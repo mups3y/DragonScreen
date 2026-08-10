@@ -64,6 +64,7 @@ namespace DragonScreen
             NodeExecutor.Tick();
             StationApproach.Tick();
             DockingOps.Tick();
+            UndockOps.Tick();
             FlightRecorder.Tick();
         }
 
@@ -84,6 +85,7 @@ namespace DragonScreen
                 StationApproach.Reset();
                 NodeExecutor.Reset();
                 DockingOps.Reset();
+                UndockOps.Reset();
             }
             catch (Exception e)
             {

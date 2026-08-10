@@ -126,10 +126,10 @@ flight 012.** Phasing above 3 km, CW from 0.5–3 km, RCS below, periapsis floor
 | step | F9I | ours |
 |---|---|---|
 | dock | `StRendezvousAndDock`, `StClosestPort` | **PORTED** `src/DockingOps.cs` - gate, hull skirt, axial run |
-| top up propellant before release | `StTopUpBeforeUndock` | **NO** |
-| close the docking shroud | `StCloseDockingShroud` | **NO** |
-| undock and back away | `StUndock`, `StBackAway` | **NO** |
-| is a return trajectory available | `StReturnAllowed`, `StMonoForDeorbit` | **NO** |
+| top up propellant before release | `StTopUpBeforeUndock` | **PORTED** holds on PROGRESS, not on full |
+| close the docking shroud | `StCloseDockingShroud` | **PORTED** |
+| undock and back away | `StUndock`, `StBackAway` | **PORTED** our port only, sign calibrated, burst-then-coast |
+| is a return trajectory available | `StReturnAllowed`, `StMonoForDeorbit` | **PORTED** `pure/ReturnBudget.cs` |
 
 ---
 

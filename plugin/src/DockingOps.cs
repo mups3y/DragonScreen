@@ -279,12 +279,52 @@ namespace DragonScreen
             if (!ship.ActionGroups[KSPActionGroup.RCS])
                 ship.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
 
-            if (c.Coast) { Translate(0.0); return; }
+            if (c.Coast) { StopTranslating(); return; }
 
-            // Translation, not rotation: the capsule holds its attitude on the port and pushes
-            // sideways. Fore/aft only for now - lateral RCS is the next thing this needs.
+            // ---- TRANSLATE, DO NOT ROTATE ----
+            // The capsule holds its nose on the port axis and slides. Yawing to correct a lateral
+            // drift takes it off the axis it has to arrive on, and arriving crooked is how flight 035
+            // "missed the port and bounced off the hull".
             bool tooSlow = c.WantClosingMps > closing;
-            Translate(tooSlow ? 1.0 : -1.0);
+            AttitudeController.Ascent.UllageFore = tooSlow ? 1.0 : -1.0;
+
+            // Lateral: resolve the sideways miss into the capsule's OWN axes and push against it.
+            // `to` is where we want to be; the component of it perpendicular to our nose is the part
+            // no amount of fore/aft will fix.
+            Transform rt = ship.ReferenceTransform;
+            Vector3d nose = rt.up;
+            Vector3d lateralErr = Vector3d.Exclude(nose, to);
+            if (lateralErr.magnitude > LateralDeadbandM)
+            {
+                // rt.right is starboard; rt.forward is the controller's -top (see AttitudeController's
+                // -90 note), so the up-in-the-cockpit axis is its negation.
+                double sx = Vector3d.Dot(lateralErr.normalized, rt.right);
+                double sy = Vector3d.Dot(lateralErr.normalized, -rt.forward);
+                AttitudeController.Ascent.TranslateX = Clamp(sx);
+                AttitudeController.Ascent.TranslateY = Clamp(sy);
+            }
+            else
+            {
+                AttitudeController.Ascent.TranslateX = 0.0;
+                AttitudeController.Ascent.TranslateY = 0.0;
+            }
+        }
+
+        /// <summary>Lateral offset below this is not worth spending monopropellant on, metres.</summary>
+        public const double LateralDeadbandM = 0.35;
+
+        private static double Clamp(double d)
+        {
+            if (d > 1.0) return 1.0;
+            if (d < -1.0) return -1.0;
+            return d;
+        }
+
+        private static void StopTranslating()
+        {
+            AttitudeController.Ascent.UllageFore = 0.0;
+            AttitudeController.Ascent.TranslateX = 0.0;
+            AttitudeController.Ascent.TranslateY = 0.0;
         }
 
         private static void Translate(double fore)

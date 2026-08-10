@@ -101,6 +101,17 @@ namespace DragonScreen
         /// </summary>
         public double UllageFore;
 
+        /// <summary>
+        /// Lateral RCS translation for THIS vehicle, -1..1. X is starboard, Y is up-in-the-cockpit.
+        ///
+        /// Docking needs these: the terminal ladder computes a lateral drift and without a way to
+        /// push sideways the only response is to YAW, which turns the capsule off the port axis it
+        /// has to arrive on. Flight 035 "missed the port and bounced off the hull" and spent 21.95
+        /// units of monopropellant on the docking alone - more than the whole approach that
+        /// delivered it there.
+        /// </summary>
+        public double TranslateX, TranslateY;
+
         /// <summary>Last attitude error, degrees. For the pages and the logs.</summary>
         public double ErrorDeg { get; private set; }
 
@@ -172,6 +183,7 @@ namespace DragonScreen
             active = false;
             Throttle = 0.0;
             UllageFore = 0.0;
+            TranslateX = 0.0; TranslateY = 0.0;
             // Write the zero throttle out before letting go, or the vehicle keeps the last one.
             if (attached != null && attached.ctrlState != null) attached.ctrlState.mainThrottle = 0f;
             Detach();
@@ -219,7 +231,13 @@ namespace DragonScreen
                 // Throttle goes out whether or not we are steering: a vehicle told to coast must
                 // actually be at zero, and this is the only per-vessel place to say so.
                 s.mainThrottle = Mathf.Clamp01((float)Throttle);
-                if (UllageFore > 0.001) s.Z = -Mathf.Clamp01((float)UllageFore);
+                // NEGATIVE Z is forward - verified at three MechJeb sites, see AutoPilot's note.
+                if (UllageFore > 0.001 || UllageFore < -0.001)
+                    s.Z = -Mathf.Clamp((float)UllageFore, -1f, 1f);
+                if (TranslateX > 0.001 || TranslateX < -0.001)
+                    s.X = Mathf.Clamp((float)TranslateX, -1f, 1f);
+                if (TranslateY > 0.001 || TranslateY < -0.001)
+                    s.Y = Mathf.Clamp((float)TranslateY, -1f, 1f);
                 if (active) DriveInner(s);
             }
             catch (Exception e)
