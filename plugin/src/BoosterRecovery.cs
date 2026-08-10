@@ -587,6 +587,20 @@ namespace DragonScreen
             if (t <= 0.0) return 0.0;
 
             Vector3d toImpact = Vector3d.Exclude(up, vel) * t;         // horizontal, from us
+
+            // ---- PREFER THE INTEGRATED PREDICTION WHEN THE VEHICLE HAS TOLD US ITS DRAG ----
+            // The ballistic solve above is drag-free and therefore always LONG. Once ImpactPredictor
+            // has a measured ballistic coefficient it can integrate the real descent instead, which
+            // is the difference between a boostback that overshoots on purpose and one that overshoots
+            // by an amount nobody chose. Falls back silently to ballistic: an unmeasured vehicle is
+            // exactly the case the deliberate 2.7 km overshoot was tuned for.
+            Impact im = ImpactPredictor.Predict(v);
+            if (im.Valid && im.DragModelled)
+            {
+                Vector3d impactPos = b.GetWorldSurfacePosition(im.LatDeg, im.LonDeg, alt);
+                toImpact = Vector3d.Exclude(up, impactPos - v.CoM);
+            }
+
             Vector3d toLz = Vector3d.Exclude(up,
                 b.GetWorldSurfacePosition(PadLat, PadLon, alt) - v.CoM);
 

@@ -159,7 +159,7 @@ Recorded so nobody spends a session discovering why they cannot.
 
 | thing | why |
 |---|---|
-| Trajectories impact prediction | third-party dependency; ours is a drag-free ballistic solve and **predicts long**, which is stated at every call site and is why the boostback overshoot pairs with it |
+| Trajectories impact prediction | third-party dependency. **Replaced 2026-08-11 by our own**: `pure/Trajectory.cs` is an RK4 integrator through the real atmosphere, and `src/ImpactPredictor.cs` MEASURES each vehicle's ballistic coefficient from its own telemetry rather than modelling drag. The drag-free fallback remains for vehicles that have not been measured yet, and says which it used. |
 | kOS steering-manager knobs — `rollts`, `torqueepsilon*`, `pitchts`, per-axis `ki` | our cascade does not expose them; `MaxStoppingTime` is the one that carries across |
 | `BBSet` / `BBMark` black-box scratch columns | our recorder has named columns instead — same purpose, better shape |
 | warp management | the recorder now logs `warp` so a bad row is identifiable; automating warp is a separate question |

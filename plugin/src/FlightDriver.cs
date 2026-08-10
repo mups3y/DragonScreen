@@ -61,6 +61,12 @@ namespace DragonScreen
             AutoPilot.Tick();
             // The node executor before the things that plan burns, so a burn armed this frame is
             // flown from the next one rather than sitting a frame behind its own ignition time.
+            // Sample drag on BOTH vehicles before anything reads a prediction. The estimate is
+            // per-vessel and only improves while it is being measured, so it is taken every tick
+            // rather than when someone happens to ask.
+            ImpactPredictor.Sample(AutoPilot.AscentVessel);
+            ImpactPredictor.Sample(BoosterRecovery.BoosterVessel);
+
             NodeExecutor.Tick();
             StationApproach.Tick();
             DockingOps.Tick();
@@ -86,6 +92,7 @@ namespace DragonScreen
                 NodeExecutor.Reset();
                 DockingOps.Reset();
                 UndockOps.Reset();
+                ImpactPredictor.Reset();
             }
             catch (Exception e)
             {
