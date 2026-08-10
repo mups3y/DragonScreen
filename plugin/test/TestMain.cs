@@ -19,6 +19,7 @@ public static class TestMain
         bad += ReturnBudgetTest.Run();
         bad += PhasingTest.Run();
         bad += DockGeometryTest.Run();
+        bad += DeorbitBurnTest.Run();
         bad += DockControlTest.Run();
 
         Console.WriteLine(bad == 0 ? "ALL SUITES PASSED" : bad + " SUITE(S) FAILED");
