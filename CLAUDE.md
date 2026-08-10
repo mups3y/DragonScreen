@@ -101,6 +101,41 @@ one-engine thrust of 1676 kN against a real 764 — ignition too low, into the p
 Also fixed: `MaxStoppingTime` leaking 0.05 into the next vehicle, `FindBooster` accepting debris,
 grid fins never deployed, entry burn lighting three engines at once instead of the 0.75 s soft start.
 
+### ⛔⛔ THE PORT RULES — READ BEFORE WRITING ANY LINE OF FLIGHT LOGIC ⛔⛔
+
+Written 2026-08-11 after a session in which every single flight failure had one cause: **I took
+F9I's numbers and wrote my own mechanism.** F9I is 971 lines that already land a booster 0.34–0.56 m
+from the pad. Nothing in this project needs inventing. It needs transcribing.
+
+**RULE 1 — NO FLIGHT-LOGIC FUNCTION WITHOUT A CITED SOURCE.**
+Before writing a function that decides anything in flight, name the F9I function it comes from and
+put `SPACEX/BOOSTER.ks:394-518` (or wherever) in its doc comment. If there is no F9I equivalent:
+**stop and say so to the user.** Do not fill the gap with something reasonable. Every gap I filled
+with something reasonable — the 20° boostback pitch-up, the closing-speed miss estimate, the
+launch-pad-as-landing-zone, the 200 m clearance hold — cost a flight.
+
+**RULE 2 — PORT THE SEQUENCE, NOT THE CONSTANTS.**
+Copying `wait 2.5` and `32500` while writing your own control flow around them is cargo cult. The
+2.5 s means something because of what runs before and after it. Read the whole function top to
+bottom, including its comments, and reproduce its ORDER. If the port has a different shape from the
+original, it is not a port.
+
+**RULE 3 — IF F9I COMPUTES IT, DO NOT ESTIMATE IT.**
+F9I gets its impact point from Trajectories. We cannot take that dependency — so the honest answer
+is "our predictor is drag-free and therefore predicts long", stated at the call site, NOT a
+different algorithm that looks close enough.
+
+**RULE 4 — ONE CHANGE PER TEST FLIGHT.**
+Five changes went into the flight that caught the upper stage. When it failed, nothing could be
+attributed. A flight costs the user real time; spend it resolving one question.
+
+**RULE 5 — THE PORT MAP ENTRY COMES FIRST.**
+Write the `docs/F9I_PORT_MAP.md` row — source function, line range, what differs and why — BEFORE
+the code. If the "why" cannot be written down, the difference is not a decision, it is a guess.
+
+**HOW TO TELL YOU ARE ABOUT TO BREAK THESE:** you are reasoning about what the vehicle *should* do
+from physics. Stop. F9I already answered it, and it answered it against flights you do not have.
+
 ### 📈 THE FLIGHT RECORDER — USE IT, DO NOT READ KSP.log
 
 `src/FlightRecorder.cs` writes **5 Hz CSV to `DragonScreen_capture/flight_*.csv`**, with the
