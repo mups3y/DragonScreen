@@ -243,6 +243,18 @@ namespace DragonScreen
         /// </summary>
         public const double HandoverPad = 1.35, HandoverVs = -40.0;
 
+        /// <summary>
+        /// Below this the AoA ceiling follows alt:radar/100; above it, the flat 15. AtmGNC:753
+        /// `wait until ship:altitude < 4000` is the gate onto that law.
+        /// </summary>
+        public const double GuidanceHandAltM = 4000.0;
+
+        /// <summary>
+        /// Vertical speed at which the arc is unambiguously over. AtmGNC:666
+        /// `wait until ship:verticalspeed < -50`. Until then the nose is held UP.
+        /// </summary>
+        public const double ArcOverVs = -50.0;
+
         /// <summary>Legs out at 200 m radar. BOOSTER.ks:797.</summary>
         public const double LegsAltitudeM = 200.0;
 
@@ -485,9 +497,17 @@ namespace DragonScreen
             // centre-engine figure - dividing the all-engine accel by the engine count is the 2.2x
             // error described on AccelOneEngine, and this is the exact test that decides whether the
             // booster commits to a one-engine landing.
-            double perEngine = (s.AccelOneEngine > 0.0) ? s.AccelOneEngine : s.MaxThrustAccel / have;
-            double twrOne = (s.Gravity > 0.0) ? perEngine / s.Gravity : 0.0;
-            return (twrOne >= MinLandingTwr) ? 1 : Min(3, have);
+            // ---- THE 3 -> 1 HANDOVER. Land:805, and it is not a TWR test. ----
+            // BOTH conditions, and F9I is explicit that getting it wrong is not a soft failure:
+            // "at low propellant this stage does not have TWR 1 on one Merlin, and a handover that
+            // happens too early cannot be undone."
+            //     slow enough             verticalspeed > -40
+            //     provably able to stop   OneEngStopDist(2.23) * 1.35 < TrueRadar
+            // So the burn STARTS on three - which is what makes the 2.23 ratio valid, because AtmGNC
+            // leaves the octaweb in three-engine mode - and drops to one only once the stage has
+            // earned it. Ours committed to one engine up front on a TWR check.
+            double threeAccel = (s.AccelThreeEngine > 0.0) ? s.AccelThreeEngine : s.MaxThrustAccel;
+            return HandoverReady(s, threeAccel) ? 1 : Min(3, have);
         }
 
         private static int Min(int a, int b) { return a < b ? a : b; }
@@ -523,8 +543,22 @@ namespace DragonScreen
             // SOLVE ON THE ENGINES THE LANDING BURN WILL ACTUALLY LIGHT, not on all nine. Solving on
             // full thrust and then lighting one engine is how a booster arrives at the pad still
             // doing 200 m/s: the ignition altitude would be nine times too low.
+            // ---- THE IGNITION POINT. THIS WAS WRONG IN BOTH ARGUMENTS. ----
+            // F9I, LandBurnVars + AtmGNC:757:
+            //     F9L_MaxDecel = availablethrust / mass - g       the thrust it ACTUALLY has, which
+            //                                                     after the entry burn is THREE
+            //     F9L_StopDist = verticalspeed^2 / (2 * MaxDecel) VERTICAL speed, not surface
+            //     ignite when F9L_TrueRadar <= F9L_StopDist + F9L_BoosterHeight
+            //
+            // Ours passed SURFACE speed - much larger on a lofted descent because it carries all the
+            // horizontal velocity the landing burn is not trying to arrest - and solved it against
+            // ONE engine, which is not even lit yet. Two errors pulling opposite ways, so the
+            // altitude came out wrong by a different amount on every flight.
+            //
+            // The one-engine figure does have a job. It is the HANDOVER test, further down.
+            double descentAccel = PhaseAccel(LandingPhase.EntryBurn, s);
             double landAccel = PhaseAccel(LandingPhase.LandingBurn, s);
-            double ign = IgnitionAltitude(s.SurfaceSpeed, landAccel, s.Gravity);
+            double ign = StopDistance(s.VerticalSpeed, descentAccel, s.Gravity) + BoosterHeightM;
             c.IgnitionAltitude = ign;
 
             if (s.Landed || (s.AltitudeRadar < TouchdownAltitude && s.SurfaceSpeed < TouchdownSpeed))
@@ -665,9 +699,26 @@ namespace DragonScreen
                     break;
 
                 case LandingPhase.Coast:
+                    // ---- NOSE UP THROUGH THE ARC. WE WERE COASTING RETROGRADE. ----
+                    // AtmGNC:665 `lock steering to up.` then `wait until ship:verticalspeed < -50`.
+                    // The boostback ends well BEFORE apoapsis, so the stage is still climbing - and
+                    // retrograde while climbing points it at the ground, which is the wrong attitude
+                    // for the arc and the wrong one to meet the air in.
                     c.Throttle = 0.0;
                     c.StoppingTime = GlideStoppingTime;
-                    c.Note = "COAST";
+                    if (s.VerticalSpeed > ArcOverVs)
+                    {
+                        c.Aim = LandingAim.Up;
+                        c.Note = "COAST - OVER THE TOP";
+                    }
+                    else
+                    {
+                        // Past the apex and unambiguous. Retrograde, and the lean law takes over and
+                        // holds all the way to touchdown - one continuous law, no handover.
+                        c.Aim = LandingAim.SurfaceRetrograde;
+                        c.GuidedLean = true;
+                        c.Note = "COAST - DESCENDING";
+                    }
                     break;
 
                 case LandingPhase.NoSolution:
@@ -743,7 +794,21 @@ namespace DragonScreen
         /// </summary>
         private static bool Hoverslam(LandingInputs s, double ign)
         {
-            return s.VerticalSpeed < 0.0 && s.AltitudeRadar <= ign;
+            // TrueRadar, not alt:radar - the bells are BoosterHeightM below what the altimeter
+            // reports, and that is most of a landing burn's final margin.
+            return s.VerticalSpeed < 0.0 && TrueRadar(s) <= ign;
+        }
+
+        /// <summary>
+        /// Distance needed to arrest a VERTICAL descent rate. F9I `F9L_StopDist`: v^2/2a with
+        /// gravity already taken out of a. Returns an unreachably large number when there is no
+        /// deceleration to be had, so every "is there room" test fails instead of dividing by zero.
+        /// </summary>
+        public static double StopDistance(double verticalSpeed, double thrustAccel, double gravity)
+        {
+            double decel = thrustAccel - gravity;
+            if (decel <= 0.1) return 999999.0;
+            return verticalSpeed * verticalSpeed / (2.0 * decel);
         }
 
         /// <summary>
@@ -912,7 +977,21 @@ namespace DragonScreen
         /// </summary>
         public static double GuidanceAoaDeg(double altitudeRadarM, bool enginesLit)
         {
-            if (!enginesLit) return AeroAoaDeg;
+            // ---- UNPOWERED: 15 deg HIGH UP, alt/100 BELOW 4 km ----
+            // AtmGNC:754 sets F9L_AOA to alt:radar/100 inside the sub-4 km loop - about 40 deg at
+            // entry, decaying to 15 at 1500 m. F9I notes the sub-metre landings were all flown with
+            // that 40 deg ceiling available and that a clamp to 15 "has never actually been in
+            // force". Ours WAS that clamp, at every altitude.
+            //
+            // It is a CEILING, not a demand: the guidance only rebuilds the direction when the naive
+            // error sum exceeds it, and a nominal descent flies 0.31-0.86 deg. It bites only when
+            // the stage arrives at 4 km with a large lateral error, which is when it is wanted.
+            if (!enginesLit)
+            {
+                if (altitudeRadarM >= GuidanceHandAltM) return AeroAoaDeg;
+                double up = altitudeRadarM / 100.0;
+                return (up < AeroAoaDeg) ? AeroAoaDeg : up;
+            }
 
             double a = -(altitudeRadarM / 100.0) - 0.25;
             if (a < PoweredAoaMinDeg) a = PoweredAoaMinDeg;

@@ -405,8 +405,13 @@ namespace DragonScreen
             // ⚠ AND NOT WHILE SEPARATING. The gate listed Idle and Boostback and I added a phase
             // before both without revisiting it, so the fins would have deployed at 29 km, climbing
             // at 700 m/s, 11 m from the upper stage. They belong at the top of the arc.
-            if (Phase != LandingPhase.Idle && Phase != LandingPhase.Flip
-                && Phase != LandingPhase.Boostback) DeployGridFins(booster);
+            // ---- FINS OUT ON THE DESCENT, NOT ON A PHASE ----
+            // AtmGNC:667 deploys them on the -50 m/s transition, immediately after the arc:
+            // "they are the only control authority that works before the engines relight, and they
+            // need to be out before the air arrives, not when it does." Our gate was a list of
+            // phases, and Coast begins while the stage is still CLIMBING - so the fins came out
+            // going up, into vacuum, with the whole arc still to fly.
+            if (s.VerticalSpeed <= Landing.ArcOverVs) DeployGridFins(booster);
 
             SetEngines(booster, c.Engines);
             Aim(booster, c, s);

@@ -431,9 +431,17 @@ public static class FlightTest
         LandingInputs octa = Fall(5000.0, -200.0, 200.0, 180.0, 9);
         octa.AccelThreeEngine = 60.0;
         octa.AccelOneEngine = 27.0;
-        Check("one-engine accel comes from the vehicle, not from a division",
-              Math.Abs(Landing.PhaseAccel(LandingPhase.LandingBurn, octa) - 27.0) < 1e-9,
+        // The landing burn STARTS on three engines - Land() hands over to one only once the stage
+        // is slow enough and provably able to finish. So a fast, high booster reads the three-engine
+        // figure here, and only a slow low one reads the centre engine's.
+        Check("the landing burn opens on the three-engine figure",
+              Math.Abs(Landing.PhaseAccel(LandingPhase.LandingBurn, octa) - 60.0) < 1e-9,
               Landing.PhaseAccel(LandingPhase.LandingBurn, octa).ToString("F2"));
+        LandingInputs handed = Fall(200.0, -30.0, 32.0, 180.0, 9);
+        handed.AccelThreeEngine = 60.0; handed.AccelOneEngine = 27.0;
+        Check("and after the handover, the centre engine's",
+              Math.Abs(Landing.PhaseAccel(LandingPhase.LandingBurn, handed) - 27.0) < 1e-9,
+              Landing.PhaseAccel(LandingPhase.LandingBurn, handed).ToString("F2"));
         Check("three-engine accel comes from the vehicle too",
               Math.Abs(Landing.PhaseAccel(LandingPhase.Boostback, octa) - 60.0) < 1e-9,
               Landing.PhaseAccel(LandingPhase.Boostback, octa).ToString("F2"));
@@ -441,10 +449,27 @@ public static class FlightTest
         // estimate is exactly right - so it has to survive.
         LandingInputs plain = Fall(5000.0, -200.0, 200.0, 180.0, 9);
         Check("without discrete modes the linear estimate still applies",
-              Math.Abs(Landing.PhaseAccel(LandingPhase.LandingBurn, plain) - 180.0 / 9.0) < 1e-9,
+              Math.Abs(Landing.PhaseAccel(LandingPhase.LandingBurn, plain) - 180.0 * 3.0 / 9.0)
+              < 1e-9,
               Landing.PhaseAccel(LandingPhase.LandingBurn, plain).ToString("F2"));
-        Check("a light booster lands on one",
-              Landing.EnginesFor(LandingPhase.LandingBurn, Fall(5000.0, -200.0, 200.0, 180.0, 9)) == 1, "");
+        // ---- THE HANDOVER IS BOTH CONDITIONS, NOT A TWR CHECK ----
+        // Land:805. "At low propellant this stage does not have TWR 1 on one Merlin, and a handover
+        // that happens too early cannot be undone." Ours committed to one engine up front.
+        LandingInputs fastLow = Fall(5000.0, -200.0, 200.0, 180.0, 9);
+        fastLow.AccelThreeEngine = 60.0; fastLow.AccelOneEngine = 27.0;
+        Check("still fast: the burn stays on three",
+              Landing.EnginesFor(LandingPhase.LandingBurn, fastLow) == 3,
+              Landing.EnginesFor(LandingPhase.LandingBurn, fastLow).ToString());
+        LandingInputs slowHigh = Fall(200.0, -30.0, 32.0, 180.0, 9);
+        slowHigh.AccelThreeEngine = 60.0; slowHigh.AccelOneEngine = 27.0;
+        Check("slow, and one engine could still stop it: hand over",
+              Landing.EnginesFor(LandingPhase.LandingBurn, slowHigh) == 1,
+              Landing.EnginesFor(LandingPhase.LandingBurn, slowHigh).ToString());
+        LandingInputs slowLow = Fall(45.0, -30.0, 32.0, 180.0, 9);
+        slowLow.AccelThreeEngine = 60.0; slowLow.AccelOneEngine = 27.0;
+        Check("slow but no room left: do NOT hand over",
+              Landing.EnginesFor(LandingPhase.LandingBurn, slowLow) == 3,
+              Landing.EnginesFor(LandingPhase.LandingBurn, slowLow).ToString());
         Check("a booster without the TWR takes three",
               Landing.EnginesFor(LandingPhase.LandingBurn, heavy) == 3,
               Landing.EnginesFor(LandingPhase.LandingBurn, heavy).ToString());
@@ -519,8 +544,18 @@ public static class FlightTest
               Landing.GuidanceAoaDeg(3000.0, false).ToString("F2"));
         Check("powered lean is NEGATIVE", Landing.GuidanceAoaDeg(3000.0, true) < 0.0,
               Landing.GuidanceAoaDeg(3000.0, true).ToString("F2"));
-        Check("unpowered is the 15 degree trim",
-              Math.Abs(Landing.GuidanceAoaDeg(3000.0, false) - 15.0) < 1e-9, "");
+        // The unpowered ceiling is 15 only ABOVE 4 km. Below it F9I follows alt:radar/100 - about
+        // 40 deg at 4 km decaying to 15 at 1500 m - and its own note is that the sub-metre landings
+        // were all flown with that authority available, so a flat clamp to 15 "has never actually
+        // been in force". Ours was that clamp, at every altitude. AtmGNC:754.
+        Check("unpowered above 4 km is the 15 degree trim",
+              Math.Abs(Landing.GuidanceAoaDeg(6000.0, false) - Landing.AeroAoaDeg) < 1e-9,
+              Landing.GuidanceAoaDeg(6000.0, false).ToString("F2"));
+        Check("and below 4 km the ceiling opens up to alt/100",
+              Math.Abs(Landing.GuidanceAoaDeg(3000.0, false) - 30.0) < 1e-9,
+              Landing.GuidanceAoaDeg(3000.0, false).ToString("F2"));
+        Check("never below the 15 degree floor",
+              Landing.GuidanceAoaDeg(500.0, false) >= Landing.AeroAoaDeg, "");
 
         // Under power the authority TAPERS with height: 4 degrees down to 1, floor at 75 m, so the
         // stage stops steering and starts standing up as it arrives.
