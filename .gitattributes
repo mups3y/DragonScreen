@@ -1,0 +1,8 @@
+# LF in the repository, always. The build asserts on line endings and a Windows
+# checkout silently rewriting them has bitten this project before.
+* text=auto eol=lf
+*.png binary
+*.otf binary
+*.ttf binary
+*.dds binary
+*.mu  binary
