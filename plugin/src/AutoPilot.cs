@@ -94,6 +94,9 @@ namespace DragonScreen
             Phase = AscentPhase.Idle;
             // A fresh engagement is a fresh mission: never inherit a previous flight's recovery.
             BoosterRecovery.Reset();
+            // The recovery profile IS an ascent profile - see AscentTarget.Station(profile). Taking
+            // it here means the two can never disagree about which mission is being flown.
+            Target = AscentTarget.Station(BoosterRecovery.Profile);
             ascentVessel = v;
             packedReported = false;
             s2Separated = false;

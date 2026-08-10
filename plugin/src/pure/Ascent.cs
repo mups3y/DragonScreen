@@ -76,14 +76,27 @@ namespace DragonScreen
         /// Space X Station sits at 86.8 x 85.8 km, inclination 0.133 - MEASURED over four flights,
         /// not a round number. An 86 km circular orbit due east is the ferry mission's insertion.
         /// </summary>
-        public static AscentTarget Station()
+        public static AscentTarget Station() { return Station(LandingProfile.Rtls); }
+
+        /// <summary>
+        /// The same insertion, flown for a given recovery.
+        ///
+        /// ⚠ THE PROFILE IS NOT A LANDING SETTING - IT IS AN ASCENT. Picking "droneship" on the
+        /// console and leaving the ascent at RTLS numbers stages the booster steep and early and then
+        /// asks it to fly to a barge it no longer has the trajectory for; the reverse leaves a stage
+        /// downrange with no propellant to come home on. The two have to be chosen together, so they
+        /// are chosen in one place.
+        /// </summary>
+        public static AscentTarget Station(LandingProfile p)
         {
             AscentTarget t = new AscentTarget();
             t.AltitudeM = 86000.0;
             t.HeadingDeg = 90.0;
-            t.MecoAngleDeg = 45.0;      // RTLSmode()
-            t.PitchGain = 110.0;
-            t.StageAltM = 60000.0;
+            double meco, stageAlt, gain, payload;
+            LandingSites.AscentFor(p, out meco, out stageAlt, out gain, out payload);
+            t.MecoAngleDeg = meco;
+            t.PitchGain = gain;
+            t.StageAltM = stageAlt;
             return t;
         }
     }

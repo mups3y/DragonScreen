@@ -103,6 +103,16 @@ namespace DragonScreen
         public double Gravity;
         /// <summary>Ground distance to the landing zone, metres.</summary>
         public double DownrangeM;
+
+        // ---- THE BOOSTBACK IS FLOWN AGAINST A PREDICTED IMPACT POINT, NOT A VELOCITY ----
+        // BOOSTER.ks does this with the Trajectories add-on; we cannot take that dependency, so the
+        // glue integrates a ballistic impact and signs it here. POSITIVE means the impact point is
+        // still short of the landing zone - on the booster's side of it - and NEGATIVE means it has
+        // walked past. Boostback burns until it is past by BoostbackOvershootM.
+        /// <summary>Signed miss of the predicted impact point, metres. Negative = beyond the LZ.</summary>
+        public double PredictedMissM;
+        /// <summary>|PredictedMissM| when the boostback burn began. Throttle tapers against it.</summary>
+        public double InitialMissM;
         public double AtmosphereDepthM;
         public double DynamicPressureKpa;
         public bool Landed;
@@ -176,6 +186,16 @@ namespace DragonScreen
 
         /// <summary>Boostback is finished when the predicted miss is inside this. Metres.</summary>
         public const double BoostbackTolerance = 400.0;
+
+        /// <summary>
+        /// Deliberate overshoot of the landing zone at boostback cutoff, metres. BOOSTER.ks:455-458.
+        /// Drag can only ever SHORTEN a trajectory, so the burn aims long and the entry burn plus the
+        /// guided descent bleed the rest off - "undershooting cannot be recovered, overshooting can".
+        /// </summary>
+        public const double BoostbackOvershootM = 2700.0;
+
+        /// <summary>Boostback throttle floor. Keeps the engines lit and the gimbal authoritative.</summary>
+        public const double BoostbackMinThrottle = 0.25;
 
         /// <summary>Touchdown when this low and this slow.</summary>
         public const double TouchdownAltitude = 3.0, TouchdownSpeed = 3.0;
@@ -381,24 +401,32 @@ namespace DragonScreen
             // command described one phase while the label described another. Harmless for one frame
             // in game, invisible in a log, and exactly the kind of thing that makes a state machine
             // untrustworthy. Deciding the phase and then rendering it removes the whole class.
+            // ---- ⛔ ONE TRANSITION PER TICK. THESE WERE SEQUENTIAL `if`s AND IT COST THE RTLS. ----
+            // 22:18 flight: BOOSTBACK completed at 119.9 s, fell straight through the Coast block on
+            // the SAME TICK, and landed in LANDING BURN at 44 km altitude while CLIMBING at 828 m/s.
+            // It then burned for 370 seconds, flew the booster up to 90 km, ran the tanks dry and
+            // reported NO SOLUTION at 6.8 km.
+            //
+            // This is the same `if` versus `else if` class that already cost seven ascent failures
+            // and has its own rule in CLAUDE.md. A chain cannot cascade.
             if (phase == LandingPhase.Idle) phase = LandingPhase.Boostback;
 
-            if (phase == LandingPhase.Boostback && BoostbackDone(s))
+            else if (phase == LandingPhase.Boostback && BoostbackDone(s))
                 phase = LandingPhase.Coast;
 
-            if (phase == LandingPhase.Coast)
-            {
-                if (InEntryBand(s) && s.VerticalSpeed < EntryBurnCutVs)
-                    phase = LandingPhase.EntryBurn;
-                else if (s.AltitudeRadar <= ign) phase = LandingPhase.LandingBurn;
-            }
+            else if (phase == LandingPhase.Coast && InEntryBand(s)
+                     && s.VerticalSpeed < EntryBurnCutVs)
+                phase = LandingPhase.EntryBurn;
+
+            else if (phase == LandingPhase.Coast && Hoverslam(s, ign))
+                phase = LandingPhase.LandingBurn;
 
             // F9I cuts on VERTICAL SPEED: `until (ship:verticalspeed > -300)`.
-            if (phase == LandingPhase.EntryBurn
-                && (s.VerticalSpeed > EntryBurnCutVs || !InEntryBand(s)))
+            else if (phase == LandingPhase.EntryBurn
+                     && (s.VerticalSpeed > EntryBurnCutVs || !InEntryBand(s)))
                 phase = LandingPhase.Descent;
 
-            if (phase == LandingPhase.Descent && s.AltitudeRadar <= ign)
+            else if (phase == LandingPhase.Descent && Hoverslam(s, ign))
                 phase = LandingPhase.LandingBurn;
 
             c.Phase = phase;
@@ -407,7 +435,12 @@ namespace DragonScreen
             {
                 case LandingPhase.Boostback:
                     c.Aim = LandingAim.TowardTarget;
-                    c.Throttle = 1.0;
+                    // ---- THROTTLE ON THE FRACTION OF THE ERROR STILL LEFT ----
+                    // BOOSTER.ks:478 - `set throt to max(0.25, impDist / intDist)`. Burns hard while
+                    // the error is large and eases as it closes, which is what stops the boostback
+                    // overshooting its own overshoot target. The floor is not a minimum useful
+                    // thrust: it keeps the engines lit so the gimbal stays authoritative.
+                    c.Throttle = BoostbackThrottle(s);
                     c.Note = "BOOSTBACK";
                     break;
 
@@ -453,17 +486,51 @@ namespace DragonScreen
         }
 
         /// <summary>
-        /// Boostback is finished when the predicted MISS - not the velocity error - is inside
-        /// tolerance. Expressed as a distance so the tolerance is in metres and means the same thing
-        /// at every altitude, instead of being a speed threshold that tightens as the booster falls.
+        /// ⛔ THE HOVERSLAM IS ONLY ARMED ON THE WAY DOWN.
+        ///
+        /// `ign` is derived from SURFACE speed, which during boostback is ~830 m/s of mostly
+        /// HORIZONTAL velocity - so it evaluated to 89.6 km while the stage was at 31 km, and the
+        /// gate was wide open from the moment of handover. The 22:18 booster lit its landing burn
+        /// climbing through 44 km.
+        ///
+        /// A landing burn is a thing you do while falling. Requiring that costs nothing and makes
+        /// the gate mean what its name says.
+        /// </summary>
+        private static bool Hoverslam(LandingInputs s, double ign)
+        {
+            return s.VerticalSpeed < 0.0 && s.AltitudeRadar <= ign;
+        }
+
+        /// <summary>
+        /// Boostback is finished when the PREDICTED IMPACT POINT has walked back past the landing
+        /// zone by <see cref="BoostbackOvershootM"/>.
+        ///
+        /// ---- WHY OVERSHOOT ON PURPOSE ----
+        /// BOOSTER.ks:455 states the reasoning and it is not a fudge: "Deliberately overshoot the pad
+        /// by 2.7 km and stop burning. The stage still has the whole entry and the guided descent to
+        /// bleed that off, and AtmGNC steers with drag far more cheaply than this burn does -
+        /// undershooting cannot be recovered, overshooting can." Drag only ever shortens a
+        /// trajectory, so the boostback must aim long.
+        ///
+        /// ---- WHAT THIS REPLACED ----
+        /// A miss estimated as (requiredClosingSpeed - horizontalSpeed) x timeToGround. During
+        /// boostback the stage is CLIMBING, so timeToGround is nonsense and so was the estimate. The
+        /// signed impact prediction comes from the glue, which has the vessel and the body.
         /// </summary>
         private static bool BoostbackDone(LandingInputs s)
         {
-            if (s.DownrangeM < BoostbackTolerance) return true;
-            double t = TimeToGround(s.AltitudeRadar, s.VerticalSpeed, s.Gravity);
-            double miss = (RequiredClosingSpeed(s) - s.HorizontalSpeed) * t;
-            if (miss < 0.0) miss = -miss;
-            return miss < BoostbackTolerance;
+            return s.PredictedMissM < -BoostbackOvershootM;
+        }
+
+        /// <summary>Proportional boostback throttle. BOOSTER.ks:478.</summary>
+        public static double BoostbackThrottle(LandingInputs s)
+        {
+            if (s.InitialMissM <= 0.0) return 1.0;
+            double left = s.PredictedMissM;
+            if (left < 0.0) left = -left;
+            double frac = left / s.InitialMissM;
+            if (frac > 1.0) frac = 1.0;
+            return (frac < BoostbackMinThrottle) ? BoostbackMinThrottle : frac;
         }
 
         /// <summary>The entry-burn window, on ASL and vertical speed exactly as BOOSTER.ks.</summary>

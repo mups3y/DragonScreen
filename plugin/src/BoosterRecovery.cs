@@ -63,16 +63,60 @@ namespace DragonScreen
         /// <summary>Booster ground distance to the landing zone, metres.</summary>
         public static double DownrangeM;
 
-        /// <summary>The pad we came from. Captured at liftoff - it is the RTLS target.</summary>
+        /// <summary>Which recovery this mission is flying. Drives the LZ and the ascent.</summary>
+        public static LandingProfile Profile = LandingProfile.Rtls;
+
+        /// <summary>The landing zone. NOT where we launched from - see below.</summary>
         public static double PadLat, PadLon;
         public static bool HavePad;
 
+        /// <summary>
+        /// Resolve the landing zone for this mission.
+        ///
+        /// ---- ⛔ THIS USED TO BE `PadLat = v.latitude` AT LIFTOFF. ----
+        /// The launch pad is not LZ-1. They are a few hundred metres apart, and "a few hundred
+        /// metres" is the entire problem: the boosters this is copied from land 0.34-0.56 m from the
+        /// mark, so a target error of that size is three orders of magnitude bigger than the thing
+        /// being tuned. It would never have shown up as a bug, only as a landing that was always
+        /// slightly wrong for reasons that looked like guidance.
+        ///
+        /// The droneship is not a coordinate at all. BOOSTER.ks:147: it "is parked by hand and moves
+        /// between missions", so it is found by name and asked where it currently is.
+        /// </summary>
         public static void RememberPad(Vessel v)
         {
             if (v == null || HavePad) return;
-            PadLat = v.latitude; PadLon = v.longitude; HavePad = true;
-            Debug.Log(Tag + "landing zone remembered: " + PadLat.ToString("F4")
-                      + ", " + PadLon.ToString("F4"));
+
+            if (Profile == LandingProfile.Droneship)
+            {
+                Vessel drone = FindDroneship();
+                if (drone != null)
+                {
+                    PadLat = drone.latitude; PadLon = drone.longitude; HavePad = true;
+                    Debug.Log(Tag + "landing zone: droneship '" + drone.vesselName + "' at "
+                              + PadLat.ToString("F6") + ", " + PadLon.ToString("F6"));
+                    return;
+                }
+                PadLat = LandingSites.Lz0.LatDeg; PadLon = LandingSites.Lz0.LonDeg; HavePad = true;
+                Debug.LogWarning(Tag + "no vessel named '" + LandingSites.DroneshipVesselName
+                                     + "' in the world - falling back to " + LandingSites.Lz0.Name
+                                     + ". The booster will aim at open water.");
+                return;
+            }
+
+            LandingSite site = LandingSites.For(Profile);
+            PadLat = site.LatDeg; PadLon = site.LonDeg; HavePad = true;
+            Debug.Log(Tag + "landing zone: " + site.Name + " at " + PadLat.ToString("F6")
+                      + ", " + PadLon.ToString("F6") + " (profile " + Profile + ")");
+        }
+
+        private static Vessel FindDroneship()
+        {
+            List<Vessel> all = FlightGlobals.Vessels;
+            for (int i = 0; i < all.Count; i++)
+                if (all[i] != null && all[i].vesselName == LandingSites.DroneshipVesselName)
+                    return all[i];
+            return null;
         }
 
         public static void Reset()
@@ -85,7 +129,7 @@ namespace DragonScreen
             gridFinsOut = false;
             lastModeStepAt = 0.0; modeSteps = 0; lastWantMode = -1; modeFailReported = false;
             phaseStartedAt = 0.0; noBoosterReported = false;
-            TrueRadar = 0.0; DownrangeM = 0.0;
+            TrueRadar = 0.0; DownrangeM = 0.0; initialMiss = 0.0;
         }
 
         // ------------------------------------------------------------------ handover
@@ -130,6 +174,8 @@ namespace DragonScreen
             // Join the profile where the stage actually is. Handover is late by design - see
             // Landing.InitialPhase - so assuming Boostback would fly a falling booster back up.
             Phase = Landing.InitialPhase(Read(booster));
+            // Latch the error the boostback starts with; the throttle tapers against it.
+            initialMiss = Math.Abs(PredictedMiss(booster));
 
             FlightGlobals.ForceSetActiveVessel(booster);
 
@@ -407,8 +453,64 @@ namespace DragonScreen
 
             s.DownrangeM = HavePad && v.mainBody != null
                 ? GroundRange(v.mainBody, v.latitude, v.longitude, PadLat, PadLon) : 0.0;
+
+            s.PredictedMissM = PredictedMiss(v);
+            s.InitialMissM = initialMiss;
             return s;
         }
+
+        /// <summary>
+        /// Signed miss of the BALLISTIC IMPACT POINT against the landing zone, metres.
+        /// POSITIVE = the impact is still short of the LZ, on the booster's side of it.
+        /// NEGATIVE = it has walked past.
+        ///
+        /// ---- WHY A PREDICTION AND NOT A VELOCITY ERROR ----
+        /// BOOSTER.ks flies its whole boostback against `Impact(1, landProfile, LZ)` and stops when
+        /// the predicted impact has overshot the pad by 2.7 km. Our old test multiplied a closing
+        /// speed error by a time-to-ground - and during boostback the stage is CLIMBING, so the
+        /// time-to-ground was meaningless and so was the answer.
+        ///
+        /// ---- WHAT THIS DELIBERATELY IS NOT ----
+        /// F9I gets its impact point from the Trajectories add-on, which integrates DRAG. We cannot
+        /// take that dependency, so this is a vacuum ballistic solve: constant gravity, no
+        /// atmosphere, flat over the range involved. It therefore predicts LONG, because drag can
+        /// only ever shorten a trajectory - which is the same direction as the deliberate 2.7 km
+        /// overshoot and is why aiming long is safe. Do not "correct" it toward the truth without
+        /// also revisiting BoostbackOvershootM; the two are a pair.
+        /// </summary>
+        private static double PredictedMiss(Vessel v)
+        {
+            if (!HavePad || v == null || v.mainBody == null) return 0.0;
+            CelestialBody b = v.mainBody;
+
+            Vector3d up = (v.CoM - b.position).normalized;
+            Vector3d vel = v.srf_velocity;
+            double vz = Vector3d.Dot(vel, up);
+            double alt = v.altitude;
+            double r = b.Radius + alt;
+            double g = b.gMagnitudeAtCenter / (r * r);
+            if (g <= 0.0) return 0.0;
+
+            // alt + vz*t - g*t^2/2 = 0, taking the future root. Positive vz simply means it climbs
+            // first, which is exactly the case the old estimate could not handle.
+            double disc = vz * vz + 2.0 * g * alt;
+            if (disc < 0.0) return 0.0;
+            double t = (vz + Math.Sqrt(disc)) / g;
+            if (t <= 0.0) return 0.0;
+
+            Vector3d toImpact = Vector3d.Exclude(up, vel) * t;         // horizontal, from us
+            Vector3d toLz = Vector3d.Exclude(up,
+                b.GetWorldSurfacePosition(PadLat, PadLon, alt) - v.CoM);
+
+            Vector3d err = toImpact - toLz;                             // LZ -> impact
+            double miss = err.magnitude;
+            // Sign: is the impact point on OUR side of the LZ (short) or past it? `-toLz` points
+            // from the LZ back toward us, so a positive projection means short.
+            return (Vector3d.Dot(err, -toLz) > 0.0) ? miss : -miss;
+        }
+
+        /// <summary>|PredictedMiss| latched when the boostback burn began, for the throttle taper.</summary>
+        private static double initialMiss;
 
         /// <summary>
         /// Great-circle ground distance, metres.
@@ -698,14 +800,17 @@ namespace DragonScreen
             }
             else if (c.Aim == LandingAim.TowardTarget && HavePad)
             {
-                // Boostback: pitch up off the horizon so the burn both kills downrange velocity and
-                // holds altitude while it does it, which is what the real flip-and-burn looks like.
+                // ---- ⛔ PURELY HORIZONTAL, TOWARD THE LZ. THE 20-DEGREE PITCH-UP WAS INVENTED. ----
+                // BOOSTER.ks:452 is exactly this and nothing more:
+                //     lock BBvec to vxcl(up:vector, LZ:altitudeposition(ship:altitude)):normalized.
+                // The pitch-up was my own idea about what "the real flip-and-burn looks like", and
+                // in the 22:18 recording it drove vertical speed UP from 676 to 828 m/s across the
+                // burn - the booster gained 13 km of altitude during a manoeuvre whose entire job is
+                // to reverse horizontal velocity. Every metre of that had to be paid for twice.
                 Vector3d toPad = (v.mainBody.GetWorldSurfacePosition(PadLat, PadLon, v.altitude)
                                   - v.CoM);
                 Vector3d horiz = Vector3d.Exclude(up, toPad);
-                if (horiz.sqrMagnitude > 1.0)
-                    dir = (horiz.normalized * Math.Cos(20.0 * Math.PI / 180.0)
-                         + up * Math.Sin(20.0 * Math.PI / 180.0)).normalized;
+                if (horiz.sqrMagnitude > 1.0) dir = horiz.normalized;
             }
 
             // ---- ⛔ ISSUE 5. LandingZoneGuidance WAS PORTED AND NEVER CONNECTED. ----

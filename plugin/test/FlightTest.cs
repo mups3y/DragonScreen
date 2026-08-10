@@ -84,6 +84,77 @@ public static class FlightTest
         LandingInputs heavy = Fall(40000.0, -400.0, 420.0, 90.0, 9);
         Check("boostback on three", Landing.EnginesFor(LandingPhase.Boostback, heavy) == 3,
               Landing.EnginesFor(LandingPhase.Boostback, heavy).ToString());
+        // ---- ⛔ ONE TRANSITION PER TICK, AND THE HOVERSLAM ONLY ON THE WAY DOWN ----
+        // 22:18 flight: boostback completed, the sequential `if`s let Coast fall straight through to
+        // LandingBurn on the SAME TICK, and the booster lit its landing burn at 44 km while CLIMBING
+        // at 828 m/s. It burned 370 s, flew to 90 km, ran dry and reported NO SOLUTION at 6.8 km.
+        // `ign` was 89.6 km because it is derived from SURFACE speed, which during boostback is
+        // mostly horizontal - so the gate was open from the moment of handover.
+        LandingInputs climbFast = Fall(44000.0, 828.0, 830.0, 43.0, 9);
+        climbFast.PredictedMissM = -9000.0;              // boostback overshoot achieved
+        climbFast.InitialMissM = 60000.0;
+        LandingCommand cascade = Landing.Guide(climbFast, LandingPhase.Boostback);
+        Check("boostback leaves to COAST, never straight to the landing burn",
+              cascade.Phase == LandingPhase.Coast, cascade.Phase.ToString());
+        Check("a climbing stage is never in a landing burn",
+              Landing.Guide(climbFast, LandingPhase.Coast).Phase != LandingPhase.LandingBurn,
+              Landing.Guide(climbFast, LandingPhase.Coast).Phase.ToString());
+
+        // The same state, but falling, must arm normally - the gate has to still work.
+        LandingInputs fallFast = Fall(2000.0, -180.0, 190.0, 43.0, 9);
+        fallFast.AccelOneEngine = 15.0;
+        Check("a falling stage inside the ignition altitude does light",
+              Landing.Guide(fallFast, LandingPhase.Descent).Phase == LandingPhase.LandingBurn,
+              Landing.Guide(fallFast, LandingPhase.Descent).Phase.ToString());
+
+        // ---- BOOSTBACK STOPS ON A PREDICTED IMPACT POINT, DELIBERATELY LONG ----
+        LandingInputs bbShort = Fall(40000.0, 500.0, 900.0, 43.0, 9);
+        bbShort.InitialMissM = 60000.0; bbShort.PredictedMissM = 30000.0;
+        Check("still short of the pad keeps burning",
+              Landing.Guide(bbShort, LandingPhase.Boostback).Phase == LandingPhase.Boostback, "");
+        bbShort.PredictedMissM = -1000.0;   // past the pad, but not by the overshoot margin
+        Check("just past the pad is not far enough - drag will eat it",
+              Landing.Guide(bbShort, LandingPhase.Boostback).Phase == LandingPhase.Boostback, "");
+        bbShort.PredictedMissM = -(Landing.BoostbackOvershootM + 1.0);
+        Check("overshooting by the margin ends the burn",
+              Landing.Guide(bbShort, LandingPhase.Boostback).Phase == LandingPhase.Coast, "");
+        Check("and the overshoot is F9I's 2.7 km",
+              Math.Abs(Landing.BoostbackOvershootM - 2700.0) < 1e-9, "");
+
+        // Throttle tapers with the error and never drops below the floor that keeps the gimbal live.
+        LandingInputs bbT = Fall(40000.0, 500.0, 900.0, 43.0, 9);
+        bbT.InitialMissM = 40000.0; bbT.PredictedMissM = 40000.0;
+        Check("boostback opens at full throttle",
+              Math.Abs(Landing.BoostbackThrottle(bbT) - 1.0) < 1e-9, "");
+        bbT.PredictedMissM = 20000.0;
+        Check("half the error left is half throttle",
+              Math.Abs(Landing.BoostbackThrottle(bbT) - 0.5) < 1e-9, "");
+        bbT.PredictedMissM = 100.0;
+        Check("and it floors at 25%, not at zero",
+              Math.Abs(Landing.BoostbackThrottle(bbT) - Landing.BoostbackMinThrottle) < 1e-9, "");
+
+        // ---- THE LANDING ZONE IS NOT THE LAUNCH PAD, AND THE PROFILES ARE NOT INTERCHANGEABLE ----
+        Check("LZ-1 is a real surveyed coordinate, not the origin",
+              Math.Abs(LandingSites.Lz1.LatDeg) > 0.0001 && Math.Abs(LandingSites.Lz1.LonDeg) > 1.0,
+              "");
+        Check("LZ-1 and LZ-2 are different pads",
+              Math.Abs(LandingSites.Lz1.LatDeg - LandingSites.Lz2.LatDeg) > 1e-6, "");
+        double ma, sa, pg, mp, ma2, sa2, pg2, mp2;
+        LandingSites.AscentFor(LandingProfile.Rtls, out ma, out sa, out pg, out mp);
+        LandingSites.AscentFor(LandingProfile.Droneship, out ma2, out sa2, out pg2, out mp2);
+        Check("RTLS stages earlier and steeper than a droneship flight",
+              ma > ma2 && sa < sa2, ma + "/" + sa + " vs " + ma2 + "/" + sa2);
+        Check("RTLS is PARAM.ks RTLSmode: 45 deg, 60 km, gain 110",
+              Math.Abs(ma - 45.0) < 1e-9 && Math.Abs(sa - 60000.0) < 1e-9
+              && Math.Abs(pg - 110.0) < 1e-9, "");
+        Check("a droneship flight can carry more payload",  mp2 > mp, "");
+        Check("RTLS reverses fully, a droneship flight does not",
+              Math.Abs(LandingSites.FlipDeg(LandingProfile.Rtls) - 180.0) < 1e-9
+              && Math.Abs(LandingSites.FlipDeg(LandingProfile.Droneship) - 170.0) < 1e-9, "");
+        Check("an expendable stage is not recovered",
+              !LandingSites.Recovers(LandingProfile.Expendable)
+              && LandingSites.Recovers(LandingProfile.Rtls), "");
+
         // ---- JOIN THE PROFILE WHERE THE STAGE ACTUALLY IS ----
         // Handover is late by design (the upper stage cannot be abandoned mid-ascent), so starting
         // at Boostback unconditionally would point a falling booster back up the range. The 21:01
