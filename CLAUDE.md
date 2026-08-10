@@ -56,13 +56,64 @@ a paragraph of theory), and check whether a thing exists before building it.
 
 ## WHERE THE BUILD IS — 2026-08-06. Read this before planning anything.
 
-**972 headless checks pass (268 layout + 497 page + 207 panel/sequence).** All five pages built and
-installed, **the lower console wired and flown**, and the systems it drives simulated. 26 files in
-`src/pure`, 12 in `src/`, 6 art files. A full station mission was flown 2026-08-06 with the screens
-driven throughout; the console was exercised button-by-button the same day.
+**~7 400 headless checks pass** across seven suites (layout, page, panel/sequence, flight software,
+orbital, predictor, burn exec, docking). 32 files in `src/pure`, 16 in `src/`, 6 art files.
 
-⚠ **NOT YET LOADED:** the button-indicator overdrive, the coolant-loop saturation, FLIGHT's step list,
-and the whole of `VehicleSystems`. Everything above them has flown.
+**THE PAGES WORK. THE FLIGHT SOFTWARE DOES NOT, YET.** Five test flights, five failures. All five
+pages, the 39-button console and the simulated systems have flown and are good. Everything below is
+the honest state of the autopilot:
+
+| | |
+|---|---|
+| ascent guidance | computes correct commands — verified in the CSV |
+| attitude controller | **HAS NEVER EXECUTED.** Threw every physics tick on its only flight; fixed, unflown |
+| booster recovery | **HAS NEVER RUN ONCE.** Every constant in it is untested |
+| orbit | **never achieved.** Best flight: 73 km apoapsis, fell back |
+| rendezvous / docking / refuel / entry | not built — see `docs/F9I_PORT_MAP.md` |
+
+### 📈 THE FLIGHT RECORDER — USE IT, DO NOT READ KSP.log
+
+`src/FlightRecorder.cs` writes **5 Hz CSV to `DragonScreen_capture/flight_*.csv`**, with the
+GUIDANCE COMMAND and the VEHICLE RESPONSE on the same row. It starts on autopilot engage.
+
+It exists because `ls bb_*.csv` returned NOTHING after five flights: the black box is
+`F9I/blackbox.ks`, a **kOS script**, and it only records while F9I is running — we fly under the C#
+autopilot with kOS idle, so **none of those flights recorded anything.** Everything was diagnosed
+from log lines usually added *after* the flight that needed them.
+
+It paid for itself on its first flight: `attErrDeg = 0` and `torqueX = 0` for all 1304 rows, beside a
+`cmdPitch` running 90° → 4.5°, said in one glance that guidance was fine and **nothing was steering
+the vehicle**. No amount of log reading was going to be that fast.
+
+⚠ `ctlPitch/ctlYaw/ctlRoll` are **live for the first time** — dead in all 554 kOS recordings because
+cooked steering and SAS both bypass `FlightCtrlState`. Our controller writes them.
+
+### ⛔ AN EXCEPTION IN `OnFlyByWire` IS INVISIBLE AND INFINITE
+
+KSP calls it from `Vessel.FeedInputFeed` and **swallows whatever it throws**. The flight continues,
+the vehicle simply is not steered — once per physics tick, forever. From the cockpit it looks like
+the autopilot doing nothing. It wrote **119 000 log lines in four minutes** and I still had to go
+looking for it.
+
+Anything hooked to `OnFlyByWire` must catch, **detach**, and log ONCE.
+
+**And the cause is the recurring mistake in one line:** MechJeb's source reads
+`MathExtensions.Euler(-90, 0, 0)` — *its own* implementation. I substituted `QuaternionD.Euler`,
+assuming equivalence. **MechJeb wrote its own BECAUSE KSP's is broken** (`Internal_FromEulerRad` is
+missing). Use the float `Quaternion.Euler`.
+
+That is the same failure as `"K1"` from a PAW title and `staticAmbientTemperature`: **read the source,
+saw a call, substituted the assumed equivalent.** When porting, port what is written — and when the
+original uses its own helper instead of the obvious engine call, that is a fact worth understanding
+before replacing it.
+
+### 🌐 PUBLISHED — `Desktop/DragonScreen` is a git repo as of 2026-08-10
+
+Committed locally for GitHub Desktop to publish; **GPL-3.0**, because the MechJeb2 ports make it a
+derivative. `.gitignore` excludes 151 MB of third-party reference (MAS, Dragon2-UI, Figma) and the
+unused 1117-file `kenney_ui_scifi` pack — cited by path, never redistributed. `assets/d-din` stays:
+genuinely used, CC-BY-SA-4.0, licence bundled. `.gitattributes` forces LF because `build.py` asserts
+on line endings. README opens by listing what is broken, since the repo exists to attract bug-finding.
 
 ⛔ **THE SINGLE MOST IMPORTANT THING ON THIS PAGE: build from `docs/UI_AUDIT.md`, never from a
 rendered picture.** Every page designed from an SVG export or a screenshot came out wrong and cost a
