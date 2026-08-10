@@ -52,6 +52,60 @@ namespace DragonScreen
         public const string DroguesMarker = "POD.DROGUES";
         public const string MainsMarker = "POD.MAINS";
 
+        // ---- GRID FINS ----
+        // NOT a Tundra part. Four `Grid Fin M Titanium` from Kerbal Reusability Expansion on every
+        // Ghidorah 9 craft, and this one really does have spaces in `part.name` (config line 3;
+        // the TITLE is the different-looking `T-222 "Nemesis" Grid Fin Medium`).
+        //
+        // ⚠ F9I records getting this exact pair wrong: its FalconDetect filled the GridFins global
+        // from `TE2.19.F9.CGT`, which is the cold-gas RCS thruster, not a fin. Fixed there
+        // 2026-08-04. The two are unrelated parts that both sit on the booster.
+        //
+        // The animation name is preferred over the part name for the actual deploy, the same way
+        // FlightCommands finds the nose cone: B9PartSwitch reorders modules and a part rename is
+        // survivable, but the animation clip name is what the module is actually keyed on.
+        public const string GridFinPart = "Grid Fin M Titanium";
+        public const string GridFinAnimation = "NewFinsDeploy";
+
+        // ---- THE OCTAWEB ----
+        // All nine Merlins are ONE part carrying THREE mutually exclusive ModuleEnginesFX, selected
+        // by a Tundra module. Engine IDs and thrusts from TE_19_F9_S1_Engine.cfg:
+        //
+        //      AllEngines    2560 kN   mode 0   primaryEngineID
+        //      ThreeLanding  1706 kN   mode 1   secondaryEngineID
+        //      CenterOnly     764 kN   mode 2   tertiaryEngineID
+        //
+        // ⚠ Those are NOT multiples of one engine: 284 / 569 / 764 kN "per engine". Any code that
+        // scales thrust linearly by an engine COUNT is wrong on this vehicle.
+        public const string EngineSwitchModule = "ModuleTundraEngineSwitch";
+        public const string EngineSwitchAction = "next engine mode";
+        public const string EngineIdThree = "Three";
+        public const string EngineIdCentre = "Center";
+
+        /// <summary>Ghidorah NINE. The mode switch presents nine engines as one module.</summary>
+        public const int OctawebEngineCount = 9;
+
+        /// <summary>Octaweb modes, in the order the part's one-way "next engine mode" cycles them.</summary>
+        public const int ModeAllEngines = 0, ModeThreeEngine = 1, ModeCentreOnly = 2;
+
+        /// <summary>Which octaweb mode flies a given engine count.</summary>
+        public static int OctawebModeFor(int engines)
+        {
+            if (engines <= 1) return ModeCentreOnly;
+            if (engines <= 3) return ModeThreeEngine;
+            return ModeAllEngines;
+        }
+
+        /// <summary>Does this engineID belong to the given octaweb mode?</summary>
+        public static bool EngineIdIsMode(string engineId, int mode)
+        {
+            bool centre = Has(engineId, EngineIdCentre);
+            bool three = Has(engineId, EngineIdThree);
+            if (mode == ModeCentreOnly) return centre;
+            if (mode == ModeThreeEngine) return three;
+            return !centre && !three;
+        }
+
         private static bool Has(string partName, string marker)
         {
             return partName != null

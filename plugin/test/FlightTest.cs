@@ -84,7 +84,40 @@ public static class FlightTest
         LandingInputs heavy = Fall(40000.0, -400.0, 420.0, 90.0, 9);
         Check("boostback on three", Landing.EnginesFor(LandingPhase.Boostback, heavy) == 3,
               Landing.EnginesFor(LandingPhase.Boostback, heavy).ToString());
-        Check("entry burn on three", Landing.EnginesFor(LandingPhase.EntryBurn, heavy) == 3, "");
+        // ---- THE ENTRY BURN'S SOFT START ----
+        // BOOSTER.ks:721: centre engine alone for 0.75 s, then the outboards. Lighting three at once
+        // into supersonic flow is the shock the stage does not need. Both halves are asserted -
+        // testing only the settled value would let a soft start that never ends pass.
+        LandingInputs entryOpen = heavy; entryOpen.PhaseElapsedS = 0.0;
+        LandingInputs entrySettled = heavy; entrySettled.PhaseElapsedS = 1.0;
+        Check("entry burn opens on the centre engine",
+              Landing.EnginesFor(LandingPhase.EntryBurn, entryOpen) == 1,
+              Landing.EnginesFor(LandingPhase.EntryBurn, entryOpen).ToString());
+        Check("entry burn goes to three after the soft start",
+              Landing.EnginesFor(LandingPhase.EntryBurn, entrySettled) == 3,
+              Landing.EnginesFor(LandingPhase.EntryBurn, entrySettled).ToString());
+        Check("the soft start is short enough to be a start, not a phase",
+              Landing.EntrySoftStartS > 0.0 && Landing.EntrySoftStartS < 3.0, "");
+
+        // ---- THE OCTAWEB'S MODES ARE NOT MULTIPLES OF ONE ENGINE ----
+        // 2560 / 1706 / 764 kN for nine / three / one. Scaling the all-engine figure by an engine
+        // COUNT overstates the one-engine landing burn by 2.2x, and that number sets the hoverslam
+        // ignition altitude. When the vehicle reports its real modes, they must be used verbatim.
+        LandingInputs octa = Fall(5000.0, -200.0, 200.0, 180.0, 9);
+        octa.AccelThreeEngine = 60.0;
+        octa.AccelOneEngine = 27.0;
+        Check("one-engine accel comes from the vehicle, not from a division",
+              Math.Abs(Landing.PhaseAccel(LandingPhase.LandingBurn, octa) - 27.0) < 1e-9,
+              Landing.PhaseAccel(LandingPhase.LandingBurn, octa).ToString("F2"));
+        Check("three-engine accel comes from the vehicle too",
+              Math.Abs(Landing.PhaseAccel(LandingPhase.Boostback, octa) - 60.0) < 1e-9,
+              Landing.PhaseAccel(LandingPhase.Boostback, octa).ToString("F2"));
+        // A conventional cluster of identical engines has no discrete modes, and there the linear
+        // estimate is exactly right - so it has to survive.
+        LandingInputs plain = Fall(5000.0, -200.0, 200.0, 180.0, 9);
+        Check("without discrete modes the linear estimate still applies",
+              Math.Abs(Landing.PhaseAccel(LandingPhase.LandingBurn, plain) - 180.0 / 9.0) < 1e-9,
+              Landing.PhaseAccel(LandingPhase.LandingBurn, plain).ToString("F2"));
         Check("a light booster lands on one",
               Landing.EnginesFor(LandingPhase.LandingBurn, Fall(5000.0, -200.0, 200.0, 180.0, 9)) == 1, "");
         Check("a booster without the TWR takes three",

@@ -393,11 +393,16 @@ namespace DragonScreen
             // Switch the docking camera off when no screen has asked for it lately - a full
             // scene camera is not free and most of a mission is not spent on DOCKING.
             DockingCamRenderer.Idle();
-            // Fly any burn the console armed. Frame-guarded inside, because this Update runs once
-            // per SCREEN and three screens must not each fly their own copy of the same burn.
-            FlightCommands.Tick();
-            AutoPilot.Tick();
-            FlightRecorder.Tick();
+
+            // ---- ⛔ THE AUTOPILOT USED TO BE TICKED FROM HERE. IT MUST NOT BE. ----
+            // FlightCommands, AutoPilot and FlightRecorder now live in FlightDriver, a flight-scene
+            // KSPAddon. This object belongs to the IVA, and the IVA is destroyed whenever the Dragon
+            // stops being the active vessel - which is precisely what a booster handover does. Every
+            // tick driven from here silently stopped at the moment the recovery began. See
+            // FlightDriver.cs for the full account.
+            //
+            // Nothing frame-critical to the DISPLAY belongs here either: this Update runs once per
+            // SCREEN, so anything vehicle-wide would run three times a frame.
         }
 
         /// <summary>

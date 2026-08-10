@@ -48,6 +48,9 @@ namespace DragonScreen
         private static Vessel booster, upperStage;
         private static double startedAt;
 
+        /// <summary>When the CURRENT landing phase began. The entry burn's soft start is timed off it.</summary>
+        private static double phaseStartedAt;
+
         /// <summary>The pad we came from. Captured at liftoff - it is the RTLS target.</summary>
         public static double PadLat, PadLon;
         public static bool HavePad;
@@ -64,6 +67,12 @@ namespace DragonScreen
         {
             Active = false; Phase = LandingPhase.Idle;
             booster = null; upperStage = null; HavePad = false;
+            // Every latch below is a static that would otherwise carry a PREVIOUS flight's state
+            // into this one: fins "already out" on a stage that has not launched, a mode machine
+            // that thinks it is mid-step, a failure already reported so never reported again.
+            gridFinsOut = false;
+            lastModeStepAt = 0.0; modeSteps = 0; lastWantMode = -1; modeFailReported = false;
+            phaseStartedAt = 0.0;
         }
 
         // ------------------------------------------------------------------ handover
@@ -84,6 +93,7 @@ namespace DragonScreen
             Active = true;
             Phase = LandingPhase.Boostback;
             startedAt = Planetarium.GetUniversalTime();
+            phaseStartedAt = startedAt;
 
             Extend(upperStage);
             Extend(booster);
@@ -99,10 +109,21 @@ namespace DragonScreen
         /// <summary>
         /// The separated first stage: a loaded vessel that is not us, is not on the ground, and
         /// carries a booster tank. Matched on part name the same way FlightCommands finds the trunk.
+        ///
+        /// ---- TAKE THE HEAVIEST CANDIDATE THAT CAN STILL FLY, NOT THE FIRST ONE SEEN ----
+        /// This used to return the first loaded vessel carrying a `.S1.` part, in whatever order
+        /// FlightGlobals happened to hold them. A shed interstage, a broken-off tank section, or the
+        /// wreckage of an earlier booster still carries that marker, and picking one of those means
+        /// focus jumps to debris while the real stage falls unguided and the recovery then "completes"
+        /// on the wrong object. Two extra tests settle it: it must have an engine to fly with, and
+        /// among what is left the real booster is the heavy one by a wide margin.
         /// </summary>
         private static Vessel FindBooster(Vessel active)
         {
             List<Vessel> all = FlightGlobals.VesselsLoaded;
+            Vessel best = null;
+            double bestMass = 0.0;
+
             for (int i = 0; i < all.Count; i++)
             {
                 Vessel v = all[i];
@@ -114,10 +135,33 @@ namespace DragonScreen
 
                 // See VehicleParts: this matched "K1" from a PAW title and therefore never fired,
                 // so the recovery could not run even once the handover gate was right.
-                for (int p = 0; p < v.parts.Count; p++)
-                    if (VehicleParts.IsBooster(v.parts[p].name)) return v;
+                bool isBooster = false;
+                for (int p = 0; p < v.parts.Count && !isBooster; p++)
+                    if (VehicleParts.IsBooster(v.parts[p].name)) isBooster = true;
+                if (!isBooster) continue;
+
+                // Debris carries the marker; debris does not carry a working engine.
+                if (!HasEngine(v)) continue;
+
+                double m = v.GetTotalMass();
+                if (m > bestMass) { bestMass = m; best = v; }
             }
-            return null;
+
+            if (best != null)
+                Debug.Log(Tag + "booster candidate '" + best.vesselName + "', "
+                              + bestMass.ToString("F1") + " t");
+            return best;
+        }
+
+        private static bool HasEngine(Vessel v)
+        {
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                List<ModuleEngines> es = v.parts[i].Modules.GetModules<ModuleEngines>();
+                for (int m = 0; m < es.Count; m++)
+                    if (!es[m].flameout) return true;
+            }
+            return false;
         }
 
         private static void Extend(Vessel v)
@@ -158,20 +202,32 @@ namespace DragonScreen
             LandingCommand c = Landing.Guide(s, Phase);
 
             if (c.Phase != Phase)
+            {
                 Debug.Log(Tag + "booster -> " + Landing.Name(c.Phase)
                           + "  alt " + (s.AltitudeRadar / 1000.0).ToString("F1")
                           + " km, v " + s.SurfaceSpeed.ToString("F0")
                           + " m/s, downrange " + (s.DownrangeM / 1000.0).ToString("F1")
                           + " km, ignition at " + (c.IgnitionAltitude / 1000.0).ToString("F2")
                           + " km on " + c.Engines + " engine(s)");
+                // The entry burn's soft start is timed from the start of its phase, so this clock
+                // has to be reset on the transition and not merely at handover.
+                phaseStartedAt = Planetarium.GetUniversalTime();
+            }
             Phase = c.Phase;
             Command = c;
 
             if (Phase == LandingPhase.Touchdown) { Finish("booster down"); return; }
 
             // Only fly it while it is the ACTIVE vessel - an unloaded vessel is on rails and writing
-            // a throttle to it does nothing but look like it worked.
+            // a throttle to it does nothing but look like it worked. That applies to the fins and
+            // the engine mode exactly as it does to the throttle, so every command sits below here.
             if (FlightGlobals.ActiveVessel != booster) return;
+
+            // ---- FINS OUT AT THE TOP OF THE ARC, NOT AT THE ENTRY BURN ----
+            // F9I's AtmGNC opens with "grid fins out, entry burn, guided descent" - the fins are out
+            // BEFORE the gate at 32.5 km, so the stage is already stable when it meets the thick air
+            // rather than deploying into it.
+            if (Phase != LandingPhase.Idle && Phase != LandingPhase.Boostback) DeployGridFins(booster);
 
             SetEngines(booster, c.Engines);
             Aim(booster, c, s);
@@ -188,6 +244,13 @@ namespace DragonScreen
                       + " after " + (Planetarium.GetUniversalTime() - startedAt).ToString("F0") + " s");
             FlightInputHandler.state.mainThrottle = 0f;
             Active = false;
+
+            // ---- ⛔ PUT THE STEERING GAIN BACK. IT IS A GLOBAL ON A SHARED CONTROLLER. ----
+            // Aim() drives MaxStoppingTime to 0.05 for the landing burn, which is right for the last
+            // few hundred metres and badly wrong for anything else. Leaving it there handed the
+            // upper stage a rate limit forty times tighter than the default for the circularisation
+            // it is about to resume. AttitudeController.Release does the same on its own path.
+            AttitudeController.MaxStoppingTime = AttitudeCascade.DefaultMaxStoppingTime;
 
             // Hand focus back so the upper stage can finish the job it was left in the middle of.
             if (upperStage != null && upperStage.state != Vessel.State.DEAD)
@@ -222,7 +285,18 @@ namespace DragonScreen
             double pressureAtm = (v.mainBody != null)
                 ? v.mainBody.GetPressure(v.altitude) / 101.325 : 0.0;
 
-            double thrust = 0.0; int n = 0;
+            // ---- ⛔ ISSUE 8. THIS SUMMED THREE MUTUALLY EXCLUSIVE ENGINE MODES. ----
+            // The Tundra first stage is ONE part carrying THREE ModuleEnginesFX - AllEngines 2560 kN,
+            // ThreeLanding 1706, CenterOnly 764 - of which exactly one is ever lit. Summing every
+            // non-flameout ModuleEngines gave 5030 kN, about double the real figure, and that number
+            // is the input to the hoverslam. It also made `EngineCount` 3, so the "one engine" case
+            // was modelled as a third of a thrust the stage does not have: 1676 kN against the real
+            // 764. Both errors point the same way - too much thrust, ignition too late, into the pad.
+            //
+            // So the modes are read SEPARATELY, by engineID, and the guidance is given all three.
+            // Anything that is not a named mode accumulates into the all-engines figure, which is
+            // what a conventional cluster of identical engines should do.
+            double thrust = 0.0, thrustThree = 0.0, thrustOne = 0.0; int n = 0;
             for (int i = 0; i < v.parts.Count; i++)
             {
                 List<ModuleEngines> es = v.parts[i].Modules.GetModules<ModuleEngines>();
@@ -243,13 +317,23 @@ namespace DragonScreen
                     float isp0 = es[m].atmosphereCurve.Evaluate(0f);
                     float ispNow = es[m].atmosphereCurve.Evaluate((float)pressureAtm);
                     double scale = (isp0 > 0.01f) ? ispNow / isp0 : 1.0;
-                    thrust += es[m].maxThrust * scale;
-                    n++;
+                    double t1 = es[m].maxThrust * scale;
+
+                    string id = es[m].engineID;
+                    if (Contains(id, VehicleParts.EngineIdCentre)) thrustOne = t1;
+                    else if (Contains(id, VehicleParts.EngineIdThree)) thrustThree = t1;
+                    else { thrust += t1; n++; }
                 }
             }
-            s.EngineCount = n;
+
             double mass = v.GetTotalMass();
             s.MaxThrustAccel = (mass > 0.0) ? thrust / mass : 0.0;
+            s.AccelThreeEngine = (mass > 0.0) ? thrustThree / mass : 0.0;
+            s.AccelOneEngine = (mass > 0.0) ? thrustOne / mass : 0.0;
+            // With the octaweb the "all" mode is a single module standing for nine engines, so the
+            // count has to come from the vehicle rather than from how many modules were summed.
+            s.EngineCount = (FindEngineSwitch(v) != null) ? VehicleParts.OctawebEngineCount : n;
+            s.PhaseElapsedS = Planetarium.GetUniversalTime() - phaseStartedAt;
 
             s.DownrangeM = HavePad && v.mainBody != null
                 ? GroundRange(v.mainBody, v.latitude, v.longitude, PadLat, PadLon) : 0.0;
@@ -283,6 +367,181 @@ namespace DragonScreen
         /// </summary>
         private static void SetEngines(Vessel v, int want)
         {
+            PartModule em = FindEngineSwitch(v);
+            if (em != null) { SetOctawebMode(v, em, want); return; }
+            SetEnginesIndividually(v, want);
+        }
+
+        // ------------------------------------------------------------------ the octaweb
+
+        /// <summary>
+        /// Drive the Tundra engine switch to the mode that flies <paramref name="want"/> engines.
+        ///
+        /// ---- WHY THIS IS NOT Activate()/Shutdown() ON INDIVIDUAL ENGINES ----
+        /// It used to be, and it could not work: all nine Merlins are ONE part with three
+        /// mutually exclusive ModuleEnginesFX on it. Sorting them by distance from the centreline
+        /// sorted three modules at the SAME position - an arbitrary order - and then lit the first
+        /// `want` of them, which could light AllEngines and ThreeLanding together.
+        ///
+        /// ---- STEP AND VERIFY, BECAUSE THE PART ONLY OFFERS "NEXT" ----
+        /// There is no "set mode", only a one-way cycle, so reaching a mode means stepping and
+        /// reading back. BOOSTER.ks:898 gives the reason for reading rather than counting: "a step
+        /// that does not take would otherwise leave this script's idea of the octaweb permanently
+        /// one place off the real one", and the landing solve is computed against the mode it
+        /// believes it is in. F9I waits 0.3 s between steps; we have no `wait`, so the interval is
+        /// enforced across ticks.
+        ///
+        /// The guard is one full cycle. Exceeding it means the part is not answering, and that is
+        /// said out loud once - the landing that follows will probably be wrong and the recorder
+        /// should not be the only place that knows.
+        /// </summary>
+        private static void SetOctawebMode(Vessel v, PartModule em, int want)
+        {
+            if (want <= 0)
+            {
+                for (int i = 0; i < v.parts.Count; i++)
+                {
+                    List<ModuleEngines> es = v.parts[i].Modules.GetModules<ModuleEngines>();
+                    for (int m = 0; m < es.Count; m++)
+                        if (es[m].EngineIgnited) es[m].Shutdown();
+                }
+                return;
+            }
+
+            int wantMode = VehicleParts.OctawebModeFor(want);
+            if (wantMode != lastWantMode) { lastWantMode = wantMode; modeSteps = 0; }
+
+            int now = ReadOctawebMode(em);
+            if (now != wantMode && now >= 0)
+            {
+                double t = Planetarium.GetUniversalTime();
+                if (t - lastModeStepAt >= ModeStepIntervalS && modeSteps <= 3)
+                {
+                    lastModeStepAt = t;
+                    modeSteps++;
+                    if (!InvokeAction(em, VehicleParts.EngineSwitchAction))
+                        Debug.LogWarning(Tag + "engine switch has no '"
+                                             + VehicleParts.EngineSwitchAction + "' action");
+                    else
+                        Debug.Log(Tag + "octaweb " + now + " -> stepping toward " + wantMode);
+                }
+                else if (modeSteps > 3 && !modeFailReported)
+                {
+                    modeFailReported = true;
+                    Debug.LogError(Tag + "OCTAWEB WILL NOT REACH MODE " + wantMode
+                                       + " (stuck in " + now + ") - the landing solve is being "
+                                       + "computed against the wrong thrust");
+                }
+                return;                     // do not light anything until the mode is right
+            }
+
+            // Mode is correct (or unreadable, in which case light what is there and say so once).
+            if (now < 0 && !modeFailReported)
+            {
+                modeFailReported = true;
+                Debug.LogWarning(Tag + "cannot read the octaweb mode - lighting whatever is enabled");
+            }
+
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                List<ModuleEngines> es = v.parts[i].Modules.GetModules<ModuleEngines>();
+                for (int m = 0; m < es.Count; m++)
+                {
+                    bool mine = (now < 0) || VehicleParts.EngineIdIsMode(es[m].engineID, wantMode);
+                    bool on = mine && !es[m].flameout;
+                    if (on && !es[m].EngineIgnited) es[m].Activate();
+                    else if (!on && es[m].EngineIgnited) es[m].Shutdown();
+                }
+            }
+        }
+
+        /// <summary>Seconds between mode steps. BOOSTER.ks:926 waits 0.3 s and reads back.</summary>
+        private const double ModeStepIntervalS = 0.3;
+
+        private static double lastModeStepAt;
+        private static int modeSteps, lastWantMode = -1;
+        private static bool modeFailReported;
+
+        private static PartModule FindEngineSwitch(Vessel v)
+        {
+            if (v == null) return null;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                Part p = v.parts[i];
+                for (int m = 0; m < p.Modules.Count; m++)
+                    if (p.Modules[m].moduleName == VehicleParts.EngineSwitchModule)
+                        return p.Modules[m];
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// 0 = all nine, 1 = three, 2 = centre only, -1 = no answer.
+        ///
+        /// -1 is a DISTINCT case from any real mode and is treated as such rather than guessed at,
+        /// exactly as OctaRead does (BOOSTER.ks:880). A Falcon Heavy side booster or a future variant
+        /// may not carry the switch at all.
+        /// </summary>
+        private static int ReadOctawebMode(PartModule em)
+        {
+            if (em == null) return -1;
+            try
+            {
+                for (int i = 0; i < em.Fields.Count; i++)
+                {
+                    BaseField f = em.Fields[i];
+                    if (f == null) continue;
+                    if (!Same(f.name, "mode") && !Same(f.guiName, "mode")) continue;
+                    object val = f.GetValue(em);
+                    if (val == null) return -1;
+                    string d = val.ToString();
+                    if (Contains(d, VehicleParts.EngineIdThree)) return VehicleParts.ModeThreeEngine;
+                    if (Contains(d, VehicleParts.EngineIdCentre)) return VehicleParts.ModeCentreOnly;
+                    return VehicleParts.ModeAllEngines;
+                }
+            }
+            catch (Exception) { }
+            return -1;
+        }
+
+        private static bool InvokeAction(PartModule pm, string guiName)
+        {
+            try
+            {
+                for (int i = 0; i < pm.Actions.Count; i++)
+                {
+                    BaseAction a = pm.Actions[i];
+                    if (a == null || !Same(a.guiName, guiName)) continue;
+                    a.Invoke(new KSPActionParam(KSPActionGroup.None, KSPActionType.Activate));
+                    return true;
+                }
+            }
+            catch (Exception e) { Debug.LogWarning(Tag + "action '" + guiName + "' threw: " + e.Message); }
+            return false;
+        }
+
+        private static bool Same(string a, string b)
+        {
+            return a != null && b != null && string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool Contains(string s, string part)
+        {
+            return s != null && s.IndexOf(part, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        // ------------------------------------------------------------------ conventional engines
+
+        /// <summary>
+        /// The original behaviour, kept for any vehicle WITHOUT the mode switch: light exactly
+        /// <paramref name="want"/> engines, choosing the ones nearest the centreline.
+        ///
+        /// Falcon 9's single-engine landing burn is the centre engine and it has to be - an outboard
+        /// engine alone would put the thrust vector off the centre of mass. Sorting by distance from
+        /// the axis finds it without needing to know the part's name.
+        /// </summary>
+        private static void SetEnginesIndividually(Vessel v, int want)
+        {
             List<ModuleEngines> all = new List<ModuleEngines>();
             for (int i = 0; i < v.parts.Count; i++)
                 all.AddRange(v.parts[i].Modules.GetModules<ModuleEngines>());
@@ -314,6 +573,48 @@ namespace DragonScreen
             if (e == null || e.part == null) return float.MaxValue;
             return Vector3.ProjectOnPlane(e.part.transform.position - com, axis).sqrMagnitude;
         }
+
+        // ------------------------------------------------------------------ grid fins
+
+        /// <summary>
+        /// Put the grid fins out, once.
+        ///
+        /// The action is a TOGGLE, so the latch is not an optimisation - it is what stops a second
+        /// call folding the fins back in during entry, and BOOSTER.ks:941 is explicit that the cost
+        /// of losing it is the stage. The Progress test is the belt to that braces: it also covers a
+        /// stage whose fins were already deployed by hand, the same way F9I's DeployLegs checks each
+        /// leg's state rather than trusting a flag.
+        ///
+        /// Matched on ANIMATION NAME rather than part name, as FlightCommands does for the nose cone.
+        /// Once they are out they also start contributing real torque, because a grid fin carries
+        /// ModuleControlSurface and AttitudeController now counts every ITorqueProvider.
+        /// </summary>
+        private static void DeployGridFins(Vessel v)
+        {
+            if (gridFinsOut || v == null) return;
+            gridFinsOut = true;
+
+            int n = 0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                List<ModuleAnimateGeneric> mods =
+                    v.parts[i].Modules.GetModules<ModuleAnimateGeneric>();
+                for (int m = 0; m < mods.Count; m++)
+                {
+                    if (mods[m].animationName != VehicleParts.GridFinAnimation) continue;
+                    if (mods[m].Progress > 0.5f) continue;      // already out
+                    mods[m].Toggle();
+                    n++;
+                }
+            }
+            Debug.Log(Tag + "grid fins deployed (" + n + ")");
+            if (n == 0)
+                Debug.LogWarning(Tag + "no grid fins found - looked for ModuleAnimateGeneric '"
+                                     + VehicleParts.GridFinAnimation + "'. Entry will have no "
+                                     + "aerodynamic authority.");
+        }
+
+        private static bool gridFinsOut;
 
         private static void Aim(Vessel v, LandingCommand c, LandingInputs s)
         {

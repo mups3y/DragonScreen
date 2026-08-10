@@ -83,6 +83,23 @@ namespace DragonScreen
         public double MaxThrustAccel;
         /// <summary>How many engines the booster actually has available.</summary>
         public int EngineCount;
+
+        // ---- ⚠ THE OCTAWEB'S MODES ARE NOT MULTIPLES OF ONE ENGINE ----
+        // See VehicleParts: 2560 / 1706 / 764 kN for nine / three / one, which is 284 / 569 / 764 kN
+        // "per engine". Scaling MaxThrustAccel by an engine COUNT - which is what PhaseAccel used to
+        // do, and all it could do - overstates the one-engine landing burn by 2.2x. That number goes
+        // straight into the hoverslam solve, so it puts the ignition altitude too low and flies the
+        // stage into the pad, which is the same failure ISSUE 2 was written to prevent.
+        //
+        // Zero means "this vehicle has no such discrete mode"; PhaseAccel then falls back to the
+        // linear estimate, which is right for a conventional cluster of identical engines.
+        /// <summary>Accel in the three-engine landing mode, m/s^2. Zero if the vehicle has none.</summary>
+        public double AccelThreeEngine;
+        /// <summary>Accel on the centre engine alone, m/s^2. Zero if the vehicle has none.</summary>
+        public double AccelOneEngine;
+
+        /// <summary>Seconds in the current phase. The entry burn's soft start is timed off this.</summary>
+        public double PhaseElapsedS;
         public double Gravity;
         /// <summary>Ground distance to the landing zone, metres.</summary>
         public double DownrangeM;
@@ -243,28 +260,55 @@ namespace DragonScreen
         /// That memory's own instruction is "pick engine mode from MEASURED thrust, before the
         /// landing solve" - which is exactly what this does.
         /// </summary>
+        /// <summary>
+        /// Entry-burn soft start, seconds. BOOSTER.ks:721 - "light the CENTRE engine alone at full
+        /// throttle, give it 0.75 s to establish, then add the other two. Lighting three at once
+        /// into supersonic flow is the shock the stage does not need."
+        /// </summary>
+        public const double EntrySoftStartS = 0.75;
+
         public static int EnginesFor(LandingPhase phase, LandingInputs s)
         {
             int have = (s.EngineCount > 0) ? s.EngineCount : 1;
 
             if (phase == LandingPhase.Boostback) return Min(BoostbackEngines, have);
-            if (phase == LandingPhase.EntryBurn) return Min(EntryEngines, have);
+
+            // The entry burn opens on the centre engine alone and adds the outboards at 0.75 s. F9I
+            // does this with two EngSwitch calls either side of a `wait`; we have no `wait`, so the
+            // schedule is expressed against phase-elapsed time and the glue follows it per tick.
+            if (phase == LandingPhase.EntryBurn)
+                return (s.PhaseElapsedS < EntrySoftStartS)
+                     ? Min(1, have)
+                     : Min(EntryEngines, have);
+
             if (phase != LandingPhase.LandingBurn) return 0;
 
-            // Landing: measure what one engine would actually give us at this mass.
-            double perEngine = s.MaxThrustAccel / have;
+            // Landing: measure what ONE engine actually gives at this mass. Prefer the vehicle's own
+            // centre-engine figure - dividing the all-engine accel by the engine count is the 2.2x
+            // error described on AccelOneEngine, and this is the exact test that decides whether the
+            // booster commits to a one-engine landing.
+            double perEngine = (s.AccelOneEngine > 0.0) ? s.AccelOneEngine : s.MaxThrustAccel / have;
             double twrOne = (s.Gravity > 0.0) ? perEngine / s.Gravity : 0.0;
             return (twrOne >= MinLandingTwr) ? 1 : Min(3, have);
         }
 
         private static int Min(int a, int b) { return a < b ? a : b; }
 
-        /// <summary>Thrust acceleration available on the engines this phase will actually light.</summary>
+        /// <summary>
+        /// Thrust acceleration available on the engines this phase will actually light.
+        ///
+        /// Uses the vehicle's MEASURED per-mode accelerations when it has them, because the octaweb's
+        /// modes are not multiples of one engine (see AccelOneEngine). The linear fallback is kept
+        /// for a conventional cluster of identical engines, where it is exactly right.
+        /// </summary>
         public static double PhaseAccel(LandingPhase phase, LandingInputs s)
         {
             int have = (s.EngineCount > 0) ? s.EngineCount : 1;
             int use = EnginesFor(phase, s);
             if (use <= 0) use = have;
+
+            if (use == 1 && s.AccelOneEngine > 0.0) return s.AccelOneEngine;
+            if (use == 3 && s.AccelThreeEngine > 0.0) return s.AccelThreeEngine;
             return s.MaxThrustAccel * use / have;
         }
 

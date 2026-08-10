@@ -88,12 +88,22 @@ namespace DragonScreen
             active = true;
         }
 
-        /// <summary>Stop steering and give the vehicle back.</summary>
+        /// <summary>
+        /// Stop steering and give the vehicle back.
+        ///
+        /// ⛔ MaxStoppingTime IS RESET HERE BECAUSE IT IS A GLOBAL STATIC ON A SHARED CONTROLLER.
+        /// BoosterRecovery drives it to 0.05 for the landing burn and never put it back, so the next
+        /// vehicle to use the controller - the upper stage, resuming circularisation the moment the
+        /// booster is down - inherited a rate limit forty times tighter than the default and would
+        /// have slewed at a crawl. Statics must validate, not remember; same rule that already
+        /// applies to BoosterRecovery's own state.
+        /// </summary>
         public static void Release(Vessel v)
         {
             active = false;
             Detach();
             actuation = Vector3d.zero;
+            MaxStoppingTime = AttitudeCascade.DefaultMaxStoppingTime;
             pitchPi.ResetI(); yawPi.ResetI(); rollPi.ResetI();
             pitchRate.ResetI(); yawRate.ResetI(); rollRate.ResetI();
         }
@@ -236,28 +246,65 @@ namespace DragonScreen
         ///
         /// Summed from the parts rather than taken from a cached total, because the whole point of
         /// the MoI-scaled gains is that they track the vehicle as it stages - and a stale torque
-        /// figure would undo that. Reaction wheels and RCS both count; engine gimbal does not, which
-        /// makes the estimate CONSERVATIVE and the controller gentle rather than twitchy.
+        /// figure would undo that.
+        ///
+        /// ---- ⛔ THIS USED TO COUNT REACTION WHEELS ONLY. THAT IS NOT "CONSERVATIVE". ----
+        /// It is wrong by three orders of magnitude on a launch vehicle, and the comment that stood
+        /// here claimed RCS was included when the code never looked at it - which is how it survived
+        /// being read several times.
+        ///
+        /// MEASURED, not estimated. On this stack the only wheels are the interstage's 3.5 kN·m and
+        /// the Dragon pod's 6, so this returned 9.5. Recorded pitch MoI in the gravity turn
+        /// (flight_0810_182024.csv) is 21 949 t·m². The cascade's rate limit is
+        ///     maxOmega = torque × MaxStoppingTime / MoI = 9.5 × 2.0 / 21 949 = 0.05 deg/s
+        /// against roughly 0.45 deg/s needed to fly the turn. The vehicle would have rolled normally
+        /// - roll MoI is only 122 t·m² - and simply refused to pitch over. Nine Merlin gimbals are
+        /// worth order 10³ kN·m and were counted as zero.
+        ///
+        /// ---- ASK EVERY TORQUE PROVIDER, WHICH IS WHAT MECHJEB DOES ----
+        /// `VesselState.cs:1024-1034` sums wheels + RCS + control surfaces + gimbal + anything else
+        /// implementing ITorqueProvider. Grid fins join that set the moment they deploy, and gimbal
+        /// authority correctly falls to zero at zero throttle because GetPotentialTorque scales with
+        /// current thrust.
+        ///
+        /// One deliberate simplification against MechJeb: it accumulates the positive and negative
+        /// directions separately in a Vector6 and takes the larger at the end, while this takes the
+        /// larger per module and sums. The two agree whenever a module's pos and neg are symmetric,
+        /// which MechJeb's own comments assert for wheels and gimbals (`VesselState.cs:891, 966`).
         /// </summary>
         private static Vector3d AvailableTorque(Vessel v)
         {
             Vector3d t = Vector3d.zero;
-            for (int i = 0; i < v.parts.Count; i++)
+            try
             {
-                Part p = v.parts[i];
-                for (int m = 0; m < p.Modules.Count; m++)
+                for (int i = 0; i < v.parts.Count; i++)
                 {
-                    ModuleReactionWheel w = p.Modules[m] as ModuleReactionWheel;
-                    if (w != null && w.isEnabled && w.wheelState == ModuleReactionWheel.WheelState.Active)
+                    Part p = v.parts[i];
+                    for (int m = 0; m < p.Modules.Count; m++)
                     {
-                        t.x += w.PitchTorque; t.y += w.RollTorque; t.z += w.YawTorque;
+                        PartModule pm = p.Modules[m];
+                        if (!pm.isEnabled) continue;
+                        ITorqueProvider tp = pm as ITorqueProvider;
+                        if (tp == null) continue;
+
+                        Vector3 pos, neg;
+                        tp.GetPotentialTorque(out pos, out neg);
+                        t.x += Math.Max(Math.Abs(pos.x), Math.Abs(neg.x));
+                        t.y += Math.Max(Math.Abs(pos.y), Math.Abs(neg.y));
+                        t.z += Math.Max(Math.Abs(pos.z), Math.Abs(neg.z));
                     }
                 }
             }
-            // Never zero: the cascade divides by it, and a vehicle with no wheels still has RCS and
-            // gimbal that this does not count. A small floor keeps the actuation finite and the
-            // controller simply asks for its maximum, which is the right answer when authority is
-            // unknown rather than absent.
+            catch (Exception e)
+            {
+                // A third-party ITorqueProvider that throws must not take the controller with it -
+                // Drive() would detach and stop steering the vehicle. Keep what was summed.
+                Debug.LogWarning(Tag + "a torque provider threw, using the partial sum: " + e.Message);
+            }
+
+            // Never zero: the cascade divides by it. A small floor keeps the actuation finite and the
+            // controller then simply asks for its maximum, which is the right answer when authority
+            // is unknown rather than absent.
             if (t.x < 0.1) t.x = 0.1;
             if (t.y < 0.1) t.y = 0.1;
             if (t.z < 0.1) t.z = 0.1;
