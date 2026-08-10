@@ -77,27 +77,28 @@ The real order, read end to end:
 
 ## 3. Station mission — `station_ops.ks` (43 functions)
 
-**Almost none of this is ported.** This is the largest gap and it is the whole middle of the mission.
+**Ported 2026-08-11.** This row used to read "almost none of this is ported" and was the largest gap
+on the project.
 
 | F9I | what it does | status |
 |---|---|---|
-| `StFindStation` / `StLockStation` | find and hold the station target | **NO** |
-| `StPhaseAtLaunch` / `StRequiredLead` / `StLaunchPhaseWait` | **launch on PHASE** — wait for the right phase angle | **NO** |
-| `StClosestPort` | choose which docking port to aim at | **NO** |
-| `StNodeBasis` / `StProNode` / `StNodeSafe` | build burn nodes with a periapsis-floor guard | **NO** |
-| `StCwSolve` / `StCwLeg` | **Clohessy-Wiltshire two-impulse**, at 0.20 of a period | **NO** — we classify the rung and then fall through to corridor closing |
-| `StPhaseLeg` | the phasing-orbit leg | **NO** |
-| `StTerminal` / `StCloseIn` | terminal approach and close-in | **NO** |
-| `StMatchStationOrbit` | match the station's orbit | **NO** |
-| `StRendezvousAndDock` | the whole approach | **NO** |
-| `StCloseDockingShroud` | close the nose cone after docking | **NO** |
-| `StTopUpBeforeUndock` | **REFUELLING** | **NO** |
-| `StUndock` / `StBackAway` | undock and back off at 1.5 m/s to 150 m | **PART** — constants ported, no controller |
-| `StPhaseToDeorbitOrbit` | phase to the landing-calibrated 85.1 × 79.2 orbit | **NO** |
-| `StUndockAndLand` | the whole return | **NO** |
-| `StMonoForDeorbit` / `StMonoReport` | check the monoprop budget BEFORE committing | **NO** |
-| `StReturnAllowed` | the go/no-go for coming home | **NO** |
-| ladder + periapsis floor | >3 km / 0.5–3 km / <0.5 km, floor 75 km | **DONE** (rules and guard only) |
+| `StFindStation` / `StLockStation` | find and hold the station target | **DONE** — `StationApproach.Find` |
+| `StPhaseAtLaunch` / `StRequiredLead` / `StLaunchPhaseWait` | **launch on PHASE** — wait for the right phase angle | **DONE** — `pure/LaunchWindow.cs` |
+| `StClosestPort` | choose which docking port to aim at | **DONE** — `pure/DockGeometry.cs` |
+| `StNodeBasis` / `StProNode` / `StNodeSafe` | build burn nodes with a periapsis-floor guard | **DONE** — the floor lives inside `NodeExecutor` so no caller can forget it |
+| `StCwSolve` / `StCwLeg` | **Clohessy-Wiltshire two-impulse**, at 0.20 of a period | **DONE** — `pure/CwTargeting.cs`, flown through the node executor |
+| `StPhaseLeg` | the phasing-orbit leg | **DONE** — `pure/Phasing.cs`; cannot lower periapsis |
+| `StTerminal` / `StCloseIn` | terminal approach and close-in | **DONE** — `src/StationApproach.cs` |
+| `StMatchStationOrbit` | match the station's orbit | **DONE** — `OrbitMatch`, first rung of the ladder |
+| `StRendezvousAndDock` | the whole approach | **DONE** — `src/DockingOps.cs` |
+| `StCloseDockingShroud` | close the nose cone after docking | **DONE** — in `UndockOps`, before release |
+| `StTopUpBeforeUndock` | **REFUELLING** | **DONE** — holds on PROGRESS, not on a full tank |
+| `StUndock` / `StBackAway` | undock and back off at 1.5 m/s to 150 m | **DONE** — our port only, sign calibrated in flight, burst-then-coast |
+| `StPhaseToDeorbitOrbit` | phase to the landing-calibrated 85.1 × 79.2 orbit | **DONE** — `pure/DeorbitOrbit.cs` + `src/PhaseDownOps.cs`; engines proved lit first |
+| `StUndockAndLand` | the whole return | **DONE** as a chain rather than one function: `UndockOps` → DEORBIT NOW → `PhaseDownOps` → `DeorbitOps` → `EntryOps` |
+| `StMonoForDeorbit` / `StMonoReport` | check the monoprop budget BEFORE committing | **DONE** — `pure/ReturnBudget.cs` |
+| `StReturnAllowed` | the go/no-go for coming home | **DONE** — `DeorbitOps.Engage` refuses on it |
+| ladder + periapsis floor | >3 km / 0.5–3 km / <0.5 km, floor 75 km | **DONE** |
 
 ---
 
@@ -105,20 +106,21 @@ The real order, read end to end:
 
 | F9I | what it does | status |
 |---|---|---|
-| `DgFindOverflight` / `DgPhasing` | phase until the ground track crosses the LZ | **NO** |
-| `DgPlaneMatch` / `DgPlaneBurn` | match the landing site's plane | **NO** |
-| `DgDeorbitBurn` | the burn, throttled on periapsis AND range error | **DONE** (law + fitted aims) |
-| `DgAimPoint` / `DgAimMiss` / `DgImpactMiss` | where we are actually going to land | **NO** — needs the predictor |
-| `DgCapsuleTrim` | trim with the capsule's own lift | **NO** |
-| `DgRcsDeorbit` | de-orbit on RCS alone | **NO** |
-| `DgSepStack` / `DgTrunkAndEI` | separation sequencing into entry | **NO** |
-| `DgPreEntryTrim` | RCS cross-track kill in vacuum | **PART** — deadbands ported, no controller |
-| `DgCoastToEI` | coast to entry interface, with warp | **NO** |
-| `DgEntryGuidance` | the AoA schedule with **shorten-only + lead** | **PART** — schedule ported, the closed loop is not |
-| `DgLongMargin` | the measured margin curve | **NO** |
-| `DgTerminalParachute` | chutes | **PART** |
-| `DgTerminalPropulsive` | SuperDraco landing | **PART** — throttle law ported |
-| `DgLandingReserve` / `DgUseS2Deorbit` | reserve and mode decisions | **PART** — constants only |
+| `DgFindOverflight` / `DgSiteInertialAt` / `DgLandLag` / `DgTrackMissAt` | pick the pass whose ground track crosses the LZ | **DONE** — `pure/Overflight.cs`; site evaluated at TOUCHDOWN, lag calibrated not derived |
+| `DgPlaneMatch` | measure how far out of plane the site will be at landing | **DONE** — `Overflight.OffPlaneDeg`, reported not burnt |
+| `DgPlaneBurn` / `DgPlaneNodeBurn` / `DgRelNodeUt` | fly a plane change | **NOT PORTED, DELIBERATELY** — F9I hard-gates its own off (`dgPlaneChangeEnabled` false; flights 082–100 missed by 54–262 km), its geometry has an unresolved contradiction in its own source, and it needs MechJeb's node executor. See `docs/PORT_PLAN.md` E4 |
+| `DgDeorbitBurn` | the burn, throttled on periapsis AND range error | **DONE** — `src/DeorbitOps.cs`, flown against the aim miss with periapsis as the depth limit |
+| `DgAimPoint` / `DgAimMiss` / `DgImpactMiss` / `DgDownCross` | where we are actually going to land | **DONE** — `ImpactPredictor` (ours, drag measured) + `Orbital.DownCross` with the flight-053 lever-arm fix |
+| `DgCapsuleTrim` / `DgPreEntryTrim` | take the long bias out during the dead coast | **DONE** — `EntryOps.Trim`, RCS translation only, landing reserve outranks the range |
+| `DgRcsDeorbit` | de-orbit on RCS alone | **DONE** — `DeorbitOps` runs the burn on RCS when there is no thrust |
+| `DgSepStack` / `DgTrunkAndEI` | separation sequencing into entry | **DONE** — `EntryOps.Separate`, one decouple in the retrograde attitude |
+| `DgCoastToEI` | coast to entry interface, with warp | **DONE** minus the warp — warp automation is out of scope; every gate here is an altitude or a speed, not a clock |
+| `DgEntryGuidance` | the AoA schedule with **shorten-only + lead** | **DONE** — `pure/EntryGuidance.cs` (all four traps) + `EntryOps.Fly` for the lift vector |
+| `DgLongMargin` | the measured margin curve | **DONE** — `pure/EntryMargin.cs` |
+| `DgTerminalParachute` | chutes | **DONE** — `pure/Terminal.cs` + `EntryOps` |
+| `DgTerminalPropulsive` | SuperDraco landing | **DONE** — engines lit UNDER the drogues, chutes cut only once thrust is proven |
+| `DgLandingReserve` / `DgUseS2Deorbit` | reserve and mode decisions | **DONE** for the reserve and the terminal mode. The S2 de-orbit branch stays unreachable: `DeorbitOps` refuses to run with a second stage attached |
+| `DgDeployGear` | gear out of the heat shield | **DONE** — after touchdown, and never on a splashdown |
 
 ---
 
@@ -241,18 +243,12 @@ Roughly **15% ported**, and the ported part is the part I happened to grep for. 
 not detail — it is the **middle and end of the mission**: launch-on-phase, the CW rendezvous,
 docking, refuelling, undock, the phasing to the calibrated de-orbit orbit, and the closed-loop entry.
 
-**The order to do it in**, because each depends on the ones above it:
+**THE ORDER ABOVE IS SPENT — all five steps are done as of 2026-08-11.** It read: 1. `GNC.ks`
+toolbox · 2. ascent architecture · 3. booster · 4. station · 5. return.
 
-1. **`GNC.ks` toolbox** — `TimeToAltitude`, `Impact`, `ClosestApproach`, `ExecNode`, `RCSTranslate`.
-   Nothing else can be ported faithfully without these.
-2. **Ascent architecture** — MECO as a discrete step, `BurnToApoapsis`, `FalconSepS2` before
-   circularising. Fixes the dry booster and the over-powered circularisation together.
-3. **Booster** — `Flip1`, the real `Boostback`, `LandingZoneGuidance` with its sign flip, grid fins.
-4. **Station** — `StCwSolve`, `StRendezvousAndDock`, `DockGNC`, `StTopUpBeforeUndock`, `StUndock`.
-5. **Return** — `DgPhasing`, `DgAimPoint`, the closed-loop `DgEntryGuidance`.
-
-**This is several sessions of work, not one.** Saying otherwise is how the last three flights got
-lost. Each step above should end with a flight and a log read, and this table updated.
+**⛔ WHAT REPLACES IT IS NOT MORE PORTING. IT IS FLYING.** Each step was supposed to end with a
+flight and a log read, and that half did not happen — only §2 and §5 of the mission have flown. The
+order of work is now the order of verification, and it is at the bottom of `docs/MISSION_PLAN.md`.
 
 ## Explicit gaps confirmed 2026-08-11 (external review + verification)
 

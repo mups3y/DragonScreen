@@ -66,12 +66,19 @@ namespace DragonScreen
             // rather than when someone happens to ask.
             ImpactPredictor.Sample(AutoPilot.AscentVessel);
             ImpactPredictor.Sample(BoosterRecovery.BoosterVessel);
+            // And the returning capsule, which is neither of those by the time it comes home: the
+            // autopilot let go at insertion and the booster is long since down. Without this its drag
+            // is never measured and every entry prediction quietly falls back to a vacuum solve.
+            ImpactPredictor.Sample(DeorbitOps.Vehicle);
+            ImpactPredictor.Sample(EntryOps.Vehicle);
 
             NodeExecutor.Tick();
             StationApproach.Tick();
             DockingOps.Tick();
             UndockOps.Tick();
+            PhaseDownOps.Tick();
             DeorbitOps.Tick();
+            EntryOps.Tick();
             FlightRecorder.Tick();
         }
 
@@ -93,7 +100,9 @@ namespace DragonScreen
                 NodeExecutor.Reset();
                 DockingOps.Reset();
                 UndockOps.Reset();
+                PhaseDownOps.Reset();
                 DeorbitOps.Reset();
+                EntryOps.Reset();
                 ImpactPredictor.Reset();
             }
             catch (Exception e)

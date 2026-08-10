@@ -50,9 +50,23 @@ namespace DragonScreen
 
         private static readonly System.Collections.Generic.Dictionary<uint, Vector3d> lastVel =
             new System.Collections.Generic.Dictionary<uint, Vector3d>();
-        private static double lastSampleUt = -1.0;
 
-        public static void Reset() { bc.Clear(); lastVel.Clear(); lastSampleUt = -1.0; }
+        /// <summary>
+        /// When each vessel was last sampled.
+        ///
+        /// ---- ⛔ THIS WAS ONE SHARED FIELD, AND IT MEANT ONLY ONE VEHICLE WAS EVER MEASURED ----
+        /// `FlightDriver` samples the ascent vehicle and then the booster in the same frame. With a
+        /// single timestamp the first call stamped it to now, so the second computed dt = 0, hit the
+        /// `dt &lt;= 0` guard and returned - every frame, for the whole flight. The booster's ballistic
+        /// coefficient stayed at zero, which silently downgrades its impact prediction to a VACUUM
+        /// solve: always long, by kilometres, on the one vehicle whose whole descent is a drag problem.
+        /// It fails invisibly because `Predict` still returns an answer and only `DragModelled` says
+        /// which kind. Per-vessel, like everything else in here.
+        /// </summary>
+        private static readonly System.Collections.Generic.Dictionary<uint, double> lastSampleUt =
+            new System.Collections.Generic.Dictionary<uint, double>();
+
+        public static void Reset() { bc.Clear(); lastVel.Clear(); lastSampleUt.Clear(); }
 
         /// <summary>The current estimate for a vessel, for the recorder. Zero = unknown.</summary>
         public static double BallisticCoefficient(Vessel v)
@@ -80,8 +94,10 @@ namespace DragonScreen
             bool havePrev = lastVel.TryGetValue(id, out prev);
             lastVel[id] = vel;
 
-            double dt = now - lastSampleUt;
-            lastSampleUt = now;
+            double was;
+            bool haveWas = lastSampleUt.TryGetValue(id, out was);
+            lastSampleUt[id] = now;
+            double dt = haveWas ? now - was : 0.0;
             if (!havePrev || dt <= 0.0 || dt > 1.0) return;      // a warp jump is not a measurement
 
             CelestialBody b = v.mainBody;

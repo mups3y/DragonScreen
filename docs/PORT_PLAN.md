@@ -112,17 +112,56 @@ burn and F2 for the axis to back away along.
 A budget check, no guidance. **Do this before E2–E8**: it is cheap, and it answers "should we undock
 at all", which is the question the crew actually needs.
 
-### E2 · Phase into the deorbit orbit
-**Read:** `StPhaseToDeorbitOrbit:2560`. Needs F1.
+### E2 · Phase into the deorbit orbit — **DONE 2026-08-11**
+**Read:** `StPhaseToDeorbitOrbit:2560`, constants at `station_ops.ks:78-80`. Needs F1.
 
-### E3 · Find an overflight
+`pure/DeorbitOrbit.cs` + `src/PhaseDownOps.cs`. Two Hohmann half-burns onto 85.1 × 79.2 km through
+the node executor. **`DeorbitOps.Engage` now runs it first** — every aim constant in `pure/Deorbit.cs`
+was fitted from that orbit, so de-orbiting from the station's 86.8 × 85.8 hands them an entry energy
+they do not describe.
+
+**⚠ The trap that is not the maths:** the first station return planned both burns with **nothing
+lit**, so the executor fell back to RCS and pushed the wrong way — 120.3 × 119.5 became 159.1 × 138.0
+and spent 34.5 units of monopropellant. `PodEngines.Available` is the check, and `PhaseDownOps` waits
+on it rather than assuming ignition worked.
+
+### E3 · Find an overflight — **DONE 2026-08-11**
 **Read:** `DgFindOverflight:856`, `DgSiteInertialAt:805`, `DgLandLag:821`, `DgOffPlaneAt:839`,
 `DgTrackMissAt:847`, `DgGCDist:566`, `DgBearing:573`. Pure, no burns — a search over time.
 
-### E4 · Plane match
-**Read:** `DgPlaneMatch:889`, `DgPlaneNodeBurn:1000`, `DgNodeBasis:1106`, `DgPlaneDeltaVAt:1121`,
-`DgPlaneDeltaV:1133`, `DgRelNodeUt:1152`, `DgPlaneBurn:1190`. ~300 lines, the largest single read on
-this list. Needs F1.
+`pure/Overflight.cs`. Coarse 60 s sweep over 5 orbits, then refine 5 → 1 → 0.2 s.
+
+**⛔ The site is evaluated at TOUCHDOWN, not at the overflight.** That single distinction is
+`CargoDragon_070`'s 55 km. And the lag is **calibrated (0.358 of a period), not derived** — the
+plausible derivation gives 366 s, flights 072/074 flew it, and the cross-track went from +53 km
+straight through zero to −64 km.
+
+### E4 · Plane match — **DECIDED 2026-08-11: PORT THE MEASUREMENT, NOT THE BURN**
+**Read:** `DgPlaneMatch:889-1000` in full, plus the `dgPlaneChangeEnabled` declaration at `:33` and
+the file header at `:26-33`.
+
+**⛔ F9I DOES NOT FLY THIS BURN, AND THE PLAN WAS WRONG TO ASSUME IT DID.** Three findings, all from
+the source itself:
+
+1. **It is hard-gated off.** `global dgPlaneChangeEnabled is false`, with the reason in the header:
+   flights **082–100 flew the plane change and missed by 54–262 km**. `DgPlaneMatch` solves the
+   geometry, logs it, and returns before `DgPlaneNodeBurn`.
+2. **Its own geometry is unresolved.** The source carries an open DIAG block: `dgTheta` (off-plane
+   from the normal at the overflight) and `dgRotS` (from the normal now) are the same angle by
+   construction and disagree by **3.6× to 26×** across four flights. Its author wrote *"DO NOT 'fix'
+   this by making one call the other until that is known"*. Porting a burn driven by a number the
+   source says may be fiction is exactly the failure this plan exists to prevent.
+3. **`DgPlaneNodeBurn` hands the burn to MechJeb's node executor** after five hand-flown attempts
+   failed. `mechjeb-kos-binding-limits` rules that out for us.
+
+**And it does not cost us a landing.** Our station is at **inclination 0.133°** — the plane is
+degenerate. The source records the equatorial case directly: off-plane reads up to 1.5°, the gate
+fires, no burn happens, *and the capsule lands at 331 m anyway* because the entry lift walks the
+cross-track off (flight 080 touched down at **−5 m** of cross).
+
+**Ported:** `DgSiteInertialAt`, `DgLandLag`, `DgOffPlaneAt`, `DgTrackMissAt` — the measurement, in
+`pure/Overflight.cs`, reported to the crew and the recorder. **Not ported:** the burn.
+Re-open only with flight evidence that the residual cross-track is not being absorbed by the entry.
 
 ### E5 · Deorbit burn — **DONE 2026-08-11**
 **Read:** `DgDeorbitBurn:1328`, `DgPhasing:1306`, `DgUseS2Deorbit:1901`, `DgS2DeorbitToPeri:1568`,
@@ -131,15 +170,20 @@ this list. Needs F1.
 **⚠** `FlightCommands.StartDeorbit` is currently a plain retrograde burn with no target periapsis
 solve. It gets **replaced**, not extended.
 
-### E6 · Trunk and entry interface
+### E6 · Trunk and entry interface — **DONE 2026-08-11**
 **Read:** `DgSepStack:1859`, `DgPreEntryTrim:1910`, `DgCoastToEI:1970`, `DgTrunkAndEI:1995`,
 `DgCapsuleTrim:1408`.
+
+`src/EntryOps.cs` stages `Separating` → `CoastToInterface` → `Trimming`. One decouple, taken in the
+**retrograde** attitude so the trunk goes prograde and the capsule is already pointed for what
+follows. The trim runs on RCS **translation** with steering still locked shield-forward, and the
+landing propellant reserve outranks the range every time.
 
 **⚠ `falcon-dragon-two-decouplers`:** `TE.19.C.Dragon.Decoupler` drops the S2 alone; only the TRUNK
 decoupler takes everything below it — and a comment in `dragon_deorbit.ks` itself says the opposite
 and is wrong. We already have this right in `VehicleParts`; do not let the source's comment undo it.
 
-### E7 · Lifting entry — the bank controller — **LAW DONE 2026-08-11**, glue outstanding
+### E7 · Lifting entry — the bank controller — **DONE 2026-08-11** (law and glue)
 **Read:** `DgEntryGuidance:2109-2356`. 247 lines, the second-largest read. Also `DgSetProfileAngle:680`,
 `DgSetProfile:733`, `DgImpactMiss:601`, `DgDownCross:605`, `DgAimPoint:586`, `DgAimMiss:590`.
 
@@ -147,9 +191,15 @@ and is wrong. We already have this right in `VehicleParts`; do not let the sourc
 **⚠ `falcon-dragon-entry-solution`:** the flown law is "shorten-only + lead". Check `x1` first on any
 new recording. `pure/Entry.cs` was NOT replaced after all: it answers a different question - which way the heat shield points per altitude band, carrying the CargoDragon_012 lesson - and composes with the new range controller rather than duplicating it. Noted in both headers so nobody merges them.
 
-### E8 · Terminal descent
+### E8 · Terminal descent — **DONE 2026-08-11**
 **Read:** `DgTerminal:2411`, `DgTerminalParachute:2356`, `DgTerminalPropulsive:2372`,
 `DgRecoveryMain:2426`.
+
+`pure/Terminal.cs` + the terminal stages of `src/EntryOps.cs`. Mode chosen on **capability**, and the
+crew are told which of the three conditions failed. The propulsive path lights the SuperDracos
+**under** the drogues and cuts only once thrust is proven — a headless check sweeps every stopping
+distance to prove the burn gate can never be reached before the arm gate. Gear after touchdown, never
+on a splashdown.
 
 ---
 
@@ -174,8 +224,14 @@ Recorded so nobody spends a session discovering why they cannot.
 3. ~~**R1**, **R2**~~ **DONE** — §6 complete: match-orbit, phasing, CW, ladder, terminal, all wired
 4. ~~**F2**, **D1**~~ **DONE** — `pure/DockGeometry.cs` + `src/DockingOps.cs`, 15 checks
 5. ~~**D2**, **D3**~~ **DONE** — `src/UndockOps.cs`; §7 complete
-6. **E2**, **E3**, **E4**, **E5**
-7. **E6**, **E7**, **E8**
+6. ~~**E2**, **E3**, **E4**, **E5**~~ **DONE** — phase-down, overflight search, plane MEASUREMENT
+   (not the burn — see E4), de-orbit burn
+7. ~~**E6**, **E7**, **E8**~~ **DONE** — `src/EntryOps.cs` is the whole return sequence, and
+   `DeorbitOps` hands to it automatically the way `DgRecoveryMain` does
+
+**§8 is complete. The port is complete.** What remains is not porting — it is flying it. See
+`docs/MISSION_PLAN.md` for what is proven versus merely written, and its "known gaps" table for the
+three things left out on purpose.
 
 **One test flight per numbered group, not per item.** Group 1–2 need no flight at all: they are pure
 plus a headless check.

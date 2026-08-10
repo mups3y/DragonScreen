@@ -54,14 +54,14 @@ a paragraph of theory), and check whether a thing exists before building it.
 
 ---
 
-## WHERE THE BUILD IS — 2026-08-06. Read this before planning anything.
+## WHERE THE BUILD IS — 2026-08-11. Read this before planning anything.
 
-**~7 400 headless checks pass** across seven suites (layout, page, panel/sequence, flight software,
-orbital, predictor, burn exec, docking). 32 files in `src/pure`, 16 in `src/`, 6 art files.
+**~7 930 headless checks pass** across 15 suites. 51 files in `src/pure`, 26 in `src/`, 16 test
+suites, 6 art files.
 
-**THE PAGES WORK. THE WHOLE MISSION IS PORTED. ALMOST NONE OF IT HAS FLOWN.** Read
-`docs/MISSION_PLAN.md` for per-phase status and `docs/PORT_PLAN.md` for what is left and in what
-order — both are kept current and they are the authority, not this block.
+**THE PAGES WORK. THE WHOLE MISSION IS PORTED, END TO END. ALMOST NONE OF IT HAS FLOWN.** Read
+`docs/MISSION_PLAN.md` for per-phase status and `docs/PORT_PLAN.md` for the contracts and what was
+deliberately left out — both are kept current and they are the authority, not this block.
 
 | phase | state |
 |---|---|
@@ -72,12 +72,18 @@ order — both are kept current and they are the authority, not this block.
 | §5 upper stage to orbit | **FLOWN** — 86.0 × 83.8 km, S2 sep works, 5.50 t in orbit |
 | §6 rendezvous | ported: node executor, orbit match, phasing, CW, speed ladder, terminal |
 | §7 dock / refuel / undock | ported |
-| §8 return | budget, de-orbit burn and entry laws ported; E2/E3/E4/E6/E8 and the entry GLUE are not |
+| §8 return | **ported entire** — phase-down, overflight search, de-orbit, trunk jettison, pre-entry trim, lifting entry, chutes, propulsive. One button: DEORBIT NOW runs the lot |
 
-**~1,290 headless checks.** The last real flight was 2026-08-10 23:19 and it ended in a
-booster/upper-stage collision that has since been fixed. Everything built after that — the whole
-rendezvous, docking and return stack — is transcription plus headless tests and has never run in
-the game. Expect the first flight of any of it to find something, most likely a frame convention.
+**⛔ THE PORT BEING FINISHED IS NOT THE SAME AS THE MISSION WORKING.** The last real flight was
+2026-08-10 23:19 and it ended in a booster/upper-stage collision that has since been fixed.
+Everything built after that — the whole rendezvous, docking and return stack — is transcription plus
+headless tests and has never run in the game. The tests catch arithmetic; they cannot catch a wrong
+assumption about what KSP does. Expect the first flight of any of it to find something, most likely
+a frame convention.
+
+**The highest-value next test is a plain RTLS launch**, reading `b_phase` and `b_predMissKm`. §4 has
+the most flight-derived constants riding on it and has never landed once. The return stack is
+downstream of an orbit we already reach reliably, so it can wait its turn.
 
 ### The four architectural facts a new session needs
 
@@ -95,11 +101,16 @@ the game. Expect the first flight of any of it to find something, most likely a 
    each vehicle's own telemetry (`a_total − a_gravity − a_thrust` → ballistic coefficient), not
    modelled. Where it cannot measure, it reports a vacuum solve and SAYS so.
 
-### The recorder is 113 columns and checks itself
-`a_` = ascent vehicle, `b_` = booster, both every row, plus `focus` and `warp`. It counts its own
-commas against the header on the first row and logs `RECORDER COLUMN MISMATCH` if they differ —
-**if you see that, do not read the CSV.** Flight data is archived to
-`Desktop/quarantine/dragonscreen_flightdata`, not left in the game folder.
+### The recorder is 139 columns and checks itself
+`a_` = ascent vehicle, `b_` = booster, `r_` = the return (the same craft as `a_`, in the phases after
+insertion), all every row, plus `focus` and `warp`. It counts its own commas against the header on
+the first row and logs `RECORDER COLUMN MISMATCH` if they differ — **if you see that, do not read the
+CSV.** Flight data is archived to `Desktop/quarantine/dragonscreen_flightdata`, not left in the game
+folder.
+
+**The two columns that judge a return:** `r_liftMin` — zero at touchdown means the entry flew OPEN
+LOOP, so the miss is de-orbit AIM error and not guidance error — and `r_bcAscent` / `r_bcBooster`,
+the measured ballistic coefficients everything downstream of a prediction rests on.
 
 ### ⛔ 2026-08-10 — SIX DEFECTS FOUND WITHOUT FLYING. READ THIS BEFORE THE NEXT FLIGHT.
 
@@ -542,8 +553,10 @@ circularisation on this flight.
 `ctlPitch/ctlYaw/ctlRoll` either, so **those black-box columns stay dead and the system-identification
 pass is still blocked.**
 
-**What it does NOT do yet:** booster boostback and landing, rendezvous, docking, entry. "Full flight"
-is ascent-to-orbit only. Deorbit exists but only as the interim panel buttons.
+**What it does NOT do yet:** nothing, on paper — the whole mission is ported as of 2026-08-11,
+"FULL FLIGHT" runs ascent through insertion, and DEORBIT NOW runs phase-down, de-orbit, separation,
+trim, lifting entry and touchdown as one sequence. **What it does not do YET IN PRACTICE is the
+question that matters:** only ascent and insertion have flown. See the state header at the top.
 
 ### ⛔⛔ READ `docs/F9I_PORT_MAP.md` BEFORE TOUCHING THE FLIGHT SOFTWARE. IT IS THE INVENTORY.
 
@@ -553,16 +566,20 @@ It exists because I cherry-picked three flights in a row: grep F9I for the one f
 implicated, port it, fly, lose the vehicle to the next thing. The user named it twice — *"you are
 still cherry picking"*, *"you should be looking from end to end"* — and both times were right.
 
-**F9I is 24 885 lines of flown, tuned flight software and we have ported roughly 15% of it** — the
-15% I happened to grep for. What is missing is not detail, it is the **middle and end of the
-mission**: launch-on-phase, the Clohessy-Wiltshire rendezvous, docking, refuelling, undock, phasing
-to the calibrated de-orbit orbit, and the closed-loop entry. `COMMON/GNC.ks` — the 48-function
-toolbox all of it stands on — is **entirely unported**.
+**This paragraph used to say we had ported roughly 15% of F9I's 24 885 lines and that the middle and
+end of the mission were missing. That is no longer true — all of it is ported as of 2026-08-11** —
+but the map is not therefore obsolete, and neither is the habit it exists to enforce.
 
 The map lists every function in `station_ops.ks` (43), `dragon_deorbit.ks` (57), `BOOSTER.ks` (13)
-and `GNC.ks` (48) with a DONE / PART / NO status and what the gap is. **Update the row when you port
-something.** The order to work in is at the bottom of it, and step 1 is the GNC toolbox because
-nothing else can be ported faithfully without it.
+and `GNC.ks` (48) with a status and what the gap is. **Update the row when you port something, and
+read the row before you change something.** Three rows now say NOT PORTED, DELIBERATELY — the plane
+change, warp automation, the ASDS boostback branch — and each carries the flights that decided it.
+
+**⛔ The specific trap it still guards:** F9I contains paths its own author DISABLED after they lost
+vehicles. `dgPlaneChangeEnabled` is the clearest — false, because flights 082–100 flew that code and
+missed by 54–262 km. Porting it because it is there, and because the function name reads like
+something the mission needs, would be a faithful transcription of a known failure. Read what the
+source does with a function, not just what it contains.
 
 ### ⛔ THE FLIGHT PARAMETERS ARE ALREADY SOLVED — IN F9I. PORT THEM, DO NOT INVENT THEM.
 

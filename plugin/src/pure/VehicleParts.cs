@@ -52,6 +52,15 @@ namespace DragonScreen
         public const string DroguesMarker = "POD.DROGUES";
         public const string MainsMarker = "POD.MAINS";
 
+        /// <summary>
+        /// The heat shield - and, less obviously, where the LANDING GEAR lives.
+        ///
+        /// ⚠ The gear is a `ModuleAnimateGeneric` "deploy gear" on THIS part, not on the pod. It is
+        /// deployed only after touchdown and only on land: out early it is drag in the airflow and, on
+        /// a propulsive landing, it sits in the SuperDraco plume.
+        /// </summary>
+        public const string HeatShieldMarker = "DRAGONV2.HEATSHIELD";
+
         // ---- ⛔ TWO DECOUPLERS, AND ONLY ONE OF THEM IS EVER THE RIGHT ONE ----
         // From Ghidorah 9 - Crew Rodan.craft, top to bottom:
         //     TE.18.DRAGONV2.TRUNK       ModuleTundraDecoupler  drops the TRUNK *and everything
@@ -151,5 +160,6 @@ namespace DragonScreen
         public static bool IsPod(string partName) { return Has(partName, PodMarker); }
         public static bool IsDrogues(string partName) { return Has(partName, DroguesMarker); }
         public static bool IsMains(string partName) { return Has(partName, MainsMarker); }
+        public static bool IsHeatShield(string partName) { return Has(partName, HeatShieldMarker); }
     }
 }

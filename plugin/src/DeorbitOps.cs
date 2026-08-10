@@ -29,10 +29,16 @@ namespace DragonScreen
         public static string Note = "-";
         public static double AimMissM = -1.0, ThrottleCmd, PeriapsisM;
 
+        /// <summary>
+        /// The capsule flying the burn. Exposed so `FlightDriver` can keep its drag measured - the
+        /// burn is steered by the impact prediction, and an unmeasured vehicle predicts in vacuum.
+        /// </summary>
+        public static Vessel Vehicle { get { return ship; } }
+
         private static Vessel ship;
         private static DeorbitState st;
         private static double startedAt, lastScanAt, prevPeri, prevPeriAt;
-        private static bool aligned;
+        private static bool aligned, phaseDownPending;
 
         /// <summary>Where the capsule is trying to land. Defaults to LZ-1.</summary>
         public static double TargetLatDeg = LandingSites.Lz1.LatDeg;
@@ -80,6 +86,18 @@ namespace DragonScreen
             prevPeri = v.orbit.PeA;
             prevPeriAt = startedAt;
 
+            // ---- ⛔ PHASE DOWN FIRST, OR EVERY AIM CONSTANT BELOW IS DESCRIBING A DIFFERENT ORBIT ----
+            // `pure/Deorbit.cs`'s aims were each fitted from 85.1 x 79.2 km. The station sits at
+            // 86.8 x 85.8. F9I runs `StPhaseToDeorbitOrbit` before handing over to the de-orbit for
+            // exactly this reason, and the phase-down knows how to skip itself when it is unnecessary
+            // or impossible - so asking is free and not asking is a miss.
+            phaseDownPending = false;
+            if (!DeorbitOrbit.AlreadyOnOrbit(v.orbit.ApA, v.orbit.PeA))
+            {
+                PhaseDownOps.Engage(v);
+                phaseDownPending = !PhaseDownOps.Finished;
+            }
+
             st = new DeorbitState();
             st.AimMissM = -1.0;
             st.BestMissM = 9.9e12;
@@ -107,7 +125,7 @@ namespace DragonScreen
 
         public static void Reset()
         {
-            Engaged = false; ship = null; Note = "-";
+            Engaged = false; ship = null; Note = "-"; phaseDownPending = false;
             AimMissM = -1.0; ThrottleCmd = 0.0; PeriapsisM = 0.0;
         }
 
@@ -134,6 +152,26 @@ namespace DragonScreen
 
             double now = Planetarium.GetUniversalTime();
             PeriapsisM = ship.orbit != null ? ship.orbit.PeA : 0.0;
+
+            // The phase-down owns the vehicle until it settles, one way or the other. It is allowed to
+            // give up - "de-orbit from here" beats "stuck in a phase that cannot complete" - so this
+            // waits on Finished, not on success.
+            if (phaseDownPending)
+            {
+                if (!PhaseDownOps.Finished)
+                {
+                    Note = "PHASE-DOWN - " + PhaseDownOps.Note;
+                    return;
+                }
+                phaseDownPending = false;
+                startedAt = now;
+                prevPeri = PeriapsisM;
+                prevPeriAt = now;
+                Debug.Log(Tag + "phase-down settled (" + PhaseDownOps.Stage
+                          + ") - starting the de-orbit burn from "
+                          + (ship.orbit.ApA / 1000.0).ToString("F1") + " x "
+                          + (ship.orbit.PeA / 1000.0).ToString("F1") + " km");
+            }
 
             // Retrograde, and hold it. The burn is long and shallow; a capsule that wanders off
             // retrograde is putting its dv somewhere other than where the solve assumed.
@@ -186,6 +224,16 @@ namespace DragonScreen
                           + (st.AimMissM >= 0.0
                              ? (st.AimMissM / 1000.0).ToString("F2") + " km" : "unknown"));
                 Note = "BURN COMPLETE - " + why;
+
+                // ---- HAND STRAIGHT TO THE ENTRY, THE WAY `DgRecoveryMain` DOES ----
+                // Separation, the coast, the range trim, the lifting entry and the chutes are one
+                // continuous sequence with no crew action between them, and there is no moment in it
+                // where stopping to wait for a button press would be useful. Engage BEFORE disengaging:
+                // Disengage drops our vessel reference.
+                EntryOps.TargetLatDeg = TargetLatDeg;
+                EntryOps.TargetLonDeg = TargetLonDeg;
+                EntryOps.Engage(ship);
+
                 Disengage(why);
                 return;
             }

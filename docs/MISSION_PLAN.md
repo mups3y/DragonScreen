@@ -141,26 +141,42 @@ range, drogues then mains, splashdown.
 
 | step | F9I | ours |
 |---|---|---|
-| phase into the deorbit orbit | `StPhaseToDeorbitOrbit` | **NO** |
-| find an overflight of the site | `DgFindOverflight`, `DgSiteInertialAt` | **NO** |
-| plane match | `DgPlaneMatch`, `DgPlaneBurn`, `DgPlaneDeltaV` | **NO** |
-| phasing | `DgPhasing` | **NO** |
-| deorbit burn to a target periapsis | `DgDeorbitBurn` | **PORTED** `src/DeorbitOps.cs` - flown against the aim miss, periapsis is the depth limit. DEORBIT NOW points at it. |
-| trunk jettison before the burn | `DgSepStack`, `DgTrunkAndEI` | **PART** we fire it, but not on F9I's schedule |
-| pre-entry trim | `DgPreEntryTrim`, `DgCapsuleTrim` | **NO** |
-| **lifting entry on bank angle, long-margin schedule** | `DgEntryGuidance`, `DgLongMargin` | **PART** schedule AND controller ported (`pure/EntryMargin.cs`, `pure/EntryGuidance.cs`, 23 checks); the glue that drives bank angle from them is not written |
-| aim point, cross-range | `DgAimPoint`, `DgDownCross`, `DgImpactMiss` | **PORTED** `src/ImpactPredictor.MissTo` - integrated, drag measured in flight |
-| drogues, mains | `DgTerminalParachute` | **PART** buttons wired, no sequencer |
-| propulsive option | `DgTerminalPropulsive` | **NO** |
+| phase into the deorbit orbit | `StPhaseToDeorbitOrbit` | **PORTED** `pure/DeorbitOrbit.cs` + `src/PhaseDownOps.cs` - two Hohmann half-burns onto 85.1 x 79.2, engines proved lit first, skippable |
+| find an overflight of the site | `DgFindOverflight`, `DgSiteInertialAt`, `DgLandLag`, `DgTrackMissAt` | **PORTED** `pure/Overflight.cs` - coarse/refine sweep, site evaluated at TOUCHDOWN not overflight |
+| plane match | `DgPlaneMatch`, `DgPlaneBurn`, `DgPlaneDeltaV` | **MEASUREMENT ONLY, ON PURPOSE** - `Overflight.OffPlaneDeg`. F9I hard-gates its own burn off (`dgPlaneChangeEnabled` false; flights 082-100 missed by 54-262 km) and its geometry has an open contradiction. See `docs/PORT_PLAN.md` E4 |
+| phasing | `DgPhasing` | **PORTED** as the phase-down above - the overflight search replaces the wait |
+| deorbit burn to a target periapsis | `DgDeorbitBurn` | **PORTED** `src/DeorbitOps.cs` - flown against the aim miss, periapsis is the depth limit. DEORBIT NOW points at it, and it now phases down first |
+| trunk jettison before the burn | `DgSepStack`, `DgTrunkAndEI` | **PORTED** `EntryOps.Separate` - one decouple, in the retrograde attitude |
+| pre-entry trim | `DgPreEntryTrim`, `DgCapsuleTrim` | **PORTED** `EntryOps.Trim` - RCS translation only, attitude never leaves shield-forward, landing reserve outranks the range |
+| **lifting entry on bank angle, long-margin schedule** | `DgEntryGuidance`, `DgLongMargin` | **PORTED** law in `pure/EntryMargin.cs` + `pure/EntryGuidance.cs`, glue in `EntryOps.Fly` - lift vector, scaled AoA, one-way drop latch |
+| aim point, cross-range | `DgAimPoint`, `DgDownCross`, `DgImpactMiss` | **PORTED** `src/ImpactPredictor.MissTo` (integrated, drag measured) and `Orbital.DownCross` with the 053 lever-arm fix |
+| drogues, mains | `DgTerminalParachute` | **PORTED** `pure/Terminal.cs` + `EntryOps` - speed-or-altitude drogue window, mains at 2 km |
+| propulsive option | `DgTerminalPropulsive` | **PORTED** engines lit UNDER the drogues, chutes cut only once thrust is proven, hoverslam then hover |
+| gear, and the final report | tail of `DgRecoveryMain` | **PORTED** gear after touchdown, never on a splashdown; miss distance logged |
+
+### Known gaps in §8, deliberately
+
+| gap | why |
+|---|---|
+| S2 de-orbit (`DgUseS2Deorbit`, `DgS2DeorbitToPeri`) | `DeorbitOps` refuses to run with a second stage attached, so only the Draco path is reachable. That makes `Deorbit.AimS2Crew` / `AimS2Cargo` unreachable constants today. Decided at E5; revisit only if a direct launch-to-landing is wanted |
+| the plane-change burn | see the table above |
+| warp automation | the recorder logs `warp` so a warped row is identifiable; taking the time controls off the crew is a separate decision |
 
 ---
 
 ## What this says
 
-Of the eight phases, **two are done** (ascent to MECO, upper stage to orbit), **one is close**
-(separation), **one is half-ported and wrong in four specific places** (booster recovery), and
-**four have not been started** (launch window, rendezvous, docking/refuel, return and entry).
+**All eight phases are ported as of 2026-08-11.** The mission runs end to end: launch on phase,
+ascend, recover the booster, insert, rendezvous, dock, refuel, undock, phase down, de-orbit, enter on
+lift, and land.
 
-The order of work is the order of the flight. Fix §4's four NOs, because that is what is failing
-now and every one of them is a line of `AtmGNC` or `Land` I had not read. Then §1, §6, §7, §8 in
-sequence — each one starting by reading its F9I function end to end, and adding its row here first.
+**⛔ AND ALMOST NONE OF IT HAS FLOWN.** Only §2 and §5 are proven in the game - ascent and insertion,
+86.0 x 83.8 km with the second stage away. Everything from §4 onward is transcription plus headless
+tests: about 1 350 checks, which catch the arithmetic and cannot catch a wrong assumption about what
+KSP does. Treat every **PORTED** in this file as "written from the source that flies it", not as
+"works".
+
+The order of work is now the order of *verification*, not of porting. The highest-value single test
+is a plain RTLS launch reading `b_phase` and `b_predMissKm`: §4 has the most flight-derived constants
+riding on it and has never landed. The return stack is downstream of an orbit we already reach
+reliably, so it can wait its turn.

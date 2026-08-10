@@ -299,5 +299,52 @@ namespace DragonScreen
             outLat = p2 * Deg;
             outLon = ((l2 * Deg + 540.0) % 360.0) - 180.0;
         }
+
+        /// <summary>
+        /// Split a predicted miss into ALONG-track and CROSS-track, metres. `DgDownCross`.
+        ///
+        /// `alongM` is NEGATIVE when the impact is predicted LONG - past the target - which is where
+        /// the entry profile wants it for most of the descent. `crossM` is positive when the target
+        /// lies to the RIGHT of the ground track.
+        ///
+        /// ---- ⛔ THE CROSS TERM IS NOT `miss · sin(Δbearing)`, AND THE OBVIOUS VERSION IS BIASED ----
+        /// It was, and it read over a kilometre high. `track` is the ship→impact bearing measured AT
+        /// THE SHIP, but the naive formula applies it at the IMPACT POINT, up to 1 165 km away - and a
+        /// great-circle bearing rotates along its own path (meridian convergence). On flight 053 that
+        /// rotation was only 0.22°, but it multiplies the MISS, which during a de-orbit is the 318 km
+        /// aim overshoot rather than a small error: 318 894 · sin(0.22°) = 1 222 m of pure fiction.
+        /// Measured that flight, the formula reported 1 473 m of cross when the true perpendicular
+        /// offset was 251 m. 1473 − 251 = 1222, exactly. The yaw loop steered to that false null and
+        /// kept correcting after the real cross had already passed through zero.
+        ///
+        /// The version below is the standard cross-track distance - the perpendicular from the TARGET
+        /// to the great circle running ship→impact. Both bearings are taken AT THE SHIP, so there is no
+        /// lever arm to amplify.
+        ///
+        /// ⚠ THE ALONG TERM WAS NEVER AFFECTED: it takes cos() of an angle near 180°, which is flat
+        /// there, so the same 0.22° costs it under a metre. Only cross sat on the steep part of the
+        /// curve. Do not "fix" along to match.
+        ///
+        /// ⚠ AND THE SIGN IS FLIGHT-VERIFIED, NOT DERIVED. Negating it would invert every cross-track
+        /// control on the vehicle at once.
+        /// </summary>
+        public static void DownCross(double bodyRadius,
+                                     double shipLat, double shipLon,
+                                     double impactLat, double impactLon,
+                                     double tgtLat, double tgtLon,
+                                     out double alongM, out double crossM, out double missM)
+        {
+            missM = GroundRange(bodyRadius, impactLat, impactLon, tgtLat, tgtLon);
+            double track = Bearing(shipLat, shipLon, impactLat, impactLon);
+            double toTgt = Bearing(impactLat, impactLon, tgtLat, tgtLon);
+            alongM = missM * System.Math.Cos((toTgt - track) * Rad);
+
+            double tgtD = GroundRange(bodyRadius, shipLat, shipLon, tgtLat, tgtLon);
+            double tgtB = Bearing(shipLat, shipLon, tgtLat, tgtLon);
+            double arc = tgtD / bodyRadius;
+            double s = System.Math.Sin(arc) * System.Math.Sin((tgtB - track) * Rad);
+            if (s > 1.0) s = 1.0; else if (s < -1.0) s = -1.0;
+            crossM = System.Math.Asin(s) * bodyRadius;
+        }
     }
 }

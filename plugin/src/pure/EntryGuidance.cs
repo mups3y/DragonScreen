@@ -90,6 +90,16 @@ namespace DragonScreen
         public double LiftMin;
         /// <summary>Worst below-profile error seen, metres.</summary>
         public double WorstErrorM;
+        /// <summary>
+        /// The range loop has given up for good. `dgDrop`.
+        ///
+        /// ⚠ LATCHED ON PURPOSE. Set when the prediction lands inside `LzToleranceM` or the capsule
+        /// falls below `TermAltM`, and never cleared. F9I: *"re-engaging lift this low would only throw
+        /// away a good approach"* - a prediction that has arrived on the target is a result to protect,
+        /// not an input to keep correcting, and a metre of altitude noise around the floor must not be
+        /// able to switch the loop back on in the last 90 seconds of a descent.
+        /// </summary>
+        public bool Dropped;
     }
 
     public struct EntryGuideCommand
@@ -131,6 +141,68 @@ namespace DragonScreen
         /// <summary>Minimum interval between rate updates, seconds.</summary>
         public const double RateIntervalS = 0.5;
 
+        // ---- HOW THE COMMAND BECOMES AN ATTITUDE. dragon_deorbit.ks:35, 322-323, 474, 2311-2320. ----
+
+        /// <summary>
+        /// The capsule's trim angle of attack off retrograde, degrees. `dgAoA`. L/D about 0.27.
+        ///
+        /// ⚠ A DRAGON IS NOT A STARSHIP. Starship holds 78-79° - nearly broadside - and inheriting that
+        /// number throws the guidance most of a hemisphere off. A capsule flies heat-shield-first and
+        /// trims only about 15°.
+        /// </summary>
+        public const double TrimAoaDeg = 15.0;
+
+        /// <summary>
+        /// Dynamic pressure below which there is nothing to steer with, kPa. `dgQsteer`.
+        /// Above the interface the capsule just holds shield-forward; banking in vacuum does nothing.
+        /// </summary>
+        public const double QSteerKpa = 0.003;
+
+        /// <summary>
+        /// Pitch sign. `dgPitchSign`. ESTABLISHED BY MEASUREMENT ON FLIGHT 001, not assumed: with the
+        /// impact 157 km long the law commanded −1, which through this sign put lift along +up, and the
+        /// error shortened monotonically to −3.5 km. So **+up SHORTENS and −up EXTENDS**.
+        /// </summary>
+        public const double PitchSign = -1.0;
+
+        /// <summary>Yaw sign. `dgYawSign`. Same provenance as the cross-track formula's sign.</summary>
+        public const double YawSign = 1.0;
+
+        /// <summary>Cancel entry warp at this radar altitude, metres. `dgEntryWarpAlt`.</summary>
+        public const double WarpCancelAltM = 55000.0;
+        /// <summary>Physics-warp index used above it: 0=1x 1=2x 2=3x 3=4x. `dgEntryWarpIdx`.</summary>
+        public const int WarpIndex = 3;
+
+        /// <summary>
+        /// How much of full deflection the two commands add up to, 0..1.
+        ///
+        /// The vertical and lateral axes are perpendicular, so the magnitude is the plain hypotenuse -
+        /// and it is capped at 1 because the AoA below is a TRIM angle, not a budget to overspend.
+        /// </summary>
+        public static double LiftFraction(double verticalCmd, double lateralCmd)
+        {
+            double m = System.Math.Sqrt(verticalCmd * verticalCmd + lateralCmd * lateralCmd);
+            return (m > 1.0) ? 1.0 : m;
+        }
+
+        /// <summary>
+        /// The angle of attack to actually fly, degrees.
+        ///
+        /// ⚠ SCALED, NOT BANG-BANG. A partial command flies a partial angle; a zero command collapses
+        /// to exactly retrograde. Slamming to full deflection for any non-zero error is how a capsule
+        /// with 20 s of lead time oscillates instead of converging.
+        /// </summary>
+        public static double AoaCommandDeg(double verticalCmd, double lateralCmd)
+        {
+            return TrimAoaDeg * LiftFraction(verticalCmd, lateralCmd);
+        }
+
+        /// <summary>True once there is enough air for the bank command to mean anything.</summary>
+        public static bool CanSteer(double dynamicPressureKpa)
+        {
+            return dynamicPressureKpa > QSteerKpa;
+        }
+
         /// <summary>
         /// The signed distance still to run to the landing zone ALONG THE GROUND TRACK.
         ///
@@ -148,7 +220,11 @@ namespace DragonScreen
         {
             EntryGuideCommand c = new EntryGuideCommand();
 
-            bool rangeLive = s.AltitudeM > TermAltM;
+            // The drop latch, before anything else reads it. Both conditions are one-way.
+            if (s.MissM >= 0.0 && s.MissM < LzToleranceM) mem.Dropped = true;
+            if (s.AltitudeM <= TermAltM) mem.Dropped = true;
+
+            bool rangeLive = !mem.Dropped;
             if (rangeLive)
             {
                 // Trap 1: the schedule knows altitude, not geography. Clamp it to what is left.

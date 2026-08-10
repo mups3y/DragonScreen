@@ -147,7 +147,23 @@ namespace DragonScreen
             "b_cmdThrottle,b_ignitionAlt,b_engines,b_aim,b_legs," +
             "b_downrangeKm,b_predMissKm,b_initMissKm," +
             "b_attErrDeg,b_omegaP,b_omegaR,b_omegaY,b_actP,b_actR,b_actY," +
-            "b_ctlPitch,b_ctlYaw,b_ctlRoll,b_ctlThrottle";
+            "b_ctlPitch,b_ctlYaw,b_ctlRoll,b_ctlThrottle," +
+            // ================= THE RETURN =================
+            // Not a third vehicle - the same craft as `a_`, in the phases after insertion. Kept in its
+            // own block because these columns are all "-" or zero for the whole ascent, so a reader
+            // can ignore them until the return and a return recording is readable on its own.
+            //
+            // ⛔ r_liftMin IS THE COLUMN THAT JUDGES AN ENTRY. Zero at touchdown means the range loop
+            // never commanded any shortening: the descent flew OPEN LOOP, the de-orbit aim was too
+            // short, and the miss is aim error rather than guidance error. Every aim constant in
+            // pure/Deorbit.cs was fitted by reading exactly this out of a recording.
+            "r_stage,r_note,r_method,r_vertCmd,r_latCmd,r_aoaCmd," +
+            "r_alongKm,r_crossM,r_missM,r_wantLongKm,r_trimErrM,r_belowProfile," +
+            "r_liftMin,r_worstErrKm,r_dropped,r_drogues,r_mains,r_burnThr," +
+            "r_phaseDown,r_deorbitMissKm,r_deorbitThr,r_nodePhase,r_nodeDvLeft," +
+            // The measured ballistic coefficients. Everything the impact predictions are built on
+            // comes from these two numbers, and until now they only existed inside the predictor.
+            "r_bcAscent,r_bcBooster";
 
         /// <summary>
         /// Called every frame by the painter; samples at 5 Hz. Cheap enough to call unconditionally
@@ -267,10 +283,53 @@ namespace DragonScreen
             Attitude(r, AttitudeController.Booster, false);
             Controls(r, b);
 
+            Return(r);
+
             r.Length -= 1;                // trailing comma
             r.Append("\n");
 
             if (++pendingRows >= FlushEvery) Flush();
+        }
+
+        /// <summary>
+        /// The return block - 25 columns, written unconditionally.
+        ///
+        /// ⚠ NO BRANCHES IN HERE. `Margins()` once wrote five fields down its null path and four down
+        /// its real one, which would have shifted every later column for the pre-separation phase of
+        /// every flight. A block whose width depends on state is the recorder's characteristic bug, so
+        /// this one has a fixed shape and lets the sources return zero when they are idle.
+        /// </summary>
+        private static void Return(StringBuilder r)
+        {
+            S(r, EntryOps.Stage.ToString());
+            S(r, EntryOps.Engaged ? EntryOps.Note : "-");
+            F(r, (double)(int)EntryOps.Method);
+            F(r, EntryOps.VerticalCmd);
+            F(r, EntryOps.LateralCmd);
+            F(r, EntryOps.AoaCmdDeg);
+
+            F(r, EntryOps.AlongTrackM / 1000.0);
+            F(r, EntryOps.CrossTrackM);
+            F(r, EntryOps.MissM);
+            F(r, EntryOps.WantLongM / 1000.0);
+            F(r, EntryOps.TrimErrorM);
+            F(r, EntryOps.BelowProfile ? 1.0 : 0.0);
+
+            F(r, EntryOps.LiftMin);
+            F(r, EntryOps.WorstErrorM / 1000.0);
+            F(r, EntryOps.Dropped ? 1.0 : 0.0);
+            F(r, EntryOps.DroguesDeployed ? 1.0 : 0.0);
+            F(r, EntryOps.MainsDeployed ? 1.0 : 0.0);
+            F(r, EntryOps.ThrottleCmd);
+
+            S(r, PhaseDownOps.Stage.ToString());
+            F(r, DeorbitOps.AimMissM / 1000.0);
+            F(r, DeorbitOps.ThrottleCmd);
+            S(r, NodeExecutor.Phase.ToString());
+            F(r, NodeExecutor.RemainingDvMps);
+
+            F(r, ImpactPredictor.BallisticCoefficient(AutoPilot.AscentVessel));
+            F(r, ImpactPredictor.BallisticCoefficient(BoosterRecovery.BoosterVessel));
         }
 
         /// <summary>Where it is and what it weighs. `orbital` adds the orbit block.</summary>
