@@ -345,6 +345,29 @@ namespace DragonScreen
                 return false;
             }
 
+            // ---- ⛔ NOT WITH THE SECOND STAGE STILL ON. ----
+            // The 21:01 flight reached orbit as a 20.5 t stack because nothing ever dropped the S2,
+            // and de-orbiting that does not work at any burn size: the burn is sized for a capsule,
+            // and entry needs the heat shield forward, which a capsule with a spent tank bolted to
+            // its nose will not hold. Refuse and say which decoupler is needed rather than firing a
+            // burn that cannot end well.
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                if (!VehicleParts.IsSecondStage(v.parts[i].name)) continue;
+                Log(what + " REFUSED - the second stage is still attached. It should have gone at "
+                    + "the 40 km periapsis gate during ascent (see AutoPilot.SeparateSecondStage). "
+                    + "Drop it on the '" + VehicleParts.DragonDecouplerMarker + "' first.");
+                return false;
+            }
+
+            // ---- THE TRUNK GOES BEFORE THE BURN, WHICH IS THE REAL PROFILE ----
+            // Crew Dragon jettisons the trunk shortly before the de-orbit burn - it carries the
+            // solar arrays and radiators and is not built to survive entry. Doing it here rather
+            // than leaving it to the crew means the burn is sized against the mass that will
+            // actually fly it, and it is announced rather than silent.
+            if (FirePyros(v)) Log(what + " - trunk jettisoned before the burn");
+            else Log(what + " - no trunk to jettison (already gone)");
+
             BurnTargetPe = targetPe;
             // ---- ONE CONTROLLER AT A TIME ----
             // The panel deorbit uses stock SAS RETROGRADE mode, which SAS is genuinely good at -

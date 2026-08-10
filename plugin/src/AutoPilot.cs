@@ -96,6 +96,7 @@ namespace DragonScreen
             BoosterRecovery.Reset();
             ascentVessel = v;
             packedReported = false;
+            s2Separated = false;
             lastHandoverTry = 0.0;
             starvedFor = 0.0;
             blindStages = 0;
@@ -347,6 +348,17 @@ namespace DragonScreen
                     v.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
             }
 
+            // ---- RCS FOR THE UNPOWERED COASTS ----
+            // F9I's MECO() does `rcs on` before the separation hold. The recording says why: with
+            // the engines out the gimbal goes too, available torque falls from 2300 kN·m to the 9.5
+            // of the reaction wheels alone, and the pitch axis sat saturated at ±1 for the whole
+            // coast at 7-8 degrees of error. RCS is the only authority the stack has there.
+            if (c.Rcs && !v.ActionGroups[KSPActionGroup.RCS])
+                v.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
+
+            // ---- DROP THE S2 AND FINISH ON THE DRACOS ----
+            if (c.SeparateS2) SeparateSecondStage(v);
+
             // ---- MECO STAGES ON COMMAND, NOT ON STARVATION ----
             // The guidance decides when the first stage is done, at its own 60 km apoapsis target,
             // while the booster still has propellant for boostback. Starvation staging is kept only
@@ -413,7 +425,17 @@ namespace DragonScreen
             // faces as well as where the nose points, and an uncommanded roll on a launch vehicle
             // is most of what the wandering was. Up-hint is the local vertical during the
             // atmospheric climb and the orbit normal above it - the same choice F9I makes.
-            Vector3d upHint = (v.CoM - v.mainBody.position).normalized;
+            // ---- ⛔ AND DURING VERTICAL FLIGHT THE LOCAL VERTICAL IS NOT A ROLL REFERENCE. ----
+            // It IS the direction we are flying, so `up` and `dir` are parallel and the frame is
+            // degenerate - which is how the controller's 180-degree fallback got exercised on every
+            // single launch and spun the stack at 64 deg/s. Fixing the fallback stops the spin;
+            // this stops us asking for the impossible in the first place.
+            //
+            // The horizontal heading, negated, is the continuous continuation of the same frame. As
+            // pitch approaches 90 degrees, Exclude(dir, up) tends to exactly -horizontal, so the two
+            // agree at the boundary and the vehicle does not snap when it crosses.
+            Vector3d upHint = up;
+            if (Math.Abs(Vector3d.Dot(up, dir)) > 0.999) upHint = -horizontal;
             AttitudeController.Ascent.SteerTo(v, dir, upHint);
             lastCommanded = dir;
         }
@@ -484,6 +506,77 @@ namespace DragonScreen
                 if (VehicleParts.IsBooster(v.parts[i].name)) return true;
             return false;
         }
+
+        /// <summary>
+        /// Shed the S2 and light the capsule's own engines.
+        ///
+        /// ---- WHY THE ORBIT IS NOT FINISHED ON THE MVac ----
+        /// It was, and the 21:01 flight ended in an 86 x 84 km orbit weighing 20.5 tonnes with the
+        /// whole second stage still bolted on. Nothing after that works: the de-orbit burn is sized
+        /// for a capsule, entry needs a heat shield facing forward and a 20 t stack will not hold
+        /// that attitude, and the S2 is left in a stable orbit as permanent debris.
+        ///
+        /// F9I's FalconSepS2 does it at a 40 km periapsis so the S2 comes down promptly, then closes
+        /// the orbit on the Dragon's SuperDracos - 228 kN on the pod, about 400 m/s in the tank,
+        /// roughly 37 m/s needed from that gate. MEASURED, bb_upper_CrewDragon_069.
+        ///
+        /// ⚠ THE RIGHT DECOUPLER. `TE.19.C.Dragon.Decoupler` drops the S2 alone. The trunk decoupler
+        /// above it would take the trunk - and the solar panels and radiators - with it. See
+        /// VehicleParts and `falcon-dragon-two-decouplers`.
+        ///
+        /// NO SETTLING PAUSE, deliberately: FalconSepS2's own note is that the Dracos are canted
+        /// away from the S2, so unlike the MVac there is nothing to wait for.
+        /// </summary>
+        private static void SeparateSecondStage(Vessel v)
+        {
+            if (s2Separated) return;
+            s2Separated = true;
+
+            bool fired = false;
+            for (int i = 0; i < v.parts.Count && !fired; i++)
+            {
+                Part p = v.parts[i];
+                if (!VehicleParts.IsDragonDecoupler(p.name)) continue;
+                System.Collections.Generic.List<ModuleDecouple> ds =
+                    p.Modules.GetModules<ModuleDecouple>();
+                for (int m = 0; m < ds.Count; m++)
+                {
+                    if (ds[m].isDecoupled) continue;
+                    ds[m].Decouple();
+                    fired = true;
+                    Debug.Log(Tag + "S2 SEP - dropped on '" + p.name + "' at "
+                              + (v.orbit.ApA / 1000.0).ToString("F1") + " x "
+                              + (v.orbit.PeA / 1000.0).ToString("F1") + " km");
+                    break;
+                }
+            }
+
+            if (!fired)
+            {
+                // Say it, do not silently stay stacked - that is the failure the crew has to know
+                // about before they try to de-orbit a vehicle twice the mass they expect.
+                Debug.LogWarning(Tag + "S2 SEP FAILED - no undecoupled '"
+                                     + VehicleParts.DragonDecouplerMarker + "' on this vehicle. "
+                                     + "Circularising STACKED; de-orbit and entry will not work.");
+                return;
+            }
+
+            // Light the capsule's own engines. Staging would be the lazy way and it is dangerous
+            // here: the next item in a Dragon's stack is the trunk decoupler.
+            int lit = 0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                if (!VehicleParts.IsPod(v.parts[i].name)) continue;
+                System.Collections.Generic.List<ModuleEngines> es =
+                    v.parts[i].Modules.GetModules<ModuleEngines>();
+                for (int m = 0; m < es.Count; m++)
+                    if (!es[m].EngineIgnited && !es[m].flameout) { es[m].Activate(); lit++; }
+            }
+            Debug.Log(Tag + "Dracos armed (" + lit + " engine module(s)) - the capsule closes its "
+                          + "own orbit from here");
+        }
+
+        private static bool s2Separated;
 
         private static double AvailableThrust(Vessel v)
         {

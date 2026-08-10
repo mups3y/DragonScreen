@@ -459,8 +459,26 @@ public static class PanelTest
         AscentInputs held = Fly(60000.0, 60500.0, 20000.0, 0.1);
         held.PhaseElapsedS = Ascent.MecoHoldS + 0.1;
         c = Ascent.Guide(held, t, AscentPhase.Meco);
-        Check("after the hold it moves on", c.Phase == AscentPhase.BurnToApoapsis,
-              c.Phase.ToString());
+        Check("after the hold it separates", c.Phase == AscentPhase.StageSep, c.Phase.ToString());
+
+        // ---- ⛔ AND THE MVac MUST NOT LIGHT YET ----
+        // Separation and MVac ignition used to land on the same tick, so the plume went straight
+        // into the booster at zero range - `falcon-open-issues` number one. StageSep is the gap.
+        Check("the MVac stays out during the separation coast",
+              Math.Abs(c.Throttle) < 1e-9, c.Throttle.ToString("F3"));
+        Check("RCS is on for the unpowered coast - the gimbal went with the engines", c.Rcs, "");
+
+        AscentInputs sepHeld = Fly(60000.0, 60500.0, 20000.0, 0.1);
+        sepHeld.PhaseElapsedS = Ascent.PostSepHoldS * 0.5;
+        Check("the coast is held, not skipped",
+              Ascent.Guide(sepHeld, t, AscentPhase.StageSep).Phase == AscentPhase.StageSep, "");
+        Check("and it is silent while it is held",
+              Math.Abs(Ascent.Guide(sepHeld, t, AscentPhase.StageSep).Throttle) < 1e-9, "");
+        sepHeld.PhaseElapsedS = Ascent.PostSepHoldS + 0.1;
+        Check("then the second stage takes over",
+              Ascent.Guide(sepHeld, t, AscentPhase.StageSep).Phase == AscentPhase.BurnToApoapsis,
+              "");
+        Check("the gap is long enough to matter", Ascent.PostSepHoldS >= 2.0, "");
 
         // ---- ULLAGE BEFORE THE SECOND STAGE IS ASKED FOR THRUST ----
         AscentInputs ull = Fly(62000.0, 62000.0, 20000.0, 0.0);
@@ -559,7 +577,7 @@ public static class PanelTest
               == AscentPhase.Meco, "");
         inMeco.PhaseElapsedS = Ascent.MecoHoldS + 0.1;
         AscentCommand meco = Ascent.Guide(inMeco, t, AscentPhase.Meco);
-        Check("a served MECO advances", meco.Phase == AscentPhase.BurnToApoapsis,
+        Check("a served MECO advances", meco.Phase == AscentPhase.StageSep,
               meco.Phase.ToString());
 
         // ---- ⛔ AND IT MUST ACTUALLY COMMAND THE SEPARATION ----

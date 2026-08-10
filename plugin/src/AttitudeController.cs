@@ -119,11 +119,31 @@ namespace DragonScreen
             targetForward = forward.normalized;
 
             // A roll reference must not be parallel to the direction, or the frame is degenerate.
-            // BOOSTER.ks bails to the current top vector at exactly this point rather than clamping,
-            // because "a moment of un-held roll is harmless, a snap is not".
+            //
+            // ---- ⛔ THIS FALLBACK SPUN THE ROCKET ON THE PAD AT 64 DEG/S. ----
+            // The comment said "bails to the current top vector" and the code used
+            // `ReferenceTransform.forward`, which is MINUS that: the controller's own top is
+            // `rotation * Euler(-90,0,0) * up`, and the -90 about X maps controller-up onto
+            // reference -Z. So the fallback asked for a top vector exactly 180 degrees from the one
+            // the vehicle had.
+            //
+            // 180 degrees is the bistable point of the roll error. In the 21:01 recording phiRoll
+            // sat pinned at +-pi from the first tick and flipped sign row to row, so the controller
+            // commanded full roll one way, wound the stack up to -1.12 rad/s (-64 deg/s), watched
+            // the sign flip, and drove it back the other way - a limit cycle that ran through the
+            // whole vertical rise and into the gravity turn. attErrDeg looked FINE throughout,
+            // 0.08-0.17 deg, because the nose was tracking perfectly; only the roll axis was insane.
+            //
+            // The current top is the right answer and the one the comment always claimed: it makes
+            // the roll error ZERO, which is "hold whatever roll you have" - harmless, and exactly
+            // what BOOSTER.ks means by "a moment of un-held roll is harmless, a snap is not".
             Vector3d u = up;
             if (u.sqrMagnitude < 1e-6 || Math.Abs(Vector3d.Dot(u.normalized, targetForward)) > 0.999)
-                u = v.ReferenceTransform.forward;
+            {
+                QuaternionD nowRot = (QuaternionD)(v.ReferenceTransform.rotation
+                                                   * Quaternion.Euler(-90f, 0f, 0f));
+                u = nowRot * Vector3d.up;
+            }
             targetTop = Vector3d.Exclude(targetForward, u).normalized;
             active = true;
         }

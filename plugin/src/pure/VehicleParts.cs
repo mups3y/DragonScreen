@@ -52,6 +52,18 @@ namespace DragonScreen
         public const string DroguesMarker = "POD.DROGUES";
         public const string MainsMarker = "POD.MAINS";
 
+        // ---- ⛔ TWO DECOUPLERS, AND ONLY ONE OF THEM IS EVER THE RIGHT ONE ----
+        // From Ghidorah 9 - Crew Rodan.craft, top to bottom:
+        //     TE.18.DRAGONV2.TRUNK       ModuleTundraDecoupler  drops the TRUNK *and everything
+        //                                                       below it*, S2 included
+        //     TE.19.C.Dragon.Decoupler   ModuleDecouple         drops the S2 ONLY - capsule and
+        //                                                       trunk stay
+        //     TE.19.F9.S2.Tank
+        // `falcon-dragon-two-decouplers` was written because a comment in dragon_deorbit.ks claims
+        // the opposite. Firing the trunk decoupler to "drop the S2" takes the trunk with it, and the
+        // trunk is what the solar panels and radiators are on.
+        public const string DragonDecouplerMarker = "C.Dragon.Decoupler";
+
         // ---- GRID FINS ----
         // NOT a Tundra part. Four `Grid Fin M Titanium` from Kerbal Reusability Expansion on every
         // Ghidorah 9 craft, and this one really does have spaces in `part.name` (config line 3;
@@ -132,6 +144,10 @@ namespace DragonScreen
         }
 
         public static bool IsTrunk(string partName) { return Has(partName, TrunkMarker); }
+        public static bool IsDragonDecoupler(string partName)
+        {
+            return Has(partName, DragonDecouplerMarker);
+        }
         public static bool IsPod(string partName) { return Has(partName, PodMarker); }
         public static bool IsDrogues(string partName) { return Has(partName, DroguesMarker); }
         public static bool IsMains(string partName) { return Has(partName, MainsMarker); }

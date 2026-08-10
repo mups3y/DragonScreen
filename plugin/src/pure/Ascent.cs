@@ -36,6 +36,10 @@ namespace DragonScreen
         GravityTurn,
         /// <summary>Engines off, holding attitude, about to separate. A DISCRETE STEP.</summary>
         Meco,
+        /// <summary>
+        /// Separated, still coasting, MVac NOT YET LIT. The gap that keeps the booster alive.
+        /// </summary>
+        StageSep,
         /// <summary>Second stage raising apoapsis to the real orbit.</summary>
         BurnToApoapsis,
         /// <summary>Apoapsis made, engines off, waiting to reach it.</summary>
@@ -122,6 +126,10 @@ namespace DragonScreen
         public double UllageFore;
         /// <summary>Separate the spent stage now.</summary>
         public bool Stage;
+        /// <summary>Drop the S2 off the Dragon. A DIFFERENT decoupler - see VehicleParts.</summary>
+        public bool SeparateS2;
+        /// <summary>RCS should be on. The unpowered coasts have no gimbal and need it.</summary>
+        public bool Rcs;
         public string Note;
     }
 
@@ -167,6 +175,28 @@ namespace DragonScreen
         /// before the second stage is asked for real thrust. `BurnToApoapsis`, F9_payload.ks:571.
         /// </summary>
         public const double UllageSeconds = 6.0;
+
+        /// <summary>
+        /// Coast between SEPARATION and MVac ignition, seconds. F9I's MECO(): `wait 2.5. SafeStage().
+        /// core:part:controlfrom(). wait 3.` - the second wait is this one, and it is the only thing
+        /// standing between the MVac plume and the booster we are trying to recover.
+        /// `falcon-open-issues` lists "booster killed by MVac exhaust on sep" as its number one.
+        ///
+        /// We had NO gap: the stage command and the transition into BurnToApoapsis fired on the same
+        /// tick, so the MVac lit at 7% ullage throttle with the booster still at zero range.
+        /// </summary>
+        public const double PostSepHoldS = 3.0;
+
+        /// <summary>
+        /// Periapsis at which the S2 is dropped, metres. F9I `sepPeTarget`, and the reasoning is in
+        /// FalconSepS2: 64.8 km is "technically" inside the 70 km atmosphere but sits where there is
+        /// no meaningful air, so the stage stays up more or less indefinitely. 40 km is deep enough
+        /// that "inside the atmosphere" and "comes down" are the same claim.
+        ///
+        /// MEASURED, bb_upper_CrewDragon_069: "S2 SEP: separating at 85.4 x 40.2 km", Dracos lit one
+        /// second later, orbit closed 7 s after that.
+        /// </summary>
+        public const double SepPeTargetM = 40000.0;
         public const double UllageThrottle = 0.075;
         public const double UllageFore = 0.75;
 
@@ -214,6 +244,7 @@ namespace DragonScreen
             if (!s.Valid) { c.Phase = AscentPhase.Idle; c.Note = "no vessel"; return c; }
 
             bool stageNow = false;
+            bool sepS2Now = false;
 
             // ---- ⛔ EXACTLY ONE TRANSITION PER CALL. THIS `else` CHAIN IS LOAD-BEARING. ----
             // Flight 16:58 was a chain of plain `if`s, and it cost the entire mission. On the tick
@@ -248,12 +279,31 @@ namespace DragonScreen
                 // never be true, because on the tick the hold expires THIS branch fires first and
                 // the switch renders BurnToApoapsis instead. The booster would have stayed attached
                 // for a second flight running, with the  fix in place and looking correct.
-                phase = AscentPhase.BurnToApoapsis;
+                // ---- ⛔ AND IT GOES TO StageSep, NOT STRAIGHT TO THE MVac. ----
+                // Separating and lighting the second stage on the same tick is what puts the MVac
+                // plume into the booster. PostSepHoldS is the gap; see the constant.
+                phase = AscentPhase.StageSep;
                 stageNow = true;
             }
 
-            // SECOND STAGE raises apoapsis to the real orbit.
-            else if (phase == AscentPhase.BurnToApoapsis && Above(s, t)) phase = AscentPhase.Coast;
+            else if (phase == AscentPhase.StageSep && s.PhaseElapsedS >= PostSepHoldS)
+                phase = AscentPhase.BurnToApoapsis;
+
+            // ---- SECOND STAGE RAISES APOAPSIS, THEN THE S2 IS DROPPED ----
+            // Exit on EITHER the apoapsis target or a 40 km periapsis, whichever comes first, and
+            // shed the S2 on the way past. F9I calls FalconSepS2 at exactly this point so the S2
+            // leaves on a trajectory that re-enters, and the Dragon closes the orbit on its own
+            // SuperDracos - 228 kN on the pod, ~400 m/s in the tank, ~37 m/s needed.
+            //
+            // Without this the capsule circularises with the whole S2 still bolted to it and then
+            // tries to de-orbit and land as a 20.5 t stack. It does not work, and the 21:01 flight
+            // ended exactly that way.
+            else if (phase == AscentPhase.BurnToApoapsis
+                     && (Above(s, t) || s.PeriapsisM >= SepPeTargetM))
+            {
+                phase = AscentPhase.Coast;
+                sepS2Now = true;
+            }
 
             else if (phase == AscentPhase.Coast
                      && (s.TimeToApoapsisS <= CircBurnLeadS || s.PeriapsisM > t.AltitudeM * 0.5))
@@ -311,7 +361,21 @@ namespace DragonScreen
                     // `heading(azimuth, MECOangle)` and depends on the stack holding exactly this.
                     c.PitchDeg = (t.MecoAngleDeg > 0.0) ? t.MecoAngleDeg : 45.0;
                     c.Throttle = 0.0;
+                    // F9I's MECO() does `rcs on` before the hold, and the recording shows why: with
+                    // the engines out the gimbal goes with them, torque falls from 2300 kN.m to the
+                    // 9.5 of the reaction wheels alone, and the pitch axis saturates at +-1 for the
+                    // whole coast. RCS is the only authority the stack has here.
+                    c.Rcs = true;
                     c.Note = "MECO";
+                    break;
+
+                case AscentPhase.StageSep:
+                    // Separated and drifting apart. Engines STAY OFF - this hold exists so the MVac
+                    // does not light into the booster.
+                    c.PitchDeg = (t.MecoAngleDeg > 0.0) ? t.MecoAngleDeg : 45.0;
+                    c.Throttle = 0.0;
+                    c.Rcs = true;
+                    c.Note = "STAGE SEP";
                     break;
 
                 case AscentPhase.BurnToApoapsis:
@@ -355,6 +419,7 @@ namespace DragonScreen
             }
 
             c.Stage = stageNow;
+            c.SeparateS2 = sepS2Now;
             return c;
         }
 
@@ -500,6 +565,7 @@ namespace DragonScreen
                 case AscentPhase.VerticalRise: return "VERTICAL RISE";
                 case AscentPhase.GravityTurn:  return "GRAVITY TURN";
                 case AscentPhase.Meco:         return "MECO";
+                case AscentPhase.StageSep:     return "STAGE SEP";
                 case AscentPhase.BurnToApoapsis: return "BURN TO APOAPSIS";
                 case AscentPhase.Coast:        return "COAST";
                 case AscentPhase.Circularise:  return "CIRCULARISE";
