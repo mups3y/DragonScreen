@@ -48,6 +48,9 @@ namespace DragonScreen
         private static Vessel booster, upperStage;
         private static double startedAt;
 
+        /// <summary>The booster, for the recorder. Null when no recovery is running.</summary>
+        public static Vessel BoosterVessel { get { return booster; } }
+
         /// <summary>When the CURRENT landing phase began. The entry burn's soft start is timed off it.</summary>
         private static double phaseStartedAt;
 
@@ -62,6 +65,10 @@ namespace DragonScreen
         public static double TrueRadar;
         /// <summary>Booster ground distance to the landing zone, metres.</summary>
         public static double DownrangeM;
+        /// <summary>Signed predicted miss, metres. Negative = the impact point is past the LZ.</summary>
+        public static double PredictedMissM;
+        /// <summary>The miss the boostback started with, metres. The throttle tapers against it.</summary>
+        public static double InitialMissM;
 
         /// <summary>Which recovery this mission is flying. Drives the LZ and the ascent.</summary>
         public static LandingProfile Profile = LandingProfile.Rtls;
@@ -130,6 +137,7 @@ namespace DragonScreen
             lastModeStepAt = 0.0; modeSteps = 0; lastWantMode = -1; modeFailReported = false;
             phaseStartedAt = 0.0; noBoosterReported = false;
             TrueRadar = 0.0; DownrangeM = 0.0; initialMiss = 0.0;
+            PredictedMissM = 0.0; InitialMissM = 0.0;
         }
 
         // ------------------------------------------------------------------ handover
@@ -304,6 +312,8 @@ namespace DragonScreen
 
             TrueRadar = s.AltitudeRadar;
             DownrangeM = s.DownrangeM;
+            PredictedMissM = s.PredictedMissM;
+            InitialMissM = s.InitialMissM;
 
             if (c.Phase != Phase)
             {
@@ -321,6 +331,22 @@ namespace DragonScreen
             Command = c;
 
             if (Phase == LandingPhase.Touchdown) { Finish("booster down"); return; }
+
+            // ---- NO SOLUTION IS AN END STATE AND NOTHING TREATED IT AS ONE ----
+            // Landing.Guide returns NoSolution with throttle 1.0 - "everything we have, it is still
+            // correct" - but nothing here ever acted on it, so the recovery stayed Active, kept
+            // commanding full thrust, and only stopped when the booster hit the ground and went
+            // DEAD. In the 22:18 recording that is the last 33 seconds of the flight. Finish() is
+            // what releases the controller and hands focus back; without it a failed landing also
+            // strands the camera.
+            if (Phase == LandingPhase.NoSolution)
+            {
+                Debug.LogError(Tag + "BOOSTER CANNOT STOP - thrust-to-weight below 1 at "
+                                   + (s.AltitudeRadar / 1000.0).ToString("F2") + " km, "
+                                   + s.SurfaceSpeed.ToString("F0") + " m/s. Burning what is left.");
+                Finish("no landing solution");
+                return;
+            }
 
             // ---- ⛔ THE "ONLY FLY IT WHILE FOCUSED" GUARD IS GONE, DELIBERATELY. ----
             // It used to return here unless the booster was the active vessel. That was true of the

@@ -253,3 +253,13 @@ docking, refuelling, undock, the phasing to the calibrated de-orbit orbit, and t
 
 **This is several sessions of work, not one.** Saying otherwise is how the last three flights got
 lost. Each step above should end with a flight and a log read, and this table updated.
+
+## Explicit gaps confirmed 2026-08-11 (external review + verification)
+
+| item | F9I source | status | note |
+|---|---|---|---|
+| `Flip1` — rate-limited rotation to a commanded attitude before boostback | `BOOSTER.ks:286-380`, called at :226 (180°) and :231 (170°) | **NO** | `LandingSites.FlipDeg`/`FlipPower` carry the constants and are marked NOT WIRED. Our boostback points at the LZ and lights; there is no flip manoeuvre. |
+| ASDS boostback target shift — LZ moved 2.7 km further downrange, burn flown against the shifted target, real LZ restored | `BOOSTER.ks:483-500` | **NO** | RTLS uses the signed-overshoot form, which is ported. The droneship branch is not. |
+| Impact prediction with drag | `addons:tr` (Trajectories) | **PART** | Trajectories is installed but is a third-party dependency we do not take. `BoosterRecovery.PredictedMiss` is a vacuum ballistic solve, so it predicts LONG — the same direction as the deliberate 2.7 km overshoot. The two are a pair; do not "improve" one alone. |
+| `TimeToAltitude` circularisation timing / no-coast branch | `F9_payload.ks` | **NO** | Current gate is `timeToAp <= 12 s` or periapsis already high. Flew correctly to 86 × 84 km on 2026-08-10. |
+| Ullage delivered through `OnFlyByWire` | — | **PART** | `AutoPilot` writes `v.ctrlState.Z` from Update, which KSP rebuilds each FixedUpdate, so it is very likely a no-op. Harmless in stock (no ullage model); would matter under Real Fuels. Now that `AttitudeController` owns the callback the fix is a one-line move. |

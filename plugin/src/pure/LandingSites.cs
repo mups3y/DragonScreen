@@ -97,20 +97,29 @@ namespace DragonScreen
             }
         }
 
+        // ---- ⚠ REFERENCE ONLY. NOT WIRED TO ANYTHING. DO NOT READ THESE AS IMPLEMENTED. ----
+        // An external reviewer flagged exactly this and was right: FlipDeg and FlipPower are
+        // transcribed from BOOSTER.ks:226/231 and nothing calls them. They are kept because the
+        // numbers were read from source and are worth not losing, but the manoeuvre they describe -
+        // F9I's Flip1, a rate-limited rotation to a commanded attitude BEFORE the boostback burn -
+        // does not exist in this mod. Our boostback simply points at the landing zone and lights.
+        //
+        // Recorded as an explicit gap in docs/F9I_PORT_MAP.md. The project rule is "never build a
+        // control bound to nothing"; a constant that looks like a setting is the same trap wearing
+        // a different hat, so it says so here rather than being quietly correct one day.
+
         /// <summary>
-        /// How far past its MECO heading the booster rotates for the boostback burn, degrees.
-        /// BOOSTER.ks:226 `Flip1(180, 0.333)` for RTLS, :231 `Flip1(170, 0.333)` for a droneship.
-        ///
-        /// 180 is fully reversed - straight back up the range, which is what a return to the launch
-        /// site needs. A droneship sits downrange, so the stage only trims its trajectory rather than
-        /// reversing it, and 170 leaves it 10 degrees short of a full turn.
+        /// NOT WIRED. How far past its MECO heading F9I rotates the booster before boostback.
+        /// BOOSTER.ks:226 `Flip1(180, 0.333)` RTLS, :231 `Flip1(170, 0.333)` droneship. 180 is fully
+        /// reversed, which a return to the launch site needs; a droneship sits downrange so the
+        /// stage only trims its trajectory and stops 10 degrees short.
         /// </summary>
         public static double FlipDeg(LandingProfile p)
         {
             return (p == LandingProfile.Droneship) ? 170.0 : 180.0;
         }
 
-        /// <summary>Rate the flip is commanded at. `flipPower` 0.333 at both call sites.</summary>
+        /// <summary>NOT WIRED. `flipPower` 0.333 at both Flip1 call sites.</summary>
         public const double FlipPower = 0.333;
 
         /// <summary>Does this profile fly the stage home at all?</summary>

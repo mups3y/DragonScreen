@@ -107,24 +107,41 @@ namespace DragonScreen
 
         // ------------------------------------------------------------------ the row
 
+        // ---- ⛔ ONE COLUMN BLOCK PER VEHICLE. IT USED TO SAMPLE FlightGlobals.ActiveVessel. ----
+        // Which meant every telemetry column changed which CRAFT it described the moment focus moved
+        // to the booster. In the 22:18 recording `massT` steps 35.55 -> 59.13 at MET 102 and then
+        // wanders between the two vehicles for the rest of the flight, so nothing in the file can be
+        // differenced or plotted without first working out who each row is about. Diagnosing the
+        // RTLS from it took hours and several wrong conclusions, which is exactly the cost the
+        // recorder exists to avoid.
+        //
+        // `a_` is the ASCENT vehicle - AutoPilot's, held by reference, so it stays the same craft
+        // from liftoff to insertion even after the S2 comes off. `b_` is the BOOSTER. Both are
+        // written every row; a vehicle that does not exist writes zeros and its phase reads "-".
         private const string Header =
-            "met,ut," +
-            "phase,note," +
-            // --- where it is ---
-            "altAsl,altRadar,lat,lon,vertSpeed,srfSpeed,orbSpeed,mach,qKpa," +
-            "apoKm,periKm,incDeg,timeToApS," +
-            // --- what it weighs and can push with ---
-            "massT,availThrustKn,moiX,moiY,moiZ,torqueX,torqueY,torqueZ," +
-            // --- GUIDANCE COMMAND ---
-            "cmdPitchDeg,cmdHeadingDeg,cmdThrottle,cmdStage,cmdUllage,circDvMps," +
-            // --- ATTITUDE: commanded vs achieved ---
-            "attErrDeg,phiPitch,phiRoll,phiYaw," +
-            "tgtOmegaP,tgtOmegaR,tgtOmegaY,omegaP,omegaR,omegaY," +
-            "tgtTorqueP,tgtTorqueR,tgtTorqueY,actP,actR,actY," +
-            // --- what actually reached the axes. Dead in every kOS recording; live now. ---
-            "ctlPitch,ctlYaw,ctlRoll,ctlThrottle," +
-            // --- booster recovery ---
-            "landPhase,trueRadar,burnThrottle,ignitionAlt,engines,downrangeKm";
+            "met,ut,focus," +
+            // ================= ASCENT VEHICLE =================
+            "a_phase,a_note," +
+            "a_altAsl,a_altRadar,a_lat,a_lon,a_vertSpeed,a_srfSpeed,a_orbSpeed,a_mach,a_qKpa," +
+            "a_apoKm,a_periKm,a_incDeg,a_timeToApS," +
+            "a_massT,a_availThrustKn,a_moiX,a_moiY,a_moiZ,a_torqueX,a_torqueY,a_torqueZ," +
+            // guidance command
+            "a_cmdPitchDeg,a_cmdHeadingDeg,a_cmdThrottle,a_cmdStage,a_cmdSepS2,a_cmdUllage," +
+            "a_cmdRcs,a_circDvMps," +
+            // attitude: commanded vs achieved
+            "a_attErrDeg,a_phiPitch,a_phiRoll,a_phiYaw," +
+            "a_tgtOmegaP,a_tgtOmegaR,a_tgtOmegaY,a_omegaP,a_omegaR,a_omegaY," +
+            "a_tgtTorqueP,a_tgtTorqueR,a_tgtTorqueY,a_actP,a_actR,a_actY," +
+            "a_ctlPitch,a_ctlYaw,a_ctlRoll,a_ctlThrottle," +
+            // ================= BOOSTER =================
+            "b_phase," +
+            "b_altAsl,b_altRadar,b_lat,b_lon,b_vertSpeed,b_srfSpeed,b_mach,b_qKpa," +
+            "b_massT,b_availThrustKn,b_torqueX,b_torqueY,b_torqueZ," +
+            // landing command and the two numbers that judge it
+            "b_cmdThrottle,b_ignitionAlt,b_engines,b_aim,b_legs," +
+            "b_downrangeKm,b_predMissKm,b_initMissKm," +
+            "b_attErrDeg,b_omegaP,b_omegaR,b_omegaY,b_actP,b_actR,b_actY," +
+            "b_ctlPitch,b_ctlYaw,b_ctlRoll,b_ctlThrottle";
 
         /// <summary>
         /// Called every frame by the painter; samples at 5 Hz. Cheap enough to call unconditionally
@@ -154,64 +171,101 @@ namespace DragonScreen
             StringBuilder r = pending;
 
             F(r, ut - startedUt); F(r, ut);
+            Vessel focus = FlightGlobals.ActiveVessel;
+            S(r, focus != null ? focus.vesselName : "-");
+
+            // ---------------- ascent vehicle ----------------
+            Vessel a = AutoPilot.AscentVessel;
             S(r, AutoPilot.Engaged ? Ascent.Name(AutoPilot.Phase) : "-");
             S(r, AutoPilot.Command.Note);
-
-            F(r, v.altitude); F(r, v.radarAltitude); F(r, v.latitude); F(r, v.longitude);
-            F(r, v.verticalSpeed); F(r, v.srfSpeed); F(r, v.obt_speed);
-            F(r, v.mach); F(r, v.dynamicPressurekPa);
-
-            Orbit o = v.orbit;
-            F(r, o != null ? o.ApA / 1000.0 : 0.0);
-            F(r, o != null ? o.PeA / 1000.0 : 0.0);
-            F(r, o != null ? o.inclination : 0.0);
-            F(r, o != null ? o.timeToAp : 0.0);
-
-            // Whichever controller is flying the vessel being sampled. There are two now - the
-            // ascent's and the booster's - and reading a fixed one would have logged the upper
-            // stage's attitude loop against the booster's telemetry the moment focus moved.
-            AttitudeController ac = AttitudeController.For(v);
-            if (ac == null) ac = AttitudeController.Ascent;
-
-            F(r, v.GetTotalMass());
-            F(r, Thrust(v));
-            V(r, v.MOI);
-            V(r, ac.Torque);
+            Motion(r, a, true);
 
             AscentCommand c = AutoPilot.Command;
             F(r, c.PitchDeg); F(r, c.HeadingDeg); F(r, c.Throttle);
-            F(r, c.Stage ? 1.0 : 0.0); F(r, c.UllageFore);
-            // circDv is not on the command, so take it from the last inputs the autopilot built.
+            F(r, c.Stage ? 1.0 : 0.0); F(r, c.SeparateS2 ? 1.0 : 0.0); F(r, c.UllageFore);
+            F(r, c.Rcs ? 1.0 : 0.0);
             F(r, AutoPilot.LastCircDvMps);
+            Attitude(r, AttitudeController.Ascent, true);
+            Controls(r, a);
 
-            F(r, ac.ErrorDeg);
-            V(r, ac.Phi);
-            V(r, ac.TargetOmega);
-            V(r, ac.Omega);
-            V(r, ac.TargetTorque);
-            V(r, ac.Actuation);
-
-            // ---- THE COLUMNS THAT WERE DEAD IN ALL 554 kOS RECORDINGS ----
-            // kOS cooked steering and stock SAS both bypass FlightCtrlState, so these were always
-            // zero. Our controller writes them, so from here they are real - and that is what makes
-            // system identification possible at all.
-            F(r, v.ctrlState.pitch); F(r, v.ctrlState.yaw); F(r, v.ctrlState.roll);
-            F(r, v.ctrlState.mainThrottle);
+            // ---------------- booster ----------------
+            Vessel b = BoosterRecovery.BoosterVessel;
+            S(r, BoosterRecovery.Active ? Landing.Name(BoosterRecovery.Phase) : "-");
+            Motion(r, b, false);
 
             LandingCommand lc = BoosterRecovery.Command;
-            S(r, BoosterRecovery.Active ? Landing.Name(BoosterRecovery.Phase) : "-");
-            // These two belong to the BOOSTER, not to the vessel sampled above, and they used to be
-            // hard-coded zeros - so the height the stage really had and the distance it really
-            // missed by were absent from every row ever recorded. BoosterRecovery publishes them.
-            F(r, BoosterRecovery.TrueRadar);
-            F(r, lc.Throttle);
-            F(r, lc.IgnitionAltitude);
-            F(r, lc.Engines);
-            F(r, BoosterRecovery.DownrangeM / 1000.0);      // km, matching the column name
+            F(r, lc.Throttle); F(r, lc.IgnitionAltitude); F(r, lc.Engines);
+            F(r, (double)(int)lc.Aim); F(r, lc.DeployLegs ? 1.0 : 0.0);
+            F(r, BoosterRecovery.DownrangeM / 1000.0);
+            F(r, BoosterRecovery.PredictedMissM / 1000.0);
+            F(r, BoosterRecovery.InitialMissM / 1000.0);
+            Attitude(r, AttitudeController.Booster, false);
+            Controls(r, b);
+
             r.Length -= 1;                // trailing comma
-            r.Append('\n');
+            r.Append("\n");
 
             if (++pendingRows >= FlushEvery) Flush();
+        }
+
+        /// <summary>Where it is and what it weighs. `orbital` adds the orbit block.</summary>
+        private static void Motion(StringBuilder r, Vessel v, bool orbital)
+        {
+            if (v == null || v.state == Vessel.State.DEAD)
+            {
+                int n = orbital ? 21 : 13;
+                for (int i = 0; i < n; i++) F(r, 0.0);
+                return;
+            }
+
+            F(r, v.altitude); F(r, v.radarAltitude); F(r, v.latitude); F(r, v.longitude);
+            F(r, v.verticalSpeed); F(r, v.srfSpeed);
+            if (orbital) F(r, v.obt_speed);
+            F(r, v.mach); F(r, v.dynamicPressurekPa);
+
+            if (orbital)
+            {
+                Orbit o = v.orbit;
+                F(r, o != null ? o.ApA / 1000.0 : 0.0);
+                F(r, o != null ? o.PeA / 1000.0 : 0.0);
+                F(r, o != null ? o.inclination : 0.0);
+                F(r, o != null ? o.timeToAp : 0.0);
+            }
+
+            F(r, v.GetTotalMass());
+            F(r, Thrust(v));
+            if (orbital) V(r, v.MOI);
+            V(r, AttitudeController.For(v) != null ? AttitudeController.For(v).Torque : Vector3d.zero);
+        }
+
+        /// <summary>The control loop's internals. `full` writes phi and the target torques too.</summary>
+        private static void Attitude(StringBuilder r, AttitudeController ac, bool full)
+        {
+            F(r, ac.ErrorDeg);
+            if (full)
+            {
+                V(r, ac.Phi);
+                V(r, ac.TargetOmega);
+            }
+            V(r, ac.Omega);
+            if (full) V(r, ac.TargetTorque);
+            V(r, ac.Actuation);
+        }
+
+        /// <summary>
+        /// What actually reached the axes. Dead in all 554 kOS recordings - cooked steering and
+        /// stock SAS both bypass FlightCtrlState - and live since our controller took over. This is
+        /// the half that makes system identification possible at all.
+        /// </summary>
+        private static void Controls(StringBuilder r, Vessel v)
+        {
+            if (v == null || v.state == Vessel.State.DEAD || v.ctrlState == null)
+            {
+                F(r, 0.0); F(r, 0.0); F(r, 0.0); F(r, 0.0);
+                return;
+            }
+            F(r, v.ctrlState.pitch); F(r, v.ctrlState.yaw); F(r, v.ctrlState.roll);
+            F(r, v.ctrlState.mainThrottle);
         }
 
         private static double Thrust(Vessel v)

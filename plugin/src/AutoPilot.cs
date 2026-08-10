@@ -218,8 +218,12 @@ namespace DragonScreen
             //
             // Only after MECO, because before separation the only vessel carrying a `.S1.` part is
             // us. Rate-limited because FindBooster walks every part of every loaded vessel.
-            if (Phase == AscentPhase.Meco || Phase == AscentPhase.BurnToApoapsis
-                || Phase == AscentPhase.Coast)
+            // ⚠ StageSep IS IN THIS LIST AND MUST BE: it is the phase during which the booster
+            // first exists as a separate vessel. Leaving it out delayed every handover by the full
+            // 3 s post-separation coast and made the "no booster" warning fire during MECO, when
+            // there legitimately is not one yet.
+            if (Phase == AscentPhase.Meco || Phase == AscentPhase.StageSep
+                || Phase == AscentPhase.BurnToApoapsis || Phase == AscentPhase.Coast)
             {
                 double nowUt = Planetarium.GetUniversalTime();
                 if (nowUt - lastHandoverTry > 0.5)
@@ -475,6 +479,9 @@ namespace DragonScreen
 
         /// <summary>The vehicle this autopilot is flying. NOT whichever one has the camera.</summary>
         private static Vessel ascentVessel;
+
+        /// <summary>The upper stage, for the recorder - so its columns always mean one vehicle.</summary>
+        public static Vessel AscentVessel { get { return ascentVessel; } }
         private static bool packedReported;
         private static double lastHandoverTry;
         private static float lastBurnLog = -999f;
