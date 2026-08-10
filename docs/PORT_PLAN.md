@@ -106,7 +106,7 @@ burn and F2 for the axis to back away along.
 
 ## §8 · Return
 
-### E1 · Is a return even available
+### E1 · Is a return even available — **DONE 2026-08-11**
 **Read:** `StReturnAllowed:2645`, `StMonoForDeorbit:839`, `StMonoReport:876`, `DgLandingReserve:1895`.
 A budget check, no guidance. **Do this before E2–E8**: it is cheap, and it answers "should we undock
 at all", which is the question the crew actually needs.
@@ -169,7 +169,7 @@ Recorded so nobody spends a session discovering why they cannot.
 ## Order of work
 
 1. ~~**F1** node executor~~ **DONE** — `pure/BurnExec.cs` rewritten as a port, `src/NodeExecutor.cs` is the glue, CW burns now fly through it
-2. **E1** return budget ← cheap, and it is a crew-facing answer
+2. ~~**E1** return budget~~ **DONE** — `pure/ReturnBudget.cs`, 19 checks. Not yet on a page or a button
 3. **R1**, **R2** ← completes §6, makes the rendezvous actually close a gap
 4. **F2**, **D1** ← docking, which is the point of the mission
 5. **D2**, **D3**
