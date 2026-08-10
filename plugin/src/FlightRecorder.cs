@@ -167,10 +167,16 @@ namespace DragonScreen
             F(r, o != null ? o.inclination : 0.0);
             F(r, o != null ? o.timeToAp : 0.0);
 
+            // Whichever controller is flying the vessel being sampled. There are two now - the
+            // ascent's and the booster's - and reading a fixed one would have logged the upper
+            // stage's attitude loop against the booster's telemetry the moment focus moved.
+            AttitudeController ac = AttitudeController.For(v);
+            if (ac == null) ac = AttitudeController.Ascent;
+
             F(r, v.GetTotalMass());
             F(r, Thrust(v));
             V(r, v.MOI);
-            V(r, AttitudeController.Torque);
+            V(r, ac.Torque);
 
             AscentCommand c = AutoPilot.Command;
             F(r, c.PitchDeg); F(r, c.HeadingDeg); F(r, c.Throttle);
@@ -178,12 +184,12 @@ namespace DragonScreen
             // circDv is not on the command, so take it from the last inputs the autopilot built.
             F(r, AutoPilot.LastCircDvMps);
 
-            F(r, AttitudeController.ErrorDeg);
-            V(r, AttitudeController.Phi);
-            V(r, AttitudeController.TargetOmega);
-            V(r, AttitudeController.Omega);
-            V(r, AttitudeController.TargetTorque);
-            V(r, AttitudeController.Actuation);
+            F(r, ac.ErrorDeg);
+            V(r, ac.Phi);
+            V(r, ac.TargetOmega);
+            V(r, ac.Omega);
+            V(r, ac.TargetTorque);
+            V(r, ac.Actuation);
 
             // ---- THE COLUMNS THAT WERE DEAD IN ALL 554 kOS RECORDINGS ----
             // kOS cooked steering and stock SAS both bypass FlightCtrlState, so these were always

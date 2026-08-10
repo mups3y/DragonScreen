@@ -351,7 +351,11 @@ namespace DragonScreen
             // it is holding a fixed marker, not tracking a moving guidance vector. But the ascent
             // controller switches SAS OFF and drives the axes itself, so if it is still attached
             // the two fight over pitch/yaw/roll. Hand the axes back before asking SAS for them.
-            AttitudeController.Release(v);
+            // Whichever controller has this vessel - normally Ascent, but a deorbit could in
+            // principle be commanded on a stage the recovery is flying, and releasing the wrong one
+            // would leave the real one still driving the axes.
+            AttitudeController held = AttitudeController.For(v);
+            if (held != null) held.Release(v);
             v.ActionGroups.SetGroup(KSPActionGroup.SAS, true);
             Log(what + " ignition, target Pe " + (targetPe / 1000.0).ToString("F0")
                 + " km. ⚠ INTERIM GUIDANCE: retrograde burn to periapsis, not the entry solution in "

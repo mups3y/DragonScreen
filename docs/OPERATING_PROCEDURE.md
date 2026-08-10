@@ -95,22 +95,41 @@ Do not wait for these; nothing will happen.
 - **Rendezvous, docking, refuelling** — the guidance exists in `pure/`, unwired and unflown.
 - **Closed-loop entry guidance** — see `docs/F9I_PORT_MAP.md`.
 
-## 5. Booster recovery — read this before expecting a landing
+## 5. Booster recovery — both vehicles fly at once
 
-Recovery is attempted at `COAST`, and it will **not** reach the pad. The reason is structural, not a
-tuning problem:
+**Recovery is taken as soon as the booster exists**, seconds after MECO, which is what gives
+boostback its window. The camera follows the booster down; **the upper stage keeps flying itself the
+whole time** and continues to orbit without you.
 
-KSP flies one vessel at a time. Our upper stage separates at ~97 s on a suborbital arc
-(periapsis −582 km), so abandoning it at MECO to chase the booster loses the payload. Handover
-therefore waits until the upper stage is safe, which in the 21:01 flight was **155 s after
-separation**. F9I's own measured booster timeline puts boostback at 16–55 s after separation — long
-gone by then. So the stage joins its profile part-way down (`Landing.InitialPhase`), flies the entry
-burn and the landing burn, and comes down downrange in the sea.
+This is F9I's architecture, not a workaround. KSP simulates every *loaded* vessel and calls each
+one's own control callback whether or not the camera is on it — F9I runs `BOOSTER.ks` and
+`F9_payload.ks` as two CPUs and says so plainly: *"Focus → Booster for landing. The upper stage
+circularizes on its own."* We now do the same with one controller instance per vehicle.
 
-That is still worth flying: **the entry burn, the soft start, the grid fins, the hoverslam and the
-engine-mode switching have never executed once**, and this exercises all of them.
+Expected sequence after MECO:
 
-**To actually land it on the pad you need PhysicsRangeExtender installed.** It is not, and
-`falcon-physics-range-clamp` measured the consequence on four F9I flights: 1500 km requested,
-297–341 km delivered. With PRE the booster and the upper stage can both stay in physics and the real
-profile becomes possible. That is a call for you to make, not for the mod to make quietly.
+```
+booster:      BOOSTBACK → COAST → ENTRY BURN → DESCENT → LANDING BURN → TOUCHDOWN
+upper stage:  BURN TO APOAPSIS → COAST → CIRCULARISE → insertion       (concurrently)
+```
+
+When the booster is down, focus returns to the upper stage. That is a camera move — it never
+stopped flying.
+
+**Press `[` or `]` to look at the other vehicle at any time.** It changes nothing about what either
+one is doing.
+
+### The one limit that is real
+
+The physics range still clamps. `falcon-physics-range-clamp` measured 297–341 km against the
+1500 km requested, on four F9I flights, because PhysicsRangeExtender is not installed. Past that the
+far vehicle goes **on rails** and neither we nor F9I can command it — F9I sees exactly this as its
+interface CPU rebooting mid-circularisation on every flight.
+
+For an RTLS profile the two vehicles stay well inside 300 km, so this should not bite. If the log
+says `upper stage has gone on rails`, that is what happened, and PhysicsRangeExtender is the fix.
+
+### Still unflown
+
+The entry burn, the soft start, the grid fins, the hoverslam and the engine-mode switching **have
+never executed once**. Expect the first recovery to find something.

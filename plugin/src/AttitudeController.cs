@@ -1,69 +1,109 @@
 /*
  * DragonScreen - AttitudeController
  *
- * GLUE. Points the vehicle. Replaces stock SAS with kOS's steering manager, which is what F9I has
- * always flown. Control law in `pure/AttitudePid.cs`; this file is the vector maths and the
- * FlightCtrlState write.
+ * GLUE. Points a vehicle and sets its throttle. Replaces stock SAS with kOS's steering manager,
+ * which is what F9I has always flown. Control law in `pure/AttitudePid.cs`; this file is the vector
+ * maths and the FlightCtrlState write.
  *
  * Ported from `Desktop/mechjeb_src/MechJeb2/AttitudeControllers/KosAttitudeController.cs`.
  *
- * ---- WHAT CHANGES, AND WHY IT IS NOT A TUNING TWEAK ----
- * `SAS.SetTargetOrientation(dir, false)` takes a DIRECTION. `lookdirup(dir, up)` takes a full
- * ATTITUDE - where the nose points AND where the top faces. Stock SAS therefore leaves roll
- * uncommanded, has no torque feed-forward, and is designed to hold a fixed navball marker rather
- * than track a guidance vector that moves every frame. All three showed up as the wander.
+ * ---- ⛔ ONE INSTANCE PER VEHICLE. THIS USED TO BE A STATIC CLASS AND THAT WAS THE CEILING. ----
+ * A single static controller can fly exactly one vessel, so a booster recovery could only ever be
+ * bought by abandoning the upper stage - and since our upper stage separates on a suborbital arc,
+ * that meant the recovery had to wait until insertion was finished, by which time boostback was
+ * three minutes gone.
+ *
+ * F9I has no such limit and never did, because it runs TWO kOS CPUs: BOOSTER.ks flies the booster
+ * while F9_payload.ks flies the upper stage, and `FalconFocusBooster` says exactly what that buys -
+ * "Focus -> Booster for landing. The upper stage circularizes on its own." KSP simulates every
+ * LOADED vessel, not just the focused one, so both fly at once as long as the physics range holds
+ * them (~300 km here; F9I measured 296.8-341.1 km on four flights).
+ *
+ * So this is now an ordinary class with two named instances. `Ascent` flies the upper stage,
+ * `Booster` flies the first stage, and neither cares which one the camera is looking at. That is
+ * the whole reason the real Falcon 9 profile is now reachable.
+ *
+ * ---- WHY THROTTLE LIVES HERE TOO ----
+ * `FlightInputHandler.state.mainThrottle` is the ACTIVE vessel's throttle. Writing it while flying
+ * two vehicles would put the booster's landing-burn throttle on whichever one had focus. The only
+ * per-vessel write point is the FlightCtrlState handed to that vessel's own OnFlyByWire callback,
+ * which is exactly where MechJeb puts it (`MechJebModuleThrustController.cs:437  s.mainThrottle =
+ * TargetThrottle`). Its line 282 also mirrors to FlightInputHandler, with the comment "so that the
+ * on-screen throttle gauge reflects the autopilot throttle" - cosmetic, active vessel only, and
+ * that is the only thing it is good for.
  *
  * ---- THE FRAME CORRECTION IS NOT OPTIONAL ----
  *      _vesselRotation = ReferenceTransform.rotation * Euler(-90, 0, 0)
  * A KSP command part's transform has +Y out of the nose, but the controller works in a
  * forward/top/starboard frame where FORWARD is +Z. Skip the -90 and every axis is permuted - the
  * same class of error as the navball's transposed texture, and just as invisible until it flies.
- *
- * ---- WHY IT WRITES FlightCtrlState DIRECTLY, AND WHAT THAT UNLOCKS ----
- * SAS is switched OFF and the three axes are driven through the OnFlyByWire callback, exactly as
- * MechJeb does. That is also how `ctlPitch/ctlYaw/ctlRoll` finally start recording: those columns
- * are dead in all 554 black-box flights BECAUSE kOS cooked steering and SAS both bypass them. With
- * this controller the corpus starts capturing command/response pairs, and the system-identification
- * pass in FLIGHT_SOFTWARE_PLAN.md stops being blocked.
  */
 using System;
 using UnityEngine;
 
 namespace DragonScreen
 {
-    public static class AttitudeController
+    public class AttitudeController
     {
         private const string Tag = "[DragonScreen] ";
 
-        /// <summary>Where we want to point. Null means "not steering" - hands back to the player.</summary>
-        private static Vector3d targetForward, targetTop;
-        private static bool active;
-        private static Vessel attached;
+        // ---- THE TWO VEHICLES WE EVER FLY AT ONCE ----
+        // Named rather than pooled: there are exactly two, they have different jobs, and a name in
+        // a log line beats an index.
+        public static readonly AttitudeController Ascent = new AttitudeController("ascent");
+        public static readonly AttitudeController Booster = new AttitudeController("booster");
 
-        private static readonly TorquePi pitchPi = new TorquePi();
-        private static readonly TorquePi yawPi = new TorquePi();
-        private static readonly TorquePi rollPi = new TorquePi();
+        /// <summary>Whichever controller is flying this vessel, or null. For the recorder.</summary>
+        public static AttitudeController For(Vessel v)
+        {
+            if (v == null) return null;
+            if (Ascent.attached == v) return Ascent;
+            if (Booster.attached == v) return Booster;
+            return null;
+        }
+
+        private readonly string who;
+        public AttitudeController(string name) { who = name; }
+
+        /// <summary>Where we want to point. Inactive means "not steering" - hands back to the player.</summary>
+        private Vector3d targetForward, targetTop;
+        private bool active;
+        private Vessel attached;
+
+        private readonly TorquePi pitchPi = new TorquePi();
+        private readonly TorquePi yawPi = new TorquePi();
+        private readonly TorquePi rollPi = new TorquePi();
 
         // Rate loops: Kp 1, Ki 0.1, Kd 0, extraUnwind ON - KosAttitudeController.cs:24-26.
-        private static readonly KosPid pitchRate = new KosPid(1.0, 0.1, 0.0, true);
-        private static readonly KosPid yawRate = new KosPid(1.0, 0.1, 0.0, true);
-        private static readonly KosPid rollRate = new KosPid(1.0, 0.1, 0.0, true);
+        private readonly KosPid pitchRate = new KosPid(1.0, 0.1, 0.0, true);
+        private readonly KosPid yawRate = new KosPid(1.0, 0.1, 0.0, true);
+        private readonly KosPid rollRate = new KosPid(1.0, 0.1, 0.0, true);
 
-        private static Vector3d actuation = Vector3d.zero;
+        private Vector3d actuation = Vector3d.zero;
 
         /// <summary>Seconds allowed to arrest a rotation. F9I retunes this per phase.</summary>
-        public static double MaxStoppingTime = AttitudeCascade.DefaultMaxStoppingTime;
+        public double MaxStoppingTime = AttitudeCascade.DefaultMaxStoppingTime;
+
+        /// <summary>
+        /// Throttle for THIS vehicle, 0-1. Written into its own FlightCtrlState every tick while
+        /// attached - including while zero, so a released vehicle actually stops rather than keeping
+        /// whatever it had.
+        /// </summary>
+        public double Throttle;
 
         /// <summary>Last attitude error, degrees. For the pages and the logs.</summary>
-        public static double ErrorDeg { get; private set; }
+        public double ErrorDeg { get; private set; }
+
+        /// <summary>The vessel this controller is flying, or null.</summary>
+        public Vessel Vehicle { get { return attached; } }
 
         // ---- INTERNALS EXPOSED FOR THE RECORDER ----
         // Not decoration: without the COMMAND beside the RESPONSE you can see the vehicle was 12
         // degrees off and still not know whether guidance asked for the wrong thing or the
         // controller failed to deliver it. F9I hit this and solved it with its x1..x4 scratch
         // columns - "they record what the guidance ASKED for, which no KSP telemetry exposes".
-        public static Vector3d Phi, TargetOmega, Omega, TargetTorque, Actuation, Torque, Moi;
-        public static bool Steering { get { return active; } }
+        public Vector3d Phi, TargetOmega, Omega, TargetTorque, Actuation, Torque, Moi;
+        public bool Steering { get { return active; } }
 
         // ------------------------------------------------------------------ public
 
@@ -71,7 +111,7 @@ namespace DragonScreen
         /// Steer at a direction, with an optional roll reference. Pass `up` as zero to let the
         /// controller pick one - but prefer giving it one: an uncommanded roll is what SAS did.
         /// </summary>
-        public static void SteerTo(Vessel v, Vector3d forward, Vector3d up)
+        public void SteerTo(Vessel v, Vector3d forward, Vector3d up)
         {
             if (v == null || forward.sqrMagnitude < 1e-6) { Release(v); return; }
 
@@ -91,16 +131,18 @@ namespace DragonScreen
         /// <summary>
         /// Stop steering and give the vehicle back.
         ///
-        /// ⛔ MaxStoppingTime IS RESET HERE BECAUSE IT IS A GLOBAL STATIC ON A SHARED CONTROLLER.
-        /// BoosterRecovery drives it to 0.05 for the landing burn and never put it back, so the next
-        /// vehicle to use the controller - the upper stage, resuming circularisation the moment the
-        /// booster is down - inherited a rate limit forty times tighter than the default and would
-        /// have slewed at a crawl. Statics must validate, not remember; same rule that already
-        /// applies to BoosterRecovery's own state.
+        /// ⛔ MaxStoppingTime IS RESET HERE. BoosterRecovery drives it to 0.05 for the landing burn,
+        /// which is right for the last few hundred metres and badly wrong for anything else; when
+        /// this was one shared static, the upper stage inherited it and slewed at a crawl. It is
+        /// per-instance now, but resetting on release is still correct - a controller handed a new
+        /// vehicle must not remember the last one's tuning.
         /// </summary>
-        public static void Release(Vessel v)
+        public void Release(Vessel v)
         {
             active = false;
+            Throttle = 0.0;
+            // Write the zero throttle out before letting go, or the vehicle keeps the last one.
+            if (attached != null && attached.ctrlState != null) attached.ctrlState.mainThrottle = 0f;
             Detach();
             actuation = Vector3d.zero;
             MaxStoppingTime = AttitudeCascade.DefaultMaxStoppingTime;
@@ -108,7 +150,7 @@ namespace DragonScreen
             pitchRate.ResetI(); yawRate.ResetI(); rollRate.ResetI();
         }
 
-        private static void Attach(Vessel v)
+        private void Attach(Vessel v)
         {
             if (attached == v) return;
             Detach();
@@ -118,10 +160,10 @@ namespace DragonScreen
             // set of axes is worse than either alone. MechJebModuleAttitudeController.cs:401 does
             // exactly this for the same reason.
             v.ActionGroups.SetGroup(KSPActionGroup.SAS, false);
-            Debug.Log(Tag + "attitude controller attached to '" + v.vesselName + "', SAS off");
+            Debug.Log(Tag + who + " controller attached to '" + v.vesselName + "', SAS off");
         }
 
-        private static void Detach()
+        private void Detach()
         {
             if (attached == null) return;
             attached.OnFlyByWire -= Drive;
@@ -139,22 +181,28 @@ namespace DragonScreen
         /// So: catch, DETACH, and say so once. A controller that has failed must stop pretending to
         /// fly the vehicle, and the log must say why the first time rather than the ten-thousandth.
         /// </summary>
-        private static void Drive(FlightCtrlState s)
+        private void Drive(FlightCtrlState s)
         {
-            try { DriveInner(s); }
+            try
+            {
+                // Throttle goes out whether or not we are steering: a vehicle told to coast must
+                // actually be at zero, and this is the only per-vessel place to say so.
+                s.mainThrottle = Mathf.Clamp01((float)Throttle);
+                if (active) DriveInner(s);
+            }
             catch (Exception e)
             {
-                Debug.LogError(Tag + "attitude controller FAILED and has detached - the vehicle is "
+                Debug.LogError(Tag + who + " controller FAILED and has detached - the vehicle is "
                                + "not being steered: " + e);
                 active = false;
                 Detach();
             }
         }
 
-        private static void DriveInner(FlightCtrlState s)
+        private void DriveInner(FlightCtrlState s)
         {
             Vessel v = attached;
-            if (!active || v == null || v.ReferenceTransform == null) return;
+            if (v == null || v.ReferenceTransform == null) return;
 
             double dt = TimeWarp.fixedDeltaTime;
             if (dt <= 0.0) return;
@@ -259,7 +307,8 @@ namespace DragonScreen
         ///     maxOmega = torque × MaxStoppingTime / MoI = 9.5 × 2.0 / 21 949 = 0.05 deg/s
         /// against roughly 0.45 deg/s needed to fly the turn. The vehicle would have rolled normally
         /// - roll MoI is only 122 t·m² - and simply refused to pitch over. Nine Merlin gimbals are
-        /// worth order 10³ kN·m and were counted as zero.
+        /// worth order 10³ kN·m and were counted as zero. With this fixed the 21:01 flight tracked
+        /// its pitch programme to 0.08-0.17 deg and made orbit.
         ///
         /// ---- ASK EVERY TORQUE PROVIDER, WHICH IS WHAT MECHJEB DOES ----
         /// `VesselState.cs:1024-1034` sums wheels + RCS + control surfaces + gimbal + anything else
@@ -272,7 +321,7 @@ namespace DragonScreen
         /// larger per module and sums. The two agree whenever a module's pos and neg are symmetric,
         /// which MechJeb's own comments assert for wheels and gimbals (`VesselState.cs:891, 966`).
         /// </summary>
-        private static Vector3d AvailableTorque(Vessel v)
+        private Vector3d AvailableTorque(Vessel v)
         {
             Vector3d t = Vector3d.zero;
             try

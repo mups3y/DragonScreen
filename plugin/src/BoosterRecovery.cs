@@ -276,10 +276,17 @@ namespace DragonScreen
 
             if (Phase == LandingPhase.Touchdown) { Finish("booster down"); return; }
 
-            // Only fly it while it is the ACTIVE vessel - an unloaded vessel is on rails and writing
-            // a throttle to it does nothing but look like it worked. That applies to the fins and
-            // the engine mode exactly as it does to the throttle, so every command sits below here.
-            if (FlightGlobals.ActiveVessel != booster) return;
+            // ---- ⛔ THE "ONLY FLY IT WHILE FOCUSED" GUARD IS GONE, DELIBERATELY. ----
+            // It used to return here unless the booster was the active vessel. That was true of the
+            // old throttle path - FlightInputHandler.state belongs to whoever has focus - but it is
+            // not true of KSP: every LOADED, unpacked vessel is simulated, and its own OnFlyByWire
+            // callback is called whether or not the camera is on it. That is how F9I flies a booster
+            // and an upper stage at the same time from two CPUs, and how MechJeb flies unfocused
+            // craft.
+            //
+            // What still matters is LOADED. Beyond the physics range the booster goes on rails and
+            // nothing here reaches it - which is why the range is raised before separation now.
+            if (booster.packed) return;
 
             // ---- FINS OUT AT THE TOP OF THE ARC, NOT AT THE ENTRY BURN ----
             // F9I's AtmGNC opens with "grid fins out, entry burn, guided descent" - the fins are out
@@ -289,7 +296,14 @@ namespace DragonScreen
 
             SetEngines(booster, c.Engines);
             Aim(booster, c, s);
-            FlightInputHandler.state.mainThrottle = (float)c.Throttle;
+            // The BOOSTER's own throttle, through its own controller. Not FlightInputHandler.state,
+            // which is the focused vessel's - that would have put the landing-burn throttle on the
+            // upper stage the moment the camera moved.
+            AttitudeController.Booster.Throttle = c.Throttle;
+            // Cosmetic only, and only when it is the vessel on screen: keeps the throttle gauge
+            // honest. MechJebModuleThrustController.cs:282 does the same for the same reason.
+            if (FlightGlobals.ActiveVessel == booster)
+                FlightInputHandler.state.mainThrottle = (float)c.Throttle;
 
             // ⛔ ISSUE 6. This was a second, hard-coded copy of the legs rule, so the DeployLegs
             // the guidance computes was ignored and the two could disagree. One source.
@@ -300,21 +314,19 @@ namespace DragonScreen
         {
             Debug.Log(Tag + "booster recovery complete - " + why
                       + " after " + (Planetarium.GetUniversalTime() - startedAt).ToString("F0") + " s");
-            FlightInputHandler.state.mainThrottle = 0f;
             Active = false;
 
-            // ---- ⛔ PUT THE STEERING GAIN BACK. IT IS A GLOBAL ON A SHARED CONTROLLER. ----
-            // Aim() drives MaxStoppingTime to 0.05 for the landing burn, which is right for the last
-            // few hundred metres and badly wrong for anything else. Leaving it there handed the
-            // upper stage a rate limit forty times tighter than the default for the circularisation
-            // it is about to resume. AttitudeController.Release does the same on its own path.
-            AttitudeController.MaxStoppingTime = AttitudeCascade.DefaultMaxStoppingTime;
+            // Let the booster go: zeroes its throttle through its own control state and puts the
+            // 0.05 landing-burn stopping time back to the default.
+            AttitudeController.Booster.Release(booster);
+            if (FlightGlobals.ActiveVessel == booster) FlightInputHandler.state.mainThrottle = 0f;
 
-            // Hand focus back so the upper stage can finish the job it was left in the middle of.
+            // Hand focus back so the crew can watch the vehicle that still has somewhere to be. The
+            // upper stage has been flying itself throughout - this is a camera move, not a handover.
             if (upperStage != null && upperStage.state != Vessel.State.DEAD)
             {
                 FlightGlobals.ForceSetActiveVessel(upperStage);
-                Debug.Log(Tag + "focus -> '" + upperStage.vesselName + "' to circularise");
+                Debug.Log(Tag + "focus -> '" + upperStage.vesselName + "' (it never stopped flying)");
             }
         }
 
@@ -722,9 +734,9 @@ namespace DragonScreen
             // Same controller the ascent uses. A landing booster wants a TIGHT stopping time -
             // BOOSTER.ks sets maxstoppingtime 0.05 for the landing burn against 1 for the coast,
             // because the two want opposite behaviour and one setting cannot serve both.
-            AttitudeController.MaxStoppingTime =
+            AttitudeController.Booster.MaxStoppingTime =
                 (c.Phase == LandingPhase.LandingBurn) ? 0.05 : 1.0;
-            AttitudeController.SteerTo(v, dir, up);
+            AttitudeController.Booster.SteerTo(v, dir, up);
         }
     }
 }

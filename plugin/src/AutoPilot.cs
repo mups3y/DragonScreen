@@ -12,15 +12,21 @@
  *      vessel.Autopilot.SAS.SetTargetOrientation(dir, false)   MechJebModuleAttitudeController.cs:361
  *      StageManager.ActivateNextStage()                        MechJebModuleAscentBaseAutopilot.cs:119
  *
- * ---- STEERING BORROWS SAS, DELIBERATELY, FOR NOW ----
- * Our own attitude controller with per-configuration gains is step 4 of the flight-software plan.
- * Until it exists, pointing SAS at a direction is honest and works: it is KSP's own controller doing
- * the inner loop while OUR guidance decides where to point. When the real controller lands, only
- * Steer() changes.
+ * ---- IT FLIES ONE NAMED VESSEL, NOT "THE ACTIVE ONE" ----
+ * `ascentVessel` is captured at engage and held. That is what lets the booster recovery run at the
+ * same time: focus moves to the booster for the landing while this keeps flying the upper stage,
+ * exactly as F9I's two CPUs do. Reading FlightGlobals.ActiveVessel here would have pointed the
+ * ascent guidance at whichever vehicle the camera happened to be on.
  *
- * ⚠ And it has a known consequence worth stating: SAS does not write `ctlPitch/ctlYaw/ctlRoll`
- * either, so the black-box columns that are dead in the existing corpus STAY dead until step 4. The
- * system-identification pass in the flight-software plan is still blocked.
+ * Throttle goes through `AttitudeController.Ascent.Throttle`, into this vessel's own
+ * FlightCtrlState. `FlightInputHandler.state` is the FOCUSED vessel's and is written only to keep
+ * the on-screen gauge honest - the same split MechJeb makes.
+ *
+ * ---- STEERING IS OURS, NOT SAS ----
+ * `AttitudeController` is a port of kOS's steering manager. SAS could not take a roll reference and
+ * had no torque feed-forward, which is most of what the early wandering was. It also never wrote
+ * `ctlPitch/ctlYaw/ctlRoll`, so those columns were dead in all 554 black-box flights; they are live
+ * now, which is what unblocks the system-identification pass in FLIGHT_SOFTWARE_PLAN.md.
  *
  * ---- STAGING IS OBSERVED, NOT SCHEDULED ----
  * Stage when we are ASKING for thrust and not getting any, for long enough that it is not a flicker.
@@ -88,7 +94,9 @@ namespace DragonScreen
             Phase = AscentPhase.Idle;
             // A fresh engagement is a fresh mission: never inherit a previous flight's recovery.
             BoosterRecovery.Reset();
-            lastVesselId = v.persistentId;
+            ascentVessel = v;
+            packedReported = false;
+            lastHandoverTry = 0.0;
             starvedFor = 0.0;
             blindStages = 0;
             phaseStartedAt = Planetarium.GetUniversalTime();
@@ -116,39 +124,67 @@ namespace DragonScreen
             if (!Engaged) return;
             Engaged = false;
             Phase = AscentPhase.Idle;
-            Vessel v = FlightGlobals.ActiveVessel;
             // Hand the axes back, or the controller keeps flying a vehicle nobody is commanding.
-            AttitudeController.Release(v);
-            if (v != null) v.ctrlState.mainThrottle = 0f;
-            FlightInputHandler.state.mainThrottle = 0f;
+            AttitudeController.Ascent.Release(ascentVessel);
+            if (FlightGlobals.ActiveVessel == ascentVessel)
+                FlightInputHandler.state.mainThrottle = 0f;
+            ascentVessel = null;
             Debug.Log(Tag + "autopilot DISENGAGED - " + why);
             // Keep recording through a booster recovery - that is the half we have never seen.
             if (!BoosterRecovery.Active) FlightRecorder.Stop(why);
         }
 
         /// <summary>
-        /// One step. Called from the painter's Update, frame-guarded because three screens call it -
-        /// the same guard as VesselData and FlightCommands, and here it would otherwise mean three
-        /// autopilots fighting over one throttle.
+        /// One step, driven by FlightDriver. The frame guard is kept from when three IVA screens
+        /// each called this - it costs nothing and it is the difference between one autopilot and
+        /// three fighting over a throttle if anything ever calls it twice again.
         /// </summary>
         public static void Tick()
         {
             if (Time.frameCount == lastFrame) return;
             lastFrame = Time.frameCount;
-            // ⛔ ISSUE 7. `if (!Engaged) return;` used to come FIRST, so disengaging the ascent -
-            // including by touching the stick - abandoned a booster in the middle of its landing
-            // burn with the throttle wherever it happened to be. The recovery is its own mission
-            // once it has started and outlives the ascent that spawned it.
-            if (BoosterRecovery.Active) { BoosterRecovery.Tick(); return; }
+
+            // ---- ⛔ BOTH VEHICLES FLY. THIS USED TO `return` HERE, AND THAT WAS THE CEILING. ----
+            // The recovery is its own mission and outlives the ascent that spawned it (ISSUE 7) -
+            // but returning meant the upper stage stopped being flown the instant a booster was
+            // taken over, so recovery could only be bought by giving up the payload. Since our
+            // upper stage separates on a suborbital arc, that forced handover to wait until after
+            // insertion, three minutes past the boostback window.
+            //
+            // KSP simulates every LOADED vessel and calls each one's own OnFlyByWire, so there was
+            // never a reason to fly only one. F9I proves it: two CPUs, and FalconFocusBooster's
+            // message is "Focus -> Booster for landing. The upper stage circularizes on its own."
+            // Now that the controller is per-vehicle and the throttle goes through each vessel's own
+            // control state, we do the same.
+            if (BoosterRecovery.Active) BoosterRecovery.Tick();
 
             if (!Engaged) return;
 
-            Vessel v = FlightGlobals.ActiveVessel;
-            if (v == null || v.orbit == null || v.mainBody == null)
+            // ---- FLY THE VESSEL WE LAUNCHED, NOT WHICHEVER ONE THE CAMERA IS ON ----
+            // Reading FlightGlobals.ActiveVessel here would have pointed the ascent guidance at the
+            // BOOSTER the moment focus moved to watch it land.
+            Vessel v = ascentVessel;
+            if (v == null || v.state == Vessel.State.DEAD || v.orbit == null || v.mainBody == null)
             {
-                Disengage("no vessel");
+                Disengage("upper stage lost");
                 return;
             }
+
+            // On rails beyond the physics range: nothing we write reaches it, and pretending
+            // otherwise is how a flight looks fine in the log and does nothing in the world.
+            // `falcon-physics-range-clamp` measured that boundary at 297-341 km on four flights.
+            // Stay engaged - it comes back when it reloads, which is exactly what F9I sees.
+            if (v.packed)
+            {
+                if (!packedReported)
+                {
+                    packedReported = true;
+                    Debug.LogWarning(Tag + "upper stage has gone on rails (beyond the physics "
+                                         + "range) - guidance is suspended until it reloads");
+                }
+                return;
+            }
+            packedReported = false;
 
             // ---- ⛔ ISSUES 3 AND 4. STATICS MUST VALIDATE, NOT REMEMBER. ----
             // CLAUDE.md already carries this rule - it was written after the NAV map and navball
@@ -157,38 +193,37 @@ namespace DragonScreen
             // scene change `Active` could still be true, `booster`/`upperStage` held references to
             // destroyed vessels, and `HavePad` carried the PREVIOUS flight's landing zone.
             // VesselData does this correctly by watching persistentId; same pattern here.
-            if (v.persistentId != lastVesselId)
-            {
-                if (lastVesselId != 0)
-                {
-                    Debug.Log(Tag + "new vessel - autopilot and booster recovery reset");
-                    BoosterRecovery.Reset();
-                    Phase = AscentPhase.Idle;
-                    Engaged = false;
-                    lastVesselId = v.persistentId;
-                    return;
-                }
-                lastVesselId = v.persistentId;
-            }
+            // The persistentId watch that used to live here compared ActiveVessel against the one we
+            // engaged on. It cannot do that job now - we hold the vessel by reference, so the two
+            // are the same object by construction - and it would have fired spuriously the moment
+            // focus moved to the booster. Scene-level validation moved to FlightDriver.OnDestroy,
+            // which is the honest place for it: a revert or a scene change is what invalidates
+            // these statics, not a camera move.
 
             BoosterRecovery.RememberPad(v);
 
-            // ---- ⛔ HAND OVER AT COAST, AND ONLY AT COAST ----
-            // The gate used to be GravityTurn || Coast. The booster separates at MECO, so by the
-            // time one EXISTS the phase is BurnToApoapsis - which the gate excluded. The handover
-            // could never fire.
+            // ---- ⛔ TAKE THE BOOSTER AS SOON AS ONE EXISTS. ----
+            // This gate has now been wrong twice in opposite directions. It was GravityTurn||Coast,
+            // which excluded the only phases where a booster exists, so it could never fire. Then it
+            // was Coast alone, which fired 155 s after separation - the 21:01 flight measured it -
+            // by which time boostback (16-55 s after separation in F9I's data) was long gone.
             //
-            // Coast is also the only phase where it is SAFE. We can fly exactly one vessel at a
-            // time (see BoosterRecovery on the ~300 km physics clamp), so handing over during
-            // BurnToApoapsis would abandon the upper stage mid-ascent and it would never reach
-            // orbit. At Coast the apoapsis is already made and the stage is ballistic, so it can be
-            // left alone while the booster flies its recovery.
+            // Waiting was only ever necessary because taking the booster meant dropping the upper
+            // stage. It no longer does: both are flown, so the right moment is the FIRST one, which
+            // is what the real vehicle does and what F9I does.
             //
-            // The cost is stated rather than hidden: the booster falls unguided for the ~30 s
-            // between separation and Coast. F9I hands over immediately because its booster has its
-            // own CPU; ours does not, and pretending otherwise would strand the payload.
-            if (Phase == AscentPhase.Coast)
-                if (BoosterRecovery.TryHandover(v)) return;
+            // Only after MECO, because before separation the only vessel carrying a `.S1.` part is
+            // us. Rate-limited because FindBooster walks every part of every loaded vessel.
+            if (Phase == AscentPhase.Meco || Phase == AscentPhase.BurnToApoapsis
+                || Phase == AscentPhase.Coast)
+            {
+                double nowUt = Planetarium.GetUniversalTime();
+                if (nowUt - lastHandoverTry > 0.5)
+                {
+                    lastHandoverTry = nowUt;
+                    BoosterRecovery.TryHandover(v);
+                }
+            }
 
             // ---- HAND BACK RATHER THAN FIGHT ----
             // If the crew grabs the stick, get out of the way instead of arguing through the same
@@ -203,7 +238,7 @@ namespace DragonScreen
             // does NOT transfer: MechJeb turns SAS OFF and drives the axes itself, so for MechJeb
             // ctrlState really is just the pilot. Reading the raw bindings is the equivalent for a
             // controller that leaves SAS on.
-            if (PilotInput()) { Disengage("manual input"); return; }
+            if (PilotInput(v)) { Disengage("manual input"); return; }
 
             AscentInputs a = new AscentInputs();
             a.Valid = true;
@@ -282,7 +317,12 @@ namespace DragonScreen
             }
 
             Steer(v, c);
-            FlightInputHandler.state.mainThrottle = (float)c.Throttle;
+            // THIS vessel's throttle, through its own control state - see AttitudeController's header.
+            // FlightInputHandler.state belongs to whoever has focus, so writing it here would have
+            // put the ascent throttle on the booster the moment the camera moved to watch it land.
+            AttitudeController.Ascent.Throttle = c.Throttle;
+            if (FlightGlobals.ActiveVessel == v)
+                FlightInputHandler.state.mainThrottle = (float)c.Throttle;
             // ---- ULLAGE. THE SIGN IS CONFIRMED; THE DELIVERY IS BEST-EFFORT. ----
             // NEGATIVE Z is FORWARD translation. Verified at three independent MechJeb sites rather
             // than assumed, one of which is literally this manoeuvre:
@@ -374,7 +414,7 @@ namespace DragonScreen
             // is most of what the wandering was. Up-hint is the local vertical during the
             // atmospheric climb and the orbit normal above it - the same choice F9I makes.
             Vector3d upHint = (v.CoM - v.mainBody.position).normalized;
-            AttitudeController.SteerTo(v, dir, upHint);
+            AttitudeController.Ascent.SteerTo(v, dir, upHint);
             lastCommanded = dir;
         }
 
@@ -387,8 +427,13 @@ namespace DragonScreen
         /// Wrapped so a surprise in the input API costs the hand-back feature and not the autopilot:
         /// an exception here while flying a booster to a pad would be a bad trade.
         /// </summary>
-        private static bool PilotInput()
+        private static bool PilotInput(Vessel v)
         {
+            // The raw bindings report what the PLAYER is holding, and the player is flying whichever
+            // vessel has focus. While the camera is on the booster, a stick input is aimed at the
+            // booster - disengaging the upper stage's ascent for it would be reading someone else's
+            // controls.
+            if (v == null || FlightGlobals.ActiveVessel != v) return false;
             try
             {
                 if (Mathf.Abs(GameSettings.AXIS_PITCH.GetAxis()) > 0.2f) return true;
@@ -402,7 +447,11 @@ namespace DragonScreen
 
         private static Vector3d circDv, circDvStart;
         private static double phaseStartedAt;
-        private static uint lastVesselId;
+
+        /// <summary>The vehicle this autopilot is flying. NOT whichever one has the camera.</summary>
+        private static Vessel ascentVessel;
+        private static bool packedReported;
+        private static double lastHandoverTry;
         private static float lastBurnLog = -999f;
 
         /// <summary>

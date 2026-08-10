@@ -37,6 +37,7 @@
  *
  * The painter still draws. It no longer flies.
  */
+using System;
 using UnityEngine;
 
 namespace DragonScreen
@@ -66,6 +67,21 @@ namespace DragonScreen
             // Leaving the flight scene ends the flight. Close the file rather than leaving the last
             // rows buffered - the flights worth reading are the ones that end unexpectedly.
             FlightRecorder.Stop("left the flight scene");
+
+            // ---- AND CLEAR THE STATICS HERE, WHICH IS THE HONEST PLACE FOR IT ----
+            // A revert or a scene change is what invalidates them - not a camera move, which is what
+            // AutoPilot's old persistentId watch was actually detecting. Everything below holds a
+            // reference to a vessel that is about to stop existing.
+            try
+            {
+                AutoPilot.Disengage("left the flight scene");
+                BoosterRecovery.Reset();
+            }
+            catch (Exception e)
+            {
+                // The scene is being torn down; a throw here would be logged against nothing useful.
+                Debug.LogWarning(Tag + "cleanup on scene exit: " + e.Message);
+            }
         }
     }
 }
