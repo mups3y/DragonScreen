@@ -115,7 +115,7 @@ flight 012.** Phasing above 3 km, CW from 0.5–3 km, RCS below, periapsis floor
 | match the station's orbit | `StMatchStationOrbit` | **PORTED** `OrbitMatch`, first leg of the ladder |
 | phasing leg | `StPhaseLeg`, `StAlongTrack` | **PORTED** `pure/Phasing.cs`, wired through the node executor |
 | Clohessy–Wiltshire solve and leg | `StCwSolve`, `StCwLeg` | **PORTED** `pure/CwTargeting.cs`, wired with a periapsis floor |
-| terminal approach, closest port | `StTerminal`, `StClosestPort`, `StCloseIn` | **PORTED** terminal ladder wired; port SELECTION still `StClosestPort` |
+| terminal approach, closest port | `StTerminal`, `StClosestPort`, `StCloseIn` | **PORTED** ladder and port selection both |
 | node execution | `StExecNode`, `StBurnNode`, `StVisViva` | **PORTED** `src/NodeExecutor.cs`, with the periapsis floor inside it |
 | speed cap by range | `StSpeedCap` | **PORTED** `Approach.SpeedCap`, all four bands |
 
@@ -125,7 +125,7 @@ flight 012.** Phasing above 3 km, CW from 0.5–3 km, RCS below, periapsis floor
 
 | step | F9I | ours |
 |---|---|---|
-| dock | `StRendezvousAndDock` | **NO** |
+| dock | `StRendezvousAndDock`, `StClosestPort` | **PORTED** `src/DockingOps.cs` - gate, hull skirt, axial run |
 | top up propellant before release | `StTopUpBeforeUndock` | **NO** |
 | close the docking shroud | `StCloseDockingShroud` | **NO** |
 | undock and back away | `StUndock`, `StBackAway` | **NO** |

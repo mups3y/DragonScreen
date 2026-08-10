@@ -405,8 +405,21 @@ namespace DragonScreen
 
         private static void Arrived()
         {
+            // The ladder has done its job. Docking is a different problem with a different frame -
+            // port axes and a keep-out sphere rather than orbits - so it gets its own controller
+            // rather than another branch in here.
+            if (!DockingOps.Engaged && DockingOps.Stage != DockStage.Docked
+                && DockingOps.Stage != DockStage.NoPort)
+            {
+                DockingOps.Engage(ship, Station);
+            }
+            if (DockingOps.Engaged || DockingOps.Stage == DockStage.Docked)
+            {
+                Note = "DOCKING - " + DockingOps.Stage + " " + DockingOps.Note;
+                return;
+            }
             Hold();
-            Note = "STATION KEEPING at " + RangeM.ToString("F0") + " m";
+            Note = "STATION KEEPING at " + RangeM.ToString("F0") + " m - " + DockingOps.Note;
         }
 
         // ------------------------------------------------------------------ helpers

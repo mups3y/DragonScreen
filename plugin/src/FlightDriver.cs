@@ -63,6 +63,7 @@ namespace DragonScreen
             // flown from the next one rather than sitting a frame behind its own ignition time.
             NodeExecutor.Tick();
             StationApproach.Tick();
+            DockingOps.Tick();
             FlightRecorder.Tick();
         }
 
@@ -82,6 +83,7 @@ namespace DragonScreen
                 BoosterRecovery.Reset();
                 StationApproach.Reset();
                 NodeExecutor.Reset();
+                DockingOps.Reset();
             }
             catch (Exception e)
             {

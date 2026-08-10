@@ -83,7 +83,7 @@ Starship toolchain. No plane match: the station is at 0.133° and the plane is d
 
 ---
 
-## F2 · Docking port selection
+## F2 · Docking port selection — **DONE 2026-08-11**
 
 **Read:** `StClosestPort:369`, `StRelVel:737`, `StCloseIn:1689`, `StApproachTo:1597`.
 
@@ -95,7 +95,7 @@ Starship toolchain. No plane match: the station is at 0.133° and the plane is d
 keep-out sphere is centred on the station and the approach must slide round it rather than drive at
 it. `falcon9.ks:10704-10760` has that geometry worked out — read it, do not re-derive it.
 
-## D1 · Dock · D2 · Refuel · D3 · Undock
+## D1 · Dock — **DONE 2026-08-11** · D2 · Refuel · D3 · Undock
 
 **Read:** `StRendezvousAndDock:1999`, `StCloseDockingShroud:2291`, `StUndock:2303`,
 `StBackAway:2338`, `StTopUpBeforeUndock:2666`, `StMono:1254`.
@@ -172,7 +172,7 @@ Recorded so nobody spends a session discovering why they cannot.
 1. ~~**F1** node executor~~ **DONE** — `pure/BurnExec.cs` rewritten as a port, `src/NodeExecutor.cs` is the glue, CW burns now fly through it
 2. ~~**E1** return budget~~ **DONE** — `pure/ReturnBudget.cs`, 19 checks. Not yet on a page or a button
 3. ~~**R1**, **R2**~~ **DONE** — §6 complete: match-orbit, phasing, CW, ladder, terminal, all wired
-4. **F2**, **D1** ← docking, which is the point of the mission
+4. ~~**F2**, **D1**~~ **DONE** — `pure/DockGeometry.cs` + `src/DockingOps.cs`, 15 checks
 5. **D2**, **D3**
 6. **E2**, **E3**, **E4**, **E5**
 7. **E6**, **E7**, **E8**
