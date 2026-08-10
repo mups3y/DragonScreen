@@ -24,12 +24,15 @@
  * `node_drogue` and `node_mains` - each carrying its own ModuleParachute. That is what makes
  * MAINS ONLY / DROGUES & MAINS / CUT MAINS distinguishable rather than three names for one action.
  *
- * ---- THE THREE SEQUENCE COMMANDS ARE HONEST BUT INTERIM ----
- * DEORBIT NOW, WATER DEORBIT and BREAKOUT want the guidance stack in docs/FLIGHT_SOFTWARE_PLAN.md,
- * which is not built. What they do TODAY is real and closed-loop but crude: point retrograde and burn
- * until the periapsis target is met. It is a genuine deorbit, not a teleport and not a fake - but it
- * is not the bank-angle-modulated entry the plan describes, and the log says so on every ignition so
- * nobody later mistakes it for the finished article.
+ * ---- DEORBIT NOW IS NO LONGER THE CRUDE ONE ----
+ * It used to point retrograde and burn until a periapsis number was met, with no idea where the
+ * capsule would land. It now hands off to `DeorbitOps`, which flies the AIM MISS - how far the
+ * predicted impact is from the landing zone - against an integrated trajectory that measures the
+ * capsule's own drag, with the periapsis target demoted to a depth limit. It refuses if the second
+ * stage is attached or there is no orbit to leave, and reports the monopropellant budget before it
+ * commits.
+ *
+ * WATER DEORBIT and BREAKOUT are still the crude form and still say so on ignition.
  */
 using System;
 using System.Collections.Generic;
@@ -171,7 +174,13 @@ namespace DragonScreen
                         Log("entry string swap - undecided function, see REAL_DRAGON_SCREENS.md");
                         return true;
 
-                    case PanelCommand.DeorbitNow:   return StartDeorbit(v, DeorbitTargetPe, "DEORBIT NOW");
+                    // ---- ⛔ THE REAL DE-ORBIT, NOT THE OLD RETROGRADE BURN ----
+                    // StartDeorbit drove periapsis to a number and had no idea where the capsule
+                    // would land. DeorbitOps flies the AIM MISS - how far the predicted impact is
+                    // from the landing zone - with the periapsis target demoted to a depth limit.
+                    // It also refuses if the S2 is attached or there is no orbit to leave, and
+                    // reports the monopropellant budget before it commits.
+                    case PanelCommand.DeorbitNow:   DeorbitOps.Engage(); return DeorbitOps.Engaged;
                     case PanelCommand.WaterDeorbit: return StartDeorbit(v, WaterDeorbitTargetPe, "WATER DEORBIT");
                     case PanelCommand.Breakout:     return Breakout(v);
                     case PanelCommand.Abort:        return Abort(v);

@@ -129,7 +129,7 @@ flight 012.** Phasing above 3 km, CW from 0.5–3 km, RCS below, periapsis floor
 | top up propellant before release | `StTopUpBeforeUndock` | **PORTED** holds on PROGRESS, not on full |
 | close the docking shroud | `StCloseDockingShroud` | **PORTED** |
 | undock and back away | `StUndock`, `StBackAway` | **PORTED** our port only, sign calibrated, burst-then-coast |
-| is a return trajectory available | `StReturnAllowed`, `StMonoForDeorbit` | **PORTED** `pure/ReturnBudget.cs` |
+| is a return trajectory available | `StReturnAllowed`, `StMonoForDeorbit` | **PORTED** and now WIRED - DeorbitOps refuses on it and reports the budget |
 
 ---
 
@@ -145,7 +145,7 @@ range, drogues then mains, splashdown.
 | find an overflight of the site | `DgFindOverflight`, `DgSiteInertialAt` | **NO** |
 | plane match | `DgPlaneMatch`, `DgPlaneBurn`, `DgPlaneDeltaV` | **NO** |
 | phasing | `DgPhasing` | **NO** |
-| deorbit burn to a target periapsis | `DgDeorbitBurn` | **PART** law ported (`pure/DeorbitBurn.cs`, 22 checks); `FlightCommands.StartDeorbit` still the old plain retrograde burn and gets REPLACED |
+| deorbit burn to a target periapsis | `DgDeorbitBurn` | **PORTED** `src/DeorbitOps.cs` - flown against the aim miss, periapsis is the depth limit. DEORBIT NOW points at it. |
 | trunk jettison before the burn | `DgSepStack`, `DgTrunkAndEI` | **PART** we fire it, but not on F9I's schedule |
 | pre-entry trim | `DgPreEntryTrim`, `DgCapsuleTrim` | **NO** |
 | **lifting entry on bank angle, long-margin schedule** | `DgEntryGuidance`, `DgLongMargin` | **PART** `pure/EntryMargin.cs` is the real measured schedule; the bank controller around it is not wired |

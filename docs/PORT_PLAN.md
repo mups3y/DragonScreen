@@ -124,7 +124,7 @@ at all", which is the question the crew actually needs.
 `DgPlaneDeltaV:1133`, `DgRelNodeUt:1152`, `DgPlaneBurn:1190`. ~300 lines, the largest single read on
 this list. Needs F1.
 
-### E5 · Deorbit burn — **LAW DONE 2026-08-11**, glue outstanding
+### E5 · Deorbit burn — **DONE 2026-08-11**
 **Read:** `DgDeorbitBurn:1328`, `DgPhasing:1306`, `DgUseS2Deorbit:1901`, `DgS2DeorbitToPeri:1568`,
 `DgRcsDeorbit:1754`. Needs F1.
 
