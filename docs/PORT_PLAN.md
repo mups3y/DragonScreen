@@ -64,7 +64,7 @@ that must not be "simplified".
 
 ---
 
-## R1 · Phasing leg
+## R1 · Phasing leg — **DONE 2026-08-11**
 
 **Read:** `StPhaseLeg:932`, `StAlongTrack:894`, and the ladder tuning block at `:620-645` again for
 `stPhaseOrbits`.
@@ -170,7 +170,7 @@ Recorded so nobody spends a session discovering why they cannot.
 
 1. ~~**F1** node executor~~ **DONE** — `pure/BurnExec.cs` rewritten as a port, `src/NodeExecutor.cs` is the glue, CW burns now fly through it
 2. ~~**E1** return budget~~ **DONE** — `pure/ReturnBudget.cs`, 19 checks. Not yet on a page or a button
-3. **R1**, **R2** ← completes §6, makes the rendezvous actually close a gap
+3. **R1** ~~phasing~~ **DONE** (`pure/Phasing.cs`, 19 checks, wired). **R2** match-orbit still to do
 4. **F2**, **D1** ← docking, which is the point of the mission
 5. **D2**, **D3**
 6. **E2**, **E3**, **E4**, **E5**

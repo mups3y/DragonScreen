@@ -17,6 +17,7 @@ public static class TestMain
         bad += PredictTest.Run();
         bad += BurnExecTest.Run();
         bad += ReturnBudgetTest.Run();
+        bad += PhasingTest.Run();
         bad += DockControlTest.Run();
 
         Console.WriteLine(bad == 0 ? "ALL SUITES PASSED" : bad + " SUITE(S) FAILED");

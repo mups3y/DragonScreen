@@ -51,6 +51,8 @@ namespace DragonScreen
         private static Vessel ship;
         private static double startedAt;
         private static double lastBurnAt = -999.0;
+        /// <summary>When the phasing coast returns us to the burn point. 0 = not phasing.</summary>
+        private static double phaseReturnUt;
         private static int lastFrame = -1;
 
         // ------------------------------------------------------------------ lifecycle
@@ -107,6 +109,7 @@ namespace DragonScreen
         public static void Reset()
         {
             Engaged = false; Station = null; ship = null;
+            phaseReturnUt = 0.0;
             RangeM = 0.0; ClosingMps = 0.0; LateralMps = 0.0; AlongTrackM = 0.0; LastDvMps = 0.0;
             Note = "-";
         }
@@ -193,19 +196,83 @@ namespace DragonScreen
         // ------------------------------------------------------------------ the legs
 
         /// <summary>
-        /// PHASING. The gap is too large for CW at any sane cost - F9I's own table puts direct CW at
-        /// 289 m/s for a 51 km gap against 17.7 m/s for one phasing lap, and the CW version drops
-        /// periapsis 15.6 km below the surface doing it.
+        /// PHASING. Change our PERIOD and let the geometry close the gap.
         ///
-        /// ⚠ NOT IMPLEMENTED AS A BURN YET. It reports and holds rather than guessing at a manoeuvre,
-        /// because a phasing burn that is wrong is the exact failure mode that de-orbited flight 012.
-        /// `StPhaseLeg:932` is the port site.
+        /// F9I's simulated table: a 51 km gap costs 17.7 m/s over one lap against 289 m/s for a
+        /// direct CW transfer - and the CW version puts periapsis 15.6 km below the surface doing it.
+        /// Ahead of the station means a LONGER period, i.e. a HIGHER orbit, which is why this can
+        /// never drop us into the atmosphere the way flight 012's pursuit controller did.
         /// </summary>
         private static void FlyPhasing()
         {
-            Hold();
-            Note = "PHASING NEEDED - gap " + (Math.Abs(AlongTrackM) / 1000.0).ToString("F1")
-                 + " km. Not yet flown; see StPhaseLeg.";
+            if (NodeExecutor.Active)
+            {
+                Note = "PHASING - " + NodeExecutor.Phase + " " + NodeExecutor.Note;
+                return;
+            }
+
+            double now = Planetarium.GetUniversalTime();
+
+            // Coasting the phasing orbit: nothing to do but wait for the return to this point.
+            if (now < phaseReturnUt)
+            {
+                Hold();
+                Note = "PHASING - circularise in " + (phaseReturnUt - now).ToString("F0") + " s";
+                return;
+            }
+
+            // Back at the burn point after the coast: circularise into the station's orbit.
+            if (phaseReturnUt > 0.0)
+            {
+                phaseReturnUt = 0.0;
+                CelestialBody bx = ship.mainBody;
+                double rx = (ship.CoM - bx.position).magnitude;
+                double dvx = Phasing.ExitDvMps(rx, ship.obt_velocity.magnitude, bx.gravParameter);
+                Vector3d dirx = ship.obt_velocity.normalized * dvx;
+                if (NodeExecutor.Begin(ship, dirx, now, "phasing exit")) return;
+                Note = NodeExecutor.Note;
+                return;
+            }
+
+            if (now - lastBurnAt < 30.0) { Hold(); Note = "PHASING - settling"; return; }
+
+            CelestialBody b = ship.mainBody;
+            PhasingInputs p = new PhasingInputs();
+            p.GapM = AlongTrackM;
+            p.RadiusM = (ship.CoM - b.position).magnitude;
+            p.SpeedMps = ship.obt_velocity.magnitude;
+            p.StationPeriodS = (Station.orbit != null) ? Station.orbit.period : 0.0;
+            p.StationSmaM = (Station.orbit != null) ? Station.orbit.semiMajorAxis : 0.0;
+            p.Mu = b.gravParameter;
+            p.Orbits = Approach.PhaseOrbits;
+
+            PhasingSolution sol = Phasing.Solve(p);
+            if (!sol.Ok) { Hold(); Note = "PHASING - " + sol.Note; return; }
+
+            // ⚠ THE DIRECTION CHECK IS NOT DECORATION. Flight 014's bad semi-major axis produced a
+            // burn of roughly the right SIZE pointing the wrong WAY - 1353 m/s retrograde, periapsis
+            // -539.9 km. A solution that would lower the orbit to catch something ahead of us is
+            // wrong however plausible its magnitude.
+            if (!Phasing.DirectionSane(p, sol))
+            {
+                Hold();
+                Note = "PHASING REFUSED - the solution would move the orbit the wrong way";
+                Debug.LogWarning(Tag + Note + " (gap " + p.GapM.ToString("F0") + " m, a_phase "
+                                 + sol.PhaseSmaM.ToString("F0") + " vs a_stn "
+                                 + p.StationSmaM.ToString("F0") + ")");
+                return;
+            }
+
+            // Prograde/retrograde at this point, so it becomes an apsis and we return to exactly here.
+            Vector3d dv = ship.obt_velocity.normalized * sol.EntryDvMps;
+            if (NodeExecutor.Begin(ship, dv, now, "phasing entry"))
+            {
+                lastBurnAt = now;
+                phaseReturnUt = now + sol.CoastS;
+                Debug.Log(Tag + "phasing: " + (Math.Abs(p.GapM) / 1000.0).ToString("F1") + " km "
+                          + (sol.Ahead ? "AHEAD" : "BEHIND") + ", " + sol.Note);
+            }
+            else Note = NodeExecutor.Note;
         }
 
         /// <summary>

@@ -113,10 +113,10 @@ flight 012.** Phasing above 3 km, CW from 0.5–3 km, RCS below, periapsis floor
 | step | F9I | ours |
 |---|---|---|
 | match the station's orbit | `StMatchStationOrbit` | **NO** |
-| phasing leg | `StPhaseLeg`, `StAlongTrack` | **PART** the leg is detected and reported; the BURN is not planned |
+| phasing leg | `StPhaseLeg`, `StAlongTrack` | **PORTED** `pure/Phasing.cs`, wired through the node executor |
 | Clohessy–Wiltshire solve and leg | `StCwSolve`, `StCwLeg` | **PORTED** `pure/CwTargeting.cs`, wired with a periapsis floor |
 | terminal approach, closest port | `StTerminal`, `StClosestPort`, `StCloseIn` | **PORTED** terminal ladder wired; port SELECTION still `StClosestPort` |
-| node execution | `StExecNode`, `StBurnNode`, `StVisViva` | **PART** `pure/BurnExec.cs` unwired |
+| node execution | `StExecNode`, `StBurnNode`, `StVisViva` | **PORTED** `src/NodeExecutor.cs`, with the periapsis floor inside it |
 | speed cap by range | `StSpeedCap` | **PORTED** `Approach.SpeedCap`, all four bands |
 
 ---
