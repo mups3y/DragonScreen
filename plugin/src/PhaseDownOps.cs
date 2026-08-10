@@ -218,7 +218,8 @@ namespace DragonScreen
         /// </summary>
         private static bool Launch(PhaseDownBurn burn, double burnUt)
         {
-            Vector3d velAtNode = ship.orbit.getOrbitalVelocityAtUT(burnUt);
+            // Swizzled -> world. See StationApproach.FlyMatchOrbit for the full note.
+            Vector3d velAtNode = ship.orbit.getOrbitalVelocityAtUT(burnUt).xzy;
             if (velAtNode.sqrMagnitude < 1.0) { Note = "no velocity at the node"; return false; }
 
             Vector3d dv = velAtNode.normalized * burn.DvMps;

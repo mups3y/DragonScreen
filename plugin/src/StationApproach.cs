@@ -225,7 +225,14 @@ namespace DragonScreen
             // Prograde at apoapsis. The Δv direction is the velocity direction AT THE NODE, not now -
             // half an orbit away those differ by 180 degrees, and using the current one would burn
             // exactly backwards.
-            Vector3d velAtAp = o.getOrbitalVelocityAtUT(burnUt);
+            // ---- ⛔ `.xzy` IS NOT DECORATION. WITHOUT IT THIS BURNS IN THE WRONG DIRECTION. ----
+            // KSP's `getOrbitalVelocityAtUT` returns the SWIZZLED orbit frame with Y and Z exchanged;
+            // everything else here - `obt_velocity`, `CoM`, the attitude controller - is world. MechJeb
+            // carries `WorldOrbitalVelocityAtUT(o, ut) => o.getOrbitalVelocityAtUT(ut).xzy`
+            // (OrbitExtensions.cs:22) for exactly this. This file's own header warned about the trap
+            // and the code did it anyway: "a frame error here looks identical to a tuning problem right
+            // up until the capsule burns the wrong way."
+            Vector3d velAtAp = o.getOrbitalVelocityAtUT(burnUt).xzy;
             if (velAtAp.sqrMagnitude < 1.0) { Hold(); Note = "ORBIT MATCH - no velocity"; return; }
 
             if (NodeExecutor.Begin(ship, velAtAp.normalized * dv, burnUt, "orbit match"))

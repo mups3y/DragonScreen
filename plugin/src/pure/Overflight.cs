@@ -80,6 +80,40 @@ namespace DragonScreen
         /// <summary>At most this many orbits are searched for a pass. `dgOrbitCap`.</summary>
         public const double OrbitCap = 5.0;
 
+        /// <summary>
+        /// How far before the overflight the de-orbit burn is lit, as a fraction of an orbit.
+        /// `dgPhaseFrac`.
+        ///
+        /// ---- ⛔ THIS IS NOT `LagArcFrac`, AND CONFUSING THE TWO COST THREE FLIGHTS ----
+        /// Two different fractions of the same orbit, 0.255 and 0.358, both about "when":
+        ///   · **this one** is the IGNITION LEAD - light the engine this far before the pass, because
+        ///     the capsule has to fall for a while after it burns.
+        ///   · **`LagArcFrac`** is the LANDING LAG - the site keeps rotating for 164 s after that pass,
+        ///     and the cross-track solve must be evaluated where the site will BE.
+        /// F9I derived the second from the first, reasoning that a capsule lands one descent after a
+        /// burn placed 0.255 of an orbit early. It is the right mechanism and the wrong number, and
+        /// flights 072, 074 and 076 paid for the difference. Keep them separate.
+        /// </summary>
+        public const double PhaseArcFrac = 0.255;
+
+        /// <summary>Never commit to an ignition closer than this, seconds. Room to turn and settle.</summary>
+        public const double GoTimeMarginS = 60.0;
+
+        /// <summary>
+        /// When to light the de-orbit burn for a given pass. `DgPhasing`'s `dgGoUt`.
+        ///
+        /// The lead can easily land in the past - the search happily returns a pass that is minutes
+        /// away, and the ignition for it was a quarter of an orbit before that. Rolling forward by
+        /// whole orbits keeps the same GEOMETRY on a later lap rather than firing late into this one.
+        /// </summary>
+        public static double GoTimeUt(double overflightUt, double nowUt, double orbitPeriodS)
+        {
+            double go = overflightUt - (orbitPeriodS * PhaseArcFrac);
+            if (orbitPeriodS <= 0.0) return go;
+            while (go <= nowUt + GoTimeMarginS) go += orbitPeriodS;
+            return go;
+        }
+
         /// <summary>Off-plane angle accepted without comment, degrees. `dgPlaneTol`.</summary>
         public const double PlaneToleranceDeg = 0.05;
 

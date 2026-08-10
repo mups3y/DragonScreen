@@ -38,7 +38,16 @@ namespace DragonScreen
         private static Vessel ship;
         private static DeorbitState st;
         private static double startedAt, lastScanAt, prevPeri, prevPeriAt;
-        private static bool aligned, phaseDownPending;
+        private static bool aligned, phaseDownPending, passFound;
+        private static double goTimeUt, trackMissM, offPlaneDeg;
+
+        /// <summary>When the burn will be lit, and how good the pass is. For the pages and the crew.</summary>
+        public static double SecondsToIgnition
+        {
+            get { return passFound ? goTimeUt - Planetarium.GetUniversalTime() : -1.0; }
+        }
+        public static double PassTrackMissM { get { return trackMissM; } }
+        public static double PassOffPlaneDeg { get { return offPlaneDeg; } }
 
         /// <summary>Where the capsule is trying to land. Defaults to LZ-1.</summary>
         public static double TargetLatDeg = LandingSites.Lz1.LatDeg;
@@ -92,6 +101,8 @@ namespace DragonScreen
             // exactly this reason, and the phase-down knows how to skip itself when it is unnecessary
             // or impossible - so asking is free and not asking is a miss.
             phaseDownPending = false;
+            passFound = false;
+            trackMissM = 0.0; offPlaneDeg = 0.0; goTimeUt = 0.0;
             if (!DeorbitOrbit.AlreadyOnOrbit(v.orbit.ApA, v.orbit.PeA))
             {
                 PhaseDownOps.Engage(v);
@@ -126,6 +137,7 @@ namespace DragonScreen
         public static void Reset()
         {
             Engaged = false; ship = null; Note = "-"; phaseDownPending = false;
+            passFound = false; goTimeUt = 0.0; trackMissM = 0.0; offPlaneDeg = 0.0;
             AimMissM = -1.0; ThrottleCmd = 0.0; PeriapsisM = 0.0;
         }
 
@@ -168,9 +180,26 @@ namespace DragonScreen
                 prevPeri = PeriapsisM;
                 prevPeriAt = now;
                 Debug.Log(Tag + "phase-down settled (" + PhaseDownOps.Stage
-                          + ") - starting the de-orbit burn from "
+                          + ") - finding the de-orbit point from "
                           + (ship.orbit.ApA / 1000.0).ToString("F1") + " x "
                           + (ship.orbit.PeA / 1000.0).ToString("F1") + " km");
+            }
+
+            // ---- ⛔ WHERE IN THE ORBIT WE BURN IS NOT A DETAIL. IT IS THE LANDING. ----
+            // A retrograde burn cannot move the plane and can barely move the ground track, so almost
+            // all of where the capsule ends up is decided by WHEN the engine lights. This used to
+            // ignite the moment the button was pressed, from wherever the capsule happened to be,
+            // which hands the closed loop a miss of hundreds of kilometres it has no authority to fix
+            // - it would simply burn to its own timeout. `DgPhasing` picks the pass and waits for it.
+            if (!passFound) { FindPass(now); return; }
+            if (now < goTimeUt)
+            {
+                // Hold retrograde while we wait, so the burn's alignment falls through when it starts.
+                AttitudeController.Ascent.Throttle = 0.0;
+                AttitudeController.Ascent.SteerTo(ship, -ship.obt_velocity.normalized, Vector3d.zero);
+                Note = "WAITING FOR THE DE-ORBIT POINT - T-" + (goTimeUt - now).ToString("F0")
+                     + " s, track miss " + (trackMissM / 1000.0).ToString("F1") + " km";
+                return;
             }
 
             // Retrograde, and hold it. The burn is long and shallow; a capsule that wanders off
@@ -247,6 +276,87 @@ namespace DragonScreen
                  + (st.AimMissM >= 0.0 ? (st.AimMissM / 1000.0).ToString("F1") + " km" : "acquiring")
                  + ", Pe " + (PeriapsisM / 1000.0).ToString("F1") + " km, thr "
                  + (ThrottleCmd * 100.0).ToString("F0") + "%";
+        }
+
+        /// <summary>
+        /// Pick the pass and the ignition time. `DgPhasing`, once, when the phase-down has settled.
+        ///
+        /// ⚠ THE SITE IS EVALUATED AT TOUCHDOWN. `Overflight.LandLagS` is why - the ground keeps
+        /// turning for about 164 s after the pass, and scoring the pass against where the site is NOW
+        /// is `CargoDragon_070`'s 55 km. The search costs a few hundred trajectory samples and runs
+        /// exactly once.
+        /// </summary>
+        private static void FindPass(double now)
+        {
+            CelestialBody b = ship.mainBody;
+            Orbit o = ship.orbit;
+            if (o == null || o.period <= 0.0)
+            {
+                // No orbit to search is not a reason to refuse to come home - burn from here.
+                passFound = true;
+                goTimeUt = now;
+                Debug.LogWarning(Tag + "no usable orbit for an overflight search - de-orbiting now");
+                return;
+            }
+
+            searchShip = ship;
+            searchLag = Overflight.LandLagS(o.period);
+            searchNow = now;
+            OverflightResult r = Overflight.Search(now, o.period, new TrackMissAtUt(MissAt));
+
+            trackMissM = r.TrackMissM;
+            goTimeUt = Overflight.GoTimeUt(r.Ut, now, o.period);
+            passFound = true;
+
+            // The off-plane angle at touchdown, reported not burnt - see pure/Overflight.cs. On our
+            // 0.133 degree station orbit this is noise; on an inclined one it is the whole cross-track
+            // error, and the crew should be told before the engine lights rather than after.
+            //
+            // ⚠ THE NORMAL IS BUILT FROM TWO WORLD POSITIONS, NOT FROM position x velocity.
+            // `getRelativePositionAtUT` and `getOrbitalVelocityAtUT` both return KSP's SWIZZLED orbit
+            // frame (y and z exchanged), while `GetLatitude`/`GetLongitude` take a WORLD position.
+            // Crossing the swizzled pair and then asking the body where it points mixes two frames and
+            // produces a plausible number that is wrong by an arbitrary rotation - the kind of defect
+            // that reads fine and lands 50 km out. `getPositionAtUT` is already world, so two of those
+            // a minute apart give the normal with no frame question at all.
+            Vector3d r1 = o.getPositionAtUT(r.Ut) - b.position;
+            Vector3d r2 = o.getPositionAtUT(r.Ut + 60.0) - b.position;
+            Vector3d n = Vector3d.Cross(r1, r2).normalized;
+            Vector3d np = b.position + n * b.Radius;
+            offPlaneDeg = Overflight.OffPlaneDeg(b.GetLatitude(np), b.GetLongitude(np),
+                                                 TargetLatDeg,
+                                                 Overflight.SiteLonAtDeg(TargetLonDeg,
+                                                                         (r.Ut + searchLag) - now,
+                                                                         b.rotationPeriod));
+
+            Debug.Log(Tag + "de-orbit point: pass in " + r.InS.ToString("F0")
+                      + " s, track miss " + (trackMissM / 1000.0).ToString("F1")
+                      + " km, landing lag " + searchLag.ToString("F0")
+                      + " s, off-plane at touchdown " + offPlaneDeg.ToString("F2")
+                      + " deg (" + (Overflight.CrossTrackFromOffPlaneM(offPlaneDeg, b.Radius) / 1000.0)
+                          .ToString("F1") + " km of cross). Ignition in "
+                      + (goTimeUt - now).ToString("F0") + " s.");
+
+            if (Math.Abs(offPlaneDeg) > Overflight.PlaneToleranceDeg)
+                Debug.Log(Tag + "note: " + offPlaneDeg.ToString("F2")
+                          + " deg out of plane and no plane change is flown (F9I disabled its own "
+                          + "after flights 082-100). The entry's cross-track loop absorbs this on a "
+                          + "near-equatorial orbit - flight 080 touched down at -5 m of cross.");
+        }
+
+        // The search callback needs state the delegate signature cannot carry. Static rather than a
+        // closure: C# 5, and the rest of the plugin uses named delegates for the same reason.
+        private static Vessel searchShip;
+        private static double searchLag, searchNow;
+
+        private static double MissAt(double ut)
+        {
+            CelestialBody b = searchShip.mainBody;
+            Vector3d p = searchShip.orbit.getPositionAtUT(ut);
+            return Overflight.TrackMissM(b.Radius, b.rotationPeriod,
+                                         b.GetLatitude(p), b.GetLongitude(p),
+                                         (ut - searchNow) + searchLag,
+                                         TargetLatDeg, TargetLonDeg);
         }
 
         private static double Mono(Vessel v)
