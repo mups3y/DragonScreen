@@ -75,10 +75,11 @@ the orbit, and the cost table shows a phasing orbit "cannot drop periapsis when 
 
 **Currently:** `StationApproach.FlyPhasing` reports the gap and holds. Replace that body only.
 
-## R2 · Match station orbit
+## R2 · Match station orbit — **DONE 2026-08-11**
 
-**Read:** `StMatchStationOrbit:1959`. Also `MatchPlanes:796` and `MatchSMA:816` in `F9_payload.ks` —
-two implementations exist and the plan must pick one deliberately.
+**Decided:** `StMatchStationOrbit`. `MatchPlanes`/`MatchSMA` are marked DEAD in their own source
+("do not wire this one back in by mistake because the name reads right") and drag in an unported
+Starship toolchain. No plane match: the station is at 0.133° and the plane is degenerate.
 
 ---
 
@@ -170,7 +171,7 @@ Recorded so nobody spends a session discovering why they cannot.
 
 1. ~~**F1** node executor~~ **DONE** — `pure/BurnExec.cs` rewritten as a port, `src/NodeExecutor.cs` is the glue, CW burns now fly through it
 2. ~~**E1** return budget~~ **DONE** — `pure/ReturnBudget.cs`, 19 checks. Not yet on a page or a button
-3. **R1** ~~phasing~~ **DONE** (`pure/Phasing.cs`, 19 checks, wired). **R2** match-orbit still to do
+3. ~~**R1**, **R2**~~ **DONE** — §6 complete: match-orbit, phasing, CW, ladder, terminal, all wired
 4. **F2**, **D1** ← docking, which is the point of the mission
 5. **D2**, **D3**
 6. **E2**, **E3**, **E4**, **E5**

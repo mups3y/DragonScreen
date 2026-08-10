@@ -111,6 +111,45 @@ public static class PhasingTest
         PhasingSolution none = Phasing.Solve(Gap(0.0, 1));
         Check("no gap, no burn", Math.Abs(none.EntryDvMps) < 1e-6, none.EntryDvMps.ToString("F6"));
 
+
+        // ---- ORBIT MATCH COMES FIRST, AND THE OTHER IMPLEMENTATION IS DEAD CODE ----
+        // F9_payload.ks's MatchPlanes/MatchSMA are marked "DEAD SINCE 2026-08-04... do not wire this
+        // one back in by mistake because the name reads right". StMatchStationOrbit is the live one.
+        double stnSma = Rk + 86300.0;
+        Check("500 m of semi-major axis is already co-orbital",
+              !OrbitMatch.Needed(stnSma + 400.0, stnSma), "");
+        Check("a kilometre is not",
+              OrbitMatch.Needed(stnSma + 1000.0, stnSma), "");
+        Check("and it does not care which side we are on",
+              OrbitMatch.Needed(stnSma - 1000.0, stnSma), "");
+
+        // An elliptical orbit whose apoapsis is at the station's radius: circularising there is
+        // prograde, and it both rounds the orbit off and matches the altitude in one burn.
+        double ra = stnSma;
+        double ourSma = stnSma - 5000.0;               // apoapsis here, periapsis lower
+        double matchDv = OrbitMatch.CirculariseAtApoapsisDv(ra, ourSma, Mu);
+        Check("circularising at apoapsis is a PROGRADE burn", matchDv > 0.0,
+              matchDv.ToString("F2"));
+        Check("and it is a small one from a nearly-matched orbit",
+              matchDv < 20.0, matchDv.ToString("F2"));
+        Check("an already circular orbit needs no match burn",
+              Math.Abs(OrbitMatch.CirculariseAtApoapsisDv(stnSma, stnSma, Mu)) < 1e-6, "");
+
+        // ---- AND THE LADDER PUTS IT BEFORE EVERYTHING ELSE ----
+        // A CW solve against a different semi-major axis is nonsense: its frame IS the station's.
+        Check("not co-orbital: match the orbit before phasing or CW",
+              Approach.LegFor(50000.0, 50000.0, 60.0, stnSma + 20000.0, stnSma)
+              == ApproachLeg.MatchOrbit, "");
+        Check("co-orbital with a big gap: phase",
+              Approach.LegFor(50000.0, 50000.0, 60.0, stnSma, stnSma) == ApproachLeg.Phasing, "");
+        Check("co-orbital with a small gap: CW",
+              Approach.LegFor(2000.0, 2000.0, 60.0, stnSma, stnSma) == ApproachLeg.Clohessy, "");
+        Check("inside the terminal range, RCS - whatever the orbits say",
+              Approach.LegFor(300.0, 300.0, 60.0, stnSma + 20000.0, stnSma)
+              == ApproachLeg.Terminal, "");
+        Check("at the aim point, arrived",
+              Approach.LegFor(50.0, 50.0, 60.0, stnSma, stnSma) == ApproachLeg.Arrived, "");
+
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
     }

@@ -146,12 +146,15 @@ namespace DragonScreen
             LateralMps = Vector3d.Exclude(rel.normalized, -relVel).magnitude;
 
             CwState st = BuildState(out AlongTrackM);
-            Leg = Approach.LegFor(RangeM, AlongTrackM, GoalRangeM);
+            double ourSma = (ship.orbit != null) ? ship.orbit.semiMajorAxis : 0.0;
+            double stnSma = (Station.orbit != null) ? Station.orbit.semiMajorAxis : 0.0;
+            Leg = Approach.LegFor(RangeM, AlongTrackM, GoalRangeM, ourSma, stnSma);
 
             switch (Leg)
             {
                 case ApproachLeg.Arrived: Arrived(); break;
                 case ApproachLeg.Terminal: FlyTerminal(); break;
+                case ApproachLeg.MatchOrbit: FlyMatchOrbit(); break;
                 case ApproachLeg.Clohessy: FlyCw(st); break;
                 default: FlyPhasing(); break;
             }
@@ -194,6 +197,46 @@ namespace DragonScreen
         }
 
         // ------------------------------------------------------------------ the legs
+
+        /// <summary>
+        /// MATCH ORBIT. Circularise at OUR apoapsis, which both rounds the orbit off and matches the
+        /// station's altitude in one burn - the ascent already put apoapsis within a few hundred
+        /// metres of the station's radius, so anywhere else would take a Hohmann.
+        /// </summary>
+        private static void FlyMatchOrbit()
+        {
+            if (NodeExecutor.Active)
+            {
+                Note = "ORBIT MATCH - " + NodeExecutor.Phase + " " + NodeExecutor.Note;
+                return;
+            }
+
+            double now = Planetarium.GetUniversalTime();
+            if (now - lastBurnAt < 30.0) { Hold(); Note = "ORBIT MATCH - settling"; return; }
+
+            CelestialBody b = ship.mainBody;
+            Orbit o = ship.orbit;
+            if (o == null) { Hold(); Note = "ORBIT MATCH - no orbit"; return; }
+
+            double ra = b.Radius + o.ApA;
+            double dv = OrbitMatch.CirculariseAtApoapsisDv(ra, o.semiMajorAxis, b.gravParameter);
+            double burnUt = now + o.timeToAp;
+
+            // Prograde at apoapsis. The Δv direction is the velocity direction AT THE NODE, not now -
+            // half an orbit away those differ by 180 degrees, and using the current one would burn
+            // exactly backwards.
+            Vector3d velAtAp = o.getOrbitalVelocityAtUT(burnUt);
+            if (velAtAp.sqrMagnitude < 1.0) { Hold(); Note = "ORBIT MATCH - no velocity"; return; }
+
+            if (NodeExecutor.Begin(ship, velAtAp.normalized * dv, burnUt, "orbit match"))
+            {
+                lastBurnAt = now;
+                Debug.Log(Tag + "orbit match: SMA off by "
+                          + Math.Abs(o.semiMajorAxis - Station.orbit.semiMajorAxis).ToString("F0")
+                          + " m, circularising at apoapsis for " + dv.ToString("F2") + " m/s");
+            }
+            else Note = NodeExecutor.Note;
+        }
 
         /// <summary>
         /// PHASING. Change our PERIOD and let the geometry close the gap.

@@ -165,4 +165,55 @@ namespace DragonScreen
             return true;
         }
     }
+
+    /// <summary>
+    /// Get co-orbital with the station before any of the approach ladder runs. Ported from
+    /// `F9I/station_ops.ks:1959 StMatchStationOrbit`.
+    ///
+    /// ---- ⚠ THE OTHER IMPLEMENTATION IS DEAD CODE AND THE SOURCE SAYS SO ----
+    /// `F9_payload.ks` also has `MatchPlanes` and `MatchSMA`, and the comment immediately below them
+    /// reads: "DEAD SINCE 2026-08-04... The third orphan of the removed inline rendezvous... do not
+    /// wire this one back in by mistake because the name reads right." They also drag in a whole
+    /// Starship-inherited toolchain - Hohmann, PlaneMnv, VecToNode, TimeToNodeTarget - none of which
+    /// is ported. StMatchStationOrbit is the live one and it is four lines of vis-viva.
+    ///
+    /// ---- AND THERE IS NO PLANE MATCH HERE, DELIBERATELY ----
+    /// The station is at inclination 0.133 degrees. The plane is degenerate at the equator - the same
+    /// reason the launch window is flown on phase angle rather than on plane - so a plane-match burn
+    /// would be spending propellant to correct a difference that is inside the measurement noise.
+    /// If the station is ever moved to a real inclination, THIS is where the plane match belongs and
+    /// `DgPlaneMatch` is the thing to port into it.
+    /// </summary>
+    public static class OrbitMatch
+    {
+        /// <summary>
+        /// Semi-major axes within this are already co-orbital, metres. `StMatchStationOrbit`'s 500.
+        /// Below it the approach ladder can close everything that is left.
+        /// </summary>
+        public const double SmaToleranceM = 500.0;
+
+        /// <summary>Do we need a matching burn at all?</summary>
+        public static bool Needed(double ourSmaM, double stationSmaM)
+        {
+            double err = ourSmaM - stationSmaM;
+            if (err < 0.0) err = -err;
+            return err >= SmaToleranceM;
+        }
+
+        /// <summary>
+        /// Prograde Δv to circularise at OUR APOAPSIS, m/s.
+        ///
+        /// Burning at apoapsis is what makes this one burn instead of two: the ascent already put our
+        /// apoapsis within a few hundred metres of the station's radius, so circularising there both
+        /// rounds the orbit off AND matches the altitude. Anywhere else and it would take a Hohmann.
+        /// </summary>
+        public static double CirculariseAtApoapsisDv(double apoapsisRadiusM, double ourSmaM,
+                                                     double mu)
+        {
+            if (apoapsisRadiusM <= 0.0 || ourSmaM <= 0.0 || mu <= 0.0) return 0.0;
+            double vNow = ReturnBudget.VisViva(apoapsisRadiusM, ourSmaM, mu);
+            double vCirc = System.Math.Sqrt(mu / apoapsisRadiusM);
+            return vCirc - vNow;
+        }
+    }
 }

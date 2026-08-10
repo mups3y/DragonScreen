@@ -30,8 +30,13 @@ namespace DragonScreen
     /// <summary>Which leg of the ladder the current geometry calls for.</summary>
     public enum ApproachLeg : byte
     {
+        /// <summary>
+        /// Not co-orbital yet. Circularise at apoapsis first - everything below assumes two orbits
+        /// of the same size, and a CW solve against a different semi-major axis is nonsense.
+        /// </summary>
+        MatchOrbit = 0,
         /// <summary>Gap too large for CW at any sane cost. Use a phasing orbit.</summary>
-        Phasing = 0,
+        Phasing,
         /// <summary>Small enough for a two-impulse CW transfer.</summary>
         Clohessy,
         /// <summary>Inside CW's useful range. Straight-line RCS on a speed ladder.</summary>
@@ -113,10 +118,18 @@ namespace DragonScreen
         }
 
         /// <summary>Which leg the geometry calls for. Range in metres, along-track gap in metres.</summary>
-        public static ApproachLeg LegFor(double rangeM, double alongTrackGapM, double goalM)
+        public static ApproachLeg LegFor(double rangeM, double alongTrackGapM, double goalM,
+                                         double ourSmaM, double stationSmaM)
         {
             if (rangeM <= goalM) return ApproachLeg.Arrived;
             if (rangeM <= CwTermRangeM) return ApproachLeg.Terminal;
+
+            // ⚠ CO-ORBITAL FIRST. The CW solver assumes both vehicles are on orbits of the same
+            // size - its whole frame is the station's LVLH - and the phasing solve reasons about a
+            // PERIOD difference it is about to create. Neither means anything while the two orbits
+            // are still different sizes, so the match comes before both.
+            if (OrbitMatch.Needed(ourSmaM, stationSmaM)) return ApproachLeg.MatchOrbit;
+
             double gap = (alongTrackGapM < 0.0) ? -alongTrackGapM : alongTrackGapM;
             return (gap > PhaseMinM) ? ApproachLeg.Phasing : ApproachLeg.Clohessy;
         }

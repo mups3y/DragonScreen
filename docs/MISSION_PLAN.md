@@ -112,7 +112,7 @@ flight 012.** Phasing above 3 km, CW from 0.5–3 km, RCS below, periapsis floor
 
 | step | F9I | ours |
 |---|---|---|
-| match the station's orbit | `StMatchStationOrbit` | **NO** |
+| match the station's orbit | `StMatchStationOrbit` | **PORTED** `OrbitMatch`, first leg of the ladder |
 | phasing leg | `StPhaseLeg`, `StAlongTrack` | **PORTED** `pure/Phasing.cs`, wired through the node executor |
 | Clohessy–Wiltshire solve and leg | `StCwSolve`, `StCwLeg` | **PORTED** `pure/CwTargeting.cs`, wired with a periapsis floor |
 | terminal approach, closest port | `StTerminal`, `StClosestPort`, `StCloseIn` | **PORTED** terminal ladder wired; port SELECTION still `StClosestPort` |
