@@ -480,21 +480,25 @@ public static class PanelTest
               "");
         Check("the gap is long enough to matter", Ascent.PostSepHoldS >= 2.0, "");
 
-        // ---- ⛔ AND THE GAP IS A DISTANCE, NOT A DURATION ----
-        // 23:19 flight: 11.4 m between the two vehicles 0.6 s after separation, and still ~11 m when
-        // the 3 s coast expired - there is almost no separation impulse, so time bought nothing. The
-        // booster lit three engines alongside the upper stage and came apart, 59.20 t to 9.40 t.
+        // ---- ⛔ THE GAP IS A DURATION, AND MAKING IT A DISTANCE WAS A DEADLOCK ----
+        // I gated the MVac on 200 m of clearance. There is no separation impulse worth the name on
+        // this stack - the thing that opens the gap IS the upper stage flying away - so waiting for
+        // clearance before lighting the engine that produces it is circular. The 23:19 flight is
+        // what that looks like: both vehicles 11 m apart until their timeouts expired.
+        //
+        // F9I has no such gate. The booster is protected by not burning and not steering for the
+        // first seconds (WaitForSep's `wait 2`, then Flip1's settle), never by holding the payload.
         AscentInputs stillThere = Fly(60000.0, 60500.0, 20000.0, 0.1);
         stillThere.PhaseElapsedS = Ascent.PostSepHoldS + 0.1;
         stillThere.RangeToBoosterM = 11.4;
-        Check("the coast expiring is not enough - the booster is still there",
-              Ascent.Guide(stillThere, t, AscentPhase.StageSep).Phase == AscentPhase.StageSep, "");
-        Check("and the MVac stays out while it is",
-              Math.Abs(Ascent.Guide(stillThere, t, AscentPhase.StageSep).Throttle) < 1e-9, "");
-        stillThere.RangeToBoosterM = Landing.SafeSeparationM + 1.0;
-        Check("once it is clear, the second stage lights",
+        Check("the hold expiring is enough - clearance is not the payload's problem",
               Ascent.Guide(stillThere, t, AscentPhase.StageSep).Phase == AscentPhase.BurnToApoapsis,
               "");
+        stillThere.PhaseElapsedS = Ascent.PostSepHoldS * 0.5;
+        Check("but the hold itself is still served",
+              Ascent.Guide(stillThere, t, AscentPhase.StageSep).Phase == AscentPhase.StageSep, "");
+        Check("and the MVac stays out during it",
+              Math.Abs(Ascent.Guide(stillThere, t, AscentPhase.StageSep).Throttle) < 1e-9, "");
         stillThere.RangeToBoosterM = 11.4;
         stillThere.PhaseElapsedS = Ascent.MaxSepWaitS + 1.0;
         Check("but a payload is not stranded because the booster would not move",

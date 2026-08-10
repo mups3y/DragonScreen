@@ -317,11 +317,18 @@ namespace DragonScreen
                 stageNow = true;
             }
 
-            // Time AND distance. The hold is the minimum; clearance is the actual condition.
-            else if (phase == AscentPhase.StageSep && s.PhaseElapsedS >= PostSepHoldS
-                     && (s.RangeToBoosterM <= 0.0
-                         || s.RangeToBoosterM >= Landing.SafeSeparationM
-                         || s.PhaseElapsedS >= MaxSepWaitS))
+            // ---- ⛔ TIME, NOT DISTANCE - AND THE DISTANCE VERSION WAS A DEADLOCK. ----
+            // I gated the MVac on 200 m of clearance. But there is no separation impulse worth the
+            // name on this stack: the thing that actually opens the gap is THE UPPER STAGE FLYING
+            // AWAY. Waiting for clearance before lighting the engine that produces the clearance is
+            // circular, and the 23:19 flight is what it looks like - both vehicles sitting 11 m
+            // apart until their timeouts expired.
+            //
+            // F9I has no such gate. WaitForSep waits 2 s for the vessel split to resolve, Flip1
+            // settles for 2 more before it rotates, and the MVac lights on a plain 3 s timer. The
+            // booster is protected by not BURNING and not STEERING during those first seconds, not
+            // by holding the payload hostage.
+            else if (phase == AscentPhase.StageSep && s.PhaseElapsedS >= PostSepHoldS)
                 phase = AscentPhase.BurnToApoapsis;
 
             // ---- SECOND STAGE RAISES APOAPSIS, THEN THE S2 IS DROPPED ----

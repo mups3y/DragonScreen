@@ -124,8 +124,13 @@ public static class FlightTest
                 {
                     Check(w + ": nothing burns while alongside",
                           Math.Abs(c.Throttle) < 1e-9, c.Throttle.ToString("F3"));
-                    Check(w + ": and nothing slews while alongside",
-                          c.Aim == LandingAim.Hold, c.Aim.ToString());
+                    // NOT "and nothing slews". F9I DOES rotate while the two are still close - it
+                    // just waits 2 s for the vessel split to resolve first (WaitForSep) and another
+                    // 2 s settling before the rotation starts. Forbidding the slew outright would
+                    // forbid the flip, which is the manoeuvre that gets the stage home.
+                    Check(w + ": and it is quiet for the first seconds after the split",
+                          !(states[i].PhaseElapsedS < Landing.SepQuietS
+                            && c.Aim != LandingAim.Hold), c.Aim.ToString());
                 }
 
                 // A landing burn is a thing you do while FALLING. (Descent and EntryBurn are
@@ -282,16 +287,22 @@ public static class FlightTest
         LandingInputs alongside = Fall(29000.0, 700.0, 780.0, 43.0, 9);
         alongside.RangeToPartnerM = 11.4;
         Check("a booster still alongside starts in SEPARATING",
-              Landing.InitialPhase(alongside) == LandingPhase.Separating, "");
-        LandingCommand sepc = Landing.Guide(alongside, LandingPhase.Separating);
+              Landing.InitialPhase(alongside) == LandingPhase.Flip, "");
+        LandingCommand sepc = Landing.Guide(alongside, LandingPhase.Flip);
         Check("and it burns nothing", Math.Abs(sepc.Throttle) < 1e-9, sepc.Throttle.ToString("F3"));
         Check("and it stays there while it is close",
-              sepc.Phase == LandingPhase.Separating, sepc.Phase.ToString());
+              sepc.Phase == LandingPhase.Flip, sepc.Phase.ToString());
         // ⛔ AND IT DOES NOT ROTATE. The stage is climbing at 700 m/s, so surface retrograde is very
         // nearly straight down - a 180-degree flip with the upper stage 11 m away. A 40 m booster
         // cannot rotate through that without hitting it.
-        Check("a booster alongside holds its attitude, it does not flip",
+        Check("a booster holds still for the first seconds - the split is still resolving",
               sepc.Aim == LandingAim.Hold, sepc.Aim.ToString());
+        // ...and then it flips, because that is the manoeuvre, not a hazard.
+        LandingInputs flipping = alongside; flipping.PhaseElapsedS = Landing.FlipHoldS + 0.1;
+        Check("and then it starts the turnaround",
+              Landing.Guide(flipping, LandingPhase.Flip).Aim == LandingAim.Flip, "");
+        Check("still burning nothing while it does",
+              Math.Abs(Landing.Guide(flipping, LandingPhase.Flip).Throttle) < 1e-9, "");
 
         // ---- A BOOSTBACK THAT CANNOT SOLVE MUST STILL END ----
         // PredictedMissM is 0 when the predictor cannot answer, and 0 < -2700 is false for ever.
@@ -304,22 +315,43 @@ public static class FlightTest
         Check("but not before it has had a fair run",
               Landing.Guide(blind, LandingPhase.Boostback).Phase == LandingPhase.Boostback, "");
 
-        LandingInputs clear = Fall(29000.0, 700.0, 780.0, 43.0, 9);
-        clear.RangeToPartnerM = Landing.SafeSeparationM + 1.0;
-        Check("clear of the stage, the boostback begins",
-              Landing.Guide(clear, LandingPhase.Separating).Phase == LandingPhase.Boostback, "");
+        // The flip ends when the stage is ROUND, not when a clock says so.
+        LandingInputs flipDone = Fall(29000.0, 700.0, 780.0, 43.0, 9);
+        flipDone.RangeToPartnerM = Landing.SafeSeparationM + 1.0;
+        flipDone.PhaseElapsedS = 18.0;
+        Check("the flip holds until the stage is round",
+              Landing.Guide(flipDone, LandingPhase.Flip).Phase == LandingPhase.Flip, "");
+        flipDone.FlipDone = true;
+        Check("and then the burn kills downrange velocity first",
+              Landing.Guide(flipDone, LandingPhase.Flip).Phase == LandingPhase.BoostbackKill, "");
 
-        // A stage that never drifts clear must not hold attitude all the way to the ground.
-        LandingInputs stuck = Fall(29000.0, 700.0, 780.0, 43.0, 9);
-        stuck.RangeToPartnerM = 11.4; stuck.PhaseElapsedS = Landing.MaxSeparationWaitS + 1.0;
-        Check("but it does not wait for ever",
-              Landing.Guide(stuck, LandingPhase.Separating).Phase == LandingPhase.Boostback, "");
+        // ---- BOOSTBACK IS TWO HALVES, AND I ONLY EVER BUILT THE SECOND ----
+        // BOOSTER.ks:417 holds FLAT RETROGRADE until the horizontal velocity collapses, and only
+        // then aims at the pad: "once the horizontal velocity is dead the retrograde direction is
+        // meaningless as a steering reference". Aiming at the pad from the first tick is why the
+        // landings went to the wrong place.
+        LandingInputs killing = Fall(45000.0, 400.0, 800.0, 43.0, 9);
+        killing.AccelOneEngine = 15.0; killing.HorizRetroMag = 0.6; killing.PhaseElapsedS = 5.0;
+        LandingCommand kc = Landing.Guide(killing, LandingPhase.BoostbackKill);
+        Check("the first half holds flat retrograde",
+              kc.Aim == LandingAim.FlatRetrograde, kc.Aim.ToString());
+        Check("at full throttle once the ramp is done",
+              Math.Abs(kc.Throttle - 1.0) < 1e-9, kc.Throttle.ToString("F3"));
+        Check("and the throttle RAMPS rather than stepping",
+              Landing.Ramp(0.0) < 0.01 && Landing.Ramp(0.25) < 0.5
+              && Math.Abs(Landing.Ramp(1.0) - 1.0) < 1e-9, "");
+        killing.HorizRetroMag = Landing.HorizVelocityDead * 0.5;
+        Check("downrange dead, now aim at the pad",
+              Landing.Guide(killing, LandingPhase.BoostbackKill).Phase == LandingPhase.Boostback,
+              "");
+        Check("and the boostback holds steady, not fast - 15 s, not 1",
+              Math.Abs(Landing.BoostbackStoppingTime - 15.0) < 1e-9, "");
 
         // No partner at all - a solo booster test - must not be gated on a range it cannot measure.
         LandingInputs solo = Fall(29000.0, 700.0, 780.0, 43.0, 9);
         solo.RangeToPartnerM = 0.0;
         Check("an unmeasurable range is not a reason to sit still",
-              Landing.InitialPhase(solo) != LandingPhase.Separating, "");
+              Landing.InitialPhase(solo) != LandingPhase.Flip, "");
 
         // ---- ⛔ THE ENTRY BURN FLIES STRAIGHT RETROGRADE, NEVER LEANED ----
         // BOOSTER.ks:716: "leaning the stage off retrograde while doing it puts a large side load on

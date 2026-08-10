@@ -156,6 +156,7 @@ namespace DragonScreen
             PredictedMissM = 0.0; InitialMissM = 0.0;
             RangeToPartnerM = 0.0; PhaseElapsedS = 0.0; OctaMode = -1; EnginesLit = 0;
             GridFinsOut = false; LeanFrac = 0.0; AoaDeg = 0.0;
+            flipSeeded = false; flipComplete = false;
         }
 
         // ------------------------------------------------------------------ handover
@@ -404,7 +405,7 @@ namespace DragonScreen
             // ⚠ AND NOT WHILE SEPARATING. The gate listed Idle and Boostback and I added a phase
             // before both without revisiting it, so the fins would have deployed at 29 km, climbing
             // at 700 m/s, 11 m from the upper stage. They belong at the top of the arc.
-            if (Phase != LandingPhase.Idle && Phase != LandingPhase.Separating
+            if (Phase != LandingPhase.Idle && Phase != LandingPhase.Flip
                 && Phase != LandingPhase.Boostback) DeployGridFins(booster);
 
             SetEngines(booster, c.Engines);
@@ -522,6 +523,13 @@ namespace DragonScreen
                 ? GroundRange(v.mainBody, v.latitude, v.longitude, PadLat, PadLon) : 0.0;
 
             s.RangeToPartnerM = AutoPilot.Range(v, upperStage);
+            s.FlipDone = flipComplete;
+            // The 0.03 test is on the UNIT retrograde's horizontal part - not a speed. It reaches
+            // zero when the velocity has become purely vertical, i.e. downrange travel has stopped.
+            Vector3d bUp = (v.CoM - v.mainBody.position).normalized;
+            Vector3d retro = v.srf_velocity;
+            s.HorizRetroMag = (retro.sqrMagnitude > 1.0)
+                ? Vector3d.Exclude(bUp, retro.normalized).magnitude : 0.0;
             s.PredictedMissM = PredictedMiss(v);
             s.InitialMissM = initialMiss;
             return s;
@@ -579,6 +587,66 @@ namespace DragonScreen
 
         /// <summary>|PredictedMiss| latched when the boostback burn began, for the throttle taper.</summary>
         private static double initialMiss;
+
+        // ---- FLIP STATE. The vectors are the glue's; the schedule is Landing's. ----
+        private static Vector3d flipVec, flipFinal, flipAxis;
+        private static bool flipSeeded, flipComplete;
+
+        /// <summary>
+        /// Walk the aim vector round toward the final attitude and return where to point NOW.
+        ///
+        /// `flipAxis` is perpendicular to both the ground track and "down", so rotating about it
+        /// swings the nose through the vertical PLANE OF FLIGHT and never yaws the stage sideways
+        /// (BOOSTER.ks:335). `flipFinal` is the ground track reversed by FlipDeg - 180 for RTLS,
+        /// 170 for a droneship, which only needs to point back far enough to trim.
+        /// </summary>
+        private static Vector3d StepFlip(Vessel v)
+        {
+            Vector3d up = (v.CoM - v.mainBody.position).normalized;
+
+            if (!flipSeeded)
+            {
+                // Seeded from where the stage is ACTUALLY pointing, not from a fresh command:
+                // WaitForSep refreshes flipVec at 10 Hz for exactly this reason, so the rotation
+                // starts from the attitude the booster was flying at MECO.
+                Vector3d tangent = Vector3d.Exclude(up, v.srf_velocity);
+                if (tangent.sqrMagnitude < 1.0) return v.ReferenceTransform.up;
+                tangent = tangent.normalized;
+
+                flipAxis = Vector3d.Cross(tangent, -up).normalized;
+                double deg = LandingSites.FlipDeg(Profile);
+                flipFinal = (QuaternionD)Quaternion.AngleAxis((float)deg, (Vector3)flipAxis)
+                            * (-tangent);
+                flipVec = v.ReferenceTransform.up;
+                flipSeeded = true;
+                flipComplete = false;
+                Debug.Log(Tag + "flip: " + deg.ToString("F0") + " deg about the plane of flight");
+            }
+
+            double toGo = Vector3d.Angle(flipFinal, flipVec);
+            if (toGo < Landing.FlipFineDeg)
+            {
+                // Snap to the exact final attitude - the stepping only ever gets within 15 deg, and
+                // the boostback needs a clean reference, not wherever the last step landed.
+                flipVec = flipFinal;
+                if (!flipComplete)
+                {
+                    flipComplete = true;
+                    Debug.Log(Tag + "flip complete");
+                }
+                return flipVec;
+            }
+
+            // Coarse: only advance when the NOSE has caught up. Fine (last 25 deg): advance every
+            // tick, because by then the rate is established and waiting only makes the finish crawl.
+            bool coarse = toGo >= Landing.FlipCoarseDeg;
+            bool noseCaught = Vector3d.Angle(v.ReferenceTransform.up, flipVec)
+                              < Landing.FlipNoseCatchDeg;
+            if (!coarse || noseCaught)
+                flipVec = (QuaternionD)Quaternion.AngleAxis((float)Landing.FlipPowerDeg,
+                                                            (Vector3)flipAxis) * flipVec;
+            return flipVec;
+        }
 
         /// <summary>
         /// Great-circle ground distance, metres.
@@ -871,6 +939,22 @@ namespace DragonScreen
             // KSP command part's nose. Steering at the current facing is therefore a true hold - zero
             // attitude error, nothing commanded.
             if (c.Aim == LandingAim.Hold) dir = v.ReferenceTransform.up;
+
+            // ---- THE STEPPED TURNAROUND. BOOSTER.ks:295-381 Flip1. ----
+            // The aim vector is WALKED round, not commanded in one go: "A single big command makes
+            // the steering manager saturate and the stage tumbles; stepping keeps the demand inside
+            // what RCS and gimbal can actually deliver." Coarse phase advances only when the nose
+            // has caught up to within 7.5 deg, so the stage leads the target rather than the other
+            // way round - that is what stops the flip diverging.
+            if (c.Aim == LandingAim.Flip) dir = StepFlip(v);
+
+            // Retrograde FLATTENED ONTO THE HORIZON. BOOSTER.ks:417 - while the stage is killing
+            // downrange velocity it must not pitch down at the ground.
+            if (c.Aim == LandingAim.FlatRetrograde)
+            {
+                Vector3d flat = Vector3d.Exclude(up, v.srf_velocity);
+                if (flat.sqrMagnitude > 1.0) dir = -flat.normalized;
+            }
 
             if (c.Aim == LandingAim.SurfaceRetrograde)
             {

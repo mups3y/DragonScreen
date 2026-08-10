@@ -42,10 +42,16 @@ namespace DragonScreen
     {
         Idle = 0,
         /// <summary>
-        /// Just separated and still alongside the upper stage. Engines OFF until clear.
+        /// The turnaround. Engines OFF, three-engine mode selected, aim vector walked round in
+        /// small steps. This IS the post-separation wait - F9I measures it settled at 16 s - and
+        /// unlike a timer it does useful work while it runs.
         /// </summary>
-        Separating,
-        /// <summary>Flip and burn back toward the pad.</summary>
+        Flip,
+        /// <summary>
+        /// Burning flat-retrograde to kill DOWNRANGE velocity. Ends when the velocity is vertical.
+        /// </summary>
+        BoostbackKill,
+        /// <summary>Burning at the pad's horizon bearing, until the impact point overshoots it.</summary>
         Boostback,
         /// <summary>Engines off, arcing over the top.</summary>
         Coast,
@@ -68,6 +74,13 @@ namespace DragonScreen
         SurfaceRetrograde,
         /// <summary>Horizontally toward the landing zone, for boostback.</summary>
         TowardTarget,
+        /// <summary>The stepped turnaround vector. The glue owns it; see BoosterRecovery.</summary>
+        Flip,
+        /// <summary>
+        /// Retrograde FLATTENED ONTO THE HORIZON, not the full 3D retrograde. BOOSTER.ks:417 -
+        /// while the stage is killing downrange velocity it must not pitch down at the ground.
+        /// </summary>
+        FlatRetrograde,
         /// <summary>Straight up, for the last few metres.</summary>
         Up
     }
@@ -119,6 +132,16 @@ namespace DragonScreen
         /// that happened to be wrong.
         /// </summary>
         public double RangeToPartnerM;
+
+        /// <summary>The glue reports the stepped flip has reached its final attitude.</summary>
+        public bool FlipDone;
+
+        /// <summary>
+        /// Magnitude of the horizontal component of the UNIT retrograde vector. BOOSTER.ks:421 - it
+        /// is NOT a speed: it goes to zero when the velocity becomes purely vertical, i.e. when the
+        /// stage has stopped travelling downrange at all. 0.03 is that moment to within ~1.7 deg.
+        /// </summary>
+        public double HorizRetroMag;
 
         // ---- THE BOOSTBACK IS FLOWN AGAINST A PREDICTED IMPACT POINT, NOT A VELOCITY ----
         // BOOSTER.ks does this with the Trajectories add-on; we cannot take that dependency, so the
@@ -236,6 +259,57 @@ namespace DragonScreen
         /// <summary>Boostback throttle floor. Keeps the engines lit and the gimbal authoritative.</summary>
         public const double BoostbackMinThrottle = 0.25;
 
+        // ---- THE TURNAROUND. BOOSTER.ks:295-381 `Flip1(180, 0.333)`. ----
+        /// <summary>Degrees the aim vector advances per tick. A RATE LIMITER, not a torque.</summary>
+        public const double FlipPowerDeg = 0.333;
+        /// <summary>Settle back onto the ascent track before the flip proper. `wait 2.`</summary>
+        public const double FlipSettleS = 2.0;
+        /// <summary>
+        /// Dead time immediately after separation, before ANY steering. WaitForSep's closing line,
+        /// and its reason: "KSP is still resolving the vessel split and the physics of two bodies a
+        /// metre apart. Steering into that produces a lurch and can push the booster back into the
+        /// upper stage's plume."
+        /// </summary>
+        public const double SepQuietS = 2.0;
+        /// <summary>Total hold before the rotation starts: the quiet, then the settle.</summary>
+        public const double FlipHoldS = SepQuietS + FlipSettleS;
+        /// <summary>Roll must be within this of the flip plane before pitching starts.</summary>
+        public const double FlipRollToleranceDeg = 10.0;
+        /// <summary>Floor, so a lucky first frame does not count as settled.</summary>
+        public const double FlipRollMinS = 1.0;
+        /// <summary>Ceiling, so a stage that will not roll still gets flipped.</summary>
+        public const double FlipRollMaxS = 8.0;
+        /// <summary>
+        /// Coarse phase advances the aim ONLY when the nose is within this of it, so the demand can
+        /// never run away from what the vehicle is achieving. BOOSTER.ks:358 - "the stage leads the
+        /// target rather than the other way round. This is what stops the flip diverging."
+        /// </summary>
+        public const double FlipNoseCatchDeg = 7.5;
+        /// <summary>Coarse until the aim is this close to final; then advance unconditionally.</summary>
+        public const double FlipCoarseDeg = 25.0;
+        /// <summary>Fine phase ends here and the aim snaps to the exact final attitude.</summary>
+        public const double FlipFineDeg = 15.0;
+        /// <summary>Three engines BEFORE the flip - nine on a near-empty stage fight the rotation.</summary>
+        public const int FlipEngines = 3;
+        /// <summary>Gains are wound UP for the flip: the one moment it must rotate hard.</summary>
+        public const double FlipStoppingTime = 3.0;
+
+        // ---- THE BURN. BOOSTER.ks:394-518 `Boostback`. ----
+        /// <summary>
+        /// Steady, not fast. BOOSTER.ks:400 - "the boostback wants a steady hold, not a fast one."
+        /// Fifteen times looser than the glide, and the value is the whole difference between a
+        /// stage that holds its aim through the burn and one that chases it.
+        /// </summary>
+        public const double BoostbackStoppingTime = 15.0;
+        /// <summary>Horizontal retrograde magnitude at which downrange velocity counts as dead.</summary>
+        public const double HorizVelocityDead = 0.03;
+        /// <summary>
+        /// EngSpl RAMPS the throttle at about this per second rather than stepping it. A step to 1.0
+        /// on three Merlins would shock the stage mid-rotation (BOOSTER.ks:379), and a hard CUT at
+        /// the end "kicks the stage off the aim it has just spent the whole burn reaching" (:512).
+        /// </summary>
+        public const double ThrottleRampPerS = 1.333;
+
         /// <summary>
         /// How far the booster must be from the upper stage before it may light anything, metres.
         ///
@@ -343,7 +417,7 @@ namespace DragonScreen
         {
             if (s.Landed) return LandingPhase.Touchdown;
             // Still alongside whatever we just left. Nothing lights until that is not true.
-            if (NearPartner(s)) return LandingPhase.Separating;
+            if (NearPartner(s)) return LandingPhase.Flip;
             if (s.VerticalSpeed > 0.0) return LandingPhase.Boostback;
             if (s.AltitudeAsl <= EntryBurnGateAsl) return LandingPhase.EntryBurn;
             return LandingPhase.Coast;
@@ -385,7 +459,11 @@ namespace DragonScreen
         {
             int have = (s.EngineCount > 0) ? s.EngineCount : 1;
 
-            if (phase == LandingPhase.Boostback) return Min(BoostbackEngines, have);
+            // Three from the flip onward - selected BEFORE the rotation, held through both halves
+            // of the burn. BOOSTER.ks:326 EngSwitch(0, 1).
+            if (phase == LandingPhase.Flip || phase == LandingPhase.BoostbackKill
+                || phase == LandingPhase.Boostback)
+                return Min(FlipEngines, have);
 
             // The entry burn opens on the centre engine alone and adds the outboards at 0.75 s. F9I
             // does this with two EngSwitch calls either side of a `wait`; we have no `wait`, so the
@@ -489,7 +567,7 @@ namespace DragonScreen
             //
             // This is the same `if` versus `else if` class that already cost seven ascent failures
             // and has its own rule in CLAUDE.md. A chain cannot cascade.
-            if (phase == LandingPhase.Idle) phase = LandingPhase.Separating;
+            if (phase == LandingPhase.Idle) phase = LandingPhase.Flip;
 
             // ---- CLEARANCE OVERRIDES EVERYTHING EXCEPT BEING DOWN ----
             // Not just the phase we happen to start in: ANY phase, from any path. If the other
@@ -504,12 +582,21 @@ namespace DragonScreen
             // being written.
             if (NearPartner(s) && phase != LandingPhase.Touchdown
                 && s.PhaseElapsedS < MaxSeparationWaitS)
-                phase = LandingPhase.Separating;
+                phase = LandingPhase.Flip;
 
 
-            // Clear of the upper stage, or out of patience. Either way, fly the recovery.
-            else if (phase == LandingPhase.Separating
+            // ---- THE FLIP ENDS WHEN THE STAGE IS ROUND, NOT WHEN A TIMER SAYS SO ----
+            // My previous version waited for 200 m of separation or 20 s, which was dead time doing
+            // nothing. F9I's turnaround takes about the same 16 s and spends it rotating the stage
+            // and stepping down to three engines. The wait was never the point; the flip was.
+            else if (phase == LandingPhase.Flip && s.FlipDone
                      && (!NearPartner(s) || s.PhaseElapsedS >= MaxSeparationWaitS))
+                phase = LandingPhase.BoostbackKill;
+
+            // Downrange velocity is dead - the retrograde direction is now meaningless as a steering
+            // reference (BOOSTER.ks:451), so switch to the pad's horizon bearing.
+            else if (phase == LandingPhase.BoostbackKill
+                     && s.HorizRetroMag <= HorizVelocityDead)
                 phase = LandingPhase.Boostback;
 
             else if (phase == LandingPhase.Boostback && BoostbackDone(s))
@@ -534,20 +621,36 @@ namespace DragonScreen
 
             switch (phase)
             {
-                case LandingPhase.Separating:
-                    // ---- ⛔ HOLD MEANS HOLD. THIS CASE DID NOT SET Aim AND INHERITED RETROGRADE. ----
-                    // The comment here said "hold the attitude we were left in" and the code said
-                    // nothing, so `c.Aim` kept the SurfaceRetrograde default set at the top of Guide.
-                    // At separation the booster is climbing at ~700 m/s, so surface retrograde points
-                    // very nearly STRAIGHT DOWN - the controller would have commanded a 180-degree
-                    // flip with the upper stage 11 m away, and a 40 m stage cannot rotate through
-                    // that without hitting it. The same shape of mistake as the roll bug: the comment
-                    // described the intent and the code did something else.
-                    c.Aim = LandingAim.Hold;
+                case LandingPhase.Flip:
+                    // ---- ENGINES OFF, THREE-ENGINE MODE, AIM WALKED ROUND IN STEPS ----
+                    // The mode switch is commanded here and not at the burn because it has to be
+                    // DONE before the rotation: "nine engines on a nearly empty stage is far more
+                    // thrust than the boostback needs and the gimbal authority of the outer ring
+                    // fights the rotation" (BOOSTER.ks:324). Engines selected, throttle zero.
+                    // Two seconds of nothing while KSP resolves the split, then two settling on
+                    // the ascent track, and only then does the aim start walking round. Steering
+                    // into an unresolved vessel split lurches the stage back into the plume.
+                    c.Aim = (s.PhaseElapsedS < FlipHoldS) ? LandingAim.Hold : LandingAim.Flip;
                     c.Throttle = 0.0;
-                    c.StoppingTime = GlideStoppingTime;
-                    c.Note = "SEPARATING";
+                    c.StoppingTime = FlipStoppingTime;
+                    c.Note = (s.PhaseElapsedS < FlipHoldS) ? "SEP QUIET" : "FLIP";
                     break;
+
+                case LandingPhase.BoostbackKill:
+                    // Flat retrograde until the downrange velocity is gone. Throttle RAMPS - EngSpl
+                    // walks it up at ~1.333/s rather than stepping, because a step to 1.0 on three
+                    // Merlins shocks the stage mid-rotation.
+                    c.Aim = LandingAim.FlatRetrograde;
+                    c.Throttle = Ramp(s.PhaseElapsedS);
+                    c.StoppingTime = BoostbackStoppingTime;
+                    c.Note = "BOOSTBACK - KILLING DOWNRANGE";
+                    break;
+
+                    // (The old Separating case stood here. It was a 200 m / 20 s hold that did
+                    // nothing but wait, and it is superseded by the Flip above - F9I spends the same
+                    // ~16 s rotating the stage and stepping down to three engines. Its one real
+                    // lesson survives in the clearance guard at the top of the transitions: nothing
+                    // burns or slews while the two vehicles are alongside.)
 
                 case LandingPhase.Boostback:
                     c.Aim = LandingAim.TowardTarget;
@@ -557,7 +660,7 @@ namespace DragonScreen
                     // overshooting its own overshoot target. The floor is not a minimum useful
                     // thrust: it keeps the engines lit so the gimbal stays authoritative.
                     c.Throttle = BoostbackThrottle(s);
-                    c.StoppingTime = GlideStoppingTime;
+                    c.StoppingTime = BoostbackStoppingTime;
                     c.Note = "BOOSTBACK";
                     break;
 
@@ -679,6 +782,18 @@ namespace DragonScreen
         public static bool NearPartner(LandingInputs s)
         {
             return s.RangeToPartnerM > 0.0 && s.RangeToPartnerM < SafeSeparationM;
+        }
+
+        /// <summary>
+        /// EngSpl's ramp, as a throttle against seconds since the burn began. BOOSTER.ks calls
+        /// EngSpl(1) rather than setting throttle, and EngSpl walks it - a step to full on three
+        /// Merlins mid-rotation is a shock the stage does not need.
+        /// </summary>
+        public static double Ramp(double elapsedS)
+        {
+            double t = elapsedS * ThrottleRampPerS;
+            if (t < 0.0) return 0.0;
+            return (t > 1.0) ? 1.0 : t;
         }
 
         /// <summary>Proportional boostback throttle. BOOSTER.ks:478.</summary>
@@ -809,7 +924,8 @@ namespace DragonScreen
         {
             switch (p)
             {
-                case LandingPhase.Separating:  return "SEPARATING";
+                case LandingPhase.Flip:        return "FLIP";
+                case LandingPhase.BoostbackKill: return "BOOSTBACK KILL";
                 case LandingPhase.Boostback:   return "BOOSTBACK";
                 case LandingPhase.Coast:       return "COAST";
                 case LandingPhase.EntryBurn:   return "ENTRY BURN";
