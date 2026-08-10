@@ -395,6 +395,12 @@ namespace DragonScreen
                      ? Min(1, have)
                      : Min(EntryEngines, have);
 
+            // Everything available, because there is no solution and thrust is all that is left.
+            // The switch sets Throttle 1.0 for this phase; without a matching engine count that
+            // throttle reaches nothing, which is the defect the sweep names as "asking for thrust
+            // means asking for engines".
+            if (phase == LandingPhase.NoSolution) return have;
+
             if (phase != LandingPhase.LandingBurn) return 0;
 
             // Landing: measure what ONE engine actually gives at this mass. Prefer the vehicle's own
@@ -459,6 +465,12 @@ namespace DragonScreen
             {
                 c.Phase = LandingPhase.NoSolution;
                 c.Throttle = 1.0;                       // everything we have, it is still correct
+                // ⛔ AND THAT MEANS LIGHTING SOMETHING. This returns before `c.Engines` is assigned
+                // at the bottom of Guide, so it commanded full throttle with an engine count of
+                // ZERO - and SetEngines(v, 0) shuts every engine down. "Everything we have" was
+                // nothing at all, on the one path that exists for a stage that cannot stop.
+                c.Engines = (s.EngineCount > 0) ? s.EngineCount : 1;
+                c.StoppingTime = LandingStoppingTime;
                 c.Note = "NO SOLUTION - TWR BELOW 1";
                 return c;
             }
@@ -478,6 +490,22 @@ namespace DragonScreen
             // This is the same `if` versus `else if` class that already cost seven ascent failures
             // and has its own rule in CLAUDE.md. A chain cannot cascade.
             if (phase == LandingPhase.Idle) phase = LandingPhase.Separating;
+
+            // ---- CLEARANCE OVERRIDES EVERYTHING EXCEPT BEING DOWN ----
+            // Not just the phase we happen to start in: ANY phase, from any path. If the other
+            // vehicle is within reach, the only correct command is hold and burn nothing, and that
+            // is true whether we got here through Boostback or through something nobody has thought
+            // of yet. Costs one comparison and removes a whole class of "but how would it even get
+            // there" reasoning - which is exactly the reasoning that lost a booster.
+            // ⚠ AND IT RESPECTS THE TIMEOUT. Written without the elapsed test, this guard ran
+            // before the Separating -> Boostback transition and forced Separating back on every
+            // tick, so MaxSeparationWaitS could never fire and a stage that never drifted clear
+            // would have held attitude to the ground. The sweep caught that within a minute of it
+            // being written.
+            if (NearPartner(s) && phase != LandingPhase.Touchdown
+                && s.PhaseElapsedS < MaxSeparationWaitS)
+                phase = LandingPhase.Separating;
+
 
             // Clear of the upper stage, or out of patience. Either way, fly the recovery.
             else if (phase == LandingPhase.Separating
@@ -539,6 +567,15 @@ namespace DragonScreen
                     c.Note = "COAST";
                     break;
 
+                case LandingPhase.NoSolution:
+                    // Reachable as an INPUT phase, not only through the early return above, and the
+                    // switch had no case for it - so it rendered the default: no throttle, no gain,
+                    // no engines. A stage that cannot stop was being told to do nothing at all.
+                    c.Throttle = 1.0;
+                    c.StoppingTime = LandingStoppingTime;
+                    c.Note = "NO SOLUTION - TWR BELOW 1";
+                    break;
+
                 case LandingPhase.EntryBurn:
                     c.Throttle = 1.0;
                     // Straight retrograde. No lean - see GuidedLean.
@@ -565,6 +602,11 @@ namespace DragonScreen
                     double margin = (TrueRadar(s) < FlareRadarM) ? FlareMargin : BulkMargin;
                     double th = BurnThrottle(s, landAccel) + margin;
                     if (th < 0.0) th = 0.0; else if (th > 1.0) th = 1.0;
+                    // ⛔ AND IF WE HAVE OVER-BRAKED INTO A CLIMB, STOP PUSHING. BurnThrottle is
+                    // StopDist/TrueRadar, and StopDist is computed from SPEED - it does not care
+                    // which way the speed points, so a stage that over-corrected upward would read a
+                    // huge stopping distance and hold full throttle while flying away from the pad.
+                    if (s.VerticalSpeed > 0.0) th = 0.0;
                     c.Throttle = th;
                     c.Aim = (s.AltitudeRadar < 60.0) ? LandingAim.Up : LandingAim.SurfaceRetrograde;
                     // Still steering to the pad, and now the only thing that can.

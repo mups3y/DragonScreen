@@ -33,11 +33,130 @@ public static class FlightTest
     {
         Console.WriteLine("DragonScreen flight software tests");
         Recovery();
+        PhaseSweep();
         Approach();
         Reentry();
         Return();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
+    }
+
+    // ------------------------------------------------------------------ the sweep
+
+    /// <summary>
+    /// Drive EVERY landing phase against EVERY representative vehicle state and assert the handful
+    /// of things that must be true regardless of which pair you picked.
+    ///
+    /// ---- WHY THIS EXISTS ----
+    /// Three consecutive "fix" commits each introduced a defect, and every one of them was a local
+    /// change that did not account for the state machine around it:
+    ///
+    ///   - a new phase inherited SurfaceRetrograde because its case never set Aim, which would have
+    ///     flipped a 40 m booster 180 degrees with the upper stage 11 m away
+    ///   - the grid-fin gate enumerated phases and a phase was inserted before it without revisiting
+    ///   - NoSolution returned before c.Engines was assigned, so it asked for full throttle on zero
+    ///     engines
+    ///   - sequential `if`s let Boostback cascade to LandingBurn in one tick, at 44 km, climbing
+    ///
+    /// Reading carefully did not catch these; I wrote three of them while reading carefully. A sweep
+    /// does, because it does not care which phase is new - it asks the same questions of all of them.
+    /// Anything added to LandingPhase is covered the moment it exists.
+    /// </summary>
+    static void PhaseSweep()
+    {
+        LandingPhase[] phases = (LandingPhase[])Enum.GetValues(typeof(LandingPhase));
+
+        // Representative states, each one a situation the booster genuinely passes through.
+        LandingInputs[] states = new LandingInputs[6];
+        string[] names = new string[6];
+
+        states[0] = Fall(29000.0, 700.0, 780.0, 43.0, 9);        // just separated, alongside
+        states[0].RangeToPartnerM = 11.4; states[0].AccelOneEngine = 13.0;
+        names[0] = "alongside";
+
+        states[1] = Fall(40000.0, 500.0, 900.0, 43.0, 9);        // boosting back, climbing
+        states[1].AccelOneEngine = 15.0; states[1].InitialMissM = 60000.0;
+        states[1].PredictedMissM = 30000.0; states[1].DownrangeM = 40000.0;
+        names[1] = "climbing";
+
+        states[2] = Fall(60000.0, -50.0, 400.0, 43.0, 9);        // over the top, falling
+        states[2].AccelOneEngine = 15.0; states[2].DownrangeM = 20000.0;
+        names[2] = "high falling";
+
+        states[3] = Fall(20000.0, -500.0, 1200.0, 43.0, 9);      // in the entry band
+        states[3].AccelOneEngine = 15.0; states[3].DownrangeM = 8000.0;
+        names[3] = "entry band";
+
+        states[4] = Fall(1500.0, -160.0, 165.0, 43.0, 9);        // terminal, solvable
+        states[4].AccelOneEngine = 16.0; states[4].DownrangeM = 400.0;
+        names[4] = "terminal";
+
+        states[5] = Fall(3000.0, -200.0, 210.0, 9.0, 9);         // cannot stop at any altitude
+        states[5].AccelOneEngine = 5.0;
+        names[5] = "no thrust margin";
+
+        for (int p = 0; p < phases.Length; p++)
+        {
+            // A phase in the enum with no name is a phase somebody forgot to finish. Idle is the
+            // one legitimate STANDBY - it is the "not flying" state.
+            if (phases[p] != LandingPhase.Idle)
+                Check("phase " + phases[p] + " has a display name",
+                      Landing.Name(phases[p]) != "STANDBY", Landing.Name(phases[p]));
+
+            for (int i = 0; i < states.Length; i++)
+            {
+                LandingCommand c = Landing.Guide(states[i], phases[p]);
+                string w = phases[p] + " / " + names[i];
+
+                Check(w + ": throttle is a real number in range",
+                      !double.IsNaN(c.Throttle) && !double.IsInfinity(c.Throttle)
+                      && c.Throttle >= 0.0 && c.Throttle <= 1.0, c.Throttle.ToString("F3"));
+
+                // Thrust with nothing lit is the NoSolution bug: SetEngines(v, 0) shuts the octaweb
+                // down and the throttle command reaches nothing.
+                Check(w + ": asking for thrust means asking for engines",
+                      !(c.Throttle > 0.001 && c.Engines <= 0),
+                      "thr " + c.Throttle.ToString("F2") + " eng " + c.Engines);
+
+                // Nothing burns next to the vehicle it just left, from ANY starting phase.
+                // Touchdown is exempt: a stage that is already down is not manoeuvring.
+                if (Landing.NearPartner(states[i]) && phases[p] != LandingPhase.Touchdown)
+                {
+                    Check(w + ": nothing burns while alongside",
+                          Math.Abs(c.Throttle) < 1e-9, c.Throttle.ToString("F3"));
+                    Check(w + ": and nothing slews while alongside",
+                          c.Aim == LandingAim.Hold, c.Aim.ToString());
+                }
+
+                // A landing burn is a thing you do while FALLING. (Descent and EntryBurn are
+                // reachable as forced inputs while climbing, but both command zero throttle, so
+                // they are harmless; the burn is not.)
+                // A landing burn is a thing you do while FALLING. It cannot be ENTERED while
+                // climbing; forced in as a starting phase it must at least stop pushing, because
+                // BurnThrottle is computed from speed and does not care which way that speed points.
+                if (states[i].VerticalSpeed > 0.0)
+                {
+                    if (phases[p] != LandingPhase.LandingBurn)
+                        Check(w + ": a climbing stage never enters a landing burn",
+                              c.Phase != LandingPhase.LandingBurn, c.Phase.ToString());
+                    Check(w + ": and a climbing stage is never pushed further up",
+                          !(c.Phase == LandingPhase.LandingBurn && c.Throttle > 0.0),
+                          c.Throttle.ToString("F3"));
+                }
+
+                // The glue divides by nothing and guesses at nothing: every flying phase states the
+                // steering gain it wants.
+                if (c.Phase != LandingPhase.Idle && c.Phase != LandingPhase.Touchdown)
+                    Check(w + ": states a steering gain", c.StoppingTime > 0.0,
+                          c.StoppingTime.ToString("F3"));
+
+                // Guide must settle. Feeding its own answer back must not ping-pong for ever.
+                LandingPhase again = Landing.Guide(states[i], c.Phase).Phase;
+                LandingPhase third = Landing.Guide(states[i], again).Phase;
+                Check(w + ": the state machine settles", again == third,
+                      c.Phase + " -> " + again + " -> " + third);
+            }
+        }
     }
 
     // ------------------------------------------------------------------ booster recovery
