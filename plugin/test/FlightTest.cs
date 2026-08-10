@@ -168,6 +168,22 @@ public static class FlightTest
         Check("and it burns nothing", Math.Abs(sepc.Throttle) < 1e-9, sepc.Throttle.ToString("F3"));
         Check("and it stays there while it is close",
               sepc.Phase == LandingPhase.Separating, sepc.Phase.ToString());
+        // ⛔ AND IT DOES NOT ROTATE. The stage is climbing at 700 m/s, so surface retrograde is very
+        // nearly straight down - a 180-degree flip with the upper stage 11 m away. A 40 m booster
+        // cannot rotate through that without hitting it.
+        Check("a booster alongside holds its attitude, it does not flip",
+              sepc.Aim == LandingAim.Hold, sepc.Aim.ToString());
+
+        // ---- A BOOSTBACK THAT CANNOT SOLVE MUST STILL END ----
+        // PredictedMissM is 0 when the predictor cannot answer, and 0 < -2700 is false for ever.
+        LandingInputs blind = Fall(40000.0, 300.0, 900.0, 43.0, 9);
+        blind.PredictedMissM = 0.0; blind.InitialMissM = 0.0;
+        blind.PhaseElapsedS = Landing.MaxBoostbackS + 1.0;
+        Check("an unsolvable boostback stops instead of burning dry",
+              Landing.Guide(blind, LandingPhase.Boostback).Phase == LandingPhase.Coast, "");
+        blind.PhaseElapsedS = 10.0;
+        Check("but not before it has had a fair run",
+              Landing.Guide(blind, LandingPhase.Boostback).Phase == LandingPhase.Boostback, "");
 
         LandingInputs clear = Fall(29000.0, 700.0, 780.0, 43.0, 9);
         clear.RangeToPartnerM = Landing.SafeSeparationM + 1.0;

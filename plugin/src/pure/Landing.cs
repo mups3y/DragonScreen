@@ -507,7 +507,15 @@ namespace DragonScreen
             switch (phase)
             {
                 case LandingPhase.Separating:
-                    // Engines off, hold the attitude we were left in, drift clear.
+                    // ---- ⛔ HOLD MEANS HOLD. THIS CASE DID NOT SET Aim AND INHERITED RETROGRADE. ----
+                    // The comment here said "hold the attitude we were left in" and the code said
+                    // nothing, so `c.Aim` kept the SurfaceRetrograde default set at the top of Guide.
+                    // At separation the booster is climbing at ~700 m/s, so surface retrograde points
+                    // very nearly STRAIGHT DOWN - the controller would have commanded a 180-degree
+                    // flip with the upper stage 11 m away, and a 40 m stage cannot rotate through
+                    // that without hitting it. The same shape of mistake as the roll bug: the comment
+                    // described the intent and the code did something else.
+                    c.Aim = LandingAim.Hold;
                     c.Throttle = 0.0;
                     c.StoppingTime = GlideStoppingTime;
                     c.Note = "SEPARATING";
@@ -594,6 +602,16 @@ namespace DragonScreen
         }
 
         /// <summary>
+        /// Longest a boostback may burn before it is stopped regardless, seconds.
+        ///
+        /// PredictedMiss returns 0 when it cannot solve, and `0 < -2700` is false for ever - so an
+        /// unsolvable prediction would have burned the stage dry with no landing propellant and no
+        /// error anywhere. A termination condition that can silently never fire is not one.
+        /// F9I's measured boostback ends 54-58 s after separation, so 75 s is well past nominal.
+        /// </summary>
+        public const double MaxBoostbackS = 75.0;
+
+        /// <summary>
         /// Boostback is finished when the PREDICTED IMPACT POINT has walked back past the landing
         /// zone by <see cref="BoostbackOvershootM"/>.
         ///
@@ -611,6 +629,7 @@ namespace DragonScreen
         /// </summary>
         private static bool BoostbackDone(LandingInputs s)
         {
+            if (s.PhaseElapsedS >= MaxBoostbackS) return true;      // never burn for ever
             return s.PredictedMissM < -BoostbackOvershootM;
         }
 

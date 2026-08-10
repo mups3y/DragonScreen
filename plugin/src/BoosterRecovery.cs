@@ -364,7 +364,11 @@ namespace DragonScreen
             // F9I's AtmGNC opens with "grid fins out, entry burn, guided descent" - the fins are out
             // BEFORE the gate at 32.5 km, so the stage is already stable when it meets the thick air
             // rather than deploying into it.
-            if (Phase != LandingPhase.Idle && Phase != LandingPhase.Boostback) DeployGridFins(booster);
+            // ⚠ AND NOT WHILE SEPARATING. The gate listed Idle and Boostback and I added a phase
+            // before both without revisiting it, so the fins would have deployed at 29 km, climbing
+            // at 700 m/s, 11 m from the upper stage. They belong at the top of the arc.
+            if (Phase != LandingPhase.Idle && Phase != LandingPhase.Separating
+                && Phase != LandingPhase.Boostback) DeployGridFins(booster);
 
             SetEngines(booster, c.Engines);
             Aim(booster, c, s);
@@ -819,6 +823,17 @@ namespace DragonScreen
         {
             Vector3d up = (v.CoM - v.mainBody.position).normalized;
             Vector3d dir = up;
+
+            // ---- ⛔ Hold DID NOT HOLD - IT POINTED THE STAGE STRAIGHT UP. ----
+            // `dir` starts as the local vertical and only the two branches below ever changed it, so
+            // LandingAim.Hold - whose entire job is "do not slew" - commanded a slew to vertical. At
+            // a 45-degree separation attitude that is a 45-degree rotation for no reason.
+            //
+            // The controller's forward IS ReferenceTransform.up: its frame is
+            // rotation * Euler(-90,0,0), and -90 about X maps +Z onto +Y, which is the axis out of a
+            // KSP command part's nose. Steering at the current facing is therefore a true hold - zero
+            // attitude error, nothing commanded.
+            if (c.Aim == LandingAim.Hold) dir = v.ReferenceTransform.up;
 
             if (c.Aim == LandingAim.SurfaceRetrograde)
             {
