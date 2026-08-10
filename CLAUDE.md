@@ -129,6 +129,13 @@ different algorithm that looks close enough.
 Five changes went into the flight that caught the upper stage. When it failed, nothing could be
 attributed. A flight costs the user real time; spend it resolving one question.
 
+**RULE 0 — `docs/PORT_PLAN.md` IS THE ORDER OF WORK. FOLLOW IT.**
+It names, for every remaining item, the exact functions to read and what each piece consumes and
+exposes. The waste on this project has not been porting - it has been rewriting things written
+before their dependency existed or before the whole source function had been read. If a read
+turns up a dependency the plan does not list, **stop and update the plan first**; discovering
+that in code is how a rewrite starts.
+
 **RULE 5 — THE PORT MAP ENTRY COMES FIRST.**
 Write the `docs/F9I_PORT_MAP.md` row — source function, line range, what differs and why — BEFORE
 the code. If the "why" cannot be written down, the difference is not a decision, it is a guess.
