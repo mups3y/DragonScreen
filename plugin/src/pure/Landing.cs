@@ -130,6 +130,29 @@ namespace DragonScreen
         public int Engines;
         /// <summary>Legs out. F9I drops them at 200 m radar.</summary>
         public bool DeployLegs;
+
+        /// <summary>
+        /// May the glue lean the stage off retrograde to walk the impact point onto the pad?
+        ///
+        /// ⛔ NOT DURING THE ENTRY BURN. BOOSTER.ks:716 is explicit and gives the reason: "Straight
+        /// retrograde for the burn, not guidance: the point of the entry burn is to kill speed
+        /// through the thickest air, and leaning the stage off retrograde while doing it puts a
+        /// large side load on it. Guidance is handed back the moment the burn ends."
+        ///
+        /// Our glue leaned whenever the aim was SurfaceRetrograde and there was a downrange error,
+        /// which is every phase including the entry burn - full thrust, maximum dynamic pressure,
+        /// and an angle of attack on top.
+        /// </summary>
+        public bool GuidedLean;
+
+        /// <summary>
+        /// Seconds the steering may take to arrest a rotation, for THIS phase. F9I retunes it three
+        /// times down the descent - `maxstoppingtime` 10 through the entry burn, 1 for the glide,
+        /// 0.05 for the landing burn - because those phases want opposite behaviour and one setting
+        /// cannot serve all three. A big number through the entry burn is what stops the controller
+        /// fighting the airflow while the stage is a lawn dart at full throttle.
+        /// </summary>
+        public double StoppingTime;
     }
 
     public static class Landing
@@ -196,6 +219,14 @@ namespace DragonScreen
 
         /// <summary>Boostback throttle floor. Keeps the engines lit and the gimbal authoritative.</summary>
         public const double BoostbackMinThrottle = 0.25;
+
+        // ---- STEERING GAIN PER PHASE. BOOSTER.ks sets maxstoppingtime three times. ----
+        /// <summary>Through the entry burn (:721). Loose, so the controller does not fight the air.</summary>
+        public const double EntryStoppingTime = 10.0;
+        /// <summary>The guided glide (:734).</summary>
+        public const double GlideStoppingTime = 1.0;
+        /// <summary>The landing burn. Tight, because the last hundred metres need it.</summary>
+        public const double LandingStoppingTime = 0.05;
 
         /// <summary>Touchdown when this low and this slow.</summary>
         public const double TouchdownAltitude = 3.0, TouchdownSpeed = 3.0;
@@ -441,21 +472,30 @@ namespace DragonScreen
                     // overshooting its own overshoot target. The floor is not a minimum useful
                     // thrust: it keeps the engines lit so the gimbal stays authoritative.
                     c.Throttle = BoostbackThrottle(s);
+                    c.StoppingTime = GlideStoppingTime;
                     c.Note = "BOOSTBACK";
                     break;
 
                 case LandingPhase.Coast:
                     c.Throttle = 0.0;
+                    c.StoppingTime = GlideStoppingTime;
                     c.Note = "COAST";
                     break;
 
                 case LandingPhase.EntryBurn:
                     c.Throttle = 1.0;
+                    // Straight retrograde. No lean - see GuidedLean.
+                    c.StoppingTime = EntryStoppingTime;
                     c.Note = "ENTRY BURN";
                     break;
 
                 case LandingPhase.Descent:
                     c.Throttle = 0.0;
+                    // Guidance is handed back the moment the burn ends. This is the glide where the
+                    // stage actually steers, and it does it with drag, which is far cheaper than
+                    // propellant.
+                    c.GuidedLean = true;
+                    c.StoppingTime = GlideStoppingTime;
                     c.Note = "DESCENT";
                     break;
 
@@ -470,6 +510,9 @@ namespace DragonScreen
                     if (th < 0.0) th = 0.0; else if (th > 1.0) th = 1.0;
                     c.Throttle = th;
                     c.Aim = (s.AltitudeRadar < 60.0) ? LandingAim.Up : LandingAim.SurfaceRetrograde;
+                    // Still steering to the pad, and now the only thing that can.
+                    c.GuidedLean = true;
+                    c.StoppingTime = LandingStoppingTime;
                     c.DeployLegs = s.AltitudeRadar < LegsAltitudeM;
                     c.Note = "LANDING BURN";
                     break;

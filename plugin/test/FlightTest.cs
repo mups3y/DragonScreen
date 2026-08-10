@@ -155,6 +155,40 @@ public static class FlightTest
               !LandingSites.Recovers(LandingProfile.Expendable)
               && LandingSites.Recovers(LandingProfile.Rtls), "");
 
+        // ---- ⛔ THE ENTRY BURN FLIES STRAIGHT RETROGRADE, NEVER LEANED ----
+        // BOOSTER.ks:716: "leaning the stage off retrograde while doing it puts a large side load on
+        // it." Our glue leaned on any retrograde aim with a downrange error, which is every phase -
+        // full thrust, maximum dynamic pressure, and an angle of attack on top of it.
+        LandingInputs inEntry = Fall(20000.0, -500.0, 1200.0, 43.0, 9);
+        inEntry.PhaseElapsedS = 2.0; inEntry.DownrangeM = 30000.0;
+        LandingCommand eb = Landing.Guide(inEntry, LandingPhase.EntryBurn);
+        Check("the entry burn is not steered", !eb.GuidedLean, "");
+        Check("and it is loose on the stick so it does not fight the air",
+              Math.Abs(eb.StoppingTime - Landing.EntryStoppingTime) < 1e-9,
+              eb.StoppingTime.ToString("F2"));
+
+        // AccelOneEngine matters here: without it PhaseAccel falls back to accel/9, which is under
+        // gravity, and Guide correctly answers NO SOLUTION instead of the phase being asked about.
+        LandingInputs glide = Fall(8000.0, -250.0, 260.0, 43.0, 9);
+        glide.AccelOneEngine = 16.0; glide.DownrangeM = 4000.0;
+        LandingCommand gl = Landing.Guide(glide, LandingPhase.Descent);
+        Check("the glide IS steered - it is where drag does the work", gl.GuidedLean, "");
+        Check("and it tightens up for the glide",
+              Math.Abs(gl.StoppingTime - Landing.GlideStoppingTime) < 1e-9, "");
+
+        LandingInputs lb = Fall(600.0, -120.0, 125.0, 43.0, 9);
+        lb.AccelOneEngine = 16.0; lb.DownrangeM = 300.0;
+        LandingCommand lbc = Landing.Guide(lb, LandingPhase.LandingBurn);
+        Check("the landing burn steers too", lbc.GuidedLean, "");
+        Check("and it is tightest of all",
+              Math.Abs(lbc.StoppingTime - Landing.LandingStoppingTime) < 1e-9, "");
+        Check("the three gains are genuinely different, loosest first",
+              Landing.EntryStoppingTime > Landing.GlideStoppingTime
+              && Landing.GlideStoppingTime > Landing.LandingStoppingTime, "");
+        Check("every flying phase asks for a gain - zero would mean the glue guesses",
+              Landing.Guide(Fall(40000.0, 400.0, 900.0, 43.0, 9),
+                            LandingPhase.Boostback).StoppingTime > 0.0, "");
+
         // ---- JOIN THE PROFILE WHERE THE STAGE ACTUALLY IS ----
         // Handover is late by design (the upper stage cannot be abandoned mid-ascent), so starting
         // at Boostback unconditionally would point a falling booster back up the range. The 21:01

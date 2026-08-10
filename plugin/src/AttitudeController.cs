@@ -91,6 +91,16 @@ namespace DragonScreen
         /// </summary>
         public double Throttle;
 
+        /// <summary>
+        /// Fore/aft RCS translation for THIS vehicle, 0..1. Positive settles propellant forward.
+        ///
+        /// Here rather than on the vessel because `v.ctrlState.Z` written from Update is rebuilt by
+        /// KSP every FixedUpdate before physics sees it - the ullage command was almost certainly a
+        /// no-op for its whole life. MechJeb writes Z into the FlightCtrlState it is handed
+        /// (MechJebModuleNodeExecutor.cs:161,193), which is this one. NEGATIVE Z is forward.
+        /// </summary>
+        public double UllageFore;
+
         /// <summary>Last attitude error, degrees. For the pages and the logs.</summary>
         public double ErrorDeg { get; private set; }
 
@@ -161,6 +171,7 @@ namespace DragonScreen
         {
             active = false;
             Throttle = 0.0;
+            UllageFore = 0.0;
             // Write the zero throttle out before letting go, or the vehicle keeps the last one.
             if (attached != null && attached.ctrlState != null) attached.ctrlState.mainThrottle = 0f;
             Detach();
@@ -208,6 +219,7 @@ namespace DragonScreen
                 // Throttle goes out whether or not we are steering: a vehicle told to coast must
                 // actually be at zero, and this is the only per-vessel place to say so.
                 s.mainThrottle = Mathf.Clamp01((float)Throttle);
+                if (UllageFore > 0.001) s.Z = -Mathf.Clamp01((float)UllageFore);
                 if (active) DriveInner(s);
             }
             catch (Exception e)

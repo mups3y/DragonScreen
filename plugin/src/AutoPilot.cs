@@ -348,12 +348,15 @@ namespace DragonScreen
             // flavour during the six-second settle. If a fuel mod ever makes ullage matter, this has
             // to move to an OnFlyByWire callback, and that is the fix rather than a bigger number.
             // Only written while actually ullaging, so it cannot stamp on anything else.
-            if (c.UllageFore > 0.01)
-            {
-                v.ctrlState.Z = -(float)c.UllageFore;
-                if (!v.ActionGroups[KSPActionGroup.RCS])
-                    v.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
-            }
+            // ---- ⛔ ULLAGE GOES THROUGH THE CALLBACK NOW, NOT `v.ctrlState.Z` FROM HERE. ----
+            // KSP rebuilds ctrlState from input every FixedUpdate, so a Z written from Update was
+            // overwritten before physics ever saw it - the settle command was almost certainly a
+            // no-op for its entire life. It cost nothing in stock, which has no ullage model, and
+            // would have cost an ignition under Real Fuels. The controller owns the FlightCtrlState,
+            // so it owns this too.
+            AttitudeController.Ascent.UllageFore = c.UllageFore;
+            if (c.UllageFore > 0.01 && !v.ActionGroups[KSPActionGroup.RCS])
+                v.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
 
             // ---- RCS FOR THE UNPOWERED COASTS ----
             // F9I's MECO() does `rcs on` before the separation hold. The recording says why: with

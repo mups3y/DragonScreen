@@ -849,7 +849,10 @@ namespace DragonScreen
             // BOOSTER.ks:571. The AoA SIGN FLIPS under thrust - positive works aerodynamically,
             // negative is needed once the force is along the nose - which is why it is asked for
             // per-tick with the engine state rather than held as a constant.
-            if (HavePad && c.Aim == LandingAim.SurfaceRetrograde && s.DownrangeM > 0.0)
+            // ⛔ AND ONLY WHEN THE GUIDANCE SAYS SO. This used to lean on any retrograde aim, which
+            // includes the ENTRY BURN - full thrust into the thickest air with an angle of attack on
+            // top. BOOSTER.ks:716 forbids exactly that; see LandingCommand.GuidedLean.
+            if (HavePad && c.GuidedLean && c.Aim == LandingAim.SurfaceRetrograde && s.DownrangeM > 0.0)
             {
                 Vector3d toPad = v.mainBody.GetWorldSurfacePosition(PadLat, PadLon, v.altitude)
                                  - v.CoM;
@@ -865,9 +868,22 @@ namespace DragonScreen
             // Same controller the ascent uses. A landing booster wants a TIGHT stopping time -
             // BOOSTER.ks sets maxstoppingtime 0.05 for the landing burn against 1 for the coast,
             // because the two want opposite behaviour and one setting cannot serve both.
+            // ---- THE GAIN IS THE GUIDANCE'S CHOICE, NOT A TERNARY HERE ----
+            // F9I retunes maxstoppingtime three times down the descent: 10 through the entry burn so
+            // the controller does not fight the airflow, 1 for the glide, 0.05 for the landing burn.
+            // This only knew about the last one.
             AttitudeController.Booster.MaxStoppingTime =
-                (c.Phase == LandingPhase.LandingBurn) ? 0.05 : 1.0;
-            AttitudeController.Booster.SteerTo(v, dir, up);
+                (c.StoppingTime > 0.0) ? c.StoppingTime : Landing.GlideStoppingTime;
+
+            // ---- ⛔ ROLL IS HELD, NOT COMMANDED. THE GRID FINS DEPEND ON IT. ----
+            // Passing the local vertical as the roll reference rolls the stage to put its "top"
+            // along it - which turns the grid fins out of the plane they were built to work in.
+            // BOOSTER.ks:315: the flip "blends the roll reference by tgtRotation so the booster keeps
+            // the same roll it launched with and the grid fins stay in the plane they expect."
+            //
+            // Zero here means "no roll reference", and SteerTo then holds the roll the stage already
+            // has - which is the launch roll, because nothing has commanded it since.
+            AttitudeController.Booster.SteerTo(v, dir, Vector3d.zero);
         }
     }
 }
