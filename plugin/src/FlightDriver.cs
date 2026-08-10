@@ -72,6 +72,15 @@ namespace DragonScreen
             ImpactPredictor.Sample(DeorbitOps.Vehicle);
             ImpactPredictor.Sample(EntryOps.Vehicle);
 
+            // ---- ⛔ THE RECORDER STARTS HERE, NOT AT LAUNCH. ----
+            // `FlightRecorder.Start` had exactly one caller: `AutoPilot` engaging for a launch. So a
+            // flight scene entered any other way was NEVER RECORDED - and that is every return from
+            // orbit. On 2026-08-11 the crew flew the whole de-orbit sequence and there is no CSV of
+            // it at all; the only evidence is a dozen log lines. The recorder exists so that a
+            // failure can be diagnosed from data, and the phases most likely to fail were the ones
+            // it was not watching.
+            if (!FlightRecorder.Recording) FlightRecorder.Start(FlightGlobals.ActiveVessel);
+
             NodeExecutor.Tick();
             StationApproach.Tick();
             DockingOps.Tick();

@@ -54,7 +54,12 @@ namespace DragonScreen
         private static Vector3d dvWorld;        // the ORIGINAL request, for the overshoot test
         private static Vector3d dvRemaining;
         private static double nodeUt, ignitionUt, startedBurnAt;
-        private static bool rcsWasOn, boughtRcs;
+        private static bool rcsWasOn, boughtRcs, warpRequested;
+
+        /// <summary>Arrive this long before ignition, so there is time to drop out of warp.</summary>
+        public const double WarpArriveLeadS = 6.0;
+        /// <summary>Do not bother warping a wait shorter than this. `DgWarpTo`'s 12 s.</summary>
+        public const double WarpWorthwhileS = 12.0;
 
         public static bool Active
         {
@@ -100,6 +105,7 @@ namespace DragonScreen
 
             rcsWasOn = v.ActionGroups[KSPActionGroup.RCS];
             boughtRcs = false;
+            warpRequested = false;
             Phase = BurnPhase.Aligning;
             Note = label;
 
@@ -113,6 +119,7 @@ namespace DragonScreen
         public static void Abort(string why)
         {
             if (!Active) return;
+            if (warpRequested && TimeWarp.CurrentRateIndex > 0) TimeWarp.SetRate(0, true);
             Stop();
             Phase = BurnPhase.Failed;
             Note = "ABORTED - " + why;
@@ -174,9 +181,42 @@ namespace DragonScreen
             }
         }
 
+        /// <summary>
+        /// Skip the dead wait to ignition. `DgWarpTo`, ported: only if the wait is worth warping, and
+        /// only ever AFTER the alignment - warping while still turning gives the controller no physics
+        /// to turn with.
+        ///
+        /// ---- ⛔ WITHOUT THIS THE RETURN IS UNFLYABLE, AND THAT IS NOT AN EXAGGERATION. ----
+        /// On 2026-08-11 the crew pressed DEORBIT NOW and the phase-down planned a **4.12 m/s** burn
+        /// with "ignition in 1511 s". Nothing warped, so the console sat there for twenty-five
+        /// REAL-TIME MINUTES showing a burn that had not started. The crew pressed the button again
+        /// eight minutes later, which is exactly what anyone would do. Warp automation was written off
+        /// in `docs/PORT_PLAN.md` as "a separate question"; it is not - a node executor that cannot
+        /// reach its own node is broken, and F9I warps inside `DgExecNode` for this reason.
+        ///
+        /// ⚠ THE CREW CAN STILL OVERRIDE IT. This asks for rails warp once and then leaves the
+        /// controls alone; it does not re-issue every tick, so a manual cancel stays cancelled.
+        /// </summary>
+        private static void WarpToIgnition(double now)
+        {
+            if (warpRequested) return;
+            double lead = ignitionUt - WarpArriveLeadS;
+            if (lead - now < WarpWorthwhileS) return;
+
+            warpRequested = true;
+            Debug.Log(Tag + "warping " + (lead - now).ToString("F0") + " s to ignition for '"
+                      + Note + "'");
+            TimeWarp.fetch.WarpTo(lead);
+        }
+
         private static void Hold(double now)
         {
             AttitudeController.Ascent.Throttle = 0.0;
+
+            if (now < ignitionUt - WarpArriveLeadS) { WarpToIgnition(now); return; }
+
+            // Back to real time before the engine lights: a burn under rails warp is not a burn.
+            if (TimeWarp.CurrentRateIndex > 0) TimeWarp.SetRate(0, true);
             if (now < ignitionUt) return;
 
             // ⚠ IF THE IGNITION TIME HAS ALREADY GONE, BURN NOW rather than skipping it. F9I:

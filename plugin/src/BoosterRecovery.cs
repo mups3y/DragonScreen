@@ -665,21 +665,34 @@ namespace DragonScreen
 
             if (!flipSeeded)
             {
+                // ---- ⛔ THE GEOMETRY IS IN pure/FlipGeometry.cs AND IT IS THERE FOR A REASON. ----
+                // This block used to build the tangent from `v.srf_velocity` - PROgrade - where F9I
+                // uses `srfretrograde`. Both then negate and rotate 180°, so the flip finished flat
+                // PROGRADE, exactly reversed, and BoostbackKill inherited a 149.7° error at the
+                // instant three Merlins reached full throttle. The stage tumbled, burned 24 t, drove
+                // itself 15 km further downrange and was lost. Do not re-derive this here.
+                double rX, rY, rZ, aX, aY, aZ, fX, fY, fZ;
+                double deg = LandingSites.FlipDeg(Profile);
+                if (!FlipGeometry.Solve(up.x, up.y, up.z,
+                                        v.srf_velocity.x, v.srf_velocity.y, v.srf_velocity.z,
+                                        deg,
+                                        out rX, out rY, out rZ,
+                                        out aX, out aY, out aZ,
+                                        out fX, out fY, out fZ))
+                    return v.ReferenceTransform.up;
+
+                flipAxis = new Vector3d(aX, aY, aZ);
+                flipFinal = new Vector3d(fX, fY, fZ);
                 // Seeded from where the stage is ACTUALLY pointing, not from a fresh command:
                 // WaitForSep refreshes flipVec at 10 Hz for exactly this reason, so the rotation
                 // starts from the attitude the booster was flying at MECO.
-                Vector3d tangent = Vector3d.Exclude(up, v.srf_velocity);
-                if (tangent.sqrMagnitude < 1.0) return v.ReferenceTransform.up;
-                tangent = tangent.normalized;
-
-                flipAxis = Vector3d.Cross(tangent, -up).normalized;
-                double deg = LandingSites.FlipDeg(Profile);
-                flipFinal = (QuaternionD)Quaternion.AngleAxis((float)deg, (Vector3)flipAxis)
-                            * (-tangent);
                 flipVec = v.ReferenceTransform.up;
                 flipSeeded = true;
                 flipComplete = false;
-                Debug.Log(Tag + "flip: " + deg.ToString("F0") + " deg about the plane of flight");
+                Debug.Log(Tag + "flip: " + deg.ToString("F0")
+                          + " deg about the plane of flight, finishing "
+                          + FlipGeometry.AngleDeg(fX, fY, fZ, rX, rY, rZ).ToString("F1")
+                          + " deg off flat retrograde (must be ~0 for RTLS - see FlipGeometry)");
             }
 
             double toGo = Vector3d.Angle(flipFinal, flipVec);

@@ -636,8 +636,13 @@ namespace DragonScreen
 
             // ---- THE FLIP ENDS WHEN THE STAGE IS ROUND, NOT WHEN A TIMER SAYS SO ----
             // My previous version waited for 200 m of separation or 20 s, which was dead time doing
-            // nothing. F9I's turnaround takes about the same 16 s and spends it rotating the stage
-            // and stepping down to three engines. The wait was never the point; the flip was.
+            // nothing. The wait was never the point; the flip was.
+            //
+            // ⚠ "F9I's turnaround takes about the same 16 s" stood here and was INVENTED - I wrote
+            // it, not F9I. MEASURED on 2026-08-11: ours took 152 s of game time (MET 99 -> 255), and
+            // it is rate-limited rather than idle - the stage physically rotates at about 2.5 deg/s on
+            // cold gas at 59 t. There is no evidence F9I is faster, and the flip's duration was never
+            // what lost a booster; the flip's DIRECTION was. Do not tune against the 16.
             else if (phase == LandingPhase.Flip && s.FlipDone
                      && (!NearPartner(s) || s.PhaseElapsedS >= MaxSeparationWaitS))
                 phase = LandingPhase.BoostbackKill;
@@ -696,10 +701,10 @@ namespace DragonScreen
                     break;
 
                     // (The old Separating case stood here. It was a 200 m / 20 s hold that did
-                    // nothing but wait, and it is superseded by the Flip above - F9I spends the same
-                    // ~16 s rotating the stage and stepping down to three engines. Its one real
-                    // lesson survives in the clearance guard at the top of the transitions: nothing
-                    // burns or slews while the two vehicles are alongside.)
+                    // nothing but wait, and it is superseded by the Flip above, which spends the time
+                    // rotating the stage and stepping down to three engines. Its one real lesson
+                    // survives in the clearance guard at the top of the transitions: nothing burns or
+                    // slews while the two vehicles are alongside.)
 
                 case LandingPhase.Boostback:
                     c.Aim = LandingAim.TowardTarget;

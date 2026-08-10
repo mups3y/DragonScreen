@@ -38,7 +38,10 @@ namespace DragonScreen
         private static Vessel ship;
         private static DeorbitState st;
         private static double startedAt, lastScanAt, prevPeri, prevPeriAt;
-        private static bool aligned, phaseDownPending, passFound;
+        private static bool aligned, phaseDownPending, passFound, warpRequested;
+
+        /// <summary>Drop out of warp this long before the de-orbit point, to settle. `DgPhasing`'s 25 s.</summary>
+        public const double PassWarpLeadS = 25.0;
         private static double goTimeUt, trackMissM, offPlaneDeg;
 
         /// <summary>When the burn will be lit, and how good the pass is. For the pages and the crew.</summary>
@@ -62,6 +65,19 @@ namespace DragonScreen
         {
             Vessel v = FlightGlobals.ActiveVessel;
             if (v == null) return;
+
+            // ---- ⚠ A SECOND PRESS IS NOT A SECOND DE-ORBIT. ----
+            // On 2026-08-11 the crew pressed DEORBIT NOW, watched nothing happen for eight minutes
+            // (the phase-down was waiting on an un-warped apoapsis), and pressed it again. That
+            // re-ran this whole method underneath a burn the node executor had already planned:
+            // fresh phase-down, `passFound` cleared, the overflight thrown away. Re-engaging is
+            // never what a second press means, so say what is happening instead.
+            if (Engaged)
+            {
+                Debug.Log(Tag + "DE-ORBIT already running - " + Note + ". Press ignored; use the "
+                          + "same button again only after it has finished or been cancelled.");
+                return;
+            }
 
             // ---- IS A RETURN EVEN MEANINGFUL FROM HERE? `StReturnAllowed`. ----
             string why;
@@ -101,7 +117,7 @@ namespace DragonScreen
             // exactly this reason, and the phase-down knows how to skip itself when it is unnecessary
             // or impossible - so asking is free and not asking is a miss.
             phaseDownPending = false;
-            passFound = false;
+            passFound = false; warpRequested = false;
             trackMissM = 0.0; offPlaneDeg = 0.0; goTimeUt = 0.0;
             if (!DeorbitOrbit.AlreadyOnOrbit(v.orbit.ApA, v.orbit.PeA))
             {
@@ -137,7 +153,8 @@ namespace DragonScreen
         public static void Reset()
         {
             Engaged = false; ship = null; Note = "-"; phaseDownPending = false;
-            passFound = false; goTimeUt = 0.0; trackMissM = 0.0; offPlaneDeg = 0.0;
+            passFound = false; warpRequested = false;
+            goTimeUt = 0.0; trackMissM = 0.0; offPlaneDeg = 0.0;
             AimMissM = -1.0; ThrottleCmd = 0.0; PeriapsisM = 0.0;
         }
 
@@ -197,6 +214,23 @@ namespace DragonScreen
                 // Hold retrograde while we wait, so the burn's alignment falls through when it starts.
                 AttitudeController.Ascent.Throttle = 0.0;
                 AttitudeController.Ascent.SteerTo(ship, -ship.obt_velocity.normalized, Vector3d.zero);
+
+                // ---- AND WARP THERE. The pass can be five orbits away. ----
+                // `DgPhasing` ends with `DgWarpTo(dgGoUt - 25)` for exactly this reason: the wait is
+                // dead time by construction - the whole point of picking a pass is that it is not
+                // now. Asked once, and only once we are pointed, so a manual cancel stays cancelled.
+                if (!warpRequested && goTimeUt - PassWarpLeadS - now > NodeExecutor.WarpWorthwhileS)
+                {
+                    warpRequested = true;
+                    Debug.Log(Tag + "warping " + (goTimeUt - PassWarpLeadS - now).ToString("F0")
+                              + " s to the de-orbit point");
+                    TimeWarp.fetch.WarpTo(goTimeUt - PassWarpLeadS);
+                }
+                else if (goTimeUt - now <= PassWarpLeadS && TimeWarp.CurrentRateIndex > 0)
+                {
+                    TimeWarp.SetRate(0, true);
+                }
+
                 Note = "WAITING FOR THE DE-ORBIT POINT - T-" + (goTimeUt - now).ToString("F0")
                      + " s, track miss " + (trackMissM / 1000.0).ToString("F1") + " km";
                 return;

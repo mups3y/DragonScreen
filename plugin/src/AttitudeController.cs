@@ -383,6 +383,23 @@ namespace DragonScreen
                     {
                         PartModule pm = p.Modules[m];
                         if (!pm.isEnabled) continue;
+
+                        // ---- ⛔ RCS IS MEASURED FROM ITS NOZZLES, NOT ASKED FOR. ----
+                        // `ModuleRCS.GetPotentialTorque` under-reports badly. Measured on the 08:40
+                        // booster during the flip, throttle zero so RCS was the ONLY torque source:
+                        // it returned 4.1 kN·m while the stage's own angular acceleration worked out
+                        // at about 50. That is a factor of twelve, and `MaxOmega` is linear in it, so
+                        // the controller allowed itself a twelfth of the slew rate it actually had -
+                        // which is most of why a 180° turnaround took 152 s.
+                        //
+                        // MechJeb reached the same conclusion: `VesselState.cs:686` has the
+                        // `rcs.GetPotentialTorque` call COMMENTED OUT and walks the thruster
+                        // transforms instead. This is that walk. Everything else - reaction wheels,
+                        // gimbals, control surfaces - reports honestly and goes through the
+                        // interface below.
+                        ModuleRCS rcs = pm as ModuleRCS;
+                        if (rcs != null) { AddRcsTorque(v, rcs, ref t); continue; }
+
                         ITorqueProvider tp = pm as ITorqueProvider;
                         if (tp == null) continue;
 
@@ -408,6 +425,49 @@ namespace DragonScreen
             if (t.y < 0.1) t.y = 0.1;
             if (t.z < 0.1) t.z = 0.1;
             return t;
+        }
+
+        /// <summary>
+        /// One RCS block's contribution, from where its nozzles are and which way they point.
+        /// Ported from `MechJeb2/VesselState.cs:676-740`.
+        ///
+        /// ⚠ THE AXIS MAPPING IS NOT THE OBVIOUS ONE. KSP's vessel transform has Y forward and Z up,
+        /// while this controller works in forward/top/starboard (pitch about X, roll about Y, yaw
+        /// about Z). MechJeb builds the enable mask as (pitch, roll, yaw) against a torque it has
+        /// already transformed into the vessel frame, and the swap between them is why the mask is
+        /// applied to (x, y, z) in that order rather than to the raw cross product.
+        ///
+        /// ⚠ AND ONLY LIVE NOZZLES COUNT. Since KSP 1.11 an RCS part carries the transforms of every
+        /// part VARIANT, so a four-nozzle block can advertise sixteen. kOS culls on
+        /// `activeInHierarchy` and MechJeb borrowed the fix; without it this over-reports instead,
+        /// which is the same defect the other way round.
+        /// </summary>
+        private void AddRcsTorque(Vessel v, ModuleRCS rcs, ref Vector3d t)
+        {
+            if (!rcs.rcsEnabled || !rcs.isEnabled || rcs.isJustForShow || rcs.flameout) return;
+            if (!v.ActionGroups[KSPActionGroup.RCS]) return;
+            if (rcs.part.ShieldedFromAirstream) return;
+            if (rcs.thrusterTransforms == null) return;
+
+            Vector3d com = v.CoM;
+            Transform vt = v.GetTransform();
+            double power = rcs.thrusterPower * rcs.thrustPercentage * 0.01;
+            if (power <= 0.0) return;
+
+            for (int i = 0; i < rcs.thrusterTransforms.Count; i++)
+            {
+                Transform tr = rcs.thrusterTransforms[i];
+                if (tr == null || !tr.gameObject.activeInHierarchy) continue;
+
+                Vector3d pos = (Vector3d)tr.position - com;
+                Vector3d dir = rcs.useZaxis ? (Vector3d)(-tr.forward) : (Vector3d)(-tr.up);
+                Vector3d torque = Vector3d.Cross(pos, dir * power);
+                Vector3d local = vt.InverseTransformDirection(torque);
+
+                if (rcs.enablePitch) t.x += Math.Abs(local.x);
+                if (rcs.enableRoll) t.y += Math.Abs(local.y);
+                if (rcs.enableYaw) t.z += Math.Abs(local.z);
+            }
         }
     }
 }

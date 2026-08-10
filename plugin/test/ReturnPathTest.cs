@@ -31,6 +31,7 @@ public static class ReturnPathTest
     public static int Run()
     {
         Console.WriteLine("DragonScreen return-path tests");
+        Flips();
         Overflights();
         PhaseDown();
         TerminalDescent();
@@ -38,6 +39,77 @@ public static class ReturnPathTest
         EntryActuation();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
+    }
+
+    // ================================================================== the turnaround
+
+    /// <summary>
+    /// ⛔ THE ONE INVARIANT THIS FILE WAS ADDED FOR, AFTER THE 08:40 BOOSTER WAS LOST:
+    /// **a 180-degree RTLS flip must finish pointing where the boostback begins.**
+    ///
+    /// It did not. The flip built its tangent from PROgrade where F9I uses `srfretrograde`, so it
+    /// finished flat prograde - exactly reversed - and `BoostbackKill` inherited a 149.7 deg attitude
+    /// error at the instant three Merlins hit full throttle. The stage tumbled at 0.85 rad/s, burned
+    /// 24 tonnes, drove itself 15 km FURTHER downrange during the burn meant to reverse it, ran dry at
+    /// 11 km and was destroyed.
+    ///
+    /// The bug survived a line-by-line audit of the whole booster phase because the arithmetic lived
+    /// inside a method that takes a `Vessel` and could not be tested. That is why it is pure now.
+    /// </summary>
+    static void Flips()
+    {
+        double rx, ry, rz, ax, ay, az, fx, fy, fz;
+
+        // Flying due +X, "up" is +Z. Flat retrograde is therefore -X.
+        bool ok = FlipGeometry.Solve(0, 0, 1, 500, 0, 0, 180.0,
+                                     out rx, out ry, out rz, out ax, out ay, out az,
+                                     out fx, out fy, out fz);
+        Check("the flip geometry solves for a vehicle with a ground track", ok, "");
+        Check("flat retrograde is the reverse of the ground track",
+              Math.Abs(rx + 1.0) < 1e-9 && Math.Abs(ry) < 1e-9 && Math.Abs(rz) < 1e-9,
+              rx.ToString("F3") + "," + ry.ToString("F3") + "," + rz.ToString("F3"));
+
+        // THE CHECK. Had this existed, the flight would not have been lost.
+        Check("a 180 deg RTLS flip finishes FLAT RETROGRADE - where BoostbackKill starts",
+              FlipGeometry.AngleDeg(fx, fy, fz, rx, ry, rz) < 1e-6,
+              FlipGeometry.AngleDeg(fx, fy, fz, rx, ry, rz).ToString("F1") + " deg off");
+        Check("...and NOT prograde, which is what it used to do",
+              FlipGeometry.AngleDeg(fx, fy, fz, -rx, -ry, -rz) > 179.0, "");
+
+        // The axis is perpendicular to both the track and the vertical, so the nose swings through
+        // the PLANE OF FLIGHT and the stage never yaws sideways.
+        Check("the rotation axis is perpendicular to the ground track",
+              Math.Abs(ax * rx + ay * ry + az * rz) < 1e-9, "");
+        Check("and to the vertical", Math.Abs(az) < 1e-9, az.ToString("F6"));
+
+        // A droneship only turns back far enough to trim, so it finishes 10 deg SHORT of retrograde -
+        // short, not long, and on the retrograde side.
+        FlipGeometry.Solve(0, 0, 1, 500, 0, 0, 170.0,
+                           out rx, out ry, out rz, out ax, out ay, out az, out fx, out fy, out fz);
+        double off = FlipGeometry.AngleDeg(fx, fy, fz, rx, ry, rz);
+        Check("a 170 deg droneship flip finishes 10 deg off retrograde, on the retrograde side",
+              Math.Abs(off - 10.0) < 1e-6, off.ToString("F2"));
+
+        // The invariant must hold for any attitude, not just the axis-aligned one that happens to be
+        // easy to reason about - an inclined, climbing booster is the real case.
+        double[] ups = { 0.0, 0.3, -0.6 };
+        bool all = true;
+        for (int i = 0; i < ups.Length; i++)
+        {
+            double ux = ups[i], uy = 0.2, uz = 1.0;
+            double n = Math.Sqrt(ux * ux + uy * uy + uz * uz);
+            FlipGeometry.Solve(ux / n, uy / n, uz / n, 400, 250, 120, 180.0,
+                               out rx, out ry, out rz, out ax, out ay, out az,
+                               out fx, out fy, out fz);
+            if (FlipGeometry.AngleDeg(fx, fy, fz, rx, ry, rz) > 1e-6) all = false;
+        }
+        Check("and it holds for a climbing booster on an inclined track too", all, "");
+
+        // Straight up has no ground track to reverse, and saying so beats returning a garbage axis.
+        Check("a vertical climb has no flip geometry and admits it",
+              !FlipGeometry.Solve(0, 0, 1, 0, 0, 900, 180.0,
+                                  out rx, out ry, out rz, out ax, out ay, out az,
+                                  out fx, out fy, out fz), "");
     }
 
     // ================================================================== E3 / E4

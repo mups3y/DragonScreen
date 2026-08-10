@@ -50,6 +50,7 @@ namespace DragonScreen
         private static double lastSample = -999.0;
         private static double startedUt;
         private static uint vesselId;
+        private static Vessel primary;
 
         public static bool Recording { get { return writer != null; } }
 
@@ -71,6 +72,7 @@ namespace DragonScreen
 
                 startedUt = Planetarium.GetUniversalTime();
                 vesselId = v.persistentId;
+                primary = v;
                 lastSample = -999.0;
                 Debug.Log(Tag + "recording -> " + name);
             }
@@ -231,6 +233,40 @@ namespace DragonScreen
             return n;
         }
 
+        /// <summary>
+        /// The craft the `a_` block describes.
+        ///
+        /// ---- ⛔ THIS USED TO BE `AutoPilot.AscentVessel` AND IT WENT NULL AT INSERTION. ----
+        /// The 08:40 recording: from "INSERTION COMPLETE" onward every `a_` column reads ZERO -
+        /// altitude, apoapsis, mass, the lot - because the autopilot had let go of its reference and
+        /// `Motion` writes zeros for a null vessel. The capsule was in a perfectly good 86 × 83 km
+        /// orbit at the time. Everything the return stack does happens AFTER that point, so a return
+        /// would have been recorded with no telemetry at all about the vehicle flying it.
+        ///
+        /// The block still means ONE CRAFT - that is the rule the whole a_/b_ split exists for - it is
+        /// just latched here instead of borrowed from whoever happens to be steering. The latch only
+        /// moves when the craft it points at is gone.
+        /// </summary>
+        private static Vessel Primary()
+        {
+            if (primary != null && primary.state != Vessel.State.DEAD) return primary;
+
+            Vessel a = AutoPilot.AscentVessel;
+            if (a == null || a.state == Vessel.State.DEAD) a = EntryOps.Vehicle;
+            if (a == null || a.state == Vessel.State.DEAD) a = DeorbitOps.Vehicle;
+            // ⚠ The active vessel is the LAST resort, never the first: taking it every row is the
+            // original defect this whole column block was built to fix, where `massT` stepped between
+            // two craft the moment focus moved to the booster.
+            if (a == null || a.state == Vessel.State.DEAD)
+            {
+                a = FlightGlobals.ActiveVessel;
+                // ...and not if the booster is what has focus, or the two blocks describe one craft.
+                if (a != null && a == BoosterRecovery.BoosterVessel) a = null;
+            }
+            primary = a;
+            return primary;
+        }
+
         private static void WriteRow(Vessel v, double ut)
         {
             StringBuilder r = pending;
@@ -243,7 +279,7 @@ namespace DragonScreen
             F(r, TimeWarp.CurrentRate);
 
             // ---------------- ascent vehicle ----------------
-            Vessel a = AutoPilot.AscentVessel;
+            Vessel a = Primary();
             S(r, AutoPilot.Engaged ? Ascent.Name(AutoPilot.Phase) : "-");
             S(r, AutoPilot.Command.Note);
             Motion(r, a, true);
