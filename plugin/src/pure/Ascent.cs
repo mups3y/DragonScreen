@@ -111,6 +111,17 @@ namespace DragonScreen
         public double VerticalSpeed;
         public double DynamicPressureKpa;
         public double TimeToApoapsisS;
+
+        /// <summary>
+        /// Distance to the separated booster, metres. Zero = no booster (or not measurable).
+        ///
+        /// ⛔ THE 3 s COAST WAS NOT ENOUGH AND TIME WAS NEVER THE RIGHT TEST. Measured on the 23:19
+        /// flight: 11.4 m between the two vehicles 0.6 s after separation, and still only ~11 m when
+        /// the MVac lit three seconds later. The separation impulse is tiny, so the gap does not open
+        /// on its own. Lighting a second stage 11 m off a booster is the failure the coast was added
+        /// to prevent, and the coast prevented none of it.
+        /// </summary>
+        public double RangeToBoosterM;
         /// <summary>Thrust the vehicle could make right now, kN. Zero means nothing is lit.</summary>
         public double AvailableThrust;
         public bool Landed;
@@ -199,6 +210,13 @@ namespace DragonScreen
         /// tick, so the MVac lit at 7% ullage throttle with the booster still at zero range.
         /// </summary>
         public const double PostSepHoldS = 3.0;
+
+        /// <summary>
+        /// Longest the upper stage will wait for the booster to get clear before lighting anyway.
+        /// A payload stranded on a suborbital arc because the booster would not drift away is a
+        /// worse outcome than a scorched booster, so the wait has an end.
+        /// </summary>
+        public const double MaxSepWaitS = 20.0;
 
         /// <summary>
         /// Periapsis at which the S2 is dropped, metres. F9I `sepPeTarget`, and the reasoning is in
@@ -299,7 +317,11 @@ namespace DragonScreen
                 stageNow = true;
             }
 
-            else if (phase == AscentPhase.StageSep && s.PhaseElapsedS >= PostSepHoldS)
+            // Time AND distance. The hold is the minimum; clearance is the actual condition.
+            else if (phase == AscentPhase.StageSep && s.PhaseElapsedS >= PostSepHoldS
+                     && (s.RangeToBoosterM <= 0.0
+                         || s.RangeToBoosterM >= Landing.SafeSeparationM
+                         || s.PhaseElapsedS >= MaxSepWaitS))
                 phase = AscentPhase.BurnToApoapsis;
 
             // ---- SECOND STAGE RAISES APOAPSIS, THEN THE S2 IS DROPPED ----

@@ -41,6 +41,10 @@ namespace DragonScreen
     public enum LandingPhase : byte
     {
         Idle = 0,
+        /// <summary>
+        /// Just separated and still alongside the upper stage. Engines OFF until clear.
+        /// </summary>
+        Separating,
         /// <summary>Flip and burn back toward the pad.</summary>
         Boostback,
         /// <summary>Engines off, arcing over the top.</summary>
@@ -103,6 +107,18 @@ namespace DragonScreen
         public double Gravity;
         /// <summary>Ground distance to the landing zone, metres.</summary>
         public double DownrangeM;
+
+        /// <summary>
+        /// Distance to the OTHER vehicle, metres. Zero means "nothing to hit" - either it is gone or
+        /// we could not measure it.
+        ///
+        /// ⛔ THIS EXISTS BECAUSE A FIXED COAST IS NOT A SAFETY CONDITION. The 23:19 flight measured
+        /// 11.4 m between booster and upper stage 0.6 s after separation, and the gap was still
+        /// closing seven seconds later. There is almost no separation impulse, so "wait three
+        /// seconds" bought no clearance at all. Distance is the actual condition; time is a proxy
+        /// that happened to be wrong.
+        /// </summary>
+        public double RangeToPartnerM;
 
         // ---- THE BOOSTBACK IS FLOWN AGAINST A PREDICTED IMPACT POINT, NOT A VELOCITY ----
         // BOOSTER.ks does this with the Trajectories add-on; we cannot take that dependency, so the
@@ -220,6 +236,25 @@ namespace DragonScreen
         /// <summary>Boostback throttle floor. Keeps the engines lit and the gimbal authoritative.</summary>
         public const double BoostbackMinThrottle = 0.25;
 
+        /// <summary>
+        /// How far the booster must be from the upper stage before it may light anything, metres.
+        ///
+        /// 23:19 flight: the booster lit three engines at full throttle 11.4 m from the upper stage,
+        /// the vertical gap went NEGATIVE - they passed through each other - and the booster came
+        /// apart, 59.20 t down to 9.40 t of debris. A stage that is still alongside its payload does
+        /// not get to burn, and no amount of tuning the coast duration fixes that.
+        /// </summary>
+        public const double SafeSeparationM = 200.0;
+
+        /// <summary>
+        /// Longest the booster will wait for clearance before burning anyway, seconds.
+        ///
+        /// A deadlock here is worse than a close pass: the stage would hold attitude all the way to
+        /// the ground with a landing it could still have flown. F9I's own callout schedule has the
+        /// flip settled by 16 s, so 20 is past the point where the real vehicle has moved on.
+        /// </summary>
+        public const double MaxSeparationWaitS = 20.0;
+
         // ---- STEERING GAIN PER PHASE. BOOSTER.ks sets maxstoppingtime three times. ----
         /// <summary>Through the entry burn (:721). Loose, so the controller does not fight the air.</summary>
         public const double EntryStoppingTime = 10.0;
@@ -307,6 +342,8 @@ namespace DragonScreen
         public static LandingPhase InitialPhase(LandingInputs s)
         {
             if (s.Landed) return LandingPhase.Touchdown;
+            // Still alongside whatever we just left. Nothing lights until that is not true.
+            if (NearPartner(s)) return LandingPhase.Separating;
             if (s.VerticalSpeed > 0.0) return LandingPhase.Boostback;
             if (s.AltitudeAsl <= EntryBurnGateAsl) return LandingPhase.EntryBurn;
             return LandingPhase.Coast;
@@ -440,7 +477,12 @@ namespace DragonScreen
             //
             // This is the same `if` versus `else if` class that already cost seven ascent failures
             // and has its own rule in CLAUDE.md. A chain cannot cascade.
-            if (phase == LandingPhase.Idle) phase = LandingPhase.Boostback;
+            if (phase == LandingPhase.Idle) phase = LandingPhase.Separating;
+
+            // Clear of the upper stage, or out of patience. Either way, fly the recovery.
+            else if (phase == LandingPhase.Separating
+                     && (!NearPartner(s) || s.PhaseElapsedS >= MaxSeparationWaitS))
+                phase = LandingPhase.Boostback;
 
             else if (phase == LandingPhase.Boostback && BoostbackDone(s))
                 phase = LandingPhase.Coast;
@@ -464,6 +506,13 @@ namespace DragonScreen
 
             switch (phase)
             {
+                case LandingPhase.Separating:
+                    // Engines off, hold the attitude we were left in, drift clear.
+                    c.Throttle = 0.0;
+                    c.StoppingTime = GlideStoppingTime;
+                    c.Note = "SEPARATING";
+                    break;
+
                 case LandingPhase.Boostback:
                     c.Aim = LandingAim.TowardTarget;
                     // ---- THROTTLE ON THE FRACTION OF THE ERROR STILL LEFT ----
@@ -563,6 +612,12 @@ namespace DragonScreen
         private static bool BoostbackDone(LandingInputs s)
         {
             return s.PredictedMissM < -BoostbackOvershootM;
+        }
+
+        /// <summary>Is the other vehicle close enough that lighting an engine would hit it?</summary>
+        public static bool NearPartner(LandingInputs s)
+        {
+            return s.RangeToPartnerM > 0.0 && s.RangeToPartnerM < SafeSeparationM;
         }
 
         /// <summary>Proportional boostback throttle. BOOSTER.ks:478.</summary>
@@ -693,6 +748,7 @@ namespace DragonScreen
         {
             switch (p)
             {
+                case LandingPhase.Separating:  return "SEPARATING";
                 case LandingPhase.Boostback:   return "BOOSTBACK";
                 case LandingPhase.Coast:       return "COAST";
                 case LandingPhase.EntryBurn:   return "ENTRY BURN";

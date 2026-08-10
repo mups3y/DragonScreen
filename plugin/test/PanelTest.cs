@@ -480,6 +480,27 @@ public static class PanelTest
               "");
         Check("the gap is long enough to matter", Ascent.PostSepHoldS >= 2.0, "");
 
+        // ---- ⛔ AND THE GAP IS A DISTANCE, NOT A DURATION ----
+        // 23:19 flight: 11.4 m between the two vehicles 0.6 s after separation, and still ~11 m when
+        // the 3 s coast expired - there is almost no separation impulse, so time bought nothing. The
+        // booster lit three engines alongside the upper stage and came apart, 59.20 t to 9.40 t.
+        AscentInputs stillThere = Fly(60000.0, 60500.0, 20000.0, 0.1);
+        stillThere.PhaseElapsedS = Ascent.PostSepHoldS + 0.1;
+        stillThere.RangeToBoosterM = 11.4;
+        Check("the coast expiring is not enough - the booster is still there",
+              Ascent.Guide(stillThere, t, AscentPhase.StageSep).Phase == AscentPhase.StageSep, "");
+        Check("and the MVac stays out while it is",
+              Math.Abs(Ascent.Guide(stillThere, t, AscentPhase.StageSep).Throttle) < 1e-9, "");
+        stillThere.RangeToBoosterM = Landing.SafeSeparationM + 1.0;
+        Check("once it is clear, the second stage lights",
+              Ascent.Guide(stillThere, t, AscentPhase.StageSep).Phase == AscentPhase.BurnToApoapsis,
+              "");
+        stillThere.RangeToBoosterM = 11.4;
+        stillThere.PhaseElapsedS = Ascent.MaxSepWaitS + 1.0;
+        Check("but a payload is not stranded because the booster would not move",
+              Ascent.Guide(stillThere, t, AscentPhase.StageSep).Phase == AscentPhase.BurnToApoapsis,
+              "");
+
         // ---- ULLAGE BEFORE THE SECOND STAGE IS ASKED FOR THRUST ----
         AscentInputs ull = Fly(62000.0, 62000.0, 20000.0, 0.0);
         ull.SecondStage = true; ull.PhaseElapsedS = 2.0; ull.TimeToApoapsisS = 200.0;

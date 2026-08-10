@@ -265,6 +265,7 @@ namespace DragonScreen
             // The two stages fly DIFFERENT laws in F9I, so the guidance has to know which it is on.
             a.SecondStage = !HasBooster(v);
             a.PhaseElapsedS = Planetarium.GetUniversalTime() - phaseStartedAt;
+            a.RangeToBoosterM = Range(v, BoosterRecovery.BoosterVessel);
 
             // ---- "MAKE THE ORBIT CIRCULAR HERE, NOW" ----
             // FalconCircBurnVecNow, F9_payload.ks:265, ported exactly:
@@ -590,6 +591,14 @@ namespace DragonScreen
         }
 
         private static bool s2Separated;
+
+        /// <summary>Metres between two vessels, or 0 when there is nothing to measure.</summary>
+        public static double Range(Vessel a, Vessel b)
+        {
+            if (a == null || b == null || a == b) return 0.0;
+            if (a.state == Vessel.State.DEAD || b.state == Vessel.State.DEAD) return 0.0;
+            return Vector3d.Distance(a.CoM, b.CoM);
+        }
 
         private static double AvailableThrust(Vessel v)
         {

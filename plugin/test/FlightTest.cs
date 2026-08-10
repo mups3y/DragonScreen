@@ -155,6 +155,37 @@ public static class FlightTest
               !LandingSites.Recovers(LandingProfile.Expendable)
               && LandingSites.Recovers(LandingProfile.Rtls), "");
 
+        // ---- ⛔ NOTHING LIGHTS WHILE THE TWO VEHICLES ARE STILL ALONGSIDE ----
+        // 23:19 flight: the booster lit three engines at full throttle 11.4 m from the upper stage,
+        // the vertical gap went NEGATIVE - they passed through each other - and the booster came
+        // apart, 59.20 t down to 9.40 t. The 3 s coast bought no clearance because there is almost
+        // no separation impulse; the gap was still ~11 m when it expired. Distance is the condition.
+        LandingInputs alongside = Fall(29000.0, 700.0, 780.0, 43.0, 9);
+        alongside.RangeToPartnerM = 11.4;
+        Check("a booster still alongside starts in SEPARATING",
+              Landing.InitialPhase(alongside) == LandingPhase.Separating, "");
+        LandingCommand sepc = Landing.Guide(alongside, LandingPhase.Separating);
+        Check("and it burns nothing", Math.Abs(sepc.Throttle) < 1e-9, sepc.Throttle.ToString("F3"));
+        Check("and it stays there while it is close",
+              sepc.Phase == LandingPhase.Separating, sepc.Phase.ToString());
+
+        LandingInputs clear = Fall(29000.0, 700.0, 780.0, 43.0, 9);
+        clear.RangeToPartnerM = Landing.SafeSeparationM + 1.0;
+        Check("clear of the stage, the boostback begins",
+              Landing.Guide(clear, LandingPhase.Separating).Phase == LandingPhase.Boostback, "");
+
+        // A stage that never drifts clear must not hold attitude all the way to the ground.
+        LandingInputs stuck = Fall(29000.0, 700.0, 780.0, 43.0, 9);
+        stuck.RangeToPartnerM = 11.4; stuck.PhaseElapsedS = Landing.MaxSeparationWaitS + 1.0;
+        Check("but it does not wait for ever",
+              Landing.Guide(stuck, LandingPhase.Separating).Phase == LandingPhase.Boostback, "");
+
+        // No partner at all - a solo booster test - must not be gated on a range it cannot measure.
+        LandingInputs solo = Fall(29000.0, 700.0, 780.0, 43.0, 9);
+        solo.RangeToPartnerM = 0.0;
+        Check("an unmeasurable range is not a reason to sit still",
+              Landing.InitialPhase(solo) != LandingPhase.Separating, "");
+
         // ---- ⛔ THE ENTRY BURN FLIES STRAIGHT RETROGRADE, NEVER LEANED ----
         // BOOSTER.ks:716: "leaning the stage off retrograde while doing it puts a large side load on
         // it." Our glue leaned on any retrograde aim with a downrange error, which is every phase -

@@ -480,6 +480,7 @@ namespace DragonScreen
             s.DownrangeM = HavePad && v.mainBody != null
                 ? GroundRange(v.mainBody, v.latitude, v.longitude, PadLat, PadLon) : 0.0;
 
+            s.RangeToPartnerM = AutoPilot.Range(v, upperStage);
             s.PredictedMissM = PredictedMiss(v);
             s.InitialMissM = initialMiss;
             return s;
