@@ -235,6 +235,32 @@ namespace DragonScreen
             return s.DownrangeM / t;
         }
 
+        // ------------------------------------------------------------------ where to pick it up
+
+        /// <summary>
+        /// Which phase a booster should be flown from, given the state it is ACTUALLY in when we
+        /// take it over.
+        ///
+        /// ---- WHY THIS IS NOT ALWAYS Boostback ----
+        /// Handover used to start at Boostback unconditionally, which is right only if we take the
+        /// stage seconds after separation. We do not: the upper stage cannot be abandoned mid-ascent
+        /// (one vessel at a time under the ~300 km clamp), so handover waits for Coast - and in the
+        /// 21:01 flight that was 155 s after separation, by which time the booster is already most
+        /// of the way down. Commanding a boostback burn there points a falling stage back up the
+        /// range and wastes the propellant the landing burn needs.
+        ///
+        /// So: still climbing means separation was recent and a boostback is both possible and
+        /// useful. Descending means that moment has passed, and the honest thing is to join the
+        /// profile wherever the stage really is and fly the part that is left.
+        /// </summary>
+        public static LandingPhase InitialPhase(LandingInputs s)
+        {
+            if (s.Landed) return LandingPhase.Touchdown;
+            if (s.VerticalSpeed > 0.0) return LandingPhase.Boostback;
+            if (s.AltitudeAsl <= EntryBurnGateAsl) return LandingPhase.EntryBurn;
+            return LandingPhase.Coast;
+        }
+
         // ------------------------------------------------------------------ engine selection
 
         /// <summary>Falcon 9 burns three engines for boostback and for the entry burn. Real.</summary>

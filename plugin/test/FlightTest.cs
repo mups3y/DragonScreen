@@ -84,6 +84,28 @@ public static class FlightTest
         LandingInputs heavy = Fall(40000.0, -400.0, 420.0, 90.0, 9);
         Check("boostback on three", Landing.EnginesFor(LandingPhase.Boostback, heavy) == 3,
               Landing.EnginesFor(LandingPhase.Boostback, heavy).ToString());
+        // ---- JOIN THE PROFILE WHERE THE STAGE ACTUALLY IS ----
+        // Handover is late by design (the upper stage cannot be abandoned mid-ascent), so starting
+        // at Boostback unconditionally would point a falling booster back up the range. The 21:01
+        // flight handed over 155 s after separation.
+        LandingInputs climbing = Fall(35000.0, 250.0, 900.0, 90.0, 9);
+        Check("a stage still climbing gets a boostback",
+              Landing.InitialPhase(climbing) == LandingPhase.Boostback, "");
+        LandingInputs highFall = Fall(50000.0, -150.0, 900.0, 90.0, 9);
+        Check("a stage falling from above the gate coasts first",
+              Landing.InitialPhase(highFall) == LandingPhase.Coast, "");
+        LandingInputs lowFall = Fall(20000.0, -400.0, 1100.0, 90.0, 9);
+        Check("a stage already below the gate goes straight to the entry burn",
+              Landing.InitialPhase(lowFall) == LandingPhase.EntryBurn, "");
+        LandingInputs down = Fall(0.0, 0.0, 0.0, 90.0, 9); down.Landed = true;
+        Check("a stage on the ground is not flown at all",
+              Landing.InitialPhase(down) == LandingPhase.Touchdown, "");
+        // The boundary is the entry gate itself, and it must be the SAME constant the burn uses -
+        // two copies one metre apart is how a gate opens in the wrong place.
+        LandingInputs atGate = Fall(Landing.EntryBurnGateAsl, -300.0, 1000.0, 90.0, 9);
+        Check("the gate boundary belongs to the entry burn",
+              Landing.InitialPhase(atGate) == LandingPhase.EntryBurn, "");
+
         // ---- THE ENTRY BURN'S SOFT START ----
         // BOOSTER.ks:721: centre engine alone for 0.75 s, then the outboards. Lighting three at once
         // into supersonic flow is the shock the stage does not need. Both halves are asserted -

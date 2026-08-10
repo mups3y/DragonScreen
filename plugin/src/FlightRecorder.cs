@@ -194,11 +194,14 @@ namespace DragonScreen
 
             LandingCommand lc = BoosterRecovery.Command;
             S(r, BoosterRecovery.Active ? Landing.Name(BoosterRecovery.Phase) : "-");
-            F(r, 0.0);                    // trueRadar - only meaningful on the booster
+            // These two belong to the BOOSTER, not to the vessel sampled above, and they used to be
+            // hard-coded zeros - so the height the stage really had and the distance it really
+            // missed by were absent from every row ever recorded. BoosterRecovery publishes them.
+            F(r, BoosterRecovery.TrueRadar);
             F(r, lc.Throttle);
             F(r, lc.IgnitionAltitude);
             F(r, lc.Engines);
-            F(r, 0.0);                    // downrange - filled when the recovery is flying
+            F(r, BoosterRecovery.DownrangeM / 1000.0);      // km, matching the column name
             r.Length -= 1;                // trailing comma
             r.Append('\n');
 

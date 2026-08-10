@@ -51,6 +51,18 @@ namespace DragonScreen
         /// <summary>When the CURRENT landing phase began. The entry burn's soft start is timed off it.</summary>
         private static double phaseStartedAt;
 
+        private static bool noBoosterReported;
+
+        // ---- FOR THE RECORDER ----
+        // Both columns wrote a hard-coded 0.0, so the two numbers that decide whether a landing was
+        // any good - how high the stage really was and how far it missed by - were absent from every
+        // row of every recording. They belong to the BOOSTER, which is not the vessel the recorder
+        // samples, so they have to be published from here.
+        /// <summary>Booster height above the terrain, metres. Zero when no recovery is running.</summary>
+        public static double TrueRadar;
+        /// <summary>Booster ground distance to the landing zone, metres.</summary>
+        public static double DownrangeM;
+
         /// <summary>The pad we came from. Captured at liftoff - it is the RTLS target.</summary>
         public static double PadLat, PadLon;
         public static bool HavePad;
@@ -72,7 +84,8 @@ namespace DragonScreen
             // that thinks it is mid-step, a failure already reported so never reported again.
             gridFinsOut = false;
             lastModeStepAt = 0.0; modeSteps = 0; lastWantMode = -1; modeFailReported = false;
-            phaseStartedAt = 0.0;
+            phaseStartedAt = 0.0; noBoosterReported = false;
+            TrueRadar = 0.0; DownrangeM = 0.0;
         }
 
         // ------------------------------------------------------------------ handover
@@ -86,21 +99,43 @@ namespace DragonScreen
             if (Active || active == null) return false;
 
             Vessel b = FindBooster(active);
-            if (b == null) return false;
+            if (b == null)
+            {
+                // ---- SAY SO. A HANDOVER THAT NEVER FIRES MUST NOT BE SILENT. ----
+                // The 21:01 flight recorded `landPhase = "-"` for all 1371 rows and the log said
+                // nothing at all, so "the recovery did not happen" and "the recovery was never
+                // attempted" looked identical. Once per attempt window, not per tick.
+                if (!noBoosterReported)
+                {
+                    noBoosterReported = true;
+                    Debug.LogWarning(Tag + "no booster to recover - looked for a loaded, unpacked, "
+                                         + "uncrewed vessel with a '" + VehicleParts.BoosterMarker
+                                         + "' part and a working engine, and found none among "
+                                         + FlightGlobals.VesselsLoaded.Count + " loaded vessel(s). "
+                                         + "If it separated cleanly it has probably unloaded: the "
+                                         + "physics range must be raised BEFORE separation.");
+                }
+                return false;
+            }
 
             upperStage = active;
             booster = b;
             Active = true;
-            Phase = LandingPhase.Boostback;
             startedAt = Planetarium.GetUniversalTime();
             phaseStartedAt = startedAt;
 
             Extend(upperStage);
             Extend(booster);
+
+            // Join the profile where the stage actually is. Handover is late by design - see
+            // Landing.InitialPhase - so assuming Boostback would fly a falling booster back up.
+            Phase = Landing.InitialPhase(Read(booster));
+
             FlightGlobals.ForceSetActiveVessel(booster);
 
             Debug.Log(Tag + "booster recovery: focus -> '" + booster.vesselName
-                      + "', upper stage '" + upperStage.vesselName + "' coasts to apoapsis. "
+                      + "' at " + Landing.Name(Phase)
+                      + ", upper stage '" + upperStage.vesselName + "' coasts to apoapsis. "
                       + "Physics range asked " + (RangeMetres / 1000f).ToString("F0")
                       + " km; KSP clamps near 300 km without PhysicsRangeExtender.");
             return true;
@@ -164,6 +199,26 @@ namespace DragonScreen
             return false;
         }
 
+        /// <summary>
+        /// Raise the launch vehicle's physics range BEFORE anything separates from it.
+        ///
+        /// The range on the ACTIVE vessel is what decides how far away another vessel may drift and
+        /// still be loaded, so this has to happen while the booster is still part of us. Called from
+        /// AutoPilot.Engage - see the note there for the circular dependency this replaces.
+        ///
+        /// ⚠ KSP clamps it. `falcon-physics-range-clamp` measured 297-341 km against the 1500 km
+        /// asked for, on four flights, because PhysicsRangeExtender is not installed. Asking is still
+        /// correct: 300 km is far more than a booster recovery needs, and 22.5 km is far less.
+        /// </summary>
+        public static void PrepareForSeparation(Vessel v)
+        {
+            if (v == null) return;
+            Extend(v);
+            Debug.Log(Tag + "physics range raised on '" + v.vesselName + "' before separation - "
+                          + "asked " + (RangeMetres / 1000f).ToString("F0")
+                          + " km, KSP clamps near 300 km without PhysicsRangeExtender");
+        }
+
         private static void Extend(Vessel v)
         {
             if (v == null) return;
@@ -200,6 +255,9 @@ namespace DragonScreen
 
             LandingInputs s = Read(booster);
             LandingCommand c = Landing.Guide(s, Phase);
+
+            TrueRadar = s.AltitudeRadar;
+            DownrangeM = s.DownrangeM;
 
             if (c.Phase != Phase)
             {

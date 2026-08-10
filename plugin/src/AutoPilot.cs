@@ -59,6 +59,31 @@ namespace DragonScreen
         {
             Vessel v = FlightGlobals.ActiveVessel;
             if (v == null) return;
+
+            // ---- ⛔ THIS IS AN ASCENT AUTOPILOT. IT MUST REFUSE TO "ASCEND" FROM ORBIT. ----
+            // 2026-08-10, four times in four minutes: AUTO SEQUENCE was pressed on a Dragon already
+            // in an 86 x 84 km orbit. Guide() starts at Idle and walks its state machine from the
+            // beginning, so it ran VERTICAL RISE -> GRAVITY TURN -> MECO on an orbiting capsule. The
+            // pitch law at 86 km asks for a horizon-relative angle that has nothing to do with where
+            // the vehicle is pointing, so the controller slewed hard: peak attitude errors of 45,
+            // 99, 112 and 134 degrees in the four recordings.
+            //
+            // And the MECO transition issues a STAGE command. On a launch vehicle that is staging;
+            // on a Dragon in orbit it is the trunk, the chutes, or whatever is next in the stack.
+            // The only reason nothing was destroyed is that the crew disengaged within seconds.
+            //
+            // Periapsis above the atmosphere means the job this autopilot exists to do is already
+            // done. Refuse, say so, and leave the vehicle alone.
+            if (v.orbit != null && v.mainBody != null && v.orbit.PeA > v.mainBody.atmosphereDepth)
+            {
+                Debug.LogWarning(Tag + "AUTO SEQUENCE refused - already in orbit ("
+                                     + (v.orbit.PeA / 1000.0).ToString("F1") + " x "
+                                     + (v.orbit.ApA / 1000.0).ToString("F1")
+                                     + " km). The ascent autopilot flies to orbit; it will not fly "
+                                     + "from one. Use the manoeuvre page for orbital burns.");
+                return;
+            }
+
             Engaged = true;
             Phase = AscentPhase.Idle;
             // A fresh engagement is a fresh mission: never inherit a previous flight's recovery.
@@ -69,6 +94,18 @@ namespace DragonScreen
             phaseStartedAt = Planetarium.GetUniversalTime();
             lastCommanded = Vector3d.zero;
             FlightRecorder.Start(v);
+
+            // ---- ⛔ EXTEND THE PHYSICS RANGE NOW, NOT AT HANDOVER. ----
+            // This was the reason `landPhase` is "-" for all 1371 rows of the 21:01 flight: the
+            // ranges were only extended INSIDE TryHandover, which runs after FindBooster has already
+            // succeeded. FindBooster searches FlightGlobals.VesselsLoaded, and KSP's default load
+            // distance is 22.5 km - so the booster unloaded seconds after separation and was simply
+            // not in the list by the time anything went looking. The extension could never happen
+            // because it was gated on finding the thing it existed to keep loaded.
+            //
+            // F9I gets the order right and says why: FalconExtendRange raises the range on the SHIP
+            // first, then waits for the booster to appear, then raises it on the booster too.
+            BoosterRecovery.PrepareForSeparation(v);
             Debug.Log(Tag + "autopilot ENGAGED - target " + (Target.AltitudeM / 1000.0).ToString("F0")
                       + " km, heading " + Target.HeadingDeg.ToString("F0")
                       + ". ⚠ INTERIM: gravity turn, not the PSG ascent in FLIGHT_SOFTWARE_PLAN.md");
