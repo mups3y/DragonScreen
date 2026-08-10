@@ -67,9 +67,39 @@ the honest state of the autopilot:
 |---|---|
 | ascent guidance | computes correct commands — verified in the CSV |
 | attitude controller | **HAS NEVER EXECUTED.** Threw every physics tick on its only flight; fixed, unflown |
-| booster recovery | **HAS NEVER RUN ONCE.** Every constant in it is untested |
+| booster recovery | **HAS NEVER RUN ONCE.** Root cause found 2026-08-10 and fixed; every constant still untested |
 | orbit | **never achieved.** Best flight: 73 km apoapsis, fell back |
 | rendezvous / docking / refuel / entry | not built — see `docs/F9I_PORT_MAP.md` |
+
+### ⛔ 2026-08-10 — SIX DEFECTS FOUND WITHOUT FLYING. READ THIS BEFORE THE NEXT FLIGHT.
+
+The repo was published for outside review. Of ten findings returned, **two were false positives and
+three were already documented in the code** — but verifying them turned up worse. Full account in
+commit `52f5ce9`; the three that generalise:
+
+**1. "Conservative" was a lie the comment told.** `AvailableTorque` counted reaction wheels only,
+and its own comment claimed RCS was included. Measured: 9.5 kN·m of wheels against a recorded pitch
+MoI of 21 949 t·m², giving a rate limit of **0.05 °/s where the gravity turn needs 0.45**. The next
+flight would have rolled fine and simply refused to pitch over. Nine Merlin gimbals counted as zero.
+→ *A comment that describes intent rather than code is worse than no comment; it is what let this
+survive several readings.*
+
+**2. Flight software was living inside a display widget.** `BoosterRecovery.Tick()`'s only caller
+was `ScreenPainter.Update()`. The painter belongs to the Dragon's IVA, and `ForceSetActiveVessel`
+despawns that IVA — so **the very call that starts a recovery removed the thing that flies it.**
+Booster fell unguided, `Finish()` unreachable, `Active` stuck true for the session. Now in
+`FlightDriver`, a flight-scene `KSPAddon`, which is how MAS scopes the same problem.
+→ *Ask what destroys the object your loop lives on. IVA-scoped code cannot survive a vessel switch.*
+
+**3. The vehicle was not the vehicle I assumed.** The Tundra first stage is **ONE part with THREE
+mutually exclusive `ModuleEnginesFX`** — AllEngines 2560, ThreeLanding 1706, CenterOnly 764 kN, and
+those are *not* multiples of one engine. `Read()` summed all three (5030 kN) and `SetEngines` sorted
+three modules at the same position and lit an arbitrary prefix. The landing solve believed a
+one-engine thrust of 1676 kN against a real 764 — ignition too low, into the pad.
+→ *Read the part config before writing code that commands the part.*
+
+Also fixed: `MaxStoppingTime` leaking 0.05 into the next vehicle, `FindBooster` accepting debris,
+grid fins never deployed, entry burn lighting three engines at once instead of the 0.75 s soft start.
 
 ### 📈 THE FLIGHT RECORDER — USE IT, DO NOT READ KSP.log
 
