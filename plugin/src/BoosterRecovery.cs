@@ -70,6 +70,22 @@ namespace DragonScreen
         /// <summary>The miss the boostback started with, metres. The throttle tapers against it.</summary>
         public static double InitialMissM;
 
+        // ---- EVERYTHING BELOW IS A DECISION INPUT THE RECORDER COULD NOT SEE ----
+        // Each one is something the guidance acts on, so without it in the CSV a bad landing can be
+        // observed but not explained. That is the same argument that produced this file.
+        /// <summary>Distance to the upper stage, metres. The separation gate is on this.</summary>
+        public static double RangeToPartnerM;
+        /// <summary>Seconds in the current landing phase. Soft start and the timeouts key on it.</summary>
+        public static double PhaseElapsedS;
+        /// <summary>Octaweb mode ACTUALLY read back: 0 all, 1 three, 2 centre, -1 no answer.</summary>
+        public static int OctaMode = -1;
+        /// <summary>Engines actually ignited, against the count the guidance asked for.</summary>
+        public static int EnginesLit;
+        /// <summary>Grid fins commanded out.</summary>
+        public static bool GridFinsOut;
+        /// <summary>Lean fraction applied toward the pad, and the AoA it was computed from.</summary>
+        public static double LeanFrac, AoaDeg;
+
         /// <summary>Which recovery this mission is flying. Drives the LZ and the ascent.</summary>
         public static LandingProfile Profile = LandingProfile.Rtls;
 
@@ -138,6 +154,8 @@ namespace DragonScreen
             phaseStartedAt = 0.0; noBoosterReported = false;
             TrueRadar = 0.0; DownrangeM = 0.0; initialMiss = 0.0;
             PredictedMissM = 0.0; InitialMissM = 0.0;
+            RangeToPartnerM = 0.0; PhaseElapsedS = 0.0; OctaMode = -1; EnginesLit = 0;
+            GridFinsOut = false; LeanFrac = 0.0; AoaDeg = 0.0;
         }
 
         // ------------------------------------------------------------------ handover
@@ -242,6 +260,20 @@ namespace DragonScreen
             return best;
         }
 
+        /// <summary>Engines actually burning, as against the number the guidance asked for.</summary>
+        public static int CountLit(Vessel v)
+        {
+            if (v == null) return 0;
+            int n = 0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                List<ModuleEngines> es = v.parts[i].Modules.GetModules<ModuleEngines>();
+                for (int m = 0; m < es.Count; m++)
+                    if (es[m].EngineIgnited && !es[m].flameout) n++;
+            }
+            return n;
+        }
+
         private static bool HasEngine(Vessel v)
         {
             for (int i = 0; i < v.parts.Count; i++)
@@ -312,6 +344,11 @@ namespace DragonScreen
 
             TrueRadar = s.AltitudeRadar;
             DownrangeM = s.DownrangeM;
+            RangeToPartnerM = s.RangeToPartnerM;
+            PhaseElapsedS = s.PhaseElapsedS;
+            OctaMode = ReadOctawebMode(FindEngineSwitch(booster));
+            EnginesLit = CountLit(booster);
+            GridFinsOut = gridFinsOut;
             PredictedMissM = s.PredictedMissM;
             InitialMissM = s.InitialMissM;
 
@@ -877,6 +914,7 @@ namespace DragonScreen
                 {
                     double aoa = Landing.GuidanceAoaDeg(s.AltitudeRadar, c.Throttle > 0.01);
                     double lean = Landing.LeanFraction(s.DownrangeM, aoa);
+                    AoaDeg = aoa; LeanFrac = lean;
                     dir = (dir.normalized + lean * errHoriz.normalized).normalized;
                 }
             }

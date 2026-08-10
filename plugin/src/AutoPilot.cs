@@ -52,6 +52,11 @@ namespace DragonScreen
         /// <summary>Last circularisation dv. On the recorder's row, not the command struct.</summary>
         public static double LastCircDvMps;
 
+        /// <summary>Seconds in the current ascent phase. Every hold and timeout keys on it.</summary>
+        public static double PhaseElapsedS;
+        /// <summary>Distance to the booster, metres. The MVac clearance gate is on this.</summary>
+        public static double RangeToBoosterM;
+
         private static int lastFrame = -1;
         private static double starvedFor;
         private static double lastStageAt = -99.0;
@@ -266,6 +271,8 @@ namespace DragonScreen
             a.SecondStage = !HasBooster(v);
             a.PhaseElapsedS = Planetarium.GetUniversalTime() - phaseStartedAt;
             a.RangeToBoosterM = Range(v, BoosterRecovery.BoosterVessel);
+            PhaseElapsedS = a.PhaseElapsedS;
+            RangeToBoosterM = a.RangeToBoosterM;
 
             // ---- "MAKE THE ORBIT CIRCULAR HERE, NOW" ----
             // FalconCircBurnVecNow, F9_payload.ks:265, ported exactly:

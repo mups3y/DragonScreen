@@ -94,6 +94,7 @@ namespace DragonScreen
             writer = null;
             pending.Length = 0;
             pendingRows = 0;
+            widthChecked = false;
         }
 
         private static void Flush()
@@ -119,12 +120,15 @@ namespace DragonScreen
         // from liftoff to insertion even after the S2 comes off. `b_` is the BOOSTER. Both are
         // written every row; a vehicle that does not exist writes zeros and its phase reads "-".
         private const string Header =
-            "met,ut,focus," +
+            "met,ut,focus,warp," +
             // ================= ASCENT VEHICLE =================
             "a_phase,a_note," +
             "a_altAsl,a_altRadar,a_lat,a_lon,a_vertSpeed,a_srfSpeed,a_orbSpeed,a_mach,a_qKpa," +
             "a_apoKm,a_periKm,a_incDeg,a_timeToApS," +
             "a_massT,a_availThrustKn,a_moiX,a_moiY,a_moiZ,a_torqueX,a_torqueY,a_torqueZ," +
+            // margins and validity - what is left, and whether physics is even running on it
+            "a_lfFrac,a_oxFrac,a_monoFrac,a_ecFrac,a_maxSkinK,a_packed,a_enginesLit," +
+            "a_phaseElapsedS,a_rangeToBoosterKm," +
             // guidance command
             "a_cmdPitchDeg,a_cmdHeadingDeg,a_cmdThrottle,a_cmdStage,a_cmdSepS2,a_cmdUllage," +
             "a_cmdRcs,a_circDvMps," +
@@ -136,7 +140,9 @@ namespace DragonScreen
             // ================= BOOSTER =================
             "b_phase," +
             "b_altAsl,b_altRadar,b_lat,b_lon,b_vertSpeed,b_srfSpeed,b_mach,b_qKpa," +
-            "b_massT,b_availThrustKn,b_torqueX,b_torqueY,b_torqueZ," +
+            "b_massT,b_availThrustKn,b_moiX,b_moiY,b_moiZ,b_torqueX,b_torqueY,b_torqueZ," +
+            "b_lfFrac,b_oxFrac,b_maxSkinK,b_packed,b_enginesLit,b_octaMode,b_finsOut,b_gearOut," +
+            "b_phaseElapsedS,b_rangeToPartnerKm,b_trueRadar,b_leanFrac,b_aoaDeg," +
             // landing command and the two numbers that judge it
             "b_cmdThrottle,b_ignitionAlt,b_engines,b_aim,b_legs," +
             "b_downrangeKm,b_predMissKm,b_initMissKm," +
@@ -158,12 +164,55 @@ namespace DragonScreen
             if (ut - lastSample < IntervalS) return;
             lastSample = ut;
 
-            try { WriteRow(v, ut); }
+            try { WriteRow(v, ut); VerifyWidth(); }
             catch (Exception e)
             {
                 Debug.LogWarning(Tag + "recorder row failed, stopping: " + e.Message);
                 Stop("row failed");
             }
+        }
+
+        /// <summary>
+        /// ⛔ A ROW THAT IS NOT AS WIDE AS THE HEADER IS WORSE THAN NO RECORDING AT ALL.
+        ///
+        /// Every column after the mismatch is then labelled with its neighbour's name, and the file
+        /// looks perfectly well-formed while telling you that the throttle was 29 000. Nothing
+        /// headless can catch it - the row is built from live vessel state, so the test suite never
+        /// executes this path - and the columns are now written by four helpers whose widths depend
+        /// on flags. So it checks itself, once, on the first row, in the game.
+        ///
+        /// Once is enough: the width is structural. If the first row matches, they all do.
+        /// </summary>
+        private static bool widthChecked;
+
+        private static void VerifyWidth()
+        {
+            if (widthChecked || pending.Length == 0) return;
+            widthChecked = true;
+
+            string row = pending.ToString();
+            int nl = row.IndexOf("\n", StringComparison.Ordinal);
+            if (nl > 0) row = row.Substring(0, nl);
+
+            int cols = Count(row, ',') + 1;
+            int want = Count(Header, ',') + 1;
+            if (cols == want)
+            {
+                Debug.Log(Tag + "recorder verified: " + cols + " columns");
+                return;
+            }
+
+            Debug.LogError(Tag + "RECORDER COLUMN MISMATCH - header has " + want
+                               + " columns, the row wrote " + cols
+                               + ". Every column past the difference is mislabelled and the file "
+                               + "cannot be trusted. Fix Header/WriteRow before reading this flight.");
+        }
+
+        private static int Count(string s, char c)
+        {
+            int n = 0;
+            for (int i = 0; i < s.Length; i++) if (s[i] == c) n++;
+            return n;
         }
 
         private static void WriteRow(Vessel v, double ut)
@@ -173,12 +222,18 @@ namespace DragonScreen
             F(r, ut - startedUt); F(r, ut);
             Vessel focus = FlightGlobals.ActiveVessel;
             S(r, focus != null ? focus.vesselName : "-");
+            // Physics under warp is not the physics we are tuning. A row taken at 4x is not
+            // comparable with one taken at 1x, and nothing in the file said which it was.
+            F(r, TimeWarp.CurrentRate);
 
             // ---------------- ascent vehicle ----------------
             Vessel a = AutoPilot.AscentVessel;
             S(r, AutoPilot.Engaged ? Ascent.Name(AutoPilot.Phase) : "-");
             S(r, AutoPilot.Command.Note);
             Motion(r, a, true);
+            Margins(r, a, true);
+            F(r, AutoPilot.PhaseElapsedS);
+            F(r, AutoPilot.RangeToBoosterM / 1000.0);
 
             AscentCommand c = AutoPilot.Command;
             F(r, c.PitchDeg); F(r, c.HeadingDeg); F(r, c.Throttle);
@@ -192,6 +247,16 @@ namespace DragonScreen
             Vessel b = BoosterRecovery.BoosterVessel;
             S(r, BoosterRecovery.Active ? Landing.Name(BoosterRecovery.Phase) : "-");
             Motion(r, b, false);
+            Margins(r, b, false);
+            F(r, BoosterRecovery.EnginesLit);
+            F(r, BoosterRecovery.OctaMode);
+            F(r, BoosterRecovery.GridFinsOut ? 1.0 : 0.0);
+            F(r, (b != null && b.ActionGroups[KSPActionGroup.Gear]) ? 1.0 : 0.0);
+            F(r, BoosterRecovery.PhaseElapsedS);
+            F(r, BoosterRecovery.RangeToPartnerM / 1000.0);
+            F(r, BoosterRecovery.TrueRadar);
+            F(r, BoosterRecovery.LeanFrac);
+            F(r, BoosterRecovery.AoaDeg);
 
             LandingCommand lc = BoosterRecovery.Command;
             F(r, lc.Throttle); F(r, lc.IgnitionAltitude); F(r, lc.Engines);
@@ -213,7 +278,7 @@ namespace DragonScreen
         {
             if (v == null || v.state == Vessel.State.DEAD)
             {
-                int n = orbital ? 21 : 13;
+                int n = orbital ? 21 : 16;
                 for (int i = 0; i < n; i++) F(r, 0.0);
                 return;
             }
@@ -234,9 +299,65 @@ namespace DragonScreen
 
             F(r, v.GetTotalMass());
             F(r, Thrust(v));
-            if (orbital) V(r, v.MOI);
+            V(r, v.MOI);
             V(r, AttitudeController.For(v) != null ? AttitudeController.For(v).Torque : Vector3d.zero);
         }
+
+        /// <summary>
+        /// What is LEFT, and whether the row is trustworthy.
+        ///
+        /// ---- PROPELLANT IS THE ONE THAT MATTERS MOST AND WAS ENTIRELY ABSENT ----
+        /// `falcon-booster-landing-twr`: "at 11% propellant our F9 has TWR 0.81 on one engine and
+        /// CANNOT land". That is a decision made against a propellant FRACTION, and no recording
+        /// this project has ever taken contained one. Every margin question - can the booster get
+        /// home, does the S2 have the dv, has the Dragon enough mono for the rendezvous - is
+        /// unanswerable without these four columns, and each would have cost a flight to re-ask.
+        ///
+        /// `packed` is here for the same reason F9I hunts for "the ~300 km gap in ut": an unloaded
+        /// vessel is on rails, so rows either side of that gap are not continuous and nothing we
+        /// commanded in between reached anything.
+        /// </summary>
+        private static void Margins(StringBuilder r, Vessel v, bool full)
+        {
+            if (v == null || v.state == Vessel.State.DEAD)
+            {
+                // ⛔ THESE COUNTS MUST MATCH THE LIVE PATH BELOW EXACTLY.
+                //   full : lf, ox, mono, ec, skin, packed, enginesLit          = 7
+                //   not   : lf, ox,           skin, packed                     = 4
+                // This said 5, and the booster is null for the whole pre-separation stretch of every
+                // flight - so the first hundred seconds of every recording would have had every
+                // column after this one shifted by one, with the header still looking correct.
+                int n = full ? 7 : 4;
+                for (int i = 0; i < n; i++) F(r, 0.0);
+                return;
+            }
+
+            double lf = 0.0, lfMax = 0.0, ox = 0.0, oxMax = 0.0;
+            double mono = 0.0, monoMax = 0.0, ec = 0.0, ecMax = 0.0, skin = 0.0;
+
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                Part p = v.parts[i];
+                if (p.skinTemperature > skin) skin = p.skinTemperature;
+                for (int k = 0; k < p.Resources.Count; k++)
+                {
+                    PartResource res = p.Resources[k];
+                    if (res.resourceName == "LiquidFuel") { lf += res.amount; lfMax += res.maxAmount; }
+                    else if (res.resourceName == "Oxidizer") { ox += res.amount; oxMax += res.maxAmount; }
+                    else if (res.resourceName == "MonoPropellant") { mono += res.amount; monoMax += res.maxAmount; }
+                    else if (res.resourceName == "ElectricCharge") { ec += res.amount; ecMax += res.maxAmount; }
+                }
+            }
+
+            F(r, Frac(lf, lfMax));
+            F(r, Frac(ox, oxMax));
+            if (full) { F(r, Frac(mono, monoMax)); F(r, Frac(ec, ecMax)); }
+            F(r, skin);
+            F(r, v.packed ? 1.0 : 0.0);
+            if (full) F(r, BoosterRecovery.CountLit(v));
+        }
+
+        private static double Frac(double a, double max) { return (max > 0.0) ? a / max : 0.0; }
 
         /// <summary>The control loop's internals. `full` writes phi and the target torques too.</summary>
         private static void Attitude(StringBuilder r, AttitudeController ac, bool full)
