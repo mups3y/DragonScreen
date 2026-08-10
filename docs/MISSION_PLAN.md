@@ -31,9 +31,9 @@ copying the wrong thing.
 
 | step | F9I | ours |
 |---|---|---|
-| find the station | `StFindStation`, `StLockStation` | **NO** |
-| phase angle now, and the lead required | `StPhaseAtLaunch`, `StRequiredLead` | **NO** |
-| hold until the phase is right | `StLaunchPhaseWait` | **NO** |
+| find the station | `StFindStation`, `StLockStation` | **PORTED** `StationApproach.Find` |
+| phase angle now, and the lead required | `StPhaseAtLaunch`, `StRequiredLead` | **PORTED** `pure/LaunchWindow.cs` |
+| hold until the phase is right | `StLaunchPhaseWait` | **PORTED** `LaunchWindow.SecondsToWindow` |
 | pick the landing zone for the profile | `StLandingZone`, `StLandingZoneName` | **DONE** `LandingSites` |
 
 ---
@@ -113,11 +113,11 @@ flight 012.** Phasing above 3 km, CW from 0.5–3 km, RCS below, periapsis floor
 | step | F9I | ours |
 |---|---|---|
 | match the station's orbit | `StMatchStationOrbit` | **NO** |
-| phasing leg | `StPhaseLeg`, `StAlongTrack` | **NO** |
+| phasing leg | `StPhaseLeg`, `StAlongTrack` | **PART** the leg is detected and reported; the BURN is not planned |
 | Clohessy–Wiltshire solve and leg | `StCwSolve`, `StCwLeg` | **PART** `pure/Rendezvous.cs` unwired |
-| terminal approach, closest port | `StTerminal`, `StClosestPort`, `StCloseIn` | **PART** `pure/DockControl.cs` unwired |
+| terminal approach, closest port | `StTerminal`, `StClosestPort`, `StCloseIn` | **PORTED** terminal ladder wired; port SELECTION still `StClosestPort` |
 | node execution | `StExecNode`, `StBurnNode`, `StVisViva` | **PART** `pure/BurnExec.cs` unwired |
-| speed cap by range | `StSpeedCap` | **NO** |
+| speed cap by range | `StSpeedCap` | **PORTED** `Approach.SpeedCap`, all four bands |
 
 ---
 
@@ -148,7 +148,7 @@ range, drogues then mains, splashdown.
 | deorbit burn to a target periapsis | `DgDeorbitBurn` | **PART** `FlightCommands.StartDeorbit` is a plain retrograde burn |
 | trunk jettison before the burn | `DgSepStack`, `DgTrunkAndEI` | **PART** we fire it, but not on F9I's schedule |
 | pre-entry trim | `DgPreEntryTrim`, `DgCapsuleTrim` | **NO** |
-| **lifting entry on bank angle, long-margin schedule** | `DgEntryGuidance`, `DgLongMargin` | **NO** ← `pure/Entry.cs` is ours, unflown |
+| **lifting entry on bank angle, long-margin schedule** | `DgEntryGuidance`, `DgLongMargin` | **PART** `pure/EntryMargin.cs` is the real measured schedule; the bank controller around it is not wired |
 | aim point, cross-range | `DgAimPoint`, `DgDownCross`, `DgImpactMiss` | **NO** |
 | drogues, mains | `DgTerminalParachute` | **PART** buttons wired, no sequencer |
 | propulsive option | `DgTerminalPropulsive` | **NO** |

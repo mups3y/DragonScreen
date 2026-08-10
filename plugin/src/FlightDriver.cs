@@ -59,6 +59,7 @@ namespace DragonScreen
             // carries this frame's command rather than the previous one's.
             FlightCommands.Tick();
             AutoPilot.Tick();
+            StationApproach.Tick();
             FlightRecorder.Tick();
         }
 
@@ -76,6 +77,7 @@ namespace DragonScreen
             {
                 AutoPilot.Disengage("left the flight scene");
                 BoosterRecovery.Reset();
+                StationApproach.Reset();
             }
             catch (Exception e)
             {
