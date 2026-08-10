@@ -148,7 +148,7 @@ range, drogues then mains, splashdown.
 | deorbit burn to a target periapsis | `DgDeorbitBurn` | **PORTED** `src/DeorbitOps.cs` - flown against the aim miss, periapsis is the depth limit. DEORBIT NOW points at it. |
 | trunk jettison before the burn | `DgSepStack`, `DgTrunkAndEI` | **PART** we fire it, but not on F9I's schedule |
 | pre-entry trim | `DgPreEntryTrim`, `DgCapsuleTrim` | **NO** |
-| **lifting entry on bank angle, long-margin schedule** | `DgEntryGuidance`, `DgLongMargin` | **PART** `pure/EntryMargin.cs` is the real measured schedule; the bank controller around it is not wired |
+| **lifting entry on bank angle, long-margin schedule** | `DgEntryGuidance`, `DgLongMargin` | **PART** schedule AND controller ported (`pure/EntryMargin.cs`, `pure/EntryGuidance.cs`, 23 checks); the glue that drives bank angle from them is not written |
 | aim point, cross-range | `DgAimPoint`, `DgDownCross`, `DgImpactMiss` | **PORTED** `src/ImpactPredictor.MissTo` - integrated, drag measured in flight |
 | drogues, mains | `DgTerminalParachute` | **PART** buttons wired, no sequencer |
 | propulsive option | `DgTerminalPropulsive` | **NO** |

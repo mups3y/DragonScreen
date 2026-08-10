@@ -139,13 +139,13 @@ solve. It gets **replaced**, not extended.
 decoupler takes everything below it — and a comment in `dragon_deorbit.ks` itself says the opposite
 and is wrong. We already have this right in `VehicleParts`; do not let the source's comment undo it.
 
-### E7 · Lifting entry — the bank controller
+### E7 · Lifting entry — the bank controller — **LAW DONE 2026-08-11**, glue outstanding
 **Read:** `DgEntryGuidance:2109-2356`. 247 lines, the second-largest read. Also `DgSetProfileAngle:680`,
 `DgSetProfile:733`, `DgImpactMiss:601`, `DgDownCross:605`, `DgAimPoint:586`, `DgAimMiss:590`.
 
 **Consumes:** `pure/EntryMargin.cs` (done — the measured long-margin table).
 **⚠ `falcon-dragon-entry-solution`:** the flown law is "shorten-only + lead". Check `x1` first on any
-new recording. `pure/Entry.cs` is OURS and unflown — expect to **replace** it, not extend it.
+new recording. `pure/Entry.cs` was NOT replaced after all: it answers a different question - which way the heat shield points per altitude band, carrying the CargoDragon_012 lesson - and composes with the new range controller rather than duplicating it. Noted in both headers so nobody merges them.
 
 ### E8 · Terminal descent
 **Read:** `DgTerminal:2411`, `DgTerminalParachute:2356`, `DgTerminalPropulsive:2372`,
