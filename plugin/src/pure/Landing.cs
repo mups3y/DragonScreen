@@ -171,6 +171,14 @@ namespace DragonScreen
         public bool DeployLegs;
 
         /// <summary>
+        /// RCS wanted. AtmGNC turns it ON for the coast - the fins and cold gas are the only
+        /// authority before the engines relight - and Land turns it OFF for the landing burn,
+        /// because "below here the gimbal has all the authority needed and the cold gas is only
+        /// spending propellant to fight it".
+        /// </summary>
+        public bool Rcs;
+
+        /// <summary>
         /// May the glue lean the stage off retrograde to walk the impact point onto the pad?
         ///
         /// ⛔ NOT DURING THE ENTRY BURN. BOOSTER.ks:716 is explicit and gives the reason: "Straight
@@ -248,6 +256,13 @@ namespace DragonScreen
         /// `wait until ship:altitude < 4000` is the gate onto that law.
         /// </summary>
         public const double GuidanceHandAltM = 4000.0;
+
+        /// <summary>
+        /// AoA once the stage is on one engine. Land:833 `set F9L_AOA to -0.25.` - "almost no
+        /// steering authority left; at this point the only job is to arrive upright." Our taper
+        /// floors at -1, so this value was unreachable and the stage kept steering to the ground.
+        /// </summary>
+        public const double PostHandoverAoaDeg = -0.25;
 
         /// <summary>
         /// Vertical speed at which the arc is unambiguously over. AtmGNC:666
@@ -717,6 +732,7 @@ namespace DragonScreen
                         // holds all the way to touchdown - one continuous law, no handover.
                         c.Aim = LandingAim.SurfaceRetrograde;
                         c.GuidedLean = true;
+                        c.Rcs = true;
                         c.Note = "COAST - DESCENDING";
                     }
                     break;
@@ -766,6 +782,7 @@ namespace DragonScreen
                     // Still steering to the pad, and now the only thing that can.
                     c.GuidedLean = true;
                     c.StoppingTime = LandingStoppingTime;
+                    c.Rcs = false;          // gimbal has it from here; cold gas only fights it
                     c.DeployLegs = s.AltitudeRadar < LegsAltitudeM;
                     c.Note = "LANDING BURN";
                     break;
@@ -977,6 +994,14 @@ namespace DragonScreen
         /// </summary>
         public static double GuidanceAoaDeg(double altitudeRadarM, bool enginesLit)
         {
+            return GuidanceAoaDeg(altitudeRadarM, enginesLit, false);
+        }
+
+        /// <summary>As above, but <paramref name="handedOver"/> once the stage is on one engine.</summary>
+        public static double GuidanceAoaDeg(double altitudeRadarM, bool enginesLit, bool handedOver)
+        {
+            // Past the handover the stage stops steering and simply stands up.
+            if (enginesLit && handedOver) return PostHandoverAoaDeg;
             // ---- UNPOWERED: 15 deg HIGH UP, alt/100 BELOW 4 km ----
             // AtmGNC:754 sets F9L_AOA to alt:radar/100 inside the sub-4 km loop - about 40 deg at
             // entry, decaying to 15 at 1500 m. F9I notes the sub-metre landings were all flown with

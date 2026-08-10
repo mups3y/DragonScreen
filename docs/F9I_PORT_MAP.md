@@ -277,3 +277,17 @@ lost. Each step above should end with a flight and a log read, and this table up
 | `steeringmanager` gains through the burn | `BoostbackStoppingTime = 15` | "The boostback wants a steady hold, not a fast one." We were using 1. `rollts 20` has no equivalent in our cascade. |
 | `rcs off` for the burn | **NOT PORTED** | "Three Merlins gimballing have far more authority than the cold gas, and leaving RCS on just wastes the propellant the landing needs." We never command booster RCS either way, so nothing is wasted yet — but when RCS is added, this is the rule. |
 | ASDS branch (`BOOSTER.ks:483-510`) | **NOT PORTED** | Target shifted 2.7 km downrange, `max(0.125, ...)` floor, no sign test. RTLS only for now. |
+
+## Audit of the AtmGNC/Land port, 2026-08-11 — what the first pass still missed
+
+Checked line by line after the port was claimed complete. Four more, one of them the largest
+remaining landing-accuracy error:
+
+| F9I | what we had | fixed |
+|---|---|---|
+| `LandingZoneGuidance:553` `errorVec is impactPos:position - LZ:position` | the stage's CURRENT horizontal offset from the pad | **YES** — now the predicted impact point, same ballistic solve the boostback uses |
+| `Land:833` `set F9L_AOA to -0.25` after the handover | taper floored at −1, so −0.25 was unreachable and the stage kept steering to the ground | **YES** |
+| `AtmGNC:664` `rcs on` / `Land:780` `rcs off` | booster RCS never commanded either way | **YES** — on for the coast, off for the landing burn |
+| `AtmGNC:753` `wait until ship:altitude < 4000` before the ignition watch | no 4 km gate | **NO, deliberately** — checked the arithmetic: at 30 km and −300 m/s the stop distance is 2.3 km against 30 km of height, so the gate cannot fire early. Noted rather than added. |
+| `LandingZoneGuidance:565` naive `velVec + errorVec` when it is gentler than the AoA ceiling | always the clamped form | **NO** — the clamped form is the conservative one and never leans further than F9I would |
+| `AtmGNC:653` torque-epsilon deadbands | no equivalent | **NO** — kOS steering-manager knob our cascade does not expose |

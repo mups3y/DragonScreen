@@ -427,6 +427,13 @@ namespace DragonScreen
             // ⛔ ISSUE 6. This was a second, hard-coded copy of the legs rule, so the DeployLegs
             // the guidance computes was ignored and the two could disagree. One source.
             if (c.DeployLegs) booster.ActionGroups.SetGroup(KSPActionGroup.Gear, true);
+
+            // RCS follows the guidance: on for the coast, off for the landing burn. AtmGNC:664
+            // `rcs on.` and Land:780 `rcs off.` - "below here the gimbal has all the authority
+            // needed and the cold gas is only spending propellant to fight it", and that propellant
+            // is the landing's.
+            if (booster.ActionGroups[KSPActionGroup.RCS] != c.Rcs)
+                booster.ActionGroups.SetGroup(KSPActionGroup.RCS, c.Rcs);
         }
 
         private static void Finish(string why)
@@ -592,6 +599,39 @@ namespace DragonScreen
 
         /// <summary>|PredictedMiss| latched when the boostback burn began, for the throttle taper.</summary>
         private static double initialMiss;
+
+        /// <summary>
+        /// Horizontal vector from the LANDING ZONE to the PREDICTED IMPACT POINT - F9I's
+        /// `impactPos:position - LZ:position`, flattened. This is what the descent steers on: lean
+        /// off retrograde toward the miss, so the impact point walks onto the pad.
+        ///
+        /// Same ballistic solve as PredictedMiss, so the boostback and the descent are steering
+        /// against one prediction rather than two that can disagree. Drag-free, so it reads long -
+        /// stated once here rather than corrected into something that looks closer.
+        /// </summary>
+        private static Vector3d ImpactErrorHoriz(Vessel v)
+        {
+            if (!HavePad || v == null || v.mainBody == null) return Vector3d.zero;
+            CelestialBody b = v.mainBody;
+
+            Vector3d up = (v.CoM - b.position).normalized;
+            Vector3d vel = v.srf_velocity;
+            double vz = Vector3d.Dot(vel, up);
+            double alt = v.altitude;
+            double r = b.Radius + alt;
+            double g = b.gMagnitudeAtCenter / (r * r);
+            if (g <= 0.0) return Vector3d.zero;
+
+            double disc = vz * vz + 2.0 * g * alt;
+            if (disc < 0.0) return Vector3d.zero;
+            double t = (vz + Math.Sqrt(disc)) / g;
+            if (t <= 0.0) return Vector3d.zero;
+
+            Vector3d toImpact = Vector3d.Exclude(up, vel) * t;
+            Vector3d toLz = Vector3d.Exclude(up,
+                b.GetWorldSurfacePosition(PadLat, PadLon, alt) - v.CoM);
+            return toImpact - toLz;                      // LZ -> impact
+        }
 
         // ---- FLIP STATE. The vectors are the glue's; the schedule is Landing's. ----
         private static Vector3d flipVec, flipFinal, flipAxis;
@@ -996,12 +1036,19 @@ namespace DragonScreen
             // top. BOOSTER.ks:716 forbids exactly that; see LandingCommand.GuidedLean.
             if (HavePad && c.GuidedLean && c.Aim == LandingAim.SurfaceRetrograde && s.DownrangeM > 0.0)
             {
-                Vector3d toPad = v.mainBody.GetWorldSurfacePosition(PadLat, PadLon, v.altitude)
-                                 - v.CoM;
-                Vector3d errHoriz = Vector3d.Exclude(up, -toPad);   // from the pad toward us = miss
+                // ---- THE ERROR IS WHERE IT WILL LAND, NOT WHERE IT IS. ----
+                // LandingZoneGuidance:553  `local errorVec is impactPos:position - LZ:position.`
+                // where impactPos is the PREDICTED impact point. Ours used the stage's CURRENT
+                // horizontal offset from the pad, which is a different quantity entirely: it asks a
+                // vehicle moving at hundreds of metres per second to be OVER the pad now, instead of
+                // asking it to arrive there. On a descent from 30 km those two vectors can point in
+                // opposite directions, and steering on the wrong one is why the landings missed.
+                Vector3d errHoriz = ImpactErrorHoriz(v);
                 if (errHoriz.sqrMagnitude > 1.0)
                 {
-                    double aoa = Landing.GuidanceAoaDeg(s.AltitudeRadar, c.Throttle > 0.01);
+                    // handedOver: on one engine the stage stops steering and stands up (-0.25 deg).
+                    double aoa = Landing.GuidanceAoaDeg(s.AltitudeRadar, c.Throttle > 0.01,
+                                                        c.Engines == 1);
                     double lean = Landing.LeanFraction(s.DownrangeM, aoa);
                     AoaDeg = aoa; LeanFrac = lean;
                     dir = (dir.normalized + lean * errHoriz.normalized).normalized;
