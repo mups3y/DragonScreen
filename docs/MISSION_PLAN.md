@@ -74,20 +74,20 @@ exceeds landed weight — so it must reach zero velocity and zero altitude simul
 | stepped 180° turnaround, 3 engines selected first | `Flip1(180, 0.333)` | **PORTED** |
 | kill downrange velocity, flat retrograde | `Boostback` first half | **PORTED** |
 | aim at the pad, taper to −2.7 km overshoot | `Boostback` second half | **PORTED** |
-| **hold nose UP through the arc until −50 m/s** | `AtmGNC:665` `lock steering to up` | **NO** ← we coast retrograde |
-| **fins out ON the −50 m/s transition** | `AtmGNC:667` | **PART** ours fire while still climbing |
-| **continuous lean law from here to touchdown** | `LandingZoneGuidance` | **PART** ours only in Descent |
-| **AoA ceiling 15° high, then `alt/100` below 4 km** | `AtmGNC:754` | **NO** ← ours is a fixed schedule |
+| hold nose UP through the arc until −50 m/s | `AtmGNC:665` | **PORTED** |
+| fins out ON the −50 m/s transition | `AtmGNC:667` | **PORTED** gate is now the descent, not a phase |
+| continuous lean law from here to touchdown | `LandingZoneGuidance` | **PORTED** and it steers the PREDICTED IMPACT, not our position |
+| AoA ceiling 15° high, then `alt/100` below 4 km | `AtmGNC:754` | **PORTED**, plus −0.25° after handover |
 | entry burn: gate 32.5 km, soft start, cut at −300 m/s | `AtmGNC:707-730` | **PORTED** |
-| **ignition point on VERTICAL speed, 3-engine thrust, +31 m** | `LandBurnVars`, `AtmGNC:757` | **NO** ← ours uses SURFACE speed and 1-engine thrust |
-| landing burn = `StopDist/TrueRadar` + margin | `Land` | **PART** |
-| **3→1 engine handover: −40 m/s AND `OneEngStopDist×1.35 < TrueRadar`** | `Land:805` | **NO** |
-| flare +34% inside 25 m, legs at 200 m | `Land` | **PART** |
+| ignition point on VERTICAL speed, 3-engine thrust, +31 m | `LandBurnVars`, `AtmGNC:757` | **PORTED** |
+| landing burn = `StopDist/TrueRadar` + margin | `Land` | **PORTED** |
+| 3→1 engine handover: −40 m/s AND `OneEngStopDist×1.35 < TrueRadar` | `Land:805` | **PORTED** |
+| flare +34% inside 25 m, legs at 200 m | `Land` | **PORTED**, plus RCS off for the burn |
 
-**The four NOs above are why the landings are wrong.** The ignition point one is the worst: F9I
-solves `verticalspeed² / 2·decel` on the thrust it *actually has* (three engines) and adds the 31 m
-of booster below the CoM; ours solves on *surface* speed — which during a lofted descent is much
-larger — against *one* engine's thrust. Different number, different altitude, every flight.
+**All of §4 is now ported and audited line by line.** The two that mattered most, both found only by
+reading the source rather than my summary of it: the ignition point solved on *surface* speed against
+*one* engine's thrust instead of vertical speed against three, and the descent lean steering on our
+CURRENT offset from the pad instead of the PREDICTED IMPACT POINT. Unflown.
 
 ---
 
@@ -114,7 +114,7 @@ flight 012.** Phasing above 3 km, CW from 0.5–3 km, RCS below, periapsis floor
 |---|---|---|
 | match the station's orbit | `StMatchStationOrbit` | **NO** |
 | phasing leg | `StPhaseLeg`, `StAlongTrack` | **PART** the leg is detected and reported; the BURN is not planned |
-| Clohessy–Wiltshire solve and leg | `StCwSolve`, `StCwLeg` | **PART** `pure/Rendezvous.cs` unwired |
+| Clohessy–Wiltshire solve and leg | `StCwSolve`, `StCwLeg` | **PORTED** `pure/CwTargeting.cs`, wired with a periapsis floor |
 | terminal approach, closest port | `StTerminal`, `StClosestPort`, `StCloseIn` | **PORTED** terminal ladder wired; port SELECTION still `StClosestPort` |
 | node execution | `StExecNode`, `StBurnNode`, `StVisViva` | **PART** `pure/BurnExec.cs` unwired |
 | speed cap by range | `StSpeedCap` | **PORTED** `Approach.SpeedCap`, all four bands |
