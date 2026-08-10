@@ -216,6 +216,9 @@ namespace DragonScreen
         /// </summary>
         private static void FlyCw(CwState st)
         {
+            // While the executor has it, leave it alone - it owns the attitude and the throttle.
+            if (NodeExecutor.Active) { Note = "CW - " + NodeExecutor.Phase + " " + NodeExecutor.Note; return; }
+
             double now = Planetarium.GetUniversalTime();
             if (now - lastBurnAt < 30.0) { Hold(); Note = "CW - coasting the transfer"; return; }
 
@@ -239,26 +242,11 @@ namespace DragonScreen
                  + (tof / 60.0).ToString("F1") + " min, arrive "
                  + sol.ArrivalRelSpeed.ToString("F1") + " m/s";
 
-            // ---- ⛔ THE PERIAPSIS FLOOR. NOT OPTIONAL. ----
-            // A CW solution is a two-body transfer that knows nothing about the planet underneath it.
-            // Flight 012's went 15.6 km below the surface and the display said "closing" the whole
-            // way down. Anything that would put periapsis into the atmosphere is refused outright.
-            if (WouldBreachFloor(dv))
-            {
-                Hold();
-                Note = "CW REFUSED - that transfer breaches the periapsis floor";
-                return;
-            }
-
-            AttitudeController.Ascent.SteerTo(ship, dv.normalized, Vector3d.zero);
-            if (AttitudeController.Ascent.ErrorDeg < 5.0)
-            {
-                lastBurnAt = now;
-                Debug.Log(Tag + "CW: " + Note);
-                // The burn itself is the node executor's job - pure/BurnExec.cs. Until that is wired
-                // the crew flies it, and saying so is better than a silent no-op.
-                Note += " - ARMED, execute manually";
-            }
+            // The executor checks the periapsis floor itself, before it turns or lights anything -
+            // that check lives with the burn rather than with each caller, so no future caller can
+            // forget it. `StNodeSafe` is "the guard flight 012 did not have".
+            if (NodeExecutor.Begin(ship, dv, now, "CW transfer")) lastBurnAt = now;
+            else Note = NodeExecutor.Note;
         }
 
         /// <summary>TERMINAL. RCS only, straight line, on the speed ladder with a deadband.</summary>

@@ -1,203 +1,162 @@
 /*
  * DragonScreen - BurnExec
  *
- * PURE. Executing a burn: how hard to push, where to point, and when to stop.
- * `COMMON/GNC.ks:917` ExecNode - tranche 3 of the port map.
+ * PURE. The node-execution law, ported from `F9I/station_ops.ks:2469 StBurnNode` (which is itself
+ * F9I's port of `DgExecNode` from dragon_deorbit.ks, with a proportional throttle instead of a
+ * locked 1.0).
  *
- * ---- THIS IS THE MOST CAREFUL THROTTLE LAW IN THE WHOLE TREE ----
- * Three ideas, each of which fixes a specific way a burn goes wrong:
+ * ---- ⛔ THIS FILE WAS MINE AND IS NOW A PORT. THE THROTTLE LAW CHANGED. ----
+ * The previous version was written from the idea of a node executor rather than from F9I's, and its
+ * throttle law was not F9I's. Replaced wholesale per the port plan.
  *
- *      throttle = min(dvRemaining / maxAccel, 1) * angleMult
+ * ---- WHY THE THROTTLE IS PROPORTIONAL AND NOT LOCKED AT 1 ----
+ * F9I's own note: DgExecNode holds `lock throttle to 1.` and stays that way, and that is right for
+ * the de-orbit, which is calibrated on it. On the approach it is not: "580 kN against ~20 t is
+ * 28 m/s^2, so a 10 m/s CW burn is over in 0.36 s of full blast and the engine slams on and off."
+ * So: hold a cruise ACCELERATION, then taper the last of the dv over a few seconds so the burn ends
+ * at near-zero thrust rather than being chopped off. Same dv, smoothly delivered.
  *
- * 1. **Throttle by SECONDS OF BURN REMAINING, not by dv.** `dv/accel` is how long is left; clamped
- *    to 1 that is full throttle until the final second and then a proportional taper. F9I's own
- *    comment: "that is what lands the residual on 0.085 m/s instead of overshooting past it."
- *    A dv-proportional law cannot do that, because the same dv means different burn times on
- *    different vehicles.
+ * ---- AND WHY THE HALF-BURN LEAD IS SIZED ON THE ACCELERATION WE WILL USE ----
+ * Not on full thrust. F9I: sized at full thrust "we would arrive late for our own burn", because the
+ * burn actually runs at the cruise acceleration and therefore takes longer than full thrust implies.
  *
- * 2. **angleMult goes NEGATIVE past 5 degrees.** `(5 - angle)/5` is 1 aligned, 0 at five degrees off,
- *    and negative beyond - which clamps the throttle to zero. "Thrusting 10 degrees off is worse
- *    than not thrusting", because the off-axis component is pure waste AND it pushes the orbit
- *    somewhere nobody asked for.
- *
- * 3. **The floor-lift.** Demands below 0.5 are DOUBLED, so a small request stays above the engine's
- *    minimum useful throttle instead of dribbling.
- *
- * ---- AND TWO THINGS ABOUT THE BURN THAT ARE NOT THE THROTTLE ----
- * **The burn is CENTRED on the node, not started at it.** Half the burn duration is the lead. That is
- * what makes a long finite burn approximate the instantaneous impulse the node solver assumed.
- *
- * **Steer at the RESIDUAL dv, never the original.** kOS locks `nv` to `nd:deltav:normalized`, which
- * re-evaluates each read - so as the burn proceeds the vessel keeps pointing at what is LEFT. That is
- * what makes it self-correcting when the engine under-performs or the attitude drifts.
- *
- * ---- ⚠ AND THE ONE THAT REVERSES A BURN IF YOU GET IT WRONG ----
- * A Dragon burning on RCS points at MINUS the burn vector, because the Dracos thrust out of the back
- * of the trunk and the vessel's forward runs the other way. `GNC.ks:1051`. Get it wrong and the burn
- * is applied backwards - which on a de-orbit is not a small error.
+ * ---- THE STOP CONDITION IS AN OVERSHOOT TEST, NOT A COUNTDOWN ----
+ * `vdot(dir0, remaining) < 0` - the remaining dv has REVERSED against where it pointed at ignition.
+ * A burn that stops on a timer or on a dv total keeps pushing through the target when the estimate
+ * was wrong; this one cannot.
  */
 namespace DragonScreen
 {
-    /// <summary>Which way the vehicle must point to push along a burn vector.</summary>
-    public enum ThrustSense : byte
-    {
-        /// <summary>Nose along the burn vector. Engines out of the back, the normal case.</summary>
-        Forward = 0,
-        /// <summary>Nose at MINUS the burn vector - a capsule on Dracos. See the header.</summary>
-        Reversed
-    }
-
     public struct BurnState
     {
-        public bool Valid;
-        /// <summary>Magnitude of the dv still owed, m/s. Shrinks as the burn proceeds.</summary>
+        /// <summary>Δv still to deliver, m/s.</summary>
         public double RemainingDvMps;
-        /// <summary>Full-throttle acceleration at the CURRENT mass, m/s^2.</summary>
-        public double MaxAccel;
-        /// <summary>Angle between where we point and where the burn needs to go, degrees.</summary>
+        /// <summary>Δv the node asked for at ignition, m/s.</summary>
+        public double InitialDvMps;
+        /// <summary>Vehicle mass, tonnes.</summary>
+        public double MassT;
+        /// <summary>Thrust available right now, kN. Zero means nothing is lit.</summary>
+        public double AvailableThrustKn;
+        /// <summary>Angle between the nose and the Δv direction, degrees.</summary>
         public double PointingErrorDeg;
-        /// <summary>Seconds until the node. Negative once past it.</summary>
-        public double NodeEtaS;
-        /// <summary>Burning on RCS rather than the main engine.</summary>
-        public bool OnRcs;
-        /// <summary>A capsule whose thrusters face the other way. See ThrustSense.</summary>
-        public bool CapsuleThrusters;
+        /// <summary>
+        /// True once the remaining Δv has reversed against its direction at ignition - we have
+        /// burned past the node and must stop.
+        /// </summary>
+        public bool Overshot;
+        /// <summary>Seconds since ignition. The runaway backstop is on this.</summary>
+        public double ElapsedS;
     }
 
     public static class BurnExec
     {
-        /// <summary>Beyond this pointing error the throttle is cut entirely. GNC.ks uses 5.</summary>
-        public const double PointingLimitDeg = 5.0;
-
-        /// <summary>Demands below this are doubled to clear the engine's minimum useful throttle.</summary>
-        public const double FloorLiftBelow = 0.5;
-
-        /// <summary>Burn duration is capped so a near-zero-thrust vehicle cannot plan a lead
-        /// longer than its own orbit. GNC.ks:954.</summary>
-        public const double MaxBurnDurationS = 1800.0;
-
-        /// <summary>Residual below which the burn is finished, m/s.</summary>
-        public const double ResidualToleranceMps = 0.1;
+        // ---- F9I's CONSTANTS. station_ops.ks:597-681. ----
+        /// <summary>Cruise acceleration for approach burns, m/s^2. `stBurnAccel`. TUNABLE.</summary>
+        public const double CruiseAccel = 1.5;
+        /// <summary>Taper the last of the Δv over this long, seconds. `stBurnTaper`. TUNABLE.</summary>
+        public const double TaperS = 4.0;
+        /// <summary>Never command less than this while burning. `stThrMin`.</summary>
+        public const double ThrottleMin = 0.01;
+        /// <summary>Stop when this little Δv remains, m/s. `stBurnStop`.</summary>
+        public const double StopDvMps = 0.05;
+        /// <summary>Finish the turn this long before ignition, seconds. `stAlignPad`.</summary>
+        public const double AlignPadS = 2.0;
+        /// <summary>Inside this many seconds to ignition, buy RCS to finish the turn. `stAlignRcsBelow`.</summary>
+        public const double AlignRcsBelowS = 45.0;
+        /// <summary>Aligned enough to ignite, degrees. StBurnNode's `vang(...) < 3`.</summary>
+        public const double AlignedDeg = 3.0;
+        /// <summary>Runaway backstop, seconds. StBurnNode's `stEndT is time:seconds + 300`.</summary>
+        public const double MaxBurnDurationS = 300.0;
 
         /// <summary>
-        /// How long the burn will take. Capped, and floored on acceleration so a stage whose engine
-        /// has not lit yet gives a pessimistically long plan rather than an infinite one.
+        /// The acceleration the burn will actually run at: the cruise figure, or all we have if that
+        /// is less. Floored so the lead below cannot divide by nothing.
         /// </summary>
-        public static double BurnDuration(double dvMps, double maxAccel)
+        public static double BurnAccel(double massT, double availableThrustKn)
         {
-            double a = (maxAccel > 0.001) ? maxAccel : 0.001;
-            double t = dvMps / a;
-            return (t > MaxBurnDurationS) ? MaxBurnDurationS : t;
+            double have = availableThrustKn / (massT > 0.1 ? massT : 0.1);
+            double a = (CruiseAccel < have) ? CruiseAccel : have;
+            return (a < 0.05) ? 0.05 : a;
         }
 
         /// <summary>
-        /// When to light the engine: half the burn BEFORE the node, so the burn straddles it.
-        /// Returns seconds from now; negative means we are already late.
+        /// Half the burn happens BEFORE the node time, so the impulse straddles it.
+        ///
+        /// ⚠ Sized on <see cref="BurnAccel"/>, not on full thrust. F9I is explicit: at full thrust
+        /// "we would arrive late for our own burn".
         /// </summary>
-        public static double IgnitionEtaS(double nodeEtaS, double burnDurationS)
+        public static double HalfBurnS(double dvMps, double massT, double availableThrustKn)
         {
-            return nodeEtaS - burnDurationS * 0.5;
+            return dvMps / (2.0 * BurnAccel(massT, availableThrustKn));
+        }
+
+        /// <summary>Latest moment the turn may still be running, as an offset from ignition.</summary>
+        public static double AlignDeadlineS(double secondsToIgnition)
+        {
+            return secondsToIgnition - AlignPadS;
+        }
+
+        /// <summary>Pointed close enough to light the engine?</summary>
+        public static bool Aligned(double pointingErrorDeg)
+        {
+            return pointingErrorDeg < AlignedDeg;
         }
 
         /// <summary>
-        /// The alignment multiplier. 1 pointing straight at the burn, 0 at the limit, and CLAMPED to
-        /// zero beyond - never negative out of this function, because a negative throttle is not a
-        /// thing and letting the sign escape invites someone downstream to multiply by it.
+        /// Should RCS be bought to finish the turn?
+        ///
+        /// ⚠ RCS IS THE DE-ORBIT AND LANDING BUDGET. F9I: "It is not free attitude authority, so it
+        /// is bought only when the clock says reaction wheels alone will not finish the turn in
+        /// time." Long coast: wheels. Short coast: a little RCS, cheaper than missing the match
+        /// point and re-planning.
         /// </summary>
-        public static double AlignmentMultiplier(double pointingErrorDeg)
+        public static bool NeedRcsToAlign(double secondsToIgnition, double pointingErrorDeg)
         {
-            double m = (PointingLimitDeg - pointingErrorDeg) / PointingLimitDeg;
-            if (m < 0.0) m = 0.0;
-            if (m > 1.0) m = 1.0;
-            return m;
+            return !Aligned(pointingErrorDeg) && secondsToIgnition < AlignRcsBelowS;
         }
 
         /// <summary>
-        /// The throttle. See the header for why each of the three parts is there.
+        /// The throttle. `min(cruise, remaining/taper)` as an acceleration, converted against the
+        /// CURRENT mass and thrust, floored so the engine never sits at literally zero mid-burn.
+        ///
+        /// Far from the end the cruise term wins and the throttle is steady; inside the last
+        /// <see cref="TaperS"/> seconds the second term takes over and walks it down to nothing.
         /// </summary>
         public static double Throttle(BurnState s)
         {
-            if (!s.Valid) return 0.0;
-            if (s.RemainingDvMps <= ResidualToleranceMps) return 0.0;
+            if (s.AvailableThrustKn <= 0.0 || s.MassT <= 0.0) return 0.0;
+            if (Complete(s)) return 0.0;
 
-            double accel = (s.MaxAccel > 0.0001) ? s.MaxAccel : 0.0001;
+            double wantA = s.RemainingDvMps / TaperS;
+            if (CruiseAccel < wantA) wantA = CruiseAccel;
 
-            // Seconds of burn still owed, clamped to one. Full throttle until the last second.
-            double secondsLeft = s.RemainingDvMps / accel;
-            if (secondsLeft > 1.0) secondsLeft = 1.0;
-
-            // ---- ⚠ THE FLOOR-LIFT GOES BEFORE THE ALIGNMENT TERM, NOT AFTER. DELIBERATE CHANGE. ----
-            // GNC.ks:1085 computes `reqThrot = min(dv/accel, 1) * angleMult` and THEN doubles it if
-            // it is under 0.5. Because angleMult can push a full-throttle demand under 0.5 on its
-            // own, the lift fires on MISPOINTING as well as on a small demand - and the result is
-            // not monotonic in pointing error:
-            //
-            //      1 deg off -> 1.0 * 0.8 = 0.80                     (not lifted)
-            //      2 deg off -> 1.0 * 0.6 = 0.60                     (not lifted)
-            //      3 deg off -> 1.0 * 0.4 = 0.40 -> lifted -> 0.80   (MORE than at 2 deg)
-            //
-            // So a vessel drifting off-axis gets a throttle KICK exactly as its pointing degrades,
-            // which is the opposite of what the alignment term exists to do. Caught by the headless
-            // monotonicity check, not in flight - it would show up as a burn that wanders.
-            //
-            // The comment in GNC.ks says the lift is for "small demands ... rather than dribbling",
-            // i.e. the END of a burn, so lifting the TIME-BASED demand and then applying alignment
-            // keeps that intent and removes the artifact. Aligned burns are unchanged.
-            double demand = secondsLeft;
-            if (demand <= FloorLiftBelow) demand *= 2.0;
-
-            double req = demand * AlignmentMultiplier(s.PointingErrorDeg);
-
-            if (req < 0.0) req = 0.0;
-            if (req > 1.0) req = 1.0;
-            return req;
+            double th = wantA * s.MassT / (s.AvailableThrustKn > 1.0 ? s.AvailableThrustKn : 1.0);
+            if (th > 1.0) th = 1.0;
+            if (th < ThrottleMin) th = ThrottleMin;
+            return th;
         }
 
         /// <summary>
-        /// Which way to point. The capsule-on-RCS case is the one that reverses a burn if missed.
-        /// </summary>
-        public static ThrustSense Sense(BurnState s)
-        {
-            return (s.CapsuleThrusters && s.OnRcs) ? ThrustSense.Reversed : ThrustSense.Forward;
-        }
-
-        /// <summary>
-        /// Is the burn finished?
+        /// Is the burn over? Overshoot, or the remainder is inside the stop threshold, or the
+        /// backstop has fired.
         ///
-        /// Two ways, and BOTH are needed. The residual falling inside tolerance is the clean one.
-        /// The other is the dv REVERSING - `vdot(remaining, original) < 0` in kOS - which means we
-        /// have burned past the target and any further thrust undoes it. Without the reversal test a
-        /// burn that overshoots between ticks turns around and chases itself.
+        /// The overshoot test is the important one: a burn that stops on a countdown keeps pushing
+        /// through the target whenever the estimate was wrong.
         /// </summary>
-        public static bool Complete(BurnState s, bool dvReversed)
+        public static bool Complete(BurnState s)
         {
-            if (!s.Valid) return true;
-            if (s.RemainingDvMps <= ResidualToleranceMps) return true;
-            return dvReversed;
+            if (s.Overshot) return true;
+            if (s.RemainingDvMps < StopDvMps) return true;
+            return s.ElapsedS > MaxBurnDurationS;
         }
 
-        /// <summary>
-        /// Should we still be coasting rather than orienting and warping?
-        ///
-        /// ⚠ `>`, NOT `-`. GNC.ks had `if (nd:eta - ((burnDuration / 2) + 120))` - an arithmetic
-        /// expression where a boolean was wanted. kOS reads any non-zero scalar as true, so the
-        /// branch was taken unless the difference was EXACTLY zero, i.e. always. Fixed there
-        /// 2026-08-04; written as a real comparison here so it cannot come back.
-        /// </summary>
-        public static bool HasCoastTime(double nodeEtaS, double burnDurationS)
+        /// <summary>Why it ended, for the log. Empty while it is still running.</summary>
+        public static string CompletionNote(BurnState s)
         {
-            return nodeEtaS > (burnDurationS * 0.5) + 120.0;
-        }
-
-        /// <summary>
-        /// Settled time, not iterations. GNC.ks counts SECONDS of continuous alignment inside one
-        /// degree, so a vessel that keeps drifting in and out never satisfies it - which an
-        /// iteration count would.
-        /// </summary>
-        public static double UpdateSettled(double settledS, double pointingErrorDeg, double dt)
-        {
-            if (pointingErrorDeg <= 1.0) return settledS + dt;
-            return 0.0;
+            if (s.Overshot) return "burned past the node";
+            if (s.RemainingDvMps < StopDvMps) return "residual inside the stop threshold";
+            if (s.ElapsedS > MaxBurnDurationS) return "ABORTED - burn ran past its backstop";
+            return "";
         }
     }
 }

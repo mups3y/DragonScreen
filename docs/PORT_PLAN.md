@@ -40,7 +40,7 @@ Read `docs/MISSION_PLAN.md` for status. This is the *order and the contracts*.
 
 ---
 
-## F1 · Node executor — **DO THIS FIRST**
+## F1 · Node executor — **DONE 2026-08-11**
 
 Five items are blocked on it: R1, R2, D3, E4, E5. Every one of them needs "turn to a vector and burn
 a given Δv accurately", and every one would otherwise grow its own.
@@ -168,7 +168,7 @@ Recorded so nobody spends a session discovering why they cannot.
 
 ## Order of work
 
-1. **F1** node executor ← unblocks five items
+1. ~~**F1** node executor~~ **DONE** — `pure/BurnExec.cs` rewritten as a port, `src/NodeExecutor.cs` is the glue, CW burns now fly through it
 2. **E1** return budget ← cheap, and it is a crew-facing answer
 3. **R1**, **R2** ← completes §6, makes the rendezvous actually close a gap
 4. **F2**, **D1** ← docking, which is the point of the mission

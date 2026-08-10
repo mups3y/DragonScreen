@@ -59,6 +59,9 @@ namespace DragonScreen
             // carries this frame's command rather than the previous one's.
             FlightCommands.Tick();
             AutoPilot.Tick();
+            // The node executor before the things that plan burns, so a burn armed this frame is
+            // flown from the next one rather than sitting a frame behind its own ignition time.
+            NodeExecutor.Tick();
             StationApproach.Tick();
             FlightRecorder.Tick();
         }
@@ -78,6 +81,7 @@ namespace DragonScreen
                 AutoPilot.Disengage("left the flight scene");
                 BoosterRecovery.Reset();
                 StationApproach.Reset();
+                NodeExecutor.Reset();
             }
             catch (Exception e)
             {
