@@ -59,17 +59,47 @@ a paragraph of theory), and check whether a thing exists before building it.
 **~7 400 headless checks pass** across seven suites (layout, page, panel/sequence, flight software,
 orbital, predictor, burn exec, docking). 32 files in `src/pure`, 16 in `src/`, 6 art files.
 
-**THE PAGES WORK. THE FLIGHT SOFTWARE DOES NOT, YET.** Five test flights, five failures. All five
-pages, the 39-button console and the simulated systems have flown and are good. Everything below is
-the honest state of the autopilot:
+**THE PAGES WORK. THE WHOLE MISSION IS PORTED. ALMOST NONE OF IT HAS FLOWN.** Read
+`docs/MISSION_PLAN.md` for per-phase status and `docs/PORT_PLAN.md` for what is left and in what
+order — both are kept current and they are the authority, not this block.
 
-| | |
+| phase | state |
 |---|---|
-| ascent guidance | computes correct commands — verified in the CSV |
-| attitude controller | **HAS NEVER EXECUTED.** Threw every physics tick on its only flight; fixed, unflown |
-| booster recovery | **HAS NEVER RUN ONCE.** Root cause found 2026-08-10 and fixed; every constant still untested |
-| orbit | **never achieved.** Best flight: 73 km apoapsis, fell back |
-| rendezvous / docking / refuel / entry | not built — see `docs/F9I_PORT_MAP.md` |
+| §1 launch window | ported — phase angle, not plane (station is at 0.133°, plane is degenerate) |
+| §2 ascent to MECO | **FLOWN AND GOOD** |
+| §3 separation | ported; the 23:19 collision fixed but unflown since |
+| §4 booster recovery | fully ported and line-by-line audited; **never landed** |
+| §5 upper stage to orbit | **FLOWN** — 86.0 × 83.8 km, S2 sep works, 5.50 t in orbit |
+| §6 rendezvous | ported: node executor, orbit match, phasing, CW, speed ladder, terminal |
+| §7 dock / refuel / undock | ported |
+| §8 return | budget, de-orbit burn and entry laws ported; E2/E3/E4/E6/E8 and the entry GLUE are not |
+
+**~1,290 headless checks.** The last real flight was 2026-08-10 23:19 and it ended in a
+booster/upper-stage collision that has since been fixed. Everything built after that — the whole
+rendezvous, docking and return stack — is transcription plus headless tests and has never run in
+the game. Expect the first flight of any of it to find something, most likely a frame convention.
+
+### The four architectural facts a new session needs
+
+1. **`FlightDriver` is a flight-scene `KSPAddon` and drives everything.** Autopilot, booster
+   recovery, station approach, docking, undock, de-orbit, node executor, impact predictor,
+   recorder. It exists because all of that used to be ticked from `ScreenPainter`, which belongs to
+   the IVA — so `ForceSetActiveVessel(booster)` destroyed the thing flying the booster.
+2. **`AttitudeController` is an instance class, one per vehicle** (`.Ascent`, `.Booster`), and it
+   owns throttle and all three translation axes through each vessel's own `FlightCtrlState`.
+   `FlightInputHandler.state` is the FOCUSED vessel's and is cosmetic only. This is what lets both
+   vehicles fly at once.
+3. **`NodeExecutor` is the one burn mechanism**, and `StNodeSafe`'s periapsis floor lives inside it
+   so no caller can forget it. Five things use it.
+4. **`ImpactPredictor` + `pure/Trajectory.cs` are ours**, not Trajectories. Drag is MEASURED from
+   each vehicle's own telemetry (`a_total − a_gravity − a_thrust` → ballistic coefficient), not
+   modelled. Where it cannot measure, it reports a vacuum solve and SAYS so.
+
+### The recorder is 113 columns and checks itself
+`a_` = ascent vehicle, `b_` = booster, both every row, plus `focus` and `warp`. It counts its own
+commas against the header on the first row and logs `RECORDER COLUMN MISMATCH` if they differ —
+**if you see that, do not read the CSV.** Flight data is archived to
+`Desktop/quarantine/dragonscreen_flightdata`, not left in the game folder.
 
 ### ⛔ 2026-08-10 — SIX DEFECTS FOUND WITHOUT FLYING. READ THIS BEFORE THE NEXT FLIGHT.
 
