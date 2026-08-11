@@ -24,6 +24,7 @@ public static class TestMain
         bad += EntryGuidanceTest.Run();
         bad += DockControlTest.Run();
         bad += ReturnPathTest.Run();
+        bad += LayoutSweepTest.Run();
 
         Console.WriteLine(bad == 0 ? "ALL SUITES PASSED" : bad + " SUITE(S) FAILED");
         return bad == 0 ? 0 : 1;

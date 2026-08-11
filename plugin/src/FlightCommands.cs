@@ -180,7 +180,10 @@ namespace DragonScreen
                     // from the landing zone - with the periapsis target demoted to a depth limit.
                     // It also refuses if the S2 is attached or there is no orbit to leave, and
                     // reports the monopropellant budget before it commits.
-                    case PanelCommand.DeorbitNow:   DeorbitOps.Engage(); return DeorbitOps.Engaged;
+                    // ⛔ TOGGLE, NOT ENGAGE. On 2026-08-11 the crew pressed this to escape a
+                    // runaway rendezvous and got "Press ignored" - the idempotency guard added that
+                    // morning had removed the only abort the cockpit has. A second press cancels.
+                    case PanelCommand.DeorbitNow:   DeorbitOps.Toggle(); return true;
                     case PanelCommand.WaterDeorbit: return StartDeorbit(v, WaterDeorbitTargetPe, "WATER DEORBIT");
                     case PanelCommand.Breakout:     return Breakout(v);
                     case PanelCommand.Abort:        return Abort(v);

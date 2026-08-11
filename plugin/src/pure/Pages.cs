@@ -641,15 +641,38 @@ namespace DragonScreen
         public static void MissionRect(int index, int w, int h, out float x, out float y,
                                        out float rw, out float rh)
         {
-            float ax, ay, aw, ah;
-            AutoRect(w, h, out ax, out ay, out aw, out ah);
-            rw = aw; rh = ah;
-            x = ax;
-            y = ay + (ah + MissionGap) * (index + 1);
+            rh = MissionHeight;
+
+            // ---- ⛔ MEASURED UP FROM THE TAB BAR, NOT DOWN FROM AUTO SEQUENCE. ----
+            // Stacked downward they ran straight under the chrome bar: on a 703-high screen the bar
+            // starts at 639 and two of the three landed at 623-657 and 665-699, so AUTO-DOCK was half
+            // covered and UNDOCK & LAND was invisible. The test that should have caught it asserted
+            // against the PAGE bottom instead of the bar. `NavPage.MapRect` had the right pattern
+            // three files away.
+            y = ChromeBar.TopY(h) - MissionGap - rh;
+
+            // ---- AND A ROW, NOT A COLUMN, STARTING RIGHT OF THE SIDEBAR. ----
+            // A column here would cross the gauges; the strip between AUTO SEQUENCE and the bar is
+            // one button tall. The left 30% belongs to the phase sidebar and the step list, so the
+            // row starts clear of it rather than centring on the page and overlapping the steps.
+            float left = w * SidebarFrac + MissionGap;
+            float right = w - SidePad;
+            float total = right - left;
+            if (total > MissionRowMax) total = MissionRowMax;
+            rw = (total - MissionGap * (MissionButtons - 1)) / MissionButtons;
+            x = left + (rw + MissionGap) * index;
         }
 
-        /// <summary>Vertical gap between the mission buttons.</summary>
+        /// <summary>Gap between the mission buttons, and between the row and the tab bar.</summary>
         public const float MissionGap = 8f;
+        /// <summary>Height of a mission button.</summary>
+        public const float MissionHeight = 34f;
+        /// <summary>The row never grows past this, however wide the screen.</summary>
+        public const float MissionRowMax = 660f;
+        /// <summary>Left 30% is the phase sidebar and the step list - see Flight().</summary>
+        public const float SidebarFrac = 0.30f;
+        /// <summary>Page margin, matching Flight()'s own `pad`.</summary>
+        public const float SidePad = 28f;
         /// <summary>How many there are: RENDEZVOUS, AUTO-DOCK, UNDOCK &amp; LAND.</summary>
         public const int MissionButtons = 3;
 
@@ -693,12 +716,13 @@ namespace DragonScreen
                 return PageHit.Of(PageAct.UndockAndLand, 0);
             }
 
-            for (int i = 0; i < (int)StepId.Count; i++)
+            int visible = StepVisible(h);
+            for (int i = 0; i < visible; i++)
             {
                 float x, y, rw, rh;
                 StepRect(i, w, h, out x, out y, out rw, out rh);
                 if (px >= x && px <= x + rw && py >= y - 3f && py <= y + rh - 4f)
-                    return PageHit.Of(PageAct.AckStep, i);
+                    return PageHit.Of(PageAct.AckStep, StepIdAt(i, h));
             }
             return PageHit.None;
         }
@@ -716,6 +740,66 @@ namespace DragonScreen
         /// </summary>
         public const float StepPitch = 18f;
 
+        /// <summary>Never below this - dense type is 12 and needs a little leading.</summary>
+        public const float StepPitchMin = 13f;
+
+        /// <summary>Top of the step list, matching FlightPage's sidebar exactly.</summary>
+        public static float StepTop { get { return StripHeight + 110f + 182f; } }
+
+        /// <summary>
+        /// The pitch that actually fits on THIS screen.
+        ///
+        /// ---- ⛔ A CONSTANT PITCH IS A BUG WAITING FOR A SHORTER SCREEN. ----
+        /// 18 was chosen when the only screens were 703 and 710 high, and the comment above records
+        /// the same fault being fixed once already by changing 30 to 18. At 600 the list runs to 638
+        /// against a tab bar at 536 and the last six milestones are unreachable - found by the layout
+        /// sweep, not by a flight, which is the whole point of the sweep.
+        ///
+        /// Deriving it from the space left means the list can never overflow at any resolution, and
+        /// on the screens we actually ship it is still exactly 18 because the cap binds first.
+        /// </summary>
+        public static float StepPitchFor(int h)
+        {
+            int rows = (int)StepId.Count;
+            if (rows < 2) return StepPitch;
+            float room = ChromeBar.TopY(h) - StepTop;
+            float fit = room / rows;
+            if (fit > StepPitch) fit = StepPitch;
+            if (fit < StepPitchMin) fit = StepPitchMin;
+            return fit;
+        }
+
+        /// <summary>
+        /// How many step rows actually fit, and therefore how many are drawn.
+        ///
+        /// ---- ⚠ SHRINKING TYPE HAS A FLOOR; THE LIST DOES NOT HAVE TO. ----
+        /// On a screen too short for all fifteen milestones even at `StepPitchMin`, the choice is
+        /// between unreadable rows and fewer rows. Fewer rows, and the window is anchored at the
+        /// END: the completed milestones scroll off the top and the RUNNING and UPCOMING ones stay
+        /// on the glass, which is the half the crew is actually reading. Clipping the bottom - what
+        /// the fixed pitch used to do - hides exactly the wrong end, including SPLASHDOWN.
+        ///
+        /// On both screens the Dragon actually has (703 and 710 high) this returns all fifteen and
+        /// the pitch is the full 18, so nothing changes on the vehicle we fly.
+        /// </summary>
+        public static int StepVisible(int h)
+        {
+            int rows = (int)StepId.Count;
+            float pitch = StepPitchFor(h);
+            if (pitch <= 0f) return rows;
+            int fit = (int)((ChromeBar.TopY(h) - StepTop) / pitch);
+            if (fit > rows) fit = rows;
+            if (fit < 1) fit = 1;
+            return fit;
+        }
+
+        /// <summary>The StepId drawn in window slot <paramref name="slot"/>. See StepVisible.</summary>
+        public static int StepIdAt(int slot, int h)
+        {
+            int rows = (int)StepId.Count;
+            return slot + (rows - StepVisible(h));
+        }
+
         /// <summary>Reused every frame - the draw path allocates nothing. See the DisplayList rule.</summary>
         private static readonly StepRow[] stepScratch = new StepRow[(int)StepId.Count];
 
@@ -732,8 +816,11 @@ namespace DragonScreen
             rw = w * 0.30f - pad * 2f;
             // Must track FlightPage's sidebar exactly: bodyTop + 110 for the apsis rows, + 182 for
             // the step column below them. Both live here so the two cannot drift apart.
-            y = StripHeight + 110f + 182f + i * StepPitch;
-            rh = StepPitch;
+            float pitch = StepPitchFor(h);
+            // `i` is a WINDOW SLOT, not a StepId - see StepVisible. On our screens they are the same
+            // because every row fits.
+            y = StepTop + i * pitch;
+            rh = pitch;
         }
 
         /// <summary>
@@ -746,6 +833,9 @@ namespace DragonScreen
         {
             dl.Text("SEQUENCE", x, y - 26f, Typography.Caption, TextAlign.Left, DragonPalette.Text6);
 
+            // ONE pitch for drawing and hitting - StepRect derives the same number from h.
+            float pitch = StepPitchFor(h);
+
             int n = s.Valid ? StepList.Build(s.Steps, stepScratch) : 0;
             if (n == 0)
             {
@@ -753,10 +843,12 @@ namespace DragonScreen
                 return;
             }
 
-            for (int i = 0; i < n; i++)
+            int first = n - StepVisible(h);
+            if (first < 0) first = 0;
+            for (int i = first; i < n; i++)
             {
                 StepRow r = stepScratch[i];
-                float ry = y + i * StepPitch;
+                float ry = y + (i - first) * pitch;
 
                 // A marker per state, in the panel's own language rather than an invented icon set:
                 // filled for done, hollow-bright for the running one, dim for pending.
@@ -777,7 +869,7 @@ namespace DragonScreen
                 // only one that gets an affordance. Marking the others would promise a control that
                 // is not there - the vehicle does those, not the crew.
                 if (r.CrewStep && r.State == StepState.Active)
-                    dl.Box(x, ry - 2f, w, StepPitch - 2f, 1f, DragonPalette.Accent);
+                    dl.Box(x, ry - 2f, w, pitch - 2f, 1f, DragonPalette.Accent);
             }
         }
 

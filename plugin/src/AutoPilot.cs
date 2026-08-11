@@ -125,36 +125,19 @@ namespace DragonScreen
             ascentVessel = v;
             packedReported = false;
 
-            // ---- THE PAD HOLD. Nothing is commanded until the phase comes round. ----
-            if (windowOpensUt > 0.0)
-            {
-                double now = Planetarium.GetUniversalTime();
-                double left = windowOpensUt - now;
-                if (left > 0.0)
-                {
-                    Command.Note = "HOLD FOR PHASE WINDOW - T-" + left.ToString("F0") + " s";
-                    // Warp there. A hold that has to be sat through in real time is a hold nobody
-                    // uses, which is how the de-orbit's 25-minute wait went unnoticed until a flight.
-                    if (!windowWarped && left > NodeExecutor.WarpWorthwhileS)
-                    {
-                        windowWarped = true;
-                        TimeWarp.fetch.WarpTo(windowOpensUt - 5.0);
-                    }
-                    else if (left <= 5.0 && TimeWarp.CurrentRateIndex > 0) TimeWarp.SetRate(0, true);
-                    return;
-                }
-                if (TimeWarp.CurrentRateIndex > 0) { TimeWarp.SetRate(0, true); return; }
-                windowOpensUt = 0.0;
-                Debug.Log(Tag + "launch window OPEN - releasing the countdown");
-            }
-            if (liftoffUt <= 0.0 && Phase != AscentPhase.Idle) liftoffUt = Planetarium.GetUniversalTime();
+            // ---- ⛔ THE PAD HOLD LIVES IN Tick(), NOT HERE. ----
+            // It was here, and its `return` skipped TEN statements below it - including
+            // `PrepareForSeparation`, which is why the 10:37 booster unloaded and was lost; and
+            // `phaseStartedAt`, which left every phase timeout running on the PREVIOUS flight's
+            // clock; and `s2Separated`, which meant a second flight in one session would never
+            // separate the second stage at all. Engage sets the window up; Tick holds against it.
+            // Engage must fall through to the bottom of this method on every path.
             s2Separated = false;
             lastHandoverTry = 0.0;
             starvedFor = 0.0;
             blindStages = 0;
             phaseStartedAt = Planetarium.GetUniversalTime();
             lastCommanded = Vector3d.zero;
-            FlightRecorder.Start(v);
 
             // ---- ⛔ EXTEND THE PHYSICS RANGE NOW, NOT AT HANDOVER. ----
             // This was the reason `landPhase` is "-" for all 1371 rows of the 21:01 flight: the
@@ -167,8 +150,11 @@ namespace DragonScreen
             // F9I gets the order right and says why: FalconExtendRange raises the range on the SHIP
             // first, then waits for the booster to appear, then raises it on the booster too.
             BoosterRecovery.PrepareForSeparation(v);
+            // Cleared, not set: liftoff has not happened yet. Tick stamps it when the vehicle
+            // actually leaves the pad - see the note there. Setting it here is what made
+            // LaunchWindowOps.MeasureAtInsertion dead code for its entire life.
             liftoffUt = 0.0;
-            liftoffLonDeg = v.longitude;
+            liftoffLonDeg = 0.0;
             Debug.Log(Tag + "autopilot ENGAGED - target " + (Target.AltitudeM / 1000.0).ToString("F0")
                       + " km, heading " + Target.HeadingDeg.ToString("F0")
                       + ". ⚠ INTERIM: gravity turn, not the PSG ascent in FLIGHT_SOFTWARE_PLAN.md");
@@ -185,8 +171,10 @@ namespace DragonScreen
                 FlightInputHandler.state.mainThrottle = 0f;
             ascentVessel = null;
             Debug.Log(Tag + "autopilot DISENGAGED - " + why);
-            // Keep recording through a booster recovery - that is the half we have never seen.
-            if (!BoosterRecovery.Active) FlightRecorder.Stop(why);
+            // ⚠ THE RECORDER IS NOT OURS TO STOP. `FlightDriver` starts it on scene entry and stops
+            // it on scene exit, and it restarts anything it finds stopped - so a Stop() here just
+            // split the flight across two CSVs at insertion. One owner.
+
         }
 
         /// <summary>
@@ -240,6 +228,47 @@ namespace DragonScreen
                 return;
             }
             packedReported = false;
+
+            // ---- THE PAD HOLD. Nothing is commanded until the phase comes round. ----
+            // §1 of the mission: F9I launches on PHASE ANGLE, not plane, because the station sits at
+            // 0.133 deg and a plane window is degenerate at the equator. Arriving at the wrong phase
+            // is what made its first ferry "spend 7.3 HOURS phasing for only 39 LF".
+            //
+            // ⚠ AND IT BELONGS HERE, AFTER THE PACKED CHECK, BECAUSE IT RETURNS. Anything this
+            // block skips is skipped for the whole hold; in Engage that was the vehicle's own setup.
+            if (windowOpensUt > 0.0)
+            {
+                double leftS = windowOpensUt - Planetarium.GetUniversalTime();
+                if (leftS > 0.0)
+                {
+                    Command.Note = "HOLD FOR PHASE WINDOW - T-" + leftS.ToString("F0") + " s";
+                    // Warp there. A hold that has to be sat through in real time is a hold nobody
+                    // uses - which is how the de-orbit's 25-minute wait went unnoticed until a flight.
+                    if (!windowWarped && leftS > NodeExecutor.WarpWorthwhileS)
+                    {
+                        windowWarped = true;
+                        TimeWarp.fetch.WarpTo(windowOpensUt - WindowWarpLeadS);
+                    }
+                    else if (leftS <= WindowWarpLeadS && TimeWarp.CurrentRateIndex > 0)
+                        TimeWarp.SetRate(0, true);
+                    return;
+                }
+                if (TimeWarp.CurrentRateIndex > 0) { TimeWarp.SetRate(0, true); return; }
+                windowOpensUt = 0.0;
+                Debug.Log(Tag + "launch window OPEN - releasing the countdown");
+            }
+
+            // ---- STAMP LIFTOFF WHEN IT HAPPENS, NOT WHEN THE CREW ARMED THE AUTOPILOT. ----
+            // `MeasureAtInsertion` needs the real ascent duration to re-fit the launch window, and it
+            // early-returns on a zero liftoff time - so with this set in Engage it never ran once.
+            if (liftoffUt <= 0.0
+                && v.situation != Vessel.Situations.PRELAUNCH
+                && v.situation != Vessel.Situations.LANDED)
+            {
+                liftoffUt = Planetarium.GetUniversalTime();
+                liftoffLonDeg = v.longitude;
+                Debug.Log(Tag + "liftoff - clock started for the launch-window fit");
+            }
 
             // ---- ⛔ ISSUES 3 AND 4. STATICS MUST VALIDATE, NOT REMEMBER. ----
             // CLAUDE.md already carries this rule - it was written after the NAV map and navball
@@ -546,6 +575,8 @@ namespace DragonScreen
         private static bool packedReported;
         private static double lastHandoverTry;
         private static double windowOpensUt, liftoffUt, liftoffLonDeg;
+        /// <summary>Drop out of warp this long before the window opens, to settle.</summary>
+        private const double WindowWarpLeadS = 5.0;
         private static bool windowWarped;
         private static float lastBurnLog = -999f;
 
