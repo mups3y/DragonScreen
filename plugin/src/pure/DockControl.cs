@@ -184,14 +184,63 @@ namespace DragonScreen
         private static double Abs(double v) { return (v < 0.0) ? -v : v; }
 
         /// <summary>
-        /// Speed cap for a range, tying the docking controller to the recorded approach ladder so
-        /// the two cannot disagree about how fast is safe. See Rendezvous.CorridorRate - the same
-        /// numbers, deliberately, because a controller with its own idea of a safe closing speed is
-        /// how you get a capsule that thinks it is being careful while the ladder thinks otherwise.
+        /// Contact speed, metres per second, for the last few metres.
+        ///
+        /// ---- ⚠ THIS BAND IS OURS. F9I HAS NO LAW FOR IT, AND THAT IS NOT AN OVERSIGHT. ----
+        /// F9I's ladder bottoms out at 1 m/s for anything inside 100 m and stops there, because its
+        /// approach HANDS OVER at `stMatchDist` = 200 m and lets the docking add-on take the last
+        /// stretch. We fly the last stretch ourselves, so we need a law where F9I has none.
+        ///
+        /// 1 m/s is an approach speed, not a contact speed - F9I's own note on the near band is that
+        /// "below that range a miss is a COLLISION, not a correction". So inside the near band this
+        /// tapers to `DirectApproach.MatchVelMps`, the speed F9I itself calls velocity-matched.
+        /// </summary>
+        public static double ContactCapMps(double rangeM)
+        {
+            // ⚠ OUTSIDE THE NEAR BAND THIS MUST NOT BIND AT ALL. Returning BandNearV here instead of
+            // "no opinion" capped the whole approach at 1 m/s - my own first version did exactly
+            // that and the ladder check caught it at 2975 m.
+            if (rangeM >= Approach.BandNearD) return double.MaxValue;
+
+            // Taper from the ladder's near band down to a crawl at the port. 1 m/s is what F9I
+            // permits at 100 m; it is not what anyone touches a docking port at.
+            double t = rangeM / Approach.BandNearD;
+            double v = ContactFloorMps + (Approach.BandNearV - ContactFloorMps) * t;
+            return (v < ContactFloorMps) ? ContactFloorMps : v;
+        }
+
+        /// <summary>Slowest we ever command. Below this the servo is chasing noise.</summary>
+        public const double ContactFloorMps = 0.15;
+
+        /// <summary>
+        /// Speed cap for a range - THE APPROACH LADDER, tightened for contact.
+        ///
+        /// ---- ⛔ THIS USED A SECOND, DIFFERENT LAW WHILE CLAIMING TO USE THE FIRST. ----
+        /// It called `Rendezvous.CorridorRate` - a continuous `range × 0.025` - under a comment
+        /// saying "the same numbers, deliberately". They were never the same numbers, and the
+        /// DOCKING servo was the faster of the two in the band that matters:
+        ///
+        ///        range     Approach.SpeedCap     CorridorRate
+        ///        100 m           1.00                2.50      2.5x faster
+        ///        300 m           5.00                7.50
+        ///        600 m           5.00               12.00      2.4x faster
+        ///
+        /// in the phase whose recorded failure is "missed the port and bounced off the hull… 21.95
+        /// units of monopropellant on the docking alone, more than the whole approach that delivered
+        /// it there". Every live F9I caller takes `StSpeedCap`: `StCloseIn:1220`, `StDirectDv:1361`,
+        /// `StDirectApproach:1476`. `DockGNC`'s own taper went with `DockGNC`, which its header ends
+        /// by telling us not to wire back in.
+        ///
+        /// ⚠ AND IT IS THE TIGHTER OF THE TWO, NOT SIMPLY THE LADDER. Replacing the old curve
+        /// outright made the servo SLOWER everywhere it mattered and FASTER at contact - 1 m/s at
+        /// five metres from a port. Taking the minimum keeps F9I's ladder wherever it binds and
+        /// keeps the crawl where only we have a law.
         /// </summary>
         public static double SpeedCapFor(double rangeM)
         {
-            return Rendezvous.CorridorRate(rangeM);
+            double ladder = Approach.SpeedCap(rangeM);
+            double contact = ContactCapMps(rangeM);
+            return (contact < ladder) ? contact : ladder;
         }
     }
 }

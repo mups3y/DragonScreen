@@ -81,9 +81,18 @@ public static class DockControlTest
         // ---- AND IT AGREES WITH THE APPROACH LADDER ----
         // A controller with its own idea of a safe speed is how the ladder and the autopilot end up
         // disagreeing about what "careful" means.
-        for (double r = 5.0; r < 3000.0; r += 25.0)
+        //
+        // ⛔ THIS CHECK USED TO BE A TAUTOLOGY. It compared `SpeedCapFor` against
+        // `Rendezvous.CorridorRate` - the function `SpeedCapFor` itself called - so it restated the
+        // implementation and could never fail. Meanwhile the two curves it was supposed to be
+        // reconciling differed by up to 2.5x. Compare against the LADDER, which is the thing the
+        // comment above actually claims.
+        for (double r = Approach.BandNearD; r < 3000.0; r += 25.0)
             Near("speed cap matches the ladder at " + r,
-                 DockControl.SpeedCapFor(r), Rendezvous.CorridorRate(r), 1e-12);
+                 DockControl.SpeedCapFor(r), Approach.SpeedCap(r), 1e-12);
+        Check("and it is never FASTER than the ladder anywhere",
+              DockControl.SpeedCapFor(50.0) <= Approach.SpeedCap(50.0)
+              && DockControl.SpeedCapFor(5.0) <= Approach.SpeedCap(5.0), "");
         Check("contact speed is a crawl", DockControl.SpeedCapFor(5.0) < 0.3,
               DockControl.SpeedCapFor(5.0).ToString("F3"));
     }

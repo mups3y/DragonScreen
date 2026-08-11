@@ -54,7 +54,7 @@ namespace DragonScreen
         private static Vector3d dvWorld;        // the ORIGINAL request, for the overshoot test
         private static Vector3d dvRemaining;
         private static double nodeUt, ignitionUt, startedBurnAt;
-        private static bool rcsWasOn, boughtRcs, warpRequested;
+        private static bool rcsWasOn, boughtRcs, warpRequested, warpRefused;
 
         /// <summary>Arrive this long before ignition, so there is time to drop out of warp.</summary>
         public const double WarpArriveLeadS = 6.0;
@@ -106,6 +106,7 @@ namespace DragonScreen
             rcsWasOn = v.ActionGroups[KSPActionGroup.RCS];
             boughtRcs = false;
             warpRequested = false;
+            warpRefused = false;
             Phase = BurnPhase.Aligning;
             Note = label;
 
@@ -201,10 +202,31 @@ namespace DragonScreen
         {
             if (warpRequested) return;
             double lead = ignitionUt - WarpArriveLeadS;
-            if (lead - now < WarpWorthwhileS) return;
+            double wait = lead - now;
+            if (wait < WarpWorthwhileS) return;
+
+            // ---- ⛔ A BURN MORE THAN ONE ORBIT AWAY MEANS THE PLAN IS WRONG. ----
+            // On 2026-08-11 this warped ~25 minutes at a time, twenty-eight times, for burns of
+            // 0.13 to 5.57 m/s - 11.7 hours of game time inside a twenty-minute session, because
+            // nothing upstream had a convergence test. Skipping half an hour is not a way to make a
+            // bad plan cheap; it is how a bad plan goes unnoticed. Refuse, say so, and let the
+            // caller's own bound deal with it.
+            double period = (ship.orbit != null) ? ship.orbit.period : 0.0;
+            if (period > 0.0 && wait > period)
+            {
+                if (!warpRefused)
+                {
+                    warpRefused = true;
+                    Debug.LogWarning(Tag + "NOT warping " + (wait / 60.0).ToString("F1")
+                                     + " min to '" + Note + "' - that is more than one orbit ("
+                                     + (period / 60.0).ToString("F1") + " min) away. A burn that far "
+                                     + "out is a planning error, not a wait. Holding.");
+                }
+                return;
+            }
 
             warpRequested = true;
-            Debug.Log(Tag + "warping " + (lead - now).ToString("F0") + " s to ignition for '"
+            Debug.Log(Tag + "warping " + wait.ToString("F0") + " s to ignition for '"
                       + Note + "'");
             TimeWarp.fetch.WarpTo(lead);
         }

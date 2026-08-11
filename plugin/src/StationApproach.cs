@@ -86,6 +86,7 @@ namespace DragonScreen
             Leg = ApproachLeg.Phasing;
             startedAt = Planetarium.GetUniversalTime();
             lastBurnAt = -999.0;
+            haltReported = null;
             Debug.Log(Tag + "rendezvous ENGAGED - target '" + Station.vesselName + "', "
                           + (Vector3d.Distance(v.CoM, Station.CoM) / 1000.0).ToString("F1") + " km");
         }
@@ -111,6 +112,7 @@ namespace DragonScreen
             DirectApproachOps.Reset();
             Engaged = false; Station = null; ship = null;
             phaseReturnUt = 0.0;
+            haltReported = null;
             RangeM = 0.0; ClosingMps = 0.0; LateralMps = 0.0; AlongTrackM = 0.0; LastDvMps = 0.0;
             Note = "-";
         }
@@ -152,50 +154,80 @@ namespace DragonScreen
             double stnSma = (Station.orbit != null) ? Station.orbit.semiMajorAxis : 0.0;
             Leg = Approach.LegFor(RangeM, AlongTrackM, GoalRangeM, ourSma, stnSma);
 
-            // ---- ⛔ INSIDE THE GATE, FLY IT DIRECTLY. THE CW LADDER IS FOR OUTSIDE. ----
-            // F9I gates this at `stDirectMax` (10 km) "and nowhere else", and the reason is a flight:
-            // on 029 a good intercept was followed by APPROACH-500M-1, 500M-2, 200M-1, 200M-2, each
-            // with its own match burn, running to 1936 s - "every leg after it was sloppier than the
-            // one before, because a CW transfer flown from a standstill 2 km out is solving a problem
-            // we do not have." We are already co-moving and inside the pursuit gate; the only thing
-            // left is to point at it and close.
+            // ================================================================================
+            //  ⛔ THIS IS F9I'S LIVE RENDEZVOUS, AND IT IS SHORTER THAN THE ONE IT REPLACED.
             //
-            // ⚠ AND THE LAUNCH WINDOW MAKES THIS THE NORMAL PATH. Now that §1 is wired, arrivals
-            // land within a few km, which is inside the gate - so this branch, not the ladder, is what
-            // an ordinary ferry flies.
+            //  `StRendezvousAndDock:2027`, in capitals in its own source:
+            //      ---- MATCH THE ORBIT, THEN JUST FLY THE GAP. DO NOT PHASE. ----
+            //      ---- NO CIRCULARISATION, NO NODES, NO PHASING. JUST GO. ----
             //
-            // If it throws us back OUTSIDE the gate, the ladder genuinely is the right tool again and
-            // the fall-through below picks it up on the next tick.
+            //  and its reason, which is our 2026-08-11 flight described in advance:
+            //      "Every node-based step has hurt rather than helped. StMatchStationOrbit's
+            //       'circularise at apoapsis' burn OVERSHOT on flight 011: SMA 683.06 -> 691.61 km
+            //       against a station at 686.75... The launch already puts us in the station's
+            //       orbit; what is left is a RELATIVE MOTION problem, so fly it directly."
+            //
+            //  We had the node machinery in a per-tick classifier, so it re-fired forever: 28
+            //  orbit-match burns, SMA error growing 593 -> 12 986 m, 11.7 hours of warp requested in
+            //  a twenty-minute session, and the crew gave up. F9I hit the same divergence on flight
+            //  011 and its fix was to DELETE THE STEP, not to tune it.
+            //
+            //  So: arrived, or inside the gate and flying it directly, or STOPPED. There is no
+            //  fourth branch, and that is the whole point.
+            // ================================================================================
+
             if (DirectApproachOps.Engaged)
             {
                 DirectApproachOps.Tick();
                 Note = "DIRECT - " + DirectApproachOps.Note;
                 if (DirectApproachOps.Complete) Arrived();
+                // Thrown back outside the gate: the approach refuses on its own and we fall through
+                // to the report below on the next tick.
+                else if (DirectApproachOps.Phase == DirectPhase.Refused) Halt("pushed outside the gate");
                 return;
             }
-            if (Leg != ApproachLeg.Arrived && Leg != ApproachLeg.MatchOrbit
-                && DirectApproach.InsideGate(RangeM) && !NodeExecutor.Active
-                && DirectApproachOps.Phase != DirectPhase.Refused)
+
+            if (Leg == ApproachLeg.Arrived) { Arrived(); return; }
+
+            // ⚠ DISTANCE AND NOTHING ELSE. The previous gate also demanded `Leg != MatchOrbit`,
+            // which is exactly the leg the vehicle was in at 4.4 km - so the branch that exists for
+            // this range could never run at that range. F9I gates on `target:distance < stDirectMax`
+            // "and nowhere else".
+            if (DirectApproach.InsideGate(RangeM))
             {
                 if (DirectApproachOps.Engage(ship, Station)) { Note = "DIRECT APPROACH"; return; }
+                Halt(DirectApproachOps.Note);
+                return;
             }
 
-            switch (Leg)
-            {
-                case ApproachLeg.Arrived: Arrived(); break;
-                case ApproachLeg.Terminal: FlyTerminal(); break;
-                case ApproachLeg.MatchOrbit: FlyMatchOrbit(); break;
-                case ApproachLeg.Clohessy: FlyCw(st); break;
-                default: FlyPhasing(); break;
-            }
+            // ---- OUTSIDE THE GATE: REPORT AND STOP. DO NOT PLAN A NODE. ----
+            // F9I, on the same fall-through: "A failed approach is a thing to report and re-try
+            // deliberately, not to hand to a planner that answers with a two-month wait." Its
+            // numbers: flight 020 planned a node 60 days out, 015 lost 89 days, 014 lost 13.
+            Halt((RangeM / 1000.0).ToString("F1") + " km is outside the "
+                 + (DirectApproach.GateM / 1000.0).ToString("F0") + " km gate");
         }
 
         /// <summary>
-        /// Build the CW state in the STATION's LVLH frame: x radial out, y along-track, z normal.
+        /// Stop the approach where it is, holding attitude, and say why.
         ///
-        /// x and y are built WITHOUT a cross product so their handedness cannot be wrong, exactly as
-        /// F9I does - see CwTargeting's header for why that makes the solver handedness-proof.
+        /// ⛔ STOPPING IS A RESULT, NOT A FAILURE. The capsule is left co-moving and safe with every
+        /// option open, which is worth more than any burn this code could pick on its own. The crew
+        /// press RENDEZVOUS again to retry from here.
         /// </summary>
+        private static void Halt(string why)
+        {
+            Hold();
+            Note = "STOPPED - " + why + ". Press RENDEZVOUS again to retry from here.";
+            if (haltReported == why) return;
+            haltReported = why;
+            Debug.LogWarning(Tag + "rendezvous stopped - " + why + ". Range "
+                             + (RangeM / 1000.0).ToString("F2") + " km, closing "
+                             + ClosingMps.ToString("F2") + " m/s. Nothing burned.");
+        }
+
+        private static string haltReported;
+
         private static CwState BuildState(out double alongTrack)
         {
             CwState s = new CwState();
@@ -233,6 +265,30 @@ namespace DragonScreen
         /// station's altitude in one burn - the ascent already put apoapsis within a few hundred
         /// metres of the station's radius, so anywhere else would take a Hohmann.
         /// </summary>
+        // =====================================================================================
+        //  ⛔ EVERYTHING BELOW THIS LINE IS DEAD BY DECISION. NOTHING CALLS IT, AND NOTHING SHOULD.
+        //
+        //  `FlyMatchOrbit`, `FlyCw`, `FlyPhasing` and `FlyTerminal` are faithful ports of laws F9I
+        //  itself stopped using. Its own source marks the first of them the same way:
+        //
+        //      station_ops.ks:1951
+        //      ---- DEAD BY DECISION: NOTHING CALLS StMatchStationOrbit, AND NOTHING SHOULD. ----
+        //
+        //  They are kept, not deleted, for one reason: the arithmetic was read out of the source and
+        //  is worth not losing if a mission ever needs it - a launch into the WRONG orbit, or a
+        //  station somewhere other than the one we ferry to. What must not happen is one of them
+        //  being quietly reconnected because the name reads like something the mission needs.
+        //
+        //  What it cost when they WERE connected, on 2026-08-11: 28 orbit-match burns, semi-major
+        //  axis error growing 593 -> 12 986 m, 11.7 hours of warp requested inside a twenty-minute
+        //  session, and an abandoned flight. F9I's equivalent numbers for the phasing planner are
+        //  60 days (flight 020), 89 days (015) and 13 days (014).
+        //
+        //  ⚠ IF YOU RECONNECT ANY OF THESE, THE LADDER NEEDS THE THING IT NEVER HAD: a bound. An
+        //  attempt count, a Δv budget, and a convergence test that fails loudly. The reason the
+        //  live path above needs none of that is that it does not loop at all.
+        // =====================================================================================
+
         private static void FlyMatchOrbit()
         {
             if (NodeExecutor.Active)

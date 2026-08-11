@@ -31,6 +31,7 @@ public static class ReturnPathTest
     public static int Run()
     {
         Console.WriteLine("DragonScreen return-path tests");
+        Rendezvous();
         Boosterback();
         Direct();
         Flips();
@@ -41,6 +42,96 @@ public static class ReturnPathTest
         EntryActuation();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
+    }
+
+    // ================================================================== the rendezvous
+
+    /// <summary>
+    /// The rendezvous, driven from THE GEOMETRY THAT ENDED THE 2026-08-11 FLIGHT.
+    ///
+    /// The capsule arrived 4.4 km from the station with its semi-major axis 750 m out. That is the
+    /// case F9I describes as "a RELATIVE MOTION problem, so fly it directly" - and instead the
+    /// classifier called it `MatchOrbit`, planned a node, and did it 28 more times.
+    ///
+    /// These checks are on the LAW, not on the glue: what `LegFor` says, what the gate admits, and
+    /// what one ladder of speeds allows. Written so the arrangement that produced 11.7 hours of warp
+    /// cannot be reassembled without one of them going red.
+    /// </summary>
+    static void Rendezvous()
+    {
+        const double ArrivalRangeM = 4400.0;      // measured, 10:41:57
+        const double SmaErrM = 750.0;             // 86.0 km apoapsis vs a station at ~86.75
+
+        // ---- THE GATE ADMITS THE CASE THAT ACTUALLY HAPPENED ----
+        Check("4.4 km is inside the direct-approach gate",
+              DirectApproach.InsideGate(ArrivalRangeM), "");
+        Check("and the gate is the only test - 10 km, per F9I's 'and nowhere else'",
+              DirectApproach.InsideGate(DirectApproach.GateM)
+              && !DirectApproach.InsideGate(DirectApproach.GateM + 1.0), "");
+
+        // ---- ⛔ THE CLASSIFIER STILL SAYS 'MatchOrbit' HERE, AND THAT MUST NOT MATTER. ----
+        // LegFor is unchanged and still reports MatchOrbit for this geometry - it is a description
+        // of the orbits, and it is accurate. What changed is that StationApproach no longer ACTS on
+        // it. Pinning both halves means a future edit cannot quietly make the leg authoritative
+        // again without this going red.
+        Check("LegFor still classifies the 10:37 arrival as MatchOrbit",
+              Approach.LegFor(ArrivalRangeM, 200.0, 60.0, 683000.0, 683000.0 + SmaErrM)
+                  == ApproachLeg.MatchOrbit, "");
+        Check("...and OrbitMatch still considers that error worth a burn",
+              OrbitMatch.Needed(683000.0, 683000.0 + SmaErrM), "");
+        Check("...but the range alone is what admits the direct approach",
+              DirectApproach.InsideGate(ArrivalRangeM), "");
+
+        // ---- ONE SPEED LADDER ----
+        // DockControl used a second, faster law while its comment claimed otherwise. At 100 m the
+        // docking servo allowed 2.5 m/s against the approach ladder's 1.0.
+        double[] ranges = { 100.0, 200.0, 300.0, 600.0, 1000.0, 1500.0, 3000.0 };
+        bool same = true;
+        for (int i = 0; i < ranges.Length; i++)
+            if (Math.Abs(DockControl.SpeedCapFor(ranges[i]) - Approach.SpeedCap(ranges[i])) > 1e-9)
+                same = false;
+        Check("the docking servo and the approach fly ONE ladder wherever it binds", same, "");
+        Check("at 100 m that is 1 m/s, where the old servo allowed 2.5",
+              Math.Abs(DockControl.SpeedCapFor(100.0) - 1.0) < 1e-9,
+              DockControl.SpeedCapFor(100.0).ToString("F2"));
+        // Inside the near band the servo is TIGHTER than the ladder, never looser - the ladder has
+        // no opinion about the last few metres because F9I hands docking away at 200 m.
+        Check("and inside it the servo only ever tightens",
+              DockControl.SpeedCapFor(50.0) < Approach.SpeedCap(50.0)
+              && DockControl.SpeedCapFor(5.0) < Approach.SpeedCap(5.0), "");
+
+        // ---- THE APPROACH ARRIVES, AND IT ARRIVES SLOW ----
+        // The commanded speed must fall to the handover speed exactly at the handover range, or the
+        // capsule cannot arrive matched however well it flies.
+        Check("from 4.4 km the commanded speed is inside the ladder",
+              DirectApproach.WantSpeedMps(ArrivalRangeM) <= Approach.SpeedCap(ArrivalRangeM) + 1e-9,
+              DirectApproach.WantSpeedMps(ArrivalRangeM).ToString("F2"));
+        Check("and at the handover range it IS the handover speed",
+              Math.Abs(DirectApproach.WantSpeedMps(DirectApproach.GoalM)
+                       - DirectApproach.MatchVelMps) < 1e-9, "");
+
+        // ---- AND THE WHOLE THING TAKES MINUTES, NOT ORBITS ----
+        // Integrate the commanded profile from 4.4 km to the 200 m handover. The point is the ORDER
+        // OF MAGNITUDE: F9I's argument for flying it directly is that "the manoeuvre is short
+        // compared with an orbit", which is also what makes a pursuit law safe here.
+        double d = ArrivalRangeM, t = 0.0;
+        int guard = 0;
+        while (d > DirectApproach.GoalM && guard++ < 200000)
+        {
+            double v = DirectApproach.WantSpeedMps(d);
+            if (v <= 0.0) break;
+            d -= v * 0.5;
+            t += 0.5;
+        }
+        Check("closing 4.4 km takes minutes, not orbits",
+              d <= DirectApproach.GoalM && t < 900.0,
+              t.ToString("F0") + " s to " + d.ToString("F0") + " m");
+
+        // ---- THE WARP BOUND IS GLUE-SIDE AND DELIBERATELY NOT ASSERTED HERE ----
+        // `NodeExecutor` touches KSP, and this project links `src/pure` only - that boundary is the
+        // reason the pure half can be tested at all, so it is not worth breaking for one check.
+        // The bound itself (refuse any wait longer than one orbital period, and say so) lives in
+        // NodeExecutor.WarpToIgnition and is verified by the log line it prints.
     }
 
     // ================================================================== the boostback
