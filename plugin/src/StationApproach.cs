@@ -108,6 +108,7 @@ namespace DragonScreen
 
         public static void Reset()
         {
+            DirectApproachOps.Reset();
             Engaged = false; Station = null; ship = null;
             phaseReturnUt = 0.0;
             RangeM = 0.0; ClosingMps = 0.0; LateralMps = 0.0; AlongTrackM = 0.0; LastDvMps = 0.0;
@@ -150,6 +151,34 @@ namespace DragonScreen
             double ourSma = (ship.orbit != null) ? ship.orbit.semiMajorAxis : 0.0;
             double stnSma = (Station.orbit != null) ? Station.orbit.semiMajorAxis : 0.0;
             Leg = Approach.LegFor(RangeM, AlongTrackM, GoalRangeM, ourSma, stnSma);
+
+            // ---- ⛔ INSIDE THE GATE, FLY IT DIRECTLY. THE CW LADDER IS FOR OUTSIDE. ----
+            // F9I gates this at `stDirectMax` (10 km) "and nowhere else", and the reason is a flight:
+            // on 029 a good intercept was followed by APPROACH-500M-1, 500M-2, 200M-1, 200M-2, each
+            // with its own match burn, running to 1936 s - "every leg after it was sloppier than the
+            // one before, because a CW transfer flown from a standstill 2 km out is solving a problem
+            // we do not have." We are already co-moving and inside the pursuit gate; the only thing
+            // left is to point at it and close.
+            //
+            // ⚠ AND THE LAUNCH WINDOW MAKES THIS THE NORMAL PATH. Now that §1 is wired, arrivals
+            // land within a few km, which is inside the gate - so this branch, not the ladder, is what
+            // an ordinary ferry flies.
+            //
+            // If it throws us back OUTSIDE the gate, the ladder genuinely is the right tool again and
+            // the fall-through below picks it up on the next tick.
+            if (DirectApproachOps.Engaged)
+            {
+                DirectApproachOps.Tick();
+                Note = "DIRECT - " + DirectApproachOps.Note;
+                if (DirectApproachOps.Complete) Arrived();
+                return;
+            }
+            if (Leg != ApproachLeg.Arrived && Leg != ApproachLeg.MatchOrbit
+                && DirectApproach.InsideGate(RangeM) && !NodeExecutor.Active
+                && DirectApproachOps.Phase != DirectPhase.Refused)
+            {
+                if (DirectApproachOps.Engage(ship, Station)) { Note = "DIRECT APPROACH"; return; }
+            }
 
             switch (Leg)
             {

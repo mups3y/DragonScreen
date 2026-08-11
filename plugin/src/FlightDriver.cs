@@ -106,6 +106,7 @@ namespace DragonScreen
                 AutoPilot.Disengage("left the flight scene");
                 BoosterRecovery.Reset();
                 StationApproach.Reset();
+                DirectApproachOps.Reset();
                 NodeExecutor.Reset();
                 DockingOps.Reset();
                 UndockOps.Reset();

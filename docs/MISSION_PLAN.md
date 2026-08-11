@@ -114,7 +114,8 @@ flight 012.** Phasing above 3 km, CW from 0.5–3 km, RCS below, periapsis floor
 |---|---|---|
 | match the station's orbit | `StMatchStationOrbit` | **PORTED** `OrbitMatch`, first leg of the ladder |
 | phasing leg | `StPhaseLeg`, `StAlongTrack` | **PORTED** `pure/Phasing.cs`, wired through the node executor |
-| Clohessy–Wiltshire solve and leg | `StCwSolve`, `StCwLeg` | **PORTED** `pure/CwTargeting.cs`, wired with a periapsis floor |
+| Clohessy–Wiltshire solve and leg | `StCwSolve`, `StCwLeg` | **PORTED** `pure/CwTargeting.cs`, wired with a periapsis floor — and now reachable ONLY from outside the 10 km gate, which is the regime it was designed for |
+| **direct approach inside 10 km** | `StDirectApproach`, `StDirectDv` | **PORTED** `pure/DirectApproach.cs` + `src/DirectApproachOps.cs`. F9I's normal path and ours: the launch window puts arrivals within a few km, and flight 029 spent 1936 s flying CW legs across 2 km it was already co-moving with |
 | terminal approach, closest port | `StTerminal`, `StClosestPort`, `StCloseIn` | **PORTED** ladder and port selection both |
 | node execution | `StExecNode`, `StBurnNode`, `StVisViva` | **PORTED** `src/NodeExecutor.cs`, with the periapsis floor inside it |
 | speed cap by range | `StSpeedCap` | **PORTED** `Approach.SpeedCap`, all four bands |

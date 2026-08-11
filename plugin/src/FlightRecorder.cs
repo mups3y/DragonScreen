@@ -373,7 +373,11 @@ namespace DragonScreen
             F(r, ImpactPredictor.BallisticCoefficient(BoosterRecovery.BoosterVessel));
 
             // ---- the middle of the mission. Seven columns, no branches - see the note above. ----
-            S(r, StationApproach.Engaged ? StationApproach.Leg.ToString() : "-");
+            // ⚠ The DIRECT branch is a different law from the ladder, so the column has to say
+            // which one flew - a rendezvous logged only as "Terminal" cannot be told apart from one
+            // that never entered the gate at all.
+            S(r, DirectApproachOps.Engaged ? ("DIRECT-" + DirectApproachOps.Phase)
+                 : (StationApproach.Engaged ? StationApproach.Leg.ToString() : "-"));
             S(r, DockingOps.Stage.ToString());
             S(r, UndockOps.Stage.ToString());
 

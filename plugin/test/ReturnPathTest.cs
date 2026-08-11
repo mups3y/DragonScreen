@@ -31,6 +31,7 @@ public static class ReturnPathTest
     public static int Run()
     {
         Console.WriteLine("DragonScreen return-path tests");
+        Direct();
         Flips();
         Overflights();
         PhaseDown();
@@ -39,6 +40,96 @@ public static class ReturnPathTest
         EntryActuation();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
+    }
+
+    // ================================================================== the direct approach
+
+    /// <summary>
+    /// The short-range rendezvous. Four traps, each of them a flight, all documented in
+    /// `pure/DirectApproach.cs`.
+    /// </summary>
+    static void Direct()
+    {
+        // ---- ⛔ THE GATE. Pursuit beyond it is what de-orbited flight 012. ----
+        Check("inside the gate the direct approach is allowed",
+              DirectApproach.InsideGate(DirectApproach.GateM), "");
+        Check("one metre beyond it, it is not",
+              !DirectApproach.InsideGate(DirectApproach.GateM + 1.0), "");
+        Check("and the gate is F9I's 10 km, not a rounder number someone preferred",
+              Math.Abs(DirectApproach.GateM - 10000.0) < 1e-9, "");
+
+        // ---- TRAP 3: THE SPEED IS MEASURED FROM THE GOAL, NOT FROM THE STATION ----
+        // This is the one that decides whether the approach can arrive at all. At the handover range
+        // the commanded speed must BE the handover speed; anything else and the capsule was always
+        // going to get there too fast however well it flew.
+        double atGoal = DirectApproach.WantSpeedMps(DirectApproach.GoalM);
+        Check("at the handover range the commanded speed IS the handover speed",
+              Math.Abs(atGoal - DirectApproach.MatchVelMps) < 1e-9, atGoal.ToString("F3"));
+
+        // The version measured from the STATION - `d * CloseRate` - is what F9I had, and at 200 m it
+        // asks for 4 m/s, capped by the ladder to 3. Pin the difference so nobody "simplifies" the
+        // taper back to the broken form.
+        double naive = Math.Min(Approach.SpeedCap(DirectApproach.GoalM),
+                                Math.Max(DirectApproach.MatchVelMps,
+                                         DirectApproach.GoalM * DirectApproach.CloseRate));
+        Check("...where measuring from the STATION would ask for several m/s at the same point",
+              naive > atGoal * 4.0, naive.ToString("F2"));
+
+        // ---- THE PROFILE IS SANE EVERYWHERE, NOT JUST AT THE ENDS ----
+        bool monotonic = true, capped = true, floored = true;
+        double prev = -1.0;
+        for (double d = DirectApproach.GoalM; d <= DirectApproach.GateM; d += 25.0)
+        {
+            double want = DirectApproach.WantSpeedMps(d);
+            if (want < prev - 1e-9) monotonic = false;
+            if (want > Approach.SpeedCap(d) + 1e-9) capped = false;
+            if (want < DirectApproach.MatchVelMps - 1e-9) floored = false;
+            prev = want;
+        }
+        Check("the commanded speed never decreases with range", monotonic, "");
+        Check("and never exceeds the ladder's cap at any range", capped, "");
+        Check("and never falls below the handover speed", floored, "");
+
+        // ---- THE HARD CAP IS HARD. Overspeed means NO THRUST. ----
+        // F9I: "the residue is cancelled on the braking burn, never by stopping and starting again."
+        double cap = Approach.SpeedCap(1000.0);
+        Check("at the cap the throttle stays shut",
+              !DirectApproach.Burn(5.0, 0.5, cap, 1000.0), "");
+        Check("over the cap it stays shut too",
+              !DirectApproach.Burn(5.0, 0.5, cap + 2.0, 1000.0), "");
+        Check("under it, and pointed, it burns",
+              DirectApproach.Burn(5.0, 0.5, cap - 1.0, 1000.0), "");
+
+        // Pointing matters: thrusting through a large aim error makes a correction into a new error.
+        Check("a correction we are not pointed at is not burned",
+              !DirectApproach.Burn(5.0, DirectApproach.AimToleranceDeg, 0.0, 1000.0), "");
+        // And a correction too small to be worth propellant is left alone.
+        Check("a correction inside tolerance is not burned",
+              !DirectApproach.Burn(DirectApproach.DvToleranceMps, 0.0, 0.0, 1000.0), "");
+
+        // ---- THROTTLE ----
+        // ⚠ THE CORRECTION'S SIZE CANNOT SATURATE THE THROTTLE, AND THAT IS THE POINT. The
+        // demand is an ACCELERATION capped at BurnAccel, so a 100 m/s error on a light capsule with a
+        // strong engine still asks for 1.5 m/s^2 and barely opens the throttle. My first version of
+        // this check asserted full throttle for a big correction and failed - the test was wrong, not
+        // the law, and the law is what stops an approach burn slamming on.
+        double big = DirectApproach.Throttle(100.0, 10.0, 200.0);
+        Check("a huge correction still only asks for the cruise acceleration",
+              Math.Abs(big - DirectApproach.BurnAccel * 10.0 / 200.0) < 1e-9, big.ToString("F3"));
+        Check("what saturates the throttle is a weak engine, not a big error",
+              Math.Abs(DirectApproach.Throttle(100.0, 10.0, 5.0) - 1.0) < 1e-9, "");
+        Check("a tiny one still keeps the engine lit at the floor",
+              Math.Abs(DirectApproach.Throttle(1e-6, 10.0, 20000.0)
+                       - DirectApproach.ThrottleMin) < 1e-9, "");
+        // The taper: dv/4 s of acceleration, capped at the cruise value, scaled by mass over thrust.
+        double tapered = Math.Min(DirectApproach.BurnAccel, 2.0 / DirectApproach.BurnTaperS);
+        Check("and in between it is mass times the tapered acceleration over thrust",
+              Math.Abs(DirectApproach.Throttle(2.0, 8.0, 200.0) - tapered * 8.0 / 200.0) < 1e-9, "");
+
+        Check("arrival needs BOTH the range and the speed",
+              DirectApproach.Arrived(DirectApproach.GoalM, DirectApproach.MatchVelMps)
+              && !DirectApproach.Arrived(DirectApproach.GoalM, 2.0)
+              && !DirectApproach.Arrived(5000.0, 0.1), "");
     }
 
     // ================================================================== the turnaround
