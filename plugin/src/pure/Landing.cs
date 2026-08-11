@@ -687,6 +687,15 @@ namespace DragonScreen
                     c.Aim = (s.PhaseElapsedS < FlipHoldS) ? LandingAim.Hold : LandingAim.Flip;
                     c.Throttle = 0.0;
                     c.StoppingTime = FlipStoppingTime;
+                    // ---- ⛔ RCS ON. THIS IS THE ONE THAT COST 152 SECONDS. ----
+                    // `Rcs` defaulted to false here, and BoosterRecovery obeys it literally: it
+                    // SetGroup(RCS,false). With the throttle at zero there is no gimbal torque
+                    // either, so the stage was flipping on REACTION WHEELS ALONE - 4.1 kN.m against
+                    // a 4919 t.m^2 pitch inertia. BOOSTER.ks:303 is `set steeringmanager:
+                    // maxstoppingtime to 3. rcs on.` on one line, and Flip1 says why: "this is the
+                    // one moment the booster is asked to rotate hard, on a nearly empty stage, with
+                    // no aerodynamic authority."
+                    c.Rcs = true;
                     c.Note = (s.PhaseElapsedS < FlipHoldS) ? "SEP QUIET" : "FLIP";
                     break;
 
@@ -697,6 +706,12 @@ namespace DragonScreen
                     c.Aim = LandingAim.FlatRetrograde;
                     c.Throttle = Ramp(s.PhaseElapsedS);
                     c.StoppingTime = BoostbackStoppingTime;
+                    // ---- ⚠ OFF UNTIL THE THROTTLE SPOOLS, THEN ON. NOT SIMPLY ON. ----
+                    // BOOSTER.ks does `rcs off` on Boostback's FIRST LINE (:408) and `rcs on` only
+                    // once EngSpl(1) starts spooling (:429). The stage establishes its aim on wheels
+                    // and gimbal, and cold gas joins when there is thrust to steer. Reproduced from
+                    // the ramp rather than a second timer, so the two cannot drift apart.
+                    c.Rcs = Ramp(s.PhaseElapsedS) > 0.0;
                     c.Note = "BOOSTBACK - KILLING DOWNRANGE";
                     break;
 
@@ -715,6 +730,8 @@ namespace DragonScreen
                     // thrust: it keeps the engines lit so the gimbal stays authoritative.
                     c.Throttle = BoostbackThrottle(s);
                     c.StoppingTime = BoostbackStoppingTime;
+                    // Lit throughout this phase, so RCS is on - BOOSTER.ks:429 onward.
+                    c.Rcs = true;
                     c.Note = "BOOSTBACK";
                     break;
 
@@ -755,6 +772,9 @@ namespace DragonScreen
                     c.Throttle = 1.0;
                     // Straight retrograde. No lean - see GuidedLean.
                     c.StoppingTime = EntryStoppingTime;
+                    // AtmGNC:659 `rcs on` covers the whole of the coast, the entry burn and the
+                    // guided descent. Only Land() turns it off again, at :781.
+                    c.Rcs = true;
                     c.Note = "ENTRY BURN";
                     break;
 
@@ -765,6 +785,7 @@ namespace DragonScreen
                     // propellant.
                     c.GuidedLean = true;
                     c.StoppingTime = GlideStoppingTime;
+                    c.Rcs = true;                       // still inside AtmGNC's `rcs on`
                     c.Note = "DESCENT";
                     break;
 
@@ -1019,8 +1040,13 @@ namespace DragonScreen
             if (!enginesLit)
             {
                 if (altitudeRadarM >= GuidanceHandAltM) return AeroAoaDeg;
-                double up = altitudeRadarM / 100.0;
-                return (up < AeroAoaDeg) ? AeroAoaDeg : up;
+                // ---- ⛔ A PLAIN TAPER. THE max() HERE WAS MINE AND IT WAS WRONG. ----
+                // BOOSTER.ks:755 is `set F9L_AOA to (alt:radar / 100).` and nothing else - so F9I
+                // runs 40 deg at 4 km down to 1 deg at 100 m, giving the stage less and less
+                // authority as it runs out of height to use it in. Flooring it at 15 held a
+                // fifteen-degree angle of attack all the way to touchdown, and made the command
+                // JUMP from 15 to 40 crossing 4 km instead of continuing smoothly.
+                return altitudeRadarM / 100.0;
             }
 
             double a = -(altitudeRadarM / 100.0) - 0.25;

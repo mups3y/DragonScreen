@@ -31,6 +31,7 @@ public static class ReturnPathTest
     public static int Run()
     {
         Console.WriteLine("DragonScreen return-path tests");
+        Boosterback();
         Direct();
         Flips();
         Overflights();
@@ -40,6 +41,115 @@ public static class ReturnPathTest
         EntryActuation();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
+    }
+
+    // ================================================================== the boostback
+
+    /// <summary>
+    /// The boostback's RCS map, its AoA taper, and the sign convention its termination depends on.
+    ///
+    /// ---- ⛔ THE SIGN HAS NEVER BEEN EXERCISED IN FLIGHT. ----
+    /// `BoostbackDone` waits for the predicted miss to go below −2700 - i.e. 2.7 km PAST the pad -
+    /// and on the one flight we have it never went negative at all: it read +67…+82 km for the whole
+    /// burn, which ended on its 75 s safety cap instead. The convention is right (BOOSTER.ks negates
+    /// once the impact is beyond the pad and terminates on `impDist < -2700`), but "right and never
+    /// executed" is how the flip stayed inverted for weeks. Pin it here.
+    /// </summary>
+    static void Boosterback()
+    {
+        // ⚠ GIVE IT A REAL STATE. A zeroed LandingInputs is at zero altitude and zero speed, so
+        // the transition chain calls Touchdown before it ever reaches the boostback test - which is
+        // what the first version of this fixture did.
+        LandingInputs s = new LandingInputs();
+        s.Valid = true;
+        s.AltitudeRadar = 40000.0; s.AltitudeAsl = 40000.0;
+        s.SurfaceSpeed = 600.0; s.VerticalSpeed = -200.0; s.HorizontalSpeed = 560.0;
+        s.Gravity = 9.81; s.AtmosphereDepthM = 70000.0;
+        s.InitialMissM = 80000.0;
+
+        // NEGATIVE means the impact is beyond the pad. Only then may the burn stop.
+        s.PredictedMissM = -(Landing.BoostbackOvershootM + 1.0);
+        s.PhaseElapsedS = 10.0;
+        LandingCommand done = Landing.Guide(s, LandingPhase.Boostback);
+        Check("boostback ends once the impact is 2.7 km PAST the pad",
+              done.Phase == LandingPhase.Coast, done.Phase.ToString());
+
+        // Short of the pad - positive - must keep burning however large the number is.
+        s.PredictedMissM = 80000.0;
+        Check("and keeps burning while the impact is still SHORT",
+              Landing.Guide(s, LandingPhase.Boostback).Phase == LandingPhase.Boostback, "");
+        // Past the pad but not yet past the overshoot: still burning.
+        s.PredictedMissM = -(Landing.BoostbackOvershootM - 100.0);
+        Check("...and while it is past the pad but inside the overshoot",
+              Landing.Guide(s, LandingPhase.Boostback).Phase == LandingPhase.Boostback, "");
+
+        // ⚠ The safety cap must remain a BACKSTOP, not the normal exit. On 2026-08-11 it was the
+        // only thing that ended the burn.
+        s.PredictedMissM = 80000.0;
+        s.PhaseElapsedS = Landing.MaxBoostbackS + 1.0;
+        Check("the 75 s cap still ends a burn that is going nowhere",
+              Landing.Guide(s, LandingPhase.Boostback).Phase == LandingPhase.Coast, "");
+
+        // ---- THE RCS MAP. Ported statement by statement from BOOSTER.ks - see Landing.Guide. ----
+        LandingInputs f = new LandingInputs();
+        f.Valid = true;
+        f.AltitudeRadar = 50000.0; f.AltitudeAsl = 50000.0;
+        f.SurfaceSpeed = 700.0; f.VerticalSpeed = 400.0;
+        f.Gravity = 9.81; f.AtmosphereDepthM = 70000.0;
+        f.PhaseElapsedS = Landing.FlipHoldS + 1.0;
+        Check("RCS is ON for the flip - the one moment it must rotate hard",
+              Landing.Guide(f, LandingPhase.Flip).Rcs, "");
+
+        LandingInputs b = new LandingInputs();
+        b.Valid = true;
+        b.AltitudeRadar = 45000.0; b.AltitudeAsl = 45000.0;
+        b.SurfaceSpeed = 650.0; b.VerticalSpeed = -100.0; b.HorizontalSpeed = 640.0;
+        b.Gravity = 9.81; b.AtmosphereDepthM = 70000.0;
+        // ⚠ AND IT MUST STILL HAVE DOWNRANGE VELOCITY, or BoostbackKill hands straight on to
+        // Boostback (`HorizRetroMag <= 0.03`) and the check reads the wrong phase's RCS.
+        b.HorizRetroMag = 0.9;
+        b.InitialMissM = 80000.0; b.PredictedMissM = 80000.0;
+        b.PhaseElapsedS = 0.0;
+        Check("RCS is OFF at the very start of the boostback, before the throttle spools",
+              !Landing.Guide(b, LandingPhase.BoostbackKill).Rcs, "");
+        b.PhaseElapsedS = 1.0;
+        Check("...and ON once it is spooling",
+              Landing.Guide(b, LandingPhase.BoostbackKill).Rcs, "");
+
+        LandingInputs land = new LandingInputs();
+        land.Valid = true;
+        land.AltitudeRadar = 100.0; land.VerticalSpeed = -30.0; land.Gravity = 9.81;
+        land.AccelThreeEngine = 30.0; land.AccelOneEngine = 13.0; land.MaxThrustAccel = 30.0;
+        Check("and OFF for the landing burn - the gimbal has it, cold gas only fights it",
+              !Landing.Guide(land, LandingPhase.LandingBurn).Rcs, "");
+
+        // ---- THE AoA TAPER. BOOSTER.ks:755 is a plain alt/100 with no floor. ----
+        Check("above 4 km the ceiling is the flat 15 deg",
+              Math.Abs(Landing.GuidanceAoaDeg(5000.0, false) - Landing.AeroAoaDeg) < 1e-9, "");
+        Check("at 4 km it tapers, and does NOT jump to 40",
+              Math.Abs(Landing.GuidanceAoaDeg(4000.0, false) - Landing.AeroAoaDeg) < 1e-9,
+              Landing.GuidanceAoaDeg(4000.0, false).ToString("F1"));
+        Check("at 1 km it is 10 deg, not floored at 15",
+              Math.Abs(Landing.GuidanceAoaDeg(1000.0, false) - 10.0) < 1e-9,
+              Landing.GuidanceAoaDeg(1000.0, false).ToString("F2"));
+        Check("at 100 m it is 1 deg - almost no steering left, which is the point",
+              Math.Abs(Landing.GuidanceAoaDeg(100.0, false) - 1.0) < 1e-9,
+              Landing.GuidanceAoaDeg(100.0, false).ToString("F2"));
+        // ⚠ THE STEP AT 4 km IS F9I'S, NOT A DEFECT. AtmGNC holds the flat 15 through the arc and
+        // only starts `alt:radar / 100` once below 4000 - where that expression is ~40. So the
+        // ceiling really does jump UP as the stage descends through 4 km and then tapers away. My
+        // first version of this check asserted a single monotonic curve across the boundary and
+        // failed; the law is right and the expectation was mine. It binds rarely in any case: F9I
+        // measures flown angles of 0.31-0.86 deg through this phase, orders of magnitude inside it.
+        bool tapers = true;
+        double prev = double.MaxValue;
+        for (double a = Landing.GuidanceHandAltM - 1.0; a >= 0.0; a -= 50.0)
+        {
+            double v = Landing.GuidanceAoaDeg(a, false);
+            if (v > prev + 1e-9) tapers = false;
+            prev = v;
+        }
+        Check("below 4 km the ceiling only ever shrinks as the stage descends", tapers, "");
     }
 
     // ================================================================== the direct approach

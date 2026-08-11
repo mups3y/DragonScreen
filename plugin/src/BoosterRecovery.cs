@@ -55,6 +55,7 @@ namespace DragonScreen
         private static double phaseStartedAt;
 
         private static bool noBoosterReported;
+        private static bool packedReported;
 
         // ---- FOR THE RECORDER ----
         // Both columns wrote a hard-coded 0.0, so the two numbers that decide whether a landing was
@@ -151,12 +152,13 @@ namespace DragonScreen
             // that thinks it is mid-step, a failure already reported so never reported again.
             gridFinsOut = false;
             lastModeStepAt = 0.0; modeSteps = 0; lastWantMode = -1; modeFailReported = false;
-            phaseStartedAt = 0.0; noBoosterReported = false;
+            phaseStartedAt = 0.0; noBoosterReported = false; packedReported = false;
             TrueRadar = 0.0; DownrangeM = 0.0; initialMiss = 0.0;
             PredictedMissM = 0.0; InitialMissM = 0.0;
             RangeToPartnerM = 0.0; PhaseElapsedS = 0.0; OctaMode = -1; EnginesLit = 0;
             GridFinsOut = false; LeanFrac = 0.0; AoaDeg = 0.0;
             flipSeeded = false; flipComplete = false;
+            rollStartedAt = 0.0; rollSettledAt = 0.0;
         }
 
         // ------------------------------------------------------------------ handover
@@ -340,6 +342,24 @@ namespace DragonScreen
                 return;
             }
 
+            // ---- ⛔ A PACKED STAGE MUST NOT ADVANCE ITS OWN PHASE MACHINE. ----
+            // The packed test used to sit BELOW `Landing.Guide` and below `Phase = c.Phase`, so a
+            // booster on rails walked its whole descent in the log while nothing was applied to it -
+            // a flight that reads as flown and did nothing. Nothing we write reaches a packed vessel
+            // (`falcon-physics-range-clamp`), so the honest thing is to freeze and wait for it to
+            // reload, which is what F9I sees too.
+            if (booster.packed)
+            {
+                if (!packedReported)
+                {
+                    packedReported = true;
+                    Debug.LogWarning(Tag + "booster is on rails - recovery frozen at "
+                                         + Landing.Name(Phase) + " until it reloads");
+                }
+                return;
+            }
+            packedReported = false;
+
             LandingInputs s = Read(booster);
             LandingCommand c = Landing.Guide(s, Phase);
 
@@ -396,7 +416,6 @@ namespace DragonScreen
             //
             // What still matters is LOADED. Beyond the physics range the booster goes on rails and
             // nothing here reaches it - which is why the range is raised before separation now.
-            if (booster.packed) return;
 
             // ---- FINS OUT AT THE TOP OF THE ARC, NOT AT THE ENTRY BURN ----
             // F9I's AtmGNC opens with "grid fins out, entry burn, guided descent" - the fins are out
@@ -650,6 +669,20 @@ namespace DragonScreen
         // ---- FLIP STATE. The vectors are the glue's; the schedule is Landing's. ----
         private static Vector3d flipVec, flipFinal, flipAxis;
         private static bool flipSeeded, flipComplete;
+        private static double rollStartedAt, rollSettledAt;
+
+        /// <summary>
+        /// The controller's TOP vector.
+        ///
+        /// ⚠ NOT `ReferenceTransform.forward`, which is MINUS it. That substitution is what span
+        /// the stack at 64 deg/s on the pad; see AttitudeController.SteerTo's note.
+        /// </summary>
+        private static Vector3d TopVector(Vessel v)
+        {
+            QuaternionD rot = (QuaternionD)(v.ReferenceTransform.rotation
+                                            * Quaternion.Euler(-90f, 0f, 0f));
+            return rot * Vector3d.up;
+        }
 
         /// <summary>
         /// Walk the aim vector round toward the final attitude and return where to point NOW.
@@ -689,10 +722,49 @@ namespace DragonScreen
                 flipVec = v.ReferenceTransform.up;
                 flipSeeded = true;
                 flipComplete = false;
+                rollSettledAt = 0.0;
+                rollStartedAt = Planetarium.GetUniversalTime();
                 Debug.Log(Tag + "flip: " + deg.ToString("F0")
                           + " deg about the plane of flight, finishing "
                           + FlipGeometry.AngleDeg(fX, fY, fZ, rX, rY, rZ).ToString("F1")
                           + " deg off flat retrograde (must be ~0 for RTLS - see FlipGeometry)");
+            }
+
+            // ---- ⛔ SETTLE THE ROLL BEFORE PITCHING. THREE CONSTANTS EXISTED; THE GATE DID NOT. ----
+            // `FlipRollToleranceDeg`, `FlipRollMinS` and `FlipRollMaxS` were transcribed from Flip1
+            // and read by nothing - the same trap as `FlipDeg`, which was documented "NOT WIRED"
+            // while being called. F9I's reason, verbatim: "Rolling and pitching at once on a stage
+            // with this much inertia cross-couples and the flip wanders off the plane of flight.
+            // Three guards, all needed: the tolerance (10 deg is as good as it gets without burning
+            // RCS for nothing), a 1 s floor so a lucky first frame does not count as settled, and an
+            // 8 s ceiling so a stage that will not roll still gets flipped rather than sitting here
+            // until it hits the sea."
+            //
+            // Holding `flipVec` still is what "do not pitch yet" means here: the aim vector simply
+            // does not advance, so the controller keeps chasing the attitude it already has while
+            // the roll axis converges.
+            if (rollSettledAt <= 0.0)
+            {
+                double nowUt = Planetarium.GetUniversalTime();
+                double inRoll = nowUt - rollStartedAt;
+
+                // The roll reference the flip will use: the stage's top should lie in the plane of
+                // flight, i.e. perpendicular to the rotation axis.
+                Vector3d wantTop = Vector3d.Exclude(v.ReferenceTransform.up, -flipAxis);
+                Vector3d haveTop = TopVector(v);
+                double rollErr = (wantTop.sqrMagnitude > 1e-6)
+                               ? Vector3d.Angle(haveTop, wantTop.normalized) : 0.0;
+
+                bool settled = rollErr < Landing.FlipRollToleranceDeg
+                               && inRoll > Landing.FlipRollMinS;
+                if (settled || inRoll > Landing.FlipRollMaxS)
+                {
+                    rollSettledAt = nowUt;
+                    Debug.Log(Tag + "flip roll settled at " + rollErr.ToString("F1")
+                              + " deg after " + inRoll.ToString("F1") + " s"
+                              + (settled ? "" : " (ceiling reached - flipping anyway)"));
+                }
+                else return flipVec;          // hold the aim; do not start walking it round yet
             }
 
             double toGo = Vector3d.Angle(flipFinal, flipVec);

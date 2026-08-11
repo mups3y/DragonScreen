@@ -545,17 +545,31 @@ public static class FlightTest
         Check("powered lean is NEGATIVE", Landing.GuidanceAoaDeg(3000.0, true) < 0.0,
               Landing.GuidanceAoaDeg(3000.0, true).ToString("F2"));
         // The unpowered ceiling is 15 only ABOVE 4 km. Below it F9I follows alt:radar/100 - about
-        // 40 deg at 4 km decaying to 15 at 1500 m - and its own note is that the sub-metre landings
-        // were all flown with that authority available, so a flat clamp to 15 "has never actually
-        // been in force". Ours was that clamp, at every altitude. AtmGNC:754.
+        // 40 deg at 4 km, and it keeps going all the way down. AtmGNC:754.
         Check("unpowered above 4 km is the 15 degree trim",
               Math.Abs(Landing.GuidanceAoaDeg(6000.0, false) - Landing.AeroAoaDeg) < 1e-9,
               Landing.GuidanceAoaDeg(6000.0, false).ToString("F2"));
         Check("and below 4 km the ceiling opens up to alt/100",
               Math.Abs(Landing.GuidanceAoaDeg(3000.0, false) - 30.0) < 1e-9,
               Landing.GuidanceAoaDeg(3000.0, false).ToString("F2"));
-        Check("never below the 15 degree floor",
-              Landing.GuidanceAoaDeg(500.0, false) >= Landing.AeroAoaDeg, "");
+
+        // ---- ⛔ THERE IS NO 15 DEGREE FLOOR, AND THIS CHECK USED TO ASSERT ONE. ----
+        // It read `GuidanceAoaDeg(500, false) >= AeroAoaDeg` and passed against a `max(15, alt/100)`
+        // in the law. Both were mine. `BOOSTER.ks:755` is one statement with no clamp of any kind -
+        //     set F9L_AOA to (alt:radar / 100).
+        // - so the ceiling really does keep shrinking: 10 deg at 1 km, 1 deg at 100 m. The comment
+        // that stood here said the taper decays "to 15 at 1500 m" and then treated 15 as the bottom;
+        // 1500 m is simply where the curve happens to cross 15 on its way down.
+        //
+        // Flooring it held a fifteen-degree angle of attack on a stage in the last hundred metres of
+        // a landing burn approach - the regime F9I deliberately gives almost no steering authority,
+        // "at this point the only job is to arrive upright".
+        Check("the taper keeps going below 15 - there is no floor",
+              Math.Abs(Landing.GuidanceAoaDeg(1000.0, false) - 10.0) < 1e-9,
+              Landing.GuidanceAoaDeg(1000.0, false).ToString("F2"));
+        Check("...right down to 1 degree at 100 m",
+              Math.Abs(Landing.GuidanceAoaDeg(100.0, false) - 1.0) < 1e-9,
+              Landing.GuidanceAoaDeg(100.0, false).ToString("F2"));
 
         // Under power the authority TAPERS with height: 4 degrees down to 1, floor at 75 m, so the
         // stage stops steering and starts standing up as it arrives.
