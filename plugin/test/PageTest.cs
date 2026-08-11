@@ -41,6 +41,8 @@ public static class PageTest
 
     public static int Run()
     {
+
+        MissionButtonsTest();
         Console.WriteLine("DragonScreen page tests");
 
         Selection();
@@ -1034,4 +1036,87 @@ public static class PageTest
                   "used " + dl.Count);
         }
     }
+    /// <summary>
+    /// The FLIGHT page's mission controls: AUTO SEQUENCE and the three phase buttons.
+    ///
+    /// ---- ⛔ A CONTROL SITTING ON TOP OF ANOTHER ONE HAS HAPPENED TWICE ON THIS PAGE. ----
+    /// AutoRect's own comment records the first: it was placed at the bottom of the sidebar, straight
+    /// on top of DRAGON SEPARATION and NOSE CONE OPEN. Adding three more buttons underneath it without
+    /// a round-trip check would be inviting the third. Every rect must hit-test back to ITS OWN
+    /// action, at the centre and at all four corners, and none may overlap or leave the screen.
+    /// </summary>
+    static void MissionButtonsTest()
+    {
+        int[] sizes = { 1280, 1024, 800 };
+        int[] heights = { 703, 710, 600 };
+
+        for (int si = 0; si < sizes.Length; si++)
+        {
+            int w = sizes[si], h = heights[si];
+            float ax, ay, aw, ah;
+            Pages.AutoRect(w, h, out ax, out ay, out aw, out ah);
+
+            PageAct[] want = { PageAct.Rendezvous, PageAct.AutoDock, PageAct.UndockAndLand };
+            float[] xs = new float[Pages.MissionButtons + 1];
+            float[] ys = new float[Pages.MissionButtons + 1];
+            float[] ws = new float[Pages.MissionButtons + 1];
+            float[] hs = new float[Pages.MissionButtons + 1];
+            xs[0] = ax; ys[0] = ay; ws[0] = aw; hs[0] = ah;
+
+            for (int i = 0; i < Pages.MissionButtons; i++)
+            {
+                float x, y, rw, rh;
+                Pages.MissionRect(i, w, h, out x, out y, out rw, out rh);
+                xs[i + 1] = x; ys[i + 1] = y; ws[i + 1] = rw; hs[i + 1] = rh;
+
+                // Centre and all four corners, inset by a pixel so a shared edge is not a failure.
+                Check("mission " + i + " centre round-trips at " + w + "x" + h,
+                      Pages.HitTest(0, x + rw * 0.5f, y + rh * 0.5f, w, h).Act == want[i], "");
+                Check("mission " + i + " top-left round-trips at " + w + "x" + h,
+                      Pages.HitTest(0, x + 1f, y + 1f, w, h).Act == want[i], "");
+                Check("mission " + i + " bottom-right round-trips at " + w + "x" + h,
+                      Pages.HitTest(0, x + rw - 1f, y + rh - 1f, w, h).Act == want[i], "");
+
+                Check("mission " + i + " is on screen at " + w + "x" + h,
+                      x >= 0f && y >= 0f && x + rw <= w && y + rh <= h,
+                      x.ToString("F0") + "," + y.ToString("F0"));
+            }
+
+            // AUTO SEQUENCE must still answer for itself - the new buttons sit under it.
+            Check("AUTO SEQUENCE still round-trips at " + w + "x" + h,
+                  Pages.HitTest(0, ax + aw * 0.5f, ay + ah * 0.5f, w, h).Act
+                      == PageAct.ToggleAuto, "");
+
+            for (int a = 0; a < xs.Length; a++)
+                for (int b = a + 1; b < xs.Length; b++)
+                {
+                    bool apart = xs[a] + ws[a] <= xs[b] || xs[b] + ws[b] <= xs[a]
+                              || ys[a] + hs[a] <= ys[b] || ys[b] + hs[b] <= ys[a];
+                    Check("button " + a + " does not overlap button " + b + " at " + w + "x" + h,
+                          apart, "");
+                }
+        }
+
+        // The labels must say what the button does, and change when it is running.
+        PageState s = new PageState();
+        s.Valid = true;
+        Check("the rendezvous button names itself when idle",
+              Pages.MissionLabel(s, 0) == "RENDEZVOUS", Pages.MissionLabel(s, 0));
+        s.RendezvousEngaged = true; s.RendezvousNote = "PHASING - 51 km gap";
+        Check("and reports what it is doing when running",
+              Pages.MissionLabel(s, 0).StartsWith("RNDZ") && Pages.MissionLabel(s, 0).Length > 6,
+              Pages.MissionLabel(s, 0));
+
+        // ⚠ Greyed, not hidden: a live-looking button that does nothing reads as a dead screen.
+        PageState d = new PageState();
+        d.Valid = true; d.Docked = true;
+        Check("docked, there is nothing left to rendezvous with", !Pages.MissionUsable(d, 0), "");
+        Check("docked, auto-dock is spent", !Pages.MissionUsable(d, 1), "");
+        Check("docked, UNDOCK is the live one", Pages.MissionUsable(d, 2), "");
+        PageState f = new PageState();
+        f.Valid = true;
+        Check("free-flying, UNDOCK is meaningless", !Pages.MissionUsable(f, 2), "");
+        Check("free-flying, rendezvous is available", Pages.MissionUsable(f, 0), "");
+    }
+
 }

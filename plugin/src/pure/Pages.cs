@@ -139,6 +139,13 @@ namespace DragonScreen
         public bool AutoEngaged;
         public string AutoPhase;
 
+        /// <summary>Mission-phase buttons: lit when that phase is the one running.</summary>
+        public bool RendezvousEngaged, DockEngaged, UndockEngaged;
+        /// <summary>What each is doing, shown on the button itself when it is running.</summary>
+        public string RendezvousNote, DockNote, UndockNote;
+        /// <summary>True once docked - AUTO-DOCK becomes meaningless and UNDOCK becomes the live one.</summary>
+        public bool Docked;
+
         // ---- NAV ----
         public bool HasFix;
         public double Latitude, Longitude;
@@ -571,7 +578,80 @@ namespace DragonScreen
             Control.Button(dl, ax, ay, aw, ah,
                            s.AutoEngaged ? ("AUTO  " + (s.AutoPhase ?? "")) : "AUTO SEQUENCE",
                            s.AutoEngaged, s.Valid);
+
+            for (int i = 0; i < MissionButtons; i++)
+            {
+                float mx, my, mw, mh;
+                MissionRect(i, w, h, out mx, out my, out mw, out mh);
+                Control.Button(dl, mx, my, mw, mh, MissionLabel(s, i),
+                               MissionLit(s, i), s.Valid && MissionUsable(s, i));
+            }
         }
+
+        /// <summary>What a mission button says. Running phases say what they are doing.</summary>
+        public static string MissionLabel(PageState s, int index)
+        {
+            if (index == 0)
+                return s.RendezvousEngaged
+                     ? ("RNDZ  " + Short(s.RendezvousNote)) : "RENDEZVOUS";
+            if (index == 1)
+                return s.DockEngaged ? ("DOCK  " + Short(s.DockNote))
+                                     : (s.Docked ? "DOCKED" : "AUTO-DOCK");
+            return s.UndockEngaged ? ("UNDOCK  " + Short(s.UndockNote)) : "UNDOCK & LAND";
+        }
+
+        public static bool MissionLit(PageState s, int index)
+        {
+            if (index == 0) return s.RendezvousEngaged;
+            if (index == 1) return s.DockEngaged || s.Docked;
+            return s.UndockEngaged;
+        }
+
+        /// <summary>
+        /// Greyed rather than hidden when it cannot be pressed.
+        ///
+        /// ⚠ A control the crew can see but not use must LOOK unusable. A live-looking button that
+        /// silently does nothing is indistinguishable from a dead touchscreen - the same argument
+        /// FlightHitTest's header already makes about swallowing presses.
+        /// </summary>
+        public static bool MissionUsable(PageState s, int index)
+        {
+            if (index == 0) return !s.Docked;          // nothing to rendezvous with once berthed
+            if (index == 1) return !s.Docked;          // already there
+            return s.Docked || s.UndockEngaged;        // only meaningful from the berth
+        }
+
+        private static string Short(string note)
+        {
+            if (string.IsNullOrEmpty(note) || note == "-") return "";
+            int cut = note.IndexOf(" - ");
+            string head = (cut > 0) ? note.Substring(0, cut) : note;
+            return (head.Length > 16) ? head.Substring(0, 16) : head;
+        }
+
+        /// <summary>
+        /// The three MISSION buttons, stacked under AUTO SEQUENCE. Same rect for drawing and hitting.
+        ///
+        /// ⚠ PLACED IN THE EMPTY MIDDLE, on the precedent AUTO SEQUENCE already set and for the same
+        /// reason: the reference UI has no control for any of this because the real Dragon's crew do
+        /// not command a rendezvous from a touchscreen. These are ours, so they go where there is
+        /// room rather than on top of something that belongs to the reference - which is the mistake
+        /// AutoRect's own comment records being caught twice.
+        /// </summary>
+        public static void MissionRect(int index, int w, int h, out float x, out float y,
+                                       out float rw, out float rh)
+        {
+            float ax, ay, aw, ah;
+            AutoRect(w, h, out ax, out ay, out aw, out ah);
+            rw = aw; rh = ah;
+            x = ax;
+            y = ay + (ah + MissionGap) * (index + 1);
+        }
+
+        /// <summary>Vertical gap between the mission buttons.</summary>
+        public const float MissionGap = 8f;
+        /// <summary>How many there are: RENDEZVOUS, AUTO-DOCK, UNDOCK &amp; LAND.</summary>
+        public const int MissionButtons = 3;
 
         /// <summary>
         /// The AUTO SEQUENCE button, bottom of FLIGHT's sidebar. Same rect for drawing and hitting.
@@ -602,6 +682,16 @@ namespace DragonScreen
             AutoRect(w, h, out ax, out ay, out aw, out ah);
             if (px >= ax && px <= ax + aw && py >= ay && py <= ay + ah)
                 return PageHit.Of(PageAct.ToggleAuto, 0);
+
+            for (int i = 0; i < MissionButtons; i++)
+            {
+                float mx, my, mw, mh;
+                MissionRect(i, w, h, out mx, out my, out mw, out mh);
+                if (px < mx || px > mx + mw || py < my || py > my + mh) continue;
+                if (i == 0) return PageHit.Of(PageAct.Rendezvous, 0);
+                if (i == 1) return PageHit.Of(PageAct.AutoDock, 0);
+                return PageHit.Of(PageAct.UndockAndLand, 0);
+            }
 
             for (int i = 0; i < (int)StepId.Count; i++)
             {

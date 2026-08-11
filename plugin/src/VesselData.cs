@@ -399,6 +399,14 @@ namespace DragonScreen
             state.AutoEngaged = AutoPilot.Engaged;
             state.AutoPhase = AutoPilot.Engaged ? Ascent.Name(AutoPilot.Phase) : null;
 
+            state.RendezvousEngaged = StationApproach.Engaged;
+            state.RendezvousNote = StationApproach.Note;
+            state.DockEngaged = DockingOps.Engaged;
+            state.DockNote = DockingOps.Note;
+            state.UndockEngaged = UndockOps.Engaged;
+            state.UndockNote = UndockOps.Note;
+            state.Docked = DockedSide.Docked(v);
+
             StepInputs si = new StepInputs();
             si.Valid = true;
             si.Phase = phase;

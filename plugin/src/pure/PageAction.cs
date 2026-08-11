@@ -62,6 +62,23 @@ namespace DragonScreen
         /// flies itself and the crew can take it or hand it back.
         /// </summary>
         ToggleAuto,
+
+        /// <summary>
+        /// Fly the rendezvous: match the station's orbit, phase, Clohessy-Wiltshire in, and hand to
+        /// the docking at the gate.
+        ///
+        /// ---- ⛔ THESE THREE EXIST BECAUSE THE MISSION WAS UNREACHABLE. ----
+        /// `StationApproach.Engage` and `UndockOps.Engage` were written, tested and documented as
+        /// PORTED, and **had no caller anywhere in the plugin**. Sections 6 and 7 of the mission -
+        /// the entire middle of a station ferry - could not be started from the cockpit or from
+        /// anywhere else. The goal for this project is that pressing a button does what it says; a
+        /// phase with no button does not exist.
+        /// </summary>
+        Rendezvous,
+        /// <summary>Take the last few hundred metres onto the port. Safe from any range.</summary>
+        AutoDock,
+        /// <summary>Top up from the station, release, back away, and hand to the de-orbit.</summary>
+        UndockAndLand,
         /// <summary>
         /// Look through the eyes of the crew member in this seat. Arg is the IVA seat index.
         ///

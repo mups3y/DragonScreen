@@ -49,6 +49,14 @@ namespace DragonScreen
         public static double RangeToPortM, ClosingMps, AxisErrorDeg;
 
         private static Vessel ship, station;
+
+        // ---- ⚠ THE PIDs LIVE HERE, NOT INSIDE THE SOLVER. ----
+        // DockControl.Solve takes them as arguments precisely so their integral and derivative
+        // survive between ticks: "a PID recreated every frame is just a P controller with extra
+        // steps." Reset on Engage, never inside the loop.
+        private static readonly Pid pidF = new Pid();
+        private static readonly Pid pidS = new Pid();
+        private static readonly Pid pidT = new Pid();
         private static ModuleDockingNode ourPort, theirPort;
         private static double keepOutR;
         private static double startedAt;
@@ -59,6 +67,8 @@ namespace DragonScreen
 
         public static void Engage(Vessel v, Vessel target)
         {
+            // The servo's memory belongs to THIS approach, not the last one.
+            pidF.Reset(); pidS.Reset(); pidT.Reset();
             if (v == null || target == null) return;
             ship = v; station = target;
             startedAt = Planetarium.GetUniversalTime();
@@ -285,29 +295,48 @@ namespace DragonScreen
             // The capsule holds its nose on the port axis and slides. Yawing to correct a lateral
             // drift takes it off the axis it has to arrive on, and arriving crooked is how flight 035
             // "missed the port and bounced off the hull".
-            bool tooSlow = c.WantClosingMps > closing;
-            AttitudeController.Ascent.UllageFore = tooSlow ? 1.0 : -1.0;
-
-            // Lateral: resolve the sideways miss into the capsule's OWN axes and push against it.
-            // `to` is where we want to be; the component of it perpendicular to our nose is the part
-            // no amount of fore/aft will fix.
+            //
+            // ---- ⛔ THE SERVO IS `pure/DockControl.cs`, THE PORT OF `GNC.ks:1190 DockGNC`. ----
+            // What stood here was mine: `UllageFore = tooSlow ? 1.0 : -1.0` and a normalised lateral
+            // push. That is BANG-BANG - full thrust one way or the other, every tick, on all three
+            // axes at once - against a ported velocity servo that was already written, already
+            // tested, and wired to nothing. RULE 0, exactly: I took F9I's numbers and wrote my own
+            // mechanism. Two things the servo has that the bang-bang cannot:
+            //
+            //   · a BRAKING CURVE. Each axis gets a target speed of sqrt(2 a d) capped by the
+            //     ladder, so the approach speed is bounded BY CONSTRUCTION at every range instead of
+            //     emerging from whatever the gains happen to do. Bang-bang has no such bound: it
+            //     closes at whatever speed it has picked up and reverses at the deadband.
+            //   · AUTHORITY MIXING. The three axes share one set of thrusters, so the dominant one
+            //     takes half and the others a quarter each. Commanding all three flat out is how a
+            //     capsule crabs sideways into a hull.
             Transform rt = ship.ReferenceTransform;
             Vector3d nose = rt.up;
-            Vector3d lateralErr = Vector3d.Exclude(nose, to);
-            if (lateralErr.magnitude > LateralDeadbandM)
-            {
-                // rt.right is starboard; rt.forward is the controller's -top (see AttitudeController's
-                // -90 note), so the up-in-the-cockpit axis is its negation.
-                double sx = Vector3d.Dot(lateralErr.normalized, rt.right);
-                double sy = Vector3d.Dot(lateralErr.normalized, -rt.forward);
-                AttitudeController.Ascent.TranslateX = Clamp(sx);
-                AttitudeController.Ascent.TranslateY = Clamp(sy);
-            }
-            else
-            {
-                AttitudeController.Ascent.TranslateX = 0.0;
-                AttitudeController.Ascent.TranslateY = 0.0;
-            }
+
+            DockState ds = new DockState();
+            ds.Valid = true;
+            // Offsets and relative velocity resolved onto the capsule's OWN axes. `rt.forward` is the
+            // controller's -top - see AttitudeController's -90 note - so top is its negation.
+            ds.DistF = Vector3d.Dot(to, nose);
+            ds.DistS = Vector3d.Dot(to, rt.right);
+            ds.DistT = Vector3d.Dot(to, -rt.forward);
+            Vector3d ourRel = -relVel;                 // ours minus theirs
+            ds.VelF = Vector3d.Dot(ourRel, nose);
+            ds.VelS = Vector3d.Dot(ourRel, rt.right);
+            ds.VelT = Vector3d.Dot(ourRel, -rt.forward);
+            // ⚠ The cap comes from the SAME ladder the approach is flown on. A controller with its
+            // own idea of a safe closing speed is how you get a capsule that thinks it is being
+            // careful while the ladder thinks otherwise.
+            ds.SpeedCap = c.WantClosingMps;
+
+            double dt = Time.fixedDeltaTime;
+            if (dt <= 0.0) dt = 0.02;
+            DockCommand dc = DockControl.Solve(ds, pidF, pidS, pidT, dt);
+
+            AttitudeController.Ascent.UllageFore = dc.Fore;
+            AttitudeController.Ascent.TranslateX = dc.Starboard;
+            AttitudeController.Ascent.TranslateY = dc.Top;
+            Note += " " + dc.Note;
         }
 
         /// <summary>Lateral offset below this is not worth spending monopropellant on, metres.</summary>

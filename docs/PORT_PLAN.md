@@ -8,6 +8,24 @@ Read `docs/MISSION_PLAN.md` for status. This is the *order and the contracts*.
 
 ---
 
+## ⛔ RULE 0 OF ALL: A PHASE WITH NO CALLER IS NOT PORTED
+
+Added 2026-08-11, after a dead-code sweep found **four** things written, tested, documented as DONE
+in this file and in the port map - and referenced by nothing:
+
+| written and unreachable | what it meant |
+|---|---|
+| `pure/LaunchWindow.cs` | §1 launch-on-phase could not be used. Arriving at the wrong phase is what made F9I's first ferry "spend 7.3 HOURS phasing" |
+| `StationApproach.Engage` | §6 rendezvous had no caller anywhere in the plugin |
+| `UndockOps.Engage` | §7 undock had no caller either - and its top-up moved no propellant, so the refuel had never once happened |
+| `pure/DockControl.cs` | the ported `DockGNC` velocity servo, unused, while `DockingOps` flew bang-bang translation I had invented |
+
+Every one of these looked finished from every angle except the one that matters. **Wire it the same
+day you write it, or the row here stays open.** The sweep that found them is worth re-running:
+list every public member of `src/pure` and `src/`, and flag any whose name appears in no other file.
+
+---
+
 ## The three rules this plan enforces
 
 1. **Read the whole function before writing a line of it.** Every item below names the exact

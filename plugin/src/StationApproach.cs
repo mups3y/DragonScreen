@@ -114,7 +114,8 @@ namespace DragonScreen
             Note = "-";
         }
 
-        private static Vessel Find()
+        /// <summary>Public so the LAUNCH WINDOW can find the station before liftoff.</summary>
+        public static Vessel Find()
         {
             List<Vessel> all = FlightGlobals.Vessels;
             for (int i = 0; i < all.Count; i++)

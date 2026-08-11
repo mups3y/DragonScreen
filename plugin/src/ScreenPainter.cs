@@ -376,6 +376,14 @@ namespace DragonScreen
                 case PageAct.AckStep: VesselData.AcknowledgeStep(hit.Arg); break;
 
                 case PageAct.ToggleAuto: AutoPilot.Toggle(); break;
+
+                // ---- THE MIDDLE OF THE MISSION. See PageAct's note on why these exist. ----
+                // The painter only DISPATCHES: every one of these is a static on a flight-software
+                // class ticked by FlightDriver, so the phase outlives this widget being destroyed
+                // when the IVA is despawned. That distinction is the whole reason FlightDriver exists.
+                case PageAct.Rendezvous: MissionOps.Rendezvous(); break;
+                case PageAct.AutoDock: MissionOps.AutoDock(); break;
+                case PageAct.UndockAndLand: MissionOps.UndockAndLand(); break;
             }
         }
 

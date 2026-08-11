@@ -125,8 +125,8 @@ flight 012.** Phasing above 3 km, CW from 0.5–3 km, RCS below, periapsis floor
 
 | step | F9I | ours |
 |---|---|---|
-| dock | `StRendezvousAndDock`, `StClosestPort` | **PORTED** `src/DockingOps.cs` - gate, hull skirt, axial run |
-| top up propellant before release | `StTopUpBeforeUndock` | **PORTED** holds on PROGRESS, not on full |
+| dock | `StRendezvousAndDock`, `StClosestPort` | **PORTED** `src/DockingOps.cs` - gate, hull skirt, axial run, flying the `pure/DockControl.cs` velocity servo (braking curve + authority mixing), not the bang-bang that stood there |
+| top up propellant before release | `StTopUpBeforeUndock` | **PORTED** `src/Refuel.cs` actually moves it, reading the CAPSULE's tank through `DockedSide` - the merged-vessel read is a live bug in F9I and the reason our top-up could never see progress |
 | close the docking shroud | `StCloseDockingShroud` | **PORTED** |
 | undock and back away | `StUndock`, `StBackAway` | **PORTED** our port only, sign calibrated, burst-then-coast |
 | is a return trajectory available | `StReturnAllowed`, `StMonoForDeorbit` | **PORTED** and now WIRED - DeorbitOps refuses on it and reports the budget |
@@ -165,6 +165,12 @@ range, drogues then mains, splashdown.
 ---
 
 ## What this says
+
+**All eight phases are ported AND REACHABLE as of 2026-08-11.** The second half of that sentence is
+new and it was not true before: a dead-code sweep found the launch window, the rendezvous, the undock
+and the docking servo all written, tested, marked DONE - and callable from nowhere. The FLIGHT page
+now carries RENDEZVOUS, AUTO-DOCK and UNDOCK & LAND beneath AUTO SEQUENCE, and DEORBIT NOW runs the
+whole return. See `docs/PORT_PLAN.md` rule 0.
 
 **All eight phases are ported as of 2026-08-11.** The mission runs end to end: launch on phase,
 ascend, recover the booster, insert, rendezvous, dock, refuel, undock, phase down, de-orbit, enter on

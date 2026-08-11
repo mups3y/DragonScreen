@@ -165,7 +165,12 @@ namespace DragonScreen
             "r_phaseDown,r_deorbitMissKm,r_deorbitThr,r_nodePhase,r_nodeDvLeft," +
             // The measured ballistic coefficients. Everything the impact predictions are built on
             // comes from these two numbers, and until now they only existed inside the predictor.
-            "r_bcAscent,r_bcBooster";
+            "r_bcAscent,r_bcBooster," +
+            // ================= THE MIDDLE OF THE MISSION =================
+            // Rendezvous, docking and undock. Added the day they first became reachable from a
+            // button - recording a phase for the first time it flies is the whole point, and the
+            // 2026-08-11 return went unrecorded precisely because nobody had done this in advance.
+            "m_rndz,m_dock,m_undock,m_stationKm,m_closingMps,m_monoOurs,m_monoCap";
 
         /// <summary>
         /// Called every frame by the painter; samples at 5 Hz. Cheap enough to call unconditionally
@@ -366,6 +371,22 @@ namespace DragonScreen
 
             F(r, ImpactPredictor.BallisticCoefficient(AutoPilot.AscentVessel));
             F(r, ImpactPredictor.BallisticCoefficient(BoosterRecovery.BoosterVessel));
+
+            // ---- the middle of the mission. Seven columns, no branches - see the note above. ----
+            S(r, StationApproach.Engaged ? StationApproach.Leg.ToString() : "-");
+            S(r, DockingOps.Stage.ToString());
+            S(r, UndockOps.Stage.ToString());
+
+            // ⚠ StationApproach's OWN numbers, not a second computation of the same thing. Two
+            // sources for one quantity is how a screen and a log end up disagreeing - the exact
+            // defect CLAUDE.md's rule 2 exists to prevent.
+            Vessel me = Primary();
+            F(r, StationApproach.RangeM / 1000.0);
+            F(r, StationApproach.ClosingMps);
+            // ⚠ OUR tank, not the merged vessel's - see DockedSide. Recording the pair added
+            // together is how the live F9I ends up telling the crew a full Dragon is empty.
+            F(r, me != null ? DockedSide.Mono(me) : 0.0);
+            F(r, me != null ? DockedSide.MonoCapacity(me) : 0.0);
         }
 
         /// <summary>Where it is and what it weighs. `orbital` adds the orbit block.</summary>

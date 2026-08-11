@@ -101,9 +101,9 @@ downstream of an orbit we already reach reliably, so it can wait its turn.
    each vehicle's own telemetry (`a_total − a_gravity − a_thrust` → ballistic coefficient), not
    modelled. Where it cannot measure, it reports a vacuum solve and SAYS so.
 
-### The recorder is 139 columns and checks itself
-`a_` = ascent vehicle, `b_` = booster, `r_` = the return (the same craft as `a_`, in the phases after
-insertion), all every row, plus `focus` and `warp`. It counts its own commas against the header on
+### The recorder is 145 columns and checks itself
+`a_` = ascent vehicle, `b_` = booster, `r_` = the return, `m_` = the middle of the mission
+(rendezvous, dock, undock), all every row, plus `focus` and `warp`. It counts its own commas against the header on
 the first row and logs `RECORDER COLUMN MISMATCH` if they differ — **if you see that, do not read the
 CSV.** Flight data is archived to `Desktop/quarantine/dragonscreen_flightdata`, not left in the game
 folder.

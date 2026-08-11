@@ -95,6 +95,26 @@ namespace DragonScreen
                 return;
             }
 
+            // ---- ⛔ HOLD FOR THE PHASE WINDOW. §1 OF THE MISSION, AND IT WAS UNREACHABLE. ----
+            // `pure/LaunchWindow.cs` was ported, tested, marked DONE - and called by nothing. F9I
+            // launches on PHASE ANGLE rather than plane (the station is at 0.133 deg, so the plane
+            // window is degenerate at the equator), and arriving at the wrong phase is what made its
+            // first ferry "spend 7.3 HOURS phasing for only 39 LF". Only on the pad: mid-flight there
+            // is nothing to hold.
+            windowOpensUt = 0.0;
+            windowWarped = false;
+            if (v.situation == Vessel.Situations.PRELAUNCH
+                || v.situation == Vessel.Situations.LANDED)
+            {
+                double wait = LaunchWindowOps.SecondsToWait(v);
+                if (wait > 0.0)
+                {
+                    windowOpensUt = Planetarium.GetUniversalTime() + wait;
+                    Debug.Log(Tag + "LAUNCH WINDOW: " + LaunchWindowOps.Note);
+                }
+                else Debug.Log(Tag + "launch window open now - " + LaunchWindowOps.Note);
+            }
+
             Engaged = true;
             Phase = AscentPhase.Idle;
             // A fresh engagement is a fresh mission: never inherit a previous flight's recovery.
@@ -104,6 +124,30 @@ namespace DragonScreen
             Target = AscentTarget.Station(BoosterRecovery.Profile);
             ascentVessel = v;
             packedReported = false;
+
+            // ---- THE PAD HOLD. Nothing is commanded until the phase comes round. ----
+            if (windowOpensUt > 0.0)
+            {
+                double now = Planetarium.GetUniversalTime();
+                double left = windowOpensUt - now;
+                if (left > 0.0)
+                {
+                    Command.Note = "HOLD FOR PHASE WINDOW - T-" + left.ToString("F0") + " s";
+                    // Warp there. A hold that has to be sat through in real time is a hold nobody
+                    // uses, which is how the de-orbit's 25-minute wait went unnoticed until a flight.
+                    if (!windowWarped && left > NodeExecutor.WarpWorthwhileS)
+                    {
+                        windowWarped = true;
+                        TimeWarp.fetch.WarpTo(windowOpensUt - 5.0);
+                    }
+                    else if (left <= 5.0 && TimeWarp.CurrentRateIndex > 0) TimeWarp.SetRate(0, true);
+                    return;
+                }
+                if (TimeWarp.CurrentRateIndex > 0) { TimeWarp.SetRate(0, true); return; }
+                windowOpensUt = 0.0;
+                Debug.Log(Tag + "launch window OPEN - releasing the countdown");
+            }
+            if (liftoffUt <= 0.0 && Phase != AscentPhase.Idle) liftoffUt = Planetarium.GetUniversalTime();
             s2Separated = false;
             lastHandoverTry = 0.0;
             starvedFor = 0.0;
@@ -123,6 +167,8 @@ namespace DragonScreen
             // F9I gets the order right and says why: FalconExtendRange raises the range on the SHIP
             // first, then waits for the booster to appear, then raises it on the booster too.
             BoosterRecovery.PrepareForSeparation(v);
+            liftoffUt = 0.0;
+            liftoffLonDeg = v.longitude;
             Debug.Log(Tag + "autopilot ENGAGED - target " + (Target.AltitudeM / 1000.0).ToString("F0")
                       + " km, heading " + Target.HeadingDeg.ToString("F0")
                       + ". ⚠ INTERIM: gravity turn, not the PSG ascent in FLIGHT_SOFTWARE_PLAN.md");
@@ -328,6 +374,10 @@ namespace DragonScreen
                 // A guard that fires silently is worse than no guard: it converts a loud failure
                 // into a quiet lie.
                 FlightInputHandler.state.mainThrottle = 0f;
+                // Measure what this ascent actually did, so the NEXT launch window is fitted to the
+                // ascent we fly rather than to the one F9I flew. See LaunchWindowOps - reading these
+                // from a constant is precisely what makes the window drift.
+                LaunchWindowOps.MeasureAtInsertion(v, liftoffUt, liftoffLonDeg);
                 Disengage(string.IsNullOrEmpty(c.Note) ? "insertion complete" : c.Note);
                 return;
             }
@@ -495,6 +545,8 @@ namespace DragonScreen
         public static Vessel AscentVessel { get { return ascentVessel; } }
         private static bool packedReported;
         private static double lastHandoverTry;
+        private static double windowOpensUt, liftoffUt, liftoffLonDeg;
+        private static bool windowWarped;
         private static float lastBurnLog = -999f;
 
         /// <summary>
