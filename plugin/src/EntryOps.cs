@@ -698,12 +698,10 @@ namespace DragonScreen
 
         private static double Mono(Vessel v)
         {
-            double t = 0.0;
-            for (int i = 0; i < v.parts.Count; i++)
-                for (int k = 0; k < v.parts[i].Resources.Count; k++)
-                    if (v.parts[i].Resources[k].resourceName == "MonoPropellant")
-                        t += v.parts[i].Resources[k].amount;
-            return t;
+            // OUR side of any docking joint, never the merged vessel - see DockedSide. Correct
+            // today only because both of these run after the undock; one caller moved earlier and
+            // the budget would silently become the station's.
+            return DockedSide.Mono(v);
         }
 
         // ---- part plumbing ----
@@ -711,11 +709,17 @@ namespace DragonScreen
         // idiom the rest of the plugin already uses for this.
         private delegate bool PartMatch(string partName);
 
+        /// <summary>
+        /// ⚠ OUR SIDE ONLY. While berthed, `ship.parts` is the station as well - a trunk or a spent
+        /// stage on another docked Dragon would read as ours, and `DoEvent` below would fire ITS
+        /// decoupler or ITS parachutes. `DockedSide` stops the walk at the docking joint.
+        /// </summary>
         private static bool HasPart(PartMatch m)
         {
             if (ship == null) return false;
-            for (int i = 0; i < ship.parts.Count; i++)
-                if (m(ship.parts[i].name)) return true;
+            List<Part> ours = DockedSide.Ours(ship);
+            for (int i = 0; i < ours.Count; i++)
+                if (m(ours[i].name)) return true;
             return false;
         }
 
@@ -740,9 +744,10 @@ namespace DragonScreen
         {
             if (ship == null) return 0;
             int n = 0;
-            for (int i = 0; i < ship.parts.Count; i++)
+            List<Part> ours = DockedSide.Ours(ship);
+            for (int i = 0; i < ours.Count; i++)
             {
-                Part p = ship.parts[i];
+                Part p = ours[i];
                 if (!m(p.name)) continue;
                 for (int mod = 0; mod < p.Modules.Count; mod++)
                 {

@@ -95,9 +95,12 @@ namespace DragonScreen
             // ---- AND THE SECOND STAGE MUST BE GONE ----
             // A capsule with a spent tank on its nose cannot hold a heat shield forward. The old
             // StartDeorbit checked this too and it is the one thing worth keeping from it.
-            for (int i = 0; i < v.parts.Count; i++)
+            // ⚠ OUR side: a spent stage parked on the STATION is not attached to us, and scanning
+            // the merged vessel would refuse the de-orbit because of somebody else's hardware.
+            System.Collections.Generic.List<Part> mine = DockedSide.Ours(v);
+            for (int i = 0; i < mine.Count; i++)
             {
-                if (!VehicleParts.IsSecondStage(v.parts[i].name)) continue;
+                if (!VehicleParts.IsSecondStage(mine[i].name)) continue;
                 Note = "REFUSED - the second stage is still attached";
                 Debug.LogWarning(Tag + "DE-ORBIT " + Note);
                 return;
@@ -395,12 +398,10 @@ namespace DragonScreen
 
         private static double Mono(Vessel v)
         {
-            double t = 0.0;
-            for (int i = 0; i < v.parts.Count; i++)
-                for (int k = 0; k < v.parts[i].Resources.Count; k++)
-                    if (v.parts[i].Resources[k].resourceName == "MonoPropellant")
-                        t += v.parts[i].Resources[k].amount;
-            return t;
+            // OUR side of any docking joint, never the merged vessel - see DockedSide. Correct
+            // today only because both of these run after the undock; one caller moved earlier and
+            // the budget would silently become the station's.
+            return DockedSide.Mono(v);
         }
     }
 }

@@ -71,7 +71,7 @@ namespace DragonScreen
         public static double SeparationM, OpeningMps;
 
         private static Vessel ship, station;
-        private static double stageStartedAt, lastProgressAt, lastMono, d0;
+        private static double stageStartedAt, lastProgressAt, lastMono, lastTopUpAt, d0;
         private static double foreSign = -1.0;
 
         public static bool Engaged { get; private set; }
@@ -85,6 +85,8 @@ namespace DragonScreen
             stageStartedAt = Planetarium.GetUniversalTime();
             lastProgressAt = stageStartedAt;
             lastMono = Mono(v);
+            lastTopUpAt = stageStartedAt;
+            Refuel.Begin();
             foreSign = -1.0;
             Debug.Log(Tag + "undock sequence started - topping up first");
         }
@@ -128,17 +130,36 @@ namespace DragonScreen
         /// </summary>
         private static void TopUp(double now, double inStage)
         {
+            // ---- ⛔ AND SOMETHING HAS TO ACTUALLY MOVE THE PROPELLANT. ----
+            // This used only to WATCH a number. Nothing in the plugin transferred anything, so the
+            // refuel - the entire reason for the station trip - had never once happened, and the
+            // return budget could never close. `Refuel.Tick` yields to any other authority, so if the
+            // station is feeding us this finds no deficit and does nothing.
+            Refuel.Tick(ship, now - lastTopUpAt);
+            lastTopUpAt = now;
+
+            // ⚠ THE CAPSULE'S TANK, NOT THE MERGED VESSEL'S. See DockedSide - reading the pair is
+            // what has F9I announcing "the fuel tanks are not full" over a brimming Dragon, and it is
+            // also why a progress test against the merged total can never see progress at all.
             double mono = Mono(ship);
             if (mono > lastMono + 0.01) { lastMono = mono; lastProgressAt = now; }
 
             double flat = now - lastProgressAt;
-            Note = "TOPPING UP - " + mono.ToString("F1") + " units, "
-                 + (flat > 1.0 ? "flat for " + flat.ToString("F0") + " s" : "filling");
+            bool full = Refuel.Full(ship);
+            Note = "TOPPING UP - " + mono.ToString("F1") + " units ("
+                 + (Refuel.Fraction(ship) * 100.0).ToString("F0") + "%), "
+                 + (full ? "full" : (flat > 1.0 ? "flat for " + flat.ToString("F0") + " s" : "filling"));
 
-            if (inStage > TopUpMaxS || flat > TopUpFlatS)
+            // Full is a reason to stop; so is the gauge going quiet, because a station that cannot
+            // fill us is not a station to keep waiting on.
+            if (full || inStage > TopUpMaxS || flat > TopUpFlatS)
             {
-                Debug.Log(Tag + "top-up finished at " + mono.ToString("F1") + " units after "
-                          + inStage.ToString("F0") + " s");
+                Debug.Log(Tag + "refuel finished after " + inStage.ToString("F0") + " s - "
+                          + Refuel.Report(ship));
+                if (!full)
+                    Debug.LogWarning(Tag + "⚠ UNDOCKING WITHOUT A FULL TANK - the return budget is "
+                                     + "sized on leaving the berth full. Check the de-orbit margin "
+                                     + "before committing.");
                 CloseShroud();
                 Go(UndockStage.Releasing);
             }
@@ -290,14 +311,24 @@ namespace DragonScreen
             AttitudeController.Ascent.UllageFore = sign;
         }
 
+        /// <summary>
+        /// Monopropellant in the CAPSULE'S tank - not the station's, and not the two added together.
+        ///
+        /// ---- ⛔ THIS IS THE BUG F9I HAS IN THE GAME RIGHT NOW. DO NOT REINTRODUCE IT. ----
+        /// Reported 2026-08-11: the station refuel fills the Dragon, and the undock then announces
+        /// that the tanks are not full. They are. The reading is coming off the MERGED vessel, so it
+        /// is the station's 6 237-unit farm being measured, and that is never full.
+        ///
+        /// ⚠ IT ALSO DISABLED THE TOP-UP ENTIRELY, WHICH IS WORSE THAN THE MESSAGE. A transfer from
+        /// the station into the capsule moves propellant WITHIN one merged vessel - the merged total
+        /// does not move by a single unit. `TopUp` waits for that total to stop rising before letting
+        /// go, so against the merged number it could never see progress: every undock would fall
+        /// through on the six-second flat-line timeout and report "no propellant moved", however much
+        /// had actually been taken on.
+        /// </summary>
         private static double Mono(Vessel v)
         {
-            double t = 0.0;
-            for (int i = 0; i < v.parts.Count; i++)
-                for (int k = 0; k < v.parts[i].Resources.Count; k++)
-                    if (v.parts[i].Resources[k].resourceName == "MonoPropellant")
-                        t += v.parts[i].Resources[k].amount;
-            return t;
+            return DockedSide.Mono(v);
         }
     }
 }

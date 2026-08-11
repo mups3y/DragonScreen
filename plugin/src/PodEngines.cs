@@ -41,8 +41,9 @@ namespace DragonScreen
         public static bool Present(Vessel v)
         {
             if (v == null) return false;
-            for (int i = 0; i < v.parts.Count; i++)
-                if (IsPodEngine(v.parts[i])) return true;
+            List<Part> ours = DockedSide.Ours(v);
+            for (int i = 0; i < ours.Count; i++)
+                if (IsPodEngine(ours[i])) return true;
             return false;
         }
 
@@ -58,9 +59,10 @@ namespace DragonScreen
         {
             if (v == null) return 0.0;
             double t = 0.0;
-            for (int i = 0; i < v.parts.Count; i++)
+            List<Part> ours = DockedSide.Ours(v);
+            for (int i = 0; i < ours.Count; i++)
             {
-                List<ModuleEngines> es = v.parts[i].Modules.GetModules<ModuleEngines>();
+                List<ModuleEngines> es = ours[i].Modules.GetModules<ModuleEngines>();
                 for (int m = 0; m < es.Count; m++)
                     if (es[m].EngineIgnited && !es[m].flameout)
                         t += es[m].MaxThrustOutputVac(true);
@@ -75,10 +77,16 @@ namespace DragonScreen
         {
             if (v == null) return 0;
             int n = 0;
-            for (int i = 0; i < v.parts.Count; i++)
+            // ---- ⛔ OUR SIDE ONLY. A MERGED VESSEL'S ENGINES ARE THE STATION'S TOO. ----
+            // `IsPodEngine` excludes the two Falcon stages by name and accepts everything else, which
+            // is right for a lone capsule and catastrophic while berthed: this would command
+            // "activate engine" on every engine the STATION owns, and on any other Dragon parked on
+            // it. `DockedSide` stops the walk at the docking joint.
+            List<Part> ours = DockedSide.Ours(v);
+            for (int i = 0; i < ours.Count; i++)
             {
-                if (!IsPodEngine(v.parts[i])) continue;
-                List<ModuleEnginesFX> es = v.parts[i].Modules.GetModules<ModuleEnginesFX>();
+                if (!IsPodEngine(ours[i])) continue;
+                List<ModuleEnginesFX> es = ours[i].Modules.GetModules<ModuleEnginesFX>();
                 for (int m = 0; m < es.Count; m++)
                 {
                     BaseAction a = Find(es[m], actionName);
