@@ -254,7 +254,7 @@ order of work is now the order of verification, and it is at the bottom of `docs
 
 | item | F9I source | status | note |
 |---|---|---|---|
-| `Flip1` — rate-limited rotation to a commanded attitude before boostback | `BOOSTER.ks:286-380`, called at :226 (180°) and :231 (170°) | **NO** | `LandingSites.FlipDeg`/`FlipPower` carry the constants and are marked NOT WIRED. Our boostback points at the LZ and lights; there is no flip manoeuvre. |
+| `Flip1` — rate-limited rotation to a commanded attitude before boostback | `SPACEX/BOOSTER.ks:295-380`, called at :226 (180°) and :231 (170°) | **YES** | ⛔ THIS ROW SAID **NO** UNTIL 2026-08-13 AND IT WAS THE MOST MISLEADING LINE IN THE REPO. `LandingPhase.Flip`, `BoosterRecovery.StepFlip`, the roll-settle gate and the whole gain set are ported; `FlipDeg`/`FlipPower` are wired and read. Days were spent debugging a flip the inventory said did not exist. |
 | ASDS boostback target shift — LZ moved 2.7 km further downrange, burn flown against the shifted target, real LZ restored | `BOOSTER.ks:483-500` | **NO** | RTLS uses the signed-overshoot form, which is ported. The droneship branch is not. |
 | Impact prediction with drag | `addons:tr` (Trajectories) | **PART** | Trajectories is installed but is a third-party dependency we do not take. `BoosterRecovery.PredictedMiss` is a vacuum ballistic solve, so it predicts LONG — the same direction as the deliberate 2.7 km overshoot. The two are a pair; do not "improve" one alone. |
 | `TimeToAltitude` circularisation timing / no-coast branch | `F9_payload.ks` | **NO** | Current gate is `timeToAp <= 12 s` or periapsis already high. Flew correctly to 86 × 84 km on 2026-08-10. |

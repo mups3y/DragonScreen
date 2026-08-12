@@ -322,66 +322,21 @@ namespace DragonScreen
         public const double FlipStoppingTime = 3.0;
 
         /// <summary>
-        /// Roll-control angle range during the flip, degrees. `SPACEX/BOOSTER.ks:309`, live `Flip1`.
+        /// Roll-control angle range during the flip, degrees. `BOOSTER.ks:157`, live `Flip1`.
         ///
-        /// ⚠ FLIP ONLY - `Boostback` resets it at `SPACEX/BOOSTER.ks:399`, one line into itself. See AttitudeController.RollControlRangeDeg
+        /// ⚠ FLIP ONLY - `Boostback:399` resets it. See AttitudeController.RollControlRangeDeg
         /// for what the default 5 did to the flip.
         /// </summary>
         public const double FlipRollControlRangeDeg = 45.0;
 
-        /// <summary>
-        /// Roll torque factor during the flip. `SPACEX/BOOSTER.ks:308`, live `Flip1`.
-        ///
-        /// ⛔ 3.0 -> 1.0 ON 2026-08-12. THE CONSTANT IS REAL; IT DOES NOT TRANSFER. `MY DECISION`.
-        ///
-        /// kOS's `rolltorquefactor` is a knob inside kOS's OWN steering manager. Ours is a
-        /// MechJeb-shaped cascade, and the same number means something different in it: it
-        /// multiplies the MEASURED roll torque, which (a) raises the roll rate cap, since
-        /// `MaxOmega` is linear in torque, (b) raises the roll PI's torque limit, and (c) divides
-        /// the actuation. The controller is told it has three times the roll authority it has.
-        ///
-        /// MEASURED, flight 2026-08-12 12:08, `b_phase = FLIP`:
-        ///
-        ///     roll travel      749 deg in 25 s      against F9I's 138 for flip+boostback
-        ///     |b_actR| = 1.00  on 79% of rows       railed both ways, 54 rows +ve, 50 -ve
-        ///     b_omegaRdps      NEGATIVE on 115 of 127 rows, 26-49 deg/s, never reversing
-        ///
-        /// The onset is the tell. At t+4.9 s the controller commanded FULL negative roll with a
-        /// nose error of 0.03 deg; by t+7.3 s the stage was rolling at 48.9 deg/s and 20 s of
-        /// railed actuator never arrested it. It kicked the stage into a roll and then could not
-        /// catch it, because the authority it was spending against had been overstated 3x.
-        ///
-        /// ⚠ A PERFECT FLIP NEEDS ZERO ROLL. The stepping rotates the aim about `flipAxis`, and the
-        /// roll reference IS `-flipAxis`, so the target top is perpendicular to the rotation plane
-        /// and does not move as the nose comes round. Every degree in that 749 is error.
-        ///
-        /// This is RULE 2 - port the sequence, not the constants. `AvailableTorque` already
-        /// measures RCS off the nozzle transforms rather than trusting `GetPotentialTorque`, so
-        /// 1.0 means "use the torque the vehicle actually has" and the fudge is simply removed.
-        /// NOT a claim that F9I is wrong: 3 is right for kOS's cascade and was never right for ours.
-        /// </summary>
-        public const double FlipRollTorqueFactor = 1.0;
+        /// <summary>Roll torque factor during the flip. `BOOSTER.ks:156`, live `Flip1`.</summary>
+        public const double FlipRollTorqueFactor = 3.0;
 
-        /// <summary>Pitch/yaw time-scale multiplier for the flip. `SPACEX/BOOSTER.ks:304-305`.</summary>
+        /// <summary>Pitch/yaw time-scale multiplier for the flip. `BOOSTER.ks:152-153`.</summary>
         public const double FlipPitchYawStoppingScale = 1.5;
 
         /// <summary>
-        /// Roll-rate ceilings, degrees per second. MEASURED from F9I's own black box over
-        /// `bb_booster_001..008` - see docs/F9I_BOOSTER_TARGETS.md, the "peak roll" column.
-        ///
-        /// These are the rates the vehicle that lands 0.34-0.56 m from the pad actually reaches:
-        /// 14.9 flip+boostback, 2.9 coast, 24.0 entry burn, 9.4 descent, 0.1 landing burn. They are
-        /// a CEILING on what we COMMAND, not a target - the flip's required roll is exactly zero,
-        /// so this is correction authority and nothing more. It never binds on a vehicle flying
-        /// correctly, and it stops a runaway dead.
-        /// </summary>
-        public const double FlipRollRateCapDps = 15.0;
-        public const double DescentRollRateCapDps = 10.0;
-        /// <summary>The widest any phase needs - F9I's entry burn peaks at 24.0 deg/s.</summary>
-        public const double RollRateCapDefaultDps = 25.0;
-
-        /// <summary>
-        /// Roll time-scale multiplier from grid-fin deploy down. `AtmGNC:434`, `rollts to 10`.
+        /// Roll time-scale multiplier from grid-fin deploy down. `AtmGNC:697`, `rollts to 10`.
         /// F9I flies the coast at 3 deg/s of roll; we flew it at 24. See RollStoppingScale.
         /// </summary>
         public const double DescentRollStoppingScale = 10.0;

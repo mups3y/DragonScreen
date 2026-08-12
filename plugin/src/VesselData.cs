@@ -895,8 +895,13 @@ namespace DragonScreen
         {
             int max = DockingCamRenderer.HullCamBase + HullCams.Count - 1;
             if (cameraView <= max) return;
+            // ⚠ "FRONT" no longer exists - the computed directions were removed on 2026-08-13.
+            // View 0 is now the FIRST REAL CAMERA, and if the vehicle has none there is no picture,
+            // which the renderer reports rather than hiding behind a black rectangle.
             Debug.Log("[DragonScreen] camera view " + cameraView + " is gone with its part - "
-                      + "falling back to FRONT");
+                      + (HullCams.Count > 0
+                         ? "falling back to the first camera on the vehicle"
+                         : "and this vehicle has no cameras at all"));
             cameraView = 0;
         }
 

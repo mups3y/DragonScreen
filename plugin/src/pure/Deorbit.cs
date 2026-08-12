@@ -58,6 +58,14 @@ namespace DragonScreen
         public bool Crewed;
         /// <summary>True when de-orbiting on Draco rather than the second stage.</summary>
         public bool OnDraco;
+
+        /// <summary>
+        /// Orbit altitude the de-orbit is flown FROM, metres. Zero = use the fitted altitude.
+        ///
+        /// The aim was a bare constant fitted at 86 km, so moving the station to 120 km silently
+        /// invalidated it with nothing in the code to say so. See `AimRange`.
+        /// </summary>
+        public double OrbitAltM;
         /// <summary>Landing under chutes rather than propulsively.</summary>
         public bool ChuteLanding;
     }
@@ -106,7 +114,7 @@ namespace DragonScreen
         /// The number below is the 86 km fit carried forward unchanged ON PURPOSE - guessing at a
         /// correction would be a second single-point fit on top of an invalid one. Fly one return,
         /// read the settled miss, and re-fit it ONCE using `settled / AimGain`.
-        public const double AimDracoCrew = 284400.0;  // was 270700 (F9I flight 076); re-fit 2026-08-12
+        public const double AimDracoCrew = 295400.0;  // 270700 -> 284400 -> 295400; see AimRange
 
         /// <summary>De-orbit aims this far PAST the landing zone.</summary>
         public const double OvershootM = 35000.0;
@@ -146,10 +154,74 @@ namespace DragonScreen
             return s.OnDraco ? PeriapsisTargetDraco : PeriapsisTargetS2;
         }
 
+        /// <summary>Altitude the Draco aim was fitted at. See `AimRange`.</summary>
+        public const double AimFitAltM = 86000.0;
+
+        /// <summary>
+        /// How far PAST the target to place the de-orbit's predicted impact point, metres.
+        ///
+        /// ---- ⛔ TUNED 2026-08-13 FROM THE ONE RETURN THAT EVER COMPLETED, AND MADE TO SCALE ----
+        /// The aim exists because the PREDICTION is drag-free and the real entry is not: the
+        /// capsule always falls short of the vacuum impact point, and this is how far short.
+        ///
+        /// MEASURED, flight_0813_005927 - the only flight in the archive that flew a return end to
+        /// end - landed **7.4 km SHORT** with the aim at 284 400 and `r_liftMin` flat zero. Zero
+        /// lift means the entry guidance never once needed to SHORTEN, which is the signature of
+        /// arriving short, and it has read zero on every return we have. The aim has been too
+        /// short the whole time. `settled / AimGain` = 7395 / 0.67 = 11.0 km, so 295 400.
+        ///
+        /// ⛔ AND SHORT IS THE DANGEROUS DIRECTION, WHICH IS WHY THIS IS NOT SPLIT-THE-DIFFERENCE.
+        /// `EntryGuidance` is SHORTEN-ONLY by construction - "Trap 4: shorten or coast. Never
+        /// extend." Arrive long and the entry flies the excess off; arrive short and nothing in the
+        /// vehicle can recover it. An aim erring long is recoverable, an aim erring short is a miss.
+        ///
+        /// ---- THE ALTITUDE SCALING, AND WHAT IT IS NOT ----
+        /// The station moved from 86 km to 120 km and a bare constant had no way to notice. Entry
+        /// range grows with the energy carried through the interface, and interface speed rises
+        /// from 2216 m/s (86 km) to 2249 (120 km) for the same target periapsis - so the aim is
+        /// scaled by the square of the interface-speed ratio, first order in energy.
+        ///
+        /// ⚠ THIS IS A FIRST-ORDER CORRECTION, NOT A FIT. No return has ever been flown from
+        /// 120 km, so there is nothing to fit against and I will not pretend otherwise. It exists
+        /// so the number moves in the right direction and by a defensible amount instead of
+        /// silently staying tied to an altitude we no longer fly. The FIRST return from the new
+        /// orbit re-fits it properly: read the settled miss, divide by `AimGain`, and set
+        /// `AimDracoCrew` - the scaling then rides on top of a fit that is actually current.
+        /// </summary>
         public static double AimRange(DeorbitInputs s)
         {
-            if (s.OnDraco) return AimDracoCrew;
-            return s.Crewed ? AimS2Crew : AimS2Cargo;
+            if (!s.OnDraco) return s.Crewed ? AimS2Crew : AimS2Cargo;
+
+            double aim = AimDracoCrew;
+            if (s.OrbitAltM > 0.0 && s.OrbitAltM != AimFitAltM)
+                aim *= InterfaceEnergyRatio(s.OrbitAltM);
+            return aim;
+        }
+
+        /// <summary>
+        /// Square of the interface-speed ratio between this orbit and the one the aim was fitted
+        /// at - the first-order energy scaling. Vis-viva at the 70 km interface, both de-orbiting
+        /// to the same target periapsis.
+        /// </summary>
+        public static double InterfaceEnergyRatio(double orbitAltM)
+        {
+            double vNow = InterfaceSpeed(orbitAltM);
+            double vFit = InterfaceSpeed(AimFitAltM);
+            if (vFit <= 0.0) return 1.0;
+            double k = vNow / vFit;
+            return k * k;
+        }
+
+        /// <summary>Speed at the 70 km entry interface after de-orbiting from `orbitAltM`.</summary>
+        public static double InterfaceSpeed(double orbitAltM)
+        {
+            const double R = 600000.0, MU = 3.5316e12, INTERFACE = 70000.0;
+            double ra = R + orbitAltM;
+            double rp = R + PeriapsisTargetDraco;
+            double ri = R + INTERFACE;
+            double a = (ra + rp) / 2.0;
+            double t = MU * (2.0 / ri - 1.0 / a);
+            return (t > 0.0) ? System.Math.Sqrt(t) : 0.0;
         }
 
         public static double MonoReserve(DeorbitInputs s)

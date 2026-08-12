@@ -158,13 +158,22 @@ namespace DragonScreen
         public const double BandOutD = 1500.0, BandOutV = 12.0;
         public const double BandMaxV = 25.0;
 
-        // ---- TERMINAL LAW. ----
-        // ⚠ CITED TO `StTerminal:1199` UNTIL 2026-08-12, AND `StTerminal` HAS NO CALLERS.
-        // `check_live.py --audit` caught it. The constants are NOT wrong - `stCloseRate` is used by
-        // the LIVE `StDirectApproach` at `station_ops.ks:695`:
-        //     min(StSpeedCap(target:distance), max(stMatchVel, target:distance * stCloseRate))
-        // - only the attribution was, and a citation pointing at dead code is how three flights got
-        // spent porting `Flip2` and `Reentry1`.
+        // ---- TERMINAL LAW. `StDirectDv:1361`, which is LIVE - called at :1443 and :1481. ----
+        //
+        //     local stDdW is min(StSpeedCap(target:distance),
+        //                        max(stMatchVel, target:distance * stCloseRate)).
+        //
+        // ⛔ THIS ATTRIBUTION WAS WRONG THREE TIMES AND IS WORTH KEEPING AS A WARNING.
+        //   1. Cited to `StTerminal:1199` - which has NO CALLERS. Correct diagnosis.
+        //   2. "Corrected" to `StDirectApproach` at `station_ops.ks:695`. Also wrong, twice over:
+        //      `StDirectApproach` spans 1365-1596, and line 695 is `global stMonoIsp is 184`.
+        //   3. A sibling comment then recorded `StDirectDv` as DEAD - it is the live user.
+        // Every one of those came from reading a tool's verdict instead of the source, and from
+        // `check_live.py` scanning the COMMENT-STRIPPED RELEASE, where the line numbers are not the
+        // ones a citation means. The constants themselves were never in doubt at any point.
+        //
+        // A citation pointing at dead code is how three flights got spent porting `Flip2` and
+        // `Reentry1`, which is why the attribution is worth this much space.
         /// <summary>Commanded closing speed per metre of range, s^-1. `stCloseRate`.</summary>
         public const double CloseRate = 0.02;
         /// <summary>Never close faster than this, m/s. `stCloseMax`.</summary>

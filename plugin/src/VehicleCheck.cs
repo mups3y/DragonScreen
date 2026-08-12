@@ -118,8 +118,10 @@ namespace DragonScreen
             // needs, the vehicle will hold heading beautifully and refuse to pitch over.
             if (moi.x > 1.0)
             {
-                double wheelsOnly = wheelTorque * AttitudeCascade.DefaultMaxStoppingTime / moi.x
-                                    * 180.0 / Math.PI;
+                // The rate the wheels alone could reach against a 45 deg pitch-over, using the
+                // same arrestable-rate law the controller flies. Was kOS's `maxstoppingtime`.
+                double wheelsOnly = Attitude.ArrestableRate(45.0 * Math.PI / 180.0,
+                                                            wheelTorque, moi.x) * 180.0 / Math.PI;
                 if (wheelsOnly < 0.45)
                     notes.Add("reaction wheels alone give " + wheelsOnly.ToString("F2")
                               + " deg/s of pitch rate against a MoI of " + moi.x.ToString("F0")

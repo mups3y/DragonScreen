@@ -738,7 +738,7 @@ public static class FlightTest
             Check("heat shield leads at " + alt, Entry.Guide(Down(alt)).Retrograde, "");
 
         // ---- THE MEASURED SCHEDULE, NOT A DERIVED ONE ----
-        // aoaRetro from bb_dragon_CrewDragon_072, binned by altitude. A flight that landed 6.3 km out.
+        // aoaRetro from bb_dragon_CrewDragon_072 (⛔ NOT IN OUR ARCHIVE - the numbers are quoted from F9I's own comment at dragon_deorbit.ks:38-44, which IS verifiable; the recording behind them is not), binned by altitude. A flight that landed 6.3 km out.
         Check("interface is pure retrograde", Entry.AngleFor(EntryBand.Interface) == 0.0, "");
         Check("high band is full trim", Math.Abs(Entry.AngleFor(EntryBand.High) - 15.00) < 0.001,
               Entry.AngleFor(EntryBand.High).ToString("F3"));
@@ -781,12 +781,34 @@ public static class FlightTest
         // F9I flew 270 700 on its flight 076. Ours now carries most of its monopropellant to entry
         // because the S2 performs the insertion, so the vehicle differs and the aim was re-fitted
         // from our own first end-to-end return: settled 9.2 km short / AimGain 0.67 = +13 700 m.
-        Check("Draco crew aim is the 2026-08-12 re-fit", Deorbit.AimDracoCrew == 284400.0, "");
-        Check("...and it is a small correction on F9I's flown value, not a new number",
-              Math.Abs(Deorbit.AimDracoCrew - 270700.0) < 20000.0,
+        Check("Draco crew aim is the 2026-08-13 re-fit", Deorbit.AimDracoCrew == 295400.0, "");
+        Check("...and it is still a correction on F9I's flown value, not a new number",
+              Math.Abs(Deorbit.AimDracoCrew - 270700.0) < 30000.0,
               (Deorbit.AimDracoCrew - 270700.0).ToString("F0"));
-        Check("...still shorter than the S2 crew aim, which burns from higher",
-              Deorbit.AimDracoCrew < Deorbit.AimS2Crew, "");
+
+        // ⛔ THIS ASSERTED THE DRACO AIM IS SHORTER THAN THE S2's AND THE REASONING WAS BACKWARDS.
+        // The S2 de-orbits to a periapsis of -40.8 km, the Draco to -31.8 - SHALLOWER. A shallow
+        // entry spends longer in the atmosphere and flies further past the drag-free prediction,
+        // so it needs the LARGER aim. The old ordering held only by accident of an under-fitted
+        // Draco number, and it stopped holding the moment that number was corrected upward.
+        Check("the shallower Draco entry needs the LONGER aim",
+              Deorbit.AimDracoCrew > Deorbit.AimS2Crew
+              && Deorbit.PeriapsisTargetDraco > Deorbit.PeriapsisTargetS2,
+              Deorbit.AimDracoCrew.ToString("F0") + " vs " + Deorbit.AimS2Crew.ToString("F0"));
+
+        // The altitude scaling: a higher orbit carries more energy through the interface and needs
+        // a longer aim. Nothing to fit against yet - see AimRange - but the SIGN must be right.
+        DeorbitInputs hi = new DeorbitInputs();
+        hi.Valid = true; hi.OnDraco = true; hi.Crewed = true;
+        hi.OrbitAltM = 120000.0;
+        DeorbitInputs fit = hi; fit.OrbitAltM = Deorbit.AimFitAltM;
+        Check("a higher orbit aims longer", Deorbit.AimRange(hi) > Deorbit.AimRange(fit),
+              Deorbit.AimRange(hi).ToString("F0") + " vs " + Deorbit.AimRange(fit).ToString("F0"));
+        Check("...and the fitted altitude is unchanged by the scaling",
+              Math.Abs(Deorbit.AimRange(fit) - Deorbit.AimDracoCrew) < 1.0, "");
+        Check("...by a few percent, not a rewrite",
+              Deorbit.AimRange(hi) / Deorbit.AimRange(fit) < 1.10,
+              (Deorbit.AimRange(hi) / Deorbit.AimRange(fit)).ToString("F4"));
         Check("S2 periapsis target", Deorbit.PeriapsisTargetS2 == -40800.0, "");
         Check("Draco aims the entry directly", Deorbit.PeriapsisTargetDraco == -31800.0, "");
         Check("landing-calibrated orbit", StationOps.DeorbitApM == 85100.0

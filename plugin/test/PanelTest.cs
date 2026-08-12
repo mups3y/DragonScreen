@@ -557,7 +557,11 @@ public static class PanelTest
         AscentInputs done = Fly(86000.0, 86200.0, 85800.0, 0.0);
         done.CircDvMps = 0.1; done.TimeToApoapsisS = 100.0;
         c = Ascent.Guide(done, t, AscentPhase.Circularise);
-        Check("dv at zero finishes it", c.Phase == AscentPhase.Done, c.Phase.ToString());
+        // ⛔ SHUTDOWN, NOT Done. Circularisation now hands to a spool-down hold and the S2
+        // decoupler fires from THERE - separating on the tick the throttle reaches zero
+        // fired into a live engine and pushed the capsule off course (2026-08-13).
+        Check("dv at zero hands over to the shutdown hold",
+              c.Phase == AscentPhase.Shutdown, c.Phase.ToString());
         Check("done means engines off", c.Throttle == 0.0, c.Throttle.ToString());
 
         // ---- ⛔ INSERTION COMPLETE MUST MEAN AN ACTUAL ORBIT ----
@@ -588,7 +592,8 @@ public static class PanelTest
         AscentInputs over = Fly(86000.0, 86200.0, 85800.0, 0.0);
         over.CircDvFlipped = true; over.CircDvMps = 0.2; over.TimeToApoapsisS = 100.0;
         c = Ascent.Guide(over, t, AscentPhase.Circularise);
-        Check("a real overshoot finishes cleanly", c.Phase == AscentPhase.Done, c.Phase.ToString());
+        Check("a real overshoot hands over to the shutdown hold",
+              c.Phase == AscentPhase.Shutdown, c.Phase.ToString());
         Check("without the abort note", c.Note == null || !c.Note.Contains("DIVERGING"), c.Note);
 
         // ---- ⛔ ONE TRANSITION PER CALL. THE ROOT CAUSE OF THE WHOLE FLIGHT. ----

@@ -54,6 +54,23 @@ namespace DragonScreen
             new LandingSite("LZ-2", -0.140425956708956, -74.5495256417959);
 
         /// <summary>
+        /// THE CAPSULE'S SPLASHDOWN POINT - just off shore, east of KSC.
+        ///
+        /// Crew Dragon comes down in water, not on a pad, and it does so within helicopter reach of
+        /// the recovery fleet rather than in mid-ocean. LZ-1 sits at -0.1323, -74.5494; the coast
+        /// runs east of the space centre, so this is placed a few kilometres offshore on the same
+        /// latitude - close enough to be "just off KSC", far enough that a long entry lands in
+        /// water rather than on the runway.
+        ///
+        /// ⚠ THE CAPSULE MUST NOT AIM AT THE BOOSTER'S PAD. It was defaulting to `Lz1` - the RTLS
+        /// pad - so a perfect entry would have put a crewed capsule on concrete, and any error
+        /// short of perfect put it inland. The two vehicles come home to different places, which is
+        /// true of the real ones as well.
+        /// </summary>
+        public static readonly LandingSite Splashdown =
+            new LandingSite("SPLASHDOWN", -0.0972, -74.3200);
+
+        /// <summary>
         /// BOOSTER.ks:158 looks the droneship up by this name and takes its CURRENT position,
         /// because it is a vessel someone parked, not a fixed coordinate.
         /// </summary>

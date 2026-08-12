@@ -52,10 +52,22 @@ namespace DragonScreen
         public static double TrailDistM = 1000.0;
 
         /// <summary>
-        /// Longest hold worth taking, seconds. `stWindowCap`. Beyond this, launch anyway and phase in
-        /// orbit - a window that is an hour away is not a window, it is a different launch.
+        /// Longest hold worth taking, seconds. `stWindowCap`.
+        ///
+        /// ⛔ 1800 -> 7200 ON 2026-08-13. THIRTY MINUTES WAS NOT A CAP, IT WAS THE FAILURE MODE.
+        /// The station's period at 120 km is about 34 minutes, so a cap of 30 could not even cover
+        /// ONE lap: any window more than half an orbit out was abandoned and the flight launched
+        /// into whatever phase it happened to have. Measured on 2026-08-13 - "window 34.1 min away,
+        /// past the 30 min cap - launching now and phasing in orbit" - and the phasing that was
+        /// supposed to recover it then could not, because the gap was too large to close.
+        ///
+        /// Waiting is FREE. Phasing is not: it costs propellant, laps and the risk of not closing
+        /// at all. Two hours covers roughly three and a half laps, so a window is essentially
+        /// always taken rather than traded for a phase correction the vehicle may not be able to
+        /// afford. If the wait is genuinely longer than this, the phase does not close from this
+        /// pad on this orbit and launching is the honest answer.
         /// </summary>
-        public const double WindowCapS = 1800.0;
+        public const double WindowCapS = 7200.0;
 
         /// <summary>Seconds still to wait, or 0 when the window is open. Negative = no station.</summary>
         public static double WaitS = -1.0;

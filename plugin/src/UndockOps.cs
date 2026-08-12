@@ -99,6 +99,18 @@ namespace DragonScreen
 
         private static void Go(UndockStage s)
         {
+            // ---- ⛔ RELEASE THE TARGET WHEN THE STATION STOPS BEING ONE. ----
+            // Docking targets the PORT so the DOCKING page reads port-relative state. Once the
+            // capsule is clear that target is worse than none: every target-relative readout on
+            // every page - range, closing rate, the navball marker - keeps pointing at a station
+            // the vehicle is leaving, and the de-orbit that follows is flown with the approach's
+            // furniture still on the glass. The trip is over; the crew should see their own orbit.
+            //
+            // Here rather than at the three call sites that reach `Clear`, so a fourth cannot
+            // forget. Refuel completed in `ToppingUp`, long before this.
+            if (s == UndockStage.Clear || s == UndockStage.Failed)
+                DockingOps.SetTarget(null, "undock complete - clear of the station");
+
             Stage = s;
             stageStartedAt = Planetarium.GetUniversalTime();
         }

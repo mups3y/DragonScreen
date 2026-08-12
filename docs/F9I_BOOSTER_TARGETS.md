@@ -28,7 +28,7 @@ binds — which independently confirms the conditional-rebuild port. A descent c
 degrees is commanding more than twice what F9I flies.
 
 **`aoaRetro` sweeping to 123.6 degrees during the nose-up coast is correct, not a fault.** F9I is not
-tracking retrograde there; `AtmGNC:425` is `lock steering to up` until vertical speed passes −50.
+tracking retrograde there; `AtmGNC:663` is `lock steering to up` until vertical speed passes −50.
 Our own coast already does this. A large angle-to-retrograde in that window is the profile working.
 
 **`ctlRoll` is 0.000 in every phase** because F9I steers through kOS cooked steering, which bypasses

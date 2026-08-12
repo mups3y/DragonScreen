@@ -642,7 +642,7 @@ namespace DragonScreen
         ///
         /// F9I's FalconSepS2 does it at a 40 km periapsis so the S2 comes down promptly, then closes
         /// the orbit on the Dragon's SuperDracos - 228 kN on the pod, about 400 m/s in the tank,
-        /// roughly 37 m/s needed from that gate. MEASURED, bb_upper_CrewDragon_069.
+        /// roughly 37 m/s needed from that gate. MEASURED, the S2 separation log.
         ///
         /// ⚠ THE RIGHT DECOUPLER. `TE.19.C.Dragon.Decoupler` drops the S2 alone. The trunk decoupler
         /// above it would take the trunk - and the solar panels and radiators - with it. See
@@ -653,6 +653,17 @@ namespace DragonScreen
         /// </summary>
         private static void SeparateSecondStage(Vessel v)
         {
+            // ---- ⛔ THE CAPSULE IS NOT THE LAUNCH VEHICLE. GIVE IT ITS OWN RATE CEILING. ----
+            // From here `AttitudeController.Ascent` flies the Dragon alone - a tenth the inertia of
+            // the stack it was tuned for. Left at the ascent ceiling of 2 deg/s it could not slew
+            // at all: MEASURED on the flight that docked and landed, the capsule averages 1.85
+            // deg/s docking, 2.62 on approach and 1.87 through the de-orbit, so 2 sits AT the
+            // working average rather than above it.
+            //
+            // 10 gives roughly four times the flown average. The 40-125 deg/s transients in that
+            // same recording are the controller misbehaving, not a requirement, and are exactly
+            // what a ceiling exists to prevent.
+            AttitudeController.Ascent.MaxRateDps = Attitude.CapsuleMaxRateDps;
             if (s2Separated) return;
             s2Separated = true;
 

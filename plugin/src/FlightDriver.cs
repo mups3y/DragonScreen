@@ -85,6 +85,10 @@ namespace DragonScreen
             StationApproach.Tick();
             DockingOps.Tick();
             UndockOps.Tick();
+
+            // ⛔ LAST, AND UNCONDITIONALLY. The chutes must not depend on any sequence having been
+            // started - see ChuteGuard. A crew flying the entry by hand had none deploy at all.
+            ChuteGuard.Tick();
             PhaseDownOps.Tick();
             DeorbitOps.Tick();
             EntryOps.Tick();
@@ -116,6 +120,7 @@ namespace DragonScreen
                 NodeExecutor.Reset();
                 DockingOps.Reset();
                 UndockOps.Reset();
+            ChuteGuard.Reset();
                 PhaseDownOps.Reset();
                 DeorbitOps.Reset();
                 EntryOps.Reset();

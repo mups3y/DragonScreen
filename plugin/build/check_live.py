@@ -114,6 +114,14 @@ def audit(text):
             for ln, line in enumerate(body.split("\n"), 1):
                 if "//" not in line and "///" not in line:
                     continue
+                # ⛔ A COMMENT THAT ALREADY SAYS "THIS IS DEAD" IS NOT A DEFECT - IT IS THE FIX.
+                # `Approach.cs` names `StTerminal` precisely to warn that it has no callers. Left
+                # unfiltered this tool reports that warning as a finding on every run, and a report
+                # with a permanent entry in it is one nobody reads to the bottom of. Same rule as
+                # audit_comments.py's acknowledgement handling.
+                if re.search(r'no callers|has NO CALLERS|is dead|are dead|DEAD|not live',
+                             line, re.I):
+                    continue
                 for m in pat_fn.finditer(line):
                     nm = m.group(1)
                     if nm in known:

@@ -5,7 +5,7 @@
  *
  * ---- ⛔ THE SCHEDULE IS MEASURED FLIGHT DATA. DO NOT DERIVE IT FROM THEORY. ----
  * `docs/FLIGHT_SYSTEMS.md` says this in as many words, and it is the standing instruction: read the
- * numbers off the recordings. They come from the `aoaRetro` column of `bb_dragon_CrewDragon_072`,
+ * numbers off the recordings. They come from the `aoaRetro` column of `bb_dragon_CrewDragon_072` (⛔ NOT IN OUR ARCHIVE - the numbers are quoted from F9I's own comment at `dragon_deorbit.ks:38-44`, which IS verifiable; the recording behind them is not),
  * binned by altitude, on a flight that landed 6.3 km from its target:
  *
  *      70-55 km    0.07 - 0.11 deg    pure retrograde, the shield-forward coast in   -> 0.00

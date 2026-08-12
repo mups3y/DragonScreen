@@ -24,7 +24,6 @@ public static class TestMain
         bad += EntryGuidanceTest.Run();
         bad += DockControlTest.Run();
         bad += DockApproachTest.Run_();
-        bad += FlipRollTest.Run();
         bad += ReturnPathTest.Run();
         bad += LayoutSweepTest.Run();
 

@@ -56,6 +56,40 @@ namespace DragonScreen
 
         /// <summary>When the phasing coast returns us to the burn point. 0 = not phasing.</summary>
         private static double phaseReturnUt;
+
+        /// <summary>
+        /// Rails-warp a long, empty coast, and drop out in time to fly the burn.
+        ///
+        /// A phasing lap at 120 km is about 34 minutes of doing nothing, and `MaxLaps` allows five
+        /// of them - close to three hours of real time watching a static screen. F9I warps its
+        /// coasts for exactly this reason.
+        ///
+        /// ⛔ RAILS WARP ONLY, AND ONLY WHILE NOTHING IS BEING FLOWN. Physics warp would corrupt
+        /// the attitude solution, and warping through a burn is how a manoeuvre gets missed
+        /// entirely. It steps DOWN as the burn approaches rather than dropping from 1000x to 1x in
+        /// one frame, because KSP needs several physics ticks to settle a vessel coming off rails
+        /// and the node executor needs a settled vessel to aim.
+        ///
+        /// ⚠ The crew can always override - this only ever RAISES warp toward what the remaining
+        /// time allows, and never fights a rate the crew has chosen for themselves.
+        /// </summary>
+        private static void Warp(double secondsLeft)
+        {
+            if (TimeWarp.fetch == null) return;
+            if (!ship.Landed && ship.situation != Vessel.Situations.ORBITING) return;
+
+            int want;
+            if (secondsLeft > 600.0) want = 4;          // 100x
+            else if (secondsLeft > 180.0) want = 3;     //  50x
+            else if (secondsLeft > 60.0) want = 2;      //  10x
+            else if (secondsLeft > 25.0) want = 1;      //   5x
+            else want = 0;
+
+            if (want < TimeWarp.CurrentRateIndex) TimeWarp.SetRate(want, true);
+            else if (want > TimeWarp.CurrentRateIndex
+                     && TimeWarp.WarpMode == TimeWarp.Modes.HIGH)
+                TimeWarp.SetRate(want, false);
+        }
         /// <summary>Phasing laps flown this engagement. Bounded by `Approach.PhaseMaxPass`.</summary>
         private static int phasePass;
         /// <summary>Latch, so using up the laps is said once and not every tick.</summary>
@@ -248,7 +282,7 @@ namespace DragonScreen
             //                           to match altitude OVERSHOT - SMA 683.06 -> 691.61 km
             //                           against a station at 686.75. Dead, and it stays dead.
             //
-            //      StPhaseLeg           ALIVE. Called from StCloseIn:882, inside a bounded loop.
+            //      StPhaseLeg           ALIVE. Called from StCloseIn:1737, inside a bounded loop.
             //                           Nothing was ever wrong with it.
             //
             //  The cost of the confusion was a real one: on the 2026-08-11 13:44 flight the capsule
@@ -659,7 +693,7 @@ namespace DragonScreen
         //  ⛔ EVERYTHING BELOW THIS LINE IS DEAD BY DECISION - EXCEPT `FlyPhasing`, WHICH IS LIVE.
         //
         //  ⚠ `FlyPhasing` WAS LISTED HERE AND SHOULD NOT HAVE BEEN. It is called from the live
-        //  path above, as leg 1, because F9I calls `StPhaseLeg` from `StCloseIn:882`. It is kept
+        //  path above, as leg 1, because F9I calls `StPhaseLeg` from `StCloseIn:1737`. It is kept
         //  physically below this line only because moving it would obscure the diff; the banner is
         //  the authority, not the position in the file. See the correction at the top of Tick.
         //
@@ -750,7 +784,9 @@ namespace DragonScreen
             if (now < phaseReturnUt)
             {
                 Hold();
-                Note = "PHASING - circularise in " + (phaseReturnUt - now).ToString("F0") + " s";
+                double left = phaseReturnUt - now;
+                Note = "PHASING - circularise in " + left.ToString("F0") + " s";
+                Warp(left);
                 return;
             }
 

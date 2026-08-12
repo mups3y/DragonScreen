@@ -80,7 +80,7 @@ Both are already solved and flying. **Do not re-derive these.** Cited so the nex
 Those angles are `dgAoA x (0.00, 1.00, 0.55, 0.13)` with `dgAoA = 15` (capsule trim off retrograde,
 L/D ~0.27). Kept as FRACTIONS so changing the trim scales all four together.
 
-**They were MEASURED, not chosen** — from the `aoaRetro` column of `bb_dragon_CrewDragon_072`,
+**They were MEASURED, not chosen** — from the `aoaRetro` column of `bb_dragon_CrewDragon_072` (⛔ NOT IN OUR ARCHIVE - the numbers are quoted from F9I's own comment at `dragon_deorbit.ks:38-44`, which IS verifiable; the recording behind them is not),
 binned by altitude:
 
     70-55 km   0.07 - 0.11 deg    pure retrograde, the shield-forward coast in   -> Entry 0.00
@@ -88,11 +88,34 @@ binned by altitude:
     25-15 km    8.5 -  4.6 deg    lift bleeding off                              -> Low   0.55
     10-0  km    0.2 -  1.8 deg    essentially retrograde again                   -> Final 0.13
 
-#### Falcon 9 booster — `booster.ks:3341-3344`, in `SteeringCorrections`
+#### Falcon 9 booster — `SPACEX/BOOSTER.ks:207-209`
 
-    descentmodes  = (true, true, true, true)
-    descentgrades = (true, true, true, true)
-    descentangles = (180,  180,  180,  180)
+    descentmodes  = (true,  true,  true,  true)
+    descentgrades = (false, false, false, false)
+    descentangles = (0,     0,     0,     0)
+
+> ⛔ **CORRECTED 2026-08-13 — THIS SECTION QUOTED THE STARSHIP BOOSTER.** It read
+> `booster.ks:3341-3344, in SteeringCorrections` with `grades = true` and `angles = 180`. There is
+> no `SteeringCorrections` anywhere in F9I; the only file containing it is
+> `quarantine/starship_interface_removed_2026-07-21/Ships_Script/booster.ks`, the STARSHIP
+> interface removed from this project on 2026-07-21. The values above are now F9I's own, for the
+> Falcon 9 booster it actually flies.
+>
+> ⚠ **AND THE OBVIOUS EXPLANATION FOR THE DIFFERENCE IS WRONG.** The first version of this note
+> said Starship descends engines-first and Falcon 9 does not. **Both descend engines-first** - that
+> is what the flip is FOR, and F9I's `Flip1` turns the stage 180 deg precisely so the engines and
+> grid fins meet the airflow. These three lists are not a description of which way the stage points:
+> they are what each script tells the Trajectories add-on about its angle of attack for the impact
+> PREDICTION. F9I says zero - model the booster as a drag body aligned with the airflow, generating
+> no lift. Why the Starship script says 180 is a question about ITS control-point convention, and
+> is not established here. Do not infer a physical attitude from these numbers.
+>
+> `audit_comments.py` flagged the citation as past the end of BOOSTER.ks (972 lines); the
+> wrong-vehicle question, and this correction, came from the crew.
+>
+> `grades = false` alongside the Dragon's `grades = true` looks like a bug and is not one: at an
+> angle of zero, prograde and retrograde put the marker in the same place, so the choice is moot.
+> `SPACEX/BOOSTER.ks:198-206` says exactly this. Do not "align" them.
     + ADDONS:TR:SETTARGET(landingzone) when not already targeted
 
 Empirically right — the boosters land at 0.34-0.56 m. **One honest caveat:** a booster is very nearly

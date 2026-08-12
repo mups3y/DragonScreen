@@ -260,7 +260,7 @@ The cost of my error was concrete: on 2026-08-11 13:44 the capsule sat 10.2 km o
 |---|---|---|
 | 0 | circularise **at the station's radius crossing** | new — see below |
 | 1 | phasing laps, bounded at 3, adaptive lap count | `StPhaseLeg` + simulation |
-| 2 | ride an existing intercept and match velocity there | `StCloseIn:895-913` |
+| 2 | ride an existing intercept and match velocity there | `StCloseIn:1786-1841` |
 | 3 | direct approach | unchanged |
 
 **Leg 0 is the only thing here that is not a port, and it exists because the simulation said the

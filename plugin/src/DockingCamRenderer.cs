@@ -24,6 +24,7 @@
  * is disabled and costs nothing. Three screens on DOCKING still cost one camera.
  */
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace DragonScreen
@@ -66,14 +67,28 @@ namespace DragonScreen
         /// and so a vehicle that loses a camera at staging cannot silently renumber the rest into
         /// something the crew did not pick.
         /// </summary>
-        internal const int HullCamBase = 4;
+        /// ⛔ 4 -> 0 ON 2026-08-13. THE FOUR HULL-SWEPT DIRECTIONS ARE GONE - THEY DID NOT WORK.
+        ///
+        /// FRONT / REAR / LEFT / RIGHT were computed from the control point and a measured hull
+        /// extent. The crew's verdict after flying them is that they do not produce a usable
+        /// picture, while the vehicle's own cameras "mostly work".
+        ///
+        /// The consequence worth spelling out: the DOCKING page requested view 0, which WAS
+        /// `FRONT`. So the docking camera has been the broken computed camera all along - that is
+        /// why it has never shown anything. With the base at zero, view 0 is now the FIRST REAL
+        /// CAMERA on the vehicle, and DOCKING gets a picture that works without any change at its
+        /// call site.
+        ///
+        /// If the vehicle carries no cameras at all there is no picture, and `Aim` already says so
+        /// once per view rather than leaving a black rectangle to be interpreted.
+        internal const int HullCamBase = 0;
 
         /// <summary>Label for the view now on screen, for the page to print under the picture.</summary>
         internal static string ViewLabel
         {
             get
             {
-                if (wantView < HullCamBase)
+                if (wantView < HullCamBase)     // no longer reachable - kept so the branch is total
                 {
                     switch (wantView)
                     {
@@ -141,6 +156,7 @@ namespace DragonScreen
                 if (blankReportedFor != wantView)
                 {
                     blankReportedFor = wantView;
+                    aimReportedFor = -999;
                     Debug.LogWarning("[DragonScreen] camera view " + wantView + " ("
                                    + ViewLabel + ") has no picture - "
                                    + (wantView >= HullCamBase
@@ -152,6 +168,20 @@ namespace DragonScreen
             }
             if (blankReportedFor == wantView) blankReportedFor = -999;
             cam.enabled = true;
+
+            // ---- ONE LINE PER VIEW, SO A BLACK RECTANGLE CAN BE TOLD FROM A DEAD CAMERA. ----
+            // A picture of empty space and a camera rendering nothing look identical on the glass,
+            // and the crew has reported "the cameras are not working" for both. This says where the
+            // camera actually IS and what it is looking at, once per view rather than every frame.
+            if (aimReportedFor != wantView)
+            {
+                aimReportedFor = wantView;
+                Debug.Log("[DragonScreen] camera view " + wantView + " (" + ViewLabel
+                          + ") live at " + camObject.transform.position.ToString("F1")
+                          + " facing " + camObject.transform.forward.ToString("F2")
+                          + ", fov " + cam.fieldOfView.ToString("F0")
+                          + ", mask 0x" + cam.cullingMask.ToString("X"));
+            }
             return target;
         }
 
@@ -159,6 +189,8 @@ namespace DragonScreen
         /// Switch the camera off when no page has asked for a while. Called from the painter's
         /// update, which runs whether or not DOCKING is on screen.
         /// </summary>
+        private static int aimReportedFor = -999;
+
         internal static void Idle()
         {
             if (cam != null && cam.enabled && Time.frameCount - lastWanted > IdleFrames)
@@ -236,7 +268,7 @@ namespace DragonScreen
             // it can see, which is the entire reason for preferring it to a direction we chose.
             if (wantView >= HullCamBase) return AimHullCam(wantView - HullCamBase);
 
-            Vessel v = FlightGlobals.ActiveVessel;
+            Vessel v = OurVessel();
             if (v == null) return false;
             Transform rt = v.ReferenceTransform;
             if (rt == null) return false;
@@ -379,6 +411,35 @@ namespace DragonScreen
             cachedAt = Time.realtimeSinceStartup;
             cachedExtent = best;
             return best;
+        }
+
+        /// <summary>
+        /// THE VESSEL THESE SCREENS ARE IN - not whichever one the camera is following.
+        ///
+        /// ⛔ THIS WAS `FlightGlobals.ActiveVessel` AND THAT IS WRONG DURING A RECOVERY.
+        /// `BoosterRecovery:256` calls `ForceSetActiveVessel(booster)` so the crew can watch the
+        /// landing, and MechJeb does the same thing for the same reason. With the active vessel as
+        /// the source, the Dragon's own docking camera renders a view out of the BOOSTER - and the
+        /// screens are in the capsule, showing the capsule's crew a picture from a stage three
+        /// hundred kilometres away.
+        ///
+        /// Same rule the crew card already follows: our own `DragonScreenState` is the marker for
+        /// "this is our capsule", and it beats anything about focus. Falls back to the active
+        /// vessel so a craft without the module still gets a picture.
+        /// </summary>
+        private static Vessel OurVessel()
+        {
+            List<Vessel> all = FlightGlobals.Vessels;
+            if (all != null)
+            {
+                for (int i = 0; i < all.Count; i++)
+                {
+                    Vessel v = all[i];
+                    if (v == null || !v.loaded || v.parts == null) continue;
+                    if (ScreenPart(v) != null) return v;
+                }
+            }
+            return FlightGlobals.ActiveVessel;
         }
 
         /// <summary>The part carrying the screens, used only when there is no control part.</summary>

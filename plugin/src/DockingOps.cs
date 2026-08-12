@@ -61,7 +61,7 @@ namespace DragonScreen
         // moment we said it had none - we were 10 km out and could not see any of them.
         //
         // F9I raises the ranges on the TARGET and then waits for `target:loaded` before reading a
-        // single port, and `StClosestPort:150` opens by refusing outright if it is still not loaded.
+        // single port, and `StClosestPort:373` opens by refusing outright if it is still not loaded.
         // Note `load` is 10050 m - fifty metres past the 10 km direct-approach gate, so the station
         // is in memory by the time the approach hands over, not at the instant it arrives.
         private const double TargetUnloadM = 25000.0;
@@ -114,10 +114,22 @@ namespace DragonScreen
                 return;
             }
 
+            // ---- ⛔ TARGET THE PORT ITSELF, NOT THE VESSEL. ----
+            // `ModuleDockingNode` is an `ITargetable`, and targeting the NODE is what makes KSP
+            // produce port-relative state: the navball's target marker becomes the port's axis
+            // rather than the station's centre of mass, and the DOCKING page's alignment ring,
+            // Z/ROLL readouts and closing rate all read off that. Targeting the vessel gives you
+            // the middle of the station, which is not where the capsule is going and is why the
+            // page has never shown what it was built to show.
+            //
+            // It is also what a crew flying this manually would do first.
+            SetTarget(theirPort, "docking engaged");
             keepOutR = MeasureKeepOut(station);
             bestRangeM = double.MaxValue; bestRangeAt = 0.0;
             reached = DockStage.Idle;
             haveSideStep = false;
+            holdStableS = 0.0; CrewGo = false;
+            legRangeM = 0.0; lastWaypoint = DockWaypoint.None;
             Engaged = true;
             Commit(DockStage.ToGate);
             Debug.Log(Tag + "docking engaged - '" + ourPort.part.partInfo.title + "' to '"
@@ -134,10 +146,35 @@ namespace DragonScreen
             Debug.Log(Tag + "docking disengaged - " + why);
         }
 
+        /// <summary>
+        /// Point KSP's target machinery at something, or clear it with null.
+        ///
+        /// Guarded and logged: `SetVesselTarget` on a vessel that is not the active one throws in
+        /// some KSP versions, and an exception here would take the docking loop with it - the same
+        /// class of failure as an unguarded `OnFlyByWire`.
+        /// </summary>
+        internal static void SetTarget(ITargetable t, string why)
+        {
+            try
+            {
+                if (FlightGlobals.fetch == null) return;
+                FlightGlobals.fetch.SetVesselTarget(t, true);
+                Debug.Log(Tag + (t == null ? "target CLEARED - " : "target set to '"
+                          + t.GetName() + "' - ") + why);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning(Tag + "could not " + (t == null ? "clear" : "set")
+                                 + " the target: " + e.Message);
+            }
+        }
+
         public static void Reset()
         {
             Engaged = false; Stage = DockStage.Idle; Note = "-";
             reached = DockStage.Idle; haveSideStep = false;
+            holdStableS = 0.0; CrewGo = false;
+            legRangeM = 0.0; lastWaypoint = DockWaypoint.None;
             ship = null; station = null; ourPort = null; theirPort = null;
             RangeToPortM = 0.0; ClosingMps = 0.0; AxisErrorDeg = 0.0;
         }
@@ -267,8 +304,35 @@ namespace DragonScreen
 
         // ------------------------------------------------------------------ the loop
 
+        /// <summary>
+        /// Distance to the waypoint the profile is currently flying to, metres. Zero until known.
+        ///
+        /// The no-progress guard judges THIS, not the range to the station - see DivergedTooLong.
+        /// </summary>
+        private static double legRangeM;
+        private static DockWaypoint lastWaypoint;
+
         /// <summary>Best range seen this approach, and when it was last improved on.</summary>
         private static double bestRangeM = double.MaxValue, bestRangeAt;
+
+        /// <summary>
+        /// Seconds the capsule has been parked in the current waypoint box AND slow.
+        ///
+        /// Every real waypoint is a HOLD - Dragon stops and station-keeps at WP0, WP1 and WP2
+        /// awaiting a GO. Ours never stopped, which is exactly why it had to null a large lateral
+        /// error while closing; the real vehicle arrives at each waypoint stationary and lined up.
+        /// </summary>
+        private static double holdStableS;
+
+        /// <summary>
+        /// The crew's GO for the next leg, released by the DOCKING page.
+        ///
+        /// ⚠ ON THE REAL VEHICLE EVERY WAYPOINT IS A CREW/GROUND DECISION. This auto-releases on a
+        /// demonstrably stable hold so the mission flies unattended, and the flag lets the screen
+        /// take that decision back without the guidance changing shape. Cleared on leaving a hold
+        /// so one press can never release two legs.
+        /// </summary>
+        public static bool CrewGo;
 
         /// <summary>Latched "which way is out" for a sidestep. See the note where it is used.</summary>
         private static Vector3d sideStepOut;
@@ -307,7 +371,21 @@ namespace DragonScreen
         private static bool DivergedTooLong()
         {
             double now = Planetarium.GetUniversalTime();
-            double range = Vector3d.Distance(ship.CoM, station.CoM);
+
+            // ---- ⛔ PROGRESS IS TOWARD THE CURRENT WAYPOINT, NOT TOWARD THE STATION. ----
+            // This measured `ship.CoM -> station.CoM` and gave up when that stopped shrinking. The
+            // real Crew Dragon profile makes it shrink and grow BY DESIGN: WP0 is 400 m BELOW the
+            // station, so the first leg deliberately flies AWAY. Measured 2026-08-13: the range ran
+            // 164 -> 436 -> 382 -> 430 -> 142 m as the capsule worked the L, the guard read every
+            // outbound leg as failure, and `x_dkStage` cycled ToGate -> NoPort -> ToGate five times
+            // and spent 93 units of monopropellant before the crew stopped it.
+            //
+            // The guard is right to exist - it is what stops an approach running for ever - but it
+            // has to judge the leg being flown. `legRangeM` is the distance to the waypoint the
+            // profile actually chose, which shrinks monotonically on every leg of a working
+            // approach and on none of a broken one.
+            double range = (legRangeM > 0.0) ? legRangeM
+                                             : Vector3d.Distance(ship.CoM, station.CoM);
 
             if (range < bestRangeM - ProgressEpsilonM)
             {
@@ -494,7 +572,41 @@ namespace DragonScreen
                           ? theirPort.acquireRange * 0.5 : 0.25;
             ai.SafeM = keepOutR;
 
+            // ---- ⛔ THE STATION'S OWN ORBITAL FRAME. WP0 IS DEFINED BY THE ORBIT. ----
+            // "400 metres directly BELOW the station" is a statement about the R-bar, and no
+            // amount of port-axis geometry can express it. RADIAL is away from the planet, ALONG
+            // is the direction of travel, CROSS completes the set - the frame every real
+            // rendezvous is flown in, and the one we did not have.
+            Vector3d radial = (station.CoM - station.mainBody.position).normalized;
+            Vector3d along = Vector3d.Exclude(radial, station.obt_velocity).normalized;
+            Vector3d cross = Vector3d.Cross(radial, along).normalized;
+            Vector3d rel = ourPos - station.CoM;
+            ai.RadialM = Vector3d.Dot(rel, radial);
+            ai.AlongM = Vector3d.Dot(rel, along);
+            ai.CrossM = Vector3d.Dot(rel, cross);
+
+            // A hold is not a hold until the capsule is actually stopped relative to the station.
+            ai.RelSpeedMps = relVel.magnitude;
+            ai.HoldStableS = holdStableS;
+            ai.CrewGo = CrewGo;
+
             DockApproachResult sel = DockApproach.Select(ai, reached);
+            if (sel.Waypoint != lastWaypoint)
+            {
+                // A NEW LEG IS NOT A FAILURE OF THE OLD ONE. Without this the high-water mark from
+                // the previous waypoint condemns the next one before it has flown a metre.
+                lastWaypoint = sel.Waypoint;
+                bestRangeM = double.MaxValue;
+                bestRangeAt = Planetarium.GetUniversalTime();
+            }
+
+            // The dwell only accumulates while we are inside the waypoint box AND slow. Anything
+            // else resets it - a hold that counts while drifting is not a hold.
+            bool holding = sel.Stage == DockStage.HoldWp0 || sel.Stage == DockStage.HoldWp1
+                           || sel.Stage == DockStage.HoldWp2;
+            holdStableS = (holding && ai.RelSpeedMps <= DockApproach.HoldSpeedMps)
+                          ? holdStableS + TimeWarp.fixedDeltaTime : 0.0;
+            if (!holding) CrewGo = false;
             Commit(sel.Stage);
             Note = sel.Note;
 
@@ -519,6 +631,26 @@ namespace DragonScreen
                 case DockWaypoint.Port:
                     target = tgtPos;
                     break;
+
+                // ---- THE REAL WAYPOINTS. docs/REAL_CREW_DRAGON_MISSION.md. ----
+                // WP0 is on the station's R-BAR, not the port axis - that is why the LVLH frame
+                // above had to exist. WP1 and WP2 are on the docking axis, 220 m and 20 m out.
+                case DockWaypoint.Wp0:
+                    target = station.CoM - radial * DockApproach.Wp0BelowM;
+                    break;
+                case DockWaypoint.Wp1:
+                    target = tgtPos + axis * DockApproach.Wp1AxialM;
+                    break;
+                case DockWaypoint.Wp2:
+                    target = tgtPos + axis * DockApproach.Wp2AxialM;
+                    break;
+                // Forward at WP0's depth, level with WP1: the corner flown as two sides so the
+                // path never grazes the keep-out sphere. See DockWaypoint.Wp1Transit.
+                case DockWaypoint.Wp1Transit:
+                    target = station.CoM - radial * DockApproach.Wp0BelowM
+                             + along * (Vector3d.Dot(tgtPos - station.CoM, along)
+                                        + DockApproach.Wp1AxialM);
+                    break;
                 case DockWaypoint.Standoff:
                 case DockWaypoint.BackOut:
                     target = standoff;
@@ -542,6 +674,7 @@ namespace DragonScreen
                     break;
             }
 
+            legRangeM = (target - ourPos).magnitude;
             FlyTo(ourPos, target, axis);
         }
 
@@ -662,7 +795,16 @@ namespace DragonScreen
             Note += " " + dc.Note;
         }
 
-        /// <summary>Lateral offset below this is not worth spending monopropellant on, metres.</summary>
+        /// <summary>
+        /// ⛔ NEVER WIRED, AND DELIBERATELY NOT WIRING IT. Kept as the record of a rejected idea.
+        ///
+        /// "Lateral offset below 0.35 m is not worth spending monopropellant on" - transcribed,
+        /// never read by anything, and it is as well. A lateral deadband on the FINAL approach is
+        /// precisely how a capsule misses the port: it stops trimming at 0.35 m and coasts the last
+        /// metre off-centre. The port's own capture envelope is a few centimetres, so the trim has
+        /// to run all the way to contact. `AxisSpeedLimit` already tapers the command to zero as
+        /// the error closes, which is the honest version of what this was reaching for.
+        /// </summary>
         public const double LateralDeadbandM = 0.35;
 
         private static double Clamp(double d)

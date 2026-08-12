@@ -12,7 +12,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Alarms.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Approach.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\ArcGeometry.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Ascent.cs
-C:\Users\User\Desktop\DragonScreen\plugin\src/pure\AttitudePid.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Attitude.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\BurnExec.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\CabinEnvironment.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Card.cs
@@ -69,7 +69,6 @@ C:\Users\User\Desktop\DragonScreen\plugin\test\DockControlTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\DockGeometryTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\EntryGuidanceTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\FlightTest.cs
-C:\Users\User\Desktop\DragonScreen\plugin\test\FlipRollTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\LayoutSweepTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\LayoutTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\OrbitalTest.cs

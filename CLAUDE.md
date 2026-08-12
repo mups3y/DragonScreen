@@ -246,7 +246,7 @@ autopilot with kOS idle, so **none of those flights recorded anything.** Everyth
 from log lines usually added *after* the flight that needed them.
 
 It paid for itself on its first flight: `attErrDeg = 0` and `torqueX = 0` for all 1304 rows, beside a
-`cmdPitch` running 90° → 4.5°, said in one glance that guidance was fine and **nothing was steering
+`a_cmdPitchDeg` running 90° → 4.5°, said in one glance that guidance was fine and **nothing was steering
 the vehicle**. No amount of log reading was going to be that fast.
 
 ⚠ `ctlPitch/ctlYaw/ctlRoll` are **live for the first time** — dead in all 554 kOS recordings because
@@ -685,7 +685,7 @@ thrust *before* the solve, and "no solution" is a reported state rather than a d
 012 to −159 km while the display said "closing".
 
 **Entry** — the AoA schedule is **measured flight data** from `aoaRetro` in
-`bb_dragon_CrewDragon_072`, binned by altitude: `0.00 / 15.00 / 8.25 / 1.95` as fractions
+`bb_dragon_CrewDragon_072` (⛔ NOT IN OUR ARCHIVE - the numbers are quoted from F9I's own comment at `dragon_deorbit.ks:38-44`, which IS verifiable; the recording behind them is not), binned by altitude: `0.00 / 15.00 / 8.25 / 1.95` as fractions
 `(0, 1.00, 0.55, 0.13)` of the 15° trim. ⛔ **`Retrograde` is true on every band and is not
 configurable** — the heat shield leads, and getting that backwards flew CargoDragon_012 134.9° off
 the nose for an entire entry. Chutes at the real altitudes, 5486 m and 1830 m, and **chutes outrank
@@ -1089,7 +1089,7 @@ every positioned selector, every label, every asset, per component — and is re
 
 The old `assets/reference/dragon2-ui-vue/` was missing **39 files**, including:
 
-- `docs/css/app.84fb9753.css` — the compiled stylesheet, every coordinate in the app
+- `<dragon2-ui zip>/docs/css/app.84fb9753.css` — the compiled stylesheet, every coordinate in the app
 - `dragon_video.webp` — what the demo uses as its docking backdrop
 - `first_ball.glb` … `sixth_ball.glb` — the demo's navball meshes, one per page
 - `spaceDragon.glb`, `iss_lowpoly.glb`, `misc/*.png`, `LICENSE.md`
@@ -1442,7 +1442,7 @@ page selection is stored under. Nothing about a screen's behaviour may branch on
     DOCKING  approach and docking controls
     SETTINGS cabin, audio, lighting, cameras
 
-Already in the cfg as `defaultPage`, logged at startup, wired to nothing until the router exists.
+Already in the cfg as `defaultPage`, logged at startup, and LIVE since the router landed - `DragonScreenMonitor.cs:286` resolves it through `PageSelection.IndexOfName`. (This line said "wired to nothing until the router exists" until 2026-08-13.)
 
 **A PHASE CHANGE MUST NEVER OVERRIDE A PAGE THE CREW CHOSE.** Auto-swapping to `DOCKING` on approach
 is tempting and wrong — the only thing worse than the wrong page is the right page vanishing because

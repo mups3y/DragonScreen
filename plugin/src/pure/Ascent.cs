@@ -40,6 +40,19 @@ namespace DragonScreen
         /// Separated, still coasting, MVac NOT YET LIT. The gap that keeps the booster alive.
         /// </summary>
         StageSep,
+        /// <summary>
+        /// Throttle at ZERO, engine spooling down, still attached. A DISCRETE STEP, like Meco.
+        ///
+        /// ⛔ SEPARATING ON THE TICK THE THROTTLE REACHES ZERO IS NOT SEPARATING WITH THE ENGINE
+        /// OFF. MEASURED, flight_0813_053635: the circularisation ramped 0.50 -> 0.21 -> 0.00 and
+        /// `a_cmdSepS2` went high on the SAME tick the throttle first read 0.00, with
+        /// `a_enginesLit` still 1. An MVac does not stop producing thrust the instant the command
+        /// does, so the decoupler fired into a live engine: the stage stayed pressed against the
+        /// trunk and kept pushing the capsule off course, and the crew had to roll it off during
+        /// entry. F9I's order is "MECO (throttle 0, hold attitude, SafeStage)" - three steps, and
+        /// the hold between them is the point.
+        /// </summary>
+        Shutdown,
         /// <summary>Second stage raising apoapsis to the real orbit.</summary>
         BurnToApoapsis,
         /// <summary>Apoapsis made, engines off, waiting to reach it.</summary>
@@ -95,6 +108,14 @@ namespace DragonScreen
         /// re-fit. Nothing else in the flight software depends on this number.
         /// </summary>
         public const double StationAltitudeM = 120000.0;
+
+        /// <summary>
+        /// Seconds between the throttle reaching zero and the S2 decoupler firing.
+        ///
+        /// Long enough for the engine to stop pushing. Two seconds is F9I's own settling pause in
+        /// the equivalent place, and the cost of being wrong in the other direction is nil.
+        /// </summary>
+        public const double ShutdownSettleS = 2.0;
 
         public static AscentTarget Station(LandingProfile p)
         {
@@ -247,7 +268,7 @@ namespace DragonScreen
         /// no meaningful air, so the stage stays up more or less indefinitely. 40 km is deep enough
         /// that "inside the atmosphere" and "comes down" are the same claim.
         ///
-        /// MEASURED, bb_upper_CrewDragon_069: "S2 SEP: separating at 85.4 x 40.2 km", Dracos lit one
+        /// MEASURED, from the S2 separation log (the recording itself is NOT in the archive - see below): "S2 SEP: separating at 85.4 x 40.2 km", Dracos lit one
         /// second later, orbit closed 7 s after that.
         /// </summary>
         public const double SepPeTargetM = 40000.0;
@@ -400,6 +421,14 @@ namespace DragonScreen
                 // not exist then: `FalconCircBurnVecNow`'s dv has a true fixed point, a reversal
                 // above 5 m/s aborts with a reason, and the 1.5x apoapsis backstop cuts the throttle
                 // in every phase. All three are tested.
+                // Throttle to zero and HOLD. The separation happens in Shutdown, once the engine
+                // has actually stopped pushing - see the phase's own note.
+                phase = AscentPhase.Shutdown;
+            }
+
+            // ---- THE SPOOL-DOWN HOLD, THEN SEPARATE ----
+            else if (phase == AscentPhase.Shutdown && s.PhaseElapsedS >= AscentTarget.ShutdownSettleS)
+            {
                 sepS2Now = true;
                 phase = AscentPhase.Done;
             }
@@ -489,6 +518,12 @@ namespace DragonScreen
                     c.PitchDeg = 0.0;
                     c.Throttle = 0.0;
                     c.Note = "COAST TO APOAPSIS";
+                    break;
+
+                case AscentPhase.Shutdown:
+                    // Zero throttle, hold the attitude. Nothing else.
+                    c.Throttle = 0.0;
+                    c.Note = "SHUTDOWN - engine spooling down before separation";
                     break;
 
                 case AscentPhase.Circularise:
@@ -657,6 +692,7 @@ namespace DragonScreen
                 case AscentPhase.StageSep:     return "STAGE SEP";
                 case AscentPhase.BurnToApoapsis: return "BURN TO APOAPSIS";
                 case AscentPhase.Coast:        return "COAST";
+                case AscentPhase.Shutdown:     return "SHUTDOWN";
                 case AscentPhase.Circularise:  return "CIRCULARISE";
                 case AscentPhase.Done:         return "INSERTION COMPLETE";
                 default:                       return "STANDBY";

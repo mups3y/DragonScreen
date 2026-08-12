@@ -66,8 +66,12 @@ namespace DragonScreen
         public static double PassOffPlaneDeg { get { return offPlaneDeg; } }
 
         /// <summary>Where the capsule is trying to land. Defaults to LZ-1.</summary>
-        public static double TargetLatDeg = LandingSites.Lz1.LatDeg;
-        public static double TargetLonDeg = LandingSites.Lz1.LonDeg;
+        // ⛔ THE SAME POINT THE ENTRY AIMS AT, OR THE BURN AND THE ENTRY DISAGREE. The de-orbit
+        // solves for an impact and the entry then steers to a target; with two different
+        // coordinates the entry spends its whole (shorten-only) authority fixing an error the
+        // burn deliberately introduced. Both are the capsule's SPLASHDOWN point, not the pad.
+        public static double TargetLatDeg = LandingSites.Splashdown.LatDeg;
+        public static double TargetLonDeg = LandingSites.Splashdown.LonDeg;
 
         public static void Toggle()
         {

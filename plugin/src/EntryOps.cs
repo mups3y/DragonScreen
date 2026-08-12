@@ -114,8 +114,11 @@ namespace DragonScreen
         public static string Note = "-";
 
         /// <summary>Where we are trying to land. Defaults to LZ-1, same as the de-orbit.</summary>
-        public static double TargetLatDeg = LandingSites.Lz1.LatDeg;
-        public static double TargetLonDeg = LandingSites.Lz1.LonDeg;
+        /// ⛔ THE CAPSULE SPLASHES DOWN. It defaulted to `Lz1`, the BOOSTER's RTLS pad, so a
+        /// perfect entry aimed a crewed capsule at concrete and anything short of perfect put it
+        /// inland. See LandingSites.Splashdown.
+        public static double TargetLatDeg = LandingSites.Splashdown.LatDeg;
+        public static double TargetLonDeg = LandingSites.Splashdown.LonDeg;
 
         /// <summary>
         /// Does the crew want a SuperDraco touchdown? F9I's `dragonPropulsive`, and like it this
@@ -127,6 +130,9 @@ namespace DragonScreen
 
         /// <summary>Chute state, for the pages and the recorder.</summary>
         public static bool DroguesDeployed, MainsDeployed;
+
+        /// <summary>Latched so a lost prediction is reported once per entry, not every frame.</summary>
+        private static bool noPredictionReported;
 
         /// <summary>Live guidance, for the pages and the recorder.</summary>
         public static double VerticalCmd, LateralCmd, AoaCmdDeg;
@@ -400,6 +406,8 @@ namespace DragonScreen
 
             if (haveImpact && canSteer)
             {
+                noPredictionReported = false;
+
                 double along, cross, miss;
                 Orbital.DownCross(ship.mainBody.Radius,
                                   ship.latitude, ship.longitude,
@@ -436,8 +444,25 @@ namespace DragonScreen
             }
             else
             {
+                // ---- ⛔ NO PREDICTION IN STEERABLE AIR MEANS NO STEERING AT ALL. SAY SO. ----
+                // `r_liftMin` has read 0.00 on every return we have ever flown, and it was never
+                // clear whether the loop had nothing to correct or was never consulted. These are
+                // completely different faults and the file could not tell them apart, because the
+                // no-prediction case only ever set a Note that scrolls past. In air thick enough
+                // to steer with, flying without a prediction is the capsule going ballistic - it
+                // will land wherever the atmosphere puts it, and nothing will try to fix that.
+                if (canSteer && !noPredictionReported)
+                {
+                    noPredictionReported = true;
+                    Debug.LogError(Tag + "ENTRY IS NOT STEERING - q is "
+                        + ship.dynamicPressurekPa.ToString("F2") + " kPa, which is enough to fly "
+                        + "with, but the impact predictor has no solution. The capsule is "
+                        + "BALLISTIC from here and the de-orbit aim is the only thing setting "
+                        + "where it lands. Check r_bcAscent - a zero ballistic coefficient means "
+                        + "drag was never measured.");
+                }
                 Note = canSteer
-                     ? "ENTRY - no impact prediction, holding retrograde"
+                     ? "ENTRY - NOT STEERING, no impact prediction"
                      : "ENTRY - shield forward, too thin to steer ("
                        + (alt / 1000.0).ToString("F1") + " km)";
             }
@@ -730,6 +755,13 @@ namespace DragonScreen
             s.Valid = true;
             s.OnDraco = !HasPart(new PartMatch(VehicleParts.IsSecondStage));
             s.Crewed = PodEngines.Present(ship);
+            // ⛔ THE ORBIT THE DE-ORBIT WAS FLOWN FROM. Without it the aim silently uses the
+            // altitude it was FITTED at (86 km) whatever orbit we are actually in - which is
+            // exactly how moving the station to 120 km invalidated it with nothing to show for it.
+            // Apoapsis, not current altitude: by the time this is read the burn has already
+            // lowered periapsis, and the aim is a property of the orbit we left.
+            s.OrbitAltM = (ship != null && ship.orbit != null)
+                          ? ship.orbit.ApA : Deorbit.AimFitAltM;
             return Deorbit.AimRange(s);
         }
 
@@ -804,7 +836,7 @@ namespace DragonScreen
         ///
         /// And the fallback is a port, not a guess. F9I never used events for this at all:
         /// `dragon_deorbit.ks:892` is `DgDoAction(dgTRUNK, "ModuleTundraDecoupler", "decouple")`,
-        /// and `DgDoAction:94` is `if dgM:hasaction(dgAct) { dgM:doaction(dgAct, true) }`. An action
+        /// and `DgDoAction:522` is `if dgM:hasaction(dgAct) { dgM:doaction(dgAct, true) }`. An action
         /// carries no `active` flag, which is exactly why the proven path never hit this.
         /// </summary>
         private static int DoEvent(PartMatch m, string eventName)

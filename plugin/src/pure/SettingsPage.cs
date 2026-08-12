@@ -120,10 +120,18 @@ namespace DragonScreen
         }
 
         /// <summary>
-        /// The four hull-swept directions, which every vehicle has because they are derived from its
-        /// control point rather than from any part. Real cameras are appended after these.
+        /// ⛔ EMPTY SINCE 2026-08-13. THE LIST IS THE VEHICLE'S REAL CAMERAS AND NOTHING ELSE.
+        ///
+        /// This held FRONT / REAR / LEFT / RIGHT - four views computed from the control point and a
+        /// measured hull extent, offered because "every vehicle has them". Every vehicle had them
+        /// and none of them worked: the crew flew all four and reported no usable picture, against
+        /// the vehicle's own cameras which "mostly work".
+        ///
+        /// Offering a control that does not do what it says is the one thing this project forbids
+        /// by name, so they are not merely hidden - they are gone, and `HullCamBase` moved to 0
+        /// with them. A vehicle with no cameras now shows an empty list, which is the truth.
         /// </summary>
-        public static readonly string[] CamNames = { "FRONT", "REAR", "LEFT", "RIGHT" };
+        public static readonly string[] CamNames = new string[0];
 
         /// <summary>
         /// How many camera buttons this screen has room for.

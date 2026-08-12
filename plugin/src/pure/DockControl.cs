@@ -267,13 +267,15 @@ namespace DragonScreen
         ///
         /// in the phase whose recorded failure is "missed the port and bounced off the hull… 21.95
         /// units of monopropellant on the docking alone, more than the whole approach that delivered
-        /// it there". Every live F9I caller takes `StSpeedCap`: `StCloseIn:1220`, `StDirectDv:1361`,
+        /// it there". Every live F9I caller takes `StSpeedCap`: `StCloseIn:1841`, `StDirectDv:1361`,
         /// `StDirectApproach:1476`. `DockGNC`'s own taper went with `DockGNC`, which its header ends
         /// by telling us not to wire back in.
         ///
-        /// ⚠ `StDirectDv` IN THAT LIST IS DEAD - no callers, found by `check_live.py --audit`
-        /// on 2026-08-12. The live callers of `StSpeedCap` are `StCloseIn` and `StDirectApproach`.
-        /// The argument is unaffected; the roll-call was wrong.
+        /// ⚠ `StDirectDv` WAS RECORDED HERE AS DEAD ON 2026-08-12 AND THAT WAS WRONG. It is
+        /// called at `station_ops.ks:1443` and `:1481`. The claim came from `check_live.py` while
+        /// that tool was scanning the PACKAGED RELEASE instead of the live tree - the same fault
+        /// that made every line number in this repo wrong. The roll-call above is correct as
+        /// written; it was the correction that was mistaken.
         ///
         /// ⚠ AND IT IS THE TIGHTER OF THE TWO, NOT SIMPLY THE LADDER. Replacing the old curve
         /// outright made the servo SLOWER everywhere it mattered and FASTER at contact - 1 m/s at

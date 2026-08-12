@@ -1376,35 +1376,39 @@ namespace DragonScreen
             // F9I retunes maxstoppingtime three times down the descent: 10 through the entry burn so
             // the controller does not fight the airflow, 1 for the glide, 0.05 for the landing burn.
             // This only knew about the last one.
-            AttitudeController.Booster.MaxStoppingTime =
-                (c.StoppingTime > 0.0) ? c.StoppingTime : Landing.GlideStoppingTime;
+            // ---- ⛔ THE FOUR kOS SCALE FACTORS ARE GONE. ONE TIME CONSTANT REPLACES THEM. ----
+            // `maxstoppingtime`, `pitchts`, `rollts` and `rolltorquefactor` were kOS's knobs, and
+            // porting them was the mistake: eleven changes to this block in one session, three of
+            // them with the direction of the effect backwards. `pure/Attitude.cs` derives the rate
+            // bound from the vehicle's own torque and inertia, so there is no per-phase tuning to
+            // get wrong - the flip, the glide and the landing burn all use the same law and the
+            // law works out their differences from the vehicle.
+            //
+            // What remains is a TIME: how long to take arresting a rate error. The landing burn
+            // wants to be crisp about it, everything else does not.
+            AttitudeController.Booster.TimeConstantS =
+                (c.Phase == LandingPhase.LandingBurn) ? 0.35 : Attitude.DefaultTimeConstantS;
 
-            // ---- THE ROLL BAND WIDENS FOR THE FLIP AND ONLY FOR THE FLIP. ----
-            // `Flip1` sets 45 and `Boostback` resets it one line into itself, so the scope is one
-            // phase. See AttitudeController.RollControlRangeDeg for the 1330 degrees this cost.
-            bool flipping = c.Aim == LandingAim.Flip;
-            AttitudeController.Booster.RollControlRangeDeg =
-                flipping ? Landing.FlipRollControlRangeDeg : AttitudeCascade.RollControlRangeDeg;
-            // Both of Flip1's roll settings, together. Porting the range alone made it worse.
-            AttitudeController.Booster.RollTorqueFactor =
-                flipping ? Landing.FlipRollTorqueFactor : 1.0;
-            // Flip1's third and last steering setting. All three now, together.
-            AttitudeController.Booster.PitchYawStoppingScale =
-                flipping ? Landing.FlipPitchYawStoppingScale : 1.0;
-            // AtmGNC sets rollts just before LandingZoneGuidance takes over, which is the same
-            // moment the grid fins go out. Everything from there down flies the slow roll axis.
-            AttitudeController.Booster.RollStoppingScale =
-                GridFinsOut ? Landing.DescentRollStoppingScale : 1.0;
-
-            // ---- ⛔ AND A CEILING ON THE ROLL RATE ITSELF, PER PHASE. ----
-            // The stopping-time limit alone gave the flip 147 deg/s of permitted roll against
-            // 16 deg/s of pitch, because the roll axis has a hundredth of the inertia and one
-            // global `maxstoppingtime` scales both. See AttitudeCascade.MaxOmegaCapped for the
-            // 759 degrees that cost. The numbers are F9I's own measured peaks.
-            AttitudeController.Booster.RollRateCapDps =
-                flipping ? Landing.FlipRollRateCapDps
-                         : (GridFinsOut ? Landing.DescentRollRateCapDps
-                                        : Landing.RollRateCapDefaultDps);
+            // ---- AND THE RATE CEILING FOR THIS PHASE. EVERY FIGURE MEASURED. ----
+            // F9I's own peaks over bb_booster_001..008 - the vehicle that lands half a metre from
+            // the pad. A ceiling, not a target: the flip needs 15 deg/s of authority and the
+            // landing burn needs almost none, and asking for more than the reference vehicle ever
+            // used is how an axis saturates.
+            switch (c.Phase)
+            {
+                case LandingPhase.Flip:
+                case LandingPhase.BoostbackKill:
+                case LandingPhase.Boostback:
+                    AttitudeController.Booster.MaxRateDps = Attitude.FlipMaxRateDps; break;
+                case LandingPhase.Coast:
+                    AttitudeController.Booster.MaxRateDps = Attitude.CoastMaxRateDps; break;
+                case LandingPhase.EntryBurn:
+                    AttitudeController.Booster.MaxRateDps = Attitude.EntryMaxRateDps; break;
+                case LandingPhase.Descent:
+                    AttitudeController.Booster.MaxRateDps = Attitude.DescentMaxRateDps; break;
+                default:
+                    AttitudeController.Booster.MaxRateDps = Attitude.LandingMaxRateDps; break;
+            }
 
             // ---- ⛔ AND FROM THE GLIDE DOWN, ROLL IS COMMANDED. F9I COMMANDS IT TOO. ----
             // The note below is right about the FLIP and was then applied to the whole descent,
