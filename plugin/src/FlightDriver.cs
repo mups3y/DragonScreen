@@ -89,6 +89,12 @@ namespace DragonScreen
             DeorbitOps.Tick();
             EntryOps.Tick();
             FlightRecorder.Tick();
+
+            // ---- THE WATCH RUNS LAST, AND OUTSIDE EVERYTHING. ----
+            // Deliberately after every controller and outside all of them: a controller that throws
+            // and detaches must not take the monitor with it, which is the exact failure mode the
+            // monitor exists to report. It owns no actuator - see its header.
+            FlightMonitor.Tick();
         }
 
         public void OnDestroy()
@@ -114,6 +120,8 @@ namespace DragonScreen
                 DeorbitOps.Reset();
                 EntryOps.Reset();
                 ImpactPredictor.Reset();
+                FlightMonitor.Reset();
+                VehicleCheck.Reset();
             }
             catch (Exception e)
             {

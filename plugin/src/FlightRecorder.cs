@@ -208,7 +208,20 @@ namespace DragonScreen
             // a command holding one sign while its own offset grows is an inverted axis.
             "x_dkDistF,x_dkDistS,x_dkDistT,x_dkVelF,x_dkVelS,x_dkVelT," +
             // The ladder, and the undock.
-            "x_leg,x_alongKm,x_lateral,x_udSepM,x_udOpening,x_refuelFrac";
+            "x_leg,x_alongKm,x_lateral,x_udSepM,x_udOpening,x_refuelFrac," +
+            // ---- ⛔ THE TRANSLATION RESPONSE. THE LAST UNINSTRUMENTED PART OF THE PATH. ----
+            // We recorded the translation COMMAND (x_fore/transX/transY) and the rotational
+            // RESPONSE (a_ctlPitch/Yaw/Roll) but never the translation response. On the
+            // 2026-08-12 18:11 docking that left the central question unanswerable: the fore
+            // command sat at 0.50 for 164 s, RCS was on, 98 units of monopropellant went, and
+            // the capsule did not move. Command reaching the vessel or not is exactly the
+            // distinction these three columns make, and it was the one thing missing.
+            //
+            // `x_actP/R/Y` are OUR commanded actuation beside them, because on that same
+            // flight `a_ctlPitch/Yaw/Roll` read +/-1.0 while our own actuation was ~0.00 -
+            // something outside this controller was writing full deflection and there was no
+            // column that could show it.
+            "x_ctlX,x_ctlY,x_ctlZ,x_actP,x_actR,x_actY";
 
         /// <summary>
         /// Called every frame by the painter; samples at 5 Hz. Cheap enough to call unconditionally
@@ -409,9 +422,15 @@ namespace DragonScreen
             F(r, ac.UllageFore);
             F(r, ac.TranslateX);
             F(r, ac.TranslateY);
-            // Commanded RCS versus the group's ACTUAL state. They disagreeing is a real fault and
-            // there was no way to see it: the approach turns RCS on and nothing turned it off.
-            F(r, AutoPilot.Command.Rcs ? 1.0 : 0.0);
+            // ---- ⚠ THE COMMANDED SIDE WAS DEAD, EXACTLY LIKE a_cmdThrottle. ----
+            // This read `AutoPilot.Command.Rcs`, which stops being written the moment the ascent
+            // disengages - so it said 0 while `x_rcsOn` said 1 on 89% of the rows of EVERY flight,
+            // and nobody noticed until a disagreement sweep was run over the archive. Post-insertion
+            // the RCS group is commanded by whichever controller holds the vehicle, so record the
+            // thing that is actually true: is any controller asking for RCS right now.
+            bool rcsWanted = AutoPilot.Command.Rcs || DirectApproachOps.Engaged
+                             || DockingOps.Engaged || UndockOps.Engaged || DeorbitOps.Engaged;
+            F(r, rcsWanted ? 1.0 : 0.0);
             F(r, (a != null && a.ActionGroups[KSPActionGroup.RCS]) ? 1.0 : 0.0);
 
             S(r, DirectApproachOps.Engaged ? DirectApproachOps.Phase.ToString() : "-");
@@ -435,6 +454,12 @@ namespace DragonScreen
             F(r, UndockOps.SeparationM);
             F(r, UndockOps.OpeningMps);
             F(r, a != null ? Refuel.Fraction(a) : 0.0);
+
+            // Translation as the VESSEL received it, beside our own rotational demand.
+            if (a != null && a.ctrlState != null)
+            { F(r, a.ctrlState.X); F(r, a.ctrlState.Y); F(r, a.ctrlState.Z); }
+            else { F(r, 0.0); F(r, 0.0); F(r, 0.0); }
+            V(r, ac.Actuation);
         }
 
         /// <summary>

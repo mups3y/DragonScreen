@@ -18,12 +18,60 @@ That is why `preview` exists: restarts are the scarce resource, so anything that
 outside the game - layout, proportion, palette, legibility - is judged from a PNG, and a restart is
 spent only on what needs the capsule.
 """
-import os, subprocess, sys, shutil, hashlib
+import io, os, subprocess, sys, shutil, hashlib
+
+NL = chr(10)          # response-file line separator, spelled out so no edit can eat the escape
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 KSP  = r'C:\Program Files (x86)\Steam\steamapps\common\Kerbal Space Program'
 MAN  = os.path.join(KSP, 'KSP_x64_Data', 'Managed')
-CSC  = r'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+# ---------------------------------------------------------------- the compiler
+# ⛔ THE LANGUAGE VERSION AND THE RUNTIME TARGET ARE TWO KNOBS, AND WE HAD THEM WELDED TOGETHER.
+#
+# This used the csc that ships inside Windows itself - the 2012 .NET Framework compiler, which caps
+# at C# 5. That was a deliberate "no IDE, no MSBuild, no NuGet" decision and it was a good one, but
+# it was recorded as if C# 5 were a KSP requirement. It is not. Most modern C# - `$"..."`, `?.`,
+# `=>` members, pattern matching - is COMPILE-TIME SUGAR that lowers to ordinary IL, and KSP's
+# Unity 2019.4 Mono runs it happily. It is exactly how MechJeb ships modern C# into this same game.
+#
+# So: prefer Roslyn when it is present, targeting KSP's OWN mscorlib via -nostdlib, and fall back to
+# the Framework compiler when it is not. The fallback keeps the project buildable on a bare machine;
+# it just cannot compile modern syntax, and it says so rather than emitting a wall of parse errors.
+#
+# What this bought, concretely: porting MechJebLib's FuelFlowSimulation needed ~95 hand edits to
+# downgrade its syntax. Every hand edit to flight-proven code is a chance to introduce a bug, and
+# hand edits are where most of this project's regressions came from. That count is now zero.
+#
+# Roslyn also has -deterministic, which the legacy compiler does not (see `_same`): identical
+# sources now produce a byte-identical DLL, so an unchanged build can be recognised as unchanged.
+CSC_LEGACY = r'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+DOTNET_SDK = r'C:\Program Files\dotnet\sdk'
+
+
+def _find_roslyn():
+    """Newest Roslyn csc in the installed .NET SDKs, or None."""
+    if not os.path.isdir(DOTNET_SDK):
+        return None
+    best = None
+    for v in os.listdir(DOTNET_SDK):
+        cand = os.path.join(DOTNET_SDK, v, 'Roslyn', 'bincore', 'csc.exe')
+        if os.path.isfile(cand):
+            try:
+                key = tuple(int(x) for x in v.split('-')[0].split('.'))
+            except ValueError:
+                key = (0,)
+            if best is None or key > best[0]:
+                best = (key, cand)
+    return best[1] if best else None
+
+
+ROSLYN  = _find_roslyn()
+CSC     = ROSLYN or CSC_LEGACY
+MODERN  = ROSLYN is not None
+
+# ⚠ WITH -nostdlib WE MUST NAME THE CORE ASSEMBLIES OURSELVES, and they must be KSP's, not the
+# SDK's. Referencing .NET 10 reference assemblies would compile and then fail to load in the game.
+CORE_REFS = ['mscorlib.dll', 'System.dll', 'System.Core.dll']
 
 # Assembly-CSharp = KSP itself. UnityEngine is SPLIT INTO MODULES in 2019.4, and the split is not
 # intuitive - the compiler will tell you which one it wants, in a CS0012 error naming the assembly.
@@ -70,6 +118,10 @@ def preflight():
     bad = False
     if not os.path.isfile(CSC):
         print('MISSING compiler: %s' % CSC); bad = True
+    if MODERN:
+        for r in CORE_REFS:
+            if not os.path.isfile(os.path.join(MAN, r)):
+                print('MISSING core reference: %s' % os.path.join(MAN, r)); bad = True
     for r in REFS:
         if not os.path.isfile(os.path.join(MAN, r)):
             print('MISSING reference: %s' % os.path.join(MAN, r)); bad = True
@@ -78,6 +130,42 @@ def preflight():
             print('MISSING mod reference: %s' % r); bad = True
     if bad:
         sys.exit('preflight failed - nothing built')
+
+
+def compile_cs(out, src, refs=(), exe=False, extra=()):
+    """
+    One invocation, either compiler, via a RESPONSE FILE.
+
+    The response file is not decoration: the reference and source lists run to thousands of
+    characters and every KSP path contains spaces. Passing them on the command line is how you get
+    `Source file 'C:/Program Files' could not be found`.
+    """
+    args = ['-nologo', '-warn:4',
+            '-target:' + ('exe' if exe else 'library'),
+            '-out:' + out]
+    if MODERN:
+        # KSP's core assemblies, never the SDK's. See CORE_REFS.
+        args += ['-langversion:latest', '-deterministic', '-nostdlib']
+        args += ['-reference:' + os.path.join(MAN, r) for r in CORE_REFS]
+    args += ['-reference:' + r for r in refs]
+    args += list(extra)
+    args += list(src)
+
+    rsp = os.path.join(HERE, 'build', 'csc.rsp')
+    os.makedirs(os.path.dirname(rsp), exist_ok=True)
+    with io.open(rsp, 'w', encoding='utf-8') as f:
+        for a in args:
+            # QUOTE THE VALUE, NOT THE FLAG. A reference path starts with a dash and contains a
+            # space; quoting the whole token makes csc read the flag as part of a filename, and
+            # leaving it bare splits the path at the space. Split on the first colon.
+            if ' ' not in a:
+                f.write(a + NL)
+            elif a.startswith('-') and ':' in a:
+                flag, _, val = a.partition(':')
+                f.write(flag + ':"' + val + '"' + NL)
+            else:
+                f.write('"' + a + '"' + NL)
+    return [CSC, '@' + rsp]
 
 
 def run(args, label):
@@ -99,10 +187,10 @@ def build_plugin():
     if not src:
         sys.exit('no sources in src/ - nothing to build')
     os.makedirs(os.path.dirname(OUT_DLL), exist_ok=True)
-    args = [CSC, '/target:library', '/optimize+', '/warn:4', '/nologo',
-            '/out:' + OUT_DLL] + \
-           ['/reference:' + os.path.join(MAN, r) for r in REFS] +            ['/reference:' + r for r in EXTRA_REFS] + src
-    run(args, 'plugin (%d source files)' % len(src))
+    run(compile_cs(OUT_DLL, src,
+                   refs=[os.path.join(MAN, r) for r in REFS] + list(EXTRA_REFS),
+                   extra=['-optimize+']),
+        'plugin (%d source files)%s' % (len(src), '' if MODERN else '  [C#5 fallback]'))
     print('    -> %s  (%.1f KB)' % (OUT_DLL, os.path.getsize(OUT_DLL) / 1024.0))
 
 
@@ -117,8 +205,10 @@ def build_tests():
         print('--- no tests yet (src/pure + test are empty)'); return
     exe = os.path.join(HERE, 'build', 'DragonScreenTest.exe')
     os.makedirs(os.path.dirname(exe), exist_ok=True)
-    run([CSC, '/target:exe', '/nologo', '/warn:4', '/out:' + exe] + src,
-        'tests (%d source files)' % len(src))
+    # ⚠ THE TESTS COMPILE src/pure TOO, so they must use the SAME compiler as the plugin - or
+    # `src/pure` is pinned to whatever the older of the two accepts, which defeats the switch
+    # entirely. This is where the MechJebLib port will land.
+    run(compile_cs(exe, src, exe=True), 'tests (%d source files)' % len(src))
     print('--- running tests')
     p = subprocess.run([exe], capture_output=True, text=True)
     print((p.stdout or '') + (p.stderr or ''))
@@ -143,8 +233,12 @@ def build_preview():
     exe = os.path.join(HERE, 'build', 'DragonScreenPreview.exe')
     out = os.path.join(HERE, 'build', 'preview')
     os.makedirs(os.path.dirname(exe), exist_ok=True)
-    run([CSC, '/target:exe', '/nologo', '/warn:4', '/out:' + exe,
-         '/reference:System.Drawing.dll'] + src,
+    # System.Drawing is a .NET Framework assembly and is NOT in KSP's Managed folder, so under
+    # -nostdlib it has to be named by full path from the framework directory. Nothing here ships.
+    drawing = 'System.Drawing.dll'
+    if MODERN:
+        drawing = os.path.join(os.path.dirname(CSC_LEGACY), 'System.Drawing.dll')
+    run(compile_cs(exe, src, refs=[drawing], exe=True),
         'preview renderer (%d source files)' % len(src))
     print('--- rendering pages')
     p = subprocess.run([exe, out], capture_output=True, text=True)

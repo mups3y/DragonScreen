@@ -155,6 +155,13 @@ namespace DragonScreen
             // LaunchWindowOps.MeasureAtInsertion dead code for its entire life.
             liftoffUt = 0.0;
             liftoffLonDeg = 0.0;
+            // ---- READ THE VEHICLE BEFORE FLYING IT. ----
+            // Three flights were lost to the software's idea of the vehicle differing from the part
+            // configs - wheels-only torque, three engine modules summed as three engines, a PAW
+            // title matched instead of a part name. All three were findable on the pad. See
+            // VehicleCheck; it reports and never refuses.
+            VehicleCheck.Report(v);
+
             Debug.Log(Tag + "autopilot ENGAGED - target " + (Target.AltitudeM / 1000.0).ToString("F0")
                       + " km, heading " + Target.HeadingDeg.ToString("F0")
                       + ". ⚠ INTERIM: gravity turn, not the PSG ascent in FLIGHT_SOFTWARE_PLAN.md");

@@ -328,9 +328,18 @@ namespace DragonScreen
             Note = "GAVE UP - no closer than " + bestRangeM.ToString("F0") + " m in "
                  + NoProgressLimitS.ToString("F0") + " s; now " + range.ToString("F0") + " m";
             Debug.LogError(Tag + "docking " + Note + ". Disengaging so the approach is not spent "
-                         + "flying the wrong way. Check x_transX/Y/Z against x_dkDistS/T/F in the "
-                         + "recording - a command that holds one sign while its own offset grows "
-                         + "is an inverted axis.");
+                         + "flying the wrong way. Check x_transX/Y/Z against x_dkDistS/T/F and "
+                         + "x_ctlX/Y/Z in the recording - a command that holds one sign while its "
+                         + "own offset grows is an inverted axis; a command that never reaches "
+                         + "x_ctl* is not being applied at all.");
+
+            // ---- ⛔ AND IT MUST STAY GIVEN UP. ----
+            // `Disengage` only clears `Engaged`, and `StationApproach.Arrived` re-engages anything
+            // that is not Docked or NoPort - so on 2026-08-12 the guard fired and the docking came
+            // straight back 0.02 s later, three times, achieving exactly nothing but a tidier log.
+            // The same shape as the propellant refusal that "stopped" a phase-down already running:
+            // a guard whose effect is undone by the next tick is not a guard.
+            Stage = DockStage.NoPort;
             Disengage("no progress");
             return true;
         }
