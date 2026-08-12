@@ -235,6 +235,9 @@ namespace DragonScreen
                 // reference's eight named zones are not drawn.
                 state.LightCount = CountLights(v);
                 state.CameraView = cameraView;
+                // The vehicle's own cameras, re-read each refresh: they arrive with a part and leave
+                // with one, so a remembered list would offer a view of a jettisoned interstage.
+                state.CamLabels = HullCams.Labels();
                 state.RcsOn = v.ActionGroups[KSPActionGroup.RCS];
 
                 // ---- CONTROL DEMAND, FOR THE DOCKING CORNER RINGS ----
@@ -861,9 +864,40 @@ namespace DragonScreen
 
         internal static void SetCameraView(int view)
         {
-            if (view < 0 || view > 3) return;
+            // ⚠ THE UPPER BOUND IS THE VEHICLE'S, NOT A CONSTANT. This read `view > 3` when the
+            // four hull-swept directions were all there were; with the vehicle's own cameras
+            // appended, a hard 3 would silently swallow every press on a real camera.
+            int max = DockingCamRenderer.HullCamBase + HullCams.Count - 1;
+            if (view < 0 || view > max) return;
             cameraView = view;
-            Debug.Log("[DragonScreen] camera -> " + view);
+            Debug.Log("[DragonScreen] camera -> " + view + " (" + CameraLabel(view) + ")");
+        }
+
+        /// <summary>The name of a view, for the log and the page. Never an index the crew must decode.</summary>
+        internal static string CameraLabel(int view)
+        {
+            if (view < DockingCamRenderer.HullCamBase)
+                return (view >= 0 && view < SettingsPage.CamNames.Length)
+                     ? SettingsPage.CamNames[view] : "?";
+            HullCam hc;
+            return HullCams.TryGet(view - DockingCamRenderer.HullCamBase, out hc) ? hc.Label : "?";
+        }
+
+        /// <summary>
+        /// Drop back to FRONT when the picked camera has left the vehicle.
+        ///
+        /// ⛔ A VIEW CAN BE JETTISONED MID-FLIGHT. The interstage cameras go with the first stage
+        /// and the trunk's go before entry, so a selection that was valid at launch can point at
+        /// nothing by the time it matters. Falling back beats a black rectangle the crew has to
+        /// diagnose.
+        /// </summary>
+        internal static void ValidateCameraView()
+        {
+            int max = DockingCamRenderer.HullCamBase + HullCams.Count - 1;
+            if (cameraView <= max) return;
+            Debug.Log("[DragonScreen] camera view " + cameraView + " is gone with its part - "
+                      + "falling back to FRONT");
+            cameraView = 0;
         }
 
         internal static void ToggleLights()

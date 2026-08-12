@@ -46,6 +46,44 @@ namespace DragonScreen
         public static LandingCommand Command;
 
         private static Vessel booster, upperStage;
+
+        /// <summary>
+        /// Universal time the post-landing settle ends. Zero when not settling.
+        ///
+        /// See the hold in <see cref="Finish"/> for why this is a deadline checked on later ticks
+        /// rather than a wait: `Finish` runs inside the flight driver, and blocking there stops the
+        /// upper stage flying too.
+        /// </summary>
+        private static double settleUntil;
+        /// <summary>Consecutive failed booster searches. See the quiet-first-look note.</summary>
+        private static int noBoosterLooks;
+        /// <summary>Searches to stay quiet for - separation takes about 2 s at 5 Hz.</summary>
+        private const int NoBoosterQuietLooks = 15;
+
+        /// <summary>
+        /// True while the booster is down and standing before the camera leaves.
+        ///
+        /// ⛔ THE CALLER MUST TICK ON THIS AS WELL AS ON `Active`. `AutoPilot` guards the tick with
+        /// `if (BoosterRecovery.Active)`, and `Finish` clears `Active` - so the first version of this
+        /// hold set a deadline that nothing would ever come back to check, and the camera would have
+        /// stayed on a landed booster for the rest of the flight. Exactly the failure CLAUDE.md
+        /// records twice: the transition was right and the branch was unreachable.
+        /// </summary>
+        public static bool Settling { get { return settleUntil > 0.0; } }
+
+        /// <summary>
+        /// Seconds the booster stands on the pad before the camera goes back. User's call,
+        /// 2026-08-12. Long enough for the legs to take the load and the engine to spool down.
+        /// </summary>
+        public const double SettleAfterLandingS = 10.0;
+
+        /// <summary>
+        /// The booster we are flying, for anything that needs to look at it rather than fly it.
+        ///
+        /// Read-only on purpose: `HullCams` renders its interstage cameras while it is still loaded,
+        /// and a second owner of this reference is exactly the kind of thing that ends up steering.
+        /// </summary>
+        internal static Vessel Tracked { get { return booster; } }
         private static double startedAt;
 
         /// <summary>The booster, for the recorder. Null when no recovery is running.</summary>
@@ -152,6 +190,10 @@ namespace DragonScreen
             // that thinks it is mid-step, a failure already reported so never reported again.
             gridFinsOut = false;
             lastModeStepAt = 0.0; modeSteps = 0; lastWantMode = -1; modeFailReported = false;
+            handedOverToOne = false;
+            settleUntil = 0.0;
+            burnLatchedEngines = 0; lastBurnPhase = LandingPhase.Idle;
+            noBoosterLooks = 0;
             phaseStartedAt = 0.0; noBoosterReported = false; packedReported = false;
             TrueRadar = 0.0; DownrangeM = 0.0; initialMiss = 0.0;
             PredictedMissM = 0.0; InitialMissM = 0.0;
@@ -178,7 +220,12 @@ namespace DragonScreen
                 // The 21:01 flight recorded `landPhase = "-"` for all 1371 rows and the log said
                 // nothing at all, so "the recovery did not happen" and "the recovery was never
                 // attempted" looked identical. Once per attempt window, not per tick.
-                if (!noBoosterReported)
+                // ⚠ AND NOT ON THE FIRST LOOK. This fires at MECO, about two seconds before
+                // separation completes, on every flight - four in a row - and then finds the
+                // booster immediately afterwards. A warning that is wrong more often than it is
+                // right trains the reader to skip it, which is the one thing a warning must not do.
+                noBoosterLooks++;
+                if (!noBoosterReported && noBoosterLooks >= NoBoosterQuietLooks)
                 {
                     noBoosterReported = true;
                     Debug.LogWarning(Tag + "no booster to recover - looked for a loaded, unpacked, "
@@ -334,6 +381,18 @@ namespace DragonScreen
 
         public static void Tick()
         {
+            // The post-landing settle runs even though the recovery is finished flying: the booster
+            // is down but the camera has not left yet. Checked first so it cannot be skipped by any
+            // of the early returns below.
+            if (settleUntil > 0.0)
+            {
+                if (Planetarium.GetUniversalTime() < settleUntil) return;
+                settleUntil = 0.0;
+                Debug.Log(Tag + "booster settled - releasing the camera");
+                Finish("settled");
+                return;
+            }
+
             if (!Active) return;
 
             if (booster == null || booster.state == Vessel.State.DEAD)
@@ -465,6 +524,26 @@ namespace DragonScreen
             // 0.05 landing-burn stopping time back to the default.
             AttitudeController.Booster.Release(booster);
             if (FlightGlobals.ActiveVessel == booster) FlightInputHandler.state.mainThrottle = 0f;
+
+            // ---- LET THE STAGE SETTLE ON ITS LEGS BEFORE THE CAMERA LEAVES. ----
+            // User's call, 2026-08-12: *"we also need to settle the booster after landing it for 10
+            // seconds before switching back to the upper stage."* The focus change used to happen on
+            // the same tick as TOUCHDOWN, so the one moment the whole recovery exists for went past
+            // in a frame - and a stage still absorbing its landing, with legs compressing and the
+            // engine spooling down, is exactly when a hop or a tip would show.
+            //
+            // ⚠ A HOLD, NOT A SLEEP. `Finish` runs inside the flight driver's tick, so blocking
+            // here would block the upper stage too. The recovery marks the touchdown time and the
+            // handback is checked on later ticks by `SettleTick`, which is why `Active` stays true
+            // through the hold - the booster is still ours until we let go of it.
+            if (upperStage != null && upperStage.state != Vessel.State.DEAD
+                && why == "booster down" && settleUntil <= 0.0)
+            {
+                settleUntil = Planetarium.GetUniversalTime() + SettleAfterLandingS;
+                Debug.Log(Tag + "settling on the pad for " + SettleAfterLandingS.ToString("F0")
+                          + " s before the camera goes back to the upper stage");
+                return;
+            }
 
             // Hand focus back so the crew can watch the vehicle that still has somewhere to be. The
             // upper stage has been flying itself throughout - this is a camera move, not a handover.
@@ -605,20 +684,11 @@ namespace DragonScreen
             double t = (vz + Math.Sqrt(disc)) / g;
             if (t <= 0.0) return 0.0;
 
-            Vector3d toImpact = Vector3d.Exclude(up, vel) * t;         // horizontal, from us
-
-            // ---- PREFER THE INTEGRATED PREDICTION WHEN THE VEHICLE HAS TOLD US ITS DRAG ----
-            // The ballistic solve above is drag-free and therefore always LONG. Once ImpactPredictor
-            // has a measured ballistic coefficient it can integrate the real descent instead, which
-            // is the difference between a boostback that overshoots on purpose and one that overshoots
-            // by an amount nobody chose. Falls back silently to ballistic: an unmeasured vehicle is
-            // exactly the case the deliberate 2.7 km overshoot was tuned for.
-            Impact im = ImpactPredictor.Predict(v);
-            if (im.Valid && im.DragModelled)
-            {
-                Vector3d impactPos = b.GetWorldSurfacePosition(im.LatDeg, im.LonDeg, alt);
-                toImpact = Vector3d.Exclude(up, impactPos - v.CoM);
-            }
+            // ---- THE SAME PREDICTION THE GUIDANCE STEERS ON. See ImpactPointHoriz. ----
+            // This readout and the descent guidance used to solve this separately, and only this one
+            // asked ImpactPredictor. They cannot disagree now.
+            Vector3d toImpact;
+            if (!ImpactPointHoriz(v, up, alt, out toImpact)) return 0.0;
 
             Vector3d toLz = Vector3d.Exclude(up,
                 b.GetWorldSurfacePosition(PadLat, PadLon, alt) - v.CoM);
@@ -634,13 +704,30 @@ namespace DragonScreen
         private static double initialMiss;
 
         /// <summary>
-        /// Horizontal vector from the LANDING ZONE to the PREDICTED IMPACT POINT - F9I's
-        /// `impactPos:position - LZ:position`, flattened. This is what the descent steers on: lean
-        /// off retrograde toward the miss, so the impact point walks onto the pad.
+        /// The horizontal vector from the landing zone to where this stage will actually come down.
         ///
-        /// Same ballistic solve as PredictedMiss, so the boostback and the descent are steering
-        /// against one prediction rather than two that can disagree. Drag-free, so it reads long -
-        /// stated once here rather than corrected into something that looks closer.
+        /// ---- ⛔ ONE PREDICTION, NOT TWO. THIS FILE HAD BOTH AND THE GUIDANCE USED THE WRONG ONE. ----
+        /// `PredictedMiss` already prefers `ImpactPredictor.Predict` whenever the vehicle has told us
+        /// its drag, falling back to a vacuum parabola only when it has not. This function - the one
+        /// the DESCENT GUIDANCE steers on - was a second, private copy of the fallback, and it never
+        /// asked the predictor at all. So the number on the screen and the number being flown were
+        /// computed by different physics, in the same class, forty lines apart.
+        ///
+        /// A vacuum solve in atmosphere predicts LONG and, worse, predicts UNSTEADILY: it takes the
+        /// current horizontal velocity and multiplies by a free-fall time, so every metre per second
+        /// the airflow removes swings the answer by tens of metres. Measured on 2026-08-12, through
+        /// the descent, with the stage's ballistic coefficient sitting in the recorder the whole time
+        /// at `r_bcBooster` 1116-1516:
+        ///
+        ///     predicted miss oscillated 45 m -> 287 m -> 45 m -> 248 m on a ~5 second cycle
+        ///     it is SMOOTH, not noisy - 11 m per 0.2 s sample - so this is a real closed loop
+        ///     each pass through zero REVERSES `errHoriz`, flipping the commanded lean side to side
+        ///     attitude error jumped 8 deg -> 27 deg in ONE sample as the command flipped
+        ///     pitch actuation saturated 35% of the descent, yaw 44%
+        ///
+        /// The stage was chasing a phantom: it landed 0.0 km downrange while being told it was
+        /// 231 m out on average. CLAUDE.md check #2 - a rule a second place needs goes in ONE
+        /// function both callers use - in its most literal form.
         /// </summary>
         private static Vector3d ImpactErrorHoriz(Vessel v)
         {
@@ -648,22 +735,49 @@ namespace DragonScreen
             CelestialBody b = v.mainBody;
 
             Vector3d up = (v.CoM - b.position).normalized;
-            Vector3d vel = v.srf_velocity;
-            double vz = Vector3d.Dot(vel, up);
             double alt = v.altitude;
-            double r = b.Radius + alt;
-            double g = b.gMagnitudeAtCenter / (r * r);
-            if (g <= 0.0) return Vector3d.zero;
 
-            double disc = vz * vz + 2.0 * g * alt;
-            if (disc < 0.0) return Vector3d.zero;
-            double t = (vz + Math.Sqrt(disc)) / g;
-            if (t <= 0.0) return Vector3d.zero;
+            Vector3d toImpact;
+            if (!ImpactPointHoriz(v, up, alt, out toImpact)) return Vector3d.zero;
 
-            Vector3d toImpact = Vector3d.Exclude(up, vel) * t;
             Vector3d toLz = Vector3d.Exclude(up,
                 b.GetWorldSurfacePosition(PadLat, PadLon, alt) - v.CoM);
             return toImpact - toLz;                      // LZ -> impact
+        }
+
+        /// <summary>
+        /// Where this stage comes down, as a horizontal offset from it. The integrated prediction
+        /// when drag has been measured, the vacuum parabola when it has not.
+        ///
+        /// ⚠ THE FALLBACK IS STILL A FALLBACK AND IT STILL PREDICTS LONG. That is deliberate and
+        /// paired with `BoostbackOvershootM` - see `PredictedMiss`. What is NOT acceptable is using
+        /// it while a measured coefficient sits unused, which is what the descent guidance did.
+        /// </summary>
+        private static bool ImpactPointHoriz(Vessel v, Vector3d up, double alt, out Vector3d toImpact)
+        {
+            toImpact = Vector3d.zero;
+            CelestialBody b = v.mainBody;
+
+            Impact im = ImpactPredictor.Predict(v);
+            if (im.Valid && im.DragModelled)
+            {
+                Vector3d impactPos = b.GetWorldSurfacePosition(im.LatDeg, im.LonDeg, alt);
+                toImpact = Vector3d.Exclude(up, impactPos - v.CoM);
+                return true;
+            }
+
+            Vector3d vel = v.srf_velocity;
+            double vz = Vector3d.Dot(vel, up);
+            double r = b.Radius + alt;
+            double g = b.gMagnitudeAtCenter / (r * r);
+            if (g <= 0.0) return false;
+            double disc = vz * vz + 2.0 * g * alt;
+            if (disc < 0.0) return false;
+            double t = (vz + Math.Sqrt(disc)) / g;
+            if (t <= 0.0) return false;
+
+            toImpact = Vector3d.Exclude(up, vel) * t;
+            return true;
         }
 
         // ---- FLIP STATE. The vectors are the glue's; the schedule is Landing's. ----
@@ -750,6 +864,9 @@ namespace DragonScreen
 
                 // The roll reference the flip will use: the stage's top should lie in the plane of
                 // flight, i.e. perpendicular to the rotation axis.
+                // The same target the controller is given above, resolved the same way SteerTo
+                // resolves it - so the gate cannot pass while the controller disagrees, or wait on
+                // something the controller was never asked for.
                 Vector3d wantTop = Vector3d.Exclude(v.ReferenceTransform.up, -flipAxis);
                 Vector3d haveTop = TopVector(v);
                 double rollErr = (wantTop.sqrMagnitude > 1e-6)
@@ -860,6 +977,39 @@ namespace DragonScreen
                 return;
             }
 
+            // ---- ⛔ THE 3->1 HANDOVER LATCHES. IT MUST NOT BE RE-DECIDED PER TICK. ----
+            // `HandoverReady` tests vertical speed against -40 and a stopping distance that both
+            // change fast in the last seconds, so the answer flickers - and on 2026-08-11 the mode
+            // machine chased it: "octaweb 1 -> stepping toward 2" then "2 -> stepping toward 1",
+            // 0.3 s apart, in the last second before touchdown. F9I calls EngSwitch ONCE at the
+            // handover point. Once the stage is on the centre engine it stays there; there is no
+            // altitude at which going back to three is the right answer.
+            // ⚠ SCOPED TO THE LANDING BURN, AND THE CHURN IS IN THE ENTRY BURN. On three
+            // consecutive flights the mode went 1 -> 2 -> 0 -> 1 inside ENTRY BURN, a full wasted
+            // round trip mid-burn (2026-08-11 16:08:37, 2026-08-12 09:37:33). The latch only ever
+            // covered the last phase. A mode change during a burn is never free - it steps the
+            // one-way cycle through modes the burn did not ask for - so the rule is now: once a
+            // BURN has settled on an engine count, it keeps it for the rest of that burn.
+            // ⛔ THE LATCH IS ON THE ENTRY BURN ONLY. LATCHING THE LANDING BURN BROKE THE 3->1.
+            // My previous version latched the engine count for BOTH burns, which made
+            // `want <= 1` structurally unreachable in the landing burn - so the handover to the
+            // centre engine could never fire and 2026-08-12 flew the whole landing on three
+            // (`b_engines = 3` for all 94 rows). Real Falcon 9 lands on one, and F9I's 2.23 ratio
+            // handover at `BOOSTER.ks:801` is the thing that decides when.
+            //
+            // The churn being guarded against was always in the ENTRY burn - 1 -> 2 -> 0 -> 1 on
+            // three consecutive flights - and the landing burn's own `handedOverToOne` latch below
+            // already stops it oscillating once it has committed to the centre engine. So the two
+            // burns get the two different rules they actually need.
+            if (Phase != lastBurnPhase) { burnLatchedEngines = 0; lastBurnPhase = Phase; }
+            if (Phase == LandingPhase.EntryBurn)
+            {
+                if (burnLatchedEngines == 0) burnLatchedEngines = want;
+                else want = burnLatchedEngines;
+            }
+            if (Phase == LandingPhase.LandingBurn && want <= 1) handedOverToOne = true;
+            if (handedOverToOne && Phase == LandingPhase.LandingBurn) want = 1;
+
             int wantMode = VehicleParts.OctawebModeFor(want);
             if (wantMode != lastWantMode) { lastWantMode = wantMode; modeSteps = 0; }
 
@@ -912,6 +1062,10 @@ namespace DragonScreen
 
         private static double lastModeStepAt;
         private static int modeSteps, lastWantMode = -1;
+        private static bool handedOverToOne;
+        /// <summary>Engine count a burn settled on, held for that burn. See the churn note.</summary>
+        private static int burnLatchedEngines;
+        private static LandingPhase lastBurnPhase;
         private static bool modeFailReported;
 
         private static PartModule FindEngineSwitch(Vessel v)
@@ -1148,9 +1302,70 @@ namespace DragonScreen
                     // handedOver: on one engine the stage stops steering and stands up (-0.25 deg).
                     double aoa = Landing.GuidanceAoaDeg(s.AltitudeRadar, c.Throttle > 0.01,
                                                         c.Engines == 1);
-                    double lean = Landing.LeanFraction(s.DownrangeM, aoa);
-                    AoaDeg = aoa; LeanFrac = lean;
-                    dir = (dir.normalized + lean * errHoriz.normalized).normalized;
+
+                    // ================================================================================
+                    //  ⛔ THE REBUILD IS CONDITIONAL. THE AoA IS A CEILING, NOT A DEMAND.
+                    //
+                    //  `BOOSTER.ks:360-364`, the whole of it:
+                    //
+                    //      local result is velVec + errorVec.
+                    //      if (vAng(result, velVec) > F9L_AOA) {
+                    //          set result to velVec:normalized
+                    //                      + tan(F9L_AOA) * F9L_ErrScale * errorVec:normalized.
+                    //      }
+                    //
+                    //  So F9I NORMALLY FLIES THE NAIVE SUM. `velVec` is the retrograde vector at full
+                    //  speed - hundreds of m/s - and `errorVec` is an impact error in metres, so the
+                    //  sum leans by `atan(error / speed)`: a few degrees for a small miss, growing
+                    //  smoothly as the miss grows. The rebuild fires ONLY when that natural lean
+                    //  already exceeds the allowed angle, and then it clamps it back to exactly the
+                    //  allowed angle. The angle of attack is a LIMITER on a proportional law.
+                    //
+                    //  We had no conditional at all: every tick commanded `tan(aoa) * scale`, the
+                    //  full clamped lean, whatever the error. Below 4 km `aoa` is `alt/100` - forty
+                    //  degrees at 4 km - so the guidance demanded a 40 degree lean on a stage that
+                    //  needed two. Measured on 2026-08-12: `b_leanFrac` reached 0.838, which is
+                    //  tan(40), with pitch actuation saturated 35% of the descent and yaw 44%. That
+                    //  is the side-to-side swinging, and it got WORSE after the previous change
+                    //  because the previous change only touched the scale.
+                    //
+                    //  ⚠ MY OWN COMMENT ON `LeanFraction` TALKED ME OUT OF THIS. It described the
+                    //  conditional correctly and then said the rebuild happens "nearly always, because
+                    //  the naive sum compares metres of error against metres per second of velocity
+                    //  and is meaningless when the error is large". The second half is true and the
+                    //  "nearly always" was an assumption I never checked: at 250 m/s a 100 m error
+                    //  leans 21.8 degrees, well under the ceiling, so the rebuild does NOT fire and
+                    //  the naive sum is exactly the law being flown. Port rule 2, in one line - I took
+                    //  F9I's constant and wrote my own mechanism around it.
+                    // ================================================================================
+                    Vector3d velVec = -v.srf_velocity;                 // BOOSTER.ks:355
+                    Vector3d naive = velVec + errHoriz;                // :360, metres + m/s, as flown
+                    AoaDeg = aoa;
+
+                    // ---- ⚠ THE TWO BRANCHES MUST MEET AT THE CEILING, OR THE COMMAND STEPS. ----
+                    // F9I's rebuild is `velVec:normalized + tan(AOA) * ErrScale * err:normalized`
+                    // and its naive sum is `velVec + errorVec`. Those agree at the switch point ONLY
+                    // when ErrScale is 1; inside the 5 m deadband ErrScale tapers and the rebuild
+                    // drops below the naive lean, so crossing the boundary jumps the command.
+                    //
+                    // Ours crossed it repeatedly. Measured 2026-08-12 through the descent, the
+                    // commanded lean collapsed and recovered - 0.268, 0.167, 0.060, 0.074, 0.033,
+                    // 0.005, 0.019 - between 20 km and 13 km, which is exactly the band the crew
+                    // reported as unstable and exactly where the impact error crosses zero. Below
+                    // 12 km the error stays one side of zero and it settles.
+                    //
+                    // Taking the SMALLER of the two removes the step: the rebuild is a ceiling, so
+                    // below the ceiling the naive lean is already smaller and wins, and at the
+                    // ceiling they are equal by construction. The command is now continuous through
+                    // the crossing and still never exceeds the angle of attack.
+                    if (naive.sqrMagnitude > 1e-6)
+                    {
+                        double naiveLean = Math.Tan(Vector3d.Angle(naive, velVec) * Math.PI / 180.0);
+                        double ceiling = Landing.LeanFraction(errHoriz.magnitude, aoa);
+                        double lean = (naiveLean < ceiling) ? naiveLean : ceiling;
+                        LeanFrac = lean;
+                        dir = (velVec.normalized + lean * errHoriz.normalized).normalized;
+                    }
                 }
             }
 
@@ -1164,6 +1379,45 @@ namespace DragonScreen
             AttitudeController.Booster.MaxStoppingTime =
                 (c.StoppingTime > 0.0) ? c.StoppingTime : Landing.GlideStoppingTime;
 
+            // ---- THE ROLL BAND WIDENS FOR THE FLIP AND ONLY FOR THE FLIP. ----
+            // `Flip1` sets 45 and `Boostback` resets it one line into itself, so the scope is one
+            // phase. See AttitudeController.RollControlRangeDeg for the 1330 degrees this cost.
+            bool flipping = c.Aim == LandingAim.Flip;
+            AttitudeController.Booster.RollControlRangeDeg =
+                flipping ? Landing.FlipRollControlRangeDeg : AttitudeCascade.RollControlRangeDeg;
+            // Both of Flip1's roll settings, together. Porting the range alone made it worse.
+            AttitudeController.Booster.RollTorqueFactor =
+                flipping ? Landing.FlipRollTorqueFactor : 1.0;
+            // Flip1's third and last steering setting. All three now, together.
+            AttitudeController.Booster.PitchYawStoppingScale =
+                flipping ? Landing.FlipPitchYawStoppingScale : 1.0;
+            // AtmGNC sets rollts just before LandingZoneGuidance takes over, which is the same
+            // moment the grid fins go out. Everything from there down flies the slow roll axis.
+            AttitudeController.Booster.RollStoppingScale =
+                GridFinsOut ? Landing.DescentRollStoppingScale : 1.0;
+
+            // ---- ⛔ AND FROM THE GLIDE DOWN, ROLL IS COMMANDED. F9I COMMANDS IT TOO. ----
+            // The note below is right about the FLIP and was then applied to the whole descent,
+            // which F9I does not do. `LandingZoneGuidance` - the function this guidance is a port of
+            // - ends every call with a roll reference:
+            //
+            //     BOOSTER.ks:365  if F9L_LandingRoll < 0 { return lookdirup(result, facing:topvector). }
+            //     BOOSTER.ks:366  local _rollRef is heading(F9L_LandingRoll, 0):vector.
+            //     BOOSTER.ks:367  if vang(result, _rollRef) < 15  { return lookdirup(result, facing:topvector). }
+            //     BOOSTER.ks:368  if vang(result, _rollRef) > 165 { return lookdirup(result, facing:topvector). }
+            //     BOOSTER.ks:369  return lookdirup(result, _rollRef).
+            //
+            // with `F9L_LandingRoll is 0`, so the reference is heading 000 - HORIZONTAL NORTH. That
+            // is not the local vertical the warning below is about, and it does not turn the fins out
+            // of plane; it pins them to a fixed plane against the ground instead of letting the roll
+            // wander wherever the last disturbance left it. "Holding" the launch roll is passive:
+            // nothing commands it back, so every gust accumulates, which is the rolling seen from
+            // separation to landing on 2026-08-11.
+            //
+            // The two fallbacks are not optional. `lookdirup` has no answer when the aim is parallel
+            // to the reference, and on an RTLS the stage IS pointed near-vertically while the
+            // reference is horizontal only when it is nearly on top of the pad - so both the 15 and
+            // the 165 degree escapes fire in normal flight, and both mean "keep the roll you have".
             // ---- ⛔ ROLL IS HELD, NOT COMMANDED. THE GRID FINS DEPEND ON IT. ----
             // Passing the local vertical as the roll reference rolls the stage to put its "top"
             // along it - which turns the grid fins out of the plane they were built to work in.
@@ -1172,7 +1426,33 @@ namespace DragonScreen
             //
             // Zero here means "no roll reference", and SteerTo then holds the roll the stage already
             // has - which is the launch roll, because nothing has commanded it since.
-            AttitudeController.Booster.SteerTo(v, dir, Vector3d.zero);
+            // ---- ⛔ THE FLIP IS THE ONE PHASE THAT NEEDS A ROLL REFERENCE. ----
+            // Everywhere else zero is right and its reason above stands: an uncommanded roll keeps
+            // the launch roll and the grid fins stay in the plane they were built for.
+            //
+            // But Flip1 does NOT hold roll - it locks `lookdirup(flipVec, -rotateVector)`, putting
+            // the stage's top along the flip axis so the rotation stays in the plane of flight. With
+            // zero here the controller was told "keep whatever roll you have", so the roll-settle
+            // gate below waited eight seconds for a roll NOTHING WAS COMMANDING and gave up at
+            // 89.8 deg - which is the 2026-08-11 13:37 log line, and very nearly a right angle
+            // because that is exactly how far it had to go and never went.
+            Vector3d upHint = Vector3d.zero;
+            if (c.Aim == LandingAim.Flip && flipSeeded && flipAxis.sqrMagnitude > 0.5)
+                upHint = -flipAxis;
+            else if (HavePad && c.Aim == LandingAim.SurfaceRetrograde)
+            {
+                // The landing roll reference. See the F9I citation above.
+                Vector3d radial = (v.CoM - v.mainBody.position).normalized;
+                Vector3d north = Vector3d.Exclude(radial, v.mainBody.transform.up).normalized;
+                if (north.sqrMagnitude > 0.5)
+                {
+                    double rollAng = Vector3d.Angle(dir, north);
+                    if (rollAng >= Landing.RollRefMinDeg && rollAng <= Landing.RollRefMaxDeg)
+                        upHint = north;
+                }
+            }
+
+            AttitudeController.Booster.SteerTo(v, dir, upHint);
         }
     }
 }

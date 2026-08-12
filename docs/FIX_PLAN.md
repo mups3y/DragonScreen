@@ -208,3 +208,156 @@ and the three drogue altitudes to one home each. Retire `StartDeorbit` and point
 
 Three of four are deletions. The pattern is the one this project keeps re-learning: **the expensive
 mistake is not failing to write something, it is writing something F9I already tried and removed.**
+
+
+---
+
+## Flight 2026-08-11 13:44 — seven more, all fixed
+
+See [FLIGHT_2026-08-11_1344.md](FLIGHT_2026-08-11_1344.md) for the log evidence and the F9I
+citations. Summary, because four of these are the same shape as the audit's own worst pattern:
+
+| # | fault | shape |
+|---|---|---|
+| F1 | "no free docking port on the station" — the station was **unloaded**, so `parts` was empty | a true sentence about an empty list, a false one about the world |
+| F2 | docking approach steered with no roll reference; KDSS needs `captureMinRollDot = 0.5` | same omission as the booster flip |
+| F3 | the 300 s burn backstop was measured from before a 3663 s warp | a backstop on the wait, not the burn |
+| F4 | no monopropellant floor on the Dracos, though the S2 has one | asymmetry between two branches of one guard |
+| F5 | short-of-reserve and short-of-burn shared one warning, and it flew anyway | two failures, one message |
+| F6 | an aborted de-orbit was handed to the entry at Pe 80.1 km | trusted the abort string instead of the orbit |
+| F7 | `trunk jettison commanded (0 decoupler(s))` logged as success; the error then blamed attitude | a guard that fires silently, and a diagnostic pointing away from the cause |
+
+F1, F3 and F7 were each settled by a source outside my own reasoning — the partdumps and F9I — and
+in two cases that source **overturned my first diagnosis**. F7 in particular: I had already written
+"the trunk only has the action" into a comment before the partdump showed it has both.
+
+
+---
+
+## CORRECTION — the rendezvous was not "deletion not rewrite"
+
+The research table above says *"Rewrite `OrbitMatch` as a Hohmann → **Delete the orbit-match path.**
+F9I marks it dead by decision after flight 011."* The deletion is right. **The conclusion I drew
+from it was not**, and it went into `StationApproach.cs` as a banner claiming F9I's live rendezvous
+is "arrived, or inside the gate and flying it directly, or STOPPED. There is no fourth branch."
+
+F9I's live rendezvous is **`StCloseIn` (station_ops.ks:855)** and it has three legs:
+
+1. `StPhaseLeg` in a bounded loop — `until gap <= stPhaseMin`, capped at `stPhaseMaxPass = 3`
+2. ride an existing intercept — closest approach inside `stCaUseMax = 27000`, warp there, `StMatchVelAt`
+3. `StDirectApproach` inside `stDirectMax = 10000`
+
+I had conflated `StMatchStationOrbit` (dead, and its source says so in capitals at :1951) with
+`StPhaseLeg` (live, called from :882). **What cost a flight was the circularise-at-apoapsis burn,
+not phasing.**
+
+The cost of my error was concrete: on 2026-08-11 13:44 the capsule sat 10.2 km out receding at
+116 m/s and the only answer the code had was STOPPED. Nothing was wrong with the vehicle.
+
+### What went in
+
+| leg | what | source |
+|---|---|---|
+| 0 | circularise **at the station's radius crossing** | new — see below |
+| 1 | phasing laps, bounded at 3, adaptive lap count | `StPhaseLeg` + simulation |
+| 2 | ride an existing intercept and match velocity there | `StCloseIn:895-913` |
+| 3 | direct approach | unchanged |
+
+**Leg 0 is the only thing here that is not a port, and it exists because the simulation said the
+port alone would not converge.** `Phasing.ExitDvMps` circularises at whatever radius the coast
+returns to; from the 182 × 81 km orbit that flight was actually in, that leaves a 411 s period error
+and **933 km of fresh drift per lap**. Three bounded laps could never close it.
+
+It is *not* the burn flight 011 deleted, and the distinction is the whole justification:
+
+- **`StMatchStationOrbit`** circularised at **our apoapsis** — not the station's radius, so it lands
+  in the wrong orbit by construction. It went to SMA 691.61 km against a station at 686.75.
+- **Leg 0** circularises where our radius **equals the station's**. There `sqrt(mu/r)` *is* the
+  station's speed, so a correct burn cannot land anywhere else. It cannot overshoot the way flight
+  011 did because the target speed is measured at the target radius.
+
+It refuses rather than guesses when our orbit never reaches the station's radius — that needs a
+transfer, and inventing one there is how the deleted burn came to exist in the first place.
+
+### Simulated before written, per `falcon-rendezvous-approach-law`
+
+Sweeping the phasing law across every gap it can physically see (a projection along the track, so it
+cannot exceed half a lap — 2156 km at the measured station orbit):
+
+| gap | a_phase | periapsis | Δv | one lap? |
+|---|---|---|---|---|
+| 10 km | 687 km | 86.3 km | 1.75 m/s | yes |
+| 100 km | 697 km | 86.3 km | 17.20 m/s | yes |
+| 800 km | 771 km | 86.3 km | 121.58 m/s | yes |
+| 1700 km | 867 km | 86.3 km | 224.91 m/s | yes |
+| 2100 km | — | — | 262.77 m/s | **rejected — over the 250 cap** |
+| 2100 km | — | — | 153.23 m/s | yes, over **two** laps |
+
+**Periapsis does not move at any gap** — the burn point stays an apsis, which is the structural
+reason phasing cannot do what flight 012 did. And the band near the maximum was being refused for
+being *expensive* rather than *wrong*, so `Phasing.SolveAdaptive` spreads it over more laps. The
+250 m/s cap is untouched: it is what caught flight 014's 1353 m/s.
+
+Leg 0's cost, simulated: 69.0 m/s / ~89 units of monopropellant from 182 × 81, 2.8 m/s / 3.7 units
+from 90 × 86, nothing when already co-orbital. Expensive from a bad orbit, paid once, not per lap.
+
+### The real boundary, stated plainly
+
+"Any distance" now holds. **"Any orbit" does not, and cannot be made to hold here.** If our orbit
+never crosses the station's radius, leg 0 refuses and says so. That is a transfer, and it is the
+one thing in this area that has already cost a flight.
+
+
+---
+
+## Hull cameras on the VIDEO tab — 2026-08-11
+
+User: *"the tundra parts should have cameras attached by default ... I would like these cameras to be
+the camera views we can pick on the dragonscreen."*
+
+**`MuMechModuleHullCameraZoom` is HullCameraVDS, not MechJeb.** The MuMech prefix is historical and
+it misleads — MechJeb is not installed in this game at all. HullCameraVDS is, at
+`GameData/HullCameraVDS/Plugins/HullcamVDSContinued.dll`, and it is what defines the module.
+
+### What the vehicle actually carries
+
+`TundraExploration/Patches/Extra_Hullcam.cfg` adds cameras to the **interstage (two), the S2 tank,
+the FH nosecone, the fairing and the fairing adapter** — not, as expected, to the capsule, trunk or
+booster tank. The 13:34 partdump shows more than that on the flown craft (a HazCam pair, two booster
+guidance units, one on the K2-81 tank), which are separate HullCameraVDS parts bolted on in the VAB.
+
+So the list cannot be written down. **It is enumerated off the vessel at runtime.**
+
+### How
+
+`src/HullCams.cs`, by reflection on the type NAME — no compile-time reference to
+`HullcamVDSContinued.dll`, because a hard reference would stop the plugin loading for anyone without
+the mod. `build.py`'s MODS list stays empty. The three cases all degrade to the truth:
+
+| situation | result |
+|---|---|
+| mod installed, cameras on the craft | they appear |
+| mod installed, no cameras | nothing appears |
+| mod not installed | nothing appears, no error |
+
+Views 0–3 stay the four hull-swept directions (real, derived from the control point and a live hull
+sweep). Real cameras are appended from index 4 up, so a saved selection keeps meaning what it meant.
+
+### Three things that needed care
+
+1. **A zero `cameraForward` is not a direction, it is "use the transform".** Every Tundra camera
+   ships `0, 0, 0` and relies on `cameraTransformName`; HullCameraVDS's own docking-port patch does
+   the opposite. Both forms are live in this install, so a zero vector is treated as absent —
+   normalising it would aim every Tundra camera at nothing.
+2. **A camera can be jettisoned mid-flight.** The interstage cameras leave with the first stage.
+   The transform is re-validated every frame, and `ValidateCameraView` drops back to FRONT rather
+   than showing a black rectangle the crew has to diagnose. Booster cameras keep working after
+   separation because `BoosterRecovery` already holds the booster loaded.
+3. **The column is not infinite.** Four buttons fitted by inspection; a craft with six more would
+   run the list out through the tab bar — the same failure a cockpit photo showed for AUTO DOCK.
+   `CamSlots` derives the count from the space and anything that does not fit is not drawn.
+
+The layout sweep now sweeps the **full** column rather than the four it used to, and passes the same
+count to the hit test. That immediately caught the hit path still answering for four buttons while
+eleven were painted — a button bound to nothing wearing the shape of one that works. 2,212 checks
+went to 2,481.

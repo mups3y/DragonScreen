@@ -209,14 +209,16 @@ namespace DragonScreen
 
             PanelCommand c = entry.Command;
 
-            if (PanelMap.IsInert(c))
-            {
-                // Modelled, pressable, and honestly does nothing - stock KSP has no cabin fire and no
-                // depressurisation. Lighting it still tells the crew the press registered.
-                Debug.Log(Tag + "panel: " + entry.Label + " - no KSP system behind this control");
-                Flash(PanelLight.Lit, FlashSeconds);
-                return;
-            }
+            // ---- ⛔ THE "INERT" GATE IS GONE. IT WAS STANDING IN FRONT OF WORKING CODE. ----
+            // DEPRESS RESPONSE, SUPPRESS FIRE and FIRE RESPONSE were listed as inert back when stock
+            // KSP had no cabin fire and no depressurisation to act on. `pure/VehicleSystems.cs` then
+            // MODELLED all three, and `FlightCommands` grew real handlers for them that isolate the
+            // cabin, discharge the bottle and run the fire procedure - but this gate was never
+            // removed, so every press returned here and logged "no KSP system behind this control"
+            // while a complete implementation sat four lines further down, unreachable.
+            //
+            // On 2026-08-12 the crew pressed all three and got that message from all three. The
+            // simulate-a-system rule was applied and then silently undone by a leftover guard.
 
             if (c == PanelCommand.Cancel || c == PanelCommand.Execute || PanelMap.NeedsExecute(c))
             {

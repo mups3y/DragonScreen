@@ -321,6 +321,26 @@ namespace DragonScreen
         /// <summary>Gains are wound UP for the flip: the one moment it must rotate hard.</summary>
         public const double FlipStoppingTime = 3.0;
 
+        /// <summary>
+        /// Roll-control angle range during the flip, degrees. `BOOSTER.ks:157`, live `Flip1`.
+        ///
+        /// ⚠ FLIP ONLY - `Boostback:207` resets it. See AttitudeController.RollControlRangeDeg
+        /// for what the default 5 did to the flip.
+        /// </summary>
+        public const double FlipRollControlRangeDeg = 45.0;
+
+        /// <summary>Roll torque factor during the flip. `BOOSTER.ks:156`, live `Flip1`.</summary>
+        public const double FlipRollTorqueFactor = 3.0;
+
+        /// <summary>Pitch/yaw time-scale multiplier for the flip. `BOOSTER.ks:152-153`.</summary>
+        public const double FlipPitchYawStoppingScale = 1.5;
+
+        /// <summary>
+        /// Roll time-scale multiplier from grid-fin deploy down. `AtmGNC:434`, `rollts to 10`.
+        /// F9I flies the coast at 3 deg/s of roll; we flew it at 24. See RollStoppingScale.
+        /// </summary>
+        public const double DescentRollStoppingScale = 10.0;
+
         // ---- THE BURN. BOOSTER.ks:394-518 `Boostback`. ----
         /// <summary>
         /// Steady, not fast. BOOSTER.ks:400 - "the boostback wants a steady hold, not a fast one."
@@ -975,6 +995,17 @@ namespace DragonScreen
         /// </summary>
         public const double GuidanceDeadbandM = 5.0;
 
+        /// <summary>
+        /// The landing roll reference is used only when the aim is between these angles from it.
+        /// `BOOSTER.ks:367-368`, both escapes meaning "keep the roll you have".
+        ///
+        /// ⚠ NOT TUNING. `lookdirup` - and Unity's `Quaternion.LookRotation` behind our own
+        /// SteerTo - has no defined answer when the look direction is parallel to the up reference,
+        /// and a booster standing vertically over its pad is exactly parallel to a horizontal north
+        /// reference. Outside this band the roll must be left alone or the command is a singularity.
+        /// </summary>
+        public const double RollRefMinDeg = 15.0, RollRefMaxDeg = 165.0;
+
         /// <summary>Unpowered aerodynamic trim during the descent. `F9L_AOA` = 15.</summary>
         public const double AeroAoaDeg = 15.0;
 
@@ -986,15 +1017,25 @@ namespace DragonScreen
         /// How far off retrograde to lean, as a TANGENT fraction. `LandingZoneGuidance`.
         ///
         /// F9I builds the aim as `velVec + errorVec` and then checks whether that leans further than
-        /// the allowed angle; if it does - which is nearly always, because the naive sum compares
-        /// metres of error against metres per second of velocity and is meaningless when the error
-        /// is large - it REBUILDS the direction as
+        /// the allowed angle; if it does it REBUILDS the direction as
         ///
         ///     retrograde_unit + tan(AoA) * errScale * error_unit
         ///
         /// so the lean is exactly AoA and no more. Returning the tangent fraction lets the glue build
         /// that vector without this file needing vectors.
+        ///
+        /// ⛔ THIS IS THE CLAMPED CASE ONLY, AND THAT SENTENCE USED TO BE MISSING. This comment
+        /// once claimed the rebuild fires "nearly always", which is what justified the glue applying
+        /// it unconditionally - and that is what made the booster swing. At 250 m/s a 100 m impact
+        /// error leans only 21.8 degrees, under every ceiling in the schedule, so the rebuild does
+        /// NOT fire and F9I flies `velVec + errorVec` directly. The caller must test the angle first.
         /// </summary>
+        /// <remarks>
+        /// ⛔ <paramref name="errorMagnitudeM"/> MUST be the magnitude of the very vector whose
+        /// direction the caller leans along. The glue passed downrange instead, which is never small,
+        /// so this returned a full lean along an azimuth derived from a few metres of noise. See the
+        /// argument at the call site in `BoosterRecovery`.
+        /// </remarks>
         public static double LeanFraction(double errorMagnitudeM, double aoaDeg)
         {
             double scale = errorMagnitudeM / GuidanceDeadbandM;
@@ -1029,14 +1070,22 @@ namespace DragonScreen
             // Past the handover the stage stops steering and simply stands up.
             if (enginesLit && handedOver) return PostHandoverAoaDeg;
             // ---- UNPOWERED: 15 deg HIGH UP, alt/100 BELOW 4 km ----
-            // AtmGNC:754 sets F9L_AOA to alt:radar/100 inside the sub-4 km loop - about 40 deg at
-            // entry, decaying to 15 at 1500 m. F9I notes the sub-metre landings were all flown with
-            // that 40 deg ceiling available and that a clamp to 15 "has never actually been in
-            // force". Ours WAS that clamp, at every altitude.
+            // `BOOSTER.ks:455-459`, verbatim:
             //
-            // It is a CEILING, not a demand: the guidance only rebuilds the direction when the naive
-            // error sum exceeds it, and a nominal descent flies 0.31-0.86 deg. It bites only when
-            // the stage arrives at 4 km with a large lateral error, which is when it is wanted.
+            //     wait until ship:altitude < 4000.
+            //     until (F9L_TrueRadar <= (F9L_StopDist + F9L_BoosterHeight)) {
+            //         if (F9L_AOA > 15) { set F9L_AOA to 15. }
+            //         if (ship:altitude < 10000) { set F9L_AOA to (alt:radar / 100). }
+            //     }
+            //
+            // The loop is entered only below 4 km, so the second line always fires and the clamp on
+            // the first is overwritten before it is used. Above 4 km `F9L_AOA` is still the 15 set at
+            // :437. Hence 15 high up, alt/100 below - 40 deg at 4 km, decaying with height.
+            //
+            // ⚠ AND IT IS A CEILING, NOT A DEMAND. `LandingZoneGuidance` only rebuilds the aim
+            // when the natural lean already exceeds this angle - see the port note at the call site
+            // in `BoosterRecovery`. Reading this number as a commanded lean is what made the stage
+            // swing; forty degrees is the most it may ever be asked for, not what it is asked for.
             if (!enginesLit)
             {
                 if (altitudeRadarM >= GuidanceHandAltM) return AeroAoaDeg;

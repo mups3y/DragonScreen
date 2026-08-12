@@ -291,7 +291,8 @@ namespace DragonScreen
                 return;
             }
 
-            Apply(Pages.HitTest(selectedPage, px, py, w, h, subview[selectedPage & 7]));
+            Apply(Pages.HitTest(selectedPage, px, py, w, h, subview[selectedPage & 7],
+                                HullCams.Count));
         }
 
         /// <summary>
@@ -531,7 +532,10 @@ namespace DragonScreen
             // to draw, so the claim is made here rather than inside ImageStore.
             if (selectedPage == 3) DockingCamRenderer.Request(0, 1);
             else if (selectedPage == 4 && sub == SettingsPage.Video)
-                DockingCamRenderer.Request(ps.CameraView, 0);
+            {
+                VesselData.ValidateCameraView();
+                DockingCamRenderer.Request(VesselData.CameraView, 0);
+            }
             ps.CameraHeldByDocking = DockingCamRenderer.HeldByDocking;
             ps.CameraResText = DockingCamRenderer.Resolution;
 

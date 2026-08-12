@@ -83,6 +83,37 @@ public static class DockGeometryTest
         Check("the tolerance is well inside the standoff",
               DockGeometry.StandoffToleranceM < DockGeometry.StandoffM, "");
 
+        // ================================================================================
+        //  ⛔ THE GATE -> STANDOFF LEG. Its absence deadlocked every docking to 2026-08-12:
+        //  1904 rows, all `ToGate`, parked at the corridorGate for six minutes across four attempts.
+        // ================================================================================
+        // The measured geometry from that flight: keep-out 31 m, so the corridorGate sits at the sphere
+        // exit plus the 20 m pad, and the standoff is 25 m.
+        // ⚠ THE PORT IS NOT AT THE STATION'S CENTRE, AND A FIXTURE THAT PUTS IT THERE IS
+        // DEGENERATE - the axis misses the sphere entirely and GateDistanceM falls back to the
+        // plain standoff, which quietly tests nothing. `c` runs from the PORT to the centre, so it
+        // points opposite the outward axis: cDotU is negative and |c| is the port's offset in.
+        double corridorKeepOut = 31.0;            // measured on the station, 2026-08-12
+        double portOffset = 10.0;                 // port to station centre
+        double corridorGate = DockGeometry.GateDistanceM(
+            -portOffset, portOffset * portOffset, corridorKeepOut);
+        Check("the corridorGate really is outside the standoff, which is why a leg is needed",
+              corridorGate > DockGeometry.StandoffM + DockGeometry.StandoffToleranceM,
+              "corridorGate " + corridorGate.ToString("F1") + " vs standoff " + DockGeometry.StandoffM);
+        Check("...and sitting at the corridorGate does NOT count as being at the standoff",
+              !DockGeometry.AtStandoff(corridorGate - DockGeometry.StandoffM),
+              (corridorGate - DockGeometry.StandoffM).ToString("F1") + " m apart");
+        Check("...but it DOES count as being at the corridorGate, which starts the corridor",
+              DockGeometry.AtGate(0.0), "");
+        Check("arriving with a few metres of residual drift still counts",
+              DockGeometry.AtGate(DockGeometry.GateToleranceM - 1.0), "");
+        Check("but being a long way off does not",
+              !DockGeometry.AtGate(DockGeometry.GateToleranceM + 1.0), "");
+        Check("the corridorGate tolerance is wider than the standoff's - it is a waypoint, not a hold",
+              DockGeometry.GateToleranceM > DockGeometry.StandoffToleranceM, "");
+        // And the far end: having run the corridor, the standoff must promote to axial.
+        Check("reaching the standoff promotes", DockGeometry.AtStandoff(0.0), "");
+
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
     }

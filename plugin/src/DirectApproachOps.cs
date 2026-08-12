@@ -58,6 +58,22 @@ namespace DragonScreen
                 return false;
             }
 
+            // ---- ⛔ AND IT NEVER FLIES OUTWARD TO REACH ITS OWN GOAL. ----
+            // `GoalM` is 200 m, the handover point. Engaging INSIDE that asks the approach to open
+            // the range, which it will dutifully do - on 2026-08-12 it was engaged at 60 m and
+            // commanded "closing to 200 m", pushing the capsule off a station it had already
+            // arrived at. Whatever called it was wrong, but a controller that can be asked to
+            // reverse into its own goal is wrong too. Arriving early is not a reason to leave.
+            if (range <= DirectApproach.GoalM)
+            {
+                Note = "REFUSED - already inside the " + DirectApproach.GoalM.ToString("F0")
+                     + " m handover point at " + range.ToString("F0")
+                     + " m; the approach does not fly outward";
+                Debug.LogWarning(Tag + Note);
+                Phase = DirectPhase.Refused;
+                return false;
+            }
+
             ship = v; station = target;
             Engaged = true;
             startedAt = Planetarium.GetUniversalTime();
@@ -105,19 +121,22 @@ namespace DragonScreen
 
             double now = Planetarium.GetUniversalTime();
 
-            Vector3d toTarget = station.CoM - ship.CoM;
-            RangeM = toTarget.magnitude;
-            if (RangeM < 1e-3) { Disengage("coincident"); return; }
-            Vector3d los = toTarget / RangeM;
-
-            // ⚠ POSITIVE = CLOSING. Proven from flight 035: written the other way round it read
-            // −10.0179 m/s while genuinely closing, and every gate built on it had the wrong sign.
-            Vector3d relVel = ship.obt_velocity - station.obt_velocity;
-            ClosingMps = Vector3d.Dot(-relVel, los);
+            // ---- ⛔ ONE DEFINITION OF CLOSING, IN RelativeMotion. THIS FILE HAD ITS OWN. ----
+            // It negated a `relVel` that was already ours-minus-theirs, so its closing rate came out
+            // with the sign REVERSED from StationApproach's - and on 2026-08-11 that single line
+            // meant the hard speed cap could never bind (a negative number is always under 25) and
+            // the correction ADDED the velocity it should have removed. Closing ran 5.9 -> 44.3 m/s
+            // against a 25 m/s cap, apoapsis 85.9 -> 166.7 km, and 45 of 72 units of monopropellant
+            // - the return budget - went into the approach.
+            RelState rel = RelativeMotion.Of(ship, station);
+            if (!rel.Valid) { Disengage("coincident"); return; }
+            RangeM = rel.RangeM;
+            Vector3d los = rel.Los;
+            ClosingMps = rel.ClosingMps;
 
             // ---- THE ONE COMMANDED CORRECTION. Trap 1: never split aim from speed. ----
             WantMps = DirectApproach.WantSpeedMps(RangeM);
-            Vector3d dv = (los * WantMps) - (-relVel);
+            Vector3d dv = RelativeMotion.Correction(rel, WantMps);
             DvMps = dv.magnitude;
 
             // Trap 2: re-solved and re-pointed EVERY tick. A pursuit vector in orbit is valid only at
@@ -176,7 +195,9 @@ namespace DragonScreen
         {
             if (RangeM <= DirectApproach.GoalM) { Go(DirectPhase.Matching); return; }
 
-            if (DirectApproach.Burn(DvMps, AimErrorDeg, ClosingMps, RangeM))
+            // The cap applies only while still building speed - F9I's accelerate loop. See Burn().
+            if (DirectApproach.Burn(DvMps, AimErrorDeg, ClosingMps, RangeM,
+                                    Phase == DirectPhase.Accelerating))
             {
                 ThrottleCmd = DirectApproach.Throttle(DvMps, ship.GetTotalMass(),
                                                       PodEngines.ThrustKn(ship));
@@ -200,7 +221,8 @@ namespace DragonScreen
         /// </summary>
         private static void Match()
         {
-            Vector3d relVel = ship.obt_velocity - station.obt_velocity;
+            RelState rel = RelativeMotion.Of(ship, station);
+            Vector3d relVel = rel.Relative;
             double speed = relVel.magnitude;
 
             if (speed <= DirectApproach.MatchVelMps)
@@ -234,8 +256,7 @@ namespace DragonScreen
 
         private static double RelSpeed()
         {
-            if (ship == null || station == null) return 0.0;
-            return (ship.obt_velocity - station.obt_velocity).magnitude;
+            return RelativeMotion.Of(ship, station).Relative.magnitude;
         }
     }
 }

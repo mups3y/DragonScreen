@@ -64,6 +64,17 @@ public static class LayoutSweepTest
         public float MinH;
     }
 
+    /// <summary>
+    /// More hull cameras than any real craft carries, so what is being tested is the clip in
+    /// CamSlots rather than a particular camera count. Both the control list and the hit test use
+    /// this, because the bug it caught was the two of them disagreeing.
+    /// </summary>
+    static int SweepExtraCams(int w, int h)
+    {
+        int extra = SettingsPage.CamSlots(w, h) - SettingsPage.CamNames.Length;
+        return (extra > 0) ? extra : 0;
+    }
+
     static Ctl C(string n, float x, float y, float w, float h, PageAct a, int arg)
     {
         Ctl c = new Ctl();
@@ -145,11 +156,19 @@ public static class LayoutSweepTest
                     list.Add(C("SEAT[" + i + "]", x, y, rw, rh, PageAct.ViewFromSeat, i));
                 }
             if (subview == SettingsPage.Video)
-                for (int i = 0; i < SettingsPage.CamNames.Length; i++)
+            {
+                // ⚠ SWEEP THE FULL COLUMN, NOT THE FOUR IT USED TO HAVE. The list grows with
+                // whatever real cameras are bolted to the craft, so the sweep asks for MORE than any
+                // vehicle could carry and checks that CamSlots clips it to what fits. A sweep that
+                // only ever saw four buttons would pass while a six-camera craft ran its column out
+                // through the tab bar.
+                int slots = SettingsPage.CamSlots(w, h);
+                for (int i = 0; i < slots; i++)
                 {
                     SettingsPage.CamRect(i, w, h, out x, out y, out rw, out rh);
                     list.Add(C("CAM[" + i + "]", x, y, rw, rh, PageAct.SetCamera, i));
                 }
+            }
             if (subview == SettingsPage.Display)
             {
                 SettingsPage.BrightRect(false, w, h, out x, out y, out rw, out rh);
@@ -234,7 +253,11 @@ public static class LayoutSweepTest
                         bool all5 = true;
                         for (int k = 0; k < 5; k++)
                         {
-                            PageHit hit = Pages.HitTest(page, px[k], py[k], w, h, sub);
+                            // The same camera count the control list was built with. The hit path
+                            // and the painter must agree about how many buttons exist - they did
+                            // not, and this line is what proved it.
+                            PageHit hit = Pages.HitTest(page, px[k], py[k], w, h, sub,
+                                                        SweepExtraCams(w, h));
                             if (hit.Act != c.Act || hit.Arg != c.Arg) all5 = false;
                         }
                         Check(c.Name + " reaches its own action from all five points, " + tag,

@@ -344,7 +344,6 @@ namespace DragonScreen
                      && (Above(s, t) || s.PeriapsisM >= SepPeTargetM))
             {
                 phase = AscentPhase.Coast;
-                sepS2Now = true;
             }
 
             else if (phase == AscentPhase.Coast
@@ -355,7 +354,32 @@ namespace DragonScreen
                 phase = AscentPhase.Circularise;
             }
             else if (phase == AscentPhase.Circularise && Circularised(s, t))
+            {
+                // ---- ⛔ THE SECOND STAGE FINISHES THE JOB, THEN LEAVES. ----
+                // This used to shed the S2 on the way into COAST, and the comment there justified it
+                // with "~37 m/s needed" from the Dracos. That figure assumed separation near the
+                // 40 km periapsis target. In practice the apoapsis condition wins the race first and
+                // the stage is dropped at a periapsis of MINUS 126 km - measured 2026-08-12 - so the
+                // Dracos are handed a 212 m/s insertion instead of 37.
+                //
+                // What that cost, from the same recording: the capsule spent 114 of its 195
+                // monopropellant units - 58% of the tank - doing the second stage's job, before the
+                // mission had begun. Every flight has then run dry during the approach or docking.
+                // And the S2 was thrown away with 32% of its own propellant still aboard.
+                //
+                // The real vehicle does not fly this way either: Falcon 9's second stage performs
+                // orbital insertion and Dragon separates into a STABLE ORBIT about twelve minutes
+                // after launch. Its Dracos are for phasing, rendezvous and de-orbit - never for
+                // reaching orbit.
+                //
+                // ⚠ CIRCULARISING WITH THE S2 ATTACHED IS WHAT REACHED ESCAPE VELOCITY ON THE
+                // 13:36 FLIGHT, and that is why it was moved. It is safe now for reasons that did
+                // not exist then: `FalconCircBurnVecNow`'s dv has a true fixed point, a reversal
+                // above 5 m/s aborts with a reason, and the 1.5x apoapsis backstop cuts the throttle
+                // in every phase. All three are tested.
+                sepS2Now = true;
                 phase = AscentPhase.Done;
+            }
 
             // ---- ⛔ AND A DIVERGING BURN IS NOT A FINISHED ONE ----
             // Same flight: circDv ROSE from 2098 to 2174 m/s while the burn ran, the dv direction

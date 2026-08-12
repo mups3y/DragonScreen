@@ -41,6 +41,14 @@ namespace DragonScreen
         Clohessy,
         /// <summary>Inside CW's useful range. Straight-line RCS on a speed ladder.</summary>
         Terminal,
+        /// <summary>
+        /// Riding an intercept the orbits already give us, waiting on the velocity match.
+        ///
+        /// Distinct from <see cref="Clohessy"/> on purpose: nothing has been bought. F9I's leg 2 -
+        /// "matching velocity there rather than buying a transfer" - is a warp and one burn, and a
+        /// crew reading the leg name should be able to tell those apart.
+        /// </summary>
+        Intercept,
         /// <summary>At the aim point, station-keeping.</summary>
         Arrived
     }
@@ -72,6 +80,71 @@ namespace DragonScreen
         /// <summary>Below this, stop planning nodes and fly it on RCS. `stCwTermRange`.</summary>
         public const double CwTermRangeM = 500.0;
 
+        /// <summary>
+        /// How far our orbital radius may differ from the station's before leg 0 fixes it, metres.
+        ///
+        /// Set from the simulated drift rate rather than picked. At the measured station orbit a
+        /// circular orbit N metres off the station's radius drifts along-track by roughly 4.7 km per
+        /// lap per kilometre of altitude error, so:
+        ///
+        ///      87 x 86 km   ->  +6.6 km per lap    the phasing loop absorbs this
+        ///      90 x 86 km   ->  +34.9 km per lap   marginal
+        ///     120 x 86 km   ->  +321 km per lap    diverges
+        ///     182 x 81 km   ->  +933 km per lap    the 2026-08-11 flight; never converges
+        ///
+        /// 2 km buys about 9 km of drift per lap against a 3 km phasing exit threshold, so a lap can
+        /// still close what the drift opens. Above that the loop is chasing its own tail.
+        /// </summary>
+        public const double CoOrbitalTolM = 2000.0;
+
+        // ---- THE PHASING LOOP'S BOUND. `stPhaseMaxPass`, station_ops.ks:270. ----
+        /// <summary>
+        /// Phasing laps allowed before closing in from wherever we got to.
+        ///
+        /// ⛔ THE BOUND IS THE POINT. An unbounded ladder is what cost 28 orbit-match burns and
+        /// 11.7 hours of requested warp on 2026-08-11, and F9I's own planner lost 60 days on flight
+        /// 020, 89 on 015 and 13 on 014. Phasing is well-behaved in a way those were not - each lap
+        /// closes a measured gap by a computed amount - but "well-behaved" is a reason to bound it at
+        /// three, not a reason to leave it unbounded. F9I's fall-through is explicit and is the one
+        /// we copy: log that the laps are used up and close in from here anyway.
+        /// </summary>
+        public const int PhaseMaxPass = 3;
+
+        // ---- THE FREE INTERCEPT. station_ops.ks:247-253, 895-913. ----
+        // ⚠ A TRANSFER YOU ALREADY HAVE IS CHEAPER THAN ONE YOU BUY. After the phasing laps the
+        // orbits usually already cross close; F9I checks the existing closest approach BEFORE
+        // planning anything, and if it is good enough it warps there and matches velocity instead.
+        // Its own words: "riding the existing intercept ... Matching velocity there rather than
+        // buying a transfer."
+        /// <summary>Ride an existing intercept if it comes this close, metres. `stCaUseMax`.</summary>
+        public const double CaUseMaxM = 27000.0;
+        /// <summary>Search this many station periods ahead for it. `stCaSpan`.</summary>
+        public const double CaSpanPeriods = 1.60;
+        /// <summary>Coarse samples across that span. `stCaSteps`.</summary>
+        public const int CaSteps = 60;
+        /// <summary>Refinement passes, each buying a decimal place. `stCaRefine`.</summary>
+        public const int CaRefine = 3;
+        /// <summary>Closer than this and there is nothing left to match. `stMatchDist`.</summary>
+        public const double MatchDistM = 200.0;
+        /// <summary>Relative speed already low enough to call matched, m/s. `stMatchVel`.</summary>
+        public const double MatchVelMps = 0.5;
+        /// <summary>Do not bother warping a span shorter than this, seconds. `stWarpMinSpan`.</summary>
+        public const double WarpMinSpanS = 60.0;
+        /// <summary>Stop the warp this long before the match point, seconds. `stWarpMargin`.</summary>
+        public const double WarpMarginS = 30.0;
+        /// <summary>
+        /// Plan a burn this far ahead so the vehicle can orient into it first. `stCwLead`.
+        /// Same figure as <see cref="Phasing.LeadS"/>, and for the same reason.
+        /// </summary>
+        public const double LeadS = 60.0;
+        /// <summary>
+        /// Reject any approach burn bigger than this, m/s. `stCwMaxDv`.
+        ///
+        /// Shared with <see cref="Phasing.MaxDvMps"/>: a rendezvous burn of this size is a wrong
+        /// number, not an expensive manoeuvre, whichever leg produced it.
+        /// </summary>
+        public const double MaxDvMps = 250.0;
+
         // ---- THE SPEED CAP. StSpeedCap:603, ordered NEAREST FIRST so the tightest band wins. ----
         // F9I's reason for the three bands rather than two, and it is a flight: "Flight 035 still
         // arrived too fast at the end, missed the port and bounced off the hull - 21.95 units of
@@ -85,7 +158,13 @@ namespace DragonScreen
         public const double BandOutD = 1500.0, BandOutV = 12.0;
         public const double BandMaxV = 25.0;
 
-        // ---- TERMINAL LAW. StTerminal:1199. ----
+        // ---- TERMINAL LAW. ----
+        // ⚠ CITED TO `StTerminal:1199` UNTIL 2026-08-12, AND `StTerminal` HAS NO CALLERS.
+        // `check_live.py --audit` caught it. The constants are NOT wrong - `stCloseRate` is used by
+        // the LIVE `StDirectApproach` at `station_ops.ks:695`:
+        //     min(StSpeedCap(target:distance), max(stMatchVel, target:distance * stCloseRate))
+        // - only the attribution was, and a citation pointing at dead code is how three flights got
+        // spent porting `Flip2` and `Reentry1`.
         /// <summary>Commanded closing speed per metre of range, s^-1. `stCloseRate`.</summary>
         public const double CloseRate = 0.02;
         /// <summary>Never close faster than this, m/s. `stCloseMax`.</summary>

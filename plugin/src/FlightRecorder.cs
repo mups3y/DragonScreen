@@ -135,8 +135,18 @@ namespace DragonScreen
             "a_cmdPitchDeg,a_cmdHeadingDeg,a_cmdThrottle,a_cmdStage,a_cmdSepS2,a_cmdUllage," +
             "a_cmdRcs,a_circDvMps," +
             // attitude: commanded vs achieved
-            "a_attErrDeg,a_phiPitch,a_phiRoll,a_phiYaw," +
-            "a_tgtOmegaP,a_tgtOmegaR,a_tgtOmegaY,a_omegaP,a_omegaR,a_omegaY," +
+            // ⛔ EVERY ANGLE AND RATE IN THIS FILE IS DEGREES. THE NAMES SAY SO ON PURPOSE.
+            // `Phi` and `Omega` are RADIANS inside the controller - KSP's `angularVelocity` is
+            // rad/s and `phi` is compared against `RollControlRangeDeg * Deg2Rad`. They used to be
+            // written raw, next to `attErrDeg` and `aoaDeg` which are degrees, with nothing in the
+            // header to tell them apart. On 2026-08-12 that cost a wrong diagnosis: booster roll
+            // travel was reported as "5.6 degrees through the flip, minor" when the figure was 5.6
+            // RADIANS - 320 degrees - and the true total for the recovery was 1330 degrees, nearly
+            // four full turns, which the crew could plainly see and the analysis could not.
+            //
+            // Converted at write time and suffixed, so the mistake cannot be made again.
+            "a_attErrDeg,a_phiPitchDeg,a_phiRollDeg,a_phiYawDeg," +
+            "a_tgtOmegaPdps,a_tgtOmegaRdps,a_tgtOmegaYdps,a_omegaPdps,a_omegaRdps,a_omegaYdps," +
             "a_tgtTorqueP,a_tgtTorqueR,a_tgtTorqueY,a_actP,a_actR,a_actY," +
             "a_ctlPitch,a_ctlYaw,a_ctlRoll,a_ctlThrottle," +
             // ================= BOOSTER =================
@@ -148,7 +158,7 @@ namespace DragonScreen
             // landing command and the two numbers that judge it
             "b_cmdThrottle,b_ignitionAlt,b_engines,b_aim,b_legs," +
             "b_downrangeKm,b_predMissKm,b_initMissKm," +
-            "b_attErrDeg,b_omegaP,b_omegaR,b_omegaY,b_actP,b_actR,b_actY," +
+            "b_attErrDeg,b_omegaPdps,b_omegaRdps,b_omegaYdps,b_actP,b_actR,b_actY," +
             "b_ctlPitch,b_ctlYaw,b_ctlRoll,b_ctlThrottle," +
             // ================= THE RETURN =================
             // Not a third vehicle - the same craft as `a_`, in the phases after insertion. Kept in its
@@ -170,7 +180,35 @@ namespace DragonScreen
             // Rendezvous, docking and undock. Added the day they first became reachable from a
             // button - recording a phase for the first time it flies is the whole point, and the
             // 2026-08-11 return went unrecorded precisely because nobody had done this in advance.
-            "m_rndz,m_dock,m_undock,m_stationKm,m_closingMps,m_monoOurs,m_monoCap";
+            "m_rndz,m_dock,m_undock,m_stationKm,m_closingMps,m_monoOurs,m_monoCap," +
+            // ================= WHAT THE VEHICLE WAS ACTUALLY TOLD TO DO =================
+            // ⛔ ADDED 2026-08-12 BECAUSE THE COMMAND HALF OF THIS RECORDER WAS DEAD AFTER
+            // INSERTION, AND THAT IS THE HALF IT EXISTS FOR.
+            //
+            // `a_cmd*` above all read `AutoPilot.Command`, which stops being written the instant the
+            // ascent disengages. Everything after insertion - the approach, the docking, the
+            // de-orbit - flies the SAME vessel through `AttitudeController.Ascent`, and none of it
+            // appeared anywhere. Measured on the 2026-08-12 flight: `a_cmdThrottle` read 0.000 for
+            // all 7560 rows of the approach while `a_ctlThrottle` hit 1.00 on 783 of them.
+            //
+            // Worse, there were NO TRANSLATION COLUMNS AT ALL. Translation is the docking
+            // controller's entire output, so when the approach and the docking fought each other for
+            // eleven minutes and emptied the tank, the conflict had to be inferred from range - the
+            // commands that caused it were never written down.
+            //
+            // `x_owner` is the column that would have made that a one-glance diagnosis instead of an
+            // afternoon: it names the controller holding the vehicle on each row. Two controllers
+            // cannot both be the owner, so a flicker in this column IS the bug.
+            "x_owner,x_thrCmd,x_fore,x_transX,x_transY,x_rcsCmd,x_rcsOn," +
+            // The approach, in its own numbers rather than inferred from range.
+            "x_daPhase,x_daRangeM,x_daClosing,x_daDv,x_daWant,x_daAimErr,x_daThr," +
+            // The docking controller. `x_dkRangeM` is PORT to PORT, which is not `m_stationKm`.
+            "x_dkStage,x_dkRangeM,x_dkClosing,x_dkAxisErr," +
+            // The docking controller's INPUTS. Paired with x_fore/transX/transY above:
+            // a command holding one sign while its own offset grows is an inverted axis.
+            "x_dkDistF,x_dkDistS,x_dkDistT,x_dkVelF,x_dkVelS,x_dkVelT," +
+            // The ladder, and the undock.
+            "x_leg,x_alongKm,x_lateral,x_udSepM,x_udOpening,x_refuelFrac";
 
         /// <summary>
         /// Called every frame by the painter; samples at 5 Hz. Cheap enough to call unconditionally
@@ -272,6 +310,12 @@ namespace DragonScreen
             return primary;
         }
 
+        /// <summary>Edges held until a row carries them. See the latch note in WriteRow.</summary>
+        private static bool stageLatched, sepLatched;
+
+        /// <summary>Last real mass per block, so a null vessel cannot report a massless one.</summary>
+        private static double lastMassA, lastMassB;
+
         private static void WriteRow(Vessel v, double ut)
         {
             StringBuilder r = pending;
@@ -294,7 +338,19 @@ namespace DragonScreen
 
             AscentCommand c = AutoPilot.Command;
             F(r, c.PitchDeg); F(r, c.HeadingDeg); F(r, c.Throttle);
-            F(r, c.Stage ? 1.0 : 0.0); F(r, c.SeparateS2 ? 1.0 : 0.0); F(r, c.UllageFore);
+            // ---- ⛔ EDGES MUST LATCH OR A 5 Hz SAMPLER NEVER SEES THEM. ----
+            // `c.Stage` and `c.SeparateS2` are true for the single tick that issues the command. The
+            // recorder samples five times a second, so it sampled between them every time: both
+            // columns read 0 for the whole 2026-08-12 flight while the log shows `autopilot staged`
+            // and `S2 SEP - dropped on TE.19.C.Dragon.Decoupler`. A column that can only be true on
+            // a tick nobody looks at is not instrumentation.
+            //
+            // Latched until written, so exactly one row carries each edge and none are lost.
+            if (c.Stage) stageLatched = true;
+            if (c.SeparateS2) sepLatched = true;
+            F(r, stageLatched ? 1.0 : 0.0); F(r, sepLatched ? 1.0 : 0.0);
+            stageLatched = false; sepLatched = false;
+            F(r, c.UllageFore);
             F(r, c.Rcs ? 1.0 : 0.0);
             F(r, AutoPilot.LastCircDvMps);
             Attitude(r, AttitudeController.Ascent, true);
@@ -325,11 +381,100 @@ namespace DragonScreen
             Controls(r, b);
 
             Return(r);
+            Commanded(r);
 
             r.Length -= 1;                // trailing comma
             r.Append("\n");
 
             if (++pendingRows >= FlushEvery) Flush();
+        }
+
+        /// <summary>
+        /// WHAT THE VEHICLE WAS TOLD TO DO, from the controller that was actually driving it.
+        ///
+        /// ⛔ FIXED WIDTH, NO BRANCHES - the same rule as `Return`. Every source returns a resting
+        /// value when it is idle rather than being skipped, because a block whose width depends on
+        /// state is this recorder's characteristic bug and it has already shifted a column once.
+        ///
+        /// The `a_cmd*` block above describes the ASCENT GUIDANCE. This one describes the ACTUATOR,
+        /// whoever is holding it - which after insertion is nobody the old block could see.
+        /// </summary>
+        private static void Commanded(StringBuilder r)
+        {
+            AttitudeController ac = AttitudeController.Ascent;
+            Vessel a = Primary();
+
+            S(r, Owner());
+            F(r, ac.Throttle);
+            F(r, ac.UllageFore);
+            F(r, ac.TranslateX);
+            F(r, ac.TranslateY);
+            // Commanded RCS versus the group's ACTUAL state. They disagreeing is a real fault and
+            // there was no way to see it: the approach turns RCS on and nothing turned it off.
+            F(r, AutoPilot.Command.Rcs ? 1.0 : 0.0);
+            F(r, (a != null && a.ActionGroups[KSPActionGroup.RCS]) ? 1.0 : 0.0);
+
+            S(r, DirectApproachOps.Engaged ? DirectApproachOps.Phase.ToString() : "-");
+            F(r, DirectApproachOps.RangeM);
+            F(r, DirectApproachOps.ClosingMps);
+            F(r, DirectApproachOps.DvMps);
+            F(r, DirectApproachOps.WantMps);
+            F(r, DirectApproachOps.AimErrorDeg);
+            F(r, DirectApproachOps.ThrottleCmd);
+
+            S(r, DockingOps.Stage.ToString());
+            F(r, DockingOps.RangeToPortM);
+            F(r, DockingOps.ClosingMps);
+            F(r, DockingOps.AxisErrorDeg);
+            F(r, DockingOps.DistF); F(r, DockingOps.DistS); F(r, DockingOps.DistT);
+            F(r, DockingOps.VelF);  F(r, DockingOps.VelS);  F(r, DockingOps.VelT);
+
+            S(r, StationApproach.Engaged ? StationApproach.Leg.ToString() : "-");
+            F(r, StationApproach.AlongTrackM / 1000.0);
+            F(r, StationApproach.LateralMps);
+            F(r, UndockOps.SeparationM);
+            F(r, UndockOps.OpeningMps);
+            F(r, a != null ? Refuel.Fraction(a) : 0.0);
+        }
+
+        /// <summary>
+        /// Which controller is holding the vehicle this tick.
+        ///
+        /// ⛔ THE POINT OF THIS COLUMN IS THAT IT SHOULD NEVER BE AMBIGUOUS. On 2026-08-12 the
+        /// station approach and the docking controller both drove the capsule for eleven minutes,
+        /// pulling opposite ways, and emptied the tank - and nothing in 145 columns said so. The
+        /// order below is the priority the code is SUPPOSED to enforce, so if two are live at once
+        /// this reports the winner and `CONTENDED:` names the clash outright.
+        /// </summary>
+        private static string Owner()
+        {
+            int live = 0;
+            if (AutoPilot.Engaged) live++;
+            if (DockingOps.Engaged) live++;
+            if (DirectApproachOps.Engaged) live++;
+            if (UndockOps.Engaged) live++;
+            if (DeorbitOps.Engaged) live++;
+            if (EntryOps.Engaged) live++;
+            if (NodeExecutor.Active) live++;
+
+            string top = "-";
+            if (AutoPilot.Engaged) top = "ascent";
+            else if (EntryOps.Engaged) top = "entry";
+            else if (DeorbitOps.Engaged) top = "deorbit";
+            else if (NodeExecutor.Active) top = "node";
+            else if (UndockOps.Engaged) top = "undock";
+            else if (DockingOps.Engaged) top = "docking";
+            else if (DirectApproachOps.Engaged) top = "approach";
+
+            // The node executor legitimately runs INSIDE the de-orbit and the phasing, so it does
+            // not count as a clash with those two.
+            if (live > 1)
+            {
+                bool benign = NodeExecutor.Active && live == 2
+                              && (DeorbitOps.Engaged || AutoPilot.Engaged);
+                if (!benign) return "CONTENDED:" + top;
+            }
+            return top;
         }
 
         /// <summary>
@@ -398,8 +543,24 @@ namespace DragonScreen
         {
             if (v == null || v.state == Vessel.State.DEAD)
             {
+                // ---- ⛔ A BLOCK OF ZEROS IS NOT "NO DATA", IT IS A LIE THAT PARSES. ----
+                // The width must stay fixed - see Margins - but zero is a legal reading for most of
+                // these and a physically impossible one for mass. `a_massT` read 0.000 t on 42 rows
+                // of the 2026-08-12 flight, and a mass column that reports a massless spacecraft
+                // will silently poison any thrust-to-weight or propellant sum computed from the file.
+                //
+                // So the shape is unchanged and the one field that cannot legitimately be zero is
+                // carried forward from the last real sample instead.
                 int n = orbital ? 21 : 16;
-                for (int i = 0; i < n; i++) F(r, 0.0);
+                for (int k = 0; k < n; k++)
+                {
+                    // Index of the mass field within this block. ORBITAL carries obt_speed and the
+                    // four orbit fields that the booster block does not, so the two differ:
+                    //   orbital  alt,radar,lat,lon,vert,srf,OBT,mach,q,ap,pe,inc,tAp,MASS  -> 13
+                    //   booster  alt,radar,lat,lon,vert,srf,    mach,q,            MASS    ->  8
+                    if (k == (orbital ? 13 : 8)) F(r, orbital ? lastMassA : lastMassB);
+                    else F(r, 0.0);
+                }
                 return;
             }
 
@@ -417,7 +578,20 @@ namespace DragonScreen
                 F(r, o != null ? o.timeToAp : 0.0);
             }
 
-            F(r, v.GetTotalMass());
+            // ---- ⛔ A PACKED VESSEL'S MASS IS NOT ITS MASS. ----
+            // On 2026-08-12 `a_massT` read 1174.20 t through the launch-window hold with
+            // `a_packed = 1`, then 174.19 t on the single tick it unpacked - a thousand tonnes that
+            // never existed. On rails KSP is not maintaining the same quantity, and anything derived
+            // from it (thrust-to-weight, propellant mass, the landing solve) is nonsense for those
+            // rows. Carry the last real reading instead, the same rule as the null path above.
+            double massT = v.GetTotalMass();
+            if (v.packed)
+            {
+                double kept = orbital ? lastMassA : lastMassB;
+                if (kept > 0.0) massT = kept;
+            }
+            else if (orbital) lastMassA = massT; else lastMassB = massT;
+            F(r, massT);
             F(r, Thrust(v));
             V(r, v.MOI);
             V(r, AttitudeController.For(v) != null ? AttitudeController.For(v).Torque : Vector3d.zero);
@@ -485,12 +659,19 @@ namespace DragonScreen
             F(r, ac.ErrorDeg);
             if (full)
             {
-                V(r, ac.Phi);
-                V(r, ac.TargetOmega);
+                Vdeg(r, ac.Phi);
+                Vdeg(r, ac.TargetOmega);
             }
-            V(r, ac.Omega);
-            if (full) V(r, ac.TargetTorque);
-            V(r, ac.Actuation);
+            Vdeg(r, ac.Omega);
+            if (full) V(r, ac.TargetTorque);          // kN.m - a torque, not an angle
+            V(r, ac.Actuation);                       // fraction of available torque
+        }
+
+        /// <summary>An angle or rate held in radians, written in DEGREES. See the header note.</summary>
+        private static void Vdeg(StringBuilder r, Vector3d v)
+        {
+            const double D = 180.0 / System.Math.PI;
+            F(r, v.x * D); F(r, v.y * D); F(r, v.z * D);
         }
 
         /// <summary>

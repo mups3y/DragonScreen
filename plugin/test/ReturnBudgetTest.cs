@@ -107,6 +107,56 @@ public static class ReturnBudgetTest
         Check("and a real orbit is allowed",
               ReturnBudget.ReturnAllowed(false, 86800.0, 85800.0, 70000.0, out why), why);
 
+        // ================================================================================
+        //  THE REFUSAL THRESHOLD. Pinned to the 2026-08-11 16:12 flight, which was refused and
+        //  should not have been: 71.1 units against a 78.7-unit AIM POINT, when reaching the
+        //  atmosphere at all costs far less.
+        // ================================================================================
+        BudgetReport flown = ReturnBudget.Report(AtStation(71.1, false, LandingMode.Parachute));
+        Check("reaching the atmosphere costs far less than reaching the aim point",
+              flown.EntryInterfaceUnits < flown.DeorbitUnits * 0.6,
+              flown.EntryInterfaceUnits.ToString("F1") + " vs " + flown.DeorbitUnits.ToString("F1"));
+        Check("...so the capsule refused on 2026-08-11 could in fact have come home",
+              flown.HaveUnits > flown.EntryInterfaceUnits + 5.0,
+              "have " + flown.HaveUnits.ToString("F1") + ", entry needs "
+              + flown.EntryInterfaceUnits.ToString("F1"));
+        Check("...while still being correctly short of a good landing", !flown.Sufficient,
+              flown.Line);
+
+        // A capsule that genuinely cannot get down must still be refused.
+        BudgetReport empty = ReturnBudget.Report(AtStation(2.0, false, LandingMode.Parachute));
+        Check("2 units cannot reach the atmosphere and must be refused",
+              empty.HaveUnits < empty.EntryInterfaceUnits + 5.0,
+              "have " + empty.HaveUnits.ToString("F1") + ", entry needs "
+              + empty.EntryInterfaceUnits.ToString("F1"));
+
+        // ⚠ ALREADY FALLING IS FREE. A capsule whose periapsis is inside the interface needs no
+        // burn to enter, and must never be refused for lacking propellant it does not need.
+        BudgetInputs low = AtStation(1.0, false, LandingMode.Parachute);
+        low.ApoapsisM = 85000.0;
+        low.SmaM = 600000.0 + 20000.0;        // periapsis well under the 40 km interface
+        Check("a capsule already on an entry trajectory needs nothing to enter",
+              ReturnBudget.EntryInterfaceMonoUnits(low) == 0.0,
+              ReturnBudget.EntryInterfaceMonoUnits(low).ToString("F2"));
+
+        // With the S2 attached the de-orbit is on liquid fuel, so the mono gate must not bite.
+        BudgetInputs s2low = AtStation(0.0, true, LandingMode.Parachute);
+        Check("the S2 de-orbit needs no monopropellant to reach the atmosphere either",
+              ReturnBudget.EntryInterfaceMonoUnits(s2low) == 0.0, "");
+
+        // ⛔ A CAPSULE THAT NEEDS NOTHING MUST NOT BE REFUSED FOR NOT HAVING A RESERVE.
+        // The gate in DeorbitOps reads `EntryInterfaceUnits > 0 && Have < Entry + floor`. Without
+        // the first clause an empty tank on an entry trajectory refused itself: "0.0 units cannot
+        // reach the atmosphere; that needs 0.0", three times, on 2026-08-12.
+        BudgetInputs falling = AtStation(0.0, false, LandingMode.Parachute);
+        falling.ApoapsisM = 85000.0;
+        falling.SmaM = 600000.0 + 20000.0;
+        double needFalling = ReturnBudget.EntryInterfaceMonoUnits(falling);
+        Check("a capsule already falling needs nothing to reach the atmosphere",
+              needFalling == 0.0, needFalling.ToString("F2"));
+        Check("...so the gate's first clause is what keeps it from refusing itself",
+              !(needFalling > 0.0), "");
+
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
     }

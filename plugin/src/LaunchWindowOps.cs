@@ -32,9 +32,20 @@ namespace DragonScreen
 
         // ---- F9I's SEEDS. station_ops.ks:72-73, 237, 277. Replace with our own measurements. ----
         /// <summary>Liftoff to insertion, seconds. `stAscentTime`.</summary>
-        public static double AscentTimeS = 315.0;
+        // ⛔ MEASURED, NOT SEEDED. The calibration line asked for these to be updated on FOUR
+        // consecutive flights and nobody did it - 2026-08-11 16:03 flew 281.8 s / 16.29 deg,
+        // 2026-08-12 09:32 flew 281.5 s / 16.24. The seeds said 315.0 / 22.80, which is 12% long in
+        // time and 40% wrong in longitude, and the window is computed FROM these - so every hold was
+        // released at the wrong moment. F9I's warning is exactly this case: "the ascent changed twice
+        // and this number did not follow it".
+        //
+        // Set from the mean of the two clean flights. Re-measure whenever the ascent changes.
+        // Re-measured 2026-08-12 after the S2 took over the insertion: the ascent now runs
+        // ~3 s longer and 0.5 deg further east, because the circularisation happens on the
+        // MVac before separation instead of on the Dracos after it.
+        public static double AscentTimeS = 284.7;
         /// <summary>Longitude the ascent gains, degrees. `stAscentLng`.</summary>
-        public static double AscentLonDeg = 22.8;
+        public static double AscentLonDeg = 16.76;
         /// <summary>Correction the last arrival measured, degrees. `stPhaseBias`.</summary>
         public static double PhaseBiasDeg = 4.418;
         /// <summary>How far behind the station to settle, metres. `stTrailDist`.</summary>

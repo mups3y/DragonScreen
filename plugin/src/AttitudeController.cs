@@ -85,6 +85,100 @@ namespace DragonScreen
         public double MaxStoppingTime = AttitudeCascade.DefaultMaxStoppingTime;
 
         /// <summary>
+        /// Total attitude error beyond which the roll axis is left alone, degrees. PER PHASE.
+        ///
+        /// ---- ⛔ THIS WAS A CONSTANT 5 AND F9I SETS IT TO 45 FOR THE FLIP. ----
+        /// 5 is kOS's DEFAULT, not F9I's value. `BOOSTER.ks:157`, inside the live `Flip1`:
+        ///
+        ///     set steeringmanager:rollcontrolanglerange to 45.
+        ///
+        /// and `Boostback:207` calls `resettodefault()`, so the 45 is scoped to the flip alone -
+        /// which is exactly the phase the crew described as messy.
+        ///
+        /// What 5 did to the flip, measured 2026-08-12: the flip tracks with about 7.8 degrees of
+        /// error, which is just outside 5. So roll control was commanded live while the nose had not
+        /// yet moved, spun the stage up to 43 deg/s chasing the new reference, and then switched OFF
+        /// the instant the slew began - abandoning that rate with only the rate damper to catch it.
+        /// 320 degrees of roll through the flip, and 1330 degrees over the whole recovery.
+        ///
+        /// At 45 the error never leaves the band, so the roll is FLOWN to its reference instead of
+        /// being started and dropped, and the integrator is never reset mid-manoeuvre.
+        ///
+        /// ⚠ NOT APPLIED OUTSIDE THE FLIP. F9I runs the coast, entry and descent at the default,
+        /// so widening it there would be my choice rather than a port. The descent has its own roll
+        /// problem - a limit cycle, `omegaR` swinging +/-30 deg/s - and it is a separate question.
+        /// </summary>
+        public double RollControlRangeDeg = AttitudeCascade.RollControlRangeDeg;
+
+        /// <summary>
+        /// Assumed-available roll torque is multiplied by this. `rolltorquefactor`, per phase.
+        ///
+        /// ---- ⛔ THE OTHER HALF OF THE FLIP ROLL PORT, AND WITHOUT IT THE FIRST HALF REGRESSED. ----
+        /// `Flip1` sets TWO coupled things - `rollcontrolanglerange to 45` AND
+        /// `rolltorquefactor to 3` (`BOOSTER.ks:156-157`). I ported the range alone, which turned
+        /// roll control ON for the whole flip while leaving it as aggressive as pitch and yaw. It
+        /// got worse, measured: flip roll 320 -> 743 degrees, actuation saturated 52.5% -> 78.7%,
+        /// total 1330 -> 1682 degrees over the recovery.
+        ///
+        /// Our cascade computes `actuation = targetTorque / availableTorque`, so scaling the roll
+        /// axis's available torque by 3 divides its commanded actuation by 3 - which is exactly the
+        /// authority reduction a saturated, oscillating axis needs.
+        ///
+        /// ⚠ THE ONE THING HERE I COULD NOT READ FROM SOURCE. kOS ships as a DLL and F9I only
+        /// sets the value, so the direction of the effect is inferred from our own cascade's algebra
+        /// rather than confirmed. If the next flight shows saturation RISING, the sense is inverted
+        /// and this becomes a divide. `b_actR` and the roll travel in `b_omegaRdps` decide it.
+        /// </summary>
+        public double RollTorqueFactor = 1.0;
+
+        /// <summary>
+        /// Pitch and yaw stopping time multiplier. `pitchts`/`yawts`, per phase.
+        ///
+        /// ---- ⛔ F9I SLOWS PITCH AND YAW FOR THE FLIP AND LEAVES ROLL ALONE. WE HAD ONE KNOB. ----
+        /// `BOOSTER.ks:152-153`, inside the live `Flip1`:
+        ///
+        ///     set steeringmanager:pitchts to (steeringmanager:pitchts * 1.5).
+        ///     set steeringmanager:yawts   to (steeringmanager:yawts   * 1.5).
+        ///
+        /// kOS carries a separate time-scale per axis; we collapsed all three into `MaxStoppingTime`,
+        /// so this multiplier had nowhere to live and every axis flew the same aggression. Measured
+        /// on 2026-08-12: through the flip, pitch actuation saturated 45.5% of the time and yaw
+        /// 46.3%, with only 5.3 degrees of average error - a controller slamming to full deflection
+        /// over five degrees is over-driven, and it is the pitch/yaw axes that then couple into roll.
+        ///
+        /// A LONGER stopping time means a lower rate limit and a gentler approach, which is exactly
+        /// what `* 1.5` asks for. Roll is deliberately not scaled here, because Flip1 does not scale
+        /// it either - it uses `rolltorquefactor` instead.
+        /// </summary>
+        public double PitchYawStoppingScale = 1.0;
+
+        /// <summary>
+        /// Roll stopping-time multiplier. `rollts`, per phase.
+        ///
+        /// ---- ⛔ F9I SLOWS THE ROLL AXIS TENFOLD FOR THE DESCENT. WE HAD NOTHING. ----
+        /// `AtmGNC:434`, on the live path, set immediately before it hands over to
+        /// `LandingZoneGuidance`:
+        ///
+        ///     set steeringmanager:rollts to 10.
+        ///
+        /// I previously said I had no citation for a descent roll setting and left it. It was in
+        /// AtmGNC all along; I had been reading `Reentry1`, which has no callers.
+        ///
+        /// What it is worth, measured against F9I's own black box over eight booster flights
+        /// (bb_booster_001..008, the vehicle that lands 0.34-0.56 m from the pad), across the
+        /// identical coast window:
+        ///
+        ///                       roll travel      peak roll rate
+        ///     F9I                 103 deg            3.1 deg/s
+        ///     ours (08-12)        240 deg           24.3 deg/s
+        ///
+        /// A longer stopping time lowers the rate limit the roll axis is allowed to command, which
+        /// is exactly the difference between those two rows. Applied from grid-fin deploy onward,
+        /// which is where AtmGNC sets it.
+        /// </summary>
+        public double RollStoppingScale = 1.0;
+
+        /// <summary>
         /// Throttle for THIS vehicle, 0-1. Written into its own FlightCtrlState every tick while
         /// attached - including while zero, so a released vehicle actually stops rather than keeping
         /// whatever it had.
@@ -189,6 +283,10 @@ namespace DragonScreen
             Detach();
             actuation = Vector3d.zero;
             MaxStoppingTime = AttitudeCascade.DefaultMaxStoppingTime;
+            RollControlRangeDeg = AttitudeCascade.RollControlRangeDeg;
+            RollTorqueFactor = 1.0;
+            PitchYawStoppingScale = 1.0;
+            RollStoppingScale = 1.0;
             pitchPi.ResetI(); yawPi.ResetI(); rollPi.ResetI();
             pitchRate.ResetI(); yawRate.ResetI(); rollRate.ResetI();
         }
@@ -234,8 +332,25 @@ namespace DragonScreen
                 // NEGATIVE Z is forward - verified at three MechJeb sites, see AutoPilot's note.
                 if (UllageFore > 0.001 || UllageFore < -0.001)
                     s.Z = -Mathf.Clamp((float)UllageFore, -1f, 1f);
+                // ---- ⛔ NEGATED, AND THE NEGATION IS MEASURED. ----
+                // Every axis here needs exactly one sign flip between our body convention and
+                // KSP's FlightCtrlState, and starboard was the only one with none: fore has it in
+                // the write below, top carries it in `DistT = Dot(to, -rt.forward)`, starboard had
+                // it nowhere. So commanding starboard moved the capsule to PORT.
+                //
+                // Measured on 2026-08-12 with the docking controller's own inputs, recorded for the
+                // first time. Over 965 rows of docking, per axis, "did the commanded translation
+                // shrink its own offset?":
+                //
+                //     FORE      shrank 766, grew 160   OK
+                //     STARBOARD shrank 189, grew 739   INVERTED
+                //     TOP       shrank 528, grew 382   OK
+                //
+                // and the trace is unambiguous - DistS 29.9 -> 86.7 -> 181.6 m while transX held
+                // +0.25 then +0.50. The docking has never once worked, on any flight, because of
+                // this line.
                 if (TranslateX > 0.001 || TranslateX < -0.001)
-                    s.X = Mathf.Clamp((float)TranslateX, -1f, 1f);
+                    s.X = -Mathf.Clamp((float)TranslateX, -1f, 1f);
                 if (TranslateY > 0.001 || TranslateY < -0.001)
                     s.Y = Mathf.Clamp((float)TranslateY, -1f, 1f);
                 if (active) DriveInner(s);
@@ -295,10 +410,16 @@ namespace DragonScreen
             Vector3d torque = AvailableTorque(v);
 
             // ---- CASCADE: error -> rate -> torque -> actuation ----
+            // The roll axis may be told it has more torque than it does - see RollTorqueFactor.
+            Vector3d rollScaled = new Vector3d(torque.x, torque.y * RollTorqueFactor, torque.z);
+
+            // Per-axis time scale: pitch (x) and yaw (z) may be slowed together, roll (y) is not.
+            double tsPY = MaxStoppingTime * PitchYawStoppingScale;
+            double tsR  = MaxStoppingTime * RollStoppingScale;
             Vector3d maxOmega = new Vector3d(
-                AttitudeCascade.MaxOmega(torque.x, moi.x, MaxStoppingTime),
-                AttitudeCascade.MaxOmega(torque.y, moi.y, MaxStoppingTime),
-                AttitudeCascade.MaxOmega(torque.z, moi.z, MaxStoppingTime));
+                AttitudeCascade.MaxOmega(rollScaled.x, moi.x, tsPY),
+                AttitudeCascade.MaxOmega(rollScaled.y, moi.y, tsR),
+                AttitudeCascade.MaxOmega(rollScaled.z, moi.z, tsPY));
 
             Vector3d targetOmega = Vector3d.zero;
             targetOmega[0] = pitchRate.Update(-phi[0], 0.0, maxOmega[0], dt);
@@ -309,7 +430,7 @@ namespace DragonScreen
             // Outside 5 degrees of total error the roll axis is commanded to zero and its integral
             // is reset. Rolling mid-slew wastes authority and couples the axes; get the nose there,
             // then worry about which way up.
-            if (Math.Abs(phiTotal) > AttitudeCascade.RollControlRangeDeg * Mathf.Deg2Rad)
+            if (Math.Abs(phiTotal) > RollControlRangeDeg * Mathf.Deg2Rad)
             {
                 targetOmega[1] = 0.0;
                 rollRate.ResetI();
@@ -317,11 +438,11 @@ namespace DragonScreen
 
             Vector3d targetTorque = Vector3d.zero;
             targetTorque[0] = pitchPi.Update(omega[0], targetOmega[0], moi[0], torque[0], dt);
-            targetTorque[1] = rollPi.Update(omega[1], targetOmega[1], moi[1], torque[1], dt);
+            targetTorque[1] = rollPi.Update(omega[1], targetOmega[1], moi[1], rollScaled.y, dt);
             targetTorque[2] = yawPi.Update(omega[2], targetOmega[2], moi[2], torque[2], dt);
 
             for (int i = 0; i < 3; i++)
-                actuation[i] = AttitudeCascade.Actuation(targetTorque[i], torque[i], actuation[i]);
+                actuation[i] = AttitudeCascade.Actuation(targetTorque[i], rollScaled[i], actuation[i]);
 
             Phi = phi; TargetOmega = targetOmega; Omega = omega;
             TargetTorque = targetTorque; Actuation = actuation; Torque = torque; Moi = moi;

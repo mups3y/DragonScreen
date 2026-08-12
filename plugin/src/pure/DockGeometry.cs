@@ -106,5 +106,38 @@ namespace DragonScreen
         {
             return distanceToStandoffM < StandoffToleranceM;
         }
+
+        /// <summary>
+        /// Close enough to the gate to start down the corridor.
+        ///
+        /// ---- ⛔ THE LEG THIS TEST EXISTS FOR WAS MISSING, AND IT DEADLOCKED THE DOCKING. ----
+        /// The stage machine was `if (AtStandoff) Axial; else ToGate`, with the gate as the target
+        /// in every non-Axial case. So the capsule flew to the gate and then held it - because the
+        /// gate WAS its target - while `AtStandoff` tested a point 20 m further in that nothing was
+        /// ever going to take it to.
+        ///
+        /// Measured 2026-08-12, 1904 rows, every one of them `ToGate`: the capsule parked at the
+        /// gate and oscillated between 31 and 48 m for six minutes across four attempts, holding
+        /// its offsets to within 3 m the whole time. The controller was flying well. There was
+        /// simply no instruction to go in.
+        ///
+        /// The geometry: `keepOutR` measured 31 m, `GateDistanceM` puts the gate at the sphere's
+        /// exit plus `KeepOutPadM` (20 m) - about 45 m - and `StandoffM` is 25 m. 45 minus 25 is
+        /// 20 m, outside `StandoffToleranceM` of 12. The deadlock was structural, not marginal.
+        /// </summary>
+        public static bool AtGate(double distanceToGateM)
+        {
+            return distanceToGateM < GateToleranceM;
+        }
+
+        /// <summary>
+        /// How close counts as having arrived at the gate, metres.
+        ///
+        /// Wider than <see cref="StandoffToleranceM"/> on purpose: the gate is a waypoint to leave,
+        /// not a position to hold, and the capsule arrives there with the approach's residual drift
+        /// still being nulled. Requiring the same precision as the standoff would just move the
+        /// deadlock 20 m further out.
+        /// </summary>
+        public const double GateToleranceM = 15.0;
     }
 }

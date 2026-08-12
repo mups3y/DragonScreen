@@ -268,6 +268,14 @@ namespace DragonScreen
                     int n = Decouple(new PartMatch(VehicleParts.IsTrunk));
                     Debug.Log(Tag + "trunk jettison commanded (" + n + " decoupler(s)) at "
                               + off.ToString("F0") + " deg off retrograde");
+                    // ⚠ NOTHING FIRED IS ITS OWN FAILURE AND MUST BE SAID HERE. Reporting it
+                    // 1.5 s later as "entry attitude cannot be held" sent the 2026-08-11 debug at the
+                    // steering, which was holding 0 deg off retrograde perfectly. The attitude was
+                    // never the problem; no decoupler answered.
+                    if (n == 0)
+                        Debug.LogError(Tag + "trunk jettison found NO decoupler to fire - the trunk "
+                                     + "part is attached but exposes neither a 'decouple' event nor "
+                                     + "a 'decouple' action");
                 }
                 sepFiredAt = now;
                 return;
@@ -276,7 +284,9 @@ namespace DragonScreen
             if (now - sepFiredAt < SepSettleS) { Note = "SEPARATION - clearing"; return; }
 
             if (HasPart(new PartMatch(VehicleParts.IsTrunk)))
-                Debug.LogError(Tag + "TRUNK WILL NOT JETTISON - entry attitude cannot be held");
+                Debug.LogError(Tag + "TRUNK WILL NOT JETTISON - it is still attached "
+                             + SepSettleS.ToString("F1") + " s after the decouple command. The heat "
+                             + "shield cannot be held forward of a trunk.");
 
             if (HasPart(new PartMatch(VehicleParts.IsSecondStage)))
             {
@@ -458,12 +468,26 @@ namespace DragonScreen
             // calibration history keeps calling this out by eye; say it instead.
             if (EntryGuidance.FlewOpenLoop(mem))
             {
-                double raise = mem.WorstErrorM / Deorbit.AimGain;
-                Debug.LogWarning(Tag + "ENTRY FLEW OPEN LOOP - the lift command never went negative "
-                                 + "(worst deficit " + (mem.WorstErrorM / 1000.0).ToString("F1")
-                                 + " km). Raise the aim for this mode by about "
-                                 + raise.ToString("F0") + " m: " + Aim().ToString("F0") + " -> "
-                                 + (Aim() + raise).ToString("F0") + ".");
+                // ---- ⛔ CALIBRATE ON WHERE IT LANDED, NOT ON THE WORST TRANSIENT. ----
+                // This divided `WorstErrorM` by the aim gain, and `WorstErrorM` accumulates
+                // `leadErr` - the RATE-COMPENSATED error, which looks far ahead and spikes while the
+                // prediction is still settling. On 2026-08-12 it reported a "worst deficit" of
+                // 407.7 km and advised raising the aim 270 700 -> 879 219 m, a factor of 3.2 on a
+                // constant F9I confirmed by flight. The capsule's actual miss never exceeded 46 km
+                // and settled at 9.2; it landed 9.6 km out.
+                //
+                // Acting on that advice would have thrown the entry hundreds of kilometres long.
+                // The number to calibrate against is the one the flight ended with.
+                double settled = (MissM >= 0.0) ? MissM : mem.WorstErrorM;
+                double raise = settled / Deorbit.AimGain;
+                Debug.LogWarning(Tag + "ENTRY FLEW OPEN LOOP - the lift command never went negative, "
+                                 + "so it was short the whole way and this miss is AIM error, not "
+                                 + "guidance error. Settled miss " + (settled / 1000.0).ToString("F1")
+                                 + " km (worst lead-compensated transient was "
+                                 + (mem.WorstErrorM / 1000.0).ToString("F1")
+                                 + " km - do NOT calibrate on that). Raise the aim for this mode by "
+                                 + "about " + raise.ToString("F0") + " m: " + Aim().ToString("F0")
+                                 + " -> " + (Aim() + raise).ToString("F0") + ".");
             }
             else
             {
@@ -734,16 +758,38 @@ namespace DragonScreen
         private static int Cut(PartMatch m) { return DoEvent(m, "cut chute"); }
 
         /// <summary>
-        /// Fire a named part event on every matching part.
+        /// Fire a named capability on every matching part - as an EVENT if the part offers one, and
+        /// otherwise as an ACTION.
         ///
-        /// Matched on the event's GUI NAME rather than a module type, because the modules differ:
-        /// the trunk is a `ModuleTundraDecoupler` and the Dragon decoupler a stock `ModuleDecouple`,
-        /// and both answer to "decouple". `falcon-detect-by-capability` again - ask what it can do.
+        /// Matched on the GUI NAME rather than a module type, because the modules differ: the trunk
+        /// is a `ModuleTundraDecoupler` and the Dragon decoupler a stock `ModuleDecouple`, and both
+        /// answer to "decouple". `falcon-detect-by-capability` again - ask what it can do.
+        ///
+        /// ---- ⛔ AN INACTIVE EVENT IS NOT A MISSING ONE, AND THE ACTION WORKS EITHER WAY. ----
+        /// On 2026-08-11 this scanned `pm.Events` only and logged
+        /// `trunk jettison commanded (0 decoupler(s))` - a jettison that never happened - followed
+        /// 1.5 s later by `TRUNK WILL NOT JETTISON`. The capsule then sat in orbit behind a spent
+        /// stage for the 22 minutes to the end of the session.
+        ///
+        /// The partdump settles what the part offers, and it is BOTH:
+        ///     MODULE: ModuleTundraDecoupler
+        ///        events : [decouple]
+        ///        actions: [decouple]
+        /// So the name matched and the part was in `DockedSide.Ours` - `HasPart` found it with the
+        /// same list one line earlier. The only filter left between the two is `ev.active`, which
+        /// this skipped in silence. Hence both changes below: the skip is now COUNTED AND REPORTED
+        /// rather than swallowed, so the next flight names the cause outright instead of leaving it
+        /// to be inferred.
+        ///
+        /// And the fallback is a port, not a guess. F9I never used events for this at all:
+        /// `dragon_deorbit.ks:892` is `DgDoAction(dgTRUNK, "ModuleTundraDecoupler", "decouple")`,
+        /// and `DgDoAction:94` is `if dgM:hasaction(dgAct) { dgM:doaction(dgAct, true) }`. An action
+        /// carries no `active` flag, which is exactly why the proven path never hit this.
         /// </summary>
         private static int DoEvent(PartMatch m, string eventName)
         {
             if (ship == null) return 0;
-            int n = 0;
+            int n = 0, inactive = 0;
             List<Part> ours = DockedSide.Ours(ship);
             for (int i = 0; i < ours.Count; i++)
             {
@@ -758,8 +804,45 @@ namespace DragonScreen
                         if (ev == null || ev.guiName == null) continue;
                         if (!string.Equals(ev.guiName, eventName, StringComparison.OrdinalIgnoreCase))
                             continue;
-                        if (!ev.active) continue;
+                        if (!ev.active) { inactive++; continue; }
                         ev.Invoke();
+                        n++;
+                    }
+                }
+            }
+            if (n > 0) return n;
+            if (inactive > 0)
+                Debug.LogWarning(Tag + "'" + eventName + "' matched " + inactive + " event(s) but "
+                               + "every one of them was inactive - trying the action instead");
+            return DoAction(m, eventName);
+        }
+
+        /// <summary>
+        /// The same search over `pm.Actions`. See <see cref="DoEvent"/> for why both exist.
+        ///
+        /// `KSPActionParam` is constructed exactly as kOS's `doaction(name, true)` does: the group is
+        /// None because we are not staging, and the state is Active because we are asking for the
+        /// action to happen, not to be undone.
+        /// </summary>
+        private static int DoAction(PartMatch m, string actionName)
+        {
+            if (ship == null) return 0;
+            int n = 0;
+            List<Part> ours = DockedSide.Ours(ship);
+            for (int i = 0; i < ours.Count; i++)
+            {
+                Part p = ours[i];
+                if (!m(p.name)) continue;
+                for (int mod = 0; mod < p.Modules.Count; mod++)
+                {
+                    PartModule pm = p.Modules[mod];
+                    for (int a = 0; a < pm.Actions.Count; a++)
+                    {
+                        BaseAction ac = pm.Actions[a];
+                        if (ac == null || ac.guiName == null) continue;
+                        if (!string.Equals(ac.guiName, actionName, StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        ac.Invoke(new KSPActionParam(KSPActionGroup.None, KSPActionType.Activate));
                         n++;
                     }
                 }

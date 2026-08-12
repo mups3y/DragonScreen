@@ -166,13 +166,13 @@ namespace DragonScreen
                 || c == PanelCommand.Breakout;
         }
 
-        /// <summary>True for the cabin emergencies, which stock KSP cannot represent at all.</summary>
-        public static bool IsInert(PanelCommand c)
-        {
-            return c == PanelCommand.DepressResponse
-                || c == PanelCommand.SuppressFire
-                || c == PanelCommand.FireResponse;
-        }
+        // ⛔ `IsInert` DELETED 2026-08-12. It listed DepressResponse, SuppressFire and
+        // FireResponse as having nothing behind them, which stopped being true the day
+        // `VehicleSystems` modelled the cabin - but the list outlived the fact and kept three
+        // working controls unreachable. If a control ever genuinely has nothing behind it, the
+        // honest answer is not to add it back here: it is that `FlightCommands` returns false and
+        // the dash goes red with the reason, which is the refusal path everything else uses.
+
     }
 
     /// <summary>What a press did, so the caller knows which way to light the dash.</summary>

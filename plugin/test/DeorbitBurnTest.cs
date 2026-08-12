@@ -26,6 +26,9 @@ public static class DeorbitBurnTest
         s.PeriapsisM = periM;
         s.PeriapsisRateMps = peRate;
         s.BestMissM = 9.9e12;
+        // A fixture that leaves the tank at zero is a fixture that is out of propellant, and every
+        // test built on it then asserts the wrong stop reason. Give the burn something to burn.
+        s.MonoUnits = 100.0;
         return s;
     }
 
@@ -89,6 +92,21 @@ public static class DeorbitBurnTest
         DeorbitState dry = Burning(200000.0, 50000.0, -10.0);
         dry.UsingS2 = true; dry.S2FuelUnits = 1.0;
         Check("an empty S2 ends the burn", DeorbitBurn.Complete(dry, out why), why);
+
+        DeorbitState dryMono = Burning(200000.0, 50000.0, -10.0);
+        dryMono.UsingS2 = false; dryMono.MonoUnits = 1.0;
+        DeorbitBurn.Complete(dryMono, out why);
+        Check("Dracos out of monopropellant end the burn, and say so",
+              why == "ABORTED - out of monopropellant", why);
+        DeorbitState wetMono = Burning(200000.0, 50000.0, -10.0);
+        wetMono.UsingS2 = false; wetMono.MonoUnits = DeorbitBurn.MonoFloorUnits + 0.1;
+        Check("just above the floor is still a burn",
+              !DeorbitBurn.Complete(wetMono, out why), why);
+        // ⚠ The S2 burns liquid fuel, so an empty MONO tank must not stop an S2 de-orbit.
+        DeorbitState s2NoMono = Burning(200000.0, 50000.0, -10.0);
+        s2NoMono.UsingS2 = true; s2NoMono.S2FuelUnits = 500.0; s2NoMono.MonoUnits = 0.0;
+        Check("an S2 de-orbit does not care that the mono tank is empty",
+              !DeorbitBurn.Complete(s2NoMono, out why), why);
 
         DeorbitState runaway = Burning(200000.0, 50000.0, -10.0);
         runaway.ElapsedS = DeorbitBurn.MaxBurnS + 1.0;

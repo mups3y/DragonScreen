@@ -199,7 +199,8 @@ namespace DragonScreen
             // message is "Focus -> Booster for landing. The upper stage circularizes on its own."
             // Now that the controller is per-vehicle and the throttle goes through each vessel's own
             // control state, we do the same.
-            if (BoosterRecovery.Active) BoosterRecovery.Tick();
+            // ...and while it is settling on the pad, when Active is already false. See Settling.
+            if (BoosterRecovery.Active || BoosterRecovery.Settling) BoosterRecovery.Tick();
 
             if (!Engaged) return;
 
@@ -403,6 +404,18 @@ namespace DragonScreen
                 // A guard that fires silently is worse than no guard: it converts a loud failure
                 // into a quiet lie.
                 FlightInputHandler.state.mainThrottle = 0f;
+
+                // ---- ⛔ SEPARATE HERE, BECAUSE THIS BRANCH RETURNS. ----
+                // The S2 now finishes the insertion and is shed on the SAME tick the ascent
+                // completes, and the generic `if (c.SeparateS2)` handler lives sixty lines BELOW
+                // this `return`. Left there the command would have been computed, logged and
+                // silently dropped - the capsule would reach orbit still bolted to a spent second
+                // stage, every flight, with nothing in the log to say why.
+                //
+                // Exactly the failure CLAUDE.md records twice: "after fixing a state machine,
+                // re-trace what each branch RENDERS, not just which branch is taken."
+                if (c.SeparateS2) SeparateSecondStage(v);
+
                 // Measure what this ascent actually did, so the NEXT launch window is fitted to the
                 // ascent we fly rather than to the one F9I flew. See LaunchWindowOps - reading these
                 // from a constant is precisely what makes the window drift.

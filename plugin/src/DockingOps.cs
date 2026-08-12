@@ -29,10 +29,21 @@ namespace DragonScreen
         Idle = 0,
         /// <summary>No usable pair of ports. Says so rather than flying at the hull.</summary>
         NoPort,
+        /// <summary>Range raised, waiting for KSP to load the station so its ports can be read.</summary>
+        AwaitingTarget,
         /// <summary>Flying to the gate - the point where the port axis leaves the keep-out sphere.</summary>
         ToGate,
         /// <summary>The direct path cuts the hull; sliding round the sphere instead.</summary>
         Rounding,
+        /// <summary>
+        /// At the gate and running IN along the port axis to the standoff.
+        ///
+        /// This is the real vehicle's approach-corridor transit: Crew Dragon holds outside the
+        /// Keep Out Sphere and then enters along a defined corridor to a close hold, rather than
+        /// closing on the station from wherever it happens to be. It is also the leg whose absence
+        /// deadlocked every docking attempt up to 2026-08-12 - see DockGeometry.AtGate.
+        /// </summary>
+        Corridor,
         /// <summary>Holding at the standoff, lined up on the axis.</summary>
         Standoff,
         /// <summary>Straight down the port axis.</summary>
@@ -48,6 +59,18 @@ namespace DragonScreen
         public static string Note = "-";
         public static double RangeToPortM, ClosingMps, AxisErrorDeg;
 
+        /// <summary>
+        /// The controller's INPUTS, for the recorder. Offsets and relative velocity on the capsule's
+        /// own axes, exactly as `DockControl.Solve` sees them.
+        ///
+        /// ⛔ THESE EXIST BECAUSE THE OUTPUTS ALONE COULD NOT SETTLE THE 2026-08-12 FAILURE.
+        /// `x_transX` was railed at -0.50 for 213 seconds while the range grew 197 m -> 2943 m, and
+        /// with only the commands recorded there was no way to tell an inverted axis from a correct
+        /// axis chasing a real and growing error. One flight with these decides it: if a command is
+        /// steadily non-zero while ITS OWN offset grows in the same direction, that axis is inverted.
+        /// </summary>
+        public static double DistF, DistS, DistT, VelF, VelS, VelT;
+
         private static Vessel ship, station;
 
         // ---- ⚠ THE PIDs LIVE HERE, NOT INSIDE THE SOLVER. ----
@@ -57,6 +80,26 @@ namespace DragonScreen
         private static readonly Pid pidF = new Pid();
         private static readonly Pid pidS = new Pid();
         private static readonly Pid pidT = new Pid();
+        // ---- F9I's LOAD RANGES FOR THE TARGET. `station_ops.ks:1147-1150`, verbatim. ----
+        // ⛔ AN UNLOADED VESSEL HAS NO PARTS, SO IT HAS NO PORTS. KSP represents anything past the
+        // load distance as a ProtoVessel: `station.parts` is EMPTY, every port scan returns nothing,
+        // and the honest-sounding refusal "no free docking port on the station" is simply false. The
+        // 2026-08-11 partdump shows the station carrying several free `ModuleDockingNode`s at the
+        // moment we said it had none - we were 10 km out and could not see any of them.
+        //
+        // F9I raises the ranges on the TARGET and then waits for `target:loaded` before reading a
+        // single port, and `StClosestPort:150` opens by refusing outright if it is still not loaded.
+        // Note `load` is 10050 m - fifty metres past the 10 km direct-approach gate, so the station
+        // is in memory by the time the approach hands over, not at the instant it arrives.
+        private const double TargetUnloadM = 25000.0;
+        private const double TargetLoadM   = 10050.0;
+        private const double TargetUnpackM =  2100.0;
+        private const double TargetPackM   =  2250.0;
+        /// <summary>How long to wait for the load before giving up. F9I's `stLoadT`, 30 s.</summary>
+        private const double TargetLoadTimeoutS = 30.0;
+
+        private static double loadWaitStartedAt;
+
         private static ModuleDockingNode ourPort, theirPort;
         private static double keepOutR;
         private static double startedAt;
@@ -73,6 +116,23 @@ namespace DragonScreen
             ship = v; station = target;
             startedAt = Planetarium.GetUniversalTime();
 
+            RaiseTargetRange(target);
+
+            if (!target.loaded)
+            {
+                // Not a refusal - a wait. See RaiseTargetRange.
+                Engaged = true;
+                Stage = DockStage.AwaitingTarget;
+                loadWaitStartedAt = startedAt;
+                Note = "WAITING FOR THE STATION TO LOAD";
+                Debug.Log(Tag + "docking: '" + target.vesselName + "' is "
+                          + (Vector3d.Distance(v.CoM, target.CoM) / 1000.0).ToString("F1")
+                          + " km away and not loaded - its ports cannot be read yet. Range raised to "
+                          + (TargetLoadM / 1000.0).ToString("F1") + " km, waiting up to "
+                          + TargetLoadTimeoutS.ToString("F0") + " s.");
+                return;
+            }
+
             if (!PickPorts())
             {
                 Stage = DockStage.NoPort;
@@ -82,6 +142,8 @@ namespace DragonScreen
             }
 
             keepOutR = MeasureKeepOut(station);
+            bestRangeM = double.MaxValue; bestRangeAt = 0.0;
+            inCorridor = false;
             Engaged = true;
             Stage = DockStage.ToGate;
             Debug.Log(Tag + "docking engaged - '" + ourPort.part.partInfo.title + "' to '"
@@ -101,6 +163,7 @@ namespace DragonScreen
         public static void Reset()
         {
             Engaged = false; Stage = DockStage.Idle; Note = "-";
+            inCorridor = false;
             ship = null; station = null; ourPort = null; theirPort = null;
             RangeToPortM = 0.0; ClosingMps = 0.0; AxisErrorDeg = 0.0;
         }
@@ -116,8 +179,23 @@ namespace DragonScreen
             ourPort = null; theirPort = null;
             List<ModuleDockingNode> ours = OpenPorts(ship);
             List<ModuleDockingNode> theirs = OpenPorts(station);
-            if (ours.Count == 0) { Note = "no free docking port on this vehicle"; return false; }
-            if (theirs.Count == 0) { Note = "no free docking port on the station"; return false; }
+            // ---- ⛔ SAY WHAT WAS ACTUALLY FOUND, NOT JUST THAT NOTHING WAS. ----
+            // On 2026-08-11 this refused four times with "no free docking port on the station" and
+            // that sentence is unactionable: it cannot distinguish a station with no ports, a
+            // station whose ports are all occupied, one whose shields are shut, or a node type we
+            // cannot mate with. The next flight should not have to guess which.
+            if (ours.Count == 0)
+            {
+                Note = "no free docking port on this vehicle - " + Census(ship);
+                Debug.LogWarning(Tag + Note);
+                return false;
+            }
+            if (theirs.Count == 0)
+            {
+                Note = "no free docking port on the station - " + Census(station);
+                Debug.LogWarning(Tag + Note);
+                return false;
+            }
 
             double best = double.MaxValue;
             for (int i = 0; i < ours.Count; i++)
@@ -139,6 +217,41 @@ namespace DragonScreen
             return true;
         }
 
+        /// <summary>
+        /// Every docking node on a vessel and why each one was or was not usable.
+        ///
+        /// Printed only on a refusal, so it costs nothing on a normal approach and turns the one
+        /// message that matters from "no" into "no, because".
+        /// </summary>
+        private static string Census(Vessel v)
+        {
+            if (v == null) return "no vessel";
+            int total = 0, docked = 0, shielded = 0, noTransform = 0, free = 0;
+            System.Text.StringBuilder types = new System.Text.StringBuilder();
+
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                List<ModuleDockingNode> ns = v.parts[i].Modules.GetModules<ModuleDockingNode>();
+                for (int m = 0; m < ns.Count; m++)
+                {
+                    ModuleDockingNode n = ns[m];
+                    total++;
+                    if (n.otherNode != null) { docked++; continue; }
+                    if (n.nodeTransform == null) { noTransform++; continue; }
+                    // A shielded port reports itself Disabled until its cover is opened.
+                    if (!string.IsNullOrEmpty(n.state)
+                        && n.state.ToLowerInvariant().Contains("disabled")) { shielded++; continue; }
+                    free++;
+                    if (types.Length > 0) types.Append("/");
+                    types.Append(string.IsNullOrEmpty(n.nodeType) ? "?" : n.nodeType);
+                }
+            }
+            return total + " node(s): " + docked + " already docked, " + shielded
+                 + " shielded or disabled, " + noTransform + " with no transform, " + free
+                 + " free" + (types.Length > 0 ? " (" + types + ")" : "")
+                 + (shielded > 0 ? " - open the shields and try again" : "");
+        }
+
         private static List<ModuleDockingNode> OpenPorts(Vessel v)
         {
             List<ModuleDockingNode> open = new List<ModuleDockingNode>();
@@ -149,6 +262,10 @@ namespace DragonScreen
                 {
                     if (ns[m].otherNode != null) continue;              // already docked
                     if (ns[m].nodeTransform == null) continue;
+                    // ⚠ A SHIELDED PORT IS NOT A FREE PORT. It reports Disabled until its cover
+                    // opens, and driving a capsule onto one is a collision with a closed hatch.
+                    if (!string.IsNullOrEmpty(ns[m].state)
+                        && ns[m].state.ToLowerInvariant().Contains("disabled")) continue;
                     open.Add(ns[m]);
                 }
             }
@@ -176,13 +293,141 @@ namespace DragonScreen
 
         // ------------------------------------------------------------------ the loop
 
+        /// <summary>Best range seen this approach, and when it was last improved on.</summary>
+        private static double bestRangeM = double.MaxValue, bestRangeAt;
+
+        /// <summary>Committed to the approach corridor. See the latch note in Tick.</summary>
+        private static bool inCorridor;
+
+        /// <summary>Seconds the range may fail to improve before the docking gives up.</summary>
+        private const double NoProgressLimitS = 60.0;
+
+        /// <summary>Range must beat the best by this to count as progress, metres.</summary>
+        private const double ProgressEpsilonM = 1.0;
+
+        /// <summary>
+        /// True when the docking has stopped making progress and has been disengaged.
+        ///
+        /// Measured against the BEST range seen, not the previous tick, so a momentary drift while
+        /// rounding the keep-out sphere does not trip it - only a sustained failure to get closer.
+        /// </summary>
+        private static bool DivergedTooLong()
+        {
+            double now = Planetarium.GetUniversalTime();
+            double range = Vector3d.Distance(ship.CoM, station.CoM);
+
+            if (range < bestRangeM - ProgressEpsilonM)
+            {
+                bestRangeM = range;
+                bestRangeAt = now;
+                return false;
+            }
+            if (bestRangeAt <= 0.0) { bestRangeAt = now; return false; }
+            if (now - bestRangeAt < NoProgressLimitS) return false;
+
+            Note = "GAVE UP - no closer than " + bestRangeM.ToString("F0") + " m in "
+                 + NoProgressLimitS.ToString("F0") + " s; now " + range.ToString("F0") + " m";
+            Debug.LogError(Tag + "docking " + Note + ". Disengaging so the approach is not spent "
+                         + "flying the wrong way. Check x_transX/Y/Z against x_dkDistS/T/F in the "
+                         + "recording - a command that holds one sign while its own offset grows "
+                         + "is an inverted axis.");
+            Disengage("no progress");
+            return true;
+        }
+
+        /// <summary>
+        /// Ask KSP to keep the station in memory out to the docking range. F9I `station_ops:1147`.
+        ///
+        /// ⚠ ORBIT SITUATION ONLY. These are the ranges that apply where we dock; raising the
+        /// landed or flying ones would keep station geometry loaded in situations that have no use
+        /// for it and every frame cost of it. `falcon-physics-range-clamp` is the standing warning
+        /// that KSP does not always honour a raised range - it clamped the booster's 1500 km request
+        /// to about 300 km on four measured flights - so the wait below has a timeout and a refusal
+        /// rather than an assumption that the ask worked.
+        /// </summary>
+        private static void RaiseTargetRange(Vessel target)
+        {
+            if (target == null) return;
+            VesselRanges r = target.vesselRanges;
+            if (r == null) return;
+            r.orbit.unload = (float)TargetUnloadM;
+            r.orbit.load   = (float)TargetLoadM;
+            r.orbit.unpack = (float)TargetUnpackM;
+            r.orbit.pack   = (float)TargetPackM;
+            target.vesselRanges = r;
+        }
+
+        /// <summary>
+        /// Hold while KSP loads the station, then pick the ports. F9I's `until target:loaded` loop.
+        ///
+        /// Nothing is flown here on purpose: the capsule is co-moving and the crew asked to dock, not
+        /// to close. Timing out is a refusal that names the real reason, which is the whole point of
+        /// the change - "no free docking port on the station" was a true sentence about an empty part
+        /// list and a false one about the station.
+        /// </summary>
+        private static void AwaitTarget()
+        {
+            double waited = Planetarium.GetUniversalTime() - loadWaitStartedAt;
+
+            if (station.loaded)
+            {
+                if (!PickPorts())
+                {
+                    Stage = DockStage.NoPort;
+                    Engaged = false;
+                    Debug.LogWarning(Tag + "docking refused - " + Note);
+                    return;
+                }
+                keepOutR = MeasureKeepOut(station);
+                Stage = DockStage.ToGate;
+                Debug.Log(Tag + "docking engaged - '" + ourPort.part.partInfo.title + "' to '"
+                          + theirPort.part.partInfo.title + "', keep-out " + keepOutR.ToString("F0")
+                          + " m (station loaded after " + waited.ToString("F1") + " s)");
+                return;
+            }
+
+            if (waited > TargetLoadTimeoutS)
+            {
+                double km = Vector3d.Distance(ship.CoM, station.CoM) / 1000.0;
+                Note = "REFUSED - the station is still not loaded after "
+                     + TargetLoadTimeoutS.ToString("F0") + " s at " + km.ToString("F1") + " km";
+                Stage = DockStage.NoPort;
+                Engaged = false;
+                Debug.LogWarning(Tag + "docking refused - " + Note
+                               + ". Its ports cannot be read from here. Close to inside "
+                               + (TargetLoadM / 1000.0).ToString("F1") + " km first.");
+                return;
+            }
+
+            Note = "WAITING FOR THE STATION - " + waited.ToString("F0") + " / "
+                 + TargetLoadTimeoutS.ToString("F0") + " s";
+        }
+
         public static void Tick()
         {
             if (!Engaged) return;
-            if (ship == null || station == null || ourPort == null || theirPort == null
-                || ship.state == Vessel.State.DEAD)
+            if (ship == null || station == null || ship.state == Vessel.State.DEAD)
             {
-                Disengage("vessel or port lost");
+                Disengage("vessel lost");
+                return;
+            }
+
+            if (Stage == DockStage.AwaitingTarget) { AwaitTarget(); return; }
+
+            // ---- ⛔ A DOCKING THAT IS NOT CLOSING IS NOT DOCKING. BOUND IT. ----
+            // On 2026-08-12 this held the vehicle for 213 seconds while the range went 197 m to
+            // 2943 m and the tank went 36 units to zero, and nothing stopped it - the crew did, by
+            // cancelling. Whatever the underlying fault turns out to be, a controller allowed to
+            // run indefinitely while its own objective gets monotonically worse is its own bug, and
+            // it is the one that costs the mission.
+            //
+            // Same shape as the phasing lap cap: not a tuning knob, a bound. It gives up and says
+            // why, leaving the capsule co-moving with its propellant, which is a recoverable state.
+            if (DivergedTooLong()) return;
+
+            if (ourPort == null || theirPort == null)
+            {
+                Disengage("port lost");
                 return;
             }
 
@@ -217,6 +462,19 @@ namespace DragonScreen
                 Stage = DockStage.Axial;
                 target = tgtPos;
                 Note = "AXIAL - " + RangeToPortM.ToString("F1") + " m";
+            }
+            // ---- THE CORRIDOR. Arrive at the gate, then run IN along the port axis. ----
+            // ⚠ LATCHED. Without the latch the capsule leaves the gate, immediately stops being
+            // `AtGate`, reverts to targeting the gate, and oscillates between the two - which is a
+            // more animated version of the deadlock it replaces. Once committed to the corridor the
+            // only ways out are reaching the standoff, docking, or the no-progress guard.
+            else if (inCorridor || DockGeometry.AtGate((gate - ourPos).magnitude))
+            {
+                inCorridor = true;
+                Stage = DockStage.Corridor;
+                target = standoff;
+                Note = "CORRIDOR - " + (standoff - ourPos).magnitude.ToString("F0")
+                     + " m to the standoff";
             }
             else
             {
@@ -282,8 +540,19 @@ namespace DragonScreen
                                                   DockGeometry.StandoffToleranceM * 0.25, elapsed);
             Note += "  " + c.Note;
 
-            // Nose down the port axis, always: -axis is "facing the port".
-            AttitudeController.Ascent.SteerTo(ship, -axis, Vector3d.zero);
+            // ---- Nose down the port axis, always: -axis is "facing the port". ----
+            // ⛔ AND WITH A ROLL REFERENCE, BECAUSE KDSS WILL NOT CAPTURE WITHOUT ONE.
+            // Both halves of the pair we fly - `KDSS/Parts/KDSS/KDSSA.cfg:43` and `KDSSP.cfg:44` -
+            // carry `captureMinRollDot = 0.5`, so the two ports must be within 60 degrees of roll
+            // alignment or the magnets never latch however perfect the approach was. Passing
+            // `Vector3d.zero` here leaves roll unconstrained, which is the same omission that let the
+            // booster flip drift to 89.8 degrees before its roll gate timed out on 2026-08-11.
+            //
+            // The reference is the TARGET PORT's own up, not the capsule's and not the orbit's: it is
+            // the one frame in which "aligned" means what the capture test means by it.
+            Vector3d rollRef = (theirPort != null && theirPort.nodeTransform != null)
+                             ? (Vector3d)theirPort.nodeTransform.up : Vector3d.zero;
+            AttitudeController.Ascent.SteerTo(ship, -axis, rollRef);
             AxisErrorDeg = Vector3d.Angle(ship.ReferenceTransform.up, -axis);
 
             if (!ship.ActionGroups[KSPActionGroup.RCS])
@@ -332,6 +601,9 @@ namespace DragonScreen
             double dt = Time.fixedDeltaTime;
             if (dt <= 0.0) dt = 0.02;
             DockCommand dc = DockControl.Solve(ds, pidF, pidS, pidT, dt);
+
+            DistF = ds.DistF; DistS = ds.DistS; DistT = ds.DistT;
+            VelF = ds.VelF; VelS = ds.VelS; VelT = ds.VelT;
 
             AttitudeController.Ascent.UllageFore = dc.Fore;
             AttitudeController.Ascent.TranslateX = dc.Starboard;

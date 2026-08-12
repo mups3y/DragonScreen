@@ -83,7 +83,24 @@ namespace DragonScreen
         /// <summary>FITTED aim ranges, metres. The comment in the source is the miss they produced.</summary>
         public const double AimS2Crew = 286000.0;     // 159 m
         public const double AimS2Cargo = 315450.0;    // 331 m
-        public const double AimDracoCrew = 270700.0;  // confirmed by flight 076
+        /// <summary>
+        /// ⚠ RE-FITTED 2026-08-12 for OUR vehicle: 270 700 -> 284 400 m.
+        ///
+        /// F9I's 270 700 was confirmed by its flight 076 and is not wrong - for F9I's capsule. Ours
+        /// is no longer the same vehicle at entry interface: since the second stage started
+        /// performing the orbital insertion, the Dragon arrives with most of its monopropellant
+        /// instead of a third of it, which is real mass and a different ballistic coefficient.
+        ///
+        /// The 2026-08-12 return is the first that flew end to end, and it landed 9.6 km SHORT with
+        /// `r_liftMin` flat at zero for the whole entry - the signature of an aim that is too short,
+        /// because the loop never once needed to shorten and spent the descent trying to stretch.
+        /// The settled miss was 9.2 km, so `9200 / AimGain` = 13 700 m of aim.
+        ///
+        /// ⛔ ONE FLIGHT, ONE FIT. The sign is unambiguous and the size is small, but this is a
+        /// single data point. If the next return lands LONG, halve the change rather than reverting
+        /// it, and do not re-fit from `WorstErrorM` - see the note in EntryOps.Handover.
+        /// </summary>
+        public const double AimDracoCrew = 284400.0;  // was 270700 (F9I flight 076); re-fit 2026-08-12
 
         /// <summary>De-orbit aims this far PAST the landing zone.</summary>
         public const double OvershootM = 35000.0;

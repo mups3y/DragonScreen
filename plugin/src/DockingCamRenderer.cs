@@ -43,6 +43,8 @@ namespace DragonScreen
         /// <summary>Reported on the VIDEO tab. Built once, never formatted per frame.</summary>
         internal static string Resolution = Width + " x " + Height;
         private static int lastWanted = -999;
+        /// <summary>View last reported as blank, so the warning is not per-frame.</summary>
+        private static int blankReportedFor = -999;
 
         // ---- ONE CAMERA, TWO CONSUMERS ----
         // DOCKING wants the forward view; the VIDEO tab wants whichever direction the crew picked.
@@ -51,8 +53,40 @@ namespace DragonScreen
         // than quietly showing the wrong direction. Priority is re-armed every frame.
         private static int wantView, wantPriority, priorityFrame = -999;
 
-        /// <summary>Direction currently rendered. 0 Front, 1 Rear, 2 Left, 3 Right.</summary>
+        /// <summary>
+        /// View currently rendered. 0-3 are the hull-swept directions - Front, Rear, Left, Right -
+        /// and <see cref="HullCamBase"/> upward are the vehicle's own cameras, in HullCams order.
+        /// </summary>
         internal static int View { get { return wantView; } }
+
+        /// <summary>
+        /// First view index that means "a real camera on the vehicle" rather than a direction.
+        ///
+        /// The four synthetic views keep indices 0-3 so a saved selection still means what it meant,
+        /// and so a vehicle that loses a camera at staging cannot silently renumber the rest into
+        /// something the crew did not pick.
+        /// </summary>
+        internal const int HullCamBase = 4;
+
+        /// <summary>Label for the view now on screen, for the page to print under the picture.</summary>
+        internal static string ViewLabel
+        {
+            get
+            {
+                if (wantView < HullCamBase)
+                {
+                    switch (wantView)
+                    {
+                        case 1: return "REAR";
+                        case 2: return "LEFT";
+                        case 3: return "RIGHT";
+                        default: return "FRONT";
+                    }
+                }
+                HullCam hc;
+                return HullCams.TryGet(wantView - HullCamBase, out hc) ? hc.Label : "-";
+            }
+        }
 
         /// <summary>True when DOCKING has claimed the forward view this frame.</summary>
         internal static bool HeldByDocking
@@ -96,7 +130,27 @@ namespace DragonScreen
             if (cam == null || target == null) return null;
 
             lastWanted = Time.frameCount;
-            if (!Aim()) { cam.enabled = false; return null; }
+            if (!Aim())
+            {
+                // ---- SAY WHY THERE IS NO PICTURE, ONCE PER VIEW. ----
+                // On 2026-08-12 the crew reported "none of the cameras are working on the camera
+                // selection list" and the log had nothing to say about it - a black rectangle is
+                // indistinguishable from a camera pointed at space, and neither the selection log
+                // line nor the page could tell them apart. Latched on the view so a genuinely dead
+                // camera says so once rather than every frame.
+                if (blankReportedFor != wantView)
+                {
+                    blankReportedFor = wantView;
+                    Debug.LogWarning("[DragonScreen] camera view " + wantView + " ("
+                                   + ViewLabel + ") has no picture - "
+                                   + (wantView >= HullCamBase
+                                      ? "its part is gone or its transform was destroyed"
+                                      : "no control transform on the active vessel"));
+                }
+                cam.enabled = false;
+                return null;
+            }
+            if (blankReportedFor == wantView) blankReportedFor = -999;
             cam.enabled = true;
             return target;
         }
@@ -177,6 +231,11 @@ namespace DragonScreen
         /// </summary>
         private static bool Aim()
         {
+            // ---- A REAL CAMERA ON THE VEHICLE, IF THAT IS WHAT WAS PICKED. ----
+            // No hull sweep and no standoff here: the mod author already placed this transform where
+            // it can see, which is the entire reason for preferring it to a direction we chose.
+            if (wantView >= HullCamBase) return AimHullCam(wantView - HullCamBase);
+
             Vessel v = FlightGlobals.ActiveVessel;
             if (v == null) return false;
             Transform rt = v.ReferenceTransform;
@@ -200,6 +259,50 @@ namespace DragonScreen
             // second and it is right for any capsule, any variant, any control point.
             camObject.transform.position = rt.position + fwd * (HullExtent(rt.position, fwd) + Standoff);
             camObject.transform.rotation = Quaternion.LookRotation(fwd, upRef);
+            // A hull camera may have left its own field of view behind. Restore ours.
+            cam.fieldOfView = 60f;
+            return true;
+        }
+
+        /// <summary>
+        /// Point the camera through one of the vehicle's own hull cameras.
+        ///
+        /// ⚠ A CAMERA CAN LEAVE MID-FLIGHT. The interstage cameras go with the first stage and the
+        /// trunk's go at jettison, so the transform is re-validated every frame rather than
+        /// remembered - a destroyed Transform compares null in Unity and we simply report no picture,
+        /// which is the truth. The same reasoning as the scene-teardown check in Texture().
+        ///
+        /// The config's `cameraForward` and `cameraUp` are PART-LOCAL and are used only when
+        /// non-zero. Every Tundra camera ships them as zero and relies on the named transform's own
+        /// orientation; HullCameraVDS's docking-port patch does the opposite. Both are live here.
+        /// </summary>
+        private static bool AimHullCam(int index)
+        {
+            HullCam c;
+            if (!HullCams.TryGet(index, out c)) return false;
+            // Unity's overloaded null: a destroyed transform or a jettisoned part both land here.
+            if (c.Anchor == null || c.Host == null || c.Host.vessel == null) return false;
+
+            Transform ht = c.Host.transform;
+            if (ht == null) return false;
+
+            Vector3 pos = c.Anchor.position;
+            if (c.Offset != Vector3.zero) pos += ht.TransformDirection(c.Offset);
+
+            Vector3 fwd = (c.Forward != Vector3.zero)
+                        ? ht.TransformDirection(c.Forward) : c.Anchor.forward;
+            Vector3 up = (c.Up != Vector3.zero)
+                       ? ht.TransformDirection(c.Up) : c.Anchor.up;
+
+            if (fwd.sqrMagnitude < 1e-8f) return false;
+            // Parallel forward and up give Unity no rotation to build; fall back rather than warn.
+            if (up.sqrMagnitude < 1e-8f
+                || Mathf.Abs(Vector3.Dot(fwd.normalized, up.normalized)) > 0.999f)
+                up = c.Anchor.up;
+
+            camObject.transform.position = pos;
+            camObject.transform.rotation = Quaternion.LookRotation(fwd, up);
+            cam.fieldOfView = c.Fov;
             return true;
         }
 

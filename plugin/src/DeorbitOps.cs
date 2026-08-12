@@ -38,6 +38,19 @@ namespace DragonScreen
         private static Vessel ship;
         private static DeorbitState st;
         private static double startedAt, lastScanAt, prevPeri, prevPeriAt;
+        /// <summary>
+        /// When the engine actually lit. ⛔ NOT the same clock as <c>startedAt</c>.
+        ///
+        /// `DeorbitBurn.MaxBurnS` is a 300 s RUNAWAY BACKSTOP on the burn, and it was being fed
+        /// `now - startedAt`, which starts when the phase-down settles - before FindPass, before the
+        /// wait for the pass, and before a warp that on 2026-08-11 was 3663 seconds long. So the
+        /// backstop had expired 3388 s before ignition: the burn lit at 13:52:07.241, completed at
+        /// 13:52:07.260, and reported "ABORTED - burn ran past its backstop" after 19 milliseconds
+        /// of thrust. A backstop measured from before the wait is a backstop on the wait.
+        /// </summary>
+        private static double ignitedAt;
+        /// <summary>When the retrograde turn began, for the alignment timeout - same argument.</summary>
+        private static double aligningSinceAt;
         private static bool aligned, phaseDownPending, passFound, warpRequested;
 
         /// <summary>Drop out of warp this long before the de-orbit point, to settle. `DgPhasing`'s 25 s.</summary>
@@ -106,6 +119,42 @@ namespace DragonScreen
                 return;
             }
 
+            // ---- ⛔ THE PROPELLANT GATE GOES HERE, BEFORE ANYTHING MOVES. ----
+            // This check used to sit AFTER `PhaseDownOps.Engage` below, so on 2026-08-11 16:12 it
+            // printed "REFUSED ... Nothing burned" and then the phase-down lit its engines 1
+            // millisecond later, flew both burns, and reported "ON THE LANDING ORBIT". The guard
+            // fired and stopped nothing, which is worse than having no guard: the log said one thing
+            // and the vehicle did another.
+            //
+            // ⚠ AND IT REFUSES ON THE RIGHT NUMBER NOW. It compared against `DeorbitUnits`, the
+            // cost of driving periapsis to MINUS 31.8 km, and refused a capsule holding 71.1 units
+            // against 78.7. Reaching the 40 km entry interface costs roughly a third of that - the
+            // vehicle could have come home, and was told it could not. Refusing a de-orbit strands
+            // the crew, so the bar is what is PHYSICALLY IMPOSSIBLE, not what will land badly.
+            BudgetInputs gate = Budget(v);
+            BudgetReport gateRep = ReturnBudget.Report(gate);
+            // ⚠ AND THE FLOOR ONLY APPLIES WHEN THERE IS A BURN TO MAKE. A capsule already on an
+            // entry trajectory needs ZERO units, and comparing 0.0 against a 5-unit ullage floor
+            // refused it anyway: "REFUSED - 0.0 units of monopropellant cannot reach the atmosphere;
+            // that needs 0.0", logged three times on 2026-08-12 while periapsis was -88.7 km and the
+            // capsule was already coming down. A reserve against ullage is meaningless when nothing
+            // is going to be burned.
+            // ⚠ AND NOT WHEN PROPELLANT IS NOT A CONSTRAINT. With KSP's infinite-propellant
+            // cheat on, the tank still READS whatever it fell to - 0.0 on 2026-08-12 - so the gate
+            // refused a vehicle that could physically burn all day. Refusing a de-orbit strands the
+            // crew; refusing one that would work is worse than not checking.
+            bool unlimited = CheatOptions.InfinitePropellant;
+            if (!unlimited && gateRep.EntryInterfaceUnits > 0.0
+                && gateRep.HaveUnits < gateRep.EntryInterfaceUnits + DeorbitBurn.MonoFloorUnits)
+            {
+                Note = "REFUSED - " + gateRep.HaveUnits.ToString("F1") + " units of monopropellant "
+                     + "cannot reach the atmosphere; that needs "
+                     + gateRep.EntryInterfaceUnits.ToString("F1");
+                Debug.LogError(Tag + Note + ". Nothing engaged and nothing burned - the capsule is "
+                             + "left in the orbit it is in. Dock and refuel.");
+                return;
+            }
+
             ship = v;
             Engaged = true;
             aligned = false;
@@ -137,10 +186,16 @@ namespace DragonScreen
             BudgetReport rep = ReturnBudget.Report(b);
             Debug.Log(Tag + "DE-ORBIT engaged - target " + TargetLatDeg.ToString("F4") + ", "
                       + TargetLonDeg.ToString("F4") + ". Mono budget: " + rep.Line);
-            if (!rep.Sufficient)
+            if (rep.HaveUnits < rep.DeorbitUnits + DeorbitBurn.MonoFloorUnits)
+                Debug.LogWarning(Tag + "⚠ " + rep.HaveUnits.ToString("F1") + " units will reach "
+                                 + "the atmosphere but not the " + rep.DeorbitUnits.ToString("F1")
+                                 + " unit aim point - the entry starts shallow and the landing will "
+                                 + "miss long.");
+            else if (!rep.Sufficient)
                 Debug.LogWarning(Tag + "⚠ MONOPROP SHORT by "
                                  + (-rep.MarginUnits).ToString("F1")
-                                 + " units - the burn may not finish and the landing will miss.");
+                                 + " units - the de-orbit will finish but the entry and landing "
+                                 + "reserve is not there; expect the landing to miss.");
         }
 
         public static void Disengage(string why)
@@ -197,6 +252,7 @@ namespace DragonScreen
                 }
                 phaseDownPending = false;
                 startedAt = now;
+                aligningSinceAt = now;
                 prevPeri = PeriapsisM;
                 prevPeriAt = now;
                 Debug.Log(Tag + "phase-down settled (" + PhaseDownOps.Stage
@@ -249,9 +305,11 @@ namespace DragonScreen
             {
                 AttitudeController.Ascent.Throttle = 0.0;
                 Note = "ALIGNING - " + off.ToString("F1") + " deg";
-                if (off < DeorbitBurn.AlignedDeg || now - startedAt > 30.0)
+                if (aligningSinceAt <= 0.0) aligningSinceAt = now;
+                if (off < DeorbitBurn.AlignedDeg || now - aligningSinceAt > 30.0)
                 {
                     aligned = true;
+                    ignitedAt = now;
                     Debug.Log(Tag + "de-orbit ignition, " + off.ToString("F1") + " deg off retrograde");
                 }
                 return;
@@ -269,7 +327,8 @@ namespace DragonScreen
                 prevPeriAt = now;
             }
             st.PeriapsisM = PeriapsisM;
-            st.ElapsedS = now - startedAt;
+            st.ElapsedS = now - ignitedAt;
+            st.MonoUnits = DockedSide.Mono(ship);
 
             // The aim scan, at its own slower rate.
             if (now - lastScanAt >= DeorbitBurn.AimScanIntervalS)
@@ -291,11 +350,29 @@ namespace DragonScreen
                              ? (st.AimMissM / 1000.0).ToString("F2") + " km" : "unknown"));
                 Note = "BURN COMPLETE - " + why;
 
-                // ---- HAND STRAIGHT TO THE ENTRY, THE WAY `DgRecoveryMain` DOES ----
-                // Separation, the coast, the range trim, the lifting entry and the chutes are one
-                // continuous sequence with no crew action between them, and there is no moment in it
-                // where stopping to wait for a button press would be useful. Engage BEFORE disengaging:
-                // Disengage drops our vessel reference.
+                // ---- ⛔ THE ENTRY IS HANDED A RE-ENTRY TRAJECTORY, OR IT IS NOT HANDED ANYTHING. ----
+                // `DgRecoveryMain` runs separation, the coast, the trim, the lifting entry and the
+                // chutes as one continuous sequence with no crew action between them - but every one
+                // of those steps assumes the capsule is coming down. On 2026-08-11 an aborted burn
+                // left periapsis at 80.1 km, ten kilometres ABOVE the atmosphere, and this handed it
+                // to the entry anyway: it jettisoned the trunk in a stable orbit and then had nothing
+                // to do for the 22 minutes to the end of the session. The test is physical, not a
+                // reading of `why` - what matters is where periapsis is, however the burn ended.
+                double atmoTopM = (ship.mainBody != null && ship.mainBody.atmosphere)
+                                ? ship.mainBody.atmosphereDepth : 0.0;
+                if (PeriapsisM > atmoTopM)
+                {
+                    Note = "DE-ORBIT FAILED - " + why + ", periapsis still "
+                         + (PeriapsisM / 1000.0).ToString("F1") + " km";
+                    Debug.LogError(Tag + Note + " - above the " + (atmoTopM / 1000.0).ToString("F0")
+                                 + " km atmosphere, so this is not a re-entry trajectory. The entry "
+                                 + "sequence is NOT engaged and the trunk is NOT jettisoned. The "
+                                 + "capsule is in a stable orbit; fix the propellant and retry.");
+                    Disengage(why);
+                    return;
+                }
+
+                // Engage BEFORE disengaging: Disengage drops our vessel reference.
                 EntryOps.TargetLatDeg = TargetLatDeg;
                 EntryOps.TargetLonDeg = TargetLonDeg;
                 EntryOps.Engage(ship);

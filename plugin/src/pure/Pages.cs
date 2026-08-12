@@ -184,8 +184,22 @@ namespace DragonScreen
         /// rather than drawing seven buttons bound to nothing.
         /// </summary>
         public int LightCount;
-        /// <summary>Which way the live camera is pointed - 0 Front, 1 Rear, 2 Left, 3 Right.</summary>
+        /// <summary>
+        /// Which view the live camera is showing. 0-3 are the hull-swept directions; 4 upward are
+        /// the vehicle's own cameras, in <see cref="CamLabels"/> order.
+        /// </summary>
         public int CameraView;
+        /// <summary>
+        /// Every view this vehicle can actually offer, in button order: the four directions, then
+        /// one entry per real camera found on the hull.
+        ///
+        /// ⚠ SUPPLIED BY THE GLUE, NOT LISTED HERE. The set depends on what is bolted to the
+        /// craft and on whether HullCameraVDS is installed at all, neither of which pure code can
+        /// know. Null or empty means "the four directions only", which is what a vehicle with no
+        /// hull cameras genuinely has - the same reasoning as LightCount above: draw what exists,
+        /// never a button bound to nothing.
+        /// </summary>
+        public string[] CamLabels;
         public string CameraResText;
         /// <summary>DOCKING has the camera forward, so the VIDEO tab cannot aim it right now.</summary>
         public bool CameraHeldByDocking;
@@ -412,7 +426,7 @@ namespace DragonScreen
         /// that ignores them.
         /// </summary>
         public static PageHit HitTest(int pageIndex, float px, float py, int w, int h,
-                                      int subview)
+                                      int subview, int extraCams = 0)
         {
             // TABS FIRST. They live in the card's notch, over the subview, so a subview control
             // that happened to overlap the notch must not eat the only way back out of it - the same
@@ -428,7 +442,7 @@ namespace DragonScreen
             {
                 case 0: return FlightHitTest(px, py, w, h);
                 case 2: return NavPage.HitTest(px, py, w, h);
-                case 4: return SettingsPage.HitTest(px, py, w, h, subview);
+                case 4: return SettingsPage.HitTest(px, py, w, h, subview, extraCams);
                 default: return PageHit.None;
             }
         }

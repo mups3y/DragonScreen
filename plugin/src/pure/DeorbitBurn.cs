@@ -46,6 +46,8 @@ namespace DragonScreen
         /// <summary>Liquid fuel remaining if burning the S2, units. Ignored on Dracos.</summary>
         public double S2FuelUnits;
         public bool UsingS2;
+        /// <summary>Monopropellant remaining, units. What the Dracos burn.</summary>
+        public double MonoUnits;
     }
 
     public static class DeorbitBurn
@@ -84,6 +86,20 @@ namespace DragonScreen
         public const double MaxBurnS = 300.0;
         /// <summary>Below this the S2 is out of fuel and the burn ends.</summary>
         public const double S2FuelFloorUnits = 5.0;
+
+        /// <summary>
+        /// Below this the Dracos are out of monopropellant and the burn ends, units.
+        ///
+        /// ⛔ THE SAME GUARD THE S2 ALREADY HAD, ON THE PROPELLANT WE ACTUALLY BURN. Its absence
+        /// is why the 2026-08-11 phase-down held the throttle open for 301 seconds on a dry tank and
+        /// then reported "ABORTED - burn ran past its backstop" - 74.25 m/s commanded, 32.45 m/s
+        /// residual, and a backstop named as the cause when the cause was an empty tank. A burn that
+        /// cannot push must say so in its own words.
+        ///
+        /// Same 5-unit figure as the S2 floor for the same reason: the last of a tank is unusable
+        /// ullage, and a "remaining" that is not zero is not the same as thrust.
+        /// </summary>
+        public const double MonoFloorUnits = 5.0;
         /// <summary>Aligned enough to ignite, degrees.</summary>
         public const double AlignedDeg = 4.0;
 
@@ -133,6 +149,11 @@ namespace DragonScreen
             if (s.UsingS2 && s.S2FuelUnits < S2FuelFloorUnits)
             {
                 why = "S2 out of fuel";
+                return true;
+            }
+            if (!s.UsingS2 && s.MonoUnits < MonoFloorUnits)
+            {
+                why = "ABORTED - out of monopropellant";
                 return true;
             }
             if (s.ElapsedS > MaxBurnS)

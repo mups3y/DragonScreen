@@ -53,6 +53,10 @@ namespace DragonScreen
         private static double lastBurnAt = -999.0;
         /// <summary>When the phasing coast returns us to the burn point. 0 = not phasing.</summary>
         private static double phaseReturnUt;
+        /// <summary>Phasing laps flown this engagement. Bounded by `Approach.PhaseMaxPass`.</summary>
+        private static int phasePass;
+        /// <summary>Latch, so using up the laps is said once and not every tick.</summary>
+        private static bool phaseCapReported;
         private static int lastFrame = -1;
 
         // ------------------------------------------------------------------ lifecycle
@@ -86,7 +90,11 @@ namespace DragonScreen
             Leg = ApproachLeg.Phasing;
             startedAt = Planetarium.GetUniversalTime();
             lastBurnAt = -999.0;
-            haltReported = null;
+            haltReported = false;
+            phasePass = 0; phaseCapReported = false;
+            phaseReturnUt = 0.0;
+            matchUt = 0.0; matchDistM = 0.0; matchWarpAsked = false;
+            altBurnUt = 0.0; altWarpAsked = false; altMatchDone = false;
             Debug.Log(Tag + "rendezvous ENGAGED - target '" + Station.vesselName + "', "
                           + (Vector3d.Distance(v.CoM, Station.CoM) / 1000.0).ToString("F1") + " km");
         }
@@ -112,7 +120,10 @@ namespace DragonScreen
             DirectApproachOps.Reset();
             Engaged = false; Station = null; ship = null;
             phaseReturnUt = 0.0;
-            haltReported = null;
+            phasePass = 0; phaseCapReported = false;
+            matchUt = 0.0; matchDistM = 0.0; matchWarpAsked = false;
+            altBurnUt = 0.0; altWarpAsked = false; altMatchDone = false;
+            haltReported = false;
             RangeM = 0.0; ClosingMps = 0.0; LateralMps = 0.0; AlongTrackM = 0.0; LastDvMps = 0.0;
             Note = "-";
         }
@@ -126,13 +137,52 @@ namespace DragonScreen
             return null;
         }
 
+        /// <summary>
+        /// Keep the station numbers live while the approach is idle.
+        ///
+        /// ⚠ ONE SOURCE, STILL. This writes the same fields `Tick` writes, from the same
+        /// `RelativeMotion.Of` - it is not a second computation of the same quantity, which is the
+        /// thing the recorder's own comment warns against. It just means the fields are measured
+        /// rather than remembered.
+        /// </summary>
+        private static void Observe()
+        {
+            Vessel v = FlightGlobals.ActiveVessel;
+            if (Station == null) Station = Find();
+            if (v == null || Station == null || Station.state == Vessel.State.DEAD)
+            {
+                RangeM = 0.0; ClosingMps = 0.0; LateralMps = 0.0; AlongTrackM = 0.0;
+                return;
+            }
+            RelState rm = RelativeMotion.Of(v, Station);
+            if (!rm.Valid) return;
+            RangeM = rm.RangeM;
+            ClosingMps = rm.ClosingMps;
+            LateralMps = rm.LateralMps;
+        }
+
         // ------------------------------------------------------------------ the loop
 
         public static void Tick()
         {
             if (Time.frameCount == lastFrame) return;
             lastFrame = Time.frameCount;
-            if (!Engaged) return;
+
+            // ---- ⛔ MEASURE EVEN WHEN WE ARE NOT FLYING IT. ----
+            // This used to `return` here, so `RangeM` and `ClosingMps` kept whatever they held when
+            // the crew last disengaged - and the recorder reads exactly those fields. On the
+            // 2026-08-11 13:44 flight they last changed at MET 53 and were then written unchanged
+            // into every one of the next 6700 rows: "13.71 km, closing -127.47 m/s" for 99% of a two
+            // hour flight, in the instrument CLAUDE.md calls the primary one.
+            //
+            // The same shape of fault as the docking refusal that started this: a true statement
+            // about a stale variable and a false one about the world. Observing costs one vector
+            // subtraction per frame and there is no version of this where a frozen number is better.
+            if (!Engaged)
+            {
+                Observe();
+                return;
+            }
 
             if (ship == null || ship.state == Vessel.State.DEAD
                 || Station == null || Station.state == Vessel.State.DEAD)
@@ -141,13 +191,42 @@ namespace DragonScreen
                 return;
             }
 
+            // ---- ⛔ ONCE THE DOCKING HAS THE VEHICLE, THIS FILE IS A PASSENGER. ----
+            // `Leg` is recomputed from range on EVERY tick, twenty lines below, so `Arrived` never
+            // stuck. On 2026-08-12 the approach matched at 43 m and handed over correctly - and then
+            // the capsule drifted to 60 m, this re-classified it as still approaching, and re-engaged
+            // the direct approach, whose goal is `DirectApproach.GoalM` = 200 m:
+            //
+            //     09:50:31  direct approach complete - MATCHED - 43 m at 0.50 m/s. Handing to the docking.
+            //     09:50:31  docking engaged - KDSS-A to KDSS-P, keep-out 31 m
+            //     09:50:47  direct approach engaged at 60 m - closing to 200 m at 0.5 m/s
+            //
+            // So from 60 m the approach flew AWAY, because 200 m is where it had been told to be,
+            // while the docking controller pulled toward the port. Two owners of one set of
+            // thrusters, pulling opposite ways, for eleven minutes - which is the crew's report in
+            // both its halves: "docking seems to move us away instead of towards", and the tank at
+            // 0.0 units by 10:01.
+            //
+            // The fix is the one the fix plan already names as step 6, ONE OWNER PER ACTUATOR, and
+            // the order is not arbitrary: docking is the more specific controller and it is the one
+            // holding a port pair, so it wins and this yields entirely - no re-classification, no
+            // re-engage, not even a measurement that could tempt a later branch.
+            if (DockingOps.Engaged || DockingOps.Stage == DockStage.Docked)
+            {
+                if (DirectApproachOps.Engaged) DirectApproachOps.Disengage("docking has the vehicle");
+                Leg = ApproachLeg.Arrived;
+                Observe();
+                Note = "DOCKING - " + DockingOps.Stage + " " + DockingOps.Note;
+                return;
+            }
+
             // ---- MEASURE ----
-            Vector3d rel = Station.CoM - ship.CoM;
-            RangeM = rel.magnitude;
-            Vector3d relVel = Station.obt_velocity - ship.obt_velocity;
-            // Closing is POSITIVE when the gap is shrinking, which is the sign the ladder expects.
-            ClosingMps = Vector3d.Dot(-relVel, rel.normalized);
-            LateralMps = Vector3d.Exclude(rel.normalized, -relVel).magnitude;
+            // One definition, in RelativeMotion - this file and DirectApproachOps used to compute
+            // it separately with opposite operand order, and one of them was wrong.
+            RelState rm = RelativeMotion.Of(ship, Station);
+            RangeM = rm.RangeM;
+            ClosingMps = rm.ClosingMps;
+            LateralMps = rm.LateralMps;
 
             CwState st = BuildState(out AlongTrackM);
             double ourSma = (ship.orbit != null) ? ship.orbit.semiMajorAxis : 0.0;
@@ -155,25 +234,37 @@ namespace DragonScreen
             Leg = Approach.LegFor(RangeM, AlongTrackM, GoalRangeM, ourSma, stnSma);
 
             // ================================================================================
-            //  ⛔ THIS IS F9I'S LIVE RENDEZVOUS, AND IT IS SHORTER THAN THE ONE IT REPLACED.
+            //  F9I'S LIVE RENDEZVOUS IS `StCloseIn` (station_ops.ks:855) AND IT HAS THREE LEGS.
             //
-            //  `StRendezvousAndDock:2027`, in capitals in its own source:
-            //      ---- MATCH THE ORBIT, THEN JUST FLY THE GAP. DO NOT PHASE. ----
-            //      ---- NO CIRCULARISATION, NO NODES, NO PHASING. JUST GO. ----
+            //  ⚠ THIS BANNER USED TO CLAIM THERE WAS ONLY ONE, AND THAT WAS MY ERROR. It read
+            //  "arrived, or inside the gate and flying it directly, or STOPPED. There is no fourth
+            //  branch, and that is the whole point." I had conflated two different deletions:
             //
-            //  and its reason, which is our 2026-08-11 flight described in advance:
-            //      "Every node-based step has hurt rather than helped. StMatchStationOrbit's
-            //       'circularise at apoapsis' burn OVERSHOT on flight 011: SMA 683.06 -> 691.61 km
-            //       against a station at 686.75... The launch already puts us in the station's
-            //       orbit; what is left is a RELATIVE MOTION problem, so fly it directly."
+            //      StMatchStationOrbit  DELETED after flight 011, and its own source says so in
+            //                           capitals at station_ops.ks:1951. Circularising at apoapsis
+            //                           to match altitude OVERSHOT - SMA 683.06 -> 691.61 km
+            //                           against a station at 686.75. Dead, and it stays dead.
             //
-            //  We had the node machinery in a per-tick classifier, so it re-fired forever: 28
-            //  orbit-match burns, SMA error growing 593 -> 12 986 m, 11.7 hours of warp requested in
-            //  a twenty-minute session, and the crew gave up. F9I hit the same divergence on flight
-            //  011 and its fix was to DELETE THE STEP, not to tune it.
+            //      StPhaseLeg           ALIVE. Called from StCloseIn:882, inside a bounded loop.
+            //                           Nothing was ever wrong with it.
             //
-            //  So: arrived, or inside the gate and flying it directly, or STOPPED. There is no
-            //  fourth branch, and that is the whole point.
+            //  The cost of the confusion was a real one: on the 2026-08-11 13:44 flight the capsule
+            //  sat 10.2 km out RECEDING at 116 m/s, and the only answer this file had was STOPPED.
+            //  There was nothing wrong with the vehicle and nothing wrong with the gate - the leg
+            //  that closes a gap that size had been marked dead by mistake.
+            //
+            //  What was genuinely true, and still is: a ladder that plans nodes in a per-tick
+            //  classifier re-fires forever. Ours did - 28 orbit-match burns, SMA error growing
+            //  593 -> 12 986 m, 11.7 hours of warp requested in a twenty-minute session. F9I's
+            //  planner lost 60 days on flight 020, 89 on 015, 13 on 014. So the phasing loop below
+            //  is BOUNDED: `Approach.PhaseMaxPass` laps, then it closes in from wherever it got to,
+            //  exactly as F9I does. The bound is what makes a loop safe, not the absence of one.
+            //
+            //  The three legs, in F9I's order:
+            //      1. PHASING     until the along-track gap is under `Approach.PhaseMinM`
+            //      2. INTERCEPT   ride an existing close pass and match velocity there, rather than
+            //                     buying a transfer we already have
+            //      3. DIRECT      inside the gate, `DirectApproachOps`
             // ================================================================================
 
             if (DirectApproachOps.Engaged)
@@ -200,12 +291,305 @@ namespace DragonScreen
                 return;
             }
 
-            // ---- OUTSIDE THE GATE: REPORT AND STOP. DO NOT PLAN A NODE. ----
-            // F9I, on the same fall-through: "A failed approach is a thing to report and re-try
-            // deliberately, not to hand to a planner that answers with a two-month wait." Its
-            // numbers: flight 020 planned a node 60 days out, 015 lost 89 days, 014 lost 13.
-            Halt((RangeM / 1000.0).ToString("F1") + " km is outside the "
-                 + (DirectApproach.GateM / 1000.0).ToString("F0") + " km gate");
+            // ---- LEG 0: GET INTO THE STATION'S ORBIT BEFORE PHASING IN IT. ----
+            if (MatchAltitude()) return;
+
+            // ---- LEG 1: PHASING, BOUNDED. ----
+            // Runs while a lap is in flight, or while the gap is still too wide and laps remain.
+            // `phaseReturnUt > 0` means a coast is under way and must be seen through - checking the
+            // gap again mid-coast would re-plan against a gap the current lap is already closing.
+            bool lapInFlight = phaseReturnUt > 0.0 || NodeExecutor.Active;
+            if (lapInFlight
+                || (Math.Abs(AlongTrackM) > Approach.PhaseMinM && phasePass < Approach.PhaseMaxPass))
+            {
+                Leg = ApproachLeg.Phasing;
+                FlyPhasing();
+                return;
+            }
+
+            if (Math.Abs(AlongTrackM) > Approach.PhaseMinM && !phaseCapReported)
+            {
+                phaseCapReported = true;
+                Debug.Log(Tag + Approach.PhaseMaxPass + " phasing laps used and the gap is still "
+                          + (Math.Abs(AlongTrackM) / 1000.0).ToString("F1")
+                          + " km - closing in from here anyway.");
+            }
+
+            // ---- LEG 2: RIDE AN INTERCEPT WE ALREADY HAVE. ----
+            Leg = ApproachLeg.Intercept;
+            if (RideIntercept()) return;
+
+            // ---- NOTHING LEFT TO TRY FROM HERE. ----
+            Halt((RangeM / 1000.0).ToString("F1") + " km out, along-track gap "
+                 + (AlongTrackM / 1000.0).ToString("F1") + " km, and no intercept inside "
+                 + (Approach.CaUseMaxM / 1000.0).ToString("F0") + " km");
+        }
+
+        /// <summary>
+        /// LEG 0. Circularise WHERE OUR ORBIT CROSSES THE STATION'S RADIUS.
+        ///
+        /// ---- ⛔ THIS IS NOT `StMatchStationOrbit`, AND THE DIFFERENCE IS THE WHOLE POINT. ----
+        /// The burn flight 011 deleted circularised at OUR APOAPSIS. Our apoapsis is not the
+        /// station's radius, so "circularise here" lands in the wrong orbit BY CONSTRUCTION - it
+        /// went to SMA 691.61 km against a station at 686.75 and was rightly killed.
+        ///
+        /// This burns where our radius EQUALS the station's. There, `sqrt(mu/r)` is the station's own
+        /// orbital speed, so a correct burn cannot land anywhere else. It cannot overshoot the way
+        /// flight 011 did, because the target speed is measured at the target radius rather than
+        /// assumed to be wherever we happened to be.
+        ///
+        /// ---- WHY IT HAS TO EXIST AT ALL: PHASING ALONE DOES NOT CONVERGE FROM A WRONG ORBIT ----
+        /// `Phasing.ExitDvMps` circularises at whatever radius the coast returns us to. If that is
+        /// not the station's radius we end circular at the WRONG ALTITUDE and immediately drift
+        /// again. Simulated against the orbit the 2026-08-11 flight was actually in - 182 x 81 km
+        /// against a station at 86.3 - the exit leaves a 411 s period error and 933 km of fresh
+        /// along-track drift PER LAP. Three bounded laps could never close that, and the crew would
+        /// watch it fail three times and stop. The gap was never the problem; the orbit was.
+        ///
+        /// Cost, simulated: 69.0 m/s and about 89 units of monopropellant from 182 x 81, 2.8 m/s and
+        /// 3.7 units from 90 x 86, nothing at all when already co-orbital. Expensive from a bad
+        /// orbit, which is the honest price of arriving in one, and paid ONCE rather than per lap.
+        ///
+        /// ⚠ IT REFUSES RATHER THAN GUESSES when our orbit does not reach the station's radius at
+        /// all - an orbit entirely below it needs a real transfer, and inventing one here is how the
+        /// deleted burn came to exist. Returns true when it took the tick.
+        /// </summary>
+        private static bool MatchAltitude()
+        {
+            if (NodeExecutor.Active)
+            {
+                Note = "ALTITUDE MATCH - " + NodeExecutor.Phase + " " + NodeExecutor.Note;
+                return true;
+            }
+
+            Orbit mo = ship.orbit, so = Station.orbit;
+            if (mo == null || so == null) return false;
+            CelestialBody b = ship.mainBody;
+            if (b == null) return false;
+
+            // The station's own radius. Near-circular by measurement, so its SMA is that radius.
+            double rStn = so.semiMajorAxis;
+            double rNow = (ship.CoM - b.position).magnitude;
+
+            // Close enough already? Then this leg has nothing to do, now or ever this engagement.
+            if (Math.Abs(rNow - rStn) <= Approach.CoOrbitalTolM
+                && Math.Abs(mo.semiMajorAxis - rStn) <= Approach.CoOrbitalTolM)
+                return false;
+
+            if (altMatchDone) return false;
+
+            double now = Planetarium.GetUniversalTime();
+
+            // Committed to a crossing: hold, warp, then burn.
+            if (altBurnUt > 0.0)
+            {
+                if (now < altBurnUt - Approach.LeadS)
+                {
+                    Hold();
+                    double togo = altBurnUt - now;
+                    if (!altWarpAsked
+                        && togo - Approach.LeadS - Approach.WarpMarginS > Approach.WarpMinSpanS)
+                    {
+                        altWarpAsked = true;
+                        double to = altBurnUt - Approach.LeadS - Approach.WarpMarginS;
+                        Debug.Log(Tag + "warping " + (to - now).ToString("F0")
+                                  + " s to the station's altitude crossing");
+                        TimeWarp.fetch.WarpTo(to);
+                    }
+                    else if (togo - Approach.LeadS <= Approach.WarpMarginS
+                             && TimeWarp.CurrentRateIndex > 0)
+                    {
+                        TimeWarp.SetRate(0, true);
+                    }
+                    Note = "ALTITUDE MATCH - crossing in " + togo.ToString("F0") + " s";
+                    return true;
+                }
+
+                double at = altBurnUt;
+                altBurnUt = 0.0; altWarpAsked = false;
+
+                // At the crossing our radius IS the station's, so this circularises into its orbit.
+                Vector3d vHere = WorldVelAt(mo, at);
+                double dvMag = Math.Sqrt(b.gravParameter / rStn) - vHere.magnitude;
+                if (Math.Abs(dvMag) > Approach.MaxDvMps)
+                {
+                    altMatchDone = true;
+                    Debug.LogWarning(Tag + "altitude match wants " + dvMag.ToString("F1")
+                                     + " m/s - over the " + Approach.MaxDvMps.ToString("F0")
+                                     + " m/s cap. Not flying it; phasing from here instead.");
+                    return false;
+                }
+                Vector3d dv = vHere.normalized * dvMag;
+                if (NodeExecutor.Begin(ship, dv, at, "altitude match"))
+                {
+                    altMatchDone = true;
+                    LastDvMps = Math.Abs(dvMag);
+                    Debug.Log(Tag + "altitude match - circularising into the station's "
+                              + ((rStn - b.Radius) / 1000.0).ToString("F1") + " km orbit, "
+                              + dvMag.ToString("F2") + " m/s");
+                    return true;
+                }
+                Note = NodeExecutor.Note;
+                altMatchDone = true;
+                return false;
+            }
+
+            // Find the next crossing of the station's radius.
+            double rAp = b.Radius + mo.ApA, rPe = b.Radius + mo.PeA;
+            if (rStn > rAp || rStn < rPe)
+            {
+                // ⚠ REFUSE, DO NOT INVENT A TRANSFER. See the banner.
+                altMatchDone = true;
+                Debug.LogWarning(Tag + "cannot match the station's altitude from here - our "
+                    + (mo.ApA / 1000.0).ToString("F1") + " x " + (mo.PeA / 1000.0).ToString("F1")
+                    + " km orbit never reaches its " + ((rStn - b.Radius) / 1000.0).ToString("F1")
+                    + " km. That needs a transfer, not a circularisation. Phasing from here, which "
+                    + "will not converge - raise or lower the orbit first.");
+                return false;
+            }
+
+            double ta;
+            try { ta = mo.TrueAnomalyAtRadius(rStn); }
+            catch (Exception) { altMatchDone = true; return false; }
+
+            // Two crossings per orbit, at +/-ta. Take whichever comes first.
+            double t1 = mo.GetUTforTrueAnomaly(ta, 0.0);
+            double t2 = mo.GetUTforTrueAnomaly(-ta, 0.0);
+            while (t1 < now + Approach.LeadS) t1 += mo.period;
+            while (t2 < now + Approach.LeadS) t2 += mo.period;
+            altBurnUt = (t1 < t2) ? t1 : t2;
+            altWarpAsked = false;
+            Debug.Log(Tag + "altitude match planned - our " + (mo.ApA / 1000.0).ToString("F1")
+                      + " x " + (mo.PeA / 1000.0).ToString("F1") + " km crosses the station's "
+                      + ((rStn - b.Radius) / 1000.0).ToString("F1") + " km in "
+                      + (altBurnUt - now).ToString("F0") + " s. Phasing needs a matching orbit, "
+                      + "not just a matching phase.");
+            return true;
+        }
+
+        private static double altBurnUt;
+        private static bool altWarpAsked, altMatchDone;
+
+        /// <summary>
+        /// LEG 2. If the orbits already bring us close, warp to that pass and match velocity there.
+        ///
+        /// ⚠ CHEAPER THAN BUYING A TRANSFER, AND F9I SAYS SO IN THOSE WORDS: "riding the existing
+        /// intercept - closest approach N m in T s. Matching velocity there rather than buying a
+        /// transfer." After the phasing laps the two orbits usually already cross close; planning a
+        /// CW leg at that point spends propellant to arrange something we have for free.
+        ///
+        /// Returns true when it took the tick. False means there is no intercept worth riding.
+        /// </summary>
+        private static bool RideIntercept()
+        {
+            if (NodeExecutor.Active)
+            {
+                Note = "INTERCEPT - " + NodeExecutor.Phase + " " + NodeExecutor.Note;
+                return true;
+            }
+
+            double now = Planetarium.GetUniversalTime();
+            Orbit so = Station.orbit, mo = ship.orbit;
+            if (so == null || mo == null || so.period <= 0.0) return false;
+
+            // Already committed to a pass: hold, warp, and match when we get there.
+            if (matchUt > 0.0)
+            {
+                if (now < matchUt - Approach.LeadS)
+                {
+                    Hold();
+                    double togo = matchUt - now;
+                    if (!matchWarpAsked
+                        && togo - Approach.LeadS - Approach.WarpMarginS > Approach.WarpMinSpanS)
+                    {
+                        matchWarpAsked = true;
+                        double to = matchUt - Approach.LeadS - Approach.WarpMarginS;
+                        Debug.Log(Tag + "warping " + (to - now).ToString("F0")
+                                  + " s to the closest-approach velocity match");
+                        TimeWarp.fetch.WarpTo(to);
+                    }
+                    else if (togo - Approach.LeadS <= Approach.WarpMarginS
+                             && TimeWarp.CurrentRateIndex > 0)
+                    {
+                        TimeWarp.SetRate(0, true);
+                    }
+                    Note = "INTERCEPT - match in " + togo.ToString("F0") + " s, "
+                         + (matchDistM / 1000.0).ToString("F1") + " km";
+                    return true;
+                }
+
+                // At the pass. Kill the relative velocity there - `StMatchVelAt`.
+                double at = matchUt;
+                matchUt = 0.0; matchWarpAsked = false;
+
+                Vector3d dv = WorldVelAt(so, at) - WorldVelAt(mo, at);
+                double mag = dv.magnitude;
+                if (mag < Approach.MatchVelMps)
+                {
+                    Debug.Log(Tag + "intercept - already matched to " + mag.ToString("F2") + " m/s");
+                    return false;
+                }
+                if (mag > Approach.MaxDvMps)
+                {
+                    Debug.LogWarning(Tag + "intercept match wants " + mag.ToString("F1")
+                                     + " m/s - over the " + Approach.MaxDvMps.ToString("F0")
+                                     + " m/s cap, not flying it");
+                    return false;
+                }
+                // NodeExecutor checks the periapsis floor itself before it turns or lights anything.
+                if (NodeExecutor.Begin(ship, dv, at, "closest-approach velocity match"))
+                {
+                    LastDvMps = mag;
+                    Debug.Log(Tag + "intercept - matching velocity, " + mag.ToString("F2") + " m/s");
+                    return true;
+                }
+                Note = NodeExecutor.Note;
+                return false;
+            }
+
+            // Look for one. Coarse-to-fine over `CaSpanPeriods` of the station's orbit.
+            interceptShip = mo; interceptStation = so; interceptFrom = now;
+            Predict.Approach ca = Predict.ClosestApproach(
+                new Func<double, double>(SeparationAt),
+                so.period * Approach.CaSpanPeriods, Approach.CaSteps, Approach.CaRefine);
+            if (!ca.Valid) return false;
+
+            // Too far to be worth riding, or so close there is nothing left to match.
+            if (ca.DistanceM > Approach.CaUseMaxM || ca.DistanceM <= Approach.MatchDistM)
+                return false;
+
+            matchUt = now + ca.TimeS;
+            matchDistM = ca.DistanceM;
+            matchWarpAsked = false;
+            Debug.Log(Tag + "riding the existing intercept - closest approach "
+                      + ca.DistanceM.ToString("F0") + " m in " + ca.TimeS.ToString("F0")
+                      + " s. Matching velocity there rather than buying a transfer.");
+            return true;
+        }
+
+        // ---- ⛔ `.xzy`. KSP's orbit sampler returns the SWIZZLED frame with Y and Z exchanged. ----
+        // `getPositionAtUT` is already world; `getOrbitalVelocityAtUT` is NOT, and MechJeb carries
+        // `WorldOrbitalVelocityAtUT(o, ut) => o.getOrbitalVelocityAtUT(ut).xzy` (OrbitExtensions:22)
+        // for exactly this. A match burn computed in the wrong frame points somewhere plausible and
+        // is wrong by up to 180 degrees.
+        private static Vector3d WorldVelAt(Orbit o, double ut)
+        {
+            return o.getOrbitalVelocityAtUT(ut).xzy;
+        }
+
+        private static Orbit interceptShip, interceptStation;
+        private static double interceptFrom;
+        private static double matchUt, matchDistM;
+        private static bool matchWarpAsked;
+
+        /// <summary>
+        /// Separation at `t` seconds from the scan's start. A named method because C# 5 has no
+        /// lambdas here and `Predict.ClosestApproach` wants a delegate.
+        /// </summary>
+        private static double SeparationAt(double t)
+        {
+            double ut = interceptFrom + t;
+            return (interceptStation.getPositionAtUT(ut) - interceptShip.getPositionAtUT(ut)).magnitude;
         }
 
         /// <summary>
@@ -219,14 +603,17 @@ namespace DragonScreen
         {
             Hold();
             Note = "STOPPED - " + why + ". Press RENDEZVOUS again to retry from here.";
-            if (haltReported == why) return;
-            haltReported = why;
+            // ⚠ LATCH ON THE FACT, NOT THE SENTENCE. The first version compared the whole `why`
+            // string, which carries the range - so it changed every tick and logged every tick:
+            // twelve identical warnings in ten seconds on 2026-08-11 as the capsule drifted out.
+            if (haltReported) return;
+            haltReported = true;
             Debug.LogWarning(Tag + "rendezvous stopped - " + why + ". Range "
                              + (RangeM / 1000.0).ToString("F2") + " km, closing "
                              + ClosingMps.ToString("F2") + " m/s. Nothing burned.");
         }
 
-        private static string haltReported;
+        private static bool haltReported;
 
         private static CwState BuildState(out double alongTrack)
         {
@@ -266,10 +653,15 @@ namespace DragonScreen
         /// metres of the station's radius, so anywhere else would take a Hohmann.
         /// </summary>
         // =====================================================================================
-        //  ⛔ EVERYTHING BELOW THIS LINE IS DEAD BY DECISION. NOTHING CALLS IT, AND NOTHING SHOULD.
+        //  ⛔ EVERYTHING BELOW THIS LINE IS DEAD BY DECISION - EXCEPT `FlyPhasing`, WHICH IS LIVE.
         //
-        //  `FlyMatchOrbit`, `FlyCw`, `FlyPhasing` and `FlyTerminal` are faithful ports of laws F9I
-        //  itself stopped using. Its own source marks the first of them the same way:
+        //  ⚠ `FlyPhasing` WAS LISTED HERE AND SHOULD NOT HAVE BEEN. It is called from the live
+        //  path above, as leg 1, because F9I calls `StPhaseLeg` from `StCloseIn:882`. It is kept
+        //  physically below this line only because moving it would obscure the diff; the banner is
+        //  the authority, not the position in the file. See the correction at the top of Tick.
+        //
+        //  `FlyMatchOrbit`, `FlyCw` and `FlyTerminal` are faithful ports of laws F9I itself stopped
+        //  using. Its own source marks the first of them the same way:
         //
         //      station_ops.ks:1951
         //      ---- DEAD BY DECISION: NOTHING CALLS StMatchStationOrbit, AND NOTHING SHOULD. ----
@@ -284,9 +676,11 @@ namespace DragonScreen
         //  session, and an abandoned flight. F9I's equivalent numbers for the phasing planner are
         //  60 days (flight 020), 89 days (015) and 13 days (014).
         //
-        //  ⚠ IF YOU RECONNECT ANY OF THESE, THE LADDER NEEDS THE THING IT NEVER HAD: a bound. An
-        //  attempt count, a Δv budget, and a convergence test that fails loudly. The reason the
-        //  live path above needs none of that is that it does not loop at all.
+        //  ⚠ IF YOU RECONNECT ANY OF THESE, THEY NEED THE THING THEY NEVER HAD: a bound. An
+        //  attempt count, a Δv budget, and a convergence test that fails loudly. That is exactly
+        //  what leg 1 above now has - `Approach.PhaseMaxPass` laps and then a documented
+        //  fall-through - and it is the difference between a loop that converges and one that ate
+        //  a twenty-minute session.
         // =====================================================================================
 
         private static void FlyMatchOrbit()
@@ -382,8 +776,10 @@ namespace DragonScreen
             p.Mu = b.gravParameter;
             p.Orbits = Approach.PhaseOrbits;
 
-            PhasingSolution sol = Phasing.Solve(p);
+            int laps;
+            PhasingSolution sol = Phasing.SolveAdaptive(p, out laps);
             if (!sol.Ok) { Hold(); Note = "PHASING - " + sol.Note; return; }
+            p.Orbits = laps;                       // DirectionSane must see the flown solution
 
             // ⚠ THE DIRECTION CHECK IS NOT DECORATION. Flight 014's bad semi-major axis produced a
             // burn of roughly the right SIZE pointing the wrong WAY - 1353 m/s retrograde, periapsis
@@ -405,8 +801,12 @@ namespace DragonScreen
             {
                 lastBurnAt = now;
                 phaseReturnUt = now + sol.CoastS;
-                Debug.Log(Tag + "phasing: " + (Math.Abs(p.GapM) / 1000.0).ToString("F1") + " km "
-                          + (sol.Ahead ? "AHEAD" : "BEHIND") + ", " + sol.Note);
+                phasePass++;
+                Debug.Log(Tag + "phasing lap " + phasePass + " of " + Approach.PhaseMaxPass + ": "
+                          + (Math.Abs(p.GapM) / 1000.0).ToString("F1") + " km "
+                          + (sol.Ahead ? "AHEAD" : "BEHIND") + ", " + sol.Note
+                          + (laps > Approach.PhaseOrbits
+                             ? "  (spread over " + laps + " laps to stay under the dv cap)" : ""));
             }
             else Note = NodeExecutor.Note;
         }

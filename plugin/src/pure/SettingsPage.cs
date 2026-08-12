@@ -119,11 +119,59 @@ namespace DragonScreen
             y = by + bh * 0.1225f + i * (BtnH + 8f);
         }
 
+        /// <summary>
+        /// The four hull-swept directions, which every vehicle has because they are derived from its
+        /// control point rather than from any part. Real cameras are appended after these.
+        /// </summary>
         public static readonly string[] CamNames = { "FRONT", "REAR", "LEFT", "RIGHT" };
+
+        /// <summary>
+        /// How many camera buttons this screen has room for.
+        ///
+        /// ⛔ THE COLUMN IS NOT INFINITE AND THE CAMERAS ARE NOT COUNTED BY US. Four fitted on
+        /// every screen size by inspection, so nobody had to ask; a craft carrying six hull cameras
+        /// on top of those would run the column off the bottom of the body and out through the tab
+        /// bar - which is exactly the failure the layout sweep exists to catch, and exactly the
+        /// failure a photograph of the cockpit showed on 2026-08-11 with AUTO DOCK. So the count is
+        /// derived from the space, and anything that does not fit is not drawn.
+        /// </summary>
+        public static int CamSlots(int w, int h)
+        {
+            float bx, by, bw, bh;
+            Body(w, h, out bx, out by, out bw, out bh);
+            float top = bh * 0.1225f;
+            float room = bh - top;
+            int n = (int)((room + 8f) / (BtnH + 8f));
+            if (n < 1) n = 1;
+            return n;
+        }
+
+        /// <summary>
+        /// The views actually on offer: the four directions plus whatever real cameras were found,
+        /// clipped to what fits. Never null.
+        /// </summary>
+        public static string[] CamList(PageState s, int w, int h)
+        {
+            string[] extra = s.CamLabels;
+            int have = CamNames.Length + ((extra != null) ? extra.Length : 0);
+            int slots = CamSlots(w, h);
+            int n = (have < slots) ? have : slots;
+
+            string[] a = new string[n];
+            for (int i = 0; i < n; i++)
+                a[i] = (i < CamNames.Length) ? CamNames[i] : extra[i - CamNames.Length];
+            return a;
+        }
 
         // ---------------------------------------------------------------- input
 
-        public static PageHit HitTest(float px, float py, int w, int h, int tab)
+        /// <param name="extraCams">
+        /// Real hull cameras found on the vehicle, beyond the four hull-swept directions. An int
+        /// rather than a PageState so the hit path stays free of display state - the painter is the
+        /// only thing that knows the count, and it is the only caller that has to supply it.
+        /// Defaults to none, which is what every existing caller and every layout test means.
+        /// </param>
+        public static PageHit HitTest(float px, float py, int w, int h, int tab, int extraCams = 0)
         {
             float x, y, rw, rh;
 
@@ -145,7 +193,12 @@ namespace DragonScreen
 
             if (tab == Video)
             {
-                for (int i = 0; i < CamNames.Length; i++)
+                // ⚠ THE SAME LIST THE PAINTER DREW, not CamNames. A hit test over a longer list
+                // than was painted is a button bound to nothing wearing the shape of one that works.
+                int have = CamNames.Length + extraCams;
+                int slots = CamSlots(w, h);
+                int n = (have < slots) ? have : slots;
+                for (int i = 0; i < n; i++)
                 {
                     CamRect(i, w, h, out x, out y, out rw, out rh);
                     if (Control.Hit(px, py, x, y, rw, rh))
@@ -275,10 +328,11 @@ namespace DragonScreen
                                      float bx, float by, float bw, float bh)
         {
             float x, y, rw, rh;
-            for (int i = 0; i < CamNames.Length; i++)
+            string[] cams = CamList(s, w, h);
+            for (int i = 0; i < cams.Length; i++)
             {
                 CamRect(i, w, h, out x, out y, out rw, out rh);
-                Control.Button(dl, x, y, rw, rh, CamNames[i], s.CameraView == i, true);
+                Control.Button(dl, x, y, rw, rh, cams[i], s.CameraView == i, true);
             }
             dl.Text("CAMERA", bx, by + bh * 0.1225f - 22f, Typography.Caption, TextAlign.Left,
                     DragonPalette.Text5);

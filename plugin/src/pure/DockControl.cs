@@ -231,6 +231,10 @@ namespace DragonScreen
         /// `StDirectApproach:1476`. `DockGNC`'s own taper went with `DockGNC`, which its header ends
         /// by telling us not to wire back in.
         ///
+        /// ⚠ `StDirectDv` IN THAT LIST IS DEAD - no callers, found by `check_live.py --audit`
+        /// on 2026-08-12. The live callers of `StSpeedCap` are `StCloseIn` and `StDirectApproach`.
+        /// The argument is unaffected; the roll-call was wrong.
+        ///
         /// ⚠ AND IT IS THE TIGHTER OF THE TWO, NOT SIMPLY THE LADDER. Replacing the old curve
         /// outright made the servo SLOWER everywhere it mattered and FASTER at contact - 1 m/s at
         /// five metres from a port. Taking the minimum keeps F9I's ladder wherever it binds and

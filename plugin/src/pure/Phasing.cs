@@ -139,6 +139,53 @@ namespace DragonScreen
             return s;
         }
 
+        /// <summary>Most laps <see cref="SolveAdaptive"/> will spread a gap over.</summary>
+        public const int MaxLaps = 3;
+
+        /// <summary>
+        /// Solve, and if the answer is over the Δv cap, spread it over more laps and solve again.
+        ///
+        /// ---- WHY: ONE LAP CANNOT PAY FOR THE LARGEST GAPS, AND THE CAP IS RIGHT TO REFUSE ----
+        /// The gap is a projection along the station's track, so it cannot exceed half a lap of its
+        /// orbit - 2156 km at the measured 86.8 x 85.8 km. Simulated across that whole range against
+        /// this exact law:
+        ///
+        ///      gap        1 lap                2 laps
+        ///      1700 km    224.9 m/s  ok        -
+        ///      2000 km    253.7 m/s  REJECTED  147.1 m/s  ok
+        ///      2100 km    262.8 m/s  REJECTED  153.2 m/s  ok
+        ///      2156 km    267.8 m/s  REJECTED  156.6 m/s  ok
+        ///
+        /// So a single lap leaves a band near the maximum that is refused for being expensive rather
+        /// than for being wrong, and the fix costs nothing but time: two laps roughly halves the Δv
+        /// and doubles the wait, 47 minutes to 79. The cap itself stays exactly where it is - it is
+        /// what caught flight 014's 1353 m/s - and this only stops it rejecting arithmetic that was
+        /// correct all along.
+        ///
+        /// ⚠ MORE LAPS IS NOT A RETRY. Each lap count is a DIFFERENT, complete solution, and the
+        /// first one under the cap is flown. A solution rejected for direction or for a nonsensical
+        /// period is not retried at all - those are wrong, not expensive.
+        /// </summary>
+        public static PhasingSolution SolveAdaptive(PhasingInputs p, out int lapsUsed)
+        {
+            lapsUsed = (p.Orbits > 0) ? p.Orbits : 1;
+            PhasingSolution first = Solve(p);
+            if (first.Ok) return first;
+
+            // Only the Δv cap is worth spending laps on. Anything else is a bad number.
+            if (first.Note == null || first.Note.IndexOf("exceeds the", System.StringComparison.Ordinal) < 0)
+                return first;
+
+            for (int laps = lapsUsed + 1; laps <= MaxLaps; laps++)
+            {
+                PhasingInputs q = p;
+                q.Orbits = laps;
+                PhasingSolution s = Solve(q);
+                if (s.Ok) { lapsUsed = laps; return s; }
+            }
+            return first;
+        }
+
         /// <summary>
         /// Δv to circularise back into the station's orbit at the end of the coast.
         ///

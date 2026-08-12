@@ -56,6 +56,8 @@ namespace DragonScreen
     {
         public double HaveUnits, NeedUnits, MarginUnits;
         public double DeorbitUnits, EntryUnits, LandingUnits;
+        /// <summary>What it costs merely to reach the atmosphere. The refusal threshold.</summary>
+        public double EntryInterfaceUnits;
         public bool S2Deorbit;
         public bool Sufficient;
         /// <summary>One line, in the shape F9I logs it. Says WHICH de-orbit is budgeted for.</summary>
@@ -127,6 +129,53 @@ namespace DragonScreen
         }
 
         /// <summary>
+        /// Periapsis that counts as committed to entry, metres.
+        ///
+        /// ⚠ NOT THE AIM POINT. `DeorbitPeriapsisM` is -31.8 km, deliberately deep, because the
+        /// entry guidance wants margin to trim away. This is the far shallower question of whether
+        /// the capsule can get into the atmosphere AT ALL, and 40 km is the figure `FlightCommands`
+        /// already uses for WATER DEORBIT - flown on 2026-08-11 16:16 and reported "target periapsis
+        /// reached". A number this code path already trusts, rather than a new one.
+        /// </summary>
+        public const double EntryInterfacePeriapsisM = 40000.0;
+
+        /// <summary>
+        /// The monopropellant that buys an ENTRY, as opposed to a good landing.
+        ///
+        /// ---- ⛔ WHY THE TWO FIGURES MUST BE SEPARATE ----
+        /// Refusing a de-orbit is a serious act - it strands the crew - so it must be based on what
+        /// is physically impossible, not on what is merely going to land badly. On 2026-08-11 16:12
+        /// a capsule with 71.1 units was refused against a 78.7-unit figure, and 78.7 is the cost of
+        /// driving periapsis to MINUS 31.8 km. Reaching 40 km costs roughly a third of that. The
+        /// vehicle could have come home; the guard said it could not.
+        ///
+        /// So: cannot reach <see cref="EntryInterfacePeriapsisM"/> is a REFUSAL, and cannot reach the
+        /// deep aim point is a WARNING that the landing will miss. Same split as F5, one level down.
+        /// </summary>
+        public static double EntryInterfaceMonoUnits(BudgetInputs b)
+        {
+            if (b.S2Attached) return 0.0;
+            if (b.Mu <= 0.0 || b.MassT <= 0.0) return 0.0;
+
+            double ra = b.BodyRadiusM + b.ApoapsisM;
+            double rp = b.BodyRadiusM + EntryInterfacePeriapsisM;
+            // Already low enough? Then it costs nothing to be on an entry trajectory. Periapsis is
+            // derived from the two figures already here rather than carried as a third the glue
+            // could fill in inconsistently: r_pe = 2a - r_ap.
+            double peM = 2.0 * b.SmaM - ra - b.BodyRadiusM;
+            if (peM <= EntryInterfacePeriapsisM) return 0.0;
+
+            double vNow = VisViva(ra, b.SmaM, b.Mu);
+            double vAfter = VisViva(ra, (ra + rp) / 2.0, b.Mu);
+            double dv = vNow - vAfter;
+            if (dv < 0.0) dv = -dv;
+
+            double x = dv / (MonoIsp * G0);
+            double kg = b.MassT * 1000.0 * (x - (x * x / 2.0));
+            return kg / MonoKgPerUnit;
+        }
+
+        /// <summary>
         /// The whole return budget, BEFORE anything is committed.
         ///
         /// The line says WHICH de-orbit is being budgeted for, because a zero de-orbit figure with the
@@ -137,6 +186,7 @@ namespace DragonScreen
             BudgetReport r = new BudgetReport();
             r.HaveUnits = b.MonoUnits;
             r.DeorbitUnits = DeorbitMonoUnits(b);
+            r.EntryInterfaceUnits = EntryInterfaceMonoUnits(b);
             r.EntryUnits = EntryUnits;
             r.LandingUnits = ReserveFor(b.Mode);
             r.NeedUnits = r.DeorbitUnits + r.EntryUnits + r.LandingUnits;

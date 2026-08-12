@@ -153,8 +153,40 @@ namespace DragonScreen
         /// </summary>
         public static bool Burn(double dvMps, double aimErrorDeg, double closingMps, double rangeM)
         {
+            return Burn(dvMps, aimErrorDeg, closingMps, rangeM, true);
+        }
+
+        /// <summary>
+        /// As above, but knowing whether we are still building speed or already coasting in.
+        ///
+        /// ---- ⛔ THE SPEED CAP BELONGS TO THE ACCELERATE LOOP ONLY. F9I HAS THREE LOOPS. ----
+        /// `StDirectApproach` is three sequential loops and our port collapsed them into one:
+        ///
+        ///     accelerate  station_ops.ks:43   if stClosN >= stCap { set stThr to 0. }
+        ///     coast            :67            if stDvCmd:mag > stDirectTol and vang(...) < stAimTol
+        ///     brake            :87            if vang(facing, -stV) &lt; 10 { burn }
+        ///
+        /// Only the FIRST has a cap. The coast loop re-solves the correction every tick and burns it
+        /// whenever it is worth burning and the nose is on it - with no reference to closing rate at
+        /// all - and the brake loop points retrograde and burns freely.
+        ///
+        /// Applying the cap in all three inverted its meaning. A cap is supposed to stop the vehicle
+        /// building MORE speed; ours also refused to fire when already too fast, which is precisely
+        /// when a correction is needed. Measured 2026-08-12: 8% of approach ticks were over the band
+        /// cap, including 24.4 m/s at 528 m where the cap is 5 - the guidance had computed the right
+        /// braking correction and then declined to apply it. The capsule arrived at 195 m doing
+        /// 24 m/s against a commanded 0.4.
+        ///
+        /// ⚠ The cap is NOT weakened. `WantSpeedMps` still tapers the commanded speed, so the
+        /// correction the coast loop burns is a braking one whenever we are above it. This only stops
+        /// the gate blocking the burn that fixes the very condition it is detecting.
+        /// </summary>
+        public static bool Burn(double dvMps, double aimErrorDeg, double closingMps, double rangeM,
+                                bool accelerating)
+        {
             if (dvMps <= DvToleranceMps) return false;
             if (aimErrorDeg >= AimToleranceDeg) return false;
+            if (!accelerating) return true;
             return closingMps < Approach.SpeedCap(rangeM);
         }
 

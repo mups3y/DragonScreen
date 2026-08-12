@@ -150,6 +150,67 @@ public static class PhasingTest
         Check("at the aim point, arrived",
               Approach.LegFor(50.0, 50.0, 60.0, stnSma, stnSma) == ApproachLeg.Arrived, "");
 
+        // ================================================================================
+        //  ADAPTIVE LAPS. The figures are from the RK4 sweep in the SolveAdaptive header, so a
+        //  change that quietly alters the law fails here rather than in flight.
+        // ================================================================================
+        double rStn = stnSma, vStn = Math.Sqrt(Mu / rStn);
+        double tStn = 2.0 * Math.PI * Math.Sqrt(rStn * rStn * rStn / Mu);
+
+        PhasingInputs adBig = new PhasingInputs();
+        adBig.RadiusM = rStn; adBig.SpeedMps = vStn;
+        adBig.StationPeriodS = tStn; adBig.StationSmaM = rStn; adBig.Mu = Mu; adBig.Orbits = 1;
+
+        // 1700 km is payable in adOne lap; 2100 km is not.
+        adBig.GapM = 1700000.0;
+        int adLaps;
+        PhasingSolution adOne = Phasing.SolveAdaptive(adBig, out adLaps);
+        Check("a 1700 km gap closes in a single lap", adOne.Ok && adLaps == 1,
+              adLaps + " adLaps, " + adOne.Note);
+
+        adBig.GapM = 2100000.0;
+        PhasingSolution adTwo = Phasing.SolveAdaptive(adBig, out adLaps);
+        Check("a 2100 km gap is over the cap in adOne lap but pays in adTwo",
+              adTwo.Ok && adLaps == 2, adLaps + " adLaps, " + adTwo.Note);
+        Check("...and spreading it really did cut the dv under the cap",
+              adTwo.Ok && Math.Abs(adTwo.EntryDvMps) <= Phasing.MaxDvMps,
+              adTwo.EntryDvMps.ToString("F1"));
+        Check("...and it costs proportionally more waiting",
+              adTwo.Ok && adTwo.CoastS > 1.5 * adOne.CoastS,
+              (adTwo.CoastS / 60.0).ToString("F0") + " min");
+
+        // ⚠ MORE LAPS IS NOT A UNIVERSAL RETRY. A nonsensical period is wrong, not expensive,
+        // and must not be quietly re-solved into something that looks fine.
+        PhasingInputs adJunk = adBig;
+        adJunk.GapM = -2.0 * Math.PI * rStn;      // a full lap adBehind: period goes to zero
+        adJunk.Orbits = 1;
+        PhasingSolution adBad = Phasing.SolveAdaptive(adJunk, out adLaps);
+        Check("a nonsensical period is refused outright, not spread over more adLaps",
+              !adBad.Ok, adBad.Note);
+
+        // ---- THE DIRECTION PROPERTY THAT MAKES PHASING SAFE AT ALL ----
+        // Ahead means RAISE. This is why a phasing burn structurally cannot drop periapsis into
+        // the atmosphere the way flight 012's pursuit did.
+        adBig.GapM = 50000.0; adBig.Orbits = 1;
+        PhasingSolution adAhead = Phasing.Solve(adBig);
+        Check("adAhead of the station: raise the orbit",
+              adAhead.Ok && adAhead.Ahead && adAhead.PhaseSmaM > rStn && adAhead.EntryDvMps > 0.0,
+              adAhead.PhaseSmaM.ToString("F0"));
+        Check("...and that passes the direction check", Phasing.DirectionSane(adBig, adAhead), "");
+
+        adBig.GapM = -50000.0;
+        PhasingSolution adBehind = Phasing.Solve(adBig);
+        Check("adBehind the station: lower the orbit",
+              adBehind.Ok && !adBehind.Ahead && adBehind.PhaseSmaM < rStn && adBehind.EntryDvMps < 0.0,
+              adBehind.PhaseSmaM.ToString("F0"));
+        Check("...and that passes too", Phasing.DirectionSane(adBig, adBehind), "");
+
+        // ---- THE BURN POINT STAYS AN APSIS, SO PERIAPSIS NEVER MOVES ----
+        // Simulated: periapsis held at 86.3 km across every gap from 1 km to 1700 km.
+        double rOther = 2.0 * adAhead.PhaseSmaM - rStn;
+        Check("closing a forward gap leaves the burn point as the LOW apsis",
+              rOther > rStn, ((rOther - rStn) / 1000.0).ToString("F1") + " km higher");
+
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
     }

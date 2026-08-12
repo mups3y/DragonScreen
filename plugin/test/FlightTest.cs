@@ -604,6 +604,71 @@ public static class FlightTest
         Check("a powered lean is signed the other way",
               Landing.LeanFraction(500.0, -3.0) < 0.0,
               Landing.LeanFraction(500.0, -3.0).ToString("F5"));
+
+        // ================================================================================
+        //  ⛔ THE CANCELLATION. This is the property the descent's stability rests on, and the
+        //  three checks above could not catch it breaking: they call LeanFraction with the right
+        //  argument, and the 2026-08-11 fault was the CALLER passing a different quantity.
+        //
+        //  As the impact error shrinks its DIRECTION becomes meaningless - a predicted impact
+        //  point that jitters by a metre swings its azimuth arbitrarily, up to a full reversal.
+        //  What keeps the command still is that the lean it is multiplied by shrinks at the same
+        //  time. So the thing to test is the WORST-CASE COMMANDED SWING: how far the aim moves if
+        //  the error direction reverses completely.
+        //
+        //      swing = 2 * atan(LeanFraction(error, aoa))
+        //
+        //  It must go to zero with the error. Scaled on downrange - which is never small - it does
+        //  not: it sits at 2*atan(tan(15)) = 30 degrees all the way to touchdown, which is the
+        //  measured 4-second limit cycle with actuation saturated 30% of the descent.
+        // ================================================================================
+        double swing500 = 2.0 * Math.Atan(Landing.LeanFraction(500.0, 15.0)) * 180.0 / Math.PI;
+        double swing5 = 2.0 * Math.Atan(Landing.LeanFraction(5.0, 15.0)) * 180.0 / Math.PI;
+        double swing1 = 2.0 * Math.Atan(Landing.LeanFraction(1.0, 15.0)) * 180.0 / Math.PI;
+        double swing0 = 2.0 * Math.Atan(Landing.LeanFraction(0.05, 15.0)) * 180.0 / Math.PI;
+
+        Check("a reversed direction on a LARGE error is allowed to swing the aim",
+              swing500 > 25.0, swing500.ToString("F1") + " deg");
+        Check("at the 5 m deadband edge the worst-case swing is already bounded",
+              swing5 <= swing500 + 1e-9, swing5.ToString("F1") + " deg");
+        Check("at 1 m of error a full reversal moves the aim under 7 deg",
+              swing1 < 7.0, swing1.ToString("F1") + " deg");
+        Check("at 5 cm it is under half a degree - the noisy azimuth cannot be felt",
+              swing0 < 0.5, swing0.ToString("F3") + " deg");
+        Check("and the swing is monotone in the error, so there is no worst case in between",
+              swing0 < swing1 && swing1 < swing5 && swing5 <= swing500, "");
+
+        // The counter-case, stated so the regression is unmistakable: feeding a downrange-like
+        // number where the error belongs pins the swing at the full 30 degrees no matter how
+        // perfectly the stage is tracking.
+        double swingWrong = 2.0 * Math.Atan(Landing.LeanFraction(600.0, 15.0)) * 180.0 / Math.PI;
+        Check("scaling on downrange would leave a 30 deg swing on a perfect track",
+              swingWrong > 29.0 && swingWrong < 31.0, swingWrong.ToString("F1") + " deg");
+
+        // ================================================================================
+        //  ⛔ THE APPROACH MUST BE ABLE TO BRAKE. The cap belongs to the accelerate loop only.
+        //  2026-08-12: 24.4 m/s closing at 528 m against a 5 m/s cap, because the gate refused to
+        //  fire exactly when the correction was a braking one.
+        // ================================================================================
+        double fastClose = 24.4, atRange = 528.0;
+        Check("while ACCELERATING the cap still blocks building more speed",
+              !DirectApproach.Burn(5.0, 1.0, fastClose, atRange, true), "");
+        Check("while COASTING the same state is allowed to burn - that burn is the brake",
+              DirectApproach.Burn(5.0, 1.0, fastClose, atRange, false), "");
+        Check("a tiny correction is still not worth a burn in either phase",
+              !DirectApproach.Burn(0.0, 1.0, fastClose, atRange, false), "");
+        Check("and neither is one we are not pointed at",
+              !DirectApproach.Burn(5.0, 90.0, fastClose, atRange, false), "");
+        Check("under the cap, accelerating burns normally",
+              DirectApproach.Burn(5.0, 1.0, 0.5, atRange, true), "");
+
+        // ---- THE LANDING ROLL REFERENCE IS SKIPPED NEAR THE lookdirup SINGULARITY ----
+        Check("a vertical stage over the pad does not take the horizontal roll reference",
+              5.0 < Landing.RollRefMinDeg, "");
+        Check("...nor one pointed nearly opposite it",
+              170.0 > Landing.RollRefMaxDeg, "");
+        Check("but a leaning stage does", 45.0 >= Landing.RollRefMinDeg
+              && 45.0 <= Landing.RollRefMaxDeg, "");
     }
 
     // ------------------------------------------------------------------ rendezvous
@@ -712,7 +777,16 @@ public static class FlightTest
         // ---- THE FITTED CONSTANTS. THE SOURCE RECORDS THE MISS EACH ONE PRODUCED. ----
         Check("S2 crew aim is the 159 m fit", Deorbit.AimS2Crew == 286000.0, "");
         Check("S2 cargo aim is the 331 m fit", Deorbit.AimS2Cargo == 315450.0, "");
-        Check("Draco crew aim is flight 076's", Deorbit.AimDracoCrew == 270700.0, "");
+        // ⚠ RE-FIT 2026-08-12, and deliberately still pinned so a future edit is a decision.
+        // F9I flew 270 700 on its flight 076. Ours now carries most of its monopropellant to entry
+        // because the S2 performs the insertion, so the vehicle differs and the aim was re-fitted
+        // from our own first end-to-end return: settled 9.2 km short / AimGain 0.67 = +13 700 m.
+        Check("Draco crew aim is the 2026-08-12 re-fit", Deorbit.AimDracoCrew == 284400.0, "");
+        Check("...and it is a small correction on F9I's flown value, not a new number",
+              Math.Abs(Deorbit.AimDracoCrew - 270700.0) < 20000.0,
+              (Deorbit.AimDracoCrew - 270700.0).ToString("F0"));
+        Check("...still shorter than the S2 crew aim, which burns from higher",
+              Deorbit.AimDracoCrew < Deorbit.AimS2Crew, "");
         Check("S2 periapsis target", Deorbit.PeriapsisTargetS2 == -40800.0, "");
         Check("Draco aims the entry directly", Deorbit.PeriapsisTargetDraco == -31800.0, "");
         Check("landing-calibrated orbit", StationOps.DeorbitApM == 85100.0
