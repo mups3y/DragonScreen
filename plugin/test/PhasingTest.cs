@@ -211,6 +211,47 @@ public static class PhasingTest
         Check("closing a forward gap leaves the burn point as the LOW apsis",
               rOther > rStn, ((rOther - rStn) / 1000.0).ToString("F1") + " km higher");
 
+        // ---- ⛔ THE 2026-08-13 DEADLOCK. THE REAL NUMBERS OFF THE FLIGHT. ----
+        // Station 84.29 km AHEAD, our orbit 85.96 x 83.50 km. One lap puts the phasing periapsis
+        // at ~69 km - below Kerbin's 70 km atmosphere - so `NodeExecutor` refused it, the caller
+        // re-solved the identical burn, and it refused 4515 times in 102 seconds while the crew
+        // cancelled and re-engaged four times and finally gave up and de-orbited.
+        //
+        // The floor now lives in the SOLVER, and the cure is the mechanism that was already there
+        // for the dv cap: more laps is a smaller period change, which is a higher periapsis.
+        PhasingInputs dl = new PhasingInputs();
+        dl.GapM = -84290.0;
+        dl.RadiusM = 684730.0;
+        dl.SpeedMps = 2271.0;
+        dl.StationSmaM = 685800.0;
+        dl.StationPeriodS = 1899.0;
+        dl.Mu = 3.5316e12;
+        dl.Orbits = 1;
+        dl.PeriFloorRadiusM = 600000.0 + Rendezvous.PeriapsisFloorM;
+
+        PhasingSolution one = Phasing.Solve(dl);
+        Check("one lap is REFUSED for periapsis, not silently flown",
+              !one.Ok && one.Note.IndexOf("too low") >= 0, one.Note);
+
+        int dlLaps;
+        PhasingSolution fixedUp = Phasing.SolveAdaptive(dl, out dlLaps);
+        Check("SolveAdaptive spends a lap and finds a legal orbit", fixedUp.Ok,
+              fixedUp.Note == null ? "no solution" : fixedUp.Note);
+        Check("...in 2 laps", dlLaps == 2, dlLaps.ToString());
+
+        double dlPeri = 2.0 * fixedUp.PhaseSmaM - dl.RadiusM;
+        if (dlPeri > dl.RadiusM) dlPeri = dl.RadiusM;
+        Check("...and its periapsis clears the 75 km floor", dlPeri >= dl.PeriFloorRadiusM,
+              ((dlPeri - 600000.0) / 1000.0).ToString("F2") + " km");
+        Check("...with margin over the 70 km ATMOSPHERE the node executor tests",
+              dlPeri >= 670000.0, ((dlPeri - 670000.0) / 1000.0).ToString("F2") + " km of margin");
+
+        // A floor of zero must not change any of the behaviour above it.
+        PhasingInputs unchecked_ = dl;
+        unchecked_.PeriFloorRadiusM = 0.0;
+        Check("a zero floor disables the test rather than refusing everything",
+              Phasing.Solve(unchecked_).Ok, "");
+
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
     }

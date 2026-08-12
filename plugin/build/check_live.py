@@ -20,8 +20,22 @@ So: before a function name goes into a doc comment as a citation, it goes throug
 """
 import os, re, sys, glob
 
+# ---- THE LIVE KSP TREE, NOT THE RELEASE. ----
+# This pointed at `Desktop\Falcon 9 Interface\Ships\Script`, which is the PACKAGED RELEASE, and the
+# release is COMMENT-STRIPPED. Every line number this tool ever printed was a line number in a file
+# that does not exist on disk in that form: it reported `Flip1` defined at BOOSTER.ks:146 and called
+# at :108 and :113, when the live file has the definition at :295 and the calls at :226 and :231.
+# The LIVE/DEAD verdicts were still right - the call graph survives comment stripping - but the whole
+# point of this tool is to produce a CITATION, and a citation with a wrong line number is exactly
+# what RULE 1 exists to prevent.
+#
+# Two further reasons the release is the wrong source, both worse than the line numbers:
+#   · it is a SNAPSHOT (v1.1.0) and lags the live tree. `COMMON/TIME.ks` was deleted from the live
+#     tree on 2026-08-04 and the tagged release still carries it - so the tool would report its
+#     functions as present in code that no longer flies.
+#   · "verified live" has to mean the code that actually flew, and that is the KSP install.
 F9I_ROOTS = [
-    r"C:\Users\User\Desktop\Falcon 9 Interface\Ships\Script",
+    r"C:\Program Files (x86)\Steam\steamapps\common\Kerbal Space Program\Ships\Script",
 ]
 OUR_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src")
 
@@ -71,14 +85,14 @@ def report(name, text):
     if not defs:
         print("  %-24s NOT FOUND - no `function %s` anywhere in the F9I tree" % (name, name))
         return "missing"
-    where = ", ".join("%s:%d" % (os.path.basename(p), l) for p, l in defs)
+    where = ", ".join("%s:%d" % (os.path.relpath(p, F9I_ROOTS[0]), l) for p, l in defs)
     if not calls:
         print("  %-24s *** DEAD *** defined at %s, CALLED BY NOTHING" % (name, where))
         print("  %-24s     do not port it. find what the live path uses instead." % "")
         return "dead"
     print("  %-24s LIVE  (%s) - %d call site(s):" % (name, where, len(calls)))
     for p, l, src in calls[:4]:
-        print("  %-24s     %s:%d  %s" % ("", os.path.basename(p), l, src))
+        print("  %-24s     %s:%d  %s" % ("", os.path.relpath(p, F9I_ROOTS[0]), l, src))
     return "live"
 
 

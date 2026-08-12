@@ -101,9 +101,11 @@ Dragon separating into a stable orbit (was -121 km, which cost 114 of 195 mono u
 booster RTLS repeatably at 0.0 km / 4-6 m/s; the full return end to end — phase-down, de-orbit,
 trunk jettison, trim, lifting entry, drogues, mains, `DRAGON RECOVERED`.
 
-**THE ONE LEG THAT HAS NEVER SUCCEEDED IS DOCKING.** It now reaches `Axial` and stalls at 13 m. See
-the flight doc — my published diagnosis of that stall was wrong and the instrumentation to settle it
-went in afterwards.
+**DOCKING: the 13 m stall is SOLVED (2026-08-12 flight 19:29) but has NOT yet flown with the fix.**
+It was arithmetic - `StandoffM` 25 minus `StandoffToleranceM` 12 - and the cause was a stage machine
+whose every test was proximity to its own waypoint, so each stage falsified its own entry condition
+by succeeding. It is monotone now. **Both of my published diagnoses of that stall were wrong; the
+control path was never involved.** See `docs/SESSION_2026-08-12.md` section 3.
 
 **~7 930 headless checks pass** across 15 suites. 51 files in `src/pure`, 26 in `src/`, 16 test
 suites, 6 art files.

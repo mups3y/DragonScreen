@@ -1396,6 +1396,16 @@ namespace DragonScreen
             AttitudeController.Booster.RollStoppingScale =
                 GridFinsOut ? Landing.DescentRollStoppingScale : 1.0;
 
+            // ---- ⛔ AND A CEILING ON THE ROLL RATE ITSELF, PER PHASE. ----
+            // The stopping-time limit alone gave the flip 147 deg/s of permitted roll against
+            // 16 deg/s of pitch, because the roll axis has a hundredth of the inertia and one
+            // global `maxstoppingtime` scales both. See AttitudeCascade.MaxOmegaCapped for the
+            // 759 degrees that cost. The numbers are F9I's own measured peaks.
+            AttitudeController.Booster.RollRateCapDps =
+                flipping ? Landing.FlipRollRateCapDps
+                         : (GridFinsOut ? Landing.DescentRollRateCapDps
+                                        : Landing.RollRateCapDefaultDps);
+
             // ---- ⛔ AND FROM THE GLIDE DOWN, ROLL IS COMMANDED. F9I COMMANDS IT TOO. ----
             // The note below is right about the FLIP and was then applied to the whole descent,
             // which F9I does not do. `LandingZoneGuidance` - the function this guidance is a port of

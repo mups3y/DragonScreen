@@ -51,6 +51,9 @@ namespace DragonScreen
         private static Vessel ship;
         private static double startedAt;
         private static double lastBurnAt = -999.0;
+        /// <summary>One phasing refusal is a finding; 4515 of them is noise. Latched, reset on success.</summary>
+        private static bool phaseRefusalLogged;
+
         /// <summary>When the phasing coast returns us to the burn point. 0 = not phasing.</summary>
         private static double phaseReturnUt;
         /// <summary>Phasing laps flown this engagement. Bounded by `Approach.PhaseMaxPass`.</summary>
@@ -775,10 +778,31 @@ namespace DragonScreen
             p.StationSmaM = (Station.orbit != null) ? Station.orbit.semiMajorAxis : 0.0;
             p.Mu = b.gravParameter;
             p.Orbits = Approach.PhaseOrbits;
+            // F9I's `stPeriFloor`, at last connected to the thing that plans the burn. The solver
+            // clears this by 5 km, so `NodeExecutor.PeriapsisSafe`'s atmosphere test never has to
+            // catch a phasing entry - and if it ever does, that is a real bug rather than a
+            // disagreement between two floors.
+            p.PeriFloorRadiusM = b.Radius + Rendezvous.PeriapsisFloorM;
 
             int laps;
             PhasingSolution sol = Phasing.SolveAdaptive(p, out laps);
-            if (!sol.Ok) { Hold(); Note = "PHASING - " + sol.Note; return; }
+            if (!sol.Ok)
+            {
+                // ---- ⛔ A REFUSAL THAT REPEATS IDENTICALLY IS A DEADLOCK, NOT A GUARD. ----
+                // 4515 identical refusals in 102 s on 2026-08-13, none of them on the glass, while
+                // the crew re-engaged four times and then gave up. If more laps cannot fix it, the
+                // phasing cannot fix it, and the crew needs to be told that once and clearly.
+                Hold();
+                Note = "PHASING REFUSED - " + sol.Note;
+                if (!phaseRefusalLogged)
+                {
+                    phaseRefusalLogged = true;
+                    Debug.LogWarning(Tag + Note + " - tried up to " + Phasing.MaxLaps
+                                     + " laps. The approach is holding; it will not retry silently.");
+                }
+                return;
+            }
+            phaseRefusalLogged = false;
             p.Orbits = laps;                       // DirectionSane must see the flown solution
 
             // ⚠ THE DIRECTION CHECK IS NOT DECORATION. Flight 014's bad semi-major axis produced a

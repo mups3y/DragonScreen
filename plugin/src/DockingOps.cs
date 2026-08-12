@@ -24,33 +24,6 @@ using UnityEngine;
 
 namespace DragonScreen
 {
-    public enum DockStage : byte
-    {
-        Idle = 0,
-        /// <summary>No usable pair of ports. Says so rather than flying at the hull.</summary>
-        NoPort,
-        /// <summary>Range raised, waiting for KSP to load the station so its ports can be read.</summary>
-        AwaitingTarget,
-        /// <summary>Flying to the gate - the point where the port axis leaves the keep-out sphere.</summary>
-        ToGate,
-        /// <summary>The direct path cuts the hull; sliding round the sphere instead.</summary>
-        Rounding,
-        /// <summary>
-        /// At the gate and running IN along the port axis to the standoff.
-        ///
-        /// This is the real vehicle's approach-corridor transit: Crew Dragon holds outside the
-        /// Keep Out Sphere and then enters along a defined corridor to a close hold, rather than
-        /// closing on the station from wherever it happens to be. It is also the leg whose absence
-        /// deadlocked every docking attempt up to 2026-08-12 - see DockGeometry.AtGate.
-        /// </summary>
-        Corridor,
-        /// <summary>Holding at the standoff, lined up on the axis.</summary>
-        Standoff,
-        /// <summary>Straight down the port axis.</summary>
-        Axial,
-        Docked
-    }
-
     public static class DockingOps
     {
         private const string Tag = "[DragonScreen] ";
@@ -143,9 +116,10 @@ namespace DragonScreen
 
             keepOutR = MeasureKeepOut(station);
             bestRangeM = double.MaxValue; bestRangeAt = 0.0;
-            inCorridor = false;
+            reached = DockStage.Idle;
+            haveSideStep = false;
             Engaged = true;
-            Stage = DockStage.ToGate;
+            Commit(DockStage.ToGate);
             Debug.Log(Tag + "docking engaged - '" + ourPort.part.partInfo.title + "' to '"
                       + theirPort.part.partInfo.title + "', keep-out " + keepOutR.ToString("F0")
                       + " m");
@@ -163,7 +137,7 @@ namespace DragonScreen
         public static void Reset()
         {
             Engaged = false; Stage = DockStage.Idle; Note = "-";
-            inCorridor = false;
+            reached = DockStage.Idle; haveSideStep = false;
             ship = null; station = null; ourPort = null; theirPort = null;
             RangeToPortM = 0.0; ClosingMps = 0.0; AxisErrorDeg = 0.0;
         }
@@ -296,8 +270,27 @@ namespace DragonScreen
         /// <summary>Best range seen this approach, and when it was last improved on.</summary>
         private static double bestRangeM = double.MaxValue, bestRangeAt;
 
-        /// <summary>Committed to the approach corridor. See the latch note in Tick.</summary>
-        private static bool inCorridor;
+        /// <summary>Latched "which way is out" for a sidestep. See the note where it is used.</summary>
+        private static Vector3d sideStepOut;
+        private static bool haveSideStep;
+
+        /// <summary>
+        /// The furthest stage this approach has reached. The stage machine is MONOTONE - see the
+        /// note in Tick. Replaces the single-purpose `inCorridor` latch, which fixed this bug for
+        /// one stage and left the others holding it.
+        /// </summary>
+        private static DockStage reached;
+
+        // Ranking lives in `pure/DockApproach` so the flight code and the simulator cannot
+        // disagree about what "further along" means. A second copy here is the ChromeBar.LinkRect
+        // defect in another costume.
+
+        /// <summary>Enter a stage, and remember it as the high-water mark.</summary>
+        private static void Commit(DockStage s)
+        {
+            Stage = s;
+            if (DockApproach.Rank(s) > DockApproach.Rank(reached)) reached = s;
+        }
 
         /// <summary>Seconds the range may fail to improve before the docking gives up.</summary>
         private const double NoProgressLimitS = 60.0;
@@ -465,47 +458,88 @@ namespace DragonScreen
             Vector3d gate = tgtPos + axis * gateD;
             Vector3d standoff = tgtPos + axis * DockGeometry.StandoffM;
 
+            // ---- ⛔ THE DECISION IS `pure/DockApproach.Select`, AND THAT IS THE POINT. ----
+            // It used to be written out here, in KSP glue, where no test could reach it - and
+            // `DockControlTest` flew the servo for 40 000 steps and passed 4704 checks while
+            // docking never once succeeded, because it fed the servo the distance STRAIGHT TO THE
+            // PORT and the flight code feeds it the distance to the current WAYPOINT. The tested
+            // layer was not the broken layer. `DockApproachTest` now flies this exact function
+            // against a 3-D plant, and it found four defects on its first run.
+            //
+            // This block's only job is to turn the vessel state into scalars and the chosen
+            // waypoint back into a point.
+            double axialM = -Vector3d.Dot(toPort, axis);      // + when we are IN FRONT of the port
+            Vector3d lateralVec = toPort - axis * Vector3d.Dot(toPort, axis);
+            double lateralM = lateralVec.magnitude;
+
+            Vector3d toGate = gate - ourPos;
+            Vector3d cs = station.CoM - ourPos;               // us -> station centre
+            bool clear = (toGate.sqrMagnitude > 1e-6)
+                         && DockGeometry.PathClear(cs.magnitude, cs.sqrMagnitude,
+                                                   Vector3d.Dot(cs, toGate.normalized),
+                                                   toGate.magnitude, keepOutR);
+
+            DockApproachInputs ai = new DockApproachInputs();
+            ai.Valid = true;
+            ai.AxialM = axialM;
+            ai.LateralM = lateralM;
+            ai.ToStandoffM = (standoff - ourPos).magnitude;
+            ai.ToGateM = toGate.magnitude;
+            ai.PathClear = clear;
+            // ⛔ THE PORT'S OWN CAPTURE RANGE, NOT A CONSTANT. `MechJebModuleDockingAutopilot.cs:342`
+            // takes `acquireRange * 0.5` off the target node and falls back to 0.25 m. Ours had no
+            // notion of capture distance at all, so "arrived" was never a state the geometry could
+            // reach - it could only ever be reported by KSP coupling the ports.
+            ai.AcquireM = (theirPort != null && theirPort.acquireRange > 0.0f)
+                          ? theirPort.acquireRange * 0.5 : 0.25;
+            ai.SafeM = keepOutR;
+
+            DockApproachResult sel = DockApproach.Select(ai, reached);
+            Commit(sel.Stage);
+            Note = sel.Note;
+
+            // ---- INSIDE THE CAPTURE RANGE: STOP THRUSTING AND LET THE MAGNETS TAKE IT. ----
+            // MechJeb ends the approach at `zSep < acquireRange` (`:293`) rather than driving to
+            // contact. Holding the attitude matters - the ports must stay aligned for the latch -
+            // but pushing does not, and pushing through a capture is how a port bounces.
+            if (sel.Captured)
+            {
+                StopTranslating();
+                AttitudeController.Ascent.SteerTo(ship, -axis,
+                    (theirPort != null && theirPort.nodeTransform != null)
+                    ? (Vector3d)theirPort.nodeTransform.up : Vector3d.zero);
+                return;
+            }
+
+            if (sel.Waypoint != DockWaypoint.SideStep) haveSideStep = false;
+
             Vector3d target;
-            if (DockGeometry.AtStandoff((standoff - ourPos).magnitude))
+            switch (sel.Waypoint)
             {
-                Stage = DockStage.Axial;
-                target = tgtPos;
-                Note = "AXIAL - " + RangeToPortM.ToString("F1") + " m";
-            }
-            // ---- THE CORRIDOR. Arrive at the gate, then run IN along the port axis. ----
-            // ⚠ LATCHED. Without the latch the capsule leaves the gate, immediately stops being
-            // `AtGate`, reverts to targeting the gate, and oscillates between the two - which is a
-            // more animated version of the deadlock it replaces. Once committed to the corridor the
-            // only ways out are reaching the standoff, docking, or the no-progress guard.
-            else if (inCorridor || DockGeometry.AtGate((gate - ourPos).magnitude))
-            {
-                inCorridor = true;
-                Stage = DockStage.Corridor;
-                target = standoff;
-                Note = "CORRIDOR - " + (standoff - ourPos).magnitude.ToString("F0")
-                     + " m to the standoff";
-            }
-            else
-            {
-                Vector3d toGate = gate - ourPos;
-                Vector3d cs = station.CoM - ourPos;            // us -> station centre
-                bool clear = DockGeometry.PathClear(cs.magnitude, cs.sqrMagnitude,
-                                                    Vector3d.Dot(cs, toGate.normalized),
-                                                    toGate.magnitude, keepOutR);
-                if (clear)
-                {
-                    Stage = DockStage.ToGate;
-                    target = gate;
-                    Note = "TO GATE - " + toGate.magnitude.ToString("F0") + " m";
-                }
-                else
-                {
-                    // Slide ROUND the sphere rather than driving at it. Recomputed every tick, so
-                    // this is a continuous curve rather than a waypoint that has to be reached.
-                    Stage = DockStage.Rounding;
-                    target = Skirt(ourPos, gate);
-                    Note = "ROUNDING HULL";
-                }
+                case DockWaypoint.Port:
+                    target = tgtPos;
+                    break;
+                case DockWaypoint.Standoff:
+                case DockWaypoint.BackOut:
+                    target = standoff;
+                    break;
+                case DockWaypoint.SideStep:
+                    // ⛔ THE OUTWARD DIRECTION IS LATCHED. Recomputed from the live lateral vector
+                    // it FLIPS every time the capsule crosses the axis, the aim reverses, and the
+                    // capsule saws about the axis for ever - the simulator held 55.00 m for a full
+                    // 1800 s run doing exactly that. Which way is out is decided once per sidestep.
+                    if (!haveSideStep)
+                    {
+                        sideStepOut = (lateralM > 0.05)
+                                      ? lateralVec.normalized
+                                      : Vector3d.Exclude(axis, ship.ReferenceTransform.right).normalized;
+                        haveSideStep = true;
+                    }
+                    target = (ourPos - lateralVec) + sideStepOut * (keepOutR + 2.0);
+                    break;
+                default:
+                    target = clear ? gate : Skirt(ourPos, gate);
+                    break;
             }
 
             FlyTo(ourPos, target, axis);
@@ -567,6 +601,36 @@ namespace DragonScreen
             if (!ship.ActionGroups[KSPActionGroup.RCS])
                 ship.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
 
+            // ---- ⛔ MEASURE BEFORE ANY EARLY RETURN. A STALE READING LOOKS EXACTLY LIKE A LIVE ONE. ----
+            // These six used to be written only on the path that also commands thrust, so a coast
+            // left the LAST COMMANDED tick's numbers sitting in the recorder looking current. On
+            // 2026-08-12 `x_dkDistF` held 11.64 for 8 s while the true range fell 24.7 m -> 17.4 m,
+            // and reading that back it was impossible to tell a frozen sample from a controller
+            // that had stopped responding. The offsets are a MEASUREMENT of where the capsule is;
+            // they do not depend on whether we chose to burn, so they are taken every tick.
+            // Same family as the navball serving a RenderTexture nothing was rendering into.
+            Transform rt = ship.ReferenceTransform;
+            Vector3d nose = rt.up;
+
+            DockState ds = new DockState();
+            ds.Valid = true;
+            // Offsets and relative velocity resolved onto the capsule's OWN axes. `rt.forward` is the
+            // controller's -top - see AttitudeController's -90 note - so top is its negation.
+            ds.DistF = Vector3d.Dot(to, nose);
+            ds.DistS = Vector3d.Dot(to, rt.right);
+            ds.DistT = Vector3d.Dot(to, -rt.forward);
+            Vector3d ourRel = -relVel;                 // ours minus theirs
+            ds.VelF = Vector3d.Dot(ourRel, nose);
+            ds.VelS = Vector3d.Dot(ourRel, rt.right);
+            ds.VelT = Vector3d.Dot(ourRel, -rt.forward);
+            // ⚠ The cap comes from the SAME ladder the approach is flown on. A controller with its
+            // own idea of a safe closing speed is how you get a capsule that thinks it is being
+            // careful while the ladder thinks otherwise.
+            ds.SpeedCap = c.WantClosingMps;
+
+            DistF = ds.DistF; DistS = ds.DistS; DistT = ds.DistT;
+            VelF = ds.VelF; VelS = ds.VelS; VelT = ds.VelT;
+
             if (c.Coast) { StopTranslating(); return; }
 
             // ---- TRANSLATE, DO NOT ROTATE ----
@@ -588,31 +652,9 @@ namespace DragonScreen
             //   · AUTHORITY MIXING. The three axes share one set of thrusters, so the dominant one
             //     takes half and the others a quarter each. Commanding all three flat out is how a
             //     capsule crabs sideways into a hull.
-            Transform rt = ship.ReferenceTransform;
-            Vector3d nose = rt.up;
-
-            DockState ds = new DockState();
-            ds.Valid = true;
-            // Offsets and relative velocity resolved onto the capsule's OWN axes. `rt.forward` is the
-            // controller's -top - see AttitudeController's -90 note - so top is its negation.
-            ds.DistF = Vector3d.Dot(to, nose);
-            ds.DistS = Vector3d.Dot(to, rt.right);
-            ds.DistT = Vector3d.Dot(to, -rt.forward);
-            Vector3d ourRel = -relVel;                 // ours minus theirs
-            ds.VelF = Vector3d.Dot(ourRel, nose);
-            ds.VelS = Vector3d.Dot(ourRel, rt.right);
-            ds.VelT = Vector3d.Dot(ourRel, -rt.forward);
-            // ⚠ The cap comes from the SAME ladder the approach is flown on. A controller with its
-            // own idea of a safe closing speed is how you get a capsule that thinks it is being
-            // careful while the ladder thinks otherwise.
-            ds.SpeedCap = c.WantClosingMps;
-
             double dt = Time.fixedDeltaTime;
             if (dt <= 0.0) dt = 0.02;
             DockCommand dc = DockControl.Solve(ds, pidF, pidS, pidT, dt);
-
-            DistF = ds.DistF; DistS = ds.DistS; DistT = ds.DistT;
-            VelF = ds.VelF; VelS = ds.VelS; VelT = ds.VelT;
 
             AttitudeController.Ascent.UllageFore = dc.Fore;
             AttitudeController.Ascent.TranslateX = dc.Starboard;

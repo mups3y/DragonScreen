@@ -100,6 +100,12 @@ namespace DragonScreen
         /// single data point. If the next return lands LONG, halve the change rather than reverting
         /// it, and do not re-fit from `WorstErrorM` - see the note in EntryOps.Handover.
         /// </summary>
+        /// ⛔ STALE AS OF 2026-08-13 - THE STATION MOVED FROM 86 km TO 120 km.
+        /// This was fitted against returns from an 86 km orbit. A 120 km de-orbit is a different
+        /// entry: 26 m/s more braking, a shallower flight-path angle at interface, a longer glide.
+        /// The number below is the 86 km fit carried forward unchanged ON PURPOSE - guessing at a
+        /// correction would be a second single-point fit on top of an invalid one. Fly one return,
+        /// read the settled miss, and re-fit it ONCE using `settled / AimGain`.
         public const double AimDracoCrew = 284400.0;  // was 270700 (F9I flight 076); re-fit 2026-08-12
 
         /// <summary>De-orbit aims this far PAST the landing zone.</summary>

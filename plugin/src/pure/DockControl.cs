@@ -84,6 +84,8 @@ namespace DragonScreen
     {
         public double Fore, Starboard, Top;
         public double RangeM;
+        /// <summary>The closure was slowed to let the lateral catch up. See the note in Solve.</summary>
+        public bool Balanced;
         public string Note;
     }
 
@@ -162,6 +164,44 @@ namespace DragonScreen
             //
             // The offsets do not saturate, and "which axis has the most left to do" is what the
             // mixing was always trying to ask.
+            // ---- ⛔ THE CLOSURE WAITS FOR THE LATERAL. `MechJebModuleDockingAutopilot.cs:203-213`. ----
+            // Authority mixing decides WHICH axis gets the thrusters. It does not stop the capsule
+            // arriving before it is lined up, and that is a different failure: on 2026-08-12 the
+            // fore command sat saturated for 164 s with the lateral never closing, 97.8 units of
+            // monopropellant into a capsule that did not move.
+            //
+            // MechJeb couples them - if the axis cannot be nulled in the time the approach will
+            // take, the approach is slowed until it can:
+            //
+            //     timeToAxis       = |lateral| / lateralSpeed
+            //     timeToTargetSize = |axial|   / axialSpeed
+            //     axialSpeed  *= min(timeToTargetSize / timeToAxis, 1)
+            //     lateralSpeed = FixSpeed(lateralSpeed * 2)
+            //
+            // It can only ever SLOW the closure (the min caps at 1), so it cannot make an approach
+            // more aggressive than the ladder already allows.
+            double lat = System.Math.Sqrt(s.DistS * s.DistS + s.DistT * s.DistT);
+            double latSpeed = Abs(ps.Setpoint) + Abs(pt.Setpoint);
+            double axSpeed = Abs(pf.Setpoint);
+            if (lat > 1e-3 && latSpeed > 1e-6 && axSpeed > 1e-6)
+            {
+                double timeToAxis = lat / latSpeed;
+                double timeToClose = Abs(s.DistF) / axSpeed;
+                if (timeToAxis > 1e-6 && timeToClose > 1e-6
+                    && (Abs(s.DistF) <= lat * 10.0 || timeToClose <= timeToAxis * 10.0))
+                {
+                    double scale = timeToClose / timeToAxis;
+                    if (scale > 1.0) scale = 1.0;
+                    pf.Setpoint = pf.Setpoint * scale;
+                    ps.Setpoint = AxisSpeedLimit(s.DistS, s.SpeedCap * 2.0);
+                    pt.Setpoint = AxisSpeedLimit(s.DistT, s.SpeedCap * 2.0);
+                    of = pf.Update(s.VelF, dt);
+                    os = ps.Update(s.VelS, dt);
+                    ot = pt.Update(s.VelT, dt);
+                    c.Balanced = scale < 0.999;
+                }
+            }
+
             double af = Abs(s.DistF), as_ = Abs(s.DistS), at = Abs(s.DistT);
             if (as_ + at < af)
             {

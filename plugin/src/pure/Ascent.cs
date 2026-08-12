@@ -87,10 +87,33 @@ namespace DragonScreen
         /// downrange with no propellant to come home on. The two have to be chosen together, so they
         /// are chosen in one place.
         /// </summary>
+        /// <summary>
+        /// The station's orbital altitude, metres. ONE definition - the ascent targets it, the
+        /// de-orbit aim was fitted against it, and the phasing depth is measured from it.
+        ///
+        /// ⚠ `Deorbit.AimDracoCrew` WAS FITTED AT 86 km AND IS NOW STALE. It needs one return to
+        /// re-fit. Nothing else in the flight software depends on this number.
+        /// </summary>
+        public const double StationAltitudeM = 120000.0;
+
         public static AscentTarget Station(LandingProfile p)
         {
             AscentTarget t = new AscentTarget();
-            t.AltitudeM = 86000.0;
+            // ---- ⛔ THE STATION'S ALTITUDE, AND IT IS NOT A ROUND NUMBER BY ACCIDENT. ----
+            // 86 000 was the measured Space X Station altitude and it is being RAISED to 120 000 on
+            // 2026-08-13, deliberately, because 86 km left only 10.8 km between the station and the
+            // 75 km periapsis floor - and the phasing orbit has to fit in that gap.
+            //
+            // MEASURED consequence at 86 km: the largest along-track gap closable in the 3 permitted
+            // laps was 153 km, against a worst case of 2155 km - seven percent of the cases. On
+            // 2026-08-13 the launch window was missed by 34 min, the software launched anyway
+            // intending to phase in orbit, and the phasing was arithmetically impossible: 4515
+            // refusals in 102 s, by a margin of 300-600 metres.
+            //
+            // At 120 km there are 45 km of depth and 636 km closable in 3 laps - four times the
+            // reach - for 26 m/s more de-orbit out of the Draco's 423 m/s. It is also still far
+            // inside the ~300 km physics-unload range, so both vehicles stay loaded.
+            t.AltitudeM = StationAltitudeM;
             t.HeadingDeg = 90.0;
             double meco, stageAlt, gain, payload;
             LandingSites.AscentFor(p, out meco, out stageAlt, out gain, out payload);

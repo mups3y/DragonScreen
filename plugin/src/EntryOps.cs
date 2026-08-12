@@ -442,6 +442,27 @@ namespace DragonScreen
                        + (alt / 1000.0).ToString("F1") + " km)";
             }
 
+            // ---- ⛔ THE LANDING RESERVE OUTRANKS THE RANGE HERE TOO. ----
+            // `Trim()` above already refuses to spend below `Reserve()`, and its own comment calls
+            // that "the same test the de-orbit burn loop uses so the two cannot disagree". THE
+            // LIFTING ENTRY WAS THE ONE CALLER THAT DID NOT APPLY IT, and on 2026-08-12 that cost
+            // the whole tank: 84 km short along-track, `LateralCmd` railed at 1.00, a full 15 deg
+            // of commanded AoA held against the airstream for 350 s, and 57 of 185 units burned
+            // between 37 km and 11 km - reaching zero with 234 s still to fly. Attitude authority
+            // on the chutes matters more than an impact point that is already unreachable.
+            //
+            // ⚠ THIS IS A BOUND, NOT A TUNING KNOB, AND IT IS NOT A FIX FOR THE 84 km. It stops
+            // the vehicle spending propellant it needs on an error it cannot correct - an L/D of
+            // 0.27 was never going to retrieve 84 km. The aim is a separate question and is
+            // deliberately left alone; see the note on AimDracoCrew.
+            if (Mono(ship) <= Reserve())
+            {
+                if (VerticalCmd != 0.0 || LateralCmd != 0.0)
+                    Note += "  RESERVE - lift stowed, " + Mono(ship).ToString("F1") + " units left";
+                VerticalCmd = 0.0;
+                LateralCmd = 0.0;
+            }
+
             // ---- two scalars into an attitude ----
             Vector3d lift = (upC * (VerticalCmd * EntryGuidance.PitchSign))
                           + (rt * (LateralCmd * EntryGuidance.YawSign));

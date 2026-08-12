@@ -176,6 +176,40 @@ namespace DragonScreen
         }
 
         /// <summary>
+        /// The same, with an absolute ceiling on the rate. Zero or negative means no ceiling.
+        ///
+        /// ---- ⛔ WHY A ROLL AXIS NEEDS ONE AND A PITCH AXIS DOES NOT ----
+        /// `MaxOmega` is linear in torque and inverse in inertia, and on a spent booster those two
+        /// differ by two orders of magnitude between the axes. MEASURED on the 2026-08-13 flip:
+        ///
+        ///     roll   torque  41.13 kN.m   MoI    48 t.m2  ->  3 s of stopping time = 147 deg/s
+        ///     pitch  torque 458.16 kN.m   MoI  4916 t.m2  ->  3 s of stopping time =  16 deg/s
+        ///
+        /// F9I winds the gains UP for the flip because the stage must rotate hard - but that is a
+        /// PITCH decision, and one global `maxstoppingtime` applies it to an axis with a hundredth
+        /// of the inertia. The flip then commanded a roll rate nine times the pitch rate it was
+        /// actually trying to achieve, on a manoeuvre whose required roll is EXACTLY ZERO: the aim
+        /// rotates about `flipAxis` and the roll reference IS `-flipAxis`, so the target top never
+        /// moves.
+        ///
+        /// What followed is in the recording: full roll deflection at 0.03 deg of nose error, the
+        /// stage spun up to 53 deg/s, the roll error then wrapped through +/-180 deg every few
+        /// seconds so the command alternated instead of arresting, and the booster rolled 759 deg
+        /// through a 180 deg turn.
+        ///
+        /// A rate ceiling breaks that at the first step. It is not a gain to tune - it is the
+        /// statement that no phase of this flight has any use for a faster roll than the vehicle
+        /// F9I actually flies.
+        /// </summary>
+        public static double MaxOmegaCapped(double controlTorque, double momentOfInertia,
+                                            double maxStoppingTime, double capRadPerS)
+        {
+            double w = MaxOmega(controlTorque, momentOfInertia, maxStoppingTime);
+            if (capRadPerS > 0.0 && w > capRadPerS) w = capRadPerS;
+            return w;
+        }
+
+        /// <summary>
         /// Torque demand to an actuation fraction, with kOS's rate limiter: each axis may only move
         /// to twice its previous magnitude (floored at 0.005) in one tick. That is what stops a
         /// step change in the target snapping the controls hard over.

@@ -58,6 +58,121 @@ def load(path):
     return hdr, data, len(rows) - 1 - len(data)
 
 
+# ---------------------------------------------------------------- missions, not files
+#
+# ⛔ A RECORDING IS HALF A MISSION. THE RECORDER SPLITS AT AUTOPILOT HANDOVER.
+#
+# `FlightRecorder` starts a new file on every autopilot engage, so a mission lands in at least two:
+# ascent+booster in one, docking+return in the next, 0-10 s apart in `ut`. Taking the newest file -
+# which is what this tool did until 2026-08-12 - therefore assessed HALF A FLIGHT and said nothing
+# about it. That is the exact failure this tool exists to prevent, re-entering through the back door:
+# every docking assessment reported "blocks not exercised: a_, b_" and I read it as "launched from an
+# orbital save", and the booster numbers in docs/F9I_BOOSTER_TARGETS.md came from a different file
+# than the docking numbers beside them. 35 archived recordings; not one holds a whole mission.
+#
+# So segments are chained on UNIVERSAL TIME, which is continuous across the split, and `met` - which
+# restarts at 0 in each file - is rebased onto the mission clock.
+SEGMENT_GAP_S = 120.0
+
+
+def segment_info(path):
+    """(hdr, ut0, ut1, rows, has_liftoff) - or None if it is not a usable recording."""
+    try:
+        rows = list(csv.reader(io.open(path, encoding="utf-8", errors="replace")))
+    except IOError:
+        return None
+    if len(rows) < 3:
+        return None
+    hdr = rows[0]
+    if "ut" not in hdr:
+        return None
+    iu, ia = hdr.index("ut"), (hdr.index("a_phase") if "a_phase" in hdr else -1)
+    ut0 = ut1 = None
+    lift = False
+    n = 0
+    for r in rows[1:]:
+        if len(r) != len(hdr):
+            continue
+        try:
+            u = float(r[iu])
+        except ValueError:
+            continue
+        if ut0 is None:
+            ut0 = u
+        ut1 = u
+        n += 1
+        if ia >= 0 and r[ia] == "VERTICAL RISE":
+            lift = True
+    if ut0 is None or n < 20:
+        return None
+    return hdr, ut0, ut1, n, lift
+
+
+def missions():
+    """Every recording grouped into the mission it belongs to, oldest first."""
+    paths = glob.glob(os.path.join(CAPTURE, "flight_*.csv")) + \
+            glob.glob(os.path.join(ARCHIVE, "flight_*.csv"))
+    segs = []
+    for p in sorted(set(paths)):
+        info = segment_info(p)
+        if info:
+            segs.append((p,) + info)
+    segs.sort(key=lambda s: s[2])                       # by ut0
+
+    out, cur = [], []
+    for s in segs:
+        path, hdr, ut0, ut1, n, lift = s
+        if cur:
+            gap = ut0 - cur[-1][3]
+            # A NEW LAUNCH ALWAYS STARTS A MISSION, however small the gap. The last four launches
+            # sit in one continuous game session 10 s apart, and without this test a liftoff would
+            # be chained onto the previous flight's splashdown.
+            # A NEGATIVE gap is a revert - the same UT flown twice - and is also a new mission.
+            same = (0.0 <= gap <= SEGMENT_GAP_S) and not lift and hdr == cur[-1][1]
+            if not same:
+                out.append(cur); cur = []
+        cur.append(s)
+    if cur:
+        out.append(cur)
+    return out
+
+
+def mission_containing(path):
+    """The list of segments making up the mission that `path` belongs to."""
+    target = os.path.abspath(path)
+    for m in missions():
+        if any(os.path.abspath(s[0]) == target for s in m):
+            return m
+    info = segment_info(path)
+    return [(path,) + info] if info else None
+
+
+def load_mission(segs):
+    """
+    Concatenate the segments into one flight, with `met` rebased onto the mission clock.
+
+    Headers are identical by construction - `missions()` refuses to chain across a schema change,
+    because column 118 means different things in a 175-column file and a 181-column one, and a
+    silent misalignment is worse than two separate assessments.
+    """
+    hdr = segs[0][1]
+    iu, im = hdr.index("ut"), hdr.index("met")
+    ut_start = segs[0][2]
+    data, malformed = [], 0
+    for s in segs:
+        rows = list(csv.reader(io.open(s[0], encoding="utf-8", errors="replace")))
+        for r in rows[1:]:
+            if len(r) != len(hdr):
+                malformed += 1
+                continue
+            try:
+                r[im] = "%.2f" % (float(r[iu]) - ut_start)
+            except ValueError:
+                pass
+            data.append(r)
+    return hdr, data, malformed
+
+
 def num(r, i, n):
     try:
         return float(r[i[n]])
@@ -91,12 +206,29 @@ def recorder_health(hdr, data, malformed):
         print("  blocks not exercised by this flight (their columns are correctly idle): %s"
               % ", ".join(sorted(dormant)))
 
+    # ---- A BLOCK IS LIVE FOR PART OF A MISSION, NOT ALL OF IT. ----
+    # Chaining segments made this matter: a mission now holds a booster leg AND a capsule-only leg,
+    # so `b_` is "exercised" while being legitimately empty for most rows. Judging a column over the
+    # whole mission then flagged `b_massT` as "MASS <= 0 - impossible" from the rows where there is
+    # no booster at all. A column is only assessed over the rows where ITS OWN block is running.
+    gate = {"a_": "a_phase", "b_": "b_phase", "r_": "r_stage"}
+
+    def block_rows(pre):
+        key = gate.get(pre)
+        if key is None or key not in i2:
+            return data
+        g = i2[key]
+        return [r for r in data if r[g] not in ("-", "", "Idle")]
+
     flags = []
     for k, name in enumerate(hdr):
         pre = name[:2]
         if pre in live and not live[pre]:
             continue
-        vals = [r[k] for r in data]
+        rows_for = block_rows(pre) if pre in gate else data
+        if not rows_for:
+            continue
+        vals = [r[k] for r in rows_for]
         ne = [v for v in vals if v != ""]
         nums = []
         for v in ne:
@@ -290,12 +422,40 @@ def propellant(hdr, data, i):
         print("     *** TANK RAN DRY ***")
 
 
+def list_missions():
+    ms = missions()
+    print("%d mission(s), oldest first. A mission is one or more contiguous recordings.\n" % len(ms))
+    for k, m in enumerate(ms, 1):
+        span = m[-1][3] - m[0][2]
+        rows = sum(s[4] for s in m)
+        print("  %2d  %s  %5.0f s  %6d rows  %d segment(s)"
+              % (k, os.path.basename(m[0][0]), span, rows, len(m)))
+        for s in m[1:]:
+            print("      + %s" % os.path.basename(s[0]))
+    return 0
+
+
 def main():
-    path = sys.argv[1] if len(sys.argv) > 1 else newest()
-    if not path or not os.path.exists(path):
+    args = [a for a in sys.argv[1:]]
+    if args and args[0] in ("--list", "-l"):
+        return list_missions()
+    seed = args[0] if args else newest()
+    if not seed or not os.path.exists(seed):
         print("no flight capture found"); return 2
-    hdr, data, malformed = load(path)
-    print("FLIGHT ASSESSMENT  %s" % os.path.basename(path))
+
+    segs = mission_containing(seed)
+    if not segs:
+        print("could not read %s" % seed); return 2
+    hdr, data, malformed = load_mission(segs)
+
+    print("FLIGHT ASSESSMENT  %s" % os.path.basename(segs[0][0]))
+    if len(segs) > 1:
+        # Say which files this is, every time. The whole point is that a mission is not a file.
+        print("  %d recordings chained into one mission (met rebased onto the mission clock):"
+              % len(segs))
+        for s in segs:
+            print("     %-28s ut %9.0f -> %9.0f  %6.0f s  %5d rows"
+                  % (os.path.basename(s[0]), s[2], s[3], s[3] - s[2], s[4]))
     i = {n: k for k, n in enumerate(hdr)}
     recorder_health(hdr, data, malformed)
     physics(hdr, data, i)

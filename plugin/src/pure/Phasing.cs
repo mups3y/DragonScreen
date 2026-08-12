@@ -47,6 +47,21 @@ namespace DragonScreen
         public double Mu;
         /// <summary>Laps to spread the phasing over. More laps, less Δv, longer wait.</summary>
         public int Orbits;
+
+        /// <summary>
+        /// Absolute RADIUS the phasing orbit's periapsis may not go below. Zero = do not check.
+        ///
+        /// ⛔ THIS IS WHY THE RENDEZVOUS DEADLOCKED ON 2026-08-13. `Rendezvous.PeriapsisFloorM`
+        /// (F9I's `stPeriFloor`, 75 km) existed, was documented as "checked before every execute",
+        /// and THE SOLVER NEVER READ IT. So the solver happily returned a phasing orbit with a
+        /// periapsis of 69.5 km, `NodeExecutor.PeriapsisSafe` correctly refused it against the
+        /// 70 km atmosphere, the caller set a Note and returned, and the identical solution came
+        /// back next tick - 4515 refusals in 102 seconds, by a margin of 300 to 600 metres, while
+        /// the crew cancelled and re-engaged four times and finally gave up and de-orbited.
+        ///
+        /// A guard the SOLVER cannot see is a guard that can only ever deadlock the caller.
+        /// </summary>
+        public double PeriFloorRadiusM;
     }
 
     public struct PhasingSolution
@@ -125,6 +140,24 @@ namespace DragonScreen
             double vPhase = System.Math.Sqrt(term);
             s.EntryDvMps = vPhase - p.SpeedMps;
 
+            // ---- WOULD THIS PHASING ORBIT DIP TOO LOW? ----
+            // The burn is prograde/retrograde at the current point, so the current radius becomes
+            // one apsis and 2a - r is the other. Catching a station AHEAD of us means dropping into
+            // a faster, lower orbit, and on an 86 km station there is very little room beneath.
+            if (p.PeriFloorRadiusM > 0.0)
+            {
+                double other = 2.0 * s.PhaseSmaM - p.RadiusM;
+                double peri = (other < p.RadiusM) ? other : p.RadiusM;
+                if (peri < p.PeriFloorRadiusM)
+                {
+                    // The token `too low` is what SolveAdaptive keys on to spend a lap - see there.
+                    s.Note = "phasing periapsis would be "
+                           + ((peri - p.PeriFloorRadiusM) / 1000.0).ToString("F1")
+                           + " km too low";
+                    return s;
+                }
+            }
+
             double mag = (s.EntryDvMps < 0.0) ? -s.EntryDvMps : s.EntryDvMps;
             if (mag > MaxDvMps)
             {
@@ -140,7 +173,16 @@ namespace DragonScreen
         }
 
         /// <summary>Most laps <see cref="SolveAdaptive"/> will spread a gap over.</summary>
-        public const int MaxLaps = 3;
+        /// <summary>
+        /// Most laps <see cref="SolveAdaptive"/> will spread a gap over.
+        ///
+        /// ⛔ 3 -> 5 ON 2026-08-13. Laps are the CHEAP way to close phase - they cost mission time,
+        /// not propellant, and a smaller period change is both a smaller burn AND a higher
+        /// periapsis. Three laps closed 153 km of gap at the old 86 km station altitude against a
+        /// worst case of 2155 km. MechJeb's rendezvous autopilot takes `Math.Max(maxPhasingOrbits,
+        /// 5)`, treating anything under five as unreasonably small; this agrees with it.
+        /// </summary>
+        public const int MaxLaps = 5;
 
         /// <summary>
         /// Solve, and if the answer is over the Δv cap, spread it over more laps and solve again.
@@ -172,8 +214,14 @@ namespace DragonScreen
             PhasingSolution first = Solve(p);
             if (first.Ok) return first;
 
-            // Only the Δv cap is worth spending laps on. Anything else is a bad number.
-            if (first.Note == null || first.Note.IndexOf("exceeds the", System.StringComparison.Ordinal) < 0)
+            // ---- WHAT IS WORTH SPENDING A LAP ON ----
+            // The Δv cap and the periapsis floor are both "correct but too aggressive for one lap",
+            // and more laps is the cure for both: a smaller period change is a smaller Δv AND a
+            // higher periapsis, by the same arithmetic. Everything else is a bad number and no
+            // amount of laps will improve it.
+            if (first.Note == null
+                || (first.Note.IndexOf("exceeds the", System.StringComparison.Ordinal) < 0
+                    && first.Note.IndexOf("too low", System.StringComparison.Ordinal) < 0))
                 return first;
 
             for (int laps = lapsUsed + 1; laps <= MaxLaps; laps++)

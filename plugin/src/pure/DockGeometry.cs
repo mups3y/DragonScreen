@@ -102,6 +102,11 @@ namespace DragonScreen
         }
 
         /// <summary>Arrived at the standoff point?</summary>
+        /// ⛔ SUPERSEDED 2026-08-13 AND KEPT ONLY AS THE RECORD OF A BUG. NOTHING CALLS IT.
+        /// This predicate WAS the 13 m stall: "within 12 m of a point 25 m out" is false at 13 m
+        /// from the port, so Axial's entry condition failed BECAUSE AXIAL HAD WORKED. The final run
+        /// is now gated on lateral error alone (`DockApproach.CorridorRadiusM`, 1 m), which cannot
+        /// falsify itself by succeeding. Do not wire it back in.
         public static bool AtStandoff(double distanceToStandoffM)
         {
             return distanceToStandoffM < StandoffToleranceM;

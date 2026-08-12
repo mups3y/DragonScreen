@@ -132,6 +132,16 @@ namespace DragonScreen
         public double RollTorqueFactor = 1.0;
 
         /// <summary>
+        /// Ceiling on the commanded ROLL rate, degrees per second. Zero = no ceiling.
+        ///
+        /// MEASURED, not chosen: `docs/F9I_BOOSTER_TARGETS.md` gives the peak roll rate F9I's own
+        /// booster reaches in each phase, on the vehicle that lands 0.34-0.56 m from the pad -
+        /// 14.9 flip+boostback, 2.9 coast, 24.0 entry burn, 9.4 descent, 0.1 landing burn. This is
+        /// that envelope, so it never binds on a vehicle flying correctly and stops a runaway dead.
+        /// </summary>
+        public double RollRateCapDps = Landing.RollRateCapDefaultDps;
+
+        /// <summary>
         /// Pitch and yaw stopping time multiplier. `pitchts`/`yawts`, per phase.
         ///
         /// ---- ⛔ F9I SLOWS PITCH AND YAW FOR THE FLIP AND LEAVES ROLL ALONE. WE HAD ONE KNOB. ----
@@ -285,6 +295,7 @@ namespace DragonScreen
             MaxStoppingTime = AttitudeCascade.DefaultMaxStoppingTime;
             RollControlRangeDeg = AttitudeCascade.RollControlRangeDeg;
             RollTorqueFactor = 1.0;
+            RollRateCapDps = Landing.RollRateCapDefaultDps;
             PitchYawStoppingScale = 1.0;
             RollStoppingScale = 1.0;
             pitchPi.ResetI(); yawPi.ResetI(); rollPi.ResetI();
@@ -416,9 +427,13 @@ namespace DragonScreen
             // Per-axis time scale: pitch (x) and yaw (z) may be slowed together, roll (y) is not.
             double tsPY = MaxStoppingTime * PitchYawStoppingScale;
             double tsR  = MaxStoppingTime * RollStoppingScale;
+            // ⛔ THE ROLL AXIS GETS AN ABSOLUTE RATE CEILING. See AttitudeCascade.MaxOmegaCapped.
+            // Pitch and yaw do not need one - their inertia is ~100x the roll axis on a spent
+            // booster, so the stopping-time limit already lands somewhere sane.
+            double rollCap = RollRateCapDps * Mathf.Deg2Rad;
             Vector3d maxOmega = new Vector3d(
                 AttitudeCascade.MaxOmega(rollScaled.x, moi.x, tsPY),
-                AttitudeCascade.MaxOmega(rollScaled.y, moi.y, tsR),
+                AttitudeCascade.MaxOmegaCapped(rollScaled.y, moi.y, tsR, rollCap),
                 AttitudeCascade.MaxOmega(rollScaled.z, moi.z, tsPY));
 
             Vector3d targetOmega = Vector3d.zero;
@@ -575,6 +590,9 @@ namespace DragonScreen
             double power = rcs.thrusterPower * rcs.thrustPercentage * 0.01;
             if (power <= 0.0) return;
 
+            // Per-axis, per-direction accumulators for THIS block. See the note at the sum below.
+            double px = 0.0, nx = 0.0, py = 0.0, ny = 0.0, pz = 0.0, nz = 0.0;
+
             for (int i = 0; i < rcs.thrusterTransforms.Count; i++)
             {
                 Transform tr = rcs.thrusterTransforms[i];
@@ -585,10 +603,41 @@ namespace DragonScreen
                 Vector3d torque = Vector3d.Cross(pos, dir * power);
                 Vector3d local = vt.InverseTransformDirection(torque);
 
-                if (rcs.enablePitch) t.x += Math.Abs(local.x);
-                if (rcs.enableRoll) t.y += Math.Abs(local.y);
-                if (rcs.enableYaw) t.z += Math.Abs(local.z);
+                // ---- ⛔ A NOZZLE IS ONE-WAY. OPPOSED NOZZLES CANCEL; THEY DO NOT ADD. ----
+                // This was `t.y += Math.Abs(local.y)` per nozzle, so a symmetric block - four
+                // thrusters rolling one way, four the other, which is what any translation-capable
+                // block is - was credited |+T| + |-T| = 2T of roll authority where the real one-way
+                // figure is T. That is why MechJeb accumulates the two directions SEPARATELY in a
+                // Vector6 (`VesselState.cs:676-740`) instead of summing magnitudes.
+                //
+                // `AvailableTorque`'s comment justified the shortcut with "MechJeb's own comments
+                // assert pos and neg are symmetric for WHEELS AND GIMBALS". They are - and an RCS
+                // nozzle is neither. The exception was written down and then applied to the one
+                // module it does not hold for.
+                if (rcs.enablePitch) Bucket(local.x, ref px, ref nx);
+                if (rcs.enableRoll)  Bucket(local.y, ref py, ref ny);
+                if (rcs.enableYaw)   Bucket(local.z, ref pz, ref nz);
             }
+
+            // The authority GUARANTEED IN EITHER DIRECTION, which is what a controller that has to
+            // both start and stop an axis can rely on. MechJeb takes the larger because it uses the
+            // figure as a normaliser; ours divides the cascade by it and sets the rate limit from
+            // it, so the weaker direction is the one that binds.
+            //
+            // MEASURED, booster flip 2026-08-13: roll MoI is 48 t.m2 against pitch's 4916, so an
+            // overstated roll torque is amplified ~100x in RATE terms. 41.13 kN.m x 3 s / 48 gave a
+            // permitted roll rate of 147 deg/s against pitch's 16, the axis saturated 80% of the
+            // flip, and the stage rolled 759 deg through a 180 deg turn that needs ZERO roll.
+            t.x += Math.Min(px, nx);
+            t.y += Math.Min(py, ny);
+            t.z += Math.Min(pz, nz);
+        }
+
+        /// <summary>Split a signed per-nozzle torque into its two one-way buckets.</summary>
+        private static void Bucket(double signed, ref double pos, ref double neg)
+        {
+            if (signed >= 0.0) pos += signed;
+            else neg += -signed;
         }
     }
 }

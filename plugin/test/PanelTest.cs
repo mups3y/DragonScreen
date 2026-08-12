@@ -364,8 +364,13 @@ public static class PanelTest
     static void AscentProfile()
     {
         AscentTarget t = AscentTarget.Station();
-        Check("station target is the MEASURED orbit", Math.Abs(t.AltitudeM - 86000.0) < 1.0,
-              t.AltitudeM.ToString());
+        // ⛔ DERIVED, NOT HARD-CODED. This asserted 86 000 and the station moved to 120 000 on
+        // 2026-08-13, so the test failed for being right. A fixture that repeats a constant instead
+        // of reading it is trigger #2 in test form - one definition, or the two drift apart.
+        Check("the station target is the one definition of the station's altitude",
+              Math.Abs(t.AltitudeM - AscentTarget.StationAltitudeM) < 1.0, t.AltitudeM.ToString());
+        Check("...and it clears the atmosphere with room to phase beneath it",
+              t.AltitudeM > 100000.0, t.AltitudeM.ToString());
 
         // ---- THE TURN IS MONOTONIC AND NEVER POINTS AT THE GROUND ----
         // A guidance law that commands a negative pitch during ascent is a bug that flies the
@@ -521,21 +526,22 @@ public static class PanelTest
         Check("throttle is variable, not pinned",
               c.Throttle > 0.0 && c.Throttle <= 1.0, c.Throttle.ToString("F3"));
         // Closer to the target means less throttle - it is proportional to the DEFICIT.
-        AscentInputs nearly = bta; nearly.ApoapsisM = 85000.0;
+        AscentInputs nearly = bta; nearly.ApoapsisM = t.AltitudeM - 1000.0;
         Check("nearly there means gentler",
               Ascent.ApoapsisThrottle(nearly, t) < Ascent.ApoapsisThrottle(bta, t),
               Ascent.ApoapsisThrottle(nearly, t).ToString("F3"));
         Check("but never stops closing", Ascent.ApoapsisThrottle(nearly, t) >= 0.1, "");
 
         // Second stage reaching the ORBIT target hands over to the coast.
-        c = Ascent.Guide(Fly(80000.0, 86500.0, 20000.0, 0.0), t, AscentPhase.BurnToApoapsis);
+        c = Ascent.Guide(Fly(t.AltitudeM - 6000.0, t.AltitudeM + 500.0, 20000.0, 0.0), t,
+                         AscentPhase.BurnToApoapsis);
         Check("second stage ends at the orbit target", c.Phase == AscentPhase.Coast,
               c.Phase.ToString());
         Check("coast is engines off", c.Throttle == 0.0, c.Throttle.ToString());
 
         // ---- CIRCULARISATION RUNS ON THE dv, NOT ON PERIAPSIS ----
         // The periapsis-chasing version had no fixed point and flew a stage to escape velocity.
-        AscentInputs near = Fly(85000.0, 86500.0, 20000.0, 0.0);
+        AscentInputs near = Fly(t.AltitudeM - 1000.0, t.AltitudeM + 500.0, 20000.0, 0.0);
         near.TimeToApoapsisS = 5.0; near.CircDvMps = 120.0;
         c = Ascent.Guide(near, t, AscentPhase.Coast);
         Check("circularises near apoapsis", c.Phase == AscentPhase.Circularise, c.Phase.ToString());

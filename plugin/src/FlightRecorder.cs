@@ -158,7 +158,16 @@ namespace DragonScreen
             // landing command and the two numbers that judge it
             "b_cmdThrottle,b_ignitionAlt,b_engines,b_aim,b_legs," +
             "b_downrangeKm,b_predMissKm,b_initMissKm," +
-            "b_attErrDeg,b_omegaPdps,b_omegaRdps,b_omegaYdps,b_actP,b_actR,b_actY," +
+            // ⛔ THE BOOSTER GETS THE FULL CONTROL TRACE TOO, AS OF 2026-08-13.
+            // It was writing total error and rates only. Three separate attempts were made at
+            // the flip roll - 765 deg through a 180 deg turn with the actuator railed 80% of
+            // the time - and none could be settled, because the ROLL ERROR the loop is actually
+            // chasing was never recorded. `b_attErrDeg` is the NOSE error and says nothing about
+            // roll. Two of those three attempts shipped as no-ops.
+            "b_attErrDeg,b_phiPitchDeg,b_phiRollDeg,b_phiYawDeg," +
+            "b_tgtOmegaPdps,b_tgtOmegaRdps,b_tgtOmegaYdps," +
+            "b_omegaPdps,b_omegaRdps,b_omegaYdps," +
+            "b_tgtTorqueP,b_tgtTorqueR,b_tgtTorqueY,b_actP,b_actR,b_actY," +
             "b_ctlPitch,b_ctlYaw,b_ctlRoll,b_ctlThrottle," +
             // ================= THE RETURN =================
             // Not a third vehicle - the same craft as `a_`, in the phases after insertion. Kept in its
@@ -390,7 +399,7 @@ namespace DragonScreen
             F(r, BoosterRecovery.DownrangeM / 1000.0);
             F(r, BoosterRecovery.PredictedMissM / 1000.0);
             F(r, BoosterRecovery.InitialMissM / 1000.0);
-            Attitude(r, AttitudeController.Booster, false);
+            Attitude(r, AttitudeController.Booster, true);
             Controls(r, b);
 
             Return(r);
@@ -539,7 +548,17 @@ namespace DragonScreen
             S(r, NodeExecutor.Phase.ToString());
             F(r, NodeExecutor.RemainingDvMps);
 
-            F(r, ImpactPredictor.BallisticCoefficient(AutoPilot.AscentVessel));
+            // ---- ⛔ THE RETURN'S BC MUST COME FROM THE RETURN'S VEHICLE. ----
+            // This asked `AutoPilot.AscentVessel`, which is null on any flight that did not launch
+            // under the autopilot - so on 2026-08-12 `r_bcAscent` logged 0.0000 for an entire entry
+            // while `FlightDriver:73` was faithfully sampling `EntryOps.Vehicle` the whole way down.
+            // CLAUDE.md calls this one of "the two columns that judge a return" and it was reading a
+            // vessel that did not exist. Zero here is indistinguishable from "drag never measured",
+            // which is the state it is supposed to be able to report.
+            Vessel bcOurs = EntryOps.Vehicle;
+            if (bcOurs == null) bcOurs = DeorbitOps.Vehicle;
+            if (bcOurs == null) bcOurs = AutoPilot.AscentVessel;
+            F(r, ImpactPredictor.BallisticCoefficient(bcOurs));
             F(r, ImpactPredictor.BallisticCoefficient(BoosterRecovery.BoosterVessel));
 
             // ---- the middle of the mission. Seven columns, no branches - see the note above. ----
