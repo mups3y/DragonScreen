@@ -87,7 +87,9 @@ exceeds landed weight — so it must reach zero velocity and zero altitude simul
 **All of §4 is now ported and audited line by line.** The two that mattered most, both found only by
 reading the source rather than my summary of it: the ignition point solved on *surface* speed against
 *one* engine's thrust instead of vertical speed against three, and the descent lean steering on our
-CURRENT offset from the pad instead of the PREDICTED IMPACT POINT. Unflown.
+CURRENT offset from the pad instead of the PREDICTED IMPACT POINT. **FLOWN 2026-08-11: lands
+0.0 km / 1 m/s** (`FLIGHT_2026-08-11_1600.md`); the powered-off descent was wobbly and over-rolled
+(1515° vs F9I's 443°), re-tuned 2026-08-17 — reverify.
 
 ---
 
@@ -177,13 +179,12 @@ whole return. See `docs/PORT_PLAN.md` rule 0.
 ascend, recover the booster, insert, rendezvous, dock, refuel, undock, phase down, de-orbit, enter on
 lift, and land.
 
-**⛔ AND ALMOST NONE OF IT HAS FLOWN.** Only §2 and §5 are proven in the game - ascent and insertion,
-86.0 x 83.8 km with the second stage away. Everything from §4 onward is transcription plus headless
-tests: about 1 350 checks, which catch the arithmetic and cannot catch a wrong assumption about what
-KSP does. Treat every **PORTED** in this file as "written from the source that flies it", not as
-"works".
+**⛔ AND NOT ALL OF IT HAS FLOWN CLEANLY.** As of 2026-08-17: §2 ascent, §3 separation, §4 booster
+landing (0.0 km / 1 m/s, `FLIGHT_2026-08-11_1600.md`), §5 insertion and §7 docking have flown. §6
+rendezvous, §7 refuel/undock and the whole §8 return have been exercised in flight but not completed
+cleanly — each found real defects (fixed), and the 2026-08-17 fixes are unverified. Treat every
+**PORTED** that has not flown as "written from the source that flies it", not as "works".
 
 The order of work is now the order of *verification*, not of porting. The highest-value single test
-is a plain RTLS launch reading `b_phase` and `b_predMissKm`: §4 has the most flight-derived constants
-riding on it and has never landed. The return stack is downstream of an orbit we already reach
-reliably, so it can wait its turn.
+is a clean end-to-end ferry on the 2026-08-17 build, reading the de-orbit's signed along-track miss
+to finish the aim re-fit. See `docs/SESSION_2026-08-17.md`.

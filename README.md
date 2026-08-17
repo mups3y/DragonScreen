@@ -16,9 +16,10 @@ The goal, in the author's words:
 This repository is **published specifically so other people and other AI can find what we have
 missed**, so it is worth being blunt about where it stands.
 
-**The pages work. The flight software does not, yet.** Five test flights, five different failures,
-and several of the fixes contained their own bugs. The most useful thing you can do is look for the
-next one.
+**The pages work, and the flight software now flies — but not yet a clean mission end to end.**
+Ascent, booster landing, orbital insertion and docking have all flown; rendezvous and the de-orbit
+return have flown but not yet completed cleanly. Many test flights, many fixes, several of which
+contained their own bugs. The most useful thing you can do is look for the next one.
 
 **Start with these three files, in this order:**
 
@@ -28,15 +29,16 @@ next one.
 | `docs/F9I_PORT_MAP.md` | the port inventory: what has been taken from the working kOS autopilot, what has not, and what is known to be wrong |
 | `plugin/src/pure/` | all the guidance and layout logic, with no engine dependencies |
 
-**Known broken or unverified right now:**
+**Status as of 2026-08-17** (separating *flown* — in-game evidence in `docs/FLIGHT_*.md` — from
+*ported* — code plus headless tests):
 
-- The **attitude controller has never successfully executed**. It threw `MissingMethodException` on
-  every physics tick of its first flight (KSP's `QuaternionD.Euler` is broken; MechJeb ships its own
-  for that reason). Fixed but unflown.
-- **Booster recovery has never run once.** Every constant in `BoosterRecovery.cs` and
-  `pure/Landing.cs` is untested in flight.
-- **No orbit has been achieved.** The best flight reached a 73 km apoapsis and fell back.
-- Rendezvous, docking, refuelling and closed-loop entry guidance are **not built** — see the port map.
+- **Flown and working:** the attitude controller (the `QuaternionD.Euler` crash was fixed), ascent to
+  an 86 x 84 km orbit, S2 insertion, booster RTLS landing at 0.0 km / 1 m/s, and docking.
+- **Flown but not yet clean:** rendezvous (launch timing left the capsule too far to close — re-tuned,
+  unverified) and the de-orbit return (lands long — aim re-fit, unverified). No full end-to-end
+  mission has completed cleanly.
+- **Ported, not yet flight-verified:** refuel-while-docked, the automatic undock push, and the
+  closed-loop lifting-entry steering. See `docs/MISSION_PLAN.md` and `docs/F9I_PORT_MAP.md`.
 
 ---
 
@@ -44,7 +46,7 @@ next one.
 
     plugin/src/pure/     no KSP, no Unity. Layout, guidance, orbital maths. Headless-tested.
     plugin/src/          the thin glue that talks to KSP.
-    plugin/test/         ~7 400 headless checks, run on every build.
+    plugin/test/         ~9 150 headless checks (14 suites), run on every build.
     plugin/preview/      renders every page to PNG without launching the game.
     docs/                research, the port map, the UI audit.
 

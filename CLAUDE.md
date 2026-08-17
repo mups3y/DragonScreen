@@ -89,18 +89,37 @@ a paragraph of theory), and check whether a thing exists before building it.
 
 ---
 
-## WHERE THE BUILD IS — 2026-08-11. Read this before planning anything.
+## WHERE THE BUILD IS — updated 2026-08-17. Read this before planning anything.
 
-**⛔ UPDATED 2026-08-12 — read this block, then `docs/SESSION_2026-08-12.md` for the detail.**
+**⛔ Read this block, then `docs/SESSION_2026-08-17.md` for the current detail and
+`docs/SESSION_2026-08-12.md` for the earlier detail.**
 
-**~7 960 headless checks pass** across 16 suites. Recorder is **181 columns**. Two new tools exist
-and must be used: `plugin/build/check_live.py` (is that F9I function actually called?) and
+**9 154 headless checks pass** across 14 suites. Recorder is **190 columns** and self-verifies (logs
+`recorder verified: 190`; `RECORDER COLUMN MISMATCH` if a row disagrees — do not read that CSV). It
+was 145 on 08-11 and 181 on 08-12; it has grown with the return and tuning columns. Two tools must be
+used: `plugin/build/check_live.py` (is that F9I function actually called?) and
 `plugin/build/assess_flight.py` (the whole flight, one command). See checks -1 and -2 at the top.
 
-**FLOWN AND WORKING NOW:** ascent to 86.0 x 84.0 km with the **S2 performing the insertion** and the
-Dragon separating into a stable orbit (was -121 km, which cost 114 of 195 mono units every flight);
-booster RTLS repeatably at 0.0 km / 4-6 m/s; the full return end to end — phase-down, de-orbit,
-trunk jettison, trim, lifting entry, drogues, mains, `DRAGON RECOVERED`.
+**FLOWN — in-game evidence, cited:**
+- **Ascent to 86.0 x 84.0 km** with the **S2 performing the insertion**, Dragon separating into a
+  stable orbit (`docs/FLIGHT_2026-08-11_1600.md`). The capsule reaches orbit with ~71 of 195 mono
+  units — by design; the mission refuels at the station.
+- **Booster RTLS landing at 0.0 km downrange, 1 m/s** (`docs/FLIGHT_2026-08-11_1600.md`). The landing
+  is accurate; the powered-off DESCENT was wobbly and over-rolled (measured 1515° of roll vs F9I's
+  443°, `docs/F9I_BOOSTER_TARGETS.md`). Roll reference, camera handback and auto-recover were reworked
+  2026-08-17 — reverify on the next flight.
+- **Docking** with the gate → standoff → axial profile (crew report 2026-08-17: "docking worked",
+  after reaching the station on infinite fuel because the rendezvous fell short).
+
+**EXERCISED IN FLIGHT BUT NOT A CLEAN SUCCESS — do not describe these as working:**
+- **Rendezvous**: launch timing was mistuned (inserted ~486 km ahead; the capsule ran out of fuel
+  before closing). Both launch seeds re-tuned 2026-08-17 — unverified.
+- **The return stack** (phase-down, de-orbit, trunk jettison, trim, lifting entry, drogues, mains):
+  ported and flown, but every documented return so far hit a defect — a false budget refusal, a
+  stable-orbit hand-off to entry, a trunk that would not jettison (all fixed,
+  `docs/FLIGHT_2026-08-11_*`), and a de-orbit that lands long (~49.5 km, aim re-fit 2026-08-17).
+  **No clean `DRAGON RECOVERED` end-to-end run is evidenced in any flight doc.** Treat a full return
+  as unproven.
 
 **DOCKING: the LVLH WP0/WP1/WP2 "L" was REMOVED 2026-08-17 - it emptied the tank in flight.**
 The 08-13 rebuild flew the real Crew-Dragon L (WP0 400 m below -> WP1 220 m -> WP2 20 m), which
@@ -111,37 +130,38 @@ and below, so the L kept routing a near-port capsule back out to a point 400 m b
 the simpler gate -> standoff -> axial profile (`DOCKING_REBUILD_PLAN.md` Phase 1): 1 m lateral commit
 (not the self-falsifying `AtStandoff` - that was the old 13 m stall), the ported `DockControl`
 velocity inner loop kept, monotone stages. `DockApproachTest` now starts from the real ~60 m handover.
-**Passes headless; NOT yet flown with this fix** - assess with `assess_flight.py`: expect `Docked`
-reached, docking mono spend well down from 54, FORE no longer flagged INVERTED.
+**Passes headless, and FLOWN 2026-08-17** — the crew reported docking worked with this profile
+(reaching the station on infinite fuel after the rendezvous fell short). Still worth an
+`assess_flight.py` pass on a clean rendezvous: expect `Docked` reached, docking mono spend well down
+from 54, FORE no longer flagged INVERTED.
 
-**~7 930 headless checks pass** across 15 suites. 51 files in `src/pure`, 26 in `src/`, 16 test
-suites, 6 art files.
-
-**THE PAGES WORK. THE WHOLE MISSION IS PORTED, END TO END. ALMOST NONE OF IT HAS FLOWN.** Read
+**THE PAGES WORK. THE WHOLE MISSION IS PORTED, END TO END. SOME OF IT HAS NOW FLOWN — ascent, booster
+landing, insertion and docking — but no clean end-to-end mission has been completed.** Read
 `docs/MISSION_PLAN.md` for per-phase status and `docs/PORT_PLAN.md` for the contracts and what was
 deliberately left out — both are kept current and they are the authority, not this block.
 
 | phase | state |
 |---|---|
-| §1 launch window | ported — phase angle, not plane (station is at 0.133°, plane is degenerate) |
+| §1 launch window | ported — phase angle, not plane (station is at 0.133°, plane is degenerate); timing re-tuned 08-17 |
 | §2 ascent to MECO | **FLOWN AND GOOD** |
-| §3 separation | ported; the 23:19 collision fixed but unflown since |
-| §4 booster recovery | fully ported and line-by-line audited; **never landed** |
-| §5 upper stage to orbit | **FLOWN** — 86.0 × 83.8 km, S2 sep works, 5.50 t in orbit |
-| §6 rendezvous | ported: node executor, orbit match, phasing, CW, speed ladder, terminal |
-| §7 dock / refuel / undock | ported |
-| §8 return | **ported entire** — phase-down, overflight search, de-orbit, trunk jettison, pre-entry trim, lifting entry, chutes, propulsive. One button: DEORBIT NOW runs the lot |
+| §3 separation | ported; **FLOWN** — clean sep, 3 hull cameras found (08-11) |
+| §4 booster recovery | fully ported and audited; **FLOWN — lands 0.0 km / 1 m/s** (08-11); descent roll re-tuned 08-17, reverify |
+| §5 upper stage to orbit | **FLOWN** — 86.0 × 84.0 km, S2 does the insertion, ~71 units in orbit (refuel by design) |
+| §6 rendezvous | ported; **flown but fell short** — launch timing re-tuned 08-17, unverified |
+| §7 dock / refuel / undock | ported; **docking FLOWN and worked** (08-17); auto-refuel-while-docked + undock push fixed 08-17, unverified |
+| §8 return | ported entire; **flown but no clean recovery yet** — de-orbit lands long, aim re-fit 08-17. DEORBIT NOW runs the lot |
 
-**⛔ THE PORT BEING FINISHED IS NOT THE SAME AS THE MISSION WORKING.** The last real flight was
-2026-08-10 23:19 and it ended in a booster/upper-stage collision that has since been fixed.
-Everything built after that — the whole rendezvous, docking and return stack — is transcription plus
-headless tests and has never run in the game. The tests catch arithmetic; they cannot catch a wrong
-assumption about what KSP does. Expect the first flight of any of it to find something, most likely
-a frame convention.
+**⛔ THE PORT BEING FINISHED IS NOT THE SAME AS THE MISSION WORKING.** Ascent, booster landing,
+insertion and docking have flown (08-11 through 08-17). The rendezvous, refuel-while-docked, undock
+push and the whole return stack have been exercised in flight but not yet completed cleanly — each
+found and fixed real defects, and the fixes made 2026-08-17 are unverified. The tests catch
+arithmetic; they cannot catch a wrong assumption about what KSP does. Expect the next flight of any
+unverified piece to find something, most likely a frame convention.
 
-**The highest-value next test is a plain RTLS launch**, reading `b_phase` and `b_predMissKm`. §4 has
-the most flight-derived constants riding on it and has never landed once. The return stack is
-downstream of an orbit we already reach reliably, so it can wait its turn.
+**The highest-value next test is a clean end-to-end ferry** on the 2026-08-17 build: launch on phase,
+confirm a tight rendezvous with no phasing lap, dock, refuel, undock, and read the de-orbit's signed
+along-track miss to finish the aim re-fit. See `docs/SESSION_2026-08-17.md` for the OPEN items in
+priority order.
 
 ### The four architectural facts a new session needs
 
@@ -159,7 +179,7 @@ downstream of an orbit we already reach reliably, so it can wait its turn.
    each vehicle's own telemetry (`a_total − a_gravity − a_thrust` → ballistic coefficient), not
    modelled. Where it cannot measure, it reports a vacuum solve and SAYS so.
 
-### The recorder is 145 columns and checks itself
+### The recorder is 190 columns and checks itself
 `a_` = ascent vehicle, `b_` = booster, `r_` = the return, `m_` = the middle of the mission
 (rendezvous, dock, undock), all every row, plus `focus` and `warp`. It counts its own commas against the header on
 the first row and logs `RECORDER COLUMN MISMATCH` if they differ — **if you see that, do not read the
@@ -614,7 +634,8 @@ pass is still blocked.**
 **What it does NOT do yet:** nothing, on paper — the whole mission is ported as of 2026-08-11,
 "FULL FLIGHT" runs ascent through insertion, and DEORBIT NOW runs phase-down, de-orbit, separation,
 trim, lifting entry and touchdown as one sequence. **What it does not do YET IN PRACTICE is the
-question that matters:** only ascent and insertion have flown. See the state header at the top.
+question that matters:** ascent, booster landing, insertion and docking have flown; the return has
+not completed cleanly. See the state header at the top.
 
 ### ⛔⛔ READ `docs/F9I_PORT_MAP.md` BEFORE TOUCHING THE FLIGHT SOFTWARE. IT IS THE INVENTORY.
 

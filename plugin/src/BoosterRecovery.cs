@@ -17,16 +17,22 @@
  * and `FlightGlobals.ForceSetActiveVessel`, which MechJeb also uses at
  * MechJebModuleStagingController.cs:402.
  *
- * ---- ⚠ AND F9I'S OWN WARNING APPLIES TO US IDENTICALLY ----
- * Its HUD text says it plainly: "KSP will clamp this without PhysicsRangeExtender, so expect the
- * upper stage to unload near 300 km." `falcon-physics-range-clamp` MEASURED that on four flights -
- * 1500 km is requested, 297-341 km is what you get, because PhysicsRangeExtender is NOT installed.
+ * ---- ⚠ THE PHYSICS RANGE, AND WHY PhysicsRangeExtender IS A REQUIRED DEPENDENCY ----
+ * F9I's HUD text says it plainly: "KSP will clamp this without PhysicsRangeExtender, so expect the
+ * upper stage to unload near 300 km." `falcon-physics-range-clamp` MEASURED that clamp on four
+ * flights - 1500 km requested, 297-341 km delivered - on a game WITHOUT PRE.
  *
- * So we CANNOT fly both vehicles at once for a whole recovery. What we do instead is honest and
- * works: the upper stage's apoapsis is already set by the ascent, so it COASTS - on rails once it
- * unloads, which preserves its orbit exactly - while the booster flies its recovery. When the
- * booster is down we take focus back and circularise. If the coast has already carried the upper
- * stage past apoapsis, circularisation happens at the NEXT one; nothing is lost but time.
+ * DragonScreen now REQUIRES PRE (see the README). WITH it, the 1500 km range this file asks for is
+ * honoured, so the upper stage stays LOADED and keeps flying itself through the whole recovery
+ * (`FlightDriver` ticks every loaded vessel's guidance, not just the focused one). The range is taken
+ * as a LOAN only while focus is on the booster and handed back on landing - see
+ * SnapshotRanges/Extend/RestoreRanges - because a standing 1500 km range would load the whole system,
+ * the station included.
+ *
+ * WITHOUT PRE the clamp still applies and the upper stage unloads near 300 km: it then COASTS on
+ * rails, which preserves its orbit exactly, and circularises at the next apoapsis once focus returns.
+ * That fallback works, but it is not the supported configuration - the camera flip-flop and lost
+ * orbit the crew hit came from running without PRE.
  */
 using System;
 using System.Collections.Generic;
@@ -48,6 +54,11 @@ namespace DragonScreen
         /// most of the coast and aero torque free-rolled it 367 deg. Wider keeps roll held throughout
         /// so the stage does not re-clock after separation. Tunable - if the flip or descent looks
         /// worse, dial it back toward 45.
+        ///
+        /// ⚠ 130 predates the 2026-08-17 rework of the roll REFERENCE (now the plane-of-flight flip
+        /// axis instead of the swinging north heading - see StepFlip). The value is unchanged and
+        /// pending reverification against that: measure roll travel per phase on the next flight
+        /// against `docs/F9I_BOOSTER_TARGETS.md` (target 443° total) before re-tuning it.
         /// </summary>
         [Tunable] public static double BoosterRollRangeDeg = 130.0;
 
@@ -355,9 +366,10 @@ namespace DragonScreen
         /// still be loaded, so this has to happen while the booster is still part of us. Called from
         /// AutoPilot.Engage - see the note there for the circular dependency this replaces.
         ///
-        /// ⚠ KSP clamps it. `falcon-physics-range-clamp` measured 297-341 km against the 1500 km
-        /// asked for, on four flights, because PhysicsRangeExtender is not installed. Asking is still
-        /// correct: 300 km is far more than a booster recovery needs, and 22.5 km is far less.
+        /// ⚠ WITHOUT PhysicsRangeExtender KSP clamps it - `falcon-physics-range-clamp` measured
+        /// 297-341 km against the 1500 km asked for, on four flights on a game without PRE. With PRE
+        /// (now required) the full range is honoured. Asking is correct either way: 300 km is far more
+        /// than a booster recovery needs, and 22.5 km is far less.
         /// </summary>
         public static void PrepareForSeparation(Vessel v)
         {
