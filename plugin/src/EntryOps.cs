@@ -179,6 +179,12 @@ namespace DragonScreen
             AttitudeController.Ascent.Throttle = 0.0;
             if (!v.ActionGroups[KSPActionGroup.RCS]) v.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
 
+            // ⛔ NOSE SHUT BEFORE ENTRY, WHATEVER HAPPENED AT UNDOCK. The undock closes the shroud on
+            // a clean back-away, but a manual undock or an early DEORBIT NOW can skip that - and an
+            // open docking hatch is not something to take through entry heating. Closing here is the
+            // authoritative point; harmless if it is already shut (the event will not be found).
+            DockShroud.Close(v);
+
             bool stacked = HasPart(new PartMatch(VehicleParts.IsTrunk))
                         || HasPart(new PartMatch(VehicleParts.IsSecondStage));
             Go(stacked ? EntryStage.Separating : EntryStage.CoastToInterface);

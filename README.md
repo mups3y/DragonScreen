@@ -92,3 +92,14 @@ Also drawn on, with attribution at each site:
 - **Tundra Exploration** — the Dragon V2 and Falcon 9 parts and IVA this mod attaches to.
 
 None of those are redistributed here; `.gitignore` keeps them out and the code cites them by path.
+
+## Requirements
+
+- **ModuleManager** and **Tundra Exploration** — required. The `.cfg` is a ModuleManager patch on
+  Tundra's Crew Dragon IVA and pod; without either, nothing attaches.
+- **PhysicsRangeExtender** — required for booster recovery. KSP clamps a vessel's physics range near
+  300 km, so during the ~250 s the camera follows the booster down, the upper stage unloads and comes
+  back a rebooted vessel — which disengages the ascent and loses the orbit. PRE lifts the clamp so the
+  1500 km range the recovery already requests is honoured and the upper stage keeps flying itself.
+  The mod raises the range only while focus is on the booster and restores it on handback
+  (`BoosterRecovery.Extend`/`RestoreRanges`), so the reach is paid for only during recovery.

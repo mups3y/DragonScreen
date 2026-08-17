@@ -108,13 +108,16 @@ namespace DragonScreen
         /// single data point. If the next return lands LONG, halve the change rather than reverting
         /// it, and do not re-fit from `WorstErrorM` - see the note in EntryOps.Handover.
         /// </summary>
-        /// ⛔ STALE AS OF 2026-08-13 - THE STATION MOVED FROM 86 km TO 120 km.
-        /// This was fitted against returns from an 86 km orbit. A 120 km de-orbit is a different
-        /// entry: 26 m/s more braking, a shallower flight-path angle at interface, a longer glide.
-        /// The number below is the 86 km fit carried forward unchanged ON PURPOSE - guessing at a
-        /// correction would be a second single-point fit on top of an invalid one. Fly one return,
-        /// read the settled miss, and re-fit it ONCE using `settled / AimGain`.
-        public const double AimDracoCrew = 295400.0;  // 270700 -> 284400 -> 295400; see AimRange
+        /// ⛔ RE-FIT 2026-08-17 AGAINST A 120 km RETURN AT REPEATABLE MASS: 295400 -> 221500.
+        /// The 295400 value was an 86 km fit carried unchanged onto the 120 km station - a longer,
+        /// shallower glide - so it aimed long. flight_0817_193135 is the first return the comment's
+        /// own recipe applies to cleanly: auto-refuel fills the tank every docked flight, so the mass
+        /// is now repeatable, and it landed along -49.5 km (LONG) with liftMin railed at -1 the whole
+        /// entry - the entry shortening as hard as it could and still overshooting. The recipe is
+        /// `new = current - settledMiss / AimGain` = 295400 - 49500/0.67 = 221500. Read the NEXT
+        /// return's miss and re-fit again ONCE if it is not within the entry's own authority; do not
+        /// blind-guess between flights. Tunable, so it can also be dialed live in tuning.cfg.
+        [Tunable] public static double AimDracoCrew = 221500.0;  // 270700->284400->295400->221500
 
         /// <summary>De-orbit aims this far PAST the landing zone.</summary>
         public const double OvershootM = 35000.0;
@@ -141,7 +144,7 @@ namespace DragonScreen
         /// <summary>Range trim deadband. 50 m is unreachable for an RCS trim, so this is 2 km.</summary>
         public const double TrimToleranceM = 2000.0;
         /// <summary>Km of miss closed per km of aim added. MEASURED.</summary>
-        public const double AimGain = 0.67;
+        [Tunable] public static double AimGain = 0.67;
 
         // ---- RESERVES ----
         /// <summary>Monoprop kept back for a PROPULSIVE (SuperDraco) landing, units.</summary>

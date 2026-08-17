@@ -96,7 +96,11 @@ namespace DragonScreen
         /// exact - it sets how conservative the braking curve is, and 0.15 is deliberately low so
         /// the approach under-commits rather than arriving unable to stop.
         /// </summary>
-        public const double RcsAccel = 0.15;
+        [Tunable] public static double RcsAccel = 0.15;
+
+        /// <summary>PID gains the docking servo applies to its three axis controllers each tick.
+        /// Live-tunable; the defaults are F9I's `GNC.ks` values (stiff P, light I, light D).</summary>
+        [Tunable] public static double PidP = 8.0, PidI = 0.02, PidD = 0.1;
 
         /// <summary>
         /// The braking curve: fastest we may close on this axis and still stop in the distance left.
@@ -140,6 +144,11 @@ namespace DragonScreen
             }
 
             c.RangeM = Range(s);
+
+            // Apply the (live-tunable) gains to all three axis controllers before they run.
+            pf.P = ps.P = pt.P = PidP;
+            pf.I = ps.I = pt.I = PidI;
+            pf.D = ps.D = pt.D = PidD;
 
             // Each axis: a target CLOSING SPEED from the braking curve, servoed by the PID against
             // the relative velocity we actually have.
@@ -250,7 +259,7 @@ namespace DragonScreen
         }
 
         /// <summary>Slowest we ever command. Below this the servo is chasing noise.</summary>
-        public const double ContactFloorMps = 0.15;
+        [Tunable] public static double ContactFloorMps = 0.15;
 
         /// <summary>
         /// Speed cap for a range - THE APPROACH LADDER, tightened for contact.

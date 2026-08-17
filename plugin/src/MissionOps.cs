@@ -93,6 +93,24 @@ namespace DragonScreen
                 return;
             }
 
+            // ---- ONE BUTTON, THE WHOLE JOB. Far -> rendezvous; close -> dock. ----
+            // The docking servo only owns the last few hundred metres (DockingOps.DockEnvelopeM). From
+            // further out, pressing dock flies the RENDEZVOUS, which matches velocity and hands to the
+            // docking automatically at ~200 m. Pressing it at 3.5 km used to engage the servo directly
+            // and thrash the tank dry - see DockingOps.Engage's envelope guard.
+            double range = Vector3d.Distance(v.CoM, station.CoM);
+            if (range > DockingOps.DockEnvelopeM)
+            {
+                if (StationApproach.Engaged) { Log("auto-dock: rendezvous already running"); return; }
+                StationApproach.Engage();
+                if (StationApproach.Engaged)
+                    Log("auto-dock from " + (range / 1000.0).ToString("F1")
+                        + " km - flying the rendezvous, which hands to docking at ~200 m");
+                else
+                    Refuse(StationApproach.Note);
+                return;
+            }
+
             DockingOps.Engage(v, station);
             if (!DockingOps.Engaged) Refuse(DockingOps.Note);
         }

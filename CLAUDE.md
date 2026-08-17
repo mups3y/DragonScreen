@@ -34,8 +34,9 @@ the mistake is actually about to happen. Each line is a TRIGGER, then what to do
    instead of another flight spent finding out.
 
 -0. **Starting a session, or just compacted?**
-   → **`docs/SESSION_2026-08-12.md` FIRST.** What flies, what does not, what is instrumented but
-   not diagnosed, and the process failures that produced most of a week's waste. Then
+   → **`docs/SESSION_2026-08-17.md` FIRST** - the current state: the whole end-to-end mission pass,
+   the installed DLL hash, every fix made, the OPEN items in priority order (de-orbit LZ re-fit
+   first), and the traps. Then `docs/SESSION_2026-08-12.md` for the earlier detail, and then
    `docs/F9I_BOOSTER_TARGETS.md` (the measured numbers to fly the booster against) and
    `docs/MECHJEBLIB_PORT.md` (scoped, blocking question answered, not started).
 
@@ -101,11 +102,17 @@ Dragon separating into a stable orbit (was -121 km, which cost 114 of 195 mono u
 booster RTLS repeatably at 0.0 km / 4-6 m/s; the full return end to end — phase-down, de-orbit,
 trunk jettison, trim, lifting entry, drogues, mains, `DRAGON RECOVERED`.
 
-**DOCKING: the 13 m stall is SOLVED (2026-08-12 flight 19:29) but has NOT yet flown with the fix.**
-It was arithmetic - `StandoffM` 25 minus `StandoffToleranceM` 12 - and the cause was a stage machine
-whose every test was proximity to its own waypoint, so each stage falsified its own entry condition
-by succeeding. It is monotone now. **Both of my published diagnoses of that stall were wrong; the
-control path was never involved.** See `docs/SESSION_2026-08-12.md` section 3.
+**DOCKING: the LVLH WP0/WP1/WP2 "L" was REMOVED 2026-08-17 - it emptied the tank in flight.**
+The 08-13 rebuild flew the real Crew-Dragon L (WP0 400 m below -> WP1 220 m -> WP2 20 m), which
+PASSED headless (the test started it behind-and-below) and thrashed in flight (flight_0814_172345:
+54 units, never past `Corridor`, `x_ctlZ` slamming +/-0.5, tank dry). The cause was the handover:
+`StationApproach.Arrived()` engages docking at ~60 m, co-orbital, IN FRONT of the port, not behind
+and below, so the L kept routing a near-port capsule back out to a point 400 m below. Docking is now
+the simpler gate -> standoff -> axial profile (`DOCKING_REBUILD_PLAN.md` Phase 1): 1 m lateral commit
+(not the self-falsifying `AtStandoff` - that was the old 13 m stall), the ported `DockControl`
+velocity inner loop kept, monotone stages. `DockApproachTest` now starts from the real ~60 m handover.
+**Passes headless; NOT yet flown with this fix** - assess with `assess_flight.py`: expect `Docked`
+reached, docking mono spend well down from 54, FORE no longer flagged INVERTED.
 
 **~7 930 headless checks pass** across 15 suites. 51 files in `src/pure`, 26 in `src/`, 16 test
 suites, 6 art files.

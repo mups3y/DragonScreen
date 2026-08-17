@@ -71,6 +71,22 @@ namespace DragonScreen
         /// <summary>How long to wait for the load before giving up. F9I's `stLoadT`, 30 s.</summary>
         private const double TargetLoadTimeoutS = 30.0;
 
+        /// <summary>Furthest the docking servo will accept the job, metres. Beyond this the rendezvous
+        /// owns the approach - the RCS servo cannot fly a kilometre-scale gap.</summary>
+        [Tunable] public static double DockEnvelopeM = 300.0;
+        /// <summary>Fastest relative speed the servo will accept at engage, m/s. The rendezvous matches
+        /// to ~0.5 m/s before handing over; this allows margin.</summary>
+        [Tunable] public static double DockMaxRelSpeedMps = 2.0;
+
+        /// <summary>
+        /// Sign on the roll reference (the target port's up). +1 clocks our port's up PARALLEL to
+        /// theirs; -1 flips it 180 deg. We control from our port so the roll steers the port directly,
+        /// but whether KDSS's `captureMinRollDot` wants the ups parallel or opposed is a convention
+        /// only a flight settles - so this is tunable LIVE: if the ports sit aligned but refuse to
+        /// latch, set `DockingOps.DockRollSign = -1` in tuning.cfg and watch it grab, no rebuild.
+        /// </summary>
+        [Tunable] public static double DockRollSign = 1.0;
+
         private static double loadWaitStartedAt;
 
         private static ModuleDockingNode ourPort, theirPort;
@@ -86,6 +102,28 @@ namespace DragonScreen
             // The servo's memory belongs to THIS approach, not the last one.
             pidF.Reset(); pidS.Reset(); pidT.Reset();
             if (v == null || target == null) return;
+
+            // ---- ⛔ THE DOCKING ENVELOPE. RCS CANNOT FLY A KILOMETRE-SCALE, FAST APPROACH. ----
+            // The servo has 0.15 m/s^2 of authority and a contact-speed law. Handed a 3.5 km gap at
+            // 30 m/s - the manual AUTO-DOCK button pressed mid-rendezvous, measured 2026-08-17 - it
+            // cannot null the closing velocity and thrashes the whole tank dry without ever reaching
+            // the gate. Docking is the LAST few hundred metres; the rendezvous owns everything before
+            // that and matches velocity to ~0.5 m/s before it hands over (well inside this envelope).
+            // Refuse out of envelope and say why, so the crew rendezvous first.
+            double engRangeM = Vector3d.Distance(v.CoM, target.CoM);
+            double engRelMps = (target.obt_velocity - v.obt_velocity).magnitude;
+            if (engRangeM > DockEnvelopeM || engRelMps > DockMaxRelSpeedMps)
+            {
+                Note = "TOO FAR/FAST TO DOCK - " + engRangeM.ToString("F0") + " m at "
+                     + engRelMps.ToString("F1") + " m/s. Rendezvous to within "
+                     + DockEnvelopeM.ToString("F0") + " m and under "
+                     + DockMaxRelSpeedMps.ToString("F1") + " m/s first.";
+                Stage = DockStage.NoPort;
+                Engaged = false;
+                Debug.LogWarning(Tag + "docking refused - " + Note);
+                return;
+            }
+
             ship = v; station = target;
             startedAt = Planetarium.GetUniversalTime();
 
@@ -124,11 +162,11 @@ namespace DragonScreen
             //
             // It is also what a crew flying this manually would do first.
             SetTarget(theirPort, "docking engaged");
+            ControlFromPort();
+            DockShroud.Open(ship);          // the nose must be open before the ports can mate
             keepOutR = MeasureKeepOut(station);
             bestRangeM = double.MaxValue; bestRangeAt = 0.0;
             reached = DockStage.Idle;
-            haveSideStep = false;
-            holdStableS = 0.0; CrewGo = false;
             legRangeM = 0.0; lastWaypoint = DockWaypoint.None;
             Engaged = true;
             Commit(DockStage.ToGate);
@@ -143,7 +181,48 @@ namespace DragonScreen
             Engaged = false;
             Translate(0.0);
             AttitudeController.Ascent.Release(ship);
+            RestoreControlPoint();
             Debug.Log(Tag + "docking disengaged - " + why);
+        }
+
+        /// <summary>The control point held before docking took it, to put back afterwards.</summary>
+        private static Part savedRefPart;
+
+        /// <summary>
+        /// ⛔ CONTROL FROM OUR DOCKING PORT. This is what makes the ROLL align at the port.
+        ///
+        /// MechJeb requires it - `MechJebModuleDockingGuidance.cs:54` warns "this vessel is not
+        /// controlled from a docking node... Control from here" and does all its docking math in that
+        /// frame. Ours steered the POD's roll to the target port's up, so OUR PORT ended up clocked
+        /// ~180 deg off theirs; with `captureMinRollDot = 0.5` on both KDSS halves the magnets refuse
+        /// the latch even from a flawless 0.5 m hold - which is exactly what the crew watched, the
+        /// capsule frozen half a metre out. Controlling from the port makes `-axis`/roll steer the
+        /// PORT, so aligning to the target port's up clocks the two ports together. Restored on
+        /// disengage so de-orbit and entry fly from the pod again.
+        /// </summary>
+        private static void ControlFromPort()
+        {
+            try
+            {
+                if (ship == null || ourPort == null) return;
+                savedRefPart = ship.GetReferenceTransformPart();
+                ourPort.MakeReferenceTransform();
+                Debug.Log(Tag + "control point -> docking port '" + ourPort.part.partInfo.title
+                          + "' (was '" + (savedRefPart != null ? savedRefPart.partInfo.title : "-")
+                          + "') so the roll aligns at the port");
+            }
+            catch (Exception e) { Debug.LogWarning(Tag + "could not control from the port: " + e.Message); }
+        }
+
+        private static void RestoreControlPoint()
+        {
+            try
+            {
+                if (ship != null && savedRefPart != null && savedRefPart.vessel == ship)
+                    ship.SetReferenceTransform(savedRefPart);
+            }
+            catch (Exception e) { Debug.LogWarning(Tag + "could not restore control point: " + e.Message); }
+            savedRefPart = null;
         }
 
         /// <summary>
@@ -172,8 +251,7 @@ namespace DragonScreen
         public static void Reset()
         {
             Engaged = false; Stage = DockStage.Idle; Note = "-";
-            reached = DockStage.Idle; haveSideStep = false;
-            holdStableS = 0.0; CrewGo = false;
+            reached = DockStage.Idle;
             legRangeM = 0.0; lastWaypoint = DockWaypoint.None;
             ship = null; station = null; ourPort = null; theirPort = null;
             RangeToPortM = 0.0; ClosingMps = 0.0; AxisErrorDeg = 0.0;
@@ -315,28 +393,6 @@ namespace DragonScreen
         /// <summary>Best range seen this approach, and when it was last improved on.</summary>
         private static double bestRangeM = double.MaxValue, bestRangeAt;
 
-        /// <summary>
-        /// Seconds the capsule has been parked in the current waypoint box AND slow.
-        ///
-        /// Every real waypoint is a HOLD - Dragon stops and station-keeps at WP0, WP1 and WP2
-        /// awaiting a GO. Ours never stopped, which is exactly why it had to null a large lateral
-        /// error while closing; the real vehicle arrives at each waypoint stationary and lined up.
-        /// </summary>
-        private static double holdStableS;
-
-        /// <summary>
-        /// The crew's GO for the next leg, released by the DOCKING page.
-        ///
-        /// ⚠ ON THE REAL VEHICLE EVERY WAYPOINT IS A CREW/GROUND DECISION. This auto-releases on a
-        /// demonstrably stable hold so the mission flies unattended, and the flag lets the screen
-        /// take that decision back without the guidance changing shape. Cleared on leaving a hold
-        /// so one press can never release two legs.
-        /// </summary>
-        public static bool CrewGo;
-
-        /// <summary>Latched "which way is out" for a sidestep. See the note where it is used.</summary>
-        private static Vector3d sideStepOut;
-        private static bool haveSideStep;
 
         /// <summary>
         /// The furthest stage this approach has reached. The stage machine is MONOTONE - see the
@@ -373,17 +429,12 @@ namespace DragonScreen
             double now = Planetarium.GetUniversalTime();
 
             // ---- ⛔ PROGRESS IS TOWARD THE CURRENT WAYPOINT, NOT TOWARD THE STATION. ----
-            // This measured `ship.CoM -> station.CoM` and gave up when that stopped shrinking. The
-            // real Crew Dragon profile makes it shrink and grow BY DESIGN: WP0 is 400 m BELOW the
-            // station, so the first leg deliberately flies AWAY. Measured 2026-08-13: the range ran
-            // 164 -> 436 -> 382 -> 430 -> 142 m as the capsule worked the L, the guard read every
-            // outbound leg as failure, and `x_dkStage` cycled ToGate -> NoPort -> ToGate five times
-            // and spent 93 units of monopropellant before the crew stopped it.
-            //
-            // The guard is right to exist - it is what stops an approach running for ever - but it
-            // has to judge the leg being flown. `legRangeM` is the distance to the waypoint the
-            // profile actually chose, which shrinks monotonically on every leg of a working
-            // approach and on none of a broken one.
+            // This measured `ship.CoM -> station.CoM` and gave up when that stopped shrinking. But
+            // rounding the hull deliberately flies AWAY from the station centre for a while, so the
+            // guard has to judge the leg being flown, not the range to the station. `legRangeM` is
+            // the distance to the waypoint the profile actually chose - gate, standoff or port, all
+            // near the station - which shrinks monotonically on every leg of a working approach and
+            // on none of a broken one.
             double range = (legRangeM > 0.0) ? legRangeM
                                              : Vector3d.Distance(ship.CoM, station.CoM);
 
@@ -572,24 +623,6 @@ namespace DragonScreen
                           ? theirPort.acquireRange * 0.5 : 0.25;
             ai.SafeM = keepOutR;
 
-            // ---- ⛔ THE STATION'S OWN ORBITAL FRAME. WP0 IS DEFINED BY THE ORBIT. ----
-            // "400 metres directly BELOW the station" is a statement about the R-bar, and no
-            // amount of port-axis geometry can express it. RADIAL is away from the planet, ALONG
-            // is the direction of travel, CROSS completes the set - the frame every real
-            // rendezvous is flown in, and the one we did not have.
-            Vector3d radial = (station.CoM - station.mainBody.position).normalized;
-            Vector3d along = Vector3d.Exclude(radial, station.obt_velocity).normalized;
-            Vector3d cross = Vector3d.Cross(radial, along).normalized;
-            Vector3d rel = ourPos - station.CoM;
-            ai.RadialM = Vector3d.Dot(rel, radial);
-            ai.AlongM = Vector3d.Dot(rel, along);
-            ai.CrossM = Vector3d.Dot(rel, cross);
-
-            // A hold is not a hold until the capsule is actually stopped relative to the station.
-            ai.RelSpeedMps = relVel.magnitude;
-            ai.HoldStableS = holdStableS;
-            ai.CrewGo = CrewGo;
-
             DockApproachResult sel = DockApproach.Select(ai, reached);
             if (sel.Waypoint != lastWaypoint)
             {
@@ -600,13 +633,6 @@ namespace DragonScreen
                 bestRangeAt = Planetarium.GetUniversalTime();
             }
 
-            // The dwell only accumulates while we are inside the waypoint box AND slow. Anything
-            // else resets it - a hold that counts while drifting is not a hold.
-            bool holding = sel.Stage == DockStage.HoldWp0 || sel.Stage == DockStage.HoldWp1
-                           || sel.Stage == DockStage.HoldWp2;
-            holdStableS = (holding && ai.RelSpeedMps <= DockApproach.HoldSpeedMps)
-                          ? holdStableS + TimeWarp.fixedDeltaTime : 0.0;
-            if (!holding) CrewGo = false;
             Commit(sel.Stage);
             Note = sel.Note;
 
@@ -619,11 +645,9 @@ namespace DragonScreen
                 StopTranslating();
                 AttitudeController.Ascent.SteerTo(ship, -axis,
                     (theirPort != null && theirPort.nodeTransform != null)
-                    ? (Vector3d)theirPort.nodeTransform.up : Vector3d.zero);
+                    ? (Vector3d)theirPort.nodeTransform.up * DockRollSign : Vector3d.zero);
                 return;
             }
-
-            if (sel.Waypoint != DockWaypoint.SideStep) haveSideStep = false;
 
             Vector3d target;
             switch (sel.Waypoint)
@@ -631,46 +655,14 @@ namespace DragonScreen
                 case DockWaypoint.Port:
                     target = tgtPos;
                     break;
-
-                // ---- THE REAL WAYPOINTS. docs/REAL_CREW_DRAGON_MISSION.md. ----
-                // WP0 is on the station's R-BAR, not the port axis - that is why the LVLH frame
-                // above had to exist. WP1 and WP2 are on the docking axis, 220 m and 20 m out.
-                case DockWaypoint.Wp0:
-                    target = station.CoM - radial * DockApproach.Wp0BelowM;
-                    break;
-                case DockWaypoint.Wp1:
-                    target = tgtPos + axis * DockApproach.Wp1AxialM;
-                    break;
-                case DockWaypoint.Wp2:
-                    target = tgtPos + axis * DockApproach.Wp2AxialM;
-                    break;
-                // Forward at WP0's depth, level with WP1: the corner flown as two sides so the
-                // path never grazes the keep-out sphere. See DockWaypoint.Wp1Transit.
-                case DockWaypoint.Wp1Transit:
-                    target = station.CoM - radial * DockApproach.Wp0BelowM
-                             + along * (Vector3d.Dot(tgtPos - station.CoM, along)
-                                        + DockApproach.Wp1AxialM);
-                    break;
                 case DockWaypoint.Standoff:
-                case DockWaypoint.BackOut:
                     target = standoff;
                     break;
-                case DockWaypoint.SideStep:
-                    // ⛔ THE OUTWARD DIRECTION IS LATCHED. Recomputed from the live lateral vector
-                    // it FLIPS every time the capsule crosses the axis, the aim reverses, and the
-                    // capsule saws about the axis for ever - the simulator held 55.00 m for a full
-                    // 1800 s run doing exactly that. Which way is out is decided once per sidestep.
-                    if (!haveSideStep)
-                    {
-                        sideStepOut = (lateralM > 0.05)
-                                      ? lateralVec.normalized
-                                      : Vector3d.Exclude(axis, ship.ReferenceTransform.right).normalized;
-                        haveSideStep = true;
-                    }
-                    target = (ourPos - lateralVec) + sideStepOut * (keepOutR + 2.0);
+                case DockWaypoint.Skirt:
+                    target = Skirt(ourPos, gate);
                     break;
-                default:
-                    target = clear ? gate : Skirt(ourPos, gate);
+                default:                            // Gate, or anything unexpected: fly to the gate,
+                    target = clear ? gate : Skirt(ourPos, gate);   // rounding if the path is blocked
                     break;
             }
 
@@ -727,7 +719,7 @@ namespace DragonScreen
             // The reference is the TARGET PORT's own up, not the capsule's and not the orbit's: it is
             // the one frame in which "aligned" means what the capture test means by it.
             Vector3d rollRef = (theirPort != null && theirPort.nodeTransform != null)
-                             ? (Vector3d)theirPort.nodeTransform.up : Vector3d.zero;
+                             ? (Vector3d)theirPort.nodeTransform.up * DockRollSign : Vector3d.zero;
             AttitudeController.Ascent.SteerTo(ship, -axis, rollRef);
             AxisErrorDeg = Vector3d.Angle(ship.ReferenceTransform.up, -axis);
 
@@ -756,15 +748,32 @@ namespace DragonScreen
             ds.VelF = Vector3d.Dot(ourRel, nose);
             ds.VelS = Vector3d.Dot(ourRel, rt.right);
             ds.VelT = Vector3d.Dot(ourRel, -rt.forward);
-            // ⚠ The cap comes from the SAME ladder the approach is flown on. A controller with its
-            // own idea of a safe closing speed is how you get a capsule that thinks it is being
-            // careful while the ladder thinks otherwise.
-            ds.SpeedCap = c.WantClosingMps;
+            // ---- ⛔ THE CONTACT-TAPERED CAP, NOT THE RENDEZVOUS LADDER'S. ----
+            // This used `c.WantClosingMps` from `Approach.Terminal` - the rendezvous speed ladder,
+            // which bottoms out near 1 m/s and does NOT taper to a contact speed. Measured
+            // 2026-08-17: the capsule coasted the last 7 m into the port at a steady 0.97 m/s,
+            // arrived ~1 m off centre far too fast to capture, missed, and flew back out to the
+            // standoff - the +/-20 m oscillation the crew watched. `SpeedCapFor` is the cap the
+            // headless DockControl test flies and CAPTURES on: it tapers to `ContactFloorMps`
+            // (0.15 m/s) at the port, so the servo slows to a controlled contact instead of drifting
+            // through the capture envelope. `range` is the distance to the current waypoint, which
+            // on the final run is the port itself.
+            ds.SpeedCap = DockControl.SpeedCapFor(range);
 
             DistF = ds.DistF; DistS = ds.DistS; DistT = ds.DistT;
             VelF = ds.VelF; VelS = ds.VelS; VelT = ds.VelT;
 
-            if (c.Coast) { StopTranslating(); return; }
+            // ---- ⛔ NO COAST BYPASS ON THE DOCKING. THE SERVO FLIES EVERY TICK. ----
+            // `Approach.Terminal`'s coast is a RENDEZVOUS economy - stop thrusting inside a speed
+            // deadband to save monopropellant over a long transit. On the final docking approach it
+            // was catastrophic: `if (c.Coast) return` skipped `DockControl.Solve` ENTIRELY, so on
+            // the last few metres there was NO braking curve and NO lateral trim - the capsule
+            // coasted in at whatever speed it had and drifted off the axis. That is exactly what the
+            // crew reported: "you just forward thrust and hope for the best". The velocity servo
+            // below has its own bound (the braking curve) and commands ~0 once it is at the target
+            // speed, so it needs no coast - and it is the only thing that keeps the approach lined
+            // up. This is also why the headless test passed while flight failed: the test always
+            // ran the servo; the flight coasted around it.
 
             // ---- TRANSLATE, DO NOT ROTATE ----
             // The capsule holds its nose on the port axis and slides. Yawing to correct a lateral

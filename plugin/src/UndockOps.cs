@@ -111,6 +111,12 @@ namespace DragonScreen
             if (s == UndockStage.Clear || s == UndockStage.Failed)
                 DockingOps.SetTarget(null, "undock complete - clear of the station");
 
+            // Shut the nose again once we are clear - an open docking shroud is not something to take
+            // through entry heating. F9I's `StCloseDockingShroud`. Only on a clean undock; a failed
+            // one may still be docked, where closing the nose would be wrong.
+            if (s == UndockStage.Clear)
+                DockShroud.Close(ship);
+
             Stage = s;
             stageStartedAt = Planetarium.GetUniversalTime();
         }
@@ -172,35 +178,12 @@ namespace DragonScreen
                     Debug.LogWarning(Tag + "⚠ UNDOCKING WITHOUT A FULL TANK - the return budget is "
                                      + "sized on leaving the berth full. Check the de-orbit margin "
                                      + "before committing.");
-                CloseShroud();
+                // ⛔ THE SHROUD CLOSES AT `Clear`, NOT HERE. This used to fire while STILL DOCKED, when
+                // the port occupies the shroud and the "close shroud" event does not exist yet - so it
+                // logged "no close shroud event found" every flight and the nose stayed open. See
+                // `Go(Clear)` -> `DockShroud.Close`, which runs after we have backed away.
                 Go(UndockStage.Releasing);
             }
-        }
-
-        /// <summary>Close the docking shroud before re-entry - it is not built to fly through air.</summary>
-        private static void CloseShroud()
-        {
-            int n = 0;
-            for (int i = 0; i < ship.parts.Count; i++)
-            {
-                Part p = ship.parts[i];
-                for (int m = 0; m < p.Modules.Count; m++)
-                {
-                    PartModule pm = p.Modules[m];
-                    for (int e = 0; e < pm.Events.Count; e++)
-                    {
-                        BaseEvent ev = pm.Events[e];
-                        if (ev == null || ev.guiName == null) continue;
-                        string g = ev.guiName.ToLowerInvariant();
-                        if (g.Contains("close shroud") || g.Contains("close docking hatch"))
-                        {
-                            ev.Invoke(); n++;
-                        }
-                    }
-                }
-            }
-            if (n > 0) Debug.Log(Tag + "docking shroud closed for re-entry");
-            else Debug.LogWarning(Tag + "no 'close shroud' event found - it may still be open");
         }
 
         /// <summary>

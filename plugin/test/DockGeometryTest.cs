@@ -75,12 +75,10 @@ public static class DockGeometryTest
               DockGeometry.SkirtRadiusM(R) > R, "");
 
         // ---- ARRIVAL ----
-        Check("inside the tolerance is arrived",
-              DockGeometry.AtStandoff(DockGeometry.StandoffToleranceM - 0.1), "");
-        Check("outside it is not",
-              !DockGeometry.AtStandoff(DockGeometry.StandoffToleranceM + 0.1), "");
-        // The tolerance must be smaller than the standoff or "arrived" would include the port itself.
-        Check("the tolerance is well inside the standoff",
+        // ⛔ `AtStandoff` was deleted 2026-08-17 - it was the 13 m stall. The axial commit now lives
+        // in `DockApproach.Select`, gated on lateral alignment; `StandoffToleranceM` survives only as
+        // the terminal arrival tolerance in `DockingOps.FlyTo`.
+        Check("the standoff tolerance is well inside the standoff",
               DockGeometry.StandoffToleranceM < DockGeometry.StandoffM, "");
 
         // ================================================================================
@@ -100,8 +98,8 @@ public static class DockGeometryTest
         Check("the corridorGate really is outside the standoff, which is why a leg is needed",
               corridorGate > DockGeometry.StandoffM + DockGeometry.StandoffToleranceM,
               "corridorGate " + corridorGate.ToString("F1") + " vs standoff " + DockGeometry.StandoffM);
-        Check("...and sitting at the corridorGate does NOT count as being at the standoff",
-              !DockGeometry.AtStandoff(corridorGate - DockGeometry.StandoffM),
+        Check("...and the corridorGate is well beyond the standoff, so a corridor leg is real",
+              corridorGate - DockGeometry.StandoffM > DockGeometry.StandoffToleranceM,
               (corridorGate - DockGeometry.StandoffM).ToString("F1") + " m apart");
         Check("...but it DOES count as being at the corridorGate, which starts the corridor",
               DockGeometry.AtGate(0.0), "");
@@ -111,8 +109,6 @@ public static class DockGeometryTest
               !DockGeometry.AtGate(DockGeometry.GateToleranceM + 1.0), "");
         Check("the corridorGate tolerance is wider than the standoff's - it is a waypoint, not a hold",
               DockGeometry.GateToleranceM > DockGeometry.StandoffToleranceM, "");
-        // And the far end: having run the corridor, the standoff must promote to axial.
-        Check("reaching the standoff promotes", DockGeometry.AtStandoff(0.0), "");
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;

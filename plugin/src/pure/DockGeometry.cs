@@ -37,13 +37,13 @@ namespace DragonScreen
     public static class DockGeometry
     {
         /// <summary>Metres directly out from the port to hold before the final axial run. 25 m.</summary>
-        public const double StandoffM = 25.0;
+        [Tunable] public static double StandoffM = 25.0;
 
         /// <summary>How close to the standoff point counts as arrived, metres.</summary>
-        public const double StandoffToleranceM = 12.0;
+        [Tunable] public static double StandoffToleranceM = 12.0;
 
         /// <summary>Added to the measured hull radius, metres. TUNABLE.</summary>
-        public const double KeepOutPadM = 20.0;
+        [Tunable] public static double KeepOutPadM = 20.0;
 
         /// <summary>
         /// Distance along the port's outward axis at which that axis leaves the keep-out sphere,
@@ -101,16 +101,12 @@ namespace DragonScreen
             return keepOutRadiusM + KeepOutPadM;
         }
 
-        /// <summary>Arrived at the standoff point?</summary>
-        /// ⛔ SUPERSEDED 2026-08-13 AND KEPT ONLY AS THE RECORD OF A BUG. NOTHING CALLS IT.
-        /// This predicate WAS the 13 m stall: "within 12 m of a point 25 m out" is false at 13 m
-        /// from the port, so Axial's entry condition failed BECAUSE AXIAL HAD WORKED. The final run
-        /// is now gated on lateral error alone (`DockApproach.CorridorRadiusM`, 1 m), which cannot
-        /// falsify itself by succeeding. Do not wire it back in.
-        public static bool AtStandoff(double distanceToStandoffM)
-        {
-            return distanceToStandoffM < StandoffToleranceM;
-        }
+        // ---- ⛔ `AtStandoff` WAS DELETED 2026-08-17. It was the 13 m stall: "within 12 m of a point
+        // 25 m out" is false at 13 m from the port, so the axial run's entry failed BECAUSE THE RUN
+        // HAD WORKED. The commit is now gated on lateral alignment (`DockApproach.CorridorRadiusM`,
+        // 1 m), which cannot falsify itself by succeeding. Do not reintroduce a proximity-to-standoff
+        // commit test. `StandoffToleranceM` above survives only as the terminal arrival tolerance in
+        // `DockingOps.FlyTo`.
 
         /// <summary>
         /// Close enough to the gate to start down the corridor.
@@ -143,6 +139,6 @@ namespace DragonScreen
         /// still being nulled. Requiring the same precision as the standoff would just move the
         /// deadlock 20 m further out.
         /// </summary>
-        public const double GateToleranceM = 15.0;
+        [Tunable] public static double GateToleranceM = 15.0;
     }
 }

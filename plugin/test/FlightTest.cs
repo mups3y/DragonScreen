@@ -777,22 +777,22 @@ public static class FlightTest
         // ---- THE FITTED CONSTANTS. THE SOURCE RECORDS THE MISS EACH ONE PRODUCED. ----
         Check("S2 crew aim is the 159 m fit", Deorbit.AimS2Crew == 286000.0, "");
         Check("S2 cargo aim is the 331 m fit", Deorbit.AimS2Cargo == 315450.0, "");
-        // ⚠ RE-FIT 2026-08-12, and deliberately still pinned so a future edit is a decision.
-        // F9I flew 270 700 on its flight 076. Ours now carries most of its monopropellant to entry
-        // because the S2 performs the insertion, so the vehicle differs and the aim was re-fitted
-        // from our own first end-to-end return: settled 9.2 km short / AimGain 0.67 = +13 700 m.
-        Check("Draco crew aim is the 2026-08-13 re-fit", Deorbit.AimDracoCrew == 295400.0, "");
-        Check("...and it is still a correction on F9I's flown value, not a new number",
-              Math.Abs(Deorbit.AimDracoCrew - 270700.0) < 30000.0,
-              (Deorbit.AimDracoCrew - 270700.0).ToString("F0"));
+        // ⛔ RE-FIT 2026-08-17 FROM A MEASURED RETURN AT REPEATABLE MASS: 295400 -> 221500.
+        // The 295400 value (an 86 km fit carried onto the 120 km station) was contradicted by data:
+        // flight_0817_193135 railed liftMin at -1 (max shorten) the whole entry and STILL landed
+        // along -49.5 km LONG. That is the signature of an aim too far past the LZ for the entry's
+        // shorten authority to reel back. The comment's own recipe: 295400 - 49500/0.67 = 221500.
+        Check("Draco crew aim is the 2026-08-17 measured re-fit", Deorbit.AimDracoCrew == 221500.0, "");
 
-        // ⛔ THIS ASSERTED THE DRACO AIM IS SHORTER THAN THE S2's AND THE REASONING WAS BACKWARDS.
-        // The S2 de-orbits to a periapsis of -40.8 km, the Draco to -31.8 - SHALLOWER. A shallow
-        // entry spends longer in the atmosphere and flies further past the drag-free prediction,
-        // so it needs the LARGER aim. The old ordering held only by accident of an under-fitted
-        // Draco number, and it stopped holding the moment that number was corrected upward.
-        Check("the shallower Draco entry needs the LONGER aim",
-              Deorbit.AimDracoCrew > Deorbit.AimS2Crew
+        // ⛔ THE OLD TEST CLAIMED "the shallow Draco entry needs the LONGER aim (> S2)". MEASURED FALSE.
+        // The aim is where the de-orbit puts the impact and the entry then SHORTENS to the LZ. A
+        // shallow entry has LITTLE shorten authority, so it needs LESS overshoot to reel back - a
+        // SHORTER aim, not longer. At 295400 (longer than the S2's 286000) the entry saturated and
+        // overshot 49.5 km; the measured fit puts the Draco aim BELOW the S2's, which is what the
+        // vehicle actually needs. The periapsis ordering is unchanged and correct: the Draco entry
+        // really is shallower (-31.8 vs -40.8 km).
+        Check("the shallow Draco entry (low shorten authority) needs the SHORTER aim",
+              Deorbit.AimDracoCrew < Deorbit.AimS2Crew
               && Deorbit.PeriapsisTargetDraco > Deorbit.PeriapsisTargetS2,
               Deorbit.AimDracoCrew.ToString("F0") + " vs " + Deorbit.AimS2Crew.ToString("F0"));
 

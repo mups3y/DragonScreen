@@ -121,11 +121,11 @@ namespace DragonScreen
     {
         // ---- F9I's CONSTANTS. dragon_deorbit.ks:277-475. ----
         /// <summary>Downrange error that saturates the command, metres. `dgDownScale`.</summary>
-        public const double DownScaleM = 20000.0;
+        [Tunable] public static double DownScaleM = 20000.0;
         /// <summary>Cross-track error that saturates the lateral command, metres. `dgCrossScale`.</summary>
-        public const double CrossScaleM = 5000.0;
+        [Tunable] public static double CrossScaleM = 5000.0;
         /// <summary>Lead time on the error rate, seconds. `dgLead`.</summary>
-        public const double LeadS = 20.0;
+        [Tunable] public static double LeadS = 20.0;
         /// <summary>Lead term capped at this fraction of the error. `dgLeadFrac`. See trap 3.</summary>
         public const double LeadFrac = 0.5;
         /// <summary>Range loop latches off here, metres. `dgTermAlt`.</summary>

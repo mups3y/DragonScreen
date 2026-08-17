@@ -273,9 +273,19 @@ namespace DragonScreen
                 return;
             }
 
-            ThrottleCmd = BurnExec.Throttle(s);
+            // ---- ⛔ DO NOT THROTTLE UP UNTIL THE NOSE IS ON THE Δv. ----
+            // BurnExec.Throttle sizes on remaining Δv alone - it does not know where the nose points.
+            // A small burn (a phasing exit, 3.88 m/s) that ignites before the slew is finished pushes
+            // OFF-AXIS: the delivered Δv never reduces the aim-direction remainder, so the residual
+            // GROWS and the burn runs to its 300 s backstop. Measured 2026-08-17: 3.88 m/s commanded,
+            // 58.58 m/s residual, ABORTED - and that overshoot, three phasing burns of it, is what
+            // ran the tank dry before rendezvous. Hold throttle at zero and keep steering until
+            // aligned; then burn clean. The attitude controller is already pointed at the Δv.
+            bool onAxis = BurnExec.Aligned(PointingErrorDeg);
+            if (!onAxis) startedBurnAt = now;          // the backstop counts BURNING, not slewing
+            ThrottleCmd = onAxis ? BurnExec.Throttle(s) : 0.0;
             AttitudeController.Ascent.Throttle = ThrottleCmd;
-            AccountForDelivered(TimeWarp.fixedDeltaTime);
+            if (onAxis) AccountForDelivered(TimeWarp.fixedDeltaTime);
         }
 
         private static void Stop()

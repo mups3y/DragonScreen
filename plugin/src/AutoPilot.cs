@@ -46,6 +46,13 @@ namespace DragonScreen
         public static AscentPhase Phase { get; private set; }
         public static AscentTarget Target = AscentTarget.Station();
 
+        /// <summary>
+        /// Set when a mid-ascent teardown (the booster-recovery handback) disengaged us, so the
+        /// rebuilt FlightDriver re-engages the ascent on its own rather than leaving the crew to
+        /// restart it. See FlightDriver.OnDestroy (sets it) and FlightDriver.Update (acts on it).
+        /// </summary>
+        public static bool ResumeAscent;
+
         /// <summary>Last command flown, for the page to display. Never computed twice.</summary>
         public static AscentCommand Command;
 
@@ -116,6 +123,7 @@ namespace DragonScreen
             }
 
             Engaged = true;
+            ResumeAscent = false;              // engaging satisfies any pending resume
             Phase = AscentPhase.Idle;
             // A fresh engagement is a fresh mission: never inherit a previous flight's recovery.
             BoosterRecovery.Reset();
@@ -123,6 +131,13 @@ namespace DragonScreen
             // it here means the two can never disagree about which mission is being flown.
             Target = AscentTarget.Station(BoosterRecovery.Profile);
             ascentVessel = v;
+
+            // ---- TARGET THE STATION FROM LAUNCH. ----
+            // The mission is a ferry to the Space X Station, so put it on the navball at liftoff. The
+            // rendezvous retargets to the docking PORT at handover, and the undock clears it when the
+            // trip is over. Guarded and harmless if the station is not in this save.
+            Vessel stn = StationApproach.Find();
+            if (stn != null) DockingOps.SetTarget(stn, "launch - targeting the station");
             packedReported = false;
 
             // ---- ⛔ THE PAD HOLD LIVES IN Tick(), NOT HERE. ----
@@ -136,6 +151,17 @@ namespace DragonScreen
             lastHandoverTry = 0.0;
             starvedFor = 0.0;
             blindStages = 0;
+            // ---- ⛔ RESET THE STAGING LOCKOUT, OR A REVERT-TO-LAUNCH NEVER IGNITES. ----
+            // `lastStageAt` is a UT and the auto-ignition holds a 2 s lockout against it
+            // (`Stage`: `if (now - lastStageAt < 2.0) return;`). Reverting to launch moves UT
+            // BACKWARDS - the new launch clock is earlier than a previous flight's last staging -
+            // so `now - lastStageAt` goes large-negative, the lockout never clears, and the initial
+            // ignition can never fire: engines stay unlit, no liftoff, and the launch window
+            // re-arms. Measured 2026-08-17: two revert-launches sat in VERTICAL RISE at full
+            // throttle with availThrust 0 for 30 s each and never staged, while fresh-load launches
+            // the same session ignited normally. `starvedFor`/`blindStages` were reset here; this
+            // one was missed. The same "statics must validate, not remember" rule as BoosterRecovery.
+            lastStageAt = -99.0;
             phaseStartedAt = Planetarium.GetUniversalTime();
             lastCommanded = Vector3d.zero;
 
@@ -153,8 +179,17 @@ namespace DragonScreen
             // Cleared, not set: liftoff has not happened yet. Tick stamps it when the vehicle
             // actually leaves the pad - see the note there. Setting it here is what made
             // LaunchWindowOps.MeasureAtInsertion dead code for its entire life.
-            liftoffUt = 0.0;
-            liftoffLonDeg = 0.0;
+            //
+            // ⛔ BUT ONLY A GROUND LAUNCH CLEARS IT. A re-engage IN THE AIR - which the booster
+            // recovery handback triggers - must NOT re-stamp the clock, or MeasureAtInsertion times
+            // the ascent from the re-engage instead of the real liftoff. Measured 2026-08-17: a 520 s
+            // ascent was fit as 89.6 s that way, leaving the window seed stale and the capsule 16 km
+            // off. On the pad, clear it; already flying, keep whatever liftoff we stamped.
+            if (v.situation == Vessel.Situations.PRELAUNCH || v.situation == Vessel.Situations.LANDED)
+            {
+                liftoffUt = 0.0;
+                liftoffLonDeg = 0.0;
+            }
             // ---- READ THE VEHICLE BEFORE FLYING IT. ----
             // Three flights were lost to the software's idea of the vehicle differing from the part
             // configs - wheels-only torque, three engine modules summed as three engines, a PAW
@@ -480,7 +515,17 @@ namespace DragonScreen
             // The guidance decides when the first stage is done, at its own 60 km apoapsis target,
             // while the booster still has propellant for boostback. Starvation staging is kept only
             // as the FALLBACK for an engine that quits unexpectedly.
-            if (c.Stage && Planetarium.GetUniversalTime() - lastStageAt > 2.0)
+            //
+            // ---- ⛔ AND ONLY WHILE THERE IS A BOOSTER TO SEPARATE. ----
+            // The MECO stage command exists to shed the FIRST STAGE. If the autopilot is re-engaged
+            // AFTER the booster is already gone - which is exactly what a crew does after a
+            // booster-recovery handback disengages it - `Ascent.Guide` re-runs from the start and
+            // re-issues MECO, and this then stages AGAIN with nothing to shed, dropping the S2 and
+            // then the payload one stage at a time. Measured 2026-08-17: a re-engage at 120 km
+            // apoapsis ran MECO->stage 4->CIRCULARISE->stage 3->stage 2 and disengaged "staged twice
+            // with no thrust", stripping the circularisation engine and losing the orbit. `HasBooster`
+            // is the correct gate: you can only separate a booster that is still attached.
+            if (c.Stage && HasBooster(v) && Planetarium.GetUniversalTime() - lastStageAt > 2.0)
             {
                 lastStageAt = Planetarium.GetUniversalTime();
                 blindStages = 0;

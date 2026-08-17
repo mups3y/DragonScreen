@@ -41,6 +41,16 @@ namespace DragonScreen
         /// <summary>What F9I asks for. KSP clamps it; asking is still correct.</summary>
         public const float RangeMetres = 1500000f;
 
+        /// <summary>
+        /// How far the booster's TOTAL attitude error may be and still have its roll axis actively
+        /// held, degrees. The controller default is 45 (`Attitude.RollControlRangeDeg`), but the
+        /// booster's coast runs a ~52 deg pitch error, so at 45 the roll axis went uncontrolled for
+        /// most of the coast and aero torque free-rolled it 367 deg. Wider keeps roll held throughout
+        /// so the stage does not re-clock after separation. Tunable - if the flip or descent looks
+        /// worse, dial it back toward 45.
+        /// </summary>
+        [Tunable] public static double BoosterRollRangeDeg = 130.0;
+
         public static bool Active { get; private set; }
         public static LandingPhase Phase { get; private set; }
         public static LandingCommand Command;
@@ -244,6 +254,9 @@ namespace DragonScreen
             startedAt = Planetarium.GetUniversalTime();
             phaseStartedAt = startedAt;
 
+            // Remember the upper stage's normal ranges so they can be put back on handback - the
+            // extended range is only wanted WHILE focus is away on the booster. See RestoreRanges.
+            SnapshotRanges(upperStage);
             Extend(upperStage);
             Extend(booster);
 
@@ -375,6 +388,54 @@ namespace DragonScreen
             s.unload = RangeMetres * 1.1f;
             s.pack = RangeMetres * 0.9f;
             s.unpack = 200f;
+        }
+
+        // ---- ⛔ THE EXTENDED RANGE IS ON ONLY WHILE FOCUS IS AWAY ON THE BOOSTER. ----
+        // With PhysicsRangeExtender installed the 1500 km ask is honoured, so the upper stage stays
+        // LOADED and keeps flying itself through the whole recovery instead of unloading at ~300 km
+        // and coming back a rebooted vessel (which is what disengaged the ascent and lost the orbit).
+        // But a 1500 km range on the active vessel is a standing cost - it loads everything else in
+        // the system too, the station included, long before anything needs it. So the range is a
+        // LOAN: snapshot the normal ranges when we take the booster, put them back on handback.
+        private static float[] savedUpperRanges;
+
+        private static void SnapshotRanges(Vessel v)
+        {
+            savedUpperRanges = null;
+            if (v == null || v.vesselRanges == null) return;
+            VesselRanges r = v.vesselRanges;
+            savedUpperRanges = new float[]
+            {
+                r.flying.load,     r.flying.unload,     r.flying.pack,     r.flying.unpack,
+                r.subOrbital.load, r.subOrbital.unload, r.subOrbital.pack, r.subOrbital.unpack,
+                r.orbit.load,      r.orbit.unload,      r.orbit.pack,      r.orbit.unpack,
+                r.escaping.load,   r.escaping.unload,   r.escaping.pack,   r.escaping.unpack,
+            };
+        }
+
+        private static void RestoreRanges(Vessel v)
+        {
+            if (savedUpperRanges == null) return;
+            try
+            {
+                if (v != null && v.vesselRanges != null)
+                {
+                    VesselRanges r = v.vesselRanges;
+                    Put(r.flying, 0); Put(r.subOrbital, 4); Put(r.orbit, 8); Put(r.escaping, 12);
+                    v.vesselRanges = r;
+                    Debug.Log(Tag + "physics range restored on '" + v.vesselName
+                              + "' - the extended range was only needed while the booster had focus");
+                }
+            }
+            catch (Exception e) { Debug.LogWarning(Tag + "could not restore range: " + e.Message); }
+            savedUpperRanges = null;
+        }
+
+        private static void Put(VesselRanges.Situation s, int i)
+        {
+            if (s == null) return;
+            s.load = savedUpperRanges[i]; s.unload = savedUpperRanges[i + 1];
+            s.pack = savedUpperRanges[i + 2]; s.unpack = savedUpperRanges[i + 3];
         }
 
         // ------------------------------------------------------------------ flying it
@@ -550,7 +611,65 @@ namespace DragonScreen
             if (upperStage != null && upperStage.state != Vessel.State.DEAD)
             {
                 FlightGlobals.ForceSetActiveVessel(upperStage);
+
+                // ---- ⛔ RE-ASSERT CONTROL AFTER THE FORCED SWITCH. ----
+                // `ForceSetActiveVessel` onto a vessel whose IVA was despawned while it was inactive
+                // (KSP `Part.DespawnIVA`) leaves the crew unable to steer, throttle or enter IVA
+                // until a FULL SCENE RELOAD - which is the Tracking Center round-trip the crew was
+                // doing by hand, and which itself ends the flight (`FlightDriver.OnDestroy`
+                // disengages the autopilot, so the ascent then has to be restarted and re-runs its
+                // staging). Measured 2026-08-17. Doing here what that round-trip does:
+                //   · clear any control locks the switch left set, so the stick and throttle answer;
+                //   · reset the camera to flight, so the IVA the recovery despawned can be entered.
+                // Guarded: this runs during a scene transition, and a throw here would abort the
+                // handback and strand focus on the booster.
+                try
+                {
+                    InputLockManager.ClearControlLocks();
+                    if (CameraManager.Instance != null)
+                        CameraManager.Instance.SetCameraFlight();
+                    upperStage.MakeActive();
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning(Tag + "control re-assert after handback failed: " + e.Message);
+                }
+
+                // Give the upper stage its normal physics range back - the extended range was a loan
+                // for the recovery window, and it is the active vessel now, so it needs no reach.
+                RestoreRanges(upperStage);
+
                 Debug.Log(Tag + "focus -> '" + upperStage.vesselName + "' (it never stopped flying)");
+
+                // ⛔ RECOVER THE LANDED BOOSTER SO IT STOPS STEALING THE CAMERA. With PhysicsRange
+                // Extender keeping it loaded, KSP kept flipping focus between the down booster and the
+                // Dragon in orbit for the rest of the flight (crew report 2026-08-17). A recovered
+                // booster is gone from the world, so there is nothing to flip to - and it is the real
+                // end of the recovery: it is down, settled, and ours no longer.
+                RecoverBooster();
+            }
+        }
+
+        /// <summary>
+        /// Recover the landed booster through KSP's own recovery, or failing that remove it, so it
+        /// cannot keep stealing focus from the returning capsule. Only ever the booster, only once it
+        /// is down, and never the active vessel (KSP refuses to recover the one you are flying).
+        /// </summary>
+        private static void RecoverBooster()
+        {
+            if (booster == null || booster.state == Vessel.State.DEAD) return;
+            if (booster == FlightGlobals.ActiveVessel) return;
+            if (!booster.LandedOrSplashed) return;
+            try
+            {
+                GameEvents.OnVesselRecoveryRequested.Fire(booster);
+                Debug.Log(Tag + "booster recovered - removed from the flight so it cannot steal focus");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning(Tag + "booster recovery request failed (" + e.Message
+                                 + ") - removing it instead");
+                try { booster.Die(); } catch (Exception e2) { Debug.LogWarning(Tag + e2.Message); }
             }
         }
 
@@ -1450,21 +1569,22 @@ namespace DragonScreen
             // gate below waited eight seconds for a roll NOTHING WAS COMMANDING and gave up at
             // 89.8 deg - which is the 2026-08-11 13:37 log line, and very nearly a right angle
             // because that is exactly how far it had to go and never went.
-            Vector3d upHint = Vector3d.zero;
-            if (c.Aim == LandingAim.Flip && flipSeeded && flipAxis.sqrMagnitude > 0.5)
-                upHint = -flipAxis;
-            else if (HavePad && c.Aim == LandingAim.SurfaceRetrograde)
-            {
-                // The landing roll reference. See the F9I citation above.
-                Vector3d radial = (v.CoM - v.mainBody.position).normalized;
-                Vector3d north = Vector3d.Exclude(radial, v.mainBody.transform.up).normalized;
-                if (north.sqrMagnitude > 0.5)
-                {
-                    double rollAng = Vector3d.Angle(dir, north);
-                    if (rollAng >= Landing.RollRefMinDeg && rollAng <= Landing.RollRefMaxDeg)
-                        upHint = north;
-                }
-            }
+            // Keep the roll axis held even through the coast's larger pitch error - see the tunable.
+            AttitudeController.Booster.RollControlRangeDeg = BoosterRollRangeDeg;
+
+            // ---- ⛔ ONE ROLL FROM FLIP TO TOUCHDOWN: THE PLANE-OF-FLIGHT NORMAL. ----
+            // The crew's requirement is ZERO roll rotation after separation. The earlier NORTH
+            // reference SWUNG: re-projected perpendicular to a rotating aim it jumped whenever the aim
+            // neared north, driving phiRoll from -34 to +119 deg and 345 deg of coast roll (measured
+            // flight_0817_162926). The FLIP AXIS does not swing - it is perpendicular to the plane of
+            // flight (FlipGeometry / StepFlip), so it is ALWAYS perpendicular to the aim, never
+            // degenerate and never gated, and holding the booster's top to it keeps the grid fins in
+            // the flight plane the whole way down. It is already the flip's own roll reference; every
+            // phase uses it now, so the stage never re-clocks.
+            //
+            // Seeded at the flip. Before that (the instant between separation and flip) upHint is zero
+            // = hold current roll, which is right: there is nothing to re-clock to yet.
+            Vector3d upHint = (flipSeeded && flipAxis.sqrMagnitude > 0.5) ? -flipAxis : Vector3d.zero;
 
             AttitudeController.Booster.SteerTo(v, dir, upHint);
         }

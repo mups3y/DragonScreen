@@ -49,12 +49,47 @@ namespace DragonScreen
 
         public void Start()
         {
+            // Discover the [Tunable] fields, dump the reference catalogue, apply any overrides. Once
+            // per flight-scene entry, before anything ticks, so the first frame already runs on the
+            // tuned values rather than a frame of defaults.
+            Tuning.Build();
             Debug.Log(Tag + "flight driver up - autopilot, recovery and recorder now tick "
                           + "independently of the IVA");
         }
 
         public void Update()
         {
+            // Live tuning: re-read PluginData/tuning.cfg if it changed. Throttled to ~1 s internally,
+            // so this is a cheap call every frame and a disk touch only once a second.
+            Tuning.Poll();
+
+            // ---- AUTO-RESUME THE ASCENT AFTER A RECOVERY HANDBACK. ----
+            // The booster-recovery handback tears down and rebuilds the flight scene; OnDestroy
+            // disengaged the ascent mid-climb and the crew had to restart the sequence. If that
+            // teardown flagged a resume, bring the ascent straight back - but only when the active
+            // vessel is genuinely still climbing (airborne, periapsis below the atmosphere), so a
+            // finished mission is never re-launched. `AutoPilot.Engage` refuses from a stable orbit
+            // anyway, which is the belt to this braces.
+            if (AutoPilot.ResumeAscent && !AutoPilot.Engaged)
+            {
+                Vessel av = FlightGlobals.ActiveVessel;
+                bool climbing = av != null && av.orbit != null && av.mainBody != null
+                                && av.situation != Vessel.Situations.PRELAUNCH
+                                && av.situation != Vessel.Situations.LANDED
+                                && av.orbit.PeA < av.mainBody.atmosphereDepth;
+                if (climbing)
+                {
+                    AutoPilot.ResumeAscent = false;
+                    AutoPilot.Engage();
+                    Debug.Log(Tag + "ascent auto-sequence resumed after the recovery handback");
+                }
+                else if (av != null && av.orbit != null && av.mainBody != null
+                         && av.orbit.PeA >= av.mainBody.atmosphereDepth)
+                {
+                    AutoPilot.ResumeAscent = false;   // already in orbit - nothing to resume
+                }
+            }
+
             // Order matters only in that the recorder samples AFTER the guidance has run, so a row
             // carries this frame's command rather than the previous one's.
             FlightCommands.Tick();
@@ -84,7 +119,9 @@ namespace DragonScreen
             NodeExecutor.Tick();
             StationApproach.Tick();
             DockingOps.Tick();
+            DockedRefuel.Tick();          // fill the capsule the whole time it is berthed, not just at undock
             UndockOps.Tick();
+            UndockPush.Tick();            // a manual undock still gets the retro push + shroud close
 
             // ⛔ LAST, AND UNCONDITIONALLY. The chutes must not depend on any sequence having been
             // started - see ChuteGuard. A crew flying the entry by hand had none deploy at all.
@@ -103,6 +140,14 @@ namespace DragonScreen
 
         public void OnDestroy()
         {
+            // ---- REMEMBER TO COME BACK IF THE ASCENT WAS STILL FLYING. ----
+            // The booster-recovery handback rebuilds the flight scene and fires this OnDestroy, which
+            // disengages the ascent mid-climb. If we were flying an ascent that had not finished, flag
+            // it so the rebuilt driver picks it straight back up (see Update). Set BEFORE Disengage.
+            if (AutoPilot.Engaged && AutoPilot.Phase != AscentPhase.Done
+                && AutoPilot.Phase != AscentPhase.Idle)
+                AutoPilot.ResumeAscent = true;
+
             // Leaving the flight scene ends the flight. Close the file rather than leaving the last
             // rows buffered - the flights worth reading are the ones that end unexpectedly.
             FlightRecorder.Stop("left the flight scene");
@@ -119,6 +164,8 @@ namespace DragonScreen
                 DirectApproachOps.Reset();
                 NodeExecutor.Reset();
                 DockingOps.Reset();
+                DockedRefuel.Reset();
+                UndockPush.Reset();
                 UndockOps.Reset();
             ChuteGuard.Reset();
                 PhaseDownOps.Reset();

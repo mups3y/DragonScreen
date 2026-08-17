@@ -43,13 +43,30 @@ namespace DragonScreen
         // Re-measured 2026-08-12 after the S2 took over the insertion: the ascent now runs
         // ~3 s longer and 0.5 deg further east, because the circularisation happens on the
         // MVac before separation instead of on the Dracos after it.
-        public static double AscentTimeS = 284.7;
-        /// <summary>Longitude the ascent gains, degrees. `stAscentLng`.</summary>
-        public static double AscentLonDeg = 16.76;
+        // ⛔ 284.7 -> 519.5 ON 2026-08-17. The 284.7 s seed was measured against an OLD profile. The
+        // S2 now performs the insertion and separates AFTER circularising, so the real liftoff-to-
+        // co-orbital time is 519.5 s - MEASURED, flight_0817_114554: liftoff met 848.0, circular at
+        // station altitude met 1367.5. The 235 s stale seed timed the launch that much too early and
+        // the capsule inserted 16 km behind the station instead of the 1 km target, forcing a phasing
+        // lap. Tunable, and MeasureAtInsertion re-fits it live each ascent (once the liftoff clock is
+        // stamped once, not re-stamped on the recovery handback - see AutoPilot.Engage).
+        [Tunable] public static double AscentTimeS = 519.5;
+        /// <summary>
+        /// Longitude the ascent gains, degrees. `stAscentLng`.
+        ///
+        /// ⛔ 16.76 -> 56.61 ON 2026-08-17. Paired with the AscentTimeS fix and just as stale: the
+        /// 16.76 seed was the old 285 s ascent. The 519.5 s ascent sweeps 56.61 deg of longitude
+        /// (MEASURED, flight_0817_173..: "gained 56.61 deg"), and the launch window subtracts this
+        /// from the station's own travel to place the insertion - so a 40 deg error here put the
+        /// capsule 486 km AHEAD of the station instead of 1 km behind, and no rendezvous starts well
+        /// from there. Tunable, and MeasureAtInsertion re-fits it live.
+        /// </summary>
+        [Tunable] public static double AscentLonDeg = 56.61;
         /// <summary>Correction the last arrival measured, degrees. `stPhaseBias`.</summary>
-        public static double PhaseBiasDeg = 4.418;
-        /// <summary>How far behind the station to settle, metres. `stTrailDist`.</summary>
-        public static double TrailDistM = 1000.0;
+        [Tunable] public static double PhaseBiasDeg = 4.418;
+        /// <summary>How far behind the station to settle, metres. `stTrailDist`. Tunable - lower it
+        /// for a closer arrival, but stay inside the direct-approach gate so no phasing is needed.</summary>
+        [Tunable] public static double TrailDistM = 1000.0;
 
         /// <summary>
         /// Longest hold worth taking, seconds. `stWindowCap`.
