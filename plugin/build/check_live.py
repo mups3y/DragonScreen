@@ -20,7 +20,7 @@ So: before a function name goes into a doc comment as a citation, it goes throug
 """
 import os, re, sys, glob
 
-# ---- THE LIVE KSP TREE, NOT THE RELEASE. ----
+# ---- THE LIVE KSP TREE, NOT THE RELEASE - AND NOT DRAGONSCREEN'S KSP INSTALL EITHER. ----
 # This pointed at `Desktop\Falcon 9 Interface\Ships\Script`, which is the PACKAGED RELEASE, and the
 # release is COMMENT-STRIPPED. Every line number this tool ever printed was a line number in a file
 # that does not exist on disk in that form: it reported `Flip1` defined at BOOSTER.ks:146 and called
@@ -29,13 +29,24 @@ import os, re, sys, glob
 # point of this tool is to produce a CITATION, and a citation with a wrong line number is exactly
 # what RULE 1 exists to prevent.
 #
-# Two further reasons the release is the wrong source, both worse than the line numbers:
+# ⛔ FOUND 2026-08-18: it was then "fixed" to the Steam KSP install's own Ships/Script - on the false
+# assumption that F9I and DragonScreen fly in the SAME game. They do not. F9I is a separate kOS-only
+# KSP installation; the Steam copy DragonScreen actually flies from (GameData/DragonScreen +
+# PhysicsRangeExtender) has NO Ships/Script at all. So this pointed at a directory with zero .ks
+# files, `ks_files()` returned empty, and the tool has been silently printing "citation checks are
+# DISABLED" for an unknown span - every "PORT <file:line - verified live>" label written since could
+# not actually have been checked by this tool.
+#
+# `F9I_dev_v1.2.0_BACKUP_20260804` is the fix: CLAUDE.md records it as "verified byte-identical" to
+# the real F9I tree, taken as a restore point right before DragonScreen work began (2026-08-05) and
+# untouched since (F9I work stopped when this project started). Confirmed 2026-08-18 by spot-checking
+# a real citation - BOOSTER.ks:801, the 2.23/1.35 handover ratio - against this tree; it matches
+# exactly.
 #   · it is a SNAPSHOT (v1.1.0) and lags the live tree. `COMMON/TIME.ks` was deleted from the live
 #     tree on 2026-08-04 and the tagged release still carries it - so the tool would report its
 #     functions as present in code that no longer flies.
-#   · "verified live" has to mean the code that actually flew, and that is the KSP install.
 F9I_ROOTS = [
-    r"C:\Program Files (x86)\Steam\steamapps\common\Kerbal Space Program\Ships\Script",
+    r"C:\Users\User\Desktop\F9I_dev_v1.2.0_BACKUP_20260804\Ships\Script",
 ]
 OUR_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src")
 

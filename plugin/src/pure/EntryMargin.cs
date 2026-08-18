@@ -40,11 +40,20 @@ namespace DragonScreen
     public static class EntryMargin
     {
         /// <summary>
-        /// Global multiplier on the whole schedule. `dgMarginScale`. The one dial to turn when an
-        /// entry is consistently long or short - turning individual breakpoints discards the
-        /// measurement they came from.
+        /// Global multiplier on the whole "aim long" schedule. `dgMarginScale`.
+        ///
+        /// ⛔ SET TO 0 (user directive, 2026-08-19): AIM THE PREDICTED IMPACT DIRECTLY AT THE LZ, and let
+        /// the lift steering only null drift to stay on target. Our `ImpactPredictor` is DRAG-AWARE, so
+        /// DownrangeErr = 0 already means "lands on the LZ." The F9I 341 km-at-71 km overshoot (measured
+        /// on a DIFFERENT capsule) made the loop read the impact as hundreds of km "below profile,"
+        /// command 0 (shorten-only cannot extend) and COAST OPEN-LOOP the whole descent - landed 107 km
+        /// off (flight_0818_210822) after the pre-entry trim already had it at -381 m. With scale 0 the
+        /// loop steers on the real miss all the way down.
+        ///
+        /// [Tunable]. If a flight then lands consistently SHORT (the predictor integrates drag but not
+        /// the lift the capsule banks with), a small positive value is the tune - but try 0 FIRST.
         /// </summary>
-        public static double MarginScale = 1.0;
+        [Tunable] public static double MarginScale = 0.0;
 
         /// <summary>Altitude at which the schedule reaches zero. Re-measured twice; see the header.</summary>
         public const double ZeroAtM = 9000.0;
@@ -93,19 +102,14 @@ namespace DragonScreen
             return (want > alongTrackRemainingM) ? alongTrackRemainingM : want;
         }
 
-        /// <summary>
-        /// Range error to fly on: how much LONGER the predicted impact is than the schedule wants.
-        /// Positive means we are going too far and the capsule should shorten - bank the lift down.
-        ///
-        /// ⚠ SHORTEN-ONLY IS THE FLOWN BEHAVIOUR. `falcon-dragon-entry-solution`: the working entry
-        /// "steers a long-margin schedule with shorten-only + lead". The capsule is aimed deliberately
-        /// long and only ever gives range away, because lift-up authority is far weaker than drag and
-        /// a profile that tries to stretch has usually already lost.
-        /// </summary>
-        public static double ShortenErrorM(double altitudeM, double predictedLongM,
-                                           double alongTrackRemainingM)
-        {
-            return predictedLongM - WantLongClampedM(altitudeM, alongTrackRemainingM);
-        }
+        // ShortenErrorM (predictedLong - WantLongClampedM) was removed 2026-08-18 (audit D4). It was
+        // dead API - called by nothing - and, unlike the flown loop, it formed the error as
+        // (predictedLong - clampedWant) rather than EntryGuidance.Update's (downrangeErr + clampedWant),
+        // so it was NOT a drop-in for the live path and could have gone silently stale. WantLongClampedM
+        // above is now called directly by Update, which is the one place the clamp is needed.
+        //
+        // ⚠ SHORTEN-ONLY IS THE FLOWN BEHAVIOUR. `falcon-dragon-entry-solution`: the working entry
+        // "steers a long-margin schedule with shorten-only + lead" - aimed deliberately long, only ever
+        // giving range away, because lift-up authority is far weaker than drag.
     }
 }

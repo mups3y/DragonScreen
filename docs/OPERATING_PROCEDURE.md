@@ -70,7 +70,29 @@ but there is nothing useful behind the refusal either.
 
 ---
 
-## 3. The lower console
+## 3. On orbit — rendezvous, dock, refuel, come home
+
+These three live on the **FLIGHT page**, in a row under **AUTO SEQUENCE**. They are *not* lower-console
+commands — no arm/execute. Each is a single press that toggles the phase on; press it again to cancel.
+They grey out when they cannot be used: RENDEZVOUS and AUTO-DOCK go dead once berthed, UNDOCK & LAND is
+dead until you are.
+
+| Press | What it does | Refuses when |
+|---|---|---|
+| **RENDEZVOUS** | Flies the whole ladder from orbit — matches the station's orbit, phases, closes on Clohessy-Wiltshire, hands to the docking servo at ~200 m. Reads `RNDZ <phase>` while running. | on the ground, already docked, or not yet in a stable orbit — the log says which |
+| **AUTO-DOCK** | One button, the whole job. Beyond `DockingOps.DockEnvelopeM` it flies the RENDEZVOUS for you; inside it, it drives the gate → standoff → axial dock straight to contact. Reads `DOCK <stage>`, then `DOCKED`. | already docked, or no station loaded |
+| **UNDOCK & LAND** | Tops the tank off, releases our own port, and backs clear. De-orbit is a **separate** press on the lower console (§4) — backing away and leaving orbit are two decisions. | not docked (use `DEORBIT NOW` instead) |
+
+**Refuelling is automatic — there is no button.** While berthed, `DockedRefuel` fills the capsule from
+the station; UNDOCK & LAND also takes a final top-up as the hooks release. A recent return left the
+berth with 192.5 units and needed no manual transfer.
+
+All three are flown. Rendezvous and docking were exercised end-to-end on 2026-08-17 — the crew
+confirmed the dock latched — and the refuel filled the tank with no manual top-up.
+
+---
+
+## 4. The lower console
 
 Every command is **arm, then execute**:
 
@@ -88,14 +110,23 @@ below the target — they will say which in the log.
 
 ---
 
-## 4. What is NOT built
+## 5. What is still open
 
-Do not wait for these; nothing will happen.
+Rendezvous, docking and refuelling used to be listed here as "unwired and unflown." They are not —
+they are wired and have flown; see §3. What remains genuinely open:
 
-- **Rendezvous, docking, refuelling** — the guidance exists in `pure/`, unwired and unflown.
-- **Closed-loop entry guidance** — see `docs/F9I_PORT_MAP.md`.
+- **Entry guidance is basic, not the real technique.** A shorten-only lift-steering loop
+  (`pure/EntryGuidance.cs`) IS flying and has splashed the capsule down within margin — but it is not
+  the real Crew Dragon scheme, which modulates bank angle with cross-range reversals. See
+  `docs/F9I_PORT_MAP.md` and `docs/REAL_CREW_DRAGON_MISSION.md`.
+- **51.6° inclination and a plane-based launch window** — the station flies at ~0.13° and launch is on
+  phase, ascent heading hard-90. The real-mission plane solve and azimuth are not built. See
+  `docs/REAL_CREW_DRAGON_MISSION.md`.
 
-## 5. Booster recovery — both vehicles fly at once
+*Corrected 2026-08-18; this section previously claimed rendezvous/docking/refuelling were unbuilt. See
+`docs/AUDIT_2026-08-18.md` finding P0-DOCS.*
+
+## 6. Booster recovery — both vehicles fly at once
 
 **Recovery is taken as soon as the booster exists**, seconds after MECO, which is what gives
 boostback its window. The camera follows the booster down; **the upper stage keeps flying itself the
@@ -129,7 +160,10 @@ interface CPU rebooting mid-circularisation on every flight.
 For an RTLS profile the two vehicles stay well inside 300 km, so this should not bite. If the log
 says `upper stage has gone on rails`, that is what happened, and PhysicsRangeExtender is the fix.
 
-### Still unflown
+### Flown
 
-The entry burn, the soft start, the grid fins, the hoverslam and the engine-mode switching **have
-never executed once**. Expect the first recovery to find something.
+The entry burn, the soft start, the grid fins, the hoverslam and the engine-mode switching have all
+executed in sequence. The booster has landed **0.0 km downrange at ~1 m/s** — a real hoverslam, with
+the 3-to-1 engine-mode handover firing — and done it on multiple recoveries.
+
+*This subsection said "never executed once" until 2026-08-18; that was false (audit P0-DOCS).*

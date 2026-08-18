@@ -777,12 +777,11 @@ public static class FlightTest
         // ---- THE FITTED CONSTANTS. THE SOURCE RECORDS THE MISS EACH ONE PRODUCED. ----
         Check("S2 crew aim is the 159 m fit", Deorbit.AimS2Crew == 286000.0, "");
         Check("S2 cargo aim is the 331 m fit", Deorbit.AimS2Cargo == 315450.0, "");
-        // ⛔ RE-FIT 2026-08-17 FROM A MEASURED RETURN AT REPEATABLE MASS: 295400 -> 221500.
-        // The 295400 value (an 86 km fit carried onto the 120 km station) was contradicted by data:
-        // flight_0817_193135 railed liftMin at -1 (max shorten) the whole entry and STILL landed
-        // along -49.5 km LONG. That is the signature of an aim too far past the LZ for the entry's
-        // shorten authority to reel back. The comment's own recipe: 295400 - 49500/0.67 = 221500.
-        Check("Draco crew aim is the 2026-08-17 measured re-fit", Deorbit.AimDracoCrew == 221500.0, "");
+        // ⛔ THE AIM IS NOT A MONOTONIC LEVER - see Deorbit.AimDracoCrew. 221500 -> 47 km short,
+        // 256000 -> 260 km short (a LONGER aim burned deeper and landed SHORTER). Reverted to 221500,
+        // the least-bad known, pending the closed-loop bank-entry rework that replaces this constant
+        // as the range lever.
+        Check("Draco crew aim reverted to 221500 pending closed-loop entry", Deorbit.AimDracoCrew == 221500.0, "");
 
         // ⛔ THE OLD TEST CLAIMED "the shallow Draco entry needs the LONGER aim (> S2)". MEASURED FALSE.
         // The aim is where the de-orbit puts the impact and the entry then SHORTENS to the LZ. A

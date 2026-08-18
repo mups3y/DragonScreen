@@ -94,6 +94,13 @@ namespace DragonScreen
         private static int phasePass;
         /// <summary>Latch, so using up the laps is said once and not every tick.</summary>
         private static bool phaseCapReported;
+        /// <summary>
+        /// Set once the range first reaches the direct-approach gate. After that, NO new phasing laps -
+        /// if the approach is thrown back out of the gate (a fast crossing the phasing left), riding the
+        /// existing intercept to match velocity is right; going back out to 22 km for another whole lap
+        /// is the "rendezvous that takes longer" the crew flagged 2026-08-18 (flight_0818_154218).
+        /// </summary>
+        private static bool reachedGate;
         private static int lastFrame = -1;
 
         // ------------------------------------------------------------------ lifecycle
@@ -128,7 +135,7 @@ namespace DragonScreen
             startedAt = Planetarium.GetUniversalTime();
             lastBurnAt = -999.0;
             haltReported = false;
-            phasePass = 0; phaseCapReported = false;
+            phasePass = 0; phaseCapReported = false; reachedGate = false;
             phaseReturnUt = 0.0;
             matchUt = 0.0; matchDistM = 0.0; matchWarpAsked = false;
             altBurnUt = 0.0; altWarpAsked = false; altMatchDone = false;
@@ -323,6 +330,7 @@ namespace DragonScreen
             // "and nowhere else".
             if (DirectApproach.InsideGate(RangeM))
             {
+                reachedGate = true;   // from here on, ride intercepts rather than phase out again
                 if (DirectApproachOps.Engage(ship, Station)) { Note = "DIRECT APPROACH"; return; }
                 Halt(DirectApproachOps.Note);
                 return;
@@ -337,7 +345,8 @@ namespace DragonScreen
             // gap again mid-coast would re-plan against a gap the current lap is already closing.
             bool lapInFlight = phaseReturnUt > 0.0 || NodeExecutor.Active;
             if (lapInFlight
-                || (Math.Abs(AlongTrackM) > Approach.PhaseMinM && phasePass < Approach.PhaseMaxPass))
+                || (!reachedGate
+                    && Math.Abs(AlongTrackM) > Approach.PhaseMinM && phasePass < Approach.PhaseMaxPass))
             {
                 Leg = ApproachLeg.Phasing;
                 FlyPhasing();

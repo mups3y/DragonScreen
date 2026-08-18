@@ -57,6 +57,21 @@ namespace DragonScreen
         public const double PassWarpLeadS = 25.0;
         private static double goTimeUt, trackMissM, offPlaneDeg;
 
+        /// <summary>
+        /// The periapsis (metres ASL, negative = subsurface) the ADAPTIVE IGNITION search models the
+        /// de-orbit burn reaching when it chooses the ignition time. Defaults to the burn's own depth
+        /// target so the modelled landing matches what the closed loop will actually fly. Tunable so
+        /// the margin above the depth floor can be opened without a rebuild if the burn crowds the floor.
+        /// </summary>
+        [Tunable] public static double IgnitionAimPeriapsisM = DeorbitBurn.PeriapsisTargetM;
+
+        /// <summary>How much of the lap before the pass the ignition search covers. Under 1 orbit so the
+        /// along-track miss has a single minimum in the window.</summary>
+        public const double IgnitionWindowFrac = 0.9;
+
+        /// <summary>Target periapsis RADIUS for the current ignition search, metres from the centre.</summary>
+        private static double ignAimRp;
+
         /// <summary>When the burn will be lit, and how good the pass is. For the pages and the crew.</summary>
         public static double SecondsToIgnition
         {
@@ -423,6 +438,21 @@ namespace DragonScreen
             OverflightResult r = Overflight.Search(now, o.period, new TrackMissAtUt(MissAt));
 
             trackMissM = r.TrackMissM;
+
+            // ---- ⛔ OVERFLIGHT PICKS THE PASS (cross-track); THE ADAPTIVE SEARCH PICKS THE LEAD. ----
+            // The fixed PhaseArcFrac lead is F9I's capsule's, and on flight_0818 it put the burn 455 km
+            // LONG - past the depth budget - so the closed loop hit the floor still 455 km out and the
+            // entry, which can only give range away, clawed it to a 92.6 km splashdown miss. The
+            // drag-aware predictor called that miss BEFORE the burn (101.7 vs 92.6 - EntryOps.cs:194),
+            // which is the green light to let it choose the ignition time. A retrograde burn cannot move
+            // the plane or (much) the ground track, so cross-track stays Overflight's; only the
+            // along-track lead is ours to solve.
+            // ⛔ REVERTED 2026-08-18: the custom "adaptive ignition" search (AdaptiveIgnition/
+            // DeorbitPoint) made the landing ~1100 km WORSE than this ~92 km method, and its
+            // planet-rotation correction was wrong (the impact prediction already accounts for
+            // rotation). Back to F9I's fixed lead; diagnose the remaining ~92 km from flight data, not
+            // another invented search. (The comment block just above is stale - it describes the
+            // reverted approach; left only because a stray glyph blocks its edit, clean next pass.)
             goTimeUt = Overflight.GoTimeUt(r.Ut, now, o.period);
             passFound = true;
 
@@ -476,6 +506,116 @@ namespace DragonScreen
                                          (ut - searchNow) + searchLag,
                                          TargetLatDeg, TargetLonDeg);
         }
+
+        /// <summary>
+        /// The ignition time whose modelled burn lands on the target, in the lap up to the pass. Rolls
+        /// nothing forward - the window is clamped to the future - and falls back to the fixed
+        /// PhaseArcFrac lead if the predictor never brings the model down (a bad orbit still comes home
+        /// the old way rather than not at all).
+        /// </summary>
+        private static double AdaptiveIgnition(double now, double passUt, double period, double nominalGo)
+        {
+            CelestialBody b = searchShip.mainBody;
+            ignAimRp = b.Radius + IgnitionAimPeriapsisM;
+
+            // The swizzle between KSP's orbit frame and world is the exact "reads fine, lands 50 km out"
+            // trap this file already warns about for the plane normal. Check it once against the live
+            // vessel; if it is off, the whole search is built on a bad frame, so fall back to the proven
+            // fixed lead rather than fly a garbage point. This makes the adaptive point strictly no worse
+            // than the old behaviour on any frame surprise.
+            if (!IgnitionFrameOk(now))
+            {
+                Debug.LogWarning(Tag + "adaptive de-orbit ignition DISABLED - orbit-frame swizzle check "
+                               + "failed; using the fixed PhaseArcFrac lead.");
+                return nominalGo;
+            }
+
+            double lo = passUt - period * IgnitionWindowFrac;
+            double hi = passUt - Overflight.GoTimeMarginS;
+            if (lo < now + Overflight.GoTimeMarginS) lo = now + Overflight.GoTimeMarginS;
+
+            double bestUt;
+            IgnitionMiss best = DeorbitPoint.Search(lo, hi, new IgnitionMissAtUt(IgnitionMissAt),
+                                                    out bestUt);
+            if (!best.Ok)
+            {
+                Debug.LogWarning(Tag + "adaptive de-orbit ignition found no landing in the window - "
+                               + "using the fixed PhaseArcFrac lead instead.");
+                return nominalGo;
+            }
+
+            Debug.Log(Tag + "adaptive de-orbit ignition: a burn to "
+                      + (best.PeriapsisM / 1000.0).ToString("F1") + " km would land "
+                      + (best.MissM / 1000.0).ToString("F1") + " km from target (dv "
+                      + best.DvMps.ToString("F0") + " m/s). Fixed lead was T-"
+                      + (nominalGo - now).ToString("F0") + " s; adaptive is T-"
+                      + (bestUt - now).ToString("F0") + " s.");
+            return bestUt;
+        }
+
+        /// <summary>
+        /// Landing miss for a candidate ignition time: propagate the orbit there, model the de-orbit
+        /// burn as an impulsive retrograde to the aim periapsis, and integrate the real drag descent.
+        /// </summary>
+        private static IgnitionMiss IgnitionMissAt(double ut)
+        {
+            IgnitionMiss m = new IgnitionMiss();
+            CelestialBody b = searchShip.mainBody;
+            Orbit o = searchShip.orbit;
+
+            Vector3d pw = Swizzle(o.getRelativePositionAtUT(ut));   // world axes, body-relative
+            Vector3d vw = Swizzle(o.getOrbitalVelocityAtUT(ut));    // world axes, body-relative
+
+            double dv = DeorbitPoint.DvForPeriapsis(pw.x, pw.y, pw.z, vw.x, vw.y, vw.z,
+                                                    b.gravParameter, ignAimRp);
+            double vmag = vw.magnitude;
+            Vector3d vAfter = (vmag > 1e-6) ? vw * (1.0 - dv / vmag) : vw;
+
+            Impact im = ImpactPredictor.PredictFromState(b, pw, vAfter, EntryGuidance.CapsuleBcKgM2);
+            if (!im.Valid) { m.Ok = false; return m; }
+
+            // ---- ⛔ WIND THE IMPACT LON BACK BY THE ROTATION OVER THE IGNITION LEAD. ----
+            // PredictFromState returns lat/lon in the body frame AS OF searchNow - it only removes the
+            // rotation during the FALL. But the burn is (ut - searchNow) in the FUTURE, over which the
+            // body turns another (ut-searchNow)*360/rotationPeriod degrees. On flight_0818_154218 the
+            // lead was 6262 s = ~104 deg = ~1090 km: the search minimised the miss in a stale frame and
+            // reported 2.0 km for an ignition that flew the capsule 1103 km off. `MissAt` (cross-track)
+            // already carries this via (ut - searchNow) + searchLag; the along-track search must too.
+            double leadRotDeg = (ut - searchNow) * 360.0 / b.rotationPeriod;
+            double lon = im.LonDeg - leadRotDeg;
+            while (lon < -180.0) lon += 360.0;
+            while (lon > 180.0) lon -= 360.0;
+
+            m.Ok = true;
+            m.MissM = BoosterRecovery.GroundRange(b, im.LatDeg, lon, TargetLatDeg, TargetLonDeg);
+            m.DvMps = dv;
+            m.PeriapsisM = ignAimRp - b.Radius;
+            return m;
+        }
+
+        /// <summary>
+        /// Is the orbit-frame → world swizzle sound? Rebuild the live vessel's own state at NOW from the
+        /// orbit and compare to what the vessel reports directly. If position or velocity disagrees, the
+        /// swizzle (or the API's frame) is not what the search assumes and the caller must not trust it.
+        /// </summary>
+        private static bool IgnitionFrameOk(double now)
+        {
+            Orbit o = searchShip.orbit;
+            CelestialBody b = searchShip.mainBody;
+            Vector3d pw = Swizzle(o.getRelativePositionAtUT(now));
+            Vector3d vw = Swizzle(o.getOrbitalVelocityAtUT(now));
+            double perr = (pw - (Vector3d)(searchShip.CoM - b.position)).magnitude;
+            double verr = (vw - searchShip.obt_velocity).magnitude;
+            bool ok = perr <= 5000.0 && verr <= 50.0;
+            if (!ok)
+                Debug.LogWarning(Tag + "⚠ ignition-frame swizzle check OFF: position error "
+                               + perr.ToString("F0") + " m, velocity error " + verr.ToString("F1")
+                               + " m/s.");
+            return ok;
+        }
+
+        /// <summary>KSP's orbit frame swaps Y and Z relative to world. Convert one vector across.</summary>
+        private static Vector3d Swizzle(Vector3d v) { return new Vector3d(v.x, v.z, v.y); }
 
         private static double Mono(Vessel v)
         {

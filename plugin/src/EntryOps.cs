@@ -190,6 +190,27 @@ namespace DragonScreen
             Go(stacked ? EntryStage.Separating : EntryStage.CoastToInterface);
             Debug.Log(Tag + "entry sequence engaged - " + (stacked ? "stack still attached" : "clean capsule")
                       + ", target " + TargetLatDeg.ToString("F4") + ", " + TargetLonDeg.ToString("F4"));
+
+            // ---- ⛔ VALIDATE THE KNOWN-BC PREDICTOR BEFORE IT MOVES ANYTHING (2026-08-18). ----
+            // The de-orbit POINT is placed with F9I's fixed DescentTimeS (845 s) and lands us hundreds
+            // of km off, before any entry guidance can matter. The approved fix is to place the burn
+            // from a DRAG-AWARE prediction using our OWN ballistic coefficient. This logs what that
+            // predictor says the landing will be NOW, on the entry trajectory just set, so the next
+            // flight can compare it to the actual DRAGON RECOVERED miss. If it is close, the predictor
+            // is trustworthy and the next step lets it drive the de-orbit point. It commands nothing.
+            if (v.mainBody != null)
+            {
+                Impact pk = ImpactPredictor.Predict(v, EntryGuidance.CapsuleBcKgM2);
+                if (pk.Valid)
+                    Debug.Log(Tag + "known-bc(" + EntryGuidance.CapsuleBcKgM2.ToString("F0")
+                              + ") drag-aware landing prediction: " + pk.LatDeg.ToString("F3") + ", "
+                              + pk.LonDeg.ToString("F3") + " = "
+                              + (BoosterRecovery.GroundRange(v.mainBody, pk.LatDeg, pk.LonDeg,
+                                     TargetLatDeg, TargetLonDeg) / 1000.0).ToString("F1")
+                              + " km from target - COMPARE to the actual landing miss.");
+                else
+                    Debug.Log(Tag + "known-bc predictor: no answer yet (" + pk.Note + ")");
+            }
         }
 
         public static void Disengage(string why)

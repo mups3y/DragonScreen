@@ -20,6 +20,7 @@ public static class TestMain
         bad += PhasingTest.Run();
         bad += DockGeometryTest.Run();
         bad += DeorbitBurnTest.Run();
+        bad += DeorbitPointTest.Run();
         bad += TrajectoryTest.Run();
         bad += EntryGuidanceTest.Run();
         bad += DockControlTest.Run();

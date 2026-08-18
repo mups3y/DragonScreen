@@ -108,16 +108,18 @@ namespace DragonScreen
         /// single data point. If the next return lands LONG, halve the change rather than reverting
         /// it, and do not re-fit from `WorstErrorM` - see the note in EntryOps.Handover.
         /// </summary>
-        /// ⛔ RE-FIT 2026-08-17 AGAINST A 120 km RETURN AT REPEATABLE MASS: 295400 -> 221500.
-        /// The 295400 value was an 86 km fit carried unchanged onto the 120 km station - a longer,
-        /// shallower glide - so it aimed long. flight_0817_193135 is the first return the comment's
-        /// own recipe applies to cleanly: auto-refuel fills the tank every docked flight, so the mass
-        /// is now repeatable, and it landed along -49.5 km (LONG) with liftMin railed at -1 the whole
-        /// entry - the entry shortening as hard as it could and still overshooting. The recipe is
-        /// `new = current - settledMiss / AimGain` = 295400 - 49500/0.67 = 221500. Read the NEXT
-        /// return's miss and re-fit again ONCE if it is not within the entry's own authority; do not
-        /// blind-guess between flights. Tunable, so it can also be dialed live in tuning.cfg.
-        [Tunable] public static double AimDracoCrew = 221500.0;  // 270700->284400->295400->221500
+        /// ⛔ THE AIM IS A BAD CONTROL LEVER - IT IS NOT MONOTONIC. Data 2026-08-17/18, 120 km return:
+        ///     aim 295400 (flight_0817_193135) -> -49.5 km LONG (liftMin railed -1, closed loop)
+        ///     aim 221500 (flight_0817_214211) -> 47.2 km SHORT (OPEN loop, Pe -25.3)
+        ///     aim 256000 (flight_0817_232723) -> 260   km SHORT (OPEN loop, Pe -28.7)
+        /// I raised 221500 -> 256000 expecting the landing to move LONG; it moved 213 km SHORTER. The
+        /// reason: the de-orbit burn stops on a DEPTH floor, and a longer range aim makes it burn
+        /// DEEPER before it quits (Pe -25.3 -> -28.7), which is a STEEPER, SHORTER entry. Larger aim =
+        /// shorter landing here. On top of that the aim is scaled by orbit energy (`AimRange`), so its
+        /// effect differs flight to flight. A feed-forward number that couples to burn depth AND to the
+        /// orbit is not a lever you can bracket - which is why the real fix is a CLOSED-LOOP bank
+        /// entry, not this constant. Reverted to 221500 (the least-bad known) pending that rework.
+        [Tunable] public static double AimDracoCrew = 221500.0;  // 270700->284400->295400->256000->221500
 
         /// <summary>De-orbit aims this far PAST the landing zone.</summary>
         public const double OvershootM = 35000.0;
@@ -357,39 +359,47 @@ namespace DragonScreen
     }
 
     /// <summary>
-    /// Station operations: the constants `F9I/station_ops.ks` flies a ferry mission on.
+    /// Station de-orbit calibration - the constants the landing-calibrated return orbit is fitted to.
     ///
-    /// `stDeorbitAp` / `stDeorbitPe` are THE landing-calibrated orbit and the source says in as many
-    /// words: do not change without re-fitting. The whole de-orbit aim table above was fitted FROM
-    /// that orbit, so moving it invalidates every number in this file.
+    /// ⚠ THIS CLASS IS NOT THE LIVE RENDEZVOUS/APPROACH. Split 2026-08-18 (audit D3). It used to hold
+    /// a full multi-pass, timed-back-away ferry design ported from `F9I/station_ops.ks`, but that
+    /// design is not what the code flies: the live approach is StationApproach.cs + pure/Rendezvous.cs
+    /// + pure/CwTargeting.cs + pure/DirectApproach.cs; the station is found by
+    /// StationApproach.StationName (this class carried a dead DUPLICATE of it); the docking handover is
+    /// DockingOps.DockEnvelopeM. The six dead members of that old design (StationInclination,
+    /// OrbitToleranceM, BackAwayRate, BackAwayTimeoutS, MaxPasses, MinGainPerPassM) and the duplicate
+    /// StationName were removed here. (The 2026-08-18 audit's own D3 note called some of these "live";
+    /// that was wrong - it counted FlightTest value-assertions as flight-code usage. Corrected here.)
+    ///
+    /// What remains is a calibration/reference block, kept because FlightTest.cs value-pins it as a
+    /// regression guard - NOT because flight code reads it.
     /// </summary>
     public static class StationOps
     {
-        public const string StationName = "Space X Station";
-        /// <summary>Station inclination, degrees. Must match the landing-zone latitude.</summary>
-        public const double StationInclination = 0.13;
-
-        /// <summary>THE landing-calibrated orbit. Re-fit the aim table if you move it.</summary>
+        /// <summary>
+        /// THE landing-calibrated orbit. The de-orbit aim table above was fitted FROM this orbit, so
+        /// moving it invalidates every number in this file. Value-pinned by FlightTest.cs so an
+        /// accidental change trips a red assertion instead of a silent bad landing; not read by flight
+        /// code.
+        /// </summary>
         public const double DeorbitApM = 85100.0, DeorbitPeM = 79200.0;
-        /// <summary>How close to that orbit counts as arrived.</summary>
-        public const double OrbitToleranceM = 1500.0;
-
-        /// <summary>Hand the rendezvous over to the docking autopilot at this range.</summary>
-        public const double DockHandoverM = 300.0;
-
-        /// <summary>Back away this far from the station before ANY burn, and how fast.</summary>
-        public const double SafeDistanceM = 150.0;
-        public const double BackAwayRate = 1.5;
-        public const double BackAwayTimeoutS = 180.0;
-
-        /// <summary>Rendezvous passes allowed before giving up, and the minimum gain per pass.</summary>
-        public const int MaxPasses = 8;
-        public const double MinGainPerPassM = 250.0;
 
         /// <summary>
-        /// Is it safe to light an engine here? Never with the station this close - back off first.
-        /// This is why `stSafeDist` exists at all: a main-engine burn at the port is not a rendezvous
-        /// error, it is a collision.
+        /// SUPERSEDED by DockingOps.DockEnvelopeM, which is the live rendezvous-to-docking handover
+        /// range. Kept only as the value FlightTest.cs still pins.
+        /// </summary>
+        public const double DockHandoverM = 300.0;
+
+        /// <summary>
+        /// Collision guard: never light a main engine with the station closer than this - back off
+        /// first. Used by SafeToBurn below; value-pinned by FlightTest.cs.
+        /// </summary>
+        public const double SafeDistanceM = 150.0;
+
+        /// <summary>
+        /// Is it safe to light an engine here? Never with the station this close - a main-engine burn
+        /// at the port is not a rendezvous error, it is a collision. Tested; not currently called from
+        /// the live de-orbit path, which carries its own guards - kept as the stated rule.
         /// </summary>
         public static bool SafeToBurn(double rangeM) { return rangeM >= SafeDistanceM; }
     }

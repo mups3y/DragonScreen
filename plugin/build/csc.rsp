@@ -21,6 +21,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\CwTargeting.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Deorbit.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\DeorbitBurn.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\DeorbitOrbit.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\DeorbitPoint.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\DirectApproach.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\DisplayList.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\DockApproach.cs
@@ -65,6 +66,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\VehicleParts.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\VehicleSystems.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\BurnExecTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\DeorbitBurnTest.cs
+C:\Users\User\Desktop\DragonScreen\plugin\test\DeorbitPointTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\DockApproachTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\DockControlTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\DockGeometryTest.cs

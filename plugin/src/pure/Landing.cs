@@ -321,23 +321,45 @@ namespace DragonScreen
         /// <summary>Gains are wound UP for the flip: the one moment it must rotate hard.</summary>
         public const double FlipStoppingTime = 3.0;
 
+        // ---- ⛔ DEAD kOS SCALE-FACTOR KNOBS. NOT WIRED. Re-flagged 2026-08-18 (audit D1). ----
+        // These four are the literal kOS steering knobs BoosterRecovery.cs:1510 already declares GONE:
+        // "maxstoppingtime, pitchts, rollts and rolltorquefactor were kOS's knobs, and porting them
+        // was the mistake... pure/Attitude.cs derives the rate bound from the vehicle's own torque and
+        // inertia." Grep-confirmed referenced NOWHERE but their own definitions. They read as live
+        // settings but drive nothing - the exact "constant that looks like a setting" trap. Kept, not
+        // deleted, only as the read-from-source numbers a future roll investigation may need.
+        //
+        // ⛔ DO NOT reactivate them as a "fix" for the coast/descent roll problem. docs/F9I_BOOSTER_
+        // TARGETS.md records this project decoded kOS's rollts/torque knobs once and made the roll
+        // measurably WORSE. The roll problem was DIAGNOSED 2026-08-18 (flight_0818_104520): the cause is
+        // physical roll AUTHORITY (~10x below pitch/yaw), not a controller knob - see BoosterRecovery.cs
+        // ~1595. The audit's H1 (the RollRefMinDeg/RollRefMaxDeg gate) was tested and REFUTED. Neither
+        // these dead knobs nor that gate is the fix; reducing the aero roll torque is.
+
         /// <summary>
-        /// Roll-control angle range during the flip, degrees. `BOOSTER.ks:157`, live `Flip1`.
-        ///
-        /// ⚠ FLIP ONLY - `Boostback:399` resets it. See AttitudeController.RollControlRangeDeg
-        /// for what the default 5 did to the flip.
+        /// DEAD here - not wired. The flip's roll-control range actually comes from the live
+        /// AttitudeController.RollControlRangeDeg; this is the dead duplicate with a near-identical
+        /// name. Ported from `Flip1` at `BOOSTER.ks:157`, which is live in F9I.
         /// </summary>
         public const double FlipRollControlRangeDeg = 45.0;
 
-        /// <summary>Roll torque factor during the flip. `BOOSTER.ks:156`, live `Flip1`.</summary>
+        /// <summary>DEAD here - not wired. Ports kOS's `rolltorquefactor` (`BOOSTER.ks:156` `Flip1`),
+        /// which is live in F9I; superseded here by Attitude.cs's torque-derived rate bound (see
+        /// BoosterRecovery.cs:1510).</summary>
         public const double FlipRollTorqueFactor = 3.0;
 
-        /// <summary>Pitch/yaw time-scale multiplier for the flip. `BOOSTER.ks:152-153`.</summary>
+        /// <summary>DEAD here - not wired. Ports kOS's `pitchts` (`BOOSTER.ks:152-153`), which is live
+        /// in F9I; superseded here by Attitude.cs's torque-derived rate bound (see
+        /// BoosterRecovery.cs:1510).</summary>
         public const double FlipPitchYawStoppingScale = 1.5;
 
         /// <summary>
-        /// Roll time-scale multiplier from grid-fin deploy down. `AtmGNC:697`, `rollts to 10`.
-        /// F9I flies the coast at 3 deg/s of roll; we flew it at 24. See RollStoppingScale.
+        /// DEAD here - not wired. Ports kOS's `rollts` ("rollts to 10", `AtmGNC:697`), which is live in
+        /// F9I: F9I flies the coast at 3 deg/s of roll, we flew it at 24. Superseded here by
+        /// Attitude.cs's torque-derived rate bound (see BoosterRecovery.cs:1510). (The old
+        /// "See RollStoppingScale" pointer was removed 2026-08-18 - no such identifier ever existed in
+        /// this tree; it was a ghost citation, and audit_comments.py's own docstring cites it as the
+        /// canonical example of a name left in a comment after deletion.)
         /// </summary>
         public const double DescentRollStoppingScale = 10.0;
 

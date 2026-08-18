@@ -144,21 +144,45 @@ namespace DragonScreen
         /// removed - a 600 km body turning once per six hours moves 175 m/s at the equator, which is
         /// kilometres of error over a long entry.
         /// </summary>
-        public static Impact Predict(Vessel v)
+        public static Impact Predict(Vessel v) { return Predict(v, 0.0); }
+
+        /// <summary>
+        /// As <see cref="Predict(Vessel)"/> but with an EXPLICIT ballistic coefficient instead of the
+        /// live-measured one. This is what lets the de-orbit predict a drag-aware landing BEFORE entry,
+        /// in vacuum, where nothing has measured drag yet: hand it the capsule's KNOWN bc (measured
+        /// ~440 kg/m2 over flights 0817_214211 and 0817_232723) and Trajectory.Solve integrates the
+        /// real entry instead of a vacuum parabola. bcOverride &lt;= 0 falls back to the live estimate.
+        /// </summary>
+        public static Impact Predict(Vessel v, double bcOverride)
+        {
+            if (v == null || v.mainBody == null) { Impact im = new Impact(); im.Note = "no vessel"; return im; }
+            CelestialBody b = v.mainBody;
+            double useBc = (bcOverride > 0.0) ? bcOverride : BallisticCoefficient(v);
+            return PredictFromState(b, v.CoM - b.position, v.obt_velocity, useBc);
+        }
+
+        /// <summary>
+        /// Integrate to impact from an EXPLICIT state rather than a live vessel: a position relative to
+        /// the body centre and an inertial (world-frame) velocity. This is what lets the de-orbit
+        /// ignition search ask "if the burn happened HERE, where would the capsule come down?" for a
+        /// hypothetical post-burn state the vessel is not actually in yet. The frame handling is exactly
+        /// <see cref="Predict(Vessel,double)"/>'s - extracted, not re-derived, so the two cannot drift.
+        /// </summary>
+        public static Impact PredictFromState(CelestialBody b, Vector3d posRelBody, Vector3d velWorld,
+                                              double bc)
         {
             Impact im = new Impact();
-            if (v == null || v.mainBody == null) { im.Note = "no vessel"; return im; }
-            CelestialBody b = v.mainBody;
+            if (b == null) { im.Note = "no body"; return im; }
 
             TrajectoryInputs s = new TrajectoryInputs();
-            Vector3d r = v.CoM - b.position;
-            Vector3d vel = v.obt_velocity;
+            Vector3d r = posRelBody;
+            Vector3d vel = velWorld;
             s.Px = r.x; s.Py = r.y; s.Pz = r.z;
             s.Vx = vel.x; s.Vy = vel.y; s.Vz = vel.z;
             s.Mu = b.gravParameter;
             s.BodyRadiusM = b.Radius;
             s.AtmosphereDepthM = b.atmosphereDepth;
-            s.BallisticCoefficient = BallisticCoefficient(v);
+            s.BallisticCoefficient = bc;
             s.ImpactAltitudeM = 0.0;
 
             // ⚠ THE ROTATION AXIS IS THE BODY'S, NOT THE FRAME'S +Z. Integrating about the wrong

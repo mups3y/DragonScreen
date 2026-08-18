@@ -41,9 +41,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, '..'))          # plugin/
 PROJ = os.path.normpath(os.path.join(ROOT, '..'))          # DragonScreen/
 
-# The LIVE KSP tree, never the packaged release - the release is comment-stripped, so its line
-# numbers are not the ones a citation means. This is the same trap check_live.py fell into.
-F9I = r"C:\Program Files (x86)\Steam\steamapps\common\Kerbal Space Program\Ships\Script"
+# The LIVE F9I tree, never the packaged release (comment-stripped, wrong line numbers) and never
+# DragonScreen's OWN KSP install (a separate game with no Ships/Script at all - see check_live.py's
+# 2026-08-18 note, the same wrong assumption broke this tool's citation checking too).
+F9I = r"C:\Users\User\Desktop\F9I_dev_v1.2.0_BACKUP_20260804\Ships\Script"
 
 REFS = [
     r"C:\Users\User\Desktop\mechjeb_src",

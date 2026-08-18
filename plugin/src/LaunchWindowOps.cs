@@ -62,11 +62,33 @@ namespace DragonScreen
         /// from there. Tunable, and MeasureAtInsertion re-fits it live.
         /// </summary>
         [Tunable] public static double AscentLonDeg = 56.61;
-        /// <summary>Correction the last arrival measured, degrees. `stPhaseBias`.</summary>
-        [Tunable] public static double PhaseBiasDeg = 4.418;
-        /// <summary>How far behind the station to settle, metres. `stTrailDist`. Tunable - lower it
-        /// for a closer arrival, but stay inside the direct-approach gate so no phasing is needed.</summary>
-        [Tunable] public static double TrailDistM = 1000.0;
+        /// <summary>
+        /// Correction the last arrival measured, degrees. `stPhaseBias`.
+        ///
+        /// ⛔ 4.418 -> 0.0 ON 2026-08-18. This is the reason the parking orbit was NOT within 1 km.
+        /// `RequiredLead = TrailDistM_angle + PhaseBiasDeg`, and 4.418 deg is ~47 km - it SWAMPED the
+        /// 1 km TrailDistM (0.08 deg) and made the window aim ~47 km behind the station. An 0818
+        /// parking-orbit test measured it: commanded 4.50 deg lead, inserted 45.6 km behind - the
+        /// window HITS what it is
+        /// told (~1.4 km scatter), so the 4.418 seed was simply telling it to trail 47 km. The gap then
+        /// forced a phasing lap before the direct-approach gate (10 km) could even engage. Zeroed so
+        /// the trail is TrailDistM alone. It is F9I's seed and was never our measurement - unlike
+        /// AscentTimeS/AscentLonDeg, MeasureAtInsertion does NOT re-fit it, so it sat stale. If a future
+        /// arrival is consistently off in the SAME direction, that residual is what this should hold.
+        /// </summary>
+        [Tunable] public static double PhaseBiasDeg = 0.0;
+        /// <summary>
+        /// How far behind the station to settle, metres. `stTrailDist`. Tunable - lower it for a closer
+        /// arrival, but stay inside the direct-approach gate (10 km) so no phasing lap is needed.
+        ///
+        /// ⛔ 1000 -> 2000 ON 2026-08-18. The user wants the parking orbit within ~1 km. With
+        /// PhaseBiasDeg zeroed the arrival is TrailDistM +/- the measured ~1.4 km scatter, so a literal
+        /// 1000 could land the capsule slightly AHEAD of the station - awkward, near the 200 m keep-out.
+        /// 2000 keeps it safely BEHIND (0.6-3.4 km on the measured scatter), still far inside the 10 km
+        /// gate so the direct approach engages immediately with NO phasing lap. Lower toward 1000 once a
+        /// couple of arrivals confirm the scatter.
+        /// </summary>
+        [Tunable] public static double TrailDistM = 2000.0;
 
         /// <summary>
         /// Longest hold worth taking, seconds. `stWindowCap`.

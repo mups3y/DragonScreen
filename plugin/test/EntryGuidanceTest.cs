@@ -64,15 +64,20 @@ public static class EntryGuidanceTest
         Check("and it is reported as below profile instead", ex.BelowProfile, ex.Note);
         Check("with a note that names the cause", ex.Note.Contains("de-orbit aim"), ex.Note);
 
-        // ⚠ "LONG" MEANS LONG OF THE SCHEDULE, NOT OF THE TARGET. At 30 km the profile WANTS about
-        // 60 km of overshoot, so a capsule 60 km long is exactly ON profile and the correct command
-        // is zero. The first version of this fixture asserted a shorten there and was wrong about
-        // what the controller is for - which is the same confusion the whole file exists to prevent.
+        // ⚠ AIM-AT-LZ (MarginScale = 0, user directive 2026-08-19): "on profile" now means the predicted
+        // impact is ON THE LZ, so a capsule with zero downrange error is not corrected - the loop only
+        // nulls drift. (The old aim-long schedule put the impact 60 km long and called THAT "on profile";
+        // with the margin off, 60 km long is simply long and gets shortened - asserted right below.)
         EntryMemory onProfile = new EntryMemory();
-        EntryGuideInputs nominal = At(30000.0, -60000.0, 60000.0);
-        Check("a capsule sitting ON the profile is not corrected",
-              Math.Abs(EntryGuidance.Update(nominal, ref onProfile).VerticalCmd) < 1e-9,
-              EntryGuidance.Update(nominal, ref onProfile).VerticalCmd.ToString("F3"));
+        EntryGuideInputs onLz = At(30000.0, 0.0, 60000.0);            // predicted impact ON the LZ
+        Check("a capsule with its impact on the LZ is not corrected",
+              Math.Abs(EntryGuidance.Update(onLz, ref onProfile).VerticalCmd) < 1e-9,
+              EntryGuidance.Update(onLz, ref onProfile).VerticalCmd.ToString("F3"));
+
+        // A LONG impact IS now shortened toward the LZ (aim-at-LZ, not aim-long).
+        EntryMemory longNow = new EntryMemory();
+        Check("a long impact is shortened toward the LZ",
+              EntryGuidance.Update(At(30000.0, -60000.0, 60000.0), ref longNow).VerticalCmd < -0.001, "");
 
         EntryMemory m4 = new EntryMemory();
         EntryGuideInputs longOfTarget = At(30000.0, -150000.0, 60000.0);  // long BEYOND the schedule

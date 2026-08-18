@@ -126,6 +126,13 @@ namespace DragonScreen
         [Tunable] public static double CrossScaleM = 5000.0;
         /// <summary>Lead time on the error rate, seconds. `dgLead`.</summary>
         [Tunable] public static double LeadS = 20.0;
+        /// <summary>
+        /// The capsule's ballistic coefficient at entry, kg/m2. MEASURED ~440 - avg 448 over
+        /// flight_0817_214211 and 436 over flight_0817_232723. Fed to ImpactPredictor.Predict(v, bc)
+        /// so the de-orbit can predict a DRAG-AWARE landing BEFORE entry, where no drag is measured
+        /// live yet. This is the input the adaptive de-orbit targeting is being built on.
+        /// </summary>
+        [Tunable] public static double CapsuleBcKgM2 = 440.0;
         /// <summary>Lead term capped at this fraction of the error. `dgLeadFrac`. See trap 3.</summary>
         public const double LeadFrac = 0.5;
         /// <summary>Range loop latches off here, metres. `dgTermAlt`.</summary>
@@ -228,9 +235,11 @@ namespace DragonScreen
             if (rangeLive)
             {
                 // Trap 1: the schedule knows altitude, not geography. Clamp it to what is left.
+                // WantLongClampedM IS that clamp - the single live source of the rule. The hand-clamp
+                // that used to sit here was an exact duplicate of it (removed 2026-08-18, audit D4;
+                // equivalence verified for ahead >, =, <, and <= 0 vs. want before the swap).
                 double ahead = AheadM(s);
-                double margin = EntryMargin.WantLongM(s.AltitudeM);
-                if (ahead < margin) margin = (ahead > 0.0) ? ahead : 0.0;
+                double margin = EntryMargin.WantLongClampedM(s.AltitudeM, ahead);
                 c.WantLongM = margin;
 
                 double errNow = s.DownrangeErrM + margin;

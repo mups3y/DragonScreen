@@ -70,10 +70,20 @@ namespace DragonScreen
         // docs/F9I_BOOSTER_TARGETS.md. Each carries headroom over what was actually flown.
         public const double AscentMaxRateDps = 2.0;      // flown max 1.02
         public const double FlipMaxRateDps = 15.0;       // F9I flip+boostback peak 14.9
-        public const double CoastMaxRateDps = 4.0;       // F9I coast peak 2.9
         public const double EntryMaxRateDps = 25.0;      // F9I entry burn peak 24.0
         public const double DescentMaxRateDps = 10.0;    // F9I descent peak 9.4
         public const double LandingMaxRateDps = 3.0;     // F9I landing burn peak 0.1
+
+        /// <summary>
+        /// Coast reorientation rate cap, deg/s. [Tunable]. Back at 4.0: the 2026-08-18 experiment of
+        /// lowering it to 3.0 to gentle the reorientation DID NOT WORK - the coast still rolled 358 deg
+        /// (flight_0818_154218), essentially unchanged, because the roll is not driven by slew RATE but
+        /// by slewing pitch AND yaw AT ONCE (see the sequenced-slew lock in AttitudeController.DriveInner
+        /// and BoosterRecovery.cs ~1595). Sequencing needs the rate back: it lengthens the turn path
+        /// (~256 vs ~194 deg), and 4.0 keeps that inside the coast window while 3.0 did not.
+        /// </summary>
+        [Tunable] public static double CoastMaxRateDps = 4.0;   // F9I coast peak 2.9
+
 
         /// <summary>
         /// The capsule alone, after S2 separation. MEASURED on flight_0813_005927, which docked and

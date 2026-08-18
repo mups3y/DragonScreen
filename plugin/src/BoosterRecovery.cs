@@ -49,16 +49,16 @@ namespace DragonScreen
 
         /// <summary>
         /// How far the booster's TOTAL attitude error may be and still have its roll axis actively
-        /// held, degrees. The controller default is 45 (`Attitude.RollControlRangeDeg`), but the
-        /// booster's coast runs a ~52 deg pitch error, so at 45 the roll axis went uncontrolled for
-        /// most of the coast and aero torque free-rolled it 367 deg. Wider keeps roll held throughout
-        /// so the stage does not re-clock after separation. Tunable - if the flip or descent looks
-        /// worse, dial it back toward 45.
+        /// held, degrees. The controller default is 45 (`Attitude.RollControlRangeDeg`); at 45 the roll
+        /// axis went uncontrolled for most of the coast and free-rolled to 367 deg, so this was widened
+        /// to 130 to keep roll held. That gave 347 deg (flight_0818_104520) - barely different.
         ///
-        /// ⚠ 130 predates the 2026-08-17 rework of the roll REFERENCE (now the plane-of-flight flip
-        /// axis instead of the swinging north heading - see StepFlip). The value is unchanged and
-        /// pending reverification against that: measure roll travel per phase on the next flight
-        /// against `docs/F9I_BOOSTER_TARGETS.md` (target 443° total) before re-tuning it.
+        /// ⛔ THIS KNOB IS NOT THE ROLL FIX, AND THE 45-vs-130 SPLIT PROVES IT: 45 -> 367, 130 -> 347,
+        /// both ~350. The coast over-roll is induced kinematically by the ~180 deg reorientation to
+        /// retrograde at coast start, not by the roll reference (see the ROOT CAUSE block in Aim, ~1595);
+        /// neither holding nor freeing the reference fixes it. The old "aero torque free-rolled it"
+        /// reading was wrong - the excursion is at 58 km where q is negligible. Leave this at 130 (roll
+        /// held); the real fix is a coordinated reorientation, not a value here.
         /// </summary>
         [Tunable] public static double BoosterRollRangeDeg = 130.0;
 
@@ -1588,15 +1588,46 @@ namespace DragonScreen
             // The crew's requirement is ZERO roll rotation after separation. The earlier NORTH
             // reference SWUNG: re-projected perpendicular to a rotating aim it jumped whenever the aim
             // neared north, driving phiRoll from -34 to +119 deg and 345 deg of coast roll (measured
-            // flight_0817_162926). The FLIP AXIS does not swing - it is perpendicular to the plane of
-            // flight (FlipGeometry / StepFlip), so it is ALWAYS perpendicular to the aim, never
-            // degenerate and never gated, and holding the booster's top to it keeps the grid fins in
-            // the flight plane the whole way down. It is already the flip's own roll reference; every
-            // phase uses it now, so the stage never re-clocks.
+            // flight_0817_162926). The FLIP AXIS is perpendicular to the plane of flight (FlipGeometry
+            // / StepFlip) and does not swing, so holding the booster's top to it keeps the grid fins in
+            // the flight plane. Every phase uses it.
+            //
+            // ⚠ THE COAST OVER-ROLLS (347 deg this flight vs F9I's ~102) - a roll QUALITY gap, not a
+            // landing failure: the booster still lands 0.0 km. ROOT CAUSE ISOLATED 2026-08-18
+            // (flight_0818_104520), and it is NOT aero and NOT the roll reference:
+            //   · The excursion is TRIGGERED by the ~180 deg reorientation to retrograde at coast start
+            //     (met 2137: target pitch jumps to -178, yaw to +140 - the flip to heat-shield-forward),
+            //     at 58 km where dynamic pressure is negligible. That large slew about a TILTED axis
+            //     (pitch AND yaw at once, worsened by a standing ~70 deg boostback yaw error) drives the
+            //     BODY roll to +-13 deg/s kinematically. The weak roll channel (b_torqueY 34 vs pitch/yaw
+            //     329/367 kN.m - physical, a booster's RCS quads have a short roll arm; ModuleRCSFX IS a
+            //     ModuleRCS so it is fully counted) cannot arrest 13 deg/s against a 4 deg/s command, and
+            //     overshoots to -148 deg.
+            //   · THE ROLL-REFERENCE GATE IS NOT THE LEVER. BoosterRollRangeDeg already frees the roll
+            //     above a total-error threshold; its own history rules the knob out - 45 deg free-rolls
+            //     to 367, 130 deg holds-and-fights to 347. Both extremes ~350. So neither holding nor
+            //     freeing the reference fixes a roll the reorientation induces kinematically.
+            //   · Audit H1 (the RollRefMinDeg/RollRefMaxDeg singularity gate) was TESTED AND REFUTED:
+            //     -flipAxis is the flight-plane normal, ~90 deg from the aim, never near the band.
+            //   · Global rate-damping (AttitudeController.HoldRoll) was tried and WORSE (675 -> 852).
+            // MITIGATION APPLIED 2026-08-18: lowered Attitude.CoastMaxRateDps 4.0 -> 3.0 (now [Tunable]).
+            // F9I's coast PEAKS at 2.9 deg/s and rolls only 102; we ran ~5 and rolled 347 - a gentler
+            // reorientation makes smaller pitch/yaw RCS torque and cross-couples into the weak roll axis
+            // less. This is disturbance REDUCTION, not the cure, and cannot tumble anything (it only
+            // slews gentler). The REAL cure is a coordinated single-axis slew - rotate about the one
+            // correct axis so the ~180 deg turn induces no roll - and/or killing the standing boostback
+            // yaw error that tilts it. That rewrites the shared control law (a frame bug there tumbles
+            // the craft), so it is deferred to its own isolated pass, designed not guessed.
             //
             // Seeded at the flip. Before that (the instant between separation and flip) upHint is zero
             // = hold current roll, which is right: there is nothing to re-clock to yet.
-            Vector3d upHint = (flipSeeded && flipAxis.sqrMagnitude > 0.5) ? -flipAxis : Vector3d.zero;
+            // ⛔ HARD RULE (user, 2026-08-18): THE BOOSTER NEVER ROLLS. Pitch and yaw ONLY, launch to
+            // landing. `upHint = zero` means "no roll reference - hold the roll you have." `-flipAxis`
+            // was a roll REFERENCE the controller actively drove the top onto - that IS a roll command,
+            // and driving the top onto it through the 180 deg pitch reorientation is exactly what rolled
+            // the booster. Zero in every phase: steer the nose (pitch/yaw), never command roll.
+            // flipSeeded/flipAxis remain above for the flip GEOMETRY, not for a roll reference.
+            Vector3d upHint = Vector3d.zero;
 
             AttitudeController.Booster.SteerTo(v, dir, upHint);
         }
