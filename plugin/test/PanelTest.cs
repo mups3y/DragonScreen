@@ -272,7 +272,7 @@ public static class PanelTest
         // ---- NOTHING FIRES IN NORMAL FLIGHT ----
         // The whole model is worthless if it cries wolf. An hour of quiet cruise must produce no
         // fire, no leak and no trip.
-        SystemsState s = SystemsState.Fresh();
+        SystemsState s = SystemsState.Fresh(); s.Bus1On = true;   // powered, or Get() reads Online regardless
         for (int t = 0; t < 360; t++) Systems.Update(ref s, Quiet(10.0));
         Check("quiet cruise starts no fire", !s.Fire, s.FireIntensity.ToString("F3"));
         Check("quiet cruise springs no leak", !s.Leaking, s.LeakRate.ToString("F3"));
@@ -308,7 +308,9 @@ public static class PanelTest
         Check("leak closes within a minute", !lk.Leaking, lk.LeakRate.ToString("F3"));
 
         // ---- STRINGS ----
-        SystemsState p = SystemsState.Fresh();
+        // Buses now start OFF (the flight-computer power gate), so the sim's own string behaviour is
+        // only exercised with the bus powered - which is the only state in which it means anything.
+        SystemsState p = SystemsState.Fresh(); p.Bus1On = true;
         SystemsInputs flat = Quiet(1.0); flat.Charge01 = 0.05;
         Systems.Update(ref p, flat);
         Check("undervoltage trips the C strings",
@@ -320,7 +322,7 @@ public static class PanelTest
               Systems.Get(p, 1, 2).ToString());
 
         // A string the CREW isolated must never be quietly re-closed by the model.
-        SystemsState iso = SystemsState.Fresh();
+        SystemsState iso = SystemsState.Fresh(); iso.Bus2On = true;
         Systems.ToggleString(ref iso, 2, 0);
         Check("crew isolation holds", Systems.Get(iso, 2, 0) == StringState.Isolated, "");
         for (int t = 0; t < 100; t++) Systems.Update(ref iso, Quiet(1.0));

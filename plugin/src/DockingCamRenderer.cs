@@ -22,6 +22,22 @@
  * A full scene camera is not free, and for most of a mission no screen is showing DOCKING. The page
  * marks itself wanted each frame it draws; after a short grace period with nobody asking, the camera
  * is disabled and costs nothing. Three screens on DOCKING still cost one camera.
+ *
+ * ---- WHERE THE DOCKING VIEW COMES FROM: THE PORT ITSELF, KURS-STYLE ----
+ * DOCKING mounts the camera on OUR controlling docking node's own `nodeTransform` and looks out along
+ * its forward - the port's OUTWARD axis, the same fact `DockingOps` steers on, so the picture and the
+ * numbers cannot disagree about which way the target is. This is exactly how the installed KURS mod
+ * (`DockingCamKURS`) does it: its `MM_KSPCamera.cfg` bolts a `DockingCameraModule` onto every part
+ * `@MODULE[ModuleDockingNode]` and the DLL parents a camera to the node's game object.
+ *
+ * An earlier attempt put the camera at the vessel CONTROL POINT (the pod centre) and swept a measured
+ * hull extent to stand off FRONT/REAR/LEFT/RIGHT. It never produced a usable docking picture - the
+ * control point is the middle of the capsule, not the port - and it was removed 2026-08-21 along with
+ * its hull-sweep. The node transform is where a docking camera actually belongs, and it needs no sweep
+ * because it is already at the outside face.
+ *
+ * The VIDEO tab is unchanged: it still offers the vehicle's OWN cameras (HullCams, e.g. the interstage
+ * views). DOCKING outranks it for the one shared scene camera.
  */
 using System;
 using System.Collections.Generic;
@@ -61,43 +77,41 @@ namespace DragonScreen
         internal static int View { get { return wantView; } }
 
         /// <summary>
-        /// First view index that means "a real camera on the vehicle" rather than a direction.
-        ///
-        /// The four synthetic views keep indices 0-3 so a saved selection still means what it meant,
-        /// and so a vehicle that loses a camera at staging cannot silently renumber the rest into
-        /// something the crew did not pick.
+        /// The DOCKING view: the camera on our controlling docking node, looking out along its axis.
+        /// A negative sentinel so it can never collide with a hull-camera index, and so the VIDEO
+        /// tab's bounds (0 .. HullCams.Count-1) exclude it - DOCKING claims it directly.
         /// </summary>
-        /// ⛔ 4 -> 0 ON 2026-08-13. THE FOUR HULL-SWEPT DIRECTIONS ARE GONE - THEY DID NOT WORK.
-        ///
-        /// FRONT / REAR / LEFT / RIGHT were computed from the control point and a measured hull
-        /// extent. The crew's verdict after flying them is that they do not produce a usable
-        /// picture, while the vehicle's own cameras "mostly work".
-        ///
-        /// The consequence worth spelling out: the DOCKING page requested view 0, which WAS
-        /// `FRONT`. So the docking camera has been the broken computed camera all along - that is
-        /// why it has never shown anything. With the base at zero, view 0 is now the FIRST REAL
-        /// CAMERA on the vehicle, and DOCKING gets a picture that works without any change at its
-        /// call site.
-        ///
-        /// If the vehicle carries no cameras at all there is no picture, and `Aim` already says so
-        /// once per view rather than leaving a black rectangle to be interpreted.
+        internal const int DockingPortView = -1;
+
+        /// <summary>
+        /// First view index that means "a real camera on the vehicle". Zero since 2026-08-13, when the
+        /// four synthetic hull-swept directions (FRONT/REAR/LEFT/RIGHT) were removed for never
+        /// producing a usable picture. The VIDEO tab enumerates HullCams from here; view 0 is the
+        /// FIRST REAL CAMERA on the vehicle. DOCKING no longer uses view 0 - it uses
+        /// <see cref="DockingPortView"/>, mounted on the port itself (see the header).
+        /// </summary>
         internal const int HullCamBase = 0;
+
+        /// <summary>How far in front of the port face to sit, metres. Small: the node transform is
+        /// already at the outside face, this only clears the ring off the near plane. Live-tunable so
+        /// the framing can be nudged (pull it back toward 0 to bring the docking ring into shot).</summary>
+        [Tunable] public static double PortStandoffM = 0.15;
+
+        /// <summary>
+        /// Field of view of the docking-port camera, degrees. WIDE on purpose: a docking approach is
+        /// rarely dead-aligned, and at 60 deg the target fell outside the frame whenever the port axis
+        /// was more than 30 deg off it - flight 2026-08-21 sat ~45 deg off and showed black. 90 deg
+        /// keeps the target in shot while the pilot lines up, the way a real docking camera is wide.
+        /// Live-tunable for framing.
+        /// </summary>
+        [Tunable] public static double PortFovDeg = 90.0;
 
         /// <summary>Label for the view now on screen, for the page to print under the picture.</summary>
         internal static string ViewLabel
         {
             get
             {
-                if (wantView < HullCamBase)     // no longer reachable - kept so the branch is total
-                {
-                    switch (wantView)
-                    {
-                        case 1: return "REAR";
-                        case 2: return "LEFT";
-                        case 3: return "RIGHT";
-                        default: return "FRONT";
-                    }
-                }
+                if (wantView == DockingPortView) return "DOCKING PORT";
                 HullCam hc;
                 return HullCams.TryGet(wantView - HullCamBase, out hc) ? hc.Label : "-";
             }
@@ -159,9 +173,9 @@ namespace DragonScreen
                     aimReportedFor = -999;
                     Debug.LogWarning("[DragonScreen] camera view " + wantView + " ("
                                    + ViewLabel + ") has no picture - "
-                                   + (wantView >= HullCamBase
-                                      ? "its part is gone or its transform was destroyed"
-                                      : "no control transform on the active vessel"));
+                                   + (wantView == DockingPortView
+                                      ? "no usable docking port: none fitted, or the only one is docked or shielded"
+                                      : "its part is gone or its transform was destroyed"));
                 }
                 cam.enabled = false;
                 return null;
@@ -253,47 +267,115 @@ namespace DragonScreen
         }
 
         /// <summary>
-        /// Put the camera at the controlling docking port, looking out along its axis.
-        ///
-        /// KSP's ReferenceTransform has UP pointing out of the control point, which is exactly the
-        /// docking axis when a port is controlling - the same fact VesselData.Docking() relies on for
-        /// the offsets, so the picture and the numbers cannot disagree about which way is forward.
-        ///
-        /// Returns false when there is nothing to look through.
+        /// Point the camera for the view now claimed: DOCKING looks out our docking port; every other
+        /// view is a real camera the vehicle carries. Returns false when there is nothing to look
+        /// through, which the caller reports once rather than leaving a black rectangle.
         /// </summary>
         private static bool Aim()
         {
-            // ---- A REAL CAMERA ON THE VEHICLE, IF THAT IS WHAT WAS PICKED. ----
-            // No hull sweep and no standoff here: the mod author already placed this transform where
-            // it can see, which is the entire reason for preferring it to a direction we chose.
-            if (wantView >= HullCamBase) return AimHullCam(wantView - HullCamBase);
+            if (wantView == DockingPortView) return AimDockingPort();
+            return AimHullCam(wantView - HullCamBase);
+        }
 
+        /// <summary>
+        /// Put the camera on our controlling docking node, looking OUT along its axis - the KURS
+        /// technique (see the header). The node transform is already at the outside face and its
+        /// forward is the OUTWARD axis, the same one `DockingOps` steers on, so no hull sweep and no
+        /// guessed standoff are needed - only a small clearance off the near plane.
+        ///
+        /// Returns false when the vehicle has no usable port (none fitted, or the only one is docked
+        /// or shielded), in which case DOCKING shows its dark background and the HUD, honestly.
+        /// </summary>
+        private static bool AimDockingPort()
+        {
             Vessel v = OurVessel();
-            if (v == null) return false;
-            Transform rt = v.ReferenceTransform;
-            if (rt == null) return false;
+            if (v == null || v.parts == null) return false;
 
-            // Forward is the control point's UP - the docking axis, the same fact the offsets use.
-            Vector3 fwd = rt.up, upRef = rt.forward;
-            if (wantView == 1) { fwd = -rt.up; upRef = rt.forward; }
-            else if (wantView == 2) { fwd = -rt.right; upRef = rt.up; }
-            else if (wantView == 3) { fwd = rt.right; upRef = rt.up; }
+            ModuleDockingNode node = PickPort(v);
+            if (node == null || node.nodeTransform == null) return false;
 
-            // ---- THE CAMERA HAS TO CLEAR THE HULL, AND 0.5 m DOES NOT ----
-            // This was `rt.position + fwd * 0.5f`. The control point is the middle of the capsule and
-            // the capsule is about 4 m across, so every camera sat INSIDE it: the forward view looked
-            // at the back face of the docking port and the side views looked out through the Draco
-            // pods. Found in flight 2026-08-06.
-            //
-            // A bigger constant would only be a better guess, and it would be wrong again on the next
-            // vehicle. Measure the hull instead: how far the part's own geometry actually reaches
-            // along this direction, then stand off from that. It costs one bounds sweep twice a
-            // second and it is right for any capsule, any variant, any control point.
-            camObject.transform.position = rt.position + fwd * (HullExtent(rt.position, fwd) + Standoff);
-            camObject.transform.rotation = Quaternion.LookRotation(fwd, upRef);
+            Transform nt = node.nodeTransform;
+            Vector3 fwd = nt.forward;                    // OUTWARD - toward the target on approach
+            if (fwd.sqrMagnitude < 1e-8f) return false;
+            fwd = fwd.normalized;
+
+            // The node's own up is a stable perpendicular; fall back only if it is somehow degenerate.
+            Vector3 up = nt.up;
+            if (up.sqrMagnitude < 1e-8f || Mathf.Abs(Vector3.Dot(fwd, up.normalized)) > 0.999f)
+                up = nt.right;
+
+            camObject.transform.position = nt.position + fwd * (float)PortStandoffM;
+            camObject.transform.rotation = Quaternion.LookRotation(fwd, up);
             // A hull camera may have left its own field of view behind. Restore ours.
-            cam.fieldOfView = 60f;
+            cam.fieldOfView = (float)PortFovDeg;
+
+            // ---- IS IT ACTUALLY POINTED AT THE TARGET? A few lines, then quiet. ----
+            // A black docking view could be a mis-aimed camera OR just empty/dark space in shot; the
+            // angle off boresight tells them apart. Small angle + still black => lighting or range,
+            // not aim. This is why flight 2026-08-21 read black: the target sat ~45 deg off a 60 deg
+            // FOV. Delete once the framing is confirmed good.
+            if (portLogsLeft > 0 && Time.realtimeSinceStartup - portLastLog > 2f)
+            {
+                ITargetable tgt = v.targetObject;
+                Transform tt = (tgt != null) ? tgt.GetTransform() : null;
+                if (tt != null)
+                {
+                    portLastLog = Time.realtimeSinceStartup;
+                    portLogsLeft--;
+                    Vector3 toTgt = (Vector3)tt.position - camObject.transform.position;
+                    float ang = Vector3.Angle(fwd, toTgt);
+                    Debug.Log("[DragonScreen] docking cam: target " + ang.ToString("F0")
+                              + " deg off boresight at " + toTgt.magnitude.ToString("F0") + " m - "
+                              + (ang < PortFovDeg * 0.5 ? "IN frame" : "OUT of frame")
+                              + " (FOV " + PortFovDeg.ToString("F0") + ")");
+                }
+            }
             return true;
+        }
+
+        private static float portLastLog = -999f;
+        private static int portLogsLeft = 4;
+
+        /// <summary>
+        /// The docking node to look out of: the FREE node nearest the target (so a multi-port vehicle
+        /// looks out the one actually being used), else the first free node, else the first node that
+        /// has a transform at all. The Dragon carries one, so this is usually unambiguous; the ranking
+        /// only bites on a vehicle with several. Same free/shielded test as `DockingOps.OpenPorts`.
+        /// </summary>
+        private static ModuleDockingNode PickPort(Vessel v)
+        {
+            Vector3d tgtPos = Vector3d.zero;
+            bool haveTgt = false;
+            ITargetable tgt = v.targetObject;
+            if (tgt != null && tgt.GetTransform() != null)
+            {
+                tgtPos = tgt.GetTransform().position;
+                haveTgt = true;
+            }
+
+            ModuleDockingNode firstAny = null, firstFree = null, nearest = null;
+            double best = double.MaxValue;
+
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                List<ModuleDockingNode> ns = v.parts[i].Modules.GetModules<ModuleDockingNode>();
+                for (int m = 0; m < ns.Count; m++)
+                {
+                    ModuleDockingNode n = ns[m];
+                    if (n.nodeTransform == null) continue;
+                    if (firstAny == null) firstAny = n;
+                    if (n.otherNode != null) continue;                    // already docked
+                    if (!string.IsNullOrEmpty(n.state)
+                        && n.state.ToLowerInvariant().Contains("disabled")) continue;  // shielded
+                    if (firstFree == null) firstFree = n;
+                    if (haveTgt)
+                    {
+                        double d = ((Vector3d)n.nodeTransform.position - tgtPos).sqrMagnitude;
+                        if (d < best) { best = d; nearest = n; }
+                    }
+                }
+            }
+            return nearest ?? firstFree ?? firstAny;
         }
 
         /// <summary>
@@ -336,81 +418,6 @@ namespace DragonScreen
             camObject.transform.rotation = Quaternion.LookRotation(fwd, up);
             cam.fieldOfView = c.Fov;
             return true;
-        }
-
-        /// <summary>
-        /// Clear of the skin by this much, so the hull is never in frame.
-        ///
-        /// SMALL ON PURPOSE, and the figure is borrowed rather than picked. Two docking-port camera
-        /// mods are installed here and both anchor on the PORT'S OWN part transform and then nudge by
-        /// centimetres - `HullCameraVDS/MM_Scripts/DockingPortCameraPatch.cfg` uses
-        /// `cameraPosition = 0, 0.07, 0` and `0, 0.12, 0`, and DockingCamKURS parents to
-        /// `_moduleDockingNodeGameObject` with a `cameraPosition` offset. Their offsets are tiny
-        /// because their anchor is already at the outside face.
-        ///
-        /// Ours cannot use that anchor - the control point is often the POD, not a port - so the hull
-        /// sweep finds the outside face first and this only has to clear it. Both patches also set
-        /// `cameraForward = 0, 1, 0`, independently confirming that +Y is the docking axis, which is
-        /// what `rt.up` above relies on.
-        /// </summary>
-        private const float Standoff = 0.15f;
-
-        private static float cachedExtent;
-        private static int cachedView = -999;
-        private static Part cachedPart;
-        private static float cachedAt = -999f;
-
-        /// <summary>
-        /// How far the controlling part's geometry reaches from the control point along <paramref
-        /// name="dir"/>, in metres.
-        ///
-        /// Deliberately measured over the CONTROL PART ALONE, not the whole vessel. Off the pad the
-        /// stack runs forty metres down to the booster's engine bells, so a whole-vessel extent would
-        /// throw the rear camera below the rocket. One part gives the capsule's own skin, which is
-        /// what each of these four views is looking out through.
-        ///
-        /// Only geometry the camera can actually SEE is counted - anything outside its culling mask
-        /// cannot block the view, and that also keeps the IVA interior out of the measurement without
-        /// hard-coding a layer number.
-        /// </summary>
-        private static float HullExtent(Vector3 origin, Vector3 dir)
-        {
-            Vessel v = FlightGlobals.ActiveVessel;
-            if (v == null) return 0f;
-
-            // MechJeb's own comment on this call: it is null after undocking. Fall back to the part
-            // carrying the screen, then to the root, rather than returning a zero standoff.
-            Part p = v.GetReferenceTransformPart();
-            if (p == null) p = ScreenPart(v);
-            if (p == null) p = v.rootPart;
-            if (p == null) return 0f;
-
-            if (p == cachedPart && wantView == cachedView
-                && Time.realtimeSinceStartup - cachedAt < 0.5f)
-                return cachedExtent;
-
-            float best = 0f;
-            Renderer[] rs = p.transform.GetComponentsInChildren<Renderer>();
-            for (int i = 0; i < rs.Length; i++)
-            {
-                Renderer r = rs[i];
-                if (r == null || !r.enabled) continue;
-                if (((1 << r.gameObject.layer) & cam.cullingMask) == 0) continue;
-
-                // Farthest corner of a world-space AABB along dir, without walking all eight.
-                Bounds b = r.bounds;
-                float d = Vector3.Dot(b.center - origin, dir)
-                          + Mathf.Abs(dir.x) * b.extents.x
-                          + Mathf.Abs(dir.y) * b.extents.y
-                          + Mathf.Abs(dir.z) * b.extents.z;
-                if (d > best) best = d;
-            }
-
-            cachedPart = p;
-            cachedView = wantView;
-            cachedAt = Time.realtimeSinceStartup;
-            cachedExtent = best;
-            return best;
         }
 
         /// <summary>

@@ -530,7 +530,7 @@ namespace DragonScreen
             // One camera, two consumers: DOCKING must have the forward view, the VIDEO tab wants
             // whatever the crew picked. The painter is the only place that knows which page is about
             // to draw, so the claim is made here rather than inside ImageStore.
-            if (selectedPage == 3) DockingCamRenderer.Request(0, 1);
+            if (selectedPage == 3) DockingCamRenderer.Request(DockingCamRenderer.DockingPortView, 1);
             else if (selectedPage == 4 && sub == SettingsPage.Video)
             {
                 VesselData.ValidateCameraView();

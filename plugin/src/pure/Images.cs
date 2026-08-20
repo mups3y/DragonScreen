@@ -108,7 +108,7 @@ namespace DragonScreen
                 case ImageId.Dragon: w = 1800; h = 3010; break;
                 case ImageId.HudRing: w = 650; h = 650; break;
                 case ImageId.HudRingInner: w = 650; h = 650; break;
-                case ImageId.NavBall: w = 2048; h = 2048; break;
+                case ImageId.NavBall: w = 512; h = 256; break;   // stock Squad IVANavBall, equirectangular 2:1
                 case ImageId.Seat: w = 408; h = 520; break;
                 case ImageId.HudDarken: w = 1300; h = 1300; break;
                 default: w = 0; h = 0; break;

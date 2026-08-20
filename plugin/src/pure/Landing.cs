@@ -290,6 +290,10 @@ namespace DragonScreen
         /// <summary>Degrees the aim vector advances per tick. A RATE LIMITER, not a torque.</summary>
         public const double FlipPowerDeg = 0.333;
         /// <summary>Settle back onto the ascent track before the flip proper. `wait 2.`</summary>
+        /// ⚠ RESTORED to 2.0 on 2026-08-20: the brief "ride the plume" experiment that set this to zero
+        /// regressed the flip (user), so it goes back with the rest of that day's flip edits. The flip's
+        /// roll problem was never the settle timing - it was the roll REFERENCE (see the roll-lock note
+        /// in BoosterRecovery.Aim); do not re-open this without fixing that first.
         public const double FlipSettleS = 2.0;
         /// <summary>
         /// Dead time immediately after separation, before ANY steering. WaitForSep's closing line,
@@ -792,10 +796,17 @@ namespace DragonScreen
                     }
                     else
                     {
-                        // Past the apex and unambiguous. Retrograde, and the lean law takes over and
-                        // holds all the way to touchdown - one continuous law, no handover.
+                        // ---- ⛔ COAST IS PURE SURFACE RETROGRADE. NO LEAN. (user, 2026-08-19) ----
+                        // "after boost back burn you command all kinds of AOA changes when all you
+                        // really have to do is point retrograde (surface not orbital) and wait for the
+                        // atmosphere braking burn." The coast has no job but to present the heat shield
+                        // to the airflow and hold; the guided lean that steers toward the pad belongs to
+                        // the DESCENT glide (after the entry burn), where there is air to steer in and a
+                        // pad to steer at. Leaning up here - in negligible dynamic pressure - only wags
+                        // the stage and cross-couples into the weak roll axis. So GuidedLean is OFF:
+                        // SurfaceRetrograde aims at -srf_velocity (Aim():1391), roll stays locked
+                        // (upHint = zero), and the law resumes at Descent, not here.
                         c.Aim = LandingAim.SurfaceRetrograde;
-                        c.GuidedLean = true;
                         c.Rcs = true;
                         c.Note = "COAST - DESCENDING";
                     }

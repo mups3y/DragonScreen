@@ -103,6 +103,16 @@ namespace DragonScreen
         private static bool reachedGate;
         private static int lastFrame = -1;
 
+        /// <summary>
+        /// Which leg planned the node the executor is currently flying. A node in flight is routed back
+        /// to its owner so no other leg can grab it (the `CONTENDED` bug) and, above all, so a long warp
+        /// to one leg's node cannot silently starve the others. flight_0820_221434: `MatchAltitude`
+        /// planned a circularise node ~2800 s ahead and the executor warped to it at 100x, holding the
+        /// tick for the ENTIRE coast - the drift closed 91 -> 15 km underneath it and `RideIntercept`,
+        /// the leg that should have matched that pass, never ran.
+        /// </summary>
+        private static ApproachLeg nodeOwner = ApproachLeg.Phasing;
+
         // ------------------------------------------------------------------ lifecycle
 
         public static void Toggle()
@@ -135,10 +145,9 @@ namespace DragonScreen
             startedAt = Planetarium.GetUniversalTime();
             lastBurnAt = -999.0;
             haltReported = false;
-            phasePass = 0; phaseCapReported = false; reachedGate = false;
+            phasePass = 0; phaseCapReported = false; reachedGate = false; nodeOwner = ApproachLeg.Phasing;
             phaseReturnUt = 0.0;
-            matchUt = 0.0; matchDistM = 0.0; matchWarpAsked = false;
-            altBurnUt = 0.0; altWarpAsked = false; altMatchDone = false;
+            altMatchDone = false;
             Debug.Log(Tag + "rendezvous ENGAGED - target '" + Station.vesselName + "', "
                           + (Vector3d.Distance(v.CoM, Station.CoM) / 1000.0).ToString("F1") + " km");
         }
@@ -165,8 +174,7 @@ namespace DragonScreen
             Engaged = false; Station = null; ship = null;
             phaseReturnUt = 0.0;
             phasePass = 0; phaseCapReported = false;
-            matchUt = 0.0; matchDistM = 0.0; matchWarpAsked = false;
-            altBurnUt = 0.0; altWarpAsked = false; altMatchDone = false;
+            altMatchDone = false;
             haltReported = false;
             RangeM = 0.0; ClosingMps = 0.0; LateralMps = 0.0; AlongTrackM = 0.0; LastDvMps = 0.0;
             Note = "-";
@@ -336,17 +344,43 @@ namespace DragonScreen
                 return;
             }
 
-            // ---- LEG 0: GET INTO THE STATION'S ORBIT BEFORE PHASING IN IT. ----
+            // ---- A NODE IN FLIGHT BELONGS TO THE LEG THAT PLANNED IT. ----
+            // Route the tick back to that leg. Without this the first leg to test `NodeExecutor.Active`
+            // grabs whatever node is flying, so a MatchAltitude warp got handled as "phasing" and, worse,
+            // blocked RideIntercept for the whole coast (flight_0820_221434). See `nodeOwner`.
+            if (NodeExecutor.Active)
+            {
+                switch (nodeOwner)
+                {
+                    case ApproachLeg.MatchOrbit: MatchAltitude(); return;
+                    case ApproachLeg.Intercept:  RideIntercept(); return;
+                    default:                     Leg = ApproachLeg.Phasing; FlyPhasing(); return;
+                }
+            }
+
+            // A phasing COAST (not a burn) in flight is seen through by FlyPhasing, which rides a pass
+            // mid-coast on its own - checking the gap again here would re-plan a gap it is already closing.
+            if (phaseReturnUt > 0.0) { Leg = ApproachLeg.Phasing; FlyPhasing(); return; }
+
+            // ---- FREE INTERCEPT FIRST - before circularising OR phasing. ----
+            // ⛔ 2026-08-20 (sim-validated, docs/rendezvous_sim/). The drift usually delivers a close
+            // pass on its own, and matching velocity there costs tens of m/s where phasing costs hundreds:
+            // flight_0820 ran the tank toward dry phasing an oscillating gap when a ~22 m/s match at the
+            // 13 km pass was sitting there. Riding it BEFORE MatchAltitude is what stops a circularise
+            // warp from committing the whole coast to the wrong thing. It also co-orbits us in one burn -
+            // a velocity match IS getting onto the station's orbit - and collapses the relative-motion
+            // football, so any phasing that still runs works a clean gap, not the oscillating `Ry`.
+            // Only when no pass is on offer (RideIntercept returns false past `CaUseMaxM`) do we
+            // circularise and then phase.
+            Leg = ApproachLeg.Intercept;
+            if (RideIntercept()) return;
+
+            // ---- LEG 0: no pass on offer - get onto the station's orbit before phasing in it. ----
             if (MatchAltitude()) return;
 
-            // ---- LEG 1: PHASING, BOUNDED. ----
-            // Runs while a lap is in flight, or while the gap is still too wide and laps remain.
-            // `phaseReturnUt > 0` means a coast is under way and must be seen through - checking the
-            // gap again mid-coast would re-plan against a gap the current lap is already closing.
-            bool lapInFlight = phaseReturnUt > 0.0 || NodeExecutor.Active;
-            if (lapInFlight
-                || (!reachedGate
-                    && Math.Abs(AlongTrackM) > Approach.PhaseMinM && phasePass < Approach.PhaseMaxPass))
+            // ---- LEG 1: PHASING, BOUNDED. Reached only when no free intercept is on offer. ----
+            if (!reachedGate
+                && Math.Abs(AlongTrackM) > Approach.PhaseMinM && phasePass < Approach.PhaseMaxPass)
             {
                 Leg = ApproachLeg.Phasing;
                 FlyPhasing();
@@ -360,10 +394,6 @@ namespace DragonScreen
                           + (Math.Abs(AlongTrackM) / 1000.0).ToString("F1")
                           + " km - closing in from here anyway.");
             }
-
-            // ---- LEG 2: RIDE AN INTERCEPT WE ALREADY HAVE. ----
-            Leg = ApproachLeg.Intercept;
-            if (RideIntercept()) return;
 
             // ---- NOTHING LEFT TO TRY FROM HERE. ----
             Halt((RangeM / 1000.0).ToString("F1") + " km out, along-track gap "
@@ -426,60 +456,6 @@ namespace DragonScreen
 
             double now = Planetarium.GetUniversalTime();
 
-            // Committed to a crossing: hold, warp, then burn.
-            if (altBurnUt > 0.0)
-            {
-                if (now < altBurnUt - Approach.LeadS)
-                {
-                    Hold();
-                    double togo = altBurnUt - now;
-                    if (!altWarpAsked
-                        && togo - Approach.LeadS - Approach.WarpMarginS > Approach.WarpMinSpanS)
-                    {
-                        altWarpAsked = true;
-                        double to = altBurnUt - Approach.LeadS - Approach.WarpMarginS;
-                        Debug.Log(Tag + "warping " + (to - now).ToString("F0")
-                                  + " s to the station's altitude crossing");
-                        TimeWarp.fetch.WarpTo(to);
-                    }
-                    else if (togo - Approach.LeadS <= Approach.WarpMarginS
-                             && TimeWarp.CurrentRateIndex > 0)
-                    {
-                        TimeWarp.SetRate(0, true);
-                    }
-                    Note = "ALTITUDE MATCH - crossing in " + togo.ToString("F0") + " s";
-                    return true;
-                }
-
-                double at = altBurnUt;
-                altBurnUt = 0.0; altWarpAsked = false;
-
-                // At the crossing our radius IS the station's, so this circularises into its orbit.
-                Vector3d vHere = WorldVelAt(mo, at);
-                double dvMag = Math.Sqrt(b.gravParameter / rStn) - vHere.magnitude;
-                if (Math.Abs(dvMag) > Approach.MaxDvMps)
-                {
-                    altMatchDone = true;
-                    Debug.LogWarning(Tag + "altitude match wants " + dvMag.ToString("F1")
-                                     + " m/s - over the " + Approach.MaxDvMps.ToString("F0")
-                                     + " m/s cap. Not flying it; phasing from here instead.");
-                    return false;
-                }
-                Vector3d dv = vHere.normalized * dvMag;
-                if (NodeExecutor.Begin(ship, dv, at, "altitude match"))
-                {
-                    altMatchDone = true;
-                    LastDvMps = Math.Abs(dvMag);
-                    Debug.Log(Tag + "altitude match - circularising into the station's "
-                              + ((rStn - b.Radius) / 1000.0).ToString("F1") + " km orbit, "
-                              + dvMag.ToString("F2") + " m/s");
-                    return true;
-                }
-                Note = NodeExecutor.Note;
-                altMatchDone = true;
-                return false;
-            }
-
             // Find the next crossing of the station's radius.
             double rAp = b.Radius + mo.ApA, rPe = b.Radius + mo.PeA;
             if (rStn > rAp || rStn < rPe)
@@ -503,18 +479,43 @@ namespace DragonScreen
             double t2 = mo.GetUTforTrueAnomaly(-ta, 0.0);
             while (t1 < now + Approach.LeadS) t1 += mo.period;
             while (t2 < now + Approach.LeadS) t2 += mo.period;
-            altBurnUt = (t1 < t2) ? t1 : t2;
-            altWarpAsked = false;
-            Debug.Log(Tag + "altitude match planned - our " + (mo.ApA / 1000.0).ToString("F1")
-                      + " x " + (mo.PeA / 1000.0).ToString("F1") + " km crosses the station's "
-                      + ((rStn - b.Radius) / 1000.0).ToString("F1") + " km in "
-                      + (altBurnUt - now).ToString("F0") + " s. Phasing needs a matching orbit, "
-                      + "not just a matching phase.");
-            return true;
+            double at = (t1 < t2) ? t1 : t2;
+
+            // ---- ⛔ HAND THE WHOLE NODE TO THE EXECUTOR NOW (user, 2026-08-19), as the intercept does.
+            // At the crossing our radius IS the station's, so circularising there drops us into its
+            // orbit. The Δv is the velocity AT the crossing from the CURRENT orbit, unchanged while we
+            // coast, so it is exact to compute up front - and the executor then warps to 10 min out,
+            // orients on reaction wheels, warps to the node and burns, never holding RCS across the
+            // long coast to the crossing.
+            Vector3d vHere = WorldVelAt(mo, at);
+            double dvMag = Math.Sqrt(b.gravParameter / rStn) - vHere.magnitude;
+            if (Math.Abs(dvMag) > Approach.MaxDvMps)
+            {
+                altMatchDone = true;
+                Debug.LogWarning(Tag + "altitude match wants " + dvMag.ToString("F1")
+                                 + " m/s - over the " + Approach.MaxDvMps.ToString("F0")
+                                 + " m/s cap. Not flying it; phasing from here instead.");
+                return false;
+            }
+            Vector3d dv = vHere.normalized * dvMag;
+            nodeOwner = ApproachLeg.MatchOrbit;
+            if (NodeExecutor.Begin(ship, dv, at, "altitude match"))
+            {
+                altMatchDone = true;
+                LastDvMps = Math.Abs(dvMag);
+                Debug.Log(Tag + "altitude match - our " + (mo.ApA / 1000.0).ToString("F1") + " x "
+                          + (mo.PeA / 1000.0).ToString("F1") + " km crosses the station's "
+                          + ((rStn - b.Radius) / 1000.0).ToString("F1") + " km in "
+                          + (at - now).ToString("F0") + " s; circularising there for "
+                          + dvMag.ToString("F2") + " m/s. Executor warps, orients, then burns.");
+                return true;
+            }
+            Note = NodeExecutor.Note;
+            altMatchDone = true;
+            return false;
         }
 
-        private static double altBurnUt;
-        private static bool altWarpAsked, altMatchDone;
+        private static bool altMatchDone;
 
         /// <summary>
         /// LEG 2. If the orbits already bring us close, warp to that pass and match velocity there.
@@ -538,62 +539,7 @@ namespace DragonScreen
             Orbit so = Station.orbit, mo = ship.orbit;
             if (so == null || mo == null || so.period <= 0.0) return false;
 
-            // Already committed to a pass: hold, warp, and match when we get there.
-            if (matchUt > 0.0)
-            {
-                if (now < matchUt - Approach.LeadS)
-                {
-                    Hold();
-                    double togo = matchUt - now;
-                    if (!matchWarpAsked
-                        && togo - Approach.LeadS - Approach.WarpMarginS > Approach.WarpMinSpanS)
-                    {
-                        matchWarpAsked = true;
-                        double to = matchUt - Approach.LeadS - Approach.WarpMarginS;
-                        Debug.Log(Tag + "warping " + (to - now).ToString("F0")
-                                  + " s to the closest-approach velocity match");
-                        TimeWarp.fetch.WarpTo(to);
-                    }
-                    else if (togo - Approach.LeadS <= Approach.WarpMarginS
-                             && TimeWarp.CurrentRateIndex > 0)
-                    {
-                        TimeWarp.SetRate(0, true);
-                    }
-                    Note = "INTERCEPT - match in " + togo.ToString("F0") + " s, "
-                         + (matchDistM / 1000.0).ToString("F1") + " km";
-                    return true;
-                }
-
-                // At the pass. Kill the relative velocity there - `StMatchVelAt`.
-                double at = matchUt;
-                matchUt = 0.0; matchWarpAsked = false;
-
-                Vector3d dv = WorldVelAt(so, at) - WorldVelAt(mo, at);
-                double mag = dv.magnitude;
-                if (mag < Approach.MatchVelMps)
-                {
-                    Debug.Log(Tag + "intercept - already matched to " + mag.ToString("F2") + " m/s");
-                    return false;
-                }
-                if (mag > Approach.MaxDvMps)
-                {
-                    Debug.LogWarning(Tag + "intercept match wants " + mag.ToString("F1")
-                                     + " m/s - over the " + Approach.MaxDvMps.ToString("F0")
-                                     + " m/s cap, not flying it");
-                    return false;
-                }
-                // NodeExecutor checks the periapsis floor itself before it turns or lights anything.
-                if (NodeExecutor.Begin(ship, dv, at, "closest-approach velocity match"))
-                {
-                    LastDvMps = mag;
-                    Debug.Log(Tag + "intercept - matching velocity, " + mag.ToString("F2") + " m/s");
-                    return true;
-                }
-                Note = NodeExecutor.Note;
-                return false;
-            }
-
-            // Look for one. Coarse-to-fine over `CaSpanPeriods` of the station's orbit.
+            // Look for a close pass. Coarse-to-fine over `CaSpanPeriods` of the station's orbit.
             interceptShip = mo; interceptStation = so; interceptFrom = now;
             Predict.Approach ca = Predict.ClosestApproach(
                 new Func<double, double>(SeparationAt),
@@ -604,13 +550,44 @@ namespace DragonScreen
             if (ca.DistanceM > Approach.CaUseMaxM || ca.DistanceM <= Approach.MatchDistM)
                 return false;
 
-            matchUt = now + ca.TimeS;
-            matchDistM = ca.DistanceM;
-            matchWarpAsked = false;
-            Debug.Log(Tag + "riding the existing intercept - closest approach "
-                      + ca.DistanceM.ToString("F0") + " m in " + ca.TimeS.ToString("F0")
-                      + " s. Matching velocity there rather than buying a transfer.");
-            return true;
+            // ---- ⛔ HAND THE WHOLE NODE TO THE EXECUTOR NOW (user, 2026-08-19). ----
+            // "set the intercept exactly as you have been BUT then warp to within 10 minutes of the
+            // node and only then point the right way for the burn." The velocity to kill is the
+            // relative velocity AT the pass, computed from the CURRENT orbits - and nothing burns
+            // before the pass, so those orbits (and this Δv) do not change while we coast. Handing it
+            // over up front is therefore exact, not a guess, and it lets the executor warp the coast
+            // BEFORE it orients: the turn is flown on reaction wheels (free) instead of RCS bought at
+            // 60 s out, and the plotted intercept is never nudged by an early orient. The executor
+            // warps to the orient point and then to ignition, both strictly before closest approach,
+            // so it never warps PAST the pass.
+            double at = now + ca.TimeS;
+            Vector3d dv = WorldVelAt(so, at) - WorldVelAt(mo, at);
+            double mag = dv.magnitude;
+            if (mag < Approach.MatchVelMps)
+            {
+                Debug.Log(Tag + "intercept - already matched to " + mag.ToString("F2") + " m/s");
+                return false;
+            }
+            if (mag > Approach.MaxDvMps)
+            {
+                Debug.LogWarning(Tag + "intercept match wants " + mag.ToString("F1")
+                                 + " m/s - over the " + Approach.MaxDvMps.ToString("F0")
+                                 + " m/s cap, not flying it");
+                return false;
+            }
+            // NodeExecutor checks the periapsis floor itself before it turns or lights anything.
+            nodeOwner = ApproachLeg.Intercept;
+            if (NodeExecutor.Begin(ship, dv, at, "closest-approach velocity match"))
+            {
+                LastDvMps = mag;
+                Debug.Log(Tag + "riding the existing intercept - closest approach "
+                          + ca.DistanceM.ToString("F0") + " m in " + ca.TimeS.ToString("F0")
+                          + " s, " + mag.ToString("F2") + " m/s to match. Executor warps to 10 min "
+                          + "out, orients on wheels, warps to the pass, then burns.");
+                return true;
+            }
+            Note = NodeExecutor.Note;
+            return false;
         }
 
         // ---- ⛔ `.xzy`. KSP's orbit sampler returns the SWIZZLED frame with Y and Z exchanged. ----
@@ -625,8 +602,6 @@ namespace DragonScreen
 
         private static Orbit interceptShip, interceptStation;
         private static double interceptFrom;
-        private static double matchUt, matchDistM;
-        private static bool matchWarpAsked;
 
         /// <summary>
         /// Separation at `t` seconds from the scan's start. A named method because C# 5 has no
@@ -792,6 +767,23 @@ namespace DragonScreen
             // Coasting the phasing orbit: nothing to do but wait for the return to this point.
             if (now < phaseReturnUt)
             {
+                // ---- ⛔ RIDE A CLOSE PASS RATHER THAN WARP PAST IT (user, 2026-08-20). ----
+                // The lap's circularisation point (phaseReturnUt) is NOT the closest approach, and
+                // the dispatch's `lapInFlight` guard sends every mid-lap tick straight here and skips
+                // LEG 2 - so the coast warped at 100x through passes of 4.1 and 3.5 km on flight_0820
+                // and only dropped out at 6.8 km and OPENING. "You are also warping past the closest
+                // approach point." If the current orbits already give a ridable pass, hand it to the
+                // executor NOW: it warps to 10 min out, orients on wheels, warps to the pass and stops
+                // BEFORE it (WarpToOrient/WarpToIgnition target strictly pre-approach), then matches
+                // velocity AT the pass. RideIntercept's own gates (CaUseMaxM / MatchDistM / MaxDvMps)
+                // decide whether a pass is worth riding - the same ones the post-phasing leg uses - so
+                // this only ever supersedes the lap with something at least as good, never worse.
+                if (!NodeExecutor.Active && RideIntercept())
+                {
+                    phaseReturnUt = 0.0;   // abandon the lap; we are matching at the pass instead
+                    Leg = ApproachLeg.Intercept;
+                    return;
+                }
                 Hold();
                 double left = phaseReturnUt - now;
                 Note = "PHASING - circularise in " + left.ToString("F0") + " s";
@@ -807,6 +799,7 @@ namespace DragonScreen
                 double rx = (ship.CoM - bx.position).magnitude;
                 double dvx = Phasing.ExitDvMps(rx, ship.obt_velocity.magnitude, bx.gravParameter);
                 Vector3d dirx = ship.obt_velocity.normalized * dvx;
+                nodeOwner = ApproachLeg.Phasing;
                 if (NodeExecutor.Begin(ship, dirx, now, "phasing exit")) return;
                 Note = NodeExecutor.Note;
                 return;
@@ -866,6 +859,7 @@ namespace DragonScreen
 
             // Prograde/retrograde at this point, so it becomes an apsis and we return to exactly here.
             Vector3d dv = ship.obt_velocity.normalized * sol.EntryDvMps;
+            nodeOwner = ApproachLeg.Phasing;
             if (NodeExecutor.Begin(ship, dv, now, "phasing entry"))
             {
                 lastBurnAt = now;

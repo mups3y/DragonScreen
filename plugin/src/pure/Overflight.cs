@@ -81,6 +81,24 @@ namespace DragonScreen
         public const double OrbitCap = 5.0;
 
         /// <summary>
+        /// How much better a LATER pass must be before it may steal the choice from an earlier one,
+        /// metres of ground-track miss. `dgPassTieMargin`.
+        ///
+        /// ---- ⛔ WHY A GLOBAL MINIMUM IS A COIN-FLIP OVER AN EQUATORIAL SITE ----
+        /// The ground track crosses a near-equatorial landing site once (almost) every lap, and each
+        /// crossing is an all-but-equal minimum of `TrackMissM`. Picking the single smallest of them
+        /// therefore turns on the last few km of orbit jitter: flight_0820_175458 and _182849 took the
+        /// pass at −155.9° lon, flight_0820_181043 took the ADJACENT lap at +172°, all three from the
+        /// SAME save, and the de-orbit fired a whole lap apart for a ~300 m swing in where the capsule
+        /// came down. Requiring a real improvement before a later pass wins makes near-ties resolve to
+        /// the EARLIEST pass every time - the same pass across loads, so the residual is finally a
+        /// systematic offset that can be trimmed instead of coin-flip scatter that cannot. An honestly
+        /// better pass (an inclined orbit, where the crossings are kilometres apart) still wins by
+        /// clearing the margin.
+        /// </summary>
+        public const double TieMarginM = 3000.0;
+
+        /// <summary>
         /// How far before the overflight the de-orbit burn is lit, as a fraction of an orbit.
         /// `dgPhaseFrac`.
         ///
@@ -237,11 +255,16 @@ namespace DragonScreen
                 return r;
             }
 
+            // ⛔ The coarse sweep prefers the EARLIEST pass among near-equal ones (see TieMarginM): a
+            // later sample must beat the incumbent by a real margin to steal the choice, so equatorial
+            // laps - which are all-but-equal minima - resolve to the same pass across loads. The
+            // refinement below then hones that chosen pass with a strict `<`, since ±12 steps stay
+            // inside one crossing and cannot wander to another lap.
             double end = orbitPeriodS * OrbitCap;
             for (double t = 0.0; t <= end; t += CoarseStepS)
             {
                 double m = f(nowUt + t);
-                if (m < r.TrackMissM) { r.TrackMissM = m; r.Ut = nowUt + t; }
+                if (m < r.TrackMissM - TieMarginM) { r.TrackMissM = m; r.Ut = nowUt + t; }
             }
 
             double step = RefineStartStepS;

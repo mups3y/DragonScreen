@@ -314,6 +314,23 @@ namespace DragonScreen
         /// </summary>
         private static Vessel Primary()
         {
+            // ---- ⛔ A RETURN IN PROGRESS OUTRANKS THE LATCH. (flight_0820_054631) ----
+            // After docking, KSP merges the two craft into ONE Vessel and the latch below held that
+            // merged STATION through the entire de-orbit and entry: a_massT read 1483 t, a_altAsl
+            // read 120 km AT TOUCHDOWN, a_periKm was frozen at the station's orbit. The capsule's own
+            // descent - the one thing the return recording exists to capture, and the data the
+            // de-orbit aim is trimmed from - never reached the a_ columns at all. It was not that the
+            // latched craft died (the station lives on); it was that the latch pointed at the wrong
+            // survivor of the dock and undock never moved it. A de-orbit or an entry names its own
+            // vehicle unambiguously, so follow it - re-latching, so the rows after touchdown still
+            // describe the capsule rather than snapping back to the station.
+            if (DeorbitOps.Engaged && DeorbitOps.Vehicle != null
+                && DeorbitOps.Vehicle.state != Vessel.State.DEAD)
+                return primary = DeorbitOps.Vehicle;
+            if (EntryOps.Engaged && EntryOps.Vehicle != null
+                && EntryOps.Vehicle.state != Vessel.State.DEAD)
+                return primary = EntryOps.Vehicle;
+
             if (primary != null && primary.state != Vessel.State.DEAD) return primary;
 
             Vessel a = AutoPilot.AscentVessel;

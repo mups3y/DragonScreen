@@ -44,6 +44,19 @@ namespace DragonScreen
     /// <summary>Density at an altitude above sea level, kg/m³. The glue supplies KSP's own model.</summary>
     public delegate double DensityAt(double altitudeM);
 
+    /// <summary>Speed of sound at an altitude, m/s. The glue supplies KSP's own model.</summary>
+    public delegate double SpeedOfSoundAt(double altitudeM);
+
+    /// <summary>
+    /// The drag "factor" at a Mach number and pseudo-Reynolds (rho·|v|), such that the drag
+    /// acceleration is <c>0.5·rho·v²·factor</c> opposing the surface velocity. This is the Mach- and
+    /// Reynolds-dependent inverse ballistic coefficient the STOCK aero produces, ported from
+    /// Trajectories' <c>StockAeroUtil.SimAeroForce</c>:
+    /// <c>factor = 0.001 · DragMultiplier · DragCubeMultiplier · pseudoReynolds(rhoV) · Σ areaDrag(mach) / mass</c>.
+    /// Supplied by the glue because it needs the vessel's drag cubes; null falls back to the scalar bc.
+    /// </summary>
+    public delegate double DragFactorAt(double mach, double pseudoReynolds);
+
     public struct TrajectoryInputs
     {
         /// <summary>Position relative to the body centre, metres, inertial.</summary>
@@ -60,11 +73,37 @@ namespace DragonScreen
         public double AtmosphereDepthM;
         /// <summary>
         /// Ballistic coefficient m/(Cd·A), kg/m². MEASURED - see the header. Zero or negative means
-        /// "unknown", and the integration runs as a vacuum solve and says so.
+        /// "unknown", and the integration runs as a vacuum solve and says so. Used only when
+        /// <see cref="DragFactor"/> is null (the fallback path).
         /// </summary>
         public double BallisticCoefficient;
         /// <summary>Altitude the impact is declared at - terrain height, or zero for sea level.</summary>
         public double ImpactAltitudeM;
+
+        /// <summary>
+        /// Optional: when non-null, Solve appends samples of the flown path here (about one every
+        /// <see cref="Trajectory.PathIntervalS"/> of flight), for the map-view renderer to draw a line.
+        /// Each sample carries the integrator-frame position and the body rotation so far, so the glue
+        /// can put it back into a body-fixed world position. Null skips all of it - the guidance solve
+        /// pays nothing for a line nobody is looking at.
+        /// </summary>
+        public System.Collections.Generic.List<PathSample> Path;
+
+        /// <summary>
+        /// The STOCK drag model, ported from Trajectories. When set it SUPERSEDES
+        /// <see cref="BallisticCoefficient"/>: the drag is Mach- and Reynolds-dependent, computed from
+        /// the vessel's real drag cubes, so it matches what the Trajectories add-on predicts. Needs
+        /// <see cref="SoundSpeed"/> to turn speed into a Mach number.
+        /// </summary>
+        public DragFactorAt DragFactor;
+        /// <summary>Speed of sound vs altitude, for the Mach number. Required when DragFactor is set.</summary>
+        public SpeedOfSoundAt SoundSpeed;
+    }
+
+    /// <summary>One point on the flown path: integrator-frame position and body rotation so far.</summary>
+    public struct PathSample
+    {
+        public double X, Y, Z, Rot;
     }
 
     public struct TrajectoryResult
@@ -100,6 +139,9 @@ namespace DragonScreen
         /// <summary>Give up after this much simulated time, seconds.</summary>
         public const double MaxFlightS = 3600.0;
 
+        /// <summary>Flight-time between samples added to <see cref="TrajectoryInputs.Path"/>, seconds.</summary>
+        public const double PathIntervalS = 3.0;
+
         /// <summary>
         /// Integrate to impact.
         ///
@@ -116,10 +158,12 @@ namespace DragonScreen
             double vx = s.Vx, vy = s.Vy, vz = s.Vz;
             double t = 0.0;
             double rot = 0.0;
+            double lastPathT = -1e9;
             bool draggedEver = false;
 
             double impactR = s.BodyRadiusM + s.ImpactAltitudeM;
             if (s.Mu <= 0.0 || s.BodyRadiusM <= 0.0) { r.Note = "no body"; return r; }
+            if (s.Path != null) { s.Path.Add(Sample(px, py, pz, rot)); lastPathT = 0.0; }
 
             // Already at or below the impact radius: the answer is "here", not a simulation.
             double r0 = Mag(px, py, pz);
@@ -134,7 +178,8 @@ namespace DragonScreen
             while (t < MaxFlightS)
             {
                 double alt = Mag(px, py, pz) - s.BodyRadiusM;
-                bool inAir = alt < s.AtmosphereDepthM && s.BallisticCoefficient > 0.0;
+                bool inAir = alt < s.AtmosphereDepthM
+                             && (s.DragFactor != null || s.BallisticCoefficient > 0.0);
                 if (inAir) draggedEver = true;
 
                 double dt = VacuumStepS;
@@ -180,6 +225,7 @@ namespace DragonScreen
                     r.Iz = pz + (nz - pz) * f;
                     t += dt * f;
                     rot += s.BodyOmega * dt * f;
+                    if (s.Path != null) s.Path.Add(Sample(r.Ix, r.Iy, r.Iz, rot));
                     r.Ok = true;
                     r.TimeToImpactS = t;
                     r.ImpactSpeedMps = Mag(vx, vy, vz);
@@ -192,6 +238,11 @@ namespace DragonScreen
                 px = nx; py = ny; pz = nz;
                 t += dt;
                 rot += s.BodyOmega * dt;
+                if (s.Path != null && t - lastPathT >= PathIntervalS)
+                {
+                    s.Path.Add(Sample(px, py, pz, rot));
+                    lastPathT = t;
+                }
             }
 
             r.Note = "no impact within " + MaxFlightS.ToString("F0") + " s - this does not come down";
@@ -214,7 +265,8 @@ namespace DragonScreen
             double g = -s.Mu / (r * r * r);
             ax = g * px; ay = g * py; az = g * pz;
 
-            if (s.BallisticCoefficient <= 0.0) return;
+            bool haveStock = s.DragFactor != null && s.SoundSpeed != null;
+            if (!haveStock && s.BallisticCoefficient <= 0.0) return;
             double alt = r - s.BodyRadiusM;
             if (alt >= s.AtmosphereDepthM || alt < 0.0) return;
 
@@ -228,8 +280,26 @@ namespace DragonScreen
             double sv = Mag(srx, sry, srz);
             if (sv < 0.1) return;
 
-            // a = 0.5 * rho * v² / BC, opposing the surface-relative velocity.
-            double a = 0.5 * rho * sv * sv / s.BallisticCoefficient;
+            // a = 0.5 * rho * v² * factor, opposing the surface-relative velocity. The factor is
+            // 1/BC: a fixed scalar in the fallback, or the STOCK Mach/Reynolds-dependent drag ported
+            // from Trajectories when the glue supplies it (see DragFactorAt). The latter is what makes
+            // the prediction agree with the add-on - a constant BC over-drags at high Mach and lands
+            // the predicted impact tens of km short of where it really comes down.
+            double factor;
+            if (haveStock)
+            {
+                double ss = s.SoundSpeed(alt);
+                double mach = (ss > 1e-6) ? sv / ss : 0.0;
+                if (mach > 25.0) mach = 25.0;
+                factor = s.DragFactor(mach, rho * sv);
+                if (factor <= 0.0) return;
+            }
+            else
+            {
+                factor = 1.0 / s.BallisticCoefficient;
+            }
+
+            double a = 0.5 * rho * sv * sv * factor;
             ax -= a * srx / sv;
             ay -= a * sry / sv;
             az -= a * srz / sv;
@@ -238,6 +308,11 @@ namespace DragonScreen
         private static double Mag(double x, double y, double z)
         {
             return Math.Sqrt(x * x + y * y + z * z);
+        }
+
+        private static PathSample Sample(double x, double y, double z, double rot)
+        {
+            PathSample p; p.X = x; p.Y = y; p.Z = z; p.Rot = rot; return p;
         }
 
         // ------------------------------------------------------------------ the measurement

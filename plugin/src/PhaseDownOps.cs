@@ -50,6 +50,21 @@ namespace DragonScreen
         private static double stageStartedAt;
         private static bool burnLaunched;
 
+        /// <summary>
+        /// How many times burn 1 may re-fire to bring the periapsis the rest of the way down.
+        ///
+        /// ⛔ ONE BURN DOES NOT LAND THE PERIAPSIS ON TARGET. The Draco tail throttles down to nothing
+        /// as the node empties, and that low-thrust tail terminates at a frame-timing-sensitive point:
+        /// flight_0820_191736 stopped at 82.1 km, flight_0820_193553 at 88.7 km, from the SAME save and
+        /// the SAME 79.2 km target. A landing orbit whose periapsis wanders 7 km is not repeatable, and
+        /// downstream the de-orbit pass search reads that as a different orbit and commits a whole pass
+        /// away - which is the "one flight on target, one wildly off" the crew saw. So burn 1 tops up
+        /// until the periapsis is actually within tolerance, capped so a burn that genuinely cannot get
+        /// there (out of propellant) still ends rather than looping forever.
+        /// </summary>
+        private const int MaxPeriapsisTopUps = 3;
+        private static int periapsisTopUps;
+
         /// <summary>True once the sequence has settled, either way. The caller may proceed.</summary>
         public static bool Finished
         {
@@ -62,6 +77,7 @@ namespace DragonScreen
             ship = v;
             Engaged = true;
             burnLaunched = false;
+            periapsisTopUps = 0;
             stageStartedAt = Planetarium.GetUniversalTime();
 
             if (DeorbitOrbit.AlreadyOnOrbit(v.orbit.ApA, v.orbit.PeA))
@@ -91,7 +107,7 @@ namespace DragonScreen
         public static void Reset()
         {
             Engaged = false; Stage = PhaseDownStage.Idle; ship = null;
-            Note = "-"; PlannedDvMps = 0.0; burnLaunched = false;
+            Note = "-"; PlannedDvMps = 0.0; burnLaunched = false; periapsisTopUps = 0;
         }
 
         private static void Go(PhaseDownStage s)
@@ -159,9 +175,28 @@ namespace DragonScreen
             {
                 // The executor has finished with it, one way or the other.
                 if (NodeExecutor.Phase == BurnPhase.Failed) { Skip(NodeExecutor.Note); return; }
+
+                // ⛔ Did the periapsis actually reach the target, or did the low-thrust tail quit high?
+                // If it is still above target by more than the tolerance and there are top-ups left, do
+                // not accept it - clear burnLaunched and let the branch below plant a fresh lowering
+                // node next tick. Converges the periapsis to a repeatable value so the same save always
+                // hands the de-orbit the same orbit. See MaxPeriapsisTopUps.
+                if (ship.orbit.PeA > DeorbitOrbit.TargetPeriapsisM + DeorbitOrbit.ToleranceM
+                    && periapsisTopUps < MaxPeriapsisTopUps)
+                {
+                    periapsisTopUps++;
+                    burnLaunched = false;
+                    Debug.Log(Tag + "phase-down burn 1 left periapsis at "
+                              + (ship.orbit.PeA / 1000.0).ToString("F1") + " km, above the "
+                              + (DeorbitOrbit.TargetPeriapsisM / 1000.0).ToString("F1")
+                              + " km target - top-up " + periapsisTopUps + " of " + MaxPeriapsisTopUps);
+                    return;
+                }
+
                 Debug.Log(Tag + "phase-down burn 1 done - now "
                           + (ship.orbit.ApA / 1000.0).ToString("F1") + " x "
-                          + (ship.orbit.PeA / 1000.0).ToString("F1") + " km");
+                          + (ship.orbit.PeA / 1000.0).ToString("F1") + " km"
+                          + (periapsisTopUps > 0 ? " (" + periapsisTopUps + " top-ups)" : ""));
                 Go(PhaseDownStage.LoweringApoapsis);
                 return;
             }

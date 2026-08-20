@@ -270,7 +270,23 @@ namespace DragonScreen
             return c == PanelCommand.EnableBackupPyros
                 || c == PanelCommand.EnableEntryReboot
                 || c == PanelCommand.EnableBackupEntry
-                || c == PanelCommand.EnableNormalEntry;
+                || c == PanelCommand.EnableNormalEntry
+                || IsLiveMode(c);
+        }
+
+        /// <summary>
+        /// Modes whose "on" state is set by something OTHER than this button - the flight-computer
+        /// engage lamps (STRING 1A/1B/1C), which are lit by the phase autopilot being engaged and must
+        /// go dark on their own when it finishes. Refreshed every tick in Update(); the Enable* modes
+        /// above only ever change on their own press, so they are not re-read.
+        /// </summary>
+        private static bool IsLiveMode(PanelCommand c)
+        {
+            return c == PanelCommand.Power1        // lit while its bus is powered
+                || c == PanelCommand.Power2
+                || c == PanelCommand.String1A      // lit while its phase is engaged (row 1)
+                || c == PanelCommand.String1B
+                || c == PanelCommand.String1C;
         }
 
         private static bool ModeIsOn(PanelCommand c)
@@ -281,6 +297,15 @@ namespace DragonScreen
                 case PanelCommand.EnableEntryReboot:  return FlightCommands.EntryReboot;
                 case PanelCommand.EnableBackupEntry:  return FlightCommands.BackupEntry;
                 case PanelCommand.EnableNormalEntry:  return !FlightCommands.BackupEntry;
+                // POWER lamps show which bus is live, so the crew can see the row is armed.
+                case PanelCommand.Power1: return FlightCommands.State.Bus1On;
+                case PanelCommand.Power2: return FlightCommands.State.Bus2On;
+                // The flight-computer engage lamps track the live phase state (grid column A/B/C),
+                // however the phase was started - the physical STRING button OR the touchscreen.
+                case PanelCommand.String1A: return AutoPilot.Engaged;                        // ASCENT
+                case PanelCommand.String1B: return StationApproach.Engaged
+                                                || DockingOps.Engaged;                       // RNDZ/DOCK
+                case PanelCommand.String1C: return DeorbitOps.Engaged;                       // DEORBIT
             }
             return false;
         }
@@ -311,11 +336,35 @@ namespace DragonScreen
 
         public void Update()
         {
-            if (until > 0f && Time.realtimeSinceStartup > until)
+            // A momentary flash (press confirmation, or a red refusal) plays out first - even on a
+            // live-mode button, so pressing an unpowered STRING still flashes red before the lamp
+            // returns to tracking its state.
+            if (until > 0f)
             {
+                if (Time.realtimeSinceStartup <= until) return;    // flash still showing
                 until = -1f;
-                light = PanelLight.Dark;
-                Apply();
+                if (!IsLiveMode(entry.Command))
+                {
+                    light = PanelLight.Dark;                       // momentary button: flash done
+                    Apply();
+                    return;
+                }
+                // live-mode: fall through and re-establish the state-driven lamp
+            }
+
+            // The POWER and flight-computer engage lamps mirror live state, so re-read it every tick
+            // rather than latching once at the press: the ASCENT lamp must go dark by itself at
+            // insertion, and light when the phase re-engages - or is started from the touchscreen -
+            // without another press.
+            if (IsLiveMode(entry.Command))
+            {
+                PanelLight want = ModeIsOn(entry.Command) ? PanelLight.Lit : PanelLight.Dark;
+                if (want != light)
+                {
+                    light = want;
+                    latched = (want != PanelLight.Dark);
+                    Apply();
+                }
             }
         }
 

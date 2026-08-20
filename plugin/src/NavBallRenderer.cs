@@ -34,6 +34,20 @@
  * three cameras rendering three identical spheres every frame would be three times the cost for
  * pixel-identical output.
  *
+ * ---- THE FOUR MARKERS ARE MAS's TOO, PORTED VERBATIM ----
+ * PROGRADE, RETROGRADE, TARGET and ANTI-TARGET only - the docking page already carries range, rate
+ * and the attitude numbers, so radial/normal/maneuver would be clutter the reference navball does
+ * not show here. Each is a flat quad on layer 29, textured from the STOCK atlas
+ * `Squad/Props/IVANavBall/ManeuverNode_vectors` (white glyphs, shape in the alpha channel, verified
+ * over the file), tinted the stock colours and faded as its direction rotates to the far side.
+ *
+ * MASPageNavBall.cs:InitMarkers/MakeMarker/CameraPrerender and its markerUV/markerColor tables are
+ * the source for every constant. The one adaptation: MAS toggles its markers inside camera callbacks
+ * because its layer 29 is shared with other MAS cameras; ours is a private RenderTexture that nothing
+ * else renders, so the quads simply stay enabled and are re-placed each frame, exactly like the ball.
+ * The placement uses navballAttitudeGimbal - the SAME `attitude` quaternion Orient() already builds
+ * for the ball - so markers and ball cannot drift apart.
+ *
  * ---- WHERE THE SPHERE COMES FROM ----
  * MAS loads a .mu model from GameDatabase. We have no navball model to load and adding one would
  * mean shipping a binary asset that a dozen lines of code can produce exactly - so the mesh is
@@ -60,6 +74,49 @@ namespace DragonScreen
         private static Camera cam;
         private static RenderTexture target;
         private static bool tried, failed;
+
+        // ---- THE MARKERS. Every number below is MAS's (MASPageNavBall.cs), not chosen. ----
+        private enum Marker { Prograde, Retrograde, Target, AntiTarget }
+        private const int MarkerCount = 4;
+
+        /// <summary>orthographicSize, AND the radius directions are scaled to so a marker sits on the
+        /// limb. MASPageNavBall.cs:218 and the *navballExtents at :337.</summary>
+        private const float BallExtent = 1.01f;
+
+        /// <summary>Icon half-size as a fraction of the ball. MASPageNavBall.cs:478 (0.18 * extent).</summary>
+        private const float IconExtent = BallExtent * 0.18f;
+
+        /// <summary>Fixed z in FRONT of the ball toward the camera, so a marker is never inside it.
+        /// MASPageNavBall.cs:98.</summary>
+        private const float IconDepth = 1.4f - BallExtent - 0.01f;
+
+        /// <summary>Maps the scaled direction's z to alpha, so a marker on the far side fades out.
+        /// MASPageNavBall.cs:99, applied at :279.</summary>
+        private const float IconAlphaScalar = 0.6f / BallExtent;
+
+        private static GameObject[] markerObj;
+        private static Material[] markerMat;
+        private static MeshRenderer[] markerRend;
+        private static readonly int ColorId = Shader.PropertyToID("_Color");
+        private static readonly int TintId = Shader.PropertyToID("_TintColor");
+
+        /// <summary>Stock marker colours, MASPageNavBall.cs:436: prograde yellow, target magenta.</summary>
+        private static readonly Color[] MarkerColour =
+        {
+            new Color(1f, 0.796f, 0f, 1f),   // Prograde    255,203,0
+            new Color(1f, 0.796f, 0f, 1f),   // Retrograde
+            new Color(1f, 0f, 1f, 1f),       // Target      255,0,255
+            new Color(1f, 0f, 1f, 1f),       // AntiTarget
+        };
+
+        /// <summary>Lower-left origin of each glyph in the 3x3 stock atlas. MASPageNavBall.cs:419.</summary>
+        private static readonly Vector2[] MarkerUV =
+        {
+            new Vector2(0f / 3f, 2f / 3f),   // Prograde
+            new Vector2(1f / 3f, 2f / 3f),   // Retrograde
+            new Vector2(2f / 3f, 2f / 3f),   // Target +
+            new Vector2(2f / 3f, 1f / 3f),   // Target -
+        };
 
         /// <summary>
         /// The navball texture, or null if it could not be set up. Called from the draw path, so
@@ -133,7 +190,7 @@ namespace DragonScreen
                 cam = camObject.AddComponent<Camera>();
                 cam.enabled = true;
                 cam.orthographic = true;
-                cam.orthographicSize = 1.01f;      // 1% margin so the limb is never clipped
+                cam.orthographicSize = BallExtent; // 1% margin so the limb is never clipped
                 cam.aspect = 1f;
                 cam.cullingMask = 1 << Layer;
                 cam.clearFlags = CameraClearFlags.SolidColor;
@@ -149,8 +206,11 @@ namespace DragonScreen
                 ballObject.transform.position = camObject.transform.position + new Vector3(0f, 0f, 2.4f);
                 cam.transform.LookAt(ballObject.transform, Vector3.up);
 
+                BuildMarkers();
+
                 Debug.Log("[DragonScreen] navball ready: " + Size + "x" + Size + " on layer " + Layer
-                          + ", shader '" + (s != null ? s.name : "none") + "'");
+                          + ", shader '" + (s != null ? s.name : "none") + "'"
+                          + (markerObj != null ? ", markers on" : ", NO markers"));
             }
             catch (Exception e)
             {
@@ -184,6 +244,9 @@ namespace DragonScreen
                 Vector3.ProjectOnPlane(up + body.transform.up, up), up);
 
             ballObject.transform.rotation = NavballYRotate * MirrorXAxis(relative);
+
+            // The markers ride the SAME `attitude` quaternion, so they cannot drift off the ball.
+            OrientMarkers(attitude, v);
 
             // ---- INSTRUMENT, DO NOT THEORISE ----
             // The ball is up and turning, but whether it is turning the RIGHT WAY cannot be settled
@@ -220,6 +283,173 @@ namespace DragonScreen
         /// </summary>
         private static int logsLeft = 3;
 
+        // ------------------------------------------------------------------ the four markers
+
+        /// <summary>
+        /// Place the markers for this frame. Ported from MASPageNavBall.CameraPrerender: a marker sits
+        /// at (attitude * worldDirection) scaled to the limb, at a fixed depth in front of the ball,
+        /// and its retrograde/anti-target twin is the antipode - MAS's UpdateVectorPair.
+        ///
+        /// Prograde follows the STOCK speed mode (Orbit/Surface/Target) so the ball reads the same as
+        /// the game's own: on a docking approach that is Target mode - velocity relative to the station
+        /// - which is the vector the pilot flies onto the magenta target marker.
+        /// </summary>
+        private static void OrientMarkers(Quaternion attitude, Vessel v)
+        {
+            if (markerObj == null) return;
+
+            Vector3 prograde;
+            switch (FlightGlobals.speedDisplayMode)
+            {
+                case FlightGlobals.SpeedDisplayModes.Surface:
+                    prograde = v.srf_velocity.normalized; break;
+                case FlightGlobals.SpeedDisplayModes.Target:
+                    prograde = ((Vector3)FlightGlobals.ship_tgtVelocity).normalized; break;
+                default:
+                    prograde = v.obt_velocity.normalized; break;
+            }
+            Place(Marker.Prograde, attitude, prograde);
+            Place(Marker.Retrograde, attitude, -prograde);
+
+            ITargetable tgt = v.targetObject;
+            Transform tt = (tgt != null) ? tgt.GetTransform() : null;
+            if (tt != null)
+            {
+                Vector3 toTarget = (tt.position - v.transform.position).normalized;
+                Place(Marker.Target, attitude, toTarget);
+                Place(Marker.AntiTarget, attitude, -toTarget);
+            }
+            else
+            {
+                markerRend[(int)Marker.Target].enabled = false;
+                markerRend[(int)Marker.AntiTarget].enabled = false;
+            }
+
+            // ---- CONFIRM ON LOAD, THEN QUIET ----
+            // Markers cannot be settled offline the way the ball's orientation was (that needs the
+            // world-frame vectors the preview does not model), so log where the two primary markers
+            // land the first few frames: pointing AT the target, its x/y should be ~0 and FRONT.
+            if (markerLogsLeft > 0 && Time.realtimeSinceStartup - markerLastLog > 2f)
+            {
+                markerLastLog = Time.realtimeSinceStartup;
+                markerLogsLeft--;
+                LogMarker("prograde", attitude, prograde);
+                if (tt != null)
+                    LogMarker("target", attitude, (tt.position - v.transform.position).normalized);
+            }
+        }
+
+        private static void Place(Marker id, Quaternion attitude, Vector3 worldDir)
+        {
+            int i = (int)id;
+            if (worldDir.sqrMagnitude < 1e-8f) { markerRend[i].enabled = false; return; }
+
+            Vector3 scaled = (attitude * worldDir) * BallExtent;
+            markerObj[i].transform.localPosition = new Vector3(scaled.x, scaled.y, IconDepth);
+
+            Color c = MarkerColour[i];
+            c.a = Mathf.Clamp01(scaled.z * IconAlphaScalar + 0.4f);   // MASPageNavBall.cs:279
+            SetMarkerColour(markerMat[i], c);
+            markerRend[i].enabled = true;
+        }
+
+        private static float markerLastLog = -999f;
+        private static int markerLogsLeft = 3;
+
+        private static void LogMarker(string name, Quaternion attitude, Vector3 dir)
+        {
+            Vector3 s = (attitude * dir) * BallExtent;
+            Debug.Log("[DragonScreen] navball marker " + name + " x/y = " + s.x.ToString("F2")
+                      + " / " + s.y.ToString("F2") + " (limb +/-" + BallExtent.ToString("F2")
+                      + "), alpha " + Mathf.Clamp01(s.z * IconAlphaScalar + 0.4f).ToString("F2")
+                      + (s.z >= 0f ? " FRONT" : " BACK"));
+        }
+
+        /// <summary>
+        /// The four direction markers, as flat quads parented to the camera and lit from the stock
+        /// navball atlas. A missing atlas or shader is a state, not a crash: the ball keeps working
+        /// without markers, exactly as it keeps working without its own texture.
+        /// </summary>
+        private static void BuildMarkers()
+        {
+            Texture atlas = (GameDatabase.Instance != null)
+                ? GameDatabase.Instance.GetTexture("Squad/Props/IVANavBall/ManeuverNode_vectors", false)
+                : null;
+            if (atlas == null)
+            {
+                Debug.LogWarning("[DragonScreen] no navball marker atlas - prograde/target markers off");
+                return;
+            }
+
+            // The glyphs are WHITE with the shape in the alpha channel, so an alpha-blended shader that
+            // MULTIPLIES by a tint turns them the marker colour. Sprites/Default does exactly that.
+            Shader s = Shader.Find("Sprites/Default");
+            if (s == null) s = Shader.Find("KSP/Alpha/Unlit Transparent");
+            if (s == null) s = Shader.Find("Unlit/Transparent");
+            if (s == null)
+            {
+                Debug.LogWarning("[DragonScreen] no alpha shader for navball markers - markers off");
+                return;
+            }
+
+            markerObj = new GameObject[MarkerCount];
+            markerMat = new Material[MarkerCount];
+            markerRend = new MeshRenderer[MarkerCount];
+            for (int i = 0; i < MarkerCount; i++) markerObj[i] = MakeMarker(i, s, atlas);
+        }
+
+        /// <summary>One marker quad. MASPageNavBall.cs:MakeMarker - same UVs, same winding.</summary>
+        private static GameObject MakeMarker(int i, Shader shader, Texture atlas)
+        {
+            GameObject o = new GameObject("DragonScreenNavBallMarker" + i);
+            o.layer = Layer;
+            o.transform.parent = camObject.transform;
+            o.transform.localPosition = new Vector3(0f, 0f, IconDepth);
+
+            Material m = new Material(shader);
+            m.mainTexture = atlas;
+            SetMarkerColour(m, MarkerColour[i]);
+
+            MeshFilter mf = o.AddComponent<MeshFilter>();
+            MeshRenderer mr = o.AddComponent<MeshRenderer>();
+            mr.material = m;
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows = false;
+
+            Vector2 uv0 = MarkerUV[i];
+            Vector2 uv1 = uv0 + new Vector2(1f / 3f, 1f / 3f);
+            Mesh mesh = new Mesh();
+            mesh.vertices = new[]
+            {
+                new Vector3(-IconExtent,  IconExtent, 0f),
+                new Vector3( IconExtent,  IconExtent, 0f),
+                new Vector3(-IconExtent, -IconExtent, 0f),
+                new Vector3( IconExtent, -IconExtent, 0f),
+            };
+            mesh.uv = new[]
+            {
+                new Vector2(uv0.x, uv1.y),
+                uv1,
+                uv0,
+                new Vector2(uv1.x, uv0.y),
+            };
+            mesh.triangles = new[] { 0, 3, 2, 0, 1, 3 };
+            mesh.RecalculateBounds();
+            mf.mesh = mesh;
+
+            markerMat[i] = m;
+            markerRend[i] = mr;
+            return o;
+        }
+
+        /// <summary>Set whichever tint property the chosen shader exposes - _Color on Sprites/Default,
+        /// _TintColor on the particle shaders - so the colour and its alpha take either way.</summary>
+        private static void SetMarkerColour(Material m, Color c)
+        {
+            if (m.HasProperty(ColorId)) m.SetColor(ColorId, c);
+            if (m.HasProperty(TintId)) m.SetColor(TintId, c);
+        }
+
         private static readonly Quaternion VesselOrientationCorrection = Quaternion.Euler(90f, 0f, 0f);
         private static readonly Quaternion NavballYRotate = Quaternion.Euler(0f, 180f, 0f);
 
@@ -236,13 +466,6 @@ namespace DragonScreen
         /// Generated rather than shipped: a dozen lines beat a binary asset whose unwrap we would
         /// have to trust, and it guarantees the UVs match the texture.
         /// </summary>
-        /// <summary>
-        /// The texture carries a light border about 6 px wide on all four sides. Latitude now runs
-        /// along that axis, so the border lands ON the poles and smears across the whole ball as a
-        /// bright streak. Costs a third of a degree of ladder to stay off it.
-        /// </summary>
-        private const float PoleInset = 8f / 2048f;
-
         private static Mesh Sphere(float radius, int segments, int rings)
         {
             int vertCount = (segments + 1) * (rings + 1);
@@ -266,27 +489,19 @@ namespace DragonScreen
                     verts[i] = p * radius;
                     normals[i] = p;
 
-                    // ---- THE TEXTURE IS STORED TRANSPOSED, SO THE UNWRAP IS TOO ----
-                    // navball_edited.png is NOT laid out like an ordinary equirectangular navball.
-                    // Measured over the file rather than eyeballed (plugin/build/navball_preview.py):
+                    // ---- STOCK KSP NAVBALL: STANDARD EQUIRECTANGULAR, LONGITUDE FLIPPED ----
+                    // art/navball.png is now Squad's IVANavBall (the brown-ground/blue-sky ball), which
+                    // IS an ordinary equirectangular navball - blue in the top rows, brown in the
+                    // bottom, heading uniform across. Latitude maps straight through (v), so the sky
+                    // sits at the +Y pole and the ground at -Y.
                     //
-                    //      light/dark halves split across its U axis, not its V   (48.9 vs 117.5 mean
-                    //          left/right, 82.7 vs 83.7 top/bottom - no latitude split at all)
-                    //      rows y=16..2032 are pixel-identical, so content barely varies with V
-                    //      every glyph is rotated 90 degrees
-                    //
-                    // That is a standard navball stored on its side: its U axis is PITCH and its V
-                    // axis is HEADING. Feeding it the ordinary (longitude, latitude) unwrap put the
-                    // horizon on a meridian, so the ball split vertically and rolled with heading -
-                    // which is exactly what the first flight showed.
-                    //
-                    // Longitude is mirrored as well as swapped. Un-mirroring by flipping LATITUDE
-                    // instead also turns the ball upside down; flipping longitude fixes the glyph
-                    // handedness and leaves up where it is. All four combinations were rendered
-                    // offline and this is the only one with sky up, the ladder upright, readable
-                    // glyphs, and the markings sweeping the correct way under yaw.
-                    float lat01 = 1f - v;                       // 1 at the +Y pole, 0 at -Y
-                    uvs[i] = new Vector2(PoleInset + lat01 * (1f - 2f * PoleInset), 1f - u);
+                    // Longitude is flipped (1 - u): our generated sphere winds theta the opposite way
+                    // to the texture, so the plain (u, v) unwrap renders every glyph MIRRORED. Flipping
+                    // u un-mirrors the digits and leaves sky up where it is. Chosen by rendering all
+                    // candidates offline in `navball_preview.py` (the "stock" mode) and reading them:
+                    // it is the only one with sky up, the ladder upright, glyphs readable, and the
+                    // markings sweeping LEFT under a right yaw. See that file for the sheets.
+                    uvs[i] = new Vector2(1f - u, 1f - v);       // (1 - lon, lat), lat = 1 at +Y pole
                 }
             }
 
@@ -314,6 +529,17 @@ namespace DragonScreen
 
         internal static void Clear()
         {
+            if (markerObj != null)
+            {
+                for (int i = 0; i < markerObj.Length; i++)
+                {
+                    if (markerMat != null && markerMat[i] != null)
+                        UnityEngine.Object.Destroy(markerMat[i]);
+                    if (markerObj[i] != null) UnityEngine.Object.Destroy(markerObj[i]);
+                }
+            }
+            markerObj = null; markerMat = null; markerRend = null;
+
             if (cam != null) cam.targetTexture = null;
             if (target != null) { target.Release(); UnityEngine.Object.Destroy(target); target = null; }
             if (ballObject != null) { UnityEngine.Object.Destroy(ballObject); ballObject = null; }

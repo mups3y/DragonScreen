@@ -25,6 +25,7 @@
  * says which it did. A prediction that quietly changes meaning is worse than one that admits it.
  */
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace DragonScreen
@@ -38,6 +39,55 @@ namespace DragonScreen
         /// <summary>True when the integration actually modelled drag.</summary>
         public bool DragModelled;
         public string Note;
+    }
+
+    /// <summary>
+    /// The STOCK aerodynamic drag of a vessel, tabulated over Mach - the port of Trajectories'
+    /// StockAeroUtil.SimAeroForce that makes our predicted impact agree with the add-on.
+    ///
+    /// ---- ⛔ WHY A TABLE, AND WHY MACH ----
+    /// KSP's drag is per-part drag cubes whose area varies with Mach; a single ballistic coefficient
+    /// (what we used before) is that area frozen at ONE Mach, so it over-drags badly at the high Mach
+    /// of an entry and lands the prediction tens of km short (flight_0820_092128: ours said 7.5 km,
+    /// the truth was 29 km). This sums each part's <c>DragCubes.AddSurfaceDragDirection(...).areaDrag</c>
+    /// at a grid of Mach numbers, ONCE, for the SHIELD-FORWARD attitude, then the integrator
+    /// interpolates - the same "cache it, don't recompute per step" the add-on does.
+    ///
+    /// The drag acceleration the integrator applies is <c>0.5·rho·v²·DragFactor(mach, rho·v)</c>,
+    /// matching SimAeroForce: <c>force = dyn_pressure · areaDrag · DragCubeMultiplier ·
+    /// pseudoReynolds · DragMultiplier</c> with <c>dyn_pressure = 0.0005·rho·v²</c>.
+    /// </summary>
+    public sealed class AeroTable
+    {
+        public const double MachMax = 25.0;      // SimAeroForce caps Mach at 25
+        public const int Bins = 51;              // 0..25 in 0.5 steps
+
+        public double Mass;                      // TONNES - KSP force is kN, so kN/tonne = m/s²
+        public double[] AreaDrag;                // Σ part areaDrag at each Mach bin, shield-forward
+        public double DragCubeMult, DragMult;    // PhysicsGlobals multipliers
+        private readonly FloatCurve pseudoRe;    // PhysicsGlobals.DragCurvePseudoReynolds
+
+        public AeroTable(FloatCurve pseudoReynolds) { pseudoRe = pseudoReynolds; }
+
+        /// <summary>1/BC-equivalent: drag accel = 0.5·rho·v²·this.</summary>
+        public double DragFactor(double mach, double pseudoReynolds)
+        {
+            if (Mass <= 0.0 || AreaDrag == null) return 0.0;
+            double pr = (pseudoRe != null) ? pseudoRe.Evaluate((float)pseudoReynolds) : 1.0;
+            // 0.0005/0.5 = 0.001 (dyn_pressure uses 0.0005; the integrator's 0.5·rho·v² supplies the rest)
+            return 0.001 * DragMult * DragCubeMult * pr * InterpArea(mach) / Mass;
+        }
+
+        private double InterpArea(double mach)
+        {
+            if (mach <= 0.0) return AreaDrag[0];
+            if (mach >= MachMax) return AreaDrag[Bins - 1];
+            double f = mach / MachMax * (Bins - 1);
+            int i = (int)f;
+            if (i >= Bins - 1) return AreaDrag[Bins - 1];
+            double frac = f - i;
+            return AreaDrag[i] * (1.0 - frac) + AreaDrag[i + 1] * frac;
+        }
     }
 
     public static class ImpactPredictor
@@ -66,7 +116,11 @@ namespace DragonScreen
         private static readonly System.Collections.Generic.Dictionary<uint, double> lastSampleUt =
             new System.Collections.Generic.Dictionary<uint, double>();
 
-        public static void Reset() { bc.Clear(); lastVel.Clear(); lastSampleUt.Clear(); }
+        public static void Reset()
+        {
+            bc.Clear(); lastVel.Clear(); lastSampleUt.Clear();
+            MapValid = false; if (MapPath != null) MapPath.Clear();
+        }
 
         /// <summary>The current estimate for a vessel, for the recorder. Zero = unknown.</summary>
         public static double BallisticCoefficient(Vessel v)
@@ -157,8 +211,15 @@ namespace DragonScreen
         {
             if (v == null || v.mainBody == null) { Impact im = new Impact(); im.Note = "no vessel"; return im; }
             CelestialBody b = v.mainBody;
+            // ---- ⛔ STOCK DRAG FOR THE CAPSULE ENTRY ONLY, bc AS FALLBACK (2026-08-20). ----
+            // The known ballistic coefficient is a single number and cannot be right across the Mach
+            // range of an entry, so the CAPSULE's de-orbit/entry (the callers that pass a known bc >0)
+            // gets the Mach-tabulated stock drag from the real drag cubes, matching the Trajectories
+            // add-on. The BOOSTER path calls Predict(v) with no override and keeps its live-measured bc
+            // untouched - its shield-forward geometry is different and its recovery already works.
+            AeroTable table = (bcOverride > 0.0) ? BuildAeroTable(v) : null;
             double useBc = (bcOverride > 0.0) ? bcOverride : BallisticCoefficient(v);
-            return PredictFromState(b, v.CoM - b.position, v.obt_velocity, useBc);
+            return PredictFromState(b, v.CoM - b.position, v.obt_velocity, useBc, table);
         }
 
         /// <summary>
@@ -170,6 +231,17 @@ namespace DragonScreen
         /// </summary>
         public static Impact PredictFromState(CelestialBody b, Vector3d posRelBody, Vector3d velWorld,
                                               double bc)
+        {
+            return PredictFromState(b, posRelBody, velWorld, bc, null);
+        }
+
+        /// <summary>
+        /// As above, with an optional STOCK drag model. When <paramref name="table"/> is non-null the
+        /// integration uses the Mach-tabulated drag cubes (matching Trajectories) and ignores
+        /// <paramref name="bc"/>; when null it falls back to the scalar bc.
+        /// </summary>
+        public static Impact PredictFromState(CelestialBody b, Vector3d posRelBody, Vector3d velWorld,
+                                              double bc, AeroTable table)
         {
             Impact im = new Impact();
             if (b == null) { im.Note = "no body"; return im; }
@@ -184,6 +256,12 @@ namespace DragonScreen
             s.AtmosphereDepthM = b.atmosphereDepth;
             s.BallisticCoefficient = bc;
             s.ImpactAltitudeM = 0.0;
+            if (table != null)
+            {
+                s.DragFactor = table.DragFactor;
+                CelestialBody body = b;
+                s.SoundSpeed = delegate(double alt) { return StockSoundSpeed(body, alt); };
+            }
 
             // ⚠ THE ROTATION AXIS IS THE BODY'S, NOT THE FRAME'S +Z. Integrating about the wrong
             // axis puts the ground track sideways, which reads as a cross-range error nobody can
@@ -200,10 +278,11 @@ namespace DragonScreen
             s.Px = rp.x; s.Py = rp.y; s.Pz = rp.z;
             s.Vx = vp.x; s.Vy = vp.y; s.Vz = vp.z;
 
+            CelestialBody db = b;
             TrajectoryResult t = Trajectory.Solve(s, delegate(double alt)
             {
-                if (alt < 0.0 || alt >= b.atmosphereDepth) return 0.0;
-                return b.GetDensity(b.GetPressure(alt), b.GetTemperature(alt));
+                if (alt < 0.0 || alt >= db.atmosphereDepth) return 0.0;
+                return StockDensity(db, alt);
             });
 
             im.Note = t.Note;
@@ -228,6 +307,91 @@ namespace DragonScreen
             return im;
         }
 
+        // ------------------------------------------------------------------ map-view trajectory
+
+        /// <summary>The last predicted path for the map overlay: BODY-FIXED positions relative to the
+        /// body centre (add body.position for world). Ends at <see cref="MapImpact"/>. Null/empty = none.</summary>
+        public static List<Vector3d> MapPath = new List<Vector3d>();
+        /// <summary>Predicted ground impact, body-relative world (body-fixed). Valid only with MapValid.</summary>
+        public static Vector3d MapImpact;
+        /// <summary>The aim point (LZ), body-relative world. Valid only with MapValid.</summary>
+        public static Vector3d MapTarget;
+        public static CelestialBody MapBody;
+        public static bool MapValid;
+        /// <summary>UT the map path was last refreshed, for staleness.</summary>
+        public static double MapStampUt;
+
+        /// <summary>
+        /// Recompute the map-view trajectory for a vessel and cache it in the Map* fields for
+        /// <see cref="MapTrajectory"/> to draw. Same integration as Predict, but it collects the flown
+        /// path and rotates every point into a BODY-FIXED frame (the ground as it is oriented now), so
+        /// the line ends exactly on the impact crosshair rather than tens of km away at the inertial
+        /// impact the body has since rotated out from under.
+        /// </summary>
+        public static void UpdateMapTrajectory(Vessel v, double bcOverride, double tgtLatDeg, double tgtLonDeg)
+        {
+            if (v == null || v.mainBody == null) { MapValid = false; return; }
+            CelestialBody b = v.mainBody;
+
+            AeroTable table = (bcOverride > 0.0) ? BuildAeroTable(v) : null;
+            double useBc = (bcOverride > 0.0) ? bcOverride : BallisticCoefficient(v);
+
+            Vector3d r = v.CoM - b.position;
+            Vector3d vel = v.obt_velocity;
+
+            TrajectoryInputs s = new TrajectoryInputs();
+            s.Mu = b.gravParameter;
+            s.BodyRadiusM = b.Radius;
+            s.AtmosphereDepthM = b.atmosphereDepth;
+            s.BallisticCoefficient = useBc;
+            s.ImpactAltitudeM = 0.0;
+            s.BodyOmega = b.angularVelocity.magnitude;
+            if (table != null)
+            {
+                s.DragFactor = table.DragFactor;
+                CelestialBody body2 = b;
+                s.SoundSpeed = delegate(double alt) { return StockSoundSpeed(body2, alt); };
+            }
+
+            // Same rotated (+Z = spin axis) frame as PredictFromState.
+            Vector3d axis = b.angularVelocity.normalized;
+            if (axis.sqrMagnitude < 0.5) axis = b.transform.up;
+            QuaternionD toAxis = (QuaternionD)Quaternion.FromToRotation((Vector3)axis, Vector3.forward);
+            QuaternionD fromAxis = (QuaternionD)Quaternion.Inverse(
+                Quaternion.FromToRotation((Vector3)axis, Vector3.forward));
+            Vector3d rp = toAxis * r, vp = toAxis * vel;
+            s.Px = rp.x; s.Py = rp.y; s.Pz = rp.z;
+            s.Vx = vp.x; s.Vy = vp.y; s.Vz = vp.z;
+
+            List<PathSample> raw = new List<PathSample>();
+            s.Path = raw;
+
+            CelestialBody db = b;
+            TrajectoryResult t = Trajectory.Solve(s, delegate(double alt)
+            {
+                if (alt < 0.0 || alt >= db.atmosphereDepth) return 0.0;
+                return StockDensity(db, alt);
+            });
+
+            if (!t.Ok || raw.Count < 2) { MapValid = false; return; }
+
+            // Rotate each integrator-frame point back by the body rotation to that instant (body-fixed),
+            // then out of the spin-axis frame. RotZ(-rot) about the frame's +Z is the body spin.
+            MapPath.Clear();
+            for (int i = 0; i < raw.Count; i++)
+            {
+                PathSample ps = raw[i];
+                double c = Math.Cos(-ps.Rot), sn = Math.Sin(-ps.Rot);
+                Vector3d deRot = new Vector3d(ps.X * c - ps.Y * sn, ps.X * sn + ps.Y * c, ps.Z);
+                MapPath.Add(fromAxis * deRot);
+            }
+            MapImpact = MapPath[MapPath.Count - 1];
+            MapTarget = (Vector3d)b.GetWorldSurfacePosition(tgtLatDeg, tgtLonDeg, 0.0) - b.position;
+            MapBody = b;
+            MapValid = true;
+            MapStampUt = Planetarium.GetUniversalTime();
+        }
+
         /// <summary>
         /// Ground distance from a predicted impact to a target, metres. Negative when the predictor
         /// has no answer - a distinct case from a zero miss, and the de-orbit law relies on that.
@@ -250,6 +414,98 @@ namespace DragonScreen
                     if (es[m].EngineIgnited && !es[m].flameout) t += es[m].finalThrust;
             }
             return t;
+        }
+
+        // ------------------------------------------------------------------ stock aero (Trajectories)
+
+        /// <summary>
+        /// Build the Mach-tabulated stock drag for the vessel's ENTRY configuration, shield-forward.
+        ///
+        /// ---- ⛔ SHIELD-FORWARD, AND THE TRUNK IS NOT COUNTED ----
+        /// The airflow direction is taken as −ReferenceTransform.up (the heat-shield direction: the
+        /// controller points that at retrograde during entry), transformed into each part's local frame
+        /// - which is INVARIANT to how the vessel is pointed right now, so it is correct even while the
+        /// de-orbit burn is vectored off retrograde. Trunk and second-stage parts are excluded because
+        /// they are jettisoned before entry; the prediction is for the capsule that actually comes down.
+        ///
+        /// Returns null when nothing can be modelled (no drag-cube parts, or zero mass), and the caller
+        /// falls back to the scalar bc.
+        /// </summary>
+        public static AeroTable BuildAeroTable(Vessel v)
+        {
+            if (v == null || v.ReferenceTransform == null) return null;
+            Vector3 shieldFwdWorld = -v.ReferenceTransform.up;
+
+            List<Part> parts = DockedSide.Ours(v);
+            List<Part> cubeParts = new List<Part>();
+            List<Vector3> localDirs = new List<Vector3>();
+            double mass = 0.0;
+            for (int i = 0; i < parts.Count; i++)
+            {
+                Part p = parts[i];
+                if (VehicleParts.IsTrunk(p.name) || VehicleParts.IsSecondStage(p.name)) continue;
+                if (p.physicalSignificance != Part.PhysicalSignificance.NONE)
+                    mass += p.mass + p.GetResourceMass() + p.GetPhysicslessChildMass();
+                if (p.ShieldedFromAirstream || p.Rigidbody == null) continue;
+                if (p.dragModel != Part.DragModel.DEFAULT && p.dragModel != Part.DragModel.CUBE) continue;
+                DragCubeList cubes = p.DragCubes;
+                if (cubes == null || cubes.None) continue;
+                cubeParts.Add(p);
+                localDirs.Add(p.transform.InverseTransformDirection(shieldFwdWorld));
+            }
+            if (mass <= 0.0 || cubeParts.Count == 0) return null;
+
+            AeroTable table = new AeroTable(PhysicsGlobals.DragCurvePseudoReynolds);
+            // ⚠ TONNES, not kg. SimAeroForce's force is in kN and KSP gets acceleration as kN/tonne
+            // (= m/s²), so the mass that divides it here is in tonnes - part.mass already is.
+            table.Mass = mass;
+            table.DragCubeMult = PhysicsGlobals.DragCubeMultiplier;
+            table.DragMult = PhysicsGlobals.DragMultiplier;
+            table.AreaDrag = new double[AeroTable.Bins];
+            for (int bIdx = 0; bIdx < AeroTable.Bins; bIdx++)
+            {
+                double mach = AeroTable.MachMax * bIdx / (AeroTable.Bins - 1);
+                double sum = 0.0;
+                for (int k = 0; k < cubeParts.Count; k++)
+                {
+                    DragCubeList.CubeData data = new DragCubeList.CubeData();
+                    try { cubeParts[k].DragCubes.AddSurfaceDragDirection(localDirs[k], (float)mach, ref data); }
+                    catch { continue; }
+                    sum += data.areaDrag;
+                }
+                table.AreaDrag[bIdx] = sum;
+            }
+            return table;
+        }
+
+        /// <summary>
+        /// Air density at an altitude, ported from Trajectories.StockAeroUtil.GetDensity - the average
+        /// day/night equatorial temperature, so the density (and the Mach number built on it) match the
+        /// add-on rather than the bare <c>GetTemperature</c> we used before.
+        /// </summary>
+        public static double StockDensity(CelestialBody body, double altitude)
+        {
+            if (body == null || !body.atmosphere || altitude > body.atmosphereDepth || altitude < 0.0)
+                return 0.0;
+            double pressure = body.GetPressure(altitude);
+            const double sunDot = 0.5;
+            const float sunAxialDot = 0f;
+            double tempOffset = body.latitudeTemperatureBiasCurve.Evaluate(0f)
+                              + body.latitudeTemperatureSunMultCurve.Evaluate(0f) * sunDot
+                              + body.axialTemperatureSunMultCurve.Evaluate(sunAxialDot);
+            double temperature = body.GetTemperature(altitude)
+                               + body.atmosphereTemperatureSunMultCurve.Evaluate((float)altitude) * tempOffset;
+            return body.GetDensity(pressure, temperature);
+        }
+
+        /// <summary>Speed of sound at an altitude, using the same density as SimAeroForce.</summary>
+        public static double StockSoundSpeed(CelestialBody body, double altitude)
+        {
+            if (body == null || !body.atmosphere) return 0.0;
+            double pressure = body.GetPressure(altitude);
+            double rho = StockDensity(body, altitude);
+            if (rho <= 0.0) return 0.0;
+            return body.GetSpeedOfSound(pressure, rho);
         }
     }
 }

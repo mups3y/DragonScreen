@@ -52,7 +52,8 @@ the mistake is actually about to happen. Each line is a TRIGGER, then what to do
    `Attitude.CoastMaxRateDps` 4.0→3.0 ([Tunable]) - a gentler slew (F9I peaks 2.9°/s, rolls 102; we ran
    ~5, rolled 347), disturbance-reduction that cannot tumble. FULL CURE = a coordinated single-axis slew
    in `DriveInner`, DEFERRED to its own isolated pass (a frame bug in the shared controller tumbles the
-   craft; do NOT bundle it with a de-orbit-validation flight). See `BoosterRecovery.cs:1595`. Then
+   craft; do NOT bundle it with a de-orbit-validation flight). See the roll-lock block in
+   `BoosterRecovery.Aim`. Then
    `docs/SESSION_2026-08-17.md` for the earlier end-to-end pass, `docs/SESSION_2026-08-12.md` for detail,
    `docs/F9I_BOOSTER_TARGETS.md` (measured booster numbers) and `docs/MECHJEBLIB_PORT.md` (scoped, not
    started).
@@ -295,6 +296,13 @@ the vehicle**. No amount of log reading was going to be that fast.
 
 ⚠ `ctlPitch/ctlYaw/ctlRoll` are **live for the first time** — dead in all 554 kOS recordings because
 cooked steering and SAS both bypass `FlightCtrlState`. Our controller writes them.
+
+⚠ THE `a_` BLOCK FOLLOWS THE **RETURN VEHICLE** DURING A DE-ORBIT/ENTRY — fixed 2026-08-20. Before
+that, `Primary()` latched onto whichever Vessel survived the DOCK MERGE (the 1483-t station) and held
+it through the whole return: on flight_0820_054631 `a_altAsl` read 120 km AT TOUCHDOWN, `a_periKm` was
+frozen at the station's, `a_massT` was 1483 t. The capsule's own descent was NEVER in `a_*`. The `r_`
+block was always right (it reads `EntryOps.Vehicle` directly). If a return CSV ever shows the station's
+orbit again, this latch is the suspect.
 
 ### ⛔ AN EXCEPTION IN `OnFlyByWire` IS INVISIBLE AND INFINITE
 

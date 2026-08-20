@@ -199,8 +199,23 @@ def recorder_health(hdr, data, malformed):
     def active(prefix, key):
         return any(r[i2[key]] not in ("-", "", "Idle") for r in data) if key in i2 else True
     i2 = {n: k for k, n in enumerate(hdr)}
+
+    # ⛔ THE r_ BLOCK IS THE WHOLE RETURN, NOT JUST THE ENTRY. `r_stage` names the ENTRY stage and
+    # reads "-" for the entire de-orbit phase, so gating the block on it judges the de-orbit columns
+    # (r_deorbitMissKm, r_deorbitThr, r_nodePhase, r_nodeDvLeft) only over entry rows - where the burn
+    # is long finished and every one of them is frozen. That reported live de-orbit telemetry as
+    # "CONSTANT" / "ALL ZERO" on flight_0820 and nearly buried a real diagnosis. A return row is one
+    # where the entry stage is running OR the de-orbit/entry owner has the stick.
+    ir_stage, ix_owner = i2.get("r_stage"), i2.get("x_owner")
+    def return_active(r):
+        if ir_stage is not None and r[ir_stage] not in ("-", "", "Idle"):
+            return True
+        if ix_owner is not None and r[ix_owner] in ("deorbit", "entry"):
+            return True
+        return False
+
     live = {"a_": active("a_", "a_phase"), "b_": active("b_", "b_phase"),
-            "r_": active("r_", "r_stage"), "m_": True, "x_": True}
+            "r_": any(return_active(r) for r in data), "m_": True, "x_": True}
     dormant = [p for p, on in live.items() if not on]
     if dormant:
         print("  blocks not exercised by this flight (their columns are correctly idle): %s"
@@ -211,9 +226,11 @@ def recorder_health(hdr, data, malformed):
     # so `b_` is "exercised" while being legitimately empty for most rows. Judging a column over the
     # whole mission then flagged `b_massT` as "MASS <= 0 - impossible" from the rows where there is
     # no booster at all. A column is only assessed over the rows where ITS OWN block is running.
-    gate = {"a_": "a_phase", "b_": "b_phase", "r_": "r_stage"}
+    gate = {"a_": "a_phase", "b_": "b_phase"}
 
     def block_rows(pre):
+        if pre == "r_":
+            return [r for r in data if return_active(r)]
         key = gate.get(pre)
         if key is None or key not in i2:
             return data

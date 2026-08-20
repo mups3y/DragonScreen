@@ -47,12 +47,16 @@ namespace DragonScreen
     {
         private const string Tag = "[DragonScreen] ";
 
+        /// <summary>realtime of the last map-trajectory refresh, to throttle it to ~2 Hz.</summary>
+        private float lastMapUpdate;
+
         public void Start()
         {
             // Discover the [Tunable] fields, dump the reference catalogue, apply any overrides. Once
             // per flight-scene entry, before anything ticks, so the first frame already runs on the
             // tuned values rather than a frame of defaults.
             Tuning.Build();
+            MapTrajectory.Start();   // the map-view re-entry overlay (replaces the Trajectories add-on)
             Debug.Log(Tag + "flight driver up - autopilot, recovery and recorder now tick "
                           + "independently of the IVA");
         }
@@ -136,6 +140,30 @@ namespace DragonScreen
             // and detaches must not take the monitor with it, which is the exact failure mode the
             // monitor exists to report. It owns no actuator - see its header.
             FlightMonitor.Tick();
+
+            // ---- MAP-VIEW RE-ENTRY TRAJECTORY (replaces the Trajectories add-on). ----
+            // Only while a return is being flown and only while the map is up: the path integration is
+            // the same cost the guidance already pays, so it is not run for a view nobody is looking at.
+            // Throttled to ~2 Hz, matching how often the guidance itself re-predicts.
+            if (global::MapView.MapIsEnabled)
+            {
+                float now = Time.realtimeSinceStartup;
+                if (now - lastMapUpdate > 0.5f)
+                {
+                    lastMapUpdate = now;
+                    Vessel rv = null; double tlat = 0.0, tlon = 0.0;
+                    if (EntryOps.Engaged && EntryOps.Vehicle != null)
+                    { rv = EntryOps.Vehicle; tlat = EntryOps.TargetLatDeg; tlon = EntryOps.TargetLonDeg; }
+                    else if (DeorbitOps.Engaged && DeorbitOps.Vehicle != null)
+                    { rv = DeorbitOps.Vehicle; tlat = DeorbitOps.TargetLatDeg; tlon = DeorbitOps.TargetLonDeg; }
+
+                    if (rv != null)
+                        ImpactPredictor.UpdateMapTrajectory(rv, EntryGuidance.CapsuleBcKgM2, tlat, tlon);
+                    else
+                        ImpactPredictor.MapValid = false;
+                }
+            }
+            MapTrajectory.Update();
         }
 
         public void OnDestroy()
@@ -151,6 +179,8 @@ namespace DragonScreen
             // Leaving the flight scene ends the flight. Close the file rather than leaving the last
             // rows buffered - the flights worth reading are the ones that end unexpectedly.
             FlightRecorder.Stop("left the flight scene");
+
+            MapTrajectory.Destroy();   // tear down the map camera component and its meshes
 
             // ---- AND CLEAR THE STATICS HERE, WHICH IS THE HONEST PLACE FOR IT ----
             // A revert or a scene change is what invalidates them - not a camera move, which is what

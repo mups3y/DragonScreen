@@ -97,13 +97,52 @@ namespace DragonScreen
         /// <summary>Settle time after a decouple, seconds.</summary>
         public const double SepSettleS = 1.5;
 
-        /// <summary>Start trimming this far above the atmosphere, metres.</summary>
-        public const double TrimStartAboveM = 5000.0;
         /// <summary>
-        /// ...and stop this far above it. The last kilometre is left clear so the attitude is settled
-        /// and the controls neutral before the air starts doing the flying.
+        /// Start the coast course-correction this far above the atmosphere, metres. Raised to 20 km
+        /// (~90 km ASL) - the STOCK-drag predictor now returns a valid impact the whole coast (verified
+        /// flight_0820_112928: 104/104 rows valid from 75 km), so the correction gets the FULL ~200 s
+        /// coast to null the miss with RCS instead of a 20 s sliver at the interface. Time matters: the
+        /// de-orbit burn no longer aims, so the correction can have tens of km to take out, two-way.
         /// </summary>
-        public const double TrimFloorAboveM = 1000.0;
+        public const double TrimStartAboveM = 20000.0;
+        /// <summary>
+        /// Stop the course correction when dynamic pressure passes this, kPa. ⛔ Not an altitude: the
+        /// correction is RCS translation, and it stays effective only while the air is thin enough that
+        /// the thrusters out-push the drag. Running it INTO the thin upper atmosphere (rather than
+        /// stopping 1 km above the interface) lets it null the miss deeper, where the prediction is more
+        /// accurate and the entry drift is already developing - flight_0820_160013 handed off at 419 m at
+        /// 71 km and then drifted to 1.4 km with nothing steering. ~0.3 kPa is around 52 km on Kerbin.
+        /// </summary>
+        public const double TrimQCutKpa = 0.30;
+
+        /// <summary>Miss at which the RCS trim reaches full deflection, metres. Proportional below it.</summary>
+        public const double TrimScaleM = 5000.0;
+        /// <summary>Inside this the predicted impact is on the LZ; the trim stops pushing, metres.</summary>
+        public const double TrimDeadbandM = 200.0;
+
+        /// <summary>
+        /// Aim the course correction this far DOWNRANGE of the LZ, metres. [Tunable]. The drag-only
+        /// prediction lands LONG of where the capsule actually comes down (body lift is not in the stock
+        /// table, and the RCS cutoff leaves the last stretch unsteered), so aiming the predicted impact a
+        /// matching amount long makes the real one land on the LZ. It moves the landing ~1:1: 165413
+        /// landed 234 m short on 1.3 km (-> 1.55), 172452 landed 163 m short on 1.55 km (-> 1.70). A
+        /// calibration constant - refine from the recorded landing miss.
+        /// </summary>
+        [Tunable] public static double AlongBiasM = 1700.0;
+
+        /// <summary>
+        /// Aim the course correction this far NORTH of the LZ, metres. [Tunable]. Flights land a
+        /// systematic ~130-290 m SOUTH of the LZ, so aim a matching amount north: 172452 landed 133 m
+        /// south on 180 m -> 310 m. Refine from the recorded landing miss; negative aims south.
+        /// </summary>
+        [Tunable] public static double CrossBiasM = 310.0;
+
+        /// <summary>
+        /// Below this predicted miss the lifting entry stops steering and flies SHIELD-FORWARD, landing
+        /// on the burn's ballistic solution. Any AoA extends the range, so once the vectored burn has the
+        /// impact this close, lift only makes it worse. Latched once tripped - see the note in Fly.
+        /// </summary>
+        public const double EntryHoldM = 10000.0;
 
         /// <summary>Seconds to wait under the drogues before lighting the SuperDracos.</summary>
         public const double EngineArmDelayS = 2.0;
@@ -113,12 +152,12 @@ namespace DragonScreen
         public static bool Engaged { get; private set; }
         public static string Note = "-";
 
-        /// <summary>Where we are trying to land. Defaults to LZ-1, same as the de-orbit.</summary>
-        /// ⛔ THE CAPSULE SPLASHES DOWN. It defaulted to `Lz1`, the BOOSTER's RTLS pad, so a
-        /// perfect entry aimed a crewed capsule at concrete and anything short of perfect put it
-        /// inland. See LandingSites.Splashdown.
-        public static double TargetLatDeg = LandingSites.Splashdown.LatDeg;
-        public static double TargetLonDeg = LandingSites.Splashdown.LonDeg;
+        /// <summary>Where we are trying to land. LZ-1, same as the de-orbit.</summary>
+        // ⛔ LZ-1, BY USER DIRECTIVE (2026-08-20): "the predicted impact must be DIRECTLY ON LZ1."
+        // Was LandingSites.Splashdown (a crew capsule comes down in water); the crew wants the pad,
+        // and the mid-course RCS trim below now has the authority to actually hit it.
+        public static double TargetLatDeg = LandingSites.Lz1.LatDeg;
+        public static double TargetLonDeg = LandingSites.Lz1.LonDeg;
 
         /// <summary>
         /// Does the crew want a SuperDraco touchdown? F9I's `dragonPropulsive`, and like it this
@@ -133,6 +172,9 @@ namespace DragonScreen
 
         /// <summary>Latched so a lost prediction is reported once per entry, not every frame.</summary>
         private static bool noPredictionReported;
+
+        /// <summary>Latched once the predicted impact is within <see cref="EntryHoldM"/>: fly ballistic.</summary>
+        private static bool ballisticHold;
 
         /// <summary>Live guidance, for the pages and the recorder.</summary>
         public static double VerticalCmd, LateralCmd, AoaCmdDeg;
@@ -168,7 +210,7 @@ namespace DragonScreen
             ship = v;
             Engaged = true;
             mem = new EntryMemory();
-            haveImpact = false; enginesCommanded = false;
+            haveImpact = false; enginesCommanded = false; ballisticHold = false;
             DroguesDeployed = false; MainsDeployed = false;
             // ⚠ sepFiredAt is a LATCH, not a timestamp to leave lying around. Left set from a previous
             // run, Separate() believes it has already fired and skips the decouple entirely - the
@@ -228,7 +270,7 @@ namespace DragonScreen
         {
             Engaged = false; Stage = EntryStage.Idle; ship = null; Note = "-";
             mem = new EntryMemory();
-            haveImpact = false; enginesCommanded = false; sepFiredAt = 0.0;
+            haveImpact = false; enginesCommanded = false; sepFiredAt = 0.0; ballisticHold = false;
             DroguesDeployed = false; MainsDeployed = false;
             VerticalCmd = 0.0; LateralCmd = 0.0; AoaCmdDeg = 0.0; ThrottleCmd = 0.0;
             AlongTrackM = 0.0; CrossTrackM = 0.0; MissM = -1.0; WantLongM = 0.0;
@@ -356,37 +398,90 @@ namespace DragonScreen
             double atm = ship.mainBody.atmosphereDepth;
             double alt = ship.radarAltitude;
 
-            if (alt < atm + TrimFloorAboveM)
+            if (ship.dynamicPressurekPa > TrimQCutKpa)
             {
-                AttitudeController.Ascent.UllageFore = 0.0;
-                Debug.Log(Tag + "pre-entry trim finished at " + (alt / 1000.0).ToString("F1")
-                          + " km - range error " + TrimErrorM.ToString("F0") + " m, mono "
-                          + Mono(ship).ToString("F1"));
+                Neutral();
+                Debug.Log(Tag + "course correction finished at " + (alt / 1000.0).ToString("F1")
+                          + " km (q " + ship.dynamicPressurekPa.ToString("F2") + " kPa) - predicted miss "
+                          + (MissM >= 0.0 ? MissM.ToString("F0") + " m" : "unknown")
+                          + ", mono " + Mono(ship).ToString("F1"));
                 Go(EntryStage.LiftingEntry);
                 return;
             }
 
-            Predict();
+            // ---- ⛔ MID-COURSE RCS TRIM: PUT THE PREDICTED IMPACT DIRECTLY ON THE LZ, BOTH AXES. ----
+            // (user, 2026-08-20: "the DE-ORBIT BURN must put the predicted trajectory impact point
+            // PERFECTLY DIRECTLY ON LZ1 - no over/undershoot, no cross error.") The retrograde burn tunes
+            // only depth from a fixed ignition, so it lands ~10-15 km from its miss minimum and CANNOT do
+            // cross-track at all. This spends the whole coast closing the rest with RCS, in BOTH axes,
+            // aimed straight at the LZ. Authority is proven: flight_0820_070846 moved the predicted impact
+            // 12 km in 20 s on fore alone, and this now has the full ~200 s coast.
+            Predict(EntryGuidance.CapsuleBcKgM2);
             if (!haveImpact)
             {
-                AttitudeController.Ascent.UllageFore = 0.0;
-                Note = "COAST - no impact prediction yet, " + (alt / 1000.0).ToString("F1") + " km";
+                Neutral();
+                Note = "TRIM - no impact prediction yet, " + (alt / 1000.0).ToString("F1") + " km";
                 return;
             }
 
-            // How far PAST the target the impact currently sits, against how far past it should.
-            double past = Orbital.GroundRange(ship.mainBody.Radius, TargetLatDeg, TargetLonDeg,
-                                              impactLat, impactLon);
-            TrimErrorM = past - Aim();
+            CelestialBody b = ship.mainBody;
+            double along, cross, missM;
+            Orbital.DownCross(b.Radius, ship.latitude, ship.longitude, impactLat, impactLon,
+                              TargetLatDeg, TargetLonDeg, out along, out cross, out missM);
+            AlongTrackM = along; CrossTrackM = cross; MissM = missM; TrimErrorM = -along;
 
-            double cmd = 0.0;
-            if (Mono(ship) <= Reserve()) cmd = 0.0;
-            else if (TrimErrorM > Deorbit.TrimToleranceM) cmd = 1.0;
-            else if (TrimErrorM < -Deorbit.TrimToleranceM) cmd = -1.0;
-            AttitudeController.Ascent.UllageFore = cmd;
+            // ---- ⛔ TWO-WAY RCS COURSE CORRECTION, AIMED A HAIR DOWNRANGE (2026-08-20, MechJeb-style). ----
+            // The de-orbit burn only lowers periapsis now - it does NOT aim - so this is where the impact
+            // is put on target, both ways: prograde/retro RCS (fore) to lengthen OR shorten along-track,
+            // lateral RCS to slide cross-track either side. It aims at the LZ offset AlongBiasM DOWNRANGE,
+            // because the drag-only prediction lands ~1.3 km long of the real touchdown - biasing the
+            // predicted impact that far past the LZ makes the real one land on it.
+            Vector3d up = (ship.CoM - b.position).normalized;
+            Vector3d impactPos = (Vector3d)b.GetWorldSurfacePosition(impactLat, impactLon, 0.0) - b.position;
+            Vector3d lzPos = (Vector3d)b.GetWorldSurfacePosition(TargetLatDeg, TargetLonDeg, 0.0) - b.position;
+            Vector3d downrange = Vector3d.Exclude(up, ship.srf_velocity);      // horizontal prograde
+            if (downrange.sqrMagnitude > 1e-6) lzPos += AlongBiasM * downrange.normalized;   // aim downrange of LZ
+            // ...and a touch NORTH, to cancel the systematic south cross-track offset. North is the spin
+            // axis with its vertical part removed (local horizontal north).
+            Vector3d northHoriz = Vector3d.Exclude(up, b.angularVelocity);
+            if (northHoriz.sqrMagnitude > 1e-6) lzPos += CrossBiasM * northHoriz.normalized;
+            Vector3d toAim = Vector3d.Exclude(up, lzPos - impactPos);          // horizontal, impact -> aim point
+            double missToAim = toAim.magnitude;
 
-            Note = "PRE-ENTRY TRIM - long by " + TrimErrorM.ToString("F0") + " m, "
-                 + (alt / 1000.0).ToString("F1") + " km";
+            // Reserve outranks it, and it stops as soon as the impact is on the aim point.
+            if (Mono(ship) <= Reserve() || missToAim < TrimDeadbandM)
+            {
+                Neutral();
+                Note = (missToAim < TrimDeadbandM ? "CORRECTION - ON TARGET, " : "CORRECTION - reserve held, ")
+                     + missM.ToString("F0") + " m to LZ, " + (alt / 1000.0).ToString("F1") + " km";
+                return;
+            }
+
+            // Resolve the push onto the capsule's own axes with the docking controller's MEASURED
+            // convention (fore = rt.up, starboard = rt.right, top = -rt.forward; DockingOps:738-750) so
+            // every sign is proven. Fore is the ALONG axis (nose on retrograde: +fore shortens) - two-way.
+            if (toAim.sqrMagnitude < 1e-6) { Neutral(); return; }
+            Vector3d dir = toAim.normalized;
+
+            double frac = missToAim / TrimScaleM;                        // proportional, tapers near zero
+            if (frac > 1.0) frac = 1.0;
+
+            Transform rt = ship.ReferenceTransform;
+            AttitudeController.Ascent.UllageFore = Vector3d.Dot(dir, (Vector3d)rt.up) * frac;
+            AttitudeController.Ascent.TranslateX = Vector3d.Dot(dir, (Vector3d)rt.right) * frac;
+            AttitudeController.Ascent.TranslateY = Vector3d.Dot(dir, -(Vector3d)rt.forward) * frac;
+
+            Note = "COURSE CORRECTION - " + (missM / 1000.0).ToString("F2") + " km ("
+                 + (Math.Abs(along) / 1000.0).ToString("F1") + (along >= 0.0 ? " short" : " long") + ", "
+                 + (Math.Abs(cross) / 1000.0).ToString("F1") + " cross), " + (alt / 1000.0).ToString("F1") + " km";
+        }
+
+        /// <summary>Neutral translation - no fore/aft, no lateral. Used whenever the trim is not pushing.</summary>
+        private static void Neutral()
+        {
+            AttitudeController.Ascent.UllageFore = 0.0;
+            AttitudeController.Ascent.TranslateX = 0.0;
+            AttitudeController.Ascent.TranslateY = 0.0;
         }
 
         // ------------------------------------------------------------------ E7
@@ -428,7 +523,12 @@ namespace DragonScreen
             VerticalCmd = 0.0;
             LateralCmd = 0.0;
 
-            Predict();
+            // ⛔ SAME bc AS THE BURN AND THE TRIM (2026-08-20). The entry used the LIVE-measured bc,
+            // which in thin entry air is noisy and DISAGREED with the burn's known-bc(440) solution -
+            // flight_0820 read 385 m ballistic at the interface but the live-bc loop saw it swinging
+            // km's and ramped 11° of AoA to "correct" it. All three phases now predict with the one bc,
+            // so the entry sees the same on-target impact the burn left instead of a phantom error.
+            Predict(EntryGuidance.CapsuleBcKgM2);
             bool canSteer = EntryGuidance.CanSteer(ship.dynamicPressurekPa);
 
             if (haveImpact && canSteer)
@@ -463,11 +563,23 @@ namespace DragonScreen
                 WantLongM = c.WantLongM;
                 BelowProfile = c.BelowProfile;
 
+                // ---- ⛔ THE BURN NAILED IT - HOLD BALLISTIC, DO NOT LIFT-STEER. (user, 2026-08-20) ----
+                // The vectored de-orbit now puts the ballistic impact ON the LZ, both axes. Flying ANY
+                // AoA from there only EXTENDS the range - flight_0820 was 385 m at the interface and the
+                // lift loop flew it 15.8 km LONG under an 11° AoA it ramped chasing a phantom. Inside
+                // EntryHoldM the burn's solution beats anything lift can do, so fly shield-forward and
+                // land on it. Latched, so prediction noise cannot flap it back on in mid-descent.
+                if (miss < EntryHoldM) ballisticHold = true;
+                if (ballisticHold) { VerticalCmd = 0.0; LateralCmd = 0.0; }
+
                 string word = (along < 0.0) ? "LONG" : "SHORT";
-                Note = "LIFTING ENTRY - " + word + " " + (Math.Abs(along) / 1000.0).ToString("F1")
-                     + " km, want long " + (c.WantLongM / 1000.0).ToString("F2")
-                     + " km, lift " + c.VerticalCmd.ToString("F2") + " / "
-                     + c.LateralCmd.ToString("F2");
+                Note = ballisticHold
+                     ? "BALLISTIC HOLD - burn on target, " + miss.ToString("F0") + " m, "
+                       + (alt / 1000.0).ToString("F1") + " km"
+                     : "LIFTING ENTRY - " + word + " " + (Math.Abs(along) / 1000.0).ToString("F1")
+                       + " km, want long " + (c.WantLongM / 1000.0).ToString("F2")
+                       + " km, lift " + c.VerticalCmd.ToString("F2") + " / "
+                       + c.LateralCmd.ToString("F2");
             }
             else
             {
@@ -764,13 +876,24 @@ namespace DragonScreen
         }
 
         /// <summary>Rate-limited impact prediction. See <see cref="PredictIntervalS"/>.</summary>
-        private static void Predict()
+        private static void Predict() { Predict(0.0); }
+
+        /// <summary>
+        /// Rate-limited impact prediction with an optional ballistic-coefficient override.
+        ///
+        /// bcOverride &lt;= 0 uses the LIVE-measured bc, which is right INSIDE the atmosphere where the
+        /// air is doing the measuring - that is what <see cref="Fly"/> wants. ABOVE the interface there
+        /// is no drag to measure and the live value collapses to a vacuum solve, tens of km long; there
+        /// the pre-entry trim hands in the capsule's KNOWN bc so the prediction is the real drag-aware
+        /// impact, the SAME one the de-orbit burn aims (`DeorbitOps` uses the identical override).
+        /// </summary>
+        private static void Predict(double bcOverride)
         {
             double now = Planetarium.GetUniversalTime();
             if (now - lastPredictAt < PredictIntervalS) return;
             lastPredictAt = now;
 
-            Impact im = ImpactPredictor.Predict(ship);
+            Impact im = ImpactPredictor.Predict(ship, bcOverride);
             haveImpact = im.Valid;
             if (im.Valid) { impactLat = im.LatDeg; impactLon = im.LonDeg; }
         }

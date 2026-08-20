@@ -149,11 +149,22 @@ def uv_readable(lon01, lat01):
     return u, 1.0 - lon01
 
 
+def uv_stock(lon01, lat01):
+    """
+    The STOCK KSP navball (Squad IVANavBall): a standard equirectangular ball - blue sky in the top
+    rows, brown ground in the bottom, heading uniform across. `standard` (u=lon) gets the hemispheres
+    right but MIRRORS the glyphs, because our generated sphere winds longitude the opposite way to the
+    texture. Flipping longitude un-mirrors the digits while leaving sky up where it was.
+    """
+    return (1.0 - lon01) % 1.0, lat01
+
+
 UV_MODES = {
     "standard": uv_standard,
     "transposed": uv_transposed,
     "transposed_flip": uv_transposed_flip,
     "readable": uv_readable,
+    "stock": uv_stock,
 }
 
 
@@ -271,7 +282,7 @@ def render_all():
     for mode in UV_MODES:
         if only and mode != only:
             continue
-        rows = [ATTITUDES, HEADING_SWEEP] if mode == "readable" else [ATTITUDES]
+        rows = [ATTITUDES, HEADING_SWEEP] if mode in ("readable", "stock") else [ATTITUDES]
         width = max(len(r) for r in rows)
         sheet = Image.new("RGB", (SIZE * width, SIZE * len(rows)), (10, 12, 28))
         for ry, row in enumerate(rows):

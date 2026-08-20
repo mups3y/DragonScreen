@@ -17,22 +17,21 @@
  * and `FlightGlobals.ForceSetActiveVessel`, which MechJeb also uses at
  * MechJebModuleStagingController.cs:402.
  *
- * ---- ⚠ THE PHYSICS RANGE, AND WHY PhysicsRangeExtender IS A REQUIRED DEPENDENCY ----
- * F9I's HUD text says it plainly: "KSP will clamp this without PhysicsRangeExtender, so expect the
- * upper stage to unload near 300 km." `falcon-physics-range-clamp` MEASURED that clamp on four
- * flights - 1500 km requested, 297-341 km delivered - on a game WITHOUT PRE.
+ * ---- THE PHYSICS RANGE: OUR OWN PhysicsRangeExtender PORT, NO PRE DEPENDENCY ----
+ * The stock game unloads a non-focused vessel near ~300 km, so the upper stage used to unload during
+ * the booster's descent (`falcon-physics-range-clamp` measured 297-341 km). That is NOT a hard KSP
+ * limit - it is that KSP RESETS a vessel's `vesselRanges` on every situation change, so a one-time ask
+ * falls straight back. PhysicsRangeExtender's whole trick is to re-apply the ranges on those events;
+ * we now do the same ourselves - `Extend` is re-applied to both vessels on the recovery's own tick
+ * (see `Tick`), so the range holds without PRE installed.
  *
- * DragonScreen now REQUIRES PRE (see the README). WITH it, the 1500 km range this file asks for is
- * honoured, so the upper stage stays LOADED and keeps flying itself through the whole recovery
- * (`FlightDriver` ticks every loaded vessel's guidance, not just the focused one). The range is taken
- * as a LOAN only while focus is on the booster and handed back on landing - see
- * SnapshotRanges/Extend/RestoreRanges - because a standing 1500 km range would load the whole system,
- * the station included.
- *
- * WITHOUT PRE the clamp still applies and the upper stage unloads near 300 km: it then COASTS on
- * rails, which preserves its orbit exactly, and circularises at the next apoapsis once focus returns.
- * That fallback works, but it is not the supported configuration - the camera flip-flop and lost
- * orbit the crew hit came from running without PRE.
+ * The range is 500 km, MEASURED: the separation peaks at ~360 km at booster touchdown
+ * (flight_0821_004239), so 500 km covers it with margin. It is taken as a LOAN only while focus is on
+ * the booster and handed back on landing (SnapshotRanges/Extend/RestoreRanges) - a standing range
+ * would load the whole system, the station included, and cost frames the recovery does not need.
+ * `Set` matches PRE's own band proportions so both vessels stay UNPACKED (full physics, controllable)
+ * out to the range, not merely loaded-on-rails. With PRE also installed there is no conflict - its
+ * global ranges and ours agree; uninstalling it changes nothing.
  */
 using System;
 using System.Collections.Generic;
@@ -44,8 +43,17 @@ namespace DragonScreen
     {
         private const string Tag = "[DragonScreen] ";
 
-        /// <summary>What F9I asks for. KSP clamps it; asking is still correct.</summary>
-        public const float RangeMetres = 1500000f;
+        /// <summary>
+        /// The physics range we hold during a recovery, metres. Our own PhysicsRangeExtender port
+        /// (see `Extend`/`Tick`) so the mod no longer depends on PRE being installed.
+        ///
+        /// 500 km, MEASURED not guessed: the upper-stage-to-booster separation peaks at ~360 km at
+        /// booster touchdown (flight_0821_004239), crossing the stock ~300 km fallback during the
+        /// booster's final descent - which is exactly where the upper stage used to unload. 500 km
+        /// covers that with margin and is far cheaper than the old 1500 km, which loaded the whole
+        /// system (station included) and cost frames the recovery did not need.
+        /// </summary>
+        public const float RangeMetres = 500000f;
 
         /// <summary>
         /// How far the booster's TOTAL attitude error may be and still have its roll axis actively
@@ -53,12 +61,11 @@ namespace DragonScreen
         /// axis went uncontrolled for most of the coast and free-rolled to 367 deg, so this was widened
         /// to 130 to keep roll held. That gave 347 deg (flight_0818_104520) - barely different.
         ///
-        /// ⛔ THIS KNOB IS NOT THE ROLL FIX, AND THE 45-vs-130 SPLIT PROVES IT: 45 -> 367, 130 -> 347,
-        /// both ~350. The coast over-roll is induced kinematically by the ~180 deg reorientation to
-        /// retrograde at coast start, not by the roll reference (see the ROOT CAUSE block in Aim, ~1595);
-        /// neither holding nor freeing the reference fixes it. The old "aero torque free-rolled it"
-        /// reading was wrong - the excursion is at 58 km where q is negligible. Leave this at 130 (roll
-        /// held); the real fix is a coordinated reorientation, not a value here.
+        /// Since 2026-08-20 the booster holds its roll to the IN-PLANE top (`flipAxis x dir`, see the
+        /// pitch-only block at `upHint` in Aim), so this gate is active again and does its real job: keep
+        /// roll HELD through the coast's large pitch error rather than releasing it mid-turn. 130 covers
+        /// the ~130 deg coast reorientation. The 45-vs-130 history (45 -> 367, 130 -> 347) was measured
+        /// under the old `upHint = zero`, chasing a phantom roll error either way; not a live result.
         /// </summary>
         [Tunable] public static double BoosterRollRangeDeg = 130.0;
 
@@ -222,6 +229,8 @@ namespace DragonScreen
             GridFinsOut = false; LeanFrac = 0.0; AoaDeg = 0.0;
             flipSeeded = false; flipComplete = false;
             rollStartedAt = 0.0; rollSettledAt = 0.0;
+            slewSeeded = false;
+            slewSign = 0.0;
         }
 
         // ------------------------------------------------------------------ handover
@@ -282,8 +291,8 @@ namespace DragonScreen
             Debug.Log(Tag + "booster recovery: focus -> '" + booster.vesselName
                       + "' at " + Landing.Name(Phase)
                       + ", upper stage '" + upperStage.vesselName + "' coasts to apoapsis. "
-                      + "Physics range asked " + (RangeMetres / 1000f).ToString("F0")
-                      + " km; KSP clamps near 300 km without PhysicsRangeExtender.");
+                      + "Physics range held at " + (RangeMetres / 1000f).ToString("F0")
+                      + " km (re-applied each tick; no PRE needed).");
             return true;
         }
 
@@ -364,20 +373,17 @@ namespace DragonScreen
         ///
         /// The range on the ACTIVE vessel is what decides how far away another vessel may drift and
         /// still be loaded, so this has to happen while the booster is still part of us. Called from
-        /// AutoPilot.Engage - see the note there for the circular dependency this replaces.
-        ///
-        /// ⚠ WITHOUT PhysicsRangeExtender KSP clamps it - `falcon-physics-range-clamp` measured
-        /// 297-341 km against the 1500 km asked for, on four flights on a game without PRE. With PRE
-        /// (now required) the full range is honoured. Asking is correct either way: 300 km is far more
-        /// than a booster recovery needs, and 22.5 km is far less.
+        /// AutoPilot.Engage - see the note there for the circular dependency this replaces. The range
+        /// must be up before the separation crosses stock's ~2.5 km, which the data puts at ~met 287,
+        /// DURING the boostback burn - so "raise it after boostback" is too late; the upper stage would
+        /// already have unloaded. `Tick` then re-applies it every frame so KSP's resets cannot drop it.
         /// </summary>
         public static void PrepareForSeparation(Vessel v)
         {
             if (v == null) return;
             Extend(v);
-            Debug.Log(Tag + "physics range raised on '" + v.vesselName + "' before separation - "
-                          + "asked " + (RangeMetres / 1000f).ToString("F0")
-                          + " km, KSP clamps near 300 km without PhysicsRangeExtender");
+            Debug.Log(Tag + "physics range raised to " + (RangeMetres / 1000f).ToString("F0")
+                          + " km on '" + v.vesselName + "' before separation (held by Tick each frame)");
         }
 
         private static void Extend(Vessel v)
@@ -396,19 +402,24 @@ namespace DragonScreen
         private static void Set(VesselRanges.Situation s)
         {
             if (s == null) return;
+            // ⛔ MATCH PhysicsRangeExtender'S OWN PROPORTIONS. The old unpack of 200 m would have left a
+            // vessel PACKED (on rails, no physics, no control) past 200 m; it only ever flew because
+            // PRE's global ranges - unpack = 0.99 x range - overrode ours. Replacing PRE means we must
+            // carry that ourselves: unpacked (full physics) out to ~range, loaded to range, with PRE's
+            // hysteresis so a vessel hovering at the edge does not flap between states.
             s.load = RangeMetres;
-            s.unload = RangeMetres * 1.1f;
-            s.pack = RangeMetres * 0.9f;
-            s.unpack = 200f;
+            s.unload = RangeMetres * 1.05f;
+            s.pack = RangeMetres * 1.10f;
+            s.unpack = RangeMetres * 0.99f;
         }
 
         // ---- ⛔ THE EXTENDED RANGE IS ON ONLY WHILE FOCUS IS AWAY ON THE BOOSTER. ----
-        // With PhysicsRangeExtender installed the 1500 km ask is honoured, so the upper stage stays
-        // LOADED and keeps flying itself through the whole recovery instead of unloading at ~300 km
-        // and coming back a rebooted vessel (which is what disengaged the ascent and lost the orbit).
-        // But a 1500 km range on the active vessel is a standing cost - it loads everything else in
-        // the system too, the station included, long before anything needs it. So the range is a
-        // LOAN: snapshot the normal ranges when we take the booster, put them back on handback.
+        // Held at 500 km, the upper stage stays LOADED and UNPACKED and keeps flying itself through the
+        // whole recovery instead of unloading at ~300 km and coming back a rebooted vessel (which is
+        // what disengaged the ascent and lost the orbit). But a standing 500 km range is still a cost -
+        // it loads everything else in range, the station included, when it happens to be near. So the
+        // range is a LOAN: snapshot the normal ranges when we take the booster, put them back on
+        // handback so the moment focus returns to the upper stage the system unloads and frames return.
         private static float[] savedUpperRanges;
 
         private static void SnapshotRanges(Vessel v)
@@ -473,6 +484,17 @@ namespace DragonScreen
                 Finish("booster lost");
                 return;
             }
+
+            // ---- ⛔ HOLD THE EXTENDED RANGE EVERY TICK - THIS IS THE PhysicsRangeExtender PORT. ----
+            // Setting `vesselRanges` ONCE is not enough: KSP RESETS a vessel's ranges every time it
+            // changes situation - the booster ENTRY -> DESCENT -> LANDED, the upper stage subOrbital ->
+            // orbit - which is why the old one-time ask fell back to the ~300 km the stock game allows,
+            // and the upper stage unloaded during the booster's final descent (falcon-physics-range-
+            // clamp). PRE's whole trick is to re-apply on those situation-change events; re-applying
+            // here on the recovery's own tick does the same thing more simply, for the two vessels that
+            // matter, only while the recovery is live. This is what lets us drop the PRE dependency.
+            Extend(booster);
+            Extend(upperStage);
 
             // ---- ⛔ A PACKED STAGE MUST NOT ADVANCE ITS OWN PHASE MACHINE. ----
             // The packed test used to sit BELOW `Landing.Guide` and below `Phase = c.Phase`, so a
@@ -653,35 +675,29 @@ namespace DragonScreen
 
                 Debug.Log(Tag + "focus -> '" + upperStage.vesselName + "' (it never stopped flying)");
 
-                // ⛔ RECOVER THE LANDED BOOSTER SO IT STOPS STEALING THE CAMERA. With PhysicsRange
-                // Extender keeping it loaded, KSP kept flipping focus between the down booster and the
-                // Dragon in orbit for the rest of the flight (crew report 2026-08-17). A recovered
-                // booster is gone from the world, so there is nothing to flip to - and it is the real
-                // end of the recovery: it is down, settled, and ours no longer.
-                RecoverBooster();
-            }
-        }
-
-        /// <summary>
-        /// Recover the landed booster through KSP's own recovery, or failing that remove it, so it
-        /// cannot keep stealing focus from the returning capsule. Only ever the booster, only once it
-        /// is down, and never the active vessel (KSP refuses to recover the one you are flying).
-        /// </summary>
-        private static void RecoverBooster()
-        {
-            if (booster == null || booster.state == Vessel.State.DEAD) return;
-            if (booster == FlightGlobals.ActiveVessel) return;
-            if (!booster.LandedOrSplashed) return;
-            try
-            {
-                GameEvents.OnVesselRecoveryRequested.Fire(booster);
-                Debug.Log(Tag + "booster recovered - removed from the flight so it cannot steal focus");
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning(Tag + "booster recovery request failed (" + e.Message
-                                 + ") - removing it instead");
-                try { booster.Die(); } catch (Exception e2) { Debug.LogWarning(Tag + e2.Message); }
+                // ---- REMOVE THE LANDED BOOSTER IN PLACE - NO RECOVERY EVENT, NO SCENE CHANGE. ----
+                // User directive 2026-08-20: *"auto recover the booster AFTER returning to the upper
+                // stage, without returning to the space centre - we must keep focus on the upper
+                // stage."* `OnVesselRecoveryRequested` cannot do that: it tears down and rebuilds the
+                // flight scene (see the FlightDriver header) and returns to the space centre even for a
+                // booster that is no longer the active vessel - which is exactly the trip we are killing.
+                // `Vessel.Die()` removes the stage from the world directly, so it stops stealing focus,
+                // WITHOUT any scene transition - the upper stage stays active and under control, its
+                // orbit unbroken. Guarded so it can only ever remove the LANDED booster once focus is
+                // provably on the upper stage.
+                if (booster != null && booster.state != Vessel.State.DEAD
+                    && booster != FlightGlobals.ActiveVessel
+                    && FlightGlobals.ActiveVessel == upperStage
+                    && booster.LandedOrSplashed)
+                {
+                    try
+                    {
+                        booster.Die();
+                        Debug.Log(Tag + "landed booster removed in place - no scene change, focus stays "
+                                  + "on '" + upperStage.vesselName + "'");
+                    }
+                    catch (Exception e) { Debug.LogWarning(Tag + "in-place booster removal failed: " + e.Message); }
+                }
             }
         }
 
@@ -915,6 +931,62 @@ namespace DragonScreen
         private static Vector3d flipVec, flipFinal, flipAxis;
         private static bool flipSeeded, flipComplete;
         private static double rollStartedAt, rollSettledAt;
+
+        // ---- SINGLE-AXIS SLEW STATE. The persistent aim the coast/entry/descent walk toward. ----
+        private static Vector3d slewVec;
+        private static bool slewSeeded;
+
+        // ---- ROLL-REFERENCE SIGN. Which of the two in-plane tops (±flipAxis x dir) matches the roll
+        // the stage launched with. Captured once, when flipAxis is first known, and held. 0 = not yet. ----
+        private static double slewSign;
+
+        /// <summary>
+        /// ⛔ WALK THE AIM TOWARD <paramref name="target"/> ABOUT ONE AXIS, SO NO ROLL IS INDUCED.
+        /// (user, 2026-08-20: "build the single-axis coast reorientation.")
+        ///
+        /// The controller nulls pitch and yaw INDEPENDENTLY. Hand it a target 90-130 deg off the nose
+        /// in one go - as snapping straight to surface-retrograde at coast start does - and it nulls a
+        /// large pitch error AND a large yaw error at once, which is a rotation about a TILTED body axis
+        /// and cross-couples into roll: flight_0820 measured 42 deg of coast roll (222 on the descent)
+        /// with the roll COMMAND at zero (LockRoll) - purely induced. In vacuum the grid fins give NO
+        /// roll authority, so that induced roll cannot be taken back out; it must not be induced.
+        ///
+        /// This is exactly why the FLIP rolls only 4 deg: `StepFlip` never hands the controller a big
+        /// error - it walks the aim about a single axis in small steps, nose-catch gated, so each tick's
+        /// rotation is about one axis (perpendicular to the nose) and touches roll not at all. Generalise
+        /// that: rotate a persistent aim toward the target along the shortest arc (about `slewVec x
+        /// target`, which stays perpendicular to the nose the vehicle is tracking), advancing only when
+        /// the nose has caught up. Once within `FlipFineDeg` hand the exact target over and track it.
+        /// </summary>
+        private static Vector3d SingleAxisSlew(Vessel v, Vector3d target)
+        {
+            if (target.sqrMagnitude < 1e-6) return target;
+            target = target.normalized;
+            Vector3d fwd = v.ReferenceTransform.up;          // the controller's forward IS the nose
+            if (!slewSeeded) { slewVec = fwd; slewSeeded = true; }
+
+            double toGo = Vector3d.Angle(slewVec, target);
+            if (toGo <= Landing.FlipFineDeg)                 // aligned - hand the exact target over
+            {
+                slewVec = target;
+                return slewVec;
+            }
+
+            // Advance only when the nose has caught up, so the aim leads by at most FlipNoseCatchDeg and
+            // never runs away from what the stage can deliver - StepFlip's rule, and what stops it
+            // diverging. Between advances the stage keeps turning toward the aim it already has.
+            if (Vector3d.Angle(fwd, slewVec) < Landing.FlipNoseCatchDeg)
+            {
+                Vector3d axis = Vector3d.Cross(slewVec, target);
+                if (axis.sqrMagnitude > 1e-9)
+                {
+                    double step = (toGo < Landing.FlipPowerDeg) ? toGo : Landing.FlipPowerDeg;
+                    slewVec = ((QuaternionD)Quaternion.AngleAxis((float)step, (Vector3)axis.normalized)
+                               * slewVec).normalized;
+                }
+            }
+            return slewVec;
+        }
 
         /// <summary>
         /// The controller's TOP vector.
@@ -1358,6 +1430,7 @@ namespace DragonScreen
             Vector3d up = (v.CoM - v.mainBody.position).normalized;
             Vector3d dir = up;
 
+
             // ---- ⛔ Hold DID NOT HOLD - IT POINTED THE STAGE STRAIGHT UP. ----
             // `dir` starts as the local vertical and only the two branches below ever changed it, so
             // LandingAim.Hold - whose entire job is "do not slew" - commanded a slew to vertical. At
@@ -1500,6 +1573,17 @@ namespace DragonScreen
                 }
             }
 
+            // ---- ⛔ EVERY RETROGRADE-HOLDING PHASE REORIENTS AS A SINGLE-AXIS SLEW. (user, 2026-08-20) ----
+            // Coast, entry and descent all aim surface-retrograde, and each one turns the nose: the coast
+            // swings ~90-130 deg off the boostback attitude, the descent tracks retrograde round as the
+            // velocity stands up. Snapping the aim makes the controller null pitch+yaw at once and induces
+            // roll the vacuum fins cannot remove (see SingleAxisSlew). Walk it instead - one axis, no
+            // roll. Applied to the final aim (after the lean) so descent pad-steering is walked too, and
+            // only to SurfaceRetrograde so the flip (its own StepFlip), boostback and the vertical
+            // landing aim are untouched; leaving those phases re-seeds the walk from the current nose.
+            if (c.Aim == LandingAim.SurfaceRetrograde) dir = SingleAxisSlew(v, dir);
+            else slewSeeded = false;
+
             // Same controller the ascent uses. A landing booster wants a TIGHT stopping time -
             // BOOSTER.ks sets maxstoppingtime 0.05 for the landing burn against 1 for the coast,
             // because the two want opposite behaviour and one setting cannot serve both.
@@ -1541,93 +1625,54 @@ namespace DragonScreen
                     AttitudeController.Booster.MaxRateDps = Attitude.LandingMaxRateDps; break;
             }
 
-            // ---- ⛔ AND FROM THE GLIDE DOWN, ROLL IS COMMANDED. F9I COMMANDS IT TOO. ----
-            // The note below is right about the FLIP and was then applied to the whole descent,
-            // which F9I does not do. `LandingZoneGuidance` - the function this guidance is a port of
-            // - ends every call with a roll reference:
+            // ---- ⛔ FLY THE BOOSTER ON PITCH ALONE, ROLL AND YAW HELD - "SAS + W/S". ----
+            // (user, 2026-08-20: "if a user were flying the booster, all they would need is to switch on
+            // SAS and use the W and S keys to steer. All other inputs would be unnecessary." And earlier:
+            // not 1 degree of roll change, launch pad to landing zone.)
             //
-            //     BOOSTER.ks:365  if F9L_LandingRoll < 0 { return lookdirup(result, facing:topvector). }
-            //     BOOSTER.ks:366  local _rollRef is heading(F9L_LandingRoll, 0):vector.
-            //     BOOSTER.ks:367  if vang(result, _rollRef) < 15  { return lookdirup(result, facing:topvector). }
-            //     BOOSTER.ks:368  if vang(result, _rollRef) > 165 { return lookdirup(result, facing:topvector). }
-            //     BOOSTER.ks:369  return lookdirup(result, _rollRef).
+            // That IS the spec, and it is geometric. The whole recovery happens in ONE plane - the plane
+            // of flight - and the stage's pitch axis (starboard) already lies along that plane's normal,
+            // `flipAxis`. So pointing the nose anywhere it must go (flip, boostback, retrograde, the
+            // landing lean) is PURE PITCH about flipAxis - W and S; roll and yaw only ever need HOLDING.
+            // Hand the controller a target attitude that says exactly that and it steers on pitch alone.
             //
-            // with `F9L_LandingRoll is 0`, so the reference is heading 000 - HORIZONTAL NORTH. That
-            // is not the local vertical the warning below is about, and it does not turn the fins out
-            // of plane; it pins them to a fixed plane against the ground instead of letting the roll
-            // wander wherever the last disturbance left it. "Holding" the launch roll is passive:
-            // nothing commands it back, so every gust accumulates, which is the rolling seen from
-            // separation to landing on 2026-08-11.
+            // The target TOP that does it is the IN-PLANE one, `flipAxis x dir`: perpendicular to flipAxis
+            // (so it lies IN the plane of flight - that is the launch roll, top in-plane, starboard on
+            // flipAxis), perpendicular to `dir` (a valid top for the aim), and being a cross product it can
+            // NEVER be parallel to dir, so it never goes degenerate the way a vertical or north reference
+            // does. Holding it pins starboard to flipAxis, so every nose move is pure pitch and never yaws
+            // the stage out of plane. This is exactly what the earlier `-flipAxis` try got wrong by 90
+            // degrees: -flipAxis is the plane NORMAL (cross-track), so it drove the top OUT of plane and
+            // rolled the stage 90 deg to reach it (flight_0820_031245, the flip regression). `flipAxis x
+            // dir` is that normal CROSSED with the aim - in-plane - the roll the stage launched with.
             //
-            // The two fallbacks are not optional. `lookdirup` has no answer when the aim is parallel
-            // to the reference, and on an RTLS the stage IS pointed near-vertically while the
-            // reference is horizontal only when it is nearly on top of the pad - so both the 15 and
-            // the 165 degree escapes fire in normal flight, and both mean "keep the roll you have".
-            // ---- ⛔ ROLL IS HELD, NOT COMMANDED. THE GRID FINS DEPEND ON IT. ----
-            // Passing the local vertical as the roll reference rolls the stage to put its "top"
-            // along it - which turns the grid fins out of the plane they were built to work in.
-            // BOOSTER.ks:315: the flip "blends the roll reference by tgtRotation so the booster keeps
-            // the same roll it launched with and the grid fins stay in the plane they expect."
+            // ⚠ SIGN: `flipAxis x dir` and its negative are two in-plane tops 180 deg apart; only one is
+            // the launch roll. Capture which, ONCE, when flipAxis is first known, by matching the stage's
+            // actual top - so establishing the reference commands no roll and the -flipAxis regression
+            // cannot recur. Before flipAxis exists (sep quiet) there is no plane yet, so hold current roll.
             //
-            // Zero here means "no roll reference", and SteerTo then holds the roll the stage already
-            // has - which is the launch roll, because nothing has commanded it since.
-            // ---- ⛔ THE FLIP IS THE ONE PHASE THAT NEEDS A ROLL REFERENCE. ----
-            // Everywhere else zero is right and its reason above stands: an uncommanded roll keeps
-            // the launch roll and the grid fins stay in the plane they were built for.
-            //
-            // But Flip1 does NOT hold roll - it locks `lookdirup(flipVec, -rotateVector)`, putting
-            // the stage's top along the flip axis so the rotation stays in the plane of flight. With
-            // zero here the controller was told "keep whatever roll you have", so the roll-settle
-            // gate below waited eight seconds for a roll NOTHING WAS COMMANDING and gave up at
-            // 89.8 deg - which is the 2026-08-11 13:37 log line, and very nearly a right angle
-            // because that is exactly how far it had to go and never went.
-            // Keep the roll axis held even through the coast's larger pitch error - see the tunable.
-            AttitudeController.Booster.RollControlRangeDeg = BoosterRollRangeDeg;
-
-            // ---- ⛔ ONE ROLL FROM FLIP TO TOUCHDOWN: THE PLANE-OF-FLIGHT NORMAL. ----
-            // The crew's requirement is ZERO roll rotation after separation. The earlier NORTH
-            // reference SWUNG: re-projected perpendicular to a rotating aim it jumped whenever the aim
-            // neared north, driving phiRoll from -34 to +119 deg and 345 deg of coast roll (measured
-            // flight_0817_162926). The FLIP AXIS is perpendicular to the plane of flight (FlipGeometry
-            // / StepFlip) and does not swing, so holding the booster's top to it keeps the grid fins in
-            // the flight plane. Every phase uses it.
-            //
-            // ⚠ THE COAST OVER-ROLLS (347 deg this flight vs F9I's ~102) - a roll QUALITY gap, not a
-            // landing failure: the booster still lands 0.0 km. ROOT CAUSE ISOLATED 2026-08-18
-            // (flight_0818_104520), and it is NOT aero and NOT the roll reference:
-            //   · The excursion is TRIGGERED by the ~180 deg reorientation to retrograde at coast start
-            //     (met 2137: target pitch jumps to -178, yaw to +140 - the flip to heat-shield-forward),
-            //     at 58 km where dynamic pressure is negligible. That large slew about a TILTED axis
-            //     (pitch AND yaw at once, worsened by a standing ~70 deg boostback yaw error) drives the
-            //     BODY roll to +-13 deg/s kinematically. The weak roll channel (b_torqueY 34 vs pitch/yaw
-            //     329/367 kN.m - physical, a booster's RCS quads have a short roll arm; ModuleRCSFX IS a
-            //     ModuleRCS so it is fully counted) cannot arrest 13 deg/s against a 4 deg/s command, and
-            //     overshoots to -148 deg.
-            //   · THE ROLL-REFERENCE GATE IS NOT THE LEVER. BoosterRollRangeDeg already frees the roll
-            //     above a total-error threshold; its own history rules the knob out - 45 deg free-rolls
-            //     to 367, 130 deg holds-and-fights to 347. Both extremes ~350. So neither holding nor
-            //     freeing the reference fixes a roll the reorientation induces kinematically.
-            //   · Audit H1 (the RollRefMinDeg/RollRefMaxDeg singularity gate) was TESTED AND REFUTED:
-            //     -flipAxis is the flight-plane normal, ~90 deg from the aim, never near the band.
-            //   · Global rate-damping (AttitudeController.HoldRoll) was tried and WORSE (675 -> 852).
-            // MITIGATION APPLIED 2026-08-18: lowered Attitude.CoastMaxRateDps 4.0 -> 3.0 (now [Tunable]).
-            // F9I's coast PEAKS at 2.9 deg/s and rolls only 102; we ran ~5 and rolled 347 - a gentler
-            // reorientation makes smaller pitch/yaw RCS torque and cross-couples into the weak roll axis
-            // less. This is disturbance REDUCTION, not the cure, and cannot tumble anything (it only
-            // slews gentler). The REAL cure is a coordinated single-axis slew - rotate about the one
-            // correct axis so the ~180 deg turn induces no roll - and/or killing the standing boostback
-            // yaw error that tilts it. That rewrites the shared control law (a frame bug there tumbles
-            // the craft), so it is deferred to its own isolated pass, designed not guessed.
-            //
-            // Seeded at the flip. Before that (the instant between separation and flip) upHint is zero
-            // = hold current roll, which is right: there is nothing to re-clock to yet.
-            // ⛔ HARD RULE (user, 2026-08-18): THE BOOSTER NEVER ROLLS. Pitch and yaw ONLY, launch to
-            // landing. `upHint = zero` means "no roll reference - hold the roll you have." `-flipAxis`
-            // was a roll REFERENCE the controller actively drove the top onto - that IS a roll command,
-            // and driving the top onto it through the 180 deg pitch reorientation is exactly what rolled
-            // the booster. Zero in every phase: steer the nose (pitch/yaw), never command roll.
-            // flipSeeded/flipAxis remain above for the flip GEOMETRY, not for a roll reference.
+            // One reference, replacing the LockRoll / atmospheric-hold split it superseded: because the
+            // nose moves on pitch ONLY, the coast reorientation INDUCES no roll (vacuum, where the fins
+            // give nothing), and because the roll is actively HELD, the descent's aero roll is fought by
+            // the fins the moment they bite. Nothing to fight when nothing disturbs it - near-zero effort.
             Vector3d upHint = Vector3d.zero;
+            if (flipSeeded && flipAxis.sqrMagnitude > 0.5)
+            {
+                Vector3d inPlaneTop = Vector3d.Cross(flipAxis, dir);
+                if (inPlaneTop.sqrMagnitude > 1e-6)
+                {
+                    inPlaneTop = inPlaneTop.normalized;
+                    if (slewSign == 0.0)
+                        slewSign = (Vector3d.Dot(inPlaneTop, TopVector(v)) < 0.0) ? -1.0 : 1.0;
+                    upHint = slewSign * inPlaneTop;
+                }
+            }
+
+            // Roll is HELD to that reference now, not locked out: LockRoll off. The range gate stays at
+            // 130 - the reorientation is pure pitch so roll error is ~0 through it anyway, and holding a
+            // separate axis does not steal the pitch authority the slew needs.
+            AttitudeController.Booster.LockRoll = false;
+            AttitudeController.Booster.RollControlRangeDeg = BoosterRollRangeDeg;
 
             AttitudeController.Booster.SteerTo(v, dir, upHint);
         }

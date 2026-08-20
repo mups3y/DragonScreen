@@ -63,18 +63,6 @@ namespace DragonScreen
         /// <summary>Charge fraction, refreshed by VesselData. RESET needs it to judge bus health.</summary>
         public static double Charge01;
 
-        private static bool Str(int bus, int index)
-        {
-            if (!Systems.ToggleString(ref State, bus, index))
-            {
-                Log("string " + bus + (char)('A' + index) + " is TRIPPED - use RESET " + bus);
-                return false;
-            }
-            Log("string " + bus + (char)('A' + index) + " "
-                + Systems.StateWord(Systems.Get(State, bus, index)));
-            return true;
-        }
-
         private static bool Reset(int bus)
         {
             if (!Systems.ResetBus(ref State, bus, Charge01))
@@ -85,6 +73,68 @@ namespace DragonScreen
                 return false;
             }
             Log("RESET " + bus + " - strings restored");
+            return true;
+        }
+
+        /// <summary>
+        /// A STRING row only responds once its POWER bus is on - the crew powers the flight-computer
+        /// group before its computers will engage, the way the real STRING buttons need their bus. A
+        /// refused press returns false (a red flash) and says which POWER button to press. The engage
+        /// LAMPS are not gated this way: a phase started from the touchscreen still lights its string.
+        /// </summary>
+        private static bool Powered(int bus)
+        {
+            bool on = (bus == 1) ? State.Bus1On : State.Bus2On;
+            if (!on) Log("STRING row " + bus + " unpowered - press POWER " + bus + " first");
+            return on;
+        }
+
+        /// <summary>
+        /// STRING 1B: one button for the whole middle of the mission. Off -> `MissionOps.AutoDock`
+        /// (far = rendezvous, close = dock). On -> disengage BOTH, because the lamp is lit for either
+        /// phase and a mode button the crew cannot switch off is worse than no lamp. AutoDock's own
+        /// toggle only cancels the docking servo, so the rendezvous leg is disengaged here.
+        /// </summary>
+        private static bool ToggleRendezvousDock()
+        {
+            if (StationApproach.Engaged || DockingOps.Engaged)
+            {
+                if (DockingOps.Engaged) DockingOps.Reset();
+                if (StationApproach.Engaged) StationApproach.Disengage("crew");
+                Log("RENDEZVOUS/DOCK disengaged (STRING 1B)");
+                return true;
+            }
+            MissionOps.AutoDock();
+            return true;
+        }
+
+        // ---- STRING re-init (row 2 of the grid): force-restart a phase's flight computer ----
+        // "Reinitialise the backup flight computer" for the real STRING buttons; here it force-restarts
+        // the phase autopilot - disengage if running, then engage fresh - so a faulted phase can be
+        // recovered without waiting for it to give up. Each returns true (the press was accepted); the
+        // underlying engage logs its own outcome and posts a refusal to the screen if it will not run.
+        private static bool ReinitAscent()
+        {
+            if (AutoPilot.Engaged) AutoPilot.Disengage("string re-init");
+            AutoPilot.Engage();
+            Log("ASCENT computer re-initialised (STRING 2A)");
+            return true;
+        }
+
+        private static bool ReinitRendezvous()
+        {
+            if (DockingOps.Engaged) DockingOps.Reset();
+            if (StationApproach.Engaged) StationApproach.Disengage("string re-init");
+            MissionOps.AutoDock();
+            Log("RENDEZVOUS/DOCK computer re-initialised (STRING 2B)");
+            return true;
+        }
+
+        private static bool ReinitDeorbit()
+        {
+            if (DeorbitOps.Engaged) DeorbitOps.Disengage("string re-init");
+            DeorbitOps.Engage();
+            Log("DEORBIT/LAND computer re-initialised (STRING 2C)");
             return true;
         }
 
@@ -142,12 +192,25 @@ namespace DragonScreen
                     case PanelCommand.Reset1: return Reset(1);
                     case PanelCommand.Reset2: return Reset(2);
 
-                    case PanelCommand.String1A: return Str(1, 0);
-                    case PanelCommand.String1B: return Str(1, 1);
-                    case PanelCommand.String1C: return Str(1, 2);
-                    case PanelCommand.String2A: return Str(2, 0);
-                    case PanelCommand.String2B: return Str(2, 1);
-                    case PanelCommand.String2C: return Str(2, 2);
+                    // ---- FLIGHT COMPUTER STRINGS (repurposed 2026-08-21) ----
+                    // The real Crew Dragon STRING buttons reinitialise the redundant flight computers
+                    // when a system faults. OURS are flight computers - the phase autopilots - so the
+                    // grid is columns = phase, rows = job (user's mapping, 2026-08-21):
+                    //   col A = ASCENT   col B = RENDEZVOUS/DOCK   col C = DEORBIT + LAND
+                    //   row 1 (1A/1B/1C) ENGAGE the phase (toggle - a second press disengages)
+                    //   row 2 (2A/2B/2C) RE-INITIALISE it (force disengage + re-engage - recover a
+                    //                    computer that faulted mid-phase)
+                    // The old power-string SIMULATION these used to drive is retired from these
+                    // buttons; POWER 1/2 and RESET 1/2 still run the bus model (auto-trip + recover).
+                    case PanelCommand.String1A: if (!Powered(1)) return false;
+                        AutoPilot.Toggle();  return true;                          // ASCENT
+                    case PanelCommand.String1B: if (!Powered(1)) return false;
+                        return ToggleRendezvousDock();                            // RENDEZVOUS/DOCK
+                    case PanelCommand.String1C: if (!Powered(1)) return false;
+                        DeorbitOps.Toggle(); return true;                         // DEORBIT + LAND
+                    case PanelCommand.String2A: if (!Powered(2)) return false; return ReinitAscent();
+                    case PanelCommand.String2B: if (!Powered(2)) return false; return ReinitRendezvous();
+                    case PanelCommand.String2C: if (!Powered(2)) return false; return ReinitDeorbit();
 
                     // ---- CABIN EMERGENCIES ----
                     // Also previously inert. A fire needs a part genuinely near its temperature

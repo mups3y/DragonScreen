@@ -67,7 +67,13 @@ namespace DragonScreen
         public static SystemsState Fresh()
         {
             SystemsState s = new SystemsState();
-            s.Bus1On = true; s.Bus2On = true;
+            // ---- BUSES START OFF: THE CREW POWERS EACH ROW BEFORE ITS STRINGS RESPOND ----
+            // The STRING buttons are the flight-computer engages (col A/B/C), and each row is gated on
+            // its POWER bus - POWER 1 must be pressed before STRING 1A/1B/1C respond, POWER 2 before
+            // 2A/2B/2C. Starting the buses on would make that gate a no-op. Nothing DISPLAYS bus state
+            // (the POWER dials read real ElectricCharge), so an off bus is invisible until a string
+            // press is refused for want of power. User's call, 2026-08-21.
+            s.Bus1On = false; s.Bus2On = false;
             s.Suppressant = 1.0;
             s.Oxygen = 1.0; s.Nitrogen = 1.0;
             return s;

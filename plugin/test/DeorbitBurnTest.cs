@@ -78,6 +78,17 @@ public static class DeorbitBurnTest
         Check("a large miss with plenty of altitude keeps burning",
               !DeorbitBurn.Complete(Burning(200000.0, 50000.0, -10.0), out why), why);
 
+        // ---- ⛔ STOP ON THE WAY DOWN, ON THE LONG SIDE OF THE MISS MINIMUM (flight_0820) ----
+        // The ballistic miss falls to a minimum then climbs; past the minimum is a steeper, SHORTER
+        // entry a shorten-only descent cannot recover. The burn must stop at the FIRST scan inside the
+        // tolerance - on the way DOWN, the shallow/long side - not overshoot into the depth floor.
+        // ⚠ periapsis ABOVE the entry target so the depth limit does not fire and this tests the
+        // tolerance branch of Complete (kept for the unit, though the flown burn no longer calls it).
+        Check("12 km miss is inside the 15 km tolerance - stop, long side of the minimum",
+              DeorbitBurn.Complete(Burning(12000.0, -10000.0, -2500.0), out why), why);
+        Check("18 km is still outside it - keep burning down toward the minimum",
+              !DeorbitBurn.Complete(Burning(18000.0, -10000.0, -2500.0), out why), why);
+
         // Diverging while already close ends it - continuing trades a small miss for a steep entry.
         DeorbitState div = Burning(20000.0, 50000.0, -10.0);
         div.WorseCount = DeorbitBurn.WorseLimit + 1;

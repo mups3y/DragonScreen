@@ -54,12 +54,21 @@ namespace DragonScreen
         private static Vector3d dvWorld;        // the ORIGINAL request, for the overshoot test
         private static Vector3d dvRemaining;
         private static double nodeUt, ignitionUt, startedBurnAt;
-        private static bool rcsWasOn, boughtRcs, warpRequested, warpRefused;
+        private static bool rcsWasOn, boughtRcs, warpRequested, warpRefused, orientWarpRequested;
 
         /// <summary>Arrive this long before ignition, so there is time to drop out of warp.</summary>
         public const double WarpArriveLeadS = 6.0;
         /// <summary>Do not bother warping a wait shorter than this. `DgWarpTo`'s 12 s.</summary>
         public const double WarpWorthwhileS = 12.0;
+        /// <summary>
+        /// Point at the Δv only once ignition is within this, seconds. Before it, the coast is warped
+        /// with the controller RELEASED - the crew's rule (2026-08-19): "warp to within 10 minutes of
+        /// the node and ONLY then point the right way for the burn." Ten minutes is far above
+        /// <see cref="BurnExec.AlignRcsBelowS"/> (45 s), so the turn is then flown on reaction wheels
+        /// rather than bought RCS - which is what drained the tank before de-orbit on flight_0819 - and
+        /// no attitude is held across the coast to nudge a plotted intercept.
+        /// </summary>
+        public const double OrientLeadS = 600.0;
 
         public static bool Active
         {
@@ -107,6 +116,7 @@ namespace DragonScreen
             boughtRcs = false;
             warpRequested = false;
             warpRefused = false;
+            orientWarpRequested = false;
             Phase = BurnPhase.Aligning;
             Note = label;
 
@@ -146,8 +156,26 @@ namespace DragonScreen
             // the vessel's velocity change rather than integrating thrust means an engine that
             // under-performs, flames out or is throttled by something else is accounted for.
             RemainingDvMps = dvRemaining.magnitude;
-
             Vector3d aim = dvRemaining.sqrMagnitude > 1e-8 ? dvRemaining : dvWorld;
+
+            // ---- ⛔ WARP TO WITHIN OrientLeadS OF THE NODE BEFORE POINTING AT IT (user, 2026-08-19). ----
+            // The crew's rendezvous procedure, verbatim: "warp to within 10 minutes of the manoeuvre
+            // node and only then point the right way for the burn. From there warp to the manoeuvre and
+            // complete the burn." Orienting far from the node holds attitude the whole coast, and on a
+            // capsule that means RCS - which nudges the orbit and RUINS a plotted intercept, and burns
+            // the monopropellant the de-orbit needs (flight_0819: the tank was dry before de-orbit). So
+            // while ignition is more than OrientLeadS away the controller is RELEASED - no steering, no
+            // RCS - and the empty coast is warped. Only inside the window does Align() turn the ship,
+            // with minutes to do it on reaction wheels (NeedRcsToAlign is false above AlignRcsBelowS).
+            if (Phase == BurnPhase.Aligning && (ignitionUt - now) > OrientLeadS)
+            {
+                AttitudeController.Ascent.Throttle = 0.0;
+                AttitudeController.Ascent.Release(ship);
+                PointingErrorDeg = Vector3d.Angle(ship.ReferenceTransform.up, aim.normalized);
+                WarpToOrient(now);
+                return;
+            }
+
             AttitudeController.Ascent.SteerTo(ship, aim.normalized, Vector3d.zero);
             PointingErrorDeg = Vector3d.Angle(ship.ReferenceTransform.up, aim.normalized);
 
@@ -180,6 +208,27 @@ namespace DragonScreen
                 if (boughtRcs && !rcsWasOn) ship.ActionGroups.SetGroup(KSPActionGroup.RCS, false);
                 Phase = BurnPhase.Holding;
             }
+        }
+
+        /// <summary>
+        /// Warp the dead coast down to <see cref="OrientLeadS"/> before ignition WITHOUT orienting -
+        /// the first half of the crew's procedure. One-shot, like the ignition warp, so a manual cancel
+        /// stays cancelled. No one-orbit refusal here: the caller has already bounded the node time (an
+        /// intercept is at most `Approach.CaSpanPeriods` orbits out by construction), and refusing a
+        /// legitimate multi-lap coast is exactly what would strand the approach sitting in real time.
+        /// </summary>
+        private static void WarpToOrient(double now)
+        {
+            if (orientWarpRequested) return;
+            double target = ignitionUt - OrientLeadS;
+            double wait = target - now;
+            if (wait < WarpWorthwhileS) return;
+
+            orientWarpRequested = true;
+            Debug.Log(Tag + "warping " + wait.ToString("F0") + " s to within "
+                      + (OrientLeadS / 60.0).ToString("F0") + " min of '" + Note
+                      + "' - controls released, will orient there");
+            TimeWarp.fetch.WarpTo(target);
         }
 
         /// <summary>

@@ -102,6 +102,20 @@ namespace DragonScreen
         public double RollControlRangeDeg = Attitude.RollControlRangeDeg;
 
         /// <summary>
+        /// When true, the roll-axis rate command is forced to ZERO - the channel becomes a pure rate
+        /// damper that drives any roll RATE back to zero but never chases a positional roll reference.
+        ///
+        /// ⚠ CURRENTLY UNUSED. Written 2026-08-20 as the booster's roll answer, then superseded the same
+        /// day: a pure damper cannot remove an INDUCED roll (it left 42 deg on the coast), so the booster
+        /// now HOLDS its roll to the in-plane top `flipAxis x dir` instead (BoosterRecovery.Aim), which
+        /// steers on pitch alone and induces no roll to begin with. Kept as a general capability - a
+        /// vehicle that wants "hold whatever roll you have, command none" can still set it - but nothing
+        /// sets it today. Off (default) leaves the normal reference-tracking roll that the Dragon needs
+        /// to clock its docking port.
+        /// </summary>
+        public bool LockRoll = false;
+
+        /// <summary>
         /// Seconds to arrest a rate error. THE ONLY AGILITY KNOB, and it is a TIME - so it means
         /// the same thing on every vehicle, unlike the four kOS scale factors it replaces.
         /// </summary>
@@ -224,6 +238,7 @@ namespace DragonScreen
             Detach();
             actuation = Vector3d.zero;
             RollControlRangeDeg = Attitude.RollControlRangeDeg;
+            LockRoll = false;
             TimeConstantS = Attitude.DefaultTimeConstantS;
             MaxRateDps = Attitude.AscentMaxRateDps;
             // Nothing else to reset: the law is STATELESS. There are no integrators to go stale
@@ -375,6 +390,13 @@ namespace DragonScreen
             // Get the nose where it is going, then worry about which way up. Roll authority spent
             // during a slew is authority the slew does not get. No integrator to reset now.
             if (Math.Abs(phiTotal) > RollControlRangeDeg * Mathf.Deg2Rad) targetOmega[1] = 0.0;
+
+            // ---- ⛔ LOCK ROLL: NEVER COMMAND A POSITIONAL ROLL. (user, 2026-08-20) ----
+            // Zero the roll-rate command outright, so `targetTorque[1]` below becomes pure damping of
+            // `omega[1]` - the roll axis holds whatever it has (the launch roll) and is never rolled
+            // toward a reference. See LockRoll. This overrides the range gate, not the other way round:
+            // the gate only zeroes the command above a nose error; lock zeroes it always.
+            if (LockRoll) targetOmega[1] = 0.0;
 
             Vector3d targetTorque = Vector3d.zero;
             targetTorque[0] = Attitude.TorqueCommand(targetOmega[0] - omega[0], moi.x, TimeConstantS);

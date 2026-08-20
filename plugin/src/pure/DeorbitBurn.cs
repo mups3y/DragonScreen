@@ -53,8 +53,26 @@ namespace DragonScreen
     public static class DeorbitBurn
     {
         // ---- F9I's CONSTANTS. dragon_deorbit.ks:96-265. ----
-        /// <summary>Closed-loop cutoff: impact within this of the target, metres. `dgLzTol`.</summary>
-        public const double LzToleranceM = 50.0;
+        /// <summary>
+        /// Closed-loop cutoff: STOP once the predicted ballistic impact first comes within this of the
+        /// target, metres. `dgLzTol` was 50 m - UNREACHABLE, and that is the whole bug (flight_0820).
+        ///
+        /// ⛔ THE BURN WAS OVERSHOOTING A GOOD SOLUTION. As periapsis is driven down the ballistic miss
+        /// falls to a MINIMUM and then climbs again - past the minimum is a steeper, SHORTER entry.
+        /// flight_0820_070846: the miss bottomed at 5.5 km (Pe -47 km) and the burn kept going to Pe
+        /// -67 km, where the miss had grown back to 45.7 km; flight_0820_054631 did the same, 9.9 km ->
+        /// 70 km. The 50 m cutoff can never fire (the achievable minimum is ~5-10 km, predictor- and
+        /// step-limited), and the "close and no longer improving" backstop needs 25 worsening scans while
+        /// the burn floors out in ~8 - so nothing stopped it at the minimum and the depth floor took it,
+        /// tens of km SHORT, which a shorten-only entry cannot recover.
+        ///
+        /// Set to 15 km: the miss falls MONOTONICALLY to the minimum (verified on both flights, no
+        /// blips), so the FIRST scan under 15 km is on the way DOWN - the SHALLOW, LONG side of the
+        /// minimum - which is exactly where a shorten-only lifting entry wants to start. The entry then
+        /// bleeds that ~10-15 km onto the LZ. Kept below the 20 km the worsening test exercises so that
+        /// test stays about worsening, not tolerance.
+        /// </summary>
+        public const double LzToleranceM = 15000.0;
         /// <summary>The S2 de-orbit aims the impact this far PAST the LZ, metres. `dgOvershoot`.</summary>
         public const double OvershootM = 35000.0;
         /// <summary>Seconds between aim scans during the burn. `dgAimEvery`.</summary>
@@ -62,10 +80,44 @@ namespace DragonScreen
         /// <summary>Seconds of LEAD on the cutoff. Covers the loop tick. `dgCutLead`.</summary>
         public const double CutLeadS = 0.35;
         /// <summary>
-        /// Periapsis the burn drives to, metres. The DEPTH LIMIT, not the objective.
-        /// `dgPeriTgtDraco` - no trim authority on Dracos, so aim the entry directly.
+        /// THE ENTRY PERIAPSIS THE BURN AIMS FOR, metres ASL (negative = subsurface). ⛔ 2026-08-20,
+        /// AFTER RESEARCH: the burn NO LONGER aims the impact by deepening - that is one-way (retrograde
+        /// only shortens) and near the grazing entry it is so sensitive that full thrust threw the impact
+        /// 37 km past the target between two aim scans and slammed to the old -70 km floor
+        /// (flight_0820_112928), unrecoverable. MechJeb's landing autopilot burns to a PERIAPSIS and then
+        /// does a two-way course correction; so this is now just a sane entry depth. -30 km is close to
+        /// F9I's proven `dgPeriTgtDraco` (-31.8 km): steep enough to re-enter cleanly, shallow enough that
+        /// the impact lands near the target, and `EntryOps.Trim` (two-way RCS) does the aiming.
         /// </summary>
-        public const double PeriapsisTargetM = -31800.0;
+        public const double PeriapsisTargetM = -30000.0;
+
+        /// <summary>How far above the target periapsis the deepen-throttle is still at full; it eases to
+        /// zero as periapsis approaches the target so the burn does not slam past it. Metres.</summary>
+        public const double DepthEaseM = 40000.0;
+        /// <summary>Throttle ceiling while deepening to the entry periapsis. Gentle - this is not a slam.</summary>
+        public const double DepthThrottleMax = 0.40;
+        /// <summary>How much sideways (cross-null) push is blended into the retrograde burn: `normalize(
+        /// retro + this * normal)`. A normal push cannot change periapsis, so it takes cross-track out
+        /// while deepening without ever overshooting the depth. Small so the burn stays mostly retro.</summary>
+        public const double CrossBlend = 0.30;
+
+        // ---- ⛔ VECTORED STEERING. The burn is not pure retrograde (user, 2026-08-20). ----
+        /// <summary>
+        /// Miss at which the burn's steering reaches its full vector-gain cap, metres. Below it the
+        /// blend toward the LZ tapers with the miss, so the thrust returns to pure retrograde as the
+        /// impact arrives on target.
+        /// </summary>
+        public const double VectorScaleM = 60000.0;
+        /// <summary>
+        /// The most of the toward-LZ correction that is blended into the retrograde thrust direction,
+        /// as `normalize(retro + gain * towardLZ)`. Kept BELOW 1.0 on purpose: with the correction
+        /// weaker than retrograde the resultant can never point prograde, so periapsis keeps falling and
+        /// the burn cannot lift itself back out of a re-entry. A horizontal toward-LZ vector that is
+        /// anti-parallel to retrograde is absorbed by the normalise (it only shortens the vector, not
+        /// turns it), so this naturally steers CROSS-track - the axis a retrograde burn cannot reach -
+        /// and leaves along-track to the depth loop.
+        /// </summary>
+        public const double VectorMaxGain = 0.5;
 
         /// <summary>Throttle ceiling. The burn is long and shallow, not a slam. `min(0.60, ...)`.</summary>
         public const double ThrottleMax = 0.60;
@@ -78,8 +130,15 @@ namespace DragonScreen
 
         /// <summary>A miss worse than the best by this counts toward the diverging test, metres.</summary>
         public const double WorseMarginM = 500.0;
-        /// <summary>Consecutive worse scans that end the burn, once already close.</summary>
-        public const int WorseLimit = 25;
+        /// <summary>
+        /// Consecutive worse scans that end the burn, once already close. Was 25 - too slow: past the
+        /// miss minimum the burn deepens ~2.5 km/scan and floors out in ~8 scans, so 25 never accrued
+        /// and the depth floor stopped it tens of km short. 4 is the BACKSTOP for an orbit whose
+        /// achievable minimum sits ABOVE <see cref="LzToleranceM"/> (so the way-down cutoff never fires);
+        /// it then stops within a few scans of the minimum instead of at the floor. On the flown orbits
+        /// LzToleranceM fires first, on the way down, and this never accrues.
+        /// </summary>
+        public const int WorseLimit = 4;
         /// <summary>...and "already close" means inside this, metres.</summary>
         public const double CloseEnoughM = 30000.0;
         /// <summary>Runaway backstop, seconds.</summary>

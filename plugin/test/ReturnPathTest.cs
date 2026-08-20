@@ -468,10 +468,41 @@ public static class ReturnPathTest
 
         OverflightResult none = Overflight.Search(0.0, 0.0, new TrackMissAtUt(Vee));
         Check("no orbit means no answer, and it says so", !none.Ok, none.Note);
+
+        // ---- ⛔ NEAR-EQUAL PASSES MUST RESOLVE THE SAME WAY EVERY TIME (flight_0820) ----
+        // Three landings from ONE save split two-to-one: two took the pass at one lap, the third the
+        // adjacent lap, because over a near-equatorial site both crossings are all-but-equal minima and
+        // the global-minimum search is a coin-flip on a few km of orbit jitter. Two minima exactly one
+        // lap apart, both on the coarse grid: the search must take the EARLIER, and a sub-margin wobble
+        // in the later one must not steal it - but a genuinely better later pass still must.
+        twinTarget = 420.0; twinTarget2 = 420.0 + 1920.0;   // one 1920 s lap apart, both on the 60 s grid
+        twinDepth2 = 0.0;                                    // ...and exactly as deep
+        OverflightResult tw = Overflight.Search(0.0, 1920.0, new TrackMissAtUt(Twin));
+        Check("near-equal passes a lap apart resolve to the EARLIER one",
+              Math.Abs(tw.Ut - twinTarget) < 0.5, tw.Ut.ToString("F1"));
+        twinDepth2 = -Overflight.TieMarginM * 0.5;           // later pass a hair deeper, within the margin
+        OverflightResult tw2 = Overflight.Search(0.0, 1920.0, new TrackMissAtUt(Twin));
+        Check("a sub-margin wobble in the later pass does not flip the choice",
+              Math.Abs(tw2.Ut - twinTarget) < 0.5, tw2.Ut.ToString("F1"));
+        twinDepth2 = -Overflight.TieMarginM * 4.0;           // ...but a genuinely better later pass wins
+        OverflightResult tw3 = Overflight.Search(0.0, 1920.0, new TrackMissAtUt(Twin));
+        Check("a clearly better later pass is still preferred - inclined orbits need it",
+              Math.Abs(tw3.Ut - twinTarget2) < 0.5, tw3.Ut.ToString("F1"));
     }
 
+    // Realistic ground-track slope: ~2.28 km of miss per second of ignition error, so a 60 s coarse
+    // step is tens of km and the tie margin is the few-km band it is meant to be. A unit slope made the
+    // margin span a thousand seconds and hid the very case this file now pins.
     static double searchTarget;
-    static double Vee(double ut) { return Math.Abs(ut - searchTarget); }
+    static double Vee(double ut) { return 2280.0 * Math.Abs(ut - searchTarget); }
+
+    static double twinTarget, twinTarget2, twinDepth2;
+    static double Twin(double ut)
+    {
+        double a = 2280.0 * Math.Abs(ut - twinTarget);
+        double b = 2280.0 * Math.Abs(ut - twinTarget2) + twinDepth2;
+        return Math.Min(a, b);
+    }
 
     // ================================================================== E2
 

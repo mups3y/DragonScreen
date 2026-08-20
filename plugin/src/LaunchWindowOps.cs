@@ -75,8 +75,16 @@ namespace DragonScreen
         /// the trail is TrailDistM alone. It is F9I's seed and was never our measurement - unlike
         /// AscentTimeS/AscentLonDeg, MeasureAtInsertion does NOT re-fit it, so it sat stale. If a future
         /// arrival is consistently off in the SAME direction, that residual is what this should hold.
+        ///
+        /// ⛔ 0.0 -> 7.25 ON 2026-08-21. Two flights on the current profile (flight_0821_013601 and the
+        /// following calibration flight) BOTH inserted ~89 km AHEAD of the station when the window
+        /// commanded a 2 km trail - the new `INSERTION TRAIL` line measured delivered-minus-commanded =
+        /// -7.25 deg, and the ascent seeds were accurate (524 s / 56.41 deg), so this is a repeatable
+        /// release-phase slip, not the ascent. +7.25 is the negative of that residual: it tells the
+        /// window to aim 7.25 deg further BEHIND, so after the slip we arrive on target. Re-fit from the
+        /// `INSERTION TRAIL` residual whenever it stops reading near zero.
         /// </summary>
-        [Tunable] public static double PhaseBiasDeg = 0.0;
+        [Tunable] public static double PhaseBiasDeg = 7.25;
         /// <summary>
         /// How far behind the station to settle, metres. `stTrailDist`. Tunable - lower it for a closer
         /// arrival, but stay inside the direct-approach gate (10 km) so no phasing lap is needed.
@@ -85,10 +93,15 @@ namespace DragonScreen
         /// PhaseBiasDeg zeroed the arrival is TrailDistM +/- the measured ~1.4 km scatter, so a literal
         /// 1000 could land the capsule slightly AHEAD of the station - awkward, near the 200 m keep-out.
         /// 2000 keeps it safely BEHIND (0.6-3.4 km on the measured scatter), still far inside the 10 km
-        /// gate so the direct approach engages immediately with NO phasing lap. Lower toward 1000 once a
-        /// couple of arrivals confirm the scatter.
+        /// gate so the direct approach engages immediately with NO phasing lap.
+        ///
+        /// ⛔ 2000 -> 1000 ON 2026-08-21, paired with the +7.25 PhaseBiasDeg fix. Now that the 89 km
+        /// systematic is cancelled, 1000 is the crew's stated 1 km target. If the `INSERTION TRAIL`
+        /// residual still carries scatter that risks arriving AHEAD of the station (near the 200 m
+        /// keep-out), raise this back toward 2000 - the direct approach handles an arrival either side,
+        /// but behind is tidier. Tunable live in PluginData/tuning.cfg.
         /// </summary>
-        [Tunable] public static double TrailDistM = 2000.0;
+        [Tunable] public static double TrailDistM = 1000.0;
 
         /// <summary>
         /// Longest hold worth taking, seconds. `stWindowCap`.
@@ -111,6 +124,12 @@ namespace DragonScreen
         /// <summary>Seconds still to wait, or 0 when the window is open. Negative = no station.</summary>
         public static double WaitS = -1.0;
         public static string Note = "-";
+
+        /// <summary>The lead the window last COMMANDED, degrees - logged against the trail actually
+        /// delivered at insertion so the two can be compared on one line. flight_0821 aimed 0.16 deg
+        /// (2 km) and delivered 89 km, and the seeds were accurate, so the slip is in the release phase,
+        /// not the ascent - this is how we see it directly.</summary>
+        public static double LastRequiredLeadDeg;
 
         /// <summary>
         /// How long to hold. Zero means go now - including when there is no station to go to, which
@@ -146,6 +165,7 @@ namespace DragonScreen
             double insertUt = Planetarium.GetUniversalTime() + AscentTimeS;
             Vector3d p = station.orbit.getPositionAtUT(insertUt);
             w.StationLonAtInsertionDeg = b.GetLongitude(p);
+            LastRequiredLeadDeg = LaunchWindow.RequiredLead(w);
 
             double wait = LaunchWindow.SecondsToWindow(w, b.rotationPeriod);
             if (wait < 0.0)
@@ -196,6 +216,26 @@ namespace DragonScreen
 
             AscentTimeS = flown;
             AscentLonDeg = gained;
+
+            // ---- COMMANDED LEAD vs. TRAIL ACTUALLY DELIVERED, on one line. ----
+            // The seeds above are accurate (flight_0821 flew 525 s / 56.7 deg against 519.5 / 56.61),
+            // so a big trail error is NOT the ascent - it is the release phase. This makes that visible:
+            // what lead did the window command, and what trail did we actually get? A repeatable
+            // delivered-minus-commanded residual is exactly what PhaseBiasDeg exists to cancel.
+            Vessel station = StationApproach.Find();
+            if (station != null && station.orbit != null)
+            {
+                double trailDeg = station.longitude - v.longitude;
+                while (trailDeg < -180.0) trailDeg += 360.0;
+                while (trailDeg > 180.0) trailDeg -= 360.0;
+                double trailKm = trailDeg * System.Math.PI / 180.0 * station.orbit.semiMajorAxis / 1000.0;
+                Debug.Log(Tag + "INSERTION TRAIL: station is " + trailDeg.ToString("F2") + " deg / "
+                          + trailKm.ToString("F1") + " km ahead of us (positive = we are BEHIND it). "
+                          + "Window commanded lead " + LastRequiredLeadDeg.ToString("F2")
+                          + " deg; delivered-minus-commanded = "
+                          + (trailDeg - LastRequiredLeadDeg).ToString("F2") + " deg. If this residual "
+                          + "repeats across flights, set PhaseBiasDeg to its NEGATIVE to cancel it.");
+            }
         }
     }
 }

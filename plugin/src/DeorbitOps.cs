@@ -53,6 +53,17 @@ namespace DragonScreen
         private static double aligningSinceAt;
         private static bool aligned, phaseDownPending, passFound, warpRequested;
 
+        /// <summary>The latest predicted impact, for the vectored steering. Valid only when haveImpact.</summary>
+        private static double impactLat, impactLon;
+        private static bool haveImpact;
+        /// <summary>Signed along/cross of the predicted impact to the LZ, metres. along&lt;0 = LONG (past LZ).</summary>
+        private static double aimAlongM, aimCrossM;
+
+        /// <summary>Along-track within this counts as on the LZ; the burn stops deepening. Metres.</summary>
+        public const double AimAlongTolM = 1500.0;
+        /// <summary>Cross-track within this counts as on the LZ. Metres.</summary>
+        public const double AimCrossTolM = 800.0;
+
         /// <summary>Drop out of warp this long before the de-orbit point, to settle. `DgPhasing`'s 25 s.</summary>
         public const double PassWarpLeadS = 25.0;
         private static double goTimeUt, trackMissM, offPlaneDeg;
@@ -82,11 +93,11 @@ namespace DragonScreen
 
         /// <summary>Where the capsule is trying to land. Defaults to LZ-1.</summary>
         // ⛔ THE SAME POINT THE ENTRY AIMS AT, OR THE BURN AND THE ENTRY DISAGREE. The de-orbit
-        // solves for an impact and the entry then steers to a target; with two different
-        // coordinates the entry spends its whole (shorten-only) authority fixing an error the
-        // burn deliberately introduced. Both are the capsule's SPLASHDOWN point, not the pad.
-        public static double TargetLatDeg = LandingSites.Splashdown.LatDeg;
-        public static double TargetLonDeg = LandingSites.Splashdown.LonDeg;
+        // solves for an impact and the entry then trims to a target; two different coordinates would
+        // have the trim fighting an error the burn introduced. Both are LZ-1, by user directive
+        // (2026-08-20): "the predicted impact must be DIRECTLY ON LZ1." See EntryOps.TargetLatDeg.
+        public static double TargetLatDeg = LandingSites.Lz1.LatDeg;
+        public static double TargetLonDeg = LandingSites.Lz1.LonDeg;
 
         public static void Toggle()
         {
@@ -177,6 +188,7 @@ namespace DragonScreen
             ship = v;
             Engaged = true;
             aligned = false;
+            haveImpact = false;
             startedAt = Planetarium.GetUniversalTime();
             lastScanAt = 0.0;
             prevPeri = v.orbit.PeA;
@@ -230,7 +242,7 @@ namespace DragonScreen
         public static void Reset()
         {
             Engaged = false; ship = null; Note = "-"; phaseDownPending = false;
-            passFound = false; warpRequested = false;
+            passFound = false; warpRequested = false; haveImpact = false;
             goTimeUt = 0.0; trackMissM = 0.0; offPlaneDeg = 0.0;
             AimMissM = -1.0; ThrottleCmd = 0.0; PeriapsisM = 0.0;
         }
@@ -314,14 +326,19 @@ namespace DragonScreen
                 return;
             }
 
-            // Retrograde, and hold it. The burn is long and shallow; a capsule that wanders off
-            // retrograde is putting its dv somewhere other than where the solve assumed.
+            // ---- ⛔ ONE CONTINUOUS BURN: RETROGRADE UNTIL THERE IS AN IMPACT, THEN AIM IT. (user, 2026-08-20) ----
+            // Above the atmosphere the capsule is still in orbit, so the predictor has no impact to aim at.
+            // The burn therefore lights PURE RETROGRADE and holds it until the predictor first returns an
+            // impact (periapsis has dropped into the atmosphere); only THEN does it start aiming, walking
+            // the red X onto the green X. There is no shutdown between the two - it is one burn. The
+            // aiming itself is decoupled (see below the aim scan): DEPTH nulls along-track, a sideways push
+            // nulls cross-track. `off` measures the retrograde alignment the ignition gate waits for.
             Vector3d retro = -ship.obt_velocity.normalized;
-            AttitudeController.Ascent.SteerTo(ship, retro, Vector3d.zero);
             double off = Vector3d.Angle(ship.ReferenceTransform.up, retro);
 
             if (!aligned)
             {
+                AttitudeController.Ascent.SteerTo(ship, retro, Vector3d.zero);
                 AttitudeController.Ascent.Throttle = 0.0;
                 Note = "ALIGNING - " + off.ToString("F1") + " deg";
                 if (aligningSinceAt <= 0.0) aligningSinceAt = now;
@@ -353,20 +370,53 @@ namespace DragonScreen
             if (now - lastScanAt >= DeorbitBurn.AimScanIntervalS)
             {
                 lastScanAt = now;
-                st.AimMissM = ImpactPredictor.MissTo(ship, TargetLatDeg, TargetLonDeg);
+                // ---- ⛔ DRAG-AWARE MISS, NOT VACUUM. AIM THE BURN DIRECTLY AT THE LZ (2026-08-19). ----
+                // The burn happens at ~80 km, above the atmosphere, where NO drag has been measured, so
+                // `MissTo(ship)` (live BC = 0) fell back to a VACUUM solve - always long by tens of km -
+                // and the burn chased that phantom overshoot into the depth floor still ~171 km out and
+                // NEVER aimed at the real LZ. Use the KNOWN capsule BC (the same 440 the pre-entry trim
+                // and entry guidance already fly), so the predicted impact is drag-aware and the closed
+                // loop drives THAT onto the target, within the depth budget. This is the "put the
+                // predicted impact directly on the LZ" the crew asked for.
+                Impact aim = ImpactPredictor.Predict(ship, EntryGuidance.CapsuleBcKgM2);
+                haveImpact = aim.Valid;
+                if (aim.Valid)
+                {
+                    impactLat = aim.LatDeg; impactLon = aim.LonDeg;
+                    double miss;
+                    Orbital.DownCross(ship.mainBody.Radius, ship.latitude, ship.longitude,
+                                      impactLat, impactLon, TargetLatDeg, TargetLonDeg,
+                                      out aimAlongM, out aimCrossM, out miss);
+                    st.AimMissM = miss;
+                }
+                else { st.AimMissM = -1.0; }
                 AimMissM = st.AimMissM;
                 DeorbitBurn.Track(ref st);
             }
 
-            string why;
-            if (DeorbitBurn.Complete(st, out why))
+            // ---- ⛔ BURN TO THE ENTRY PERIAPSIS - THE AIMING IS RCS'S JOB, NOT THE ENGINE'S. ----
+            // (2026-08-20, after researching MechJeb's landing autopilot.) Aiming the impact by DEEPENING
+            // is one-way and hyper-sensitive at the grazing entry - flight_0820_112928 threw the impact
+            // 37 km past the target in one aim scan and slammed to the floor, unrecoverable. So the burn
+            // no longer chases the impact; it lowers periapsis to a fixed sane depth and stops. The
+            // predicted impact then sits within RCS range of the target, and EntryOps.Trim closes it with
+            // a TWO-WAY course correction (prograde/retro for along, lateral for cross) on the coast.
+            string why = "";
+            bool stop = DeorbitBurn.DepthLimitReached(st.PeriapsisM, st.PeriapsisRateMps)
+                     || (!CheatOptions.InfinitePropellant && st.MonoUnits < DeorbitBurn.MonoFloorUnits)
+                     || st.ElapsedS > DeorbitBurn.MaxBurnS;
+            if (DeorbitBurn.DepthLimitReached(st.PeriapsisM, st.PeriapsisRateMps)) why = "reached entry depth";
+            else if (!CheatOptions.InfinitePropellant && st.MonoUnits < DeorbitBurn.MonoFloorUnits) why = "ABORTED - out of monopropellant";
+            else if (st.ElapsedS > DeorbitBurn.MaxBurnS) why = "ABORTED - burn ran past its backstop";
+
+            if (stop)
             {
                 AttitudeController.Ascent.Throttle = 0.0;
                 ThrottleCmd = 0.0;
                 Debug.Log(Tag + "de-orbit burn complete - " + why + ". Pe "
-                          + (PeriapsisM / 1000.0).ToString("F1") + " km, aim miss "
-                          + (st.AimMissM >= 0.0
-                             ? (st.AimMissM / 1000.0).ToString("F2") + " km" : "unknown"));
+                          + (PeriapsisM / 1000.0).ToString("F1") + " km, along "
+                          + (aimAlongM / 1000.0).ToString("F2") + " km, cross "
+                          + (aimCrossM / 1000.0).ToString("F2") + " km");
                 Note = "BURN COMPLETE - " + why;
 
                 // ---- ⛔ THE ENTRY IS HANDED A RE-ENTRY TRAJECTORY, OR IT IS NOT HANDED ANYTHING. ----
@@ -400,15 +450,85 @@ namespace DragonScreen
                 return;
             }
 
-            ThrottleCmd = DeorbitBurn.Throttle(st);
+            // ---- ⛔ DEEPEN TO THE ENTRY PERIAPSIS, EASING NEAR IT; CANCEL CROSS ON THE WAY. ----
+            // Throttle is proportional to how far periapsis still has to fall, so it eases to nothing at
+            // the target instead of slamming past it. Steer retrograde until there is an impact, then
+            // blend in a gentle sideways (normal) push to take cross-track out - a normal push cannot
+            // change periapsis, so it never overshoots the depth. Along-track is deliberately NOT aimed
+            // here; the coast trim does that two-way.
+            Vector3d aimSteer = retro;
+            if (haveImpact)
+            {
+                Vector3d cn = CrossNullDir(retro);
+                Vector3d blended = retro + DeorbitBurn.CrossBlend * cn;
+                if (blended.sqrMagnitude > 1e-9) aimSteer = blended.normalized;
+            }
+            double depthAbove = st.PeriapsisM - DeorbitBurn.PeriapsisTargetM;   // metres periapsis still to fall
+            double th = depthAbove / DeorbitBurn.DepthEaseM;
+            if (th > DeorbitBurn.DepthThrottleMax) th = DeorbitBurn.DepthThrottleMax;
+            if (th < DeorbitBurn.ThrottleMin) th = DeorbitBurn.ThrottleMin;
+            ThrottleCmd = haveImpact ? th : DeorbitBurn.ThrottleBlind;   // get periapsis into the air fast, then ease
+            AttitudeController.Ascent.SteerTo(ship, aimSteer, Vector3d.zero);
             AttitudeController.Ascent.Throttle = ThrottleCmd;
             if (!ship.ActionGroups[KSPActionGroup.RCS])
                 ship.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
 
-            Note = "DE-ORBIT - miss "
-                 + (st.AimMissM >= 0.0 ? (st.AimMissM / 1000.0).ToString("F1") + " km" : "acquiring")
+            Note = "DE-ORBIT - " + (haveImpact
+                     ? ("along " + (aimAlongM / 1000.0).ToString("F1") + " / cross "
+                        + (aimCrossM / 1000.0).ToString("F1") + " km")
+                     : "acquiring impact")
                  + ", Pe " + (PeriapsisM / 1000.0).ToString("F1") + " km, thr "
                  + (ThrottleCmd * 100.0).ToString("F0") + "%";
+        }
+
+        /// <summary>
+        /// The thrust direction for the vectored burn: retrograde blended with a push toward the LZ.
+        ///
+        /// The predicted impact moves in the direction of the delta-v, so pushing the velocity along the
+        /// horizontal impact->LZ vector walks the impact onto the target. The blend is
+        /// `normalize(retro + gain * towardLZ)` with gain &lt; 1, so a towardLZ that opposes retrograde
+        /// only shortens the resultant (the normalise keeps its direction) and the thrust stays
+        /// net-retrograde - periapsis keeps falling. What survives the blend is the CROSS-track component,
+        /// which is exactly the axis a pure retrograde burn cannot correct. Along-track is still the
+        /// depth loop's; this only stops the burn missing sideways.
+        /// </summary>
+        private static Vector3d VectoredDir(Vector3d retro)
+        {
+            CelestialBody b = ship.mainBody;
+            if (b == null) return retro;
+            Vector3d up = (ship.CoM - b.position).normalized;
+            Vector3d impactPos = (Vector3d)b.GetWorldSurfacePosition(impactLat, impactLon, 0.0) - b.position;
+            Vector3d lzPos = (Vector3d)b.GetWorldSurfacePosition(TargetLatDeg, TargetLonDeg, 0.0) - b.position;
+            Vector3d toLZ = Vector3d.Exclude(up, lzPos - impactPos);   // horizontal, impact -> LZ
+            if (toLZ.sqrMagnitude < 1e-6) return retro;
+
+            double g = AimMissM / DeorbitBurn.VectorScaleM;
+            if (g > DeorbitBurn.VectorMaxGain) g = DeorbitBurn.VectorMaxGain;
+            if (g < 0.0) g = 0.0;
+            Vector3d steer = retro + g * toLZ.normalized;
+            return (steer.sqrMagnitude > 1e-9) ? steer.normalized : retro;
+        }
+
+        /// <summary>
+        /// Thrust direction to null CROSS-track ONLY: a pure normal push (perpendicular to the ground
+        /// track, horizontal) toward the LZ's side. A normal burn rotates the plane without changing
+        /// energy, so periapsis - and therefore along-track - stays put, which is exactly what the aim
+        /// phase wants once along-track is already on the LZ.
+        /// </summary>
+        private static Vector3d CrossNullDir(Vector3d retro)
+        {
+            CelestialBody b = ship.mainBody;
+            if (b == null) return retro;
+            Vector3d up = (ship.CoM - b.position).normalized;
+            Vector3d vhat = ship.obt_velocity.normalized;
+            Vector3d normal = Vector3d.Cross(up, vhat);       // horizontal, perpendicular to the track
+            if (normal.sqrMagnitude < 1e-9) return retro;
+            normal = normal.normalized;
+
+            Vector3d impactPos = (Vector3d)b.GetWorldSurfacePosition(impactLat, impactLon, 0.0) - b.position;
+            Vector3d lzPos = (Vector3d)b.GetWorldSurfacePosition(TargetLatDeg, TargetLonDeg, 0.0) - b.position;
+            double crossErr = Vector3d.Dot(lzPos - impactPos, normal);   // + = LZ on the +normal side
+            return (crossErr >= 0.0) ? normal : -normal;
         }
 
         /// <summary>
