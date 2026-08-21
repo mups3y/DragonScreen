@@ -134,6 +134,22 @@ namespace DragonScreen
             Vector3d los = rel.Los;
             ClosingMps = rel.ClosingMps;
 
+            // ---- ⛔ KEEP-OUT BACKSTOP (see pure/DirectApproach.cs) ----
+            // Never drive into the station. flight_0821_060847 rammed it at 11 m when Match() could
+            // not brake in time. Below the hard abort we release to the crew; below the floor we may
+            // only brake - forcing Matching does that, since Match() only ever burns retrograde.
+            if (RangeM < DirectApproach.HardAbortM)
+            {
+                Note = "KEEP-OUT ABORT - " + RangeM.ToString("F0")
+                     + " m, too close to brake safely; releasing to the crew";
+                Debug.LogWarning(Tag + Note);
+                Phase = DirectPhase.Refused;
+                Disengage("keep-out abort");
+                return;
+            }
+            if (RangeM < DirectApproach.KeepOutFloorM && Phase != DirectPhase.Matching)
+                Go(DirectPhase.Matching);       // brake only from here in - no forward push
+
             // ---- THE ONE COMMANDED CORRECTION. Trap 1: never split aim from speed. ----
             WantMps = DirectApproach.WantSpeedMps(RangeM);
             Vector3d dv = RelativeMotion.Correction(rel, WantMps);

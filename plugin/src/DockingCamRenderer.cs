@@ -238,6 +238,18 @@ namespace DragonScreen
                 // would show either nothing or the inside of the capsule.
                 cam.cullingMask = FlightMask();
 
+                // ---- ⛔ RE-AIM RIGHT BEFORE THE CAMERA RENDERS, OR IT LAGS A FRAME ----
+                // flight_0821_060847: on load the cameras slid down the hull and flickered until the
+                // vessel settled. Aim() was called from the DRAW PATH (ImageStore -> Texture), which
+                // runs AFTER this depth -102 camera has already rendered this frame - so it rendered
+                // at last frame's position. While the vessel is still moving in world space (physics
+                // ease-in, before Krakensbane pins it to the origin) that is a visible slide; once it
+                // settles the lag is sub-pixel and it "locks in". This component re-aims in OnPreCull,
+                // immediately before the camera culls, so the picture is always current. The camera is
+                // deliberately NOT parented to the part transform - that would tie its lifetime to a
+                // part that dies at staging/dock-merge and take the camera down with it.
+                camObject.AddComponent<DockingCamAimer>();
+
                 Resolution = Width + " x " + Height;
                 Debug.Log("[DragonScreen] docking cam ready: " + Width + "x" + Height
                           + ", cullingMask 0x" + cam.cullingMask.ToString("X"));
@@ -457,6 +469,19 @@ namespace DragonScreen
             return null;
         }
 
+        /// <summary>
+        /// Re-point the camera immediately before it renders. Called from <see cref="DockingCamAimer"/>
+        /// in OnPreCull so the transform is always current for THIS frame's render - see the note in
+        /// Build(). Only runs when the camera is live; a disabled camera never culls.
+        /// </summary>
+        internal static void AimForRender()
+        {
+            if (cam == null || camObject == null || !cam.enabled) return;
+            try { Aim(); }
+            catch (Exception e)
+            { Debug.LogWarning("[DragonScreen] docking cam re-aim failed: " + e.Message); }
+        }
+
         internal static void Clear()
         {
             if (cam != null) cam.targetTexture = null;
@@ -465,5 +490,15 @@ namespace DragonScreen
             cam = null;
             tried = false; failed = false;
         }
+    }
+
+    /// <summary>
+    /// Sits on the docking-cam GameObject and re-points the camera in OnPreCull - the last callback
+    /// before that camera culls and renders - so the view is never a frame stale. See the note in
+    /// DockingCamRenderer.Build(). Destroyed with the camObject in Clear().
+    /// </summary>
+    internal sealed class DockingCamAimer : MonoBehaviour
+    {
+        private void OnPreCull() { DockingCamRenderer.AimForRender(); }
     }
 }

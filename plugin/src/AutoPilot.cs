@@ -73,7 +73,16 @@ namespace DragonScreen
             if (Engaged) Disengage("crew"); else Engage();
         }
 
-        public static void Engage()
+        public static void Engage() { EngageCore(false); }
+
+        /// <summary>
+        /// The TOURIST mission ascent (user 2026-08-21): fly to a HIGHER orbit and DO NOT hunt the
+        /// station - no docking, and no launch-window phase hold (there is nothing to rendezvous with).
+        /// Everything else - the guards, staging, gravity turn, circularisation - is the proven ascent.
+        /// </summary>
+        public static void EngageTourist() { EngageCore(true); }
+
+        private static void EngageCore(bool tourist)
         {
             Vessel v = FlightGlobals.ActiveVessel;
             if (v == null) return;
@@ -110,8 +119,8 @@ namespace DragonScreen
             // is nothing to hold.
             windowOpensUt = 0.0;
             windowWarped = false;
-            if (v.situation == Vessel.Situations.PRELAUNCH
-                || v.situation == Vessel.Situations.LANDED)
+            if (!tourist && (v.situation == Vessel.Situations.PRELAUNCH
+                || v.situation == Vessel.Situations.LANDED))
             {
                 double wait = LaunchWindowOps.SecondsToWait(v);
                 if (wait > 0.0)
@@ -129,15 +138,19 @@ namespace DragonScreen
             BoosterRecovery.Reset();
             // The recovery profile IS an ascent profile - see AscentTarget.Station(profile). Taking
             // it here means the two can never disagree about which mission is being flown.
-            Target = AscentTarget.Station(BoosterRecovery.Profile);
+            Target = tourist ? AscentTarget.Tourist()
+                             : AscentTarget.Station(BoosterRecovery.Profile);
             ascentVessel = v;
 
-            // ---- TARGET THE STATION FROM LAUNCH. ----
-            // The mission is a ferry to the Space X Station, so put it on the navball at liftoff. The
-            // rendezvous retargets to the docking PORT at handover, and the undock clears it when the
-            // trip is over. Guarded and harmless if the station is not in this save.
-            Vessel stn = StationApproach.Find();
-            if (stn != null) DockingOps.SetTarget(stn, "launch - targeting the station");
+            // ---- TARGET THE STATION FROM LAUNCH (station mission only). ----
+            // The ferry puts the station on the navball at liftoff; the rendezvous retargets to the
+            // docking PORT at handover, and the undock clears it. The TOURIST mission never docks, so it
+            // hunts nothing. Guarded and harmless if the station is not in this save.
+            if (!tourist)
+            {
+                Vessel stn = StationApproach.Find();
+                if (stn != null) DockingOps.SetTarget(stn, "launch - targeting the station");
+            }
             packedReported = false;
 
             // ---- ⛔ THE PAD HOLD LIVES IN Tick(), NOT HERE. ----

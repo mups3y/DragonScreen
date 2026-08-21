@@ -105,13 +105,12 @@ namespace DragonScreen
         /// When true, the roll-axis rate command is forced to ZERO - the channel becomes a pure rate
         /// damper that drives any roll RATE back to zero but never chases a positional roll reference.
         ///
-        /// ⚠ CURRENTLY UNUSED. Written 2026-08-20 as the booster's roll answer, then superseded the same
-        /// day: a pure damper cannot remove an INDUCED roll (it left 42 deg on the coast), so the booster
-        /// now HOLDS its roll to the in-plane top `flipAxis x dir` instead (BoosterRecovery.Aim), which
-        /// steers on pitch alone and induces no roll to begin with. Kept as a general capability - a
-        /// vehicle that wants "hold whatever roll you have, command none" can still set it - but nothing
-        /// sets it today. Off (default) leaves the normal reference-tracking roll that the Dragon needs
-        /// to clock its docking port.
+        /// USED FOR THE BOOSTER COAST (BoosterRecovery.Aim, 2026-08-21). Written 2026-08-20, switched off
+        /// the same day for the in-plane-top reference `flipAxis x dir` on the theory it "induces no roll" -
+        /// but flight_0821_060847 showed the reference drew 211 deg of roll on the coast (the weak roll
+        /// authority fighting it), while this damper had flown at ~42 deg. So the coast turns it ON: hold
+        /// whatever roll you have, command none, just null the rate. Off (default) leaves the normal
+        /// reference-tracking roll the descent and the Dragon (clocking its docking port) need.
         /// </summary>
         public bool LockRoll = false;
 

@@ -108,34 +108,64 @@ namespace DragonScreen
             return true;
         }
 
-        // ---- STRING re-init (row 2 of the grid): force-restart a phase's flight computer ----
-        // "Reinitialise the backup flight computer" for the real STRING buttons; here it force-restarts
-        // the phase autopilot - disengage if running, then engage fresh - so a faulted phase can be
-        // recovered without waiting for it to give up. Each returns true (the press was accepted); the
-        // underlying engage logs its own outcome and posts a refusal to the screen if it will not run.
-        private static bool ReinitAscent()
+        // ---- TOURIST DRAGON MISSION (STRING 2 row, user 2026-08-21) ----
+        // Launch to a higher orbit, no docking, sightsee, then descend to the de-orbit orbit and
+        // parachute-splash down offshore. Each returns true (press accepted); the engage logs its own
+        // outcome. Momentary buttons - the shared ascent/de-orbit controllers show live on row 1.
+        private static bool TouristLaunch()
         {
-            if (AutoPilot.Engaged) AutoPilot.Disengage("string re-init");
-            AutoPilot.Engage();
-            Log("ASCENT computer re-initialised (STRING 2A)");
+            // Toggle the ascent. The two missions are exclusive - one flight flies one row - so this
+            // shares AutoPilot with STRING 1A; a second press (either) disengages it.
+            if (AutoPilot.Engaged) { AutoPilot.Disengage("crew"); return true; }
+            AutoPilot.EngageTourist();      // 250 km, no station hunt, no phase-window hold
+            Log("TOURIST LAUNCH (STRING 2A) - ascent to 250 km, no docking");
             return true;
         }
 
-        private static bool ReinitRendezvous()
+        private static bool TouristDescend()
         {
-            if (DockingOps.Engaged) DockingOps.Reset();
-            if (StationApproach.Engaged) StationApproach.Disengage("string re-init");
-            MissionOps.AutoDock();
-            Log("RENDEZVOUS/DOCK computer re-initialised (STRING 2B)");
+            Vessel v = FlightGlobals.ActiveVessel;
+            if (v == null) return false;
+            if (PhaseDownOps.Engaged) { PhaseDownOps.Reset(); Log("descent cancelled (STRING 2B)"); return true; }
+            PhaseDownOps.Engage(v);         // lower to DeorbitOrbit's ideal de-orbit altitude
+            Log("TOURIST DESCEND (STRING 2B) - phasing down to the de-orbit orbit");
             return true;
         }
 
-        private static bool ReinitDeorbit()
+        private static bool TouristDeorbit()
         {
-            if (DeorbitOps.Engaged) DeorbitOps.Disengage("string re-init");
-            DeorbitOps.Engage();
-            Log("DEORBIT/LAND computer re-initialised (STRING 2C)");
+            // Tourist always splashes down under parachutes offshore: force the method, then run the
+            // standard targeted return - DeorbitOps.Engage then aims at the splashdown point per that
+            // method, and skips the phase-down if STRING 2B already did it (AlreadyOnOrbit).
+            EntryOps.PropulsiveRequested = false;
+            DeorbitOps.Toggle();
+            Log("TOURIST DE-ORBIT (STRING 2C) - parachute splashdown offshore");
             return true;
+        }
+
+        /// <summary>
+        /// CANCEL stops ANY running autopilot sequence, not just an armed emergency command (user
+        /// 2026-08-21). flight_0821_060847: a rendezvous the crew tried to cancel left a controller
+        /// engaged and every de-orbit after it was CONTENDED - the return never ran. Returns true if
+        /// something was actually stopped, so the panel can flash a confirmation.
+        ///
+        /// ⚠ ENTRY IS DELIBERATELY NOT CANCELLED. Once the capsule is descending under guidance,
+        /// dropping it is more dangerous than finishing; ChuteGuard deploys the parachutes on its own
+        /// regardless, so the crew is never left without chutes.
+        /// </summary>
+        public static bool CancelAllSequences()
+        {
+            bool any = false;
+            if (AutoPilot.Engaged)        { AutoPilot.Disengage("CANCEL");        any = true; }
+            if (StationApproach.Engaged)  { StationApproach.Disengage("CANCEL");  any = true; }
+            if (DirectApproachOps.Engaged){ DirectApproachOps.Disengage("CANCEL"); any = true; }
+            if (DockingOps.Engaged)       { DockingOps.Reset();                    any = true; }
+            if (UndockOps.Engaged)        { UndockOps.Reset();                     any = true; }
+            if (DeorbitOps.Engaged)       { DeorbitOps.Disengage("CANCEL");       any = true; }
+            if (PhaseDownOps.Engaged)     { PhaseDownOps.Reset();                  any = true; }
+            if (BurnActive)               { StopBurn("CANCEL");                    any = true; }
+            if (any) Log("CANCEL - running sequence(s) stopped");
+            return any;
         }
 
         /// <summary>Periapsis a deorbit burn aims for, metres. Low enough to guarantee capture.</summary>
@@ -175,10 +205,17 @@ namespace DragonScreen
                         Log("entry reboot " + (EntryReboot ? "ENABLED" : "disabled"));
                         return true;
 
+                    // ---- ENTRY MODE = LANDING METHOD (user 2026-08-21) ----
+                    // NORMAL entry lands under parachutes (the real Crew Dragon procedure); BACKUP
+                    // entry lands propulsively on the SuperDracos. This picks the method for the
+                    // TARGETED return (STRING 1C / DeorbitOps -> EntryOps, which reads
+                    // PropulsiveRequested); the emergency DEORBIT NOW / WATER buttons always parachute.
                     case PanelCommand.EnableBackupEntry:
-                        BackupEntry = true;  Log("entry mode BACKUP"); return true;
+                        BackupEntry = true;  EntryOps.PropulsiveRequested = true;
+                        Log("entry mode BACKUP - propulsive landing"); return true;
                     case PanelCommand.EnableNormalEntry:
-                        BackupEntry = false; Log("entry mode NORMAL"); return true;
+                        BackupEntry = false; EntryOps.PropulsiveRequested = false;
+                        Log("entry mode NORMAL - parachute landing"); return true;
 
                     // ---- POWER STRINGS ----
                     // These used to log "no KSP system behind it" and do nothing. Stock KSP has no
@@ -192,25 +229,24 @@ namespace DragonScreen
                     case PanelCommand.Reset1: return Reset(1);
                     case PanelCommand.Reset2: return Reset(2);
 
-                    // ---- FLIGHT COMPUTER STRINGS (repurposed 2026-08-21) ----
-                    // The real Crew Dragon STRING buttons reinitialise the redundant flight computers
-                    // when a system faults. OURS are flight computers - the phase autopilots - so the
-                    // grid is columns = phase, rows = job (user's mapping, 2026-08-21):
-                    //   col A = ASCENT   col B = RENDEZVOUS/DOCK   col C = DEORBIT + LAND
-                    //   row 1 (1A/1B/1C) ENGAGE the phase (toggle - a second press disengages)
-                    //   row 2 (2A/2B/2C) RE-INITIALISE it (force disengage + re-engage - recover a
-                    //                    computer that faulted mid-phase)
-                    // The old power-string SIMULATION these used to drive is retired from these
-                    // buttons; POWER 1/2 and RESET 1/2 still run the bus model (auto-trip + recover).
+                    // ---- FLIGHT COMPUTER STRINGS: TWO MISSIONS, ONE PER ROW (user 2026-08-21) ----
+                    // OURS are flight computers - the phase autopilots. Each ROW is a whole mission:
+                    //   ROW 1 = STATION FERRY:  1A ASCENT (120 km) · 1B RENDEZVOUS/DOCK · 1C DEORBIT+LAND
+                    //   ROW 2 = TOURIST DRAGON: 2A LAUNCH (250 km, no dock) · 2B DESCEND to the de-orbit
+                    //                           orbit · 2C DEORBIT + parachute SPLASHDOWN offshore
+                    // Row 1 buttons latch lit while their (shared) controller runs; the tourist row is
+                    // momentary (its ascent/de-orbit reuse the same controllers, so row 1 shows their
+                    // live state). POWER 1/2 + RESET 1/2 still run the bus model. The re-init row this
+                    // replaced is gone.
                     case PanelCommand.String1A: if (!Powered(1)) return false;
-                        AutoPilot.Toggle();  return true;                          // ASCENT
+                        AutoPilot.Toggle();  return true;                          // STATION ASCENT
                     case PanelCommand.String1B: if (!Powered(1)) return false;
                         return ToggleRendezvousDock();                            // RENDEZVOUS/DOCK
                     case PanelCommand.String1C: if (!Powered(1)) return false;
                         DeorbitOps.Toggle(); return true;                         // DEORBIT + LAND
-                    case PanelCommand.String2A: if (!Powered(2)) return false; return ReinitAscent();
-                    case PanelCommand.String2B: if (!Powered(2)) return false; return ReinitRendezvous();
-                    case PanelCommand.String2C: if (!Powered(2)) return false; return ReinitDeorbit();
+                    case PanelCommand.String2A: if (!Powered(2)) return false; return TouristLaunch();
+                    case PanelCommand.String2B: if (!Powered(2)) return false; return TouristDescend();
+                    case PanelCommand.String2C: if (!Powered(2)) return false; return TouristDeorbit();
 
                     // ---- CABIN EMERGENCIES ----
                     // Also previously inert. A fire needs a part genuinely near its temperature
@@ -246,8 +282,21 @@ namespace DragonScreen
                     // ⛔ TOGGLE, NOT ENGAGE. On 2026-08-11 the crew pressed this to escape a
                     // runaway rendezvous and got "Press ignored" - the idempotency guard added that
                     // morning had removed the only abort the cockpit has. A second press cancels.
-                    case PanelCommand.DeorbitNow:   DeorbitOps.Toggle(); return true;
-                    case PanelCommand.WaterDeorbit: return StartDeorbit(v, WaterDeorbitTargetPe, "WATER DEORBIT");
+                    // ---- ⛔ THE EMERGENCY LANDINGS: IMMEDIATE, PARACHUTE, ARM+EXECUTE ----
+                    // Redefined 2026-08-21. These are NOT the targeted STRING 1C return - they get the
+                    // capsule DOWN NOW under parachutes, no landing-zone aim. StartDeorbit is the crude
+                    // retrograde-to-periapsis burn (SAS holds the heat shield forward, ChuteGuard
+                    // deploys the mains), so they always parachute regardless of the NORMAL/BACKUP
+                    // selection. Both are on the emergency plate, so NeedsExecute already gates them
+                    // behind arm+EXECUTE. STRING 1C stays the single-press targeted return.
+                    //   DEORBIT NOW - deorbit immediately, parachute, land ANYWHERE the track falls.
+                    //   WATER       - a shallower (gentler) arc for a splashdown, parachute.
+                    case PanelCommand.DeorbitNow:
+                        EntryOps.PropulsiveRequested = false;
+                        return StartDeorbit(v, DeorbitTargetPe, "DEORBIT NOW");
+                    case PanelCommand.WaterDeorbit:
+                        EntryOps.PropulsiveRequested = false;
+                        return StartDeorbit(v, WaterDeorbitTargetPe, "WATER DEORBIT");
                     case PanelCommand.Breakout:     return Breakout(v);
                     case PanelCommand.Abort:        return Abort(v);
                 }

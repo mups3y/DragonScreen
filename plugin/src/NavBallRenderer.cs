@@ -159,6 +159,10 @@ namespace DragonScreen
                     failed = true;
                     return;
                 }
+                // The heading origin is applied as a U-offset that runs the mesh UVs past 1.0, so the
+                // skin must WRAP horizontally for the closed seam to sample the same texel. navball.png
+                // is used by nothing else, so setting it here is safe.
+                skin.wrapMode = TextureWrapMode.Repeat;
 
                 target = new RenderTexture(Size, Size, 16, RenderTextureFormat.ARGB32);
                 target.antiAliasing = 4;          // same reasoning as the screens: this is all curves
@@ -501,7 +505,17 @@ namespace DragonScreen
                     // candidates offline in `navball_preview.py` (the "stock" mode) and reading them:
                     // it is the only one with sky up, the ladder upright, glyphs readable, and the
                     // markings sweeping LEFT under a right yaw. See that file for the sheets.
-                    uvs[i] = new Vector2(1f - u, 1f - v);       // (1 - lon, lat), lat = 1 at +Y pole
+                    //
+                    // ---- HEADING ORIGIN: +0.75 in U, CALIBRATED AGAINST A REAL LOGGED HEADING ----
+                    // The plain (1-u) mapping put the heading tape 90 deg out - a vessel logged level
+                    // on the pad at heading 90.0 read "N" at the centre of the ball, not "E". Rotating
+                    // the heading axis by +0.75 (of a full wrap) lines it up: the same attitude now
+                    // reads "90". Measured with `navball_preview.py` against the on-pad log line
+                    // `surface pitch/heading/roll = 359.2 / 90.0 / 0.0`. A U-offset only rotates the
+                    // heading origin - it cannot touch the hemispheres, the ladder, or the sweep, which
+                    // stay as verified. No modulo: U runs 1.75 -> 0.75 across the mesh with no jump, and
+                    // the wrapped skin (set in Build) makes the closed seam sample the same texel.
+                    uvs[i] = new Vector2(1f - u + 0.75f, 1f - v);   // (1 - lon + heading origin, lat)
                 }
             }
 

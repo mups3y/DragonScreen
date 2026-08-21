@@ -87,6 +87,19 @@ namespace DragonScreen
         /// <summary>...and at or below this relative speed, m/s. `stMatchVel`.</summary>
         public const double MatchVelMps = 0.5;
 
+        // ---- ⛔ KEEP-OUT: A HARD BACKSTOP AGAINST RAMMING THE STATION ----
+        // flight_0821_060847: Match() blew through the 200 m handover down to 11 m and hit the
+        // structure - the SuperDracos could not arrest the closing velocity in time. The approach
+        // should never be inside GoalM (Match holds there, then docking takes over), so being deep
+        // inside it means something failed. Below the floor the approach may only BRAKE; below the
+        // hard abort it releases to the crew, because a drifting capsule is recoverable and a
+        // capsule the autopilot is driving into a station is not. This is a safety net, NOT the fix
+        // for why Match cannot brake - that is the rendezvous rebuild, deferred.
+        /// <summary>Inside this range the approach may only brake, never add closing speed, m.</summary>
+        public const double KeepOutFloorM = 60.0;
+        /// <summary>Inside this the approach gives up and releases the vehicle to the crew, m.</summary>
+        public const double HardAbortM = 25.0;
+
         /// <summary>Correction below this needs no burn, m/s. `stDirectTol`.</summary>
         public const double DvToleranceMps = 0.30;
         /// <summary>Thrust gate: nose must be within this of the correction, degrees. `stAimTol`.</summary>

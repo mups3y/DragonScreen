@@ -53,8 +53,19 @@ namespace DragonScreen
         public const double DrogueMaxSpeedMps = 560.0;
         /// <summary>Mains, metres. `dgMainAlt`.</summary>
         public const double MainAltM = 2000.0;
-        /// <summary>Monopropellant needed to attempt a SuperDraco landing, units. `dgMonoGate`.</summary>
-        public const double MonoGateUnits = 40.0;
+        /// <summary>
+        /// Monopropellant needed to attempt a SuperDraco landing, units. RAISED for FULLY PROPULSIVE
+        /// (user 2026-08-21): F9I's 40 was for a drogue-then-burn, which only had to kill ~60 m/s. A
+        /// no-chute hoverslam kills the whole terminal velocity (~120-150 m/s) plus its gravity loss -
+        /// order ~200 m/s of dv, ~100 units of the 195-unit tank (~400 m/s). 120 leaves margin, and is
+        /// the guard that DROPS BACK TO PARACHUTES rather than start a hoverslam that cannot finish.
+        /// ⚠ An estimate until a propulsive flight is flown - refine from the recorded landing-burn dv.
+        /// </summary>
+        public const double MonoGateUnits = 120.0;
+
+        /// <summary>Legs out (through the heat shield) at this true radar altitude on a propulsive
+        /// landing, metres. Low: the capsule lands ON them, but early is drag and plume.</summary>
+        public const double GearDeployAltM = 40.0;
 
         /// <summary>Landing gear/bell offset below the radar altimeter, metres. F9I's `dgH`.</summary>
         public const double HeightOffsetM = 4.0;

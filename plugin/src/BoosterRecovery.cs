@@ -25,9 +25,11 @@
  * we now do the same ourselves - `Extend` is re-applied to both vessels on the recovery's own tick
  * (see `Tick`), so the range holds without PRE installed.
  *
- * The range is 500 km, MEASURED: the separation peaks at ~360 km at booster touchdown
- * (flight_0821_004239), so 500 km covers it with margin. It is taken as a LOAN only while focus is on
- * the booster and handed back on landing (SnapshotRanges/Extend/RestoreRanges) - a standing range
+ * The range is 1500 km ([Tunable] RangeMetres): the 120 km ferry peaks at ~360 km separation at
+ * booster touchdown (flight_0821_004239), which 500 km covered, but the 250 km TOURIST mission flies
+ * the upper stage far further downrange, so it is raised to F9I's 1500 km. It is taken as a LOAN only
+ * while focus is on the booster and handed back on landing (SnapshotRanges/Extend/RestoreRanges) - a
+ * standing range
  * would load the whole system, the station included, and cost frames the recovery does not need.
  * `Set` matches PRE's own band proportions so both vessels stay UNPACKED (full physics, controllable)
  * out to the range, not merely loaded-on-rails. With PRE also installed there is no conflict - its
@@ -47,13 +49,19 @@ namespace DragonScreen
         /// The physics range we hold during a recovery, metres. Our own PhysicsRangeExtender port
         /// (see `Extend`/`Tick`) so the mod no longer depends on PRE being installed.
         ///
-        /// 500 km, MEASURED not guessed: the upper-stage-to-booster separation peaks at ~360 km at
-        /// booster touchdown (flight_0821_004239), crossing the stock ~300 km fallback during the
-        /// booster's final descent - which is exactly where the upper stage used to unload. 500 km
-        /// covers that with margin and is far cheaper than the old 1500 km, which loaded the whole
-        /// system (station included) and cost frames the recovery did not need.
+        /// 1500 km. The 120 km ferry separates by only ~360 km at booster touchdown
+        /// (flight_0821_004239) and 500 km covered it, but the 250 km TOURIST mission puts the upper
+        /// stage far further downrange while the booster flies RTLS, so 500 km loses one of them. F9I
+        /// used 1500 km; match it. [Tunable] - drop it back toward 500 km for a station-only flight if
+        /// the physics load bites.
         /// </summary>
-        public const float RangeMetres = 500000f;
+        // ---- RAISED TO 1500 km FOR THE 250 km TOURIST MISSION (user 2026-08-21) ----
+        // 500 km covered the 120 km station ferry - booster and upper stage stayed loaded. The tourist
+        // mission flies to 250 km, so the upper stage is much further downrange while the booster does
+        // RTLS, and 500 km "won't cut it": one of them unloads and is lost. F9I set 1500 km
+        // (`SetLoadDistances(ship, 1500000)`) for exactly this, so match it. [Tunable] - lower it back
+        // toward 500 km for a lighter station-only flight if the physics load bites.
+        [Tunable] public static float RangeMetres = 1500000f;
 
         /// <summary>
         /// How far the booster's TOTAL attitude error may be and still have its roll axis actively
@@ -1668,10 +1676,21 @@ namespace DragonScreen
                 }
             }
 
-            // Roll is HELD to that reference now, not locked out: LockRoll off. The range gate stays at
-            // 130 - the reorientation is pure pitch so roll error is ~0 through it anyway, and holding a
-            // separate axis does not steal the pitch authority the slew needs.
-            AttitudeController.Booster.LockRoll = false;
+            // ---- ⛔ THE COAST DROPS THE ROLL REFERENCE - JUST DAMP THE RATE (user 2026-08-21) ----
+            // The in-plane top above was meant to make the coast reorientation "pure pitch, no roll
+            // induced". flight_0821_060847 disagrees: 211 deg of roll on the coast (2.1x F9I), the weak
+            // roll authority fighting the reference the whole ~180 deg nose-up - the "elephant walk"
+            // the user described. LockRoll turns the roll channel into a pure RATE DAMPER (no reference
+            // to chase), and this controller's own note records it FLOWN at ~42 deg on the coast -
+            // because there is nothing for the weak authority to fight. It was switched off on the
+            // theory the data above disproves. So the COAST now holds NO roll reference and just nulls
+            // the rate; every other phase keeps the in-plane top (the descent needs it once the fins
+            // bite, and roll does not affect the landing point). Any residual roll is corrected in the
+            // entry burn / descent, which have the authority the coast lacks - so nothing that lands
+            // the booster changes.
+            bool coastDampRoll = (c.Phase == LandingPhase.Coast);
+            AttitudeController.Booster.LockRoll = coastDampRoll;
+            if (coastDampRoll) upHint = Vector3d.zero;   // remove the reference the authority was fighting
             AttitudeController.Booster.RollControlRangeDeg = BoosterRollRangeDeg;
 
             AttitudeController.Booster.SteerTo(v, dir, upHint);

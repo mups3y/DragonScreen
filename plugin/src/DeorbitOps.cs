@@ -122,6 +122,22 @@ namespace DragonScreen
                 return;
             }
 
+            // ---- CAPSULE TARGET FOLLOWS THE LANDING METHOD (user 2026-08-21) ----
+            // A PROPULSIVE landing puts the capsule exactly on LZ-1 (the pad); a PARACHUTE landing
+            // splashes down ~1 km off shore of it. The method is the NORMAL/BACKUP entry selection
+            // (EntryOps.PropulsiveRequested), chosen before this press. Set here, before the budget and
+            // the aim use it, and propagated to EntryOps at the handover (line ~456).
+            if (EntryOps.PropulsiveRequested)
+            {
+                TargetLatDeg = LandingSites.Lz1.LatDeg;
+                TargetLonDeg = LandingSites.Lz1.LonDeg;
+            }
+            else
+            {
+                TargetLatDeg = LandingSites.Splashdown.LatDeg;
+                TargetLonDeg = LandingSites.Splashdown.LonDeg;
+            }
+
             // ---- IS A RETURN EVEN MEANINGFUL FROM HERE? `StReturnAllowed`. ----
             string why;
             bool down = v.situation == Vessel.Situations.LANDED
@@ -184,6 +200,17 @@ namespace DragonScreen
                              + "left in the orbit it is in. Dock and refuel.");
                 return;
             }
+
+            // ---- ⛔ THE DE-ORBIT OWNS THE VEHICLE ALONE ----
+            // flight_0821_060847: an approach controller was still engaged when the crew de-orbited,
+            // so two controllers drove one capsule for 702 s and the return never ran. A de-orbit is
+            // the point of no return - it must not share the stick. Clear anything else that steers,
+            // belt-and-suspenders on top of each controller's own cancel path.
+            if (AutoPilot.Engaged) AutoPilot.Disengage("de-orbit takes the vehicle");
+            if (StationApproach.Engaged) StationApproach.Disengage("de-orbit takes the vehicle");
+            if (DirectApproachOps.Engaged) DirectApproachOps.Disengage("de-orbit takes the vehicle");
+            if (DockingOps.Engaged) DockingOps.Reset();
+            if (UndockOps.Engaged) UndockOps.Reset();
 
             ship = v;
             Engaged = true;

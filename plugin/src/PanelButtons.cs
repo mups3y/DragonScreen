@@ -220,7 +220,25 @@ namespace DragonScreen
             // On 2026-08-12 the crew pressed all three and got that message from all three. The
             // simulate-a-system rule was applied and then silently undone by a leftover guard.
 
-            if (c == PanelCommand.Cancel || c == PanelCommand.Execute || PanelMap.NeedsExecute(c))
+            // ---- CANCEL: clear any armed command AND stop any running sequence (user 2026-08-21) ----
+            // Two jobs now. The interlock clears an armed emergency command; CancelAllSequences stops
+            // a running ascent / rendezvous / dock / de-orbit / undock, whether or not anything was
+            // armed. Still never punishes the careful press: with nothing armed and nothing running it
+            // stays dark.
+            if (c == PanelCommand.Cancel)
+            {
+                PressResult r = PanelButtons.Lock.Press(c);
+                bool cleared = (r == PressResult.Cancelled);
+                if (cleared) ClearArmedLamps();
+                bool stopped = FlightCommands.CancelAllSequences();
+                Debug.Log(Tag + "panel: CANCEL -> "
+                          + (cleared ? "armed cleared; " : "")
+                          + (stopped ? "sequence stopped" : (cleared ? "" : "nothing to cancel")));
+                if (cleared || stopped) Flash(PanelLight.Lit, FlashSeconds);
+                return;
+            }
+
+            if (c == PanelCommand.Execute || PanelMap.NeedsExecute(c))
             {
                 PressResult r = PanelButtons.Lock.Press(c);
                 Debug.Log(Tag + "panel: " + entry.Label + " -> " + r

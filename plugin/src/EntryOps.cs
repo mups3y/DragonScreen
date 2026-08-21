@@ -29,9 +29,11 @@
  *
  * 4. THE CHUTES ARE CUT ONLY AFTER THE ENGINES ARE PROVEN LIT. See `pure/Terminal.cs`.
  *
- * 5. THE GEAR GOES DOWN AFTER TOUCHDOWN, AND NEVER ON A SPLASHDOWN. It lives in the heat shield: out
- *    early it is drag hanging in the airflow and, on a propulsive landing, it sits in the SuperDraco
- *    plume. In the water there is nothing to stand on and legs only risk breaking the capsule up.
+ * 5. THE GEAR TIMING DEPENDS ON THE LANDING, AND NEVER COMES OUT ON A SPLASHDOWN. It lives in the heat
+ *    shield. On a PARACHUTE-on-land touchdown it goes down AFTER touchdown - out early it is just drag.
+ *    On a FULLY PROPULSIVE landing it must be out DURING the hoverslam, low (Terminal.GearDeployAltM),
+ *    because the capsule lands ON the legs; that is late enough to be for standing on, not plume. In the
+ *    water there is nothing to stand on and legs only risk breaking the capsule up - a splashdown gets none.
  *
  * ---- ⚠ WHAT IS DELIBERATELY NOT HERE ----
  * **Warp.** F9I rails-warps the coast and physics-warps the entry above 55 km. `docs/PORT_PLAN.md`
@@ -152,10 +154,12 @@ namespace DragonScreen
         public static bool Engaged { get; private set; }
         public static string Note = "-";
 
-        /// <summary>Where we are trying to land. LZ-1, same as the de-orbit.</summary>
-        // ⛔ LZ-1, BY USER DIRECTIVE (2026-08-20): "the predicted impact must be DIRECTLY ON LZ1."
-        // Was LandingSites.Splashdown (a crew capsule comes down in water); the crew wants the pad,
-        // and the mid-course RCS trim below now has the authority to actually hit it.
+        /// <summary>Where we are trying to land. SET BY DeorbitOps PER LANDING METHOD, not here.</summary>
+        // ⛔ THE TARGET FOLLOWS THE LANDING METHOD (user 2026-08-21): PROPULSIVE lands exactly on LZ-1,
+        // PARACHUTE splashes down ~1 km off shore of it. DeorbitOps.Engage picks the point from
+        // EntryOps.PropulsiveRequested and copies it here at the handover, so this default only stands
+        // in the (unreached) case of an entry with no de-orbit ahead of it. Supersedes the 2026-08-20
+        // "always DIRECTLY ON LZ1" directive - propulsive still hits the pad, parachute no longer does.
         public static double TargetLatDeg = LandingSites.Lz1.LatDeg;
         public static double TargetLonDeg = LandingSites.Lz1.LonDeg;
 
@@ -169,6 +173,7 @@ namespace DragonScreen
 
         /// <summary>Chute state, for the pages and the recorder.</summary>
         public static bool DroguesDeployed, MainsDeployed;
+        private static bool gearDeployed;
 
         /// <summary>Latched so a lost prediction is reported once per entry, not every frame.</summary>
         private static bool noPredictionReported;
@@ -211,7 +216,7 @@ namespace DragonScreen
             Engaged = true;
             mem = new EntryMemory();
             haveImpact = false; enginesCommanded = false; ballisticHold = false;
-            DroguesDeployed = false; MainsDeployed = false;
+            DroguesDeployed = false; MainsDeployed = false; gearDeployed = false;
             // ⚠ sepFiredAt is a LATCH, not a timestamp to leave lying around. Left set from a previous
             // run, Separate() believes it has already fired and skips the decouple entirely - the
             // capsule would enter with the trunk still on it and no message saying why.
@@ -271,7 +276,7 @@ namespace DragonScreen
             Engaged = false; Stage = EntryStage.Idle; ship = null; Note = "-";
             mem = new EntryMemory();
             haveImpact = false; enginesCommanded = false; sepFiredAt = 0.0; ballisticHold = false;
-            DroguesDeployed = false; MainsDeployed = false;
+            DroguesDeployed = false; MainsDeployed = false; gearDeployed = false;
             VerticalCmd = 0.0; LateralCmd = 0.0; AoaCmdDeg = 0.0; ThrottleCmd = 0.0;
             AlongTrackM = 0.0; CrossTrackM = 0.0; MissM = -1.0; WantLongM = 0.0;
             TrimErrorM = 0.0; BelowProfile = false;
@@ -701,15 +706,22 @@ namespace DragonScreen
 
             if (!Terminal.DrogueReady(ship.srfSpeed, alt, Method)) return;
 
-            DroguesDeployed = Deploy(new PartMatch(VehicleParts.IsDrogues)) > 0;
-            Debug.Log(Tag + "drogues deployed at " + alt.ToString("F0") + " m, "
-                      + ship.srfSpeed.ToString("F0") + " m/s");
-
+            // ---- ⛔ FULLY PROPULSIVE: NO CHUTES (user 2026-08-21) ----
+            // The SuperDracos take the WHOLE terminal velocity - no drogues to slow first. Go straight
+            // to lighting them: the propulsive drogue floor (5 km) leaves time to light, prove, and
+            // commit the hoverslam (~1.6 km) with the chutes still stowed. The drogues survive only as
+            // the ENGINE-FAILURE ABORT in ArmEngines, never as the nominal path. This is a rebuild of
+            // the ported drogue-then-SuperDraco sequence, not a copy of it - the crew asked for a fully
+            // propulsive landing (SpaceX's original Dragon-2 plan: decelerate to zero, then legs).
             if (Method == LandingMethod.Propulsive)
             {
                 Go(EntryStage.ArmingEngines);
                 return;
             }
+
+            DroguesDeployed = Deploy(new PartMatch(VehicleParts.IsDrogues)) > 0;
+            Debug.Log(Tag + "drogues deployed at " + alt.ToString("F0") + " m, "
+                      + ship.srfSpeed.ToString("F0") + " m/s");
             ship.ActionGroups.SetGroup(KSPActionGroup.RCS, false);
             Go(EntryStage.DroguesOut);
         }
@@ -754,16 +766,24 @@ namespace DragonScreen
 
             if (!PodEngines.Available(ship))
             {
-                // Abandon. Chutes STAY OUT.
-                Debug.LogError(Tag + "PROPULSIVE ABANDONED at the chute-cut point - no thrust. "
-                               + "The drogues stay out and this becomes a parachute landing.");
-                Mains("propulsive abandoned - no thrust");
+                // ---- ENGINE-FAILURE ABORT ----
+                // Fully propulsive carries NO drogues out yet, so deploy them NOW (we are below
+                // DrogueMaxSpeed by here) and fall back to the parachute descent. A soft landing nobody
+                // planned beats a hoverslam with no thrust. This is the one place chutes come out on a
+                // "no chutes" landing, and it is an abort, not the plan.
+                Debug.LogError(Tag + "PROPULSIVE ABANDONED at " + trueRadar.ToString("F0")
+                               + " m - no thrust. Deploying chutes as an abort.");
+                DroguesDeployed = Deploy(new PartMatch(VehicleParts.IsDrogues)) > 0;
+                ship.ActionGroups.SetGroup(KSPActionGroup.RCS, false);
+                Go(EntryStage.DroguesOut);
                 return;
             }
 
+            // Fully propulsive has no drogues out; this Cut is a no-op then, and cuts the abort/parachute
+            // drogues only if a mixed path ever reaches here. Keep it - proven-lit BEFORE anything is cut.
             Cut(new PartMatch(VehicleParts.IsDrogues));
-            Debug.Log(Tag + "chutes cut at " + trueRadar.ToString("F0") + " m, "
-                      + PodEngines.ThrustKn(ship).ToString("F0") + " kN available");
+            Debug.Log(Tag + "engines proven lit at " + trueRadar.ToString("F0") + " m, "
+                      + PodEngines.ThrustKn(ship).ToString("F0") + " kN - committing the hoverslam");
             Go(EntryStage.Committed);
         }
 
@@ -786,6 +806,16 @@ namespace DragonScreen
                         ? Terminal.HoverThrottle(ship.GetTotalMass(), Gravity(), PodEngines.ThrustKn(ship))
                         : Terminal.LandingThrottle(trueRadar, stop);
             AttitudeController.Ascent.Throttle = ThrottleCmd;
+
+            // Legs out for the touchdown, through the heat shield, once low enough that they are for
+            // standing on rather than drag/plume. A propulsive landing lands ON them, so they come out
+            // DURING the hoverslam - not after it, the way the parachute/splashdown path leaves them.
+            if (!gearDeployed && trueRadar < Terminal.GearDeployAltM)
+            {
+                DoEvent(new PartMatch(VehicleParts.IsHeatShield), "deploy gear");
+                gearDeployed = true;
+                Debug.Log(Tag + "landing gear out at " + trueRadar.ToString("F0") + " m");
+            }
 
             Note = "SUPERDRACO LANDING BURN - " + trueRadar.ToString("F0") + " m, "
                  + ship.verticalSpeed.ToString("F1") + " m/s, thr "
@@ -830,10 +860,13 @@ namespace DragonScreen
             PodEngines.Off(ship);
             bool splashed = ship.situation == Vessel.Situations.SPLASHED;
 
-            if (!splashed)
+            if (!splashed && !gearDeployed)
             {
+                // The parachute-on-land case deploys the gear now; a propulsive landing already put it
+                // out during the hoverslam (it lands ON the legs), and a splashdown never wants it.
                 int n = DoEvent(new PartMatch(VehicleParts.IsHeatShield), "deploy gear");
                 if (n == 0) Debug.LogWarning(Tag + "no 'deploy gear' event found on the heat shield");
+                gearDeployed = n > 0;
             }
 
             double miss = Orbital.GroundRange(ship.mainBody.Radius, ship.latitude, ship.longitude,

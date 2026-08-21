@@ -156,7 +156,10 @@ def uv_stock(lon01, lat01):
     right but MIRRORS the glyphs, because our generated sphere winds longitude the opposite way to the
     texture. Flipping longitude un-mirrors the digits while leaving sky up where it was.
     """
-    return (1.0 - lon01) % 1.0, lat01
+    # +0.75 heading origin, calibrated against the on-pad log line (heading 90 -> reads "90").
+    # In-game this runs the mesh UVs past 1.0 with a wrapped skin; here render() clamps per pixel,
+    # so wrap it with the modulo to emulate that.
+    return (1.0 - lon01 + 0.75) % 1.0, lat01
 
 
 UV_MODES = {

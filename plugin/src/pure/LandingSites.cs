@@ -54,21 +54,18 @@ namespace DragonScreen
             new LandingSite("LZ-2", -0.140425956708956, -74.5495256417959);
 
         /// <summary>
-        /// THE CAPSULE'S SPLASHDOWN POINT - just off shore, east of KSC.
+        /// THE CAPSULE'S PARACHUTE SPLASHDOWN POINT - ~1 km off shore, seaward of LZ-1.
         ///
-        /// Crew Dragon comes down in water, not on a pad, and it does so within helicopter reach of
-        /// the recovery fleet rather than in mid-ocean. LZ-1 sits at -0.1323, -74.5494; the coast
-        /// runs east of the space centre, so this is placed a few kilometres offshore on the same
-        /// latitude - close enough to be "just off KSC", far enough that a long entry lands in
-        /// water rather than on the runway.
+        /// The capsule's target follows the LANDING METHOD (user 2026-08-21, wired in DeorbitOps.Engage):
+        /// a PARACHUTE landing splashes down about 1 km off shore from LZ-1, a PROPULSIVE landing puts
+        /// the capsule exactly on LZ-1 (the pad). So this is the parachute target only.
         ///
-        /// ⚠ THE CAPSULE MUST NOT AIM AT THE BOOSTER'S PAD. It was defaulting to `Lz1` - the RTLS
-        /// pad - so a perfect entry would have put a crewed capsule on concrete, and any error
-        /// short of perfect put it inland. The two vehicles come home to different places, which is
-        /// true of the real ones as well.
+        /// Placed 1 km from LZ-1 along the bearing of the previous, known-water splashdown point
+        /// (-0.0972, -74.3200, which was ~2.4 km out on a heading just north of east) - i.e. the same
+        /// seaward direction, pulled in to 1 km. Kerbin: 1 deg ~ 10.472 km.
         /// </summary>
         public static readonly LandingSite Splashdown =
-            new LandingSite("SPLASHDOWN", -0.0972, -74.3200);
+            new LandingSite("SPLASHDOWN", -0.1179, -74.4550);
 
         /// <summary>
         /// BOOSTER.ks:158 looks the droneship up by this name and takes its CURRENT position,

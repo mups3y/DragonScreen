@@ -156,6 +156,13 @@ namespace DragonScreen
         {
             if (!Engaged) return;
             Engaged = false;
+            // ---- ⛔ TAKE THE HANDED-OFF DIRECT APPROACH DOWN WITH US, OR IT ZOMBIES ----
+            // flight_0821_060847: the crew cancelled the rendezvous, this cleared, but the DIRECT
+            // approach we had handed off to stayed Engaged and stopped ticking (RangeM froze at
+            // 815.8 m for 702 s). Owner() then read it as a live controller and every de-orbit after
+            // it was CONTENDED:deorbit - two owners, the node never aligned, the return never ran.
+            // Only Reset() used to clean it up; a crew CANCEL calls Disengage, so it must too.
+            if (DirectApproachOps.Engaged) DirectApproachOps.Disengage("rendezvous cancelled");
             AttitudeController.Ascent.Release(ship);
             if (ship != null && ship.ctrlState != null)
             {

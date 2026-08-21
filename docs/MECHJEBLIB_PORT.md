@@ -1,7 +1,44 @@
-# Porting MechJebLib's FuelFlowSimulation — scope, settled, not yet started
+# Porting MechJebLib's FuelFlowSimulation — the pure sim is DONE and PROVEN
 
-**Status: fully scoped, blocking question answered, zero lines written.** Deliberately not rushed at
-the end of a long session; it is ready to start cold.
+**Status 2026-08-21: steps 1-3 COMPLETE and headless-validated. Steps 4-6 (the KSP builder, wiring
+ReturnBudget, surfacing the budget) remain — they are KSP-coupled and can only be validated in-game,
+so they wait for the RSS/RO install gate.** This work was started as step 2 of the approved RSS/RO
+Crew-1 plan (`.claude/plans/snoopy-orbiting-hennessy.md`): a real staged Δv budget is the prerequisite
+for tuning any RSS phase honestly.
+
+## ✅ DONE 2026-08-21 — the pure simulation, ported verbatim into `src/pure/mechjeblib/`
+
+- **Foundation** (`Utils/ObjectPool`, `Utils/Statics` [subset], `Utils/DictOfLists`, `Utils/AsyncJob`,
+  `Functions/Interpolants` [double only], `Primitives/HBase`, `Primitives/H1`) and the **15 sim files**
+  (`FuelFlowSimulation/*` + `PartModules/*`), all copied verbatim with SPDX + provenance headers.
+- **`test/MechJebLibTest.cs` (16 checks)** guards H1/Statics; **`test/FuelFlowTest.cs` (8 checks)**
+  hand-builds a SimVessel and proves the sim reproduces **dv = Isp·g0·ln(m0/m1)** at both vacuum and
+  sea level (so the H1 AtmosphereCurve is being evaluated by pressure), plus start/end mass, thrust,
+  Isp. Build green, all suites pass.
+
+### ⚠ ONE DELIBERATE DEVIATION from the plan below: a **minimal V3**, not "skip V3"
+
+The "V3 — SKIP ... only V3.zero x6" line was an under-count. `SimModuleEngines` carries
+`List<V3> ThrustDirectionVectors` + `V3 ThrustCurrent/Max/Min` and does real vector arithmetic to sum
+canted thrust before `.magnitude` reduces it to a scalar; `SimVessel` has `V3 R,V,U`. The full V3.cs
+(481 lines) drags in M3 (Outer) + Q3 (Slerp) + more Statics — the cascade this plan rightly deferred.
+Resolution: keep all 15 sim files **verbatim** and provide a **minimal V3** (`src/pure/mechjeblib/
+Primitives/V3.cs`) with exactly the members the sim uses. It is a strict subset of MechJebLib's V3, so
+the PSG port (which needs the full V3 + M3 + Q3) **replaces that file additively** — nothing here is
+undone. The approved plan's PSG step makes a real vector type in `src/pure` correct, superseding the
+old "pure has no vector type" note.
+
+### What remains (steps 4-6, KSP-coupled — need the game to validate)
+
+4. **Our own SimVessel builder** in `src/` (not `src/pure`) against `VehicleParts` — reads the KSP
+   Vessel's parts/engines/resources/FloatCurves into a SimVessel. Only exercisable against a real
+   craft, so it waits for the RSS/RO install + Tundra-RO Falcon 9.
+5. **Wire a staged Δv budget** (ReturnBudget, or a new consumer) to ask the sim.
+6. **Surface staged Δv** on the VEHICLE page + recorder.
+
+---
+
+## (original scope, kept for reference)
 
 ## Why
 

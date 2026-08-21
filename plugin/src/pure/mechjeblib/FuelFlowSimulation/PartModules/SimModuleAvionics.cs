@@ -1,0 +1,40 @@
+/*
+ * Copyright Lamont Granquist, Sebastien Gaggini and the MechJeb contributors
+ * SPDX-License-Identifier: LicenseRef-PD-hp OR Unlicense OR CC0-1.0 OR 0BSD OR MIT-0 OR MIT OR LGPL-2.1+
+ */
+
+/*
+ * ---- PORTED VERBATIM into DragonScreen from MechJebLib/FuelFlowSimulation/PartModules/SimModuleAvionics.cs ----
+ * Per docs/MECHJEBLIB_PORT.md.
+ */
+using MechJebLib.Utils;
+using static System.FormattableString;
+
+namespace MechJebLib.FuelFlowSimulation.PartModules
+{
+    // this handles ControllableMass for both ModuleAvionics and ModuleProceduralAvionics
+    public class SimModuleAvionics : SimPartModule
+    {
+        private static readonly ObjectPool<SimModuleAvionics> _pool = new ObjectPool<SimModuleAvionics>(New, Clear);
+
+        public double ControllableMass;
+
+        public override void Dispose() => _pool.Release(this);
+
+        public static SimModuleAvionics Borrow(SimPart part)
+        {
+            SimModuleAvionics avionics = _pool.Borrow();
+            avionics.Part = part;
+            return avionics;
+        }
+
+        private static SimModuleAvionics New() => new SimModuleAvionics();
+
+        private static void Clear(SimModuleAvionics m)
+        {
+        }
+
+        public override string ToString() =>
+            Invariant($"SimModuleAvionics: {CommonFields()} ControllableMass={ControllableMass}");
+    }
+}

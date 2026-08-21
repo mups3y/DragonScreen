@@ -1,0 +1,42 @@
+/*
+ * Copyright Lamont Granquist, Sebastien Gaggini and the MechJeb contributors
+ * SPDX-License-Identifier: LicenseRef-PD-hp OR Unlicense OR CC0-1.0 OR 0BSD OR MIT-0 OR MIT OR LGPL-2.1+
+ */
+
+/*
+ * ---- PORTED VERBATIM into DragonScreen from MechJebLib/FuelFlowSimulation/PartModules/SimModuleDecouple.cs ----
+ * Per docs/MECHJEBLIB_PORT.md. `#nullable enable annotations` legalises `SimPart? AttachedPart`.
+ */
+#nullable enable annotations
+using MechJebLib.Utils;
+using static System.FormattableString;
+
+namespace MechJebLib.FuelFlowSimulation.PartModules
+{
+    public class SimModuleDecouple : SimPartModule
+    {
+        private static readonly ObjectPool<SimModuleDecouple> _pool = new ObjectPool<SimModuleDecouple>(New, Clear);
+
+        public bool IsDecoupled;
+        public bool IsOmniDecoupler;
+        public bool Staged;
+        public SimPart? AttachedPart;
+
+        public override void Dispose() => _pool.Release(this);
+
+        public static SimModuleDecouple Borrow(SimPart part)
+        {
+            SimModuleDecouple decoupler = _pool.Borrow();
+            decoupler.Part = part;
+            return decoupler;
+        }
+
+        private static SimModuleDecouple New() => new SimModuleDecouple();
+
+        private static void Clear(SimModuleDecouple m) => m.AttachedPart = null;
+
+        public override string ToString() =>
+            Invariant(
+                $"SimModuleDecouple: {CommonFields()} IsDecoupled={IsDecoupled} IsOmniDecoupler={IsOmniDecoupler} Staged={Staged} AttachedPart={AttachedPart?.Name ?? "null"}");
+    }
+}
