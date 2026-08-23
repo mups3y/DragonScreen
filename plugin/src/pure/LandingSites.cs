@@ -68,8 +68,11 @@ namespace DragonScreen
             new LandingSite("SPLASHDOWN", -0.1179, -74.4550);
 
         /// <summary>
-        /// BOOSTER.ks:158 looks the droneship up by this name and takes its CURRENT position,
-        /// because it is a vessel someone parked, not a fixed coordinate.
+        /// STOCK droneship vessel name. The stock build parks a droneship VESSEL, found by this name
+        /// with its CURRENT position taken (it moves between missions). RSS/RO parks the barge as a
+        /// KerbalKonstructs STATIC ("Of Course I Still Love You") which is NOT a vessel, so the RSS
+        /// booster aims at a fixed coordinate instead (BoosterRecovery.DroneshipEarth*) - this name is
+        /// the stock path only. FindDroneship also falls back to the droneship PART, for either build.
         /// </summary>
         public const string DroneshipVesselName = "DRONESHIP_MAIN";
 

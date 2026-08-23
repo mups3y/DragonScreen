@@ -58,6 +58,30 @@ namespace MechJebLib.Primitives
 
         public static V3 operator *(double d, V3 a) => new V3(a.x * d, a.y * d, a.z * d);
 
+        // ---- Extended for the UPFG ascent guidance (2026-08-22). Every member below is copied
+        // UNCHANGED from MechJebLib/Primitives/V3.cs, so this remains a strict subset of that type. ----
+        public static V3 operator /(V3 a, double d) => new V3(a.x / d, a.y / d, a.z / d);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static V3 Cross(V3 v1, V3 v2) =>
+            new V3(v1.y * v2.z - v1.z * v2.y, v1.z * v2.x - v1.x * v2.z, v1.x * v2.y - v1.y * v2.x);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static double Dot(V3 v1, V3 v2) => v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static V3 Normalize(V3 v)
+        {
+            double norm = v.magnitude;
+            return norm > 0 ? v / norm : zero;
+        }
+
+        public V3 normalized
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => Normalize(this);
+        }
+
         public double sqrMagnitude
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]

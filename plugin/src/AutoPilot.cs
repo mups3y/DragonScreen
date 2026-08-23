@@ -35,6 +35,7 @@
 using System;
 using KSP.UI.Screens;      // StageManager. Namespace confirmed in MechJebModuleStagingController.cs:4
 using UnityEngine;
+using MechJebLib.Primitives; // V3, for the UPFG second-stage guidance
 
 namespace DragonScreen
 {
@@ -45,6 +46,41 @@ namespace DragonScreen
         public static bool Engaged { get; private set; }
         public static AscentPhase Phase { get; private set; }
         public static AscentTarget Target = AscentTarget.Station();
+
+        // ---- STOCK KERBIN vs RSS/RO EARTH ----
+        // The flown ascent constants are Kerbin's. A body this much bigger than Kerbin (600 km) is
+        // RSS/RO Earth (6371 km); it gets the scaled interim gravity turn and a real parking orbit
+        // instead of Kerbin's numbers. See AscentTarget.ForBody and docs/SESSION_2026-08-22.md.
+        const double RssBodyRadiusM = 1.0e6;
+
+        /// <summary>
+        /// Degrees ADDED to the station's inclination before solving the launch azimuth, RSS only.
+        ///
+        /// ⛔ WHY A BIAS IS NEEDED. The azimuth solver is correct for a vehicle that reaches ORBITAL
+        /// velocity holding its heading. But UPFG's frame-agnostic Iy LOCKS whatever plane MECO delivers
+        /// (it holds the current velocity plane, it does not steer toward the target plane). At MECO the
+        /// vehicle is only ~2.5 km/s, where Earth's rotation (~0.41 km/s) pulls the inertial azimuth ~4
+        /// deg further east than at 7.8 km/s - so the same ground azimuth sets a LOWER inclination, and
+        /// UPFG then holds it. MEASURED flight_0822_112918: solver commanded 42.8 deg for a 51.60 plane,
+        /// insertion came out 47.9 deg (3.7 short). Adding the deficit to the solver's target aims a more
+        /// northerly azimuth so MECO sets 51.6 directly. One flight - confirm inc reads ~51.6 next launch.
+        ///
+        /// ⚠ RE-MEASURED flight_0822_221316 (octaweb + ullage fixes in): the CORRECTED ascent flies a
+        /// cleaner gravity turn and carries more horizontal velocity through MECO, so Earth's rotation
+        /// drags the plane LESS - a 3.7 bias OVERSHOT to 53.78 deg (2.18 deg over the 51.6 target). The
+        /// deficit the bias must cancel is therefore ~1.5 deg, not 3.7. Tunable; confirm ~51.6 next launch.
+        /// </summary>
+        [Tunable] public static double AscentInclinationBiasDeg = 1.5;
+        // Parking orbit for the RSS ferry, m. Below the ISS (420 km) - the rendezvous phases up;
+        // real Crew-1 inserted near ~200 km. INTERIM, tune from flight.
+        const double RssParkingAltitudeM = 200000.0;
+
+        // ---- RSS second-stage LOFT (interim, see Steer) ----
+        // A TWR<1 upper stage must aim above prograde to climb out of the 140 km atmosphere. The loft
+        // angle = deficit(0..1) * gain, capped at max, where deficit is how far apoapsis is short of
+        // target. [Tunable] so it can be tuned in-flight without a rebuild. Superseded by PSG.
+        [Tunable] public static double S2LoftGainDeg = 70.0;
+        [Tunable] public static double S2MaxLoftDeg = 45.0;
 
         /// <summary>
         /// Set when a mid-ascent teardown (the booster-recovery handback) disengaged us, so the
@@ -138,8 +174,27 @@ namespace DragonScreen
             BoosterRecovery.Reset();
             // The recovery profile IS an ascent profile - see AscentTarget.Station(profile). Taking
             // it here means the two can never disagree about which mission is being flown.
-            Target = tourist ? AscentTarget.Tourist()
-                             : AscentTarget.Station(BoosterRecovery.Profile);
+            //
+            // ---- SCALE THE ASCENT TO THE BODY. ----
+            // On stock Kerbin this is exactly Station(profile) - the flown numbers, untouched. On
+            // RSS/RO Earth (radius >> Kerbin's) the deeper atmosphere and the ~7.8 km/s orbit need
+            // the turn stretched and a real ~200 km parking orbit, which ForBody derives off the
+            // live atmosphere depth. Tourist stays a stock-only mission for now.
+            // ---- RSS/RO: Crew-2 recovers the booster on the DRONESHIP (ASDS), downrange - NOT RTLS. ----
+            // Stock keeps whatever Profile it had (Rtls default, or a LandingSites choice). On Earth the
+            // default Rtls flies a boostback the booster cannot close: MEASURED flight_0822_105240 it ran
+            // BOOSTBACK KILL -> BOOSTBACK and stayed ~3110 km from any target. The droneship profile skips
+            // boostback (Flip->Coast->Entry->Landing, Landing.cs) and aims the barge downrange. Set BEFORE
+            // the target is built - ForBody/Station read Profile. RSS-gated; stock is untouched.
+            if (!tourist && v.mainBody != null && v.mainBody.Radius > RssBodyRadiusM)
+                BoosterRecovery.Profile = LandingProfile.Droneship;
+
+            if (tourist)
+                Target = AscentTarget.Tourist();
+            else if (v.mainBody != null && v.mainBody.Radius > RssBodyRadiusM)
+                Target = AscentTarget.ForBody(BoosterRecovery.Profile, RssParkingAltitudeM);
+            else
+                Target = AscentTarget.Station(BoosterRecovery.Profile);
             ascentVessel = v;
 
             // ---- TARGET THE STATION FROM LAUNCH (station mission only). ----
@@ -149,7 +204,37 @@ namespace DragonScreen
             if (!tourist)
             {
                 Vessel stn = StationApproach.Find();
-                if (stn != null) DockingOps.SetTarget(stn, "launch - targeting the station");
+                if (stn != null)
+                {
+                    DockingOps.SetTarget(stn, "launch - targeting the station");
+
+                    // ---- LAUNCH INTO THE STATION'S PLANE, NOT BLINDLY DUE EAST. ----
+                    // 'heading 90' is a Kerbin artefact: the stock station is at 0.133 deg over an
+                    // equatorial pad, so due east IS the plane and LaunchAzimuth returns ~90 here -
+                    // nothing changes. RSS/Crew-1: the ISS is at 51.6 deg and LC-39A at 28.6 N, so
+                    // due east misses the plane by ~23 deg, which a gravity turn cannot recover.
+                    // The azimuth is solved from the TARGET's own inclination and corrected for the
+                    // body's spin, so it is right for whatever station is in the world. See
+                    // pure/LaunchAzimuth.cs and docs/REAL_CREW_DRAGON_MISSION.md.
+                    if (stn.orbit != null && v.mainBody != null)
+                    {
+                        double r = v.mainBody.Radius + Target.AltitudeM;
+                        double vOrb = Math.Sqrt(v.mainBody.gravParameter / r);
+                        double vEq = LaunchAzimuth.SurfaceEastwardSpeedMps(
+                            v.mainBody.Radius, v.mainBody.rotationPeriod, v.latitude);
+                        // On RSS, aim at the plane PLUS the bias that cancels UPFG's MECO plane-lock (see
+                        // AscentInclinationBiasDeg). Stock holds heading to orbital velocity, no bias.
+                        double incTarget = stn.orbit.inclination;
+                        if (v.mainBody.Radius > RssBodyRadiusM) incTarget += AscentInclinationBiasDeg;
+                        Target.HeadingDeg = LaunchAzimuth.GroundHeadingDeg(
+                            incTarget, v.latitude, vOrb, vEq);
+                        Debug.Log(Tag + "launch azimuth " + Target.HeadingDeg.ToString("F1")
+                                  + " deg for a " + incTarget.ToString("F2") + " deg aim (station "
+                                  + stn.orbit.inclination.ToString("F2") + " + bias "
+                                  + (incTarget - stn.orbit.inclination).ToString("F2")
+                                  + ", pad " + v.latitude.ToString("F2") + " N)");
+                    }
+                }
             }
             packedReported = false;
 
@@ -161,6 +246,13 @@ namespace DragonScreen
             // separate the second stage at all. Engage sets the window up; Tick holds against it.
             // Engage must fall through to the bottom of this method on every path.
             s2Separated = false;
+            boosterSeparated = false;
+            s2IgnitionAttempts = 0;
+            lastS2IgniteAt = -99.0;
+            upfgState.Initialised = false;     // fresh guidance solve for this ascent
+            upfgActive = false;
+            clampReleased = false;
+            s1IgniteAt = -1.0;
             lastHandoverTry = 0.0;
             starvedFor = 0.0;
             blindStages = 0;
@@ -442,10 +534,50 @@ namespace DragonScreen
                 Debug.Log(Tag + "ascent -> "
                           + (string.IsNullOrEmpty(c.Note) ? Ascent.Name(c.Phase) : c.Note)
                           + "  ap " + (a.ApoapsisM / 1000.0).ToString("F1")
-                          + " km, pe " + (a.PeriapsisM / 1000.0).ToString("F1") + " km");
+                          + " km, pe " + (a.PeriapsisM / 1000.0).ToString("F1") + " km"
+                          + Crew2Sync(v));
             if (c.Phase != Phase) phaseStartedAt = Planetarium.GetUniversalTime();
             Phase = c.Phase;
             Command = c;
+
+            // ---- ⛔ RSS/RO: UPFG OWNS THE SECOND STAGE ALL THE WAY TO ORBIT. ----
+            // Once the M-Vac is lit, the closed-loop UPFG guidance (pure/Upfg.cs) flies the whole
+            // insertion - loft, apoapsis raise and circularise in one law - which is the only thing that
+            // reliably closes a real orbit with a TWR<1 upper stage (every fixed-pitch heuristic failed).
+            // ⛔ ONCE ACTIVE IT OWNS EVERY TICK until SECO, IGNORING the pure phase machine - because the
+            // gravity turn's apoapsis-runaway backstop fired at 300 km and ABORTED UPFG mid-insertion
+            // (flight_0822_090116). UPFG manages its own trajectory and cut; the pure Done/abort must not
+            // pre-empt it. Falls through to the loft only while a solve is invalid, never a dead stage.
+            // ⛔ DO NOT ACTIVATE (and Init) UPFG UNTIL THE M-VAC IS ACTUALLY AT THRUST. Init seeds the
+            // predictor-corrector's persistent state (tu = ve*m/F, Rgrav, Rd, Vgo). If it runs during
+            // ULLAGE, `a.AvailableThrust` (summed finalThrust of ignited engines) reads ~1 kN, tu goes
+            // astronomical, and the poisoned state never recovers under single-stepping - the stage holds
+            // ~84 deg and lofts to a 2400 km apoapsis while orbital speed barely moves. PROVEN in the
+            // point-mass sim (scratchpad/sim): a 6 s ullage-poisoned Init reproduces flight_0822_095330
+            // to the degree (apo 2378 km, iF stuck 84 deg); waiting for real thrust reaches orbit. The
+            // fingerprint is the first log line `UPFG tgo 315343s`. UpfgMinThrustKn separates the lit
+            // M-Vac (~800 kN) from ullage (~1 kN); the loft holds prograde for the ~6 s until then.
+            if (RssBody(v) && !s2Separated)
+            {
+                if (!upfgActive && a.AvailableThrust > UpfgMinThrustKn
+                    && (c.Phase == AscentPhase.BurnToApoapsis || c.Phase == AscentPhase.Coast
+                        || c.Phase == AscentPhase.Circularise))
+                    upfgActive = true;
+                if (upfgActive && UpfgFlyS2(v, a))
+                {
+                    // ---- ⛔ UPFG RETURNS BEFORE THE UllageFore APPLICATION BELOW - SO APPLY IT HERE. ----
+                    // Once UPFG owns the S2 it flies at real thrust and the engine self-settles: the RCS
+                    // ullage must stop. This early return skipped line ~627, so the RCS-fore held its last
+                    // ULLAGE value (0.75) for the WHOLE burn - flight_0822_221316: x_fore stuck at 0.75
+                    // through 894 kN of MVac, RCS firing pointlessly alongside the engine, wasting cold gas
+                    // and disturbing the attitude UPFG was steering. `Ascent.Guide` already drops
+                    // c.UllageFore to 0 the moment the engine has thrust; apply that decision here too.
+                    AttitudeController.Ascent.UllageFore = c.UllageFore;
+                    SetAscentRcs(v, c);   // MVac lit under UPFG: the gimbal steers, RCS off - this path
+                                          // returns before the manager below, so set it here too.
+                    return;
+                }
+            }
 
             if (Phase == AscentPhase.Done)
             {
@@ -510,16 +642,7 @@ namespace DragonScreen
             // would have cost an ignition under Real Fuels. The controller owns the FlightCtrlState,
             // so it owns this too.
             AttitudeController.Ascent.UllageFore = c.UllageFore;
-            if (c.UllageFore > 0.01 && !v.ActionGroups[KSPActionGroup.RCS])
-                v.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
-
-            // ---- RCS FOR THE UNPOWERED COASTS ----
-            // F9I's MECO() does `rcs on` before the separation hold. The recording says why: with
-            // the engines out the gimbal goes too, available torque falls from 2300 kN·m to the 9.5
-            // of the reaction wheels alone, and the pitch axis sat saturated at ±1 for the whole
-            // coast at 7-8 degrees of error. RCS is the only authority the stack has there.
-            if (c.Rcs && !v.ActionGroups[KSPActionGroup.RCS])
-                v.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
+            SetAscentRcs(v, c);
 
             // ---- DROP THE S2 AND FINISH ON THE DRACOS ----
             if (c.SeparateS2) SeparateSecondStage(v);
@@ -542,11 +665,495 @@ namespace DragonScreen
             {
                 lastStageAt = Planetarium.GetUniversalTime();
                 blindStages = 0;
-                StageManager.ActivateNextStage();
-                Debug.Log(Tag + "MECO - staged on command, now stage " + StageManager.CurrentStage);
+                // ---- ⛔ STOCK KEEPS STAGING; RSS/RO SEPARATES BY CAPABILITY. ----
+                // The stock build is shipped and tested on StageManager.ActivateNextStage() - keep it.
+                // In RSS/RO that blind-stages the user's layout and (measured 2026-08-22) collapsed the
+                // S1 decouple and MVac activation into one frame, destroying the engine; so on Earth we
+                // fire exactly the interstage decoupler and light the MVac later, after ullage.
+                if (!RssBody(v))
+                {
+                    StageManager.ActivateNextStage();      // STOCK: the previous, tested way
+                    Debug.Log(Tag + "MECO - staged on command, now stage " + StageManager.CurrentStage);
+                }
+                else if (SeparateBooster(v))
+                    Debug.Log(Tag + "MECO - booster separated by capability (interstage decoupler)");
+                else
+                {
+                    StageManager.ActivateNextStage();      // RSS fallback: no interstage decoupler found
+                    Debug.LogWarning(Tag + "MECO - no interstage decoupler found; fell back to staging, "
+                                         + "now stage " + StageManager.CurrentStage);
+                }
             }
-            else Stage(v, c, a);
+            else if (RssBody(v) && c.Phase == AscentPhase.VerticalRise)
+                // RSS/RO pad start: ignite the S1 by capability, spool, confirm thrust, THEN release the
+                // erector/clamp by capability - the real Falcon-9 sequence. Stock keeps ActivateNextStage.
+                RoLaunch(v, a);
+            else if (RssBody(v) && c.Phase == AscentPhase.BurnToApoapsis)
+                // RSS/RO ONLY: the capability ignition OWNS the second stage - during the ullage settle
+                // the throttle is up with no thrust yet, and the starvation Stage() fallback would read
+                // that as a dead stage and fire ActivateNextStage, the cascade we are removing. Stock
+                // lights the MVac through its MECO staging above and never reaches here.
+                IgniteSecondStageWhenSettled(v, c, a);
+            else
+                Stage(v, c, a);
         }
+
+        /// <summary>
+        /// This world is RSS/RO Earth, not stock Kerbin (Kerbin 600 km, Earth 6371 km). The stock and
+        /// RSS builds are ONE codebase with two methods (user, 2026-08-22): stock keeps the previous,
+        /// tested ways; RSS gets the capability-based separation/ignition, the real launch azimuth, the
+        /// ForBody ascent and the droneship-static coordinate. Everything divergent gates on this.
+        /// </summary>
+        private static bool RssBody(Vessel v)
+        {
+            return v != null && v.mainBody != null && v.mainBody.Radius > RssBodyRadiusM;
+        }
+
+        /// <summary>
+        /// RCS on ONLY when there is no engine gimbal to hold attitude, and off otherwise.
+        ///
+        /// ---- ⛔ RCS THROUGH POWERED FLIGHT IS WASTE. ----
+        /// While any engine is lit the gimbal controls attitude, so cold gas / monopropellant spent on
+        /// RCS during the vertical rise, the gravity turn and the MVac burn buys nothing - the crew flew
+        /// flight_0823 with RCS on for the ENTIRE ascent. RCS is wanted only when the phase is UNPOWERED
+        /// (Meco/StageSep/Coast/Shutdown holds, which set c.Rcs) or we are settling propellant for an
+        /// ignition (UllageFore). SET it either way - never just raise it - so it is turned OFF the moment
+        /// the engine relights and the gimbal takes over. Docking/entry manage their own RCS elsewhere.
+        /// </summary>
+        private static void SetAscentRcs(Vessel v, AscentCommand c)
+        {
+            if (v == null) return;
+            bool want = c.Rcs || c.UllageFore > 0.01;
+            if (v.ActionGroups[KSPActionGroup.RCS] != want)
+                v.ActionGroups.SetGroup(KSPActionGroup.RCS, want);
+        }
+
+        /// <summary>
+        /// A one-line comparison of our flight to the REAL Crew-2 launch clock, appended to the
+        /// phase-transition log - the "match the livestream" reference (user 2026-08-22). Empty on stock
+        /// (Kerbin) or before liftoff, so it never touches the stock build. See pure/Crew2Timeline.cs.
+        /// </summary>
+        private static string Crew2Sync(Vessel v)
+        {
+            if (!RssBody(v) || liftoffUt <= 0.0) return "";
+            double met = Planetarium.GetUniversalTime() - liftoffUt;
+            if (met < 0.0) return "";
+            Crew2Event cur = Crew2Timeline.Current(met);
+            string s = "  | Crew-2 T+" + met.ToString("F0") + "s: " + cur.Name;
+            Crew2Event nxt;
+            if (Crew2Timeline.Next(met, out nxt))
+                s += ", next " + nxt.Name + " in " + Crew2Timeline.TimeToNext(met).ToString("F0") + "s";
+            return s;
+        }
+
+        // ---- UPFG SECOND-STAGE GUIDANCE (RSS/RO) ----
+        private static UpfgState upfgState;
+        /// <summary>Once the M-Vac is lit, UPFG owns the stage to SECO - even past the pure runaway abort.</summary>
+        private static bool upfgActive;
+        /// <summary>Command SECO when UPFG's time-to-go falls to this, seconds.</summary>
+        private const double UpfgSecoTgoS = 0.2;
+        /// <summary>Minimum M-Vac thrust (kN) before UPFG may Init/Step. Above ullage (~1 kN), below the
+        /// lit M-Vac (~800 kN). Guards the predictor-corrector from an ullage-poisoned seed. See the
+        /// activation block and scratchpad/sim (Case B vs C).</summary>
+        private const double UpfgMinThrustKn = 200.0;
+        private static double lastUpfgLog;
+
+        /// <summary>
+        /// Fly the second stage to orbit under UPFG for one tick: build the target/vehicle from the live
+        /// state, solve, steer the thrust vector, hold full throttle, and cut at SECO. Returns false if the
+        /// solve is not usable (no thrust/mass/Isp or a bad solution), so the caller falls back to the
+        /// gravity-turn loft. The inertial frame is the instantaneous world frame (position relative to the
+        /// body, orbital velocity) - consistent for R, V and iF within a tick, which is all UPFG needs.
+        /// </summary>
+        private static bool UpfgFlyS2(Vessel v, AscentInputs a)
+        {
+            if (v.mainBody == null) return false;
+            V3 r = ToV3(v.CoM - v.mainBody.position);
+            V3 vel = ToV3(v.obt_velocity);
+            double mu = v.mainBody.gravParameter;
+            if (r.magnitude <= 0.0 || vel.magnitude <= 0.0) return false;
+
+            // Target: the plane we are already in (the launch put us in the ISS plane), the parking orbit,
+            // circular.
+            // ⛔ FRAME-AGNOSTIC Iy. KSP's world frame is LEFT-handed, so `-r x v` points the wrong way and
+            // UPFG's target velocity came out RADIAL, not prograde - the stage lofted to a 300 km apoapsis
+            // while orbital speed barely moved (flight_0822_090116). Instead derive Iy from the ACTUAL
+            // horizontal velocity: with `Iy = prograde x up`, block 8's `iz = up x Iy` returns `prograde`
+            // exactly (double-cross identity), so the desired cutoff velocity is horizontal-prograde
+            // regardless of handedness. Self-consistent because every cross here uses the same formula.
+            UpfgTarget t = new UpfgTarget();
+            V3 up = V3.Normalize(r);
+            V3 prograde = V3.Normalize(vel - V3.Dot(vel, up) * up);   // velocity with the radial part removed
+            t.Iy = V3.Normalize(V3.Cross(prograde, up));
+            t.RadiusM = v.mainBody.Radius + Target.AltitudeM;
+            t.SpeedMps = Math.Sqrt(mu / t.RadiusM);
+            t.GammaRad = 0.0;
+
+            UpfgVehicle veh = new UpfgVehicle();
+            veh.ThrustN = a.AvailableThrust * 1000.0;         // kN -> N
+            veh.MassKg = v.GetTotalMass() * 1000.0;           // t -> kg
+            veh.ExhaustVel = S2ExhaustVel(v);
+            if (veh.MassKg <= 0.0 || veh.ExhaustVel <= 0.0) return false;
+            // ⛔ A thrust reading below the ullage/lit-engine floor must NEVER reach Step: it would seed or
+            // rescale the persistent state with an astronomical tu and loft the stage. Hold prograde this
+            // tick instead (rare post-activation - throttle is pinned full - but a hard guard, not a hope).
+            if (a.AvailableThrust < UpfgMinThrustKn)
+            {
+                AttitudeController.Ascent.SteerTo(v, new Vector3d(prograde.x, prograde.y, prograde.z),
+                    (v.CoM - v.mainBody.position).normalized);
+                AttitudeController.Ascent.Throttle = 1.0;
+                if (FlightGlobals.ActiveVessel == v) FlightInputHandler.state.mainThrottle = 1.0f;
+                return true;
+            }
+
+            UpfgGuidance g = Upfg.Step(r, vel, mu, t, veh, ref upfgState);
+            if (!g.Valid || double.IsNaN(g.TgoS)) return false;
+
+            if (g.TgoS <= UpfgSecoTgoS)
+            {
+                // SECO - orbit insertion complete. Shed the S2 and hand to the capsule, as at Done.
+                AttitudeController.Ascent.Throttle = 0.0;
+                if (FlightGlobals.ActiveVessel == v) FlightInputHandler.state.mainThrottle = 0f;
+                SeparateSecondStage(v);
+                LaunchWindowOps.MeasureAtInsertion(v, liftoffUt, liftoffLonDeg);
+                Debug.Log(Tag + "SECO - UPFG orbit insertion complete" + Crew2Sync(v));
+                Disengage("SECO - UPFG orbit insertion");
+                return true;
+            }
+
+            // Steer the thrust vector and hold full throttle.
+            Vector3d iF = new Vector3d(g.IF.x, g.IF.y, g.IF.z);
+            Vector3d upW = (v.CoM - v.mainBody.position).normalized;
+            AttitudeController.Ascent.SteerTo(v, iF, upW);
+            AttitudeController.Ascent.Throttle = 1.0;
+            if (FlightGlobals.ActiveVessel == v) FlightInputHandler.state.mainThrottle = 1.0f;
+
+            if (Time.realtimeSinceStartup - lastUpfgLog > 2f)
+            {
+                lastUpfgLog = Time.realtimeSinceStartup;
+                // iF pitch above local horizontal - the one-glance health check: it should lay over from
+                // ~58 deg toward 0, NOT sit near 84 (the ullage-poisoned loft signature).
+                double ifPitch = Math.Asin(Math.Max(-1.0, Math.Min(1.0, V3.Dot(g.IF, up)))) * 57.29578;
+                Debug.Log(Tag + "UPFG  tgo " + g.TgoS.ToString("F0") + "s  pitch "
+                          + ifPitch.ToString("F0") + "deg  ap "
+                          + (a.ApoapsisM / 1000.0).ToString("F1") + "  pe "
+                          + (a.PeriapsisM / 1000.0).ToString("F1") + "  orb "
+                          + v.obt_velocity.magnitude.ToString("F0") + "/" + t.SpeedMps.ToString("F0")
+                          + Crew2Sync(v));
+            }
+            return true;
+        }
+
+        private static V3 ToV3(Vector3d w) { return new V3(w.x, w.y, w.z); }
+
+        // ---- RO LAUNCH: ignite, spool, confirm thrust, THEN release the clamp (by capability) ----
+        private static bool clampReleased;
+        private static double s1IgniteAt = -1.0;
+        /// <summary>Spool time before the clamp releases - real F9 ignites at T-3 s and lifts off at T-0.</summary>
+        private const double LaunchSpoolS = 3.0;
+
+        /// <summary>
+        /// The real Falcon-9 pad start, RSS/RO. Ignite the first stage WHILE CLAMPED, let it spool for
+        /// LaunchSpoolS, confirm it is actually making thrust-to-weight above 1 (excluding the erector's
+        /// own mass, which stays on the ground), and only THEN release the hold-down - so the stack never
+        /// drops onto engines that failed to light. Stock keeps its ActivateNextStage launch.
+        /// </summary>
+        private static void RoLaunch(Vessel v, AscentInputs a)
+        {
+            double now = Planetarium.GetUniversalTime();
+            if (s1IgniteAt < 0.0)
+            {
+                int lit = IgniteFirstStage(v);
+                if (lit > 0)
+                {
+                    s1IgniteAt = now;
+                    Debug.Log(Tag + "S1 IGNITION - " + lit + " engine(s) lit, spooling up while clamped");
+                }
+                return;
+            }
+            if (clampReleased || now - s1IgniteAt < LaunchSpoolS || a.AvailableThrust <= 1.0) return;
+
+            double rocketT = v.GetTotalMass() - ErectorMassT(v);
+            double twr = (rocketT > 0.0) ? a.AvailableThrust / (rocketT * 9.80665) : 0.0;
+            if (twr >= 1.0)
+            {
+                ReleaseLaunchClamp(v);
+                clampReleased = true;
+                Debug.Log(Tag + "LIFTOFF - clamp released at TWR " + twr.ToString("F2")
+                              + " (rocket " + rocketT.ToString("F0") + " t)" + Crew2Sync(v));
+            }
+            else if (now - s1IgniteAt > LaunchSpoolS + 6.0)
+                Debug.LogWarning(Tag + "PAD HOLD - TWR only " + twr.ToString("F2")
+                                     + " after ignition; NOT releasing the clamp onto a stack that cannot fly");
+        }
+
+        /// <summary>Activate the first-stage engines by capability (not by staging). Returns the count lit.</summary>
+        ///
+        /// ---- ⛔ ONLY THE ALL-ENGINES MODE. THE OCTAWEB CARRIES THREE ENGINE MODULES. ----
+        /// The Tundra octaweb (`TE_19_F9_S1_Engine`) is ONE part holding THREE `ModuleEngines` - the
+        /// ascent "all nine", the entry-burn "three", and the landing "centre" - and all three ship
+        /// `isEnabled = true`. Activating every ModuleEngines on the part therefore lit all three modes
+        /// at once. Proven on flight_0822_201219: "S1 IGNITION - 3 engine(s) lit", ascent thrust ~11 900 kN
+        /// (9 Merlins make ~8 500), a_enginesLit = 3, and the descent-engine PLUMES rendering during ascent -
+        /// which is what the crew saw as "the plume set for the descending engine, not the ascending". Worse,
+        /// the two descent modules' `heatProduction` (196-248 each) stacked onto the ascent module and cooked
+        /// the S1 tank: skin climbed 300 -> 644 K through the climb WHILE dynamic pressure fell 25 -> 1.8 kPa
+        /// (aero heating scales with rho*v^3 and was dropping - so the source was the engines, not the air),
+        /// and the pre-heated tank let go during boostback (TE.19.F9.S1.Tank Exploded, T+6 s after sep).
+        ///
+        /// The octaweb starts in the all-engines mode (craft: `selectedIndex = 0`), so at ignition we light
+        /// ONLY the engines that belong to that mode. `EngineIdIsMode(id, ModeAllEngines)` is `!three &&
+        /// !centre`, so a plain engine (individual-Merlin boosters, empty/normal engineID) still lights -
+        /// this only ever SKIPS the octaweb's descent modules. BoosterRecovery lights those later, when it
+        /// steps the switch to the mode the entry/landing burn actually needs.
+        private static int IgniteFirstStage(Vessel v)
+        {
+            int lit = 0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                if (!VehicleParts.IsBooster(v.parts[i].name)) continue;
+                System.Collections.Generic.List<ModuleEngines> es =
+                    v.parts[i].Modules.GetModules<ModuleEngines>();
+                for (int m = 0; m < es.Count; m++)
+                    if (!es[m].EngineIgnited && !es[m].flameout
+                        && VehicleParts.EngineIdIsMode(es[m].engineID, VehicleParts.ModeAllEngines))
+                    { es[m].Activate(); lit++; }
+            }
+            return lit;
+        }
+
+        /// <summary>Release the erector/launch clamp by capability: swing the arm clear, then decouple.</summary>
+        private static void ReleaseLaunchClamp(Vessel v)
+        {
+            FireCapability(v, VehicleParts.IsErector, "open erector");
+            int n = FireCapability(v, VehicleParts.IsErector, "decouple");
+            if (n == 0)
+                Debug.LogWarning(Tag + "clamp release: no 'decouple' answered on an '"
+                                     + VehicleParts.ErectorMarker + "' part - is the erector on the craft?");
+        }
+
+        private static double ErectorMassT(Vessel v)
+        {
+            double m = 0.0;
+            for (int i = 0; i < v.parts.Count; i++)
+                if (VehicleParts.IsErector(v.parts[i].name))
+                    m += v.parts[i].mass + v.parts[i].GetResourceMass();
+            return m;
+        }
+
+        /// <summary>
+        /// Fire a named capability (the ACTIVE event if the module offers one, else the action) on every
+        /// part matching `match`. The event-then-action pattern EntryOps documents - a ModuleTundraDecoupler
+        /// answers to both, and an inactive event is not a missing one. Returns how many fired.
+        /// </summary>
+        private static int FireCapability(Vessel v, System.Func<string, bool> match, string cap)
+        {
+            int n = 0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                Part p = v.parts[i];
+                if (!match(p.name)) continue;
+                for (int mod = 0; mod < p.Modules.Count; mod++)
+                {
+                    PartModule pm = p.Modules[mod];
+                    for (int e = 0; e < pm.Events.Count; e++)
+                    {
+                        BaseEvent ev = pm.Events[e];
+                        if (ev != null && ev.active && ev.guiName != null
+                            && string.Equals(ev.guiName, cap, StringComparison.OrdinalIgnoreCase))
+                        { ev.Invoke(); n++; }
+                    }
+                }
+            }
+            if (n > 0) return n;
+            for (int i = 0; i < v.parts.Count; i++)      // fall back to the action
+            {
+                Part p = v.parts[i];
+                if (!match(p.name)) continue;
+                for (int mod = 0; mod < p.Modules.Count; mod++)
+                {
+                    PartModule pm = p.Modules[mod];
+                    for (int act = 0; act < pm.Actions.Count; act++)
+                    {
+                        BaseAction ac = pm.Actions[act];
+                        if (ac != null && ac.guiName != null
+                            && string.Equals(ac.guiName, cap, StringComparison.OrdinalIgnoreCase))
+                        { ac.Invoke(new KSPActionParam(KSPActionGroup.None, KSPActionType.Activate)); n++; }
+                    }
+                }
+            }
+            return n;
+        }
+
+        /// <summary>Current effective exhaust velocity of the lit second-stage engine, m/s. Falls back
+        /// to the M-Vac vacuum figure (Isp 345) if none is readable.</summary>
+        private static double S2ExhaustVel(Vessel v)
+        {
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                if (!VehicleParts.IsSecondStage(v.parts[i].name)) continue;
+                System.Collections.Generic.List<ModuleEngines> es =
+                    v.parts[i].Modules.GetModules<ModuleEngines>();
+                for (int m = 0; m < es.Count; m++)
+                    if (es[m].EngineIgnited && !es[m].flameout && es[m].realIsp > 1.0)
+                        return es[m].realIsp * 9.80665;
+            }
+            return 345.0 * 9.80665;
+        }
+
+        // ---- SECOND-STAGE IGNITION: RO-CORRECT, BY CAPABILITY ----
+        // Max attempts to light the MVac. The RO Merlin1DVac has ignitions = 4 (each consuming a
+        // TEATEB charge); we spend at most this many, leaving a margin, and never spam - one attempt,
+        // then a re-light only if the first produced no thrust (ignitionReliabilityStart ~0.967, so a
+        // real ~3% chance of a dud light). See CREW2_RSS_RESEARCH.md.
+        private const int MaxS2IgnitionAttempts = 3;
+        /// <summary>Let RCS settle the propellant this long before the first ullage-gated light.</summary>
+        private const double S2SettleBeforeIgniteS = 2.0;
+        /// <summary>Give a commanded light this long to produce thrust before calling it a dud.</summary>
+        private const double S2IgniteRetryGapS = 1.5;
+        private static int s2IgnitionAttempts;
+        private static double lastS2IgniteAt = -99.0;
+
+        /// <summary>Live worst MVac ullage stability this tick, 0..1; -1 when not applicable (stock, or no
+        /// ullage-limited engine live). For the pages and the recorder - the flight computer's read of
+        /// exactly how settled the propellant is right now.</summary>
+        public static double S2Ullage = -1.0;
+        private static double lastUllageLog = -99.0;
+
+        /// <summary>
+        /// Light the MVac DIRECTLY once ullage has settled the tanks - not by staging. ModuleEnginesRF
+        /// needs settled propellant (ullage = True), so we wait S2SettleBeforeIgniteS of RCS-fore
+        /// settling first; if the light produces no thrust we retry, within the ignition budget, rather
+        /// than staging the stack apart (the failure the whole capability path exists to prevent).
+        /// </summary>
+        private static void IgniteSecondStageWhenSettled(Vessel v, AscentCommand c, AscentInputs a)
+        {
+            if (c.Phase != AscentPhase.BurnToApoapsis) return;
+            if (a.PhaseElapsedS < S2SettleBeforeIgniteS) return;           // let RCS settle first
+            if (a.AvailableThrust > 1.0) return;                          // already lit and burning
+            if (s2IgnitionAttempts >= MaxS2IgnitionAttempts) return;      // keep an ignition in reserve
+            if (Planetarium.GetUniversalTime() - lastS2IgniteAt < S2IgniteRetryGapS) return;
+
+            // ---- ⛔ LIGHT ONLY WHEN THE PROPELLANT IS ACTUALLY SETTLED (RealFuels LIVE ullage). ----
+            // A blind timed light into unsettled propellant flames out on "No propellants" AND spends one
+            // of the four ignitions - flight_0822_211853 did exactly that, with nothing on the glass. So
+            // read the MVac's own ullage state every tick and hold the light until it is genuinely settled.
+            // The guidance keeps the RCS-fore on meanwhile (ULLAGE + LIGHT). This never wastes an ignition
+            // on floating propellant, and on a flight where the propellant IS settled from boost it lights
+            // the instant it is ready. Stock engines report no ullage (count 0) and fall straight through.
+            int ullageN;
+            S2Ullage = UllageProbe.VesselWorst(v, delegate(Part p) { return VehicleParts.IsSecondStage(p.name); },
+                                               out ullageN);
+            if (ullageN > 0 && S2Ullage >= 0.0 && S2Ullage < UllageProbe.SettledStability)
+            {
+                double now = Planetarium.GetUniversalTime();
+                if (now - lastUllageLog > 3.0)
+                {
+                    lastUllageLog = now;
+                    Debug.Log(Tag + "MVac HOLDING for ullage - propellant "
+                              + (S2Ullage * 100.0).ToString("F0") + "% settled, need "
+                              + (UllageProbe.SettledStability * 100.0).ToString("F0")
+                              + "%. RCS still settling; not spending an ignition.");
+                }
+                return;   // do NOT light into floating propellant
+            }
+
+            int lit = IgniteSecondStage(v);
+            lastS2IgniteAt = Planetarium.GetUniversalTime();
+            // Only a REAL (re)activation spends an ignition. An engine that is already lit but not yet
+            // thrusting is just waiting for the RCS to finish settling the tanks - leave it, don't burn
+            // a TEATEB charge on it. Without this, a stalled MVac would eat the whole 3-attempt budget
+            // doing nothing ("activated 0"), which is exactly what the pre-ullage light looked like.
+            if (lit > 0)
+            {
+                s2IgnitionAttempts++;
+                Debug.Log(Tag + "MVac ignition attempt " + s2IgnitionAttempts + "/" + MaxS2IgnitionAttempts
+                              + " - activated " + lit + " engine module(s) after ullage settle");
+            }
+        }
+
+        /// <summary>
+        /// Activate the second-stage engine(s) by capability. Returns the count of engines we actually
+        /// commanded to light. An engine that flamed out on a failed ignition (RO ~3% dud rate) is shut
+        /// down first so Activate re-attempts it; one that is lit and merely ullage-stalled is left
+        /// alone to spool up on its own once the propellant settles.
+        /// </summary>
+        private static int IgniteSecondStage(Vessel v)
+        {
+            int lit = 0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                if (!VehicleParts.IsSecondStage(v.parts[i].name)) continue;
+                System.Collections.Generic.List<ModuleEngines> es =
+                    v.parts[i].Modules.GetModules<ModuleEngines>();
+                for (int m = 0; m < es.Count; m++)
+                {
+                    ModuleEngines e = es[m];
+                    if (e.EngineIgnited && e.flameout) e.Shutdown();   // reset a failed light to re-try
+                    if (!e.EngineIgnited) { e.Activate(); lit++; }
+                }
+            }
+            return lit;
+        }
+
+        /// <summary>
+        /// Separate the booster by firing the interstage decoupler as a CAPABILITY - the "decouple"
+        /// event if the module offers an active one, else the action (a ModuleTundraDecoupler answers to
+        /// both, and an inactive event is not a missing one - the same trap EntryOps documents). Returns
+        /// true if a decoupler actually fired. See VehicleParts.IsInterstage and falcon-detect-by-capability.
+        /// </summary>
+        private static bool SeparateBooster(Vessel v)
+        {
+            if (boosterSeparated) return true;
+            int n = 0, inactive = 0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                Part p = v.parts[i];
+                if (!VehicleParts.IsInterstage(p.name)) continue;
+                for (int mod = 0; mod < p.Modules.Count; mod++)
+                {
+                    PartModule pm = p.Modules[mod];
+                    for (int e = 0; e < pm.Events.Count; e++)
+                    {
+                        BaseEvent ev = pm.Events[e];
+                        if (ev == null || ev.guiName == null) continue;
+                        if (!string.Equals(ev.guiName, "decouple", StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        if (!ev.active) { inactive++; continue; }
+                        ev.Invoke();
+                        n++;
+                    }
+                }
+            }
+            if (n == 0)                                    // inactive event, or none: try the action
+            {
+                for (int i = 0; i < v.parts.Count; i++)
+                {
+                    Part p = v.parts[i];
+                    if (!VehicleParts.IsInterstage(p.name)) continue;
+                    for (int mod = 0; mod < p.Modules.Count; mod++)
+                    {
+                        PartModule pm = p.Modules[mod];
+                        for (int act = 0; act < pm.Actions.Count; act++)
+                        {
+                            BaseAction ac = pm.Actions[act];
+                            if (ac == null || ac.guiName == null) continue;
+                            if (!string.Equals(ac.guiName, "decouple", StringComparison.OrdinalIgnoreCase))
+                                continue;
+                            ac.Invoke(new KSPActionParam(KSPActionGroup.None, KSPActionType.Activate));
+                            n++;
+                        }
+                    }
+                }
+            }
+            if (n > 0) { boosterSeparated = true; return true; }
+            if (inactive > 0)
+                Debug.LogWarning(Tag + "booster sep: '" + VehicleParts.InterstageMarker
+                                     + "' decouple event(s) all inactive and no action answered");
+            return false;
+        }
+
+        private static bool boosterSeparated;
 
         /// <summary>
         /// Point the vehicle. Pitch and heading are converted into a world direction through the
@@ -572,10 +1179,38 @@ namespace DragonScreen
             // COAST holds prograde. CIRCULARISE steers along the CIRCULARISATION DV, not prograde -
             // near apoapsis those differ by several degrees, and steering prograde is what raises
             // apoapsis instead of periapsis. This is the pointing half of the escape-trajectory bug.
+            //
             if (c.Phase == AscentPhase.Coast)
             {
                 Vector3d pro = v.obt_velocity.normalized;
                 if (pro.sqrMagnitude > 0.5) dir = pro;
+            }
+            // ---- ⛔ RSS/RO SECOND STAGE: LOFT ABOVE PROGRADE, THEN FLATTEN. ----
+            // MEASURED flight_0822_045358: the RO M-Vac (TWR ~0.82 at ignition) apexes at ~113 km -
+            // INSIDE Earth's 140 km atmosphere - and burning pure prograde there raises periapsis, not
+            // apoapsis, so the apoapsis stalls at ~124 km and the stack DESCENDS back into the air
+            // (skin 372 -> 1751 K) and re-enters. A low-TWR upper stage must keep climbing out of the
+            // atmosphere: aim ABOVE prograde by an angle that scales with how far the apoapsis is short
+            // of target, flattening to prograde as apoapsis approaches target, after which Coast +
+            // Circularise finish it. Interim heuristic (superseded by PSG); gains are [Tunable]. Stock's
+            // higher-TWR turn keeps its pitch law and never enters this branch.
+            else if (RssBody(v) && c.Phase == AscentPhase.BurnToApoapsis)
+            {
+                Vector3d pro = v.obt_velocity.normalized;
+                if (pro.sqrMagnitude > 0.5)
+                {
+                    double deficit = (Target.AltitudeM - v.orbit.ApA) / Target.AltitudeM;
+                    if (deficit < 0.0) deficit = 0.0;
+                    double loftDeg = deficit * S2LoftGainDeg;
+                    if (loftDeg > S2MaxLoftDeg) loftDeg = S2MaxLoftDeg;
+                    Vector3d upPerp = up - Vector3d.Project(up, pro);   // 'up' made perpendicular to pro
+                    if (loftDeg > 0.05 && upPerp.sqrMagnitude > 1e-6)
+                    {
+                        double l = loftDeg * Math.PI / 180.0;
+                        dir = (pro * Math.Cos(l) + upPerp.normalized * Math.Sin(l)).normalized;
+                    }
+                    else dir = pro;
+                }
             }
             else if (c.Phase == AscentPhase.Circularise)
             {
@@ -725,6 +1360,22 @@ namespace DragonScreen
             if (s2Separated) return;
             s2Separated = true;
 
+            // ---- ⛔ SHUT THE M-VAC DOWN BEFORE DROPPING THE S2. ----
+            // At SECO the engine is still IGNITED (throttle 0 only idles it). Once decoupled the spent
+            // stage is its own vessel and KSP resumes its last throttle, so it flies off UNDER POWER -
+            // MEASURED flight_0822_105240: the 9.9 t S2 ran to 838 x 76 km at 5 G, stole the camera focus
+            // and blocked the quicksave ("Cannot save"), and the ascent then re-engaged on that debris and
+            // aborted. Shutting the engine while it is still ours makes the jettisoned stage inert. The
+            // M-Vac carries the S2 marker (`.S2.`); the capsule lights its own Dracos below.
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                if (!VehicleParts.IsSecondStage(v.parts[i].name)) continue;
+                System.Collections.Generic.List<ModuleEngines> se =
+                    v.parts[i].Modules.GetModules<ModuleEngines>();
+                for (int m = 0; m < se.Count; m++)
+                    if (se[m].EngineIgnited) se[m].Shutdown();
+            }
+
             bool fired = false;
             for (int i = 0; i < v.parts.Count && !fired; i++)
             {
@@ -803,6 +1454,14 @@ namespace DragonScreen
         /// </summary>
         private static void Stage(Vessel v, AscentCommand c, AscentInputs a)
         {
+            // ---- ⛔ IN RSS/RO, STARVATION STAGING IS FOR THE PAD START ONLY. ----
+            // Stock keeps the previous behaviour: starvation staging recovers a dead stage in ANY phase.
+            // In RSS that is a hazard - MEASURED flight_0822_022834, when the S1 flamed out a hair short
+            // of the MECO target this fired in the gap and decoupled the booster + lit the MVac
+            // destructively, before ullage, ahead of the clean capability sequence. On Earth the booster
+            // hand-off is owned by the guidance (MECO on target OR flameout, Ascent.FirstStageSpent) and
+            // SeparateBooster; the MVac by IgniteSecondStage. So there this only lights the S1 off the pad.
+            if (RssBody(v) && c.Phase != AscentPhase.VerticalRise && c.Phase != AscentPhase.Idle) return;
             if (c.Throttle < 0.05) { starvedFor = 0.0; return; }
 
             if (a.AvailableThrust > 0.1)

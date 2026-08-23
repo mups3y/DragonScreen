@@ -99,6 +99,13 @@ namespace DragonScreen
         public static double TargetLatDeg = LandingSites.Lz1.LatDeg;
         public static double TargetLonDeg = LandingSites.Lz1.LonDeg;
 
+        // ---- RSS/RO SPLASHDOWN: Crew-2 came down in the Gulf off Pensacola, FL ----
+        // Real coords are unpublished (SpaceX Gulf recovery zone); this is the offshore point south of
+        // Pensacola. [Tunable] - refine from where the entry actually brings the capsule down. Stock
+        // Kerbin keeps LandingSites.Splashdown.
+        [Tunable] public static double SplashdownEarthLatDeg = 29.8;
+        [Tunable] public static double SplashdownEarthLonDeg = -87.3;
+
         public static void Toggle()
         {
             if (Engaged) Disengage("crew"); else Engage();
@@ -132,9 +139,15 @@ namespace DragonScreen
                 TargetLatDeg = LandingSites.Lz1.LatDeg;
                 TargetLonDeg = LandingSites.Lz1.LonDeg;
             }
+            else if (v.mainBody != null && v.mainBody.Radius > BoosterRecovery.EarthRadiusThresholdM)
+            {
+                // RSS/RO Earth - Crew-2's Gulf-of-Mexico splashdown off Pensacola.
+                TargetLatDeg = SplashdownEarthLatDeg;
+                TargetLonDeg = SplashdownEarthLonDeg;
+            }
             else
             {
-                TargetLatDeg = LandingSites.Splashdown.LatDeg;
+                TargetLatDeg = LandingSites.Splashdown.LatDeg;   // stock Kerbin
                 TargetLonDeg = LandingSites.Splashdown.LonDeg;
             }
 

@@ -147,7 +147,7 @@ namespace DragonScreen
             haltReported = false;
             phasePass = 0; phaseCapReported = false; reachedGate = false; nodeOwner = ApproachLeg.Phasing;
             phaseReturnUt = 0.0;
-            altMatchDone = false;
+            altMatchBurns = 0; altCapReported = false;
             Debug.Log(Tag + "rendezvous ENGAGED - target '" + Station.vesselName + "', "
                           + (Vector3d.Distance(v.CoM, Station.CoM) / 1000.0).ToString("F1") + " km");
         }
@@ -163,6 +163,7 @@ namespace DragonScreen
             // it was CONTENDED:deorbit - two owners, the node never aligned, the return never ran.
             // Only Reset() used to clean it up; a crew CANCEL calls Disengage, so it must too.
             if (DirectApproachOps.Engaged) DirectApproachOps.Disengage("rendezvous cancelled");
+            if (WaypointApproachOps.Engaged) WaypointApproachOps.Disengage("rendezvous cancelled");
             AttitudeController.Ascent.Release(ship);
             if (ship != null && ship.ctrlState != null)
             {
@@ -178,22 +179,40 @@ namespace DragonScreen
         public static void Reset()
         {
             DirectApproachOps.Reset();
+            WaypointApproachOps.Reset();
             Engaged = false; Station = null; ship = null;
             phaseReturnUt = 0.0;
             phasePass = 0; phaseCapReported = false;
-            altMatchDone = false;
+            altMatchBurns = 0; altCapReported = false;
             haltReported = false;
             RangeM = 0.0; ClosingMps = 0.0; LateralMps = 0.0; AlongTrackM = 0.0; LastDvMps = 0.0;
             Note = "-";
         }
 
-        /// <summary>Public so the LAUNCH WINDOW can find the station before liftoff.</summary>
+        /// <summary>
+        /// The station to rendezvous with. Public so the LAUNCH WINDOW can find it before liftoff.
+        ///
+        /// ---- ⛔ DETECT BY WHAT IT IS, NOT ONLY WHAT IT IS CALLED. ----
+        /// The stock build ships a station literally named "Space X Station", so that exact name wins
+        /// when present. But in RSS/RO the user builds and NAMES THEIR OWN ISS (measured 2026-08-22:
+        /// "ISS USOS Real Size"), and a launch that matched only the stock name found nothing, so the
+        /// launch azimuth defaulted to due east and the rendezvous had no target. KSP still TYPES that
+        /// vessel as a Station (`type = Station` in the save), and the type survives any rename - so we
+        /// fall back to the first orbiting Station-type vessel. `falcon-detect-by-capability`.
+        /// </summary>
         public static Vessel Find()
         {
             List<Vessel> all = FlightGlobals.Vessels;
+            Vessel typed = null;
             for (int i = 0; i < all.Count; i++)
-                if (all[i] != null && all[i].vesselName == StationName) return all[i];
-            return null;
+            {
+                Vessel s = all[i];
+                if (s == null || s.state == Vessel.State.DEAD) continue;
+                if (s.vesselName == StationName) return s;                 // exact stock name wins
+                if (s.vesselType == VesselType.Station && s != FlightGlobals.ActiveVessel
+                    && typed == null) typed = s;                          // else: it IS a station
+            }
+            return typed;
         }
 
         /// <summary>
@@ -287,6 +306,19 @@ namespace DragonScreen
             ClosingMps = rm.ClosingMps;
             LateralMps = rm.LateralMps;
 
+            // ---- RSS L-APPROACH OWNS THE VEHICLE ONCE ENGAGED (like the DirectApproach block below). ----
+            // The R-bar/V-bar waypoint profile (WaypointApproachOps) is the RSS terminal approach, off by
+            // default. Once it has the vehicle it flies WP0->WP1->WP2 and this file is a passenger until it
+            // completes (hand to docking), aborts (keep-out), or releases (envelope). Stock never sees it.
+            if (WaypointApproachOps.Engaged)
+            {
+                WaypointApproachOps.Tick();
+                Note = "L-APPROACH - " + WaypointApproachOps.Note;
+                if (WaypointApproachOps.Complete) { Arrived(); return; }
+                if (!WaypointApproachOps.Engaged) { Halt("L-approach released - " + WaypointApproachOps.Note); return; }
+                return;
+            }
+
             CwState st = BuildState(out AlongTrackM);
             double ourSma = (ship.orbit != null) ? ship.orbit.semiMajorAxis : 0.0;
             double stnSma = (Station.orbit != null) ? Station.orbit.semiMajorAxis : 0.0;
@@ -325,6 +357,23 @@ namespace DragonScreen
             //                     buying a transfer we already have
             //      3. DIRECT      inside the gate, `DirectApproachOps`
             // ================================================================================
+
+            // ---- HAND THE INSIDE-GATE APPROACH TO THE L-PROFILE (RSS, off by default). ----
+            // DirectApproach closes the kilometre-scale gap straight in; at the L-approach initiation
+            // envelope the RSS build swaps to the R-bar/V-bar waypoint profile for the terminal run.
+            // Stock and disabled builds never take this branch - DirectApproach flies to its 200 m goal
+            // and hands to the docking exactly as before. Enabling it is the first RSS validation flight.
+            if (WaypointApproachOps.Enabled && RssHere()
+                && RangeM <= WaypointApproachOps.EnvelopeM && RangeM > GoalRangeM)
+            {
+                if (DirectApproachOps.Engaged) DirectApproachOps.Disengage("handing to the L-approach");
+                if (WaypointApproachOps.Engage(ship, Station))
+                {
+                    WaypointApproachOps.Tick();
+                    Note = "L-APPROACH - " + WaypointApproachOps.Note;
+                    return;
+                }
+            }
 
             if (DirectApproachOps.Engaged)
             {
@@ -459,34 +508,88 @@ namespace DragonScreen
                 && Math.Abs(mo.semiMajorAxis - rStn) <= Approach.CoOrbitalTolM)
                 return false;
 
-            if (altMatchDone) return false;
-
-            double now = Planetarium.GetUniversalTime();
-
-            // Find the next crossing of the station's radius.
-            double rAp = b.Radius + mo.ApA, rPe = b.Radius + mo.PeA;
-            if (rStn > rAp || rStn < rPe)
+            // ---- BOUND, LIKE THE PHASING LAPS. A per-tick classifier that re-plans forever ate a
+            // twenty-minute session once (the 28-burn bug). A Hohmann is two burns - raise then
+            // circularise - so three is margin, after which we phase from wherever we reached.
+            if (altMatchBurns >= AltMatchMaxBurns)
             {
-                // ⚠ REFUSE, DO NOT INVENT A TRANSFER. See the banner.
-                altMatchDone = true;
-                Debug.LogWarning(Tag + "cannot match the station's altitude from here - our "
-                    + (mo.ApA / 1000.0).ToString("F1") + " x " + (mo.PeA / 1000.0).ToString("F1")
-                    + " km orbit never reaches its " + ((rStn - b.Radius) / 1000.0).ToString("F1")
-                    + " km. That needs a transfer, not a circularisation. Phasing from here, which "
-                    + "will not converge - raise or lower the orbit first.");
+                if (!altCapReported)
+                {
+                    altCapReported = true;
+                    Debug.LogWarning(Tag + AltMatchMaxBurns + " altitude-match burns used and still "
+                        + (Math.Abs((ship.CoM - b.position).magnitude - rStn) / 1000.0).ToString("F1")
+                        + " km off the station's radius - phasing from here.");
+                }
                 return false;
             }
 
+            double now = Planetarium.GetUniversalTime();
+            if (now - lastBurnAt < 30.0) { Hold(); Note = "ALTITUDE MATCH - settling"; return true; }
+
+            double rAp = b.Radius + mo.ApA, rPe = b.Radius + mo.PeA;
+            double mu = b.gravParameter;
+
+            // ---- ⛔ THE STATION IS ABOVE OUR APOAPSIS: RAISE TO IT (Crew Dragon inserts LOW). ----
+            // Real Crew-2 went into a ~190 km orbit and climbed to the ISS at ~420 km. So when the
+            // station sits above our whole orbit we do the FIRST Hohmann burn now - prograde at
+            // periapsis to lift apoapsis onto the station's radius - and the circularise branch below
+            // finishes it at the new apoapsis on a later tick. This replaces the old "refuse, needs a
+            // transfer" dead-end that stranded the rendezvous (flight_0822_221316: 200x173 vs 420 km).
+            if (rStn > rAp + Approach.CoOrbitalTolM)
+            {
+                double dvMag = Hohmann.RaiseOppositeApsisDv(rPe, mo.semiMajorAxis, rStn, mu);
+                double at = now + mo.timeToPe;
+                if (Math.Abs(dvMag) > Approach.MaxDvMps) { altCapReported = true; return LogAltCap(dvMag); }
+                Vector3d dv = WorldVelAt(mo, at).normalized * dvMag;
+                nodeOwner = ApproachLeg.MatchOrbit;
+                if (NodeExecutor.Begin(ship, dv, at, "raise to station altitude"))
+                {
+                    lastBurnAt = now; altMatchBurns++; LastDvMps = Math.Abs(dvMag);
+                    Debug.Log(Tag + "altitude match: raising apoapsis " + mo.ApA.ToString("F0")
+                        + " m -> the station's " + (rStn - b.Radius).ToString("F0") + " m at periapsis for "
+                        + dvMag.ToString("F1") + " m/s (Hohmann burn 1). Circularise follows at apoapsis.");
+                    return true;
+                }
+                Note = NodeExecutor.Note; return false;
+            }
+
+            // ---- THE STATION IS BELOW OUR PERIAPSIS: LOWER TO IT (retrograde at apoapsis). ----
+            if (rStn < rPe - Approach.CoOrbitalTolM)
+            {
+                double dvMag = Hohmann.RaiseOppositeApsisDv(rAp, mo.semiMajorAxis, rStn, mu);   // negative
+                double at = now + mo.timeToAp;
+                if (Math.Abs(dvMag) > Approach.MaxDvMps) { altCapReported = true; return LogAltCap(dvMag); }
+                Vector3d dv = WorldVelAt(mo, at).normalized * dvMag;
+                nodeOwner = ApproachLeg.MatchOrbit;
+                if (NodeExecutor.Begin(ship, dv, at, "lower to station altitude"))
+                {
+                    lastBurnAt = now; altMatchBurns++; LastDvMps = Math.Abs(dvMag);
+                    Debug.Log(Tag + "altitude match: lowering periapsis " + mo.PeA.ToString("F0")
+                        + " m -> the station's " + (rStn - b.Radius).ToString("F0") + " m at apoapsis for "
+                        + dvMag.ToString("F1") + " m/s (Hohmann burn 1). Circularise follows at periapsis.");
+                    return true;
+                }
+                Note = NodeExecutor.Note; return false;
+            }
+
+            // ---- THE STATION IS WITHIN OUR ORBIT: circularise where our radius equals its. ----
+            // After a raise/lower this is the SECOND Hohmann burn (station ~ our apoapsis/periapsis).
+            // If it is at our apsis, circularise there directly - TrueAnomalyAtRadius throws at the apsis.
+            if (rStn >= rAp - Approach.CoOrbitalTolM)
+                return CirculariseAtApsis(mo, b, rStn, now, now + mo.timeToAp, "apoapsis");
+            if (rStn <= rPe + Approach.CoOrbitalTolM)
+                return CirculariseAtApsis(mo, b, rStn, now, now + mo.timeToPe, "periapsis");
+
             double ta;
             try { ta = mo.TrueAnomalyAtRadius(rStn); }
-            catch (Exception) { altMatchDone = true; return false; }
+            catch (Exception) { altMatchBurns = AltMatchMaxBurns; return false; }
 
             // Two crossings per orbit, at +/-ta. Take whichever comes first.
             double t1 = mo.GetUTforTrueAnomaly(ta, 0.0);
             double t2 = mo.GetUTforTrueAnomaly(-ta, 0.0);
             while (t1 < now + Approach.LeadS) t1 += mo.period;
             while (t2 < now + Approach.LeadS) t2 += mo.period;
-            double at = (t1 < t2) ? t1 : t2;
+            double atCross = (t1 < t2) ? t1 : t2;
 
             // ---- ⛔ HAND THE WHOLE NODE TO THE EXECUTOR NOW (user, 2026-08-19), as the intercept does.
             // At the crossing our radius IS the station's, so circularising there drops us into its
@@ -494,35 +597,59 @@ namespace DragonScreen
             // coast, so it is exact to compute up front - and the executor then warps to 10 min out,
             // orients on reaction wheels, warps to the node and burns, never holding RCS across the
             // long coast to the crossing.
-            Vector3d vHere = WorldVelAt(mo, at);
-            double dvMag = Math.Sqrt(b.gravParameter / rStn) - vHere.magnitude;
-            if (Math.Abs(dvMag) > Approach.MaxDvMps)
-            {
-                altMatchDone = true;
-                Debug.LogWarning(Tag + "altitude match wants " + dvMag.ToString("F1")
-                                 + " m/s - over the " + Approach.MaxDvMps.ToString("F0")
-                                 + " m/s cap. Not flying it; phasing from here instead.");
-                return false;
-            }
-            Vector3d dv = vHere.normalized * dvMag;
+            Vector3d vHere = WorldVelAt(mo, atCross);
+            double dvCross = Math.Sqrt(b.gravParameter / rStn) - vHere.magnitude;
+            if (Math.Abs(dvCross) > Approach.MaxDvMps) return LogAltCap(dvCross);
+            Vector3d dvC = vHere.normalized * dvCross;
             nodeOwner = ApproachLeg.MatchOrbit;
-            if (NodeExecutor.Begin(ship, dv, at, "altitude match"))
+            if (NodeExecutor.Begin(ship, dvC, atCross, "altitude match"))
             {
-                altMatchDone = true;
-                LastDvMps = Math.Abs(dvMag);
+                altMatchBurns++;
+                LastDvMps = Math.Abs(dvCross);
                 Debug.Log(Tag + "altitude match - our " + (mo.ApA / 1000.0).ToString("F1") + " x "
                           + (mo.PeA / 1000.0).ToString("F1") + " km crosses the station's "
                           + ((rStn - b.Radius) / 1000.0).ToString("F1") + " km in "
-                          + (at - now).ToString("F0") + " s; circularising there for "
-                          + dvMag.ToString("F2") + " m/s. Executor warps, orients, then burns.");
+                          + (atCross - now).ToString("F0") + " s; circularising there for "
+                          + dvCross.ToString("F2") + " m/s. Executor warps, orients, then burns.");
                 return true;
             }
             Note = NodeExecutor.Note;
-            altMatchDone = true;
             return false;
         }
 
-        private static bool altMatchDone;
+        /// <summary>Circularise directly at an apsis (radius rApsis) reached at time `at`. Used for the
+        /// SECOND Hohmann burn, where the station sits at our apoapsis/periapsis and TrueAnomalyAtRadius
+        /// would throw. Signed dv along the velocity there.</summary>
+        private static bool CirculariseAtApsis(Orbit mo, CelestialBody b, double rStn, double now,
+                                               double at, string which)
+        {
+            double dvMag = Hohmann.CirculariseDv(rStn, mo.semiMajorAxis, b.gravParameter);
+            if (Math.Abs(dvMag) > Approach.MaxDvMps) return LogAltCap(dvMag);
+            Vector3d dv = WorldVelAt(mo, at).normalized * dvMag;
+            nodeOwner = ApproachLeg.MatchOrbit;
+            if (NodeExecutor.Begin(ship, dv, at, "circularise at station altitude"))
+            {
+                lastBurnAt = now; altMatchBurns++; LastDvMps = Math.Abs(dvMag);
+                Debug.Log(Tag + "altitude match: circularising at " + which + " ("
+                          + ((rStn - b.Radius) / 1000.0).ToString("F1") + " km) for "
+                          + dvMag.ToString("F1") + " m/s (Hohmann burn 2) - onto the station's orbit.");
+                return true;
+            }
+            Note = NodeExecutor.Note; return false;
+        }
+
+        private static bool LogAltCap(double dvMag)
+        {
+            altMatchBurns = AltMatchMaxBurns;   // stop trying; phase from here
+            Debug.LogWarning(Tag + "altitude match wants " + dvMag.ToString("F1") + " m/s - over the "
+                             + Approach.MaxDvMps.ToString("F0") + " m/s cap. Phasing from here instead.");
+            return false;
+        }
+
+        /// <summary>Altitude-match burns flown this engagement (Hohmann is two), bounded by AltMatchMaxBurns.</summary>
+        private static int altMatchBurns;
+        private static bool altCapReported;
+        private const int AltMatchMaxBurns = 3;
 
         /// <summary>
         /// LEG 2. If the orbits already bring us close, warp to that pass and match velocity there.
@@ -642,6 +769,13 @@ namespace DragonScreen
         }
 
         private static bool haltReported;
+
+        /// <summary>RSS body test, matching AutoPilot's `RssBody` gate (Earth's radius dwarfs Kerbin's).
+        /// The L-approach is an RSS-only fidelity path; stock keeps the straight-in DirectApproach.</summary>
+        private static bool RssHere()
+        {
+            return Station != null && Station.mainBody != null && Station.mainBody.Radius > 1.0e6;
+        }
 
         private static CwState BuildState(out double alongTrack)
         {
@@ -827,7 +961,12 @@ namespace DragonScreen
             // clears this by 5 km, so `NodeExecutor.PeriapsisSafe`'s atmosphere test never has to
             // catch a phasing entry - and if it ever does, that is a real bug rather than a
             // disagreement between two floors.
-            p.PeriFloorRadiusM = b.Radius + Rendezvous.PeriapsisFloorM;
+            // ---- ⛔ THE FLOOR IS THE ATMOSPHERE, NOT A KERBIN NUMBER. ----
+            // A flat 75 km (Rendezvous.PeriapsisFloorM) is 5 km above Kerbin's 70 km atmosphere - but
+            // it is 65 km INSIDE Earth's 140 km atmosphere, so in RSS a phasing periapsis "cleared" at
+            // 75 km would re-enter. Take the floor from the body's OWN atmosphere depth: Kerbin stays
+            // exactly 75 km (70 + margin), Earth becomes ~145 km. Body-agnostic, stock-transparent.
+            p.PeriFloorRadiusM = b.Radius + b.atmosphereDepth + Rendezvous.PeriapsisMarginM;
 
             int laps;
             PhasingSolution sol = Phasing.SolveAdaptive(p, out laps);

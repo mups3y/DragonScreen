@@ -82,8 +82,30 @@ namespace DragonScreen
         public double MecoAngleDeg;
         /// <summary>Shapes how fast the first stage pitches over. Per cent.</summary>
         public double PitchGain;
-        /// <summary>First-stage reference altitude, metres.</summary>
+        /// <summary>First-stage reference altitude, metres. ALSO the MECO apoapsis target.</summary>
         public double StageAltM;
+
+        /// <summary>
+        /// First-stage pitch-over characteristic altitude, metres. When > 0 it REPLACES the Kerbin
+        /// denominator `StageAltM * PitchGain/100` in TurnPitch, DECOUPLING how fast the stage pitches
+        /// over from where it stages.
+        ///
+        /// ⛔ WHY THIS HAD TO EXIST FOR RSS. On Kerbin the two happen to want the same number, so one
+        /// StageAltM served both. On Earth (flight_0822_011349, MechJeb) they do not: the real turn
+        /// reaches 45 deg by 16 km and 21 deg at staging - a pitch scale of ~40 km - while the MECO
+        /// apoapsis wants ~110 km. Scaling one number by the atmosphere ratio (the first attempt) set
+        /// the pitch denom to ~135 km, which holds the stack near-vertical and LOFTS. 0 on Kerbin, so
+        /// nothing there changes.
+        /// </summary>
+        public double PitchRefAltM;
+
+        /// <summary>
+        /// Dynamic-pressure ceiling for THIS body, kPa. Kerbin's 20 (below where its flights showed
+        /// control trouble) throttles a real Falcon 9 to the 35% floor straight through Earth's max Q
+        /// - MEASURED 31 kPa at 13 km on flight_0822_011349, which MechJeb flew at full thrust. Earth
+        /// gets a ceiling above that peak; the global Ascent.MaxQKpa const is the Kerbin default.
+        /// </summary>
+        public double MaxQKpa;
 
         /// <summary>
         /// Space X Station sits at 86.8 x 85.8 km, inclination 0.133 - MEASURED over four flights,
@@ -141,6 +163,48 @@ namespace DragonScreen
             t.MecoAngleDeg = meco;
             t.PitchGain = gain;
             t.StageAltM = stageAlt;
+            t.PitchRefAltM = 0.0;                 // Kerbin: denom stays StageAltM * PitchGain/100
+            t.MaxQKpa = Ascent.MaxQKpa;           // Kerbin's flown 20 kPa ceiling
+            return t;
+        }
+
+        /// <summary>
+        /// The RSS/RO Earth ascent, aimed at a given parking orbit. NOT a scaling of the Kerbin
+        /// numbers - MEASURED from a real MechJeb ascent of this exact vehicle off LC-39A
+        /// (flight_0822_011349, 2026-08-22), because no single scale maps Kerbin's ascent onto
+        /// Earth's: the atmosphere is 2x deeper but the turn pitches over FASTER, not slower, and the
+        /// orbit needs ~7.8 km/s instead of ~2.3.
+        ///
+        /// What the flight showed, and where each number comes from:
+        ///   - liftoff ~527 t, TWR ~1.6; max Q 31 kPa at 13 km flown at full thrust  -> MaxQKpa 34
+        ///   - flight-path angle 89 deg -> 45 by 16 km -> 21 at staging               -> PitchRefAltM 40 km
+        ///   - MECO/S1 sep at 70 km, 2587 m/s, apoapsis 121 km, inc heading to 51.6   -> StageAltM 110 km
+        ///   - the second stage pushes a ~6.6 t Dragon: ~8.9 km/s of margin, so we can even stage a
+        ///     little EARLY (110 vs 121 km) and still make orbit, keeping booster propellant for the
+        ///     droneship recovery.
+        /// The MECO floor / booster-sep attitude drops to 25 deg (real staging was 21) because Earth's
+        /// turn goes far shallower than Kerbin's 40 before staging.
+        ///
+        /// ⚠ INTERIM. A linear-in-altitude pitch law is a crude fit to a real gravity turn (which is
+        /// convex - fast kick then shallow follow); these constants keep it from lofting and reach
+        /// orbit, they are not optimal. The whole law is superseded by PSG. See
+        /// docs/SESSION_2026-08-22.md. The 2nd stage never fired on the measured flight (MVac failure,
+        /// a CRAFT issue), so its pitch law is unvalidated on Earth.
+        /// </summary>
+        public static AscentTarget ForBody(LandingProfile p, double parkingAltitudeM)
+        {
+            AscentTarget t = Station(p);
+            t.AltitudeM = parkingAltitudeM;   // real ~200 km parking orbit, below the ISS
+            t.StageAltM = 110000.0;           // MECO apoapsis (MechJeb staged at 121 km; a touch early)
+            // ⛔ 40->50->40 km. The 50 km "AoA ease" (2026-08-22) BACKFIRED: a slower pitch-over climbs
+            // steeper, so apoapsis reached the 110 km MECO trigger at only orb 2087 m/s instead of 2502
+            // (flight_0822_174436/174845) - the booster staged ~415 m/s low and left the low-TWR S2 far
+            // more to do. REVERTED to the value that flew to orbit (flight_0822_112918). The 17 deg AoA
+            // is survivable; fixing it must not move the MECO velocity - a different lever (a MaxQ-region
+            // pitch clamp, not the whole pitch scale) is the way, if it is worth touching at all.
+            t.PitchRefAltM = 40000.0;         // pitch-over scale, decoupled from staging - see the field
+            t.MecoAngleDeg = 25.0;            // Earth stages far shallower than Kerbin's 40
+            t.MaxQKpa = 34.0;                 // just above the measured 31 kPa peak - do not throttle
             return t;
         }
 
@@ -163,6 +227,8 @@ namespace DragonScreen
             t.MecoAngleDeg = meco;
             t.PitchGain = gain;
             t.StageAltM = stageAlt;
+            t.PitchRefAltM = 0.0;
+            t.MaxQKpa = Ascent.MaxQKpa;
             return t;
         }
     }
@@ -297,6 +363,21 @@ namespace DragonScreen
         public const double UllageThrottle = 0.075;
         public const double UllageFore = 0.75;
 
+        /// <summary>
+        /// Available thrust (kN) that confirms the MVac has actually CAUGHT - lit, spooled and producing
+        /// real thrust, so its own acceleration now self-settles the tanks and the RCS ullage can stop.
+        ///
+        /// ---- ⛔ WHY ULLAGE IS GATED ON THRUST, NOT A FIXED 6 s WINDOW. ----
+        /// flight_0822_205453: the RCS-fore ullage ran for exactly UllageSeconds (x_fore 0.75 for ~6 s)
+        /// and then STOPPED while the throttle went to full - but the MVac had not yet built thrust, so
+        /// the instant the settle ended the propellant floated and the engine flamed out on "No
+        /// propellants" (Prop Requirement Met 0.00%), spent an ignition, and read 0 kN for the whole
+        /// coast. The stage never circularised and the vehicle reentered suborbitally. A settled engine
+        /// at UllageThrottle makes ~70 kN and a lit one at power makes hundreds; 100 kN cleanly says
+        /// "really running", so ullage is HELD until AvailableThrust clears it.
+        /// </summary>
+        public const double UllageThrustConfirmKn = 100.0;
+
         // ---- CIRCULARISATION: THE BURN THAT PUT US ON AN ESCAPE TRAJECTORY ----
         // The first version burned PROGRADE at full throttle until periapsis reached the target
         // altitude. That has NO FIXED POINT: burning prograde raises apoapsis faster than periapsis,
@@ -364,8 +445,14 @@ namespace DragonScreen
                 phase = (s.RadarAltitude < VerticalRiseM && !Above(s, t))
                       ? AscentPhase.VerticalRise : AscentPhase.GravityTurn;
             }
-            // FIRST STAGE ends at the MECO target, not at the orbit target.
-            else if (phase == AscentPhase.GravityTurn && s.ApoapsisM >= StageTarget(t))
+            // FIRST STAGE ends at the MECO target - OR when the booster is spent, whichever comes
+            // first. The real vehicle stages on depletion too, and in RSS the interim turn can run the
+            // S1 dry a hair short of the apoapsis target (MEASURED flight_0822_022834: flameout at apo
+            // ~108 km, target 110). Without the flameout branch the guidance stayed in GRAVITY TURN
+            // over a dead stage for 31 s, and the starvation-staging fallback tore the stack apart in
+            // the gap. MECO on flameout hands straight to the clean SeparateBooster path.
+            else if (phase == AscentPhase.GravityTurn
+                     && (s.ApoapsisM >= StageTarget(t) || FirstStageSpent(s)))
                 phase = AscentPhase.Meco;
 
             // MECO holds, then separates. The command below raises Stage on the tick it expires.
@@ -492,7 +579,7 @@ namespace DragonScreen
 
                 case AscentPhase.GravityTurn:
                     c.PitchDeg = TurnPitch(s, t);
-                    c.Throttle = QThrottle(s);
+                    c.Throttle = QThrottle(s, t.MaxQKpa);
                     c.Note = "GRAVITY TURN";
                     break;
 
@@ -522,13 +609,24 @@ namespace DragonScreen
                     c.PitchDeg = TurnPitch(s, t);
                     if (s.PhaseElapsedS < UllageSeconds)
                     {
-                        // Settle the propellant before asking for thrust.
+                        // Settle the propellant gently before asking for real thrust.
                         c.Throttle = UllageThrottle;
                         c.UllageFore = UllageFore;
                         c.Note = "ULLAGE";
                     }
+                    else if (s.AvailableThrust < UllageThrustConfirmKn)
+                    {
+                        // ⛔ THE MINIMUM SETTLE IS DONE BUT THE ENGINE HAS NOT CAUGHT. Command power AND
+                        // KEEP ULLAGE. Dropping the RCS-fore here on a fixed clock is what flamed the MVac
+                        // out on unsettled propellant (see UllageThrustConfirmKn). Hold the settle until
+                        // the engine's own thrust can take over.
+                        c.Throttle = ApoapsisThrottle(s, t);
+                        c.UllageFore = UllageFore;
+                        c.Note = "ULLAGE + LIGHT";
+                    }
                     else
                     {
+                        // Engine has real thrust now - it self-settles, so the RCS ullage can stop.
                         c.Throttle = ApoapsisThrottle(s, t);
                         c.Note = "BURN TO APOAPSIS";
                     }
@@ -539,12 +637,14 @@ namespace DragonScreen
                     // is still in thin atmosphere and a sideways capsule bleeds apoapsis.
                     c.PitchDeg = 0.0;
                     c.Throttle = 0.0;
+                    c.Rcs = true;              // engines out - the gimbal is gone, RCS is the only authority
                     c.Note = "COAST TO APOAPSIS";
                     break;
 
                 case AscentPhase.Shutdown:
                     // Zero throttle, hold the attitude. Nothing else.
                     c.Throttle = 0.0;
+                    c.Rcs = true;              // engine spooling down - hold on RCS, not the fading gimbal
                     c.Note = "SHUTDOWN - engine spooling down before separation";
                     break;
 
@@ -573,6 +673,23 @@ namespace DragonScreen
         public static double StageTarget(AscentTarget t)
         {
             return (t.StageAltM > 0.0) ? t.StageAltM : 60000.0;
+        }
+
+        /// <summary>Below this thrust (kN) the first stage counts as flamed out / spent.</summary>
+        public const double FirstStageSpentThrustKn = 1.0;
+        /// <summary>...but only above this altitude, so no pad or max-Q transient can trip it.</summary>
+        public const double FirstStageSpentMinAltM = 30000.0;
+
+        /// <summary>
+        /// The first stage is spent: it is the booster (not the S2), we are well up-range, and it is
+        /// making no thrust while the gravity turn is still commanding it. Real F9 MECOs on depletion;
+        /// so do we, rather than coast a dead stage to the apoapsis target it can no longer reach.
+        /// </summary>
+        public static bool FirstStageSpent(AscentInputs s)
+        {
+            return !s.SecondStage
+                && s.Altitude > FirstStageSpentMinAltM
+                && s.AvailableThrust < FirstStageSpentThrustKn;
         }
 
         /// <summary>
@@ -679,10 +796,18 @@ namespace DragonScreen
                 return (p > meco) ? meco : p;
             }
 
-            double gain = (t.PitchGain > 0.0) ? t.PitchGain : 110.0;
-            double stageAlt = (t.StageAltM > 0.0) ? t.StageAltM : 60000.0;
-            double denom = stageAlt * (gain / 100.0);
-            if (denom <= 0.0) denom = 66000.0;
+            // The pitch-over scale. On Earth PitchRefAltM sets it directly (decoupled from where the
+            // stage MECOs); on Kerbin it is 0 and the denom stays the flown StageAltM * PitchGain/100.
+            double denom;
+            if (t.PitchRefAltM > 0.0)
+                denom = t.PitchRefAltM;
+            else
+            {
+                double gain = (t.PitchGain > 0.0) ? t.PitchGain : 110.0;
+                double stageAlt = (t.StageAltM > 0.0) ? t.StageAltM : 60000.0;
+                denom = stageAlt * (gain / 100.0);
+                if (denom <= 0.0) denom = 66000.0;
+            }
 
             double pitch = 90.0 * (1.0 - s.Altitude / denom);
             // The MECO floor. Never below the horizon either - a negative pitch here would be a
@@ -695,10 +820,15 @@ namespace DragonScreen
         /// Throttle back through max Q. Proportional above the limit rather than a hard cut, so the
         /// vehicle eases off instead of pogoing between full and nothing.
         /// </summary>
-        public static double QThrottle(AscentInputs s)
+        public static double QThrottle(AscentInputs s) { return QThrottle(s, MaxQKpa); }
+
+        /// <summary>As above, against a body-specific ceiling (Kerbin 20, Earth 34 - see
+        /// AscentTarget.MaxQKpa). The 1-arg overload keeps the Kerbin default for existing callers.</summary>
+        public static double QThrottle(AscentInputs s, double maxQKpa)
         {
-            if (s.DynamicPressureKpa <= MaxQKpa) return 1.0;
-            double over = (s.DynamicPressureKpa - MaxQKpa) / MaxQKpa;
+            if (maxQKpa <= 0.0) maxQKpa = MaxQKpa;
+            if (s.DynamicPressureKpa <= maxQKpa) return 1.0;
+            double over = (s.DynamicPressureKpa - maxQKpa) / maxQKpa;
             double th = 1.0 - over * 2.0;
             if (th < 0.35) th = 0.35;      // never below the level that keeps the engines happy
             return th;

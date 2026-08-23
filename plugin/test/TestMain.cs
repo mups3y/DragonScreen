@@ -29,6 +29,15 @@ public static class TestMain
         bad += LayoutSweepTest.Run();
         bad += MechJebLibTest.Run();
         bad += FuelFlowTest.Run();
+        bad += LaunchAzimuthTest.Run();
+        bad += WaypointApproachTest.Run();
+        bad += LvlhTest.Run();
+        bad += VehiclePartsTest.Run();
+        bad += HohmannTest.Run();
+        bad += PlaneWindowTest.Run();
+        bad += Crew2TimelineTest.Run();
+        bad += KeplerTest.Run();
+        bad += UpfgTest.Run();
 
         Console.WriteLine(bad == 0 ? "ALL SUITES PASSED" : bad + " SUITE(S) FAILED");
         return bad == 0 ? 0 : 1;

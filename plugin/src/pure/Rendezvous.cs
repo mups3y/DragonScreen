@@ -101,6 +101,13 @@ namespace DragonScreen
         /// </summary>
         public const double PeriapsisFloorM = 75000.0;
 
+        /// <summary>
+        /// Margin above a body's atmosphere for the phasing periapsis floor, metres. The live floor is
+        /// `atmosphereDepth + this` (StationApproach), so it scales to any body: Kerbin 70 km + 5 =
+        /// 75 km (= PeriapsisFloorM, stock unchanged), Earth 140 km + 5 = 145 km. See that call site.
+        /// </summary>
+        public const double PeriapsisMarginM = 5000.0;
+
         /// <summary>The knee of the CW transfer time. Shorter than this and the cost explodes.</summary>
         public const double CwPeriodFraction = 0.20;
 

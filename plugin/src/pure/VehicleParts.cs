@@ -40,6 +40,14 @@ namespace DragonScreen
         /// <summary>Falcon 9 first stage. Tank, engine and interstage all carry it.</summary>
         public const string BoosterMarker = ".S1.";
 
+        /// <summary>
+        /// The interstage - the part that carries the S1/S2 separation decoupler (a
+        /// ModuleTundraDecoupler). Firing THIS decoupler by capability drops the booster cleanly,
+        /// rather than trusting `StageManager.ActivateNextStage` to fire the right stage. See
+        /// AutoPilot.SeparateBooster and CREW2_RSS_RESEARCH.md.
+        /// </summary>
+        public const string InterstageMarker = "S1.Interstage";
+
         /// <summary>Falcon 9 second stage.</summary>
         public const string SecondStageMarker = ".S2.";
 
@@ -151,6 +159,21 @@ namespace DragonScreen
             if (Has(partName, BoosterMarker)) return false;
             return Has(partName, SecondStageMarker);
         }
+
+        /// <summary>The interstage that carries the booster-separation decoupler.</summary>
+        public static bool IsInterstage(string partName) { return Has(partName, InterstageMarker); }
+
+        /// <summary>The ASDS droneship part (Space_X_barge_lander's SpaceXDroneship). Lets the booster
+        /// find its landing barge by what it IS, so renaming the vessel to the real ASDS name cannot
+        /// break the target. See BoosterRecovery.FindDroneship.</summary>
+        public const string DroneshipMarker = "Droneship";
+        public static bool IsDroneship(string partName) { return Has(partName, DroneshipMarker); }
+
+        /// <summary>The Ghidorah erector / launch clamp (TE.Ghidorah.Erector) - a ModuleTundraDecoupler
+        /// (event 'decouple' releases the vehicle) plus a ModuleAnimateGeneric ('open erector' swings the
+        /// arm clear). The RO launch sequence fires these by capability. See AutoPilot.ReleaseLaunchClamp.</summary>
+        public const string ErectorMarker = "Erector";
+        public static bool IsErector(string partName) { return Has(partName, ErectorMarker); }
 
         public static bool IsTrunk(string partName) { return Has(partName, TrunkMarker); }
         public static bool IsDragonDecoupler(string partName)

@@ -77,6 +77,17 @@ namespace DragonScreen
         /// </summary>
         [Tunable] public static double BoosterRollRangeDeg = 130.0;
 
+        // ---- RSS/RO DRONESHIP: "Of Course I Still Love You" (Crew-2's ASDS) ----
+        // In RSS the barge is placed as a KerbalKonstructs STATIC (too unstable to float as a vessel),
+        // which is NOT in FlightGlobals - FindDroneship cannot see a static. So on Earth the booster
+        // aims at this fixed coordinate: the exact spot the static was set (KK RefLatitude/RefLongitude,
+        // 2026-08-22). [Tunable] - move the barge and update these to re-aim, no rebuild. On Kerbin the
+        // stock open-water fallback (Lz0) is kept.
+        [Tunable] public static double DroneshipEarthLatDeg = 31.559906;
+        [Tunable] public static double DroneshipEarthLonDeg = -76.679988;
+        /// <summary>Body radius above which the world is RSS/RO Earth (Kerbin 600 km, Earth 6371 km).</summary>
+        public const double EarthRadiusThresholdM = 1.0e6;
+
         public static bool Active { get; private set; }
         public static LandingPhase Phase { get; private set; }
         public static LandingCommand Command;
@@ -112,6 +123,20 @@ namespace DragonScreen
         /// 2026-08-12. Long enough for the legs to take the load and the engine to spool down.
         /// </summary>
         public const double SettleAfterLandingS = 10.0;
+
+        /// <summary>
+        /// Seconds to RCS-settle the propellant before lighting the ENTRY burn (Real Fuels).
+        ///
+        /// ⛔ A ballistically-coasting stage has UNSETTLED propellant: free fall is weightless, so gravity
+        /// does NOT settle a falling tank. Only a non-gravitational force on the airframe does - drag, or
+        /// active ullage - and at the ~65 km entry-burn altitude the air is too thin for drag to settle it
+        /// in time. Without a settle the Merlin will not light under Real Fuels even WITH ignitor fluid
+        /// (TEATEB). So hold the engine OFF for this long at the top of the entry burn while RCS fires
+        /// forward (UllageFore), settling propellant onto the engine feed, THEN light. Mirrors the M-Vac's
+        /// S2SettleBeforeIgniteS. NOT applied to the landing burn: by then the stage is in dense air (drag
+        /// settles it), the entry burn just ran, and a hoverslam must not be delayed.
+        /// </summary>
+        private const double EntryBurnUllageSettleS = 2.0;
 
         /// <summary>
         /// The booster we are flying, for anything that needs to look at it rather than fly it.
@@ -195,10 +220,20 @@ namespace DragonScreen
                               + PadLat.ToString("F6") + ", " + PadLon.ToString("F6"));
                     return;
                 }
+                // No droneship VESSEL. In RSS the barge is a KerbalKonstructs STATIC (not a vessel), so
+                // on Earth aim at the fixed OCISLY coordinate the static sits at; on Kerbin keep the
+                // stock open-water fallback. See the DroneshipEarth* tunables.
+                if (v.mainBody != null && v.mainBody.Radius > EarthRadiusThresholdM)
+                {
+                    PadLat = DroneshipEarthLatDeg; PadLon = DroneshipEarthLonDeg; HavePad = true;
+                    Debug.Log(Tag + "landing zone: droneship STATIC 'Of Course I Still Love You' at "
+                              + PadLat.ToString("F6") + ", " + PadLon.ToString("F6")
+                              + " (no vessel; fixed Earth coordinate)");
+                    return;
+                }
                 PadLat = LandingSites.Lz0.LatDeg; PadLon = LandingSites.Lz0.LonDeg; HavePad = true;
-                Debug.LogWarning(Tag + "no vessel named '" + LandingSites.DroneshipVesselName
-                                     + "' in the world - falling back to " + LandingSites.Lz0.Name
-                                     + ". The booster will aim at open water.");
+                Debug.LogWarning(Tag + "no droneship vessel and not on Earth - falling back to "
+                                     + LandingSites.Lz0.Name + ". The booster will aim at open water.");
                 return;
             }
 
@@ -211,10 +246,36 @@ namespace DragonScreen
         private static Vessel FindDroneship()
         {
             List<Vessel> all = FlightGlobals.Vessels;
+            // The configured name wins (Crew-2: "Of Course I Still Love You"); but a rename must not
+            // silently leave the booster aiming at open water, so fall back to any vessel that IS a
+            // droneship - it carries the droneship part. The barge is usually UNLOADED downrange, so
+            // read its proto-parts when it is not loaded. falcon-detect-by-capability.
+            Vessel byPart = null;
             for (int i = 0; i < all.Count; i++)
-                if (all[i] != null && all[i].vesselName == LandingSites.DroneshipVesselName)
-                    return all[i];
-            return null;
+            {
+                Vessel s = all[i];
+                if (s == null || s.state == Vessel.State.DEAD) continue;
+                if (s.vesselName == LandingSites.DroneshipVesselName) return s;
+                if (byPart == null && IsDroneshipVessel(s)) byPart = s;
+            }
+            return byPart;
+        }
+
+        private static bool IsDroneshipVessel(Vessel v)
+        {
+            if (v.loaded)
+            {
+                for (int i = 0; i < v.parts.Count; i++)
+                    if (VehicleParts.IsDroneship(v.parts[i].name)) return true;
+                return false;
+            }
+            if (v.protoVessel != null)
+            {
+                List<ProtoPartSnapshot> pps = v.protoVessel.protoPartSnapshots;
+                for (int i = 0; pps != null && i < pps.Count; i++)
+                    if (VehicleParts.IsDroneship(pps[i].partName)) return true;
+            }
+            return false;
         }
 
         public static void Reset()
@@ -225,6 +286,7 @@ namespace DragonScreen
             // into this one: fins "already out" on a stage that has not launched, a mode machine
             // that thinks it is mid-step, a failure already reported so never reported again.
             gridFinsOut = false;
+            recoveryPropStart = -1.0;
             lastModeStepAt = 0.0; modeSteps = 0; lastWantMode = -1; modeFailReported = false;
             handedOverToOne = false;
             settleUntil = 0.0;
@@ -287,6 +349,13 @@ namespace DragonScreen
             SnapshotRanges(upperStage);
             Extend(upperStage);
             Extend(booster);
+
+            // ⛔ STOW THE GRID FINS' CONTROL RESPONSE. They are retracted at separation and do not
+            // deploy until the arc-over, but KSP deflects every ModuleControlSurface from ctrlState
+            // regardless of deploy state - so through the flip and coast the RETRACTED fins actuated to
+            // the (railed) attitude command. Gate their control on actually being out; DeployGridFins
+            // restores it. flight_0822_205453: b_finsOut 0 while the actuators railed +-1 the whole coast.
+            SetGridFinControl(booster, false);
 
             // Join the profile where the stage actually is. Handover is late by design - see
             // Landing.InitialPhase - so assuming Boostback would fly a falling booster back up.
@@ -594,6 +663,28 @@ namespace DragonScreen
             // going up, into vacuum, with the whole arc still to fly.
             if (s.VerticalSpeed <= Landing.ArcOverVs) DeployGridFins(booster);
 
+            // ---- ⛔ ULLAGE SETTLE BEFORE THE ENTRY-BURN RELIGHT (Real Fuels). ----
+            // The stage has been coasting ballistically, so its propellant is unsettled (free fall is
+            // weightless), and at ~65 km the air is too thin for drag to settle it. Under Real Fuels the
+            // Merlin will not light on unsettled propellant even with TEATEB. So for the first
+            // EntryBurnUllageSettleS of the entry burn, keep the engine OFF and fire RCS forward
+            // (UllageFore -> Drive's s.Z, through the booster's own OnFlyByWire) to settle propellant onto
+            // the engine feed; then fall through and light. Aim still runs so the stage holds retrograde
+            // and the settle pushes the right way. See EntryBurnUllageSettleS.
+            if (Phase == LandingPhase.EntryBurn
+                && Planetarium.GetUniversalTime() - phaseStartedAt < EntryBurnUllageSettleS)
+            {
+                if (!booster.ActionGroups[KSPActionGroup.RCS])
+                    booster.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
+                AttitudeController.Booster.UllageFore = 1.0;   // -Z forward, settles propellant aft
+                SetEngines(booster, 0);                        // hold off - do NOT spend an ignition yet
+                Aim(booster, c, s);
+                AttitudeController.Booster.Throttle = 0.0;
+                if (FlightGlobals.ActiveVessel == booster) FlightInputHandler.state.mainThrottle = 0f;
+                return;
+            }
+            AttitudeController.Booster.UllageFore = 0.0;        // settle done (or not the entry burn)
+
             SetEngines(booster, c.Engines);
             Aim(booster, c, s);
             // The BOOSTER's own throttle, through its own controller. Not FlightInputHandler.state,
@@ -729,6 +820,9 @@ namespace DragonScreen
             s.DynamicPressureKpa = v.dynamicPressurekPa;
             s.Landed = (v.situation == Vessel.Situations.LANDED
                      || v.situation == Vessel.Situations.SPLASHED);
+            // Crew-2 is a droneship (ASDS) recovery - no boostback, the booster runs downrange to the
+            // barge. Landing.Guide skips BoostbackKill+Boostback when this is set. See Landing.cs.
+            s.Droneship = (Profile == LandingProfile.Droneship);
 
             // Ambient pressure in ATMOSPHERES - atmosphereCurve is keyed in atm, GetPressure is kPa.
             double pressureAtm = (v.mainBody != null)
@@ -783,6 +877,13 @@ namespace DragonScreen
             // count has to come from the vehicle rather than from how many modules were summed.
             s.EngineCount = (FindEngineSwitch(v) != null) ? VehicleParts.OctawebEngineCount : n;
             s.PhaseElapsedS = Planetarium.GetUniversalTime() - phaseStartedAt;
+
+            // ---- RECOVERY PROPELLANT FRACTION: 1.0 at handover, so the entry burn can reserve the
+            // landing burn's share (Landing.EntryBurnReserveFrac). recoveryPropStart is latched on the
+            // first read after separation, when everything left in the tanks IS the recovery budget.
+            double propNow = RecoveryPropUnits(v);
+            if (recoveryPropStart <= 0.0 && propNow > 0.0) recoveryPropStart = propNow;
+            s.RecoveryPropFrac = (recoveryPropStart > 0.0) ? propNow / recoveryPropStart : -1.0;
 
             s.DownrangeM = HavePad && v.mainBody != null
                 ? GroundRange(v.mainBody, v.latitude, v.longitude, PadLat, PadLon) : 0.0;
@@ -1424,11 +1525,71 @@ namespace DragonScreen
                     n++;
                 }
             }
+            SetGridFinControl(v, true);      // now they are out, let them fly the attitude
             Debug.Log(Tag + "grid fins deployed (" + n + ")");
             if (n == 0)
                 Debug.LogWarning(Tag + "no grid fins found - looked for ModuleAnimateGeneric '"
                                      + VehicleParts.GridFinAnimation + "'. Entry will have no "
                                      + "aerodynamic authority.");
+        }
+
+        /// <summary>
+        /// Enable or disable the grid fins' aerodynamic control RESPONSE (not the deploy animation).
+        ///
+        /// ⛔ KSP applies the vessel's ctrlState to EVERY ModuleControlSurface the instant the vessel is
+        /// controlled - it does not care whether the fin's deploy animation is retracted - so a stowed
+        /// grid fin still deflects to the pitch/yaw/roll command. That is the "fins actuating while
+        /// retracted" the crew reported, and during the powerless coast the command is railed at +-1, so
+        /// they slam to their stops. Setting ignorePitch/Yaw/Roll while stowed makes the surface ignore
+        /// the command until DeployGridFins turns it back on. Matched on the grid-fin deploy animation so
+        /// it can only ever touch the grid fins.
+        /// </summary>
+        /// <summary>Propellant at recovery handover, in resource units - the denominator for RecoveryPropFrac.
+        /// Latched on the first post-sep read, reset per flight.</summary>
+        private static double recoveryPropStart = -1.0;
+
+        /// <summary>
+        /// The booster's remaining LIQUID PROPELLANT (RP-1/LOX family, cooled or not), in resource units.
+        /// Read directly off the parts so it sees RealFuels' resources, which `b_lfFrac`/`b_oxFrac` cannot.
+        /// Used only as a RATIO (now / at-handover), so units and mixture ratio cancel.
+        /// </summary>
+        private static double RecoveryPropUnits(Vessel v)
+        {
+            if (v == null) return 0.0;
+            double u = 0.0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                PartResourceList rs = v.parts[i].Resources;
+                for (int r = 0; r < rs.Count; r++)
+                {
+                    string nm = rs[r].resourceName;
+                    if (nm == "RP-1" || nm == "CooledRP-1" || nm == "LqdOxygen" || nm == "CooledLqdOxygen"
+                        || nm == "Kerosene" || nm == "LiquidFuel" || nm == "Oxidizer")
+                        u += rs[r].amount;
+                }
+            }
+            return u;
+        }
+
+        private static void SetGridFinControl(Vessel v, bool active)
+        {
+            if (v == null) return;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                Part p = v.parts[i];
+                bool isFin = false;
+                List<ModuleAnimateGeneric> anims = p.Modules.GetModules<ModuleAnimateGeneric>();
+                for (int m = 0; m < anims.Count; m++)
+                    if (anims[m].animationName == VehicleParts.GridFinAnimation) { isFin = true; break; }
+                if (!isFin) continue;
+                List<ModuleControlSurface> cs = p.Modules.GetModules<ModuleControlSurface>();
+                for (int m = 0; m < cs.Count; m++)
+                {
+                    cs[m].ignorePitch = !active;
+                    cs[m].ignoreYaw = !active;
+                    cs[m].ignoreRoll = !active;
+                }
+            }
         }
 
         private static bool gridFinsOut;

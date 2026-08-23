@@ -100,6 +100,13 @@ namespace DragonScreen
         public double MaxThrustAccel;
         /// <summary>How many engines the booster actually has available.</summary>
         public int EngineCount;
+        /// <summary>
+        /// Fraction of the RECOVERY propellant still aboard, 1.0 at separation falling to 0.0 when the
+        /// recovery tank is dry. The glue measures it (current propellant / propellant at handover). It
+        /// is how the entry burn knows to STOP and save fuel for the landing burn - see EntryBurnReserveFrac.
+        /// -1 when the glue cannot read it (then the entry burn keeps its speed-based cut).
+        /// </summary>
+        public double RecoveryPropFrac;
 
         // ---- ⚠ THE OCTAWEB'S MODES ARE NOT MULTIPLES OF ONE ENGINE ----
         // See VehicleParts: 2560 / 1706 / 764 kN for nine / three / one, which is 284 / 569 / 764 kN
@@ -155,6 +162,14 @@ namespace DragonScreen
         public double AtmosphereDepthM;
         public double DynamicPressureKpa;
         public bool Landed;
+
+        /// <summary>
+        /// This is a DRONESHIP (ASDS) recovery, not RTLS - the glue sets it from
+        /// BoosterRecovery.Profile. A droneship booster keeps going downrange to a barge at its natural
+        /// impact point, so it SKIPS the boostback and goes flip -> coast -> entry burn -> landing burn.
+        /// Crew-2 flew this. RTLS (false) keeps the boostback burn home.
+        /// </summary>
+        public bool Droneship;
     }
 
     public struct LandingCommand
@@ -219,6 +234,23 @@ namespace DragonScreen
 
         /// <summary>Entry burn cuts on VERTICAL speed, not airspeed. BOOSTER.ks:728.</summary>
         public const double EntryBurnCutVs = -300.0;
+
+        /// <summary>
+        /// The entry burn stops once the recovery propellant falls to this fraction, RESERVING the rest
+        /// for the landing burn.
+        ///
+        /// ---- ⛔ WHY A DRONESHIP ENTRY BURN MUST NOT RUN ON THE VERTICAL-SPEED CUT ALONE. ----
+        /// F9I's `verticalspeed > -300` cut is an RTLS/Kerbin number: the RTLS booster has already killed
+        /// its horizontal velocity in boostback, so retrograde is nearly straight down and the burn is
+        /// short. A DRONESHIP booster keeps ~2 km/s of downrange velocity (it must, to reach a barge ~500
+        /// km out), so a SurfaceRetrograde burn held to vs > -300 arrests that horizontal too and eats the
+        /// WHOLE recovery load: flight_0823_082234 spent 22.8 t of ~22.7 t on the entry burn, left nothing
+        /// for the landing ("NO SOLUTION", splashed at 471 m/s), AND killed the downrange so it fell 370 km
+        /// short of the barge. Real Crew-2 does two SHORT burns (entry T+7:27, landing T+9:03). Reserving
+        /// half the recovery propellant makes the entry burn short, keeps the downrange, and guarantees a
+        /// landing burn. 0.5 is a starting split; tune from the barge miss + landing residual.
+        /// </summary>
+        [Tunable] public static double EntryBurnReserveFrac = 0.5;
 
         /// <summary>
         /// Lowest part to the engine bells, metres. `F9L_BoosterHeight`. alt:radar measures to the
@@ -491,8 +523,9 @@ namespace DragonScreen
             if (s.Landed) return LandingPhase.Touchdown;
             // Still alongside whatever we just left. Nothing lights until that is not true.
             if (NearPartner(s)) return LandingPhase.Flip;
-            if (s.VerticalSpeed > 0.0) return LandingPhase.Boostback;
-            if (s.AltitudeAsl <= EntryBurnGateAsl) return LandingPhase.EntryBurn;
+            // A droneship booster never boosts back - still climbing just means "coast to entry".
+            if (s.VerticalSpeed > 0.0) return s.Droneship ? LandingPhase.Coast : LandingPhase.Boostback;
+            if (s.AltitudeAsl <= EntryGateAsl(s)) return LandingPhase.EntryBurn;
             return LandingPhase.Coast;
         }
 
@@ -619,6 +652,16 @@ namespace DragonScreen
             // The one-engine figure does have a job. It is the HANDOVER test, further down.
             double descentAccel = PhaseAccel(LandingPhase.EntryBurn, s);
             double landAccel = PhaseAccel(LandingPhase.LandingBurn, s);
+            // ---- ⛔ THE HOVERSLAM IGNITES ON VERTICAL SPEED, NOT SURFACE SPEED. ----
+            // F9I stops on VERTICAL speed. A droneship booster keeps big horizontal velocity down the arc,
+            // but DRAG bleeds it: with the entry burn now cut short to reserve landing fuel and PRESERVE
+            // the downrange (EntryBurnReserveFrac), the stage reaches the deck with the horizontal mostly
+            // gone (flight_0823: 43 m/s horizontal, 227 vertical at touchdown) and only the vertical to
+            // kill. Sizing the ignition on the SURFACE speed instead was a mistake: high on the arc that
+            // speed is ~1.5 km/s, so the ignition altitude came out 30-70 km and the landing burn LIT AT
+            // 48 km, throttled down, shut the engine, and could not relight at the ground (out of ignitions)
+            // - the stage fell in at 231 m/s. Vertical speed puts ignition where the hoverslam belongs, a
+            // few hundred metres up, one clean light.
             double ign = StopDistance(s.VerticalSpeed, descentAccel, s.Gravity) + BoosterHeightM;
             c.IgnitionAltitude = ign;
 
@@ -689,6 +732,16 @@ namespace DragonScreen
             // it is rate-limited rather than idle - the stage physically rotates at about 2.5 deg/s on
             // cold gas at 59 t. There is no evidence F9I is faster, and the flip's duration was never
             // what lost a booster; the flip's DIRECTION was. Do not tune against the 16.
+            // ---- ⛔ A DRONESHIP BOOSTER DOES NOT BOOST BACK. ----
+            // RTLS reverses course to fly home; a droneship (ASDS) booster - Crew-2's profile - keeps
+            // going downrange to a barge parked at its natural impact point, so it goes straight from
+            // the flip to the coast, skipping BoostbackKill + Boostback entirely. Real Crew-2 booster
+            // sequence is flip -> coast -> entry burn (T+7:27) -> landing burn (T+9:03) -> land (T+9:30),
+            // with NO boostback burn. See CREW2_RSS_RESEARCH.md.
+            else if (phase == LandingPhase.Flip && s.FlipDone && s.Droneship
+                     && (!NearPartner(s) || s.PhaseElapsedS >= MaxSeparationWaitS))
+                phase = LandingPhase.Coast;
+
             else if (phase == LandingPhase.Flip && s.FlipDone
                      && (!NearPartner(s) || s.PhaseElapsedS >= MaxSeparationWaitS))
                 phase = LandingPhase.BoostbackKill;
@@ -709,9 +762,13 @@ namespace DragonScreen
             else if (phase == LandingPhase.Coast && Hoverslam(s, ign))
                 phase = LandingPhase.LandingBurn;
 
-            // F9I cuts on VERTICAL SPEED: `until (ship:verticalspeed > -300)`.
+            // F9I cuts on VERTICAL SPEED: `until (ship:verticalspeed > -300)`. A droneship ALSO cuts the
+            // instant the recovery propellant hits the reserve, so the landing burn is never starved and
+            // the downrange velocity that carries it to the barge is not thrown away. See EntryBurnReserveFrac.
             else if (phase == LandingPhase.EntryBurn
-                     && (s.VerticalSpeed > EntryBurnCutVs || !InEntryBand(s)))
+                     && (s.VerticalSpeed > EntryBurnCutVs || !InEntryBand(s)
+                         || (s.Droneship && s.RecoveryPropFrac >= 0.0
+                             && s.RecoveryPropFrac <= EntryBurnReserveFrac)))
                 phase = LandingPhase.Descent;
 
             else if (phase == LandingPhase.Descent && Hoverslam(s, ign))
@@ -789,6 +846,15 @@ namespace DragonScreen
                     // for the arc and the wrong one to meet the air in.
                     c.Throttle = 0.0;
                     c.StoppingTime = GlideStoppingTime;
+                    // ---- ⛔ RCS ON FOR THE WHOLE COAST, NOT JUST THE DESCENT. ----
+                    // The engines are out (no gimbal) and the grid fins are stowed, so the ONLY attitude
+                    // authority on a coasting booster is the cold-gas RCS - exactly what the real Falcon 9
+                    // holds attitude on across the coast. This branch (climbing over the top) left Rcs at
+                    // its default FALSE, so from the flip's residual rate the stage had nothing to arrest
+                    // it and tumbled - attitude error swinging 0-166 deg with the actuators railed at +-1
+                    // doing nothing (flight_0823, crew: "left tumbling through space"). RCS belongs on
+                    // both halves of the coast; only the AIM differs (nose up over the top, retrograde down).
+                    c.Rcs = true;
                     if (s.VerticalSpeed > ArcOverVs)
                     {
                         c.Aim = LandingAim.Up;
@@ -969,9 +1035,20 @@ namespace DragonScreen
         }
 
         /// <summary>The entry-burn window, on ASL and vertical speed exactly as BOOSTER.ks.</summary>
+        /// <summary>32.5 km over Kerbin's 70 km atmosphere = this fraction; RSS/Earth's deeper air
+        /// moves the gate up proportionally, to ~65 km (real Falcon 9 entry burn is ~55-70 km).</summary>
+        public const double EntryGateFraction = 32500.0 / 70000.0;
+
+        /// <summary>The entry-burn altitude gate for THIS body, metres ASL - atmosphere-relative so it
+        /// is right on Earth, and reproduces the flown 32.5 km on Kerbin. Falls back to the const.</summary>
+        public static double EntryGateAsl(LandingInputs s)
+        {
+            return (s.AtmosphereDepthM > 0.0) ? s.AtmosphereDepthM * EntryGateFraction : EntryBurnGateAsl;
+        }
+
         private static bool InEntryBand(LandingInputs s)
         {
-            return s.AltitudeAsl < EntryBurnGateAsl && s.AltitudeRadar > 1000.0;
+            return s.AltitudeAsl < EntryGateAsl(s) && s.AltitudeRadar > 1000.0;
         }
 
         /// <summary>Height the ENGINES must fly out. Radar is to the lowest part; bells are higher.</summary>

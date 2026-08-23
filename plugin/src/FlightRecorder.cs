@@ -130,10 +130,12 @@ namespace DragonScreen
             "a_massT,a_availThrustKn,a_moiX,a_moiY,a_moiZ,a_torqueX,a_torqueY,a_torqueZ," +
             // margins and validity - what is left, and whether physics is even running on it
             "a_lfFrac,a_oxFrac,a_monoFrac,a_ecFrac,a_maxSkinK,a_packed,a_enginesLit," +
+            // RSS/RO telemetry: angle of attack (FAR aero loads) and g-force (crew + structural limits).
+            "a_aoaDeg,a_geeForce," +
             "a_phaseElapsedS,a_rangeToBoosterKm," +
             // guidance command
             "a_cmdPitchDeg,a_cmdHeadingDeg,a_cmdThrottle,a_cmdStage,a_cmdSepS2,a_cmdUllage," +
-            "a_cmdRcs,a_circDvMps," +
+            "a_cmdRcs,a_circDvMps,a_ullage," +
             // attitude: commanded vs achieved
             // ⛔ EVERY ANGLE AND RATE IN THIS FILE IS DEGREES. THE NAMES SAY SO ON PURPOSE.
             // `Phi` and `Omega` are RADIANS inside the controller - KSP's `angularVelocity` is
@@ -211,6 +213,9 @@ namespace DragonScreen
             "x_owner,x_thrCmd,x_fore,x_transX,x_transY,x_rcsCmd,x_rcsOn," +
             // The approach, in its own numbers rather than inferred from range.
             "x_daPhase,x_daRangeM,x_daClosing,x_daDv,x_daWant,x_daAimErr,x_daThr," +
+            // The RSS L-approach (R-bar/V-bar terminal), in the station's LVLH frame: +radial up,
+            // +along ahead. Off by default; these read '-'/0 on stock and disabled builds.
+            "x_laPhase,x_laRangeM,x_laRadial,x_laAlong,x_laCross," +
             // The docking controller. `x_dkRangeM` is PORT to PORT, which is not `m_stationKm`.
             "x_dkStage,x_dkRangeM,x_dkClosing,x_dkAxisErr," +
             // The docking controller's INPUTS. Paired with x_fore/transX/transY above:
@@ -392,6 +397,10 @@ namespace DragonScreen
             F(r, c.UllageFore);
             F(r, c.Rcs ? 1.0 : 0.0);
             F(r, AutoPilot.LastCircDvMps);
+            // Live RealFuels ullage of the active vessel's worst ullage-limited engine (0 floating .. 1
+            // settled; -1 = no ullage engine / stock). The number the flight computer reads to know it can
+            // light - the whole point of UllageProbe. Reads the S1 during ascent, the MVac during the S2 burn.
+            int ullN; F(r, UllageProbe.VesselWorst(a, null, out ullN));
             Attitude(r, AttitudeController.Ascent, true);
             Controls(r, a);
 
@@ -455,6 +464,7 @@ namespace DragonScreen
             // the RCS group is commanded by whichever controller holds the vehicle, so record the
             // thing that is actually true: is any controller asking for RCS right now.
             bool rcsWanted = AutoPilot.Command.Rcs || DirectApproachOps.Engaged
+                             || WaypointApproachOps.Engaged
                              || DockingOps.Engaged || UndockOps.Engaged || DeorbitOps.Engaged;
             F(r, rcsWanted ? 1.0 : 0.0);
             F(r, (a != null && a.ActionGroups[KSPActionGroup.RCS]) ? 1.0 : 0.0);
@@ -466,6 +476,12 @@ namespace DragonScreen
             F(r, DirectApproachOps.WantMps);
             F(r, DirectApproachOps.AimErrorDeg);
             F(r, DirectApproachOps.ThrottleCmd);
+
+            S(r, WaypointApproachOps.Engaged ? WaypointApproachOps.Phase.ToString() : "-");
+            F(r, WaypointApproachOps.RangeM);
+            F(r, WaypointApproachOps.RadialM);
+            F(r, WaypointApproachOps.AlongM);
+            F(r, WaypointApproachOps.CrossM);
 
             S(r, DockingOps.Stage.ToString());
             F(r, DockingOps.RangeToPortM);
@@ -677,12 +693,12 @@ namespace DragonScreen
             if (v == null || v.state == Vessel.State.DEAD)
             {
                 // ⛔ THESE COUNTS MUST MATCH THE LIVE PATH BELOW EXACTLY.
-                //   full : lf, ox, mono, ec, skin, packed, enginesLit          = 7
-                //   not   : lf, ox,           skin, packed                     = 4
+                //   full : lf, ox, mono, ec, skin, packed, enginesLit, aoa, gee = 9
+                //   not   : lf, ox,           skin, packed                      = 4
                 // This said 5, and the booster is null for the whole pre-separation stretch of every
                 // flight - so the first hundred seconds of every recording would have had every
                 // column after this one shifted by one, with the header still looking correct.
-                int n = full ? 7 : 4;
+                int n = full ? 9 : 4;
                 for (int i = 0; i < n; i++) F(r, 0.0);
                 return;
             }
@@ -709,7 +725,18 @@ namespace DragonScreen
             if (full) { F(r, Frac(mono, monoMax)); F(r, Frac(ec, ecMax)); }
             F(r, skin);
             F(r, v.packed ? 1.0 : 0.0);
-            if (full) F(r, BoosterRecovery.CountLit(v));
+            if (full)
+            {
+                F(r, BoosterRecovery.CountLit(v));
+                // Angle of attack: nose (control-point 'up') vs the surface velocity. Under FAR this
+                // is what drives the aero loads that a real ascent has to keep small. Zero when slow
+                // or before physics, so it cannot read a garbage angle off a near-zero velocity.
+                double aoa = 0.0;
+                if (v.srfSpeed > 1.0 && v.ReferenceTransform != null)
+                    aoa = Vector3d.Angle(v.srf_velocity, v.ReferenceTransform.up);
+                F(r, aoa);
+                F(r, v.geeForce);          // g-load: the crew limit and the structural one
+            }
         }
 
         private static double Frac(double a, double max) { return (max > 0.0) ? a / max : 0.0; }

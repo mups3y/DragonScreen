@@ -178,6 +178,7 @@ public static class FlightTest
         s.HorizontalSpeed = Math.Sqrt(Math.Max(0.0, srfSpeed * srfSpeed - vSpeed * vSpeed));
         s.MaxThrustAccel = accel; s.EngineCount = engines;
         s.Gravity = 9.81; s.AtmosphereDepthM = 70000.0;
+        s.RecoveryPropFrac = 1.0;   // full recovery load unless a test lowers it
         return s;
     }
 
@@ -231,6 +232,25 @@ public static class FlightTest
               Landing.Guide(fallFast, LandingPhase.Descent).Phase == LandingPhase.LandingBurn,
               Landing.Guide(fallFast, LandingPhase.Descent).Phase.ToString());
 
+        // ---- ⛔ A DRONESHIP ENTRY BURN RESERVES THE LANDING PROPELLANT (flight_0823_082234). ----
+        // Still falling fast in the entry band (vs < -300), so the vertical-speed cut has NOT tripped.
+        LandingInputs ebDrn = Fall(25000.0, -880.0, 2430.0, 43.0, 9);   // huge horizontal, deep in the band
+        ebDrn.Droneship = true;
+        ebDrn.RecoveryPropFrac = 0.8;   // plenty of recovery propellant left
+        Check("a droneship entry burn keeps burning while propellant is above the reserve",
+              Landing.Guide(ebDrn, LandingPhase.EntryBurn).Phase == LandingPhase.EntryBurn,
+              Landing.Guide(ebDrn, LandingPhase.EntryBurn).Phase.ToString());
+        ebDrn.RecoveryPropFrac = 0.45;  // hit the 0.5 reserve - the landing burn's share
+        Check("...and CUTS to Descent the moment the reserve is reached, saving landing fuel",
+              Landing.Guide(ebDrn, LandingPhase.EntryBurn).Phase == LandingPhase.Descent,
+              Landing.Guide(ebDrn, LandingPhase.EntryBurn).Phase.ToString());
+        // An RTLS booster (not droneship) is NOT cut on the reserve - it keeps F9I's vertical-speed cut.
+        LandingInputs ebRtls = Fall(25000.0, -880.0, 2430.0, 43.0, 9);
+        ebRtls.Droneship = false; ebRtls.RecoveryPropFrac = 0.1;
+        Check("an RTLS entry burn ignores the reserve (it boosted back, so it is short anyway)",
+              Landing.Guide(ebRtls, LandingPhase.EntryBurn).Phase == LandingPhase.EntryBurn,
+              Landing.Guide(ebRtls, LandingPhase.EntryBurn).Phase.ToString());
+
         // ---- BOOSTBACK STOPS ON A PREDICTED IMPACT POINT, DELIBERATELY LONG ----
         LandingInputs bbShort = Fall(40000.0, 500.0, 900.0, 43.0, 9);
         bbShort.InitialMissM = 60000.0; bbShort.PredictedMissM = 30000.0;
@@ -244,6 +264,25 @@ public static class FlightTest
               Landing.Guide(bbShort, LandingPhase.Boostback).Phase == LandingPhase.Coast, "");
         Check("and the overshoot is F9I's 2.7 km",
               Math.Abs(Landing.BoostbackOvershootM - 2700.0) < 1e-9, "");
+
+        // ---- DRONESHIP (Crew-2, ASDS) SKIPS BOOSTBACK ----
+        LandingInputs dsClimb = Fall(60000.0, 200.0, 2400.0, 20.0, 9);   // climbing after sep
+        dsClimb.Droneship = true;
+        Check("a droneship booster still climbing coasts to entry, does not boost back",
+              Landing.InitialPhase(dsClimb) == LandingPhase.Coast,
+              Landing.InitialPhase(dsClimb).ToString());
+        LandingInputs rtlsClimb = dsClimb; rtlsClimb.Droneship = false;
+        Check("...whereas an RTLS booster still climbing boosts back",
+              Landing.InitialPhase(rtlsClimb) == LandingPhase.Boostback, "");
+        // Flip hands straight to COAST for a droneship, skipping BoostbackKill + Boostback.
+        LandingInputs dsFlip = Fall(60000.0, 200.0, 2400.0, 20.0, 9);
+        dsFlip.Droneship = true; dsFlip.FlipDone = true; dsFlip.RangeToPartnerM = 0.0;
+        Check("a droneship flip hands to COAST (no boostback)",
+              Landing.Guide(dsFlip, LandingPhase.Flip).Phase == LandingPhase.Coast,
+              Landing.Guide(dsFlip, LandingPhase.Flip).Phase.ToString());
+        LandingInputs rtlsFlip = dsFlip; rtlsFlip.Droneship = false;
+        Check("...whereas an RTLS flip hands to BOOSTBACK KILL",
+              Landing.Guide(rtlsFlip, LandingPhase.Flip).Phase == LandingPhase.BoostbackKill, "");
 
         // Throttle tapers with the error and never drops below the floor that keeps the gimbal live.
         LandingInputs bbT = Fall(40000.0, 500.0, 900.0, 43.0, 9);
@@ -278,6 +317,104 @@ public static class FlightTest
         Check("an expendable stage is not recovered",
               !LandingSites.Recovers(LandingProfile.Expendable)
               && LandingSites.Recovers(LandingProfile.Rtls), "");
+
+        // ---- ForBody: Kerbin stays FLOWN, RSS/Earth uses constants MEASURED off flight_0822_011349 ----
+        // Crew-2 (like Crew-1) flies the Droneship profile (booster to the barge downrange).
+        AscentTarget kerbin = AscentTarget.Station(LandingProfile.Droneship);
+        Check("Kerbin keeps the flown 20 kPa max-Q ceiling and no decoupled pitch scale",
+              Math.Abs(kerbin.MaxQKpa - Ascent.MaxQKpa) < 1e-9 && kerbin.PitchRefAltM == 0.0,
+              kerbin.MaxQKpa + "/" + kerbin.PitchRefAltM);
+
+        // RSS/RO Earth: 200 km parking orbit below the ISS.
+        AscentTarget earth = AscentTarget.ForBody(LandingProfile.Droneship, 200000.0);
+        Check("Earth targets the real ~200 km parking orbit, not Kerbin's 120 km",
+              Math.Abs(earth.AltitudeM - 200000.0) < 1e-9, earth.AltitudeM.ToString());
+        Check("Earth's MECO apoapsis is ~110 km (MechJeb staged at 121), below the parking orbit",
+              Math.Abs(earth.StageAltM - 110000.0) < 1e-9 && earth.StageAltM < earth.AltitudeM,
+              earth.StageAltM.ToString());
+        // Decoupled from the 110 km staging and well under the ~135 km that lofts. Tuned 40->50 km on
+        // 2026-08-22 to ease the first-stage AoA (flight_0822_112918 peaked 17 deg); the range, not a
+        // point, is what matters - it must not equal StageAltM and must stay below the loft threshold.
+        Check("the pitch-over scale is DECOUPLED from staging and below the loft threshold",
+              earth.PitchRefAltM >= 30000.0 && earth.PitchRefAltM <= 70000.0
+              && earth.PitchRefAltM != earth.StageAltM, earth.PitchRefAltM.ToString());
+        Check("Earth stages far shallower than Kerbin - MECO floor 25 vs 40 deg",
+              earth.MecoAngleDeg < kerbin.MecoAngleDeg && Math.Abs(earth.MecoAngleDeg - 25.0) < 1e-9,
+              earth.MecoAngleDeg + " vs " + kerbin.MecoAngleDeg);
+        Check("Earth's max-Q ceiling clears the measured 31 kPa peak so it flies at full thrust",
+              earth.MaxQKpa > 31.0 && earth.MaxQKpa > kerbin.MaxQKpa,
+              earth.MaxQKpa.ToString());
+
+        // The decoupled pitch scale must actually make the Earth turn pitch over FASTER than the
+        // Kerbin law would at the same altitude (the whole point - the atmosphere-scaling first
+        // attempt lofted). At 20 km: Earth ~45 deg vs Kerbin's ~63 deg.
+        AscentInputs at20 = new AscentInputs();
+        at20.Altitude = 20000.0; at20.SecondStage = false;
+        Check("the decoupled Earth scale pitches over faster than the Kerbin law at 20 km",
+              Ascent.TurnPitch(at20, earth) < Ascent.TurnPitch(at20, kerbin),
+              Ascent.TurnPitch(at20, earth).ToString("F1") + " vs "
+              + Ascent.TurnPitch(at20, kerbin).ToString("F1"));
+
+        // ---- MECO on FLAMEOUT, not only the apoapsis target (real F9 stages on depletion) ----
+        AscentInputs spent = new AscentInputs();
+        spent.Valid = true; spent.SecondStage = false; spent.Altitude = 80000.0; spent.AvailableThrust = 0.0;
+        Check("a booster making no thrust up high is spent", Ascent.FirstStageSpent(spent), "");
+        AscentInputs burning = spent; burning.AvailableThrust = 6000.0;
+        Check("a booster still making thrust is not spent", !Ascent.FirstStageSpent(burning), "");
+        AscentInputs lowPad = spent; lowPad.Altitude = 500.0;
+        Check("no thrust near the pad is a transient, not spent", !Ascent.FirstStageSpent(lowPad), "");
+        AscentInputs s2spent = spent; s2spent.SecondStage = true;
+        Check("the second stage is never 'first stage spent'", !Ascent.FirstStageSpent(s2spent), "");
+        // A flameout BELOW the MECO apoapsis target still triggers MECO (the 31 s dead-stage gap).
+        AscentInputs gt = spent; gt.ApoapsisM = 90000.0;   // below the 110 km Earth MECO target
+        Check("flameout below the MECO target still MECOs, not coast a dead stage",
+              Ascent.Guide(gt, earth, AscentPhase.GravityTurn).Phase == AscentPhase.Meco,
+              Ascent.Guide(gt, earth, AscentPhase.GravityTurn).Phase.ToString());
+
+        // ---- ⛔ ULLAGE IS HELD UNTIL THE MVac CATCHES, not a fixed 6 s (flight_0822_205453). ----
+        // The MVac needs settled propellant; stopping the RCS-fore on a clock while the engine had not
+        // yet built thrust flamed it out on "No propellants" and the stage never circularised.
+        AscentInputs ull = new AscentInputs();
+        ull.Valid = true; ull.SecondStage = true; ull.Altitude = 70000.0;
+        ull.PhaseElapsedS = 3.0; ull.AvailableThrust = 0.0;   // inside the settle window
+        AscentCommand uSettle = Ascent.Guide(ull, earth, AscentPhase.BurnToApoapsis);
+        Check("ullage fires during the settle window",
+              uSettle.UllageFore > 0.5, uSettle.UllageFore.ToString("F2"));
+
+        AscentInputs held = ull; held.PhaseElapsedS = 9.0; held.AvailableThrust = 0.0;   // past 6 s, no thrust yet
+        AscentCommand uHeld = Ascent.Guide(held, earth, AscentPhase.BurnToApoapsis);
+        Check("ullage is HELD past the settle window while the engine has not caught  [the fix]",
+              uHeld.UllageFore > 0.5, uHeld.UllageFore.ToString("F2"));
+        Check("...and it commands real throttle at the same time (light it WHILE settling)",
+              uHeld.Throttle > Ascent.UllageThrottle, uHeld.Throttle.ToString("F3"));
+
+        AscentInputs caught = ull; caught.PhaseElapsedS = 9.0; caught.AvailableThrust = 800.0;   // MVac running
+        AscentCommand uCaught = Ascent.Guide(caught, earth, AscentPhase.BurnToApoapsis);
+        Check("ullage RELEASES once the engine is really thrusting (it self-settles)",
+              uCaught.UllageFore < 1e-9, uCaught.UllageFore.ToString("F2"));
+
+        // ---- ⛔ RCS OFF DURING POWERED FLIGHT, ON ONLY WHEN THE GIMBAL IS GONE (crew, flight_0823). ----
+        // The glue turns RCS on iff (c.Rcs || UllageFore>0.01); these pin which phases ask for it.
+        AscentInputs pw = new AscentInputs(); pw.Valid = true; pw.Altitude = 5000.0;
+        Check("vertical rise wants NO RCS (engine gimbal holds it)",
+              !Ascent.Guide(pw, earth, AscentPhase.VerticalRise).Rcs, "");
+        pw.Altitude = 20000.0;
+        Check("gravity turn wants NO RCS", !Ascent.Guide(pw, earth, AscentPhase.GravityTurn).Rcs, "");
+        AscentInputs circ = new AscentInputs(); circ.Valid = true; circ.CircDvMps = 50.0;
+        Check("circularise (MVac burning) wants NO RCS",
+              !Ascent.Guide(circ, earth, AscentPhase.Circularise).Rcs, "");
+        AscentInputs held2 = ull; held2.PhaseElapsedS = 9.0; held2.AvailableThrust = 800.0;
+        Check("a thrusting BurnToApoapsis wants NO RCS (gimbal, and ullage released)",
+              !Ascent.Guide(held2, earth, AscentPhase.BurnToApoapsis).Rcs
+              && Ascent.Guide(held2, earth, AscentPhase.BurnToApoapsis).UllageFore < 1e-9, "");
+        AscentInputs up = new AscentInputs(); up.Valid = true;
+        Check("MECO hold wants RCS (engines out)", Ascent.Guide(up, earth, AscentPhase.Meco).Rcs, "");
+        Check("stage-sep hold wants RCS", Ascent.Guide(up, earth, AscentPhase.StageSep).Rcs, "");
+        AscentInputs cst = new AscentInputs(); cst.Valid = true;
+        cst.TimeToApoapsisS = 300.0; cst.PeriapsisM = -100000.0;   // still coasting up, not yet circularising
+        Check("coast wants RCS (engines out, no gimbal)", Ascent.Guide(cst, earth, AscentPhase.Coast).Rcs,
+              Ascent.Guide(cst, earth, AscentPhase.Coast).Phase.ToString());
+        Check("shutdown wants RCS", Ascent.Guide(up, earth, AscentPhase.Shutdown).Rcs, "");
 
         // ---- ⛔ NOTHING LIGHTS WHILE THE TWO VEHICLES ARE STILL ALONGSIDE ----
         // 23:19 flight: the booster lit three engines at full throttle 11.4 m from the upper stage,
