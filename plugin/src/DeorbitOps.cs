@@ -136,19 +136,15 @@ namespace DragonScreen
             // the aim use it, and propagated to EntryOps at the handover (line ~456).
             if (EntryOps.PropulsiveRequested)
             {
+                // Backup propulsive landing puts the capsule on LZ-1 (Cape Canaveral).
                 TargetLatDeg = LandingSites.Lz1.LatDeg;
                 TargetLonDeg = LandingSites.Lz1.LonDeg;
             }
-            else if (v.mainBody != null && v.mainBody.Radius > BoosterRecovery.EarthRadiusThresholdM)
-            {
-                // RSS/RO Earth - Crew-2's Gulf-of-Mexico splashdown off Pensacola.
-                TargetLatDeg = SplashdownEarthLatDeg;
-                TargetLonDeg = SplashdownEarthLonDeg;
-            }
             else
             {
-                TargetLatDeg = LandingSites.Splashdown.LatDeg;   // stock Kerbin
-                TargetLonDeg = LandingSites.Splashdown.LonDeg;
+                // Nominal: Crew-2's Gulf-of-Mexico splashdown off Pensacola.
+                TargetLatDeg = SplashdownEarthLatDeg;
+                TargetLonDeg = SplashdownEarthLonDeg;
             }
 
             // ---- IS A RETURN EVEN MEANINGFUL FROM HERE? `StReturnAllowed`. ----

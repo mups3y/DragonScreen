@@ -41,63 +41,13 @@ namespace DragonScreen
         public string Note;
     }
 
-    /// <summary>
-    /// The STOCK aerodynamic drag of a vessel, tabulated over Mach - the port of Trajectories'
-    /// StockAeroUtil.SimAeroForce that makes our predicted impact agree with the add-on.
-    ///
-    /// ---- ⛔ WHY A TABLE, AND WHY MACH ----
-    /// KSP's drag is per-part drag cubes whose area varies with Mach; a single ballistic coefficient
-    /// (what we used before) is that area frozen at ONE Mach, so it over-drags badly at the high Mach
-    /// of an entry and lands the prediction tens of km short (flight_0820_092128: ours said 7.5 km,
-    /// the truth was 29 km). This sums each part's <c>DragCubes.AddSurfaceDragDirection(...).areaDrag</c>
-    /// at a grid of Mach numbers, ONCE, for the SHIELD-FORWARD attitude, then the integrator
-    /// interpolates - the same "cache it, don't recompute per step" the add-on does.
-    ///
-    /// The drag acceleration the integrator applies is <c>0.5·rho·v²·DragFactor(mach, rho·v)</c>,
-    /// matching SimAeroForce: <c>force = dyn_pressure · areaDrag · DragCubeMultiplier ·
-    /// pseudoReynolds · DragMultiplier</c> with <c>dyn_pressure = 0.0005·rho·v²</c>.
-    /// </summary>
-    public sealed class AeroTable
-    {
-        public const double MachMax = 25.0;      // SimAeroForce caps Mach at 25
-        public const int Bins = 51;              // 0..25 in 0.5 steps
-
-        public double Mass;                      // TONNES - KSP force is kN, so kN/tonne = m/s²
-        public double[] AreaDrag;                // Σ part areaDrag at each Mach bin, shield-forward
-        public double DragCubeMult, DragMult;    // PhysicsGlobals multipliers
-        private readonly FloatCurve pseudoRe;    // PhysicsGlobals.DragCurvePseudoReynolds
-
-        public AeroTable(FloatCurve pseudoReynolds) { pseudoRe = pseudoReynolds; }
-
-        /// <summary>1/BC-equivalent: drag accel = 0.5·rho·v²·this.</summary>
-        public double DragFactor(double mach, double pseudoReynolds)
-        {
-            if (Mass <= 0.0 || AreaDrag == null) return 0.0;
-            double pr = (pseudoRe != null) ? pseudoRe.Evaluate((float)pseudoReynolds) : 1.0;
-            // 0.0005/0.5 = 0.001 (dyn_pressure uses 0.0005; the integrator's 0.5·rho·v² supplies the rest)
-            return 0.001 * DragMult * DragCubeMult * pr * InterpArea(mach) / Mass;
-        }
-
-        private double InterpArea(double mach)
-        {
-            if (mach <= 0.0) return AreaDrag[0];
-            if (mach >= MachMax) return AreaDrag[Bins - 1];
-            double f = mach / MachMax * (Bins - 1);
-            int i = (int)f;
-            if (i >= Bins - 1) return AreaDrag[Bins - 1];
-            double frac = f - i;
-            return AreaDrag[i] * (1.0 - frac) + AreaDrag[i + 1] * frac;
-        }
-    }
-
     public static class ImpactPredictor
     {
         private const string Tag = "[DragonScreen] ";
 
-        // ---- ⛔ FAR/RSS-CLEAN DRAG SAMPLING (2026-08-23) ----
+        // ---- ⛔ FAR-CLEAN DRAG SAMPLING (2026-08-23) ----
         // The live bc is the ONLY FAR-consistent drag we have (it measures the vessel's real
-        // deceleration, so FAR's forces arrive in the number without a coefficient - the stock
-        // DragCube AeroTable path does NOT match FAR and is capsule-entry only). But it was sampled
+        // deceleration, so FAR's forces arrive in the number without a coefficient). But it was sampled
         // in two regimes where it means nothing, and both poisoned the booster's descent prediction
         // (flight_0823_100646: bc swung 16 -> 2151, miss prediction good in coast, garbage in the burn):
 
@@ -242,20 +192,14 @@ namespace DragonScreen
         {
             if (v == null || v.mainBody == null) { Impact im = new Impact(); im.Note = "no vessel"; return im; }
             CelestialBody b = v.mainBody;
-            // ---- ⛔ STOCK DRAG-CUBE TABLE IS FOR STOCK KSP ONLY. FAR REPLACES IT. ----
-            // BuildAeroTable ports Trajectories' StockAeroUtil - it describes KSP's OWN drag cubes. On
-            // Earth with FAR installed the acting aerodynamics are FAR's, NOT the drag cubes, so the
-            // table predicts the wrong forces (RO_MODS_MECHANICS: capsule-entry FAR mismatch). Under FAR
-            // the ONLY consistent drag we have is the one MEASURED from the vehicle's own deceleration -
-            // the same source the booster already uses - so we drop the table and fly the scalar bc:
-            // the LIVE-measured value once in atmosphere (FAR reality), the known override in vacuum
-            // before anything has been measured. Stock keeps the Mach-tabulated cubes.
-            bool far = (b.Radius > 1.0e6);                       // Earth/RSS with FAR (Kerbin 600 km)
+            // ---- ⛔ MEASURED DRAG, NOT THE STOCK DRAG-CUBE TABLE. FAR IS THE AERODYNAMICS ON EARTH. ----
+            // The acting aerodynamics under FAR are FAR's, not KSP's drag cubes, so the ONLY consistent
+            // drag we have is the one MEASURED from the vehicle's own deceleration (the same source the
+            // booster uses). Fly the scalar bc: the LIVE-measured value once in atmosphere, the known
+            // override in vacuum before anything has been measured.
             double measured = BallisticCoefficient(v);
-            AeroTable table = (bcOverride > 0.0 && !far) ? BuildAeroTable(v) : null;
-            double useBc = far ? (measured > 0.0 ? measured : bcOverride)
-                               : (bcOverride > 0.0 ? bcOverride : measured);
-            return PredictFromState(b, v.CoM - b.position, v.obt_velocity, useBc, table);
+            double useBc = measured > 0.0 ? measured : bcOverride;
+            return PredictFromState(b, v.CoM - b.position, v.obt_velocity, useBc);
         }
 
         /// <summary>
@@ -267,17 +211,6 @@ namespace DragonScreen
         /// </summary>
         public static Impact PredictFromState(CelestialBody b, Vector3d posRelBody, Vector3d velWorld,
                                               double bc)
-        {
-            return PredictFromState(b, posRelBody, velWorld, bc, null);
-        }
-
-        /// <summary>
-        /// As above, with an optional STOCK drag model. When <paramref name="table"/> is non-null the
-        /// integration uses the Mach-tabulated drag cubes (matching Trajectories) and ignores
-        /// <paramref name="bc"/>; when null it falls back to the scalar bc.
-        /// </summary>
-        public static Impact PredictFromState(CelestialBody b, Vector3d posRelBody, Vector3d velWorld,
-                                              double bc, AeroTable table)
         {
             Impact im = new Impact();
             if (b == null) { im.Note = "no body"; return im; }
@@ -292,12 +225,6 @@ namespace DragonScreen
             s.AtmosphereDepthM = b.atmosphereDepth;
             s.BallisticCoefficient = bc;
             s.ImpactAltitudeM = 0.0;
-            if (table != null)
-            {
-                s.DragFactor = table.DragFactor;
-                CelestialBody body = b;
-                s.SoundSpeed = delegate(double alt) { return StockSoundSpeed(body, alt); };
-            }
 
             // ⚠ THE ROTATION AXIS IS THE BODY'S, NOT THE FRAME'S +Z. Integrating about the wrong
             // axis puts the ground track sideways, which reads as a cross-range error nobody can
@@ -369,12 +296,9 @@ namespace DragonScreen
             if (v == null || v.mainBody == null) { MapValid = false; return; }
             CelestialBody b = v.mainBody;
 
-            // FAR-consistent, matching Predict(): no stock drag-cube table on Earth, fly the measured bc.
-            bool far = (b.Radius > 1.0e6);
+            // FAR-consistent, matching Predict(): fly the measured bc (the known override in vacuum).
             double measured = BallisticCoefficient(v);
-            AeroTable table = (bcOverride > 0.0 && !far) ? BuildAeroTable(v) : null;
-            double useBc = far ? (measured > 0.0 ? measured : bcOverride)
-                               : (bcOverride > 0.0 ? bcOverride : measured);
+            double useBc = measured > 0.0 ? measured : bcOverride;
 
             Vector3d r = v.CoM - b.position;
             Vector3d vel = v.obt_velocity;
@@ -386,12 +310,6 @@ namespace DragonScreen
             s.BallisticCoefficient = useBc;
             s.ImpactAltitudeM = 0.0;
             s.BodyOmega = b.angularVelocity.magnitude;
-            if (table != null)
-            {
-                s.DragFactor = table.DragFactor;
-                CelestialBody body2 = b;
-                s.SoundSpeed = delegate(double alt) { return StockSoundSpeed(body2, alt); };
-            }
 
             // Same rotated (+Z = spin axis) frame as PredictFromState.
             Vector3d axis = b.angularVelocity.normalized;
@@ -459,66 +377,6 @@ namespace DragonScreen
         // ------------------------------------------------------------------ stock aero (Trajectories)
 
         /// <summary>
-        /// Build the Mach-tabulated stock drag for the vessel's ENTRY configuration, shield-forward.
-        ///
-        /// ---- ⛔ SHIELD-FORWARD, AND THE TRUNK IS NOT COUNTED ----
-        /// The airflow direction is taken as −ReferenceTransform.up (the heat-shield direction: the
-        /// controller points that at retrograde during entry), transformed into each part's local frame
-        /// - which is INVARIANT to how the vessel is pointed right now, so it is correct even while the
-        /// de-orbit burn is vectored off retrograde. Trunk and second-stage parts are excluded because
-        /// they are jettisoned before entry; the prediction is for the capsule that actually comes down.
-        ///
-        /// Returns null when nothing can be modelled (no drag-cube parts, or zero mass), and the caller
-        /// falls back to the scalar bc.
-        /// </summary>
-        public static AeroTable BuildAeroTable(Vessel v)
-        {
-            if (v == null || v.ReferenceTransform == null) return null;
-            Vector3 shieldFwdWorld = -v.ReferenceTransform.up;
-
-            List<Part> parts = DockedSide.Ours(v);
-            List<Part> cubeParts = new List<Part>();
-            List<Vector3> localDirs = new List<Vector3>();
-            double mass = 0.0;
-            for (int i = 0; i < parts.Count; i++)
-            {
-                Part p = parts[i];
-                if (VehicleParts.IsTrunk(p.name) || VehicleParts.IsSecondStage(p.name)) continue;
-                if (p.physicalSignificance != Part.PhysicalSignificance.NONE)
-                    mass += p.mass + p.GetResourceMass() + p.GetPhysicslessChildMass();
-                if (p.ShieldedFromAirstream || p.Rigidbody == null) continue;
-                if (p.dragModel != Part.DragModel.DEFAULT && p.dragModel != Part.DragModel.CUBE) continue;
-                DragCubeList cubes = p.DragCubes;
-                if (cubes == null || cubes.None) continue;
-                cubeParts.Add(p);
-                localDirs.Add(p.transform.InverseTransformDirection(shieldFwdWorld));
-            }
-            if (mass <= 0.0 || cubeParts.Count == 0) return null;
-
-            AeroTable table = new AeroTable(PhysicsGlobals.DragCurvePseudoReynolds);
-            // ⚠ TONNES, not kg. SimAeroForce's force is in kN and KSP gets acceleration as kN/tonne
-            // (= m/s²), so the mass that divides it here is in tonnes - part.mass already is.
-            table.Mass = mass;
-            table.DragCubeMult = PhysicsGlobals.DragCubeMultiplier;
-            table.DragMult = PhysicsGlobals.DragMultiplier;
-            table.AreaDrag = new double[AeroTable.Bins];
-            for (int bIdx = 0; bIdx < AeroTable.Bins; bIdx++)
-            {
-                double mach = AeroTable.MachMax * bIdx / (AeroTable.Bins - 1);
-                double sum = 0.0;
-                for (int k = 0; k < cubeParts.Count; k++)
-                {
-                    DragCubeList.CubeData data = new DragCubeList.CubeData();
-                    try { cubeParts[k].DragCubes.AddSurfaceDragDirection(localDirs[k], (float)mach, ref data); }
-                    catch { continue; }
-                    sum += data.areaDrag;
-                }
-                table.AreaDrag[bIdx] = sum;
-            }
-            return table;
-        }
-
-        /// <summary>
         /// Air density at an altitude, ported from Trajectories.StockAeroUtil.GetDensity - the average
         /// day/night equatorial temperature, so the density (and the Mach number built on it) match the
         /// add-on rather than the bare <c>GetTemperature</c> we used before.
@@ -536,16 +394,6 @@ namespace DragonScreen
             double temperature = body.GetTemperature(altitude)
                                + body.atmosphereTemperatureSunMultCurve.Evaluate((float)altitude) * tempOffset;
             return body.GetDensity(pressure, temperature);
-        }
-
-        /// <summary>Speed of sound at an altitude, using the same density as SimAeroForce.</summary>
-        public static double StockSoundSpeed(CelestialBody body, double altitude)
-        {
-            if (body == null || !body.atmosphere) return 0.0;
-            double pressure = body.GetPressure(altitude);
-            double rho = StockDensity(body, altitude);
-            if (rho <= 0.0) return 0.0;
-            return body.GetSpeedOfSound(pressure, rho);
         }
     }
 }

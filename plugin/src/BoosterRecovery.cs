@@ -115,8 +115,6 @@ namespace DragonScreen
         // AIM (here + tuning.reference.cfg) is the deck centre. See falcon-real-hoverslam-technique.
         [Tunable] public static double DroneshipEarthLatDeg = 32.787551;
         [Tunable] public static double DroneshipEarthLonDeg = -76.644507;
-        /// <summary>Body radius above which the world is RSS/RO Earth (Kerbin 600 km, Earth 6371 km).</summary>
-        public const double EarthRadiusThresholdM = 1.0e6;
 
         public static bool Active { get; private set; }
         public static LandingPhase Phase { get; private set; }
@@ -245,37 +243,20 @@ namespace DragonScreen
         {
             if (v == null || HavePad) return;
 
-            if (Profile == LandingProfile.Droneship)
+            Vessel drone = FindDroneship();
+            if (drone != null)
             {
-                Vessel drone = FindDroneship();
-                if (drone != null)
-                {
-                    PadLat = drone.latitude; PadLon = drone.longitude; HavePad = true;
-                    Debug.Log(Tag + "landing zone: droneship '" + drone.vesselName + "' at "
-                              + PadLat.ToString("F6") + ", " + PadLon.ToString("F6"));
-                    return;
-                }
-                // No droneship VESSEL. In RSS the barge is a KerbalKonstructs STATIC (not a vessel), so
-                // on Earth aim at the fixed OCISLY coordinate the static sits at; on Kerbin keep the
-                // stock open-water fallback. See the DroneshipEarth* tunables.
-                if (v.mainBody != null && v.mainBody.Radius > EarthRadiusThresholdM)
-                {
-                    PadLat = DroneshipEarthLatDeg; PadLon = DroneshipEarthLonDeg; HavePad = true;
-                    Debug.Log(Tag + "landing zone: droneship STATIC 'Of Course I Still Love You' at "
-                              + PadLat.ToString("F6") + ", " + PadLon.ToString("F6")
-                              + " (no vessel; fixed Earth coordinate)");
-                    return;
-                }
-                PadLat = LandingSites.Lz0.LatDeg; PadLon = LandingSites.Lz0.LonDeg; HavePad = true;
-                Debug.LogWarning(Tag + "no droneship vessel and not on Earth - falling back to "
-                                     + LandingSites.Lz0.Name + ". The booster will aim at open water.");
+                PadLat = drone.latitude; PadLon = drone.longitude; HavePad = true;
+                Debug.Log(Tag + "landing zone: droneship '" + drone.vesselName + "' at "
+                          + PadLat.ToString("F6") + ", " + PadLon.ToString("F6"));
                 return;
             }
-
-            LandingSite site = LandingSites.For(Profile);
-            PadLat = site.LatDeg; PadLon = site.LonDeg; HavePad = true;
-            Debug.Log(Tag + "landing zone: " + site.Name + " at " + PadLat.ToString("F6")
-                      + ", " + PadLon.ToString("F6") + " (profile " + Profile + ")");
+            // No droneship VESSEL - the barge is a KerbalKonstructs STATIC (not a vessel), so aim at the
+            // fixed OCISLY deck-centre coordinate the static sits at (DroneshipEarthLat/LonDeg).
+            PadLat = DroneshipEarthLatDeg; PadLon = DroneshipEarthLonDeg; HavePad = true;
+            Debug.Log(Tag + "landing zone: droneship STATIC 'Of Course I Still Love You' at "
+                      + PadLat.ToString("F6") + ", " + PadLon.ToString("F6")
+                      + " (no vessel; fixed deck coordinate)");
         }
 
         private static Vessel FindDroneship()

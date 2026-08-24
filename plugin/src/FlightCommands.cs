@@ -108,41 +108,6 @@ namespace DragonScreen
             return true;
         }
 
-        // ---- TOURIST DRAGON MISSION (STRING 2 row, user 2026-08-21) ----
-        // Launch to a higher orbit, no docking, sightsee, then descend to the de-orbit orbit and
-        // parachute-splash down offshore. Each returns true (press accepted); the engage logs its own
-        // outcome. Momentary buttons - the shared ascent/de-orbit controllers show live on row 1.
-        private static bool TouristLaunch()
-        {
-            // Toggle the ascent. The two missions are exclusive - one flight flies one row - so this
-            // shares AutoPilot with STRING 1A; a second press (either) disengages it.
-            if (AutoPilot.Engaged) { AutoPilot.Disengage("crew"); return true; }
-            AutoPilot.EngageTourist();      // 250 km, no station hunt, no phase-window hold
-            Log("TOURIST LAUNCH (STRING 2A) - ascent to 250 km, no docking");
-            return true;
-        }
-
-        private static bool TouristDescend()
-        {
-            Vessel v = FlightGlobals.ActiveVessel;
-            if (v == null) return false;
-            if (PhaseDownOps.Engaged) { PhaseDownOps.Reset(); Log("descent cancelled (STRING 2B)"); return true; }
-            PhaseDownOps.Engage(v);         // lower to DeorbitOrbit's ideal de-orbit altitude
-            Log("TOURIST DESCEND (STRING 2B) - phasing down to the de-orbit orbit");
-            return true;
-        }
-
-        private static bool TouristDeorbit()
-        {
-            // Tourist always splashes down under parachutes offshore: force the method, then run the
-            // standard targeted return - DeorbitOps.Engage then aims at the splashdown point per that
-            // method, and skips the phase-down if STRING 2B already did it (AlreadyOnOrbit).
-            EntryOps.PropulsiveRequested = false;
-            DeorbitOps.Toggle();
-            Log("TOURIST DE-ORBIT (STRING 2C) - parachute splashdown offshore");
-            return true;
-        }
-
         /// <summary>
         /// CANCEL stops ANY running autopilot sequence, not just an armed emergency command (user
         /// 2026-08-21). flight_0821_060847: a rendezvous the crew tried to cancel left a controller
@@ -229,24 +194,18 @@ namespace DragonScreen
                     case PanelCommand.Reset1: return Reset(1);
                     case PanelCommand.Reset2: return Reset(2);
 
-                    // ---- FLIGHT COMPUTER STRINGS: TWO MISSIONS, ONE PER ROW (user 2026-08-21) ----
-                    // OURS are flight computers - the phase autopilots. Each ROW is a whole mission:
-                    //   ROW 1 = STATION FERRY:  1A ASCENT (120 km) · 1B RENDEZVOUS/DOCK · 1C DEORBIT+LAND
-                    //   ROW 2 = TOURIST DRAGON: 2A LAUNCH (250 km, no dock) · 2B DESCEND to the de-orbit
-                    //                           orbit · 2C DEORBIT + parachute SPLASHDOWN offshore
-                    // Row 1 buttons latch lit while their (shared) controller runs; the tourist row is
-                    // momentary (its ascent/de-orbit reuse the same controllers, so row 1 shows their
-                    // live state). POWER 1/2 + RESET 1/2 still run the bus model. The re-init row this
-                    // replaced is gone.
+                    // ---- FLIGHT COMPUTER STRINGS: THE CREW-2 MISSION ON ROW 1. ----
+                    // OURS are flight computers - the phase autopilots. Row 1 flies the whole mission:
+                    //   1A ASCENT · 1B RENDEZVOUS/DOCK · 1C DEORBIT + LAND. Buttons latch lit while their
+                    // controller runs. POWER 1/2 + RESET 1/2 run the bus model. Row 2 (the stock tourist
+                    // mission) is not part of the Crew-2 build - its buttons fall through to the inert
+                    // default below.
                     case PanelCommand.String1A: if (!Powered(1)) return false;
-                        AutoPilot.Toggle();  return true;                          // STATION ASCENT
+                        AutoPilot.Toggle();  return true;                          // ASCENT
                     case PanelCommand.String1B: if (!Powered(1)) return false;
                         return ToggleRendezvousDock();                            // RENDEZVOUS/DOCK
                     case PanelCommand.String1C: if (!Powered(1)) return false;
                         DeorbitOps.Toggle(); return true;                         // DEORBIT + LAND
-                    case PanelCommand.String2A: if (!Powered(2)) return false; return TouristLaunch();
-                    case PanelCommand.String2B: if (!Powered(2)) return false; return TouristDescend();
-                    case PanelCommand.String2C: if (!Powered(2)) return false; return TouristDeorbit();
 
                     // ---- CABIN EMERGENCIES ----
                     // Also previously inert. A fire needs a part genuinely near its temperature

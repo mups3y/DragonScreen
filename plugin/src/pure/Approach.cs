@@ -134,14 +134,11 @@ namespace DragonScreen
         public const double WarpMarginS = 30.0;
         /// <summary>
         /// Plan a burn this far ahead so the vehicle can orient into it first. `stCwLead`.
-        /// Same figure as <see cref="Phasing.LeadS"/>, and for the same reason.
         /// </summary>
         public const double LeadS = 60.0;
         /// <summary>
-        /// Reject any approach burn bigger than this, m/s. `stCwMaxDv`.
-        ///
-        /// Shared with <see cref="Phasing.MaxDvMps"/>: a rendezvous burn of this size is a wrong
-        /// number, not an expensive manoeuvre, whichever leg produced it.
+        /// Reject any approach burn bigger than this, m/s. `stCwMaxDv`. A rendezvous burn of this size
+        /// is a wrong number, not an expensive manoeuvre, whichever leg produced it.
         /// </summary>
         public const double MaxDvMps = 250.0;
 

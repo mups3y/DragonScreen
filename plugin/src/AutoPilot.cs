@@ -47,12 +47,6 @@ namespace DragonScreen
         public static AscentPhase Phase { get; private set; }
         public static AscentTarget Target = AscentTarget.Station();
 
-        // ---- STOCK KERBIN vs RSS/RO EARTH ----
-        // The flown ascent constants are Kerbin's. A body this much bigger than Kerbin (600 km) is
-        // RSS/RO Earth (6371 km); it gets the scaled interim gravity turn and a real parking orbit
-        // instead of Kerbin's numbers. See AscentTarget.ForBody and docs/SESSION_2026-08-22.md.
-        const double RssBodyRadiusM = 1.0e6;
-
         /// <summary>
         /// Degrees ADDED to the station's inclination before solving the launch azimuth, RSS only.
         ///
@@ -115,16 +109,7 @@ namespace DragonScreen
             if (Engaged) Disengage("crew"); else Engage();
         }
 
-        public static void Engage() { EngageCore(false); }
-
-        /// <summary>
-        /// The TOURIST mission ascent (user 2026-08-21): fly to a HIGHER orbit and DO NOT hunt the
-        /// station - no docking, and no launch-window phase hold (there is nothing to rendezvous with).
-        /// Everything else - the guards, staging, gravity turn, circularisation - is the proven ascent.
-        /// </summary>
-        public static void EngageTourist() { EngageCore(true); }
-
-        private static void EngageCore(bool tourist)
+        public static void Engage()
         {
             Vessel v = FlightGlobals.ActiveVessel;
             if (v == null) return;
@@ -161,8 +146,8 @@ namespace DragonScreen
             // is nothing to hold.
             windowOpensUt = 0.0;
             windowWarped = false;
-            if (!tourist && (v.situation == Vessel.Situations.PRELAUNCH
-                || v.situation == Vessel.Situations.LANDED))
+            if (v.situation == Vessel.Situations.PRELAUNCH
+                || v.situation == Vessel.Situations.LANDED)
             {
                 double wait = LaunchWindowOps.SecondsToWait(v);
                 if (wait > 0.0)
@@ -178,36 +163,20 @@ namespace DragonScreen
             Phase = AscentPhase.Idle;
             // A fresh engagement is a fresh mission: never inherit a previous flight's recovery.
             BoosterRecovery.Reset();
-            // The recovery profile IS an ascent profile - see AscentTarget.Station(profile). Taking
-            // it here means the two can never disagree about which mission is being flown.
-            //
-            // ---- SCALE THE ASCENT TO THE BODY. ----
-            // On stock Kerbin this is exactly Station(profile) - the flown numbers, untouched. On
-            // RSS/RO Earth (radius >> Kerbin's) the deeper atmosphere and the ~7.8 km/s orbit need
-            // the turn stretched and a real ~200 km parking orbit, which ForBody derives off the
-            // live atmosphere depth. Tourist stays a stock-only mission for now.
-            // ---- RSS/RO: Crew-2 recovers the booster on the DRONESHIP (ASDS), downrange - NOT RTLS. ----
-            // Stock keeps whatever Profile it had (Rtls default, or a LandingSites choice). On Earth the
-            // default Rtls flies a boostback the booster cannot close: MEASURED flight_0822_105240 it ran
-            // BOOSTBACK KILL -> BOOSTBACK and stayed ~3110 km from any target. The droneship profile skips
-            // boostback (Flip->Coast->Entry->Landing, Landing.cs) and aims the barge downrange. Set BEFORE
-            // the target is built - ForBody/Station read Profile. RSS-gated; stock is untouched.
-            if (!tourist && v.mainBody != null && v.mainBody.Radius > RssBodyRadiusM)
-                BoosterRecovery.Profile = LandingProfile.Droneship;
-
-            if (tourist)
-                Target = AscentTarget.Tourist();
-            else if (v.mainBody != null && v.mainBody.Radius > RssBodyRadiusM)
-                Target = AscentTarget.ForBody(BoosterRecovery.Profile, RssParkingAltitudeM);
-            else
-                Target = AscentTarget.Station(BoosterRecovery.Profile);
+            // ---- CREW-2: DRONESHIP recovery downrange, ascent scaled to Earth. ----
+            // Crew-2 recovers the booster on the droneship (ASDS) downrange - NOT RTLS: from Earth the
+            // boostback is one the booster cannot close (flight_0822_105240 ran BOOSTBACK KILL ->
+            // BOOSTBACK and stayed ~3110 km from any target). The droneship profile skips boostback
+            // (Flip->Coast->Entry->Landing, Landing.cs) and aims the barge downrange. Set the profile
+            // BEFORE the target - ForBody reads it. ForBody scales the turn and the ~200 km parking orbit
+            // off the live Earth atmosphere depth.
+            BoosterRecovery.Profile = LandingProfile.Droneship;
+            Target = AscentTarget.ForBody(BoosterRecovery.Profile, RssParkingAltitudeM);
             ascentVessel = v;
 
-            // ---- TARGET THE STATION FROM LAUNCH (station mission only). ----
-            // The ferry puts the station on the navball at liftoff; the rendezvous retargets to the
-            // docking PORT at handover, and the undock clears it. The TOURIST mission never docks, so it
-            // hunts nothing. Guarded and harmless if the station is not in this save.
-            if (!tourist)
+            // ---- TARGET THE STATION (ISS) FROM LAUNCH. ----
+            // Puts the station on the navball at liftoff; the rendezvous retargets to the docking PORT at
+            // handover, and the undock clears it. Guarded and harmless if the station is not in this save.
             {
                 Vessel stn = StationApproach.Find();
                 if (stn != null)
@@ -228,10 +197,9 @@ namespace DragonScreen
                         double vOrb = Math.Sqrt(v.mainBody.gravParameter / r);
                         double vEq = LaunchAzimuth.SurfaceEastwardSpeedMps(
                             v.mainBody.Radius, v.mainBody.rotationPeriod, v.latitude);
-                        // On RSS, aim at the plane PLUS the bias that cancels UPFG's MECO plane-lock (see
-                        // AscentInclinationBiasDeg). Stock holds heading to orbital velocity, no bias.
-                        double incTarget = stn.orbit.inclination;
-                        if (v.mainBody.Radius > RssBodyRadiusM) incTarget += AscentInclinationBiasDeg;
+                        // Aim at the plane PLUS the bias that cancels UPFG's MECO plane-lock (see
+                        // AscentInclinationBiasDeg).
+                        double incTarget = stn.orbit.inclination + AscentInclinationBiasDeg;
                         Target.HeadingDeg = LaunchAzimuth.GroundHeadingDeg(
                             incTarget, v.latitude, vOrb, vEq);
                         Debug.Log(Tag + "launch azimuth " + Target.HeadingDeg.ToString("F1")
@@ -565,7 +533,7 @@ namespace DragonScreen
             // to the degree (apo 2378 km, iF stuck 84 deg); waiting for real thrust reaches orbit. The
             // fingerprint is the first log line `UPFG tgo 315343s`. UpfgMinThrustKn separates the lit
             // M-Vac (~800 kN) from ullage (~1 kN); the loft holds prograde for the ~6 s until then.
-            if (RssBody(v) && !s2Separated)
+            if (!s2Separated)
             {
                 if (UpfgEnabledS2 && !upfgActive && a.AvailableThrust > UpfgMinThrustKn
                     && (c.Phase == AscentPhase.BurnToApoapsis || c.Phase == AscentPhase.Coast
@@ -673,48 +641,30 @@ namespace DragonScreen
             {
                 lastStageAt = Planetarium.GetUniversalTime();
                 blindStages = 0;
-                // ---- ⛔ STOCK KEEPS STAGING; RSS/RO SEPARATES BY CAPABILITY. ----
-                // The stock build is shipped and tested on StageManager.ActivateNextStage() - keep it.
-                // In RSS/RO that blind-stages the user's layout and (measured 2026-08-22) collapsed the
-                // S1 decouple and MVac activation into one frame, destroying the engine; so on Earth we
-                // fire exactly the interstage decoupler and light the MVac later, after ullage.
-                if (!RssBody(v))
-                {
-                    StageManager.ActivateNextStage();      // STOCK: the previous, tested way
-                    Debug.Log(Tag + "MECO - staged on command, now stage " + StageManager.CurrentStage);
-                }
-                else if (SeparateBooster(v))
+                // ---- SEPARATE THE S1 BY CAPABILITY (Crew-2). ----
+                // A blind StageManager.ActivateNextStage() collapsed the S1 decouple and the MVac
+                // activation into one frame and destroyed the engine (measured 2026-08-22). So fire
+                // exactly the interstage decoupler and light the MVac later, after ullage.
+                if (SeparateBooster(v))
                     Debug.Log(Tag + "MECO - booster separated by capability (interstage decoupler)");
                 else
                 {
-                    StageManager.ActivateNextStage();      // RSS fallback: no interstage decoupler found
+                    StageManager.ActivateNextStage();      // fallback: no interstage decoupler found
                     Debug.LogWarning(Tag + "MECO - no interstage decoupler found; fell back to staging, "
                                          + "now stage " + StageManager.CurrentStage);
                 }
             }
-            else if (RssBody(v) && c.Phase == AscentPhase.VerticalRise)
-                // RSS/RO pad start: ignite the S1 by capability, spool, confirm thrust, THEN release the
-                // erector/clamp by capability - the real Falcon-9 sequence. Stock keeps ActivateNextStage.
+            else if (c.Phase == AscentPhase.VerticalRise)
+                // Pad start: ignite the S1 by capability, spool, confirm thrust, THEN release the
+                // erector/clamp by capability - the real Falcon-9 sequence.
                 RoLaunch(v, a);
-            else if (RssBody(v) && c.Phase == AscentPhase.BurnToApoapsis)
-                // RSS/RO ONLY: the capability ignition OWNS the second stage - during the ullage settle
-                // the throttle is up with no thrust yet, and the starvation Stage() fallback would read
-                // that as a dead stage and fire ActivateNextStage, the cascade we are removing. Stock
-                // lights the MVac through its MECO staging above and never reaches here.
+            else if (c.Phase == AscentPhase.BurnToApoapsis)
+                // The capability ignition OWNS the second stage - during the ullage settle the throttle is
+                // up with no thrust yet, and the starvation Stage() fallback would read that as a dead
+                // stage and fire ActivateNextStage, the cascade we removed.
                 IgniteSecondStageWhenSettled(v, c, a);
             else
                 Stage(v, c, a);
-        }
-
-        /// <summary>
-        /// This world is RSS/RO Earth, not stock Kerbin (Kerbin 600 km, Earth 6371 km). The stock and
-        /// RSS builds are ONE codebase with two methods (user, 2026-08-22): stock keeps the previous,
-        /// tested ways; RSS gets the capability-based separation/ignition, the real launch azimuth, the
-        /// ForBody ascent and the droneship-static coordinate. Everything divergent gates on this.
-        /// </summary>
-        private static bool RssBody(Vessel v)
-        {
-            return v != null && v.mainBody != null && v.mainBody.Radius > RssBodyRadiusM;
         }
 
         /// <summary>
@@ -743,7 +693,7 @@ namespace DragonScreen
         /// </summary>
         private static string Crew2Sync(Vessel v)
         {
-            if (!RssBody(v) || liftoffUt <= 0.0) return "";
+            if (liftoffUt <= 0.0) return "";
             double met = Planetarium.GetUniversalTime() - liftoffUt;
             if (met < 0.0) return "";
             Crew2Event cur = Crew2Timeline.Current(met);
@@ -1214,7 +1164,7 @@ namespace DragonScreen
             // of target, flattening to prograde as apoapsis approaches target, after which Coast +
             // Circularise finish it. Interim heuristic (superseded by PSG); gains are [Tunable]. Stock's
             // higher-TWR turn keeps its pitch law and never enters this branch.
-            else if (RssBody(v) && c.Phase == AscentPhase.BurnToApoapsis)
+            else if (c.Phase == AscentPhase.BurnToApoapsis)
             {
                 Vector3d pro = v.obt_velocity.normalized;
                 if (pro.sqrMagnitude > 0.5)
@@ -1509,7 +1459,7 @@ namespace DragonScreen
             // destructively, before ullage, ahead of the clean capability sequence. On Earth the booster
             // hand-off is owned by the guidance (MECO on target OR flameout, Ascent.FirstStageSpent) and
             // SeparateBooster; the MVac by IgniteSecondStage. So there this only lights the S1 off the pad.
-            if (RssBody(v) && c.Phase != AscentPhase.VerticalRise && c.Phase != AscentPhase.Idle) return;
+            if (c.Phase != AscentPhase.VerticalRise && c.Phase != AscentPhase.Idle) return;
             if (c.Throttle < 0.05) { starvedFor = 0.0; return; }
 
             if (a.AvailableThrust > 0.1)

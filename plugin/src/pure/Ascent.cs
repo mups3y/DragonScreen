@@ -265,27 +265,6 @@ namespace DragonScreen
 
         /// <summary>Tourist orbit altitude, metres (user 2026-08-21) - higher than the station's, a
         /// sightseeing lap with no docking.</summary>
-        public const double TouristAltitudeM = 250000.0;
-
-        /// <summary>
-        /// The TOURIST mission ascent: a higher (250 km) circular orbit, no station. The booster still
-        /// flies RTLS, so it takes the same RTLS ascent profile as the ferry - only the circularisation
-        /// target is higher, which the upper stage reaches by burning to the higher apoapsis.
-        /// </summary>
-        public static AscentTarget Tourist()
-        {
-            AscentTarget t = new AscentTarget();
-            t.AltitudeM = TouristAltitudeM;
-            t.HeadingDeg = 90.0;
-            double meco, stageAlt, gain, payload;
-            LandingSites.AscentFor(LandingProfile.Rtls, out meco, out stageAlt, out gain, out payload);
-            t.MecoAngleDeg = meco;
-            t.PitchGain = gain;
-            t.StageAltM = stageAlt;
-            t.PitchRefAltM = 0.0;
-            t.MaxQKpa = Ascent.MaxQKpa;
-            return t;
-        }
     }
 
     public struct AscentInputs
