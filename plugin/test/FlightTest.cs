@@ -240,7 +240,7 @@ public static class FlightTest
         Check("a droneship entry burn keeps burning while propellant is above the reserve",
               Landing.Guide(ebDrn, LandingPhase.EntryBurn).Phase == LandingPhase.EntryBurn,
               Landing.Guide(ebDrn, LandingPhase.EntryBurn).Phase.ToString());
-        ebDrn.RecoveryPropFrac = 0.45;  // hit the 0.5 reserve - the landing burn's share
+        ebDrn.RecoveryPropFrac = Landing.EntryBurnReserveFrac - 0.02;  // just below the reserve, tracks the tunable
         Check("...and CUTS to Descent the moment the reserve is reached, saving landing fuel",
               Landing.Guide(ebDrn, LandingPhase.EntryBurn).Phase == LandingPhase.Descent,
               Landing.Guide(ebDrn, LandingPhase.EntryBurn).Phase.ToString());
@@ -329,21 +329,25 @@ public static class FlightTest
         AscentTarget earth = AscentTarget.ForBody(LandingProfile.Droneship, 200000.0);
         Check("Earth targets the real ~200 km parking orbit, not Kerbin's 120 km",
               Math.Abs(earth.AltitudeM - 200000.0) < 1e-9, earth.AltitudeM.ToString());
-        Check("Earth's MECO apoapsis is ~110 km (MechJeb staged at 121), below the parking orbit",
-              Math.Abs(earth.StageAltM - 110000.0) < 1e-9 && earth.StageAltM < earth.AltitudeM,
+        // The apoapsis ceiling is a MECO BACKSTOP, not the primary trigger - the 2300 m/s speed cap is.
+        // Raised 110 -> 150 km (2026-08-24) so the loft below (which climbs steeper -> apoapsis rises
+        // faster) still stages on the SPEED cap, not the apoapsis; it must stay below the parking orbit.
+        Check("Earth's MECO apoapsis ceiling is above the loft's climb but below the parking orbit",
+              earth.StageAltM >= 110000.0 && earth.StageAltM < earth.AltitudeM,
               earth.StageAltM.ToString());
-        // Decoupled from the 110 km staging and well under the ~135 km that lofts. Tuned 40->50 km on
-        // 2026-08-22 to ease the first-stage AoA (flight_0822_112918 peaked 17 deg); the range, not a
-        // point, is what matters - it must not equal StageAltM and must stay below the loft threshold.
-        Check("the pitch-over scale is DECOUPLED from staging and below the loft threshold",
-              earth.PitchRefAltM >= 30000.0 && earth.PitchRefAltM <= 70000.0
+        // The pitch-over scale lofts toward the real ~67 km MECO; decoupled from staging (!= StageAltM).
+        Check("the pitch-over scale is DECOUPLED from staging and in the loft range",
+              earth.PitchRefAltM >= 30000.0 && earth.PitchRefAltM <= 90000.0
               && earth.PitchRefAltM != earth.StageAltM, earth.PitchRefAltM.ToString());
         Check("Earth stages far shallower than Kerbin - MECO floor 25 vs 40 deg",
               earth.MecoAngleDeg < kerbin.MecoAngleDeg && Math.Abs(earth.MecoAngleDeg - 25.0) < 1e-9,
               earth.MecoAngleDeg + " vs " + kerbin.MecoAngleDeg);
-        Check("Earth's max-Q ceiling clears the measured 31 kPa peak so it flies at full thrust",
-              earth.MaxQKpa > 31.0 && earth.MaxQKpa > kerbin.MaxQKpa,
-              earth.MaxQKpa.ToString());
+        // Crew-2 flies a THROTTLE BUCKET through max Q (throttle down, T+0:53), so Earth's ceiling now
+        // sits just BELOW the full-thrust peak (~32 kPa) - the vehicle eases off through the transonic
+        // region and max Q reads ~30-31 kPa like the real mission - and Earth also carries a crewed g cap.
+        Check("Earth flies the Crew-2 max-Q bucket (ceiling below the ~32 kPa full-thrust peak) + a g cap",
+              earth.MaxQKpa >= 28.0 && earth.MaxQKpa <= 31.0 && earth.GLimitMps2 > 0.0,
+              "maxQ=" + earth.MaxQKpa + " gLimit=" + earth.GLimitMps2.ToString("F1"));
 
         // The decoupled pitch scale must actually make the Earth turn pitch over FASTER than the
         // Kerbin law would at the same altitude (the whole point - the atmosphere-scaling first
@@ -370,6 +374,25 @@ public static class FlightTest
         Check("flameout below the MECO target still MECOs, not coast a dead stage",
               Ascent.Guide(gt, earth, AscentPhase.GravityTurn).Phase == AscentPhase.Meco,
               Ascent.Guide(gt, earth, AscentPhase.GravityTurn).Phase.ToString());
+
+        // ---- MECO CAPS AT THE REAL STAGING VELOCITY, to put the booster on the barge ----
+        // Downrange is set by staging speed, so MECO trims to the real ~2300 m/s BEFORE the 110 km
+        // apoapsis target is reached. flight_0823_134926 staged at 2440 -> booster fell 140 km long.
+        AscentInputs hot = new AscentInputs();
+        hot.Valid = true; hot.SecondStage = false; hot.Altitude = 66000.0; hot.AvailableThrust = 6000.0;
+        hot.ApoapsisM = 95000.0;                            // still below the 110 km apoapsis target
+        hot.SurfaceSpeed = 2300.0;                          // at the real Crew-2 staging velocity
+        Check("MECO caps at the real staging velocity, before the apoapsis target",
+              Ascent.Guide(hot, earth, AscentPhase.GravityTurn).Phase == AscentPhase.Meco, "");
+        AscentInputs stillGoing = hot; stillGoing.SurfaceSpeed = 2100.0;   // below the cap
+        Check("below the staging-velocity cap it keeps burning",
+              Ascent.Guide(stillGoing, earth, AscentPhase.GravityTurn).Phase == AscentPhase.GravityTurn, "");
+        // Stock (cap 0) ignores surface speed entirely - MECO is the apoapsis target (or flameout) only.
+        AscentInputs stockHot = new AscentInputs();
+        stockHot.Valid = true; stockHot.SecondStage = false; stockHot.Altitude = 30000.0;
+        stockHot.AvailableThrust = 6000.0; stockHot.ApoapsisM = 30000.0; stockHot.SurfaceSpeed = 2300.0;
+        Check("stock (cap 0) does NOT MECO on velocity",
+              Ascent.Guide(stockHot, kerbin, AscentPhase.GravityTurn).Phase == AscentPhase.GravityTurn, "");
 
         // ---- ⛔ ULLAGE IS HELD UNTIL THE MVac CATCHES, not a fixed 6 s (flight_0822_205453). ----
         // The MVac needs settled propellant; stopping the RCS-fore on a clock while the engine had not
@@ -565,20 +588,26 @@ public static class FlightTest
         // 2560 / 1706 / 764 kN for nine / three / one. Scaling the all-engine figure by an engine
         // COUNT overstates the one-engine landing burn by 2.2x, and that number sets the hoverslam
         // ignition altitude. When the vehicle reports its real modes, they must be used verbatim.
-        LandingInputs octa = Fall(5000.0, -200.0, 200.0, 180.0, 9);
+        // ---- ⛔ THE REAL CREW-2 3->1 LANDING BURN, ENVELOPE HANDOVER (falcon-real-hoverslam-technique). ----
+        // Lights THREE for the hard brake, then drops to the centre engine when it can fly the suicide-burn
+        // envelope to the deck FROM HERE - stop1 * HandoverEnvPad < TrueRadar (NOT a fixed speed, which let
+        // flight_0824_210106 hand over at 730 m and stop dead 222 m up). So a stage that CANNOT yet stop on
+        // one (fast for its height) reads the THREE-engine figure; one that can reads the centre engine's.
+        // stop1 = v^2 / (2*(AccelOneEngine-g)) = 200^2/(2*17.19) = 1163 m; at 600 m radar (TrueRadar 569 m)
+        // 1163*1.12 > 569, so one engine cannot stop -> THREE.
+        LandingInputs octa = Fall(600.0, -200.0, 200.0, 180.0, 9);
         octa.AccelThreeEngine = 60.0;
         octa.AccelOneEngine = 27.0;
-        // The landing burn STARTS on three engines - Land() hands over to one only once the stage
-        // is slow enough and provably able to finish. So a fast, high booster reads the three-engine
-        // figure here, and only a slow low one reads the centre engine's.
-        Check("the landing burn opens on the three-engine figure",
+        Check("the landing burn brakes on THREE while one engine cannot stop from here",
               Math.Abs(Landing.PhaseAccel(LandingPhase.LandingBurn, octa) - 60.0) < 1e-9,
               Landing.PhaseAccel(LandingPhase.LandingBurn, octa).ToString("F2"));
-        LandingInputs handed = Fall(200.0, -30.0, 32.0, 180.0, 9);
-        handed.AccelThreeEngine = 60.0; handed.AccelOneEngine = 27.0;
-        Check("and after the handover, the centre engine's",
-              Math.Abs(Landing.PhaseAccel(LandingPhase.LandingBurn, handed) - 27.0) < 1e-9,
-              Landing.PhaseAccel(LandingPhase.LandingBurn, handed).ToString("F2"));
+        // At 2000 m radar and 40 m/s, stop1 = 40^2/(2*17.19) = 47 m; 47*1.12 << 1969 m -> one engine can
+        // fly the envelope to the deck -> hand to the CENTRE engine.
+        LandingInputs octaSlow = Fall(2000.0, -40.0, 40.0, 180.0, 9);
+        octaSlow.AccelThreeEngine = 60.0; octaSlow.AccelOneEngine = 27.0;
+        Check("...and drops to the CENTRE engine once one engine can fly the envelope to the deck",
+              Math.Abs(Landing.PhaseAccel(LandingPhase.LandingBurn, octaSlow) - 27.0) < 1e-9,
+              Landing.PhaseAccel(LandingPhase.LandingBurn, octaSlow).ToString("F2"));
         Check("three-engine accel comes from the vehicle too",
               Math.Abs(Landing.PhaseAccel(LandingPhase.Boostback, octa) - 60.0) < 1e-9,
               Landing.PhaseAccel(LandingPhase.Boostback, octa).ToString("F2"));
@@ -589,25 +618,26 @@ public static class FlightTest
               Math.Abs(Landing.PhaseAccel(LandingPhase.LandingBurn, plain) - 180.0 * 3.0 / 9.0)
               < 1e-9,
               Landing.PhaseAccel(LandingPhase.LandingBurn, plain).ToString("F2"));
-        // ---- THE HANDOVER IS BOTH CONDITIONS, NOT A TWR CHECK ----
-        // Land:805. "At low propellant this stage does not have TWR 1 on one Merlin, and a handover
-        // that happens too early cannot be undone." Ours committed to one engine up front.
-        LandingInputs fastLow = Fall(5000.0, -200.0, 200.0, 180.0, 9);
-        fastLow.AccelThreeEngine = 60.0; fastLow.AccelOneEngine = 27.0;
-        Check("still fast: the burn stays on three",
-              Landing.EnginesFor(LandingPhase.LandingBurn, fastLow) == 3,
-              Landing.EnginesFor(LandingPhase.LandingBurn, fastLow).ToString());
-        LandingInputs slowHigh = Fall(200.0, -30.0, 32.0, 180.0, 9);
-        slowHigh.AccelThreeEngine = 60.0; slowHigh.AccelOneEngine = 27.0;
-        Check("slow, and one engine could still stop it: hand over",
-              Landing.EnginesFor(LandingPhase.LandingBurn, slowHigh) == 1,
-              Landing.EnginesFor(LandingPhase.LandingBurn, slowHigh).ToString());
-        LandingInputs slowLow = Fall(45.0, -30.0, 32.0, 180.0, 9);
-        slowLow.AccelThreeEngine = 60.0; slowLow.AccelOneEngine = 27.0;
-        Check("slow but no room left: do NOT hand over",
-              Landing.EnginesFor(LandingPhase.LandingBurn, slowLow) == 3,
-              Landing.EnginesFor(LandingPhase.LandingBurn, slowLow).ToString());
-        Check("a booster without the TWR takes three",
+        // ---- THE LANDING ENGINE CHOICE: the real 3->1 ENVELOPE handover. ----
+        // A CenterOnly mode with one-engine TWR >= 1.25 brakes on THREE while one engine cannot yet stop,
+        // then hands to ONE once stop1*pad fits in the height left. Two guards keep a stage that CANNOT
+        // finish on one on three the whole way: no centre-engine mode (generic cluster), or centre below TWR.
+        LandingInputs oneMode = Fall(600.0, -200.0, 200.0, 180.0, 9);   // one engine cannot stop from here
+        oneMode.AccelThreeEngine = 60.0; oneMode.AccelOneEngine = 27.0;
+        Check("a 3->1 stage brakes on THREE while one engine cannot stop",
+              Landing.EnginesFor(LandingPhase.LandingBurn, oneMode) == 3,
+              Landing.EnginesFor(LandingPhase.LandingBurn, oneMode).ToString());
+        LandingInputs oneModeSlow = Fall(2000.0, -40.0, 40.0, 180.0, 9); // one engine can fly the envelope
+        oneModeSlow.AccelThreeEngine = 60.0; oneModeSlow.AccelOneEngine = 27.0;
+        Check("...and hands to ONE once it can fly the envelope to the deck",
+              Landing.EnginesFor(LandingPhase.LandingBurn, oneModeSlow) == 1,
+              Landing.EnginesFor(LandingPhase.LandingBurn, oneModeSlow).ToString());
+        LandingInputs weakOne = Fall(5000.0, -200.0, 200.0, 180.0, 9);
+        weakOne.AccelThreeEngine = 60.0; weakOne.AccelOneEngine = 9.0;   // centre engine below 1.25 g
+        Check("a centre engine WITHOUT the TWR falls back to three",
+              Landing.EnginesFor(LandingPhase.LandingBurn, weakOne) == 3,
+              Landing.EnginesFor(LandingPhase.LandingBurn, weakOne).ToString());
+        Check("a generic cluster (no centre-engine mode) takes three",
               Landing.EnginesFor(LandingPhase.LandingBurn, heavy) == 3,
               Landing.EnginesFor(LandingPhase.LandingBurn, heavy).ToString());
 
@@ -741,6 +771,45 @@ public static class FlightTest
         Check("a powered lean is signed the other way",
               Landing.LeanFraction(500.0, -3.0) < 0.0,
               Landing.LeanFraction(500.0, -3.0).ToString("F5"));
+
+        // ---- THE CEILING IS A MAGNITUDE CLAMP, EVEN WHEN THE NAIVE LEAN GOES NEGATIVE ----
+        // flight_0823_123648: a 149 km overshoot drove the naive-aim angle past 90 deg, tan() went
+        // negative, and `min(naiveLean, ceiling)` returned the negative value - a 70 deg lean at a
+        // 6 deg ceiling - pitching the booster 45 deg off retrograde into a crash.
+        double ceil6 = Math.Tan(6.0 * Math.PI / 180.0);      // the 600 m ceiling that failed
+        Check("a small positive lean under the ceiling passes through",
+              Math.Abs(Landing.ClampLean(0.05, ceil6) - 0.05) < 1e-12, "");
+        Check("a positive lean above the ceiling is clamped down to it",
+              Math.Abs(Landing.ClampLean(3.0, ceil6) - ceil6) < 1e-12, Landing.ClampLean(3.0, ceil6).ToString("F5"));
+        Check("a NEGATIVE naive lean (angle > 90 deg) clamps to the ceiling, never past it",
+              Math.Abs(Landing.ClampLean(-2.77, ceil6) - ceil6) < 1e-12, Landing.ClampLean(-2.77, ceil6).ToString("F5"));
+        Check("the clamped lean stays within [0, ceiling]",
+              Landing.ClampLean(-2.77, ceil6) <= ceil6 + 1e-12 && Landing.ClampLean(-2.77, ceil6) >= 0.0, "");
+
+        // ---- IGNITION IS GATED ON A FIRING PHASE, NOT THE THROTTLE (the flip must not light) ----
+        // flight_0823_123648 burned an ignition sitting flamed-out through the whole flip because the
+        // flip selects the 3-engine MODE. The firing phases light; the mode-select/glide phases do not.
+        Check("the flip selects the mode but does NOT fire", !Landing.FiresEngine(LandingPhase.Flip), "");
+        Check("coast does not fire", !Landing.FiresEngine(LandingPhase.Coast), "");
+        Check("the glide/descent does not fire", !Landing.FiresEngine(LandingPhase.Descent), "");
+        Check("the entry burn fires", Landing.FiresEngine(LandingPhase.EntryBurn), "");
+        Check("the landing burn fires", Landing.FiresEngine(LandingPhase.LandingBurn), "");
+        Check("boostback fires", Landing.FiresEngine(LandingPhase.Boostback), "");
+        Check("no-solution still fires (everything it has left)", Landing.FiresEngine(LandingPhase.NoSolution), "");
+
+        // ---- THE LANDING BURN LIGHTS HIGH ENOUGH TO RETRY A FAILED IGNITION ----
+        // The ignition height is the drag-aware hoverslam altitude (pure/Hoverslam.cs) PLUS
+        // LandingIgnitionLeadS of descent as settle-dead-fall + retry room, so a dead first light
+        // (TestFlight) can be re-attempted before the deck. At 230 m/s that lead is ~1.5 s * 230 = ~345 m
+        // of retry room ON TOP of the physically-correct base. The base cancels in the delta below.
+        double savedLead = Landing.LandingIgnitionLeadS;
+        Landing.LandingIgnitionLeadS = 0.0;
+        double ignNoLead = Landing.Guide(Fall(2000.0, -230.0, 235.0, 30.0, 3), LandingPhase.Descent).IgnitionAltitude;
+        Landing.LandingIgnitionLeadS = 1.5;
+        double ignWithLead = Landing.Guide(Fall(2000.0, -230.0, 235.0, 30.0, 3), LandingPhase.Descent).IgnitionAltitude;
+        Landing.LandingIgnitionLeadS = savedLead;
+        Check("the retry lead raises the ignition height by lead * descent speed",
+              Math.Abs((ignWithLead - ignNoLead) - 1.5 * 230.0) < 5.0, (ignWithLead - ignNoLead).ToString("F0") + " m");
 
         // ================================================================================
         //  ⛔ THE CANCELLATION. This is the property the descent's stability rests on, and the

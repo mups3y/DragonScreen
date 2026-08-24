@@ -46,12 +46,13 @@ namespace DragonScreen
         [Tunable] public static bool Enabled = false;
 
         /// <summary>
-        /// Furthest range this will accept the job, metres. WP0 sits 400 m below the station, so the
-        /// initiation point has to be close enough that RCS can fly to it; beyond this the rendezvous
-        /// (and DirectApproach) still own the closing. The real approach initiates from a few hundred
-        /// metres, so this is the R-bar initiation envelope, not a kilometre-scale gate.
+        /// Furthest range this will accept the job, metres. WP0 sits 400 m below the station and RCS has
+        /// to fly to it. Raised to the real APPROACH ELLIPSOID scale (2000 m along-track × 1000 m): the
+        /// named-burn Ti delivers the vehicle just below the station at ~this range, so the L-approach
+        /// takes over there and flies WP0->WP1->WP2. 2.5 km slant covers the ellipsoid corner. (Stock
+        /// never engages this - RSS only, and the named-burn hands off exactly at EnvelopeM.)
         /// </summary>
-        [Tunable] public static double EnvelopeM = 900.0;
+        [Tunable] public static double EnvelopeM = 2500.0;
 
         public static bool Engaged { get; private set; }
         public static WpPhase Phase { get; private set; }
@@ -118,6 +119,10 @@ namespace DragonScreen
             if (ship == null || ship.state == Vessel.State.DEAD
                 || station == null || station.state == Vessel.State.DEAD)
             { Disengage("vessel lost"); return; }
+
+            // R-bar/V-bar terminal approach: gentle Draco strength - a little more than docking, far less
+            // than a burn, so the small station-relative corrections are precise not wasteful. (2026-08-24)
+            CapsuleRcs.Set(ship, CapsuleRcs.ApproachPct);
 
             CelestialBody b = station.mainBody;
             if (b == null) { Disengage("no body"); return; }

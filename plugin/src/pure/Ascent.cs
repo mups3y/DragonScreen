@@ -86,6 +86,21 @@ namespace DragonScreen
         public double StageAltM;
 
         /// <summary>
+        /// Cap MECO at this SURFACE speed, m/s. 0 disables it (stock: MECO on the apoapsis target only).
+        ///
+        /// ⛔ WHY A VELOCITY CAP AND NOT JUST THE APOAPSIS. The booster's DOWNRANGE is set by its
+        /// staging velocity, not by the apoapsis it is aiming at - and the droneship has to come down ON
+        /// a barge at a fixed distance. flight_0823_134926 staged at 2440 m/s (apoapsis-triggered) and
+        /// the booster fell 640 km downrange, 140 km PAST the 500 km barge; the entry-burn reserve barely
+        /// moved it (drag-dominated descent), so the ONLY lever with the authority is where the first
+        /// stage cuts. Real Crew-2 staged at ~2300 m/s surface and that is what put its booster on a
+        /// barge ~500 km out. Capping MECO here trims the staging energy to the real value so the natural
+        /// impact falls at the real barge distance, within the descent lean's authority to fine-tune. The
+        /// second stage makes up the small energy difference exactly as the real vehicle does.
+        /// </summary>
+        public double MecoSurfaceSpeedCapMps;
+
+        /// <summary>
         /// First-stage pitch-over characteristic altitude, metres. When > 0 it REPLACES the Kerbin
         /// denominator `StageAltM * PitchGain/100` in TurnPitch, DECOUPLING how fast the stage pitches
         /// over from where it stages.
@@ -106,6 +121,15 @@ namespace DragonScreen
         /// gets a ceiling above that peak; the global Ascent.MaxQKpa const is the Kerbin default.
         /// </summary>
         public double MaxQKpa;
+
+        /// <summary>
+        /// Acceleration ceiling for THIS body, m/s^2. Zero = no limit (stock Kerbin flies unlimited).
+        /// Real Crew Dragon flies a GENTLE ascent for the crew: the first stage throttles down near MECO
+        /// so peak g stays ~4. Ours pulled 4.65 g at MECO at full thrust (8218 kN / 180 t); the g-limit
+        /// throttle (GThrottle) caps it. Preserves the MECO velocity - MECO is speed-capped, so the cap
+        /// just spreads the last of the burn over a little more time.
+        /// </summary>
+        public double GLimitMps2;
 
         /// <summary>
         /// Space X Station sits at 86.8 x 85.8 km, inclination 0.133 - MEASURED over four flights,
@@ -195,16 +219,47 @@ namespace DragonScreen
         {
             AscentTarget t = Station(p);
             t.AltitudeM = parkingAltitudeM;   // real ~200 km parking orbit, below the ISS
-            t.StageAltM = 110000.0;           // MECO apoapsis (MechJeb staged at 121 km; a touch early)
-            // ⛔ 40->50->40 km. The 50 km "AoA ease" (2026-08-22) BACKFIRED: a slower pitch-over climbs
-            // steeper, so apoapsis reached the 110 km MECO trigger at only orb 2087 m/s instead of 2502
-            // (flight_0822_174436/174845) - the booster staged ~415 m/s low and left the low-TWR S2 far
-            // more to do. REVERTED to the value that flew to orbit (flight_0822_112918). The 17 deg AoA
-            // is survivable; fixing it must not move the MECO velocity - a different lever (a MaxQ-region
-            // pitch clamp, not the whole pitch scale) is the way, if it is worth touching at all.
-            t.PitchRefAltM = 40000.0;         // pitch-over scale, decoupled from staging - see the field
+            // ⛔ 110 -> 150 km. This is the APOAPSIS ceiling that ALSO ends MECO. The loft below climbs
+            // steeper, so apoapsis rises faster - and when the apoapsis hit the OLD 110 km ceiling before
+            // the speed cap, MECO fired early and LOW (2087 m/s, flight_0822_174436), which is exactly why
+            // the earlier loft backfired. Raising the ceiling lets the 2300 m/s SPEED cap (added since,
+            // MecoSurfaceSpeedCapMps) be the trigger instead, so the booster stages at the RIGHT speed but
+            // a HIGHER altitude. If a flight still stages on the apoapsis (MECO under 2300 m/s), raise this.
+            t.StageAltM = 150000.0;
+            // ⛔ 40 -> 48 km: LOFT TO THE REAL CREW-2 ~67 km MECO (user 2026-08-24, "full fidelity").
+            // At 40 km we stage at 61 km / 2300 m/s and the booster lands +13-20 km LONG - too much
+            // downrange energy. Real Crew-2 stages at ~67 km. A larger pitch-over scale holds the stack
+            // more vertical longer, so it reaches the (speed-capped) 2300 m/s HIGHER, with less of its
+            // speed pointed downrange -> the booster comes down shorter, toward the barge. The 2026-08-22
+            // backfire was the apoapsis trigger, now fixed by StageAltM 150 above, so the speed cap binds
+            // and the MECO VELOCITY does not move. [Tunable] - iterate from the flown MECO altitude toward
+            // 67 km; if it stages slow (MECO < 2300 m/s), the apoapsis is firing first - raise StageAltM.
+            t.PitchRefAltM = 48000.0;         // pitch-over scale, decoupled from staging - see the field
             t.MecoAngleDeg = 25.0;            // Earth stages far shallower than Kerbin's 40
-            t.MaxQKpa = 34.0;                 // just above the measured 31 kPa peak - do not throttle
+            // ⛔ 34 -> 30: FLY THE REAL CREW-2 THROTTLE BUCKET (user 2026-08-23, "match crew-2 speeds").
+            // Real Crew-2 throttles DOWN through max Q ("throttle bucket", T+0:53) to a ~31 kPa peak. Ours
+            // hit 32 kPa at FULL throttle (flight_0823_222127) - flying the bucket instead of holding 100 %.
+            // A 30 kPa ceiling makes QThrottle ease off through the transonic peak, so max Q reads ~30-31
+            // like the real vehicle. MECO is speed-capped (below), so the small thrust loss just costs a
+            // little more gravity loss on the way to the same 2300 m/s - it does NOT move the staging speed.
+            t.MaxQKpa = 30.0;
+            // Crew-Dragon gentle-ascent g cap: the crew profile keeps first-stage g ~3.5; we pulled 4.65 g at
+            // MECO. GThrottle throttles the light stage down near MECO to hold the cap, matching the crewed
+            // telemetry without moving the (speed-capped) MECO velocity.
+            // ⛔ 4.0 -> 3.5 g (user 2026-08-24, "real Crew-2 may not use full throttle like we do"):
+            // flight_0824_162840 flew near-FULL throttle the whole ascent (max Q 0.91, pre-MECO 0.92) and
+            // staged LOW at 61 km, vs real Crew-2's ~67 km - the booster then lands +20 km long. The real
+            // crew ascent throttles the light stage down HARDER near MECO (crew g-limit ~3.5, not 4.0),
+            // which builds the last of the 2300 m/s over a longer, LOFTIER arc: it stages higher with less
+            // of its speed pointed downrange, so the booster comes down shorter. MECO is speed-capped, so
+            // this does NOT change the staging speed or starve the S2 - it hands the S2 off from a higher,
+            // lower-loss start. HYPOTHESIS to confirm from the next flight's MECO altitude + landing miss;
+            // if the loft does not pull the landing back, revert (it cannot break the 7/7 orbit).
+            t.GLimitMps2 = 3.5 * 9.80665;
+            // Cap MECO at the real Crew-2 surface staging velocity so the booster's downrange matches the
+            // real ~500 km barge distance. 110 km apoapsis is reached at ~2440 m/s and drops the booster
+            // 640 km out (140 km past the barge); real Crew-2 staged ~2300 m/s. See MecoSurfaceSpeedCapMps.
+            t.MecoSurfaceSpeedCapMps = 2300.0;
             return t;
         }
 
@@ -241,6 +296,9 @@ namespace DragonScreen
         public double ApoapsisM, PeriapsisM;
         public double AtmosphereDepthM;
         public double VerticalSpeed;
+        /// <summary>Surface (body-relative) speed, m/s. Caps MECO at the real staging velocity - see
+        /// AscentTarget.MecoSurfaceSpeedCapMps.</summary>
+        public double SurfaceSpeed;
         public double DynamicPressureKpa;
         public double TimeToApoapsisS;
 
@@ -256,6 +314,9 @@ namespace DragonScreen
         public double RangeToBoosterM;
         /// <summary>Thrust the vehicle could make right now, kN. Zero means nothing is lit.</summary>
         public double AvailableThrust;
+        /// <summary>Total vehicle mass, tonnes. With AvailableThrust it gives the current acceleration,
+        /// which the g-limit throttle caps at the crewed profile (Crew Dragon ~4 g) - see GThrottle.</summary>
+        public double MassT;
         public bool Landed;
         /// <summary>True once the booster is gone - the two stages fly different laws.</summary>
         public bool SecondStage;
@@ -452,7 +513,9 @@ namespace DragonScreen
             // over a dead stage for 31 s, and the starvation-staging fallback tore the stack apart in
             // the gap. MECO on flameout hands straight to the clean SeparateBooster path.
             else if (phase == AscentPhase.GravityTurn
-                     && (s.ApoapsisM >= StageTarget(t) || FirstStageSpent(s)))
+                     && (s.ApoapsisM >= StageTarget(t)
+                         || (t.MecoSurfaceSpeedCapMps > 0.0 && s.SurfaceSpeed >= t.MecoSurfaceSpeedCapMps)
+                         || FirstStageSpent(s)))
                 phase = AscentPhase.Meco;
 
             // MECO holds, then separates. The command below raises Stage on the tick it expires.
@@ -579,7 +642,8 @@ namespace DragonScreen
 
                 case AscentPhase.GravityTurn:
                     c.PitchDeg = TurnPitch(s, t);
-                    c.Throttle = QThrottle(s, t.MaxQKpa);
+                    // Crew-2 throttle profile: the max-Q bucket AND the crewed g cap, whichever bites more.
+                    c.Throttle = System.Math.Min(QThrottle(s, t.MaxQKpa), GThrottle(s, t.GLimitMps2));
                     c.Note = "GRAVITY TURN";
                     break;
 
@@ -831,6 +895,24 @@ namespace DragonScreen
             double over = (s.DynamicPressureKpa - maxQKpa) / maxQKpa;
             double th = 1.0 - over * 2.0;
             if (th < 0.35) th = 0.35;      // never below the level that keeps the engines happy
+            return th;
+        }
+
+        /// <summary>
+        /// Throttle to hold acceleration at or below <paramref name="gLimitMps2"/> - the crewed-ascent g
+        /// cap (Crew Dragon ~4 g). Zero limit returns 1 (stock Kerbin, unlimited). Acceleration at full
+        /// thrust is AvailableThrust(kN)/MassT(t) = m/s^2 directly; to cap it, scale throttle by
+        /// gLimit/fullAccel. Only bites once the stage is light enough that full thrust would exceed the
+        /// limit - i.e. the last seconds before MECO - so early ascent is untouched. Same 0.35 floor as
+        /// QThrottle. MECO stays speed-capped, so this only spreads the final burn over a little more time.
+        /// </summary>
+        public static double GThrottle(AscentInputs s, double gLimitMps2)
+        {
+            if (gLimitMps2 <= 0.0 || s.MassT <= 0.0 || s.AvailableThrust <= 0.0) return 1.0;
+            double fullAccel = s.AvailableThrust / s.MassT;   // kN/t == m/s^2
+            if (fullAccel <= gLimitMps2) return 1.0;
+            double th = gLimitMps2 / fullAccel;
+            if (th < 0.35) th = 0.35;
             return th;
         }
 

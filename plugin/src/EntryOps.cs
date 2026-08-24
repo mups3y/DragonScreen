@@ -295,6 +295,10 @@ namespace DragonScreen
             if (!Engaged) return;
             if (ship == null || ship.state == Vessel.State.DEAD) { Disengage("vessel lost"); return; }
 
+            // Entry holds attitude (shield forward, retrograde) on the Draco - a HOLD, not a burn, so a
+            // middle strength: enough to hold, not full (which the de-orbit left it at). (user 2026-08-24.)
+            CapsuleRcs.Set(ship, CapsuleRcs.AttitudePct);
+
             double now = Planetarium.GetUniversalTime();
             double inStage = now - stageStartedAt;
 

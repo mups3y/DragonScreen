@@ -56,7 +56,8 @@ namespace DragonScreen
             // per flight-scene entry, before anything ticks, so the first frame already runs on the
             // tuned values rather than a frame of defaults.
             Tuning.Build();
-            MapTrajectory.Start();   // the map-view re-entry overlay (replaces the Trajectories add-on)
+            MapTrajectory.Start();      // the map-view re-entry overlay (replaces the Trajectories add-on)
+            FlightTrajectory.Start();   // the same overlay, projected over the flight view
             Debug.Log(Tag + "flight driver up - autopilot, recovery and recorder now tick "
                           + "independently of the IVA");
         }
@@ -97,6 +98,10 @@ namespace DragonScreen
             // Order matters only in that the recorder samples AFTER the guidance has run, so a row
             // carries this frame's command rather than the previous one's.
             FlightCommands.Tick();
+            BargeWaypoint.Ensure();   // cosmetic: drop the droneship map/navball marker once, when able
+            // The conductor runs BEFORE the controllers it supervises: it may engage the next phase this
+            // frame, and that controller then ticks in the same frame rather than a frame late.
+            AutoSequence.Tick();
             AutoPilot.Tick();
             // The node executor before the things that plan burns, so a burn armed this frame is
             // flown from the next one rather than sitting a frame behind its own ignition time.
@@ -141,29 +146,46 @@ namespace DragonScreen
             // monitor exists to report. It owns no actuator - see its header.
             FlightMonitor.Tick();
 
-            // ---- MAP-VIEW RE-ENTRY TRAJECTORY (replaces the Trajectories add-on). ----
-            // Only while a return is being flown and only while the map is up: the path integration is
-            // the same cost the guidance already pays, so it is not run for a view nobody is looking at.
-            // Throttled to ~2 Hz, matching how often the guidance itself re-predicts.
-            if (global::MapView.MapIsEnabled)
+            // ---- PREDICTED-IMPACT TRAJECTORY (map AND flight view; replaces the Trajectories add-on). ----
+            // TWO PROFILES, selected by which vehicle is coming down (user 2026-08-24):
+            //   * the CREW DRAGON return - EntryOps/DeorbitOps engaged, flown on the capsule's KNOWN
+            //     ballistic coefficient (CapsuleBcKgM2), aimed at the splashdown target;
+            //   * the BOOSTER recovery - BoosterRecovery.Active, flown on the booster's LIVE-MEASURED
+            //     drag (bcOverride 0 -> use the measured bc), aimed at the droneship.
+            // The path integration is the same cost the guidance already pays and is now consumed by
+            // BOTH the map overlay and the in-flight overlay, so it runs whenever a descent is being
+            // flown - someone is always looking at one view or the other. Throttled to ~2 Hz.
             {
                 float now = Time.realtimeSinceStartup;
                 if (now - lastMapUpdate > 0.5f)
                 {
                     lastMapUpdate = now;
-                    Vessel rv = null; double tlat = 0.0, tlon = 0.0;
+                    Vessel rv = null; double tlat = 0.0, tlon = 0.0; double bcov = 0.0;
                     if (EntryOps.Engaged && EntryOps.Vehicle != null)
-                    { rv = EntryOps.Vehicle; tlat = EntryOps.TargetLatDeg; tlon = EntryOps.TargetLonDeg; }
+                    { rv = EntryOps.Vehicle; tlat = EntryOps.TargetLatDeg; tlon = EntryOps.TargetLonDeg;
+                      bcov = EntryGuidance.CapsuleBcKgM2; }
                     else if (DeorbitOps.Engaged && DeorbitOps.Vehicle != null)
-                    { rv = DeorbitOps.Vehicle; tlat = DeorbitOps.TargetLatDeg; tlon = DeorbitOps.TargetLonDeg; }
+                    { rv = DeorbitOps.Vehicle; tlat = DeorbitOps.TargetLatDeg; tlon = DeorbitOps.TargetLonDeg;
+                      bcov = EntryGuidance.CapsuleBcKgM2; }
+                    else if (BoosterRecovery.Active && BoosterRecovery.BoosterVessel != null
+                             && !BoosterRecovery.BoosterVessel.packed)
+                    {
+                        rv = BoosterRecovery.BoosterVessel;
+                        if (BoosterRecovery.HavePad)
+                        { tlat = BoosterRecovery.PadLat; tlon = BoosterRecovery.PadLon; }
+                        else
+                        { tlat = BoosterRecovery.DroneshipEarthLatDeg; tlon = BoosterRecovery.DroneshipEarthLonDeg; }
+                        bcov = 0.0;   // booster flies its OWN measured drag, not the capsule's known bc
+                    }
 
                     if (rv != null)
-                        ImpactPredictor.UpdateMapTrajectory(rv, EntryGuidance.CapsuleBcKgM2, tlat, tlon);
+                        ImpactPredictor.UpdateMapTrajectory(rv, bcov, tlat, tlon);
                     else
                         ImpactPredictor.MapValid = false;
                 }
             }
-            MapTrajectory.Update();
+            MapTrajectory.Update();      // draws in map view
+            FlightTrajectory.Update();   // draws the same path + target X over the flight view
         }
 
         public void OnDestroy()
@@ -180,7 +202,8 @@ namespace DragonScreen
             // rows buffered - the flights worth reading are the ones that end unexpectedly.
             FlightRecorder.Stop("left the flight scene");
 
-            MapTrajectory.Destroy();   // tear down the map camera component and its meshes
+            MapTrajectory.Destroy();      // tear down the map camera component and its meshes
+            FlightTrajectory.Destroy();   // and the flight-view overlay component + material
 
             // ---- AND CLEAR THE STATICS HERE, WHICH IS THE HONEST PLACE FOR IT ----
             // A revert or a scene change is what invalidates them - not a camera move, which is what

@@ -376,7 +376,10 @@ namespace DragonScreen
                 // VEHICLE's, so a check made on the left display is made for everyone.
                 case PageAct.AckStep: VesselData.AcknowledgeStep(hit.Arg); break;
 
-                case PageAct.ToggleAuto: AutoPilot.Toggle(); break;
+                // AUTO SEQUENCE is now the whole-mission conductor, not just the ascent: it chains
+                // ascent -> rendezvous -> dock -> refuel (then off), and after undock flies the return.
+                // The manual ascent-only toggle is still on the physical STRING 1A button.
+                case PageAct.ToggleAuto: AutoSequence.Toggle(); break;
 
                 // ---- THE MIDDLE OF THE MISSION. See PageAct's note on why these exist. ----
                 // The painter only DISPATCHES: every one of these is a static on a flight-software

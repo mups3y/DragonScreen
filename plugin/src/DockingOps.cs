@@ -570,6 +570,12 @@ namespace DragonScreen
                 return;
             }
 
+            // ⛔ DOCK GENTLE. The Draco now carries full real thrust; at 100 % it would over-drive this
+            // servo, which is tuned for the old weak RCS. DockPct (~20 %) reproduces that old authority,
+            // so docking is unchanged - and it OVERRIDES whatever strength the rendezvous burn left at
+            // 100 %. (user 2026-08-24, "tune the thruster strength for the task at hand".)
+            CapsuleRcs.Set(ship, CapsuleRcs.DockPct);
+
             Vector3d ourPos = ourPort.nodeTransform.position;
             Vector3d tgtPos = theirPort.nodeTransform.position;
             // The port's OUTWARD axis. KSP's docking node points along its transform's forward.
@@ -643,6 +649,13 @@ namespace DragonScreen
             if (sel.Captured)
             {
                 StopTranslating();
+                // ⛔ RCS ON TO HOLD THE PORT AXIS FOR THE LATCH. In RO there are no reaction wheels
+                // (RO_ReactionWheels.cfg), so this hold turns on RCS or nothing keeps the ports aligned
+                // while the magnets pull in - and captureMinRollDot 0.5 loses the latch on a few degrees
+                // of drift. FlyTo enables RCS every approach tick; this final hold must GUARANTEE it too
+                // rather than inherit it, since it returns before ever reaching FlyTo's enable.
+                if (!ship.ActionGroups[KSPActionGroup.RCS])
+                    ship.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
                 AttitudeController.Ascent.SteerTo(ship, -axis,
                     (theirPort != null && theirPort.nodeTransform != null)
                     ? (Vector3d)theirPort.nodeTransform.up * DockRollSign : Vector3d.zero);

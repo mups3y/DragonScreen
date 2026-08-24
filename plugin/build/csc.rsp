@@ -13,6 +13,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Approach.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\ArcGeometry.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Ascent.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Attitude.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\AutoSequenceCore.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\BurnExec.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\CabinEnvironment.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Card.cs
@@ -36,6 +37,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\EntryMargin.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\FlipGeometry.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Gauge.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Hohmann.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Hoverslam.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Images.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Kepler.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Landing.cs
@@ -46,6 +48,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Lvlh.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\MapProjection.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\MechPage.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\MissionPhase.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\NamedRendezvous.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\NavPage.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Orbital.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Overflight.cs
@@ -95,6 +98,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\mechjeblib\Utils\AsyncJob.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\mechjeblib\Utils\DictOfLists.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\mechjeblib\Utils\ObjectPool.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\mechjeblib\Utils\Statics.cs
+C:\Users\User\Desktop\DragonScreen\plugin\test\AutoSequenceTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\BurnExecTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\Crew2TimelineTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\DeorbitBurnTest.cs
@@ -106,12 +110,14 @@ C:\Users\User\Desktop\DragonScreen\plugin\test\EntryGuidanceTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\FlightTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\FuelFlowTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\HohmannTest.cs
+C:\Users\User\Desktop\DragonScreen\plugin\test\HoverslamTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\KeplerTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\LaunchAzimuthTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\LayoutSweepTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\LayoutTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\LvlhTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\MechJebLibTest.cs
+C:\Users\User\Desktop\DragonScreen\plugin\test\NamedRendezvousTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\OrbitalTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\PageTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\PanelTest.cs

@@ -49,23 +49,32 @@ namespace DragonScreen
         public static void Begin() { TakenOnUnits = 0.0; }
 
         /// <summary>
-        /// Is the CAPSULE'S tank full? The question F9I answers about the station by mistake.
+        /// The capsule's REAL return propellant - MMH + NTO (the Draco/SuperDraco bipropellant the
+        /// de-orbit and landing burn on). NOT MonoPropellant: the 300 u MonoProp tank is vestigial and
+        /// topping it off the station's farm would just waste a transfer. Real Crew-2 does not refuel at
+        /// the ISS at all (it flies the whole mission on its launch load), so in practice nothing has
+        /// MMH/NTO to give and this never moves anything - it is kept only so a station that DID carry
+        /// MMH/NTO could top the return tank. See dragon-return-propellant-mmh-nto.
+        /// </summary>
+        private static readonly string[] TopUp = { "MMH", "NTO" };
+
+        /// <summary>
+        /// Is the CAPSULE'S return tank full? "Full tank for de-orbit and land" (user 2026-08-24) is the
+        /// REAL propellant - MMH+NTO - not the vestigial MonoProp, so this asks DockedSide.ReturnFraction
+        /// (the limiting one of the bipropellant, MonoProp fallback for an old capsule).
         ///
         /// A capacity of zero means there is no tank to fill, which counts as full - otherwise a
-        /// vehicle with no monopropellant at all would hold the undock open forever.
+        /// vehicle with no return propellant at all would hold the undock open forever.
         /// </summary>
         public static bool Full(Vessel v)
         {
-            double cap = DockedSide.MonoCapacity(v);
-            if (cap <= 0.0) return true;
-            return DockedSide.Mono(v) >= cap * FullFraction;
+            return DockedSide.ReturnFraction(v) >= FullFraction;
         }
 
-        /// <summary>Fill fraction of OUR tank, 0..1, for the readout.</summary>
+        /// <summary>Fill fraction of OUR return tank, 0..1, for the readout - the limiting propellant.</summary>
         public static double Fraction(Vessel v)
         {
-            double cap = DockedSide.MonoCapacity(v);
-            return (cap > 0.0) ? DockedSide.Mono(v) / cap : 1.0;
+            return DockedSide.ReturnFraction(v);
         }
 
         /// <summary>
@@ -86,6 +95,22 @@ namespace DragonScreen
             List<Part> ours = DockedSide.Ours(v);
             HashSet<Part> mine = new HashSet<Part>(ours);
 
+            // Move EACH return propellant (MMH+NTO, and MonoProp for an old capsule). A bipropellant
+            // needs both topped, so this fills every one that has a station source, one pair per tick.
+            double moved = 0.0;
+            for (int t = 0; t < TopUp.Length; t++)
+                moved += MoveOne(v, ours, mine, TopUp[t], dt);
+            return moved;
+        }
+
+        /// <summary>
+        /// One resource, one tick: the emptiest of OUR tanks pulled from the fullest of the STATION's.
+        /// Zero when our tank is full, when the station has none of this resource, or when there is no
+        /// such tank at all - all legitimate, and the caller sums them.
+        /// </summary>
+        private static double MoveOne(Vessel v, List<Part> ours, HashSet<Part> mine,
+                                      string resourceName, double dt)
+        {
             PartResource dst = null, src = null;
             double gap = DeadbandUnits, have = DeadbandUnits;
 
@@ -93,10 +118,10 @@ namespace DragonScreen
                 for (int k = 0; k < ours[i].Resources.Count; k++)
                 {
                     PartResource r = ours[i].Resources[k];
-                    if (r.resourceName != "MonoPropellant" || !r.flowState) continue;
+                    if (r.resourceName != resourceName || !r.flowState) continue;
                     if (r.maxAmount - r.amount > gap) { gap = r.maxAmount - r.amount; dst = r; }
                 }
-            if (dst == null) return 0.0;                    // our tank is full
+            if (dst == null) return 0.0;                    // our tank is full (or we carry none)
 
             for (int i = 0; i < v.parts.Count; i++)
             {
@@ -105,11 +130,11 @@ namespace DragonScreen
                 for (int k = 0; k < p.Resources.Count; k++)
                 {
                     PartResource r = p.Resources[k];
-                    if (r.resourceName != "MonoPropellant" || !r.flowState) continue;
+                    if (r.resourceName != resourceName || !r.flowState) continue;
                     if (r.amount > have) { have = r.amount; src = r; }
                 }
             }
-            if (src == null) return 0.0;                    // the station has nothing to give
+            if (src == null) return 0.0;                    // the station has none of this to give
 
             double move = RateUnitsPerS * dt;
             if (move > gap) move = gap;

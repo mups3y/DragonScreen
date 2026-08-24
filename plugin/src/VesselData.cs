@@ -399,8 +399,11 @@ namespace DragonScreen
             Systems.Update(ref FlightCommands.State, sy);
             state.Systems = FlightCommands.State;
 
-            state.AutoEngaged = AutoPilot.Engaged;
-            state.AutoPhase = AutoPilot.Engaged ? Ascent.Name(AutoPilot.Phase) : null;
+            // The FLIGHT-page AUTO SEQUENCE button is the whole-mission conductor. It lights while the
+            // conductor is running and names the leg it is flying (ASCENT/RENDEZVOUS/REFUEL/RETURN). A
+            // bare ascent flown manually from STRING 1A leaves this dark - that button is the manual path.
+            state.AutoEngaged = AutoSequence.Engaged;
+            state.AutoPhase = AutoSequence.Engaged ? AutoSequence.PhaseName : null;
 
             state.RendezvousEngaged = StationApproach.Engaged;
             state.RendezvousNote = StationApproach.Note;

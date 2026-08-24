@@ -360,6 +360,46 @@ def phases(hdr, data, i):
           "OK" if tot < F9I_TOTAL_ROLL * 1.5
           else "*** %.1fx OVER ***" % (tot / F9I_TOTAL_ROLL)))
 
+    # ---- ACCURACY: touchdown vs the barge DECK CENTRE, split into along-track (downrange) + cross-track ----
+    # PAD = LC-39A. BARGE = the physical DECK CENTRE = BoosterRecovery.DroneshipEarthLatDeg/LonDeg (the aim).
+    # ⛔ 2026-08-24: this is now the DECK CENTRE (group centre 32.7875/-76.6445 + the SpaceXbarge2 model
+    # offset of ~5.7 m), NOT the group centre / waypoint. Aiming at the group centre made an on-aim landing
+    # read "dead centre" while it was ~5.7 m off the real deck (25 m wide) - the circular measure the user
+    # caught. Keep BARGE == DroneshipEarthLatDeg/LonDeg so the tool measures the real deck miss.
+    PAD, BARGE = (28.6084, -80.6043), (32.787551, -76.644507)
+    def _bd(a, c):
+        p1, p2 = math.radians(a[0]), math.radians(c[0]); dl = math.radians(c[1] - a[1])
+        x = math.sin(dl) * math.cos(p2)
+        y = math.cos(p1) * math.sin(p2) - math.sin(p1) * math.cos(p2) * math.cos(dl)
+        h = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+        return math.degrees(math.atan2(x, y)) % 360, 6371.0 * 2 * math.asin(math.sqrt(h))
+    last = next((r for r in reversed(b) if num(r, i, "b_lat") not in (None, 0.0)), None)
+    if last is not None:
+        land = (num(last, i, "b_lat"), num(last, i, "b_lon"))
+        br_l, d_l = _bd(PAD, land); br_b, d_b = _bd(PAD, BARGE); _, miss = _bd(land, BARGE)
+        dn = math.radians(land[0] - BARGE[0]) * 6371.0
+        de = math.radians(land[1] - BARGE[1]) * 6371.0 * math.cos(math.radians((land[0] + BARGE[0]) / 2))
+        th = math.radians(br_b)
+        along = dn * math.cos(th) + de * math.sin(th)      # + = past the barge (long)
+        cross = -dn * math.sin(th) + de * math.cos(th)     # + = right of the track
+        # BARGE is now the physical DECK CENTRE (== the guidance aim). Report the real deck miss in METRES
+        # so it can never round to 0, split into downrange (along-track) and cross-track. The barge is
+        # 50 m long x 25 m wide, so the deck edge is at 25 m (length) / 12.5 m (width).
+        miss_m = miss * 1000.0
+        along_m, cross_m = along * 1000.0, cross * 1000.0
+        on_deck = abs(along_m) <= 25.0 and abs(cross_m) <= 12.5
+        print("")
+        print("  ACCURACY:  touchdown   %.5f,%.5f  = %3.0f km / %.1f deg from pad" % (land[0], land[1], d_l, br_l))
+        print("             DECK CENTRE %.5f,%.5f  (physical barge deck = the guidance aim)"
+              % (BARGE[0], BARGE[1]))
+        print("             MISS vs DECK CENTRE = %.1f m   (downrange %+.1f m, cross %+.1f m)   %s"
+              % (miss_m, along_m, cross_m, "ON DECK" if on_deck else "*** OFF DECK ***"))
+        print("             (deck 50 m x 25 m: edge at 25 m downrange / 12.5 m cross)")
+        if abs(cross_m) > 10000.0:
+            print("             -> the miss is CROSS-TRACK: off the flown plane (launch azimuth / barge lon)")
+        elif abs(along_m) > 10000.0:
+            print("             -> the miss is DOWNRANGE: staging energy / entry-burn sizing (barge is on the track)")
+
     section("5. RETURN")
     e = [r for r in data if r[i["r_stage"]] not in ("Idle", "-", "")]
     if not e:
@@ -420,23 +460,81 @@ def control(hdr, data, i):
 
 
 # ------------------------------------------------------------------ 8. propellant
+def fuel_by_phase(hdr, data, i, phase_col, lf, ox, extra=None):
+    """One row per phase transition: fuel/ox fraction at the moment each phase begins. extra is a
+    list of (label, colname) to also print (e.g. the booster recovery reserve)."""
+    if phase_col not in i or lf not in i:
+        return
+    prev = None
+    for r in data:
+        ph = r[i[phase_col]]
+        if ph in ("-", "", "STANDBY") or ph == prev:
+            continue
+        prev = ph
+        vlf = num(r, i, lf); vox = num(r, i, ox)
+        line = "     %-16s lf %5.1f%%  ox %5.1f%%" % (
+            ph, (vlf or 0) * 100, (vox or 0) * 100)
+        for label, col in (extra or []):
+            v = num(r, i, col)
+            line += "  %s %s" % (label, ("%6.2f" % v) if v is not None else "  -  ")
+        print(line)
+
+
 def propellant(hdr, data, i):
-    section("8. PROPELLANT LEDGER")
+    section("8. PROPELLANT & FUEL (RealFuels Kerosene+LqdOxygen, now read correctly)")
+
+    # ---- ASCENT / S2: fuel through the climb and insertion ----
+    if "a_lfFrac" in i:
+        print("  ASCENT vehicle (booster while attached, then S2) - fuel at each phase:")
+        fuel_by_phase(hdr, data, i, "a_phase", "a_lfFrac", "a_oxFrac")
+
+    # ---- BOOSTER recovery: the entry burn MUST reserve the landing burn's share ----
+    if "b_lfFrac" in i and "d_recovFrac" in i:
+        print("\n  BOOSTER recovery - fuel + reserve (the entry burn cut watches d_recovFrac):")
+        fuel_by_phase(hdr, data, i, "b_phase", "b_lfFrac", "b_oxFrac",
+                      extra=[("recovFrac", "d_recovFrac"), ("units", "d_recovUnits")])
+        # Auto-flag the reserve-cut failure: the recovery fraction at the START of DESCENT is what the
+        # entry burn LEFT for the landing. Below ~0.25 means the entry burn over-burned the landing dry.
+        desc = next((r for r in data if r[i["b_phase"]] == "DESCENT"), None)
+        land = next((r for r in data if r[i["b_phase"]] == "LANDING BURN"), None)
+        if desc is not None:
+            rf = num(desc, i, "d_recovFrac")
+            if rf is not None and 0.0 <= rf < 0.25:
+                print("     *** ENTRY BURN OVER-BURNED: only %.0f%% recovery propellant left at DESCENT"
+                      " (reserve cut should hold ~35%%) - the landing will run dry ***" % (rf * 100))
+            elif rf is not None and rf < 0.0:
+                print("     *** d_recovFrac = -1 at DESCENT: the reserve baseline never latched -"
+                      " the reserve cut is DISABLED, entry burn runs on the speed cut alone ***")
+        if land is not None:
+            lf_end = num(data[-1], i, "b_lfFrac")
+            v_end = num(data[-1], i, "b_srfSpeed")
+            if lf_end is not None and lf_end < 0.02 and v_end is not None and v_end > 5.0:
+                print("     *** BOOSTER RAN DRY mid-landing (fuel ~0, still %.0f m/s) ***" % v_end)
+
+    # ---- CAPSULE monopropellant (Draco/SuperDraco) ----
     m = [(num(r, i, "met"), num(r, i, "m_monoOurs"), r[i["a_phase"]],
           r[i["x_owner"]] if "x_owner" in i else "-") for r in data]
     m = [x for x in m if x[1] is not None]
-    if not m:
-        print("  no monopropellant column")
-        return
-    print("  start %.1f   end %.1f   capacity %s"
-          % (m[0][1], m[-1][1], data[0][i["m_monoCap"]] if "m_monoCap" in i else "?"))
-    prev = None
-    for t, v, ph, ow in m:
-        if prev is None or prev - v > 8.0:
-            print("     met %7.0f  mono %6.1f   phase=%-16s owner=%s" % (t, v, ph, ow))
-            prev = v
-    if m[-1][1] < 5.0:
-        print("     *** TANK RAN DRY ***")
+    if m:
+        print("\n  CAPSULE monopropellant: start %.1f  end %.1f  capacity %s"
+              % (m[0][1], m[-1][1], data[0][i["m_monoCap"]] if "m_monoCap" in i else "?"))
+        prev = None
+        for t, v, ph, ow in m:
+            if prev is None or prev - v > 8.0:
+                print("     met %7.0f  mono %6.1f   phase=%-16s owner=%s" % (t, v, ph, ow))
+                prev = v
+        if m[-1][1] < 5.0:
+            print("     *** CAPSULE TANK RAN DRY ***")
+
+    # ---- CONDUCTOR progression: which legs the AUTO SEQUENCE actually flew ----
+    if "d_autoStep" in i:
+        steps, prev = [], None
+        for r in data:
+            s = r[i["d_autoStep"]]
+            if s != prev and s not in ("-", ""):
+                steps.append(s); prev = s
+        if steps:
+            print("\n  AUTO SEQUENCE conductor flew: " + " -> ".join(steps))
 
 
 def list_missions():

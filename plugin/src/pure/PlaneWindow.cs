@@ -102,5 +102,73 @@ namespace DragonScreen
             ny = -System.Math.Cos(lanRad) * si;
             nz = ci;
         }
+
+        // ==================================================================================
+        //  MechJeb launch-into-plane timing - PORTED VERBATIM from MechJebLib Astro.TimeToPlane.
+        //
+        //  This is the proven, in-game-validated launch window and it REPLACES the vector-normal
+        //  crossing search above (which mixed a swizzled orbit normal with a world pad and ended up
+        //  tracking the station's POSITION, not its plane - the user's "X"). The genius of MechJeb's
+        //  version is that it is ALL SCALARS in KSP's own celestial frame: the pad's celestial
+        //  longitude, and the target orbit's LAN and inclination straight off `orbit.LAN` /
+        //  `orbit.inclination`. Nothing to mis-swizzle. Standard spherical trig (Napier).
+        //
+        //  TAILORED TO CREW DRAGON: pass +inc (never -inc). Our ascent always flies the ASCENDING
+        //  (north-going, north-east) azimuth, so we want the north-going plane crossing every time -
+        //  NOT MinimumTimeToPlane, which would sometimes pick the south-going (descending) pass that
+        //  our fixed NE ascent cannot fly.
+        // ==================================================================================
+        private const double D2R = System.Math.PI / 180.0;
+        private const double TAU = 2.0 * System.Math.PI;
+        private const double PlaneEps = 1e-6;
+
+        /// <summary>
+        /// Seconds until the launch site rotates into the target plane, launching NORTH-going. Ported
+        /// from MechJebLib Astro.TimeToPlane. All angles in degrees. `inc &gt; 0` = north-going (the
+        /// ascending, north-east launch a Crew Dragon flies); a negative `inc` would ask for the
+        /// south-going pass. A backwards-spinning body (rotationPeriod &lt; 0) is handled.
+        /// </summary>
+        public static double TimeToPlane(double rotationPeriodS, double latitudeDeg,
+                                         double celestialLongitudeDeg, double lanDeg, double incDeg)
+        {
+            double latitude = latitudeDeg * D2R;
+            double celestialLongitude = celestialLongitudeDeg * D2R;
+            double lan = lanDeg * D2R;
+            double inc = incDeg * D2R;
+
+            // singularity at the poles where tan(lat) is infinite
+            if (System.Math.Abs(System.Math.Abs(latitude) - System.Math.PI / 2.0) < PlaneEps) return 0.0;
+            // equatorial target: longitude does not matter, launch now
+            if (System.Math.Abs(inc) < PlaneEps || System.Math.Abs(System.Math.Abs(inc) - System.Math.PI) < PlaneEps)
+                return 0.0;
+
+            // Napier's rules for spherical trig; the clamped Asin is correct for |inc| < |lat|.
+            double angleEastOfAN = SafeAsin(System.Math.Tan(latitude) / System.Math.Tan(System.Math.Abs(inc)));
+
+            // South-going trajectories: the AN sits "behind" the planet, [90,270].
+            if (inc < 0.0) angleEastOfAN = System.Math.PI - angleEastOfAN;
+
+            double lanNow = celestialLongitude - angleEastOfAN;
+            double lanDiff = lan - lanNow;
+
+            if (rotationPeriodS < 0.0) lanDiff = -lanDiff;   // backwards-spinning body
+
+            return Clamp2Pi(lanDiff) / TAU * System.Math.Abs(rotationPeriodS);
+        }
+
+        /// <summary>asin clamped to [-1,1] (MechJebLib Statics.SafeAsin).</summary>
+        private static double SafeAsin(double x)
+        {
+            if (x < -1.0) x = -1.0; else if (x > 1.0) x = 1.0;
+            return System.Math.Asin(x);
+        }
+
+        /// <summary>Wrap to [0, 2pi) (MechJebLib Statics.Clamp2Pi).</summary>
+        private static double Clamp2Pi(double x)
+        {
+            x %= TAU;
+            if (x < 0.0) x += TAU;
+            return x >= TAU ? 0.0 : x;
+        }
     }
 }

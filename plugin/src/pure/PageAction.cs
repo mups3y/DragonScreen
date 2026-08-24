@@ -77,7 +77,11 @@ namespace DragonScreen
         Rendezvous,
         /// <summary>Take the last few hundred metres onto the port. Safe from any range.</summary>
         AutoDock,
-        /// <summary>Top up from the station, release, back away, and hand to the de-orbit.</summary>
+        /// <summary>
+        /// Plain UNDOCK: top up from the station, release, and back away to a safe hold. It does NOT
+        /// deorbit - the return leg is flown by the AUTO SEQUENCE conductor on its next press. (The enum
+        /// name is kept to avoid churn across the hit-test/dispatch; the button reads "UNDOCK".)
+        /// </summary>
         UndockAndLand,
         /// <summary>
         /// Look through the eyes of the crew member in this seat. Arg is the IVA seat index.

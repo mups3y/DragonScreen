@@ -95,8 +95,11 @@ namespace DragonScreen
             PlannedDvMps = DeorbitOrbit.TotalDvMps(v.mainBody.gravParameter, v.mainBody.Radius,
                                                    v.orbit.ApA, v.orbit.PeA, v.orbit.semiMajorAxis);
 
-            if (PodEngines.Present(v) && !PodEngines.Available(v)) PodEngines.On(v);
-            Go(PhaseDownStage.Igniting);
+            // ⛔ NO SUPERDRACO IGNITION (user 2026-08-24, "copy real Crew-2"): the phase-down burns on the
+            // Draco RCS now, and RCS is always ready - there is no engine to light, so skip the Igniting
+            // wait entirely and start lowering periapsis. (Ignite() is kept only for the SuperDraco path,
+            // which nothing takes any more - abort-only.)
+            Go(PhaseDownStage.LoweringPeriapsis);
             Debug.Log(Tag + "phase-down engaged: " + (v.orbit.ApA / 1000.0).ToString("F1") + " x "
                       + (v.orbit.PeA / 1000.0).ToString("F1") + " km -> "
                       + (DeorbitOrbit.TargetApoapsisM / 1000.0).ToString("F1") + " x "
@@ -258,7 +261,9 @@ namespace DragonScreen
             if (velAtNode.sqrMagnitude < 1.0) { Note = "no velocity at the node"; return false; }
 
             Vector3d dv = velAtNode.normalized * burn.DvMps;
-            if (!NodeExecutor.Begin(ship, dv, burnUt, "phase-down: " + burn.Label)) return false;
+            // On the Draco, like the de-orbit and rendezvous (user 2026-08-24) - NOT the SuperDraco.
+            CapsuleRcs.Set(ship, CapsuleRcs.BurnPct);
+            if (!NodeExecutor.Begin(ship, dv, burnUt, "phase-down: " + burn.Label, useRcs: true)) return false;
             burnLaunched = true;
             return true;
         }

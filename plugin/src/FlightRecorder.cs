@@ -235,7 +235,12 @@ namespace DragonScreen
             // flight `a_ctlPitch/Yaw/Roll` read +/-1.0 while our own actuation was ~0.00 -
             // something outside this controller was writing full deflection and there was no
             // column that could show it.
-            "x_ctlX,x_ctlY,x_ctlZ,x_actP,x_actR,x_actY";
+            "x_ctlX,x_ctlY,x_ctlZ,x_actP,x_actR,x_actY," +
+            // ================= DIAGNOSTICS (cross-phase) =================
+            // Values that judge a phase but live outside the a_/b_/r_ vehicle blocks. Appended here so
+            // they never shift an existing column. d_recovFrac is the entry-burn reserve the landing
+            // depends on; d_recovUnits its absolute margin; d_auto* the mission conductor's live state.
+            "d_recovFrac,d_recovUnits,d_autoStep,d_autoOn,d_returnFrac,d_rcsPct";
 
         /// <summary>
         /// Called every frame by the painter; samples at 5 Hz. Cheap enough to call unconditionally
@@ -430,6 +435,7 @@ namespace DragonScreen
 
             Return(r);
             Commanded(r);
+            Diagnostics(r);
 
             r.Length -= 1;                // trailing comma
             r.Append("\n");
@@ -713,10 +719,17 @@ namespace DragonScreen
                 for (int k = 0; k < p.Resources.Count; k++)
                 {
                     PartResource res = p.Resources[k];
-                    if (res.resourceName == "LiquidFuel") { lf += res.amount; lfMax += res.maxAmount; }
-                    else if (res.resourceName == "Oxidizer") { ox += res.amount; oxMax += res.maxAmount; }
-                    else if (res.resourceName == "MonoPropellant") { mono += res.amount; monoMax += res.maxAmount; }
-                    else if (res.resourceName == "ElectricCharge") { ec += res.amount; ecMax += res.maxAmount; }
+                    // ⛔ REALFUELS: the stock LiquidFuel/Oxidizer are EMPTY in RO - the Falcon burns
+                    // Kerosene + LqdOxygen - so these columns read 0.000 for the whole mission and the
+                    // fuel state (the thing "not enough fuel for both burns" is about) was invisible.
+                    // Map the RP-1/LOX family onto lf/ox so the fractions mean the real propellant.
+                    string nm = res.resourceName;
+                    if (nm == "LiquidFuel" || nm == "RP-1" || nm == "CooledRP-1" || nm == "Kerosene")
+                        { lf += res.amount; lfMax += res.maxAmount; }
+                    else if (nm == "Oxidizer" || nm == "LqdOxygen" || nm == "CooledLqdOxygen")
+                        { ox += res.amount; oxMax += res.maxAmount; }
+                    else if (nm == "MonoPropellant") { mono += res.amount; monoMax += res.maxAmount; }
+                    else if (nm == "ElectricCharge") { ec += res.amount; ecMax += res.maxAmount; }
                 }
             }
 
@@ -740,6 +753,28 @@ namespace DragonScreen
         }
 
         private static double Frac(double a, double max) { return (max > 0.0) ? a / max : 0.0; }
+
+        /// <summary>
+        /// Cross-phase diagnostics that do not belong to any one vehicle block. Fixed width, resting
+        /// values when idle - the same discipline as Return/Commanded. Appended LAST so it never shifts
+        /// an existing column.
+        /// </summary>
+        private static void Diagnostics(StringBuilder r)
+        {
+            // Booster recovery reserve - the number the entry-burn cut watches and the landing burn lives
+            // on. -1 until the baseline latches (idle / not recovering), which reads as "no data", not "empty".
+            F(r, BoosterRecovery.RecoveryPropFrac);
+            F(r, BoosterRecovery.RecoveryPropUnitsNow);
+            // The mission conductor: which leg it is flying and whether it is engaged at all.
+            S(r, AutoSequence.Engaged ? AutoSequence.PhaseName : "-");
+            F(r, AutoSequence.Engaged ? 1.0 : 0.0);
+            // ---- RETURN PROPELLANT (MMH+NTO) + the Draco strength - the falsifiable "does the mission
+            // close on the launch load?" test (user 2026-08-24). ReturnFraction is the LIMITING of the
+            // bipropellant on our side; d_rcsPct is CapsuleRcs' current per-task strength.
+            Vessel av = FlightGlobals.ActiveVessel;
+            F(r, av != null ? DockedSide.ReturnFraction(av) : -1.0);
+            F(r, CapsuleRcs.CurrentPct);
+        }
 
         /// <summary>The control loop's internals. `full` writes phi and the target torques too.</summary>
         private static void Attitude(StringBuilder r, AttitudeController ac, bool full)

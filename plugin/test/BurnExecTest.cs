@@ -110,13 +110,21 @@ public static class BurnExecTest
         Check("ten is not", !BurnExec.Aligned(10.0), "");
         Check("the turn must finish before the node, not after",
               BurnExec.AlignDeadlineS(60.0) < 60.0, "");
-        // RCS is the de-orbit and landing budget - bought only when wheels will not finish in time.
+        // WITH wheels (stock): bought only when the clock says wheels will not finish the turn in time.
         Check("a long coast turns on reaction wheels",
-              !BurnExec.NeedRcsToAlign(300.0, 40.0), "");
+              !BurnExec.NeedRcsToAlign(300.0, 40.0, true), "");
         Check("a short coast buys RCS",
-              BurnExec.NeedRcsToAlign(20.0, 40.0), "");
+              BurnExec.NeedRcsToAlign(20.0, 40.0, true), "");
         Check("and an aligned vehicle never buys it",
-              !BurnExec.NeedRcsToAlign(5.0, 1.0), "");
+              !BurnExec.NeedRcsToAlign(5.0, 1.0, true), "");
+        // WITHOUT wheels (RO strips them): RCS is the ONLY thing that turns the ship, so it is bought
+        // the moment we are off-attitude, however far from ignition - the fix for the manual-RCS flight.
+        Check("no wheels: a long coast buys RCS immediately",
+              BurnExec.NeedRcsToAlign(300.0, 40.0, false), "");
+        Check("no wheels: still bought on a short coast",
+              BurnExec.NeedRcsToAlign(20.0, 40.0, false), "");
+        Check("no wheels: but an aligned vehicle still never buys it",
+              !BurnExec.NeedRcsToAlign(5.0, 1.0, false), "");
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;

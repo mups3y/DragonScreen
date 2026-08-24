@@ -142,9 +142,27 @@ namespace DragonScreen
         /// phase window. Stock Kerbin's ~0.13 deg station stays on phase; the ISS at 51.6 deg uses plane.</summary>
         public const double PlaneMatchMinIncDeg = 5.0;
 
-        /// <summary>Cap for the PLANE window, seconds. A node crossing recurs about once per sidereal day,
-        /// so this is a full day - a rendezvous launch legitimately waits (time-warps) for its plane.</summary>
-        [Tunable] public static double PlaneWindowCapS = 90000.0;
+        /// <summary>Cap for the PLANE window, seconds. Raised to ~4.5 days so the min-lead window (below,
+        /// held ~2 days out to give the crew time to warp) is never abandoned as "too far".</summary>
+        [Tunable] public static double PlaneWindowCapS = 400000.0;
+
+        /// <summary>
+        /// Minimum lead to the launch window, seconds. User 2026-08-23: "give us two days to warp to launch
+        /// so we do not miss the window." The north-going plane crossing recurs once per sidereal day, so
+        /// the soonest is under 24 h - too soon to set the mission up and easy to miss. The window is pushed
+        /// forward whole sidereal days until it is at least this far ahead: identical on-plane geometry,
+        /// with a comfortable ~2-day warp to reach it. Set 0 to launch on the next crossing.
+        /// </summary>
+        [Tunable] public static double PlaneWindowMinLeadS = 172800.0;   // 2 days
+
+        /// <summary>
+        /// Degrees SUBTRACTED from the target LAN before solving the plane window (MechJeb's
+        /// LaunchLANDifference). The orbit's LAN drifts a little between liftoff and insertion as the
+        /// ascent flies its gravity turn, so aiming a touch early lands the INSERTION LAN on the target.
+        /// Start at 0 and tune from the `INSERTION PLANE` rel-inc line MeasureAtInsertion logs: if every
+        /// flight inserts consistently a few degrees to one side, set this to that residual.
+        /// </summary>
+        [Tunable] public static double LaunchLanBiasDeg = 0.0;
 
         /// <summary>Seconds still to wait, or 0 when the window is open. Negative = no station.</summary>
         public static double WaitS = -1.0;
@@ -190,6 +208,12 @@ namespace DragonScreen
                     Note = "plane window unresolved (degenerate geometry) - launching now";
                     return 0.0;
                 }
+                // ---- HOLD ~2 DAYS OUT SO THE CREW CAN WARP TO IT (see PlaneWindowMinLeadS). ----
+                // The soonest north-going crossing is < 1 sidereal day; push forward whole days until the
+                // window is at least the min lead ahead. Same on-plane geometry, a comfortable warp to it.
+                double sidereal = System.Math.Abs(b.rotationPeriod);
+                if (sidereal > 1.0 && PlaneWindowMinLeadS > 0.0)
+                    while (planeWait < PlaneWindowMinLeadS) planeWait += sidereal;
                 if (planeWait > PlaneWindowCapS)
                 {
                     Note = "plane crossing " + (planeWait / 3600.0).ToString("F1") + " h away, past the "
@@ -246,66 +270,61 @@ namespace DragonScreen
         }
 
         /// <summary>
-        /// Seconds until the pad next crosses the station's orbital plane (ascending/northbound node),
-        /// the RAAN-matching launch window. Frame work lives here; the trig is in pure/PlaneWindow.cs.
+        /// Seconds until the pad rotates into the target's orbital PLANE, launching NORTH-going - the
+        /// RAAN-matching launch window. Uses MechJeb's proven Astro.TimeToPlane (pure/PlaneWindow.cs),
+        /// which works in SCALARS in KSP's celestial frame - the pad's celestial longitude and the
+        /// target's own orbit.LAN / orbit.inclination - so there is nothing to mis-swizzle.
         ///
-        /// ⚠ ALL VECTORS ARE BUILT IN KSP'S WORLD FRAME AND PROJECTED ONTO AN AXIS-ALIGNED BASIS, so the
-        /// pure math's "rotation about +Z" assumption holds for any body orientation. The station is
-        /// sampled off its ORBIT (it is unloaded at launch), and its velocity is `.xzy`-swizzled to world
-        /// exactly as StationApproach does - a raw getOrbitalVelocityAtUT here would put the plane normal
-        /// 90 deg out and the window would be nonsense.
+        /// ⛔ THIS REPLACED a vector-normal crossing search that tracked the station's POSITION, not its
+        /// plane: the ISS plane is LAN 0 but our launches came out LAN ~107 = the station's argument of
+        /// latitude at engage (the user's "X"). The stock 0.13 deg station hid it; a 51.6 deg orbit did
+        /// not. We launch to the PLANE regardless of where the station is; the rendezvous closes phase.
         /// </summary>
         private static double SecondsToPlaneCrossing(Vessel v, Vessel station, CelestialBody b)
         {
             if (b == null || station.orbit == null || b.rotationPeriod == 0.0) return -1.0;
 
-            // ---- ⛔ THE NORMAL MUST BE IN KSP'S WORLD FRAME, OR THE WHOLE WINDOW IS NONSENSE. ----
-            // flight_0823: our orbit came out LAN 230 deg against the station's 0 (crew: "mismatch between
-            // your coordinates and the ones KSP uses"). The old normal crossed a WORLD position with an
-            // `.xzy`-swizzled velocity - two different frames - so it pointed nowhere near the real plane
-            // and dot(pad, normal)=0 solved for a meaningless time. `Orbit.GetOrbitNormal()` returns the
-            // SWIZZLED normal; MechJeb's SwappedOrbitNormal (OrbitExtensions.cs) is `-(GetOrbitNormal().xzy)`
-            // - the proven de-swizzle to world. Everything else here is already world (v.CoM, b.position).
-            Vector3d n = (-station.orbit.GetOrbitNormal().xzy).normalized;
+            // Pad's celestial longitude, exactly as MechJeb's VesselState computes it:
+            //   Planetarium.right.AngleInPlane(-Planetarium.up, orbitalPosition)
+            // It lives in the SAME celestial frame as orbit.LAN / orbit.inclination below.
+            double celLon = CelestialLongitudeDeg(v.CoM - b.position);
 
-            // The pad, relative to the body centre, world frame.
-            Vector3d rSite = v.CoM - b.position;
+            // +inclination = NORTH-GOING. Our ascent always flies the ascending (north-east) azimuth, so
+            // we always want the north-going crossing - never MinimumTimeToPlane's south-going option.
+            double lan = station.orbit.LAN - LaunchLanBiasDeg;
+            double t = PlaneWindow.TimeToPlane(b.rotationPeriod, v.latitude, celLon,
+                                               lan, station.orbit.inclination);
 
-            // The body's spin axis (north pole) and rate. Prograde spin about +axis is +omega.
-            Vector3d axis = ((Vector3d)b.bodyTransform.up).normalized;
-            double omega = 2.0 * System.Math.PI / b.rotationPeriod;
-
-            // An orthonormal basis with the spin axis as local Z.
-            Vector3d e1 = Vector3d.Cross(axis, new Vector3d(1.0, 0.0, 0.0));
-            if (e1.magnitude < 0.1) e1 = Vector3d.Cross(axis, new Vector3d(0.0, 1.0, 0.0));
-            e1 = e1.normalized;
-            Vector3d e2 = Vector3d.Cross(axis, e1).normalized;
-
-            double rx = Vector3d.Dot(rSite, e1), ry = Vector3d.Dot(rSite, e2), rz = Vector3d.Dot(rSite, axis);
-            double nx = Vector3d.Dot(n, e1), ny = Vector3d.Dot(n, e2), nz = Vector3d.Dot(n, axis);
-
-            // ---- BOTH NODES PUT THE PAD IN THE STATION'S PLANE (once the normal is right), so take the
-            // SOONER crossing - the node choice no longer matters for the plane match, only for the wait.
-            double tN = PlaneWindow.SecondsToPlane(rx, ry, rz, nx, ny, nz, omega, true);
-            double tS = PlaneWindow.SecondsToPlane(rx, ry, rz, nx, ny, nz, omega, false);
-            double t = (tN >= 0.0 && tS >= 0.0) ? System.Math.Min(tN, tS)
-                     : System.Math.Max(tN, tS);   // one may be -1 (degenerate); take the valid one
-
-            // Frame sanity, logged so the plane match can be verified from the ground: at the chosen time
-            // the pad must sit IN the plane (dot ~ 0), and the plane's tilt off the spin axis is the
-            // station's inclination.
-            if (t >= 0.0)
-            {
-                double th = omega * t, cth = System.Math.Cos(th), sth = System.Math.Sin(th);
-                double px = rx * cth - ry * sth, py = rx * sth + ry * cth, pz = rz;
-                double dotIn = px * nx + py * ny + pz * nz;
-                double planeIncDeg = System.Math.Acos(System.Math.Abs(nz)) * 57.29578;
-                Debug.Log(Tag + "plane window: node-N " + tN.ToString("F0") + " s / node-S " + tS.ToString("F0")
-                    + " s -> hold " + t.ToString("F0") + " s. Check: |pad.n| at t = " + dotIn.ToString("F3")
-                    + " (want ~0), plane tilt " + planeIncDeg.ToString("F1") + " deg (station inc "
-                    + station.orbit.inclination.ToString("F1") + ").");
-            }
+            Debug.Log(Tag + "plane window (MechJeb TimeToPlane): pad celLon " + celLon.ToString("F1")
+                + " deg, target LAN " + station.orbit.LAN.ToString("F1") + " (bias " + LaunchLanBiasDeg.ToString("F1")
+                + ") inc " + station.orbit.inclination.ToString("F2") + " -> hold " + t.ToString("F0")
+                + " s for the north-going plane crossing.");
             return t;
+        }
+
+        /// <summary>
+        /// The pad's celestial (inertial) longitude in degrees, in KSP's celestial reference frame - the
+        /// frame `orbit.LAN` is measured in. Verbatim from MechJeb VesselState.CelestialLongitude: the
+        /// angle of the pad position, projected into the equatorial plane, from Planetarium.right.
+        /// </summary>
+        private static double CelestialLongitudeDeg(Vector3d orbitalPosition)
+        {
+            return AngleInPlaneDeg(Planetarium.right, -Planetarium.up, orbitalPosition);
+        }
+
+        /// <summary>
+        /// Signed angle (degrees) from <paramref name="vector"/> to <paramref name="other"/>, both
+        /// projected onto the plane whose normal is <paramref name="planeNormal"/>. Port of MechJeb's
+        /// Vector3d.AngleInPlane (MathExtensions.cs). Sign follows the plane normal.
+        /// </summary>
+        private static double AngleInPlaneDeg(Vector3d vector, Vector3d planeNormal, Vector3d other)
+        {
+            Vector3d v1 = Vector3d.Exclude(planeNormal, vector);
+            Vector3d v2 = Vector3d.Exclude(planeNormal, other);
+            if (v1.magnitude == 0.0 || v2.magnitude == 0.0) return 0.0;
+            double angle = Vector3d.Angle(v1, v2);                       // 0..180 deg
+            if (Vector3d.Dot(Vector3d.Cross(v1, v2), planeNormal) < 0.0) angle = -angle;
+            return angle;
         }
 
         /// <summary>
@@ -353,6 +372,32 @@ namespace DragonScreen
                           + " deg; delivered-minus-commanded = "
                           + (trailDeg - LastRequiredLeadDeg).ToString("F2") + " deg. If this residual "
                           + "repeats across flights, set PhaseBiasDeg to its NEGATIVE to cancel it.");
+
+                // ---- GROUND-TRUTH PLANE CHECK. This is the number that says whether the launch made an X.
+                // Relative inclination from the two orbits' own inc/LAN (KSP scalars): 0 = coplanar (no X),
+                // tens of degrees = the X the user kept seeing. If this stays non-zero in the SAME
+                // direction, LAN drifts during ascent - feed it back into LaunchLanBiasDeg.
+                if (v.orbit != null)
+                {
+                    double i1 = v.orbit.inclination * System.Math.PI / 180.0;
+                    double i2 = station.orbit.inclination * System.Math.PI / 180.0;
+                    double dLan = (v.orbit.LAN - station.orbit.LAN) * System.Math.PI / 180.0;
+                    double cosRel = System.Math.Cos(i1) * System.Math.Cos(i2)
+                                  + System.Math.Sin(i1) * System.Math.Sin(i2) * System.Math.Cos(dLan);
+                    cosRel = System.Math.Max(-1.0, System.Math.Min(1.0, cosRel));
+                    double relIncDeg = System.Math.Acos(cosRel) * 57.29578;
+                    double dLanDeg = v.orbit.LAN - station.orbit.LAN;
+                    while (dLanDeg < -180.0) dLanDeg += 360.0;
+                    while (dLanDeg > 180.0) dLanDeg -= 360.0;
+                    Debug.Log(Tag + "INSERTION PLANE: rel-inc to station " + relIncDeg.ToString("F2")
+                              + " deg (want ~0 - this IS the X check). Our LAN " + v.orbit.LAN.ToString("F1")
+                              + " vs station " + station.orbit.LAN.ToString("F1") + " (dLAN " + dLanDeg.ToString("F1")
+                              + "), inc " + v.orbit.inclination.ToString("F2") + " vs "
+                              + station.orbit.inclination.ToString("F2") + ". If dLAN repeats, add it to LaunchLanBiasDeg.");
+                    if (relIncDeg > 3.0)
+                        Debug.LogWarning(Tag + "INSERTION PLANE: " + relIncDeg.ToString("F1")
+                            + " deg off the station plane - a rendezvous from here needs an expensive plane change.");
+                }
             }
         }
     }

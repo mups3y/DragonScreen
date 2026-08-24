@@ -94,6 +94,25 @@ namespace DragonScreen
     {
         private const string Tag = "[DragonScreen] ";
 
+        // ---- ⛔ FAR/RSS-CLEAN DRAG SAMPLING (2026-08-23) ----
+        // The live bc is the ONLY FAR-consistent drag we have (it measures the vessel's real
+        // deceleration, so FAR's forces arrive in the number without a coefficient - the stock
+        // DragCube AeroTable path does NOT match FAR and is capsule-entry only). But it was sampled
+        // in two regimes where it means nothing, and both poisoned the booster's descent prediction
+        // (flight_0823_100646: bc swung 16 -> 2151, miss prediction good in coast, garbage in the burn):
+
+        /// <summary>Skip drag sampling while thrust exceeds this (kN). The thrust subtraction assumes
+        /// thrust along the nose (+ReferenceTransform.up), but a descending booster burns ENGINES-
+        /// RETROGRADE - the opposite direction - so a sample taken under thrust is sign-flipped. Hold
+        /// the last clean estimate through the entry/landing burns instead. See Sample().</summary>
+        public const double ThrustCleanMaxKn = 1.0;
+
+        /// <summary>Skip drag sampling below this dynamic pressure (Pa). In RSS the air above ~80 km is
+        /// effectively vacuum (q &lt; 0.001 kPa) yet still inside <c>atmosphereDepth</c> (~140 km), so
+        /// the bare depth gate let near-vacuum noise drive bc to 16-120. 100 Pa (0.1 kPa) is where FAR
+        /// drag is actually measurable. See Sample().</summary>
+        public const double QSampleFloorPa = 100.0;
+
         /// <summary>Ballistic coefficient estimate per vessel, kg/m². Zero means not yet known.</summary>
         private static readonly System.Collections.Generic.Dictionary<uint, double> bc =
             new System.Collections.Generic.Dictionary<uint, double>();
@@ -167,8 +186,13 @@ namespace DragonScreen
             if (rm < 1.0) return;
             Vector3d aGrav = -r.normalized * (b.gravParameter / (rm * rm));
 
-            // Subtract thrust, along the nose.
+            // ⛔ FAR-CLEAN: engines OFF only. The thrust subtraction below assumes thrust along the
+            // nose, but a descending booster burns engines-retrograde, so any sample under thrust is
+            // sign-flipped garbage (bc hit 1800 during the entry burn). Hold the last clean bc instead.
             double thrust = LiveThrust(v);
+            if (thrust > ThrustCleanMaxKn) return;
+
+            // Subtract thrust, along the nose. (Near zero here by the gate above; kept for correctness.)
             double mass = v.GetTotalMass();
             if (mass <= 0.0) return;
             Vector3d aThrust = (Vector3d)v.ReferenceTransform.up * (thrust / mass);
@@ -183,6 +207,13 @@ namespace DragonScreen
             if (along <= 0.0) return;                            // accelerating; not a drag sample
 
             double rho = b.GetDensity(b.GetPressure(alt), b.GetTemperature(alt));
+
+            // ⛔ FAR-CLEAN: only where there is real drag to measure. RSS air above ~80 km is
+            // effectively vacuum yet still below atmosphereDepth, so the bare depth gate let
+            // near-vacuum noise set bc to 16-120. Require measurable dynamic pressure.
+            double q = 0.5 * rho * srf.magnitude * srf.magnitude;
+            if (q < QSampleFloorPa) return;
+
             double sample = Trajectory.BallisticCoefficientFrom(rho, srf.magnitude, along);
             if (sample <= 0.0) return;
 
@@ -211,14 +242,19 @@ namespace DragonScreen
         {
             if (v == null || v.mainBody == null) { Impact im = new Impact(); im.Note = "no vessel"; return im; }
             CelestialBody b = v.mainBody;
-            // ---- ⛔ STOCK DRAG FOR THE CAPSULE ENTRY ONLY, bc AS FALLBACK (2026-08-20). ----
-            // The known ballistic coefficient is a single number and cannot be right across the Mach
-            // range of an entry, so the CAPSULE's de-orbit/entry (the callers that pass a known bc >0)
-            // gets the Mach-tabulated stock drag from the real drag cubes, matching the Trajectories
-            // add-on. The BOOSTER path calls Predict(v) with no override and keeps its live-measured bc
-            // untouched - its shield-forward geometry is different and its recovery already works.
-            AeroTable table = (bcOverride > 0.0) ? BuildAeroTable(v) : null;
-            double useBc = (bcOverride > 0.0) ? bcOverride : BallisticCoefficient(v);
+            // ---- ⛔ STOCK DRAG-CUBE TABLE IS FOR STOCK KSP ONLY. FAR REPLACES IT. ----
+            // BuildAeroTable ports Trajectories' StockAeroUtil - it describes KSP's OWN drag cubes. On
+            // Earth with FAR installed the acting aerodynamics are FAR's, NOT the drag cubes, so the
+            // table predicts the wrong forces (RO_MODS_MECHANICS: capsule-entry FAR mismatch). Under FAR
+            // the ONLY consistent drag we have is the one MEASURED from the vehicle's own deceleration -
+            // the same source the booster already uses - so we drop the table and fly the scalar bc:
+            // the LIVE-measured value once in atmosphere (FAR reality), the known override in vacuum
+            // before anything has been measured. Stock keeps the Mach-tabulated cubes.
+            bool far = (b.Radius > 1.0e6);                       // Earth/RSS with FAR (Kerbin 600 km)
+            double measured = BallisticCoefficient(v);
+            AeroTable table = (bcOverride > 0.0 && !far) ? BuildAeroTable(v) : null;
+            double useBc = far ? (measured > 0.0 ? measured : bcOverride)
+                               : (bcOverride > 0.0 ? bcOverride : measured);
             return PredictFromState(b, v.CoM - b.position, v.obt_velocity, useBc, table);
         }
 
@@ -333,8 +369,12 @@ namespace DragonScreen
             if (v == null || v.mainBody == null) { MapValid = false; return; }
             CelestialBody b = v.mainBody;
 
-            AeroTable table = (bcOverride > 0.0) ? BuildAeroTable(v) : null;
-            double useBc = (bcOverride > 0.0) ? bcOverride : BallisticCoefficient(v);
+            // FAR-consistent, matching Predict(): no stock drag-cube table on Earth, fly the measured bc.
+            bool far = (b.Radius > 1.0e6);
+            double measured = BallisticCoefficient(v);
+            AeroTable table = (bcOverride > 0.0 && !far) ? BuildAeroTable(v) : null;
+            double useBc = far ? (measured > 0.0 ? measured : bcOverride)
+                               : (bcOverride > 0.0 ? bcOverride : measured);
 
             Vector3d r = v.CoM - b.position;
             Vector3d vel = v.obt_velocity;

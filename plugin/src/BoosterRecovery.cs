@@ -80,11 +80,41 @@ namespace DragonScreen
         // ---- RSS/RO DRONESHIP: "Of Course I Still Love You" (Crew-2's ASDS) ----
         // In RSS the barge is placed as a KerbalKonstructs STATIC (too unstable to float as a vessel),
         // which is NOT in FlightGlobals - FindDroneship cannot see a static. So on Earth the booster
-        // aims at this fixed coordinate: the exact spot the static was set (KK RefLatitude/RefLongitude,
-        // 2026-08-22). [Tunable] - move the barge and update these to re-aim, no rebuild. On Kerbin the
-        // stock open-water fallback (Lz0) is kept.
-        [Tunable] public static double DroneshipEarthLatDeg = 31.559906;
-        [Tunable] public static double DroneshipEarthLonDeg = -76.679988;
+        // aims at this fixed coordinate, which MUST equal the KK static's RefLatitude/RefLongitude.
+        //
+        // ⛔ 2026-08-24 RE-PLACED AT THE REAL CREW-2 DOWNRANGE, ON THE ACTUAL EARTH-FIXED TRACK.
+        // Two corrections over the old 31.906,-77.089 (bearing 41.8, only 498 km):
+        //   1. DOWNRANGE: the real Crew-2 droneship OCISLY sat 542 km downrange (spaceOFFSHORE AIS
+        //      tracking, 2021-04-22), not ~500 km.
+        //   2. BEARING: the barge must sit on the booster's EARTH-FIXED landing track, NOT the launch
+        //      azimuth. A 51.6 deg launch from LC-39A heads out at ~42.8 deg ground azimuth, but the
+        //      stage falls ballistically for ~9 min while Earth turns ~2.4 deg under it, so the Earth-
+        //      fixed impact bearing is ~38.2 deg (MEASURED, flight_0824_043650 pad->touchdown). The real
+        //      Crew-2 booster experienced the identical rotation, so its barge was on that ~38 deg line
+        //      too. The old 41.8 deg spot sat ~35 km CROSS-TRACK - a miss the grid fins can never null.
+        // 542 km along the measured 38.2 deg track from LC-39A (28.6084,-80.6043) = 32.392, -77.036 was
+        // the real OCISLY spot. But the entry burn is FUEL-LIMITED (reserve 0.20) and cannot trim the
+        // remaining downrange, so the stage kept landing long of it.
+        //
+        // ⛔ 2026-08-24 (user): "as long as our flight profile matches the real Crew-2 booster, move the
+        // barge to where the booster wants to land." The profile now DOES match - flight_0824_193138
+        // staged at 68.5 km / 2301 m/s (real Crew-2 ~67 km / 2.3 km/s) after the ascent loft, flew a
+        // SMOOTH coast (roll 21 vs 509 before the walked-aim fix), a 3-engine entry burn and a grid-fin
+        // descent, all like the real booster. With that faithful profile our vehicle's natural impact is
+        // 599 km / 38.2 deg (MEASURED touchdown). The KK GROUP CENTRE is placed there: RefLatitude
+        // 32.7875, RefLongitude -76.6445.
+        // ⛔ AIM AT THE DECK CENTRE, NOT THE GROUP CENTRE (2026-08-24, user caught the circular
+        // "dead-centre"). The barge MODEL (SpaceXbarge2 static) sits ~5.7 m from the group centre - its
+        // RelativePosition (-1.94163275,-2.0829668,5.34070635) rotated by the group Heading 13.320014 deg
+        // gives a ground offset of E -0.66 m / N +5.64 m. So the DECK CENTRE is 32.787551, -76.644507
+        // (5.6 m N, 0.7 m W of the group centre). The guidance + the map/navball waypoint aim HERE, at the
+        // deck, so a landing on the aim is on the deck - not 5.7 m off it, on a 25 m-wide barge (edge 12.5 m).
+        // ⚠ VERIFY IN-GAME: on the next flight, the "OCISLY droneship" waypoint should sit on the DECK. If
+        // it sits off the barge in the WRONG direction, the KK heading/axis convention differs - negate or
+        // rotate the offset. The KK static (RefLat/Lon) stays at the group centre 32.7875/-76.6445; only the
+        // AIM (here + tuning.reference.cfg) is the deck centre. See falcon-real-hoverslam-technique.
+        [Tunable] public static double DroneshipEarthLatDeg = 32.787551;
+        [Tunable] public static double DroneshipEarthLonDeg = -76.644507;
         /// <summary>Body radius above which the world is RSS/RO Earth (Kerbin 600 km, Earth 6371 km).</summary>
         public const double EarthRadiusThresholdM = 1.0e6;
 
@@ -167,6 +197,11 @@ namespace DragonScreen
         public static double DownrangeM;
         /// <summary>Signed predicted miss, metres. Negative = the impact point is past the LZ.</summary>
         public static double PredictedMissM;
+        /// <summary>Recovery-propellant fraction remaining, 0..1 (denominator = prop at sep). The number the
+        /// entry-burn reserve cut watches; -1 until the baseline latches. Published for the recorder.</summary>
+        public static double RecoveryPropFrac = -1.0;
+        /// <summary>Recovery propellant remaining, resource units (Kerosene+LqdOxygen). Absolute margin.</summary>
+        public static double RecoveryPropUnitsNow;
         /// <summary>The miss the boostback started with, metres. The throttle tapers against it.</summary>
         public static double InitialMissM;
 
@@ -301,6 +336,41 @@ namespace DragonScreen
             rollStartedAt = 0.0; rollSettledAt = 0.0;
             slewSeeded = false;
             slewSign = 0.0;
+            lastIgniteAttemptAt = 0.0; igniteAttempts = 0;
+            landingBurnLitAt = 0.0;
+            descentErrSeeded = false; descentErrPrev = Vector3d.zero;
+            descentErrPrevUt = 0.0; descentErrRate = Vector3d.zero;
+        }
+
+        // ---- DESCENT LEAD/DAMPING (reduce the target overshoot during the guided descent) ----
+        // The aim leans toward the horizontal IMPACT error; but the predicted impact responds to the lean
+        // with a LAG (the lean bends the whole remaining trajectory), so steering on the raw error
+        // over-corrects a big early miss and OVERSHOOTS the target - flight_0824_230104: the miss went
+        // -4.3 km short -> +0.5 km LONG and held ~70 s before settling. A LEAD term fixes it: steer on
+        // err + tau * d(err)/dt, so when the error is closing fast the command eases off BEFORE the miss
+        // reaches zero, anticipating the response instead of driving through it. The rate is low-pass
+        // filtered (predicted impact jitters). Standard PD lead compensation.
+        private static bool descentErrSeeded;
+        private static Vector3d descentErrPrev, descentErrRate;
+        private static double descentErrPrevUt;
+
+        /// <summary>
+        /// Lead-compensate the horizontal impact error: <c>err + DescentLeadTauS * filtered(d err/dt)</c>.
+        /// Returns the raw error on the first sample or a warp jump (no valid rate yet).
+        /// </summary>
+        private static Vector3d DescentLeadError(Vector3d err)
+        {
+            double now = Planetarium.GetUniversalTime();
+            double dt = descentErrSeeded ? now - descentErrPrevUt : 0.0;
+            if (descentErrSeeded && dt > 1e-3 && dt < 1.0)
+            {
+                Vector3d raw = (err - descentErrPrev) / dt;
+                // Low-pass the rate so a jittery prediction cannot whip the lean around.
+                double a = dt / (Landing.DescentLeadFilterS + dt);
+                descentErrRate = descentErrRate + a * (raw - descentErrRate);
+            }
+            descentErrPrev = err; descentErrPrevUt = now; descentErrSeeded = true;
+            return err + Landing.DescentLeadTauS * descentErrRate;
         }
 
         // ------------------------------------------------------------------ handover
@@ -444,6 +514,29 @@ namespace DragonScreen
             }
             return false;
         }
+
+        /// <summary>
+        /// Total thrust the engines are ACTUALLY producing right now, kN. This is `finalThrust` (real
+        /// output), not `EngineIgnited` (which can be true through a failed light) and not available
+        /// thrust (which is non-zero even when off). The ullage-until-lit logic uses it to tell a real
+        /// relight from a commanded-but-not-burning one - the exact difference that crashed 0823_222127.
+        /// </summary>
+        private static double ProducingThrustKn(Vessel v)
+        {
+            if (v == null) return 0.0;
+            double t = 0.0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                List<ModuleEngines> es = v.parts[i].Modules.GetModules<ModuleEngines>();
+                for (int m = 0; m < es.Count; m++) t += es[m].finalThrust;
+            }
+            return t;
+        }
+
+        /// <summary>Above this much real thrust (kN) the engine counts as lit and the ullage can stop.
+        /// A Merlin spooling from a good light passes it in a fraction of a second; a failed light never
+        /// reaches it. Well below one Merlin's ~800 kN so the spool is not mistaken for unlit.</summary>
+        private const double BoosterLitThrustKn = 50.0;
 
         /// <summary>
         /// Raise the launch vehicle's physics range BEFORE anything separates from it.
@@ -603,6 +696,8 @@ namespace DragonScreen
             GridFinsOut = gridFinsOut;
             PredictedMissM = s.PredictedMissM;
             InitialMissM = s.InitialMissM;
+            RecoveryPropFrac = s.RecoveryPropFrac;
+            RecoveryPropUnitsNow = RecoveryPropUnits(booster);
 
             if (c.Phase != Phase)
             {
@@ -663,38 +758,79 @@ namespace DragonScreen
             // going up, into vacuum, with the whole arc still to fly.
             if (s.VerticalSpeed <= Landing.ArcOverVs) DeployGridFins(booster);
 
-            // ---- ⛔ ULLAGE SETTLE BEFORE THE ENTRY-BURN RELIGHT (Real Fuels). ----
-            // The stage has been coasting ballistically, so its propellant is unsettled (free fall is
-            // weightless), and at ~65 km the air is too thin for drag to settle it. Under Real Fuels the
-            // Merlin will not light on unsettled propellant even with TEATEB. So for the first
-            // EntryBurnUllageSettleS of the entry burn, keep the engine OFF and fire RCS forward
-            // (UllageFore -> Drive's s.Z, through the booster's own OnFlyByWire) to settle propellant onto
-            // the engine feed; then fall through and light. Aim still runs so the stage holds retrograde
-            // and the settle pushes the right way. See EntryBurnUllageSettleS.
-            if (Phase == LandingPhase.EntryBurn
+            // ---- ⛔ ULLAGE SETTLE BEFORE EVERY RELIGHT (Real Fuels), ENTRY BURN AND LANDING BURN. ----
+            // The stage has been coasting/gliding with the engine OFF, so its propellant is unsettled, and
+            // under Real Fuels the Merlin will not light on unsettled propellant even with TEATEB. So for
+            // the first UllageSettleS of a relight, keep the engine OFF and fire RCS forward (UllageFore ->
+            // Drive's s.Z, through the booster's own OnFlyByWire) to settle propellant onto the engine
+            // feed; then fall through and light. Aim still runs so the stage holds retrograde and the
+            // settle pushes the right way.
+            //
+            // ⛔ THE LANDING BURN NEEDED THIS TOO. flight_0823_160823: the entry burn settled 2 s then lit
+            // cleanly (eng=1 at +2.2 s, thrust building +3 s), but the landing burn - which SKIPPED the
+            // settle on the assumption "dense air / drag settles it" - NEVER ignited (eng=0, availThr=0
+            // the whole 0.84 km -> deck), 7 retries, no TestFlight fault. Drag did not settle it; the
+            // relight needs the same active ullage the entry burn gets. The landing-ignition lead
+            // (LandingIgnitionLeadS) is sized so this settle + the spool both finish above the deck.
+            if ((Phase == LandingPhase.EntryBurn || Phase == LandingPhase.LandingBurn)
                 && Planetarium.GetUniversalTime() - phaseStartedAt < EntryBurnUllageSettleS)
             {
                 if (!booster.ActionGroups[KSPActionGroup.RCS])
                     booster.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
                 AttitudeController.Booster.UllageFore = 1.0;   // -Z forward, settles propellant aft
-                SetEngines(booster, 0);                        // hold off - do NOT spend an ignition yet
+                SetEngines(booster, 0, false);                 // hold off - do NOT spend an ignition yet
                 Aim(booster, c, s);
                 AttitudeController.Booster.Throttle = 0.0;
                 if (FlightGlobals.ActiveVessel == booster) FlightInputHandler.state.mainThrottle = 0f;
                 return;
             }
-            AttitudeController.Booster.UllageFore = 0.0;        // settle done (or not the entry burn)
+            // ⛔ KEEP SETTLING UNTIL THE ENGINE ACTUALLY LIGHTS - NOT A FIXED WINDOW.
+            // The block above settles for EntryBurnUllageSettleS then falls through and COMMANDS ignition.
+            // But flight_0823_222127 lit nothing: TestFlight rolled IgnitionFail on the landing relight, the
+            // fixed window ended, the ullage stopped, and in terminal descent (~0 g, drag == weight) the
+            // propellant floated off the intake so ALL 14 retries lit on vapour - booster into the sea at
+            // 244 m/s. Fix: hold the RCS-forward ullage as long as a relight is COMMANDED but no thrust has
+            // built; release it only once the engine is actually producing thrust. The entry burn is
+            // unaffected (it lights inside the window, so this releases immediately).
+            bool relightLit = ProducingThrustKn(booster) > BoosterLitThrustKn;
+            if ((Phase == LandingPhase.EntryBurn || Phase == LandingPhase.LandingBurn) && !relightLit)
+            {
+                if (!booster.ActionGroups[KSPActionGroup.RCS])
+                    booster.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
+                AttitudeController.Booster.UllageFore = 1.0;    // keep settling through the ignition retries
+            }
+            else
+                AttitudeController.Booster.UllageFore = 0.0;     // lit (or not a relight) - stop ullage
 
-            SetEngines(booster, c.Engines);
+            // ⛔ IGNITE ONLY IN A FIRING PHASE. A phase can want the 3-engine MODE selected (the flip,
+            // before its rotation) with no thrust; lighting it there spends a finite TEATEB ignition for
+            // nothing. Gated on the PHASE, not the throttle, so a landing burn that momentarily commands
+            // zero (over-braked into a climb) keeps the engine lit rather than dropping and re-lighting
+            // it - which would spend another ignition. See SetEngines.
+            SetEngines(booster, c.Engines, Landing.FiresEngine(c.Phase));
             Aim(booster, c, s);
+            // ---- FULL THROTTLE THROUGH THE LANDING-BURN SPOOL. ----
+            // The RO Merlin takes ~3.5 s from command to full thrust and follows whatever throttle it is
+            // given, so BurnThrottle's ~0.4 command up high spooled it toward 0.4 and it never built
+            // thrust in time (full thrust at 171 m, 243 m/s - a crash). Hold FULL throttle for the first
+            // LandingSpoolS of the landing burn (past the ullage settle) so the engine reaches full thrust
+            // HIGH; then hand back to the hoverslam law to modulate down for the touchdown.
+            double throttle = c.Throttle;
+            if (c.Phase == LandingPhase.LandingBurn)
+            {
+                double nowT = Planetarium.GetUniversalTime();
+                if (landingBurnLitAt <= 0.0) landingBurnLitAt = nowT;
+                if (nowT - landingBurnLitAt < Landing.LandingSpoolS) throttle = 1.0;
+            }
+            else landingBurnLitAt = 0.0;
             // The BOOSTER's own throttle, through its own controller. Not FlightInputHandler.state,
             // which is the focused vessel's - that would have put the landing-burn throttle on the
             // upper stage the moment the camera moved.
-            AttitudeController.Booster.Throttle = c.Throttle;
+            AttitudeController.Booster.Throttle = throttle;
             // Cosmetic only, and only when it is the vessel on screen: keeps the throttle gauge
             // honest. MechJebModuleThrustController.cs:282 does the same for the same reason.
             if (FlightGlobals.ActiveVessel == booster)
-                FlightInputHandler.state.mainThrottle = (float)c.Throttle;
+                FlightInputHandler.state.mainThrottle = (float)throttle;
 
             // ⛔ ISSUE 6. This was a second, hard-coded copy of the legs rule, so the DeployLegs
             // the guidance computes was ignored and the two could disagree. One source.
@@ -870,6 +1006,7 @@ namespace DragonScreen
             }
 
             double mass = v.GetTotalMass();
+            s.Mass = mass;
             s.MaxThrustAccel = (mass > 0.0) ? thrust / mass : 0.0;
             s.AccelThreeEngine = (mass > 0.0) ? thrustThree / mass : 0.0;
             s.AccelOneEngine = (mass > 0.0) ? thrustOne / mass : 0.0;
@@ -882,8 +1019,28 @@ namespace DragonScreen
             // landing burn's share (Landing.EntryBurnReserveFrac). recoveryPropStart is latched on the
             // first read after separation, when everything left in the tanks IS the recovery budget.
             double propNow = RecoveryPropUnits(v);
-            if (recoveryPropStart <= 0.0 && propNow > 0.0) recoveryPropStart = propNow;
+            if (recoveryPropStart <= 0.0 && propNow > 0.0)
+            {
+                recoveryPropStart = propNow;
+                Debug.Log(Tag + "recovery reserve baseline latched: " + recoveryPropStart.ToString("F0")
+                          + " units (Kerosene+LqdOxygen) at phase " + Landing.Name(Phase)
+                          + ", mass " + v.GetTotalMass().ToString("F1") + " t");
+            }
             s.RecoveryPropFrac = (recoveryPropStart > 0.0) ? propNow / recoveryPropStart : -1.0;
+
+            // ⛔ DIAGNOSTIC (2026-08-24): the entry burn over-burned and STARVED the landing (ran dry at
+            // 90 m/s, flight_0824_050855) - the 0.35 reserve cut never fired. Log the reserve fraction
+            // through the entry burn so the next flight shows whether the fraction is even valid and where
+            // it is when the burn cuts. Remove once the reserve cut is proven to hold.
+            if (Phase == LandingPhase.EntryBurn && Time.realtimeSinceStartup - lastReserveLog > 1.5)
+            {
+                lastReserveLog = Time.realtimeSinceStartup;
+                Debug.Log(Tag + "ENTRY reserve frac " + s.RecoveryPropFrac.ToString("F3")
+                          + " (cut at <= " + Landing.EntryBurnReserveFrac.ToString("F2")
+                          + ", droneship=" + s.Droneship + ")  propNow " + propNow.ToString("F0")
+                          + "  mass " + v.GetTotalMass().ToString("F1") + " t  srfV "
+                          + v.srfSpeed.ToString("F0") + "  vSpd " + s.VerticalSpeed.ToString("F0"));
+            }
 
             s.DownrangeM = HavePad && v.mainBody != null
                 ? GroundRange(v.mainBody, v.latitude, v.longitude, PadLat, PadLon) : 0.0;
@@ -1045,6 +1202,14 @@ namespace DragonScreen
         private static Vector3d slewVec;
         private static bool slewSeeded;
 
+        // ---- COAST AIM WALK. A persistent aim stepped toward the phase target at a bounded rate, so the
+        // Up->retrograde reorientation is smooth and never a saturating jump. See Aim's coast block. ----
+        private static Vector3d coastAimVec;
+        private static bool coastAimSeeded;
+        /// <summary>How fast the coast aim may walk toward its target, deg/s. Kept below the controller's
+        /// CoastMaxRateDps so the nose leads the target instead of chasing a jump. [Tunable].</summary>
+        [Tunable] public static double CoastAimRateDps = 2.5;
+
         // ---- ROLL-REFERENCE SIGN. Which of the two in-plane tops (±flipAxis x dir) matches the roll
         // the stage launched with. Captured once, when flipAxis is first known, and held. 0 = not yet. ----
         private static double slewSign;
@@ -1118,6 +1283,25 @@ namespace DragonScreen
         /// (BOOSTER.ks:335). `flipFinal` is the ground track reversed by FlipDeg - 180 for RTLS,
         /// 170 for a droneship, which only needs to point back far enough to trim.
         /// </summary>
+        /// <summary>
+        /// Walk the persistent coast aim toward <paramref name="target"/> at CoastAimRateDps. Seeded to
+        /// the current nose, so the first tick of the coast commands nothing and every step after is a
+        /// small, deliverable rotation - the fix for the saturating Up->retrograde jump (see Aim).
+        /// </summary>
+        private static Vector3d StepCoastAim(Vessel v, Vector3d target)
+        {
+            if (!coastAimSeeded || coastAimVec.sqrMagnitude < 0.5)
+            {
+                coastAimVec = v.ReferenceTransform.up;   // current nose - no jump on entry
+                coastAimSeeded = true;
+            }
+            if (target.sqrMagnitude < 1e-6) return coastAimVec.normalized;
+            double dt = Time.fixedDeltaTime; if (dt <= 0.0) dt = 0.02;
+            float maxRad = (float)(CoastAimRateDps * Math.PI / 180.0 * dt);
+            coastAimVec = Vector3d.RotateTowards(coastAimVec, target.normalized, maxRad, 0f).normalized;
+            return coastAimVec;
+        }
+
         private static Vector3d StepFlip(Vessel v)
         {
             Vector3d up = (v.CoM - v.mainBody.position).normalized;
@@ -1246,11 +1430,19 @@ namespace DragonScreen
         /// engine alone would put the thrust vector off the centre of mass. Sorting by distance from
         /// the axis finds it without needing to know the part's name.
         /// </summary>
-        private static void SetEngines(Vessel v, int want)
+        /// <summary>
+        /// Select the engine mode and, when <paramref name="wantThrust"/>, light it. wantThrust is
+        /// false for phases that need the MODE set but no thrust - the flip picks the 3-engine mode
+        /// before the rotation but must not IGNITE (a zero-throttle light still spends a finite TEATEB
+        /// ignition and rolls TestFlight; flight_0823_123648 burned an ignition sitting flamed-out
+        /// through the whole 24 s flip). Then the entry burn is the first relight, the landing the
+        /// second, and the reserve ignition is there for a retry.
+        /// </summary>
+        private static void SetEngines(Vessel v, int want, bool wantThrust)
         {
             PartModule em = FindEngineSwitch(v);
-            if (em != null) { SetOctawebMode(v, em, want); return; }
-            SetEnginesIndividually(v, want);
+            if (em != null) { SetOctawebMode(v, em, want, wantThrust); return; }
+            SetEnginesIndividually(v, want, wantThrust);
         }
 
         // ------------------------------------------------------------------ the octaweb
@@ -1276,7 +1468,7 @@ namespace DragonScreen
         /// said out loud once - the landing that follows will probably be wrong and the recorder
         /// should not be the only place that knows.
         /// </summary>
-        private static void SetOctawebMode(Vessel v, PartModule em, int want)
+        private static void SetOctawebMode(Vessel v, PartModule em, int want, bool wantThrust)
         {
             if (want <= 0)
             {
@@ -1362,12 +1554,45 @@ namespace DragonScreen
                 for (int m = 0; m < es.Count; m++)
                 {
                     bool mine = (now < 0) || VehicleParts.EngineIdIsMode(es[m].engineID, wantMode);
-                    bool on = mine && !es[m].flameout;
-                    if (on && !es[m].EngineIgnited) es[m].Activate();
-                    else if (!on && es[m].EngineIgnited) es[m].Shutdown();
+                    if (mine && wantThrust) IgniteWithRetry(es[m]);   // fire it, retry a dead light
+                    else if (es[m].EngineIgnited) es[m].Shutdown();   // not wanted (or mode-select only)
                 }
             }
         }
+
+        /// <summary>
+        /// Light an engine that should be firing, and RE-ATTEMPT if the light did not take.
+        ///
+        /// ---- ⛔ THE RETRY THE LANDING BURN NEVER HAD ----
+        /// The old code was `if (on && !EngineIgnited) Activate()` with `on = mine && !flameout`. When
+        /// TestFlight fails an ignition it FLAMES THE ENGINE OUT, so `on` went false, the branch fell to
+        /// Shutdown(), and the stage coasted to the ground dead - flight_0823_123648 lost the booster to
+        /// one failed relight at 0.44 km with no second try. A finite-ignition engine that has failed to
+        /// light must be RE-COMMANDED, not abandoned. Rate-limited because each Activate() spends one of
+        /// the finite TEATEB ignitions (RealFuels stops it for free once the budget is gone, so there is
+        /// no runaway); the landing burn now lights high enough (LandingIgnitionLeadS) to afford a retry.
+        /// </summary>
+        private static void IgniteWithRetry(ModuleEngines e)
+        {
+            if (e.EngineIgnited && !e.flameout) { igniteAttempts = 0; return; }   // firing cleanly
+            double t = Planetarium.GetUniversalTime();
+            if (t - lastIgniteAttemptAt < IgniteRetryIntervalS) return;
+            lastIgniteAttemptAt = t;
+            e.Activate();
+            if (++igniteAttempts > 1)
+                Debug.LogWarning(Tag + "ignition did not take - retry " + (igniteAttempts - 1)
+                                     + " (spends one of the finite relights)");
+        }
+
+        /// <summary>Seconds between ignition re-attempts. Spaced so a retry does not burst through the
+        /// whole ignition budget in one second; long enough for a light to actually show thrust.</summary>
+        private const double IgniteRetryIntervalS = 0.4;
+        private static double lastIgniteAttemptAt;
+        private static int igniteAttempts;
+
+        /// <summary>When the landing-burn engine was first commanded (past the ullage settle), for the
+        /// full-throttle spool window. 0 = not in a landing burn.</summary>
+        private static double landingBurnLitAt;
 
         /// <summary>Seconds between mode steps. BOOSTER.ks:926 waits 0.3 s and reads back.</summary>
         private const double ModeStepIntervalS = 0.3;
@@ -1458,7 +1683,7 @@ namespace DragonScreen
         /// engine alone would put the thrust vector off the centre of mass. Sorting by distance from
         /// the axis finds it without needing to know the part's name.
         /// </summary>
-        private static void SetEnginesIndividually(Vessel v, int want)
+        private static void SetEnginesIndividually(Vessel v, int want, bool wantThrust)
         {
             List<ModuleEngines> all = new List<ModuleEngines>();
             for (int i = 0; i < v.parts.Count; i++)
@@ -1480,9 +1705,8 @@ namespace DragonScreen
 
             for (int i = 0; i < all.Count; i++)
             {
-                bool on = i < want && !all[i].flameout;
-                if (on && !all[i].EngineIgnited) all[i].Activate();
-                else if (!on && all[i].EngineIgnited) all[i].Shutdown();
+                if (i < want && wantThrust) IgniteWithRetry(all[i]);   // fire it, retry a dead light
+                else if (all[i].EngineIgnited) all[i].Shutdown();      // not wanted (or mode-select only)
             }
         }
 
@@ -1548,6 +1772,9 @@ namespace DragonScreen
         /// Latched on the first post-sep read, reset per flight.</summary>
         private static double recoveryPropStart = -1.0;
 
+        /// <summary>Throttle for the entry-burn reserve diagnostic log.</summary>
+        private static double lastReserveLog = -10.0;
+
         /// <summary>
         /// The booster's remaining LIQUID PROPELLANT (RP-1/LOX family, cooled or not), in resource units.
         /// Read directly off the parts so it sees RealFuels' resources, which `b_lfFrac`/`b_oxFrac` cannot.
@@ -1599,6 +1826,24 @@ namespace DragonScreen
             Vector3d up = (v.CoM - v.mainBody.position).normalized;
             Vector3d dir = up;
 
+            // ---- ⛔ COAST: WALK THE AIM, NEVER JUMP IT (flight_0824_183939). ----
+            // The coast aim switched Up (over the top) -> SurfaceRetrograde (descending) in ONE step at
+            // apoapsis (b_aim 5->1 at met 212105), an ~80 deg command that is EXACTLY the "single big
+            // command" the flip's StepFlip exists to avoid: the steering manager saturated all three axes
+            // (actP/Y/R railed at +-1), the ~80 deg pitch cross-coupled into the weak roll (omegaR to -12
+            // dps), and the stage tumbled - attErr 0.3 -> 22 deg, roll 509 (5x). Same cure as the flip:
+            // keep a persistent aim and STEP it toward the phase's target at a bounded rate, so every
+            // command is small and the RCS can deliver it. The whole coast is then smooth and deliberate.
+            bool coastWalked = false;
+            if (c.Phase == LandingPhase.Coast)
+            {
+                Vector3d srf = v.srf_velocity;
+                Vector3d target = (c.Aim == LandingAim.SurfaceRetrograde && srf.sqrMagnitude > 1.0)
+                                  ? -srf.normalized : up;
+                dir = StepCoastAim(v, target);
+                coastWalked = true;
+            }
+            else coastAimSeeded = false;   // re-seed the walk on the next coast entry
 
             // ---- ⛔ Hold DID NOT HOLD - IT POINTED THE STAGE STRAIGHT UP. ----
             // `dir` starts as the local vertical and only the two branches below ever changed it, so
@@ -1627,7 +1872,7 @@ namespace DragonScreen
                 if (flat.sqrMagnitude > 1.0) dir = -flat.normalized;
             }
 
-            if (c.Aim == LandingAim.SurfaceRetrograde)
+            if (c.Aim == LandingAim.SurfaceRetrograde && !coastWalked)
             {
                 Vector3d srf = v.srf_velocity;
                 if (srf.sqrMagnitude > 1.0) dir = -srf.normalized;
@@ -1670,6 +1915,12 @@ namespace DragonScreen
                 // asking it to arrive there. On a descent from 30 km those two vectors can point in
                 // opposite directions, and steering on the wrong one is why the landings missed.
                 Vector3d errHoriz = ImpactErrorHoriz(v);
+                // ⛔ LEAD-COMPENSATE ONLY THE UNPOWERED DESCENT GLIDE (c.Throttle == 0). That is where the
+                // long aero lag lives and where the overshoot happened; the powered landing burn is nearly
+                // vertical with a tiny error, and a lead term there would just inject rate noise. Below the
+                // 1 m^2 gate we skip it anyway.
+                if (c.Throttle <= 0.01 && errHoriz.sqrMagnitude > 1.0)
+                    errHoriz = DescentLeadError(errHoriz);
                 if (errHoriz.sqrMagnitude > 1.0)
                 {
                     // handedOver: on one engine the stage stops steering and stands up (-0.25 deg).
@@ -1735,7 +1986,11 @@ namespace DragonScreen
                     {
                         double naiveLean = Math.Tan(Vector3d.Angle(naive, velVec) * Math.PI / 180.0);
                         double ceiling = Landing.LeanFraction(errHoriz.magnitude, aoa);
-                        double lean = (naiveLean < ceiling) ? naiveLean : ceiling;
+                        // ⛔ MAGNITUDE clamp - a bare min() picks the NEGATIVE naiveLean when the impact
+                        // error dwarfs the speed (angle > 90 deg), commanding a 70 deg lean at a 6 deg
+                        // ceiling. See Landing.ClampLean. This is what pitched the booster 45 deg off
+                        // retrograde on the droneship descent (flight_0823_123648).
+                        double lean = Landing.ClampLean(naiveLean, ceiling);
                         LeanFrac = lean;
                         dir = (velVec.normalized + lean * errHoriz.normalized).normalized;
                     }

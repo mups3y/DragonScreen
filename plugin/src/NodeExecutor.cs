@@ -56,6 +56,15 @@ namespace DragonScreen
         private static double nodeUt, ignitionUt, startedBurnAt;
         private static bool rcsWasOn, boughtRcs, warpRequested, warpRefused, orientWarpRequested;
 
+        /// <summary>Burn on RCS forward-translation (Draco), not main-engine throttle. Set by Begin.</summary>
+        private static bool rcsBurn;
+        /// <summary>Previous-tick orbital velocity, for measuring the Δv an RCS burn actually delivered
+        /// (RCS thrust is not in LiveThrust, so the throttle-based accounting cannot see it).</summary>
+        private static Vector3d prevObtVel;
+        /// <summary>Lowest residual seen this burn - the backstop clock resets whenever it falls, so a slow
+        /// but PROGRESSING RCS burn never trips the runaway timeout; only a stalled one does.</summary>
+        private static double lastProgressDv;
+
         /// <summary>Arrive this long before ignition, so there is time to drop out of warp.</summary>
         public const double WarpArriveLeadS = 6.0;
         /// <summary>Do not bother warping a wait shorter than this. `DgWarpTo`'s 12 s.</summary>
@@ -63,12 +72,18 @@ namespace DragonScreen
         /// <summary>
         /// Point at the Δv only once ignition is within this, seconds. Before it, the coast is warped
         /// with the controller RELEASED - the crew's rule (2026-08-19): "warp to within 10 minutes of
-        /// the node and ONLY then point the right way for the burn." Ten minutes is far above
-        /// <see cref="BurnExec.AlignRcsBelowS"/> (45 s), so the turn is then flown on reaction wheels
-        /// rather than bought RCS - which is what drained the tank before de-orbit on flight_0819 - and
-        /// no attitude is held across the coast to nudge a plotted intercept.
+        /// the node and ONLY then point the right way for the burn." No attitude is held across the
+        /// coast, so a plotted intercept is not nudged, and the tank is not drained holding for minutes
+        /// (flight_0819). In stock the align inside this window is flown on reaction wheels; in RO there
+        /// are none, so it turns on RCS - but the dead coast BEFORE the window is still warped on rails
+        /// (thrusters do not fire), so the RCS cost is only the turn itself, not the full ten minutes.
         /// </summary>
         public const double OrientLeadS = 600.0;
+
+        /// <summary>Spool lead for a THROTTLE (main-engine) node burn, seconds - it ramps to full over
+        /// roughly this, so the half-burn ignites earlier to keep the impulse on the node. Unused for the
+        /// Draco RCS burns (pressure-fed, instant). [Tunable].</summary>
+        public const double SpoolLeadS = 1.5;
 
         public static bool Active
         {
@@ -82,7 +97,11 @@ namespace DragonScreen
         /// Returns false and explains itself if the burn is refused. The floor check happens HERE,
         /// before anything turns or lights.
         /// </summary>
-        public static bool Begin(Vessel v, Vector3d dv, double atUt, string label)
+        /// <param name="useRcs">Burn on RCS forward-translation (Draco) instead of the main-engine
+        /// throttle. Crew Dragon does its orbital maneuvers on Draco; its SuperDraco reads zero available
+        /// thrust to the throttle path (unlit / needs ullage), so a throttle burn delivered NOTHING and the
+        /// residual never fell (flight_0823_233243: apoapsis unchanged, range diverging). See Burn().</param>
+        public static bool Begin(Vessel v, Vector3d dv, double atUt, string label, bool useRcs = false)
         {
             if (v == null || dv.sqrMagnitude < 1e-8)
             {
@@ -90,6 +109,7 @@ namespace DragonScreen
                 Phase = BurnPhase.Failed;
                 return false;
             }
+            rcsBurn = useRcs;
 
             // Declared first, not inline: the build is .NET Framework csc, which is C# 5. Inline
             // `out` variables are C# 7 and the compiler rejects them - the same reason the sort in
@@ -109,7 +129,11 @@ namespace DragonScreen
             InitialDvMps = dv.magnitude;
             nodeUt = atUt;
 
-            double half = BurnExec.HalfBurnS(InitialDvMps, v.GetTotalMass(), Thrust(v));
+            // Factor the spool into the half-burn lead (user 2026-08-24). An RCS/Draco burn is pressure-fed
+            // and instant (0); a throttle burn on a main engine ramps, so it must ignite earlier - the
+            // SpoolLeadS lead keeps the impulse centred on the node instead of arriving late.
+            double spool = rcsBurn ? 0.0 : SpoolLeadS;
+            double half = BurnExec.HalfBurnS(InitialDvMps, v.GetTotalMass(), Thrust(v), spool);
             ignitionUt = atUt - half;
 
             rcsWasOn = v.ActionGroups[KSPActionGroup.RCS];
@@ -119,6 +143,14 @@ namespace DragonScreen
             orientWarpRequested = false;
             Phase = BurnPhase.Aligning;
             Note = label;
+
+            // ⛔ START FROM REAL TIME. A rendezvous phasing warp can hand the executor over at a high warp
+            // rate; if it inherits that rate, WarpToOrient cannot decelerate in time and OVERSHOOTS the
+            // node - the vehicle drops out PAST ignition still unaligned and lights off-axis. That is the
+            // NC phasing burn that aborted "past its backstop" with a full 62 m/s residual
+            // (flight_0823_222127). Drop warp here so the executor's own WarpToOrient / WarpToIgnition own
+            // the timeline. Paired with the loose-align guard in Align() as a belt-and-suspenders fix.
+            if (TimeWarp.CurrentRateIndex > 0) TimeWarp.SetRate(0, true);
 
             Debug.Log(Tag + "burn planned: " + label + " - " + InitialDvMps.ToString("F2")
                       + " m/s, ignition in "
@@ -165,8 +197,9 @@ namespace DragonScreen
             // capsule that means RCS - which nudges the orbit and RUINS a plotted intercept, and burns
             // the monopropellant the de-orbit needs (flight_0819: the tank was dry before de-orbit). So
             // while ignition is more than OrientLeadS away the controller is RELEASED - no steering, no
-            // RCS - and the empty coast is warped. Only inside the window does Align() turn the ship,
-            // with minutes to do it on reaction wheels (NeedRcsToAlign is false above AlignRcsBelowS).
+            // RCS - and the empty coast is warped. Only inside the window does Align() turn the ship:
+            // on reaction wheels in stock, on RCS in RO where there are none (NeedRcsToAlign checks the
+            // actual wheel authority, so it buys RCS from the start when the wheels do not exist).
             if (Phase == BurnPhase.Aligning && (ignitionUt - now) > OrientLeadS)
             {
                 AttitudeController.Ascent.Throttle = 0.0;
@@ -175,6 +208,10 @@ namespace DragonScreen
                 WarpToOrient(now);
                 return;
             }
+
+            // Inside the orient window (or a warp overshot into it), Aligning steers in real time - a turn
+            // under rails warp does nothing. Holding runs its own warp-to-ignition, so leave that alone.
+            if (Phase == BurnPhase.Aligning && TimeWarp.CurrentRateIndex > 0) TimeWarp.SetRate(0, true);
 
             AttitudeController.Ascent.SteerTo(ship, aim.normalized, Vector3d.zero);
             PointingErrorDeg = Vector3d.Angle(ship.ReferenceTransform.up, aim.normalized);
@@ -191,24 +228,68 @@ namespace DragonScreen
         {
             AttitudeController.Ascent.Throttle = 0.0;
             double toIgnition = ignitionUt - now;
+            bool haveWheels = HaveWheelAuthority(ship);
 
-            // RCS is the de-orbit and landing budget. Bought only when the clock says the wheels
-            // will not finish the turn in time - see BurnExec.NeedRcsToAlign.
-            if (!boughtRcs && BurnExec.NeedRcsToAlign(toIgnition, PointingErrorDeg))
+            // RCS is the de-orbit and landing budget. With reaction wheels (stock) it is bought only
+            // when the clock says the wheels will not finish the turn in time. Without them (RO strips
+            // them - RO_ReactionWheels.cfg) it is the ONLY thing that turns the ship, so NeedRcsToAlign
+            // returns true the moment we are off-attitude. See BurnExec.NeedRcsToAlign.
+            if (!boughtRcs && BurnExec.NeedRcsToAlign(toIgnition, PointingErrorDeg, haveWheels))
             {
                 boughtRcs = true;
                 ship.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
                 Debug.Log(Tag + toIgnition.ToString("F0") + " s to ignition and still "
-                          + PointingErrorDeg.ToString("F1") + " deg off - RCS assisting the turn");
+                          + PointingErrorDeg.ToString("F1") + " deg off - RCS "
+                          + (haveWheels ? "assisting the turn" : "turning it (no reaction wheels)"));
             }
 
-            if (BurnExec.Aligned(PointingErrorDeg) || toIgnition <= BurnExec.AlignPadS)
+            // ⛔ THE PAD CLAUSE MUST NOT LIGHT AN OFF-AXIS ENGINE. `toIgnition <= AlignPadS` also fires
+            // when the node time has already PASSED (a warp overshoot leaves toIgnition negative). If the
+            // vehicle is still tens of degrees off then, handing to Holding lights the engine off-axis and
+            // the burn aborts having delivered nothing (the NC failure, flight_0823_222127). Gate the pad
+            // transition on a loose alignment; otherwise stay in Align, keep steering in real time, and
+            // burn late-but-clean once actually pointed.
+            if (BurnExec.Aligned(PointingErrorDeg)
+                || (toIgnition <= BurnExec.AlignPadS && PointingErrorDeg < BurnExec.LooseAlignDeg))
             {
-                // Hand RCS back the way we found it. The burn re-enables it if it needs it.
-                if (boughtRcs && !rcsWasOn) ship.ActionGroups.SetGroup(KSPActionGroup.RCS, false);
+                // ⛔ Hand RCS back the way we found it ONLY if wheels can hold the attitude to ignition.
+                // With no wheels, dropping RCS here leaves nothing to hold the burn attitude (the engine
+                // is not lit yet, and a Dragon maneuvers on Draco RCS in the first place), so KEEP it on
+                // through the hold and burn - Stop() restores it at the end. The intervening coast is
+                // warped on rails, where thrusters do not fire, so this costs no extra propellant.
+                if (boughtRcs && !rcsWasOn && haveWheels) ship.ActionGroups.SetGroup(KSPActionGroup.RCS, false);
                 Phase = BurnPhase.Holding;
             }
         }
+
+        /// <summary>
+        /// Does this vehicle have usable reaction-wheel torque? ~No in RealismOverhaul, which strips
+        /// ModuleReactionWheel (RO_ReactionWheels.cfg: 392 removed, the survivors cut to ~0.1 N·m CMGs).
+        /// Capability-measured, not a body/RSS check - the project rule is detect-by-capability - so
+        /// stock keeps its wheels and RO is recognised wherever it is flown.
+        /// </summary>
+        private static bool HaveWheelAuthority(Vessel v)
+        {
+            if (v == null) return false;
+            double t = 0.0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                System.Collections.Generic.List<ModuleReactionWheel> ws =
+                    v.parts[i].Modules.GetModules<ModuleReactionWheel>();
+                for (int m = 0; m < ws.Count; m++)
+                {
+                    ModuleReactionWheel w = ws[m];
+                    if (w.wheelState != ModuleReactionWheel.WheelState.Active) continue;
+                    t += (w.PitchTorque + w.YawTorque + w.RollTorque) * (w.authorityLimiter / 100f);
+                    if (t >= WheelAuthorityFloorKNm) return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>Summed 3-axis reaction-wheel torque below this (kN·m) counts as "no wheels": RO's
+        /// stripped/CMG survivors sit near zero, real stock wheels at 5-30.</summary>
+        private const double WheelAuthorityFloorKNm = 1.0;
 
         /// <summary>
         /// Warp the dead coast down to <see cref="OrientLeadS"/> before ignition WITHOUT orienting -
@@ -294,8 +375,11 @@ namespace DragonScreen
             // "DO NOT WARP TO A TIME THAT HAS ALREADY GONE... a token warp, then straight on as if
             // the match had been flown."
             startedBurnAt = now;
+            prevObtVel = ship.obt_velocity;             // seed the RCS velocity-delta accounting
+            lastProgressDv = RemainingDvMps;            // seed the progress-based backstop
             Phase = BurnPhase.Burning;
-            Debug.Log(Tag + "ignition - " + Note + ", " + InitialDvMps.ToString("F2") + " m/s");
+            Debug.Log(Tag + "ignition - " + Note + ", " + InitialDvMps.ToString("F2") + " m/s"
+                      + (rcsBurn ? " (RCS translation)" : ""));
         }
 
         private static void Burn(double now)
@@ -331,10 +415,51 @@ namespace DragonScreen
             // ran the tank dry before rendezvous. Hold throttle at zero and keep steering until
             // aligned; then burn clean. The attitude controller is already pointed at the Δv.
             bool onAxis = BurnExec.Aligned(PointingErrorDeg);
-            if (!onAxis) startedBurnAt = now;          // the backstop counts BURNING, not slewing
-            ThrottleCmd = onAxis ? BurnExec.Throttle(s) : 0.0;
-            AttitudeController.Ascent.Throttle = ThrottleCmd;
-            if (onAxis) AccountForDelivered(TimeWarp.fixedDeltaTime);
+            double dt = TimeWarp.fixedDeltaTime;
+
+            if (rcsBurn)
+            {
+                // ---- CREW DRAGON: BURN ON DRACO RCS, NOT THE MAIN-ENGINE THROTTLE. ----
+                // Real Crew-2 flies its phasing/rendezvous burns on the 16 Draco thrusters; the SuperDracos
+                // are launch-abort only and read zero available thrust to the throttle path, so a throttle
+                // burn delivered NOTHING (flight_0823_233243: apoapsis flat, range diverging). UllageFore
+                // drives forward RCS translation (s.Z) along the nose - which SteerTo has already put on the
+                // Δv - so translating forward burns along the Δv. This is MechJeb's RCS-translation method,
+                // tuned to the Dragon. Only push when aligned; measure what actually went in (RCS is invisible
+                // to LiveThrust).
+                if (!boughtRcs) { ship.ActionGroups.SetGroup(KSPActionGroup.RCS, true); boughtRcs = true; }
+                AttitudeController.Ascent.Throttle = 0.0;
+                AttitudeController.Ascent.UllageFore = onAxis ? 1.0 : 0.0;
+                ThrottleCmd = onAxis ? 1.0 : 0.0;                  // for the pages/recorder: "translating"
+                if (onAxis) AccountByVelocity(dt);
+            }
+            else
+            {
+                // ---- RealFuels relight: SETTLE ULLAGE UNTIL THE ENGINE LIGHTS. ----
+                // The Dragon's SuperDraco (and any main engine) shuts off during the coast; commanding
+                // throttle on unsettled propellant lights nothing (flight_0823_233243: availThrust 0, Δv 0).
+                // So while aligned but not yet producing thrust, fire RCS forward (UllageFore) to settle -
+                // exactly the booster relight - AND command throttle so it ignites the moment fuel reaches
+                // the feed. In vacuum there is no dynamic-pressure ignition penalty, so it lights cleanly.
+                bool lit = LiveThrust(ship) > 1.0;
+                if (onAxis && !lit)
+                {
+                    if (!boughtRcs) { ship.ActionGroups.SetGroup(KSPActionGroup.RCS, true); boughtRcs = true; }
+                    AttitudeController.Ascent.UllageFore = 1.0;
+                }
+                else AttitudeController.Ascent.UllageFore = 0.0;
+                ThrottleCmd = onAxis ? BurnExec.Throttle(s) : 0.0;
+                AttitudeController.Ascent.Throttle = ThrottleCmd;
+                if (onAxis) AccountForDelivered(dt);
+            }
+
+            // ---- PROGRESS-BASED BACKSTOP. The runaway timer counts time since the residual LAST FELL,
+            // not total burn time - so a slow-but-working Draco burn (a 59 m/s phasing raise takes minutes)
+            // never trips it, while a genuinely stalled burn (off-axis, dead engine, no thrust) still aborts
+            // within MaxBurnDurationS. Slewing off-axis also resets it (it is not burn time either).
+            bool progressed = RemainingDvMps < lastProgressDv - 0.01;
+            if (progressed) lastProgressDv = RemainingDvMps;
+            if (progressed || !onAxis) startedBurnAt = now;
         }
 
         private static void Stop()
@@ -343,9 +468,11 @@ namespace DragonScreen
             if (ship != null)
             {
                 AttitudeController.Ascent.Throttle = 0.0;
+                AttitudeController.Ascent.UllageFore = 0.0;      // stop any RCS-translation burn
                 AttitudeController.Ascent.Release(ship);
                 if (boughtRcs && !rcsWasOn) ship.ActionGroups.SetGroup(KSPActionGroup.RCS, false);
             }
+            rcsBurn = false;
         }
 
         /// <summary>
@@ -373,6 +500,28 @@ namespace DragonScreen
             dvRemaining -= (Vector3d)ship.ReferenceTransform.up * dv;
         }
 
+        /// <summary>
+        /// Decrement the remaining Δv by the vehicle's ACTUAL velocity change this tick minus the
+        /// gravitational part - propulsion-agnostic accounting for an RCS burn, whose thrust LiveThrust
+        /// cannot see. Gravity over one physics tick is `-mu·r/|r|³·dt`, exact enough to isolate the small
+        /// per-tick thrust Δv (the two are ~0.18 vs ~0.004 m/s, so the gravity term is computed exactly,
+        /// not measured). Integrated over the burn this is the delivered Δv.
+        /// </summary>
+        private static void AccountByVelocity(double dt)
+        {
+            if (dt <= 0.0 || ship == null || ship.mainBody == null) return;
+            Vector3d nowVel = ship.obt_velocity;
+            Vector3d r = ship.CoM - ship.mainBody.position;
+            double rm = r.magnitude;
+            if (rm > 1.0)
+            {
+                Vector3d grav = -ship.mainBody.gravParameter / (rm * rm * rm) * r;   // world accel
+                Vector3d dvThrust = (nowVel - prevObtVel) - grav * dt;               // remove gravity
+                dvRemaining -= dvThrust;
+            }
+            prevObtVel = nowVel;
+        }
+
         /// <summary>Thrust the engines are ACTUALLY producing, kN. Not the maximum.</summary>
         private static double LiveThrust(Vessel v)
         {
@@ -389,6 +538,13 @@ namespace DragonScreen
 
         private static double Thrust(Vessel v)
         {
+            // ⛔ AN RCS BURN'S THRUST IS THE DRACO, NOT THE (unlit) SUPERDRACO. Only used for the
+            // half-burn LEAD that centres the burn on the node; the cutoff is measured off the orbit, so
+            // an approximate figure is fine, but the main-engine sum below would hand back the SuperDraco's
+            // ~680 kN for a Draco burn and start it far too late. Estimate the fore/aft RCS thrust from the
+            // live thrusterPower x thrustPercentage x nozzle count, times a translation-alignment fraction.
+            if (rcsBurn) return RcsTranslationThrust(v);
+
             double t = 0.0;
             for (int i = 0; i < v.parts.Count; i++)
             {
@@ -399,6 +555,32 @@ namespace DragonScreen
             }
             return t;
         }
+
+        /// <summary>Approximate fore/aft RCS translation thrust, kN: live per-nozzle power x nozzle count,
+        /// scaled by the fraction of nozzles that point along a translation axis. See Thrust().</summary>
+        private static double RcsTranslationThrust(Vessel v)
+        {
+            double t = 0.0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                System.Collections.Generic.List<ModuleRCS> rs =
+                    v.parts[i].Modules.GetModules<ModuleRCS>();
+                for (int m = 0; m < rs.Count; m++)
+                {
+                    ModuleRCS rcs = rs[m];
+                    if (!rcs.isEnabled || rcs.isJustForShow || rcs.flameout) continue;
+                    int nz = (rcs.thrusterTransforms != null && rcs.thrusterTransforms.Count > 0)
+                             ? rcs.thrusterTransforms.Count : 1;
+                    t += rcs.thrusterPower * (rcs.thrustPercentage * 0.01) * nz;
+                }
+            }
+            return t * RcsAlignFraction;
+        }
+
+        /// <summary>Fraction of the RCS nozzles that push along a given translation axis - the rest point
+        /// off-axis (roll/pitch/lateral) and do not add to fore thrust. A coarse constant; the burn cutoff
+        /// is measured, so it only has to get the half-burn lead into the right ballpark.</summary>
+        public const double RcsAlignFraction = 0.4;
 
         /// <summary>
         /// `StNodeSafe`. Would this burn leave periapsis below the floor?

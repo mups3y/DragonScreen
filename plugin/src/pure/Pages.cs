@@ -611,7 +611,10 @@ namespace DragonScreen
             if (index == 1)
                 return s.DockEngaged ? ("DOCK  " + Short(s.DockNote))
                                      : (s.Docked ? "DOCKED" : "AUTO-DOCK");
-            return s.UndockEngaged ? ("UNDOCK  " + Short(s.UndockNote)) : "UNDOCK & LAND";
+            // Plain UNDOCK now: release + back off to a safe hold, no deorbit. The return (deorbit ->
+            // entry -> splashdown) is flown by pressing AUTO SEQUENCE again once undocked. UndockOps
+            // always did undock-only; the "& LAND" label misdescribed it.
+            return s.UndockEngaged ? ("UNDOCK  " + Short(s.UndockNote)) : "UNDOCK";
         }
 
         public static bool MissionLit(PageState s, int index)

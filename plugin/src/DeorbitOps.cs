@@ -274,6 +274,8 @@ namespace DragonScreen
             if (!Engaged) return;
             Engaged = false;
             AttitudeController.Ascent.Throttle = 0.0;
+            AttitudeController.Ascent.UllageFore = 0.0;   // stop the Draco RCS burn - it drove the de-orbit
+            CapsuleRcs.Forget();                          // next phase re-asserts its own Draco strength
             AttitudeController.Ascent.Release(ship);
             ship = null;
             Debug.Log(Tag + "DE-ORBIT disengaged - " + why);
@@ -509,7 +511,15 @@ namespace DragonScreen
             if (th < DeorbitBurn.ThrottleMin) th = DeorbitBurn.ThrottleMin;
             ThrottleCmd = haveImpact ? th : DeorbitBurn.ThrottleBlind;   // get periapsis into the air fast, then ease
             AttitudeController.Ascent.SteerTo(ship, aimSteer, Vector3d.zero);
-            AttitudeController.Ascent.Throttle = ThrottleCmd;
+            // ⛔ DE-ORBIT ON THE DRACO, NOT THE SUPERDRACO (user 2026-08-24, "copy real Crew-2"). The real
+            // Crew Dragon de-orbits on its Draco RCS (~12 min burn); the SuperDracos are abort-only, never
+            // fired nominally. The Draco now has its real effective thrust (DragonScreen.cfg x5). Fire it
+            // as retrograde RCS translation (UllageFore), with the depth-ease `th` applied as the RCS
+            // STRENGTH so the burn still eases to nothing at the target periapsis (RCS is on/off per axis,
+            // so proportional control comes from thrustPercentage, not the translation command).
+            AttitudeController.Ascent.Throttle = 0.0;
+            CapsuleRcs.Set(ship, CapsuleRcs.BurnPct * ThrottleCmd);   // full at depth, eases near target
+            AttitudeController.Ascent.UllageFore = (ThrottleCmd > 0.0) ? 1.0 : 0.0;
             if (!ship.ActionGroups[KSPActionGroup.RCS])
                 ship.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
 

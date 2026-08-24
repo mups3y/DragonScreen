@@ -44,6 +44,10 @@ namespace DragonScreen
         public static ApproachLeg Leg { get; private set; }
         public static Vessel Station { get; private set; }
 
+        /// <summary>RSS (Earth) flies the real named-burn co-elliptic rendezvous (NamedRendezvousOps);
+        /// stock keeps the ladder in this file. Set at Engage from the body radius.</summary>
+        private static bool useNamedBurn;
+
         /// <summary>For the pages and the recorder.</summary>
         public static double RangeM, ClosingMps, LateralMps, AlongTrackM, LastDvMps;
         public static string Note = "-";
@@ -142,6 +146,11 @@ namespace DragonScreen
             ship = v;
             Engaged = true;
             Leg = ApproachLeg.Phasing;
+            // RSS/Earth: fly the real co-elliptic named-burn profile (NC -> NSR -> Ti -> L-approach)
+            // instead of the stock phasing ladder. Body radius > 1e6 is the Earth gate (Kerbin 600 km).
+            useNamedBurn = (v.mainBody != null && v.mainBody.Radius > 1.0e6);
+            if (useNamedBurn && NamedRendezvousOps.Engage(v, Station))
+                Debug.Log(Tag + "RSS - flying the named-burn co-elliptic rendezvous");
             startedAt = Planetarium.GetUniversalTime();
             lastBurnAt = -999.0;
             haltReported = false;
@@ -164,6 +173,8 @@ namespace DragonScreen
             // Only Reset() used to clean it up; a crew CANCEL calls Disengage, so it must too.
             if (DirectApproachOps.Engaged) DirectApproachOps.Disengage("rendezvous cancelled");
             if (WaypointApproachOps.Engaged) WaypointApproachOps.Disengage("rendezvous cancelled");
+            if (NamedRendezvousOps.Engaged) NamedRendezvousOps.Disengage("rendezvous cancelled");
+            useNamedBurn = false;
             AttitudeController.Ascent.Release(ship);
             if (ship != null && ship.ctrlState != null)
             {
@@ -180,6 +191,8 @@ namespace DragonScreen
         {
             DirectApproachOps.Reset();
             WaypointApproachOps.Reset();
+            NamedRendezvousOps.Reset();
+            useNamedBurn = false;
             Engaged = false; Station = null; ship = null;
             phaseReturnUt = 0.0;
             phasePass = 0; phaseCapReported = false;
@@ -316,6 +329,18 @@ namespace DragonScreen
                 Note = "L-APPROACH - " + WaypointApproachOps.Note;
                 if (WaypointApproachOps.Complete) { Arrived(); return; }
                 if (!WaypointApproachOps.Engaged) { Halt("L-approach released - " + WaypointApproachOps.Note); return; }
+                return;
+            }
+
+            // ---- RSS: the named-burn co-elliptic profile owns everything up to the L-approach. ----
+            // NC -> NSR -> Ti, then it hands to WaypointApproachOps above. The stock ladder below never
+            // runs on Earth. Docking (checked earlier) still wins if it has the vehicle.
+            if (useNamedBurn)
+            {
+                RangeM = Vector3d.Distance(ship.CoM, Station.CoM);
+                NamedRendezvousOps.Tick();
+                Leg = (NamedRendezvousOps.Leg == RdvLeg.Arrived) ? ApproachLeg.Arrived : ApproachLeg.Phasing;
+                Note = "NAMED-BURN " + NamedRendezvousOps.Leg + " - " + NamedRendezvousOps.Note;
                 return;
             }
 
@@ -595,8 +620,8 @@ namespace DragonScreen
             // At the crossing our radius IS the station's, so circularising there drops us into its
             // orbit. The Δv is the velocity AT the crossing from the CURRENT orbit, unchanged while we
             // coast, so it is exact to compute up front - and the executor then warps to 10 min out,
-            // orients on reaction wheels, warps to the node and burns, never holding RCS across the
-            // long coast to the crossing.
+            // orients (on reaction wheels in stock, on RCS in RO where there are none - NodeExecutor),
+            // warps to the node and burns, never holding attitude across the long coast to the crossing.
             Vector3d vHere = WorldVelAt(mo, atCross);
             double dvCross = Math.Sqrt(b.gravParameter / rStn) - vHere.magnitude;
             if (Math.Abs(dvCross) > Approach.MaxDvMps) return LogAltCap(dvCross);
@@ -690,8 +715,9 @@ namespace DragonScreen
             // relative velocity AT the pass, computed from the CURRENT orbits - and nothing burns
             // before the pass, so those orbits (and this Δv) do not change while we coast. Handing it
             // over up front is therefore exact, not a guess, and it lets the executor warp the coast
-            // BEFORE it orients: the turn is flown on reaction wheels (free) instead of RCS bought at
-            // 60 s out, and the plotted intercept is never nudged by an early orient. The executor
+            // BEFORE it orients, so no attitude is held across the coast to nudge the plotted intercept.
+            // The turn itself is flown on reaction wheels in stock, or on RCS in RO (no wheels) - and
+            // because the coast before it is warped on rails, that RCS costs only the turn. The executor
             // warps to the orient point and then to ignition, both strictly before closest approach,
             // so it never warps PAST the pass.
             double at = now + ca.TimeS;
@@ -717,7 +743,7 @@ namespace DragonScreen
                 Debug.Log(Tag + "riding the existing intercept - closest approach "
                           + ca.DistanceM.ToString("F0") + " m in " + ca.TimeS.ToString("F0")
                           + " s, " + mag.ToString("F2") + " m/s to match. Executor warps to 10 min "
-                          + "out, orients on wheels, warps to the pass, then burns.");
+                          + "out, orients (wheels/RCS), warps to the pass, then burns.");
                 return true;
             }
             Note = NodeExecutor.Note;
@@ -914,7 +940,7 @@ namespace DragonScreen
                 // LEG 2 - so the coast warped at 100x through passes of 4.1 and 3.5 km on flight_0820
                 // and only dropped out at 6.8 km and OPENING. "You are also warping past the closest
                 // approach point." If the current orbits already give a ridable pass, hand it to the
-                // executor NOW: it warps to 10 min out, orients on wheels, warps to the pass and stops
+                // executor NOW: it warps to 10 min out, orients (wheels in stock, RCS in RO), warps to the pass and stops
                 // BEFORE it (WarpToOrient/WarpToIgnition target strictly pre-approach), then matches
                 // velocity AT the pass. RideIntercept's own gates (CaUseMaxM / MatchDistM / MaxDvMps)
                 // decide whether a pass is worth riding - the same ones the post-phasing leg uses - so

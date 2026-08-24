@@ -65,6 +65,14 @@ namespace DragonScreen
         public const double AlignRcsBelowS = 45.0;
         /// <summary>Aligned enough to ignite, degrees. StBurnNode's `vang(...) < 3`.</summary>
         public const double AlignedDeg = 3.0;
+        /// <summary>
+        /// A LOOSE alignment (degrees) below which the AlignPadS early/late ignition is allowed. The tight
+        /// 3 deg gate says "on axis, burn now"; this wider gate guards the *pad*: if the node time has
+        /// passed (a warp overshot it) while the vehicle is still tens of degrees off, do NOT let the pad
+        /// clause light the engine off-axis - keep steering and burn late-but-clean once pointed. 15 deg
+        /// costs at most cos(15)=3.4% along-axis at the pad, which the burn's residual loop absorbs.
+        /// </summary>
+        public const double LooseAlignDeg = 15.0;
         /// <summary>Runaway backstop, seconds. StBurnNode's `stEndT is time:seconds + 300`.</summary>
         public const double MaxBurnDurationS = 300.0;
 
@@ -84,10 +92,22 @@ namespace DragonScreen
         ///
         /// ⚠ Sized on <see cref="BurnAccel"/>, not on full thrust. F9I is explicit: at full thrust
         /// "we would arrive late for our own burn".
+        ///
+        /// ⛔ AND IT LEADS FOR THE SPOOL (user 2026-08-24, "all burns factor in spool up"). An engine
+        /// ramps 0 -> full over <paramref name="spoolS"/>, delivering only ~half its thrust across that
+        /// window, so the impulse arrives LATE unless the burn starts earlier. Leading by half the spool
+        /// keeps the impulse centred on the node. Zero for a pressure-fed RCS burn (the Draco) - it has no
+        /// spool - so an RCS node burn is unchanged.
         /// </summary>
+        public static double HalfBurnS(double dvMps, double massT, double availableThrustKn, double spoolS)
+        {
+            return dvMps / (2.0 * BurnAccel(massT, availableThrustKn)) + 0.5 * (spoolS > 0.0 ? spoolS : 0.0);
+        }
+
+        /// <summary>Back-compat overload: no spool (RCS / instant-thrust burns).</summary>
         public static double HalfBurnS(double dvMps, double massT, double availableThrustKn)
         {
-            return dvMps / (2.0 * BurnAccel(massT, availableThrustKn));
+            return HalfBurnS(dvMps, massT, availableThrustKn, 0.0);
         }
 
         /// <summary>Latest moment the turn may still be running, as an offset from ignition.</summary>
@@ -109,10 +129,23 @@ namespace DragonScreen
         /// is bought only when the clock says reaction wheels alone will not finish the turn in
         /// time." Long coast: wheels. Short coast: a little RCS, cheaper than missing the match
         /// point and re-planning.
+        ///
+        /// ---- ⛔ ...BUT THAT ASSUMES REACTION WHEELS EXIST, AND IN RO THEY DO NOT ----
+        /// RealismOverhaul strips ModuleReactionWheel (RO_ReactionWheels.cfg: 392 removed outright, the
+        /// survivors cut to ~0.1 N·m CMGs). With no wheel torque the controller's pitch/yaw/roll move
+        /// NOTHING while coasting - no engine means no gimbal either - so the capsule will not turn to
+        /// the burn attitude at all until RCS is enabled. RCS is then not a clock-driven fallback, it is
+        /// the ONLY align authority, and must be bought the moment we start aligning. flight 2026-08-23:
+        /// the crew had to enable RCS by hand before the rendezvous burn would orient. <paramref
+        /// name="haveWheelAuthority"/> is capability-measured (real torque &gt; a floor), so stock keeps
+        /// the clock-driven behaviour and RO gets RCS-from-the-start with no body check.
         /// </summary>
-        public static bool NeedRcsToAlign(double secondsToIgnition, double pointingErrorDeg)
+        public static bool NeedRcsToAlign(double secondsToIgnition, double pointingErrorDeg,
+                                          bool haveWheelAuthority)
         {
-            return !Aligned(pointingErrorDeg) && secondsToIgnition < AlignRcsBelowS;
+            if (Aligned(pointingErrorDeg)) return false;
+            if (!haveWheelAuthority) return true;                 // RO: RCS is the only thing that turns it
+            return secondsToIgnition < AlignRcsBelowS;            // stock: wheels turn it, RCS at the end
         }
 
         /// <summary>

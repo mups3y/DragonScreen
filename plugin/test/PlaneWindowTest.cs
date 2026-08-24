@@ -82,6 +82,43 @@ public static class PlaneWindowTest
         Check("a site on the pole returns -1 (never crosses)",
               PlaneWindow.SecondsToPlane(0, 0, 1, nx, ny, nz, omega, true) < 0.0, "");
 
+        // ---- MechJeb TimeToPlane (the live launch window) ----
+        // Anchors computed independently in scratchpad/verify_ttp.py (rotPeriod 86164 s, lat 28.6084,
+        // inc 51.6 - LC-39A into the ISS plane).
+        double R = 86164.0, latD = 28.6084, incD = 51.6;
+        Check("TimeToPlane(cel 0, lan 0) ~ 6130 s",
+              Math.Abs(PlaneWindow.TimeToPlane(R, latD, 0.0, 0.0, incD) - 6130.25) < 1.0,
+              PlaneWindow.TimeToPlane(R, latD, 0.0, 0.0, incD).ToString("F1"));
+        Check("TimeToPlane(cel 90, lan 0) ~ 70753 s",
+              Math.Abs(PlaneWindow.TimeToPlane(R, latD, 90.0, 0.0, incD) - 70753.25) < 1.0,
+              PlaneWindow.TimeToPlane(R, latD, 90.0, 0.0, incD).ToString("F1"));
+        Check("TimeToPlane(cel 0, lan 90) ~ 27671 s",
+              Math.Abs(PlaneWindow.TimeToPlane(R, latD, 0.0, 90.0, incD) - 27671.25) < 1.0,
+              PlaneWindow.TimeToPlane(R, latD, 0.0, 90.0, incD).ToString("F1"));
+        Check("equatorial target -> launch now (0 s)",
+              PlaneWindow.TimeToPlane(R, latD, 123.0, 45.0, 0.0) == 0.0, "");
+        Check("TimeToPlane always in [0, rotationPeriod)",
+              PlaneWindow.TimeToPlane(R, latD, 200.0, 113.5, incD) >= 0.0
+              && PlaneWindow.TimeToPlane(R, latD, 200.0, 113.5, incD) < R, "");
+
+        // THE INVARIANT THAT KILLS THE X: launching at t makes the orbit's ascending-node LAN equal the
+        // target LAN (coplanar), for EVERY pad longitude and target LAN. North-going orbit LAN =
+        // celLon(t) - angleEastOfAN, with angleEastOfAN = asin(tan lat / tan inc).
+        double aEast = Math.Asin(Math.Tan(latD * Math.PI / 180.0) / Math.Tan(incD * Math.PI / 180.0))
+                       * 180.0 / Math.PI;
+        int planeBad = 0;
+        double[] targets = { 0.0, 45.0, 113.5, 250.0, 359.0 };
+        foreach (double targetLan in targets)
+            for (int c = 0; c < 360; c += 30)
+            {
+                double t = PlaneWindow.TimeToPlane(R, latD, c, targetLan, incD);
+                double lanAtLaunch = (c + 360.0 * t / R - aEast) % 360.0;
+                double err = ((lanAtLaunch - targetLan + 180.0) % 360.0 + 360.0) % 360.0 - 180.0;
+                if (Math.Abs(err) > 0.01) planeBad++;
+            }
+        Check("launching at TimeToPlane always lands the orbit LAN on the target LAN (coplanar, no X)",
+              planeBad == 0, planeBad + " of 60 off-plane");
+
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
     }

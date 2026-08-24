@@ -111,9 +111,40 @@ namespace DragonScreen
             return t;
         }
 
-        /// <summary>Monopropellant on our side, units. The one the return budget is built on.</summary>
+        /// <summary>Monopropellant on our side, units. The one the return BUDGET is built on (kept as-is:
+        /// the RO Dragon still carries a 300 u MonoProp tank that passes the de-orbit gates, and the
+        /// mission flies on it - see dragon-return-propellant-mmh-nto).</summary>
         public static double Mono(Vessel v) { return Resource(v, "MonoPropellant"); }
         public static double MonoCapacity(Vessel v) { return Capacity(v, "MonoPropellant"); }
+
+        /// <summary>
+        /// The Crew Dragon's REAL return propellant, in the order it is a bipropellant. Verified against
+        /// the RO config (RO_TE_Dragon_2.cfg) + the VAB: the Draco RCS and SuperDraco that fly the
+        /// rendezvous, the de-orbit burn and attitude all run on MMH + NTO, NOT the 300 u MonoPropellant
+        /// (that tank is vestigial). "Full tank for de-orbit and land" means BOTH of these full.
+        /// </summary>
+        public static readonly string[] ReturnProps = { "MMH", "NTO" };
+
+        /// <summary>
+        /// Fill fraction (0..1) of the capsule's real return propellant on OUR side - the LIMITING one of
+        /// the bipropellant pair, since a burn needs both. Falls back to MonoPropellant for a stock/old
+        /// capsule that has no MMH+NTO tank, so this is correct for either vehicle. 1.0 = nothing to fill.
+        /// </summary>
+        public static double ReturnFraction(Vessel v)
+        {
+            double worst = 1.0; bool any = false;
+            for (int i = 0; i < ReturnProps.Length; i++)
+            {
+                double cap = Capacity(v, ReturnProps[i]);
+                if (cap <= 0.0) continue;
+                any = true;
+                double f = Resource(v, ReturnProps[i]) / cap;
+                if (f < worst) worst = f;
+            }
+            if (any) return worst;
+            double mc = MonoCapacity(v);
+            return (mc > 0.0) ? Mono(v) / mc : 1.0;
+        }
 
         /// <summary>
         /// The part we are flying from.

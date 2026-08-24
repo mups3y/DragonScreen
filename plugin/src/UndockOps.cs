@@ -231,6 +231,7 @@ namespace DragonScreen
         private static void Calibrate(double inStage)
         {
             if (station == null) { Go(UndockStage.Burst); return; }
+            CapsuleRcs.Set(ship, CapsuleRcs.UndockPct);   // firm, brief push on the Draco (user 2026-08-24)
             double d = Vector3d.Distance(ship.CoM, station.CoM);
             SeparationM = d;
 

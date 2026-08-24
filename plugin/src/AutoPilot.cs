@@ -69,8 +69,14 @@ namespace DragonScreen
         /// cleaner gravity turn and carries more horizontal velocity through MECO, so Earth's rotation
         /// drags the plane LESS - a 3.7 bias OVERSHOT to 53.78 deg (2.18 deg over the 51.6 target). The
         /// deficit the bias must cancel is therefore ~1.5 deg, not 3.7. Tunable; confirm ~51.6 next launch.
+        ///
+        /// ⚠ RE-MEASURED AGAIN flight_0823_201351 (MECO VELOCITY CAP in): staging now cuts at the real
+        /// ~2300 m/s instead of ~2440, so MECO is SLOWER and Earth's rotation drags the plane MORE again -
+        /// insertion came out 49.2 deg at a 53.1 target (1.5 bias), a 3.9 deg loss, 2.4 deg short of 51.6.
+        /// Back up to ~3.9 to cancel it (near the pre-cap 3.7). This is the launch->rendezvous blocker: a
+        /// 2.4 deg plane error the coplanar named-burn rendezvous cannot cheaply remove. Confirm ~51.6.
         /// </summary>
-        [Tunable] public static double AscentInclinationBiasDeg = 1.5;
+        [Tunable] public static double AscentInclinationBiasDeg = 3.9;
         // Parking orbit for the RSS ferry, m. Below the ISS (420 km) - the rendezvous phases up;
         // real Crew-1 inserted near ~200 km. INTERIM, tune from flight.
         const double RssParkingAltitudeM = 200000.0;
@@ -484,9 +490,11 @@ namespace DragonScreen
             a.PeriapsisM = v.orbit.PeA;
             a.AtmosphereDepthM = v.mainBody.atmosphereDepth;
             a.VerticalSpeed = v.verticalSpeed;
+            a.SurfaceSpeed = v.srfSpeed;                 // caps MECO at the real staging velocity
             a.DynamicPressureKpa = v.dynamicPressurekPa;
             a.TimeToApoapsisS = v.orbit.timeToAp;
             a.AvailableThrust = AvailableThrust(v);
+            a.MassT = v.GetTotalMass();                  // for the g-limit throttle (Crew Dragon ~4 g cap)
             a.Landed = (v.situation == Vessel.Situations.LANDED
                      || v.situation == Vessel.Situations.PRELAUNCH
                      || v.situation == Vessel.Situations.SPLASHED);
@@ -559,7 +567,7 @@ namespace DragonScreen
             // M-Vac (~800 kN) from ullage (~1 kN); the loft holds prograde for the ~6 s until then.
             if (RssBody(v) && !s2Separated)
             {
-                if (!upfgActive && a.AvailableThrust > UpfgMinThrustKn
+                if (UpfgEnabledS2 && !upfgActive && a.AvailableThrust > UpfgMinThrustKn
                     && (c.Phase == AscentPhase.BurnToApoapsis || c.Phase == AscentPhase.Coast
                         || c.Phase == AscentPhase.Circularise))
                     upfgActive = true;
@@ -750,6 +758,18 @@ namespace DragonScreen
         private static UpfgState upfgState;
         /// <summary>Once the M-Vac is lit, UPFG owns the stage to SECO - even past the pure runaway abort.</summary>
         private static bool upfgActive;
+
+        /// <summary>
+        /// Whether UPFG may fly the second-stage insertion. DEFAULT OFF, on the flight record.
+        ///
+        /// ⛔ MEASURED 0/8: across flight_0823_201351 .. flight_0824_031348, UPFG reached orbit ZERO times
+        /// and the gravity-turn + CIRCULARISE fallback reached it SEVEN times (pe 178-184 km). The one
+        /// flight where UPFG actually engaged (flight_0824_031348) is the ONLY suborbital one: it held
+        /// ~55 deg nose-up too long, lofted the apoapsis to 1564 km, and ran the marginal S2 dry 330 m/s
+        /// short. UPFG "working" is the failure mode here. Until its over-loft is fixed and re-proven in
+        /// the point-mass sim, the S2 flies the path that has a 7/7 record. Set true to re-test UPFG.
+        /// </summary>
+        [Tunable] public static bool UpfgEnabledS2 = false;
         /// <summary>Command SECO when UPFG's time-to-go falls to this, seconds.</summary>
         private const double UpfgSecoTgoS = 0.2;
         /// <summary>Minimum M-Vac thrust (kN) before UPFG may Init/Step. Above ullage (~1 kN), below the
@@ -1418,6 +1438,34 @@ namespace DragonScreen
             }
             Debug.Log(Tag + "Dracos armed (" + lit + " engine module(s)) - the capsule closes its "
                           + "own orbit from here");
+
+            // ---- ⛔ DEPLOY THE SOLAR PANELS. Without this the battery drains to zero. ----
+            // The Crew Dragon's array is on the trunk (TE.18.DRAGONV2.TRUNK), a ModuleDeployableSolarPanel
+            // that LAUNCHES RETRACTED and nobody was extending it - so it made ~0 power and EC ran to zero
+            // in orbit (flight_0824_013850: 1.0 -> 0), which then starves the RCS/guidance and kills the
+            // rendezvous. The real vehicle's trunk cells are exposed once it is in orbit; do the same here,
+            // now that we are out of the atmosphere (Dragon just separated at the parking orbit).
+            DeploySolarPanels(v);
+        }
+
+        /// <summary>Extend every retractable solar panel on the vessel (once in orbit). A non-deployable /
+        /// body-mounted panel is left alone; an already-extended one is a no-op. Safe to call repeatedly.</summary>
+        private static void DeploySolarPanels(Vessel v)
+        {
+            if (v == null) return;
+            int n = 0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                System.Collections.Generic.List<ModuleDeployableSolarPanel> ps =
+                    v.parts[i].Modules.GetModules<ModuleDeployableSolarPanel>();
+                for (int m = 0; m < ps.Count; m++)
+                {
+                    ModuleDeployableSolarPanel p = ps[m];
+                    if (p.useAnimation && p.deployState != ModuleDeployablePart.DeployState.EXTENDED)
+                    { p.Extend(); n++; }
+                }
+            }
+            if (n > 0) Debug.Log(Tag + "solar panels deployed (" + n + ") - closing the power budget");
         }
 
         private static bool s2Separated;
