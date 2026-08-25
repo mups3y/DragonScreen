@@ -275,6 +275,29 @@ def recorder_health(hdr, data, malformed):
         print("  no dead or impossible columns")
 
 
+# ---- BODY CONSTANTS. The recorder logs no body, so DETECT it from the data. ----
+# ⛔ THE VIS-VIVA CHECK WAS HARD-CODED TO KERBIN (MU 3.5316e12, R 600 km). An RSS/Earth flight
+# then read "105 of 105 samples off by >2%" - a FALSE alarm from checking Earth orbital speeds
+# (LEO ~7.8 km/s) against Kerbin gravity, not a physics fault. The stock build flies Kerbin, the
+# RSS build flies Earth, and this tool assesses both, so it must pick the right body. Chosen by
+# which body's circular-orbit speed at the sampled altitude matches the observed a_orbSpeed.
+BODIES = {"Kerbin": (3.5316000e12, 600000.0),
+          "Earth":  (3.9860044e14, 6371000.0)}
+
+
+def detect_body(data, i):
+    for r in data[len(data) // 3:]:
+        v, alt = num(r, i, "a_orbSpeed"), num(r, i, "a_altAsl")
+        if v and alt and v > 100:
+            best, berr = "Kerbin", 1e9
+            for name, (mu, rad) in BODIES.items():
+                e = abs(math.sqrt(mu / (rad + alt)) - v) / v
+                if e < berr:
+                    best, berr = name, e
+            return best, BODIES[best]
+    return "Kerbin", BODIES["Kerbin"]
+
+
 # ------------------------------------------------------------------ 2. physics self-check
 def physics(hdr, data, i):
     section("2. PHYSICS SELF-CHECK (does the file agree with itself)")
@@ -290,7 +313,8 @@ def physics(hdr, data, i):
         errs.sort()
         print("  a_vertSpeed vs d(alt)/dt   median %.3f  95th %.3f  (n=%d)"
               % (errs[len(errs) // 2], errs[int(len(errs) * .95)], len(errs)))
-    MU, R = 3.5316e12, 600000.0
+    body, (MU, R) = detect_body(data, i)
+    print("  body detected: %s (MU %.4g, R %.0f km) - vis-viva checked against this" % (body, MU, R / 1000.0))
     bad = n = 0
     for r in data[::40]:
         ap, pe, v, alt = (num(r, i, "a_apoKm"), num(r, i, "a_periKm"),

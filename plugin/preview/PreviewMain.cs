@@ -274,6 +274,33 @@ public static class PreviewMain
             Console.WriteLine("  " + path + "   " + W + "x" + H + "   " + dl.Count + " commands");
         }
 
+        // ---- THE CREW CHECKLIST CARD ----
+        // The flagship interactive moment: the crew works the GO/NO-GO poll on the FLIGHT page. Rendered
+        // GO-ready so the checked items and the green GO / amber NO-GO / red ABORT plates are all visible.
+        {
+            ps.GateActive = true;
+            ps.GateTitle = "GO / NO-GO FOR LAUNCH";
+            ps.GateStage = GatePhase.GoReady;
+            ps.GateItems = new GateItemView[]
+            {
+                new GateItemView { Label = "GO/NO-GO poll complete", Checked = true, CrewActionable = true },
+                new GateItemView { Label = "Dragon crew - GO",       Checked = true, CrewActionable = true },
+                new GateItemView { Label = "SpaceX - GO for launch",  Checked = true, CrewActionable = true }
+            };
+            dl.Clear();
+            Pages.Build(dl, 0, W, H, ps, MapProjection.Default(), 2);
+            ChromeState cs = new ChromeState();
+            cs.Met = "T- 00:00:45"; cs.VehicleState = "GO FOR LAUNCH";
+            cs.LinkName = "COM1/TLM"; cs.LinkTimer = "00:04:12"; cs.LinkUp = true;
+            cs.SelectedPage = 0;
+            ChromeBar.Build(dl, W, H, cs);
+            if (dl.Overflowed) Console.WriteLine("  WARNING FLIGHT/GATE OVERFLOWED at " + dl.Capacity);
+            string path = Path.Combine(outDir, "page0_flight_gate.png");
+            Render(dl, W, H, path);
+            Console.WriteLine("  " + path + "   " + W + "x" + H + "   " + dl.Count + " commands");
+            ps.GateActive = false;
+        }
+
         return 0;
     }
 

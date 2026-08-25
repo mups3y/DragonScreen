@@ -40,7 +40,7 @@ public static class TestMain
         bad += UpfgTest.Run();
         bad += NamedRendezvousTest.Run();
         bad += HoverslamTest.Run();
-        bad += AutoSequenceTest.Run();
+        bad += CrewOpsTest.Run();
 
         Console.WriteLine(bad == 0 ? "ALL SUITES PASSED" : bad + " SUITE(S) FAILED");
         return bad == 0 ? 0 : 1;

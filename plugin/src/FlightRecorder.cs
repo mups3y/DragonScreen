@@ -240,7 +240,31 @@ namespace DragonScreen
             // Values that judge a phase but live outside the a_/b_/r_ vehicle blocks. Appended here so
             // they never shift an existing column. d_recovFrac is the entry-burn reserve the landing
             // depends on; d_recovUnits its absolute margin; d_auto* the mission conductor's live state.
-            "d_recovFrac,d_recovUnits,d_autoStep,d_autoOn,d_returnFrac,d_rcsPct";
+            "d_recovFrac,d_recovUnits,d_autoStep,d_autoOn,d_returnFrac,d_rcsPct," +
+            // ================= THE BURN (NodeExecutor) - EVERY orbital burn goes through this =================
+            // ⛔ nd_initDv vs nd_deliveredDv IS THE BURN-PATH PROOF. A burn that reads deliveredDv ~0 while
+            // "Burning" delivered nothing however long it ran (the RCS/throttle-on-a-dead-engine failure).
+            // nd_pointErrDeg says whether it was on-axis; nd_rcs which propulsion; nd_tIgnS the wait/overshoot.
+            "nd_phase,nd_initDv,nd_remainDv,nd_deliveredDv,nd_pointErrDeg,nd_throttle,nd_rcs,nd_tIgnS," +
+            // ================= CREW PROCEDURE GATES =================
+            // The interactive conductor's internals: which gate, its GO/NO-GO/HOLD/ABORT phase, whether the
+            // crew must act now, the return latch, and which waypoint hold the crew has released.
+            "g_gate,g_gatePhase,g_actionNeeded,g_returnArmed,g_releasedHold," +
+            // ================= ABORT RESPONDER =================
+            "ab_lesArmed,ab_aborting,ab_mode," +
+            // ================= LIFE SUPPORT (TAC) - the Dragon's OWN side (DockedSide.Ours) =================
+            // Real O2 supply + CO2 accumulator fractions and days-remaining. days are clamped to 9999 when
+            // there is no crew (nothing consuming), so 0 means genuinely empty, not "infinite".
+            "ls_present,ls_o2Frac,ls_co2Frac,ls_o2Days,ls_foodDays,ls_waterDays," +
+            // ================= NAMED-BURN RENDEZVOUS (NamedRendezvousOps) =================
+            // ⛔ THE COLUMNS THAT WOULD HAVE DIAGNOSED THE 2026-08-25 ZERO-BURN FLIGHT IN ONE GLANCE.
+            // rv_leg is which named burn we are on; rv_gapDeg is how far the phase still is from the BOOST
+            // lead (it sitting frozen far from zero IS the no-fire bug); rv_lastBurn/rv_lastDv say what
+            // last fired (paired with nd_deliveredDv = planned vs delivered); rv_along/radial/elev are the
+            // station-LVLH terminal geometry; rv_arrRelMps the CW-predicted arrival speed; rv_warp the
+            // live timewarp index (a stuck warp is visible here).
+            "rv_leg,rv_rangeKm,rv_phaseDeg,rv_alongKm,rv_radialKm,rv_elevDeg,rv_leadDeg,rv_gapDeg," +
+            "rv_coAltKm,rv_lastBurn,rv_lastDv,rv_arrRelMps,rv_warp";
 
         /// <summary>
         /// Called every frame by the painter; samples at 5 Hz. Cheap enough to call unconditionally
@@ -436,6 +460,7 @@ namespace DragonScreen
             Return(r);
             Commanded(r);
             Diagnostics(r);
+            Deep(r);
 
             r.Length -= 1;                // trailing comma
             r.Append("\n");
@@ -765,9 +790,9 @@ namespace DragonScreen
             // on. -1 until the baseline latches (idle / not recovering), which reads as "no data", not "empty".
             F(r, BoosterRecovery.RecoveryPropFrac);
             F(r, BoosterRecovery.RecoveryPropUnitsNow);
-            // The mission conductor: which leg it is flying and whether it is engaged at all.
-            S(r, AutoSequence.Engaged ? AutoSequence.PhaseName : "-");
-            F(r, AutoSequence.Engaged ? 1.0 : 0.0);
+            // The mission conductor: which gate/phase it is at and whether it is engaged at all.
+            S(r, CrewProcedureOps.Engaged ? CrewProcedureOps.PhaseName : "-");
+            F(r, CrewProcedureOps.Engaged ? 1.0 : 0.0);
             // ---- RETURN PROPELLANT (MMH+NTO) + the Draco strength - the falsifiable "does the mission
             // close on the launch load?" test (user 2026-08-24). ReturnFraction is the LIMITING of the
             // bipropellant on our side; d_rcsPct is CapsuleRcs' current per-task strength.
@@ -775,6 +800,70 @@ namespace DragonScreen
             F(r, av != null ? DockedSide.ReturnFraction(av) : -1.0);
             F(r, CapsuleRcs.CurrentPct);
         }
+
+        /// <summary>
+        /// DEEP INSTRUMENTATION - every sequence's internals, appended LAST so it never shifts a column.
+        /// Fixed width, resting values when idle, the same discipline as Return/Commanded/Diagnostics.
+        ///
+        /// The burn (NodeExecutor) is here because EVERY orbital burn - phasing, transfer, de-orbit -
+        /// runs through it, and planned-vs-delivered Δv is the one number that proves a burn did anything.
+        /// The gates, the abort responder and life support are here so the interactive crew mission and
+        /// the vehicle's consumables are as diagnosable as the ascent already is.
+        /// </summary>
+        private static void Deep(StringBuilder r)
+        {
+            // ---- THE BURN (NodeExecutor) ----
+            S(r, NodeExecutor.Phase.ToString());
+            F(r, NodeExecutor.InitialDvMps);
+            F(r, NodeExecutor.RemainingDvMps);
+            F(r, NodeExecutor.DeliveredDvMps);
+            F(r, NodeExecutor.PointingErrorDeg);
+            F(r, NodeExecutor.ThrottleCmd);
+            F(r, NodeExecutor.RcsBurn ? 1.0 : 0.0);
+            F(r, NodeExecutor.TimeToIgnitionS);
+
+            // ---- CREW PROCEDURE GATES ----
+            bool ce = CrewProcedureOps.Engaged;
+            S(r, ce ? CrewProcedureOps.CurrentGate().Id.ToString() : "-");
+            S(r, ce ? CrewProcedureOps.Proc.Phase.ToString() : "-");
+            F(r, CrewProcedureOps.CrewActionNeeded() ? 1.0 : 0.0);
+            F(r, CrewProcedureOps.ReturnArmed ? 1.0 : 0.0);
+            S(r, CrewProcedureOps.ReleasedHold.ToString());
+
+            // ---- ABORT RESPONDER ----
+            F(r, AbortResponder.LesArmed ? 1.0 : 0.0);
+            F(r, AbortResponder.Aborting ? 1.0 : 0.0);
+            S(r, AbortResponder.Mode.ToString());
+
+            // ---- LIFE SUPPORT (TAC), the Dragon's own side, one part-walk ----
+            LsSample ls = LifeSupportBridge.Sample(FlightGlobals.ActiveVessel);
+            F(r, ls.Present ? 1.0 : 0.0);
+            F(r, ls.Oxygen01);
+            F(r, ls.Co201);
+            F(r, Days(ls.Margins.OxygenDays));
+            F(r, Days(ls.Margins.FoodDays));
+            F(r, Days(ls.Margins.WaterDays));
+
+            // ---- NAMED-BURN RENDEZVOUS (the climb legs + the CW terminal internals) ----
+            bool re = NamedRendezvousOps.Engaged;
+            S(r, re ? NamedRendezvousOps.Leg.ToString() : "-");
+            F(r, NamedRendezvousOps.RangeKm);
+            F(r, NamedRendezvousOps.PhaseDeg);
+            F(r, NamedRendezvousOps.AlongKm);
+            F(r, NamedRendezvousOps.RadialKm);
+            F(r, NamedRendezvousOps.ElevDeg);
+            F(r, NamedRendezvousOps.LeadDeg);
+            F(r, NamedRendezvousOps.GapDeg);
+            F(r, NamedRendezvousOps.CoAltKm);
+            S(r, NamedRendezvousOps.LastBurn);
+            F(r, NamedRendezvousOps.LastDvMps);
+            F(r, NamedRendezvousOps.ArrRelMps);
+            F(r, TimeWarp.CurrentRateIndex);
+        }
+
+        /// <summary>Consumable days for the recorder: +inf (no crew consuming) is clamped to 9999 so a 0
+        /// reads as genuinely empty, not infinite.</summary>
+        private static double Days(double d) { return (double.IsInfinity(d) || d > 9999.0) ? 9999.0 : d; }
 
         /// <summary>The control loop's internals. `full` writes phi and the target torques too.</summary>
         private static void Attitude(StringBuilder r, AttitudeController ac, bool full)

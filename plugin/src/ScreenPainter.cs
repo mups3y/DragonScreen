@@ -291,6 +291,25 @@ namespace DragonScreen
                 return;
             }
 
+            // ---- THE CREW CHECKLIST CARD IS MODAL OVER FLIGHT ----
+            // When the conductor needs the crew, the card is drawn over the FLIGHT page; a touch on it
+            // (an item, GO, NO-GO, ABORT) drives CrewProcedureOps directly and wins over the page beneath.
+            // A touch that misses the card falls through to the normal page controls (so AUTO SEQUENCE,
+            // still reachable, can cancel), and the chrome bar was already tested above.
+            if (selectedPage == 0 && CrewProcedureOps.CrewActionNeeded())
+            {
+                Gate g = CrewProcedureOps.CurrentGate();
+                int n = (g.Items == null) ? 0 : g.Items.Length;
+                GateHit gh = GateCard.HitTest(px, py, w, h, n);
+                switch (gh.Kind)
+                {
+                    case GateHitKind.Item:  CrewProcedureOps.ToggleItem(gh.Item); return;
+                    case GateHitKind.Go:    CrewProcedureOps.PressGo();  return;
+                    case GateHitKind.NoGo:  CrewProcedureOps.PressNoGo(); return;
+                    case GateHitKind.Abort: CrewProcedureOps.PressAbort(); return;
+                }
+            }
+
             Apply(Pages.HitTest(selectedPage, px, py, w, h, subview[selectedPage & 7],
                                 HullCams.Count));
         }
@@ -376,10 +395,11 @@ namespace DragonScreen
                 // VEHICLE's, so a check made on the left display is made for everyone.
                 case PageAct.AckStep: VesselData.AcknowledgeStep(hit.Arg); break;
 
-                // AUTO SEQUENCE is now the whole-mission conductor, not just the ascent: it chains
-                // ascent -> rendezvous -> dock -> refuel (then off), and after undock flies the return.
-                // The manual ascent-only toggle is still on the physical STRING 1A button.
-                case PageAct.ToggleAuto: AutoSequence.Toggle(); break;
+                // AUTO SEQUENCE is the crew-in-the-loop mission conductor (CrewProcedureOps): it runs the
+                // real gate sequence - countdown checklists, GO/NO-GO, the L-approach holds, GO for undock,
+                // GO for deorbit - flying each phase only after the crew's GO. The manual ascent-only
+                // toggle is still on the physical STRING 1A button.
+                case PageAct.ToggleAuto: CrewProcedureOps.Toggle(); break;
 
                 // ---- THE MIDDLE OF THE MISSION. See PageAct's note on why these exist. ----
                 // The painter only DISPATCHES: every one of these is a static on a flight-software

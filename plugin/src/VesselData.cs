@@ -197,10 +197,11 @@ namespace DragonScreen
                 state.GForce01 = Clamp01(gee / 5.0);
                 state.GForceText = gee.ToString("F1");
 
-                // ---- LIFE SUPPORT, SIMULATED FROM REAL STATE ----
-                // Stock KSP has no PPO2, CO2, cabin pressure or coolant loops, so CabinEnvironment
-                // derives them from things that ARE real: crew aboard, hull temperature, and the
-                // electrical state. Not constants - they move because the vessel does. See that file.
+                // ---- LIFE SUPPORT ----
+                // ppO2 and CO2 are now driven by REAL TAC Life Support state (the Dragon's own O2 supply
+                // and CO2 accumulator, isolated from the station when docked - see LifeSupportBridge).
+                // Cabin pressure, temperature and the coolant loops TAC does not model, so those stay
+                // derived from real hull temperature and the electrical state. See CabinEnvironment.
                 CabinInputs ci = new CabinInputs();
                 ci.Crew = v.GetCrewCount();
                 ci.CrewCapacity = v.GetCrewCapacity();
@@ -211,6 +212,11 @@ namespace DragonScreen
                 // Below 1% charge the cabin systems are treated as down, and the readouts degrade
                 // rather than freeze - a fake cannot fail convincingly, a model can.
                 ci.Powered = (state.Power01 > 0.01);
+
+                LsState ls = LifeSupportBridge.Read(v);
+                ci.HasLifeSupport = ls.Present;
+                ci.OxygenFrac = ls.Oxygen01;
+                ci.Co2Frac = ls.Co201;
 
                 CabinReadout cb = Cabin.Compute(ci);
                 state.Cabin = cb;
@@ -399,11 +405,31 @@ namespace DragonScreen
             Systems.Update(ref FlightCommands.State, sy);
             state.Systems = FlightCommands.State;
 
-            // The FLIGHT-page AUTO SEQUENCE button is the whole-mission conductor. It lights while the
-            // conductor is running and names the leg it is flying (ASCENT/RENDEZVOUS/REFUEL/RETURN). A
-            // bare ascent flown manually from STRING 1A leaves this dark - that button is the manual path.
-            state.AutoEngaged = AutoSequence.Engaged;
-            state.AutoPhase = AutoSequence.Engaged ? AutoSequence.PhaseName : null;
+            // The FLIGHT-page AUTO SEQUENCE button is the crew-in-the-loop conductor (CrewProcedureOps). It
+            // lights while the conductor is running and names the current gate or phase (GO FOR LAUNCH,
+            // ASCENT, HOLD - WP0, ...). A bare ascent flown manually from STRING 1A leaves this dark.
+            state.AutoEngaged = CrewProcedureOps.Engaged;
+            state.AutoPhase = CrewProcedureOps.Engaged ? CrewProcedureOps.PhaseName : null;
+
+            // Crew checklist card: the gate the crew must act on now (GateCard reads these).
+            state.GateActive = CrewProcedureOps.CrewActionNeeded();
+            if (state.GateActive)
+            {
+                Gate g = CrewProcedureOps.CurrentGate();
+                ProcState pr = CrewProcedureOps.Proc;
+                state.GateTitle = g.Title;
+                state.GateStage = pr.Phase;
+                int n = (g.Items == null) ? 0 : g.Items.Length;
+                GateItemView[] views = new GateItemView[n];
+                for (int i = 0; i < n; i++)
+                {
+                    views[i].Label = g.Items[i].Label;
+                    views[i].Checked = pr.Satisfied != null && i < pr.Satisfied.Length && pr.Satisfied[i];
+                    views[i].CrewActionable = g.Items[i].Kind == ItemKind.CrewAck;
+                }
+                state.GateItems = views;
+            }
+            else { state.GateTitle = null; state.GateItems = null; }
 
             state.RendezvousEngaged = StationApproach.Engaged;
             state.RendezvousNote = StationApproach.Note;

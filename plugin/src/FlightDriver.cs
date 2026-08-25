@@ -100,8 +100,10 @@ namespace DragonScreen
             FlightCommands.Tick();
             BargeWaypoint.Ensure();   // cosmetic: drop the droneship map/navball marker once, when able
             // The conductor runs BEFORE the controllers it supervises: it may engage the next phase this
-            // frame, and that controller then ticks in the same frame rather than a frame late.
-            AutoSequence.Tick();
+            // frame, and that controller then ticks in the same frame rather than a frame late. The abort
+            // responder ticks alongside it - once armed/triggered it drives the escape or retreat itself.
+            CrewProcedureOps.Tick();
+            AbortResponder.Tick();
             AutoPilot.Tick();
             // The node executor before the things that plan burns, so a burn armed this frame is
             // flown from the next one rather than sitting a frame behind its own ignition time.

@@ -1,28 +1,28 @@
 /*
  * DragonScreen - CabinEnvironment
  *
- * PURE. The life-support readouts the real VEHICLE page shows and stock KSP does not model:
+ * PURE. The life-support readouts the real VEHICLE page shows:
  * PPO2, CO2, cabin pressure, cabin temperature, the two coolant loops, and the two power buses.
  *
- * ---- SIMULATED, NOT FAKED, AND THE DIFFERENCE IS THE WHOLE POINT ----
- * User's call, 2026-08-05: *"we should 'fake' things like ppo2 cabin temp cabin pressure etc. It
- * would look more realistic if they acted as if they were functioning rather than no display or
- * reading all zero."* Right, and my earlier objection was aimed at the wrong target.
- *
- *     A CONSTANT or a random number is a lie - it is indistinguishable from a dead sensor, which is
- *     what "never draw invented telemetry" exists to prevent.
- *
- *     A value DERIVED FROM REAL STATE by a stated model is a simulation, which is what this whole
- *     mod is. A cabin that warms during entry and a CO2 reading that climbs with four crew aboard
- *     are not pretending - they are modelling, visibly and consistently.
- *
- * So every number here MOVES, and moves BECAUSE OF SOMETHING. Nothing is a constant with noise on
- * top. Where a real KSP input exists it is used; where none does, the driver is crew count, hull
- * temperature or mission time, and the relationship is written down beside it.
+ * ---- PPO2 AND CO2 ARE NOW DRIVEN BY REAL TAC LIFE SUPPORT ----
+ * The install runs TAC Life Support v0.18 and the Crew Dragon carries its LifeSupportModule, so the O2
+ * SUPPLY really depletes and CO2 really accumulates on the vessel. LifeSupportBridge reads those (the
+ * Dragon's own tanks, isolated from the station when docked), and this file turns the real supply and
+ * accumulator FRACTIONS into the ppO2 and CO2 gauge readings. TAC's Oxygen/CarbonDioxide are STORED
+ * consumables, not cabin air, so the gauge mapping is a stated MODEL keyed on real depletion - the number
+ * is real, "what a cabin partial pressure would read at that supply level" is the model. See
+ * dragonscreen-tac-life-support. When TAC is absent (HasLifeSupport == false) the old crew-count model is
+ * the fallback, so the display still lives without a life-support mod.
  *
  * ---- WHAT IS REAL AND WHAT IS MODELLED ----
- *     REAL      hull temperature, crew count and capacity, electric charge and its flow
- *     MODELLED  the mapping from those to PPO2 / CO2 / pressure / cabin temp / loop temps
+ *     REAL      O2 supply + CO2 accumulator (TAC), hull temperature, crew, electric charge and its flow
+ *     MODELLED  ppO2/CO2 gauge mapping from the real TAC fractions; cabin pressure; cabin + loop temps
+ *               (TAC models no cabin atmosphere, pressure or temperature, and no compatible mod does)
+ *
+ * A stated model driven by real state is a simulation, not a fake: a value DERIVED from real depletion by
+ * a written-down rule is what this whole mod is; a bare constant with noise would be a dead sensor, which
+ * is what "never draw invented telemetry" exists to prevent. Every number here MOVES, and moves because
+ * of something real.
  *
  * ---- DETERMINISTIC ----
  * No random numbers. Two screens showing the same instant must agree, and a value that jitters
@@ -48,6 +48,14 @@ namespace DragonScreen
         public double PowerFlow;
         /// <summary>False when the vessel has no electricity - the cabin systems then fail visibly.</summary>
         public bool Powered;
+
+        // ---- REAL TAC LIFE SUPPORT (filled from LifeSupportBridge). ----
+        /// <summary>TAC is modelling this vessel's life support. False = use the crew-count fallback model.</summary>
+        public bool HasLifeSupport;
+        /// <summary>Breathing-O2 SUPPLY remaining, 0..1. REAL - TAC consumes it. Drives ppO2 when HasLifeSupport.</summary>
+        public double OxygenFrac;
+        /// <summary>Captured-CO2 ACCUMULATOR fill, 0..1. REAL - TAC fills it. Drives CO2 when HasLifeSupport.</summary>
+        public double Co2Frac;
     }
 
     /// <summary>Values and their gauge fractions. Fractions are what the dials need; values print.</summary>
@@ -105,14 +113,32 @@ namespace DragonScreen
             // for simulating rather than faking - a fake cannot fail convincingly.
             double fail = s.Powered ? 0.0 : 1.0;
 
-            // CO2 rises with the number of people breathing and falls with a working scrubber.
-            // 0.35 mmHg per crew member is not a measured constant - it is a slope chosen so a full
-            // capsule sits comfortably under the caution band and an unpowered one climbs out of it.
             double crew = s.Crew;
-            r.Co2MmHg = 0.25 + crew * 0.35 + slow * 0.04 + fail * 4.5;
+            if (s.HasLifeSupport)
+            {
+                // ---- DRIVEN BY REAL TAC STATE ----
+                // TAC's Oxygen/CarbonDioxide are STORED consumables, not cabin air, so these are a stated
+                // MODEL keyed on the real supply/accumulator fractions - not a literal partial pressure.
+                //
+                // ppO2: the cabin is regulated from the O2 supply and holds near nominal until the supply
+                // is nearly exhausted, then falls. 3.0 at full supply -> caution (2.5) as it drops through
+                // ~17% -> below the 2.0 alarm at empty. Unpowered collapses it (circulation/scrubbers down).
+                double o2health = Clamp01(s.OxygenFrac / 0.20);           // 1.0 while supply >= 20%
+                r.Ppo2Psia = 1.5 + 1.5 * o2health + slower * 0.05 - fail * 1.2;
 
-            // Oxygen partial pressure: nominal, drawn down slightly by crew, collapsing if unpowered.
-            r.Ppo2Psia = Ppo2Nominal - crew * 0.04 + slower * 0.05 - fail * 1.2;
+                // CO2: the Dragon has no active scrubber in TAC, so captured CO2 accumulates toward the
+                // tank cap over the mission - the gauge climbs with that real fraction (and with crew, and
+                // spikes unpowered). A full accumulator with a full crew reaches the ~6 mmHg alarm.
+                r.Co2MmHg = 0.4 + crew * 0.15 + Clamp01(s.Co2Frac) * 5.5 + slow * 0.04 + fail * 4.5;
+            }
+            else
+            {
+                // ---- FALLBACK MODEL (TAC absent) ----
+                // The original crew-count model, kept so the display still lives without a life-support
+                // mod. 0.35 mmHg per crew is a slope chosen so a full capsule sits under the caution band.
+                r.Co2MmHg = 0.25 + crew * 0.35 + slow * 0.04 + fail * 4.5;
+                r.Ppo2Psia = Ppo2Nominal - crew * 0.04 + slower * 0.05 - fail * 1.2;
+            }
 
             // Cabin pressure holds; a leak is not modelled, so this is the steadiest reading on the
             // page and should be - a pressure gauge that wanders is alarming for the wrong reason.
@@ -173,5 +199,7 @@ namespace DragonScreen
             double f = v / full;
             return (f < 0.0) ? 0.0 : (f > 1.0) ? 1.0 : f;
         }
+
+        private static double Clamp01(double x) { return (x < 0.0) ? 0.0 : (x > 1.0) ? 1.0 : x; }
     }
 }

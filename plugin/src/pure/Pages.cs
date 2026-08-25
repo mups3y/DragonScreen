@@ -139,6 +139,12 @@ namespace DragonScreen
         public bool AutoEngaged;
         public string AutoPhase;
 
+        /// <summary>Crew procedure gate the user must act on now - the checklist card. See GateCard.</summary>
+        public bool GateActive;
+        public string GateTitle;
+        public GatePhase GateStage;
+        public GateItemView[] GateItems;
+
         /// <summary>Mission-phase buttons: lit when that phase is the one running.</summary>
         public bool RendezvousEngaged, DockEngaged, UndockEngaged;
         /// <summary>What each is doing, shown on the button itself when it is running.</summary>
@@ -352,9 +358,10 @@ namespace DragonScreen
         /// ground-track sample (90), the ORBIT view is up to two per globe strip (128) plus the
         /// ellipse. Sized with headroom rather than to the exact worst case, because the failure mode
         /// of being one short is a silently truncated page - and the capacity test builds every page
-        /// in both NAV views precisely because the worst case is not the obvious one.
+        /// in both NAV views precisely because the worst case is not the obvious one. FLIGHT's crew
+        /// checklist card (GateCard) adds ~25 commands over the base page; the headroom covers it.
         /// </summary>
-        public const int Commands = 448;
+        public const int Commands = 480;
 
         /// <summary>Top of the page body, below the telemetry strip.</summary>
         private const float StripHeight = 76f;
@@ -600,6 +607,14 @@ namespace DragonScreen
                 Control.Button(dl, mx, my, mw, mh, MissionLabel(s, i),
                                MissionLit(s, i), s.Valid && MissionUsable(s, i));
             }
+
+            // ---- CREW CHECKLIST CARD ----
+            // Drawn LAST, over everything: when the conductor reaches a gate the crew must act on, the
+            // card is the modal step - complete the checklist, then GO / NO-GO / ABORT. It is only active
+            // when there is something to do (CrewProcedureOps.CrewActionNeeded), so it never covers the
+            // gauges during a phase the crew is monitoring.
+            if (s.GateActive)
+                GateCard.Draw(dl, s.GateTitle, s.GateStage, s.GateItems, w, h);
         }
 
         /// <summary>What a mission button says. Running phases say what they are doing.</summary>

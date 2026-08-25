@@ -38,12 +38,13 @@ namespace DragonScreen
         private const string Tag = "[DragonScreen] ";
 
         /// <summary>
-        /// RSS-only master switch. False keeps DirectApproach as the approach everywhere; true routes
-        /// the RSS inside-gate approach through the L-profile. Live-tunable so a test flight can enable
-        /// it from tuning.cfg without a rebuild. Flipping it true is the first RSS validation flight for
-        /// the L-approach - see the header. The fly-around geometry is proven; the flight behaviour is not.
+        /// Master switch for the real Crew Dragon L-approach. ON by default: it is the full-fidelity
+        /// proximity-operations profile (R-bar -> V-bar through WP0/WP1/WP2, each a crew-GO hold), which is
+        /// what the crew-in-the-loop gates authorise. Live-tunable so it can be turned OFF to DirectApproach
+        /// from tuning.cfg without a rebuild if a flight needs the straight-in fallback. The fly-around
+        /// geometry is proven headless; the closed-loop RSS flight behaviour is validated on the crew flight.
         /// </summary>
-        [Tunable] public static bool Enabled = false;
+        [Tunable] public static bool Enabled = true;
 
         /// <summary>
         /// Furthest range this will accept the job, metres. WP0 sits 400 m below the station and RCS has
@@ -146,7 +147,11 @@ namespace DragonScreen
             s.RadialRateMps = L.RadialRateMps; s.AlongRateMps = L.AlongRateMps; s.CrossRateMps = L.CrossRateMps;
             s.Docked = false;
             s.HoldElapsedS = Planetarium.GetUniversalTime() - holdStartedAt;
-            s.Go = false;   // auto-GO after WaypointApproach.HoldS; a crew GO could be wired here later.
+            // Crew-in-the-loop: when the conductor is running, a hold is left ONLY on the crew's GO for
+            // THIS waypoint (CrewProcedureOps.ReleasedHold), which is what makes each hold a real,
+            // abortable decision. Un-conducted, RequireCrewGo is false and the hold auto-releases (HoldS).
+            s.RequireCrewGo = CrewProcedureOps.Engaged;
+            s.Go = CrewProcedureOps.Engaged && CrewProcedureOps.ReleasedHold == Phase;
 
             // ---- THE PHASE MACHINE (pure/WaypointApproach.cs) ----
             WpCommand c = WaypointApproach.Guide(s, Phase);

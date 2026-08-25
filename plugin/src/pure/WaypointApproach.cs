@@ -81,8 +81,15 @@ namespace DragonScreen
         public bool Docked;
         /// <summary>Seconds station-kept at the current hold. Auto-GO after WaypointApproach.HoldS.</summary>
         public double HoldElapsedS;
-        /// <summary>Crew/ground GO to leave a hold early. Auto-GO fires without it after the hold time.</summary>
+        /// <summary>Crew/ground GO to leave a hold. See RequireCrewGo for whether it is mandatory.</summary>
         public bool Go;
+        /// <summary>
+        /// The real Crew Dragon rule: a hold is left ONLY on a crew/ground GO. When true, the auto-GO
+        /// timer is disabled and the vehicle station-keeps at the waypoint until <see cref="Go"/> arrives -
+        /// which is what makes the approach abortable at every stage. When false (nobody conducting), the
+        /// hold auto-releases after HoldS so an un-crewed approach still completes.
+        /// </summary>
+        public bool RequireCrewGo;
     }
 
     public struct WpCommand
@@ -221,7 +228,7 @@ namespace DragonScreen
             {
                 // Station-keep ON the waypoint: null the relative velocity and any residual offset.
                 CommandToward(ref c, er, ea, ec, 0.0);   // 0 approach speed - just hold position
-                bool go = s.Go || s.HoldElapsedS >= HoldS;
+                bool go = HoldReleased(s);
                 c.Note = go ? "GO" : ("HOLD - station-keeping (" + s.HoldElapsedS.ToString("F0") + " s)");
                 // The phase ADVANCE happens in the caller when it reads Arrived/go; see StepPhase.
                 return c;
@@ -244,7 +251,7 @@ namespace DragonScreen
         public static WpPhase StepPhase(WpInputs s, WpPhase phase, WpCommand c)
         {
             if (c.KeepOutBreach) return WpPhase.Abort;
-            bool go = s.Go || s.HoldElapsedS >= HoldS;
+            bool go = HoldReleased(s);
             switch (phase)
             {
                 case WpPhase.Idle:  return WpPhase.ToWP0;
@@ -260,6 +267,15 @@ namespace DragonScreen
                 case WpPhase.Hold2: return go ? WpPhase.Handover : WpPhase.Hold2;
                 default:            return phase;
             }
+        }
+
+        /// <summary>
+        /// A hold is released on a GO. With RequireCrewGo (a crew is conducting) that GO must be the crew's;
+        /// otherwise the auto-GO timer releases it after HoldS so an unconducted approach still completes.
+        /// </summary>
+        public static bool HoldReleased(WpInputs s)
+        {
+            return s.RequireCrewGo ? s.Go : (s.Go || s.HoldElapsedS >= HoldS);
         }
 
         /// <summary>Command a velocity of `approachMps` from us toward the waypoint (offset er,ea,ec).</summary>

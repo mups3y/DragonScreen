@@ -50,6 +50,17 @@ namespace DragonScreen
         /// <summary>For the pages and the recorder.</summary>
         public static double RemainingDvMps, InitialDvMps, ThrottleCmd, PointingErrorDeg;
 
+        /// <summary>Δv actually delivered so far (planned minus remaining) - the burn-path proof: an RCS
+        /// burn that reads 0 here delivered nothing however long it "burned". For the recorder.</summary>
+        public static double DeliveredDvMps { get { return InitialDvMps - RemainingDvMps; } }
+        /// <summary>This burn is on RCS/Draco translation, not the main-engine throttle. For the recorder.</summary>
+        public static bool RcsBurn { get { return rcsBurn; } }
+        /// <summary>Seconds until ignition (negative once past), or 0 when idle. For the recorder.</summary>
+        public static double TimeToIgnitionS
+        {
+            get { return Active ? ignitionUt - Planetarium.GetUniversalTime() : 0.0; }
+        }
+
         private static Vessel ship;
         private static Vector3d dvWorld;        // the ORIGINAL request, for the overshoot test
         private static Vector3d dvRemaining;

@@ -1,6 +1,10 @@
 /*
- * Tests for the named-burn co-elliptic rendezvous (pure/NamedRendezvous.cs). Numbers checked against
- * the headless sim (scratchpad/rdv_sim.py) for the Crew-2 geometry: chaser 200 km, ISS 420 km.
+ * Tests for the rebuilt named-burn rendezvous (pure/NamedRendezvous.cs) - the CLIMB state machine and
+ * geometry, plus a Clohessy-Wiltshire terminal-phase sanity check (the solver the glue flies past the
+ * co-elliptic). NO simulation: closed-form vis-viva + the CW STM, checked against hand geometry.
+ *
+ * The regression these lock in is the 2026-08-25 zero-burn flight: a robust trigger FIRES at the lead
+ * angle AND fires when a warp nudges slightly past it (gap gone negative), never waiting a synodic period.
  */
 using System;
 using DragonScreen;
@@ -20,66 +24,149 @@ public static class NamedRendezvousTest
         Console.WriteLine("DragonScreen named-burn rendezvous tests");
 
         double mu = 3.9860044e14, Re = 6.371010e6;
-        double rIns = Re + 200000.0;     // chaser insertion
-        double rTgt = Re + 420000.0;     // ISS
+        double rIns = Re + 208000.0;     // chaser insertion (Crew-2 low insertion)
+        double rTgt = Re + 419000.0;     // ISS
         double rCo = NamedRendezvous.CoellipticRadius(rTgt);
 
-        // ---- co-elliptic radius is 15 km below the target ----
-        Check("co-elliptic radius is 15 km below the target",
-              Near(rCo, rTgt - 15000.0, 1.0), (rCo - Re).ToString("F0"));
+        // ---- co-elliptic radius is 10 km below the target ----
+        Check("co-elliptic radius is 10 km below the target",
+              Near(rCo, rTgt - 10000.0, 1.0), (rCo - Re).ToString("F0"));
 
-        // ---- transfer time insertion -> co-elliptic ~ 45 min (sim: 45.2) ----
+        // ---- transfer time insertion -> co-elliptic ~ 45 min ----
         double tH = NamedRendezvous.TransferTimeS(rIns, rCo, mu);
-        Check("insertion->co-elliptic transfer ~45 min", Near(tH / 60.0, 45.2, 1.0), (tH / 60.0).ToString("F1"));
+        Check("insertion->co-elliptic transfer ~45 min", Near(tH / 60.0, 45.3, 1.0), (tH / 60.0).ToString("F1"));
 
-        // ---- NC lead angle: the transfer sweeps almost a full target orbit (~175 deg), so NC fires with
-        //      the target only a few degrees ahead (sim: ~4.6 deg + arrive-ahead) ----
-        double lead = NamedRendezvous.NcLeadAngleDeg(rIns, rCo, rTgt, mu,
-                                                     NamedRendezvous.CoellipticArriveAheadDeg);
-        Check("NC lead angle is small (a few degrees)", lead > 2.0 && lead < 10.0, lead.ToString("F2"));
+        // ---- BOOST lead angle: the transfer sweeps ~176 deg of the target orbit, so BOOST fires with the
+        //      target only a few degrees ahead (plus the 1.5 deg arrive-behind margin) ----
+        double lead = NamedRendezvous.LeadAngleDeg(rIns, rCo, rTgt, mu, NamedRendezvous.BoostArriveAheadDeg);
+        Check("BOOST lead angle is small (a few degrees)", lead > 2.0 && lead < 12.0, lead.ToString("F2"));
 
-        // ---- Ti elevation geometry: at 27.5 deg with dH 15 km, the target leads ~28.8 km (sim: 28.81) ----
-        double along = NamedRendezvous.AlongTrackForElevation(NamedRendezvous.CoellipticDhM,
-                                                              NamedRendezvous.TiElevationDeg);
-        Check("Ti along-track ~28.8 km at 27.5 deg", Near(along / 1000.0, 28.8, 0.3), (along / 1000.0).ToString("F2"));
-        // inverse: elevation at that along-track is back to 27.5
-        double elev = NamedRendezvous.ElevationDeg(NamedRendezvous.CoellipticDhM, along);
+        // ---- closing rate: the lower chaser gains ~11 deg/hr on the ISS ----
+        double rateDegS = NamedRendezvous.ClosingRateDegS(rIns, rTgt, mu);
+        Check("closing rate ~11 deg/hr, positive", rateDegS > 0.0 && Near(rateDegS * 3600.0, 11.3, 1.5),
+              (rateDegS * 3600.0).ToString("F1"));
+
+        // ---- gap: robust firing. Positive gap = still closing; zero or slightly-past = FIRE ----
+        Check("gap far from lead is large positive",
+              Near(NamedRendezvous.GapToLeadDeg(40.0, lead), 40.0 - lead, 0.01), "");
+        Check("gap AT the lead is zero",
+              Near(NamedRendezvous.GapToLeadDeg(lead, lead), 0.0, 1e-6), "");
+        Check("gap SLIGHTLY PAST the lead is small negative (still fires)",
+              NamedRendezvous.GapToLeadDeg(lead - 0.8, lead) < 0.0
+              && NamedRendezvous.GapToLeadDeg(lead - 0.8, lead) > -1.0,
+              NamedRendezvous.GapToLeadDeg(lead - 0.8, lead).ToString("F2"));
+
+        // ---- elevation geometry round-trips ----
+        double along = NamedRendezvous.AlongTrackForElevation(10000.0, 27.5);
+        double elev = NamedRendezvous.ElevationDeg(10000.0, along);
         Check("elevation round-trips to 27.5 deg", Near(elev, 27.5, 0.2), elev.ToString("F2"));
-        // closer in (smaller along-track) => higher elevation
         Check("closer target reads a higher elevation",
-              NamedRendezvous.ElevationDeg(NamedRendezvous.CoellipticDhM, along * 0.5) > elev, "");
+              NamedRendezvous.ElevationDeg(10000.0, along * 0.5) > elev, "");
 
-        // ---- floor guard: a RAISE never breaches the floor; a big lower would ----
-        RdvInputs s = new RdvInputs();
-        s.Mu = mu; s.ChaserRadiusM = rIns; s.ChaserSmaM = rIns; s.TargetRadiusM = rTgt;
-        s.FloorM = Re + 145000.0; s.PeriapsisM = rIns;
+        // ---- floor guard: a RAISE never breaches; a big lower does ----
+        RdvInputs s = MakeInputs(mu, Re, rIns, rTgt);
+        s.ChaserApoapsisM = rIns; s.ChaserPeriapsisM = rIns;    // circular phasing orbit
         double aRaise = Hohmann.TransferSma(rIns, rCo);
-        Check("raise to co-elliptic does not breach the 145 km floor",
+        Check("raise to co-elliptic does not breach the floor",
               !NamedRendezvous.BreachesFloor(s, aRaise, rIns), "");
-        double aLower = Hohmann.TransferSma(rIns, Re + 100000.0);   // lower toward 100 km
+        double aLower = Hohmann.TransferSma(rIns, Re + 100000.0);
         Check("a lower below the floor IS blocked",
               NamedRendezvous.BreachesFloor(s, aLower, rIns), "");
 
-        // ---- state machine: PHASING waits until the lead angle, then fires NC prograde ----
-        s.PhaseAngleDeg = 40.0;                       // target well ahead - still closing
-        RdvPlan far = NamedRendezvous.Plan(s, RdvLeg.Phasing);
-        Check("far from the lead angle: phasing, no burn", far.Leg == RdvLeg.Phasing && !far.FireNow, far.Note);
-        s.PhaseAngleDeg = lead;                        // exactly at the lead angle
-        RdvPlan at = NamedRendezvous.Plan(s, RdvLeg.Phasing);
-        Check("at the lead angle: NC fires prograde", at.FireNow && at.Burn == "NC" && at.DvMps > 0.0,
-              at.Burn + " " + at.DvMps.ToString("F1"));
+        // ================= THE CLIMB STATE MACHINE =================
 
-        // ---- Coelliptic leg: drifts until the Ti along-track, then fires Ti ----
-        RdvInputs c = s; c.ChaserRadiusM = rCo; c.ChaserSmaM = rCo;
-        c.PhaseAngleDeg = (along + 20000.0) / rTgt * 180.0 / Math.PI;   // a bit beyond the Ti point
-        RdvPlan drift = NamedRendezvous.Plan(c, RdvLeg.Coelliptic);
-        Check("co-elliptic before the Ti point: drift, no burn", !drift.FireNow && drift.Leg == RdvLeg.Coelliptic, drift.Note);
-        c.PhaseAngleDeg = along / rTgt * 180.0 / Math.PI;              // at the Ti elevation point
-        RdvPlan ti = NamedRendezvous.Plan(c, RdvLeg.Coelliptic);
-        Check("at the Ti point: Ti fires prograde", ti.FireNow && ti.Burn == "Ti" && ti.DvMps > 0.0,
-              ti.Burn + " " + ti.DvMps.ToString("F1"));
+        // ---- PHASE: a dispersed insertion circularises; an already-circular one skips to BOOST ----
+        RdvInputs disp = MakeInputs(mu, Re, rIns, rTgt);
+        disp.ChaserApoapsisM = rIns + 9000.0; disp.ChaserPeriapsisM = rIns - 9000.0;   // 18 km spread
+        disp.ChaserSmaM = rIns;
+        RdvPlan ph = NamedRendezvous.Plan(disp, RdvLeg.Idle);
+        Check("dispersed insertion: PHASE circularises at apoapsis, then BOOST",
+              ph.FireNow && ph.Burn == "PHASE" && ph.FireAt == RdvFire.Apoapsis
+              && ph.NextLeg == RdvLeg.Boost && ph.DvMps > 0.0,
+              ph.Burn + " dv=" + ph.DvMps.ToString("F2") + " next=" + ph.NextLeg);
+
+        RdvInputs circ = MakeInputs(mu, Re, rIns, rTgt);
+        circ.ChaserApoapsisM = rIns; circ.ChaserPeriapsisM = rIns; circ.ChaserSmaM = rIns;
+        RdvPlan skip = NamedRendezvous.Plan(circ, RdvLeg.Idle);
+        Check("circular insertion: no PHASE burn, advance straight to BOOST",
+              !skip.FireNow && skip.NextLeg == RdvLeg.Boost, skip.Note);
+
+        // ---- BOOST: waits far from the lead (with a warp hint), fires AT the lead, fires PAST the lead ----
+        RdvInputs b = MakeInputs(mu, Re, rIns, rTgt);
+        b.ChaserApoapsisM = rIns; b.ChaserPeriapsisM = rIns; b.ChaserSmaM = rIns;
+        b.PhaseAngleDeg = 40.0;
+        RdvPlan far = NamedRendezvous.Plan(b, RdvLeg.Boost);
+        Check("BOOST far from lead: waits, no burn, offers a warp hint",
+              !far.FireNow && far.WarpWaitS > 0.0 && far.GapDeg > 1.0, far.Note);
+
+        b.PhaseAngleDeg = lead;
+        RdvPlan at = NamedRendezvous.Plan(b, RdvLeg.Boost);
+        Check("BOOST at the lead: fires the raise prograde, next leg CLOSE",
+              at.FireNow && at.Burn == "BOOST" && at.FireAt == RdvFire.Now
+              && at.DvMps > 0.0 && at.NextLeg == RdvLeg.Close,
+              at.Burn + " dv=" + at.DvMps.ToString("F1"));
+
+        // ⛔ THE REGRESSION: a warp overshoot leaves the phase just PAST the lead. The old 0.6 deg window
+        // would then wait a full synodic period; the rebuilt trigger fires immediately.
+        b.PhaseAngleDeg = lead - 0.5;
+        RdvPlan past = NamedRendezvous.Plan(b, RdvLeg.Boost);
+        Check("BOOST just PAST the lead: STILL fires (no synodic-period wait)",
+              past.FireNow && past.Burn == "BOOST", past.Note);
+
+        // ---- CLOSE: circularises at the boost apoapsis onto the co-elliptic, then DRIFT ----
+        RdvInputs c = MakeInputs(mu, Re, rIns, rTgt);
+        c.ChaserApoapsisM = rCo; c.ChaserPeriapsisM = rIns;      // the boost transfer ellipse
+        c.ChaserSmaM = Hohmann.TransferSma(rIns, rCo);
+        c.ChaserRadiusM = rCo;                                   // at apoapsis
+        RdvPlan close = NamedRendezvous.Plan(c, RdvLeg.Close);
+        Check("CLOSE: circularise at apoapsis, next leg DRIFT",
+              close.FireNow && close.Burn == "CLOSE" && close.FireAt == RdvFire.Apoapsis
+              && close.DvMps > 0.0 && close.NextLeg == RdvLeg.Drift,
+              close.Burn + " dv=" + close.DvMps.ToString("F1"));
+
+        // ================= THE CW TERMINAL SOLVER (what the glue flies past the co-elliptic) =================
+        // A chaser on the co-elliptic 10 km below and 20 km behind the station, drifting forward. Ask the
+        // solver for the TRANSFER intercept to the 7.5 km AI point - it must find a real, modest burn.
+        double nStn = NamedRendezvous.MeanMotion(rTgt, mu);
+        double period = 2.0 * Math.PI / nStn;
+        CwState cw = new CwState();
+        cw.Rx = -10000.0;                 // 10 km below (radial)
+        cw.Ry = -20000.0;                 // 20 km behind (along-track)
+        cw.Rz = 0.0;
+        cw.Vx = 0.0;
+        cw.Vy = 1.5 * nStn * 10000.0;     // the co-elliptic along-track drift (~1.5 n dH), closing
+        cw.Vz = 0.0;
+        cw.N = nStn;
+        double bestTof;
+        CwSolution sol = CwTargeting.Best(cw, 300.0, 0.9 * period, 60, NamedRendezvous.AiPointM, out bestTof);
+        Check("CW TRANSFER solve succeeds from the co-elliptic", sol.Ok, sol.Note);
+        Check("CW TRANSFER impulse is modest (< 50 m/s)",
+              sol.Ok && CwTargeting.DvMagnitude(sol) < 50.0, CwTargeting.DvMagnitude(sol).ToString("F2"));
+        Check("CW TRANSFER arrival speed is finite and modest (< 50 m/s)",
+              sol.Ok && sol.ArrivalRelSpeed >= 0.0 && sol.ArrivalRelSpeed < 50.0,
+              sol.ArrivalRelSpeed.ToString("F2"));
+        // The cheapest transfer is the slowest one the sweep allows (a gentle, fuel-optimal intercept) -
+        // realistic for terminal phase, which is ~90 min per leg on the real vehicle.
+        Check("CW TRANSFER time-of-flight is a sane sub-orbit time",
+              bestTof >= 300.0 && bestTof <= period, (bestTof / 60.0).ToString("F1") + " min");
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
+    }
+
+    static RdvInputs MakeInputs(double mu, double Re, double rChaser, double rTgt)
+    {
+        RdvInputs s = new RdvInputs();
+        s.Mu = mu;
+        s.BodyRadiusM = Re;
+        s.ChaserRadiusM = rChaser;
+        s.ChaserSmaM = rChaser;
+        s.ChaserApoapsisM = rChaser;
+        s.ChaserPeriapsisM = rChaser;
+        s.TargetRadiusM = rTgt;
+        s.FloorM = Re + 145000.0;
+        s.RangeM = rTgt - rChaser;
+        s.PhaseAngleDeg = 0.0;
+        return s;
     }
 }

@@ -16,8 +16,8 @@
  * ---- WHAT THIS CLASSIFIER CAN AND CANNOT KNOW ----
  * Some phases are visible in vessel state: on the pad, climbing, in space, docked, under chutes, wet.
  * Others are INTENTIONS - "departure" and "deorbit burn" are only distinguishable from "coast" by
- * knowing what the flight plan is doing. Those belong to the flight sequencer - the AUTO SEQUENCE
- * conductor (AutoSequence + pure/AutoSequenceCore), added 2026-08-24. This classifier stays the
+ * knowing what the flight plan is doing. Those belong to the flight sequencer - the crew-in-the-loop
+ * conductor (CrewProcedureOps + pure/CrewProcedure + pure/CrewGates). This classifier stays the
  * OBSERVABLE fallback for a vessel nobody is conducting; the conductor knows the intent.
  *
  * So this returns what is OBSERVABLE and returns `Coast` rather than guessing when it cannot tell.

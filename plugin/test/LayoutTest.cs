@@ -724,6 +724,39 @@ public static class LayoutTest
                   ra.Press01.ToString("F2"));
             Check("nominal cabin temp sits mid-dial", ra.CabinTemp01 > 0.3 && ra.CabinTemp01 < 0.8,
                   ra.CabinTemp01.ToString("F2"));
+
+            // ---- REAL TAC LIFE SUPPORT PATH ----
+            // With HasLifeSupport, ppO2 and CO2 are driven by the Dragon's real O2 supply and CO2
+            // accumulator fractions (LifeSupportBridge), not the crew-count fallback. The gauges must
+            // read nominal at mission start and cross the alarm bands as TAC really depletes/accumulates.
+            CabinInputs tacOk = new CabinInputs();
+            tacOk.Crew = 4; tacOk.CrewCapacity = 4; tacOk.HullTempC = 22.0;
+            tacOk.MissionTime = 100.0; tacOk.Power01 = 0.9; tacOk.Powered = true;
+            tacOk.HasLifeSupport = true; tacOk.OxygenFrac = 1.0; tacOk.Co2Frac = 0.0;
+            CabinReadout rt = Cabin.Compute(tacOk);
+            Check("full O2 supply reads nominal ppO2", rt.Ppo2Psia > 2.8 && rt.Ppo2Psia < 3.2,
+                  rt.Ppo2Psia.ToString("F2"));
+            Check("empty CO2 accumulator reads below caution",
+                  rt.Co2MmHg < CabinLimits.Co2Caution, rt.Co2MmHg.ToString("F2"));
+
+            // A depleted O2 supply must drive ppO2 through the alarm limit.
+            CabinInputs tacDry = tacOk; tacDry.OxygenFrac = 0.0;
+            CabinReadout rdry = Cabin.Compute(tacDry);
+            Check("O2 supply falling drops ppO2", rdry.Ppo2Psia < rt.Ppo2Psia, "");
+            Check("empty O2 supply reaches the ppO2 alarm",
+                  rdry.Ppo2Psia <= CabinLimits.Ppo2Alarm, rdry.Ppo2Psia.ToString("F2"));
+
+            // A saturated CO2 accumulator (no scrubber on the Dragon) must reach the CO2 alarm.
+            CabinInputs tacCo2 = tacOk; tacCo2.Co2Frac = 1.0;
+            CabinReadout rco2 = Cabin.Compute(tacCo2);
+            Check("CO2 accumulating raises CO2", rco2.Co2MmHg > rt.Co2MmHg, "");
+            Check("saturated CO2 accumulator reaches the CO2 alarm",
+                  rco2.Co2MmHg >= CabinLimits.Co2Alarm, rco2.Co2MmHg.ToString("F2"));
+
+            // The TAC path is deterministic too, and its fractions stay on the dial.
+            Check("TAC path is deterministic", Cabin.Compute(tacOk).Ppo2Psia == rt.Ppo2Psia, "");
+            Check("TAC ppO2 fraction clamps", rdry.Ppo201 >= 0.0 && rdry.Ppo201 <= 1.0, "");
+            Check("TAC CO2 fraction clamps", rco2.Co201 >= 0.0 && rco2.Co201 <= 1.0, "");
         }
 
         // ---- orbital readout meaningfulness ----
