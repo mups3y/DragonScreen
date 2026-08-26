@@ -100,6 +100,7 @@ namespace DragonScreen
         public static void SetAttitude(double pitch, double yaw)
         { cmdPitch = Clamp1(pitch); cmdYaw = Clamp1(yaw); attitudeOwned = true; }
         public static void SetAttitudeRoll(double roll) { cmdAttRoll = Clamp1(roll); attRollOwned = true; }
+        public static void ReleaseAttitudeRoll() { attRollOwned = false; cmdAttRoll = 0f; }
         public static void ReleaseAttitude()
         { attitudeOwned = false; attRollOwned = false; cmdPitch = cmdYaw = cmdAttRoll = 0f; }
 
@@ -255,7 +256,7 @@ namespace DragonScreen
             {
                 aborting = true; abortChute = ChutePhase.Idle;
                 Debug.Log("[DragonScreen] ⛔ ABORT — SuperDraco launch escape, then chutes to splashdown.");
-                ReleaseThrottle(); ReleaseTranslation(); ReleaseRoll();
+                ReleaseThrottle(); ReleaseTranslation(); ReleaseRoll(); AttitudePilot.Reset();
                 Actuator.FireAbort(v);   // ⛔ direct: SuperDraco motor at full + capsule separation (no action group)
             }
 

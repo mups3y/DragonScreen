@@ -90,9 +90,11 @@ namespace DragonScreen
                     if (i == 0) RateCmdRads = res.TargetOmega;          // pitch rate command (representative)
                 }
 
-                // --- apply: pitch + yaw always; roll only when we own it ---
+                // --- apply: pitch + yaw always; roll only when we own it (else release + keep its PID clean,
+                //     so the entry bank loop's own roll channel is not fighting a stale damping command) ---
                 FlightDriver.SetAttitude(act[0], act[2]);
                 if (dampRoll) FlightDriver.SetAttitudeRoll(act[1]);
+                else { FlightDriver.ReleaseAttitudeRoll(); posPid[1].Reset(); velPid[1].Reset(); }
 
                 // --- diagnostics ---
                 Active = true;
@@ -113,13 +115,20 @@ namespace DragonScreen
         // the loop then commands nothing, which is correct.
         static void ControlTorque(Vessel v, out double tx, out double ty, out double tz)
         {
+            // ⛔ RCS torque only counts when the master is ON — otherwise the loop sees authority it cannot
+            // actuate (during gimbal-only ascent RCS is off), overcounts the available torque, and under-drives
+            // the gimbal. Gimbal/control-surface torque always counts (it needs no master). This makes coast
+            // (engines off, RCS off) correctly read zero authority, so the loop commands nothing.
+            bool rcsOn = v.ActionGroups[KSPActionGroup.RCS];
             double px = 0.0, py = 0.0, pz = 0.0;
             for (int i = 0; i < v.parts.Count; i++)
             {
                 Part p = v.parts[i];
                 for (int m = 0; m < p.Modules.Count; m++)
                 {
-                    ITorqueProvider tp = p.Modules[m] as ITorqueProvider;
+                    PartModule pm = p.Modules[m];
+                    if (!rcsOn && pm is ModuleRCS) continue;
+                    ITorqueProvider tp = pm as ITorqueProvider;
                     if (tp == null) continue;
                     Vector3 pos, neg;
                     try { tp.GetPotentialTorque(out pos, out neg); }
