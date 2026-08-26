@@ -119,6 +119,17 @@ namespace DragonScreen
             Debug.Log("[DragonScreen] AUTO SEQUENCE disengaged");
         }
 
+        // ⛔ Hard reset for a NEW flight scene (revert-to-VAB/launch, fresh launch). The conductor is static,
+        // so without this the previous flight's engaged/index/return state carries onto the next vehicle and
+        // the autopilot starts flying a fresh pad rocket mid-mission. Called from FlightDriver.Start().
+        public static void ForceReset()
+        {
+            engaged = false; plan = null; satisfied = null; gate = new Gate();
+            phase = GatePhase.Holding; index = 0; boundVesselId = 0;
+            goPressed = noGoPressed = abortPressed = false;
+            launchPending = false; abortLatched = false; returnLeg = false;
+        }
+
         static bool CurrentIsGate() { return plan != null && index < plan.Length && plan[index].Kind == StepKind.Gate; }
         static bool CurrentIsFly() { return plan != null && index < plan.Length && plan[index].Kind == StepKind.Fly; }
         static bool IsCrewItem(int i)

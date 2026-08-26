@@ -53,6 +53,31 @@ namespace DragonScreen
             return vv.magnitude > 0.1 ? vv.normalized : v.transform.up;
         }
 
+        // ⛔ ZERO-AoA LOAD RELIEF. A launch vehicle must NEVER be commanded far off its velocity vector in
+        // the atmosphere — the aero side-force is q·Cn·α and at max-Q even a few degrees of angle of attack
+        // will rip the stack apart (RUD). So clamp a desired attitude to within maxAoaDeg of SURFACE
+        // prograde: the pitch program then only ever LEADS the velocity by a bounded amount, and the gravity
+        // turn stays load-relieved. Below ~30 m/s there is no meaningful prograde yet, so pass it through.
+        public static Vector3d LimitToProgradeCone(Vessel v, Vector3d desired, double maxAoaDeg)
+        {
+            Vector3d vel = v.srf_velocity;
+            if (vel.magnitude < 30.0 || desired.magnitude < 1e-6) return desired;
+            Vector3d pro = vel.normalized, des = desired.normalized;
+            double ang = Vector3d.Angle(pro, des);
+            if (ang <= maxAoaDeg || ang < 1e-6) return desired;
+            Vector3d axis = Vector3d.Cross(pro, des);
+            if (axis.magnitude < 1e-9) return desired;
+            return (Vector3d)(Quaternion.AngleAxis((float)maxAoaDeg, ((Vector3)axis).normalized) * (Vector3)pro);
+        }
+
+        // Angle of attack (deg): the vehicle's nose (control-forward) vs its surface velocity.
+        public static double AngleOfAttackDeg(Vessel v)
+        {
+            Transform rt = v.ReferenceTransform;
+            if (rt == null || v.srf_velocity.magnitude < 1.0) return 0.0;
+            return Vector3d.Angle(rt.up, v.srf_velocity);
+        }
+
         // Hold the given WORLD direction with stock SAS (our guidance owns the direction).
         static bool sasReady;
         public static void Point(Vessel v, Vector3d worldDir)

@@ -1,107 +1,65 @@
 # Next-session resume prompt
 
-Paste the block below at the start of the next session to pick up the autopilot rebuild exactly where
-it left off. (Updated 2026-08-26 — ALL pure layers L0–L7 AND ALL glue seams 1–6 complete + installed; what
-remains is IN-GAME proving flights + tuning. When something changes, update "WHERE WE ARE"/"DO NEXT".)
+Paste the block below at the start of the next session to pick up the autopilot build exactly where it left
+off. (Rewritten 2026-08-26 to the approved plan: the autopilot is BUILT + INSTALLED but has never flown a
+mission — 3 flights RUD'd at max-Q; the fix is the direct control stack. When something changes, update
+"WHERE WE ARE" / "DO NEXT".)
 
 ---
 
 ```
-Resume the Crew Dragon autopilot rebuild (project "CLAUDE"), RSS/RO DragonScreen.
+Resume the RSS/RO Crew Dragon autopilot (DragonScreen). The autopilot is NOT named "CLAUDE" yet — the name is
+EARNED by flying a full crew mission clean. It flies ANY crew mission (mission-as-data); Crew-2 is the
+reference profile.
 
-FIRST, read in full: docs/AUTOPILOT_REBUILD_PLAN.md (the governing plan — §8b execution log
-has the live progress; §5 is the research-derived Constants Register) and the memory
-dragonscreen-autopilot-rebuild-plan. Then continue the build.
+FIRST, read in full, in this order:
+  1. the approved plan file  C:\Users\User\.claude\plans\snoopy-orbiting-hennessy.md  (§1 FRAME OF MIND +
+     §2 GROUND-TRUTH AUTHORITY are the anti-regression guardrails — read every session; §4 is the build order)
+  2. docs/AUTOPILOT_REBUILD_PLAN.md  (§0.0 folded master state; §5 Constants Register; §8b execution log)
+  3. the memory dragonscreen-autopilot-rebuild-plan
+Then continue the build.
 
-WHERE WE ARE: the old autopilot was DELETED; we're rebuilding FRESH, bottom-up, headless-tested.
-DONE and green: L0 (verified-reuse), L1 nav (impact predictor w/ measured drag+lift, q/Mach,
-authority), L2 control (quaternion-PD on the arrestable-rate bound, throttle bucket+g-limit, RCS),
-L3 ascent (S1 DM-1 pitch program + phase FSM; S2 UPFG ported from the PEGAS primary source),
-L3 booster (hoverslam + grid-fin steering + descent FSM), L3 rendezvous (LVLH + CW two-impulse +
-Hohmann + named-burn FSM), L3 docking (glideslope servo + R-bar→V-bar L-approach FSM), and
-L3 RETURN, L4 MODE MANAGER + CREW GATES, L5 FDIR, L6 SELF-CAL, and L7 INSTRUMENTATION
-(pure/FlightRecorder.cs — 60-column per-flight CSV schema + invariant formatting + a Put* filler per
-controller). ⛔ ALL PURE GUIDANCE/AUTOPILOT LAYERS L0–L7 ARE COMPLETE, fresh, and headless-green
-(~900+ checks). The CoM shifter (AdjustableCoMShifter) is engaged ONCE before entry and never toggled to
-steer.
+WHERE WE ARE: the ENTIRE autopilot is BUILT + INSTALLED — pure L0–L7 (~900+ headless checks green) + all six
+KSP glue seams (pad→orbit→booster→rendezvous→docking→return, DLL 237.5 KB). BUT it has never flown a mission:
+the three in-game flights all RUD'd or lost the crew AT MAX-Q on ascent. Diagnosed causes: the glue still uses
+stock SAS (too slow for FAR's transonic instability) + StageManager + action groups (hard-rule violation), and
+earlier the launch clamp/erector wasn't released and chutes used stock ModuleParachute not RealChute. The deep
+MechJeb + AtmosphereAutopilot harvest (docs/AUTOPILOT_HARVEST.md) supplied the concrete fixes.
 
-KSP GLUE — built in SEAMS (game-side, not headless-testable; each seam verified in-game before the next).
-DONE + installed: SEAM 1 (FlightDriver.cs [KSPAddon(Flight)] host survives handover; CrewProcedureOps.cs the
-REAL conductor; FlightLog.cs per-flight CSV). SEAM 2 ASCENT (Steering.cs SAS inner loop + ENU/pitch-heading;
-AscentControl.cs = S1 pitch program on the LaunchAzimuth heading, max-Q+g-limit throttle, MECO→stage, S2
-ignition, UPFG insertion, SECO on measured Pe, Dragon decoupler, then PhaseComplete). SEAM 3 BOOSTER
-(BoosterControl.cs = flies the separated S1 when it is the active vessel — flip→entry burn ThreeLanding→aero
-descent→hoverslam CenterOnly; engine modes selected ABSOLUTELY by Activating the matching-engineID
-ModuleEngines while off, only on a mode change, one ignition per mode, NEVER NextEngineMode; fins+legs by
-capability). FlightDriver throttle authority generalised (SetThrottle/ReleaseThrottle), shared by ascent +
-booster; a lone booster dispatched before the conductor. DLL 223.0 KB, installed. Attitude inner loop is
-stock SAS for now (guidance is ours) — pure ControlLaw+Authority loop is a later swap.
-⚠ First-cut items to VALIDATE against the CSV, one change per flight: UPFG Iy plane normal (=−(r×v)), SECO
-cutoff, ENU heading sign (SelfCal.SteerSign guards), StageManager order; booster = retrograde-hold+hoverslam
-(no droneship targeting yet — that + the engine-mode Activate/Shutdown behaviour + booster avionics are what
-to confirm).
+THE FIX (approved plan Steps A–I, ASCENT-FIRST — get pad→orbit clean BEFORE any later phase):
+  A. Actuator (NEW glue) — direct part control by capability from docs/CRAFT_DUMP_VEHICLE_MAP.md; rip out ALL
+     StageManager + action-group calls. Octaweb mode via ModuleTundraEngineSwitch selected ABSOLUTELY while
+     off (never NextEngineMode); decouplers/RealChute/RCS/legs/fins/CoM-shifter/SuperDracos all direct.
+  B. AttitudePilot (NEW glue) — port MechJeb BetterController: currentAttitude=rot*Euler(-90,0,0), error=Euler
+     of Inverse(current)*requested with yaw NEGATED (order pitch,roll,yaw), arrestable-rate ω=√(2αθ) with
+     α=ΣGetPotentialTorque/MOI, actuation=−torque/controlTorque → s.pitch/roll/yaw; MOI-scaled gains; pitch≈yaw.
+     Replaces SAS in Steering.cs. + AoA moderation (AA method) as a FAR safety net.
+  C. Ullage before every light (RCS aft until LowestUllage≥0.996) + clamp/erector release gate (release only
+     at ≥99% measured thrust + no failed engine; reset the gimbal integral while clamped).
+  D. PROVING FLIGHT: pad→orbit. Then E booster, F rendezvous, G docking, H return, I FDIR/self-cal hardening.
 
-SEAM 4 RENDEZVOUS (RendezvousControl.cs = Fly(Phasing): LVLH from the targeted station via pure/Lvlh,
-Rendezvous.Guide named-burn Δv on the Dracos, ATTITUDE-FIRST-THEN-TRANSLATE, opens the nose shroud before
-any Draco burn, hands to the G9 gate at ~7.5 km; FlightDriver gained RCS SetTranslation/ReleaseTranslation).
-DLL 225.5 KB, installed. ⚠ validate: the RCS translation axis/sign (ForwardSign default −1). Env note: a
-DRONESHIP is already placed + the Cape Canaveral mod gives RTLS landing pads — so booster targeting is now
-unblocked (VehicleParts.IsDroneship marker "Droneship"; RTLS pad is a static position).
+DO NEXT: build Step A (Actuator), then Step B (AttitudePilot), then Step C. Headless-test the pure-testable
+decision logic; keep build.py test green; commit when green. Then hand a pad→orbit proving flight.
 
-BOOSTER TARGETING refinement DONE (src/BoosterTargeting.cs — L1 Trajectory impact predictor with a measured
-ballistic coeff, rotation-corrected, vs the droneship/targeted RTLS pad → GridFin steers the booster onto the
-deck; BoosterControl feeds it + measures BC while coasting). ⚠ validate: BC measurement, rotation-correction
-sign, CrossSign.
+AMENDED WORKFLOW RULES (2026-08-26 — these SUPERSEDE the older discipline):
+- BATCH FIXES: apply as many well-reasoned fixes as a phase needs, then fly to verify the batch. Do NOT fly a
+  separate flight per single constant. One disciplined root-cause pass may yield multiple fixes.
+- YOU MAY COMMIT + INSTALL autonomously once build.py test is green and the change is reasoned (keeps a backup
+  to revert to). The old "never commit/install without me" rule is lifted.
+- INSTRUMENT everything but keep the FPS drop minimal (modest sample rate, no heavy per-tick work).
 
-SEAM 5 DOCKING (DockingControl.cs = flies the L-approach with pure/DockControl glideslope servo, one leg at
-a time keyed on CrewProcedureOps.NextGateId → WP0 400m below/WP1 220m/WP2 20m/contact on the Dracos, ring
-pointed at the port, PhaseComplete per WP so the G10/G11/G12 gate releases the next leg; DockedSide.Docked =
-capture). DLL 229.5 KB, installed. ⚠ validate: RCS translation axis SIGNS (RcsRight/Up/FwdSign), servo gains,
-tolerances; KOS auto-abort not wired (crew ABORT on the gate is the path).
-
-SEAM 6 RETURN (ReturnControl.cs — return Phasing→FlyDeparture: undock the docking node + Departure CW burns
-on Dracos; Entry→FlyDeorbitEntry: DeorbitGuidance trunk-jettison→close shroud→retrograde Draco burn on
-measured Pe, then lifting entry ENGAGING the CoM shifter Descent Mode via AdjustableCoMShifter ToggleMode,
-shield-forward; Drogues/Mains/Splashdown→FlyChutes: Chutes state-based ModuleParachute deploy→splashdown.
-CrewProcedureOps.IsReturn (set at G14) splits return-Phasing from outbound rendezvous). DLL 235.0 KB,
-installed. ⚠ BANK-ANGLE ENTRY STEERING NOT WIRED (stable shield-forward + CoM engaged + chutes; S-turn bank
-is the refinement — SAS holds a direction not a roll, needs a roll loop).
-
-✅ THE ENTIRE AUTOPILOT IS BUILT + INSTALLED — pure L0–L7 + glue seams 1–6 (pad→orbit→booster recovery+
-targeting→rendezvous→docking→undock→departure→deorbit→entry→splashdown). DLL 235.0 KB.
-
-BANK-ANGLE ENTRY STEERING DONE (src/EntrySteering.cs = L1 footprint predictor WITH LIFT + measured BC,
-rotation-corrected, vs the capsule's splashdown target → Entry.Guide down/cross error; + measured-bank; the
-roll loop banks to σ via FlightDriver.SetRoll st.roll while SAS holds retrograde). DLL 237.5 KB, installed.
-
-DO NOT read the deleted tree. ✅ THE ENTIRE AUTOPILOT IS BUILT + INSTALLED (pure L0–L7 + glue seams 1–6 +
-booster targeting + bank-angle entry). DLL 237.5 KB. What remains is IN-GAME.
-
-DO NEXT: IN-GAME PROVING FLIGHTS + TUNING (no more blind glue). Fly Crew-2 on AUTO SEQUENCE, read the
-DragonScreen_capture/*.csv, fix flagged first-cut items ONE change per flight (NO Python sims):
-(1) RCS translation SIGNS (RendezvousControl.ForwardSign, DockingControl.RcsRight/Up/FwdSign, ReturnControl.
-ForwardSign) — a burn/translate the wrong way; (2) UPFG Iy plane normal + SECO cutoff + ENU heading sign
-(AscentControl); (3) booster BC/rotation/CrossSign (BoosterTargeting); (4) deorbit target Pe; (5) entry
-bank/roll SIGNS (ReturnControl.RollSign, EntrySteering.RollRefSign/CrossSign) + roll gain (RollKp). Target
-the droneship (booster) and a splashdown recovery-ship/waypoint (entry) so the predictors have a target.
-REMAINING REFINEMENTS: the pure ControlLaw+Authority attitude loop replacing the SAS inner loop
-(src/Steering.cs); roll-ONLY entry control (aero-trim AoA); KOS auto-abort in docking. Build fresh
-referencing the pure controllers.
+GROUND-TRUTH AUTHORITY: live ModuleManager.ConfigCache > flight CSV+KSP.log > the .md docs. Neutralized stale
+numbers: octaweb ignitions = 1 PER MODE (3 total: liftoff/entry/landing, no mid-burn 3→1) NOT "4"; Merlin spool
+INSTANT NOT "3–5 s"; engine thrust/Isp read live; capsule entry aero MEASURED live; AtmosphereAutopilot REMOVED.
 
 NON-NEGOTIABLE RULES:
-- ⛔ DO NOT read, reference, or resurrect plugin/_deleted_autopilot/ — it's the old unproven code.
-  Build only from the research docs + primary sources (cite them). The SCREENS were kept.
-- FULL CONTROL AT ALL TIMES: the guidance always outputs a definite attitude — never floating/drifting.
-  The Dragon has no reaction wheels (16 Dracos share rotation+translation) → attitude-first-then-
-  translate, never both at once.
-- Actuate BY CAPABILITY from the real craft (docs/CRAFT_DUMP_VEHICLE_MAP.md): Draco = MMH+NTO;
-  open the nose shroud before any Draco burn; octaweb has 1 ignition per engine mode (landing =
-  CenterOnly, no 3→1 mid-burn, select mode absolutely while off, never NextEngineMode).
-- Constants come from the research (plan §5 / live ConfigCache), NOT old tuned values. Instrument
-  everything the same pass. No Python sims — validate with headless C# tests. Do NOT commit/install
-  unless I ask.
-
-The pure stack is done; the KSP glue is the last build step, then flight testing (one change per flight,
-validated against the FlightRecorder CSV — no Python sims).
+- ⛔ DO NOT read/reference/resurrect plugin/_deleted_autopilot/ — old unproven code. Build fresh from the
+  research + primary sources (cite them). The SCREENS were kept.
+- ⛔ DIRECT PART CONTROL ONLY — never StageManager, never Vessel.ActionGroups. Actuate by capability.
+- ⛔ SAS lost control 3× — build the direct gimbal loop. SAS only if it demonstrably wins.
+- FULL CONTROL AT ALL TIMES: guidance always outputs a definite attitude — never floating. No reaction wheels
+  (16 Dracos share rotation+translation) → attitude-first-then-translate, never both at once. Open the nose
+  shroud before any Draco burn. Draco = MMH+NTO.
+- Crash-investigator method: read the CSV + KSP.log together, one disciplined root-cause pass. NO Python sims
+  — validate with headless C# tests + the flight corpus (assess_flight.py). Full fidelity, never "safe".
 ```
-</content>

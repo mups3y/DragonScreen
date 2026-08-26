@@ -1,11 +1,98 @@
-# CLAUDE — Crew Dragon autopilot: ground-up rebuild plan
+# Crew Dragon autopilot — the governing plan
 
-> The autopilot we are building is named **CLAUDE** (user: "if you succeed we will call the autopilot
-> CLAUDE"). It is the SpaceX/NASA autonomous flight software for the RSS/RO **Tundra Falcon 9 + Crew
-> Dragon** stack, flown crew-in-the-loop, launch → splashdown, on Earth. This document is the single,
-> self-contained plan for rebuilding it correctly from the ground up, with every starting value derived
-> from the research corpus — not inherited from the current code. It is written to be **picked up in any
-> session** and put you straight into the right mode.
+> This is the SpaceX/NASA autonomous flight software for the RSS/RO **Tundra Falcon 9 + Crew Dragon**
+> stack, flown crew-in-the-loop, launch → splashdown, on Earth. It is the single, self-contained governing
+> plan, written to be **picked up in any session** and put you straight into the right mode.
+>
+> ⭐ **THE NAME IS NOT GIVEN — IT IS EARNED (user 2026-08-26).** The autopilot is **"the autopilot"** until
+> it is genuinely great — flies a full crew mission launch→splashdown, clean, full-fidelity. Only then does
+> it get the name **CLAUDE**. Older text in this doc that calls it "CLAUDE" predates this rule = the
+> aspirational/earned name, not the current one. And it flies **ANY** crew mission (mission-as-data); Crew-2
+> is only the reference/validation profile.
+>
+> ⭐ **The step-by-step build sequence + the anti-regression rules live in the approved plan file**
+> `C:\Users\User\.claude\plans\snoopy-orbiting-hennessy.md` (approved 2026-08-26). §0.0 below is the folded
+> master state; the plan file is the authoritative build order. Read both first, every session.
+
+---
+
+## 0.0 MASTER STATE — read first (rebuilt 2026-08-26 from flight data + full environment research)
+
+**Where we are:** the whole pure stack (L0–L7) + all KSP glue seams are BUILT and INSTALLED, but the first
+three in-game flights all **RUD'd or lost the crew at max-Q**. The failures were diagnosed from the CSVs +
+`KSP.log`, and then we STOPPED guessing and **researched the actual environment**. The autopilot is now
+being corrected against that ground truth, not against the `.md` hypotheses.
+
+**THE RESEARCH CORPUS (read these — they are the ground truth this plan is built on):**
+- **`docs/INSTALLED_MODS_RESEARCH.md`** — how the 114-mod RSS/RO install actually behaves. THE key facts:
+  ⛔ **no reaction wheels (RO)** → the ONLY ascent attitude authority is the **S1 engine gimbal, ±5°**;
+  **FAR** makes the airframe **transonically UNSTABLE** (aero-centre shifts fwd through Mach 1) so any AoA at
+  max-Q is amplified and must be nulled fast; **RealChute** (not stock `ModuleParachute`); **RealFuels**
+  ullage + 1-ignition-per-mode; **TestFlight** can fail engines (rare); **AtmosphereAutopilot** installed but
+  OFF (FAR-aware FBW = the reference for what our control must do).
+- **`docs/ATTITUDE_CONTROL_RESEARCH.md`** — the CONFIRMED (read-in-full) port of MechJeb's `BetterController`
+  gimbal attitude law: the `Euler(-90,0,0)` frame conversion, the quaternion→(pitch,roll,yaw) error (yaw
+  negated), the arrestable-rate braking curve `ω=√(2αθ)` with `α = Σ GetPotentialTorque / MOI`, and the
+  **negative actuation** onto `FlightCtrlState`. This is the gimbal loop to build; KSPCommunityFixes fixes
+  the gimbal-torque reporting so it is trustworthy.
+- **`docs/LAUNCH_AND_ASCENT_RESEARCH.md`** §4.3/§6.1 — the **zero-AoA gravity turn** (nose on the velocity
+  vector, gravity turns it) = load relief AND the only way to survive FAR's transonic instability.
+- The real-technique corpus: `docs/TRUE_AUTOPILOT_ARCHITECTURE.md`, `docs/FLIGHT_SOFTWARE_PLAN.md`,
+  `docs/CREW2_REAL_MISSION_TECHNIQUES.md`, `docs/REAL_CREW_DRAGON_MISSION.md`, the `PHASE_*` docs,
+  `data/crew_missions.json` (the callout timeline), `docs/CRAFT_DUMP_VEHICLE_MAP.md` + `data/craftdump.csv`
+  (every actuable module).
+
+**THE TWO HARD RULES that reshape the control layer:**
+1. ⛔ **DIRECT PART CONTROL ONLY** ([[direct-part-control-hard-rule]]) — NEVER `StageManager` (staging) or
+   `Vessel.ActionGroups` (Abort/RCS/Gear/SAS/Light). Actuate every module directly, matched by capability
+   from the craft dump: ignite/shutdown the specific `ModuleEngines`, fire the specific decouplers, enable
+   each `ModuleRCS` + set thrust limits, deploy legs/fins/RealChutes, fire the SuperDracos, switch octaweb
+   modes. A central `Actuator` glue class owns this; no controller reaches for staging or an action group.
+2. **SAS is allowed ONLY if it is genuinely the best precise control** (user) — but with no reaction wheels
+   and a gimbal-only unstable rocket at max-Q, SAS lost control 3× → the answer is the **direct gimbal
+   attitude loop** (the MechJeb port above), which is also what "direct full control" demands.
+
+**THE CORRECTED CONTROL ARCHITECTURE (what to build):**
+```
+GUIDANCE (pure: UPFG / zero-AoA pitch program / named-burns / entry)   ← WHERE to point + throttle
+      │ world aim direction + throttle + which engines/RCS
+      ▼
+ATTITUDE PILOT (glue, MechJeb-ported): world aim → gimbal/RCS via FlightCtrlState pitch/yaw/roll
+      │                                 (arrestable-rate braking curve, live GetPotentialTorque)
+      ▼
+ACTUATOR (glue): DIRECT ModuleEngines/ModuleRCS/ModuleDecouple/ModuleGimbal/RealChute — never staging/AG
+      ▲
+FDIR + ABORT over the top: thrust-shortfall/loss-of-control → SuperDraco escape → RealChutes → splashdown
+```
+Zero-AoA through transonic/max-Q (guidance) + a fast gimbal loop that uses the ±5° authority (attitude
+pilot) = the fix for the loss of control. Ullage before every ignition (RealFuels). Respect min throttle.
+
+**FLIGHT POST-MORTEMS (see §8b for the full log):** F1 clamp held + AoA RUD; F2 erector (`ModuleTundra-
+Decoupler`, not `LaunchClamp`) stayed on → drag RUD; F3 erector fixed but still transonic AoA runaway (SAS
+too slow) + RealChute never deployed (used stock `ModuleParachute`) so the crew hit at 139 m/s. Fixes so
+far: clamp + erector release, RealChute-aware deploy, state-reset-on-scene-load, q-scaled zero-AoA cap.
+**NEXT (the real fix — sequenced in the approved plan file, Steps A–I):** (1) `Actuator` glue — rip out ALL
+staging/action-groups, actuate every module directly by capability; (2) `AttitudePilot` glue — the
+MechJeb-`BetterController` direct gimbal loop replacing SAS (arrestable-rate, live `GetPotentialTorque`,
+MOI-scaled gains, pitch≈yaw), + AoA moderation as a FAR safety net; (3) **ullage** settle before every light
+(RCS aft until `LowestUllage≥0.996`); (4) **clamp/erector release gate** — release hold-downs only at ≥99%
+measured thrust + no failed engine, reset the gimbal integral while clamped. Then **ascent-first proving
+flights** (pad→orbit clean BEFORE any later phase), then booster→rendezvous→docking→return, then FDIR/self-cal
+hardening. Full detail: the plan file.
+
+**⛔ GROUND-TRUTH AUTHORITY (neutralize stale numbers): live `ModuleManager.ConfigCache` > flight CSV+`KSP.log`
+> the `.md` docs.** Superseded numbers a stale doc still carries: octaweb **ignitions = 1 per mode** (3 total:
+liftoff/entry/landing — NOT "4"); Merlin **spool INSTANT** (`throttleResponseRate=1e6` — NOT "3–5 s slow");
+engine thrust/Isp read live (S1 6681.6 kN / MVac 805 kN / Draco 2 kN·Isp240 MMH+NTO); capsule entry aero
+**measured** live (`Trajectory.MeasureAero`, not a stock drag-cube AeroTable); AtmosphereAutopilot **removed**.
+
+**⛔ AMENDED WORKFLOW RULES (user 2026-08-26 — supersede the older discipline):**
+- **Batch fixes** — you may apply as many well-reasoned fixes as a phase needs, then fly to verify the batch;
+  do NOT fly a separate flight per single constant ("we will never finish the project that way"). One
+  disciplined root-cause pass MAY yield multiple fixes.
+- **You MAY commit and install autonomously** once `build.py test` is green and the change is reasoned (keeps
+  a backup to revert to) — the old "never commit/install without the user" rule is lifted.
+- **Instrument everything but keep the FPS drop minimal** (modest sample rate, no heavy per-tick work).
 
 ---
 
@@ -29,14 +116,18 @@ never a convenient analogue, never a "safe/simplified" alternative. When a choic
 - **Instrument EVERYTHING the same pass you build it** — every controller's decisions, gates, targets,
   triggers, planned+delivered Δv into `FlightRecorder.cs`; prefer more columns. Never fly uninstrumented.
   Between flights ALWAYS suggest the proper next step. [[instrument-everything]]
-- **One root-cause pass then ONE fix; one change per test flight.** No "wait/actually" thrash. Terse chat.
-  Take the user's clues literally. [[work-efficiency-no-second-guessing]] [[falcon-flight-data-first]]
+- **One disciplined root-cause pass, then fix ALL the real causes you found** (multiple fixes per pass OK) —
+  diagnose before you touch. **Batch reasoned fixes and fly to verify the batch**; do NOT fly a separate
+  flight per single constant. No "wait/actually" thrash. Terse chat. Take the user's clues literally.
+  [[work-efficiency-no-second-guessing]] [[falcon-flight-data-first]]
 - **Port, don't invent** — grep a function's identifiers before calling; copy the reason; never a
   "defensive" global; MechJeb source is at `Desktop/mechjeb_src` (port from it, don't decompile).
   [[falcon-port-dont-invent]] [[mechjeb-source-reference]]
 - **Detect by capability, not part name.** [[falcon-detect-by-capability]]
-- **Do NOT commit or install** without the user. Build: `cd plugin && python build.py test|install`
-  (install needs KSP + CKAN closed and a full restart). `.cfg` changes need a restart only.
+- **You MAY commit and install autonomously** when `build.py test` is green and the change is reasoned (keeps
+  a backup to revert to — user 2026-08-26 lifted the old "never without me" rule). Build:
+  `cd plugin && python build.py test|install` (install needs KSP + CKAN closed and a full restart). `.cfg`
+  changes need a restart only.
 
 **The environment (RSS/RO, verified):** Earth R 6371 km, μ 3.986e14, atmosphere ~140 km, LEO ~7.8 km/s.
 FAR voxel aero (**measure** drag, don't model it; grid fins are `FARControllableSurface`, authority ∝ q).

@@ -41,6 +41,7 @@ namespace DragonScreen
                 writer.Flush();
                 openVesselId = v.persistentId;
                 startUT = Planetarium.GetUniversalTime();
+                lastSampleT = -1e9;   // a revert can move UT backwards; force the first sample to fire
                 Debug.Log("[DragonScreen] flight log → " + name);
             }
             catch (Exception e)
