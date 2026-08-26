@@ -43,6 +43,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Gauge.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\GridFin.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Hohmann.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Hoverslam.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\IgnitionGate.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Images.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\LaunchAzimuth.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\LifeSupport.cs
@@ -89,6 +90,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\test\CrewGateTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\DockingTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\FdirTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\FlightRecorderTest.cs
+C:\Users\User\Desktop\DragonScreen\plugin\test\IgnitionGateTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\LayoutSweepTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\LayoutTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\MissionProfileTest.cs

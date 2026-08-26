@@ -31,6 +31,8 @@ namespace DragonScreen
             // attitude loop (direct gimbal/RCS pointing — the max-Q fix; AttitudePilot internals)
             "att_point_deg", "att_rate_cmd", "att_rate_meas", "act_pitch", "act_yaw", "act_roll",
             "ctrl_tq_pitch", "ctrl_tq_yaw",
+            // ignition gates (ullage settle + clamp release)
+            "ullage_stab", "clamp_frac", "clamp_held",
             // ascent (UPFG)
             "upfg_tgo_s", "upfg_vgo_mps", "pitch_deg", "azimuth_deg", "ascent_phase",
             // booster
@@ -67,6 +69,7 @@ namespace DragonScreen
             AttPointDeg = Index("att_point_deg"), AttRateCmd = Index("att_rate_cmd"), AttRateMeas = Index("att_rate_meas"),
             ActPitchC = Index("act_pitch"), ActYawC = Index("act_yaw"), ActRollC = Index("act_roll"),
             CtrlTqPitch = Index("ctrl_tq_pitch"), CtrlTqYaw = Index("ctrl_tq_yaw"),
+            UllageStab = Index("ullage_stab"), ClampFrac = Index("clamp_frac"), ClampHeldC = Index("clamp_held"),
             UpfgTgo = Index("upfg_tgo_s"), UpfgVgo = Index("upfg_vgo_mps"), PitchDeg = Index("pitch_deg"),
             AzimuthDeg = Index("azimuth_deg"), AscentPhase = Index("ascent_phase"),
             BoostPhase = Index("boost_phase"), BoostAoaDeg = Index("boost_aoa_deg"), EngineMode = Index("engine_mode"),
@@ -174,6 +177,13 @@ namespace DragonScreen
             Set(c, AttPointDeg, pointErrDeg); Set(c, AttRateCmd, rateCmdRads); Set(c, AttRateMeas, rateMeasRads);
             Set(c, ActPitchC, actPitch); Set(c, ActYawC, actYaw); Set(c, ActRollC, actRoll);
             Set(c, CtrlTqPitch, ctrlTqPitchNm); Set(c, CtrlTqYaw, ctrlTqYawNm);
+        }
+
+        // The ignition gates: RealFuels ullage stability (during the S2 settle) + the pad clamp-hold thrust
+        // fraction and whether the hold-downs are still on — so the CSV shows the settle and the release.
+        public static void PutIgnition(string[] c, double ullageStability, double clampThrustFrac, bool clampHeld)
+        {
+            Set(c, UllageStab, ullageStability); Set(c, ClampFrac, clampThrustFrac); Set(c, ClampHeldC, clampHeld);
         }
 
         public static void PutAscent(string[] c, double tgoS, double vgoMps, double pitchDeg,

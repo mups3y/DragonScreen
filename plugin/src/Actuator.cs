@@ -68,6 +68,54 @@ namespace DragonScreen
             }
         }
 
+        // The first live engine playing the wanted role (null if none) — e.g. the MVac for the ullage settle.
+        public static ModuleEngines FindEngine(Vessel v, EngineRole want)
+        {
+            if (v == null) return null;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                Part p = v.parts[i];
+                string nm = p.name ?? "";
+                for (int m = 0; m < p.Modules.Count; m++)
+                {
+                    ModuleEngines e = p.Modules[m] as ModuleEngines;
+                    if (e != null && Actuation.EngineRoleOf(nm, e.engineID) == want) return e;
+                }
+            }
+            return null;
+        }
+
+        // Measured vs available thrust (N) for a role, and how many of its engines are lit — the clamp gate's
+        // release signal. `available` is the CURRENT-CONDITIONS max (maxFuelFlow·flowMultiplier·Isp·g0, the
+        // MechJeb VesselState formula), NOT the static maxThrust — so at sea level a healthy engine at full
+        // throttle reads ~100% (using vacuum maxThrust would read ~82% and never let the gate release a good
+        // launch). Falls back to maxThrust if the flow terms are unavailable. finalThrust/maxThrust are in kN.
+        public static void EngineThrust(Vessel v, EngineRole want, out double thrustN, out double maxN, out int litCount)
+        {
+            thrustN = 0.0; maxN = 0.0; litCount = 0;
+            if (v == null) return;
+            const double g0 = 9.80665;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                Part p = v.parts[i];
+                string nm = p.name ?? "";
+                for (int m = 0; m < p.Modules.Count; m++)
+                {
+                    ModuleEngines e = p.Modules[m] as ModuleEngines;
+                    if (e == null || Actuation.EngineRoleOf(nm, e.engineID) != want) continue;
+                    double isp = e.realIsp > 1f ? e.realIsp : 0.0;
+                    double eMaxKn = e.maxFuelFlow * e.flowMultiplier * isp * g0;   // current-conditions max (kN)
+                    if (!(eMaxKn > 0.0)) eMaxKn = e.maxThrust;                     // fallback: static config max
+                    maxN += eMaxKn * 1000.0;
+                    if (e.EngineIgnited && e.isOperational)
+                    {
+                        thrustN += e.finalThrust * 1000.0;
+                        litCount++;
+                    }
+                }
+            }
+        }
+
         // Shut ALL lit engines on booster parts (covers whichever octaweb mode is currently lit).
         public static void ShutdownBoosterEngines(Vessel v)
         {

@@ -44,6 +44,7 @@ namespace DragonScreen
             ReturnControl.Reset();
             Steering.Release();
             ReleaseThrottle(); ReleaseTranslation(); ReleaseRoll();
+            clampHeld = false; launchUT = 0.0;
             FlightLog.Fill = null;
             FlightLog.Close();
             aborting = false; abortPending = false; abortChute = ChutePhase.Idle;
@@ -136,6 +137,7 @@ namespace DragonScreen
                     ReleaseTranslation();
                     ReleaseRoll();
                     AttitudePilot.Reset();
+                    clampHeld = false;
                     FlightLog.Fill = null;
                     FlightLog.Close();
                     aborting = false; abortPending = false; abortChute = ChutePhase.Idle;
@@ -172,6 +174,9 @@ namespace DragonScreen
 
                 // 3) the flying-phase controller for the active phase
                 DriveActivePhase(v);
+
+                // 3b) the clamp-release gate holds the hold-downs until full thrust is confirmed
+                if (clampHeld) ClampGate(v);
 
                 // 4) instrument (only while engaged — one CSV per autopilot flight)
                 FlightLog.Sample(v);
@@ -222,18 +227,59 @@ namespace DragonScreen
             }
         }
 
+        // ⛔ CLAMP-RELEASE GATE (plan §3.4): light the octaweb, but HOLD the hold-downs until the measured
+        // thrust reaches ≥99% of available (a failed light before release = pad safe-abort, never lift off on
+        // a bad engine). ClampGate runs each tick until release; the gimbal integral is reset while clamped.
+        static bool clampHeld;
+        static double launchUT;
+        public static bool ClampHeld { get { return clampHeld; } }
+        public static double ClampThrustFrac { get { return lastClampThrustFrac; } }
+
         static void Ignite(Vessel v)
         {
             try
             {
-                Debug.Log("[DragonScreen] LAUNCH — crew GO cleared; igniting.");
+                Debug.Log("[DragonScreen] LAUNCH — crew GO cleared; igniting (hold-downs held until full thrust).");
                 SetThrottle(1.0);         // full throttle AT ignition — never light the engines against a 0 throttle
                 Actuator.IgniteOctawebLiftoff(v);   // ⛔ direct: light ONLY the octaweb all-engines mode (no staging)
-                Actuator.ReleaseHoldDowns(v);       // ⛔ free EVERYTHING holding the rocket: clamps AND the erector.
+                clampHeld = true;
+                launchUT = Planetarium.GetUniversalTime();
             }
             catch (Exception e)
             {
                 Debug.LogWarning("[DragonScreen] ignition command failed: " + e.Message);
+            }
+        }
+
+        // Held every tick between ignition and hold-down release. Releases at ≥99% thrust; safe-aborts a
+        // failed light (keep clamps, shut down); keeps the gimbal integral zeroed so it cannot kick at release.
+        static double lastClampThrustFrac;
+        static void ClampGate(Vessel v)
+        {
+            AttitudePilot.ResetIntegrators();   // bolted down → no windup
+
+            double thrustN, availN; int lit;
+            Actuator.EngineThrust(v, EngineRole.OctawebAll, out thrustN, out availN, out lit);
+            lastClampThrustFrac = availN > 1.0 ? thrustN / availN : 0.0;
+            double heldS = Planetarium.GetUniversalTime() - launchUT;
+
+            switch (IgnitionGate.Evaluate(thrustN, availN, lit, heldS))
+            {
+                case ClampAction.Release:
+                    Actuator.ReleaseHoldDowns(v);   // ⛔ free the clamps AND the erector — full thrust confirmed
+                    clampHeld = false;
+                    Debug.Log("[DragonScreen] CLAMP RELEASE — thrust " + (lastClampThrustFrac * 100.0).ToString("F0") + "% of available, liftoff");
+                    break;
+                case ClampAction.SafeAbort:
+                    // Failed light while still bolted down = a SAFE state: shut the engine, KEEP the clamps,
+                    // drop throttle. Do NOT fire the SuperDracos — the vehicle is held to the pad, not falling.
+                    Actuator.ShutdownBoosterEngines(v);
+                    SetThrottle(0.0); ReleaseThrottle(); clampHeld = false;
+                    Debug.LogWarning("[DragonScreen] ⛔ PAD SAFE-ABORT — octaweb failed to reach thrust ("
+                                     + (lastClampThrustFrac * 100.0).ToString("F0") + "%); engines shut, clamps held.");
+                    break;
+                default:
+                    break;   // Hold — keep waiting for thrust
             }
         }
 

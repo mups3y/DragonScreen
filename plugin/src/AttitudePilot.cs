@@ -35,6 +35,13 @@ namespace DragonScreen
         public static double ActPitch, ActYaw, ActRoll;
         public static double CtrlTorquePitchNm, CtrlTorqueYawNm;
 
+        // Clear the loop's integrators without dropping the hold — called every tick while the rocket is still
+        // clamped, so the position PID cannot wind up against the hold-downs and kick the gimbal at release.
+        public static void ResetIntegrators()
+        {
+            for (int i = 0; i < 3; i++) { posPid[i].Reset(); velPid[i].Reset(); }
+        }
+
         public static void Reset()
         {
             for (int i = 0; i < 3; i++) { posPid[i].Reset(); velPid[i].Reset(); }

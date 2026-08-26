@@ -29,6 +29,10 @@ namespace DragonScreen
         [Tunable] public static double AbortAoaDeg = 25.0;
         // the AoA cap ramps from MaxAoaDeg (low q) to 0 at this dynamic pressure, so max-Q is flown at 0 AoA.
         [Tunable] public static double QAoaZeroPa = 15000.0;
+        // S2 ullage: minimum post-MECO coast before S2 may light (lets S1 clear — the forward settle push
+        // also opens the gap), and the settle backstop (ignite anyway if RealFuels never reports settled).
+        [Tunable] public static double MinCoastS = 2.0;
+        [Tunable] public static double MaxUllageSettleS = 6.0;
 
         static AscentPhase phase = AscentPhase.Idle;
         static UpfgState upfg;
@@ -40,6 +44,7 @@ namespace DragonScreen
         // last commanded values, for the recorder
         static double Throttle;
         static double lastPitchCmd = 90, lastAzDeg, lastTgo, lastVgo, lastAoaDeg;
+        static double lastUllage = 1.0;
         static bool lastRcsOn;
         static string lastPhaseWord = "IDLE";
 
@@ -99,10 +104,25 @@ namespace DragonScreen
 
             if (phase == AscentPhase.Coast)
             {
-                // after S1 sep, ignite S2 once if it has not lit within a short settle
+                // ⛔ ULLAGE SETTLE before S2 ignition (plan §3.3): after MECO the propellant floats off the
+                // MVac intake in free-fall; fire the aft RCS (forward push, s.Z=-1) until RealFuels reports it
+                // settled, THEN light — there is no retry. A minimum coast lets the spent S1 clear first.
                 if (coastStartUT < 0) coastStartUT = Planetarium.GetUniversalTime();
-                if (!s2Lit && !s2Ignited && Planetarium.GetUniversalTime() - coastStartUT > 1.5)
-                { Actuator.IgniteSecondStage(v); s2Ignited = true; }   // ⛔ direct MVac ignite (Step C adds ullage)
+                if (!s2Lit && !s2Ignited)
+                {
+                    double settledS = Planetarium.GetUniversalTime() - coastStartUT;
+                    lastUllage = Ullage.Stability(Actuator.FindEngine(v, EngineRole.SecondStage));
+                    if (IgnitionGate.UllageReady(lastUllage, settledS, MinCoastS, MaxUllageSettleS))
+                    {
+                        Actuator.IgniteSecondStage(v); s2Ignited = true;
+                        FlightDriver.ReleaseTranslation();     // stop settling; RCS master stays on (S2 roll control)
+                    }
+                    else
+                    {
+                        Actuator.EnableRcs(v);                 // settle: seat the propellant on the intake
+                        FlightDriver.SetTranslation(0, 0, -1); // s.Z=-1 = forward push (MechJeb ProcessUllage)
+                    }
+                }
             }
 
             // ---- steering ----
@@ -275,6 +295,7 @@ namespace DragonScreen
             FlightRecorder.PutAttitude(row, AttitudePilot.PointErrDeg, AttitudePilot.RateCmdRads,
                 AttitudePilot.RateMeasRads, AttitudePilot.ActPitch, AttitudePilot.ActYaw, AttitudePilot.ActRoll,
                 AttitudePilot.CtrlTorquePitchNm, AttitudePilot.CtrlTorqueYawNm);
+            FlightRecorder.PutIgnition(row, lastUllage, FlightDriver.ClampThrustFrac, FlightDriver.ClampHeld);
             FlightRecorder.PutSelfCal(row, cal);
         }
     }

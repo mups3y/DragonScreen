@@ -22,6 +22,7 @@ public static class TestMain
         bad += VehiclePartsTest.Run();
         bad += ActuationTest.Run();        // glue: direct-control role classifier (Actuator ← pure/Actuation)
         bad += AttitudeLoopTest.Run();     // L2 control: MechJeb BetterController gimbal loop (AttitudePilot ← pure)
+        bad += IgnitionGateTest.Run();     // glue gates: clamp release (≥99% thrust) + ullage settle (≥0.996)
         bad += MissionProfileTest.Run();   // rebuilt autopilot: S0b mission-as-data resolver
         bad += TrajectoryTest.Run();       // L1 nav: RK4 impact predictor + measured drag/lift/beta
         bad += PredictTest.Run();          // L1 nav: impact / closest-approach helpers
