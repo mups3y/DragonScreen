@@ -223,9 +223,10 @@ public static class OrbitalTest
         }
 
         // A 35 km overshoot due east of the KSC pad - the real dgOvershoot case.
-        Orbital.OffsetLatLon(R, -0.0972, -74.5577, 90.0, Deorbit.OvershootM, out lat, out lon);
+        // (35 000 m was Deorbit.OvershootM; inlined here now the autopilot is rebuilt from scratch.)
+        Orbital.OffsetLatLon(R, -0.0972, -74.5577, 90.0, 35000.0, out lat, out lon);
         Near("35 km overshoot lands 35 km away",
-             Orbital.GroundRange(R, -0.0972, -74.5577, lat, lon), Deorbit.OvershootM, 1.0);
+             Orbital.GroundRange(R, -0.0972, -74.5577, lat, lon), 35000.0, 1.0);
         Check("and it is to the EAST", lon > -74.5577, lon.ToString("F4"));
     }
 }

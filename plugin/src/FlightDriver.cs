@@ -1,256 +1,219 @@
-/*
- * DragonScreen - FlightDriver
- *
- * GLUE. The heartbeat for everything that must keep running whether or not anyone is looking at a
- * screen: the autopilot, the booster recovery, the console's armed burns, and the recorder.
- *
- * ---- ⛔ WHY THIS FILE EXISTS: THE AUTOPILOT WAS LIVING INSIDE A DISPLAY WIDGET ----
- * All four used to be ticked from `ScreenPainter.Update()`. ScreenPainter is a MonoBehaviour on a
- * GameObject owned by DragonScreenMonitor, which is an `InternalModule` on the Dragon's IVA - and
- * `DragonScreenMonitor.OnDestroy` explicitly destroys that GameObject when the IVA is torn down.
- *
- * KSP despawns the IVA of a vessel that is not active (`Part.DespawnIVA`). So the exact call that
- * starts a booster recovery -
- *
- *      FlightGlobals.ForceSetActiveVessel(booster)
- *
- * - made the Dragon inactive, which despawned its IVA, which destroyed the painter, which removed
- * the ONLY caller of BoosterRecovery.Tick(). The booster took focus and then fell completely
- * unguided: no boostback, no entry burn, no landing burn, and no recording of any of it. Worse,
- * Finish() could never run either, so focus never returned to the upper stage and `Active` stayed
- * true forever - which meant even a rebuilt painter would hit the early return in AutoPilot.Tick
- * and do nothing for the rest of the session.
- *
- * That is the real reason "booster recovery has never run once", and it would have stayed true
- * after every constant in Landing.cs was made correct. It is not a tuning bug; it is flight
- * software scoped to a screen.
- *
- * ---- THE FIX IS SCOPE, AND IT IS THE STANDARD ONE ----
- * MAS solves the same problem the same way: `MASFlightComputer` is a PartModule and
- * `MASVesselComputer` a vessel-level MonoBehaviour, never an InternalModule - only the display
- * lives in the prop. A `[KSPAddon(Startup.Flight, false)]` is the strongest version of that: it is
- * created when the flight scene loads and destroyed when it unloads, so it is indifferent to which
- * vessel is active, which camera mode is up, and whether any IVA exists at all.
- *
- * `false` means "not once per game" - recreate it on every entry to the flight scene, which is what
- * makes the statics get re-validated rather than carried across a revert.
- *
- * The painter still draws. It no longer flies.
- */
+// DragonScreen — FlightDriver  (KSP glue: the autopilot host, a flight-scene KSPAddon)
+// ============================================================================================
+// THE AUTOPILOT TICK LIVES HERE, not on the IVA screen objects. A KSPAddon(Flight) is scoped to the
+// flight SCENE, so it survives the active-vessel switch a booster handover performs — the IVA (and the
+// ScreenPainter on it) is destroyed the instant the Dragon stops being the active vessel, which is why
+// nothing vehicle-wide may be ticked from there (see ScreenPainter.Update). This host:
+//   • runs the crew-gate CONDUCTOR (CrewProcedureOps) against the live vessel each physics frame,
+//   • performs the seam's single ACTUATION — ignition on the crew's launch GO,
+//   • hands an ABORT to the phase-correct responder (pure/AbortResponder.cs),
+//   • writes the per-flight FlightLog CSV.
+// The flying-phase controllers (ascent/booster/rendezvous/docking/return) attach through OnFlyByWire in
+// later seams; this seam establishes the host + the countdown → launch path. Defensive throughout — a
+// glue fault logs and carries on, never taking the flight down.
+// ============================================================================================
 using System;
 using UnityEngine;
+using KSP.UI.Screens;
 
 namespace DragonScreen
 {
     [KSPAddon(KSPAddon.Startup.Flight, false)]
     public class FlightDriver : MonoBehaviour
     {
-        private const string Tag = "[DragonScreen] ";
-
-        /// <summary>realtime of the last map-trajectory refresh, to throttle it to ~2 Hz.</summary>
-        private float lastMapUpdate;
+        static FlightDriver instance;
+        Vessel boundVessel;
 
         public void Start()
         {
-            // Discover the [Tunable] fields, dump the reference catalogue, apply any overrides. Once
-            // per flight-scene entry, before anything ticks, so the first frame already runs on the
-            // tuned values rather than a frame of defaults.
-            Tuning.Build();
-            MapTrajectory.Start();      // the map-view re-entry overlay (replaces the Trajectories add-on)
-            FlightTrajectory.Start();   // the same overlay, projected over the flight view
-            Debug.Log(Tag + "flight driver up - autopilot, recovery and recorder now tick "
-                          + "independently of the IVA");
-        }
-
-        public void Update()
-        {
-            // Live tuning: re-read PluginData/tuning.cfg if it changed. Throttled to ~1 s internally,
-            // so this is a cheap call every frame and a disk touch only once a second.
-            Tuning.Poll();
-
-            // One-shot: the first frame a craft is sitting on the pad, dump every part/module/event/
-            // field/action to DragonScreen_capture/craftdump.csv, so direct control can be written
-            // against the vehicle's REAL handles. Latches until the flight scene is rebuilt.
-            CraftDump.Auto();
-
-            // ---- AUTO-RESUME THE ASCENT AFTER A RECOVERY HANDBACK. ----
-            // The booster-recovery handback tears down and rebuilds the flight scene; OnDestroy
-            // disengaged the ascent mid-climb and the crew had to restart the sequence. If that
-            // teardown flagged a resume, bring the ascent straight back - but only when the active
-            // vessel is genuinely still climbing (airborne, periapsis below the atmosphere), so a
-            // finished mission is never re-launched. `AutoPilot.Engage` refuses from a stable orbit
-            // anyway, which is the belt to this braces.
-            if (AutoPilot.ResumeAscent && !AutoPilot.Engaged)
-            {
-                Vessel av = FlightGlobals.ActiveVessel;
-                bool climbing = av != null && av.orbit != null && av.mainBody != null
-                                && av.situation != Vessel.Situations.PRELAUNCH
-                                && av.situation != Vessel.Situations.LANDED
-                                && av.orbit.PeA < av.mainBody.atmosphereDepth;
-                if (climbing)
-                {
-                    AutoPilot.ResumeAscent = false;
-                    AutoPilot.Engage();
-                    Debug.Log(Tag + "ascent auto-sequence resumed after the recovery handback");
-                }
-                else if (av != null && av.orbit != null && av.mainBody != null
-                         && av.orbit.PeA >= av.mainBody.atmosphereDepth)
-                {
-                    AutoPilot.ResumeAscent = false;   // already in orbit - nothing to resume
-                }
-            }
-
-            // Order matters only in that the recorder samples AFTER the guidance has run, so a row
-            // carries this frame's command rather than the previous one's.
-            FlightCommands.Tick();
-            BargeWaypoint.Ensure();   // cosmetic: drop the droneship map/navball marker once, when able
-            // The conductor runs BEFORE the controllers it supervises: it may engage the next phase this
-            // frame, and that controller then ticks in the same frame rather than a frame late. The abort
-            // responder ticks alongside it - once armed/triggered it drives the escape or retreat itself.
-            CrewProcedureOps.Tick();
-            AbortResponder.Tick();
-            AutoPilot.Tick();
-            // The node executor before the things that plan burns, so a burn armed this frame is
-            // flown from the next one rather than sitting a frame behind its own ignition time.
-            // Sample drag on BOTH vehicles before anything reads a prediction. The estimate is
-            // per-vessel and only improves while it is being measured, so it is taken every tick
-            // rather than when someone happens to ask.
-            ImpactPredictor.Sample(AutoPilot.AscentVessel);
-            ImpactPredictor.Sample(BoosterRecovery.BoosterVessel);
-            // And the returning capsule, which is neither of those by the time it comes home: the
-            // autopilot let go at insertion and the booster is long since down. Without this its drag
-            // is never measured and every entry prediction quietly falls back to a vacuum solve.
-            ImpactPredictor.Sample(DeorbitOps.Vehicle);
-            ImpactPredictor.Sample(EntryOps.Vehicle);
-
-            // ---- ⛔ THE RECORDER STARTS HERE, NOT AT LAUNCH. ----
-            // `FlightRecorder.Start` had exactly one caller: `AutoPilot` engaging for a launch. So a
-            // flight scene entered any other way was NEVER RECORDED - and that is every return from
-            // orbit. On 2026-08-11 the crew flew the whole de-orbit sequence and there is no CSV of
-            // it at all; the only evidence is a dozen log lines. The recorder exists so that a
-            // failure can be diagnosed from data, and the phases most likely to fail were the ones
-            // it was not watching.
-            if (!FlightRecorder.Recording) FlightRecorder.Start(FlightGlobals.ActiveVessel);
-
-            NodeExecutor.Tick();
-            StationApproach.Tick();
-            DockingOps.Tick();
-            DockedRefuel.Tick();          // fill the capsule the whole time it is berthed, not just at undock
-            UndockOps.Tick();
-            UndockPush.Tick();            // a manual undock still gets the retro push + shroud close
-
-            // ⛔ LAST, AND UNCONDITIONALLY. The chutes must not depend on any sequence having been
-            // started - see ChuteGuard. A crew flying the entry by hand had none deploy at all.
-            ChuteGuard.Tick();
-            // ⛔ LAYER-3 FDIR: watch the autonomous rendezvous for a FROZEN plan and act on it - re-plan
-            // the stuck node, then abort-to-home if that does not recover. This is the autopilot noticing
-            // the fault a HUMAN had to cancel by hand on flight_0826_014654. Before ReturnFallback so its
-            // re-plan / abort acts this frame, and after the rendezvous controllers so it sees live state.
-            RendezvousFdir.Tick();
-            // The "always have a way home" safety net: if the rendezvous will not close (propellant floor
-            // or timeout), it abandons it and de-orbits for a steering-test entry. Before the deorbit/entry
-            // ticks so a fired fallback flies from this same frame.
-            ReturnFallback.Tick();
-            PhaseDownOps.Tick();
-            DeorbitOps.Tick();
-            EntryOps.Tick();
-            FlightRecorder.Tick();
-
-            // ---- THE WATCH RUNS LAST, AND OUTSIDE EVERYTHING. ----
-            // Deliberately after every controller and outside all of them: a controller that throws
-            // and detaches must not take the monitor with it, which is the exact failure mode the
-            // monitor exists to report. It owns no actuator - see its header.
-            FlightMonitor.Tick();
-
-            // ---- PREDICTED-IMPACT TRAJECTORY (map AND flight view; replaces the Trajectories add-on). ----
-            // TWO PROFILES, selected by which vehicle is coming down (user 2026-08-24):
-            //   * the CREW DRAGON return - EntryOps/DeorbitOps engaged, flown on the capsule's KNOWN
-            //     ballistic coefficient (CapsuleBcKgM2), aimed at the splashdown target;
-            //   * the BOOSTER recovery - BoosterRecovery.Active, flown on the booster's LIVE-MEASURED
-            //     drag (bcOverride 0 -> use the measured bc), aimed at the droneship.
-            // The path integration is the same cost the guidance already pays and is now consumed by
-            // BOTH the map overlay and the in-flight overlay, so it runs whenever a descent is being
-            // flown - someone is always looking at one view or the other. Throttled to ~2 Hz.
-            {
-                float now = Time.realtimeSinceStartup;
-                if (now - lastMapUpdate > 0.5f)
-                {
-                    lastMapUpdate = now;
-                    Vessel rv = null; double tlat = 0.0, tlon = 0.0; double bcov = 0.0;
-                    if (EntryOps.Engaged && EntryOps.Vehicle != null)
-                    { rv = EntryOps.Vehicle; tlat = EntryOps.TargetLatDeg; tlon = EntryOps.TargetLonDeg;
-                      bcov = EntryGuidance.CapsuleBcKgM2; }
-                    else if (DeorbitOps.Engaged && DeorbitOps.Vehicle != null)
-                    { rv = DeorbitOps.Vehicle; tlat = DeorbitOps.TargetLatDeg; tlon = DeorbitOps.TargetLonDeg;
-                      bcov = EntryGuidance.CapsuleBcKgM2; }
-                    else if (BoosterRecovery.Active && BoosterRecovery.BoosterVessel != null
-                             && !BoosterRecovery.BoosterVessel.packed)
-                    {
-                        rv = BoosterRecovery.BoosterVessel;
-                        if (BoosterRecovery.HavePad)
-                        { tlat = BoosterRecovery.PadLat; tlon = BoosterRecovery.PadLon; }
-                        else
-                        { tlat = BoosterRecovery.DroneshipEarthLatDeg; tlon = BoosterRecovery.DroneshipEarthLonDeg; }
-                        bcov = 0.0;   // booster flies its OWN measured drag, not the capsule's known bc
-                    }
-
-                    if (rv != null)
-                        ImpactPredictor.UpdateMapTrajectory(rv, bcov, tlat, tlon);
-                    else
-                        ImpactPredictor.MapValid = false;
-                }
-            }
-            MapTrajectory.Update();      // draws in map view
-            FlightTrajectory.Update();   // draws the same path + target X over the flight view
+            instance = this;
+            Debug.Log("[DragonScreen] FlightDriver up (flight-scene autopilot host)");
         }
 
         public void OnDestroy()
         {
-            // ---- REMEMBER TO COME BACK IF THE ASCENT WAS STILL FLYING. ----
-            // The booster-recovery handback rebuilds the flight scene and fires this OnDestroy, which
-            // disengages the ascent mid-climb. If we were flying an ascent that had not finished, flag
-            // it so the rebuilt driver picks it straight back up (see Update). Set BEFORE Disengage.
-            if (AutoPilot.Engaged && AutoPilot.Phase != AscentPhase.Done
-                && AutoPilot.Phase != AscentPhase.Idle)
-                AutoPilot.ResumeAscent = true;
+            if (instance == this) instance = null;
+            Unbind();
+            FlightLog.Close();
+        }
 
-            // Leaving the flight scene ends the flight. Close the file rather than leaving the last
-            // rows buffered - the flights worth reading are the ones that end unexpectedly.
-            FlightRecorder.Stop("left the flight scene");
+        // ---- throttle authority: the active flying controller sets this; our OnFlyByWire applies it ----
+        void Bind(Vessel v)
+        {
+            if (boundVessel == v) return;
+            Unbind();
+            if (v != null) { v.OnFlyByWire += OnFlyByWire; boundVessel = v; }
+        }
+        void Unbind()
+        {
+            if (boundVessel != null) { boundVessel.OnFlyByWire -= OnFlyByWire; boundVessel = null; }
+        }
+        // throttle authority — whichever flying controller is active sets it; OnFlyByWire applies it.
+        static double cmdThrottle;
+        static bool throttleOwned;
+        public static void SetThrottle(double t)
+        {
+            cmdThrottle = t < 0.0 ? 0.0 : (t > 1.0 ? 1.0 : t); throttleOwned = true;
+        }
+        public static void ReleaseThrottle() { throttleOwned = false; }
 
-            MapTrajectory.Destroy();      // tear down the map camera component and its meshes
-            FlightTrajectory.Destroy();   // and the flight-view overlay component + material
+        // RCS translation authority (Dracos) — the capsule's rendezvous/prox-ops burns. Control-frame
+        // axes: X = right, Y = up, Z = fore/aft (KSP FlightCtrlState translation).
+        static float transX, transY, transZ;
+        static bool transOwned;
+        public static void SetTranslation(double x, double y, double z)
+        { transX = Clamp1(x); transY = Clamp1(y); transZ = Clamp1(z); transOwned = true; }
+        public static void ReleaseTranslation() { transOwned = false; transX = transY = transZ = 0f; }
+        static float Clamp1(double d) { return (float)(d < -1.0 ? -1.0 : (d > 1.0 ? 1.0 : d)); }
 
-            // ---- AND CLEAR THE STATICS HERE, WHICH IS THE HONEST PLACE FOR IT ----
-            // A revert or a scene change is what invalidates them - not a camera move, which is what
-            // AutoPilot's old persistentId watch was actually detecting. Everything below holds a
-            // reference to a vessel that is about to stop existing.
+        // Roll authority — the entry bank loop rolls the capsule about the velocity axis to the commanded
+        // bank σ while SAS (a direction-only target) holds the nose retrograde. SAS leaves roll free, so
+        // this st.roll coexists with the SAS pointing hold.
+        static float cmdRoll;
+        static bool rollOwned;
+        public static void SetRoll(double r) { cmdRoll = Clamp1(r); rollOwned = true; }
+        public static void ReleaseRoll() { rollOwned = false; cmdRoll = 0f; }
+
+        void OnFlyByWire(FlightCtrlState st)
+        {
+            // Only take an axis when a controller is actively commanding it; otherwise leave the
+            // player/idle in control. Pitch/yaw pointing is held by Steering (SAS), not here.
+            if (throttleOwned) st.mainThrottle = (float)cmdThrottle;
+            if (transOwned) { st.X = transX; st.Y = transY; st.Z = transZ; }
+            if (rollOwned) st.roll = cmdRoll;
+        }
+
+        // Physics-rate tick — control cadence, not display cadence.
+        public void FixedUpdate()
+        {
+            Vessel v = FlightGlobals.ActiveVessel;
+            if (v == null || !HighLogic.LoadedSceneIsFlight) return;
+
             try
             {
-                AutoPilot.Disengage("left the flight scene");
-                BoosterRecovery.Reset();
-                StationApproach.Reset();
-                DirectApproachOps.Reset();
-                NodeExecutor.Reset();
-                DockingOps.Reset();
-                DockedRefuel.Reset();
-                UndockPush.Reset();
-                UndockOps.Reset();
-            ChuteGuard.Reset();
-                PhaseDownOps.Reset();
-                DeorbitOps.Reset();
-                EntryOps.Reset();
-                ImpactPredictor.Reset();
-                FlightMonitor.Reset();
-                VehicleCheck.Reset();
-                CraftDump.Reset();
-                RendezvousFdir.Reset();
-                ReturnFallback.Reset();
+                if (!CrewProcedureOps.Engaged)
+                {
+                    // idle: not flying anyone. Close any open log, drop control, reset latches.
+                    Unbind();
+                    AscentControl.Reset();
+                    BoosterControl.Reset();
+                    RendezvousControl.Reset();
+                    DockingControl.Reset();
+                    ReturnControl.Reset();
+                    ReleaseThrottle();
+                    ReleaseTranslation();
+                    ReleaseRoll();
+                    FlightLog.Fill = null;
+                    FlightLog.Close();
+                    abortFired = false;
+                    return;
+                }
+
+                Bind(v);   // ensure our throttle hook is on the current vessel (follows handover)
+
+                // A lone SEPARATED BOOSTER (the active vessel after a focus-switch) flies its own autonomous
+                // recovery — the mission conductor tracks the Dragon, not this vehicle.
+                if (BoosterControl.IsRecoverableBooster(v))
+                {
+                    BoosterControl.Tick(v);
+                    FlightLog.Sample(v);
+                    return;
+                }
+
+                // otherwise: the Dragon / mission vessel.
+                BoosterControl.Reset();
+
+                // 1) the crew-gate conductor advances on measured state + the crew's GO
+                CrewProcedureOps.Tick(v);
+
+                // 2) the seam's single countdown actuation: ignition on the launch GO
+                if (CrewProcedureOps.ConsumeLaunch()) Ignite(v);
+
+                // 3) the flying-phase controller for the active phase
+                if (CrewProcedureOps.AbortActive) HandleAbort(v);
+                else DriveActivePhase(v);
+
+                // 4) instrument (only while engaged — one CSV per autopilot flight)
+                FlightLog.Sample(v);
             }
             catch (Exception e)
             {
-                // The scene is being torn down; a throw here would be logged against nothing useful.
-                Debug.LogWarning(Tag + "cleanup on scene exit: " + e.Message);
+                Debug.LogWarning("[DragonScreen] FlightDriver tick failed: " + e.Message);
+            }
+        }
+
+        // Dispatch the active mission phase to its controller. Seam 2 wires ASCENT; the remaining
+        // phases (booster/rendezvous/docking/return) attach here as their seams land. Between a
+        // controller's phases the throttle authority is dropped so nothing is left commanding.
+        static void DriveActivePhase(Vessel v)
+        {
+            switch (CrewProcedureOps.ActivePhase)
+            {
+                case MissionPhase.Ascent:
+                    AscentControl.Tick(v, CrewProcedureOps.Profile);
+                    break;
+                case MissionPhase.Phasing:
+                    // outbound Phasing = rendezvous; return Phasing = departure (same enum, IsReturn splits)
+                    if (CrewProcedureOps.IsReturn) ReturnControl.TickDeparture(v, CrewProcedureOps.Profile);
+                    else RendezvousControl.Tick(v, CrewProcedureOps.Profile);
+                    break;
+                case MissionPhase.Approach:
+                case MissionPhase.Docked:
+                    DockingControl.Tick(v, CrewProcedureOps.Profile);
+                    break;
+                case MissionPhase.Entry:
+                    ReturnControl.TickDeorbitEntry(v, CrewProcedureOps.Profile);
+                    break;
+                case MissionPhase.Drogues:
+                case MissionPhase.Mains:
+                case MissionPhase.Splashdown:
+                    ReturnControl.TickChutes(v);
+                    break;
+                default:
+                    AscentControl.Reset();
+                    RendezvousControl.Reset();
+                    DockingControl.Reset();
+                    ReturnControl.Reset();
+                    ReleaseThrottle();
+                    ReleaseTranslation();
+                    ReleaseRoll();
+                    FlightLog.Fill = null;   // no flying controller contributing columns right now
+                    break;
+            }
+        }
+
+        static void Ignite(Vessel v)
+        {
+            try
+            {
+                Debug.Log("[DragonScreen] LAUNCH — crew GO cleared; igniting.");
+                StageManager.ActivateNextStage();
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[DragonScreen] ignition command failed: " + e.Message);
+            }
+        }
+
+        static bool abortFired;
+        static void HandleAbort(Vessel v)
+        {
+            if (abortFired) return;
+            try
+            {
+                AbortInputs ai;
+                ai.Triggered = true;
+                ai.Phase = CrewProcedureOps.ActivePhase;
+                ai.LesArmed = FlightCommands.EscapeArmed;
+                AbortCommand c = AbortResponder.Respond(ai);
+                Debug.Log("[DragonScreen] ABORT: " + c.Mode + " — " + c.Note);
+                if (c.FireSuperDracos || c.Separate)
+                    v.ActionGroups.SetGroup(KSPActionGroup.Abort, true);   // stock Abort AG = SuperDraco escape
+                abortFired = true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[DragonScreen] abort command failed: " + e.Message);
             }
         }
     }

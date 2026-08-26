@@ -1,130 +1,123 @@
-/*
- * DragonScreen - MissionProfile (PURE)
- *
- * One Crew Dragon mission, as DATA. The autopilot is mission-agnostic: Crew-2, a crew rotation to a
- * different port, a private ISS flight, or a free-flyer are all the SAME flight software driven by a
- * different profile - never bespoke code. This is that profile, and Crew2Profile() is the reference one.
- *
- * ---- WHAT THE PROFILE ACTUALLY DECIDES ----
- * The low-level guidance (UPFG ascent, hoverslam recovery, named-burn rendezvous, bank-angle entry) is
- * already tuned to the real Crew-2 numbers. So the profile does NOT re-tune it; Crew2Profile carries those
- * same values, which is why adding "any mission" regresses nothing. What the profile decides is the shape
- * of the MISSION:
- *   - HasRendezvous == false makes a FREE-FLYER (Inspiration4/Polaris-style): the conductor and the crew
- *     gates skip rendezvous / dock / undock entirely - launch, orbit, return.
- *   - The rendezvous target, approach geometry (WP0/WP1/WP2, keep-out sphere) and the recovery/splashdown
- *     sites are the per-mission facts the gates, the timeline and the displays read.
- *   - The consumables budget (mission days + reserve) is what the launch and de-orbit LS commit gates
- *     check against real TAC margins (see LifeSupport).
- *
- * ---- SCOPE: REAL MISSIONS, REAL EARTH ----
- * "Any Crew Dragon mission" means any REAL one in RSS/RO on Earth. It does not re-open the stock Kerbin /
- * tourist paths (removed 2026-08-25); the stock station-ferry lives in the separate DragonScreen-Stock
- * build. See dragonscreen-two-builds-split.
- */
+// DragonScreen — MissionProfile  (autopilot rebuild L-S0b, docs/AUTOPILOT_REBUILD_PLAN.md §3A)
+// ============================================================================================
+// THE FIRST PIECE OF THE REBUILT AUTOPILOT. A mission is DATA, selected by the VAB craft name.
+// This is what makes CLAUDE a true autopilot and not a script: the guidance/control is invariant
+// and flies physics to the TARGETS in the resolved profile; changing the mission changes only the
+// data. Build one .craft per mission named exactly as the mission (saves/test/Ships/VAB/<name>.craft,
+// generated from data/crew_missions.json). On the pad, Resolve(vessel.vesselName) picks the profile.
+//
+// Pure + headless-tested. The catalog is the compiled-in mirror of data/crew_missions.json (the DB is
+// the source of truth; regen this table from it when the DB changes). No file I/O in the pure layer.
+// ============================================================================================
+using System;
+
 namespace DragonScreen
 {
+    public enum MissionKind : byte { IssCrew, FreeFlyer }
+    public enum RecoveryMode : byte { Droneship, RTLS }
+
     public struct MissionProfile
     {
-        /// <summary>Human name for the mission - shown on the screen. e.g. "CREW-2".</summary>
-        public string Name;
+        public string Name;          // the VAB craft name that selects this mission
+        public string Date;
+        public double IncDeg;        // target orbital plane
+        public double PeriKm, ApoKm; // 0/0 = the standard ~200 km circular ISS insertion
+        public MissionKind Kind;
+        public RecoveryMode Recovery;
+        public string Capsule;
+        public string BoosterTail;
+        public int BoosterFlight;    // 1 = new booster
+        public bool HasRendezvous;   // ISS crew = true; a free-flyer omits rendezvous/dock/undock
+        public bool Valid;           // false = no craft-name match; caller must NO-GO, not fly blind
 
-        /// <summary>A crewed Dragon (the LS gates and the crew poll apply). Cargo Dragon would be false.</summary>
-        public bool Crewed;
-        /// <summary>This mission rendezvous and docks. False = a free-flyer: no rendezvous/dock/undock.</summary>
-        public bool HasRendezvous;
-        /// <summary>The booster returns to a droneship. False = expendable (no recovery gates).</summary>
-        public bool RecoverBooster;
-
-        // ---- ASCENT ----
-        /// <summary>Target orbital-plane inclination, degrees. ISS = 51.6.</summary>
-        public double TargetInclinationDeg;
-        /// <summary>Target insertion altitude, metres (real Earth ISS ~ 4.2e5).</summary>
-        public double InsertionAltitudeM;
-
-        // ---- RENDEZVOUS TARGET (only meaningful when HasRendezvous) ----
-        /// <summary>The vessel to find and dock with. StationApproach falls back to vesselType==Station.</summary>
-        public string StationVesselName;
-        /// <summary>WP0: metres directly BELOW the station on the +R-bar (a hold).</summary>
-        public double Wp0BelowM;
-        /// <summary>WP1: metres in FRONT of the station on the docking axis (a hold).</summary>
-        public double Wp1AheadM;
-        /// <summary>WP2: metres from the docking port (a hold, then contact).</summary>
-        public double Wp2RangeM;
-        /// <summary>Keep-Out Sphere radius, metres. ISS = 200.</summary>
-        public double KeepOutSphereM;
-
-        // ---- RECOVERY / RETURN ----
-        public double DroneshipLatDeg, DroneshipLonDeg;
-        /// <summary>Splashdown aim point, degrees. For display + return targeting.</summary>
-        public double SplashdownLatDeg, SplashdownLonDeg;
-
-        // ---- CONSUMABLES BUDGET (drives the LS commit gates against real TAC margins) ----
-        /// <summary>Planned mission length, days. The LS gate needs this many days of consumables...</summary>
-        public double MissionDurationDays;
-        /// <summary>...plus this reserve, before it will GO.</summary>
-        public double ConsumablesReserveDays;
-
-        /// <summary>The profile is self-consistent enough to fly. Cheap sanity, used by the test + on load.</summary>
-        public bool Valid()
-        {
-            if (string.IsNullOrEmpty(Name)) return false;
-            if (TargetInclinationDeg < 0.0 || TargetInclinationDeg > 180.0) return false;
-            if (InsertionAltitudeM <= 0.0) return false;
-            if (HasRendezvous)
-            {
-                if (string.IsNullOrEmpty(StationVesselName)) return false;
-                // The L-approach only makes sense outside-in: WP0 (below) is the furthest, WP2 the closest.
-                if (!(Wp0BelowM > Wp1AheadM && Wp1AheadM > Wp2RangeM && Wp2RangeM > 0.0)) return false;
-                if (KeepOutSphereM <= 0.0) return false;
-            }
-            if (MissionDurationDays < 0.0 || ConsumablesReserveDays < 0.0) return false;
-            return true;
-        }
+        public bool FreeFlyer { get { return Kind == MissionKind.FreeFlyer; } }
     }
 
     public static class Missions
     {
-        /// <summary>
-        /// The reference mission - SpaceX Crew-2 to the ISS. Numbers match the values the guidance is
-        /// already tuned to (inclination 51.6, the "ISS USOS Real Size" target, WP0/WP1/WP2 = 400/220/20 m,
-        /// the 200 m KOS, the droneship deck at 32.79 / -76.64), so selecting it changes no guidance.
-        /// Crew-2 stayed ~6 months docked; the LS budget below is the CAPSULE's own free-flight endurance
-        /// (Dragon carries a few days of consumables for the transit + return, the station keeps the crew),
-        /// which is what the capsule-side commit gate should check.
-        /// </summary>
-        public static MissionProfile Crew2()
+        // ---- helpers to keep the table terse ----
+        static MissionProfile Iss(string name, string date, string capsule, string tail, int flight,
+                                   RecoveryMode rec)
         {
-            MissionProfile p = new MissionProfile();
-            p.Name = "CREW-2";
-            p.Crewed = true;
-            p.HasRendezvous = true;
-            p.RecoverBooster = true;
-
-            p.TargetInclinationDeg = 51.6;
-            p.InsertionAltitudeM = 420000.0;
-
-            p.StationVesselName = "ISS USOS Real Size";
-            p.Wp0BelowM = 400.0;
-            p.Wp1AheadM = 220.0;
-            p.Wp2RangeM = 20.0;
-            p.KeepOutSphereM = 200.0;
-
-            p.DroneshipLatDeg = 32.787551;
-            p.DroneshipLonDeg = -76.644507;
-            p.SplashdownLatDeg = 30.0;      // off the Florida coast; return targeting owns the precise point
-            p.SplashdownLonDeg = -80.0;
-
-            // The commit gate checks the CAPSULE's own endurance for the transit + return, NOT the months
-            // docked (the station keeps the crew). Kept conservative (1.5 + 0.5 = 2 days) so a normally
-            // provisioned Dragon always passes and only a genuinely near-empty capsule is a NO-GO - a
-            // too-high bar would false-block the pad, since TAC's auto-loaded amounts are the vehicle's.
-            p.MissionDurationDays = 1.5;
-            p.ConsumablesReserveDays = 0.5;
-            return p;
+            return new MissionProfile {
+                Name = name, Date = date, IncDeg = 51.6, PeriKm = 0, ApoKm = 0,
+                Kind = MissionKind.IssCrew, Recovery = rec, Capsule = capsule,
+                BoosterTail = tail, BoosterFlight = flight, HasRendezvous = true, Valid = true };
+        }
+        static MissionProfile Free(string name, string date, string capsule, string tail, int flight,
+                                   double inc, double peri, double apo)
+        {
+            return new MissionProfile {
+                Name = name, Date = date, IncDeg = inc, PeriKm = peri, ApoKm = apo,
+                Kind = MissionKind.FreeFlyer, Recovery = RecoveryMode.Droneship, Capsule = capsule,
+                BoosterTail = tail, BoosterFlight = flight, HasRendezvous = false, Valid = true };
         }
 
-        /// <summary>The active mission the conductor, gates and displays read. Defaults to Crew-2.</summary>
-        public static MissionProfile Active = Crew2();
+        // Mirror of data/crew_missions.json (booster tail/flight verified from primary sources 2026-08-26).
+        public static readonly MissionProfile[] Catalog = new MissionProfile[]
+        {
+            Iss ("DM-2",         "2020-05-30", "Endeavour",  "B1058", 1, RecoveryMode.Droneship),
+            Iss ("Crew-1",       "2020-11-16", "Resilience", "B1061", 1, RecoveryMode.Droneship),
+            Iss ("Crew-2",       "2021-04-23", "Endeavour",  "B1061", 2, RecoveryMode.Droneship),
+            Free("Inspiration4", "2021-09-16", "Resilience", "B1062", 3, 51.6, 575, 585),
+            Iss ("Crew-3",       "2021-11-11", "Endurance",  "B1067", 2, RecoveryMode.Droneship),
+            Iss ("Ax-1",         "2022-04-08", "Endeavour",  "B1062", 4, RecoveryMode.Droneship),
+            Iss ("Crew-4",       "2022-04-27", "Freedom",    "B1067", 4, RecoveryMode.Droneship),
+            Iss ("Crew-5",       "2022-10-05", "Endurance",  "B1077", 1, RecoveryMode.Droneship),
+            Iss ("Crew-6",       "2023-03-02", "Endeavour",  "B1078", 1, RecoveryMode.Droneship),
+            Iss ("Ax-2",         "2023-05-21", "Freedom",    "B1080", 1, RecoveryMode.RTLS),
+            Iss ("Crew-7",       "2023-08-26", "Endurance",  "B1081", 1, RecoveryMode.Droneship),
+            Iss ("Ax-3",         "2024-01-18", "Freedom",    "B1080", 5, RecoveryMode.RTLS),
+            Iss ("Crew-8",       "2024-03-04", "Endeavour",  "B1083", 1, RecoveryMode.Droneship),
+            Free("Polaris Dawn", "2024-09-10", "Resilience", "B1083", 4, 51.7, 190, 1400),
+            Iss ("Crew-9",       "2024-09-28", "Freedom",    "B1085", 2, RecoveryMode.Droneship),
+            Iss ("Crew-10",      "2025-03-14", "Endurance",  "B1090", 2, RecoveryMode.Droneship),
+            Free("Fram2",        "2025-03-31", "Resilience", "B1085", 6, 90.01, 202, 413),
+            Iss ("Ax-4",         "2025-06-25", "Grace",      "B1094", 2, RecoveryMode.Droneship),
+            Iss ("Crew-11",      "2025-07-31", "Endeavour",  "B1094", 3, RecoveryMode.Droneship),
+        };
+
+        // No craft-name match: a generic ISS-crew plane so nothing is undefined, but Valid=false so the
+        // conductor raises a NO-GO — never fly a guessed mission silently (docs plan §3A).
+        public static MissionProfile Fallback = new MissionProfile {
+            Name = "(unrecognised — generic ISS crew)", Date = "", IncDeg = 51.6, PeriKm = 0, ApoKm = 0,
+            Kind = MissionKind.IssCrew, Recovery = RecoveryMode.Droneship, Capsule = "",
+            BoosterTail = "", BoosterFlight = 1, HasRendezvous = true, Valid = false };
+
+        // Lowercase; keep only [a-z0-9], so "Falcon 9 - Crew-2 Real Size" -> "falcon9crew2realsize"
+        // and "Crew-2" -> "crew2". Exact-name match is the primary path (the generated craft use the
+        // bare mission name); the substring pass is a bounded fallback for descriptive craft names.
+        static string Norm(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            var sb = new System.Text.StringBuilder(s.Length);
+            for (int i = 0; i < s.Length; i++)
+            {
+                char c = char.ToLowerInvariant(s[i]);
+                if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) sb.Append(c);
+            }
+            return sb.ToString();
+        }
+
+        public static MissionProfile Resolve(string vesselName)
+        {
+            string key = Norm(vesselName);
+            if (key.Length == 0) return Fallback;
+
+            // 1) exact normalized match (the generated craft names hit this).
+            for (int i = 0; i < Catalog.Length; i++)
+                if (Norm(Catalog[i].Name) == key) return Catalog[i];
+
+            // 2) substring, LONGEST catalog name first so "crew11" wins over "crew1" (Crew-1 vs Crew-11).
+            int bestLen = -1, best = -1;
+            for (int i = 0; i < Catalog.Length; i++)
+            {
+                string cn = Norm(Catalog[i].Name);
+                if (cn.Length > bestLen && key.Contains(cn)) { bestLen = cn.Length; best = i; }
+            }
+            if (best >= 0) return Catalog[best];
+
+            return Fallback;
+        }
     }
 }

@@ -1,64 +1,77 @@
-/*
- * DragonScreen - Hohmann
- *
- * PURE. The two-impulse transfer that raises (or lowers) one apsis to a target radius. The rendezvous
- * needs it because Crew Dragon inserts LOW - Crew-2 went into a ~190 km orbit and climbed to the ISS at
- * ~420 km over the phasing days - so the approach has to be able to lift the whole orbit ~220 km, not
- * just circularise where it already is. Before this, `StationApproach.MatchAltitude` refused when the
- * station sat above our apoapsis ("never reaches its 420 km") and the rendezvous dead-ended.
- *
- * Everything is vis-viva, mu = GM: the speed on an orbit of semi-major axis a at radius r is
- * sqrt(mu (2/r - 1/a)). A burn AT AN APSIS (where velocity is purely horizontal) changes only the
- * OPPOSITE apsis, so the transfer is: burn prograde at periapsis to raise apoapsis to the target, coast
- * half an orbit, then circularise at the new apoapsis. Two burns, each a plain vis-viva difference.
- */
+// DragonScreen — Hohmann  (autopilot rebuild L3 rendezvous: the orbit raises + phasing)
+// ============================================================================================
+// The big catch-up burns (Phase / Boost / Close) are Hohmann-family apsis burns; the phase-lead timing
+// says WHEN to fire so the transfer arrives with the station still safely ahead. Built fresh from the
+// standard vis-viva / Hohmann equations (PHASE_3_RENDEZVOUS_RESEARCH §4.3/§4b). Coarse phasing here,
+// CW two-impulse (pure/Cw.cs) for the terminal legs.
+// ============================================================================================
+using System;
+
 namespace DragonScreen
 {
     public static class Hohmann
     {
-        /// <summary>Orbital speed at radius r on an orbit of semi-major axis a (vis-viva). 0 if unbound here.</summary>
+        public static double CircularSpeed(double r, double mu)
+        {
+            if (r <= 0.0 || mu <= 0.0) return 0.0;
+            return Math.Sqrt(mu / r);
+        }
+
+        // vis-viva: v² = μ(2/r − 1/a)
         public static double SpeedAt(double r, double a, double mu)
         {
             if (r <= 0.0 || a <= 0.0 || mu <= 0.0) return 0.0;
             double v2 = mu * (2.0 / r - 1.0 / a);
-            return v2 > 0.0 ? System.Math.Sqrt(v2) : 0.0;
+            return v2 > 0.0 ? Math.Sqrt(v2) : 0.0;
         }
 
-        /// <summary>
-        /// Signed prograde dv at an apsis of radius <paramref name="rBurn"/> to move the semi-major axis
-        /// from <paramref name="aOld"/> to <paramref name="aNew"/>. Positive raises the far apsis
-        /// (prograde), negative lowers it (retrograde). Apply along the velocity direction at the apsis.
-        /// </summary>
-        public static double ApsisBurnDv(double rBurn, double aOld, double aNew, double mu)
+        public static double TransferSma(double r1, double r2) { return 0.5 * (r1 + r2); }
+
+        // First burn at r1 to raise/lower the opposite apsis to r2 (prograde +, retrograde −).
+        public static double Dv1(double r1, double r2, double mu)
         {
-            return SpeedAt(rBurn, aNew, mu) - SpeedAt(rBurn, aOld, mu);
+            double at = TransferSma(r1, r2);
+            return SpeedAt(r1, at, mu) - CircularSpeed(r1, mu);
+        }
+        // Second burn at r2 to circularise from the transfer ellipse.
+        public static double Dv2(double r1, double r2, double mu)
+        {
+            double at = TransferSma(r1, r2);
+            return CircularSpeed(r2, mu) - SpeedAt(r2, at, mu);
+        }
+        public static double Total(double r1, double r2, double mu)
+        {
+            return Math.Abs(Dv1(r1, r2, mu)) + Math.Abs(Dv2(r1, r2, mu));
         }
 
-        /// <summary>
-        /// The semi-major axis of the transfer ellipse that touches <paramref name="rBurn"/> at one apsis
-        /// and <paramref name="rOther"/> at the other. (rBurn + rOther) / 2.
-        /// </summary>
-        public static double TransferSma(double rBurn, double rOther)
+        public static double TransferTimeS(double r1, double r2, double mu)
         {
-            return 0.5 * (rBurn + rOther);
+            double at = TransferSma(r1, r2);
+            if (at <= 0.0 || mu <= 0.0) return 0.0;
+            return Math.PI * Math.Sqrt(at * at * at / mu);
         }
 
-        /// <summary>
-        /// First burn of a Hohmann from our current orbit up (or down) to a target circular radius: the
-        /// prograde dv at the burn apsis (periapsis to raise, apoapsis to lower) that sets the OPPOSITE
-        /// apsis onto <paramref name="rTarget"/>. Signed as ApsisBurnDv.
-        /// </summary>
-        public static double RaiseOppositeApsisDv(double rBurn, double aOld, double rTarget, double mu)
+        // Phase-lead: the target sweeps ω₂·t_H during the transfer, so fire when the target is AHEAD by
+        // φ = π − ω₂·t_H (normalised to [0,2π)). The chaser (lower/faster) closes the phase at ω₁−ω₂.
+        public static double PhaseLeadRad(double r1, double r2, double mu)
         {
-            return ApsisBurnDv(rBurn, aOld, TransferSma(rBurn, rTarget), mu);
+            double tH = TransferTimeS(r1, r2, mu);
+            double w2 = Math.Sqrt(mu / (r2 * r2 * r2));
+            double phi = Math.PI - w2 * tH;
+            phi = phi % (2.0 * Math.PI);
+            if (phi < 0.0) phi += 2.0 * Math.PI;
+            return phi;
         }
 
-        /// <summary>Circularisation dv AT radius r for an orbit currently of semi-major axis a: bring the
-        /// speed to the local circular speed sqrt(mu/r). Signed (negative when we are faster than circular,
-        /// i.e. at periapsis of an ellipse).</summary>
-        public static double CirculariseDv(double r, double a, double mu)
+        // Wait time until the phase angle (target-ahead-of-chaser) reaches the lead angle.
+        public static double WaitTimeS(double phaseNowRad, double phaseLeadRad, double omega1, double omega2)
         {
-            return SpeedAt(r, r, mu) - SpeedAt(r, a, mu);   // SpeedAt(r,r,..) == sqrt(mu/r)
+            double rel = omega1 - omega2;   // closing rate of the phase angle (chaser lower → faster → rel>0)
+            if (Math.Abs(rel) < 1e-12) return 0.0;
+            double dphi = (phaseNowRad - phaseLeadRad) % (2.0 * Math.PI);
+            if (rel > 0.0) { while (dphi < 0.0) dphi += 2.0 * Math.PI; }
+            else { while (dphi > 0.0) dphi -= 2.0 * Math.PI; }
+            return dphi / rel;
         }
     }
 }

@@ -1,0 +1,830 @@
+{
+ "_meta": {
+  "title": "Crew Dragon mission telemetry & reconstruction database",
+  "built": "2026-08-26",
+  "purpose": "Per-mission ascent facts for the DragonScreen autopilot. Only DM-1 has raw extracted time-series telemetry; every other mission is reconstructed from the DM-1 template keyed to that mission's published callout timeline + target orbit.",
+  "confidence": {
+   "P": "cited primary/authoritative",
+   "E": "established",
+   "D": "derived/reconstructed",
+   "~": "approximate/verify"
+  },
+  "reconstruction_basis": "data/dm1_ascent_template.json (pitch + throttle/g) and data/dm1_ascent_full.json (539-sample full profile)",
+  "met_units": "seconds relative to liftoff (negative = countdown)",
+  "selection": "The autopilot picks a mission by matching the VAB craft name (vessel.vesselName) to a mission 'name' here. Build one vehicle per mission, named exactly as the mission. No match -> generic ISS-crew fallback + NO-GO note.",
+  "vehicle_setup_fields": "Per mission, user-SETTABLE in the VAB (DB gives the real default): capsule, booster {tail, flights_flown} (feeds TestFlight wear/reliability), fuel_load (crew LEO = full; booster reserve is emergent from MECO energy), decals/livery (cosmetic, shown on screen). The guidance reads the RESULTING vehicle state from ground truth and flies physics; setup is data it measures, never a scripted branch."
+ },
+ "standard_iss_crew": {
+  "_note": "Falcon 9 Block 5 -> ~51.6 deg, ~200 km insertion, droneship recovery downrange. Near-identical across DM-2, Crew-1..Crew-11, Ax-1..Ax-4. Countdown+ascent MET from the Crew-1 NASA timeline PDF (2020-11-15), cross-checked vs Crew-2 & Crew-6 (spread of a few seconds).",
+  "source_P": "NASA Crew-1 mission timeline PDF; Spaceflight Now Crew-2 & Crew-6 timelines",
+  "countdown_gates": [
+   {
+    "met_s": -9300,
+    "event": "Crew ingress",
+    "gate": "G1"
+   },
+   {
+    "met_s": -8400,
+    "event": "Communication check",
+    "gate": "G1"
+   },
+   {
+    "met_s": -8040,
+    "event": "Suit leak checks",
+    "gate": "G2"
+   },
+   {
+    "met_s": -6900,
+    "event": "Hatch close",
+    "gate": "G3"
+   },
+   {
+    "met_s": -4200,
+    "event": "ISS state upload to Dragon",
+    "gate": null
+   },
+   {
+    "met_s": -2700,
+    "event": "Launch Director GO for propellant load",
+    "gate": "G4"
+   },
+   {
+    "met_s": -2520,
+    "event": "Crew access arm retracts",
+    "gate": null
+   },
+   {
+    "met_s": -2220,
+    "event": "Dragon launch escape system ARMED",
+    "gate": "G5"
+   },
+   {
+    "met_s": -2100,
+    "event": "RP-1 + 1st-stage LOX load begins",
+    "gate": null
+   },
+   {
+    "met_s": -960,
+    "event": "2nd-stage LOX load begins",
+    "gate": null
+   },
+   {
+    "met_s": -420,
+    "event": "Falcon 9 engine chill",
+    "gate": null
+   },
+   {
+    "met_s": -300,
+    "event": "Dragon to internal power",
+    "gate": "G6"
+   },
+   {
+    "met_s": -60,
+    "event": "Final prelaunch checks; tanks to flight pressure",
+    "gate": null
+   },
+   {
+    "met_s": -45,
+    "event": "Launch Director GO for launch",
+    "gate": "G7"
+   },
+   {
+    "met_s": -3,
+    "event": "Ignition sequence start",
+    "gate": null
+   }
+  ],
+  "ascent_events": [
+   {
+    "met_s": 0,
+    "event": "Liftoff"
+   },
+   {
+    "met_s": 58,
+    "event": "Max-Q"
+   },
+   {
+    "met_s": 157,
+    "event": "MECO"
+   },
+   {
+    "met_s": 160,
+    "event": "Stage separation"
+   },
+   {
+    "met_s": 168,
+    "event": "SES-1 (2nd-stage ignition)"
+   },
+   {
+    "met_s": 449,
+    "event": "1st-stage entry burn"
+   },
+   {
+    "met_s": 530,
+    "event": "SECO-1 (orbit insertion)"
+   },
+   {
+    "met_s": 539,
+    "event": "1st-stage landing burn"
+   },
+   {
+    "met_s": 569,
+    "event": "1st-stage landing (droneship)"
+   },
+   {
+    "met_s": 723,
+    "event": "Crew Dragon separation"
+   },
+   {
+    "met_s": 768,
+    "event": "Dragon nosecone open"
+   }
+  ],
+  "rendezvous_docking": {
+   "_note": "Real named-burn schedule from the Crew-1 rendezvous timeline PDF. ~28 h profile. Named-burn order (Phase->Boost->Close->Transfer->Coelliptic->AI->Midcourse) matches the autopilot rebuild. AI burn spec is exact.",
+   "source_P": "NASA Crew-1 rendezvous timeline PDF",
+   "events": [
+    {
+     "met_s": 2742,
+     "event": "Phase burn",
+     "gate": null
+    },
+    {
+     "met_s": 57219,
+     "event": "Boost burn",
+     "gate": null
+    },
+    {
+     "met_s": 59725,
+     "event": "Close burn",
+     "gate": null
+    },
+    {
+     "met_s": 80285,
+     "event": "Transfer burn",
+     "gate": null
+    },
+    {
+     "met_s": 83073,
+     "event": "Coelliptic burn",
+     "gate": null
+    },
+    {
+     "met_s": 88362,
+     "event": "30 km - rendezvous complete",
+     "gate": null
+    },
+    {
+     "met_s": 90172,
+     "event": "Approach OOP burn (if needed)",
+     "gate": null
+    },
+    {
+     "met_s": 92262,
+     "event": "GO/NO-GO for AI burn",
+     "gate": "G9"
+    },
+    {
+     "met_s": 93762,
+     "event": "AI-burn (7.5 km)",
+     "gate": null,
+     "burn": {
+      "dur_s": 90,
+      "dv_ms": 0.72
+     }
+    },
+    {
+     "met_s": 95262,
+     "event": "AI-Midcourse burn",
+     "gate": null
+    },
+    {
+     "met_s": 96462,
+     "event": "Waypoint Zero (400 m below)",
+     "gate": "G10"
+    },
+    {
+     "met_s": 97902,
+     "event": "Docking-axis arrival WP1 (~220 m)",
+     "gate": "G11"
+    },
+    {
+     "met_s": 98562,
+     "event": "Waypoint 2 arrive (20 m)",
+     "gate": "G12"
+    },
+    {
+     "met_s": 98622,
+     "event": "GO/NO-GO for Docking",
+     "gate": "G12"
+    },
+    {
+     "met_s": 98862,
+     "event": "WP2 depart (20 m)",
+     "gate": null
+    },
+    {
+     "met_s": 99162,
+     "event": "Contact / Capture (soft)",
+     "gate": null
+    },
+    {
+     "met_s": 99942,
+     "event": "Docking complete (hard capture, 12 hooks)",
+     "gate": "G13"
+    }
+   ],
+   "waypoints": {
+    "WP0_m_below": 400,
+    "WP1_m_axis": 220,
+    "WP2_m": 20,
+    "AE_semi_axis_m": [
+     2000,
+     1000
+    ],
+    "KOS_radius_m": 200
+   }
+  },
+  "return": {
+   "_note": "Return callouts (NASA blogs DM-2/Crew-1/Crew-2). Times are RELATIVE offsets in seconds; absolute MET depends on the deorbit opportunity (hours-to-days after undock). Sequence + spacing is what the autopilot needs.",
+   "source_P": "NASA Commercial Crew / Space Station blogs (DM-2, Crew-1, Crew-2 returns)",
+   "sequence": [
+    {
+     "phase": "undock",
+     "event": "Hooks open, umbilicals retract, 2 tiny sep burns",
+     "rel_s": 0
+    },
+    {
+     "phase": "depart",
+     "event": "Fly-around burns x4 (zenith->aft->nadir->forward->zenith)",
+     "rel_s": 0,
+     "spacing_s": 1320
+    },
+    {
+     "phase": "depart",
+     "event": "Departure burn 0",
+     "rel_s": 0
+    },
+    {
+     "phase": "depart",
+     "event": "Departure burn 1",
+     "rel_s": 300
+    },
+    {
+     "phase": "depart",
+     "event": "Departure burn 2",
+     "rel_s": 3180
+    },
+    {
+     "phase": "depart",
+     "event": "Departure burn 3 (stable ~10 km below ISS)",
+     "rel_s": 5940
+    },
+    {
+     "phase": "phasing",
+     "event": "Departure phasing burn (~6 min)",
+     "dur_s": 360,
+     "note": "sets ground track for splashdown; hours later"
+    },
+    {
+     "phase": "deorbit",
+     "event": "Trunk jettison",
+     "ref": "deorbit_ref",
+     "rel_s": 0
+    },
+    {
+     "phase": "deorbit",
+     "event": "Deorbit burn start (Draco, ~12-16 min)",
+     "ref": "deorbit_ref",
+     "rel_s": 300,
+     "dur_s": 987
+    },
+    {
+     "phase": "entry",
+     "event": "Entry interface ~120 km",
+     "ref": "deorbit_ref",
+     "rel_s": 2400
+    },
+    {
+     "phase": "entry",
+     "event": "Drogue chutes (~5.5 km, ~156 m/s)",
+     "ref": "deorbit_ref"
+    },
+    {
+     "phase": "entry",
+     "event": "Main chutes (~1.8 km, ~53 m/s)",
+     "ref": "deorbit_ref"
+    },
+    {
+     "phase": "entry",
+     "event": "Splashdown (~5-8 m/s)",
+     "ref": "deorbit_ref",
+     "rel_s": 3180
+    }
+   ]
+  }
+ },
+ "missions": [
+  {
+   "name": "DM-1 (Demo-1)",
+   "date": "2019-03-02",
+   "capsule": "C204",
+   "crewed": false,
+   "orbit": {
+    "peri_km": 200,
+    "apo_km": 400,
+    "inc_deg": 51.6,
+    "type": "ISS"
+   },
+   "recovery": "OCISLY droneship",
+   "telemetry": "RAW (shahar603/Telemetry-Data)",
+   "confidence": "P",
+   "booster": {
+    "tail": "B1051",
+    "flight_number": 1
+   },
+   "role": "reconstruction template",
+   "ascent_overrides": {
+    "maxq_s": 59,
+    "meco_s": 158,
+    "ses1_s": 169,
+    "seco1_s": 527
+   }
+  },
+  {
+   "name": "DM-2 (Demo-2)",
+   "date": "2020-05-30",
+   "capsule": "Endeavour",
+   "crewed": true,
+   "crew": [
+    "Behnken",
+    "Hurley"
+   ],
+   "orbit": {
+    "inc_deg": 51.6,
+    "type": "ISS"
+   },
+   "recovery": "OCISLY droneship",
+   "booster": {
+    "tail": "B1058",
+    "flight_number": 1
+   },
+   "telemetry": "reconstructed",
+   "confidence": "P",
+   "note": "first crewed Crew Dragon flight"
+  },
+  {
+   "name": "Crew-1",
+   "date": "2020-11-16",
+   "capsule": "Resilience",
+   "crewed": true,
+   "crew": [
+    "Hopkins",
+    "Glover",
+    "Walker",
+    "Noguchi"
+   ],
+   "orbit": {
+    "inc_deg": 51.6,
+    "type": "ISS"
+   },
+   "recovery": "JRTI droneship",
+   "booster": {
+    "tail": "B1061",
+    "flight_number": 1
+   },
+   "telemetry": "reconstructed",
+   "confidence": "P",
+   "note": "EXACT NASA timeline PDF = standard_iss_crew source",
+   "ascent_overrides": {
+    "maxq_s": 58,
+    "meco_s": 157,
+    "sep_s": 160,
+    "ses1_s": 168,
+    "entryburn_s": 449,
+    "seco1_s": 530,
+    "landing_s": 569,
+    "dragonsep_s": 723,
+    "nosecone_s": 768
+   }
+  },
+  {
+   "name": "Crew-2",
+   "date": "2021-04-23",
+   "capsule": "Endeavour",
+   "crewed": true,
+   "crew": [
+    "Kimbrough",
+    "McArthur",
+    "Hoshide",
+    "Pesquet"
+   ],
+   "orbit": {
+    "inc_deg": 51.6,
+    "type": "ISS"
+   },
+   "recovery": "OCISLY droneship",
+   "booster": {
+    "tail": "B1061",
+    "flight_number": 2
+   },
+   "telemetry": "reconstructed",
+   "confidence": "P",
+   "role": "autopilot REFERENCE profile",
+   "ascent_overrides": {
+    "meco_s": 156,
+    "sep_s": 159,
+    "seco1_s": 527,
+    "dragonsep_s": 718
+   }
+  },
+  {
+   "name": "Inspiration4",
+   "date": "2021-09-16",
+   "capsule": "Resilience",
+   "crewed": true,
+   "crew": [
+    "Isaacman",
+    "Proctor",
+    "Sembroski",
+    "Arceneaux"
+   ],
+   "orbit": {
+    "peri_km": 575,
+    "apo_km": 585,
+    "inc_deg": 51.6,
+    "type": "free-flyer high circular"
+   },
+   "recovery": "droneship",
+   "telemetry": "reconstructed",
+   "confidence": "P",
+   "note": "highest circular crewed orbit since Hubble; S2 does a longer/2-burn raise to 585 km circular (NOT the ISS single burn)",
+   "booster": {
+    "tail": "B1062",
+    "flight_number": 3
+   }
+  },
+  {
+   "name": "Crew-3",
+   "date": "2021-11-11",
+   "capsule": "Endurance",
+   "crew": [
+    "Chari",
+    "Marshburn",
+    "Barron",
+    "Maurer"
+   ],
+   "orbit": {
+    "inc_deg": 51.6,
+    "type": "ISS"
+   },
+   "recovery": "ASOG droneship",
+   "crewed": true,
+   "booster": {
+    "tail": "B1067",
+    "flight_number": 2
+   },
+   "telemetry": "reconstructed",
+   "confidence": "P"
+  },
+  {
+   "name": "Ax-1",
+   "date": "2022-04-08",
+   "capsule": "Endeavour",
+   "crewed": true,
+   "crew": [
+    "Lopez-Alegria",
+    "Connor",
+    "Pathy",
+    "Stibbe"
+   ],
+   "orbit": {
+    "inc_deg": 51.6,
+    "type": "ISS (private)"
+   },
+   "recovery": "ASOG droneship",
+   "telemetry": "reconstructed",
+   "confidence": "P",
+   "note": "first fully private ISS mission",
+   "booster": {
+    "tail": "B1062",
+    "flight_number": 4
+   }
+  },
+  {
+   "name": "Crew-4",
+   "date": "2022-04-27",
+   "capsule": "Freedom",
+   "crewed": true,
+   "crew": [
+    "Lindgren",
+    "Hines",
+    "Watkins",
+    "Cristoforetti"
+   ],
+   "orbit": {
+    "inc_deg": 51.6,
+    "type": "ISS"
+   },
+   "recovery": "ASOG droneship",
+   "telemetry": "reconstructed",
+   "confidence": "P",
+   "note": "Crew-4 timeline (Spaceflight Now) matches standard: sep 2:39, entry 7:28, landing 9:30",
+   "booster": {
+    "tail": "B1067",
+    "flight_number": 4
+   }
+  },
+  {
+   "name": "Crew-5",
+   "date": "2022-10-05",
+   "capsule": "Endurance",
+   "crewed": true,
+   "crew": [
+    "Mann",
+    "Cassada",
+    "Wakata",
+    "Kikina"
+   ],
+   "orbit": {
+    "inc_deg": 51.6,
+    "type": "ISS"
+   },
+   "recovery": "droneship",
+   "telemetry": "reconstructed",
+   "confidence": "P",
+   "booster": {
+    "tail": "B1077",
+    "flight_number": 1
+   }
+  },
+  {
+   "name": "Crew-6",
+   "date": "2023-03-02",
+   "capsule": "Endeavour",
+   "crewed": true,
+   "crew": [
+    "Bowen",
+    "Hoburg",
+    "Alneyadi",
+    "Fedyaev"
+   ],
+   "orbit": {
+    "inc_deg": 51.6,
+    "type": "ISS"
+   },
+   "recovery": "droneship",
+   "telemetry": "reconstructed",
+   "confidence": "P",
+   "ascent_overrides": {
+    "meco_s": 154,
+    "sep_s": 158,
+    "seco1_s": 527,
+    "dragonsep_s": 717
+   },
+   "booster": {
+    "tail": "B1078",
+    "flight_number": 1
+   }
+  },
+  {
+   "name": "Ax-2",
+   "date": "2023-05-21",
+   "capsule": "Freedom",
+   "crewed": true,
+   "crew": [
+    "Whitson",
+    "Shoffner",
+    "Ali AlQarni",
+    "Barnawi"
+   ],
+   "orbit": {
+    "inc_deg": 51.6,
+    "type": "ISS (private)"
+   },
+   "recovery": "RTLS (LZ-1)",
+   "telemetry": "reconstructed",
+   "confidence": "P",
+   "note": "RARE crew RTLS (boostback to land, not droneship) \u00e2\u20ac\u201d different booster recovery",
+   "booster": {
+    "tail": "B1080",
+    "flight_number": 1
+   }
+  },
+  {
+   "name": "Crew-7",
+   "date": "2023-08-26",
+   "capsule": "Endurance",
+   "crewed": true,
+   "crew": [
+    "Moghbeli",
+    "Mogensen",
+    "Furukawa",
+    "Borisov"
+   ],
+   "orbit": {
+    "inc_deg": 51.6,
+    "type": "ISS"
+   },
+   "recovery": "droneship",
+   "telemetry": "reconstructed",
+   "confidence": "P",
+   "booster": {
+    "tail": "B1081",
+    "flight_number": 1
+   }
+  },
+  {
+   "name": "Ax-3",
+   "date": "2024-01-18",
+   "capsule": "Freedom",
+   "crewed": true,
+   "crew": [
+    "Lopez-Alegria",
+    "Villadei",
+    "Wandt",
+    "Neguse"
+   ],
+   "orbit": {
+    "inc_deg": 51.6,
+    "type": "ISS (private)"
+   },
+   "recovery": "RTLS (LZ-1)",
+   "telemetry": "reconstructed",
+   "confidence": "P",
+   "note": "crew RTLS",
+   "booster": {
+    "tail": "B1080",
+    "flight_number": 5
+   }
+  },
+  {
+   "name": "Crew-8",
+   "date": "2024-03-04",
+   "capsule": "Endeavour",
+   "crewed": true,
+   "crew": [
+    "Dominick",
+    "Barratt",
+    "Epps",
+    "Grebenkin"
+   ],
+   "orbit": {
+    "inc_deg": 51.6,
+    "type": "ISS"
+   },
+   "recovery": "droneship",
+   "telemetry": "reconstructed",
+   "confidence": "P",
+   "booster": {
+    "tail": "B1083",
+    "flight_number": 1
+   }
+  },
+  {
+   "name": "Polaris Dawn",
+   "date": "2024-09-10",
+   "capsule": "Resilience",
+   "crewed": true,
+   "crew": [
+    "Isaacman",
+    "Poteet",
+    "Gillis",
+    "Menon"
+   ],
+   "orbit": {
+    "peri_km": 190,
+    "apo_km": 1400,
+    "inc_deg": 51.7,
+    "type": "free-flyer high elliptical"
+   },
+   "recovery": "droneship",
+   "telemetry": "reconstructed",
+   "confidence": "P",
+   "note": "highest crewed apogee ever (1408 km); S2/Dragon raise apogee to ~1200-1400 km; perigee later raised for EVA. First commercial spacewalk.",
+   "booster": {
+    "tail": "B1083",
+    "flight_number": 4
+   }
+  },
+  {
+   "name": "Crew-9",
+   "date": "2024-09-28",
+   "capsule": "Freedom",
+   "crewed": true,
+   "crew": [
+    "Hague",
+    "Gorbunov"
+   ],
+   "orbit": {
+    "inc_deg": 51.6,
+    "type": "ISS"
+   },
+   "recovery": "droneship",
+   "telemetry": "reconstructed",
+   "confidence": "P",
+   "note": "launched with 2 empty seats (Starliner crew return)",
+   "booster": {
+    "tail": "B1085",
+    "flight_number": 2
+   }
+  },
+  {
+   "name": "Crew-10",
+   "date": "2025-03-14",
+   "capsule": "Endurance",
+   "crewed": true,
+   "crew": [
+    "McClain",
+    "Ayers",
+    "Onishi",
+    "Peskov"
+   ],
+   "orbit": {
+    "inc_deg": 51.6,
+    "type": "ISS"
+   },
+   "recovery": "droneship",
+   "telemetry": "reconstructed",
+   "confidence": "P",
+   "booster": {
+    "tail": "B1090",
+    "flight_number": 2
+   }
+  },
+  {
+   "name": "Fram2",
+   "date": "2025-03-31",
+   "capsule": "Resilience",
+   "crewed": true,
+   "crew": [
+    "Wang",
+    "Mikkelsen",
+    "Philips",
+    "Rogge"
+   ],
+   "orbit": {
+    "peri_km": 202,
+    "apo_km": 413,
+    "inc_deg": 90.01,
+    "type": "free-flyer TRUE POLAR"
+   },
+   "recovery": "droneship",
+   "telemetry": "reconstructed",
+   "confidence": "P",
+   "note": "FIRST crewed polar orbit. Launched DUE SOUTH from KSC (azimuth ~180-190 deg), NOT the ~44 deg ISS azimuth. First Dragon Pacific splashdown.",
+   "booster": {
+    "tail": "B1085",
+    "flight_number": 6
+   }
+  },
+  {
+   "name": "Ax-4",
+   "date": "2025-06-25",
+   "capsule": "Grace",
+   "crewed": true,
+   "crew": [
+    "Whitson",
+    "Shukla",
+    "Uznanski-Wisniewski",
+    "Kapu"
+   ],
+   "orbit": {
+    "inc_deg": 51.6,
+    "type": "ISS (private)"
+   },
+   "recovery": "droneship",
+   "telemetry": "reconstructed",
+   "confidence": "P",
+   "note": "5th & FINAL Crew Dragon capsule 'Grace' (C213) debut",
+   "booster": {
+    "tail": "B1094",
+    "flight_number": 2
+   }
+  },
+  {
+   "name": "Crew-11",
+   "date": "2025-07-31",
+   "capsule": "Endeavour",
+   "crewed": true,
+   "crew": [
+    "Cardman",
+    "Fincke",
+    "Yui",
+    "Platonov"
+   ],
+   "orbit": {
+    "inc_deg": 51.6,
+    "type": "ISS"
+   },
+   "recovery": "droneship",
+   "telemetry": "reconstructed",
+   "confidence": "P",
+   "note": "Endeavour record 6th flight",
+   "booster": {
+    "tail": "B1094",
+    "flight_number": 3
+   }
+  }
+ ]
+}

@@ -1,57 +1,8 @@
-/*
- * DragonScreen - HullCams
- *
- * GLUE. The REAL cameras bolted to this vehicle, found on the vehicle rather than listed by us.
- *
- * ---- WHY THIS EXISTS ----
- * User, 2026-08-11: *"the tundra parts should have cameras attached by default. The crew capsule,
- * trunk and booster I think. I would like these cameras to be the camera views we can pick on the
- * dragonscreen."*
- *
- * The VIDEO tab already offered four views - FRONT, REAR, LEFT, RIGHT - and those are honest: they
- * are derived from the control point and a live sweep of the hull, not from a picture. But they are
- * SYNTHETIC. They are directions we chose. The cameras the vehicle actually carries are somewhere
- * else entirely, pointed at things the designer thought were worth looking at, and the interstage
- * cameras in particular look at exactly what a Falcon 9 webcast looks at.
- *
- * ---- ⛔ NO COMPILE-TIME DEPENDENCY ON HullCameraVDS. FOUND BY NAME, AT RUNTIME. ----
- * `MuMechModuleHullCameraZoom` lives in `HullCameraVDS/Plugins/HullcamVDSContinued.dll`. The MuMech
- * prefix is historical - it is NOT MechJeb, which is not installed here at all - and it is worth
- * writing down because the name misleads.
- *
- * We do not reference that assembly. `build.py`'s MODS list is empty on purpose, and adding a mod
- * reference would mean the plugin fails to load for anyone without it. Instead the module is matched
- * by type NAME and its fields read by reflection, so:
- *
- *      HullCameraVDS installed and cameras on the craft  ->  they appear
- *      HullCameraVDS installed, no cameras on the craft  ->  nothing appears
- *      HullCameraVDS not installed at all                ->  nothing appears, no error
- *
- * In all three cases the list contains exactly the cameras that exist. `CLAUDE.md`: never build a
- * control bound to nothing.
- *
- * ---- WHAT IS READ, AND WHAT IS IGNORED ----
- * From the part config (`TundraExploration/Patches/Extra_Hullcam.cfg` is the reference):
- *
- *      cameraName            the label the crew sees - the mod author's own name for the view
- *      cameraTransformName   the transform on the part model the camera sits at
- *      cameraForward/Up      orientation overrides, IN PART-LOCAL SPACE
- *      cameraPosition        a small offset, also part-local
- *      cameraFovMax/Min      the zoom range; we take Max as the resting field of view
- *
- * ⚠ A ZERO `cameraForward` IS NOT A DIRECTION, IT IS "USE THE TRANSFORM". Every Tundra camera
- * ships `cameraForward = 0, 0, 0` and relies on `cameraTransformName` pointing the right way, while
- * HullCameraVDS's own docking-port patch ships `cameraForward = 0, 1, 0` with no transform name at
- * all. Both forms are live in this install, so both are handled, and a zero vector is treated as
- * absent rather than as a direction - normalising it would aim every Tundra camera at nothing.
- *
- * ---- THE BOOSTER IS A DIFFERENT VESSEL AFTER SEPARATION ----
- * The interstage cameras leave with the first stage. `BoosterRecovery` already raises the booster's
- * ranges so it stays loaded through its landing, and a loaded vessel's transforms are real, so its
- * cameras keep working - which is the whole point of having them. An UNLOADED vessel has no parts at
- * all, the same fact that made the docking refusal wrong on 2026-08-11, so it contributes nothing
- * and is skipped rather than reported as an empty camera.
- */
+// DragonScreen - HullCams
+// ---- WHY THIS EXISTS ----
+// ---- ⛔ NO COMPILE-TIME DEPENDENCY ON HullCameraVDS. FOUND BY NAME, AT RUNTIME. ----
+// ---- WHAT IS READ, AND WHAT IS IGNORED ----
+// ---- THE BOOSTER IS A DIFFERENT VESSEL AFTER SEPARATION ----
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -59,22 +10,14 @@ using UnityEngine;
 
 namespace DragonScreen
 {
-    /// <summary>One real camera on one real part.</summary>
     internal struct HullCam
     {
-        /// <summary>The mod author's own name for the view. What the crew sees on the button.</summary>
         internal string Label;
-        /// <summary>The part it is bolted to. Held so a jettisoned camera can be noticed.</summary>
         internal Part Host;
-        /// <summary>Where it sits and which way it looks.</summary>
         internal Transform Anchor;
-        /// <summary>Part-local offset from the anchor. Zero for every Tundra camera.</summary>
         internal Vector3 Offset;
-        /// <summary>Part-local look direction, or zero meaning "use the anchor's forward".</summary>
         internal Vector3 Forward;
-        /// <summary>Part-local up, or zero meaning "use the anchor's up".</summary>
         internal Vector3 Up;
-        /// <summary>Resting field of view, degrees.</summary>
         internal float Fov;
     }
 
@@ -83,19 +26,16 @@ namespace DragonScreen
         private const string Tag = "[DragonScreen] ";
         private const string ModuleName = "MuMechModuleHullCameraZoom";
 
-        /// <summary>Re-scan at most this often. Parts do not appear mid-flight except at staging.</summary>
         private const double RescanS = 2.0;
 
         private static readonly List<HullCam> cams = new List<HullCam>();
         private static double lastScanAt = -999.0;
         private static int lastCount = -1;
 
-        /// <summary>The cameras on the vehicle right now. Never null; often empty.</summary>
         internal static List<HullCam> All { get { Scan(); return cams; } }
 
         internal static int Count { get { Scan(); return cams.Count; } }
 
-        /// <summary>The labels, in the same order, for the page. Empty array when there are none.</summary>
         internal static string[] Labels()
         {
             Scan();
@@ -132,7 +72,6 @@ namespace DragonScreen
             Vessel active = FlightGlobals.ActiveVessel;
             Harvest(active);
 
-            // The booster, once it is its own vessel and still loaded. See the header.
             Vessel booster = BoosterRecovery.Tracked;
             if (booster != null && booster != active && booster.loaded) Harvest(booster);
 
@@ -177,12 +116,6 @@ namespace DragonScreen
             }
         }
 
-        /// <summary>
-        /// Pull one camera's configuration out of the module by reflection.
-        ///
-        /// Every field is optional. A module missing all of them still yields a usable camera at the
-        /// part's own transform, which is better than dropping a camera the crew can see on the hull.
-        /// </summary>
         private static bool Read(Part p, PartModule pm, out HullCam c)
         {
             c = new HullCam();
@@ -205,7 +138,7 @@ namespace DragonScreen
                 c.Up = Vec(t, pm, "cameraUp");
 
                 float fov = Flt(t, pm, "cameraFovMax", 0f);
-                if (fov <= 1f) fov = Flt(t, pm, "cameraFoVMax", 0f);   // the cfgs use both spellings
+                if (fov <= 1f) fov = Flt(t, pm, "cameraFoVMax", 0f);
                 c.Fov = (fov > 1f && fov < 170f) ? fov : 60f;
 
                 c.Label = Clean(!string.IsNullOrEmpty(name) ? name : p.partInfo != null
@@ -219,15 +152,6 @@ namespace DragonScreen
             }
         }
 
-        /// <summary>
-        /// A button label, not a config string.
-        ///
-        /// Camera names are written for a right-click menu: "GHidorah9OuterInterstageCam",
-        /// "#autoLOC_HULL_PM_007". Localisation tokens are resolved and the vendor prefix and the
-        /// trailing "Cam" are dropped, because the crew already knows whose rocket they are on and
-        /// that they are looking at a camera. What is left is the part that distinguishes one view
-        /// from another, which is the only reason the label exists.
-        /// </summary>
         private static string Clean(string raw)
         {
             if (string.IsNullOrEmpty(raw)) return "CAM";
@@ -238,7 +162,6 @@ namespace DragonScreen
                 catch (Exception) { }
             }
 
-            // Split camelCase so "OuterInterstage" becomes two words before it is upper-cased.
             System.Text.StringBuilder sb = new System.Text.StringBuilder();
             for (int i = 0; i < s.Length; i++)
             {

@@ -1,26 +1,6 @@
-/*
- * DragonScreen - Predict
- *
- * PURE. Tranche 2 of the GNC port: where we will be, where we will hit, and when we pass closest to
- * something else. `COMMON/GNC.ks` - `TimeTwoTA`, `GroundTrack`, `ImpactUT`, `ClosestApproach`.
- *
- * ---- PURE, WITH THE SAMPLING HANDED IN ----
- * A predictor needs to ask the world questions - "how high is the terrain there", "where is the
- * target then". Those answers live in KSP. Rather than drag KSP in here and lose the headless tests,
- * the SEARCHES take a delegate and the glue supplies it. The search logic - which is the part with
- * the bugs in it - stays testable against analytic functions whose answers are known exactly.
- *
- * ---- THE TWO NON-OBVIOUS ONES ----
- * `ImpactUT` looks like it should be a one-shot solve and is not: the time you hit the ground depends
- * on the terrain height where you hit, which depends on where you hit, which depends on the time. So
- * it is a FIXED-POINT ITERATION, and F9I damps it by averaging the old and new heights
- * (`(impactHeight + newImpactHeight) / 2`) rather than taking the new one. Undamped, it oscillates
- * between a mountain and the valley behind it and never converges.
- *
- * `GroundTrack` is the one that catches people: a future position in INERTIAL space is over a
- * different LONGITUDE than it looks, because the body rotates underneath it. Predicting an impact
- * point without that shift puts it degrees out - and on Kerbin a degree is 10 472 m.
- */
+// DragonScreen - Predict
+// ---- PURE, WITH THE SAMPLING HANDED IN ----
+// ---- THE TWO NON-OBVIOUS ONES ----
 using System;
 
 namespace DragonScreen
@@ -31,13 +11,6 @@ namespace DragonScreen
 
         // ------------------------------------------------------------------ timing
 
-        /// <summary>
-        /// Seconds to travel from one true anomaly to another on the same orbit. `TimeTwoTA`.
-        ///
-        /// Via MEAN anomaly, because that is the only one that advances linearly with time. Always
-        /// returns a POSITIVE time within one period - going "backwards" means going the long way
-        /// round, which is what an orbit actually does.
-        /// </summary>
         public static double TimeBetweenTrueAnomalies(double ecc, double period,
                                                       double fromTrue, double toTrue)
         {
@@ -48,15 +21,6 @@ namespace DragonScreen
             return period * frac;
         }
 
-        /// <summary>
-        /// Longitude of a point that will be reached <paramref name="dt"/> seconds from now, given
-        /// the longitude its inertial position maps to today. `GroundTrack`.
-        ///
-        /// The body turns under the orbit, so the ground point drifts WEST relative to the inertial
-        /// position at the body's rotation rate. Skip this and every predicted impact is wrong by
-        /// (rotation rate x time of flight) - for a ten-minute Kerbin descent that is about 25
-        /// degrees, or 260 km.
-        /// </summary>
         public static double GroundTrackLongitude(double inertialLongitudeDeg,
                                                   double bodyRotationDegPerSec, double dt)
         {
@@ -69,34 +33,16 @@ namespace DragonScreen
 
         // ------------------------------------------------------------------ impact
 
-        /// <summary>Result of an impact solve.</summary>
         public struct Impact
         {
             public bool Valid;
-            /// <summary>Seconds from now.</summary>
             public double TimeS;
-            /// <summary>Terrain height the solution settled on, metres.</summary>
             public double TerrainHeightM;
             public bool Converged;
             public int Iterations;
         }
 
-        /// <summary>
-        /// When and where the orbit meets the ground. `ImpactUT`, ported with its damping.
-        ///
-        /// <paramref name="terrainHeightAt"/> is given a time-from-now and returns the terrain height
-        /// under the vessel at that time. The glue supplies it; here it can be a test function.
-        ///
         /// ---- WHY IT ITERATES, AND WHY IT MUST BE DAMPED ----
-        /// The impact TIME depends on the terrain HEIGHT at the impact point, which depends on WHERE
-        /// the impact is, which depends on the time. F9I closes that loop by averaging the previous
-        /// height with the newly sampled one. Taking the new height outright makes the search
-        /// oscillate between a peak and the valley behind it; the average halves the step each pass
-        /// and it settles.
-        ///
-        /// Returns Converged=false rather than looping forever over terrain that will not settle -
-        /// a caller flying a landing needs to know the prediction is untrustworthy, not wait for it.
-        /// </summary>
         public static Impact SolveImpact(double sma, double ecc, double bodyRadius,
                                          double periapsis, double apoapsis,
                                          double currentTrueAnomaly, double period,
@@ -106,14 +52,11 @@ namespace DragonScreen
             Impact r = new Impact();
             if (terrainHeightAt == null || period <= 0.0) return r;
 
-            // An orbit whose periapsis clears the terrain never comes down. Say so instead of
-            // returning a confident answer from a clamp.
             double height = 0.0;
             for (int i = 0; i < maxIterations; i++)
             {
                 r.Iterations = i + 1;
 
-                // Where does the orbit cross that height, coming DOWN? Falling root.
                 double clamped = height;
                 if (clamped > apoapsis - 1.0) clamped = apoapsis - 1.0;
                 if (clamped < periapsis + 1.0) clamped = periapsis + 1.0;
@@ -146,24 +89,10 @@ namespace DragonScreen
         public struct Approach
         {
             public bool Valid;
-            /// <summary>Seconds from now.</summary>
             public double TimeS;
             public double DistanceM;
         }
 
-        /// <summary>
-        /// Time of closest approach between now and <paramref name="window"/>. `ClosestApproach`.
-        ///
-        /// Coarse-to-fine, exactly as F9I does it: scan the window at a stride, keep the best sample,
-        /// then rescan a stride either side of it at a tenth of the stride, and repeat. Each pass
-        /// buys one decimal place, and it costs `steps + 10*refinements` samples rather than the
-        /// `steps * 10^refinements` a flat scan of the same resolution would.
-        ///
-        /// ⚠ IT FINDS A LOCAL MINIMUM, AND SO DOES F9I'S. On a rendezvous with several close passes
-        /// in the window it returns whichever one the coarse scan happened to land in. That is fine
-        /// for the approach ladder, which only ever asks about the NEXT pass - but a caller that
-        /// needs the global best over many orbits must narrow the window itself.
-        /// </summary>
         public static Approach ClosestApproach(Func<double, double> distanceAt,
                                                double window, int steps, int refinements)
         {
@@ -201,14 +130,6 @@ namespace DragonScreen
             return r;
         }
 
-        /// <summary>
-        /// Is the vessel closing on the target or opening away from it? Sampled rather than
-        /// differentiated, because the caller already has a distance function and a numerical
-        /// derivative of a noisy one is worse than two samples.
-        ///
-        /// POSITIVE means closing, matching the sign convention on the DOCKING page and in
-        /// `Rendezvous.ApproachInputs` - the one place a sign error would be read as good news.
-        /// </summary>
         public static double ClosingRate(Func<double, double> distanceAt, double dt)
         {
             if (distanceAt == null || dt <= 0.0) return 0.0;

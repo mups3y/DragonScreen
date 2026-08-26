@@ -1,930 +1,134 @@
-/*
- * DragonScreen - Ascent
- *
- * PURE. Ascent guidance: given where the vehicle is, where should it point and how hard should it
- * burn. No KSP, no Unity, so the whole profile can be flown headless before it is flown for real.
- *
- * ---- THIS IS A GRAVITY TURN, NOT THE OPTIMAL-CONTROL ASCENT IN THE PLAN ----
- * `docs/FLIGHT_SOFTWARE_PLAN.md` step 5 is MechJebLib's PSG - a primer-vector optimal-control
- * solver, the same family real launch vehicles use. That needs the numerical core ported first
- * (steps 1-2) and it is a solver, not a formula: ported carelessly it fails to converge with no
- * obvious reason why.
- *
- * This is the honest interim: a closed-loop gravity turn with dynamic-pressure limiting and an
- * apoapsis cutoff. It is what it says it is. It will not fly a fuel-optimal trajectory, and when PSG
- * lands, only Guide() changes - everything around it stays.
- *
- * ---- WHY A GRAVITY TURN IS THE RIGHT INTERIM, NOT A PITCH TABLE ----
- * A pitch table is open loop: it flies the same profile whatever the vehicle does, so a heavy load
- * or a lost engine just makes it wrong. This reads ALTITUDE and closes the loop through it, and cuts
- * on APOAPSIS rather than on a clock. That is the difference between guidance and a recording.
- *
- * ---- THE NUMBERS, AND WHERE THEY COME FROM ----
- * Scaled off the atmosphere depth rather than hard-coded to Kerbin, so RSS/RO does not silently get
- * a 70 km profile. The turn ends at 62% of the atmosphere because that is where a Falcon-shaped
- * vehicle is through the thick of it; the Q limit is set below the level at which our own recorded
- * flights showed control trouble.
- */
+// DragonScreen — Ascent  (autopilot rebuild L3: first-stage ascent guidance + the ascent FSM)
+// ============================================================================================
+// The first stage flies a PITCH-PROGRAMMED zero-AoA gravity turn (load relief), following the REAL
+// Crew Dragon pitch-vs-speed profile derived from DM-1 telemetry (data/dm1_ascent_template.json). The
+// commanded flight-path pitch tracks that curve, so the emergent trajectory matches the real flight;
+// staying on the velocity vector keeps the aero side-loads ~0. Throttle is full with the L2 max-Q
+// bucket + crew g-limit overlaid (ControlLaw.ThrottleLimit). At the staging energy it commands MECO;
+// after the ~8 s coast the SECOND stage flies CLOSED-LOOP UPFG (pure/Upfg.cs) to the insertion target —
+// this FSM manages the phases and the throttle, UPFG owns the S2 steering + the SECO decision.
+// Sources: LAUNCH_AND_ASCENT_RESEARCH.md §4–6, the DM-1 profile, §5.0 vehicle numbers.
+// ============================================================================================
+using System;
+
 namespace DragonScreen
 {
-    public enum AscentPhase : byte
-    {
-        Idle = 0,
-        /// <summary>Straight up, clear of the pad.</summary>
-        VerticalRise,
-        /// <summary>Pitching over and following the turn.</summary>
-        GravityTurn,
-        /// <summary>Engines off, holding attitude, about to separate. A DISCRETE STEP.</summary>
-        Meco,
-        /// <summary>
-        /// Separated, still coasting, MVac NOT YET LIT. The gap that keeps the booster alive.
-        /// </summary>
-        StageSep,
-        /// <summary>
-        /// Throttle at ZERO, engine spooling down, still attached. A DISCRETE STEP, like Meco.
-        ///
-        /// ⛔ SEPARATING ON THE TICK THE THROTTLE REACHES ZERO IS NOT SEPARATING WITH THE ENGINE
-        /// OFF. MEASURED, flight_0813_053635: the circularisation ramped 0.50 -> 0.21 -> 0.00 and
-        /// `a_cmdSepS2` went high on the SAME tick the throttle first read 0.00, with
-        /// `a_enginesLit` still 1. An MVac does not stop producing thrust the instant the command
-        /// does, so the decoupler fired into a live engine: the stage stayed pressed against the
-        /// trunk and kept pushing the capsule off course, and the crew had to roll it off during
-        /// entry. F9I's order is "MECO (throttle 0, hold attitude, SafeStage)" - three steps, and
-        /// the hold between them is the point.
-        /// </summary>
-        Shutdown,
-        /// <summary>Second stage raising apoapsis to the real orbit.</summary>
-        BurnToApoapsis,
-        /// <summary>Apoapsis made, engines off, waiting to reach it.</summary>
-        Coast,
-        /// <summary>Burning prograde at apoapsis to raise periapsis.</summary>
-        Circularise,
-        Done
-    }
-
-    public struct AscentTarget
-    {
-        /// <summary>Target apoapsis AND the circular altitude, metres above sea level.</summary>
-        public double AltitudeM;
-        /// <summary>Launch azimuth, degrees. 90 is due east - the cheapest direction.</summary>
-        public double HeadingDeg;
-
-        // ---- F9I'S ASCENT CONSTANTS. FLOWN, NOT CHOSEN HERE. ----
-        // `SPACEX/PARAM.ks` RTLSmode(). Three landing profiles exist and they differ in exactly
-        // these numbers, which is the tell that they were tuned against flights rather than derived:
-        //
-        //      RTLS      MECOangle 45   tgtAlt 60 km   pitchGain 110
-        //      ASDS      MECOangle 40   tgtAlt 70 km   pitchGain  97
-        //      expend    MECOangle 10   tgtAlt 70 km   pitchGain  72.5
-        //
-        // RTLS is ours: the booster comes home, so it separates steeper and earlier.
-        /// <summary>Pitch the first stage holds from the floor to MECO, degrees.</summary>
-        public double MecoAngleDeg;
-        /// <summary>Shapes how fast the first stage pitches over. Per cent.</summary>
-        public double PitchGain;
-        /// <summary>First-stage reference altitude, metres. ALSO the MECO apoapsis target.</summary>
-        public double StageAltM;
-
-        /// <summary>
-        /// Cap MECO at this SURFACE speed, m/s. 0 disables it (stock: MECO on the apoapsis target only).
-        ///
-        /// ⛔ WHY A VELOCITY CAP AND NOT JUST THE APOAPSIS. The booster's DOWNRANGE is set by its
-        /// staging velocity, not by the apoapsis it is aiming at - and the droneship has to come down ON
-        /// a barge at a fixed distance. flight_0823_134926 staged at 2440 m/s (apoapsis-triggered) and
-        /// the booster fell 640 km downrange, 140 km PAST the 500 km barge; the entry-burn reserve barely
-        /// moved it (drag-dominated descent), so the ONLY lever with the authority is where the first
-        /// stage cuts. Real Crew-2 staged at ~2300 m/s surface and that is what put its booster on a
-        /// barge ~500 km out. Capping MECO here trims the staging energy to the real value so the natural
-        /// impact falls at the real barge distance, within the descent lean's authority to fine-tune. The
-        /// second stage makes up the small energy difference exactly as the real vehicle does.
-        /// </summary>
-        public double MecoSurfaceSpeedCapMps;
-
-        /// <summary>
-        /// First-stage pitch-over characteristic altitude, metres. When > 0 it REPLACES the Kerbin
-        /// denominator `StageAltM * PitchGain/100` in TurnPitch, DECOUPLING how fast the stage pitches
-        /// over from where it stages.
-        ///
-        /// ⛔ WHY THIS HAD TO EXIST FOR RSS. On Kerbin the two happen to want the same number, so one
-        /// StageAltM served both. On Earth (flight_0822_011349, MechJeb) they do not: the real turn
-        /// reaches 45 deg by 16 km and 21 deg at staging - a pitch scale of ~40 km - while the MECO
-        /// apoapsis wants ~110 km. Scaling one number by the atmosphere ratio (the first attempt) set
-        /// the pitch denom to ~135 km, which holds the stack near-vertical and LOFTS. 0 on Kerbin, so
-        /// nothing there changes.
-        /// </summary>
-        public double PitchRefAltM;
-
-        /// <summary>
-        /// Dynamic-pressure ceiling for THIS body, kPa. Kerbin's 20 (below where its flights showed
-        /// control trouble) throttles a real Falcon 9 to the 35% floor straight through Earth's max Q
-        /// - MEASURED 31 kPa at 13 km on flight_0822_011349, which MechJeb flew at full thrust. Earth
-        /// gets a ceiling above that peak; the global Ascent.MaxQKpa const is the Kerbin default.
-        /// </summary>
-        public double MaxQKpa;
-
-        /// <summary>
-        /// Acceleration ceiling for THIS body, m/s^2. Zero = no limit (stock Kerbin flies unlimited).
-        /// Real Crew Dragon flies a GENTLE ascent for the crew: the first stage throttles down near MECO
-        /// so peak g stays ~4. Ours pulled 4.65 g at MECO at full thrust (8218 kN / 180 t); the g-limit
-        /// throttle (GThrottle) caps it. Preserves the MECO velocity - MECO is speed-capped, so the cap
-        /// just spreads the last of the burn over a little more time.
-        /// </summary>
-        public double GLimitMps2;
-
-        /// <summary>
-        /// Space X Station sits at 86.8 x 85.8 km, inclination 0.133 - MEASURED over four flights,
-        /// not a round number. An 86 km circular orbit due east is the ferry mission's insertion.
-        /// </summary>
-        public static AscentTarget Station() { return Station(LandingProfile.Rtls); }
-
-        /// <summary>
-        /// The same insertion, flown for a given recovery.
-        ///
-        /// ⚠ THE PROFILE IS NOT A LANDING SETTING - IT IS AN ASCENT. Picking "droneship" on the
-        /// console and leaving the ascent at RTLS numbers stages the booster steep and early and then
-        /// asks it to fly to a barge it no longer has the trajectory for; the reverse leaves a stage
-        /// downrange with no propellant to come home on. The two have to be chosen together, so they
-        /// are chosen in one place.
-        /// </summary>
-        /// <summary>
-        /// The station's orbital altitude, metres. ONE definition - the ascent targets it, the
-        /// de-orbit aim was fitted against it, and the phasing depth is measured from it.
-        ///
-        /// ⚠ `Deorbit.AimDracoCrew` WAS FITTED AT 86 km AND IS NOW STALE. It needs one return to
-        /// re-fit. Nothing else in the flight software depends on this number.
-        /// </summary>
-        public const double StationAltitudeM = 120000.0;
-
-        /// <summary>
-        /// Seconds between the throttle reaching zero and the S2 decoupler firing.
-        ///
-        /// Long enough for the engine to stop pushing. Two seconds is F9I's own settling pause in
-        /// the equivalent place, and the cost of being wrong in the other direction is nil.
-        /// </summary>
-        public const double ShutdownSettleS = 2.0;
-
-        public static AscentTarget Station(LandingProfile p)
-        {
-            AscentTarget t = new AscentTarget();
-            // ---- ⛔ THE STATION'S ALTITUDE, AND IT IS NOT A ROUND NUMBER BY ACCIDENT. ----
-            // 86 000 was the measured Space X Station altitude and it is being RAISED to 120 000 on
-            // 2026-08-13, deliberately, because 86 km left only 10.8 km between the station and the
-            // 75 km periapsis floor - and the phasing orbit has to fit in that gap.
-            //
-            // MEASURED consequence at 86 km: the largest along-track gap closable in the 3 permitted
-            // laps was 153 km, against a worst case of 2155 km - seven percent of the cases. On
-            // 2026-08-13 the launch window was missed by 34 min, the software launched anyway
-            // intending to phase in orbit, and the phasing was arithmetically impossible: 4515
-            // refusals in 102 s, by a margin of 300-600 metres.
-            //
-            // At 120 km there are 45 km of depth and 636 km closable in 3 laps - four times the
-            // reach - for 26 m/s more de-orbit out of the Draco's 423 m/s. It is also still far
-            // inside the ~300 km physics-unload range, so both vehicles stay loaded.
-            t.AltitudeM = StationAltitudeM;
-            t.HeadingDeg = 90.0;
-            double meco, stageAlt, gain, payload;
-            LandingSites.AscentFor(p, out meco, out stageAlt, out gain, out payload);
-            t.MecoAngleDeg = meco;
-            t.PitchGain = gain;
-            t.StageAltM = stageAlt;
-            t.PitchRefAltM = 0.0;                 // Kerbin: denom stays StageAltM * PitchGain/100
-            t.MaxQKpa = Ascent.MaxQKpa;           // Kerbin's flown 20 kPa ceiling
-            return t;
-        }
-
-        /// <summary>
-        /// The RSS/RO Earth ascent, aimed at a given parking orbit. NOT a scaling of the Kerbin
-        /// numbers - MEASURED from a real MechJeb ascent of this exact vehicle off LC-39A
-        /// (flight_0822_011349, 2026-08-22), because no single scale maps Kerbin's ascent onto
-        /// Earth's: the atmosphere is 2x deeper but the turn pitches over FASTER, not slower, and the
-        /// orbit needs ~7.8 km/s instead of ~2.3.
-        ///
-        /// What the flight showed, and where each number comes from:
-        ///   - liftoff ~527 t, TWR ~1.6; max Q 31 kPa at 13 km flown at full thrust  -> MaxQKpa 34
-        ///   - flight-path angle 89 deg -> 45 by 16 km -> 21 at staging               -> PitchRefAltM 40 km
-        ///   - MECO/S1 sep at 70 km, 2587 m/s, apoapsis 121 km, inc heading to 51.6   -> StageAltM 110 km
-        ///   - the second stage pushes a ~6.6 t Dragon: ~8.9 km/s of margin, so we can even stage a
-        ///     little EARLY (110 vs 121 km) and still make orbit, keeping booster propellant for the
-        ///     droneship recovery.
-        /// The MECO floor / booster-sep attitude drops to 25 deg (real staging was 21) because Earth's
-        /// turn goes far shallower than Kerbin's 40 before staging.
-        ///
-        /// ⚠ INTERIM. A linear-in-altitude pitch law is a crude fit to a real gravity turn (which is
-        /// convex - fast kick then shallow follow); these constants keep it from lofting and reach
-        /// orbit, they are not optimal. The whole law is superseded by PSG. See
-        /// docs/SESSION_2026-08-22.md. The 2nd stage never fired on the measured flight (MVac failure,
-        /// a CRAFT issue), so its pitch law is unvalidated on Earth.
-        /// </summary>
-        public static AscentTarget ForBody(LandingProfile p, double parkingAltitudeM)
-        {
-            AscentTarget t = Station(p);
-            t.AltitudeM = parkingAltitudeM;   // real ~200 km parking orbit, below the ISS
-            // ⛔ 110 -> 150 km. This is the APOAPSIS ceiling that ALSO ends MECO. The loft below climbs
-            // steeper, so apoapsis rises faster - and when the apoapsis hit the OLD 110 km ceiling before
-            // the speed cap, MECO fired early and LOW (2087 m/s, flight_0822_174436), which is exactly why
-            // the earlier loft backfired. Raising the ceiling lets the 2300 m/s SPEED cap (added since,
-            // MecoSurfaceSpeedCapMps) be the trigger instead, so the booster stages at the RIGHT speed but
-            // a HIGHER altitude. If a flight still stages on the apoapsis (MECO under 2300 m/s), raise this.
-            t.StageAltM = 150000.0;
-            // ⛔ 40 -> 48 km: LOFT TO THE REAL CREW-2 ~67 km MECO (user 2026-08-24, "full fidelity").
-            // At 40 km we stage at 61 km / 2300 m/s and the booster lands +13-20 km LONG - too much
-            // downrange energy. Real Crew-2 stages at ~67 km. A larger pitch-over scale holds the stack
-            // more vertical longer, so it reaches the (speed-capped) 2300 m/s HIGHER, with less of its
-            // speed pointed downrange -> the booster comes down shorter, toward the barge. The 2026-08-22
-            // backfire was the apoapsis trigger, now fixed by StageAltM 150 above, so the speed cap binds
-            // and the MECO VELOCITY does not move. [Tunable] - iterate from the flown MECO altitude toward
-            // 67 km; if it stages slow (MECO < 2300 m/s), the apoapsis is firing first - raise StageAltM.
-            t.PitchRefAltM = 48000.0;         // pitch-over scale, decoupled from staging - see the field
-            t.MecoAngleDeg = 25.0;            // Earth stages far shallower than Kerbin's 40
-            // ⛔ 34 -> 30: FLY THE REAL CREW-2 THROTTLE BUCKET (user 2026-08-23, "match crew-2 speeds").
-            // Real Crew-2 throttles DOWN through max Q ("throttle bucket", T+0:53) to a ~31 kPa peak. Ours
-            // hit 32 kPa at FULL throttle (flight_0823_222127) - flying the bucket instead of holding 100 %.
-            // A 30 kPa ceiling makes QThrottle ease off through the transonic peak, so max Q reads ~30-31
-            // like the real vehicle. MECO is speed-capped (below), so the small thrust loss just costs a
-            // little more gravity loss on the way to the same 2300 m/s - it does NOT move the staging speed.
-            t.MaxQKpa = 30.0;
-            // Crew-Dragon gentle-ascent g cap: the crew profile keeps first-stage g ~3.5; we pulled 4.65 g at
-            // MECO. GThrottle throttles the light stage down near MECO to hold the cap, matching the crewed
-            // telemetry without moving the (speed-capped) MECO velocity.
-            // ⛔ 4.0 -> 3.5 g (user 2026-08-24, "real Crew-2 may not use full throttle like we do"):
-            // flight_0824_162840 flew near-FULL throttle the whole ascent (max Q 0.91, pre-MECO 0.92) and
-            // staged LOW at 61 km, vs real Crew-2's ~67 km - the booster then lands +20 km long. The real
-            // crew ascent throttles the light stage down HARDER near MECO (crew g-limit ~3.5, not 4.0),
-            // which builds the last of the 2300 m/s over a longer, LOFTIER arc: it stages higher with less
-            // of its speed pointed downrange, so the booster comes down shorter. MECO is speed-capped, so
-            // this does NOT change the staging speed or starve the S2 - it hands the S2 off from a higher,
-            // lower-loss start. HYPOTHESIS to confirm from the next flight's MECO altitude + landing miss;
-            // if the loft does not pull the landing back, revert (it cannot break the 7/7 orbit).
-            t.GLimitMps2 = 3.5 * 9.80665;
-            // Cap MECO at the real Crew-2 surface staging velocity so the booster's downrange matches the
-            // real ~500 km barge distance. 110 km apoapsis is reached at ~2440 m/s and drops the booster
-            // 640 km out (140 km past the barge); real Crew-2 staged ~2300 m/s. See MecoSurfaceSpeedCapMps.
-            t.MecoSurfaceSpeedCapMps = 2300.0;
-            return t;
-        }
-
-        /// <summary>Tourist orbit altitude, metres (user 2026-08-21) - higher than the station's, a
-        /// sightseeing lap with no docking.</summary>
-    }
+    public enum AscentPhase : byte { Idle, VerticalRise, GravityTurn, Meco, Coast, S2Burn, Seco, Done }
 
     public struct AscentInputs
     {
         public bool Valid;
-        public double RadarAltitude;
-        public double Altitude;
-        public double ApoapsisM, PeriapsisM;
-        public double AtmosphereDepthM;
-        public double VerticalSpeed;
-        /// <summary>Surface (body-relative) speed, m/s. Caps MECO at the real staging velocity - see
-        /// AscentTarget.MecoSurfaceSpeedCapMps.</summary>
-        public double SurfaceSpeed;
-        public double DynamicPressureKpa;
-        public double TimeToApoapsisS;
-
-        /// <summary>
-        /// Distance to the separated booster, metres. Zero = no booster (or not measurable).
-        ///
-        /// ⛔ THE 3 s COAST WAS NOT ENOUGH AND TIME WAS NEVER THE RIGHT TEST. Measured on the 23:19
-        /// flight: 11.4 m between the two vehicles 0.6 s after separation, and still only ~11 m when
-        /// the MVac lit three seconds later. The separation impulse is tiny, so the gap does not open
-        /// on its own. Lighting a second stage 11 m off a booster is the failure the coast was added
-        /// to prevent, and the coast prevented none of it.
-        /// </summary>
-        public double RangeToBoosterM;
-        /// <summary>Thrust the vehicle could make right now, kN. Zero means nothing is lit. This is the
-        /// LIVE (throttled) finalThrust - what the engines are producing at the current throttle.</summary>
-        public double AvailableThrust;
-        /// <summary>
-        /// FULL-THROTTLE thrust of the lit engines, kN - what they would make at throttle 1.0. ⛔ THE
-        /// G-LIMIT NEEDS THIS, NOT AvailableThrust. Feeding the throttled thrust to GThrottle made it
-        /// compute the ALREADY-throttled acceleration as if it were the full-throttle one, so as soon as it
-        /// throttled down to the cap the "full accel" read the cap, GThrottle returned 1.0, and the engine
-        /// went back to full - oscillating 3.5 g <-> 4.5 g and peaking ~4.2 g (user-observed). The cap on
-        /// full-throttle accel is stable: throttle = gLimit / (MaxThrust/mass), independent of the current
-        /// throttle. Zero = unknown, and GThrottle then does not limit.
-        /// </summary>
-        public double MaxThrustKn;
-        /// <summary>Total vehicle mass, tonnes. With MaxThrustKn it gives the FULL-THROTTLE acceleration,
-        /// which the g-limit throttle caps at the crewed profile (Crew Dragon ~3.5 g) - see GThrottle.</summary>
-        public double MassT;
-        public bool Landed;
-        /// <summary>True once the booster is gone - the two stages fly different laws.</summary>
-        public bool SecondStage;
-        /// <summary>Seconds since the current phase began. MECO and the ullage burn are timed.</summary>
-        public double PhaseElapsedS;
-
-        // ---- CIRCULARISATION, F9I-STYLE ----
-        // "Make the orbit circular HERE, NOW" - FalconCircBurnVecNow, F9_payload.ks:265. The GLUE
-        // computes the vector because it needs the state vectors; pure decides what to do with it.
-        /// <summary>Magnitude of the dv that would circularise at the CURRENT radius, m/s.</summary>
-        public double CircDvMps;
-        /// <summary>True once that dv has REVERSED against its value at burn start - overshoot.</summary>
-        public bool CircDvFlipped;
+        public double AltitudeM;
+        public double SurfaceSpeedMps;      // surface-relative speed (the pitch program keys on it)
+        public double ApoapsisM;
+        public double TargetApoapsisM;      // orbit target radius-altitude (runaway backstop)
+        public double DynamicPressurePa;    // measured q (max-Q bucket)
+        public double MassKg;
+        public double FullThrustN;
+        public double GLimitG;              // crew axial-g cap for this stage
+        public bool   SecondStage;          // the MVac is lit (S1 gone)
     }
 
     public struct AscentCommand
     {
-        public AscentPhase Phase;
-        /// <summary>Degrees above the horizon. 90 is straight up.</summary>
-        public double PitchDeg;
-        public double HeadingDeg;
-        public double Throttle;
-        /// <summary>RCS fore command for the ullage settle, 0..1.</summary>
-        public double UllageFore;
-        /// <summary>Separate the spent stage now.</summary>
-        public bool Stage;
-        /// <summary>Drop the S2 off the Dragon. A DIFFERENT decoupler - see VehicleParts.</summary>
-        public bool SeparateS2;
-        /// <summary>RCS should be on. The unpowered coasts have no gimbal and need it.</summary>
-        public bool Rcs;
-        public string Note;
+        public AscentPhase Phase;           // fed back next tick (stateless FSM)
+        public double PitchDeg;             // commanded flight-path pitch, 90 = straight up (S1 only)
+        public double Throttle;             // final commanded throttle (bucket + g-limit already applied)
+        public bool Stage;                  // command staging THIS tick
+        public bool Cutoff;                 // engines to zero (MECO / SECO)
     }
 
     public static class Ascent
     {
-        /// <summary>Straight up to here, so the vehicle is clear before it leans. Metres, radar.</summary>
-        public const double VerticalRiseM = 250.0;
+        // ---- the real DM-1 pitch-vs-surface-speed program (flight-path angle, degrees) ----
+        // Vertical to the pitch-kick speed, then the measured turn 79°→47° through to the staging speed.
+        static readonly double[] Sp = { 0,   55,  60,  235, 300, 430, 630, 880, 1180, 1530, 1881 };
+        static readonly double[] Pd = { 90,  90,  79,  79,  75,  73,  68,  63,  57,   51,   47   };
 
-        /// <summary>Turn completes at this fraction of the atmosphere - scales to any body.</summary>
-        public const double TurnEndFraction = 0.62;
+        public const double KickSpeedMps = 55.0;      // clear the tower, then start the turn
+        [Tunable] public static double MecoSurfaceSpeedMps = 1900.0;   // DM-1 staging energy (couples to booster reserve)
+        public const double ApoapsisRunawayFactor = 1.5;               // safety: cut if apoapsis runs away
 
-        /// <summary>
-        /// Dynamic pressure ceiling, kPa. Falcon 9 throttles down through max Q and so do we; this
-        /// sits below where our own recorded flights showed the stack getting unhappy.
-        /// </summary>
-        public const double MaxQKpa = 20.0;
+        // max-Q bucket shape (Pa) — hold q under the ceiling through the transonic region.
+        public const double QSoftPa = 20000.0, QLimitPa = 35000.0, QBucketFloor = 0.7;
 
-        /// <summary>Stop circularising once periapsis is within this of the target.</summary>
-        public const double PeriapsisToleranceM = 2000.0;
+        public static double PitchAtSpeed(double v)
+        {
+            if (v <= Sp[0]) return Pd[0];
+            int n = Sp.Length;
+            if (v >= Sp[n - 1]) return Pd[n - 1];
+            for (int i = 1; i < n; i++)
+                if (v <= Sp[i])
+                {
+                    double f = (v - Sp[i - 1]) / (Sp[i] - Sp[i - 1]);
+                    return Pd[i - 1] + (Pd[i] - Pd[i - 1]) * f;
+                }
+            return Pd[n - 1];
+        }
 
-        /// <summary>Start the circularisation burn this long before apoapsis.</summary>
-        public const double CircBurnLeadS = 12.0;
+        static double Throttle(AscentInputs s, double baseT)
+        {
+            return ControlLaw.ThrottleLimit(baseT, s.DynamicPressurePa, QSoftPa, QLimitPa, QBucketFloor,
+                                            s.GLimitG, s.MassKg, s.FullThrustN);
+        }
 
-        // ---- ⛔ MECO IS A DISCRETE STEP AT ITS OWN, LOWER, APOAPSIS TARGET ----
-        // The thing I had completely wrong until the port map forced an end-to-end read. F9I carries
-        // TWO altitude targets and they are not the same number:
-        //
-        //      tgtAlt    60 km   `Ascent()` exits when apoapsis passes THIS - it is the MECO target
-        //      tgtOrbPE  86 km   the final orbit, which the SECOND stage reaches
-        //
-        // Ours flew the first stage at the 86 km figure, so the booster burned to depletion and the
-        // recovery inherited a dry stage with nothing left for boostback. The whole point of MECO at
-        // 60 km is that the booster still HAS propellant when it separates.
-        //
-        // `MECO()` at F9_payload.ks:543 is then a real sequence, not a consequence of running out:
-        // throttle to zero, hold the separation attitude, wait 2.5 s, stage, wait 3 s.
-
-        /// <summary>Hold after the engines cut before separating. F9I waits 2.5 s.</summary>
-        public const double MecoHoldS = 2.5;
-
-        /// <summary>
-        /// Ullage: RCS fore 0.75 with the engine at 0.075 for six seconds, settling the propellant
-        /// before the second stage is asked for real thrust. `BurnToApoapsis`, F9_payload.ks:571.
-        /// </summary>
-        public const double UllageSeconds = 6.0;
-
-        /// <summary>
-        /// Coast between SEPARATION and MVac ignition, seconds. F9I's MECO(): `wait 2.5. SafeStage().
-        /// core:part:controlfrom(). wait 3.` - the second wait is this one, and it is the only thing
-        /// standing between the MVac plume and the booster we are trying to recover.
-        /// `falcon-open-issues` lists "booster killed by MVac exhaust on sep" as its number one.
-        ///
-        /// We had NO gap: the stage command and the transition into BurnToApoapsis fired on the same
-        /// tick, so the MVac lit at 7% ullage throttle with the booster still at zero range.
-        /// </summary>
-        public const double PostSepHoldS = 3.0;
-
-        /// <summary>
-        /// Longest the upper stage will wait for the booster to get clear before lighting anyway.
-        /// A payload stranded on a suborbital arc because the booster would not drift away is a
-        /// worse outcome than a scorched booster, so the wait has an end.
-        /// </summary>
-        public const double MaxSepWaitS = 20.0;
-
-        /// <summary>
-        /// Periapsis at which the S2 is dropped, metres. F9I `sepPeTarget`, and the reasoning is in
-        /// FalconSepS2: 64.8 km is "technically" inside the 70 km atmosphere but sits where there is
-        /// no meaningful air, so the stage stays up more or less indefinitely. 40 km is deep enough
-        /// that "inside the atmosphere" and "comes down" are the same claim.
-        ///
-        /// MEASURED, from the S2 separation log (the recording itself is NOT in the archive - see below): "S2 SEP: separating at 85.4 x 40.2 km", Dracos lit one
-        /// second later, orbit closed 7 s after that.
-        /// </summary>
-        public const double SepPeTargetM = 40000.0;
-        public const double UllageThrottle = 0.075;
-        public const double UllageFore = 0.75;
-
-        /// <summary>
-        /// Available thrust (kN) that confirms the MVac has actually CAUGHT - lit, spooled and producing
-        /// real thrust, so its own acceleration now self-settles the tanks and the RCS ullage can stop.
-        ///
-        /// ---- ⛔ WHY ULLAGE IS GATED ON THRUST, NOT A FIXED 6 s WINDOW. ----
-        /// flight_0822_205453: the RCS-fore ullage ran for exactly UllageSeconds (x_fore 0.75 for ~6 s)
-        /// and then STOPPED while the throttle went to full - but the MVac had not yet built thrust, so
-        /// the instant the settle ended the propellant floated and the engine flamed out on "No
-        /// propellants" (Prop Requirement Met 0.00%), spent an ignition, and read 0 kN for the whole
-        /// coast. The stage never circularised and the vehicle reentered suborbitally. A settled engine
-        /// at UllageThrottle makes ~70 kN and a lit one at power makes hundreds; 100 kN cleanly says
-        /// "really running", so ullage is HELD until AvailableThrust clears it.
-        /// </summary>
-        public const double UllageThrustConfirmKn = 100.0;
-
-        // ---- CIRCULARISATION: THE BURN THAT PUT US ON AN ESCAPE TRAJECTORY ----
-        // The first version burned PROGRADE at full throttle until periapsis reached the target
-        // altitude. That has NO FIXED POINT: burning prograde raises apoapsis faster than periapsis,
-        // so the cutoff recedes as you chase it. Flight 13:36 ran the second stage dry doing exactly
-        // that and left Kerbin altogether.
-        //
-        // F9I solved this and wrote down why (`F9_payload.ks:265`, FalconCircBurnVecNow):
-        //
-        //      "Make the orbit circular HERE, NOW" ... This has a true fixed point (dv -> 0 exactly
-        //      when the orbit is circular at the current radius), so the closed loop converges by
-        //      construction instead of chasing a target that has expired.
-        //
-        //      dv = (horizontal_unit * sqrt(mu / r)) - v
-        //
-        // The glue computes that vector; this file only has to decide throttle and when to stop.
-        // Because dv shrinks to zero as the orbit rounds out, throttling on |dv| cannot run away.
-
-        /// <summary>Circular within this and the burn is finished, m/s.</summary>
-        public const double CircDvToleranceMps = 0.5;
-
-        /// <summary>|dv| that commands full throttle. Below it the burn eases in proportion.</summary>
-        public const double CircDvFullMps = 25.0;
-
-        /// <summary>Floor, so the last fraction of a m/s still closes instead of stalling.</summary>
-        public const double CircThrottleMin = 0.05;
-
-        /// <summary>
-        /// ⛔ RUNAWAY BACKSTOP. If apoapsis ever exceeds the target by this factor the burn is
-        /// wrong, whatever the guidance believes, and it stops. This is a SECOND line of defence
-        /// behind the fixed point above - the escape trajectory is the one failure on this project
-        /// that loses the whole vehicle and the crew with it, so it gets a guard that does not
-        /// depend on the guidance being correct.
-        /// </summary>
-        public const double ApoapsisRunawayFactor = 1.5;
-
-        public static AscentCommand Guide(AscentInputs s, AscentTarget t, AscentPhase phase)
+        public static AscentCommand Guide(AscentInputs s, AscentPhase phase)
         {
             AscentCommand c = new AscentCommand();
-            c.HeadingDeg = t.HeadingDeg;
-            c.Phase = phase;
+            c.Phase = phase; c.PitchDeg = 90.0; c.Throttle = 0.0;
 
-            if (!s.Valid) { c.Phase = AscentPhase.Idle; c.Note = "no vessel"; return c; }
+            if (!s.Valid) { c.Phase = AscentPhase.Idle; return c; }
 
-            bool stageNow = false;
-            bool sepS2Now = false;
-
-            // ---- ⛔ EXACTLY ONE TRANSITION PER CALL. THIS `else` CHAIN IS LOAD-BEARING. ----
-            // Flight 16:58 was a chain of plain `if`s, and it cost the entire mission. On the tick
-            // apoapsis crossed 60 km, the first test set phase = Meco - and then the NEXT test read
-            // `PhaseElapsedS`, which was still the eighty-odd seconds spent in GRAVITY TURN, decided
-            // the 2.5 s MECO hold was long over, and advanced straight to BurnToApoapsis in the same
-            // call. MECO never happened. It was never logged, never held, and never staged.
-            //
-            // Everything else that went wrong that flight followed from those two lines:
-            //   no stage command  -> the booster stayed attached
-            //   booster attached  -> SecondStage stayed false
-            //   SecondStage false -> the FIRST-stage pitch law ran the whole flight, floored at 45
-            //   45 degrees        -> the burn raised apoapsis and never periapsis (60 -> 129 km,
-            //                        periapsis -598.4 -> -597.7, i.e. it never left the lob)
-            //
-            // A state machine must advance one step per tick, or a per-phase timer is meaningless
-            // because the phase it is timing may already have been left.
-            if (phase == AscentPhase.Idle || phase == AscentPhase.VerticalRise)
-            {
-                phase = (s.RadarAltitude < VerticalRiseM && !Above(s, t))
-                      ? AscentPhase.VerticalRise : AscentPhase.GravityTurn;
-            }
-            // FIRST STAGE ends at the MECO target - OR when the booster is spent, whichever comes
-            // first. The real vehicle stages on depletion too, and in RSS the interim turn can run the
-            // S1 dry a hair short of the apoapsis target (MEASURED flight_0822_022834: flameout at apo
-            // ~108 km, target 110). Without the flameout branch the guidance stayed in GRAVITY TURN
-            // over a dead stage for 31 s, and the starvation-staging fallback tore the stack apart in
-            // the gap. MECO on flameout hands straight to the clean SeparateBooster path.
-            else if (phase == AscentPhase.GravityTurn
-                     && (s.ApoapsisM >= StageTarget(t)
-                         || (t.MecoSurfaceSpeedCapMps > 0.0 && s.SurfaceSpeed >= t.MecoSurfaceSpeedCapMps)
-                         || FirstStageSpent(s)))
-                phase = AscentPhase.Meco;
-
-            // MECO holds, then separates. The command below raises Stage on the tick it expires.
-            else if (phase == AscentPhase.Meco && s.PhaseElapsedS >= MecoHoldS)
-            {
-                // ⛔ THE STAGE COMMAND BELONGS ON THE TRANSITION, NOT IN THE Meco CASE.
-                // It was  inside  - which can
-                // never be true, because on the tick the hold expires THIS branch fires first and
-                // the switch renders BurnToApoapsis instead. The booster would have stayed attached
-                // for a second flight running, with the  fix in place and looking correct.
-                // ---- ⛔ AND IT GOES TO StageSep, NOT STRAIGHT TO THE MVac. ----
-                // Separating and lighting the second stage on the same tick is what puts the MVac
-                // plume into the booster. PostSepHoldS is the gap; see the constant.
-                phase = AscentPhase.StageSep;
-                stageNow = true;
-            }
-
-            // ---- ⛔ TIME, NOT DISTANCE - AND THE DISTANCE VERSION WAS A DEADLOCK. ----
-            // I gated the MVac on 200 m of clearance. But there is no separation impulse worth the
-            // name on this stack: the thing that actually opens the gap is THE UPPER STAGE FLYING
-            // AWAY. Waiting for clearance before lighting the engine that produces the clearance is
-            // circular, and the 23:19 flight is what it looks like - both vehicles sitting 11 m
-            // apart until their timeouts expired.
-            //
-            // F9I has no such gate. WaitForSep waits 2 s for the vessel split to resolve, Flip1
-            // settles for 2 more before it rotates, and the MVac lights on a plain 3 s timer. The
-            // booster is protected by not BURNING and not STEERING during those first seconds, not
-            // by holding the payload hostage.
-            else if (phase == AscentPhase.StageSep && s.PhaseElapsedS >= PostSepHoldS)
-                phase = AscentPhase.BurnToApoapsis;
-
-            // ---- SECOND STAGE RAISES APOAPSIS, THEN THE S2 IS DROPPED ----
-            // Exit on EITHER the apoapsis target or a 40 km periapsis, whichever comes first, and
-            // shed the S2 on the way past. F9I calls FalconSepS2 at exactly this point so the S2
-            // leaves on a trajectory that re-enters, and the Dragon closes the orbit on its own
-            // SuperDracos - 228 kN on the pod, ~400 m/s in the tank, ~37 m/s needed.
-            //
-            // Without this the capsule circularises with the whole S2 still bolted to it and then
-            // tries to de-orbit and land as a 20.5 t stack. It does not work, and the 21:01 flight
-            // ended exactly that way.
-            else if (phase == AscentPhase.BurnToApoapsis
-                     && (Above(s, t) || s.PeriapsisM >= SepPeTargetM))
-            {
-                phase = AscentPhase.Coast;
-            }
-
-            else if (phase == AscentPhase.Coast
-                     && (s.TimeToApoapsisS <= CircBurnLeadS || s.PeriapsisM > t.AltitudeM * 0.5))
-            {
-                // Lead the burn so it straddles apoapsis instead of starting at it - burning entirely
-                // after apoapsis raises the wrong side of the orbit.
-                phase = AscentPhase.Circularise;
-            }
-            else if (phase == AscentPhase.Circularise && Circularised(s, t))
-            {
-                // ---- ⛔ THE SECOND STAGE FINISHES THE JOB, THEN LEAVES. ----
-                // This used to shed the S2 on the way into COAST, and the comment there justified it
-                // with "~37 m/s needed" from the Dracos. That figure assumed separation near the
-                // 40 km periapsis target. In practice the apoapsis condition wins the race first and
-                // the stage is dropped at a periapsis of MINUS 126 km - measured 2026-08-12 - so the
-                // Dracos are handed a 212 m/s insertion instead of 37.
-                //
-                // What that cost, from the same recording: the capsule spent 114 of its 195
-                // monopropellant units - 58% of the tank - doing the second stage's job, before the
-                // mission had begun. Every flight has then run dry during the approach or docking.
-                // And the S2 was thrown away with 32% of its own propellant still aboard.
-                //
-                // The real vehicle does not fly this way either: Falcon 9's second stage performs
-                // orbital insertion and Dragon separates into a STABLE ORBIT about twelve minutes
-                // after launch. Its Dracos are for phasing, rendezvous and de-orbit - never for
-                // reaching orbit.
-                //
-                // ⚠ CIRCULARISING WITH THE S2 ATTACHED IS WHAT REACHED ESCAPE VELOCITY ON THE
-                // 13:36 FLIGHT, and that is why it was moved. It is safe now for reasons that did
-                // not exist then: `FalconCircBurnVecNow`'s dv has a true fixed point, a reversal
-                // above 5 m/s aborts with a reason, and the 1.5x apoapsis backstop cuts the throttle
-                // in every phase. All three are tested.
-                // Throttle to zero and HOLD. The separation happens in Shutdown, once the engine
-                // has actually stopped pushing - see the phase's own note.
-                phase = AscentPhase.Shutdown;
-            }
-
-            // ---- THE SPOOL-DOWN HOLD, THEN SEPARATE ----
-            else if (phase == AscentPhase.Shutdown && s.PhaseElapsedS >= AscentTarget.ShutdownSettleS)
-            {
-                sepS2Now = true;
-                phase = AscentPhase.Done;
-            }
-
-            // ---- ⛔ AND A DIVERGING BURN IS NOT A FINISHED ONE ----
-            // Same flight: circDv ROSE from 2098 to 2174 m/s while the burn ran, the dv direction
-            // swung more than 90 degrees off where it started, the overshoot test read that as
-            // "we have burned past it", and the autopilot announced INSERTION COMPLETE on a
-            // trajectory with a periapsis of MINUS 598 km. A false success is worse than a failure:
-            // it disengages and hands back a vehicle nobody is flying.
-            if (phase == AscentPhase.Circularise && s.CircDvFlipped
-                && s.CircDvMps > CircDvDivergedMps)
-            {
-                c.Phase = AscentPhase.Done;
-                c.Throttle = 0.0;
-                c.Note = "ABORT - CIRCULARISATION DIVERGING";
-                return c;
-            }
-
-            // ⛔ THE BACKSTOP, CHECKED IN EVERY PHASE AND NOT JUST THE BURN.
-            if (s.ApoapsisM > t.AltitudeM * ApoapsisRunawayFactor)
-            {
-                c.Phase = AscentPhase.Done;
-                c.Throttle = 0.0;
-                c.PitchDeg = 0.0;
-                c.Note = "ABORT - APOAPSIS RUNAWAY";
-                return c;
-            }
-
-            c.Phase = phase;
+            // ---- runaway backstop: if the apoapsis has blown past the target while still climbing, cut. ----
+            if ((phase == AscentPhase.GravityTurn || phase == AscentPhase.S2Burn)
+                && s.TargetApoapsisM > 0.0 && s.ApoapsisM > s.TargetApoapsisM * ApoapsisRunawayFactor)
+            { c.Phase = AscentPhase.Done; c.Cutoff = true; c.Throttle = 0.0; return c; }
 
             switch (phase)
             {
+                case AscentPhase.Idle:
                 case AscentPhase.VerticalRise:
+                    c.Phase = AscentPhase.VerticalRise;
                     c.PitchDeg = 90.0;
-                    c.Throttle = 1.0;
-                    c.Note = "VERTICAL RISE";
+                    c.Throttle = Throttle(s, 1.0);
+                    if (s.SurfaceSpeedMps > KickSpeedMps) c.Phase = AscentPhase.GravityTurn;
                     break;
 
                 case AscentPhase.GravityTurn:
-                    c.PitchDeg = TurnPitch(s, t);
-                    // Crew-2 throttle profile: the max-Q bucket AND the crewed g cap, whichever bites more.
-                    c.Throttle = System.Math.Min(QThrottle(s, t.MaxQKpa), GThrottle(s, t.GLimitMps2));
-                    c.Note = "GRAVITY TURN";
+                    c.Phase = AscentPhase.GravityTurn;
+                    c.PitchDeg = PitchAtSpeed(s.SurfaceSpeedMps);
+                    c.Throttle = Throttle(s, 1.0);
+                    if (s.SurfaceSpeedMps >= MecoSurfaceSpeedMps) c.Phase = AscentPhase.Meco;
                     break;
 
                 case AscentPhase.Meco:
-                    // Engines off, hold the separation attitude. BOOSTER.ks separates on
-                    // `heading(azimuth, MECOangle)` and depends on the stack holding exactly this.
-                    c.PitchDeg = (t.MecoAngleDeg > 0.0) ? t.MecoAngleDeg : 45.0;
-                    c.Throttle = 0.0;
-                    // F9I's MECO() does `rcs on` before the hold, and the recording shows why: with
-                    // the engines out the gimbal goes with them, torque falls from 2300 kN.m to the
-                    // 9.5 of the reaction wheels alone, and the pitch axis saturates at +-1 for the
-                    // whole coast. RCS is the only authority the stack has here.
-                    c.Rcs = true;
-                    c.Note = "MECO";
-                    break;
-
-                case AscentPhase.StageSep:
-                    // Separated and drifting apart. Engines STAY OFF - this hold exists so the MVac
-                    // does not light into the booster.
-                    c.PitchDeg = (t.MecoAngleDeg > 0.0) ? t.MecoAngleDeg : 45.0;
-                    c.Throttle = 0.0;
-                    c.Rcs = true;
-                    c.Note = "STAGE SEP";
-                    break;
-
-                case AscentPhase.BurnToApoapsis:
-                    c.PitchDeg = TurnPitch(s, t);
-                    if (s.PhaseElapsedS < UllageSeconds)
-                    {
-                        // Settle the propellant gently before asking for real thrust.
-                        c.Throttle = UllageThrottle;
-                        c.UllageFore = UllageFore;
-                        c.Note = "ULLAGE";
-                    }
-                    else if (s.AvailableThrust < UllageThrustConfirmKn)
-                    {
-                        // ⛔ THE MINIMUM SETTLE IS DONE BUT THE ENGINE HAS NOT CAUGHT. Command power AND
-                        // KEEP ULLAGE. Dropping the RCS-fore here on a fixed clock is what flamed the MVac
-                        // out on unsettled propellant (see UllageThrustConfirmKn). Hold the settle until
-                        // the engine's own thrust can take over.
-                        c.Throttle = ApoapsisThrottle(s, t);
-                        c.UllageFore = UllageFore;
-                        c.Note = "ULLAGE + LIGHT";
-                    }
-                    else
-                    {
-                        // Engine has real thrust now - it self-settles, so the RCS ullage can stop.
-                        c.Throttle = ApoapsisThrottle(s, t);
-                        c.Note = "BURN TO APOAPSIS";
-                    }
+                    // cut the engines, hold the separation attitude, command staging.
+                    c.Phase = AscentPhase.Coast;
+                    c.PitchDeg = PitchAtSpeed(MecoSurfaceSpeedMps);
+                    c.Throttle = 0.0; c.Cutoff = true; c.Stage = true;
                     break;
 
                 case AscentPhase.Coast:
-                    // Hold the prograde-ish attitude rather than flopping to the horizon: the vehicle
-                    // is still in thin atmosphere and a sideways capsule bleeds apoapsis.
-                    c.PitchDeg = 0.0;
+                    c.Phase = AscentPhase.Coast;
                     c.Throttle = 0.0;
-                    c.Rcs = true;              // engines out - the gimbal is gone, RCS is the only authority
-                    c.Note = "COAST TO APOAPSIS";
+                    if (s.SecondStage) c.Phase = AscentPhase.S2Burn;   // MVac lit → UPFG takes over
                     break;
 
-                case AscentPhase.Shutdown:
-                    // Zero throttle, hold the attitude. Nothing else.
-                    c.Throttle = 0.0;
-                    c.Rcs = true;              // engine spooling down - hold on RCS, not the fading gimbal
-                    c.Note = "SHUTDOWN - engine spooling down before separation";
+                case AscentPhase.S2Burn:
+                    // UPFG owns the S2 pitch + the SECO call; here we only meter the throttle (g-limit near cutoff).
+                    c.Phase = AscentPhase.S2Burn;
+                    c.Throttle = Throttle(s, 1.0);
                     break;
 
-                case AscentPhase.Circularise:
-                    // Variable, on the remaining dv. Full throttle at 25 m/s to go, easing to the
-                    // floor as it converges - a full-throttle finish overshoots between ticks and
-                    // there is no way to take it back.
-                    c.PitchDeg = 0.0;
-                    c.Throttle = CircThrottle(s.CircDvMps);
-                    c.Note = "CIRCULARISE";
+                case AscentPhase.Seco:
+                    c.Phase = AscentPhase.Done; c.Throttle = 0.0; c.Cutoff = true;
                     break;
 
                 default:
-                    c.PitchDeg = 0.0;
-                    c.Throttle = 0.0;
-                    c.Note = (phase == AscentPhase.Done) ? "INSERTION COMPLETE" : "IDLE";
+                    c.Phase = AscentPhase.Done; c.Throttle = 0.0;
                     break;
             }
-
-            c.Stage = stageNow;
-            c.SeparateS2 = sepS2Now;
             return c;
-        }
-
-        /// <summary>The MECO apoapsis - the FIRST stage's target, well below the orbit.</summary>
-        public static double StageTarget(AscentTarget t)
-        {
-            return (t.StageAltM > 0.0) ? t.StageAltM : 60000.0;
-        }
-
-        /// <summary>Below this thrust (kN) the first stage counts as flamed out / spent.</summary>
-        public const double FirstStageSpentThrustKn = 1.0;
-        /// <summary>...but only above this altitude, so no pad or max-Q transient can trip it.</summary>
-        public const double FirstStageSpentMinAltM = 30000.0;
-
-        /// <summary>
-        /// The first stage is spent: it is the booster (not the S2), we are well up-range, and it is
-        /// making no thrust while the gravity turn is still commanding it. Real F9 MECOs on depletion;
-        /// so do we, rather than coast a dead stage to the apoapsis target it can no longer reach.
-        /// </summary>
-        public static bool FirstStageSpent(AscentInputs s)
-        {
-            return !s.SecondStage
-                && s.Altitude > FirstStageSpentMinAltM
-                && s.AvailableThrust < FirstStageSpentThrustKn;
-        }
-
-        /// <summary>
-        /// Second-stage throttle, `BurnToApoapsis`:
-        ///
-        ///     min( max(0.1, (target - apoapsis) / (target - atmHeight))
-        ///          + max(0, (30 - etaApoapsis) * 0.075), 1 )
-        ///
-        /// Proportional to the apoapsis DEFICIT, normalised by how much of the climb is above the
-        /// atmosphere, floored at 0.1 so it always closes, plus the same avoidFireDeath term that
-        /// pitches up when apoapsis is about to arrive. Variable, not full throttle.
-        /// </summary>
-        public static double ApoapsisThrottle(AscentInputs s, AscentTarget t)
-        {
-            double span = t.AltitudeM - s.AtmosphereDepthM;
-            if (span < 1000.0) span = 1000.0;
-            double deficit = (t.AltitudeM - s.ApoapsisM) / span;
-            if (deficit < 0.1) deficit = 0.1;
-
-            double fire = (30.0 - s.TimeToApoapsisS) * 0.075;
-            if (fire < 0.0) fire = 0.0;
-
-            double th = deficit + fire;
-            if (th > 1.0) th = 1.0;
-            return th;
-        }
-
-        /// <summary>
-        /// A reversed dv this large means the burn is DIVERGING, not overshooting. Above it the
-        /// autopilot aborts and says so instead of claiming success.
-        /// </summary>
-        public const double CircDvDivergedMps = 5.0;
-
-        /// <summary>
-        /// ⛔ IS IT ACTUALLY IN ORBIT? Not "did the guidance run out of things to do".
-        ///
-        /// Flight 16:58 declared INSERTION COMPLETE with apoapsis 129 km and periapsis MINUS 598 km.
-        /// Every individual condition that fired was defensible; none of them asked the only
-        /// question that matters. Periapsis must clear the atmosphere, or it is not an orbit and
-        /// saying so is a lie the crew cannot check.
-        /// </summary>
-        public static bool Circularised(AscentInputs s, AscentTarget t)
-        {
-            if (s.PeriapsisM <= s.AtmosphereDepthM) return false;
-            if (s.CircDvMps <= CircDvToleranceMps) return true;
-            return s.PeriapsisM >= t.AltitudeM - PeriapsisToleranceM;
-        }
-
-        /// <summary>Throttle for the circularisation burn, from the dv still to go.</summary>
-        public static double CircThrottle(double dvMps)
-        {
-            if (dvMps <= CircDvToleranceMps) return 0.0;
-            double t = dvMps / CircDvFullMps;
-            if (t > 1.0) t = 1.0;
-            if (t < CircThrottleMin) t = CircThrottleMin;
-            return t;
-        }
-
-        private static bool Above(AscentInputs s, AscentTarget t)
-        {
-            return s.ApoapsisM >= t.AltitudeM;
-        }
-
-        /// <summary>
-        /// The turn itself. Square root of the fraction of the way through, which spends more of the
-        /// turn near vertical early - the shape a rocket wants, because pitching hard low down is
-        /// where the drag and the bending loads are.
-        /// </summary>
-        public static double TurnPitch(AscentInputs s) { return TurnPitch(s, AscentTarget.Station()); }
-
-        /// <summary>
-        /// ---- F9I'S ASCENT LAW, PORTED. NOT THE sqrt CURVE I INVENTED FIRST. ----
-        /// `F9I/F9_payload.ks:527-530` for the first stage and `:622-624` for the second:
-        ///
-        ///     stage 1   tgtPitch = max( 90 * (1 - alt / (tgtAlt * pitchGain/100)), MECOangle )
-        ///     stage 2   tgtPitch = min( max(90 * (1 - alt / tanAlt), 0.1) + avoidFireDeath, MECOangle )
-        ///
-        /// LINEAR in altitude with a floor at the MECO angle, not a square root. The floor is the
-        /// important part and the sqrt version had nothing like it: the first stage pitches over to
-        /// 45 degrees and then HOLDS there to staging, which is what sets up the booster's return -
-        /// BOOSTER.ks separates on `heading(azimuth, MECOangle)` and depends on the stack having
-        /// been holding exactly that.
-        ///
-        /// `avoidFireDeath` is F9I's guard for the second stage: inside 30 s to apoapsis it adds up
-        /// to about 11 degrees of pitch-up to stop the apoapsis running away underneath the burn.
-        ///
-        /// These constants are tuned per landing profile against real flights - RTLS 45/60 km/110,
-        /// droneship 40/70 km/97, expendable 10/70 km/72.5. Do not retune them here.
-        /// </summary>
-        public static double TurnPitch(AscentInputs s, AscentTarget t)
-        {
-            double meco = (t.MecoAngleDeg > 0.0) ? t.MecoAngleDeg : 45.0;
-
-            if (s.SecondStage)
-            {
-                double tanAlt = (s.AtmosphereDepthM > 0.0) ? s.AtmosphereDepthM : 70000.0;
-                double p = 90.0 * (1.0 - s.Altitude / tanAlt);
-                if (p < 0.1) p = 0.1;
-                // avoidFireDeath: 5 * max(0, (30 - eta:apoapsis) * 0.075)
-                double eta = s.TimeToApoapsisS;
-                double fire = 5.0 * ((30.0 - eta) * 0.075);
-                if (fire < 0.0) fire = 0.0;
-                p += fire;
-                return (p > meco) ? meco : p;
-            }
-
-            // The pitch-over scale. On Earth PitchRefAltM sets it directly (decoupled from where the
-            // stage MECOs); on Kerbin it is 0 and the denom stays the flown StageAltM * PitchGain/100.
-            double denom;
-            if (t.PitchRefAltM > 0.0)
-                denom = t.PitchRefAltM;
-            else
-            {
-                double gain = (t.PitchGain > 0.0) ? t.PitchGain : 110.0;
-                double stageAlt = (t.StageAltM > 0.0) ? t.StageAltM : 60000.0;
-                denom = stageAlt * (gain / 100.0);
-                if (denom <= 0.0) denom = 66000.0;
-            }
-
-            double pitch = 90.0 * (1.0 - s.Altitude / denom);
-            // The MECO floor. Never below the horizon either - a negative pitch here would be a
-            // guidance bug driving the stack into the ground at full throttle.
-            if (pitch < meco) pitch = meco;
-            return (pitch < 0.0) ? 0.0 : pitch;
-        }
-
-        /// <summary>
-        /// Throttle back through max Q. Proportional above the limit rather than a hard cut, so the
-        /// vehicle eases off instead of pogoing between full and nothing.
-        /// </summary>
-        public static double QThrottle(AscentInputs s) { return QThrottle(s, MaxQKpa); }
-
-        /// <summary>As above, against a body-specific ceiling (Kerbin 20, Earth 34 - see
-        /// AscentTarget.MaxQKpa). The 1-arg overload keeps the Kerbin default for existing callers.</summary>
-        public static double QThrottle(AscentInputs s, double maxQKpa)
-        {
-            if (maxQKpa <= 0.0) maxQKpa = MaxQKpa;
-            if (s.DynamicPressureKpa <= maxQKpa) return 1.0;
-            double over = (s.DynamicPressureKpa - maxQKpa) / maxQKpa;
-            double th = 1.0 - over * 2.0;
-            if (th < 0.35) th = 0.35;      // never below the level that keeps the engines happy
-            return th;
-        }
-
-        /// <summary>
-        /// Throttle to hold acceleration at or below <paramref name="gLimitMps2"/> - the crewed-ascent g
-        /// cap (Crew Dragon ~3.5 g). Zero limit returns 1 (stock Kerbin, unlimited).
-        ///
-        /// ⛔ SIZED ON FULL-THROTTLE THRUST (MaxThrustKn), NOT the live throttled thrust. Full-throttle
-        /// acceleration is MaxThrustKn/MassT (m/s^2 directly, kN/t == m/s^2); the throttle that caps the
-        /// FELT g there is gLimit/fullAccel, which is stable because MaxThrustKn does not change when we
-        /// throttle. Using the live thrust instead made the loop oscillate above the cap (~4.2 g observed) -
-        /// see AscentInputs.MaxThrustKn. Only bites once the stage is light enough that full thrust would
-        /// exceed the limit - the last seconds before MECO - so early ascent is untouched. Same 0.35 floor
-        /// as QThrottle. MECO stays speed-capped, so this only spreads the final burn over a little more time.
-        /// </summary>
-        public static double GThrottle(AscentInputs s, double gLimitMps2)
-        {
-            if (gLimitMps2 <= 0.0 || s.MassT <= 0.0 || s.MaxThrustKn <= 0.0) return 1.0;
-            double fullAccel = s.MaxThrustKn / s.MassT;       // full-throttle accel, kN/t == m/s^2
-            if (fullAccel <= gLimitMps2) return 1.0;
-            double th = gLimitMps2 / fullAccel;
-            if (th < 0.35) th = 0.35;
-            return th;
-        }
-
-        public static string Name(AscentPhase p)
-        {
-            switch (p)
-            {
-                case AscentPhase.VerticalRise: return "VERTICAL RISE";
-                case AscentPhase.GravityTurn:  return "GRAVITY TURN";
-                case AscentPhase.Meco:         return "MECO";
-                case AscentPhase.StageSep:     return "STAGE SEP";
-                case AscentPhase.BurnToApoapsis: return "BURN TO APOAPSIS";
-                case AscentPhase.Coast:        return "COAST";
-                case AscentPhase.Shutdown:     return "SHUTDOWN";
-                case AscentPhase.Circularise:  return "CIRCULARISE";
-                case AscentPhase.Done:         return "INSERTION COMPLETE";
-                default:                       return "STANDBY";
-            }
         }
     }
 }

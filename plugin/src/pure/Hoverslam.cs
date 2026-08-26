@@ -1,137 +1,86 @@
-/*
- * DragonScreen - Hoverslam
- *
- * PURE. The drag-aware suicide-burn (hoverslam) ignition-point solver for the Falcon booster landing.
- *
- * ---- WHY THIS EXISTS, AND WHAT IT TAKES FROM MECHJEB ----
- * MechJeb's HoverslamSimulation (MechJebLib/HoverslamSimulation) solves the same problem the RIGHT way:
- * NUMERICALLY INTEGRATE the descent and ROOT-SOLVE for the ignition point, instead of a closed form. We
- * take that METHOD. But MechJeb's version is VACUUM - its RHS is `dv = -mu*r/r^3 + thrust*u`, gravity and
- * thrust only, aero is a `TODO` in its own source - and it is a 3D orbital integration on a heavy stack
- * (Tsit5 ODE, BrentRoot, Shepperd, Astro, Phase). The Falcon LANDING burn is a 1D vertical problem
- * DOMINATED BY AERO DRAG (the stage falls at terminal velocity, where drag == gravity), so a drag-free
- * solver mis-times the light exactly like the closed form `StopDist = v^2/(2(a-g))` we replace.
- *
- * So this is MechJeb's method, tailored: a 1D vertical integrator of altitude / vertical speed / mass
- * under gravity + thrust + the MEASURED drag + the Merlin's ~3.5 s spool, bisection-root-solved for the
- * ignition altitude at which a full-throttle burn arrests the stage exactly at the deck. Ignite as late
- * as that allows - the suicide burn - so drag does maximum free braking. All MEASURED inputs; no tuning.
- *
- * Drag model: at terminal velocity the stage falls at constant speed, so drag == gravity there. Drag
- * scales with v^2, so `dragAccel(v) = DragRefAccel * (v/DragRefSpeed)^2` - give it the measured terminal
- * fall (DragRefSpeed = terminal speed, DragRefAccel = g) and it is exact near the deck where the burn
- * lives, with no atmosphere model needed over the short final kilometres.
- */
+// DragonScreen — Hoverslam  (autopilot rebuild L3 booster: the landing-burn ignition solver)
+// ============================================================================================
+// Built fresh from the research (PHASE_2_BOOSTER_RECOVERY_RESEARCH §6/§8.1, BOOSTER_GUIDANCE_DESIGN).
+// The stage cannot hover — even one Merlin at ~40% min throttle out-thrusts the near-empty stage — so
+// landing is a HOVERSLAM: one continuous max-thrust brake timed to reach v=0 exactly at h=0, igniting as
+// LATE as possible so aero drag does maximum free braking. The ignition altitude is the drop consumed by
+// (a) the ullage-settle DEAD TIME the stage free-falls before real thrust, (b) the spool ramp, then
+// (c) the braking distance under thrust − gravity + drag. Solved numerically with the measured drag so
+// it is correct for the real stage. Engine mode is the FEWEST engines that can still arrest (3 → 1), the
+// centre engine flying the touchdown. Sources cite §5.0: Merlin spool is instant (throttleResponseRate),
+// so the dead time is ullage-settle, not spool.
+// ============================================================================================
+using System;
+
 namespace DragonScreen
 {
-    /// <summary>Everything the hoverslam solver needs, all MEASURED off the descending stage.</summary>
     public struct HoverslamInputs
     {
-        /// <summary>Height above the deck, metres (the booster's own base, not the CoM - see BoosterHeightM).</summary>
-        public double AltitudeM;
-        /// <summary>Vertical speed, m/s. NEGATIVE descending.</summary>
-        public double VerticalSpeed;
-        /// <summary>Mass, tonnes.</summary>
-        public double MassT;
-        /// <summary>Local gravity, m/s^2.</summary>
+        public double AltitudeM;         // height above the deck
+        public double DescentSpeedMps;   // current descent speed (positive magnitude)
+        public double ThrustAccelMps2;   // full-thrust acceleration of the braking engines (F/m)
         public double GravityMps2;
-        /// <summary>Full thrust on the engines the landing burn will light, kN.</summary>
-        public double ThrustKn;
-        /// <summary>Propellant flow at full throttle, t/s (= Thrust/(Isp*g0)). Zero = ignore mass loss.</summary>
-        public double MdotTps;
-        /// <summary>A drag-accel sample: the deceleration drag makes at DragRefSpeed, m/s^2. At terminal
-        /// velocity this equals gravity, which is the easy measurement to feed it.</summary>
-        public double DragRefAccel;
-        /// <summary>The speed at which DragRefAccel was measured, m/s (e.g. the terminal fall speed).</summary>
-        public double DragRefSpeed;
-        /// <summary>
-        /// Seconds of near-ZERO thrust after the ignition COMMAND, before the engine ramps: the ullage
-        /// settle (engine held off, RCS settling propellant) PLUS the RealFuels chamber-pressure build.
-        /// MEASURED 5.4 s on flight_0824_031348 (cmd at 1571 m, first real thrust at 283 m). The stage
-        /// FREE-FALLS this whole time - modelling it as part of the spool ramp gives phantom early braking
-        /// and lights the burn far too low (that flight hit the deck at 192 m/s). Zero = no dead time.
-        /// </summary>
-        public double DeadTimeS;
-        /// <summary>Seconds the engine takes to ramp 0 -> full thrust AFTER DeadTimeS. RO Merlin ~1.2.</summary>
-        public double SpoolS;
+        public double TerminalSpeedMps;  // measured terminal fall speed (drag == gravity there)
+        public double DeadTimeS;         // ullage-settle dead-fall before real thrust
+        public double SpoolS;            // thrust ramp (≈0 for the instant-spool Merlin)
     }
 
-    public static class HoverslamSolver
+    public static class Hoverslam
     {
-        /// <summary>Integration step, seconds. 0.05 is well inside the dynamics and fast to root-solve.</summary>
-        private const double DtS = 0.05;
+        const double Dt = 0.05;
 
-        /// <summary>
-        /// The altitude (above the deck) at which to LIGHT the landing burn: the latest altitude from which
-        /// a full-throttle burn - through the spool, against gravity, WITH drag helping - still arrests the
-        /// stage at the deck. Ignite once the real altitude falls to this. Returns the current altitude if
-        /// the stage cannot stop from here (already too late), so the caller lights immediately.
-        /// </summary>
+        // Altitude at which to IGNITE so a full brake (after the dead-time and spool) nulls v at h=0.
+        // The caller lights the engines when the true altitude falls to this value.
         public static double IgnitionAltitude(HoverslamInputs s)
         {
-            if (s.ThrustKn <= 0.0 || s.MassT <= 0.0) return s.AltitudeM;
+            double v = Math.Abs(s.DescentSpeedMps);
+            double a = s.ThrustAccelMps2, g = s.GravityMps2;
+            if (v < 1.0) return 0.0;                 // not descending → nothing to solve
+            if (a <= g) return s.AltitudeM;          // cannot decelerate against gravity → light now
 
-            // Bisection on the ignition altitude. StopAltitude(h) is where the stage comes to rest (v=0)
-            // if it lights a full-throttle burn at altitude h with the current descent speed. It rises
-            // monotonically with h (more height to burn -> stops higher), so we bracket a root of
-            // StopAltitude(h) == 0 (rest exactly at the deck). Bracket: [0, a generous ceiling].
-            double lo = 0.0;
-            double hi = System.Math.Max(s.AltitudeM * 2.0, 5000.0);
-            if (StopAltitude(hi, s) < 0.0) return s.AltitudeM;   // cannot stop even from way up - light now
+            double vterm = s.TerminalSpeedMps > 1.0 ? s.TerminalSpeedMps : v;
+            double h = 0.0, vv = v;
 
-            for (int i = 0; i < 60; i++)
+            // (a) DEAD TIME: engines lit but ullage settling → free-fall under gravity minus drag.
+            for (double t = 0.0; t < s.DeadTimeS; t += Dt)
             {
-                double mid = 0.5 * (lo + hi);
-                if (StopAltitude(mid, s) > 0.0) hi = mid; else lo = mid;
-                if (hi - lo < 0.5) break;
+                double drag = g * (vv * vv) / (vterm * vterm);   // drag == g at terminal, ∝ v²
+                vv += (g - drag) * Dt;
+                if (vv < 0.0) vv = 0.0;
+                h += vv * Dt;
             }
-            return 0.5 * (lo + hi);
-        }
 
-        /// <summary>
-        /// Integrate a full-throttle burn that STARTS at ignition altitude <paramref name="hIgn"/> with the
-        /// current descent speed, and return the altitude at which vertical speed reaches zero (the rest
-        /// altitude). Positive = stops above the deck (fuel to spare / could have waited), negative = hit
-        /// the deck still moving (too late). Models the spool ramp, mass loss and v^2 drag.
-        /// </summary>
-        public static double StopAltitude(double hIgn, HoverslamInputs s)
-        {
-            double h = hIgn;
-            double v = s.VerticalSpeed;                 // negative, descending
-            double m = s.MassT;
-            double t = 0.0;
-            double g = s.GravityMps2;
-
-            for (int step = 0; step < 20000; step++)
+            // (b)+(c) BRAKE: thrust ramps over the spool, then full; drag + thrust decelerate, gravity adds.
+            for (double t = 0.0; vv > 0.0 && t < 300.0; t += Dt)
             {
-                if (v >= 0.0) return h;                  // arrested
-                if (h <= -2000.0) return h;              // ran it into the ground, done bracketing
-
-                // Dead time first: the engine makes no useful thrust through the ullage settle + chamber
-                // build, so the stage FREE-FALLS (drag + gravity only). Then the spool ramps from there.
-                double thrustAccel = 0.0, spool = 0.0;
-                if (t >= s.DeadTimeS)
-                {
-                    spool = (s.SpoolS > 0.0) ? System.Math.Min(1.0, (t - s.DeadTimeS) / s.SpoolS) : 1.0;
-                    thrustAccel = (m > 0.0) ? s.ThrustKn * spool / m : 0.0;       // up
-                }
-                double dragAccel = DragAccel(-v, s);                              // opposes descent -> up
-                double a = -g + dragAccel + thrustAccel;                          // net, up positive
-
-                v += a * DtS;
-                h += v * DtS;
-                m -= s.MdotTps * spool * DtS;            // fuel only burns once thrust is being made
-                t += DtS;
+                double thr = s.SpoolS > 1e-6 ? Math.Min(1.0, t / s.SpoolS) : 1.0;
+                double drag = g * (vv * vv) / (vterm * vterm);
+                double netDown = g - drag - a * thr;             // <0 while braking
+                vv += netDown * Dt;
+                if (vv < 0.0) vv = 0.0;
+                h += vv * Dt;
             }
             return h;
         }
 
-        /// <summary>Drag deceleration at descent SPEED (m/s, positive), m/s^2. `DragRefAccel*(speed/DragRefSpeed)^2`.</summary>
-        private static double DragAccel(double speed, HoverslamInputs s)
+        // The stop altitude if the stage ignites at hIgnite with the current descent speed — should be ~0
+        // when hIgnite == IgnitionAltitude. (Used to verify the solver and as a live safety check.)
+        public static double StopAltitude(double hIgnite, HoverslamInputs s)
         {
-            if (s.DragRefSpeed <= 0.0 || s.DragRefAccel <= 0.0) return 0.0;
-            double r = speed / s.DragRefSpeed;
-            return s.DragRefAccel * r * r;
+            return hIgnite - IgnitionAltitude(s);
+        }
+
+        // Fewest engines that can still arrest from here: try the centre engine first, then three. Returns
+        // 1 or 3 (0 if even three cannot stop → the caller flags an un-recoverable landing to FDIR).
+        public static int EnginesFor(HoverslamInputs sOne, HoverslamInputs sThree)
+        {
+            // if one engine can ignite low enough that its ignition altitude is under the current altitude
+            // with margin, one engine suffices; otherwise three are needed to arrest the speed.
+            if (sOne.ThrustAccelMps2 > sOne.GravityMps2 && IgnitionAltitude(sOne) < sOne.AltitudeM)
+                return 1;
+            if (sThree.ThrustAccelMps2 > sThree.GravityMps2)
+                return 3;
+            return 0;
         }
     }
 }

@@ -1,237 +1,122 @@
-/*
- * DragonScreen - DockApproach
- *
- * PURE. WHICH POINT THE CAPSULE IS FLYING AT, and whether it is allowed to start the final run.
- *
- * ---- ⛔ WHY THIS FILE EXISTS: THE TESTED LAYER WAS NOT THE BROKEN LAYER ----
- * `DockControlTest.Converge` flies the real servo for 40 000 steps and passes 4704 checks, and
- * docking has never once succeeded in flight. The test feeds `DistF/S/T` measured STRAIGHT TO THE
- * PORT; the flight code feeds the distance to whichever WAYPOINT the stage machine currently wants.
- * Every failure has been in the waypoint choice, and the waypoint choice lived in KSP glue where no
- * test could reach it. So the decision is here, in scalars, and both the flight code and the
- * simulator call it - AND THE SIMULATOR MUST START WHERE THE RENDEZVOUS ACTUALLY HANDS OVER.
- *
- * ---- ⛔ SIMPLIFIED 2026-08-17: THE LVLH "L" IS GONE. gate -> standoff -> axial. ----
- * The 2026-08-13 rebuild flew the real Crew-Dragon L: WP0 400 m BELOW the station, WP1 220 m out on
- * the axis, WP2 20 m, then the port, in the station's LVLH frame. It PASSED headless and EMPTIED THE
- * TANK IN FLIGHT (flight_0814_172345.csv: 54 units, never past `Corridor`, `x_ctlZ` slamming +/-0.5).
- * The reason is the handover: the L assumes the capsule arrives BEHIND AND BELOW - which is exactly
- * where the test started it, `V(-900,-500,0)` - but `StationApproach.Arrived()` hands over at ~60 m,
- * co-orbital, IN FRONT of the port. That close, `axialM` oscillates about 0 inside the keep-out
- * sphere: the wrong-side branch commanded a back-out while `Wp1Transit` commanded a point 400 m
- * BELOW, and the target flipped every few ticks.
- *
- * A gate -> standoff -> axial profile has no such assumption: every point it flies to is NEAR the
- * port (gate ~ standoff ~ 25 m, then the port), so it converges from wherever it is handed the
- * vehicle. This is `docs/DOCKING_REBUILD_PLAN.md` Phase 1 - keep the gate/corridor/standoff profile,
- * keep the ported `DockControl` velocity inner loop, drop the L.
- *
- * ---- WHERE THE RULES COME FROM ----
- *   · COMMIT AT 1 m OF LATERAL, NOT 15. `MechJebModuleDockingAutopilot.cs:59`,
- *     `dockingcorridorRadius = 1`. The axial run may only START when the lateral is inside
- *     `CorridorRadiusM`, so the capsule is lined up BEFORE it closes rather than nulling a large
- *     offset while closing. This also replaces the self-falsifying `AtStandoff` predicate - see the
- *     note on the commit test in `Select`, and `DockGeometry`'s removed `AtStandoff`.
- *   · WRONG SIDE IS A STATE, NOT AN ACCIDENT. If our port is behind theirs we go ROUND to the front;
- *     we never reverse straight through the station.
- *
- * ---- AND THE STAGE MACHINE IS MONOTONE ----
- * Every proximity test falsifies itself by succeeding, so a stage may only ever advance. `reached`
- * is the high-water mark; pass the previous result back in. See `Rank`.
- */
+// DragonScreen — DockApproach  (autopilot rebuild L3 docking: the R-bar→V-bar L-approach FSM)
+// ============================================================================================
+// The real Crew Dragon proximity-ops approach (PHASE_4_DOCKING_RESEARCH + telemetry DB): up the R-bar
+// to WP0 (~400 m directly BELOW), hold + crew GO to enter the keep-out sphere, swing onto the V-bar to
+// WP1 (~200 m in FRONT on the docking axis), hold + GO, close to WP2 (~20 m), hold + GO for docking,
+// then close to CONTACT at ~8 cm/s. Each waypoint is a station-keeping HOLD released only by a crew GO,
+// which is what makes the approach abortable at every step. OFFSET-targeted; ANY UNPLANNED KOS breach
+// commands an automatic ABORT (retreat). DockControl.cs flies the 6-DOF glideslope between the points.
+//
+// ⛔ FULL CONTROL: Guide() ALWAYS returns a unit AimLvlh — the capsule points its docking ring at the
+// port the whole time; L2 holds it (attitude first), then DockControl translates.
+// ============================================================================================
+using System;
+
 namespace DragonScreen
 {
-    // ---- THE STAGE. A plain enum with no KSP in it, so the layer that DECIDES it is testable. ----
-    public enum DockStage : byte
-    {
-        Idle = 0,
-        /// <summary>No usable pair of ports. Says so rather than flying at the hull.</summary>
-        NoPort,
-        /// <summary>Range raised, waiting for KSP to load the station so its ports can be read.</summary>
-        AwaitingTarget,
-        /// <summary>Flying to the gate - the point where the port axis leaves the keep-out sphere.</summary>
-        ToGate,
-        /// <summary>The direct path cuts the hull; sliding round the sphere instead.</summary>
-        Rounding,
-        /// <summary>
-        /// At the gate and running IN along the port axis to the standoff, lining up as it goes.
-        ///
-        /// This is the approach-corridor transit: hold outside the keep-out sphere, then enter along
-        /// the port axis to a close hold, rather than closing on the station from wherever it happens
-        /// to be.
-        /// </summary>
-        Corridor,
-        /// <summary>Lined up on the axis and running straight down it to contact.</summary>
-        Axial,
-        Docked
-    }
+    public enum DockPhase : byte { Idle, WP0Hold, ToWP1, WP1Hold, ToWP2, WP2Hold, Contact, Captured, Abort }
 
-    /// <summary>Where the capsule should be flying, this tick.</summary>
-    public enum DockWaypoint : byte
-    {
-        /// <summary>No usable geometry.</summary>
-        None = 0,
-        /// <summary>Round the keep-out sphere - the direct path cuts the hull.</summary>
-        Skirt,
-        /// <summary>The point where the port axis leaves the keep-out sphere.</summary>
-        Gate,
-        /// <summary>On the axis, `StandoffM` out from the port.</summary>
-        Standoff,
-        /// <summary>The port itself. Only once lined up inside the corridor.</summary>
-        Port
-    }
-
-    /// <summary>Everything the choice depends on, in metres. No vectors - see the file header.</summary>
-    public struct DockApproachInputs
+    public struct DockInputs
     {
         public bool Valid;
-        /// <summary>Along the port axis, POSITIVE when we are in front of the port.</summary>
-        public double AxialM;
-        /// <summary>Perpendicular distance from the port axis. Always positive.</summary>
-        public double LateralM;
-        /// <summary>Straight-line distance to the standoff point.</summary>
-        public double ToStandoffM;
-        /// <summary>Straight-line distance to the gate.</summary>
-        public double ToGateM;
-        /// <summary>Does the straight run to the gate clear the keep-out sphere?</summary>
-        public bool PathClear;
-        /// <summary>Half the docking node's own `acquireRange` - magnets take it from here.</summary>
-        public double AcquireM;
-        /// <summary>Station bounding radius plus ours, metres. Sets the wrong-side clearance.</summary>
-        public double SafeM;
+        public LvlhState Rel;          // capsule relative to the station, LVLH
+        public double KosRadiusM;      // 200
+        public bool GoWP0, GoWP1, GoWP2;   // crew GO gates released at the holds
+        public double WP0BelowM;       // 400  (−radial)
+        public double WP1FrontM;       // 200  (+along, on the V-bar)
+        public double WP2FrontM;       // 20
+        public double ArriveTolM;      // hold-capture tolerance to consider a waypoint reached
+        public bool CorridorOk;        // on the planned corridor (false → unplanned breach → abort)
     }
 
-    public struct DockApproachResult
+    public struct DockCommand
     {
-        public DockWaypoint Waypoint;
-        public DockStage Stage;
-        public bool Captured;
-        public string Note;
+        public DockPhase Phase;
+        public Vec3 TargetLvlh;        // the point to fly to (DockControl closes to it)
+        public Vec3 AimLvlh;           // ALWAYS unit — point the docking ring at the port (toward station)
+        public bool Hold;              // station-keeping, waiting for GO
+        public bool Docked;
     }
 
     public static class DockApproach
     {
-        /// <summary>
-        /// Lateral error permitted before the final run may START, metres.
-        ///
-        /// ⛔ `MechJebModuleDockingAutopilot.cs:59`, `dockingcorridorRadius = 1`. The axial run is
-        /// committed only when the lateral is inside this, so the capsule is lined up before it
-        /// closes. Ours committed on `GateToleranceM` 15 m and `StandoffToleranceM` 12 m and entered
-        /// `Axial` up to fifteen metres off the axis, then tried to null that while closing.
-        /// </summary>
-        [Tunable] public static double CorridorRadiusM = 1.0;
+        public const double ContactRangeM = 0.3;   // soft-capture contact
 
-        /// <summary>Lateral error that sends the final run back to re-line-up. Hysteresis, not a
-        /// second value.</summary>
-        [Tunable] public static double CorridorAbortM = 2.0;
-
-        /// <summary>How far in front of the port the capsule lines up before the axial run. Follows
-        /// the (tunable) `DockGeometry.StandoffM` so the two can never disagree.</summary>
-        public static double StandoffM { get { return DockGeometry.StandoffM; } }
-
-        /// <summary>Stage ordering. ToGate and Rounding share a rank - rounding is a curve, not a
-        /// milestone.</summary>
-        public static int Rank(DockStage s)
+        static Vec3 Toward(LvlhState r)
         {
-            switch (s)
-            {
-                case DockStage.ToGate:
-                case DockStage.Rounding: return 1;   // transit to the gate
-                case DockStage.Corridor: return 2;   // gate -> standoff, lining up
-                case DockStage.Axial:    return 3;   // straight down the axis to contact
-                case DockStage.Docked:   return 4;
-                default: return 0;
-            }
+            // point the docking ring at the station (−relative position). Never undefined.
+            Vec3 v = new Vec3(-r.Rx, -r.Ry, -r.Rz);
+            return v.Magnitude > 1e-6 ? v.Normalized : new Vec3(0, 1, 0);
         }
 
-        /// <summary>
-        /// Choose the waypoint. `reached` is the high-water mark; pass the previous result back in.
-        /// </summary>
-        public static DockApproachResult Select(DockApproachInputs s, DockStage reached)
+        static Vec3 WP0(DockInputs s) { return new Vec3(-s.WP0BelowM, 0, 0); }
+        static Vec3 WP1(DockInputs s) { return new Vec3(0, s.WP1FrontM, 0); }
+        static Vec3 WP2(DockInputs s) { return new Vec3(0, s.WP2FrontM, 0); }
+        static Vec3 Port() { return new Vec3(0, 0, 0); }
+
+        static double DistTo(LvlhState r, Vec3 wp)
         {
-            DockApproachResult r = new DockApproachResult();
-            r.Stage = reached;
+            double dx = r.Rx - wp.X, dy = r.Ry - wp.Y, dz = r.Rz - wp.Z;
+            return Math.Sqrt(dx * dx + dy * dy + dz * dz);
+        }
 
-            if (!s.Valid)
+        public static DockCommand Guide(DockInputs s, DockPhase phase)
+        {
+            DockCommand c = new DockCommand();
+            c.Phase = phase;
+            c.AimLvlh = s.Valid ? Toward(s.Rel) : new Vec3(0, 1, 0);   // ALWAYS pointed at the port
+            c.TargetLvlh = WP0(s);
+
+            if (!s.Valid) { c.Phase = DockPhase.Idle; return c; }
+
+            // ---- ANY unplanned KOS breach aborts (retreat) — the real hard rule ----
+            if (phase != DockPhase.Abort && phase != DockPhase.Captured
+                && s.Rel.RangeM < s.KosRadiusM && !s.CorridorOk)
+            { c.Phase = DockPhase.Abort; c.TargetLvlh = WP0(s); return c; }
+
+            if (phase == DockPhase.Idle) phase = DockPhase.WP0Hold;
+
+            switch (phase)
             {
-                r.Waypoint = DockWaypoint.None;
-                r.Note = "no geometry";
-                return r;
+                case DockPhase.WP0Hold:
+                    c.Phase = DockPhase.WP0Hold; c.TargetLvlh = WP0(s); c.Hold = true;
+                    if (s.GoWP0) { c.Phase = DockPhase.ToWP1; c.Hold = false; }
+                    break;
+
+                case DockPhase.ToWP1:
+                    c.Phase = DockPhase.ToWP1; c.TargetLvlh = WP1(s);
+                    if (DistTo(s.Rel, WP1(s)) <= s.ArriveTolM) c.Phase = DockPhase.WP1Hold;
+                    break;
+
+                case DockPhase.WP1Hold:
+                    c.Phase = DockPhase.WP1Hold; c.TargetLvlh = WP1(s); c.Hold = true;
+                    if (s.GoWP1) { c.Phase = DockPhase.ToWP2; c.Hold = false; }
+                    break;
+
+                case DockPhase.ToWP2:
+                    c.Phase = DockPhase.ToWP2; c.TargetLvlh = WP2(s);
+                    if (DistTo(s.Rel, WP2(s)) <= s.ArriveTolM) c.Phase = DockPhase.WP2Hold;
+                    break;
+
+                case DockPhase.WP2Hold:
+                    c.Phase = DockPhase.WP2Hold; c.TargetLvlh = WP2(s); c.Hold = true;
+                    if (s.GoWP2) { c.Phase = DockPhase.Contact; c.Hold = false; }
+                    break;
+
+                case DockPhase.Contact:
+                    c.Phase = DockPhase.Contact; c.TargetLvlh = Port();   // close at contact speed (DockControl caps it)
+                    if (s.Rel.RangeM <= ContactRangeM) { c.Phase = DockPhase.Captured; c.Docked = true; }
+                    break;
+
+                case DockPhase.Captured:
+                    c.Phase = DockPhase.Captured; c.Docked = true; c.TargetLvlh = Port();
+                    break;
+
+                case DockPhase.Abort:
+                    c.Phase = DockPhase.Abort; c.TargetLvlh = WP0(s);    // retreat back out along the approach
+                    break;
             }
-
-            // ---- CAPTURED ----
-            // ⛔ THE AXIAL TEST IS TWO-SIDED. `AxialM <= AcquireM` alone is true for every NEGATIVE
-            // axial too, so a capsule that flew straight through the station reports a capture.
-            // ⛔ AND THE LATERAL TOLERANCE IS THE PORT'S OWN CAPTURE ENVELOPE, NOT THE CORRIDOR.
-            // Declaring capture means "stop thrusting and let the magnets take it", and a metre off
-            // centre the magnets do not reach. `AcquireM` is `theirPort.acquireRange * 0.5` - the
-            // port's own number - so the final run keeps trimming until the capsule is inside it,
-            // which is the whole point of trimming to contact.
-            if (s.AxialM <= s.AcquireM && s.AxialM > -s.AcquireM
-                && s.LateralM <= s.AcquireM)
-            {
-                r.Captured = true;
-                r.Stage = DockStage.Docked;
-                r.Waypoint = DockWaypoint.Port;
-                r.Note = "CAPTURE";
-                return r;
-            }
-
-            // ---- WRONG SIDE falls through to the gate logic below, NOT a special branch. ----
-            // Behind the port (axial < 0) the gate is in FRONT of the port, so the normal
-            // "fly to the gate if clear, else round the hull" leg already pulls the capsule to the
-            // front and round the station - no reversing through it. The ONE thing that must not
-            // happen is the axial commit firing while behind: `axial <= StandoffM` is trivially true
-            // for every negative axial, so the commit is guarded with `axial > 0` below.
-
-            // ================= THE NOMINAL PROFILE: gate -> standoff -> axial =================
-            // ⚠ MONOTONE. `reached` only advances; a stage falsifies its own test by succeeding.
-
-            // ---- AXIAL: lined up, run straight in. ----
-            // ⛔ THE COMMIT TEST IS LATERAL ALIGNMENT, NOT PROXIMITY TO THE STANDOFF POINT. The old
-            // `AtStandoff` - "within 12 m of a point 25 m out" - is FALSE at 13 m from the port, so
-            // the axial entry failed BECAUSE THE AXIAL RUN HAD WORKED. That was the 13 m stall. Here
-            // the run starts once the lateral is inside `CorridorRadiusM` and we are at or inside the
-            // standoff axially, and `reached` latches it - it cannot self-falsify. `DockControl`
-            // already slows the closure while a lateral remains, so committing at 1 m is safe.
-            if (Rank(reached) >= Rank(DockStage.Axial)
-                || (s.AxialM > 0.0 && s.AxialM <= StandoffM && s.LateralM <= CorridorRadiusM))
-            {
-                r.Stage = DockStage.Axial;
-                if (s.LateralM > CorridorAbortM)
-                {
-                    // Lateral blew out past the abort band mid-run: re-line-up on the standoff
-                    // rather than crabbing into the port. Stays `Axial` rank (monotone).
-                    r.Waypoint = DockWaypoint.Standoff;
-                    r.Note = "OFF THE AXIS - re-lining up, lateral " + s.LateralM.ToString("F1") + " m";
-                    return r;
-                }
-                r.Waypoint = DockWaypoint.Port;
-                r.Note = "AXIAL - " + s.AxialM.ToString("F1") + " m";
-                return r;
-            }
-
-            // ---- CORRIDOR: at the gate, run in along the port axis to the standoff. ----
-            if (Rank(reached) >= Rank(DockStage.Corridor) || DockGeometry.AtGate(s.ToGateM))
-            {
-                r.Waypoint = DockWaypoint.Standoff;
-                r.Stage = DockStage.Corridor;
-                r.Note = "CORRIDOR - " + s.ToStandoffM.ToString("F0") + " m to the standoff";
-                return r;
-            }
-
-            // ---- TO THE GATE: straight there if the path is clear, else slide round the hull. ----
-            if (s.PathClear)
-            {
-                r.Waypoint = DockWaypoint.Gate;
-                r.Stage = DockStage.ToGate;
-                r.Note = "TO GATE - " + s.ToGateM.ToString("F0") + " m";
-                return r;
-            }
-            r.Waypoint = DockWaypoint.Skirt;
-            r.Stage = DockStage.Rounding;
-            r.Note = "ROUNDING HULL";
-            return r;
+            return c;
         }
     }
 }

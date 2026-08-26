@@ -205,7 +205,24 @@ speed**, and a **flight-path angle**; plus per-stage thrust, Isp and mass. [P]
 - **Constraint:** a direct ascent can only reach **`i ≥ |φ|`** (else `cos i / cos φ > 1`, no solution) —
   from the Cape (~28.5°N) the 51.6° ISS plane is reachable (NE azimuth), ascending node. [P]
 
-### 6.4 Ascent Δv budget (order of magnitude)
+### 6.4 Launch window — plane ∩ phase (when to launch)
+To hit an inclined plane you must launch when the rotating **launch site passes through the target orbital
+plane**, which happens **twice per sidereal day** (an ascending-node pass and a descending-node pass). [D]
+```
+in-plane condition: the site's geocentric position lies in the target plane (defined by inclination i and
+                    RAAN Ω); at that instant the in-plane launch azimuth is  sin β = cos i / cos φ.
+site inertial right ascension at a plane crossing:
+                    α = Ω + Δ    (ascending pass)      α = Ω + 180° − Δ    (descending pass)
+                    where  sin(Δ) = tan(φ)/tan(i)      (the node-to-site angle along the plane)
+launch time:        when the site's right ascension α = GST + longitude reaches the above (Earth rotates
+                    the site to it once per pass).
+```
+For **rendezvous with a specific target** (the ISS), of the two daily plane windows pick the one whose
+resulting **phase angle** to the station makes the phasing close in the allowed laps — that is the
+**plane ∩ phase** window. Launching off-plane is not recoverable by steering (a plane change costs
+`Δv ≈ 2·v·sin(Δi/2)`), so the window, not the ascent, fixes the plane. [D]
+
+### 6.5 Ascent Δv budget (order of magnitude)
 - Total Δv to LEO ≈ **~9.3–9.4 km/s** = orbital velocity (~7.8 km/s) **+ gravity losses** (~1.5–2 km/s)
   **+ drag losses** (~0.1–0.3 km/s) **+ steering losses**, minus the **Earth-rotation assist** (~0.4 km/s
   eastward from the Cape). The gravity turn exists to **minimise the gravity + steering losses**. [E]
@@ -255,6 +272,14 @@ Light 9 Merlins (~7,600 kN) → vertical rise → pitch kick (~T+10 s) → **zer
 pad‑through‑orbit with automatic + manual triggers. Fly the physics and the clock takes care of itself.
 
 ---
+
+## Real derived ascent profile (DM-1 telemetry) — the numbers to fly to
+The one Crew Dragon mission with archived time-series telemetry (Demo-1) was extracted and derived
+2026-08-26 → `data/dm1_ascent_template.json` + `docs/CREW_MISSION_TELEMETRY.md`. It gives the real
+**pitch + throttle/g program**: pitch kick **+5.3°/s** off the pad → hold ~**79°** to ~T+45 → gravity turn
+mean **−0.287°/s** → **46.6° at MECO**; throttle **bucket to ~1.35 g** through max-Q (Mach 0.91 in the
+derivation); **S1 g-limit 3.26 g**, **S2 g-limit 3.57 g** (both under the ~4 g crew cap — DM-1 never
+g-throttled). Full per-mission callout MET (countdown gates + ascent) in `data/crew_missions.json`.
 
 ## Open items to verify further (honesty log)
 - Our UPFG has been cross-checked against the **PEGAS reference**, not line-by-line against the original

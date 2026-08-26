@@ -1,6 +1,11 @@
 /*
  * Headless test runner. Every suite returns a failure count; the process exit code is non-zero if any
  * of them failed, so build.py stops rather than cheerfully reporting "ok" over a broken build.
+ *
+ * ⛔ THE AUTOPILOT WAS DELETED FOR A GROUND-UP REBUILD (docs/AUTOPILOT_REBUILD_PLAN.md, 2026-08-26).
+ * Only the SCREEN suites remain here. As each rebuilt autopilot layer lands, re-register its (verified)
+ * test — the L0 math suites (Kepler/UPFG/CW/Hohmann/Hoverslam/FuelFlow) are in _deleted_autopilot/test/,
+ * ready to return with their layer.
  */
 using System;
 
@@ -10,41 +15,31 @@ public static class TestMain
     {
         int bad = 0;
         bad += LayoutTest.Run();
+        bad += LayoutSweepTest.Run();
         bad += PageTest.Run();
         bad += PanelTest.Run();
-        bad += FlightTest.Run();
         bad += OrbitalTest.Run();
-        bad += PredictTest.Run();
-        bad += BurnExecTest.Run();
-        bad += ReturnBudgetTest.Run();
-        bad += PhasingTest.Run();
-        bad += DockGeometryTest.Run();
-        bad += DeorbitBurnTest.Run();
-        bad += DeorbitPointTest.Run();
-        bad += TrajectoryTest.Run();
-        bad += EntryGuidanceTest.Run();
-        bad += DockControlTest.Run();
-        bad += DockApproachTest.Run_();
-        bad += ReturnPathTest.Run();
-        bad += LayoutSweepTest.Run();
-        bad += MechJebLibTest.Run();
-        bad += FuelFlowTest.Run();
-        bad += LaunchAzimuthTest.Run();
-        bad += WaypointApproachTest.Run();
-        bad += LvlhTest.Run();
         bad += VehiclePartsTest.Run();
-        bad += HohmannTest.Run();
-        bad += PlaneWindowTest.Run();
-        bad += Crew2TimelineTest.Run();
-        bad += KeplerTest.Run();
-        bad += UpfgTest.Run();
-        bad += NamedRendezvousTest.Run();
-        bad += HoverslamTest.Run();
-        bad += CrewOpsTest.Run();
-        bad += HealthMonitorTest.Run();
-        bad += RendezvousProgressTest.Run();
+        bad += MissionProfileTest.Run();   // rebuilt autopilot: S0b mission-as-data resolver
+        bad += TrajectoryTest.Run();       // L1 nav: RK4 impact predictor + measured drag/lift/beta
+        bad += PredictTest.Run();          // L1 nav: impact / closest-approach helpers
+        bad += AeroTest.Run();             // L1 nav: dynamic pressure / Mach / sound speed
+        bad += AuthorityTest.Run();        // L1 nav: per-axis control authority + arrestable rate
+        bad += ControlTest.Run();          // L2 control: attitude PD + throttle bucket/g-limit + RCS
+        bad += ConicTest.Run();            // L3 support: Vec3 + conic propagator (UPFG gravity)
+        bad += AscentTest.Run();           // L3 ascent: launch azimuth + S1 pitch program + FSM
+        bad += UpfgTest.Run();             // L3 ascent: closed-loop UPFG S2 insertion (PEGAS port)
+        bad += BoosterTest.Run();          // L3 booster: hoverslam + grid-fin steering + descent FSM
+        bad += RendezvousMathTest.Run();   // L3 rendezvous: LVLH + CW two-impulse + Hohmann
+        bad += RendezvousTest.Run();       // L3 rendezvous: named-burn FSM + full-control contract
+        bad += DockingTest.Run();          // L3 docking: glideslope servo + L-approach FSM
+        bad += ReturnTest.Run();           // L3 return: departure + deorbit + lifting entry (CoM shifter) + chutes
+        bad += CrewGateTest.Run();         // L4 conductor: crew-gate state machine + gate catalog + mode manager
+        bad += FdirTest.Run();             // L5 FDIR: debounced monitors + recovery ladder + phase-correct abort
+        bad += SelfCalTest.Run();          // L6 self-cal: RLS w/ variable forgetting + the live-estimate bank
+        bad += FlightRecorderTest.Run();   // L7 instrumentation: the per-flight CSV schema + fillers
 
-        Console.WriteLine(bad == 0 ? "ALL SUITES PASSED" : bad + " SUITE(S) FAILED");
+        Console.WriteLine(bad == 0 ? "ALL SCREEN SUITES PASSED" : bad + " SUITE(S) FAILED");
         return bad == 0 ? 0 : 1;
     }
 }

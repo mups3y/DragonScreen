@@ -1,106 +1,43 @@
-/*
- * DragonScreen - Trajectory
- *
- * PURE. Forward integration of a ballistic trajectory THROUGH AN ATMOSPHERE, to an impact point.
- *
- * ---- WHY WE HAVE OUR OWN INSTEAD OF TAKING TRAJECTORIES ----
- * F9I gets its impact point from the Trajectories add-on. We do not take that dependency, and the
- * vacuum solve we had instead is not good enough for everything: it is fine for a boostback that
- * deliberately overshoots by 2.7 km, and useless for a de-orbit burn whose stop condition is a 50 m
- * tolerance. Drag only ever shortens a trajectory, so a vacuum answer is always LONG, and by tens of
- * kilometres on an entry.
- *
- * ---- ⛔ THE DRAG TERM IS MEASURED, NOT MODELLED ----
- * This is the part that makes it worth having. KSP's drag comes from per-part drag cubes, occlusion
- * and orientation; computing it analytically means reimplementing the game's aerodynamics and being
- * wrong in a new way. Instead the glue MEASURES the vessel's actual drag acceleration in flight -
- * total acceleration minus gravity minus thrust - and back-solves the ballistic coefficient:
- *
- *      a_drag = 0.5 * rho * v² / BC        ->        BC = 0.5 * rho * v² / a_drag
- *
- * BC = m/(Cd·A) carries mass, shape, orientation and occlusion in one number the vehicle tells us
- * about itself. It is re-measured continuously, so a capsule that jettisons a trunk, deploys fins or
- * turns broadside updates its own prediction without anyone writing down a coefficient.
- *
- * That is the same principle as everything else that works on this project: `falcon-detect-by-
- * capability`, the measured keep-out radius, the measured ascent time. Measure the vehicle, do not
- * describe it.
- *
- * ---- INTEGRATION ----
- * RK4 in an inertial frame centred on the body. Gravity is Newtonian; drag acts along the
- * SURFACE-relative velocity, because that is what the air sees. The body's rotation is carried
- * separately so the impact point comes out as a ground position rather than an inertial one - a
- * 600 km body turning once per six hours moves 175 m/s at the equator, which is kilometres of miss
- * over a long entry.
- *
- * The atmosphere is supplied as a callback so this file stays free of KSP. The glue passes
- * `body.GetDensity(body.GetPressure(alt), body.GetTemperature(alt))`, which is the game's own model
- * rather than an approximation of it.
- */
+// DragonScreen - Trajectory
+// ---- WHY WE HAVE OUR OWN INSTEAD OF TAKING TRAJECTORIES ----
+// ---- ⛔ THE DRAG TERM IS MEASURED, NOT MODELLED ----
+// ---- INTEGRATION ----
 using System;
 
 namespace DragonScreen
 {
-    /// <summary>Density at an altitude above sea level, kg/m³. The glue supplies KSP's own model.</summary>
     public delegate double DensityAt(double altitudeM);
 
-    /// <summary>Speed of sound at an altitude, m/s. The glue supplies KSP's own model.</summary>
     public delegate double SpeedOfSoundAt(double altitudeM);
 
-    /// <summary>
-    /// The drag "factor" at a Mach number and pseudo-Reynolds (rho·|v|), such that the drag
-    /// acceleration is <c>0.5·rho·v²·factor</c> opposing the surface velocity. This is the Mach- and
-    /// Reynolds-dependent inverse ballistic coefficient the STOCK aero produces, ported from
-    /// Trajectories' <c>StockAeroUtil.SimAeroForce</c>:
-    /// <c>factor = 0.001 · DragMultiplier · DragCubeMultiplier · pseudoReynolds(rhoV) · Σ areaDrag(mach) / mass</c>.
-    /// Supplied by the glue because it needs the vessel's drag cubes; null falls back to the scalar bc.
-    /// </summary>
     public delegate double DragFactorAt(double mach, double pseudoReynolds);
 
     public struct TrajectoryInputs
     {
-        /// <summary>Position relative to the body centre, metres, inertial.</summary>
         public double Px, Py, Pz;
-        /// <summary>Inertial velocity, m/s.</summary>
         public double Vx, Vy, Vz;
-        /// <summary>Body gravitational parameter.</summary>
         public double Mu;
-        /// <summary>Body radius, metres.</summary>
         public double BodyRadiusM;
-        /// <summary>Body rotation rate, rad/s. Sign follows the +Z axis of the frame the glue uses.</summary>
         public double BodyOmega;
-        /// <summary>Top of the atmosphere, metres. Above this the drag term is skipped entirely.</summary>
         public double AtmosphereDepthM;
-        /// <summary>
-        /// Ballistic coefficient m/(Cd·A), kg/m². MEASURED - see the header. Zero or negative means
-        /// "unknown", and the integration runs as a vacuum solve and says so. Used only when
-        /// <see cref="DragFactor"/> is null (the fallback path).
-        /// </summary>
         public double BallisticCoefficient;
-        /// <summary>Altitude the impact is declared at - terrain height, or zero for sea level.</summary>
         public double ImpactAltitudeM;
 
-        /// <summary>
-        /// Optional: when non-null, Solve appends samples of the flown path here (about one every
-        /// <see cref="Trajectory.PathIntervalS"/> of flight), for the map-view renderer to draw a line.
-        /// Each sample carries the integrator-frame position and the body rotation so far, so the glue
-        /// can put it back into a body-fixed world position. Null skips all of it - the guidance solve
-        /// pays nothing for a line nobody is looking at.
-        /// </summary>
+        // ---- LIFT (from reading the original Trajectories mod, which samples the real aero force at a
+        // ---- descent AoA — drag AND lift). We model lift as (L/D)*drag, perpendicular to the surface-
+        // ---- relative velocity, rolled by BankRad about it (bank 0 = lift in the vertical plane → range;
+        // ---- bank ±90° = lift to a side → crossrange). L/D = 0 (default) is the old drag-only solve, so
+        // ---- the vacuum/drag verification still holds. This is what lets the predictor track a grid-fin
+        // ---- steered booster and a bank-modulated lifting entry, not just a ballistic fall.
+        public double LiftToDrag;    // |lift|/|drag| ; 0 = no lift (drag-only)
+        public double BankRad;       // roll of the lift vector about the velocity vector
+
         public System.Collections.Generic.List<PathSample> Path;
 
-        /// <summary>
-        /// The STOCK drag model, ported from Trajectories. When set it SUPERSEDES
-        /// <see cref="BallisticCoefficient"/>: the drag is Mach- and Reynolds-dependent, computed from
-        /// the vessel's real drag cubes, so it matches what the Trajectories add-on predicts. Needs
-        /// <see cref="SoundSpeed"/> to turn speed into a Mach number.
-        /// </summary>
         public DragFactorAt DragFactor;
-        /// <summary>Speed of sound vs altitude, for the Mach number. Required when DragFactor is set.</summary>
         public SpeedOfSoundAt SoundSpeed;
     }
 
-    /// <summary>One point on the flown path: integrator-frame position and body rotation so far.</summary>
     public struct PathSample
     {
         public double X, Y, Z, Rot;
@@ -109,46 +46,23 @@ namespace DragonScreen
     public struct TrajectoryResult
     {
         public bool Ok;
-        /// <summary>Impact position relative to the body centre, in the INERTIAL frame.</summary>
         public double Ix, Iy, Iz;
-        /// <summary>Seconds from now to impact.</summary>
         public double TimeToImpactS;
-        /// <summary>Speed at impact, m/s. Worth knowing before you arrive.</summary>
         public double ImpactSpeedMps;
-        /// <summary>
-        /// Radians the body turned during the flight. The glue subtracts this from the impact
-        /// longitude to get a GROUND position.
-        /// </summary>
         public double BodyRotationRad;
-        /// <summary>True when drag was actually modelled rather than skipped.</summary>
         public bool DragModelled;
         public string Note;
     }
 
     public static class Trajectory
     {
-        /// <summary>Coarse step used in vacuum, seconds. Nothing interesting happens up there.</summary>
         public const double VacuumStepS = 2.0;
-        /// <summary>Fine step used inside the atmosphere, seconds.</summary>
         public const double AtmoStepS = 0.25;
-        /// <summary>
-        /// Finer still in the dense lower atmosphere, seconds. Below a quarter of the atmosphere the
-        /// density is changing fast enough that a 0.25 s step is visibly lossy over a long entry.
-        /// </summary>
         public const double DenseStepS = 0.05;
-        /// <summary>Give up after this much simulated time, seconds.</summary>
         public const double MaxFlightS = 3600.0;
 
-        /// <summary>Flight-time between samples added to <see cref="TrajectoryInputs.Path"/>, seconds.</summary>
         public const double PathIntervalS = 3.0;
 
-        /// <summary>
-        /// Integrate to impact.
-        ///
-        /// Returns Ok = false rather than a wrong answer when the trajectory does not come down
-        /// inside <see cref="MaxFlightS"/> - an orbit that does not intersect the ground has no
-        /// impact point, and reporting one would be worse than reporting none.
-        /// </summary>
         public static TrajectoryResult Solve(TrajectoryInputs s, DensityAt density)
         {
             TrajectoryResult r = new TrajectoryResult();
@@ -165,7 +79,6 @@ namespace DragonScreen
             if (s.Mu <= 0.0 || s.BodyRadiusM <= 0.0) { r.Note = "no body"; return r; }
             if (s.Path != null) { s.Path.Add(Sample(px, py, pz, rot)); lastPathT = 0.0; }
 
-            // Already at or below the impact radius: the answer is "here", not a simulation.
             double r0 = Mag(px, py, pz);
             if (r0 <= impactR)
             {
@@ -214,9 +127,6 @@ namespace DragonScreen
                 if (newR <= impactR)
                 {
                     // ---- LINEAR INTERPOLATION ONTO THE SURFACE ----
-                    // Stopping at the first step that is underground would place the impact up to a
-                    // whole step past the ground - 0.05 s at 300 m/s is 15 m, which is a third of the
-                    // de-orbit burn's entire 50 m tolerance. Interpolate the crossing instead.
                     double prevR = Mag(px, py, pz);
                     double f = (prevR - impactR) / (prevR - newR);
                     if (f < 0.0) f = 0.0; else if (f > 1.0) f = 1.0;
@@ -249,11 +159,6 @@ namespace DragonScreen
             return r;
         }
 
-        /// <summary>
-        /// Gravity plus drag. Drag acts along the SURFACE-relative velocity, which is what the air
-        /// sees - using the inertial velocity instead is a real error at 175 m/s of equatorial
-        /// rotation.
-        /// </summary>
         private static void Accel(double px, double py, double pz,
                                   double vx, double vy, double vz,
                                   TrajectoryInputs s, DensityAt density,
@@ -273,18 +178,12 @@ namespace DragonScreen
             double rho = density(alt);
             if (rho <= 0.0) return;
 
-            // Surface-relative velocity: inertial minus the local rotation, omega about +Z.
             double srx = vx + s.BodyOmega * py;
             double sry = vy - s.BodyOmega * px;
             double srz = vz;
             double sv = Mag(srx, sry, srz);
             if (sv < 0.1) return;
 
-            // a = 0.5 * rho * v² * factor, opposing the surface-relative velocity. The factor is
-            // 1/BC: a fixed scalar in the fallback, or the STOCK Mach/Reynolds-dependent drag ported
-            // from Trajectories when the glue supplies it (see DragFactorAt). The latter is what makes
-            // the prediction agree with the add-on - a constant BC over-drags at high Mach and lands
-            // the predicted impact tens of km short of where it really comes down.
             double factor;
             if (haveStock)
             {
@@ -303,6 +202,30 @@ namespace DragonScreen
             ax -= a * srx / sv;
             ay -= a * sry / sv;
             az -= a * srz / sv;
+
+            // ---- LIFT: (L/D)*drag, perpendicular to the surface-relative velocity, banked about it.
+            // ---- Same decomposition the entry guidance uses: vertical lift L·cos(bank) flies RANGE,
+            // ---- horizontal lift L·sin(bank) flies CROSSRANGE (Apollo/Orion). L/D=0 → no lift.
+            if (s.LiftToDrag > 0.0)
+            {
+                double aL = s.LiftToDrag * a;
+                double vhx = srx / sv, vhy = sry / sv, vhz = srz / sv;         // unit surface-rel velocity
+                double upx = px / r, upy = py / r, upz = pz / r;               // local radial-up
+                double dot = upx * vhx + upy * vhy + upz * vhz;
+                double lux = upx - dot * vhx, luy = upy - dot * vhy, luz = upz - dot * vhz; // lift-up (bank 0)
+                double lulen = Mag(lux, luy, luz);
+                if (lulen > 1e-6)                                              // ill-defined on a radial fall
+                {
+                    lux /= lulen; luy /= lulen; luz /= lulen;
+                    double lrx = vhy * luz - vhz * luy;                        // lift-right = vhat x liftUp
+                    double lry = vhz * lux - vhx * luz;
+                    double lrz = vhx * luy - vhy * lux;
+                    double cb = Math.Cos(s.BankRad), sb = Math.Sin(s.BankRad);
+                    ax += aL * (cb * lux + sb * lrx);
+                    ay += aL * (cb * luy + sb * lry);
+                    az += aL * (cb * luz + sb * lrz);
+                }
+            }
         }
 
         private static double Mag(double x, double y, double z)
@@ -317,16 +240,6 @@ namespace DragonScreen
 
         // ------------------------------------------------------------------ the measurement
 
-        /// <summary>
-        /// Back-solve the ballistic coefficient from an observed drag acceleration.
-        ///
-        /// `BC = 0.5 * rho * v² / a_drag`, kg/m². The glue measures a_drag as the part of the
-        /// vessel's acceleration that is neither gravity nor thrust.
-        ///
-        /// Returns zero when the measurement cannot mean anything - no air, barely moving, or no
-        /// measurable deceleration. Zero propagates as "unknown" and the solve falls back to vacuum
-        /// rather than inventing a coefficient.
-        /// </summary>
         public static double BallisticCoefficientFrom(double densityKgM3, double surfaceSpeedMps,
                                                       double dragAccelMps2)
         {
@@ -334,23 +247,65 @@ namespace DragonScreen
             return 0.5 * densityKgM3 * surfaceSpeedMps * surfaceSpeedMps / dragAccelMps2;
         }
 
-        /// <summary>
-        /// Smooth successive measurements. Drag is noisy tick to tick - the vessel wobbles, parts
-        /// occlude each other - and feeding raw samples to the integrator makes the predicted impact
-        /// jitter by kilometres, which then makes the guidance chase it.
-        ///
-        /// A first-order filter with a time constant, so the response does not depend on frame rate.
-        /// </summary>
+        // ------------------------------------------------------------------ the vessel's live aero profile
+        // The prediction must be TAILORED TO THE VESSEL FLYING NOW — a grid-fin booster at angle of attack
+        // and a Dragon capsule in a bank-modulated lifting entry have very different L/D and bank, so a
+        // drag-only assumption is wrong for both. Rather than assume a profile, MEASURE it, exactly as the
+        // ballistic coefficient is measured: from the vessel's actual AERO acceleration (its measured
+        // acceleration minus gravity — the glue passes it). Split that into DRAG (opposite the surface
+        // velocity), LIFT (perpendicular), and the BANK of the lift about the velocity. Feeds β, L/D and
+        // bank straight into Solve, so the predicted footprint reflects the real lifting flight.
+
+        public struct AeroProfile
+        {
+            public double DragAccel;    // m/s^2 along −velocity (the ballistic-coefficient source)
+            public double LiftAccel;    // m/s^2 perpendicular to velocity
+            public double LiftToDrag;   // |lift| / |drag|
+            public double BankRad;      // orientation of the lift vector about velocity (0 = lift up)
+            public bool   Valid;
+        }
+
+        public static AeroProfile MeasureAero(double aax, double aay, double aaz,   // aero accel, world
+                                              double svx, double svy, double svz,   // surface-rel velocity
+                                              double upx, double upy, double upz)   // local radial-up
+        {
+            AeroProfile p = new AeroProfile();
+            double sv = Mag(svx, svy, svz);
+            if (sv < 10.0) return p;
+            double vhx = svx / sv, vhy = svy / sv, vhz = svz / sv;
+
+            double along = aax * vhx + aay * vhy + aaz * vhz;      // <0 while decelerating
+            double drag = -along;                                  // drag magnitude (positive)
+            double lx = aax - along * vhx, ly = aay - along * vhy, lz = aaz - along * vhz;
+            double lift = Mag(lx, ly, lz);
+            p.DragAccel = drag; p.LiftAccel = lift;
+            if (drag <= 1e-4) return p;                            // no measurable drag → no profile yet
+            p.LiftToDrag = lift / drag; p.Valid = true;
+
+            // bank: angle of the lift vector between local "up" (radial ⟂ v) and "right" (v × up).
+            double uup = upx * vhx + upy * vhy + upz * vhz;
+            double lux = upx - uup * vhx, luy = upy - uup * vhy, luz = upz - uup * vhz;
+            double ll = Mag(lux, luy, luz);
+            if (ll > 1e-6 && lift > 1e-6)
+            {
+                lux /= ll; luy /= ll; luz /= ll;
+                double lrx = vhy * luz - vhz * luy, lry = vhz * lux - vhx * luz, lrz = vhx * luy - vhy * lux;
+                double cu = (lx * lux + ly * luy + lz * luz) / lift;
+                double cr = (lx * lrx + ly * lry + lz * lrz) / lift;
+                p.BankRad = Math.Atan2(cr, cu);
+            }
+            return p;
+        }
+
         public static double SmoothBc(double previous, double sample, double dt, double tauS)
         {
-            if (sample <= 0.0) return previous;          // a bad sample never poisons the estimate
-            if (previous <= 0.0) return sample;          // first good sample seeds it
+            if (sample <= 0.0) return previous;
+            if (previous <= 0.0) return sample;
             if (tauS <= 0.0 || dt <= 0.0) return sample;
             double k = dt / (tauS + dt);
             return previous + (sample - previous) * k;
         }
 
-        /// <summary>Time constant for the BC filter, seconds.</summary>
         public const double BcFilterTauS = 3.0;
     }
 }

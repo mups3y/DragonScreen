@@ -145,6 +145,48 @@ public static class TrajectoryTest
         Check("but only a little in one tick - drag is noisy",
               smoothed < 810.0, smoothed.ToString("F2"));
 
+        // ---- ⛔ LIFT: the predictor flies the VESSEL'S REAL LIFTING PROFILE, not a ballistic fall ----
+        // A grid-fin booster at AoA and a bank-modulated capsule both generate lift; a drag-only default
+        // would mispredict both. Bank 0 = lift up (flies farther), bank 180 = lift down (shorter), bank 90
+        // = lift to a side (crossrange). Compare against the same drag-only fall (downWith, BC 500).
+        TrajectoryInputs liftUp = Dropped(40000.0, 500.0); liftUp.Vy = 2000.0;
+        liftUp.LiftToDrag = 0.3; liftUp.BankRad = 0.0;
+        double downUp = Math.Atan2(Trajectory.Solve(liftUp, Density).Iy, Trajectory.Solve(liftUp, Density).Ix);
+        Check("lift UP (bank 0) flies FARTHER than the ballistic fall",
+              downUp > downWith, (downUp * Rk / 1000).ToString("F1") + " vs " + (downWith * Rk / 1000).ToString("F1") + " km");
+
+        TrajectoryInputs liftDn = Dropped(40000.0, 500.0); liftDn.Vy = 2000.0;
+        liftDn.LiftToDrag = 0.3; liftDn.BankRad = Math.PI;
+        double downDn = Math.Atan2(Trajectory.Solve(liftDn, Density).Iy, Trajectory.Solve(liftDn, Density).Ix);
+        Check("lift DOWN (bank 180) flies SHORTER than the ballistic fall", downDn < downWith,
+              (downDn * Rk / 1000).ToString("F1") + " km");
+
+        TrajectoryInputs liftX = Dropped(40000.0, 500.0); liftX.Vy = 2000.0;
+        liftX.LiftToDrag = 0.3; liftX.BankRad = Math.PI / 2.0;
+        TrajectoryResult rx = Trajectory.Solve(liftX, Density);
+        Check("a banked lift develops CROSSRANGE (out-of-plane)", Math.Abs(rx.Iz) > 1000.0,
+              (rx.Iz / 1000).ToString("F1") + " km");
+        Check("...while the ballistic fall stayed in-plane", Math.Abs(withAir.Iz) < 100.0,
+              withAir.Iz.ToString("F1"));
+
+        // L/D = 0 is only the degenerate case (NOT the operating default): it reproduces the drag-only fall.
+        TrajectoryInputs liftZero = Dropped(40000.0, 500.0); liftZero.Vy = 2000.0; liftZero.LiftToDrag = 0.0;
+        double downZero = Math.Atan2(Trajectory.Solve(liftZero, Density).Iy, Trajectory.Solve(liftZero, Density).Ix);
+        Check("L/D=0 reproduces the drag-only solve exactly", Math.Abs(downZero - downWith) < 1e-12, "");
+
+        // ---- MEASURE the live L/D + bank from the vessel's aero acceleration (self-calibrated profile) ----
+        // velocity +Y, radial-up +X → lift-up dir = +X, lift-right dir = v x up = -Z.
+        Trajectory.AeroProfile mp = Trajectory.MeasureAero(0, -5, 0, 0, 100, 0, 1, 0, 0);
+        Check("pure drag reads L/D = 0", mp.Valid && Math.Abs(mp.LiftToDrag) < 1e-9, mp.LiftToDrag.ToString());
+        Check("...and the drag magnitude back-solves", Math.Abs(mp.DragAccel - 5.0) < 1e-9, mp.DragAccel.ToString());
+        Trajectory.AeroProfile mu = Trajectory.MeasureAero(1.5, -5, 0, 0, 100, 0, 1, 0, 0);
+        Check("lift-up: L/D measured 0.3", Math.Abs(mu.LiftToDrag - 0.3) < 1e-6, mu.LiftToDrag.ToString("F3"));
+        Check("lift-up: bank ~ 0", Math.Abs(mu.BankRad) < 1e-6, mu.BankRad.ToString("F4"));
+        Trajectory.AeroProfile mr = Trajectory.MeasureAero(0, -5, -1.5, 0, 100, 0, 1, 0, 0);
+        Check("lift-right: L/D measured 0.3", Math.Abs(mr.LiftToDrag - 0.3) < 1e-6, mr.LiftToDrag.ToString("F3"));
+        Check("lift-right: bank ~ +90 deg", Math.Abs(mr.BankRad - Math.PI / 2.0) < 1e-6, (mr.BankRad * 180 / Math.PI).ToString("F1"));
+        Check("too slow to measure a profile", !Trajectory.MeasureAero(1, -5, 0, 0, 1, 0, 1, 0, 0).Valid, "");
+
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
     }

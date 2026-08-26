@@ -1,28 +1,6 @@
-/*
- * DragonScreen - Tuning
- *
- * A RUNTIME OVERRIDE LAYER for the flight-software constants, so a value can be changed WITHOUT a
- * rebuild and WITHOUT a restart. Restarts are the scarce resource on this project; a tuning loop that
- * needs one per tweak is the single biggest cost in the whole workflow, and this removes it.
- *
- * ---- HOW IT WORKS ----
- *   · A field marked `[Tunable]` and declared `public static` (NOT `const` - a const is inlined at
- *     compile time and cannot be set) is discovered by reflection at flight start.
- *   · Every one is written to `PluginData/tuning.reference.cfg` with its current default - the full
- *     catalogue of what can be tuned, browsable end to end.
- *   · `PluginData/tuning.cfg`, if present, overrides any of them by `Class.Field = value`.
- *   · The file's write time is polled ~1x/s in flight; edit a value and it applies within a second,
- *     logged old -> new. Pure functions read the static field, so the next tick sees the new value.
- *
- * `PluginData` is used deliberately: KSP's GameDatabase and ModuleManager do NOT scan it, so this
- * file is ours to read when we choose rather than baked into the load and needing a restart.
- *
- * ---- ⛔ THE CODE DEFAULT STAYS THE AUTHORITY ----
- * `tuning.cfg` is the EXPERIMENT layer, not the source of truth. The inline default on each field is
- * still the ported/measured value with its citation. When a flight proves a better number, bake it
- * into the default WITH its evidence and clear the override. Absent or empty `tuning.cfg` -> behaviour
- * is byte-identical to the defaults. The release build excludes PluginData, so nothing here ships.
- */
+// DragonScreen - Tuning
+// ---- HOW IT WORKS ----
+// ---- ⛔ THE CODE DEFAULT STAYS THE AUTHORITY ----
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -32,8 +10,6 @@ using UnityEngine;
 
 namespace DragonScreen
 {
-    // TunableAttribute lives in src/pure/Tunable.cs so the headless tests (which compile src/pure
-    // only) can see the marker on the flight constants.
 
     public static class Tuning
     {
@@ -47,7 +23,6 @@ namespace DragonScreen
         private static bool built;
         private static float lastPoll;
 
-        /// <summary>Discover the tunables, dump the reference catalogue, apply any overrides. Once.</summary>
         public static void Build()
         {
             if (built) return;
@@ -61,7 +36,7 @@ namespace DragonScreen
                     for (int i = 0; i < fs.Length; i++)
                     {
                         FieldInfo f = fs[i];
-                        if (f.IsLiteral || f.IsInitOnly) continue;           // const / readonly can't be set
+                        if (f.IsLiteral || f.IsInitOnly) continue;
                         if (!f.IsDefined(typeof(TunableAttribute), false)) continue;
                         if (!Supported(f.FieldType)) continue;
                         fields[t.Name + "." + f.Name] = f;
@@ -84,7 +59,6 @@ namespace DragonScreen
             }
         }
 
-        /// <summary>Cheap enough to call every frame; only touches the disk ~1x/s.</summary>
         public static void Poll()
         {
             if (!built || overridePath == null) return;
@@ -109,7 +83,7 @@ namespace DragonScreen
             ConfigNode wrap = ConfigNode.Load(overridePath);
             if (wrap == null) return;
             ConfigNode root = wrap.GetNode(RootName);
-            if (root == null) root = wrap;              // tolerate a bare list without the wrapper node
+            if (root == null) root = wrap;
 
             int changed = 0, unknown = 0;
             for (int i = 0; i < root.values.Count; i++)
