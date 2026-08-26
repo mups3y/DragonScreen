@@ -33,18 +33,20 @@ THE FIX (approved plan Steps A–I, ASCENT-FIRST — get pad→orbit clean BEFOR
      hold-downs, RCS, legs ported from MechJeb's ModuleWheelDeployment fsm-toggle, grid fins). ONLY the RCS
      *master* toggle remains (KSP requires it for FlightCtrlState translation — MechJeb-canonical), plus
      Steering SAS (Step B) + VesselData Light display (out of scope).
-  B. AttitudePilot (NEW glue) — port MechJeb BetterController: currentAttitude=rot*Euler(-90,0,0), error=Euler
-     of Inverse(current)*requested with yaw NEGATED (order pitch,roll,yaw), arrestable-rate ω=√(2αθ) with
-     α=ΣGetPotentialTorque/MOI, actuation=−torque/controlTorque → s.pitch/roll/yaw; MOI-scaled gains; pitch≈yaw.
-     Replaces SAS in Steering.cs. + AoA moderation (AA method) as a FAR safety net.
+  B. ✅ DONE + committed (abb01eb). pure/AttitudeLoop.cs (MechJeb BetterController cascade + Pid2 port,
+     13 headless checks incl. closed-loop convergence) + src/AttitudePilot.cs (frame glue: Euler(-90,0,0),
+     error=(euler.x,euler.z,-euler.y), live MOI/angVel/ΣGetPotentialTorque, s.pitch/yaw + roll-damp via a new
+     FlightDriver fly-by-wire channel). Steering.Point/PointNoRoll delegate to it; SAS behind UseGimbalLoop=false
+     fallback only. Recorder att_*/act_*/ctrl_tq_* columns. STILL TODO here: AoA moderation (the FAR safety net,
+     pure/AoaModeration §3.2) — deferred to Step I unless the proving flight shows a residual transonic transient.
   C. Ullage before every light (RCS aft until LowestUllage≥0.996) + clamp/erector release gate (release only
      at ≥99% measured thrust + no failed engine; reset the gimbal integral while clamped).
   D. PROVING FLIGHT: pad→orbit. Then E booster, F rendezvous, G docking, H return, I FDIR/self-cal hardening.
 
-DO NEXT: Step A is DONE. Build Step B (AttitudePilot — MechJeb BetterController direct gimbal loop, replaces
-SAS in Steering.cs), then Step C (ullage-settle before every light + clamp/erector release gate at ≥99%
-thrust). Headless-test the pure-testable decision logic; keep build.py test green; commit when green. Then
-hand a pad→orbit proving flight (Step D).
+DO NEXT: Steps A + B are DONE. Build Step C (ullage-settle before every light: fire the aft RCS block until
+LowestUllage≥0.996 then ignite — RealFuels reflection; + the clamp/erector release gate: release hold-downs
+only at ≥99% measured thrust + no failed engine, reset the gimbal integral while clamped). Then install and
+hand the pad→orbit proving flight (Step D). Keep build.py test green; commit when green.
 
 AMENDED WORKFLOW RULES (2026-08-26 — these SUPERSEDE the older discipline):
 - BATCH FIXES: apply as many well-reasoned fixes as a phase needs, then fly to verify the batch. Do NOT fly a
