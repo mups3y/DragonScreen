@@ -27,6 +27,9 @@ namespace DragonScreen
         [Tunable] public static double MaxAoaDeg = 8.0;
         // if the MEASURED AoA exceeds this in powered atmospheric flight, control is lost → abort the crew out.
         [Tunable] public static double AbortAoaDeg = 25.0;
+        // ⛔ STRUCTURAL Q ABORT: dynamic pressure past this (≈1.5× the max-Q cap) means the ascent has diverged
+        // — punch out WHILE STILL INTACT (the decoupler still exists → clean sep), before q RUDs the stack.
+        [Tunable] public static double AbortQPa = 52000.0;
         // the AoA cap ramps from MaxAoaDeg (low q) to 0 at this dynamic pressure, so max-Q is flown at 0 AoA.
         [Tunable] public static double QAoaZeroPa = 15000.0;
         // S2 ullage: minimum post-MECO coast before S2 may light (lets S1 clear — the forward settle push
@@ -179,6 +182,17 @@ namespace DragonScreen
             {
                 Debug.LogWarning("[DragonScreen] loss of control — AoA " + lastAoaDeg.ToString("F0")
                                  + "° > " + AbortAoaDeg.ToString("F0") + "° — ABORT");
+                FlightDriver.RequestAbort();
+            }
+
+            // ⛔ STRUCTURAL Q ABORT: q past the safe ceiling = the ascent has diverged (this is what RUD'd the
+            // stack at 247 kPa). Abort NOW, while intact and the decoupler still exists, so the capsule
+            // separates cleanly — unlike a late AoA abort after the couplers already failed.
+            double qAbortNow = v.dynamicPressurekPa * 1000.0;
+            if ((phase == AscentPhase.VerticalRise || phase == AscentPhase.GravityTurn) && qAbortNow > AbortQPa)
+            {
+                Debug.LogWarning("[DragonScreen] ⛔ Q ABORT — dynamic pressure " + (qAbortNow / 1000.0).ToString("F0")
+                                 + " kPa > " + (AbortQPa / 1000.0).ToString("F0") + " kPa structural limit — ABORT");
                 FlightDriver.RequestAbort();
             }
 

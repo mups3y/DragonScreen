@@ -166,6 +166,20 @@ namespace DragonScreen
                 // otherwise: the Dragon / mission vessel.
                 BoosterControl.Reset();
 
+                // ⛔ STRUCTURAL G ABORT (crewed vehicle, ANY phase): felt g past the structural limit means a
+                // break-up, aero overload, or collision — get the crew out INSTANTLY. This is the universal
+                // backstop that catches what the per-phase monitors miss (the stack RUD spiked to 5+ g the
+                // instant it broke). Only reached when not already aborting (the abort path returns above).
+                if (v.geeForce > StructuralAbortG)
+                {
+                    Debug.LogWarning("[DragonScreen] ⛔ G ABORT — felt " + v.geeForce.ToString("F1") + " g > "
+                                     + StructuralAbortG.ToString("F1") + " g structural limit — ABORT");
+                    RequestAbort();
+                    UpdateAbort(v);
+                    FlightLog.Sample(v);
+                    return;
+                }
+
                 // 1) the crew-gate conductor advances on measured state + the crew's GO
                 CrewProcedureOps.Tick(v);
 
@@ -292,6 +306,10 @@ namespace DragonScreen
         // and mains on measured altitude/descent until splashdown.
         static bool aborting, abortPending;
         static ChutePhase abortChute = ChutePhase.Idle;
+
+        // ⛔ Felt-g above this triggers an INSTANT abort in any phase (mission-spec structural limit). Nominal
+        // ascent is throttle-limited to 3.5 g; blowing past 4.5 g means the vehicle is coming apart.
+        [Tunable] public static double StructuralAbortG = 4.5;
 
         public static void RequestAbort() { abortPending = true; }
         public static bool Aborting { get { return aborting; } }
