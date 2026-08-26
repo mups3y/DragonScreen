@@ -37,8 +37,11 @@ THE FIX (approved plan Steps A–I, ASCENT-FIRST — get pad→orbit clean BEFOR
      13 headless checks incl. closed-loop convergence) + src/AttitudePilot.cs (frame glue: Euler(-90,0,0),
      error=(euler.x,euler.z,-euler.y), live MOI/angVel/ΣGetPotentialTorque, s.pitch/yaw + roll-damp via a new
      FlightDriver fly-by-wire channel). Steering.Point/PointNoRoll delegate to it; SAS behind UseGimbalLoop=false
-     fallback only. Recorder att_*/act_*/ctrl_tq_* columns. STILL TODO here: AoA moderation (the FAR safety net,
-     pure/AoaModeration §3.2) — deferred to Step I unless the proving flight shows a residual transonic transient.
+     fallback only. Recorder att_*/act_*/ctrl_tq_* columns (ASCENT filler only so far — add PutAttitude to the
+     booster/rendezvous/docking/return fillers as those proving flights come, Steps E-H). Self-reviewed +
+     fixed (e6a5cdb): RCS torque gated by the master, roll channel released when dampRoll=false, attitude
+     released on abort; MechJeb sign/axis port verified faithful. STILL TODO: AoA moderation (FAR safety net,
+     §3.2) deferred to Step I; ⚠ Step C MUST reset the gimbal-loop PID integral while clamped (§3.4 windup).
   C. Ullage before every light (RCS aft until LowestUllage≥0.996) + clamp/erector release gate (release only
      at ≥99% measured thrust + no failed engine; reset the gimbal integral while clamped).
   D. PROVING FLIGHT: pad→orbit. Then E booster, F rendezvous, G docking, H return, I FDIR/self-cal hardening.
