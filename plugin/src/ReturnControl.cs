@@ -185,7 +185,7 @@ namespace DragonScreen
 
             // 2) hold the heat shield into the flow (nose RETROGRADE) with SAS...
             Vector3d retroSrf = v.srf_velocity.magnitude > 1 ? -((Vector3d)v.srf_velocity).normalized : up;
-            Steering.Point(v, retroSrf);
+            Steering.PointNoRoll(v, retroSrf);   // roll is owned by the bank loop below (FlightDriver.SetRoll)
 
             // 3) ...and BANK to σ with the roll loop (only once actually in the entry, with a target + aero)
             if (haveTarget && entPhase == EntryPhase.Entry && v.srfSpeed > 1.0)

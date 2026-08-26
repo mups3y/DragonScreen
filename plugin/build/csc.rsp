@@ -14,6 +14,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Aero.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Alarms.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\ArcGeometry.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Ascent.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\AttitudeLoop.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Authority.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\BoosterDescent.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\BoosterDrag.cs
@@ -79,6 +80,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\_DeorbitStub.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\ActuationTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\AeroTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\AscentTest.cs
+C:\Users\User\Desktop\DragonScreen\plugin\test\AttitudeLoopTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\AuthorityTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\BoosterTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\ConicTest.cs

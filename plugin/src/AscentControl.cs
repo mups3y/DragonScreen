@@ -272,6 +272,9 @@ namespace DragonScreen
             // Q·α that RUDs the vehicle. This was hardcoded 0 before, which is why the first flights were
             // flown blind to their own cause of death.
             FlightRecorder.PutControl(row, lastAoaDeg, 0, Throttle, double.NaN, lastRcsOn);
+            FlightRecorder.PutAttitude(row, AttitudePilot.PointErrDeg, AttitudePilot.RateCmdRads,
+                AttitudePilot.RateMeasRads, AttitudePilot.ActPitch, AttitudePilot.ActYaw, AttitudePilot.ActRoll,
+                AttitudePilot.CtrlTorquePitchNm, AttitudePilot.CtrlTorqueYawNm);
             FlightRecorder.PutSelfCal(row, cal);
         }
     }

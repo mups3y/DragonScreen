@@ -78,12 +78,21 @@ namespace DragonScreen
             return Vector3d.Angle(rt.up, v.srf_velocity);
         }
 
-        // Hold the given WORLD direction with stock SAS (our guidance owns the direction).
+        // ⛔ Hold the given WORLD direction. The direct gimbal/RCS loop (AttitudePilot) is the real inner
+        // loop now — SAS was too slow for FAR's transonic divergence (lost control 3×). SAS remains behind
+        // UseGimbalLoop as a one-flip fallback only. Point() damps roll (ascent/booster/prox-ops); the entry
+        // bank keeps roll free via PointNoRoll() + FlightDriver.SetRoll.
+        public static bool UseGimbalLoop = true;
         static bool sasReady;
-        public static void Point(Vessel v, Vector3d worldDir)
+
+        public static void Point(Vessel v, Vector3d worldDir) { Hold(v, worldDir, true); }
+        public static void PointNoRoll(Vessel v, Vector3d worldDir) { Hold(v, worldDir, false); }
+
+        static void Hold(Vessel v, Vector3d worldDir, bool dampRoll)
         {
             if (v == null || worldDir.magnitude < 1e-6) return;
-            try
+            if (UseGimbalLoop) { AttitudePilot.Point(v, worldDir, dampRoll); return; }
+            try   // ---- SAS fallback (UseGimbalLoop=false) ----
             {
                 if (!v.ActionGroups[KSPActionGroup.SAS]) v.ActionGroups.SetGroup(KSPActionGroup.SAS, true);
                 if (v.Autopilot != null)
@@ -103,7 +112,7 @@ namespace DragonScreen
         }
 
         // Release the hold (e.g. at handover / disengage) so the next controller re-seeds it.
-        public static void Release() { sasReady = false; }
+        public static void Release() { sasReady = false; AttitudePilot.Reset(); }
 
         // Angle (deg) between the vessel's nose (control-forward) and a world direction — the pointing error.
         public static double PointingErrorDeg(Vessel v, Vector3d worldDir)

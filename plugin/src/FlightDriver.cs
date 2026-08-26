@@ -93,13 +93,25 @@ namespace DragonScreen
         public static void SetRoll(double r) { cmdRoll = Clamp1(r); rollOwned = true; }
         public static void ReleaseRoll() { rollOwned = false; cmdRoll = 0f; }
 
+        // Attitude authority (the direct gimbal/RCS loop, AttitudePilot) — pitch+yaw always, roll optionally
+        // (ascent/booster damp roll here; the entry bank keeps roll on the separate SetRoll channel above).
+        static float cmdPitch, cmdYaw, cmdAttRoll;
+        static bool attitudeOwned, attRollOwned;
+        public static void SetAttitude(double pitch, double yaw)
+        { cmdPitch = Clamp1(pitch); cmdYaw = Clamp1(yaw); attitudeOwned = true; }
+        public static void SetAttitudeRoll(double roll) { cmdAttRoll = Clamp1(roll); attRollOwned = true; }
+        public static void ReleaseAttitude()
+        { attitudeOwned = false; attRollOwned = false; cmdPitch = cmdYaw = cmdAttRoll = 0f; }
+
         void OnFlyByWire(FlightCtrlState st)
         {
             // Only take an axis when a controller is actively commanding it; otherwise leave the
-            // player/idle in control. Pitch/yaw pointing is held by Steering (SAS), not here.
+            // player/idle in control. Pitch/yaw pointing is the direct gimbal loop (AttitudePilot).
             if (throttleOwned) st.mainThrottle = (float)cmdThrottle;
             if (transOwned) { st.X = transX; st.Y = transY; st.Z = transZ; }
-            if (rollOwned) st.roll = cmdRoll;
+            if (attitudeOwned) { st.pitch = cmdPitch; st.yaw = cmdYaw; }
+            if (attRollOwned) st.roll = cmdAttRoll;   // AttitudePilot roll damping (ascent/booster)
+            if (rollOwned) st.roll = cmdRoll;         // entry bank — wins if both ever set (mutually exclusive by phase)
         }
 
         // Physics-rate tick — control cadence, not display cadence.
@@ -122,6 +134,7 @@ namespace DragonScreen
                     ReleaseThrottle();
                     ReleaseTranslation();
                     ReleaseRoll();
+                    AttitudePilot.Reset();
                     FlightLog.Fill = null;
                     FlightLog.Close();
                     aborting = false; abortPending = false; abortChute = ChutePhase.Idle;

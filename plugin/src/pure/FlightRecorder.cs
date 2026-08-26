@@ -28,6 +28,9 @@ namespace DragonScreen
             "alt_m", "speed_mps", "vspeed_mps", "q_pa", "mach", "downrange_m", "mass_kg",
             // control
             "att_err_deg", "rate_cmd_rads", "throttle", "torque_cmd", "rcs_on",
+            // attitude loop (direct gimbal/RCS pointing — the max-Q fix; AttitudePilot internals)
+            "att_point_deg", "att_rate_cmd", "att_rate_meas", "act_pitch", "act_yaw", "act_roll",
+            "ctrl_tq_pitch", "ctrl_tq_yaw",
             // ascent (UPFG)
             "upfg_tgo_s", "upfg_vgo_mps", "pitch_deg", "azimuth_deg", "ascent_phase",
             // booster
@@ -61,6 +64,9 @@ namespace DragonScreen
             QPa = Index("q_pa"), Mach = Index("mach"), DownrangeM = Index("downrange_m"), MassKg = Index("mass_kg"),
             AttErrDeg = Index("att_err_deg"), RateCmd = Index("rate_cmd_rads"), Throttle = Index("throttle"),
             TorqueCmd = Index("torque_cmd"), RcsOn = Index("rcs_on"),
+            AttPointDeg = Index("att_point_deg"), AttRateCmd = Index("att_rate_cmd"), AttRateMeas = Index("att_rate_meas"),
+            ActPitchC = Index("act_pitch"), ActYawC = Index("act_yaw"), ActRollC = Index("act_roll"),
+            CtrlTqPitch = Index("ctrl_tq_pitch"), CtrlTqYaw = Index("ctrl_tq_yaw"),
             UpfgTgo = Index("upfg_tgo_s"), UpfgVgo = Index("upfg_vgo_mps"), PitchDeg = Index("pitch_deg"),
             AzimuthDeg = Index("azimuth_deg"), AscentPhase = Index("ascent_phase"),
             BoostPhase = Index("boost_phase"), BoostAoaDeg = Index("boost_aoa_deg"), EngineMode = Index("engine_mode"),
@@ -156,6 +162,18 @@ namespace DragonScreen
         {
             Set(c, AttErrDeg, attErrDeg); Set(c, RateCmd, rateCmd); Set(c, Throttle, throttle);
             Set(c, TorqueCmd, torqueCmd); Set(c, RcsOn, rcsOn);
+        }
+
+        // The direct gimbal/RCS loop internals (AttitudePilot) — pointing error, commanded vs measured rate,
+        // per-axis actuation, and the live control-torque authority. So the max-Q attitude is judged from the
+        // CSV, not by eye ([[instrument-everything]]).
+        public static void PutAttitude(string[] c, double pointErrDeg, double rateCmdRads, double rateMeasRads,
+                                       double actPitch, double actYaw, double actRoll,
+                                       double ctrlTqPitchNm, double ctrlTqYawNm)
+        {
+            Set(c, AttPointDeg, pointErrDeg); Set(c, AttRateCmd, rateCmdRads); Set(c, AttRateMeas, rateMeasRads);
+            Set(c, ActPitchC, actPitch); Set(c, ActYawC, actYaw); Set(c, ActRollC, actRoll);
+            Set(c, CtrlTqPitch, ctrlTqPitchNm); Set(c, CtrlTqYaw, ctrlTqYawNm);
         }
 
         public static void PutAscent(string[] c, double tgoS, double vgoMps, double pitchDeg,
