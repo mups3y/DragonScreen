@@ -27,9 +27,12 @@ earlier the launch clamp/erector wasn't released and chutes used stock ModulePar
 MechJeb + AtmosphereAutopilot harvest (docs/AUTOPILOT_HARVEST.md) supplied the concrete fixes.
 
 THE FIX (approved plan Steps A–I, ASCENT-FIRST — get pad→orbit clean BEFORE any later phase):
-  A. Actuator (NEW glue) — direct part control by capability from docs/CRAFT_DUMP_VEHICLE_MAP.md; rip out ALL
-     StageManager + action-group calls. Octaweb mode via ModuleTundraEngineSwitch selected ABSOLUTELY while
-     off (never NextEngineMode); decouplers/RealChute/RCS/legs/fins/CoM-shifter/SuperDracos all direct.
+  A. ✅ DONE + committed (fe837f0). Actuator (src/Actuator.cs) + pure role classifier (pure/Actuation.cs,
+     tested in test/ActuationTest.cs) own all direct part control; every StageManager + actuation action-group
+     call is gone (liftoff/MVac/SuperDraco ignition, MECO cutoff+interstage decouple, Dragon sep, RealChute,
+     hold-downs, RCS, legs ported from MechJeb's ModuleWheelDeployment fsm-toggle, grid fins). ONLY the RCS
+     *master* toggle remains (KSP requires it for FlightCtrlState translation — MechJeb-canonical), plus
+     Steering SAS (Step B) + VesselData Light display (out of scope).
   B. AttitudePilot (NEW glue) — port MechJeb BetterController: currentAttitude=rot*Euler(-90,0,0), error=Euler
      of Inverse(current)*requested with yaw NEGATED (order pitch,roll,yaw), arrestable-rate ω=√(2αθ) with
      α=ΣGetPotentialTorque/MOI, actuation=−torque/controlTorque → s.pitch/roll/yaw; MOI-scaled gains; pitch≈yaw.
@@ -38,8 +41,10 @@ THE FIX (approved plan Steps A–I, ASCENT-FIRST — get pad→orbit clean BEFOR
      at ≥99% measured thrust + no failed engine; reset the gimbal integral while clamped).
   D. PROVING FLIGHT: pad→orbit. Then E booster, F rendezvous, G docking, H return, I FDIR/self-cal hardening.
 
-DO NEXT: build Step A (Actuator), then Step B (AttitudePilot), then Step C. Headless-test the pure-testable
-decision logic; keep build.py test green; commit when green. Then hand a pad→orbit proving flight.
+DO NEXT: Step A is DONE. Build Step B (AttitudePilot — MechJeb BetterController direct gimbal loop, replaces
+SAS in Steering.cs), then Step C (ullage-settle before every light + clamp/erector release gate at ≥99%
+thrust). Headless-test the pure-testable decision logic; keep build.py test green; commit when green. Then
+hand a pad→orbit proving flight (Step D).
 
 AMENDED WORKFLOW RULES (2026-08-26 — these SUPERSEDE the older discipline):
 - BATCH FIXES: apply as many well-reasoned fixes as a phase needs, then fly to verify the batch. Do NOT fly a
