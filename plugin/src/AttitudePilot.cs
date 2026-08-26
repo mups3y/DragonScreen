@@ -29,6 +29,14 @@ namespace DragonScreen
         static readonly Pid2[] posPid = { new Pid2(), new Pid2(), new Pid2() };
         static readonly Pid2[] velPid = { new Pid2(), new Pid2(), new Pid2() };
 
+        // Control-torque low-pass (MechJeb BetterController SmoothTorque). The available torque fluctuates —
+        // gimbal authority scales with throttle (dips in the max-Q bucket), RCS toggles on/off — and feeding
+        // the raw value into actuation=−MOI·α/controlTorque spikes the actuation. Smooth the RISES with an
+        // EMA; keep DROPS to zero authority instant (so cutting the engines reads zero immediately).
+        const double SmoothTorque = 0.10;
+        static double smTx, smTy, smTz;
+        static bool smInit;
+
         // ---- diagnostics for the FlightRecorder (loop internals — the standing instrument-everything rule) ----
         public static bool Active;
         public static double PointErrDeg, RateCmdRads, RateMeasRads;
@@ -45,6 +53,7 @@ namespace DragonScreen
         public static void Reset()
         {
             for (int i = 0; i < 3; i++) { posPid[i].Reset(); velPid[i].Reset(); }
+            smInit = false; smTx = smTy = smTz = 0.0;
             Active = false;
             PointErrDeg = RateCmdRads = RateMeasRads = 0.0;
             ActPitch = ActYaw = ActRoll = 0.0;
@@ -80,8 +89,18 @@ namespace DragonScreen
                 Vector3 moiV = v.MOI, avV = v.angularVelocity;
                 double[] moi = { moiV.x, moiV.y, moiV.z };
                 double[] omega = { avV.x, avV.y, avV.z };
-                double ctx, cty, ctz; ControlTorque(v, out ctx, out cty, out ctz);
-                double[] ct = { ctx, cty, ctz };
+                double ctxRaw, ctyRaw, ctzRaw; ControlTorque(v, out ctxRaw, out ctyRaw, out ctzRaw);
+                if (!smInit) { smTx = ctxRaw; smTy = ctyRaw; smTz = ctzRaw; smInit = true; }
+                else
+                {
+                    smTx += SmoothTorque * (ctxRaw - smTx);
+                    smTy += SmoothTorque * (ctyRaw - smTy);
+                    smTz += SmoothTorque * (ctzRaw - smTz);
+                }
+                if (ctxRaw == 0.0) smTx = 0.0;   // drop to zero authority is instant (don't lag an engine cut)
+                if (ctyRaw == 0.0) smTy = 0.0;
+                if (ctzRaw == 0.0) smTz = 0.0;
+                double[] ct = { smTx, smTy, smTz };
 
                 // --- roll-control-range gate: don't fight roll until the nose is pointed ---
                 double distanceDeg = AttitudeLoop.PointingDistanceRad(errPitch, errYaw) * Rad2Deg;
@@ -108,7 +127,7 @@ namespace DragonScreen
                 PointErrDeg = distanceDeg;
                 RateMeasRads = omega[0];
                 ActPitch = act[0]; ActYaw = act[2]; ActRoll = act[1];
-                CtrlTorquePitchNm = ctx; CtrlTorqueYawNm = ctz;
+                CtrlTorquePitchNm = smTx; CtrlTorqueYawNm = smTz;   // record the smoothed torque the loop used
             }
             catch (Exception ex)
             {
