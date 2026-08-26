@@ -20,6 +20,16 @@ namespace DragonScreen
 {
     public static class AscentControl
     {
+        // ⛔ the atmospheric angle-of-attack cap — never command the nose more than this off surface
+        // prograde (zero-AoA gravity turn, load relief). Exceeding it RUDs the stack at max-Q.
+        // AoA allowed at LOW q to establish the gravity turn (a real pitch-kick is ~8-10°); it ramps to 0
+        // by QAoaZeroPa so max-Q is flown at 0 AoA. Larger = faster turn/shallower climb = reaches orbit.
+        [Tunable] public static double MaxAoaDeg = 8.0;
+        // if the MEASURED AoA exceeds this in powered atmospheric flight, control is lost → abort the crew out.
+        [Tunable] public static double AbortAoaDeg = 25.0;
+        // the AoA cap ramps from MaxAoaDeg (low q) to 0 at this dynamic pressure, so max-Q is flown at 0 AoA.
+        [Tunable] public static double QAoaZeroPa = 15000.0;
+
         static AscentPhase phase = AscentPhase.Idle;
         static UpfgState upfg;
         static bool s2Ignited;
@@ -29,7 +39,8 @@ namespace DragonScreen
 
         // last commanded values, for the recorder
         static double Throttle;
-        static double lastPitchCmd = 90, lastAzDeg, lastTgo, lastVgo;
+        static double lastPitchCmd = 90, lastAzDeg, lastTgo, lastVgo, lastAoaDeg;
+        static bool lastRcsOn;
         static string lastPhaseWord = "IDLE";
 
         public static void Reset()
@@ -84,14 +95,14 @@ namespace DragonScreen
             lastPhaseWord = phase.ToString();
 
             // ---- staging ----
-            if (ac.Stage) TryStage(v, "MECO / stage separation");
+            if (ac.Stage) Actuator.Meco(v);   // ⛔ direct: octaweb cutoff + interstage decoupler (no staging)
 
             if (phase == AscentPhase.Coast)
             {
                 // after S1 sep, ignite S2 once if it has not lit within a short settle
                 if (coastStartUT < 0) coastStartUT = Planetarium.GetUniversalTime();
                 if (!s2Lit && !s2Ignited && Planetarium.GetUniversalTime() - coastStartUT > 1.5)
-                { TryStage(v, "S2 ignition"); s2Ignited = true; }
+                { Actuator.IgniteSecondStage(v); s2Ignited = true; }   // ⛔ direct MVac ignite (Step C adds ullage)
             }
 
             // ---- steering ----
@@ -109,7 +120,27 @@ namespace DragonScreen
                     azRad = descending ? Math.PI : Math.PI / 2.0;   // unreachable inc → due S / due E fallback
                 lastAzDeg = azRad * 180.0 / Math.PI;
                 lastPitchCmd = ac.PitchDeg;
-                aim = Steering.PitchHeadingDir(v, ac.PitchDeg, azRad);
+
+                // ⛔ THE REAL TECHNIQUE (LAUNCH_AND_ASCENT_RESEARCH §4.3/§6.1): a ZERO-AoA gravity turn —
+                // the nose held near the velocity vector so aero side loads stay ~0 (load relief), which is
+                // what lets the unstable airframe survive the dense atmosphere. But it must ALSO pitch over
+                // enough to reach orbit, so we track the DM-1 pitch program with an AoA that is allowed at
+                // LOW q and SHRINKS TO 0 through max-Q: turn is established early, then flown at 0 AoA through
+                // the danger band, then tracking resumes up high. Holding a fixed AoA at max-Q is what
+                // diverged and RUD'd the stack (flights 1-3).
+                Vector3d up = Steering.Up(v);
+                double qPa = v.dynamicPressurekPa * 1000.0;
+                if (v.srfSpeed < Ascent.KickSpeedMps)
+                {
+                    aim = up;                                            // vertical rise, clear the tower
+                }
+                else
+                {
+                    double qFrac = qPa / QAoaZeroPa; if (qFrac > 1.0) qFrac = 1.0; if (qFrac < 0.0) qFrac = 0.0;
+                    double aoaCap = MaxAoaDeg * (1.0 - qFrac);           // → 0 through max-Q, MaxAoaDeg at low q
+                    Vector3d target = Steering.PitchHeadingDir(v, ac.PitchDeg, azRad);
+                    aim = Steering.LimitToProgradeCone(v, target, aoaCap);
+                }
             }
             else
             {
@@ -117,18 +148,33 @@ namespace DragonScreen
                 aim = UpfgAim(v, mu, targetRadiusM, activeThrustN, ve, massKg);
             }
             Steering.Point(v, aim);
+            lastAoaDeg = Steering.AngleOfAttackDeg(v);
+            lastRcsOn = Actuator.IsRcsOn(v);
+
+            // ⛔ LOSS-OF-CONTROL ABORT: if the vehicle departs (AoA runs away) in the powered atmospheric
+            // ascent, PUNCH OUT before the stack RUDs — the crew survives on the SuperDracos + chutes. The
+            // guidance commands ≤MaxAoaDeg; an AoA this far past it means control is lost, not commanded.
+            if ((phase == AscentPhase.VerticalRise || phase == AscentPhase.GravityTurn)
+                && v.dynamicPressurekPa > 1.0 && lastAoaDeg > AbortAoaDeg)
+            {
+                Debug.LogWarning("[DragonScreen] loss of control — AoA " + lastAoaDeg.ToString("F0")
+                                 + "° > " + AbortAoaDeg.ToString("F0") + "° — ABORT");
+                FlightDriver.RequestAbort();
+            }
 
             // ---- throttle ----
-            if (phase == AscentPhase.Coast || phase == AscentPhase.Done || phase == AscentPhase.Seco)
+            if (phase == AscentPhase.Done || phase == AscentPhase.Seco)
                 Throttle = 0.0;
-            else Throttle = ac.Throttle;
+            else if (phase == AscentPhase.Coast)
+                Throttle = s2Ignited ? 1.0 : 0.0;   // full the instant S2 is commanded, else coasting = off
+            else Throttle = ac.Throttle;            // powered (VerticalRise / GravityTurn / S2Burn)
 
             // ---- SECO + Dragon separation ----
             bool inOrbit = (v.orbit != null) && (v.orbit.PeA >= targetAltM - 5000.0);
             if (s2Lit && (inOrbit || (upfg.Init && lastTgo > 0 && lastTgo < 0.15)))
             {
                 Throttle = 0.0;
-                if (!dragonSeparated) { SeparateDragon(v); dragonSeparated = true; }
+                if (!dragonSeparated) { Actuator.SeparateDragon(v); dragonSeparated = true; }
             }
 
             FlightDriver.SetThrottle(Throttle);
@@ -173,32 +219,7 @@ namespace DragonScreen
             return Steering.Prograde(v);                     // fallback: prograde raise
         }
 
-        // ---- actuation helpers ----
-        static void TryStage(Vessel v, string why)
-        {
-            try { Debug.Log("[DragonScreen] ascent: " + why); KSP.UI.Screens.StageManager.ActivateNextStage(); }
-            catch (Exception e) { Debug.LogWarning("[DragonScreen] stage failed (" + why + "): " + e.Message); }
-        }
-
-        static void SeparateDragon(Vessel v)
-        {
-            // fire the Dragon decoupler (drops S2 alone; the Dragon+trunk stays) — craftdump/VehicleParts.
-            try
-            {
-                for (int i = 0; i < v.parts.Count; i++)
-                {
-                    Part p = v.parts[i];
-                    if (!VehicleParts.IsDragonDecoupler(p.name)) continue;
-                    ModuleDecouple d = p.Modules.GetModule<ModuleDecouple>();
-                    if (d != null && !d.isDecoupled) { d.Decouple(); Debug.Log("[DragonScreen] SECO — Dragon separated from S2"); return; }
-                    ModuleAnchoredDecoupler a = p.Modules.GetModule<ModuleAnchoredDecoupler>();
-                    if (a != null && !a.isDecoupled) { a.Decouple(); Debug.Log("[DragonScreen] SECO — Dragon separated from S2"); return; }
-                }
-                Debug.LogWarning("[DragonScreen] SECO: no Dragon decoupler found — staging instead");
-                TryStage(v, "Dragon separation (fallback)");
-            }
-            catch (Exception e) { Debug.LogWarning("[DragonScreen] Dragon sep failed: " + e.Message); }
-        }
+        // ---- actuation helpers ---- (staging + separation now live in Actuator: Meco / SeparateDragon)
 
         static bool AnyStageEngineLit(Vessel v, bool booster)
         {
@@ -247,7 +268,10 @@ namespace DragonScreen
         static void FillRow(string[] row)
         {
             FlightRecorder.PutAscent(row, lastTgo, lastVgo, lastPitchCmd, lastAzDeg, lastPhaseWord);
-            FlightRecorder.PutControl(row, 0, 0, Throttle, double.NaN, false);
+            // att_err_deg column now carries the REAL angle of attack (nose vs surface velocity) — the
+            // Q·α that RUDs the vehicle. This was hardcoded 0 before, which is why the first flights were
+            // flown blind to their own cause of death.
+            FlightRecorder.PutControl(row, lastAoaDeg, 0, Throttle, double.NaN, lastRcsOn);
             FlightRecorder.PutSelfCal(row, cal);
         }
     }

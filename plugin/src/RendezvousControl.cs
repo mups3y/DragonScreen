@@ -68,7 +68,7 @@ namespace DragonScreen
 
             // ---- open the nose shroud before any Draco burn (exposes the forward Dracos + the port) ----
             if (!shroudOpened) { OpenNoseShroud(v); shroudOpened = true; }
-            if (!v.ActionGroups[KSPActionGroup.RCS]) v.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
+            Actuator.EnableRcs(v);   // ⛔ direct: per-thruster rcsEnabled + master (no craft AG binding)
 
             // ---- relative state in the station LVLH frame ----
             double mu = body.gravParameter;

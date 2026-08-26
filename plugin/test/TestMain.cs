@@ -20,6 +20,7 @@ public static class TestMain
         bad += PanelTest.Run();
         bad += OrbitalTest.Run();
         bad += VehiclePartsTest.Run();
+        bad += ActuationTest.Run();        // glue: direct-control role classifier (Actuator ← pure/Actuation)
         bad += MissionProfileTest.Run();   // rebuilt autopilot: S0b mission-as-data resolver
         bad += TrajectoryTest.Run();       // L1 nav: RK4 impact predictor + measured drag/lift/beta
         bad += PredictTest.Run();          // L1 nav: impact / closest-approach helpers

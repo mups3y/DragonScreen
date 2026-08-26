@@ -9,6 +9,7 @@
 -reference:"C:\Program Files (x86)\Steam\steamapps\common\Kerbal Space Program\KSP_x64_Data\Managed\System.dll"
 -reference:"C:\Program Files (x86)\Steam\steamapps\common\Kerbal Space Program\KSP_x64_Data\Managed\System.Core.dll"
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\AbortResponder.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Actuation.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Aero.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Alarms.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\ArcGeometry.cs
@@ -75,6 +76,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Vec3.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\VehicleParts.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\VehicleSystems.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\_DeorbitStub.cs
+C:\Users\User\Desktop\DragonScreen\plugin\test\ActuationTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\AeroTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\AscentTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\AuthorityTest.cs

@@ -14,7 +14,6 @@
 // ============================================================================================
 using System;
 using UnityEngine;
-using KSP.UI.Screens;
 
 namespace DragonScreen
 {
@@ -27,7 +26,27 @@ namespace DragonScreen
         public void Start()
         {
             instance = this;
-            Debug.Log("[DragonScreen] FlightDriver up (flight-scene autopilot host)");
+            // ⛔ A NEW flight scene (fresh launch, revert-to-VAB/launch, load) must start with the autopilot
+            // FULLY IDLE. All the controllers hold STATIC state that survives a scene change, so without this
+            // the last flight's engaged/mid-mission state carries onto the next vehicle and AUTO SEQUENCE is
+            // still "on" the moment you roll out — flying a fresh pad rocket into the ground. Reset it all.
+            ResetAll();
+            Debug.Log("[DragonScreen] FlightDriver up (flight-scene autopilot host) — state reset");
+        }
+
+        static void ResetAll()
+        {
+            CrewProcedureOps.ForceReset();
+            AscentControl.Reset();
+            BoosterControl.Reset();
+            RendezvousControl.Reset();
+            DockingControl.Reset();
+            ReturnControl.Reset();
+            Steering.Release();
+            ReleaseThrottle(); ReleaseTranslation(); ReleaseRoll();
+            FlightLog.Fill = null;
+            FlightLog.Close();
+            aborting = false; abortPending = false; abortChute = ChutePhase.Idle;
         }
 
         public void OnDestroy()
@@ -105,11 +124,19 @@ namespace DragonScreen
                     ReleaseRoll();
                     FlightLog.Fill = null;
                     FlightLog.Close();
-                    abortFired = false;
+                    aborting = false; abortPending = false; abortChute = ChutePhase.Idle;
                     return;
                 }
 
                 Bind(v);   // ensure our throttle hook is on the current vessel (follows handover)
+
+                // ⛔ ABORT takes over everything and does not stop until the crew is under chutes.
+                if (aborting || abortPending || CrewProcedureOps.AbortActive)
+                {
+                    UpdateAbort(v);
+                    FlightLog.Sample(v);
+                    return;
+                }
 
                 // A lone SEPARATED BOOSTER (the active vessel after a focus-switch) flies its own autonomous
                 // recovery — the mission conductor tracks the Dragon, not this vehicle.
@@ -130,8 +157,7 @@ namespace DragonScreen
                 if (CrewProcedureOps.ConsumeLaunch()) Ignite(v);
 
                 // 3) the flying-phase controller for the active phase
-                if (CrewProcedureOps.AbortActive) HandleAbort(v);
-                else DriveActivePhase(v);
+                DriveActivePhase(v);
 
                 // 4) instrument (only while engaged — one CSV per autopilot flight)
                 FlightLog.Sample(v);
@@ -187,7 +213,9 @@ namespace DragonScreen
             try
             {
                 Debug.Log("[DragonScreen] LAUNCH — crew GO cleared; igniting.");
-                StageManager.ActivateNextStage();
+                SetThrottle(1.0);         // full throttle AT ignition — never light the engines against a 0 throttle
+                Actuator.IgniteOctawebLiftoff(v);   // ⛔ direct: light ONLY the octaweb all-engines mode (no staging)
+                Actuator.ReleaseHoldDowns(v);       // ⛔ free EVERYTHING holding the rocket: clamps AND the erector.
             }
             catch (Exception e)
             {
@@ -195,26 +223,45 @@ namespace DragonScreen
             }
         }
 
-        static bool abortFired;
-        static void HandleAbort(Vessel v)
+        // ⛔ Hold-down release + decoupler firing moved to Actuator (Actuator.ReleaseHoldDowns / FireDecoupler).
+
+        // ============================ ABORT — and it must LAND THE CREW ============================
+        // A previous "abort" fired the action group and walked away — so the escaped capsule tumbled and
+        // hit the ground with the crew still aboard. A real abort is not done until the chutes are out. So:
+        // fire the SuperDraco escape (stock Abort AG) ONCE, then FLY THE CAPSULE DOWN — deploy the drogues
+        // and mains on measured altitude/descent until splashdown.
+        static bool aborting, abortPending;
+        static ChutePhase abortChute = ChutePhase.Idle;
+
+        public static void RequestAbort() { abortPending = true; }
+        public static bool Aborting { get { return aborting; } }
+
+        static void UpdateAbort(Vessel v)
         {
-            if (abortFired) return;
+            if (!aborting)
+            {
+                aborting = true; abortChute = ChutePhase.Idle;
+                Debug.Log("[DragonScreen] ⛔ ABORT — SuperDraco launch escape, then chutes to splashdown.");
+                ReleaseThrottle(); ReleaseTranslation(); ReleaseRoll();
+                Actuator.FireAbort(v);   // ⛔ direct: SuperDraco motor at full + capsule separation (no action group)
+            }
+
+            // fly the escaped capsule down: deploy chutes on measured altitude + descent (safety backstop).
             try
             {
-                AbortInputs ai;
-                ai.Triggered = true;
-                ai.Phase = CrewProcedureOps.ActivePhase;
-                ai.LesArmed = FlightCommands.EscapeArmed;
-                AbortCommand c = AbortResponder.Respond(ai);
-                Debug.Log("[DragonScreen] ABORT: " + c.Mode + " — " + c.Note);
-                if (c.FireSuperDracos || c.Separate)
-                    v.ActionGroups.SetGroup(KSPActionGroup.Abort, true);   // stock Abort AG = SuperDraco escape
-                abortFired = true;
+                ChuteInputs ci = new ChuteInputs
+                {
+                    Valid = true, AltitudeM = v.radarAltitude, DescentRateMps = -v.verticalSpeed,
+                    DrogueAltM = Mission.DrogueAltitude, MainAltM = Mission.MainAltitude, SeaAltM = 0.0
+                };
+                ChuteCommand cc = Chutes.Sequence(ci, abortChute);
+                abortChute = cc.Phase;
+                if (cc.DeployDrogues) Actuator.DeployChutes(v, true);
+                if (cc.DeployMains) Actuator.DeployChutes(v, false);
             }
-            catch (Exception e)
-            {
-                Debug.LogWarning("[DragonScreen] abort command failed: " + e.Message);
-            }
+            catch (Exception e) { Debug.LogWarning("[DragonScreen] abort descent failed: " + e.Message); }
         }
+
+        // ⛔ Chute deploy (RealChute-aware) moved to Actuator.DeployChutes.
     }
 }

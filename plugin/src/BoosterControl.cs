@@ -133,8 +133,8 @@ namespace DragonScreen
             ApplyEngineMode(v, bc.EngineMode, bc.Throttle);
 
             // ---- aero surfaces + legs ----
-            if (bc.DeployFins && !finsOut) { DeployFins(v); finsOut = true; }
-            if (bc.DeployLegs && !legsDown) { v.ActionGroups.SetGroup(KSPActionGroup.Gear, true); legsDown = true; }
+            if (bc.DeployFins && !finsOut) { Actuator.DeployGridFins(v); finsOut = true; }
+            if (bc.DeployLegs && !legsDown) { Actuator.DeployLegs(v); legsDown = true; }   // ⛔ direct: ModuleWheelDeployment (no Gear AG)
 
             FlightLog.Fill = FillRow;
         }
@@ -198,21 +198,7 @@ namespace DragonScreen
             return t;
         }
 
-        static void DeployFins(Vessel v)
-        {
-            try
-            {
-                for (int i = 0; i < v.parts.Count; i++)
-                {
-                    Part p = v.parts[i];
-                    if (p.name == null || p.name.IndexOf("Grid Fin", StringComparison.OrdinalIgnoreCase) < 0) continue;
-                    List<ModuleAnimateGeneric> an = p.Modules.GetModules<ModuleAnimateGeneric>();
-                    for (int m = 0; m < an.Count; m++) if (an[m].Progress < 0.5f) an[m].Toggle();
-                }
-                Debug.Log("[DragonScreen] booster grid fins deployed");
-            }
-            catch (Exception e) { Debug.LogWarning("[DragonScreen] fin deploy failed: " + e.Message); }
-        }
+        // (grid-fin + leg deploy now live in Actuator.DeployGridFins / DeployLegs)
 
         static string ModeName(int m)
         {

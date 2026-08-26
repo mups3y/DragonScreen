@@ -63,7 +63,7 @@ namespace DragonScreen
         static void FlyDeparture(Vessel v, MissionProfile mission)
         {
             if (!undocked) { UndockNode(v); undocked = true; }
-            if (!v.ActionGroups[KSPActionGroup.RCS]) v.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
+            Actuator.EnableRcs(v);   // ⛔ direct: per-thruster rcsEnabled + master (no craft AG binding)
 
             CelestialBody body = v.mainBody;
             ITargetable tgt = v.targetObject;
@@ -120,7 +120,7 @@ namespace DragonScreen
 
             if (!deorbitDone)
             {
-                if (!v.ActionGroups[KSPActionGroup.RCS]) v.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
+                Actuator.EnableRcs(v);   // ⛔ direct: per-thruster rcsEnabled + master (no craft AG binding)
 
                 DeorbitInputs di = new DeorbitInputs();
                 di.Valid = true;
@@ -217,8 +217,8 @@ namespace DragonScreen
 
             ChuteCommand cc = Chutes.Sequence(ci, chutePhase);
             chutePhase = cc.Phase;
-            if (cc.DeployDrogues) DeployChutes(v, true);
-            if (cc.DeployMains) DeployChutes(v, false);
+            if (cc.DeployDrogues) Actuator.DeployChutes(v, true);   // RealChute-aware (see Actuator)
+            if (cc.DeployMains) Actuator.DeployChutes(v, false);
 
             if (cc.Splashed || v.situation == Vessel.Situations.SPLASHED || v.situation == Vessel.Situations.LANDED)
                 CrewProcedureOps.PhaseComplete();   // mission complete
@@ -292,26 +292,7 @@ namespace DragonScreen
             return false;
         }
 
-        static void DeployChutes(Vessel v, bool drogue)
-        {
-            try
-            {
-                for (int i = 0; i < v.parts.Count; i++)
-                {
-                    List<ModuleParachute> ps = v.parts[i].Modules.GetModules<ModuleParachute>();
-                    for (int m = 0; m < ps.Count; m++)
-                    {
-                        ModuleParachute mp = ps[m];
-                        bool isDrogue = mp.deployAltitude >= Mission.MainAltitude * 1.5;
-                        if (isDrogue != drogue) continue;
-                        if (mp.deploymentState == ModuleParachute.deploymentStates.STOWED
-                            || mp.deploymentState == ModuleParachute.deploymentStates.ACTIVE)
-                            mp.Deploy();
-                    }
-                }
-            }
-            catch (Exception e) { Debug.LogWarning("[DragonScreen] chute deploy failed: " + e.Message); }
-        }
+        // (chute deployment is RealChute-aware and lives in Actuator.DeployChutes)
 
         static Vec3 V(Vector3d d) { return new Vec3(d.x, d.y, d.z); }
         static Vector3d W(Vec3 p) { return new Vector3d(p.X, p.Y, p.Z); }
