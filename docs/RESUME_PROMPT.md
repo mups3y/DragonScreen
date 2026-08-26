@@ -42,14 +42,21 @@ THE FIX (approved plan Steps A–I, ASCENT-FIRST — get pad→orbit clean BEFOR
      fixed (e6a5cdb): RCS torque gated by the master, roll channel released when dampRoll=false, attitude
      released on abort; MechJeb sign/axis port verified faithful. STILL TODO: AoA moderation (FAR safety net,
      §3.2) deferred to Step I; ⚠ Step C MUST reset the gimbal-loop PID integral while clamped (§3.4 windup).
-  C. Ullage before every light (RCS aft until LowestUllage≥0.996) + clamp/erector release gate (release only
-     at ≥99% measured thrust + no failed engine; reset the gimbal integral while clamped).
+  C. ✅ DONE + committed (06b9f86). pure/IgnitionGate.cs (clamp + ullage decisions, 13 checks) + src/Ullage.cs
+     (RealFuels ullage via reflection). FlightDriver clamp gate: light octaweb, HOLD hold-downs until ≥99% of
+     current-conditions thrust (maxFuelFlow*flowMultiplier*Isp*g0), reset gimbal integral while clamped, safe-
+     abort a failed light (shut down, keep clamps, no SuperDraco). AscentControl S2 ullage settle: fire aft RCS
+     (s.Z=-1) until settled, ignite past a 2 s min coast / 6 s backstop. Recorder ullage_stab/clamp_frac/clamp_held.
   D. PROVING FLIGHT: pad→orbit. Then E booster, F rendezvous, G docking, H return, I FDIR/self-cal hardening.
 
-DO NEXT: Steps A + B are DONE. Build Step C (ullage-settle before every light: fire the aft RCS block until
-LowestUllage≥0.996 then ignite — RealFuels reflection; + the clamp/erector release gate: release hold-downs
-only at ≥99% measured thrust + no failed engine, reset the gimbal integral while clamped). Then install and
-hand the pad→orbit proving flight (Step D). Keep build.py test green; commit when green.
+DO NEXT: Steps A+B+C DONE — the ascent stack is complete + INSTALLED. **Step D = the pad→orbit PROVING FLIGHT**
+(the user flies it; I cannot fly in-game). Fly AUTO SEQUENCE pad→SECO→Dragon-sep, then read the CSV with
+assess_flight.py. WATCH: clamp releases only at full thrust; vertical rise → one pitch kick → zero-AoA gravity
+turn HELD BY THE GIMBAL LOOP through max-Q (att_point_deg small, no divergence — the RUD fix); MECO→interstage
+sep→ullage settle (ullage_stab climbs to ≥0.996)→S2 light→UPFG→SECO→Dragon sep. First-cut items to tune from
+the CSV (batch): UPFG Iy plane normal / SECO cutoff, ENU heading sign (SelfCal.SteerSign), the attitude sign
+(if att_point_deg DIVERGES the actuation sign is flipped — set Steering.UseGimbalLoop=false to fall back to SAS
+and confirm, or flip the sign). Do NOT proceed to Step E until ascent-to-orbit is clean. Keep build.py green.
 
 AMENDED WORKFLOW RULES (2026-08-26 — these SUPERSEDE the older discipline):
 - BATCH FIXES: apply as many well-reasoned fixes as a phase needs, then fly to verify the batch. Do NOT fly a
