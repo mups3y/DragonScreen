@@ -111,6 +111,20 @@ namespace DragonScreen
         /// </summary>
         public double RecoveryPropFrac;
 
+        /// <summary>
+        /// Estimated terminal descent speed the landing burn must arrest, m/s - the glue computes it LIVE
+        /// from the measured ballistic coefficient and the landing-altitude air density
+        /// (v_term = sqrt(2 g bc / rho)), so the reserve sizes itself to the vehicle's real drag. Zero =
+        /// unknown (the reserve then falls back to the fixed EntryBurnReserveFrac). See LandingFuelKg.
+        /// </summary>
+        public double TerminalSpeedMps;
+        /// <summary>
+        /// Recovery propellant currently aboard, kg - the absolute budget the ADAPTIVE reserve compares the
+        /// live-computed landing-fuel need against, so the entry burn reserves exactly what the landing will
+        /// use and bleeds everything else toward the barge. Zero = unknown (falls back to the fraction).
+        /// </summary>
+        public double RecoveryPropKg;
+
         // ---- ⚠ THE OCTAWEB'S MODES ARE NOT MULTIPLES OF ONE ENGINE ----
         // See VehicleParts: 2560 / 1706 / 764 kN for nine / three / one, which is 284 / 569 / 764 kN
         // "per engine". Scaling MaxThrustAccel by an engine COUNT - which is what PhaseAccel used to
@@ -160,6 +174,16 @@ namespace DragonScreen
         // walked past. Boostback burns until it is past by BoostbackOvershootM.
         /// <summary>Signed miss of the predicted impact point, metres. Negative = beyond the LZ.</summary>
         public double PredictedMissM;
+        /// <summary>The predicted-impact solve actually succeeded (drag-modelled). The entry-burn aim
+        /// gate requires this, so a failed prediction (PredictedMissM defaults to 0) cannot false-cut.</summary>
+        public bool PredictedMissValid;
+        /// <summary>Downrange component of the predicted impact error, metres (+ = long, past the deck
+        /// along the ground track). PredictedMissM is only the signed MAGNITUDE - this splits it so a lift-
+        /// magnitude shortfall (downrange) can be told apart from a steering problem (crossrange).</summary>
+        public double DownMissM;
+        /// <summary>Crossrange component of the predicted impact error, metres (signed, right of the ground
+        /// track positive). If this does not null through the glide, the fins are not steering it out.</summary>
+        public double CrossMissM;
         /// <summary>|PredictedMissM| when the boostback burn began. Throttle tapers against it.</summary>
         public double InitialMissM;
         public double AtmosphereDepthM;
@@ -235,8 +259,48 @@ namespace DragonScreen
         /// </summary>
         public const double EntryBurnGateAsl = 32500.0;
 
-        /// <summary>Entry burn cuts on VERTICAL speed, not airspeed. BOOSTER.ks:728.</summary>
+        /// <summary>Entry burn cuts on VERTICAL speed, not airspeed. BOOSTER.ks:728. SUPERSEDED for the
+        /// droneship by EntryBurnTargetSpeedMps - kept for the RTLS start gate.</summary>
         public const double EntryBurnCutVs = -300.0;
+
+        /// <summary>
+        /// Cut the entry burn once SURFACE speed has bled to this, m/s. Real Falcon 9 ~1300 (the entry burn
+        /// only knocks ~2300 -> ~1300; drag + the landing burn do the rest).
+        ///
+        /// ⛔ WHY THIS REPLACES THE -300 VERTICAL CUT ON A DRONESHIP (flight_0825_163535). The -300 vs cut
+        /// held the retrograde burn until the stage had bled almost ALL its speed (2306 -> 507 m/s, 25 t of
+        /// propellant), which put the stage at TERMINAL VELOCITY (drag == weight, ~0 g) long before the deck.
+        /// At terminal the propellant is UNSETTLED, so the landing-burn Merlin starved: it took ~5 s to reach
+        /// real thrust and only caught at ~105 m, far too low to stop (the "lit but no thrust" crash). Cutting
+        /// the entry burn while the stage is still FAST leaves it DECELERATING (drag > weight) through the
+        /// landing altitude, which settles the propellant so the engine spools cleanly at 1-2 km - the real
+        /// Falcon profile. It also leaves the downrange the barge sits on and stops the 25 t over-burn.
+        /// ⚠ leaving it faster raises reentry heating - watch b_maxSkinK against the airframe limit (~773 K);
+        /// raise this target if it runs hot. And it lands FURTHER downrange, so the barge/ascent staging must
+        /// be re-tuned to the new impact point (see BoosterRecovery.DroneshipEarthLat/Lon + the ascent MECO).
+        /// [Tunable].
+        /// </summary>
+        [Tunable] public static double EntryBurnTargetSpeedMps = 1300.0;
+
+        /// <summary>
+        /// The droneship entry burn is a DOWNRANGE-TARGETING burn: it burns retrograde (bleeding speed
+        /// SHORTENS the ballistic+drag impact) until the PREDICTED impact has bled down to within this of
+        /// the barge, then cuts and lets the grid-fin descent trim the last bit. This is what puts the
+        /// stage on the barge instead of the velocity cut, which had no idea where it was aiming (it left
+        /// the impact 25 km long and drag over-shortened it to 16 km short - flight_0825_184857).
+        ///
+        /// The prediction is ImpactPredictor.PredictBooster, integrated with the CORPUS Mach-dependent drag
+        /// curve (BoosterDrag, 18k recorded samples), so it is accurate DURING the burn - the old live
+        /// scalar bc was garbage under thrust. Left slightly LONG (this buffer) because the grid fins can
+        /// trim a few km but drag can only ever shorten, so aiming a touch long is the recoverable side.
+        /// [Tunable].
+        /// </summary>
+        [Tunable] public static double EntryAimBufferM = 2000.0;
+
+        /// <summary>Below this surface speed the entry burn cuts regardless of the aim - a heating/fuel
+        /// floor so a barge that needs more bleed than is safe does not drive the stage into the ground.
+        /// If the aim is not reached by here, the staging energy is wrong (barge too close). m/s.</summary>
+        [Tunable] public static double EntryBurnMinSpeedMps = 700.0;
 
         /// <summary>
         /// The entry burn stops once the recovery propellant falls to this fraction, RESERVING the rest
@@ -339,8 +403,19 @@ namespace DragonScreen
         /// three-engine full-throttle brake reached the handover speed hundreds of metres up, so the
         /// one-engine finish over-braked into a hover. The reliability worry (a 2.0 s flight that failed to
         /// light) was a SWITCHED light (envelope handover), not a held one. See falcon-real-hoverslam-technique.
+        ///
+        /// ⛔ 2.5 -> 6.0 (2026-08-25). MEASURED on flight_0825_173123: the cold gas is empty by the landing
+        /// burn (bl_coldGasFrac 0.00), so the propellant is UNSETTLED at terminal velocity and the Merlin
+        /// STARVES - command→first-real-thrust was ~6 s (lit/EngineIgnited at +2 s but thrust crawled 1→25 kN
+        /// for ~4 s more, catching to full only at ~280 m). The 2.5 s budget lit the burn ~800 m too low and
+        /// the stage caught at 280 m, far too low to stop (~230 m/s at the deck). PROOF this is the spool and
+        /// not something altitude-locked: the catch ALTITUDE tracks the ignition altitude (105 m when lit
+        /// low, 280 m when lit higher), so budgeting the real ~6 s raises the catch to ~570 m where the brake
+        /// can still stop. The old over-brake worry was a SETTLED (2 s) light catching early; a starved engine
+        /// catches LATE regardless, so the high ignition does not brake early. If the cold gas is ever
+        /// provisioned so the light is a clean ~2 s, drop this back down. Watch bl_liveThrustKn on the flight.
         /// </summary>
-        [Tunable] public static double LandingDeadTimeS = 2.5;
+        [Tunable] public static double LandingDeadTimeS = 6.0;
 
         /// <summary>Merlin 1D sea-level Isp, s. Turns the 3-engine thrust into a propellant flow so the
         /// drag-aware hoverslam solver can track burn-off (lighter stage brakes harder near the deck).</summary>
@@ -735,68 +810,119 @@ namespace DragonScreen
             // means asking for engines".
             if (phase == LandingPhase.NoSolution) return have;
 
-            if (phase != LandingPhase.LandingBurn) return 0;
+            // ---- ⛔ NO MID-BURN 3->1 SWITCH. IT FREE-FALLS, AND THE REAL FALCON DOES NOT. ----
+            // Real Falcon 9 keeps the CENTRE engine CONTINUOUSLY lit through a 3->1 landing burn - it sheds
+            // the two outboards while the centre never stops, so there is no thrust gap. Our octaweb models
+            // the modes as MUTUALLY EXCLUSIVE ModuleEnginesFX (AllEngines / ThreeLanding / CenterOnly), so
+            // "hand over to one" cannot keep the centre lit: it SHUTS the ThreeLanding module and RELIGHTS
+            // CenterOnly, and SetOctawebMode fires nothing while the mode is stepping - the stage FREE-FALLS
+            // through the gap (observed: 3 engines -> shut down -> ~1-2 s free-fall -> 1 engine). That is
+            // not a landing burn SpaceX would fly. The faithful equivalent for exclusive modes is a SINGLE
+            // CONTINUOUS mode: LandingEngines decides it ONCE (the centre engine if it can land soft - a
+            // real Falcon single-engine landing burn - else three), it is PRE-SELECTED during the engine-OFF
+            // DESCENT (no lit engine, so the mode change is gap-free) and HELD through the burn with no
+            // switch. The old speed-handover that caused the free-fall is gone.
+            if (phase == LandingPhase.Descent || phase == LandingPhase.LandingBurn)
+                return LandingEngines(s, have);
 
-            // Landing: measure what ONE engine actually gives at this mass. Prefer the vehicle's own
-            // centre-engine figure - dividing the all-engine accel by the engine count is the 2.2x
-            // error described on AccelOneEngine, and this is the exact test that decides whether the
-            // booster commits to a one-engine landing.
-            // ---- THE 3 -> 1 HANDOVER. Land:805, and it is not a TWR test. ----
-            // BOTH conditions, and F9I is explicit that getting it wrong is not a soft failure:
-            // "at low propellant this stage does not have TWR 1 on one Merlin, and a handover that
-            // happens too early cannot be undone."
-            //     slow enough             verticalspeed > -40
-            //     provably able to stop   OneEngStopDist(2.23) * 1.35 < TrueRadar
-            // So the burn STARTS on three - which is what makes the 2.23 ratio valid, because AtmGNC
-            // leaves the octaweb in three-engine mode - and drops to one only once the stage has
-            // earned it.
-            // ⛔ THE REAL CREW-2 3->1 (user 2026-08-24, "do the 3-1 landing burn, full fidelity"). Real
-            // Falcon 9 droneship landings light THREE for the hard braking then drop to the centre engine
-            // for the controlled touchdown. The octaweb ENTERS the landing burn already in three-engine
-            // mode (the entry burn left it there), so holding THREE means NO octaweb switch = a fast,
-            // reliable light; the ONE switch to CenterOnly happens once, late, near the deck.
-            //
-            // ---- ⛔ SPEED HANDOVER - HOLD THREE WHILE FAST, DROP TO ONE ONLY WHEN SLOW. ----
-            // The "envelope" handover (drop to one the instant one engine COULD stop from here) fired at
-            // IGNITION for our over-powered centre engine (it can stop from 2.3 km up), which switched the
-            // octaweb to CenterOnly, then flip-flopped back to three, CHURNING the octaweb - the single
-            // engine did not reach thrust until 985 m and the stage hit the deck at 81 m/s
-            // (flight_0824_230104, read line by line). So instead: stay on THREE while descending faster
-            // than the handover speed - the octaweb never switches, three engines do the hard brake - and
-            // drop to ONE only once slow (near the touchdown). handedOverToOne latches it on one after.
-            // Pairs with a LOW ignition (short LandingDeadTimeS, because holding three-mode lights fast) so
-            // the three-engine brake reaches the handover speed near the deck, not high. See
-            // falcon-real-hoverslam-technique.
-            if (!(s.AccelOneEngine > 0.0 && s.AccelOneEngine >= s.Gravity * MinLandingTwr))
-                return Min(3, have);                                  // no usable centre engine - land on three
-            double vd = (s.VerticalSpeed < 0.0) ? -s.VerticalSpeed : 0.0;
-            return (vd > HandoverVsMps) ? Min(3, have) : Min(1, have);
+            return 0;
         }
 
         /// <summary>
-        /// How many engines to fly the WHOLE landing burn on - decided ONCE, HELD to the deck, so there is
-        /// no mid-air octaweb switch.
+        /// How many engines to fly the landing burn on - chosen LIVE from the actual THRUST NEED, every
+        /// tick, not a fixed per-phase number. The rule: the FEWEST engines that can still arrest the
+        /// descent before the deck, because fewer engines flare softer and land more precisely. A nominal
+        /// descent lands on the CENTRE engine alone (the softest - a real Falcon single-engine landing
+        /// burn); a HOT or high descent one engine could not stop from steps up to THREE; and if even three
+        /// cannot brake it in the height left, ALL of them, for maximum deceleration. So a stage coming in
+        /// hot and off target naturally takes more engines to slow down fast, and eases back toward one as
+        /// the need drops - the autopilot reads its need and picks the mode, it is not locked to a script.
         ///
-        /// ⛔ WHY NOT THE 3->1 HANDOVER. The octaweb is three separate engine MODULES on one part
-        /// (AllEngines / ThreeLanding / CenterOnly), so "hand over to one" is not "shut two of three" - it
-        /// SHUTS the ThreeLanding module and must RELIGHT the CenterOnly module. flight_0824_054405: that
-        /// relight failed in the descent, all thrust died at 222 m, and the stage fell into the sea at
-        /// 99 m/s with ~7 t of propellant aboard. A module swap in mid-air cannot be made gap-free.
-        ///
-        /// So: if the CENTRE engine alone has the thrust-to-weight to both arrest the fall and throttle the
-        /// touchdown (falcon-booster-landing-twr - one Merlin is below TWR 1 only at very low propellant),
-        /// fly the ENTIRE landing burn on it. The mode then changes during the engine-OFF coast, with no
-        /// thrust gap, and a continuous radar-altitude hoverslam (pure/Hoverslam) flies it to the deck.
-        /// Otherwise commit to three (a stage that needs three to stop cannot land soft on one anyway).
+        /// ⛔ ONE CONTINUOUS MODE PER BURN, decided before ignition and HELD - because the octaweb's three
+        /// modes (AllEngines / ThreeLanding / CenterOnly) are MUTUALLY EXCLUSIVE ModuleEnginesFX on one
+        /// part: "hand over to one" cannot keep the centre lit, it SHUTS the three-engine module and
+        /// RELIGHTS the centre one, and the stage FREE-FALLS through that relight gap (flight_0824_054405
+        /// died at 222 m doing exactly this). A real Falcon steps 3->1 gap-free by shedding the two
+        /// outboards while the centre never stops; this vehicle physically cannot (it needs individually-
+        /// controllable engines to). So the honest gap-free equivalent is a single mode sized to the need
+        /// and pre-selected during the engine-OFF descent (EnginesFor), throttle-modulated the whole way.
         /// </summary>
         public static int LandingEngines(LandingInputs s, int have)
         {
-            // Only a stage with a REAL centre-engine mode (AccelOneEngine measured off the vehicle) can
-            // land on one engine: a generic cluster's "one of nine" is 1/9 of the thrust, with no TWR.
-            // And only if that centre engine can actually hold the stage up (falcon-booster-landing-twr).
-            if (s.AccelOneEngine > 0.0 && s.AccelOneEngine >= s.Gravity * MinLandingTwr)
+            double h = TrueRadar(s);
+            // ONE (softest, most precise) if the centre engine can both hover (falcon-booster-landing-twr)
+            // AND arrest the descent from here.
+            if (s.AccelOneEngine > 0.0 && s.AccelOneEngine >= s.Gravity * MinLandingTwr
+                && CanArrest(s, s.AccelOneEngine, h))
                 return Min(1, have);
-            return Min(3, have);
+            // Else THREE - a harder brake for a hotter/higher descent one engine could not stop.
+            if (s.AccelThreeEngine > 0.0 && CanArrest(s, s.AccelThreeEngine, h))
+                return Min(3, have);
+            // A generic identical-engine cluster (no measured octaweb modes) has no distinct centre engine:
+            // three is the real Falcon landing default there.
+            if (s.AccelOneEngine <= 0.0 && s.AccelThreeEngine <= 0.0)
+                return Min(3, have);
+            // Octaweb, coming in too hot for three: everything available, maximum deceleration.
+            return have;
+        }
+
+        /// <summary>
+        /// Can an engine mode of acceleration <paramref name="accel"/> arrest the current vertical descent
+        /// before the deck (height <paramref name="heightM"/> to the bells)? Stopping distance v²/2a against
+        /// the net (thrust - gravity) deceleration. Drag is ignored here on purpose - it only ever shortens
+        /// the stop, so this is the conservative test that decides whether FEWER engines are enough.
+        /// </summary>
+        public static bool CanArrest(LandingInputs s, double accel, double heightM)
+        {
+            double net = accel - s.Gravity;
+            if (net <= 0.1 || heightM <= 0.0) return false;
+            double vDown = (s.VerticalSpeed < 0.0) ? -s.VerticalSpeed : 0.0;
+            double stop = vDown * vDown / (2.0 * net);
+            return stop < heightM;
+        }
+
+        /// <summary>
+        /// The propellant the LANDING BURN will need, kg - computed LIVE from the state, not a tuned
+        /// constant. The ADAPTIVE replacement for the fixed EntryBurnReserveFrac: the entry burn reserves
+        /// THIS (plus a safety margin) and bleeds everything else toward the barge, so a heavier or faster
+        /// stage automatically keeps more and a benign descent keeps less - it self-calibrates to the
+        /// situation. Rocket equation on the landing Δv = v_arrest * a/(a-g) (arrest the terminal descent
+        /// plus the gravity loss over the burn) on the live-selected landing engine mode's thrust. Returns 0
+        /// when it cannot be computed (no terminal estimate / no usable landing accel) so the caller falls
+        /// back to the fraction.
+        /// </summary>
+        public static double LandingFuelKg(LandingInputs s)
+        {
+            if (s.TerminalSpeedMps <= 0.0 || s.Mass <= 0.0) return 0.0;
+            int have = (s.EngineCount > 0) ? s.EngineCount : 1;
+            int landEng = LandingEngines(s, have);
+            double aLand = (landEng <= 1 && s.AccelOneEngine > 0.0) ? s.AccelOneEngine
+                         : (landEng == 3 && s.AccelThreeEngine > 0.0 ? s.AccelThreeEngine
+                            : (s.MaxThrustAccel > 0.0 ? s.MaxThrustAccel : s.AccelThreeEngine));
+            double net = aLand - s.Gravity;
+            if (aLand <= 0.0 || net <= 0.1) return 0.0;          // cannot land on this mode - NoSolution territory
+            double dvLand = s.TerminalSpeedMps * aLand / net;    // arrest + gravity loss over the burn
+            double ve = MerlinIspS * 9.80665;
+            double frac = 1.0 - System.Math.Exp(-dvLand / ve);   // fraction of the CURRENT mass that is landing fuel
+            return s.Mass * 1000.0 * frac;                       // t -> kg
+        }
+
+        /// <summary>Safety margin on the live-computed landing reserve - hold back the fuel need x (1+this)
+        /// for the ignition retries, the flare and dispersions. [Tunable].</summary>
+        [Tunable] public static double LandingReserveMargin = 0.4;
+
+        /// <summary>
+        /// Has the entry burn bled down to the LIVE-computed landing reserve? Adaptive: senses mass,
+        /// terminal speed and the selected landing mode and reserves exactly the fuel the landing needs,
+        /// bleeding the rest toward the barge. Falls back to the fixed EntryBurnReserveFrac only when the
+        /// live inputs (terminal estimate + recovery-prop mass) are missing.
+        /// </summary>
+        public static bool LandingReserveReached(LandingInputs s)
+        {
+            double needKg = LandingFuelKg(s);
+            if (needKg > 0.0 && s.RecoveryPropKg > 0.0)
+                return s.RecoveryPropKg <= needKg * (1.0 + LandingReserveMargin);
+            return s.RecoveryPropFrac >= 0.0 && s.RecoveryPropFrac <= EntryBurnReserveFrac;
         }
 
         private static int Min(int a, int b) { return a < b ? a : b; }
@@ -845,76 +971,29 @@ namespace DragonScreen
             // altitude came out wrong by a different amount on every flight.
             //
             // The one-engine figure does have a job. It is the HANDOVER test, further down.
-            double descentAccel = PhaseAccel(LandingPhase.EntryBurn, s);
             double landAccel = PhaseAccel(LandingPhase.LandingBurn, s);
             // ---- ⛔ THE HOVERSLAM IGNITES ON VERTICAL SPEED, NOT SURFACE SPEED. ----
             // F9I stops on VERTICAL speed. A droneship booster keeps big horizontal velocity down the arc,
-            // but DRAG bleeds it: with the entry burn now cut short to reserve landing fuel and PRESERVE
-            // the downrange (EntryBurnReserveFrac), the stage reaches the deck with the horizontal mostly
-            // gone (flight_0823: 43 m/s horizontal, 227 vertical at touchdown) and only the vertical to
-            // kill. Sizing the ignition on the SURFACE speed instead was a mistake: high on the arc that
-            // speed is ~1.5 km/s, so the ignition altitude came out 30-70 km and the landing burn LIT AT
-            // 48 km, throttled down, shut the engine, and could not relight at the ground (out of ignitions)
-            // - the stage fell in at 231 m/s. Vertical speed puts ignition where the hoverslam belongs, a
-            // few hundred metres up, one clean light.
-            // ---- DRAG-AWARE HOVERSLAM IGNITION POINT (pure/Hoverslam.cs). ----
-            // MechJeb's method - numerically INTEGRATE the descent and root-solve the ignition point -
-            // but with the aero drag MechJeb's own version omits (a TODO in its source) and the ~3.5 s
-            // Merlin spool, both of which the old closed form ignored. That drag/spool blindness lit the
-            // burn too late (0824: hard braking that flamed the engine out). The stage falls at terminal
-            // through DESCENT, where drag == gravity, so its own descent speed is the drag reference.
+            // but DRAG bleeds it: with the entry burn cut short to reserve landing fuel and PRESERVE the
+            // downrange, the stage reaches the deck with the horizontal mostly gone (flight_0823: 43 m/s
+            // horizontal, 227 vertical at touchdown) and only the vertical to kill. Sizing the ignition on
+            // the SURFACE speed instead came out 30-70 km and lit the burn at 48 km. Vertical speed puts
+            // ignition where the hoverslam belongs, a few hundred metres up, one clean light.
+            //
+            // ---- DRAG-AWARE HOVERSLAM IGNITION, ONE CONTINUOUS ENGINE MODE (pure/Hoverslam.cs). ----
+            // MechJeb's method - numerically INTEGRATE the descent and root-solve the ignition point - with
+            // the aero drag MechJeb omits and the RO Merlin's ullage-settle + spool. The landing burn flies
+            // ONE mode the whole way (LandingEngines, pre-selected during the engine-off descent - NO
+            // mid-burn octaweb switch / free-fall; see EnginesFor), so the solve is sized on that one mode's
+            // thrust (landAccel), and the whole ignition->thrust lead (dead-time + spool) is inside the
+            // solver. The stage falls at terminal through DESCENT (drag == gravity), so its own descent
+            // speed is the drag reference.
             double vTerm = (s.VerticalSpeed < 0.0) ? -s.VerticalSpeed : 1.0;
-            // ---- ⛔ TWO-PHASE 3->1 IGNITION (real Crew-2 droneship landing burn). ----
-            // The burn lights THREE at FULL throttle to brake hard down to the handover speed, then the
-            // throttleable centre engine flies the last bit to the deck. So the ignition is the sum of
-            // two stops: the drag-aware ONE-engine hoverslam from the handover speed (the altitude the
-            // centre engine needs, phase 2), PLUS the full-throttle THREE-engine brake from the current
-            // speed down to the handover speed (phase 1). This is what stops the three-engine phase ever
-            // reaching the low throttle that flamed it out - it is full throttle the whole way.
             double vDown = (s.VerticalSpeed < 0.0) ? -s.VerticalSpeed : 0.0;
-            bool canOneEngine = (s.AccelOneEngine > 0.0 && s.AccelOneEngine >= s.Gravity * MinLandingTwr);
+            double thrustLandKn = landAccel * s.Mass;
             double ign;
-            if (canOneEngine && s.AccelThreeEngine > 0.0 && s.Mass > 0.0)
+            if (thrustLandKn > 0.0 && s.Mass > 0.0)
             {
-                double thrust1 = s.AccelOneEngine * s.Mass;
-                HoverslamInputs hs1 = new HoverslamInputs
-                {
-                    AltitudeM = s.AltitudeRadar,
-                    VerticalSpeed = -HandoverVsMps,                // finish from the handover speed
-                    MassT = s.Mass,
-                    GravityMps2 = s.Gravity,
-                    ThrustKn = thrust1,
-                    MdotTps = (MerlinIspS > 0.0) ? thrust1 / (MerlinIspS * 9.80665) : 0.0,
-                    DragRefAccel = s.Gravity,
-                    DragRefSpeed = vTerm,
-                    DeadTimeS = HandoverGapS,                      // free-fall through the octaweb relight gap
-                    SpoolS = LandingSpoolS
-                };
-                double aH = HoverslamSolver.IgnitionAltitude(hs1);   // phase-2 altitude (one engine, from vh)
-                double decel3 = s.AccelThreeEngine - s.Gravity;      // phase 1: full-throttle three-engine brake
-                double d3 = (decel3 > 0.0 && vDown > HandoverVsMps)
-                          ? (vDown * vDown - HandoverVsMps * HandoverVsMps) / (2.0 * decel3) : 0.0;
-                // ⛔ FACTOR THE THREE-ENGINE SPOOL - AT HALF (2026-08-24). The three Merlins ramp 0->full
-                // over LandingSpoolS, so ACROSS the ramp they brake at ~half thrust, not zero: the un-braked
-                // free-fall during spool is ~vDown*LandingSpoolS*0.5, NOT the full vDown*LandingSpoolS. The
-                // full term (used through flight_0824_230104) over-raised the ignition, so the three-engine
-                // brake reached the handover speed hundreds of metres too high and the one-engine finish
-                // over-braked. Half the spool distance puts the ignition where the brake ends near the deck.
-                d3 += vDown * LandingSpoolS * 0.5;
-                // ⛔ AND THE INITIAL-RELIGHT DEAD-TIME (flight_0824_202712 crash: ignited at 1080 m, engines
-                // never lit, hit the deck unlit). The engines were OFF through the whole descent, so the
-                // THREE-engine light needs the FULL ullage-settle + pressure-build dead-time before it makes
-                // thrust - during which the stage free-falls ~vDown*LandingDeadTimeS. The single-phase solver
-                // adds this via DeadTimeS; the closed-form d3 must add it explicitly, or the burn ignites far
-                // too low to ever light in time. + LandingIgnitionLeadS is the retry margin on top.
-                ign = aH + d3 + BoosterHeightM + vDown * (LandingDeadTimeS + LandingIgnitionLeadS);
-            }
-            else
-            {
-                // No usable centre engine: the single-phase, drag-aware three-engine hoverslam (or the
-                // closed-form fallback when mass/thrust are missing).
-                double landModeAccel = (s.AccelThreeEngine > 0.0) ? s.AccelThreeEngine : s.MaxThrustAccel;
-                double thrustLandKn = landModeAccel * s.Mass;
                 HoverslamInputs hs = new HoverslamInputs
                 {
                     AltitudeM = s.AltitudeRadar,
@@ -925,13 +1004,15 @@ namespace DragonScreen
                     MdotTps = (MerlinIspS > 0.0) ? thrustLandKn / (MerlinIspS * 9.80665) : 0.0,
                     DragRefAccel = s.Gravity,
                     DragRefSpeed = vTerm,
-                    DeadTimeS = LandingDeadTimeS,
+                    DeadTimeS = LandingDeadTimeS,     // the full ullage-settle + pressure-build free-fall
                     SpoolS = LandingSpoolS
                 };
-                ign = (thrustLandKn > 0.0 && s.Mass > 0.0)
-                    ? HoverslamSolver.IgnitionAltitude(hs) + BoosterHeightM
-                    : StopDistance(s.VerticalSpeed, descentAccel, s.Gravity) + BoosterHeightM;
-                ign += LandingIgnitionLeadS * vDown;
+                ign = HoverslamSolver.IgnitionAltitude(hs) + BoosterHeightM + LandingIgnitionLeadS * vDown;
+            }
+            else
+            {
+                ign = StopDistance(s.VerticalSpeed, landAccel, s.Gravity) + BoosterHeightM
+                    + LandingIgnitionLeadS * vDown;
             }
             c.IgnitionAltitude = ign;
 
@@ -1032,13 +1113,18 @@ namespace DragonScreen
             else if (phase == LandingPhase.Coast && Hoverslam(s, ign))
                 phase = LandingPhase.LandingBurn;
 
-            // F9I cuts on VERTICAL SPEED: `until (ship:verticalspeed > -300)`. A droneship ALSO cuts the
-            // instant the recovery propellant hits the reserve, so the landing burn is never starved and
-            // the downrange velocity that carries it to the barge is not thrown away. See EntryBurnReserveFrac.
+            // ---- DRONESHIP: the entry burn TARGETS THE BARGE. Bleed retrograde (which shortens the
+            // predicted impact) until the predicted impact has come back to within EntryAimBufferM of the
+            // barge, then cut and let the grid-fin descent trim it. Falls back to a heating/fuel floor
+            // (EntryBurnMinSpeedMps) and the reserve floor. RTLS keeps F9I's vertical-speed cut. ----
             else if (phase == LandingPhase.EntryBurn
-                     && (s.VerticalSpeed > EntryBurnCutVs || !InEntryBand(s)
-                         || (s.Droneship && s.RecoveryPropFrac >= 0.0
-                             && s.RecoveryPropFrac <= EntryBurnReserveFrac)))
+                     && ((s.Droneship ? (EntryAimReached(s) || s.SurfaceSpeed <= EntryBurnMinSpeedMps)
+                                      : s.VerticalSpeed > EntryBurnCutVs)
+                         || !InEntryBand(s)
+                         // ADAPTIVE RESERVE: cut once the recovery propellant has bled to the LIVE-computed
+                         // landing-fuel need (LandingReserveReached), not a fixed fraction - so the entry
+                         // burn bleeds the maximum toward the barge while still guaranteeing a landing.
+                         || (s.Droneship && LandingReserveReached(s))))
                 phase = LandingPhase.Descent;
 
             else if (phase == LandingPhase.Descent && Hoverslam(s, ign))
@@ -1187,24 +1273,20 @@ namespace DragonScreen
                     double margin = (TrueRadar(s) < FlareRadarM) ? FlareMargin : BulkMargin;
                     double th = BurnThrottle(s, landAccel) + margin;
                     if (th < 0.0) th = 0.0; else if (th > 1.0) th = 1.0;
-                    // ⛔ FULL THROTTLE ON THE THREE-ENGINE BRAKE (real Crew-2 3->1). While still on three
-                    // - descending faster than the handover speed - run FULL throttle, a hard suicide
-                    // brake. Three engines are TWR ~8 and cannot throttle-hover; MODULATING them is exactly
-                    // what dropped the throttle to 0.22 and flamed them out. Only the ONE-engine phase,
-                    // below the handover speed, modulates (BurnThrottle) to arrive at v=0 at the deck. The
-                    // handover test MUST match EnginesFor's (SPEED) or the throttle and engine count disagree.
-                    bool onThree = (s.AccelOneEngine > 0.0 && s.AccelOneEngine >= s.Gravity * MinLandingTwr)
-                                   && (-s.VerticalSpeed) > HandoverVsMps;
-                    if (onThree) th = 1.0;
-                    // ⛔ NEVER BELOW THE MERLIN FLAMEOUT FLOOR WHILE DESCENDING (one-engine phase). The RO
-                    // Merlin dies below ~0.4; the one-engine hoverslam stays naturally above it, and this
-                    // clamps any dip. (The three-engine phase is pinned to full above.)
-                    else if (th > 0.0 && th < LandingMinThrottle) th = LandingMinThrottle;
-                    // ⛔ AND IF WE HAVE OVER-BRAKED INTO A CLIMB, STOP PUSHING. BurnThrottle is
-                    // StopDist/TrueRadar, and StopDist is computed from SPEED - it does not care
-                    // which way the speed points, so a stage that over-corrected upward would read a
-                    // huge stopping distance and hold full throttle while flying away from the pad.
-                    // (This overrides the floor above, so the engine still cuts cleanly at touchdown.)
+                    // ---- ONE CONTINUOUS MODE: THE HOVERSLAM MODULATES IT THE WHOLE WAY. ----
+                    // BurnThrottle = StopDist/TrueRadar self-scales: ~full at ignition (a hard suicide brake)
+                    // and easing off as the height runs out. On the centre engine the flare is soft; on a
+                    // three-engine landing (a stage too heavy for one) it floors at the Merlin minimum, which
+                    // is the physical reason such a stage lands hard. No mid-burn octaweb switch, no
+                    // full-throttle special case - one mode, one modulation (the free-fall handover is gone).
+                    //
+                    // ⛔ NEVER BELOW THE MERLIN FLAMEOUT FLOOR WHILE DESCENDING. The RO Merlin dies below
+                    // ~0.4; the one-engine hoverslam stays above it naturally, this clamps any dip.
+                    if (th > 0.0 && th < LandingMinThrottle) th = LandingMinThrottle;
+                    // ⛔ AND IF WE HAVE OVER-BRAKED INTO A CLIMB, STOP PUSHING. BurnThrottle is StopDist/
+                    // TrueRadar and StopDist is speed-based - it does not know which way the speed points -
+                    // so a stage that over-corrected upward would read a huge stop distance and hold full
+                    // throttle while flying away. (Overrides the floor above, so the engine cuts at touchdown.)
                     if (s.VerticalSpeed > 0.0) th = 0.0;
                     c.Throttle = th;
                     c.Aim = (s.AltitudeRadar < 60.0) ? LandingAim.Up : LandingAim.SurfaceRetrograde;
@@ -1335,6 +1417,17 @@ namespace DragonScreen
             return s.AltitudeAsl < EntryGateAsl(s) && s.AltitudeRadar > 1000.0;
         }
 
+        /// <summary>
+        /// Has the retrograde entry burn bled the PREDICTED impact back to within EntryAimBufferM of the
+        /// barge? Requires a valid drag-modelled prediction (ImpactPredictor.PredictBooster, corpus drag
+        /// curve). PredictedMissM &lt; 0 = impact still LONG (past the barge); the burn shortens it, so the
+        /// aim is reached once it is no more than EntryAimBufferM long - the grid-fin descent trims the rest.
+        /// </summary>
+        public static bool EntryAimReached(LandingInputs s)
+        {
+            return s.Droneship && s.PredictedMissValid && s.PredictedMissM >= -EntryAimBufferM;
+        }
+
         /// <summary>Height the ENGINES must fly out. Radar is to the lowest part; bells are higher.</summary>
         public static double TrueRadar(LandingInputs s)
         {
@@ -1400,8 +1493,27 @@ namespace DragonScreen
         /// </summary>
         public const double RollRefMinDeg = 15.0, RollRefMaxDeg = 165.0;
 
-        /// <summary>Unpowered aerodynamic trim during the descent. `F9L_AOA` = 15.</summary>
-        public const double AeroAoaDeg = 15.0;
+        /// <summary>
+        /// Unpowered aerodynamic trim CEILING during the high descent (above GuidanceHandAltM). The most
+        /// off-retrograde the fins may steer while gliding; below 4 km GuidanceAoaDeg tapers it to vertical
+        /// for the burn (the "restrict once on target" the real Falcon 9 flies).
+        ///
+        /// ---- ⛔ RAISED 15 -> 25 (user + flight_0826_083854..092722, 2026-08-26). ----
+        /// F9I's `F9L_AOA` is 15, and on 2026-08-12 I clamped the descent to it to stop a side-to-side
+        /// swing (the naive lean law commanded up to tan(40) = 0.838). That over-corrected: the four
+        /// 2026-08-26 droneship descents show the lean SATURATED at exactly tan(15) = 0.268 for the WHOLE
+        /// glide (44 km -> 5 km) - the fins want more authority (naiveLean > ceiling every tick) but are
+        /// pinned at 15 deg, so they cannot trim the crossrange dispersion (one flight landed 2.3 km cross)
+        /// nor arrest the residual downrange velocity (the stage passes OVER the deck at 11 km still carrying
+        /// ~156 m/s horizontal, then coasts +2.4 km past). The real booster steers AGGRESSIVELY on the grid
+        /// fins during the glide and only stands vertical once on target - so the restriction belongs near
+        /// the deck (the below-4 km taper + the powered burn), NOT across the whole descent. 25 deg gives
+        /// ~74% more lean authority (tan25/tan15 = 1.74x), well within recovery margin high up, and the
+        /// ClampLean magnitude fix means it can never point the lean backwards. [Tunable] - dial it in flight
+        /// (PluginData/tuning.cfg) without a rebuild; watch b_leanFrac (should now vary/rail higher) and the
+        /// downrange+cross miss.
+        /// </summary>
+        [Tunable] public static double AeroAoaDeg = 25.0;
 
         /// <summary>
         /// Descent LEAD time, seconds. The guided descent steers on the horizontal impact error PLUS this

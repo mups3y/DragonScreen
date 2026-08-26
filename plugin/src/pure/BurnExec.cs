@@ -77,6 +77,21 @@ namespace DragonScreen
         public const double MaxBurnDurationS = 300.0;
 
         /// <summary>
+        /// Residual-runaway abort. If the remaining Δv GROWS past <c>InitialDvMps * this + buffer</c> the
+        /// burn is delivering OFF-AXIS / WRONG-WAY, and neither the overshoot test nor the stop threshold
+        /// can catch it - a wrong-way delivery grows the residual in the SAME direction as the target, so
+        /// <see cref="BurnState.Overshot"/> never trips and <see cref="BurnState.RemainingDvMps"/> never
+        /// falls. flight_0825_163535: a Crew Dragon 4 m/s Draco burn that could not hold attitude (no wheels,
+        /// no gimbal - the Dracos must rotate AND translate at once) delivered ~1390 m/s the wrong way over
+        /// 8m39s, driving periapsis to -18 km. Abort the moment the residual runs away so a re-plan recovers
+        /// the orbit instead of wrecking it.
+        /// </summary>
+        public const double RunawayFactor = 1.5;
+        /// <summary>Absolute buffer on the runaway abort, m/s - keeps a tiny burn from tripping on the
+        /// alignment noise a few m/s of residual jitter produces.</summary>
+        public const double RunawayBufferMps = 3.0;
+
+        /// <summary>
         /// The acceleration the burn will actually run at: the cruise figure, or all we have if that
         /// is less. Floored so the lead below cannot divide by nothing.
         /// </summary>
@@ -180,7 +195,17 @@ namespace DragonScreen
         {
             if (s.Overshot) return true;
             if (s.RemainingDvMps < StopDvMps) return true;
+            if (Runaway(s)) return true;                          // delivering wrong-way - stop before it wrecks the orbit
             return s.ElapsedS > MaxBurnDurationS;
+        }
+
+        /// <summary>The residual has run away past what was commanded - the burn is thrusting off-axis /
+        /// wrong-way (see RunawayFactor). A distinct, catchable state, unlike the overshoot the wrong-way
+        /// case can never trip.</summary>
+        public static bool Runaway(BurnState s)
+        {
+            return s.InitialDvMps > 0.0
+                && s.RemainingDvMps > s.InitialDvMps * RunawayFactor + RunawayBufferMps;
         }
 
         /// <summary>Why it ended, for the log. Empty while it is still running.</summary>
@@ -188,6 +213,7 @@ namespace DragonScreen
         {
             if (s.Overshot) return "burned past the node";
             if (s.RemainingDvMps < StopDvMps) return "residual inside the stop threshold";
+            if (Runaway(s)) return "ABORTED - residual ran away (thrusting off-axis / wrong-way)";
             if (s.ElapsedS > MaxBurnDurationS) return "ABORTED - burn ran past its backstop";
             return "";
         }

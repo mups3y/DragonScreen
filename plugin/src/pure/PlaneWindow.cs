@@ -170,5 +170,93 @@ namespace DragonScreen
             if (x < 0.0) x += TAU;
             return x >= TAU ? 0.0 : x;
         }
+
+        // ==================================================================================
+        //  PLANE ∩ PHASE - pick WHICH plane crossing to launch on.
+        //
+        //  TimeToPlane above gives the launch TIME that matches the plane (RAAN). But a real Dragon
+        //  launch also matches the PHASE: it picks the DAY on which the plane crossing coincides with an
+        //  acceptable along-track gap to the station, so the rendezvous is a short catch-up rather than
+        //  half an orbit of phasing. Matching only the plane (taking the first crossing) is what left us
+        //  118 deg / 14,000 km behind the ISS on flight_0825_195232 - coplanar (rel-inc 0.41 deg) but
+        //  useless for a rendezvous. The plane crossing recurs every sidereal day; because the station's
+        //  period does not divide the day, its phase at each successive crossing steps by a fixed amount,
+        //  so a few days of candidates span the circle and one of them lands the phase where we want it.
+        // ==================================================================================
+
+        /// <summary>
+        /// Among the recurring north-going plane crossings (one per sidereal day), pick the one to launch
+        /// on. The plane is matched at EVERY crossing (same geometry each sidereal day); they differ only in
+        /// the target's phase, which advances by <paramref name="stepDeg"/> per crossing. Preference order:
+        ///   1. the EARLIEST crossing whose lead lands in the acceptance band [acceptMinDeg, acceptMaxDeg]
+        ///      (target safely AHEAD by a bounded, monotonically-closing gap) - minimises pre-launch warp;
+        ///   2. failing that, the crossing whose lead is closest to <paramref name="desiredLeadDeg"/>.
+        /// The band matters more than hitting an exact lead: at the ISS the phase steps ~170 deg/crossing,
+        /// so an exact target can be many days out, whereas "target ahead in a workable band, soonest" is
+        /// both cheaper in warp and all the rendezvous phasing needs.
+        ///
+        /// firstWaitS      seconds to the k=0 crossing (from TimeToPlane).
+        /// siderealS       the body's sidereal rotation period; crossings recur every one (&gt; 0).
+        /// phase0Deg       the target's along-track lead over OUR insertion at the k=0 crossing, deg,
+        ///                 POSITIVE = target AHEAD (we are behind; the lower/faster chaser closes it).
+        /// stepDeg         how much that lead advances per crossing = Norm360(360*siderealS/targetPeriodS).
+        /// acceptMinDeg..acceptMaxDeg   the usable lead band (target ahead, bounded away from 0 so we never
+        ///                 insert already past the raise lead, and under ~180 so the catch-up is monotonic).
+        /// desiredLeadDeg  the fallback target if no crossing lands in the band.
+        /// minWaitS        never pick a crossing sooner than this (warp lead for the crew).
+        /// maxWaitS        never wait longer than this.
+        ///
+        /// Returns the chosen crossing's wait, its index k, and the predicted lead there. Ties (and the
+        /// band) go to the EARLIEST crossing. With no recurrence (siderealS &lt;= 0) returns k=0 unchanged.
+        /// </summary>
+        public static void PickPhasedCrossing(
+            double firstWaitS, double siderealS, double phase0Deg, double stepDeg,
+            double acceptMinDeg, double acceptMaxDeg, double desiredLeadDeg,
+            double minWaitS, double maxWaitS,
+            out double waitS, out int index, out double predictedLeadDeg)
+        {
+            waitS = firstWaitS; index = 0; predictedLeadDeg = Norm360(phase0Deg);
+            if (siderealS <= 0.0) return;                       // no recurrence to search over
+            if (maxWaitS < minWaitS) maxWaitS = minWaitS;       // tolerate a short/swapped cap
+
+            bool haveBest = false;                              // closest-to-desired fallback
+            double bestErr = 0.0;
+
+            int kMax = (int)(maxWaitS / siderealS) + 2;         // cap the search; a tiny sidereal can't loop forever
+            if (kMax > 100000) kMax = 100000;
+            if (kMax < 0) kMax = 0;
+
+            for (int k = 0; k <= kMax; k++)
+            {
+                double wait = firstWaitS + k * siderealS;
+                if (wait > maxWaitS + 0.5) break;
+                if (wait < minWaitS) continue;
+                double phase = Norm360(phase0Deg + k * stepDeg);
+
+                // Pass 1: earliest crossing inside the acceptance band wins outright.
+                if (phase >= acceptMinDeg && phase <= acceptMaxDeg)
+                { waitS = wait; index = k; predictedLeadDeg = phase; return; }
+
+                // Pass 2 (only used if the band is never hit): track closest-to-desired, ties earliest.
+                double err = System.Math.Abs(Wrap180(phase - desiredLeadDeg));
+                if (!haveBest || err < bestErr - 1e-9)
+                { haveBest = true; bestErr = err; waitS = wait; index = k; predictedLeadDeg = phase; }
+            }
+        }
+
+        /// <summary>Wrap to [0, 360).</summary>
+        public static double Norm360(double d)
+        {
+            d %= 360.0;
+            if (d < 0.0) d += 360.0;
+            return d;
+        }
+
+        /// <summary>Wrap to (-180, 180].</summary>
+        public static double Wrap180(double d)
+        {
+            d = Norm360(d);
+            return (d > 180.0) ? d - 360.0 : d;
+        }
     }
 }

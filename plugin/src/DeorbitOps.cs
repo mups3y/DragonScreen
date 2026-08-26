@@ -223,6 +223,10 @@ namespace DragonScreen
 
             ship = v;
             Engaged = true;
+            // ⛔ OPEN THE NOSE CONE FOR THE DRACO DEORBIT BURN. The Dragon deorbits on its Dracos, and a
+            // closed shroud SHIELDS the forward ones ("RCS obstructed") so the burn would deliver nothing.
+            // The entry sequence (and ChuteGuard) shut it again before the atmosphere. Harmless if open.
+            DockShroud.Open(v);
             aligned = false;
             haveImpact = false;
             startedAt = Planetarium.GetUniversalTime();
@@ -235,13 +239,30 @@ namespace DragonScreen
             // 86.8 x 85.8. F9I runs `StPhaseToDeorbitOrbit` before handing over to the de-orbit for
             // exactly this reason, and the phase-down knows how to skip itself when it is unnecessary
             // or impossible - so asking is free and not asking is a miss.
+            //
+            // ⛔ BUT `DeorbitOrbit`'s 85 x 79 km target is a STOCK-KERBIN orbit, and on RSS EARTH that
+            // periapsis (79 km) sits BELOW the 140 km atmosphere - it is not a valid orbit at all, so
+            // every phase-down burn toward it is refused by NodeExecutor's periapsis floor (a futile
+            // refuse-loop), and the crew ends up de-orbiting from full station altitude with Kerbin-
+            // fitted constants. Only phase down when the landing orbit is a REAL orbit for THIS body
+            // (target periapsis above its atmosphere): stock Kerbin (70 km atmo) still phases down; RSS
+            // Earth skips straight to the closed-loop de-orbit, which is what the real Crew Dragon does -
+            // it de-orbits from near its orbit, not from a low parking pass. Body-detect, not RSS-check.
             phaseDownPending = false;
             passFound = false; warpRequested = false;
             trackMissM = 0.0; offPlaneDeg = 0.0; goTimeUt = 0.0;
-            if (!DeorbitOrbit.AlreadyOnOrbit(v.orbit.ApA, v.orbit.PeA))
+            bool landingOrbitValidHere = DeorbitOrbit.TargetPeriapsisM > v.mainBody.atmosphereDepth;
+            if (landingOrbitValidHere && !DeorbitOrbit.AlreadyOnOrbit(v.orbit.ApA, v.orbit.PeA))
             {
                 PhaseDownOps.Engage(v);
                 phaseDownPending = !PhaseDownOps.Finished;
+            }
+            else if (!landingOrbitValidHere)
+            {
+                Debug.Log(Tag + "phase-down skipped - the " + (DeorbitOrbit.TargetPeriapsisM / 1000.0).ToString("F0")
+                    + " km landing orbit is below this body's " + (v.mainBody.atmosphereDepth / 1000.0).ToString("F0")
+                    + " km atmosphere (RSS Earth), so it is not a valid orbit here. De-orbiting closed-loop "
+                    + "from the current orbit, as the real Crew Dragon does.");
             }
 
             st = new DeorbitState();

@@ -45,6 +45,16 @@ namespace DragonScreen
         public double DvX, DvY, DvZ;
         /// <summary>Relative speed on arrival. Sizes the braking burn and is worth reporting.</summary>
         public double ArrivalRelSpeed;
+        /// <summary>The ROTATING-frame relative velocity right AFTER the departure impulse (v0+). This is
+        /// what the vehicle coasts on if the arrival burn is never made - the input to the passive-abort
+        /// free-drift check.</summary>
+        public double Vx1, Vy1, Vz1;
+        /// <summary>Closest the passive free-drift (no arrival burn) comes to the station over the checked
+        /// coast, metres. Large = a missed burn safely misses the station. 0 when not evaluated.</summary>
+        public double MinFreeDriftRangeM;
+        /// <summary>True when the passive free-drift clears the required keep-out margin (or the check was
+        /// disabled). False means this transfer would let a missed arrival burn breach the keep-out sphere.</summary>
+        public bool PassiveAbortSafe;
         public string Note;
     }
 
@@ -117,6 +127,10 @@ namespace DragonScreen
             r.DvY = w1y - v0y;
             r.DvZ = w1z - v0z;
 
+            // The rotating-frame velocity the vehicle coasts on if the arrival burn is never made.
+            r.Vx1 = w1x; r.Vy1 = w1y; r.Vz1 = w1z;
+            r.PassiveAbortSafe = true;          // until a caller runs the free-drift check
+
             // Arrival relative velocity: vf = Phi_vr*r0 + Phi_vv*v0+.
             double avx = 3.0 * s.N * sn * s.Rx + cs * w1x + 2.0 * sn * w1y;
             double avy = -6.0 * s.N * (1.0 - cs) * s.Rx - 2.0 * sn * w1x + (4.0 * cs - 3.0) * w1y;
@@ -133,27 +147,135 @@ namespace DragonScreen
             return System.Math.Sqrt(r.DvX * r.DvX + r.DvY * r.DvY + r.DvZ * r.DvZ);
         }
 
+        // ================= PASSIVE ABORT (offset targeting made a proven property) =================
+        //
+        // The real Crew Dragon rule (docs/REAL_CREW_DRAGON_MISSION.md): a departure burn must be aimed so
+        // that a DISPERSED trajectory - one where the arrival (braking) burn never fires - still misses the
+        // keep-out sphere. Aiming behind is the intent; this is the check that makes it a guarantee. After
+        // the departure impulse the vehicle coasts on the rotating-frame velocity v0+ (CwSolution.Vx1..);
+        // we propagate that free drift with the CW state-transition matrix and require the closest approach
+        // to the station over a full orbit to stay outside the keep-out margin.
+
+        /// <summary>
+        /// CW free-drift position at time <paramref name="t"/> in the rotating LVLH frame, from a
+        /// rotating-frame state (position r0, rotating-frame velocity v0). The position rows of the CW
+        /// state-transition matrix - identical to the free-drift terms Solve uses, so a coast started from
+        /// a solved v0+ reproduces the aim point at the transfer time and continues past it.
+        /// </summary>
+        public static void FreeDrift(double x0, double y0, double z0,
+                                     double vx0, double vy0, double vz0,
+                                     double n, double t,
+                                     out double x, out double y, out double z)
+        {
+            double nt = n * t, s = System.Math.Sin(nt), c = System.Math.Cos(nt);
+            x = (4.0 - 3.0 * c) * x0 + (s / n) * vx0 + (2.0 / n) * (1.0 - c) * vy0;
+            y = 6.0 * (s - nt) * x0 + y0 - (2.0 / n) * (1.0 - c) * vx0 + ((4.0 * s - 3.0 * nt) / n) * vy0;
+            z = c * z0 + (s / n) * vz0;
+        }
+
+        /// <summary>
+        /// The closest the passive free-drift comes to the station over [0, horizonS], sampling
+        /// <paramref name="samples"/>+1 points. Starts from rotating-frame state (r0, v0). Used to score a
+        /// transfer's passive-abort safety: large = a missed arrival burn safely misses the station.
+        /// </summary>
+        public static double FreeDriftMinRangeM(double x0, double y0, double z0,
+                                                double vx0, double vy0, double vz0,
+                                                double n, double horizonS, int samples)
+        {
+            if (n <= 0.0 || horizonS <= 0.0) return 0.0;
+            if (samples < 1) samples = 1;
+            double min = double.MaxValue;
+            for (int i = 0; i <= samples; i++)
+            {
+                double t = horizonS * i / samples;
+                double x, y, z;
+                FreeDrift(x0, y0, z0, vx0, vy0, vz0, n, t, out x, out y, out z);
+                double rr = System.Math.Sqrt(x * x + y * y + z * z);
+                if (rr < min) min = rr;
+            }
+            return min;
+        }
+
+        /// <summary>Default samples for the free-drift coast scan - fine enough to catch a grazing pass.</summary>
+        public const int DefaultCoastSamples = 240;
+
         /// <summary>
         /// Pick the cheapest transfer time by sweeping. F9I sweeps rather than solving analytically
         /// because the cost is not monotonic in time of flight - there are singular times in the
         /// middle of the range, and the cheapest answer is often just to one side of one.
+        ///
+        /// (No passive-abort filter - the cheapest non-singular transfer, as before.)
         /// </summary>
         public static CwSolution Best(CwState s, double minTofS, double maxTofS, int steps,
                                       double aimBehindM, out double bestTofS)
+        {
+            return Best(s, minTofS, maxTofS, steps, aimBehindM, out bestTofS, 0.0, 0.0, 0);
+        }
+
+        /// <summary>
+        /// Pick the best transfer time by sweeping, with a PASSIVE-ABORT preference: among the
+        /// non-singular transfers, prefer the cheapest whose free drift (arrival burn never made) stays at
+        /// least <paramref name="passiveSafeM"/> from the station over one orbit past arrival. If none is
+        /// safe (the geometry forces a close pass), return the SAFEST transfer instead and flag it - the
+        /// keep-out backstop then catches an actual breach, but we never knowingly pick a less-safe path.
+        ///
+        /// passiveSafeM &lt;= 0 disables the filter (identical to the plain Best). coastCheckPeriodS is one
+        /// station orbital period; the coast is checked over [0, tof + coastCheckPeriodS].
+        /// </summary>
+        public static CwSolution Best(CwState s, double minTofS, double maxTofS, int steps,
+                                      double aimBehindM, out double bestTofS,
+                                      double passiveSafeM, double coastCheckPeriodS, int coastSamples)
         {
             CwSolution best = new CwSolution();
             best.Ok = false;
             bestTofS = 0.0;
             if (steps < 1) steps = 1;
+            if (coastSamples < 1) coastSamples = DefaultCoastSamples;
+            bool filter = passiveSafeM > 0.0 && coastCheckPeriodS > 0.0;
 
-            double bestCost = double.MaxValue;
+            double bestSafeCost = double.MaxValue;     // cheapest among passively-safe transfers
+            double bestSafeTof = 0.0; CwSolution bestSafe = new CwSolution(); bool haveSafe = false;
+            double bestMargin = -1.0;                  // safest transfer, if none clears the margin
+            double bestMarginTof = 0.0; CwSolution bestMarginSol = new CwSolution(); bool haveAny = false;
+
             for (int i = 0; i <= steps; i++)
             {
                 double tof = minTofS + (maxTofS - minTofS) * i / steps;
                 CwSolution c = Solve(s, tof, aimBehindM);
                 if (!c.Ok) continue;
+
+                double margin = double.MaxValue;
+                if (filter)
+                {
+                    margin = FreeDriftMinRangeM(s.Rx, s.Ry, s.Rz, c.Vx1, c.Vy1, c.Vz1,
+                                                s.N, tof + coastCheckPeriodS, coastSamples);
+                    c.MinFreeDriftRangeM = margin;
+                    c.PassiveAbortSafe = margin >= passiveSafeM;
+                }
+
                 double cost = DvMagnitude(c);
-                if (cost < bestCost) { bestCost = cost; best = c; bestTofS = tof; }
+                if (!haveAny || margin > bestMargin)
+                { haveAny = true; bestMargin = margin; bestMarginTof = tof; bestMarginSol = c; }
+
+                if (!filter || c.PassiveAbortSafe)
+                {
+                    if (cost < bestSafeCost) { bestSafeCost = cost; bestSafeTof = tof; bestSafe = c; haveSafe = true; }
+                }
+            }
+
+            if (haveSafe)
+            {
+                best = bestSafe; bestTofS = bestSafeTof;
+            }
+            else if (haveAny)
+            {
+                // No transfer clears the passive-abort margin - take the safest and say so. Not a burn to
+                // refuse (that would freeze the approach); the keep-out backstop guards an actual breach.
+                best = bestMarginSol; bestTofS = bestMarginTof;
+                if (filter)
+                    best.Note = "no passively-safe transfer (closest free-drift "
+                              + bestMargin.ToString("F0") + " m < " + passiveSafeM.ToString("F0")
+                              + " m) - flew the safest available";
             }
             if (!best.Ok) best.Note = "no non-singular transfer in the window";
             return best;

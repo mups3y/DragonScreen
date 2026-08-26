@@ -103,6 +103,19 @@ public static class BurnExecTest
               BurnExec.CompletionNote(runaway).Contains("ABORTED"),
               BurnExec.CompletionNote(runaway));
 
+        // ---- ⛔ RESIDUAL RUNAWAY: a WRONG-WAY burn grows its residual past what was commanded. ----
+        // The overshoot test can never catch this (the wrong-way delivery grows the remaining in the SAME
+        // direction as the target), so without this abort a Dragon Draco burn thrusting off-axis ran 8m39s
+        // and drove periapsis to -18 km (flight_0825_163535). 80 > 50*1.5+3 = a runaway, well before the
+        // 300 s backstop (elapsed 5 s here).
+        Check("a residual grown past the commanded Δv is a runaway abort",
+              BurnExec.Complete(Burning(80.0, 50.0, 20.0, 5.0)), "");
+        Check("named as wrong-way, not the backstop",
+              BurnExec.CompletionNote(Burning(80.0, 50.0, 20.0, 5.0)).Contains("wrong-way"),
+              BurnExec.CompletionNote(Burning(80.0, 50.0, 20.0, 5.0)));
+        Check("but a residual only a little over the commanded Δv is NOT a runaway",
+              !BurnExec.Complete(Burning(52.0, 50.0, 20.0, 5.0)), "");
+
         // ---- ALIGN BEFORE IGNITING, AND BUY RCS ONLY WHEN THE CLOCK SAYS SO ----
         // "Every working burn in this project does this and the one that did not emptied a tank
         // slewing at full throttle."

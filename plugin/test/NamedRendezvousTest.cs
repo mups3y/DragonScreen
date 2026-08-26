@@ -150,6 +150,57 @@ public static class NamedRendezvousTest
         Check("CW TRANSFER time-of-flight is a sane sub-orbit time",
               bestTof >= 300.0 && bestTof <= period, (bestTof / 60.0).ToString("F1") + " min");
 
+        // ================= PASSIVE ABORT (free-drift after a missed arrival burn) =================
+        // FreeDrift at t=0 is exactly r0.
+        {
+            double x0, y0, z0;
+            CwTargeting.FreeDrift(cw.Rx, cw.Ry, cw.Rz, 1.0, 2.0, 3.0, nStn, 0.0, out x0, out y0, out z0);
+            Check("free-drift at t=0 returns r0",
+                  Near(x0, cw.Rx, 1e-6) && Near(y0, cw.Ry, 1e-6) && Near(z0, cw.Rz, 1e-6),
+                  x0.ToString("F1") + "," + y0.ToString("F1"));
+        }
+
+        // A solved transfer's free-drift (on v0+ = Vx1..) reproduces the aim point (0, -aim, 0) at tof.
+        {
+            double x1, y1, z1;
+            CwTargeting.FreeDrift(cw.Rx, cw.Ry, cw.Rz, sol.Vx1, sol.Vy1, sol.Vz1, nStn, bestTof,
+                                  out x1, out y1, out z1);
+            Check("solved transfer's free-drift reaches the aim point at tof",
+                  Near(x1, 0.0, 5.0) && Near(y1, -NamedRendezvous.AiPointM, 5.0) && Near(z1, 0.0, 5.0),
+                  x1.ToString("F1") + "," + y1.ToString("F1") + "," + z1.ToString("F1"));
+        }
+
+        // A trajectory heading straight through the origin has a small min range; one parked far does not.
+        {
+            // Start 5 km "below", drifting up toward the station at 5 m/s radial - it will pass close.
+            double minToward = CwTargeting.FreeDriftMinRangeM(-5000.0, 0.0, 0.0, 5.0, 0.0, 0.0,
+                                                              nStn, period, 240);
+            Check("a free-drift aimed at the station reports a small min range",
+                  minToward < 5000.0, minToward.ToString("F0"));
+            // A stationary co-elliptic point 5 km below never approaches - min stays near 5 km.
+            double minSafe = CwTargeting.FreeDriftMinRangeM(-5000.0, 0.0, 0.0, 0.0, 1.5 * nStn * 5000.0, 0.0,
+                                                            nStn, period, 240);
+            Check("a co-elliptic free-drift keeps its distance (min range large)",
+                  minSafe > 1000.0, minSafe.ToString("F0"));
+        }
+
+        // The passive-abort Best sets the margin + flag, and a returned SAFE solution really clears it.
+        {
+            double safeM = WaypointApproach.KeepOutRadiusM + 50.0;
+            double tof2;
+            CwSolution safe = CwTargeting.Best(cw, 300.0, 0.9 * period, 60, NamedRendezvous.AiPointM,
+                                               out tof2, safeM, period, CwTargeting.DefaultCoastSamples);
+            Check("passive-abort Best returns a solution", safe.Ok, safe.Note);
+            Check("passive-abort margin is populated", safe.MinFreeDriftRangeM > 0.0,
+                  safe.MinFreeDriftRangeM.ToString("F0"));
+            Check("a solution flagged passive-abort-SAFE really clears the margin",
+                  !safe.PassiveAbortSafe || safe.MinFreeDriftRangeM >= safeM - 1e-6,
+                  "safe=" + safe.PassiveAbortSafe + " margin=" + safe.MinFreeDriftRangeM.ToString("F0"));
+            Check("passive-abort aim behind (7.5 km) is comfortably safe here",
+                  safe.PassiveAbortSafe && safe.MinFreeDriftRangeM >= safeM,
+                  safe.MinFreeDriftRangeM.ToString("F0"));
+        }
+
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
     }

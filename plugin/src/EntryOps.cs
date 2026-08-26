@@ -189,6 +189,47 @@ namespace DragonScreen
         public static LandingMethod Method = LandingMethod.Parachute;
 
         /// <summary>
+        /// ⛔ THE REAL PASSIVE-CoM LIFTING ENTRY (RO AdjustableCoMShifter "Descent Mode"). ON by default.
+        ///
+        /// The real Crew Dragon trims to its entry angle of attack PASSIVELY - an offset centre of mass
+        /// makes the blunt capsule sit at an AoA in the airflow, generating lift for free - and rolls to
+        /// bank that lift. The alternative FORCES the AoA with the attitude controller, which on RO (no
+        /// reaction wheels) spends RCS the whole descent holding the nose off retrograde against the aero
+        /// restoring moment. This enables Descent Mode (the CoM offset) and modulates it with
+        /// offsetPercent = the guidance's LiftFraction, so the capsule flies the SAME commanded lift
+        /// aerodynamically instead of on thrusters - the real technique, and it saves the entry's RCS.
+        ///
+        /// ⛔ ON because there is NO proven RO entry to protect (user 2026-08-26): we have not flown a good
+        /// RO return, so the real technique is what we fly, not a fallback. It is a live [Tunable], so a
+        /// flight that shows the roll geometry / trim signs are wrong can flip it straight off and revert to
+        /// the active-AoA steering. When on, Descent Mode is released again at Handover so the chute descent
+        /// is unaffected.
+        /// </summary>
+        [Tunable] public static bool PassiveComEntry = true;
+
+        /// <summary>
+        /// ⛔ RE-ENTRY STEERING-LIMITS TEST (user 2026-08-26). Set by ReturnFallback when we come home to
+        /// land ANYWHERE - with no target to protect, the entry exercises the full PITCH (range) and YAW
+        /// (cross-range) steering envelope, holding each extreme long enough to measure its trajectory
+        /// response, and BACKS OFF to retrograde if the heat shield nears its limit. Fully instrumented
+        /// (EntryHeat + the he_ recorder block: shield temp, heat flux, ablator remaining) so the autopilot
+        /// can LEARN the real RO steering authority and its heating/ablator cost. A live [Tunable] - the
+        /// crew can also flip it on for a deliberate characterisation entry.
+        /// </summary>
+        [Tunable] public static bool SteeringTest = false;
+        /// <summary>Seconds to hold each pitch/yaw extreme, so its trajectory response is measurable.</summary>
+        [Tunable] public static double SweepSegmentS = 20.0;
+        /// <summary>Back off to retrograde above this shield-temperature fraction (find the limit, do not
+        /// exceed it).</summary>
+        [Tunable] public static double SweepBackoffTempFrac = 0.92;
+        /// <summary>...or below this ablator-remaining fraction.</summary>
+        [Tunable] public static double SweepBackoffAblatorFrac = 0.15;
+        /// <summary>Which sweep segment is live (0 pitch / 1 yaw-right / 2 yaw-left / 3 neutral; -1 backed
+        /// off). For the recorder.</summary>
+        public static int SweepSegment = -1;
+        private static double sweepStartAt = -1.0;
+
+        /// <summary>
         /// The controller's own memory, exposed for the recorder.
         ///
         /// ⛔ `LiftMin` IS THE ONE NUMBER THAT JUDGES AN ENTRY. Zero at the end means the loop never
@@ -280,6 +321,7 @@ namespace DragonScreen
             VerticalCmd = 0.0; LateralCmd = 0.0; AoaCmdDeg = 0.0; ThrottleCmd = 0.0;
             AlongTrackM = 0.0; CrossTrackM = 0.0; MissM = -1.0; WantLongM = 0.0;
             TrimErrorM = 0.0; BelowProfile = false;
+            sweepStartAt = -1.0; SweepSegment = -1;   // sweep state; SteeringTest (the mode) is owned externally
         }
 
         private static void Go(EntryStage s)
@@ -540,7 +582,23 @@ namespace DragonScreen
             Predict(EntryGuidance.CapsuleBcKgM2);
             bool canSteer = EntryGuidance.CanSteer(ship.dynamicPressurekPa);
 
-            if (haveImpact && canSteer)
+            // ---- ⛔ STEERING-LIMITS TEST: sweep the pitch/yaw envelope instead of aiming (SteeringTest). ----
+            // Landing anywhere, so exercise the full pitch (range) and yaw (cross-range) steering and record
+            // the response as the capsule falls THROUGH every atmosphere layer - the he_ recorder block tags
+            // each sample with density/q/altitude and heat, so the per-layer authority can be read out. Still
+            // computes the impact error, so the trajectory response to each command is logged too.
+            if (SteeringTest && canSteer)
+            {
+                if (haveImpact)
+                {
+                    double sa, sc, sm;
+                    Orbital.DownCross(ship.mainBody.Radius, ship.latitude, ship.longitude,
+                                      impactLat, impactLon, TargetLatDeg, TargetLonDeg, out sa, out sc, out sm);
+                    AlongTrackM = sa; CrossTrackM = sc; MissM = sm;
+                }
+                SteeringSweep(alt, now);
+            }
+            else if (haveImpact && canSteer)
             {
                 noPredictionReported = false;
 
@@ -639,11 +697,32 @@ namespace DragonScreen
             // ---- two scalars into an attitude ----
             Vector3d lift = (upC * (VerticalCmd * EntryGuidance.PitchSign))
                           + (rt * (LateralCmd * EntryGuidance.YawSign));
+
+            // ---- ⛔ REAL PASSIVE-CoM LIFTING ENTRY (opt-in, see PassiveComEntry). ----
+            // Enable the RO AdjustableCoMShifter "Descent Mode" so the offset CoM PASSIVELY trims the
+            // capsule to its AoA (aero lift), and scale that offset (offsetPercent) to the guidance's
+            // LiftFraction - so the SAME commanded lift is flown aerodynamically instead of forced on RCS.
+            // The active steering below still points the lift; the CoM makes holding it nearly free.
+            if (PassiveComEntry)
+            {
+                VehicleControl.SetDescentMode(ship, true);
+                VehicleControl.SetComOffset(ship, EntryGuidance.LiftFraction(VerticalCmd, LateralCmd));
+            }
+
             if (lift.magnitude > 0.001)
             {
+                // ⛔ BANK-TO-STEER: PITCH holds the angle of attack, ROLL banks the lift - NO YAW.
+                // (user 2026-08-26, MANUAL entry: pitch (S) and roll (Q/E) were the only controllable
+                // inputs; every yaw input induced instability, because a blunt capsule is aerodynamically
+                // STABLE in yaw and forcing it fights the airflow.) Rolling the capsule's TOP onto the
+                // desired lift direction makes the nose's AoA tilt toward it a PURE PITCH, and the roll
+                // itself IS the bank - the real Apollo/Crew-Dragon lifting-entry technique. The old code
+                // used `upC` as the roll reference and put the cross-range command into YAW, which is
+                // exactly the instability the crew felt.
+                Vector3d liftDir = lift.normalized;
                 AoaCmdDeg = EntryGuidance.AoaCommandDeg(VerticalCmd, LateralCmd);
-                Vector3d fwd = -vn + (Math.Tan(AoaCmdDeg * Math.PI / 180.0) * lift.normalized);
-                AttitudeController.Ascent.SteerTo(ship, fwd, upC);
+                Vector3d fwd = -vn + (Math.Tan(AoaCmdDeg * Math.PI / 180.0) * liftDir);
+                AttitudeController.Ascent.SteerTo(ship, fwd, liftDir);
             }
             else
             {
@@ -652,10 +731,55 @@ namespace DragonScreen
             }
         }
 
+        /// <summary>
+        /// The pitch/yaw steering-limits sweep (SteeringTest). Sets VerticalCmd (pitch/range) and
+        /// LateralCmd (yaw/cross-range) to their extremes in turn, each held SweepSegmentS so its
+        /// trajectory response is measurable, cycling as the capsule descends through the atmosphere
+        /// layers. Backs off to retrograde if the heat shield nears its temperature or ablator limit -
+        /// finding the limit without exceeding it. The existing actuation below flies whatever it sets.
+        /// </summary>
+        private static void SteeringSweep(double alt, double now)
+        {
+            // Heat safety: at the edge, hold retrograde (minimum lift/heat). This both survives and
+            // records exactly where the layer's limit is.
+            HeatSample h = EntryHeat.Sample(ship);
+            if (h.Present && (h.ShieldTempFrac > SweepBackoffTempFrac || h.AblatorFrac < SweepBackoffAblatorFrac))
+            {
+                VerticalCmd = 0.0; LateralCmd = 0.0; SweepSegment = -1;
+                Note = "STEERING TEST - BACKED OFF at the heat limit (shield "
+                     + (h.ShieldTempFrac * 100.0).ToString("F0") + "% / ablator "
+                     + (h.AblatorFrac * 100.0).ToString("F0") + "%), " + (alt / 1000.0).ToString("F1") + " km";
+                return;
+            }
+
+            if (sweepStartAt <= 0.0) sweepStartAt = now;
+            double seg = SweepSegmentS > 1.0 ? SweepSegmentS : 1.0;
+            int s = ((int)((now - sweepStartAt) / seg)) % 4;
+            SweepSegment = s;
+            switch (s)
+            {
+                case 0: VerticalCmd = -1.0; LateralCmd =  0.0; break;   // PITCH to the limit (max range authority)
+                case 1: VerticalCmd =  0.0; LateralCmd =  1.0; break;   // YAW right to the limit
+                case 2: VerticalCmd =  0.0; LateralCmd = -1.0; break;   // YAW left to the limit
+                default: VerticalCmd = 0.0; LateralCmd =  0.0; break;   // neutral - the ballistic baseline
+            }
+            Note = "STEERING TEST seg " + s + "  pitch " + VerticalCmd.ToString("F1")
+                 + " / yaw " + LateralCmd.ToString("F1") + "  " + (alt / 1000.0).ToString("F1")
+                 + " km  q " + ship.dynamicPressurekPa.ToString("F2") + " kPa";
+        }
+
         /// <summary>Entry guidance is finished. Say how it went, then pick a landing method.</summary>
         private static void Handover()
         {
             AttitudeController.Ascent.UllageFore = 0.0;
+
+            // Leaving the lifting phase: release the passive-CoM Descent Mode so the chute descent flies
+            // with the CoM centred (a no-op if it was never on).
+            if (PassiveComEntry && ship != null)
+            {
+                VehicleControl.SetDescentMode(ship, false);
+                VehicleControl.SetComOffset(ship, 0.0);
+            }
 
             // ⛔ THE OPEN-LOOP SIGNATURE. A run that never commanded any shortening had nothing it
             // could do: the aim was too short and the miss is all aim error, not guidance error. F9I's
@@ -995,7 +1119,10 @@ namespace DragonScreen
         }
 
         private static int Deploy(PartMatch m) { return DoEvent(m, "deploy chute"); }
-        private static int Cut(PartMatch m) { return DoEvent(m, "cut chute"); }
+        // ⛔ "cut main chute" is the RealChute handle's exact GUI name (craft dump: the event AND action
+        // are both "Cut main chute"); the old "cut chute" matched NEITHER, so a propulsive landing could
+        // never cut its chutes. DoEvent matches the GUI name exactly, so it must be the real one.
+        private static int Cut(PartMatch m) { return DoEvent(m, "cut main chute"); }
 
         /// <summary>
         /// Fire a named capability on every matching part - as an EVENT if the part offers one, and

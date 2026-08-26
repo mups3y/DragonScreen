@@ -291,10 +291,21 @@ namespace DragonScreen
         /// to prevent, and the coast prevented none of it.
         /// </summary>
         public double RangeToBoosterM;
-        /// <summary>Thrust the vehicle could make right now, kN. Zero means nothing is lit.</summary>
+        /// <summary>Thrust the vehicle could make right now, kN. Zero means nothing is lit. This is the
+        /// LIVE (throttled) finalThrust - what the engines are producing at the current throttle.</summary>
         public double AvailableThrust;
-        /// <summary>Total vehicle mass, tonnes. With AvailableThrust it gives the current acceleration,
-        /// which the g-limit throttle caps at the crewed profile (Crew Dragon ~4 g) - see GThrottle.</summary>
+        /// <summary>
+        /// FULL-THROTTLE thrust of the lit engines, kN - what they would make at throttle 1.0. ⛔ THE
+        /// G-LIMIT NEEDS THIS, NOT AvailableThrust. Feeding the throttled thrust to GThrottle made it
+        /// compute the ALREADY-throttled acceleration as if it were the full-throttle one, so as soon as it
+        /// throttled down to the cap the "full accel" read the cap, GThrottle returned 1.0, and the engine
+        /// went back to full - oscillating 3.5 g <-> 4.5 g and peaking ~4.2 g (user-observed). The cap on
+        /// full-throttle accel is stable: throttle = gLimit / (MaxThrust/mass), independent of the current
+        /// throttle. Zero = unknown, and GThrottle then does not limit.
+        /// </summary>
+        public double MaxThrustKn;
+        /// <summary>Total vehicle mass, tonnes. With MaxThrustKn it gives the FULL-THROTTLE acceleration,
+        /// which the g-limit throttle caps at the crewed profile (Crew Dragon ~3.5 g) - see GThrottle.</summary>
         public double MassT;
         public bool Landed;
         /// <summary>True once the booster is gone - the two stages fly different laws.</summary>
@@ -879,16 +890,20 @@ namespace DragonScreen
 
         /// <summary>
         /// Throttle to hold acceleration at or below <paramref name="gLimitMps2"/> - the crewed-ascent g
-        /// cap (Crew Dragon ~4 g). Zero limit returns 1 (stock Kerbin, unlimited). Acceleration at full
-        /// thrust is AvailableThrust(kN)/MassT(t) = m/s^2 directly; to cap it, scale throttle by
-        /// gLimit/fullAccel. Only bites once the stage is light enough that full thrust would exceed the
-        /// limit - i.e. the last seconds before MECO - so early ascent is untouched. Same 0.35 floor as
-        /// QThrottle. MECO stays speed-capped, so this only spreads the final burn over a little more time.
+        /// cap (Crew Dragon ~3.5 g). Zero limit returns 1 (stock Kerbin, unlimited).
+        ///
+        /// ⛔ SIZED ON FULL-THROTTLE THRUST (MaxThrustKn), NOT the live throttled thrust. Full-throttle
+        /// acceleration is MaxThrustKn/MassT (m/s^2 directly, kN/t == m/s^2); the throttle that caps the
+        /// FELT g there is gLimit/fullAccel, which is stable because MaxThrustKn does not change when we
+        /// throttle. Using the live thrust instead made the loop oscillate above the cap (~4.2 g observed) -
+        /// see AscentInputs.MaxThrustKn. Only bites once the stage is light enough that full thrust would
+        /// exceed the limit - the last seconds before MECO - so early ascent is untouched. Same 0.35 floor
+        /// as QThrottle. MECO stays speed-capped, so this only spreads the final burn over a little more time.
         /// </summary>
         public static double GThrottle(AscentInputs s, double gLimitMps2)
         {
-            if (gLimitMps2 <= 0.0 || s.MassT <= 0.0 || s.AvailableThrust <= 0.0) return 1.0;
-            double fullAccel = s.AvailableThrust / s.MassT;   // kN/t == m/s^2
+            if (gLimitMps2 <= 0.0 || s.MassT <= 0.0 || s.MaxThrustKn <= 0.0) return 1.0;
+            double fullAccel = s.MaxThrustKn / s.MassT;       // full-throttle accel, kN/t == m/s^2
             if (fullAccel <= gLimitMps2) return 1.0;
             double th = gLimitMps2 / fullAccel;
             if (th < 0.35) th = 0.35;

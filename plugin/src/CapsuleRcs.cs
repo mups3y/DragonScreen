@@ -59,12 +59,9 @@ namespace DragonScreen
             if (System.Math.Abs(percent - lastPct) < 0.5) return;
             lastPct = percent;
 
-            List<Part> ours = DockedSide.Ours(v);
-            for (int i = 0; i < ours.Count; i++)
-            {
-                List<ModuleRCS> rcss = ours[i].Modules.GetModules<ModuleRCS>();
-                for (int k = 0; k < rcss.Count; k++) rcss[k].thrustPercentage = p;
-            }
+            // Our side of any docking joint only (never the station's RCS), through the unified
+            // direct-handle primitive - ModuleRCS.thrustPercentage, the dump's "Thrust Limiter".
+            VehicleControl.SetRcsThrust(DockedSide.Ours(v), p);
             // Not logged per-change: the de-orbit varies the strength smoothly (would spam), and it is
             // already in the recorder as d_rcsPct. Log only the big task-to-task steps, rounded to a band.
             double band = System.Math.Round(percent / 10.0) * 10.0;

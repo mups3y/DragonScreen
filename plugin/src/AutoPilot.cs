@@ -461,8 +461,9 @@ namespace DragonScreen
             a.SurfaceSpeed = v.srfSpeed;                 // caps MECO at the real staging velocity
             a.DynamicPressureKpa = v.dynamicPressurekPa;
             a.TimeToApoapsisS = v.orbit.timeToAp;
-            a.AvailableThrust = AvailableThrust(v);
-            a.MassT = v.GetTotalMass();                  // for the g-limit throttle (Crew Dragon ~4 g cap)
+            a.AvailableThrust = AvailableThrust(v);       // live throttled thrust (finalThrust)
+            a.MaxThrustKn = MaxThrust(v);                 // full-throttle thrust - the g-limit is sized on THIS
+            a.MassT = v.GetTotalMass();                  // for the g-limit throttle (Crew Dragon ~3.5 g cap)
             a.Landed = (v.situation == Vessel.Situations.LANDED
                      || v.situation == Vessel.Situations.PRELAUNCH
                      || v.situation == Vessel.Situations.SPLASHED);
@@ -791,12 +792,20 @@ namespace DragonScreen
                 return true;
             }
 
-            // Steer the thrust vector and hold full throttle.
+            // Steer the thrust vector; hold full throttle EXCEPT under the crew g-limit.
             Vector3d iF = new Vector3d(g.IF.x, g.IF.y, g.IF.z);
             Vector3d upW = (v.CoM - v.mainBody.position).normalized;
             AttitudeController.Ascent.SteerTo(v, iF, upW);
-            AttitudeController.Ascent.Throttle = 1.0;
-            if (FlightGlobals.ActiveVessel == v) FlightInputHandler.state.mainThrottle = 1.0f;
+            // ⛔ THE CREW G-LIMIT APPLIES TO THE UPPER STAGE TOO. Near SECO the MVac (~980 kN) on a light
+            // stage + Dragon (~8-12 t) pulls 8-12 g at full throttle - real Crew Dragon throttles the
+            // second stage to hold the crew cap there. UPFG is closed-loop on the LIVE thrust
+            // (veh.ThrustN = a.AvailableThrust), so it re-solves Tgo for the reduced throttle next tick and
+            // still closes the orbit. `a` already carries MaxThrustKn (the MVac's full-throttle thrust) and
+            // MassT, so GThrottle gives the right cap; the 0.35 floor even mirrors the MVac's ~40% minimum,
+            // so the brief ~4 g at the very end is the real vehicle's SECO g-load, not a miss.
+            double s2Throttle = Ascent.GThrottle(a, Target.GLimitMps2);
+            AttitudeController.Ascent.Throttle = s2Throttle;
+            if (FlightGlobals.ActiveVessel == v) FlightInputHandler.state.mainThrottle = (float)s2Throttle;
 
             if (Time.realtimeSinceStartup - lastUpfgLog > 2f)
             {
@@ -1396,6 +1405,12 @@ namespace DragonScreen
             // rendezvous. The real vehicle's trunk cells are exposed once it is in orbit; do the same here,
             // now that we are out of the atmosphere (Dragon just separated at the parking orbit).
             DeploySolarPanels(v);
+            // ---- AND ACTIVATE THE TRUNK RADIATOR. The real Crew Dragon runs its radiators in orbit for
+            // thermal control; the autopilot asserts that state directly (VehicleControl, the part's own
+            // "Activate Radiator" event) rather than leaving the part at its launch default. Solar (just
+            // deployed) covers the small EC the pump draws; watch a_ecFrac if a flight ever runs tight.
+            int rad = VehicleControl.SetRadiators(v, true);
+            if (rad > 0) Debug.Log(Tag + "trunk radiator(s) activated (" + rad + ") - thermal control on");
         }
 
         /// <summary>Extend every retractable solar panel on the vessel (once in orbit). A non-deployable /
@@ -1441,6 +1456,31 @@ namespace DragonScreen
                     if (!e.isEnabled || e.flameout) continue;
                     if (!e.EngineIgnited) continue;
                     t += e.finalThrust;
+                }
+            }
+            return t;
+        }
+
+        /// <summary>
+        /// FULL-THROTTLE thrust of the lit engines, kN - what they would make at throttle 1.0. The crew
+        /// g-limit is sized on THIS, not the live finalThrust: sizing it on the throttled thrust made the
+        /// loop oscillate above the cap (~4.2 g observed) because it read the already-throttled acceleration
+        /// as the full one. See AscentInputs.MaxThrustKn and Ascent.GThrottle. Vacuum max is accurate near
+        /// MECO (near-vacuum, where the cap actually bites) and conservative lower down, so the felt g never
+        /// exceeds the cap.
+        /// </summary>
+        private static double MaxThrust(Vessel v)
+        {
+            double t = 0.0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                System.Collections.Generic.List<ModuleEngines> es =
+                    v.parts[i].Modules.GetModules<ModuleEngines>();
+                for (int m = 0; m < es.Count; m++)
+                {
+                    ModuleEngines e = es[m];
+                    if (!e.isEnabled || e.flameout || !e.EngineIgnited) continue;
+                    t += e.MaxThrustOutputVac(true);
                 }
             }
             return t;

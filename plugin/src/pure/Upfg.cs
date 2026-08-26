@@ -132,7 +132,13 @@ namespace DragonScreen
             double phi = Math.Acos(Clamp(V3.Dot(iF, lambda), -1.0, 1.0));
             double phidot = (Math.Abs(J) > 1e-9) ? -phi * L / J : 0.0;
             V3 ild = V3.Normalize(lambdadot);
-            V3 vthrust = (L - 0.5 * L * phi * phi - J * phi * phidot - 0.5 * H * phidot * phidot) * lambda;
+            // ⛔ BOTH thrust vectors carry the LATERAL (i_lambdadot) turning term - canonical Brand-Brown-
+            // Higgins UPFG (PEGAS unifiedPoweredFlightGuidance.m). vthrust used to omit -(L*phi + J*phidot)*ild
+            // while rthrust kept -(S*phi + Q*phidot)*ild: an inconsistent predictor whose vbias absorbed the
+            // dropped lateral velocity as a spurious bias, so the Vgo correction converged to a slightly wrong
+            // steering each call. Both terms restored to match the reference.
+            V3 vthrust = (L - 0.5 * L * phi * phi - J * phi * phidot - 0.5 * H * phidot * phidot) * lambda
+                       - (L * phi + J * phidot) * ild;
             V3 rthrust = (S - 0.5 * S * phi * phi - Q * phi * phidot - 0.5 * P * phidot * phidot) * lambda
                        - (S * phi + Q * phidot) * ild;
             V3 vbias = vgo - vthrust;

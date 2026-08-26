@@ -159,7 +159,7 @@ namespace DragonScreen
             "b_phaseElapsedS,b_rangeToPartnerKm,b_trueRadar,b_leanFrac,b_aoaDeg," +
             // landing command and the two numbers that judge it
             "b_cmdThrottle,b_ignitionAlt,b_engines,b_aim,b_legs," +
-            "b_downrangeKm,b_predMissKm,b_initMissKm," +
+            "b_downrangeKm,b_predMissKm,b_missDownKm,b_missCrossKm,b_initMissKm," +
             // ⛔ THE BOOSTER GETS THE FULL CONTROL TRACE TOO, AS OF 2026-08-13.
             // It was writing total error and rates only. Three separate attempts were made at
             // the flip roll - 765 deg through a 180 deg turn with the actuator railed 80% of
@@ -261,10 +261,44 @@ namespace DragonScreen
             // rv_leg is which named burn we are on; rv_gapDeg is how far the phase still is from the BOOST
             // lead (it sitting frozen far from zero IS the no-fire bug); rv_lastBurn/rv_lastDv say what
             // last fired (paired with nd_deliveredDv = planned vs delivered); rv_along/radial/elev are the
-            // station-LVLH terminal geometry; rv_arrRelMps the CW-predicted arrival speed; rv_warp the
+            // station-LVLH terminal geometry; rv_arrRelMps the CW-predicted arrival speed; rv_passiveM the
+            // passive-abort margin (closest a missed-arrival free-drift comes to the station); rv_warp the
             // live timewarp index (a stuck warp is visible here).
             "rv_leg,rv_rangeKm,rv_phaseDeg,rv_alongKm,rv_radialKm,rv_elevDeg,rv_leadDeg,rv_gapDeg," +
-            "rv_coAltKm,rv_lastBurn,rv_lastDv,rv_arrRelMps,rv_warp";
+            "rv_coAltKm,rv_lastBurn,rv_lastDv,rv_arrRelMps,rv_passiveM,rv_warp," +
+            // ================= BOOSTER LANDING DIAGNOSTICS (the lit-but-no-thrust failure) =================
+            // ⛔ bl_liveThrustKn is PRODUCING thrust (finalThrust), NOT b_availThrustKn (available). The
+            // 2026-08-25 landing lit (b_enginesLit=3) but bl_liveThrustKn ~0 = ullage starvation / failed
+            // relight. bl_coldGasFrac is the settle propellant; bl_ullageOn whether the settle is commanded;
+            // bl_igniteAttempts how many of the finite 4 ignitions the relight spent.
+            "bl_liveThrustKn,bl_coldGasFrac,bl_ullageOn,bl_igniteAttempts," +
+            // ================= FDIR (Layer 3 - the autonomy layer, OBSERVE-ONLY) =================
+            // ⛔ THE DETECT -> ISOLATE -> DECIDE CHAIN ON EVERY ROW, for the node executor's thrust-delivery
+            // monitor. fd_thrResid is expected-vs-delivered along-axis accel (0 = full, 1 = nothing, >1 =
+            // wrong-way); fd_thrRaw is this-tick's classification, fd_thrVerdict the DEBOUNCED verdict (Raw
+            // flickering while Verdict holds = the confirmation filter working); fd_thrKind the isolated
+            // fault; fd_thrRecovery what FaultResponse WOULD do about it in the current regime. The monitor
+            // drives nothing yet - these columns are how it is validated against live flights before it is
+            // given authority. See pure/HealthMonitor.cs + pure/ThrustDeliveryMonitor.cs.
+            "fd_thrVerdict,fd_thrRaw,fd_thrResid,fd_thrKind,fd_thrRecovery," +
+            // ================= DIRECT ACTUATOR AUTHORITY (autopilot-owned) =================
+            // The gimbal-limit % the booster is asserting through the part's own handle each phase.
+            "ctrl_gimbalPct," +
+            // ================= RE-ENTRY HEAT + STEERING (per atmosphere layer) =================
+            // The steering-test state + the heat-shield thermal/ablator load, so the re-entry steering
+            // authority can be read out PER ATMOSPHERE LAYER: pair these with a_altAsl / a_qKpa / a_mach
+            // (the layer), a_aoaDeg (achieved AoA), r_aoaCmd/r_vertCmd/r_latCmd (the pitch/yaw command) and
+            // r_alongKm/r_crossM (the trajectory response). he_steerSeg is the sweep segment (0 pitch /
+            // 1 yaw-right / 2 yaw-left / 3 neutral / -1 heat-backoff); density is the layer tag.
+            "he_steerTest,he_steerSeg,he_atmDensity,he_ablatorFrac,he_charFrac,he_shieldK,he_shieldFluxKw," +
+            // ================= RENDEZVOUS FDIR (Layer-3 responder - it ACTS) =================
+            // The autonomous stall watchdog that answers the fault a HUMAN had to cancel by hand on
+            // flight_0826_014654. rvfd_stallS = real-time seconds the rendezvous has been FROZEN (no warp /
+            // burn delivery / slew / leg-advance / closing); rvfd_verdict the debounced verdict; rvfd_replans
+            // the count of re-plan nudges issued; rvfd_action the last recovery taken (REPLAN / ABORT-TO-HOME).
+            // Unlike the observe-only fd_ block, this one DRIVES the recovery. See RendezvousFdir +
+            // pure/RendezvousProgress.cs.
+            "rvfd_stallS,rvfd_verdict,rvfd_replans,rvfd_action";
 
         /// <summary>
         /// Called every frame by the painter; samples at 5 Hz. Cheap enough to call unconditionally
@@ -453,6 +487,8 @@ namespace DragonScreen
             F(r, (double)(int)lc.Aim); F(r, lc.DeployLegs ? 1.0 : 0.0);
             F(r, BoosterRecovery.DownrangeM / 1000.0);
             F(r, BoosterRecovery.PredictedMissM / 1000.0);
+            F(r, BoosterRecovery.DownMissM / 1000.0);      // downrange impact error (+ = long)
+            F(r, BoosterRecovery.CrossMissM / 1000.0);     // crossrange impact error (signed)
             F(r, BoosterRecovery.InitialMissM / 1000.0);
             Attitude(r, AttitudeController.Booster, true);
             Controls(r, b);
@@ -602,8 +638,13 @@ namespace DragonScreen
             F(r, EntryOps.LiftMin);
             F(r, EntryOps.WorstErrorM / 1000.0);
             F(r, EntryOps.Dropped ? 1.0 : 0.0);
-            F(r, EntryOps.DroguesDeployed ? 1.0 : 0.0);
-            F(r, EntryOps.MainsDeployed ? 1.0 : 0.0);
+            // ⛔ TRUTHFUL CHUTE STATE, WHOEVER DEPLOYED (flight_0826_014654). The chutes are the single
+            // most safety-critical system and their telemetry must never lie: on the manual/DEORBIT-NOW
+            // return EntryOps was Idle, so these read 0 all the way down - yet the LOG proved CHUTE GUARD
+            // deployed the drogues at 5485 m and the crew landed safely. r_drogues/r_mains now show the
+            // chute out if EITHER the entry sequence OR the independent ChuteGuard fired it.
+            F(r, (EntryOps.DroguesDeployed || ChuteGuard.DroguesDeployed) ? 1.0 : 0.0);
+            F(r, (EntryOps.MainsDeployed || ChuteGuard.MainsDeployed) ? 1.0 : 0.0);
             F(r, EntryOps.ThrottleCmd);
 
             S(r, PhaseDownOps.Stage.ToString());
@@ -858,7 +899,60 @@ namespace DragonScreen
             S(r, NamedRendezvousOps.LastBurn);
             F(r, NamedRendezvousOps.LastDvMps);
             F(r, NamedRendezvousOps.ArrRelMps);
+            F(r, NamedRendezvousOps.PassiveMarginM);
             F(r, TimeWarp.CurrentRateIndex);
+
+            // ---- BOOSTER LANDING DIAGNOSTICS (lit-but-no-thrust) ----
+            F(r, BoosterRecovery.LiveThrustKn);
+            F(r, BoosterRecovery.ColdGasFrac);
+            F(r, BoosterRecovery.UllageOn ? 1.0 : 0.0);
+            F(r, BoosterRecovery.IgniteAttempts);
+
+            // ---- FDIR: the node-executor thrust-delivery monitor (Layer 3, observe-only) ----
+            // Five fields, no branches - the same fixed-width discipline as the blocks above.
+            S(r, HealthMonitor.Name(NodeExecutor.DeliveryVerdict));
+            S(r, HealthMonitor.Name(NodeExecutor.DeliveryRaw));
+            F(r, NodeExecutor.DeliveryResidual);
+            S(r, NodeExecutor.DeliveryFault.ToString());
+            S(r, FaultResponse.Name(FaultResponse.Decide(
+                    NodeExecutor.DeliveryFault, NodeExecutor.DeliveryVerdict, FaultDomainNow())));
+
+            // ---- DIRECT ACTUATOR AUTHORITY ----
+            F(r, BoosterRecovery.GimbalLimitPct);
+
+            // ---- RE-ENTRY HEAT + STEERING (per atmosphere layer) ----
+            Vessel entv = FlightGlobals.ActiveVessel;
+            F(r, EntryOps.SteeringTest ? 1.0 : 0.0);
+            F(r, EntryOps.SweepSegment);
+            F(r, entv != null ? entv.atmDensity : 0.0);
+            HeatSample hs = EntryHeat.Sample(entv);
+            F(r, hs.AblatorFrac);
+            F(r, hs.CharFrac);
+            F(r, hs.ShieldK);
+            F(r, hs.FluxKw);
+
+            // ---- rendezvous FDIR (the Layer-3 responder that ACTS on a frozen rendezvous) ----
+            F(r, RendezvousFdir.StallS);
+            S(r, HealthMonitor.Name(RendezvousFdir.Verdict));
+            F(r, RendezvousFdir.Replans);
+            S(r, RendezvousFdir.LastAction);
+        }
+
+        /// <summary>
+        /// The FDIR flight regime right now, from the engaged controller - not observed. The single place
+        /// the glue maps "who is flying" onto a FaultDomain (see the header on pure/FaultResponse.cs on why
+        /// this is separate from MissionPhase). Same priority order as Owner().
+        /// </summary>
+        private static FaultDomain FaultDomainNow()
+        {
+            if (BoosterRecovery.Active) return FaultDomain.BoosterRecovery;
+            if (AutoPilot.Engaged) return FaultDomain.Ascent;
+            if (EntryOps.Engaged) return FaultDomain.Entry;
+            if (DeorbitOps.Engaged) return FaultDomain.Deorbit;
+            if (NamedRendezvousOps.Engaged || WaypointApproachOps.Engaged
+                || DockingOps.Engaged || DirectApproachOps.Engaged || StationApproach.Engaged)
+                return FaultDomain.Rendezvous;
+            return FaultDomain.OrbitCoast;
         }
 
         /// <summary>Consumable days for the recorder: +inf (no crew consuming) is clamped to 9999 so a 0

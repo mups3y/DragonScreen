@@ -76,6 +76,56 @@ namespace DragonScreen
         /// but PROGRESSING RCS burn never trips the runaway timeout; only a stalled one does.</summary>
         private static double lastProgressDv;
 
+        // ---- FDIR: thrust-delivery monitor (Layer 3 - docs/LAYER3_AUTONOMY_PLAN.md). OBSERVE-ONLY. ----
+        // Every burning tick it compares the accel the guidance INTENDS with the accel actually delivered
+        // ALONG the aim (the same finalThrust / velocity-delta accounting the burn already does), and
+        // HealthMonitor debounces that into a verdict + isolated fault. It drives NOTHING yet - the
+        // existing BurnExec.Runaway / progress-backstop guards still act; this proves the unified monitor
+        // against live flights (the reversed-Draco, off-axis-no-burn and lit-but-no-thrust failures it is
+        // meant to replace) before it is ever given authority. Recorded in the fd_ block.
+        private static MonitorState deliveryMon;
+        /// <summary>Debounced thrust-delivery verdict for the current burn. For the recorder.</summary>
+        public static HealthVerdict DeliveryVerdict { get { return deliveryMon.Verdict; } }
+        /// <summary>This-tick raw verdict, before debounce. For the recorder.</summary>
+        public static HealthVerdict DeliveryRaw { get { return deliveryMon.Raw; } }
+        /// <summary>This-tick delivery residual (0 = full, 1 = nothing, &gt;1 = wrong-way). For the recorder.</summary>
+        public static double DeliveryResidual { get { return deliveryMon.Residual; } }
+        /// <summary>The isolated fault kind once the verdict is non-nominal (Shortfall / Reversed / None).</summary>
+        public static FaultKind DeliveryFault { get; private set; }
+
+        // ---- ⛔ SELF-CORRECTING RCS TRANSLATION SIGN (flight_0825_163535 diagnosis). ----
+        // The Crew Dragon's forward translation is INVERTED vs the booster's: with the nose ON the Δv (nd_
+        // pointErr 2 deg) and full forward translation commanded (x_ctlZ -1.00), the capsule accelerated the
+        // WRONG WAY - periapsis driven from 200 km to -18 km, nd_deliveredDv -1941 m/s. The s.Z sign that is
+        // "forward" depends on the vessel's control frame, so it cannot be hard-coded. Instead: fire, MEASURE
+        // whether the delivered Δv goes the right way, and FLIP once if it does not. Vehicle-agnostic.
+        /// <summary>Sign applied to the RCS forward-translation command. Flipped once if the burn measures
+        /// a wrong-way delivery. +1 = the booster's convention (UllageFore -> s.Z = -1 = toward the nose).</summary>
+        private static double rcsTransSign;
+        /// <summary>The sign check has run for this burn (one-shot).</summary>
+        private static bool rcsSignChecked;
+        /// <summary>Seconds of on-axis RCS translation accumulated, for the one-shot sign check.</summary>
+        private static double rcsTransElapsedS;
+
+        /// <summary>Seconds of on-axis translation to measure the delivery direction before deciding the sign.
+        /// Long enough to clear accounting noise, short enough that a wrong-way push barely perturbs the orbit.</summary>
+        public const double RcsSignCheckS = 0.6;
+        /// <summary>Delivered Δv below this (m/s) after the check window means the translation is inverted.</summary>
+        public const double RcsSignFlipDvMps = -0.10;
+
+        /// <summary>
+        /// ⛔ RCS TRANSLATION FIRES AT A LOOSE POINTING GATE, NOT the tight 3° main-engine one.
+        ///
+        /// flight_0825_184857: of 1414 "Burning" rows only ONE had pointing error under 3°, so the burn
+        /// translated for a single tick and delivered NOTHING - the orbit never moved and the rendezvous
+        /// floated. The Crew Dragon has NO reaction wheels; it holds attitude on the same Dracos it
+        /// translates with, so it oscillates 3-40° around the Δv and can never sit under 3°. But RCS
+        /// translation does not NEED 3°: at 25° off the along-axis component is cos(25°)=91% and the small
+        /// cross-component averages out as the nose oscillates through the aim. So the RCS burn translates
+        /// whenever roughly pointed; the tight 3° gate stays for main-engine burns, where off-axis is wasted.
+        /// </summary>
+        public const double RcsTranslateGateDeg = 25.0;
+
         /// <summary>Arrive this long before ignition, so there is time to drop out of warp.</summary>
         public const double WarpArriveLeadS = 6.0;
         /// <summary>Do not bother warping a wait shorter than this. `DgWarpTo`'s 12 s.</summary>
@@ -152,6 +202,8 @@ namespace DragonScreen
             warpRequested = false;
             warpRefused = false;
             orientWarpRequested = false;
+            rcsTransSign = 1.0; rcsSignChecked = false; rcsTransElapsedS = 0.0;
+            deliveryMon = HealthMonitor.Fresh(); DeliveryFault = FaultKind.None;
             Phase = BurnPhase.Aligning;
             Note = label;
 
@@ -184,6 +236,7 @@ namespace DragonScreen
         {
             Phase = BurnPhase.Idle; ship = null; Note = "-";
             RemainingDvMps = 0.0; InitialDvMps = 0.0; ThrottleCmd = 0.0; PointingErrorDeg = 0.0;
+            deliveryMon = HealthMonitor.Fresh(); DeliveryFault = FaultKind.None;
         }
 
         // ------------------------------------------------------------------ the loop
@@ -225,6 +278,18 @@ namespace DragonScreen
             if (Phase == BurnPhase.Aligning && TimeWarp.CurrentRateIndex > 0) TimeWarp.SetRate(0, true);
 
             AttitudeController.Ascent.SteerTo(ship, aim.normalized, Vector3d.zero);
+            // ---- ⛔ FLY THE CAPSULE AT ITS REAL AGILITY, NOT THE ASCENT RATE CAP (flight_0826_014654). ----
+            // The controller defaults MaxRateDps to Attitude.AscentMaxRateDps (2 deg/s) - correct for a launch
+            // vehicle in atmosphere, ~5x too slow for a capsule on orbit. That cap is why the rendezvous died:
+            // the CLOSE burn needed a ~180 deg reorientation (prograde-at-apoapsis is opposite the post-BOOST
+            // attitude - inherent Hohmann geometry), and at 2 deg/s that is ~90 s it never completed; and the
+            // BOOST burn's nose DRIFTED off the aim to 26 deg mid-burn (small off-CoM Draco torque outrunning
+            // the sluggish 2 deg/s correction), crossed the 25 deg translate gate and STALLED at 39.5/60 m/s.
+            // Attitude.CapsuleMaxRateDps (10 deg/s) is the MEASURED capsule agility (docking 1.85, approach 2.62
+            // deg/s averages, with headroom); giving the Draco burns that rate lets the capsule both reorient
+            // fast and HOLD the aim so the translation never cuts out. Only for the RCS/Draco burns - a main-
+            // engine node burn keeps the ascent cap. Release() resets it, so re-assert every steering tick.
+            if (rcsBurn) AttitudeController.Ascent.MaxRateDps = Attitude.CapsuleMaxRateDps;
             PointingErrorDeg = Vector3d.Angle(ship.ReferenceTransform.up, aim.normalized);
 
             switch (Phase)
@@ -428,6 +493,10 @@ namespace DragonScreen
             bool onAxis = BurnExec.Aligned(PointingErrorDeg);
             double dt = TimeWarp.fixedDeltaTime;
 
+            // RCS translation tolerates a loose pointing gate the Dragon can actually hold; a main-engine
+            // burn keeps the tight one. See RcsTranslateGateDeg.
+            bool onAxisRcs = PointingErrorDeg < RcsTranslateGateDeg;
+
             if (rcsBurn)
             {
                 // ---- CREW DRAGON: BURN ON DRACO RCS, NOT THE MAIN-ENGINE THROTTLE. ----
@@ -435,14 +504,36 @@ namespace DragonScreen
                 // are launch-abort only and read zero available thrust to the throttle path, so a throttle
                 // burn delivered NOTHING (flight_0823_233243: apoapsis flat, range diverging). UllageFore
                 // drives forward RCS translation (s.Z) along the nose - which SteerTo has already put on the
-                // Δv - so translating forward burns along the Δv. This is MechJeb's RCS-translation method,
-                // tuned to the Dragon. Only push when aligned; measure what actually went in (RCS is invisible
-                // to LiveThrust).
+                // Δv. rcsTransSign self-corrects an inverted translation (the Dragon's is flipped vs the
+                // booster's - flight_0825_163535). Push whenever roughly pointed; measure what went in.
                 if (!boughtRcs) { ship.ActionGroups.SetGroup(KSPActionGroup.RCS, true); boughtRcs = true; }
                 AttitudeController.Ascent.Throttle = 0.0;
-                AttitudeController.Ascent.UllageFore = onAxis ? 1.0 : 0.0;
-                ThrottleCmd = onAxis ? 1.0 : 0.0;                  // for the pages/recorder: "translating"
-                if (onAxis) AccountByVelocity(dt);
+                AttitudeController.Ascent.UllageFore = onAxisRcs ? rcsTransSign : 0.0;
+                ThrottleCmd = onAxisRcs ? 1.0 : 0.0;              // for the pages/recorder: "translating"
+                if (onAxisRcs)
+                {
+                    AccountByVelocity(dt);
+                    // Self-correct the sign: after RcsSignCheckS of translation, if the Δv delivered ALONG
+                    // the intended direction is negative, the thrust is going the wrong way - flip once.
+                    if (!rcsSignChecked)
+                    {
+                        rcsTransElapsedS += dt;
+                        if (rcsTransElapsedS >= RcsSignCheckS)
+                        {
+                            rcsSignChecked = true;
+                            double alongDv = Vector3d.Dot(dvWorld.normalized, dvWorld - dvRemaining);
+                            if (alongDv < RcsSignFlipDvMps)
+                            {
+                                rcsTransSign = -rcsTransSign;
+                                dvRemaining = dvWorld;            // discard the small wrong-way perturbation
+                                prevObtVel = ship.obt_velocity;   // reseed the accounting for the corrected burn
+                                lastProgressDv = InitialDvMps;
+                                Debug.LogWarning(Tag + "RCS translation was INVERTED (delivered "
+                                    + alongDv.ToString("F2") + " m/s wrong-way) - flipped the sign, restarting");
+                            }
+                        }
+                    }
+                }
             }
             else
             {
@@ -467,10 +558,33 @@ namespace DragonScreen
             // ---- PROGRESS-BASED BACKSTOP. The runaway timer counts time since the residual LAST FELL,
             // not total burn time - so a slow-but-working Draco burn (a 59 m/s phasing raise takes minutes)
             // never trips it, while a genuinely stalled burn (off-axis, dead engine, no thrust) still aborts
-            // within MaxBurnDurationS. Slewing off-axis also resets it (it is not burn time either).
+            // within MaxBurnDurationS. Slewing off-axis (the RCS loose gate for a Draco burn) also resets it.
+            bool effectiveOnAxis = rcsBurn ? onAxisRcs : onAxis;
             bool progressed = RemainingDvMps < lastProgressDv - 0.01;
             if (progressed) lastProgressDv = RemainingDvMps;
-            if (progressed || !onAxis) startedBurnAt = now;
+            if (progressed || !effectiveOnAxis) startedBurnAt = now;
+
+            // ---- FDIR SAMPLE (observe-only). Expected vs delivered along-axis accel this tick. ----
+            // Delivered is the drop in the remaining Δv over the tick (the burn's own accounting):
+            // positive = closing on the aim, negative = the residual GREW = a wrong-way delivery. Expected
+            // is the accel the guidance intends - commanded throttle x the engine's full thrust for a
+            // main-engine burn, the Draco translation thrust for an RCS burn - and 0 when nothing on-axis
+            // is being commanded (a slew), so a legitimate coast/turn never reads as a shortfall.
+            double massNow = ship.GetTotalMass();
+            ThrustSample sample = new ThrustSample();
+            sample.DeliveredAccel = (dt > 0.0) ? (RemainingDvMps - dvRemaining.magnitude) / dt : 0.0;
+            if (rcsBurn)
+            {
+                sample.Commanding = onAxisRcs;
+                sample.ExpectedAccel = (onAxisRcs && massNow > 0.0) ? RcsTranslationThrust(ship) / massNow : 0.0;
+            }
+            else
+            {
+                sample.Commanding = onAxis && ThrottleCmd > 0.0;
+                sample.ExpectedAccel = (sample.Commanding && massNow > 0.0) ? ThrottleCmd * Thrust(ship) / massNow : 0.0;
+            }
+            deliveryMon = ThrustDeliveryMonitor.Step(deliveryMon, sample, dt);
+            DeliveryFault = ThrustDeliveryMonitor.Kind(sample, deliveryMon.Verdict);
         }
 
         private static void Stop()

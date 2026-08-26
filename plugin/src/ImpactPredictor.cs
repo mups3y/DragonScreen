@@ -212,6 +212,43 @@ namespace DragonScreen
         public static Impact PredictFromState(CelestialBody b, Vector3d posRelBody, Vector3d velWorld,
                                               double bc)
         {
+            return PredictFromState(b, posRelBody, velWorld, bc, null, null);
+        }
+
+        /// <summary>
+        /// The BOOSTER's impact, integrated with the corpus Mach-dependent drag curve (BoosterDrag) -
+        /// accurate through the WHOLE entry+descent, because it does not depend on a single live-measured
+        /// bc (which is held at a garbage near-vacuum value under thrust, exactly when the entry burn needs
+        /// to aim). This is what the entry burn targets the barge with. (user 2026-08-25: use the flights.)
+        /// </summary>
+        public static Impact PredictBooster(Vessel v)
+        {
+            if (v == null || v.mainBody == null) { Impact im = new Impact(); im.Note = "no vessel"; return im; }
+            CelestialBody b = v.mainBody;
+            return PredictFromState(b, v.CoM - b.position, v.obt_velocity, 0.0,
+                                    BoosterDrag.DragFactor, SoundSpeedFor(b));
+        }
+
+        /// <summary>Speed of sound vs altitude for a body, m/s: sqrt(gamma * P / rho), gamma = 1.4 (air).
+        /// Pure formula, so it needs no KSP API beyond pressure + density the integrator already uses.</summary>
+        private static SpeedOfSoundAt SoundSpeedFor(CelestialBody b)
+        {
+            CelestialBody body = b;
+            return delegate(double alt)
+            {
+                double p = body.GetPressure(alt);
+                double rho = StockDensity(body, alt);
+                return (rho > 1e-6 && p > 0.0) ? Math.Sqrt(1.4 * p / rho) : 0.0;
+            };
+        }
+
+        /// <summary>
+        /// As above, but with the Mach-dependent drag path when <paramref name="dragFactor"/> is supplied
+        /// (it SUPERSEDES the scalar bc). This is the integrator's own DragFactorAt path, finally wired up.
+        /// </summary>
+        public static Impact PredictFromState(CelestialBody b, Vector3d posRelBody, Vector3d velWorld,
+                                              double bc, DragFactorAt dragFactor, SpeedOfSoundAt soundSpeed)
+        {
             Impact im = new Impact();
             if (b == null) { im.Note = "no body"; return im; }
 
@@ -224,6 +261,8 @@ namespace DragonScreen
             s.BodyRadiusM = b.Radius;
             s.AtmosphereDepthM = b.atmosphereDepth;
             s.BallisticCoefficient = bc;
+            s.DragFactor = dragFactor;
+            s.SoundSpeed = soundSpeed;
             s.ImpactAltitudeM = 0.0;
 
             // ⚠ THE ROTATION AXIS IS THE BODY'S, NOT THE FRAME'S +Z. Integrating about the wrong

@@ -39,6 +39,7 @@
  * same class of error as the navball's transposed texture, and just as invisible until it flies.
  */
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace DragonScreen
@@ -360,6 +361,11 @@ namespace DragonScreen
             phi[2] = Vector3d.Angle(fwd, Vector3d.Exclude(top, targetForward)) * Mathf.Deg2Rad;
             if (Vector3d.Angle(star, Vector3d.Exclude(top, targetForward)) > 90.0) phi[2] *= -1.0;
 
+            // ⛔ RO HAS NO REACTION WHEELS - IF WE ARE STEERING, WE NEED RCS. (user 2026-08-26.) Turn it
+            // on ourselves so no manoeuvre can depend on wheels that RealismOverhaul strips. Before the
+            // torque read, so the RCS torque is counted the same frame.
+            EnsureRcsAuthority(v);
+
             Vector3d moi = v.MOI;
             Vector3d torque = AvailableTorque(v);
 
@@ -508,6 +514,57 @@ namespace DragonScreen
             if (t.y < 0.1) t.y = 0.1;
             if (t.z < 0.1) t.z = 0.1;
             return t;
+        }
+
+        /// <summary>
+        /// ⛔ REMOVE THE REACTION-WHEEL DEPENDENCY (user 2026-08-26). RealismOverhaul strips reaction
+        /// wheels, so on a coasting capsule RCS is the ONLY attitude authority - and AddRcsTorque only
+        /// COUNTS the RCS if the RCS action group is on. So a manoeuvre that steers without RCS enabled
+        /// sees ~zero torque and moves nothing, which looks exactly like "relying on wheels that are not
+        /// there". This turns RCS on whenever the controller is steering a vessel that has NO reaction-
+        /// wheel authority AND is NOT under power (a lit engine's gimbal is its own authority, and the
+        /// booster landing burn deliberately flies RCS-off). Idempotent; only the unpowered no-wheel case
+        /// forces it. Stock (with wheels) is left exactly as it was.
+        /// </summary>
+        private void EnsureRcsAuthority(Vessel v)
+        {
+            if (v == null) return;
+            if (HasWheelAuthority(v)) return;                 // stock: the wheels steer it
+            if (Powered(v)) return;                           // engine lit: the gimbal steers it
+            if (!v.ActionGroups[KSPActionGroup.RCS])
+                v.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
+        }
+
+        /// <summary>Summed active reaction-wheel torque above a floor (kN·m). RO strips these to ~0.</summary>
+        private static bool HasWheelAuthority(Vessel v)
+        {
+            double t = 0.0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                List<ModuleReactionWheel> ws = v.parts[i].Modules.GetModules<ModuleReactionWheel>();
+                for (int m = 0; m < ws.Count; m++)
+                {
+                    ModuleReactionWheel w = ws[m];
+                    if (w.wheelState != ModuleReactionWheel.WheelState.Active) continue;
+                    t += (w.PitchTorque + w.YawTorque + w.RollTorque) * (w.authorityLimiter / 100f);
+                    if (t >= 1.0) return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>Is a main engine lit and producing thrust (so its gimbal is the attitude authority)?
+        /// The Draco RCS-translation deorbit burn is NOT this - it is ModuleRCS, so the capsule still
+        /// needs RCS on, which is exactly what we want.</summary>
+        private static bool Powered(Vessel v)
+        {
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                List<ModuleEngines> es = v.parts[i].Modules.GetModules<ModuleEngines>();
+                for (int m = 0; m < es.Count; m++)
+                    if (es[m].EngineIgnited && !es[m].flameout && es[m].finalThrust > 1.0) return true;
+            }
+            return false;
         }
 
         /// <summary>

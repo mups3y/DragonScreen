@@ -44,6 +44,9 @@ namespace DragonScreen
         // ---- instrumentation (read by FlightRecorder rv_ block) ----
         public static double RangeKm, PhaseDeg, LastDvMps;
         public static double AlongKm, RadialKm, ElevDeg, LeadDeg, GapDeg, CoAltKm, ArrRelMps;
+        /// <summary>Closest the last terminal burn's passive free-drift (arrival burn missed) comes to the
+        /// station, metres - the passive-abort safety margin. Large = a missed burn safely misses the ISS.</summary>
+        public static double PassiveMarginM;
         public static string LastBurn = "-";
 
         private static Vessel ship, station;
@@ -61,6 +64,21 @@ namespace DragonScreen
             ship = v; station = target; Engaged = true; Leg = RdvLeg.Phase;
             termArrivalUt = 0.0; termMidUt = 0.0; midcourseDone = false;
             LastBurn = "-"; LastDvMps = 0.0;
+
+            // ⛔ OPEN THE NOSE CONE NOW, BEFORE THE FIRST PHASING BURN - what the real Crew Dragon does.
+            // The real vehicle opens its nose cap on orbit (shortly after sep, before the Phase burn) to
+            // expose the docking adapter AND the forward Draco thrusters. Closed, the RO Dragon's cone
+            // SHIELDS the forward Dracos: KSP flags the RCS "obstructed", and with no reaction wheels the
+            // RCS is also the attitude control - so the capsule loses BOTH. The phasing burn tumbled to
+            // 22.5 deg off-axis and "delivered" -193 m/s while the orbit sat frozen (flight_0825_110240).
+            // We had only opened it at docking, which the rendezvous never reached. ("open shroud" is the
+            // confirmed event; the cone is closed again before deorbit by UndockOps.)
+            if (DockShroud.Open(v))
+                Debug.Log(Tag + "nose cone OPENED for rendezvous - forward Dracos + docking port exposed");
+            else
+                Debug.LogWarning(Tag + "nose cone open event NOT found - if the RCS reads 'obstructed', "
+                                     + "the cone is still shut and the phasing burns will tumble");
+
             Debug.Log(Tag + "NAMED-BURN rendezvous ENGAGED (Phase/Boost/Close -> CW terminal) - target '"
                           + target.vesselName + "', "
                           + (Vector3d.Distance(v.CoM, target.CoM) / 1000.0).ToString("F1") + " km");
@@ -259,14 +277,24 @@ namespace DragonScreen
             double period = (station.orbit != null && station.orbit.period > 0.0)
                             ? station.orbit.period : (2.0 * System.Math.PI / System.Math.Max(1e-9, g.N));
             double bestTof;
+            // PASSIVE ABORT: prefer the cheapest transfer whose free drift (arrival burn never made) stays
+            // clear of the keep-out sphere for a full orbit - the real Crew Dragon offset-targeting rule
+            // made a proven property (docs/REAL_CREW_DRAGON_MISSION.md). safeM = KOS + margin.
+            double safeM = WaypointApproach.KeepOutRadiusM + PassiveAbortMarginM;
             CwSolution sol = CwTargeting.Best(g.Cw, CwMinTofS, period * CwMaxTofFrac, CwTofSteps,
-                                              aimBehindM, out bestTof);
+                                              aimBehindM, out bestTof,
+                                              safeM, period, CwTargeting.DefaultCoastSamples);
             if (!sol.Ok)
             {
                 Note = label + " - no CW solution yet (" + sol.Note + "), holding";
                 return false;
             }
             ArrRelMps = sol.ArrivalRelSpeed;
+            PassiveMarginM = sol.MinFreeDriftRangeM;
+            if (!sol.PassiveAbortSafe)
+                Debug.LogWarning(Tag + label + " PASSIVE-ABORT: closest free-drift "
+                    + sol.MinFreeDriftRangeM.ToString("F0") + " m is inside the " + safeM.ToString("F0")
+                    + " m safe margin - flew the safest transfer; the keep-out backstop guards a real breach.");
 
             double ox, oy, oz;
             Lvlh.OffsetToWorld(g.StnR.x, g.StnR.y, g.StnR.z, g.StnV.x, g.StnV.y, g.StnV.z,
@@ -281,7 +309,9 @@ namespace DragonScreen
                 Debug.Log(Tag + label + " CW intercept: " + dvWorld.magnitude.ToString("F1")
                           + " m/s, TOF " + (bestTof / 60.0).ToString("F0") + " min, arrival "
                           + sol.ArrivalRelSpeed.ToString("F1") + " m/s, aim " + (aimBehindM / 1000.0).ToString("F1")
-                          + " km behind");
+                          + " km behind; passive-abort free-drift clears "
+                          + sol.MinFreeDriftRangeM.ToString("F0") + " m (safe "
+                          + (sol.PassiveAbortSafe ? "YES" : "NO") + ")");
                 return true;
             }
             Note = label + " refused: " + NodeExecutor.Note;
@@ -461,5 +491,9 @@ namespace DragonScreen
         private const double CwMinTofS = 300.0;
         private const double CwMaxTofFrac = 0.9;
         private const int CwTofSteps = 60;
+        /// <summary>Passive-abort safety margin ABOVE the 200 m keep-out sphere, metres. A transfer is
+        /// "passively safe" only if its free drift (arrival burn never made) stays at least KOS+this from
+        /// the station for a full orbit. 50 m keeps a dispersed trajectory clear of the sphere itself.</summary>
+        private const double PassiveAbortMarginM = 50.0;
     }
 }

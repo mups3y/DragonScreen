@@ -13,6 +13,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Approach.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\ArcGeometry.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Ascent.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Attitude.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\BoosterDrag.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\BurnExec.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\CabinEnvironment.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Card.cs
@@ -35,9 +36,11 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\DragonPalette.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Entry.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\EntryGuidance.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\EntryMargin.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\FaultResponse.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\FlipGeometry.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\GateCard.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Gauge.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\HealthMonitor.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Hohmann.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Hoverslam.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Images.cs
@@ -67,11 +70,13 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\ProofPage.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\PropellantReadout.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Readouts.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Rendezvous.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\RendezvousProgress.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\ReturnBudget.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\ScreenLayout.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\SettingsPage.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\StepList.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Terminal.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\ThrustDeliveryMonitor.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Trajectory.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Tunable.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Typography.cs
@@ -113,6 +118,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\test\DockGeometryTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\EntryGuidanceTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\FlightTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\FuelFlowTest.cs
+C:\Users\User\Desktop\DragonScreen\plugin\test\HealthMonitorTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\HohmannTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\HoverslamTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\KeplerTest.cs
@@ -128,6 +134,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\test\PanelTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\PhasingTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\PlaneWindowTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\PredictTest.cs
+C:\Users\User\Desktop\DragonScreen\plugin\test\RendezvousProgressTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\ReturnBudgetTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\ReturnPathTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\TestMain.cs

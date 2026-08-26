@@ -195,6 +195,11 @@ namespace DragonScreen
         public static double DownrangeM;
         /// <summary>Signed predicted miss, metres. Negative = the impact point is past the LZ.</summary>
         public static double PredictedMissM;
+        /// <summary>Predicted impact error split into DOWNRANGE (+ = long) and CROSSRANGE (signed, right of
+        /// the ground track +), metres. PredictedMissM is only the magnitude; these two tell apart a lift-
+        /// MAGNITUDE shortfall (downrange, the AoA/lean cap) from a STEERING failure (crossrange, the roll
+        /// cycle) - the exact signal to settle whether the fins are trimming. Recorder b_missDownKm/CrossKm.</summary>
+        public static double DownMissM, CrossMissM;
         /// <summary>Recovery-propellant fraction remaining, 0..1 (denominator = prop at sep). The number the
         /// entry-burn reserve cut watches; -1 until the baseline latches. Published for the recorder.</summary>
         public static double RecoveryPropFrac = -1.0;
@@ -212,10 +217,39 @@ namespace DragonScreen
         public static double PhaseElapsedS;
         /// <summary>Octaweb mode ACTUALLY read back: 0 all, 1 three, 2 centre, -1 no answer.</summary>
         public static int OctaMode = -1;
+
+        // ---- ⛔ DIRECT ACTUATOR AUTHORITY, the autopilot's own (VehicleControl, handles from the craft
+        // dump). The booster is authority-LIMITED - the corpus shows 10-20% of descent/entry/landing rows
+        // rail the gimbal - so these sit at FULL; the value is that the autopilot ASSERTS them every phase
+        // through the parts' real handles, so no prior phase, the engine-mode change, or a KSP default can
+        // leave the vehicle under-authority when the landing needs it. [Tunable] - dial per phase from the
+        // corpus if a phase ever wants less (e.g. to stop fighting the airflow), never blind. ----
+        /// <summary>Engine gimbal limit the booster asserts, percent (ModuleGimbal.gimbalLimiter). For the recorder.</summary>
+        [Tunable] public static double GimbalLimitPct = 100.0;
+        /// <summary>Grid-fin control authority the booster asserts, percent (control-surface authorityLimiter).</summary>
+        [Tunable] public static double FinAuthorityPct = 100.0;
         /// <summary>Engines actually ignited, against the count the guidance asked for.</summary>
         public static int EnginesLit;
         /// <summary>Grid fins commanded out.</summary>
         public static bool GridFinsOut;
+
+        // ---- ⛔ LANDING-BURN DIAGNOSTICS: WHY THE ENGINES LIT BUT MADE NO THRUST (recorder bl_ columns) ----
+        // flight_0825_110240: the landing burn was commanded at 1358 m, read "lit" (EnginesLit=3) at ~776 m,
+        // but the stage's MASS fell only 0.06 t and speed only 239->233 m/s to the deck - the Merlins lit and
+        // produced ~ZERO thrust, and it free-fell in at ~230 m/s. On a real Merlin (ullage=True, ignitions=4)
+        // that is ullage starvation at ~0 g terminal fall and/or a failed relight. None of it was recordable:
+        // b_availThrustKn is AVAILABLE thrust (non-zero even off), not PRODUCING; nothing logged the cold gas
+        // the settle needs, whether the ullage was commanded, or how many of the 4 ignitions were spent.
+        /// <summary>Thrust the engines are ACTUALLY producing, kN (summed finalThrust). The lit-but-no-thrust
+        /// landing failure reads ~0 here while b_availThrustKn is large.</summary>
+        public static double LiveThrustKn;
+        /// <summary>Cold-gas RCS propellant remaining, fraction of capacity. The ullage settle that lets the
+        /// Merlin relight in ~0 g terminal fall spends it; -1 = the vehicle carries none / not read.</summary>
+        public static double ColdGasFrac = -1.0;
+        /// <summary>The RCS-forward ullage settle is commanded this tick (a relight is in progress, unlit).</summary>
+        public static bool UllageOn;
+        /// <summary>Relight attempts on the current burn - each Activate() spends one of the finite (4) ignitions.</summary>
+        public static int IgniteAttempts { get { return igniteAttempts; } }
         /// <summary>Lean fraction applied toward the pad, and the AoA it was computed from.</summary>
         public static double LeanFrac, AoaDeg;
 
@@ -303,16 +337,16 @@ namespace DragonScreen
             // that thinks it is mid-step, a failure already reported so never reported again.
             gridFinsOut = false;
             recoveryPropStart = -1.0;
-            lastModeStepAt = 0.0; modeSteps = 0; lastWantMode = -1; modeFailReported = false;
             handedOverToOne = false;
             settleUntil = 0.0;
             burnLatchedEngines = 0; lastBurnPhase = LandingPhase.Idle;
             noBoosterLooks = 0;
             phaseStartedAt = 0.0; noBoosterReported = false; packedReported = false;
             TrueRadar = 0.0; DownrangeM = 0.0; initialMiss = 0.0;
-            PredictedMissM = 0.0; InitialMissM = 0.0;
+            PredictedMissM = 0.0; DownMissM = 0.0; CrossMissM = 0.0; InitialMissM = 0.0;
             RangeToPartnerM = 0.0; PhaseElapsedS = 0.0; OctaMode = -1; EnginesLit = 0;
             GridFinsOut = false; LeanFrac = 0.0; AoaDeg = 0.0;
+            LiveThrustKn = 0.0; ColdGasFrac = -1.0; UllageOn = false;
             flipSeeded = false; flipComplete = false;
             rollStartedAt = 0.0; rollSettledAt = 0.0;
             slewSeeded = false;
@@ -514,9 +548,11 @@ namespace DragonScreen
             return t;
         }
 
-        /// <summary>Above this much real thrust (kN) the engine counts as lit and the ullage can stop.
-        /// A Merlin spooling from a good light passes it in a fraction of a second; a failed light never
-        /// reaches it. Well below one Merlin's ~800 kN so the spool is not mistaken for unlit.</summary>
+        /// <summary>Above this much real thrust (kN) the engine counts as lit and the ullage settle can
+        /// stop. A Merlin spooling from a good light passes it in a fraction of a second; a failed light
+        /// never reaches it. Well below one Merlin's ~800 kN so the spool is not mistaken for unlit.
+        /// (The real landing fix is the entry-burn cut that keeps the stage decelerating/settled so the
+        /// engine spools cleanly - see Landing.EntryBurnTargetSpeedMps - not this threshold.)</summary>
         private const double BoosterLitThrustKn = 50.0;
 
         /// <summary>
@@ -672,10 +708,14 @@ namespace DragonScreen
             DownrangeM = s.DownrangeM;
             RangeToPartnerM = s.RangeToPartnerM;
             PhaseElapsedS = s.PhaseElapsedS;
-            OctaMode = ReadOctawebMode(FindEngineSwitch(booster));
+            OctaMode = LitOctawebMode(booster);   // the mode ACTUALLY firing (we drive modules, not the switch)
             EnginesLit = CountLit(booster);
+            LiveThrustKn = ProducingThrustKn(booster);      // ACTUAL thrust - the lit-but-no-thrust proof
+            ColdGasFrac = ColdGasFraction(booster);         // the ullage settle's propellant
+            UllageOn = false;                               // set true below iff a relight is settling
             GridFinsOut = gridFinsOut;
             PredictedMissM = s.PredictedMissM;
+            DownMissM = s.DownMissM; CrossMissM = s.CrossMissM;
             InitialMissM = s.InitialMissM;
             RecoveryPropFrac = s.RecoveryPropFrac;
             RecoveryPropUnitsNow = RecoveryPropUnits(booster);
@@ -759,6 +799,7 @@ namespace DragonScreen
                 if (!booster.ActionGroups[KSPActionGroup.RCS])
                     booster.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
                 AttitudeController.Booster.UllageFore = 1.0;   // -Z forward, settles propellant aft
+                UllageOn = true;
                 SetEngines(booster, 0, false);                 // hold off - do NOT spend an ignition yet
                 Aim(booster, c, s);
                 AttitudeController.Booster.Throttle = 0.0;
@@ -779,6 +820,7 @@ namespace DragonScreen
                 if (!booster.ActionGroups[KSPActionGroup.RCS])
                     booster.ActionGroups.SetGroup(KSPActionGroup.RCS, true);
                 AttitudeController.Booster.UllageFore = 1.0;    // keep settling through the ignition retries
+                UllageOn = true;
             }
             else
                 AttitudeController.Booster.UllageFore = 0.0;     // lit (or not a relight) - stop ullage
@@ -823,6 +865,13 @@ namespace DragonScreen
             // is the landing's.
             if (booster.ActionGroups[KSPActionGroup.RCS] != c.Rcs)
                 booster.ActionGroups.SetGroup(KSPActionGroup.RCS, c.Rcs);
+
+            // ---- ⛔ DIRECT ACTUATOR OWNERSHIP. Assert the gimbal + grid-fin authority through the parts'
+            // own handles every phase (VehicleControl, from the craft dump), so the autopilot holds full
+            // control authority rather than trusting a KSP default a prior phase could have changed. Both
+            // full because the booster is authority-limited (see the fields' note). Cheap idempotent writes.
+            VehicleControl.SetGimbalLimit(booster, GimbalLimitPct);
+            VehicleControl.SetFinAuthority(booster, FinAuthorityPct);
         }
 
         private static void Finish(string why)
@@ -957,6 +1006,7 @@ namespace DragonScreen
             // Anything that is not a named mode accumulates into the all-engines figure, which is
             // what a conventional cluster of identical engines should do.
             double thrust = 0.0, thrustThree = 0.0, thrustOne = 0.0; int n = 0;
+            bool haveCentre = false, haveThree = false;
             for (int i = 0; i < v.parts.Count; i++)
             {
                 List<ModuleEngines> es = v.parts[i].Modules.GetModules<ModuleEngines>();
@@ -980,20 +1030,37 @@ namespace DragonScreen
                     double t1 = es[m].maxThrust * scale;
 
                     string id = es[m].engineID;
-                    if (Contains(id, VehicleParts.EngineIdCentre)) thrustOne = t1;
-                    else if (Contains(id, VehicleParts.EngineIdThree)) thrustThree = t1;
+                    if (Contains(id, VehicleParts.EngineIdCentre)) { thrustOne = t1; haveCentre = true; }
+                    else if (Contains(id, VehicleParts.EngineIdThree)) { thrustThree = t1; haveThree = true; }
                     else { thrust += t1; n++; }
                 }
             }
 
             double mass = v.GetTotalMass();
             s.Mass = mass;
-            s.MaxThrustAccel = (mass > 0.0) ? thrust / mass : 0.0;
-            s.AccelThreeEngine = (mass > 0.0) ? thrustThree / mass : 0.0;
-            s.AccelOneEngine = (mass > 0.0) ? thrustOne / mass : 0.0;
-            // With the octaweb the "all" mode is a single module standing for nine engines, so the
-            // count has to come from the vehicle rather than from how many modules were summed.
-            s.EngineCount = (FindEngineSwitch(v) != null) ? VehicleParts.OctawebEngineCount : n;
+            // ⛔ ADDITIVE INDIVIDUAL ENGINES vs the mode-switch octaweb. With the individual-engine patch
+            // (Crew2_Patches/F9_S1_IndividualEngines.cfg) the ModuleTundraEngineSwitch is GONE and the three
+            // groups are INDEPENDENT + ADDITIVE - 1 = centre, 3 = centre + landing pair, 9 = all three lit
+            // together - so the per-count accelerations are the CUMULATIVE sums. Without the patch (switch
+            // present) each mode is a COMPLETE thrust level and the accels are read as-is. Detected by the
+            // switch's presence, so the guidance is correct with or without the patch.
+            bool octaweb = haveCentre && haveThree;
+            bool additive = octaweb && FindEngineSwitch(v) == null;
+            if (additive)
+            {
+                s.AccelOneEngine   = (mass > 0.0) ? thrustOne / mass : 0.0;
+                s.AccelThreeEngine = (mass > 0.0) ? (thrustOne + thrustThree) / mass : 0.0;
+                s.MaxThrustAccel   = (mass > 0.0) ? (thrustOne + thrustThree + thrust) / mass : 0.0;
+            }
+            else
+            {
+                s.MaxThrustAccel   = (mass > 0.0) ? thrust / mass : 0.0;
+                s.AccelThreeEngine = (mass > 0.0) ? thrustThree / mass : 0.0;
+                s.AccelOneEngine   = (mass > 0.0) ? thrustOne / mass : 0.0;
+            }
+            // The octaweb is nine physical engines however it is packaged; the count comes from the
+            // vehicle, not from how many modules were summed (the "all" bucket is one module).
+            s.EngineCount = octaweb ? VehicleParts.OctawebEngineCount : n;
             s.PhaseElapsedS = Planetarium.GetUniversalTime() - phaseStartedAt;
 
             // ---- RECOVERY PROPELLANT FRACTION: 1.0 at handover, so the entry burn can reserve the
@@ -1008,6 +1075,22 @@ namespace DragonScreen
                           + ", mass " + v.GetTotalMass().ToString("F1") + " t");
             }
             s.RecoveryPropFrac = (recoveryPropStart > 0.0) ? propNow / recoveryPropStart : -1.0;
+
+            // ---- ADAPTIVE LANDING RESERVE INPUTS (sensed live). ----
+            // The entry burn reserves the ACTUAL landing-fuel need, not a fixed fraction: it needs the
+            // recovery propellant MASS aboard, and an estimate of the terminal descent speed the landing
+            // burn must arrest. v_term = sqrt(2 g bc / rho) from the corpus low-Mach ballistic coefficient
+            // and the near-deck air density - adapts to the body's air and the vehicle's drag. Clamped to a
+            // sane band so a bad density read cannot mis-size the reserve; the reserve margin covers the rest.
+            s.RecoveryPropKg = RecoveryPropMassKg(v);
+            double rhoLand = (v.mainBody != null)
+                ? v.mainBody.GetDensity(v.mainBody.GetPressure(1000.0), v.mainBody.GetTemperature(1000.0))
+                : 1.2;
+            double bcLand = BoosterDrag.BcAtMach(0.8);
+            double vTermEst = (rhoLand > 1e-4 && bcLand > 0.0)
+                ? Math.Sqrt(2.0 * s.Gravity * bcLand / rhoLand) : 280.0;
+            if (vTermEst < 200.0) vTermEst = 200.0; else if (vTermEst > 380.0) vTermEst = 380.0;
+            s.TerminalSpeedMps = vTermEst;
 
             // ⛔ DIAGNOSTIC (2026-08-24): the entry burn over-burned and STARVED the landing (ran dry at
             // 90 m/s, flight_0824_050855) - the 0.35 reserve cut never fired. Log the reserve fraction
@@ -1034,7 +1117,24 @@ namespace DragonScreen
             Vector3d retro = v.srf_velocity;
             s.HorizRetroMag = (retro.sqrMagnitude > 1.0)
                 ? Vector3d.Exclude(bUp, retro.normalized).magnitude : 0.0;
-            s.PredictedMissM = PredictedMiss(v);
+            bool missValid;
+            s.PredictedMissM = PredictedMiss(v, out missValid);
+            s.PredictedMissValid = missValid;
+            // ---- SPLIT THE IMPACT ERROR INTO DOWNRANGE + CROSSRANGE (the guidance steers on the whole
+            // vector; only its magnitude was recorded). Downrange = along the ground track (the direction
+            // of horizontal travel), crossrange = perpendicular. This is the missing signal: whether the
+            // remaining miss is downrange (lift MAGNITUDE - the AoA/lean cap) or crossrange (STEERING - is
+            // the roll cycle stopping the fins pointing the lift where it must go). See DownMissM/CrossMissM.
+            Vector3d errH = ImpactErrorHoriz(v);                       // LZ -> predicted impact, horizontal
+            Vector3d downHat = Vector3d.Exclude(bUp, retro);          // the ground-track (travel) direction
+            if (downHat.sqrMagnitude > 1.0 && errH.sqrMagnitude > 1e-6)
+            {
+                downHat = downHat.normalized;
+                Vector3d crossHat = Vector3d.Cross(bUp, downHat).normalized;   // right of track
+                s.DownMissM = Vector3d.Dot(errH, downHat);            // + = impact is LONG (past the deck)
+                s.CrossMissM = Vector3d.Dot(errH, crossHat);         // signed left/right of the track
+            }
+            else { s.DownMissM = 0.0; s.CrossMissM = 0.0; }
             s.InitialMissM = initialMiss;
             return s;
         }
@@ -1058,8 +1158,13 @@ namespace DragonScreen
         /// overshoot and is why aiming long is safe. Do not "correct" it toward the truth without
         /// also revisiting BoostbackOvershootM; the two are a pair.
         /// </summary>
-        private static double PredictedMiss(Vessel v)
+        private static double PredictedMiss(Vessel v) { bool drag; return PredictedMiss(v, out drag); }
+
+        /// <summary>As above, and reports whether the impact was DRAG-MODELLED (the corpus-curve prediction
+        /// succeeded) - the entry-burn aim only trusts a drag-modelled miss, never the vacuum fallback.</summary>
+        private static double PredictedMiss(Vessel v, out bool dragModelled)
         {
+            dragModelled = false;
             if (!HavePad || v == null || v.mainBody == null) return 0.0;
             CelestialBody b = v.mainBody;
 
@@ -1082,7 +1187,7 @@ namespace DragonScreen
             // This readout and the descent guidance used to solve this separately, and only this one
             // asked ImpactPredictor. They cannot disagree now.
             Vector3d toImpact;
-            if (!ImpactPointHoriz(v, up, alt, out toImpact)) return 0.0;
+            if (!ImpactPointHoriz(v, up, alt, out toImpact, out dragModelled)) return 0.0;
 
             Vector3d toLz = Vector3d.Exclude(up,
                 b.GetWorldSurfacePosition(PadLat, PadLon, alt) - v.CoM);
@@ -1149,14 +1254,26 @@ namespace DragonScreen
         /// </summary>
         private static bool ImpactPointHoriz(Vessel v, Vector3d up, double alt, out Vector3d toImpact)
         {
+            bool drag;
+            return ImpactPointHoriz(v, up, alt, out toImpact, out drag);
+        }
+
+        private static bool ImpactPointHoriz(Vessel v, Vector3d up, double alt, out Vector3d toImpact,
+                                             out bool dragModelled)
+        {
             toImpact = Vector3d.zero;
+            dragModelled = false;
             CelestialBody b = v.mainBody;
 
-            Impact im = ImpactPredictor.Predict(v);
+            // ⛔ THE BOOSTER USES THE CORPUS Mach-DEPENDENT DRAG CURVE (BoosterDrag), NOT the single live
+            // scalar bc - which is held at a garbage near-vacuum value under thrust and mis-predicts by tens
+            // of km. This is what makes the entry-burn aim correct. See ImpactPredictor.PredictBooster.
+            Impact im = ImpactPredictor.PredictBooster(v);
             if (im.Valid && im.DragModelled)
             {
                 Vector3d impactPos = b.GetWorldSurfacePosition(im.LatDeg, im.LonDeg, alt);
                 toImpact = Vector3d.Exclude(up, impactPos - v.CoM);
+                dragModelled = true;
                 return true;
             }
 
@@ -1496,47 +1613,30 @@ namespace DragonScreen
             if (handedOverToOne && Phase == LandingPhase.LandingBurn) want = 1;
 
             int wantMode = VehicleParts.OctawebModeFor(want);
-            if (wantMode != lastWantMode) { lastWantMode = wantMode; modeSteps = 0; }
 
-            int now = ReadOctawebMode(em);
-            if (now != wantMode && now >= 0)
-            {
-                double t = Planetarium.GetUniversalTime();
-                if (t - lastModeStepAt >= ModeStepIntervalS && modeSteps <= 3)
-                {
-                    lastModeStepAt = t;
-                    modeSteps++;
-                    if (!InvokeAction(em, VehicleParts.EngineSwitchAction))
-                        Debug.LogWarning(Tag + "engine switch has no '"
-                                             + VehicleParts.EngineSwitchAction + "' action");
-                    else
-                        Debug.Log(Tag + "octaweb " + now + " -> stepping toward " + wantMode);
-                }
-                else if (modeSteps > 3 && !modeFailReported)
-                {
-                    modeFailReported = true;
-                    Debug.LogError(Tag + "OCTAWEB WILL NOT REACH MODE " + wantMode
-                                       + " (stuck in " + now + ") - the landing solve is being "
-                                       + "computed against the wrong thrust");
-                }
-                return;                     // do not light anything until the mode is right
-            }
-
-            // Mode is correct (or unreadable, in which case light what is there and say so once).
-            if (now < 0 && !modeFailReported)
-            {
-                modeFailReported = true;
-                Debug.LogWarning(Tag + "cannot read the octaweb mode - lighting whatever is enabled");
-            }
-
+            // ---- ⛔ DIRECT MODULE CONTROL - NO ENGINE-SWITCH CYCLE (user-verified 2026-08-26). ----
+            // The octaweb's three modes are three INDEPENDENT ModuleEnginesRF (engineID AllEngines /
+            // ThreeLanding / CenterOnly), and each one's own Activate()/Shutdown() is SEAMLESS - the crew
+            // proved it by firing the three "Activate Engine" toggles by hand, gap-free. What free-fell for
+            // ~2-4 s was the ModuleTundraEngineSwitch's one-way "next engine mode" CYCLE: stepping it
+            // re-inits the target module through the part's own reset, which re-runs the ignition/spool
+            // regardless of throttleResponseRate. So we DO NOT touch the switch. We light the ONE module
+            // whose engineID is wantMode and shut the other two, directly - the real handles, not staging
+            // or an action group. Paired with the instant-spool patch (F9_Engines_InstantSpool.cfg,
+            // throttleResponseRate=1E6), the newly-lit module reaches thrust immediately: a gap-free step.
+            //
+            // ⚠ SELECT BY MODE/engineID, NEVER BY POSITION. The earlier direct attempt (why the switch
+            // cycle was adopted) sorted the three co-located modules by distance from the axis - an
+            // arbitrary order - and lit the first `want`, which could light AllEngines AND ThreeLanding
+            // together = double thrust. EngineIdIsMode keys on the engineID, so exactly one mode is ever lit.
             for (int i = 0; i < v.parts.Count; i++)
             {
                 List<ModuleEngines> es = v.parts[i].Modules.GetModules<ModuleEngines>();
                 for (int m = 0; m < es.Count; m++)
                 {
-                    bool mine = (now < 0) || VehicleParts.EngineIdIsMode(es[m].engineID, wantMode);
-                    if (mine && wantThrust) IgniteWithRetry(es[m]);   // fire it, retry a dead light
-                    else if (es[m].EngineIgnited) es[m].Shutdown();   // not wanted (or mode-select only)
+                    bool mine = VehicleParts.EngineIdIsMode(es[m].engineID, wantMode);
+                    if (mine && wantThrust) IgniteWithRetry(es[m]);   // fire the wanted mode, retry a dead light
+                    else if (es[m].EngineIgnited) es[m].Shutdown();   // shut the other two modes - seamless
                 }
             }
         }
@@ -1575,16 +1675,10 @@ namespace DragonScreen
         /// full-throttle spool window. 0 = not in a landing burn.</summary>
         private static double landingBurnLitAt;
 
-        /// <summary>Seconds between mode steps. BOOSTER.ks:926 waits 0.3 s and reads back.</summary>
-        private const double ModeStepIntervalS = 0.3;
-
-        private static double lastModeStepAt;
-        private static int modeSteps, lastWantMode = -1;
         private static bool handedOverToOne;
         /// <summary>Engine count a burn settled on, held for that burn. See the churn note.</summary>
         private static int burnLatchedEngines;
         private static LandingPhase lastBurnPhase;
-        private static bool modeFailReported;
 
         private static PartModule FindEngineSwitch(Vessel v)
         {
@@ -1606,6 +1700,33 @@ namespace DragonScreen
         /// exactly as OctaRead does (BOOSTER.ks:880). A Falcon Heavy side booster or a future variant
         /// may not carry the switch at all.
         /// </summary>
+        /// <summary>
+        /// The octaweb mode ACTUALLY firing right now - the mode of whichever ModuleEnginesRF is lit.
+        /// Since the autopilot drives the three modules directly (SetOctawebMode) instead of cycling the
+        /// ModuleTundraEngineSwitch, the switch's own `mode` field no longer tracks reality; this reads the
+        /// truth off the lit engine. If nothing is lit (a coast), it falls back to the switch's selected
+        /// mode so the diagnostic still shows what a stage would light. Highest-thrust mode wins a tie
+        /// (a one-frame transition where two are briefly lit).
+        /// </summary>
+        private static int LitOctawebMode(Vessel v)
+        {
+            if (v == null) return -1;
+            int best = -1;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                List<ModuleEngines> es = v.parts[i].Modules.GetModules<ModuleEngines>();
+                for (int m = 0; m < es.Count; m++)
+                {
+                    if (!es[m].EngineIgnited || es[m].flameout) continue;
+                    for (int mode = 0; mode <= 2; mode++)
+                        if (VehicleParts.EngineIdIsMode(es[m].engineID, mode)
+                            && (best < 0 || mode < best)) best = mode;   // ModeAllEngines=0 is highest thrust
+                }
+            }
+            if (best >= 0) return best;
+            return ReadOctawebMode(FindEngineSwitch(v));   // nothing lit - show the selected mode
+        }
+
         private static int ReadOctawebMode(PartModule em)
         {
             if (em == null) return -1;
@@ -1626,22 +1747,6 @@ namespace DragonScreen
             }
             catch (Exception) { }
             return -1;
-        }
-
-        private static bool InvokeAction(PartModule pm, string guiName)
-        {
-            try
-            {
-                for (int i = 0; i < pm.Actions.Count; i++)
-                {
-                    BaseAction a = pm.Actions[i];
-                    if (a == null || !Same(a.guiName, guiName)) continue;
-                    a.Invoke(new KSPActionParam(KSPActionGroup.None, KSPActionType.Activate));
-                    return true;
-                }
-            }
-            catch (Exception e) { Debug.LogWarning(Tag + "action '" + guiName + "' threw: " + e.Message); }
-            return false;
         }
 
         private static bool Same(string a, string b)
@@ -1677,6 +1782,36 @@ namespace DragonScreen
                 return;
             }
 
+            // ---- ADDITIVE OCTAWEB (individual-engine patch): three INDEPENDENT groups by engineID, lit
+            // CUMULATIVELY so the centre never stops through a step - true gap-free 9->3->1. Centre if
+            // want>=1, the landing pair (engineID "Three") if want>=3, the outer six (neither) if want>3.
+            // Shedding a group shuts it while the others keep firing - no relight gap, exactly the real
+            // Falcon. ⛔ SHED-ONLY during the landing burn: latch the floor so the count cannot climb back
+            // and re-light (each relight spends a finite TEATEB ignition), and the descent only ever slows,
+            // so the fewest-that-can-arrest only ever drops - the natural all->3->1 taper.
+            ModuleEngines centre = null, pair = null;
+            List<ModuleEngines> outer = new List<ModuleEngines>();
+            for (int i = 0; i < all.Count; i++)
+            {
+                string id = all[i].engineID;
+                if (Contains(id, VehicleParts.EngineIdCentre)) centre = all[i];
+                else if (Contains(id, VehicleParts.EngineIdThree)) pair = all[i];
+                else outer.Add(all[i]);
+            }
+            if (centre != null && pair != null)                 // the additive octaweb
+            {
+                if (Phase == LandingPhase.LandingBurn)
+                {
+                    if (want < landingCountFloor) landingCountFloor = want;
+                    want = landingCountFloor;
+                }
+                else landingCountFloor = 99;
+                SetGroup(centre, wantThrust && want >= 1);
+                SetGroup(pair,   wantThrust && want >= 3);
+                for (int i = 0; i < outer.Count; i++) SetGroup(outer[i], wantThrust && want > 3);
+                return;
+            }
+
             Vector3 axis = v.ReferenceTransform.up;
             Vector3 com = v.CoM;
             all.Sort(delegate (ModuleEngines a, ModuleEngines b)
@@ -1696,6 +1831,20 @@ namespace DragonScreen
             if (e == null || e.part == null) return float.MaxValue;
             return Vector3.ProjectOnPlane(e.part.transform.position - com, axis).sqrMagnitude;
         }
+
+        /// <summary>Light one additive-octaweb engine group, or shut it (leaving the others firing - the
+        /// gap-free step). A dead relight is retried (IgniteWithRetry); shutting is instant.</summary>
+        private static void SetGroup(ModuleEngines e, bool on)
+        {
+            if (e == null) return;
+            if (on) IgniteWithRetry(e);
+            else if (e.EngineIgnited) e.Shutdown();
+        }
+
+        /// <summary>Lowest engine count committed so far in the current landing burn - the additive octaweb
+        /// only ever SHEDS engines (never re-lights a group), so a borderline count cannot churn ignitions.
+        /// 99 = not yet in a landing burn. See SetEnginesIndividually.</summary>
+        private static int landingCountFloor = 99;
 
         // ------------------------------------------------------------------ grid fins
 
@@ -1777,6 +1926,54 @@ namespace DragonScreen
                 }
             }
             return u;
+        }
+
+        /// <summary>
+        /// The MASS of the recovery propellant currently aboard, kg (amount x density). The ADAPTIVE landing
+        /// reserve (Landing.LandingReserveReached) compares the live-computed landing-fuel need against this,
+        /// so the entry burn reserves exactly what the landing will burn and bleeds the rest toward the barge
+        /// - self-sizing instead of a tuned fraction. Units alone cannot be compared to a fuel mass.
+        /// </summary>
+        private static double RecoveryPropMassKg(Vessel v)
+        {
+            if (v == null) return 0.0;
+            double kg = 0.0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                PartResourceList rs = v.parts[i].Resources;
+                for (int r = 0; r < rs.Count; r++)
+                {
+                    string nm = rs[r].resourceName;
+                    if (nm == "RP-1" || nm == "CooledRP-1" || nm == "LqdOxygen" || nm == "CooledLqdOxygen"
+                        || nm == "Kerosene" || nm == "LiquidFuel" || nm == "Oxidizer")
+                        kg += rs[r].amount * rs[r].info.density * 1000.0;   // info.density is tonnes/unit
+                }
+            }
+            return kg;
+        }
+
+        /// <summary>
+        /// The booster's cold-gas RCS propellant remaining as a fraction of capacity - the propellant the
+        /// landing ullage settle spends to feed the Merlin its relight in ~0 g terminal fall. Real Falcon 9
+        /// uses cold-gas nitrogen; RO/RealFuels may model it as Nitrogen or MonoPropellant, so both are
+        /// summed. -1 = the vehicle carries none (then the ullage-settle cannot work and the landing burn
+        /// depends on drag alone). Diagnostic only.
+        /// </summary>
+        private static double ColdGasFraction(Vessel v)
+        {
+            if (v == null) return -1.0;
+            double amt = 0.0, cap = 0.0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                PartResourceList rs = v.parts[i].Resources;
+                for (int r = 0; r < rs.Count; r++)
+                {
+                    string nm = rs[r].resourceName;
+                    if (nm == "Nitrogen" || nm == "MonoPropellant" || nm == "NitrogenGas" || nm == "HTP")
+                    { amt += rs[r].amount; cap += rs[r].maxAmount; }
+                }
+            }
+            return (cap > 0.0) ? amt / cap : -1.0;
         }
 
         private static void SetGridFinControl(Vessel v, bool active)

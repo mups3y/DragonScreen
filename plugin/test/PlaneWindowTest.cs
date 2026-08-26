@@ -119,7 +119,73 @@ public static class PlaneWindowTest
         Check("launching at TimeToPlane always lands the orbit LAN on the target LAN (coplanar, no X)",
               planeBad == 0, planeBad + " of 60 off-plane");
 
+        // ---- PickPhasedCrossing: choose WHICH plane crossing (plane ∩ phase) ----
+        // The plane repeats every sidereal day; the target's phase steps ~170 deg/crossing at the ISS.
+        // The launch should take the EARLIEST crossing that lands the target ahead in a usable band.
+        {
+            double sid = 86164.0, tStn = 5569.0;
+            double step = (((360.0 * sid / tStn) % 360.0) + 360.0) % 360.0;      // ~170 deg
+            double first = 85260.0, phase0 = 118.0;
+            double amin = 20.0, amax = 160.0, desired = 25.0;
+            double minW = 172800.0, maxW = 604800.0;                            // 2..7 days
+
+            double w; int k; double lead;
+            PlaneWindow.PickPhasedCrossing(first, sid, phase0, step, amin, amax, desired,
+                                           minW, maxW, out w, out k, out lead);
+
+            Check("picked crossing >= the min lead", w >= minW - 0.5, w.ToString("F0"));
+            Check("picked crossing <= the max wait", w <= maxW + 0.5, w.ToString("F0"));
+            Check("picked wait matches its index", Math.Abs(w - (first + k * sid)) < 1.0,
+                  "k=" + k + " w=" + w.ToString("F0"));
+            Check("reported lead matches the index phase",
+                  Math.Abs((((phase0 + k * step) % 360 + 360) % 360) - lead) < 1e-6, lead.ToString("F2"));
+            Check("picked lead is inside the acceptance band", lead >= amin - 1e-6 && lead <= amax + 1e-6,
+                  lead.ToString("F1"));
+
+            // Independent brute force: the EARLIEST in-range crossing whose phase is in the band.
+            int refK = -1; double refW = 0, refLead = 0;
+            for (int kk = 0; first + kk * sid <= maxW + 0.5; kk++)
+            {
+                double ww = first + kk * sid; if (ww < minW) continue;
+                double ph = (((phase0 + kk * step) % 360) + 360) % 360;
+                if (ph >= amin && ph <= amax) { refK = kk; refW = ww; refLead = ph; break; }
+            }
+            Check("picker takes the earliest in-band crossing", refK >= 0 && k == refK && Math.Abs(w - refW) < 1.0,
+                  "picker k=" + k + " ref k=" + refK);
+            // And it's a real improvement on the naive first crossing (118 deg, behind-ish for a raise).
+            Check("in-band lead beats the raw first-crossing phase",
+                  Math.Abs(Wrap180d(lead - desired)) < Math.Abs(Wrap180d(phase0 - desired)), lead.ToString("F1"));
+
+            // Band-empty fallback -> closest to desired, ties earliest.
+            double w2; int k2; double l2;
+            PlaneWindow.PickPhasedCrossing(first, sid, phase0, step, 200.0, 201.0, 90.0,
+                                           minW, maxW, out w2, out k2, out l2);
+            double bestErr = 1e9; int fbK = -1; double fbLead = 0, fbW = 0;
+            for (int kk = 0; first + kk * sid <= maxW + 0.5; kk++)
+            {
+                double ww = first + kk * sid; if (ww < minW) continue;
+                double ph = (((phase0 + kk * step) % 360) + 360) % 360;
+                double e = Math.Abs(Wrap180d(ph - 90.0));
+                if (e < bestErr - 1e-9) { bestErr = e; fbK = kk; fbLead = ph; fbW = ww; }
+            }
+            Check("band-empty -> closest-to-desired fallback", k2 == fbK && Math.Abs(w2 - fbW) < 1.0,
+                  "k2=" + k2 + " fb=" + fbK);
+
+            // No recurrence -> the first crossing, unchanged.
+            double w3; int k3; double l3;
+            PlaneWindow.PickPhasedCrossing(first, 0.0, phase0, step, amin, amax, desired,
+                                           minW, maxW, out w3, out k3, out l3);
+            Check("no recurrence -> first crossing unchanged", w3 == first && k3 == 0, w3.ToString("F0"));
+        }
+
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
+    }
+
+    // (-180,180] wrap, for the phase-window checks above.
+    static double Wrap180d(double d)
+    {
+        d = ((d % 360.0) + 360.0) % 360.0;
+        return (d > 180.0) ? d - 360.0 : d;
     }
 }

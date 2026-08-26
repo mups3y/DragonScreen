@@ -68,6 +68,11 @@ namespace DragonScreen
             // so this is a cheap call every frame and a disk touch only once a second.
             Tuning.Poll();
 
+            // One-shot: the first frame a craft is sitting on the pad, dump every part/module/event/
+            // field/action to DragonScreen_capture/craftdump.csv, so direct control can be written
+            // against the vehicle's REAL handles. Latches until the flight scene is rebuilt.
+            CraftDump.Auto();
+
             // ---- AUTO-RESUME THE ASCENT AFTER A RECOVERY HANDBACK. ----
             // The booster-recovery handback tears down and rebuilds the flight scene; OnDestroy
             // disengaged the ascent mid-climb and the crew had to restart the sequence. If that
@@ -137,6 +142,15 @@ namespace DragonScreen
             // ⛔ LAST, AND UNCONDITIONALLY. The chutes must not depend on any sequence having been
             // started - see ChuteGuard. A crew flying the entry by hand had none deploy at all.
             ChuteGuard.Tick();
+            // ⛔ LAYER-3 FDIR: watch the autonomous rendezvous for a FROZEN plan and act on it - re-plan
+            // the stuck node, then abort-to-home if that does not recover. This is the autopilot noticing
+            // the fault a HUMAN had to cancel by hand on flight_0826_014654. Before ReturnFallback so its
+            // re-plan / abort acts this frame, and after the rendezvous controllers so it sees live state.
+            RendezvousFdir.Tick();
+            // The "always have a way home" safety net: if the rendezvous will not close (propellant floor
+            // or timeout), it abandons it and de-orbits for a steering-test entry. Before the deorbit/entry
+            // ticks so a fired fallback flies from this same frame.
+            ReturnFallback.Tick();
             PhaseDownOps.Tick();
             DeorbitOps.Tick();
             EntryOps.Tick();
@@ -229,6 +243,9 @@ namespace DragonScreen
                 ImpactPredictor.Reset();
                 FlightMonitor.Reset();
                 VehicleCheck.Reset();
+                CraftDump.Reset();
+                RendezvousFdir.Reset();
+                ReturnFallback.Reset();
             }
             catch (Exception e)
             {

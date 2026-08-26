@@ -164,6 +164,52 @@ namespace DragonScreen
         /// </summary>
         [Tunable] public static double LaunchLanBiasDeg = 0.0;
 
+        // ==================================================================================
+        //  PLANE ∩ PHASE. The plane window (above) matches the RAAN; these pick WHICH plane crossing so
+        //  the target PHASE is also right. flight_0825_195232 was coplanar (rel-inc 0.41 deg) but inserted
+        //  118 deg / 14,000 km behind the ISS because we took the first crossing regardless of phase. See
+        //  pure/PlaneWindow.PickPhasedCrossing.
+        // ==================================================================================
+
+        /// <summary>
+        /// The along-track lead we want the station to have at insertion, degrees (target AHEAD). Not zero:
+        /// the lower/faster chaser must have some gap to close, and the BOOST raise fires at a small lead
+        /// (~6 deg for the 200->409 km climb), so we insert a bit above it and let the phasing dwell bring
+        /// it down. ~25 deg is ~1.5 h of phasing before BOOST - short, and safely on the closing side so we
+        /// never insert already past the lead (which would mean waiting a whole synodic period). TUNABLE.
+        /// </summary>
+        [Tunable] public static double DesiredPhaseLeadDeg = 25.0;
+
+        /// <summary>
+        /// The arg-of-latitude our ascent gains from the pad's on-plane crossing point to insertion,
+        /// degrees. Added to the pad's on-plane arg-of-latitude (spherical trig from its latitude and the
+        /// inclination) to get where WE insert on the shared plane, which fixes phase0. A seed; calibrate it
+        /// from the `INSERTION PHASE` residual MeasureAtInsertion logs (subtract the residual from this).
+        /// A few degrees of error here only shifts the whole phase estimate and the rendezvous phasing
+        /// absorbs it - it is not knife-edge. TUNABLE.
+        /// </summary>
+        [Tunable] public static double AscentArcDeg = 18.0;
+
+        /// <summary>
+        /// The usable insertion-lead band, degrees (target AHEAD). The launch picks the EARLIEST plane
+        /// crossing landing the lead in here. Bounded away from 0 so we never insert already past the BOOST
+        /// raise lead (~6 deg) - which would force a whole synodic period's wait - and kept under ~180 so
+        /// the lower/faster chaser closes it monotonically without lapping. Wide because at the ISS the
+        /// phase steps ~170 deg/crossing, so a narrow band would push the launch many days out for little
+        /// gain; the rendezvous phasing closes whatever lands in this band. TUNABLE.
+        /// </summary>
+        [Tunable] public static double AcceptLeadMinDeg = 20.0;
+        [Tunable] public static double AcceptLeadMaxDeg = 160.0;
+
+        /// <summary>
+        /// Longest we will look ahead for a well-phased plane crossing, seconds. The crossing recurs every
+        /// sidereal day and the phase steps ~170 deg/day at the ISS, so ~7 days of candidates span the
+        /// circle and land the phase within a few tens of degrees of the target - which the phasing then
+        /// closes. Larger = tighter phase but more pre-launch warp (which is free and safe, unlike phasing
+        /// warp). TUNABLE.
+        /// </summary>
+        [Tunable] public static double PhaseSearchMaxS = 604800.0;   // 7 days
+
         /// <summary>Seconds still to wait, or 0 when the window is open. Negative = no station.</summary>
         public static double WaitS = -1.0;
         public static string Note = "-";
@@ -202,30 +248,47 @@ namespace DragonScreen
             // then closes the phase by phasing up from the low insertion orbit. See pure/PlaneWindow.cs.
             if (station.orbit.inclination > PlaneMatchMinIncDeg)
             {
-                double planeWait = SecondsToPlaneCrossing(v, station, b);
-                if (planeWait < 0.0)
+                double firstCrossing = SecondsToPlaneCrossing(v, station, b);
+                if (firstCrossing < 0.0)
                 {
                     Note = "plane window unresolved (degenerate geometry) - launching now";
                     return 0.0;
                 }
-                // ---- HOLD ~2 DAYS OUT SO THE CREW CAN WARP TO IT (see PlaneWindowMinLeadS). ----
-                // The soonest north-going crossing is < 1 sidereal day; push forward whole days until the
-                // window is at least the min lead ahead. Same on-plane geometry, a comfortable warp to it.
                 double sidereal = System.Math.Abs(b.rotationPeriod);
-                if (sidereal > 1.0 && PlaneWindowMinLeadS > 0.0)
-                    while (planeWait < PlaneWindowMinLeadS) planeWait += sidereal;
-                if (planeWait > PlaneWindowCapS)
+
+                // ---- PLANE ∩ PHASE: pick the crossing DAY whose target phase is also a small catch-up
+                // lead, so the rendezvous is a short phasing dwell - not the ~118 deg we got by taking the
+                // first crossing. The plane is matched at every crossing (same geometry each sidereal day);
+                // we choose among them for phase. minLead still holds the window ~2 days out to warp to.
+                double phase0, step;
+                PhaseAtCrossing(v, station, b, firstCrossing, out phase0, out step);
+                double chosenWait; int chosenK; double predLead;
+                PlaneWindow.PickPhasedCrossing(firstCrossing, sidereal, phase0, step,
+                    AcceptLeadMinDeg, AcceptLeadMaxDeg, DesiredPhaseLeadDeg,
+                    PlaneWindowMinLeadS, PhaseSearchMaxS,
+                    out chosenWait, out chosenK, out predLead);
+
+                // Record the lead the window PREDICTED so MeasureAtInsertion can score it against what the
+                // ascent actually delivered (the `INSERTION PHASE` calibration line).
+                LastRequiredLeadDeg = predLead;
+
+                if (chosenWait > PhaseSearchMaxS + sidereal)
                 {
-                    Note = "plane crossing " + (planeWait / 3600.0).ToString("F1") + " h away, past the "
-                         + (PlaneWindowCapS / 3600.0).ToString("F0") + " h cap - launching now, plane will be off";
+                    Note = "no well-phased plane crossing within " + (PhaseSearchMaxS / 86400.0).ToString("F1")
+                         + " days - launching now, phase will be large";
                     Debug.LogWarning(Tag + "LAUNCH WINDOW: " + Note);
                     return 0.0;
                 }
-                WaitS = planeWait;
-                Note = "plane crossing (RAAN match) in " + planeWait.ToString("F0") + " s - station inc "
-                     + station.orbit.inclination.ToString("F2") + " deg";
-                Debug.Log(Tag + "LAUNCH WINDOW: " + Note + ". Phase closed by rendezvous phasing.");
-                return planeWait;
+
+                WaitS = chosenWait;
+                Note = "plane+phase crossing #" + chosenK + " in " + chosenWait.ToString("F0")
+                     + " s (" + (chosenWait / 86400.0).ToString("F2") + " d) - target lead "
+                     + predLead.ToString("F1") + " deg (want " + DesiredPhaseLeadDeg.ToString("F0")
+                     + "), station inc " + station.orbit.inclination.ToString("F2") + " deg";
+                Debug.Log(Tag + "LAUNCH WINDOW: " + Note
+                     + ". Plane matched (RAAN); the " + predLead.ToString("F1")
+                     + " deg lead is closed by rendezvous phasing.");
+                return chosenWait;
             }
 
             WindowInputs w = new WindowInputs();
@@ -300,6 +363,50 @@ namespace DragonScreen
                 + ") inc " + station.orbit.inclination.ToString("F2") + " -> hold " + t.ToString("F0")
                 + " s for the north-going plane crossing.");
             return t;
+        }
+
+        /// <summary>
+        /// The target's along-track lead over OUR insertion at the k=0 plane crossing (phase0Deg, +ve =
+        /// target ahead), and how much that lead advances per subsequent daily crossing (stepDeg). Worked in
+        /// ARG-OF-LATITUDE from the shared plane's ascending node - all KSP celestial scalars (orbit.LAN /
+        /// inclination / argumentOfPeriapsis / true anomaly), so there is nothing to mis-swizzle (the same
+        /// discipline as SecondsToPlaneCrossing). The chaser's insertion arg-of-latitude is the pad's
+        /// on-plane arg-of-latitude - spherical trig from its geographic latitude and the inclination,
+        /// sin(u)=sin(lat)/sin(inc) - plus the measured ascent arc (AscentArcDeg).
+        /// </summary>
+        private static void PhaseAtCrossing(Vessel v, Vessel station, CelestialBody b, double firstCrossing,
+                                            out double phase0Deg, out double stepDeg)
+        {
+            const double D2R = System.Math.PI / 180.0;
+            const double R2D = 180.0 / System.Math.PI;
+
+            double utIns0 = Planetarium.GetUniversalTime() + firstCrossing + AscentTimeS;
+
+            // Target arg-of-latitude at our first insertion (deg, from its ascending node).
+            double nuDeg = station.orbit.TrueAnomalyAtUT(utIns0) * R2D;
+            double uStn = PlaneWindow.Norm360(station.orbit.argumentOfPeriapsis + nuDeg);
+
+            // Our insertion arg-of-latitude: the pad's on-plane arg-of-latitude + the ascent arc.
+            double lat = v.latitude * D2R;
+            double sinInc = System.Math.Sin(System.Math.Abs(station.orbit.inclination * D2R));
+            double ratio = (sinInc > 1e-6) ? System.Math.Sin(lat) / sinInc : 0.0;
+            if (ratio > 1.0) ratio = 1.0; else if (ratio < -1.0) ratio = -1.0;
+            double uPad = System.Math.Asin(ratio) * R2D;          // north-going ascending: [0,90)
+            double uIns = PlaneWindow.Norm360(uPad + AscentArcDeg);
+
+            phase0Deg = PlaneWindow.Norm360(uStn - uIns);
+
+            // Per-crossing advance: one sidereal day is this many target orbits; the fractional part is how
+            // much further ahead the target is at the next daily crossing.
+            double tStn = station.orbit.period;
+            stepDeg = (tStn > 1.0)
+                    ? PlaneWindow.Norm360(360.0 * System.Math.Abs(b.rotationPeriod) / tStn)
+                    : 0.0;
+
+            Debug.Log(Tag + "plane+phase: pad on-plane u " + uPad.ToString("F1") + " + ascent arc "
+                + AscentArcDeg.ToString("F1") + " = insertion u " + uIns.ToString("F1")
+                + "; target u " + uStn.ToString("F1") + " -> phase0 " + phase0Deg.ToString("F1")
+                + " deg, step " + stepDeg.ToString("F1") + " deg/crossing.");
         }
 
         /// <summary>
@@ -397,6 +504,23 @@ namespace DragonScreen
                     if (relIncDeg > 3.0)
                         Debug.LogWarning(Tag + "INSERTION PLANE: " + relIncDeg.ToString("F1")
                             + " deg off the station plane - a rendezvous from here needs an expensive plane change.");
+
+                    // ---- INSERTION PHASE (the along-track half of the launch window). ----
+                    // arg-of-latitude difference is the true along-track lead between two coplanar orbits
+                    // (unlike the body-longitude trail above, which is only along-track near the equator).
+                    // This is what the plane+phase window aims at, so score delivered vs predicted here.
+                    double r2d = 180.0 / System.Math.PI;
+                    double uStnNow = PlaneWindow.Norm360(
+                        station.orbit.argumentOfPeriapsis + station.orbit.trueAnomaly * r2d);
+                    double uChaserNow = PlaneWindow.Norm360(
+                        v.orbit.argumentOfPeriapsis + v.orbit.trueAnomaly * r2d);
+                    double deliveredLead = PlaneWindow.Norm360(uStnNow - uChaserNow);
+                    double residDeg = PlaneWindow.Wrap180(deliveredLead - LastRequiredLeadDeg);
+                    Debug.Log(Tag + "INSERTION PHASE: target lead (arg-of-lat) " + deliveredLead.ToString("F1")
+                        + " deg; window predicted " + LastRequiredLeadDeg.ToString("F1") + " deg; residual "
+                        + residDeg.ToString("F1") + " deg (want the delivered lead near "
+                        + DesiredPhaseLeadDeg.ToString("F0") + "). If this residual repeats, subtract it "
+                        + "from LaunchWindowOps.AscentArcDeg.");
                 }
             }
         }

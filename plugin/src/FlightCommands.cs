@@ -299,61 +299,43 @@ namespace DragonScreen
         /// nodes they hang on - `minAirPressure` distinguishes them in stock terms, so the DROGUE is
         /// the one that will deploy higher.
         /// </summary>
+        /// ⛔ FIRES THE CHUTE'S OWN "Deploy Chute" HANDLE, NOT A STOCK ModuleParachute CAST. The RO
+        /// Dragon's chutes are RealChuteModule (no stock ModuleParachute exists on the craft), so the old
+        /// cast found nothing and these buttons were a silent no-op. Drogues vs mains by name (VehicleParts).
         private static bool Deploy(Vessel v, bool mains, bool drogues)
         {
             int fired = 0;
-            List<ModuleParachute> all = Parachutes(v);
-            for (int i = 0; i < all.Count; i++)
+            for (int i = 0; i < v.parts.Count; i++)
             {
-                ModuleParachute p = all[i];
-                bool isDrogue = p.part != null && p.part.name.IndexOf("DROGUE",
-                                    StringComparison.OrdinalIgnoreCase) >= 0;
+                Part p = v.parts[i];
+                if (p == null) continue;
+                bool isDrogue = VehicleParts.IsDrogues(p.name);
+                bool isMain = VehicleParts.IsMains(p.name);
+                if (!isDrogue && !isMain) continue;
                 if (isDrogue && !drogues) continue;
-                if (!isDrogue && !mains) continue;
-                if (p.deploymentState == ModuleParachute.deploymentStates.DEPLOYED
-                    || p.deploymentState == ModuleParachute.deploymentStates.SEMIDEPLOYED) continue;
-
-                p.Deploy();
-                fired++;
+                if (isMain && !mains) continue;
+                if (VehicleControl.FireByGuiName(p, "deploy chute")) fired++;
             }
             Log("chutes deployed: " + fired + " (mains=" + mains + " drogues=" + drogues + ")");
             return fired > 0;
         }
 
         /// <summary>
-        /// CUT MAINS. The model itself carries the warning `USE ONLY AFTER LANDING`, so this cuts
-        /// only what is actually out - cutting nothing is a refusal, not a silent success.
+        /// CUT the chutes. The RealChute handle is "Cut main chute" (event + action); an already-cut or
+        /// stowed chute offers no active event, so cutting nothing is reported, not a silent success.
         /// </summary>
         private static bool CutChutes(Vessel v)
         {
             int cut = 0;
-            List<ModuleParachute> all = Parachutes(v);
-            List<string> states = new List<string>();
-            for (int i = 0; i < all.Count; i++)
-            {
-                ModuleParachute p = all[i];
-                states.Add(p.deploymentState.ToString());
-                if (p.deploymentState != ModuleParachute.deploymentStates.DEPLOYED
-                    && p.deploymentState != ModuleParachute.deploymentStates.SEMIDEPLOYED) continue;
-                p.CutParachute();
-                cut++;
-            }
-            // ---- SAY WHY, NOT JUST NO ----
-            // The first flight logged a bare "chutes cut: 0" after MAINS ONLY had just reported
-            // success, which reads like a contradiction. It is not: arming a chute leaves it ACTIVE,
-            // and an ACTIVE canopy has nothing to cut. Printing the states makes that self-evident
-            // instead of something to work out from two log lines a minute apart.
-            Log("chutes cut: " + cut + " of " + all.Count
-                + " [" + string.Join(", ", states.ToArray()) + "]");
-            return cut > 0;
-        }
-
-        private static List<ModuleParachute> Parachutes(Vessel v)
-        {
-            List<ModuleParachute> found = new List<ModuleParachute>();
             for (int i = 0; i < v.parts.Count; i++)
-                found.AddRange(v.parts[i].Modules.GetModules<ModuleParachute>());
-            return found;
+            {
+                Part p = v.parts[i];
+                if (p == null) continue;
+                if (!VehicleParts.IsDrogues(p.name) && !VehicleParts.IsMains(p.name)) continue;
+                if (VehicleControl.FireByGuiName(p, "cut main chute")) cut++;
+            }
+            Log("chutes cut: " + cut);
+            return cut > 0;
         }
 
         /// <summary>

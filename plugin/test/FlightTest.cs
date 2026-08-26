@@ -225,9 +225,11 @@ public static class FlightTest
               Landing.Guide(climbFast, LandingPhase.Coast).Phase != LandingPhase.LandingBurn,
               Landing.Guide(climbFast, LandingPhase.Coast).Phase.ToString());
 
-        // The same state, but falling, must arm normally - the gate has to still work.
-        LandingInputs fallFast = Fall(2000.0, -180.0, 190.0, 43.0, 9);
-        fallFast.AccelOneEngine = 15.0;
+        // The same state, but falling, must arm normally - the gate has to still work. A realistic octaweb
+        // descent (centre + three-engine modes, real mass) low and slow enough that the centre engine's own
+        // drag-aware ignition altitude is above it, so the hoverslam gate fires and the burn lights.
+        LandingInputs fallFast = Fall(800.0, -120.0, 130.0, 60.0, 9);
+        fallFast.AccelOneEngine = 27.0; fallFast.AccelThreeEngine = 60.0; fallFast.Mass = 25.0;
         Check("a falling stage inside the ignition altitude does light",
               Landing.Guide(fallFast, LandingPhase.Descent).Phase == LandingPhase.LandingBurn,
               Landing.Guide(fallFast, LandingPhase.Descent).Phase.ToString());
@@ -250,6 +252,27 @@ public static class FlightTest
         Check("an RTLS entry burn ignores the reserve (it boosted back, so it is short anyway)",
               Landing.Guide(ebRtls, LandingPhase.EntryBurn).Phase == LandingPhase.EntryBurn,
               Landing.Guide(ebRtls, LandingPhase.EntryBurn).Phase.ToString());
+
+        // ---- ADAPTIVE LANDING RESERVE: sized LIVE from the landing-fuel need, not a fixed fraction. ----
+        LandingInputs res = Fall(30000.0, -600.0, 700.0, 60.0, 9);
+        res.Droneship = true; res.AccelOneEngine = 30.0; res.AccelThreeEngine = 65.0; res.Mass = 25.0;
+        res.TerminalSpeedMps = 280.0;
+        double needKg = Landing.LandingFuelKg(res);
+        Check("the live landing-fuel need is a real positive mass", needKg > 100.0 && needKg < 25000.0,
+              needKg.ToString("F0"));
+        res.RecoveryPropKg = needKg * 3.0;               // plenty aboard -> keep bleeding toward the barge
+        Check("reserve NOT reached while recovery prop is well above the live need",
+              !Landing.LandingReserveReached(res), "");
+        res.RecoveryPropKg = needKg * (1.0 + Landing.LandingReserveMargin) - 1.0;   // bled to the need
+        Check("reserve reached once recovery prop hits the live-computed need + margin",
+              Landing.LandingReserveReached(res), "");
+        LandingInputs heavyRes = res; heavyRes.Mass = 40.0;                          // heavier -> needs more
+        Check("a heavier stage reserves MORE landing fuel (adaptive, not a fixed fraction)",
+              Landing.LandingFuelKg(heavyRes) > needKg, Landing.LandingFuelKg(heavyRes).ToString("F0"));
+        LandingInputs noLive = Fall(30000.0, -600.0, 700.0, 60.0, 9);               // no live inputs
+        noLive.Droneship = true; noLive.RecoveryPropFrac = Landing.EntryBurnReserveFrac - 0.01;
+        Check("with no live inputs the reserve falls back to the fixed fraction",
+              Landing.LandingReserveReached(noLive), "");
 
         // ---- BOOSTBACK STOPS ON A PREDICTED IMPACT POINT, DELIBERATELY LONG ----
         LandingInputs bbShort = Fall(40000.0, 500.0, 900.0, 43.0, 9);
@@ -348,6 +371,33 @@ public static class FlightTest
         Check("Earth flies the Crew-2 max-Q bucket (ceiling below the ~32 kPa full-thrust peak) + a g cap",
               earth.MaxQKpa >= 28.0 && earth.MaxQKpa <= 31.0 && earth.GLimitMps2 > 0.0,
               "maxQ=" + earth.MaxQKpa + " gLimit=" + earth.GLimitMps2.ToString("F1"));
+
+        // ---- ⛔ THE G-LIMIT IS SIZED ON FULL-THROTTLE THRUST, NOT THE LIVE THROTTLED THRUST. ----
+        // The ~4.2 g the crew observed: GThrottle was fed the already-throttled thrust, read that throttled
+        // acceleration as if it were the full-throttle one, so the instant it throttled to the cap the "full
+        // accel" read the cap, it returned 1.0, and the engine went back to full - oscillating above 3.5 g.
+        // It must key on MaxThrustKn (full-throttle), which is stable under throttling.
+        double gcap = earth.GLimitMps2;                          // 3.5 g
+        AscentInputs glim = new AscentInputs();
+        glim.Valid = true; glim.MassT = 20.0;
+        glim.MaxThrustKn = 4.5 * 9.80665 * glim.MassT;           // full-throttle accel = 4.5 g
+        glim.AvailableThrust = 0.0;                              // live thrust must be IRRELEVANT to the cap
+        double gt2 = Ascent.GThrottle(glim, gcap);
+        Check("g-limit throttles a 4.5 g full-throttle stage toward the 3.5 g cap",
+              Math.Abs(gt2 - 3.5 / 4.5) < 1e-3, gt2.ToString("F3"));
+        Check("...and the delivered acceleration at that throttle equals the cap (stable, no oscillation)",
+              Math.Abs(gt2 * glim.MaxThrustKn / glim.MassT - gcap) < 1e-6,
+              (gt2 * glim.MaxThrustKn / glim.MassT).ToString("F3"));
+        AscentInputs glow = glim; glow.MaxThrustKn = 3.0 * 9.80665 * glow.MassT;   // 3.0 g at full throttle
+        Check("a stage under the g cap runs full throttle",
+              Math.Abs(Ascent.GThrottle(glow, gcap) - 1.0) < 1e-9, Ascent.GThrottle(glow, gcap).ToString("F3"));
+        // THE REGRESSION: set the live thrust to exactly the cap's throttled value (what the OLD buggy code
+        // read as "fullAccel == cap -> return 1.0"). The fixed code ignores it and still returns the cap.
+        AscentInputs gthrottled = glim;
+        gthrottled.AvailableThrust = gcap * gthrottled.MassT;    // live accel already AT the cap
+        Check("the g-limit keys on full-throttle thrust, not the live throttled thrust  [the ~4.2 g fix]",
+              Math.Abs(Ascent.GThrottle(gthrottled, gcap) - gt2) < 1e-9,
+              Ascent.GThrottle(gthrottled, gcap).ToString("F3"));
 
         // The decoupled pitch scale must actually make the Earth turn pitch over FASTER than the
         // Kerbin law would at the same altitude (the whole point - the atmosphere-scaling first
