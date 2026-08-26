@@ -68,6 +68,23 @@ namespace DragonScreen
                          ? plan[index].Phase : MissionPhase.Unknown; }
         }
         public static MissionProfile Profile { get { return mission; } }
+
+        // A ModeStep snapshot for the flight recorder (mission_phase + mode columns), built from the live
+        // conductor state so the recorder always knows the phase — even during an abort or a between-phase gap.
+        public static ModeStep CurrentMode
+        {
+            get
+            {
+                ModeStep ms = new ModeStep();
+                ms.Index = index;
+                ms.ActivePhase = ActivePhase;
+                ms.Holding = engaged && CurrentIsGate() && phase != GatePhase.Go;
+                ms.Flying = engaged && CurrentIsFly();
+                ms.Aborted = abortLatched;
+                return ms;
+            }
+        }
+
         public static bool IsReturn { get { return returnLeg; } }
         public static bool AtGate { get { return engaged && CurrentIsGate(); } }
         public static GateId CurrentGateId { get { return CurrentIsGate() ? plan[index].Gate : GateId.None; } }

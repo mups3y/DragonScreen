@@ -116,6 +116,24 @@ namespace DragonScreen
             }
         }
 
+        // Total thrust (N) of every lit engine on the vessel — the always-on recorder readout, so an
+        // uncommanded cutout (like the one that starved the attitude loop at MET 121 s) is visible directly.
+        public static double TotalActiveThrustN(Vessel v)
+        {
+            if (v == null) return 0.0;
+            double t = 0.0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                Part p = v.parts[i];
+                for (int m = 0; m < p.Modules.Count; m++)
+                {
+                    ModuleEngines e = p.Modules[m] as ModuleEngines;
+                    if (e != null && e.EngineIgnited && e.isOperational) t += e.finalThrust * 1000.0;
+                }
+            }
+            return t;
+        }
+
         // Shut ALL lit engines on booster parts (covers whichever octaweb mode is currently lit).
         public static void ShutdownBoosterEngines(Vessel v)
         {

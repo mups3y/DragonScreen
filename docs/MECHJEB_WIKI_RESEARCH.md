@@ -124,6 +124,15 @@ don't touch the loop). We must not chase gains for a structural wobble — it wo
   with minimal attitude disturbance). Relevant to **capsule prox-ops (Steps F/G)** — our
   "attitude-first-then-translate" already avoids the coupling, but a balancer is the refinement if translation
   induces attitude error. [Modules; Utilities]
+- **Flight Recorder** — read the SOURCE (`MechJebModuleFlightRecorder.cs`). ⭐ Its architecture is the fix
+  we applied to our own recorder (2026-08-26): a single `RecordStruct` is filled **every sample from live
+  vessel state**, NOT gated on which "phase/controller" is active — so an abort/coast/cutout is never lost.
+  It records **BOTH `SpeedSurface` and `SpeedOrbital`**, `AoA/AoS/AoD`, `Acceleration`, `Q`, and the
+  `GravityLosses/DragLosses/SteeringLosses` decomposition. We adopted: (1) an always-on base snapshot
+  (`FlightRecorder.PutBase`) writing phase/mode/surface-speed/AoA/felt-g/measured-thrust/RCS/abort every tick;
+  (2) both surface + orbital speed columns. **TODO (not yet):** the gravity/drag/**steering**-loss columns
+  (steering loss = `dt·thrustAccel·(1−dot(v̂,fwd))`, harvest §L) — they need per-tick integration in the ascent
+  controller and would directly diagnose the excessive-q ascent; add when we return to ascent tuning.
 - **Translatron** = vertical-speed hold — not needed; our hoverslam is the direct `√(2ad)` law.
 - **Delta-V Stats** — confirms MechJeb tracks **atmospheric vs vacuum** thrust/Isp separately, which validates
   our Step-C clamp-gate choice to use the **current-conditions** max thrust (`maxFuelFlow·flowMultiplier·Isp·g0`),

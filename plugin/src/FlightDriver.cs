@@ -303,6 +303,7 @@ namespace DragonScreen
                 aborting = true; abortChute = ChutePhase.Idle;
                 Debug.Log("[DragonScreen] ⛔ ABORT — SuperDraco launch escape, then chutes to splashdown.");
                 ReleaseThrottle(); ReleaseTranslation(); ReleaseRoll(); AttitudePilot.Reset();
+                FlightLog.Fill = AbortFillRow;   // ⛔ replace the stale ascent filler so the abort + chute descent record
                 Actuator.FireAbort(v);   // ⛔ direct: SuperDraco motor at full + capsule separation (no action group)
             }
 
@@ -321,6 +322,10 @@ namespace DragonScreen
             }
             catch (Exception e) { Debug.LogWarning("[DragonScreen] abort descent failed: " + e.Message); }
         }
+
+        // The abort's recorder columns (the always-on base already logs phase/AoA/thrust/abort; this adds the
+        // chute detail the abort descent owns). Replaces the frozen ascent filler for the rest of the flight.
+        static void AbortFillRow(string[] row) { FlightRecorder.PutAbortChutes(row, abortChute); }
 
         // ⛔ Chute deploy (RealChute-aware) moved to Actuator.DeployChutes.
     }

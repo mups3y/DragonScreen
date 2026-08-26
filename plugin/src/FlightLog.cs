@@ -77,9 +77,16 @@ namespace DragonScreen
                     v.altitude, v.obt_speed, v.verticalSpeed,
                     v.dynamicPressurekPa * 1000.0, v.mach,
                     double.NaN, v.totalMass * 1000.0);
+                // ⛔ ALWAYS-ON SNAPSHOT (MechJeb principle): phase/mode + surface speed + AoA + felt g +
+                // measured thrust + RCS + abort state, from live vessel data, so nothing is lost when no
+                // controller Fill is active (an abort, a coast, an engine cutout). See FlightRecorder.PutBase.
+                AbortMode am = FlightDriver.Aborting ? AbortMode.LaunchEscape : AbortMode.None;
+                FlightRecorder.PutBase(row, CrewProcedureOps.ActivePhase, CrewProcedureOps.CurrentMode,
+                    v.srfSpeed, Steering.AngleOfAttackDeg(v), v.geeForce, Actuator.TotalActiveThrustN(v),
+                    Actuator.IsRcsOn(v), FlightDriver.Aborting, am);
                 FlightRecorder.PutGate(row, CrewProcedureOps.CurrentGateId, CrewProcedureOps.Proc.Phase,
                                        CrewProcedureOps.CrewActionNeeded());
-                Action<string[]> fill = Fill;   // the active controller's columns (ascent, booster, …)
+                Action<string[]> fill = Fill;   // the active controller's PHASE-SPECIFIC columns on top of the base
                 if (fill != null) { try { fill(row); } catch { } }
                 writer.WriteLine(FlightRecorder.Row(row));
             }

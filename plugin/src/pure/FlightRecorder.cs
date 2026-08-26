@@ -24,8 +24,10 @@ namespace DragonScreen
             // time + mode/gate
             "met_s", "mission_phase", "mode_index", "mode_holding", "mode_flying",
             "gate_id", "gate_phase", "crew_action",
-            // nav / state
-            "alt_m", "speed_mps", "vspeed_mps", "q_pa", "mach", "downrange_m", "mass_kg",
+            // nav / state  (BOTH surface + orbital speed — MechJeb records both; the screenshots show surface,
+            // the guidance works in orbital. accel_g = felt g (thrust/cutout, always on). thrust_n = measured.)
+            "alt_m", "speed_mps", "srf_speed_mps", "vspeed_mps", "q_pa", "mach", "downrange_m", "mass_kg",
+            "accel_g", "thrust_n",
             // control
             "att_err_deg", "rate_cmd_rads", "throttle", "torque_cmd", "rcs_on",
             // attitude loop (direct gimbal/RCS pointing — the max-Q fix; AttitudePilot internals)
@@ -62,8 +64,10 @@ namespace DragonScreen
         public static readonly int MetS = Index("met_s"), MissionPhase = Index("mission_phase"),
             ModeIndex = Index("mode_index"), ModeHolding = Index("mode_holding"), ModeFlying = Index("mode_flying"),
             GateIdC = Index("gate_id"), GatePhaseC = Index("gate_phase"), CrewAction = Index("crew_action"),
-            AltM = Index("alt_m"), SpeedMps = Index("speed_mps"), VspeedMps = Index("vspeed_mps"),
+            AltM = Index("alt_m"), SpeedMps = Index("speed_mps"), SrfSpeed = Index("srf_speed_mps"),
+            VspeedMps = Index("vspeed_mps"),
             QPa = Index("q_pa"), Mach = Index("mach"), DownrangeM = Index("downrange_m"), MassKg = Index("mass_kg"),
+            AccelG = Index("accel_g"), ThrustN = Index("thrust_n"),
             AttErrDeg = Index("att_err_deg"), RateCmd = Index("rate_cmd_rads"), Throttle = Index("throttle"),
             TorqueCmd = Index("torque_cmd"), RcsOn = Index("rcs_on"),
             AttPointDeg = Index("att_point_deg"), AttRateCmd = Index("att_rate_cmd"), AttRateMeas = Index("att_rate_meas"),
@@ -144,6 +148,29 @@ namespace DragonScreen
             Set(c, ModeIndex, m.Index);
             Set(c, ModeHolding, m.Holding);
             Set(c, ModeFlying, m.Flying);
+        }
+
+        // ⛔ THE ALWAYS-ON SNAPSHOT (MechJeb FlightRecorder principle): the universally-available state is
+        // recorded EVERY sample from live vessel data, INDEPENDENT of which flying controller is active — so
+        // an abort, a coast, or an engine cutout is never lost just because no controller's Fill was set. This
+        // is the fix for the recorder freezing on the ascent filler through the whole abort + chute descent.
+        // Writes: mission_phase + mode, surface speed, AoA, felt g, measured thrust, RCS master, abort state.
+        public static void PutBase(string[] c, MissionPhase phase, ModeStep mode, double srfSpeedMps,
+                                   double aoaDeg, double accelG, double thrustN, bool rcsOn,
+                                   bool aborting, AbortMode abortMode)
+        {
+            PutMode(c, mode, phase);
+            Set(c, SrfSpeed, srfSpeedMps); Set(c, AttErrDeg, aoaDeg); Set(c, AccelG, accelG);
+            Set(c, ThrustN, thrustN); Set(c, RcsOn, rcsOn);
+            Set(c, FdirAbort, aborting); Set(c, AbortModeC, abortMode.ToString());
+        }
+
+        // Chute state during an ABORT descent (the abort path owns the chutes, not ReturnControl).
+        public static void PutAbortChutes(string[] c, ChutePhase chute)
+        {
+            Set(c, ChutePhaseC, chute.ToString());
+            Set(c, Drogue, chute >= ChutePhase.Drogue);
+            Set(c, Main, chute >= ChutePhase.Main);
         }
 
         public static void PutGate(string[] c, GateId id, GatePhase phase, bool crewActionNeeded)
