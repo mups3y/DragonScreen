@@ -16,6 +16,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Aero.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Alarms.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\ArcGeometry.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Ascent.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\AscentLoss.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\AttitudeLoop.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Authority.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\BoosterDescent.cs
@@ -52,6 +53,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\IgnitionGate.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Images.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Lambert.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\LaunchAzimuth.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\LaunchTuner.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\LaunchWindow.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\LifeSupport.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Lvlh.cs
@@ -112,6 +114,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\test\FlightRecorderTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\GlobeProjectionTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\IgnitionGateTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\LambertTest.cs
+C:\Users\User\Desktop\DragonScreen\plugin\test\LaunchTunerTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\LaunchWindowTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\LayoutSweepTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\LayoutTest.cs

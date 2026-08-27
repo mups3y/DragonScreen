@@ -43,8 +43,9 @@ flies until the build is done, so one install before I-B, not per-item):** B1 St
 (+glue), B3 thrust/RCS balancer (+engine-out glue), B4 actuator-lag (+glue), B6 NavFilter, B7 Lambert + Maneuver,
 + the fatal-abort fix, + **B8 pure** (CourseCorrect 2×2/1×1 divert solve + Trajectory.EntryLdBand 4-band L/D
 prior; 15+7 checks), + **B11 pure** (FDIR escalation ladder + free-flyer profiles verified; +6 checks).
-**REMAINING (in order):** B9 GravityTurn LaunchDB auto-tuner, B10 V&V (Tier-2 more families + Tier-3 regress +
-Tier-4 MC), B5 primer-vector PVG (LAST). **Then Movement I-B: flight-tune.** Owed in I-B: the B2 estimator FEED
+**REMAINING (in order):** B10 V&V (Tier-2 more families + Tier-3 regress + Tier-4 MC), B5 primer-vector PVG
+(LAST). ✅ **B9 pure** done (AscentLoss + LaunchTuner, 17 checks). **Then Movement I-B: flight-tune.** Owed in
+I-B: **B9 glue** (integrate AscentLoss into the recorder + run LaunchTuner across flights → learned.cfg) + the B2 estimator FEED
 (isolated aero angular-accel, sign-sensitive) + the B3 RcsBalance glue (rendezvous/docking) + **B8 targeting glue**
 (wire CourseCorrect into BoosterTargeting/EntrySteering, keep the heuristic as fallback) + **B8 KSP-Euler
 correction** (corpus-gated) + **B11 FDIR live-wiring** (observe-first into FlightDriver, then acting — plan Step I).
