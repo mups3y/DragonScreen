@@ -28,17 +28,24 @@ solve** (costates/burn-times/optimal-coast) — same solution class, determinist
 the natural multi-stage upgrade of our UPFG. ~No-op for single-burn Crew-2 → sequenced LAST. (May need PEGAS-MATLAB
 fetched; kOS PEGAS off-limits per NO-KOS.)
 
-**⛔⛔ CREW-SURVIVAL ITEM #1 = the FATAL abort:** launch-escape splashes at ~122 m/s (mains under-decelerate). FIRST
-classify from the EXISTING quarantine recordings (NO new flight): logic/structural defect → fix now (build); pure
-tuning → flag for I-B.
+**✅ CREW-SURVIVAL ITEM #1 = the FATAL abort — FIXED (build), commit a9d2600.** Classified from the existing
+recordings (NO new flight): both launch-escape aborts splashed ~122 m/s because the capsule slowed to ~42 m/s
+under chute drag then ACCELERATED back to ~122 m/s (bare terminal) — the mains never inflated. ROOT (CSV+KSP.log,
+one pass): the glue invoked RealChute's one-shot "Deploy Chute" EVERY tick (log: "…MAINS was activated in stage 1"
+~50×/s at splash), restarting inflation so the canopy never finished. FIX = ARM the RealChute canopy once
+(idempotent) and let RealChute stage it by altitude (`Actuator.DeployChutePart`); abort no longer CUTS the drogues
+(kept as a backstop under the mains — `Chutes.SequenceAbort`); latch each arm (`AbortControl`/`ReturnControl`).
+Green headless; ⚠ NOT flight-verified (no-new-flights constraint) — #1 to confirm in I-B (and re-enable the
+fidelity drogue-cut once main deploy is confirmable).
 
-**BUILT + committed + installed earlier this run (headless-green ~490+ checks, DLL live):** B1 StageStats, B2 q·α
-moderation (+glue), B3 thrust/RCS balancer (+engine-out glue), B4 actuator-lag (+glue), B6 NavFilter, B7 Lambert
-+ Maneuver. **REMAINING:** fatal-abort fix, B8 entry-predictor upgrade (Trajectories KSP-Euler correction + 4-band
-AoA + course-correction 2×2), B11 FDIR full authority + free-flyer profiles, B9 GravityTurn LaunchDB auto-tuner,
-B10 V&V (Tier-2 more families + Tier-3 regress + Tier-4 MC), B5 primer-vector PVG (LAST). **Then Movement I-B:
-flight-tune.** Owed in I-B: the B2 estimator FEED (isolated aero angular-accel, sign-sensitive) + the B3 RcsBalance
-glue (rendezvous/docking).
+**BUILT + committed earlier this run (headless-green ~490+ checks; DLL install DEFERRED to end of I-A — nothing
+flies until the build is done, so one install before I-B, not per-item):** B1 StageStats, B2 q·α moderation
+(+glue), B3 thrust/RCS balancer (+engine-out glue), B4 actuator-lag (+glue), B6 NavFilter, B7 Lambert + Maneuver,
++ the fatal-abort fix. **REMAINING (in order):** B8 entry-predictor upgrade (Trajectories KSP-Euler correction +
+4-band AoA + course-correction 2×2), B11 FDIR full authority + free-flyer profiles, B9 GravityTurn LaunchDB
+auto-tuner, B10 V&V (Tier-2 more families + Tier-3 regress + Tier-4 MC), B5 primer-vector PVG (LAST). **Then
+Movement I-B: flight-tune.** Owed in I-B: the B2 estimator FEED (isolated aero angular-accel, sign-sensitive) +
+the B3 RcsBalance glue (rendezvous/docking).
 
 **⚠ From the 2026-08-28 flight analysis (7 flights, in `quarantine\dragonscreen_flightdata`, in the DB):**
 phasing self-deorbit is FIXED (verified, pe held 177–179 km). Ascent defects: inc −5.1° (A1 UPFG-plane fix
