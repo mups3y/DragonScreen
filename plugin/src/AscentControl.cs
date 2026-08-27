@@ -229,8 +229,11 @@ namespace DragonScreen
             }
             else
             {
-                // S2: closed-loop UPFG thrust vector (world/inertial frame)
-                aim = UpfgAim(v, mu, targetRadiusM, activeThrustN, ve, massKg);
+                // S2: closed-loop UPFG thrust vector (world/inertial frame). Feed the TARGET plane normal so
+                // UPFG steers the insertion onto the ISS plane (corrects the S1 inclination undershoot) — NOT
+                // the current plane, which only holds whatever S1 left. (flights 014906/020539/023613: S1 sets
+                // inc 46.5°, S2 held it unchanged to SECO because UPFG was fed its own current h.)
+                aim = UpfgAim(v, mu, targetRadiusM, activeThrustN, ve, massKg, planeNormal, haveTargetPlane);
             }
 
             // ⛔ ROLL REFERENCE — TWO requirements, both met (perfect control includes crew orientation):
@@ -337,7 +340,8 @@ namespace DragonScreen
         }
 
         // ---- UPFG: build the target + step; return the world thrust direction ----
-        static Vector3d UpfgAim(Vessel v, double mu, double targetRadiusM, double thrustN, double ve, double massKg)
+        static Vector3d UpfgAim(Vessel v, double mu, double targetRadiusM, double thrustN, double ve, double massKg,
+                                Vector3d targetPlaneNormal, bool haveTargetPlane)
         {
             if (mu <= 0 || v.orbit == null || thrustN <= 1.0)
                 return Steering.Prograde(v);
@@ -346,9 +350,17 @@ namespace DragonScreen
             Vec3 vel = W(v.obt_velocity);
 
             UpfgTarget t;
-            // plane normal OPPOSITE the angular momentum (in-plane launch assumption; note is the sign trap)
-            Vec3 h = Vec3.Cross(r, vel);
-            t.Iy = h.Magnitude > 1e-3 ? (h * -1.0).Normalized : new Vec3(0, 1, 0);
+            // UPFG steers to the plane whose normal is t.Iy (Iy is OPPOSITE the angular momentum — the sign trap).
+            // ⭐ Feed the TARGET plane normal so S2 corrects the S1 inclination shortfall; TargetPlaneNormal gives
+            // the PROGRADE normal (r1×r2, +r×v sense), so Iy = -targetPlaneNormal. Only when a target plane is
+            // known — else hold the CURRENT plane (Iy = -(r×v)), the safe fallback for a no-target free-flyer.
+            if (haveTargetPlane && targetPlaneNormal.magnitude > 1e-6)
+                t.Iy = W(-targetPlaneNormal.normalized);
+            else
+            {
+                Vec3 h = Vec3.Cross(r, vel);
+                t.Iy = h.Magnitude > 1e-3 ? (h * -1.0).Normalized : new Vec3(0, 1, 0);
+            }
             t.RadiusM = targetRadiusM;
             t.SpeedMps = Math.Sqrt(mu / targetRadiusM);      // circular insertion
             t.GammaRad = 0.0;
