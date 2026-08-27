@@ -95,6 +95,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Upfg.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Vec3.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\VehicleParts.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\VehicleSystems.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\WarpPlan.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\_DeorbitStub.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\ActuationTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\ActuatorLagTest.cs
@@ -136,3 +137,4 @@ C:\Users\User\Desktop\DragonScreen\plugin\test\ThrustBalanceTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\TrajectoryTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\UpfgTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\VehiclePartsTest.cs
+C:\Users\User\Desktop\DragonScreen\plugin\test\WarpPlanTest.cs

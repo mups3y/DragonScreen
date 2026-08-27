@@ -51,6 +51,7 @@ namespace DragonScreen
             FlightLog.Fill = null;
             FlightLog.Close();
             aborting = false; abortPending = false; abortFxSuppressed = false; AbortControl.Reset();
+            MissionConductor.Reset();
             StopAbortFx();
         }
 
@@ -168,6 +169,7 @@ namespace DragonScreen
                     FlightLog.Fill = null;
                     FlightLog.Close();
                     aborting = false; abortPending = false; abortFxSuppressed = false; AbortControl.Reset();
+            MissionConductor.Reset();
                     return;
                 }
 
@@ -228,6 +230,10 @@ namespace DragonScreen
                 // 3) the flying-phase controller — but NOT while holding on the pad for the window (the
                 //    vehicle is clamped, engines off; don't let the ascent loop steer/throttle a held rocket).
                 if (!launchHolding) DriveActivePhase(v);
+
+                // 3a) the mission conductor: never run a live burn under warp (universal guard), and — opt-in —
+                //     hand focus to a separated booster for a recovery segment (MissionConductor.AutoRecoverBooster).
+                MissionConductor.Tick(v);
 
                 // 3b) the clamp-release gate holds the hold-downs until full thrust is confirmed
                 if (clampHeld) ClampGate(v);

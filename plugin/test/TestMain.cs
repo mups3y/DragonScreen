@@ -44,6 +44,7 @@ public static class TestMain
         bad += LambertTest.Run();          // B7: universal-variable Lambert solver + maneuver/finite-burn library
         bad += CourseCorrectTest.Run();    // B8: finite-difference impact-point divert solve (2×2 booster / 1×1 entry)
         bad += LaunchTunerTest.Run();      // B9: ascent Δv-loss decomposition + GravityTurn LaunchDB shape auto-tuner
+        bad += WarpPlanTest.Run();         // mission-conductor: safe time-warp decisions (never overshoot a burn)
         bad += RendezvousTest.Run();       // L3 rendezvous: named-burn FSM + full-control contract
         bad += PhasingTest.Run();          // L3 rendezvous: far-field co-elliptic raise + crew-safety pe floor + CW guard
         bad += DockingTest.Run();          // L3 docking: glideslope servo + L-approach FSM

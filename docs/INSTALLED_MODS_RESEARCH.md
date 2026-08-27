@@ -108,6 +108,31 @@ unreliable here and are banned — actuate every part module directly.**
 - **ThunderAerospace (TAC-LS):** life support ([[dragonscreen-tac-life-support]]).
 - **KSPWheel:** the landing legs (booster) — deploy the leg module directly, not the Gear action group.
 
+### 6a. MISSION-ORCHESTRATION mods (time-warp, physics range, readouts) — 2026-08-28
+⭐ **Policy (user 2026-08-28): NO external-mod DEPENDENCIES — we build the useful behaviour into DragonScreen.**
+These are documented as REFERENCES + environment facts; the autopilot never requires them.
+- **Kerbal Engineer Redux (KER) — INSTALLED** (`GameData/KerbalEngineer/KerbalEngineer.dll`). Live stage Δv/TWR,
+  burn time, orbital + surface readouts, and the **NodeHalfBurnTime** centre-of-burn timing our `Maneuver.cs`
+  already cites. Value to us: a **live cross-check** for `pure/StageStats` (B1) and the UPFG Tgo/Δv — if KER and
+  our numbers disagree, one of us is wrong. We do NOT depend on it; our own FuelFlowSim-math port is the source.
+- **KerbalReusabilityExpansion — INSTALLED.** The Falcon-9 REUSE hardware the booster flies with: grid fins
+  (`Grid Fin M Titanium`), the landing legs, cold-gas — actuated directly by capability (`Actuator`/`GridFin`).
+  It is the part source for booster recovery, not a control mod.
+- **PhysicsRangeExtender (PRE) — PARTIALLY present (user: "partially already built").** PRE extends the vessel
+  LOAD / unpack ranges so a separated craft stays FULLY SIMULATED instead of going on rails. Relevance: it lets a
+  separated booster remain physically present (drag, thrust, control when focused) far past the stock ~2.5 km
+  unpack / ~22 km unload, which is what makes a **focus-managed booster recovery** workable at all. ⛔ It does NOT
+  remove the stock one-active-vessel limit — only the FOCUSED craft receives control input — so recovering the
+  booster and flying the Dragon to orbit is still a SEGMENTED (focus-switched) affair, handled by
+  `src/MissionConductor.cs`. If range extension is only partial, verify the booster is still loaded at its
+  landing altitude before relying on auto-recovery.
+- **BetterTimeWarpContinued (linuxgurugamer) — NOT installed; REFERENCE only.** Adds custom warp rates + **lossless
+  physics warp** (accurate physics/thrust at accelerated time) and smoother warp-rate transitions. The USEFUL part
+  — never overshooting a burn out of warp — we build ourselves: `pure/WarpPlan.cs` (the safe-rate + lead drop-out
+  decision, headless-tested to never overshoot in one window) + `src/MissionConductor.cs` (applies it on stock
+  `TimeWarp.WarpTo`, and forces real time the instant thrust is live). Stock physics warp (≤4×) is available to us
+  if we ever want accelerated burns; we do not bundle or require the mod.
+
 ---
 
 ## 7. WHAT MUST CHANGE IN THE AUTOPILOT (the conclusion)
