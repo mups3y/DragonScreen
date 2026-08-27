@@ -56,7 +56,17 @@ far. **Then Movement I-B: flight-tune.** Owed in I-B (corpus-gated): B10 Tier-3 
 **B9 glue** (integrate AscentLoss into the recorder + run LaunchTuner across flights → learned.cfg) + the B2 estimator FEED
 (isolated aero angular-accel, sign-sensitive) + the B3 RcsBalance glue (rendezvous/docking) + **B8 targeting glue**
 (wire CourseCorrect into BoosterTargeting/EntrySteering, keep the heuristic as fallback) + **B8 KSP-Euler
-correction** (corpus-gated) + **B11 FDIR live-wiring** (observe-first into FlightDriver, then acting — plan Step I).
+correction** (corpus-gated) + **B11 FDIR live-wiring** (observe-first into FlightDriver, then acting — plan Step I)
++ **the mission-conductor proactive coast auto-warp** (wire each coast controller's next-event UT into
+`MissionConductor.WarpToEvent`; the framework + universal burn-guard are already in, commit d72ea53).
+
+**⭐ NEW: mods as DATA SOURCES (`docs/MOD_INTEGRATION_RESEARCH.md`).** KER 1.1.9.5 is a live-data TREASURE CHEST
+(per-stage Δv/TWR/burn-time/Isp/mass via `SimManager.Stages/LastStage` + suicide-burn + impact lat/lon/time + q/
+Mach/terminal-v + phase/intercept angle). **Build `src/KerBridge.cs`** — a SOFT (reflection, optional, our pure
+code as fallback) reader that feeds KER's proven RealFuels-accurate numbers into the vehicle model + Δv budgets
+(highest value) and cross-checks Hoverslam/Trajectory/max-Q. ⛔ NO hard dependency (user policy). Mods now
+researched: KER (integrate), PhysicsRangeExtender (partial — precondition for booster auto-recovery), KRE (reuse
+hardware), BetterTimeWarpContinued (reference only — the never-overshoot warp is ours: `WarpPlan`+`MissionConductor`).
 
 **⚠ From the 2026-08-28 flight analysis (7 flights, in `quarantine\dragonscreen_flightdata`, in the DB):**
 phasing self-deorbit is FIXED (verified, pe held 177–179 km). Ascent defects: inc −5.1° (A1 UPFG-plane fix
