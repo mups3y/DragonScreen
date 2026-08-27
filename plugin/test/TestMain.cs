@@ -38,6 +38,7 @@ public static class TestMain
         bad += QAlphaTest.Run();           // B2: q·α moderation controllability cap + SelfCal aero-stiffness estimator
         bad += ThrustBalanceTest.Run();    // B3: thrust-limiter balancing solver (TCA torque-nulling descent)
         bad += ActuatorLagTest.Run();      // B4: first-order actuator-lag model + lead compensation
+        bad += NavFilterTest.Run();        // B6: strict-fidelity nav filter (per-axis 3-state Kalman: pos/vel/bias)
         bad += BoosterTest.Run();          // L3 booster: hoverslam + grid-fin steering + descent FSM
         bad += RendezvousMathTest.Run();   // L3 rendezvous: LVLH + CW two-impulse + Hohmann
         bad += RendezvousTest.Run();       // L3 rendezvous: named-burn FSM + full-control contract
