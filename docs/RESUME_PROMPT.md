@@ -43,9 +43,13 @@ flies until the build is done, so one install before I-B, not per-item):** B1 St
 (+glue), B3 thrust/RCS balancer (+engine-out glue), B4 actuator-lag (+glue), B6 NavFilter, B7 Lambert + Maneuver,
 + the fatal-abort fix, + **B8 pure** (CourseCorrect 2×2/1×1 divert solve + Trajectory.EntryLdBand 4-band L/D
 prior; 15+7 checks), + **B11 pure** (FDIR escalation ladder + free-flyer profiles verified; +6 checks).
-**REMAINING (in order):** B10 V&V (Tier-2 more families + Tier-3 regress + Tier-4 MC), B5 primer-vector PVG
-(LAST). ✅ **B9 pure** done (AscentLoss + LaunchTuner, 17 checks). **Then Movement I-B: flight-tune.** Owed in
-I-B: **B9 glue** (integrate AscentLoss into the recorder + run LaunchTuner across flights → learned.cfg) + the B2 estimator FEED
+✅ **B9 pure** (AscentLoss + LaunchTuner, 17 checks) + ✅ **B10 Tier-2** (dispersion now 5 families:
+control/rendezvous/docking/return/FDIR, 724,791 checks/build). **REMAINING: only B5 — primer-vector PVG (LAST).**
+**⭐ TUNING RULE (user 2026-08-28):** every tunable (122, none unset) must carry a best educated-guess default;
+where no corpus data exists, use the best researched/educated guess. The artifact tuned-tracker DISTINGUISHES
+**DB-tuned** (corpus) from **best-guess** from **live** (self-tuning, e.g. B4). Only ascent control is DB-tuned so
+far. **Then Movement I-B: flight-tune.** Owed in I-B (corpus-gated): B10 Tier-3 corpus-regression + Tier-4 MC;
+**B9 glue** (integrate AscentLoss into the recorder + run LaunchTuner across flights → learned.cfg) + the B2 estimator FEED
 (isolated aero angular-accel, sign-sensitive) + the B3 RcsBalance glue (rendezvous/docking) + **B8 targeting glue**
 (wire CourseCorrect into BoosterTargeting/EntrySteering, keep the heuristic as fallback) + **B8 KSP-Euler
 correction** (corpus-gated) + **B11 FDIR live-wiring** (observe-first into FlightDriver, then acting — plan Step I).

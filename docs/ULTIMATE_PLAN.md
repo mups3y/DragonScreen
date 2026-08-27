@@ -77,14 +77,17 @@ Dependency-ordered. Each = a pure module + its tests, THEN the thin glue. Ported
 - **B7 — Lambert + maneuver-node library + finite-burn executor** ○ — beyond the current CW+Hohmann+named-burns.
 - **B8 — Entry predictor upgrade** ✅ pure — `pure/CourseCorrect.cs` (finite-difference impact-divert: 2×2 booster / 1×1 entry, 15 checks) + `Trajectory.EntryLdBand` 4-band L/D schedule (predictor prior; ⛔ NOT active CoM steering — respects the engage-once hard rule). **Owed I-B (validation-gated):** wiring CourseCorrect into BoosterTargeting/EntrySteering (replaces a working heuristic → flight-validate, keep heuristic fallback) + the **KSP-Euler correction** (the doc gates it on reproducing a recorded flight — no entry corpus yet).
 - **B9 — GravityTurn LaunchDB auto-tuner** ✅ pure — `pure/AscentLoss.cs` (gravity + drag + steering Δv-loss decomposition = the objective) + `pure/LaunchTuner.cs` (LaunchDB coordinate-descent that walks the gravity-turn shape to min-loss over launches; converges on a synthetic-loss replay). 17 checks. **I-B:** integrate the loss into the recorder + run the tuner across flights → `learned.cfg` (retires the hand-set pitch constants).
-- **B10 — V&V completion** ½→ **Tier-2 dispersion** more families (docking/return/FDIR — today control+rendezvous only); **Tier-3** corpus regression tool; **Tier-4** Monte-Carlo (corpus-calibrated FuelFlowSim + ReentrySim, gate first).
+- **B10 — V&V completion** ✅ Tier-2 — **Tier-2 dispersion** now covers 5 families: control, rendezvous, **docking, return, FDIR** (property-based invariants over the pure layer, **724,791 checks/build**). **I-B (corpus-gated):** Tier-3 corpus-regression tool + Tier-4 Monte-Carlo (corpus-calibrated FuelFlowSim + ReentrySim — must reproduce ≥2 recorded flights first, `VALIDATION_AND_ROBUSTNESS.md`).
 - **B11 — FDIR full authority + free-flyer profiles** ✅ pure — added the FDIR **escalation ladder** (`Fdir.Escalate`, +6 checks): a fault a recovery rung doesn't clear within RungGraceS climbs Retry→Reconfigure→Replan→Downmode→**Abort**, so a persistent fault is guaranteed to reach abort rather than retry forever; resets when it clears. Free-flyer profiles built + verified (catalog has Inspiration4/Polaris Dawn/Fram2 as `MissionKind.FreeFlyer`, `HasRendezvous=false`; CrewGates omits G9–G14). **I-B (the plan's Step I):** wire FDIR live into FlightDriver — observe-only first (record fdir_*), then acting.
 
 #### Build + Tuned status matrix (updated 2026-08-28)
 Two axes per item, so we always know both whether it is BUILT and whether its tunables are at the best data-backed
 starting defaults. **Build:** ○ not built · ½ first-cut · ✅ built. **Tuned:** **—** no tunables (pure math/physics) ·
-**○** researched defaults, the DB has no data for this phase yet (can't DB-seed until I-B flies it) · **◐** DB-seeded
-(initial values set/validated from the corpus) · **✅** flight-tuned (I-B). ⚠ The tuning DB corpus today covers only
+**○ = guess** best educated-guess default set, the DB has no data for this phase yet (never "unset") · **◐ = DB**
+tuned/validated from the corpus · **live** self-tunes from live telemetry · **✅** flight-tuned (I-B). **⭐ Every
+tunable (122, none unset) already carries a best educated-guess default** (user directive 2026-08-28): where there
+is no corpus data, use the best researched/educated guess — ○/guess means "best-guess set, awaiting corpus/flight
+confirmation", NOT "to do". ⚠ The tuning DB corpus today covers only
 **ascent control** (VerticalRise/GravityTurn/S2Burn/Coast) + **abort** — NO booster/rendezvous/docking/entry/chute
 data — so only ascent-coupled tunables are DB-seedable now; the rest stay ○ until their I-B flight.
 
@@ -99,7 +102,7 @@ data — so only ascent-coupled tunables are DB-seedable now; the rest stay ○ 
 | B7 Lambert + Maneuver | ✅ | — | universal-variable math; no tunables |
 | B8 entry predictor | ✅ pure | ○ | CourseCorrect + EntryLdBand built; band L/D + KSP-Euler pending an entry-flight corpus to calibrate; targeting glue owed I-B |
 | B9 GravityTurn auto-tuner | ✅ pure | ○ | AscentLoss + LaunchTuner built; the tuner seeds from recorded ascent LOSSES → needs recorder loss-columns + flights (I-B). It IS the ascent-shape tuner |
-| B10 V&V | ½ | — | test tooling; no tunables |
+| B10 V&V | ✅ Tier-2 | — | 5 dispersion families, 724,791 checks; Tier-3/4 corpus-gated → I-B; no tunables |
 | B11 FDIR authority | ✅ pure | ○ | escalation ladder + free-flyer profiles built; debounce/threshold tunables need data (ascent+abort only); live-wiring + acting = I-B Step I (observe-first) |
 | Ascent control (L2/L3) | ✅ | ◐ | DB-VALIDATED: GravityTurn/S2Burn pe_p95 < 0.4°, sat_duty ≈ 0 across the corpus → current defaults are already good |
 

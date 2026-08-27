@@ -62,6 +62,9 @@ public static class DispersionTest
         Console.WriteLine("DragonScreen Tier-2 dispersion (property-based robustness)");
         ControlSafety();
         RendezvousSafety();
+        DockingSafety();
+        ReturnSafety();
+        FdirSafety();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
     }
@@ -218,6 +221,141 @@ public static class DispersionTest
             + (maxFarRange / 1000.0).ToString("F0") + " km | max near-field dv = "
             + maxNearDv.ToString("F1") + " m/s | min pe margin = "
             + (double.IsInfinity(minPeMargin) ? "n/a" : (minPeMargin / 1000.0).ToString("F0") + " km"));
+    }
+
+    // ============================================================================================
+    // FAMILY 3 — DOCKING safety (pure/DockControl) — the terminal approach must always be brakeable.
+    // Invariants: the closing-speed cap is finite, non-negative, never above the far cap, and TAPERS with
+    // range (closer ⇒ slower, so a leg can always brake to the ~8 cm/s contact); the per-axis servo accel is
+    // finite for any dispersion and gives NO kick when already at rest on the target.
+    // ============================================================================================
+    static void DockingSafety()
+    {
+        Prng rng = new Prng(0xD0C0DEUL);
+        for (int i = 0; i < N; i++)
+        {
+            double contact = rng.Range(0.02, 0.3);       // ~8 cm/s soft-contact speed
+            double far = rng.Range(0.5, 5.0);            // far-field approach speed
+            double taper = rng.Range(20.0, 400.0);
+            double r1 = rng.Range(0.0, 500.0);
+            double r2 = r1 + rng.Range(0.0, 500.0);       // r2 >= r1
+            double cap1 = DockControl.SpeedCap(r1, contact, far, taper);
+            double cap2 = DockControl.SpeedCap(r2, contact, far, taper);
+            Check("dock: SpeedCap finite", Finite(cap1) && Finite(cap2), "cap1=" + cap1);
+            Check("dock: SpeedCap >= 0", cap1 >= -1e-12, "cap1=" + cap1.ToString("F5"));
+            Check("dock: SpeedCap never exceeds the far cap", cap1 <= Math.Max(contact, far) + 1e-9, "cap1=" + cap1.ToString("F5"));
+            Check("dock: SpeedCap tapers with range (closer = slower)", cap2 >= cap1 - 1e-9,
+                  "r1=" + r1.ToString("F1") + " cap1=" + cap1.ToString("F4") + " r2=" + r2.ToString("F1") + " cap2=" + cap2.ToString("F4"));
+
+            double err = rng.Sym(200.0), rate = rng.Sym(10.0), vmax = rng.Range(0.01, 5.0);
+            double kPos = rng.Range(0.01, 2.0), kVel = rng.Range(0.1, 5.0);
+            double acc = DockControl.Accel(err, rate, vmax, kPos, kVel);
+            Check("dock: servo accel finite", Finite(acc), "acc=" + acc);
+            Check("dock: no kick at rest on target", Math.Abs(DockControl.Accel(0.0, 0.0, vmax, kPos, kVel)) < 1e-6, "");
+        }
+        Console.WriteLine("    docking: " + N + " cases | SpeedCap bounded + tapering, servo finite + no-kick-at-rest");
+    }
+
+    // ============================================================================================
+    // FAMILY 4 — RETURN / ENTRY safety (pure/Entry + pure/Chutes) — the crew's way home must never float.
+    // Invariants: Entry.Guide ALWAYS returns a finite UNIT heat-shield aim (full-control contract), a finite
+    // bank |σ| ≤ π, and a CoM offset in [0,1]; the chute phase NEVER regresses and only reports splashdown at
+    // /below the sea; ⛔ the ABORT chute sequence NEVER cuts the drogues (the ~122 m/s fix — keep the backstop).
+    // ============================================================================================
+    static void ReturnSafety()
+    {
+        Prng rng = new Prng(0xE471EUL);
+        EntryPhase[] eph = { EntryPhase.Idle, EntryPhase.PreEntry, EntryPhase.Entry, EntryPhase.Descent };
+        ChutePhase[] cph = { ChutePhase.Idle, ChutePhase.Drogue, ChutePhase.Main, ChutePhase.Splashed };
+        for (int i = 0; i < N; i++)
+        {
+            EntryInputs e = new EntryInputs();
+            e.Valid = true;
+            e.Velocity = new Vec3(rng.Sym(8000), rng.Sym(8000), rng.Sym(8000));
+            e.Up = new Vec3(rng.Sym(1), rng.Sym(1), rng.Sym(1));
+            e.AltitudeM = rng.Range(0, 150000);
+            e.EntryInterfaceAltM = 120000; e.DrogueAltM = 5486;
+            e.DownrangeErrM = rng.Sym(500000); e.CrossrangeErrM = rng.Sym(500000);
+            e.SpeedMps = rng.Range(0, 8000); e.TargetLoverD = rng.Range(0, 0.4);
+            EntryCommand ec = Entry.Guide(e, eph[i & 3]);
+            Check("entry: AimForward is a finite unit vector",
+                  Finite(ec.AimForward.Magnitude) && Math.Abs(ec.AimForward.Magnitude - 1.0) < 1e-6,
+                  "|aim|=" + ec.AimForward.Magnitude.ToString("F6"));
+            Check("entry: bank finite and |σ| <= π", Finite(ec.BankRad) && Math.Abs(ec.BankRad) <= Pi + 1e-9, "σ=" + ec.BankRad.ToString("F4"));
+            Check("entry: CoM offset in [0,1]", ec.OffsetPercent >= -1e-12 && ec.OffsetPercent <= 1.0 + 1e-12, "off=" + ec.OffsetPercent.ToString("F4"));
+
+            ChuteInputs ci = new ChuteInputs();
+            ci.Valid = true; ci.AltitudeM = rng.Range(-100, 8000); ci.DescentRateMps = rng.Sym(200);
+            ci.DrogueAltM = 5486; ci.MainAltM = 1830; ci.SeaAltM = 0;
+            ChutePhase inPh = cph[i & 3];
+            ChuteCommand cc = Chutes.Sequence(ci, inPh);
+            Check("chute: phase never regresses", (byte)cc.Phase >= (byte)inPh, "in=" + inPh + " out=" + cc.Phase);
+            // the TRANSITION to splashed happens only at/below the sea (an already-latched Splashed persists).
+            if (cc.Splashed && inPh != ChutePhase.Splashed)
+                Check("chute: splashdown only at/below the sea", ci.AltitudeM <= ci.SeaAltM + 1e-6, "alt=" + ci.AltitudeM.ToString("F1"));
+
+            ChuteCommand ac = Chutes.SequenceAbort(ci, inPh, rng.Range(0.0, 10.0));
+            Check("abort chute: drogues are NEVER cut (backstop)", !ac.CutDrogues, "");
+            Check("abort chute: phase never regresses", (byte)ac.Phase >= (byte)inPh, "");
+        }
+        Console.WriteLine("    return: " + N + " cases | entry aim unit + bank bounded, chute phase monotone, abort keeps drogues");
+    }
+
+    // ============================================================================================
+    // FAMILY 5 — FDIR safety (pure/Fdir) — the safety spine must never lie about an abort or retry forever.
+    // Invariants: the abort flag matches the rung; a healthy report is Continue (never a phantom abort); a
+    // crew GO-gate hold suppresses the stall fault; the escalation rung is NEVER below the phase-correct base;
+    // and a PERSISTENT fault escalates MONOTONICALLY to Abort/SafeMode (the guaranteed-floor property).
+    // ============================================================================================
+    static void FdirSafety()
+    {
+        Prng rng = new Prng(0xFD1204UL);
+        MissionPhase[] mph = { MissionPhase.Prelaunch, MissionPhase.Ascent, MissionPhase.Coast,
+                               MissionPhase.Phasing, MissionPhase.Approach, MissionPhase.Docked, MissionPhase.Entry };
+        FaultKind[] fk = { FaultKind.None, FaultKind.KeepOutBreach, FaultKind.ThrustShortfall, FaultKind.NoControlSolution,
+                           FaultKind.ResourceCritical, FaultKind.TrajectoryDivergence, FaultKind.ConvergenceStall };
+        for (int i = 0; i < N; i++)
+        {
+            FdirState st = new FdirState();
+            FdirInputs s = new FdirInputs();
+            s.Valid = true; s.Dt = rng.Range(0.01, 3.0); s.Phase = mph[i % mph.Length];
+            s.GateHolding = rng.Bool(); s.Powered = rng.Bool();
+            s.ThrustDeliveredFrac = rng.Range(0.0, 1.2); s.TrajErrorM = rng.Range(0, 20000);
+            s.PlanProgressRate = rng.Sym(10.0); s.ResourceMargin01 = rng.Range(0.0, 1.0);
+            s.ControlSolutionOk = rng.Bool();
+            s.KosRadiusM = rng.Bool() ? 0.0 : rng.Range(50, 500); s.KosRangeM = rng.Range(0, 1000); s.CorridorOk = rng.Bool();
+            FdirReport r = Fdir.Update(ref st, s);
+            Check("fdir: abort flag matches the rung",
+                  r.Abort == (r.Response == Recovery.Abort || r.Response == Recovery.SafeMode), "resp=" + r.Response);
+            Check("fdir: healthy report is Continue (no phantom abort)",
+                  r.Fault != FaultKind.None || (r.Response == Recovery.Continue && !r.Abort), "");
+            Check("fdir: a crew hold suppresses ConvergenceStall",
+                  !(s.GateHolding && r.Fault == FaultKind.ConvergenceStall), "");
+
+            FaultKind f = fk[i % fk.Length];
+            MissionPhase ph = mph[(i / fk.Length) % mph.Length];
+            double margin = rng.Range(0.0, 1.0);
+            FdirState est = new FdirState();
+            Recovery rr = Fdir.Escalate(ref est, f, ph, margin, s.Dt);
+            Recovery baseR = Fdir.Recover(f, ph, margin);
+            Check("fdir: escalate never below the base rung", (byte)rr >= (byte)baseR, "f=" + f + " base=" + baseR + " esc=" + rr);
+            if (f == FaultKind.None) Check("fdir: no fault -> Continue", rr == Recovery.Continue, "");
+        }
+
+        // the guarantee: a persistent fault ALWAYS climbs (monotonically) to Abort/SafeMode
+        {
+            FdirState est = new FdirState();
+            Recovery last = Recovery.Continue; bool reachedAbort = false, monotone = true;
+            for (int k = 0; k < 100; k++)
+            {
+                Recovery rr = Fdir.Escalate(ref est, FaultKind.TrajectoryDivergence, MissionPhase.Phasing, 1.0, Fdir.RungGraceS + 0.01);
+                if ((byte)rr < (byte)last) monotone = false;
+                last = rr;
+                if (rr == Recovery.Abort || rr == Recovery.SafeMode) { reachedAbort = true; break; }
+            }
+            Check("fdir: a persistent fault escalates monotonically to Abort", reachedAbort && monotone, "last=" + last);
+        }
+        Console.WriteLine("    fdir: " + N + " cases | abort-flag consistent, escalate >= base, persistent fault -> Abort");
     }
 
     // Sample a dispersed rendezvous input. far=true -> range strictly beyond CwMaxRangeM (up to 13,000 km,
