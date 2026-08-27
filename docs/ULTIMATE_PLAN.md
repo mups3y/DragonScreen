@@ -119,12 +119,26 @@ data — so only ascent-coupled tunables are DB-seedable now; the rest stay ○ 
 list of tunables that can only be seeded once their phase flies in I-B. Regenerate with `tools/tuning_db.py` after any
 new flight; re-seed here from `assess_flight.py` + the DB.
 
-### Movement I-B — PROVE IT (flight-test + tune, phase-order: ascent→booster→rendezvous→docking→return)
-Only AFTER I-A. Tune each phase to its REAL coupled targets against the FlightRecorder CSVs (the flights flown
-2026-08-28 were skeleton reconnaissance — they verified the phasing self-deorbit fix and surfaced the ascent
-defects, several of which are really MISSING I-A methods). Then:
-- **Stage 8 — CLAUDE PROVING RUN.** One Crew-2 mission pad→splashdown, crew on the gates, timeline matching.
-  ⭐ **The name is earned here.**
+### Movement I-B — GET IT FLYING END-TO-END, THEN THE TUNE LOOP (rinse & repeat until perfect)
+⭐ **This is the real rhythm of the project (user 2026-08-28).** I-A built the advanced methods; I-B makes the whole
+mission RUN, then tunes it to perfection from real flight data, over many iterations.
+
+- **I-B.0 — GET THE MISSION RUNNING END-TO-END (the milestone that unlocks testing).** Wire/fix so a single AUTO run
+  COMPLETES pad→splashdown **including booster recovery**, FAST. The bar is completion + clean phase hand-offs, NOT
+  perfection (signs/params stay best-guess; the loop tunes them). Concrete: **(a)** booster-recovery focus
+  orchestration (`MissionConductor.AutoRecoverBooster` — focus→land→return; partial-PRE keeps it loaded); **(b)**
+  ⭐ **proactive coast auto-warp = warp-to-maneuvers** (wire each coast controller's next-event UT into
+  `MissionConductor.WarpToEvent` — launch window done, phasing + return/deorbit coasts to add) so there are NO long
+  real-time waits; **(c)** every phase transition completes + hands to the next (fix any stall); **(d)** plausible
+  best-guess signs/params so it RUNS; **(e)** confirm the octaweb + abort fixes hold in a real run.
+- **I-B.1 — THE TUNE LOOP → RINSE AND REPEAT.** User flies MULTIPLE end-to-end tests → I run the FULL structured
+  analysis on each recording + FEED the tuning DB → we DB-tune **ONE PHASE AT A TIME in mission order**
+  (ascent→booster→rendezvous→dock→return) with the DB tuner (the B9 `LaunchTuner` coordinate-descent generalised
+  per phase, driven by the recorded per-phase loss/deviation) → user flies more → analyze → feed DB → tune → …
+  **REPEAT until the entire flight is perfectly tuned end-to-end.** ⭐ Warp-to-maneuvers throughout to maximise
+  flight throughput; one phase per pass, in order (batch reasoned fixes within a phase; revert on the data).
+- **Stage 8 — CLAUDE PROVING RUN.** Once every phase is tuned: one Crew-2 mission pad→splashdown, crew on the gates,
+  timeline matching. ⭐ **The name is earned here.**
 
 ---
 

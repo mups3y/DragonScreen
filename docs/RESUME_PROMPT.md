@@ -5,12 +5,39 @@ at the one thing that matters next.
 
 ---
 
-## ⭐⭐ RESUME HERE (2026-08-28, post-compaction #2) — MODE IS BUILD, CREW-SURVIVAL FIRST
+## ⭐⭐ RESUME HERE (2026-08-28, post-compaction #3) — GET THE MISSION FLYING END-TO-END, THEN TUNE THE LOOP
 
-**The autopilot is NOT "build complete" — a first-cut SKELETON flies (pad→orbit→phasing, verified), but the
-researched-method BACKLOG is what makes it advanced. USER DECISION: build the full feature set first (ULTIMATE_PLAN
-Movement I-A), THEN flight-tune phase-by-phase (I-B).** Top plan `docs/ULTIMATE_PLAN.md` (has the approved
-course-change box); detail `AUTOPILOT_REBUILD_PLAN.md §0.2`; running log [[dragonscreen-autopilot-rebuild-plan]].
+**⭐⭐ FIRST TASK THIS SESSION (user, explicit): GET THE ENTIRE MISSION RUNNING END-TO-END — pad→splashdown INCLUDING
+BOOSTER RECOVERY. This is THE milestone that unlocks testing.** The bar is NOT "perfect" yet — it is that a single
+AUTO run COMPLETES every phase and hands to the next, FAST (warp-to-maneuvers, no long real-time coasts), producing
+one full end-to-end recording. Signs/params stay at best-guess; they get tuned in THE LOOP (below).
+
+**THE WORKFLOW — the whole project rhythm (corrected understanding, user 2026-08-28):**
+1. **GET IT FLYING END-TO-END** (this task) — wire/fix so the mission runs to completion incl. booster recovery +
+   warp-to-maneuvers. The purpose of all the I-A build was to reach this; now MAKE IT RUN.
+2. **THE TUNE LOOP → then RINSE AND REPEAT until perfect:** user flies MULTIPLE end-to-end tests → I run the FULL
+   structured analysis on EACH recording + FEED the tuning DB → we DB-tune **ONE PHASE AT A TIME in mission order**
+   (ascent → booster → rendezvous → dock → return) with the DB tuner (LaunchTuner-style, driven by the recorded
+   per-phase loss) → user flies more → analyze → feed DB → tune → … **repeat until the ENTIRE flight is perfectly
+   tuned end-to-end = the perfect autopilot.** One phase per tuning pass, in order (batch reasoned fixes within a
+   phase). ⭐ WARP-TO-MANEUVERS THROUGHOUT so we pump out as many flights as possible for data.
+
+**"Get it flying end-to-end" — first-session checklist:**
+- **a. Booster recovery orchestration** — finish + enable `MissionConductor.AutoRecoverBooster`: after MECO sep hand
+  focus to the booster, land it (BoosterControl), return focus. Partial PRE keeps it LOADED (flying unload ~22.5 km,
+  `ModuleManager.Physics` VesselRanges) so recovery is real; it is a FOCUS-managed segment (one active vessel).
+- **b. Proactive coast auto-warp (= warp-to-maneuvers)** — wire each coast controller's next-event UT into
+  `MissionConductor.WarpToEvent` (framework + universal burn-guard already in, commit d72ea53): launch window (done),
+  rendezvous phasing coast, return/deorbit coast. No long waits between burns.
+- **c. Every phase transition COMPLETES + hands to the next** — walk pad→ascent→(booster)→orbit→rendezvous→dock→
+  undock→deorbit→entry→splash; fix any phase that stalls or fails to hand off.
+- **d. Plausible best-guess signs/params so the mission RUNS** (RCS translation signs, booster cross-range signs,
+  entry bank/roll signs, deorbit Pe) — not tuned, just enough to complete; the LOOP tunes them.
+- **e. Verify the two just-fixed launch blockers hold in a real run:** octaweb differential-throttle (single-module
+  n<2 guard) + abort RealChute-arm (a9d2600). ⚠ After a PAD SAFE-ABORT, REVERT to launch (RealFuels spends the
+  octaweb's one ignition; a re-engage shows 0% — not a bug).
+
+Top plan `docs/ULTIMATE_PLAN.md` (Part I → Movement I-B = this loop); running log [[dragonscreen-autopilot-rebuild-plan]].
 Live plan artifact: https://claude.ai/code/artifact/943d3d08-1124-432b-b474-1c33b5c29774
 
 **⭐ APPROVED PIVOT (2026-08-28, user OK'd; user delegates the engineering calls but requires explicit permission
@@ -46,9 +73,9 @@ prior; 15+7 checks), + **B11 pure** (FDIR escalation ladder + free-flyer profile
 ✅ **B9 pure** (AscentLoss + LaunchTuner, 17 checks) + ✅ **B10 Tier-2** (dispersion now 5 families:
 control/rendezvous/docking/return/FDIR) + ✅ **B5** (multi-stage UPFG / PEGAS virtual stages, ported verbatim
 from PEGAS-MATLAB, validated by n=1-equivalence + a 2-stage point-mass closure). **✅✅ MOVEMENT I-A COMPLETE —
-all 11 backlog items built + the fatal abort fixed, ~725k headless checks/build. NEXT = Movement I-B: flight-tune
-phase-by-phase (the FIRST NEW FLIGHTS of the pivot happen here — start with ascent, and verify the abort fix +
-inc-undershoot A1 fix).**
+all 11 backlog items built + the fatal abort + the octaweb pad-abort fixed + mission-conductor (never-overshoot warp
++ booster focus) + KerBridge, ~725k headless checks/build, DLL installed. NEXT = the WORKFLOW above: get the mission
+RUNNING end-to-end (first task), then the per-phase DB-tune LOOP, rinse-and-repeat until perfect.**
 **⭐ TUNING RULE (user 2026-08-28):** every tunable (122, none unset) must carry a best educated-guess default;
 where no corpus data exists, use the best researched/educated guess. The artifact tuned-tracker DISTINGUISHES
 **DB-tuned** (corpus) from **best-guess** from **live** (self-tuning, e.g. B4). Only ascent control is DB-tuned so
