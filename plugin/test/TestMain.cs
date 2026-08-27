@@ -34,6 +34,7 @@ public static class TestMain
         bad += AscentTest.Run();           // L3 ascent: launch azimuth + S1 pitch program + FSM
         bad += LaunchWindowTest.Run();     // L3 ascent: launch-to-rendezvous plane-crossing / RAAN window
         bad += UpfgTest.Run();             // L3 ascent: closed-loop UPFG S2 insertion (PEGAS port)
+        bad += StageStatsTest.Run();       // B1: per-stage dV/TWR/burn-time + MECO recovery reserve (MechJeb FuelFlowSim math)
         bad += BoosterTest.Run();          // L3 booster: hoverslam + grid-fin steering + descent FSM
         bad += RendezvousMathTest.Run();   // L3 rendezvous: LVLH + CW two-impulse + Hohmann
         bad += RendezvousTest.Run();       // L3 rendezvous: named-burn FSM + full-control contract

@@ -38,26 +38,33 @@ stutter), cached part/module lookups, efficient screen rendering + RT cameras.
 ---
 
 ## PART I — BUILD CLAUDE (the autopilot) FIRST
-The whole autopilot is BUILT + installed; this is the order to make it GREAT. Stages, dependency-ordered
-(full detail: `AUTOPILOT_REBUILD_PLAN.md §0.2`):
+⚠ **STATE (corrected 2026-08-28, user):** a **first-cut SKELETON** is built + flies (pure L0–L7 + glue seams,
+pad→orbit→phasing). It is **NOT the advanced autopilot** — the huge array of RESEARCHED methods (from the
+MechJeb/TCA/PEGAS/Trajectories/GravityTurn mining + the GNC research) is largely **a BUILD BACKLOG, not
+implemented**. ⭐ **DECISION (user 2026-08-28): BUILD THE FULL FEATURE SET FIRST, THEN TEST.** So Part I has
+two movements: **I-A BUILD the backlog** (headless-first, no flights) → **I-B PROVE it** (flight-test + tune
+phase-by-phase — the phase-order rule lives HERE, not in the build). Full detail: `AUTOPILOT_REBUILD_PLAN.md
+§0.2`, `MECHJEB_CAPABILITY_INTEGRATION.md`, `MODS_HARVEST_2.md`, `AUTOPILOT_MINING_3.md`, `CREW_DRAGON_GNC_RESEARCH.md`.
 
-- **Stage 0 — Foundations.** Verify the installed phasing + attitude fixes in flight; build the **Tier-2
-  dispersion harness** (headless C#, crew-safety invariants — `VALIDATION_AND_ROBUSTNESS.md`); build the
-  ascent/booster **P0 capabilities**: engine-out differential octaweb throttle, AoA/q·α moderation, **UPFG
-  inc/LAN cutoff** (⭐ PEGAS's target-plane-normal method — the inc-undershoot fix, `AUTOPILOT_MINING_3.md`),
-  StageStats (MECO reserve), actuator-lag.
-- **Stage 1 — Ascent.** Tune to the REAL orbit (alt/inc, coplanar) AND a booster-recoverable MECO, together.
-- **Stage 2 — Booster return.** Course-correction 2×2, TCA landing law, StageStats reserve → droneship.
-- **Stage 3 — Navigation pipeline (strict fidelity).** `pure/NavFilter.cs` L1.5: simulate the sensor suite +
-  EKF, fly guidance on the ESTIMATE (`CREW_DRAGON_GNC_RESEARCH.md §5`).
-- **Stage 4 — Rendezvous.** RCS balancer (TCA solver), cascade completeness, Lambert + maneuver library,
-  finite-burn executor → the AI standoff.
-- **Stage 5 — Docking.** Corridor upgrade, KOS auto-abort, manual-takeover → capture.
-- **Stage 6 — Return/entry/splashdown.** ReentrySimulation predictor (⭐ Trajectories' RK4 + KSP-Euler
-  correction) + course-correction + the 4-band entry-AoA schedule; tune to splashdown.
-- **Stage 7 — Hardening + fidelity.** FDIR full authority; retire tuned constants behind self-cal (⭐
-  GravityTurn's LaunchDB loss-minimizing auto-tuner for the ascent shape); **PVG optimal-ascent port**
-  (PEGAS virtual-stages skeleton); free-flyer profiles; **Tier-4 Monte-Carlo** (corpus-calibrated first).
+### Movement I-A — BUILD THE RESEARCHED-METHOD BACKLOG (pure-first + headless-tested; NO flights yet)
+Dependency-ordered. Each = a pure module + its tests, THEN the thin glue. Ported from the PROVEN sources
+(MechJeb `mechjeb_src`, PEGAS, TCA, Trajectories) — never a self-invented model. ✅=built, ½=first-cut only, ○=not built.
+- **B1 — StageStats / FuelFlowSim** ○ — Δv/TWR per stage + MECO recovery reserve (port MechJeb `FuelFlowSimulation`). Foundational (feeds budgets + Tier-4).
+- **B2 — q·α moderation** ½→ the AtmosphereAutopilot online-model controllability region (today only a q-scaled AoA cone cap).
+- **B3 — Thrust/RCS balancer** ○ — the TCA `EngineOptimizer`/`RCSOptimizer` torque-nulling solver → **engine-out differential octaweb throttle** AND the RCS translation balancer (one solver, both users).
+- **B4 — Actuator-lag model** ○ — command→response lag compensation in the control loop.
+- **B5 — PVG / virtual-stages optimal ascent** ○ — the PEGAS virtual-stage skeleton on top of UPFG (which now has ⭐ plane targeting, done 2026-08-28).
+- **B6 — NavFilter (strict-fidelity nav)** ○ — `pure/NavFilter.cs` L1.5: simulate the sensor suite + EKF, fly guidance on the ESTIMATE (`CREW_DRAGON_GNC_RESEARCH.md §5`).
+- **B7 — Lambert + maneuver-node library + finite-burn executor** ○ — beyond the current CW+Hohmann+named-burns.
+- **B8 — Entry predictor upgrade** ½→ Trajectories' RK4 + **KSP-Euler correction** + the **4-band entry-AoA schedule** + **course-correction 2×2** (booster + entry) (today only a basic RK4 impact predictor).
+- **B9 — GravityTurn LaunchDB auto-tuner** ○ — loss-minimizing ascent-shape self-tuner (retires the hand-set pitch constants).
+- **B10 — V&V completion** ½→ **Tier-2 dispersion** more families (docking/return/FDIR — today control+rendezvous only); **Tier-3** corpus regression tool; **Tier-4** Monte-Carlo (corpus-calibrated FuelFlowSim + ReentrySim, gate first).
+- **B11 — FDIR full authority + free-flyer profiles** ○ — turn FDIR from observe to acting; the 4 mission profiles.
+
+### Movement I-B — PROVE IT (flight-test + tune, phase-order: ascent→booster→rendezvous→docking→return)
+Only AFTER I-A. Tune each phase to its REAL coupled targets against the FlightRecorder CSVs (the flights flown
+2026-08-28 were skeleton reconnaissance — they verified the phasing self-deorbit fix and surfaced the ascent
+defects, several of which are really MISSING I-A methods). Then:
 - **Stage 8 — CLAUDE PROVING RUN.** One Crew-2 mission pad→splashdown, crew on the gates, timeline matching.
   ⭐ **The name is earned here.**
 
