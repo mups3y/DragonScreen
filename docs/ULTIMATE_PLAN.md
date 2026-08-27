@@ -50,6 +50,11 @@ phase-by-phase — the phase-order rule lives HERE, not in the build). Full deta
 Dependency-ordered. Each = a pure module + its tests, THEN the thin glue. Ported from the PROVEN sources
 (MechJeb `mechjeb_src`, PEGAS, TCA, Trajectories) — never a self-invented model. ✅=built, ½=first-cut only, ○=not built.
 
+> ✅✅ **MOVEMENT I-A COMPLETE (2026-08-28).** All 11 backlog items built + headless-validated (the suite is now
+> ~725k checks/build), plus the FATAL abort splashdown fixed. Pure modules + the safe glue are in; the
+> behavior-changing / corpus-gated glue is explicitly deferred to I-B (listed per item below + in
+> `RESUME_PROMPT.md`). **NEXT = Movement I-B: flight-tune phase-by-phase.**
+
 > ⭐ **APPROVED COURSE CHANGE (2026-08-28, user OK'd the pivot).** Two governing constraints now: **(1) NO NEW flight
 > tests until the ENTIRE autopilot is built** — stay build-only through all of I-A; **(2) do INITIAL tuning from the
 > UP-TO-DATE flight recordings + the tuning DB** (`quarantine\dragonscreen_flightdata` + `DragonScreen_capture`, via
@@ -72,7 +77,7 @@ Dependency-ordered. Each = a pure module + its tests, THEN the thin glue. Ported
 - **B2 — q·α moderation** ½→ the AtmosphereAutopilot online-model controllability region (today only a q-scaled AoA cone cap).
 - **B3 — Thrust/RCS balancer** ○ — the TCA `EngineOptimizer`/`RCSOptimizer` torque-nulling solver → **engine-out differential octaweb throttle** AND the RCS translation balancer (one solver, both users).
 - **B4 — Actuator-lag model** ○ — command→response lag compensation in the control loop.
-- **B5 — PVG / virtual-stages optimal ascent** ○ **(LAST, redefined 2026-08-28)** — real primer-vector / PEG optimal ascent (PEGAS/UPFG lineage): analytic primer-vector steering + a small Newton BVP shooting solve for costates/burn-times/optimal-coast. ⛔ NOT the MechJeb PSG/ALGLIB port (rejected — see the course-change box above). Near-no-op for single-burn Crew-2.
+- **B5 — PVG / virtual-stages optimal ascent** ✅ **(LAST, done 2026-08-28)** — multi-stage UPFG (PEGAS virtual stages): `Upfg.Step(UpfgStage[])` accumulates the thrust integrals across burn stages with the `tgoi1` cross-stage shift, ported VERBATIM from `Noiredd/PEGAS-MATLAB/unifiedPoweredFlightGuidance.m` (fetched this session). Both const-thrust + const-accel modes; blocks 5–8 refactored into a shared `Steer()`; single-stage Step is the unchanged n=1 case. Validated: n=1 reproduces single-stage exactly + a 2-stage point-mass CLOSURE reaches ~200×200 km through a staging jettison. ⛔ NOT the MechJeb PSG/ALGLIB port (rejected). Near-no-op for our single-upper-stage vehicles → single-stage Step stays the live path; multi-stage built + validated, ready if needed.
 - **B6 — NavFilter (strict-fidelity nav)** ○ — `pure/NavFilter.cs` L1.5: simulate the sensor suite + EKF, fly guidance on the ESTIMATE (`CREW_DRAGON_GNC_RESEARCH.md §5`).
 - **B7 — Lambert + maneuver-node library + finite-burn executor** ○ — beyond the current CW+Hohmann+named-burns.
 - **B8 — Entry predictor upgrade** ✅ pure — `pure/CourseCorrect.cs` (finite-difference impact-divert: 2×2 booster / 1×1 entry, 15 checks) + `Trajectory.EntryLdBand` 4-band L/D schedule (predictor prior; ⛔ NOT active CoM steering — respects the engage-once hard rule). **Owed I-B (validation-gated):** wiring CourseCorrect into BoosterTargeting/EntrySteering (replaces a working heuristic → flight-validate, keep heuristic fallback) + the **KSP-Euler correction** (the doc gates it on reproducing a recorded flight — no entry corpus yet).
@@ -97,7 +102,7 @@ data — so only ascent-coupled tunables are DB-seedable now; the rest stay ○ 
 | B2 q·α moderation | ✅+glue | ○ | aero-stiffness seed is researched; the estimator needs the isolated-aero FEED (owed I-B) before the DB can seed it |
 | B3 thrust/RCS balancer | ✅+glue | ○ | StepFactor/deadband researched; no engine-out or rendezvous flight in the corpus |
 | B4 actuator-lag | ✅+glue | ◐ | uses the LIVE measured gimbal `responseSpeed` → self-seeding, no static value to tune |
-| B5 primer-vector PVG | ○ | — | not built (last) |
+| B5 primer-vector PVG | ✅ | — | multi-stage UPFG (PEGAS virtual stages) built + point-mass-closure validated; no tunables |
 | B6 NavFilter | ✅ | ○ | IMU/RGPS noise tunables; no sensor-truth flight yet |
 | B7 Lambert + Maneuver | ✅ | — | universal-variable math; no tunables |
 | B8 entry predictor | ✅ pure | ○ | CourseCorrect + EntryLdBand built; band L/D + KSP-Euler pending an entry-flight corpus to calibrate; targeting glue owed I-B |
