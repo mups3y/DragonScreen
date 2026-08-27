@@ -62,6 +62,7 @@
 ## 8. Environment / mods / vehicle (GROUND TRUTH)
 - **[INSTALLED_MODS_RESEARCH.md](INSTALLED_MODS_RESEARCH.md)** [CURRENT] — how the RSS/RO install behaves (no reaction wheels, FAR transonic, RealFuels, RealChute, TestFlight). §6a = the orchestration mods.
 - **[MOD_INTEGRATION_RESEARCH.md](MOD_INTEGRATION_RESEARCH.md)** [CURRENT] — ⭐ installed mods as DATA SOURCES: KER's live-sim API (per-stage Δv/TWR/burn-time + suicide-burn + impact + q — the treasure chest) to SOFT-integrate, PRE, BetterTimeWarp (ref), KRE. Policy: no hard deps; read KER by reflection with our pure fallback.
+- **[MOD_INVENTORY_RESEARCH.md](MOD_INVENTORY_RESEARCH.md)** [CURRENT] — the FULL triage of all 123 installed mods (useful / covered / infra / cosmetic). Useful+new: KSPCommunityFixes (validates our GetPotentialTorque authority), EngineGroupController, KSPCommunityPartModules, CustomPreLaunchChecks. So no mod is un-swept.
 - [RO_RSS_ENVIRONMENT.md](RO_RSS_ENVIRONMENT.md) [REF] — real scale / atmosphere / aero / heating.
 - [RO_MODS_MECHANICS.md](RO_MODS_MECHANICS.md) [REF] — what the guidance MUST obey.
 - [RO_TESTFLIGHT_MECHANICS.md](RO_TESTFLIGHT_MECHANICS.md) [REF] — engine ignition/ullage/reliability mechanics.
