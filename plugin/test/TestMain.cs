@@ -36,6 +36,7 @@ public static class TestMain
         bad += UpfgTest.Run();             // L3 ascent: closed-loop UPFG S2 insertion (PEGAS port)
         bad += StageStatsTest.Run();       // B1: per-stage dV/TWR/burn-time + MECO recovery reserve (MechJeb FuelFlowSim math)
         bad += QAlphaTest.Run();           // B2: q·α moderation controllability cap + SelfCal aero-stiffness estimator
+        bad += ThrustBalanceTest.Run();    // B3: thrust-limiter balancing solver (TCA torque-nulling descent)
         bad += BoosterTest.Run();          // L3 booster: hoverslam + grid-fin steering + descent FSM
         bad += RendezvousMathTest.Run();   // L3 rendezvous: LVLH + CW two-impulse + Hohmann
         bad += RendezvousTest.Run();       // L3 rendezvous: named-burn FSM + full-control contract
