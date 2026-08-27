@@ -340,9 +340,11 @@ namespace DragonScreen
 
             FlightDriver.SetThrottle(Throttle);
 
-            // ⭐ B3 engine-out differential octaweb throttle: while S1 burns, null any net-torque asymmetry the
-            // octaweb leaves (a failed engine) via per-engine thrust limiters, so the gimbal isn't saturated
-            // fighting a steady moment. Demand Vec3.Zero (pure axial); cheap when symmetric (skips the solve).
+            // ⭐ B3 engine-out differential octaweb throttle: on a genuine engine-OUT (a vehicle with ≥2 independent
+            // engine modules), trim the surviving engines so the gimbal isn't saturated fighting the missing
+            // engine's steady moment. ⛔ INAPPLICABLE to OUR octaweb — it is a SINGLE multi-nozzle module, so
+            // BalanceOctawebThrust holds it at full (the n<2 guard) rather than throttling the one engine down to
+            // null the gimbal's own steering torque (which safe-aborted the 2026-08-28 launch at ~40% thrust).
             if (phase == AscentPhase.VerticalRise || phase == AscentPhase.GravityTurn)
             {
                 bool balanced = Actuator.BalanceOctawebThrust(v, EngineRole.OctawebAll, Vec3.Zero);

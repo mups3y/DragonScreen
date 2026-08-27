@@ -183,22 +183,17 @@ namespace DragonScreen
             }
             if (n == 0) return true;
 
+            // ⛔ Differential throttle needs ≥2 INDEPENDENT engine modules to redistribute thrust BETWEEN them.
+            // Our octaweb is a SINGLE multi-nozzle ModuleEngines (n=1 — "1 all-engines module lit"), so there is
+            // nothing to redistribute: the solve can only throttle that ONE engine DOWN to reduce its own net
+            // torque — and on the pad the gimbal is deflected (steering), so the "imbalance" it sees is the
+            // gimbal's INTENTIONAL steering torque. That starved the octaweb to ~40% and safe-aborted the launch
+            // (2026-08-28). With <2 engines: HOLD FULL THRUST and let the gimbal do the steering. Differential
+            // throttle is an engine-OUT contingency for genuinely multi-engine vehicles, never a per-tick nuller.
+            if (n < 2) { HoldEnginesFull(v, want); return true; }
+
             // symmetric / balanced → hold the limiters at full (write only where they drifted), skip the solve.
-            if ((net - demandedTorqueNm).Magnitude < DiffTorqueDeadbandNm)
-            {
-                for (int i = 0; i < v.parts.Count; i++)
-                {
-                    Part p = v.parts[i]; string nm = p.name ?? "";
-                    for (int m = 0; m < p.Modules.Count; m++)
-                    {
-                        ModuleEngines e = p.Modules[m] as ModuleEngines;
-                        if (e == null || Actuation.EngineRoleOf(nm, e.engineID) != want) continue;
-                        if (e.EngineIgnited && e.isOperational && Math.Abs(e.thrustPercentage - 100f) > 0.5f)
-                            e.thrustPercentage = 100f;
-                    }
-                }
-                return true;
-            }
+            if ((net - demandedTorqueNm).Magnitude < DiffTorqueDeadbandNm) { HoldEnginesFull(v, want); return true; }
 
             // asymmetric (engine-out) → build the effectors and solve the differential throttle (rare path).
             var eng = new System.Collections.Generic.List<ModuleEngines>();
@@ -228,6 +223,22 @@ namespace DragonScreen
 
         // One engine's world-frame force + torque-about-CoM at FULL thrust, aggregated over its thrust
         // transforms (thrust pushes the vehicle opposite each nozzle's forward). Guarded; false if unusable.
+        // Restore every operational engine in the role to 100% thrust (write only where it drifted).
+        static void HoldEnginesFull(Vessel v, EngineRole want)
+        {
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                Part p = v.parts[i]; string nm = p.name ?? "";
+                for (int m = 0; m < p.Modules.Count; m++)
+                {
+                    ModuleEngines e = p.Modules[m] as ModuleEngines;
+                    if (e == null || Actuation.EngineRoleOf(nm, e.engineID) != want) continue;
+                    if (e.EngineIgnited && e.isOperational && Math.Abs(e.thrustPercentage - 100f) > 0.5f)
+                        e.thrustPercentage = 100f;
+                }
+            }
+        }
+
         static bool EngineForceTorque(ModuleEngines e, Vector3d com, out Vec3 forceN, out Vec3 torqueNm)
         {
             forceN = Vec3.Zero; torqueNm = Vec3.Zero;
