@@ -23,7 +23,11 @@ SpaceX/NASA-grade **autonomous autopilot (CLAUDE)** that flies any crew mission 
 always comes home; DIRECT part control only; the direct gimbal/RCS loop is the inner loop (SAS fallback-only);
 tune ONE PHASE at a time to REAL coupled targets; don't invent + trust sims — use proven methods + the recorded
 corpus; instrument everything; batch reasoned fixes then fly; commit+install autonomously, push on request;
-strict IMPLEMENTATION fidelity (build the real nav pipeline + PVG, not just the behavior). ⭐ **Build correctly
+strict IMPLEMENTATION fidelity (build the real nav pipeline + PVG, not just the behavior). ⭐ **MOD-DEPENDENCY
+POLICY** ([[mod-dependency-policy]]): an OPTIONAL mod (may be absent — KER, BetterTimeWarp) → soft-integrate
+(reflection + our own fallback) or build the behaviour in; a HARD-dep of RO/RSS (always present — CustomPreLaunchChecks,
+ModuleManager, RealFuels, FAR, KSPCommunityFixes…) → ⛔ don't reinvent it ("a hat on a hat"), take DIRECT control.
+⭐ **Build correctly
 + thoroughly the FIRST time — NO shortcuts:** verify before reuse; verify EVERY comment against the code and
 fix wrong ones (they rot); keep comments precise BUT concise; skim-reading/shortcutting to save tokens only
 costs more rebuilding later — token-efficiency is terse CHAT + not-rebuilding, never a skimmed build
@@ -137,6 +141,9 @@ completed as its own program. Detail: `SCREENS_CONSOLE_PLAN.md` + `SCREENS_LOOK_
   navball, docking cam, crew gates. **Build the MISSING pages:** ❌ **Vehicle Overview** (connections +
   life-support PPO2/temp/pressure/CO2 + orbit + range-to-ISS + GO/NO-GO) and ❌ **Suit Leak Check 4.011** (the
   `SuitLeakG2` gate exists but has no page) — both now buildable against the TAC-LS cabin model.
+  ⭐ **Wire the launch GO/NO-GO to the REAL readiness** — read KSP's stock `PreFlightCheck` / RO's **CustomPreLaunchChecks**
+  (a hard RO-dep → USE it directly, don't reinvent avionics/control/crew checks) and surface each as a crew-gate
+  line, so a NO-GO shows RED on the glass (`MOD_INTEGRATION_RESEARCH.md §4b`).
 - **S-D — Audio.** ❌ (residual hole) decide + add sound: the abort klaxon, alert tones, crew callouts, and the
   Audio settings page — the real Dragon is mostly quiet + alerts, so keep it minimal + tasteful.
 - **S-E — The hidden docking MINI-GAME.** ⭐ Natively recreate the iss-sim docking experience (green-diamond

@@ -37,11 +37,14 @@ drogues — BUT it is gated `MODULE:NEEDS[KSPCommunityPartModules&!RealChute]`, 
 KCPM's auto-cut is stripped and RealChute owns the drogues (see the abort-chute fix). ⇒ no effect on our chute
 logic; noted so the `!RealChute` gating is understood.
 
-### A4. CustomPreLaunchChecks — a launch GO/NO-GO gate to coexist with
-Adds configurable pre-launch checks that can BLOCK launch until conditions are met (RP-1-style avionics/crew/
-connection checks). ⚠ **Verify our auto-launch (`CrewProcedureOps` GO → `FlightDriver.StartLaunch`) is not silently
-blocked by an unmet CustomPreLaunchCheck** — if the stock launch is held, our ignition may no-op. Flight-verify at
-the first I-B ascent; if it blocks, either satisfy the check or exempt the craft. Low code impact, real gotcha.
+### A4. CustomPreLaunchChecks (CPLC) — ⭐ a HARD RO-dep → take DIRECT control (do NOT reinvent)
+A **KSP-RO** project (`github.com/KSP-RO/CustomPreLaunchChecks`), bundled with RP-1/RO → effectively always present.
+It detours `EditorLogic.GetStockPreFlightCheck` to inject RO/RP-1 launch-readiness `IPreFlightTest`s (avionics/
+control/crew) into KSP's STOCK pre-flight system. ✅ **CORRECTION to my earlier flag:** it gates the **VAB→pad
+LAUNCH**, NOT on-pad ignition — so it does NOT block our AUTO SEQUENCE (the 2026-08-28 vehicle was on the pad and
+DID ignite). ⭐ **Per the mod-dependency policy it is a HARD dep → we USE it directly**, feeding the stock/CPLC
+launch-readiness into the **crew-screen GO/NO-GO** display rather than reimplementing avionics checks. Full detail +
+the integration approach in **`MOD_INTEGRATION_RESEARCH.md §4b`**; the hat-on-a-hat audit is §6 there.
 
 ### A5. Launch site / targeting statics (booster + entry targets) — [also COVERED in part]
 `KerbalKonstructs` + `TundraSpaceCenter` + `CanaveralPads` + `ModularLaunchPads` (the erector
