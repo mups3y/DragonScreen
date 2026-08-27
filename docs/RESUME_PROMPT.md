@@ -1,8 +1,42 @@
 # Next-session resume prompt — DragonScreen autopilot
 
 Paste the block below at the start of the next session. It puts you in the right frame of mind and points you
-at the one thing that matters next. (Rewritten 2026-08-28: PLANNING COMPLETE — the ULTIMATE PLAN, all rules,
-the full research + screens + mining + index are done. READY TO BUILD. Next action = start at Stage 0.)
+at the one thing that matters next.
+
+---
+
+## ⭐⭐ RESUME HERE (2026-08-28, post-compaction) — MODE IS BUILD
+
+**The autopilot is NOT "build complete" — a first-cut SKELETON flies (pad→orbit→phasing, verified), but the
+researched-method BACKLOG is what makes it advanced. USER DECISION: build the full feature set first (ULTIMATE_PLAN
+Movement I-A, dependency-ordered B1–B11, pure-first + headless + committed + installed), THEN flight-tune
+phase-by-phase (I-B).** Top plan `docs/ULTIMATE_PLAN.md`; detail `AUTOPILOT_REBUILD_PLAN.md §0.2`; running log
+[[dragonscreen-autopilot-rebuild-plan]]. Live plan artifact: https://claude.ai/code/artifact/943d3d08-1124-432b-b474-1c33b5c29774
+
+**⭐ FIRST TASK THIS SESSION (user directive): B5 — PVG / virtual-stages.** It is the MechJebLib `PSG`
+Pontryagin/primer-vector OPTIMAL-CONTROL ascent solver (`Desktop/mechjeb_src/MechJebLib/PSG/*`, ~2900 lines
+across 13 files + deps: `MechJebLib.ODE` integrator, `Optimizer.cs` 513-line BVP solver, `AscentProblem.cs`
+556-line costate dynamics, `Primitives`/`Functions`/`Interpolants`). The LARGEST backlog item — a MULTI-PASS
+port: ODE integrator → phase/vehicle model → costate dynamics → optimizer → verify vs MechJeb `AscentTests`,
+committing each pass. It's an optimization of the already-working UPFG ascent (a no-op for single-stage Crew-2),
+so it was sequenced last; do it FIRST this session per the user.
+
+**BUILT + committed + installed this run (headless-green ~490+ checks, DLL live):** B1 StageStats, B2 q·α
+moderation (+glue), B3 thrust/RCS balancer (+engine-out glue), B4 actuator-lag (+glue), B6 NavFilter, B7 Lambert
++ Maneuver. **REMAINING after B5:** B8 entry-predictor upgrade (Trajectories KSP-Euler correction + 4-band AoA +
+course-correction 2×2), B9 GravityTurn LaunchDB auto-tuner, B10 V&V (Tier-2 more families + Tier-3 regress +
+Tier-4 MC), B11 FDIR full authority + free-flyer profiles. **Then Movement I-B: flight-tune.** Owed in I-B: the
+B2 estimator FEED (isolated aero angular-accel, sign-sensitive) + the B3 RcsBalance glue (rendezvous/docking).
+
+**⚠ From the 2026-08-28 flight analysis (7 flights, in `quarantine\dragonscreen_flightdata`, in the DB):**
+phasing self-deorbit is FIXED (verified, pe held 177–179 km). Ascent defects: inc −5.1° (A1 UPFG-plane fix
+installed, unflown), g 4.72 (min-throttle floor, safe), eccentric SECO 200×140 (re-assess post-A1). **⛔⛔ ABORT
+recovery is FATAL — launch-escape aborts splash at ~122 m/s (mains under-decelerate); the abort TRIGGERS
+perfectly in every regime but the crew doesn't survive.** High-priority I-B (return/chute phase). Flight tooling:
+`plugin/tools/assess_flight.py` (CURRENT 89-col schema) + `tuning_db.py` (both read capture + the quarantine archive).
+
+The stale "Stage 0 / PHASING SELF-DEORBIT is THE blocker" content below is SUPERSEDED — kept only for the rules
++ research references. The frame-of-mind + build-quality rules below all still apply.
 
 ---
 
