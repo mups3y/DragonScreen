@@ -80,6 +80,33 @@ Dependency-ordered. Each = a pure module + its tests, THEN the thin glue. Ported
 - **B10 — V&V completion** ½→ **Tier-2 dispersion** more families (docking/return/FDIR — today control+rendezvous only); **Tier-3** corpus regression tool; **Tier-4** Monte-Carlo (corpus-calibrated FuelFlowSim + ReentrySim, gate first).
 - **B11 — FDIR full authority + free-flyer profiles** ○ — turn FDIR from observe to acting; the 4 mission profiles.
 
+#### Build + Tuned status matrix (updated 2026-08-28)
+Two axes per item, so we always know both whether it is BUILT and whether its tunables are at the best data-backed
+starting defaults. **Build:** ○ not built · ½ first-cut · ✅ built. **Tuned:** **—** no tunables (pure math/physics) ·
+**○** researched defaults, the DB has no data for this phase yet (can't DB-seed until I-B flies it) · **◐** DB-seeded
+(initial values set/validated from the corpus) · **✅** flight-tuned (I-B). ⚠ The tuning DB corpus today covers only
+**ascent control** (VerticalRise/GravityTurn/S2Burn/Coast) + **abort** — NO booster/rendezvous/docking/entry/chute
+data — so only ascent-coupled tunables are DB-seedable now; the rest stay ○ until their I-B flight.
+
+| Item | Build | Tuned | Tuning source / why |
+|---|---|---|---|
+| B1 StageStats | ✅ | — | physics only (G0, rocket eq); no tunables |
+| B2 q·α moderation | ✅+glue | ○ | aero-stiffness seed is researched; the estimator needs the isolated-aero FEED (owed I-B) before the DB can seed it |
+| B3 thrust/RCS balancer | ✅+glue | ○ | StepFactor/deadband researched; no engine-out or rendezvous flight in the corpus |
+| B4 actuator-lag | ✅+glue | ◐ | uses the LIVE measured gimbal `responseSpeed` → self-seeding, no static value to tune |
+| B5 primer-vector PVG | ○ | — | not built (last) |
+| B6 NavFilter | ✅ | ○ | IMU/RGPS noise tunables; no sensor-truth flight yet |
+| B7 Lambert + Maneuver | ✅ | — | universal-variable math; no tunables |
+| B8 entry predictor | ½→ | ○ | AoA-band schedule + step sizes; no lifting-entry flight in the corpus |
+| B9 GravityTurn auto-tuner | ○ | — | it IS the tuner — its output is the tuned ascent shape |
+| B10 V&V | ½ | — | test tooling; no tunables |
+| B11 FDIR authority | ○ | ○ | debounce/threshold tunables; only ascent+abort phases have data |
+| Ascent control (L2/L3) | ✅ | ◐ | DB-VALIDATED: GravityTurn/S2Burn pe_p95 < 0.4°, sat_duty ≈ 0 across the corpus → current defaults are already good |
+
+**I-A tuning goal:** move every item to **◐** where the corpus supports it; the ones stuck at **○** are the honest
+list of tunables that can only be seeded once their phase flies in I-B. Regenerate with `tools/tuning_db.py` after any
+new flight; re-seed here from `assess_flight.py` + the DB.
+
 ### Movement I-B — PROVE IT (flight-test + tune, phase-order: ascent→booster→rendezvous→docking→return)
 Only AFTER I-A. Tune each phase to its REAL coupled targets against the FlightRecorder CSVs (the flights flown
 2026-08-28 were skeleton reconnaissance — they verified the phasing self-deorbit fix and surfaced the ascent
