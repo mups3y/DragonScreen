@@ -222,8 +222,19 @@ namespace DragonScreen
                 }
                 else
                 {
-                    double qFrac = qPa / QAoaZeroPa; if (qFrac > 1.0) qFrac = 1.0; if (qFrac < 0.0) qFrac = 0.0;
-                    double aoaCap = Math.Max(MinAoaDeg, MaxAoaDeg * (1.0 - qFrac));
+                    // ⭐ B2 q·α moderation: cap AoA at the CONTROLLABILITY region (the AoA whose aero pitching
+                    // moment the live gimbal authority can still hold), not a blind q-schedule. aCtrlMax = the
+                    // pitch angular authority (AttitudePilot, last tick); kAero = aero stiffness (q-seed for now —
+                    // the SelfCal.AeroPitchStiffness online estimate feeds in once its aero-accel isolation is
+                    // wired). FAR is statically UNSTABLE transonically → the conservative factor there. Composed
+                    // with the [MinAoaDeg, MaxAoaDeg] band: ⛔ never below MinAoaDeg (flight 235215 lost steering
+                    // when a cap hit 0). aCtrlMax≈0 (authority not yet read / coast) → cap floors to MinAoaDeg.
+                    const double Deg2Rad = Math.PI / 180.0;
+                    double aCtrlMax = AttitudePilot.PitchAccelRadS2;
+                    double kAero = QAlpha.AeroStiffnessSeed(qPa);
+                    bool stable = v.mach < 0.8 || v.mach > 1.3;
+                    double physCapRad = QAlpha.Limit(kAero, aCtrlMax, stable, qPa).AoaMaxRad;
+                    double aoaCap = QAlpha.EffectiveCapRad(physCapRad, MinAoaDeg * Deg2Rad, MaxAoaDeg * Deg2Rad) / Deg2Rad;
                     aim = Steering.LimitToProgradeCone(v, aimBase, aoaCap);
                 }
             }

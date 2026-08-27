@@ -42,6 +42,7 @@ namespace DragonScreen
         public static double PointErrDeg, RateCmdRads, RateMeasRads;
         public static double ActPitch, ActYaw, ActRoll;
         public static double CtrlTorquePitchNm, CtrlTorqueYawNm, CtrlTorqueRollNm;
+        public static double PitchAccelRadS2;   // live pitch control angular-accel = τ_pitch / I_pitch (B2 q·α cap)
 
         // Clear the loop's integrators without dropping the hold — called every tick while the rocket is still
         // clamped, so the position PID cannot wind up against the hold-downs and kick the gimbal at release.
@@ -58,6 +59,7 @@ namespace DragonScreen
             PointErrDeg = RateCmdRads = RateMeasRads = 0.0;
             ActPitch = ActYaw = ActRoll = 0.0;
             CtrlTorquePitchNm = CtrlTorqueYawNm = CtrlTorqueRollNm = 0.0;
+            PitchAccelRadS2 = 0.0;
             FlightDriver.ReleaseAttitude();
         }
 
@@ -135,6 +137,7 @@ namespace DragonScreen
                 RateMeasRads = omega[0];
                 ActPitch = act[0]; ActYaw = act[2]; ActRoll = act[1];
                 CtrlTorquePitchNm = smTx; CtrlTorqueYawNm = smTz; CtrlTorqueRollNm = smTy;   // authority per axis
+                PitchAccelRadS2 = moi[0] > 1e-6 ? smTx / moi[0] : 0.0;   // pitch angular authority for the q·α cap
             }
             catch (Exception ex)
             {
