@@ -21,7 +21,16 @@ namespace DragonScreen
         public static SystemsState State = SystemsState.Fresh();
         public static double Charge01;
         public static bool CancelAllSequences() { return false; }
-        public static bool Run(PanelCommand c) { return false; }
+        public static bool Run(PanelCommand c)
+        {
+            // The physical EJECT/abort handle is wired to the real abort (SuperDraco + chutes + the DON'T
+            // PANIC alert). The other panel commands are still idle stubs until their controllers are rebuilt.
+            if (c == PanelCommand.Abort) { FlightDriver.RequestAbort(); return true; }
+            // "DEPRESS RESPONSE" is the abort-alarm SUPPRESS RESPONSE: silences the klaxon + red cabin
+            // lights and drops the alert to the centre screen only. It does NOT cancel the abort.
+            if (c == PanelCommand.DepressResponse) { FlightDriver.SuppressAbortFx(); return true; }
+            return false;
+        }
     }
 
     // CrewProcedureOps (the crew-in-the-loop gate conductor) is now REAL — see src/CrewProcedureOps.cs,

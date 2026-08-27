@@ -165,6 +165,10 @@ namespace DragonScreen
         public bool HasTargetGround;
         public double TargetLat, TargetLon;
         public string TargetLatText, TargetLonText;
+        /// <summary>Live 3D scaled-planet overlay (viewport fractions), OWNED BY THE GLUE and reused
+        /// every frame. Null in the PNG preview and until the renderer fills it - the page checks
+        /// Ready. See PlanetOverlay.</summary>
+        public PlanetOverlay Planet;
 
         // ---- CREW, BY SEAT ----
         // Indexed by IVA seat, which is the capsule's OWN numbering (part.internalModel.seats), not
@@ -354,12 +358,14 @@ namespace DragonScreen
         /// <summary>
         /// Worst-case commands any single page emits.
         ///
-        /// NAV is the driver, and its two views cost differently: the MAP view is one command per
+        /// NAV is the driver, and its three views cost differently: the MAP view is one command per
         /// ground-track sample (90), the ORBIT view is up to two per globe strip (128) plus the
-        /// ellipse. Sized with headroom rather than to the exact worst case, because the failure mode
-        /// of being one short is a silently truncated page - and the capacity test builds every page
-        /// in both NAV views precisely because the worst case is not the obvious one. FLIGHT's crew
-        /// checklist card (GateCard) adds ~25 commands over the base page; the headroom covers it.
+        /// ellipse, and the 3D PLANET view is one live image plus a dot per projected orbit AND target
+        /// sample (2 x 96) plus markers. Sized with headroom rather than to the exact worst case,
+        /// because the failure mode of being one short is a silently truncated page - and the capacity
+        /// test builds every page in ALL THREE NAV views precisely because the worst case is not the
+        /// obvious one. FLIGHT's crew checklist card (GateCard) adds ~25 commands over the base page;
+        /// the headroom covers it.
         /// </summary>
         public const int Commands = 480;
 

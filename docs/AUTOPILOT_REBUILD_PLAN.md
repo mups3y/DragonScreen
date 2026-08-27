@@ -1,5 +1,15 @@
 # Crew Dragon autopilot — the governing plan
 
+> **⏱ SESSION STATE 2026-08-27 (read `docs/RESUME_PROMPT.md` first — it is the live handoff).** Pad→orbit is
+> CLOSE. WORKS + flight-proven: erector→ignite→clamp-release launch sequence; S1 ascent (max pointing ~1°,
+> DM-1/Crew-2 pitch program to MECO); attitude+ROLL (gimbal loop, roll held to the target plane normal —
+> barrel-roll gone); LAUNCH-TO-RENDEZVOUS (ISS auto-targeted on the pad, ascent flown IN the ISS plane →
+> correct inclination + coplanar); regime-aware ABORT; navball + flat-map UI fixes. **⛔ THE ONE BLOCKER: S2
+> (MVac) IGNITION** — root-caused to a RealFuels feed-line VAPOR LOCK (false "stable" ullage); the fix is the
+> documented THROTTLE-0 RESET cycle (settle@0 → light@up → confirm on sustained thrust), JUST implemented in
+> `AscentControl`, UNVERIFIED in flight. **DO NEXT: fly pad→orbit, verify the throttle cycles 0→1 and the MVac
+> catches sustained thrust (mass drops).** Then booster/rendezvous/docking/return (§4 Steps E–H).
+>
 > This is the SpaceX/NASA autonomous flight software for the RSS/RO **Tundra Falcon 9 + Crew Dragon**
 > stack, flown crew-in-the-loop, launch → splashdown, on Earth. It is the single, self-contained governing
 > plan, written to be **picked up in any session** and put you straight into the right mode.
@@ -10,9 +20,16 @@
 > aspirational/earned name, not the current one. And it flies **ANY** crew mission (mission-as-data); Crew-2
 > is only the reference/validation profile.
 >
-> ⭐ **The step-by-step build sequence + the anti-regression rules live in the approved plan file**
-> `C:\Users\User\.claude\plans\snoopy-orbiting-hennessy.md` (approved 2026-08-26). §0.0 below is the folded
-> master state; the plan file is the authoritative build order. Read both first, every session.
+> ⭐ **`docs/ULTIMATE_PLAN.md` is the TOP-LEVEL governing plan for the whole mod (autopilot + screens + console
+> + mini-game). THIS doc is its AUTHORITATIVE AUTOPILOT-DETAIL backing** — the build order + stages + constants
+> + the flight-by-flight state. (Not a competing plan; the ULTIMATE PLAN cites it for the autopilot detail.)
+> The build order is §4; the current state + the
+> path-to-robust are §0.1; the MechJeb/mod capability integration is `docs/MECHJEB_CAPABILITY_INTEGRATION.md`
+> + `docs/MODS_HARVEST_2.md`. The old plan-mode files `.claude/plans/snoopy-orbiting-hennessy.md` and
+> `atomic-wiggling-alpaca.md` are HISTORICAL artifacts (pre-Actuator/AttitudePilot) — SUPERSEDED, do not defer
+> to them. The live handoff is `docs/RESUME_PROMPT.md`; read it + this doc first, every session. **The full
+> research/resource catalog (every doc, data file, tool, external source, flight corpus) is `docs/INDEX.md` —
+> grep it to FIND anything before concluding it doesn't exist.**
 
 ---
 
@@ -71,7 +88,7 @@ pilot) = the fix for the loss of control. Ullage before every ignition (RealFuel
 Decoupler`, not `LaunchClamp`) stayed on → drag RUD; F3 erector fixed but still transonic AoA runaway (SAS
 too slow) + RealChute never deployed (used stock `ModuleParachute`) so the crew hit at 139 m/s. Fixes so
 far: clamp + erector release, RealChute-aware deploy, state-reset-on-scene-load, q-scaled zero-AoA cap.
-**NEXT (the real fix — sequenced in the approved plan file, Steps A–I):** (1) `Actuator` glue — rip out ALL
+**NEXT (the real fix — sequenced in §4 Steps A–I, now ALL DONE + installed):** (1) `Actuator` glue — rip out ALL
 staging/action-groups, actuate every module directly by capability; (2) `AttitudePilot` glue — the
 MechJeb-`BetterController` direct gimbal loop replacing SAS (arrestable-rate, live `GetPotentialTorque`,
 MOI-scaled gains, pitch≈yaw), + AoA moderation as a FAR safety net; (3) **ullage** settle before every light
@@ -93,6 +110,91 @@ engine thrust/Isp read live (S1 6681.6 kN / MVac 805 kN / Draco 2 kN·Isp240 MMH
 - **You MAY commit and install autonomously** once `build.py test` is green and the change is reasoned (keeps
   a backup to revert to) — the old "never commit/install without the user" rule is lifted.
 - **Instrument everything but keep the FPS drop minimal** (modest sample rate, no heavy per-tick work).
+
+---
+
+## 0.1 PATH TO ROBUST — closing the holes to "flawless" (2026-08-27 honest-assessment follow-up)
+
+An honest review found the plan builds a highly-advanced, mission-complete Crew-2 autopilot, but that "flawless
+on any mission" was unprovable and several holes were open. Each now has a research/plan resource; the remaining
+work is execution + two flagged decisions. **The bar we hold: not "flawless" (unreachable + wrong target) but
+"robust with guaranteed abort-to-safe."**
+
+| Hole (from the assessment) | Closed by | Status |
+|---|---|---|
+| No robustness/dispersion validation (biggest) | `docs/VALIDATION_AND_ROBUSTNESS.md` — 4 tiers; **Tier 2 property-based dispersion of the pure layer** (headless C#, allowed) is the buildable core; asserts crew-safety INVARIANTS across the envelope | ✅ method defined · ⚠ Tier-4 C# trajectory Monte-Carlo FLAGGED (ask the user — brushes [[no-python-simulations]]) |
+| Most phases unproven / bug surface | `docs/PHASE_ACCEPTANCE_CRITERIA.md` — per-phase expected signature + PASS gates + KNOB/FAIL-SIG so each first flight verifies in minutes | ✅ resource added (execution = fly each) |
+| Tuning data-starved (chicken-and-egg) | dispersion harness gives synthetic coverage before flying; acceptance gates feed the Tier-3 corpus regression | ✅ planned |
+| Docking/entry "sensor-limited" | `docs/CREW_DRAGON_GNC_RESEARCH.md` — ⭐ the gap is INVERTED: KSP gives exact relative state, so it's a CONTROL hole (RCS balancer P0), not a sensing one. Concrete adds: KOS auto-abort, manual-takeover, reentry-sim entry (P2) | ✅ reframed + planned |
+| "Any mission" untested | `docs/MISSION_PROFILES_FREEFLYER.md` — 4 archetypes (ISS/high-circular/elliptical+reshape/polar), data verified present; adds: insertion-target param, on-orbit raise/lower (maneuver lib P1), polar corridor, EVA hold phase | ✅ researched + planned |
+| PVG "heavy lift" / ascent choice | `docs/ASCENT_GUIDANCE_DECISION.md` — DECISION: upgrade UPFG (full inc/LAN cutoff + parameterized target); AoA moderation carries q·α; PVG is an EARNED P2/P3 upgrade only if dispersion shows a need | ✅ decided |
+
+**DECISIONS MADE (2026-08-27):** (1) Tier-4 C# Monte-Carlo **ALLOWED** — must reproduce ≥2 recorded flights
+first (proven-not-invented). (2) Ascent = **UPGRADE UPFG** now (interim); **PVG is the committed fidelity
+target** (strict fidelity). (3) **STRICT IMPLEMENTATION FIDELITY** chosen → also **BUILD the real NAV PIPELINE**
+(new `pure/NavFilter.cs` L1.5 layer: simulate the sensor suite from ground truth + EKF → fly guidance on the
+ESTIMATE; matches real Dragon + proves nav-error robustness — reverses the old "don't emulate sensors" note).
+(4) reputable spaceflight press OK as a source fallback; (5) gimbal loop is the committed inner loop (SAS
+fallback only); (6) commit+install autonomously, **push to GitHub only on request**. Everything else is
+execution — tune ONE PHASE AT A TIME in order (ascent→booster→…), build the dispersion harness + the P0/P1
+capabilities + the nav pipeline.
+
+## 0.2 MASTER BUILD SEQUENCE — the logical order for a successful build (2026-08-28)
+
+The whole autopilot is BUILT; this is the ORDER to tune/extend it into a great one. Ordered by DEPENDENCY +
+the phase-order rule (§6): tune one phase at a time to REAL coupled targets; build each capability just before
+the phase that needs it; validate the pure logic BEFORE the expensive flight. Follow top-to-bottom.
+
+**STAGE 0 — FOUNDATIONS (before more flights).**
+- 0a. **Verify the installed fixes** — fly pad→orbit→phasing; confirm prograde inc, phasing pe rises/holds
+  (never falls), attitude roll bounded (`RESUME_PROMPT.md` DO-NEXT).
+- 0b. **Dispersion harness (Tier-2)** — property-based dispersion of the pure layer, headless C#, asserting the
+  crew-safety invariants (`VALIDATION_AND_ROBUSTNESS.md`). Build it EARLY: it catches bugs before flights and
+  grows with every phase. Cheap insurance on expensive flights.
+- 0c. **Ascent/booster P0 capabilities** (the phases tuned first need these): engine-out **differential octaweb
+  throttle**, **AoA/q·α moderation**, **UPFG inc/LAN cutoff** (hit the REAL 51.6°/coplanar target + parameterized
+  peR/apR) — ⭐ the FIX for the inc undershoot, method from PEGAS: compute the target plane NORMAL from
+  (site, inc, LAN) and pass it INTO the UPFG cutoff as a target (steer the plane, don't lock the achieved one) —
+  `AUTOPILOT_MINING_3.md §1a`; **StageStats** (MECO reserve as a number — the ascent↔booster coupling),
+  actuator-lag term. Sources: `MECHJEB_CAPABILITY_INTEGRATION.md` (P0/P1) + `MODS_HARVEST_2.md` (TCA solvers) +
+  `AUTOPILOT_MINING_3.md` (PEGAS/Trajectories/GravityTurn: plane fix, reentry-sim, ascent auto-tuner).
+
+**STAGE 1 — ASCENT (tune to the REAL target).** Fly + tune ascent to the real orbit (alt/inc, coplanar with the
+ISS) AND a MECO state that leaves the booster a nominal return — TOGETHER (they couple at MECO; don't tune an
+abstract orbit). Accept: inc≈51.6 coplanar, clean SECO, booster-recoverable MECO. Gates: `PHASE_ACCEPTANCE_CRITERIA.md`.
+
+**STAGE 2 — BOOSTER RETURN.** Build: course-correction 2×2 solve (droneship targeting), TCA VSC/altitude/radar
+landing law + true ground clearance, StageStats reserve check. Fly + tune the droneship return given Stage-1's
+MECO. Accept: nominal landing.
+
+**STAGE 3 — NAVIGATION PIPELINE (strict fidelity, before prox-ops).** Build the L1.5 `pure/NavFilter.cs`:
+simulate the sensor suite (relative-GPS/LIDAR/star-tracker) from ground truth + noise, EKF, fly guidance on the
+ESTIMATE (`CREW_DRAGON_GNC_RESEARCH.md §5`). Needed before rendezvous/docking so those phases fly on the real
+estimated state.
+
+**STAGE 4 — RENDEZVOUS.** Build: **RCS balancer** (P0 — no-reaction-wheel Draco 6-DOF), rendezvous cascade
+completeness (plane-match, phasing-ratio, arrive-at-rest), **Lambert** + maneuver library, finite-burn executor
+(BurnTime + ThrustForDv + center-of-burn). Fly + tune to the AI standoff (~7.5 km).
+
+**STAGE 5 — DOCKING.** Build: docking-corridor upgrade (MaxSpeedForDistance, null-lateral-first, KOS auto-size,
+wrong-side go-around), KOS auto-abort, manual-takeover at WP1/WP2. Fly + tune to soft/hard capture.
+
+**STAGE 6 — RETURN → ENTRY → SPLASHDOWN.** Build: **ReentrySimulation** precision predictor + course-correction
+2×2 + parachute-deploy regression; tune bank-angle entry + deorbit. Fly + tune to splashdown in zone.
+
+**STAGE 7 — HARDENING + FIDELITY.** FDIR to full authority; retire each first-cut constant behind its L6 self-
+cal estimator; **PVG optimal-ascent port** (the committed strict-fidelity upgrade, now that ascent flies on
+UPFG); free-flyer mission profiles (`MISSION_PROFILES_FREEFLYER.md`); **Tier-4 C# Monte-Carlo** (corpus-
+calibrated first).
+
+**STAGE 8 — PROVING RUN.** One Crew-2 mission pad→splashdown, crew on the gates, timeline matching. THEN the name.
+
+**PARALLEL — SCREENS + CONSOLE** (`SCREENS_CONSOLE_PLAN.md`): the NAV globe-mirror + orbit-close bugs, the
+button-wiring audit (every console button working / educated-guessed), the per-page feature audit + error hunt,
+fidelity polish. Doesn't gate the autopilot; mostly pure + PNG-preview testable. ⛔ KEEP the abort display.
+
+**CONTINUOUS — VALIDATION:** every code change → headless C# tests + dispersion (Tier-2) + corpus regression
+(Tier-3). Never trust a self-invented model; validate with proven methods + the recorded corpus.
 
 ---
 
@@ -186,9 +288,10 @@ Every design decision and every constant traces to one of these (all on disk):
 | Docking (L-approach, capture) | `PHASE_4_DOCKING_RESEARCH.md` + `data/crew_missions.json` (WP times) |
 | Undock / departure | `PHASE_5_UNDOCKING_DEPARTURE_RESEARCH.md` + DB return sequence |
 | Deorbit / entry / splashdown | `PHASE_6_DEORBIT_ENTRY_SPLASHDOWN_RESEARCH.md` + DB return spacing |
+| **Abort / emergency — EVERY regime (pad→orbit→docked)** | **`ABORT_PROCEDURES_RESEARCH.md`** — the universal sequence (SuperDraco→TRUNK JETTISON→DRACO REORIENT→controlled entry→drogues→mains), the pad+7 in-flight modes incl. ABORT-TO-ORBIT, recovery zones, and the §8 gap-list vs our regime-blind abort |
 | Full-mission callout MET (all phases) | `data/crew_missions.json` + `docs/CREW_MISSION_TELEMETRY.md` |
 | Autonomy (FDIR + self-cal) | `LAYER3_AUTONOMY_PLAN.md` |
-| Crew-in-the-loop gates | `snoopy-orbiting-hennessy.md` (plan) + DB countdown MET |
+| Crew-in-the-loop gates | §4 build order + `pure/CrewGates.cs` + DB countdown MET |
 | Vehicle numbers (Merlin/MVac/Draco) | **`ModuleManager.ConfigCache`** — read live, do NOT trust the .md spec figures |
 | Direct-control actuation map (parts/modules/events/actions) | **`data/craftdump.csv`** + `docs/CRAFT_DUMP_VEHICLE_MAP.md` — the real vehicle's capabilities; control by capability |
 | RSS/RO mechanics | `RO_RSS_ENVIRONMENT.md`, `RO_MODS_MECHANICS.md`, `RO_TESTFLIGHT_MECHANICS.md` |
@@ -267,6 +370,20 @@ keeps "fly any mission" and "true autopilot" the same property.
 ---
 
 ## 4. THE BUILD — bottom-up layers (each headless-tested before the next)
+
+> ⭐ **MechJeb capability integration (2026-08-27):** `docs/MECHJEB_CAPABILITY_INTEGRATION.md` is the EXHAUSTIVE
+> inventory of every MechJeb capability useful to our build (✅ have / ⚠ partial / ❌ missing), sequenced into
+> this build order by priority. P0 (authority/safety for OUR vehicle): **RCS balancer** (pure-translation Draco
+> solve), **engine-out differential octaweb throttle**, **AoA/q·α moderation**, actuator-lag term, full safe-sep
+> guards. P1 (guidance leap): **PVG optimal ascent** (multi-stage, coast-optimized, q·α-constrained, inc/LAN
+> targeting — replaces UPFG), finite-burn executor (BurnTime + ThrustForDv + center-of-burn), **StageStats**
+> (live ΔV/TWR), **maneuver library + Lambert + plane-match**, Δv loss columns. Full table + file targets there.
+> **Round-2 mod harvest (`docs/MODS_HARVEST_2.md`, 2026-08-27):** the P0 items now have RSS/RO-PROVEN source —
+> **TCA** (`EngineOptimizer`/`RCSOptimizer`, iterative torque-nulling balancer) is the direct reference for the
+> RCS balancer + differential octaweb throttle (+ MechJeb QP alternative + pseudo-inverse for our symmetric
+> layout); **FAR** gives `M_α` for AoA moderation; **KerbalEngineer** is the 2nd ΔV/TWR reference for StageStats;
+> **MFI/FAR** are the force model the reentry-sim integrates against. Standing method: DLL-only mod → read its
+> GitHub source (never decompile).
 
 ### L0 — Numerical core (VERIFY-THEN-REUSE, module by module — user 2026-08-26)
 The how-to-build guide (§6) says build/verify the math toolbox first. Candidate modules already exist with
@@ -476,6 +593,17 @@ thrust/Isp) are read live from `ConfigCache`, never set here** — the .md spec 
 
 ## 6. VALIDATION & ACCEPTANCE (how each layer is proven)
 
+> ⭐ **THE TUNING WORKFLOW (user 2026-08-27): whole mission BUILT → tune ONE PHASE AT A TIME, in mission order,
+> to REAL coupled targets — not abstract placeholders.** Order: **ascent → booster return → rendezvous →
+> docking → deorbit/entry/splashdown.** Ascent + booster return are the tightest couple (they hand off at
+> MECO), and the ascent orbit/inc is what every downstream phase depends on — so nail ascent to the REAL orbit
+> (correct alt/inc, coplanar with the ISS) AND a MECO state that gives the booster a nominal return TOGETHER,
+> before advancing. Tuning ascent to an abstract orbit only forces a re-tune once the booster needs a
+> recoverable MECO and the real target-inc is enforced. Each later phase is tuned to what the phase before it
+> actually delivers. Within a phase: batch reasoned fixes, fly to verify the batch. Capability builds follow
+> the same order — ascent/booster's (UPFG inc/LAN cutoff, AoA moderation, differential octaweb throttle,
+> StageStats/MECO-reserve) BEFORE docking's RCS balancer.
+
 - **Headless (`build.py test`)** — every pure layer before its glue: L0 conic/UPFG/CW convergence; L1
   derived-quantity correctness; L2 arrestable-rate + throttle limiter; L3 each guidance solver reaching its
   target on a point-mass; L4 gate machine (advances only on GO, NO-GO holds, KOS-breach → abort, free-flyer
@@ -483,8 +611,9 @@ thrust/Isp) are read live from `ConfigCache`, never set here** — the .md spec 
   free-fall / no-burn rendezvous / g-oscillation / entry over-burn); L6 estimators converge.
 - **Timeline-match** — the emergent event times (recorded, L7) compared to the DB callout MET; a `Crew2
   TimelineTest` headless guard + the recording. A mismatch means the physics/vehicle deviates.
-- **In-game (`build.py install`, full restart)** — one change per flight, fully recorded; read the CSV with
-  `assess_flight.py`; keep or revert on the data. RSS/RO is the only high-fidelity test of the glue.
+- **In-game (`build.py install`, full restart)** — BATCH reasoned fixes then fly to verify the batch (NOT one
+  change per flight — user 2026-08-26), fully recorded; read the whole CSV; keep or revert the batch on the
+  data. RSS/RO is the only high-fidelity test of the glue.
 - **Proving run** — one Crew-2 launch → splashdown, vehicle flying every metre, user working only the gates,
   HOLD/ABORT correct at every gate, timeline matching.
 
@@ -492,8 +621,9 @@ thrust/Isp) are read live from `ConfigCache`, never set here** — the .md spec 
 
 ## 7. BUILD ORDER (sequenced, resumable; each step lands something tested)
 
-Bottom-up so each layer rests on a tested one. **Do not install/commit without the user; one change per
-flight.**
+Bottom-up so each layer rests on a tested one. **You MAY commit + install autonomously once `build.py test` is
+green and the change is reasoned (keeps a backup — user 2026-08-26 lifted the old "never without me" rule);
+BATCH reasoned fixes then fly to verify the batch (NOT one change per flight).**
 
 - [ ] **S0 — Baseline, L0 verification & register.** (a) `build.py test` green. (b) **L0 verify-then-reuse
       audit** — per module, confirm the tests prove accuracy vs a known-correct reference; classify
@@ -800,8 +930,8 @@ driven by `FlightDriver.Tick()`, feed each L3 controller the measured vessel sta
 from the craft dump (engine modes, Dracos, nose shroud, CoM shifter, trunk/decouplers, abort action
 group), run `CrewProcedureOps` off `ModeManager`+`CrewGate`+`CrewGates` with live auto-items, tick `Fdir`
 + `AbortResponder` + `SelfCal`, and write the `FlightRecorder` CSV — then the in-game proving flight
-(Crew-2 launch → splashdown, crew working the gates). Then iterate one change per flight against the
-recording, no Python sims.
+(Crew-2 launch → splashdown, crew working the gates). Then iterate — BATCH reasoned fixes, fly to verify the
+batch — against the recording; validate with proven methods (corpus + headless C# tests), never a self-invented sim.
 
 ### GLUE — built in SEAMS, each in-game-verifiable on its own (DLL green at every step)
 The glue is not headless-testable, so it is built one verifiable seam at a time and handed over for an
@@ -845,8 +975,8 @@ per flight; instrument; never fly blind).
 - **⚠ VALIDATE IN FLIGHT (first cut, not headless-testable):** S1 pitch program is the reliable part;
   the S2 UPFG **Iy plane normal** (currently −(r×v), in-plane assumption), the SECO cutoff, the ENU heading
   SIGN, and the staging order (MECO sep / S2 ignite / Dragon sep via `StageManager`) are the things to
-  confirm against the recording and fix ONE change per flight. `SelfCal.SteerSign` is the guard for a
-  flipped heading.
+  confirm against the recording and fix (batch the reasoned fixes, fly to verify the batch). `SelfCal.SteerSign`
+  is the guard for a flipped heading.
 - **IN-GAME CHECK for seam 2:** AUTO SEQUENCE → countdown → launch; the vehicle flies the pitch-program
   gravity turn on the target-inclination heading, throttles through max-Q, stages at MECO, lights S2, flies
   UPFG to a ~circular orbit, cuts, and separates the Dragon; the CSV carries the ascent columns.
@@ -937,7 +1067,8 @@ per flight; instrument; never fly blind).
 
 **✅ ALL GLUE SEAMS COMPLETE (1–6 + booster targeting) — the full Crew-2 mission is wired, pad →
 splashdown, first-cut, installed.** What remains is entirely IN-GAME: fly it, read the FlightRecorder CSVs,
-and tune the flagged first-cut items ONE change per flight (no Python sims). The known refinements queued:
+and tune the flagged first-cut items (batch reasoned fixes, fly to verify the batch; validate with the corpus +
+headless C# tests, never a self-invented sim). The known refinements queued:
 bank-angle entry steering, the RCS translation signs, UPFG Iy/SECO, booster BC/rotation/cross signs, and
 the pure ControlLaw+Authority attitude loop replacing the SAS inner loop.
 

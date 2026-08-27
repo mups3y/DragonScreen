@@ -183,6 +183,35 @@ public static class ReturnTest
         Check("at the sea surface → splashed", cs.Splashed && cs.Phase == ChutePhase.Splashed, "");
         Near("touchdown speed reported (nominal 5–8 m/s)", cs.TouchdownSpeedMps, 6.0, 1e-9);
 
+        // ---- ABORT chute sequence (compressed): drogues → dwell → CUT + mains immediately ----
+        ChuteInputs ab = new ChuteInputs();
+        ab.Valid = true; ab.DrogueAltM = 5486; ab.MainAltM = 1830; ab.SeaAltM = 0;
+
+        // low pad-abort apogee (well below the nominal main altitude), just starting to descend:
+        ab.AltitudeM = 1000; ab.DescentRateMps = 20;
+        ChuteCommand a0 = Chutes.SequenceAbort(ab, ChutePhase.Idle, 0.0);   // no drogue time yet
+        Check("abort: drogues deploy on the descent", a0.DeployDrogues && a0.Phase == ChutePhase.Drogue, "");
+        Check("abort: no mains before the drogues are out", !a0.DeployMains && !a0.CutDrogues, "");
+
+        // drogues out, still inside the stabilise dwell and above the low floor → keep riding drogues:
+        ChuteCommand a1 = Chutes.SequenceAbort(ab, ChutePhase.Drogue, 1.0);
+        Check("abort: within dwell → drogues still, no cut", a1.Phase == ChutePhase.Drogue && !a1.CutDrogues, "");
+
+        // dwell elapsed → CUT the drogues and deploy the mains THIS tick (not waiting for 1830 m):
+        ChuteCommand a2 = Chutes.SequenceAbort(ab, ChutePhase.Drogue, Chutes.AbortDrogueDwellSec + 0.1);
+        Check("abort: after dwell → cut drogues + deploy mains at once",
+              a2.CutDrogues && a2.DeployMains && a2.Phase == ChutePhase.Main, "");
+
+        // low-altitude floor forces the cut+mains before the dwell is even up:
+        ab.AltitudeM = 400;
+        ChuteCommand a3 = Chutes.SequenceAbort(ab, ChutePhase.Drogue, 0.5);
+        Check("abort: below the floor → immediate cut + mains", a3.CutDrogues && a3.DeployMains, "");
+
+        // and it still splashes down at the surface:
+        ab.AltitudeM = 0; ab.DescentRateMps = 6;
+        ChuteCommand a4 = Chutes.SequenceAbort(ab, ChutePhase.Main, 10.0);
+        Check("abort: at the sea surface → splashed", a4.Splashed && a4.Phase == ChutePhase.Splashed, "");
+
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
     }

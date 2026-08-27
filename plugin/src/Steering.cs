@@ -29,12 +29,25 @@ namespace DragonScreen
         // horizontal north + east at the vessel (ENU, right-handed: East = North × Up)
         public static void NorthEast(Vessel v, out Vector3d up, out Vector3d north, out Vector3d east)
         {
+            // ⛔ USE KSP'S OWN SURFACE FRAME (v.north / v.east), NOT a hand-rolled one from body.transform.up.
+            // MechJeb (the proven KSP ascent guidance — primary source) does exactly this: VesselState.North =
+            // vessel.north, East = vessel.east. Our old body.transform.up derivation is WRONG under RSS/Kopernicus,
+            // where bodies are reoriented, so the pole axis was not true north — azimuth 42.8° (NE) mapped to a
+            // retrograde world direction and the orbit came out inc 116° instead of 51.6° (flights 190114/201648).
+            // v.north / v.east are unit world vectors KSP maintains from the body's ACTUAL rotation — correct on
+            // any body. Keep our radial 'up' (matches MechJeb's OrbitalPosition-normalized up).
             up = Up(v);
-            Vector3d poleAxis = (v.mainBody != null) ? (Vector3d)v.mainBody.transform.up : Vector3d.up;
-            north = (poleAxis - up * Vector3d.Dot(poleAxis, up));
-            if (north.magnitude < 1e-6) north = Vector3d.Cross(up, v.transform.right);   // at a pole
-            north = north.normalized;
-            east = Vector3d.Cross(north, up).normalized;
+            north = v.north;
+            east = v.east;
+            // Degenerate guard (should never trigger for a loaded vessel): fall back to a built frame.
+            if (north.sqrMagnitude < 1e-9 || east.sqrMagnitude < 1e-9)
+            {
+                Vector3d poleAxis = (v.mainBody != null) ? (Vector3d)v.mainBody.transform.up : Vector3d.up;
+                north = (poleAxis - up * Vector3d.Dot(poleAxis, up));
+                if (north.magnitude < 1e-6) north = Vector3d.Cross(up, v.transform.right);
+                north = north.normalized;
+                east = Vector3d.Cross(north, up).normalized;
+            }
         }
 
         // A world direction at flight-path pitch (deg, 90 = straight up) on ground azimuth (rad, CW from N).
@@ -85,13 +98,18 @@ namespace DragonScreen
         public static bool UseGimbalLoop = true;
         static bool sasReady;
 
-        public static void Point(Vessel v, Vector3d worldDir) { Hold(v, worldDir, true); }
-        public static void PointNoRoll(Vessel v, Vector3d worldDir) { Hold(v, worldDir, false); }
+        public static void Point(Vessel v, Vector3d worldDir) { Hold(v, worldDir, true, Vector3d.zero); }
+        public static void PointNoRoll(Vessel v, Vector3d worldDir) { Hold(v, worldDir, false, Vector3d.zero); }
 
-        static void Hold(Vessel v, Vector3d worldDir, bool dampRoll)
+        // Point the nose AND actively hold roll so the vehicle's dorsal axis tracks worldUpRef (ascent: keeps
+        // the booster from free-spinning, so the gravity turn stays in the launch plane → correct inclination).
+        public static void PointHoldRoll(Vessel v, Vector3d worldDir, Vector3d worldUpRef)
+        { Hold(v, worldDir, true, worldUpRef); }
+
+        static void Hold(Vessel v, Vector3d worldDir, bool dampRoll, Vector3d rollUpRef)
         {
             if (v == null || worldDir.magnitude < 1e-6) return;
-            if (UseGimbalLoop) { AttitudePilot.Point(v, worldDir, dampRoll); return; }
+            if (UseGimbalLoop) { AttitudePilot.Point(v, worldDir, dampRoll, rollUpRef); return; }
             try   // ---- SAS fallback (UseGimbalLoop=false) ----
             {
                 if (!v.ActionGroups[KSPActionGroup.SAS]) v.ActionGroups.SetGroup(KSPActionGroup.SAS, true);

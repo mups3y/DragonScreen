@@ -26,6 +26,8 @@ namespace DragonScreen
         static uint openVesselId;
         static double lastSampleT = -1e9;
         static double startUT;
+        static double launchLat, launchLon;   // captured on open, for the real downrange
+        static bool haveLaunchRef;
 
         static void Open(Vessel v)
         {
@@ -42,6 +44,8 @@ namespace DragonScreen
                 openVesselId = v.persistentId;
                 startUT = Planetarium.GetUniversalTime();
                 lastSampleT = -1e9;   // a revert can move UT backwards; force the first sample to fire
+                // launch reference for downrange: the pad position (or wherever the log opens).
+                launchLat = v.latitude; launchLon = v.longitude; haveLaunchRef = true;
                 Debug.Log("[DragonScreen] flight log → " + name);
             }
             catch (Exception e)
@@ -73,19 +77,41 @@ namespace DragonScreen
 
                 string[] row = FlightRecorder.NewRow();
                 FlightRecorder.PutTime(row, v.missionTime);
+                double downrangeM = DownrangeM(v);
                 FlightRecorder.PutNav(row,
                     v.altitude, v.obt_speed, v.verticalSpeed,
                     v.dynamicPressurekPa * 1000.0, v.mach,
-                    double.NaN, v.totalMass * 1000.0);
+                    downrangeM, v.totalMass * 1000.0);
                 // ⛔ ALWAYS-ON SNAPSHOT (MechJeb principle): phase/mode + surface speed + AoA + felt g +
                 // measured thrust + RCS + abort state, from live vessel data, so nothing is lost when no
                 // controller Fill is active (an abort, a coast, an engine cutout). See FlightRecorder.PutBase.
-                AbortMode am = FlightDriver.Aborting ? AbortMode.LaunchEscape : AbortMode.None;
+                AbortMode am = FlightDriver.Aborting ? AbortControl.Mode : AbortMode.None;
                 FlightRecorder.PutBase(row, CrewProcedureOps.ActivePhase, CrewProcedureOps.CurrentMode,
                     v.srfSpeed, Steering.AngleOfAttackDeg(v), v.geeForce, Actuator.TotalActiveThrustN(v),
                     Actuator.IsRcsOn(v), FlightDriver.Aborting, am);
                 FlightRecorder.PutGate(row, CrewProcedureOps.CurrentGateId, CrewProcedureOps.Proc.Phase,
                                        CrewProcedureOps.CrewActionNeeded());
+                // ⛔ ALWAYS-ON COMMAND SNAPSHOT: the full applied control (throttle + RCS translation + the
+                // attitude-loop actuation/pointing/rates) EVERY phase, so a coast/abort is never blind. This is
+                // the gap that hid the stranded capsule's real behaviour. See FlightRecorder.PutCommand.
+                FlightRecorder.PutCommand(row, FlightDriver.CmdThrottle,
+                    FlightDriver.CmdTransX, FlightDriver.CmdTransY, FlightDriver.CmdTransZ,
+                    AttitudePilot.PointErrDeg, AttitudePilot.RateCmdRads, AttitudePilot.RateMeasRads,
+                    AttitudePilot.ActPitch, AttitudePilot.ActYaw, AttitudePilot.ActRoll,
+                    AttitudePilot.CtrlTorquePitchNm, AttitudePilot.CtrlTorqueYawNm);
+                // measured body angular rates (deg/s), pitch/roll/yaw = angularVelocity x/y/z (AttitudePilot's axis
+                // order) — the raw control-rate signal the tuning DB aggregates per phase.
+                Vector3 av = v.angularVelocity * Mathf.Rad2Deg;
+                FlightRecorder.PutRates(row, av.x, av.y, av.z);
+                // control AUTHORITY + orbit state: roll torque (pitch/yaw already in the command snapshot), MOI per
+                // axis, RCS thrust in use, and the orbit shape/plane — so the DB can flag where authority is
+                // marginal (actuation saturating, torque/MOI too low, RCS maxed) and track the plane/guidance.
+                Vector3 moi = v.MOI;
+                Orbit o = v.orbit;
+                FlightRecorder.PutAuthority(row, AttitudePilot.CtrlTorqueRollNm, moi.x, moi.y, moi.z,
+                    Actuator.RcsThrustN(v),
+                    o != null ? o.ApA / 1000.0 : double.NaN, o != null ? o.PeA / 1000.0 : double.NaN,
+                    o != null ? o.inclination : double.NaN, o != null ? o.LAN : double.NaN);
                 Action<string[]> fill = Fill;   // the active controller's PHASE-SPECIFIC columns on top of the base
                 if (fill != null) { try { fill(row); } catch { } }
                 writer.WriteLine(FlightRecorder.Row(row));
@@ -94,6 +120,22 @@ namespace DragonScreen
             {
                 Debug.LogWarning("[DragonScreen] flight-log sample failed: " + e.Message);
             }
+        }
+
+        // Great-circle surface distance from the launch reference to the current sub-point (metres).
+        // The real downrange, replacing the old hardcoded NaN so ascent/entry footprints read directly.
+        static double DownrangeM(Vessel v)
+        {
+            if (!haveLaunchRef || v.mainBody == null) return double.NaN;
+            double R = v.mainBody.Radius;
+            if (R <= 0.0) return double.NaN;
+            double lat1 = launchLat * Math.PI / 180.0, lat2 = v.latitude * Math.PI / 180.0;
+            double dLat = lat2 - lat1;
+            double dLon = (v.longitude - launchLon) * Math.PI / 180.0;
+            double a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2)
+                     + Math.Cos(lat1) * Math.Cos(lat2) * Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+            if (a < 0.0) a = 0.0; else if (a > 1.0) a = 1.0;
+            return 2.0 * R * Math.Asin(Math.Sqrt(a));
         }
 
         static string Sanitize(string s)

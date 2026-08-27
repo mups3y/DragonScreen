@@ -47,6 +47,12 @@ namespace DragonScreen
     {
         public const double RendezvousCompleteM = 30000.0;
         [Tunable] public static double TerminalTofFrac = 0.25;   // transfer time as a fraction of the period
+        // ⛔ CW VALIDITY LIMIT. Clohessy-Wiltshire is a linearisation about the target — beyond this range it
+        // is meaningless and its two-impulse inverse explodes (13,000 km → 28 km/s, flight 214827). Past it,
+        // Guide REFUSES to compute a CW burn and just holds attitude; the far field is flown by pure/Phasing
+        // (prograde co-elliptic raise) in the glue. Set well above the near-field regime so the terminal legs
+        // (tens of km) are unaffected — this is a defence-in-depth guard, not the primary far/near split.
+        [Tunable] public static double CwMaxRangeM = 200000.0;   // 200 km
 
         static Vec3 Unit(Vec3 v, Vec3 fallback)
         {
@@ -90,6 +96,11 @@ namespace DragonScreen
             c.Phase = phase;
 
             if (phase == RvPhase.Arrived) return c;   // hand to docking; hold V-bar attitude
+
+            // ⛔ CW-VALIDITY GUARD: beyond the linearisation's range, do NOT run the two-impulse solve (it would
+            // explode to a garbage Δv). Hold the along-track attitude, command NO burn — the glue's far-field
+            // prograde co-elliptic raise (pure/Phasing) flies this regime. Cannot deorbit: no burn is emitted.
+            if (range > CwMaxRangeM) { c.Burn = false; c.BurnDvMps = 0.0; return c; }
 
             // CW two-impulse to the phase's OFFSET aim point.
             double xf, yf, zf; AimPoint(phase, s, out xf, out yf, out zf);

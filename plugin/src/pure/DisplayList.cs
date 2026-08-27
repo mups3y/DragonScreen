@@ -37,7 +37,11 @@ namespace DragonScreen
         /// <summary>Text. A=x B=y(TOP of the line) C=pixel size, Str=the string, Align=horizontal.</summary>
         Text = 2,
         /// <summary>Bitmap. A=x B=y C=width D=height, Image=which one. Colour TINTS it.</summary>
-        Image = 3
+        Image = 3,
+        /// <summary>Straight line. A=x0 B=y0 C=x1 D=y1, StartDeg=stroke width. A real primitive (a
+        /// rotated quad in the GL painter, a pen in the preview) so a track can be a solid line rather
+        /// than a row of dots - the one shape a Rect cannot make because it is not axis-aligned.</summary>
+        Line = 4
     }
 
     /// <summary>
@@ -203,6 +207,23 @@ namespace DragonScreen
             c.Image = id;
             c.Colour = tint;
             c.UMin = uMin; c.UMax = uMax; c.VMin = vMin; c.VMax = vMax;
+            Add(c);
+        }
+
+        /// <summary>
+        /// A straight line from (x0,y0) to (x1,y1) of the given stroke width. Unlike Box's four rects,
+        /// this is ONE primitive that can run at any angle - drawn as a rotated quad by the GL painter
+        /// and a round-capped pen by the preview, so both render the same solid stroke. Used for the
+        /// ground track and the 3D orbit, which are polylines at arbitrary angles.
+        /// </summary>
+        public void Line(float x0, float y0, float x1, float y1, float width, Rgba colour)
+        {
+            if (width <= 0f) return;
+            DrawCmd c = new DrawCmd();
+            c.Kind = DrawKind.Line;
+            c.A = x0; c.B = y0; c.C = x1; c.D = y1;
+            c.StartDeg = width;
+            c.Colour = colour;
             Add(c);
         }
 

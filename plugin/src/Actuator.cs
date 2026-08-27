@@ -68,6 +68,25 @@ namespace DragonScreen
             }
         }
 
+        // Total 100% (config max) thrust of the engines in a role, N — for sizing a g-limited burn (e.g. the
+        // SuperDraco deorbit). Counts them whether or not currently lit, so the throttle can be set BEFORE ignition.
+        public static double MaxThrustN(Vessel v, EngineRole want)
+        {
+            if (v == null) return 0.0;
+            double sum = 0.0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                Part p = v.parts[i];
+                string nm = p.name ?? "";
+                for (int m = 0; m < p.Modules.Count; m++)
+                {
+                    ModuleEngines e = p.Modules[m] as ModuleEngines;
+                    if (e != null && Actuation.EngineRoleOf(nm, e.engineID) == want) sum += e.maxThrust * 1000.0;
+                }
+            }
+            return sum;
+        }
+
         // The first live engine playing the wanted role (null if none) — e.g. the MVac for the ullage settle.
         public static ModuleEngines FindEngine(Vessel v, EngineRole want)
         {
@@ -247,6 +266,49 @@ namespace DragonScreen
             Debug.Log("[DragonScreen] hold-downs released: " + clamps + " clamp(s), " + erectors + " erector/clamp decoupler(s)");
         }
 
+        // ⛔ Move the ERECTOR/strongback AWAY — its "Open Erector" animation (craft dump: TE.Ghidorah.Erector
+        // ModuleAnimateGeneric, event Toggle "Open Erector"). The REAL pad sequence retracts the erector BEFORE
+        // ignition; only the hold-down decoupler releases at liftoff (Actuator.ReleaseHoldDowns). Detected by
+        // capability (IsErector), idempotent (skips an already-open erector). Returns true if it started opening.
+        public static bool OpenErector(Vessel v)
+        {
+            if (v == null) return false;
+            try
+            {
+                for (int i = 0; i < v.parts.Count; i++)
+                {
+                    Part p = v.parts[i];
+                    if (!VehicleParts.IsErector(p.name)) continue;
+                    List<ModuleAnimateGeneric> an = p.Modules.GetModules<ModuleAnimateGeneric>();
+                    bool moved = false;
+                    for (int m = 0; m < an.Count; m++)
+                        if (an[m].Progress < 0.5f) { an[m].Toggle(); moved = true; }
+                    if (an.Count > 0) { Debug.Log("[DragonScreen] ERECTOR — moving away (Open Erector)"); return moved; }
+                }
+            }
+            catch (Exception e) { Debug.LogWarning("[DragonScreen] open erector failed: " + e.Message); }
+            return false;
+        }
+
+        // Is the erector fully clear (animation open)? — the clamp gate waits for this before liftoff.
+        public static bool ErectorClear(Vessel v)
+        {
+            if (v == null) return true;
+            try
+            {
+                for (int i = 0; i < v.parts.Count; i++)
+                {
+                    Part p = v.parts[i];
+                    if (!VehicleParts.IsErector(p.name)) continue;
+                    List<ModuleAnimateGeneric> an = p.Modules.GetModules<ModuleAnimateGeneric>();
+                    for (int m = 0; m < an.Count; m++) if (an[m].Progress < 0.98f) return false;   // still swinging
+                    return true;
+                }
+            }
+            catch { }
+            return true;   // no erector found → nothing to wait for
+        }
+
         // ============================ ABORT (SuperDraco launch escape) ============================
         // ⛔ Direct equivalent of the old Abort action group: light the pod's SuperDraco motor at full
         // throttle and separate the capsule (drop S2). Chutes-to-splashdown is the caller's job.
@@ -256,6 +318,51 @@ namespace DragonScreen
             int n = ActivateEngines(v, EngineRole.PodAbort);
             bool sep = FireDecoupler(v, DecouplerRole.DragonSep);
             Debug.Log("[DragonScreen] ⛔ ABORT — SuperDraco motor(s) lit: " + n + ", capsule separated: " + sep);
+        }
+
+        // ⛔ Jettison the TRUNK (clears the heat shield for entry) — mandatory on any abort that will re-enter.
+        // The trunk decoupler is TE.18.DRAGONV2.TRUNK (DecouplerRole.TrunkJettison), NOT the Dragon-sep one.
+        public static bool JettisonTrunk(Vessel v)
+        {
+            bool ok = FireDecoupler(v, DecouplerRole.TrunkJettison);
+            Debug.Log(ok ? "[DragonScreen] TRUNK JETTISON (heat shield clear for entry)"
+                         : "[DragonScreen] trunk jettison: no trunk decoupler found");
+            return ok;
+        }
+
+        // Release the docking hooks (emergency undock). Idempotent — a non-docked node is skipped.
+        public static bool Undock(Vessel v)
+        {
+            if (v == null) return false;
+            try
+            {
+                for (int i = 0; i < v.parts.Count; i++)
+                {
+                    ModuleDockingNode nd = v.parts[i].Modules.GetModule<ModuleDockingNode>();
+                    if (nd != null && nd.otherNode != null)
+                    { nd.Undock(); Debug.Log("[DragonScreen] EMERGENCY UNDOCK — hooks released"); return true; }
+                }
+            }
+            catch (Exception e) { Debug.LogWarning("[DragonScreen] undock failed: " + e.Message); }
+            return false;
+        }
+
+        // Open the nose shroud (exposes the forward Dracos + the port) — needed before ANY Draco burn on the
+        // capsule ([[dragon-nose-cone-rcs]]). Idempotent — an already-open shroud is left alone.
+        public static void OpenNoseShroud(Vessel v)
+        {
+            if (v == null) return;
+            try
+            {
+                for (int i = 0; i < v.parts.Count; i++)
+                {
+                    List<ModuleAnimateGeneric> an = v.parts[i].Modules.GetModules<ModuleAnimateGeneric>();
+                    for (int m = 0; m < an.Count; m++)
+                        if (an[m].animationName == "TE_23_CD2_NOSECONE_ANI" && an[m].Progress < 0.5f)
+                        { an[m].Toggle(); Debug.Log("[DragonScreen] nose shroud OPENED (forward Dracos exposed)"); return; }
+                }
+            }
+            catch (Exception e) { Debug.LogWarning("[DragonScreen] nose shroud open failed: " + e.Message); }
         }
 
         // ============================ RCS ============================
@@ -277,6 +384,36 @@ namespace DragonScreen
         }
 
         public static bool IsRcsOn(Vessel v) { return v != null && v.ActionGroups[KSPActionGroup.RCS]; }
+
+        // Total RCS thrust currently being DELIVERED (N) — the sum over every thruster nozzle of its live duty
+        // (thrustForces[j]) × its thrusterPower. Ported from MechJeb (MechJebModuleInfoItems). This is the RCS
+        // control AUTHORITY actually in use — for the tuning DB, so we can see how hard the Dracos are working
+        // per phase and whether they saturate (out of translation/attitude authority on the capsule).
+        public static double RcsThrustN(Vessel v)
+        {
+            if (v == null) return 0.0;
+            double sum = 0.0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                Part p = v.parts[i];
+                for (int m = 0; m < p.Modules.Count; m++)
+                {
+                    ModuleRCS r = p.Modules[m] as ModuleRCS;
+                    if (r == null || !r.rcsEnabled || r.thrustForces == null) continue;
+                    for (int j = 0; j < r.thrustForces.Length; j++)
+                        sum += r.thrustForces[j] * r.thrusterPower;
+                }
+            }
+            return sum * 1000.0;   // thrusterPower is in kN
+        }
+
+        // Turn the RCS master OFF — so the attitude loop stops using the Dracos when a gimballed engine is doing
+        // the steering (the S2 burn). Leaving it on made the fine attitude corrections fire the RCS non-stop.
+        public static void DisableRcs(Vessel v)
+        {
+            if (v == null) return;
+            if (v.ActionGroups[KSPActionGroup.RCS]) v.ActionGroups.SetGroup(KSPActionGroup.RCS, false);
+        }
 
         // ============================ LEGS / FINS ============================
 
@@ -332,6 +469,46 @@ namespace DragonScreen
                 if (drogue ? !isD : !isM) continue;
                 DeployChutePart(p);
             }
+        }
+
+        // ⛔ Cut (release) the drogues or mains — RealChute "Cut chute" event / stock ModuleParachute.CutParachute.
+        // In an abort the drogues are cut BEFORE the mains deploy (the compressed abort sequence).
+        public static void CutChutes(Vessel v, bool drogue)
+        {
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                Part p = v.parts[i];
+                bool isD = VehicleParts.IsDrogues(p.name), isM = VehicleParts.IsMains(p.name);
+                if (drogue ? !isD : !isM) continue;
+                CutChutePart(p);
+            }
+        }
+
+        static void CutChutePart(Part p)
+        {
+            try
+            {
+                ModuleParachute mp = p.Modules.GetModule<ModuleParachute>();
+                if (mp != null)
+                {
+                    if (mp.deploymentState == ModuleParachute.deploymentStates.DEPLOYED
+                        || mp.deploymentState == ModuleParachute.deploymentStates.SEMIDEPLOYED)
+                        mp.CutParachute();
+                    return;
+                }
+                for (int m = 0; m < p.Modules.Count; m++)
+                {
+                    PartModule pm = p.Modules[m];   // RealChute / any custom chute module
+                    foreach (BaseEvent ev in pm.Events)
+                    {
+                        if (ev == null || !ev.active) continue;
+                        string s = (ev.guiName ?? "") + " " + (ev.name ?? "");
+                        if (s.IndexOf("cut", StringComparison.OrdinalIgnoreCase) >= 0)
+                        { ev.Invoke(); return; }
+                    }
+                }
+            }
+            catch (Exception e) { Debug.LogWarning("[DragonScreen] chute cut failed on " + p.name + ": " + e.Message); }
         }
 
         static void DeployChutePart(Part p)

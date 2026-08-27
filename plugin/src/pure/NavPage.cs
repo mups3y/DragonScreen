@@ -38,9 +38,6 @@ namespace DragonScreen
         private const float HeaderY = 26f;
         private const float MapTop = 58f;
 
-        /// <summary>Track sample squares are this many pixels across.</summary>
-        private const float DotSize = 3f;
-
         /// <summary>
         /// Horizontal bands the ORBIT view's globe is built from. See Globe().
         ///
@@ -141,15 +138,16 @@ namespace DragonScreen
             float mx, my, mw, mh;
             MapRect(w, h, out mx, out my, out mw, out mh);
 
-            string title = (view.Mode == NavMode.Map) ? "GROUND TRACK" : "ORBIT";
+            string title = (view.Mode == NavMode.Map) ? "GROUND TRACK"
+                         : (view.Mode == NavMode.Orbit) ? "ORBIT" : "3D PLANET";
             dl.Text(title, Pad, HeaderY, Typography.Body, TextAlign.Left, DragonPalette.Text1);
 
-            // The demo labels the current view `CAMERA / Auto - Map IO`; ours says which of the two
-            // views is up and whether the map is following the vehicle, because that is the state a
-            // crew member would otherwise have to work out by watching whether it drifts.
+            // The demo labels the current view `CAMERA / Auto - Map IO`; ours says which of the three
+            // views is up and, on the map, whether it is following the vehicle, because that is the
+            // state a crew member would otherwise have to work out by watching whether it drifts.
             string sub = (view.Mode == NavMode.Map)
                 ? (view.Follow ? "TRACKING VEHICLE" : "MANUAL PAN")
-                : "PLANE VIEW";
+                : (view.Mode == NavMode.Orbit) ? "PLANE VIEW" : "LIVE CAMERA";
             dl.Text(sub, mx + mw, HeaderY, Typography.Caption, TextAlign.Right, DragonPalette.Text6);
 
             // The well the map sits in. Drawn first and always, so the panel has a shape even before
@@ -157,7 +155,8 @@ namespace DragonScreen
             dl.Rect(mx, my, mw, mh, DragonPalette.Inset2);
 
             if (view.Mode == NavMode.Map) Map(dl, s, view, mx, my, mw, mh);
-            else Orbit(dl, s, mx, my, mw, mh);
+            else if (view.Mode == NavMode.Orbit) Orbit(dl, s, mx, my, mw, mh);
+            else Planet(dl, s, view, mx, my, mw, mh);
 
             dl.Box(mx, my, mw, mh, 2f, DragonPalette.Hairline);
 
@@ -219,29 +218,40 @@ namespace DragonScreen
 
             // ---- the ground track ----
             // Points come from the glue, which propagates the orbit and takes the body's rotation off
-            // the longitude - see VesselData.GroundTrack. Everything here does is place them.
+            // the longitude - see VesselData.GroundTrack. Everything here does is connect them.
             if (s.TrackCount > 1 && s.TrackLat != null && s.TrackLon != null)
             {
                 int n = s.TrackCount;
                 if (n > s.TrackLat.Length) n = s.TrackLat.Length;
 
-                // The sample COUNT is fixed by the command budget, so zooming in spreads the dots
-                // apart. Growing them with the zoom keeps the track reading as a track instead of
-                // decaying into scattered specks, and costs nothing - it is the same command.
-                float dot = DotSize + view.ZoomStep * 0.8f;
-
-                for (int i = 0; i < n; i++)
+                // ---- SOLID LINE, SEAM-AWARE ----
+                // Consecutive samples are joined by a real line (user 2026-08-27: solid, not dotted).
+                // The one trap is the DATELINE: when the track crosses +/-180 the two samples land on
+                // opposite edges of an equirectangular map, and a straight line between them would
+                // streak clean across the panel. So a segment wider than half the map is dropped - the
+                // track simply breaks at the seam, which is the honest thing an unwrapped map can show.
+                float lineW = 2.5f + view.ZoomStep * 0.4f;
+                float seam = mw * 0.5f;
+                float pax, pay;
+                MapProjection.Project(s.TrackLat[0], s.TrackLon[0], view, mx, my, mw, mh, out pax, out pay);
+                for (int i = 1; i < n; i++)
                 {
-                    float px, py;
-                    MapProjection.Project(s.TrackLat[i], s.TrackLon[i], view,
-                                          mx, my, mw, mh, out px, out py);
-                    if (!MapProjection.Inside(px, py, mx, my, mw, mh)) continue;
+                    float pbx, pby;
+                    MapProjection.Project(s.TrackLat[i], s.TrackLon[i], view, mx, my, mw, mh, out pbx, out pby);
                     // The track FADES along its length, so which way the vehicle is going is legible
                     // without an arrowhead. Near samples bright, far samples dim.
                     Rgba c = (i < n / 3) ? DragonPalette.Accent
                            : (i < (2 * n) / 3) ? DragonPalette.AccentDim
                            : DragonPalette.Text7;
-                    dl.Rect(px - dot * 0.5f, py - dot * 0.5f, dot, dot, c);
+                    // Skip the dateline wrap (a segment wider than half the map), then CLIP to the panel
+                    // so a zoomed-in track never streaks across the readout column - there is no scissor.
+                    if (System.Math.Abs(pbx - pax) <= seam)
+                    {
+                        float ax = pax, ay = pay, bx = pbx, by = pby;
+                        if (ClipSeg(ref ax, ref ay, ref bx, ref by, mx, my, mx + mw, my + mh))
+                            dl.Line(ax, ay, bx, by, lineW, c);
+                    }
+                    pax = pbx; pay = pby;
                 }
             }
 
@@ -276,8 +286,174 @@ namespace DragonScreen
         private static void Quad(DisplayList dl, MapQuad q)
         {
             if (q.W <= 0f || q.H <= 0f) return;
+            // ⛔ U SWAPPED (user 2026-08-27: the flat map read as a MIRROR image of a real map). KSP's scaled-
+            // space _ColorMap is wound east-west opposite to our lon→U assumption, so sampling it straight drew
+            // the continents mirrored while the grid/track (MapProjection, east-on-the-right) stayed correct.
+            // Swapping uMin/uMax reverses the texture horizontally per quad → the land un-mirrors and lines up
+            // with the projection. (V/latitude is unchanged, so it does NOT re-mirror.)
+            // ⛔ BRIGHTENED (user: the map looked dark). The scaled-space _ColorMap is the DAY albedo (not the
+            // EVE night map), but a realistic albedo reads dark; the >1 tint multiplies it brighter (GL.Color
+            // multiplies the texture, so dark texels lift while already-bright ones just clamp at white).
             dl.ImageUV(ImageId.BodyMap, q.X, q.Y, q.W, q.H,
-                       q.UMin, q.UMax, q.VMin, q.VMax, DragonPalette.White);
+                       q.UMax, q.UMin, q.VMin, q.VMax, MapTint);
+        }
+
+        // Brighten the dark real-Earth albedo for the nav display (see Quad).
+        private static readonly Rgba MapTint = new Rgba(1.7f, 1.7f, 1.7f, 1f);
+
+        // ------------------------------------------------------------------ the 3D globe view
+
+        /// <summary>Stroke width of the projected orbit line, in panel pixels.</summary>
+        private const float GlobeLineW = 2.5f;
+
+        /// <summary>
+        /// The 3D globe view: the SAME textured, correctly-aligned Earth the ORBIT view draws
+        /// (NavPage.Globe, from the game's own scaled-space map), with the orbit, target orbit and
+        /// markers projected ONTO it by the pure orthographic GlobeProjection - so the far side of the
+        /// orbit disappears behind the planet. No render-to-texture, no downloaded model: it is all the
+        /// textured disc plus 2D drawing, so it works in the PNG preview too.
+        ///
+        /// The globe follows the vehicle's longitude (left/right pan spins it; +/- zooms the globe);
+        /// the overlay is placed against the SAME centre longitude and pixel radius, so it cannot drift.
+        /// </summary>
+        private static void Planet(DisplayList dl, PageState s, MapView view,
+                                   float mx, float my, float mw, float mh)
+        {
+            float cx = mx + mw * 0.5f, cy = my + mh * 0.5f;
+            float r = System.Math.Min(mw, mh) * 0.44f * (float)System.Math.Pow(1.25, view.PlanetZoom);
+            if (r < 24f) r = 24f;
+
+            // Follow the vehicle's longitude, plus the crew's manual spin.
+            double lonCentre = (s.Valid && s.HasFix ? s.Longitude : 0.0) + view.PlanetRotDeg;
+
+            // The real Earth - the same disc the ORBIT view is built from.
+            Globe(dl, cx, cy, r, lonCentre);
+
+            PlanetOverlay ov = s.Planet;
+            if (ov == null || !ov.Ready)
+            {
+                if (!s.Valid)
+                    dl.Text("NO DATA", cx, my + mh - 26f, Typography.Caption, TextAlign.Centre,
+                            DragonPalette.Text7);
+                return;
+            }
+
+            // ---- the target orbit, first so our own orbit and markers sit over it ----
+            if (ov.TgtCount > 1)
+                ProjPolyline(dl, ov.TgtLat, ov.TgtLon, ov.TgtRatio, ov.TgtCount, lonCentre,
+                             cx, cy, r, mx, my, mw, mh,
+                             DragonPalette.Caution, DragonPalette.Caution, DragonPalette.Caution, GlobeLineW);
+
+            // ---- our orbit, fading along its length so the direction of travel reads (but kept cyan
+            // and visible against the darker real Earth - the far tail is AccentDim, not a grey) ----
+            if (ov.OrbitCount > 1)
+                ProjPolyline(dl, ov.OrbitLat, ov.OrbitLon, ov.OrbitRatio, ov.OrbitCount, lonCentre,
+                             cx, cy, r, mx, my, mw, mh,
+                             DragonPalette.Accent, DragonPalette.AccentDim, DragonPalette.AccentDim, GlobeLineW);
+
+            if (ov.OnSurface)
+                dl.Text("ON SURFACE - NO ORBIT", cx, my + mh - 26f, Typography.Caption,
+                        TextAlign.Centre, DragonPalette.Text6);
+
+            // ---- markers ----
+            float sx, sy;
+            if (ProjMarker(ov.Ap, lonCentre, cx, cy, r, mx, my, mw, mh, out sx, out sy))
+            {
+                dl.Box(sx - 5f, sy - 5f, 10f, 10f, 2f, DragonPalette.Text3);
+                dl.Text("AP", sx, sy + 10f, Typography.Dense, TextAlign.Centre, DragonPalette.Text5);
+            }
+            if (ProjMarker(ov.Pe, lonCentre, cx, cy, r, mx, my, mw, mh, out sx, out sy))
+            {
+                dl.Box(sx - 5f, sy - 5f, 10f, 10f, 2f, DragonPalette.Text3);
+                dl.Text("PE", sx, sy + 10f, Typography.Dense, TextAlign.Centre, DragonPalette.Text5);
+            }
+            if (ProjMarker(ov.Target, lonCentre, cx, cy, r, mx, my, mw, mh, out sx, out sy))
+            {
+                dl.Box(sx - 7f, sy - 7f, 14f, 14f, 2f, DragonPalette.Caution);
+                dl.Text("TGT", sx, sy + 10f, Typography.Dense, TextAlign.Centre, DragonPalette.Caution);
+            }
+            // Us last, so nothing is drawn over the one marker that must always be findable.
+            if (ProjMarker(ov.Vessel, lonCentre, cx, cy, r, mx, my, mw, mh, out sx, out sy))
+            {
+                dl.Rect(sx - 9f, sy - 1f, 18f, 2f, DragonPalette.Go);
+                dl.Rect(sx - 1f, sy - 9f, 2f, 18f, DragonPalette.Go);
+                dl.Box(sx - 5f, sy - 5f, 10f, 10f, 2f, DragonPalette.Go);
+            }
+        }
+
+        /// <summary>
+        /// Project a (lat, lon, ratio) polyline onto the globe and draw it as SOLID line segments,
+        /// clipped to the panel. A segment is drawn only when BOTH endpoints are visible - a point the
+        /// globe hides (its far side) breaks the line, so the orbit correctly vanishes behind the
+        /// planet. The three colours fade near -> far along the array to show the direction of travel.
+        /// </summary>
+        private static void ProjPolyline(DisplayList dl, double[] lat, double[] lon, double[] ratio,
+                                         int n, double lonCentre, float cx, float cy, float r,
+                                         float mx, float my, float mw, float mh,
+                                         Rgba near, Rgba mid, Rgba far, float width)
+        {
+            if (lat == null || lon == null || ratio == null) return;
+            if (n > lat.Length) n = lat.Length;
+            float pax = 0f, pay = 0f; bool pvis = false;
+            for (int i = 0; i < n; i++)
+            {
+                float x, y; bool front, occ;
+                GlobeProjection.Project(lat[i], lon[i], ratio[i], lonCentre, cx, cy, r,
+                                        out x, out y, out front, out occ);
+                bool vis = !occ;
+                if (i > 0 && vis && pvis)
+                {
+                    float ax = pax, ay = pay, bx = x, by = y;
+                    if (ClipSeg(ref ax, ref ay, ref bx, ref by, mx, my, mx + mw, my + mh))
+                    {
+                        Rgba c = (i < n / 3) ? near : (i < (2 * n) / 3) ? mid : far;
+                        dl.Line(ax, ay, bx, by, width, c);
+                    }
+                }
+                pax = x; pay = y; pvis = vis;
+            }
+        }
+
+        /// <summary>Project one marker onto the globe. False when it has no fix, is hidden behind the
+        /// globe, or falls outside the panel.</summary>
+        private static bool ProjMarker(GlobePoint p, double lonCentre, float cx, float cy, float r,
+                                       float mx, float my, float mw, float mh, out float sx, out float sy)
+        {
+            sx = sy = 0f;
+            if (!p.Has) return false;
+            bool front, occ;
+            GlobeProjection.Project(p.Lat, p.Lon, p.Ratio, lonCentre, cx, cy, r, out sx, out sy, out front, out occ);
+            if (occ) return false;
+            return sx >= mx && sx <= mx + mw && sy >= my && sy <= my + mh;
+        }
+
+        /// <summary>
+        /// Clip a segment to a rectangle (Liang-Barsky), allocation-free. Returns false if the segment
+        /// misses the rect entirely; otherwise trims the endpoints in place to the rect boundary. Used
+        /// to keep the flat-map ground track inside its panel, since neither renderer has a scissor.
+        /// </summary>
+        private static bool ClipSeg(ref float x0, ref float y0, ref float x1, ref float y1,
+                                    float xmin, float ymin, float xmax, float ymax)
+        {
+            float dx = x1 - x0, dy = y1 - y0;
+            float u0 = 0f, u1 = 1f;
+            if (!ClipT(-dx, x0 - xmin, ref u0, ref u1)) return false;
+            if (!ClipT( dx, xmax - x0, ref u0, ref u1)) return false;
+            if (!ClipT(-dy, y0 - ymin, ref u0, ref u1)) return false;
+            if (!ClipT( dy, ymax - y0, ref u0, ref u1)) return false;
+            float ox = x0, oy = y0;
+            x0 = ox + u0 * dx; y0 = oy + u0 * dy;
+            x1 = ox + u1 * dx; y1 = oy + u1 * dy;
+            return true;
+        }
+
+        private static bool ClipT(float p, float q, ref float u0, ref float u1)
+        {
+            if (System.Math.Abs(p) < 1e-6f) return q >= 0f;      // parallel: in only if on the inside
+            float t = q / p;
+            if (p < 0f) { if (t > u1) return false; if (t > u0) u0 = t; }
+            else        { if (t < u0) return false; if (t < u1) u1 = t; }
+            return true;
         }
 
         // ------------------------------------------------------------------ the orbit view
@@ -520,28 +696,36 @@ namespace DragonScreen
         private static void Controls(DisplayList dl, int w, int h, MapView view)
         {
             float x, y, rw, rh;
-            bool map = (view.Mode == NavMode.Map);
+            // The pan / zoom / centre cluster drives the flat MAP and the 3D PLANET camera alike (on
+            // PLANET, pan swings and tilts the camera, zoom is distance, CTR resets the view); only the
+            // side-on ORBIT plot has nothing for them to do, so they read inactive there.
+            bool active = (view.Mode == NavMode.Map || view.Mode == NavMode.Planet);
 
             // Arrows as words rather than glyphs: the font is whatever Windows resolved, and a
             // triangle drawn from three rects is not a triangle. LEFT/RIGHT/UP/DOWN cannot be
             // mis-rendered, and at 16 px they are as fast to read as an arrow would be.
             PadRect(w, h, 0, -1, out x, out y, out rw, out rh);
-            Control.Button(dl, x, y, rw, rh, "UP", false, map);
+            Control.Button(dl, x, y, rw, rh, "UP", false, active);
             PadRect(w, h, -1, 0, out x, out y, out rw, out rh);
-            Control.Button(dl, x, y, rw, rh, "LEFT", false, map);
+            Control.Button(dl, x, y, rw, rh, "LEFT", false, active);
             PadRect(w, h, 0, 0, out x, out y, out rw, out rh);
-            Control.Button(dl, x, y, rw, rh, "CTR", view.Follow, map);
+            Control.Button(dl, x, y, rw, rh, "CTR", view.Follow && view.Mode == NavMode.Map, active);
             PadRect(w, h, 1, 0, out x, out y, out rw, out rh);
-            Control.Button(dl, x, y, rw, rh, "RIGHT", false, map);
+            Control.Button(dl, x, y, rw, rh, "RIGHT", false, active);
             PadRect(w, h, 0, 1, out x, out y, out rw, out rh);
-            Control.Button(dl, x, y, rw, rh, "DOWN", false, map);
+            Control.Button(dl, x, y, rw, rh, "DOWN", false, active);
 
             ZoomRect(w, h, false, out x, out y, out rw, out rh);
-            Control.Button(dl, x, y, rw, rh, "-", false, map);
+            Control.Button(dl, x, y, rw, rh, "-", false, active);
             ZoomRect(w, h, true, out x, out y, out rw, out rh);
-            Control.Button(dl, x, y, rw, rh, "+", false, map);
-            dl.Text("ZOOM x" + (1 << view.ZoomStep), ColumnX(w), y + 12f,
-                    Typography.Caption, TextAlign.Left, DragonPalette.Text6);
+            Control.Button(dl, x, y, rw, rh, "+", false, active);
+            // The PLANET camera zoom is a signed step (distance), not a power-of-two texture window, so
+            // it reads as a step number rather than "x2/x4".
+            string zoomLabel = (view.Mode == NavMode.Planet)
+                ? "ZOOM " + (view.PlanetZoom >= 0 ? "+" : "") + view.PlanetZoom
+                : "ZOOM x" + (1 << view.ZoomStep);
+            dl.Text(zoomLabel, ColumnX(w), y + 12f, Typography.Caption, TextAlign.Left,
+                    DragonPalette.Text6);
 
             NextViewRect(w, h, out x, out y, out rw, out rh);
             Control.Button(dl, x, y, rw, rh, "NEXT VIEW", false, true);

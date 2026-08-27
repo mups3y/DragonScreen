@@ -515,7 +515,12 @@ namespace DragonScreen
                     // heading origin - it cannot touch the hemispheres, the ladder, or the sweep, which
                     // stay as verified. No modulo: U runs 1.75 -> 0.75 across the mesh with no jump, and
                     // the wrapped skin (set in Build) makes the closed seam sample the same texel.
-                    uvs[i] = new Vector2(1f - u + 0.75f, 1f - v);   // (1 - lon + heading origin, lat)
+                    // ⛔ LATITUDE flipped to `v` (user 2026-08-27: the ball was upside down — showing the
+                    // brown/ground hemisphere where the blue/sky should be, always the opposite of the stock
+                    // KSP navball). The earlier `1 - v` (calibrated offline) was inverted vs the in-game
+                    // texture; `v` puts the sky at the +Y pole so the ball reads the same way up as KSP's.
+                    // The markers ride the separate `attitude` quaternion and are unaffected. U (heading) kept.
+                    uvs[i] = new Vector2(1f - u + 0.75f, v);         // (1 - lon + heading origin, lat right-side-up)
                 }
             }
 

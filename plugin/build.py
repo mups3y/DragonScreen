@@ -88,7 +88,8 @@ CORE_REFS = ['mscorlib.dll', 'System.dll', 'System.Core.dll']
 REFS = ['Assembly-CSharp.dll', 'UnityEngine.dll', 'UnityEngine.CoreModule.dll',
         'UnityEngine.IMGUIModule.dll', 'UnityEngine.TextRenderingModule.dll',
         'UnityEngine.ImageConversionModule.dll', 'UnityEngine.UI.dll',
-        'UnityEngine.PhysicsModule.dll', 'UnityEngine.InputLegacyModule.dll']
+        'UnityEngine.PhysicsModule.dll', 'UnityEngine.InputLegacyModule.dll',
+        'UnityEngine.AudioModule.dll']   # AudioSource / AudioClip for the abort klaxon
 
 # References to OTHER GameData mods, not to KSP. Empty on purpose right now.
 #

@@ -273,10 +273,30 @@ public static class PageTest
         for (int i = 0; i < 20; i++) v = MapProjection.Pan(v, 0.0, 1.0);
         Check("latitude clamps at the pole", v.CentreLat <= 90.0, "lat " + v.CentreLat);
 
+        // NEXT VIEW cycles Map -> Orbit -> Planet -> Map.
         v = MapProjection.Default();
-        Check("next view goes to orbit", MapProjection.NextMode(v).Mode == NavMode.Orbit, "");
-        Check("next view comes back",
-              MapProjection.NextMode(MapProjection.NextMode(v)).Mode == NavMode.Map, "");
+        v = MapProjection.NextMode(v);
+        Check("next view goes to orbit", v.Mode == NavMode.Orbit, "");
+        v = MapProjection.NextMode(v);
+        Check("next view goes to planet", v.Mode == NavMode.Planet, "");
+        v = MapProjection.NextMode(v);
+        Check("next view comes back to map", v.Mode == NavMode.Map, "");
+
+        // In PLANET (3D globe) mode: left/right spins the globe, up/down is a no-op (equatorial view),
+        // zoom is the globe's own step, and centre resets spin + zoom.
+        v = MapProjection.Default();
+        v = MapProjection.NextMode(v); v = MapProjection.NextMode(v);   // -> Planet
+        v = MapProjection.Pan(v, 1.0, 0.0);
+        Check("planet pan spins the globe", v.PlanetRotDeg != 0.0, "rot " + v.PlanetRotDeg);
+        double rotBefore = v.PlanetRotDeg;
+        v = MapProjection.Pan(v, 0.0, 1.0);
+        Check("planet up/down is a no-op", v.PlanetRotDeg == rotBefore, "");
+        v = MapProjection.Zoom(v, -3);
+        Check("planet zoom is its own step", v.PlanetZoom == -3, "zoom " + v.PlanetZoom);
+        Check("planet zoom does not touch the flat map zoom", v.ZoomStep == 0, "");
+        v = MapProjection.Centre(v, 0.0, 0.0);
+        Check("planet centre resets spin + zoom",
+              v.PlanetRotDeg == 0.0 && v.PlanetZoom == 0, "");
     }
 
     // ------------------------------------------------------------------ NAV controls
@@ -1001,6 +1021,28 @@ public static class PageTest
         s.AltitudeM = 123400.0; s.AtmosphereDepthM = 70000.0; s.CircularSpeedMps = 2426.0;
         s.ScreenPages = new int[] { -1, 1, 0, 2 };
 
+        // Worst-case 3D-globe overlay: the vessel orbit AND the target orbit almost entirely on the
+        // NEAR hemisphere (all points visible -> a line per segment), the heaviest thing that view can
+        // draw (2 x samples line segments + the textured globe strips + four markers).
+        PlanetOverlay ov = new PlanetOverlay();
+        int N = PlanetOverlay.DefaultSamples;
+        double[] olat = new double[N], olon = new double[N], orat = new double[N];
+        double[] tlat = new double[N], tlon = new double[N], trat = new double[N];
+        for (int i = 0; i < N; i++)
+        {
+            double f = (double)i / (N - 1);
+            olat[i] = -60.0 + 120.0 * f; olon[i] = -80.0 + 160.0 * f; orat[i] = 1.05;   // near hemisphere
+            tlat[i] = -50.0 + 100.0 * f; tlon[i] = -70.0 + 140.0 * f; trat[i] = 1.10;
+        }
+        ov.Ready = true;
+        ov.OrbitLat = olat; ov.OrbitLon = olon; ov.OrbitRatio = orat; ov.OrbitCount = N;
+        ov.TgtLat = tlat; ov.TgtLon = tlon; ov.TgtRatio = trat; ov.TgtCount = N;
+        ov.Vessel = new GlobePoint { Lat = 28, Lon = 0, Ratio = 1.05, Has = true };
+        ov.Target = new GlobePoint { Lat = -40, Lon = 30, Ratio = 1.10, Has = true };
+        ov.Ap = new GlobePoint { Lat = 45, Lon = -20, Ratio = 1.20, Has = true };
+        ov.Pe = new GlobePoint { Lat = -30, Lon = 40, Ratio = 1.00, Has = true };
+        s.Planet = ov;
+
         DisplayList dl = new DisplayList(Pages.Commands + ChromeBar.Commands + 4);
         ChromeState cs = new ChromeState();
 
@@ -1008,13 +1050,14 @@ public static class PageTest
         {
             for (int p = 0; p < ChromeBar.PageNames.Length; p++)
             {
-                // Both NAV views, because the orbit plot's 72 dots are a different budget from the
-                // map's 90 and only one of them can be on screen at a time.
-                foreach (NavMode mode in new NavMode[] { NavMode.Map, NavMode.Orbit })
+                // All three NAV views, because each costs a different budget - the map's 90 track dots,
+                // the orbit plot's 128 globe strips, the planet view's 2 x 96 overlay dots - and only
+                // one can be on screen at a time.
+                foreach (NavMode mode in new NavMode[] { NavMode.Map, NavMode.Orbit, NavMode.Planet })
                 {
                     MapView v = MapProjection.Default();
                     v = MapProjection.Zoom(v, 2);
-                    if (mode == NavMode.Orbit) v = MapProjection.NextMode(v);
+                    while (v.Mode != mode) v = MapProjection.NextMode(v);
 
                     dl.Clear();
                     Pages.Build(dl, p, W, h, s, v, 2);

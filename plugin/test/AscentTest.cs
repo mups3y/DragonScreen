@@ -45,11 +45,17 @@ public static class AscentTest
               LaunchAzimuth.GroundRad(D(90.0), D(28.5), 7800.0, 6371000.0, 7.292e-5, true, out azg)
               && Math.Abs(LaunchAzimuth.Deg(azg) - 180.0) < 5.0, LaunchAzimuth.Deg(azg).ToString("F1"));
 
-        // ---- S1 PITCH PROGRAM (the real DM-1 profile) ----
+        // ---- S1 PITCH PROGRAM (FLATTENED from raw DM-1 — ground truth beats the doc) ----
+        // ⛔ The raw DM-1 curve (47° final, shape 0.6) OVER-LOFTED our vehicle: flight 090123 reached MECO at
+        // fpa 51°, arced to a 228 km apoapsis and went suborbital. Our stack's TWR differs from the real F9, so
+        // it needs a FLATTER program than DM-1 to hold apoapsis near target — the flight CSV outranks the .md
+        // template (authority: live > CSV > docs). These assert the flattened curve (30° final, shape 0.5);
+        // still vertical to the kick, still monotonic, just pitches over sooner and further.
         Near("starts vertical", Ascent.PitchAtSpeed(0.0), 90.0, 1e-9);
-        Near("still vertical below the kick speed", Ascent.PitchAtSpeed(55.0), 90.0, 1e-9);
-        Near("pitches over to ~79 after the kick", Ascent.PitchAtSpeed(60.0), 79.0, 0.1);
-        Near("~47 deg at the staging speed", Ascent.PitchAtSpeed(1881.0), 47.0, 0.1);
+        Near("still vertical below the turn-start speed", Ascent.PitchAtSpeed(55.0), 90.0, 1e-9);
+        Near("~71 deg near 235 m/s (flattened)", Ascent.PitchAtSpeed(235.0), 71.2, 1.0);
+        Near("~50 deg near 880 m/s (flattened)", Ascent.PitchAtSpeed(880.0), 49.7, 2.0);
+        Near("final pitch ~30 deg at the staging speed", Ascent.PitchAtSpeed(1881.0), 30.0, 0.1);
         double prev = 91.0;
         for (double v = 0; v <= 2500; v += 50.0)
         {
@@ -70,7 +76,7 @@ public static class AscentTest
         c = Ascent.Guide(s, AscentPhase.VerticalRise);
         Check("turns once past the kick speed", c.Phase == AscentPhase.GravityTurn, c.Phase.ToString());
         c = Ascent.Guide(s, AscentPhase.GravityTurn);
-        Near("gravity-turn pitch follows the program", c.PitchDeg, 79.0, 0.5);
+        Near("gravity-turn pitch follows the program", c.PitchDeg, Ascent.PitchAtSpeed(100.0), 0.5);
 
         s.SurfaceSpeedMps = 1950.0;
         c = Ascent.Guide(s, AscentPhase.GravityTurn);

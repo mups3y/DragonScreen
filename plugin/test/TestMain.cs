@@ -18,6 +18,7 @@ public static class TestMain
         bad += LayoutSweepTest.Run();
         bad += PageTest.Run();
         bad += PanelTest.Run();
+        bad += GlobeProjectionTest.Run();  // screens: orthographic globe projection + occlusion (NAV 3D)
         bad += OrbitalTest.Run();
         bad += VehiclePartsTest.Run();
         bad += ActuationTest.Run();        // glue: direct-control role classifier (Actuator ← pure/Actuation)
@@ -31,10 +32,12 @@ public static class TestMain
         bad += ControlTest.Run();          // L2 control: attitude PD + throttle bucket/g-limit + RCS
         bad += ConicTest.Run();            // L3 support: Vec3 + conic propagator (UPFG gravity)
         bad += AscentTest.Run();           // L3 ascent: launch azimuth + S1 pitch program + FSM
+        bad += LaunchWindowTest.Run();     // L3 ascent: launch-to-rendezvous plane-crossing / RAAN window
         bad += UpfgTest.Run();             // L3 ascent: closed-loop UPFG S2 insertion (PEGAS port)
         bad += BoosterTest.Run();          // L3 booster: hoverslam + grid-fin steering + descent FSM
         bad += RendezvousMathTest.Run();   // L3 rendezvous: LVLH + CW two-impulse + Hohmann
         bad += RendezvousTest.Run();       // L3 rendezvous: named-burn FSM + full-control contract
+        bad += PhasingTest.Run();          // L3 rendezvous: far-field co-elliptic raise + crew-safety pe floor + CW guard
         bad += DockingTest.Run();          // L3 docking: glideslope servo + L-approach FSM
         bad += ReturnTest.Run();           // L3 return: departure + deorbit + lifting entry (CoM shifter) + chutes
         bad += CrewGateTest.Run();         // L4 conductor: crew-gate state machine + gate catalog + mode manager

@@ -1,20 +1,26 @@
 // DragonScreen — RendezvousControl  (KSP glue: seam 4, the coarse rendezvous controller)
 // ============================================================================================
-// Flies the Fly(Phasing) step — from the post-insertion orbit down to the Approach-Initiation standoff
-// (~7.5 km) — with the PURE guidance (pure/Rendezvous.cs named-burn FSM, pure/Lvlh.cs relative frame,
-// pure/Cw.cs + pure/Hohmann.cs). It projects the chaser into the station's LVLH frame, asks Rendezvous
-// for the burn, and executes it on the DRACOS.
+// Flies the Fly(Phasing) step — from the post-insertion orbit to the Approach-Initiation standoff (~7.5 km).
+// TWO regimes, split by range (pure/Phasing.FarField):
 //
-// ⛔ FULL CONTROL, the Dragon has NO reaction wheels (16 Dracos share rotation + translation): so it is
-// ATTITUDE-FIRST-THEN-TRANSLATE — point the nose ALONG the burn (SAS), and only once pointed
-// (AttitudeReady) translate FORWARD to deliver the Δv; never rotate and translate at once. The forward
-// Dracos are SHIELDED by the nose cone, so the shroud is OPENED before any Draco burn ([[dragon-nose-cone
-// -rcs]]). Closed-loop: the CW solve re-runs each tick, so the residual Δv shrinks as it's delivered.
-// When the range reaches the AI standoff it hands back to the conductor (→ the G9 GO-for-AI gate).
+//   • FAR FIELD (thousands → tens of km): the real CO-ELLIPTIC chase. Raise the chaser to a co-elliptic
+//     orbit ~10 km BELOW the station by burning PROGRADE ONLY (prograde raises the orbit — it can never
+//     lower periapsis, so it CANNOT deorbit). Once co-elliptic, coast: the lower/faster chaser closes the
+//     phase. ⛔ CW is NOT used here — at 13,000 km its two-impulse inverse demanded ~28 km/s and the glue
+//     fired the Dracos retrograde until the capsule self-deorbited (pe +178 → −143 km, flight 214827).
 //
-// ⚠ FIRST CUT (validate in flight): the RCS translation axis/sign (ForwardSign — a mirrored burn shows in
-// the CSV and is a one-constant fix), and the named-burn execution over the long phasing coast (the user
-// time-warps between burns). Attitude on the SAS inner loop. Instrumented into the FlightRecorder.
+//   • NEAR FIELD (inside CwHandoffRangeM): the CW two-impulse terminal legs (pure/Cw.cs) to OFFSET aim
+//     points, exactly as before — valid here because CW's linearisation holds within tens of km.
+//
+// ⛔ CREW-SAFETY FLOOR (independent of any guidance solve): no burn may fire while periapsis is at/below
+// SafePeFloorM (pure/Phasing.PeSafe). The far-field raise is prograde-only so it can't trip it; the near-
+// field CW is gated by it — a garbage command can never walk the orbit down into re-entry. The intentional
+// ABORT deorbit does not go through here.
+//
+// ⛔ FULL CONTROL, no reaction wheels (16 Dracos share rotation + translation): ATTITUDE-FIRST-THEN-TRANSLATE
+// — point the nose ALONG the burn axis, and only once pointed translate forward; never rotate + translate at
+// once. The forward Dracos are shielded by the nose cone, so the shroud is OPENED first ([[dragon-nose-cone
+// -rcs]]). Instrumented into the FlightRecorder.
 // ============================================================================================
 using System;
 using System.Collections.Generic;
@@ -24,18 +30,23 @@ namespace DragonScreen
 {
     public static class RendezvousControl
     {
-        [Tunable] public static double ForwardSign = -1.0;    // KSP forward RCS translation (H key = Z −1)
+        [Tunable] public static double ForwardSign = -1.0;      // KSP forward RCS translation (H key = Z −1)
         [Tunable] public static double AttitudeReadyDeg = 5.0;
         [Tunable] public static double BurnDoneDvMps = 0.02;
+        [Tunable] public static double CwHandoffRangeM = 50000.0; // far→near split (CW valid within tens of km)
+        [Tunable] public static double CoEllipticBelowM = 10000.0;// co-elliptic parking height below the station
+        [Tunable] public static double RaiseTolM = 2000.0;       // reached-co-elliptic tolerance
+        [Tunable] public static double SafePeFloorM = 150000.0;  // ⛔ never let a burn drop pe below this
 
         static RvPhase phase = RvPhase.Idle;
         static bool shroudOpened;
+        static bool floorLogged;
         static RendezvousCommand lastCmd;
         static LvlhState lastRel;
 
         public static void Reset()
         {
-            phase = RvPhase.Idle; shroudOpened = false;
+            phase = RvPhase.Idle; shroudOpened = false; floorLogged = false;
             FlightDriver.ReleaseTranslation();
             Steering.Release();
         }
@@ -59,7 +70,8 @@ namespace DragonScreen
         {
             CelestialBody body = v.mainBody;
             ITargetable tgt = v.targetObject;
-            if (body == null || tgt == null || tgt.GetOrbit() == null)
+            Orbit tgtOrbit = tgt != null ? tgt.GetOrbit() : null;
+            if (body == null || tgt == null || tgtOrbit == null)
             {
                 // no station targeted → cannot rendezvous; idle and wait for the crew to target it.
                 FlightDriver.ReleaseTranslation();
@@ -70,10 +82,79 @@ namespace DragonScreen
             if (!shroudOpened) { OpenNoseShroud(v); shroudOpened = true; }
             Actuator.EnableRcs(v);   // ⛔ direct: per-thruster rcsEnabled + master (no craft AG binding)
 
-            // ---- relative state in the station LVLH frame ----
+            double now = Planetarium.GetUniversalTime();
+            // ⛔ ROBUST relative range from the ORBIT, not the transform. The ISS is UNLOADED far out on the pad
+            // and through phasing, and its transform position is a placeholder there — reading it gave a bogus
+            // 13,000 km separation and fed CW the garbage that self-deorbited us. getPositionAtUT is the world
+            // frame (same convention as AscentControl.TargetPlaneNormal, which flies the correct plane).
+            Vector3d tgtWorld = tgtOrbit.getPositionAtUT(now);
+            double rangeM = (v.CoM - tgtWorld).magnitude;
+
+            double peAlt = v.orbit != null ? v.orbit.PeA : 0.0;
+            double apAlt = v.orbit != null ? v.orbit.ApA : double.MaxValue;
+
+            // ---- FAR FIELD: prograde co-elliptic raise (never CW, never a lowering burn) ----
+            if (Phasing.FarField(rangeM, CwHandoffRangeM))
+            {
+                FlyFarFieldRaise(v, tgtOrbit, apAlt, peAlt, rangeM);
+                FlightLog.Fill = FillRow;
+                return;
+            }
+
+            // ---- NEAR FIELD: CW terminal legs (the target is loaded within physics range here) ----
+            FlyNearFieldCw(v, body, tgt, now, peAlt, rangeM);
+            FlightLog.Fill = FillRow;
+        }
+
+        // FAR FIELD — raise the chaser to a co-elliptic orbit below the station, PROGRADE ONLY. Cannot deorbit
+        // (prograde raises the orbit); once co-elliptic, coast and let the phase close for the CW hand-off.
+        static void FlyFarFieldRaise(Vessel v, Orbit tgtOrbit, double apAlt, double peAlt, double rangeM)
+        {
+            double tgtMeanAlt = 0.5 * (tgtOrbit.ApA + tgtOrbit.PeA);
+            double coElAlt = Phasing.CoEllipticTargetAltM(tgtMeanAlt, CoEllipticBelowM);
+
+            Vector3d pro = Steering.Prograde(v);
+            Steering.Point(v, pro);                              // attitude-first: point the nose prograde
+            double perr = Steering.PointingErrorDeg(v, pro);
+
+            bool wantRaise = Phasing.ShouldRaise(apAlt, peAlt, coElAlt, RaiseTolM);
+            // prograde raise (forward on the Dracos) once pointed. A CORRECT prograde burn raises pe, so the
+            // floor won't trip — but ForwardSign is a first-cut constant, and if it were reversed this "raise"
+            // would be retrograde. So the pe floor STILL gates it: a wrong sign is caught at 150 km (the capsule
+            // holds safely, above the 140 km atmosphere) instead of self-deorbiting. ⚠ verify ForwardSign +
+            // that ap/pe RISE in the CSV; if pe falls, ForwardSign is flipped.
+            bool peSafe = Phasing.PeSafe(peAlt, SafePeFloorM);
+            if (!peSafe && !floorLogged)
+            {
+                Debug.LogWarning("[DragonScreen] RV pe-floor (far): pe " + (peAlt / 1000.0).ToString("F0")
+                                 + " km ≤ floor " + (SafePeFloorM / 1000.0).ToString("F0") + " km — burns HELD.");
+                floorLogged = true;
+            }
+            if (wantRaise && perr <= AttitudeReadyDeg && peSafe)
+                FlightDriver.SetTranslation(0, 0, ForwardSign);
+            else
+                FlightDriver.ReleaseTranslation();
+
+            // recorder: keep the far-field visible (phase + range + whether we're raising)
+            phase = RvPhase.Phasing;
+            lastCmd = new RendezvousCommand
+            {
+                Phase = RvPhase.Phasing,
+                AimLvlh = new Vec3(0, 1, 0),                     // prograde / along-track
+                BurnLvlh = new Vec3(0, wantRaise ? 1.0 : 0.0, 0),
+                BurnDvMps = wantRaise ? 1.0 : 0.0,
+                Burn = wantRaise
+            };
+            lastRel = new LvlhState { Rx = 0, Ry = -rangeM, Rz = 0 };
+        }
+
+        // NEAR FIELD — the CW terminal legs to offset aim points, gated by the crew-safety pe floor.
+        static void FlyNearFieldCw(Vessel v, CelestialBody body, ITargetable tgt, double now,
+                                   double peAlt, double rangeM)
+        {
             double mu = body.gravParameter;
             Vector3d tgtPos = tgt.GetTransform() != null ? (Vector3d)tgt.GetTransform().position
-                                                         : tgt.GetOrbit().getPositionAtUT(Planetarium.GetUniversalTime());
+                                                         : tgt.GetOrbit().getPositionAtUT(now);
             Vector3d tgtVel = tgt.GetObtVelocity();
             double sma = tgt.GetOrbit().semiMajorAxis;
             double n = Lvlh.MeanMotion(mu, sma);
@@ -85,13 +166,11 @@ namespace DragonScreen
             LvlhState rel = Lvlh.Project(targetR, targetV, relPos, relVel, n);
             lastRel = rel;
 
-            // ---- guidance ----
             RendezvousInputs ri = new RendezvousInputs();
             ri.Valid = true; ri.Rel = rel; ri.N = n; ri.AllNominal = true;
-            ri.CoEllipticBelowM = 10000; ri.CoEllipticBehindM = 20000;
+            ri.CoEllipticBelowM = CoEllipticBelowM; ri.CoEllipticBehindM = 20000;
             ri.AiRangeM = 7500; ri.CorridorRangeM = 2000;
 
-            // aim = the burn axis (LVLH → world); attitude-ready when the nose is on it
             Vec3 aimL = FirstNonZero(lastCmd.AimLvlh, new Vec3(0, -1, 0));
             Vector3d aimWorld = W(Lvlh.OffsetToWorld(targetR, targetV, aimL.X, aimL.Y, aimL.Z));
             double perr = Steering.PointingErrorDeg(v, aimWorld);
@@ -101,13 +180,19 @@ namespace DragonScreen
             phase = cmd.Phase;
             lastCmd = cmd;
 
-            // point the nose along the (updated) burn axis
             aimWorld = W(Lvlh.OffsetToWorld(targetR, targetV, cmd.AimLvlh.X, cmd.AimLvlh.Y, cmd.AimLvlh.Z));
             Steering.Point(v, aimWorld);
             perr = Steering.PointingErrorDeg(v, aimWorld);
 
-            // ---- execute: attitude-first, THEN forward-translate to deliver the residual Δv ----
-            if (cmd.Burn && perr <= AttitudeReadyDeg && cmd.BurnDvMps > BurnDoneDvMps)
+            // ⛔ pe-floor gate: a CW leg can carry a retrograde component — never fire it below the safety floor.
+            bool peSafe = Phasing.PeSafe(peAlt, SafePeFloorM);
+            if (!peSafe && !floorLogged)
+            {
+                Debug.LogWarning("[DragonScreen] RV pe-floor: pe " + (peAlt / 1000.0).ToString("F0")
+                                 + " km ≤ floor " + (SafePeFloorM / 1000.0).ToString("F0") + " km — burns HELD.");
+                floorLogged = true;
+            }
+            if (cmd.Burn && perr <= AttitudeReadyDeg && cmd.BurnDvMps > BurnDoneDvMps && peSafe)
                 FlightDriver.SetTranslation(0, 0, ForwardSign);      // forward on the nose (Dracos)
             else
                 FlightDriver.ReleaseTranslation();
@@ -118,8 +203,6 @@ namespace DragonScreen
                 FlightDriver.ReleaseTranslation();
                 CrewProcedureOps.PhaseComplete();
             }
-
-            FlightLog.Fill = FillRow;
         }
 
         static void OpenNoseShroud(Vessel v)

@@ -8,7 +8,9 @@ namespace DragonScreen
     public enum NavMode : byte
     {
         Map = 0,
-        Orbit = 1
+        Orbit = 1,
+        /// <summary>Live 3D scaled-planet view - the real globe with the orbit drawn over it.</summary>
+        Planet = 2
     }
 
     public struct MapView
@@ -18,6 +20,15 @@ namespace DragonScreen
         public int ZoomStep;
         public NavMode Mode;
         public bool Follow;
+
+        // ---- PLANET (3D globe) mode: the globe spins about its axis, drawn edge-on from the equator ----
+        /// <summary>Extra longitude the globe is rotated by, degrees, ON TOP of following the vehicle -
+        /// left/right pan spins it so the crew can bring the far side of the orbit into view.</summary>
+        public double PlanetRotDeg;
+        /// <summary>Zoom step for the 3D globe - SEPARATE from the flat map's ZoomStep so the map's
+        /// 0..MaxZoom clamp cannot cap it. NEGATIVE shrinks the globe (whole orbit fits), positive
+        /// enlarges it. 0 is the default framing.</summary>
+        public int PlanetZoom;
     }
 
     public struct MapQuad
@@ -40,8 +51,17 @@ namespace DragonScreen
             v.ZoomStep = 0;
             v.Mode = NavMode.Map;
             v.Follow = true;
+            v.PlanetRotDeg = 0.0;
+            v.PlanetZoom = 0;
             return v;
         }
+
+        /// <summary>Degrees the globe spins per left/right pan press.</summary>
+        private const double PlanetPanStepDeg = 20.0;
+
+        /// <summary>Globe zoom range. Negative shrinks it (whole orbit fits), positive enlarges it.</summary>
+        public const int PlanetZoomMin = -5;
+        public const int PlanetZoomMax = 6;
 
         public static float Scale(float rectW, float rectH, int zoomStep)
         {
@@ -163,12 +183,27 @@ namespace DragonScreen
 
         public static MapView Zoom(MapView v, int delta)
         {
+            // PLANET mode has its OWN zoom (camera distance) with a much wider range than the flat
+            // map's texture-window zoom, so pulling the 3D view right out is possible.
+            if (v.Mode == NavMode.Planet)
+            {
+                v.PlanetZoom = Clamp(v.PlanetZoom + delta, PlanetZoomMin, PlanetZoomMax);
+                return v;
+            }
             v.ZoomStep = Clamp(v.ZoomStep + delta, 0, MaxZoom);
             return v;
         }
 
         public static MapView Pan(MapView v, double dLon, double dLat)
         {
+            // PLANET (3D globe) mode: left/right spins the globe about its axis. The equatorial view has
+            // no up/down, so dLat is a no-op here.
+            if (v.Mode == NavMode.Planet)
+            {
+                v.PlanetRotDeg = Wrap180(v.PlanetRotDeg + dLon * PlanetPanStepDeg);
+                return v;
+            }
+
             double step = PanDegrees / Pow2(Clamp(v.ZoomStep, 0, MaxZoom));
             v.CentreLon = Wrap180(v.CentreLon + dLon * step);
             v.CentreLat = v.CentreLat + dLat * step;
@@ -180,6 +215,13 @@ namespace DragonScreen
 
         public static MapView Centre(MapView v, double lat, double lon)
         {
+            // PLANET (3D globe) mode: "centre" resets the spin and zoom back to following the vehicle.
+            if (v.Mode == NavMode.Planet)
+            {
+                v.PlanetRotDeg = 0.0;
+                v.PlanetZoom = 0;
+                return v;
+            }
             v.CentreLat = lat;
             v.CentreLon = Wrap180(lon);
             v.Follow = true;
@@ -188,7 +230,13 @@ namespace DragonScreen
 
         public static MapView NextMode(MapView v)
         {
-            v.Mode = (v.Mode == NavMode.Map) ? NavMode.Orbit : NavMode.Map;
+            // Map -> Orbit -> Planet -> Map.
+            switch (v.Mode)
+            {
+                case NavMode.Map:   v.Mode = NavMode.Orbit;  break;
+                case NavMode.Orbit: v.Mode = NavMode.Planet; break;
+                default:            v.Mode = NavMode.Map;     break;
+            }
             return v;
         }
 

@@ -28,11 +28,19 @@ namespace DragonScreen
             // the guidance works in orbital. accel_g = felt g (thrust/cutout, always on). thrust_n = measured.)
             "alt_m", "speed_mps", "srf_speed_mps", "vspeed_mps", "q_pa", "mach", "downrange_m", "mass_kg",
             "accel_g", "thrust_n",
-            // control
+            // control (throttle + the RCS translation command drive every burn — always recorded)
             "att_err_deg", "rate_cmd_rads", "throttle", "torque_cmd", "rcs_on",
+            "trans_x", "trans_y", "trans_z",
             // attitude loop (direct gimbal/RCS pointing — the max-Q fix; AttitudePilot internals)
             "att_point_deg", "att_rate_cmd", "att_rate_meas", "act_pitch", "act_yaw", "act_roll",
             "ctrl_tq_pitch", "ctrl_tq_yaw",
+            // measured body angular RATES (deg/s) — the raw control-rate signal for the tuning database
+            "rate_pitch_dps", "rate_roll_dps", "rate_yaw_dps",
+            // CONTROL AUTHORITY: available torque per axis (ctrl_tq_roll completes pitch/yaw), MOI per axis, and
+            // the RCS thrust in use — so the DB shows angular-accel authority (torque/MOI) + saturation per phase.
+            "ctrl_tq_roll", "moi_pitch", "moi_roll", "moi_yaw", "rcs_thrust_n",
+            // orbit state — for plane / guidance tuning (apoapsis/periapsis, inclination, RAAN)
+            "ap_km", "pe_km", "inc_deg", "raan_deg",
             // ignition gates (ullage settle + clamp release)
             "ullage_stab", "clamp_frac", "clamp_held",
             // ascent (UPFG)
@@ -70,9 +78,14 @@ namespace DragonScreen
             AccelG = Index("accel_g"), ThrustN = Index("thrust_n"),
             AttErrDeg = Index("att_err_deg"), RateCmd = Index("rate_cmd_rads"), Throttle = Index("throttle"),
             TorqueCmd = Index("torque_cmd"), RcsOn = Index("rcs_on"),
+            TransX = Index("trans_x"), TransY = Index("trans_y"), TransZ = Index("trans_z"),
             AttPointDeg = Index("att_point_deg"), AttRateCmd = Index("att_rate_cmd"), AttRateMeas = Index("att_rate_meas"),
             ActPitchC = Index("act_pitch"), ActYawC = Index("act_yaw"), ActRollC = Index("act_roll"),
             CtrlTqPitch = Index("ctrl_tq_pitch"), CtrlTqYaw = Index("ctrl_tq_yaw"),
+            RatePitchDps = Index("rate_pitch_dps"), RateRollDps = Index("rate_roll_dps"), RateYawDps = Index("rate_yaw_dps"),
+            CtrlTqRoll = Index("ctrl_tq_roll"), MoiPitch = Index("moi_pitch"), MoiRoll = Index("moi_roll"),
+            MoiYaw = Index("moi_yaw"), RcsThrustN = Index("rcs_thrust_n"),
+            ApKm = Index("ap_km"), PeKm = Index("pe_km"), IncDeg = Index("inc_deg"), RaanDeg = Index("raan_deg"),
             UllageStab = Index("ullage_stab"), ClampFrac = Index("clamp_frac"), ClampHeldC = Index("clamp_held"),
             UpfgTgo = Index("upfg_tgo_s"), UpfgVgo = Index("upfg_vgo_mps"), PitchDeg = Index("pitch_deg"),
             AzimuthDeg = Index("azimuth_deg"), AscentPhase = Index("ascent_phase"),
@@ -194,6 +207,25 @@ namespace DragonScreen
             Set(c, TorqueCmd, torqueCmd); Set(c, RcsOn, rcsOn);
         }
 
+        // ⛔ THE ALWAYS-ON COMMAND SNAPSHOT — the full applied control every phase, from the LIVE command state
+        // (FlightDriver + AttitudePilot), so no phase is ever blind. This is what was missing: the abort (and any
+        // coast) recorded nothing about how the vehicle was being flown, so a stranded, mis-pointed capsule looked
+        // like empty cells. Records the throttle, the RCS translation demand (every deorbit/rendezvous/docking burn
+        // is a translation), and the attitude-loop actuation + pointing error + rates + authority. Runs in the base
+        // sample for EVERY row; a controller Fill may still refine its own columns on top.
+        public static void PutCommand(string[] c, double throttle, double transX, double transY, double transZ,
+                                      double pointErrDeg, double rateCmdRads, double rateMeasRads,
+                                      double actPitch, double actYaw, double actRoll,
+                                      double ctrlTqPitchNm, double ctrlTqYawNm)
+        {
+            Set(c, Throttle, throttle);
+            Set(c, TransX, transX); Set(c, TransY, transY); Set(c, TransZ, transZ);
+            Set(c, RateCmd, rateCmdRads);
+            Set(c, AttPointDeg, pointErrDeg); Set(c, AttRateCmd, rateCmdRads); Set(c, AttRateMeas, rateMeasRads);
+            Set(c, ActPitchC, actPitch); Set(c, ActYawC, actYaw); Set(c, ActRollC, actRoll);
+            Set(c, CtrlTqPitch, ctrlTqPitchNm); Set(c, CtrlTqYaw, ctrlTqYawNm);
+        }
+
         // The direct gimbal/RCS loop internals (AttitudePilot) — pointing error, commanded vs measured rate,
         // per-axis actuation, and the live control-torque authority. So the max-Q attitude is judged from the
         // CSV, not by eye ([[instrument-everything]]).
@@ -204,6 +236,25 @@ namespace DragonScreen
             Set(c, AttPointDeg, pointErrDeg); Set(c, AttRateCmd, rateCmdRads); Set(c, AttRateMeas, rateMeasRads);
             Set(c, ActPitchC, actPitch); Set(c, ActYawC, actYaw); Set(c, ActRollC, actRoll);
             Set(c, CtrlTqPitch, ctrlTqPitchNm); Set(c, CtrlTqYaw, ctrlTqYawNm);
+        }
+
+        // Measured body angular rates (deg/s) — the raw pitch/roll/yaw rate signal for the tuning database.
+        public static void PutRates(string[] c, double pitchDps, double rollDps, double yawDps)
+        {
+            Set(c, RatePitchDps, pitchDps); Set(c, RateRollDps, rollDps); Set(c, RateYawDps, yawDps);
+        }
+
+        // Control AUTHORITY + orbit state for the tuning DB: available roll torque (pitch/yaw already in the
+        // command snapshot), MOI per axis (angular-accel authority = torque/MOI), the RCS thrust in use, and the
+        // orbit shape/plane (apoapsis/periapsis km, inclination, RAAN deg).
+        public static void PutAuthority(string[] c, double ctrlTqRollNm, double moiPitch, double moiRoll,
+                                        double moiYaw, double rcsThrustN,
+                                        double apKm, double peKm, double incDeg, double raanDeg)
+        {
+            Set(c, CtrlTqRoll, ctrlTqRollNm);
+            Set(c, MoiPitch, moiPitch); Set(c, MoiRoll, moiRoll); Set(c, MoiYaw, moiYaw);
+            Set(c, RcsThrustN, rcsThrustN);
+            Set(c, ApKm, apKm); Set(c, PeKm, peKm); Set(c, IncDeg, incDeg); Set(c, RaanDeg, raanDeg);
         }
 
         // The ignition gates: RealFuels ullage stability (during the S2 settle) + the pad clamp-hold thrust

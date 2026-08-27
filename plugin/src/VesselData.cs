@@ -25,9 +25,21 @@ namespace DragonScreen
         private const int TrackSamples = 90;
         private static readonly double[] trackLat = new double[TrackSamples];
         private static readonly double[] trackLon = new double[TrackSamples];
+        // Radius as a multiple of the body radius, per sample - lets the 3D globe view FLOAT the orbit
+        // above the surface (a ground track is ratio 1). Filled alongside lat/lon in GroundTrack.
+        private static readonly double[] trackRatio = new double[TrackSamples];
+
+        // The target's own orbit track, for the 3D globe view. Same layout, rotation-corrected.
+        private static readonly double[] tgtTrackLat = new double[TrackSamples];
+        private static readonly double[] tgtTrackLon = new double[TrackSamples];
+        private static readonly double[] tgtTrackRatio = new double[TrackSamples];
+        private static int tgtTrackCount;
 
         private const float TrackInterval = 2f;
         private static float lastTrackAt = -999f;
+
+        // The 3D globe overlay: refs to the buffers above + the point markers. Reused every frame.
+        private static readonly PlanetOverlay planetOverlay = new PlanetOverlay();
 
         internal static PageState State { get { return state; } }
         internal static string Met { get { return met; } }
@@ -109,6 +121,7 @@ namespace DragonScreen
                 state.LatText = LatLon(v.latitude, "N", "S");
                 state.LonText = LatLon(state.Longitude, "E", "W");
                 GroundTrack(v);
+                PlanetOverlayFill(v);
 
                 // ---- GAUGES ----
                 Propellants(v);
@@ -442,6 +455,7 @@ namespace DragonScreen
             if (state.Regime != FlightRegime.Space) span = Math.Min(span, 900.0);
 
             double rot = b.rotationPeriod;
+            double invR = (b.Radius > 0.0) ? 1.0 / b.Radius : 0.0;
 
             try
             {
@@ -454,6 +468,7 @@ namespace DragonScreen
                     if (rot > 0.0) lon -= 360.0 * dt / rot;
                     trackLat[i] = lat;
                     trackLon[i] = MapProjection.Wrap180(lon);
+                    trackRatio[i] = (p - b.position).magnitude * invR;   // for the 3D globe float
                 }
                 state.TrackCount = TrackSamples;
             }
@@ -461,6 +476,102 @@ namespace DragonScreen
             {
                 state.TrackCount = 0;
             }
+
+            // ---- the TARGET's own orbit track, for the 3D globe (one full period) ----
+            tgtTrackCount = 0;
+            ITargetable tgt = v.targetObject;
+            Orbit to = (tgt != null) ? tgt.GetOrbit() : null;
+            if (to != null && to.referenceBody == b)
+            {
+                double tp = to.period;
+                double tspan = (tp > 0.0 && !double.IsNaN(tp) && !double.IsInfinity(tp)) ? tp : 5400.0;
+                try
+                {
+                    for (int i = 0; i < TrackSamples; i++)
+                    {
+                        double dt = tspan * i / (TrackSamples - 1);
+                        Vector3d p = to.getPositionAtUT(now + dt);
+                        double lon = b.GetLongitude(p);
+                        if (rot > 0.0) lon -= 360.0 * dt / rot;
+                        tgtTrackLat[i] = b.GetLatitude(p);
+                        tgtTrackLon[i] = MapProjection.Wrap180(lon);
+                        tgtTrackRatio[i] = (p - b.position).magnitude * invR;
+                    }
+                    tgtTrackCount = TrackSamples;
+                }
+                catch (Exception) { tgtTrackCount = 0; }
+            }
+        }
+
+        /// <summary>
+        /// Fill the 3D globe overlay (PlanetOverlay) - the orbit/target tracks (shared refs to the
+        /// buffers above) plus the vessel/apsis/target markers, all as body-fixed (lat, lon, ratio).
+        /// The tracks are refreshed on the GroundTrack cadence; the four markers are recomputed every
+        /// frame (cheap) so they slide smoothly. NavPage projects them onto the globe.
+        /// </summary>
+        private static void PlanetOverlayFill(Vessel v)
+        {
+            planetOverlay.Reset();
+            state.Planet = planetOverlay;
+
+            CelestialBody b = v.mainBody;
+            if (b == null || b.Radius <= 0.0 || v.orbit == null) return;
+            double invR = 1.0 / b.Radius;
+
+            planetOverlay.OrbitLat = trackLat;
+            planetOverlay.OrbitLon = trackLon;
+            planetOverlay.OrbitRatio = trackRatio;
+            planetOverlay.OrbitCount = state.TrackCount;
+            planetOverlay.OnSurface = (state.TrackCount == 0);
+            planetOverlay.Ready = true;
+
+            planetOverlay.Vessel = new GlobePoint
+            {
+                Lat = state.Latitude,
+                Lon = state.Longitude,
+                Ratio = (b.Radius + state.AltitudeM) * invR,
+                Has = state.HasFix
+            };
+
+            double now = Planetarium.GetUniversalTime();
+            double rot = b.rotationPeriod;
+            if (state.ApogeeShown) planetOverlay.Ap = ArcMarker(v.orbit, now, v.orbit.timeToAp, b, rot, invR);
+            if (state.PerigeeShown) planetOverlay.Pe = ArcMarker(v.orbit, now, v.orbit.timeToPe, b, rot, invR);
+
+            ITargetable tgt = v.targetObject;
+            Orbit to = (tgt != null) ? tgt.GetOrbit() : null;
+            if (to != null && to.referenceBody == b)
+            {
+                planetOverlay.Target = ArcMarker(to, now, 0.0, b, rot, invR);
+                if (tgtTrackCount > 1)
+                {
+                    planetOverlay.TgtLat = tgtTrackLat;
+                    planetOverlay.TgtLon = tgtTrackLon;
+                    planetOverlay.TgtRatio = tgtTrackRatio;
+                    planetOverlay.TgtCount = tgtTrackCount;
+                }
+            }
+        }
+
+        /// <summary>One globe marker from an orbit at now+dt: body-fixed lat/lon (rotation-corrected)
+        /// and radius ratio.</summary>
+        private static GlobePoint ArcMarker(Orbit o, double now, double dt, CelestialBody b,
+                                            double rot, double invR)
+        {
+            GlobePoint g = new GlobePoint();
+            if (o == null || double.IsNaN(dt) || double.IsInfinity(dt)) return g;
+            try
+            {
+                Vector3d p = o.getPositionAtUT(now + dt);
+                double lon = b.GetLongitude(p);
+                if (rot > 0.0) lon -= 360.0 * dt / rot;
+                g.Lat = b.GetLatitude(p);
+                g.Lon = MapProjection.Wrap180(lon);
+                g.Ratio = (p - b.position).magnitude * invR;
+                g.Has = true;
+            }
+            catch (Exception) { g.Has = false; }
+            return g;
         }
 
         private static readonly string[] seatNames = new string[8];

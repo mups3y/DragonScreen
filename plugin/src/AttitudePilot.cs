@@ -41,7 +41,7 @@ namespace DragonScreen
         public static bool Active;
         public static double PointErrDeg, RateCmdRads, RateMeasRads;
         public static double ActPitch, ActYaw, ActRoll;
-        public static double CtrlTorquePitchNm, CtrlTorqueYawNm;
+        public static double CtrlTorquePitchNm, CtrlTorqueYawNm, CtrlTorqueRollNm;
 
         // Clear the loop's integrators without dropping the hold — called every tick while the rocket is still
         // clamped, so the position PID cannot wind up against the hold-downs and kick the gimbal at release.
@@ -57,13 +57,19 @@ namespace DragonScreen
             Active = false;
             PointErrDeg = RateCmdRads = RateMeasRads = 0.0;
             ActPitch = ActYaw = ActRoll = 0.0;
-            CtrlTorquePitchNm = CtrlTorqueYawNm = 0.0;
+            CtrlTorquePitchNm = CtrlTorqueYawNm = CtrlTorqueRollNm = 0.0;
             FlightDriver.ReleaseAttitude();
         }
 
         // Point the nose at a world direction. dampRoll = also null the roll RATE (ascent/booster/prox-ops);
         // pass false where a separate roll channel owns roll (the entry bank loop).
         public static void Point(Vessel v, Vector3d worldDir, bool dampRoll)
+        { Point(v, worldDir, dampRoll, Vector3d.zero); }
+
+        // rollUpRef: a WORLD "up" the vehicle's dorsal axis should track — this HOLDS roll (no free spin), so
+        // e.g. the ascent pitch-over stays in the launch plane and the inclination comes out right. Zero →
+        // the old behaviour: the roll reference is the CURRENT roll, i.e. pitch+yaw only, roll left free.
+        public static void Point(Vessel v, Vector3d worldDir, bool dampRoll, Vector3d rollUpRef)
         {
             if (v == null || v.ReferenceTransform == null || worldDir.magnitude < 1e-6) return;
             try
@@ -74,7 +80,8 @@ namespace DragonScreen
                 // --- frame conversion → body-frame error (pitch, roll, yaw), yaw negated ---
                 Quaternion current = v.ReferenceTransform.rotation * Quaternion.Euler(-90f, 0f, 0f);
                 Vector3 dir = ((Vector3)worldDir).normalized;
-                Vector3 up = current * Vector3.up;                       // current roll reference
+                // Roll reference: a fixed WORLD up (rollUpRef) HOLDS roll; else the current roll = free roll.
+                Vector3 up = rollUpRef.magnitude > 1e-6 ? ((Vector3)rollUpRef).normalized : current * Vector3.up;
                 if (Mathf.Abs(Vector3.Dot(dir, up)) > 0.99f) up = current * Vector3.right;   // avoid degenerate LookRotation
                 Quaternion requested = Quaternion.LookRotation(dir, up);
                 Quaternion delta = Quaternion.Inverse(current) * requested;
@@ -127,7 +134,7 @@ namespace DragonScreen
                 PointErrDeg = distanceDeg;
                 RateMeasRads = omega[0];
                 ActPitch = act[0]; ActYaw = act[2]; ActRoll = act[1];
-                CtrlTorquePitchNm = smTx; CtrlTorqueYawNm = smTz;   // record the smoothed torque the loop used
+                CtrlTorquePitchNm = smTx; CtrlTorqueYawNm = smTz; CtrlTorqueRollNm = smTy;   // authority per axis
             }
             catch (Exception ex)
             {

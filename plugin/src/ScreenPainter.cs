@@ -42,7 +42,13 @@ namespace DragonScreen
 
         private Material mat;
         private DisplayList page;
+        private readonly DisplayList overlay = new DisplayList(8);   // abort alert, drawn over the page
+        private bool overlayActive;
         private bool overflowLogged;
+
+        // Which screen keeps the abort alert after SUPPRESS RESPONSE — the CENTRE display (DragonScreen.cfg:
+        // screenIndex 1 = LEFT, 2 = CENTRE "shared by both seats", 3 = RIGHT).
+        private const int CentreScreenIndex = 2;
 
         // ---- TEXT ----
         // PORTED FROM MAS/RPM, NOT INVENTED. MdVTextMesh.cs:667-679 and 938-962: request the glyphs
@@ -580,7 +586,22 @@ namespace DragonScreen
             // REBUILD the atlas - which invalidates every UV previously read. So every string is
             // requested first, in one go, and only then is anything drawn. Interleaving request and
             // draw is the classic dynamic-font corruption bug.
+            // ---- ABORT OVERLAY: built here so its glyphs are atlased alongside the page's, drawn after it ----
+            overlay.Clear();
+            // The abort alert shows on every screen; once SUPPRESS RESPONSE is pressed it stays on the CENTRE
+            // screen (screenIndex 2, "shared by both seats") only — the side screens return to their page.
+            overlayActive = FlightDriver.Aborting
+                            && (!FlightDriver.AbortFxSuppressed || index == CentreScreenIndex);
+            if (overlayActive)
+            {
+                bool flashOn = ((int)(Time.time * 3f) & 1) == 0;   // ~1.5 Hz square flash — ABORTING + red frame
+                Texture2D dp = ImageStore.Get(ImageId.DontPanic);
+                float aspect = (dp != null && dp.height > 0) ? (float)dp.width / dp.height : 1.5f;
+                AbortOverlay.Build(overlay, w, h, flashOn, dp != null, aspect);   // the art itself stays solid
+            }
+
             RequestGlyphs(page);
+            if (overlayActive) RequestGlyphs(overlay);
 
             // Once, not every frame - an overflowing page overflows on all of them.
             if (page.Overflowed && !overflowLogged)
@@ -594,6 +615,7 @@ namespace DragonScreen
             mat.SetPass(0);
             GL.LoadPixelMatrix(0f, w, h, 0f);
             Execute(page);
+            if (overlayActive) Execute(overlay);
             GL.PopMatrix();
 
             // AFTER drawing, so the capture holds a finished frame rather than a half-built one.
@@ -697,6 +719,7 @@ namespace DragonScreen
 
                 if (c.Kind == DrawKind.Rect) DrawRect(c);
                 else if (c.Kind == DrawKind.ArcBand) DrawArcBand(c);
+                else if (c.Kind == DrawKind.Line) DrawLine(c);
                 else if (c.Kind == DrawKind.Image) DrawImage(c);
                 else DrawText(c);
             }
@@ -805,6 +828,29 @@ namespace DragonScreen
             GL.Vertex3(x + w, y, 0f);
             GL.Vertex3(x + w, y + h, 0f);
             GL.Vertex3(x, y + h, 0f);
+            GL.End();
+        }
+
+        /// <summary>
+        /// One line as a rotated quad, so its width is exact (GL.LINES width is driver-dependent - the
+        /// same reason DrawRect is a quad). The quad is the segment swept sideways by half the stroke
+        /// along the perpendicular of its direction.
+        /// </summary>
+        private static void DrawLine(DrawCmd c)
+        {
+            float x0 = c.A, y0 = c.B, x1 = c.C, y1 = c.D;
+            float dx = x1 - x0, dy = y1 - y0;
+            float len = Mathf.Sqrt(dx * dx + dy * dy);
+            if (len < 1e-4f) return;
+            float hw = c.StartDeg * 0.5f;
+            // Perpendicular unit vector, scaled to half the stroke width.
+            float px = -dy / len * hw, py = dx / len * hw;
+            GL.Begin(GL.QUADS);
+            GL.Color(Tint(c.Colour));
+            GL.Vertex3(x0 + px, y0 + py, 0f);
+            GL.Vertex3(x1 + px, y1 + py, 0f);
+            GL.Vertex3(x1 - px, y1 - py, 0f);
+            GL.Vertex3(x0 - px, y0 - py, 0f);
             GL.End();
         }
 

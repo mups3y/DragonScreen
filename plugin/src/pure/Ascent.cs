@@ -40,12 +40,25 @@ namespace DragonScreen
 
     public static class Ascent
     {
-        // ---- the real DM-1 pitch-vs-surface-speed program (flight-path angle, degrees) ----
-        // Vertical to the pitch-kick speed, then the measured turn 79°→47° through to the staging speed.
-        static readonly double[] Sp = { 0,   55,  60,  235, 300, 430, 630, 880, 1180, 1530, 1881 };
-        static readonly double[] Pd = { 90,  90,  79,  79,  75,  73,  68,  63,  57,   51,   47   };
+        // ---- the S1 pitch-vs-surface-speed program (commanded flight-path angle from horizon, degrees) ----
+        // ⛔ MATCHES THE REAL DM-1 / Crew-2 ASCENT (data/dm1_ascent_template.json) and is FULLY ADJUSTABLE like
+        // MechJeb's ascent (user 2026-08-27). Vertical to TurnStartVMps (the pitch kick), then a shaped gravity
+        // turn to FinalPitchDeg by TurnEndVMps:
+        //     pitch = 90 − (90 − FinalPitch)·frac^TurnShape ,  frac = (v − TurnStartV)/(TurnEndV − TurnStartV)
+        // This is MechJeb's turnShapeExponent model. TurnShape≈0.6 reproduces the DM-1 telemetry within ~2°
+        // (79° plateau near 235 m/s → 47° at the 1881 m/s staging speed). Tune TurnStartVMps (when to start the
+        // turn), TurnEndVMps + FinalPitchDeg (how far over at staging), and TurnShape (how fast it turns).
+        [Tunable] public static double TurnStartVMps = 55.0;    // hold vertical below this (clear the tower, then kick)
+        [Tunable] public static double TurnEndVMps   = 1881.0;  // reach FinalPitchDeg by this surface speed (DM-1 MECO)
+        // ⛔ FLATTENED 47→30 / shape 0.6→0.5 (user 2026-08-27, flight 090123). The 47° final pitch OVER-LOFTED:
+        // MECO came at fpa 51° (velocity STEEPER than the nose), the trajectory arced to a 228 km apoapsis with
+        // only 3355 m/s, then the S2 burned while DESCENDING and ran dry SUBORBITAL (Pe −720 km). A shallower
+        // final pitch + a faster early turn (lower shape) build horizontal velocity sooner and hold apoapsis
+        // near the 200 km target, so the S2 spends its Δv on orbital (horizontal) velocity, not on climbing.
+        [Tunable] public static double FinalPitchDeg = 30.0;    // flight-path pitch at the end of the turn (was 47°, lofted)
+        [Tunable] public static double TurnShape     = 0.5;     // MechJeb turnShapeExponent — lower = pitch over sooner
 
-        public const double KickSpeedMps = 55.0;      // clear the tower, then start the turn
+        public const double KickSpeedMps = 55.0;      // vertical-rise → gravity-turn phase threshold (= TurnStartVMps)
         [Tunable] public static double MecoSurfaceSpeedMps = 1900.0;   // DM-1 staging energy (couples to booster reserve)
         public const double ApoapsisRunawayFactor = 1.5;               // safety: cut if apoapsis runs away
 
@@ -54,16 +67,13 @@ namespace DragonScreen
 
         public static double PitchAtSpeed(double v)
         {
-            if (v <= Sp[0]) return Pd[0];
-            int n = Sp.Length;
-            if (v >= Sp[n - 1]) return Pd[n - 1];
-            for (int i = 1; i < n; i++)
-                if (v <= Sp[i])
-                {
-                    double f = (v - Sp[i - 1]) / (Sp[i] - Sp[i - 1]);
-                    return Pd[i - 1] + (Pd[i] - Pd[i - 1]) * f;
-                }
-            return Pd[n - 1];
+            if (v <= TurnStartVMps) return 90.0;
+            if (v >= TurnEndVMps) return FinalPitchDeg;
+            double frac = (v - TurnStartVMps) / (TurnEndVMps - TurnStartVMps);
+            if (frac < 0.0) frac = 0.0; else if (frac > 1.0) frac = 1.0;
+            double shaped = Math.Pow(frac, TurnShape);
+            double p = 90.0 - (90.0 - FinalPitchDeg) * shaped;
+            return p < 0.0 ? 0.0 : (p > 90.0 ? 90.0 : p);
         }
 
         static double Throttle(AscentInputs s, double baseT)

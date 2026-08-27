@@ -14,7 +14,8 @@ namespace DragonScreen
         NavBallLive = 6,
         Seat = 7,
         DockingCamLive = 8,
-        HudDarken = 9
+        HudDarken = 9,
+        DontPanic = 10   // user-supplied art/dontpanic.png, shown on the abort overlay (optional)
     }
 
     public static class Images
@@ -24,6 +25,11 @@ namespace DragonScreen
             return id == ImageId.BodyMap || id == ImageId.NavBallLive
                 || id == ImageId.DockingCamLive;
         }
+
+        // An OPTIONAL image is user-supplied — dropped into art/ by the player, NOT shipped with the mod,
+        // and its declared size is only nominal. The build must not require it to exist or match a size,
+        // and a missing one is fine (the overlay falls back to a plain wordmark).
+        public static bool IsOptional(ImageId id) { return id == ImageId.DontPanic; }
 
         public static string FileName(ImageId id)
         {
@@ -35,6 +41,7 @@ namespace DragonScreen
                 case ImageId.NavBall: return "navball.png";
                 case ImageId.Seat: return "seat.png";
                 case ImageId.HudDarken: return "hud_darken.png";
+                case ImageId.DontPanic: return "dontpanic.png";
                 default: return null;
             }
         }
@@ -49,6 +56,7 @@ namespace DragonScreen
                 case ImageId.NavBall: w = 512; h = 256; break;
                 case ImageId.Seat: w = 408; h = 520; break;
                 case ImageId.HudDarken: w = 1300; h = 1300; break;
+                case ImageId.DontPanic: w = 1024; h = 683; break;   // nominal; the overlay scales to fit
                 default: w = 0; h = 0; break;
             }
         }

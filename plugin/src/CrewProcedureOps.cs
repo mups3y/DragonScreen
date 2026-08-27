@@ -27,6 +27,12 @@ namespace DragonScreen
         static Gate gate;
         static uint boundVesselId;
 
+        // ⛔ TEMPORARY (user 2026-08-27): auto-advance the crew GO/NO-GO gates so AUTO SEQUENCE flies hands-off
+        // for faster test flights — the crew-ack taps + the GO press are issued automatically. The AUTO
+        // (vessel-state) checks still hold a genuinely bad pad. Set false to RESTORE the interactive gates
+        // (the gate machine + screens are unchanged; this only synthesises the crew's inputs).
+        public static bool AutoAdvanceGates = true;
+
         // latched crew button events, consumed on the next Tick
         static bool goPressed, noGoPressed, abortPressed;
 
@@ -180,6 +186,16 @@ namespace DragonScreen
                 for (int i = 0; i < gate.Items.Length && i < satisfied.Length; i++)
                     if (gate.Items[i].Kind == ItemKind.Auto)
                         satisfied[i] = AutoSatisfied(gate.Id, gate.Items[i].Label, v);
+
+            // ⛔ hands-off test mode: auto-tap the crew-ack items and press GO (the AUTO checks above still
+            // gate a bad pad). Restore the interactive gates by setting AutoAdvanceGates = false.
+            if (AutoAdvanceGates)
+            {
+                if (gate.Items != null)
+                    for (int i = 0; i < gate.Items.Length && i < satisfied.Length; i++)
+                        if (gate.Items[i].Kind == ItemKind.CrewAck) satisfied[i] = true;
+                goPressed = true;
+            }
 
             CrewGateInputs gi;
             gi.Gate = gate; gi.Satisfied = satisfied;

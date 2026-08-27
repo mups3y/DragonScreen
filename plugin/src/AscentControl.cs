@@ -25,6 +25,13 @@ namespace DragonScreen
         // AoA allowed at LOW q to establish the gravity turn (a real pitch-kick is ~8-10°); it ramps to 0
         // by QAoaZeroPa so max-Q is flown at 0 AoA. Larger = faster turn/shallower climb = reaches orbit.
         [Tunable] public static double MaxAoaDeg = 8.0;
+        // ⛔ FLOOR on the AoA cap — the guidance must KEEP steering authority through the whole powered climb.
+        // Flight 235215 RUD root cause: aoaCap ramped to 0 the moment q passed QAoaZeroPa (~MET 35) and stayed
+        // there, so from then on the vehicle had NO authority to hold the pitch program — it handed itself to a
+        // free gravity turn, fpa collapsed 80°→0°→negative at only 14.8 km, and it flew back into dense air
+        // under thrust (q 273 kPa) → break-up. Never zero the cap: hold enough authority to fly the program.
+        // Load-safe: the steeper program keeps real max-Q ~30-35 kPa, so 5°·35 kPa ≈ 3.0 kPa·rad is within limits.
+        [Tunable] public static double MinAoaDeg = 5.0;
         // if the MEASURED AoA exceeds this in powered atmospheric flight, control is lost → abort the crew out.
         [Tunable] public static double AbortAoaDeg = 25.0;
         // ⛔ STRUCTURAL Q ABORT: dynamic pressure past this (≈1.5× the max-Q cap) means the ascent has diverged
@@ -34,14 +41,23 @@ namespace DragonScreen
         [Tunable] public static double QAoaZeroPa = 15000.0;
         // S2 ullage: minimum post-MECO coast before S2 may light (lets S1 clear — the forward settle push
         // also opens the gap), and the settle backstop (ignite anyway if RealFuels never reports settled).
-        [Tunable] public static double MinCoastS = 2.0;
+        [Tunable] public static double MinCoastS = 1.5;   // light the MVac SOON — while the prop is still settled
+                                                          // from the S1 burn (a long coast lets it float off → flameout)
         [Tunable] public static double MaxUllageSettleS = 6.0;
 
         static AscentPhase phase = AscentPhase.Idle;
         static UpfgState upfg;
         static bool s2Ignited;
+        static bool s2ThrustConfirmed;   // the MVac's REAL thrust has been measured (not just commanded)
+        static double s2ThrustUpUT = -1.0;   // UT the MVac thrust first crossed the sustained threshold
+        static bool s2Lighting;              // ignition cycle: false = settle@throttle-0, true = light@throttle-up
+        static double s2PhaseUT = -1.0;      // UT the current settle/light phase began
+        // RealFuels throttle-0-reset ignition cycle (see the S2 block):
+        [Tunable] public static double S2SettleS = 2.0;       // throttle-0 settle/reset before each light attempt
+        [Tunable] public static double S2LightWindowS = 2.0;  // hold throttle up this long before resetting to retry
         static double coastStartUT = -1;
         static bool dragonSeparated;
+        static double secoUT = -1.0;   // SECO engine-cut time, to delay separation until thrust has died
         static SelfCalState cal;
 
         // last commanded values, for the recorder
@@ -50,11 +66,13 @@ namespace DragonScreen
         static double lastUllage = 1.0;
         static bool lastRcsOn;
         static string lastPhaseWord = "IDLE";
+        static double lastPlaneLogUT = -999;   // rate-limit the plane diagnostic
 
         public static void Reset()
         {
             phase = AscentPhase.Idle; upfg = new UpfgState(); s2Ignited = false;
-            coastStartUT = -1; dragonSeparated = false; Throttle = 0;
+            s2ThrustConfirmed = false; s2ThrustUpUT = -1.0; s2Lighting = false; s2PhaseUT = -1.0;
+            coastStartUT = -1; dragonSeparated = false; secoUT = -1.0; Throttle = 0;
             Steering.Release();
         }
 
@@ -94,8 +112,15 @@ namespace DragonScreen
             ai.TargetApoapsisM = targetAltM;
             ai.DynamicPressurePa = v.dynamicPressurekPa * 1000.0;
             ai.MassKg = massKg;
-            ai.FullThrustN = activeThrustN > 1.0 ? activeThrustN : 1.0;
-            ai.GLimitG = s2Lit ? 4.0 : 3.5;                 // crew axial-g caps (LAUNCH_AND_ASCENT §5.2)
+            // ⛔ g-LIMIT DENOMINATOR MUST BE 100% THRUST, not the current (already-throttled) thrust — else
+            // ControlLaw's tg = gLimit·g0·m/F is circular and the cap never bites (flight 090123 hit 8.6 g at
+            // SECO because activeThrustN was the throttled value). FullThrust100 recovers the full-throttle
+            // thrust in the current conditions (finalThrust/currentThrottle), so the g-limit is exact.
+            double fullThrustN = FullThrust100(v);
+            ai.FullThrustN = fullThrustN > 1.0 ? fullThrustN : (activeThrustN > 1.0 ? activeThrustN : 1.0);
+            // crew axial-g caps matching the REAL Crew Dragon ascent (researched): S1 peaks ~3.3 g just before
+            // MECO, S2 climbs to ~4.5 g by SECO (astronaut accounts). The throttle bucket holds these.
+            ai.GLimitG = s2Lit ? 4.5 : 3.5;
             ai.SecondStage = s2Lit;
 
             AscentCommand ac = Ascent.Guide(ai, phase);
@@ -105,53 +130,91 @@ namespace DragonScreen
             // ---- staging ----
             if (ac.Stage) Actuator.Meco(v);   // ⛔ direct: octaweb cutoff + interstage decoupler (no staging)
 
-            if (phase == AscentPhase.Coast)
+            // ⛔ S2 IGNITION — the RealFuels PROCEDURE (RF Readme_RF.txt, verified for RF 15.15 / KSP 1.12.5;
+            // researched 2026-08-27 after flight 053613 re-lit the MVac 19× at throttle=1 with ullage reading
+            // "stable" and got 0 thrust). An RF engine lit into momentarily-unsettled prop gets VAPOR in the
+            // feed lines and flames out — and it does NOT relight by re-Activating at throttle. The DOCUMENTED
+            // fix is a THROTTLE-0 RESET: (1) throttle to 0 to clear the vapor lock, (2) stabilise the prop with
+            // the aft RCS (RCS/solids are NOT subject to ullage), (3) throttle UP to restart. So we CYCLE:
+            // settle@throttle-0 (S2SettleS) → light@throttle-up (S2LightWindowS) → if no SUSTAINED thrust, reset
+            // and retry. (The old "hold throttle up + re-Activate" never cleared the vapor lock → dead S2.)
+            if ((phase == AscentPhase.Coast || phase == AscentPhase.S2Burn) && !s2ThrustConfirmed)
             {
-                // ⛔ ULLAGE SETTLE before S2 ignition (plan §3.3): after MECO the propellant floats off the
-                // MVac intake in free-fall; fire the aft RCS (forward push, s.Z=-1) until RealFuels reports it
-                // settled, THEN light — there is no retry. A minimum coast lets the spent S1 clear first.
-                if (coastStartUT < 0) coastStartUT = Planetarium.GetUniversalTime();
-                if (!s2Lit && !s2Ignited)
+                double now = Planetarium.GetUniversalTime();
+                if (s2PhaseUT < 0.0) s2PhaseUT = now;
+                Actuator.EnableRcs(v);
+                FlightDriver.SetTranslation(0, 0, -1);          // ALWAYS settle: aft push seats the prop
+                lastUllage = Ullage.Stability(Actuator.FindEngine(v, EngineRole.SecondStage));
+
+                double s2ThrustN, s2MaxN; int s2LitCount;
+                Actuator.EngineThrust(v, EngineRole.SecondStage, out s2ThrustN, out s2MaxN, out s2LitCount);
+                if (s2ThrustN > 50000.0)                         // real MVac thrust (a transient is far less)...
                 {
-                    double settledS = Planetarium.GetUniversalTime() - coastStartUT;
-                    lastUllage = Ullage.Stability(Actuator.FindEngine(v, EngineRole.SecondStage));
-                    if (IgnitionGate.UllageReady(lastUllage, settledS, MinCoastS, MaxUllageSettleS))
+                    if (s2ThrustUpUT < 0.0) s2ThrustUpUT = now;
+                    if (now - s2ThrustUpUT >= 0.5)              // ...held ≥0.5 s = truly running
                     {
-                        Actuator.IgniteSecondStage(v); s2Ignited = true;
-                        FlightDriver.ReleaseTranslation();     // stop settling; RCS master stays on (S2 roll control)
+                        s2ThrustConfirmed = true;
+                        FlightDriver.ReleaseTranslation();
+                        Actuator.DisableRcs(v);                 // gimbal steers the S2 — stop the non-stop Draco firing
+                    }
+                }
+                else
+                {
+                    s2ThrustUpUT = -1.0;
+                    double dt = now - s2PhaseUT;
+                    if (!s2Lighting)
+                    {
+                        // SETTLE / RESET: the throttle section holds 0 here (clears the vapor lock) while the
+                        // aft RCS stabilises the prop. After S2SettleS, attempt the light.
+                        if (dt >= S2SettleS) { s2Lighting = true; s2PhaseUT = now; Actuator.IgniteSecondStage(v); s2Ignited = true; }
                     }
                     else
                     {
-                        Actuator.EnableRcs(v);                 // settle: seat the propellant on the intake
-                        FlightDriver.SetTranslation(0, 0, -1); // s.Z=-1 = forward push (MechJeb ProcessUllage)
+                        // LIGHT: the throttle section drives it UP; Activate again in case it fully shut. If it
+                        // does not catch within the window, drop back to a throttle-0 reset and retry.
+                        Actuator.IgniteSecondStage(v);
+                        if (dt >= S2LightWindowS) { s2Lighting = false; s2PhaseUT = now; }
                     }
                 }
             }
 
-            // ---- steering ----
+            // ---- steering: FLY IN THE TARGET'S ORBITAL PLANE (launch-to-rendezvous) ----
+            // ⛔ (user 2026-08-27) The fixed-inclination azimuth gave the right INCLINATION but not the right
+            // PLANE — launched off the ISS's node we ended up co-inclined but not co-planar, so we could never
+            // rendezvous, and holding roll to the (rotating) radial-up snapped/barrel-rolled. FIX: with the ISS
+            // targeted, build the aim IN the ISS orbital plane (pitch program tilted from radial toward the in-
+            // plane prograde), and use the PLANE NORMAL as the roll reference — it is inertially fixed and always
+            // ⊥ the nose, so the roll is stable (no snap, no barrel-roll) and the whole climb stays in the plane
+            // → correct inclination AND coplanar with the ISS. No target → fall back to the inclination azimuth.
+            Vector3d planeNormal;
+            bool haveTargetPlane = TargetPlaneNormal(v, out planeNormal);
+            Vector3d up = Steering.Up(v);
             Vector3d aim;
             if (!s2Lit)
             {
-                // S1: pitch program on the plane azimuth
-                double azRad;
-                double lat = v.latitude * Math.PI / 180.0;
-                double incRad = mission.IncDeg * Math.PI / 180.0;
-                double bodyRot = (body != null && body.rotationPeriod > 0) ? 2.0 * Math.PI / body.rotationPeriod : 0.0;
-                bool descending = mission.IncDeg > 90.0;    // polar-south (Fram2) is the descending pass
-                double vorb = (mu > 0 && targetRadiusM > 0) ? Math.Sqrt(mu / targetRadiusM) : 7800.0;
-                if (!LaunchAzimuth.GroundRad(incRad, lat, vorb, R, bodyRot, descending, out azRad))
-                    azRad = descending ? Math.PI : Math.PI / 2.0;   // unreachable inc → due S / due E fallback
-                lastAzDeg = azRad * 180.0 / Math.PI;
                 lastPitchCmd = ac.PitchDeg;
+                // ⛔ LAUNCH AZIMUTH FROM INCLINATION (flight 173320): the instantaneous "fly in the target plane"
+                // aim (planeNormal×up) UNDERSHOT — it locked the orbit at 40.84° inclination, not the ISS's 51.6°,
+                // because the AoA cone limiter cannot steer the nose fully into the plane. The TESTED
+                // LaunchAzimuth.GroundRad from the target's inclination gives the right inclination reliably; the
+                // plane normal is still the roll reference below. (Correct RAAN/coplanar needs a launch-window HOLD
+                // — the pad must rotate under the ISS plane before liftoff — a separate, larger fix.)
+                double incDeg = mission.IncDeg;
+                if (haveTargetPlane && v.targetObject != null && v.targetObject.GetOrbit() != null)
+                    incDeg = v.targetObject.GetOrbit().inclination;
+                double lat = v.latitude * Math.PI / 180.0;
+                double incRad = incDeg * Math.PI / 180.0;
+                double bodyRot = (body != null && body.rotationPeriod > 0) ? 2.0 * Math.PI / body.rotationPeriod : 0.0;
+                bool descending = incDeg > 90.0;
+                double vorb = (mu > 0 && targetRadiusM > 0) ? Math.Sqrt(mu / targetRadiusM) : 7800.0;
+                double azRad;
+                if (!LaunchAzimuth.GroundRad(incRad, lat, vorb, R, bodyRot, descending, out azRad))
+                    azRad = descending ? Math.PI : Math.PI / 2.0;
+                lastAzDeg = azRad * 180.0 / Math.PI;
+                Vector3d aimBase = Steering.PitchHeadingDir(v, ac.PitchDeg, azRad);
 
-                // ⛔ THE REAL TECHNIQUE (LAUNCH_AND_ASCENT_RESEARCH §4.3/§6.1): a ZERO-AoA gravity turn —
-                // the nose held near the velocity vector so aero side loads stay ~0 (load relief), which is
-                // what lets the unstable airframe survive the dense atmosphere. But it must ALSO pitch over
-                // enough to reach orbit, so we track the DM-1 pitch program with an AoA that is allowed at
-                // LOW q and SHRINKS TO 0 through max-Q: turn is established early, then flown at 0 AoA through
-                // the danger band, then tracking resumes up high. Holding a fixed AoA at max-Q is what
-                // diverged and RUD'd the stack (flights 1-3).
-                Vector3d up = Steering.Up(v);
+                // zero-ish-AoA gravity turn: vertical to the kick, then track the program within the AoA cap
+                // (floored at MinAoaDeg so the guidance keeps authority through high q — see flight 235215).
                 double qPa = v.dynamicPressurekPa * 1000.0;
                 if (v.srfSpeed < Ascent.KickSpeedMps)
                 {
@@ -160,9 +223,8 @@ namespace DragonScreen
                 else
                 {
                     double qFrac = qPa / QAoaZeroPa; if (qFrac > 1.0) qFrac = 1.0; if (qFrac < 0.0) qFrac = 0.0;
-                    double aoaCap = MaxAoaDeg * (1.0 - qFrac);           // → 0 through max-Q, MaxAoaDeg at low q
-                    Vector3d target = Steering.PitchHeadingDir(v, ac.PitchDeg, azRad);
-                    aim = Steering.LimitToProgradeCone(v, target, aoaCap);
+                    double aoaCap = Math.Max(MinAoaDeg, MaxAoaDeg * (1.0 - qFrac));
+                    aim = Steering.LimitToProgradeCone(v, aimBase, aoaCap);
                 }
             }
             else
@@ -170,9 +232,46 @@ namespace DragonScreen
                 // S2: closed-loop UPFG thrust vector (world/inertial frame)
                 aim = UpfgAim(v, mu, targetRadiusM, activeThrustN, ve, massKg);
             }
-            Steering.Point(v, aim);
+
+            // ⛔ ROLL REFERENCE — TWO requirements, both met (perfect control includes crew orientation):
+            //   (1) PLANE STABILITY: it MUST be ⊥ the nose, or LookRotation tilts the control frame, the
+            //       pitch/yaw euler decomposition couples, the nose drifts off azimuth and the plane winds to
+            //       RETROGRADE (flight 190114: a non-⊥ ISS-normal ref gave inc 116° instead of 51.6°).
+            //   (2) CREW ORIENTATION: the crew must ride BACKS-TO-THE-SKY (belly toward Earth), pressed into
+            //       their seats — NOT lying on their sides. The old `up × aim` ref is ⊥ the nose but points the
+            //       dorsal axis CROSS-TRACK (sideways) — a 90° roll that puts the crew on their side.
+            // FIX that satisfies both: RADIAL-OUT projected ⊥ the nose (Gram-Schmidt). It is ⊥ the nose by
+            // construction (plane-stable, exactly like up×aim was) AND points the dorsal axis radial-out
+            // (backs to the sky), so the crew ride correctly. As the vehicle pitches over this rotates smoothly
+            // in the vertical plane (a single deliberate roll-to-belly-down = the real roll program), no snap.
+            // Vertical rise (aim ∥ up → projection degenerate): hold current roll (orientation is irrelevant
+            // going straight up; AttitudePilot damps the rate). ⚠ FLIGHT-VERIFY roll stays bounded + inc holds;
+            // one-line revert to `Vector3d.Cross(up, aim)` if any barrel-roll returns.
+            Vector3d aimN = aim.magnitude > 1e-6 ? aim.normalized : up;
+            Vector3d rollRef = up - aimN * Vector3d.Dot(up, aimN);   // radial-out ⊥ the nose (Gram-Schmidt)
+            rollRef = rollRef.magnitude > 1e-3 ? rollRef.normalized : Vector3d.zero;
+            Steering.PointHoldRoll(v, aim, rollRef);
             lastAoaDeg = Steering.AngleOfAttackDeg(v);
             lastRcsOn = Actuator.IsRcsOn(v);
+
+            // ⛔ INSTRUMENT THE PLANE (the "wrong inc" symptom): the azimuth column can be a bad log, so also
+            // print the ACHIEVED orbit inclination + the flight-path angle once/2 s. az should be ~42.8° and inc
+            // should track the ISS's 51.64° once the fix works; fpa near MECO tells us if the turn still lofts.
+            double nowLog = Planetarium.GetUniversalTime();
+            if (nowLog - lastPlaneLogUT > 2.0 && v.orbit != null)
+            {
+                lastPlaneLogUT = nowLog;
+                double sv = v.srfSpeed, vsp = v.verticalSpeed;
+                double fpa = (sv > 1.0) ? Math.Asin(Math.Max(-1.0, Math.Min(1.0, vsp / sv))) * 180.0 / Math.PI : 90.0;
+                double tgtInc = double.NaN, tgtLan = double.NaN;
+                if (v.targetObject != null && v.targetObject.GetOrbit() != null)
+                { tgtInc = v.targetObject.GetOrbit().inclination; tgtLan = v.targetObject.GetOrbit().LAN; }
+                Debug.Log("[DragonScreen] ascent " + lastPhaseWord + ": az=" + lastAzDeg.ToString("F1")
+                          + "° inc=" + v.orbit.inclination.ToString("F2") + "/" + tgtInc.ToString("F2")
+                          + "° RAAN=" + v.orbit.LAN.ToString("F1") + "/" + tgtLan.ToString("F1")
+                          + "° fpa=" + fpa.ToString("F0") + "° alt=" + (v.altitude / 1000.0).ToString("F0")
+                          + "km srfV=" + sv.ToString("F0") + " (plane " + (haveTargetPlane ? "LOCKED" : "none") + ")");
+            }
 
             // ⛔ LOSS-OF-CONTROL ABORT: if the vehicle departs (AoA runs away) in the powered atmospheric
             // ascent, PUNCH OUT before the stack RUDs — the crew survives on the SuperDracos + chutes. The
@@ -197,18 +296,31 @@ namespace DragonScreen
             }
 
             // ---- throttle ----
-            if (phase == AscentPhase.Done || phase == AscentPhase.Seco)
+            if ((phase == AscentPhase.Coast || phase == AscentPhase.S2Burn) && !s2ThrustConfirmed)
+                // ⛔ S2 IGNITION CYCLE owns the throttle until the MVac is truly running: 0 to RESET the vapor
+                // lock (settle), 1 to LIGHT. (Holding it at 1 the whole time is what left the MVac dead.)
+                Throttle = s2Lighting ? 1.0 : 0.0;
+            else if (phase == AscentPhase.Done || phase == AscentPhase.Seco)
                 Throttle = 0.0;
             else if (phase == AscentPhase.Coast)
-                Throttle = s2Ignited ? 1.0 : 0.0;   // full the instant S2 is commanded, else coasting = off
-            else Throttle = ac.Throttle;            // powered (VerticalRise / GravityTurn / S2Burn)
+                Throttle = 0.0;
+            else Throttle = ac.Throttle;            // confirmed S2Burn (or S1) = the guided throttle (bucket + g-limit)
 
             // ---- SECO + Dragon separation ----
+            // ⛔ CUT THE ENGINE, THEN SEPARATE (flight 190114): separating the Dragon while the MVac was still
+            // throttled ~0.65 slammed the light capsule (g spiked to 7 g) — you must never decouple a thrusting
+            // stage. Shut the MVac down first, wait until its measured thrust has actually died, THEN fire the
+            // decoupler (3 s backstop so a stuck thrust reading can't hang the sequence forever).
             bool inOrbit = (v.orbit != null) && (v.orbit.PeA >= targetAltM - 5000.0);
             if (s2Lit && (inOrbit || (upfg.Init && lastTgo > 0 && lastTgo < 0.15)))
             {
                 Throttle = 0.0;
-                if (!dragonSeparated) { Actuator.SeparateDragon(v); dragonSeparated = true; }
+                Actuator.ShutdownEngines(v, EngineRole.SecondStage);
+                if (secoUT < 0.0) secoUT = Planetarium.GetUniversalTime();
+                double s2tN, s2mN; int s2lc;
+                Actuator.EngineThrust(v, EngineRole.SecondStage, out s2tN, out s2mN, out s2lc);
+                if (!dragonSeparated && (s2tN < 5000.0 || Planetarium.GetUniversalTime() - secoUT > 3.0))
+                { Actuator.SeparateDragon(v); dragonSeparated = true; }
             }
 
             FlightDriver.SetThrottle(Throttle);
@@ -291,6 +403,33 @@ namespace DragonScreen
             ve = (wSum > 0) ? (ispSum / wSum) * Upfg.G0 : 3383.0;
         }
 
+        // The FULL-THROTTLE thrust (N) of the currently-lit engines in the CURRENT conditions — the correct
+        // denominator for the crew g-limit (ControlLaw.ThrottleLimit). finalThrust/currentThrottle recovers the
+        // 100% thrust even while the engine is throttled (accounting for atmosphere via the live finalThrust);
+        // falls back to the config maxThrust if the throttle is ~0.
+        static double FullThrust100(Vessel v)
+        {
+            double sum = 0.0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                Part p = v.parts[i];
+                for (int m = 0; m < p.Modules.Count; m++)
+                {
+                    ModuleEngines e = p.Modules[m] as ModuleEngines;
+                    if (e == null || !e.EngineIgnited || !e.isOperational) continue;
+                    // ⛔ MEASURED full-throttle thrust = finalThrust / currentThrottle, NOT e.maxThrust. finalThrust
+                    // and currentThrottle are the SAME instant's values, so their ratio is the thrust at throttle
+                    // 1.0 in the CURRENT condition — self-consistent, no lag error. Data (flight 201648): at
+                    // throttle 0.727 the MVac made 775967 N → full = 1067 kN, but e.maxThrust reads only 934 kN
+                    // (14% low, the vacuum thrust exceeds the config max), so maxThrust made the g-limit under-
+                    // throttle and g overshot to 5.14 g. The measured ratio holds the target g correctly.
+                    double ct = e.currentThrottle;
+                    sum += (ct > 0.05 && e.finalThrust > 0.1f) ? (e.finalThrust / ct) * 1000.0 : e.maxThrust * 1000.0;
+                }
+            }
+            return sum;
+        }
+
         // Felt (accelerometer) axial acceleration — INDEPENDENT of the thrust model, so SelfCal.Thrust
         // (F = a·m) is a genuine cross-check, not a tautology. geeForce excludes gravity (freefall = 0),
         // so under power it is ≈ thrust/mass along the axis.
@@ -298,17 +437,59 @@ namespace DragonScreen
 
         static Vec3 W(Vector3d v) { return new Vec3(v.x, v.y, v.z); }
 
+        // The targeted ISS's orbital-plane normal (world, prograde sense = r × v) so the ascent can fly IN that
+        // plane (launch-to-rendezvous) and use it as a stable roll reference.
+        //
+        // ⛔ (user 2026-08-27, flight 090123) The old version used tgt.GetTransform().position × GetObtVelocity().
+        // For an UNLOADED target — and the ISS is always unloaded on the pad, hundreds of km away — the transform
+        // position is a placeholder, NOT the real orbital position, so the normal came out ~90° wrong and the
+        // ascent flew azimuth 307.8° (a retrograde plane) instead of ~42.8°. FIX: derive the normal ONLY from
+        // the ORBIT, sampling two world positions a couple of minutes apart (getPositionAtUT returns the world
+        // frame, so no internal-frame swizzle to get wrong). r1 × r2 is the prograde normal, unambiguously.
+        static bool TargetPlaneNormal(Vessel v, out Vector3d n)
+        {
+            n = Vector3d.zero;
+            try
+            {
+                ITargetable tgt = v.targetObject;
+                Orbit o = (tgt != null) ? tgt.GetOrbit() : null;
+                if (o == null || v.mainBody == null) return false;
+                double now = Planetarium.GetUniversalTime();
+                Vector3d bpos = v.mainBody.position;
+                Vector3d r1 = o.getPositionAtUT(now) - bpos;
+                Vector3d r2 = o.getPositionAtUT(now + 120.0) - bpos;   // ~2 min downstream (prograde)
+                Vector3d h = Vector3d.Cross(r1, r2);                    // ∝ +orbit normal (prograde)
+                if (h.magnitude < 1.0) return false;
+                n = h.normalized;
+                return true;
+            }
+            catch { return false; }
+        }
+
+        // Compass heading (deg CW from north) of a world direction — informational, for the azimuth column.
+        static double HeadingDeg(Vessel v, Vector3d dir)
+        {
+            try
+            {
+                Vector3d up = v.upAxis;
+                Vector3d north = (Vector3d)v.mainBody.transform.up;              // body spin axis ≈ north
+                Vector3d east = Vector3d.Cross(north, up).normalized;
+                Vector3d locN = Vector3d.Cross(up, east).normalized;            // local horizontal north
+                Vector3d horiz = dir - up * Vector3d.Dot(dir, up);
+                if (horiz.magnitude < 1e-6) return lastAzDeg;
+                double deg = Math.Atan2(Vector3d.Dot(horiz, east), Vector3d.Dot(horiz, locN)) * 180.0 / Math.PI;
+                return deg < 0 ? deg + 360.0 : deg;
+            }
+            catch { return lastAzDeg; }
+        }
+
         // ---- recorder contribution (invoked by FlightLog while a row is built) ----
         static void FillRow(string[] row)
         {
+            // att_err_deg (real AoA), throttle and the attitude-loop internals now come from the ALWAYS-ON
+            // command snapshot (FlightLog.PutCommand), so every phase records them — not just ascent. Here we
+            // add only the ascent-UNIQUE columns.
             FlightRecorder.PutAscent(row, lastTgo, lastVgo, lastPitchCmd, lastAzDeg, lastPhaseWord);
-            // att_err_deg column now carries the REAL angle of attack (nose vs surface velocity) — the
-            // Q·α that RUDs the vehicle. This was hardcoded 0 before, which is why the first flights were
-            // flown blind to their own cause of death.
-            FlightRecorder.PutControl(row, lastAoaDeg, 0, Throttle, double.NaN, lastRcsOn);
-            FlightRecorder.PutAttitude(row, AttitudePilot.PointErrDeg, AttitudePilot.RateCmdRads,
-                AttitudePilot.RateMeasRads, AttitudePilot.ActPitch, AttitudePilot.ActYaw, AttitudePilot.ActRoll,
-                AttitudePilot.CtrlTorquePitchNm, AttitudePilot.CtrlTorqueYawNm);
             FlightRecorder.PutIgnition(row, lastUllage, FlightDriver.ClampThrustFrac, FlightDriver.ClampHeld);
             FlightRecorder.PutSelfCal(row, cal);
         }

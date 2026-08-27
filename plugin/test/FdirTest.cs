@@ -103,31 +103,65 @@ public static class FdirTest
         Check("Recover: thrust shortfall on orbit → Replan", Fdir.Recover(FaultKind.ThrustShortfall, MissionPhase.Phasing, 1.0) == Recovery.Replan, "");
         Check("Recover: resource at zero → SafeMode", Fdir.Recover(FaultKind.ResourceCritical, MissionPhase.Coast, 0.0) == Recovery.SafeMode, "");
 
-        // ============================ ABORT RESPONDER (phase-correct) ============================
+        // ============================ ABORT RESPONDER (SELF-AWARE, regime-correct) ============================
         Check("no trigger → no abort action, but attitude is always held",
               AbortResponder.Respond(new AbortInputs { Triggered = false }).Mode == AbortMode.None
               && AbortResponder.Respond(new AbortInputs { Triggered = false }).HoldAttitude, "");
 
-        AbortCommand asc = AbortResponder.Respond(new AbortInputs { Triggered = true, Phase = MissionPhase.Ascent, LesArmed = true });
-        Check("ascent abort with LES armed → LAUNCH ESCAPE (SuperDracos, separate, chutes)",
-              asc.Mode == AbortMode.LaunchEscape && asc.FireSuperDracos && asc.Separate && asc.DeployChutes, "");
+        // ascent, deep sub-orbital (like flight 030705 at 129 km, 1900 m/s vs ~7700 orbital) → LAUNCH ESCAPE,
+        // and it MUST include the trunk jettison + shield-forward reorient that the tumble was missing.
+        AbortCommand asc = AbortResponder.Respond(new AbortInputs {
+            Triggered = true, Phase = MissionPhase.Ascent, LesArmed = true,
+            AltitudeM = 129000, AtmTopM = 140000, SurfaceSpeedMps = 1900, OrbitalSpeedMps = 7700, PeriapsisAltM = -200000 });
+        Check("sub-orbital ascent abort → LAUNCH ESCAPE (SuperDracos, separate, TRUNK JETTISON, shield-forward, chutes)",
+              asc.Mode == AbortMode.LaunchEscape && asc.FireSuperDracos && asc.Separate
+              && asc.JettisonTrunk && asc.HoldShieldForward && asc.DeployChutes, "");
         Check("prelaunch abort with LES armed → LAUNCH ESCAPE",
               AbortResponder.Respond(new AbortInputs { Triggered = true, Phase = MissionPhase.Prelaunch, LesArmed = true }).Mode == AbortMode.LaunchEscape, "");
         Check("ascent abort WITHOUT armed LES → SafeHold (no escape available)",
               AbortResponder.Respond(new AbortInputs { Triggered = true, Phase = MissionPhase.Ascent, LesArmed = false }).Mode == AbortMode.SafeHold, "");
 
-        AbortCommand prox = AbortResponder.Respond(new AbortInputs { Triggered = true, Phase = MissionPhase.Approach });
-        Check("prox-ops abort → KOS RETREAT (back out, not a SuperDraco escape)",
+        // very late ascent, near orbital energy → ABORT-TO-ORBIT (fly to a safe orbit, don't splash).
+        AbortCommand ato = AbortResponder.Respond(new AbortInputs {
+            Triggered = true, Phase = MissionPhase.Ascent, LesArmed = true,
+            AltitudeM = 190000, AtmTopM = 140000, SurfaceSpeedMps = 7500, OrbitalSpeedMps = 7700, ApoapsisAltM = 210000 });
+        Check("near-orbital ascent abort → ABORT-TO-ORBIT (raise orbit, do not escape)",
+              ato.Mode == AbortMode.AbortToOrbit && ato.RaiseToOrbit && !ato.FireSuperDracos, "");
+
+        // crew hits ABORT in orbit, NOT near the station → DEORBIT RETURN (trunk jettison + deorbit + chutes).
+        AbortCommand orb = AbortResponder.Respond(new AbortInputs {
+            Triggered = true, Phase = MissionPhase.Coast, AtmTopM = 140000, PeriapsisAltM = 200000, NearStation = false });
+        Check("on-orbit abort (not near station) → DEORBIT RETURN to a safe splashdown",
+              orb.Mode == AbortMode.DeorbitReturn && orb.DeorbitBurn && orb.JettisonTrunk && orb.HoldShieldForward, "");
+
+        // prox-ops NEAR the station → KOS RETREAT (back out, not a SuperDraco escape, not a deorbit).
+        AbortCommand prox = AbortResponder.Respond(new AbortInputs { Triggered = true, Phase = MissionPhase.Approach, NearStation = true });
+        Check("prox-ops abort near the station → KOS RETREAT",
               prox.Mode == AbortMode.KosRetreat && prox.Retreat && !prox.FireSuperDracos, "");
-        Check("phasing abort → KOS RETREAT",
-              AbortResponder.Respond(new AbortInputs { Triggered = true, Phase = MissionPhase.Phasing }).Mode == AbortMode.KosRetreat, "");
-        Check("docked abort → SAFE-HOLD",
-              AbortResponder.Respond(new AbortInputs { Triggered = true, Phase = MissionPhase.Docked }).Mode == AbortMode.SafeHold, "");
+        Check("phasing abort near the station → KOS RETREAT",
+              AbortResponder.Respond(new AbortInputs { Triggered = true, Phase = MissionPhase.Phasing, NearStation = true }).Mode == AbortMode.KosRetreat, "");
+
+        Check("docked abort → EMERGENCY UNDOCK then deorbit home",
+              AbortResponder.Respond(new AbortInputs { Triggered = true, Phase = MissionPhase.Docked }).Mode == AbortMode.EmergencyUndock, "");
         AbortCommand ent = AbortResponder.Respond(new AbortInputs { Triggered = true, Phase = MissionPhase.Entry });
-        Check("entry abort → RIDE IT DOWN (past escape; chute backstop)",
-              ent.Mode == AbortMode.RideItDown && ent.DeployChutes, "");
+        Check("entry abort → RIDE IT DOWN (past escape; shield-forward + chutes)",
+              ent.Mode == AbortMode.RideItDown && ent.DeployChutes && ent.HoldShieldForward, "");
         Check("every abort holds attitude (never floats)",
-              AbortResponder.Respond(new AbortInputs { Triggered = true, Phase = MissionPhase.Approach }).HoldAttitude, "");
+              AbortResponder.Respond(new AbortInputs { Triggered = true, Phase = MissionPhase.Approach, NearStation = true }).HoldAttitude, "");
+
+        // ---- SafeLandingSite: pick the nearest OCEAN splashdown in the reachable glide window ----
+        GroundSample[] gs = new GroundSample[] {
+            new GroundSample { DownrangeM = 0.5e6, Water = true },    // too near (before the window)
+            new GroundSample { DownrangeM = 2.0e6, Water = false },   // land
+            new GroundSample { DownrangeM = 3.0e6, Water = true },    // ← nearest water in window
+            new GroundSample { DownrangeM = 5.0e6, Water = true },
+        };
+        Check("safe site = nearest water inside the glide window (not the too-near one)",
+              SafeLandingSite.PickDeorbitTarget(gs, 1.0e6, 9.0e6) == 2, "");
+        Check("no water in window → -1 (glue coasts a step)",
+              SafeLandingSite.PickDeorbitTarget(new GroundSample[]{ new GroundSample{ DownrangeM=2e6, Water=false } }, 1e6, 9e6) == -1, "");
+        Check("fallback = nearest water beyond the min lead",
+              SafeLandingSite.PickNearestWater(gs, 1.0e6) == 2, "");
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;

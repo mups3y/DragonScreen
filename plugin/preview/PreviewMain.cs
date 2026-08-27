@@ -239,6 +239,49 @@ public static class PreviewMain
             Console.WriteLine("  " + path + "   " + W + "x" + H + "   " + dl.Count + " commands");
         }
 
+        // NAV / PLANET: the 3D globe view. The globe itself is the same textured disc the ORBIT view
+        // draws (from the body-map stand-in here), and the orbit overlay is pure 2D projection, so
+        // unlike a camera view the preview shows the WHOLE thing - which is exactly what makes the
+        // orbit-on-globe projection and its occlusion cheap to iterate.
+        {
+            MapView planet = MapProjection.NextMode(MapProjection.NextMode(MapProjection.Default()));
+
+            // A synthetic inclined orbit so the projection + far-side occlusion are visible offline.
+            PlanetOverlay ov = new PlanetOverlay();
+            int N = PlanetOverlay.DefaultSamples;
+            double[] olat = new double[N], olon = new double[N], orat = new double[N];
+            const double inc = 51.6, D2R = Math.PI / 180.0, R2D = 180.0 / Math.PI;
+            for (int i = 0; i < N; i++)
+            {
+                double th = (360.0 * i / (N - 1)) * D2R;
+                olat[i] = Math.Asin(Math.Sin(inc * D2R) * Math.Sin(th)) * R2D;
+                olon[i] = Math.Atan2(Math.Cos(inc * D2R) * Math.Sin(th), Math.Cos(th)) * R2D;
+                orat[i] = 1.06;
+            }
+            ov.Ready = true;
+            ov.OrbitLat = olat; ov.OrbitLon = olon; ov.OrbitRatio = orat; ov.OrbitCount = N;
+            ov.Vessel = new GlobePoint { Lat = olat[0], Lon = olon[0], Ratio = 1.06, Has = true };
+            ov.Ap = new GlobePoint { Lat = olat[N / 4], Lon = olon[N / 4], Ratio = 1.06, Has = true };
+            ov.Pe = new GlobePoint { Lat = olat[3 * N / 4], Lon = olon[3 * N / 4], Ratio = 1.06, Has = true };
+            ps.Planet = ov;
+            ps.HasFix = true; ps.Latitude = 0.0; ps.Longitude = 0.0;
+
+            dl.Clear();
+            Pages.Build(dl, 2, W, H, ps, planet, 2);
+            ChromeState cs = new ChromeState();
+            cs.Met = "T+ 00:12:34"; cs.VehicleState = "NOMINAL";
+            cs.LinkName = "COM1/TLM"; cs.LinkTimer = "00:04:12"; cs.LinkUp = true;
+            cs.SelectedPage = 2;
+            ChromeBar.Build(dl, W, H, cs);
+
+            if (dl.Overflowed)
+                Console.WriteLine("  WARNING page NAV/PLANET OVERFLOWED at " + dl.Capacity);
+
+            string path = Path.Combine(outDir, "page2_nav_planet.png");
+            Render(dl, W, H, path);
+            Console.WriteLine("  " + path + "   " + W + "x" + H + "   " + dl.Count + " commands");
+        }
+
         // EVERY SETTINGS TAB. Four subviews behind one page is four things with no cheap evidence
         // channel unless each one is rendered - the lesson NAV's orbit view and the globe both taught.
         for (int t = 0; t < SettingsPage.Tabs.Length; t++)
@@ -301,6 +344,39 @@ public static class PreviewMain
             ps.GateActive = false;
         }
 
+        // ---- THE ABORT OVERLAY ----
+        // The emergency alert drawn OVER whatever page is up. Rendered here over the FLIGHT page with both
+        // flash phases ON, and no art file present, so the layout + the plain-wordmark fallback are visible
+        // (in-game, art/dontpanic.png replaces the wordmark). This is the look judged before a restart.
+        {
+            dl.Clear();
+            Pages.Build(dl, 0, W, H, ps, MapProjection.Default(), 2);
+            ChromeState cs = new ChromeState();
+            cs.Met = "T+ 00:02:03"; cs.VehicleState = "ABORT"; cs.SelectedPage = 0;
+            ChromeBar.Build(dl, W, H, cs);
+
+            // Load the optional user art + its true aspect so the preview composites it exactly as the game will.
+            float aspect = 1.5f; bool hasImg = false;
+            string art = Path.Combine(Path.GetDirectoryName(
+                System.Reflection.Assembly.GetExecutingAssembly().Location),
+                "..", "GameData", "DragonScreen", "art", Images.FileName(ImageId.DontPanic));
+            if (File.Exists(art))
+            {
+                byte[] hdr = new byte[24];
+                using (var fs = File.OpenRead(art)) fs.Read(hdr, 0, 24);
+                int fw = (hdr[16] << 24) | (hdr[17] << 16) | (hdr[18] << 8) | hdr[19];
+                int fh = (hdr[20] << 24) | (hdr[21] << 16) | (hdr[22] << 8) | hdr[23];
+                if (fw > 0 && fh > 0) { aspect = (float)fw / fh; hasImg = true; }
+                Console.WriteLine("  dontpanic.png " + fw + "x" + fh + "  aspect " + aspect.ToString("F3"));
+            }
+            AbortOverlay.Build(dl, W, H, true, hasImg, aspect);
+            if (dl.Overflowed) Console.WriteLine("  WARNING ABORT OVERLAY OVERFLOWED at " + dl.Capacity);
+            string path = Path.Combine(outDir, "abort_overlay.png");
+            Render(dl, W, H, path);
+            Console.WriteLine("  " + path + "   " + W + "x" + H + "   " + dl.Count + " commands"
+                              + (hasImg ? "  (your art composited)" : "  (fallback wordmark)"));
+        }
+
         return 0;
     }
 
@@ -328,6 +404,8 @@ public static class PreviewMain
                         g.FillRectangle(brush, c.A, c.B, c.C, c.D);
                     else if (c.Kind == DrawKind.ArcBand)
                         FillArcBand(g, brush, c);
+                    else if (c.Kind == DrawKind.Line)
+                        DrawLinePreview(g, c);
                     else if (c.Kind == DrawKind.Image)
                         DrawImage(g, c);
                     else
@@ -335,6 +413,17 @@ public static class PreviewMain
                 }
             }
             bmp.Save(path, ImageFormat.Png);
+        }
+    }
+
+    /// <summary>One line as a round-capped pen - the preview twin of DrawLine's rotated quad.</summary>
+    private static void DrawLinePreview(Graphics g, DrawCmd c)
+    {
+        using (Pen pen = new Pen(ToColor(c.Colour), c.StartDeg))
+        {
+            pen.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+            pen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+            g.DrawLine(pen, c.A, c.B, c.C, c.D);
         }
     }
 

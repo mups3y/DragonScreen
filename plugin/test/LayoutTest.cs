@@ -624,6 +624,9 @@ public static class LayoutTest
             Images.Size(iid, out dw, out dh);
             Check("image " + iid + " declares a size", dw > 0 && dh > 0, "");
 
+            // Optional (user-supplied) art is not shipped and its size is nominal — don't require it on disk.
+            if (Images.IsOptional(iid)) continue;
+
             string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(
                 System.IO.Path.GetDirectoryName(
                     System.Reflection.Assembly.GetExecutingAssembly().Location),
