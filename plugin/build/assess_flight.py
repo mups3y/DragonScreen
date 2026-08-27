@@ -1,5 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+# ============================================================================================
+# ⛔ OLD-SCHEMA (deleted-autopilot recorder: ut / a_phase / b_phase / x_owner / r_stage). It CANNOT
+#    read current recordings, which use the 89-col schema (met_s / ascent_phase / att_point_deg / ...).
+#    For CURRENT + future flights use  plugin/tools/assess_flight.py  instead. This is kept only to read
+#    the historical flight_*.csv corpus (pre-2026-08-26). Do not extend it — extend the tools/ one.
+# ============================================================================================
 """
 assess_flight.py - the WHOLE flight, every column, one command.
 

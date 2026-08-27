@@ -77,9 +77,17 @@ def main():
     out = os.path.abspath(out)
     os.makedirs(out, exist_ok=True)
 
-    files = sorted(glob.glob(os.path.join(cap, "Crew-2_*.csv")))
+    # Read the live capture dir AND the quarantine archive, so a recording keeps counting in the
+    # corpus after it is moved out of the KSP folder into quarantine\dragonscreen_flightdata. Dedupe
+    # by basename (capture wins) in case a file briefly exists in both during a move.
+    ARCHIVE = r"C:\Users\User\Desktop\quarantine\dragonscreen_flightdata"
+    by_name = {}
+    for d in (ARCHIVE, cap):          # cap last so a live capture overrides an archived namesake
+        for p in glob.glob(os.path.join(d, "Crew-2*.csv")):
+            by_name[os.path.basename(p)] = p
+    files = sorted(by_name.values(), key=lambda p: os.path.basename(p))
     if not files:
-        print("no Crew-2_*.csv in " + cap); return
+        print("no Crew-2*.csv in " + cap + " or " + ARCHIVE); return
 
     # ⛔ TRUST THE DATA ONLY WHEN IT IS CORRECT. A flight that flew a BROKEN trajectory (retrograde plane, a
     # loss-of-control, an aborted mess) records CORRECT numbers for a WRONG flight — pooling it poisons the
