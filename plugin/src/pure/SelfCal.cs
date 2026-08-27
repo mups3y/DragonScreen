@@ -22,6 +22,7 @@ namespace DragonScreen
         public RlsScalar Thrust;      // θ = thrust force (N or kN, caller's unit)
         public RlsScalar InvBeta;     // θ = 1/ballistic-coefficient
         public RlsScalar InvInertia;  // θ = 1/I (per-axis control effectiveness: α per unit torque)
+        public RlsScalar AeroStiff;   // θ = kAero = M_α/I (aero pitch angular-accel per rad AoA, 1/s²) — B2 q·α
         public RlsScalar LoverD;      // θ = lift-to-drag
         public RlsScalar SteerGain;   // θ = response per unit steering command (sign + scale)
     }
@@ -33,6 +34,7 @@ namespace DragonScreen
         [Tunable] public static double ThrustP0 = 1e6,  ThrustERef = 5.0e4;   // N
         [Tunable] public static double BetaP0 = 1e3,    BetaERef = 5.0;       // m/s² drag-accel scale
         [Tunable] public static double InertiaP0 = 1e2, InertiaERef = 0.05;   // rad/s² scale
+        [Tunable] public static double AeroStiffP0 = 1.0, AeroStiffERef = 0.05; // kAero scale (1/s²) — B2 q·α
         [Tunable] public static double LdP0 = 1.0,      LdERef = 0.1;         // L/D scale
         [Tunable] public static double SteerP0 = 1.0,   SteerERef = 1.0;      // response scale
 
@@ -59,6 +61,16 @@ namespace DragonScreen
         {
             double inv = s.InvInertia.Theta;
             return Math.Abs(inv) > 1e-9 ? desiredAngAccel / inv : 0.0;
+        }
+
+        // Aero pitch stiffness kAero = M_α/I (B2 q·α): the aero pitching angular-accel per radian of AoA.
+        // Regress the isolated AERO angular accel (measured pitch ω̇ minus the control-commanded ω̇) on AoA →
+        // kAero, which QAlpha turns into the controllability cap. Only observable when a real AoA was flown
+        // (|aoa| > eps). Sign carries stability: restoring (stable) vs diverging (statically unstable).
+        public static double AeroPitchStiffness(ref SelfCalState s, double aeroAngAccelRadS2, double aoaRad)
+        {
+            if (Math.Abs(aoaRad) < 1e-4) return s.AeroStiff.Theta;   // no AoA → nothing to learn this tick
+            return Rls.Update(ref s.AeroStiff, aoaRad, aeroAngAccelRadS2, AeroStiffP0, LambdaMin, AeroStiffERef);
         }
 
         // Entry lift-to-drag: smooth the live measurement so the entry predictor tracks the real trim.
