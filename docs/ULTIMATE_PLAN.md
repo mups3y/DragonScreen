@@ -78,7 +78,7 @@ Dependency-ordered. Each = a pure module + its tests, THEN the thin glue. Ported
 - **B8 — Entry predictor upgrade** ✅ pure — `pure/CourseCorrect.cs` (finite-difference impact-divert: 2×2 booster / 1×1 entry, 15 checks) + `Trajectory.EntryLdBand` 4-band L/D schedule (predictor prior; ⛔ NOT active CoM steering — respects the engage-once hard rule). **Owed I-B (validation-gated):** wiring CourseCorrect into BoosterTargeting/EntrySteering (replaces a working heuristic → flight-validate, keep heuristic fallback) + the **KSP-Euler correction** (the doc gates it on reproducing a recorded flight — no entry corpus yet).
 - **B9 — GravityTurn LaunchDB auto-tuner** ○ — loss-minimizing ascent-shape self-tuner (retires the hand-set pitch constants).
 - **B10 — V&V completion** ½→ **Tier-2 dispersion** more families (docking/return/FDIR — today control+rendezvous only); **Tier-3** corpus regression tool; **Tier-4** Monte-Carlo (corpus-calibrated FuelFlowSim + ReentrySim, gate first).
-- **B11 — FDIR full authority + free-flyer profiles** ○ — turn FDIR from observe to acting; the 4 mission profiles.
+- **B11 — FDIR full authority + free-flyer profiles** ✅ pure — added the FDIR **escalation ladder** (`Fdir.Escalate`, +6 checks): a fault a recovery rung doesn't clear within RungGraceS climbs Retry→Reconfigure→Replan→Downmode→**Abort**, so a persistent fault is guaranteed to reach abort rather than retry forever; resets when it clears. Free-flyer profiles built + verified (catalog has Inspiration4/Polaris Dawn/Fram2 as `MissionKind.FreeFlyer`, `HasRendezvous=false`; CrewGates omits G9–G14). **I-B (the plan's Step I):** wire FDIR live into FlightDriver — observe-only first (record fdir_*), then acting.
 
 #### Build + Tuned status matrix (updated 2026-08-28)
 Two axes per item, so we always know both whether it is BUILT and whether its tunables are at the best data-backed
@@ -100,7 +100,7 @@ data — so only ascent-coupled tunables are DB-seedable now; the rest stay ○ 
 | B8 entry predictor | ✅ pure | ○ | CourseCorrect + EntryLdBand built; band L/D + KSP-Euler pending an entry-flight corpus to calibrate; targeting glue owed I-B |
 | B9 GravityTurn auto-tuner | ○ | — | it IS the tuner — its output is the tuned ascent shape |
 | B10 V&V | ½ | — | test tooling; no tunables |
-| B11 FDIR authority | ○ | ○ | debounce/threshold tunables; only ascent+abort phases have data |
+| B11 FDIR authority | ✅ pure | ○ | escalation ladder + free-flyer profiles built; debounce/threshold tunables need data (ascent+abort only); live-wiring + acting = I-B Step I (observe-first) |
 | Ascent control (L2/L3) | ✅ | ◐ | DB-VALIDATED: GravityTurn/S2Burn pe_p95 < 0.4°, sat_duty ≈ 0 across the corpus → current defaults are already good |
 
 **I-A tuning goal:** move every item to **◐** where the corpus supports it; the ones stuck at **○** are the honest

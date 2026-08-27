@@ -163,6 +163,31 @@ public static class FdirTest
         Check("fallback = nearest water beyond the min lead",
               SafeLandingSite.PickNearestWater(gs, 1.0e6) == 2, "");
 
+        // ---- FDIR ESCALATION: a persistent fault climbs the ladder to Abort, then resets when it clears ----
+        FdirState ste = new FdirState();
+        FdirInputs div1 = new FdirInputs {
+            Valid = true, Phase = MissionPhase.Phasing, Powered = false, TrajErrorM = 9000,
+            PlanProgressRate = 1.0, ResourceMargin01 = 1.0, ControlSolutionOk = true, KosRadiusM = 0, CorridorOk = true };
+        div1.Dt = 2.5;   // trip the divergence monitor (> ConfirmS)
+        FdirReport e0 = Fdir.Update(ref ste, div1);
+        Check("escalation: fresh divergence → base rung Replan",
+              e0.Fault == FaultKind.TrajectoryDivergence && e0.Response == Recovery.Replan && !e0.Abort, e0.Response.ToString());
+        div1.Dt = Fdir.RungGraceS + 0.1;
+        Check("escalation: rung unresolved past grace → Downmode", Fdir.Update(ref ste, div1).Response == Recovery.Downmode, "");
+        FdirReport e2 = Fdir.Update(ref ste, div1);
+        Check("escalation: still unresolved → Abort (guaranteed floor)", e2.Response == Recovery.Abort && e2.Abort, e2.Response.ToString());
+        // fault clears → escalation resets to Continue
+        FdirInputs okIn = div1; okIn.TrajErrorM = 0; okIn.Dt = Fdir.ClearS + 0.5;
+        FdirReport e3 = Fdir.Update(ref ste, okIn);
+        Check("escalation: fault clears → reset to Continue",
+              e3.Fault == FaultKind.None && e3.Response == Recovery.Continue && !e3.Abort, e3.Response.ToString());
+        // a fault that STARTS at the floor (ascent thrust shortfall) is at Abort immediately, no escalation needed
+        FdirState sta = new FdirState();
+        FdirInputs thrA = new FdirInputs {
+            Valid = true, Phase = MissionPhase.Ascent, Powered = true, ThrustDeliveredFrac = 0.2,
+            PlanProgressRate = 1.0, ResourceMargin01 = 1.0, ControlSolutionOk = true, CorridorOk = true, Dt = 2.5 };
+        Check("escalation: ascent thrust-shortfall starts at Abort", Fdir.Update(ref sta, thrA).Response == Recovery.Abort, "");
+
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
     }

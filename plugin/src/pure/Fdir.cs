@@ -32,6 +32,11 @@ namespace DragonScreen
     public struct FdirState
     {
         public MonitorState Thrust, Divergence, Stall, Resource, Control, KeepOut;
+        // Escalation ladder tracking (§9): a fault a recovery rung does NOT clear within RungGraceS escalates
+        // to the next rung, so a persistent fault reaches Abort rather than being retried forever.
+        public FaultKind EscFault;   // the fault currently being recovered (None = idle)
+        public Recovery EscRung;     // the rung currently applied
+        public double EscRungS;      // seconds the current rung has run without the fault clearing
     }
 
     public struct FdirInputs
@@ -70,6 +75,8 @@ namespace DragonScreen
         [Tunable] public static double ConfirmS = 2.0;          // a fault must persist this long to trip
         [Tunable] public static double ClearS = 3.0;            // and clear this long to reset
         [Tunable] public static double FastConfirmS = 0.3;      // KOS breach / lost-control trip fast
+        [Tunable] public static double RungGraceS = 5.0;        // a recovery rung gets this long to clear the
+                                                                // fault before FDIR escalates to the next rung
 
         public static FdirReport Update(ref FdirState st, FdirInputs s)
         {
@@ -116,9 +123,44 @@ namespace DragonScreen
             else if (diverge)   r.Fault = FaultKind.TrajectoryDivergence;
             else if (stall)     r.Fault = FaultKind.ConvergenceStall;
 
-            r.Response = Recover(r.Fault, s.Phase, s.ResourceMargin01);
+            r.Response = Escalate(ref st, r.Fault, s.Phase, s.ResourceMargin01, dt);
             r.Abort = r.Response == Recovery.Abort || r.Response == Recovery.SafeMode;
             return r;
+        }
+
+        // Escalation over the least-intervention rung from Recover(): hold that rung, but if the SAME fault
+        // persists past RungGraceS (the rung did not clear it) step UP the ladder — Retry→Reconfigure→Replan→
+        // Downmode→Abort→SafeMode — so a fault can never be retried indefinitely; a stubborn one is guaranteed
+        // to reach Abort. Resets to Continue when the fault clears; a new/different fault restarts at its own
+        // phase-correct base rung. Never de-escalates below that base (e.g. a fresh ascent thrust-shortfall
+        // starts at Abort, not below).
+        public static Recovery Escalate(ref FdirState st, FaultKind fault, MissionPhase phase,
+                                        double resourceMargin01, double dt)
+        {
+            if (fault == FaultKind.None)
+            {
+                st.EscFault = FaultKind.None; st.EscRung = Recovery.Continue; st.EscRungS = 0.0;
+                return Recovery.Continue;
+            }
+
+            Recovery baseRung = Recover(fault, phase, resourceMargin01);
+
+            if (fault != st.EscFault)
+            {
+                st.EscFault = fault; st.EscRung = baseRung; st.EscRungS = 0.0;   // a new fault → its base rung
+            }
+            else
+            {
+                st.EscRungS += dt;
+                if (st.EscRungS >= RungGraceS && (byte)st.EscRung < (byte)Recovery.SafeMode)
+                {
+                    st.EscRung = (Recovery)((byte)st.EscRung + 1);   // escalate one rung up the ladder
+                    st.EscRungS = 0.0;
+                }
+            }
+
+            if ((byte)st.EscRung < (byte)baseRung) st.EscRung = baseRung;   // never below the phase-correct base
+            return st.EscRung;
         }
 
         // The phase-aware fault→recovery decision table. Least-intervention first; abort-to-home is the floor.
