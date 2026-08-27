@@ -44,6 +44,7 @@ public static class TestMain
         bad += FdirTest.Run();             // L5 FDIR: debounced monitors + recovery ladder + phase-correct abort
         bad += SelfCalTest.Run();          // L6 self-cal: RLS w/ variable forgetting + the live-estimate bank
         bad += FlightRecorderTest.Run();   // L7 instrumentation: the per-flight CSV schema + fillers
+        bad += DispersionTest.Run();       // Tier-2 robustness: property-based dispersion of the pure layer
 
         Console.WriteLine(bad == 0 ? "ALL SCREEN SUITES PASSED" : bad + " SUITE(S) FAILED");
         return bad == 0 ? 0 : 1;
