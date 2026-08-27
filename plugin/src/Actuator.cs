@@ -554,9 +554,10 @@ namespace DragonScreen
         }
 
         // ============================ PARACHUTES (RealChute-aware) ============================
-        // ⛔ Deploy the drogues or mains — for STOCK ModuleParachute OR RealChute (this vehicle uses
-        // RealChute/FAR, so ModuleParachute.Deploy alone did nothing and the crew hit the water at 139 m/s).
-        // Selected by the drogue/main PART, deployed however the chute module exposes it.
+        // ⛔ Arm/deploy the drogues or mains — for RealChute (this vehicle) we ARM the canopy and let RealChute
+        // stage it by altitude; for a plain stock ModuleParachute we Deploy. Selected by the drogue/main PART.
+        // (History: ModuleParachute.Deploy alone did nothing on RealChute → 139 m/s; then re-invoking RealChute's
+        // Deploy every tick reset inflation → 122 m/s. Arming once, idempotently, is the fix — see DeployChutePart.)
         public static void DeployChutes(Vessel v, bool drogue)
         {
             for (int i = 0; i < v.parts.Count; i++)
@@ -608,6 +609,13 @@ namespace DragonScreen
             catch (Exception e) { Debug.LogWarning("[DragonScreen] chute cut failed on " + p.name + ": " + e.Message); }
         }
 
+        // ⛔ RealChute: ARM the canopy (one-shot, idempotent) — do NOT re-invoke "Deploy Chute" every tick.
+        // Re-invoking RealChute's GUIDeploy each physics frame restarts its predeploy/inflation progression, so
+        // the canopy never finishes inflating and the crew hit the water at ~122 m/s on EVERY launch-escape abort
+        // (KSP.log: "TE.CD2.POD.MAINS was activated in stage 1" spamming ~50×/s at splashdown). Arming lets
+        // RealChute auto-predeploy/deploy at the part's own altitude/pressure envelope, and re-arming an already-
+        // armed canopy is a no-op — safe to call repeatedly. Only a plain stock ModuleParachute (no RealChute)
+        // keeps the direct Deploy, since stock stages itself by altitude once deployed.
         static void DeployChutePart(Part p)
         {
             try
@@ -620,9 +628,31 @@ namespace DragonScreen
                         mp.Deploy();
                     return;
                 }
+                // RealChute / custom canopy: prefer ARM. "Arm parachute" — but NOT "Disarm", NOT "Cut chute".
+                bool hasArm = false;
                 for (int m = 0; m < p.Modules.Count; m++)
                 {
-                    PartModule pm = p.Modules[m];   // RealChute / any custom chute module
+                    PartModule pm = p.Modules[m];
+                    foreach (BaseEvent ev in pm.Events)
+                    {
+                        if (ev == null) continue;
+                        string s = (ev.guiName ?? "") + " " + (ev.name ?? "");
+                        if (s.IndexOf("arm", StringComparison.OrdinalIgnoreCase) >= 0
+                            && s.IndexOf("disarm", StringComparison.OrdinalIgnoreCase) < 0
+                            && s.IndexOf("cut", StringComparison.OrdinalIgnoreCase) < 0)
+                        {
+                            hasArm = true;                        // a RealChute canopy → never fall through to Deploy
+                            if (ev.active) { ev.Invoke(); return; }   // arm it; an inactive arm event = already armed
+                        }
+                    }
+                }
+                // A RealChute canopy whose arm event is no longer active is already armed → do nothing (NOT Deploy).
+                if (hasArm) return;
+
+                // No arm capability anywhere → a stock-style custom canopy: fall back to a one-shot Deploy.
+                for (int m = 0; m < p.Modules.Count; m++)
+                {
+                    PartModule pm = p.Modules[m];
                     foreach (BaseEvent ev in pm.Events)
                     {
                         if (ev == null || !ev.active) continue;

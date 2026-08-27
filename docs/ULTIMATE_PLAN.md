@@ -49,11 +49,30 @@ phase-by-phase — the phase-order rule lives HERE, not in the build). Full deta
 ### Movement I-A — BUILD THE RESEARCHED-METHOD BACKLOG (pure-first + headless-tested; NO flights yet)
 Dependency-ordered. Each = a pure module + its tests, THEN the thin glue. Ported from the PROVEN sources
 (MechJeb `mechjeb_src`, PEGAS, TCA, Trajectories) — never a self-invented model. ✅=built, ½=first-cut only, ○=not built.
+
+> ⭐ **APPROVED COURSE CHANGE (2026-08-28, user OK'd the pivot).** Two governing constraints now: **(1) NO NEW flight
+> tests until the ENTIRE autopilot is built** — stay build-only through all of I-A; **(2) do INITIAL tuning from the
+> UP-TO-DATE flight recordings + the tuning DB** (`quarantine\dragonscreen_flightdata` + `DragonScreen_capture`, via
+> `assess_flight.py` / `tuning_db.py`) as you build — set data-backed start values now, never invent; FINAL tuning
+> (fresh flights, phase-by-phase) is I-B. **Priority within I-A is crew-survival-first:** the FATAL
+> abort defect, then B8 (entry) + B11 (FDIR), then B9/B10, and **B5 (PVG) LAST**. **B5 is REDEFINED:** a faithful
+> port of MechJeb `PSG` is REJECTED — PSG is a Hermite-Simpson collocation transcription solved by **ALGLIB's
+> `minnlc` SQP** (`alglib.minnlcoptimize`, 4000 iters, 120 s timeout, off-thread), i.e. vendoring **~200k lines of
+> ALGLIB** into the `-nostdlib` allocation-free build — which breaks the 60-FPS / minimal-build rules and is NOT how
+> bounded-time flight avionics are built. Instead B5 = **real primer-vector / PEG optimal ascent (PEGAS/UPFG
+> lineage): analytic primer-vector steering + a small Newton BVP shooting solve** for costates/burn-times/optimal-
+> coast — same solution class, deterministic, allocation-light, no NLP library. It is ~a no-op for the single-burn
+> Crew-2 profile (UPFG already reaches orbit clean), hence LAST. ⛔ **ALGLIB is permanently off the table.**
+>
+> **FATAL ABORT (crew-survival item #1):** launch-escape aborts splash at ~122 m/s (mains under-decelerate). FIRST
+> classify from the EXISTING quarantine recordings (no new flight): if it is a **logic/structural** defect (chutes
+> not arming / wrong deploy sequence / wrong module) → fix NOW as a build item; if it is purely **tuning** (deploy
+> altitudes, chute sizing) → flag for I-B and move on.
 - **B1 — StageStats / FuelFlowSim** ○ — Δv/TWR per stage + MECO recovery reserve (port MechJeb `FuelFlowSimulation`). Foundational (feeds budgets + Tier-4).
 - **B2 — q·α moderation** ½→ the AtmosphereAutopilot online-model controllability region (today only a q-scaled AoA cone cap).
 - **B3 — Thrust/RCS balancer** ○ — the TCA `EngineOptimizer`/`RCSOptimizer` torque-nulling solver → **engine-out differential octaweb throttle** AND the RCS translation balancer (one solver, both users).
 - **B4 — Actuator-lag model** ○ — command→response lag compensation in the control loop.
-- **B5 — PVG / virtual-stages optimal ascent** ○ — the PEGAS virtual-stage skeleton on top of UPFG (which now has ⭐ plane targeting, done 2026-08-28).
+- **B5 — PVG / virtual-stages optimal ascent** ○ **(LAST, redefined 2026-08-28)** — real primer-vector / PEG optimal ascent (PEGAS/UPFG lineage): analytic primer-vector steering + a small Newton BVP shooting solve for costates/burn-times/optimal-coast. ⛔ NOT the MechJeb PSG/ALGLIB port (rejected — see the course-change box above). Near-no-op for single-burn Crew-2.
 - **B6 — NavFilter (strict-fidelity nav)** ○ — `pure/NavFilter.cs` L1.5: simulate the sensor suite + EKF, fly guidance on the ESTIMATE (`CREW_DRAGON_GNC_RESEARCH.md §5`).
 - **B7 — Lambert + maneuver-node library + finite-burn executor** ○ — beyond the current CW+Hohmann+named-burns.
 - **B8 — Entry predictor upgrade** ½→ Trajectories' RK4 + **KSP-Euler correction** + the **4-band entry-AoA schedule** + **course-correction 2×2** (booster + entry) (today only a basic RK4 impact predictor).

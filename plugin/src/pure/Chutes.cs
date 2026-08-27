@@ -29,7 +29,8 @@ namespace DragonScreen
     {
         public ChutePhase Phase;
         public bool DeployDrogues;      // command the 2 drogues this tick
-        public bool CutDrogues;         // release the 2 drogues this tick (abort: cut before mains)
+        public bool CutDrogues;         // release the 2 drogues this tick (reserved: I-B re-enables the abort
+                                        // drogue-release once in-flight main deployment can be confirmed)
         public bool DeployMains;        // command the 4 mains this tick
         public bool Splashed;
         public double TouchdownSpeedMps; // reported at splashdown
@@ -84,15 +85,18 @@ namespace DragonScreen
         }
 
         // ============================ ABORT chute sequence (COMPRESSED) ============================
-        // In an abort — especially a pad or low ascent abort — there is NOT the altitude budget for the
-        // nominal 18 000 ft → 6 000 ft drogue-then-main gap: wait for MainAltM and the capsule hits the ground
-        // first (the bug). The real Crew Dragon abort compresses it: deploy the drogues on the descent to
-        // stabilise, ride them BRIEFLY, then CUT the drogues and deploy the mains IMMEDIATELY — not at the
-        // nominal main altitude (user directive). A low-altitude floor forces the cut+mains right away if we
-        // are running out of air before the stabilise dwell is up. RealChute still gates the actual inflation
-        // to a safe speed (reefed until slow), so commanding the mains early is safe.
-        public const double AbortDrogueDwellSec = 2.5;   // drogues ride this long to stabilise, then cut+mains
-        public const double AbortMainFloorM = 600.0;     // ...or immediately if we sink below this, dwell or not
+        // In an abort — especially a pad or low ascent abort — there is NOT the altitude budget for the nominal
+        // 18 000 ft → 6 000 ft drogue-then-main gap: wait for MainAltM and the capsule hits the ground first (the
+        // original bug). So the abort ARMS the drogues on the descent to stabilise, then ARMS the mains after a
+        // brief stabilise dwell (or immediately if we sink below the low floor) — the glue arms the RealChute
+        // canopies, which then auto-predeploy/deploy at each part's own altitude envelope (drogues high, mains
+        // low), so we don't have to wait for the nominal main altitude ourselves. ⛔ The drogues are NOT cut: a
+        // mains-failed abort that had cut the drogues became a 122 m/s free-fall, so we keep the drogues out as a
+        // backstop and let RealChute deploy the mains underneath them (both are independent parts — no in-sim
+        // entanglement). Real Dragon does release the drogues; re-enable that in I-B once in-flight main-deploy
+        // can be confirmed. `phase` is telemetry only here (both canopies are armed early, idempotently).
+        public const double AbortDrogueDwellSec = 2.5;   // drogues ride this long to stabilise, then arm the mains
+        public const double AbortMainFloorM = 600.0;     // ...or arm the mains immediately if we sink below this
 
         // tInDrogueSec: seconds since the drogues were first commanded (0 until then). The glue stamps it.
         public static ChuteCommand SequenceAbort(ChuteInputs s, ChutePhase phase, double tInDrogueSec)
@@ -108,11 +112,12 @@ namespace DragonScreen
                 case ChutePhase.Drogue:
                     c.Phase = ChutePhase.Drogue;
                     if (DrogueDeploy(s.AltitudeM, s.DescentRateMps, s.DrogueAltM)) c.DeployDrogues = true;
-                    // cut the drogues + deploy the mains once stabilised (dwell) OR immediately if low —
-                    // NO wait for the nominal main altitude. Only after the drogues have actually been out.
+                    // arm the mains once stabilised (dwell) OR immediately if low — RealChute holds them to their
+                    // own (lower) envelope, so arming early is safe. Only after the drogues have actually been out.
+                    // The drogues stay out (no cut) as a backstop underneath the mains.
                     if (descending && tInDrogueSec > 0.0
                         && (tInDrogueSec >= AbortDrogueDwellSec || s.AltitudeM <= AbortMainFloorM))
-                    { c.CutDrogues = true; c.DeployMains = true; c.Phase = ChutePhase.Main; }
+                    { c.DeployMains = true; c.Phase = ChutePhase.Main; }
                     break;
 
                 case ChutePhase.Main:

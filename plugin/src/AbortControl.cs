@@ -56,6 +56,7 @@ namespace DragonScreen
         static bool deorbitCommitted, deorbitDone;
         static DeorbitPhase deoPhase = DeorbitPhase.Idle;
         static ChutePhase chutePhase = ChutePhase.Idle;
+        static bool aDroguesArmed, aMainsArmed;   // arm each canopy once (idempotent latch)
         static double abortDrogueTime, settleStartUT = -1;
         static bool haveSite; static double siteLatDeg, siteLonDeg;
         static bool siteLogged;   // one-shot diagnostic for the deorbit water scan
@@ -69,6 +70,7 @@ namespace DragonScreen
             escapeFired = trunkGone = shroudOpen = undocked = atoDone = atoSeparated = false;
             deorbitCommitted = deorbitDone = false;
             deoPhase = DeorbitPhase.Idle; chutePhase = ChutePhase.Idle;
+            aDroguesArmed = aMainsArmed = false;
             abortDrogueTime = 0; settleStartUT = -1;
             haveSite = false; siteLatDeg = siteLonDeg = 0; siteLogged = false;
         }
@@ -347,9 +349,11 @@ namespace DragonScreen
             double tInDrogue = abortDrogueTime > 0.0 ? (Now() - abortDrogueTime) : 0.0;
             ChuteCommand cc = Chutes.SequenceAbort(ci, chutePhase, tInDrogue);
             chutePhase = cc.Phase;
-            if (cc.DeployDrogues) { Actuator.DeployChutes(v, true); if (abortDrogueTime <= 0.0) abortDrogueTime = Now(); }
-            if (cc.CutDrogues) Actuator.CutChutes(v, true);
-            if (cc.DeployMains) Actuator.DeployChutes(v, false);
+            // Arm each canopy ONCE (RealChute arming is idempotent, but latching keeps the log clean and skips the
+            // per-tick part scan). The drogues are NOT cut in an abort — they stay out as a backstop while RealChute
+            // deploys the mains at their own lower envelope (see Chutes.SequenceAbort / Actuator.DeployChutePart).
+            if (cc.DeployDrogues && !aDroguesArmed) { Actuator.DeployChutes(v, true); aDroguesArmed = true; if (abortDrogueTime <= 0.0) abortDrogueTime = Now(); }
+            if (cc.DeployMains && !aMainsArmed) { Actuator.DeployChutes(v, false); aMainsArmed = true; }
         }
 
         // ================================ safe-site selection ================================

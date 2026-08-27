@@ -38,6 +38,7 @@ namespace DragonScreen
         static DeorbitPhase deoPhase = DeorbitPhase.Idle;
         static EntryPhase entPhase = EntryPhase.Idle;
         static ChutePhase chutePhase = ChutePhase.Idle;
+        static bool rDroguesArmed, rMainsArmed;   // arm each canopy once (idempotent latch)
         static bool undocked, trunkGone, shroudClosed, comEngaged, deorbitDone;
         static double settleStartUT = -1;
         static double lastBankDeg;
@@ -47,6 +48,7 @@ namespace DragonScreen
         {
             depPhase = DepPhase.Idle; deoPhase = DeorbitPhase.Idle; entPhase = EntryPhase.Idle;
             chutePhase = ChutePhase.Idle;
+            rDroguesArmed = rMainsArmed = false;
             undocked = trunkGone = shroudClosed = comEngaged = deorbitDone = false;
             settleStartUT = -1; lastBankSign = 1;
             EntrySteering.Reset();
@@ -217,8 +219,10 @@ namespace DragonScreen
 
             ChuteCommand cc = Chutes.Sequence(ci, chutePhase);
             chutePhase = cc.Phase;
-            if (cc.DeployDrogues) Actuator.DeployChutes(v, true);   // RealChute-aware (see Actuator)
-            if (cc.DeployMains) Actuator.DeployChutes(v, false);
+            // Arm each canopy ONCE — RealChute arming is idempotent, but re-invoking deploy every tick reset its
+            // inflation (the abort 122 m/s bug), so latch here too (see Actuator.DeployChutePart).
+            if (cc.DeployDrogues && !rDroguesArmed) { Actuator.DeployChutes(v, true); rDroguesArmed = true; }
+            if (cc.DeployMains && !rMainsArmed) { Actuator.DeployChutes(v, false); rMainsArmed = true; }
 
             if (cc.Splashed || v.situation == Vessel.Situations.SPLASHED || v.situation == Vessel.Situations.LANDED)
                 CrewProcedureOps.PhaseComplete();   // mission complete

@@ -5,28 +5,40 @@ at the one thing that matters next.
 
 ---
 
-## ⭐⭐ RESUME HERE (2026-08-28, post-compaction) — MODE IS BUILD
+## ⭐⭐ RESUME HERE (2026-08-28, post-compaction #2) — MODE IS BUILD, CREW-SURVIVAL FIRST
 
 **The autopilot is NOT "build complete" — a first-cut SKELETON flies (pad→orbit→phasing, verified), but the
 researched-method BACKLOG is what makes it advanced. USER DECISION: build the full feature set first (ULTIMATE_PLAN
-Movement I-A, dependency-ordered B1–B11, pure-first + headless + committed + installed), THEN flight-tune
-phase-by-phase (I-B).** Top plan `docs/ULTIMATE_PLAN.md`; detail `AUTOPILOT_REBUILD_PLAN.md §0.2`; running log
-[[dragonscreen-autopilot-rebuild-plan]]. Live plan artifact: https://claude.ai/code/artifact/943d3d08-1124-432b-b474-1c33b5c29774
+Movement I-A), THEN flight-tune phase-by-phase (I-B).** Top plan `docs/ULTIMATE_PLAN.md` (has the approved
+course-change box); detail `AUTOPILOT_REBUILD_PLAN.md §0.2`; running log [[dragonscreen-autopilot-rebuild-plan]].
+Live plan artifact: https://claude.ai/code/artifact/943d3d08-1124-432b-b474-1c33b5c29774
 
-**⭐ FIRST TASK THIS SESSION (user directive): B5 — PVG / virtual-stages.** It is the MechJebLib `PSG`
-Pontryagin/primer-vector OPTIMAL-CONTROL ascent solver (`Desktop/mechjeb_src/MechJebLib/PSG/*`, ~2900 lines
-across 13 files + deps: `MechJebLib.ODE` integrator, `Optimizer.cs` 513-line BVP solver, `AscentProblem.cs`
-556-line costate dynamics, `Primitives`/`Functions`/`Interpolants`). The LARGEST backlog item — a MULTI-PASS
-port: ODE integrator → phase/vehicle model → costate dynamics → optimizer → verify vs MechJeb `AscentTests`,
-committing each pass. It's an optimization of the already-working UPFG ascent (a no-op for single-stage Crew-2),
-so it was sequenced last; do it FIRST this session per the user.
+**⭐ APPROVED PIVOT (2026-08-28, user OK'd; user delegates the engineering calls but requires explicit permission
+before changing the RULES or the PLAN'S COURSE).** Constraints: **(1) NO NEW flight tests until the whole autopilot
+is built** (build-only through I-A). **(2) INITIAL tuning uses the UP-TO-DATE recordings + tuning DB now** (data-
+backed start values, never invent); FINAL tuning is I-B. **Order = crew-survival first:** FATAL abort fix → B8
+(entry) → B11 (FDIR) → B9/B10 → **B5 (PVG) LAST**.
 
-**BUILT + committed + installed this run (headless-green ~490+ checks, DLL live):** B1 StageStats, B2 q·α
+**⛔ B5 REDEFINED — ALGLIB PERMANENTLY OFF THE TABLE.** A faithful MechJeb `PSG` port was REJECTED after reading the
+source: PSG is a Hermite-Simpson collocation transcription solved by **ALGLIB `minnlc` SQP** (`alglib.minnlcoptimize`,
+4000 iters, 120 s timeout, off-thread) — i.e. vendoring **~200k lines of ALGLIB** into the `-nostdlib` allocation-free
+build, breaking the 60-FPS/minimal-build rules and unlike any bounded-time flight avionics. B5 instead = **real
+primer-vector / PEG optimal ascent (PEGAS/UPFG lineage): analytic primer-vector steering + a small Newton BVP shooting
+solve** (costates/burn-times/optimal-coast) — same solution class, deterministic, allocation-light, no NLP library,
+the natural multi-stage upgrade of our UPFG. ~No-op for single-burn Crew-2 → sequenced LAST. (May need PEGAS-MATLAB
+fetched; kOS PEGAS off-limits per NO-KOS.)
+
+**⛔⛔ CREW-SURVIVAL ITEM #1 = the FATAL abort:** launch-escape splashes at ~122 m/s (mains under-decelerate). FIRST
+classify from the EXISTING quarantine recordings (NO new flight): logic/structural defect → fix now (build); pure
+tuning → flag for I-B.
+
+**BUILT + committed + installed earlier this run (headless-green ~490+ checks, DLL live):** B1 StageStats, B2 q·α
 moderation (+glue), B3 thrust/RCS balancer (+engine-out glue), B4 actuator-lag (+glue), B6 NavFilter, B7 Lambert
-+ Maneuver. **REMAINING after B5:** B8 entry-predictor upgrade (Trajectories KSP-Euler correction + 4-band AoA +
-course-correction 2×2), B9 GravityTurn LaunchDB auto-tuner, B10 V&V (Tier-2 more families + Tier-3 regress +
-Tier-4 MC), B11 FDIR full authority + free-flyer profiles. **Then Movement I-B: flight-tune.** Owed in I-B: the
-B2 estimator FEED (isolated aero angular-accel, sign-sensitive) + the B3 RcsBalance glue (rendezvous/docking).
++ Maneuver. **REMAINING:** fatal-abort fix, B8 entry-predictor upgrade (Trajectories KSP-Euler correction + 4-band
+AoA + course-correction 2×2), B11 FDIR full authority + free-flyer profiles, B9 GravityTurn LaunchDB auto-tuner,
+B10 V&V (Tier-2 more families + Tier-3 regress + Tier-4 MC), B5 primer-vector PVG (LAST). **Then Movement I-B:
+flight-tune.** Owed in I-B: the B2 estimator FEED (isolated aero angular-accel, sign-sensitive) + the B3 RcsBalance
+glue (rendezvous/docking).
 
 **⚠ From the 2026-08-28 flight analysis (7 flights, in `quarantine\dragonscreen_flightdata`, in the DB):**
 phasing self-deorbit is FIXED (verified, pe held 177–179 km). Ascent defects: inc −5.1° (A1 UPFG-plane fix
