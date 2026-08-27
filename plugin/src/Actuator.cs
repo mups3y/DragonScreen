@@ -153,6 +153,103 @@ namespace DragonScreen
             return t;
         }
 
+        // B3 engine-out differential octaweb throttle. Rebalance the OPERATIONAL engines' per-engine thrust
+        // limiters (thrustPercentage) so their net torque holds `demandedTorque` — pass Vec3.Zero to NULL the
+        // thrust asymmetry a failed engine leaves, keeping the gimbal free for attitude. The effectors are the
+        // operational engines (a failed one is simply absent → the asymmetry the solver corrects); net torque
+        // is frame-independent, so world-frame force/torque are used. Allocation-free on the symmetric path (a
+        // quick net-torque check skips the solve). Returns false → the demand could not be met = FDIR
+        // "insufficient control authority". [[falcon-detect-by-capability]] — matched by EngineRole, not name.
+        [Tunable] public static double DiffTorqueDeadbandNm = 500.0;   // below this residual, treat as balanced
+
+        public static bool BalanceOctawebThrust(Vessel v, EngineRole want, Vec3 demandedTorqueNm)
+        {
+            if (v == null) return true;
+            Vector3d com = v.CoM;
+
+            // pass 1 (allocation-free): net torque + operational-engine count.
+            Vec3 net = Vec3.Zero; int n = 0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                Part p = v.parts[i]; string nm = p.name ?? "";
+                for (int m = 0; m < p.Modules.Count; m++)
+                {
+                    ModuleEngines e = p.Modules[m] as ModuleEngines;
+                    if (e == null || Actuation.EngineRoleOf(nm, e.engineID) != want) continue;
+                    if (!e.EngineIgnited || !e.isOperational) continue;
+                    Vec3 f, tq; if (!EngineForceTorque(e, com, out f, out tq)) continue;
+                    net = net + tq; n++;
+                }
+            }
+            if (n == 0) return true;
+
+            // symmetric / balanced → hold the limiters at full (write only where they drifted), skip the solve.
+            if ((net - demandedTorqueNm).Magnitude < DiffTorqueDeadbandNm)
+            {
+                for (int i = 0; i < v.parts.Count; i++)
+                {
+                    Part p = v.parts[i]; string nm = p.name ?? "";
+                    for (int m = 0; m < p.Modules.Count; m++)
+                    {
+                        ModuleEngines e = p.Modules[m] as ModuleEngines;
+                        if (e == null || Actuation.EngineRoleOf(nm, e.engineID) != want) continue;
+                        if (e.EngineIgnited && e.isOperational && Math.Abs(e.thrustPercentage - 100f) > 0.5f)
+                            e.thrustPercentage = 100f;
+                    }
+                }
+                return true;
+            }
+
+            // asymmetric (engine-out) → build the effectors and solve the differential throttle (rare path).
+            var eng = new System.Collections.Generic.List<ModuleEngines>();
+            var force = new System.Collections.Generic.List<Vec3>();
+            var torque = new System.Collections.Generic.List<Vec3>();
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                Part p = v.parts[i]; string nm = p.name ?? "";
+                for (int m = 0; m < p.Modules.Count; m++)
+                {
+                    ModuleEngines e = p.Modules[m] as ModuleEngines;
+                    if (e == null || Actuation.EngineRoleOf(nm, e.engineID) != want) continue;
+                    if (!e.EngineIgnited || !e.isOperational) continue;
+                    Vec3 f, tq; if (!EngineForceTorque(e, com, out f, out tq)) continue;
+                    eng.Add(e); force.Add(f); torque.Add(tq);
+                }
+            }
+            BalanceResult r = DiffThrottle.Solve(force.ToArray(), torque.ToArray(), demandedTorqueNm);
+            for (int i = 0; i < eng.Count; i++)
+            {
+                float pct = (float)(r.Limits[i] * 100.0);
+                if (pct < 0f) pct = 0f; else if (pct > 100f) pct = 100f;
+                if (Math.Abs(eng[i].thrustPercentage - pct) > 0.5f) eng[i].thrustPercentage = pct;
+            }
+            return r.Feasible;
+        }
+
+        // One engine's world-frame force + torque-about-CoM at FULL thrust, aggregated over its thrust
+        // transforms (thrust pushes the vehicle opposite each nozzle's forward). Guarded; false if unusable.
+        static bool EngineForceTorque(ModuleEngines e, Vector3d com, out Vec3 forceN, out Vec3 torqueNm)
+        {
+            forceN = Vec3.Zero; torqueNm = Vec3.Zero;
+            var tts = e.thrustTransforms;
+            if (tts == null || tts.Count == 0) return false;
+            double eMaxN = e.maxThrust * 1000.0;
+            if (!(eMaxN > 0.0)) return false;
+            Vector3d f = Vector3d.zero, tq = Vector3d.zero;
+            for (int k = 0; k < tts.Count; k++)
+            {
+                Transform tt = tts[k]; if (tt == null) continue;
+                double mult = (e.thrustTransformMultipliers != null && k < e.thrustTransformMultipliers.Count)
+                              ? e.thrustTransformMultipliers[k] : 1.0 / tts.Count;
+                Vector3d fk = -(Vector3d)tt.forward * (eMaxN * mult);
+                Vector3d rk = (Vector3d)tt.position - com;
+                f += fk; tq += Vector3d.Cross(rk, fk);
+            }
+            forceN = new Vec3(f.x, f.y, f.z);
+            torqueNm = new Vec3(tq.x, tq.y, tq.z);
+            return true;
+        }
+
         // Shut ALL lit engines on booster parts (covers whichever octaweb mode is currently lit).
         public static void ShutdownBoosterEngines(Vessel v)
         {

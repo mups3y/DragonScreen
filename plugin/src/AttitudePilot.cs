@@ -37,6 +37,13 @@ namespace DragonScreen
         static double smTx, smTy, smTz;
         static bool smInit;
 
+        // ---- B4 actuator-lag lead compensation: command the gimbal HARDER when it slews slowly, so the torque
+        // reaches the demand faster (a snappier, non-oscillating loop through max-Q). actEst tracks the modeled
+        // gimbal position per axis; the issued command is Compensate()'d against it. Self-disables when the
+        // gimbal is fast / absent (Compensate → desired). Flag lets I-B flight-verify or fall back.
+        [Tunable] public static bool UseLagComp = true;
+        static readonly double[] actEst = { 0.0, 0.0, 0.0 };   // modeled gimbal deflection (pitch, roll, yaw)
+
         // ---- diagnostics for the FlightRecorder (loop internals — the standing instrument-everything rule) ----
         public static bool Active;
         public static double PointErrDeg, RateCmdRads, RateMeasRads;
@@ -60,6 +67,7 @@ namespace DragonScreen
             ActPitch = ActYaw = ActRoll = 0.0;
             CtrlTorquePitchNm = CtrlTorqueYawNm = CtrlTorqueRollNm = 0.0;
             PitchAccelRadS2 = 0.0;
+            actEst[0] = actEst[1] = actEst[2] = 0.0;   // B4: clear the modeled gimbal state on scene load
             FlightDriver.ReleaseAttitude();
         }
 
@@ -125,11 +133,23 @@ namespace DragonScreen
                     if (i == 0) RateCmdRads = res.TargetOmega;          // pitch rate command (representative)
                 }
 
+                // --- B4 actuator-lag lead compensation: issue a command that pulls the LAGGED gimbal to the
+                //     loop's demand this tick (Compensate), tracking the modeled deflection (Step). rs = the
+                //     gimbal gap-closing rate (KSP lerps by responseSpeed·dt); no active gimbal → instant → no-op.
+                double rs = UseLagComp ? GimbalResponseSpeed(v) : 1e9;
+                double[] issue = { act[0], act[1], act[2] };
+                if (UseLagComp)
+                    for (int i = 0; i < 3; i++)
+                    {
+                        issue[i] = ActuatorLag.Compensate(actEst[i], act[i], rs, dt);
+                        actEst[i] = ActuatorLag.Step(actEst[i], issue[i], rs, dt);
+                    }
+
                 // --- apply: pitch + yaw always; roll only when we own it (else release + keep its PID clean,
                 //     so the entry bank loop's own roll channel is not fighting a stale damping command) ---
-                FlightDriver.SetAttitude(act[0], act[2]);
-                if (dampRoll) FlightDriver.SetAttitudeRoll(act[1]);
-                else { FlightDriver.ReleaseAttitudeRoll(); posPid[1].Reset(); velPid[1].Reset(); }
+                FlightDriver.SetAttitude(issue[0], issue[2]);
+                if (dampRoll) FlightDriver.SetAttitudeRoll(issue[1]);
+                else { FlightDriver.ReleaseAttitudeRoll(); posPid[1].Reset(); velPid[1].Reset(); actEst[1] = 0.0; }
 
                 // --- diagnostics ---
                 Active = true;
@@ -175,6 +195,31 @@ namespace DragonScreen
                 }
             }
             tx = px; ty = py; tz = pz;
+        }
+
+        // The gimbal gap-closing rate (per second) to feed the B4 lag model: KSP lerps the gimbal toward its
+        // target by gimbalResponseSpeed·dt each tick, so responseSpeed IS the model's 1/τ. Take the SLOWEST
+        // active gimbal (the one that governs the lag). No active gimbal, or none using response-speed (instant
+        // gimbals) → a large value so Compensate becomes a no-op. Guarded: any KSP-access issue → instant.
+        static double GimbalResponseSpeed(Vessel v)
+        {
+            double slowest = double.PositiveInfinity;
+            try
+            {
+                for (int i = 0; i < v.parts.Count; i++)
+                {
+                    Part p = v.parts[i];
+                    for (int m = 0; m < p.Modules.Count; m++)
+                    {
+                        ModuleGimbal g = p.Modules[m] as ModuleGimbal;
+                        if (g == null || !g.gimbalActive || !g.useGimbalResponseSpeed) continue;
+                        double rs = g.gimbalResponseSpeed;
+                        if (rs > 0.0 && rs < slowest) slowest = rs;
+                    }
+                }
+            }
+            catch { return 1e9; }
+            return double.IsPositiveInfinity(slowest) ? 1e9 : slowest;   // no lagging gimbal → instant
         }
 
         // Wrap radians to [-π, π].

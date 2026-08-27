@@ -67,6 +67,7 @@ namespace DragonScreen
         static bool lastRcsOn;
         static string lastPhaseWord = "IDLE";
         static double lastPlaneLogUT = -999;   // rate-limit the plane diagnostic
+        static double lastDiffWarnUT = -999;   // rate-limit the B3 engine-out "insufficient authority" warning
 
         public static void Reset()
         {
@@ -338,6 +339,19 @@ namespace DragonScreen
             }
 
             FlightDriver.SetThrottle(Throttle);
+
+            // ⭐ B3 engine-out differential octaweb throttle: while S1 burns, null any net-torque asymmetry the
+            // octaweb leaves (a failed engine) via per-engine thrust limiters, so the gimbal isn't saturated
+            // fighting a steady moment. Demand Vec3.Zero (pure axial); cheap when symmetric (skips the solve).
+            if (phase == AscentPhase.VerticalRise || phase == AscentPhase.GravityTurn)
+            {
+                bool balanced = Actuator.BalanceOctawebThrust(v, EngineRole.OctawebAll, Vec3.Zero);
+                if (!balanced && Planetarium.GetUniversalTime() - lastDiffWarnUT > 2.0)
+                {
+                    lastDiffWarnUT = Planetarium.GetUniversalTime();
+                    Debug.LogWarning("[DragonScreen] differential throttle could not null the engine-out torque — insufficient authority");
+                }
+            }
 
             if (dragonSeparated)
             {
