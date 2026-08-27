@@ -31,6 +31,9 @@ namespace DragonScreen
         // ---- steered booster and a bank-modulated lifting entry, not just a ballistic fall.
         public double LiftToDrag;    // |lift|/|drag| ; 0 = no lift (drag-only)
         public double BankRad;       // roll of the lift vector about the velocity vector
+        public bool UseLdBand;       // B8: model L/D with the 4-band EntryLdBand schedule (by atmosphere-depth
+                                     // ratio) instead of the fixed LiftToDrag — a predictor prior for the bands
+                                     // not yet measured. Predictor-only; it does NOT command the CoM shifter.
 
         public System.Collections.Generic.List<PathSample> Path;
 
@@ -206,9 +209,10 @@ namespace DragonScreen
             // ---- LIFT: (L/D)*drag, perpendicular to the surface-relative velocity, banked about it.
             // ---- Same decomposition the entry guidance uses: vertical lift L·cos(bank) flies RANGE,
             // ---- horizontal lift L·sin(bank) flies CROSSRANGE (Apollo/Orion). L/D=0 → no lift.
-            if (s.LiftToDrag > 0.0)
+            double ld = s.UseLdBand ? EntryLdBand(alt / s.AtmosphereDepthM) : s.LiftToDrag;
+            if (ld > 0.0)
             {
-                double aL = s.LiftToDrag * a;
+                double aL = ld * a;
                 double vhx = srx / sv, vhy = sry / sv, vhz = srz / sv;         // unit surface-rel velocity
                 double upx = px / r, upy = py / r, upz = pz / r;               // local radial-up
                 double dot = upx * vhx + upy * vhy + upz * vhz;
@@ -307,5 +311,36 @@ namespace DragonScreen
         }
 
         public const double BcFilterTauS = 3.0;
+
+        // ------------------------------------------------------------------ B8: 4-band entry L/D schedule
+        // The blunt fixed-CoM capsule's trim AoA — and hence L/D — varies naturally with Mach/altitude across
+        // the descent; a single constant is only right for the band being flown NOW. This schedules L/D vs
+        // atmosphere-depth ratio (alt / atmosphereDepth) in the four Trajectories bands, Lerp between band
+        // centres (AUTOPILOT_MINING_3 §2c): AtmosEntry 50–100%, HighAltitude 25–50%, LowAltitude 5–25%,
+        // FinalApproach <5%. Values within the Dragon L/D 0.18–0.27 envelope. ⛔ This is a PREDICTOR MODEL only
+        // (used when TrajectoryInputs.UseLdBand is set) — it does NOT command the CoM shifter, which is engaged
+        // ONCE and never toggled to steer (the entry hard rule). The live MeasureAero L/D still overrides when
+        // available; the schedule is the prior for bands not yet flown.
+        [Tunable] public static double LdAtmosEntry    = 0.18;   // 50–100% depth (thin air, hypersonic)
+        [Tunable] public static double LdHighAltitude  = 0.20;   // 25–50%
+        [Tunable] public static double LdLowAltitude   = 0.26;   // 5–25% (dense, near peak L/D)
+        [Tunable] public static double LdFinalApproach = 0.24;   // <5% (subsonic terminal)
+
+        public static double EntryLdBand(double altRatio)
+        {
+            double r = altRatio < 0.0 ? 0.0 : (altRatio > 1.0 ? 1.0 : altRatio);
+            // band centres by ratio: FinalApproach .025, LowAltitude .15, HighAltitude .375, AtmosEntry .75
+            if (r >= 0.75)  return LdAtmosEntry;
+            if (r >= 0.375) return Lerp(r, 0.375, 0.75, LdHighAltitude, LdAtmosEntry);
+            if (r >= 0.15)  return Lerp(r, 0.15, 0.375, LdLowAltitude, LdHighAltitude);
+            if (r >= 0.025) return Lerp(r, 0.025, 0.15, LdFinalApproach, LdLowAltitude);
+            return LdFinalApproach;
+        }
+
+        private static double Lerp(double x, double x0, double x1, double y0, double y1)
+        {
+            double t = (x - x0) / (x1 - x0);
+            return y0 + (y1 - y0) * t;
+        }
     }
 }

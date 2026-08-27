@@ -187,6 +187,18 @@ public static class TrajectoryTest
         Check("lift-right: bank ~ +90 deg", Math.Abs(mr.BankRad - Math.PI / 2.0) < 1e-6, (mr.BankRad * 180 / Math.PI).ToString("F1"));
         Check("too slow to measure a profile", !Trajectory.MeasureAero(1, -5, 0, 0, 1, 0, 1, 0, 0).Valid, "");
 
+        // ---- B8: the 4-band entry L/D schedule (EntryLdBand) ----
+        Check("band: AtmosEntry (ratio .75) = 0.18", Math.Abs(Trajectory.EntryLdBand(0.75) - 0.18) < 1e-9, Trajectory.EntryLdBand(0.75).ToString("F3"));
+        Check("band: LowAltitude (ratio .15) = 0.26", Math.Abs(Trajectory.EntryLdBand(0.15) - 0.26) < 1e-9, Trajectory.EntryLdBand(0.15).ToString("F3"));
+        Check("band: FinalApproach (ratio .025) = 0.24", Math.Abs(Trajectory.EntryLdBand(0.025) - 0.24) < 1e-9, Trajectory.EntryLdBand(0.025).ToString("F3"));
+        Check("band: clamps above atmosphere (ratio 2) = AtmosEntry", Math.Abs(Trajectory.EntryLdBand(2.0) - 0.18) < 1e-9, "");
+        Check("band: clamps at the surface (ratio -1) = FinalApproach", Math.Abs(Trajectory.EntryLdBand(-1.0) - 0.24) < 1e-9, "");
+        double mid = Trajectory.EntryLdBand(0.2625);   // halfway between LowAltitude(.15,.26) and HighAlt(.375,.20)
+        Check("band: Lerp between bands", mid > 0.20 && mid < 0.26 && Math.Abs(mid - 0.23) < 1e-6, mid.ToString("F4"));
+        // every band L/D stays within the Dragon 0.18–0.27 envelope
+        bool inEnv = true; for (double rr = 0; rr <= 1.0; rr += 0.02) { double ldv = Trajectory.EntryLdBand(rr); if (ldv < 0.18 - 1e-9 || ldv > 0.27 + 1e-9) inEnv = false; }
+        Check("band: whole schedule within L/D 0.18–0.27", inEnv, "");
+
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
     }

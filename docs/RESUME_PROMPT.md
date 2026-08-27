@@ -41,11 +41,13 @@ fidelity drogue-cut once main deploy is confirmable).
 **BUILT + committed earlier this run (headless-green ~490+ checks; DLL install DEFERRED to end of I-A — nothing
 flies until the build is done, so one install before I-B, not per-item):** B1 StageStats, B2 q·α moderation
 (+glue), B3 thrust/RCS balancer (+engine-out glue), B4 actuator-lag (+glue), B6 NavFilter, B7 Lambert + Maneuver,
-+ the fatal-abort fix. **REMAINING (in order):** B8 entry-predictor upgrade (Trajectories KSP-Euler correction +
-4-band AoA + course-correction 2×2), B11 FDIR full authority + free-flyer profiles, B9 GravityTurn LaunchDB
-auto-tuner, B10 V&V (Tier-2 more families + Tier-3 regress + Tier-4 MC), B5 primer-vector PVG (LAST). **Then
-Movement I-B: flight-tune.** Owed in I-B: the B2 estimator FEED (isolated aero angular-accel, sign-sensitive) +
-the B3 RcsBalance glue (rendezvous/docking).
++ the fatal-abort fix, + **B8 pure** (CourseCorrect 2×2/1×1 divert solve + Trajectory.EntryLdBand 4-band L/D
+prior; 15+7 checks). **REMAINING (in order):** B11 FDIR full authority + free-flyer profiles, B9 GravityTurn
+LaunchDB auto-tuner, B10 V&V (Tier-2 more families + Tier-3 regress + Tier-4 MC), B5 primer-vector PVG (LAST).
+**Then Movement I-B: flight-tune.** Owed in I-B: the B2 estimator FEED (isolated aero angular-accel,
+sign-sensitive) + the B3 RcsBalance glue (rendezvous/docking) + **B8 targeting glue** (wire CourseCorrect into
+BoosterTargeting/EntrySteering, keep the heuristic as fallback) + **B8 KSP-Euler correction** (corpus-gated —
+needs an entry-flight recording to calibrate).
 
 **⚠ From the 2026-08-28 flight analysis (7 flights, in `quarantine\dragonscreen_flightdata`, in the DB):**
 phasing self-deorbit is FIXED (verified, pe held 177–179 km). Ascent defects: inc −5.1° (A1 UPFG-plane fix

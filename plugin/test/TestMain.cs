@@ -42,6 +42,7 @@ public static class TestMain
         bad += BoosterTest.Run();          // L3 booster: hoverslam + grid-fin steering + descent FSM
         bad += RendezvousMathTest.Run();   // L3 rendezvous: LVLH + CW two-impulse + Hohmann
         bad += LambertTest.Run();          // B7: universal-variable Lambert solver + maneuver/finite-burn library
+        bad += CourseCorrectTest.Run();    // B8: finite-difference impact-point divert solve (2×2 booster / 1×1 entry)
         bad += RendezvousTest.Run();       // L3 rendezvous: named-burn FSM + full-control contract
         bad += PhasingTest.Run();          // L3 rendezvous: far-field co-elliptic raise + crew-safety pe floor + CW guard
         bad += DockingTest.Run();          // L3 docking: glideslope servo + L-approach FSM
