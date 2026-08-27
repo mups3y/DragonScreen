@@ -32,7 +32,8 @@ public static class FlightRecorderTest
         // ---- schema + indices (drift-proof) ----
         Check("schema is non-trivially wide (records everything)", FlightRecorder.Schema.Length >= 55, FlightRecorder.Schema.Length.ToString());
         Check("every index resolves against the schema",
-              FlightRecorder.MetS == 0 && FlightRecorder.SteerSignC == FlightRecorder.Schema.Length - 1, "");
+              FlightRecorder.MetS == 0 && FlightRecorder.KerCurThrustN == FlightRecorder.Schema.Length - 1
+              && FlightRecorder.SteerSignC >= 0 && FlightRecorder.KerAvail >= 0, "");
         Check("named indices point at the right columns",
               FlightRecorder.Schema[FlightRecorder.MetS] == "met_s"
               && FlightRecorder.Schema[FlightRecorder.BankDeg] == "bank_deg"

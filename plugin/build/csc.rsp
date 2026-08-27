@@ -51,6 +51,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Hohmann.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Hoverslam.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\IgnitionGate.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Images.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\KerData.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Lambert.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\LaunchAzimuth.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\LaunchTuner.cs
@@ -114,6 +115,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\test\FdirTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\FlightRecorderTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\GlobeProjectionTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\IgnitionGateTest.cs
+C:\Users\User\Desktop\DragonScreen\plugin\test\KerDataTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\LambertTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\LaunchTunerTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\LaunchWindowTest.cs

@@ -112,6 +112,18 @@ namespace DragonScreen
                     Actuator.RcsThrustN(v),
                     o != null ? o.ApA / 1000.0 : double.NaN, o != null ? o.PeA / 1000.0 : double.NaN,
                     o != null ? o.inclination : double.NaN, o != null ? o.LAN : double.NaN);
+                // KER soft cross-check: what Kerbal Engineer's fuel-flow sim reports for the active vessel, so the
+                // corpus can verify it agrees with our own StageStats/UPFG before any consumer trusts KER over us.
+                KerStage[] ks;
+                if (KerBridge.TryGetStages(out ks))
+                {
+                    KerBridge.RequestSimulation();   // keep KER's result fresh for the next sample
+                    KerStage cur = KerData.Current(ks), fin = KerData.Final(ks);
+                    FlightRecorder.PutKer(row, true, KerData.RemainingDeltaV(ks), fin.Valid ? fin.TotalDeltaVMps : 0.0,
+                                          cur.Twr, cur.ThrustN);
+                }
+                else FlightRecorder.PutKer(row, false, 0, 0, 0, 0);
+
                 Action<string[]> fill = Fill;   // the active controller's PHASE-SPECIFIC columns on top of the base
                 if (fill != null) { try { fill(row); } catch { } }
                 writer.WriteLine(FlightRecorder.Row(row));

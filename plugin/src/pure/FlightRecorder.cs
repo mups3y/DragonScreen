@@ -60,6 +60,8 @@ namespace DragonScreen
             "fdir_fault", "fdir_recovery", "fdir_abort", "abort_mode",
             // self-cal
             "cal_thrust_n", "cal_beta", "cal_invI", "cal_ld", "steer_sign",
+            // KER (Kerbal Engineer) soft cross-check — blank when KER absent (see MOD_INTEGRATION_RESEARCH)
+            "ker_avail", "ker_remain_dv", "ker_final_dv", "ker_cur_twr", "ker_cur_thrust_n",
         };
 
         static int Index(string name)
@@ -102,7 +104,9 @@ namespace DragonScreen
             FdirFault = Index("fdir_fault"), FdirRecovery = Index("fdir_recovery"), FdirAbort = Index("fdir_abort"),
             AbortModeC = Index("abort_mode"),
             CalThrustN = Index("cal_thrust_n"), CalBeta = Index("cal_beta"), CalInvI = Index("cal_invI"),
-            CalLd = Index("cal_ld"), SteerSignC = Index("steer_sign");
+            CalLd = Index("cal_ld"), SteerSignC = Index("steer_sign"),
+            KerAvail = Index("ker_avail"), KerRemainDv = Index("ker_remain_dv"), KerFinalDv = Index("ker_final_dv"),
+            KerCurTwr = Index("ker_cur_twr"), KerCurThrustN = Index("ker_cur_thrust_n");
 
         // ---- formatting ----
         public static string Num(double v)
@@ -319,6 +323,18 @@ namespace DragonScreen
             Set(c, CalInvI, s.InvInertia.Theta);
             Set(c, CalLd, s.LoverD.Theta);
             Set(c, SteerSignC, SelfCal.SteerSign(s));
+        }
+
+        // KER soft cross-check: what Kerbal Engineer's fuel-flow sim reports for the active vessel, alongside our
+        // own numbers, so the corpus can prove they agree (or flag a divergence) before any consumer trusts KER.
+        public static void PutKer(string[] c, bool avail, double remainDvMps, double finalDvMps, double curTwr, double curThrustN)
+        {
+            Set(c, KerAvail, avail ? 1.0 : 0.0);
+            if (!avail) return;
+            Set(c, KerRemainDv, remainDvMps);
+            Set(c, KerFinalDv, finalDvMps);
+            Set(c, KerCurTwr, curTwr);
+            Set(c, KerCurThrustN, curThrustN);
         }
     }
 }
