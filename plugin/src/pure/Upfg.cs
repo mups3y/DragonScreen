@@ -29,6 +29,20 @@ namespace DragonScreen
         public double MassKg;
     }
 
+    // A vehicle STAGE for MULTI-STAGE UPFG (PEGAS "virtual stages", B5). Mode 1 = constant thrust, Mode 2 =
+    // constant acceleration (g-limited). The ACTIVE (first) stage's thrust accel is recomputed from the LIVE
+    // mass each call; later stages use their own start mass M0. ⛔ A coast is NOT a stage here — PEGAS guides
+    // only the BURN stages; a ballistic coast is a separate mission phase, not a term in the thrust integrals.
+    public struct UpfgStage
+    {
+        public int Mode;          // 1 = const thrust, 2 = const acceleration (g-limited)
+        public double ExhaustVel; // Isp * g0 (m/s)
+        public double ThrustN;    // vacuum thrust (N)
+        public double M0;         // stage start mass (kg) — later stages; the active stage uses the live mass
+        public double MaxT;       // max burn time of the stage (s)
+        public double GLim;       // acceleration limit in g's (Mode 2 only)
+    }
+
     public struct UpfgState
     {
         public bool Init;
@@ -72,10 +86,10 @@ namespace DragonScreen
             return s;
         }
 
+        // SINGLE-STAGE UPFG (the MVac to orbit) — the n=1 special case of the multi-stage law.
         public static UpfgGuidance Step(Vec3 r, Vec3 v, double mu, UpfgTarget t, UpfgVehicle veh,
                                         ref UpfgState st)
         {
-            UpfgGuidance g = new UpfgGuidance();
             if (!st.Init) st = Init(r, v, mu, t, veh);
 
             double ve = veh.ExhaustVel;
@@ -83,12 +97,11 @@ namespace DragonScreen
             double tu = ve / aT;
 
             // BLOCK 2 — decrement Vgo by the velocity gained since the last call (the corrector).
-            Vec3 dvsensed = v - st.LastV;
-            Vec3 vgo = st.Vgo - dvsensed;
+            Vec3 vgo = st.Vgo - (v - st.LastV);
 
             // BLOCK 3/4 — single active stage: L = |Vgo|; thrust integrals (closed forms, tgoi1 = 0).
             double L = vgo.Magnitude;   // = |Vgo|; may legitimately exceed ve (multi-ve stage)
-            if (L < 1e-6) { g.IF = st.Vgo.Normalized; g.TgoS = 0.0; g.Valid = g.IF.IsFinite; st.Vgo = vgo; st.LastV = v; return g; }
+            if (L < 1e-6) return Coasted(v, vgo, ref st);
             double tb = tu * (1.0 - Math.Exp(-L / ve));   // = tgo
             double tgo = tb;
             double J = tu * L - ve * tb;
@@ -96,6 +109,127 @@ namespace DragonScreen
             double Q = S * tu - 0.5 * ve * tb * tb;
             double P = Q * tu - 0.5 * ve * tb * tb * (tb / 3.0);
             double H = J * tgo - Q;
+
+            return Steer(r, v, mu, t, vgo, L, J, S, Q, P, H, tgo, ref st);
+        }
+
+        // MULTI-STAGE UPFG (PEGAS virtual stages, B5). stages[0] is the ACTIVE stage (its thrust accel comes
+        // from liveMassKg); later stages are planned from their own M0. Blocks 3/4 accumulate the thrust
+        // integrals across the stages that are needed to spend |Vgo| (ported verbatim from
+        // Noiredd/PEGAS-MATLAB unifiedPoweredFlightGuidance.m); blocks 5–8 are shared with the single-stage law.
+        public static UpfgGuidance Step(Vec3 r, Vec3 v, double mu, UpfgTarget t, UpfgStage[] stages,
+                                        double liveMassKg, ref UpfgState st)
+        {
+            if (stages == null || stages.Length == 0) { UpfgGuidance bad = new UpfgGuidance(); return bad; }
+            if (!st.Init) st = Init(r, v, mu, t, ToVehicle(stages[0], liveMassKg));
+
+            Vec3 vgo = st.Vgo - (v - st.LastV);
+            double L = vgo.Magnitude;
+            if (L < 1e-6) return Coasted(v, vgo, ref st);
+
+            double Lf, J, S, Q, P, H, tgo;
+            Integrals(stages, liveMassKg, L, out Lf, out J, out S, out Q, out P, out H, out tgo);
+
+            return Steer(r, v, mu, t, vgo, Lf, J, S, Q, P, H, tgo, ref st);
+        }
+
+        static UpfgVehicle ToVehicle(UpfgStage s, double liveMassKg)
+        {
+            UpfgVehicle veh; veh.ExhaustVel = s.ExhaustVel; veh.ThrustN = s.ThrustN; veh.MassKg = liveMassKg;
+            return veh;
+        }
+
+        // |Vgo| ≈ 0: the burn is essentially complete — hold the last thrust direction, report Tgo 0.
+        static UpfgGuidance Coasted(Vec3 v, Vec3 vgo, ref UpfgState st)
+        {
+            UpfgGuidance g = new UpfgGuidance();
+            g.IF = st.Vgo.Normalized; g.TgoS = 0.0; g.Valid = g.IF.IsFinite;
+            st.Vgo = vgo; st.LastV = v;
+            return g;
+        }
+
+        // BLOCK 1/3/4 — multi-stage thrust-integral accumulation, ported VERBATIM from PEGAS-MATLAB
+        // (unifiedPoweredFlightGuidance.m). SM=1 constant thrust, SM=2 constant acceleration (g-limited). The
+        // active stage (index 0) uses the live mass; the cutoff stage burns only the remaining |Vgo|. Each
+        // stage's local integrals are shifted by tgoi1 (the burn time accumulated in the earlier stages).
+        static void Integrals(UpfgStage[] stages, double liveMassKg, double vgoMag,
+                              out double L, out double J, out double S, out double Q, out double P, out double H,
+                              out double tgo)
+        {
+            int n = stages.Length;
+            double[] ve = new double[n], tu = new double[n], aL = new double[n], Li = new double[n], tb = new double[n], tgoi = new double[n];
+            int[] SM = new int[n];
+
+            // BLOCK 1 — per-stage constants; the ACTIVE stage's thrust accel from the live mass, others from M0.
+            for (int i = 0; i < n; i++)
+            {
+                SM[i] = stages[i].Mode <= 1 ? 1 : 2;
+                ve[i] = stages[i].ExhaustVel;
+                aL[i] = stages[i].GLim * G0;
+                double aT = stages[i].ThrustN / (i == 0 ? liveMassKg : stages[i].M0);
+                if (SM[i] == 2) aT = aL[i];
+                tu[i] = ve[i] / aT;
+            }
+
+            // BLOCK 3 — full-burn Δv of each stage; find the CUTOFF stage k (first whose cumulative Δv ≥ |Vgo|).
+            // The last stage always takes the remainder (never its full Δv), so its MaxT may exceed its own
+            // propellant-time tu without tripping log(≤0).
+            int k = n - 1;
+            double Lacc = 0.0;
+            for (int i = 0; i < n; i++)
+            {
+                if (i == n - 1) { Li[i] = vgoMag - Lacc; k = i; break; }
+                double full = (SM[i] == 1) ? ve[i] * Math.Log(tu[i] / (tu[i] - stages[i].MaxT)) : aL[i] * stages[i].MaxT;
+                if (Lacc + full >= vgoMag) { Li[i] = vgoMag - Lacc; k = i; break; }
+                Li[i] = full; Lacc += full;
+            }
+
+            // per-stage burn time + cumulative tgoi over the active stages 0..k.
+            for (int i = 0; i <= k; i++)
+            {
+                tb[i] = (SM[i] == 1) ? tu[i] * (1.0 - Math.Exp(-Li[i] / ve[i])) : Li[i] / aL[i];
+                tgoi[i] = (i == 0) ? tb[i] : tgoi[i - 1] + tb[i];
+            }
+            tgo = tgoi[k];
+
+            // BLOCK 4 — accumulate L, J, S, Q, P, H over the active stages with the tgoi1 shift terms.
+            L = 0; J = 0; S = 0; Q = 0; P = 0; H = 0;
+            for (int i = 0; i <= k; i++)
+            {
+                double tgoi1 = (i == 0) ? 0.0 : tgoi[i - 1];
+                double Ji, Si, Qi, Pi;
+                if (SM[i] == 1)
+                {
+                    Ji = tu[i] * Li[i] - ve[i] * tb[i];
+                    Si = -Ji + tb[i] * Li[i];
+                    Qi = Si * (tu[i] + tgoi1) - 0.5 * ve[i] * tb[i] * tb[i];
+                    Pi = Qi * (tu[i] + tgoi1) - 0.5 * ve[i] * tb[i] * tb[i] * ((1.0 / 3.0) * tb[i] + tgoi1);
+                }
+                else
+                {
+                    Ji = 0.5 * Li[i] * tb[i];
+                    Si = Ji;
+                    Qi = Si * ((1.0 / 3.0) * tb[i] + tgoi1);
+                    Pi = (1.0 / 6.0) * Si * (tgoi[i] * tgoi[i] + 2.0 * tgoi[i] * tgoi1 + 3.0 * tgoi1 * tgoi1);
+                }
+                // cross-stage shift (uses the ACCUMULATED L, J, H from the earlier stages — before adding stage i).
+                Ji += Li[i] * tgoi1;
+                Si += L * tb[i];
+                Qi += J * tb[i];
+                Pi += H * tb[i];
+
+                L += Li[i]; J += Ji; S += Si; Q += Qi; P += Pi;
+                H = J * tgoi[i] - Q;
+            }
+        }
+
+        // BLOCKS 5–8 — linear-tangent steering + conic-gravity + Vgo update. Shared by both laws; takes the
+        // (accumulated) thrust integrals and the decremented Vgo, returns iF/Tgo and advances the state.
+        static UpfgGuidance Steer(Vec3 r, Vec3 v, double mu, UpfgTarget t, Vec3 vgo,
+                                  double L, double J, double S, double Q, double P, double H, double tgo,
+                                  ref UpfgState st)
+        {
+            UpfgGuidance g = new UpfgGuidance();
 
             // BLOCK 5 — linear-tangent steering direction.
             Vec3 lambda = vgo.Normalized;
