@@ -62,6 +62,7 @@ namespace DragonScreen
         {
             for (int i = 0; i < 3; i++) { posPid[i].Reset(); velPid[i].Reset(); }
             smInit = false; smTx = smTy = smTz = 0.0;
+            rcsFallbackLogged = false;
             Active = false;
             PointErrDeg = RateCmdRads = RateMeasRads = 0.0;
             ActPitch = ActYaw = ActRoll = 0.0;
@@ -177,6 +178,7 @@ namespace DragonScreen
             // (engines off, RCS off) correctly read zero authority, so the loop commands nothing.
             bool rcsOn = v.ActionGroups[KSPActionGroup.RCS];
             double px = 0.0, py = 0.0, pz = 0.0;
+            double rcsReported = 0.0;   // how much of the total came from stock RCS GetPotentialTorque
             for (int i = 0; i < v.parts.Count; i++)
             {
                 Part p = v.parts[i];
@@ -189,13 +191,50 @@ namespace DragonScreen
                     Vector3 pos, neg;
                     try { tp.GetPotentialTorque(out pos, out neg); }
                     catch { continue; }
-                    px += Math.Max(Math.Abs(pos.x), Math.Abs(neg.x));
-                    py += Math.Max(Math.Abs(pos.y), Math.Abs(neg.y));
-                    pz += Math.Max(Math.Abs(pos.z), Math.Abs(neg.z));
+                    double ax = Math.Max(Math.Abs(pos.x), Math.Abs(neg.x));
+                    double ay = Math.Max(Math.Abs(pos.y), Math.Abs(neg.y));
+                    double az = Math.Max(Math.Abs(pos.z), Math.Abs(neg.z));
+                    px += ax; py += ay; pz += az;
+                    if (pm is ModuleRCS) rcsReported += ax + ay + az;
                 }
             }
+
+            // ⛔ STOCK ModuleRCS.GetPotentialTorque BUG WORKAROUND (data-confirmed, flights 135356/174959/180029):
+            // on the SEPARATED abort capsule the RCS reported ~0 potential torque even with the master ON and the
+            // Dracos able to fire ~21 kN → the loop saw ZERO authority → commanded nothing → the capsule tumbled at
+            // ~17°/s and the crew died. (Normal flight reports ~735 N·m and is untouched.) MechJeb doesn't trust
+            // stock GetPotentialTorque for RCS either — it estimates. So when the master is on and enabled RCS
+            // thrusters exist but the reported RCS torque is ~0, fall back to a geometric estimate (Σ thrusterPower ×
+            // moment-arm-to-CoM) so AttitudePilot has authority to actuate. KSP applies the REAL torque (the Dracos
+            // fire); the estimate only sets the actuation SCALE. ⚠ magnitude to confirm on the next instrumented abort.
+            if (rcsOn && rcsReported < RcsTorqueFloorNm)
+            {
+                Vector3d com = v.CoM;
+                double est = 0.0;
+                for (int i = 0; i < v.parts.Count; i++)
+                {
+                    var rl = v.parts[i].Modules.GetModules<ModuleRCS>();
+                    for (int k = 0; k < rl.Count; k++)
+                    {
+                        if (!rl[k].rcsEnabled) continue;
+                        double arm = ((Vector3d)v.parts[i].transform.position - com).magnitude;
+                        est += rl[k].thrusterPower * 1000.0 * Math.Max(arm, RcsMinArmM);   // kN→N × arm = N·m
+                    }
+                }
+                if (est > 0.0)
+                {
+                    px = Math.Max(px, est); py = Math.Max(py, est); pz = Math.Max(pz, est);
+                    if (!rcsFallbackLogged)
+                    { Debug.LogWarning("[DragonScreen] AttitudePilot: stock RCS GetPotentialTorque ~0 on this vessel — "
+                        + "using the geometric RCS-torque estimate (" + est.ToString("F0") + " N·m/axis) so the capsule can be controlled."); rcsFallbackLogged = true; }
+                }
+            }
+
             tx = px; ty = py; tz = pz;
         }
+        static bool rcsFallbackLogged;
+        [Tunable] public static double RcsTorqueFloorNm = 1.0;   // below this reported RCS torque → use the geometric estimate
+        [Tunable] public static double RcsMinArmM = 0.5;         // floor on the thruster moment arm for the estimate
 
         // The gimbal gap-closing rate (per second) to feed the B4 lag model: KSP lerps the gimbal toward its
         // target by gimbalResponseSpeed·dt each tick, so responseSpeed IS the model's 1/τ. Take the SLOWEST

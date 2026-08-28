@@ -4,13 +4,14 @@
 // (pure) decides WHERE to point (a pitch-program direction, a UPFG thrust vector, a retrograde, an
 // LVLH burn axis); this turns that into a held attitude on the live vessel.
 //
-// FIRST-CUT INNER LOOP = stock SAS target-hold. SAS drives whatever authority the vehicle actually has
-// (S1 engine gimbal on ascent, the Dracos on the capsule), which is exactly the right effector set, and
-// it is battle-tested — so the FIRST flights validate the GUIDANCE (ours) without a bespoke steering
-// controller underneath it. The pure ControlLaw + Authority attitude loop is a clean later swap here once
-// the guidance is proven against the flight recording (docs plan §8b, glue seams). Frame conventions are
-// the standard KSP ones (ENU from the body); a mirrored heading would show as a plane error in the CSV
-// and is a one-line sign fix — and SelfCal.SteerSign is the guard for exactly that.
+// ⭐ INNER LOOP = the DIRECT gimbal/RCS loop (AttitudePilot), the committed inner loop — Point() routes to
+// AttitudePilot when UseGimbalLoop=true (the default + current state). It drives whatever authority the
+// vehicle actually has (S1 engine gimbal on ascent, the Dracos on the capsule). Stock SAS was too slow for
+// FAR's transonic divergence (lost control 3×) and remains ONLY as a one-flip fallback behind
+// UseGimbalLoop=false. (History: the very first flights used SAS while the guidance was validated; that is
+// long superseded — do not read this as "SAS is live".) Frame conventions are the standard KSP ones (ENU
+// from the body); a mirrored heading would show as a plane error in the CSV and is a one-line sign fix —
+// and SelfCal.SteerSign is the guard for exactly that.
 // ============================================================================================
 using System;
 using UnityEngine;

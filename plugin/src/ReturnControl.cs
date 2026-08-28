@@ -15,9 +15,10 @@
 // Dracos for every burn; the deorbit burn points RETROGRADE and pushes forward (= retrograde Δv).
 //
 // ⚠ FIRST CUT (validate in flight): the departure/deorbit RCS translation sign (ForwardSign), the deorbit
-// target periapsis + cutoff, the trunk/undock actuation, and — BANK-ANGLE ENTRY STEERING IS NOT YET WIRED
-// (shield-forward lifting entry with the CoM engaged, chutes deploy; the S-turn bank modulation to hit the
-// splashdown zone is the next refinement, like booster targeting was). Instrumented into the FlightRecorder.
+// target periapsis + cutoff, and the trunk/undock actuation are best-guess and confirmed from the CSV.
+// The BANK-ANGLE lifting entry IS wired (FlyDeorbitEntry below: EntrySteering footprint → Entry.Guide →
+// RollSign bank loop, CoM shifter engaged once, chutes) — the SIGNS (RollSign, RollRefSign/CrossSign) are
+// the best-guess part that a flown entry confirms. Instrumented into the FlightRecorder.
 // ============================================================================================
 using System;
 using System.Collections.Generic;
