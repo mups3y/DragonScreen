@@ -196,6 +196,11 @@ Sources: [KSP VesselRanges API](https://kerbalspaceprogram.com/api/class_vessel_
   perturbation is unobservable; it needs a control-responsive predictor + a MEASURED fin-AoA→lift gain first.
 - **Still owed:** deorbit/entry/departure RCS + bank signs, g-cap (F5), booster CourseCorrect 2×2 (above). Resolve
   from a flown CSV — wiring the signs "on" blind risks the nominal mission.
+- ✅ **WARP never-miss — instant-on-decrease DONE (2026-08-29, commit b4fd09b).** `MissionConductor.ApplyRailWarp`
+  snaps the rail rate DOWN instantly (was gradual → spin-down overshoot from high rates). `docs/TIME_WARP_RESEARCH.md`.
+- **T14 WARP align-then-warp** *(owed — Chris 2026-08-29)* — "in position ready to burn before the burn time." On-rails
+  warp freezes attitude, so orient to the (inertial) burn vector FIRST, warp holding it (only while aligned <10°),
+  LEAD-ullage, and center ignition on `event − halfBurnTime`. Ports MechJeb's node-executor pipeline. §6 of the research.
 
 **Flight-gated (Chris flies; I analyse + tune — the F1/F2 fixes are installed, unflown):**
 - Verify deorbit brings a vessel home (F1); AUTO SEQUENCE resumes the right phase (F2); rendezvous converges to
