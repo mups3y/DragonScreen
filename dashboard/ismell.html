@@ -134,28 +134,36 @@ section.tab.on{display:block;animation:fade .25s ease}
 .arrow{align-self:center;color:var(--mut2);font-size:18px}
 
 /* ---------- Kerbal Lives Matter counter + walls ---------- */
-.klmstrip{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0 0}
-.kcard{flex:1 1 148px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:var(--shadow);
-  display:flex;flex-direction:column;gap:3px;position:relative}
-.kcard .kic{font-size:17px;line-height:1}
-.kcard .kn{font-family:var(--disp);font-weight:700;font-size:30px;line-height:1;font-variant-numeric:tabular-nums}
-.kcard .kl{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);line-height:1.3}
+/* the counter is Claude's SCORECARD, sat in the header (data-derived from the flight audit — not editable) */
+.klmstrip{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin:12px 0 2px}
+.klmhdr{width:100%;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut2);
+  margin:0 0 4px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.klmhdr b{color:var(--accent);font-weight:600;letter-spacing:.06em}
+.kcard{display:flex;align-items:center;gap:9px;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:7px 12px}
+.kcard .kic{font-size:15px;line-height:1}
+.kcard .kn{font-family:var(--disp);font-weight:700;font-size:21px;line-height:1;font-variant-numeric:tabular-nums}
+.kcard .kl{font-family:var(--mono);font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);line-height:1.25}
 .kcard.died .kn{color:var(--dispute)} .kcard.home .kn{color:var(--go)} .kcard.stranded .kn{color:var(--pending)}
 .kcard.rescued .kn{color:var(--accent)} .kcard.abort .kn{color:var(--ink)}
-.kbtns{display:flex;gap:4px;margin-top:5px}
-.kbtn{flex:1;font-family:var(--mono);font-size:13px;font-weight:600;border:1px solid var(--line2);background:var(--panel2);color:var(--mut);
-  border-radius:6px;padding:1px 0;cursor:pointer;user-select:none}
-.kbtn:hover{color:var(--ink);border-color:var(--accent-dim)}
-.wallhead{padding:4px 16px 0;color:var(--mut);font-size:13px}
-.wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;padding:12px 16px}
-.plaque{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
-.plaque.mem{border-left:3px solid var(--dispute)}
-.plaque.hero{border-left:3px solid var(--go)}
-.plaque .pn{font-family:var(--disp);font-weight:700;font-size:15px}
-.plaque .pw{font-family:var(--mono);font-size:10.5px;color:var(--mut2);margin-top:2px}
-.plaque .pd{font-size:12.5px;color:var(--mut);margin-top:6px;outline:none;border-radius:6px}
-.plaque .pd[contenteditable]:focus{background:var(--ground);box-shadow:0 0 0 1px var(--accent-dim);padding:5px 7px;margin:-1px -7px}
-.wallempty{padding:22px 16px;color:var(--mut2);font-style:italic;text-align:center}
+.kcard.home.zero .kn{color:var(--dispute)}   /* 0 home is the damning number — make it red */
+
+/* MARBLE walls — names carved into stone (memorial = grey marble, heroes = warm/gold marble) */
+.wallhead{padding:6px 16px 0;color:var(--mut);font-size:13px}
+.wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;padding:14px 16px}
+.plaque{position:relative;border-radius:8px;padding:15px 18px 14px;
+  background:linear-gradient(145deg,#eceae4 0%,#d3cec4 40%,#e2ded6 62%,#c7c2b7 100%);
+  border:1px solid #b3aca0;box-shadow:0 6px 16px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.65), inset 0 -2px 6px rgba(0,0,0,.12)}
+.plaque.hero{background:linear-gradient(145deg,#efe9dc 0%,#ddd2b8 42%,#e8e0cd 64%,#d2c6a6 100%);border-color:#bcae8f}
+.plaque .ptag{font-family:var(--mono);font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:#7a7264;
+  text-shadow:0 1px 0 rgba(255,255,255,.6)}
+.plaque.hero .ptag{color:#7d6c42}
+.plaque .date{font-family:'Cormorant Garamond',Georgia,serif;font-weight:600;font-size:14px;letter-spacing:.1em;color:#6a6357;margin-top:1px;
+  text-shadow:0 1px 0 rgba(255,255,255,.6)}
+.plaque .names{margin-top:9px;display:flex;flex-direction:column;gap:2px}
+.plaque .name{font-family:'Cormorant Garamond',Georgia,serif;font-weight:700;font-size:19px;line-height:1.28;color:#37332c;letter-spacing:.01em;
+  text-shadow:0 1px 0 rgba(255,255,255,.72), 0 -1px 1px rgba(0,0,0,.32)}
+.plaque .cause{font-family:var(--sans);font-size:11.5px;font-style:italic;color:#574f45;margin-top:10px;padding-top:8px;border-top:1px solid rgba(60,50,40,.18)}
+.wallempty{padding:26px 16px;color:var(--mut2);font-style:italic;text-align:center}
 
 /* tune board */
 .tune{padding:6px 16px 16px}
@@ -236,12 +244,12 @@ section.tab.on{display:block;animation:fade .25s ease}
     <h1 class="title">I Smell What You're Stepping In</h1>
     <p class="sub">One place we both look, so we understand each other and nothing derails the plan. <b style="color:var(--ink)">Nothing here is fact until three ticks.</b> Editable by Chris — every edit pings Claude to investigate and confirm or push back before it's trusted.</p>
     <div class="readout" id="readout"></div>
+    <div class="klmstrip" id="klmstrip"></div>
     <nav class="tabs" id="tabs"></nav>
   </div>
 </header>
 
 <div class="wrap">
-  <div class="klmstrip" id="klmstrip"></div>
   <div class="planstrip" id="planstrip"></div>
   <div class="legend" id="legend"></div>
   <section class="tab" data-tab="status" id="tab-status"></section>
@@ -263,8 +271,8 @@ section.tab.on{display:block;animation:fade .25s ease}
 {
   "version": "v1",
   "updated": "2026-08-28",
-  "updatedBy": "user",
-  "changelog": "v1 seeded by Claude: phase map, component tick-tracker, tune board (ascent seeded from the corpus), rules incl. the new 3-tick rule, research index, open claims.",
+  "updatedBy": "claude",
+  "changelog": "Claude audited the flight corpus (32 Crew-2 flights) into the KLM scorecard + marble memorial/heroes walls; counter moved to the header; ticks relabeled CL/YOU/FLT.",
   "tabs": [
     {
       "id": "status",
@@ -962,13 +970,161 @@ section.tab.on{display:block;animation:fade .25s ease}
     }
   ],
   "klm": {
-    "died": 6,
     "home": 0,
-    "stranded": 4,
+    "died": 52,
+    "stranded": 52,
+    "abortSafe": 12,
     "rescued": 0,
-    "abortSafe": 0
+    "flights": 32,
+    "incomplete": 3,
+    "audited": "2026-08-28",
+    "by": "claude"
   },
-  "memorial": [],
+  "memorial": [
+    {
+      "date": "2026-08-28",
+      "crew": [
+        "Shane Kimbrough",
+        "Megan McArthur",
+        "Akihiko Hoshide",
+        "Thomas Pesquet"
+      ],
+      "how": "abort chutes under-decelerated - impact 209 m/s",
+      "impact": 208.7
+    },
+    {
+      "date": "2026-08-28",
+      "crew": [
+        "Shane Kimbrough",
+        "Megan McArthur",
+        "Akihiko Hoshide",
+        "Thomas Pesquet"
+      ],
+      "how": "abort chutes under-decelerated - impact 123 m/s",
+      "impact": 122.8
+    },
+    {
+      "date": "2026-08-27",
+      "crew": [
+        "Shane Kimbrough",
+        "Megan McArthur",
+        "Akihiko Hoshide",
+        "Thomas Pesquet"
+      ],
+      "how": "abort chutes under-decelerated - impact 221 m/s",
+      "impact": 221.2
+    },
+    {
+      "date": "2026-08-27",
+      "crew": [
+        "Shane Kimbrough",
+        "Megan McArthur",
+        "Akihiko Hoshide",
+        "Thomas Pesquet"
+      ],
+      "how": "abort chutes under-decelerated - impact 222 m/s",
+      "impact": 221.7
+    },
+    {
+      "date": "2026-08-27",
+      "crew": [
+        "Shane Kimbrough",
+        "Megan McArthur",
+        "Akihiko Hoshide",
+        "Thomas Pesquet"
+      ],
+      "how": "abort chutes under-decelerated - impact 123 m/s",
+      "impact": 122.8
+    },
+    {
+      "date": "2026-08-27",
+      "crew": [
+        "Shane Kimbrough",
+        "Megan McArthur",
+        "Akihiko Hoshide",
+        "Thomas Pesquet"
+      ],
+      "how": "abort chutes under-decelerated - impact 122 m/s",
+      "impact": 122.1
+    },
+    {
+      "date": "2026-08-27",
+      "crew": [
+        "Shane Kimbrough",
+        "Megan McArthur",
+        "Akihiko Hoshide",
+        "Thomas Pesquet"
+      ],
+      "how": "abort chutes under-decelerated - impact 122 m/s",
+      "impact": 122.1
+    },
+    {
+      "date": "2026-08-27",
+      "crew": [
+        "Shane Kimbrough",
+        "Megan McArthur",
+        "Akihiko Hoshide",
+        "Thomas Pesquet"
+      ],
+      "how": "abort chutes under-decelerated - impact 123 m/s",
+      "impact": 122.7
+    },
+    {
+      "date": "2026-08-26",
+      "crew": [
+        "Shane Kimbrough",
+        "Megan McArthur",
+        "Akihiko Hoshide",
+        "Thomas Pesquet"
+      ],
+      "how": "impact 129 m/s",
+      "impact": 128.6
+    },
+    {
+      "date": "2026-08-26",
+      "crew": [
+        "Shane Kimbrough",
+        "Megan McArthur",
+        "Akihiko Hoshide",
+        "Thomas Pesquet"
+      ],
+      "how": "impact 143 m/s",
+      "impact": 142.7
+    },
+    {
+      "date": "2026-08-26",
+      "crew": [
+        "Shane Kimbrough",
+        "Megan McArthur",
+        "Akihiko Hoshide",
+        "Thomas Pesquet"
+      ],
+      "how": "impact 178 m/s",
+      "impact": 177.5
+    },
+    {
+      "date": "2026-08-26",
+      "crew": [
+        "Shane Kimbrough",
+        "Megan McArthur",
+        "Akihiko Hoshide",
+        "Thomas Pesquet"
+      ],
+      "how": "impact 129 m/s",
+      "impact": 128.5
+    },
+    {
+      "date": "2026-08-26",
+      "crew": [
+        "Shane Kimbrough",
+        "Megan McArthur",
+        "Akihiko Hoshide",
+        "Thomas Pesquet"
+      ],
+      "how": "abort chutes under-decelerated - impact 131 m/s",
+      "impact": 130.7
+    }
+  ],
   "heroes": []
 }
 </script>
@@ -1010,7 +1166,8 @@ section.tab.on{display:block;animation:fade .25s ease}
       + '    <p class="sub">One place we both look, so we understand each other and nothing derails the plan. '
       + '<b style="color:var(--ink)">Nothing here is fact until three ticks.</b> Editable by Chris — every edit pings '
       + 'Claude to investigate and confirm or push back before it’s trusted.</p>\n'
-      + '    <div class="readout" id="readout"></div>\n    <nav class="tabs" id="tabs"></nav>\n  </div>\n</header>';
+      + '    <div class="readout" id="readout"></div>\n    <div class="klmstrip" id="klmstrip"></div>\n'
+      + '    <nav class="tabs" id="tabs"></nav>\n  </div>\n</header>';
   }
 
   var saving = false;
@@ -1025,7 +1182,7 @@ section.tab.on{display:block;animation:fade .25s ease}
       // rebuild the document from static skeleton + fresh state (never serialize rendered DOM state)
       var styles = document.getElementById('app-styles').textContent;
       var code = document.getElementById('app-code').textContent;
-      var fonts = 'https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap';
+      var fonts = 'https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Cormorant+Garamond:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap';
       html = '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
         + '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         + '<title>I Smell What You’re Stepping In</title>\n'
@@ -1034,7 +1191,7 @@ section.tab.on{display:block;animation:fade .25s ease}
         + '<link href="' + fonts + '" rel="stylesheet">\n'
         + '<style id="app-styles">' + styles + '<\/style>\n</head>\n<body>\n'
         + staticHeader() + '\n'
-        + '<div class="wrap">\n  <div class="klmstrip" id="klmstrip"></div>\n  <div class="planstrip" id="planstrip"></div>\n  <div class="legend" id="legend"></div>\n'
+        + '<div class="wrap">\n  <div class="planstrip" id="planstrip"></div>\n  <div class="legend" id="legend"></div>\n'
         + '  <section class="tab" data-tab="status" id="tab-status"></section>\n'
         + '  <section class="tab" data-tab="tune" id="tab-tune"></section>\n'
         + '  <section class="tab" data-tab="rules" id="tab-rules"></section>\n'
@@ -1307,79 +1464,68 @@ section.tab.on{display:block;animation:fade .25s ease}
     sec.appendChild(p);
   }
 
-  // ---------- Kerbal Lives Matter: the top counter strip + the two walls ----------
+  // ---------- Kerbal Lives Matter: Claude's flight-record scorecard (header) + the two marble walls ----------
+  // ⛔ CLAUDE-OWNED: the counter + walls are audited from the flight recordings by Claude, NOT hand-edited.
+  // It's the scorecard for how the autopilot is doing — 0 home is the number that has to change.
   function renderKlm(){
     var box = document.getElementById('klmstrip'); if(!box) return; box.innerHTML='';
-    var k = S.klm || (S.klm = {died:0,home:0,stranded:0,rescued:0,abortSafe:0});
+    var k = S.klm || {};
+    var hdr = el('div','klmhdr');
+    hdr.appendChild(el('span', null, '💀 CLAUDE’S FLIGHT RECORD — how the autopilot is actually doing'));
+    var right = el('span');
+    right.appendChild(document.createTextNode('audited from '));
+    right.appendChild(el('b', null, String(k.flights||0)));
+    right.appendChild(document.createTextNode(' flights · crew of 4: Kimbrough · McArthur · Hoshide · Pesquet'));
+    hdr.appendChild(right); box.appendChild(hdr);
     var cards = [
-      ['died','💀','Kerbals lost','died'],
       ['home','🏠','Made it home','home'],
-      ['stranded','🛰️','Stranded in space','stranded'],
-      ['rescued','🚀','Rescued from space','rescued'],
-      ['abortSafe','⛑️','Abort — got back safe','abort']
+      ['died','💀','Souls lost','died'],
+      ['stranded','🛰️','Stranded in orbit','stranded'],
+      ['abortSafe','⛑️','Abort — got back safe','abort'],
+      ['rescued','🚀','Rescued from space','rescued']
     ];
     cards.forEach(function(c){
-      var key = c[0];
-      var card = el('div','kcard '+c[3]);
+      var val = k[c[0]] || 0;
+      var card = el('div','kcard '+c[3]+((c[0]==='home' && val===0)?' zero':''));
       card.appendChild(el('div','kic',c[1]));
-      card.appendChild(el('div','kn', String(k[key]||0)));
-      card.appendChild(el('div','kl',c[2]));
-      if(!readOnly){
-        var b = el('div','kbtns');
-        var minus = el('div','kbtn','−'), plus = el('div','kbtn','+');
-        minus.onclick = function(){ k[key] = Math.max(0,(k[key]||0)-1); save(); render(); };
-        plus.onclick  = function(){ k[key] = (k[key]||0)+1; save(); render(); };
-        b.appendChild(minus); b.appendChild(plus); card.appendChild(b);
-      }
+      var col = el('div');
+      col.appendChild(el('div','kn', String(val)));
+      col.appendChild(el('div','kl',c[2]));
+      card.appendChild(col);
       box.appendChild(card);
     });
   }
 
-  // a shared "add a plaque" row for either wall
-  function wallAdder(list, placeholder, field){
-    var add = el('div','adder');
-    var inp = el('input'); inp.placeholder = placeholder;
-    var btn = el('button', null, 'ADD');
-    function commit(){ var v = inp.value.trim(); if(!v) return;
-      var e = { name:v, when:new Date().toISOString().slice(0,10) }; e[field] = '';
-      list.push(e); inp.value=''; save(); render(); }
-    btn.onclick = commit; inp.onkeydown = function(ev){ if(ev.key==='Enter') commit(); };
-    add.appendChild(inp); add.appendChild(btn); return add;
-  }
-
-  function renderWall(secId, klass, title, meta, list, emptyMsg, field, placeholder){
+  // A marble wall of carved plaques (Claude-owned, read-only). Each plaque = a flight's crew, dated.
+  function renderWall(secId, klass, title, meta, list, emptyMsg, tag){
     var sec = document.getElementById(secId); if(!sec) return; sec.innerHTML='';
     var p = el('div','panel');
     var ph = el('div','ph'); ph.appendChild(el('h2',title)); ph.appendChild(el('span','meta',meta)); p.appendChild(ph);
-    if(list.length===0){ p.appendChild(el('div','wallempty',emptyMsg)); }
-    else{
-      var wall = el('div','wall');
-      list.forEach(function(m,idx){
-        var pl = el('div','plaque '+klass);
-        pl.appendChild(el('div','pn', m.name||'—'));
-        pl.appendChild(el('div','pw', (m.when||'') + (m.mission?(' · '+m.mission):'')));
-        var d = el('div','pd', m[field]||'');
-        if(!readOnly){ d.contentEditable='true'; d.onblur=function(){ var v=d.textContent.trim();
-          if(!v){ list.splice(idx,1); } else { m[field]=v; } save(); render(); }; }
-        pl.appendChild(d); wall.appendChild(pl);
-      });
-      p.appendChild(wall);
-    }
-    if(!readOnly) p.appendChild(wallAdder(list, placeholder, field));
+    if(!list || list.length===0){ p.appendChild(el('div','wallempty',emptyMsg)); sec.appendChild(p); return; }
+    var wall = el('div','wall');
+    list.forEach(function(m){
+      var pl = el('div','plaque '+klass);
+      pl.appendChild(el('div','ptag',tag));
+      pl.appendChild(el('div','date', m.date||''));
+      var names = el('div','names');
+      (m.crew||[]).forEach(function(n){ names.appendChild(el('div','name', n)); });
+      pl.appendChild(names);
+      if(m.how) pl.appendChild(el('div','cause', m.how));
+      wall.appendChild(pl);
+    });
+    p.appendChild(wall);
     sec.appendChild(p);
   }
 
   function renderMemorial(){
     renderWall('tab-memorial','mem','Memorial Wall',
-      'kerbals lost in the line of testing — gone but not forgotten',
-      S.memorial||(S.memorial=[]), 'No kerbals lost yet. Keep it that way.',
-      'how', 'Name of the fallen — then click the card to add how they were lost');
+      'crews lost in flight testing — audited from the recordings, newest first',
+      S.memorial||[], 'No crews lost. Nothing to grieve — yet.', 'In memoriam');
   }
   function renderHeroes(){
     renderWall('tab-heroes','hero','Heroes Wall',
-      'crews that flew a mission and came home',
-      S.heroes||(S.heroes=[]), 'No completed missions yet. The first clean pad→splashdown earns this wall.',
-      'note', 'Crew / kerbal — then click the card to add the mission they completed');
+      'crews that flew the mission and came home',
+      S.heroes||[], 'No crew has made it home yet. The first clean pad → splashdown earns this wall.', 'Returned home');
   }
 
   var current = 'status';
