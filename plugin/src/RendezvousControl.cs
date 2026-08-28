@@ -219,8 +219,15 @@ namespace DragonScreen
         {
             MissionConductor.Realtime();   // terminal approach is flown at 1× (precision + short legs); clears any warp
             double mu = body.gravParameter;
-            Vector3d tgtPos = tgt.GetTransform() != null ? (Vector3d)tgt.GetTransform().position
-                                                         : tgt.GetOrbit().getPositionAtUT(now);
+            // ⛔ Use the ORBIT position unless the target is LOADED (within physics range). An UNLOADED vessel's
+            // transform is a STALE PLACEHOLDER (frozen at unload / origin) — at the ~100 km CW hand-off, and until
+            // the ISS loads at ~2.5 km (or the PhysicsRangeExtender range), it is unloaded, so reading its transform
+            // fed the CW garbage → the terminal approach never converged (oc-nearfield). getPositionAtUT is the same
+            // accurate world frame the far-field uses. The transform only takes over for the final precision metres.
+            Vessel tv = tgt.GetVessel();
+            bool tgtLoaded = tv != null && tv.loaded && tgt.GetTransform() != null;
+            Vector3d tgtPos = tgtLoaded ? (Vector3d)tgt.GetTransform().position
+                                        : tgt.GetOrbit().getPositionAtUT(now);
             Vector3d tgtVel = tgt.GetObtVelocity();
             double sma = tgt.GetOrbit().semiMajorAxis;
             double n = Lvlh.MeanMotion(mu, sma);

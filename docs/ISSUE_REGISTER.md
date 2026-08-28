@@ -45,6 +45,12 @@ _Last audit: 2026-08-28 (post the 5-flight batch 165302–180029)._
 | S3 | Entry: RollSign, RollRefSign/CrossSign, deorbit target pe | ReturnControl/EntrySteering (never completed nominally) |
 | S4 | Rendezvous: ForwardSign (−1 held so far) | RendezvousControl |
 
+## COMPLETION-BLOCKERS fixed proactively (so a mission can actually reach the end)
+| # | Issue | Fix | Status |
+|---|---|---|---|
+| B1 | **Near-field CW / docking read the UNLOADED ISS transform** = a stale placeholder → the terminal approach never converges (the likely docking stall, oc-nearfield) | Use the ORBIT position (`getPositionAtUT`) until the target is actually `.loaded` (within physics range); the transform only takes over for the final precision metres. Both RendezvousControl.FlyNearFieldCw + DockingControl. | **FIXED⚑** — this pass |
+| B2 | Mission could stall waiting for a crew GO at each gate | `AutoAdvanceGates=true` — gates auto-progress; departure hands off cleanly. Verified in code (not a bug). | ✓ in place |
+
 ## DOC-ROT — comments contradicting the code (fixed this pass)
 | # | Was | Reality | Status |
 |---|---|---|---|

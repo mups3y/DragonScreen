@@ -63,9 +63,14 @@ namespace DragonScreen
             Actuator.EnableRcs(v);   // ⛔ direct: per-thruster rcsEnabled + master (no craft AG binding)
 
             // ---- relative state in the station LVLH frame ----
+            // ⛔ transform only when the target is LOADED (physics range); else the orbit position — an unloaded
+            // vessel's transform is a stale placeholder (see RendezvousControl.FlyNearFieldCw). Docking's final
+            // metres need the loaded port transform; the approach uses the orbit until the station loads.
             double mu = body.gravParameter;
-            Vector3d tgtPos = tgt.GetTransform() != null ? (Vector3d)tgt.GetTransform().position
-                                                         : tgt.GetOrbit().getPositionAtUT(Planetarium.GetUniversalTime());
+            Vessel tv = tgt.GetVessel();
+            bool tgtLoaded = tv != null && tv.loaded && tgt.GetTransform() != null;
+            Vector3d tgtPos = tgtLoaded ? (Vector3d)tgt.GetTransform().position
+                                        : tgt.GetOrbit().getPositionAtUT(Planetarium.GetUniversalTime());
             Vector3d tgtVel = tgt.GetObtVelocity();
             double n = Lvlh.MeanMotion(mu, tgt.GetOrbit().semiMajorAxis);
             Vec3 targetR = V(tgtPos - body.position), targetV = V(tgtVel);
