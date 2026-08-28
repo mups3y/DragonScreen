@@ -293,10 +293,10 @@ section.tab.on{display:block;animation:fade .25s ease}
 
 <script id="app-state" type="application/json">
 {
-  "version": "v8",
+  "version": "v9",
   "updated": "2026-08-28",
   "updatedBy": "claude",
-  "changelog": "⭐ NEW VEHICLE tab — the PERFECT CONTROL ledger (docs/VEHICLE_AUDIT.md): every RCS mode / thruster limit / engine mode / throttle / fuel type / tank / load per phase (control matrix VERIFIED from code) + the real-world Falcon 9 / Crew Dragon accuracy audit; the one-by-one runs from a FRESH DUMP next flight. Also this session: docking RCS signs DERIVED from MechJeb (all −1, was +1/+1 inverting 2 axes → docking diverged); M5 resolved from ConfigCache (Draco RCS = MMH+NTO, MonoProp is unused dead weight — caught a first-clue trap); entry roll = a safe flight-resolved sign (guidance already robust); TIME WARP fully tunable (master AutoWarpEnabled + MaxWarpRateX cap wired through the overshoot-proof SafeRate ladder). Prior: ABORT 202127 crew SURVIVED (splash 2 m/s), C1+C2 flight-proven. KLM: 8 died / 8 stranded / 4 abort-safe / 8 returning.",
+  "changelog": "⭐ RESCUE READY — the DEORBIT NOW / WATER DEORBIT buttons are now WIRED (were no-ops): a controlled deorbit-and-land reusing the proven DeorbitReturn engine. DEORBIT NOW = immediate, land anywhere safe, gear after a land touchdown; WATER DEORBIT = nearest water, splashdown, no gear. Also live: docking RCS signs DERIVED from MechJeb (all −1), tunable time warp (master + rate cap via the SafeRate ladder), and the NEW VEHICLE tab (perfect-control ledger, docs/VEHICLE_AUDIT.md — one-by-one from a fresh dump next flight). Research index now carries ISSUE_REGISTER + VEHICLE_AUDIT. M5 resolved from ConfigCache (Draco RCS = MMH+NTO; MonoProp unused). Prior: ABORT 202127 crew SURVIVED (2 m/s). KLM: 8 died / 8 stranded / 4 abort-safe / 8 returning.",
   "tabs": [
     {
       "id": "status",
@@ -558,6 +558,39 @@ section.tab.on{display:block;animation:fade .25s ease}
       "fkind": "flight",
       "pending": false,
       "note": "Escalation ladder + free-flyer profiles. Live-wiring into FlightDriver (observe-first, then acting) owed."
+    },
+    {
+      "id": "dock-signs",
+      "name": "Docking RCS translation signs (DERIVED)",
+      "group": "get-end-to-end",
+      "c": true,
+      "u": false,
+      "f": false,
+      "fkind": "flight",
+      "pending": false,
+      "note": "All three docking translation signs → −1, DERIVED from MechJeb's proven RCSController (uniform s = −Dot(A,axis) with the y/z swap) and flight-anchored by the rendezvous prograde burn (ForwardSign=−1 raised apoapsis on 131412). Was +1/+1 on right/up — unreasoned defaults that inverted 2 axes → docking would diverge. UNFLOWN. Commit f03c9c6."
+    },
+    {
+      "id": "deorbit-rescue",
+      "name": "DEORBIT NOW / WATER DEORBIT buttons",
+      "group": "crew-survival",
+      "c": true,
+      "u": false,
+      "f": false,
+      "fkind": "flight",
+      "pending": false,
+      "note": "The two rescue buttons were no-ops (FlightCommands.Run returned false) → now wired to a controlled deorbit-and-land reusing the proven DeorbitReturn engine. DEORBIT NOW = immediate, land anywhere safe, gear after a LAND touchdown; WATER DEORBIT = nearest open water, splashdown, no gear. UNFLOWN — the rescue/data flight. Commit 979959e."
+    },
+    {
+      "id": "warp-tunable",
+      "name": "Tunable time warp (master + rate cap)",
+      "group": "get-end-to-end",
+      "c": true,
+      "u": false,
+      "f": false,
+      "fkind": "flight",
+      "pending": false,
+      "note": "AutoWarpEnabled (master) + MaxWarpRateX (hard cap) on MissionConductor, and the overshoot-proof WarpPlan.SafeRate ladder is now WIRED (was built+tested but unused — the conductor called KSP's raw auto-rate WarpTo). Burn-guard remains the backstop → never miss a manoeuvre. UNFLOWN. Commit 18b303f."
     }
   ],
   "tuneboard": [
@@ -783,6 +816,11 @@ section.tab.on{display:block;animation:fade .25s ease}
           "p": "docs/INDEX.md",
           "fr": "CURRENT",
           "dd": "The master catalog — grep before assuming something's missing."
+        },
+        {
+          "p": "docs/ISSUE_REGISTER.md",
+          "fr": "CURRENT",
+          "dd": "The exhaustive-audit ledger — every open issue with a status, removed only when fixed AND flight-verified."
         }
       ]
     },
@@ -928,6 +966,11 @@ section.tab.on{display:block;animation:fade .25s ease}
           "p": "CRAFT_DUMP_VEHICLE_MAP.md",
           "fr": "CURRENT",
           "dd": "Every actuable module (control by capability). Data: data/craftdump.csv."
+        },
+        {
+          "p": "docs/VEHICLE_AUDIT.md",
+          "fr": "CURRENT",
+          "dd": "⭐ HIGH PRIORITY — the perfect-control ledger: every RCS mode / thruster limit / engine mode / throttle / fuel / tank / load per phase + real F9/Crew Dragon accuracy (see the Vehicle tab). One-by-one from a fresh dump."
         }
       ]
     },
@@ -984,33 +1027,33 @@ section.tab.on{display:block;animation:fade .25s ease}
   ],
   "openClaims": [
     {
-      "id": "oc-fwd",
-      "txt": "ForwardSign = −1 (rendezvous + return Draco translation) — best guess, pe-floor gates a wrong sign; flip from the CSV if pe falls / it doesn't raise.",
+      "id": "oc-deorbit-buttons",
+      "txt": "DEORBIT NOW / WATER DEORBIT rescue buttons — now WIRED (were no-ops), UNFLOWN. Verify: DEORBIT NOW deorbits immediately + lands anywhere safe + deploys gear AFTER a land touchdown; WATER DEORBIT splashes with no gear; both fast + safe. (This is the rescue/data flight.)",
       "pending": false
     },
     {
       "id": "oc-dock",
-      "txt": "Docking RcsRight/Up/Fwd signs — best guess; a lateral/closing move the wrong way shows in the CSV (one-constant fix).",
+      "txt": "Docking RCS signs → all −1 (DERIVED from MechJeb + flight-anchored by the rendezvous prograde burn; was +1/+1 inverting 2 axes). UNFLOWN — verify docking converges from ~100 km and the corridor closes.",
+      "pending": false
+    },
+    {
+      "id": "oc-rvchain",
+      "txt": "Rendezvous→dock chain unblocked (H2 far-field removed the slow circularize + CW hand-off 50→100 km; near-field/docking use the ORBIT position while the ISS is unloaded). UNFLOWN — verify a full mission now reaches docking.",
+      "pending": false
+    },
+    {
+      "id": "oc-warp",
+      "txt": "Time warp fully tunable — MissionConductor.AutoWarpEnabled (master) + MaxWarpRateX (cap), wired through the overshoot-proof SafeRate ladder. UNFLOWN — verify it caps the rate + never drops onto/past a manoeuvre.",
       "pending": false
     },
     {
       "id": "oc-bank",
-      "txt": "Entry bank/roll signs (RollSign, EntrySteering.RollRefSign/CrossSign) + deorbit target Pe 50 km — best guess, flight-tuned.",
+      "txt": "Entry bank/roll sign (RollSign, RollRefSign, CrossSign) — genuinely flight-resolved (KSP-roll × capsule geometry; can't derive to certainty). SAFE failure (a wrong sign → near-ballistic, not a tumble). Set it once from the recording. deorbit target Pe 50 km OK.",
       "pending": false
     },
     {
-      "id": "oc-nearfield",
-      "txt": "Near-field CW reads the ISS transform.position — a placeholder if the ISS is unloaded past physics range (PRE-dependent). If rendezvous stalls in near-field, this is the likely cause + a clean fix.",
-      "pending": false
-    },
-    {
-      "id": "oc-inc",
-      "txt": "A1 inc-undershoot fix (thread target plane-normal into UpfgAim) — installed, UNFLOWN. Verify inc→51.6° AND that S2 has Δv margin for the plane change.",
-      "pending": false
-    },
-    {
-      "id": "oc-abort",
-      "txt": "Fatal-abort chute arm-once fix — NOT flight-verified. Confirm a launch-escape now splashes 5–8 m/s (was 122).",
+      "id": "oc-vehicle",
+      "txt": "Vehicle real-world accuracy (VEHICLE_AUDIT §D) — Draco thrust ~5× (real ~400 N), Merlin gimbal 2° vs real ~±5°, octaweb/MVac/SuperDraco thrust + tank loads. AWAIT the fresh dump — do NOT change engine/tank numbers on memory.",
       "pending": false
     }
   ],

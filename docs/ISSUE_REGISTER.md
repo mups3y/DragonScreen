@@ -77,6 +77,8 @@ Flight-anchored: rendezvous `ForwardSign = −1` (`s.Z=−1`) raised apoapsis co
 | D2 | ReturnControl.cs:17 "BANK-ANGLE ENTRY STEERING IS NOT YET WIRED" | It IS wired (Entry.Guide + RollSign bank loop + CoM shifter). | **DOC-fixed** |
 
 ## UNWIRED / OWED (tracked, not yet due)
+- **DEORBIT NOW / WATER DEORBIT rescue buttons — WIRED⚑** (were no-ops; commit 979959e). `FlightCommands.Run` → `FlightDriver.RequestDeorbit(landAnywhere)` → `AbortControl.ForceDeorbit` (DeorbitReturn engine, land/water flag, gear-after-land-touchdown). UNFLOWN (the rescue/data flight).
+- **MissionOps screen buttons (RENDEZVOUS / AUTODOCK / UNDOCK+LAND) — still no-op STUBS** (`_AutopilotStub.MissionOps`), yet SURFACED on a screen page (`pure/Pages.cs:754-756`). Like the deorbit buttons were. ⚠ Wiring needs their intended UX (force-advance a gate vs engage a controller standalone) and must not conflict with the AUTO SEQUENCE gate conductor. Not needed for the rescue. **OPEN** (candidate build-only job).
 - FDIR live-wiring into FlightDriver (observe-first, then acting) — plan Step I. **OPEN**
 - Screens: page router "NOT YET WIRED" (DragonScreenMonitor:79); screen-data placeholders (ScreenPainter:148); NAV globe-mirror + orbit-line-close bugs (S-A). **OPEN** (Part II)
 - B9 recorder loss-columns; B2 isolated-aero estimator FEED; B3 RcsBalance glue; B8 targeting glue; B11 FDIR wiring. **OWED** (flight-gated)
