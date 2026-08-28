@@ -54,15 +54,18 @@ namespace DragonScreen
         }
 
         // Called every physics frame from FlightDriver. Maintains the warp toward warpTargetUT, and — the
-        // universal safety net — forces real time whenever the active vessel is under thrust so a live burn is
-        // never run under warp.
+        // universal safety net — forces real time whenever the active vessel is commanding a burn so a live burn
+        // is never run under warp. UNCONDITIONAL (not gated on Warped): a burn tick also ZEROES any pending warp
+        // target, so the conductor can never re-warp mid-burn even from a stale target a coast controller set the
+        // frame before. A coast controller only publishes WarpToEvent while it is NOT commanding a burn, so the
+        // two never fight.
         public static void Tick(Vessel active)
         {
             try
             {
-                if (active != null && ThrustActive(active) && Warped())
+                if (active != null && BurnCommanded(active))
                 {
-                    Realtime();   // ⛔ never run a live burn under warp
+                    Realtime();   // ⛔ never run a live burn under warp; also cancels any pending warp target
                     return;
                 }
 
@@ -114,9 +117,20 @@ namespace DragonScreen
         static double Now() { return Planetarium.GetUniversalTime(); }
         static bool Warped() { return TimeWarp.CurrentRateIndex != 0; }
 
-        static bool ThrustActive(Vessel v)
+        // Any burn commanded this frame — main-engine THROTTLE or an RCS (Draco) TRANSLATION. The rendezvous,
+        // departure and deorbit burns are translation, NOT throttle, so the throttle check alone would let a
+        // live Draco burn run under warp. FlightDriver's live command readbacks return 0 on a released axis, so
+        // a genuine coast reads clean. Read AFTER DriveActivePhase (the conductor ticks later in FixedUpdate),
+        // so this frame's guidance intent is already reflected.
+        static bool BurnCommanded(Vessel v)
         {
-            try { return v.ctrlState != null && v.ctrlState.mainThrottle > 0.01; }
+            try
+            {
+                if (v.ctrlState != null && v.ctrlState.mainThrottle > 0.01) return true;
+                double trans = Math.Abs(FlightDriver.CmdTransX) + Math.Abs(FlightDriver.CmdTransY)
+                             + Math.Abs(FlightDriver.CmdTransZ);
+                return trans > 0.001;
+            }
             catch { return false; }
         }
 

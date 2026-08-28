@@ -131,6 +131,14 @@ mission RUN, then tunes it to perfection from real flight data, over many iterat
   `MissionConductor.WarpToEvent` — launch window done, phasing + return/deorbit coasts to add) so there are NO long
   real-time waits; **(c)** every phase transition completes + hands to the next (fix any stall); **(d)** plausible
   best-guess signs/params so it RUNS; **(e)** confirm the octaweb + abort fixes hold in a real run.
+  ⭐⭐ **THE MATCHING TIMELINE MUST EMERGE — NEVER FORCE IT (user 2026-08-28).** "Get it running end-to-end" is
+  about the physics FLOWING through every phase to completion, NOT about hitting the real Crew-2 callout MET. ⛔ Do
+  NOT hardcode/script an event time, insert a fixed wait, or fake a hand-off to make a phase "complete" on schedule.
+  Every event time (MECO/SECO/sep/AI/dock/deorbit/splash) must be an EMERGENT output of physics-based guidance
+  flying the real trajectory — a timeline that matches the real MET is the *tell* that the guidance is right, not a
+  target to steer to. If the emergent timeline is off, that is DATA for the tune loop (I-B.1), never a cue to force
+  the clock. This is the acceptance principle applied to the get-it-running phase: warp-to-maneuvers only compresses
+  the ballistic *coasts* (it never advances a burn or a gate); the burns and hand-offs stay physics-driven.
 - **I-B.1 — THE TUNE LOOP → RINSE AND REPEAT.** User flies MULTIPLE end-to-end tests → I run the FULL structured
   analysis on each recording + FEED the tuning DB → we DB-tune **ONE PHASE AT A TIME in mission order**
   (ascent→booster→rendezvous→dock→return) with the DB tuner (the B9 `LaunchTuner` coordinate-descent generalised

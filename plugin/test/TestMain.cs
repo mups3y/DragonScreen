@@ -45,6 +45,7 @@ public static class TestMain
         bad += CourseCorrectTest.Run();    // B8: finite-difference impact-point divert solve (2×2 booster / 1×1 entry)
         bad += LaunchTunerTest.Run();      // B9: ascent Δv-loss decomposition + GravityTurn LaunchDB shape auto-tuner
         bad += WarpPlanTest.Run();         // mission-conductor: safe time-warp decisions (never overshoot a burn)
+        bad += CoastEtaTest.Run();         // mission-conductor: coast-length ETA for warp-to-maneuvers (range close)
         bad += KerDataTest.Run();          // KER soft-integration: per-stage selection over the mirrored KER sim data
         bad += RendezvousTest.Run();       // L3 rendezvous: named-burn FSM + full-control contract
         bad += PhasingTest.Run();          // L3 rendezvous: far-field co-elliptic raise + crew-safety pe floor + CW guard

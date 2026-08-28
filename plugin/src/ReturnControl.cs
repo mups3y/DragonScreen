@@ -33,6 +33,10 @@ namespace DragonScreen
         [Tunable] public static double SettleS = 3.0;
         [Tunable] public static double RollKp = 0.6;             // bank loop: st.roll per rad of bank error
         [Tunable] public static double RollSign = 1.0;           // flip if the capsule banks the wrong way
+        [Tunable] public static double EntryInterfaceAltM = 120000.0; // atmosphere-entry altitude (entry begins here)
+        [Tunable] public static bool CoastWarp = true;           // warp-to-maneuvers through the post-deorbit coast
+        [Tunable] public static double CoastWarpFallbackHorizonS = 5400.0; // bounded look-ahead if the period is unusable
+        [Tunable] public static double EntryWarpMarginM = 5000.0;// stop warping this far above the interface (1× entry buffer)
 
         static DepPhase depPhase = DepPhase.Idle;
         static DeorbitPhase deoPhase = DeorbitPhase.Idle;
@@ -64,6 +68,7 @@ namespace DragonScreen
 
         static void FlyDeparture(Vessel v, MissionProfile mission)
         {
+            MissionConductor.Realtime();   // departure is flown near the station KOS at 1× (precision); no warp here
             if (!undocked) { UndockNode(v); undocked = true; }
             Actuator.EnableRcs(v);   // ⛔ direct: per-thruster rcsEnabled + master (no craft AG binding)
 
@@ -159,6 +164,18 @@ namespace DragonScreen
             // ---- lifting bank-angle entry ----
             FlightDriver.ReleaseTranslation();
 
+            // ⭐ WARP-TO-MANEUVERS: the deorbit burn is done, so the capsule now COASTS ballistically from orbit
+            // down to the entry interface (~120 km) — up to ~half an orbit of dead time. Warp toward the interface
+            // crossing (CoastEta on ALTITUDE: "range" = alt above interface, closing as it descends), then drop to
+            // 1× at the interface so the lifting bank loop is flown in realtime. No burn here → only altitude gates it.
+            if (CoastWarp && v.altitude > EntryInterfaceAltM + EntryWarpMarginM)
+            {
+                double horizonS = (v.orbit != null && v.orbit.period > 60.0) ? v.orbit.period : CoastWarpFallbackHorizonS;
+                double etaS = CoastEta.TimeToRange(v.altitude, v.verticalSpeed, EntryInterfaceAltM, horizonS);
+                MissionConductor.WarpToEvent(Planetarium.GetUniversalTime() + etaS);
+            }
+            else MissionConductor.Realtime();   // at/below the interface → realtime for the bank loop
+
             // 1) the predicted FOOTPRINT error vs the splashdown target drives the bank magnitude/sign
             EntrySteering.MeasureBc(v);
             double downErr, crossErr;
@@ -169,7 +186,7 @@ namespace DragonScreen
             ei.Velocity = new Vec3(v.srf_velocity.x, v.srf_velocity.y, v.srf_velocity.z);
             ei.Up = new Vec3(up.x, up.y, up.z);
             ei.AltitudeM = v.altitude;
-            ei.EntryInterfaceAltM = 120000.0;
+            ei.EntryInterfaceAltM = EntryInterfaceAltM;
             ei.DrogueAltM = Mission.DrogueAltitude;
             ei.SpeedMps = v.srfSpeed;
             ei.PrevBankSign = lastBankSign;

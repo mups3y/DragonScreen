@@ -25,6 +25,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\CabinEnvironment.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Card.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\ChromeBar.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Chutes.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\CoastEta.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Conic.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\ControlLaw.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\CourseCorrect.cs
@@ -105,6 +106,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\test\AscentTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\AttitudeLoopTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\AuthorityTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\BoosterTest.cs
+C:\Users\User\Desktop\DragonScreen\plugin\test\CoastEtaTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\ConicTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\ControlTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\CourseCorrectTest.cs

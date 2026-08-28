@@ -37,6 +37,10 @@ namespace DragonScreen
         [Tunable] public static double CoEllipticBelowM = 10000.0;// co-elliptic parking height below the station
         [Tunable] public static double RaiseTolM = 2000.0;       // reached-co-elliptic tolerance
         [Tunable] public static double SafePeFloorM = 150000.0;  // ⛔ never let a burn drop pe below this
+        [Tunable] public static bool CoastWarp = true;           // warp-to-maneuvers through the co-elliptic coast
+        [Tunable] public static double CoastWarpFallbackHorizonS = 5400.0; // bounded look-ahead if the period is unusable
+        [Tunable] public static double CoastWarpMinRangeM = 120000.0; // never warp inside this of the station (buffer
+                                                                      // above the 50 km CW hand-off → realtime terminal approach)
 
         static RvPhase phase = RvPhase.Idle;
         static bool shroudOpened;
@@ -96,7 +100,8 @@ namespace DragonScreen
             // ---- FAR FIELD: prograde co-elliptic raise (never CW, never a lowering burn) ----
             if (Phasing.FarField(rangeM, CwHandoffRangeM))
             {
-                FlyFarFieldRaise(v, tgtOrbit, apAlt, peAlt, rangeM);
+                double rangeRate = RangeRateMps(v, tgtOrbit, now, tgtWorld);   // + = separating, − = closing
+                FlyFarFieldRaise(v, tgtOrbit, apAlt, peAlt, rangeM, rangeRate);
                 FlightLog.Fill = FillRow;
                 return;
             }
@@ -108,7 +113,8 @@ namespace DragonScreen
 
         // FAR FIELD — raise the chaser to a co-elliptic orbit below the station, PROGRADE ONLY. Cannot deorbit
         // (prograde raises the orbit); once co-elliptic, coast and let the phase close for the CW hand-off.
-        static void FlyFarFieldRaise(Vessel v, Orbit tgtOrbit, double apAlt, double peAlt, double rangeM)
+        static void FlyFarFieldRaise(Vessel v, Orbit tgtOrbit, double apAlt, double peAlt, double rangeM,
+                                     double rangeRateMps)
         {
             double tgtMeanAlt = 0.5 * (tgtOrbit.ApA + tgtOrbit.PeA);
             double coElAlt = Phasing.CoEllipticTargetAltM(tgtMeanAlt, CoEllipticBelowM);
@@ -135,6 +141,24 @@ namespace DragonScreen
             else
                 FlightDriver.ReleaseTranslation();
 
+            // ⭐ WARP-TO-MANEUVERS: once co-elliptic (no raise burn), the chaser just COASTS while the lower/faster
+            // orbit closes the phase to the CW hand-off — that can be many orbits (hours). Warp toward the ETA of
+            // the range crossing CwHandoffRangeM; the conductor drops out with lead and its universal burn-guard
+            // forces realtime the instant any Draco burn is commanded, so warping can never skip a burn. Only
+            // while genuinely coasting + pe-safe — a raise burn (above) sets translation and self-cancels the warp.
+            if (CoastWarp && !wantRaise && peSafe && rangeM > CoastWarpMinRangeM)
+            {
+                double horizonS = (tgtOrbit.period > 60.0) ? tgtOrbit.period : CoastWarpFallbackHorizonS;
+                double etaS = CoastEta.TimeToRange(rangeM, rangeRateMps, CwHandoffRangeM, horizonS);
+                MissionConductor.WarpToEvent(Planetarium.GetUniversalTime() + etaS);
+            }
+            else
+            {
+                // raising / inside the terminal buffer / pe-held → no warp; clear any pending target so a stale
+                // far-coast warp can't carry into the burn or the near-field approach.
+                MissionConductor.Realtime();
+            }
+
             // recorder: keep the far-field visible (phase + range + whether we're raising)
             phase = RvPhase.Phasing;
             lastCmd = new RendezvousCommand
@@ -152,6 +176,7 @@ namespace DragonScreen
         static void FlyNearFieldCw(Vessel v, CelestialBody body, ITargetable tgt, double now,
                                    double peAlt, double rangeM)
         {
+            MissionConductor.Realtime();   // terminal approach is flown at 1× (precision + short legs); clears any warp
             double mu = body.gravParameter;
             Vector3d tgtPos = tgt.GetTransform() != null ? (Vector3d)tgt.GetTransform().position
                                                          : tgt.GetOrbit().getPositionAtUT(now);
@@ -223,6 +248,23 @@ namespace DragonScreen
         static Vec3 V(Vector3d d) { return new Vec3(d.x, d.y, d.z); }
         static Vector3d W(Vec3 p) { return new Vector3d(p.X, p.Y, p.Z); }
         static Vec3 FirstNonZero(Vec3 a, Vec3 fallback) { return a.Magnitude > 1e-6 ? a : fallback; }
+
+        // Signed relative range-rate (m/s; + = separating, − = closing) for the warp ETA. Both positions come
+        // from getPositionAtUT, so they share the SAME world-frame convention (no swizzle, no CoM-vs-focus mix)
+        // — the safe way to get a rate without touching the two orbital-velocity frames. dt=10 s smooths tick
+        // noise. Falls back to 0 (treated as "not closing" → a bounded look-ahead warp) if the orbit is unusable.
+        static double RangeRateMps(Vessel v, Orbit tgtOrbit, double now, Vector3d tgtWorldNow)
+        {
+            try
+            {
+                if (v.orbit == null) return 0.0;
+                const double dt = 10.0;
+                double r0 = (v.orbit.getPositionAtUT(now) - tgtWorldNow).magnitude;
+                double r1 = (v.orbit.getPositionAtUT(now + dt) - tgtOrbit.getPositionAtUT(now + dt)).magnitude;
+                return (r1 - r0) / dt;
+            }
+            catch { return 0.0; }
+        }
 
         static void FillRow(string[] row)
         {
