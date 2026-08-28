@@ -50,6 +50,8 @@ public static class TestMain
         bad += RendezvousTest.Run();       // L3 rendezvous: named-burn FSM + full-control contract
         bad += PhasingTest.Run();          // L3 rendezvous: far-field co-elliptic raise + crew-safety pe floor + CW guard
         bad += DockingTest.Run();          // L3 docking: glideslope servo + L-approach FSM
+        bad += DockCorridorTest.Run();     // L3 docking: approach-corridor / KOS-breach geometry (auto-abort)
+        bad += DockCaptureTest.Run();      // L3 docking: IDSS soft-capture envelope gate (IDD Rev E)
         bad += ReturnTest.Run();           // L3 return: departure + deorbit + lifting entry (CoM shifter) + chutes
         bad += CrewGateTest.Run();         // L4 conductor: crew-gate state machine + gate catalog + mode manager
         bad += FdirTest.Run();             // L5 FDIR: debounced monitors + recovery ladder + phase-correct abort

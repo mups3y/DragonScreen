@@ -43,11 +43,23 @@ namespace DragonScreen
         [Tunable] public static double ArriveTolM = 10.0;    // "reached this waypoint" (contact uses ContactTol)
         public const double ContactTolM = 0.4;
 
+        // ⭐ KOS AUTO-ABORT (real Crew Dragon: any unplanned KEEP-OUT-SPHERE penetration OFF the approach
+        // corridor commands a RETREAT — SEQUENCE_MAP §1A / PHASE_4_DOCKING_RESEARCH). The pure DockCorridor test
+        // is enforced ONLY on the V-bar terminal legs (toward WP2 + contact), where the nominal path holds the
+        // docking axis; the R-bar climb and the WP0→WP1 swing legitimately arc through the KOS boundary and are
+        // NOT gated (a blind check would false-abort the corner-cut). ⚠ CorridorConeDeg is the researched
+        // ~10° cone (exact SpaceX value not public — §1A) to confirm from a flown approach.
+        [Tunable] public static double KosRadiusM = 200.0;
+        [Tunable] public static double CorridorConeDeg = 10.0;
+        [Tunable] public static double CorridorMinHalfWidthM = 5.0;
+        static bool kosAbortRaised;
+
         static DockControl.Demand lastDemand;
         static LvlhState lastRel;
 
         public static void Reset()
         {
+            kosAbortRaised = false;
             FlightDriver.ReleaseTranslation();
             Steering.Release();
         }
@@ -88,8 +100,25 @@ namespace DragonScreen
             lastRel = rel;
 
             // ---- which leg? the upcoming crew gate identifies the target waypoint ----
+            GateId nextGate = CrewProcedureOps.NextGateId;
             double tx, ty, tz; bool contact;
-            WaypointFor(CrewProcedureOps.NextGateId, out tx, out ty, out tz, out contact);
+            WaypointFor(nextGate, out tx, out ty, out tz, out contact);
+
+            // ---- KOS auto-abort: on the V-bar terminal legs (toward WP2 + contact), an off-corridor KOS
+            // penetration → RETREAT (routes through the abort responder → KosRetreat, since we are near the
+            // station). NOT enforced on the R-bar/WP0→WP1 legs (they arc through the boundary by design). ----
+            bool vbarLeg = contact || nextGate == GateId.WP2DockGoG12;
+            if (vbarLeg && !kosAbortRaised
+                && DockCorridor.Breached(rel, KosRadiusM, CorridorConeDeg * Math.PI / 180.0, CorridorMinHalfWidthM))
+            {
+                kosAbortRaised = true;
+                Debug.LogWarning("[DragonScreen] ⛔ KOS BREACH — off the approach corridor inside the "
+                                 + KosRadiusM.ToString("F0") + " m keep-out sphere (range " + rel.RangeM.ToString("F0")
+                                 + " m) — ABORT (retreat).");
+                FlightDriver.ReleaseTranslation();
+                FlightDriver.RequestAbort();
+                return;
+            }
 
             // ---- glideslope servo toward the waypoint (LVLH) ----
             double errR = rel.Rx - tx, errA = rel.Ry - ty, errC = rel.Rz - tz;
@@ -117,7 +146,12 @@ namespace DragonScreen
             double range = Math.Sqrt(errR * errR + errA * errA + errC * errC);
             if (contact)
             {
-                if (DockedSide.Docked(v) || rel.RangeM <= ContactTolM)
+                // KSP's own docking magnetism (DockedSide.Docked) is the authoritative capture signal — a real
+                // dock always completes. The geometric fallback additionally requires the IDSS soft-capture
+                // envelope (closing/lateral/offset/angle/rate ≤ IDSS IDD Rev E limits), so a fast or skewed
+                // fly-through at the contact tolerance does NOT count as a clean capture; the servo keeps
+                // nulling until inside the box. ⭐ SEQUENCE_MAP §1A / DockCapture.
+                if (DockedSide.Docked(v) || (rel.RangeM <= ContactTolM && WithinCaptureEnvelope(v, rel, aim)))
                 { FlightDriver.ReleaseTranslation(); CrewProcedureOps.PhaseComplete(); }
             }
             else if (range <= ArriveTolM)
@@ -137,6 +171,22 @@ namespace DragonScreen
                 case GateId.WP2DockGoG12: y = 20; break;   // 20 m
                 default: contact = true; break;            // close to the port (0,0,0)
             }
+        }
+
+        // Measure the IDSS soft-capture envelope from the live relative state (LVLH) + attitude, and test it.
+        // closing = axial rate toward the port (origin); lateral rate = the perpendicular speed; lateral offset
+        // = the radial distance from the V-bar axis; angle = the docking-ring pointing error; angular rate from
+        // the vessel body rate. DockCapture holds the IDSS IDD Rev E limits.
+        static bool WithinCaptureEnvelope(Vessel v, LvlhState rel, Vector3d aim)
+        {
+            double rmag = Math.Sqrt(rel.Rx * rel.Rx + rel.Ry * rel.Ry + rel.Rz * rel.Rz);
+            double closing = rmag > 1e-6 ? -((rel.Rx * rel.Vx + rel.Ry * rel.Vy + rel.Rz * rel.Vz) / rmag) : 0.0;
+            double vmag2 = rel.Vx * rel.Vx + rel.Vy * rel.Vy + rel.Vz * rel.Vz;
+            double lateralRate = Math.Sqrt(Math.Max(0.0, vmag2 - closing * closing));
+            double lateralOffset = Math.Sqrt(rel.Rx * rel.Rx + rel.Rz * rel.Rz);
+            double angleDeg = Steering.PointingErrorDeg(v, aim);
+            double angRateDegS = v.angularVelocity.magnitude * 180.0 / Math.PI;
+            return DockCapture.WithinEnvelope(closing, lateralRate, lateralOffset, angleDeg, angRateDegS, DockCapture.Idss());
         }
 
         static Vec3 V(Vector3d d) { return new Vec3(d.x, d.y, d.z); }

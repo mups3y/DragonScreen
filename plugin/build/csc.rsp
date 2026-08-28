@@ -37,7 +37,9 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Departure.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\DiffThrottle.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\DisplayList.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\DockApproach.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\DockCapture.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\DockControl.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\DockCorridor.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\DockingPage.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\DragonPalette.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Entry.cs
@@ -112,6 +114,8 @@ C:\Users\User\Desktop\DragonScreen\plugin\test\ControlTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\CourseCorrectTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\CrewGateTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\DispersionTest.cs
+C:\Users\User\Desktop\DragonScreen\plugin\test\DockCaptureTest.cs
+C:\Users\User\Desktop\DragonScreen\plugin\test\DockCorridorTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\DockingTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\FdirTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\FlightRecorderTest.cs
