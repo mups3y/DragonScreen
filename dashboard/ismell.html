@@ -293,10 +293,10 @@ section.tab.on{display:block;animation:fade .25s ease}
 
 <script id="app-state" type="application/json">
 {
-  "version": "v9",
-  "updated": "2026-08-28",
+  "version": "v10",
+  "updated": "2026-08-29",
   "updatedBy": "claude",
-  "changelog": "⭐ RESCUE READY — the DEORBIT NOW / WATER DEORBIT buttons are now WIRED (were no-ops): a controlled deorbit-and-land reusing the proven DeorbitReturn engine. DEORBIT NOW = immediate, land anywhere safe, gear after a land touchdown; WATER DEORBIT = nearest water, splashdown, no gear. Also live: docking RCS signs DERIVED from MechJeb (all −1), tunable time warp (master + rate cap via the SafeRate ladder), and the NEW VEHICLE tab (perfect-control ledger, docs/VEHICLE_AUDIT.md — one-by-one from a fresh dump next flight). Research index now carries ISSUE_REGISTER + VEHICLE_AUDIT. M5 resolved from ConfigCache (Draco RCS = MMH+NTO; MonoProp unused). Prior: ABORT 202127 crew SURVIVED (2 m/s). KLM: 8 died / 8 stranded / 4 abort-safe / 8 returning.",
+  "changelog": "⭐ FLIGHT-TEST ANALYSIS (4 flights, 4 vessels stranded) → the deorbit ROOT CAUSE found + fixed. F1: the deorbit/abort couldn't hold retrograde (ptErr p95 128-178°) so the burns fired mis-pointed — burned ~900 m/s but pe barely dropped → stranded. ROOT: AttitudePilot's geometric RCS-torque fallback over-estimated ~9× (summed thrusterPower×|arm| on every axis, logged 111185 N·m) → over-aggressive rate → oscillation. FIXED: per-axis r×F estimate (MechJeb VesselState.RCSTorqueAvailable). F2: AUTO SEQUENCE now STATE-AWARE (CrewProcedureOps.ResumeIndex) — pressing it in orbit works out rendezvous vs deorbit, never re-launches (docs/SEQUENCE_MAP.md). NEW: the SEQUENCE MAP — phases + alternate paths + the abort decision matrix (real Crew Dragon 8-mode structure). Open: F3 rendezvous reached 100 km but didn't dock; F4 water-scan 0/130 in RSS; F5 g 4.53. KLM: 8 died / 8 stranded / 4 abort-safe / 16 returning.",
   "tabs": [
     {
       "id": "status",
@@ -591,6 +591,28 @@ section.tab.on{display:block;animation:fade .25s ease}
       "fkind": "flight",
       "pending": false,
       "note": "AutoWarpEnabled (master) + MaxWarpRateX (hard cap) on MissionConductor, and the overshoot-proof WarpPlan.SafeRate ladder is now WIRED (was built+tested but unused — the conductor called KSP's raw auto-rate WarpTo). Burn-guard remains the backstop → never miss a manoeuvre. UNFLOWN. Commit 18b303f."
+    },
+    {
+      "id": "deorbit-attitude",
+      "name": "Deorbit attitude — per-axis RCS torque (F1)",
+      "group": "crew-survival",
+      "c": true,
+      "u": false,
+      "f": false,
+      "fkind": "flight",
+      "pending": false,
+      "note": "THE 4-stranded root cause. The geometric RCS-torque fallback summed thrusterPower×|arm| over ALL Dracos on EVERY axis (~9× over, logged 111185 N·m) → the arrestable-rate law over-commanded → the capsule oscillated around retrograde (deorbit ptErr p95 128-178°) → the burn fired mis-pointed → ~900 m/s burned but pe barely dropped → stranded. FIXED: per-axis r×F estimate ported from MechJeb VesselState.RCSTorqueAvailable. UNFLOWN. Commit 5d02f84."
+    },
+    {
+      "id": "state-aware-resume",
+      "name": "AUTO SEQUENCE state-aware resume (F2)",
+      "group": "get-end-to-end",
+      "c": true,
+      "u": false,
+      "f": false,
+      "fkind": "flight",
+      "pending": false,
+      "note": "CrewProcedureOps.ResumeIndex maps the live vessel state → the right plan step: pad→countdown, orbit+targeted→rendezvous, docked→departure, orbit-otherwise→deorbit, entering→ride-it-down. Pressing AUTO SEQUENCE in orbit no longer restarts the launch — it works out rendezvous vs deorbit. See docs/SEQUENCE_MAP.md. UNFLOWN. Commit 5d02f84."
     }
   ],
   "tuneboard": [
@@ -820,7 +842,12 @@ section.tab.on{display:block;animation:fade .25s ease}
         {
           "p": "docs/ISSUE_REGISTER.md",
           "fr": "CURRENT",
-          "dd": "The exhaustive-audit ledger — every open issue with a status, removed only when fixed AND flight-verified."
+          "dd": "The exhaustive-audit ledger — every open issue with a status, removed only when fixed AND flight-verified. F1-F7 = the 2026-08-29 flight-test findings."
+        },
+        {
+          "p": "docs/SEQUENCE_MAP.md",
+          "fr": "CURRENT",
+          "dd": "⭐ Mission phases + alternate paths + the ABORT DECISION MATRIX per phase (real Crew Dragon 8-mode structure) + the STATE-AWARE RESUME map (AUTO SEQUENCE works out where it is — rendezvous vs deorbit, never re-launch)."
         }
       ]
     },
@@ -1027,28 +1054,33 @@ section.tab.on{display:block;animation:fade .25s ease}
   ],
   "openClaims": [
     {
-      "id": "oc-deorbit-buttons",
-      "txt": "DEORBIT NOW / WATER DEORBIT rescue buttons — now WIRED (were no-ops), UNFLOWN. Verify: DEORBIT NOW deorbits immediately + lands anywhere safe + deploys gear AFTER a land touchdown; WATER DEORBIT splashes with no gear; both fast + safe. (This is the rescue/data flight.)",
+      "id": "oc-f1-deorbit",
+      "txt": "F1 (was: 4 vessels stranded) — the deorbit/abort couldn't hold retrograde (ptErr p95 128-178°) so the burns fired mis-pointed (~900 m/s burned, pe barely dropped). ROOT: AttitudePilot's geometric RCS-torque estimate over-counted ~9× (logged 111185 N·m). FIXED with a per-axis r×F estimate (MechJeb). UNFLOWN — verify the deorbit now actually brings a vessel down.",
       "pending": false
     },
     {
-      "id": "oc-dock",
-      "txt": "Docking RCS signs → all −1 (DERIVED from MechJeb + flight-anchored by the rendezvous prograde burn; was +1/+1 inverting 2 axes). UNFLOWN — verify docking converges from ~100 km and the corridor closes.",
+      "id": "oc-f2-stateaware",
+      "txt": "F2 — AUTO SEQUENCE is now STATE-AWARE (ResumeIndex): pressing it in orbit works out rendezvous vs deorbit vs departure, never restarts the launch (docs/SEQUENCE_MAP.md). UNFLOWN — verify a stranded vessel + AUTO SEQUENCE resumes the right phase.",
       "pending": false
     },
     {
-      "id": "oc-rvchain",
-      "txt": "Rendezvous→dock chain unblocked (H2 far-field removed the slow circularize + CW hand-off 50→100 km; near-field/docking use the ORBIT position while the ISS is unloaded). UNFLOWN — verify a full mission now reaches docking.",
+      "id": "oc-f3-rvdock",
+      "txt": "F3 — rendezvous reached the 100 km CW hand-off after ~34 h but did NOT converge to the port (ptErr 113°, act_sat BROKEN — may share F1's attitude root). Re-fly with F1 fixed, then tune the CW terminal + verify docking.",
       "pending": false
     },
     {
-      "id": "oc-warp",
-      "txt": "Time warp fully tunable — MissionConductor.AutoWarpEnabled (master) + MaxWarpRateX (cap), wired through the overshoot-proof SafeRate ladder. UNFLOWN — verify it caps the rate + never drops onto/past a manoeuvre.",
+      "id": "oc-f4-water",
+      "txt": "F4 — the deorbit water-site scan reads 0/130 over water in RSS (body.TerrainAltitude ocean check) → WATER DEORBIT can't target water. DEORBIT NOW (land-anywhere) works regardless. Needs the RSS ocean detection fixed.",
+      "pending": false
+    },
+    {
+      "id": "oc-f5-gcap",
+      "txt": "F5 — max g 4.53 > 4.5 (S2GLimitG=4.1 but the limiter overshoots ~0.4 g at light mass). Tune the g-cap / taper lead.",
       "pending": false
     },
     {
       "id": "oc-bank",
-      "txt": "Entry bank/roll sign (RollSign, RollRefSign, CrossSign) — genuinely flight-resolved (KSP-roll × capsule geometry; can't derive to certainty). SAFE failure (a wrong sign → near-ballistic, not a tumble). Set it once from the recording. deorbit target Pe 50 km OK.",
+      "txt": "Entry bank/roll sign (RollSign, RollRefSign, CrossSign) — genuinely flight-resolved (KSP-roll × capsule geometry). SAFE failure (a wrong sign → near-ballistic, not a tumble). Set it once from the recording.",
       "pending": false
     },
     {

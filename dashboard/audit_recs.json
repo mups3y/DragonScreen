@@ -84,5 +84,27 @@
   "segs": [
    "Crew-2_20260828_202127.csv"
   ]
+ },
+ {
+  "fate": "returning",
+  "how": "return underway (deorbit/abort) - crew alive, not yet home",
+  "date": "2026-08-28",
+  "returning": true,
+  "rows": 10252,
+  "segs": [
+   "Crew-2_20260828_232712.csv",
+   "Crew-2_20260828_235031.csv",
+   "Crew-2_20260828_235430.csv"
+  ]
+ },
+ {
+  "fate": "returning",
+  "how": "return underway (deorbit/abort) - crew alive, not yet home",
+  "date": "2026-08-29",
+  "returning": true,
+  "rows": 428,
+  "segs": [
+   "Crew-2_20260829_000624.csv"
+  ]
  }
 ]
