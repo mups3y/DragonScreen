@@ -5,85 +5,70 @@ at the one thing that matters next.
 
 ---
 
-## ⭐⭐ RESUME HERE (2026-08-28, post-compaction #5) — ASCENT PROVEN ×2; PHASING FLEW (PARTIAL) → CIRCULARIZE FIX BUILT
+## ⭐⭐ RESUME HERE (2026-08-28, post-compaction #6) — FIRST CREW SURVIVES AN ABORT; RV→DOCK CHAIN UNBLOCKED; BOOSTER/PRE IS THE NEXT BIG TASK
 
-**⭐⭐ THE PROJECT RHYTHM (user, said with force — do NOT lose this): WIRE THE FULL MISSION SO EVERY PHASE RUNS AND
-COLLECTS DATA — failed phases INCLUDED ("any data is good data because then we know exactly NOT to do").** Stop
-treating phases as blockers or offering option-menus; just make it RUN end-to-end. ⭐ **THE POST-FLIGHT LOOP, EVERY
-TIME (do ALL of it — this is what "everything you were supposed to do" means):** (1) full structured CSV+log pass on
-EACH recording (`plugin/tools/assess_flight.py` + read KSP.log); (2) **feed the tuning DB** (`python
-plugin/tools/tuning_db.py`); (3) **re-run the KLM audit** (`python dashboard/audit_kerbals.py`); (4) **update the
-dashboard** ticks/tuneboard/KLM + publish; (5) update THIS file + the running-log memory; (6) diagnose → build the
-next-phase fix (one phase at a time, mission order ascent→booster→rv→dock→return). ⭐ WARP-TO-MANEUVERS throughout.
+**⭐⭐ THE PROJECT RHYTHM (user, said with force): WIRE THE FULL MISSION SO EVERY PHASE RUNS AND COLLECTS DATA — failed
+phases INCLUDED.** ⭐ **THE POST-FLIGHT LOOP, EVERY TIME (do ALL of it):** (1) full event-by-event pass on EACH new CSV
+(`plugin/tools/assess_flight.py` + read KSP.log TOGETHER — never spot-check); (2) **feed the tuning DB** (`python
+plugin/tools/tuning_db.py`); (3) **re-run the KLM audit** (`python dashboard/audit_kerbals.py`); (4) **update + PUBLISH
+the dashboard** (verify it RENDERS first — serve locally + browser-console check); (5) update THIS file + the running
+log; (6) diagnose → fix the REAL root (research × data × code; ⛔ NEVER ASSUME — verify every claim against the data;
+guesses are LAST resort). ⭐ **`docs/ISSUE_REGISTER.md` = the exhaustive-audit ledger** ([[fix-everything-means-exhaustive]]):
+every issue lives there with a status, removed only when FIXED **and** flight-verified. Keep auditing until it's empty.
 
-**⭐ STATE after the 2026-08-28 full-mission flight (Crew-2_20260828_131412 ascent→phasing + _135356 return; full
-structured pass done):**
-- ✅✅ **ASCENT REACHES ORBIT + PROVEN TWICE (103303 + 131412), inc 51.65° vs 51.6°.** ⭐ **KEY CORRECTION from the
-  FULL event-by-event pass (`scratchpad/deep131412.py`): `att_err_deg` is ANGLE OF ATTACK, `att_point_deg` is the
-  POINTING error — and att_point ≈ 0 the ENTIRE flight, so attitude CONTROL is essentially perfect in every phase.**
-  (The big att_err in S2 = UPFG's commanded lead; the huge att_err in phasing = warp-frozen on-rails attitude — NOT
-  control failures. My earlier "rendezvous pointing broken" was a misread.) **Two ascent divergences FIXED (unflown):**
-  (1) **SECO eccentric 200×158** — the g-limit taper desynced tgo (cut with 12.7 m/s of vgo UNDELIVERED) → now cuts on
-  **vgo<SecoVgoMps(2)** = the full Δv lands → circular; (2) **peak g 4.77** — limiter lags ~0.27 g → **S2GLimitG 4.5→4.3**.
-  ⚠ Still open (NOT guess-fixed): **gravity-turn AoA ~8°** (pitch-program/B9 tune, minor).
-- ⚠️ **PHASING FLEW — PARTIAL (Crew-2_131412).** ✅ NO self-deorbit (pe held 171–181 km). ✅ Coast auto-warp
-  FLIGHT-PROVEN (warped ~5.6 days of phasing coast on stock APIs, burn-guard held). ✅ Transfer raised ap 200→419 km
-  (station ~420 → correct) and closed range to **86 km ONCE**. ❌ But it **never CIRCULARIZED** → stayed on a 420×172
-  ELLIPSE that only touches the station altitude at apoapsis → **flew PAST + oscillated 1,000–13,000 km for ~5 days**,
-  50 km CW hand-off never latched, docking never reached.
-- ✅ **CIRCULARIZE FIX BUILT (this session, headless-green 734,240 checks, UNFLOWN).** `pure/Phasing.FarGuide` FSM now
-  PHASE → TRANSFER (raise ap to a CO-ELLIPTIC park ~10 km UNDER the station) → **CIRCULARIZE (coast half-orbit to
-  apoapsis, then burn 2 to raise pe → near-circular co-elliptic orbit that DWELLS near the station)** → COAST → CW
-  hand-off. Glue: `TargetAltM = station − CoEllipticBelowM(10 km)`, `NearApoapsis` gate (`NearApoWindowS=20 s`),
-  warp-to-apoapsis in Circularize, far sub-phase logged + mapped into `rv_phase` (Phasing/CoElliptic/ApproachInit).
-  ⚠ **#1 TO VERIFY NEXT FLIGHT — does it now circularize + hand to CW + reach docking?**
-- ⚠️ **RETURN got first DATA (Crew-2_135356).** Chris pressed **EJECT** → **DeorbitReturn** abort fired the deorbit
-  burn (pe 203→114 km, dropping); recording **CUT OFF mid-burn** — no entry/chutes yet (incomplete data, not a
-  failure). **FIXED (unflown):** the deorbit burn now records Δv (`PutDv` was never called by any glue → planned from
-  the formula + delivered from ∫ measured RcsThrustN), and that delivered value now feeds `di.DvAppliedMps` (the
-  guidance backstop cutoff, which was unset). Crew ALIVE.
-- ⚠️ **PHASING open item:** the PHASE-align wait ran **~1.9 synodic (58 h)** — appears to miss the first alignment,
-  but WarpPlan drops out 12 s early so it shouldn't overshoot; **NOT guess-fixed.** The far-phase transition log
-  (added this session — `RV far-field: X → Y`) will pin the cause on the NEXT flight.
-- ✅ **KLM (honest, Claude-owned):** the 2 CSVs are ONE continuous mission → audit now MERGES contiguous met segments
-  (souls per MISSION, not per file) + a new **"returning"** state (deorbit/abort return in progress, crew alive).
-  Scorecard: **0 died · 0 stranded · 0 home · 4 returning · 1 mission.** Nobody lost.
-- ✅ **BOOSTER TOGGLE wired.** Toggle was OFF this run (full Dragon mission) → zero booster data yet.
+**⭐⭐ THE WIN (flight-proven this session, Crew-2_20260828_202127 — a max-Q LaunchEscape abort): FIRST CREW TO SURVIVE.**
+- **C1 chutes DONE✓:** the RealChute canopies NEVER deployed before (0 deploy activity → 127 m/s = dead). `Actuator.DeployChutePart`
+  now fires the canopy's real "Deploy Chute" (GUIDeploy) event ONCE (was arm-only). Log confirms `DROGUES/MAINS activated`;
+  the main inflated at 4.9 km → decelerated 121→8 m/s → **splash 2 m/s**. Crew alive.
+- **C2 abort attitude DONE✓:** the separated capsule had ZERO control authority (`ctrl_tq≈0` → 17°/s tumble) because stock
+  `ModuleRCS.GetPotentialTorque`=0 on a freshly-separated vessel (Dracos fire 21 kN; normal flight reads ~735). `AttitudePilot.ControlTorque`
+  now falls back to a MechJeb-style geometric RCS-torque estimate when the reported RCS torque is ~0. Log shows it fired (4310 N·m/axis),
+  `ctrl_tq` 0→1995, roll settled −8°/s. (Refinement owed: ~250°/s tumble at SuperDraco sep before the fallback recovers it.)
 
-**⛔⛔ 5-FLIGHT UPDATE (2026-08-28, post-fixes): 2 CREWS DEAD, 1 STRANDED, 2 RETURNING — NOBODY HOME. Crew safety is
-the priority.** All 5 flights reached orbit (inc 51.65). Circularize now reaches **CoElliptic** (ap raised ~405 km)
-but still doesn't hand to docking → strands. **⛔ THE KILLER: both tested aborts (LaunchEscape + DeorbitReturn)
-splashed at ~127 m/s — the RealChute canopies NEVER DEPLOYED** (zero deploy activity in the log; splashed with chutes
-attached, no drag). ROOT: the "arm once" only ARMED (deferred to RealChute's envelope, which never triggered). **FIX
-(installed, UNFLOWN): `Actuator.DeployChutePart` now DEPLOYS the canopy directly via its "Deploy Chute" (GUIDeploy)
-event, ONCE (latched)** — our pure Chutes gate already picks 5.5 km drogue / 1.83 km main. ⚠ **#1 TO VERIFY: fly an
-abort and confirm ~5–8 m/s splash.** Also: S2 g-cap 4.3→4.1 (flights hit 4.65).
+**⭐ ASCENT — reaches orbit, PROVEN. `att_err_deg`=ANGLE OF ATTACK, `att_point_deg`=POINTING error (att_point≈0 everywhere =
+control is near-perfect; don't misread AoA/UPFG-lead as a control failure).** Fixes built + FLIGHT-DATA-confirmed:
+- ✅ **SECO is 200×197 (near-circular)** — the "eccentric 200×160" was an `assess_flight.py` BUG reading the last S2Burn row
+  ~0.3 s before cutoff (pe still rising 159→196); tool fixed. The vgo/inOrbit(pe≥195) cutoff works. inc 51.65 vs 51.6.
+- ⚠ g still hit 4.65 (>4.5) with S2GLimitG=4.3 → now **4.1** (unflown; lag ~0.35). gravity-turn AoA ~8° = B9-tuner item.
 
-**⛔ DOCUMENTED, NOT GUESS-FIXED (need more investigation / a flight — refer to research, do NOT assume):**
-- **Abort RCS = 0 thrust:** `rcs_thrust_n=0` the whole abort → a 17°/s roll is never nulled (Dracos obstructed?). Aero
-  forces shield-forward below 45 km so entry survives, but attitude control is lost. Investigate the Dragon RCS
-  architecture (ModuleRCSFX-MonoProp phantom vs the real MMH+NTO ModuleEnginesRF Dracos) — may be the same root as ↓.
-- **MonoPropellant 300 u = vestigial dead weight** (Chris asked "why aboard?"): the base Tundra Dragon has a stock
-  `ModuleRCSFX` burning MonoProp; RO added the real Dracos as `ModuleEnginesRF` (MMH+NTO 655/508) but didn't strip the
-  MonoProp module. Confirm the translation path uses MMH+NTO before removing it (a wrong removal could kill RCS). [[dragon-return-propellant-mmh-nto]]
-- ✅ **SECO "eccentric 200×160" was a TOOL BUG — actually 200×197 (near-circular), flight-confirmed ×3.** `assess_flight.py`
-  read the last S2Burn row ~0.3 s before cutoff (pe still rising 159→196); tool fixed. The vgo/inOrbit(pe≥195) cutoff works.
-- ✅ **Stranding (H2) FIXED (unflown):** the low-thrust circularize drifted the chaser 246→6000 km AND the transfer only
-  reaches ~80 km at apoapsis while the CW hand-off was 50 km → fly-past. Removed the circularize; CwHandoffRangeM 50→100 km
-  so CW does the terminal rendezvous (its valid regime). ⚠ verify CW converges from ~100 km.
-- ✅ **Abort attitude (C2) FIXED (unflown):** the abort capsule had ZERO control authority (stock RCS GetPotentialTorque=0 on
-  the separated capsule) → MechJeb-style geometric RCS-torque fallback in `AttitudePilot.ControlTorque`.
-- ⭐ **`docs/ISSUE_REGISTER.md` is the exhaustive-audit ledger** — the enforcement mechanism for [[fix-everything-means-exhaustive]].
-- **10 g steep entry** in the DeorbitReturn (ballistic, no lifting entry / CoM-shift in the abort path).
+**⭐ RENDEZVOUS→DOCK CHAIN — completion-blockers fixed (ALL UNFLOWN), so a full mission should now progress much further:**
+- ✅ **H2 far-field:** removed the slow low-thrust CIRCULARIZE (it drifted the chaser 246→6000 km over ~27 orbits) — the far
+  field now just DELIVERS to CW's regime (`FarPhase` Phase→Transfer→Coast) and **`CwHandoffRangeM` 50→100 km** so CW catches
+  the transfer's ~80 km closest approach + does the terminal rendezvous (research §3). ⚠ verify CW converges from ~100 km.
+- ✅ **B1 near-field CW / DockingControl** read the ISS **transform** position — a stale placeholder while the ISS is UNLOADED
+  (from ~100 km down to ~2.5 km). Now use the **orbit position** (`getPositionAtUT`) until the target is `.loaded`; transform
+  only for the final metres. This was the likely docking stall.
+- ✅ `AutoAdvanceGates=true` verified — the mission auto-progresses gates G10–G14 (dock→undock→return), no crew-GO stall.
+- ✅ deorbit burn now records Δv (`PutDv` was never called; also feeds `di.DvAppliedMps`, the guidance backstop, which was unset).
+- Doc-rot fixed: Steering header said inner loop = SAS (it's AttitudePilot, live); ReturnControl said bank-entry not wired (it is).
 
-**⭐ NEXT = FLY, crew-survival first:**
-1. **Fly an ABORT** (LaunchEscape + DeorbitReturn) → confirm the chute-deploy fix gives ~5–8 m/s splash (was 127).
-2. **Toggle OFF → full Dragon mission** → does CoElliptic now hand to CW → docking → deorbit → entry → chutes?
-3. **Toggle ARMED → booster-recovery run** → the still-missing booster data. ⛔ **NOTE: the ARMED toggle DID NOTHING on
-   flight 180029** — `MissionConductor.TryFocusBooster` sat behind the `BurnCommanded` gate, so from MECO (ullage RCS +
-   S2 = a continuous "burn") the focus-switch was blocked every frame and the booster unloaded before it could be
-   focused. **FIXED (commit 9201aa9, installed, UNFLOWN): the focus-switch now runs BEFORE the burn gate.** Verify the
-   booster actually gets focused + landed. (Lesson: I'd wrongly ASSUMED the toggle was off — verify against the log.)
+**⛔⛔ THE NEXT BIG TASK — BOOSTER RECOVERY / "OUR PRE" (H1 in the register; Chris's clarification — do NOT re-misread this):**
+- Chris ARMED booster recovery (195316/200639). At MECO the focus-switch to the booster fires correctly (my earlier
+  BurnCommanded-gate fix 9201aa9 works). BUT: **PhysicsRangeExtender is NOT actually installed/wired** (no DLL, no log line),
+  so a **NON-ACTIVE vessel goes ON-RAILS** — the upper stage only flew (and self-corrected its drift) when Chris manually
+  FOCUSED it; the booster wouldn't flip/land even when focused. Result: **upper stage failed to reach orbit AND booster failed
+  to land.** (⚠ the "ping-pong" in the fragment CSVs was CHRIS manually switching to investigate — NOT a bug. I earlier
+  mis-guessed it as auto-focus and started a wrong "commit to booster" edit — REVERTED.)
+- **THE FIX (dual-flight, next session):** the code comment says "can't fly both (stock control-input limit)" — but **MechJeb
+  flies non-active LOADED vessels via `vessel.OnFlyByWire`** (mechjeb_src MechJebCore.cs:319/468/1055), so dual-flight IS
+  possible: (1) **"our PRE" — extend the load/unpack ranges ourselves** via `VesselRanges` (no mod dep; PRE docs cap ~100 km
+  for phantom-force reasons) to keep BOTH the Dragon + booster loaded/simulated; (2) keep the **Dragon ACTIVE** (its autopilot
+  flies S2→orbit) and drive the **BOOSTER via `OnFlyByWire`** (BoosterControl on the non-active vessel) until they separate
+  past the range (by which the booster should have landed downrange). (3) Fix **BoosterControl's flip/entry/land** (it did
+  nothing even when focused). ⚠ Research the KSP `VesselRanges` API + OnFlyByWire before coding (guard every call).
+- MonoPropellant 300 u = vestigial dead weight (base Tundra `ModuleRCSFX`; real Dracos are `ModuleEnginesRF` MMH+NTO) —
+  confirm the RCS-translation path before removing it. [[dragon-return-propellant-mmh-nto]]
+
+**⭐ KLM (Claude-owned scorecard, `dashboard/audit_kerbals.py`, counting from `20260828_103303`):** died 8 · stranded 8 ·
+**abort-safe 4 (the first survivors)** · returning 8 · 0 home. Audit impact-detection fixed twice (was reading the ascent
+climb / the main-deploy transient as the "impact"; now = touchdown speed at the lowest descending altitude). ⚠ owed: detect
+REVERTS (195316/200639 ended at MECO = booster-armed setup, not real strandings — they slightly inflate stranded/survived).
+The **KERBAL LIVES MATTER** banner is on the dashboard header. Live: https://claude.ai/code/artifact/9873fc17-efd8-4902-a029-67df25d3d783
+
+**⭐ NEXT = FLY, then the booster redesign:**
+1. **Full Dragon mission (toggle OFF)** — does the rendezvous now hand to CW → dock → undock → deorbit → entry → chutes → splash?
+   (H2 + near-field + auto-gates should carry it much further; surface the best-guess SIGNS to flip — docking RCS, entry bank.)
+2. **Then implement BOOSTER DUAL-FLIGHT** (our PRE + OnFlyByWire, above) + fix BoosterControl's land.
 ⛔ Getting it to RUN must NOT force the timeline — every MET emerges from physics (ULTIMATE_PLAN I-B.0).
 ⚠ After a PAD SAFE-ABORT, REVERT to launch (RealFuels spends the octaweb's one ignition; a re-engage shows 0% — not a bug).
 
