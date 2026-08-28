@@ -20,14 +20,14 @@ public static class PhasingTest
         // ---- co-elliptic target = a set height BELOW the station ----
         Check("co-elliptic target is below the station", Math.Abs(Phasing.CoEllipticTargetAltM(420000, 10000) - 410000) < 1e-6, "");
 
-        // ---- FarGuide FSM: PHASE (coast to lead angle) → TRANSFER (raise ap) → CIRCULARIZE (raise pe @apo) → COAST ----
+        // ---- FarGuide FSM: PHASE (coast to lead angle) → TRANSFER (raise ap to station alt) → COAST (hand to CW) ----
         double mu = 3.986e14, r1 = 6.571e6, r2 = 6.790e6;        // ~200 km chaser vs ~419 km station
         double o1 = Math.Sqrt(mu / (r1 * r1 * r1)), o2 = Math.Sqrt(mu / (r2 * r2 * r2));
         double lead = Hohmann.PhaseLeadRad(r1, r2, mu);
         double tgtAlt = r2 - 6.371e6;                            // station altitude above the 6371 km body
 
         FarInputs fp = new FarInputs { PhaseNowRad = lead + 1.0, PhaseLeadRad = lead, Omega1 = o1, Omega2 = o2,
-            ApAltM = 200000, TargetAltM = tgtAlt, RaiseTolM = 2000, PeAltM = 158000, NearApoapsis = false, FloorM = 150000 };
+            ApAltM = 200000, TargetAltM = tgtAlt, RaiseTolM = 2000, PeAltM = 158000, FloorM = 150000 };
         FarCommand cp = Phasing.FarGuide(fp, FarPhase.Phase);
         Check("PHASE: not aligned → wait (no burn)", cp.Phase == FarPhase.Phase && !cp.Burn && cp.WaitS > 15,
               "wait=" + cp.WaitS.ToString("F0"));
@@ -36,40 +36,23 @@ public static class PhasingTest
         FarCommand ct = Phasing.FarGuide(fp, FarPhase.Phase);
         Check("PHASE aligned → TRANSFER + burn", ct.Phase == FarPhase.Transfer && ct.Burn, "");
 
-        FarInputs ftr = fp; ftr.ApAltM = 300000;                // in transfer, ap still below the park altitude
+        FarInputs ftr = fp; ftr.ApAltM = 300000;                // in transfer, ap still below the station altitude
         FarCommand cb = Phasing.FarGuide(ftr, FarPhase.Transfer);
-        Check("TRANSFER: ap below park → burn to raise ap", cb.Phase == FarPhase.Transfer && cb.Burn, "");
+        Check("TRANSFER: ap below station → burn to raise ap", cb.Phase == FarPhase.Transfer && cb.Burn, "");
 
-        // ⛔ THE OVER-RAISE FIX (flight 103303: ap 200→772): once ap reaches the park altitude, STOP raising ap.
+        // ⛔ THE OVER-RAISE FIX (flight 103303: ap 200→772): once ap reaches the station altitude, STOP → COAST.
+        // (The slow near-apoapsis CIRCULARIZE was REMOVED — flight 165302: it drifted 246→6,000 km. CW does the
+        // terminal rendezvous instead, once the wider hand-off catches the ~80 km transfer approach.)
         FarInputs fdone = ftr; fdone.ApAltM = tgtAlt;
         FarCommand cc = Phasing.FarGuide(fdone, FarPhase.Transfer);
-        Check("TRANSFER: ap reached park → CIRCULARIZE, no ap-raise burn (never over-raise)",
-              cc.Phase == FarPhase.Circularize && !cc.Burn, "");
-
-        // ⛔ THE CIRCULARIZE FIX (flight 131412: no pe-raise → fly-past forever). Burn 2 raises pe AT apoapsis only.
-        FarInputs fcirc = fdone; fcirc.NearApoapsis = false;    // ap reached, pe still low, NOT at apoapsis
-        FarCommand cnb = Phasing.FarGuide(fcirc, FarPhase.Circularize);
-        Check("CIRCULARIZE off apoapsis → coast (no burn), stays Circularize",
-              cnb.Phase == FarPhase.Circularize && !cnb.Burn, "");
-
-        fcirc.NearApoapsis = true;                              // now at apoapsis → circularize
-        FarCommand cyes = Phasing.FarGuide(fcirc, FarPhase.Circularize);
-        Check("CIRCULARIZE at apoapsis, pe below park → burn to raise pe",
-              cyes.Phase == FarPhase.Circularize && cyes.Burn, "");
-
-        FarInputs fcircdone = fcirc; fcircdone.PeAltM = tgtAlt; // pe now up at the park altitude → co-elliptic done
-        FarCommand ccd = Phasing.FarGuide(fcircdone, FarPhase.Circularize);
-        Check("CIRCULARIZE: pe reached park → COAST, no burn", ccd.Phase == FarPhase.Coast && !ccd.Burn, "");
-
-        FarInputs fcircfloor = fcirc; fcircfloor.PeAltM = 149000; // pe below the floor (guard belt-and-suspenders)
-        FarCommand ccf = Phasing.FarGuide(fcircfloor, FarPhase.Circularize);
-        Check("CIRCULARIZE: pe below floor at apoapsis → burn HELD", !ccf.Burn && ccf.PeHeld, "");
+        Check("TRANSFER: ap reached station → COAST, no burn (never over-raise, no slow circularize)",
+              cc.Phase == FarPhase.Coast && !cc.Burn, "");
 
         FarInputs flow = ftr; flow.PeAltM = 149000;             // pe below the floor in transfer
         FarCommand cl = Phasing.FarGuide(flow, FarPhase.Transfer);
         Check("TRANSFER: pe below floor → burn HELD", !cl.Burn && cl.PeHeld, "");
 
-        FarCommand cco = Phasing.FarGuide(fcircdone, FarPhase.Coast);
+        FarCommand cco = Phasing.FarGuide(fdone, FarPhase.Coast);
         Check("COAST: no burn, holds coast", cco.Phase == FarPhase.Coast && !cco.Burn, "");
 
         // ---- the hard periapsis floor ----

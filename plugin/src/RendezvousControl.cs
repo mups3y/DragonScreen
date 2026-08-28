@@ -33,10 +33,13 @@ namespace DragonScreen
         [Tunable] public static double ForwardSign = -1.0;      // KSP forward RCS translation (H key = Z −1)
         [Tunable] public static double AttitudeReadyDeg = 5.0;
         [Tunable] public static double BurnDoneDvMps = 0.02;
-        [Tunable] public static double CwHandoffRangeM = 50000.0; // far→near split (CW valid within tens of km)
+        [Tunable] public static double CwHandoffRangeM = 100000.0;// far→near split. The phase-timed transfer brings the
+                                                                 // chaser to ~80 km at apoapsis (131412: 86 km, 165302:
+                                                                 // 79 km); a 50 km split NEVER caught that → fly-past.
+                                                                 // 100 km catches it so CW takes over on approach.
+                                                                 // (CW's own guard bounds it to 200 km, so this is safe.)
         [Tunable] public static double CoEllipticBelowM = 10000.0;// co-elliptic parking height below the station
         [Tunable] public static double RaiseTolM = 2000.0;       // reached-co-elliptic tolerance (ap-raise + pe-circularize)
-        [Tunable] public static double NearApoWindowS = 20.0;    // "at apoapsis" window → circularize burn only fires here
         [Tunable] public static double SafePeFloorM = 150000.0;  // ⛔ never let a burn drop pe below this
         [Tunable] public static bool CoastWarp = true;           // warp-to-maneuvers through the co-elliptic coast
         [Tunable] public static double CoastWarpFallbackHorizonS = 5400.0; // bounded look-ahead if the period is unusable
@@ -137,12 +140,10 @@ namespace DragonScreen
             double r1 = rc.magnitude, r2 = rt.magnitude;
             double o1 = Math.Sqrt(mu / (r1 * r1 * r1)), o2 = Math.Sqrt(mu / (r2 * r2 * r2));
 
-            // Park CO-ELLIPTIC: raise BOTH apses to CoEllipticBelowM UNDER the station, not up to it — a slightly
-            // lower, near-circular orbit that dwells just below/near the station for CW to close (never a bare
-            // touch-and-go at apoapsis). "At apoapsis" is a small time window so the circularize burn raises pe.
+            // Raise APOAPSIS to just below the station (CoEllipticBelowM under it) so the coast-up carries the
+            // chaser to ~just below the station near apoapsis — then CW takes over (the low-thrust circularize
+            // was removed: it drifted 246→6,000 km over ~27 orbits; the fix was the wider CW hand-off).
             double parkAltM = (r2 - body.Radius) - CoEllipticBelowM;
-            double timeToAp = v.orbit.timeToAp, per = v.orbit.period;
-            bool nearApo = per > 1.0 && Math.Min(timeToAp, per - timeToAp) < NearApoWindowS;
 
             FarInputs fi = new FarInputs
             {
@@ -150,7 +151,7 @@ namespace DragonScreen
                 PhaseLeadRad = Hohmann.PhaseLeadRad(r1, r2, mu),
                 Omega1 = o1, Omega2 = o2,
                 ApAltM = apAlt, TargetAltM = parkAltM, RaiseTolM = RaiseTolM,
-                PeAltM = peAlt, NearApoapsis = nearApo, FloorM = SafePeFloorM
+                PeAltM = peAlt, FloorM = SafePeFloorM
             };
             FarCommand fc = Phasing.FarGuide(fi, farPhase);
             farPhase = fc.Phase;
@@ -186,10 +187,6 @@ namespace DragonScreen
             {
                 MissionConductor.WarpToEvent(now + fc.WaitS);   // WarpPlan.ShouldWarp ignores gaps too short to bother
             }
-            else if (CoastWarp && farPhase == FarPhase.Circularize && !nearApo && per > 1.0)
-            {
-                MissionConductor.WarpToEvent(now + timeToAp);   // warp the half-orbit coast up to apoapsis to circularize
-            }
             else if (CoastWarp && farPhase == FarPhase.Coast && rangeM > CoastWarpMinRangeM)
             {
                 double horizonS = (tgtOrbit.period > 60.0) ? tgtOrbit.period : CoastWarpFallbackHorizonS;
@@ -198,16 +195,13 @@ namespace DragonScreen
             }
             else
             {
-                MissionConductor.Realtime();   // transferring/circularizing at apoapsis, or inside the buffer → no warp
+                MissionConductor.Realtime();   // transferring, or inside the buffer → no warp
             }
 
-            // recorder: keep the far-field visible (sub-phase + range + whether we're burning). Map the far FSM
-            // onto the RvPhase enum so the CSV rv_phase column shows WHICH far state flew: Phase/Transfer→Phasing,
-            // Circularize→CoElliptic, Coast→ApproachInit.
+            // recorder: keep the far-field visible. Map the far FSM onto the RvPhase enum so the CSV rv_phase
+            // column shows WHICH far state flew: Phase/Transfer→Phasing, Coast→ApproachInit.
             phase = RvPhase.Phasing;
-            RvPhase recPhase = (farPhase == FarPhase.Circularize) ? RvPhase.CoElliptic
-                             : (farPhase == FarPhase.Coast)       ? RvPhase.ApproachInit
-                             : RvPhase.Phasing;
+            RvPhase recPhase = (farPhase == FarPhase.Coast) ? RvPhase.ApproachInit : RvPhase.Phasing;
             lastCmd = new RendezvousCommand
             {
                 Phase = recPhase,

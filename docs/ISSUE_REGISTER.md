@@ -24,7 +24,7 @@ _Last audit: 2026-08-28 (post the 5-flight batch 165302–180029)._
 | # | Issue | Root cause | Status | Ref |
 |---|---|---|---|---|
 | H1 | **Booster-recovery toggle did NOTHING** when ARMED | `TryFocusBooster` sat behind the `BurnCommanded` early-return → from MECO (ullage RCS + S2 = continuous "burn") the focus-switch was blocked every frame; the booster unloaded before it could be focused. | **FIXED⚑** — focus-switch now runs before the burn gate. | 9201aa9 |
-| H2 | **Rendezvous strands** — CoElliptic reached but CoElliptic→CW→dock hand-off never completes | Near-field CW reads `tgt.GetTransform().position`, a placeholder when the ISS is unloaded past physics range (RendezvousControl.cs:95). Likely the near-field stall. | **OPEN** (needs a flight that reaches the hand-off + PRE range check) | — |
+| H2 | **Rendezvous strands** — never reaches CW hand-off | ROOT (data): the low-thrust CIRCULARIZE took ~27 near-apoapsis orbits, drifting the chaser 246→6,000 km. AND the transfer reaches only ~80 km at apoapsis (131412: 86, 165302: 79) while the CW hand-off was 50 km → never caught → fly-past. | **FIXED⚑** — removed the slow circularize; `CwHandoffRangeM` 50→100 km so CW takes over on approach + does the terminal rendezvous (its valid regime). ⚠ verify CW converges from ~100 km next flight. | this pass |
 | H3 | ~~SECO eccentric 200×160~~ **NOT a bug — was an assess-tool misread** | The real settled insertion is **200×197 (near-circular)** on all 3 post-fix flights (up from 200×181 pre-fix). The "200×160" was `assess_flight.py` reading the last S2Burn-phase row — ~0.3 s BEFORE cutoff, pe still rising 159→196. The vgo/inOrbit(pe≥195) cutoff works. | **DONE✓** (flight-confirmed) + tool bug fixed | this pass |
 
 ## MEDIUM — tuning / fidelity
