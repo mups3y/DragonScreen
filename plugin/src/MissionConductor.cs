@@ -316,7 +316,13 @@ namespace DragonScreen
                 // highest rail index whose rate ≤ the safe/capped rate.
                 int idx = 0;
                 for (int i = 0; i < railRates.Length; i++) if (railRates[i] <= safe + 1e-6) idx = i;
-                if (TimeWarp.CurrentRateIndex != idx) TimeWarp.SetRate(idx, false);
+                // ⛔ INSTANT on the way DOWN, gradual on the way UP (MechJeb WarpController instantOnDecrease=true —
+                // docs/TIME_WARP_RESEARCH.md §5). On-rails warp is kinematic, so snapping the rate down is safe; a
+                // GRADUAL step-down from a high rate takes ~1-2 REAL seconds to spin down, during which game-time
+                // races ahead (1 real s = rate game-s) and can carry us PAST the drop-out — the LookaheadTicks
+                // headroom is in game-seconds and far too small to cover that. Instant-down closes that overshoot.
+                if (TimeWarp.CurrentRateIndex != idx)
+                    TimeWarp.SetRate(idx, idx < TimeWarp.CurrentRateIndex);
             }
             catch (Exception e) { Debug.LogWarning("[DragonScreen] rail-warp failed: " + e.Message); }
         }
