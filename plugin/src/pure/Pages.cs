@@ -215,6 +215,8 @@ namespace DragonScreen
         public bool CameraHeldByDocking;
         /// <summary>Screen brightness in tenths, 3..10.</summary>
         public int Brightness;
+        /// <summary>AUTO BOOSTER RECOVERY armed (MissionConductor.AutoRecoverBooster) — the DISPLAY-tab toggle.</summary>
+        public bool BoosterRecoveryOn;
         /// <summary>Page index per screen, indexed BY SCREEN ID (1..3). Element 0 is unused.</summary>
         public int[] ScreenPages;
 

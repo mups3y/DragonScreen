@@ -43,6 +43,13 @@ namespace DragonScreen
         SetScreenPage,
         /// <summary>Write the render target to a PNG. Developer tooling, deliberately reachable.</summary>
         Capture,
+        /// <summary>
+        /// Toggle AUTO BOOSTER RECOVERY (MissionConductor.AutoRecoverBooster). OFF = the full crew mission flies
+        /// the Dragon to orbit (the booster is not recovered). ON = after MECO the conductor hands focus to the
+        /// separated booster and lands it — a focused booster-recovery test that sacrifices the Dragon's orbit
+        /// that run (stock KSP flies one active vessel). Lets us collect booster-phase data on demand.
+        /// </summary>
+        ToggleBoosterRecovery,
 
         // ---- FLIGHT ----
         /// <summary>

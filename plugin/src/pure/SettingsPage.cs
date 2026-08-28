@@ -94,6 +94,15 @@ namespace DragonScreen
             x = bx; y = by + 42f + BtnH + 26f; rw = 296f; rh = BtnH;
         }
 
+        /// <summary>AUTO BOOSTER RECOVERY toggle — left column, below capture + the this-display/resolution lines.</summary>
+        public static void BoosterRect(int w, int h, out float x, out float y,
+                                       out float rw, out float rh)
+        {
+            float cx, cy, crw, crh;
+            CaptureRect(w, h, out cx, out cy, out crw, out crh);
+            x = cx; y = cy + BtnH + 120f; rw = 296f; rh = BtnH;
+        }
+
         public static void PageRect(int screen, int page, int w, int h,
                                     out float x, out float y, out float rw, out float rh)
         {
@@ -223,6 +232,9 @@ namespace DragonScreen
 
                 CaptureRect(w, h, out x, out y, out rw, out rh);
                 if (Control.Hit(px, py, x, y, rw, rh)) return PageHit.Of(PageAct.Capture);
+
+                BoosterRect(w, h, out x, out y, out rw, out rh);
+                if (Control.Hit(px, py, x, y, rw, rh)) return PageHit.Of(PageAct.ToggleBoosterRecovery);
 
                 for (int screen = 1; screen <= 3; screen++)
                     for (int page = 0; page < ChromeBar.PageNames.Length; page++)
@@ -391,6 +403,17 @@ namespace DragonScreen
                     DragonPalette.Text6);
             dl.Text(w + " x " + h, bx + 296f, y + BtnH + 54f, Typography.Body, TextAlign.Right,
                     DragonPalette.Text0);
+
+            // AUTO BOOSTER RECOVERY toggle — LAST in the left column (it reassigns x,y, so it must come after the
+            // display/resolution lines above, which key off the capture rect's y). ARMED = after MECO the
+            // conductor focuses the separated booster and lands it (a booster-recovery test that sacrifices the
+            // Dragon's orbit that run — stock KSP flies one active vessel).
+            BoosterRect(w, h, out x, out y, out rw, out rh);
+            dl.Text("AUTO BOOSTER RECOVERY  (sacrifices the Dragon orbit that flight)", x, y - 22f,
+                    Typography.Caption, TextAlign.Left, DragonPalette.Text5);
+            Control.Button(dl, x, y, rw, rh,
+                           s.BoosterRecoveryOn ? "BOOSTER RECOVERY  ARMED" : "BOOSTER RECOVERY  OFF",
+                           s.BoosterRecoveryOn, true);
 
             dl.Text("PAGE ON EACH DISPLAY", bx + bw - 530f, by + 34f, Typography.Caption,
                     TextAlign.Left, DragonPalette.Text5);

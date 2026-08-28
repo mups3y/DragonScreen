@@ -397,6 +397,13 @@ namespace DragonScreen
 
                 case PageAct.Capture: captureRequested = true; break;
 
+                case PageAct.ToggleBoosterRecovery:
+                    MissionConductor.AutoRecoverBooster = !MissionConductor.AutoRecoverBooster;
+                    Debug.Log("[DragonScreen] AUTO BOOSTER RECOVERY "
+                              + (MissionConductor.AutoRecoverBooster ? "ARMED — after MECO the booster is focused + landed (Dragon orbit sacrificed this flight)"
+                                                                     : "OFF — full Dragon mission to orbit"));
+                    break;
+
                 // Tick a crew step. Held in VesselData rather than per screen: the countdown is the
                 // VEHICLE's, so a check made on the left display is made for everyone.
                 case PageAct.AckStep: VesselData.AcknowledgeStep(hit.Arg); break;
@@ -541,6 +548,7 @@ namespace DragonScreen
             // read KSP and would otherwise have to know about panels.
             PageState ps = VesselData.State;
             ps.Brightness = brightness;
+            ps.BoosterRecoveryOn = MissionConductor.AutoRecoverBooster;
             ps.ScreenPages = livePage;
 
             // The map follows the vehicle until the crew pans it by hand - see MapProjection.Pan.
