@@ -50,10 +50,31 @@ structured pass done):**
   Scorecard: **0 died · 0 stranded · 0 home · 4 returning · 1 mission.** Nobody lost.
 - ✅ **BOOSTER TOGGLE wired.** Toggle was OFF this run (full Dragon mission) → zero booster data yet.
 
-**⭐ NEXT = FLY IT again, both modes:**
-1. **Toggle OFF → full Dragon mission.** Verify the CIRCULARIZE fix: phasing should now park co-elliptic, hand to CW,
-   reach docking → deorbit → entry → chutes. Give me CSV + KSP.log → the full post-flight loop above.
-2. **Toggle ARMED → a booster-recovery run** → the still-missing booster-phase data.
+**⛔⛔ 5-FLIGHT UPDATE (2026-08-28, post-fixes): 2 CREWS DEAD, 1 STRANDED, 2 RETURNING — NOBODY HOME. Crew safety is
+the priority.** All 5 flights reached orbit (inc 51.65). Circularize now reaches **CoElliptic** (ap raised ~405 km)
+but still doesn't hand to docking → strands. **⛔ THE KILLER: both tested aborts (LaunchEscape + DeorbitReturn)
+splashed at ~127 m/s — the RealChute canopies NEVER DEPLOYED** (zero deploy activity in the log; splashed with chutes
+attached, no drag). ROOT: the "arm once" only ARMED (deferred to RealChute's envelope, which never triggered). **FIX
+(installed, UNFLOWN): `Actuator.DeployChutePart` now DEPLOYS the canopy directly via its "Deploy Chute" (GUIDeploy)
+event, ONCE (latched)** — our pure Chutes gate already picks 5.5 km drogue / 1.83 km main. ⚠ **#1 TO VERIFY: fly an
+abort and confirm ~5–8 m/s splash.** Also: S2 g-cap 4.3→4.1 (flights hit 4.65).
+
+**⛔ DOCUMENTED, NOT GUESS-FIXED (need more investigation / a flight — refer to research, do NOT assume):**
+- **Abort RCS = 0 thrust:** `rcs_thrust_n=0` the whole abort → a 17°/s roll is never nulled (Dracos obstructed?). Aero
+  forces shield-forward below 45 km so entry survives, but attitude control is lost. Investigate the Dragon RCS
+  architecture (ModuleRCSFX-MonoProp phantom vs the real MMH+NTO ModuleEnginesRF Dracos) — may be the same root as ↓.
+- **MonoPropellant 300 u = vestigial dead weight** (Chris asked "why aboard?"): the base Tundra Dragon has a stock
+  `ModuleRCSFX` burning MonoProp; RO added the real Dracos as `ModuleEnginesRF` (MMH+NTO 655/508) but didn't strip the
+  MonoProp module. Confirm the translation path uses MMH+NTO before removing it (a wrong removal could kill RCS). [[dragon-return-propellant-mmh-nto]]
+- **SECO eccentric 200×160 (not circular):** only `TargetApoapsisM=200` is set — the vgo-cutoff is CORRECT, the UPFG
+  target itself is eccentric. Needs the UPFG terminal conditions targeting a circular orbit (careful — proven ascent).
+- **Stranding:** circularize → CoElliptic works, but the CoElliptic → CW → dock hand-off doesn't complete.
+- **10 g steep entry** in the DeorbitReturn (ballistic, no lifting entry / CoM-shift in the abort path).
+
+**⭐ NEXT = FLY, crew-survival first:**
+1. **Fly an ABORT** (LaunchEscape + DeorbitReturn) → confirm the chute-deploy fix gives ~5–8 m/s splash (was 127).
+2. **Toggle OFF → full Dragon mission** → does CoElliptic now hand to CW → docking → deorbit → entry → chutes?
+3. **Toggle ARMED → booster-recovery run** → the still-missing booster data.
 ⛔ Getting it to RUN must NOT force the timeline — every MET emerges from physics (ULTIMATE_PLAN I-B.0).
 ⚠ After a PAD SAFE-ABORT, REVERT to launch (RealFuels spends the octaweb's one ignition; a re-engage shows 0% — not a bug).
 
