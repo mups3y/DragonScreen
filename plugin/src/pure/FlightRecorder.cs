@@ -62,6 +62,9 @@ namespace DragonScreen
             "cal_thrust_n", "cal_beta", "cal_invI", "cal_ld", "steer_sign",
             // KER (Kerbal Engineer) soft cross-check — blank when KER absent (see MOD_INTEGRATION_RESEARCH)
             "ker_avail", "ker_remain_dv", "ker_final_dv", "ker_cur_twr", "ker_cur_thrust_n",
+            // B9 ascent Δv-loss decomposition (pure/AscentLoss) — the gravity-turn tuner objective + a live
+            // diagnostic: steer_loss should stay ~0 on a zero-AoA turn; a growing one = the nose is off prograde.
+            "steer_loss_mps", "grav_loss_mps", "drag_loss_mps",
         };
 
         static int Index(string name)
@@ -106,7 +109,8 @@ namespace DragonScreen
             CalThrustN = Index("cal_thrust_n"), CalBeta = Index("cal_beta"), CalInvI = Index("cal_invI"),
             CalLd = Index("cal_ld"), SteerSignC = Index("steer_sign"),
             KerAvail = Index("ker_avail"), KerRemainDv = Index("ker_remain_dv"), KerFinalDv = Index("ker_final_dv"),
-            KerCurTwr = Index("ker_cur_twr"), KerCurThrustN = Index("ker_cur_thrust_n");
+            KerCurTwr = Index("ker_cur_twr"), KerCurThrustN = Index("ker_cur_thrust_n"),
+            SteerLossMps = Index("steer_loss_mps"), GravLossMps = Index("grav_loss_mps"), DragLossMps = Index("drag_loss_mps");
 
         // ---- formatting ----
         public static string Num(double v)
@@ -335,6 +339,14 @@ namespace DragonScreen
             Set(c, KerFinalDv, finalDvMps);
             Set(c, KerCurTwr, curTwr);
             Set(c, KerCurThrustN, curThrustN);
+        }
+
+        // B9 ascent Δv losses (pure/AscentLoss accumulator) — steering / gravity / drag, m/s.
+        public static void PutAscentLoss(string[] c, AscentLoss loss)
+        {
+            Set(c, SteerLossMps, loss.SteeringLoss);
+            Set(c, GravLossMps, loss.GravityLoss);
+            Set(c, DragLossMps, loss.DragLoss);
         }
     }
 }

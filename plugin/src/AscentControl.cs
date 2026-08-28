@@ -64,6 +64,7 @@ namespace DragonScreen
         static bool dragonSeparated;
         static double secoUT = -1.0;   // SECO engine-cut time, to delay separation until thrust has died
         static SelfCalState cal;
+        static AscentLoss ascentLoss;   // B9: live steering/gravity/drag Δv-loss decomposition (recorded)
 
         // last commanded values, for the recorder
         static double Throttle;
@@ -79,6 +80,7 @@ namespace DragonScreen
             phase = AscentPhase.Idle; upfg = new UpfgState(); s2Ignited = false;
             s2ThrustConfirmed = false; s2ThrustUpUT = -1.0; s2Lighting = false; s2PhaseUT = -1.0;
             coastStartUT = -1; dragonSeparated = false; secoUT = -1.0; Throttle = 0;
+            ascentLoss.Reset();
             Steering.Release();
         }
 
@@ -276,6 +278,22 @@ namespace DragonScreen
             Steering.PointHoldRoll(v, aim, rollRef);
             lastAoaDeg = Steering.AngleOfAttackDeg(v);
             lastRcsOn = Actuator.IsRcsOn(v);
+
+            // ⭐ B9: accumulate the ascent Δv-loss decomposition (steering/gravity/drag) while powered — the tuner
+            // objective + the zero-AoA diagnostic (steer_loss should stay ~0; a growing one = the nose is off
+            // prograde). Drag accel ≈ thrustAccel − felt accel (geeForce excludes gravity, so felt ≈ (F−D)/m along
+            // the near-aligned axis of a zero-AoA ascent); clamped ≥0. Only integrates under thrust.
+            if (activeThrustN > 1.0 && massKg > 1.0 && body != null)
+            {
+                double rNow = (v.CoM - body.position).magnitude;
+                double gRad = (mu > 0.0 && rNow > 1.0) ? mu / (rNow * rNow) : 9.80665;
+                double fpaRad = v.srfSpeed > 1.0
+                    ? Math.Asin(Math.Max(-1.0, Math.Min(1.0, v.verticalSpeed / v.srfSpeed))) : Math.PI / 2.0;
+                double thrustAccel = activeThrustN / massKg;
+                double dragAccel = Math.Max(0.0, thrustAccel - v.geeForce * 9.80665);
+                ascentLoss.Step(TimeWarp.fixedDeltaTime, gRad, fpaRad, dragAccel, thrustAccel,
+                                lastAoaDeg * Math.PI / 180.0);
+            }
 
             // ⛔ INSTRUMENT THE PLANE (the "wrong inc" symptom): the azimuth column can be a bad log, so also
             // print the ACHIEVED orbit inclination + the flight-path angle once/2 s. az should be ~42.8° and inc
@@ -544,6 +562,7 @@ namespace DragonScreen
             FlightRecorder.PutAscent(row, lastTgo, lastVgo, lastPitchCmd, lastAzDeg, lastPhaseWord);
             FlightRecorder.PutIgnition(row, lastUllage, FlightDriver.ClampThrustFrac, FlightDriver.ClampHeld);
             FlightRecorder.PutSelfCal(row, cal);
+            FlightRecorder.PutAscentLoss(row, ascentLoss);
         }
     }
 }
