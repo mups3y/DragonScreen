@@ -146,6 +146,19 @@ section.tab.on{display:block;animation:fade .25s ease}
 .kcard.died .kn{color:var(--dispute)} .kcard.home .kn{color:var(--go)} .kcard.stranded .kn{color:var(--pending)}
 .kcard.rescued .kn{color:var(--accent)} .kcard.abort .kn{color:var(--ink)}
 .kcard.returning .kn{color:var(--accent)}
+/* KERBAL LIVES MATTER banner — BLM protest typography, "KERBAL" pasted over "BLACK" */
+.klm-banner{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:.28em;
+  margin:14px 0 4px;padding:14px 18px;background:#0b0b0c;border:1px solid #23262b;border-radius:6px;
+  font-family:var(--disp);font-weight:700;letter-spacing:.02em;line-height:1;
+  font-size:clamp(24px,5.2vw,50px);text-transform:uppercase;color:#f4f4e8;text-align:center}
+.klmb-cover{position:relative;display:inline-block;padding:0 .06em}
+.klmb-black{color:#6b6f76;text-decoration:line-through;text-decoration-thickness:.09em;opacity:.55}
+.klmb-kerbal{position:absolute;left:50%;top:52%;transform:translate(-50%,-50%) rotate(-4deg);
+  color:#0a0d13;background:var(--go);padding:.02em .16em;border-radius:3px;white-space:nowrap;
+  box-shadow:0 2px 0 rgba(0,0,0,.5),0 6px 16px rgba(0,0,0,.45)}
+.klm-banner .klmb-rest{color:#f4f4e8}
+.klm-bsub{font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.16em;color:var(--mut2);
+  text-transform:uppercase;text-align:center;margin:0 0 8px}
 .kcard.home.zero .kn{color:var(--dispute)}   /* 0 home is the damning number — make it red */
 
 /* ONE BIG MARBLE WALL — names carved once into stone, each with a tally (like a real memorial wall) */
@@ -276,10 +289,10 @@ section.tab.on{display:block;animation:fade .25s ease}
 
 <script id="app-state" type="application/json">
 {
-  "version": "v3",
+  "version": "v4",
   "updated": "2026-08-28",
   "updatedBy": "claude",
-  "changelog": "Full event-by-event pass (deep131412.py) — every divergence from nominal, plus fixes built: SECO now cuts on vgo not tgo (fixes 200×158 eccentricity), S2 g-margin 4.5→4.3 (fixes 4.77 g), co-elliptic CIRCULARIZE (fixes phasing fly-past), deorbit-Δv now recorded. Correction: att_point (pointing) is ~0 everywhere — control is perfect; the big att_err values are angle-of-attack / UPFG lead, not error. Open: phasing 1.9-synodic wait (diagnose next flight), gravity-turn 8° AoA (B9 tune). Also fixed the dashboard render crash (renderWall arg order).",
+  "changelog": "5 more flights, systematically analysed. ⛔ 2 crews DIED (abort chutes never deployed → 127 m/s splash), 1 stranded, 2 returning — nobody home. KERBAL LIVES MATTER banner added. Crew-survival fix built: DeployChutePart now DEPLOYS the RealChute canopy directly (was only 'arming' → zero deploy activity → fatal). S2 g-cap 4.3→4.1 (still hit 4.65). Found (documented, not guess-fixed): abort RCS produces 0 thrust (Dracos obstructed); SECO target is eccentric 200×160 not circular (my vgo-cutoff is correct, the UPFG target isn't); 300 units MonoProp are vestigial dead weight (real Dracos burn MMH+NTO); circularize reaches CoElliptic but not docking; 10 g steep entry in a DeorbitReturn.",
   "tabs": [
     {
       "id": "status",
@@ -330,7 +343,7 @@ section.tab.on{display:block;animation:fade .25s ease}
       "name": "Ascent",
       "order": "1 · pad → SECO",
       "c": true,
-      "u": false,
+      "u": true,
       "f": true,
       "fkind": "flight",
       "pending": false,
@@ -342,7 +355,7 @@ section.tab.on{display:block;animation:fade .25s ease}
       "name": "Booster",
       "order": "2 · sep → landing",
       "c": true,
-      "u": false,
+      "u": true,
       "f": false,
       "fkind": "flight",
       "pending": false,
@@ -353,7 +366,7 @@ section.tab.on{display:block;animation:fade .25s ease}
       "name": "Rendezvous",
       "order": "3 · orbit → 7.5 km",
       "c": true,
-      "u": false,
+      "u": true,
       "f": false,
       "fkind": "flight",
       "pending": true,
@@ -365,7 +378,7 @@ section.tab.on{display:block;animation:fade .25s ease}
       "name": "Docking",
       "order": "4 · L-approach → capture",
       "c": true,
-      "u": false,
+      "u": true,
       "f": false,
       "fkind": "flight",
       "pending": false,
@@ -376,7 +389,7 @@ section.tab.on{display:block;animation:fade .25s ease}
       "name": "Return",
       "order": "5 · undock → splash",
       "c": true,
-      "u": false,
+      "u": true,
       "f": false,
       "fkind": "flight",
       "pending": false,
@@ -995,18 +1008,47 @@ section.tab.on{display:block;animation:fade .25s ease}
   ],
   "klm": {
     "home": 0,
-    "died": 0,
-    "stranded": 0,
+    "died": 8,
+    "stranded": 4,
     "abortSafe": 0,
     "rescued": 0,
-    "returning": 4,
-    "flights": 1,
+    "returning": 8,
+    "flights": 5,
     "incomplete": 0,
     "since": "20260828_103303",
     "audited": "2026-08-28",
     "by": "claude"
   },
-  "memorial": [],
+  "memorial": [
+    {
+      "name": "Shane Kimbrough",
+      "tally": 2,
+      "flown": 5,
+      "first": "2026-08-28",
+      "last": "2026-08-28"
+    },
+    {
+      "name": "Megan McArthur",
+      "tally": 2,
+      "flown": 5,
+      "first": "2026-08-28",
+      "last": "2026-08-28"
+    },
+    {
+      "name": "Akihiko Hoshide",
+      "tally": 2,
+      "flown": 5,
+      "first": "2026-08-28",
+      "last": "2026-08-28"
+    },
+    {
+      "name": "Thomas Pesquet",
+      "tally": 2,
+      "flown": 5,
+      "first": "2026-08-28",
+      "last": "2026-08-28"
+    }
+  ],
   "heroes": []
 }
 </script>
@@ -1354,6 +1396,14 @@ section.tab.on{display:block;animation:fade .25s ease}
   function renderKlm(){
     var box = document.getElementById('klmstrip'); if(!box) return; box.innerHTML='';
     var k = S.klm || {};
+    // KERBAL LIVES MATTER — the scorecard's conscience. "KERBAL" (kerbal-green) pasted over a struck-through "BLACK".
+    var banner = el('div','klm-banner');
+    banner.innerHTML = '<span class="klmb-cover"><span class="klmb-black">BLACK</span>'
+      + '<span class="klmb-kerbal">KERBAL</span></span>'
+      + '<span class="klmb-rest">Lives</span><span class="klmb-rest">Matter</span>';
+    box.appendChild(banner);
+    var bsub = el('div','klm-bsub', 'every kerbal aboard our missions counts — the autopilot answers for each one');
+    box.appendChild(bsub);
     var hdr = el('div','klmhdr');
     hdr.appendChild(el('span', null, '💀 CLAUDE’S FLIGHT RECORD — how the autopilot is actually doing'));
     var right = el('span');

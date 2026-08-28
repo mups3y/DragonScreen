@@ -55,7 +55,9 @@ namespace DragonScreen
         // RealFuels throttle-0-reset ignition cycle (see the S2 block):
         [Tunable] public static double S2SettleS = 2.0;       // throttle-0 settle/reset before each light attempt
         [Tunable] public static double S2LightWindowS = 2.0;  // hold throttle up this long before resetting to retry
-        [Tunable] public static double S2GLimitG = 4.3;       // S2 crew axial-g cap (setpoint; ~0.27 g lag margin below 4.5)
+        [Tunable] public static double S2GLimitG = 4.1;       // S2 crew axial-g cap setpoint. Flights showed ~0.35 g
+                                                              // limiter lag at the light-mass final second (4.3→4.65 g),
+                                                              // so 4.1 targets a felt peak ≤4.5. Flight-verify + tune.
         [Tunable] public static double SecoVgoMps = 2.0;      // SECO cutoff when velocity-to-go drops below this (delivers
                                                               // the FULL Δv → circular target orbit, even under g-limit throttle taper)
         static double coastStartUT = -1;

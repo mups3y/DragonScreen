@@ -124,18 +124,20 @@ for fo in FOLDERS:
 print("counting recorded segments with stamp > %s : %d segment(s)"%(SINCE,len(recs)))
 
 # ---- MERGE CONTIGUOUS SEGMENTS INTO MISSIONS (one crew, not one-per-file) ----
-# met is MISSION-elapsed time from the pad (≈0 at launch). A CSV whose met CONTINUES a prior one
-# (metStart well above 0 and ≳ the prior segment's metEnd) is the SAME mission reloaded/continued — NOT a
-# fresh crew. Group them so souls count PER MISSION (4 crew each), and a mission's fate = its LAST segment
-# (so a return that reaches splashdown in a later segment upgrades the whole mission). A segment starting
-# near met 0 is a new pad launch = new mission.
-recs.sort(key=lambda r:(r.get("metStart") if r.get("metStart") is not None else 0.0))
+# met is MISSION-elapsed time from the pad (≈0 at launch). A CSV whose met CONTINUES a prior one (metStart
+# well above 0 and ≈ the CURRENT mission's metEnd) is the SAME mission reloaded/continued — NOT a fresh crew.
+# ⛔ Process in CHRONOLOGICAL (filename-stamp) order, NOT sorted by metStart: a continuation immediately
+# follows its own launch in time, so "sorted by metStart" would scramble every continuation onto the wrong
+# launch (it once glued three unrelated returns into one mission). A segment starting near met 0 is a fresh
+# pad launch = new mission; a high metStart that continues the current mission's metEnd extends it.
+recs.sort(key=lambda r: stampOf(r["file"]))     # chronological
 LAUNCH_MET=120.0
 missions=[]
 for r in recs:
     ms=r.get("metStart")
     cont=(missions and ms is not None and ms>=LAUNCH_MET
-          and missions[-1]["metEnd"] is not None and ms>=missions[-1]["metEnd"]-60.0)
+          and missions[-1]["metEnd"] is not None
+          and abs(ms-missions[-1]["metEnd"])<=missions[-1]["metEnd"]*0.02+600.0)  # met continues (small gap)
     if cont:
         m=missions[-1]; m["segs"].append(r); m["metEnd"]=r.get("metEnd"); m["rows"]+=r["rows"]
     else:

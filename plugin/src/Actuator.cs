@@ -639,28 +639,14 @@ namespace DragonScreen
                         mp.Deploy();
                     return;
                 }
-                // RealChute / custom canopy: prefer ARM. "Arm parachute" — but NOT "Disarm", NOT "Cut chute".
-                bool hasArm = false;
-                for (int m = 0; m < p.Modules.Count; m++)
-                {
-                    PartModule pm = p.Modules[m];
-                    foreach (BaseEvent ev in pm.Events)
-                    {
-                        if (ev == null) continue;
-                        string s = (ev.guiName ?? "") + " " + (ev.name ?? "");
-                        if (s.IndexOf("arm", StringComparison.OrdinalIgnoreCase) >= 0
-                            && s.IndexOf("disarm", StringComparison.OrdinalIgnoreCase) < 0
-                            && s.IndexOf("cut", StringComparison.OrdinalIgnoreCase) < 0)
-                        {
-                            hasArm = true;                        // a RealChute canopy → never fall through to Deploy
-                            if (ev.active) { ev.Invoke(); return; }   // arm it; an inactive arm event = already armed
-                        }
-                    }
-                }
-                // A RealChute canopy whose arm event is no longer active is already armed → do nothing (NOT Deploy).
-                if (hasArm) return;
-
-                // No arm capability anywhere → a stock-style custom canopy: fall back to a one-shot Deploy.
+                // ⛔ RealChute / custom canopy: DEPLOY it directly, ONCE (the caller latches rDrogues/rMainsArmed so
+                // this fires a single time → no per-tick inflation reset). Flights 171135/180029 (data-confirmed):
+                // the previous "Arm parachute" approach produced ZERO RealChute deploy activity in the log and the
+                // capsule splashed at ~127 m/s (crew dead) — arming defers to RealChute's own envelope, which never
+                // triggered here. Our pure Chutes gate already picks the RIGHT moment (drogues ≤5.5 km / mains
+                // ≤1.83 km, descending), so we command the real "Deploy Chute" (GUIDeploy) event NOW rather than
+                // arm-and-hope. ("ModuleParachute.Deploy did nothing" earlier was the STOCK module, which RO strips
+                // with !MODULE[ModuleParachute] — the RealChuteModule's own Deploy is the correct one.)
                 for (int m = 0; m < p.Modules.Count; m++)
                 {
                     PartModule pm = p.Modules[m];
@@ -669,6 +655,21 @@ namespace DragonScreen
                         if (ev == null || !ev.active) continue;
                         string s = (ev.guiName ?? "") + " " + (ev.name ?? "");
                         if (s.IndexOf("deploy", StringComparison.OrdinalIgnoreCase) >= 0
+                            && s.IndexOf("cut", StringComparison.OrdinalIgnoreCase) < 0
+                            && s.IndexOf("disable", StringComparison.OrdinalIgnoreCase) < 0)
+                        { ev.Invoke(); return; }   // "Deploy Chute" (GUIDeploy) — one-shot, latched by the caller
+                    }
+                }
+                // No Deploy event active → fall back to ARM (so a chute that only exposes arm still gets committed).
+                for (int m = 0; m < p.Modules.Count; m++)
+                {
+                    PartModule pm = p.Modules[m];
+                    foreach (BaseEvent ev in pm.Events)
+                    {
+                        if (ev == null || !ev.active) continue;
+                        string s = (ev.guiName ?? "") + " " + (ev.name ?? "");
+                        if (s.IndexOf("arm", StringComparison.OrdinalIgnoreCase) >= 0
+                            && s.IndexOf("disarm", StringComparison.OrdinalIgnoreCase) < 0
                             && s.IndexOf("cut", StringComparison.OrdinalIgnoreCase) < 0)
                         { ev.Invoke(); return; }
                     }
