@@ -28,8 +28,21 @@ def classify(path):
     cPe=col(hdr,"pe_km","pe"); cAp=col(hdr,"ap_km","ap")
     cAb=col(hdr,"fdir_abort","abort"); cAbm=col(hdr,"abort_mode")
     cPh=col(hdr,"mission_phase","phase")
+    cDeorb=col(hdr,"deorbit_phase"); cDep=col(hdr,"dep_phase"); cEntry=col(hdr,"entry_phase")
+    cMetK=col(hdr,"met_s","met","ut")
     if not cAlt: return None
     last=rows[-1]
+    metStart=num(rows[0].get(cMetK)) if cMetK else None
+    metEnd=num(last.get(cMetK)) if cMetK else None
+    # RETURNING = the crew are actively on their way home (undock/departure, deorbit burn, or a DeorbitReturn
+    # abort) when the recording ends, still alive and above the ground. That is NOT "stranded" (no return) —
+    # it is a return IN PROGRESS. If a later contiguous segment shows them splashed, the merge upgrades it.
+    ACTIVE=lambda v:(v or "").strip() not in ("","-","Idle","None")
+    returning=False
+    for r in rows:
+        if (cDeorb and ACTIVE(r.get(cDeorb))) or (cEntry and ACTIVE(r.get(cEntry))) \
+           or (cDep and ACTIVE(r.get(cDep))) or (cAbm and (r.get(cAbm) or "").strip()=="DeorbitReturn"):
+            returning=True; break
     fAlt=num(last.get(cAlt))                 # metres (alt_m) — old 'alt' may be km; detect below
     fPh=(last.get(cPh) or "").strip() if cPh else ""
     # IMPACT speed = the PEAK descent speed in the final approach to the surface (alt < 1500 m), NOT the
@@ -75,7 +88,8 @@ def classify(path):
             fate="died"
             how=("abort chutes under-decelerated - " if abort else "")+"impact %.0f m/s"%spd
     elif inSpace:
-        if orbit: fate="stranded"; how="left in orbit, no return - mission not completed"
+        if returning: fate="returning"; how="return underway (deorbit/abort) - crew alive, not yet home"
+        elif orbit: fate="stranded"; how="left in orbit, no return - mission not completed"
         else: fate="stranded"; how="stuck in space, suborbital/incomplete"
     else:
         spd=abs(fVs) if fVs is not None else 0.0
@@ -84,7 +98,8 @@ def classify(path):
     date=os.path.basename(path).replace("Crew-2_","").split("_")[0]  # YYYYMMDD
     d="%s-%s-%s"%(date[0:4],date[4:6],date[6:8]) if len(date)==8 and date.isdigit() else date
     return dict(file=os.path.basename(path), date=d, rows=len(rows), abort=abort, orbit=orbit,
-               fAltKm=(altM/1000 if altM is not None else None),
+               fAltKm=(altM/1000 if altM is not None else None), metStart=metStart, metEnd=metEnd,
+               returning=returning,
                impact=(round(impactPeak,1) if impactPeak is not None else None), phase=fPh, fate=fate, how=how)
 
 # ⛔ COUNT ONLY FLIGHTS FROM THE RESET FORWARD (user 2026-08-28: "count from now on; clear both").
@@ -106,12 +121,35 @@ for fo in FOLDERS:
         if stampOf(p) <= SINCE: continue          # before/at the reset → excluded
         r=classify(p)
         if r: recs.append(r)
-print("counting flights with stamp > %s : %d flights"%(SINCE,len(recs)))
+print("counting recorded segments with stamp > %s : %d segment(s)"%(SINCE,len(recs)))
+
+# ---- MERGE CONTIGUOUS SEGMENTS INTO MISSIONS (one crew, not one-per-file) ----
+# met is MISSION-elapsed time from the pad (≈0 at launch). A CSV whose met CONTINUES a prior one
+# (metStart well above 0 and ≳ the prior segment's metEnd) is the SAME mission reloaded/continued — NOT a
+# fresh crew. Group them so souls count PER MISSION (4 crew each), and a mission's fate = its LAST segment
+# (so a return that reaches splashdown in a later segment upgrades the whole mission). A segment starting
+# near met 0 is a new pad launch = new mission.
+recs.sort(key=lambda r:(r.get("metStart") if r.get("metStart") is not None else 0.0))
+LAUNCH_MET=120.0
+missions=[]
+for r in recs:
+    ms=r.get("metStart")
+    cont=(missions and ms is not None and ms>=LAUNCH_MET
+          and missions[-1]["metEnd"] is not None and ms>=missions[-1]["metEnd"]-60.0)
+    if cont:
+        m=missions[-1]; m["segs"].append(r); m["metEnd"]=r.get("metEnd"); m["rows"]+=r["rows"]
+    else:
+        missions.append(dict(segs=[r],metEnd=r.get("metEnd"),rows=r["rows"]))
+# collapse each mission to a single rec-like dict, keyed on its LATEST-met segment
+recs=[dict(fate=m["segs"][-1]["fate"], how=m["segs"][-1]["how"], date=m["segs"][-1]["date"],
+           returning=m["segs"][-1].get("returning",False), rows=m["rows"],
+           segs=[s["file"] for s in m["segs"]]) for m in missions]
+print("merged -> %d mission(s)"%len(recs))
 
 from collections import Counter
 tally=Counter(r["fate"] for r in recs)
-print("=== %d Crew-2 flights classified ==="%len(recs))
-for k in ["died","home","stranded","abort","survived",None]:
+print("=== %d Crew-2 mission(s) classified ==="%len(recs))
+for k in ["died","home","stranded","abort","returning","survived",None]:
     print("  %-9s %d"%(str(k),tally.get(k,0)))
 print("\n=== DIED flights ===")
 for r in recs:
@@ -125,6 +163,9 @@ for r in recs:
 print("\n=== STRANDED flights ===")
 for r in recs:
     if r["fate"]=="stranded": print("  %s  %s"%(r["date"],r["how"]))
+print("\n=== RETURNING (crew alive, coming home - outcome pending) ===")
+for r in recs:
+    if r["fate"]=="returning": print("  %s  %s  [%s]"%(r["date"],r["how"],"+".join(r["segs"])))
 # save for wall-building
 json.dump(recs, open(os.path.join(os.path.dirname(__file__),"audit_recs.json"),"w"), indent=1)
 
@@ -134,6 +175,7 @@ died=[r for r in recs if r["fate"]=="died"]
 stranded=[r for r in recs if r["fate"]=="stranded"]
 abort=[r for r in recs if r["fate"]=="abort"]
 home=[r for r in recs if r["fate"]=="home"]
+returning=[r for r in recs if r["fate"]=="returning"]
 surv=[r for r in recs if r["fate"]=="survived"]
 # per-KERBAL rosters (each name ONCE, with a tally of missions in that fate + total flown + the dates).
 from collections import defaultdict
@@ -150,7 +192,8 @@ def roster(cnt, dates):
             for n in CREW if cnt[n]>0]
 klm={
  "counter":{"died":len(died)*4,"stranded":len(stranded)*4,"abortSafe":len(abort)*4,
-            "rescued":0,"home":len(home)*4,"flights":len(recs),"incomplete":len(surv)},
+            "rescued":0,"home":len(home)*4,"returning":len(returning)*4,
+            "flights":len(recs),"incomplete":len(surv)},
  "memorial":roster(diedN, diedDates),       # [{name, tally, flown, first, last}] — dead once, ×tally
  "heroes":roster(homeN, homeDates),
  "crew":CREW,
@@ -158,9 +201,10 @@ klm={
  "since":SINCE,
 }
 json.dump(klm, open(os.path.join(os.path.dirname(__file__),"klm_data.json"),"w"), indent=1)
-print("\n=== KLM SCOREBOARD (souls, 4 crew/flight) ===")
-print("  died %d  stranded %d  abort-safe %d  rescued %d  home %d  |  %d flights (%d incomplete-survived)"
+print("\n=== KLM SCOREBOARD (souls, 4 crew/mission) ===")
+print("  died %d  stranded %d  abort-safe %d  rescued %d  home %d  returning %d  |  %d mission(s) (%d incomplete-survived)"
       %(klm["counter"]["died"],klm["counter"]["stranded"],klm["counter"]["abortSafe"],
-        klm["counter"]["rescued"],klm["counter"]["home"],klm["counter"]["flights"],klm["counter"]["incomplete"]))
-print("  memorial plaques: %d fatal flights"%len(klm["memorial"]))
+        klm["counter"]["rescued"],klm["counter"]["home"],klm["counter"]["returning"],
+        klm["counter"]["flights"],klm["counter"]["incomplete"]))
+print("  memorial plaques: %d fatal mission(s)"%len(klm["memorial"]))
 print("saved klm_data.json")

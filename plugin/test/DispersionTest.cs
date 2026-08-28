@@ -186,21 +186,27 @@ public static class DispersionTest
             double coTgt = Phasing.CoEllipticTargetAltM(station, below);
             Check("co-elliptic target is below the station", coTgt < station && Finite(coTgt),
                   "station=" + station.ToString("F0") + " tgt=" + coTgt.ToString("F0"));
-            // FarGuide (phase-timed transfer) invariants: never OVER-RAISE (the 103303 fix) + never burn below
-            // the pe floor (crew safety), across dispersed geometry and every FSM state.
-            double chApAlt = station + rng.Range(-250000.0, 60000.0);   // chaser ap around/below the station
+            // FarGuide invariants across dispersed geometry + every FSM state: never OVER-RAISE either apse (the
+            // 103303 ap fix + the 131412 pe fix) and never burn below the pe floor (crew safety). The parking
+            // target is the co-elliptic altitude (coTgt, below the station).
+            double chApAlt = coTgt + rng.Range(-250000.0, 60000.0);   // chaser ap around/below the park altitude
+            bool nearApo = (i % 2 == 0);
             FarInputs fin = new FarInputs
             {
                 PhaseNowRad = rng.Range(0.0, 2.0 * Math.PI), PhaseLeadRad = rng.Range(0.0, 2.0 * Math.PI),
                 Omega1 = 0.0012, Omega2 = 0.0011,
-                ApAltM = chApAlt, TargetAltM = station, RaiseTolM = 2000.0,
-                PeAltM = pe, FloorM = floor
+                ApAltM = chApAlt, TargetAltM = coTgt, RaiseTolM = 2000.0,
+                PeAltM = pe, NearApoapsis = nearApo, FloorM = floor
             };
-            FarPhase[] fps = { FarPhase.Phase, FarPhase.Transfer, FarPhase.Coast };
-            FarCommand fcmd = Phasing.FarGuide(fin, fps[i % 3]);
-            if (chApAlt >= station - 2000.0)
-                Check("FarGuide: ap at/above station -> NO burn (never over-raise)", !fcmd.Burn,
+            FarPhase[] fps = { FarPhase.Phase, FarPhase.Transfer, FarPhase.Circularize, FarPhase.Coast };
+            FarPhase st = fps[i % 4];
+            FarCommand fcmd = Phasing.FarGuide(fin, st);
+            if (st == FarPhase.Transfer && chApAlt >= coTgt - 2000.0)
+                Check("FarGuide: ap at/above park in TRANSFER -> NO ap-raise burn (never over-raise ap)", !fcmd.Burn,
                       "ap=" + chApAlt.ToString("F0"));
+            if (st == FarPhase.Circularize && pe >= coTgt - 2000.0)
+                Check("FarGuide: pe at/above park in CIRCULARIZE -> NO burn (never over-raise pe)", !fcmd.Burn,
+                      "pe=" + pe.ToString("F0"));
             if (pe <= floor)
                 Check("FarGuide: pe at/below floor -> burn HELD (crew safety)", !fcmd.Burn,
                       "pe=" + pe.ToString("F0") + " floor=" + floor.ToString("F0"));

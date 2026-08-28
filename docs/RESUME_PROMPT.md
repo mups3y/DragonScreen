@@ -5,38 +5,45 @@ at the one thing that matters next.
 
 ---
 
-## ⭐⭐ RESUME HERE (2026-08-28, post-compaction #4) — ASCENT SOLVED; PHASING REDESIGNED (UNFLOWN); COLLECT EVERY PHASE'S DATA
+## ⭐⭐ RESUME HERE (2026-08-28, post-compaction #5) — ASCENT PROVEN ×2; PHASING FLEW (PARTIAL) → CIRCULARIZE FIX BUILT
 
 **⭐⭐ THE PROJECT RHYTHM (user, said with force — do NOT lose this): WIRE THE FULL MISSION SO EVERY PHASE RUNS AND
 COLLECTS DATA — failed phases INCLUDED ("any data is good data because then we know exactly NOT to do").** Stop
-treating phases as blockers or offering option-menus; just make it RUN end-to-end. A stalled phase blocks all
-downstream data; a booster toggle left off collects zero booster data. Then the TUNE LOOP → rinse & repeat per
-phase in mission order (ascent→booster→rv→dock→return) until perfect. ⭐ WARP-TO-MANEUVERS throughout.
+treating phases as blockers or offering option-menus; just make it RUN end-to-end. ⭐ **THE POST-FLIGHT LOOP, EVERY
+TIME (do ALL of it — this is what "everything you were supposed to do" means):** (1) full structured CSV+log pass on
+EACH recording (`plugin/tools/assess_flight.py` + read KSP.log); (2) **feed the tuning DB** (`python
+plugin/tools/tuning_db.py`); (3) **re-run the KLM audit** (`python dashboard/audit_kerbals.py`); (4) **update the
+dashboard** ticks/tuneboard/KLM + publish; (5) update THIS file + the running-log memory; (6) diagnose → build the
+next-phase fix (one phase at a time, mission order ascent→booster→rv→dock→return). ⭐ WARP-TO-MANEUVERS throughout.
 
-**⭐ STATE after the first coast-warp flight (Crew-2_103303, full structured pass — `dashboard/audit_kerbals.py` +
-`scratchpad/deepread.py`):**
-- ✅✅ **ASCENT SOLVED + FLIGHT-PROVEN (tick-3).** Reaches orbit 200×158 km, **inc 51.65° vs 51.64° target** — the A1
-  plane-normal fix WORKED (was −5.1° short; UPFG steered inc 53.5→51.66 through S2). Clean max-Q 32 kPa @ pointing ~0°,
-  no loft, guidance-terminated SECO. ✅ launch-window warp warped 23 h on STOCK APIs. ✅ KER cross-check passes (934 vs
-  938 kN). ⚠ minor tune items remain: g 4.77 (>4.5), ecc 200×158, RAAN readout 0/0.
-- ⛔→✅ **PHASING far-field was STRUCTURALLY BROKEN, now REDESIGNED (commit 6c66fe4, installed, UNFLOWN).** The old
-  "continuous co-elliptic raise" burned prograde nonstop near pe → pumped ap 200→**772 km** (target ~409), never
-  coasted (warp never armed), never closed the half-orbit gap → stalled, blocking ALL downstream data. **FIX: the
-  standard PHASE-TIMED HOHMANN TRANSFER** (`pure/Phasing.FarGuide` FSM using the already-tested `Hohmann.PhaseLeadRad`/
-  `WaitTimeS`): PHASE (coast+warp until the phase angle = the Hohmann lead) → TRANSFER (burn to raise ap to the station
-  altitude, then STOP — bounded, the over-raise fix) → COAST (warp to apoapsis → CW range → handoff). No self-deorbit
-  held (pe ≥179.9). ⚠ **THIS IS THE #1 THING TO VERIFY NEXT FLIGHT** — does it now progress through to docking?
-- ✅ **BOOSTER TOGGLE wired (commit 680b4c0).** Settings → DISPLAY tab → **BOOSTER RECOVERY OFF/ARMED**
-  (`MissionConductor.AutoRecoverBooster`). OFF = full Dragon mission; ARMED = focus the booster after MECO + land it
-  (Dragon orbit sacrificed that run — stock one-vessel limit). Flip it ON to collect BOOSTER-phase data.
-- ✅ **Coast-warp built (rendezvous phasing + post-deorbit)** but **UNTESTED** — 103303 never reached the phasing coast
-  (the old raise never finished). The redesigned transfer creates the coasts the warp needs.
-- **DLL installed** (733,945 headless checks). Fixes intact: octaweb n<2 guard, RealChute arm-once (both UNFLOWN).
+**⭐ STATE after the 2026-08-28 full-mission flight (Crew-2_20260828_131412 ascent→phasing + _135356 return; full
+structured pass done):**
+- ✅✅ **ASCENT SOLVED + FLIGHT-PROVEN TWICE (103303 + 131412).** Reaches orbit 200×157.7 km, **inc 51.65° vs 51.6°
+  target** — A1 plane-normal fix confirmed on a 2nd clean ascent. Clean max-Q 32 kPa @ pointing p95 0.36°/0.08° (sat≈0
+  across the corpus), guidance-terminated SECO. ⚠ minor tune items: g 4.77 (>4.5), ecc 200×158.
+- ⚠️ **PHASING FLEW — PARTIAL (Crew-2_131412).** ✅ NO self-deorbit (pe held 171–181 km). ✅ Coast auto-warp
+  FLIGHT-PROVEN (warped ~5.6 days of phasing coast on stock APIs, burn-guard held). ✅ Transfer raised ap 200→419 km
+  (station ~420 → correct) and closed range to **86 km ONCE**. ❌ But it **never CIRCULARIZED** → stayed on a 420×172
+  ELLIPSE that only touches the station altitude at apoapsis → **flew PAST + oscillated 1,000–13,000 km for ~5 days**,
+  50 km CW hand-off never latched, docking never reached.
+- ✅ **CIRCULARIZE FIX BUILT (this session, headless-green 734,240 checks, UNFLOWN).** `pure/Phasing.FarGuide` FSM now
+  PHASE → TRANSFER (raise ap to a CO-ELLIPTIC park ~10 km UNDER the station) → **CIRCULARIZE (coast half-orbit to
+  apoapsis, then burn 2 to raise pe → near-circular co-elliptic orbit that DWELLS near the station)** → COAST → CW
+  hand-off. Glue: `TargetAltM = station − CoEllipticBelowM(10 km)`, `NearApoapsis` gate (`NearApoWindowS=20 s`),
+  warp-to-apoapsis in Circularize, far sub-phase logged + mapped into `rv_phase` (Phasing/CoElliptic/ApproachInit).
+  ⚠ **#1 TO VERIFY NEXT FLIGHT — does it now circularize + hand to CW + reach docking?**
+- ⚠️ **RETURN got first DATA (Crew-2_135356).** An FDIR **DeorbitReturn** abort fired the deorbit burn (pe 203→114 km,
+  dropping) but the recording was **CUT OFF mid-burn** — no entry/chutes yet. ⚠ dv_planned/delivered/residual columns
+  NOT populated on the deorbit burn (instrumentation gap to fix). Crew ALIVE, coming home.
+- ✅ **KLM (honest, Claude-owned):** the 2 CSVs are ONE continuous mission → audit now MERGES contiguous met segments
+  (souls per MISSION, not per file) + a new **"returning"** state (deorbit/abort return in progress, crew alive).
+  Scorecard: **0 died · 0 stranded · 0 home · 4 returning · 1 mission.** Nobody lost.
+- ✅ **BOOSTER TOGGLE wired.** Toggle was OFF this run (full Dragon mission) → zero booster data yet.
 
-**⭐ NEXT = FLY IT, both modes, to collect every phase's data:**
-1. **Toggle OFF → full Dragon mission.** The redesigned phasing should now PROGRESS → hand to docking → deorbit → entry
-   → chutes, producing the FIRST downstream-phase data. Give me the CSV + KSP.log → full structured pass → tune loop.
-2. **Toggle ARMED → a booster-recovery run** → booster-phase data.
+**⭐ NEXT = FLY IT again, both modes:**
+1. **Toggle OFF → full Dragon mission.** Verify the CIRCULARIZE fix: phasing should now park co-elliptic, hand to CW,
+   reach docking → deorbit → entry → chutes. Give me CSV + KSP.log → the full post-flight loop above.
+2. **Toggle ARMED → a booster-recovery run** → the still-missing booster-phase data.
 ⛔ Getting it to RUN must NOT force the timeline — every MET emerges from physics (ULTIMATE_PLAN I-B.0).
 ⚠ After a PAD SAFE-ABORT, REVERT to launch (RealFuels spends the octaweb's one ignition; a re-engage shows 0% — not a bug).
 

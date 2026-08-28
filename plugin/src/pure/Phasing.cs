@@ -9,20 +9,26 @@
 // ⛔ THE OLD "continuous co-elliptic raise" WAS WRONG (flight 103303, data-confirmed): it burned prograde
 // CONTINUOUSLY to "walk both apses up", but a continuous prograde burn near periapsis only pumps APOAPSIS — it
 // raised ap 200→772 km (target was ~409) while periapsis crawled, never coasted (so warp never armed) and never
-// closed the half-orbit phase gap. Replaced by the standard PHASE-TIMED HOHMANN TRANSFER:
+// closed the half-orbit phase gap. Replaced by the standard PHASE-TIMED HOHMANN TRANSFER + CO-ELLIPTIC PARK:
 //   1. PHASE  — stay on the low (fast) insertion orbit and COAST until the phase angle reaches the Hohmann lead
 //               angle (Hohmann.PhaseLeadRad); the low orbit closes the along-track phase quickly, and the coast
 //               is warp-compressed. No burn.
-//   2. TRANSFER — at the aligned phase, burn prograde to raise APOAPSIS to the station's altitude, then STOP
-//               (bounded — this is the fix for the 200→772 over-raise). One finite burn, no coast inside it.
-//   3. COAST  — coast (warp) up to apoapsis, where the chaser arrives at the station's altitude AND, by the
-//               phase timing, near the station → the range drops into CW's regime and the glue hands off.
+//   2. TRANSFER — at the aligned phase, burn 1 (near PERIAPSIS): raise APOAPSIS to the co-elliptic parking
+//               altitude (~CoEllipticBelowM under the station), then STOP (bounded — the fix for the 200→772
+//               over-raise). One finite prograde burn.
+//   3. CIRCULARIZE — coast the half-orbit up to APOAPSIS, then burn 2 (AT apoapsis only): raise PERIAPSIS up to
+//               the parking altitude → a near-circular CO-ELLIPTIC orbit just below the station. ⛔ THIS WAS THE
+//               MISSING STEP (flight 131412, data-confirmed): TRANSFER alone left the chaser on a 420×172  km
+//               ELLIPSE that only touches the station's altitude for an instant at apoapsis, so it sailed past
+//               and oscillated 1,000–13,000 km for days and the CW hand-off never latched. A co-elliptic orbit
+//               DWELLS just below/near the station, giving CW a stable regime to close the last tens of km.
+//   4. COAST  — on the co-elliptic orbit the range drifts slowly into CW's regime → the glue hands off to CW.
 // A HARD PERIAPSIS FLOOR (PeSafe) gates every burn independently — prograde-only + the floor mean the far field
 // can never deorbit. Pure + headless-tested; the Hohmann timing math lives in the (tested) pure/Hohmann.cs.
 // ============================================================================================
 namespace DragonScreen
 {
-    public enum FarPhase { Phase = 0, Transfer = 1, Coast = 2 }
+    public enum FarPhase { Phase = 0, Transfer = 1, Circularize = 2, Coast = 3 }
 
     // Everything FarGuide needs, all computed by the glue from the live chaser + station orbits.
     public struct FarInputs
@@ -32,16 +38,17 @@ namespace DragonScreen
         public double Omega1;        // chaser mean motion √(μ/r1³)  (rad/s)
         public double Omega2;        // station mean motion √(μ/r2³) (rad/s)
         public double ApAltM;        // chaser current apoapsis altitude
-        public double TargetAltM;    // station altitude (raise ap to here)
-        public double RaiseTolM;     // "ap reached target" tolerance
-        public double PeAltM;        // chaser periapsis altitude (for the floor)
+        public double TargetAltM;    // co-elliptic PARKING altitude (raise BOTH apses to here; ~just below the station)
+        public double RaiseTolM;     // "apse reached target" tolerance (used for both ap-raise and pe-circularize)
+        public double PeAltM;        // chaser periapsis altitude (for the circularize target + the floor)
+        public bool   NearApoapsis;  // glue: chaser is within a small time window of apoapsis (so a prograde burn raises PE)
         public double FloorM;        // the crew-safety periapsis floor
     }
 
     public struct FarCommand
     {
         public FarPhase Phase;   // the state after this tick
-        public bool Burn;        // burn prograde (raise ap) this tick
+        public bool Burn;        // burn prograde this tick (TRANSFER: raise ap · CIRCULARIZE: raise pe at apoapsis)
         public bool PeHeld;      // a burn was suppressed by the pe floor (surface to the log/recorder)
         public double WaitS;     // seconds until the phase aligns (glue warps toward it); 0 outside PHASE
     }
@@ -70,13 +77,27 @@ namespace DragonScreen
             {
                 if (f.ApAltM < f.TargetAltM - f.RaiseTolM)
                 {
-                    // still below the station's altitude → burn prograde to raise ap (gated by the pe floor).
+                    // burn 1 (near periapsis): raise ap toward the parking altitude (gated by the pe floor).
                     c.Phase = FarPhase.Transfer; c.Burn = peSafe; c.PeHeld = !peSafe; return c;
                 }
-                cur = FarPhase.Coast;   // ap reached the station altitude → stop; coast up to it (never over-raise)
+                cur = FarPhase.Circularize;   // ap reached → coast the half-orbit to apoapsis, then circularize
             }
 
-            c.Phase = FarPhase.Coast;   // coast toward apoapsis / the CW hand-off; glue warps via the range ETA
+            if (cur == FarPhase.Circularize)
+            {
+                if (f.PeAltM < f.TargetAltM - f.RaiseTolM)
+                {
+                    // burn 2: raise pe to the parking altitude, but ONLY at apoapsis (there a prograde burn
+                    // raises pe, not ap). Off apoapsis the glue warps the coast toward it and we don't burn.
+                    c.Phase = FarPhase.Circularize;
+                    c.Burn = f.NearApoapsis && peSafe;
+                    c.PeHeld = f.NearApoapsis && !peSafe;
+                    return c;
+                }
+                cur = FarPhase.Coast;   // co-elliptic orbit achieved → drift/coast into CW's regime, hand off
+            }
+
+            c.Phase = FarPhase.Coast;   // coast toward the CW hand-off; glue warps via the range ETA
             return c;
         }
 

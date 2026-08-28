@@ -35,7 +35,8 @@ namespace DragonScreen
         [Tunable] public static double BurnDoneDvMps = 0.02;
         [Tunable] public static double CwHandoffRangeM = 50000.0; // far→near split (CW valid within tens of km)
         [Tunable] public static double CoEllipticBelowM = 10000.0;// co-elliptic parking height below the station
-        [Tunable] public static double RaiseTolM = 2000.0;       // reached-co-elliptic tolerance
+        [Tunable] public static double RaiseTolM = 2000.0;       // reached-co-elliptic tolerance (ap-raise + pe-circularize)
+        [Tunable] public static double NearApoWindowS = 20.0;    // "at apoapsis" window → circularize burn only fires here
         [Tunable] public static double SafePeFloorM = 150000.0;  // ⛔ never let a burn drop pe below this
         [Tunable] public static bool CoastWarp = true;           // warp-to-maneuvers through the co-elliptic coast
         [Tunable] public static double CoastWarpFallbackHorizonS = 5400.0; // bounded look-ahead if the period is unusable
@@ -44,6 +45,7 @@ namespace DragonScreen
 
         static RvPhase phase = RvPhase.Idle;
         static FarPhase farPhase = FarPhase.Phase;   // far-field transfer FSM state
+        static FarPhase lastFarPhase = FarPhase.Phase; // for one-shot transition logging
         static bool shroudOpened;
         static bool floorLogged;
         static RendezvousCommand lastCmd;
@@ -51,7 +53,8 @@ namespace DragonScreen
 
         public static void Reset()
         {
-            phase = RvPhase.Idle; farPhase = FarPhase.Phase; shroudOpened = false; floorLogged = false;
+            phase = RvPhase.Idle; farPhase = FarPhase.Phase; lastFarPhase = FarPhase.Phase;
+            shroudOpened = false; floorLogged = false;
             FlightDriver.ReleaseTranslation();
             Steering.Release();
         }
@@ -134,16 +137,31 @@ namespace DragonScreen
             double r1 = rc.magnitude, r2 = rt.magnitude;
             double o1 = Math.Sqrt(mu / (r1 * r1 * r1)), o2 = Math.Sqrt(mu / (r2 * r2 * r2));
 
+            // Park CO-ELLIPTIC: raise BOTH apses to CoEllipticBelowM UNDER the station, not up to it — a slightly
+            // lower, near-circular orbit that dwells just below/near the station for CW to close (never a bare
+            // touch-and-go at apoapsis). "At apoapsis" is a small time window so the circularize burn raises pe.
+            double parkAltM = (r2 - body.Radius) - CoEllipticBelowM;
+            double timeToAp = v.orbit.timeToAp, per = v.orbit.period;
+            bool nearApo = per > 1.0 && Math.Min(timeToAp, per - timeToAp) < NearApoWindowS;
+
             FarInputs fi = new FarInputs
             {
                 PhaseNowRad = phaseNow,
                 PhaseLeadRad = Hohmann.PhaseLeadRad(r1, r2, mu),
                 Omega1 = o1, Omega2 = o2,
-                ApAltM = apAlt, TargetAltM = r2 - body.Radius, RaiseTolM = RaiseTolM,
-                PeAltM = peAlt, FloorM = SafePeFloorM
+                ApAltM = apAlt, TargetAltM = parkAltM, RaiseTolM = RaiseTolM,
+                PeAltM = peAlt, NearApoapsis = nearApo, FloorM = SafePeFloorM
             };
             FarCommand fc = Phasing.FarGuide(fi, farPhase);
             farPhase = fc.Phase;
+            if (farPhase != lastFarPhase)
+            {
+                Debug.Log("[DragonScreen] RV far-field: " + lastFarPhase + " → " + farPhase
+                          + "  (ap " + (apAlt / 1000.0).ToString("F0") + " pe " + (peAlt / 1000.0).ToString("F0")
+                          + " park " + (parkAltM / 1000.0).ToString("F0") + " km, range "
+                          + (rangeM / 1000.0).ToString("F0") + " km)");
+                lastFarPhase = farPhase;
+            }
 
             // attitude-first: point prograde, burn only once pointed. FarGuide already gates Burn on the pe floor.
             Vector3d pro = Steering.Prograde(v);
@@ -168,6 +186,10 @@ namespace DragonScreen
             {
                 MissionConductor.WarpToEvent(now + fc.WaitS);   // WarpPlan.ShouldWarp ignores gaps too short to bother
             }
+            else if (CoastWarp && farPhase == FarPhase.Circularize && !nearApo && per > 1.0)
+            {
+                MissionConductor.WarpToEvent(now + timeToAp);   // warp the half-orbit coast up to apoapsis to circularize
+            }
             else if (CoastWarp && farPhase == FarPhase.Coast && rangeM > CoastWarpMinRangeM)
             {
                 double horizonS = (tgtOrbit.period > 60.0) ? tgtOrbit.period : CoastWarpFallbackHorizonS;
@@ -176,14 +198,19 @@ namespace DragonScreen
             }
             else
             {
-                MissionConductor.Realtime();   // transferring, or inside the buffer → no warp
+                MissionConductor.Realtime();   // transferring/circularizing at apoapsis, or inside the buffer → no warp
             }
 
-            // recorder: keep the far-field visible (phase + range + whether we're burning)
+            // recorder: keep the far-field visible (sub-phase + range + whether we're burning). Map the far FSM
+            // onto the RvPhase enum so the CSV rv_phase column shows WHICH far state flew: Phase/Transfer→Phasing,
+            // Circularize→CoElliptic, Coast→ApproachInit.
             phase = RvPhase.Phasing;
+            RvPhase recPhase = (farPhase == FarPhase.Circularize) ? RvPhase.CoElliptic
+                             : (farPhase == FarPhase.Coast)       ? RvPhase.ApproachInit
+                             : RvPhase.Phasing;
             lastCmd = new RendezvousCommand
             {
-                Phase = RvPhase.Phasing,
+                Phase = recPhase,
                 AimLvlh = new Vec3(0, 1, 0),                     // prograde / along-track
                 BurnLvlh = new Vec3(0, fc.Burn ? 1.0 : 0.0, 0),
                 BurnDvMps = fc.Burn ? 1.0 : 0.0,

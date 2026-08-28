@@ -1,0 +1,13 @@
+[
+ {
+  "fate": "returning",
+  "how": "return underway (deorbit/abort) - crew alive, not yet home",
+  "date": "2026-08-28",
+  "returning": true,
+  "rows": 27601,
+  "segs": [
+   "Crew-2_20260828_131412.csv",
+   "Crew-2_20260828_135356.csv"
+  ]
+ }
+]

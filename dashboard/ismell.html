@@ -145,6 +145,7 @@ section.tab.on{display:block;animation:fade .25s ease}
 .kcard .kl{font-family:var(--mono);font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);line-height:1.25}
 .kcard.died .kn{color:var(--dispute)} .kcard.home .kn{color:var(--go)} .kcard.stranded .kn{color:var(--pending)}
 .kcard.rescued .kn{color:var(--accent)} .kcard.abort .kn{color:var(--ink)}
+.kcard.returning .kn{color:var(--accent)}
 .kcard.home.zero .kn{color:var(--dispute)}   /* 0 home is the damning number — make it red */
 
 /* ONE BIG MARBLE WALL — names carved once into stone, each with a tally (like a real memorial wall) */
@@ -333,8 +334,8 @@ section.tab.on{display:block;animation:fade .25s ease}
       "f": true,
       "fkind": "flight",
       "pending": false,
-      "note": "FLOWN (Crew-2_103303): reaches orbit 200×158 km, inc 51.65° vs 51.64° target — the A1 plane fix WORKED (was −5.1° short; UPFG steered inc 53.5→51.66 through S2). Clean max-Q 32 kPa @ pointing ~0°, no loft, guidance-terminated SECO. Remaining tune items: g 4.77 (>4.5), ecc 200×158, RAAN readout 0/0.",
-      "claudeNote": "Tick-3 PASS for reaching orbit + inclination, confirmed by the full structured CSV+log pass. g/ecc/RAAN are minor refinements, not blockers — set your YOU tick when you're happy with the approach."
+      "note": "FLOWN TWICE (Crew-2_103303 + Crew-2_131412, 2026-08-28): reaches orbit 200×157.7 km, inc 51.65° vs 51.6° target — the A1 plane fix WORKED (was −5.1° short; UPFG steers inc through S2). Clean max-Q 32 kPa @ pointing ~0° (p95 0.36° GravityTurn / 0.08° S2Burn, sat≈0 across the corpus), no loft, guidance-terminated SECO. Remaining tune items: g 4.77 (>4.5), ecc 200×158.",
+      "claudeNote": "Tick-3 PASS for reaching orbit + inclination — re-confirmed by a SECOND clean ascent (131412) with a full structured CSV+log pass. g/ecc are minor refinements, not blockers — set your YOU tick when you're happy with the approach."
     },
     {
       "id": "booster",
@@ -355,8 +356,9 @@ section.tab.on{display:block;animation:fade .25s ease}
       "u": false,
       "f": false,
       "fkind": "flight",
-      "pending": false,
-      "note": "REDESIGNED (unflown): flight 103303's far-field continuous raise pumped ap 200→772 km and never coasted/closed. Now a phase-timed Hohmann transfer (coast→bounded burn to station alt→coast to CW). No self-deorbit held (pe ≥179.9). Near-field CW + AI standoff still never flown."
+      "pending": true,
+      "note": "REDESIGNED + FLOWN (Crew-2_131412, 2026-08-28) — PARTIAL. ✅ No self-deorbit (pe held 171–181 km, floor 150). ✅ Transfer raised ap 200→419 km (station ~420 → correct) and closed range to 86 km ONCE. ❌ But it never CIRCULARIZED at apoapsis → stayed on a 420×172 ellipse, flew PAST the station and oscillated 1,000–13,000 km for ~5 days, so the 50 km CW hand-off never latched. Docking never reached.",
+      "claudeNote": "Root cause (data-confirmed): FarGuide does the ap-raise transfer but leaves pe low, so the chaser only touches the station's altitude for an instant at apoapsis and sails away — no stable regime for CW. FIX being built now: a co-elliptic CIRCULARIZE state (raise pe at apoapsis to a parking orbit ~10 km below the target) so the range stays in CW's regime and hands off. This is the next-phase tune."
     },
     {
       "id": "dock",
@@ -378,7 +380,7 @@ section.tab.on{display:block;animation:fade .25s ease}
       "f": false,
       "fkind": "flight",
       "pending": false,
-      "note": "Departure + deorbit + lifting entry + chutes + post-deorbit coast-warp built. Never flown. ⛔ abort-chute fix is NOT flight-verified. Bank/roll + deorbit-Pe signs best-guess."
+      "note": "Departure + deorbit + lifting entry + chutes + post-deorbit coast-warp built. First DATA (Crew-2_135356, 2026-08-28): an FDIR DeorbitReturn abort fired the deorbit burn — pe dropping 203→114 km — but the recording was CUT OFF mid-burn (no entry/chutes yet). ⚠ dv_planned/delivered/residual not populated on the deorbit burn (instrumentation gap). ⛔ abort-chute fix still NOT flight-verified. Bank/roll + deorbit-Pe signs best-guess."
     }
   ],
   "components": [
@@ -388,10 +390,10 @@ section.tab.on{display:block;animation:fade .25s ease}
       "group": "get-end-to-end",
       "c": true,
       "u": true,
-      "f": false,
+      "f": true,
       "fkind": "flight",
       "pending": false,
-      "note": "pure/CoastEta + conductor guard (throttle OR RCS). Warps the phasing coast + post-deorbit coast. Headless-green; unflown. Commit 21f3898."
+      "note": "pure/CoastEta + conductor guard (throttle OR RCS). FLOWN (Crew-2_131412): warped ~5.6 days of phasing coast on stock APIs with the burn-guard holding — pe never fell below 171 km, no self-deorbit. ✅ Flight-proven. (It did its job even though rendezvous itself didn't converge.) Commit 21f3898."
     },
     {
       "id": "abortfix",
@@ -545,26 +547,26 @@ section.tab.on{display:block;animation:fade .25s ease}
         {
           "metric": "Inclination → 51.6° (ISS)",
           "target": "51.6°",
-          "current": "46.5° (−5.1°)",
-          "cls": "bad",
-          "status": "pending",
-          "note": "A1: UpfgAim now threads the target plane-normal — installed, UNFLOWN. Verify inc→51.6 + S2 Δv margin."
+          "current": "51.65° (+0.05°)",
+          "cls": "good",
+          "status": "data",
+          "note": "SOLVED + flight-proven twice (103303 + 131412): A1 target-plane-normal fix threads inc to 51.65 through S2. Was −5.1° short."
         },
         {
           "metric": "Peak g ≤ 4.5 (crew)",
           "target": "≤ 4.5 g",
-          "current": "4.72 g",
+          "current": "4.77 g",
           "cls": "bad",
           "status": "pending",
-          "note": "MVac min-throttle floor near SECO (stage light). FDIR g-abort is 6.0 so it's safe; no clean fix yet."
+          "note": "Peak 4.77 g at the light-mass final second of S2 (min-throttle floor). FDIR g-abort is 6.0 so it's safe; a throttle-taper near SECO is the tune."
         },
         {
           "metric": "SECO circular (ecc→0)",
           "target": "~200×200 km",
-          "current": "200×140 km",
+          "current": "200×158 km",
           "cls": "bad",
           "status": "pending",
-          "note": "~17 m/s cutoff short; coupled to the SECO trigger. Re-assess after the A1 plane flight."
+          "note": "SECO pe 157.7 / ap 200 — ~pe short; coupled to the SECO cutoff trigger. Tune after rendezvous (phase order)."
         },
         {
           "metric": "Pointing hold (control quality)",
@@ -592,15 +594,15 @@ section.tab.on{display:block;animation:fade .25s ease}
     },
     {
       "phase": "Rendezvous",
-      "coverage": "NO corpus data yet",
+      "coverage": "flew 2026-08-28 (Crew-2_131412) — 1 mission, partial",
       "targets": [
         {
           "metric": "Reach AI standoff 7.5 km",
           "target": "7.5 km, pe held",
-          "current": "—",
-          "cls": "mut",
-          "status": "none",
-          "note": "ForwardSign = −1 best-guess; pe-floor gates a wrong sign. Near-field transform-read is the watch item."
+          "current": "closed to 86 km then diverged",
+          "cls": "bad",
+          "status": "pending",
+          "note": "pe held (no self-deorbit ✅) + transfer raised ap to the station alt ✅, but no CIRCULARIZE → flew past, oscillated 1k–13k km. Building the co-elliptic circularize state. ForwardSign −1 held; pe-floor gated it."
         }
       ]
     },
@@ -981,7 +983,8 @@ section.tab.on{display:block;animation:fade .25s ease}
     "stranded": 0,
     "abortSafe": 0,
     "rescued": 0,
-    "flights": 0,
+    "returning": 4,
+    "flights": 1,
     "incomplete": 0,
     "since": "20260828_103303",
     "audited": "2026-08-28",
@@ -1342,13 +1345,14 @@ section.tab.on{display:block;animation:fade .25s ease}
     right.appendChild(el('b', null, fmtSince(k.since)));
     right.appendChild(document.createTextNode(' · '));
     right.appendChild(el('b', null, String(k.flights||0)));
-    right.appendChild(document.createTextNode(' flights since · crew: Kimbrough · McArthur · Hoshide · Pesquet'));
+    right.appendChild(document.createTextNode(' mission(s) since · crew: Kimbrough · McArthur · Hoshide · Pesquet'));
     hdr.appendChild(right); box.appendChild(hdr);
     var cards = [
       ['home','🏠','Made it home','home'],
       ['died','💀','Souls lost','died'],
       ['stranded','🛰️','Stranded in orbit','stranded'],
       ['abortSafe','⛑️','Abort — got back safe','abort'],
+      ['returning','🌊','Returning (in transit)','returning'],
       ['rescued','🚀','Rescued from space','rescued']
     ];
     cards.forEach(function(c){
