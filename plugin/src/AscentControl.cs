@@ -66,6 +66,28 @@ namespace DragonScreen
         static SelfCalState cal;
         static AscentLoss ascentLoss;   // B9: live steering/gravity/drag Δv-loss decomposition (recorded)
 
+        // ---- B2 q·α aero-stiffness self-cal FEED (task T4) ----
+        // The SelfCal.AeroPitchStiffness estimator (kAero = M_α/I) is FED each powered tick from the isolated aero
+        // pitch angular-accel = (measured pitch ω̇) − (control-commanded ω̇), regressed on the SIGNED pitch-plane
+        // AoA. It RUNS + RECORDS always (cal_kaero + the raw inputs → the CSV); but the q·α cap only USES the
+        // estimate when UseAeroStiffnessFeed is on AND it has converged — until then, and by default, the cap stays
+        // on the tested q-seed, so the estimate cannot move the nominal flight. ⚠ SIGN-SENSITIVE + FLIGHT-GATED: the
+        // sign linking ω̇, the control accel and AoA is a KSP frame convention — leave the feed OFF, read the raw
+        // pairs (aero_ang_accel vs aoa_signed_deg) off a flown CSV, then set AeroFeedSign + flip the flag on. A
+        // zero-AoA ascent barely excites this, so expect slow/noisy convergence (an honest observability limit).
+        [Tunable] public static bool UseAeroStiffnessFeed = false;   // OFF = estimate runs+records only; cap stays on the seed
+        [Tunable] public static double AeroFeedSign = 1.0;           // measurement-vs-AoA sign convention (resolve from a CSV)
+        [Tunable] public static double AeroFeedMinQPa = 2000.0;      // only feed where aero is meaningful (matches the q·α gate)
+        // Trust the estimate only after it has absorbed this many WELL-EXCITED samples (|AoA| above the noise floor).
+        // ⚠ NOT the RLS covariance P: a zero-AoA ascent gives weak excitation, so P actually GROWS (÷λ per step) and
+        // never falls — an excited-sample COUNT is the honest "has it seen enough real AoA to be believed" signal.
+        [Tunable] public static int AeroFeedMinSamples = 300;
+        [Tunable] public static double AeroFeedMinAoaRad = 0.002;    // ~0.11° — above this an AoA sample counts as excitation
+        static double prevPitchRate, prevCtrlAngAccel, prevSignedAoaRad;
+        static bool aeroPrevValid;
+        static int aeroSamples;                                       // count of well-excited samples absorbed
+        static double lastQAlphaCapDeg = double.NaN, lastAeroAngAccel, lastSignedAoaDeg;  // recorder readbacks
+
         // last commanded values, for the recorder
         static double Throttle;
         static double lastPitchCmd = 90, lastAzDeg, lastTgo, lastVgo, lastAoaDeg;
@@ -81,6 +103,12 @@ namespace DragonScreen
             s2ThrustConfirmed = false; s2ThrustUpUT = -1.0; s2Lighting = false; s2PhaseUT = -1.0;
             coastStartUT = -1; dragonSeparated = false; secoUT = -1.0; Throttle = 0;
             ascentLoss.Reset();
+            // ⛔ fresh scene = fresh estimators (stale RLS state must not carry to a new vehicle). Clears the B2
+            // aero-stiffness feed's paired-tick state too, so the first interval of a new flight isn't a bad sample.
+            cal = new SelfCalState();
+            prevPitchRate = 0.0; prevCtrlAngAccel = 0.0; prevSignedAoaRad = 0.0; aeroPrevValid = false;
+            aeroSamples = 0;
+            lastQAlphaCapDeg = double.NaN; lastAeroAngAccel = 0.0; lastSignedAoaDeg = 0.0;
             Steering.Release();
         }
 
@@ -230,6 +258,7 @@ namespace DragonScreen
                 if (v.srfSpeed < Ascent.KickSpeedMps)
                 {
                     aim = up;                                            // vertical rise, clear the tower
+                    lastQAlphaCapDeg = double.NaN;                       // no q·α cap applied here (blank in the CSV)
                 }
                 else
                 {
@@ -242,10 +271,17 @@ namespace DragonScreen
                     // when a cap hit 0). aCtrlMax≈0 (authority not yet read / coast) → cap floors to MinAoaDeg.
                     const double Deg2Rad = Math.PI / 180.0;
                     double aCtrlMax = AttitudePilot.PitchAccelRadS2;
-                    double kAero = QAlpha.AeroStiffnessSeed(qPa);
+                    // kAero: the tested q-seed by default; the LIVE SelfCal estimate only once the feed is enabled
+                    // (T4) AND the RLS has converged (P below the gate) — otherwise the estimate never moves the cap.
+                    double kAero;
+                    if (UseAeroStiffnessFeed && cal.AeroStiff.Init && aeroSamples >= AeroFeedMinSamples)
+                        kAero = cal.AeroStiff.Theta;                     // trusted live estimate (M_α/I)
+                    else
+                        kAero = QAlpha.AeroStiffnessSeed(qPa);           // seed until enough excitation / flag off
                     bool stable = v.mach < 0.8 || v.mach > 1.3;
                     double physCapRad = QAlpha.Limit(kAero, aCtrlMax, stable, qPa).AoaMaxRad;
                     double aoaCap = QAlpha.EffectiveCapRad(physCapRad, MinAoaDeg * Deg2Rad, MaxAoaDeg * Deg2Rad) / Deg2Rad;
+                    lastQAlphaCapDeg = aoaCap;                           // record the cap actually applied
                     aim = Steering.LimitToProgradeCone(v, aimBase, aoaCap);
                 }
             }
@@ -256,6 +292,7 @@ namespace DragonScreen
                 // the current plane, which only holds whatever S1 left. (flights 014906/020539/023613: S1 sets
                 // inc 46.5°, S2 held it unchanged to SECO because UPFG was fed its own current h.)
                 aim = UpfgAim(v, mu, targetRadiusM, activeThrustN, ve, massKg, planeNormal, haveTargetPlane);
+                lastQAlphaCapDeg = double.NaN;   // no atmospheric q·α cap on the S2 vacuum ascent (blank in the CSV)
             }
 
             // ⛔ ROLL REFERENCE — TWO requirements, both met (perfect control includes crew orientation):
@@ -293,6 +330,8 @@ namespace DragonScreen
                 double dragAccel = Math.Max(0.0, thrustAccel - v.geeForce * 9.80665);
                 ascentLoss.Step(TimeWarp.fixedDeltaTime, gRad, fpaRad, dragAccel, thrustAccel,
                                 lastAoaDeg * Math.PI / 180.0);
+                // B2/T4: feed the aero pitch-stiffness estimator (runs+records; the cap uses it only when enabled).
+                FeedAeroStiffness(v, TimeWarp.fixedDeltaTime, v.dynamicPressurekPa * 1000.0);
             }
 
             // ⛔ INSTRUMENT THE PLANE (the "wrong inc" symptom): the azimuth column can be a bad log, so also
@@ -563,6 +602,47 @@ namespace DragonScreen
             FlightRecorder.PutIgnition(row, lastUllage, FlightDriver.ClampThrustFrac, FlightDriver.ClampHeld);
             FlightRecorder.PutSelfCal(row, cal);
             FlightRecorder.PutAscentLoss(row, ascentLoss);
+            FlightRecorder.PutQAlpha(row, lastQAlphaCapDeg, lastAeroAngAccel, lastSignedAoaDeg);   // B2/T4
+        }
+
+        // Signed pitch-plane AoA (rad): magnitude = angle(nose, surface-velocity); sign from which side of the
+        // nose the velocity lies about the body pitch axis (rt.right). The exact ± convention relative to the
+        // pitch angular-rate is a KSP frame detail resolved from a flown CSV (AeroFeedSign) — here we only need a
+        // CONSISTENT signed regressor. Zero when there is no meaningful surface velocity.
+        static double SignedAoaRad(Vessel v)
+        {
+            Transform rt = v.ReferenceTransform;
+            if (rt == null || v.srf_velocity.magnitude < 1.0) return 0.0;
+            Vector3d nose = rt.up;
+            Vector3d vel = ((Vector3d)v.srf_velocity).normalized;
+            double mag = Vector3d.Angle(nose, vel) * Math.PI / 180.0;
+            double s = Vector3d.Dot(Vector3d.Cross(nose, vel), (Vector3d)rt.right);   // ± about the body pitch axis
+            return mag * (s >= 0.0 ? 1.0 : -1.0);
+        }
+
+        // B2/T4: feed the aero pitch-stiffness estimator from the ISOLATED aero angular-accel, and stash the raw
+        // inputs for the recorder. Pairs THIS interval's realized pitch angular-accel with the control accel + AoA
+        // that acted DURING it (prev* from last tick) — the correct causal pairing. Only feeds where aero is
+        // meaningful (the q gate) so coast / vertical-rise noise can't pollute the estimate; SelfCal itself skips
+        // |AoA|≈0. Runs whether or not the cap uses the result (UseAeroStiffnessFeed) — so we always collect data.
+        static void FeedAeroStiffness(Vessel v, double dt, double qPa)
+        {
+            double pitchRate = v.angularVelocity.x;                                       // body pitch rate (axis 0)
+            double ctrlAngAccel = AttitudePilot.ActPitch * AttitudePilot.PitchAccelRadS2; // control-produced pitch ω̇
+            double signedAoa = SignedAoaRad(v);
+
+            if (aeroPrevValid && dt > 1e-4 && qPa >= AeroFeedMinQPa)
+            {
+                double measAngAccel = (pitchRate - prevPitchRate) / dt;                   // realized over the last interval
+                double aeroAngAccel = AeroFeedSign * (measAngAccel - prevCtrlAngAccel);   // isolate the aero moment
+                SelfCal.AeroPitchStiffness(ref cal, aeroAngAccel, prevSignedAoaRad);
+                lastAeroAngAccel = aeroAngAccel;
+                lastSignedAoaDeg = prevSignedAoaRad * 180.0 / Math.PI;
+                if (Math.Abs(prevSignedAoaRad) > AeroFeedMinAoaRad && aeroSamples < int.MaxValue)
+                    aeroSamples++;                                                        // count only excited samples
+            }
+            prevPitchRate = pitchRate; prevCtrlAngAccel = ctrlAngAccel; prevSignedAoaRad = signedAoa;
+            aeroPrevValid = true;
         }
     }
 }

@@ -65,6 +65,11 @@ namespace DragonScreen
             // B9 ascent Δv-loss decomposition (pure/AscentLoss) — the gravity-turn tuner objective + a live
             // diagnostic: steer_loss should stay ~0 on a zero-AoA turn; a growing one = the nose is off prograde.
             "steer_loss_mps", "grav_loss_mps", "drag_loss_mps",
+            // B2 q·α aero-stiffness self-cal (task T4) — the isolated-aero feed + the controllability cap. kAero =
+            // M_α/I estimate (sign carries stability: restoring vs diverging); kAero_p = its RLS covariance (falls
+            // as it converges); qalpha_cap_deg = the effective AoA cap applied; aero_ang_accel + aoa_signed_deg =
+            // the raw regression inputs, so the SIGN convention can be read straight off the CSV before trusting it.
+            "cal_kaero", "cal_kaero_p", "qalpha_cap_deg", "aero_ang_accel", "aoa_signed_deg",
         };
 
         static int Index(string name)
@@ -110,7 +115,9 @@ namespace DragonScreen
             CalLd = Index("cal_ld"), SteerSignC = Index("steer_sign"),
             KerAvail = Index("ker_avail"), KerRemainDv = Index("ker_remain_dv"), KerFinalDv = Index("ker_final_dv"),
             KerCurTwr = Index("ker_cur_twr"), KerCurThrustN = Index("ker_cur_thrust_n"),
-            SteerLossMps = Index("steer_loss_mps"), GravLossMps = Index("grav_loss_mps"), DragLossMps = Index("drag_loss_mps");
+            SteerLossMps = Index("steer_loss_mps"), GravLossMps = Index("grav_loss_mps"), DragLossMps = Index("drag_loss_mps"),
+            CalKAero = Index("cal_kaero"), CalKAeroP = Index("cal_kaero_p"), QAlphaCapDeg = Index("qalpha_cap_deg"),
+            AeroAngAccel = Index("aero_ang_accel"), AoaSignedDeg = Index("aoa_signed_deg");
 
         // ---- formatting ----
         public static string Num(double v)
@@ -326,6 +333,8 @@ namespace DragonScreen
             Set(c, CalBeta, s.InvBeta.Theta > 1e-9 ? 1.0 / s.InvBeta.Theta : double.NaN);
             Set(c, CalInvI, s.InvInertia.Theta);
             Set(c, CalLd, s.LoverD.Theta);
+            // B2 kAero estimate + its covariance (blank until the estimator has taken a sample) — task T4.
+            if (s.AeroStiff.Init) { Set(c, CalKAero, s.AeroStiff.Theta); Set(c, CalKAeroP, s.AeroStiff.P); }
             Set(c, SteerSignC, SelfCal.SteerSign(s));
         }
 
@@ -347,6 +356,16 @@ namespace DragonScreen
             Set(c, SteerLossMps, loss.SteeringLoss);
             Set(c, GravLossMps, loss.GravityLoss);
             Set(c, DragLossMps, loss.DragLoss);
+        }
+
+        // B2 q·α cap + its raw inputs (task T4). capDeg = the effective AoA cap applied this tick; aeroAngAccel =
+        // the isolated aero pitch angular-accel fed to the kAero estimator (1/s²); aoaSignedDeg = the signed
+        // pitch-plane AoA it was regressed against — so the CSV alone reveals whether the sign convention is right.
+        public static void PutQAlpha(string[] c, double capDeg, double aeroAngAccel, double aoaSignedDeg)
+        {
+            Set(c, QAlphaCapDeg, capDeg);
+            Set(c, AeroAngAccel, aeroAngAccel);
+            Set(c, AoaSignedDeg, aoaSignedDeg);
         }
     }
 }

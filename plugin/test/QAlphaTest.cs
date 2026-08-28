@@ -69,6 +69,12 @@ public static class QAlphaTest
         Near("SelfCal AeroPitchStiffness → kAero", s.AeroStiff.Theta, kTrue, 0.03);
         double before = s.AeroStiff.Theta;
         Check("AoA≈0 → estimator unchanged", SelfCal.AeroPitchStiffness(ref s, 0.0, 0.0) == before, "");
+        // a NEGATIVE kAero (statically unstable / diverging aero) is recovered WITH its sign — QAlpha reads |kAero|
+        // for the cap but the sign is what the eventual stability call will use.
+        SelfCalState su = new SelfCalState();
+        for (int i = 0; i < 60; i++)
+        { double aoa = 0.02 + 0.08 * rng.NextDouble(); SelfCal.AeroPitchStiffness(ref su, -0.5 * aoa, aoa); }
+        Check("estimator recovers a NEGATIVE (unstable) kAero with sign", su.AeroStiff.Theta < 0.0, su.AeroStiff.Theta.ToString());
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
