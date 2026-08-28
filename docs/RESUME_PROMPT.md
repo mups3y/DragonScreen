@@ -5,9 +5,43 @@ at the one thing that matters next.
 
 ---
 
-## ⭐⭐ RESUME HERE (2026-08-28, post-compaction #6) — FIRST CREW SURVIVES AN ABORT; RV→DOCK CHAIN UNBLOCKED; BOOSTER/PRE IS THE NEXT BIG TASK
+## ⭐⭐ RESUME HERE (2026-08-29, post-compaction #7) — DEORBIT ROOT CAUSE FIXED (4 stranded); AUTO SEQUENCE NOW STATE-AWARE
 
-> **UPDATE since #6 (still 2026-08-28, commits f03c9c6 + 18b303f, installed):** (1) **Docking RCS signs DERIVED** from MechJeb (all −1; were +1/+1 inverting 2 axes → docking diverged) — flight-anchored by the rendezvous prograde burn. (2) **M5 resolved from ConfigCache** — the Draco RCS burns MMH+NTO (PROPELLANT overrides resourceName); the 300u MonoProp is unused dead weight, LEAVE it (caught a first-clue trap). (3) **Entry roll = a genuinely flight-resolved sign** with a SAFE failure (guidance already robust) — not guessed. (4) **TIME WARP fully tunable** — `MissionConductor.AutoWarpEnabled` (master) + `MaxWarpRateX` (cap), wired through the overshoot-proof `SafeRate` ladder. (5) ⭐ **NEW HIGH-PRIORITY WORKSTREAM — the PERFECT-CONTROL VEHICLE AUDIT** (`docs/VEHICLE_AUDIT.md`, register V0–V4, the Vehicle dashboard tab): correct RCS mode/thruster limits/engine modes/throttle/fuel/tanks/loads per phase + real F9/Crew Dragon accuracy, **one part at a time from a FRESH DUMP next flight**. See [[dragonscreen-perfect-control-vehicle-audit]]. ⛔ don't change engine/tank numbers on memory — verify vs the fresh dump.
+**⭐ WHAT JUST HAPPENED (2026-08-29 flight tests: 232712 / 235031 / 235430 / 000624 — rendezvous + deorbit + abort +
+entry; 4 vessels stranded). Full CSV+log analysis done → the deorbit ROOT CAUSE found + fixed. Commits 5d02f84
+(fixes) + 556b603 (artifacts), installed, UNFLOWN.** The full issue list is `docs/ISSUE_REGISTER.md` §"2026-08-29
+FLIGHT-TEST ISSUE LIST" (F1–F7). The headline three:
+- **F1 — THE 4-STRANDED ROOT CAUSE, FIXED⚑.** The deorbit/abort could not HOLD RETROGRADE (ptErr p95 128–178°, act
+  saturated) → the burns fired mis-pointed: flight 235430 burned **~900 m/s but pe dropped ~3 km** → did not deorbit.
+  ROOT: `AttitudePilot.ControlTorque`'s geometric RCS-torque fallback summed `thrusterPower × |arm|` over ALL 16
+  Dracos on EVERY axis (~9× over — logged **111185 N·m**) → the arrestable-rate law α=τ/MOI over-estimated → it
+  commanded ω=√(2αθ) far too high → the capsule OVERSHOT retrograde and oscillated → the burn fired mid-swing. FIX:
+  a **per-axis `r×F` estimate** ported from MechJeb `VesselState.RCSTorqueAvailable` ((pos−CoM)×(thrustDir·power),
+  projected to the control frame, Max(Σ+,Σ−) per axis). ⚠ #1 to verify: does a deorbit now actually bring a vessel down?
+- **F2 — AUTO SEQUENCE NOW STATE-AWARE, FIXED⚑** (Chris's core ask: "know where it is and what to do next; don't
+  re-launch in orbit"). `CrewProcedureOps.ResumeIndex` maps the LIVE vessel state → the right plan step: pad→countdown,
+  ascending→ascent, **orbit+not-docked+station-targeted→rendezvous**, docked/post-dock→departure, **orbit-otherwise→
+  deorbit**, entering→ride-it-down. So a stranded vessel + AUTO SEQUENCE resumes the correct phase. ⭐ Documented +
+  driven by the NEW **`docs/SEQUENCE_MAP.md`** — the phase sequence + all alternate paths + the ABORT DECISION MATRIX
+  per phase (grounded in the real Crew Dragon 8-mode abort structure; research-sourced).
+- **F3 — rendezvous reached the 100 km CW hand-off after ~34 h but did NOT dock** (ptErr 113°, may share F1's attitude
+  root). OPEN — re-fly with F1 fixed, then tune the CW terminal.
+- Also open: **F4** deorbit water-scan reads 0/130 over water in RSS (WATER DEORBIT can't target water; DEORBIT NOW
+  land-anywhere works regardless); **F5** g 4.53 > 4.5; **F6** early-ascent act-sat transient; **F7** pad safe-abort on
+  a re-launch (spent RealFuels ignition — operational, full restart after a revert).
+
+> **Carried from #6 (all installed, unflown unless noted):** docking RCS signs DERIVED all −1 (MechJeb); M5 resolved —
+> Draco RCS = MMH+NTO, 300u MonoProp is unused dead weight LEAVE it; entry roll = a flight-resolved sign with a SAFE
+> failure; TIME WARP tunable (`MissionConductor.AutoWarpEnabled` + `MaxWarpRateX` via the `SafeRate` ladder); the
+> **PERFECT-CONTROL VEHICLE AUDIT** (`docs/VEHICLE_AUDIT.md`, register V0–V4, Vehicle dashboard tab) — one part at a
+> time from a FRESH DUMP, ⛔ don't change engine/tank numbers on memory; the **UNDOCK button** (RENDEZVOUS + AUTO-DOCK
+> removed) + the **DEORBIT NOW / WATER DEORBIT rescue buttons** (wired to `AbortControl.ForceDeorbit`); abort C1/C2
+> FLIGHT-PROVEN (202127, 2 m/s splash). ⚠ **The attitude tunables (AttitudePilot softening/gains) are DB-tunable** —
+> F1 fixed the wrong torque FORMULA (a bug, not a tuning value); now the real attitude gains can be tuned on a correct base.
+
+**⭐ NEXT:** re-fly — (1) verify a **deorbit brings a vessel home** (F1); (2) press **AUTO SEQUENCE on a stranded
+vessel** → confirm it resumes rendezvous/deorbit not launch (F2); (3) verify **rendezvous converges to dock** (F3);
+then tune per phase to the DB. THEN the booster dual-flight (H1) + the vehicle audit fresh dump.
 
 **⭐⭐ THE PROJECT RHYTHM (user, said with force): WIRE THE FULL MISSION SO EVERY PHASE RUNS AND COLLECTS DATA — failed
 phases INCLUDED.** ⭐ **THE POST-FLIGHT LOOP, EVERY TIME (do ALL of it):** (1) full event-by-event pass on EACH new CSV
