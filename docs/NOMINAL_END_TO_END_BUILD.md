@@ -187,9 +187,15 @@ Sources: [KSP VesselRanges API](https://kerbalspaceprogram.com/api/class_vessel_
   already close the loop on induced torque. Wired instead as a records-only diagnostic (`Actuator.RcsInducedTorque`
   runs the tested pure `RcsBalance`/`ThrustBalance` LIVE during prox-ops translation → cols `rcsbal_torque_naive`/
   `_resid`/`_force_frac`). True apply = direct force injection, deferred with this data. `docs/RCS_BALANCE_FINDING.md`.
-- **Still owed:** B8 CourseCorrect targeting (booster/entry steering signs), deorbit/entry/departure RCS + bank
-  signs, g-cap (F5). Wire behind default-OFF flags to RUN + collect data; their SIGNS are only resolvable from a
-  flown CSV — wiring them "on" blind risks the nominal mission.
+- ✅ **T6 B8 CourseCorrect — ENTRY 1×1 WIRED (2026-08-29, green, commit da27b1c).** The entry range channel:
+  `EntrySteering.PredictDownErrAtBank` re-predicts the footprint downrange error at a perturbed bank (the finite
+  difference), `ReturnControl.TickCourseCorrectEntry` (~4 Hz) solves `CourseCorrect.Solve1x1` for the |σ| Newton step
+  that nulls the miss, RECORDS it (`cc_dsigma_deg`/`cc_slope_m_per_rad`), and APPLIES the corrected magnitude
+  (keeping the S-turn sign) only behind `UseCourseCorrectEntry` (default OFF; refuses → holds the heuristic when the
+  impact doesn't move). ⚠ BOOSTER 2×2 owed: BoosterTargeting's predictor is ballistic (L/D 0) → a fin-control
+  perturbation is unobservable; it needs a control-responsive predictor + a MEASURED fin-AoA→lift gain first.
+- **Still owed:** deorbit/entry/departure RCS + bank signs, g-cap (F5), booster CourseCorrect 2×2 (above). Resolve
+  from a flown CSV — wiring the signs "on" blind risks the nominal mission.
 
 **Flight-gated (Chris flies; I analyse + tune — the F1/F2 fixes are installed, unflown):**
 - Verify deorbit brings a vessel home (F1); AUTO SEQUENCE resumes the right phase (F2); rendezvous converges to

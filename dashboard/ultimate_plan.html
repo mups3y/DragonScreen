@@ -308,7 +308,7 @@
       <div class="stage anim" data-s="prog">
         <div class="stage-badge">B8</div>
         <div class="stage-body"><div class="stage-top"><h3>Entry predictor upgrade</h3><span class="chip done">Pure built</span></div>
-          <p><code>CourseCorrect</code> finite-difference impact-divert (2&times;2 booster / 1&times;1 entry range, 15 checks) + <code>EntryLdBand</code> 4-band L/D predictor prior &mdash; respects the engage-once CoM rule. Targeting glue + the corpus-gated KSP-Euler correction owed in I-B.</p></div>
+          <p><code>CourseCorrect</code> finite-difference impact-divert (2&times;2 booster / 1&times;1 entry range, 15 checks) + <code>EntryLdBand</code> 4-band L/D predictor prior &mdash; respects the engage-once CoM rule. <b>T6: the entry 1&times;1 channel is WIRED</b> (re-predict at a perturbed bank &rarr; Newton step nulling downrange, records-first, applied behind a default-OFF flag; sign from a flown CSV). The <b>booster 2&times;2 is owed</b> &mdash; its impact predictor is ballistic (L/D 0), so the fin control isn't observable until the predictor models fin lift + a measured fin-AoA&rarr;lift gain.</p></div>
       </div>
       <div class="stage anim" data-s="prog">
         <div class="stage-badge">B9</div>
