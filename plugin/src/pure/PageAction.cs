@@ -71,25 +71,13 @@ namespace DragonScreen
         ToggleAuto,
 
         /// <summary>
-        /// Fly the rendezvous: match the station's orbit, phase, Clohessy-Wiltshire in, and hand to
-        /// the docking at the gate.
-        ///
-        /// ---- ⛔ THESE THREE EXIST BECAUSE THE MISSION WAS UNREACHABLE. ----
-        /// `StationApproach.Engage` and `UndockOps.Engage` were written, tested and documented as
-        /// PORTED, and **had no caller anywhere in the plugin**. Sections 6 and 7 of the mission -
-        /// the entire middle of a station ferry - could not be started from the cockpit or from
-        /// anywhere else. The goal for this project is that pressing a button does what it says; a
-        /// phase with no button does not exist.
+        /// UNDOCK: release the docking hooks when the crew is ready (user 2026-08-28 — RENDEZVOUS + AUTO-DOCK
+        /// buttons removed; AUTO SEQUENCE flies rendezvous + docking). It does NOT deorbit or back away — the
+        /// return leg (careful KOS-safe backaway → deorbit → entry → splashdown) is flown by pressing AUTO
+        /// SEQUENCE again, which detects we have already docked this mission and RESUMES at departure, so it
+        /// never tries to dock again and it eases out of the ISS keep-out zone without hitting anything.
         /// </summary>
-        Rendezvous,
-        /// <summary>Take the last few hundred metres onto the port. Safe from any range.</summary>
-        AutoDock,
-        /// <summary>
-        /// Plain UNDOCK: top up from the station, release, and back away to a safe hold. It does NOT
-        /// deorbit - the return leg is flown by the AUTO SEQUENCE conductor on its next press. (The enum
-        /// name is kept to avoid churn across the hit-test/dispatch; the button reads "UNDOCK".)
-        /// </summary>
-        UndockAndLand,
+        Undock,
         /// <summary>
         /// Look through the eyes of the crew member in this seat. Arg is the IVA seat index.
         ///

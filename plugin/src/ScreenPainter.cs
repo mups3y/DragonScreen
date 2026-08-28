@@ -414,13 +414,10 @@ namespace DragonScreen
                 // toggle is still on the physical STRING 1A button.
                 case PageAct.ToggleAuto: CrewProcedureOps.Toggle(); break;
 
-                // ---- THE MIDDLE OF THE MISSION. See PageAct's note on why these exist. ----
-                // The painter only DISPATCHES: every one of these is a static on a flight-software
-                // class ticked by FlightDriver, so the phase outlives this widget being destroyed
-                // when the IVA is despawned. That distinction is the whole reason FlightDriver exists.
-                case PageAct.Rendezvous: MissionOps.Rendezvous(); break;
-                case PageAct.AutoDock: MissionOps.AutoDock(); break;
-                case PageAct.UndockAndLand: MissionOps.UndockAndLand(); break;
+                // ---- UNDOCK (the one manual mission control). The painter only DISPATCHES: MissionOps is a
+                // static on a flight-software class, so the action outlives this IVA widget being destroyed.
+                // Rendezvous + docking are flown by AUTO SEQUENCE (CrewProcedureOps), not by a button.
+                case PageAct.Undock: MissionOps.Undock(); break;
             }
         }
 

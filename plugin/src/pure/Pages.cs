@@ -625,30 +625,21 @@ namespace DragonScreen
                 GateCard.Draw(dl, s.GateTitle, s.GateStage, s.GateItems, w, h);
         }
 
-        /// <summary>What a mission button says. Running phases say what they are doing.</summary>
+        /// <summary>What the (single) mission button says. RENDEZVOUS + AUTO-DOCK were removed (user
+        /// 2026-08-28) — AUTO SEQUENCE flies those; only UNDOCK is a manual control, for when the crew is
+        /// ready to leave the station. The return is flown by pressing AUTO SEQUENCE again.</summary>
         public static string MissionLabel(PageState s, int index)
         {
-            if (index == 0)
-                return s.RendezvousEngaged
-                     ? ("RNDZ  " + Short(s.RendezvousNote)) : "RENDEZVOUS";
-            if (index == 1)
-                return s.DockEngaged ? ("DOCK  " + Short(s.DockNote))
-                                     : (s.Docked ? "DOCKED" : "AUTO-DOCK");
-            // Plain UNDOCK now: release + back off to a safe hold, no deorbit. The return (deorbit ->
-            // entry -> splashdown) is flown by pressing AUTO SEQUENCE again once undocked. UndockOps
-            // always did undock-only; the "& LAND" label misdescribed it.
             return s.UndockEngaged ? ("UNDOCK  " + Short(s.UndockNote)) : "UNDOCK";
         }
 
         public static bool MissionLit(PageState s, int index)
         {
-            if (index == 0) return s.RendezvousEngaged;
-            if (index == 1) return s.DockEngaged || s.Docked;
             return s.UndockEngaged;
         }
 
         /// <summary>
-        /// Greyed rather than hidden when it cannot be pressed.
+        /// Greyed rather than hidden when it cannot be pressed. Only meaningful from the berth (docked).
         ///
         /// ⚠ A control the crew can see but not use must LOOK unusable. A live-looking button that
         /// silently does nothing is indistinguishable from a dead touchscreen - the same argument
@@ -656,8 +647,6 @@ namespace DragonScreen
         /// </summary>
         public static bool MissionUsable(PageState s, int index)
         {
-            if (index == 0) return !s.Docked;          // nothing to rendezvous with once berthed
-            if (index == 1) return !s.Docked;          // already there
             return s.Docked || s.UndockEngaged;        // only meaningful from the berth
         }
 
@@ -714,7 +703,7 @@ namespace DragonScreen
         /// <summary>Page margin, matching Flight()'s own `pad`.</summary>
         public const float SidePad = 28f;
         /// <summary>How many there are: RENDEZVOUS, AUTO-DOCK, UNDOCK &amp; LAND.</summary>
-        public const int MissionButtons = 3;
+        public const int MissionButtons = 1;   // just UNDOCK (RENDEZVOUS + AUTO-DOCK removed — AUTO SEQUENCE flies them)
 
         /// <summary>
         /// The AUTO SEQUENCE button, bottom of FLIGHT's sidebar. Same rect for drawing and hitting.
@@ -751,9 +740,7 @@ namespace DragonScreen
                 float mx, my, mw, mh;
                 MissionRect(i, w, h, out mx, out my, out mw, out mh);
                 if (px < mx || px > mx + mw || py < my || py > my + mh) continue;
-                if (i == 0) return PageHit.Of(PageAct.Rendezvous, 0);
-                if (i == 1) return PageHit.Of(PageAct.AutoDock, 0);
-                return PageHit.Of(PageAct.UndockAndLand, 0);
+                return PageHit.Of(PageAct.Undock, 0);   // the one mission button = UNDOCK
             }
 
             int visible = StepVisible(h);

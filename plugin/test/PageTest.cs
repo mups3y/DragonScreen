@@ -1099,7 +1099,7 @@ public static class PageTest
             float ax, ay, aw, ah;
             Pages.AutoRect(w, h, out ax, out ay, out aw, out ah);
 
-            PageAct[] want = { PageAct.Rendezvous, PageAct.AutoDock, PageAct.UndockAndLand };
+            PageAct[] want = { PageAct.Undock };   // just UNDOCK now (rendezvous + auto-dock removed)
             float[] xs = new float[Pages.MissionButtons + 1];
             float[] ys = new float[Pages.MissionButtons + 1];
             float[] ws = new float[Pages.MissionButtons + 1];
@@ -1140,26 +1140,23 @@ public static class PageTest
                 }
         }
 
-        // The labels must say what the button does, and change when it is running.
+        // The one mission button is UNDOCK (rendezvous + auto-dock removed — AUTO SEQUENCE flies those).
         PageState s = new PageState();
         s.Valid = true;
-        Check("the rendezvous button names itself when idle",
-              Pages.MissionLabel(s, 0) == "RENDEZVOUS", Pages.MissionLabel(s, 0));
-        s.RendezvousEngaged = true; s.RendezvousNote = "PHASING - 51 km gap";
+        Check("the undock button names itself when idle",
+              Pages.MissionLabel(s, 0) == "UNDOCK", Pages.MissionLabel(s, 0));
+        s.UndockEngaged = true; s.UndockNote = "releasing hooks";
         Check("and reports what it is doing when running",
-              Pages.MissionLabel(s, 0).StartsWith("RNDZ") && Pages.MissionLabel(s, 0).Length > 6,
+              Pages.MissionLabel(s, 0).StartsWith("UNDOCK") && Pages.MissionLabel(s, 0).Length > 6,
               Pages.MissionLabel(s, 0));
 
-        // ⚠ Greyed, not hidden: a live-looking button that does nothing reads as a dead screen.
+        // ⚠ Greyed, not hidden: UNDOCK is only meaningful from the berth (docked).
         PageState d = new PageState();
         d.Valid = true; d.Docked = true;
-        Check("docked, there is nothing left to rendezvous with", !Pages.MissionUsable(d, 0), "");
-        Check("docked, auto-dock is spent", !Pages.MissionUsable(d, 1), "");
-        Check("docked, UNDOCK is the live one", Pages.MissionUsable(d, 2), "");
+        Check("docked, UNDOCK is the live one", Pages.MissionUsable(d, 0), "");
         PageState f = new PageState();
         f.Valid = true;
-        Check("free-flying, UNDOCK is meaningless", !Pages.MissionUsable(f, 2), "");
-        Check("free-flying, rendezvous is available", Pages.MissionUsable(f, 0), "");
+        Check("free-flying, UNDOCK is meaningless (not docked)", !Pages.MissionUsable(f, 0), "");
     }
 
 }

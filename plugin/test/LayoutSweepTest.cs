@@ -95,7 +95,7 @@ public static class LayoutSweepTest
             Pages.AutoRect(w, h, out x, out y, out rw, out rh);
             list.Add(C("AUTO SEQUENCE", x, y, rw, rh, PageAct.ToggleAuto, 0));
 
-            PageAct[] mission = { PageAct.Rendezvous, PageAct.AutoDock, PageAct.UndockAndLand };
+            PageAct[] mission = { PageAct.Undock };   // just UNDOCK now (rendezvous + auto-dock removed)
             for (int i = 0; i < Pages.MissionButtons; i++)
             {
                 Pages.MissionRect(i, w, h, out x, out y, out rw, out rh);

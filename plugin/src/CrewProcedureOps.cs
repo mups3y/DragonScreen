@@ -41,6 +41,21 @@ namespace DragonScreen
         static bool abortLatched;
         static bool returnLeg;      // true once the undock gate (G14) clears — distinguishes the return
                                     // Phasing (departure) from the outbound Phasing (rendezvous)
+        static bool dockedThisMission;  // ⭐ true once we have docked this mission (set on the UNDOCK press or a
+                                        // live dock). Survives AUTO SEQUENCE off/on so re-engaging RESUMES at
+                                        // departure (careful backaway → return), never re-docking. Reset per scene.
+
+        // ⭐ The UNDOCK button calls this: we have berthed this mission, so the next AUTO SEQUENCE engage skips
+        // rendezvous/dock and resumes at departure. (Set here rather than only on live-dock so it holds even
+        // after the hooks are released and DockedSide.Docked goes false.) Also DISENGAGE AUTO SEQUENCE if it is
+        // running (it holds at the berth) — so the crew's flow is exactly "press UNDOCK, then press AUTO
+        // SEQUENCE" = fly the return: the single next press ENGAGES + resumes at departure, rather than toggling
+        // a still-engaged conductor off.
+        public static void MarkDockedThisMission()
+        {
+            dockedThisMission = true;
+            if (engaged) Disengage();
+        }
 
         // ---- screen-facing surface (unchanged signatures from the stub) ----
         public static bool Engaged { get { return engaged; } }
@@ -131,8 +146,38 @@ namespace DragonScreen
             index = 0; engaged = true; boundVesselId = v.persistentId;
             goPressed = noGoPressed = abortPressed = false;
             launchPending = false; abortLatched = false; returnLeg = false;
+
+            // ⭐ POST-DOCK RESUME (user 2026-08-28): if we have already docked this mission (the crew pressed
+            // UNDOCK, or we are still docked), skip ascent/rendezvous/dock and resume at DEPARTURE. The
+            // departure FSM (pure/Departure) eases carefully OUT of the ISS keep-out zone — corridor-safe CW
+            // hops whose every aim sits outside the 200 m KOS — then flies the return. It never tries to dock
+            // again. returnLeg = true so the shared Phasing phase is flown as departure, not rendezvous.
+            if (dockedThisMission || DockedSide.Docked(v))
+            {
+                int dep = DepartureStepIndex(plan);
+                if (dep >= 0)
+                {
+                    index = dep; returnLeg = true;
+                    Debug.Log("[DragonScreen] AUTO SEQUENCE: already docked this mission → RESUMING at DEPARTURE "
+                              + "(careful KOS backaway → deorbit → entry → splashdown); rendezvous/dock skipped.");
+                }
+            }
+
             LoadGate();
-            Debug.Log("[DragonScreen] AUTO SEQUENCE engaged: " + mission.Name + " (" + plan.Length + " steps)");
+            Debug.Log("[DragonScreen] AUTO SEQUENCE engaged: " + mission.Name + " (" + plan.Length + " steps"
+                      + (returnLeg ? ", resumed at departure)" : ")"));
+        }
+
+        // The plan index of the DEPARTURE (return) phase — the Fly step right after the G14 undock gate. −1 if
+        // the profile has no dock (free-flyer) or no such step. Used by the post-dock AUTO SEQUENCE resume.
+        static int DepartureStepIndex(MissionStep[] p)
+        {
+            if (p == null) return -1;
+            for (int i = 0; i < p.Length; i++)
+                if (p[i].Kind == StepKind.Gate && p[i].Gate == GateId.UndockGoG14)
+                    for (int j = i + 1; j < p.Length; j++)
+                        if (p[j].Kind == StepKind.Fly) return j;
+            return -1;
         }
 
         static void Disengage()
@@ -151,6 +196,7 @@ namespace DragonScreen
             phase = GatePhase.Holding; index = 0; boundVesselId = 0;
             goPressed = noGoPressed = abortPressed = false;
             launchPending = false; abortLatched = false; returnLeg = false;
+            dockedThisMission = false;   // a fresh scene has not docked yet
         }
 
         static bool CurrentIsGate() { return plan != null && index < plan.Length && plan[index].Kind == StepKind.Gate; }
@@ -177,6 +223,7 @@ namespace DragonScreen
         {
             if (!engaged || plan == null || v == null) return;
             if (v.persistentId != boundVesselId) { boundVesselId = v.persistentId; }   // follow handover
+            if (DockedSide.Docked(v)) dockedThisMission = true;   // ⭐ remember the berth (post-dock AUTO SEQUENCE resume)
             if (index >= plan.Length) return;   // mission complete
 
             if (!CurrentIsGate()) { goPressed = noGoPressed = abortPressed = false; return; }

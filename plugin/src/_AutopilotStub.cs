@@ -44,11 +44,20 @@ namespace DragonScreen
     // src/FlightDriver.cs. The stub is gone.
 
     // ---- mission command entry points (screen buttons) ----
+    // Only UNDOCK is a manual control now (user 2026-08-28 — RENDEZVOUS + AUTO-DOCK removed; AUTO SEQUENCE
+    // flies rendezvous + docking). UNDOCK just RELEASES THE HOOKS when the crew is ready, and marks that we
+    // have docked this mission so pressing AUTO SEQUENCE again RESUMES at departure (careful KOS-safe backaway
+    // → deorbit → entry → splashdown) instead of trying to dock again.
     public static class MissionOps
     {
-        public static void Rendezvous() { }
-        public static void AutoDock() { }
-        public static void UndockAndLand() { }
+        public static void Undock()
+        {
+            Vessel v = FlightGlobals.ActiveVessel;
+            bool released = Actuator.Undock(v);          // release the docking hooks (idempotent — no-op if not docked)
+            CrewProcedureOps.MarkDockedThisMission();     // AUTO SEQUENCE now resumes at departure, not rendezvous
+            UnityEngine.Debug.Log("[DragonScreen] UNDOCK pressed — hooks " + (released ? "released" : "already free")
+                                  + "; press AUTO SEQUENCE to fly the return (it resumes at departure).");
+        }
     }
 
     // ---- phase controllers: the screens read only "engaged" + a status note ----
