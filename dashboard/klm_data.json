@@ -1,40 +1,40 @@
 {
  "counter": {
   "died": 8,
-  "stranded": 4,
-  "abortSafe": 0,
+  "stranded": 8,
+  "abortSafe": 4,
   "rescued": 0,
   "home": 0,
   "returning": 8,
-  "flights": 5,
-  "incomplete": 0
+  "flights": 8,
+  "incomplete": 1
  },
  "memorial": [
   {
    "name": "Shane Kimbrough",
    "tally": 2,
-   "flown": 5,
+   "flown": 8,
    "first": "2026-08-28",
    "last": "2026-08-28"
   },
   {
    "name": "Megan McArthur",
    "tally": 2,
-   "flown": 5,
+   "flown": 8,
    "first": "2026-08-28",
    "last": "2026-08-28"
   },
   {
    "name": "Akihiko Hoshide",
    "tally": 2,
-   "flown": 5,
+   "flown": 8,
    "first": "2026-08-28",
    "last": "2026-08-28"
   },
   {
    "name": "Thomas Pesquet",
    "tally": 2,
-   "flown": 5,
+   "flown": 8,
    "first": "2026-08-28",
    "last": "2026-08-28"
   }
@@ -46,6 +46,6 @@
   "Akihiko Hoshide",
   "Thomas Pesquet"
  ],
- "auditedFlights": 5,
+ "auditedFlights": 8,
  "since": "20260828_103303"
 }

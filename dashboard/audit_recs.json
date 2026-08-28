@@ -22,7 +22,7 @@
  },
  {
   "fate": "died",
-  "how": "abort chutes under-decelerated - impact 131 m/s",
+  "how": "abort chutes under-decelerated - impact 127 m/s",
   "date": "2026-08-28",
   "returning": true,
   "rows": 10237,
@@ -43,12 +43,46 @@
  },
  {
   "fate": "died",
-  "how": "abort chutes under-decelerated - impact 132 m/s",
+  "how": "abort chutes under-decelerated - impact 128 m/s",
   "date": "2026-08-28",
   "returning": false,
   "rows": 3397,
   "segs": [
    "Crew-2_20260828_180029.csv"
+  ]
+ },
+ {
+  "fate": "survived",
+  "how": "test ended mid-flight (crew alive)",
+  "date": "2026-08-28",
+  "returning": false,
+  "rows": 1051,
+  "segs": [
+   "Crew-2_20260828_195316.csv"
+  ]
+ },
+ {
+  "fate": "stranded",
+  "how": "stuck in space, suborbital/incomplete",
+  "date": "2026-08-28",
+  "returning": false,
+  "rows": 1165,
+  "segs": [
+   "Crew-2_20260828_200639.csv",
+   "Crew-2_20260828_200928.csv",
+   "Crew-2_20260828_200952.csv",
+   "Crew-2_20260828_201003.csv",
+   "Crew-2_20260828_201021.csv"
+  ]
+ },
+ {
+  "fate": "abort",
+  "how": "abort - safe splashdown 2 m/s",
+  "date": "2026-08-28",
+  "returning": false,
+  "rows": 2536,
+  "segs": [
+   "Crew-2_20260828_202127.csv"
   ]
  }
 ]

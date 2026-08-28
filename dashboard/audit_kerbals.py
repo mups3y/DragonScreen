@@ -45,17 +45,20 @@ def classify(path):
             returning=True; break
     fAlt=num(last.get(cAlt))                 # metres (alt_m) — old 'alt' may be km; detect below
     fPh=(last.get(cPh) or "").strip() if cPh else ""
-    # IMPACT speed = the PEAK descent speed in the final approach to the surface (alt < 1500 m), NOT the
-    # at-rest speed after splashdown (which is ~0 and hid the fatal 122 m/s aborts).
+    # IMPACT / SPLASH speed = the descent speed at the LOWEST altitude reached while DESCENDING (the actual
+    # touchdown), NOT the peak in the final band. ⛔ Two traps this avoids: (1) the ASCENT climb through low
+    # altitude going UP fast (vspeed>0) — excluded by requiring vspeed<0 (flight 202127: a successful 8 m/s
+    # splash was misread as 117 m/s from the ascent climb); (2) the main-deploy TRANSIENT (a NOMINAL main
+    # opens at ~53 m/s and decelerates to 5-8 m/s — the PEAK would false-flag it as fatal, so take the
+    # touchdown speed at the lowest altitude instead: ~8 m/s survives, a chute-failed ~127 m/s does not).
     def peakLowSpeed():
-        best=None
+        best=None; bestAlt=None
         for r in rows:
-            a=num(r.get(cAlt))
+            a=num(r.get(cAlt)); vs=num(r.get(cVs)) if cVs else None
             if a is None or a>=1500: continue
-            v=abs(num(r.get(cVs)) or 0.0) if cVs else 0.0
-            s=abs(num(r.get(cSrf)) or 0.0) if cSrf else 0.0
-            cand=max(v,s)
-            if best is None or cand>best: best=cand
+            if vs is None or vs > -0.5: continue          # descending only
+            if bestAlt is None or a < bestAlt:            # keep the LOWEST-altitude descending row = touchdown
+                bestAlt=a; best=max(abs(vs), abs(num(r.get(cSrf)) or 0.0) if cSrf else 0.0)
         return best
     impactPeak=peakLowSpeed()
     fVs=num(last.get(cVs)) if cVs else None

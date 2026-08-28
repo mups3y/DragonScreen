@@ -17,8 +17,8 @@ _Last audit: 2026-08-28 (post the 5-flight batch 165302–180029)._
 ## CRITICAL — crew survival
 | # | Issue | Root cause (evidence) | Status | Ref |
 |---|---|---|---|---|
-| C1 | Abort chutes never deploy → **127 m/s splash, crew dead** | RealChute canopies never deployed (0 deploy-log activity; splashed with chutes attached). The code only "armed" (deferred to RealChute's envelope, which never triggered). | **FIXED⚑** — `DeployChutePart` now fires the real "Deploy Chute" (GUIDeploy) once. | ad3c85b |
-| C2 | Abort attitude authority = **0 → capsule tumbles ~17°/s, no control** | `AttitudePilot.ControlTorque` returned ~0 on the SEPARATED capsule: stock `ModuleRCS.GetPotentialTorque` = 0 even with the master ON + Dracos able to fire 21 kN (a known stock bug; normal flight reports ~735 N·m). | **FIXED⚑** — MechJeb-style geometric RCS-torque FALLBACK when the reported RCS torque is ~0. ⚠ magnitude to confirm on an instrumented abort. | this pass |
+| C1 | Abort chutes never deploy → 127 m/s splash | Only "armed" the RealChute (deferred to its envelope, never triggered) → 0 deploy activity. | **DONE✓ FLIGHT-PROVEN** — flight 202127 (max-Q LaunchEscape): log shows `RealChute DROGUES/MAINS activated`, main inflated 4.9 km → decelerated 121→8 m/s → **splash 2 m/s** (target 5–8). Crew survived. | ad3c85b |
+| C2 | Abort attitude authority = 0 → capsule tumbles | stock `ModuleRCS.GetPotentialTorque`=0 on the separated capsule (Dracos fire 21 kN; normal flight reads ~735). | **DONE✓ FLIGHT-PROVEN** — flight 202127: fallback fired (log: "geometric RCS-torque estimate 4310 N·m/axis"), `ctrl_tq` 0→**1995 N·m**, roll settled to −8°/s (was 17). | this pass |
 
 ## HIGH — mission-blocking / functional bugs
 | # | Issue | Root cause | Status | Ref |
