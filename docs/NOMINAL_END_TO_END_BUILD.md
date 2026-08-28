@@ -171,11 +171,19 @@ Sources: [KSP VesselRanges API](https://kerbalspaceprogram.com/api/class_vessel_
    loaded, focus switches fire, the S2 survives the coast + resumes, booster lands despite phantom forces (PRE's
    >100 km caveat), size `PreRangeKm` from measured separation. Full detail: `docs/BOOSTER_DUAL_FLIGHT_RESEARCH.md`.
 
-**Flight-gated (need a flight to verify the SIGNS/tuning — cannot be correctly wired blind):**
-- B2 aero-stiffness feed (sign-sensitive AoA cap), B3 RCS balancer (changes translation authority), B8
-  CourseCorrect targeting (booster/entry steering signs), deorbit/entry/departure RCS + bank signs, g-cap (F5).
-  These can be wired behind default-OFF flags to RUN + collect data, but their SIGNS are only resolvable from a
-  flown CSV — wiring them "on" blind risks the nominal mission.
+**Flight-gated (wired behind default-OFF flags to RUN + collect data; SIGNS resolve from a flown CSV):**
+- ✅ **T4 B2 aero-stiffness feed — WIRED (2026-08-29, green, commit b13113a).** `AscentControl.FeedAeroStiffness`
+  feeds `SelfCal.AeroPitchStiffness` every powered tick: kAero = M_α/I from the isolated aero pitch angular-accel
+  = (measured pitch ω̇) − (control ω̇ = `AttitudePilot.ActPitch·PitchAccelRadS2`), regressed on a SIGNED pitch-plane
+  AoA (causal pairing). RUNS + RECORDS always (cols `cal_kaero`/`cal_kaero_p`/`qalpha_cap_deg`/`aero_ang_accel`/
+  `aoa_signed_deg`); the q·α cap USES it only when `UseAeroStiffnessFeed` on AND ≥`AeroFeedMinSamples` excited
+  samples absorbed (default OFF). ⭐ finding: gating on the RLS covariance P is WRONG — a zero-AoA ascent barely
+  excites it, so P GROWS, not shrinks → an excited-sample COUNT is the honest trust signal. ⚠ flight-gated (sign):
+  read `aero_ang_accel` vs `aoa_signed_deg` off a flown CSV → set `AeroFeedSign` → flip the flag on. Also fixed:
+  `AscentControl.Reset` now clears the SelfCal estimators (stale RLS state must not carry to a new vehicle).
+- **Still owed:** B3 RCS balancer (changes translation authority), B8 CourseCorrect targeting (booster/entry
+  steering signs), deorbit/entry/departure RCS + bank signs, g-cap (F5). Wire behind default-OFF flags to RUN +
+  collect data; their SIGNS are only resolvable from a flown CSV — wiring them "on" blind risks the nominal mission.
 
 **Flight-gated (Chris flies; I analyse + tune — the F1/F2 fixes are installed, unflown):**
 - Verify deorbit brings a vessel home (F1); AUTO SEQUENCE resumes the right phase (F2); rendezvous converges to

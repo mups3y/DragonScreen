@@ -278,7 +278,7 @@
       <div class="stage anim" data-s="prog">
         <div class="stage-badge">B2</div>
         <div class="stage-body"><div class="stage-top"><h3>q&middot;&alpha; moderation</h3><span class="chip done">Built</span></div>
-          <p>Controllability-region AoA cap (&alpha;<sub>max</sub> = factor&middot;aCtrlMax/|kAero|) + a SelfCal online M<sub>&alpha;</sub> estimator, wired into the ascent (17 checks). Tightens through max-Q, authority- &amp; stability-aware. Flight-verify in I-B.</p></div>
+          <p>Controllability-region AoA cap (&alpha;<sub>max</sub> = factor&middot;aCtrlMax/|kAero|) + a SelfCal online M<sub>&alpha;</sub> estimator, wired into the ascent (19 checks). Tightens through max-Q, authority- &amp; stability-aware. <b>T4: the isolated-aero FEED is now wired</b> &mdash; kAero runs + records every powered tick (<code>cal_kaero</code> + raw inputs), behind a default-OFF flag; the cap uses it only after enough excited samples (NOT the RLS P, which grows under a zero-AoA ascent). Sign resolved from a flown CSV, then flip on in I-B.</p></div>
       </div>
       <div class="stage anim" data-s="prog">
         <div class="stage-badge">B3</div>
