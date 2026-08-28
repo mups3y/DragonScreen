@@ -122,8 +122,14 @@ def ascent(rows):
     asc = [r for r in rows if r.get("ascent_phase","") not in ("","-","Idle")]
     qmax = max((g(r,"q_pa") or 0) for r in asc); gmax = max((g(r,"accel_g") or 0) for r in asc)
     print("  --- max q %.0f Pa   max g %.2f ---" % (qmax, gmax))
-    # last row where ascent still owns (SECO state): take last ascent row's orbit
-    last = asc[-1]
+    # ⛔ SECO orbit = the SETTLED orbit AFTER the engine cuts — NOT the last S2Burn-phase row (which is ~0.3 s
+    # BEFORE cutoff, with pe still rising fast: it read a false 200×160 when the real insertion was 200×197).
+    # Find the last ascent-phase row, scan forward to where thrust dies, read the orbit a few rows past that.
+    lastIdx = max(i for i,r in enumerate(rows) if r.get("ascent_phase","") not in ("","-","Idle"))
+    last = rows[lastIdx]
+    for j in range(lastIdx, min(lastIdx+40, len(rows))):
+        if (g(rows[j],"thrust_n") or 0) < 1000.0:      # engine cut → the orbit settles within a tick or two
+            last = rows[min(j+3, len(rows)-1)]; break
     ap, pe, inc = g(last,"ap_km"), g(last,"pe_km"), g(last,"inc_deg")
     print("  SECO/insertion:  ap %.1f  pe %.1f  inc %.2f (tgt %.1f, d=%+.2f)  raan %.1f" % (
         ap or 0, pe or 0, inc or 0, TARGET_INC, (inc or 0)-TARGET_INC, g(last,"raan_deg") or 0))

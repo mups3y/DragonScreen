@@ -25,7 +25,7 @@ _Last audit: 2026-08-28 (post the 5-flight batch 165302–180029)._
 |---|---|---|---|---|
 | H1 | **Booster-recovery toggle did NOTHING** when ARMED | `TryFocusBooster` sat behind the `BurnCommanded` early-return → from MECO (ullage RCS + S2 = continuous "burn") the focus-switch was blocked every frame; the booster unloaded before it could be focused. | **FIXED⚑** — focus-switch now runs before the burn gate. | 9201aa9 |
 | H2 | **Rendezvous strands** — CoElliptic reached but CoElliptic→CW→dock hand-off never completes | Near-field CW reads `tgt.GetTransform().position`, a placeholder when the ISS is unloaded past physics range (RendezvousControl.cs:95). Likely the near-field stall. | **OPEN** (needs a flight that reaches the hand-off + PRE range check) | — |
-| H3 | **SECO eccentric 200×160**, not circular | Only `ai.TargetApoapsisM=200` is set — UPFG's terminal target is eccentric (vgo→0 at pe~160). My vgo-cutoff is correct; the TARGET isn't circular. | **OPEN** (UPFG terminal-condition fix; careful — proven ascent) | — |
+| H3 | ~~SECO eccentric 200×160~~ **NOT a bug — was an assess-tool misread** | The real settled insertion is **200×197 (near-circular)** on all 3 post-fix flights (up from 200×181 pre-fix). The "200×160" was `assess_flight.py` reading the last S2Burn-phase row — ~0.3 s BEFORE cutoff, pe still rising 159→196. The vgo/inOrbit(pe≥195) cutoff works. | **DONE✓** (flight-confirmed) + tool bug fixed | this pass |
 
 ## MEDIUM — tuning / fidelity
 | # | Issue | Notes | Status |
