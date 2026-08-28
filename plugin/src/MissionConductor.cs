@@ -29,9 +29,24 @@ namespace DragonScreen
         // ---- WARP ----
         static double warpTargetUT;    // the event UT we are warping toward (0 = idle)
 
+        // ⭐ TUNABLE TIME WARP (user: "perfect control of it so we never miss a manoeuvre"). Every knob that
+        // shapes the auto-warp is a [Tunable] — the margins live in WarpPlan (BurnLeadS/SettleMarginS/
+        // MinWarpGapS/LookaheadTicks), the coast triggers in RendezvousControl/ReturnControl (CoastWarp*), the
+        // launch-window warp in FlightDriver (LaunchAutoWarp/LaunchLeadS), and these two masters here:
+        [Tunable] public static bool AutoWarpEnabled = true;       // master: false → the conductor NEVER warps
+                                                                   // (a burn is still forced to realtime; this only
+                                                                   // stops the coast/phase warp). Chris can kill it live.
+        [Tunable] public static double MaxWarpRateX = 10000.0;     // ⛔ hard cap on the on-rails rate — never warp
+                                                                   // faster than this even far from the event, so the
+                                                                   // deceleration always has room and a burn is never
+                                                                   // approached at a screaming rate. 10000× compresses
+                                                                   // multi-day coasts yet one 0.02 s window = 200 s,
+                                                                   // trivially stoppable before the BurnLeadS drop-out.
+
         // ---- FOCUS ----
         [Tunable] public static bool AutoRecoverBooster = false;   // opt-in: hand focus to the booster to land it
         static bool boosterHandled;                                // one-shot per flight
+        static double[] railRates;                                 // cached on-rails rate table (double, ascending)
 
         public static void Reset()
         {
@@ -81,13 +96,22 @@ namespace DragonScreen
 
                 if (warpTargetUT <= 0.0) return;
 
+                // ⭐ master enable: OFF → the conductor never warps (a commanded burn is already forced to
+                // realtime above; this only stops the coast/phase compression). Drop any warp already running.
+                if (!AutoWarpEnabled) { if (Warped()) DropToRealtime(); return; }
+
                 double timeToEvent = warpTargetUT - Now();
                 if (WarpPlan.MustBeRealtime(timeToEvent)) { Realtime(); return; }
 
-                // maintain the warp: physics-warp is never used for a coast; WarpTo decelerates to the drop-out.
+                // physics (LOW) warp is never used for a coast — drop it; on-rails only below.
                 if (Warped() && TimeWarp.WarpMode == TimeWarp.Modes.LOW) DropToRealtime();
-                if (WarpPlan.ShouldWarp(timeToEvent) && TimeWarp.CurrentRateIndex == 0)
-                    WarpTo(WarpPlan.DropOutUT(warpTargetUT));
+
+                // ⭐ Deterministic, CAPPED on-rails ladder (replaces KSP's auto-rate WarpTo): WarpPlan.SafeRate
+                // picks the highest rail rate that cannot overshoot the drop-out point in one physics window and
+                // ratchets DOWN monotonically as it nears; MaxWarpRateX hard-caps it. So the rate is fully under
+                // our tunable control and a manoeuvre is never approached faster than we can cleanly stop.
+                if (WarpPlan.ShouldWarp(timeToEvent))
+                    ApplyRailWarp(WarpPlan.DropOutUT(warpTargetUT));
             }
             catch (Exception e) { Debug.LogWarning("[DragonScreen] conductor tick failed: " + e.Message); }
         }
@@ -148,10 +172,37 @@ namespace DragonScreen
             catch (Exception e) { Debug.LogWarning("[DragonScreen] warp-stop failed: " + e.Message); }
         }
 
-        static void WarpTo(double ut)
+        // ⭐ Set the on-rails warp rate to the SAFE, CAPPED value for the time left to the drop-out point. The
+        // safe rate (WarpPlan.SafeRate) can never advance more than LookaheadTicks physics windows past the
+        // drop-out at that rate, and ratchets DOWN to 1× as it nears; MaxWarpRateX caps it further. SetRate is
+        // idempotent (only written when the index changes) and KSP clamps it to the altitude-allowed maximum,
+        // so this is safe to call every frame. Guarded — a failed warp call logs and leaves realtime.
+        static void ApplyRailWarp(double dropOutUT)
         {
-            try { if (TimeWarp.fetch != null && ut > Now()) TimeWarp.fetch.WarpTo(ut); }
-            catch (Exception e) { Debug.LogWarning("[DragonScreen] warp-to failed: " + e.Message); }
+            try
+            {
+                TimeWarp tw = TimeWarp.fetch;
+                if (tw == null || tw.warpRates == null || tw.warpRates.Length == 0) return;
+                double timeToDropoutS = dropOutUT - Now();
+                if (timeToDropoutS <= WarpPlan.SettleMarginS) { DropToRealtime(); return; }
+
+                // cache the ascending rate table as double[] (rebuild only if the table changed).
+                if (railRates == null || railRates.Length != tw.warpRates.Length)
+                {
+                    railRates = new double[tw.warpRates.Length];
+                    for (int i = 0; i < tw.warpRates.Length; i++) railRates[i] = tw.warpRates[i];
+                }
+
+                double tickS = Time.fixedDeltaTime > 0f ? Time.fixedDeltaTime : 0.02;
+                double safe = WarpPlan.SafeRate(timeToDropoutS, railRates, tickS);
+                if (safe > MaxWarpRateX) safe = MaxWarpRateX;          // ⛔ the hard cap
+
+                // highest rail index whose rate ≤ the safe/capped rate.
+                int idx = 0;
+                for (int i = 0; i < railRates.Length; i++) if (railRates[i] <= safe + 1e-6) idx = i;
+                if (TimeWarp.CurrentRateIndex != idx) TimeWarp.SetRate(idx, false);
+            }
+            catch (Exception e) { Debug.LogWarning("[DragonScreen] rail-warp failed: " + e.Message); }
         }
     }
 }

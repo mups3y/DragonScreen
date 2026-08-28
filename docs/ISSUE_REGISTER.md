@@ -27,6 +27,15 @@ _Last audit: 2026-08-28 (post the 5-flight batch 165302–180029)._
 | H2 | **Rendezvous strands** — never reaches CW hand-off | ROOT (data): the low-thrust CIRCULARIZE took ~27 near-apoapsis orbits, drifting the chaser 246→6,000 km. AND the transfer reaches only ~80 km at apoapsis (131412: 86, 165302: 79) while the CW hand-off was 50 km → never caught → fly-past. | **FIXED⚑** — removed the slow circularize; `CwHandoffRangeM` 50→100 km so CW takes over on approach + does the terminal rendezvous (its valid regime). ⚠ verify CW converges from ~100 km next flight. | this pass |
 | H3 | ~~SECO eccentric 200×160~~ **NOT a bug — was an assess-tool misread** | The real settled insertion is **200×197 (near-circular)** on all 3 post-fix flights (up from 200×181 pre-fix). The "200×160" was `assess_flight.py` reading the last S2Burn-phase row — ~0.3 s BEFORE cutoff, pe still rising 159→196. The vgo/inOrbit(pe≥195) cutoff works. | **DONE✓** (flight-confirmed) + tool bug fixed | this pass |
 
+## ⭐ PERFECT CONTROL — vehicle real-world accuracy (HIGH priority; ledger = `docs/VEHICLE_AUDIT.md`)
+| # | Item | Status | Ref |
+|---|---|---|---|
+| V0 | **The whole-vehicle audit** — correct RCS mode / thruster limits / engine modes / throttle / fuel types / tanks / loads at ALL times end-to-end, AND every part the real Falcon 9 / Crew Dragon equivalent | **FRAMEWORK BUILT** — §B control matrix VERIFIED from code; §C/§D accuracy audit SEEDED. ⛔ Needs a **fresh part dump next flight** to walk every part one-by-one (§A/§E). | VEHICLE_AUDIT.md |
+| V1 | Draco RCS thrust `thrusterPower` (last seen 2 kN = 5× real ~400 N) | **DECISION OPEN** (real accuracy vs controllability) — VEHICLE_AUDIT §D-1 | fresh dump |
+| V2 | Octaweb SL thrust (real 7,600 kN) + MVac (real 934–981 kN) vs our config | **VERIFY vs fresh ConfigCache** (don't change on memory) — §D-2/3 | fresh dump |
+| V3 | Merlin gimbal range (patch disabled → stock 2° vs real ~±5°) | **VERIFY + re-enable if 2°** — §D-5 | fresh dump |
+| V4 | Chute count (real 2 drogue + 4 main), cold-gas propellant, tank loads | **VERIFY** — §D-6/§E | fresh dump |
+
 ## MEDIUM — tuning / fidelity
 | # | Issue | Notes | Status |
 |---|---|---|---|

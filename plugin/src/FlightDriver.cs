@@ -359,7 +359,7 @@ namespace DragonScreen
                 launchWindowUT = Planetarium.GetUniversalTime() + tSec;
                 Debug.Log("[DragonScreen] ⏸ LAUNCH HOLD — target-plane (RAAN) window in " + tSec.ToString("F0")
                           + " s (" + (tSec / 60.0).ToString("F1") + " min); holding for a COPLANAR launch.");
-                if (LaunchAutoWarp) WarpTo(launchWindowUT - LaunchLeadS);
+                if (LaunchAutoWarp && MissionConductor.AutoWarpEnabled) WarpTo(launchWindowUT - LaunchLeadS);
             }
             else BeginLaunch(v);
         }
@@ -377,7 +377,7 @@ namespace DragonScreen
                 Debug.Log("[DragonScreen] ▶ LAUNCH WINDOW OPEN — igniting for a coplanar insertion.");
                 BeginLaunch(v);
             }
-            else if (LaunchAutoWarp && TimeWarp.CurrentRateIndex == 0
+            else if (LaunchAutoWarp && MissionConductor.AutoWarpEnabled && TimeWarp.CurrentRateIndex == 0
                      && (launchWindowUT - now) > LaunchLeadS + 5.0)
             {
                 WarpTo(launchWindowUT - LaunchLeadS);   // re-arm the warp if it stopped early

@@ -67,6 +67,7 @@
 - [RO_MODS_MECHANICS.md](RO_MODS_MECHANICS.md) [REF] — what the guidance MUST obey.
 - [RO_TESTFLIGHT_MECHANICS.md](RO_TESTFLIGHT_MECHANICS.md) [REF] — engine ignition/ullage/reliability mechanics.
 - **[CRAFT_DUMP_VEHICLE_MAP.md](CRAFT_DUMP_VEHICLE_MAP.md)** [CURRENT] — every actuable module (control by capability). Data: **`data/craftdump.csv`**.
+- **[VEHICLE_AUDIT.md](VEHICLE_AUDIT.md)** [CURRENT, ⭐HIGH PRIORITY] — the "perfect control" ledger: every RCS mode / thruster limit / engine mode / throttle / fuel type / tank / load, per phase (§B control matrix, VERIFIED from code) + the real-world Falcon 9/Crew Dragon accuracy audit (§C/§D), done one part at a time from a fresh dump (§A procedure, §E checklist).
 
 ## 9. Screens / UI (the DragonScreen side)
 - **[SCREENS_LOOK_AND_FUNCTION_RESEARCH.md](SCREENS_LOOK_AND_FUNCTION_RESEARCH.md)** [CURRENT] — ⭐ the comprehensive record of how the screens should LOOK + FUNCTION: all resources (3 Figma CC-BY files + Vue live-demo + iss-sim + more), the real page set + function, real→our page map, buildable functions (leak test), the hidden docking mini-game, licences.

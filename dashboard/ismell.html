@@ -226,6 +226,9 @@ section.tab.on{display:block;animation:fade .25s ease}
 .fr.REF{background:rgba(78,161,255,.1);color:var(--accent)}
 .fr.SCREENS{background:rgba(245,183,77,.1);color:var(--pending)}
 .fr.HIST{background:var(--panel2);color:var(--mut2)}
+.fr.OK{background:rgba(55,217,154,.12);color:var(--go)}
+.fr.VERIFY{background:rgba(245,183,77,.1);color:var(--pending)}
+.fr.DECIDE{background:rgba(255,107,107,.12);color:var(--dispute)}
 .doc .dd{color:var(--mut);font-size:12.5px}
 
 /* add-row */
@@ -273,6 +276,7 @@ section.tab.on{display:block;animation:fade .25s ease}
   <div class="planstrip" id="planstrip"></div>
   <div class="legend" id="legend"></div>
   <section class="tab" data-tab="status" id="tab-status"></section>
+  <section class="tab" data-tab="vehicle" id="tab-vehicle"></section>
   <section class="tab" data-tab="tune" id="tab-tune"></section>
   <section class="tab" data-tab="rules" id="tab-rules"></section>
   <section class="tab" data-tab="research" id="tab-research"></section>
@@ -289,14 +293,18 @@ section.tab.on{display:block;animation:fade .25s ease}
 
 <script id="app-state" type="application/json">
 {
-  "version": "v7",
+  "version": "v8",
   "updated": "2026-08-28",
   "updatedBy": "claude",
-  "changelog": "⭐ ABORT 202127 (max-Q LaunchEscape): CREW SURVIVED — splash 2 m/s (was 127). BOTH crew-survival fixes FLIGHT-PROVEN: C1 chutes actually deploy (RealChute DROGUES/MAINS activated; main decelerated 121→8 m/s) and C2 the abort attitude fallback fired (ctrl_tq 0→1995 N·m). First abort-safe on the board. KLM: 8 died / 8 stranded / 4 abort-safe / 8 returning. Also fixed the KLM impact-detection (was reading the ascent climb / main-deploy transient as the 'impact').",
+  "changelog": "⭐ NEW VEHICLE tab — the PERFECT CONTROL ledger (docs/VEHICLE_AUDIT.md): every RCS mode / thruster limit / engine mode / throttle / fuel type / tank / load per phase (control matrix VERIFIED from code) + the real-world Falcon 9 / Crew Dragon accuracy audit; the one-by-one runs from a FRESH DUMP next flight. Also this session: docking RCS signs DERIVED from MechJeb (all −1, was +1/+1 inverting 2 axes → docking diverged); M5 resolved from ConfigCache (Draco RCS = MMH+NTO, MonoProp is unused dead weight — caught a first-clue trap); entry roll = a safe flight-resolved sign (guidance already robust); TIME WARP fully tunable (master AutoWarpEnabled + MaxWarpRateX cap wired through the overshoot-proof SafeRate ladder). Prior: ABORT 202127 crew SURVIVED (splash 2 m/s), C1+C2 flight-proven. KLM: 8 died / 8 stranded / 4 abort-safe / 8 returning.",
   "tabs": [
     {
       "id": "status",
       "label": "Status"
+    },
+    {
+      "id": "vehicle",
+      "label": "Vehicle ★"
     },
     {
       "id": "tune",
@@ -1006,6 +1014,52 @@ section.tab.on{display:block;animation:fade .25s ease}
       "pending": false
     }
   ],
+  "vehicle": {
+    "intro": "PERFECT CONTROL ledger (docs/VEHICLE_AUDIT.md): the correct RCS mode / thruster limits / engine modes / throttle / fuel types / tanks / loads at ALL times end-to-end, AND every part real-world Falcon 9 / Crew Dragon accurate. The control matrix below is VERIFIED from code; the accuracy audit is done one part at a time from a FRESH DUMP next flight (§A/§E in the doc).",
+    "sections": [
+      {
+        "cat": "Control matrix — VERIFIED from code (what the autopilot commands, per phase)",
+        "items": [
+          { "p": "Pad → liftoff", "fr": "OK", "dd": "AllEngines(9) lit only (never 3/1); clamp gate holds until ≥99% thrust + no failed engine + erector clear; throttle 1.0; RCS off; gimbal steers." },
+          { "p": "Ascent / max-Q", "fr": "OK", "dd": "AllEngines; throttle = max-Q bucket + g-limit (S1 3.5 g); thrust-limiters HELD 100% (octaweb is 1 module → no differential throttle); RCS off." },
+          { "p": "MECO / sep", "fr": "OK", "dd": "octaweb cut → interstage decoupler (direct, no staging)." },
+          { "p": "S2 (SES)", "fr": "OK", "dd": "ullage settle on aft-RCS → MVac lit; UPFG + g-limit 4.1 g; MVac gimbal steers; RCS master OFF during the burn." },
+          { "p": "SECO / Dragon sep", "fr": "OK", "dd": "MVac shut on vgo<2 or pe≥195; fire Dragon decoupler (drops S2 only, NOT trunk) once thrust dies." },
+          { "p": "Booster recovery (opt-in)", "fr": "OK", "dd": "flip on cold-gas → entry burn ThreeLanding(3) → grid-fin descent → landing burn CenterOnly(1), lit ONCE (no mid-burn 3→1); modes selected by engineID while OFF; legs final." },
+          { "p": "Rendezvous / dock", "fr": "OK", "dd": "Draco RCS translation; nose shroud OPEN first; attitude-first-then-translate; RCS signs all −1 (MechJeb-derived); RCS master ON; time-warp compresses the coasts." },
+          { "p": "Deorbit / entry", "fr": "OK", "dd": "trunk jettison → retrograde Draco RCS burn on measured pe; CoM shifter Descent Mode engaged ONCE; |σ| downrange + S-turn bank reversals; shield-forward on SAS." },
+          { "p": "Chutes / abort", "fr": "OK", "dd": "RealChute GUIDeploy once — drogues ≤5.5 km, mains ≤1.83 km (FLIGHT-PROVEN 202127); abort = SuperDraco full-throttle + capsule sep + chutes." }
+        ]
+      },
+      {
+        "cat": "Real-world accuracy — vs Falcon 9 Block 5 / Crew Dragon (OUR values verify vs the fresh dump)",
+        "items": [
+          { "p": "Dragon RCS propellant", "fr": "OK", "dd": "Draco ModuleRCSFX burns MMH+NTO (ConfigCache PROPELLANT block overrides resourceName). Real ✓. Closure rides the 655/509 MMH/NTO budget." },
+          { "p": "MonoPropellant 300 u", "fr": "OK", "dd": "not a real resource — a KSP artifact of the unused Draco ModuleEnginesRF. Our autopilot never fires it → dead weight, leave it (M5)." },
+          { "p": "Chute deploy alts", "fr": "OK", "dd": "drogues 5,486 m / mains 1,830 m — matches real Crew Dragon." },
+          { "p": "Heatshield / legs / grid fins / docking", "fr": "OK", "dd": "PICA-X · 4 legs · 4 Ti grid fins · NDS/IDA docking — all present + correct." },
+          { "p": "Merlin 1D (S1) thrust", "fr": "VERIFY", "dd": "real 854 kN SL / Isp 282 · octaweb 7,600 kN SL. Reconcile vs the fresh ConfigCache (memory had ~6,682 — may be stale)." },
+          { "p": "MVac (S2) thrust", "fr": "VERIFY", "dd": "real 934–981 kN vac / Isp 311–348. Reconcile (memory had ~805)." },
+          { "p": "SuperDraco", "fr": "VERIFY", "dd": "real 8 × 71 kN. ConfigCache showed a 680 kN CONFIG — per-engine vs total?" },
+          { "p": "Chute count / cold-gas / tank loads", "fr": "VERIFY", "dd": "confirm 2 drogues + 4 mains; cold-gas N₂; S1 ~411 t / S2 ~108 t RP-1+LOX." }
+        ]
+      },
+      {
+        "cat": "Open decisions — surface for Chris, fix only after the fresh dump confirms",
+        "items": [
+          { "p": "D-1 Draco thrust", "fr": "DECIDE", "dd": "real Draco ~400 N; last seen thrusterPower 2 kN (5×). Real accuracy vs controllability — the old autopilot ×5-boosted it. Decide." },
+          { "p": "D-5 Merlin gimbal", "fr": "DECIDE", "dd": "patch disabled → stock 2° vs real ~±5°. Confirm + re-enable a realistic range if the dump shows 2°." },
+          { "p": "D-4 deorbit path", "fr": "OK", "dd": "we deorbit via RCS (MMH+NTO), not the throttled Draco engine — propellant is real-faithful; note the module." }
+        ]
+      },
+      {
+        "cat": "Next flight — the fresh-dump one-by-one (§A/§E)",
+        "items": [
+          { "p": "Procedure", "fr": "VERIFY", "dd": "dump on the pad fully fuelled + snapshot ConfigCache → walk all 27 parts one at a time → each discrepancy to §D with the real value + source + decision. Nothing 'corrected' until the fresh dump confirms." }
+        ]
+      }
+    ]
+  },
   "klm": {
     "home": 0,
     "died": 8,
@@ -1117,6 +1171,7 @@ section.tab.on{display:block;animation:fade .25s ease}
         + staticHeader() + '\n'
         + '<div class="wrap">\n  <div class="planstrip" id="planstrip"></div>\n  <div class="legend" id="legend"></div>\n'
         + '  <section class="tab" data-tab="status" id="tab-status"></section>\n'
+        + '  <section class="tab" data-tab="vehicle" id="tab-vehicle"></section>\n'
         + '  <section class="tab" data-tab="tune" id="tab-tune"></section>\n'
         + '  <section class="tab" data-tab="rules" id="tab-rules"></section>\n'
         + '  <section class="tab" data-tab="research" id="tab-research"></section>\n'
@@ -1358,6 +1413,29 @@ section.tab.on{display:block;animation:fade .25s ease}
     sec.appendChild(p);
   }
 
+  function renderVehicle(){
+    var sec = document.getElementById('tab-vehicle'); if(!sec) return; sec.innerHTML='';
+    var V = S.vehicle || {};
+    var p = el('div','panel');
+    var ph = el('div','ph'); ph.appendChild(el('h2','Vehicle · perfect control')); ph.appendChild(el('span','meta','every setting, every phase · real Falcon 9 / Crew Dragon accurate')); p.appendChild(ph);
+    if (V.intro) p.appendChild(el('div','hint',V.intro));
+    var box = el('div','research');
+    (V.sections||[]).forEach(function(cat){
+      var c = el('div','rcat'); c.appendChild(el('div','ct',cat.cat));
+      (cat.items||[]).forEach(function(it){
+        var d = el('div','doc');
+        var pth = el('div','p'); pth.textContent = it.p;
+        if (it.fr){ pth.appendChild(el('span','fr '+it.fr, it.fr)); }
+        d.appendChild(pth); d.appendChild(el('div','dd',it.dd||''));
+        c.appendChild(d);
+      });
+      box.appendChild(c);
+    });
+    p.appendChild(box);
+    p.appendChild(el('div','hint','Legend: OK = verified/correct · VERIFY = confirm vs the fresh dump · DECIDE = a real-accuracy call for Chris. Full ledger: docs/VEHICLE_AUDIT.md.'));
+    sec.appendChild(p);
+  }
+
   function renderUnverified(){
     var sec = document.getElementById('tab-unverified'); sec.innerHTML='';
     var p = el('div','panel');
@@ -1477,7 +1555,7 @@ section.tab.on{display:block;animation:fade .25s ease}
   var current = 'status';
   function render(){
     renderReadout(); renderTabs(); renderLinks(); renderLegend(); renderKlm();
-    renderStatus(); renderTune(); renderRules(); renderResearch(); renderUnverified();
+    renderStatus(); renderVehicle(); renderTune(); renderRules(); renderResearch(); renderUnverified();
     renderMemorial(); renderHeroes();
     document.querySelectorAll('section.tab').forEach(function(s){ s.classList.toggle('on', s.dataset.tab===current); });
   }
