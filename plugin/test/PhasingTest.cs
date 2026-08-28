@@ -1,7 +1,9 @@
-// Tests for the far-field co-elliptic phasing + the crew-safety floor (pure/Phasing.cs) and the CW-validity
-// guard in Rendezvous.Guide — the fix for the PHASING self-deorbit (flight 214827: CW at 13,000 km → 28 km/s
-// retrograde → pe +178 → −143 km). The far field must be RAISE-or-COAST only (never a lowering/deorbit burn),
-// the floor must forbid a burn below a safe periapsis, and Guide must refuse to emit a CW burn far out.
+// Tests for the far-field PHASE-TIMED HOHMANN transfer + the crew-safety floor (pure/Phasing.cs) and the
+// CW-validity guard in Rendezvous.Guide. Two flights drove this: 214827 (CW at 13,000 km → 28 km/s retrograde
+// → self-deorbit; fixed by FarField + the pe floor) and 103303 (the continuous "raise" pumped ap 200→772 km,
+// never coasted, never closed; fixed by the bounded FarGuide FSM here). The far field must be prograde-or-coast
+// only, STOP raising at the station altitude (no over-raise), gate every burn on the pe floor, and Guide must
+// refuse to emit a CW burn far out.
 using System;
 using DragonScreen;
 
@@ -18,12 +20,38 @@ public static class PhasingTest
         // ---- co-elliptic target = a set height BELOW the station ----
         Check("co-elliptic target is below the station", Math.Abs(Phasing.CoEllipticTargetAltM(420000, 10000) - 410000) < 1e-6, "");
 
-        // ---- ShouldRaise: raise while below, coast once reached ----
-        Check("far below target → RAISE", Phasing.ShouldRaise(200000, 178000, 410000, 2000), "");
-        Check("apoapsis low → RAISE", Phasing.ShouldRaise(405000, 411000, 410000, 2000), "");
-        Check("periapsis low → RAISE", Phasing.ShouldRaise(411000, 405000, 410000, 2000), "");
-        Check("both apses at target → COAST (no raise)", !Phasing.ShouldRaise(411000, 409000, 410000, 2000), "");
-        Check("above target → COAST (never lowers)", !Phasing.ShouldRaise(430000, 425000, 410000, 2000), "");
+        // ---- FarGuide FSM: PHASE (coast to the lead angle) → TRANSFER (bounded raise) → COAST ----
+        double mu = 3.986e14, r1 = 6.571e6, r2 = 6.790e6;        // ~200 km chaser vs ~419 km station
+        double o1 = Math.Sqrt(mu / (r1 * r1 * r1)), o2 = Math.Sqrt(mu / (r2 * r2 * r2));
+        double lead = Hohmann.PhaseLeadRad(r1, r2, mu);
+        double tgtAlt = r2 - 6.371e6;                            // station altitude above the 6371 km body
+
+        FarInputs fp = new FarInputs { PhaseNowRad = lead + 1.0, PhaseLeadRad = lead, Omega1 = o1, Omega2 = o2,
+            ApAltM = 200000, TargetAltM = tgtAlt, RaiseTolM = 2000, PeAltM = 158000, FloorM = 150000 };
+        FarCommand cp = Phasing.FarGuide(fp, FarPhase.Phase);
+        Check("PHASE: not aligned → wait (no burn)", cp.Phase == FarPhase.Phase && !cp.Burn && cp.WaitS > 15,
+              "wait=" + cp.WaitS.ToString("F0"));
+
+        fp.PhaseNowRad = lead + 0.00001;                        // aligned
+        FarCommand ct = Phasing.FarGuide(fp, FarPhase.Phase);
+        Check("PHASE aligned → TRANSFER + burn", ct.Phase == FarPhase.Transfer && ct.Burn, "");
+
+        FarInputs ftr = fp; ftr.ApAltM = 300000;                // in transfer, ap still below the station
+        FarCommand cb = Phasing.FarGuide(ftr, FarPhase.Transfer);
+        Check("TRANSFER: ap below station → burn to raise ap", cb.Phase == FarPhase.Transfer && cb.Burn, "");
+
+        // ⛔ THE OVER-RAISE FIX (flight 103303: ap 200→772): once ap reaches the station altitude, STOP.
+        FarInputs fdone = ftr; fdone.ApAltM = tgtAlt;
+        FarCommand cc = Phasing.FarGuide(fdone, FarPhase.Transfer);
+        Check("TRANSFER: ap reached station → COAST, NO burn (never over-raise)",
+              cc.Phase == FarPhase.Coast && !cc.Burn, "");
+
+        FarInputs flow = ftr; flow.PeAltM = 149000;             // pe below the floor
+        FarCommand cl = Phasing.FarGuide(flow, FarPhase.Transfer);
+        Check("TRANSFER: pe below floor → burn HELD", !cl.Burn && cl.PeHeld, "");
+
+        FarCommand cco = Phasing.FarGuide(fdone, FarPhase.Coast);
+        Check("COAST: no burn, holds coast", cco.Phase == FarPhase.Coast && !cco.Burn, "");
 
         // ---- the hard periapsis floor ----
         Check("pe well above floor is safe", Phasing.PeSafe(178000, 150000), "");

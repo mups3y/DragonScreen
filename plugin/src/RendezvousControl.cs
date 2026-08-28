@@ -43,6 +43,7 @@ namespace DragonScreen
                                                                       // above the 50 km CW hand-off → realtime terminal approach)
 
         static RvPhase phase = RvPhase.Idle;
+        static FarPhase farPhase = FarPhase.Phase;   // far-field transfer FSM state
         static bool shroudOpened;
         static bool floorLogged;
         static RendezvousCommand lastCmd;
@@ -50,7 +51,7 @@ namespace DragonScreen
 
         public static void Reset()
         {
-            phase = RvPhase.Idle; shroudOpened = false; floorLogged = false;
+            phase = RvPhase.Idle; farPhase = FarPhase.Phase; shroudOpened = false; floorLogged = false;
             FlightDriver.ReleaseTranslation();
             Steering.Release();
         }
@@ -97,11 +98,11 @@ namespace DragonScreen
             double peAlt = v.orbit != null ? v.orbit.PeA : 0.0;
             double apAlt = v.orbit != null ? v.orbit.ApA : double.MaxValue;
 
-            // ---- FAR FIELD: prograde co-elliptic raise (never CW, never a lowering burn) ----
+            // ---- FAR FIELD: phase-timed Hohmann transfer (never CW, never a lowering burn) ----
             if (Phasing.FarField(rangeM, CwHandoffRangeM))
             {
                 double rangeRate = RangeRateMps(v, tgtOrbit, now, tgtWorld);   // + = separating, − = closing
-                FlyFarFieldRaise(v, tgtOrbit, apAlt, peAlt, rangeM, rangeRate);
+                FlyFarField(v, tgtOrbit, apAlt, peAlt, rangeM, rangeRate, now);
                 FlightLog.Fill = FillRow;
                 return;
             }
@@ -111,63 +112,82 @@ namespace DragonScreen
             FlightLog.Fill = FillRow;
         }
 
-        // FAR FIELD — raise the chaser to a co-elliptic orbit below the station, PROGRADE ONLY. Cannot deorbit
-        // (prograde raises the orbit); once co-elliptic, coast and let the phase close for the CW hand-off.
-        static void FlyFarFieldRaise(Vessel v, Orbit tgtOrbit, double apAlt, double peAlt, double rangeM,
-                                     double rangeRateMps)
+        // FAR FIELD — the phase-timed Hohmann transfer (pure/Phasing.FarGuide): PHASE (coast+warp on the low, fast
+        // insertion orbit until the phase angle reaches the Hohmann lead) → TRANSFER (burn prograde to raise
+        // apoapsis to the station's altitude, then STOP — the fix for the flight-103303 200→772 over-raise) →
+        // COAST (warp up to apoapsis, where the chaser arrives near the station and the range drops into CW's
+        // regime). Prograde-only + the pe floor → the far field can never deorbit. The Hohmann timing is the
+        // tested pure/Hohmann.cs; here the glue only computes the live phase angle + executes.
+        static void FlyFarField(Vessel v, Orbit tgtOrbit, double apAlt, double peAlt, double rangeM,
+                                double rangeRateMps, double now)
         {
-            double tgtMeanAlt = 0.5 * (tgtOrbit.ApA + tgtOrbit.PeA);
-            double coElAlt = Phasing.CoEllipticTargetAltM(tgtMeanAlt, CoEllipticBelowM);
+            CelestialBody body = v.mainBody;
+            double mu = body.gravParameter;
+            Vector3d bc = body.position;
+            Vector3d rc = (Vector3d)v.CoM - bc;                         // chaser radius vector (world)
+            Vector3d rt = tgtOrbit.getPositionAtUT(now) - bc;          // station radius vector (world)
+            Vector3d hHat = Vector3d.Cross(rc, v.obt_velocity);        // chaser orbit normal (prograde sense)
+            if (hHat.magnitude > 1e-6) hHat = hHat.normalized;
+            // signed phase angle: target AHEAD of chaser, measured prograde about the orbit normal → [0, 2π)
+            double signed = Math.Atan2(Vector3d.Dot(Vector3d.Cross(rc, rt), hHat), Vector3d.Dot(rc, rt));
+            double phaseNow = signed < 0.0 ? signed + 2.0 * Math.PI : signed;
+            double r1 = rc.magnitude, r2 = rt.magnitude;
+            double o1 = Math.Sqrt(mu / (r1 * r1 * r1)), o2 = Math.Sqrt(mu / (r2 * r2 * r2));
 
+            FarInputs fi = new FarInputs
+            {
+                PhaseNowRad = phaseNow,
+                PhaseLeadRad = Hohmann.PhaseLeadRad(r1, r2, mu),
+                Omega1 = o1, Omega2 = o2,
+                ApAltM = apAlt, TargetAltM = r2 - body.Radius, RaiseTolM = RaiseTolM,
+                PeAltM = peAlt, FloorM = SafePeFloorM
+            };
+            FarCommand fc = Phasing.FarGuide(fi, farPhase);
+            farPhase = fc.Phase;
+
+            // attitude-first: point prograde, burn only once pointed. FarGuide already gates Burn on the pe floor.
             Vector3d pro = Steering.Prograde(v);
-            Steering.Point(v, pro);                              // attitude-first: point the nose prograde
+            Steering.Point(v, pro);
             double perr = Steering.PointingErrorDeg(v, pro);
-
-            bool wantRaise = Phasing.ShouldRaise(apAlt, peAlt, coElAlt, RaiseTolM);
-            // prograde raise (forward on the Dracos) once pointed. A CORRECT prograde burn raises pe, so the
-            // floor won't trip — but ForwardSign is a first-cut constant, and if it were reversed this "raise"
-            // would be retrograde. So the pe floor STILL gates it: a wrong sign is caught at 150 km (the capsule
-            // holds safely, above the 140 km atmosphere) instead of self-deorbiting. ⚠ verify ForwardSign +
-            // that ap/pe RISE in the CSV; if pe falls, ForwardSign is flipped.
-            bool peSafe = Phasing.PeSafe(peAlt, SafePeFloorM);
-            if (!peSafe && !floorLogged)
+            if (fc.PeHeld && !floorLogged)
             {
                 Debug.LogWarning("[DragonScreen] RV pe-floor (far): pe " + (peAlt / 1000.0).ToString("F0")
                                  + " km ≤ floor " + (SafePeFloorM / 1000.0).ToString("F0") + " km — burns HELD.");
                 floorLogged = true;
             }
-            if (wantRaise && perr <= AttitudeReadyDeg && peSafe)
-                FlightDriver.SetTranslation(0, 0, ForwardSign);
+            if (fc.Burn && perr <= AttitudeReadyDeg)
+                FlightDriver.SetTranslation(0, 0, ForwardSign);   // prograde raise on the Dracos
             else
                 FlightDriver.ReleaseTranslation();
 
-            // ⭐ WARP-TO-MANEUVERS: once co-elliptic (no raise burn), the chaser just COASTS while the lower/faster
-            // orbit closes the phase to the CW hand-off — that can be many orbits (hours). Warp toward the ETA of
-            // the range crossing CwHandoffRangeM; the conductor drops out with lead and its universal burn-guard
-            // forces realtime the instant any Draco burn is commanded, so warping can never skip a burn. Only
-            // while genuinely coasting + pe-safe — a raise burn (above) sets translation and self-cancels the warp.
-            if (CoastWarp && !wantRaise && peSafe && rangeM > CoastWarpMinRangeM)
+            // ⭐ WARP-TO-MANEUVERS. PHASE: warp toward the phase-alignment UT (the long wait for the window).
+            // COAST: warp toward the range closing into CW's regime. TRANSFER (burning) or inside the terminal
+            // buffer: realtime (the conductor's burn-guard also forces 1× on any Draco burn, so a burn is never
+            // run under warp). CoastEta gives the range a self-correcting ETA; WaitTimeS gives the phase one.
+            if (CoastWarp && farPhase == FarPhase.Phase && fc.WaitS > 0.0)
+            {
+                MissionConductor.WarpToEvent(now + fc.WaitS);   // WarpPlan.ShouldWarp ignores gaps too short to bother
+            }
+            else if (CoastWarp && farPhase == FarPhase.Coast && rangeM > CoastWarpMinRangeM)
             {
                 double horizonS = (tgtOrbit.period > 60.0) ? tgtOrbit.period : CoastWarpFallbackHorizonS;
                 double etaS = CoastEta.TimeToRange(rangeM, rangeRateMps, CwHandoffRangeM, horizonS);
-                MissionConductor.WarpToEvent(Planetarium.GetUniversalTime() + etaS);
+                MissionConductor.WarpToEvent(now + etaS);
             }
             else
             {
-                // raising / inside the terminal buffer / pe-held → no warp; clear any pending target so a stale
-                // far-coast warp can't carry into the burn or the near-field approach.
-                MissionConductor.Realtime();
+                MissionConductor.Realtime();   // transferring, or inside the buffer → no warp
             }
 
-            // recorder: keep the far-field visible (phase + range + whether we're raising)
+            // recorder: keep the far-field visible (phase + range + whether we're burning)
             phase = RvPhase.Phasing;
             lastCmd = new RendezvousCommand
             {
                 Phase = RvPhase.Phasing,
                 AimLvlh = new Vec3(0, 1, 0),                     // prograde / along-track
-                BurnLvlh = new Vec3(0, wantRaise ? 1.0 : 0.0, 0),
-                BurnDvMps = wantRaise ? 1.0 : 0.0,
-                Burn = wantRaise
+                BurnLvlh = new Vec3(0, fc.Burn ? 1.0 : 0.0, 0),
+                BurnDvMps = fc.Burn ? 1.0 : 0.0,
+                Burn = fc.Burn
             };
             lastRel = new LvlhState { Rx = 0, Ry = -rangeM, Rz = 0 };
         }

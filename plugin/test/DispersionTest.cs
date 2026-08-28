@@ -186,10 +186,25 @@ public static class DispersionTest
             double coTgt = Phasing.CoEllipticTargetAltM(station, below);
             Check("co-elliptic target is below the station", coTgt < station && Finite(coTgt),
                   "station=" + station.ToString("F0") + " tgt=" + coTgt.ToString("F0"));
-            // above target on both apses -> never raise (far field is prograde-raise-or-coast, never lower)
-            double apA = station + rng.Range(0.0, 60000.0), peA = station + rng.Range(0.0, 60000.0);
-            Check("at/above target -> coast (never a needless raise)",
-                  !Phasing.ShouldRaise(apA, peA, coTgt, 2000.0), "");
+            // FarGuide (phase-timed transfer) invariants: never OVER-RAISE (the 103303 fix) + never burn below
+            // the pe floor (crew safety), across dispersed geometry and every FSM state.
+            double chApAlt = station + rng.Range(-250000.0, 60000.0);   // chaser ap around/below the station
+            FarInputs fin = new FarInputs
+            {
+                PhaseNowRad = rng.Range(0.0, 2.0 * Math.PI), PhaseLeadRad = rng.Range(0.0, 2.0 * Math.PI),
+                Omega1 = 0.0012, Omega2 = 0.0011,
+                ApAltM = chApAlt, TargetAltM = station, RaiseTolM = 2000.0,
+                PeAltM = pe, FloorM = floor
+            };
+            FarPhase[] fps = { FarPhase.Phase, FarPhase.Transfer, FarPhase.Coast };
+            FarCommand fcmd = Phasing.FarGuide(fin, fps[i % 3]);
+            if (chApAlt >= station - 2000.0)
+                Check("FarGuide: ap at/above station -> NO burn (never over-raise)", !fcmd.Burn,
+                      "ap=" + chApAlt.ToString("F0"));
+            if (pe <= floor)
+                Check("FarGuide: pe at/below floor -> burn HELD (crew safety)", !fcmd.Burn,
+                      "pe=" + pe.ToString("F0") + " floor=" + floor.ToString("F0"));
+            Check("FarGuide: WaitS finite", Finite(fcmd.WaitS), "wait=" + fcmd.WaitS);
 
             // ---- Guide FAR FIELD: the self-deorbit invariant ----
             RendezvousInputs s = MakeInputs(rng, true);
