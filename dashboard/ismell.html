@@ -289,10 +289,10 @@ section.tab.on{display:block;animation:fade .25s ease}
 
 <script id="app-state" type="application/json">
 {
-  "version": "v4",
+  "version": "v5",
   "updated": "2026-08-28",
   "updatedBy": "claude",
-  "changelog": "5 more flights, systematically analysed. ⛔ 2 crews DIED (abort chutes never deployed → 127 m/s splash), 1 stranded, 2 returning — nobody home. KERBAL LIVES MATTER banner added. Crew-survival fix built: DeployChutePart now DEPLOYS the RealChute canopy directly (was only 'arming' → zero deploy activity → fatal). S2 g-cap 4.3→4.1 (still hit 4.65). Found (documented, not guess-fixed): abort RCS produces 0 thrust (Dracos obstructed); SECO target is eccentric 200×160 not circular (my vgo-cutoff is correct, the UPFG target isn't); 300 units MonoProp are vestigial dead weight (real Dracos burn MMH+NTO); circularize reaches CoElliptic but not docking; 10 g steep entry in a DeorbitReturn.",
+  "changelog": "Booster-recovery toggle was BROKEN — Chris armed it, MECO fired, but focus never switched to the booster (the focus-switch sat behind the burn-safety gate, blocked every frame from MECO by the ullage-RCS + S2 'burn' until the booster unloaded). FIXED (unflown). Booster still has ZERO real data. (Also: I'd wrongly assumed the toggle was off — verify against the log, don't assume.)",
   "tabs": [
     {
       "id": "status",
@@ -359,7 +359,7 @@ section.tab.on{display:block;animation:fade .25s ease}
       "f": false,
       "fkind": "flight",
       "pending": false,
-      "note": "First-cut built (flip → 3-engine entry burn → grid fins → 1-engine hoverslam → legs). Never flown focused. ⛔ stock KSP: booster recovery is a SEPARATE focused test (can't fly it live with Dragon-to-orbit)."
+      "note": "First-cut built (flip → 3-engine entry burn → grid fins → 1-engine hoverslam → legs). ⛔ FLIGHT 180029: Chris ARMED the toggle and it DID NOTHING — the focus never switched to the booster. ROOT (log-confirmed): the focus-switch sat behind the burn-safety gate, so from MECO (ullage RCS + S2 = continuous 'burn') it was blocked every frame and the booster unloaded out of range. FIXED (commit 9201aa9, unflown): focus-switch now runs before the gate. STILL zero real booster data — needs a flown ARMED run."
     },
     {
       "id": "rv",

@@ -74,7 +74,11 @@ abort and confirm ~5–8 m/s splash.** Also: S2 g-cap 4.3→4.1 (flights hit 4.6
 **⭐ NEXT = FLY, crew-survival first:**
 1. **Fly an ABORT** (LaunchEscape + DeorbitReturn) → confirm the chute-deploy fix gives ~5–8 m/s splash (was 127).
 2. **Toggle OFF → full Dragon mission** → does CoElliptic now hand to CW → docking → deorbit → entry → chutes?
-3. **Toggle ARMED → booster-recovery run** → the still-missing booster data.
+3. **Toggle ARMED → booster-recovery run** → the still-missing booster data. ⛔ **NOTE: the ARMED toggle DID NOTHING on
+   flight 180029** — `MissionConductor.TryFocusBooster` sat behind the `BurnCommanded` gate, so from MECO (ullage RCS +
+   S2 = a continuous "burn") the focus-switch was blocked every frame and the booster unloaded before it could be
+   focused. **FIXED (commit 9201aa9, installed, UNFLOWN): the focus-switch now runs BEFORE the burn gate.** Verify the
+   booster actually gets focused + landed. (Lesson: I'd wrongly ASSUMED the toggle was off — verify against the log.)
 ⛔ Getting it to RUN must NOT force the timeline — every MET emerges from physics (ULTIMATE_PLAN I-B.0).
 ⚠ After a PAD SAFE-ABORT, REVERT to launch (RealFuels spends the octaweb's one ignition; a re-engage shows 0% — not a bug).
 
