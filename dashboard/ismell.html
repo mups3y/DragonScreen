@@ -236,162 +236,694 @@ section.tab.on{display:block;animation:fade .25s ease}
 {
   "version": "v1",
   "updated": "2026-08-28",
-  "updatedBy": "claude",
+  "updatedBy": "user",
   "changelog": "v1 seeded by Claude: phase map, component tick-tracker, tune board (ascent seeded from the corpus), rules incl. the new 3-tick rule, research index, open claims.",
   "tabs": [
-    {"id":"status","label":"Status"},
-    {"id":"tune","label":"Tune Board"},
-    {"id":"rules","label":"Rules"},
-    {"id":"research","label":"Research"},
-    {"id":"unverified","label":"Open Claims"}
+    {
+      "id": "status",
+      "label": "Status"
+    },
+    {
+      "id": "tune",
+      "label": "Tune Board"
+    },
+    {
+      "id": "rules",
+      "label": "Rules"
+    },
+    {
+      "id": "research",
+      "label": "Research"
+    },
+    {
+      "id": "unverified",
+      "label": "Open Claims"
+    }
   ],
   "links": [
-    {"name":"DragonScreen Ultimate Plan","note":"the top governing plan (autopilot + whole mod)","url":"https://claude.ai/code/artifact/943d3d08-1124-432b-b474-1c33b5c29774","here":false},
-    {"name":"I Smell What You're Stepping In","note":"this dashboard — the shared source of truth","url":"https://claude.ai/code/artifact/9873fc17-efd8-4902-a029-67df25d3d783","here":true}
+    {
+      "name": "DragonScreen Ultimate Plan",
+      "note": "the top governing plan (autopilot + whole mod)",
+      "url": "https://claude.ai/code/artifact/943d3d08-1124-432b-b474-1c33b5c29774",
+      "here": false
+    },
+    {
+      "name": "I Smell What You're Stepping In",
+      "note": "this dashboard — the shared source of truth",
+      "url": "https://claude.ai/code/artifact/9873fc17-efd8-4902-a029-67df25d3d783",
+      "here": true
+    }
   ],
   "phases": [
-    {"id":"ascent","name":"Ascent","order":"1 · pad → SECO","c":true,"u":false,"f":false,"fkind":"flight","pending":false,
-     "note":"Reaches orbit in the corpus (pointing p95 0.08–0.36°, clean UPFG cutoff). NOT clean yet: inc undershoot, g 4.72, eccentric SECO — the A1 plane fix is installed but UNFLOWN."},
-    {"id":"booster","name":"Booster","order":"2 · sep → landing","c":true,"u":false,"f":false,"fkind":"flight","pending":false,
-     "note":"First-cut built (flip → 3-engine entry burn → grid fins → 1-engine hoverslam → legs). Never flown focused. ⛔ stock KSP: booster recovery is a SEPARATE focused test (can't fly it live with Dragon-to-orbit)."},
-    {"id":"rv","name":"Rendezvous","order":"3 · orbit → 7.5 km","c":true,"u":false,"f":false,"fkind":"flight","pending":false,
-     "note":"Far-field co-elliptic raise + coast-warp built; near-field CW + AI standoff never flown. Watch: near-field reads the ISS transform (placeholder if unloaded past physics range)."},
-    {"id":"dock","name":"Docking","order":"4 · L-approach → capture","c":true,"u":false,"f":false,"fkind":"flight","pending":false,
-     "note":"Glideslope servo + per-leg gates built. Never flown. RCS translation signs are best-guess (flip from CSV)."},
-    {"id":"return","name":"Return","order":"5 · undock → splash","c":true,"u":false,"f":false,"fkind":"flight","pending":false,
-     "note":"Departure + deorbit + lifting entry + chutes + post-deorbit coast-warp built. Never flown. ⛔ abort-chute fix is NOT flight-verified. Bank/roll + deorbit-Pe signs best-guess."}
+    {
+      "id": "ascent",
+      "name": "Ascent",
+      "order": "1 · pad → SECO",
+      "c": true,
+      "u": false,
+      "f": false,
+      "fkind": "flight",
+      "pending": false,
+      "note": "Reaches orbit in the corpus (pointing p95 0.08–0.36°, clean UPFG cutoff). NOT clean yet: inc undershoot, g 4.72, eccentric SECO — the A1 plane fix is installed but UNFLOWN."
+    },
+    {
+      "id": "booster",
+      "name": "Booster",
+      "order": "2 · sep → landing",
+      "c": true,
+      "u": false,
+      "f": false,
+      "fkind": "flight",
+      "pending": false,
+      "note": "First-cut built (flip → 3-engine entry burn → grid fins → 1-engine hoverslam → legs). Never flown focused. ⛔ stock KSP: booster recovery is a SEPARATE focused test (can't fly it live with Dragon-to-orbit)."
+    },
+    {
+      "id": "rv",
+      "name": "Rendezvous",
+      "order": "3 · orbit → 7.5 km",
+      "c": true,
+      "u": false,
+      "f": false,
+      "fkind": "flight",
+      "pending": false,
+      "note": "Far-field co-elliptic raise + coast-warp built; near-field CW + AI standoff never flown. Watch: near-field reads the ISS transform (placeholder if unloaded past physics range)."
+    },
+    {
+      "id": "dock",
+      "name": "Docking",
+      "order": "4 · L-approach → capture",
+      "c": true,
+      "u": false,
+      "f": false,
+      "fkind": "flight",
+      "pending": false,
+      "note": "Glideslope servo + per-leg gates built. Never flown. RCS translation signs are best-guess (flip from CSV)."
+    },
+    {
+      "id": "return",
+      "name": "Return",
+      "order": "5 · undock → splash",
+      "c": true,
+      "u": false,
+      "f": false,
+      "fkind": "flight",
+      "pending": false,
+      "note": "Departure + deorbit + lifting entry + chutes + post-deorbit coast-warp built. Never flown. ⛔ abort-chute fix is NOT flight-verified. Bank/roll + deorbit-Pe signs best-guess."
+    }
   ],
   "components": [
-    {"id":"warp","name":"Coast auto-warp (warp-to-maneuvers)","group":"get-end-to-end","c":true,"u":false,"f":false,"fkind":"flight","pending":false,
-     "note":"pure/CoastEta + conductor guard (throttle OR RCS). Warps the phasing coast + post-deorbit coast. Headless-green; unflown. Commit 21f3898."},
-    {"id":"abortfix","name":"Fatal-abort chute fix (arm-once)","group":"crew-survival","c":true,"u":false,"f":false,"fkind":"flight","pending":false,
-     "note":"RealChute ARM once (was re-Deploy every tick → 122 m/s splash). ⚠ NOT flight-verified — #1 to confirm. Commit a9d2600."},
-    {"id":"octaweb","name":"Octaweb n<2 differential-throttle guard","group":"crew-survival","c":true,"u":false,"f":false,"fkind":"flight","pending":false,
-     "note":"HoldEnginesFull unless ≥2 engine modules (single-module octaweb was starved to 40% → pad safe-abort). Headless-green; needs a real launch to confirm liftoff."},
-    {"id":"b1","name":"B1 StageStats / FuelFlowSim","group":"I-A backlog","c":true,"u":false,"f":true,"fkind":"na","pending":false,
-     "note":"Per-stage Δv/TWR/burn-time + MECO reserve (MechJeb math). Pure — certified by headless tests; no flight tick needed."},
-    {"id":"b2","name":"B2 q·α moderation","group":"I-A backlog","c":true,"u":false,"f":false,"fkind":"flight","pending":false,
-     "note":"Controllability cap + M_α estimator. Cap glue wired; the isolated-aero estimator FEED is owed (flight-gated, sign-sensitive)."},
-    {"id":"b3","name":"B3 thrust / RCS balancer","group":"I-A backlog","c":true,"u":false,"f":false,"fkind":"flight","pending":false,
-     "note":"TCA torque-nulling solver. DiffThrottle glue wired (octaweb); RcsBalance glue owed for rendezvous/docking."},
-    {"id":"b4","name":"B4 actuator-lag","group":"I-A backlog","c":true,"u":false,"f":false,"fkind":"flight","pending":false,
-     "note":"First-order lag + lead comp; self-seeds from live gimbal responseSpeed. Flight-confirm the lead helps."},
-    {"id":"b5","name":"B5 PVG — multi-stage UPFG (PEGAS)","group":"I-A backlog","c":true,"u":false,"f":true,"fkind":"na","pending":false,
-     "note":"Ported verbatim from PEGAS-MATLAB; validated n=1 + 2-stage point-mass closure. Near-no-op for single-upper-stage Crew-2. Pure."},
-    {"id":"b6","name":"B6 NavFilter (strict-fidelity nav)","group":"I-A backlog","c":true,"u":false,"f":false,"fkind":"flight","pending":false,
-     "note":"Per-axis 3-state Kalman (pos/vel/bias). Not yet fed live / flown on the estimate."},
-    {"id":"b7","name":"B7 Lambert + maneuver library","group":"I-A backlog","c":true,"u":false,"f":true,"fkind":"na","pending":false,
-     "note":"Universal-variable Lambert + finite-burn executor. Pure — headless-certified."},
-    {"id":"b8","name":"B8 entry predictor + CourseCorrect","group":"I-A backlog","c":true,"u":false,"f":false,"fkind":"flight","pending":false,
-     "note":"2×2/1×1 divert solve + 4-band L/D prior (predictor-only). Targeting glue + KSP-Euler correction owed (no entry corpus yet)."},
-    {"id":"b9","name":"B9 AscentLoss + LaunchTuner","group":"I-A backlog","c":true,"u":false,"f":false,"fkind":"flight","pending":false,
-     "note":"Δv-loss decomposition + LaunchDB coordinate-descent. Recorder loss-columns + across-flight run → learned.cfg owed."},
-    {"id":"b10","name":"B10 Tier-2 dispersion (5 families)","group":"I-A backlog","c":true,"u":false,"f":true,"fkind":"na","pending":false,
-     "note":"Property-based invariants over the pure layer (724,791 checks). Tier-3 corpus-regression + Tier-4 MC owed. Pure."},
-    {"id":"b11","name":"B11 FDIR escalation + free-flyers","group":"I-A backlog","c":true,"u":false,"f":false,"fkind":"flight","pending":false,
-     "note":"Escalation ladder + free-flyer profiles. Live-wiring into FlightDriver (observe-first, then acting) owed."}
+    {
+      "id": "warp",
+      "name": "Coast auto-warp (warp-to-maneuvers)",
+      "group": "get-end-to-end",
+      "c": true,
+      "u": false,
+      "f": false,
+      "fkind": "flight",
+      "pending": false,
+      "note": "pure/CoastEta + conductor guard (throttle OR RCS). Warps the phasing coast + post-deorbit coast. Headless-green; unflown. Commit 21f3898."
+    },
+    {
+      "id": "abortfix",
+      "name": "Fatal-abort chute fix (arm-once)",
+      "group": "crew-survival",
+      "c": true,
+      "u": false,
+      "f": false,
+      "fkind": "flight",
+      "pending": false,
+      "note": "RealChute ARM once (was re-Deploy every tick → 122 m/s splash). ⚠ NOT flight-verified — #1 to confirm. Commit a9d2600."
+    },
+    {
+      "id": "octaweb",
+      "name": "Octaweb n<2 differential-throttle guard",
+      "group": "crew-survival",
+      "c": true,
+      "u": true,
+      "f": false,
+      "fkind": "flight",
+      "pending": false,
+      "note": "HoldEnginesFull unless ≥2 engine modules (single-module octaweb was starved to 40% → pad safe-abort). Headless-green; needs a real launch to confirm liftoff."
+    },
+    {
+      "id": "b1",
+      "name": "B1 StageStats / FuelFlowSim",
+      "group": "I-A backlog",
+      "c": true,
+      "u": true,
+      "f": true,
+      "fkind": "na",
+      "pending": false,
+      "note": "Per-stage Δv/TWR/burn-time + MECO reserve (MechJeb math). Pure — certified by headless tests; no flight tick needed."
+    },
+    {
+      "id": "b2",
+      "name": "B2 q·α moderation",
+      "group": "I-A backlog",
+      "c": true,
+      "u": true,
+      "f": false,
+      "fkind": "flight",
+      "pending": false,
+      "note": "Controllability cap + M_α estimator. Cap glue wired; the isolated-aero estimator FEED is owed (flight-gated, sign-sensitive)."
+    },
+    {
+      "id": "b3",
+      "name": "B3 thrust / RCS balancer",
+      "group": "I-A backlog",
+      "c": true,
+      "u": true,
+      "f": false,
+      "fkind": "flight",
+      "pending": false,
+      "note": "TCA torque-nulling solver. DiffThrottle glue wired (octaweb); RcsBalance glue owed for rendezvous/docking."
+    },
+    {
+      "id": "b4",
+      "name": "B4 actuator-lag",
+      "group": "I-A backlog",
+      "c": true,
+      "u": true,
+      "f": false,
+      "fkind": "flight",
+      "pending": false,
+      "note": "First-order lag + lead comp; self-seeds from live gimbal responseSpeed. Flight-confirm the lead helps."
+    },
+    {
+      "id": "b5",
+      "name": "B5 PVG — multi-stage UPFG (PEGAS)",
+      "group": "I-A backlog",
+      "c": true,
+      "u": true,
+      "f": true,
+      "fkind": "na",
+      "pending": false,
+      "note": "Ported verbatim from PEGAS-MATLAB; validated n=1 + 2-stage point-mass closure. Near-no-op for single-upper-stage Crew-2. Pure."
+    },
+    {
+      "id": "b6",
+      "name": "B6 NavFilter (strict-fidelity nav)",
+      "group": "I-A backlog",
+      "c": true,
+      "u": true,
+      "f": false,
+      "fkind": "flight",
+      "pending": false,
+      "note": "Per-axis 3-state Kalman (pos/vel/bias). Not yet fed live / flown on the estimate."
+    },
+    {
+      "id": "b7",
+      "name": "B7 Lambert + maneuver library",
+      "group": "I-A backlog",
+      "c": true,
+      "u": true,
+      "f": true,
+      "fkind": "na",
+      "pending": false,
+      "note": "Universal-variable Lambert + finite-burn executor. Pure — headless-certified."
+    },
+    {
+      "id": "b8",
+      "name": "B8 entry predictor + CourseCorrect",
+      "group": "I-A backlog",
+      "c": true,
+      "u": true,
+      "f": false,
+      "fkind": "flight",
+      "pending": false,
+      "note": "2×2/1×1 divert solve + 4-band L/D prior (predictor-only). Targeting glue + KSP-Euler correction owed (no entry corpus yet)."
+    },
+    {
+      "id": "b9",
+      "name": "B9 AscentLoss + LaunchTuner",
+      "group": "I-A backlog",
+      "c": true,
+      "u": true,
+      "f": false,
+      "fkind": "flight",
+      "pending": false,
+      "note": "Δv-loss decomposition + LaunchDB coordinate-descent. Recorder loss-columns + across-flight run → learned.cfg owed."
+    },
+    {
+      "id": "b10",
+      "name": "B10 Tier-2 dispersion (5 families)",
+      "group": "I-A backlog",
+      "c": true,
+      "u": true,
+      "f": true,
+      "fkind": "na",
+      "pending": false,
+      "note": "Property-based invariants over the pure layer (724,791 checks). Tier-3 corpus-regression + Tier-4 MC owed. Pure."
+    },
+    {
+      "id": "b11",
+      "name": "B11 FDIR escalation + free-flyers",
+      "group": "I-A backlog",
+      "c": true,
+      "u": false,
+      "f": false,
+      "fkind": "flight",
+      "pending": false,
+      "note": "Escalation ladder + free-flyer profiles. Live-wiring into FlightDriver (observe-first, then acting) owed."
+    }
   ],
   "tuneboard": [
-    {"phase":"Ascent","coverage":"corpus: ascent control (gold) + abort","targets":[
-      {"metric":"Inclination → 51.6° (ISS)","target":"51.6°","current":"46.5° (−5.1°)","cls":"bad","status":"pending","note":"A1: UpfgAim now threads the target plane-normal — installed, UNFLOWN. Verify inc→51.6 + S2 Δv margin."},
-      {"metric":"Peak g ≤ 4.5 (crew)","target":"≤ 4.5 g","current":"4.72 g","cls":"bad","status":"pending","note":"MVac min-throttle floor near SECO (stage light). FDIR g-abort is 6.0 so it's safe; no clean fix yet."},
-      {"metric":"SECO circular (ecc→0)","target":"~200×200 km","current":"200×140 km","cls":"bad","status":"pending","note":"~17 m/s cutoff short; coupled to the SECO trigger. Re-assess after the A1 plane flight."},
-      {"metric":"Pointing hold (control quality)","target":"< 0.5° p95","current":"0.08–0.36° p95","cls":"good","status":"data","note":"GravityTurn/S2Burn control is clean + prograde in the corpus (gold). Roll held, sat_duty ≈ 0."}
-    ]},
-    {"phase":"Booster","coverage":"NO corpus data yet (never flown focused)","targets":[
-      {"metric":"Droneship/RTLS touchdown","target":"on deck, < 6 m/s","current":"—","cls":"mut","status":"none","note":"BC / rotation-correction / CrossSign are best-guess; hoverslam ignition alt untuned."}
-    ]},
-    {"phase":"Rendezvous","coverage":"NO corpus data yet","targets":[
-      {"metric":"Reach AI standoff 7.5 km","target":"7.5 km, pe held","current":"—","cls":"mut","status":"none","note":"ForwardSign = −1 best-guess; pe-floor gates a wrong sign. Near-field transform-read is the watch item."}
-    ]},
-    {"phase":"Docking","coverage":"NO corpus data yet","targets":[
-      {"metric":"Soft capture ≤ 8 cm/s","target":"contact ~0.08 m/s","current":"—","cls":"mut","status":"none","note":"RcsRight/Up/Fwd signs best-guess; servo gains + tolerances untuned."}
-    ]},
-    {"phase":"Return","coverage":"NO corpus data yet","targets":[
-      {"metric":"Splashdown 5–8 m/s","target":"5–8 m/s","current":"—","cls":"mut","status":"none","note":"Deorbit Pe 50 km + bank/roll signs best-guess. Abort-chute fix must confirm here first (was 122 m/s)."}
-    ]}
+    {
+      "phase": "Ascent",
+      "coverage": "corpus: ascent control (gold) + abort",
+      "targets": [
+        {
+          "metric": "Inclination → 51.6° (ISS)",
+          "target": "51.6°",
+          "current": "46.5° (−5.1°)",
+          "cls": "bad",
+          "status": "pending",
+          "note": "A1: UpfgAim now threads the target plane-normal — installed, UNFLOWN. Verify inc→51.6 + S2 Δv margin."
+        },
+        {
+          "metric": "Peak g ≤ 4.5 (crew)",
+          "target": "≤ 4.5 g",
+          "current": "4.72 g",
+          "cls": "bad",
+          "status": "pending",
+          "note": "MVac min-throttle floor near SECO (stage light). FDIR g-abort is 6.0 so it's safe; no clean fix yet."
+        },
+        {
+          "metric": "SECO circular (ecc→0)",
+          "target": "~200×200 km",
+          "current": "200×140 km",
+          "cls": "bad",
+          "status": "pending",
+          "note": "~17 m/s cutoff short; coupled to the SECO trigger. Re-assess after the A1 plane flight."
+        },
+        {
+          "metric": "Pointing hold (control quality)",
+          "target": "< 0.5° p95",
+          "current": "0.08–0.36° p95",
+          "cls": "good",
+          "status": "data",
+          "note": "GravityTurn/S2Burn control is clean + prograde in the corpus (gold). Roll held, sat_duty ≈ 0."
+        }
+      ]
+    },
+    {
+      "phase": "Booster",
+      "coverage": "NO corpus data yet (never flown focused)",
+      "targets": [
+        {
+          "metric": "Droneship/RTLS touchdown",
+          "target": "on deck, < 6 m/s",
+          "current": "—",
+          "cls": "mut",
+          "status": "none",
+          "note": "BC / rotation-correction / CrossSign are best-guess; hoverslam ignition alt untuned."
+        }
+      ]
+    },
+    {
+      "phase": "Rendezvous",
+      "coverage": "NO corpus data yet",
+      "targets": [
+        {
+          "metric": "Reach AI standoff 7.5 km",
+          "target": "7.5 km, pe held",
+          "current": "—",
+          "cls": "mut",
+          "status": "none",
+          "note": "ForwardSign = −1 best-guess; pe-floor gates a wrong sign. Near-field transform-read is the watch item."
+        }
+      ]
+    },
+    {
+      "phase": "Docking",
+      "coverage": "NO corpus data yet",
+      "targets": [
+        {
+          "metric": "Soft capture ≤ 8 cm/s",
+          "target": "contact ~0.08 m/s",
+          "current": "—",
+          "cls": "mut",
+          "status": "none",
+          "note": "RcsRight/Up/Fwd signs best-guess; servo gains + tolerances untuned."
+        }
+      ]
+    },
+    {
+      "phase": "Return",
+      "coverage": "NO corpus data yet",
+      "targets": [
+        {
+          "metric": "Splashdown 5–8 m/s",
+          "target": "5–8 m/s",
+          "current": "—",
+          "cls": "mut",
+          "status": "none",
+          "note": "Deorbit Pe 50 km + bank/roll signs best-guess. Abort-chute fix must confirm here first (was 122 m/s)."
+        }
+      ]
+    }
   ],
   "rules": [
-    {"id":"tick","hot":true,"num":"★ NEW","title":"The 3-tick system","body":"Nothing counts as fact until: (1) Claude approves — built, headless-green, reasoned, committed; (2) Chris approves — reviewed + agreed; (3) proven in-game — a recording + full structured analysis confirms the BEHAVIOR. Pure/math facts top out at ticks 1–2 (headless tests are their proof — no flight tick). Tick 3 applies only to flight-behavior claims. Chris's own edits sit tick-pending until Claude verifies them."},
-    {"id":"direct","num":"HARD","title":"Direct part control only","body":"Actuate live part modules by capability from the craft dump — NEVER StageManager / staging or action groups. The RCS master toggle is the one sanctioned exception. The direct gimbal/RCS loop is the committed inner loop; SAS is a one-flip fallback only."},
-    {"id":"fidelity","num":"HARD","title":"Full fidelity, no deviation","body":"Copy the real Crew-2 exactly; never offer a 'safe'/simplified analogue, never ask 'full or safe'. Strict IMPLEMENTATION fidelity — replicate the real internal pipeline (NAV filter + PVG), not just the flown behavior. Make hard real techniques WORK."},
-    {"id":"groundtruth","num":"HARD","title":"Ground truth > docs","body":"Authority: live ModuleManager.ConfigCache > the flight CSV + KSP.log > the research .md docs. Some doc numbers are stale. Read files IN FULL. Verify every comment against the code — comments rot like memories."},
-    {"id":"flightdata","num":"HARD","title":"Flight data first + full pass","body":"Read the CSV + KSP.log TOGETHER before proposing any cause. One disciplined root-cause pass; do NOT latch onto the first clue. ALWAYS a full event-by-event pass over the WHOLE file — never spot-checks (spot-checks have mis-diagnosed flights)."},
-    {"id":"nosim","num":"HARD","title":"Don't invent + trust sims","body":"Use PROVEN methods first — the recorded corpus, headless C# tests vs the real code, MechJeb/KER. Never a self-rolled model you rely on. A C# forward-model is OK ONLY once it reproduces ≥2 recorded flights."},
-    {"id":"phaseorder","num":"HARD","title":"Tune one phase at a time, in order","body":"ascent → booster → rendezvous → dock → return, to REAL coupled targets (ascent+booster couple at MECO), not an abstract orbit. Within a phase batch reasoned fixes then fly. This is what 'one change per flight' really meant — one PHASE, not one constant."},
-    {"id":"timeline","hot":true,"num":"★","title":"Timeline emerges, never forced","body":"Every event time (MECO/SECO/dock/deorbit/splash) is an EMERGENT output of physics-based guidance flying the real trajectory — never hardcoded/scripted/faked to hit the MET. A matching timeline is the TELL guidance is right, not a target. Warp compresses ballistic coasts only — never a burn or a gate."},
-    {"id":"build","num":"HARD","title":"Build right the first time","body":"No shortcuts: verify before reuse; units + frames explicit (our #1 bug class); fail loud never silent; pure/glue discipline; no magic literals (named [Tunable] + source); no dead code as live; guard every KSP API call. Token-efficiency is terse chat + not-rebuilding, never a skimmed build."},
-    {"id":"nokos","num":"HARD","title":"No kOS code — C# only","body":"DragonScreen is a C# KSP plugin. Port the decision logic/math from any kOS reference (PEGAS) into C#; never .ks / kOS idioms."},
-    {"id":"fps","num":"★","title":"60 FPS benchmark","body":"Target rig i5-14400F / GTX 1080 8GB / 16GB @ 1080p60. Our mod must never drop FPS < 60: allocation-free hot paths, cached lookups, modest recorder rate, DXT-compressible textures (dims ×4)."},
-    {"id":"mods","num":"POLICY","title":"Mod-dependency policy","body":"Optional mod (KER, BetterTimeWarp) → soft-integrate by reflection with our fallback, or build the behaviour in. Hard-dep of RO/RSS (CPLC, RealFuels, FAR, KSPCommunityFixes) → don't reinvent ('hat on a hat'); take direct control."},
-    {"id":"git","num":"WORKFLOW","title":"Commit + install autonomously","body":"Commit + install once build.py test is green and the change is reasoned (keeps a backup). Push to GitHub only when Chris asks. A cfg/DLL change needs a full KSP restart (delete the 4 MM cache files)."},
-    {"id":"name","num":"★","title":"The name CLAUDE is earned","body":"The autopilot is 'the autopilot' until it flies a full crew mission pad→splashdown clean, full-fidelity. Only then does it earn the name CLAUDE. It flies ANY crew mission (mission-as-data by VAB craft name); Crew-2 is the reference profile."}
+    {
+      "id": "tick",
+      "hot": true,
+      "num": "★ NEW",
+      "title": "The 3-tick system",
+      "body": "Nothing counts as fact until: (1) Claude approves — built, headless-green, reasoned, committed; (2) Chris approves — reviewed + agreed; (3) proven in-game — a recording + full structured analysis confirms the BEHAVIOR. Pure/math facts top out at ticks 1–2 (headless tests are their proof — no flight tick). Tick 3 applies only to flight-behavior claims. Chris's own edits sit tick-pending until Claude verifies them."
+    },
+    {
+      "id": "direct",
+      "num": "HARD",
+      "title": "Direct part control only",
+      "body": "Actuate live part modules by capability from the craft dump — NEVER StageManager / staging or action groups. The RCS master toggle is the one sanctioned exception. The direct gimbal/RCS loop is the committed inner loop; SAS is a one-flip fallback only."
+    },
+    {
+      "id": "fidelity",
+      "num": "HARD",
+      "title": "Full fidelity, no deviation",
+      "body": "Copy the real Crew-2 exactly; never offer a 'safe'/simplified analogue, never ask 'full or safe'. Strict IMPLEMENTATION fidelity — replicate the real internal pipeline (NAV filter + PVG), not just the flown behavior. Make hard real techniques WORK."
+    },
+    {
+      "id": "groundtruth",
+      "num": "HARD",
+      "title": "Ground truth > docs",
+      "body": "Authority: live ModuleManager.ConfigCache > the flight CSV + KSP.log > the research .md docs. Some doc numbers are stale. Read files IN FULL. Verify every comment against the code — comments rot like memories."
+    },
+    {
+      "id": "flightdata",
+      "num": "HARD",
+      "title": "Flight data first + full pass",
+      "body": "Read the CSV + KSP.log TOGETHER before proposing any cause. One disciplined root-cause pass; do NOT latch onto the first clue. ALWAYS a full event-by-event pass over the WHOLE file — never spot-checks (spot-checks have mis-diagnosed flights)."
+    },
+    {
+      "id": "nosim",
+      "num": "HARD",
+      "title": "Don't invent + trust sims",
+      "body": "Use PROVEN methods first — the recorded corpus, headless C# tests vs the real code, MechJeb/KER. Never a self-rolled model you rely on. A C# forward-model is OK ONLY once it reproduces ≥2 recorded flights."
+    },
+    {
+      "id": "phaseorder",
+      "num": "HARD",
+      "title": "Tune one phase at a time, in order",
+      "body": "ascent → booster → rendezvous → dock → return, to REAL coupled targets (ascent+booster couple at MECO), not an abstract orbit. Within a phase batch reasoned fixes then fly. This is what 'one change per flight' really meant — one PHASE, not one constant."
+    },
+    {
+      "id": "timeline",
+      "hot": true,
+      "num": "★",
+      "title": "Timeline emerges, never forced",
+      "body": "Every event time (MECO/SECO/dock/deorbit/splash) is an EMERGENT output of physics-based guidance flying the real trajectory — never hardcoded/scripted/faked to hit the MET. A matching timeline is the TELL guidance is right, not a target. Warp compresses ballistic coasts only — never a burn or a gate."
+    },
+    {
+      "id": "build",
+      "num": "HARD",
+      "title": "Build right the first time",
+      "body": "No shortcuts: verify before reuse; units + frames explicit (our #1 bug class); fail loud never silent; pure/glue discipline; no magic literals (named [Tunable] + source); no dead code as live; guard every KSP API call. Token-efficiency is terse chat + not-rebuilding, never a skimmed build."
+    },
+    {
+      "id": "nokos",
+      "num": "HARD",
+      "title": "No kOS code — C# only",
+      "body": "DragonScreen is a C# KSP plugin. Port the decision logic/math from any kOS reference (PEGAS) into C#; never .ks / kOS idioms."
+    },
+    {
+      "id": "fps",
+      "num": "★",
+      "title": "60 FPS benchmark",
+      "body": "Target rig i5-14400F / GTX 1080 8GB / 16GB @ 1080p60. Our mod must never drop FPS < 60: allocation-free hot paths, cached lookups, modest recorder rate, DXT-compressible textures (dims ×4)."
+    },
+    {
+      "id": "mods",
+      "num": "POLICY",
+      "title": "Mod-dependency policy",
+      "body": "Optional mod (KER, BetterTimeWarp) → soft-integrate by reflection with our fallback, or build the behaviour in. Hard-dep of RO/RSS (CPLC, RealFuels, FAR, KSPCommunityFixes) → don't reinvent ('hat on a hat'); take direct control."
+    },
+    {
+      "id": "git",
+      "num": "WORKFLOW",
+      "title": "Commit + install autonomously",
+      "body": "Commit + install once build.py test is green and the change is reasoned (keeps a backup). Push to GitHub only when Chris asks. A cfg/DLL change needs a full KSP restart (delete the 4 MM cache files)."
+    },
+    {
+      "id": "name",
+      "num": "★",
+      "title": "The name CLAUDE is earned",
+      "body": "The autopilot is 'the autopilot' until it flies a full crew mission pad→splashdown clean, full-fidelity. Only then does it earn the name CLAUDE. It flies ANY crew mission (mission-as-data by VAB craft name); Crew-2 is the reference profile."
+    }
   ],
   "research": [
-    {"cat":"0 · Governing","items":[
-      {"p":"docs/ULTIMATE_PLAN.md","fr":"CURRENT","dd":"THE top plan: Part I build CLAUDE, Part II finish the mod."},
-      {"p":"docs/AUTOPILOT_REBUILD_PLAN.md","fr":"CURRENT","dd":"Autopilot detail; §0.2 = the ordered stage sequence."},
-      {"p":"docs/RESUME_PROMPT.md","fr":"CURRENT","dd":"The live handoff; paste at the start of every session."},
-      {"p":"docs/INDEX.md","fr":"CURRENT","dd":"The master catalog — grep before assuming something's missing."}
-    ]},
-    {"cat":"1 · Architecture & method","items":[
-      {"p":"TRUE_AUTOPILOT_ARCHITECTURE.md","fr":"REF","dd":"How to build a true autopilot; §13 completion criteria = definition of done."}
-    ]},
-    {"cat":"2 · Validation & workflow","items":[
-      {"p":"VALIDATION_AND_ROBUSTNESS.md","fr":"CURRENT","dd":"4-tier V&V; Tier-2 dispersion is the buildable core."},
-      {"p":"PHASE_ACCEPTANCE_CRITERIA.md","fr":"CURRENT","dd":"Per-phase clean-flight signature + PASS gates + failure signatures."}
-    ]},
-    {"cat":"3 · Harvest / mining (where the algorithms come from)","items":[
-      {"p":"AUTOPILOT_HARVEST.md","fr":"CURRENT","dd":"MechJeb2 + AtmosphereAutopilot: attitude, thrust/ullage/staging, rendezvous/docking/landing, loss decomposition."},
-      {"p":"MODS_HARVEST_2.md","fr":"CURRENT","dd":"TCA balancer, KerbalEngineer Δv/TWR, MFI aero hook, FAR M_α."},
-      {"p":"AUTOPILOT_MINING_3.md","fr":"CURRENT","dd":"PEGAS (the inc-undershoot plane-normal fix), KSPTrajectories, GravityTurn auto-tuner."},
-      {"p":"MECHJEB_CAPABILITY_INTEGRATION.md","fr":"CURRENT","dd":"Full ✅/⚠/❌ capability inventory sequenced P0–P3."}
-    ]},
-    {"cat":"4 · Guidance — ascent","items":[
-      {"p":"LAUNCH_AND_ASCENT_RESEARCH.md","fr":"REF","dd":"Ascent technique + profile (zero-AoA gravity turn, azimuth, window)."},
-      {"p":"ASCENT_GUIDANCE_DECISION.md","fr":"CURRENT","dd":"UPFG upgrade now (inc/LAN cutoff); PVG the committed strict-fidelity target."}
-    ]},
-    {"cat":"5 · Guidance — phases","items":[
-      {"p":"PHASE_2_BOOSTER_RECOVERY_RESEARCH.md","fr":"REF","dd":"Entry burn / grid-fin / hoverslam."},
-      {"p":"PHASE_3_RENDEZVOUS_RESEARCH.md","fr":"REF","dd":"Named-burn cascade + the AI standoff."},
-      {"p":"PHASE_4_DOCKING_RESEARCH.md","fr":"REF","dd":"L-approach corridor + capture."},
-      {"p":"PHASE_6_DEORBIT_ENTRY_SPLASHDOWN_RESEARCH.md","fr":"REF","dd":"Deorbit, bank-angle entry, chutes, splashdown."},
-      {"p":"ABORT_PROCEDURES_RESEARCH.md","fr":"CURRENT","dd":"Every-regime abort + §G researched g-loads (the loved abort system)."}
-    ]},
-    {"cat":"6 · GN&C / nav pipeline","items":[
-      {"p":"CREW_DRAGON_GNC_RESEARCH.md","fr":"CURRENT","dd":"Real Dragon sensors/nav; §5 = the strict-fidelity NAV PIPELINE (NavFilter)."}
-    ]},
-    {"cat":"7 · Mission data (what to match)","items":[
-      {"p":"MISSION_PROFILES_FREEFLYER.md","fr":"CURRENT","dd":"The 4 archetypes + free-flyer capability gaps."},
-      {"p":"data/crew_missions.json","fr":"CURRENT","dd":"The 20-mission DB + DM-1 raw ascent telemetry."}
-    ]},
-    {"cat":"8 · Environment / mods / vehicle (ground truth)","items":[
-      {"p":"INSTALLED_MODS_RESEARCH.md","fr":"CURRENT","dd":"How the RSS/RO install behaves (no reaction wheels, FAR, RealFuels, RealChute, TestFlight)."},
-      {"p":"MOD_INTEGRATION_RESEARCH.md","fr":"CURRENT","dd":"KER live-sim API (the treasure chest) + policy: no hard deps, soft-integrate."},
-      {"p":"MOD_INVENTORY_RESEARCH.md","fr":"CURRENT","dd":"Full triage of all 123 installed mods."},
-      {"p":"CRAFT_DUMP_VEHICLE_MAP.md","fr":"CURRENT","dd":"Every actuable module (control by capability). Data: data/craftdump.csv."}
-    ]},
-    {"cat":"9 · Screens / UI","items":[
-      {"p":"SCREENS_LOOK_AND_FUNCTION_RESEARCH.md","fr":"CURRENT","dd":"How the screens should look + function; resources, page set, the hidden docking mini-game, licences."},
-      {"p":"SCREENS_CONSOLE_PLAN.md","fr":"CURRENT","dd":"The screens/console workstream: NAV bugs, button-wiring, error hunt."}
-    ]},
-    {"cat":"10 · Tools & the flight corpus","items":[
-      {"p":"plugin/build.py","fr":"CURRENT","dd":"test (headless certification) / install / preview."},
-      {"p":"plugin/tools/tuning_db.py","fr":"CURRENT","dd":"Control-tuning DB builder → docs/tuning/TUNING_DB.{json,md}. Re-run after every flight."},
-      {"p":"<KSP>/DragonScreen_capture/*.csv","fr":"CURRENT","dd":"The recorded FLIGHT CORPUS (ground truth) + KSP.log."}
-    ]},
-    {"cat":"11 · External sources","items":[
-      {"p":"Desktop/mechjeb_src","fr":"REF","dd":"Full MechJeb2 + MechJebLib C# source (primary KSP-guidance reference)."},
-      {"p":"GitHub: PEGAS · KSPTrajectories · GravityTurn · TCA · KER · MFI · FAR","fr":"REF","dd":"Mined autopilot sources (read from GitHub; standing method)."}
-    ]}
+    {
+      "cat": "0 · Governing",
+      "items": [
+        {
+          "p": "docs/ULTIMATE_PLAN.md",
+          "fr": "CURRENT",
+          "dd": "THE top plan: Part I build CLAUDE, Part II finish the mod."
+        },
+        {
+          "p": "docs/AUTOPILOT_REBUILD_PLAN.md",
+          "fr": "CURRENT",
+          "dd": "Autopilot detail; §0.2 = the ordered stage sequence."
+        },
+        {
+          "p": "docs/RESUME_PROMPT.md",
+          "fr": "CURRENT",
+          "dd": "The live handoff; paste at the start of every session."
+        },
+        {
+          "p": "docs/INDEX.md",
+          "fr": "CURRENT",
+          "dd": "The master catalog — grep before assuming something's missing."
+        }
+      ]
+    },
+    {
+      "cat": "1 · Architecture & method",
+      "items": [
+        {
+          "p": "TRUE_AUTOPILOT_ARCHITECTURE.md",
+          "fr": "REF",
+          "dd": "How to build a true autopilot; §13 completion criteria = definition of done."
+        }
+      ]
+    },
+    {
+      "cat": "2 · Validation & workflow",
+      "items": [
+        {
+          "p": "VALIDATION_AND_ROBUSTNESS.md",
+          "fr": "CURRENT",
+          "dd": "4-tier V&V; Tier-2 dispersion is the buildable core."
+        },
+        {
+          "p": "PHASE_ACCEPTANCE_CRITERIA.md",
+          "fr": "CURRENT",
+          "dd": "Per-phase clean-flight signature + PASS gates + failure signatures."
+        }
+      ]
+    },
+    {
+      "cat": "3 · Harvest / mining (where the algorithms come from)",
+      "items": [
+        {
+          "p": "AUTOPILOT_HARVEST.md",
+          "fr": "CURRENT",
+          "dd": "MechJeb2 + AtmosphereAutopilot: attitude, thrust/ullage/staging, rendezvous/docking/landing, loss decomposition."
+        },
+        {
+          "p": "MODS_HARVEST_2.md",
+          "fr": "CURRENT",
+          "dd": "TCA balancer, KerbalEngineer Δv/TWR, MFI aero hook, FAR M_α."
+        },
+        {
+          "p": "AUTOPILOT_MINING_3.md",
+          "fr": "CURRENT",
+          "dd": "PEGAS (the inc-undershoot plane-normal fix), KSPTrajectories, GravityTurn auto-tuner."
+        },
+        {
+          "p": "MECHJEB_CAPABILITY_INTEGRATION.md",
+          "fr": "CURRENT",
+          "dd": "Full ✅/⚠/❌ capability inventory sequenced P0–P3."
+        }
+      ]
+    },
+    {
+      "cat": "4 · Guidance — ascent",
+      "items": [
+        {
+          "p": "LAUNCH_AND_ASCENT_RESEARCH.md",
+          "fr": "REF",
+          "dd": "Ascent technique + profile (zero-AoA gravity turn, azimuth, window)."
+        },
+        {
+          "p": "ASCENT_GUIDANCE_DECISION.md",
+          "fr": "CURRENT",
+          "dd": "UPFG upgrade now (inc/LAN cutoff); PVG the committed strict-fidelity target."
+        }
+      ]
+    },
+    {
+      "cat": "5 · Guidance — phases",
+      "items": [
+        {
+          "p": "PHASE_2_BOOSTER_RECOVERY_RESEARCH.md",
+          "fr": "REF",
+          "dd": "Entry burn / grid-fin / hoverslam."
+        },
+        {
+          "p": "PHASE_3_RENDEZVOUS_RESEARCH.md",
+          "fr": "REF",
+          "dd": "Named-burn cascade + the AI standoff."
+        },
+        {
+          "p": "PHASE_4_DOCKING_RESEARCH.md",
+          "fr": "REF",
+          "dd": "L-approach corridor + capture."
+        },
+        {
+          "p": "PHASE_6_DEORBIT_ENTRY_SPLASHDOWN_RESEARCH.md",
+          "fr": "REF",
+          "dd": "Deorbit, bank-angle entry, chutes, splashdown."
+        },
+        {
+          "p": "ABORT_PROCEDURES_RESEARCH.md",
+          "fr": "CURRENT",
+          "dd": "Every-regime abort + §G researched g-loads (the loved abort system)."
+        }
+      ]
+    },
+    {
+      "cat": "6 · GN&C / nav pipeline",
+      "items": [
+        {
+          "p": "CREW_DRAGON_GNC_RESEARCH.md",
+          "fr": "CURRENT",
+          "dd": "Real Dragon sensors/nav; §5 = the strict-fidelity NAV PIPELINE (NavFilter)."
+        }
+      ]
+    },
+    {
+      "cat": "7 · Mission data (what to match)",
+      "items": [
+        {
+          "p": "MISSION_PROFILES_FREEFLYER.md",
+          "fr": "CURRENT",
+          "dd": "The 4 archetypes + free-flyer capability gaps."
+        },
+        {
+          "p": "data/crew_missions.json",
+          "fr": "CURRENT",
+          "dd": "The 20-mission DB + DM-1 raw ascent telemetry."
+        }
+      ]
+    },
+    {
+      "cat": "8 · Environment / mods / vehicle (ground truth)",
+      "items": [
+        {
+          "p": "INSTALLED_MODS_RESEARCH.md",
+          "fr": "CURRENT",
+          "dd": "How the RSS/RO install behaves (no reaction wheels, FAR, RealFuels, RealChute, TestFlight)."
+        },
+        {
+          "p": "MOD_INTEGRATION_RESEARCH.md",
+          "fr": "CURRENT",
+          "dd": "KER live-sim API (the treasure chest) + policy: no hard deps, soft-integrate."
+        },
+        {
+          "p": "MOD_INVENTORY_RESEARCH.md",
+          "fr": "CURRENT",
+          "dd": "Full triage of all 123 installed mods."
+        },
+        {
+          "p": "CRAFT_DUMP_VEHICLE_MAP.md",
+          "fr": "CURRENT",
+          "dd": "Every actuable module (control by capability). Data: data/craftdump.csv."
+        }
+      ]
+    },
+    {
+      "cat": "9 · Screens / UI",
+      "items": [
+        {
+          "p": "SCREENS_LOOK_AND_FUNCTION_RESEARCH.md",
+          "fr": "CURRENT",
+          "dd": "How the screens should look + function; resources, page set, the hidden docking mini-game, licences."
+        },
+        {
+          "p": "SCREENS_CONSOLE_PLAN.md",
+          "fr": "CURRENT",
+          "dd": "The screens/console workstream: NAV bugs, button-wiring, error hunt."
+        }
+      ]
+    },
+    {
+      "cat": "10 · Tools & the flight corpus",
+      "items": [
+        {
+          "p": "plugin/build.py",
+          "fr": "CURRENT",
+          "dd": "test (headless certification) / install / preview."
+        },
+        {
+          "p": "plugin/tools/tuning_db.py",
+          "fr": "CURRENT",
+          "dd": "Control-tuning DB builder → docs/tuning/TUNING_DB.{json,md}. Re-run after every flight."
+        },
+        {
+          "p": "<KSP>/DragonScreen_capture/*.csv",
+          "fr": "CURRENT",
+          "dd": "The recorded FLIGHT CORPUS (ground truth) + KSP.log."
+        }
+      ]
+    },
+    {
+      "cat": "11 · External sources",
+      "items": [
+        {
+          "p": "Desktop/mechjeb_src",
+          "fr": "REF",
+          "dd": "Full MechJeb2 + MechJebLib C# source (primary KSP-guidance reference)."
+        },
+        {
+          "p": "GitHub: PEGAS · KSPTrajectories · GravityTurn · TCA · KER · MFI · FAR",
+          "fr": "REF",
+          "dd": "Mined autopilot sources (read from GitHub; standing method)."
+        }
+      ]
+    }
   ],
   "openClaims": [
-    {"id":"oc-fwd","txt":"ForwardSign = −1 (rendezvous + return Draco translation) — best guess, pe-floor gates a wrong sign; flip from the CSV if pe falls / it doesn't raise.","pending":false},
-    {"id":"oc-dock","txt":"Docking RcsRight/Up/Fwd signs — best guess; a lateral/closing move the wrong way shows in the CSV (one-constant fix).","pending":false},
-    {"id":"oc-bank","txt":"Entry bank/roll signs (RollSign, EntrySteering.RollRefSign/CrossSign) + deorbit target Pe 50 km — best guess, flight-tuned.","pending":false},
-    {"id":"oc-nearfield","txt":"Near-field CW reads the ISS transform.position — a placeholder if the ISS is unloaded past physics range (PRE-dependent). If rendezvous stalls in near-field, this is the likely cause + a clean fix.","pending":false},
-    {"id":"oc-inc","txt":"A1 inc-undershoot fix (thread target plane-normal into UpfgAim) — installed, UNFLOWN. Verify inc→51.6° AND that S2 has Δv margin for the plane change.","pending":false},
-    {"id":"oc-abort","txt":"Fatal-abort chute arm-once fix — NOT flight-verified. Confirm a launch-escape now splashes 5–8 m/s (was 122).","pending":false}
+    {
+      "id": "oc-fwd",
+      "txt": "ForwardSign = −1 (rendezvous + return Draco translation) — best guess, pe-floor gates a wrong sign; flip from the CSV if pe falls / it doesn't raise.",
+      "pending": false
+    },
+    {
+      "id": "oc-dock",
+      "txt": "Docking RcsRight/Up/Fwd signs — best guess; a lateral/closing move the wrong way shows in the CSV (one-constant fix).",
+      "pending": false
+    },
+    {
+      "id": "oc-bank",
+      "txt": "Entry bank/roll signs (RollSign, EntrySteering.RollRefSign/CrossSign) + deorbit target Pe 50 km — best guess, flight-tuned.",
+      "pending": false
+    },
+    {
+      "id": "oc-nearfield",
+      "txt": "Near-field CW reads the ISS transform.position — a placeholder if the ISS is unloaded past physics range (PRE-dependent). If rendezvous stalls in near-field, this is the likely cause + a clean fix.",
+      "pending": false
+    },
+    {
+      "id": "oc-inc",
+      "txt": "A1 inc-undershoot fix (thread target plane-normal into UpfgAim) — installed, UNFLOWN. Verify inc→51.6° AND that S2 has Δv margin for the plane change.",
+      "pending": false
+    },
+    {
+      "id": "oc-abort",
+      "txt": "Fatal-abort chute arm-once fix — NOT flight-verified. Confirm a launch-escape now splashes 5–8 m/s (was 122).",
+      "pending": false
+    }
   ]
 }
 </script>
