@@ -289,10 +289,10 @@ section.tab.on{display:block;animation:fade .25s ease}
 
 <script id="app-state" type="application/json">
 {
-  "version": "v6",
+  "version": "v7",
   "updated": "2026-08-28",
   "updatedBy": "claude",
-  "changelog": "Exhaustive audit pass (docs/ISSUE_REGISTER.md is the new enforcement ledger). H2 FIXED: rendezvous stranded because the low-thrust circularize drifted 246→6000 km AND the 50 km CW hand-off never caught the transfer's ~80 km closest approach → removed the slow circularize, raised the hand-off to 100 km so CW does the terminal rendezvous. H3 RESOLVED: SECO is actually 200×197 (near-circular) — the 'eccentric 200×160' was an assess-tool bug reading a mid-burn row (fixed). C2 (crew-survival) FIXED: abort capsule had ZERO attitude authority (stock RCS GetPotentialTorque=0 on the separated capsule) → MechJeb-style geometric RCS-torque fallback. Doc-rot fixed (Steering/ReturnControl headers).",
+  "changelog": "⭐ ABORT 202127 (max-Q LaunchEscape): CREW SURVIVED — splash 2 m/s (was 127). BOTH crew-survival fixes FLIGHT-PROVEN: C1 chutes actually deploy (RealChute DROGUES/MAINS activated; main decelerated 121→8 m/s) and C2 the abort attitude fallback fired (ctrl_tq 0→1995 N·m). First abort-safe on the board. KLM: 8 died / 8 stranded / 4 abort-safe / 8 returning. Also fixed the KLM impact-detection (was reading the ascent climb / main-deploy transient as the 'impact').",
   "tabs": [
     {
       "id": "status",
@@ -393,7 +393,7 @@ section.tab.on{display:block;animation:fade .25s ease}
       "f": false,
       "fkind": "flight",
       "pending": false,
-      "note": "Departure + deorbit + lifting entry + chutes + post-deorbit coast-warp built. First DATA (Crew-2_135356, 2026-08-28): Chris pressed EJECT → DeorbitReturn abort fired the deorbit burn (pe dropping 203→114 km), recording CUT OFF mid-burn (no entry/chutes yet — incomplete data, not a failure). FIXED (unflown): the deorbit burn now records Δv (planned+delivered; PutDv was never called) and that also feeds the guidance backstop cutoff (was unset). ⛔ abort-chute fix still NOT flight-verified. Bank/roll + deorbit-Pe signs best-guess."
+      "note": "Departure + deorbit + lifting entry + chutes built. ⭐ ABORT PATH now CREW-SAFE (flight-proven 202127: LaunchEscape → chutes deploy → splash 2 m/s; the RCS-torque fallback gives the capsule control authority). Nominal deorbit→entry→chutes still unflown; bank/roll + deorbit-Pe signs best-guess."
     }
   ],
   "components": [
@@ -414,10 +414,10 @@ section.tab.on{display:block;animation:fade .25s ease}
       "group": "crew-survival",
       "c": true,
       "u": true,
-      "f": false,
+      "f": true,
       "fkind": "flight",
       "pending": false,
-      "note": "RealChute ARM once (was re-Deploy every tick → 122 m/s splash). ⚠ NOT flight-verified — #1 to confirm. Commit a9d2600."
+      "note": "RealChute DEPLOY (was only 'arm' → 0 deploy activity → 127 m/s). ✅ FLIGHT-PROVEN (202127, max-Q LaunchEscape): DROGUES/MAINS activated, main decelerated 121→8 m/s → splash 2 m/s. Crew survived. Commit ad3c85b."
     },
     {
       "id": "octaweb",
@@ -1009,12 +1009,12 @@ section.tab.on{display:block;animation:fade .25s ease}
   "klm": {
     "home": 0,
     "died": 8,
-    "stranded": 4,
-    "abortSafe": 0,
+    "stranded": 8,
+    "abortSafe": 4,
     "rescued": 0,
     "returning": 8,
-    "flights": 5,
-    "incomplete": 0,
+    "flights": 8,
+    "incomplete": 1,
     "since": "20260828_103303",
     "audited": "2026-08-28",
     "by": "claude"
