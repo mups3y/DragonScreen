@@ -7,6 +7,8 @@ at the one thing that matters next.
 
 ## ⭐⭐ RESUME HERE (2026-08-28, post-compaction #6) — FIRST CREW SURVIVES AN ABORT; RV→DOCK CHAIN UNBLOCKED; BOOSTER/PRE IS THE NEXT BIG TASK
 
+> **UPDATE since #6 (still 2026-08-28, commits f03c9c6 + 18b303f, installed):** (1) **Docking RCS signs DERIVED** from MechJeb (all −1; were +1/+1 inverting 2 axes → docking diverged) — flight-anchored by the rendezvous prograde burn. (2) **M5 resolved from ConfigCache** — the Draco RCS burns MMH+NTO (PROPELLANT overrides resourceName); the 300u MonoProp is unused dead weight, LEAVE it (caught a first-clue trap). (3) **Entry roll = a genuinely flight-resolved sign** with a SAFE failure (guidance already robust) — not guessed. (4) **TIME WARP fully tunable** — `MissionConductor.AutoWarpEnabled` (master) + `MaxWarpRateX` (cap), wired through the overshoot-proof `SafeRate` ladder. (5) ⭐ **NEW HIGH-PRIORITY WORKSTREAM — the PERFECT-CONTROL VEHICLE AUDIT** (`docs/VEHICLE_AUDIT.md`, register V0–V4, the Vehicle dashboard tab): correct RCS mode/thruster limits/engine modes/throttle/fuel/tanks/loads per phase + real F9/Crew Dragon accuracy, **one part at a time from a FRESH DUMP next flight**. See [[dragonscreen-perfect-control-vehicle-audit]]. ⛔ don't change engine/tank numbers on memory — verify vs the fresh dump.
+
 **⭐⭐ THE PROJECT RHYTHM (user, said with force): WIRE THE FULL MISSION SO EVERY PHASE RUNS AND COLLECTS DATA — failed
 phases INCLUDED.** ⭐ **THE POST-FLIGHT LOOP, EVERY TIME (do ALL of it):** (1) full event-by-event pass on EACH new CSV
 (`plugin/tools/assess_flight.py` + read KSP.log TOGETHER — never spot-check); (2) **feed the tuning DB** (`python
