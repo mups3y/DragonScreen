@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Audit every Crew Dragon recording -> per-flight kerbal outcome, for the KLM scoreboard.
-import csv, glob, os, math, json
+import csv, glob, os, math, json, sys
 
 FOLDERS = [
     r"C:/Program Files (x86)/Steam/steamapps/common/Kerbal Space Program/DragonScreen_capture",
@@ -87,12 +87,26 @@ def classify(path):
                fAltKm=(altM/1000 if altM is not None else None),
                impact=(round(impactPeak,1) if impactPeak is not None else None), phase=fPh, fate=fate, how=how)
 
+# ⛔ COUNT ONLY FLIGHTS FROM THE RESET FORWARD (user 2026-08-28: "count from now on; clear both").
+# SINCE is a filename stamp YYYYMMDD_HHMMSS; a recording counts only if its stamp is STRICTLY newer.
+# Pass it as argv[2], else read the stored baseline (dashboard/klm_since.txt), else count everything.
+import re as _re
+SINCE = sys.argv[2] if len(sys.argv) > 2 else None
+if SINCE is None:
+    try: SINCE = open(os.path.join(os.path.dirname(__file__),"klm_since.txt")).read().strip()
+    except: SINCE = "00000000_000000"
+def stampOf(path):
+    m = _re.search(r"(\d{8}_\d{6})", os.path.basename(path))
+    return m.group(1) if m else "00000000_000000"
+
 recs=[]
 for fo in FOLDERS:
     for p in sorted(glob.glob(os.path.join(fo,"Crew-2_2*.csv"))):
         if "Probe" in p: continue
+        if stampOf(p) <= SINCE: continue          # before/at the reset → excluded
         r=classify(p)
         if r: recs.append(r)
+print("counting flights with stamp > %s : %d flights"%(SINCE,len(recs)))
 
 from collections import Counter
 tally=Counter(r["fate"] for r in recs)
@@ -121,19 +135,27 @@ stranded=[r for r in recs if r["fate"]=="stranded"]
 abort=[r for r in recs if r["fate"]=="abort"]
 home=[r for r in recs if r["fate"]=="home"]
 surv=[r for r in recs if r["fate"]=="survived"]
-def plaques(flights):
-    out=[]
-    for r in flights:
-        out.append({"date":r["date"],"crew":CREW,"how":r["how"],"impact":r.get("impact")})
-    # newest first
-    return sorted(out, key=lambda x:x["date"], reverse=True)
+# per-KERBAL rosters (each name ONCE, with a tally of missions in that fate + total flown + the dates).
+from collections import defaultdict
+diedN=defaultdict(int); homeN=defaultdict(int); flownN=defaultdict(int)
+diedDates=defaultdict(list); homeDates=defaultdict(list)
+for r in recs:
+    for name in CREW:                       # every Crew-2 flight carries the whole crew
+        flownN[name]+=1
+        if r["fate"]=="died": diedN[name]+=1; diedDates[name].append(r["date"])
+        if r["fate"]=="home": homeN[name]+=1; homeDates[name].append(r["date"])
+def roster(cnt, dates):
+    return [{"name":n,"tally":cnt[n],"flown":flownN[n],
+             "first":min(dates[n]) if dates[n] else None,"last":max(dates[n]) if dates[n] else None}
+            for n in CREW if cnt[n]>0]
 klm={
  "counter":{"died":len(died)*4,"stranded":len(stranded)*4,"abortSafe":len(abort)*4,
             "rescued":0,"home":len(home)*4,"flights":len(recs),"incomplete":len(surv)},
- "memorial":plaques(died),
- "heroes":plaques(home),
+ "memorial":roster(diedN, diedDates),       # [{name, tally, flown, first, last}] — dead once, ×tally
+ "heroes":roster(homeN, homeDates),
  "crew":CREW,
  "auditedFlights":len(recs),
+ "since":SINCE,
 }
 json.dump(klm, open(os.path.join(os.path.dirname(__file__),"klm_data.json"),"w"), indent=1)
 print("\n=== KLM SCOREBOARD (souls, 4 crew/flight) ===")

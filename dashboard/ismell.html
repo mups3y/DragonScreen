@@ -147,23 +147,29 @@ section.tab.on{display:block;animation:fade .25s ease}
 .kcard.rescued .kn{color:var(--accent)} .kcard.abort .kn{color:var(--ink)}
 .kcard.home.zero .kn{color:var(--dispute)}   /* 0 home is the damning number — make it red */
 
-/* MARBLE walls — names carved into stone (memorial = grey marble, heroes = warm/gold marble) */
-.wallhead{padding:6px 16px 0;color:var(--mut);font-size:13px}
-.wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;padding:14px 16px}
-.plaque{position:relative;border-radius:8px;padding:15px 18px 14px;
-  background:linear-gradient(145deg,#eceae4 0%,#d3cec4 40%,#e2ded6 62%,#c7c2b7 100%);
-  border:1px solid #b3aca0;box-shadow:0 6px 16px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.65), inset 0 -2px 6px rgba(0,0,0,.12)}
-.plaque.hero{background:linear-gradient(145deg,#efe9dc 0%,#ddd2b8 42%,#e8e0cd 64%,#d2c6a6 100%);border-color:#bcae8f}
-.plaque .ptag{font-family:var(--mono);font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:#7a7264;
-  text-shadow:0 1px 0 rgba(255,255,255,.6)}
-.plaque.hero .ptag{color:#7d6c42}
-.plaque .date{font-family:'Cormorant Garamond',Georgia,serif;font-weight:600;font-size:14px;letter-spacing:.1em;color:#6a6357;margin-top:1px;
-  text-shadow:0 1px 0 rgba(255,255,255,.6)}
-.plaque .names{margin-top:9px;display:flex;flex-direction:column;gap:2px}
-.plaque .name{font-family:'Cormorant Garamond',Georgia,serif;font-weight:700;font-size:19px;line-height:1.28;color:#37332c;letter-spacing:.01em;
-  text-shadow:0 1px 0 rgba(255,255,255,.72), 0 -1px 1px rgba(0,0,0,.32)}
-.plaque .cause{font-family:var(--sans);font-size:11.5px;font-style:italic;color:#574f45;margin-top:10px;padding-top:8px;border-top:1px solid rgba(60,50,40,.18)}
-.wallempty{padding:26px 16px;color:var(--mut2);font-style:italic;text-align:center}
+/* ONE BIG MARBLE WALL — names carved once into stone, each with a tally (like a real memorial wall) */
+.wallslab{margin:14px 16px;border-radius:10px;padding:28px 32px 30px;position:relative;
+  background:linear-gradient(160deg,#e8e5de 0%,#cfcabf 38%,#ded9d0 60%,#c5c0b5 100%);
+  border:1px solid #b0a99d;
+  box-shadow:0 12px 30px rgba(0,0,0,.45), inset 0 2px 0 rgba(255,255,255,.6), inset 0 -3px 12px rgba(0,0,0,.15)}
+.wallslab.hero{background:linear-gradient(160deg,#efe9db 0%,#dbcfb1 40%,#e8e0cc 62%,#cfc3a1 100%);border-color:#bcae8f}
+.wallslab .inscr{text-align:center;font-family:var(--mono);font-size:10px;letter-spacing:.34em;text-transform:uppercase;
+  color:#7a7264;text-shadow:0 1px 0 rgba(255,255,255,.6);margin-bottom:5px}
+.wallslab .inscr2{text-align:center;font-family:'Cormorant Garamond',Georgia,serif;font-weight:700;font-size:26px;
+  color:#37322a;letter-spacing:.08em;margin-bottom:16px;
+  text-shadow:0 1px 0 rgba(255,255,255,.7), 0 -1px 1px rgba(0,0,0,.32)}
+.wallslab .brule{height:2px;max-width:55%;margin:0 auto 22px;
+  background:linear-gradient(90deg,transparent,rgba(60,50,40,.4),transparent)}
+.names-grid{columns:3 210px;column-gap:36px}
+@media(max-width:560px){.names-grid{columns:2 130px}}
+.wallname{break-inside:avoid;display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+  padding:6px 0;border-bottom:1px solid rgba(60,50,40,.13)}
+.wallname .wn{font-family:'Cormorant Garamond',Georgia,serif;font-weight:700;font-size:18.5px;color:#37332c;letter-spacing:.02em;
+  text-shadow:0 1px 0 rgba(255,255,255,.72), 0 -1px 1px rgba(0,0,0,.3)}
+.wallname .wt{font-family:var(--mono);font-size:11px;color:#6f675b;white-space:nowrap;text-shadow:0 1px 0 rgba(255,255,255,.5)}
+.wallnote{text-align:center;font-family:var(--sans);font-size:11.5px;font-style:italic;color:#5a5348;margin-top:20px}
+.wallempty2{text-align:center;font-family:'Cormorant Garamond',Georgia,serif;font-size:19px;color:#5f584c;padding:10px 0 6px;
+  text-shadow:0 1px 0 rgba(255,255,255,.55)}
 
 /* tune board */
 .tune{padding:6px 16px 16px}
@@ -272,7 +278,7 @@ section.tab.on{display:block;animation:fade .25s ease}
   "version": "v1",
   "updated": "2026-08-28",
   "updatedBy": "claude",
-  "changelog": "Claude audited the flight corpus (32 Crew-2 flights) into the KLM scorecard + marble memorial/heroes walls; counter moved to the header; ticks relabeled CL/YOU/FLT.",
+  "changelog": "KLM scoreboard CLEARED + counting fresh from 20260828_103303 (user: only new flights count). One big marble wall, names once with a ×tally.",
   "tabs": [
     {
       "id": "status",
@@ -971,160 +977,17 @@ section.tab.on{display:block;animation:fade .25s ease}
   ],
   "klm": {
     "home": 0,
-    "died": 52,
-    "stranded": 52,
-    "abortSafe": 12,
+    "died": 0,
+    "stranded": 0,
+    "abortSafe": 0,
     "rescued": 0,
-    "flights": 32,
-    "incomplete": 3,
+    "flights": 0,
+    "incomplete": 0,
+    "since": "20260828_103303",
     "audited": "2026-08-28",
     "by": "claude"
   },
-  "memorial": [
-    {
-      "date": "2026-08-28",
-      "crew": [
-        "Shane Kimbrough",
-        "Megan McArthur",
-        "Akihiko Hoshide",
-        "Thomas Pesquet"
-      ],
-      "how": "abort chutes under-decelerated - impact 209 m/s",
-      "impact": 208.7
-    },
-    {
-      "date": "2026-08-28",
-      "crew": [
-        "Shane Kimbrough",
-        "Megan McArthur",
-        "Akihiko Hoshide",
-        "Thomas Pesquet"
-      ],
-      "how": "abort chutes under-decelerated - impact 123 m/s",
-      "impact": 122.8
-    },
-    {
-      "date": "2026-08-27",
-      "crew": [
-        "Shane Kimbrough",
-        "Megan McArthur",
-        "Akihiko Hoshide",
-        "Thomas Pesquet"
-      ],
-      "how": "abort chutes under-decelerated - impact 221 m/s",
-      "impact": 221.2
-    },
-    {
-      "date": "2026-08-27",
-      "crew": [
-        "Shane Kimbrough",
-        "Megan McArthur",
-        "Akihiko Hoshide",
-        "Thomas Pesquet"
-      ],
-      "how": "abort chutes under-decelerated - impact 222 m/s",
-      "impact": 221.7
-    },
-    {
-      "date": "2026-08-27",
-      "crew": [
-        "Shane Kimbrough",
-        "Megan McArthur",
-        "Akihiko Hoshide",
-        "Thomas Pesquet"
-      ],
-      "how": "abort chutes under-decelerated - impact 123 m/s",
-      "impact": 122.8
-    },
-    {
-      "date": "2026-08-27",
-      "crew": [
-        "Shane Kimbrough",
-        "Megan McArthur",
-        "Akihiko Hoshide",
-        "Thomas Pesquet"
-      ],
-      "how": "abort chutes under-decelerated - impact 122 m/s",
-      "impact": 122.1
-    },
-    {
-      "date": "2026-08-27",
-      "crew": [
-        "Shane Kimbrough",
-        "Megan McArthur",
-        "Akihiko Hoshide",
-        "Thomas Pesquet"
-      ],
-      "how": "abort chutes under-decelerated - impact 122 m/s",
-      "impact": 122.1
-    },
-    {
-      "date": "2026-08-27",
-      "crew": [
-        "Shane Kimbrough",
-        "Megan McArthur",
-        "Akihiko Hoshide",
-        "Thomas Pesquet"
-      ],
-      "how": "abort chutes under-decelerated - impact 123 m/s",
-      "impact": 122.7
-    },
-    {
-      "date": "2026-08-26",
-      "crew": [
-        "Shane Kimbrough",
-        "Megan McArthur",
-        "Akihiko Hoshide",
-        "Thomas Pesquet"
-      ],
-      "how": "impact 129 m/s",
-      "impact": 128.6
-    },
-    {
-      "date": "2026-08-26",
-      "crew": [
-        "Shane Kimbrough",
-        "Megan McArthur",
-        "Akihiko Hoshide",
-        "Thomas Pesquet"
-      ],
-      "how": "impact 143 m/s",
-      "impact": 142.7
-    },
-    {
-      "date": "2026-08-26",
-      "crew": [
-        "Shane Kimbrough",
-        "Megan McArthur",
-        "Akihiko Hoshide",
-        "Thomas Pesquet"
-      ],
-      "how": "impact 178 m/s",
-      "impact": 177.5
-    },
-    {
-      "date": "2026-08-26",
-      "crew": [
-        "Shane Kimbrough",
-        "Megan McArthur",
-        "Akihiko Hoshide",
-        "Thomas Pesquet"
-      ],
-      "how": "impact 129 m/s",
-      "impact": 128.5
-    },
-    {
-      "date": "2026-08-26",
-      "crew": [
-        "Shane Kimbrough",
-        "Megan McArthur",
-        "Akihiko Hoshide",
-        "Thomas Pesquet"
-      ],
-      "how": "abort chutes under-decelerated - impact 131 m/s",
-      "impact": 130.7
-    }
-  ],
+  "memorial": [],
   "heroes": []
 }
 </script>
@@ -1467,15 +1330,19 @@ section.tab.on{display:block;animation:fade .25s ease}
   // ---------- Kerbal Lives Matter: Claude's flight-record scorecard (header) + the two marble walls ----------
   // ⛔ CLAUDE-OWNED: the counter + walls are audited from the flight recordings by Claude, NOT hand-edited.
   // It's the scorecard for how the autopilot is doing — 0 home is the number that has to change.
+  function fmtSince(s){ return (s && s.length>=8) ? (s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6,8)) : '—'; }
+
   function renderKlm(){
     var box = document.getElementById('klmstrip'); if(!box) return; box.innerHTML='';
     var k = S.klm || {};
     var hdr = el('div','klmhdr');
     hdr.appendChild(el('span', null, '💀 CLAUDE’S FLIGHT RECORD — how the autopilot is actually doing'));
     var right = el('span');
-    right.appendChild(document.createTextNode('audited from '));
+    right.appendChild(document.createTextNode('counting from '));
+    right.appendChild(el('b', null, fmtSince(k.since)));
+    right.appendChild(document.createTextNode(' · '));
     right.appendChild(el('b', null, String(k.flights||0)));
-    right.appendChild(document.createTextNode(' flights · crew of 4: Kimbrough · McArthur · Hoshide · Pesquet'));
+    right.appendChild(document.createTextNode(' flights since · crew: Kimbrough · McArthur · Hoshide · Pesquet'));
     hdr.appendChild(right); box.appendChild(hdr);
     var cards = [
       ['home','🏠','Made it home','home'],
@@ -1496,36 +1363,45 @@ section.tab.on{display:block;animation:fade .25s ease}
     });
   }
 
-  // A marble wall of carved plaques (Claude-owned, read-only). Each plaque = a flight's crew, dated.
-  function renderWall(secId, klass, title, meta, list, emptyMsg, tag){
+  // ONE big marble wall (Claude-owned, read-only). Each kerbal carved ONCE, with a ×tally for repeat fates.
+  function renderWall(secId, klass, title, meta, roster, inscr, inscr2, emptyMsg, tallyWord){
     var sec = document.getElementById(secId); if(!sec) return; sec.innerHTML='';
     var p = el('div','panel');
     var ph = el('div','ph'); ph.appendChild(el('h2',title)); ph.appendChild(el('span','meta',meta)); p.appendChild(ph);
-    if(!list || list.length===0){ p.appendChild(el('div','wallempty',emptyMsg)); sec.appendChild(p); return; }
-    var wall = el('div','wall');
-    list.forEach(function(m){
-      var pl = el('div','plaque '+klass);
-      pl.appendChild(el('div','ptag',tag));
-      pl.appendChild(el('div','date', m.date||''));
-      var names = el('div','names');
-      (m.crew||[]).forEach(function(n){ names.appendChild(el('div','name', n)); });
-      pl.appendChild(names);
-      if(m.how) pl.appendChild(el('div','cause', m.how));
-      wall.appendChild(pl);
-    });
-    p.appendChild(wall);
+    var slab = el('div','wallslab '+klass);
+    slab.appendChild(el('div','inscr', inscr));
+    slab.appendChild(el('div','inscr2', inscr2));
+    slab.appendChild(el('div','brule'));
+    if(!roster || roster.length===0){
+      slab.appendChild(el('div','wallempty2', emptyMsg));
+    } else {
+      var grid = el('div','names-grid');
+      roster.forEach(function(m){
+        var row = el('div','wallname');
+        row.appendChild(el('div','wn', m.name));
+        var t = (m.tally && m.tally>1) ? ('×'+m.tally) : '';
+        if (m.flown) t += (t?'  ·  ':'') + m.flown + ' flown';
+        row.appendChild(el('div','wt', t));
+        grid.appendChild(row);
+      });
+      slab.appendChild(grid);
+      slab.appendChild(el('div','wallnote','Each name once; ×N = '+tallyWord+' (the crew is reflown after each loss).'));
+    }
+    p.appendChild(slab);
     sec.appendChild(p);
   }
 
   function renderMemorial(){
-    renderWall('tab-memorial','mem','Memorial Wall',
-      'crews lost in flight testing — audited from the recordings, newest first',
-      S.memorial||[], 'No crews lost. Nothing to grieve — yet.', 'In memoriam');
+    var since = (S.klm && S.klm.since) ? fmtSince(S.klm.since) : '—';
+    renderWall('tab-memorial','mem','Memorial Wall', 'the fallen · counting from '+since,
+      'In Memory Of The Fallen', 'In Memoriam',
+      S.memorial||[], 'No crew lost since the reset. Keep it that way.', 'flights lost');
   }
   function renderHeroes(){
-    renderWall('tab-heroes','hero','Heroes Wall',
-      'crews that flew the mission and came home',
-      S.heroes||[], 'No crew has made it home yet. The first clean pad → splashdown earns this wall.', 'Returned home');
+    var since = (S.klm && S.klm.since) ? fmtSince(S.klm.since) : '—';
+    renderWall('tab-heroes','hero','Heroes Wall', 'crews that came home · counting from '+since,
+      'They Flew, And Came Home', 'Returned Home',
+      S.heroes||[], 'No crew has made it home yet. The first clean pad → splashdown earns this wall.', 'missions completed');
   }
 
   var current = 'status';
