@@ -276,10 +276,10 @@ section.tab.on{display:block;animation:fade .25s ease}
 
 <script id="app-state" type="application/json">
 {
-  "version": "v2",
+  "version": "v3",
   "updated": "2026-08-28",
   "updatedBy": "claude",
-  "changelog": "Post-flight (Crew-2_131412 + _135356): ascent proven ×2 (inc 51.65); phasing flew but never circularized → fly-past → co-elliptic CIRCULARIZE fix built (unflown); coast-warp FLT-proven; return got first deorbit data (FDIR DeorbitReturn, cut off mid-burn). KLM honest: 2 CSVs = 1 mission, new 'returning' state, 0 died / 4 returning / 1 mission.",
+  "changelog": "Full event-by-event pass (deep131412.py) — every divergence from nominal, plus fixes built: SECO now cuts on vgo not tgo (fixes 200×158 eccentricity), S2 g-margin 4.5→4.3 (fixes 4.77 g), co-elliptic CIRCULARIZE (fixes phasing fly-past), deorbit-Δv now recorded. Correction: att_point (pointing) is ~0 everywhere — control is perfect; the big att_err values are angle-of-attack / UPFG lead, not error. Open: phasing 1.9-synodic wait (diagnose next flight), gravity-turn 8° AoA (B9 tune). Also fixed the dashboard render crash (renderWall arg order).",
   "tabs": [
     {
       "id": "status",
@@ -380,7 +380,7 @@ section.tab.on{display:block;animation:fade .25s ease}
       "f": false,
       "fkind": "flight",
       "pending": false,
-      "note": "Departure + deorbit + lifting entry + chutes + post-deorbit coast-warp built. First DATA (Crew-2_135356, 2026-08-28): an FDIR DeorbitReturn abort fired the deorbit burn — pe dropping 203→114 km — but the recording was CUT OFF mid-burn (no entry/chutes yet). ⚠ dv_planned/delivered/residual not populated on the deorbit burn (instrumentation gap). ⛔ abort-chute fix still NOT flight-verified. Bank/roll + deorbit-Pe signs best-guess."
+      "note": "Departure + deorbit + lifting entry + chutes + post-deorbit coast-warp built. First DATA (Crew-2_135356, 2026-08-28): Chris pressed EJECT → DeorbitReturn abort fired the deorbit burn (pe dropping 203→114 km), recording CUT OFF mid-burn (no entry/chutes yet — incomplete data, not a failure). FIXED (unflown): the deorbit burn now records Δv (planned+delivered; PutDv was never called) and that also feeds the guidance backstop cutoff (was unset). ⛔ abort-chute fix still NOT flight-verified. Bank/roll + deorbit-Pe signs best-guess."
     }
   ],
   "components": [
@@ -555,26 +555,34 @@ section.tab.on{display:block;animation:fade .25s ease}
         {
           "metric": "Peak g ≤ 4.5 (crew)",
           "target": "≤ 4.5 g",
-          "current": "4.77 g",
+          "current": "4.77 g → fix built",
           "cls": "bad",
           "status": "pending",
-          "note": "Peak 4.77 g at the light-mass final second of S2 (min-throttle floor). FDIR g-abort is 6.0 so it's safe; a throttle-taper near SECO is the tune."
+          "note": "Peak 4.77 g at SECO — the g-limiter lags ~0.27 g at the light-mass final second. FIX (unflown): S2GLimitG setpoint 4.5→4.3 as a lag margin. FDIR g-abort 6.0 = safe. Flight-verify the peak lands ≤4.5."
         },
         {
           "metric": "SECO circular (ecc→0)",
           "target": "~200×200 km",
-          "current": "200×158 km",
+          "current": "200×158 km → fix built",
           "cls": "bad",
           "status": "pending",
-          "note": "SECO pe 157.7 / ap 200 — ~pe short; coupled to the SECO cutoff trigger. Tune after rendezvous (phase order)."
+          "note": "ROOT (data): the g-limit tapers throttle in the last seconds, so tgo hit 0 with ~12.7 m/s of vgo UNDELIVERED → engine cut 42 km of pe short. FIX (unflown): cut SECO on vgo<2 (guidance's true 'orbit achieved') not tgo → full Δv lands → circular."
         },
         {
           "metric": "Pointing hold (control quality)",
           "target": "< 0.5° p95",
-          "current": "0.08–0.36° p95",
+          "current": "≈0° (att_point)",
           "cls": "good",
           "status": "data",
-          "note": "GravityTurn/S2Burn control is clean + prograde in the corpus (gold). Roll held, sat_duty ≈ 0."
+          "note": "att_point_deg (true pointing error) is ~0 the ENTIRE flight — attitude control is essentially perfect in every phase. (The big att_err values are ANGLE OF ATTACK / UPFG lead, not control error — an earlier misread.) Roll held, sat_duty ≈ 0."
+        },
+        {
+          "metric": "Gravity-turn AoA (zero-AoA turn)",
+          "target": "≤ ~3°",
+          "current": "~8° peak",
+          "cls": "mut",
+          "status": "pending",
+          "note": "AoA peaked ~8° at Mach 2.4–3.2 (past max-Q) — the open-loop pitch program leads prograde. Mild steering-loss/load divergence; the B9 LaunchTuner (needs recorder loss-columns + flights) is the proper knob. Not a blocker."
         }
       ]
     },
@@ -599,10 +607,18 @@ section.tab.on{display:block;animation:fade .25s ease}
         {
           "metric": "Reach AI standoff 7.5 km",
           "target": "7.5 km, pe held",
-          "current": "closed to 86 km then diverged",
+          "current": "86 km then diverged → fix built",
           "cls": "bad",
           "status": "pending",
-          "note": "pe held (no self-deorbit ✅) + transfer raised ap to the station alt ✅, but no CIRCULARIZE → flew past, oscillated 1k–13k km. Building the co-elliptic circularize state. ForwardSign −1 held; pe-floor gated it."
+          "note": "pe held (no self-deorbit ✅), transfer raised ap to the station alt ✅, pointing while burning fine (p50 1.8°) ✅ — but no CIRCULARIZE → flew past, oscillated 1k–13k km. FIX (unflown): co-elliptic CIRCULARIZE state parks just below the station so CW can close. ForwardSign −1 held."
+        },
+        {
+          "metric": "Phasing time (warp-to-align)",
+          "target": "≤ 1 synodic (~31 h)",
+          "current": "58 h (~1.9 synodic)",
+          "cls": "mut",
+          "status": "pending",
+          "note": "The PHASE wait ran ~1.9 synodic periods — it appears to have missed the first alignment window. WarpPlan drops out 12 s early so it shouldn't overshoot; NOT guess-fixed. The new far-phase transition log (added this session) will pin the exact cause next flight."
         }
       ]
     },
