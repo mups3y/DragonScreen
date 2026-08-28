@@ -46,8 +46,9 @@ then tune per phase to the DB. THEN the booster dual-flight (H1) + the vehicle a
 **⭐⭐ THE PROJECT RHYTHM (user, said with force): WIRE THE FULL MISSION SO EVERY PHASE RUNS AND COLLECTS DATA — failed
 phases INCLUDED.** ⭐ **THE POST-FLIGHT LOOP, EVERY TIME (do ALL of it):** (1) full event-by-event pass on EACH new CSV
 (`plugin/tools/assess_flight.py` + read KSP.log TOGETHER — never spot-check); (2) **feed the tuning DB** (`python
-plugin/tools/tuning_db.py`); (3) **re-run the KLM audit** (`python dashboard/audit_kerbals.py`); (4) **update + PUBLISH
-the dashboard** (verify it RENDERS first — serve locally + browser-console check); (5) update THIS file + the running
+plugin/tools/tuning_db.py`); (3) **re-run the KLM audit** (`python dashboard/audit_kerbals.py`); (4) ⭐ **update + PUBLISH
+BOTH ARTIFACTS at the END OF EVERY RESPONSE** (dashboard `ismell.html` + plan `ultimate_plan.html`) — verify each
+RENDERS first (serve locally + browser-console check); (5) update THIS file + the running
 log; (6) diagnose → fix the REAL root (research × data × code; ⛔ NEVER ASSUME — verify every claim against the data;
 guesses are LAST resort). ⭐ **`docs/ISSUE_REGISTER.md` = the exhaustive-audit ledger** ([[fix-everything-means-exhaustive]]):
 every issue lives there with a status, removed only when FIXED **and** flight-verified. Keep auditing until it's empty.

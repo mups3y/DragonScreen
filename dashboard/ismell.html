@@ -293,10 +293,10 @@ section.tab.on{display:block;animation:fade .25s ease}
 
 <script id="app-state" type="application/json">
 {
-  "version": "v10",
+  "version": "v11",
   "updated": "2026-08-29",
   "updatedBy": "claude",
-  "changelog": "⭐ FLIGHT-TEST ANALYSIS (4 flights, 4 vessels stranded) → the deorbit ROOT CAUSE found + fixed. F1: the deorbit/abort couldn't hold retrograde (ptErr p95 128-178°) so the burns fired mis-pointed — burned ~900 m/s but pe barely dropped → stranded. ROOT: AttitudePilot's geometric RCS-torque fallback over-estimated ~9× (summed thrusterPower×|arm| on every axis, logged 111185 N·m) → over-aggressive rate → oscillation. FIXED: per-axis r×F estimate (MechJeb VesselState.RCSTorqueAvailable). F2: AUTO SEQUENCE now STATE-AWARE (CrewProcedureOps.ResumeIndex) — pressing it in orbit works out rendezvous vs deorbit, never re-launches (docs/SEQUENCE_MAP.md). NEW: the SEQUENCE MAP — phases + alternate paths + the abort decision matrix (real Crew Dragon 8-mode structure). Open: F3 rendezvous reached 100 km but didn't dock; F4 water-scan 0/130 in RSS; F5 g 4.53. KLM: 8 died / 8 stranded / 4 abort-safe / 16 returning.",
+  "changelog": "📌 Working agreement (Chris 2026-08-29): BOTH artifacts (this dashboard + the plan) are now kept current + republished at the END OF EVERY RESPONSE. ⭐ FLIGHT-TEST ANALYSIS (4 flights, 4 vessels stranded) → the deorbit ROOT CAUSE found + fixed. F1: the deorbit/abort couldn't hold retrograde (ptErr p95 128-178°) so the burns fired mis-pointed — burned ~900 m/s but pe barely dropped → stranded. ROOT: AttitudePilot's geometric RCS-torque fallback over-estimated ~9× (summed thrusterPower×|arm| on every axis, logged 111185 N·m) → over-aggressive rate → oscillation. FIXED: per-axis r×F estimate (MechJeb VesselState.RCSTorqueAvailable). F2: AUTO SEQUENCE now STATE-AWARE (CrewProcedureOps.ResumeIndex) — pressing it in orbit works out rendezvous vs deorbit, never re-launches (docs/SEQUENCE_MAP.md). NEW: the SEQUENCE MAP — phases + alternate paths + the abort decision matrix (real Crew Dragon 8-mode structure). Open: F3 rendezvous reached 100 km but didn't dock; F4 water-scan 0/130 in RSS; F5 g 4.53. KLM: 8 died / 8 stranded / 4 abort-safe / 16 returning.",
   "tabs": [
     {
       "id": "status",
