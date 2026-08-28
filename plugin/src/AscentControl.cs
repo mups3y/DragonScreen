@@ -55,6 +55,9 @@ namespace DragonScreen
         // RealFuels throttle-0-reset ignition cycle (see the S2 block):
         [Tunable] public static double S2SettleS = 2.0;       // throttle-0 settle/reset before each light attempt
         [Tunable] public static double S2LightWindowS = 2.0;  // hold throttle up this long before resetting to retry
+        [Tunable] public static double S2GLimitG = 4.3;       // S2 crew axial-g cap (setpoint; ~0.27 g lag margin below 4.5)
+        [Tunable] public static double SecoVgoMps = 2.0;      // SECO cutoff when velocity-to-go drops below this (delivers
+                                                              // the FULL Δv → circular target orbit, even under g-limit throttle taper)
         static double coastStartUT = -1;
         static bool dragonSeparated;
         static double secoUT = -1.0;   // SECO engine-cut time, to delay separation until thrust has died
@@ -121,7 +124,10 @@ namespace DragonScreen
             ai.FullThrustN = fullThrustN > 1.0 ? fullThrustN : (activeThrustN > 1.0 ? activeThrustN : 1.0);
             // crew axial-g caps matching the REAL Crew Dragon ascent (researched): S1 peaks ~3.3 g just before
             // MECO, S2 climbs to ~4.5 g by SECO (astronaut accounts). The throttle bucket holds these.
-            ai.GLimitG = s2Lit ? 4.5 : 3.5;
+            // ⚠ flight 131412 peaked 4.77 g at SECO — the limiter LAGS ~0.27 g at the light-mass final second,
+            // so the S2 setpoint carries a margin below 4.5 to keep the felt peak at/under the crew cap.
+            // (Flight-verify: if a flight still exceeds 4.5, lower S2GLimitG further — this is the g tune knob.)
+            ai.GLimitG = s2Lit ? S2GLimitG : 3.5;
             ai.SecondStage = s2Lit;
 
             AscentCommand ac = Ascent.Guide(ai, phase);
@@ -326,8 +332,13 @@ namespace DragonScreen
             // throttled ~0.65 slammed the light capsule (g spiked to 7 g) — you must never decouple a thrusting
             // stage. Shut the MVac down first, wait until its measured thrust has actually died, THEN fire the
             // decoupler (3 s backstop so a stuck thrust reading can't hang the sequence forever).
+            // ⛔ CUT ON VELOCITY-TO-GO, NOT TIME-TO-GO (flight 131412: SECO'd 200×158 km, not circular). The
+            // g-limit tapers the throttle in the final seconds, so tgo (a time estimate) hits 0 while ~12.7 m/s
+            // of vgo is still UNDELIVERED → the engine cut ~12.7 m/s short → pe fell 42 km below target. vgo is
+            // the guidance's true "orbit achieved" signal: cutting on it delivers the full Δv regardless of the
+            // throttle taper → the target (circular) orbit. inOrbit (pe reached) stays as the backstop.
             bool inOrbit = (v.orbit != null) && (v.orbit.PeA >= targetAltM - 5000.0);
-            if (s2Lit && (inOrbit || (upfg.Init && lastTgo > 0 && lastTgo < 0.15)))
+            if (s2Lit && (inOrbit || (upfg.Init && lastVgo >= 0.0 && lastVgo < SecoVgoMps)))
             {
                 Throttle = 0.0;
                 Actuator.ShutdownEngines(v, EngineRole.SecondStage);

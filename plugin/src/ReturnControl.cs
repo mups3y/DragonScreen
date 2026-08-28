@@ -47,6 +47,9 @@ namespace DragonScreen
         static double settleStartUT = -1;
         static double lastBankDeg;
         static int lastBankSign = 1;
+        // deorbit-burn Δv instrumentation: planned (formula from measured orbit) + delivered (∫ measured RCS
+        // thrust). Delivered also feeds di.DvAppliedMps — the guidance's own backstop cutoff (was never set).
+        static double deorbitDvPlanned, deorbitDvDelivered, lastBurnUT = -1;
 
         public static void Reset()
         {
@@ -55,6 +58,7 @@ namespace DragonScreen
             rDroguesArmed = rMainsArmed = false;
             undocked = trunkGone = shroudClosed = comEngaged = deorbitDone = false;
             settleStartUT = -1; lastBankSign = 1;
+            deorbitDvPlanned = deorbitDvDelivered = 0; lastBurnUT = -1;
             EntrySteering.Reset();
             FlightDriver.ReleaseTranslation(); FlightDriver.ReleaseRoll(); Steering.Release();
         }
@@ -138,6 +142,14 @@ namespace DragonScreen
                 di.TrunkAttached = !trunkGone;
                 di.SettleS = SettleS;
                 di.SettleElapsedS = settleStartUT > 0 ? Planetarium.GetUniversalTime() - settleStartUT : 0.0;
+                di.DvAppliedMps = deorbitDvDelivered;   // feed the guidance's backstop cutoff (was unset → 0)
+
+                // planned deorbit Δv = retrograde Δv to lower pe from the current radius to the entry interface
+                // (measured-state formula, not a sim). Recompute each tick as r_c/pe evolve through the burn.
+                if (v.orbit != null && v.mainBody != null)
+                    deorbitDvPlanned = DeorbitGuidance.DeorbitDvMps(
+                        (v.CoM - v.mainBody.position).magnitude, v.mainBody.Radius + DeorbitTargetPeM,
+                        v.mainBody.gravParameter);
 
                 // point retrograde (the burn axis) and check ready
                 Vector3d retro = velI.magnitude > 1 ? -velI.normalized : up;
@@ -153,8 +165,17 @@ namespace DragonScreen
                 Steering.Point(v, retro);
                 bool ready = Steering.PointingErrorDeg(v, retro) <= AttitudeReadyDeg;
                 // the "throttle" is the Draco retrograde burn: point retrograde + translate forward
-                if (dc.Throttle > 0.0 && ready) FlightDriver.SetTranslation(0, 0, ForwardSign);
-                else FlightDriver.ReleaseTranslation();
+                double nowUT = Planetarium.GetUniversalTime();
+                if (dc.Throttle > 0.0 && ready)
+                {
+                    FlightDriver.SetTranslation(0, 0, ForwardSign);
+                    // integrate delivered Δv = ∫ (measured RCS thrust / mass) dt while the burn is actually firing
+                    double massKg = v.totalMass * 1000.0;
+                    if (lastBurnUT > 0 && massKg > 1.0)
+                        deorbitDvDelivered += Actuator.RcsThrustN(v) / massKg * (nowUT - lastBurnUT);
+                    lastBurnUT = nowUT;
+                }
+                else { FlightDriver.ReleaseTranslation(); lastBurnUT = -1; }
 
                 if (dc.Complete) { deorbitDone = true; FlightDriver.ReleaseTranslation(); }
                 FlightLog.Fill = FillRow;
@@ -330,6 +351,7 @@ namespace DragonScreen
             FlightRecorder.PutReturn(row, depPhase, deoPhase, entPhase, lastBankDeg * Math.PI / 180.0,
                                      comEngaged, chutePhase, chutePhase != ChutePhase.Idle,
                                      chutePhase == ChutePhase.Main || chutePhase == ChutePhase.Splashed);
+            FlightRecorder.PutDv(row, deorbitDvPlanned, deorbitDvDelivered);   // deorbit burn Δv (was never recorded)
         }
     }
 }
