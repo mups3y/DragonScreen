@@ -134,8 +134,10 @@ Sources: [KSP VesselRanges API](https://kerbalspaceprogram.com/api/class_vessel_
    capture box (closing ≤0.10, lateral rate ≤0.04, offset ≤0.10 m, angle ≤4°, rate ≤0.20°/s, +10 checks) before
    the geometric fallback declares soft capture; KSP's own docking magnetism still always completes a real dock,
    so it can't stall a good capture. ⚠ flight-pending: confirm the measured feeds track.
-3. **B-F4-OCEAN** *(needs RSS API research, not a flight)* — correct RSS ocean detection for the deorbit water-
-   scan; `body.TerrainAltitude<0` reads 0/130 in RSS. Research the Kopernicus/PQS ocean test first, don't guess.
+3. ✅ **B-F4-OCEAN — DONE (2026-08-29, green).** Root cause found (MechJeb KSP 1.12 source): `TerrainAltitude(lat,lon)`
+   defaults `allowNegative=false` → **clamps ocean depth to 0**, so `<0` was never true → the RSS scan read 0/130.
+   FIX: the 3-arg overload `TerrainAltitude(lat,lon,true)` returns the real (negative) seabed height. ⚠ flight-
+   pending: fly WATER DEORBIT + read the site-scan log (expect many-of-130 water). `AbortControl.cs`.
 4. **B-FDIR-FEEDS** *(careful build, no flight)* — the L5 FDIR spine is built + tested but UNWIRED; wiring it
    needs HONEST per-phase feeds (a "worst-tank" resource margin false-trips on spent stages; thrust/traj/control
    feeds have no generic source yet). Build the feeds correctly, run observe-only, gate acting behind a flag.

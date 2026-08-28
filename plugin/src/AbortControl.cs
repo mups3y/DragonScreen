@@ -430,7 +430,13 @@ namespace DragonScreen
                 double lon = NormLon(body.GetLongitude(p) - rot);
                 samples[i].DownrangeM = vGround * dt;
                 samples[i].LatDeg = lat; samples[i].LonDeg = lon;
-                samples[i].Water = body.TerrainAltitude(lat, lon) < 0.0;   // below sea level ⇒ under ocean
+                // ⭐ F4 FIX (2026-08-29): the DEFAULT TerrainAltitude(lat,lon) CLAMPS ocean depth to 0
+                // (allowNegative=false), so "< 0" was NEVER true over water → the RSS scan read 0/130 and the
+                // abort never found an ocean. The THREE-ARG overload TerrainAltitude(lat,lon,true) returns the
+                // real seabed height (negative under the ocean) — confirmed from MechJeb (KSP 1.12) which reads
+                // it exactly this way (CelestialBodyExtensions/HoverslamSimulation + VesselState clamps
+                // `ocean && ASL<0 → 0` for display). So a body-ocean point below the datum = open water.
+                samples[i].Water = body.TerrainAltitude(lat, lon, true) < 0.0;   // below sea level ⇒ under ocean
             }
 
             int idx = SafeLandingSite.PickDeorbitTarget(samples, MinGlideM, MaxGlideM);
