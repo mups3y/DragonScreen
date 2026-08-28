@@ -69,6 +69,21 @@ nav.tabs button .c{font-size:10px;color:var(--mut2);margin-left:6px}
 .tickmark.off{color:var(--mut2);background:var(--panel2)}
 .tickmark.na{color:var(--mut2);background:transparent;border-style:dashed}
 
+/* ---------- linked plans strip ---------- */
+.planstrip{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0 0}
+.plink{flex:1 1 260px;display:flex;align-items:center;gap:11px;background:var(--panel);border:1px solid var(--line);
+  border-radius:11px;padding:12px 14px;box-shadow:var(--shadow);text-decoration:none;transition:border-color .15s,transform .08s}
+.plink:hover{border-color:var(--accent-dim);transform:translateY(-1px);text-decoration:none}
+.plink .ic{width:34px;height:34px;flex:0 0 auto;border-radius:9px;display:flex;align-items:center;justify-content:center;
+  font-size:16px;background:rgba(78,161,255,.12);border:1px solid rgba(78,161,255,.28)}
+.plink .tx{min-width:0}
+.plink .tx .nm{font-family:var(--disp);font-weight:700;font-size:14px;letter-spacing:.01em;color:var(--ink);display:flex;align-items:center;gap:6px}
+.plink .tx .nt{font-size:12px;color:var(--mut)}
+.plink .tx .u{font-family:var(--mono);font-size:10px;color:var(--mut2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;display:block;margin-top:2px}
+.plink .go{margin-left:auto;color:var(--accent);font-size:14px;flex:0 0 auto}
+.plink.here{border-color:rgba(55,217,154,.4)}
+.plink.here .ic{background:rgba(55,217,154,.12);border-color:rgba(55,217,154,.28)}
+
 /* ---------- panels / tables ---------- */
 section.tab{display:none;margin-top:16px}
 section.tab.on{display:block;animation:fade .25s ease}
@@ -202,6 +217,7 @@ section.tab.on{display:block;animation:fade .25s ease}
 </header>
 
 <div class="wrap">
+  <div class="planstrip" id="planstrip"></div>
   <div class="legend" id="legend"></div>
   <section class="tab" data-tab="status" id="tab-status"></section>
   <section class="tab" data-tab="tune" id="tab-tune"></section>
@@ -228,6 +244,10 @@ section.tab.on{display:block;animation:fade .25s ease}
     {"id":"rules","label":"Rules"},
     {"id":"research","label":"Research"},
     {"id":"unverified","label":"Open Claims"}
+  ],
+  "links": [
+    {"name":"DragonScreen Ultimate Plan","note":"the top governing plan (autopilot + whole mod)","url":"https://claude.ai/code/artifact/943d3d08-1124-432b-b474-1c33b5c29774","here":false},
+    {"name":"I Smell What You're Stepping In","note":"this dashboard — the shared source of truth","url":"https://claude.ai/code/artifact/9873fc17-efd8-4902-a029-67df25d3d783","here":true}
   ],
   "phases": [
     {"id":"ascent","name":"Ascent","order":"1 · pad → SECO","c":true,"u":false,"f":false,"fkind":"flight","pending":false,
@@ -437,7 +457,7 @@ section.tab.on{display:block;animation:fade .25s ease}
         + '<link href="' + fonts + '" rel="stylesheet">\n'
         + '<style id="app-styles">' + styles + '<\/style>\n</head>\n<body>\n'
         + staticHeader() + '\n'
-        + '<div class="wrap">\n  <div class="legend" id="legend"></div>\n'
+        + '<div class="wrap">\n  <div class="planstrip" id="planstrip"></div>\n  <div class="legend" id="legend"></div>\n'
         + '  <section class="tab" data-tab="status" id="tab-status"></section>\n'
         + '  <section class="tab" data-tab="tune" id="tab-tune"></section>\n'
         + '  <section class="tab" data-tab="rules" id="tab-rules"></section>\n'
@@ -515,6 +535,23 @@ section.tab.on{display:block;animation:fade .25s ease}
       if (tab.id===current) b.className='on';
       b.onclick = function(){ current = tab.id; render(); };
       t.appendChild(b);
+    });
+  }
+
+  function renderLinks(){
+    var box = document.getElementById('planstrip'); if(!box) return; box.innerHTML='';
+    (S.links||[]).forEach(function(lk){
+      var a = document.createElement('a');
+      a.className = 'plink'+(lk.here?' here':''); a.href = lk.url; a.target='_blank'; a.rel='noopener noreferrer';
+      var ic = el('div','ic', lk.here?'👣':'📋');
+      var tx = el('div','tx');
+      var nm = el('div','nm'); nm.appendChild(document.createTextNode(lk.name));
+      if (lk.here){ nm.appendChild(el('span','fr CURRENT','you are here')); }
+      tx.appendChild(nm);
+      if (lk.note) tx.appendChild(el('div','nt',lk.note));
+      tx.appendChild(el('div','u',lk.url));
+      a.appendChild(ic); a.appendChild(tx); a.appendChild(el('div','go','↗'));
+      box.appendChild(a);
     });
   }
 
@@ -691,7 +728,7 @@ section.tab.on{display:block;animation:fade .25s ease}
 
   var current = 'status';
   function render(){
-    renderReadout(); renderTabs(); renderLegend();
+    renderReadout(); renderTabs(); renderLinks(); renderLegend();
     renderStatus(); renderTune(); renderRules(); renderResearch(); renderUnverified();
     document.querySelectorAll('section.tab').forEach(function(s){ s.classList.toggle('on', s.dataset.tab===current); });
   }
