@@ -493,6 +493,93 @@ namespace DragonScreen
 
         public static bool IsRcsOn(Vessel v) { return v != null && v.ActionGroups[KSPActionGroup.RCS]; }
 
+        // ============================ B3/T5 RCS-BALANCE DIAGNOSTIC ============================
+        // Quantify the ROTATION a commanded RCS translation induces on this no-reaction-wheel vehicle, and how much
+        // a torque-nulling per-thruster balance (pure/RcsBalance → pure/ThrustBalance) would remove. This is the
+        // EVIDENCE for whether balanced translation is worth pursuing — it is deliberately NOT actuated.
+        // ⚠ WHY DIAGNOSTIC-ONLY (craft-dump verified 2026-08-29, docs/RCS_BALANCE_FINDING.md): the Dragon's Dracos
+        // are 2 all-axis, multi-thruster ModuleRCS blocks exposing only a per-MODULE thrustPercentage — there is NO
+        // per-thruster lever, so the per-thruster solve cannot be actuated through stock KSP. And KSP's own RCS
+        // solver + the concurrent AttitudePilot attitude hold already close the loop on the induced torque. True
+        // application would need direct force injection (part.AddForce, bypassing stock RCS) — a larger, riskier
+        // decision, deferred with this data. demandCtrl = the commanded translation in the CONTROL frame (KSP
+        // X=right, Y=up, Z=fore/aft). Returns false (nothing recorded) if there is no active RCS.
+        static Vec3[] rcsForce, rcsTorque; static double[] rcsNominal; static int rcsCount = -1;
+
+        public static bool RcsInducedTorque(Vessel v, Vector3 demandCtrl,
+            out double naiveTorqueNm, out double balancedTorqueNm, out double forceFrac, out bool feasible)
+        {
+            naiveTorqueNm = 0.0; balancedTorqueNm = 0.0; forceFrac = 0.0; feasible = true;
+            if (v == null || v.ReferenceTransform == null) return false;
+            Transform ctf = v.ReferenceTransform;
+            Vector3d com = v.CoM;
+
+            // count active thruster nozzles (allocation-free); (re)size the caches only when the count changes.
+            int n = 0;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                var rl = v.parts[i].Modules.GetModules<ModuleRCS>();
+                for (int k = 0; k < rl.Count; k++)
+                {
+                    ModuleRCS r = rl[k];
+                    if (!r.rcsEnabled || r.thrusterTransforms == null) continue;
+                    for (int t = 0; t < r.thrusterTransforms.Count; t++)
+                        if (r.thrusterTransforms[t] != null && r.thrusterTransforms[t].gameObject.activeInHierarchy) n++;
+                }
+            }
+            if (n == 0) return false;
+            if (n != rcsCount) { rcsForce = new Vec3[n]; rcsTorque = new Vec3[n]; rcsNominal = new double[n]; rcsCount = n; }
+
+            // build each active thruster's force + torque at FULL power, in the CONTROL frame (same frame as the
+            // demand). RCS thrusts along −nozzle (useZaxis ? −forward : −up) — MechJeb's convention (VesselState).
+            int idx = 0;
+            for (int i = 0; i < v.parts.Count && idx < n; i++)
+            {
+                var rl = v.parts[i].Modules.GetModules<ModuleRCS>();
+                for (int k = 0; k < rl.Count && idx < n; k++)
+                {
+                    ModuleRCS r = rl[k];
+                    if (!r.rcsEnabled || r.thrusterTransforms == null) continue;
+                    double power = r.thrusterPower * 1000.0;   // kN → N at full (the limiter is what a solve would trim)
+                    for (int t = 0; t < r.thrusterTransforms.Count && idx < n; t++)
+                    {
+                        Transform tt = r.thrusterTransforms[t];
+                        if (tt == null || !tt.gameObject.activeInHierarchy) continue;
+                        Vector3d dirW = r.useZaxis ? -(Vector3d)tt.forward : -(Vector3d)tt.up;   // thrust direction (world)
+                        Vector3d fW = dirW * power;
+                        Vector3d tqW = Vector3d.Cross((Vector3d)tt.position - com, fW);          // torque about CoM (world)
+                        Vector3 fL = ctf.InverseTransformDirection((Vector3)fW);                 // → control frame
+                        Vector3 tL = ctf.InverseTransformDirection((Vector3)tqW);
+                        rcsForce[idx] = new Vec3(fL.x, fL.y, fL.z);
+                        rcsTorque[idx] = new Vec3(tL.x, tL.y, tL.z);
+                        idx++;
+                    }
+                }
+            }
+            for (; idx < n; idx++) { rcsForce[idx] = Vec3.Zero; rcsTorque[idx] = Vec3.Zero; }  // guard partial fills
+
+            // NAIVE = every demand-serving thruster at full (RcsBalance's selection): the induced torque the
+            // attitude loop must fight, and the translation force actually delivered.
+            Vec3 demand = new Vec3(demandCtrl.x, demandCtrl.y, demandCtrl.z);
+            Vec3 dHat = demand.Magnitude > 1e-9 ? demand.Normalized : Vec3.Zero;
+            Vec3 naiveT = Vec3.Zero, naiveF = Vec3.Zero;
+            for (int i = 0; i < n; i++)
+            {
+                double fMag = rcsForce[i].Magnitude;
+                rcsNominal[i] = (fMag > 1e-9 && Vec3.Dot(rcsForce[i], dHat) > RcsBalance.SelectDotFrac * fMag) ? 1.0 : 0.0;
+                naiveT = naiveT + rcsTorque[i] * rcsNominal[i];
+                naiveF = naiveF + rcsForce[i] * rcsNominal[i];
+            }
+            naiveTorqueNm = naiveT.Magnitude;
+
+            // BALANCED = the torque-nulling per-thruster solve on the same selected set (the pure B3 solver, live).
+            BalanceResult br = ThrustBalance.Solve(rcsForce, rcsTorque, rcsNominal, Vec3.Zero);
+            balancedTorqueNm = br.TorqueErrNm;
+            forceFrac = naiveF.Magnitude > 1e-6 ? br.NetForceN.Magnitude / naiveF.Magnitude : 0.0;
+            feasible = br.Feasible;
+            return true;
+        }
+
         // Total RCS thrust currently being DELIVERED (N) — the sum over every thruster nozzle of its live duty
         // (thrustForces[j]) × its thrusterPower. Ported from MechJeb (MechJebModuleInfoItems). This is the RCS
         // control AUTHORITY actually in use — for the tuning DB, so we can see how hard the Dracos are working

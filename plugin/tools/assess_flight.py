@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# DragonScreen - assess_flight.py  (CURRENT 97-col recorder schema (+B2 T4 cal_kaero/cal_kaero_p/qalpha_cap_deg/aero_ang_accel/aoa_signed_deg): met_s / ascent_phase / att_point_deg ...)
+# DragonScreen - assess_flight.py  (CURRENT 100-col recorder schema (+B3 T5 rcsbal_torque_naive/rcsbal_torque_resid/rcsbal_force_frac): met_s / ascent_phase / att_point_deg ...)
 # =============================================================================================
 # The WHOLE flight, every phase, one command — the full structured pass the memory rule requires
 # ([[full-structured-flight-analysis]]: never spot-check, the full pass yields the right conclusion).

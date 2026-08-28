@@ -103,6 +103,17 @@ namespace DragonScreen
                 // order) — the raw control-rate signal the tuning DB aggregates per phase.
                 Vector3 av = v.angularVelocity * Mathf.Rad2Deg;
                 FlightRecorder.PutRates(row, av.x, av.y, av.z);
+                // B3/T5 RCS-balance DIAGNOSTIC (records only; see Actuator.RcsInducedTorque + docs/RCS_BALANCE_FINDING.md):
+                // how much rotation the commanded RCS translation induces, and how much a torque-nulling balance would
+                // remove. Runs ONLY when RCS translation is actually commanded (prox-ops) — else the columns stay blank.
+                double txc = FlightDriver.CmdTransX, tyc = FlightDriver.CmdTransY, tzc = FlightDriver.CmdTransZ;
+                if (System.Math.Abs(txc) + System.Math.Abs(tyc) + System.Math.Abs(tzc) > 1e-3)
+                {
+                    double nT, bT, fF; bool feas;
+                    if (Actuator.RcsInducedTorque(v, new Vector3((float)txc, (float)tyc, (float)tzc),
+                                                  out nT, out bT, out fF, out feas))
+                        FlightRecorder.PutRcsBalance(row, nT, bT, fF);
+                }
                 // control AUTHORITY + orbit state: roll torque (pitch/yaw already in the command snapshot), MOI per
                 // axis, RCS thrust in use, and the orbit shape/plane — so the DB can flag where authority is
                 // marginal (actuation saturating, torque/MOI too low, RCS maxed) and track the plane/guidance.

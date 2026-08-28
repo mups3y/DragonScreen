@@ -70,6 +70,11 @@ namespace DragonScreen
             // as it converges); qalpha_cap_deg = the effective AoA cap applied; aero_ang_accel + aoa_signed_deg =
             // the raw regression inputs, so the SIGN convention can be read straight off the CSV before trusting it.
             "cal_kaero", "cal_kaero_p", "qalpha_cap_deg", "aero_ang_accel", "aoa_signed_deg",
+            // B3 RCS-balance DIAGNOSTIC (task T5) — records only (not actuated; see docs/RCS_BALANCE_FINDING.md).
+            // rcsbal_torque_naive = the rotation (N·m) a commanded RCS translation induces with the naive full set;
+            // rcsbal_torque_resid = what a torque-nulling per-thruster balance would leave; rcsbal_force_frac = the
+            // fraction of the translation that survives the balance. Blank when no RCS translation is commanded.
+            "rcsbal_torque_naive", "rcsbal_torque_resid", "rcsbal_force_frac",
         };
 
         static int Index(string name)
@@ -117,7 +122,9 @@ namespace DragonScreen
             KerCurTwr = Index("ker_cur_twr"), KerCurThrustN = Index("ker_cur_thrust_n"),
             SteerLossMps = Index("steer_loss_mps"), GravLossMps = Index("grav_loss_mps"), DragLossMps = Index("drag_loss_mps"),
             CalKAero = Index("cal_kaero"), CalKAeroP = Index("cal_kaero_p"), QAlphaCapDeg = Index("qalpha_cap_deg"),
-            AeroAngAccel = Index("aero_ang_accel"), AoaSignedDeg = Index("aoa_signed_deg");
+            AeroAngAccel = Index("aero_ang_accel"), AoaSignedDeg = Index("aoa_signed_deg"),
+            RcsBalTorqueNaive = Index("rcsbal_torque_naive"), RcsBalTorqueResid = Index("rcsbal_torque_resid"),
+            RcsBalForceFrac = Index("rcsbal_force_frac");
 
         // ---- formatting ----
         public static string Num(double v)
@@ -366,6 +373,14 @@ namespace DragonScreen
             Set(c, QAlphaCapDeg, capDeg);
             Set(c, AeroAngAccel, aeroAngAccel);
             Set(c, AoaSignedDeg, aoaSignedDeg);
+        }
+
+        // B3 RCS-balance diagnostic (task T5) — the induced vs balanced translation torque + surviving force.
+        public static void PutRcsBalance(string[] c, double naiveTorqueNm, double residTorqueNm, double forceFrac)
+        {
+            Set(c, RcsBalTorqueNaive, naiveTorqueNm);
+            Set(c, RcsBalTorqueResid, residTorqueNm);
+            Set(c, RcsBalForceFrac, forceFrac);
         }
     }
 }
