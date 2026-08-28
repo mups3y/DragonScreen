@@ -66,9 +66,14 @@ abort and confirm ~5–8 m/s splash.** Also: S2 g-cap 4.3→4.1 (flights hit 4.6
 - **MonoPropellant 300 u = vestigial dead weight** (Chris asked "why aboard?"): the base Tundra Dragon has a stock
   `ModuleRCSFX` burning MonoProp; RO added the real Dracos as `ModuleEnginesRF` (MMH+NTO 655/508) but didn't strip the
   MonoProp module. Confirm the translation path uses MMH+NTO before removing it (a wrong removal could kill RCS). [[dragon-return-propellant-mmh-nto]]
-- **SECO eccentric 200×160 (not circular):** only `TargetApoapsisM=200` is set — the vgo-cutoff is CORRECT, the UPFG
-  target itself is eccentric. Needs the UPFG terminal conditions targeting a circular orbit (careful — proven ascent).
-- **Stranding:** circularize → CoElliptic works, but the CoElliptic → CW → dock hand-off doesn't complete.
+- ✅ **SECO "eccentric 200×160" was a TOOL BUG — actually 200×197 (near-circular), flight-confirmed ×3.** `assess_flight.py`
+  read the last S2Burn row ~0.3 s before cutoff (pe still rising 159→196); tool fixed. The vgo/inOrbit(pe≥195) cutoff works.
+- ✅ **Stranding (H2) FIXED (unflown):** the low-thrust circularize drifted the chaser 246→6000 km AND the transfer only
+  reaches ~80 km at apoapsis while the CW hand-off was 50 km → fly-past. Removed the circularize; CwHandoffRangeM 50→100 km
+  so CW does the terminal rendezvous (its valid regime). ⚠ verify CW converges from ~100 km.
+- ✅ **Abort attitude (C2) FIXED (unflown):** the abort capsule had ZERO control authority (stock RCS GetPotentialTorque=0 on
+  the separated capsule) → MechJeb-style geometric RCS-torque fallback in `AttitudePilot.ControlTorque`.
+- ⭐ **`docs/ISSUE_REGISTER.md` is the exhaustive-audit ledger** — the enforcement mechanism for [[fix-everything-means-exhaustive]].
 - **10 g steep entry** in the DeorbitReturn (ballistic, no lifting entry / CoM-shift in the abort path).
 
 **⭐ NEXT = FLY, crew-survival first:**
