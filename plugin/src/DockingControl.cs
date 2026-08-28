@@ -10,9 +10,9 @@
 // (X/Y/Z Dracos). The closing-speed cap tapers to ~8 cm/s at contact so the approach stays slow and
 // abortable; the crew's ABORT on the gate routes to the responder. The nose shroud is already open (seam 4).
 //
-// ⚠ FIRST CUT (validate in flight): the RCS translation axis SIGNS (RcsRight/Up/FwdSign — a lateral or
-// closing move in the wrong direction shows in the CSV, one-constant fix), the servo gains, and the
-// arrival tolerances. Attitude on the SAS inner loop. Instrumented into the FlightRecorder.
+// The RCS translation signs are DERIVED (not flight-guessed) — see the sign block below. The servo gains
+// (KPos/KVel) and arrival tolerances remain first-cut tunables validated from the CSV. Attitude on SAS.
+// Instrumented into the FlightRecorder.
 // ============================================================================================
 using System;
 using UnityEngine;
@@ -21,11 +21,20 @@ namespace DragonScreen
 {
     public static class DockingControl
     {
-        // RCS translation sign map (control frame → FlightCtrlState). Forward = −Z (KSP H-key), matching
-        // RendezvousControl.ForwardSign. Flip any that comes out reversed in flight.
-        [Tunable] public static double RcsRightSign = 1.0;   // s.X along ct.right
-        [Tunable] public static double RcsUpSign = 1.0;      // s.Y along ct.forward (dorsal)
-        [Tunable] public static double RcsFwdSign = -1.0;    // s.Z along ct.up (nose/fore)
+        // RCS translation sign map (world demand → FlightCtrlState X/Y/Z). ⭐ DERIVED from MechJeb's proven
+        // RCS controller (MechJebModuleRCSController.Drive): it expresses the world velocity error in the
+        // control-transform local frame (Quaternion.Inverse(GetTransform().rotation)·worldVec) and writes
+        //   s.X = local.x (right),  s.Y = local.z (forward),  s.Z = local.y (up)   ← the y/z SWAP we replicate
+        // uniformly POSITIVE off the velocity ERROR = (current − target). Our demandWorld is the desired
+        // ACCELERATION A = −error, so the correct sign on every axis is −Dot(A, axis): ALL THREE are −1.
+        // Flight-anchored: RendezvousControl's prograde burn uses s.Z = −1 with the nose (=ct.up) prograde and
+        // raised apoapsis correctly (flight 131412) — proving s.Z = −Dot(A,up); the same uniform mechanism
+        // (MechJeb assigns all three axes identically) gives −1 on right and forward too. (Was +1/+1 on
+        // right/up — unreasoned defaults that INVERT those axes → the servo pushes lateral error the wrong
+        // way → docking diverges off the corridor. −1/−1/−1 makes all three close the error.)
+        [Tunable] public static double RcsRightSign = -1.0;  // s.X = −Dot(demand, ct.right)
+        [Tunable] public static double RcsUpSign = -1.0;     // s.Y = −Dot(demand, ct.forward) (dorsal)
+        [Tunable] public static double RcsFwdSign = -1.0;    // s.Z = −Dot(demand, ct.up) (nose/fore)
 
         [Tunable] public static double FarSpeedMps = 20.0;   // closing cap far out
         [Tunable] public static double ContactSpeedMps = 0.08;

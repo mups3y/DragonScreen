@@ -34,16 +34,26 @@ _Last audit: 2026-08-28 (post the 5-flight batch 165302–180029)._
 | M2 | Gravity-turn AoA ~8° (should be ~0 zero-AoA) | open-loop pitch program leads prograde; B9 LaunchTuner is the knob (needs recorder loss-columns + flights). | **DATA** |
 | M3 | Phasing PHASE wait ~1.9 synodic (58 h) | appears to miss the 1st alignment; WarpPlan drops out 12 s early so shouldn't overshoot. | **DATA** (far-phase transition log added — pins it next flight) |
 | M4 | Deorbit burn recorded **no Δv** | `PutDv` was never called by any glue; also `di.DvAppliedMps` (backstop cutoff) was unset. | **FIXED⚑** | d2de379 |
-| M5 | 300 units MonoPropellant = **dead weight** | vestigial stock `ModuleRCSFX` RO didn't strip; real Dracos are `ModuleEnginesRF` MMH+NTO. | **OPEN** — remove via cfg AFTER confirming the RCS path (tied to C2). |
+| M5 | 300 u MonoPropellant — consumed by nothing our autopilot fires | ⭐ RESOLVED from the LIVE **ConfigCache** (authoritative; the craft-dump `resourceName=MonoPropellant` FIELD is a legacy field a `PROPELLANT{}` block OVERRIDES — a first-clue trap I nearly fell for). The pod's Draco **`ModuleRCSFX`** (attitude + translation RCS) has `PROPELLANT{MMH 0.5629 / NTO 0.4371 / Helium}` → it burns **MMH+NTO**. A separate Draco **`ModuleEnginesRF`** (228 kN) has `PROPELLANT{MonoPropellant}` → the ONLY MonoProp consumer. But our autopilot does EVERY burn (rendezvous/departure/deorbit) via RCS translation (`ModuleRCSFX`, MMH+NTO — ReturnControl:15/110), and NEVER throttles the Draco `ModuleEnginesRF`. So the 300 u MonoProp is effectively dead weight (~1.2 t) FOR OUR PROFILE, and the RCS path is confirmed MMH+NTO (so propellant closure rides the 655/509 MMH/NTO budget, NOT MonoProp). | **RESOLVED — leave it** (removal is a low-value cfg change with a CoM/entry-trim risk on the unflown entry; harmless as-is). ⚠ was going to be removed on a WRONG premise — corrected. |
 | M6 | 10 g steep entry in the DeorbitReturn | the abort entry is ballistic (no lifting entry) — but the research says high-energy aborts DO a controlled ballistic re-entry (up to ~13.6 g), so this is within the abort envelope, not a defect. | **OPEN-low** (verify vs research g-band) |
 
-## BEST-GUESS SIGNS/PARAMS — resolved only by a flown phase (guessing is last-resort → WAIT for the data)
-| # | Item | Where |
+## RCS TRANSLATION SIGNS — ⭐ DERIVED (no longer guess-and-flip)
+The Draco translation sign map is **derived from MechJeb's proven `MechJebModuleRCSController.Drive`** (it expresses
+the world velocity error in the control-transform frame and writes `s.X←right, s.Y←forward, s.Z←up` — the y/z swap we
+replicate — uniformly). Our demand is the desired accel `A = −error`, so every axis is `s = −Dot(A, axis)` → **all −1**.
+Flight-anchored: rendezvous `ForwardSign = −1` (`s.Z=−1`) raised apoapsis correctly with the nose (`ct.up`) prograde
+(flight 131412), proving `s.Z=−Dot(A,up)`; the same uniform mechanism gives −1 on right + forward.
+| # | Item | Status |
 |---|---|---|
-| S1 | Booster: BC, rotation-correction sign, CrossSign, hoverslam ignition alt | BoosterTargeting/BoosterControl (never flown) |
-| S2 | Docking: RcsRight/Up/FwdSign, servo gains, tolerances | DockingControl (never reached) |
-| S3 | Entry: RollSign, RollRefSign/CrossSign, deorbit target pe | ReturnControl/EntrySteering (never completed nominally) |
-| S4 | Rendezvous: ForwardSign (−1 held so far) | RendezvousControl |
+| S4 | Rendezvous `ForwardSign = −1` | **DERIVED + FLIGHT-CONFIRMED** (the anchor) |
+| S2 | Docking `RcsRight/Up/Fwd = −1/−1/−1` (was +1/+1/−1 — right/up were unreasoned defaults that INVERTED those axes → docking would diverge off the corridor) | **DERIVED — FIXED⚑** (verify docking converges next flight). Servo gains/tolerances stay first-cut tunables. |
+
+## GENUINELY FLIGHT-RESOLVED — a sane value + a SAFE failure, resolved deterministically from ONE recording (NOT a guess to randomly flip)
+| # | Item | Why it can't be derived to certainty | Safe? | Where |
+|---|---|---|---|---|
+| S1 | Booster: BC, rotation-correction sign, CrossSign, hoverslam ignition alt | booster geometry + never flown | opt-in segment | BoosterTargeting/BoosterControl |
+| S3 | Entry `RollSign`/`RollRefSign` (roll-loop feedback), `CrossSign` (crossrange steer) | the KSP roll convention × the capsule CoM-lift geometry × the ad-hoc `MeasuredBankRad` atan2 frame — no analytic certainty without the KSP internals or a flown entry | **YES** — downrange uses `\|σ\|` (sign-independent) + crossrange self-reverses on the deadband (Apollo/Orion lateral logic, verified in `Entry.cs`); a wrong roll sign → the capsule spins about the velocity axis → near-ballistic survivable entry (SAS holds shield-forward), NOT a tumble | ReturnControl/EntrySteering |
+| — | Deorbit target pe (SafePeFloor / DeorbitGuidance) | targets a pe band; tuned from the entry footprint | pe-floor gated | ReturnControl |
 
 ## COMPLETION-BLOCKERS fixed proactively (so a mission can actually reach the end)
 | # | Issue | Fix | Status |

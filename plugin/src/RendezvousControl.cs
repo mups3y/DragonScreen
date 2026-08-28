@@ -30,7 +30,11 @@ namespace DragonScreen
 {
     public static class RendezvousControl
     {
-        [Tunable] public static double ForwardSign = -1.0;      // KSP forward RCS translation (H key = Z −1)
+        [Tunable] public static double ForwardSign = -1.0;      // ⭐ DERIVED + FLIGHT-CONFIRMED: forward burn =
+                                                                // s.Z = −Dot(A, ct.up). Nose points prograde
+                                                                // (ct.up = nose) → s.Z=−1 raised apoapsis on
+                                                                // flight 131412 (200→419 km). Anchors the
+                                                                // DockingControl RCS sign derivation (all −1).
         [Tunable] public static double AttitudeReadyDeg = 5.0;
         [Tunable] public static double BurnDoneDvMps = 0.02;
         [Tunable] public static double CwHandoffRangeM = 100000.0;// far→near split. The phase-timed transfer brings the
