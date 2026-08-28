@@ -22,20 +22,29 @@ one full end-to-end recording. Signs/params stay at best-guess; they get tuned i
    tuned end-to-end = the perfect autopilot.** One phase per tuning pass, in order (batch reasoned fixes within a
    phase). ⭐ WARP-TO-MANEUVERS THROUGHOUT so we pump out as many flights as possible for data.
 
-**"Get it flying end-to-end" — first-session checklist:**
-- **a. Booster recovery orchestration** — finish + enable `MissionConductor.AutoRecoverBooster`: after MECO sep hand
-  focus to the booster, land it (BoosterControl), return focus. Partial PRE keeps it LOADED (flying unload ~22.5 km,
-  `ModuleManager.Physics` VesselRanges) so recovery is real; it is a FOCUS-managed segment (one active vessel).
-- **b. Proactive coast auto-warp (= warp-to-maneuvers)** — wire each coast controller's next-event UT into
-  `MissionConductor.WarpToEvent` (framework + universal burn-guard already in, commit d72ea53): launch window (done),
-  rendezvous phasing coast, return/deorbit coast. No long waits between burns.
-- **c. Every phase transition COMPLETES + hands to the next** — walk pad→ascent→(booster)→orbit→rendezvous→dock→
-  undock→deorbit→entry→splash; fix any phase that stalls or fails to hand off.
-- **d. Plausible best-guess signs/params so the mission RUNS** (RCS translation signs, booster cross-range signs,
-  entry bank/roll signs, deorbit Pe) — not tuned, just enough to complete; the LOOP tunes them.
-- **e. Verify the two just-fixed launch blockers hold in a real run:** octaweb differential-throttle (single-module
-  n<2 guard) + abort RealChute-arm (a9d2600). ⚠ After a PAD SAFE-ABORT, REVERT to launch (RealFuels spends the
-  octaweb's one ignition; a re-engage shows 0% — not a bug).
+**"Get it flying end-to-end" — first-session checklist (STATUS after the 2026-08-28 coast-warp pass, commit 21f3898):**
+- **✅ b. Proactive coast auto-warp (= warp-to-maneuvers) — DONE for the two long waits.** `pure/CoastEta.cs` (bounded,
+  self-correcting range/alt→ETA) drives `MissionConductor.WarpToEvent` from: the rendezvous co-elliptic PHASING coast
+  (hours) toward the CW-handoff ETA (`RendezvousControl`, realtime inside a 120 km terminal buffer) and the post-deorbit
+  BALLISTIC coast to the ~120 km interface (`ReturnControl`, realtime bank loop + realtime departure). Launch window was
+  already done. ⭐ The universal burn-guard now forces realtime on ANY commanded burn — throttle **OR RCS translation**
+  (rv/deorbit burns are Draco translation) — so warp can never run a live burn. Departure drift-legs stay realtime
+  (short) — minor future refinement.
+- **✅ c. Every phase transition COMPLETES + hands to the next — VERIFIED (no change).** `PhaseComplete` fires at
+  ascent-sep / rv-AI-standoff / each dock leg + capture / departed / hand-to-chutes / splashed. No stall.
+- **✅ d. Plausible best-guess signs/params — in place** (all 122 tunables carry a best-guess default). Flights flip
+  the first-cut signs (ForwardSign, dock RCS signs, entry bank/roll, deorbit Pe).
+- **✅ e. Launch-blocker fixes VERIFIED at code level** — octaweb n<2 `HoldEnginesFull` guard + RealChute arm-once are
+  intact. Confirm they hold in a real run. ⚠ After a PAD SAFE-ABORT, REVERT to launch (RealFuels spends the octaweb's
+  one ignition; a re-engage shows 0% — not a bug).
+- **☑ a. Booster recovery focus — SETTLED by the existing opt-in design (no code change).** ⛔ Stock KSP flies ONE
+  active vessel; the Dragon S2-to-orbit burn overlaps the booster recovery and an on-rails vessel neither burns nor
+  steers its entry — so you CANNOT do both live. PRIMARY end-to-end = the full Dragon mission (`AutoRecoverBooster`
+  OFF); booster recovery = a SEPARATE opt-in focused test (`AutoRecoverBooster` ON → focus→BoosterControl lands it,
+  Dragon orbit sacrificed that run). No return-focus (Dragon is doomed once the booster is focused).
+- ⭐ **NEXT = FLY IT.** The full Dragon mission should now run pad→splashdown with the coasts warped. Fly it → analyse
+  the recording (full structured pass) → feed the DB → the tune loop (I-B.1). ⛔ Getting it to RUN must NOT force the
+  timeline — every MET emerges from physics; a matching timeline is the tell guidance is right (ULTIMATE_PLAN I-B.0).
 
 Top plan `docs/ULTIMATE_PLAN.md` (Part I → Movement I-B = this loop); running log [[dragonscreen-autopilot-rebuild-plan]].
 Live plan artifact: https://claude.ai/code/artifact/943d3d08-1124-432b-b474-1c33b5c29774
