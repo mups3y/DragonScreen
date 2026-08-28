@@ -147,29 +147,110 @@ namespace DragonScreen
             goPressed = noGoPressed = abortPressed = false;
             launchPending = false; abortLatched = false; returnLeg = false;
 
-            // ⭐ POST-DOCK RESUME (user 2026-08-28): if we have already docked this mission (the crew pressed
-            // UNDOCK, or we are still docked), skip ascent/rendezvous/dock and resume at DEPARTURE. The
-            // departure FSM (pure/Departure) eases carefully OUT of the ISS keep-out zone — corridor-safe CW
-            // hops whose every aim sits outside the 200 m KOS — then flies the return. It never tries to dock
-            // again. returnLeg = true so the shared Phasing phase is flown as departure, not rendezvous.
-            if (dockedThisMission || DockedSide.Docked(v))
+            // ⭐⭐ STATE-AWARE RESUME (user 2026-08-29): AUTO SEQUENCE must KNOW WHERE IT IS and what to do next —
+            // pressing it in orbit must NOT restart the launch. Map the LIVE vessel state to the right plan step
+            // (docs/SEQUENCE_MAP.md): on the pad → countdown; ascending → ascent; in orbit not-docked with a
+            // station target → rendezvous; docked/post-dock → departure; in orbit otherwise → deorbit; entering →
+            // ride it down. returnLeg is set whenever we resume at/after the departure/deorbit branch.
+            int resume = ResumeIndex(v, plan, mission);
+            if (resume > 0 && resume < plan.Length)
             {
-                int dep = DepartureStepIndex(plan);
-                if (dep >= 0)
-                {
-                    index = dep; returnLeg = true;
-                    Debug.Log("[DragonScreen] AUTO SEQUENCE: already docked this mission → RESUMING at DEPARTURE "
-                              + "(careful KOS backaway → deorbit → entry → splashdown); rendezvous/dock skipped.");
-                }
+                index = resume;
+                returnLeg = ResumeIsReturn(plan, resume);
+                Debug.Log("[DragonScreen] AUTO SEQUENCE: state-aware RESUME at step " + resume + " '"
+                          + plan[resume].Label + "' (situation " + v.situation + ", pe "
+                          + (v.orbit != null ? (v.orbit.PeA / 1000.0).ToString("F0") : "?") + " km) — not restarting the launch.");
             }
 
             LoadGate();
             Debug.Log("[DragonScreen] AUTO SEQUENCE engaged: " + mission.Name + " (" + plan.Length + " steps"
-                      + (returnLeg ? ", resumed at departure)" : ")"));
+                      + (index > 0 ? ", resumed at step " + index + ")" : ")"));
+        }
+
+        // ⭐ Map the LIVE vessel state → the plan step AUTO SEQUENCE should start at. The real Crew Dragon flight
+        // rules pick the phase (and its abort mode) from where the vehicle physically IS (docs/SEQUENCE_MAP.md).
+        // 0 = start from the pad countdown. Never guesses launch when the vehicle is already in space.
+        static int ResumeIndex(Vessel v, MissionStep[] p, MissionProfile m)
+        {
+            if (v == null || p == null) return 0;
+            Vessel.Situations sit = v.situation;
+
+            // On the pad (or landed/splashed at rest) → the full countdown from the start.
+            if (sit == Vessel.Situations.PRELAUNCH || sit == Vessel.Situations.LANDED
+                || sit == Vessel.Situations.SPLASHED) return 0;
+
+            CelestialBody body = v.mainBody;
+            double atm = (body != null && body.atmosphere) ? body.atmosphereDepth : 140000.0;
+            Orbit o = v.orbit;
+            double pe = o != null ? o.PeA : -1.0;
+            double ap = o != null ? o.ApA : -1.0;
+            bool descending = v.verticalSpeed < -1.0;
+            bool inAtmo = v.altitude < atm;
+
+            // Descending in the atmosphere at speed → already re-entering: ride it down (entry → chutes).
+            if (inAtmo && descending && v.srfSpeed > 300.0) return PhaseIndex(p, MissionPhase.Entry);
+
+            bool inSpace = sit == Vessel.Situations.ORBITING || sit == Vessel.Situations.ESCAPING
+                        || sit == Vessel.Situations.DOCKED || (ap > atm && pe > 0.0 && !inAtmo);
+
+            if (inSpace)
+            {
+                // periapsis already below the atmosphere and coasting down → committed to entry.
+                if (pe < atm && descending) return PhaseIndex(p, MissionPhase.Entry);
+                // docked, or docked earlier this mission → the return begins at DEPARTURE (careful KOS backaway).
+                if (dockedThisMission || DockedSide.Docked(v)) return DepartureStepIndex(p);
+                // ISS crew, not yet docked, a station is targeted → go RENDEZVOUS (the outbound Phasing), not launch.
+                if (m.HasRendezvous && v.targetObject != null && v.targetObject.GetOrbit() != null)
+                    return RendezvousStepIndex(p);
+                // otherwise (free-flyer done, or nothing to rendezvous with) → come home: the DEORBIT gate.
+                return DeorbitGateIndex(p);
+            }
+
+            // Sub-orbital / flying and NOT descending → still ascending: resume the ascent.
+            if (sit == Vessel.Situations.FLYING || sit == Vessel.Situations.SUB_ORBITAL)
+                return descending ? PhaseIndex(p, MissionPhase.Entry) : PhaseIndex(p, MissionPhase.Ascent);
+
+            return 0;
+        }
+
+        // returnLeg must be true whenever we resume at or past the undock gate (departure/deorbit/entry), so the
+        // shared Phasing phase flies as departure and the return controllers own it.
+        static bool ResumeIsReturn(MissionStep[] p, int resume)
+        {
+            int dep = DepartureStepIndex(p);
+            return dep >= 0 && resume >= dep;
+        }
+
+        // The FIRST Fly step of a given phase (ascent, entry, …). −1 if absent.
+        static int PhaseIndex(MissionStep[] p, MissionPhase phase)
+        {
+            if (p == null) return -1;
+            for (int i = 0; i < p.Length; i++)
+                if (p[i].Kind == StepKind.Fly && p[i].Phase == phase) return i;
+            return -1;
+        }
+
+        // The OUTBOUND rendezvous — the FIRST Phasing Fly step (before the undock gate). −1 for a free-flyer.
+        static int RendezvousStepIndex(MissionStep[] p)
+        {
+            if (p == null) return -1;
+            int dep = DepartureStepIndex(p);   // the departure Phasing is AFTER this; the outbound one is before
+            for (int i = 0; i < p.Length; i++)
+                if (p[i].Kind == StepKind.Fly && p[i].Phase == MissionPhase.Phasing && (dep < 0 || i < dep)) return i;
+            return -1;
+        }
+
+        // The DEORBIT gate step (G15) — the start of the return for a vehicle that has no more station business. −1 if absent.
+        static int DeorbitGateIndex(MissionStep[] p)
+        {
+            if (p == null) return -1;
+            for (int i = 0; i < p.Length; i++)
+                if (p[i].Kind == StepKind.Gate && p[i].Gate == GateId.DeorbitGoG15) return i;
+            return -1;
         }
 
         // The plan index of the DEPARTURE (return) phase — the Fly step right after the G14 undock gate. −1 if
-        // the profile has no dock (free-flyer) or no such step. Used by the post-dock AUTO SEQUENCE resume.
+        // the profile has no dock (free-flyer) or no such step. Used by the state-aware resume.
         static int DepartureStepIndex(MissionStep[] p)
         {
             if (p == null) return -1;

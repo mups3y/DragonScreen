@@ -12,7 +12,18 @@ yet fixed · `DATA` = root needs an instrumented flight to pin (do NOT guess) ·
 only a flown phase resolves (guessing is last-resort → wait for data) · `DOC` = stale comment / doc-rot · `DONE✓` =
 fixed + flight-verified.
 
-_Last audit: 2026-08-28 (post the 5-flight batch 165302–180029)._
+_Last audit: 2026-08-29 (post the 4-flight batch 232712 / 235031 / 235430 / 000624 — rendezvous + deorbit + abort + entry tests)._
+
+## ⭐ 2026-08-29 FLIGHT-TEST ISSUE LIST (the systematic CSV+log findings)
+| # | Issue | Evidence (CSV+log) | Status |
+|---|---|---|---|
+| **F1** | **DEORBIT / abort can't hold retrograde → burns fire mis-pointed → DOES NOT deorbit → 4 vessels stranded** | 235430: DeorbitReturn burned **2300 kg ≈ 900 m/s** but pe only dropped ~3 km; ptErr **p95 134° / max 178°**, act_sat BROKEN. 232712/000624 same (128-178°). Log: the geometric RCS-torque estimate read **111185 / 4785 / 2393 / 2000 N·m** (23× swing). ROOT: `AttitudePilot.ControlTorque` summed `thrusterPower × \|arm\|` over ALL 16 Dracos on EVERY axis (~9× over) → the arrestable-rate law commanded ω too high → overshoot/oscillation around retrograde → burn fired mid-swing. | **FIXED⚑** — per-axis `r×F` estimate (MechJeb VesselState.RCSTorqueAvailable). Verify the deorbit now completes. |
+| **F2** | **AUTO SEQUENCE not state-aware** — pressing it in orbit restarts the launch / sits in "ASC/Done" instead of working out rendezvous vs deorbit | 235031: a stranded vessel idling in `ASC/Done` (orbit 407×172) — the autopilot didn't know what to do next. Chris's core ask. | **FIXED⚑** — `CrewProcedureOps.ResumeIndex` maps live state → the right step (pad→countdown; orbit+targeted→rendezvous; docked→departure; orbit-otherwise→deorbit; entering→ride-it-down). See `docs/SEQUENCE_MAP.md`. |
+| **F3** | **Rendezvous reached 100 km (CW hand-off) but did NOT dock** — 34-hour phasing, then aborted | 232712: range 4653→481→100 km over met 0-123456 s; at 100 km ptErr p95 113°, burn_dv 48.7, act_sat BROKEN. The near-field CW handoff doesn't converge to the port. (May share F1's attitude root — verify after the torque fix.) | **OPEN — DATA** (re-fly with F1 fixed; then tune the CW terminal) |
+| **F4** | **Deorbit water-site scan reads 0/130 over water** (RSS ocean detection) → WATER DEORBIT can't target water | log: "deorbit site scan: 0/130 ground-track samples over water; idx=-1" (×2). `body.TerrainAltitude(lat,lon) < 0` never true in RSS. | **OPEN** — DEORBIT NOW (land-anywhere) works regardless; needs the RSS ocean check fixed for water-targeting. |
+| **F5** | max g **4.53 > 4.5** (crew cap) | 232712: max g 4.53. S2GLimitG=4.1 but the limiter still overshoots ~0.4 g at light mass. | **OPEN — tune** (lower S2GLimitG or fix the taper lead) |
+| **F6** | early-ascent actuation saturation | VerticalRise act_sat 0.264, Coast 0.875 (roll axis) BROKEN | **OPEN — low** (transient; verify vs the F1 torque fix) |
+| **F7** | PAD SAFE-ABORT on re-launch (0% thrust) | log 235032: octaweb 0% — a re-launch after a REVERT spent the octaweb's one RealFuels ignition | **not a code bug** — operational: full restart after a pad safe-abort revert (already documented). |
 
 ## CRITICAL — crew survival
 | # | Issue | Root cause (evidence) | Status | Ref |

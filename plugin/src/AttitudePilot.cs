@@ -209,24 +209,50 @@ namespace DragonScreen
             // fire); the estimate only sets the actuation SCALE. ⚠ magnitude to confirm on the next instrumented abort.
             if (rcsOn && rcsReported < RcsTorqueFloorNm)
             {
+                // ⭐ PER-AXIS r×F estimate (MechJeb VesselState.RCSTorqueAvailable, ported faithfully). The old
+                // estimate summed thrusterPower × |arm| over ALL thrusters and put the SAME value on every axis —
+                // it over-counted ~9× (16 Dracos × 2 kN × ~3.5 m ≈ 112 kN·m vs a real ~10-15 kN·m/axis). That made
+                // the arrestable-rate law α=τ/MOI over-estimate the authority → it commanded ω=√(2αθ) rates far too
+                // high → the capsule OVERSHOT retrograde and oscillated (deorbit ptErr p95 128-178°, flights 235430/
+                // 232712/000624) → the deorbit burn fired mid-swing, mis-pointed → it did NOT deorbit → stranded.
+                // The fix: each thruster's torque = (pos−CoM) × (thrustDir · power), projected into the control
+                // frame, accumulated per axis as Max(Σ+, Σ−) — the same convention as the GetPotentialTorque path.
                 Vector3d com = v.CoM;
-                double est = 0.0;
-                for (int i = 0; i < v.parts.Count; i++)
+                Transform ctf = v.ReferenceTransform;
+                if (ctf != null)
                 {
-                    var rl = v.parts[i].Modules.GetModules<ModuleRCS>();
-                    for (int k = 0; k < rl.Count; k++)
+                    Vector3 posT = Vector3.zero, negT = Vector3.zero;   // per-axis +/- torque sums (control frame)
+                    for (int i = 0; i < v.parts.Count; i++)
                     {
-                        if (!rl[k].rcsEnabled) continue;
-                        double arm = ((Vector3d)v.parts[i].transform.position - com).magnitude;
-                        est += rl[k].thrusterPower * 1000.0 * Math.Max(arm, RcsMinArmM);   // kN→N × arm = N·m
+                        var rl = v.parts[i].Modules.GetModules<ModuleRCS>();
+                        for (int k = 0; k < rl.Count; k++)
+                        {
+                            ModuleRCS r = rl[k];
+                            if (!r.rcsEnabled || r.thrusterTransforms == null) continue;
+                            double power = r.thrusterPower * 1000.0 * Math.Max(r.thrustPercentage * 0.01, 0.0);   // N
+                            if (!(power > 0.0)) continue;
+                            for (int t = 0; t < r.thrusterTransforms.Count; t++)
+                            {
+                                Transform tt = r.thrusterTransforms[t];
+                                if (tt == null || !tt.gameObject.activeInHierarchy) continue;
+                                Vector3d dir = r.useZaxis ? -(Vector3d)tt.forward : -(Vector3d)tt.up;  // RCS thrusts −nozzle
+                                Vector3d torqueW = Vector3d.Cross((Vector3d)tt.position - com, dir * power);
+                                Vector3 tL = ctf.InverseTransformDirection((Vector3)torqueW);
+                                if (tL.x >= 0f) posT.x += tL.x; else negT.x -= tL.x;
+                                if (tL.y >= 0f) posT.y += tL.y; else negT.y -= tL.y;
+                                if (tL.z >= 0f) posT.z += tL.z; else negT.z -= tL.z;
+                            }
+                        }
                     }
-                }
-                if (est > 0.0)
-                {
-                    px = Math.Max(px, est); py = Math.Max(py, est); pz = Math.Max(pz, est);
-                    if (!rcsFallbackLogged)
-                    { Debug.LogWarning("[DragonScreen] AttitudePilot: stock RCS GetPotentialTorque ~0 on this vessel — "
-                        + "using the geometric RCS-torque estimate (" + est.ToString("F0") + " N·m/axis) so the capsule can be controlled."); rcsFallbackLogged = true; }
+                    double ex = Math.Max(posT.x, negT.x), ey = Math.Max(posT.y, negT.y), ez = Math.Max(posT.z, negT.z);
+                    if (ex + ey + ez > 0.0)
+                    {
+                        px = Math.Max(px, ex); py = Math.Max(py, ey); pz = Math.Max(pz, ez);
+                        if (!rcsFallbackLogged)
+                        { Debug.LogWarning("[DragonScreen] AttitudePilot: stock RCS GetPotentialTorque ~0 — using the "
+                            + "per-axis geometric RCS torque (" + ex.ToString("F0") + "/" + ey.ToString("F0") + "/"
+                            + ez.ToString("F0") + " N·m pitch/roll/yaw) so the capsule can be controlled."); rcsFallbackLogged = true; }
+                    }
                 }
             }
 
@@ -234,7 +260,6 @@ namespace DragonScreen
         }
         static bool rcsFallbackLogged;
         [Tunable] public static double RcsTorqueFloorNm = 1.0;   // below this reported RCS torque → use the geometric estimate
-        [Tunable] public static double RcsMinArmM = 0.5;         // floor on the thruster moment arm for the estimate
 
         // The gimbal gap-closing rate (per second) to feed the B4 lag model: KSP lerps the gimbal toward its
         // target by gimbalResponseSpeed·dt each tick, so responseSpeed IS the model's 1/τ. Take the SLOWEST
