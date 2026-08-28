@@ -277,6 +277,7 @@ section.tab.on{display:block;animation:fade .25s ease}
   <div class="legend" id="legend"></div>
   <section class="tab" data-tab="status" id="tab-status"></section>
   <section class="tab" data-tab="vehicle" id="tab-vehicle"></section>
+  <section class="tab" data-tab="sequence" id="tab-sequence"></section>
   <section class="tab" data-tab="tune" id="tab-tune"></section>
   <section class="tab" data-tab="rules" id="tab-rules"></section>
   <section class="tab" data-tab="research" id="tab-research"></section>
@@ -293,10 +294,10 @@ section.tab.on{display:block;animation:fade .25s ease}
 
 <script id="app-state" type="application/json">
 {
-  "version": "v16",
+  "version": "v17",
   "updated": "2026-08-29",
   "updatedBy": "claude",
-  "changelog": "⭐ v16 — BOOSTER DUAL-FLIGHT BUILT + T1 ocean fix. Feasibility RESOLVED (not folklore): KSP drives OnFlyByWire — throttle AND steering — for any UNPACKED non-active vessel (BDArmory flies many craft this way; kOS gates throttle on UNPACKED). So the booster CAN be flown while the Dragon flies, IF it stays unpacked = our PRE. Built src/RangeExtender.cs ('our PRE', VesselRanges widened, PRE method ported verbatim: Situation(R,1.05R,1.10R,0.99R)) + MissionConductor.TickBoosterRecovery = Chris's design: PRE ON before booster sep → focus the booster to land it (upper stage COASTS, kept loaded by PRE, so the separation stays ~hundreds of km not thousands) → return focus to the upper stage → PRE OFF. PreRangeKm=600 (size from measured max sep). ⚠ flight-gated (H1): the real risk is PHANTOM FORCES (PRE's >100 km caveat) on the ~500 km hoverslam + whether the coasting S2 resumes. Also T1 B-F4-OCEAN done (RSS water-scan: TerrainAltitude(lat,lon,true)). Research: docs/BOOSTER_DUAL_FLIGHT_RESEARCH.md. ⭐ v15 — TASK T2 B-FDIR-FEEDS DONE (green): the L5 FDIR safety spine is now wired OBSERVE-ONLY (FlightDriver.TickFdir, ~4 Hz) — it logs any tripped fault and acts ONLY if FdirActing is turned on (flight-gated, default OFF). Honest live feed = ResourceCritical from the Draco/RCS propellant margin (the return fuel: ~full through ascent since spent stages are separate vessels = no false trip, and the true margin for rendezvous/deorbit). New task T2b: feed the thrust/traj/stall/control monitors from per-controller residuals. ⭐ v14 — AUTONOMOUS BUILD LOOP running (Chris: build the autopilot to completion, one task at a time, research→read-fully→build+wire→artifacts→3-tick→next; continue after compaction without prompting). TASK T1 B-F4-OCEAN DONE (green): the RSS deorbit water-scan read 0/130 because CelestialBody.TerrainAltitude(lat,lon) defaults allowNegative=false and CLAMPS ocean depth to 0 → '<0' never true; FIX = the 3-arg overload TerrainAltitude(lat,lon,true) (real negative seabed height), confirmed from MechJeb KSP 1.12 source. Backlog + method in docs/NOMINAL_END_TO_END_BUILD.md; next tasks: FDIR feeds, B9 ascent-loss, B2/B3/B8 (flight-gated, wired behind flags), booster feasibility probe. ⭐ v13 — FULL END-TO-END CODE AUDIT + first feature wires. Read the ENTIRE flight path (conductor + all 6 phase controllers + warp/focus conductor + abort brain) vs the §1A envelope → docs/NOMINAL_END_TO_END_BUILD.md (the definitive gap map + backlog). FINDING: the sequence + parameters are ALREADY BUILT and wired end-to-end (ModeManager.Plan → CrewProcedureOps state-aware resume → FlightDriver phase dispatch); the params already match §1A. Remaining = behavioral gaps. WIRED THIS PASS (build-done, headless-green, flight-pending): (1) docking KOS AUTO-ABORT — pure/DockCorridor (leg-aware V-bar corridor, only the WP2/contact legs so the R-bar corner-cut doesn't false-trigger) → RequestAbort → KosRetreat; (2) IDSS SOFT-CAPTURE ENVELOPE — pure/DockCapture enforces the IDD Rev E box (closing ≤0.10, lateral ≤0.04, offset ≤0.10 m, angle ≤4°, rate ≤0.20°/s) before declaring capture. BOOSTER DUAL-FLIGHT finding: rests on an UNVERIFIED KSP behavior (does OnFlyByWire drive a non-active vessel?) — needs a 1-flight feasibility probe before the big build, NOT folklore. Remaining features (FDIR feeds, B2/B3/B8, F4 RSS ocean) each need honest per-phase feeds or flight-verified signs — not wired blind. ⭐ v12 — NOMINAL PARAMETER ENVELOPE added to docs/SEQUENCE_MAP.md §1A: read ALL the Crew Dragon mission research end-to-end and compiled, per phase (countdown → ascent → staging/S2 → booster → rendezvous → docking → undock/departure → return → abort), the real numbers the autopilot must hold to be called NOMINAL — each mapped to our tunable/gate. Holes filled with online research: the IDSS soft-capture CONTACT ENVELOPE (IDSS IDD Rev E, Table 3.3.1.1-2 — closing 0.05-0.10 m/s, lateral ≤0.04 m/s, rates ≤0.20°/s, lateral ≤0.10 m, angular ≤4°), the 7 Florida splashdown zones (Crew-2 = Gulf off Pensacola), and the entry-corridor FPA bound (~−1.5° LEO-capsule class). Honesty log records the genuinely-not-public items (exact guidance law / throttle schedule / abort T+ boundaries) as flight-calibrated. 📌 Working agreement (Chris 2026-08-29): BOTH artifacts (this dashboard + the plan) are now kept current + republished at the END OF EVERY RESPONSE. ⭐ FLIGHT-TEST ANALYSIS (4 flights, 4 vessels stranded) → the deorbit ROOT CAUSE found + fixed. F1: the deorbit/abort couldn't hold retrograde (ptErr p95 128-178°) so the burns fired mis-pointed — burned ~900 m/s but pe barely dropped → stranded. ROOT: AttitudePilot's geometric RCS-torque fallback over-estimated ~9× (summed thrusterPower×|arm| on every axis, logged 111185 N·m) → over-aggressive rate → oscillation. FIXED: per-axis r×F estimate (MechJeb VesselState.RCSTorqueAvailable). F2: AUTO SEQUENCE now STATE-AWARE (CrewProcedureOps.ResumeIndex) — pressing it in orbit works out rendezvous vs deorbit, never re-launches (docs/SEQUENCE_MAP.md). NEW: the SEQUENCE MAP — phases + alternate paths + the abort decision matrix (real Crew Dragon 8-mode structure). Open: F3 rendezvous reached 100 km but didn't dock; F4 water-scan 0/130 in RSS; F5 g 4.53. KLM: 8 died / 8 stranded / 4 abort-safe / 16 returning.",
+  "changelog": "⭐ v17 — NEW 'Sequence ✦' TAB (Chris 2026-08-29): the full nominal mission sequence + ALL §1A parameters, per phase (countdown → ascent → staging → booster → rendezvous → docking → undock/departure → return → abort) with the IDSS contact box + tags + our knobs. Also added the session's build tasks to the tick-tracker (sequence tab, docking KOS-abort, IDSS capture, F4 ocean, FDIR observe, booster dual-flight, ascent-loss). ⭐ v16 — BOOSTER DUAL-FLIGHT BUILT + T1 ocean fix. Feasibility RESOLVED (not folklore): KSP drives OnFlyByWire — throttle AND steering — for any UNPACKED non-active vessel (BDArmory flies many craft this way; kOS gates throttle on UNPACKED). So the booster CAN be flown while the Dragon flies, IF it stays unpacked = our PRE. Built src/RangeExtender.cs ('our PRE', VesselRanges widened, PRE method ported verbatim: Situation(R,1.05R,1.10R,0.99R)) + MissionConductor.TickBoosterRecovery = Chris's design: PRE ON before booster sep → focus the booster to land it (upper stage COASTS, kept loaded by PRE, so the separation stays ~hundreds of km not thousands) → return focus to the upper stage → PRE OFF. PreRangeKm=600 (size from measured max sep). ⚠ flight-gated (H1): the real risk is PHANTOM FORCES (PRE's >100 km caveat) on the ~500 km hoverslam + whether the coasting S2 resumes. Also T1 B-F4-OCEAN done (RSS water-scan: TerrainAltitude(lat,lon,true)). Research: docs/BOOSTER_DUAL_FLIGHT_RESEARCH.md. ⭐ v15 — TASK T2 B-FDIR-FEEDS DONE (green): the L5 FDIR safety spine is now wired OBSERVE-ONLY (FlightDriver.TickFdir, ~4 Hz) — it logs any tripped fault and acts ONLY if FdirActing is turned on (flight-gated, default OFF). Honest live feed = ResourceCritical from the Draco/RCS propellant margin (the return fuel: ~full through ascent since spent stages are separate vessels = no false trip, and the true margin for rendezvous/deorbit). New task T2b: feed the thrust/traj/stall/control monitors from per-controller residuals. ⭐ v14 — AUTONOMOUS BUILD LOOP running (Chris: build the autopilot to completion, one task at a time, research→read-fully→build+wire→artifacts→3-tick→next; continue after compaction without prompting). TASK T1 B-F4-OCEAN DONE (green): the RSS deorbit water-scan read 0/130 because CelestialBody.TerrainAltitude(lat,lon) defaults allowNegative=false and CLAMPS ocean depth to 0 → '<0' never true; FIX = the 3-arg overload TerrainAltitude(lat,lon,true) (real negative seabed height), confirmed from MechJeb KSP 1.12 source. Backlog + method in docs/NOMINAL_END_TO_END_BUILD.md; next tasks: FDIR feeds, B9 ascent-loss, B2/B3/B8 (flight-gated, wired behind flags), booster feasibility probe. ⭐ v13 — FULL END-TO-END CODE AUDIT + first feature wires. Read the ENTIRE flight path (conductor + all 6 phase controllers + warp/focus conductor + abort brain) vs the §1A envelope → docs/NOMINAL_END_TO_END_BUILD.md (the definitive gap map + backlog). FINDING: the sequence + parameters are ALREADY BUILT and wired end-to-end (ModeManager.Plan → CrewProcedureOps state-aware resume → FlightDriver phase dispatch); the params already match §1A. Remaining = behavioral gaps. WIRED THIS PASS (build-done, headless-green, flight-pending): (1) docking KOS AUTO-ABORT — pure/DockCorridor (leg-aware V-bar corridor, only the WP2/contact legs so the R-bar corner-cut doesn't false-trigger) → RequestAbort → KosRetreat; (2) IDSS SOFT-CAPTURE ENVELOPE — pure/DockCapture enforces the IDD Rev E box (closing ≤0.10, lateral ≤0.04, offset ≤0.10 m, angle ≤4°, rate ≤0.20°/s) before declaring capture. BOOSTER DUAL-FLIGHT finding: rests on an UNVERIFIED KSP behavior (does OnFlyByWire drive a non-active vessel?) — needs a 1-flight feasibility probe before the big build, NOT folklore. Remaining features (FDIR feeds, B2/B3/B8, F4 RSS ocean) each need honest per-phase feeds or flight-verified signs — not wired blind. ⭐ v12 — NOMINAL PARAMETER ENVELOPE added to docs/SEQUENCE_MAP.md §1A: read ALL the Crew Dragon mission research end-to-end and compiled, per phase (countdown → ascent → staging/S2 → booster → rendezvous → docking → undock/departure → return → abort), the real numbers the autopilot must hold to be called NOMINAL — each mapped to our tunable/gate. Holes filled with online research: the IDSS soft-capture CONTACT ENVELOPE (IDSS IDD Rev E, Table 3.3.1.1-2 — closing 0.05-0.10 m/s, lateral ≤0.04 m/s, rates ≤0.20°/s, lateral ≤0.10 m, angular ≤4°), the 7 Florida splashdown zones (Crew-2 = Gulf off Pensacola), and the entry-corridor FPA bound (~−1.5° LEO-capsule class). Honesty log records the genuinely-not-public items (exact guidance law / throttle schedule / abort T+ boundaries) as flight-calibrated. 📌 Working agreement (Chris 2026-08-29): BOTH artifacts (this dashboard + the plan) are now kept current + republished at the END OF EVERY RESPONSE. ⭐ FLIGHT-TEST ANALYSIS (4 flights, 4 vessels stranded) → the deorbit ROOT CAUSE found + fixed. F1: the deorbit/abort couldn't hold retrograde (ptErr p95 128-178°) so the burns fired mis-pointed — burned ~900 m/s but pe barely dropped → stranded. ROOT: AttitudePilot's geometric RCS-torque fallback over-estimated ~9× (summed thrusterPower×|arm| on every axis, logged 111185 N·m) → over-aggressive rate → oscillation. FIXED: per-axis r×F estimate (MechJeb VesselState.RCSTorqueAvailable). F2: AUTO SEQUENCE now STATE-AWARE (CrewProcedureOps.ResumeIndex) — pressing it in orbit works out rendezvous vs deorbit, never re-launches (docs/SEQUENCE_MAP.md). NEW: the SEQUENCE MAP — phases + alternate paths + the abort decision matrix (real Crew Dragon 8-mode structure). Open: F3 rendezvous reached 100 km but didn't dock; F4 water-scan 0/130 in RSS; F5 g 4.53. KLM: 8 died / 8 stranded / 4 abort-safe / 16 returning.",
   "tabs": [
     {
       "id": "status",
@@ -305,6 +306,10 @@ section.tab.on{display:block;animation:fade .25s ease}
     {
       "id": "vehicle",
       "label": "Vehicle ★"
+    },
+    {
+      "id": "sequence",
+      "label": "Sequence ✦"
     },
     {
       "id": "tune",
@@ -558,6 +563,55 @@ section.tab.on{display:block;animation:fade .25s ease}
       "fkind": "flight",
       "pending": false,
       "note": "Escalation ladder + free-flyer profiles. Live-wiring into FlightDriver (observe-first, then acting) owed."
+    },
+    {
+      "id": "seq-tab",
+      "name": "Nominal sequence-map tab (T12)",
+      "group": "get-end-to-end",
+      "c": true, "u": false, "f": false, "fkind": "na", "pending": false,
+      "note": "This tab — the full nominal mission sequence + all §1A parameters, per phase. A reference (pure doc mirror), so no flight tick. Source: docs/SEQUENCE_MAP.md §1A."
+    },
+    {
+      "id": "dock-kos-abort",
+      "name": "Docking KOS auto-abort (T·wire)",
+      "group": "get-end-to-end",
+      "c": true, "u": false, "f": false, "fkind": "flight", "pending": false,
+      "note": "pure/DockCorridor (leg-aware V-bar corridor) wired into DockingControl on the terminal legs (WP2/contact only — the R-bar corner-cut isn't gated) → RequestAbort → KosRetreat. Green. UNFLOWN. Commit 1d81f7c."
+    },
+    {
+      "id": "dock-idss-capture",
+      "name": "IDSS soft-capture envelope (T·wire)",
+      "group": "get-end-to-end",
+      "c": true, "u": false, "f": false, "fkind": "flight", "pending": false,
+      "note": "pure/DockCapture enforces the IDD Rev E box (closing ≤0.10, lateral ≤0.04, offset ≤0.10 m, angle ≤4°, rate ≤0.20°/s) before the geometric fallback declares capture; KSP's own dock magnetism still always completes. Green. UNFLOWN. Commit 1d81f7c."
+    },
+    {
+      "id": "f4-ocean",
+      "name": "F4 RSS ocean detection (T1)",
+      "group": "crew-survival",
+      "c": true, "u": false, "f": false, "fkind": "flight", "pending": false,
+      "note": "WATER DEORBIT read 0/130 because TerrainAltitude(lat,lon) clamps ocean to 0; FIX = the 3-arg overload TerrainAltitude(lat,lon,true) (MechJeb-confirmed). Green. UNFLOWN. Commit e2f74aa."
+    },
+    {
+      "id": "fdir-observe",
+      "name": "FDIR safety spine — observe-only (T2)",
+      "group": "get-end-to-end",
+      "c": true, "u": false, "f": false, "fkind": "flight", "pending": false,
+      "note": "FlightDriver.TickFdir runs the tested pure Fdir ~4 Hz, LOGS faults, acts only if FdirActing on (default OFF). Live feed = Draco/RCS fuel margin. Residual feeds owed (T2b). Green. UNFLOWN. Commit e4f525c."
+    },
+    {
+      "id": "booster-dual",
+      "name": "Booster dual-flight — our PRE (T7/T8)",
+      "group": "get-end-to-end",
+      "c": true, "u": false, "f": false, "fkind": "flight", "pending": false,
+      "note": "Feasibility RESOLVED (OnFlyByWire drives any UNPACKED non-active vessel — BDArmory proof). src/RangeExtender.cs = our PRE (VesselRanges ported) + MissionConductor.TickBoosterRecovery: PRE on before sep → focus booster (S2 coasts) → land → refocus → PRE off. PreRangeKm=600. ⚠ H1: phantom forces >100 km + S2 coast survival. Green. UNFLOWN. Commit 03610fd. See docs/BOOSTER_DUAL_FLIGHT_RESEARCH.md."
+    },
+    {
+      "id": "ascent-loss",
+      "name": "B9 ascent Δv-loss instrument (T3)",
+      "group": "get-end-to-end",
+      "c": true, "u": false, "f": false, "fkind": "flight", "pending": false,
+      "note": "AscentControl records steer/grav/drag losses (3 new recorder cols). steer_loss = the zero-AoA-turn diagnostic. Green. Commit 7b6122c."
     },
     {
       "id": "dock-signs",
@@ -815,6 +869,83 @@ section.tab.on{display:block;animation:fade .25s ease}
       "body": "The autopilot is 'the autopilot' until it flies a full crew mission pad→splashdown clean, full-fidelity. Only then does it earn the name CLAUDE. It flies ANY crew mission (mission-as-data by VAB craft name); Crew-2 is the reference profile."
     }
   ],
+  "sequence": {
+    "intro": "The NOMINAL PARAMETER ENVELOPE — the real Crew Dragon numbers the autopilot must hold END TO END to be called 'nominal' (docs/SEQUENCE_MAP.md §1A). RSS/RO reproduces them so they are used DIRECTLY. Tags: [P] primary · [E] established F9/Dragon · [D] technique · [~] approx/flight-calibrated. 'knob' = our tunable/gate. A deviation past a bound is off-nominal → a tune target or an abort trigger.",
+    "phases": [
+      { "cat": "① Countdown (T-)", "items": [
+        { "p": "Launch gates (MET)", "dd": "G1 ingress T-2:35:00 · G2 suit-leak T-2:14 · G3 hatch T-1:55 · G4 GO prop-load T-45:00 · G5 LES ARMED T-37:00 · G6 internal power T-5:00 · G7 GO launch T-45s · ignite T-3s [P]" },
+        { "p": "Pad start", "dd": "ignite S1 at T-3s → spool while clamped → release clamps ONLY at thrust ≥99% AND no failed engine (T-0); else PAD SAFE-ABORT [P]" },
+        { "p": "Ullage", "dd": "RCS-settle to LowestUllage ≥0.996 before EVERY light [P]" }
+      ]},
+      { "cat": "② Ascent — first stage (pad → MECO)", "items": [
+        { "p": "Liftoff TWR", "dd": "1.4–1.6 [E]" },
+        { "p": "Pitch kick", "dd": "~T+10s, small (DM-1 onset ~+5.3°/s) → hold ~79° to ~T+45 [P/D] · knob FinalPitchDeg/TurnShape" },
+        { "p": "Gravity turn", "dd": "ZERO-AoA — fly the velocity vector (aero side load ≈0); mean ~-0.287°/s → ~46.6° at MECO [P/D]" },
+        { "p": "Max-Q", "dd": "30–35 kPa @ Mach ~1.5, 11–13 km, ~T+58–62s; throttle BUCKET down through it [E]" },
+        { "p": "S1 g-cap", "dd": "≤ ~3.2–3.5 g (throttle down near MECO) [P] · knob S1GLimitG=3.5" },
+        { "p": "MECO", "dd": "~T+2:36 (156–158 s), ~65–80 km, ~1.7 km/s surface [P]" }
+      ]},
+      { "cat": "③ Staging + second stage (MECO → SECO → Dragon sep)", "items": [
+        { "p": "Stage sep", "dd": "MECO + 3 s (~T+2:39), pneumatic, DIRECT decoupler (never staging) [P]" },
+        { "p": "S2 ignition (SES-1)", "dd": "MECO + 8–11 s (~T+2:47), after ~8 s plume-clearance coast, ullage-settled [P]" },
+        { "p": "S2 g-cap", "dd": "≤ ~4.5 g near SECO (throttle down) [P] · knob S2GLimitG=4.1" },
+        { "p": "SECO-1", "dd": "~T+8:47 (527–530 s); insertion ~190–210 × ~300 km @ 51.6° (interim ~200 km circular) [P]" },
+        { "p": "RCS during S2", "dd": "OFF the whole burn (gimbal steers)" },
+        { "p": "Dragon sep", "dd": "~T+11:58 (718–723 s); nose cap opens ~T+13:02 [P]" },
+        { "p": "Ignition budget", "dd": "S1 & S2 = 4 each; booster recovery spends 3 of S1's [P]" }
+      ]},
+      { "cat": "④ Booster recovery (concurrent, droneship)", "items": [
+        { "p": "No boostback", "dd": "droneship ~500 km downrange; flip retrograde on cold-gas N₂ [P/E]" },
+        { "p": "Entry burn", "dd": "~T+7:27, 3 engines (ThreeLanding) → ~1300 m/s [P]" },
+        { "p": "Grid fins", "dd": "deploy ~70 km; AoA cap ~15–20°; AIM-TO-MISS until all nominal [P]" },
+        { "p": "Landing burn", "dd": "~8 km, CenterOnly (1 engine, ONE ignition — no mid-burn 3→1), hoverslam v=0 @ h=0, min throttle ~40% [E]" },
+        { "p": "Touchdown", "dd": "legs in the final seconds, ~0–2 m/s; ~T+9:30 [P]" },
+        { "p": "Dual-flight", "dd": "our-PRE keeps both loaded+unpacked (PreRangeKm=600) → focus booster (S2 coasts) → land → refocus → PRE off" }
+      ]},
+      { "cat": "⑤ Rendezvous / phasing (16 Dracos only — SuperDraco NEVER nominal)", "items": [
+        { "p": "Prop", "dd": "16 × Draco 400 N, Isp 300, MMH+NTO [P]" },
+        { "p": "Named-burn order", "dd": "Phase (~T+46m) → Boost (~T+15:53, overnight) → Close → Transfer (~48s) → Coelliptic (~37s) → 30 km rendezvous-complete → OOP → G9 GO for AI → AI-burn @ 7.5 km (90 s, 0.72 m/s) → Midcourse [P]" },
+        { "p": "Total", "dd": "~24–28 h (slow multi-orbit; NOT 1-orbit) [P]" },
+        { "p": "Co-elliptic offset", "dd": "~10 km below the ISS [D]" },
+        { "p": "AI standoff", "dd": "7.5 km behind & below, ~96 min before dock [P]" },
+        { "p": "Safety", "dd": "offset targeting mandatory; free-drift passive-abort misses the KOS; pe-floor ≥150 km gates EVERY burn [P/D] · knobs ForwardSign=-1, SafePeFloorM, CwHandoffRangeM" }
+      ]},
+      { "cat": "⑥ Proximity ops & docking", "items": [
+        { "p": "Approach Ellipsoid", "dd": "2000 m (V-bar semi-axis) × 1000 m = the '4×2 km' [P]" },
+        { "p": "Keep-Out Sphere", "dd": "200 m RADIUS; any breach/off-corridor → AUTO-ABORT (retreat, positive opening rate) [P]" },
+        { "p": "Approach shape", "dd": "an L, not a line: R-bar → V-bar → axis; every WP a station-keeping HOLD + GO [P]" },
+        { "p": "Waypoints", "dd": "WP0 400 m below (G10) → WP1 ~150–220 m front (G11) → WP2 20 m (G12) → contact [P]" },
+        { "p": "Closing / discipline", "dd": "glideslope taper (≤ IDSS at contact); null lateral BEFORE closing; attitude-first-then-translate; nose shroud open [P/D]" },
+        { "p": "IDSS contact box (IDD Rev E)", "dd": "closing 0.05–0.10 m/s · lateral rate ≤0.04 m/s · lateral offset ≤0.10 m · pitch/yaw ≤4° (vector) · roll ≤4° · rates ≤0.20°/s [P]" },
+        { "p": "Capture", "dd": "soft (ring+3 petals+latches) → hard (12 hooks) ~10 min later → G13 [P]" }
+      ]},
+      { "cat": "⑦ Undocking & departure", "items": [
+        { "p": "Undock", "dd": "GO → hooks open, umbilicals retract, 2 tiny separation burns [P]" },
+        { "p": "4 departure burns", "dd": "Burn 0 (~16s, up & around) → Burn 1 (~20s) → Burn 2 (~44s, ~50 min later) → Burn 3 (~1 min) → stable ~10 km below the ISS [P]" },
+        { "p": "Departure phasing", "dd": "~6–9 min low-thrust Draco → sets the ground track for the splash zone [P]" },
+        { "p": "Safety", "dd": "corridor-safe — a missed burn does NOT re-enter the 200 m KOS [D]" }
+      ]},
+      { "cat": "⑧ Return — deorbit → entry → splashdown", "items": [
+        { "p": "Trunk jettison", "dd": "BEFORE the deorbit burn (sheds mass, clears the shield) [P]" },
+        { "p": "Deorbit burn", "dd": "Dracos, ~12–16.5 min (Crew-1: 987 s), CLOSED-LOOP on measured Pe (stop AT target, not past) [P] · target Pe ~50 km" },
+        { "p": "Entry corridor", "dd": "target EI flight-path angle ~-1.5° class at EI ~120 km (LEO-capsule shallow; too shallow skips, too steep over-g) — flight-calibrated; exact not public [~]" },
+        { "p": "Attitude", "dd": "heat-shield forward; CoM shifter Descent Mode engaged ONCE [P]" },
+        { "p": "Lifting entry", "dd": "offset-CoM trim AoA ~12°, L/D ≈ 0.18–0.27; bank σ: vertical lift L·cos σ = downrange; bank REVERSALS (S-turns) on a v-dependent crossrange deadband [P]" },
+        { "p": "Peak g / blackout", "dd": "~4–5 g nominal; comms blackout ~6 min [P]" },
+        { "p": "Drogues (2)", "dd": "~5486 m (18 kft), ~156 m/s (350 mph) [P]" },
+        { "p": "Mains (4)", "dd": "~1830 m (6 kft), ~53 m/s (119 mph); safe on 3 of 4 [P]" },
+        { "p": "Splashdown", "dd": "~5–8 m/s; one of 7 FL zones (Gulf: Pensacola/Panama City/Tampa/Tallahassee · Atlantic: Cape Canaveral/Daytona/Jacksonville); Crew-2 = Gulf off Pensacola [P/~]" }
+      ]},
+      { "cat": "⑨ Abort — g-loads & mode boundaries (backstop, NOT the trigger)", "items": [
+        { "p": "Felt g by phase", "dd": "S1 3.2–3.3 g · S2 ≤4.5 g · coast ~0 g · SuperDraco escape ~3.3 g · lifting entry ~4 g · ballistic 4–8 g [P]" },
+        { "p": "Real trigger", "dd": "a DETECTED anomaly (loss of thrust/control, structural/aero limit), NOT raw g — SpaceX proves it at max-Q [P]" },
+        { "p": "Structural backstop", "dd": "6.0 g, 0.5 s dwell; DISABLED on entry (4–8 g nominal) · knobs StructuralAbortG/DwellS" },
+        { "p": "Contingency SuperDraco deorbit", "dd": "g-limited 3.5 g, stops at the safe entry-corridor Pe · knob DeorbitGLimit" },
+        { "p": "Mode boundaries", "dd": "pad/ascent = LaunchEscape · late-ascent near-orbital = Abort-To-Orbit (don't splash) · on-orbit = DeorbitReturn · prox-ops = KosRetreat · entry = RideItDown [P]" },
+        { "p": "Universal sequence", "dd": "escape → TRUNK JETTISON → Draco reorient shield-forward → (coast) → drogues → mains → splash [P]" }
+      ]}
+    ]
+  },
   "research": [
     {
       "cat": "0 · Governing",
@@ -1257,6 +1388,7 @@ section.tab.on{display:block;animation:fade .25s ease}
         + '<div class="wrap">\n  <div class="planstrip" id="planstrip"></div>\n  <div class="legend" id="legend"></div>\n'
         + '  <section class="tab" data-tab="status" id="tab-status"></section>\n'
         + '  <section class="tab" data-tab="vehicle" id="tab-vehicle"></section>\n'
+        + '  <section class="tab" data-tab="sequence" id="tab-sequence"></section>\n'
         + '  <section class="tab" data-tab="tune" id="tab-tune"></section>\n'
         + '  <section class="tab" data-tab="rules" id="tab-rules"></section>\n'
         + '  <section class="tab" data-tab="research" id="tab-research"></section>\n'
@@ -1498,6 +1630,28 @@ section.tab.on{display:block;animation:fade .25s ease}
     sec.appendChild(p);
   }
 
+  function renderSequence(){
+    var sec = document.getElementById('tab-sequence'); if(!sec) return; sec.innerHTML='';
+    var Q = S.sequence || {};
+    var p = el('div','panel');
+    var ph = el('div','ph'); ph.appendChild(el('h2','Nominal mission sequence · parameters')); ph.appendChild(el('span','meta','pad → orbit → rendezvous → dock → return · what "nominal" means, per phase')); p.appendChild(ph);
+    if (Q.intro) p.appendChild(el('div','hint',Q.intro));
+    var box = el('div','research');
+    (Q.phases||[]).forEach(function(cat){
+      var c = el('div','rcat'); c.appendChild(el('div','ct',cat.cat));
+      (cat.items||[]).forEach(function(it){
+        var d = el('div','doc');
+        d.appendChild(el('div','p',it.p));
+        d.appendChild(el('div','dd',it.dd||''));
+        c.appendChild(d);
+      });
+      box.appendChild(c);
+    });
+    p.appendChild(box);
+    p.appendChild(el('div','hint','Full envelope + sources + the abort decision matrix + state-aware resume: docs/SEQUENCE_MAP.md §1A. These are the numeric PASS gates (docs/PHASE_ACCEPTANCE_CRITERIA.md).'));
+    sec.appendChild(p);
+  }
+
   function renderVehicle(){
     var sec = document.getElementById('tab-vehicle'); if(!sec) return; sec.innerHTML='';
     var V = S.vehicle || {};
@@ -1640,7 +1794,7 @@ section.tab.on{display:block;animation:fade .25s ease}
   var current = 'status';
   function render(){
     renderReadout(); renderTabs(); renderLinks(); renderLegend(); renderKlm();
-    renderStatus(); renderVehicle(); renderTune(); renderRules(); renderResearch(); renderUnverified();
+    renderStatus(); renderVehicle(); renderSequence(); renderTune(); renderRules(); renderResearch(); renderUnverified();
     renderMemorial(); renderHeroes();
     document.querySelectorAll('section.tab').forEach(function(s){ s.classList.toggle('on', s.dataset.tab===current); });
   }
