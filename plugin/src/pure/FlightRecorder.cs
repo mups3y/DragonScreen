@@ -75,6 +75,10 @@ namespace DragonScreen
             // rcsbal_torque_resid = what a torque-nulling per-thruster balance would leave; rcsbal_force_frac = the
             // fraction of the translation that survives the balance. Blank when no RCS translation is commanded.
             "rcsbal_torque_naive", "rcsbal_torque_resid", "rcsbal_force_frac",
+            // B8 CourseCorrect entry range divert (task T6) — records-first (applied only behind a flag). cc_dsigma_deg
+            // = the 1×1 Newton-step bank-|σ| correction (blank when not observable this recompute); cc_slope_m_per_rad
+            // = the measured d(downrange)/dσ sensitivity (its SIGN is the convention to confirm from a flown CSV).
+            "cc_dsigma_deg", "cc_slope_m_per_rad",
         };
 
         static int Index(string name)
@@ -124,7 +128,8 @@ namespace DragonScreen
             CalKAero = Index("cal_kaero"), CalKAeroP = Index("cal_kaero_p"), QAlphaCapDeg = Index("qalpha_cap_deg"),
             AeroAngAccel = Index("aero_ang_accel"), AoaSignedDeg = Index("aoa_signed_deg"),
             RcsBalTorqueNaive = Index("rcsbal_torque_naive"), RcsBalTorqueResid = Index("rcsbal_torque_resid"),
-            RcsBalForceFrac = Index("rcsbal_force_frac");
+            RcsBalForceFrac = Index("rcsbal_force_frac"),
+            CcDsigmaDeg = Index("cc_dsigma_deg"), CcSlopeMPerRad = Index("cc_slope_m_per_rad");
 
         // ---- formatting ----
         public static string Num(double v)
@@ -381,6 +386,14 @@ namespace DragonScreen
             Set(c, RcsBalTorqueNaive, naiveTorqueNm);
             Set(c, RcsBalTorqueResid, residTorqueNm);
             Set(c, RcsBalForceFrac, forceFrac);
+        }
+
+        // B8 CourseCorrect entry divert (task T6) — the bank-|σ| Newton step (deg) + the measured d(downrange)/dσ
+        // sensitivity (m/rad). NaN dsigma = not observable this recompute (the heuristic was kept).
+        public static void PutCourseCorrect(string[] c, double dsigmaDeg, double slopeMPerRad)
+        {
+            Set(c, CcDsigmaDeg, dsigmaDeg);
+            Set(c, CcSlopeMPerRad, slopeMPerRad);
         }
     }
 }

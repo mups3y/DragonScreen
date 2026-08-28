@@ -14,6 +14,13 @@
 // ⚠ FIRST CUT (validate in flight): the ballistic-coefficient measurement, the rotation-correction SIGN,
 // and the down/cross-range SIGN into GridFin (a mirrored steer shows in the CSV — one-constant fix). Uses
 // drag-only prediction (L/D 0); the fins bend the real path and the closed loop absorbs the difference.
+//
+// ⛔ B8/T6 — why the CourseCorrect 2×2 divert is NOT wired here (the entry 1×1 IS, in ReturnControl): this
+// predictor is BALLISTIC (L/D 0, bank 0), so perturbing the fin "control" moves the predicted impact by nothing
+// — there is no observable Jacobian to solve. CourseCorrect on the booster needs (a) the predictor to model the
+// grid-fin lift (an L/D + bank driven by the fin command), and (b) a MEASURED fin-AoA→lift gain to map the solved
+// divert back to a fin command; inventing that gain is exactly what the rules forbid. So the proportional GridFin
+// heuristic (a working closed loop) stays, and the booster 2×2 is owed pending a control-responsive predictor.
 // ============================================================================================
 using System;
 using UnityEngine;

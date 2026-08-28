@@ -47,10 +47,31 @@ namespace DragonScreen
         }
 
         // The predicted footprint error (downrange +, crossrange +) vs the splashdown target, in the
-        // capsule's ground-track frame. Returns false (and zero error) if there is no target / prediction.
+        // capsule's ground-track frame, UNDER THE CURRENT BANK (LastSigmaRad). Returns false (and zero error)
+        // if there is no target / prediction.
         public static bool FootprintError(Vessel v, out double downErr, out double crossErr)
         {
-            downErr = 0; crossErr = 0; LastHadTarget = false;
+            bool ok = PredictFootprint(v, LastSigmaRad, out downErr, out crossErr);
+            LastHadTarget = ok;
+            if (ok) { LastDownErrM = downErr; LastCrossErrM = crossErr; }
+            return ok;
+        }
+
+        // ⭐ B8/T6: re-predict the footprint DOWNRANGE error at an ARBITRARY bank |σ| (the finite-difference
+        // perturbation for CourseCorrect.Solve1x1). Same predictor, a different assumed bank — so d(downrange)/dσ
+        // is observable. Returns false if the prediction is unusable (caller then falls back to the heuristic).
+        public static bool PredictDownErrAtBank(Vessel v, double bankRad, out double downErr)
+        {
+            double crossErr;
+            return PredictFootprint(v, bankRad, out downErr, out crossErr);
+        }
+
+        // The shared prediction core: run the L1 lifting impact predictor at the given bank and decompose the
+        // (impact − target) miss into the ground-track down/cross frame. No side effects (the Last* fields are
+        // set by the callers, so a perturbation re-prediction never clobbers the live footprint state).
+        static bool PredictFootprint(Vessel v, double bankRad, out double downErr, out double crossErr)
+        {
+            downErr = 0; crossErr = 0;
             CelestialBody body = v.mainBody;
             if (body == null || smoothedBc <= 0.0) return false;
             if (v.targetObject == null || v.targetObject.GetTransform() == null) return false;
@@ -68,7 +89,7 @@ namespace DragonScreen
             ti.BallisticCoefficient = smoothedBc;
             ti.ImpactAltitudeM = targetAlt;
             ti.LiftToDrag = EntryLoverD;              // LIFTING prediction
-            ti.BankRad = LastSigmaRad;                // under the current bank
+            ti.BankRad = bankRad;                     // under the given bank
 
             DensityAt density = delegate (double alt)
             {
@@ -95,8 +116,6 @@ namespace DragonScreen
             Vector3d err = impact - target;
             downErr = Vector3d.Dot(err, downHat);
             crossErr = CrossSign * Vector3d.Dot(err, crossHat);
-
-            LastDownErrM = downErr; LastCrossErrM = crossErr; LastHadTarget = true;
             return true;
         }
 

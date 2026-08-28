@@ -52,6 +52,22 @@ namespace DragonScreen
         // thrust). Delivered also feeds di.DvAppliedMps — the guidance's own backstop cutoff (was never set).
         static double deorbitDvPlanned, deorbitDvDelivered, lastBurnUT = -1;
 
+        // ---- B8/T6 CourseCorrect entry range channel (1×1: control = bank |σ|) ----
+        // OFF by default: it RUNS + RECORDS the Newton-step bank correction (from the predictor's live
+        // d(downrange)/d|σ| sensitivity) so a flown CSV reveals whether it beats the Entry.Guide heuristic; it
+        // APPLIES the correction (replaces the heuristic |σ| with the corrected magnitude, keeping the S-turn sign)
+        // only when UseCourseCorrectEntry is on. ⚠ SIGN-SENSITIVE + FLIGHT-GATED: the slope sign (does more bank
+        // shorten or lengthen the range?) is a convention to read off the CSV first. Recomputed at ~4 Hz (one extra
+        // impact prediction) so the realtime entry hot path stays light. (The BOOSTER 2×2 is deliberately NOT wired —
+        // its impact predictor is ballistic (L/D=0), so a fin-control perturbation moves nothing; see docs.)
+        [Tunable] public static bool UseCourseCorrectEntry = false;
+        [Tunable] public static double CcEntryPerturbDeg = 5.0;    // finite-difference bank perturbation dσ
+        [Tunable] public static double CcEntryMaxStepDeg = 15.0;   // clamp on a single |σ| correction
+        [Tunable] public static double CcEntryMaxBankDeg = 80.0;   // never command |σ| beyond this
+        [Tunable] public static double CcEntryTickS = 0.25;        // recompute cadence (~4 Hz)
+        static double ccAccumS, ccCorrectedMagRad, ccLastDsigmaDeg = double.NaN, ccLastSlope = double.NaN;
+        static bool ccHaveCorrection;
+
         public static void Reset()
         {
             depPhase = DepPhase.Idle; deoPhase = DeorbitPhase.Idle; entPhase = EntryPhase.Idle;
@@ -60,6 +76,8 @@ namespace DragonScreen
             undocked = trunkGone = shroudClosed = comEngaged = deorbitDone = false;
             settleStartUT = -1; lastBankSign = 1;
             deorbitDvPlanned = deorbitDvDelivered = 0; lastBurnUT = -1;
+            ccAccumS = 0; ccCorrectedMagRad = 0; ccLastDsigmaDeg = double.NaN; ccLastSlope = double.NaN;
+            ccHaveCorrection = false;
             EntrySteering.Reset();
             FlightDriver.ReleaseTranslation(); FlightDriver.ReleaseRoll(); Steering.Release();
         }
@@ -218,8 +236,20 @@ namespace DragonScreen
             EntryCommand ec = Entry.Guide(ei, entPhase);
             entPhase = ec.Phase;
             lastBankSign = ec.BankSign;
-            lastBankDeg = ec.BankRad * 180.0 / Math.PI;
-            EntrySteering.LastSigmaRad = ec.BankRad;   // the predictor assumes this bank next tick
+
+            // ⭐ B8/T6 CourseCorrect (entry range 1×1): recompute the bank correction at ~4 Hz from the live
+            // d(downrange)/d|σ| sensitivity and RECORD it; apply it (corrected magnitude, heuristic S-turn sign) only
+            // behind UseCourseCorrectEntry. Off → the Entry.Guide heuristic bank is commanded unchanged.
+            double cmdBankRad = ec.BankRad;
+            if (haveTarget && entPhase == EntryPhase.Entry)
+            {
+                double corrected;
+                if (TickCourseCorrectEntry(v, ec.BankRad, out corrected) && UseCourseCorrectEntry)
+                    cmdBankRad = corrected;
+            }
+
+            lastBankDeg = cmdBankRad * 180.0 / Math.PI;
+            EntrySteering.LastSigmaRad = cmdBankRad;   // the predictor assumes the COMMANDED bank next tick
 
             // ⛔ engage the CoM shifter Descent Mode ONCE (the correct use — a mode, not a steering actuator)
             if (ec.EngageDescentMode && !comEngaged) { comEngaged = EngageCoMShifter(v); }
@@ -232,7 +262,7 @@ namespace DragonScreen
             if (haveTarget && entPhase == EntryPhase.Entry && v.srfSpeed > 1.0)
             {
                 double bank = EntrySteering.MeasuredBankRad(v);
-                double bankErr = Wrap(ec.BankRad - bank);
+                double bankErr = Wrap(cmdBankRad - bank);
                 FlightDriver.SetRoll(RollSign * RollKp * bankErr);
             }
             else FlightDriver.ReleaseRoll();
@@ -347,12 +377,52 @@ namespace DragonScreen
             return rad;
         }
 
+        // B8/T6: at ~4 Hz, perturb the predicted bank |σ| and solve the 1×1 CourseCorrect Newton step that nulls
+        // the downrange miss. Returns true + the CORRECTED signed bank (heuristic S-turn sign, corrected magnitude);
+        // records the step (deg) + the sensitivity slope (m/rad) EVERY recompute for the flight sign-check. false →
+        // refuse/hold (caller keeps the heuristic). Between the 4 Hz recomputes the last corrected magnitude holds.
+        static bool TickCourseCorrectEntry(Vessel v, double heuristicBankRad, out double correctedBankRad)
+        {
+            correctedBankRad = heuristicBankRad;
+            ccAccumS += TimeWarp.fixedDeltaTime;
+            if (ccAccumS >= CcEntryTickS)
+            {
+                ccAccumS = 0.0;
+                const double Deg2Rad = Math.PI / 180.0;
+                double mag0 = Math.Abs(heuristicBankRad);
+                double du = CcEntryPerturbDeg * Deg2Rad;
+                double e0, e1;
+                if (EntrySteering.PredictDownErrAtBank(v, mag0, out e0)
+                    && EntrySteering.PredictDownErrAtBank(v, mag0 + du, out e1))
+                {
+                    DivertResult dr = CourseCorrect.Solve1x1(e0, e1, du, CcEntryMaxStepDeg * Deg2Rad);
+                    ccLastSlope = dr.Det;   // d(downrange)/dσ (m/rad) — the sign to verify from the CSV
+                    if (dr.Ok)
+                    {
+                        double maxBank = CcEntryMaxBankDeg * Deg2Rad;
+                        double m = mag0 + dr.Du1;
+                        if (m < 0.0) m = 0.0; else if (m > maxBank) m = maxBank;
+                        ccCorrectedMagRad = m;
+                        ccLastDsigmaDeg = dr.Du1 / Deg2Rad;
+                        ccHaveCorrection = true;
+                    }
+                    else { ccLastDsigmaDeg = double.NaN; ccHaveCorrection = false; }   // not observable → hold heuristic
+                }
+                else { ccLastDsigmaDeg = double.NaN; ccLastSlope = double.NaN; ccHaveCorrection = false; }
+            }
+            if (!ccHaveCorrection) return false;
+            double sign = heuristicBankRad >= 0.0 ? 1.0 : -1.0;   // keep the S-turn sign; correct only the magnitude
+            correctedBankRad = sign * ccCorrectedMagRad;
+            return true;
+        }
+
         static void FillRow(string[] row)
         {
             FlightRecorder.PutReturn(row, depPhase, deoPhase, entPhase, lastBankDeg * Math.PI / 180.0,
                                      comEngaged, chutePhase, chutePhase != ChutePhase.Idle,
                                      chutePhase == ChutePhase.Main || chutePhase == ChutePhase.Splashed);
             FlightRecorder.PutDv(row, deorbitDvPlanned, deorbitDvDelivered);   // deorbit burn Δv (was never recorded)
+            FlightRecorder.PutCourseCorrect(row, ccLastDsigmaDeg, ccLastSlope);   // B8/T6 entry divert (records-first)
         }
     }
 }
