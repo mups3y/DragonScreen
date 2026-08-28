@@ -43,15 +43,25 @@ namespace DragonScreen
                                                                    // multi-day coasts yet one 0.02 s window = 200 s,
                                                                    // trivially stoppable before the BurnLeadS drop-out.
 
-        // ---- FOCUS ----
-        [Tunable] public static bool AutoRecoverBooster = false;   // opt-in: hand focus to the booster to land it
-        static bool boosterHandled;                                // one-shot per flight
+        // ---- FOCUS + BOOSTER RECOVERY (our-PRE dual-flight, Chris 2026-08-29) ----
+        // Chris's method: turn "our PRE" (RangeExtender — widen the physics/load ranges so both craft stay
+        // loaded+unpacked) ON before booster separation, hand focus to the separated booster to fly it down
+        // (BoosterControl), then RETURN focus to the upper stage and turn PRE back OFF. While focused on the
+        // booster the upper stage is non-active → it COASTS (kept loaded by PRE), then resumes when refocused —
+        // which is why the max booster↔upper-stage separation stays ~hundreds of km (the S2 is not accelerating
+        // away). PreRangeKm = that max separation + margin ("say 500 km → set 600").
+        [Tunable] public static bool AutoRecoverBooster = false;   // opt-in: recover the booster (our-PRE + focus)
+        [Tunable] public static double PreRangeKm = 600.0;         // PRE range = max booster↔upper-stage sep + margin
+        enum RecPhase : byte { Idle, Armed, FlyingBooster, Returned, Done }
+        static RecPhase recPhase = RecPhase.Idle;
+        static uint dragonId;                                      // the upper stage / Dragon to return focus to
         static double[] railRates;                                 // cached on-rails rate table (double, ascending)
 
         public static void Reset()
         {
             warpTargetUT = 0.0;
-            boosterHandled = false;
+            recPhase = RecPhase.Idle; dragonId = 0;
+            if (RangeExtender.Active) RangeExtender.Disable();     // a fresh scene starts with stock ranges
         }
 
         // -------------------------------------------------------------- warp orchestration
@@ -78,15 +88,13 @@ namespace DragonScreen
         {
             try
             {
-                // ⭐ BOOSTER-RECOVERY FOCUS SWITCH — one-shot, and INDEPENDENT of the burn/warp safety net below.
-                // ⛔ It USED to sit after the BurnCommanded early-return, so it never fired (flight 180029, ARMED,
-                // data-confirmed): from MECO the Dragon is "burning" every frame — the ullage RCS settle is a
-                // TRANSLATION and then S2 throttles up — so BurnCommanded stayed true from MECO through SECO, the
-                // return below hit every frame, and the switch was never reached; the booster unloaded out of
-                // physics range and the toggle did nothing. Focus-switching has nothing to do with warp, so it is
-                // checked FIRST. It only fires once a SEPARATED recoverable booster is loaded (post-MECO); before
-                // sep there is no such vessel and it is a no-op, so checking it every frame is safe.
-                if (AutoRecoverBooster && !boosterHandled) TryFocusBooster(active);
+                // ⭐ BOOSTER RECOVERY (our-PRE dual-flight) — checked FIRST, INDEPENDENT of the burn/warp net
+                // below (focus/ranges have nothing to do with warp). It is a per-frame state machine that turns
+                // PRE on before sep, focuses the separated booster to land it, then returns focus to the upper
+                // stage and turns PRE off. A no-op before sep + when AutoRecoverBooster is off, so it is safe to
+                // call every frame. (It used to sit AFTER the BurnCommanded early-return and never fired, because
+                // the S2 ascent commands a burn every frame from MECO — flight 180029.)
+                TickBoosterRecovery(active);
 
                 if (active != null && BurnCommanded(active))
                 {
@@ -116,27 +124,105 @@ namespace DragonScreen
             catch (Exception e) { Debug.LogWarning("[DragonScreen] conductor tick failed: " + e.Message); }
         }
 
-        // -------------------------------------------------------------- focus orchestration
-        // Hand focus to a separated, airborne, recoverable booster so BoosterControl can fly it down. One-shot.
-        static void TryFocusBooster(Vessel active)
+        // -------------------------------------------------------------- booster recovery state machine
+        // PRE ON before sep → focus the separated booster (fly it down) → return focus to the upper stage →
+        // PRE OFF. See the field-block comment for why this keeps the separation small (the S2 coasts).
+        static void TickBoosterRecovery(Vessel active)
         {
-            if (active == null || !VesselHasPod(active)) return;   // only switch away FROM the crewed Dragon
-            Vessel booster = null;
+            if (!AutoRecoverBooster)
+            {
+                if (RangeExtender.Active) RangeExtender.Disable();   // turned off mid-flight → restore stock ranges
+                recPhase = RecPhase.Idle; dragonId = 0;
+                return;
+            }
+            if (active == null) return;
+
+            switch (recPhase)
+            {
+                case RecPhase.Idle:
+                    // ARM before separation: while the upper stage (the pod-carrying stack) is airborne in ascent,
+                    // widen the ranges so the booster stays loaded+unpacked the instant it separates.
+                    if (VesselHasPod(active) && Airborne(active))
+                    {
+                        dragonId = active.persistentId;
+                        RangeExtender.Enable(PreRangeKm * 1000.0);
+                        recPhase = RecPhase.Armed;
+                    }
+                    break;
+
+                case RecPhase.Armed:
+                    // After sep, a separated recoverable booster appears → re-apply PRE (to catch the NEW vessel)
+                    // and hand focus to it. The upper stage (now non-active) coasts, kept loaded by PRE.
+                    Vessel booster = FindLoadedBooster(active);
+                    if (booster != null)
+                    {
+                        RangeExtender.Enable(PreRangeKm * 1000.0);
+                        FocusOn(booster, "→ separated booster for recovery (upper stage coasts, kept loaded by PRE)");
+                        recPhase = RecPhase.FlyingBooster;
+                    }
+                    break;
+
+                case RecPhase.FlyingBooster:
+                    // Fly the booster (FlightDriver drives BoosterControl on the active booster) until it is DOWN,
+                    // then return focus to the upper stage so its ascent resumes. Also handle a KSP auto-switch
+                    // back to the Dragon (e.g. booster destroyed) — if we are already back on the pod, move on.
+                    if (VesselHasPod(active)) { recPhase = RecPhase.Returned; break; }
+                    if (BoosterControl.IsRecoverableBooster(active) && (active.Landed || active.Splashed))
+                    {
+                        Vessel dragon = FindById(dragonId);
+                        if (dragon != null) FocusOn(dragon, "← upper stage (booster recovered); resuming ascent");
+                        recPhase = RecPhase.Returned;
+                    }
+                    break;
+
+                case RecPhase.Returned:
+                    // Focus is back on the upper stage → PRE OFF (recovery complete for this flight).
+                    if (VesselHasPod(active))
+                    {
+                        RangeExtender.Disable();
+                        recPhase = RecPhase.Done;
+                    }
+                    break;
+
+                case RecPhase.Done:
+                    break;
+            }
+        }
+
+        static bool Airborne(Vessel v)
+        {
+            return v.situation == Vessel.Situations.FLYING || v.situation == Vessel.Situations.SUB_ORBITAL
+                || v.situation == Vessel.Situations.ORBITING || v.situation == Vessel.Situations.ESCAPING;
+        }
+
+        static Vessel FindLoadedBooster(Vessel active)
+        {
             var all = FlightGlobals.Vessels;
             for (int i = 0; i < all.Count; i++)
             {
                 Vessel vv = all[i];
-                if (vv != null && vv.loaded && vv != active && BoosterControl.IsRecoverableBooster(vv)) { booster = vv; break; }
+                if (vv != null && vv.loaded && vv != active && BoosterControl.IsRecoverableBooster(vv)) return vv;
             }
-            if (booster == null) return;
-            boosterHandled = true;
+            return null;
+        }
+
+        static Vessel FindById(uint id)
+        {
+            if (id == 0) return null;
+            var all = FlightGlobals.Vessels;
+            for (int i = 0; i < all.Count; i++)
+                if (all[i] != null && all[i].persistentId == id) return all[i];
+            return null;
+        }
+
+        static void FocusOn(Vessel v, string why)
+        {
             try
             {
-                FlightGlobals.ForceSetActiveVessel(booster);
-                Debug.Log("[DragonScreen] conductor: focus → separated booster for recovery (opt-in). "
-                          + "⚠ the Dragon is now unfocused (stock KSP on-rails); this is a booster-landing segment.");
+                FlightGlobals.ForceSetActiveVessel(v);
+                Debug.Log("[DragonScreen] conductor: focus " + why + ".");
             }
-            catch (Exception e) { Debug.LogWarning("[DragonScreen] booster focus switch failed: " + e.Message); }
+            catch (Exception e) { Debug.LogWarning("[DragonScreen] focus switch failed: " + e.Message); }
         }
 
         static bool VesselHasPod(Vessel v)

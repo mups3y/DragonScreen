@@ -42,6 +42,7 @@
 
 ## 5. Guidance — phases (booster → return)
 - [PHASE_2_BOOSTER_RECOVERY_RESEARCH.md](PHASE_2_BOOSTER_RECOVERY_RESEARCH.md) + [BOOSTER_GUIDANCE_DESIGN.md](BOOSTER_GUIDANCE_DESIGN.md) [REF] — booster entry burn / grid-fin / hoverslam.
+- **[BOOSTER_DUAL_FLIGHT_RESEARCH.md](BOOSTER_DUAL_FLIGHT_RESEARCH.md)** [CURRENT] — ⭐ the dual-flight: OnFlyByWire drives any UNPACKED non-active vessel (feasibility RESOLVED); "our PRE" (`src/RangeExtender.cs`, VesselRanges ported from PhysicsRangeExtender) + the PRE-on-before-sep / focus-booster / refocus / PRE-off design (`MissionConductor.TickBoosterRecovery`); the phantom-force risk + the H1 flight-verify list.
 - [PHASE_3_RENDEZVOUS_RESEARCH.md](PHASE_3_RENDEZVOUS_RESEARCH.md) [REF] — named-burn rendezvous cascade + the AI standoff.
 - [RENDEZVOUS_RESEARCH_2026-08-20.md](RENDEZVOUS_RESEARCH_2026-08-20.md) [HIST] — the flight_0820 tank-dry post-mortem (F9I-era lesson).
 - [PHASE_4_DOCKING_RESEARCH.md](PHASE_4_DOCKING_RESEARCH.md) [REF] — L-approach corridor + capture.

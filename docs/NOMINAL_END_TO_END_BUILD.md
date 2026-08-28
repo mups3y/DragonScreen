@@ -145,8 +145,13 @@ Sources: [KSP VesselRanges API](https://kerbalspaceprogram.com/api/class_vessel_
    NEW TASK **T2b** — feed the other monitors (thrust/traj/stall/control) from per-controller residuals.
 5. **B-RV-NAMED** *(low priority, fidelity)* — model the discrete named burns over the far-FSM for strict fidelity.
 
-**Feasibility-gated:**
-6. **B-BOOST-PROBE → B-BOOST-DUAL** — the §2 OnFlyByWire/VesselRanges probe, then the dual-flight build if it passes.
+**Booster dual-flight:**
+6. ✅ **B-BOOST-DUAL — BUILT (2026-08-29, green).** Feasibility RESOLVED (OnFlyByWire drives any UNPACKED non-active
+   vessel — BDArmory proof; no probe needed). `src/RangeExtender.cs` = "our PRE" (VesselRanges widened, PRE method
+   ported). `MissionConductor.TickBoosterRecovery` = Chris's design: PRE on before sep → focus booster (S2 coasts,
+   kept loaded) → land → return focus to S2 → PRE off; `PreRangeKm=600`. ⚠ flight-gated (H1): PRE keeps both
+   loaded, focus switches fire, the S2 survives the coast + resumes, booster lands despite phantom forces (PRE's
+   >100 km caveat), size `PreRangeKm` from measured separation. Full detail: `docs/BOOSTER_DUAL_FLIGHT_RESEARCH.md`.
 
 **Flight-gated (need a flight to verify the SIGNS/tuning — cannot be correctly wired blind):**
 - B2 aero-stiffness feed (sign-sensitive AoA cap), B3 RCS balancer (changes translation authority), B8
