@@ -24,6 +24,22 @@ namespace DragonScreen
         static FlightDriver instance;
         Vessel boundVessel;
 
+        // ---- FDIR (L5 safety spine) — OBSERVE-ONLY by default (task T2) ----
+        // The tested pure Fdir (pure/Fdir.cs) runs at ~4 Hz on the live feeds and LOGS any tripped fault. It
+        // does NOT command an abort unless FdirActing is turned on (a false abort kills a good flight → acting is
+        // flight-gated). HONEST feed status: LIVE = ResourceCritical, fed from the Dragon's RCS/Draco propellant
+        // margin — the real mission-ending resource (running out of Draco fuel = can't rendezvous/deorbit). Ascent
+        // stages depleting is NOMINAL (handled by staging) and after MECO the spent booster is a SEPARATE vessel,
+        // so watching THIS vessel's return fuel reads ~full through ascent (no false trip) and the true margin
+        // later. The thrust / trajectory / stall / control monitors are NOT-YET-FED (kept nominal so they cannot
+        // false-trip) — each is owed a per-controller residual feed (task T2b). The KOS-breach abort is owned by
+        // DockingControl (it acts), so FDIR does not double it here.
+        [Tunable] public static bool FdirActing = false;      // OFF = observe + log only; ON = FDIR may abort
+        [Tunable] public static double FdirTickS = 0.25;       // ~4 Hz cadence (keeps the hot path light)
+        static FdirState fdirState;
+        static double fdirAccumS, lastFdirLogUT = -999.0;
+        static readonly List<int> rcsPropIds = new List<int>();   // cached Draco/RCS propellant resource ids
+
         public void Start()
         {
             instance = this;
@@ -52,6 +68,7 @@ namespace DragonScreen
             FlightLog.Close();
             aborting = false; abortPending = false; abortFxSuppressed = false; AbortControl.Reset();
             MissionConductor.Reset();
+            fdirState = new FdirState(); fdirAccumS = 0.0; lastFdirLogUT = -999.0; rcsPropIds.Clear();
             StopAbortFx();
         }
 
@@ -67,7 +84,7 @@ namespace DragonScreen
         {
             if (boundVessel == v) return;
             Unbind();
-            if (v != null) { v.OnFlyByWire += OnFlyByWire; boundVessel = v; }
+            if (v != null) { v.OnFlyByWire += OnFlyByWire; boundVessel = v; CacheRcsProps(v); }
         }
         void Unbind()
         {
@@ -235,6 +252,9 @@ namespace DragonScreen
                 // 3a) the mission conductor: never run a live burn under warp (universal guard), and — opt-in —
                 //     hand focus to a separated booster for a recovery segment (MissionConductor.AutoRecoverBooster).
                 MissionConductor.Tick(v);
+
+                // 3c) FDIR safety spine — observe-only (logs faults; acts only if FdirActing is on).
+                TickFdir(v);
 
                 // 3b) the clamp-release gate holds the hold-downs until full thrust is confirmed
                 if (clampHeld) ClampGate(v);
@@ -548,6 +568,93 @@ namespace DragonScreen
 
         public static void RequestAbort() { abortPending = true; }
         public static bool Aborting { get { return aborting; } }
+
+        // ---- FDIR observe-only tick (task T2) ----
+        // Runs the pure Fdir at ~4 Hz on the live feeds and logs a rate-limited line on any tripped fault.
+        // Acting (commanding the abort) is gated on FdirActing (default OFF) so a not-yet-tuned monitor can't
+        // false-abort a good flight. Only the RESOURCE feed is live today (see the field comment); the others are
+        // held nominal (documented) until their per-controller residual feeds land (T2b).
+        static void TickFdir(Vessel v)
+        {
+            try
+            {
+                fdirAccumS += Time.fixedDeltaTime;
+                if (fdirAccumS < FdirTickS) return;
+                double dt = fdirAccumS; fdirAccumS = 0.0;
+
+                FdirInputs fi = new FdirInputs();
+                fi.Valid = true; fi.Dt = dt;
+                fi.Phase = CrewProcedureOps.ActivePhase;
+                fi.GateHolding = CrewProcedureOps.AtGate;
+                fi.Powered = CmdThrottle > 0.01
+                             || (Math.Abs(CmdTransX) + Math.Abs(CmdTransY) + Math.Abs(CmdTransZ)) > 0.001;
+                fi.ThrustDeliveredFrac = 1.0;   // NOT-YET-FED (T2b) — nominal so it can't false-trip
+                fi.TrajErrorM = 0.0;            // NOT-YET-FED
+                fi.PlanProgressRate = 1.0;      // NOT-YET-FED (stall suppressed)
+                fi.ControlSolutionOk = true;    // NOT-YET-FED (no AttitudePilot saturation signal yet)
+                fi.ResourceMargin01 = RcsPropMargin(v);                 // LIVE
+                fi.KosRadiusM = 0.0; fi.KosRangeM = 0.0; fi.CorridorOk = true;   // KOS abort owned by DockingControl
+
+                FdirReport rep = Fdir.Update(ref fdirState, fi);
+                if (rep.Fault != FaultKind.None)
+                {
+                    double now = Planetarium.GetUniversalTime();
+                    if (now - lastFdirLogUT > 5.0)
+                    {
+                        lastFdirLogUT = now;
+                        Debug.Log("[DragonScreen] FDIR " + (FdirActing ? "" : "(observe) ") + rep.Fault
+                                  + " → " + rep.Response + (rep.Abort ? " [ABORT]" : "") + "  phase=" + fi.Phase
+                                  + " resMargin=" + fi.ResourceMargin01.ToString("F2"));
+                    }
+                    if (FdirActing && rep.Abort) RequestAbort();
+                }
+            }
+            catch (Exception e) { Debug.LogWarning("[DragonScreen] FDIR tick failed: " + e.Message); }
+        }
+
+        // Cache the RCS/Draco propellant resource ids from the live ModuleRCS modules (by capability, not name),
+        // so the per-tick margin read is allocation-free. Rebuilt on each vessel Bind (handover).
+        static void CacheRcsProps(Vessel v)
+        {
+            rcsPropIds.Clear();
+            try
+            {
+                for (int i = 0; i < v.parts.Count; i++)
+                {
+                    Part p = v.parts[i];
+                    for (int m = 0; m < p.Modules.Count; m++)
+                    {
+                        ModuleRCS rcs = p.Modules[m] as ModuleRCS;
+                        if (rcs == null || rcs.propellants == null) continue;
+                        for (int k = 0; k < rcs.propellants.Count; k++)
+                        {
+                            int id = rcs.propellants[k].id;
+                            if (!rcsPropIds.Contains(id)) rcsPropIds.Add(id);
+                        }
+                    }
+                }
+            }
+            catch (Exception e) { Debug.LogWarning("[DragonScreen] RCS-prop cache failed: " + e.Message); }
+        }
+
+        // The worst (min) fraction among the Draco/RCS propellants on this vessel [0,1]; 1 if none/unknown.
+        // This is the return fuel — full through ascent (no false trip), the true margin for rendezvous/deorbit.
+        static double RcsPropMargin(Vessel v)
+        {
+            if (rcsPropIds.Count == 0) return 1.0;
+            double worst = 1.0;
+            try
+            {
+                for (int i = 0; i < rcsPropIds.Count; i++)
+                {
+                    double amt, max;
+                    v.GetConnectedResourceTotals(rcsPropIds[i], out amt, out max, true);
+                    if (max > 1.0) { double frac = amt / max; if (frac < worst) worst = frac; }
+                }
+            }
+            catch { return 1.0; }
+            return worst;
+        }
 
         // ⭐ DEORBIT RESCUE (the "DEORBIT NOW" / "WATER DEORBIT" panel buttons). A CONTROLLED deorbit-and-land,
         // not a fault abort: it reuses the abort machinery's DeorbitReturn engine (trunk jettison → g-limited

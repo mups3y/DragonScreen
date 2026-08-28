@@ -138,9 +138,11 @@ Sources: [KSP VesselRanges API](https://kerbalspaceprogram.com/api/class_vessel_
    defaults `allowNegative=false` → **clamps ocean depth to 0**, so `<0` was never true → the RSS scan read 0/130.
    FIX: the 3-arg overload `TerrainAltitude(lat,lon,true)` returns the real (negative) seabed height. ⚠ flight-
    pending: fly WATER DEORBIT + read the site-scan log (expect many-of-130 water). `AbortControl.cs`.
-4. **B-FDIR-FEEDS** *(careful build, no flight)* — the L5 FDIR spine is built + tested but UNWIRED; wiring it
-   needs HONEST per-phase feeds (a "worst-tank" resource margin false-trips on spent stages; thrust/traj/control
-   feeds have no generic source yet). Build the feeds correctly, run observe-only, gate acting behind a flag.
+4. ✅ **B-FDIR-FEEDS — DONE (2026-08-29, green).** FDIR spine wired observe-only (`FlightDriver.TickFdir`, ~4 Hz),
+   acting behind `FdirActing=false`. Honest live feed = ResourceCritical from the Draco/RCS propellant margin
+   (the return fuel: reads ~full through ascent since spent stages are separate vessels → no false trip, and is
+   the true margin for rendezvous/deorbit). ⚠ flight-pending: confirm no false trips, then enable `FdirActing`.
+   NEW TASK **T2b** — feed the other monitors (thrust/traj/stall/control) from per-controller residuals.
 5. **B-RV-NAMED** *(low priority, fidelity)* — model the discrete named burns over the far-FSM for strict fidelity.
 
 **Feasibility-gated:**
