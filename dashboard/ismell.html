@@ -1368,7 +1368,7 @@ section.tab.on{display:block;animation:fade .25s ease}
   }
 
   // ONE big marble wall (Claude-owned, read-only). Each kerbal carved ONCE, with a ×tally for repeat fates.
-  function renderWall(secId, klass, title, meta, roster, inscr, inscr2, emptyMsg, tallyWord){
+  function renderWall(secId, klass, title, meta, inscr, inscr2, roster, emptyMsg, tallyWord){
     var sec = document.getElementById(secId); if(!sec) return; sec.innerHTML='';
     var p = el('div','panel');
     var ph = el('div','ph'); ph.appendChild(el('h2',title)); ph.appendChild(el('span','meta',meta)); p.appendChild(ph);
