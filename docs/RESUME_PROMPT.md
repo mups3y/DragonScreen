@@ -46,10 +46,13 @@ https://claude.ai/code/artifact/9873fc17-efd8-4902-a029-67df25d3d783 (source `da
   **YOU** (Chris approves) + **FLT** (proven in-game). Pure/math tops out at CL+YOU. Chris edits it in-browser; each
   edit self-republishes and PINGS this session → I re-read + investigate + confirm/dispute. ⛔ Concurrent edits cause
   publish conflicts — merge onto the live version (Artifact action:read), and force-publish ONLY on Chris's explicit OK.
-- **KLM SCORECARD (Claude-owned, audited by `dashboard/audit_kerbals.py` — re-run after new flights):** across 32
-  flights so far — **🏠 0 home · 💀 52 lost (13 fatal flights) · 🛰 52 stranded (13) · ⛑ 12 abort-safe**. The counter
-  is in the header (my scorecard); the Memorial/Heroes walls are marble with the crew (Kimbrough/McArthur/Hoshide/
-  Pesquet) carved + dated. 0 home climbing + the memorial stopping is the real measure of the autopilot getting good.
+- **KLM SCORECARD (Claude-owned, audited by `dashboard/audit_kerbals.py`) — CLEARED, counting from NOW** (user
+  2026-08-28: "clear both, count from now on"). Baseline `dashboard/klm_since.txt` = `20260828_103303`; the audit
+  takes a SINCE cutoff and counts only STRICTLY-newer flights → **currently 0/0/0/0/0** (the messy dev flights are
+  excluded). Re-run `audit_kerbals.py` after new flights → it updates only from the reset forward. Walls = ONE big
+  carved marble slab each (memorial / heroes), names DEDUPED (each kerbal once) with a **×tally** (times lost /
+  missions completed); crew = Kimbrough/McArthur/Hoshide/Pesquet. 0 home climbing + an empty memorial = the autopilot
+  getting good; the counter sits in the header as my scorecard.
 - The user is **Chris** (nickname Muppet); "Seth" (the account email) is his SON — never call him Seth. [[user-chris]]
 
 **⭐ OWED FLIGHT-GATED GLUE (do as the phase flies):** B8 targeting glue (CourseCorrect→BoosterTargeting/EntrySteering),
