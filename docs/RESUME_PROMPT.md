@@ -5,48 +5,59 @@ at the one thing that matters next.
 
 ---
 
-## ⭐⭐ RESUME HERE (2026-08-28, post-compaction #3) — GET THE MISSION FLYING END-TO-END, THEN TUNE THE LOOP
+## ⭐⭐ RESUME HERE (2026-08-28, post-compaction #4) — ASCENT SOLVED; PHASING REDESIGNED (UNFLOWN); COLLECT EVERY PHASE'S DATA
 
-**⭐⭐ FIRST TASK THIS SESSION (user, explicit): GET THE ENTIRE MISSION RUNNING END-TO-END — pad→splashdown INCLUDING
-BOOSTER RECOVERY. This is THE milestone that unlocks testing.** The bar is NOT "perfect" yet — it is that a single
-AUTO run COMPLETES every phase and hands to the next, FAST (warp-to-maneuvers, no long real-time coasts), producing
-one full end-to-end recording. Signs/params stay at best-guess; they get tuned in THE LOOP (below).
+**⭐⭐ THE PROJECT RHYTHM (user, said with force — do NOT lose this): WIRE THE FULL MISSION SO EVERY PHASE RUNS AND
+COLLECTS DATA — failed phases INCLUDED ("any data is good data because then we know exactly NOT to do").** Stop
+treating phases as blockers or offering option-menus; just make it RUN end-to-end. A stalled phase blocks all
+downstream data; a booster toggle left off collects zero booster data. Then the TUNE LOOP → rinse & repeat per
+phase in mission order (ascent→booster→rv→dock→return) until perfect. ⭐ WARP-TO-MANEUVERS throughout.
 
-**THE WORKFLOW — the whole project rhythm (corrected understanding, user 2026-08-28):**
-1. **GET IT FLYING END-TO-END** (this task) — wire/fix so the mission runs to completion incl. booster recovery +
-   warp-to-maneuvers. The purpose of all the I-A build was to reach this; now MAKE IT RUN.
-2. **THE TUNE LOOP → then RINSE AND REPEAT until perfect:** user flies MULTIPLE end-to-end tests → I run the FULL
-   structured analysis on EACH recording + FEED the tuning DB → we DB-tune **ONE PHASE AT A TIME in mission order**
-   (ascent → booster → rendezvous → dock → return) with the DB tuner (LaunchTuner-style, driven by the recorded
-   per-phase loss) → user flies more → analyze → feed DB → tune → … **repeat until the ENTIRE flight is perfectly
-   tuned end-to-end = the perfect autopilot.** One phase per tuning pass, in order (batch reasoned fixes within a
-   phase). ⭐ WARP-TO-MANEUVERS THROUGHOUT so we pump out as many flights as possible for data.
+**⭐ STATE after the first coast-warp flight (Crew-2_103303, full structured pass — `dashboard/audit_kerbals.py` +
+`scratchpad/deepread.py`):**
+- ✅✅ **ASCENT SOLVED + FLIGHT-PROVEN (tick-3).** Reaches orbit 200×158 km, **inc 51.65° vs 51.64° target** — the A1
+  plane-normal fix WORKED (was −5.1° short; UPFG steered inc 53.5→51.66 through S2). Clean max-Q 32 kPa @ pointing ~0°,
+  no loft, guidance-terminated SECO. ✅ launch-window warp warped 23 h on STOCK APIs. ✅ KER cross-check passes (934 vs
+  938 kN). ⚠ minor tune items remain: g 4.77 (>4.5), ecc 200×158, RAAN readout 0/0.
+- ⛔→✅ **PHASING far-field was STRUCTURALLY BROKEN, now REDESIGNED (commit 6c66fe4, installed, UNFLOWN).** The old
+  "continuous co-elliptic raise" burned prograde nonstop near pe → pumped ap 200→**772 km** (target ~409), never
+  coasted (warp never armed), never closed the half-orbit gap → stalled, blocking ALL downstream data. **FIX: the
+  standard PHASE-TIMED HOHMANN TRANSFER** (`pure/Phasing.FarGuide` FSM using the already-tested `Hohmann.PhaseLeadRad`/
+  `WaitTimeS`): PHASE (coast+warp until the phase angle = the Hohmann lead) → TRANSFER (burn to raise ap to the station
+  altitude, then STOP — bounded, the over-raise fix) → COAST (warp to apoapsis → CW range → handoff). No self-deorbit
+  held (pe ≥179.9). ⚠ **THIS IS THE #1 THING TO VERIFY NEXT FLIGHT** — does it now progress through to docking?
+- ✅ **BOOSTER TOGGLE wired (commit 680b4c0).** Settings → DISPLAY tab → **BOOSTER RECOVERY OFF/ARMED**
+  (`MissionConductor.AutoRecoverBooster`). OFF = full Dragon mission; ARMED = focus the booster after MECO + land it
+  (Dragon orbit sacrificed that run — stock one-vessel limit). Flip it ON to collect BOOSTER-phase data.
+- ✅ **Coast-warp built (rendezvous phasing + post-deorbit)** but **UNTESTED** — 103303 never reached the phasing coast
+  (the old raise never finished). The redesigned transfer creates the coasts the warp needs.
+- **DLL installed** (733,945 headless checks). Fixes intact: octaweb n<2 guard, RealChute arm-once (both UNFLOWN).
 
-**"Get it flying end-to-end" — first-session checklist (STATUS after the 2026-08-28 coast-warp pass, commit 21f3898):**
-- **✅ b. Proactive coast auto-warp (= warp-to-maneuvers) — DONE for the two long waits.** `pure/CoastEta.cs` (bounded,
-  self-correcting range/alt→ETA) drives `MissionConductor.WarpToEvent` from: the rendezvous co-elliptic PHASING coast
-  (hours) toward the CW-handoff ETA (`RendezvousControl`, realtime inside a 120 km terminal buffer) and the post-deorbit
-  BALLISTIC coast to the ~120 km interface (`ReturnControl`, realtime bank loop + realtime departure). Launch window was
-  already done. ⭐ The universal burn-guard now forces realtime on ANY commanded burn — throttle **OR RCS translation**
-  (rv/deorbit burns are Draco translation) — so warp can never run a live burn. Departure drift-legs stay realtime
-  (short) — minor future refinement.
-- **✅ c. Every phase transition COMPLETES + hands to the next — VERIFIED (no change).** `PhaseComplete` fires at
-  ascent-sep / rv-AI-standoff / each dock leg + capture / departed / hand-to-chutes / splashed. No stall.
-- **✅ d. Plausible best-guess signs/params — in place** (all 122 tunables carry a best-guess default). Flights flip
-  the first-cut signs (ForwardSign, dock RCS signs, entry bank/roll, deorbit Pe).
-- **✅ e. Launch-blocker fixes VERIFIED at code level** — octaweb n<2 `HoldEnginesFull` guard + RealChute arm-once are
-  intact. Confirm they hold in a real run. ⚠ After a PAD SAFE-ABORT, REVERT to launch (RealFuels spends the octaweb's
-  one ignition; a re-engage shows 0% — not a bug).
-- **☑ a. Booster recovery focus — SETTLED by the existing opt-in design (no code change).** ⛔ Stock KSP flies ONE
-  active vessel; the Dragon S2-to-orbit burn overlaps the booster recovery and an on-rails vessel neither burns nor
-  steers its entry — so you CANNOT do both live. PRIMARY end-to-end = the full Dragon mission (`AutoRecoverBooster`
-  OFF); booster recovery = a SEPARATE opt-in focused test (`AutoRecoverBooster` ON → focus→BoosterControl lands it,
-  Dragon orbit sacrificed that run). No return-focus (Dragon is doomed once the booster is focused).
-- ⭐ **NEXT = FLY IT.** The full Dragon mission should now run pad→splashdown with the coasts warped. Fly it → analyse
-  the recording (full structured pass) → feed the DB → the tune loop (I-B.1). ⛔ Getting it to RUN must NOT force the
-  timeline — every MET emerges from physics; a matching timeline is the tell guidance is right (ULTIMATE_PLAN I-B.0).
+**⭐ NEXT = FLY IT, both modes, to collect every phase's data:**
+1. **Toggle OFF → full Dragon mission.** The redesigned phasing should now PROGRESS → hand to docking → deorbit → entry
+   → chutes, producing the FIRST downstream-phase data. Give me the CSV + KSP.log → full structured pass → tune loop.
+2. **Toggle ARMED → a booster-recovery run** → booster-phase data.
+⛔ Getting it to RUN must NOT force the timeline — every MET emerges from physics (ULTIMATE_PLAN I-B.0).
+⚠ After a PAD SAFE-ABORT, REVERT to launch (RealFuels spends the octaweb's one ignition; a re-engage shows 0% — not a bug).
 
-Top plan `docs/ULTIMATE_PLAN.md` (Part I → Movement I-B = this loop); running log [[dragonscreen-autopilot-rebuild-plan]].
+**⭐ THE SHARED DASHBOARD (source of truth) — "I Smell What You're Stepping In"**
+https://claude.ai/code/artifact/9873fc17-efd8-4902-a029-67df25d3d783 (source `dashboard/ismell.html`).
+- **3-TICK verification ([[three-tick-system]]):** nothing is FACT until **CL** (Claude built, headless-green) +
+  **YOU** (Chris approves) + **FLT** (proven in-game). Pure/math tops out at CL+YOU. Chris edits it in-browser; each
+  edit self-republishes and PINGS this session → I re-read + investigate + confirm/dispute. ⛔ Concurrent edits cause
+  publish conflicts — merge onto the live version (Artifact action:read), and force-publish ONLY on Chris's explicit OK.
+- **KLM SCORECARD (Claude-owned, audited by `dashboard/audit_kerbals.py` — re-run after new flights):** across 32
+  flights so far — **🏠 0 home · 💀 52 lost (13 fatal flights) · 🛰 52 stranded (13) · ⛑ 12 abort-safe**. The counter
+  is in the header (my scorecard); the Memorial/Heroes walls are marble with the crew (Kimbrough/McArthur/Hoshide/
+  Pesquet) carved + dated. 0 home climbing + the memorial stopping is the real measure of the autopilot getting good.
+- The user is **Chris** (nickname Muppet); "Seth" (the account email) is his SON — never call him Seth. [[user-chris]]
+
+**⭐ OWED FLIGHT-GATED GLUE (do as the phase flies):** B8 targeting glue (CourseCorrect→BoosterTargeting/EntrySteering),
+B9 AscentLoss→recorder + LaunchTuner→learned.cfg, B11 FDIR live-wiring, B2 estimator feed, B3 RcsBalance glue, KER
+consumers (trust once cross-check agrees — it now does), the near-field CW transform-read (placeholder if ISS unloaded
+past physics range — the likely near-field stall; watch the CSV), departure drift-leg warp.
+
+Top plan `docs/ULTIMATE_PLAN.md` (Part I → Movement I-B = the tune loop); running log [[dragonscreen-autopilot-rebuild-plan]].
 Live plan artifact: https://claude.ai/code/artifact/943d3d08-1124-432b-b474-1c33b5c29774
 
 **⭐ APPROVED PIVOT (2026-08-28, user OK'd; user delegates the engineering calls but requires explicit permission
