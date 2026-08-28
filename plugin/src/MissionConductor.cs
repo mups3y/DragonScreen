@@ -55,12 +55,13 @@ namespace DragonScreen
         enum RecPhase : byte { Idle, Armed, FlyingBooster, Returned, Done }
         static RecPhase recPhase = RecPhase.Idle;
         static uint dragonId;                                      // the upper stage / Dragon to return focus to
+        static double maxSepM, lastSepLogUT = -999.0;              // T8b: booster↔upper-stage separation instrument
         static double[] railRates;                                 // cached on-rails rate table (double, ascending)
 
         public static void Reset()
         {
             warpTargetUT = 0.0;
-            recPhase = RecPhase.Idle; dragonId = 0;
+            recPhase = RecPhase.Idle; dragonId = 0; maxSepM = 0.0; lastSepLogUT = -999.0;
             if (RangeExtender.Active) RangeExtender.Disable();     // a fresh scene starts with stock ranges
         }
 
@@ -163,6 +164,9 @@ namespace DragonScreen
                     break;
 
                 case RecPhase.FlyingBooster:
+                    // Instrument the booster↔upper-stage SEPARATION (T8b) — the number that sizes PreRangeKm.
+                    // The CSV only follows the active vessel, so log the live + max separation here (~every 5 s).
+                    LogSeparation(active);
                     // Fly the booster (FlightDriver drives BoosterControl on the active booster) until it is DOWN,
                     // then return focus to the upper stage so its ascent resumes. Also handle a KSP auto-switch
                     // back to the Dragon (e.g. booster destroyed) — if we are already back on the pod, move on.
@@ -170,6 +174,9 @@ namespace DragonScreen
                     if (BoosterControl.IsRecoverableBooster(active) && (active.Landed || active.Splashed))
                     {
                         Vessel dragon = FindById(dragonId);
+                        Debug.Log("[DragonScreen] booster recovered — MAX booster↔upper-stage separation this flight = "
+                                  + (maxSepM / 1000.0).ToString("F0") + " km (PreRangeKm=" + PreRangeKm.ToString("F0")
+                                  + " km; set PreRangeKm ≥ this + margin).");
                         if (dragon != null) FocusOn(dragon, "← upper stage (booster recovered); resuming ascent");
                         recPhase = RecPhase.Returned;
                     }
@@ -213,6 +220,29 @@ namespace DragonScreen
             for (int i = 0; i < all.Count; i++)
                 if (all[i] != null && all[i].persistentId == id) return all[i];
             return null;
+        }
+
+        // T8b: log the live + max booster↔upper-stage separation (and whether both stay loaded+unpacked) — the
+        // number that sizes PreRangeKm, which the single-vessel CSV cannot record. ~every 5 s while recovering.
+        static void LogSeparation(Vessel booster)
+        {
+            try
+            {
+                Vessel dragon = FindById(dragonId);
+                if (dragon == null || booster == null) return;
+                double sep = (booster.CoM - dragon.CoM).magnitude;
+                if (sep > maxSepM) maxSepM = sep;
+                double now = Now();
+                if (now - lastSepLogUT > 5.0)
+                {
+                    lastSepLogUT = now;
+                    Debug.Log("[DragonScreen] booster recovery: sep " + (sep / 1000.0).ToString("F0") + " km (max "
+                              + (maxSepM / 1000.0).ToString("F0") + " km) — booster loaded=" + booster.loaded
+                              + " unpacked=" + (!booster.packed) + ", upper-stage loaded=" + dragon.loaded
+                              + " unpacked=" + (!dragon.packed) + " [PRE keeping both alive = the H1 check].");
+                }
+            }
+            catch (Exception e) { Debug.LogWarning("[DragonScreen] separation log failed: " + e.Message); }
         }
 
         static void FocusOn(Vessel v, string why)
