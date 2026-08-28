@@ -181,9 +181,15 @@ Sources: [KSP VesselRanges API](https://kerbalspaceprogram.com/api/class_vessel_
   excites it, so P GROWS, not shrinks → an excited-sample COUNT is the honest trust signal. ⚠ flight-gated (sign):
   read `aero_ang_accel` vs `aoa_signed_deg` off a flown CSV → set `AeroFeedSign` → flip the flag on. Also fixed:
   `AscentControl.Reset` now clears the SelfCal estimators (stale RLS state must not carry to a new vehicle).
-- **Still owed:** B3 RCS balancer (changes translation authority), B8 CourseCorrect targeting (booster/entry
-  steering signs), deorbit/entry/departure RCS + bank signs, g-cap (F5). Wire behind default-OFF flags to RUN +
-  collect data; their SIGNS are only resolvable from a flown CSV — wiring them "on" blind risks the nominal mission.
+- ✅ **T5 B3 RCS balancer — ASSESSED + DIAGNOSTIC WIRED (2026-08-29, green, commit 9c89ac2).** ⚠ FINDING: the
+  per-thruster solve is NOT stock-actuatable — the Dracos are 2 all-axis multi-thruster `ModuleRCS` with only a
+  per-MODULE `thrustPercentage` (no per-thruster lever), and KSP's RCS solver + the concurrent `AttitudePilot` hold
+  already close the loop on induced torque. Wired instead as a records-only diagnostic (`Actuator.RcsInducedTorque`
+  runs the tested pure `RcsBalance`/`ThrustBalance` LIVE during prox-ops translation → cols `rcsbal_torque_naive`/
+  `_resid`/`_force_frac`). True apply = direct force injection, deferred with this data. `docs/RCS_BALANCE_FINDING.md`.
+- **Still owed:** B8 CourseCorrect targeting (booster/entry steering signs), deorbit/entry/departure RCS + bank
+  signs, g-cap (F5). Wire behind default-OFF flags to RUN + collect data; their SIGNS are only resolvable from a
+  flown CSV — wiring them "on" blind risks the nominal mission.
 
 **Flight-gated (Chris flies; I analyse + tune — the F1/F2 fixes are installed, unflown):**
 - Verify deorbit brings a vessel home (F1); AUTO SEQUENCE resumes the right phase (F2); rendezvous converges to

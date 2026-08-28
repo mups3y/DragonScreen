@@ -283,7 +283,7 @@
       <div class="stage anim" data-s="prog">
         <div class="stage-badge">B3</div>
         <div class="stage-body"><div class="stage-top"><h3>Thrust / RCS balancer</h3><span class="chip done">Built</span></div>
-          <p>TCA torque-nulling solver + <code>DiffThrottle</code> (engine-out octaweb) + <code>RcsBalance</code> (translation), 22 checks. Engine-out glue wired into the S1 ascent (+FDIR flag); RcsBalance wires with the rendezvous phase.</p></div>
+          <p>TCA torque-nulling solver + <code>DiffThrottle</code> (engine-out octaweb) + <code>RcsBalance</code> (translation), 22 checks. Engine-out glue wired into the S1 ascent (+FDIR flag). <b>T5 finding:</b> the per-thruster RcsBalance solve is <b>not stock-actuatable</b> (the Dracos are 2 all-axis multi-thruster ModuleRCS with only a per-module limiter; KSP's solver + AttitudePilot already close the induced-torque loop), so it is wired as a <b>records-only diagnostic</b> (induced vs balanced torque + surviving force) — the data to decide the deferred direct-force-injection path. <code>docs/RCS_BALANCE_FINDING.md</code>.</p></div>
       </div>
       <div class="stage anim" data-s="prog">
         <div class="stage-badge">B4</div>
