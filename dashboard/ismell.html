@@ -289,10 +289,10 @@ section.tab.on{display:block;animation:fade .25s ease}
 
 <script id="app-state" type="application/json">
 {
-  "version": "v5",
+  "version": "v6",
   "updated": "2026-08-28",
   "updatedBy": "claude",
-  "changelog": "Booster-recovery toggle was BROKEN — Chris armed it, MECO fired, but focus never switched to the booster (the focus-switch sat behind the burn-safety gate, blocked every frame from MECO by the ullage-RCS + S2 'burn' until the booster unloaded). FIXED (unflown). Booster still has ZERO real data. (Also: I'd wrongly assumed the toggle was off — verify against the log, don't assume.)",
+  "changelog": "Exhaustive audit pass (docs/ISSUE_REGISTER.md is the new enforcement ledger). H2 FIXED: rendezvous stranded because the low-thrust circularize drifted 246→6000 km AND the 50 km CW hand-off never caught the transfer's ~80 km closest approach → removed the slow circularize, raised the hand-off to 100 km so CW does the terminal rendezvous. H3 RESOLVED: SECO is actually 200×197 (near-circular) — the 'eccentric 200×160' was an assess-tool bug reading a mid-burn row (fixed). C2 (crew-survival) FIXED: abort capsule had ZERO attitude authority (stock RCS GetPotentialTorque=0 on the separated capsule) → MechJeb-style geometric RCS-torque fallback. Doc-rot fixed (Steering/ReturnControl headers).",
   "tabs": [
     {
       "id": "status",
@@ -370,7 +370,7 @@ section.tab.on{display:block;animation:fade .25s ease}
       "f": false,
       "fkind": "flight",
       "pending": true,
-      "note": "REDESIGNED + FLOWN (Crew-2_131412, 2026-08-28) — PARTIAL. ✅ No self-deorbit (pe held 171–181 km, floor 150). ✅ Transfer raised ap 200→419 km (station ~420 → correct) and closed range to 86 km ONCE. ❌ But it never CIRCULARIZED at apoapsis → stayed on a 420×172 ellipse, flew PAST the station and oscillated 1,000–13,000 km for ~5 days, so the 50 km CW hand-off never latched. Docking never reached.",
+      "note": "REDESIGNED far-field (fixed⚑, unflown). Data (165302): the low-thrust circularize took ~27 near-apoapsis orbits and drifted the chaser 246→6000 km; and the transfer only reaches ~80 km at apoapsis while the CW hand-off was 50 km → never caught → fly-past. FIX: removed the slow circularize; far-field now just DELIVERS to CW's regime (hand-off 50→100 km) and CW does the co-elliptic/AI/terminal rendezvous (research §3). Verify CW converges from ~100 km.",
       "claudeNote": "Root cause (data-confirmed): FarGuide does the ap-raise transfer but leaves pe low, so the chaser only touches the station's altitude for an instant at apoapsis and sails away — no stable regime for CW. FIX being built now: a co-elliptic CIRCULARIZE state (raise pe at apoapsis to a parking orbit ~10 km below the target) so the range stays in CW's regime and hands off. This is the next-phase tune."
     },
     {
@@ -568,18 +568,18 @@ section.tab.on{display:block;animation:fade .25s ease}
         {
           "metric": "Peak g ≤ 4.5 (crew)",
           "target": "≤ 4.5 g",
-          "current": "4.77 g → fix built",
+          "current": "4.65 g (4.3 setpoint)",
           "cls": "bad",
           "status": "pending",
-          "note": "Peak 4.77 g at SECO — the g-limiter lags ~0.27 g at the light-mass final second. FIX (unflown): S2GLimitG setpoint 4.5→4.3 as a lag margin. FDIR g-abort 6.0 = safe. Flight-verify the peak lands ≤4.5."
+          "note": "Flights hit 4.65 g with S2GLimitG=4.3 (lag ~0.35). Now 4.1 (unflown) → target ≤4.5. Flight-verify."
         },
         {
           "metric": "SECO circular (ecc→0)",
           "target": "~200×200 km",
-          "current": "200×158 km → fix built",
-          "cls": "bad",
-          "status": "pending",
-          "note": "ROOT (data): the g-limit tapers throttle in the last seconds, so tgo hit 0 with ~12.7 m/s of vgo UNDELIVERED → engine cut 42 km of pe short. FIX (unflown): cut SECO on vgo<2 (guidance's true 'orbit achieved') not tgo → full Δv lands → circular."
+          "current": "200×197 ✓ near-circular",
+          "cls": "good",
+          "status": "data",
+          "note": "RESOLVED + flight-confirmed (3 flights): the settled insertion is 200×197 (was 200×181 pre-fix). The 'eccentric 200×160' was an assess_flight.py bug reading the last S2Burn row ~0.3s before cutoff (pe still rising 159→196) — tool fixed. vgo/inOrbit(pe≥195) cutoff works."
         },
         {
           "metric": "Pointing hold (control quality)",
