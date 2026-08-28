@@ -29,6 +29,12 @@ namespace DragonScreen
             // "DEPRESS RESPONSE" is the abort-alarm SUPPRESS RESPONSE: silences the klaxon + red cabin
             // lights and drops the alert to the centre screen only. It does NOT cancel the abort.
             if (c == PanelCommand.DepressResponse) { FlightDriver.SuppressAbortFx(); return true; }
+            // ⭐ DEORBIT RESCUE buttons (arm → EXECUTE) — a controlled deorbit-and-land on the ACTIVE vessel
+            // (focus a stranded vessel, then press). DEORBIT NOW = immediate, land anywhere safe, gear after a
+            // LAND touchdown; WATER DEORBIT = nearest open water, splashdown, no gear. Reuses the DeorbitReturn
+            // engine (trunk jettison → g-limited burn → shield-forward entry → chutes). See FlightDriver.RequestDeorbit.
+            if (c == PanelCommand.DeorbitNow)   { FlightDriver.RequestDeorbit(true);  return true; }
+            if (c == PanelCommand.WaterDeorbit) { FlightDriver.RequestDeorbit(false); return true; }
             return false;
         }
     }
@@ -60,7 +66,12 @@ namespace DragonScreen
         public static string Note { get { return null; } }
     }
 
-    public static class DeorbitOps { public static bool Engaged { get { return false; } } }
+    // The "DEORBIT" mode lamp lights while a deorbit is actually running — the DEORBIT NOW / WATER DEORBIT
+    // rescue (or a fault deorbit-return abort). Real state from the abort executor, so the crew sees it engage.
+    public static class DeorbitOps
+    {
+        public static bool Engaged { get { return FlightDriver.Aborting && AbortControl.Mode == AbortMode.DeorbitReturn; } }
+    }
 
     public static class UndockOps
     {

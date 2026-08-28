@@ -169,6 +169,7 @@ namespace DragonScreen
                     FlightLog.Fill = null;
                     FlightLog.Close();
                     aborting = false; abortPending = false; abortFxSuppressed = false; AbortControl.Reset();
+                    deorbitRescuePending = false;
             MissionConductor.Reset();
                     return;
                 }
@@ -548,18 +549,43 @@ namespace DragonScreen
         public static void RequestAbort() { abortPending = true; }
         public static bool Aborting { get { return aborting; } }
 
+        // ⭐ DEORBIT RESCUE (the "DEORBIT NOW" / "WATER DEORBIT" panel buttons). A CONTROLLED deorbit-and-land,
+        // not a fault abort: it reuses the abort machinery's DeorbitReturn engine (trunk jettison → g-limited
+        // retrograde burn → shield-forward entry → chutes → touchdown) but FORCES that mode and suppresses the
+        // klaxon/DON'T PANIC FX. landAnywhere = DEORBIT NOW (immediate, any safe site, gear after a land
+        // touchdown); false = WATER DEORBIT (nearest open water, splashdown). Runs on the ACTIVE vessel, engaged
+        // or not — so a stranded vessel just needs to be focused. As fast as possible while staying survivable.
+        static bool deorbitRescuePending, deorbitRescueLandAnywhere;
+        public static void RequestDeorbit(bool landAnywhere)
+        {
+            deorbitRescuePending = true; deorbitRescueLandAnywhere = landAnywhere; abortPending = true;
+        }
+
         static void UpdateAbort(Vessel v)
         {
             if (!aborting)
             {
-                aborting = true; abortFxSuppressed = false;   // a fresh abort re-arms the alarm
-                Debug.Log("[DragonScreen] ⛔ ABORT — regime-aware response engaging.");
+                aborting = true;
                 ReleaseThrottle(); ReleaseTranslation(); ReleaseRoll(); AttitudePilot.Reset();
-                AbortControl.Reset();
+                if (deorbitRescuePending)
+                {
+                    // controlled rescue: force DeorbitReturn with the land/water flag, no alarm FX.
+                    abortFxSuppressed = true;
+                    AbortControl.ForceDeorbit(deorbitRescueLandAnywhere);
+                    deorbitRescuePending = false;
+                    Debug.Log("[DragonScreen] ⭐ DEORBIT RESCUE engaging — "
+                              + (deorbitRescueLandAnywhere ? "DEORBIT NOW (land anywhere safe)" : "WATER DEORBIT"));
+                }
+                else
+                {
+                    abortFxSuppressed = false;   // a fresh fault abort re-arms the alarm
+                    Debug.Log("[DragonScreen] ⛔ ABORT — regime-aware response engaging.");
+                    AbortControl.Reset();
+                }
             }
 
-            AbortControl.Tick(v);   // decide the mode + fly the real procedure to a safe splashdown
-            UpdateAbortFx(v);       // alarm klaxon + red IVA-light strobe (silenced by suppress / at splashdown)
+            AbortControl.Tick(v);   // fly the (forced or decided) procedure to a safe touchdown
+            UpdateAbortFx(v);       // alarm klaxon + red IVA-light strobe (suppressed for a rescue / at splashdown)
         }
 
         // A looping two-tone klaxon, generated in code (no bundled sound file). Created once on this addon's

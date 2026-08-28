@@ -60,6 +60,14 @@ namespace DragonScreen
         static double abortDrogueTime, settleStartUT = -1;
         static bool haveSite; static double siteLatDeg, siteLonDeg;
         static bool siteLogged;   // one-shot diagnostic for the deorbit water scan
+        // ⭐ DEORBIT RESCUE (the "DEORBIT NOW" / "WATER DEORBIT" panel buttons — ForceDeorbit): reuse the
+        // DeorbitReturn engine but under crew command. deorbitLandOK = true → "DEORBIT NOW" (land ANYWHERE
+        // safe, commit immediately = fastest; deploy the gear AFTER a LAND touchdown); false → "WATER
+        // DEORBIT" (wait for the nearest reachable OPEN WATER, splashdown, no gear). Rescue = not an emergency
+        // abort, so the klaxon/DON'T PANIC FX are suppressed by the caller.
+        static bool isRescue;        // this DeorbitReturn was crew-commanded (a rescue), not a fault abort
+        static bool deorbitLandOK;   // rescue mode: land on land OK (DEORBIT NOW) vs water-only (WATER DEORBIT)
+        static bool gearDeployed;    // one-shot: legs extended after a land touchdown
 
         public static AbortMode Mode { get { return mode; } }
         public static string Note { get { return note; } }
@@ -73,6 +81,21 @@ namespace DragonScreen
             aDroguesArmed = aMainsArmed = false;
             abortDrogueTime = 0; settleStartUT = -1;
             haveSite = false; siteLatDeg = siteLonDeg = 0; siteLogged = false;
+            isRescue = false; deorbitLandOK = false; gearDeployed = false;
+        }
+
+        // ⭐ Crew-commanded controlled deorbit (the panel rescue buttons). Latches DeorbitReturn directly —
+        // bypassing the fault-mode Decide() — with the land-vs-water flag. landAnywhere = "DEORBIT NOW" (fastest,
+        // any safe site, gear after a land touchdown); false = "WATER DEORBIT" (nearest open water, splashdown).
+        public static void ForceDeorbit(bool landAnywhere)
+        {
+            Reset();
+            mode = AbortMode.DeorbitReturn;
+            note = landAnywhere ? "DEORBIT NOW" : "WATER DEORBIT";
+            latched = true; onsetUT = Now();
+            isRescue = true; deorbitLandOK = landAnywhere;
+            Debug.Log("[DragonScreen] ⭐ DEORBIT RESCUE armed — " + note
+                      + (landAnywhere ? " (land anywhere safe, gear after land touchdown)" : " (nearest open water, splashdown)"));
         }
 
         public static void Tick(Vessel v)
@@ -220,10 +243,17 @@ namespace DragonScreen
                 if (!deorbitCommitted)
                 {
                     Steering.Point(v, Retro(v));
-                    if (SafeSiteReachable(v) || (Now() - onsetUT) > SiteSearchTimeoutS)
+                    // ⭐ DEORBIT NOW (land anywhere) commits IMMEDIATELY = fastest; the chutes make any touchdown
+                    // survivable and the gear deploys after a land touchdown. WATER DEORBIT (and a fault abort)
+                    // holds retrograde until the nearest reachable OPEN WATER is in the window (120 s backstop —
+                    // never strand). Either way, once retrograde is held we can commit.
+                    bool landNow = isRescue && deorbitLandOK;
+                    if (landNow || SafeSiteReachable(v) || (Now() - onsetUT) > SiteSearchTimeoutS)
                     {
                         deorbitCommitted = true;
-                        Debug.Log(haveSite
+                        Debug.Log(landNow
+                            ? "[DragonScreen] DEORBIT committed — DEORBIT NOW: immediate deorbit to the nearest safe site (land or water)"
+                            : haveSite
                             ? "[DragonScreen] DEORBIT committed — nearest safe splashdown at "
                               + siteLatDeg.ToString("F1") + "," + siteLonDeg.ToString("F1")
                             : "[DragonScreen] DEORBIT committed — no water site resolved; deorbiting to a controlled entry anyway");
@@ -235,10 +265,26 @@ namespace DragonScreen
                 return;
             }
 
-            // deorbit done → shield-forward controlled entry + chutes.
+            // deorbit done → shield-forward controlled entry + chutes → touchdown.
             FlightDriver.ReleaseTranslation();
             HoldShieldForward(v);
             DriveAbortChutes(v);
+            TouchdownGear(v);
+        }
+
+        // ⭐ Landing gear on a LAND touchdown only (DEORBIT NOW): the gear deploys IMMEDIATELY AFTER touchdown
+        // on solid ground (v.Landed), never during descent, and NEVER on a water splashdown (v.Splashed → no
+        // gear). One-shot. Water DEORBIT + fault aborts always splash, so this is a no-op there. Idempotent —
+        // Actuator.DeployLegs only extends retracted legs, so a vehicle without gear is a harmless no-op.
+        static void TouchdownGear(Vessel v)
+        {
+            if (gearDeployed || !deorbitLandOK) return;
+            if (v.Landed && !v.Splashed)
+            {
+                Actuator.DeployLegs(v);
+                gearDeployed = true;
+                Debug.Log("[DragonScreen] LAND touchdown — landing gear deployed (post-touchdown).");
+            }
         }
 
         // the retrograde Draco deorbit burn, closed-loop on measured periapsis (pure DeorbitGuidance).
