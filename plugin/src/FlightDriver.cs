@@ -24,18 +24,31 @@ namespace DragonScreen
         static FlightDriver instance;
         Vessel boundVessel;
 
-        // ---- FDIR (L5 safety spine) — OBSERVE-ONLY by default (task T2) ----
+        // ---- FDIR (L5 safety spine) — OBSERVE-ONLY by default (tasks T2 + T2b) ----
         // The tested pure Fdir (pure/Fdir.cs) runs at ~4 Hz on the live feeds and LOGS any tripped fault. It
         // does NOT command an abort unless FdirActing is turned on (a false abort kills a good flight → acting is
-        // flight-gated). HONEST feed status: LIVE = ResourceCritical, fed from the Dragon's RCS/Draco propellant
-        // margin — the real mission-ending resource (running out of Draco fuel = can't rendezvous/deorbit). Ascent
-        // stages depleting is NOMINAL (handled by staging) and after MECO the spent booster is a SEPARATE vessel,
-        // so watching THIS vessel's return fuel reads ~full through ascent (no false trip) and the true margin
-        // later. The thrust / trajectory / stall / control monitors are NOT-YET-FED (kept nominal so they cannot
-        // false-trip) — each is owed a per-controller residual feed (task T2b). The KOS-breach abort is owned by
-        // DockingControl (it acts), so FDIR does not double it here.
+        // flight-gated). HONEST feed status (all shaped by pure/FdirFeeds.cs so an UNMEASURABLE moment reads
+        // nominal, never a false trip):
+        //   • ResourceCritical  — LIVE from the Dragon's RCS/Draco propellant margin (the real mission-ending
+        //     resource; ~full through ascent → no false trip, true margin for rendezvous/deorbit).           [T2]
+        //   • ThrustShortfall   — LIVE (T2b): Σ finalThrust / (throttle·Σ full-max) over the COMMANDED main
+        //     engines. A flamed-out-but-commanded engine drops the ratio → the honest engine-out signal. Reads
+        //     nominal on a coast, a Draco-only burn, or while the hold-downs are clamped (thrust ramping).
+        //   • NoControlSolution — LIVE (T2b): the no-authority TUMBLE — actively holding attitude, ~zero control
+        //     authority, spinning past a tumble rate, pointing far off (the RCS-GetPotentialTorque-zero case). A
+        //     healthy hard slew HAS authority → excluded. Max-Q gimbal saturation is caught upstream (AscentControl).
+        //   • ConvergenceStall  — LIVE (T2b): the near-field closing rate published by RendezvousControl, only
+        //     while it is actively closing (an intended phasing coast leaves it nominal).
+        //   • TrajectoryDivergence — still NOMINAL: no honest UNIFORM position-error residual without inventing
+        //     one; ascent divergence is covered by AscentControl's q·α/AoA + the structural-g abort, and near-field
+        //     drift by DockingControl's own corridor/KOS-breach abort — so a nominal feed here is honest, not owed.
+        // The KOS-breach abort is owned by DockingControl (it acts), so FDIR does not double it here.
         [Tunable] public static bool FdirActing = false;      // OFF = observe + log only; ON = FDIR may abort
         [Tunable] public static double FdirTickS = 0.25;       // ~4 Hz cadence (keeps the hot path light)
+        // NoControlSolution tumble thresholds (conservative → only an unambiguous no-authority tumble trips):
+        [Tunable] public static double CtrlAuthFloorNm = 50.0;    // best-axis control torque below this = ~no authority
+        [Tunable] public static double CtrlTumbleRateRads = 0.15;  // spinning faster than this (~8.6°/s) = tumbling
+        [Tunable] public static double CtrlLostErrDeg = 30.0;      // and pointing this far off target
         static FdirState fdirState;
         static double fdirAccumS, lastFdirLogUT = -999.0;
         static readonly List<int> rcsPropIds = new List<int>();   // cached Draco/RCS propellant resource ids
@@ -569,11 +582,11 @@ namespace DragonScreen
         public static void RequestAbort() { abortPending = true; }
         public static bool Aborting { get { return aborting; } }
 
-        // ---- FDIR observe-only tick (task T2) ----
+        // ---- FDIR observe-only tick (tasks T2 + T2b) ----
         // Runs the pure Fdir at ~4 Hz on the live feeds and logs a rate-limited line on any tripped fault.
-        // Acting (commanding the abort) is gated on FdirActing (default OFF) so a not-yet-tuned monitor can't
-        // false-abort a good flight. Only the RESOURCE feed is live today (see the field comment); the others are
-        // held nominal (documented) until their per-controller residual feeds land (T2b).
+        // Acting (commanding the abort) is gated on FdirActing (default OFF) so a not-yet-flight-tuned monitor
+        // can't false-abort a good flight. Resource + Thrust + Control + Stall are LIVE (honestly shaped by
+        // pure/FdirFeeds.cs); TrajectoryDivergence stays nominal by design (see the field comment for why each).
         static void TickFdir(Vessel v)
         {
             try
@@ -588,10 +601,32 @@ namespace DragonScreen
                 fi.GateHolding = CrewProcedureOps.AtGate;
                 fi.Powered = CmdThrottle > 0.01
                              || (Math.Abs(CmdTransX) + Math.Abs(CmdTransY) + Math.Abs(CmdTransZ)) > 0.001;
-                fi.ThrustDeliveredFrac = 1.0;   // NOT-YET-FED (T2b) — nominal so it can't false-trip
-                fi.TrajErrorM = 0.0;            // NOT-YET-FED
-                fi.PlanProgressRate = 1.0;      // NOT-YET-FED (stall suppressed)
-                fi.ControlSolutionOk = true;    // NOT-YET-FED (no AttitudePilot saturation signal yet)
+
+                // THRUST SHORTFALL (T2b): delivered / expected over the commanded main engines. Suppressed while
+                // the hold-downs are clamped (thrust is nominally ramping to the 99% release), and self-nominal on
+                // a coast / Draco-only burn (no committed ModuleEngines) via FdirFeeds' guards.
+                double actKn, expKn;
+                MainEngineCommittedThrust(v, out actKn, out expKn);
+                fi.ThrustDeliveredFrac = clampHeld ? 1.0
+                    : FdirFeeds.ThrustDeliveredFrac(actKn, expKn, CmdThrottle);
+
+                fi.TrajErrorM = 0.0;            // NOMINAL (honest): no uniform position-error residual — see the field note
+
+                // CONVERGENCE STALL (T2b): the near-field closing rate, only while RendezvousControl is actively
+                // closing (an intended coast leaves it nominal). Gated to outbound rendezvous so a stale value from
+                // a past phase can't feed a later one.
+                bool rvActive = fi.Phase == MissionPhase.Phasing && !CrewProcedureOps.IsReturn
+                                && RendezvousControl.NearClosingActive;
+                fi.PlanProgressRate = FdirFeeds.ClosingProgress(RendezvousControl.NearClosingRateMps, rvActive);
+
+                // NO CONTROL SOLUTION (T2b): the no-authority tumble (see FdirFeeds.ControlLost). Only meaningful
+                // while the attitude loop is actively holding — attitudeOwned is that gate.
+                double bestAuthNm = Math.Max(AttitudePilot.CtrlTorquePitchNm,
+                                    Math.Max(AttitudePilot.CtrlTorqueYawNm, AttitudePilot.CtrlTorqueRollNm));
+                double spinRads = v.angularVelocity.magnitude;
+                fi.ControlSolutionOk = !FdirFeeds.ControlLost(attitudeOwned, bestAuthNm, spinRads,
+                    AttitudePilot.PointErrDeg, CtrlAuthFloorNm, CtrlTumbleRateRads, CtrlLostErrDeg);
+
                 fi.ResourceMargin01 = RcsPropMargin(v);                 // LIVE
                 fi.KosRadiusM = 0.0; fi.KosRangeM = 0.0; fi.CorridorOk = true;   // KOS abort owned by DockingControl
 
@@ -654,6 +689,36 @@ namespace DragonScreen
             }
             catch { return 1.0; }
             return worst;
+        }
+
+        // Sum the COMMANDED main-engine thrust for the FDIR shortfall feed (T2b). actualKn = Σ finalThrust of the
+        // operational commanded engines; expectedFullKn = Σ current-conditions FULL-throttle max of ALL commanded
+        // (EngineIgnited) engines — a flamed-out-but-commanded engine still counts in expected but adds 0 to actual,
+        // so its lost share drops the ratio (the honest engine-out signal). Uses the same maxFuelFlow·flowMultiplier·
+        // Isp·g0 current-conditions max as Actuator.EngineThrust (vacuum maxThrust would read ~82% at sea level and
+        // false-trip a healthy launch), folding in the per-engine thrustPercentage limiter so an intentionally
+        // throttle-limited engine still reads healthy. Only ModuleEngines counted → a Draco-only (ModuleRCS) burn
+        // yields 0/0 → FdirFeeds returns nominal (correct: not a main-engine burn). Runs at ~4 Hz, off the hot path.
+        static void MainEngineCommittedThrust(Vessel v, out double actualKn, out double expectedFullKn)
+        {
+            actualKn = 0.0; expectedFullKn = 0.0;
+            if (v == null) return;
+            const double g0 = 9.80665;
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                Part p = v.parts[i];
+                for (int m = 0; m < p.Modules.Count; m++)
+                {
+                    ModuleEngines e = p.Modules[m] as ModuleEngines;
+                    if (e == null || !e.EngineIgnited) continue;   // only engines the autopilot has commanded ON
+                    double isp = e.realIsp > 1f ? e.realIsp : 0.0;
+                    double eMaxKn = e.maxFuelFlow * e.flowMultiplier * isp * g0;   // full-throttle current-conditions max (kN)
+                    if (!(eMaxKn > 0.0)) eMaxKn = e.maxThrust;                     // fallback: static config max
+                    eMaxKn *= Math.Max(e.thrustPercentage * 0.01, 0.0);           // fold in the per-engine limiter
+                    expectedFullKn += eMaxKn;
+                    if (e.isOperational) actualKn += e.finalThrust;               // flamed-out → adds 0 (drops the ratio)
+                }
+            }
         }
 
         // ⭐ DEORBIT RESCUE (the "DEORBIT NOW" / "WATER DEORBIT" panel buttons). A CONTROLLED deorbit-and-land,

@@ -55,6 +55,7 @@ public static class TestMain
         bad += ReturnTest.Run();           // L3 return: departure + deorbit + lifting entry (CoM shifter) + chutes
         bad += CrewGateTest.Run();         // L4 conductor: crew-gate state machine + gate catalog + mode manager
         bad += FdirTest.Run();             // L5 FDIR: debounced monitors + recovery ladder + phase-correct abort
+        bad += FdirFeedsTest.Run();        // L5 FDIR: honest feed-shaping (thrust frac / tumble / closing progress) — T2b
         bad += SelfCalTest.Run();          // L6 self-cal: RLS w/ variable forgetting + the live-estimate bank
         bad += FlightRecorderTest.Run();   // L7 instrumentation: the per-flight CSV schema + fillers
         bad += DispersionTest.Run();       // Tier-2 robustness: property-based dispersion of the pure layer

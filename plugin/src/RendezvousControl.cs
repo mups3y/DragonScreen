@@ -58,10 +58,19 @@ namespace DragonScreen
         static RendezvousCommand lastCmd;
         static LvlhState lastRel;
 
+        // ---- FDIR feed (task T2b): the honest NEAR-FIELD closing signal for the ConvergenceStall monitor. The
+        // controller is the honest source of intent — only it knows when it MEANT to be closing (a near-field CW
+        // burn toward the standoff) vs coasting (the far-field phase-wait / co-elliptic coast, where a "stall" is
+        // meaningless). FlightDriver.TickFdir feeds these; far-field / idle leave NearClosingActive false so an
+        // intended coast is never a stall. + = closing (progressing), ≤0 = not closing while actively closing.
+        public static double NearClosingRateMps;
+        public static bool NearClosingActive;
+
         public static void Reset()
         {
             phase = RvPhase.Idle; farPhase = FarPhase.Phase; lastFarPhase = FarPhase.Phase;
             shroudOpened = false; floorLogged = false;
+            NearClosingRateMps = 0.0; NearClosingActive = false;
             FlightDriver.ReleaseTranslation();
             Steering.Release();
         }
@@ -89,6 +98,7 @@ namespace DragonScreen
             if (body == null || tgt == null || tgtOrbit == null)
             {
                 // no station targeted → cannot rendezvous; idle and wait for the crew to target it.
+                NearClosingActive = false;   // FDIR: not closing → stall monitor stays nominal
                 FlightDriver.ReleaseTranslation();
                 return;
             }
@@ -111,6 +121,7 @@ namespace DragonScreen
             // ---- FAR FIELD: phase-timed Hohmann transfer (never CW, never a lowering burn) ----
             if (Phasing.FarField(rangeM, CwHandoffRangeM))
             {
+                NearClosingActive = false;   // FDIR: far-field coasts/raises are NOT monotonic closing → stall stays nominal
                 double rangeRate = RangeRateMps(v, tgtOrbit, now, tgtWorld);   // + = separating, − = closing
                 FlyFarField(v, tgtOrbit, apAlt, peAlt, rangeM, rangeRate, now);
                 FlightLog.Fill = FillRow;
@@ -269,14 +280,26 @@ namespace DragonScreen
                                  + " km ≤ floor " + (SafePeFloorM / 1000.0).ToString("F0") + " km — burns HELD.");
                 floorLogged = true;
             }
-            if (cmd.Burn && perr <= AttitudeReadyDeg && cmd.BurnDvMps > BurnDoneDvMps && peSafe)
+            bool closingBurn = cmd.Burn && perr <= AttitudeReadyDeg && cmd.BurnDvMps > BurnDoneDvMps && peSafe;
+            if (closingBurn)
                 FlightDriver.SetTranslation(0, 0, ForwardSign);      // forward on the nose (Dracos)
             else
                 FlightDriver.ReleaseTranslation();
 
+            // ---- FDIR feed (T2b): while ACTIVELY closing to the standoff, publish the honest closing rate
+            //      (+ = closing). LOS closing rate = −(relVel · r̂). Both terms are the same obt-velocity/world
+            //      frame already used for the CW solve, so no frame mix. Only active when we are burning to
+            //      close AND still outside the AI standoff — an intended hold/coast leaves it false (nominal).
+            Vector3d relPosW = (Vector3d)v.CoM - tgtPos;
+            double losRange = relPosW.magnitude;
+            NearClosingRateMps = losRange > 1e-3
+                ? -Vector3d.Dot(v.obt_velocity - tgtVel, relPosW / losRange) : 0.0;
+            NearClosingActive = closingBurn && rel.RangeM > ri.AiRangeM;
+
             // ---- hand back at the AI standoff (→ the G9 GO-for-AI gate) ----
             if (rel.RangeM <= ri.AiRangeM)
             {
+                NearClosingActive = false;   // arrived → not closing anymore (stall monitor stays nominal at the gate)
                 FlightDriver.ReleaseTranslation();
                 CrewProcedureOps.PhaseComplete();
             }
