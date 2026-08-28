@@ -63,13 +63,21 @@ namespace DragonScreen
         {
             try
             {
+                // ⭐ BOOSTER-RECOVERY FOCUS SWITCH — one-shot, and INDEPENDENT of the burn/warp safety net below.
+                // ⛔ It USED to sit after the BurnCommanded early-return, so it never fired (flight 180029, ARMED,
+                // data-confirmed): from MECO the Dragon is "burning" every frame — the ullage RCS settle is a
+                // TRANSLATION and then S2 throttles up — so BurnCommanded stayed true from MECO through SECO, the
+                // return below hit every frame, and the switch was never reached; the booster unloaded out of
+                // physics range and the toggle did nothing. Focus-switching has nothing to do with warp, so it is
+                // checked FIRST. It only fires once a SEPARATED recoverable booster is loaded (post-MECO); before
+                // sep there is no such vessel and it is a no-op, so checking it every frame is safe.
+                if (AutoRecoverBooster && !boosterHandled) TryFocusBooster(active);
+
                 if (active != null && BurnCommanded(active))
                 {
                     Realtime();   // ⛔ never run a live burn under warp; also cancels any pending warp target
                     return;
                 }
-
-                if (AutoRecoverBooster && !boosterHandled) TryFocusBooster(active);
 
                 if (warpTargetUT <= 0.0) return;
 
