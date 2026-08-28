@@ -18,9 +18,14 @@ next-phase fix (one phase at a time, mission order ascent→booster→rv→dock�
 
 **⭐ STATE after the 2026-08-28 full-mission flight (Crew-2_20260828_131412 ascent→phasing + _135356 return; full
 structured pass done):**
-- ✅✅ **ASCENT SOLVED + FLIGHT-PROVEN TWICE (103303 + 131412).** Reaches orbit 200×157.7 km, **inc 51.65° vs 51.6°
-  target** — A1 plane-normal fix confirmed on a 2nd clean ascent. Clean max-Q 32 kPa @ pointing p95 0.36°/0.08° (sat≈0
-  across the corpus), guidance-terminated SECO. ⚠ minor tune items: g 4.77 (>4.5), ecc 200×158.
+- ✅✅ **ASCENT REACHES ORBIT + PROVEN TWICE (103303 + 131412), inc 51.65° vs 51.6°.** ⭐ **KEY CORRECTION from the
+  FULL event-by-event pass (`scratchpad/deep131412.py`): `att_err_deg` is ANGLE OF ATTACK, `att_point_deg` is the
+  POINTING error — and att_point ≈ 0 the ENTIRE flight, so attitude CONTROL is essentially perfect in every phase.**
+  (The big att_err in S2 = UPFG's commanded lead; the huge att_err in phasing = warp-frozen on-rails attitude — NOT
+  control failures. My earlier "rendezvous pointing broken" was a misread.) **Two ascent divergences FIXED (unflown):**
+  (1) **SECO eccentric 200×158** — the g-limit taper desynced tgo (cut with 12.7 m/s of vgo UNDELIVERED) → now cuts on
+  **vgo<SecoVgoMps(2)** = the full Δv lands → circular; (2) **peak g 4.77** — limiter lags ~0.27 g → **S2GLimitG 4.5→4.3**.
+  ⚠ Still open (NOT guess-fixed): **gravity-turn AoA ~8°** (pitch-program/B9 tune, minor).
 - ⚠️ **PHASING FLEW — PARTIAL (Crew-2_131412).** ✅ NO self-deorbit (pe held 171–181 km). ✅ Coast auto-warp
   FLIGHT-PROVEN (warped ~5.6 days of phasing coast on stock APIs, burn-guard held). ✅ Transfer raised ap 200→419 km
   (station ~420 → correct) and closed range to **86 km ONCE**. ❌ But it **never CIRCULARIZED** → stayed on a 420×172
@@ -32,9 +37,14 @@ structured pass done):**
   hand-off. Glue: `TargetAltM = station − CoEllipticBelowM(10 km)`, `NearApoapsis` gate (`NearApoWindowS=20 s`),
   warp-to-apoapsis in Circularize, far sub-phase logged + mapped into `rv_phase` (Phasing/CoElliptic/ApproachInit).
   ⚠ **#1 TO VERIFY NEXT FLIGHT — does it now circularize + hand to CW + reach docking?**
-- ⚠️ **RETURN got first DATA (Crew-2_135356).** An FDIR **DeorbitReturn** abort fired the deorbit burn (pe 203→114 km,
-  dropping) but the recording was **CUT OFF mid-burn** — no entry/chutes yet. ⚠ dv_planned/delivered/residual columns
-  NOT populated on the deorbit burn (instrumentation gap to fix). Crew ALIVE, coming home.
+- ⚠️ **RETURN got first DATA (Crew-2_135356).** Chris pressed **EJECT** → **DeorbitReturn** abort fired the deorbit
+  burn (pe 203→114 km, dropping); recording **CUT OFF mid-burn** — no entry/chutes yet (incomplete data, not a
+  failure). **FIXED (unflown):** the deorbit burn now records Δv (`PutDv` was never called by any glue → planned from
+  the formula + delivered from ∫ measured RcsThrustN), and that delivered value now feeds `di.DvAppliedMps` (the
+  guidance backstop cutoff, which was unset). Crew ALIVE.
+- ⚠️ **PHASING open item:** the PHASE-align wait ran **~1.9 synodic (58 h)** — appears to miss the first alignment,
+  but WarpPlan drops out 12 s early so it shouldn't overshoot; **NOT guess-fixed.** The far-phase transition log
+  (added this session — `RV far-field: X → Y`) will pin the cause on the NEXT flight.
 - ✅ **KLM (honest, Claude-owned):** the 2 CSVs are ONE continuous mission → audit now MERGES contiguous met segments
   (souls per MISSION, not per file) + a new **"returning"** state (deorbit/abort return in progress, crew alive).
   Scorecard: **0 died · 0 stranded · 0 home · 4 returning · 1 mission.** Nobody lost.
