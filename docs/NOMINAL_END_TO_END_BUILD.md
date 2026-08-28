@@ -142,8 +142,26 @@ Sources: [KSP VesselRanges API](https://kerbalspaceprogram.com/api/class_vessel_
    acting behind `FdirActing=false`. Honest live feed = ResourceCritical from the Draco/RCS propellant margin
    (the return fuel: reads ~full through ascent since spent stages are separate vessels → no false trip, and is
    the true margin for rendezvous/deorbit). ⚠ flight-pending: confirm no false trips, then enable `FdirActing`.
-   NEW TASK **T2b** — feed the other monitors (thrust/traj/stall/control) from per-controller residuals.
+4b. ✅ **T2b FDIR-RESIDUAL-FEEDS — DONE (2026-08-29, green, +16 headless checks → 731,271).** The thrust / control /
+   stall monitors now fed HONESTLY (were nominal-until-fed), shaped by a new PURE `pure/FdirFeeds.cs` so every guard
+   is headless-tested and an UNMEASURABLE moment reads nominal (never a false trip):
+   • **ThrustDeliveredFrac** = Σ finalThrust / (throttle·Σ current-conditions full-max) over the COMMANDED main
+     engines (a flamed-out-but-commanded engine still counts in expected but adds 0 to actual → its lost share drops
+     the ratio = the engine-out signal). Suppressed while the hold-downs are clamped (thrust ramping to release);
+     nominal on a coast or a Draco-only (ModuleRCS) burn — so it scopes itself to the crew-critical main-engine burns.
+   • **ControlSolutionOk** = ¬(no-authority tumble): actively holding attitude + ~zero best-axis control torque +
+     spinning past a tumble rate + pointing far off (the RCS-`GetPotentialTorque`-zero case). A healthy hard slew HAS
+     authority → excluded; max-Q gimbal saturation is caught upstream (AscentControl q·α/AoA + g-abort).
+   • **PlanProgressRate** = `RendezvousControl.NearClosingRateMps`, published only while it is actively closing
+     (`NearClosingActive`) — an intended phasing coast / co-elliptic raise leaves it nominal.
+   • **TrajErrorM** stays NOMINAL by design — no honest UNIFORM position-error residual without inventing one; ascent
+     divergence is covered by q·α/AoA + g-abort, near-field drift by DockingControl's own corridor/KOS abort.
+   FDIR remains OBSERVE-ONLY. ⚠ flight-pending: confirm no false trips in a flight, then enable `FdirActing`. Commit f48b5ae.
 5. **B-RV-NAMED** *(low priority, fidelity)* — model the discrete named burns over the far-FSM for strict fidelity.
+5b. **T13 CRAFTDUMP-REFRESH** *(open — Chris 2026-08-29)* — read the NEW `data/craftdump.csv` and update the artifacts'
+   vehicle data with it (dashboard vehicle/audit rows + `docs/CRAFT_DUMP_VEHICLE_MAP.md` / `docs/VEHICLE_AUDIT.md`
+   where the dump changed). Cross-check every part/module/action vs what the artifacts + code assume; flag any drift
+   (new/removed parts, changed ignitions/thrust/modes). Ground truth = the live dump, not the `.md`.
 
 **Booster dual-flight:**
 6. ✅ **B-BOOST-DUAL — BUILT (2026-08-29, green).** Feasibility RESOLVED (OnFlyByWire drives any UNPACKED non-active

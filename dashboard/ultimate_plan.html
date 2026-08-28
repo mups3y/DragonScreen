@@ -323,7 +323,7 @@
       <div class="stage anim" data-s="prog">
         <div class="stage-badge">B11</div>
         <div class="stage-body"><div class="stage-top"><h3>FDIR authority + free-flyers</h3><span class="chip done">Pure built</span></div>
-          <p>FDIR <b>escalation ladder</b> &mdash; a fault a rung doesn&rsquo;t clear climbs Retry&rarr;&hellip;&rarr;Abort (never retries forever), 6 checks. The four mission profiles built + verified (Inspiration4 / Polaris / Fram2 as <code>FreeFlyer</code>, no rendezvous/dock). Live-wiring + acting = I-B Step I (observe-first).</p></div>
+          <p>FDIR <b>escalation ladder</b> &mdash; a fault a rung doesn&rsquo;t clear climbs Retry&rarr;&hellip;&rarr;Abort (never retries forever), 6 checks. The four mission profiles built + verified (Inspiration4 / Polaris / Fram2 as <code>FreeFlyer</code>, no rendezvous/dock). <b>Observe-only wiring LIVE</b> (<code>FlightDriver.TickFdir</code> ~4&nbsp;Hz): resource + thrust + no-control-tumble + near-field-stall monitors now fed HONESTLY (pure <code>FdirFeeds</code>, +16 checks); acting (<code>FdirActing</code>) = I-B Step I after a flight confirms no false trips.</p></div>
       </div>
 
     </div>
