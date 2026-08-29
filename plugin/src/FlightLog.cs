@@ -123,6 +123,10 @@ namespace DragonScreen
                     Actuator.RcsThrustN(v),
                     o != null ? o.ApA / 1000.0 : double.NaN, o != null ? o.PeA / 1000.0 : double.NaN,
                     o != null ? o.inclination : double.NaN, o != null ? o.LAN : double.NaN);
+                // Campaign 6 diagnostic: the RAW geometric RCS-torque estimate the authority takes max() of — so the
+                // confirm flight PROVES it settles near the stock report's good spikes, not far above (over-reading).
+                FlightRecorder.PutRcsGeo(row, AttitudePilot.GeoTorquePitchNm, AttitudePilot.GeoTorqueYawNm,
+                                         AttitudePilot.GeoTorqueRollNm);
                 // KER soft cross-check: what Kerbal Engineer's fuel-flow sim reports for the active vessel, so the
                 // corpus can verify it agrees with our own StageStats/UPFG before any consumer trusts KER over us.
                 KerStage[] ks;

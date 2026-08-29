@@ -93,6 +93,12 @@ namespace DragonScreen
             // skin-max (0..1, 1 = at the limit) — the max-Q "Overheat!" was invisible with no thermal column.
             // Blank when the resource/part is absent. NOT zeroed under warp (resources don't drain on-rails).
             "mmh_frac", "nto_frac", "skin_temp_frac",
+            // ⭐ Campaign 6 diagnostic (F-RCS-AUTHORITY confirm): the RAW per-axis GEOMETRIC RCS torque estimate
+            // (r×F, N·m) — the loop now takes authority = max(stock report, this). Logged so a flight PROVES the
+            // geometric is not over-reading: it should settle near the stock report's OWN good spikes (~12-20 kN·m),
+            // not far above (a >~2× jump vs those spikes = over-estimate → cap it). 0 when the RCS master is off; a
+            // control column, so it is zeroed under on-rails warp with the rest.
+            "rcs_geo_pitch", "rcs_geo_yaw", "rcs_geo_roll",
         };
 
         static int Index(string name)
@@ -146,6 +152,8 @@ namespace DragonScreen
             CcDsigmaDeg = Index("cc_dsigma_deg"), CcSlopeMPerRad = Index("cc_slope_m_per_rad"),
             WarpRate = Index("warp_rate"), EngIgnited = Index("eng_ignited"), EngFlameout = Index("eng_flameout"),
             MmhFrac = Index("mmh_frac"), NtoFrac = Index("nto_frac"), SkinTempFrac = Index("skin_temp_frac");
+        public static readonly int RcsGeoPitch = Index("rcs_geo_pitch"), RcsGeoYaw = Index("rcs_geo_yaw"),
+            RcsGeoRoll = Index("rcs_geo_roll");
 
         // ---- formatting ----
         public static string Num(double v)
@@ -363,6 +371,13 @@ namespace DragonScreen
             Set(c, MmhFrac, mmhFrac); Set(c, NtoFrac, ntoFrac); Set(c, SkinTempFrac, skinTempFrac);
         }
 
+        /// <summary>Campaign 6 diagnostic: the RAW per-axis geometric RCS torque estimate (N·m) the authority takes
+        /// the max() of — so a flight can confirm it is not over-reading vs the stock report's own good spikes.</summary>
+        public static void PutRcsGeo(string[] c, double geoPitchNm, double geoYawNm, double geoRollNm)
+        {
+            Set(c, RcsGeoPitch, geoPitchNm); Set(c, RcsGeoYaw, geoYawNm); Set(c, RcsGeoRoll, geoRollNm);
+        }
+
         public static void PutSelfCal(string[] c, SelfCalState s)
         {
             Set(c, CalThrustN, s.Thrust.Theta);
@@ -441,6 +456,7 @@ namespace DragonScreen
                 AttErrDeg, RateCmd, TorqueCmd, AttPointDeg, AttRateCmd, AttRateMeas,
                 ActPitchC, ActYawC, ActRollC,
                 CtrlTqPitch, CtrlTqYaw, CtrlTqRoll,
+                RcsGeoPitch, RcsGeoYaw, RcsGeoRoll,
                 RatePitchDps, RateRollDps, RateYawDps,
                 ThrustN, RcsThrustN, AccelG,
             };

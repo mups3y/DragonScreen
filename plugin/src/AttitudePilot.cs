@@ -42,6 +42,9 @@ namespace DragonScreen
         public static double CtrlTorquePitchNm { get { return active.CtrlTorquePitchNm; } }
         public static double CtrlTorqueYawNm { get { return active.CtrlTorqueYawNm; } }
         public static double CtrlTorqueRollNm { get { return active.CtrlTorqueRollNm; } }
+        public static double GeoTorquePitchNm { get { return active.GeoTorquePitchNm; } }
+        public static double GeoTorqueYawNm { get { return active.GeoTorqueYawNm; } }
+        public static double GeoTorqueRollNm { get { return active.GeoTorqueRollNm; } }
         public static double PitchAccelRadS2 { get { return active.PitchAccelRadS2; } }
 
         // Clear the active loop's integrators without dropping the hold (used while the rocket is clamped).

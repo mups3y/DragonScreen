@@ -63,6 +63,9 @@ namespace DragonScreen
         public double PointErrDeg, RateCmdRads, RateMeasRads;
         public double ActPitch, ActYaw, ActRoll;
         public double CtrlTorquePitchNm, CtrlTorqueYawNm, CtrlTorqueRollNm;
+        // Campaign 6 diagnostic: the RAW per-axis geometric RCS torque estimate (before the max() + smoothing), so a
+        // flight can PROVE it isn't over-reading vs the stock report's own good spikes. 0 when the RCS master is off.
+        public double GeoTorquePitchNm, GeoTorqueYawNm, GeoTorqueRollNm;
         public double PitchAccelRadS2;   // live pitch control angular-accel = τ_pitch / I_pitch (B2 q·α cap)
 
         bool rcsFallbackLogged;
@@ -272,6 +275,7 @@ namespace DragonScreen
             {
                 double ex = Math.Max(posT.x, negT.x), ey = Math.Max(posT.y, negT.y), ez = Math.Max(posT.z, negT.z);
                 rcsx = Math.Max(rrx, ex); rcsy = Math.Max(rry, ey); rcsz = Math.Max(rrz, ez);
+                GeoTorquePitchNm = ex; GeoTorqueRollNm = ey; GeoTorqueYawNm = ez;   // diagnostic (x=pitch, y=roll, z=yaw)
                 if (!rcsFallbackLogged && ex + ey + ez > 0.0 && ex > rrx + AttitudePilot.RcsTorqueFloorNm)
                 {
                     Debug.LogWarning("[DragonScreen] AttitudeController: stock RCS GetPotentialTorque under-reads ("
@@ -281,6 +285,7 @@ namespace DragonScreen
                     rcsFallbackLogged = true;
                 }
             }
+            else { GeoTorquePitchNm = 0.0; GeoTorqueYawNm = 0.0; GeoTorqueRollNm = 0.0; }
 
             tx = gx + rcsx; ty = gy + rcsy; tz = gz + rcsz;
         }
