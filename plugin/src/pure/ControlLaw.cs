@@ -69,22 +69,34 @@ namespace DragonScreen
 
         // The guidance sets the base throttle; two limiters overlay it and the MORE RESTRICTIVE wins
         // (research §4.2). Returns a throttle in [0,1] (the glue clamps to the engine's min throttle).
-        //  • CREW g-LIMIT (exact physics): axial accel ≤ gLimit ⇒ throttle ≤ gLimit·g0·m / F_full.
+        //  • CREW g-LIMIT (exact physics): axial accel ≤ gLimit ⇒ ENGINE throttle ≤ gLimit·g0·m / F_full.
         //    As a stage lightens near MECO/SECO this caps the g the crew feels (~3.2 g S1, ~4 g S2 —
         //    LAUNCH_AND_ASCENT_RESEARCH §5.2; DM-1 peaked 3.26/3.57 g so it rarely bites, correctly).
+        //    ⛔ minThrottle FLOOR: RealFuels maps the vessel (MAIN) throttle onto [minThrottle, 1] for the
+        //    engine — engineThrottle = minThrottle + mainThrottle·(1−minThrottle). The cap above is the
+        //    ENGINE throttle; returning it AS a main throttle makes the engine run HOTTER by that floor and
+        //    the felt g overshoots by exactly (minThr + tgEng·(1−minThr))/tgEng. MEASURED: S2 held 4.53 g at
+        //    setpoint 4.1 (ratio 1.107) across flights 134620/144114/155116, MVac minThrottle 0.3854. So map
+        //    the engine-throttle target back to the main throttle the guidance commands (Campaign 5).
         //  • MAX-Q BUCKET: hold dynamic pressure under a ceiling — as q rises through [qSoft, qLimit]
         //    the throttle ramps down toward bucketFloor, then back up as q falls (the real Merlin
         //    throttle-down through max-Q). q is MEASURED, so the bucket is autonomous, not scheduled.
         public static double ThrottleLimit(double baseThrottle,
                                            double qPa, double qSoftPa, double qLimitPa, double bucketFloor,
-                                           double gLimitG, double massKg, double fullThrustN)
+                                           double gLimitG, double massKg, double fullThrustN, double minThrottle)
         {
             double t = baseThrottle;
             if (t < 0.0) t = 0.0; else if (t > 1.0) t = 1.0;
 
             if (gLimitG > 0.0 && fullThrustN > 0.0 && massKg > 0.0)
             {
-                double tg = gLimitG * G0 * massKg / fullThrustN;
+                double tgEng = gLimitG * G0 * massKg / fullThrustN;      // the ENGINE throttle that holds g
+                // Invert the RealFuels floor to the MAIN throttle that DELIVERS tgEng. Below the floor the
+                // engine cannot go lower while lit, so a negative result clamps to 0 (best effort short of
+                // shutdown). minThrottle ≤ 0 (unknown / stock) leaves the old behaviour.
+                double tg = (minThrottle > 0.0 && minThrottle < 1.0)
+                    ? (tgEng - minThrottle) / (1.0 - minThrottle)
+                    : tgEng;
                 if (tg < t) t = tg;
             }
 

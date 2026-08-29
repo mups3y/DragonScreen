@@ -55,9 +55,16 @@ namespace DragonScreen
         // RealFuels throttle-0-reset ignition cycle (see the S2 block):
         [Tunable] public static double S2SettleS = 2.0;       // throttle-0 settle/reset before each light attempt
         [Tunable] public static double S2LightWindowS = 2.0;  // hold throttle up this long before resetting to retry
-        [Tunable] public static double S2GLimitG = 4.1;       // S2 crew axial-g cap setpoint. Flights showed ~0.35 g
-                                                              // limiter lag at the light-mass final second (4.3→4.65 g),
-                                                              // so 4.1 targets a felt peak ≤4.5. Flight-verify + tune.
+        [Tunable] public static double S2GLimitG = 4.1;       // S2 crew axial-g cap setpoint. The "~0.4 g overshoot"
+                                                              // (setpoint 4.1 → felt 4.53 g, flights 134620/144114/
+                                                              // 155116) was NOT limiter lag — it was the MVac's 0.3854
+                                                              // RealFuels throttle floor, unmodelled by the g-cap
+                                                              // (Campaign 5 root-fix in ControlLaw.ThrottleLimit +
+                                                              // MinThrottle01). With the floor mapped, this setpoint
+                                                              // now yields a felt peak ≈ its own value. NOTE (fidelity,
+                                                              // Chris decision): the real Crew Dragon S2 peaks ~4.5 g —
+                                                              // if a post-fix flight confirms ≈4.1 g, RAISE this toward
+                                                              // 4.5 (the margin the overshoot forced is no longer needed).
         [Tunable] public static double SecoVgoMps = 2.0;      // SECO cutoff when velocity-to-go drops below this (delivers
                                                               // the FULL Δv → circular target orbit, even under g-limit throttle taper)
         static double coastStartUT = -1;
@@ -156,10 +163,17 @@ namespace DragonScreen
             ai.FullThrustN = fullThrustN > 1.0 ? fullThrustN : (activeThrustN > 1.0 ? activeThrustN : 1.0);
             // crew axial-g caps matching the REAL Crew Dragon ascent (researched): S1 peaks ~3.3 g just before
             // MECO, S2 climbs to ~4.5 g by SECO (astronaut accounts). The throttle bucket holds these.
-            // ⚠ flight 131412 peaked 4.77 g at SECO — the limiter LAGS ~0.27 g at the light-mass final second,
-            // so the S2 setpoint carries a margin below 4.5 to keep the felt peak at/under the crew cap.
-            // (Flight-verify: if a flight still exceeds 4.5, lower S2GLimitG further — this is the g tune knob.)
+            // ⚠ the SECO g "overshoot" seen repeatedly (flight 131412 → 4.77 g, and 134620/144114/155116 → 4.53 g
+            // at setpoint 4.1) was NOT limiter lag — it was the MVac's 0.3854 minThrottle floor unmodelled by the
+            // g-cap. Fixed below (MinThrottle01 → ControlLaw): the cap now maps to the main throttle correctly, so
+            // ⛔ do NOT lower S2GLimitG to compensate — the setpoint is now the felt peak (raise it toward 4.5 for
+            // fidelity if a flight confirms ≈4.1). This is the g tune knob AFTER the mapping, not a lag workaround.
             ai.GLimitG = s2Lit ? S2GLimitG : 3.5;
+            // ⛔ The g-cap denominator (FullThrustN) is the ENGINE throttle=1 thrust, so the cap yields an
+            // ENGINE throttle. RealFuels floors the engine at minThrottle, so the guidance's MAIN throttle
+            // must be mapped through it or the felt g overshoots by (minThr + tgEng·(1−minThr))/tgEng — the
+            // MVac's 0.3854 floor turned a 4.1 g setpoint into 4.53 g (flights 134620/144114/155116).
+            ai.MinThrottle01 = MinThrottle01(v);
             ai.SecondStage = s2Lit;
 
             AscentCommand ac = Ascent.Guide(ai, phase);
@@ -537,6 +551,40 @@ namespace DragonScreen
                 }
             }
             return sum;
+        }
+
+        // The lit stage's RealFuels throttle FLOOR: the engine runs at minThrottle + mainThrottle·(1−minThrottle),
+        // so a MAIN throttle of 0 still delivers minThrottle·F_full. The g-cap needs it to map its engine-throttle
+        // target back to a main throttle (ControlLaw.ThrottleLimit). Read from the engine's KSPField (RO/RealFuels
+        // is always present under RO); 0 when absent (stock) so the cap keeps its old linear behaviour. The lit
+        // stage's engines are identical, so the first operational one is representative.
+        static double MinThrottle01(Vessel v)
+        {
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                Part p = v.parts[i];
+                for (int m = 0; m < p.Modules.Count; m++)
+                {
+                    ModuleEngines e = p.Modules[m] as ModuleEngines;
+                    if (e == null || !e.EngineIgnited || !e.isOperational) continue;
+                    try
+                    {
+                        BaseField bf = e.Fields["_minThrottle"];
+                        if (bf != null)
+                        {
+                            object o = bf.GetValue(e);
+                            if (o != null)
+                            {
+                                double mt = Convert.ToDouble(o);
+                                if (mt > 0.0 && mt < 1.0) return mt;
+                            }
+                        }
+                    }
+                    catch { }
+                    return 0.0;   // an operational engine with no readable floor → keep stock (linear) behaviour
+                }
+            }
+            return 0.0;
         }
 
         // Felt (accelerometer) axial acceleration — INDEPENDENT of the thrust model, so SelfCal.Thrust

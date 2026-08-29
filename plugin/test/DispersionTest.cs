@@ -131,16 +131,24 @@ public static class DispersionTest
             double q = rng.Range(0.0, 80000.0), qSoft = rng.Range(0.0, 40000.0), qLim = rng.Range(20000.0, 90000.0);
             double floor = rng.Range(0.0, 1.0), gLim = rng.Range(0.0, 6.0);
             double mass = Math.Pow(10.0, rng.Range(3.0, 5.8)), Fthr = Math.Pow(10.0, rng.Range(4.0, 6.85));
-            double thr = ControlLaw.ThrottleLimit(baseT, q, qSoft, qLim, floor, gLim, mass, Fthr);
+            double minThr = rng.Range(0.0, 0.5);   // RealFuels floor; 0 = stock/linear
+            double thr = ControlLaw.ThrottleLimit(baseT, q, qSoft, qLim, floor, gLim, mass, Fthr, minThr);
             Check("throttle finite", Finite(thr), "thr=" + thr);
             Check("throttle in [0,1]", thr >= 0.0 && thr <= 1.0, "thr=" + thr.ToString("F5"));
             if (gLim > 0.0 && Fthr > 0.0 && mass > 0.0)
             {
-                double achievedG = thr * Fthr / (mass * ControlLaw.G0);
-                double gm = gLim - achievedG;
-                Check("axial accel <= crew g-limit", gm >= -1e-6,
-                      "gLim=" + gLim.ToString("F2") + " achieved=" + achievedG.ToString("F3"));
-                if (gm < worstGmargin) worstGmargin = gm;
+                // Felt g is through the RealFuels remap engineThrottle = minThr + thr·(1−minThr).
+                double engThr = minThr + thr * (1.0 - minThr);
+                double achievedG = engThr * Fthr / (mass * ControlLaw.G0);
+                // The felt g must not exceed the crew limit UNLESS the engine's own floor forces it — a lit
+                // engine cannot throttle below minThr, so floorG is the least g it can deliver at this mass.
+                double floorG = minThr * Fthr / (mass * ControlLaw.G0);
+                double allow = Math.Max(gLim, floorG);
+                double gm = allow - achievedG;
+                Check("axial accel <= crew g-limit (or the engine's minThrottle floor)", gm >= -1e-6,
+                      "gLim=" + gLim.ToString("F2") + " achieved=" + achievedG.ToString("F3") +
+                      " floorG=" + floorG.ToString("F3"));
+                if (allow <= gLim + 1e-9 && gm < worstGmargin) worstGmargin = gm;
             }
 
             // --- RCS translation axis: bounded, finite, zero-avail-safe ---

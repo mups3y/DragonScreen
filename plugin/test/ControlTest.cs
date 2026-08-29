@@ -51,23 +51,42 @@ public static class ControlTest
               ControlLaw.AxisCommand(0.0, 0.0, 100.0, 50.0, 0.0, 0.0) == 0.0, "");
 
         // ---- THROTTLE LIMITER: g-limit (physics) + max-Q bucket, more restrictive wins ----
+        // (minThrottle=0 here = the stock/linear case, so these historical values are unchanged.)
         // g-limit: 4 g on a 5 t stage with 800 kN → 4*9.80665*5000/800000 = 0.2452
-        Near("g-limit throttles a light stage", ControlLaw.ThrottleLimit(1.0, 0, 20000, 35000, 0.7, 4.0, 5000, 800000),
+        Near("g-limit throttles a light stage", ControlLaw.ThrottleLimit(1.0, 0, 20000, 35000, 0.7, 4.0, 5000, 800000, 0),
              0.24517, 1e-4);
         // a full stack at liftoff (500 t, 7000 kN → TWR ~1.4, ~1.4 g) is far under a 4 g limit → no throttle
         Check("g-limit does not bite a heavy stage at liftoff TWR",
-              ControlLaw.ThrottleLimit(1.0, 0, 20000, 35000, 0.7, 4.0, 500000, 7000000) == 1.0, "");
+              ControlLaw.ThrottleLimit(1.0, 0, 20000, 35000, 0.7, 4.0, 500000, 7000000, 0) == 1.0, "");
         // max-Q bucket: q midway [20k,35k] → throttle 0.8; at the ceiling → floor 0.7; below qSoft → full
-        Near("bucket throttles down through max-Q", ControlLaw.ThrottleLimit(1.0, 30000, 20000, 35000, 0.7, 0, 0, 0),
+        Near("bucket throttles down through max-Q", ControlLaw.ThrottleLimit(1.0, 30000, 20000, 35000, 0.7, 0, 0, 0, 0),
              0.8, 1e-9);
-        Near("bucket reaches its floor at the q ceiling", ControlLaw.ThrottleLimit(1.0, 35000, 20000, 35000, 0.7, 0, 0, 0),
+        Near("bucket reaches its floor at the q ceiling", ControlLaw.ThrottleLimit(1.0, 35000, 20000, 35000, 0.7, 0, 0, 0, 0),
              0.7, 1e-9);
         Check("no bucket below the soft-q threshold",
-              ControlLaw.ThrottleLimit(1.0, 10000, 20000, 35000, 0.7, 0, 0, 0) == 1.0, "");
+              ControlLaw.ThrottleLimit(1.0, 10000, 20000, 35000, 0.7, 0, 0, 0, 0) == 1.0, "");
         Check("the more restrictive of g-limit and bucket wins",
-              ControlLaw.ThrottleLimit(1.0, 35000, 20000, 35000, 0.7, 4.0, 5000, 800000) < 0.7, "");
+              ControlLaw.ThrottleLimit(1.0, 35000, 20000, 35000, 0.7, 4.0, 5000, 800000, 0) < 0.7, "");
         Check("a base throttle above 1 is clamped first",
-              ControlLaw.ThrottleLimit(1.5, 0, 20000, 35000, 0.7, 0, 0, 0) == 1.0, "");
+              ControlLaw.ThrottleLimit(1.5, 0, 20000, 35000, 0.7, 0, 0, 0, 0) == 1.0, "");
+
+        // ---- g-LIMIT WITH A RealFuels minThrottle FLOOR (Campaign 5, the F5 root-fix) ----
+        // The MVac floors at minThrottle 0.3854: engineThrottle = minThr + mainThrottle·(1−minThr). The g-cap
+        // yields an ENGINE throttle; if that is returned AS a main throttle the engine runs hotter and g
+        // overshoots by (minThr + tgEng·(1−minThr))/tgEng. The mapping must make the FELT g equal the setpoint.
+        // Real numbers from flights 134620/144114/155116: setpoint 4.1 g, mass 18182 kg, F_full 934 kN.
+        {
+            const double g0 = 9.80665, minThr = 0.3854, F = 934000.0, m = 18182.0, gset = 4.1;
+            double mainCap = ControlLaw.ThrottleLimit(1.0, 0, 20000, 35000, 0.7, gset, m, F, minThr);
+            double engThr  = minThr + mainCap * (1.0 - minThr);       // what RealFuels actually runs the engine at
+            double gFelt   = engThr * F / (m * g0);
+            Near("g-cap with a minThrottle floor holds the FELT g at the setpoint", gFelt, gset, 2e-3);
+            double naive = gset * g0 * m / F;                          // the OLD unmapped main throttle (→ 4.53 g)
+            Check("the floor map commands a lower main throttle than the naive cap",
+                  mainCap < naive - 0.05, "mainCap " + mainCap + " naive " + naive);
+            double gNaive = (minThr + naive * (1.0 - minThr)) * F / (m * g0);
+            Check("and the unmapped cap really would have overshot to ~4.5 g", gNaive > 4.4, "gNaive " + gNaive);
+        }
 
         // ---- RCS TRANSLATION ----
         Near("translation scales by available RCS accel", ControlLaw.TranslateAxis(2.0, 4.0), 0.5, 1e-9);

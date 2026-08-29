@@ -26,6 +26,8 @@ namespace DragonScreen
         public double MassKg;
         public double FullThrustN;
         public double GLimitG;              // crew axial-g cap for this stage
+        public double MinThrottle01;        // engine's RealFuels throttle floor (0 = unknown/stock); the g-cap
+                                            // maps its engine-throttle target back through this to a main throttle
         public bool   SecondStage;          // the MVac is lit (S1 gone)
     }
 
@@ -79,7 +81,7 @@ namespace DragonScreen
         static double Throttle(AscentInputs s, double baseT)
         {
             return ControlLaw.ThrottleLimit(baseT, s.DynamicPressurePa, QSoftPa, QLimitPa, QBucketFloor,
-                                            s.GLimitG, s.MassKg, s.FullThrustN);
+                                            s.GLimitG, s.MassKg, s.FullThrustN, s.MinThrottle01);
         }
 
         public static AscentCommand Guide(AscentInputs s, AscentPhase phase)
