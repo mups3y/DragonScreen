@@ -70,7 +70,28 @@ Same Instrument class as C0. Commits `6974bfd` (R2/R3/R4) + `0438205` (R1).
 **Tick-3 (fly): confirm the booster CSV appears with eng_ignited/ullage_stab, fdir_fault populates, mmh/nto track the
 drain, skin_temp catches the overheat.** THEN C2 Step-3.
 
-### ▶ C2 Step-3 (= the ranked Actuator-ignition class) — **booster ullage + ignition on the non-active vessel** — §8 DRAFT (measurement-gated; ready to build once the C-INSTR-2 flight lands)
+### ▶ C2 Step-3 — booster ignition — ⭐ **MEASUREMENT DONE (flight 161224): ROOT B confirmed — plan PIVOTS**
+**The C-INSTR-2 flight answered the gate: it is NOT ullage (root A is DEAD).** The booster CSV shows `ullage_stab`
+**~1.0 (settled)** through the whole entry burn with `throttle=1`, the octaweb Activated, and fuel present (KER 3,797 m/s
+Δv, 14.66 TWR available) — yet `eng_ignited=0`. So **the settle-then-light plan (§8.4 below) is DISPROVEN — do NOT build
+it.** The real root is **off-focus RF ignition** (register H1b): a non-active vessel's `ModuleEnginesRF` won't combust.
+Plus **H1c**: the booster's cold-gas RCS is nearly empty (Δv ~1 m/s) → it tumbles (att_err 40–144°) with no engine gimbal.
+
+⚠ **The deeper architectural conflict this exposes** (the honest blocker): the booster's entry burn is needed at ~T+4
+(on the way down), but the Dragon's S2 insertion runs until SECO ~T+8:53 — so the booster's burn window OVERLAPS the
+window where the Dragon must stay active. The booster needs FOCUS to fire its engine (root B), but switching focus
+during insertion reintroduces the C1 ullage-loss on the Dragon's S2. **So "recover the booster while the Dragon inserts"
+may not be solvable by ignition alone.** Options to research/decide BEFORE the next §8 (do not build yet):
+- (i) research RealFuels: is ignition/thrust truly gated on `isActiveVessel`, or is there an off-focus path we're missing?
+- (ii) sequence differently: can the booster's entry burn be DEFERRED until after the Dragon reaches orbit (accept a
+  lower/late entry burn), so a post-SECO focus-switch to the booster is safe (S2 already done)?
+- (iii) accept booster recovery is out-of-scope while crewed-insertion is active, and bank the Step-2 dual-CONTROL win.
+This is a **design decision for Chris + research**, not a code change. The §8 below is kept for the record but its
+root-A plan is void; a fresh §8 follows the decision.
+
+---
+_(superseded draft — root A, kept for the record)_
+### C2 Step-3 (was) — booster ullage + ignition on the non-active vessel — §8 DRAFT (measurement-gated)
 
 #### §8.1 State Confirmation (verified by reading, file:line, 2026-08-29)
 - **The Dragon settles ullage before every S2 light, and it WORKS** (S2 relights reliably): `AscentControl.cs:173–214`
