@@ -31,10 +31,20 @@
 - **First analysis step after the flight (do this BEFORE anything else):** `warp_rate` histogram + a side-by-side of one realtime row vs one warped row for the blanked columns. Then check `eng_ignited`/`eng_flameout`/`thrust_n`, then confirm the ignition log didn't spam.
 - **DoD:** warp rows unmistakable + control columns blank there; booster ignition state visible; log quiet. Record the Tick-3 result (pass/fail on I1–I3) in `ISSUE_REGISTER.md` + the handoff note **before** any C1 work.
 
-### C1 — INTEGRATION SCORECARD (P0)
-**Goal:** force the longest clean recorded prefix under the trustworthy instrument; produce the scorecard. **Class: (evidence only — no guidance change; if a blocker is found, it defines the NEXT single-class campaign, not this one.)**
-- Fly the longest clean prefix; fill `phase | entry cond | exit cond | propellant remaining | key error cols | status | log corroboration` into `docs/ISSUE_REGISTER.md`.
-- Identify the single highest-leverage blocker → becomes C2's scope.
+### ✅ C1 — INTEGRATION SCORECARD (P0) — *DONE (2026-08-29, Grok-approved plan)*
+Evidence-only; `is_warp` fixed to key on blanked-control (physics-warp rows kept). Scorecard: `docs/INTEGRATION_SCORECARD.md`
+(stitched by wall-clock+log with provenance; the MECO focus-switch scored as an explicit row).
+- **Earliest failed exit condition = the MECO → booster-recovery hand-off (12:06:40).** It breaks BOTH branches:
+  the S2 MVac won't relight after the ~6-min booster-recovery coast (`0 engine(s) lit` + FDIR NoControlSolution → no
+  insertion), and the booster's own engines never ignite (`eng_ignited`=0 through entry+landing → crash @119 m/s).
+- Mission B (`121530`) is a SEPARATE deorbit test (MET discontinuity) — deorbit didn't complete; parked.
+
+### ▶ C2 — MECO booster-recovery hand-off ignition failure — *NEXT (needs §8 State Confirmation first)*
+**Scope (the only thing C2 may touch):** why neither the S2 MVac (after the coast) nor the booster octaweb ignites at/
+after the MECO hand-off. **Diagnose before choosing the class** — likely candidates: RealFuels **ullage** not settled
+before the light on either vehicle (Actuator/ignition class), OR the **orchestration ordering** (recover the booster
+*after* S2 insertion, not at MECO — Phase-FSM class). Measure first (do the booster + S2 have ullage at the light
+attempt? is the octaweb even commanded on?), THEN one single-class fix. Old C2a–C2d (prediction) move down behind this.
 
 ### C2 — PREDICTION FIDELITY (P1)
 **Goal:** the predictor prevents errors the online law is currently asked to correct. **Class: Prediction model** (one sub-target per campaign — do NOT batch these):

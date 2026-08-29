@@ -55,12 +55,13 @@ def sec(t): print("\n" + "=" * 78 + "\n  " + t + "\n" + "=" * 78)
 
 def g(r, c): return fnum(r.get(c))
 
-# ⭐ P0.0 (I1): a row taken during on-rails warp has FROZEN stale control columns — the recorder now stamps
-# warp_rate and blanks them, but old files may not. Treat warp_rate>1 (or blanked control) as warp: NEVER use
-# such a row for control-signal stats (this is what manufactured the fake "attitude thrash").
+# ⭐ P0.0 (I1, C1-refined): exclude ONLY on-rails HIGH-warp rows from control-signal stats — those are the ones the
+# recorder blanks (physics warp ≤4× keeps control LIVE and must be kept). So the test is "warped AND the recorder
+# blanked the control columns", not "warp_rate>1" (which wrongly dropped live physics-warp rows).
 def is_warp(r):
     w = fnum(r.get("warp_rate"))
-    return w is not None and w > 1.0
+    if w is None or w <= 1.0: return False                       # realtime
+    return r.get("ctrl_tq_pitch", "") == "" and r.get("act_pitch", "") == ""   # on-rails = control blanked
 
 # ------------------------------------------------------------------ 1. recorder health
 def recorder_health(rows, hdr):
