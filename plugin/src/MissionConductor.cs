@@ -59,12 +59,21 @@ namespace DragonScreen
         static RecPhase recPhase = RecPhase.Idle;
         static uint dragonId;                                      // the upper stage / Dragon to return focus to
         static double maxSepM, lastSepLogUT = -999.0;              // T8b: booster↔upper-stage separation instrument
+
+        // ⭐ C2 Step-1 DUAL-FLIGHT PROOF (Grok-reviewed) — does KSP drive a loaded, non-active, unpacked booster's
+        // OnFlyByWire under our PRE? Attitude-first (isolates the control path from the ullage/ignition question).
+        [Tunable] public static double ProofPitchCmd = 0.4;        // constant pitch written to the booster's ctrlState
+        [Tunable] public static double ProofDurationS = 45.0;      // drive it this long then unhook (proof only — no landing)
+        static Vessel proofBooster; static bool proofHooked;
+        static int proofCbCount; static double proofStartUT, lastProofLogUT = -999.0, proofMaxRateDps;
         static double[] railRates;                                 // cached on-rails rate table (double, ascending)
 
         public static void Reset()
         {
             warpTargetUT = 0.0;
             recPhase = RecPhase.Idle; dragonId = 0; maxSepM = 0.0; lastSepLogUT = -999.0;
+            UnhookProof();                                         // C2 Step-1: drop the proof callback (no cross-scene leak)
+            proofCbCount = 0; proofMaxRateDps = 0.0; proofStartUT = 0.0; lastProofLogUT = -999.0;
             if (RangeExtender.Active) RangeExtender.Disable();     // a fresh scene starts with stock ranges
         }
 
@@ -155,43 +164,33 @@ namespace DragonScreen
                     break;
 
                 case RecPhase.Armed:
-                    // After sep, a separated recoverable booster appears → re-apply PRE (to catch the NEW vessel)
-                    // and hand focus to it. The upper stage (now non-active) coasts, kept loaded by PRE.
+                    // ⭐ C2 Step-1 DUAL-FLIGHT PROOF. A separated recoverable booster appeared. ⛔ Do NOT switch focus
+                    // (the C1 blocker: a focus-switch coast dissipates the S2 ullage → the MVac won't relight). Keep the
+                    // Dragon/S2 ACTIVE so its insertion burns continuously, and PROVE the OnFlyByWire path by hooking
+                    // the NON-ACTIVE booster's own OnFlyByWire with a minimal ATTITUDE command (attitude-first isolates
+                    // "does control reach it" from the ullage/ignition question). Green here → Step-2 wires the full FSM.
                     Vessel booster = FindLoadedBooster(active);
                     if (booster != null)
                     {
                         RangeExtender.Enable(PreRangeKm * 1000.0);
-                        FocusOn(booster, "→ separated booster for recovery (upper stage coasts, kept loaded by PRE)");
+                        Actuator.EnableRcs(booster);                 // cold-gas RCS → the attitude command has authority
+                        booster.OnFlyByWire += ProofFlyByWire;
+                        proofBooster = booster; proofHooked = true; proofCbCount = 0; proofMaxRateDps = 0.0;
+                        proofStartUT = Now(); lastProofLogUT = -999.0;
+                        Debug.Log("[DragonScreen] ⭐ C2 DUAL-FLIGHT PROOF — Dragon stays ACTIVE; driving the non-active "
+                                  + "booster via OnFlyByWire (pitch cmd " + ProofPitchCmd.ToString("F2")
+                                  + "). Watching whether control reaches it.");
                         recPhase = RecPhase.FlyingBooster;
                     }
                     break;
 
                 case RecPhase.FlyingBooster:
-                    // Instrument the booster↔upper-stage SEPARATION (T8b) — the number that sizes PreRangeKm.
-                    // The CSV only follows the active vessel, so log the live + max separation here (~every 5 s).
-                    LogSeparation(active);
-                    // Fly the booster (FlightDriver drives BoosterControl on the active booster) until it is DOWN,
-                    // then return focus to the upper stage so its ascent resumes. Also handle a KSP auto-switch
-                    // back to the Dragon (e.g. booster destroyed) — if we are already back on the pod, move on.
-                    if (VesselHasPod(active)) { recPhase = RecPhase.Returned; break; }
-                    if (BoosterControl.IsRecoverableBooster(active) && (active.Landed || active.Splashed))
-                    {
-                        Vessel dragon = FindById(dragonId);
-                        Debug.Log("[DragonScreen] booster recovered — MAX booster↔upper-stage separation this flight = "
-                                  + (maxSepM / 1000.0).ToString("F0") + " km (PreRangeKm=" + PreRangeKm.ToString("F0")
-                                  + " km; set PreRangeKm ≥ this + margin).");
-                        if (dragon != null) FocusOn(dragon, "← upper stage (booster recovered); resuming ascent");
-                        recPhase = RecPhase.Returned;
-                    }
+                    LogSeparation(active);          // T8b separation instrument (both vessels stay loaded under PRE)
+                    TickProof();                    // ⭐ C2 Step-1: monitor the booster's response + end after ProofDurationS
                     break;
 
-                case RecPhase.Returned:
-                    // Focus is back on the upper stage → PRE OFF (recovery complete for this flight).
-                    if (VesselHasPod(active))
-                    {
-                        RangeExtender.Disable();
-                        recPhase = RecPhase.Done;
-                    }
+                case RecPhase.Returned:             // (unused in Step-1 — the proof goes straight to Done)
+                    recPhase = RecPhase.Done;
                     break;
 
                 case RecPhase.Done:
@@ -256,6 +255,62 @@ namespace DragonScreen
                 Debug.Log("[DragonScreen] conductor: focus " + why + ".");
             }
             catch (Exception e) { Debug.LogWarning("[DragonScreen] focus switch failed: " + e.Message); }
+        }
+
+        // ⭐ C2 Step-1 PROOF callback — KSP writes this into the NON-ACTIVE booster's FlightCtrlState via its
+        // OnFlyByWire (the exact thing we are proving KSP does for a loaded, in-physics-range vessel). A constant
+        // pitch command: if control reaches the booster and it has cold-gas authority, a pitch rate develops.
+        // proofCbCount proves whether the callback is even ENTERED — so a null response separates "control does not
+        // reach it" from "reaches it but no attitude authority" (Grok's disambiguation).
+        static void ProofFlyByWire(FlightCtrlState s)
+        {
+            proofCbCount++;
+            try { s.pitch = (float)ProofPitchCmd; } catch { }
+        }
+
+        // Monitor the proof ~every 1.5 s and end it (unhook) after ProofDurationS. Step-1 does NO landing — it only
+        // answers the go/no-go. The Dragon meanwhile stays active and runs its own S2 insertion (the other criterion).
+        static void TickProof()
+        {
+            Vessel b = proofBooster; double now = Now();
+            if (b != null && b.loaded)
+            {
+                double rateDps = b.angularVelocity.magnitude * 180.0 / Math.PI;
+                if (rateDps > proofMaxRateDps) proofMaxRateDps = rateDps;
+                if (now - lastProofLogUT > 1.5)
+                {
+                    lastProofLogUT = now;
+                    Vessel av = FlightGlobals.ActiveVessel;
+                    Debug.Log("[DragonScreen] C2 PROOF: cbEntered=" + proofCbCount + " | booster body-rate="
+                              + rateDps.ToString("F1") + " dps (max " + proofMaxRateDps.ToString("F1")
+                              + ") | loaded=" + b.loaded + " unpacked=" + (!b.packed)
+                              + " | Dragon still active=" + (av != null && av != b && VesselHasPod(av)));
+                }
+            }
+            if (b == null || !b.loaded || now - proofStartUT > ProofDurationS) EndProof();
+        }
+
+        // Unhook + log the verdict against Grok's criterion (a clear commanded body-rate > noise).
+        static void EndProof()
+        {
+            UnhookProof();
+            bool reached = proofCbCount > 0, responded = proofMaxRateDps > 2.0;
+            Debug.Log("[DragonScreen] ⭐ C2 PROOF VERDICT — OnFlyByWire " + (reached ? "WAS" : "was NOT")
+                      + " entered on the non-active booster (" + proofCbCount + " calls); booster "
+                      + (responded ? "RESPONDED" : "did NOT respond") + " (max body-rate "
+                      + proofMaxRateDps.ToString("F1") + " dps). "
+                      + (reached && responded ? "GREEN — control reaches the non-active booster; Step-2 may proceed."
+                         : reached ? "control reaches it but NO attitude response — check the booster's RCS authority."
+                         : "RED — KSP does not drive the non-active booster's OnFlyByWire under this PRE."));
+            recPhase = RecPhase.Done;
+        }
+
+        // Silently remove the proof callback (scene reset / end). Idempotent.
+        static void UnhookProof()
+        {
+            if (proofHooked && proofBooster != null)
+                try { proofBooster.OnFlyByWire -= ProofFlyByWire; } catch { }
+            proofHooked = false; proofBooster = null;
         }
 
         static bool VesselHasPod(Vessel v)
