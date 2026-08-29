@@ -170,5 +170,15 @@ Flight-anchored: rendezvous `ForwardSign = −1` (`s.Z=−1`) raised apoapsis co
 | **R4** | **No thermal instrumentation.** The max-Q "Overheat!" part warning (U-F1) is invisible in the CSV — no part-temperature/thermal-margin column. | schema scan — no temp/thermal/skin col. | **Add `max_skin_temp_frac` + hottest-part id** so a thermal event is diagnosable from the recording. |
 | R5 | (minor) **Display-phase (`Mission.Classify`) not recorded** — CSV `mission_phase` is the guidance/mode phase, so display-phase bugs (U1) can't be caught from the CSV. | schema. | low-priority: add a `display_phase` col if useful. |
 
+## ⭐ 2026-08-29 — GROK END-TO-END ASSESSMENT + MY VERIFICATIONS (plan = `docs/MASTER_FIX_PLAN.md`, 13 campaigns)
+| # | Finding (Grok, VERIFIED by me against source) | Status |
+|---|---|---|
+| **N1** | **The console is a 4-command stub.** `_AutopilotStub.FlightCommands.Run` handles only Abort/DepressResponse/DeorbitNow/WaterDeorbit; **every other panel button `return false` → REFUSED-flash** (Jettison/Mains/Power/String/Reset/Pyros/Breakout/Cancel...). `CancelAllSequences()`=hardcoded false. `VehicleSystems` implements the real handlers (ToggleBus/ToggleString/ResetBus/SuppressFire/FireResponse) but is **never called from Run**. | **OPEN (HIGH) → Campaign 3.** Big miss — the dash is mostly non-functional wiring. |
+| **N2** | **Engage lamps are stubs** — `AutoPilot/StationApproach/DockingOps.Engaged` all `return false`; only `DeorbitOps` real; `BoosterRecovery.Tracked`=null. STRING lamps never light; HullCams never harvest booster cams. | **OPEN → Campaign 3.** |
+| **N3/C2a** | **C2a split (CSV 155116 realtime PHASING, n=1945):** FAR-field (>100 km) att_point **p95 13°** but **69% attitude-only firing** = the prograde-hold **chatter** (the real waste). NEAR-field CW att_point **p95 78°** = off-prograde **BY DESIGN** (not a bug). ⚠ my earlier "att_err p95 104°" read the AoA column. | **[H]→ fixable = far-field prograde-hold; Campaign 1.** |
+| **N4** | `Docked` fly step still ticks `DockingControl` (`DriveActivePhase:309`) — after capture it keeps pushing toward the port. | OPEN → Campaign 8. |
+| **N5** | NAV globe still mirrored (`NavPage.Globe:620-629`) + orbit polylines open (`ProjPolyline:398-414`). | OPEN → Campaign 4. |
+| — | **Grok's other verified points:** F4 already coded (drop); U2/U3/L6 roots cited right; g-cap needs a predictive taper (not another setpoint hop); H1b ignition-budget stays [H] (config read). | folded into the plan |
+
 ## RESOLVED-VERIFIED (tick 3) — moved out when proven
 - Ascent reaches orbit + inc 51.65 (flight-proven ×2). Everything else above is tick-1/2 or open.
