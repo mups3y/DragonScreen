@@ -32,10 +32,11 @@ public static class FlightRecorderTest
         // ---- schema + indices (drift-proof) ----
         Check("schema is non-trivially wide (records everything)", FlightRecorder.Schema.Length >= 55, FlightRecorder.Schema.Length.ToString());
         Check("every index resolves against the schema",
-              FlightRecorder.MetS == 0 && FlightRecorder.CcSlopeMPerRad == FlightRecorder.Schema.Length - 1
+              FlightRecorder.MetS == 0 && FlightRecorder.EngFlameout == FlightRecorder.Schema.Length - 1
               && FlightRecorder.KerCurThrustN >= 0 && FlightRecorder.SteerLossMps >= 0
               && FlightRecorder.DragLossMps >= 0 && FlightRecorder.CalKAero >= 0
               && FlightRecorder.RcsBalForceFrac >= 0 && FlightRecorder.CcDsigmaDeg >= 0
+              && FlightRecorder.WarpRate >= 0 && FlightRecorder.EngIgnited >= 0
               && FlightRecorder.AoaSignedDeg >= 0 && FlightRecorder.RcsBalTorqueNaive >= 0
               && FlightRecorder.SteerSignC >= 0 && FlightRecorder.KerAvail >= 0, "");
         Check("named indices point at the right columns",
@@ -104,6 +105,25 @@ public static class FlightRecorderTest
 
         // a fully-populated row still has exactly one cell per column
         Check("a populated row keeps the schema width", Split(FlightRecorder.Row(row)).Length == FlightRecorder.Schema.Length, "");
+
+        // ---- P0.0 instrument: warp stamp + engine state, and the warp-zeroing of stale control columns ----
+        FlightRecorder.PutInstrument(row, 1000.0, 9, 1);
+        cells = Split(FlightRecorder.Row(row));
+        Check("PutInstrument records warp_rate + eng ignited/flameout",
+              cells[FlightRecorder.WarpRate] == "1000" && cells[FlightRecorder.EngIgnited] == "9"
+              && cells[FlightRecorder.EngFlameout] == "1", "");
+        // populate the control columns, then blank them for a warp row; nav/orbit/eng-state must survive.
+        FlightRecorder.PutCommand(row, 0.5, 0.1, 0.2, 0.3, 30.0, 0.01, 0.02, 0.9, 0.8, 0.7, 5000.0, 4000.0);
+        FlightRecorder.PutRates(row, 8.0, 3.0, 5.0);
+        FlightRecorder.ZeroControlColumnsForWarp(row);
+        cells = Split(FlightRecorder.Row(row));
+        Check("warp-zero BLANKS the stale control columns (act/ctrl_tq/rates/thrust/throttle)",
+              cells[FlightRecorder.ActPitchC] == "" && cells[FlightRecorder.CtrlTqPitch] == ""
+              && cells[FlightRecorder.RatePitchDps] == "" && cells[FlightRecorder.RcsThrustN] == ""
+              && cells[FlightRecorder.Throttle] == "" && cells[FlightRecorder.AttPointDeg] == "", "");
+        Check("warp-zero KEEPS nav/orbit/eng-state (alt, ap, mass, warp_rate, eng_ignited)",
+              cells[FlightRecorder.AltM] != "" && cells[FlightRecorder.WarpRate] == "1000"
+              && cells[FlightRecorder.EngIgnited] == "9", "");
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;

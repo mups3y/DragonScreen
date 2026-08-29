@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# DragonScreen - assess_flight.py  (CURRENT 102-col recorder schema (+B8 T6 cc_dsigma_deg/cc_slope_m_per_rad): met_s / ascent_phase / att_point_deg ...)
+# DragonScreen - assess_flight.py  (CURRENT 105-col recorder schema (+P0.0 warp_rate/eng_ignited/eng_flameout; warp rows excluded from control stats): met_s / ascent_phase / att_point_deg ...)
 # =============================================================================================
 # The WHOLE flight, every phase, one command — the full structured pass the memory rule requires
 # ([[full-structured-flight-analysis]]: never spot-check, the full pass yields the right conclusion).
@@ -54,6 +54,13 @@ def col_active(rows, col):
 def sec(t): print("\n" + "=" * 78 + "\n  " + t + "\n" + "=" * 78)
 
 def g(r, c): return fnum(r.get(c))
+
+# ⭐ P0.0 (I1): a row taken during on-rails warp has FROZEN stale control columns — the recorder now stamps
+# warp_rate and blanks them, but old files may not. Treat warp_rate>1 (or blanked control) as warp: NEVER use
+# such a row for control-signal stats (this is what manufactured the fake "attitude thrash").
+def is_warp(r):
+    w = fnum(r.get("warp_rate"))
+    return w is not None and w > 1.0
 
 # ------------------------------------------------------------------ 1. recorder health
 def recorder_health(rows, hdr):
@@ -227,8 +234,13 @@ def control(rows):
             if v not in ("","-","Idle","None"): return pre+"/"+v
         return "MISSION/"+(r.get("mission_phase","") or "?")
     from collections import OrderedDict
+    # ⭐ P0.0 (I1): exclude on-rails warp rows — their control columns are frozen/blank stale reads.
+    nwarp = sum(1 for r in rows if is_warp(r))
+    rt = [r for r in rows if not is_warp(r)]
+    if nwarp: print("  (excluding %d on-rails warp rows — control columns there are stale/blank)" % nwarp)
+    if not rt: print("  no realtime rows to assess"); return
     segs = OrderedDict()
-    for r in rows:
+    for r in rt:
         segs.setdefault(seg(r), []).append(r)
     print("  segment              rows | ptErr p50/p95/max deg | act_sat_duty | maxRate dps p/r/y")
     for s, rs in segs.items():

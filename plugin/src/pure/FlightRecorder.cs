@@ -79,6 +79,13 @@ namespace DragonScreen
             // = the 1×1 Newton-step bank-|σ| correction (blank when not observable this recompute); cc_slope_m_per_rad
             // = the measured d(downrange)/dσ sensitivity (its SIGN is the convention to confirm from a flown CSV).
             "cc_dsigma_deg", "cc_slope_m_per_rad",
+            // ⭐ P0.0 INSTRUMENT FIDELITY (docs/OPERATING_PROCEDURE + ISSUE_REGISTER I1–I3): warp_rate = the live
+            // TimeWarp multiplier (1 = realtime). When it is >1 on-rails, the control columns above are ZEROED at the
+            // source — during on-rails warp the physics is OFF so the delivered/measured control values are frozen
+            // stale (this is what manufactured the fake "RCS thrash"); a >1 warp_rate row must be FILTERED, never
+            // read as live control. eng_ignited / eng_flameout = counts of the active vessel's main engines that are
+            // commanded-on / flamed-out — so an ignition ATTEMPT is provable even when delivered thrust is 0.
+            "warp_rate", "eng_ignited", "eng_flameout",
         };
 
         static int Index(string name)
@@ -129,7 +136,8 @@ namespace DragonScreen
             AeroAngAccel = Index("aero_ang_accel"), AoaSignedDeg = Index("aoa_signed_deg"),
             RcsBalTorqueNaive = Index("rcsbal_torque_naive"), RcsBalTorqueResid = Index("rcsbal_torque_resid"),
             RcsBalForceFrac = Index("rcsbal_force_frac"),
-            CcDsigmaDeg = Index("cc_dsigma_deg"), CcSlopeMPerRad = Index("cc_slope_m_per_rad");
+            CcDsigmaDeg = Index("cc_dsigma_deg"), CcSlopeMPerRad = Index("cc_slope_m_per_rad"),
+            WarpRate = Index("warp_rate"), EngIgnited = Index("eng_ignited"), EngFlameout = Index("eng_flameout");
 
         // ---- formatting ----
         public static string Num(double v)
@@ -394,6 +402,33 @@ namespace DragonScreen
         {
             Set(c, CcDsigmaDeg, dsigmaDeg);
             Set(c, CcSlopeMPerRad, slopeMPerRad);
+        }
+
+        // ⭐ P0.0 INSTRUMENT: the live warp multiplier + the active vessel's main-engine ignition state, so an
+        // ignition ATTEMPT is provable independent of delivered thrust (I2/I3).
+        public static void PutInstrument(string[] c, double warpRate, int engIgnited, int engFlameout)
+        {
+            Set(c, WarpRate, warpRate);
+            Set(c, EngIgnited, engIgnited);
+            Set(c, EngFlameout, engFlameout);
+        }
+
+        // ⭐ P0.0 (I1): BLANK the delivered/measured control columns for an ON-RAILS warp row. During on-rails
+        // warp the physics loop is OFF, so every one of these is a FROZEN stale value that masquerades as a live
+        // measurement (this is exactly what manufactured the fake "RCS thrash" misdiagnosis). Nav + orbit + MOI +
+        // phase + eng-state stay (they are valid / the point) — only the control-loop signals are voided. Pure +
+        // headless-tested. The glue calls this AFTER the normal fill, only when on-rails warp is active.
+        public static void ZeroControlColumnsForWarp(string[] c)
+        {
+            int[] control = {
+                Throttle, TransX, TransY, TransZ,
+                AttErrDeg, RateCmd, TorqueCmd, AttPointDeg, AttRateCmd, AttRateMeas,
+                ActPitchC, ActYawC, ActRollC,
+                CtrlTqPitch, CtrlTqYaw, CtrlTqRoll,
+                RatePitchDps, RateRollDps, RateYawDps,
+                ThrustN, RcsThrustN, AccelG,
+            };
+            for (int i = 0; i < control.Length; i++) Set(c, control[i], double.NaN);   // NaN → blank cell
         }
     }
 }

@@ -135,14 +135,55 @@ namespace DragonScreen
                 }
                 else FlightRecorder.PutKer(row, false, 0, 0, 0, 0);
 
+                // ⭐ P0.0 INSTRUMENT: the live warp multiplier + the active vessel's main-engine ignition state.
+                double warpRate = 1.0; bool onRailsWarp = false;
+                try
+                {
+                    warpRate = TimeWarp.CurrentRate;
+                    onRailsWarp = TimeWarp.WarpMode == TimeWarp.Modes.HIGH && TimeWarp.CurrentRateIndex > 0;
+                }
+                catch { }
+                int engIgn, engFlame; EngineState(v, out engIgn, out engFlame);
+                FlightRecorder.PutInstrument(row, warpRate, engIgn, engFlame);
+
                 Action<string[]> fill = Fill;   // the active controller's PHASE-SPECIFIC columns on top of the base
                 if (fill != null) { try { fill(row); } catch { } }
+
+                // ⭐ P0.0 (I1): on-rails warp → the physics loop is OFF, so every delivered/measured control value
+                // above is a FROZEN stale read. Void them (LAST, so nothing re-fills them) — a warp_rate>1 row must
+                // never be read as live control. Nav/orbit/MOI/phase/eng-state remain valid.
+                if (onRailsWarp) FlightRecorder.ZeroControlColumnsForWarp(row);
+
                 writer.WriteLine(FlightRecorder.Row(row));
             }
             catch (Exception e)
             {
                 Debug.LogWarning("[DragonScreen] flight-log sample failed: " + e.Message);
             }
+        }
+
+        // ⭐ P0.0 (I2): count the active vessel's MAIN engines (ModuleEngines, not RCS) that are commanded-on
+        // (EngineIgnited) and that have flamed out — so an ignition ATTEMPT is provable in the CSV even when the
+        // delivered thrust column reads 0 (was the booster ambiguity: engine-not-firing vs not-captured). Guarded.
+        static void EngineState(Vessel v, out int ignited, out int flameout)
+        {
+            ignited = 0; flameout = 0;
+            if (v == null || v.parts == null) return;
+            try
+            {
+                for (int i = 0; i < v.parts.Count; i++)
+                {
+                    Part p = v.parts[i];
+                    for (int m = 0; m < p.Modules.Count; m++)
+                    {
+                        ModuleEngines e = p.Modules[m] as ModuleEngines;
+                        if (e == null) continue;
+                        if (e.EngineIgnited) ignited++;
+                        if (e.flameout) flameout++;
+                    }
+                }
+            }
+            catch { }
         }
 
         // Great-circle surface distance from the launch reference to the current sub-point (metres).

@@ -287,10 +287,19 @@ namespace DragonScreen
         }
 
         // SES-1: light the MVac (second stage). ⛔ ullage must already be settled (Step C wires that ahead).
+        // ⭐ P0.0 (I3): the RealFuels settle→light→retry cycle calls this every tick, so log ONLY when the lit
+        // count changes or ≥2 s since the last line (was spamming "0 engine(s) lit" 1,246×). The recorder's
+        // eng_ignited column carries the per-tick truth; the log just needs the transitions.
+        static int lastS2Lit = -1; static double lastS2LogUT = -999.0;
         public static int IgniteSecondStage(Vessel v)
         {
             int n = ActivateEngines(v, EngineRole.SecondStage);
-            Debug.Log("[DragonScreen] S2 (MVac) ignition — " + n + " engine(s) lit");
+            double now = Planetarium.GetUniversalTime();
+            if (n != lastS2Lit || now - lastS2LogUT > 2.0)
+            {
+                Debug.Log("[DragonScreen] S2 (MVac) ignition — " + n + " engine(s) lit");
+                lastS2Lit = n; lastS2LogUT = now;
+            }
             return n;
         }
 
