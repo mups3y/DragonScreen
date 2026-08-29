@@ -21,10 +21,15 @@
 - [x] `FlightLog.cs`: stamp `warp_rate`; on on-rails warp (`WarpMode==HIGH && CurrentRateIndex>0`) blank the delivered/measured control columns; record main-engine `EngineIgnited`/`flameout` counts.
 - [x] `Actuator.cs`: rate-limit the S2 ignition log (was 1,246× spam).
 - [x] `tools/assess_flight.py`: `is_warp()` helper; §8 control-authority stats exclude `warp_rate>1` rows.
-- [x] **Tick1 DONE** — `build.py test` green (731,271 + new warp-zero/instrument checks). Committed.
-- [ ] **Tick2** — Chris approves. → [ ] **Tick3** — Chris flies (below).
-- **Tick3 (Chris flies):** one short flight (ascent + a booster focus-switch). CSV+log must show: warp rows carry `warp_rate>1` with blank control columns; `eng_ignited` shows the booster ignition attempt; the ignition log no longer spams.
-- **DoD:** a warped CSV can no longer be misread; booster ignition is visible. Then, and only then, C1.
+- [x] **Tick1 DONE** — `build.py test` green (731,271 + new warp-zero/instrument checks). Committed `bd131f3`.
+- [x] **Tick2 DONE** — Grok reviewed + signed off (blank/keep lists correct, warp gate correct, eng-state sufficient). Fly as designed.
+- [ ] **Tick3 — Chris flies. Required profile (Grok-refined):**
+      1. Ascent to orbit (realtime rows + clean MECO/S2/SECO).
+      2. **An intentional on-rails warp interval ≥30–60 s** in orbit/coast (so the blanking + `warp_rate` are inspectable). A short physics-warp (LOW) segment too is a bonus (proves those rows stay LIVE).
+      3. **One booster focus-switch that includes an ignition attempt** (or the normal recovery that should attempt it).
+      No full landing / long rendezvous needed for C0.
+- **First analysis step after the flight (do this BEFORE anything else):** `warp_rate` histogram + a side-by-side of one realtime row vs one warped row for the blanked columns. Then check `eng_ignited`/`eng_flameout`/`thrust_n`, then confirm the ignition log didn't spam.
+- **DoD:** warp rows unmistakable + control columns blank there; booster ignition state visible; log quiet. Record the Tick-3 result (pass/fail on I1–I3) in `ISSUE_REGISTER.md` + the handoff note **before** any C1 work.
 
 ### C1 — INTEGRATION SCORECARD (P0)
 **Goal:** force the longest clean recorded prefix under the trustworthy instrument; produce the scorecard. **Class: (evidence only — no guidance change; if a blocker is found, it defines the NEXT single-class campaign, not this one.)**
