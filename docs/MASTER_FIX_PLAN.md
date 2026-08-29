@@ -23,6 +23,13 @@ Ascent→orbit inc 51.64 (L1); dual-flight control (H1); H1b mode-fix (FIXED⚑ 
   78°** — off-prograde **by design**, only 24% attitude-only. → the fixable waste is far-field prograde-hold; near-field
   78° is NOT a bug. Confirms Grok's N3 + fork table.
 
+## BUILD STATUS (2026-08-29, all headless-green + installed, UNFLOWN)
+- ✅ **Campaign 1(a)** — far-field coast attitude gate (`RvCoast`, `fa67023`). *(1(b) T14 inertial pre-align = follow-on.)*
+- ✅ **Campaign 2** — shroud-spam idempotency + `Actuator.CloseNoseShroud` + L6 sep-fix (`e8a570e`). *(U2/U3 deferred.)*
+- ✅ **Campaign 3** — console dispatcher `FlightCommands.Run` → real `Systems` handlers + engage lamps (`8cc4f62`).
+- ▶ **NEXT (no flight):** Campaign 4 (NAV, `preview`-verify), 5 (g-taper — measure then predictive), 6 (L4, after 1).
+- Flights owed: 7 (H1b confirm), 8 (dock), 9 (return), 10 (FDIR-acting).
+
 ## Campaigns (execute in this order)
 
 **Campaign 0 — CONFIG READ** *(reference, no code, no flight)* — do in the session that touches H1b or fidelity.
