@@ -45,12 +45,21 @@ body-rate 7.9→36 °/s, loaded+unpacked throughout) → **control reaches it**;
 the S2 MVac **lit and burned to SECO → orbit (ap 384 × pe 154, inc 51.65°)** → **the C1 ullage-loss blocker is
 fixed by not switching focus.** ⇒ Direction A validated; Step-2 approved-in-principle, **awaiting Grok review before code.**
 
-### ▶ C2 Step-2 — full recovery FSM on the non-active booster — *NEXT (Grok review first, then §8 edit plan)*
-Wire `BoosterControl` to fly the separated booster to a landing **on its own `OnFlyByWire`** (not the FlightDriver/
-active-vessel channels it currently uses) while the Dragon stays active. Route `Steering.Point`/`SetThrottle`
-equivalents into the booster's own control. Also surfaces the C1 "booster throttle never raised" bug — fix it here
-only if it is the missing command. One change class (Phase-FSM). Re-run the scorecard after; exit conditions: S2
-reaches orbit AND booster `eng_ignited ≥ 1` at entry/landing + lands within a stated bound.
+### ▶ C2 Step-2 — full recovery FSM on the non-active booster — *NEXT (write the §8 MYSELF, then Grok sanity-check)*
+Fly the separated booster to a landing on its **own `OnFlyByWire`** while the Dragon stays active. One change class (Phase-FSM).
+**⭐ THE REAL BLOCKER (found by reading, not by asking):** `AttitudePilot` is a **`static` class** — shared static
+state `posPid[]`/`velPid[]`/`smTx,smTy,smTz`/`actEst[]` (AttitudePilot.cs:29–45) that writes to **`FlightDriver`'s
+active-vessel channels**. It cannot drive two vessels at once (state collision + it would command the Dragon, not the
+booster). This contradicts the stated "instance-per-vehicle" invariant. **Fix direction (self-derived):**
+- Refactor `AttitudePilot` **static → instantiable**: a default instance for the Dragon's existing `Steering.Point`
+  path (unchanged behaviour), + a **second instance for the booster**. No duplicated frame math.
+- Reuse the PURE `AttitudeLoop.Axis(...)` — it **already takes the PID state as parameters**, so the loop math is
+  untouched; only the glue that *holds state + chooses where to write* changes.
+- The booster instance writes attitude into the **booster's own `FlightCtrlState`** (the one KSP hands the callback),
+  + `s.mainThrottle` + engine-mode/fins/legs direct via `Actuator`. Replace `ProofFlyByWire` with `BoosterControl.Drive(booster, s)`.
+- Convergence is fine: booster `OnFlyByWire` runs at ~50 Hz (full physics rate — proven, `cbEntered≈52/s` in the Step-1 flight).
+- The C1 "booster throttle never raised" bug is fixed here only if it is the literal missing `s.mainThrottle` write.
+Re-run the scorecard after; exit conditions: S2 reaches orbit **AND** booster `eng_ignited ≥ 1` at entry/landing + lands within a stated bound.
 
 ### (old Step-1 plan, now superseded by the GREEN result above)
 ### ▶ (was) C2 — MECO booster-recovery hand-off — Step-1 DUAL-FLIGHT PROOF
