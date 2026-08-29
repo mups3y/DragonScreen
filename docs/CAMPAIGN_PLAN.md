@@ -39,7 +39,14 @@ Evidence-only; `is_warp` fixed to key on blanked-control (physics-warp rows kept
   insertion), and the booster's own engines never ignite (`eng_ignited`=0 through entry+landing → crash @119 m/s).
 - Mission B (`121530`) is a SEPARATE deorbit test (MET discontinuity) — deorbit didn't complete; parked.
 
-### ▶ C2 — MECO booster-recovery hand-off ignition failure — *NEXT (needs §8 State Confirmation first)*
+### ▶ C2 — MECO booster-recovery hand-off — Step-1 DUAL-FLIGHT PROOF (Tick-1 done, commit de6d487; awaiting Tick-3)
+**Grok-reviewed, attitude-first.** No focus switch: Dragon stays active (S2 gets its continuous insertion); the
+non-active booster is driven via its own `OnFlyByWire` with a constant pitch command; log `cbEntered` + body-rate.
+**Go/no-go (both required):** (1) booster shows a clear commanded body-rate response (> ~2 °/s, > noise) AND
+`cbEntered`>0; (2) Dragon stays active + S2 lights + does a meaningful insertion burn. GREEN → Step-2 (full FSM on
+the non-active booster). `cbEntered`=0 → RED (KSP doesn't drive it under this PRE). Report log evidence, STOP for review.
+
+### (superseded scope note) — MECO booster-recovery hand-off ignition failure
 **Scope (the only thing C2 may touch):** why neither the S2 MVac (after the coast) nor the booster octaweb ignites at/
 after the MECO hand-off. **Diagnose before choosing the class** — likely candidates: RealFuels **ullage** not settled
 before the light on either vehicle (Actuator/ignition class), OR the **orchestration ordering** (recover the booster
