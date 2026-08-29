@@ -40,7 +40,7 @@ namespace DragonScreen
         public BoosterPhase Phase;
         public Vec3 AimForward;         // ALWAYS a unit vector — the thrust/engine axis to point
         public double Throttle;
-        public int EngineMode;          // 0 = off, 3 = three-engine, 1 = centre engine
+        public int EngineMode;          // VehicleParts consts: 0=off/AllEngines(unused in recovery), 1=ModeThreeEngine, 2=ModeCentreOnly
         public double AoaDeg;           // the deliberate, held angle of attack (0 outside aero steering)
         public bool DeployFins, DeployLegs;
     }
@@ -101,7 +101,8 @@ namespace DragonScreen
                     // 3 engines, held retrograde, shedding speed. Cut at the survivable speed → aero descent.
                     c.Phase = BoosterPhase.EntryBurn;
                     c.AimForward = Retro(s.SurfaceVelocity, s.Up);
-                    c.EngineMode = 3; c.Throttle = 1.0;
+                    c.EngineMode = VehicleParts.ModeThreeEngine; c.Throttle = 1.0;   // ⛔ VehicleParts const (the bare 3 decoded as the
+                                                                            // all/outer set = engines that spent their ignition at liftoff → H1b)
                     if (s.SpeedMps <= EntryBurnCutSpeedMps) { c.Phase = BoosterPhase.AeroDescent; c.EngineMode = 0; c.Throttle = 0.0; }
                     break;
 
@@ -131,7 +132,7 @@ namespace DragonScreen
                     c.Phase = BoosterPhase.LandingBurn;
                     c.AimForward = Retro(s.SurfaceVelocity, s.Up);
                     c.Throttle = 1.0;
-                    c.EngineMode = 1;                                  // CenterOnly — one engine, one ignition, no re-light
+                    c.EngineMode = VehicleParts.ModeCentreOnly;       // CenterOnly (VehicleParts const; was the bare 1 = ThreeEngine) — one ignition, no re-light
                     c.DeployFins = true;
                     c.DeployLegs = s.AltitudeM <= LegsDeployAltM;
                     if (s.AltitudeM <= 1.0 && s.DescentSpeedMps <= LandedSpeedMps)

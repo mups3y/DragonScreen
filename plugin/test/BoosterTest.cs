@@ -93,7 +93,7 @@ public static class BoosterTest
         BoosterInputs entry = Booster(); entry.AltitudeM = 60000.0; entry.SpeedMps = 2000.0;
         Check("starts the entry burn descending through 70 km fast", BoosterDescent.Guide(entry, BoosterPhase.Flip).Phase == BoosterPhase.EntryBurn, "");
         BoosterCommand eb = BoosterDescent.Guide(entry, BoosterPhase.EntryBurn);
-        Check("entry burn is 3 engines at full", eb.EngineMode == 3 && eb.Throttle == 1.0, "");
+        Check("entry burn is 3 engines at full", eb.EngineMode == VehicleParts.ModeThreeEngine && eb.Throttle == 1.0, "mode=" + eb.EngineMode);
         BoosterInputs bled = Booster(); bled.SpeedMps = 1200.0; bled.AltitudeM = 40000.0;
         Check("entry burn cuts to the aero descent at the survivable speed",
               BoosterDescent.Guide(bled, BoosterPhase.EntryBurn).Phase == BoosterPhase.AeroDescent, "");
@@ -109,11 +109,12 @@ public static class BoosterTest
         BoosterInputs land = Booster(); land.AltitudeM = 400.0; land.DescentSpeedMps = 50.0;
         BoosterCommand lb = BoosterDescent.Guide(land, BoosterPhase.LandingBurn);
         Check("landing burn is the SINGLE CENTRE engine (no re-ignition/spool 3->1 mid-burn)",
-              lb.Throttle == 1.0 && lb.EngineMode == 1, "mode=" + lb.EngineMode);
+              lb.Throttle == 1.0 && lb.EngineMode == VehicleParts.ModeCentreOnly, "mode=" + lb.EngineMode);
         Check("legs deploy in the final hundreds of metres", lb.DeployLegs, "");
         // and the entry burn is the three-engine mode (a different, single-ignition mode)
-        Check("entry burn uses the 3-engine mode, landing the 1-engine mode (distinct ignitions)",
-              eb.EngineMode == 3 && lb.EngineMode == 1, "");
+        Check("entry burn uses the 3-engine mode, landing the centre mode (distinct ignitions)",
+              eb.EngineMode == VehicleParts.ModeThreeEngine && lb.EngineMode == VehicleParts.ModeCentreOnly
+              && eb.EngineMode != lb.EngineMode, "");
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;

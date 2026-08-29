@@ -92,11 +92,11 @@ public static class FlightRecorderTest
               && Math.Abs(double.Parse(cells[FlightRecorder.CalBeta], System.Globalization.CultureInfo.InvariantCulture) - 2000.0) < 20.0, cells[FlightRecorder.CalBeta]);
 
         // booster filler takes the real command struct
-        BoosterCommand bc = new BoosterCommand { Phase = BoosterPhase.LandingBurn, AoaDeg = 5, EngineMode = 1, Throttle = 1.0 };
+        BoosterCommand bc = new BoosterCommand { Phase = BoosterPhase.LandingBurn, AoaDeg = 5, EngineMode = VehicleParts.ModeCentreOnly, Throttle = 1.0 };
         FlightRecorder.PutBooster(row, bc, 1200, 45);
         cells = Split(FlightRecorder.Row(row));
         Check("PutBooster records phase + engine mode + AoA from the command",
-              cells[FlightRecorder.BoostPhase] == "LandingBurn" && cells[FlightRecorder.EngineMode] == "1"
+              cells[FlightRecorder.BoostPhase] == "LandingBurn" && cells[FlightRecorder.EngineMode] == "2"
               && cells[FlightRecorder.BoostAoaDeg] == "5", "");
 
         // Δv accounting residual

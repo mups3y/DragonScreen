@@ -26,7 +26,7 @@ namespace DragonScreen
     public static class BoosterControl
     {
         static BoosterPhase phase = BoosterPhase.Idle;
-        static int currentMode = -1;         // -1 = none selected; 0/3/1 = AllEngines/ThreeLanding/CenterOnly
+        static int currentMode = -1;         // -1 = none selected; VehicleParts consts 0=All, 1=ThreeEngine, 2=CentreOnly
         static bool legsDown, finsOut;
         static double smoothedBc;            // measured ballistic coefficient (for the impact predictor)
 
