@@ -28,8 +28,9 @@ Ascent→orbit inc 51.64 (L1); dual-flight control (H1); H1b mode-fix (FIXED⚑ 
 - ✅ **Campaign 2** — shroud-spam idempotency + `Actuator.CloseNoseShroud` + L6 sep-fix (`e8a570e`). *(U2/U3 deferred.)*
 - ✅ **Campaign 3** — console dispatcher `FlightCommands.Run` → real `Systems` handlers + engage lamps (`8cc4f62`).
 - ✅ **Campaign 4** — VERIFIED, both Grok items **FALSE ALARMS** (2026-08-29). Globe is NOT mirrored (its strips assign u→screen the reverse of Quad — a trial swap put east/India on the LEFT, the preview caught it, reverted); the orbit "gap" is a rotation-corrected `min(period,3h)` spiral, NOT a closable ellipse (`(n-1)→0` = spurious chord). **No NavPage change.** Kept the preview `DrawImage` reversed-U fix (the flat-map texture was silently skipped in every preview) + a per-view u-convention regression test. **No reinstall needed** (shipped behaviour unchanged; NavPage.cs comment-only).
-- ▶ **NEXT (no flight):** Campaign 5 (g-taper — measure then predictive), 6 (L4, after 1).
-- Flights owed: 7 (H1b confirm), 8 (dock), 9 (return), 10 (FDIR-acting).
+- ✅ **Campaign 5** — g overshoot ROOT-FIXED (`a4875e9`, headless-green, UNFLOWN). NOT a predictive-taper case: measured the real root = the **MVac RealFuels minThrottle floor 0.3854** (the g-cap returned an ENGINE throttle as a MAIN throttle → felt g = setpoint×1.107). `ControlLaw.ThrottleLimit` now maps the cap through the floor; `AscentControl.MinThrottle01` reads it. Verified 3 ways (flight ratio, config, currentThrottle). **NEEDS INSTALL + a confirm flight** (peak ≈4.1, SECO throttle ≈0.65). Then a fidelity decision for Chris: raise `S2GLimitG` toward the real ~4.5 g.
+- ▶ **NEXT (no flight):** Campaign 6 (L4 att-torque, after 1 — attitude loop, handle with care).
+- Flights owed: **5-confirm (g-cap)**, 7 (H1b confirm), 8 (dock), 9 (return), 10 (FDIR-acting).
 
 ## Campaigns (execute in this order)
 
@@ -78,9 +79,13 @@ streak a chord across the ~22° rotation seam. Left open. **Kept:** preview `Dra
 texture was silently skipped in every `build.py preview`) + `PageTest.NavTexture` fencing each view's u-convention.
 ⛔ Do NOT "unify" the two views' u-order — that IS the mistake this campaign caught.
 
-**Campaign 5 — G-TAPER** *(throttle law)* — F5/M1. ⛔ do NOT lower `S2GLimitG` again (4.5→4.3→4.1 still 4.53). Plot
-`accel_g` vs `mass_kg` last ~15 s S2 on 155116 → fit `g_pred = g + τ·dg/dt`; cap on PREDICTED g in `ControlLaw.ThrottleLimit`.
-ControlTest + Tick-3 peak ≤4.5. M2/F6 **[DG]**.
+**Campaign 5 — G-TAPER** *(throttle law)* — ✅ DONE 2026-08-29 (`a4875e9`), but the plan's premise was WRONG. The measurement
+(155116 + 144114 + 134620) showed the overshoot is NOT limiter lag and needs NO predictive taper: it is the **MVac RealFuels
+minThrottle floor 0.3854**. RF remaps main→engine throttle `minThr + t·(1−minThr)`; `ControlLaw.ThrottleLimit`'s g-cap is the
+correct ENGINE throttle but was returned as a MAIN throttle → felt g = setpoint·(minThr+t·(1−minThr))/t = 4.1·1.107 = 4.53.
+Verified 3 ways (flight ratio 1.104–1.107, config floor 0.3854, currentThrottle 0.8666=formula). FIX: map the cap back through
+the floor + `AscentControl.MinThrottle01` reads the field. ControlTest asserts felt g = setpoint; DispersionTest fuzzes the
+floor. NEEDS a confirm flight (peak ≈4.1). Then FIDELITY (Chris): raise `S2GLimitG` toward real ~4.5 g. ⛔ still do NOT LOWER it.
 
 **Campaign 6 — ATT-TORQUE** *(authority estimate)* — AFTER 1 (same loop). L4 [V]: `AttitudeController.ControlTorque`
 uses `max(reported, geometric)` with hysteresis (stock ~2 N·m makes the loop saturate). F1 deorbit re-fly after **[DG]**.
