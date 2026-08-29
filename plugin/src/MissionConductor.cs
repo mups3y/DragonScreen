@@ -50,7 +50,10 @@ namespace DragonScreen
         // booster the upper stage is non-active → it COASTS (kept loaded by PRE), then resumes when refocused —
         // which is why the max booster↔upper-stage separation stays ~hundreds of km (the S2 is not accelerating
         // away). PreRangeKm = that max separation + margin ("say 500 km → set 600").
-        [Tunable] public static bool AutoRecoverBooster = false;   // opt-in: recover the booster (our-PRE + focus)
+        [Tunable] public static bool AutoRecoverBooster = true;    // ⭐ DEFAULT-ON (Chris 2026-08-29: don't make me re-arm
+                                                                   // it every session) — recover the booster (our-PRE +
+                                                                   // focus). The DISPLAY-tab toggle still turns it OFF live;
+                                                                   // a PluginData/tuning.cfg line can override the default.
         [Tunable] public static double PreRangeKm = 600.0;         // PRE range = max booster↔upper-stage sep + margin
         enum RecPhase : byte { Idle, Armed, FlyingBooster, Returned, Done }
         static RecPhase recPhase = RecPhase.Idle;
