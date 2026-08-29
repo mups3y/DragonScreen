@@ -1,10 +1,22 @@
 # RETURN FIX PLAN — the autopilot cannot bring the crew home (council-verified)
 
-> **NEXT-SESSION START HERE.** This is the active build plan. Read it + `docs/ISSUE_REGISTER.md` +
-> the memory. Then build **R1**. Process is unchanged: §8 output before code, ONE change class per
-> campaign, pure-first + headless where the logic is pure, 3-tick (nothing "done" until FLOWN),
-> instrument the same pass, verify every claim against live code before editing (line numbers below
-> are as of 2026-08-30 HEAD — re-verify).
+> **STATUS 2026-08-30 — R1 BUILT (Tick-1), awaiting the Tick-3 flight.** R1 + R3 + R6(shroud) shipped as ONE
+> actuator-ignition-staging campaign (commit `cb45cb3`): the deorbit now runs on the DRACOS via the shared
+> `plugin/src/DeorbitBurn.cs` (both nominal return + emergency rescue call it), the empty-SuperDraco path is
+> deleted, the trunk fires the `ModuleTundraDecoupler` by name, and the nose shroud stays open through the
+> burn. Headless-green (731239 checks) + full Roslyn compile + installed. **NEXT: fly one real deorbit on the
+> ship's own MMH+NTO (Tick-3), then R2 (corridor FPA) + R4 (entry survivability).**
+>
+> Process is unchanged: §8 output before code, ONE change class per campaign, pure-first + headless where the
+> logic is pure, 3-tick (nothing "done" until FLOWN), instrument the same pass, verify every claim against
+> live code before editing.
+>
+> ⭐ **Two findings from building R1 (verified in code, sharpened the plan):** (a) the NOMINAL return
+> (`ReturnControl`) was ALREADY deorbiting on the Dracos correctly — only the RESCUE path (`AbortControl`)
+> fired the empty SuperDraco; the fix unified them so they can't diverge again. (b) `Actuator.JettisonTrunk`
+> was ALREADY correct (fires the Tundra decoupler by name) — only `ReturnControl`'s local copy was broken, so
+> R3 was a delete-the-duplicate, not a two-place fix. (c) `ReturnControl` had been CLOSING the shroud at trunk
+> sep, before the burn — a latent attitude-authority bug now fixed (shroud closes only after the burn).
 
 ## Why (Chris's 2026-08-30 return-test session)
 Chris flew the return; the autopilot **stranded and nearly killed five+ crews** — he hand-flew them home
@@ -53,7 +65,12 @@ a check that the installed DLL matches source (the rescue path was rewired recen
 
 ## THE FIXES — build in this order (R1 first)
 
-### R1 — deorbit on the DRACOS, not the empty SuperDraco  ← BUILD THIS FIRST
+### R1 — deorbit on the DRACOS, not the empty SuperDraco  ✅ BUILT (Tick-1, `cb45cb3`) — fly to Tick-3
+> Done in code: `plugin/src/DeorbitBurn.cs` is the ONE shared burn (`AbortControl.RunDeorbitBurn` +
+> `ReturnControl.FlyDeorbitEntry` both call `DeorbitBurn.Tick`); SuperDraco throttle + `DeorbitGLimit` deleted;
+> planned/delivered Δv instrumented on both paths (`PutDv`). ⏳ Owed at Tick-3: a flight that lowers pe to the
+> corridor on the ship's own MMH+NTO with delivered Δv > 0, and reconciles the Draco budget (drained to 0 by
+> 024400 — check the Campaign-6 RCS fix cut the thrash-drain; the 655/509 L load is ample for ~100 m/s).
 - **Fix:** unify BOTH the nominal (`ReturnControl.FlyDeorbitEntry`) and rescue
   (`AbortControl.FlyDeorbitReturn`) deorbit onto ONE **Draco** burn — retrograde-point + Draco
   translation, **closed-loop on measured pe** to the entry corridor (R2), delete the SuperDraco-deorbit
@@ -71,10 +88,12 @@ a check that the installed DLL matches source (the rescue path was rewired recen
 - Target an entry flight-path angle appropriate to a lifting capsule in RSS; keep it `[Tunable]`.
 - **Files:** `plugin/src/pure/DeorbitGuidance.cs` / `Entry.cs`; `DeorbitTargetPeM` in both controllers.
 
-### R3 — trunk jettison (confirmed bug)
-- Detect `ModuleTundraDecoupler` and invoke its `Decouple` event (the TRUNK part, not the Dragon-drop/S2
-  decoupler), in BOTH `ReturnControl.JettisonTrunk` and `Actuator`/`AbortControl`. Acceptance: "TRUNK
-  JETTISON" logged, mass drops ~3.6 t.
+### R3 — trunk jettison (confirmed bug)  ✅ BUILT (Tick-1, `cb45cb3`) — fly to Tick-3
+- Was a one-place fix, not two: `Actuator.JettisonTrunk` → `FireDecoupler(TrunkJettison)` → `FirePartDecoupler`
+  ALREADY invokes the `ModuleTundraDecoupler` `Decouple` event by name; only `ReturnControl`'s local copy did
+  the type-only `ModuleDecouple` lookup. Fix: the shared `DeorbitBurn` calls `Actuator.JettisonTrunk`, and the
+  broken local `ReturnControl.JettisonTrunk` is deleted. Acceptance at Tick-3: "TRUNK JETTISON" logged, mass
+  drops ~2.3 t (craft dump: the trunk is 2.3 t wet).
 
 ### R4 — entry survivability: test ballistic-from-corridor, add lift only if needed
 - After R1+R2 give a shallow deorbit, FLY it and measure the shield-forward ballistic entry. If peak g ≤
@@ -87,8 +106,9 @@ a check that the installed DLL matches source (the rescue path was rewired recen
   still hot from a correct entry, reconcile the chute maxTemp — **Chris fidelity call**.
 
 ### R6 — shroud latch + nominal LZ bank steering
-- **Shroud:** latch open/close (kill the 14k spam); keep OPEN through the Draco deorbit burn (RCS needs
-  it — the nose cone shields the Dracos), CLOSE only after the burn.
+- **Shroud:** ✅ the OPEN-through-burn / CLOSE-after half is BUILT in `DeorbitBurn` (Tick-1, `cb45cb3`) —
+  `Actuator.OpenNoseShroud` every tick (Campaign-2 idempotent latch, so no spam), close only on completion.
+  The nominal path's premature close-at-trunk-sep is fixed. (LZ steering below is still owed.)
 - **LZ steering (nominal only):** tune the coded `EntrySteering` footprint → `Entry.Guide` σ → bank loop
   to Chris's confirmed roll-steering (rolling moved the predicted impact — direction confirmed, magnitude
   unisolated). The autopilot must fly it RECORDED to get the tuning data (Chris's manual runs had no CSV).
