@@ -473,6 +473,25 @@ namespace DragonScreen
         public static void OpenNoseShroud(Vessel v) { SetNoseShroud(v, true); }
         public static void CloseNoseShroud(Vessel v) { SetNoseShroud(v, false); }   // for the TOGGLE SHROUD button (Campaign 2/3)
 
+        // The TOGGLE SHROUD dash button (Campaign 3): open if closed/closing, close if open/opening — read the anim
+        // Progress and flip toward the opposite end. Returns true (always actionable).
+        public static bool ToggleNoseShroud(Vessel v)
+        {
+            if (v == null) return false;
+            try
+            {
+                for (int i = 0; i < v.parts.Count; i++)
+                {
+                    List<ModuleAnimateGeneric> an = v.parts[i].Modules.GetModules<ModuleAnimateGeneric>();
+                    for (int m = 0; m < an.Count; m++)
+                        if (an[m].animationName == "TE_23_CD2_NOSECONE_ANI")
+                        { if (an[m].Progress < 0.5f) OpenNoseShroud(v); else CloseNoseShroud(v); return true; }
+                }
+            }
+            catch (Exception e) { Debug.LogWarning("[DragonScreen] nose shroud toggle failed: " + e.Message); }
+            return false;
+        }
+
         static void SetNoseShroud(Vessel v, bool open)
         {
             if (v == null) return;

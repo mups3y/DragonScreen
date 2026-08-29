@@ -72,6 +72,8 @@ namespace DragonScreen
         // True while the non-active booster recovery is flying. FlightDriver reads this to NOT reset the booster
         // FSM state on the Dragon's frames (the FSM state lives in BoosterControl statics — see FlightDriver §219).
         public static bool BoosterRecoveryActive { get { return recPhase == RecPhase.FlyingBooster; } }
+        // The booster being recovered (for the HullCams / BoosterRecovery.Tracked lamp — Campaign 3). Null when idle.
+        public static Vessel RecoveryBooster { get { return recPhase == RecPhase.FlyingBooster ? recBooster : null; } }
 
         public static void Reset()
         {
