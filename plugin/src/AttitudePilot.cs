@@ -26,7 +26,10 @@ namespace DragonScreen
         // ---- shared [Tunable] config (read by every AttitudeController instance) ----
         // B4 lag compensation: command the gimbal harder when it slews slowly (snappier loop through max-Q).
         [Tunable] public static bool UseLagComp = true;
-        // Below this reported RCS torque → use the geometric estimate (the stock-GetPotentialTorque-~0 workaround).
+        // Campaign 6: no longer a GATE — the loop now ALWAYS takes max(stock-reported, geometric) RCS torque
+        // (the stock report flickers ~2 N·m 91% of RCS-on ticks, above any sane gate, and saturated the Dracos).
+        // Retained as the DIAGNOSTIC threshold: when the geometric estimate exceeds the report by more than this,
+        // log once that the stock report is under-reading. Kept [Tunable] so saved configs stay valid.
         [Tunable] public static double RcsTorqueFloorNm = 1.0;
 
         // ---- diagnostics forwarded from the active instance (the recorder / FDIR / AscentControl read these) ----
