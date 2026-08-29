@@ -28,9 +28,9 @@ Ascent→orbit inc 51.64 (L1); dual-flight control (H1); H1b mode-fix (FIXED⚑ 
 - ✅ **Campaign 2** — shroud-spam idempotency + `Actuator.CloseNoseShroud` + L6 sep-fix (`e8a570e`). *(U2/U3 deferred.)*
 - ✅ **Campaign 3** — console dispatcher `FlightCommands.Run` → real `Systems` handlers + engage lamps (`8cc4f62`).
 - ✅ **Campaign 4** — VERIFIED, both Grok items **FALSE ALARMS** (2026-08-29). Globe is NOT mirrored (its strips assign u→screen the reverse of Quad — a trial swap put east/India on the LEFT, the preview caught it, reverted); the orbit "gap" is a rotation-corrected `min(period,3h)` spiral, NOT a closable ellipse (`(n-1)→0` = spurious chord). **No NavPage change.** Kept the preview `DrawImage` reversed-U fix (the flat-map texture was silently skipped in every preview) + a per-view u-convention regression test. **No reinstall needed** (shipped behaviour unchanged; NavPage.cs comment-only).
-- ✅ **Campaign 5** — g overshoot ROOT-FIXED (`a4875e9`, headless-green, UNFLOWN). NOT a predictive-taper case: measured the real root = the **MVac RealFuels minThrottle floor 0.3854** (the g-cap returned an ENGINE throttle as a MAIN throttle → felt g = setpoint×1.107). `ControlLaw.ThrottleLimit` now maps the cap through the floor; `AscentControl.MinThrottle01` reads it. Verified 3 ways (flight ratio, config, currentThrottle). **NEEDS INSTALL + a confirm flight** (peak ≈4.1, SECO throttle ≈0.65). Then a fidelity decision for Chris: raise `S2GLimitG` toward the real ~4.5 g.
+- ✅✅ **Campaign 5 — RESOLVED-VERIFIED (Tick-3, flight `003648`, `a4875e9`+`f12bd32`).** Root = the **MVac RealFuels minThrottle floor 0.3854** (the g-cap returned an ENGINE throttle as a MAIN throttle → felt g = setpoint×1.107), fixed by mapping the cap through the floor. CONFIRMED: S2 peak 4.53→**4.103** (flat to SECO, throttle 0.611); S1 **3.499**. Then FIDELITY: raised `S2GLimitG` 4.1→**4.5** (real Crew Dragon peak), installed.
 - ▶ **NEXT (no flight):** Campaign 6 (L4 att-torque, after 1 — attitude loop, handle with care).
-- Flights owed: **5-confirm (g-cap)**, 7 (H1b confirm), 8 (dock), 9 (return), 10 (FDIR-acting).
+- Flights owed: 7 (H1b confirm), 8 (dock), 9 (return), 10 (FDIR-acting).
 
 ## Campaigns (execute in this order)
 
