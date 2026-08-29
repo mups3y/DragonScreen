@@ -33,10 +33,18 @@ namespace DragonScreen
         static double lastAoa, lastIgniteAlt, lastDescentSpeed;
         static string lastPhaseWord = "IDLE";
 
+        // ⭐ C2 Step-2: the booster's OWN attitude loop, INDEPENDENT of the Dragon's (AttitudePilot's active
+        // instance). When the Dragon stays active and the booster is flown on its own OnFlyByWire, the two loops
+        // must not share PID/smoothing state — this instance is the booster's. Written into the booster's own
+        // FlightCtrlState (never FlightDriver's active-vessel channels) by DriveNonActive.
+        static readonly AttitudeController att = new AttitudeController();
+        static double lastDriveLogUT = -999.0;   // rate-limit the non-active recovery KSP.log line
+
         public static void Reset()
         {
             phase = BoosterPhase.Idle; currentMode = -1; legsDown = false; finsOut = false;
             smoothedBc = 0.0;
+            att.Reset(); lastDriveLogUT = -999.0;
         }
 
         // The active vessel is a lone booster to recover: it carries S1 parts and NO Dragon pod (so it is
@@ -56,9 +64,12 @@ namespace DragonScreen
             return hasBooster && !hasPod;
         }
 
+        // ACTIVE-vessel recovery (the booster IS the focused craft): actuation routes through the active-vessel
+        // sinks (Steering.Point → AttitudePilot; FlightDriver.SetThrottle). Kept for the case where focus is on
+        // the booster; the committed C2 path is DriveNonActive below.
         public static void Tick(Vessel v)
         {
-            try { Fly(v); }
+            try { Fly(v, null); }
             catch (Exception e)
             {
                 Debug.LogWarning("[DragonScreen] booster tick failed: " + e.Message);
@@ -66,7 +77,21 @@ namespace DragonScreen
             }
         }
 
-        static void Fly(Vessel v)
+        // ⭐ C2 Step-2 — NON-ACTIVE recovery: fly the SAME FSM on the separated booster while the Dragon stays
+        // active, writing every command into the booster's OWN FlightCtrlState `s` (the one KSP hands its
+        // OnFlyByWire). Attitude comes from the booster's own AttitudeController instance (no state collision with
+        // the Dragon's loop); throttle is the literal s.mainThrottle write (the C1 "throttle never raised" fix);
+        // engine-mode/fins/legs act directly on the booster's part modules (non-active-safe). Runs inside KSP's
+        // callback → its own guard; a fault logs and leaves the axes untouched this tick.
+        public static void DriveNonActive(Vessel v, FlightCtrlState s)
+        {
+            try { Fly(v, s); }
+            catch (Exception e) { Debug.LogWarning("[DragonScreen] booster non-active drive failed: " + e.Message); }
+        }
+
+        // s == null → ACTIVE path (active-vessel sinks). s != null → NON-ACTIVE path (write into the booster's
+        // own FlightCtrlState). Everything above the actuation is identical.
+        static void Fly(Vessel v, FlightCtrlState s)
         {
             CelestialBody body = v.mainBody;
             double mu = (body != null) ? body.gravParameter : 0.0;
@@ -125,28 +150,66 @@ namespace DragonScreen
             phase = bc.Phase;
             lastPhaseWord = phase.ToString();
             lastAoa = bc.AoaDeg;
+            bool active = (s == null);
 
-            // ---- attitude: hold the commanded engines-first / retrograde(+AoA) axis ----
-            Steering.Point(v, new Vector3d(bc.AimForward.X, bc.AimForward.Y, bc.AimForward.Z));
+            Vector3d aimDir = new Vector3d(bc.AimForward.X, bc.AimForward.Y, bc.AimForward.Z);
 
-            // ---- engine mode + throttle (select absolutely while off; one ignition per mode) ----
-            ApplyEngineMode(v, bc.EngineMode, bc.Throttle);
+            // ---- engine mode select (absolutely, while off; one ignition per mode) — acts on the booster's
+            //      part modules directly, so it is correct whether or not the booster is the active vessel ----
+            SelectEngineMode(v, bc.EngineMode);
+            double thr = bc.EngineMode > 0 ? bc.Throttle : 0.0;
 
-            // ---- aero surfaces + legs ----
+            // ---- attitude + throttle: to the ACTIVE-vessel sinks, or into the booster's own FlightCtrlState ----
+            if (active)
+            {
+                Steering.Point(v, aimDir);                              // → AttitudePilot (active instance)
+                if (bc.EngineMode > 0) FlightDriver.SetThrottle(thr); else FlightDriver.ReleaseThrottle();
+            }
+            else
+            {
+                AttitudeCmd c = att.Compute(v, aimDir, true, Vector3d.zero);   // booster's OWN loop, dampRoll
+                s.pitch = Clamp1f(c.Pitch); s.yaw = Clamp1f(c.Yaw);
+                if (c.HasRoll) s.roll = Clamp1f(c.Roll);
+                s.mainThrottle = Clamp01f(thr);                        // ⭐ the literal C1 throttle-raise fix
+            }
+
+            // ---- aero surfaces + legs (direct part-module actuation — non-active-safe) ----
             if (bc.DeployFins && !finsOut) { Actuator.DeployGridFins(v); finsOut = true; }
             if (bc.DeployLegs && !legsDown) { Actuator.DeployLegs(v); legsDown = true; }   // ⛔ direct: ModuleWheelDeployment (no Gear AG)
 
-            FlightLog.Fill = FillRow;
+            // ---- instrument. Active: contribute the booster columns to ITS CSV row. Non-active: the Dragon owns
+            //      the CSV, so log the booster's recovery state to KSP.log instead (the cross-check evidence). ----
+            if (active) FlightLog.Fill = FillRow;
+            else LogDrive(v, thr);
+        }
+
+        static float Clamp1f(double d) { return (float)(d < -1.0 ? -1.0 : (d > 1.0 ? 1.0 : d)); }
+        static float Clamp01f(double d) { return (float)(d < 0.0 ? 0.0 : (d > 1.0 ? 1.0 : d)); }
+
+        // Rate-limited KSP.log line of the non-active booster's recovery state — phase / altitude / vertical
+        // speed / engine mode / throttle / engines lit — the log-side cross-check for the flight (the Dragon's
+        // CSV can't record it). ~every 2 s while recovering.
+        static void LogDrive(Vessel v, double thr)
+        {
+            double now = Planetarium.GetUniversalTime();
+            if (now - lastDriveLogUT < 2.0) return;
+            lastDriveLogUT = now;
+            int lit = 0; foreach (ModuleEngines e in Engines(v)) if (e.EngineIgnited) lit++;
+            Debug.Log("[DragonScreen] booster recovery drive: phase=" + lastPhaseWord
+                      + " alt=" + v.radarAltitude.ToString("F0") + "m vspd=" + lastDescentSpeed.ToString("F0")
+                      + "m/s mode=" + ModeName(currentMode) + " thr=" + thr.ToString("F2")
+                      + " engLit=" + lit + " att.err=" + att.PointErrDeg.ToString("F0") + "°");
         }
 
         // ⛔ Select the engine set by ACTIVATING the matching-engineID ModuleEngines and shutting the rest —
         // only on a MODE CHANGE (so a lit mode is never re-ignited mid-burn: one ignition per octaweb mode).
-        static void ApplyEngineMode(Vessel v, int mode, double throttle)
+        // Throttle is NOT applied here (split out in C2 Step-2): the caller writes it to the correct sink —
+        // FlightDriver.SetThrottle for the active booster, or s.mainThrottle for the non-active one.
+        static void SelectEngineMode(Vessel v, int mode)
         {
             if (mode <= 0)
             {
                 if (currentMode != 0) { ShutdownAll(v); currentMode = 0; }
-                FlightDriver.ReleaseThrottle();
                 return;
             }
             if (mode != currentMode)
@@ -162,7 +225,6 @@ namespace DragonScreen
                           + " (activated by engineID, not NextEngineMode)");
                 currentMode = mode;
             }
-            FlightDriver.SetThrottle(throttle);
         }
 
         static void ShutdownAll(Vessel v)

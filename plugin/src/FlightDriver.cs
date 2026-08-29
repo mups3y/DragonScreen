@@ -215,8 +215,11 @@ namespace DragonScreen
                     return;
                 }
 
-                // otherwise: the Dragon / mission vessel.
-                BoosterControl.Reset();
+                // otherwise: the Dragon / mission vessel. Keep the booster FSM IDLE — UNLESS a non-active booster
+                // recovery is in progress (C2 Step-2): its FSM state lives in BoosterControl statics and is driven
+                // from the booster's own OnFlyByWire, so it MUST survive the Dragon's frames. Resetting it every
+                // tick would re-select a mode each frame → re-ignite the octaweb (violates one-ignition-per-mode).
+                if (!MissionConductor.BoosterRecoveryActive) BoosterControl.Reset();
 
                 // ⛔ STRUCTURAL G ABORT (crewed vehicle, ANY phase): felt g past the structural limit means a
                 // break-up, aero overload, or collision — get the crew out INSTANTLY. This is the universal

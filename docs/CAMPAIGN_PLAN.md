@@ -45,21 +45,76 @@ body-rate 7.9→36 °/s, loaded+unpacked throughout) → **control reaches it**;
 the S2 MVac **lit and burned to SECO → orbit (ap 384 × pe 154, inc 51.65°)** → **the C1 ullage-loss blocker is
 fixed by not switching focus.** ⇒ Direction A validated; Step-2 approved-in-principle, **awaiting Grok review before code.**
 
-### ▶ C2 Step-2 — full recovery FSM on the non-active booster — *NEXT (write the §8 MYSELF, then Grok sanity-check)*
+### ▶ C2 Step-2 — full recovery FSM on the non-active booster — *§8 WRITTEN (self-derived); code built, awaiting Tick-3*
 Fly the separated booster to a landing on its **own `OnFlyByWire`** while the Dragon stays active. One change class (Phase-FSM).
-**⭐ THE REAL BLOCKER (found by reading, not by asking):** `AttitudePilot` is a **`static` class** — shared static
-state `posPid[]`/`velPid[]`/`smTx,smTy,smTz`/`actEst[]` (AttitudePilot.cs:29–45) that writes to **`FlightDriver`'s
-active-vessel channels**. It cannot drive two vessels at once (state collision + it would command the Dragon, not the
-booster). This contradicts the stated "instance-per-vehicle" invariant. **Fix direction (self-derived):**
-- Refactor `AttitudePilot` **static → instantiable**: a default instance for the Dragon's existing `Steering.Point`
-  path (unchanged behaviour), + a **second instance for the booster**. No duplicated frame math.
-- Reuse the PURE `AttitudeLoop.Axis(...)` — it **already takes the PID state as parameters**, so the loop math is
-  untouched; only the glue that *holds state + chooses where to write* changes.
-- The booster instance writes attitude into the **booster's own `FlightCtrlState`** (the one KSP hands the callback),
-  + `s.mainThrottle` + engine-mode/fins/legs direct via `Actuator`. Replace `ProofFlyByWire` with `BoosterControl.Drive(booster, s)`.
-- Convergence is fine: booster `OnFlyByWire` runs at ~50 Hz (full physics rate — proven, `cbEntered≈52/s` in the Step-1 flight).
-- The C1 "booster throttle never raised" bug is fixed here only if it is the literal missing `s.mainThrottle` write.
-Re-run the scorecard after; exit conditions: S2 reaches orbit **AND** booster `eng_ignited ≥ 1` at entry/landing + lands within a stated bound.
+
+#### §8.1 State Confirmation (what the code actually is — verified by reading, file:line, 2026-08-29)
+- `AttitudePilot` (`AttitudePilot.cs`) is a **`static` class**: the PID/smoothing/lag state — `posPid[]`/`velPid[]`
+  (29–30), `smTx/smTy/smTz`+`smInit` (37–38), `actEst[]` (45), `rcsFallbackLogged` (261) — is **shared static**, and
+  `Point()` writes the result through `FlightDriver.SetAttitude/SetAttitudeRoll` (151–153), which set static channels
+  that `FlightDriver.OnFlyByWire` applies to the **bound = ACTIVE vessel only** (`FlightDriver.cs` Bind 96–101, apply
+  150–159). So the whole write-path targets the Dragon; it cannot drive a second vessel.
+- `BoosterControl` (`BoosterControl.cs`) already holds the **full recovery FSM** (flip→entry-burn→aero→hoverslam→legs)
+  but is written for the **active** vessel: it steers via `Steering.Point` (130) → the static `AttitudePilot`, and sets
+  throttle via `FlightDriver.SetThrottle` (149/165) — both active-only sinks.
+- `MissionConductor.TickBoosterRecovery` (`MissionConductor.cs` 143–199) keeps the Dragon **active** and hooks the
+  **non-active** booster's own `OnFlyByWire` with the Step-1 **proof** (`ProofFlyByWire` 265–269 = a constant pitch).
+  Step-1 PROVED KSP drives that callback (`cbEntered=2250`, body-rate 7.9→36 °/s).
+- ⚠ **Hazard found:** `FlightDriver.cs:219` calls `BoosterControl.Reset()` **every frame the Dragon is active** — which
+  is exactly when a non-active recovery runs. Un-guarded, it wipes the FSM state each frame (re-igniting a mode every
+  tick → violates one-ignition-per-mode). Must be guarded.
+- All booster-side `Actuator` verbs act **directly on part modules** (`e.Activate()`, `wd.EventToggle()`,
+  `r.rcsEnabled=true`, `SetGroup`) — non-active-safe. `EnableRcs` sets `ActionGroups[RCS]` (500), which is what
+  `AttitudePilot.ControlTorque` reads (line 179) to count the cold-gas authority. Confirmed on the non-active booster
+  in Step-1 (it developed a body-rate).
+
+#### §8.2 Diagnosis
+Two vessels need two independent attitude loops, and the booster's commands must land in the **booster's own
+`FlightCtrlState`**, not the Dragon's active channels. The FSM logic already exists; what's missing is (a) per-vehicle
+loop state and (b) a booster write-sink.
+
+#### §8.3 Change class — **Phase-FSM** (fly the existing recovery FSM on the non-active booster). The enabling
+attitude-loop refactor is **behaviour-preserving** (a facade delegating to identical logic), so it introduces no second
+behavioural change — landed as its own commit with the Dragon path provably unchanged.
+
+#### §8.4 Edit plan (concrete, file by file)
+1. **NEW `src/AttitudeController.cs`** — the stateful loop extracted **verbatim** from `AttitudePilot` as an
+   **instance** (per-vehicle `posPid/velPid/smTx.../actEst/rcsFallbackLogged` + diagnostics). `Compute(v,dir,dampRoll,
+   rollUpRef)` returns an `AttitudeCmd{Pitch,Yaw,Roll,HasRoll}` instead of writing to `FlightDriver`; the `!dampRoll`
+   roll-PID reset stays internal. Reuses the pure `AttitudeLoop.Axis` unchanged; reads the shared `[Tunable]`
+   `AttitudePilot.UseLagComp`/`RcsTorqueFloorNm`.
+2. **REWRITE `src/AttitudePilot.cs` → thin static facade** over one default `AttitudeController active` for the Dragon.
+   Every existing static entry (`Point`, `Reset`, `ResetIntegrators`) + every diagnostic the callers read
+   (`PitchAccelRadS2`, `ActPitch/Yaw/Roll`, `PointErrDeg`, `RateCmdRads/RateMeasRads`, `CtrlTorque*Nm`) forwards to
+   `active`. `Point` does the same `FlightDriver.SetAttitude/…` writes it does today → **Dragon path byte-identical**.
+   (Callers that must keep compiling: `Steering.cs:113/134`, `FlightDriver.cs:197/498/624-628/741`,
+   `FlightLog.cs:99-122`, `AscentControl.cs:273/631`.)
+3. **EDIT `src/BoosterControl.cs`** — add its own `AttitudeController att`. Split throttle **out** of `ApplyEngineMode`
+   (mode-select only; the caller applies throttle to the right sink). Add `DriveNonActive(booster, s)`: same guidance
+   (`BoosterDescent.Guide`) + engine-mode/fins/legs, but attitude via `att.Compute(...)` → `s.pitch/s.yaw/s.roll` and
+   throttle via **`s.mainThrottle`** (this IS the literal C1 "throttle never raised" fix). Skip `FlightLog.Fill` on the
+   non-active path (the Dragon owns the CSV); emit a rate-limited KSP.log line (phase/alt/vspeed/mode/throttle/lit).
+4. **EDIT `src/MissionConductor.cs`** — replace the proof: `Armed` hooks `BoosterRecoveryDrive` (→
+   `BoosterControl.DriveNonActive`) instead of `ProofFlyByWire`; `FlyingBooster` runs until the booster lands/splashes/
+   is destroyed or a timeout, then unhooks + `RangeExtender.Disable()` + Done. Drop the proof-only `ProofPitchCmd`;
+   keep a `RecoveryTimeoutS` backstop. Expose `BoosterRecoveryActive`.
+5. **EDIT `src/FlightDriver.cs:219`** — guard the per-frame `BoosterControl.Reset()` with
+   `if (!MissionConductor.BoosterRecoveryActive)` so the non-active FSM state survives the Dragon's frames.
+
+#### §8.5 Verification
+- **Tick-1:** `python build.py test` green — this compiles ALL of `src/` (glue included) against KSP + runs the ~900
+  pure checks. The Dragon-path behaviour-preservation is **structural** (facade → identical logic), not a new headless
+  test — stated honestly, proven at Tick-3 by an ascent identical to Step-1's (Dragon still reaches orbit).
+- **Tick-3 exit conditions (both):** the Dragon **still reaches orbit** (S2 relights — the Step-1 win is not regressed)
+  **AND** the booster's own `OnFlyByWire` flies the FSM: `eng_ignited ≥ 1` logged at the entry/landing burn and it
+  descends toward the deck. Re-run `INTEGRATION_SCORECARD.md` afterward.
+
+#### §8.6 Contingency
+- If the booster's engine **won't light** on the non-active vessel (`eng_ignited`=0) → that's the next campaign
+  (**Actuator-ignition class**: RealFuels ullage-settle before the light — NOT smuggled into this Phase-FSM change).
+- If `v.radarAltitude` reads unreliably for the non-active booster → fall back to `alt = CoM-to-body` (watch item).
+- Any glue fault is caught by the existing per-tick try/catch → logs + carries on, never taking the Dragon down.
+- Revert point: the behaviour-preserving refactor is a separate commit; the wiring can be reverted without it.
 
 ### (old Step-1 plan, now superseded by the GREEN result above)
 ### ▶ (was) C2 — MECO booster-recovery hand-off — Step-1 DUAL-FLIGHT PROOF
