@@ -45,8 +45,24 @@ body-rate 7.9→36 °/s, loaded+unpacked throughout) → **control reaches it**;
 the S2 MVac **lit and burned to SECO → orbit (ap 384 × pe 154, inc 51.65°)** → **the C1 ullage-loss blocker is
 fixed by not switching focus.** ⇒ Direction A validated; Step-2 approved-in-principle, **awaiting Grok review before code.**
 
-### ▶ C2 Step-2 — full recovery FSM on the non-active booster — *§8 WRITTEN (self-derived); code built, awaiting Tick-3*
-Fly the separated booster to a landing on its **own `OnFlyByWire`** while the Dragon stays active. One change class (Phase-FSM).
+### ✅ C2 Step-2 — recovery FSM on the non-active booster — *STRUCTURAL GOAL PROVEN (Tick-3, flight `Crew-2_20260829_144114`)*
+Fly the separated booster on its **own `OnFlyByWire`** while the Dragon stays active. One change class (Phase-FSM).
+Commits `0610609` (refactor: `AttitudeController` instance + `AttitudePilot` facade) + `5394358` (booster non-active FSM).
+**TICK-3 RESULT (CSV + KSP.log + screenshots cross-checked):**
+- ✅ **Dragon reached orbit — no regression:** SECO **200 × 197.7 km, inc 51.64°** (tgt 51.6, d=+0.04), S2 relit (`14:50:07 SECO`).
+- ✅ **Dual control proven:** the non-active booster's OWN OnFlyByWire flew the FSM — **16,139 calls**, EntryBurn→LandingBurn,
+  grid fins, engine mode switched **once** (the `FlightDriver:222` one-ignition guard held), attitude live (att.err 105°→6°).
+  The static-state-collision blocker is fixed; two vehicles controlled at once.
+- ❌ **Booster did NOT land:** `eng_ignited=0` the whole descent → ballistic → LOST @14 km. **Root = RealFuels ullage (the
+  §8.6-predicted contingency)** → the NEXT campaign, NOT a defect here. See H1b.
+- ⚠ PARKED (not Step-2): rendezvous/phasing thrash drained RCS (MMH/NTO→0) + pe self-deorbited to 149.9 km (C2a).
+
+### ▶ C2 Step-3 (NEW, = the ranked Actuator-ignition class) — **booster ullage + ignition on the non-active vessel**
+**Scope (one class only):** make the booster's octaweb actually LIGHT during recovery on the non-active vessel. Measure the
+ullage/ignition state FIRST (does `ModuleEnginesRF` see settled ullage? does `Activate()`+`s.mainThrottle` arm it off-focus?),
+THEN settle ullage (fire the booster's aft RCS along the thrust axis before each light) and verify `eng_ignited≥1`. Do NOT
+retune the descent FSM until it lights (moot before ignition). §8 to be written before code. Exit: `eng_ignited≥1` at the
+entry burn on the non-active booster, log-confirmed.
 
 #### §8.1 State Confirmation (what the code actually is — verified by reading, file:line, 2026-08-29)
 - `AttitudePilot` (`AttitudePilot.cs`) is a **`static` class**: the PID/smoothing/lag state — `posPid[]`/`velPid[]`
