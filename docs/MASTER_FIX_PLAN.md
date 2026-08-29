@@ -10,6 +10,32 @@
 > either **VERIFIED** (traced to file:line / existing CSV) or **HYPOTHESIS** (marked, to confirm). Grok verifies each
 > against the repo before I build.
 
+## ⚠ GROK REVIEW CORRECTIONS (I VERIFIED each against source — Grok was RIGHT; my plan had errors)
+- **B is NOT `[V]` — revert to `[H]` (not root-caused).** My "5° tight hold" was wrong: `AttitudeReadyDeg=5°` is the BURN
+  GATE; the real hold deadband is `ControlLaw.DeadbandRad=0.0017`≈**0.1°** (`ControlLaw.cs:24`). My "att_err p95 104°" read
+  the WRONG column: **`att_err_deg` = AoA** (`FlightRecorder.cs:219` ← `Steering.AngleOfAttackDeg`); the real pointing
+  error is **`att_point_deg`**. Re-checked with the right column (CSV 155116 realtime PHASING): `att_point_deg` p95 **77°**,
+  max 106° — real spikes, BUT only **7%** sit near a warp dropout, so **neither** "phase-retarget" (mine) **nor** pure
+  "warp-dropout re-acquire / T14" (Grok's) explains the 93%. **ROOT STILL OPEN.** The far-field always points prograde
+  (no aim flip). Fix DIRECTION (coast-release + **T14 align-then-warp** + deadband widen) is reasonable but MUST confirm
+  the root first (why 77° realtime pointing error — prograde-rotation lag? under-authority L4? near-field re-points?).
+  ⛔ Do NOT "null the L2 pe-leak" in the same patch — pe ROSE on the prograde raise; the leak is post-TRANSFER; decompose
+  the attitude-pulse Δv in the orbital frame first.
+- **F4 is ALREADY FIXED** (`AbortControl.cs:439` `TerrainAltitude(lat,lon,true)<0`, "⭐ F4 FIX"). DROP from Campaign C.
+- **shroud-spam root = the ABORT path, not rendezvous.** `AbortControl` calls `OpenNoseShroud` **every tick** (`:201/236/354`,
+  unlatched); flight 155116 ended in a manual abort → the 1674 logs are that. AND `OpenNoseShroud` self-fights: `Progress<0.5
+  → Toggle()` re-fires while it's still opening. Fix: make it a true edge (don't toggle if open OR opening; log on real change)
+  + guard the abort callers. **There is NO `Actuator.CloseNoseShroud`** — UI-shroud must ADD one (only a private copy in
+  `ReturnControl.cs:332`).
+- **D — another setpoint hop won't work.** 4.5→4.3→4.1 still hit 4.53; the lag is NOT constant (+0.15 then +0.43). Do a
+  **predictive taper** (`g_pred = g + τ·dg/dt`) after plotting `accel_g` vs `mass_kg` for the last ~15 s of S2 on 155116.
+  `S2GLimitG` is the only S2 knob (`AscentControl.cs:58`), S1 is hardcoded 3.5.
+- **A ignition budget stays `[H]`** — Grok can't read ConfigCache from git either; the docs CONFLICT (per-mode vs shared vs
+  −1 unlimited; TEATEB is a separate part-level ignitor resource). **Read the live ConfigCache / the three `ModuleEnginesRF.
+  ignitions` + TEATEB directly (no flight).** The mode fix is still required regardless.
+- **ORDER: B is the single next campaign** (mission-ending, buildable from 155116). C is a side-stream (barely overlaps B),
+  not an equal headline. E's L4 touches the same attitude loop as B — do NOT mix. F last.
+
 ## Legend
 - **[V]** root verified from code / existing data · **[H]** hypothesis (needs confirmation) · **[DG]** data-gated (needs a NEW flight / fresh dump).
 
