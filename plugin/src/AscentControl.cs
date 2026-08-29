@@ -55,16 +55,14 @@ namespace DragonScreen
         // RealFuels throttle-0-reset ignition cycle (see the S2 block):
         [Tunable] public static double S2SettleS = 2.0;       // throttle-0 settle/reset before each light attempt
         [Tunable] public static double S2LightWindowS = 2.0;  // hold throttle up this long before resetting to retry
-        [Tunable] public static double S2GLimitG = 4.1;       // S2 crew axial-g cap setpoint. The "~0.4 g overshoot"
-                                                              // (setpoint 4.1 → felt 4.53 g, flights 134620/144114/
-                                                              // 155116) was NOT limiter lag — it was the MVac's 0.3854
-                                                              // RealFuels throttle floor, unmodelled by the g-cap
-                                                              // (Campaign 5 root-fix in ControlLaw.ThrottleLimit +
-                                                              // MinThrottle01). With the floor mapped, this setpoint
-                                                              // now yields a felt peak ≈ its own value. NOTE (fidelity,
-                                                              // Chris decision): the real Crew Dragon S2 peaks ~4.5 g —
-                                                              // if a post-fix flight confirms ≈4.1 g, RAISE this toward
-                                                              // 4.5 (the margin the overshoot forced is no longer needed).
+        [Tunable] public static double S2GLimitG = 4.5;       // S2 crew axial-g cap setpoint = the REAL Crew Dragon S2 peak
+                                                              // (~4.5 g by SECO, astronaut accounts). The Campaign-5 floor
+                                                              // fix (ControlLaw.ThrottleLimit + MinThrottle01) made the cap
+                                                              // EXACT — flight 003648 confirmed setpoint 4.1 → felt 4.103 g
+                                                              // (was 4.53, the unmodelled 0.3854 MVac RealFuels floor). With
+                                                              // the cap now accurate, RAISED 4.1→4.5 to restore full fidelity
+                                                              // (the 4.1 margin was only there to fight the overshoot). ⛔ do
+                                                              // NOT lower it — the felt peak now equals this value.
         [Tunable] public static double SecoVgoMps = 2.0;      // SECO cutoff when velocity-to-go drops below this (delivers
                                                               // the FULL Δv → circular target orbit, even under g-limit throttle taper)
         static double coastStartUT = -1;
