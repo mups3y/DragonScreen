@@ -39,7 +39,21 @@ Evidence-only; `is_warp` fixed to key on blanked-control (physics-warp rows kept
   insertion), and the booster's own engines never ignite (`eng_ignited`=0 through entry+landing → crash @119 m/s).
 - Mission B (`121530`) is a SEPARATE deorbit test (MET discontinuity) — deorbit didn't complete; parked.
 
-### ▶ C2 — MECO booster-recovery hand-off — Step-1 DUAL-FLIGHT PROOF (Tick-1 done, commit de6d487; awaiting Tick-3)
+### ✅ C2 Step-1 — DUAL-FLIGHT PROOF: **GREEN (Tick-3 passed, flight 134620, 2026-08-29)**
+Both criteria passed, log+CSV cross-checked: (1) KSP drove the non-active booster's `OnFlyByWire` (`cbEntered=2250`,
+body-rate 7.9→36 °/s, loaded+unpacked throughout) → **control reaches it**; (2) with focus retained on the Dragon,
+the S2 MVac **lit and burned to SECO → orbit (ap 384 × pe 154, inc 51.65°)** → **the C1 ullage-loss blocker is
+fixed by not switching focus.** ⇒ Direction A validated; Step-2 approved-in-principle, **awaiting Grok review before code.**
+
+### ▶ C2 Step-2 — full recovery FSM on the non-active booster — *NEXT (Grok review first, then §8 edit plan)*
+Wire `BoosterControl` to fly the separated booster to a landing **on its own `OnFlyByWire`** (not the FlightDriver/
+active-vessel channels it currently uses) while the Dragon stays active. Route `Steering.Point`/`SetThrottle`
+equivalents into the booster's own control. Also surfaces the C1 "booster throttle never raised" bug — fix it here
+only if it is the missing command. One change class (Phase-FSM). Re-run the scorecard after; exit conditions: S2
+reaches orbit AND booster `eng_ignited ≥ 1` at entry/landing + lands within a stated bound.
+
+### (old Step-1 plan, now superseded by the GREEN result above)
+### ▶ (was) C2 — MECO booster-recovery hand-off — Step-1 DUAL-FLIGHT PROOF
 **Grok-reviewed, attitude-first.** No focus switch: Dragon stays active (S2 gets its continuous insertion); the
 non-active booster is driven via its own `OnFlyByWire` with a constant pitch command; log `cbEntered` + body-rate.
 **Go/no-go (both required):** (1) booster shows a clear commanded body-rate response (> ~2 °/s, > noise) AND
