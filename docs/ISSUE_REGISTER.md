@@ -145,6 +145,9 @@ Flight-anchored: rendezvous `ForwardSign = −1` (`s.Z=−1`) raised apoapsis co
 > Things visible in the screenshots or the log that the FlightRecorder CSV did NOT capture. **Instrument class.**
 > Each verified against `pure/FlightRecorder.cs` (89-col schema) + `FlightLog.cs`. These block clean diagnosis of
 > the open campaigns (esp. H1b booster ullage/ignition and C2a rendezvous fuel-waste).
+> **STATUS: R1–R4 BUILT⚑ (Tick-1 green, commits `6974bfd` R2/R3/R4 + `0438205` R1, installed, UNFLOWN).** Next
+> flight validates: the booster CSV appears + carries `eng_ignited`/`ullage_stab`; `fdir_fault` is populated;
+> `mmh_frac`/`nto_frac` track the drain; `skin_temp_frac` catches the max-Q overheat. R5 deferred (low).
 | # | Hole | Evidence | Fix (Instrument class) |
 |---|---|---|---|
 | **R1** | **The non-active booster gets NO CSV at all.** The recorder samples only the ACTIVE vessel; during C2 Step-2 the booster is non-active so nothing fills the `boost_*`/control/`eng_ignited`/`ullage_stab` columns — its whole recovery (16,139 ticks) lives only in sparse ~2 s KSP.log lines. assess flags `boost` block "idle". | only `Crew-2_144114.csv` (capsule) exists; `BoosterControl.DriveNonActive` deliberately skips `FlightLog.Fill`. | **A SECOND recorder stream for the non-active booster** (its own CSV): alt/vspeed/att_err/ctrl_tq/rates/eng_ignited/**ullage_stab**/throttle/mode/fins/legs per tick. Prereq for diagnosing **H1b**. |

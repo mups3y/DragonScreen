@@ -57,6 +57,19 @@ Commits `0610609` (refactor: `AttitudeController` instance + `AttitudePilot` fac
   §8.6-predicted contingency)** → the NEXT campaign, NOT a defect here. See H1b.
 - ⚠ PARKED (not Step-2): rendezvous/phasing thrash drained RCS (MMH/NTO→0) + pe self-deorbited to 149.9 km (C2a).
 
+### ✅ C-INSTR-2 — RECORDER FIDELITY (Instrument class) — *BUILT (Tick-1 green + installed), UNFLOWN — PREREQ for C2 Step-3*
+Holes found cross-checking flight 144114 screens/log vs the CSV (`docs/FLIGHT_144114_SCREEN_AUDIT.md`, register R1–R5).
+Same Instrument class as C0. Commits `6974bfd` (R2/R3/R4) + `0438205` (R1).
+- **R1** — the non-active booster gets its **own CSV** (`BoosterLog` + `BoosterControl.FillRecorderRow`), same schema
+  → `assess_flight.py` reads it. Carries the H1b-critical columns: `eng_ignited` (did the octaweb light?),
+  `ullage_stab` (settled ullage at the light?), throttle, the full attitude loop, reentry skin-temp.
+- **R2** — `PutFdir` is now called every sample (it had NO call-site → `fdir_fault/recovery/abort` were dead while
+  KSP.log logged 10+ faults). `FlightDriver.LastFdirReport` exposed.
+- **R3** — `mmh_frac`/`nto_frac` columns (the return-propellant drain that ends a mission was CSV-invisible).
+- **R4** — `skin_temp_frac` column + hottest-part log (the max-Q "Overheat!" was CSV-invisible).
+**Tick-3 (fly): confirm the booster CSV appears with eng_ignited/ullage_stab, fdir_fault populates, mmh/nto track the
+drain, skin_temp catches the overheat.** THEN C2 Step-3.
+
 ### ▶ C2 Step-3 (NEW, = the ranked Actuator-ignition class) — **booster ullage + ignition on the non-active vessel**
 **Scope (one class only):** make the booster's octaweb actually LIGHT during recovery on the non-active vessel. Measure the
 ullage/ignition state FIRST (does `ModuleEnginesRF` see settled ullage? does `Activate()`+`s.mainThrottle` arm it off-focus?),
