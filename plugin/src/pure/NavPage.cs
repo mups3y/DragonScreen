@@ -615,6 +615,13 @@ namespace DragonScreen
                 float halfW = (float)(r * System.Math.Sqrt(1.0 - d * d));
                 if (halfW <= 0.5f) continue;
 
+                // ⛔ NOT SWAPPED, unlike NavPage.Quad — and that is CORRECT, confirmed in the PNG preview
+                // (Campaign 4, 2026-08-29). The globe strips assign u to screen in the OPPOSITE order to the
+                // flat map's quad: the strip runs uMin(west) on the LEFT to uMax(east) on the RIGHT, which is
+                // already the mirror image of Quad's uLeft=UMax draw. So it needs NO swap to read the same
+                // way. An earlier pass mirrored this to match Quad on the false assumption the two share a
+                // u->screen convention; the preview showed that put India/east on the LEFT and S.America/west
+                // on the RIGHT. Left as-is: west-left, east-right, matching the east-on-right GlobeProjection.
                 if (!split)
                 {
                     dl.ImageUV(ImageId.BodyMap, cx - halfW, y0, halfW * 2f, y1 - y0,

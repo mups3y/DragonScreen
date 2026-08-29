@@ -27,7 +27,8 @@ Ascent→orbit inc 51.64 (L1); dual-flight control (H1); H1b mode-fix (FIXED⚑ 
 - ✅ **Campaign 1(a)** — far-field coast attitude gate (`RvCoast`, `fa67023`). *(1(b) T14 inertial pre-align = follow-on.)*
 - ✅ **Campaign 2** — shroud-spam idempotency + `Actuator.CloseNoseShroud` + L6 sep-fix (`e8a570e`). *(U2/U3 deferred.)*
 - ✅ **Campaign 3** — console dispatcher `FlightCommands.Run` → real `Systems` handlers + engage lamps (`8cc4f62`).
-- ▶ **NEXT (no flight):** Campaign 4 (NAV, `preview`-verify), 5 (g-taper — measure then predictive), 6 (L4, after 1).
+- ✅ **Campaign 4** — VERIFIED, both Grok items **FALSE ALARMS** (2026-08-29). Globe is NOT mirrored (its strips assign u→screen the reverse of Quad — a trial swap put east/India on the LEFT, the preview caught it, reverted); the orbit "gap" is a rotation-corrected `min(period,3h)` spiral, NOT a closable ellipse (`(n-1)→0` = spurious chord). **No NavPage change.** Kept the preview `DrawImage` reversed-U fix (the flat-map texture was silently skipped in every preview) + a per-view u-convention regression test. **No reinstall needed** (shipped behaviour unchanged; NavPage.cs comment-only).
+- ▶ **NEXT (no flight):** Campaign 5 (g-taper — measure then predictive), 6 (L4, after 1).
 - Flights owed: 7 (H1b confirm), 8 (dock), 9 (return), 10 (FDIR-acting).
 
 ## Campaigns (execute in this order)
@@ -68,9 +69,14 @@ EntryReboot → the existing static flags; Breakout → RequestAbort/Retreat; Ca
 the engage lamps at the real conductor (`CrewProcedureOps.Engaged`+phase; `MissionConductor` booster). Delete the stub
 "autopilot was deleted" header lie. Headless `FlightCommands` tests per command. ⛔ don't change abort FX.
 
-**Campaign 4 — NAV-DRAW** *(display)* — globe mirror (`NavPage.Globe:620-629` uMin→uMax, swap like `Quad():298`); orbit
-polyline wrap (`ProjPolyline:398-414` add `(n-1)→0`, only on the globe/orbit view, keep the flat ground-track open).
-`build.py preview` verifies.
+**Campaign 4 — NAV-DRAW** *(display)* — ✅ DONE 2026-08-29, both items **FALSE ALARMS**. (1) Globe NOT mirrored: its
+strips assign u→screen the REVERSE of `Quad`, so it needs NO swap — a trial swap put east/India on the LEFT (preview
+caught it), reverted; both projections east-on-right, but the flat map's `Quad` draws `uLeft=UMax` while the globe draws
+`uLeft=uMin` — opposite conventions, both correct. (2) Orbit polyline: the overlay is `VesselData.GroundTrack`, a
+rotation-corrected track of span `min(period,3h)` — a spiral / sub-period arc, NOT a closable ellipse, so `(n-1)→0` would
+streak a chord across the ~22° rotation seam. Left open. **Kept:** preview `DrawImage` reversed-U render fix (the flat-map
+texture was silently skipped in every `build.py preview`) + `PageTest.NavTexture` fencing each view's u-convention.
+⛔ Do NOT "unify" the two views' u-order — that IS the mistake this campaign caught.
 
 **Campaign 5 — G-TAPER** *(throttle law)* — F5/M1. ⛔ do NOT lower `S2GLimitG` again (4.5→4.3→4.1 still 4.53). Plot
 `accel_g` vs `mass_kg` last ~15 s S2 on 155116 → fit `g_pred = g + τ·dg/dt`; cap on PREDICTED g in `ControlLaw.ThrottleLimit`.
@@ -109,4 +115,5 @@ B5 multi-UPFG, B3 per-thruster RCS, `AutoAdvanceGates` (restore false for crew-i
 `att_err_deg`≠pointing (it's AoA); `AttitudeReadyDeg=5`≠the hold (0.1° `ControlLaw`); don't lower `S2GLimitG`; don't null
 L2 pe in the RCS patch; don't mix L4 with rendezvous; don't pre-build off-focus RF / force-focus; no blind booster N₂;
 don't set `FdirActing` on with anything else; don't "fix" SURPRESS FIRE (model art); don't change abort FX; re-verify
-file:line on the live HEAD.
+file:line on the live HEAD. **NAV: the globe is NOT mirrored and its orbit ring is NOT a closable ellipse — don't swap
+the globe's u to match the flat map, don't add `(n-1)→0` to `ProjPolyline` (Campaign 4 proved both wrong).**

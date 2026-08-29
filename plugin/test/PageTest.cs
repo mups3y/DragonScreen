@@ -48,6 +48,7 @@ public static class PageTest
         Selection();
         Projection();
         Quads();
+        NavTexture();
         ViewControls();
         NavControls();
         SettingsControls();
@@ -231,6 +232,83 @@ public static class PageTest
         Check("polar view still draws", n >= 1, "got " + n);
         Eq("clamped at the north pole", a.VMax, 1.0, 1e-6);
         Check("polar quad is inside the rect", a.Y >= y - 0.01f, "y " + a.Y + " rect y " + y);
+    }
+
+    // ------------------------------------------------------------------ NAV texture orientation
+
+    /// <summary>
+    /// The two NAV textured views use OPPOSITE u-conventions, and BOTH are correct - the trap that cost
+    /// a wasted edit on 2026-08-29. The flat map's Quad SWAPS u (larger u on the LEFT: UMin >= UMax) to
+    /// un-mirror KSP's _ColorMap (user-confirmed in game, 2026-08-27). The 3D globe's strips assign u to
+    /// screen in the reverse order, so they need NO swap (UMin <= UMax) to read the same way - the PNG
+    /// preview shows the swap there puts India/east on the LEFT (mirrored). This locks in each view's own
+    /// convention so a future "unify them" edit fails the build instead of a flight. The preview is the
+    /// real proof of which way is right; this is the regression fence around it.
+    /// </summary>
+    static void NavTexture()
+    {
+        PageState s = Healthy();
+        s.HasFix = true;
+        s.BodyRadiusM = 600000.0; s.ApogeeM = 124000.0; s.PerigeeM = 121900.0;
+        s.AltitudeM = 123400.0;
+        s.TrackLat = new double[90];
+        s.TrackLon = new double[90];
+        for (int i = 0; i < 90; i++)
+        {
+            s.TrackLat[i] = 45.0 * Math.Sin(i * 0.07);
+            s.TrackLon[i] = MapProjection.Wrap180(i * 4.0 - 180.0);
+        }
+        s.TrackCount = 90;
+
+        // A near-hemisphere orbit so the globe's ProjPolyline draws, and the globe strips draw over it.
+        PlanetOverlay ov = new PlanetOverlay();
+        int N = PlanetOverlay.DefaultSamples;
+        double[] olat = new double[N], olon = new double[N], orat = new double[N];
+        for (int i = 0; i < N; i++)
+        {
+            double f = (double)i / (N - 1);
+            olat[i] = -60.0 + 120.0 * f; olon[i] = -80.0 + 160.0 * f; orat[i] = 1.05;
+        }
+        ov.Ready = true;
+        ov.OrbitLat = olat; ov.OrbitLon = olon; ov.OrbitRatio = orat; ov.OrbitCount = N;
+        ov.Vessel = new GlobePoint { Lat = 28, Lon = 0, Ratio = 1.05, Has = true };
+        s.Planet = ov;
+
+        DisplayList dl = new DisplayList(Pages.Commands + 4);
+
+        // Both textured views, and at a longitude that STRADDLES THE SEAM (uMax > 1) so the globe's
+        // split branch is exercised, not just the simple one. NAV is page 2 (see PreviewMain).
+        foreach (double lon in new double[] { 0.0, 175.0 })
+        {
+            s.Longitude = lon;
+            foreach (NavMode mode in new NavMode[] { NavMode.Map, NavMode.Planet })
+            {
+                MapView v = MapProjection.Default();
+                v = MapProjection.Zoom(v, 2);
+                while (v.Mode != mode) v = MapProjection.NextMode(v);
+
+                dl.Clear();
+                Pages.Build(dl, 2, W, H1, s, v, 2);
+
+                int imgs = 0;
+                for (int i = 0; i < dl.Count; i++)
+                {
+                    DrawCmd c = dl.At(i);
+                    if (c.Kind != DrawKind.Image || c.Image != ImageId.BodyMap) continue;
+                    imgs++;
+                    if (mode == NavMode.Map)
+                        Check("flat map keeps Quad's u-swap (larger u left) lon " + lon,
+                              c.UMin >= c.UMax - 1e-6f,
+                              "left-edge u " + c.UMin + " < right-edge u " + c.UMax);
+                    else
+                        Check("globe keeps its un-swapped u (smaller u left) lon " + lon,
+                              c.UMin <= c.UMax + 1e-6f,
+                              "left-edge u " + c.UMin + " > right-edge u " + c.UMax);
+                }
+                Check("body map drawn (" + mode + ", lon " + lon + ")", imgs > 0,
+                      "no BodyMap command emitted");
+            }
+        }
     }
 
     // ------------------------------------------------------------------ view state

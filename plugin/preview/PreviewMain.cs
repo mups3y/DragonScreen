@@ -614,8 +614,19 @@ public static class PreviewMain
         // space, so VMax - the north edge in MapProjection's convention - is the source rect's TOP.
         // Getting this backwards would flip the map in the preview only, which is the worst place for
         // a discrepancy to hide because the preview is what layout is judged from.
-        float sx = c.UMin * img.Width;
-        float sw = (c.UMax - c.UMin) * img.Width;
+        //
+        // ---- REVERSED-U IS A HORIZONTAL FLIP, NOT AN EMPTY DRAW ----
+        // NavPage swaps u (left edge = the LARGER u) to un-mirror KSP's _ColorMap - the flat map has
+        // always done it, the globe now does too (Campaign 4). That makes UMin > UMax, so a source
+        // rect of width (UMax-UMin) is NEGATIVE and GDI+ draws nothing. The GL painter handles the
+        // reversal (it is why the map reads correctly IN GAME); the preview must too, or it silently
+        // omits the one texture it exists to show. Normalise the source to a positive window and, when
+        // u was reversed, mirror the DESTINATION about its own centre so the flip renders for real.
+        bool mirrorU = c.UMin > c.UMax;
+        float uLo = mirrorU ? c.UMax : c.UMin;
+        float uHi = mirrorU ? c.UMin : c.UMax;
+        float sx = uLo * img.Width;
+        float sw = (uHi - uLo) * img.Width;
         float sy = (1f - c.VMax) * img.Height;
         float sh = (c.VMax - c.VMin) * img.Height;
         if (sw <= 0f || sh <= 0f) return;
@@ -635,9 +646,22 @@ public static class PreviewMain
             }
         }
 
+        // Mirror the destination about its own centre for a reversed-u window, so the region draws
+        // horizontally flipped (matching the GL painter) while staying in the same screen rectangle.
+        System.Drawing.Drawing2D.GraphicsState stFlip = null;
+        if (mirrorU)
+        {
+            stFlip = g.Save();
+            float cxd = c.A + c.C * 0.5f;
+            g.TranslateTransform(cxd, 0f);
+            g.ScaleTransform(-1f, 1f);
+            g.TranslateTransform(-cxd, 0f);
+        }
+
         g.DrawImage(img, new RectangleF(c.A, c.B, c.C, c.D),
                     new RectangleF(sx, sy, sw, sh), GraphicsUnit.Pixel);
 
+        if (stFlip != null) g.Restore(stFlip);
         if (st != null) g.Restore(st);
     }
 
