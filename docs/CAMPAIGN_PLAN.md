@@ -15,7 +15,7 @@
 
 ## Ranked campaigns
 
-### ▶ C0 — INSTRUMENT FIDELITY (P0.0) — *current, IN PROGRESS*
+### ✅ C0 — INSTRUMENT FIDELITY (P0.0) — *PASSED (I1/I3 verified in-flight; I2 column proven, booster-focus deferred to C1)*
 **Goal:** make it impossible to diagnose a nonexistent thrash from warped rows, and provable whether an engine ignited. **Class: Instrument.**
 - [x] `pure/FlightRecorder.cs`: `warp_rate`, `eng_ignited`, `eng_flameout` cols + `PutInstrument` + pure `ZeroControlColumnsForWarp`.
 - [x] `FlightLog.cs`: stamp `warp_rate`; on on-rails warp (`WarpMode==HIGH && CurrentRateIndex>0`) blank the delivered/measured control columns; record main-engine `EngineIgnited`/`flameout` counts.
