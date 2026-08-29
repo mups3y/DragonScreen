@@ -465,8 +465,15 @@ namespace DragonScreen
         }
 
         // Open the nose shroud (exposes the forward Dracos + the port) — needed before ANY Draco burn on the
-        // capsule ([[dragon-nose-cone-rcs]]). Idempotent — an already-open shroud is left alone.
-        public static void OpenNoseShroud(Vessel v)
+        // capsule ([[dragon-nose-cone-rcs]]).
+        // ⭐ shroud-spam FIX (Campaign 2): the old `Progress < 0.5 → Toggle()` SELF-FOUGHT — while the shroud is
+        // OPENING (Progress rising 0→0.5) each call still saw <0.5 and Toggle()'d it back CLOSED, logging every tick
+        // (1,674× on flight 155116, mostly the every-tick abort callers). Fix: only Toggle from the genuinely-CLOSED
+        // state (Progress ≈ 0); once it is opening or open, leave it — a true edge, logged once. Idempotent.
+        public static void OpenNoseShroud(Vessel v) { SetNoseShroud(v, true); }
+        public static void CloseNoseShroud(Vessel v) { SetNoseShroud(v, false); }   // for the TOGGLE SHROUD button (Campaign 2/3)
+
+        static void SetNoseShroud(Vessel v, bool open)
         {
             if (v == null) return;
             try
@@ -475,11 +482,20 @@ namespace DragonScreen
                 {
                     List<ModuleAnimateGeneric> an = v.parts[i].Modules.GetModules<ModuleAnimateGeneric>();
                     for (int m = 0; m < an.Count; m++)
-                        if (an[m].animationName == "TE_23_CD2_NOSECONE_ANI" && an[m].Progress < 0.5f)
+                    {
+                        if (an[m].animationName != "TE_23_CD2_NOSECONE_ANI") continue;
+                        float p = an[m].Progress;
+                        // Toggle only from the settled opposite end (open: p≈0 closed → toggle; close: p≈1 open → toggle);
+                        // if it is already there or already moving that way, do nothing (no self-fight, no re-log).
+                        if (open && p < 0.02f)
                         { an[m].Toggle(); Debug.Log("[DragonScreen] nose shroud OPENED (forward Dracos exposed)"); return; }
+                        if (!open && p > 0.98f)
+                        { an[m].Toggle(); Debug.Log("[DragonScreen] nose shroud CLOSED (port protected)"); return; }
+                        return;   // already open/opening (or closed/closing) — leave it
+                    }
                 }
             }
-            catch (Exception e) { Debug.LogWarning("[DragonScreen] nose shroud open failed: " + e.Message); }
+            catch (Exception e) { Debug.LogWarning("[DragonScreen] nose shroud set failed: " + e.Message); }
         }
 
         // ============================ RCS ============================

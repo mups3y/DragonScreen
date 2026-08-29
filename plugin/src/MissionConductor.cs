@@ -231,13 +231,16 @@ namespace DragonScreen
 
         // T8b: log the live + max booster↔upper-stage separation (and whether both stay loaded+unpacked) — the
         // number that sizes PreRangeKm, which the single-vessel CSV cannot record. ~every 5 s while recovering.
-        static void LogSeparation(Vessel booster)
+        static void LogSeparation(Vessel upperStage)
         {
             try
             {
-                Vessel dragon = FindById(dragonId);
-                if (dragon == null || booster == null) return;
-                double sep = (booster.CoM - dragon.CoM).magnitude;
+                // ⭐ L6 FIX (Campaign 2): the caller passes the ACTIVE upper stage, and this used to difference it
+                // against `FindById(dragonId)` = the SAME active vessel (dragonId = active.persistentId) → sep ≡ 0
+                // (`sep 0 km` on every flight). The real pair is the separated booster (recBooster) vs the upper stage.
+                Vessel booster = recBooster;
+                if (booster == null || upperStage == null || !booster.loaded) return;
+                double sep = (booster.CoM - upperStage.CoM).magnitude;
                 if (sep > maxSepM) maxSepM = sep;
                 double now = Now();
                 if (now - lastSepLogUT > 5.0)
@@ -245,8 +248,8 @@ namespace DragonScreen
                     lastSepLogUT = now;
                     Debug.Log("[DragonScreen] booster recovery: sep " + (sep / 1000.0).ToString("F0") + " km (max "
                               + (maxSepM / 1000.0).ToString("F0") + " km) — booster loaded=" + booster.loaded
-                              + " unpacked=" + (!booster.packed) + ", upper-stage loaded=" + dragon.loaded
-                              + " unpacked=" + (!dragon.packed) + " [PRE keeping both alive = the H1 check].");
+                              + " unpacked=" + (!booster.packed) + ", upper-stage loaded=" + upperStage.loaded
+                              + " unpacked=" + (!upperStage.packed) + " [PRE keeping both alive = the H1 check].");
                 }
             }
             catch (Exception e) { Debug.LogWarning("[DragonScreen] separation log failed: " + e.Message); }
