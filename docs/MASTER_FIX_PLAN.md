@@ -29,8 +29,9 @@ Ascent→orbit inc 51.64 (L1); dual-flight control (H1); H1b mode-fix (FIXED⚑ 
 - ✅ **Campaign 3** — console dispatcher `FlightCommands.Run` → real `Systems` handlers + engage lamps (`8cc4f62`).
 - ✅ **Campaign 4** — VERIFIED, both Grok items **FALSE ALARMS** (2026-08-29). Globe is NOT mirrored (its strips assign u→screen the reverse of Quad — a trial swap put east/India on the LEFT, the preview caught it, reverted); the orbit "gap" is a rotation-corrected `min(period,3h)` spiral, NOT a closable ellipse (`(n-1)→0` = spurious chord). **No NavPage change.** Kept the preview `DrawImage` reversed-U fix (the flat-map texture was silently skipped in every preview) + a per-view u-convention regression test. **No reinstall needed** (shipped behaviour unchanged; NavPage.cs comment-only).
 - ✅✅ **Campaign 5 — RESOLVED-VERIFIED (Tick-3, flight `003648`, `a4875e9`+`f12bd32`).** Root = the **MVac RealFuels minThrottle floor 0.3854** (the g-cap returned an ENGINE throttle as a MAIN throttle → felt g = setpoint×1.107), fixed by mapping the cap through the floor. CONFIRMED: S2 peak 4.53→**4.103** (flat to SECO, throttle 0.611); S1 **3.499**. Then FIDELITY: raised `S2GLimitG` 4.1→**4.5** (real Crew Dragon peak), installed.
-- ▶ **NEXT (no flight):** Campaign 6 (L4 att-torque, after 1 — attitude loop, handle with care).
-- Flights owed: 7 (H1b confirm), 8 (dock), 9 (return), 10 (FDIR-acting).
+- ✅ **Campaign 6 (RCS authority) — BUILT + INSTALLED (`c42ed20`, UNFLOWN).** MEASURED (003648): the loop's authority is pinned at ~2 N·m for 91% of RCS-on ticks → `act_pitch` saturated 51% (bang-bang chatter, NOT "latent"). `AttitudeController.ControlTorque` now takes RCS authority = **max(stock report, per-axis geometric)** always (no gate), alloc-free; the existing SmoothTorque EMA is the "hysteresis." Confirm flight owed (rendezvous/deorbit): `ctrl_tq_*` ~12–20 kN·m, `act_*` unpinned, less RCS fuel.
+- ▶ **No-flight campaigns are now DONE (1a/2/3/4/5/6).** Remaining is flight-gated tuning.
+- Flights owed: **6-confirm (RCS authority)**, 7 (H1b confirm), 8 (dock), 9 (return), 10 (FDIR-acting).
 
 ## Campaigns (execute in this order)
 
@@ -87,8 +88,13 @@ Verified 3 ways (flight ratio 1.104–1.107, config floor 0.3854, currentThrottl
 the floor + `AscentControl.MinThrottle01` reads the field. ControlTest asserts felt g = setpoint; DispersionTest fuzzes the
 floor. NEEDS a confirm flight (peak ≈4.1). Then FIDELITY (Chris): raise `S2GLimitG` toward real ~4.5 g. ⛔ still do NOT LOWER it.
 
-**Campaign 6 — ATT-TORQUE** *(authority estimate)* — AFTER 1 (same loop). L4 [V]: `AttitudeController.ControlTorque`
-uses `max(reported, geometric)` with hysteresis (stock ~2 N·m makes the loop saturate). F1 deorbit re-fly after **[DG]**.
+**Campaign 6 — ATT-TORQUE** *(authority estimate)* — ✅ DONE 2026-08-30 (`c42ed20`). MEASURED the "latent" flicker to be a
+REAL saturation: `ctrl_tq_pitch` median 1.8 N·m, 91% of RCS-on ticks <100 N·m, `act_pitch` |act|=1 for 51% of ticks (003648).
+`AttitudeController.ControlTorque` now takes RCS authority = `max(stock report, per-axis geometric r×F)` ALWAYS (dropped the
+`rcsReported < RcsTorqueFloorNm` gate the ~2 N·m flicker sat above), non-RCS providers keep the report, one alloc-free pass
+(dropped `Modules.GetModules`). The "hysteresis" the plan asked for ALREADY existed — the `Compute()` SmoothTorque=0.10 EMA
+(rises smoothed, drop-to-0 instant). Glue change (compile-green, not headless-testable). Confirm flight owed. F1 deorbit re-fly
+should now hold retrograde (the same authority under-estimate mis-pointed those burns).
 
 **Campaign 7 — H1b FLIGHT CONFIRM** *(Tick-3)* — no new ignition code until the next booster CSV. Pass = `eng_ignited=1`
 ThreeEngine entry / CentreOnly landing. Fail → Campaign 0's numbers decide; only THEN research RF `isActiveVessel`. H1c
