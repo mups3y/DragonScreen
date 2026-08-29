@@ -73,6 +73,9 @@ namespace DragonScreen
                 mi.TargetRange = mi.HasTarget
                     ? (v.targetObject.GetTransform().position - v.transform.position).magnitude
                     : 0.0;
+                // ⭐ U1: the orbit is CLOSED once periapsis clears the atmosphere (a self-sustaining orbit). Below
+                // that, an in-space targeted vehicle is still on its ascent/insertion burn, not phasing.
+                mi.OrbitClosed = v.mainBody != null && v.orbit.PeA > v.mainBody.atmosphereDepth;
                 Chutes(v, ref mi);
                 MissionPhase phase = Mission.Classify(mi);
                 state.Phase = Mission.Name(phase);

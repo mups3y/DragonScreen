@@ -521,6 +521,9 @@ public static class LayoutTest
             Check("in space with no target is coast", Mission.Classify(m) == MissionPhase.Coast, "");
 
             m.HasTarget = true; m.TargetRange = 40000.0;
+            // ⭐ U1: targeted + in space but orbit NOT closed (mid-insertion, pe sub-orbital) is still ASCENT.
+            Check("targeted but orbit not closed is still ascent (U1)", Mission.Classify(m) == MissionPhase.Ascent, "");
+            m.OrbitClosed = true;
             Check("far from the target is phasing", Mission.Classify(m) == MissionPhase.Phasing, "");
             m.TargetRange = Mission.ApproachRange - 1.0;
             Check("inside 3 km is approach", Mission.Classify(m) == MissionPhase.Approach, "");

@@ -43,6 +43,10 @@ namespace DragonScreen
         public double TargetRange;
         public bool DroguesOut;
         public bool MainsOut;
+        // ⭐ U1: is the orbit CLOSED (periapsis above the atmosphere = self-sustaining)? During the S2 insertion
+        // burn the vehicle is already in the Space regime with the ISS targeted, but pe is still below the
+        // atmosphere (sub-orbital) — that is ASCENT, not phasing. Only a closed orbit begins the outbound phasing.
+        public bool OrbitClosed;
     }
 
     public static class Mission
@@ -70,7 +74,14 @@ namespace DragonScreen
             }
 
             if (s.HasTarget)
+            {
+                // ⭐ U1: a set target in space is NOT phasing until the orbit is CLOSED — during the S2 insertion
+                // the vehicle is above the atmosphere with the ISS targeted but pe is still sub-orbital (SECO not
+                // reached). Show ASCENT until orbit is achieved, then phasing/approach by range. (The return leg
+                // is undocked → HasTarget is false → this gate never mislabels a deorbit descent.)
+                if (!s.OrbitClosed) return MissionPhase.Ascent;
                 return (s.TargetRange <= ApproachRange) ? MissionPhase.Approach : MissionPhase.Phasing;
+            }
 
             return MissionPhase.Coast;
         }
