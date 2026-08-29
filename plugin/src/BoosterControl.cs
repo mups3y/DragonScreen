@@ -39,12 +39,14 @@ namespace DragonScreen
         // FlightCtrlState (never FlightDriver's active-vessel channels) by DriveNonActive.
         static readonly AttitudeController att = new AttitudeController();
         static double lastDriveLogUT = -999.0;   // rate-limit the non-active recovery KSP.log line
+        static double lastThrottle;              // ⭐ R1: throttle written to the booster's ctrlState (for the recorder)
 
         public static void Reset()
         {
             phase = BoosterPhase.Idle; currentMode = -1; legsDown = false; finsOut = false;
             smoothedBc = 0.0;
-            att.Reset(); lastDriveLogUT = -999.0;
+            att.Reset(); lastDriveLogUT = -999.0; lastThrottle = 0.0;
+            BoosterLog.Close();                  // ⭐ R1: close any open booster-recovery stream
         }
 
         // The active vessel is a lone booster to recover: it carries S1 parts and NO Dragon pod (so it is
@@ -158,6 +160,7 @@ namespace DragonScreen
             //      part modules directly, so it is correct whether or not the booster is the active vessel ----
             SelectEngineMode(v, bc.EngineMode);
             double thr = bc.EngineMode > 0 ? bc.Throttle : 0.0;
+            lastThrottle = thr;   // ⭐ R1: for the booster recorder stream
 
             // ---- attitude + throttle: to the ACTIVE-vessel sinks, or into the booster's own FlightCtrlState ----
             if (active)
@@ -180,7 +183,7 @@ namespace DragonScreen
             // ---- instrument. Active: contribute the booster columns to ITS CSV row. Non-active: the Dragon owns
             //      the CSV, so log the booster's recovery state to KSP.log instead (the cross-check evidence). ----
             if (active) FlightLog.Fill = FillRow;
-            else LogDrive(v, thr);
+            else { LogDrive(v, thr); BoosterLog.Sample(v); }   // ⭐ R1: the booster's own CSV stream (non-active)
         }
 
         static float Clamp1f(double d) { return (float)(d < -1.0 ? -1.0 : (d > 1.0 ? 1.0 : d)); }
@@ -272,6 +275,68 @@ namespace DragonScreen
         {
             BoosterCommand dummy = new BoosterCommand { Phase = phase, AoaDeg = lastAoa, EngineMode = currentMode, Throttle = 0 };
             FlightRecorder.PutBooster(row, dummy, lastIgniteAlt, lastDescentSpeed);
+        }
+
+        // ⭐ R1: fill a full FlightRecorder row from the NON-ACTIVE booster's live state (called by BoosterLog).
+        // Mirrors FlightLog's base snapshot but for THIS vessel + the booster's OWN attitude loop — so the
+        // booster recovery is a proper recording, not sparse log text. The H1b-critical columns: `eng_ignited`
+        // (did the octaweb LIGHT?), `ullage_stab` (was there settled ullage at the light?), throttle, plus the
+        // full control loop + reentry heating.
+        public static void FillRecorderRow(string[] row, Vessel v)
+        {
+            if (v == null) return;
+            try
+            {
+                FlightRecorder.PutTime(row, v.missionTime);
+                FlightRecorder.PutNav(row, v.altitude, v.obt_speed, v.verticalSpeed,
+                    v.dynamicPressurekPa * 1000.0, v.mach, double.NaN, v.totalMass * 1000.0);
+                FlightRecorder.PutBase(row, MissionPhase.Unknown, new ModeStep(), v.srfSpeed,
+                    Steering.AngleOfAttackDeg(v), v.geeForce, Actuator.TotalActiveThrustN(v),
+                    Actuator.IsRcsOn(v), false, AbortMode.None);   // booster: no mission ModeManager mode; engine_mode carries the octaweb mode
+                // the booster's OWN attitude loop (its AttitudeController instance) — the whole point of R1.
+                FlightRecorder.PutCommand(row, lastThrottle, 0.0, 0.0, 0.0,
+                    att.PointErrDeg, att.RateCmdRads, att.RateMeasRads,
+                    att.ActPitch, att.ActYaw, att.ActRoll, att.CtrlTorquePitchNm, att.CtrlTorqueYawNm);
+                Vector3 av = v.angularVelocity * Mathf.Rad2Deg;
+                FlightRecorder.PutRates(row, av.x, av.y, av.z);
+                Vector3 moi = v.MOI; Orbit o = v.orbit;
+                FlightRecorder.PutAuthority(row, att.CtrlTorqueRollNm, moi.x, moi.y, moi.z, Actuator.RcsThrustN(v),
+                    o != null ? o.ApA / 1000.0 : double.NaN, o != null ? o.PeA / 1000.0 : double.NaN,
+                    o != null ? o.inclination : double.NaN, o != null ? o.LAN : double.NaN);
+                // warp + the booster's main-engine ignition state (H1b: PROVES whether the octaweb lit).
+                double warpRate = 1.0; try { warpRate = TimeWarp.CurrentRate; } catch { }
+                int ign = 0, flame = 0;
+                foreach (ModuleEngines e in Engines(v)) { if (e.EngineIgnited) ign++; if (e.flameout) flame++; }
+                FlightRecorder.PutInstrument(row, warpRate, ign, flame);
+                // the booster octaweb's ullage (H1b: was there settled ullage at the light attempt?).
+                double ull = double.NaN;
+                foreach (ModuleEngines e in Engines(v)) { ull = Ullage.Stability(e); break; }
+                FlightRecorder.PutIgnition(row, ull, double.NaN, false);
+                // the booster FSM columns + reentry heating (MMH/NTO N/A — the booster burns RP-1/LOX).
+                BoosterCommand snap = new BoosterCommand { Phase = phase, AoaDeg = lastAoa, EngineMode = currentMode, Throttle = lastThrottle };
+                FlightRecorder.PutBooster(row, snap, lastIgniteAlt, lastDescentSpeed);
+                FlightRecorder.PutEnvironment(row, double.NaN, double.NaN, BoosterSkinFrac(v));
+            }
+            catch (Exception e) { Debug.LogWarning("[DragonScreen] booster row fill failed: " + e.Message); }
+        }
+
+        // The hottest part's skin-temperature fraction (0..1) — the booster's reentry heating; records only,
+        // no logging (the Dragon's FlightLog owns the rate-limited thermal log line).
+        static double BoosterSkinFrac(Vessel v)
+        {
+            if (v == null || v.parts == null) return double.NaN;
+            double worst = 0.0;
+            try
+            {
+                for (int i = 0; i < v.parts.Count; i++)
+                {
+                    Part p = v.parts[i];
+                    double mx = p.skinMaxTemp;
+                    if (mx > 0.0) { double f = p.skinTemperature / mx; if (f > worst) worst = f; }
+                }
+            }
+            catch { return double.NaN; }
+            return worst > 0.0 ? worst : double.NaN;
         }
     }
 }
