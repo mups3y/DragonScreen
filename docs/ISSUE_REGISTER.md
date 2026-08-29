@@ -130,5 +130,16 @@ Flight-anchored: rendezvous `ForwardSign = −1` (`s.Z=−1`) raised apoapsis co
 - Screens: page router "NOT YET WIRED" (DragonScreenMonitor:79); screen-data placeholders (ScreenPainter:148); NAV globe-mirror + orbit-line-close bugs (S-A). **OPEN** (Part II)
 - B9 recorder loss-columns; B2 isolated-aero estimator FEED; B3 RcsBalance glue; B8 targeting glue; B11 FDIR wiring. **OWED** (flight-gated)
 
+## ⭐ 2026-08-29 — DRAGONSCREEN UI AUDIT (flight 144114 full screen tour) — see `docs/FLIGHT_144114_SCREEN_AUDIT.md`
+> Chris captured every page + button; audited each screen, **source-checked every finding** (several first-glance
+> "bugs" were intentional — logged as ruled-out in the audit doc so they aren't re-raised).
+| # | Issue | Root / evidence | Status |
+|---|---|---|---|
+| U1 | **Phase classifier reads `PHASING` while still SUB-ORBITAL on the S2 insertion burn** (pe −4,600→−2,000 km, T+5–8). Contradicts the "AUTO: Ascent to orbit" label + SECO-pending checklist on the same screen. | `VesselData.cs:77` `Mission.Classify(mi)` keys on situation(Regime)+target presence, NO orbit-closed gate → "in space + has target" ⇒ Phasing mid-ascent. Should stay Ascent/Insertion until orbit closes (pe>atmo / SECO). | **OPEN (Med).** UI/phase-classify. |
+| U2 | **`STATE→CAUTION` during nominal late ascent** from a PROPELLANT low-alarm — the gauge (by-design) shows the near-spent S2 (~16%) near SECO → `Alarms.Low` → whole-vehicle CAUTION, while the RETURN propellant (MMH/NTO) is full. | 144921; `Pages.cs:1082`. | **OPEN (Low-Med).** Suppress low-prop alarm while the lit stage is an ascent stage, or alarm on the return budget. |
+| U3 | **`NET PWR 1` & `NET PWR 2` both read exactly `0 W`** on OVERVIEW (comment expects negative on battery). | 144921; `Pages.cs:974` `CabinEnvironment`. | **OPEN (Low) — VERIFY** the sim output in this state. |
+| U-F1 | **"Overheat!" part warning at max-Q ascent (T+1:56)** — a part hits its thermal limit on the climb. | 144330. Part TBD (interstage/grid-fin/fairing thermal in FAR). | **OPEN (Med)** — identify the part + confirm margin. |
+| — | **Ruled out (intentional/misread, do NOT re-raise):** "SURPRESS FIRE" button (matches model art, `PanelMap.cs:19`); MECH "NEGATIVE" unit is g not deg/s (misread); POWER STRINGS "Ax Bx Cx" (intended status format); PROPELLANT 16% (intended lit-engine readout, captioned); PERIGEE blank when suborbital (`PerigeeMeaningful`); inclination 53.6° (osculating suborbital arc). | audit doc | n/a |
+
 ## RESOLVED-VERIFIED (tick 3) — moved out when proven
 - Ascent reaches orbit + inc 51.65 (flight-proven ×2). Everything else above is tick-1/2 or open.
