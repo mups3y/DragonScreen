@@ -40,17 +40,15 @@ namespace DragonScreen
         [Tunable] public static double EntryWarpMarginM = 5000.0;// stop warping this far above the interface (1× entry buffer)
 
         static DepPhase depPhase = DepPhase.Idle;
-        static DeorbitPhase deoPhase = DeorbitPhase.Idle;
         static EntryPhase entPhase = EntryPhase.Idle;
         static ChutePhase chutePhase = ChutePhase.Idle;
         static bool rDroguesArmed, rMainsArmed;   // arm each canopy once (idempotent latch)
-        static bool undocked, trunkGone, shroudClosed, comEngaged, deorbitDone;
-        static double settleStartUT = -1;
+        static bool undocked, trunkGone, comEngaged, deorbitDone;
         static double lastBankDeg;
         static int lastBankSign = 1;
-        // deorbit-burn Δv instrumentation: planned (formula from measured orbit) + delivered (∫ measured RCS
-        // thrust). Delivered also feeds di.DvAppliedMps — the guidance's own backstop cutoff (was never set).
-        static double deorbitDvPlanned, deorbitDvDelivered, lastBurnUT = -1;
+        // the shared Draco deorbit burn (DeorbitBurn) + its burn-local state (phase, settle clock, planned/
+        // delivered Δv, shroud-closed latch). trunkGone stays a controller field (spans deorbit + entry).
+        static DeorbitBurnState deo = new DeorbitBurnState();
 
         // ---- B8/T6 CourseCorrect entry range channel (1×1: control = bank |σ|) ----
         // OFF by default: it RUNS + RECORDS the Newton-step bank correction (from the predictor's live
@@ -70,12 +68,12 @@ namespace DragonScreen
 
         public static void Reset()
         {
-            depPhase = DepPhase.Idle; deoPhase = DeorbitPhase.Idle; entPhase = EntryPhase.Idle;
+            depPhase = DepPhase.Idle; entPhase = EntryPhase.Idle;
             chutePhase = ChutePhase.Idle;
             rDroguesArmed = rMainsArmed = false;
-            undocked = trunkGone = shroudClosed = comEngaged = deorbitDone = false;
-            settleStartUT = -1; lastBankSign = 1;
-            deorbitDvPlanned = deorbitDvDelivered = 0; lastBurnUT = -1;
+            undocked = trunkGone = comEngaged = deorbitDone = false;
+            lastBankSign = 1;
+            deo.Reset();
             ccAccumS = 0; ccCorrectedMagRad = 0; ccLastDsigmaDeg = double.NaN; ccLastSlope = double.NaN;
             ccHaveCorrection = false;
             EntrySteering.Reset();
@@ -146,57 +144,15 @@ namespace DragonScreen
             CelestialBody body = v.mainBody;
             if (body == null) return;
             Vector3d up = Steering.Up(v);
-            Vector3d velI = v.obt_velocity;
 
             if (!deorbitDone)
             {
-                Actuator.EnableRcs(v);   // ⛔ direct: per-thruster rcsEnabled + master (no craft AG binding)
-
-                DeorbitInputs di = new DeorbitInputs();
-                di.Valid = true;
-                di.Velocity = new Vec3(velI.x, velI.y, velI.z);
-                di.Up = new Vec3(up.x, up.y, up.z);
-                di.PeriapsisAltM = (v.orbit != null) ? v.orbit.PeA : 0.0;
-                di.EntryInterfaceAltM = DeorbitTargetPeM;
-                di.TrunkAttached = !trunkGone;
-                di.SettleS = SettleS;
-                di.SettleElapsedS = settleStartUT > 0 ? Planetarium.GetUniversalTime() - settleStartUT : 0.0;
-                di.DvAppliedMps = deorbitDvDelivered;   // feed the guidance's backstop cutoff (was unset → 0)
-
-                // planned deorbit Δv = retrograde Δv to lower pe from the current radius to the entry interface
-                // (measured-state formula, not a sim). Recompute each tick as r_c/pe evolve through the burn.
-                if (v.orbit != null && v.mainBody != null)
-                    deorbitDvPlanned = DeorbitGuidance.DeorbitDvMps(
-                        (v.CoM - v.mainBody.position).magnitude, v.mainBody.Radius + DeorbitTargetPeM,
-                        v.mainBody.gravParameter);
-
-                // point retrograde (the burn axis) and check ready
-                Vector3d retro = velI.magnitude > 1 ? -velI.normalized : up;
-                di.AttitudeReady = Steering.PointingErrorDeg(v, retro) <= AttitudeReadyDeg;
-                di.AllNominal = true;
-
-                DeorbitCommand dc = DeorbitGuidance.Guide(di, deoPhase);
-                deoPhase = dc.Phase;
-
-                if (dc.JettisonTrunk && !trunkGone) { JettisonTrunk(v); trunkGone = true; if (!shroudClosed) { CloseNoseShroud(v); shroudClosed = true; } }
-                if (deoPhase == DeorbitPhase.Settle && settleStartUT < 0) settleStartUT = Planetarium.GetUniversalTime();
-
-                Steering.Point(v, retro);
-                bool ready = Steering.PointingErrorDeg(v, retro) <= AttitudeReadyDeg;
-                // the "throttle" is the Draco retrograde burn: point retrograde + translate forward
-                double nowUT = Planetarium.GetUniversalTime();
-                if (dc.Throttle > 0.0 && ready)
-                {
-                    FlightDriver.SetTranslation(0, 0, ForwardSign);
-                    // integrate delivered Δv = ∫ (measured RCS thrust / mass) dt while the burn is actually firing
-                    double massKg = v.totalMass * 1000.0;
-                    if (lastBurnUT > 0 && massKg > 1.0)
-                        deorbitDvDelivered += Actuator.RcsThrustN(v) / massKg * (nowUT - lastBurnUT);
-                    lastBurnUT = nowUT;
-                }
-                else { FlightDriver.ReleaseTranslation(); lastBurnUT = -1; }
-
-                if (dc.Complete) { deorbitDone = true; FlightDriver.ReleaseTranslation(); }
+                // the ONE shared Draco retrograde deorbit burn (DeorbitBurn): trunk jettison → settle →
+                // retrograde Draco translation closed-loop on MEASURED pe → orient shield-forward. The nose
+                // shroud is kept OPEN through the burn (forward Dracos = attitude authority) and closed on
+                // completion; Δv planned/delivered live in `deo` for the recorder (PutDv in FillRow).
+                deorbitDone = DeorbitBurn.Tick(v, deo, ref trunkGone,
+                                               DeorbitTargetPeM, AttitudeReadyDeg, SettleS, ForwardSign);
                 FlightLog.Fill = FillRow;
                 return;
             }
@@ -313,36 +269,8 @@ namespace DragonScreen
             catch (Exception e) { Debug.LogWarning("[DragonScreen] undock failed: " + e.Message); }
         }
 
-        static void JettisonTrunk(Vessel v)
-        {
-            try
-            {
-                for (int i = 0; i < v.parts.Count; i++)
-                {
-                    Part p = v.parts[i];
-                    ModuleDecouple d = p.Modules.GetModule<ModuleDecouple>();
-                    if (d != null && !d.isDecoupled) { d.Decouple(); Debug.Log("[DragonScreen] TRUNK JETTISON"); return; }
-                    ModuleAnchoredDecoupler a = p.Modules.GetModule<ModuleAnchoredDecoupler>();
-                    if (a != null && !a.isDecoupled) { a.Decouple(); Debug.Log("[DragonScreen] TRUNK JETTISON"); return; }
-                }
-            }
-            catch (Exception e) { Debug.LogWarning("[DragonScreen] trunk jettison failed: " + e.Message); }
-        }
-
-        static void CloseNoseShroud(Vessel v)
-        {
-            try
-            {
-                for (int i = 0; i < v.parts.Count; i++)
-                {
-                    List<ModuleAnimateGeneric> an = v.parts[i].Modules.GetModules<ModuleAnimateGeneric>();
-                    for (int m = 0; m < an.Count; m++)
-                        if (an[m].animationName == "TE_23_CD2_NOSECONE_ANI" && an[m].Progress > 0.5f)
-                        { an[m].Toggle(); Debug.Log("[DragonScreen] nose shroud CLOSED (protect the port on entry)"); return; }
-                }
-            }
-            catch (Exception e) { Debug.LogWarning("[DragonScreen] nose shroud close failed: " + e.Message); }
-        }
+        // (trunk jettison + shroud close now live in the shared DeorbitBurn — Actuator.JettisonTrunk fires the
+        //  ModuleTundraDecoupler by name, and the shroud is closed only AFTER the burn, not at trunk sep.)
 
         // ⛔ engage the offset-CoM Descent Mode via the AdjustableCoMShifter's ToggleMode event (once).
         static bool EngageCoMShifter(Vessel v)
@@ -418,10 +346,10 @@ namespace DragonScreen
 
         static void FillRow(string[] row)
         {
-            FlightRecorder.PutReturn(row, depPhase, deoPhase, entPhase, lastBankDeg * Math.PI / 180.0,
+            FlightRecorder.PutReturn(row, depPhase, deo.Phase, entPhase, lastBankDeg * Math.PI / 180.0,
                                      comEngaged, chutePhase, chutePhase != ChutePhase.Idle,
                                      chutePhase == ChutePhase.Main || chutePhase == ChutePhase.Splashed);
-            FlightRecorder.PutDv(row, deorbitDvPlanned, deorbitDvDelivered);   // deorbit burn Δv (was never recorded)
+            FlightRecorder.PutDv(row, deo.DvPlannedMps, deo.DvDeliveredMps);   // deorbit burn Δv (shared DeorbitBurn)
             FlightRecorder.PutCourseCorrect(row, ccLastDsigmaDeg, ccLastSlope);   // B8/T6 entry divert (records-first)
         }
     }

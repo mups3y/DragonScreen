@@ -30,8 +30,6 @@ namespace DragonScreen
         // ---- tunables (first-cut; calibrate against the abort recording) ----
         [Tunable] public static double EscapeBurnS = 6.0;         // SuperDraco push (real ~6 s to depletion)
         [Tunable] public static double DeorbitTargetPeM = 50000.0;// entry-corridor periapsis (matches return)
-        [Tunable] public static double DeorbitGLimit = 3.5;       // SuperDraco deorbit-burn g cap: fast but safe for
-                                                                  // a possibly-injured crew (not a full-thrust dive)
         [Tunable] public static double SettleS = 3.0;             // dwell after trunk sep before the deorbit burn
         [Tunable] public static double AttitudeReadyDeg = 10.0;   // "pointed" gate for a burn
         [Tunable] public static double ForwardSign = -1.0;        // Draco fore/aft translation sign (= return)
@@ -54,10 +52,12 @@ namespace DragonScreen
         // sub-phase flags/state
         static bool escapeFired, trunkGone, shroudOpen, undocked, atoDone, atoSeparated;
         static bool deorbitCommitted, deorbitDone;
-        static DeorbitPhase deoPhase = DeorbitPhase.Idle;
         static ChutePhase chutePhase = ChutePhase.Idle;
         static bool aDroguesArmed, aMainsArmed;   // arm each canopy once (idempotent latch)
-        static double abortDrogueTime, settleStartUT = -1;
+        static double abortDrogueTime;
+        // the shared Draco deorbit burn (DeorbitBurn) + its burn-local state — same engine/path as the
+        // nominal return; the old SuperDraco-throttle deorbit fired an EMPTY engine (it is abort-reserved).
+        static DeorbitBurnState deo = new DeorbitBurnState();
         static bool haveSite; static double siteLatDeg, siteLonDeg;
         static bool siteLogged;   // one-shot diagnostic for the deorbit water scan
         // ⭐ DEORBIT RESCUE (the "DEORBIT NOW" / "WATER DEORBIT" panel buttons — ForceDeorbit): reuse the
@@ -77,9 +77,9 @@ namespace DragonScreen
             mode = AbortMode.None; note = ""; latched = false; onsetUT = 0;
             escapeFired = trunkGone = shroudOpen = undocked = atoDone = atoSeparated = false;
             deorbitCommitted = deorbitDone = false;
-            deoPhase = DeorbitPhase.Idle; chutePhase = ChutePhase.Idle;
+            chutePhase = ChutePhase.Idle; deo.Reset();
             aDroguesArmed = aMainsArmed = false;
-            abortDrogueTime = 0; settleStartUT = -1;
+            abortDrogueTime = 0;
             haveSite = false; siteLatDeg = siteLonDeg = 0; siteLogged = false;
             isRescue = false; deorbitLandOK = false; gearDeployed = false;
         }
@@ -287,65 +287,18 @@ namespace DragonScreen
             }
         }
 
-        // the retrograde Draco deorbit burn, closed-loop on measured periapsis (pure DeorbitGuidance).
+        // The shared Draco retrograde deorbit burn (DeorbitBurn) — the SAME engine + path as the nominal
+        // return. ⛔ NOT the SuperDraco: it is ABORT-reserved and EMPTY on a return, so the retired path here
+        // (which throttled EngineRole.PodAbort) fired an empty engine → ZERO thrust → the crew STRANDED
+        // (flight 024400: throttle 0.36, thrust_n 0, pe unchanged). Draco RCS translation, closed-loop on
+        // MEASURED pe; trunk jettison (ModuleTundraDecoupler) + shroud timing handled inside; Δv planned/
+        // delivered → `deo` (recorded by FillRow). (docs/ABORT_PROCEDURES_RESEARCH.md: real Dragon deorbits
+        // on the Dracos and reserves the SuperDracos.)
         static void RunDeorbitBurn(Vessel v)
         {
-            CelestialBody body = v.mainBody;
-            Vector3d up = Steering.Up(v);
-            Vector3d velI = v.obt_velocity;
-
-            DeorbitInputs di = new DeorbitInputs();
-            di.Valid = true;
-            di.Velocity = new Vec3(velI.x, velI.y, velI.z);
-            di.Up = new Vec3(up.x, up.y, up.z);
-            di.PeriapsisAltM = v.orbit != null ? v.orbit.PeA : 0.0;
-            di.EntryInterfaceAltM = DeorbitTargetPeM;
-            di.TrunkAttached = !trunkGone;
-            di.SettleS = SettleS;
-            di.SettleElapsedS = settleStartUT > 0 ? Now() - settleStartUT : 0.0;
-
-            Vector3d retro = velI.magnitude > 1 ? -velI.normalized : up;
-            di.AttitudeReady = Steering.PointingErrorDeg(v, retro) <= AttitudeReadyDeg;
-            di.AllNominal = true;
-
-            DeorbitCommand dc = DeorbitGuidance.Guide(di, deoPhase);
-            deoPhase = dc.Phase;
-
-            if (dc.JettisonTrunk && !trunkGone) { Actuator.JettisonTrunk(v); trunkGone = true; }
-            if (deoPhase == DeorbitPhase.Settle && settleStartUT < 0) settleStartUT = Now();
-
-            Steering.Point(v, retro);
-            bool ready = Steering.PointingErrorDeg(v, retro) <= AttitudeReadyDeg;
-            // ⛔ SUPERDRACO DEORBIT — FAST BUT SAFE (user 2026-08-27). Use the SuperDracos (~534 kN) for the burn
-            // because their thrust makes the burn QUICK — the Draco/RCS deorbit is agonizingly slow (~0.1 g, many
-            // minutes for the ~100 m/s), which could cost an injured crew their lives. But NOT full-thrust-to-
-            // depletion (a ~5.6 g bone-crusher into a steep unsafe entry): the throttle is G-LIMITED to
-            // DeorbitGLimit, and the DeorbitGuidance FSM stops the burn at a SAFE entry-corridor periapsis
-            // (DeorbitTargetPeM), so it is down as fast as possible while staying survivable. Nose is retrograde,
-            // so the aft-canted SuperDracos brake the orbit. (Real Dragon reserves the SuperDracos + deorbits on
-            // the Dracos — docs/ABORT_PROCEDURES_RESEARCH.md; for an emergency we trade that for speed, safely.)
-            if (dc.Throttle > 0.0 && ready)
-            {
-                Actuator.ActivateEngines(v, EngineRole.PodAbort);
-                double sdMaxN = Actuator.MaxThrustN(v, EngineRole.PodAbort);
-                double massKg = v.totalMass * 1000.0;
-                double thr = (sdMaxN > 1.0 && massKg > 1.0)
-                    ? DeorbitGLimit * 9.80665 * massKg / sdMaxN : 1.0;
-                if (thr < 0.1) thr = 0.1; else if (thr > 1.0) thr = 1.0;   // hold ≤ DeorbitGLimit, never a dive
-                FlightDriver.SetThrottle(thr);
-            }
-            else
-            {
-                FlightDriver.ReleaseThrottle();
-                Actuator.ShutdownEngines(v, EngineRole.PodAbort);
-            }
-
-            if (dc.Complete)
-            {
+            FlightDriver.ReleaseThrottle();   // the Draco deorbit is RCS translation, never main-engine throttle
+            if (DeorbitBurn.Tick(v, deo, ref trunkGone, DeorbitTargetPeM, AttitudeReadyDeg, SettleS, ForwardSign))
                 deorbitDone = true;
-                FlightDriver.ReleaseThrottle();
-                Actuator.ShutdownEngines(v, EngineRole.PodAbort);
-            }
         }
 
         // ---------------------------------------------------------------- KOS RETREAT (prox-ops)
@@ -498,9 +451,10 @@ namespace DragonScreen
         static void FillRow(string[] row)
         {
             // reuse the return columns for the deorbit/chute detail an abort exercises.
-            FlightRecorder.PutReturn(row, DepPhase.Idle, deoPhase, EntryPhase.Idle, 0.0,
+            FlightRecorder.PutReturn(row, DepPhase.Idle, deo.Phase, EntryPhase.Idle, 0.0,
                                      false, chutePhase, chutePhase != ChutePhase.Idle,
                                      chutePhase == ChutePhase.Main || chutePhase == ChutePhase.Splashed);
+            FlightRecorder.PutDv(row, deo.DvPlannedMps, deo.DvDeliveredMps);   // deorbit burn Δv (shared DeorbitBurn)
         }
     }
 }
