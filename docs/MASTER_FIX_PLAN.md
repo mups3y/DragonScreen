@@ -1,5 +1,11 @@
 # DragonScreen — MASTER FIX PLAN (Grok end-to-end assessment + my verifications)
 
+> ⛔⛔ **ACTIVE WORK IS NOW THE RETURN — see `docs/RETURN_FIX_PLAN.md` and BUILD R1 FIRST.** Chris flew the
+> return 2026-08-30: the autopilot CANNOT deorbit (it fires the empty SuperDraco), stranding/killing crews
+> (12 dead, 17 hand-rescued, 0 brought home). That plan supersedes the campaign list below for now.
+> Campaigns 1a–6 (ascent/RCS) are done + installed; the return is untouched.
+
+
 > This REPLACES the earlier plan body (which Grok correctly flagged as stale). It is Grok's beta-mode end-to-end
 > assessment, with each claim I've **VERIFIED against source** marked. Execute campaign-by-campaign; one change class
 > each; §8 before code; Tick-1 headless-green → Tick-2 approve → Tick-3 flight; **re-verify file:line on the live HEAD

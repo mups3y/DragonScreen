@@ -7,6 +7,18 @@
 > markers (`best-guess`, `first-cut`, `unflown`, `TODO`, `placeholder`, `owed`, `⚠`, `assume`). Mirror the live
 > ones into the dashboard "Open Claims" tab.
 
+## ⛔⛔ 2026-08-30 — THE RETURN IS BROKEN (Chris's return-test session; full plan `docs/RETURN_FIX_PLAN.md`)
+Ledger: **12 kerbals killed** (respawned), **17 hand-rescued** by Chris, **0 brought home by the autopilot**.
+| # | Finding (VERIFIED code + CSV + log) | Status |
+|---|---|---|
+| **RET-1** | **THE ROOT — the autopilot cannot deorbit.** `AbortControl.FlyDeorbitReturn` fires the **SuperDraco** (`EngineRole.PodAbort`), which is EMPTY on a return (0 ignitions, no prop). Flight 024400: `Burn` phase, throttle 0.36 → `thrust_n = 0`, pe unchanged (196.9→196.1). Real Dragon deorbits on the DRACOS. | **OPEN → R1 (build first).** Unify to ONE Draco deorbit; delete the SuperDraco path. |
+| **RET-2** | **Return Draco Δv collapses** — MMH+NTO 99%→0% by flight 024400. Even the correct engine may lack the deorbit Δv (~100 m/s real). | **OPEN → R1** (budget check/fidelity). |
+| **RET-3** | **Deorbit target `DeorbitTargetPeM = 50 km` likely too steep for RSS** — should be an entry-FPA corridor. May be the real g driver, not lift. | **OPEN → R2.** |
+| **RET-4** | **Ballistic entries → 7.4–8.4 g** and the **Dragon 2 Main Parachute skin hits 507/506 K (100%) → crew death** (log 03:30). ⚠ CONFOUND: flown on Chris's manual pe≈−5000 km; can't grade the entry until RET-1/2 fixed. Whether ballistic-from-a-correct-corridor is survivable is UNPROVEN. | **OPEN → R4/R5** (decide lift from a flight; chute 506 K = fidelity call). |
+| **RET-5** | **Trunk jettison broken** — trunk decoupler is `ModuleTundraDecoupler`; code looks for `ModuleDecouple`/`ModuleAnchoredDecoupler` → "no trunk decoupler found". Chris hand-decoupled. | **OPEN → R3** (detect ModuleTundraDecoupler). |
+| **RET-6** | **Nose-shroud spam** — ~14k "OPENED" logs in ~20 min; return/rescue re-opens every tick. | **OPEN → R6** (latch; OPEN through the burn, CLOSE after). |
+| — | **Verified-OK:** ascent+4.5 g cap; Campaign 6 RCS authority (geometric firing); CoM shifter `ToggleMode` API correct; chutes gate at 5.5 km (the "91 km deploy" was a phase-column artifact — dropped). **Open checks:** installed DLL == source (rescue rewired 979959e); deorbit-burn failure on ≥2 flights; does rendezvous/dock even complete (no evidence either way). |
+
 **Status key:** `FIXED⚑` = fix built, headless-green, installed, **UNFLOWN** (tick-1 only) · `OPEN` = confirmed, not
 yet fixed · `DATA` = root needs an instrumented flight to pin (do NOT guess) · `SIGN` = a best-guess sign/param that
 only a flown phase resolves (guessing is last-resort → wait for data) · `DOC` = stale comment / doc-rot · `DONE✓` =
