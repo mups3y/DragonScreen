@@ -33,6 +33,13 @@ public static class RendezvousTest
         Check("invalid vessel still gets a unit aim (never floating)",
               Math.Abs(Rendezvous.Guide(bad, RvPhase.Phasing).AimLvlh.Magnitude - 1.0) < 1e-6, "");
 
+        // ---- Campaign 1 (C2a): far-field coast attitude gate — hold prograde tight ONLY when burning; on a
+        // coast, re-acquire only past the band, else release (drift, no RCS chatter). ----
+        Check("burning → always hold prograde (even at 0°)", RvCoast.HoldPrograde(true, 0.0, 3.0), "");
+        Check("coast within the band → release (no RCS)", !RvCoast.HoldPrograde(false, 1.0, 3.0), "");
+        Check("coast drifted past the band → re-acquire", RvCoast.HoldPrograde(false, 4.0, 3.0), "");
+        Check("coast exactly at the band → still released (strict >)", !RvCoast.HoldPrograde(false, 3.0, 3.0), "");
+
         // ---- phase progression on measured range ----
         Check("Idle → Phasing", Rendezvous.Guide(In(-10000, -50000, 0), RvPhase.Idle).Phase == RvPhase.Phasing, "");
         Check("Phasing → CoElliptic inside 30 km", Rendezvous.Guide(In(-10000, -20000, 0), RvPhase.Phasing).Phase == RvPhase.CoElliptic, "");

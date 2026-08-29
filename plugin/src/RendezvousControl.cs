@@ -36,6 +36,10 @@ namespace DragonScreen
                                                                 // flight 131412 (200→419 km). Anchors the
                                                                 // DockingControl RCS sign derivation (all −1).
         [Tunable] public static double AttitudeReadyDeg = 5.0;
+        // ⭐ Campaign 1 (C2a): far-field coast prograde re-acquire band. On a far-field COAST/PHASE we re-acquire
+        // prograde only after drifting past this, then release the attitude channel (drift, no RCS) — a hysteresis
+        // that keeps us within ~this of prograde. MUST stay < AttitudeReadyDeg so a re-acquire leaves us burn-ready.
+        [Tunable] public static double CoastReacquireDeg = 3.0;
         [Tunable] public static double BurnDoneDvMps = 0.02;
         [Tunable] public static double CwHandoffRangeM = 100000.0;// far→near split. The phase-timed transfer brings the
                                                                  // chaser to ~80 km at apoapsis (131412: 86 km, 165302:
@@ -180,9 +184,16 @@ namespace DragonScreen
             }
 
             // attitude-first: point prograde, burn only once pointed. FarGuide already gates Burn on the pe floor.
+            // ⭐ Campaign 1 (C2a): hold prograde TIGHTLY only when burning; on a far-field coast re-acquire prograde
+            // only after drifting past CoastReacquireDeg, else RELEASE the channel (drift, no RCS). The 0.1° loop
+            // deadband + prograde's ~0.06°/s rotation chattered the Dracos ~every 1.7 s → 69% of far-field firing was
+            // attitude-only (CSV 155116) = the MMH/NTO drain. This band keeps us within ~CoastReacquireDeg (< the 5°
+            // burn gate, so still burn-ready) at a fraction of the RCS. ⛔ far-field ONLY — near-field CW aim is
+            // off-prograde BY DESIGN (do not gate it here).
             Vector3d pro = Steering.Prograde(v);
-            Steering.Point(v, pro);
             double perr = Steering.PointingErrorDeg(v, pro);
+            if (RvCoast.HoldPrograde(fc.Burn, perr, CoastReacquireDeg)) Steering.Point(v, pro);
+            else FlightDriver.ReleaseAttitude();
             if (fc.PeHeld && !floorLogged)
             {
                 Debug.LogWarning("[DragonScreen] RV pe-floor (far): pe " + (peAlt / 1000.0).ToString("F0")
