@@ -132,6 +132,15 @@ Flight-anchored: rendezvous `ForwardSign = −1` (`s.Z=−1`) raised apoapsis co
 - Screens: page router "NOT YET WIRED" (DragonScreenMonitor:79); screen-data placeholders (ScreenPainter:148); NAV globe-mirror + orbit-line-close bugs (S-A). **OPEN** (Part II)
 - B9 recorder loss-columns; B2 isolated-aero estimator FEED; B3 RcsBalance glue; B8 targeting glue; B11 FDIR wiring. **OWED** (flight-gated)
 
+## ⭐ 2026-08-29 — FLIGHT 155116/155356 FULL AUDIT (exhaustive: CSV + log + screenshots, Chris-guided)
+| # | Issue | Evidence | Fix plan (to Grok — verify first) |
+|---|---|---|---|
+| **C2a-RCS** | **Rendezvous WASTES the RCS budget on ATTITUDE, not translation** — of the realtime RCS firings in PHASING, **63% are attitude-only** (1094 firing with NO translation cmd vs 634 with), with occasional **~104° attitude swings** (att_err p50 0.6° but **p95 103.6°**); drains MMH 1.0→0.0 → mission ends. `rcs_thrust_n` mean 13.6 kN. | CSV 155116, realtime (warp_rate=1) PHASING rows. | **Diagnose-first (data now exists):** why the 100° swings + attitude-only firing during coast? Candidates: (a) attitude loop re-points hard at each burn vector / thrashes in coast; (b) translation induces torque the loop fights (rcsbal cols); (c) deadband too tight → chatter. Likely fix: widen the coast attitude deadband / stop holding a tight attitude between burns / balance the translation. ⚠ NOT yet root-caused — propose instrument + one-cause fix. |
+| **H1c'** | **Booster fully TUMBLES (att_err → 179.5°) then BURNS UP (skin_temp 1.059 > 1.0)** on reentry — no retrograde hold (RCS empty, H1c) → broadside high-drag heating → parts over the thermal limit. FSM did reach LandingBurn (mode CenterOnly) at ~12.7 km, engine still unlit (H1b). | CSV 155356. | Couples to H1b/H1c — needs the engine gimbal (or far more RCS) to hold retrograde. No standalone fix until H1b. |
+| **UI-shroud** | **"JETTISON NOSE CONE" dash button should be "TOGGLE SHROUD"** — open AND close (Chris request). Currently jettison-only. | Chris 2026-08-29. | Relabel the button + change the action to toggle `Actuator.OpenNoseShroud`/`CloseNoseShroud` by current `Progress` state. `PanelMap.cs` (label) + `PanelButtons`/command (action). Small. |
+| **shroud-spam?** | **`nose shroud OPENED` logged 1674×** in the session — possible re-call/log spam (`OpenNoseShroud` toggles when `Progress<0.5`; if called every tick while it never reaches 0.5 it re-toggles). | log dedup. | **VERIFY** whether `RendezvousControl.shroudOpened`/`AbortControl.shroudOpen` latches actually hold, or the shroud is re-toggled per tick (would fight itself). Rate-limit + confirm idempotency. |
+| — | **Positives validated this flight:** R1–R4 recorder all work; the abort UI (manual) works; FDIR stayed observe-only; U1 phase-classifier installed. | — | keep |
+
 ## ⭐ 2026-08-29 — DRAGONSCREEN UI AUDIT (flight 144114 full screen tour) — see `docs/FLIGHT_144114_SCREEN_AUDIT.md`
 > Chris captured every page + button; audited each screen, **source-checked every finding** (several first-glance
 > "bugs" were intentional — logged as ruled-out in the audit doc so they aren't re-raised).
