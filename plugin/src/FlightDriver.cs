@@ -50,6 +50,12 @@ namespace DragonScreen
         [Tunable] public static double CtrlTumbleRateRads = 0.15;  // spinning faster than this (~8.6°/s) = tumbling
         [Tunable] public static double CtrlLostErrDeg = 30.0;      // and pointing this far off target
         static FdirState fdirState;
+        // ⭐ R2 recorder fidelity: the LAST FDIR report, so FlightLog can write it into the CSV every sample.
+        // Before this, PutFdir was never called → the fdir_fault/recovery/abort/abort_mode columns stayed blank
+        // even while KSP.log logged 10+ faults (flight 144114). Observe-only faults ARE recorded (they're the
+        // point — a fault that never reaches the CSV can't be correlated with the control state).
+        static FdirReport lastFdirReport;
+        public static FdirReport LastFdirReport { get { return lastFdirReport; } }
         static double fdirAccumS, lastFdirLogUT = -999.0;
         static readonly List<int> rcsPropIds = new List<int>();   // cached Draco/RCS propellant resource ids
 
@@ -82,6 +88,7 @@ namespace DragonScreen
             aborting = false; abortPending = false; abortFxSuppressed = false; AbortControl.Reset();
             MissionConductor.Reset();
             fdirState = new FdirState(); fdirAccumS = 0.0; lastFdirLogUT = -999.0; rcsPropIds.Clear();
+            lastFdirReport = new FdirReport();   // R2: fresh scene starts with a nominal (no-fault) recorded FDIR
             StopAbortFx();
         }
 
@@ -634,6 +641,7 @@ namespace DragonScreen
                 fi.KosRadiusM = 0.0; fi.KosRangeM = 0.0; fi.CorridorOk = true;   // KOS abort owned by DockingControl
 
                 FdirReport rep = Fdir.Update(ref fdirState, fi);
+                lastFdirReport = rep;   // ⭐ R2: publish for the recorder (FlightLog.Sample writes it via PutFdir)
                 if (rep.Fault != FaultKind.None)
                 {
                     double now = Planetarium.GetUniversalTime();

@@ -146,6 +146,15 @@ namespace DragonScreen
                 int engIgn, engFlame; EngineState(v, out engIgn, out engFlame);
                 FlightRecorder.PutInstrument(row, warpRate, engIgn, engFlame);
 
+                // ⭐ R2 (recorder hole, flight 144114): write the live FDIR state EVERY sample. PutFdir had NO
+                // call-site, so fdir_fault/recovery/abort/abort_mode stayed blank while KSP.log logged 10+ faults.
+                // Observe-only faults are recorded (a fault that never reaches the CSV can't be correlated).
+                FlightRecorder.PutFdir(row, FlightDriver.LastFdirReport, am);
+                // ⭐ R3/R4: the RETURN propellant (MMH/NTO) fractions — the mission-ending RCS drain was invisible
+                // in the CSV — and the hottest part's skin-temperature fraction (the max-Q "Overheat!" was invisible).
+                ResolveResIds();
+                FlightRecorder.PutEnvironment(row, ResFrac(v, mmhId), ResFrac(v, ntoId), MaxSkinTempFrac(v));
+
                 Action<string[]> fill = Fill;   // the active controller's PHASE-SPECIFIC columns on top of the base
                 if (fill != null) { try { fill(row); } catch { } }
 
@@ -184,6 +193,74 @@ namespace DragonScreen
                 }
             }
             catch { }
+        }
+
+        // ⭐ R3: the RETURN-propellant resource ids (MMH/NTO), resolved ONCE from the game-global library (ids are
+        // constant across scenes). 0 = the resource is not defined in this install → the fraction reads blank.
+        static bool resIdsResolved;
+        static int mmhId, ntoId;
+        static void ResolveResIds()
+        {
+            if (resIdsResolved) return;
+            try
+            {
+                PartResourceLibrary lib = PartResourceLibrary.Instance;
+                if (lib == null) return;   // not ready yet — retry next sample
+                PartResourceDefinition m = lib.GetDefinition("MMH"); mmhId = (m != null) ? m.id : 0;
+                PartResourceDefinition n = lib.GetDefinition("NTO"); ntoId = (n != null) ? n.id : 0;
+                resIdsResolved = true;
+            }
+            catch { }
+        }
+
+        // Connected fraction [0,1] of a resource on the vessel; NaN when the id is unset or the vessel has none.
+        static double ResFrac(Vessel v, int id)
+        {
+            if (id == 0 || v == null) return double.NaN;
+            try
+            {
+                double amt, max;
+                v.GetConnectedResourceTotals(id, out amt, out max, true);
+                return (max > 1e-9) ? amt / max : double.NaN;
+            }
+            catch { return double.NaN; }
+        }
+
+        // ⭐ R4: the hottest part's skin-temperature fraction (skinTemperature / skinMaxTemp), 0..1 (1 = at limit).
+        // Cheap 4 Hz part scan (two field reads/part, no allocation). When it runs hot, name the part in KSP.log
+        // (rate-limited) so a thermal event (the max-Q "Overheat!") is diagnosable to a specific part.
+        [Tunable] public static double SkinTempWarnFrac = 0.85;
+        static double lastThermalLogUT = -1e9;
+        static double MaxSkinTempFrac(Vessel v)
+        {
+            if (v == null || v.parts == null) return double.NaN;
+            double worst = 0.0; Part hottest = null;
+            try
+            {
+                for (int i = 0; i < v.parts.Count; i++)
+                {
+                    Part p = v.parts[i];
+                    double mx = p.skinMaxTemp;
+                    if (mx <= 0.0) continue;
+                    double f = p.skinTemperature / mx;
+                    if (f > worst) { worst = f; hottest = p; }
+                }
+            }
+            catch { return double.NaN; }
+            if (worst <= 0.0) return double.NaN;
+            if (worst >= SkinTempWarnFrac && hottest != null)
+            {
+                double now = Planetarium.GetUniversalTime();
+                if (now - lastThermalLogUT > 5.0)
+                {
+                    lastThermalLogUT = now;
+                    string nm = (hottest.partInfo != null) ? hottest.partInfo.title : hottest.name;
+                    Debug.LogWarning("[DragonScreen] THERMAL: hottest part '" + nm + "' skin "
+                        + hottest.skinTemperature.ToString("F0") + "/" + hottest.skinMaxTemp.ToString("F0")
+                        + " K (" + (worst * 100.0).ToString("F0") + "% of limit)");
+                }
+            }
+            return worst;
         }
 
         // Great-circle surface distance from the launch reference to the current sub-point (metres).

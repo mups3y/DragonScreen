@@ -86,6 +86,13 @@ namespace DragonScreen
             // read as live control. eng_ignited / eng_flameout = counts of the active vessel's main engines that are
             // commanded-on / flamed-out — so an ignition ATTEMPT is provable even when delivered thrust is 0.
             "warp_rate", "eng_ignited", "eng_flameout",
+            // ⭐ RECORDER FIDELITY (R3/R4 — holes found cross-checking flight 144114 screens/log vs CSV):
+            // mmh_frac/nto_frac = the RETURN propellant fractions (the RCS/Draco budget MMH+NTO — the drain that
+            // decides whether the Dragon can come home; the mission-ending drain was invisible in the CSV before,
+            // only in the resource-panel screenshots). skin_temp_frac = the hottest part's skin-temperature /
+            // skin-max (0..1, 1 = at the limit) — the max-Q "Overheat!" was invisible with no thermal column.
+            // Blank when the resource/part is absent. NOT zeroed under warp (resources don't drain on-rails).
+            "mmh_frac", "nto_frac", "skin_temp_frac",
         };
 
         static int Index(string name)
@@ -137,7 +144,8 @@ namespace DragonScreen
             RcsBalTorqueNaive = Index("rcsbal_torque_naive"), RcsBalTorqueResid = Index("rcsbal_torque_resid"),
             RcsBalForceFrac = Index("rcsbal_force_frac"),
             CcDsigmaDeg = Index("cc_dsigma_deg"), CcSlopeMPerRad = Index("cc_slope_m_per_rad"),
-            WarpRate = Index("warp_rate"), EngIgnited = Index("eng_ignited"), EngFlameout = Index("eng_flameout");
+            WarpRate = Index("warp_rate"), EngIgnited = Index("eng_ignited"), EngFlameout = Index("eng_flameout"),
+            MmhFrac = Index("mmh_frac"), NtoFrac = Index("nto_frac"), SkinTempFrac = Index("skin_temp_frac");
 
         // ---- formatting ----
         public static string Num(double v)
@@ -345,6 +353,14 @@ namespace DragonScreen
         {
             Set(c, FdirFault, r.Fault.ToString()); Set(c, FdirRecovery, r.Response.ToString());
             Set(c, FdirAbort, r.Abort); Set(c, AbortModeC, abortMode.ToString());
+        }
+
+        // ⭐ R3/R4 recorder fidelity: the return-propellant fractions (MMH/NTO — the RCS budget that decides
+        // whether the Dragon can come home) + the hottest part's skin-temperature fraction (0..1, 1 = at limit).
+        // NaN → blank (the resource or a valid skin-max is absent on this vessel).
+        public static void PutEnvironment(string[] c, double mmhFrac, double ntoFrac, double skinTempFrac)
+        {
+            Set(c, MmhFrac, mmhFrac); Set(c, NtoFrac, ntoFrac); Set(c, SkinTempFrac, skinTempFrac);
         }
 
         public static void PutSelfCal(string[] c, SelfCalState s)
