@@ -70,12 +70,58 @@ Same Instrument class as C0. Commits `6974bfd` (R2/R3/R4) + `0438205` (R1).
 **Tick-3 (fly): confirm the booster CSV appears with eng_ignited/ullage_stab, fdir_fault populates, mmh/nto track the
 drain, skin_temp catches the overheat.** THEN C2 Step-3.
 
-### ▶ C2 Step-3 (NEW, = the ranked Actuator-ignition class) — **booster ullage + ignition on the non-active vessel**
-**Scope (one class only):** make the booster's octaweb actually LIGHT during recovery on the non-active vessel. Measure the
-ullage/ignition state FIRST (does `ModuleEnginesRF` see settled ullage? does `Activate()`+`s.mainThrottle` arm it off-focus?),
-THEN settle ullage (fire the booster's aft RCS along the thrust axis before each light) and verify `eng_ignited≥1`. Do NOT
-retune the descent FSM until it lights (moot before ignition). §8 to be written before code. Exit: `eng_ignited≥1` at the
-entry burn on the non-active booster, log-confirmed.
+### ▶ C2 Step-3 (= the ranked Actuator-ignition class) — **booster ullage + ignition on the non-active vessel** — §8 DRAFT (measurement-gated; ready to build once the C-INSTR-2 flight lands)
+
+#### §8.1 State Confirmation (verified by reading, file:line, 2026-08-29)
+- **The Dragon settles ullage before every S2 light, and it WORKS** (S2 relights reliably): `AscentControl.cs:173–214`
+  runs an ignition CYCLE — settle@throttle-0 by firing the **aft RCS** `FlightDriver.SetTranslation(0,0,-1)` to seat the
+  propellant (185), read `Ullage.Stability(Actuator.FindEngine(v, SecondStage))` (186), and after `S2SettleS` LIGHT via
+  `Actuator.IgniteSecondStage` (208); if no SUSTAINED thrust it RESETS and re-settles (the 173–178 comment is the
+  RealFuels "lit into vapor → 0 thrust" lesson).
+- **The booster does NONE of this.** `BoosterControl.SelectEngineMode` just calls `e.Activate()` on a mode change — no
+  settle, no ullage read, no re-light cycle. On flight 144114 the octaweb `eng_ignited=0` the whole descent → LOST (H1b).
+- **The non-active booster's write path is its own `FlightCtrlState s`** (proven in Step-2): attitude `s.pitch/yaw/roll`
+  + throttle `s.mainThrottle` reach it. Translation `s.X/s.Y/s.Z` is the same channel → an aft-settle for the booster is
+  `s.Z` (sign TBD), NOT `FlightDriver.SetTranslation` (that targets the active Dragon).
+- **C-INSTR-2 (R1) now records the booster** — `ullage_stab`, `eng_ignited`, `throttle`, `trans_*` per tick in its own
+  CSV → the flight FINALLY shows the ullage state at the light attempt (the measurement this campaign is gated on).
+- ⚠ **Open physics the flight must settle:** (a) does the booster's cold-gas RCS have TRANSLATION authority, or attitude
+  only? (b) engine-first atmospheric descent decelerates the booster → the pseudo-force pushes propellant toward the NOSE
+  (away from the feed) → ullage UN-settled unless actively pushed aft (so a settle is genuinely needed). (c) does a
+  non-active vessel's `ModuleEnginesRF` even COMBUST once ullage is settled, or does RF gate ignition on active-focus?
+
+#### §8.2 Diagnosis (two candidate roots — the R1 data disambiguates; do NOT guess before the flight)
+`eng_ignited=0` = the octaweb was Activated but never combusted. Either **(A) Unsettled ullage** (most likely — matches
+the Dragon needing a settle + the drag physics): `ullage_stab` reads LOW at the light → build the settle-then-light cycle;
+or **(B) Off-focus RF ignition gate**: `ullage_stab` reads HIGH but `eng_ignited`=0 → RF won't combust a non-active
+vessel's engine regardless of ullage → a DIFFERENT fix (§8.6), NOT the settle.
+
+#### §8.3 Change class — **Actuator-ignition** (make the booster's octaweb light). One class. Do NOT retune the descent
+FSM (BoosterDescent timing/AoA) until it lights — moot before ignition, and would mix classes.
+
+#### §8.4 Edit plan (PRIMARY = root A; build ONLY after the flight confirms A)
+1. **`BoosterControl` — add a settle-then-light cycle to the non-active octaweb ignition**, mirroring `AscentControl`'s
+   proven S2 cycle but writing into the booster's own `s`: before lighting a new octaweb mode, run a settle phase —
+   `s.Z = BoosterSettleDir` (aft push; sign a `[Tunable]` confirmed from the flight's `ullage_stab` response) at throttle
+   0, read `Ullage.Stability` on the target-mode octaweb engine, and only when stable (the same threshold the Dragon uses)
+   `e.Activate()` + raise `s.mainThrottle`; if no SUSTAINED thrust after a window, reset → re-settle. Kept inside
+   `Fly(v,s)`/`DriveNonActive` so it stays on the booster's ctrlState.
+2. Reuse the PURE `Ullage` + the same settle/light timing constants as AscentControl (don't re-derive) — a PORT of the
+   Dragon's working cycle to the booster, not an invention.
+3. Instrument already in place (R1) → the cycle is self-diagnosing.
+
+#### §8.5 Verification
+- **Tick-1:** `build.py test` green (glue cycle; pure `Ullage` already tested).
+- **Tick-3 (exit):** on the booster CSV, `ullage_stab` RISES during the settle AND `eng_ignited ≥ 1` at the entry burn
+  (then the landing burn). Re-run the scorecard; H1b closes when it lands within a stated bound.
+
+#### §8.6 Contingency
+- **Root B (settled but won't light off-focus):** `ullage_stab` high yet `eng_ignited`=0 → NOT a settle fix — candidates:
+  a brief FORCE-FOCUS to the booster for the ignition instant then hand back, or an ignition path RF honours off-focus.
+  RESEARCH the RealFuels source first (does `ModuleEnginesRF` gate combustion on `vessel.isActiveVessel`?). New §8; no guessing.
+- **No booster translation RCS:** settle by holding the booster PROGRADE (engines-aft to the airflow) so drag seats the
+  propellant at the feed, or enable a dedicated ullage thruster — decide from the craft dump.
+- Any glue fault is caught by `DriveNonActive`'s try/catch → logs, carries on.
 
 #### §8.1 State Confirmation (what the code actually is — verified by reading, file:line, 2026-08-29)
 - `AttitudePilot` (`AttitudePilot.cs`) is a **`static` class**: the PID/smoothing/lag state — `posPid[]`/`velPid[]`
