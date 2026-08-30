@@ -303,12 +303,15 @@ namespace DragonScreen
             return n;
         }
 
-        // MECO + stage separation: cut the octaweb, then fire the interstage decoupler (S1 falls away).
-        public static void Meco(Vessel v)
+        // ⛔ MECO is now a TWO-STEP sequence in AscentControl — shut the octaweb, WAIT for its thrust to actually
+        // die, THEN SeparateBooster — because decoupling a still-thrusting booster made it ram the S2 and push it
+        // off course (flight 194334, the same failure the SECO path already guards against). Fire the interstage
+        // decoupler (S1 falls away). Returns true if one fired.
+        public static bool SeparateBooster(Vessel v)
         {
-            ShutdownBoosterEngines(v);
             bool sep = FireDecoupler(v, DecouplerRole.StageSep);
-            Debug.Log("[DragonScreen] MECO — octaweb shut, interstage " + (sep ? "decoupled" : "NOT FOUND"));
+            Debug.Log("[DragonScreen] booster SEP — interstage " + (sep ? "decoupled" : "decoupler NOT FOUND"));
+            return sep;
         }
 
         // ============================ DECOUPLERS ============================

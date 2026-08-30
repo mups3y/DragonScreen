@@ -75,6 +75,12 @@ namespace DragonScreen
         static double coastStartUT = -1;
         static bool dragonSeparated;
         static double secoUT = -1.0;   // SECO engine-cut time, to delay separation until thrust has died
+        // ⛔ MECO two-step (flight 194334): shut the octaweb, WAIT for its thrust to die, THEN decouple — never
+        // release a thrusting booster (it rammed S2 off course). Mirrors the SECO guard below.
+        static double mecoUT = -1.0;
+        static bool boosterSeparated;
+        [Tunable] public static double BoosterSepThrustN = 20000.0;   // decouple once octaweb thrust falls below this
+        [Tunable] public static double BoosterSepBackstopS = 3.0;     // …or this long after the shutdown (stuck-read backstop)
         static SelfCalState cal;
         static AscentLoss ascentLoss;   // B9: live steering/gravity/drag Δv-loss decomposition (recorded)
 
@@ -114,6 +120,7 @@ namespace DragonScreen
             phase = AscentPhase.Idle; upfg = new UpfgState(); s2Ignited = false;
             s2ThrustConfirmed = false; s2ThrustUpUT = -1.0; s2Lighting = false; s2PhaseUT = -1.0;
             coastStartUT = -1; dragonSeparated = false; secoUT = -1.0; Throttle = 0;
+            mecoUT = -1.0; boosterSeparated = false;
             ascentLoss.Reset();
             // ⛔ fresh scene = fresh estimators (stale RLS state must not carry to a new vehicle). Clears the B2
             // aero-stiffness feed's paired-tick state too, so the first interval of a new flight isn't a bad sample.
@@ -185,8 +192,30 @@ namespace DragonScreen
             phase = ac.Phase;
             lastPhaseWord = phase.ToString();
 
-            // ---- staging ----
-            if (ac.Stage) Actuator.Meco(v);   // ⛔ direct: octaweb cutoff + interstage decoupler (no staging)
+            // ---- staging: MECO is SHUT-then-WAIT-then-DECOUPLE (flight 194334: decoupling a still-thrusting
+            //      octaweb let the booster ram the S2 and push it off course — the same failure the SECO cut
+            //      guards against, which MECO never did). Step 1: on the Stage command, SHUT the octaweb only.
+            if (ac.Stage && mecoUT < 0.0)
+            {
+                Actuator.ShutdownBoosterEngines(v);
+                mecoUT = Planetarium.GetUniversalTime();
+                Debug.Log("[DragonScreen] MECO — octaweb SHUT; holding decouple until its thrust dies (no ram-into-S2).");
+            }
+            // Step 2: decouple only once the octaweb thrust has actually died (measured), with a backstop timeout.
+            if (mecoUT > 0.0 && !boosterSeparated)
+            {
+                double bthrN, bmaxN; int blit;
+                Actuator.EngineThrust(v, EngineRole.OctawebAll, out bthrN, out bmaxN, out blit);
+                double nowMeco = Planetarium.GetUniversalTime();
+                if (bthrN < BoosterSepThrustN || nowMeco - mecoUT > BoosterSepBackstopS)
+                {
+                    Actuator.SeparateBooster(v);
+                    boosterSeparated = true;
+                    Debug.Log("[DragonScreen] booster clear — octaweb thrust " + bthrN.ToString("F0")
+                              + " N (gate " + BoosterSepThrustN.ToString("F0") + " / backstop "
+                              + BoosterSepBackstopS.ToString("F1") + "s) → interstage decoupled.");
+                }
+            }
 
             // ⛔ S2 IGNITION — the RealFuels PROCEDURE (RF Readme_RF.txt, verified for RF 15.15 / KSP 1.12.5;
             // researched 2026-08-27 after flight 053613 re-lit the MVac 19× at throttle=1 with ullage reading
@@ -196,7 +225,7 @@ namespace DragonScreen
             // the aft RCS (RCS/solids are NOT subject to ullage), (3) throttle UP to restart. So we CYCLE:
             // settle@throttle-0 (S2SettleS) → light@throttle-up (S2LightWindowS) → if no SUSTAINED thrust, reset
             // and retry. (The old "hold throttle up + re-Activate" never cleared the vapor lock → dead S2.)
-            if ((phase == AscentPhase.Coast || phase == AscentPhase.S2Burn) && !s2ThrustConfirmed)
+            if ((phase == AscentPhase.Coast || phase == AscentPhase.S2Burn) && !s2ThrustConfirmed && boosterSeparated)
             {
                 double now = Planetarium.GetUniversalTime();
                 if (s2PhaseUT < 0.0) s2PhaseUT = now;
@@ -414,7 +443,7 @@ namespace DragonScreen
             }
 
             // ---- throttle ----
-            if ((phase == AscentPhase.Coast || phase == AscentPhase.S2Burn) && !s2ThrustConfirmed)
+            if ((phase == AscentPhase.Coast || phase == AscentPhase.S2Burn) && !s2ThrustConfirmed && boosterSeparated)
                 // ⛔ S2 IGNITION CYCLE owns the throttle until the MVac is truly running: 0 to RESET the vapor
                 // lock (settle), 1 to LIGHT. (Holding it at 1 the whole time is what left the MVac dead.)
                 Throttle = s2Lighting ? 1.0 : 0.0;
