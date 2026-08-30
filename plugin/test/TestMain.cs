@@ -30,6 +30,7 @@ public static class TestMain
         bad += AeroTest.Run();             // L1 nav: dynamic pressure / Mach / sound speed
         bad += AuthorityTest.Run();        // L1 nav: per-axis control authority + arrestable rate
         bad += ControlTest.Run();          // L2 control: attitude PD + throttle bucket/g-limit + RCS
+        bad += RcsPulseTest.Run();         // Tier-2: PWPF/delta-sigma RCS pulse modulation (Draco chatter fix)
         bad += ConicTest.Run();            // L3 support: Vec3 + conic propagator (UPFG gravity)
         bad += AscentTest.Run();           // L3 ascent: launch azimuth + S1 pitch program + FSM
         bad += LaunchWindowTest.Run();     // L3 ascent: launch-to-rendezvous plane-crossing / RAAN window

@@ -154,15 +154,45 @@ namespace DragonScreen
         public static void ReleaseAttitude()
         { attitudeOwned = false; attRollOwned = false; cmdPitch = cmdYaw = cmdAttRoll = 0f; }
 
+        // ⭐ PWPF / phase-plane RCS pulse modulation (Tier-2, pure/RcsPulse) — turns the continuous RCS
+        // command into thruster pulses whose average tracks it, with a deadband that KILLS the two-sided
+        // limit cycle that thrashed the Dracos and wasted MMH/NTO (Campaign-6). A near-full command passes
+        // through continuous (sustained burns intact); only trim commands are pulsed. MechJeb never does this
+        // for RCS — our improvement (docs/MECHJEB_MASTER_MAP.md §3.3). Tunable; false = continuous fallback.
+        [Tunable] public static bool   UseRcsPulse      = true;
+        [Tunable] public static double RcsPulseDeadband = 0.05;   // |cmd| below → command nothing (chatter kill)
+        [Tunable] public static double RcsPulseMinOn    = 0.06;   // s, minimum pulse width
+        [Tunable] public static double RcsPulseMinOff   = 0.06;   // s, minimum gap
+        [Tunable] public static double RcsPulseFull     = 0.90;   // |cmd| at/above → continuous thrust
+        static RcsPulseState pX = RcsPulseState.Fresh, pY = RcsPulseState.Fresh, pZ = RcsPulseState.Fresh;
+        static RcsPulseState pPitch = RcsPulseState.Fresh, pYaw = RcsPulseState.Fresh, pRoll = RcsPulseState.Fresh;
+        static float Pulse(ref RcsPulseState st, float cmd, double dt)
+        { return (float)RcsPulse.Step(ref st, cmd, dt, RcsPulseDeadband, RcsPulseMinOn, RcsPulseMinOff, RcsPulseFull); }
+
         void OnFlyByWire(FlightCtrlState st)
         {
             // Only take an axis when a controller is actively commanding it; otherwise leave the
             // player/idle in control. Pitch/yaw pointing is the direct gimbal loop (AttitudePilot).
+            // pulse only at realtime / physics warp (on-rails HIGH warp freezes control anyway); and pulse
+            // ATTITUDE only when the main engine is OFF — i.e. RCS is the attitude actuator (coast / rendezvous
+            // / deorbit / entry / dock). During gimbal ascent (throttle on) attitude stays CONTINUOUS.
+            bool pulse = UseRcsPulse && (TimeWarp.WarpMode != TimeWarp.Modes.HIGH || TimeWarp.CurrentRateIndex == 0);
+            double dt = TimeWarp.fixedDeltaTime;
+            bool rcsAtt = pulse && !(throttleOwned && cmdThrottle > 0.01);
+
             if (throttleOwned) st.mainThrottle = (float)cmdThrottle;
-            if (transOwned) { st.X = transX; st.Y = transY; st.Z = transZ; }
-            if (attitudeOwned) { st.pitch = cmdPitch; st.yaw = cmdYaw; }
-            if (attRollOwned) st.roll = cmdAttRoll;   // AttitudePilot roll damping (ascent/booster)
-            if (rollOwned) st.roll = cmdRoll;         // entry bank — wins if both ever set (mutually exclusive by phase)
+            if (transOwned)
+            {
+                if (pulse) { st.X = Pulse(ref pX, transX, dt); st.Y = Pulse(ref pY, transY, dt); st.Z = Pulse(ref pZ, transZ, dt); }
+                else       { st.X = transX; st.Y = transY; st.Z = transZ; }
+            }
+            if (attitudeOwned)
+            {
+                if (rcsAtt) { st.pitch = Pulse(ref pPitch, cmdPitch, dt); st.yaw = Pulse(ref pYaw, cmdYaw, dt); }
+                else        { st.pitch = cmdPitch; st.yaw = cmdYaw; }
+            }
+            if (attRollOwned) st.roll = rcsAtt ? Pulse(ref pRoll, cmdAttRoll, dt) : cmdAttRoll; // AttitudePilot roll damping
+            if (rollOwned)    st.roll = rcsAtt ? Pulse(ref pRoll, cmdRoll, dt)    : cmdRoll;     // entry bank (mutually exclusive)
         }
 
         // Physics-rate tick — control cadence, not display cadence.
