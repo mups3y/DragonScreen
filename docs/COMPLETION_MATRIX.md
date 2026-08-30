@@ -31,7 +31,7 @@
 | TELEMETRY_REGISTRY populated | **DONE (docs)** | 5 | reference-confirmed telemetry (nav mission page + docking attitude + chrome) mapped to authoritative KSP/RO sources; Phase 2–4 items marked routed |
 | COMMAND_REGISTRY populated | **OPEN** | 5 | seeded; command **paths/gating** await the review decision (does the AuthorityManager gate the actuation path) |
 | Screen component system | **IN PROGRESS (L1+preview)** | 6 | `NumericReadout` (green-correction/blue-rate + `—` honesty placeholder), `StatusIndicator` (AUTO/MANUAL/ABORT + severity, C6), `TargetReticle`, and **`AttitudeHud`** — the docking attitude display built on the **LIVE game navball** (`ImageId.NavBallLive`), not a synthetic sphere. Pure, headless-tested + rendered in a new **component gallery** (`build.py preview` → `page_gallery.png`). Expanded button/FAULT states + final docking layout build **with** the Docking page (Phase 7, §62). |
-| Docking gold-standard page | OPEN | 7 | AUTO/MANUAL + real commands; flight-tested |
+| Docking gold-standard page | **PROTOTYPE (display-only)** | 7 | `DockingPageCentral` — central live-navball layout (matches real photos/Frame 58) rendered (`page_docking_central.png`) for comparison vs the current corner-ring `DockingPage` (Vue-demo). Layout choice + AUTO/MANUAL **real commands** + flight test await the review. |
 
 ## Screens (current pages)
 | Page | Status | Notes |

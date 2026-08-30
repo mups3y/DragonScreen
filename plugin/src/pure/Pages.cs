@@ -110,6 +110,12 @@ namespace DragonScreen
         public string RangeText, RateText;
         public string OffXText, OffYText, OffZText;
         public string PitchText, YawText, RollText;
+        /// <summary>
+        /// Per-axis attitude RATE (°/s) for the central attitude HUD — the BLUE rate beneath the GREEN
+        /// correction (the real HUD's two-number scheme). From `vessel.angularVelocity`; null → "—"
+        /// until plumbed in VesselData (Phase 4/7). See TELEMETRY_REGISTRY DOCK_*_RATE.
+        /// </summary>
+        public string PitchRateText, YawRateText, RollRateText;
         /// <summary>Angle between our port axis and the line to the target, 0..1 of 90 degrees.</summary>
         public double Align01;
         public string AlignText;

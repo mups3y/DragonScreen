@@ -98,6 +98,20 @@ public static class ComponentsTest
         for (int i = 0; i < dl.Count; i++) if (dl.At(i).Str == "NO TARGET") noTarget = true;
         Check("AttitudeHud invalid → live navball + NO TARGET", dl.At(0).Image == ImageId.NavBallLive && noTarget, "");
 
+        // ---- DockingPageCentral prototype (display-only) builds without overflow, uses the live navball ----
+        var page = new PageState {
+            Valid = true, HasTarget = true, TargetName = "STATION", Phase = "PROX OPS",
+            RollText = "15.0°", PitchText = "-20.0°", YawText = "-10.0°",
+            RollRateText = "0.0 °/s", PitchRateText = "0.1 °/s", YawRateText = "0.0 °/s",
+            RangeText = "202.6 m", RateText = "-0.25 m/s", Closing = true, Mode = ControlMode.Auto,
+            OffXText = "22.7 m", OffYText = "0.1 m", OffZText = "0.0 m", FaultText = "NOMINAL", Align01 = 0.06 };
+        var big = new DisplayList(300);
+        DockingPageCentral.Build(big, 1280, 703, page);
+        Check("DockingPageCentral builds without overflow", !big.Overflowed && big.Count > 20, "count=" + big.Count);
+        bool navPage = false;
+        for (int i = 0; i < big.Count; i++) if (big.At(i).Image == ImageId.NavBallLive) navPage = true;
+        Check("DockingPageCentral uses the LIVE navball", navPage, "");
+
         // ---- null-safety (must not throw) ----
         NumericReadout.Value(null, 0, 0, "x", "y", DragonPalette.Go, 20f);
         StatusIndicator.Badge(null, 0, 0, 1, 1, "x", DragonPalette.Go);

@@ -377,6 +377,26 @@ public static class PreviewMain
                               + (hasImg ? "  (your art composited)" : "  (fallback wordmark)"));
         }
 
+        // ---- DOCKING PAGE PROTOTYPE (central navball) — display-only, for the layout comparison ----
+        {
+            ps.PitchRateText = "0.1 °/s"; ps.YawRateText = "0.0 °/s"; ps.RollRateText = "0.0 °/s";
+            ps.Mode = ControlMode.Auto; ps.ModeText = "AUTO";
+            ps.RollText = "15.0°"; ps.PitchText = "-20.0°"; ps.YawText = "-10.0°";
+            ps.RangeText = "202.6 m"; ps.RateText = "-0.25 m/s"; ps.Closing = true;
+            ps.OffXText = "22.7 m"; ps.OffYText = "0.1 m"; ps.OffZText = "0.0 m";
+            ps.Align01 = 0.06; ps.Fault = FaultKind.None; ps.FaultText = "NOMINAL";
+            dl.Clear();
+            DockingPageCentral.Build(dl, W, H, ps);
+            ChromeState cs = new ChromeState();
+            cs.Met = "T+ 21:14:07"; cs.VehicleState = "NOMINAL";
+            cs.LinkName = "SPX/TDRS"; cs.LinkTimer = "00:04:12"; cs.LinkUp = true; cs.SelectedPage = 3;
+            ChromeBar.Build(dl, W, H, cs);
+            if (dl.Overflowed) Console.WriteLine("  WARNING DOCKING-CENTRAL OVERFLOWED at " + dl.Capacity);
+            string dcpath = Path.Combine(outDir, "page_docking_central.png");
+            Render(dl, W, H, dcpath);
+            Console.WriteLine("  " + dcpath + "   " + W + "x" + H + "   " + dl.Count + " commands");
+        }
+
         // ---- COMPONENT GALLERY (Phase 6): the pure display widgets, rendered so they can be looked at ----
         // Not a page — a bench. AttitudeHud composites the live navball (a circular skin stand-in here) with
         // the docking overlay; the small widgets are shown in their states. Judged from the PNG, game closed.
