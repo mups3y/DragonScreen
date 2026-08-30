@@ -2,18 +2,20 @@
 
 > **The catalog of everything: every research doc, plan, data file, tool, external source, and the flight
 > corpus.** Read this to FIND the right resource fast; grep it before concluding something doesn't exist.
-> Organised by purpose. Freshness tag: **[CURRENT]** = live/authoritative · **[REF]** = stable reference/
-> research · **[SCREENS]** = UI side · **[HIST]** = historical/F9I-era, background only (don't build from it).
+> Organised by purpose. Freshness tag: **[ACTIVE]** = governing instruction (allowlist only) · **[CURRENT]** = live/authoritative · **[REF]** = stable reference/
+> research · **[SCREENS]** = UI side · **[HIST]** = historical/F9I-era, background only (don't build from it) · **[SUPERSEDED]** = obsolete instruction plans, **deleted** from the repo (recoverable via git history; do not resurrect).
 > Keep this in sync: add a line whenever a doc is created. Sibling index for ART assets: `ASSET_INDEX.md`.
 
 ---
 
-## 0. START HERE — governing
-- **[ULTIMATE_PLAN.md](ULTIMATE_PLAN.md)** [CURRENT] — ⭐ THE top-level governing plan for the WHOLE mod: Part I build CLAUDE (autopilot) first, Part II finish the entire mod (screens/console/mini-game). Everything below is its backing.
-- **[AUTOPILOT_REBUILD_PLAN.md](AUTOPILOT_REBUILD_PLAN.md)** [CURRENT] — the autopilot-detail backing. §0.1 state, **§0.2 = the ordered stage sequence**, §4 layer detail, §5 constants, §6 validation/phase-order.
-- **[RESUME_PROMPT.md](RESUME_PROMPT.md)** [CURRENT] — the live handoff; paste at the start of every session.
+## 0. START HERE — governing (the ACTIVE allowlist; nothing else is an instruction)
+- **[MASTER_BUILD_SPEC.md](MASTER_BUILD_SPEC.md)** [ACTIVE] — ⭐ THE sole governing specification. Overrides every other doc automatically. Read first.
+- **[SCREEN_SPEC.md](SCREEN_SPEC.md)** [ACTIVE] — the single screen spec (IA, components, page inventory, visual language); cannot override the master.
+- Supporting ACTIVE docs: **[COMPLETION_MATRIX.md](COMPLETION_MATRIX.md)** · **[SOURCE_OF_TRUTH.md](SOURCE_OF_TRUTH.md)** · **[TELEMETRY_REGISTRY.md](TELEMETRY_REGISTRY.md)** · **[COMMAND_REGISTRY.md](COMMAND_REGISTRY.md)** · **[SCREEN_EVIDENCE_MATRIX.md](SCREEN_EVIDENCE_MATRIX.md)** · **[FLIGHT_VERIFICATION.md](FLIGHT_VERIFICATION.md)** · **[DEPENDENCY_MATRIX.md](DEPENDENCY_MATRIX.md)**.
 - **INDEX.md** [CURRENT] — this file.
-- Memory: `~/.claude/.../memory/MEMORY.md` (index) + `dragonscreen-autopilot-rebuild-plan.md` (running log — chronological, read latest).
+- Handoffs/assessments (HISTORICAL evidence, not instruction): `RESUME_PROMPT.md`, `SESSION_HANDOFF.md`, `GROK_ASSESSMENT_PROMPT.md`, `CHATGPT_ASSESSMENT.md`, `ASSESSMENT_VERIFICATION.md`.
+- **SUPERSEDED (deleted from the repo — only the ACTIVE plan exists; in git history):** `ULTIMATE_PLAN`, `AUTOPILOT_REBUILD_PLAN`, `MASTER_FIX_PLAN`, `CAMPAIGN_PLAN`, `CAPABILITY_BUILD_BACKLOG`, `RETURN_FIX_PLAN`, `NOMINAL_END_TO_END_BUILD`.
+- Memory: `~/.claude/.../memory/MEMORY.md` (index) + running log (read latest).
 
 ## 1. Architecture & method (how to build)
 - **[TRUE_AUTOPILOT_ARCHITECTURE.md](TRUE_AUTOPILOT_ARCHITECTURE.md)** [REF] — how to build a true autopilot; the §13 completion criteria (the definition of done).

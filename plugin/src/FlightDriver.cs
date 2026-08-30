@@ -86,6 +86,7 @@ namespace DragonScreen
             FlightLog.Fill = null;
             FlightLog.Close();
             aborting = false; abortPending = false; abortFxSuppressed = false; AbortControl.Reset();
+            abortIsRecovery = false; AuthorityManager.Reset();
             MissionConductor.Reset();
             fdirState = new FdirState(); fdirAccumS = 0.0; lastFdirLogUT = -999.0; rcsPropIds.Clear();
             lastFdirReport = new FdirReport();   // R2: fresh scene starts with a nominal (no-fault) recorded FDIR
@@ -133,7 +134,14 @@ namespace DragonScreen
         public static double CmdTransX { get { return transOwned ? transX : 0.0; } }
         public static double CmdTransY { get { return transOwned ? transY : 0.0; } }
         public static double CmdTransZ { get { return transOwned ? transZ : 0.0; } }
-        static float Clamp1(double d) { return (float)(d < -1.0 ? -1.0 : (d > 1.0 ? 1.0 : d)); }
+        // ⛔ NaN GUARD (Phase 2, rule N2): NaN < -1 and NaN > 1 are BOTH false, so a NaN command would fall
+        // straight through this clamp into FlightCtrlState and hit the actuators. Sanitize NaN → 0 (neutral):
+        // a bad controller output must never reach the thrusters as NaN. A finite value clamps to [-1,1] as before.
+        static float Clamp1(double d)
+        {
+            if (double.IsNaN(d)) return 0f;
+            return (float)(d < -1.0 ? -1.0 : (d > 1.0 ? 1.0 : d));
+        }
 
         // Roll authority — the entry bank loop rolls the capsule about the velocity axis to the commanded
         // bank σ while SAS (a direction-only target) holds the nose retrograde. SAS leaves roll free, so
@@ -215,6 +223,7 @@ namespace DragonScreen
                 {
                     Bind(v);
                     UpdateAbort(v);
+                    SyncAuthority(v);
                     FlightLog.Sample(v);
                     return;
                 }
@@ -236,7 +245,7 @@ namespace DragonScreen
                     FlightLog.Fill = null;
                     FlightLog.Close();
                     aborting = false; abortPending = false; abortFxSuppressed = false; AbortControl.Reset();
-                    deorbitRescuePending = false;
+                    deorbitRescuePending = false; abortIsRecovery = false; AuthorityManager.Reset();
             MissionConductor.Reset();
                     return;
                 }
@@ -248,6 +257,7 @@ namespace DragonScreen
                 if (BoosterControl.IsRecoverableBooster(v))
                 {
                     BoosterControl.Tick(v);
+                    SyncAuthority(v);
                     FlightLog.Sample(v);
                     return;
                 }
@@ -282,6 +292,7 @@ namespace DragonScreen
                                          + StructuralAbortDwellS.ToString("F2") + " s — ABORT");
                         RequestAbort();
                         UpdateAbort(v);
+                        SyncAuthority(v);
                         FlightLog.Sample(v);
                         return;
                     }
@@ -313,6 +324,7 @@ namespace DragonScreen
                 if (clampHeld) ClampGate(v);
 
                 // 4) instrument (only while engaged — one CSV per autopilot flight)
+                SyncAuthority(v);
                 FlightLog.Sample(v);
             }
             catch (Exception e)
@@ -625,6 +637,43 @@ namespace DragonScreen
         public static void RequestAbort() { abortPending = true; }
         public static bool Aborting { get { return aborting; } }
 
+        // ============================ CONTROL AUTHORITY (Phase 2) ============================
+        // Publish WHO owns the vehicle into the shared AuthorityManager each tick, and expose it to the crew
+        // screens. READ-ONLY w.r.t. the flight loop: SyncAuthority derives from the SAME latch/abort state
+        // OnFlyByWire already acts on and writes only to the AuthorityManager model — it cannot change what
+        // the vehicle does (this is the behaviour-preserving extraction; the Manual/Recovery command paths
+        // route THROUGH the manager in Phase 7, under their own regression). CAMERA FOCUS IS NOT AN INPUT —
+        // the mission owns authority, not the view (the dual-vessel rule).
+        static bool abortIsRecovery;   // the current abort is a controlled deorbit-rescue, not a fault abort
+        public static ControlMode MissionMode { get { return AuthorityManager.Dragon.Mode; } }
+        public static ControlMode BoosterMode { get { return AuthorityManager.Booster.Mode; } }
+
+        static void SyncAuthority(Vessel v)
+        {
+            VehicleAuthority d = AuthorityManager.Dragon, b = AuthorityManager.Booster;
+
+            // The active vessel is a lone separated booster flying its own recovery via these latches → it IS
+            // the booster slot; there is no crewed Dragon owning authority in this scene.
+            if (v != null && BoosterControl.IsRecoverableBooster(v))
+            {
+                d.SetWhole(AuthSource.None);
+                b.SetAutopilot(true, false, true, true);
+                return;
+            }
+
+            // The crewed Dragon / mission vessel.
+            if (aborting || abortPending || CrewProcedureOps.AbortActive)
+                d.SetWhole(abortIsRecovery ? AuthSource.Recovery : AuthSource.Abort);
+            else if (!CrewProcedureOps.Engaged)
+                d.SetWhole(AuthSource.None);
+            else
+                d.SetAutopilot(throttleOwned, transOwned, attitudeOwned, attRollOwned || rollOwned);
+
+            // A non-active booster running a PARALLEL recovery on its own OnFlyByWire (dual-vessel).
+            if (MissionConductor.BoosterRecoveryActive) b.SetAutopilot(true, false, true, true);
+            else b.SetWhole(AuthSource.None);
+        }
+
         // ---- FDIR observe-only tick (tasks T2 + T2b) ----
         // Runs the pure Fdir at ~4 Hz on the live feeds and logs a rate-limited line on any tripped fault.
         // Acting (commanding the abort) is gated on FdirActing (default OFF) so a not-yet-flight-tuned monitor
@@ -775,6 +824,7 @@ namespace DragonScreen
         public static void RequestDeorbit(bool landAnywhere)
         {
             deorbitRescuePending = true; deorbitRescueLandAnywhere = landAnywhere; abortPending = true;
+            abortIsRecovery = true;   // Phase 2: a controlled rescue shows as RECOVERY authority, not ABORT
         }
 
         static void UpdateAbort(Vessel v)
