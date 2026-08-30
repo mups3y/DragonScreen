@@ -74,6 +74,25 @@ namespace DragonScreen
         static uint navRng = 0x1234567u;
         static double navLastLogUT = -999.0;
 
+        // ⭐ LAMBERT MID-FIELD INTERCEPT (pure/RvIntercept, over the tested Lambert BVP solver). The phase-timed
+        // co-elliptic raise is coarse (raise-to-parking + wait); a Lambert two-impulse intercept flies a DIRECT,
+        // exact, arbitrary-geometry transfer to where the station WILL be — the proper intercept MechJeb uses.
+        // ⛔ SAFE-BY-CONSTRUCTION: RvIntercept only ever returns a plan whose TRANSFER-ORBIT periapsis ≥ the pe
+        // floor, so even a partly-retrograde intercept can never walk the orbit into re-entry (the failure mode
+        // that made raw CW dangerous at range). DEFAULT OFF — flight-gated: CW/Hohmann stay the default until a
+        // flight tunes this on. Closed-loop on a LATCHED arrival UT: re-solve to the fixed arrival each tick so
+        // the residual departure Δv shrinks as the burn is flown, then coast to the CW hand-off.
+        [Tunable] public static bool UseLambertIntercept = false;
+        [Tunable] public static double LambertMinRangeM = 30000.0;   // below → hand to the CW terminal legs (don't Lambert)
+        [Tunable] public static double LambertMaxRangeM = 300000.0;  // above → single-rev Lambert unreliable → phase-timed raise
+        [Tunable] public static double LambertMinTofS = 45.0;        // abandon a plan whose arrival is inside this
+        [Tunable] public static double LambertBurnDoneDvMps = 0.05;  // residual departure Δv that ends the intercept burn
+        enum LambPhase : byte { Idle, Burn, Coast }
+        static LambPhase lambPhase = LambPhase.Idle;
+        static double lambArrivalUT;
+        static bool lambShortWay = true;
+        static double lambPlannedDv, lambLastLogUT = -999.0;
+
         // ---- FDIR feed (task T2b): the honest NEAR-FIELD closing signal for the ConvergenceStall monitor. The
         // controller is the honest source of intent — only it knows when it MEANT to be closing (a near-field CW
         // burn toward the standoff) vs coasting (the far-field phase-wait / co-elliptic coast, where a "stall" is
@@ -87,6 +106,7 @@ namespace DragonScreen
             phase = RvPhase.Idle; farPhase = FarPhase.Phase; lastFarPhase = FarPhase.Phase;
             shroudOpened = false; floorLogged = false;
             navInit = false;   // re-init the strict-fidelity rel-nav filter on a new rendezvous
+            lambPhase = LambPhase.Idle;   // re-arm the Lambert intercept FSM on a new rendezvous
             NearClosingRateMps = 0.0; NearClosingActive = false;
             FlightDriver.ReleaseTranslation();
             Steering.Release();
@@ -159,6 +179,11 @@ namespace DragonScreen
         static void FlyFarField(Vessel v, Orbit tgtOrbit, double apAlt, double peAlt, double rangeM,
                                 double rangeRateMps, double now)
         {
+            // ⭐ Lambert mid-field intercept (default OFF): if enabled and it can fly a pe-safe direct intercept
+            // this tick, it OWNS the far field (burn/coast) and we skip the phase-timed raise. It hands back by
+            // simply not claiming the tick once the range drops into the CW near-field (outer Fly() switches).
+            if (TryLambertIntercept(v, tgtOrbit, rangeM, peAlt, now)) return;
+
             CelestialBody body = v.mainBody;
             double mu = body.gravParameter;
             Vector3d bc = body.position;
@@ -248,6 +273,135 @@ namespace DragonScreen
                 BurnLvlh = new Vec3(0, fc.Burn ? 1.0 : 0.0, 0),
                 BurnDvMps = fc.Burn ? 1.0 : 0.0,
                 Burn = fc.Burn
+            };
+            lastRel = new LvlhState { Rx = 0, Ry = -rangeM, Rz = 0 };
+        }
+
+        // ⭐ LAMBERT MID-FIELD INTERCEPT executor (pure/RvIntercept). Returns TRUE if it owns this tick (it
+        // planned/burned/coasted a direct two-impulse intercept), FALSE to let the phase-timed raise fly. The
+        // burn is closed-loop on a LATCHED arrival UT: each tick re-solve the departure Δv to the fixed arrival
+        // (the residual shrinks as the burn is delivered), point the nose along it, translate forward once
+        // pointed. ⛔ Every solve is pe-floor-gated inside RvIntercept, so a burn can never route through
+        // re-entry; if a solve ever comes back unsafe/degenerate we bail to the co-elliptic raise.
+        static bool TryLambertIntercept(Vessel v, Orbit tgtOrbit, double rangeM, double peAlt, double now)
+        {
+            if (!UseLambertIntercept) return false;
+            CelestialBody body = v.mainBody;
+            double mu = body.gravParameter;
+
+            if (lambPhase == LambPhase.Idle)
+            {
+                if (rangeM < LambertMinRangeM || rangeM > LambertMaxRangeM) return false;
+                if (tgtOrbit == null || tgtOrbit.period <= 0.0) return false;
+                if (!EngageLambert(v, tgtOrbit, body, mu, now)) return false;   // no pe-safe plan → the raise flies
+            }
+
+            double tof = lambArrivalUT - now;
+
+            if (lambPhase == LambPhase.Burn)
+            {
+                // arrival passed / range fell into the CW near-field → finish the intercept, hand on.
+                if (tof < LambertMinTofS || rangeM < LambertMinRangeM) { EndLambert(); return false; }
+                InterceptPlan p = PlanToArrival(v, tgtOrbit, body, mu, now, tof, lambShortWay);
+                if (!p.Ok || !p.PeSafe) { EndLambert(); return false; }   // ⛔ safety: bail to the raise if unsafe
+
+                MissionConductor.Realtime();                              // a Draco burn is never run under warp
+                Vector3d aim = W(p.DepartureDv);
+                Steering.Point(v, aim);
+                double perr = Steering.PointingErrorDeg(v, aim);
+                bool burning = false;
+                if (p.DepartMagMps <= LambertBurnDoneDvMps)
+                {
+                    lambPhase = LambPhase.Coast; FlightDriver.ReleaseTranslation();
+                    Debug.Log("[DragonScreen] LAMBERT burn complete → coast to intercept (range "
+                              + (rangeM / 1000.0).ToString("F0") + " km)");
+                }
+                else if (perr <= AttitudeReadyDeg) { FlightDriver.SetTranslation(0, 0, ForwardSign); burning = true; }
+                else FlightDriver.ReleaseTranslation();
+
+                if (now - lambLastLogUT > 5.0)
+                {
+                    Debug.Log("[DragonScreen] LAMBERT burn: residual dv " + p.DepartMagMps.ToString("F2")
+                              + " m/s, perr " + perr.ToString("F1") + "°, tof " + tof.ToString("F0") + " s");
+                    lambLastLogUT = now;
+                }
+                RecordLambert(rangeM, burning ? p.DepartMagMps : 0.0);
+                return true;
+            }
+
+            // COAST — drift to the intercept; hold prograde loosely (hysteresis, like the far-field coast);
+            // warp toward the latched arrival. Hands back when the range drops into the CW near-field.
+            if (rangeM < LambertMinRangeM) { EndLambert(); return false; }
+            FlightDriver.ReleaseTranslation();
+            Vector3d pro = Steering.Prograde(v);
+            double cperr = Steering.PointingErrorDeg(v, pro);
+            if (RvCoast.HoldPrograde(false, cperr, CoastReacquireDeg)) Steering.Point(v, pro);
+            else FlightDriver.ReleaseAttitude();
+            if (CoastWarp && tof > LambertMinTofS && rangeM > CoastWarpMinRangeM)
+                MissionConductor.WarpToEvent(lambArrivalUT);
+            else
+                MissionConductor.Realtime();
+            RecordLambert(rangeM, 0.0);
+            return true;
+        }
+
+        // Scan the tof band (both transfer-angle branches) using KSP's exact target ephemeris; latch the cheapest
+        // pe-safe intercept under the cost cap. Returns false (→ phase-timed raise) when nothing qualifies.
+        static bool EngageLambert(Vessel v, Orbit tgtOrbit, CelestialBody body, double mu, double now)
+        {
+            double period = tgtOrbit.period;
+            if (period <= 0.0) return false;
+            double lo = RvIntercept.TofMinFrac * period, hi = RvIntercept.TofMaxFrac * period;
+            int n = RvIntercept.TofSamples;
+            InterceptPlan best = new InterceptPlan(); double bestTof = 0.0; bool bestWay = true;
+            for (int i = 0; i < n; i++)
+            {
+                double f = n > 1 ? (double)i / (n - 1) : 0.0;
+                double tof = lo + (hi - lo) * f;
+                if (tof < LambertMinTofS) continue;
+                for (int s = 0; s < 2; s++)
+                {
+                    InterceptPlan p = PlanToArrival(v, tgtOrbit, body, mu, now, tof, s == 0);
+                    if (!p.Ok || !p.PeSafe || p.DepartMagMps > RvIntercept.MaxDvMps) continue;
+                    if (!best.Ok || p.DepartMagMps < best.DepartMagMps) { best = p; bestTof = tof; bestWay = (s == 0); }
+                }
+            }
+            if (!best.Ok) return false;
+            lambArrivalUT = now + bestTof; lambShortWay = bestWay; lambPlannedDv = best.DepartMagMps;
+            lambPhase = LambPhase.Burn;
+            Debug.Log("[DragonScreen] LAMBERT engage: dv " + best.DepartMagMps.ToString("F1") + " m/s, tof "
+                      + bestTof.ToString("F0") + " s, transfer pe " + (best.TransferPeM / 1000.0).ToString("F0")
+                      + " km, " + (bestWay ? "short" : "long") + " way");
+            return true;
+        }
+
+        // Build the frame-consistent Lambert inputs and solve to a FIXED arrival. r1 is Earth-centered NOW; r2 is
+        // Earth-centered AT ARRIVAL (subtract the body's own position at arrival, so the body's translation over
+        // the tof cancels — the one correction the same-instant far-field code doesn't need). Chaser velocity is
+        // the world-frame obt_velocity (same frame the working far-field phase-angle already uses).
+        static InterceptPlan PlanToArrival(Vessel v, Orbit tgtOrbit, CelestialBody body, double mu,
+                                           double now, double tof, bool shortWay)
+        {
+            double arrival = now + tof;
+            Vec3 r1 = V((Vector3d)v.CoM - body.position);
+            Vector3d bodyAtArrival = body.orbit != null ? body.orbit.getPositionAtUT(arrival) : (Vector3d)body.position;
+            Vec3 r2 = V(tgtOrbit.getPositionAtUT(arrival) - bodyAtArrival);
+            Vec3 vC = V(v.obt_velocity);
+            return RvIntercept.Plan(r1, vC, r2, mu, body.Radius, tof, SafePeFloorM, shortWay);
+        }
+
+        static void EndLambert() { lambPhase = LambPhase.Idle; FlightDriver.ReleaseTranslation(); }
+
+        static void RecordLambert(double rangeM, double burnDv)
+        {
+            phase = RvPhase.Phasing;
+            lastCmd = new RendezvousCommand
+            {
+                Phase = RvPhase.Phasing,
+                AimLvlh = new Vec3(0, 1, 0),
+                BurnLvlh = new Vec3(0, burnDv > 0.0 ? 1.0 : 0.0, 0),
+                BurnDvMps = burnDv,
+                Burn = burnDv > 0.0
             };
             lastRel = new LvlhState { Rx = 0, Ry = -rangeM, Rz = 0 };
         }

@@ -43,6 +43,7 @@ public static class TestMain
         bad += BoosterTest.Run();          // L3 booster: hoverslam + grid-fin steering + descent FSM
         bad += RendezvousMathTest.Run();   // L3 rendezvous: LVLH + CW two-impulse + Hohmann
         bad += LambertTest.Run();          // B7: universal-variable Lambert solver + maneuver/finite-burn library
+        bad += RvInterceptTest.Run();      // Lambert rendezvous planner: tof scan + pe-floor gate + cost cap (intercept)
         bad += CourseCorrectTest.Run();    // B8: finite-difference impact-point divert solve (2×2 booster / 1×1 entry)
         bad += LaunchTunerTest.Run();      // B9: ascent Δv-loss decomposition + GravityTurn LaunchDB shape auto-tuner
         bad += WarpPlanTest.Run();         // mission-conductor: safe time-warp decisions (never overshoot a burn)

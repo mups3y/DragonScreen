@@ -41,8 +41,11 @@ built pure module. **Wired NOWHERE (built + headless-proven, but dead gold):**
 - ✅ **NavFilter** (strict-fidelity Kalman rel-nav) → WIRED into `RendezvousControl.FlyNearFieldCw` (`e99ed21`):
   simulated rel-GPS fused → guidance flies the ESTIMATE, instrumented, tunable `UseNavFilter`. ⏳ still to wire
   into DockingControl (terminal); ⏳ Tick-3 flight to read the est-vs-truth log.
-- 🔌 **Lambert** (two-impulse intercept) → wire into `Rendezvous` Midcourse/Transfer as the intercept solver
-  (behind a tunable, default off until flight-tuned; CW stays the default). Flight-gated.
+- ✅ **Lambert** (two-impulse intercept) → WIRED via `pure/RvIntercept.cs` (tof scan + **transfer-periapsis floor
+  gate** + cost cap over the tested `Maneuver.InterceptDv`) + `RendezvousControl.TryLambertIntercept` (closed-loop
+  on a latched arrival UT: re-solve residual Δv → point → translate → coast to the CW hand-off). Headless
+  `RvInterceptTest` 10 checks (self-inversion, pe-safe guarantee, floor+cost refusal). Tunable `UseLambertIntercept`
+  **default OFF** (CW/Hohmann stay default until a flight tunes it on). ⏳ Tick-3 flight to enable + tune.
 - 🔌 **Authority** (per-axis control authority + arrestable rate) → likely SUPERSEDED by BetterController's own
   √-stopping curve; verify before wiring (don't add a redundant path).
 
