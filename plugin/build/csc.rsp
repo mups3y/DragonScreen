@@ -82,6 +82,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\ProofPage.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\PropellantReadout.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\QAlpha.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\RcsBalance.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\RcsPulse.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Readouts.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Rendezvous.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Rls.cs
@@ -138,6 +139,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\test\PanelTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\PhasingTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\PredictTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\QAlphaTest.cs
+C:\Users\User\Desktop\DragonScreen\plugin\test\RcsPulseTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\RendezvousMathTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\RendezvousTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\ReturnTest.cs
