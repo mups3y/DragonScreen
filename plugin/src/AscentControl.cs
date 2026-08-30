@@ -55,6 +55,13 @@ namespace DragonScreen
         // RealFuels throttle-0-reset ignition cycle (see the S2 block):
         [Tunable] public static double S2SettleS = 2.0;       // throttle-0 settle/reset before each light attempt
         [Tunable] public static double S2LightWindowS = 2.0;  // hold throttle up this long before resetting to retry
+        // ⭐ S2 ROLL TRIM (flight 194334): the single MVac gimbal has ZERO roll authority (ctrl_tq_roll=0 all of
+        // S2), so once RCS is disabled at ignition (below) the plane-normal roll hold has nothing to actuate and
+        // roll builds unchecked 0→54 dps — the root of the rendezvous tumble. Re-arm RCS ONLY when the body rate
+        // diverges past S2RollTrimOnDps and release below S2RollTrimOffDps (hysteresis), so roll stays bounded at
+        // a small return-propellant cost, not the non-stop firing the ullage push had. Gimbal keeps pitch/yaw.
+        [Tunable] public static double S2RollTrimOnDps = 6.0;
+        [Tunable] public static double S2RollTrimOffDps = 1.5;
         [Tunable] public static double S2GLimitG = 4.5;       // S2 crew axial-g cap setpoint = the REAL Crew Dragon S2 peak
                                                               // (~4.5 g by SECO, astronaut accounts). The Campaign-5 floor
                                                               // fix (ControlLaw.ThrottleLimit + MinThrottle01) made the cap
@@ -327,6 +334,25 @@ namespace DragonScreen
             Steering.PointHoldRoll(v, aim, rollRef);
             lastAoaDeg = Steering.AngleOfAttackDeg(v);
             lastRcsOn = Actuator.IsRcsOn(v);
+
+            // ⭐ S2 ROLL TRIM: give the plane-normal roll hold RCS authority ONLY when the body rate diverges
+            // (hysteresis) — the gimbal can't roll, so without this roll runs away to 54 dps (flight 194334). The
+            // ullage/ignition block owns RCS while lighting (!s2ThrustConfirmed); this takes over for the SUSTAINED
+            // burn. Pitch/yaw stay on the gimbal; the brief RCS windows mostly null roll (pitch/yaw errors are small).
+            if (s2Lit && s2ThrustConfirmed)
+            {
+                double rateDps = v.angularVelocity.magnitude * (180.0 / Math.PI);
+                if (rateDps > S2RollTrimOnDps && !lastRcsOn)
+                {
+                    Actuator.EnableRcs(v);
+                    Debug.Log("[DragonScreen] S2 roll-trim: body rate " + rateDps.ToString("F1")
+                              + " dps — RCS armed to hold roll (gimbal has none)");
+                }
+                else if (rateDps < S2RollTrimOffDps && lastRcsOn)
+                {
+                    Actuator.DisableRcs(v);
+                }
+            }
 
             // ⭐ B9: accumulate the ascent Δv-loss decomposition (steering/gravity/drag) while powered — the tuner
             // objective + the zero-AoA diagnostic (steer_loss should stay ~0; a growing one = the nose is off

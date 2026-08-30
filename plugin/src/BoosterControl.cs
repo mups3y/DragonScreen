@@ -25,6 +25,14 @@ namespace DragonScreen
 {
     public static class BoosterControl
     {
+        // ⭐ LET IT FALL (Chris 2026-08-30): "just drop the booster with enough fuel to land but let it fall to
+        // earth. Get upper stage to orbit." Flight 194334 proved WHY this matters: the recovery FSM lit the
+        // engines at FULL THRUST 0.3 s after MECO while still at 0 km from the stack, its attitude diverged
+        // 2°→85° and the booster was DESTROYED in ~10 s — and its 0-km burn kicked the upper stage (yaw +14.7 dps)
+        // right as S2 lit. LetFall = separate cleanly, hold a stable attitude, and NEVER fire the engines: all
+        // landing fuel is preserved and the stack is not disturbed. Turn OFF only to actually attempt a recovery.
+        [Tunable] public static bool LetFall = true;
+
         static BoosterPhase phase = BoosterPhase.Idle;
         static int currentMode = -1;         // -1 = none selected; VehicleParts consts 0=All, 1=ThreeEngine, 2=CentreOnly
         static bool legsDown, finsOut;
@@ -153,6 +161,11 @@ namespace DragonScreen
             lastPhaseWord = phase.ToString();
             lastAoa = bc.AoaDeg;
             bool active = (s == null);
+
+            // ⭐ LET IT FALL: force engines OFF (mode 0, throttle 0) so the booster never burns — it keeps all its
+            //   landing fuel and just falls, and its exhaust can't disturb the stack at 0 km. Attitude hold stays
+            //   (a stable ballistic fall). This is the committed behaviour per Chris; clear LetFall to recover.
+            if (LetFall) { bc.EngineMode = 0; bc.Throttle = 0.0; }
 
             Vector3d aimDir = new Vector3d(bc.AimForward.X, bc.AimForward.Y, bc.AimForward.Z);
 
