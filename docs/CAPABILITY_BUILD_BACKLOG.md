@@ -129,7 +129,9 @@ CoM lifting entry (first-cut) · chute sequence (partial) · WarpPlan/CoastEta �
 
 ## TIER 9 — LANDING / ENTRY  (flight-gated; the booster + capsule recovery brain)
 - 🔨 **Landing autopilot** — land-at-target (coords/KSC) + land-somewhere (nearest-safe)
-- 🔨 **Landing Predictions + ReentrySimulation** — atmospheric integrate-to-impact (uses Tier-1 ODE) ⭐ entry predictor
+- ✅ **Landing Predictions + ReentrySimulation** — COVERED by our own `pure/Trajectory` (RK4 atmospheric
+  integrate-to-impact with **MEASURED** drag/lift/beta + rotating frame — better than a modelled ReentrySimulation),
+  wired in BoosterControl / BoosterTargeting / EntrySteering. No separate build needed.
 - 🟡 **Hoverslam** — suicide-burn timing (HoverslamSimulation) + hoverslam autopilot (uses the delta-sigma modulator)
 - 🟡 **Gear/chute auto-deploy at gated stages · RCS approach trim · deorbit planning** (deorbit HAVE)
 
