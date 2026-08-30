@@ -195,3 +195,16 @@ Flight-anchored: rendezvous `ForwardSign = −1` (`s.Z=−1`) raised apoapsis co
 ## RESOLVED-VERIFIED (tick 3) — moved out when proven
 - Ascent reaches orbit + inc 51.65 (flight-proven ×2).
 - **F5 crew g-cap (Campaign 5, flight 003648, 2026-08-30):** the S2 g overshoot (4.53) was the MVac RealFuels minThrottle floor 0.3854 unmodelled by the g-cap; the floor-mapping fix holds felt g exactly at setpoint (4.1→4.103, S1 3.5→3.499). Fidelity value now S2GLimitG=4.5 (real peak). Everything else above is tick-1/2 or open.
+
+## ⭐ 2026-08-30 — FULL-MISSION FLIGHT 194334 (all features ON) — analysis + detumble fix
+Flight: ascent→orbit→phasing, then STALLED at ~500 km, never reached CW/dock/deorbit. CSV `Crew-2_20260830_194334.csv`
+(4723 rows, MET 0..76139 s = 21 h) + KSP.log. Full event-by-event pass (assess_flight + raw CSV traces). No crashes.
+**What worked (verified in data+log):** coplanar launch (inc 51.64, d=+0.04), deployables fired ("solar panels + antennas
+deployed"), MECO/SECO, pe held ≥ floor the whole leg (min 166.8 > 150 — no self-deorbit), zero exceptions.
+| # | Issue | Evidence | Status |
+|---|---|---|---|
+| **F1** | **ROOT — roll rate never nulled → far-field attitude thrash.** Single-engine S2 has NO roll authority (`ctrl_tq_roll=0`, `act_roll=0` ALL of S2) and RCS attitude is off while lit → roll builds monotonically 8→39+ dps, ~54 dps by SECO. Spinning capsule can't hold prograde: terminal realtime att_err 50–177°, ±90 dps thrash. | CSV: rate_roll timeline 8.7→39.1 climbing through S2; RV terminal att_err 50–177, rate_p/y ±90. | **FIXED (tick-1).** Detumble-at-entry gate in `RendezvousControl.Fly`: hold CURRENT attitude (worldDir=`v.ReferenceTransform.up` → 0 pitch/yaw err, verified vs the loop code → thrusters free → roll nulled in s), never warp/burn while tumbling; one-shot, `SettleRateDps=2.0`. ⏳ Tick-3. |
+| **F2** | **Far-field never translated** (consequence of F1) — burn gate `perr≤5°` never met (att_err 50–177°). | CSV: `trans_z=0` the entire flight even with `rv_burn_dv=1.0`. | fixed via F1 (settled capsule reaches the gate). |
+| **F3** | **23% Draco MMH/NTO wasted on the thrash** in ~300 s. | CSV: `mmh_frac`/`nto_frac` 0.99→0.76 in the final terminal segment only. | fixed via F1 (no thrash → no waste). |
+| **F4** | **Rendezvous stalled / 21 h passive drift** — far-field stayed PHASE (no burn) 21 h, one Phase→Transfer at the very end, never reached CW. | assess: dock/deorbit/entry/chute blocks never exercised; range 10756→13367→500 km passive. | Expected to resolve once F1 lets the transfer actually fire — **OBSERVE next flight** (does the co-elliptic raise now complete + close?). |
+| **F5** | **Eccentric insertion 229×167** (target 210×210) — UPFG cuts off climbing, pe only 17 km above floor. | SECO ap 229.1 / pe 166.9. | **OPEN (perf, ascent).** Next ascent-tuning pass — kept OUT of this campaign so the detumble fix verifies in isolation (one change per flight). |

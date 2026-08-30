@@ -74,6 +74,20 @@ namespace DragonScreen
         static uint navRng = 0x1234567u;
         static double navLastLogUT = -999.0;
 
+        // ⛔ DETUMBLE-AT-ENTRY (flight 194334 root cause). The capsule arrives from ascent with a large,
+        // UNCONTROLLED roll rate: the single-engine S2 has no roll authority (ctrl_tq_roll=0 all through S2) and
+        // RCS attitude is off while the engine is lit, so roll builds monotonically to ~54 dps by SECO. A spinning
+        // capsule can NEVER hold prograde — the nose traces a cone, pitch/yaw thrash chasing it (att_err 50–177°,
+        // ±90 dps), the burn gate perr≤5° is never met so the far-field never translates (trans_z=0 the whole
+        // flight), and the thrash burns 23% of the Draco MMH/NTO. VERIFIED FIX (against the loop code, not comments):
+        // hold CURRENT attitude first — worldDir = v.ReferenceTransform.up gives ZERO pitch/yaw error (from the
+        // Quaternion.LookRotation frame math), so the RollControlRange gate opens AND, with no pitch/yaw slew, the
+        // shared Dracos are FREE for the roll velocity loop to null the rate in seconds. One-shot: settle once at
+        // entry, then normal guidance (which rate-limits its own slews). Never warp/burn while tumbling.
+        [Tunable] public static double SettleRateDps = 2.0;   // detumble until the body rate is below this
+        static bool settleDone;
+        static double settleLastLogUT = -999.0;
+
         // ⭐ LAMBERT MID-FIELD INTERCEPT (pure/RvIntercept, over the tested Lambert BVP solver). The phase-timed
         // co-elliptic raise is coarse (raise-to-parking + wait); a Lambert two-impulse intercept flies a DIRECT,
         // exact, arbitrary-geometry transfer to where the station WILL be — the proper intercept MechJeb uses.
@@ -106,6 +120,7 @@ namespace DragonScreen
             phase = RvPhase.Idle; farPhase = FarPhase.Phase; lastFarPhase = FarPhase.Phase;
             shroudOpened = false; floorLogged = false;
             navInit = false;   // re-init the strict-fidelity rel-nav filter on a new rendezvous
+            settleDone = false;   // re-arm the detumble-at-entry gate
             lambPhase = LambPhase.Idle;   // re-arm the Lambert intercept FSM on a new rendezvous
             NearClosingRateMps = 0.0; NearClosingActive = false;
             FlightDriver.ReleaseTranslation();
@@ -154,6 +169,35 @@ namespace DragonScreen
 
             double peAlt = v.orbit != null ? v.orbit.PeA : 0.0;
             double apAlt = v.orbit != null ? v.orbit.ApA : double.MaxValue;
+
+            // ⛔ DETUMBLE FIRST (one-shot at entry): kill the ascent-induced tumble before any guidance points or
+            // burns. Hold CURRENT attitude (nose at v.ReferenceTransform.up → zero pitch/yaw error → thrusters
+            // free → roll rate nulled), never warp while tumbling. See the field comment for the full root cause.
+            if (!settleDone)
+            {
+                double rateDps = v.angularVelocity.magnitude * (180.0 / Math.PI);
+                if (rateDps > SettleRateDps)
+                {
+                    MissionConductor.Realtime();                        // never warp/burn while tumbling
+                    Steering.Point(v, v.ReferenceTransform.up);         // hold current attitude = kill rotation (all axes)
+                    FlightDriver.ReleaseTranslation();
+                    NearClosingActive = false;
+                    if (now - settleLastLogUT > 3.0)
+                    {
+                        Debug.Log("[DragonScreen] RV detumble: body rate " + rateDps.ToString("F1")
+                                  + " dps > " + SettleRateDps.ToString("F1") + " — holding attitude to settle before phasing");
+                        settleLastLogUT = now;
+                    }
+                    phase = RvPhase.Phasing;
+                    lastCmd = new RendezvousCommand { Phase = RvPhase.Phasing, AimLvlh = new Vec3(0, 1, 0), Burn = false };
+                    lastRel = new LvlhState { Rx = 0, Ry = -rangeM, Rz = 0 };
+                    FlightLog.Fill = FillRow;
+                    return;
+                }
+                settleDone = true;
+                Debug.Log("[DragonScreen] RV settled — body rate below " + SettleRateDps.ToString("F1")
+                          + " dps, beginning phasing (range " + (rangeM / 1000.0).ToString("F0") + " km)");
+            }
 
             // ---- FAR FIELD: phase-timed Hohmann transfer (never CW, never a lowering burn) ----
             if (Phasing.FarField(rangeM, CwHandoffRangeM))
