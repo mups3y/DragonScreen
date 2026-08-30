@@ -85,7 +85,9 @@ namespace DragonScreen
         // shared Dracos are FREE for the roll velocity loop to null the rate in seconds. One-shot: settle once at
         // entry, then normal guidance (which rate-limits its own slews). Never warp/burn while tumbling.
         [Tunable] public static double SettleRateDps = 2.0;   // detumble until the body rate is below this
+        [Tunable] public static double SettleMaxS = 90.0;     // …but never hold longer than this (proceed on residual)
         static bool settleDone;
+        static double settleStartUT = -1.0;
         static double settleLastLogUT = -999.0;
 
         // ⭐ LAMBERT MID-FIELD INTERCEPT (pure/RvIntercept, over the tested Lambert BVP solver). The phase-timed
@@ -120,7 +122,7 @@ namespace DragonScreen
             phase = RvPhase.Idle; farPhase = FarPhase.Phase; lastFarPhase = FarPhase.Phase;
             shroudOpened = false; floorLogged = false;
             navInit = false;   // re-init the strict-fidelity rel-nav filter on a new rendezvous
-            settleDone = false;   // re-arm the detumble-at-entry gate
+            settleDone = false; settleStartUT = -1.0;   // re-arm the detumble-at-entry gate
             lambPhase = LambPhase.Idle;   // re-arm the Lambert intercept FSM on a new rendezvous
             NearClosingRateMps = 0.0; NearClosingActive = false;
             FlightDriver.ReleaseTranslation();
@@ -176,7 +178,9 @@ namespace DragonScreen
             if (!settleDone)
             {
                 double rateDps = v.angularVelocity.magnitude * (180.0 / Math.PI);
-                if (rateDps > SettleRateDps)
+                if (settleStartUT < 0.0) settleStartUT = now;
+                bool timedOut = (now - settleStartUT) > SettleMaxS;     // insurance: never hold the mission forever
+                if (rateDps > SettleRateDps && !timedOut)
                 {
                     MissionConductor.Realtime();                        // never warp/burn while tumbling
                     Steering.Point(v, v.ReferenceTransform.up);         // hold current attitude = kill rotation (all axes)
@@ -195,8 +199,9 @@ namespace DragonScreen
                     return;
                 }
                 settleDone = true;
-                Debug.Log("[DragonScreen] RV settled — body rate below " + SettleRateDps.ToString("F1")
-                          + " dps, beginning phasing (range " + (rangeM / 1000.0).ToString("F0") + " km)");
+                Debug.Log("[DragonScreen] RV settled — body rate " + rateDps.ToString("F1") + " dps"
+                          + (timedOut ? " (settle TIMED OUT at " + SettleMaxS.ToString("F0") + " s — proceeding on residual)" : "")
+                          + ", beginning phasing (range " + (rangeM / 1000.0).ToString("F0") + " km)");
             }
 
             // ---- FAR FIELD: phase-timed Hohmann transfer (never CW, never a lowering burn) ----
