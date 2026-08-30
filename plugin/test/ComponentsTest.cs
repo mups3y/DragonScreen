@@ -77,10 +77,32 @@ public static class ComponentsTest
         Check("Marker emits a 4-line diamond", dl.Count == 4
               && dl.At(0).Kind == DrawKind.Line && dl.At(3).Kind == DrawKind.Line, "count=" + dl.Count);
 
+        // ---- AttitudeHud (the LIVE navball + docking overlay) ----
+        dl.Clear();
+        var att = new AttitudeHudState {
+            Valid = true, RollErr = "15.0°", RollRate = "0.0 °/s",
+            PitchErr = "-20.0°", PitchRate = "0.0 °/s", YawErr = "-10.0°", YawRate = "0.0 °/s",
+            OffX = "22.7 m", OffY = "0.1 m", OffZ = "0.0 m", Range = "202.6 m", Rate = "-0.25 m/s", Closing = true };
+        AttitudeHud.Draw(dl, 640f, 360f, 120f, att);
+        Check("AttitudeHud draws the LIVE navball as cmd 0",
+              dl.At(0).Kind == DrawKind.Image && dl.At(0).Image == ImageId.NavBallLive, "");
+        Check("AttitudeHud emits the overlay (many cmds)", dl.Count > 15, "count=" + dl.Count);
+        bool rangeGreen = false;
+        for (int i = 0; i < dl.Count; i++)
+        { var c = dl.At(i); if (c.Kind == DrawKind.Text && c.Str == "202.6 m" && Same(c.Colour, DragonPalette.Go)) rangeGreen = true; }
+        Check("AttitudeHud RANGE value is GREEN", rangeGreen, "");
+
+        dl.Clear();
+        AttitudeHud.Draw(dl, 640f, 360f, 120f, new AttitudeHudState { Valid = false });
+        bool noTarget = false;
+        for (int i = 0; i < dl.Count; i++) if (dl.At(i).Str == "NO TARGET") noTarget = true;
+        Check("AttitudeHud invalid → live navball + NO TARGET", dl.At(0).Image == ImageId.NavBallLive && noTarget, "");
+
         // ---- null-safety (must not throw) ----
         NumericReadout.Value(null, 0, 0, "x", "y", DragonPalette.Go, 20f);
         StatusIndicator.Badge(null, 0, 0, 1, 1, "x", DragonPalette.Go);
         TargetReticle.Crosshair(null, 0, 0, 10, DragonPalette.Go);
+        AttitudeHud.Draw(null, 0, 0, 10, att);
         Check("null DisplayList is a no-op (no throw)", true, "");
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");

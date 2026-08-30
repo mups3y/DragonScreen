@@ -377,6 +377,56 @@ public static class PreviewMain
                               + (hasImg ? "  (your art composited)" : "  (fallback wordmark)"));
         }
 
+        // ---- COMPONENT GALLERY (Phase 6): the pure display widgets, rendered so they can be looked at ----
+        // Not a page — a bench. AttitudeHud composites the live navball (a circular skin stand-in here) with
+        // the docking overlay; the small widgets are shown in their states. Judged from the PNG, game closed.
+        {
+            dl.Clear();
+            dl.Text("COMPONENT GALLERY", 40f, 22f, Typography.Hero, TextAlign.Left, DragonPalette.Text1);
+            dl.Text("pure display widgets — AttitudeHud (live navball) · NumericReadout · StatusIndicator · TargetReticle",
+                    40f, 76f, Typography.Body, TextAlign.Left, DragonPalette.Text6);
+
+            // AttitudeHud with the live navball, left half.
+            AttitudeHudState a = new AttitudeHudState();
+            a.Valid = true;
+            a.RollErr = "15.0°";  a.RollRate = "0.0 °/s";
+            a.PitchErr = "-20.0°"; a.PitchRate = "0.1 °/s";
+            a.YawErr = "-10.0°";  a.YawRate = "0.0 °/s";
+            a.Range = "202.6 m";  a.Rate = "-0.25 m/s"; a.Closing = true;
+            a.OffX = "22.7 m"; a.OffY = "0.1 m"; a.OffZ = "0.0 m";
+            AttitudeHud.Draw(dl, W * 0.33f, H * 0.55f, H * 0.24f, a);
+
+            // Right column: the small widgets in their states.
+            float rx = W * 0.63f, ry = 150f;
+            dl.Text("StatusIndicator", rx, ry, Typography.Body, TextAlign.Left, DragonPalette.Text5); ry += 32f;
+            StatusIndicator.Badge(dl, rx, ry, 150f, 44f, "AUTO", StatusIndicator.Colour(ControlMode.Auto));
+            StatusIndicator.Badge(dl, rx + 168f, ry, 150f, 44f, "MANUAL", StatusIndicator.Colour(ControlMode.Manual));
+            ry += 58f;
+            StatusIndicator.Badge(dl, rx, ry, 150f, 44f, "ABORT", StatusIndicator.Colour(ControlMode.Abort));
+            StatusIndicator.Badge(dl, rx + 168f, ry, 150f, 44f, "RECOVERY", StatusIndicator.Colour(ControlMode.Recovery));
+            ry += 74f;
+            StatusIndicator.Lamp(dl, rx, ry, "GNC", "MANUAL", DragonPalette.Accent);
+            StatusIndicator.Lamp(dl, rx + 168f, ry, "STATE", "CAUTION", Alarms.Colour(Severity.Caution));
+            ry += 86f;
+
+            dl.Text("NumericReadout", rx, ry, Typography.Body, TextAlign.Left, DragonPalette.Text5); ry += 32f;
+            NumericReadout.Value(dl, rx, ry, "ALTITUDE", "393.3 km", DragonPalette.Text0, Typography.Value);
+            NumericReadout.Value(dl, rx + 210f, ry, "RATE (no data)", null, DragonPalette.AccentDim, Typography.Value);
+            ry += 70f;
+            NumericReadout.Paired(dl, rx, ry, "PITCH", "-20.0°", "0.0 °/s");
+            NumericReadout.Paired(dl, rx + 150f, ry, "ROLL", "15.0°", "0.0 °/s");
+            ry += 104f;
+
+            dl.Text("TargetReticle", rx, ry, Typography.Body, TextAlign.Left, DragonPalette.Text5); ry += 42f;
+            TargetReticle.Crosshair(dl, rx + 40f, ry + 16f, 26f, DragonPalette.Accent);
+            TargetReticle.Marker(dl, rx + 140f, ry + 16f, 14f, DragonPalette.Go);
+
+            if (dl.Overflowed) Console.WriteLine("  WARNING GALLERY OVERFLOWED at " + dl.Capacity);
+            string gpath = Path.Combine(outDir, "page_gallery.png");
+            Render(dl, W, H, gpath);
+            Console.WriteLine("  " + gpath + "   " + W + "x" + H + "   " + dl.Count + " commands");
+        }
+
         return 0;
     }
 

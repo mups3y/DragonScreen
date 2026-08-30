@@ -30,7 +30,7 @@
 | FDIR → screen alerts (§4.2) | **CODE — UNFLIGHTED** (L1+L2) | 4/11 | `Alarms.FdirSeverity`/`SystemSeverity` + `Fdir.FaultName`; the real spine reaches the alert channel (11 tests). A dedicated FDIR/Alerts page is Phase 11. |
 | TELEMETRY_REGISTRY populated | **DONE (docs)** | 5 | reference-confirmed telemetry (nav mission page + docking attitude + chrome) mapped to authoritative KSP/RO sources; Phase 2–4 items marked routed |
 | COMMAND_REGISTRY populated | **OPEN** | 5 | seeded; command **paths/gating** await the review decision (does the AuthorityManager gate the actuation path) |
-| Screen component system | **IN PROGRESS (L1)** | 6 | `NumericReadout` (green-correction/blue-rate + honesty placeholder), `StatusIndicator` (AUTO/MANUAL/ABORT + severity, C6), `TargetReticle` — pure, 23 tests, headless-verified. The attitude sphere + expanded button/FAULT states build **with** the Docking page (Phase 7, §62). Visual check in-context when the page renders them. |
+| Screen component system | **IN PROGRESS (L1+preview)** | 6 | `NumericReadout` (green-correction/blue-rate + `—` honesty placeholder), `StatusIndicator` (AUTO/MANUAL/ABORT + severity, C6), `TargetReticle`, and **`AttitudeHud`** — the docking attitude display built on the **LIVE game navball** (`ImageId.NavBallLive`), not a synthetic sphere. Pure, headless-tested + rendered in a new **component gallery** (`build.py preview` → `page_gallery.png`). Expanded button/FAULT states + final docking layout build **with** the Docking page (Phase 7, §62). |
 | Docking gold-standard page | OPEN | 7 | AUTO/MANUAL + real commands; flight-tested |
 
 ## Screens (current pages)
