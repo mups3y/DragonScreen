@@ -48,15 +48,24 @@ built pure module. **Wired NOWHERE (built + headless-proven, but dead gold):**
   on a latched arrival UT: re-solve residual Δv → point → translate → coast to the CW hand-off). Headless
   `RvInterceptTest` 10 checks (self-inversion, pe-safe guarantee, floor+cost refusal). Tunable `UseLambertIntercept`
   **default OFF** (CW/Hohmann stay default until a flight tunes it on). ⏳ Tick-3 flight to enable + tune.
-- 🔌 **Authority** (per-axis control authority + arrestable rate) → likely SUPERSEDED by BetterController's own
-  √-stopping curve; verify before wiring (don't add a redundant path).
+- ✅ **Authority** (per-axis control authority + arrestable rate) → VERIFIED SUPERSEDED (2026-08-30, do NOT wire
+  a redundant path). The capability — "never command a rate you cannot arrest" — IS live: BetterController
+  (`pure/AttitudeLoop.cs`, the committed inner loop) computes `maxAlpha = controlTorque/MOI` (line 103) and the
+  identical `√(2·maxAlpha·(|e|−effLD))` arrestable-rate braking curve (line 128) itself. `pure/Authority` +
+  `ControlLaw.RateCommand/AxisCommand` (which consume it) are a PARALLEL attitude PD that the glue never flies
+  (only `ControlTest` calls them; the live loop is AttitudePilot→AttitudeLoop). Adding an Authority-based path =
+  "hat on a hat" ([[mod-dependency-policy]]). Left as-is; `ControlLaw.ThrottleLimit` (the throttle limiter, a
+  different function) stays live in AscentControl.
 
 **Per-phase usage (what each phase controller pulls in today):**
 - Ascent: AttitudePilot, ControlLaw, QAlpha, SelfCal, Ullage, Upfg. (DiffThrottle/ThrustBalance/RcsBalance/
   ActuatorLag are wired via Actuator + AttitudeController, so ascent gets them indirectly. NavFilter absent.)
 - Rendezvous: Cw, Hohmann, Phasing, Rendezvous FSM. (Lambert + NavFilter absent.)
-- Return: DeorbitGuidance, DeorbitBurn, Entry, EntrySteering, Chutes, CourseCorrect, Predict. (Trajectory is
-  wired via EntrySteering. SafeLandingSite absent → no LZ selection wired.)
+- Return: DeorbitGuidance, DeorbitBurn, Entry, EntrySteering, Chutes, CourseCorrect, Predict, **SafeLandingSite**
+  (Trajectory is wired via EntrySteering). ✅ **SafeLandingSite → nominal return LZ** now WIRED: shared
+  `LandingSiteScan` (one copy of the F4 water-gate fix, used by BOTH abort + return) selects the nearest reachable
+  open-water splashdown; `EntrySteering.SetSplashTarget` steers the lifting-entry footprint at it. Tunable
+  `UseSafeLandingSite`. ⏳ Tick-3 flight to tune the bank-steering signs (R6) to the recorded footprint.
 - ⭐ **RcsPulse (PWPF)** → NEW, wired at `FlightDriver.OnFlyByWire` (all RCS phases). ✅ `1d0f613`.
 
 **Next wiring campaigns (each its own §8 pass, build+wire+instrument, then flight-tune):** NavFilter→rel-nav ·

@@ -29,6 +29,15 @@ namespace DragonScreen
         public static double LastSigmaRad;                   // the bank the predictor assumes (prev command)
         public static double LastDownErrM, LastCrossErrM;
         public static bool LastHadTarget;
+
+        // ⭐ SPLASHDOWN TARGET (SafeLandingSite → nominal return LZ). When set, the footprint predictor steers
+        // toward this body-fixed lat/lon (sea level) instead of the KSP target object — the nominal return has
+        // no orbital target to aim at, so ReturnControl selects a safe open-water site and hands it here.
+        public static bool HasSplashTarget;
+        static double splashLatDeg, splashLonDeg;
+        public static void SetSplashTarget(double latDeg, double lonDeg)
+        { splashLatDeg = latDeg; splashLonDeg = lonDeg; HasSplashTarget = true; }
+        public static void ClearSplashTarget() { HasSplashTarget = false; }
         static double smoothedBc;
 
         // Measure the ballistic coefficient from the felt drag (accelerometer) while entering.
@@ -74,9 +83,20 @@ namespace DragonScreen
             downErr = 0; crossErr = 0;
             CelestialBody body = v.mainBody;
             if (body == null || smoothedBc <= 0.0) return false;
-            if (v.targetObject == null || v.targetObject.GetTransform() == null) return false;
-            Vector3d target = v.targetObject.GetTransform().position;
-            double targetAlt = body.GetAltitude(target);
+            Vector3d target; double targetAlt;
+            if (HasSplashTarget)
+            {
+                // the selected safe-water site, at sea level, in the CURRENT body-fixed world frame (same frame
+                // the impact is rotation-corrected into below, so the miss decomposition is consistent).
+                target = body.GetWorldSurfacePosition(splashLatDeg, splashLonDeg, 0.0);
+                targetAlt = 0.0;
+            }
+            else
+            {
+                if (v.targetObject == null || v.targetObject.GetTransform() == null) return false;
+                target = v.targetObject.GetTransform().position;
+                targetAlt = body.GetAltitude(target);
+            }
 
             TrajectoryInputs ti = new TrajectoryInputs();
             Vector3d rel = (Vector3d)v.CoM - body.position;
@@ -143,6 +163,6 @@ namespace DragonScreen
             return Math.Atan2(s, c);
         }
 
-        public static void Reset() { smoothedBc = 0; LastSigmaRad = 0; LastHadTarget = false; }
+        public static void Reset() { smoothedBc = 0; LastSigmaRad = 0; LastHadTarget = false; HasSplashTarget = false; }
     }
 }

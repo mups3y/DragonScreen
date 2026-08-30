@@ -365,49 +365,21 @@ namespace DragonScreen
             if (body == null || v.orbit == null) return true;   // no body model → just deorbit
             if (!body.ocean) return true;                       // an ocean-less body → any controlled entry is "safe"
 
-            double now = Now();
-            double period = v.orbit.period > 1 ? v.orbit.period : 5400.0;
-            double vGround = v.srfSpeed > 50 ? v.srfSpeed : 7000.0;   // for downrange-from-time
-            Vector3d p0 = v.CoM;
-            double lat0 = body.GetLatitude(p0), lon0 = body.GetLongitude(p0);
-
-            GroundSample[] samples = new GroundSample[GroundSamples];
-            for (int i = 0; i < GroundSamples; i++)
-            {
-                double dt = (i + 1) * GroundStepS;
-                double ut = now + dt;
-                Vector3d p = v.orbit.getPositionAtUT(ut);
-                double lat = body.GetLatitude(p);
-                // longitude in the body-fixed frame at the FUTURE ut: subtract the body's rotation over dt.
-                double rot = body.rotationPeriod > 1 ? 360.0 * (dt / body.rotationPeriod) : 0.0;
-                double lon = NormLon(body.GetLongitude(p) - rot);
-                samples[i].DownrangeM = vGround * dt;
-                samples[i].LatDeg = lat; samples[i].LonDeg = lon;
-                // ⭐ F4 FIX (2026-08-29): the DEFAULT TerrainAltitude(lat,lon) CLAMPS ocean depth to 0
-                // (allowNegative=false), so "< 0" was NEVER true over water → the RSS scan read 0/130 and the
-                // abort never found an ocean. The THREE-ARG overload TerrainAltitude(lat,lon,true) returns the
-                // real seabed height (negative under the ocean) — confirmed from MechJeb (KSP 1.12) which reads
-                // it exactly this way (CelestialBodyExtensions/HoverslamSimulation + VesselState clamps
-                // `ocean && ASL<0 → 0` for display). So a body-ocean point below the datum = open water.
-                samples[i].Water = body.TerrainAltitude(lat, lon, true) < 0.0;   // below sea level ⇒ under ocean
-            }
-
-            int idx = SafeLandingSite.PickDeorbitTarget(samples, MinGlideM, MaxGlideM);
-            if (idx < 0) idx = SafeLandingSite.PickNearestWater(samples, MinGlideM);
+            // shared ground-track → open-water scan (the F4 water-gate detail lives in LandingSiteScan now).
+            SiteScanResult r = LandingSiteScan.FindWaterSite(v, GroundSamples, GroundStepS, MinGlideM, MaxGlideM);
 
             // ⛔ INSTRUMENT the water gate (flight 173320: it never committed — need to see if TerrainAltitude
             // even reports ocean under RSS). Log once how many of the sampled ground-track points read as water.
             if (!siteLogged)
             {
                 siteLogged = true;
-                int water = 0; for (int i = 0; i < GroundSamples; i++) if (samples[i].Water) water++;
-                Debug.Log("[DragonScreen] deorbit site scan: " + water + "/" + GroundSamples
-                          + " ground-track samples over water; nearest-in-window idx=" + idx
-                          + (idx >= 0 ? " at " + samples[idx].LatDeg.ToString("F1") + "," + samples[idx].LonDeg.ToString("F1") : ""));
+                Debug.Log("[DragonScreen] deorbit site scan: " + r.WaterCount + "/" + r.SampleCount
+                          + " ground-track samples over water; nearest-in-window idx=" + r.Idx
+                          + (r.Found ? " at " + r.LatDeg.ToString("F1") + "," + r.LonDeg.ToString("F1") : ""));
             }
 
-            if (idx < 0) return false;
-            haveSite = true; siteLatDeg = samples[idx].LatDeg; siteLonDeg = samples[idx].LonDeg;
+            if (!r.Found) return false;
+            haveSite = true; siteLatDeg = r.LatDeg; siteLonDeg = r.LonDeg;
             return true;
         }
 
@@ -439,13 +411,6 @@ namespace DragonScreen
             if (tgt == null || tgt.GetTransform() == null) return false;
             double range = (v.CoM - (Vector3d)tgt.GetTransform().position).magnitude;
             return range <= Mission.ApproachRange * 3.0;   // within a few km of the station = prox-ops
-        }
-
-        static double NormLon(double lon)
-        {
-            while (lon > 180.0) lon -= 360.0;
-            while (lon < -180.0) lon += 360.0;
-            return lon;
         }
 
         static void FillRow(string[] row)

@@ -39,6 +39,17 @@ namespace DragonScreen
         [Tunable] public static double CoastWarpFallbackHorizonS = 5400.0; // bounded look-ahead if the period is unusable
         [Tunable] public static double EntryWarpMarginM = 5000.0;// stop warping this far above the interface (1× entry buffer)
 
+        // ⭐ SAFE-LANDING-SITE LZ (SafeLandingSite → nominal return). The lifting entry steers its footprint at a
+        // splashdown target; the nominal return has no orbital target to aim at, so — like the abort — we scan the
+        // descending ground track for the nearest reachable OPEN WATER and hand it to EntrySteering. Latched once
+        // committed (you don't re-pick an LZ mid-entry). Off → the entry steers at v.targetObject (legacy).
+        [Tunable] public static bool UseSafeLandingSite = true;
+        [Tunable] public static int LzGroundSamples = 130;
+        [Tunable] public static double LzGroundStepS = 45.0;
+        [Tunable] public static double LzMinGlideM = 1.0e6;
+        [Tunable] public static double LzMaxGlideM = 12.0e6;
+        static bool lzSelected; static double lzLatDeg, lzLonDeg;
+
         static DepPhase depPhase = DepPhase.Idle;
         static EntryPhase entPhase = EntryPhase.Idle;
         static ChutePhase chutePhase = ChutePhase.Idle;
@@ -73,6 +84,7 @@ namespace DragonScreen
             rDroguesArmed = rMainsArmed = false;
             undocked = trunkGone = comEngaged = deorbitDone = false;
             lastBankSign = 1;
+            lzSelected = false;
             deo.Reset();
             ccAccumS = 0; ccCorrectedMagRad = 0; ccLastDsigmaDeg = double.NaN; ccLastSlope = double.NaN;
             ccHaveCorrection = false;
@@ -159,6 +171,21 @@ namespace DragonScreen
 
             // ---- lifting bank-angle entry ----
             FlightDriver.ReleaseTranslation();
+
+            // ⭐ select the safe open-water LZ ONCE (shared LandingSiteScan) and hand it to the footprint steering,
+            // so the lifting entry aims at real water instead of the stale orbital target. Retries (window slides)
+            // until a site is found, then latches — you commit to one LZ. Off → EntrySteering falls back to v.targetObject.
+            if (UseSafeLandingSite && !lzSelected)
+            {
+                SiteScanResult r = LandingSiteScan.FindWaterSite(v, LzGroundSamples, LzGroundStepS, LzMinGlideM, LzMaxGlideM);
+                if (r.Found)
+                {
+                    lzSelected = true; lzLatDeg = r.LatDeg; lzLonDeg = r.LonDeg;
+                    EntrySteering.SetSplashTarget(lzLatDeg, lzLonDeg);
+                    Debug.Log("[DragonScreen] return LZ selected: open water at " + lzLatDeg.ToString("F2")
+                              + "," + lzLonDeg.ToString("F2") + " (" + r.WaterCount + "/" + r.SampleCount + " samples water)");
+                }
+            }
 
             // ⭐ WARP-TO-MANEUVERS: the deorbit burn is done, so the capsule now COASTS ballistically from orbit
             // down to the entry interface (~120 km) — up to ~half an orbit of dead time. Warp toward the interface
