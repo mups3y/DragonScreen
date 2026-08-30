@@ -172,10 +172,19 @@ spacecraft don't feed a continuous torque demand straight to on/off thrusters; t
   small `ControlLaw.DeadbandRad ≈ 0.1°`; a proper phase-plane schedule is stronger.
 - **PWPF (Pulse-Width Pulse-Frequency) modulation:** convert the controller's continuous torque command into
   thruster pulses whose *average* is near-linear — "less thruster activity, closer-to-linear actuation" than
-  bang-bang. **MechJeb does NOT do PWPF** (it relies on continuous demand + the RCS balancer + the
-  attitude-error RCS gate). **For our RCS-only phases we can beat MechJeb by adding PWPF + phase-plane** — this
-  is the correct, research-backed fix for the Campaign-6 chatter, and a genuine place we improve on the
-  reference rather than just port it.
+  bang-bang. **⚠ CORRECTION (verified in source 2026-08-30):** MechJeb DOES ship a PWPF-family modulator —
+  `MechJebLib/Control/DeltaSigmaThrottleModulator.cs` (delta-sigma: full-off/full-on pulsing that time-integrates
+  to the commanded accel, with MinOn/MinOff dwell + anti-windup) — but it is wired **ONLY to the hoverslam
+  ENGINE throttle** (`MechJebModuleHoverslamAutopilot._pwm`), for pulsing a min-throttle engine. **MechJeb does
+  NOT apply any PWPF or phase-plane deadband to RCS.** Its RCS control is continuous PID → KSP bang-bang:
+  attitude via the AttitudeController writing pitch/yaw/roll; translation via `MechJebModuleRCSController` (a
+  velocity PID, Kp 0.125/Ki 0.07/Kd 0.53, → s.X/Y/Z). The `MechJebModuleRCSBalancer` (threaded `RCSSolver` QP)
+  only distributes TRANSLATION across thrusters to minimize waste — **rotation balancing is explicitly
+  unsupported** (source comment). So RCS-attitude PWPF + phase-plane is genuinely absent, and **we can beat
+  MechJeb by adding it to the Draco path** — and better, `DeltaSigmaThrottleModulator` already exists to port
+  and adapt. The PID primitive it/we use (`PIDLoop2`) already supports Integral/Output **deadbands** and
+  back-calculation anti-windup, so the phase-plane deadband is a config away. This is the research-backed fix
+  for the Campaign-6 chatter, and a genuine place we improve on the reference.
 
 **Bottom line:** keep **BetterController** as the attitude law (it's the best of the five for us, and the
 research backs setpoint-PID over LQR). Put the effort into **PWPF + phase-plane deadband on the Draco RCS
@@ -425,7 +434,9 @@ gaps vs MechJeb are catalogued in [[MECHJEB_CAPABILITY_INTEGRATION]] and the reb
 ## 13. WHAT TO TAKE FROM MECHJEB FOR OUR AUTOPILOT (priority)
 
 1. **Attitude law:** BetterController — already ported, keep it (§3.3). Add **PWPF + phase-plane deadband on the
-   Draco RCS path** — the real fix for propellant chatter, which MechJeb itself lacks.
+   Draco RCS path** — the real fix for propellant chatter, which MechJeb does NOT apply to RCS (it only
+   pulse-modulates the hoverslam throttle). Port/adapt `DeltaSigmaThrottleModulator` + use `PIDLoop2`'s
+   deadbands.
 2. **Thrust:** the ordered limiter stack + `ThrustForDv` feathering + auto-RCS-ullage as a clean always-on
    service (§4) — partially built.
 3. **Guidance:** the PVG solver structure (target-as-constraints, min-thrust-accel objective, terminal precise
