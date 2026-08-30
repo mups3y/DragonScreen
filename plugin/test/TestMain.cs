@@ -25,6 +25,7 @@ public static class TestMain
         bad += AttitudeLoopTest.Run();     // L2 control: MechJeb BetterController gimbal loop (AttitudePilot ← pure)
         bad += IgnitionGateTest.Run();     // glue gates: clamp release (≥99% thrust) + ullage settle (≥0.996)
         bad += MissionProfileTest.Run();   // rebuilt autopilot: S0b mission-as-data resolver
+        bad += MissionPhaseTest.Run();     // Phase 3: authoritative-phase resolver (FSM beats the classifier shadow)
         bad += TrajectoryTest.Run();       // L1 nav: RK4 impact predictor + measured drag/lift/beta
         bad += PredictTest.Run();          // L1 nav: impact / closest-approach helpers
         bad += AeroTest.Run();             // L1 nav: dynamic pressure / Mach / sound speed
@@ -59,6 +60,7 @@ public static class TestMain
         bad += CrewGateTest.Run();         // L4 conductor: crew-gate state machine + gate catalog + mode manager
         bad += FdirTest.Run();             // L5 FDIR: debounced monitors + recovery ladder + phase-correct abort
         bad += FdirFeedsTest.Run();        // L5 FDIR: honest feed-shaping (thrust frac / tumble / closing progress) — T2b
+        bad += FdirAlertTest.Run();        // Phase 4: FDIR fault spine → crew alert channel (severity + fault name)
         bad += SelfCalTest.Run();          // L6 self-cal: RLS w/ variable forgetting + the live-estimate bank
         bad += FlightRecorderTest.Run();   // L7 instrumentation: the per-flight CSV schema + fillers
         bad += DispersionTest.Run();       // Tier-2 robustness: property-based dispersion of the pure layer

@@ -1,5 +1,7 @@
 # Next-session resume prompt — DragonScreen autopilot
 
+> **⛔ SUPERSEDED FOR GOVERNANCE (2026-08-31): the sole governing plan is [`docs/MASTER_BUILD_SPEC.md`](MASTER_BUILD_SPEC.md); start every session there, not here.** This dated handoff is kept as HISTORICAL flight-state evidence only (e.g. the F1 deorbit-torque fix, F2 state-aware AUTO SEQUENCE, the C1/C2 abort proof at flight 202127) — do not paste it as the session's instructions.
+
 Paste the block below at the start of the next session. It puts you in the right frame of mind and points you
 at the one thing that matters next.
 

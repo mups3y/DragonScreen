@@ -556,7 +556,8 @@ namespace DragonScreen
             // turns a page link red on every screen, so a crew member reading NAV still learns that
             // VEHICLE has a problem. See Alarms.Mask.
             chrome.AlertMask = Alarms.Mask(ps);
-            chrome.VehicleState = ps.Valid ? Alarms.Word(Alarms.VehicleSeverity(ps)) : "NO DATA";
+            // STATE folds in the authoritative FDIR spine (Alarms.SystemSeverity), not just crew-environment alarms.
+            chrome.VehicleState = ps.Valid ? Alarms.Word(Alarms.SystemSeverity(ps)) : "NO DATA";
 
             int sub = subview[selectedPage & 7];
 

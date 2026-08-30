@@ -104,5 +104,15 @@ namespace DragonScreen
                 default:                      return "-";
             }
         }
+
+        // ⛔ ONE AUTHORITATIVE PHASE (rule T4). While the autopilot is ENGAGED and flying a KNOWN phase, the
+        // mission FSM's ActivePhase IS the phase — the display shows it, never the independent Classify() shadow,
+        // so the screen and the autopilot can never disagree about where the mission is. When disengaged
+        // (manual/idle) or between phases (at a gate, ActivePhase == Unknown), the live classifier is the honest
+        // fallback. This is the single-source-of-truth resolver the display consumes (VesselData).
+        public static MissionPhase AuthoritativePhase(bool engaged, MissionPhase active, MissionPhase classified)
+        {
+            return (engaged && active != MissionPhase.Unknown) ? active : classified;
+        }
     }
 }

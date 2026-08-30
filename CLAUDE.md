@@ -1,5 +1,7 @@
 # DragonScreen
 
+> **⛔ GOVERNING PLAN (set 2026-08-31): the SOLE plan is [`docs/MASTER_BUILD_SPEC.md`](docs/MASTER_BUILD_SPEC.md)** — it overrides everything in this file automatically. The old governing plans (ULTIMATE_PLAN, AUTOPILOT_REBUILD_PLAN, MASTER_FIX_PLAN, CAMPAIGN_PLAN, CAPABILITY_BUILD_BACKLOG, RETURN_FIX_PLAN, NOMINAL_END_TO_END_BUILD) were **deleted**, and the dated status/session pointers below (check −0's `AUDIT_2026-08-18.md`, `SESSION_2026-08-*.md`) reference **deleted files** and are SUPERSEDED — do not follow them. **Start every session from `docs/MASTER_BUILD_SPEC.md` + `docs/COMPLETION_MATRIX.md` + `docs/FLIGHT_VERIFICATION.md`.** The process discipline in checks −1…0 below (assess flights from the recorder not KSP.log; PORT/MEASURED/MY INVENTION labels; build pages from `docs/UI_AUDIT.md` source) remains valid — it is folded into the spec's rules E5/E6/V5.
+
 ## ⛔ RUN THESE CHECKS BEFORE YOU ACT. Every one was paid for with a wasted rebuild.
 
 This file is long and gets read at session start; these are the checks that must fire LATER, when

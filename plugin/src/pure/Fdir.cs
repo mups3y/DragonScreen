@@ -197,5 +197,20 @@ namespace DragonScreen
                     return Recovery.Continue;
             }
         }
+
+        // Pre-formatted crew-facing name of a fault (for the STATE readout and the future FDIR/Alerts page).
+        public static string FaultName(FaultKind f)
+        {
+            switch (f)
+            {
+                case FaultKind.KeepOutBreach:        return "KEEP-OUT BREACH";
+                case FaultKind.ThrustShortfall:      return "THRUST SHORTFALL";
+                case FaultKind.NoControlSolution:    return "LOSS OF CONTROL";
+                case FaultKind.ResourceCritical:     return "RESOURCE CRITICAL";
+                case FaultKind.TrajectoryDivergence: return "TRAJECTORY DIVERGENCE";
+                case FaultKind.ConvergenceStall:     return "CONVERGENCE STALL";
+                default:                             return "NOMINAL";
+            }
+        }
     }
 }

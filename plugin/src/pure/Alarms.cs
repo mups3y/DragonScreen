@@ -50,6 +50,27 @@ namespace DragonScreen
             return "NOMINAL";
         }
 
+        // ---- FDIR → the crew alert channel (§4.2 fix) ----
+        // The REAL fault spine (pure/Fdir.cs) reaching the screen, instead of the display inventing alerts.
+        // A tripped fault that has DEGRADED (downmode) or gone to abort/safe-mode is an ALARM; one still being
+        // handled locally (retry/reconfigure/replan) is a CAUTION; no fault is nominal.
+        public static Severity FdirSeverity(FaultKind fault, Recovery response)
+        {
+            if (fault == FaultKind.None) return Severity.Nominal;
+            if (response == Recovery.Downmode || response == Recovery.Abort || response == Recovery.SafeMode)
+                return Severity.Alarm;
+            return Severity.Caution;
+        }
+        public static Severity FdirSeverity(PageState s)
+        {
+            return s.Valid ? FdirSeverity(s.Fault, s.FaultResponse) : Severity.Nominal;
+        }
+        // The overall crew-facing severity: the worse of the vehicle/crew-environment alarms and the FDIR spine.
+        public static Severity SystemSeverity(PageState s)
+        {
+            return Worst(VehicleSeverity(s), FdirSeverity(s));
+        }
+
         /// ---- THIS IS THE ALARM CHANNEL ----
         public static int Mask(PageState s)
         {
@@ -59,6 +80,7 @@ namespace DragonScreen
 
             Severity flight = Worst(High(s.GForce01), Low(s.Propellant01));
             flight = Worst(flight, Low(s.Power01));
+            flight = Worst(flight, FdirSeverity(s));   // FDIR faults escalate the FLIGHT tab (real spine, not invented)
             if (flight >= Severity.Caution) mask |= 1 << 0;
 
             if (VehicleSeverity(s) >= Severity.Caution) mask |= 1 << 1;

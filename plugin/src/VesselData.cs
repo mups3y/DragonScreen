@@ -77,9 +77,13 @@ namespace DragonScreen
                 // that, an in-space targeted vehicle is still on its ascent/insertion burn, not phasing.
                 mi.OrbitClosed = v.mainBody != null && v.orbit.PeA > v.mainBody.atmosphereDepth;
                 Chutes(v, ref mi);
-                MissionPhase phase = Mission.Classify(mi);
+                MissionPhase classified = Mission.Classify(mi);
+                // ⛔ ONE AUTHORITATIVE PHASE (rule T4): while the autopilot is FLYING a known phase, the phase
+                // WORD is the mission FSM's ActivePhase — never the independent classifier — so the screen can
+                // never disagree with the autopilot. Disengaged / at a gate → the live classifier is the fallback.
+                MissionPhase phase = Mission.AuthoritativePhase(CrewProcedureOps.Engaged, CrewProcedureOps.ActivePhase, classified);
                 state.Phase = Mission.Name(phase);
-                Steps(v, phase, ref state);
+                Steps(v, classified, ref state);
                 state.Altitude = Km(v.altitude);
                 state.Velocity = Speed(v.obt_speed);
                 state.SurfaceVelocity = Speed(v.srfSpeed);
@@ -290,6 +294,18 @@ namespace DragonScreen
 
             state.AutoEngaged = CrewProcedureOps.Engaged;
             state.AutoPhase = CrewProcedureOps.Engaged ? CrewProcedureOps.PhaseName : null;
+
+            // ⛔ C6 (automation must be visible): the crew-facing control authority, straight from the single
+            // AuthorityManager (Phase 2) — AUTO while the autopilot flies, MANUAL/ABORT/RECOVERY/IDLE otherwise.
+            state.Mode = FlightDriver.MissionMode;
+            state.ModeText = AuthorityManager.Name(state.Mode);
+
+            // ⛔ FDIR → the crew alert channel (§4.2): the authoritative fault spine, published by FlightDriver.
+            // The screen's STATE severity now folds this in (Alarms.SystemSeverity) instead of inventing alerts.
+            FdirReport fdir = FlightDriver.LastFdirReport;
+            state.Fault = fdir.Fault;
+            state.FaultResponse = fdir.Response;
+            state.FaultText = Fdir.FaultName(fdir.Fault);
 
             state.GateActive = CrewProcedureOps.CrewActionNeeded();
             if (state.GateActive)

@@ -139,6 +139,24 @@ namespace DragonScreen
         public bool AutoEngaged;
         public string AutoPhase;
 
+        /// <summary>
+        /// Control authority (rule C6, "automation must be visible"): who owns the vehicle right now, from the
+        /// single AuthorityManager (Phase 2) — AUTO while the autopilot flies, MANUAL / ABORT / RECOVERY / IDLE
+        /// otherwise. Raw enum for colour logic; pre-formatted text for the draw path (same rule as the rest).
+        /// </summary>
+        public ControlMode Mode;
+        public string ModeText;
+
+        /// <summary>
+        /// FDIR (rule §4.2 fix): the authoritative fault spine reaching the crew alert channel — the
+        /// highest-priority tripped fault, its recovery rung, and the pre-formatted name. From
+        /// FlightDriver.LastFdirReport; None / "NOMINAL" when the autopilot isn't flying. The chrome STATE
+        /// severity folds this in (Alarms.SystemSeverity) instead of the screen inventing alerts.
+        /// </summary>
+        public FaultKind Fault;
+        public Recovery FaultResponse;
+        public string FaultText;
+
         /// <summary>Crew procedure gate the user must act on now - the checklist card. See GateCard.</summary>
         public bool GateActive;
         public string GateTitle;
