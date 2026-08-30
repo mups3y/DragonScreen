@@ -28,7 +28,8 @@
 | `MissionPhase` enum extension | **DEFERRED** (§42 scoping) | 3→later | Extending with members the FSM doesn't yet produce is speculative (rule P4/P1). Do it when the FSM genuinely distinguishes finer phases (that change is flight-gated). Reasoning logged here per the phase-order rule. |
 | Display snapshot re-plumb (`PageState`) | **CODE — UNFLIGHTED** (L1+L2) | 4 | General authoritative seam done: phase authoritative (T4); AuthorityManager AUTO/MANUAL mode (C6); **FDIR fault spine → crew alert severity + fault name (§4.2 fix)** — chrome STATE now folds in `Fdir` via `Alarms.SystemSeverity`. Display-only, no flight. Docking-specific filtered rel-nav (`NavState3` + waypoint + capture) deferred to Phase 7, built with the docking page. |
 | FDIR → screen alerts (§4.2) | **CODE — UNFLIGHTED** (L1+L2) | 4/11 | `Alarms.FdirSeverity`/`SystemSeverity` + `Fdir.FaultName`; the real spine reaches the alert channel (11 tests). A dedicated FDIR/Alerts page is Phase 11. |
-| TELEMETRY_REGISTRY / COMMAND_REGISTRY populated | OPEN | 5 | every datum + command has a source |
+| TELEMETRY_REGISTRY populated | **DONE (docs)** | 5 | reference-confirmed telemetry (nav mission page + docking attitude + chrome) mapped to authoritative KSP/RO sources; Phase 2–4 items marked routed |
+| COMMAND_REGISTRY populated | **OPEN** | 5 | seeded; command **paths/gating** await the review decision (does the AuthorityManager gate the actuation path) |
 | Screen component system (Docking set) | OPEN | 6 | NumericReadout/StatusIndicator/TargetReticle/… |
 | Docking gold-standard page | OPEN | 7 | AUTO/MANUAL + real commands; flight-tested |
 
