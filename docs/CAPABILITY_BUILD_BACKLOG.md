@@ -38,9 +38,9 @@ complete+wire; 🔨 = genuinely build.
 ## ⚙ WIRING AUDIT (2026-08-30) — which built capabilities are actually USED in flight
 Chris: "make sure all capabilities are USED in ALL the places they are useful." Grepped the glue for each
 built pure module. **Wired NOWHERE (built + headless-proven, but dead gold):**
-- 🔌 **NavFilter** (strict-fidelity Kalman rel-nav — Chris explicitly wants it) → wire into RendezvousControl +
-  DockingControl relative state (simulate IMU/rel-GPS from truth, fly guidance on the ESTIMATE). Behind a
-  tunable + instrument estimate-vs-truth. Flight-gated.
+- ✅ **NavFilter** (strict-fidelity Kalman rel-nav) → WIRED into `RendezvousControl.FlyNearFieldCw` (`e99ed21`):
+  simulated rel-GPS fused → guidance flies the ESTIMATE, instrumented, tunable `UseNavFilter`. ⏳ still to wire
+  into DockingControl (terminal); ⏳ Tick-3 flight to read the est-vs-truth log.
 - 🔌 **Lambert** (two-impulse intercept) → wire into `Rendezvous` Midcourse/Transfer as the intercept solver
   (behind a tunable, default off until flight-tuned; CW stays the default). Flight-gated.
 - 🔌 **Authority** (per-axis control authority + arrestable rate) → likely SUPERSEDED by BetterController's own
