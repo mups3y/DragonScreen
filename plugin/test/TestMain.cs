@@ -17,6 +17,7 @@ public static class TestMain
         bad += LayoutTest.Run();
         bad += LayoutSweepTest.Run();
         bad += PageTest.Run();
+        bad += ComponentsTest.Run();       // Phase 6: pure display widgets (NumericReadout/StatusIndicator/TargetReticle)
         bad += PanelTest.Run();
         bad += GlobeProjectionTest.Run();  // screens: orthographic globe projection + occlusion (NAV 3D)
         bad += OrbitalTest.Run();
