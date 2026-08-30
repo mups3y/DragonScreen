@@ -54,12 +54,25 @@ namespace DragonScreen
         [Tunable] public static double CorridorMinHalfWidthM = 5.0;
         static bool kosAbortRaised;
 
+        // ⭐ STRICT-FIDELITY TERMINAL REL-NAV (NavFilter, B6). The docking servo is the place nav precision
+        // matters MOST — the real Dragon flies the sub-metre soft-capture on its DragonEye LIDAR/optical relative
+        // nav, not truth. As in the rendezvous wire, we SIMULATE the sensor from KSP truth (+ noise) and fly the
+        // servo on the ESTIMATE — but here the measurement 1σ is RANGE-SCHEDULED (rel-GPS → LIDAR) via
+        // NavFilter.TerminalSensorNoiseM, so the noise collapses to cm-class in close and never wrecks the dock.
+        // Tunable: false = fly on truth.
+        [Tunable] public static bool UseNavFilter = true;
+        static NavState3 navRel;
+        static bool navInit;
+        static uint navRng = 0x2468ACEu;   // independent seed from the rendezvous filter
+        static double navLastLogUT = -999.0;
+
         static DockControl.Demand lastDemand;
         static LvlhState lastRel;
 
         public static void Reset()
         {
             kosAbortRaised = false;
+            navInit = false;   // re-init the terminal rel-nav filter on a new docking approach
             FlightDriver.ReleaseTranslation();
             Steering.Release();
         }
@@ -88,14 +101,39 @@ namespace DragonScreen
             // vessel's transform is a stale placeholder (see RendezvousControl.FlyNearFieldCw). Docking's final
             // metres need the loaded port transform; the approach uses the orbit until the station loads.
             double mu = body.gravParameter;
+            double now = Planetarium.GetUniversalTime();
             Vessel tv = tgt.GetVessel();
             bool tgtLoaded = tv != null && tv.loaded && tgt.GetTransform() != null;
             Vector3d tgtPos = tgtLoaded ? (Vector3d)tgt.GetTransform().position
-                                        : tgt.GetOrbit().getPositionAtUT(Planetarium.GetUniversalTime());
+                                        : tgt.GetOrbit().getPositionAtUT(now);
             Vector3d tgtVel = tgt.GetObtVelocity();
             double n = Lvlh.MeanMotion(mu, tgt.GetOrbit().semiMajorAxis);
             Vec3 targetR = V(tgtPos - body.position), targetV = V(tgtVel);
             Vec3 relPos = V((Vector3d)v.CoM - tgtPos), relVel = V(v.obt_velocity - tgtVel);
+            // ⭐ strict-fidelity terminal rel-nav: fuse the range-scheduled sensor (rel-GPS→LIDAR) through
+            // NavFilter and fly the servo on the ESTIMATE. Near the port the LIDAR 1σ is cm-class, so the
+            // estimate error « the 0.4 m capture gate; the KSP magnetic-capture truth stays the primary signal.
+            if (UseNavFilter)
+            {
+                double dtf = TimeWarp.fixedDeltaTime;
+                double sensor = NavFilter.TerminalSensorNoiseM(relPos.Magnitude);   // true range picks the sensor
+                if (!navInit || dtf <= 0.0) { navRel = NavState3.Init(relPos, relVel); navInit = true; }
+                else
+                {
+                    navRel.Predict(Vec3.Zero, dtf);
+                    navRel.UpdatePosition(new Vec3(relPos.X + NavNoise(sensor), relPos.Y + NavNoise(sensor),
+                                                   relPos.Z + NavNoise(sensor)), sensor);
+                    Vec3 e = navRel.EstPos, ev = navRel.EstVel;
+                    if (now - navLastLogUT > 5.0)
+                    {
+                        double dx = e.X - relPos.X, dy = e.Y - relPos.Y, dz = e.Z - relPos.Z;
+                        Debug.Log("[DragonScreen] DOCK rel-filter |err| " + Math.Sqrt(dx * dx + dy * dy + dz * dz).ToString("F3")
+                                  + " m  (sensor 1σ " + sensor.ToString("F2") + " m, range " + relPos.Magnitude.ToString("F0") + ")");
+                        navLastLogUT = now;
+                    }
+                    relPos = e; relVel = ev;
+                }
+            }
             LvlhState rel = Lvlh.Project(targetR, targetV, relPos, relVel, n);
             lastRel = rel;
 
@@ -191,6 +229,14 @@ namespace DragonScreen
 
         static Vec3 V(Vector3d d) { return new Vec3(d.x, d.y, d.z); }
         static Vector3d W(Vec3 p) { return new Vector3d(p.X, p.Y, p.Z); }
+
+        // Deterministic pseudo-gaussian sensor noise (LCG + Box-Muller) to simulate the rel-nav 1σ error.
+        static double NavNoise(double sigma)
+        {
+            navRng = navRng * 1664525u + 1013904223u; double u1 = (((navRng >> 8) & 0xFFFFFF) + 1) / 16777217.0;
+            navRng = navRng * 1664525u + 1013904223u; double u2 = ((navRng >> 8) & 0xFFFFFF) / 16777216.0;
+            return sigma * Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);
+        }
 
         static void FillRow(string[] row)
         {

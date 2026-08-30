@@ -38,9 +38,11 @@ complete+wire; 🔨 = genuinely build.
 ## ⚙ WIRING AUDIT (2026-08-30) — which built capabilities are actually USED in flight
 Chris: "make sure all capabilities are USED in ALL the places they are useful." Grepped the glue for each
 built pure module. **Wired NOWHERE (built + headless-proven, but dead gold):**
-- ✅ **NavFilter** (strict-fidelity Kalman rel-nav) → WIRED into `RendezvousControl.FlyNearFieldCw` (`e99ed21`):
-  simulated rel-GPS fused → guidance flies the ESTIMATE, instrumented, tunable `UseNavFilter`. ⏳ still to wire
-  into DockingControl (terminal); ⏳ Tick-3 flight to read the est-vs-truth log.
+- ✅ **NavFilter** (strict-fidelity Kalman rel-nav) → WIRED into `RendezvousControl.FlyNearFieldCw` (`e99ed21`)
+  AND `DockingControl` (terminal): both simulate the sensor from truth, fuse through NavFilter, fly the
+  guidance/servo on the ESTIMATE. Docking adds the **terminal sensor handoff** (`NavFilter.TerminalSensorNoiseM`:
+  rel-GPS→LIDAR range-scheduled 1σ, cm-class in close so the sub-metre dock survives) — the follow-up NavFilter's
+  header flagged. Instrumented, tunable `UseNavFilter`. ⏳ Tick-3 flight to read the est-vs-truth logs.
 - ✅ **Lambert** (two-impulse intercept) → WIRED via `pure/RvIntercept.cs` (tof scan + **transfer-periapsis floor
   gate** + cost cap over the tested `Maneuver.InterceptDv`) + `RendezvousControl.TryLambertIntercept` (closed-loop
   on a latched arrival UT: re-solve residual Δv → point → translate → coast to the CW hand-off). Headless

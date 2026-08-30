@@ -82,6 +82,32 @@ public static class NavFilterTest
             Check("prediction-only covariance grows", NavFilter.PosStd(s) > Math.Sqrt(NavFilter.InitPosVar), "");
         }
 
+        // ---- TERMINAL SENSOR HANDOFF: schedule rel-GPS far → LIDAR near, and the filter tracks TIGHTLY
+        //      under the cm-class LIDAR noise (so the sub-metre dock is possible) ----
+        {
+            Near("sensor schedule: far = rel-GPS 1σ", NavFilter.TerminalSensorNoiseM(2000.0), NavFilter.RgpsNoiseM, 1e-9);
+            Near("sensor schedule: near = LIDAR 1σ", NavFilter.TerminalSensorNoiseM(50.0), NavFilter.LidarNoiseM, 1e-9);
+            double mid = NavFilter.TerminalSensorNoiseM(0.5 * (NavFilter.LidarHandoffNearM + NavFilter.LidarHandoffFarM));
+            Check("sensor schedule: mid-band between LIDAR and rel-GPS",
+                  mid > NavFilter.LidarNoiseM && mid < NavFilter.RgpsNoiseM, "mid=" + mid.ToString("F3"));
+
+            // fuse a near-field measurement at the LIDAR noise → position error stays well under a metre.
+            double truePos = 0, trueVel = 0;
+            AxisNav s = NavFilter.Init(0, 0);
+            var rng = new Rng(0xD0C);
+            double sensor = NavFilter.TerminalSensorNoiseM(30.0);   // deep in the LIDAR regime
+            double sumErr = 0; int n2 = 0;
+            for (int i = 0; i < 400; i++)
+            {
+                truePos += trueVel * dt + 0.5 * 0.1 * dt * dt; trueVel += 0.1 * dt;
+                NavFilter.Predict(ref s, 0.1 + biasTrue + rng.Gauss(NavFilter.ImuAccelNoiseMps2), dt);
+                NavFilter.UpdatePosition(ref s, truePos + rng.Gauss(sensor), sensor);
+                if (i > 150) { double e = s.Pos - truePos; sumErr += e * e; n2++; }
+            }
+            double rms = Math.Sqrt(sumErr / n2);
+            Check("LIDAR-regime filter tracks to sub-decimetre (dock-capable)", rms < 0.1, "rms=" + rms.ToString("F4"));
+        }
+
         // ---- NavState3: the 3-axis wrapper estimates a Vec3 state ----
         {
             NavState3 nav = NavState3.Init(new Vec3(0, 0, 0), new Vec3(0, 0, 0));
