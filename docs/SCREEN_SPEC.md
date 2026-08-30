@@ -7,7 +7,7 @@ Presents authoritative state; never invents it (rule T1/T2). Consumes the immuta
 
 ## 2. Framework as-built (PROTECT — do not rewrite the renderer)
 - **Render:** Unity `RenderTexture` + GL immediate-mode (not IMGUI/uGUI). Pure page code emits a `pure/DisplayList.cs` command buffer; walked in-game by `ScreenPainter.cs` (`OnPostRender`, 3 passes solid/text/image) and offline by `preview/PreviewMain.cs` (System.Drawing → PNG). Shared geometry `pure/ArcGeometry.cs`. Host: `DragonScreenMonitor.cs` per IVA prop.
-- **Three displays, "one screen four surfaces":** `screenIndex` is identity not role; any page → any display; persisted in `DragonScreenState.cs` (`pure/PageSelection.cs`). All three read the SAME authoritative snapshot (never different truth).
+- **Three displays, "one screen four surfaces":** `screenIndex` is identity not role; any page → any display; persisted in `DragonScreenState.cs` (`pure/PageSelection.cs`). All three read the SAME authoritative snapshot (never different truth). **Real default (CONFIRMED from cockpit photos, `SCREEN_EVIDENCE_MATRIX.md`): LEFT + RIGHT = the mirrored proximity/vehicle display, CENTRE = the 3D Earth globe/map.** Reconsider our cfg default (currently LEFT=VEHICLE/CENTRE=FLIGHT/RIGHT=NAV) toward this.
 - **Touch/input:** `ScreenTouch.cs` (collider raycast → page pixels) → `Pages.HitTest` → `PageHit{PageAct,Arg}` → `ScreenPainter.Apply`. **One rect function per control** (draw + hit share the same `*Rect`) — keep this invariant. Physical console: `PanelButtons.cs`/`pure/PanelMap.cs`.
 - **Sub-surface RTs:** `NavBallRenderer.cs`, `DockingCamRenderer.cs`, `ImageStore.cs`.
 

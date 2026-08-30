@@ -43,15 +43,66 @@ The simulator's "actual interface" link. A short official clip of a real Dragon 
 
 **Reconciliation (real vs training sim), drives our AUTO/MANUAL page:** the real primary interface is this **monitoring HUD** (target + corrections + RANGE + RANGE RATE), because Dragon docks **autonomously**; the iss-sim's large LEFT/RIGHT **button clusters** are the **manual-piloting/backup** layer. Our page should therefore unify both: **AUTO** shows the clean monitoring HUD; **MANUAL** reveals the translation/rotation control clusters over it (rule C6). This is a SIMULATION/RECONSTRUCTED unification of two CONFIRMED SpaceX layouts — label it as such, don't claim it's a verbatim SpaceX screen.
 
+## Real Crew Dragon screens — reference-image study (user-provided images + community Figma, 2026-08-31)
+**The highest-value evidence yet for the NON-docking screens.** Real Crew Dragon cockpit photographs and Demo-2 flight-footage frames, plus a community Figma recreation. What is *visible* in the photos is CONFIRMED (real hardware); text too small to read is `UNKNOWN — EVIDENCE REQUIRED` (never guess the strings).
+
+### The three-display console — CONFIRMED (Very High)
+- Three wide landscape touchscreens in one horizontal bezel strip, gently angled toward the two reclined seats, mounted **above** the round pressure hatch/dome.
+- **Default page roles (from the pristine console photo):** LEFT and RIGHT show the **same / mirrored proximity-&-vehicle display** (the ISS target graphic); the **CENTRE** shows the **3D Earth globe / map**. Commander + pilot each get the primary vehicle display, sharing the map between them. Any page can move to any screen (matches our "one screen, N surfaces"). *Design note: our cfg default (LEFT=VEHICLE, CENTRE=FLIGHT, RIGHT=NAV) should be reconsidered toward LEFT/RIGHT = proximity, CENTRE = map.*
+- Below the screens: a **physical control panel**; then the hatch. Two overhead light strips; panel/hatch downlights.
+
+### Global chrome visible across pages — CONFIRMED
+- **Top status/header bar** on each screen — a horizontal row of small readouts across the top (mode/time/state; exact labels not all legible).
+- **Menu tabs down the far-RIGHT edge** — a vertical stack of ~4–6 small rounded-rectangle buttons (page/section nav; one highlighted = active).
+- **Vertical scale bar on the far-LEFT edge** of the proximity page (a level/scale indicator).
+- **Circular gauge dials** (thin blue rings) grouped top-left on several pages.
+- Flat, thin-line, no bevels/gloss (validates spec §8 "restrained").
+
+### Page types observed (each is a real page to build to)
+| Page | What is visible | Class / Confidence |
+|---|---|---|
+| **Proximity / vehicle (ISS)** — LEFT/RIGHT default | Detailed white/cyan **line drawing of the ISS** (truss + solar arrays); a small cyan/green **target marker**; top-left circular gauges; right-hand **data columns** (label+value rows, headers like "102 A…"/"H0023…" — not fully legible); far-right **menu tabs**; far-left **scale bar** | CONFIRMED / Very High (layout); the values UNKNOWN |
+| **3D globe / map** — CENTRE default | Full-bleed rendered **Earth** (green/tan land, blue sea, curved horizon), orbital-track context, minimal overlay | CONFIRMED / Very High |
+| **Docking / nav plot** | **Concentric circles** (attitude / orbital / relative plot) with a central marker + radial ticks and a horizontal readout bar | CONFIRMED / High |
+| **Vehicle / systems schematic** | Blue **line-art of the Dragon capsule** (side + front) surrounded by **large numeric readouts** (e.g. `0 kW`, `100`, a signed `+68`, `50`, a data figure) — a power/thermal/systems status page | CONFIRMED / High (values' meaning UNKNOWN) |
+| **Procedure / checklist / status text** | CENTRE screen with **rows of text**, sometimes a **highlighted/selected line** or an alert/message block | CONFIRMED / High |
+| **Ascent / launch** | A **Falcon 9 vertical schematic** + a telemetry list (from the montage frame) | CONFIRMED / Medium (one small frame) |
+| **Camera feed** (likely docking cam) | A screen showing a camera view during a ground test | STRONGLY SUPPORTED / Medium |
+
+### Physical control panel — CONFIRMED (High)
+Horizontal black panel under the screens: **grouped push-buttons** (rows, symmetric left + right sections); a **central numeric readout `000000` with a `SEQ` label** (a sequence/counter, flanked by buttons); **two rotary knobs**; small **indicator lights**. Corroborates our `PanelButtons`/`PanelMap` model.
+
+### Visual language — CONFIRMED (reinforces `DragonPalette`)
+Background near-black deep navy · line-art/graphics **cyan/blue** · text **white/light-grey** · **green** = globe terrain + target marker + go states · occasional amber. Very high contrast, thin flat lines. Type: clean compact sans (consistent with D-DIN), small labels + larger values, wide letter-spacing on headers.
+
+### Supporting — community Figma recreation (opened view-only 2026-08-31)
+`figma.com/design/mbEy4s9XCQHssNvUa3mJA0` "SpaceX Crew Dragon — Dashboard UI (Community)" — a **designed vector recreation** (community, **NOT** official SpaceX) → **RECONSTRUCTED** (an interpretation; cross-check against the real photos, never treat as fact — rule E2). It rendered view-only; I could read the **frame taxonomy**, but Figma's canvas ignored automated zoom, so exact fine text wasn't captured at crisp resolution. **Frames present (= a page taxonomy that corroborates the photos):**
+- `Frame 67` → **NAV** (text list + 3D globe)
+- `Frame 58` → **DOCKING** (concentric-circle nav/approach plot)
+- `Frame 59` → **PROCEDURE / status text**
+- `Frame 66` → **VEHICLE** (ISS / vehicle line-art schematic)
+- `A-Settings-Seat1 / Seat2 / Seat3 / Seat4` + `A-Settings-Cabin` → **SETTINGS** (per-seat + cabin), each with a seat/vehicle schematic and a **systems big-number row** (community values, only partially legible: ~`12.5 · 0kW · 100 · +9kW · 50` — meanings unconfirmed).
+
+**For exact Figma specs (px / colour / strings): export the frames as PNG/SVG and I'll ingest them** — the browser tools can't drive Figma's zoom.
+
+### ⚠ Mirroring caveat (user note, 2026-08-31)
+Some circulated reference images are **horizontally flipped** (people mirror images to evade reuse detection). Treat LEFT/RIGHT orientation as authoritative **only** from the pristine console photo and from iss-sim's explicit "translation LEFT / rotation RIGHT". Verify orientation before trusting any single image; do not lock a left/right design decision on a possibly-mirrored copy.
+
+### Still `UNKNOWN — EVIDENCE REQUIRED` (do not invent)
+Exact text/labels/values in the data columns + headers · the menu-tab labels + full page list · exact colours (need pixel sampling) + pixel positions (Figma or higher-res shots would give these) · all interface/button/alert **sounds** (un-capturable via these tools; Phase 19).
+
+---
+
 ## Global chrome / other pages (seed)
 | Feature | Class | Source | Confidence |
 |---|---|---|---|
-| Persistent nav/status bar (phase, status, comm/link, MET) | STRONGLY SUPPORTED | mutantdragon reconstruction + reference set | High |
-| Visual language (dark blue/black bg, cyan primary, state colours) | STRONGLY SUPPORTED | `PALETTE.md` (measured) + references | High |
-| D-DIN typography, 16 px base | STRONGLY SUPPORTED | measured from reference set | High |
-| Three-display LEFT/CENTRE/RIGHT roles | RECONSTRUCTED | known three-screen layout; exact per-screen content varies | Medium |
-| Systems/Overview subsystem pages | RECONSTRUCTED | mutantdragon + operational reasoning | Medium |
-| Navigation 2D/3D map, ISS/ground-track/landing zone | RECONSTRUCTED | mutantdragon | Medium |
+| Persistent top status/header bar | **CONFIRMED** | real cockpit photos (see above) | Very High (labels not all legible) |
+| Visual language (dark navy bg, cyan primary, white text, green states) | **CONFIRMED** | real photos + `PALETTE.md` | Very High |
+| D-DIN-like compact sans, small-label/large-value | STRONGLY SUPPORTED | real photos + measured | High |
+| Three-display roles: LEFT/RIGHT = proximity/vehicle, CENTRE = 3D globe | **CONFIRMED** | pristine console photo | High (any page movable to any screen) |
+| Systems page (Dragon schematic + big-number readouts) | **CONFIRMED (layout)** / SIMULATION (our values) | real photos + Figma frames | High for layout; values are our KSP/TAC-LS sim |
+| Navigation: 3D Earth globe + orbital track | **CONFIRMED** | real photos (CENTRE screen) + Figma Frame 67 | Very High |
+| Far-right menu tabs + far-left scale bar (proximity page) | **CONFIRMED** | real photos | High |
 | TAC-LS / ECLSS readouts | SIMULATION | DragonScreen + KSP TAC-LS | Intentional (High as simulation) |
 | Thermal / Power values | SIMULATION (real KSP/RO state) | KSP/RO | High as simulation |
 | Comedic abort screen / Easter eggs | SIMULATION | DragonScreen | Intentional |
