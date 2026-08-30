@@ -105,7 +105,10 @@ CoM lifting entry (first-cut) · chute sequence (partial) · WarpPlan/CoastEta �
 
 ## TIER 4 — STAGING (complete) + EARLY MECO  (glue; direct-part actuation, never StageManager)
 - 🟡 **Autostage decision logic** — port the gates (safe-to-sep, hot-staging lead, fairing q/alt/flux, launch-clamp 99%, autostage-limit/stop-at-stage) onto our direct-decoupler Actuator
-- ⭐🔨 **Early-MECO trigger** — sep the booster before depletion (velocity/q trigger) → **drop the booster with landing fuel** (verify installed-DLL StagingTrigger first)
+- ✅ **Early-MECO trigger** — VERIFIED ALREADY PRESENT: `Ascent` FSM stages at `MecoSurfaceSpeedMps = 1900` (the
+  DM-1 staging energy, "couples to booster reserve") → `Actuator.Meco` — a VELOCITY trigger, NOT run-to-depletion,
+  so the booster keeps landing fuel by construction. Flight-tune the speed to the booster reserve. (A StageStats
+  propellant-reserve FLOOR gate would be a belt-and-braces refinement; not needed to keep landing fuel today.)
 
 ## TIER 5 — ASCENT (PVG) + LAUNCH-TO-PLANE  (guidance; flight-gated)
 - 🔨 **PVG/PSG optimal ascent** — port the solver (Ascent/Optimizer/Phase/Terminals/Guesser/Builder), driver (Glueball), executor (GuidanceController): multi-phase min-thrust-accel, terminal precise cutoff, terminal-RCS trim, coast phases, per-stage optimize/unguided/fixed. (Our UPFG is the interim.)
@@ -133,7 +136,10 @@ CoM lifting entry (first-cut) · chute sequence (partial) · WarpPlan/CoastEta �
 ## TIER 10 — SUPPORT SERVICES  (glue)
 - 🔨 **SmartASS** — attitude presets (prograde/retro/normal/radial/target/kill-rot/hdg-pitch-roll) · **Smart RCS** presets
 - 🔨 **Attitude Adjustment** — live PID-gain tuning surface
-- 🔨 **Deployables** — solar panel (deploy+sun-track), antenna, generic deployable controller
+- ✅ **Deployables** — `Actuator.DeploySolarPanels/RetractSolarPanels/DeployAntennas` (ModuleDeployablePart
+  Extend/Retract, idempotent, direct-part, safe no-op on fixed panels) + `DeployablesControl` (phase-driven
+  one-shot: deploy on a stable outbound orbit, retract before the return deorbit), wired at `FlightDriver`.
+  Tunable `UseDeployables`. (Sun-track is KSP's own tracking — not reimplemented.)
 - 🔨 **Warp Helper** — warp-to-phase-angle + presets (WarpToUT/Event HAVE)
 - 🟡 **Target controller** — relative pos/vel/distance, docking axis, set-target (vessel/body/position/port)
 - 🔨 **Instrumentation** — recorder graph, info-item catalog (ΔV/TWR/suicide-burn/node-time), debug arrows, trajectory draw

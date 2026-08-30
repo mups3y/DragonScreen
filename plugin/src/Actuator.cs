@@ -695,6 +695,52 @@ namespace DragonScreen
             catch (Exception e) { Debug.LogWarning("[DragonScreen] fin deploy failed: " + e.Message); }
         }
 
+        // ============================ DEPLOYABLES (solar / antenna) ============================
+        // Solar arrays + comm antennas ride RETRACTED through ascent (inside the fairing/aero) and deploy on
+        // orbit. Ported from MechJeb's DeployableController: toggle only from the RETRACTED state so it's
+        // idempotent, and via the module's own Extend()/Retract() (ModuleDeployablePart), never an action group.
+        // Safe no-op on a vehicle with fixed/body-mounted panels (no such module → n=0).
+        public static void DeploySolarPanels(Vessel v)
+        {
+            try
+            {
+                int n = 0;
+                for (int i = 0; i < v.parts.Count; i++)
+                    foreach (ModuleDeployableSolarPanel sp in v.parts[i].FindModulesImplementing<ModuleDeployableSolarPanel>())
+                        if (sp.deployState == ModuleDeployablePart.DeployState.RETRACTED) { sp.Extend(); n++; }
+                Debug.Log("[DragonScreen] solar panels deployed on " + n + " module(s)");
+            }
+            catch (Exception e) { Debug.LogWarning("[DragonScreen] solar deploy failed: " + e.Message); }
+        }
+
+        // Retract only RETRACTABLE, currently-EXTENDED panels (before a return deorbit; a fixed/one-shot panel is
+        // left alone). Trunk-mounted arrays go with the trunk on jettison anyway — this protects body panels.
+        public static void RetractSolarPanels(Vessel v)
+        {
+            try
+            {
+                int n = 0;
+                for (int i = 0; i < v.parts.Count; i++)
+                    foreach (ModuleDeployableSolarPanel sp in v.parts[i].FindModulesImplementing<ModuleDeployableSolarPanel>())
+                        if (sp.retractable && sp.deployState == ModuleDeployablePart.DeployState.EXTENDED) { sp.Retract(); n++; }
+                Debug.Log("[DragonScreen] solar panels retracted on " + n + " module(s)");
+            }
+            catch (Exception e) { Debug.LogWarning("[DragonScreen] solar retract failed: " + e.Message); }
+        }
+
+        public static void DeployAntennas(Vessel v)
+        {
+            try
+            {
+                int n = 0;
+                for (int i = 0; i < v.parts.Count; i++)
+                    foreach (ModuleDeployableAntenna a in v.parts[i].FindModulesImplementing<ModuleDeployableAntenna>())
+                        if (a.deployState == ModuleDeployablePart.DeployState.RETRACTED) { a.Extend(); n++; }
+                Debug.Log("[DragonScreen] antennas deployed on " + n + " module(s)");
+            }
+            catch (Exception e) { Debug.LogWarning("[DragonScreen] antenna deploy failed: " + e.Message); }
+        }
+
         // ============================ PARACHUTES (RealChute-aware) ============================
         // ⛔ Arm/deploy the drogues or mains — for RealChute (this vehicle) we ARM the canopy and let RealChute
         // stage it by altitude; for a plain stock ModuleParachute we Deploy. Selected by the drogue/main PART.

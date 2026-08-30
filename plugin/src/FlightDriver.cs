@@ -326,6 +326,8 @@ namespace DragonScreen
         // controller's phases the throttle authority is dropped so nothing is left commanding.
         static void DriveActivePhase(Vessel v)
         {
+            // one-shot deployables: solar/antenna out on a stable orbit, retracted before the return deorbit.
+            DeployablesControl.Tick(v, CrewProcedureOps.ActivePhase, CrewProcedureOps.IsReturn);
             switch (CrewProcedureOps.ActivePhase)
             {
                 case MissionPhase.Ascent:
@@ -353,6 +355,7 @@ namespace DragonScreen
                     RendezvousControl.Reset();
                     DockingControl.Reset();
                     ReturnControl.Reset();
+                    DeployablesControl.Reset();   // re-arm the deploy/retract one-shots for a fresh mission
                     ReleaseThrottle();
                     ReleaseTranslation();
                     ReleaseRoll();
