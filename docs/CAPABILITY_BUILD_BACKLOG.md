@@ -55,7 +55,7 @@ CoM lifting entry (first-cut) · chute sequence (partial) · WarpPlan/CoastEta �
 ## TIER 2 — CONTROL PRIMITIVES + ⭐ RCS ACTUATION  (headless where pure)
 - 🔨 **PID zoo** — PIDLoop, PIDController, PIDControllerV2, Biquad, TorquePI, KosPIDLoop, DirectionTracker (`Control` + attitude inner)
 - 🔨 **LQRLoop1** — the LQR loop (for the optional gimbal experiment; not the RCS default)
-- ⭐🔨 **DeltaSigmaThrottleModulator + phase-plane deadband** — port the modulator, add a phase-plane (error,rate) deadband, wire to the **Draco RCS** path (attitude + translation). **THE Campaign-6 propellant-chatter fix.**
+- ⭐✅ **DeltaSigma/PWPF + deadband** — DONE (`1d0f613`): `pure/RcsPulse.cs` + wired at `FlightDriver.OnFlyByWire` (translation always; attitude when engine off). Headless 11 checks green, installed. **Campaign-6 chatter fix.** ⏳ Tick-3 flight to confirm reduced thrash. (Follow-up: a full phase-plane (error,rate) deadband in the attitude law itself.)
 - 🟡 **Differential throttle** — per-engine `thrustPercentage` QP (engine-out / extra authority) — port the alglib QP
 
 ## TIER 3 — THRUST LIMITER STACK (complete it) + TRANSLATRON  (glue, compile-green)
