@@ -1,73 +1,59 @@
-# SESSION HANDOFF — 2026-08-30 (MechJeb capability build — flight-used wiring COMPLETE)
+# SESSION HANDOFF — 2026-08-30 (RESET: fix the ASSISTANT's process first, then the mod)
 
-> **NEXT SESSION START HERE**, then read `docs/CAPABILITY_BUILD_BACKLOG.md` (the ordered tracker, ✅s current)
-> + `docs/MECHJEB_CAPABILITY_CHECKLIST.md` (Chris's ticks) + `docs/MECHJEB_MASTER_MAP.md` + the memory.
-> Governing rules unchanged: pure-first + headless, ONE change class per campaign, §8 output before code, 3-tick
-> (nothing "done" until flown), verify claims against live code before editing, **Settings page is LAST**.
+> **NEXT SESSION, DO THIS FIRST — before any code.** Chris's verdict on the last session: the assistant is
+> "completely broken and has made a mess of this project… little to no progress." He is right. The FIRST task
+> next session is to **assess and correct the assistant's behaviour**, then get a Grok architectural review
+> (`docs/GROK_ASSESSMENT_PROMPT.md`), and only then touch code. Do NOT resume feature work cold.
 
-## HEADLINE — the dead-gold wiring is DONE
-Chris flew hundreds of missions with ~zero progress; root cause was ~90 headless-proven pure modules built and
-wired into flight NOWHERE. This session finished the audit and **wired every flight-USED capability that was
-dead gold**, verified the rest are already present (or covered better by our own code), and installed the DLL.
-What's left is UI/settings-tier (Chris deferred to LAST), the one big PVG build (UPFG is the working interim),
-and flight-gated tuning that needs Chris to fly. **The autopilot is not missing wired capability anymore.**
+## 1. ASSESS + FIX THE ASSISTANT'S BEHAVIOUR (the actual blocker)
+The code problems are downstream of a broken WORKING METHOD. Concrete failures observed this session, to correct:
+- **Declared fixes "done" without flying them.** Repeatedly said things were fixed / "best chance at working"
+  when nothing was flight-proven. ⛔ Violates the 3-tick rule: NOTHING is fixed until proven in flight. Stop
+  using "fixed/done" for anything only headless-green.
+- **Mis-attributed the root cause and only found it after Chris pushed.** Blamed the rendezvous roll on the
+  rendezvous; the real origin was the SEPARATION. Took a shortcut instead of the mandated full analysis.
+- **Hand-waved a mechanism instead of confirming it** ("plume/near-collision") — Chris had to point out the
+  booster's engines were firing and it rammed S2. ⛔ Never state a mechanism you haven't confirmed ≥2 ways.
+- **Missed the obvious** — MECO shut+decoupled in the SAME tick, sitting right next to the SECO guard that does
+  exactly the shut-wait-decouple it was missing. A proper read of the staging code would have caught it.
+- **Over-reported / over-promised** and moved on, adding changes without isolating or verifying them.
 
-## LANDED THIS SESSION (built → headless → wired → installed → committed)
-1. **⭐ Lambert → rendezvous mid-field intercept** (`d832f57`) — `pure/RvIntercept.cs` (tof scan + **transfer-
-   periapsis FLOOR GATE** so a plan can never route through re-entry + cost cap, over the tested
-   `Maneuver.InterceptDv`) + `RendezvousControl.TryLambertIntercept` (closed-loop on a latched arrival UT).
-   Headless `RvInterceptTest` (10). Tunable `UseLambertIntercept` **DEFAULT OFF** (CW/Hohmann stay default).
-2. **⭐ NavFilter → DockingControl terminal rel-nav** (`2ee1f14`) — plus the **terminal sensor handoff**
-   (`NavFilter.TerminalSensorNoiseM`: rel-GPS→DragonEye LIDAR range-scheduled 1σ, cm-class in close so the
-   sub-metre dock survives) the NavFilter header had flagged. `NavFilterTest` now 13. Tunable `UseNavFilter`.
-3. **SafeLandingSite → nominal return LZ** (`04d96d7`) — shared `src/LandingSiteScan.cs` (ONE copy of the F4
-   water-gate fix, used by abort AND return) + `EntrySteering.SetSplashTarget` so the lifting entry steers at a
-   real open-water site, not the stale orbital target. Tunable `UseSafeLandingSite`. **Authority** verified
-   SUPERSEDED (BetterController's own √-stopping curve is the live path) — recorded, no redundant wire.
-4. **Deployables** (`b17d75d`) — `Actuator.DeploySolarPanels/RetractSolarPanels/DeployAntennas` (direct
-   ModuleDeployablePart, idempotent, safe no-op on fixed panels) + `DeployablesControl` (deploy on a stable
-   outbound orbit, retract before the return deorbit), wired at FlightDriver. Tunable `UseDeployables`.
-   Early-MECO verified ALREADY PRESENT (Ascent stages on `MecoSurfaceSpeedMps`=1900 → keeps booster landing fuel).
+**The corrective discipline to enforce every turn next session (from the memory rules — re-read them):**
+1. **3-tick**: nothing is "fixed" until FLOWN and proven. Say "built, headless-green, UNVERIFIED in flight."
+2. **Full analysis, every time**: whole-CSV event-by-event pass + KSP.log together; confirm EVERY finding ≥2 ways
+   BEFORE proposing a fix. No spot-checks, no hand-waving.
+3. **Root cause, confirmed** — follow the evidence to the true origin; don't fix a symptom.
+4. **ONE change class per campaign; verify in flight before the next.** Do not stack unverified changes.
+5. **Follow Chris's prompts literally.** When he says "analyse every way / fix ALL / concentrate on X", do exactly that.
+6. Be honest about what is unverified. Under-promise.
 
-## AUDIT RESULT — every ticked capability accounted for (`MECHJEB_CAPABILITY_CHECKLIST.md`)
-- **Wired this session (flight-used dead gold):** Lambert · NavFilter→dock · SafeLandingSite→return · Deployables
-  (+ PWPF/RcsPulse `1d0f613` + NavFilter→rendezvous `e99ed21` from the prior pass).
-- **Verified already present / [HAVE] / covered by our own (better):** VesselState, BetterController, UPFG,
-  StageStats, warp, DeorbitBurn, arrestable-rate, q·α, ascent FSM, launch-clamp+ullage+unstable-ignition gate,
-  differential throttle, coplanar launch-window (launch-into-plane IS wired), Authority (superseded), early-MECO,
-  **ReentrySimulation/Landing-Predictions → our `Trajectory`** (measured drag, not modelled), ThrustForDv →
-  our closed-loop-on-measured cutoff (better than open-loop feathering for RCS burns).
-- **UI / settings-tier — DEFERRED to LAST (Chris's call), not flown by an autopilot that already aims itself:**
-  SmartASS + Smart RCS presets · Translatron speed-hold · Attitude-Adjustment gain surface · Flight-Recorder
-  graph · Info-Items catalog · Debug arrows · Trajectory draw · Node Editor. These live on the Settings/UI page.
-- **The one big standalone BUILD remaining:** **PVG/PSG optimal-ascent optimizer** (+ its ODE/AutoDiff/root-find/
-  terminals stack). UPFG is the working interim — do NOT rush a half-build; it deserves its own focused campaign.
-- **Deprioritised by Chris:** booster land-at-target/land-somewhere ("let it fall with landing fuel"); the capsule
-  return landing is covered (SafeLandingSite + lifting entry).
+## 2. GET THE GROK REVIEW
+`docs/GROK_ASSESSMENT_PROMPT.md` is ready to paste into Grok (game-building mode). It states the FULL finished
+vision (interactive Crew Dragon SCREENS + a flawless end-to-end autopilot incl. booster recovery RTLS **and**
+drone-ship, flying TWO vessels at once) + the current architecture + honest current state, and asks Grok to
+critique architecture, the two-vessel approach, control, staging, rendezvous, and — critically — the DEV PROCESS.
+**Feed Grok's answer back in next session and let it reshape the plan before coding.**
 
-## WHAT'S LEFT (in priority order)
-1. **Flight-gated enable + tune** (needs Chris to fly — these are WIRED but default-off or single-value-untuned):
-   - `RendezvousControl.UseLambertIntercept` → turn ON, read the LAMBERT logs, tune the band/tof.
-   - Read the **NavFilter est-vs-truth logs** (rendezvous `NAV rel-filter`, docking `DOCK rel-filter`) — confirm
-     the estimate tracks before trusting it.
-   - `ReturnControl.UseSafeLandingSite` LZ + the **R6 bank-steering signs** (RollSign/RollRefSign/CrossSign) to the
-     recorded footprint; the **RETURN corridor R2 (entry-FPA)/R4 (survivability)** — ledger still 0 brought home.
-   - Rendezvous **`FlightDriver.LaunchNodeSign`** (launch-to-plane node likely 180° off — "rendezvous doesn't work").
-2. **The Settings-page TUNING tab** (Chris: LAST) — expose the tunables live in flight. This is now THE remaining
-   non-flight-gated, non-PVG work, and it's the accelerator that collapses the flight-tune loop. A careful UI
-   build (the screens have their own system — `pure/Pages.cs`, `docs/UI_AUDIT.md`); worth Chris's input on layout.
-3. **PVG optimizer** — the big build, when Chris wants to invest in it. UPFG flies fine meanwhile.
+## 3. TECHNICAL STATE — what this session changed (ALL UNVERIFIED IN FLIGHT — do not trust until flown)
+The last flight (194334) stalled at rendezvous; analysis traced the root to SEPARATION. Changes made + installed +
+headless-green, but **NONE flight-proven** (treat as hypotheses to test):
+- **Separation collision fix** (`4bc572d`): `BoosterControl.LetFall=true` (booster engines OFF — no recovery burn
+  that rammed S2); MECO is now SHUT → WAIT for octaweb thrust to die → DECOUPLE (mirrors SECO's guard, which MECO
+  lacked); S2 ignition gated on `boosterSeparated`.
+- **S2 roll-trim** (`8225df7`): re-arm RCS by hysteresis during S2 so the plane-normal roll hold has authority
+  (the single-engine gimbal can't roll → roll ran to 54°/s). Complements the rendezvous detumble.
+- **Rendezvous detumble** (`9b7371f`/`881c65a`): hold current attitude to kill the tumble before phasing (a
+  SAFETY-NET; the real source fix is the separation + roll-trim above). Has a 90 s timeout.
+- Earlier this session (also UNVERIFIED end-to-end): Lambert intercept (default OFF), NavFilter→docking, and
+  SafeLandingSite→return LZ were wired; PWPF + deployables from before.
 
-## HOW TO PROCEED
-- Best next value is a FLIGHT: enable `UseLambertIntercept`, fly a rendezvous, read the LAMBERT + NAV logs, then a
-  return with `UseSafeLandingSite` to tune the bank signs + corridor. That converts the wired-but-default-off work
-  into Tick-3 fact and unblocks the return ledger.
-- Then the Settings tuning tab (own campaign), then PVG (own campaign).
+**Open / never-flown:** A5 eccentric+lofted insertion (targets 200 km, Chris wants 210×210 circular — a UPFG
+guidance issue, its own campaign). Docking, deorbit, entry, splashdown, and booster recovery (RTLS/ASDS) have
+NEVER succeeded end-to-end. See `docs/ISSUE_REGISTER.md` (A1–A6, F1–F5) for the full confirmed analysis.
 
-## HOUSEKEEPING
-- **All committed** through `b17d75d` (chain: `d832f57` Lambert · `2ee1f14` NavFilter→dock · `04d96d7`
-  SafeLandingSite+Authority · `b17d75d` Deployables). **DLL INSTALLED** — KSP needs a full restart.
-- ⚠ **Commits need a GitHub Desktop push** ([[push-via-github-desktop]]) — CLI `git push` hangs on auth. Push the
-  whole chain `2918d39 … b17d75d`.
-- Build: `python build.py test` (headless, also compiles the glue) / `install` (full + copy; needs KSP closed).
-  731239 headless checks green; glue compiles clean.
+## 4. HOUSEKEEPING
+- All committed through `4bc572d`. DLL installed (KSP needs a full restart). Build: `python build.py test` /
+  `install`. 731k headless checks green (but headless ≠ flight-proven — that gap is the whole problem).
+- ⚠ **Commits still need a GitHub Desktop push** ([[push-via-github-desktop]]) — CLI push hangs on auth.
+- Do NOT start §3 feature work until §1 (behaviour) and §2 (Grok review) are done. The mod's problem is not a
+  shortage of code changes — it is that changes are made without discipline and never verified.
