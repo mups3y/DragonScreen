@@ -32,13 +32,19 @@ Currently implemented: FLIGHT, VEHICLE, NAV, DOCKING, SETTINGS (`ChromeBar.PageN
 
 Navigation · **Docking (reference)** · Mission · Vehicle/Overview · Systems · Alerts(FDIR) · Cameras · Propulsion · RCS · Power · Thermal · Communications · Environment/ECLSS · Crew · GNC/Attitude · Orbital · Guidance · Maneuvers · Rendezvous · Approach · Deorbit · Entry · Landing/Recovery · Procedures/Checklists · Timeline · Automation · Manual · Abort · Recovery · Settings · Training/Simulation.
 
-### Docking (the gold standard — Phase 7)
+### Docking (the gold standard — Phase 7). Layout from a direct study of iss-sim (2026-08-31); see `SCREEN_EVIDENCE_MATRIX.md`.
 - Purpose: manual + automatic proximity/docking operations; the design system for all other pages.
-- Layout: left translation cluster · right rotation cluster · centre target reticle + alignment · precision toggle · central green correction values · closing RATE.
-- AUTO/MANUAL aware; on MANUAL, controls issue **real** RCS/attitude commands via AuthorityManager (see `COMMAND_REGISTRY.md`). Shows AUTO while the FSM flies it.
-- Telemetry: DOCK_RANGE/RATE/OFF_*/ALIGN/*_ERR/TARGET_WP/CAPTURE from filtered `NavState3` (see `TELEMETRY_REGISTRY.md`) — never recomputed on-screen.
-- Available phases: RENDEZVOUS/APPROACH/PROXIMITY/DOCKED. Required systems: target vessel, rel-nav, GNC, RCS.
-- Failure modes: NO DATA (no target/nav), INVALID (bad filter), corridor breach → abort, RCS depletion. Completion per §8.
+- **Layout (reference-confirmed):**
+  - **LEFT cluster — TRANSLATION:** Up / Down / Left / Right / Forward / Backward, with a **precision toggle centred in the cluster** (LARGE ↔ SMALL; default small/precise).
+  - **RIGHT cluster — ROTATION:** Roll / Pitch / Yaw, with its own **centred precision toggle**.
+  - **CENTRE:** HUD rings + a **green-diamond target** overlaid on the docking adapter; must be centred. Rotation readouts ROLL/PITCH/YAW near it.
+  - **RANGE** readout (distance) upper area; **RATE** (closing rate) at the **bottom**.
+  - Top controls: Instructions · Reset · Settings.
+- **Two numbers per axis (critical, from the reference):** a **GREEN correction** (drive to 0) *and* a **BLUE rate** (current speed). Success = all green < 0.2 and RATE > −0.2 m/s (keep < −0.2 below 5 m). Label these as **simulator training guidance**, not certified limits (plan §12). Our current page conflates correction and rate — the rebuild must show both.
+- **AUTO/MANUAL aware** (our addition, C6 — real Dragon docks autonomously). Design from studying BOTH SpaceX layouts (see `SCREEN_EVIDENCE_MATRIX.md`): **AUTO shows the real monitoring HUD** (target in rings + rotation corrections + RANGE + RANGE RATE, the clean look from the training video) while the FSM flies; **MANUAL reveals the LEFT/RIGHT control clusters** over it, and the crew's translation/rotation buttons issue **real** RCS/attitude commands via the AuthorityManager path (see `COMMAND_REGISTRY.md`). This unification is our SIMULATION/RECONSTRUCTION of two confirmed layouts — not a verbatim SpaceX screen.
+- Telemetry: RANGE / RATE / offsets / ROLL-PITCH-YAW error / alignment / target-waypoint / capture from the filtered `NavState3` (see `TELEMETRY_REGISTRY.md`) — never recomputed on-screen (rule T5).
+- Available phases: RENDEZVOUS / APPROACH / PROXIMITY / DOCKED. Required systems: target vessel, rel-nav, GNC, RCS.
+- Failure modes: NO DATA (no target/nav), INVALID (bad filter), corridor breach → abort, RCS depletion. Completion per §7.
 
 ## 7. "Screen complete" gate (per page)
 IA ✓ · evidence class + confidence recorded ✓ · source-of-truth contract ✓ · visual review vs reference ✓ · typography ✓ · components ✓ · glove touch targets ✓ · real telemetry ✓ · real commands ✓ · phase-aware ✓ · alert-integrated ✓ · failure/disabled states ✓ · IVA-tested ✓ · performance ✓ · **flight-tested where applicable ✓** · docs updated ✓.
