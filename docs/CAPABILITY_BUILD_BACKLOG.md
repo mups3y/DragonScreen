@@ -35,6 +35,29 @@ SelfCal · WarpPlan · CoastEta · Aero · LifeSupport · CabinEnvironment · Al
 (3) BUILD the ~12 missing pieces; (4) tune phase-by-phase in flight. The tiers below fold this in: 🟡 = exists,
 complete+wire; 🔨 = genuinely build.
 
+## ⚙ WIRING AUDIT (2026-08-30) — which built capabilities are actually USED in flight
+Chris: "make sure all capabilities are USED in ALL the places they are useful." Grepped the glue for each
+built pure module. **Wired NOWHERE (built + headless-proven, but dead gold):**
+- 🔌 **NavFilter** (strict-fidelity Kalman rel-nav — Chris explicitly wants it) → wire into RendezvousControl +
+  DockingControl relative state (simulate IMU/rel-GPS from truth, fly guidance on the ESTIMATE). Behind a
+  tunable + instrument estimate-vs-truth. Flight-gated.
+- 🔌 **Lambert** (two-impulse intercept) → wire into `Rendezvous` Midcourse/Transfer as the intercept solver
+  (behind a tunable, default off until flight-tuned; CW stays the default). Flight-gated.
+- 🔌 **Authority** (per-axis control authority + arrestable rate) → likely SUPERSEDED by BetterController's own
+  √-stopping curve; verify before wiring (don't add a redundant path).
+
+**Per-phase usage (what each phase controller pulls in today):**
+- Ascent: AttitudePilot, ControlLaw, QAlpha, SelfCal, Ullage, Upfg. (DiffThrottle/ThrustBalance/RcsBalance/
+  ActuatorLag are wired via Actuator + AttitudeController, so ascent gets them indirectly. NavFilter absent.)
+- Rendezvous: Cw, Hohmann, Phasing, Rendezvous FSM. (Lambert + NavFilter absent.)
+- Return: DeorbitGuidance, DeorbitBurn, Entry, EntrySteering, Chutes, CourseCorrect, Predict. (Trajectory is
+  wired via EntrySteering. SafeLandingSite absent → no LZ selection wired.)
+- ⭐ **RcsPulse (PWPF)** → NEW, wired at `FlightDriver.OnFlyByWire` (all RCS phases). ✅ `1d0f613`.
+
+**Next wiring campaigns (each its own §8 pass, build+wire+instrument, then flight-tune):** NavFilter→rel-nav ·
+Lambert→rendezvous intercept · SafeLandingSite→return LZ · the genuinely-missing §K/§L glue (landing autopilot,
+deployables) · then the Settings-page TUNING tab so these tunables are live-adjustable in flight (Chris's ask).
+
 ## TIER 0 — already built (verify, don't rebuild)
 ✅ VesselState + torque availability (geometric RCS) · attitudeTo + frame subset · BetterController + RollControlRange ·
 throttle write · max-Q (first-cut) · g-cap (Campaign-5) · min-throttle floor · q·α (first-cut) · ascent FSM ·
