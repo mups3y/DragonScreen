@@ -29,6 +29,7 @@ public static class TestMain
         bad += PredictTest.Run();          // L1 nav: impact / closest-approach helpers
         bad += AeroTest.Run();             // L1 nav: dynamic pressure / Mach / sound speed
         bad += AuthorityTest.Run();        // L1 nav: per-axis control authority + arrestable rate
+        bad += AuthorityManagerTest.Run(); // Phase 2: control-authority arbitration (Auto/Manual/Recovery/Abort, per-vehicle)
         bad += ControlTest.Run();          // L2 control: attitude PD + throttle bucket/g-limit + RCS
         bad += RcsPulseTest.Run();         // Tier-2: PWPF/delta-sigma RCS pulse modulation (Draco chatter fix)
         bad += ConicTest.Run();            // L3 support: Vec3 + conic propagator (UPFG gravity)

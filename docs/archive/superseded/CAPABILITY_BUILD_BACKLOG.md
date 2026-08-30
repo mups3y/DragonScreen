@@ -1,3 +1,9 @@
+> **SUPERSEDED — historical reference only, NOT an active instruction.**
+> The sole governing specification is `docs/MASTER_BUILD_SPEC.md`. Do not follow this document.
+> Quarantined 2026-08-31 (Phase 1 document control). Kept for history; not deleted.
+
+---
+
 # CAPABILITY BUILD BACKLOG — Chris's ticked MechJeb set, dependency-ordered
 
 > **Source of truth:** `docs/MECHJEB_CAPABILITY_CHECKLIST.md` (Chris ticked it 2026-08-30 — build ALL ticked

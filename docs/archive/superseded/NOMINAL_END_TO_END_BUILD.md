@@ -1,3 +1,9 @@
+> **SUPERSEDED — historical reference only, NOT an active instruction.**
+> The sole governing specification is `docs/MASTER_BUILD_SPEC.md`. Do not follow this document.
+> Quarantined 2026-08-31 (Phase 1 document control). Kept for history; not deleted. Contains verified engineering findings worth reading as evidence.
+
+---
+
 # NOMINAL END-TO-END BUILD — the audit + the backlog to fly a perfect crew mission
 
 > ⭐ **MANDATE (Chris 2026-08-29):** *"teach the autopilot the entire sequence map + the parameters for perfect

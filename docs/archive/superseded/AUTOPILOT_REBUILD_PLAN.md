@@ -1,3 +1,9 @@
+> **SUPERSEDED — historical reference only, NOT an active instruction.**
+> The sole governing specification is `docs/MASTER_BUILD_SPEC.md`. Do not follow this document.
+> Quarantined 2026-08-31 (Phase 1 document control). Kept for history; not deleted.
+
+---
+
 # Crew Dragon autopilot — the governing plan
 
 > **⏱ SESSION STATE 2026-08-27 (read `docs/RESUME_PROMPT.md` first — it is the live handoff).** Pad→orbit is

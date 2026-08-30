@@ -199,8 +199,11 @@ namespace DragonScreen
             else { LogDrive(v, thr); BoosterLog.Sample(v); }   // ⭐ R1: the booster's own CSV stream (non-active)
         }
 
-        static float Clamp1f(double d) { return (float)(d < -1.0 ? -1.0 : (d > 1.0 ? 1.0 : d)); }
-        static float Clamp01f(double d) { return (float)(d < 0.0 ? 0.0 : (d > 1.0 ? 1.0 : d)); }
+        // ⛔ NaN GUARD (Phase 2, rule N2): NaN comparisons are all false, so a NaN would pass straight through
+        // into the non-active booster's FlightCtrlState. Sanitize NaN → 0 so a bad command can't reach the
+        // booster's actuators as NaN (finite values clamp exactly as before).
+        static float Clamp1f(double d)  { if (double.IsNaN(d)) return 0f; return (float)(d < -1.0 ? -1.0 : (d > 1.0 ? 1.0 : d)); }
+        static float Clamp01f(double d) { if (double.IsNaN(d)) return 0f; return (float)(d < 0.0 ? 0.0 : (d > 1.0 ? 1.0 : d)); }
 
         // Rate-limited KSP.log line of the non-active booster's recovery state — phase / altitude / vertical
         // speed / engine mode / throttle / engines lit — the log-side cross-check for the flight (the Dragon's
