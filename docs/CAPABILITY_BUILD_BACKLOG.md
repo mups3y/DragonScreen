@@ -11,6 +11,30 @@
 
 ---
 
+## ⚠ REALITY CHECK — audited `plugin/src/pure/` (2026-08-30) before building anything
+We already have **~90 pure modules, headless-proven (731k checks pass)**. Most of the ticked set EXISTS in
+pure form — the gap is **completion + WIRING into the mission + tuning**, NOT building from scratch. Do NOT
+rebuild these; VERIFY each does what the capability needs, then WIRE + tune.
+
+**EXISTS as tested pure modules (complete or first-cut):** Vec3 · Conic · Orbital · Predict · Lvlh · ArcGeometry ·
+LaunchAzimuth · **Lambert** · Maneuver · Hohmann · Cw · Phasing · Departure · DeorbitGuidance · ControlLaw ·
+AttitudeLoop · **DiffThrottle** · **RcsBalance** · Authority · QAlpha · ThrustBalance · ActuatorLag · AscentLoss ·
+StageStats · IgnitionGate · Actuation · VehicleParts · Ascent · Upfg · LaunchWindow · LaunchTuner · CourseCorrect ·
+Rendezvous · RvCoast · DockApproach · DockCapture · DockControl · DockCorridor · Hoverslam · BoosterDescent ·
+BoosterDrag · Entry · Chutes · Trajectory · SafeLandingSite · GridFin · Rls · NavFilter · Fdir · FaultMonitor ·
+SelfCal · WarpPlan · CoastEta · Aero · LifeSupport · CabinEnvironment · Alarms · Predict · MissionPhase/Profile · ModeManager.
+
+**GENUINELY MISSING (no pure module — real BUILD):** ⭐ **DeltaSigma/PWPF + phase-plane RCS** · **PVG optimizer**
+(Ascent/Optimizer/Phase/Terminals — we have UPFG interim) · **SmartASS / SmartRCS** presets · **Translatron** ·
+**Deployables** (solar/antenna) · **LQRLoop1** · standalone **ODE integrators** / **root-find** / **minimizer** /
+**AutoDiff** (may be inlined in Predict/Trajectory — verify) · **ReentrySimulation** as a first-class predictor ·
+**Landing autopilot** (land-at-target / land-somewhere glue) · **Warp-to-phase-angle helper** · **early-MECO trigger**.
+
+**So the true work, in order:** (1) VERIFY the existing pure modules match the capability (many are "first-cut");
+(2) **WIRE them into MissionConductor + the phase controllers** (the biggest gap — proven brains, not connected);
+(3) BUILD the ~12 missing pieces; (4) tune phase-by-phase in flight. The tiers below fold this in: 🟡 = exists,
+complete+wire; 🔨 = genuinely build.
+
 ## TIER 0 — already built (verify, don't rebuild)
 ✅ VesselState + torque availability (geometric RCS) · attitudeTo + frame subset · BetterController + RollControlRange ·
 throttle write · max-Q (first-cut) · g-cap (Campaign-5) · min-throttle floor · q·α (first-cut) · ascent FSM ·
