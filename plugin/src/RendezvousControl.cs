@@ -62,6 +62,18 @@ namespace DragonScreen
         static RendezvousCommand lastCmd;
         static LvlhState lastRel;
 
+        // ⭐ STRICT-FIDELITY REL-NAV (NavFilter, B6) — the real Crew Dragon flies terminal rendezvous on a
+        // FILTERED relative state (rel-GPS + IMU fused through a Dragonfly-class filter), never on perfect
+        // truth ([[crew2-full-fidelity-no-deviation]]). KSP hands us truth, so we SIMULATE the rel-GPS from it
+        // (+ noise), fuse it through NavFilter, and fly the CW guidance on the ESTIMATE — matching the real
+        // pipeline and proving the guidance is robust to realistic nav error. Tunable: false = fly on truth.
+        // Wired here (near-field, where the rel-state feeds CW); DockingControl is the next place to wire it.
+        [Tunable] public static bool UseNavFilter = true;
+        static NavState3 navRel;
+        static bool navInit;
+        static uint navRng = 0x1234567u;
+        static double navLastLogUT = -999.0;
+
         // ---- FDIR feed (task T2b): the honest NEAR-FIELD closing signal for the ConvergenceStall monitor. The
         // controller is the honest source of intent — only it knows when it MEANT to be closing (a near-field CW
         // burn toward the standoff) vs coasting (the far-field phase-wait / co-elliptic coast, where a "stall" is
@@ -74,6 +86,7 @@ namespace DragonScreen
         {
             phase = RvPhase.Idle; farPhase = FarPhase.Phase; lastFarPhase = FarPhase.Phase;
             shroudOpened = false; floorLogged = false;
+            navInit = false;   // re-init the strict-fidelity rel-nav filter on a new rendezvous
             NearClosingRateMps = 0.0; NearClosingActive = false;
             FlightDriver.ReleaseTranslation();
             Steering.Release();
@@ -262,6 +275,31 @@ namespace DragonScreen
             Vec3 targetV = V(tgtVel);
             Vec3 relPos = V((Vector3d)v.CoM - tgtPos);
             Vec3 relVel = V(v.obt_velocity - tgtVel);
+            // ⭐ strict-fidelity rel-nav: fuse a simulated rel-GPS (truth + noise) through NavFilter and fly the
+            // guidance on the ESTIMATE (real Dragon flies filtered rel-nav, not truth). Instrumented (rate-limited
+            // est-vs-truth log). The estimate tracks truth within a few m (RgpsNoise 5 m « the km-scale CW legs),
+            // so this adds realism/robustness without regressing the geometry. Tunable off → fly on truth.
+            if (UseNavFilter)
+            {
+                double dtf = TimeWarp.fixedDeltaTime;
+                if (!navInit || dtf <= 0.0) { navRel = NavState3.Init(relPos, relVel); navInit = true; }
+                else
+                {
+                    navRel.Predict(new Vec3(0, 0, 0), dtf);   // coast model (thrust is short + GPS-corrected each tick)
+                    navRel.UpdatePosition(new Vec3(relPos.X + NavNoise(NavFilter.RgpsNoiseM),
+                                                   relPos.Y + NavNoise(NavFilter.RgpsNoiseM),
+                                                   relPos.Z + NavNoise(NavFilter.RgpsNoiseM)));
+                    Vec3 e = navRel.EstPos, ev = navRel.EstVel;
+                    if (now - navLastLogUT > 5.0)
+                    {
+                        double dx = e.X - relPos.X, dy = e.Y - relPos.Y, dz = e.Z - relPos.Z;
+                        Debug.Log("[DragonScreen] NAV rel-filter |err| " + Math.Sqrt(dx * dx + dy * dy + dz * dz).ToString("F1")
+                                  + " m  (est range " + e.Magnitude.ToString("F0") + " / truth " + relPos.Magnitude.ToString("F0") + ")");
+                        navLastLogUT = now;
+                    }
+                    relPos = e; relVel = ev;
+                }
+            }
             LvlhState rel = Lvlh.Project(targetR, targetV, relPos, relVel, n);
             lastRel = rel;
 
@@ -334,6 +372,14 @@ namespace DragonScreen
         static Vec3 V(Vector3d d) { return new Vec3(d.x, d.y, d.z); }
         static Vector3d W(Vec3 p) { return new Vector3d(p.X, p.Y, p.Z); }
         static Vec3 FirstNonZero(Vec3 a, Vec3 fallback) { return a.Magnitude > 1e-6 ? a : fallback; }
+
+        // Deterministic pseudo-gaussian sensor noise (LCG + Box-Muller) to simulate the rel-GPS 1σ error.
+        static double NavNoise(double sigma)
+        {
+            navRng = navRng * 1664525u + 1013904223u; double u1 = (((navRng >> 8) & 0xFFFFFF) + 1) / 16777217.0;
+            navRng = navRng * 1664525u + 1013904223u; double u2 = ((navRng >> 8) & 0xFFFFFF) / 16777216.0;
+            return sigma * Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);
+        }
 
         // Signed relative range-rate (m/s; + = separating, − = closing) for the warp ETA. Both positions come
         // from getPositionAtUT, so they share the SAME world-frame convention (no swizzle, no CoM-vs-focus mix)
