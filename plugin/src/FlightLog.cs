@@ -44,6 +44,7 @@ namespace DragonScreen
                 openVesselId = v.persistentId;
                 startUT = Planetarium.GetUniversalTime();
                 lastSampleT = -1e9;   // a revert can move UT backwards; force the first sample to fire
+                FlightDriver.RcsAcct.Reset();   // discard any accumulation from the gap / a previous vessel/stream
                 // launch reference for downrange: the pad position (or wherever the log opens).
                 launchLat = v.latitude; launchLon = v.longitude; haveLaunchRef = true;
                 Debug.Log("[DragonScreen] flight log → " + name);

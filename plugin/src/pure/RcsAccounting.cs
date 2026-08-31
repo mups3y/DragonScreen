@@ -16,6 +16,22 @@
 // live ModuleRCS). It does NOT split delivered force per-thruster or per-cause — KSP's own RCS solver decides
 // which thrusters fire from the combined command, and that split is not exposed. So the SIMULTANEOUS ("both")
 // bucket is the honest home for any command overlap; do not manufacture a finer per-thruster attribution.
+//
+// VALIDATED LIMITATIONS (do not overclaim beyond these):
+//  • REQUESTED ≠ APPLIED FlightCtrlState command ≠ KSP-selected thrusters ≠ vehicle net force/torque. This
+//    measures the first two per-group + the aggregate delivered force; not the last two.
+//  • TICK LAG: the caller reads Actuator.RcsThrustN inside OnFlyByWire, BEFORE KSP applies this tick's ctrlState,
+//    so the force reflects the PREVIOUS physics tick while the category is this tick's applied command → a
+//    ≤1-tick (0.02 s) boundary smear at each category transition. Negligible for the seconds-long mutually-
+//    exclusive windows the focused flight uses; do NOT trust it for rapidly-flipping sub-0.1 s categorisation.
+//  • THRESHOLD: |cmd|>0.5 is correct because the caller gates accumulation to the RCS-pulsing phases where the
+//    applied command is the PWPF output {−1,0,+1}; it is not used on the continuous (gimbal-ascent) path.
+//  • RESET: the caller resets on recorder stream-open (new flight / vessel / abort / mission-reset) and after
+//    every sample. Residual: a mid-flight ACTIVE-vessel switch without a re-open would carry one interval of the
+//    prior vessel's accumulation — rare in the terminal; treat a vessel-switch interval with caution.
+//  • PROPELLANT: per-category propellant = category_imp/total_imp × (MMH+NTO consumed) is valid because all Dracos
+//    share one Isp and the single MMH/NTO pair (delivered impulse ∝ propellant mass); NOT valid for mixed-Isp
+//    thrusters firing in different categories (not the case for this vehicle).
 // Pure + headless-tested (plugin/test/RcsAccountingTest.cs).
 // ============================================================================================
 namespace DragonScreen
