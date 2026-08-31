@@ -25,10 +25,12 @@ namespace DragonScreen
 
         // ---- shared [Tunable] config (read by every AttitudeController instance) ----
         // B4 lag compensation: command the gimbal harder when it slews slowly (snappier loop through max-Q).
-        // B4 actuator-lag lead compensation. RESTORED true (2026-09-01): the data showed it was STABILIZING the
-        // loop (leading the gimbal to cancel its response lag), not a conflicting loop — removing it GREW the
-        // attitude limit cycle (rate-pitch std 0.28→0.38). Keep it on.
-        [Tunable] public static bool UseLagComp = true;
+        // B4 actuator-lag lead compensation. OFF (2026-09-01, RESEARCH, not a guess): read MechJeb's actual
+        // BetterController.cs + PIDLoop2.cs in full — our PID is already IDENTICAL to MechJeb's (PosKp 2.03,
+        // VelKp 7.98, P-only velocity, SmoothIn/Out=1.0=pass-through). MechJeb's controller has NO lag comp; this
+        // was OUR non-MechJeb addition, and it over-drives the gimbal command to the ±1 rail every tick — that
+        // railed command IS the visible steering jitter. Removing it = the faithful MechJeb loop, no extra loop.
+        [Tunable] public static bool UseLagComp = false;
         // Campaign 6: no longer a GATE — the loop now ALWAYS takes max(stock-reported, geometric) RCS torque
         // (the stock report flickers ~2 N·m 91% of RCS-on ticks, above any sane gate, and saturated the Dracos).
         // Retained as the DIAGNOSTIC threshold: when the geometric estimate exceeds the report by more than this,

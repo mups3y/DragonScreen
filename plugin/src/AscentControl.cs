@@ -52,6 +52,11 @@ namespace DragonScreen
         static double s2ThrustUpUT = -1.0;   // UT the MVac thrust first crossed the sustained threshold
         static bool s2Lighting;              // ignition cycle: false = settle@throttle-0, true = light@throttle-up
         static double s2PhaseUT = -1.0;      // UT the current settle/light phase began
+        static double s2IgniteUT = -1.0;     // ⭐ UT the MVac actually lit (thrust up) — anchors the sep hold-lock unlock
+        // ⭐ SEPARATION HOLD-LOCK (owner 2026-09-01): from MECO the active stack LOCKS its current attitude (no
+        // slew) through decouple + S2 ignition, and UNLOCKS S2UnlockDelayS after the MVac lights — so the S2 does
+        // not whip toward the booster/fairing at separation. Then normal UPFG guidance resumes.
+        [Tunable] public static double S2UnlockDelayS = 2.0;
         // RealFuels throttle-0-reset ignition cycle (see the S2 block):
         [Tunable] public static double S2SettleS = 2.0;       // throttle-0 settle/reset before each light attempt
         [Tunable] public static double S2LightWindowS = 2.0;  // hold throttle up this long before resetting to retry
@@ -130,7 +135,7 @@ namespace DragonScreen
         public static void Reset()
         {
             phase = AscentPhase.Idle; upfg = new UpfgState(); s2Ignited = false;
-            s2ThrustConfirmed = false; s2ThrustUpUT = -1.0; s2Lighting = false; s2PhaseUT = -1.0;
+            s2ThrustConfirmed = false; s2ThrustUpUT = -1.0; s2Lighting = false; s2PhaseUT = -1.0; s2IgniteUT = -1.0;
             coastStartUT = -1; dragonSeparated = false; secoUT = -1.0; Throttle = 0;
             mecoUT = -1.0; boosterSeparated = false;
             ascentLoss.Reset();
@@ -275,9 +280,9 @@ namespace DragonScreen
                     if (now - s2ThrustUpUT >= 0.5)              // ...held ≥0.5 s = truly running
                     {
                         s2ThrustConfirmed = true;
+                        if (s2IgniteUT < 0.0) s2IgniteUT = s2ThrustUpUT;   // ⭐ latch the ignition UT for the sep hold-lock unlock (thrust-up was ~0.5 s ago)
                         FlightDriver.ReleaseTranslation();
-                        if (Steering.UseGimbalLoop)              // ⭐ KSP-SAS mode (UseGimbalLoop=false): keep RCS ON so SAS holds S2 roll (gimbal has none)
-                            Actuator.DisableRcs(v);             // gimbal steers the S2 — stop the non-stop Draco firing
+                        Actuator.EnableRcs(v);                  // ⭐ keep RCS ON through S2 (owner 2026-09-01): the single MVac gimbal has NO roll authority, so the loop needs RCS to hold roll
                     }
                 }
                 else
@@ -312,7 +317,16 @@ namespace DragonScreen
             bool haveTargetPlane = TargetPlaneNormal(v, out planeNormal);
             Vector3d up = Steering.Up(v);
             Vector3d aim;
-            if (!s2Lit)
+            // ⭐ SEPARATION HOLD-LOCK (owner 2026-09-01): from MECO, LOCK the current attitude (aim = nose) — the
+            // stack does not slew through decouple + S2 ignition — and UNLOCK S2UnlockDelayS (2 s) after the MVac
+            // lights, then resume UPFG. Stops the S2 whipping toward the booster/fairing at separation.
+            bool sepHold = mecoUT > 0.0 && !(s2IgniteUT > 0.0 && Planetarium.GetUniversalTime() - s2IgniteUT >= S2UnlockDelayS);
+            if (sepHold)
+            {
+                aim = v.ReferenceTransform.up;      // hold current nose direction → ~zero pitch/yaw error → no slew
+                lastQAlphaCapDeg = double.NaN;
+            }
+            else if (!s2Lit)
             {
                 lastPitchCmd = ac.PitchDeg;
                 // ⛔ LAUNCH AZIMUTH FROM INCLINATION (flight 173320): the instantaneous "fly in the target plane"
@@ -403,20 +417,9 @@ namespace DragonScreen
             // (hysteresis) — the gimbal can't roll, so without this roll runs away to 54 dps (flight 194334). The
             // ullage/ignition block owns RCS while lighting (!s2ThrustConfirmed); this takes over for the SUSTAINED
             // burn. Pitch/yaw stay on the gimbal; the brief RCS windows mostly null roll (pitch/yaw errors are small).
-            if (s2Lit && s2ThrustConfirmed && Steering.UseGimbalLoop)   // ⭐ KSP-SAS mode (UseGimbalLoop=false): SAS holds roll on continuous RCS — skip our hysteresis toggling
-            {
-                double rateDps = v.angularVelocity.magnitude * (180.0 / Math.PI);
-                if (rateDps > S2RollTrimOnDps && !lastRcsOn)
-                {
-                    Actuator.EnableRcs(v);
-                    Debug.Log("[DragonScreen] S2 roll-trim: body rate " + rateDps.ToString("F1")
-                              + " dps — RCS armed to hold roll (gimbal has none)");
-                }
-                else if (rateDps < S2RollTrimOffDps && lastRcsOn)
-                {
-                    Actuator.DisableRcs(v);
-                }
-            }
+            // ⭐ S2 roll-trim hysteresis REMOVED (owner 2026-09-01): RCS is now ON continuously through S2 (at
+            // thrust-confirmed, above), so the attitude loop holds roll DIRECTLY on the Dracos every tick — no
+            // on/off toggling. The old S2RollTrimOnDps/OffDps hysteresis let roll wind up to ~6 dps between pulses.
 
             // ⭐ B9: accumulate the ascent Δv-loss decomposition (steering/gravity/drag) while powered — the tuner
             // objective + the zero-AoA diagnostic (steer_loss should stay ~0; a growing one = the nose is off
