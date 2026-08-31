@@ -58,7 +58,7 @@ public static class PageTest
         Chrome();
         Velocity();
         Propellant();
-        DockingBall();
+        DockingLayout();
         Capacity();
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
@@ -956,97 +956,53 @@ public static class PageTest
         Check("FLIGHT prints the propellant source on its own line", tail, "");
     }
 
-    // ------------------------------------------------------------------ the attitude ball
+    // ------------------------------------------------------------------ the docking reticle HUD
 
     /// <summary>
-    /// The navball has to sit CONCENTRIC with the HUD and clear of the ALIGN sweep.
-    ///
-    /// First version sized it at 0.52 of the ring height against an ALIGN ring at 0.30 radius, which
-    /// left about nine pixels. In game the two touched and it read as misplaced rather than tight.
-    /// The diameter is now derived from the ring it must fit inside, and this asserts the CLEARANCE
-    /// rather than the constant - so the two cannot be edited apart.
+    /// DOCKING is the real-HUD monitoring view (SCREEN_EVIDENCE_MATRIX.md): a centred reticle in thin
+    /// rings over the live docking camera, rotation corrections left, translation/alignment right,
+    /// RANGE bottom-left, RATE bottom-right — and, above all, NOT a navball. Two navball layouts were
+    /// rejected by the owner on 2026-08-31; the one invariant that must never regress is that no
+    /// attitude sphere is drawn on this page.
     /// </summary>
-    static void DockingBall()
+    static void DockingLayout()
     {
-        foreach (int h in new int[] { H1, H2 })
-        {
-            float body = DockingPage.BodyHeight(h);
-            float d = DockingPage.RingDiameter(h);
-            float r = d * 0.5f;
-
-            // ---- THE FOUR CORNERS SIT ON THE SOURCE'S SHARED INSET ----
-            // Second.vue: left/right 14.59%, top 3%, bottom 8%. Asserting the INSET rather than the
-            // pixel means the layout stays quotable against the reference.
-            float ulx, uly, urx, ury, llx, lly, lrx, lry;
-            DockingPage.CornerCentre(0, W, h, out ulx, out uly);
-            DockingPage.CornerCentre(1, W, h, out urx, out ury);
-            DockingPage.CornerCentre(2, W, h, out llx, out lly);
-            DockingPage.CornerCentre(3, W, h, out lrx, out lry);
-
-            Eq("upper-left is at 14.59% (h" + h + ")", ulx - r, W * 0.1459f, 0.01);
-            Eq("upper-right is at 14.59% (h" + h + ")", W - (urx + r), W * 0.1459f, 0.01);
-            Eq("upper row is at 3% (h" + h + ")", uly - r, body * 0.03f, 0.01);
-            Eq("lower row is at 8% (h" + h + ")", body - (lly + r), body * 0.08f, 0.01);
-            Eq("the two upper corners share a row", uly, ury, 0.01);
-            Eq("the two lower corners share a row", lly, lry, 0.01);
-            Eq("the two left corners share a column", ulx, llx, 0.01);
-
-            // Nothing may sit under the chrome bar, and nothing may leave the page.
-            Check("lower corners clear the chrome bar (h" + h + ")",
-                  lly + r <= ChromeBar.TopY(h), "bottom " + (lly + r));
-            Check("upper corners are on the page (h" + h + ")", uly - r >= 0f, "top " + (uly - r));
-            Check("right corners are on the page (h" + h + ")", lrx + r <= W, "right " + (lrx + r));
-
-            // The corner rings must not collide with the central HUD ring, or the page reads as a
-            // pile rather than a layout.
-            float hudR = DockingPage.HudSize(W, h) * 0.25f;   // #hud-ring is HALF the darken size
-            float cx = W * 0.5f, cy = body * 0.5f;
-            for (int i = 0; i < 4; i++)
-            {
-                float qx, qy;
-                DockingPage.CornerCentre(i, W, h, out qx, out qy);
-                double dist = Math.Sqrt((qx - cx) * (qx - cx) + (qy - cy) * (qy - cy));
-                Check("corner " + i + " clears the HUD ring (h" + h + ")", dist > hudR + r,
-                      "distance " + dist.ToString("F1") + " needs > " + (hudR + r).ToString("F1"));
-            }
-        }
-
-        // ---- THE ATTITUDE BALL IS IN THE LOWER-LEFT RING, NOT THE MIDDLE ----
-        // This is the correction the audit forced. The old page put it dead centre inside the HUD
-        // rings; Second.vue puts it at `#navball { left: 14.59%; bottom: 8% }`, in its own corner.
         PageState s = Healthy();
         s.HasTarget = true; s.TargetName = "STATION";
-        s.RangeText = "100 m"; s.RateText = "-0.2 m/s";
+        s.RangeText = "100 m"; s.RateText = "-0.2 m/s"; s.Closing = true;
+        s.RollText = "1.0"; s.PitchText = "0.5"; s.YawText = "0.3";
+        s.RollRateText = "0.0 deg/s"; s.PitchRateText = "0.0 deg/s"; s.YawRateText = "0.0 deg/s";
+        s.OffXText = "2.0 m"; s.OffYText = "0.1 m"; s.OffZText = "0.0 m"; s.AlignText = "1.2 deg";
+        s.Align01 = 0.05;
+
         DisplayList dl = new DisplayList(Pages.Commands + ChromeBar.Commands + 4);
         Pages.Build(dl, 3, W, H1, s, MapProjection.Default(), 1);
 
-        float wantX, wantY;
-        DockingPage.CornerCentre(2, W, H1, out wantX, out wantY);
-        bool found = false;
+        float cx, cy;
+        DockingPage.Centre(W, H1, out cx, out cy);
+        float R = DockingPage.OuterRadius(H1);
+
+        // ---- THE HUD IS NOT A NAVBALL. This is the whole reason for the 2026-08-31 rebuild. ----
+        bool navball = false;
+        for (int i = 0; i < dl.Count; i++)
+            if (dl.At(i).Kind == DrawKind.Image && dl.At(i).Image == ImageId.NavBallLive) navball = true;
+        Check("DOCKING draws no navball", !navball, "a NavBallLive image was emitted");
+
+        // ---- THE LIVE VIEW IS THE FULL-BLEED BACKGROUND, DRAWN BEFORE THE RETICLE ----
+        int camAt = -1, ringAt = -1;
         for (int i = 0; i < dl.Count; i++)
         {
             DrawCmd c = dl.At(i);
-            if (c.Kind != DrawKind.Image || c.Image != ImageId.NavBallLive) continue;
-            found = true;
-            Eq("ball sits in the lower-left ring (x)", c.A + c.C * 0.5f, wantX, 0.01);
-            Eq("ball sits in the lower-left ring (y)", c.B + c.D * 0.5f, wantY, 0.01);
-            Eq("ball is square", c.C, c.D, 0.01);
-            Check("ball fits inside its ring", c.C <= DockingPage.RingDiameter(H1),
-                  "ball " + c.C + " ring " + DockingPage.RingDiameter(H1));
-        }
-        Check("DOCKING draws an attitude ball", found, "no NavBallLive command emitted");
-
-        // The live view is the BACKGROUND: full bleed, behind everything, and drawn before the HUD.
-        int camAt = -1, hudAt = -1;
-        for (int i = 0; i < dl.Count; i++)
-        {
-            if (dl.At(i).Kind != DrawKind.Image) continue;
-            if (dl.At(i).Image == ImageId.DockingCamLive && camAt < 0) camAt = i;
-            if (dl.At(i).Image == ImageId.HudRing && hudAt < 0) hudAt = i;
+            if (c.Kind == DrawKind.Image && c.Image == ImageId.DockingCamLive && camAt < 0) camAt = i;
+            // the outer reticle ring: a full-circle ArcBand of outer radius R, centred on the HUD.
+            if (c.Kind == DrawKind.ArcBand && ringAt < 0
+                && Math.Abs(c.A - cx) < 0.5f && Math.Abs(c.B - cy) < 0.5f
+                && Math.Abs(c.D - R) < 0.5f) ringAt = i;
         }
         Check("the docking view is drawn", camAt >= 0, "no DockingCamLive command");
-        Check("the view is behind the HUD", camAt >= 0 && hudAt > camAt,
-              "cam at " + camAt + ", hud at " + hudAt);
+        Check("a centred reticle ring is drawn", ringAt >= 0, "no outer ring at the HUD centre");
+        Check("the view is behind the reticle", camAt >= 0 && ringAt > camAt,
+              "cam at " + camAt + ", ring at " + ringAt);
         if (camAt >= 0)
         {
             DrawCmd c = dl.At(camAt);
@@ -1055,22 +1011,40 @@ public static class PageTest
             Eq("the view covers the body", c.D, DockingPage.BodyHeight(H1), 0.01);
         }
 
-        // ---- NO TARGET STILL SHOWS THE CONTROL RINGS ----
-        // Deliberate, and a change from the old page: attitude and RCS demand are useful whether or
-        // not anything is selected. Only the target-relative half is withheld.
+        // ---- THE MONITORING READOUTS ARE PRESENT: RANGE, RATE, and the rotation corrections ----
+        bool range = false, rate = false, roll = false, pitch = false, yaw = false;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind != DrawKind.Text) continue;
+            if (c.Str == "RANGE") range = true;
+            if (c.Str == "RATE") rate = true;
+            if (c.Str == "ROLL") roll = true;
+            if (c.Str == "PITCH") pitch = true;
+            if (c.Str == "YAW") yaw = true;
+        }
+        Check("DOCKING shows RANGE", range, "");
+        Check("DOCKING shows RATE", rate, "");
+        Check("DOCKING shows the rotation corrections", roll && pitch && yaw,
+              "roll=" + roll + " pitch=" + pitch + " yaw=" + yaw);
+
+        // ---- NO TARGET: the reticle stays, the target-relative readouts are withheld ----
         PageState none = Healthy();
         none.HasTarget = false;
         dl.Clear();
         Pages.Build(dl, 3, W, H1, none, MapProjection.Default(), 1);
-        bool ball = false, range = false;
+        bool ring2 = false, navball2 = false, range2 = false;
         for (int i = 0; i < dl.Count; i++)
         {
             DrawCmd c = dl.At(i);
-            if (c.Kind == DrawKind.Image && c.Image == ImageId.NavBallLive) ball = true;
-            if (c.Kind == DrawKind.Text && c.Str == "RANGE") range = true;
+            if (c.Kind == DrawKind.ArcBand && Math.Abs(c.A - cx) < 0.5f && Math.Abs(c.B - cy) < 0.5f
+                && Math.Abs(c.D - R) < 0.5f) ring2 = true;
+            if (c.Kind == DrawKind.Image && c.Image == ImageId.NavBallLive) navball2 = true;
+            if (c.Kind == DrawKind.Text && c.Str == "RANGE") range2 = true;
         }
-        Check("no target keeps the attitude ball", ball, "");
-        Check("no target withholds RANGE", !range, "");
+        Check("no target keeps the reticle", ring2, "");
+        Check("no target draws no navball", !navball2, "");
+        Check("no target withholds RANGE", !range2, "");
     }
 
     // ------------------------------------------------------------------ display list capacity

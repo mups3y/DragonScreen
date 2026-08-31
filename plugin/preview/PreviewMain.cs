@@ -81,7 +81,9 @@ public static class PreviewMain
         ps.RangeText = "202.6 m"; ps.RateText = "-0.25 m/s"; ps.Closing = true;
         ps.OffXText = "22.7 m"; ps.OffYText = "0.1 m"; ps.OffZText = "0.0 m";
         ps.PitchText = "0.1 deg"; ps.YawText = "0.1 deg"; ps.RollText = "15.0 deg";
+        ps.PitchRateText = "0.0 deg/s"; ps.YawRateText = "0.1 deg/s"; ps.RollRateText = "0.0 deg/s";
         ps.Align01 = 0.06; ps.AlignText = "5.4 deg";
+        ps.Mode = ControlMode.Auto; ps.ModeText = "AUTO";
         // ---- THE SIMULATED SYSTEMS ----
         // Fresh() then partly used, so MECH shows consumables that have MOVED and a bus with one
         // string off. A default-constructed SystemsState renders 0% oxygen and three healthy buses,
