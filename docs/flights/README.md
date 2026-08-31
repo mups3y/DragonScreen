@@ -1,6 +1,6 @@
 # Flight recordings — how to read them
 
-Archived **FlightRecorder** CSVs kept as evidence for `docs/FLIGHT_VERIFICATION.md`. Recorder CSVs are normally git‑ignored (`.gitignore`: `*.csv`, `DragonScreen_capture/`); these four are **force‑added** because they are the evidence behind the S2 ascent root cause and the screen (DOCKUI) verification. The recorder writes to `<KSP>/DragonScreen_capture/` in flight; these are copies.
+Archived **FlightRecorder** CSVs (and one **geometry dump**) kept as evidence for `docs/FLIGHT_VERIFICATION.md`. These files are normally git‑ignored (`.gitignore`: `*.csv`, `DragonScreen_capture/`); they are **force‑added** because they are the evidence behind the S2 ascent root cause, the deorbit/units‑bug resolution, and the screen (DOCKUI) verification. The recorder + `GeometryDump` write to `<KSP>/DragonScreen_capture/` in flight; these are copies.
 
 ## What's here (2026‑08‑31 test session)
 
@@ -8,10 +8,15 @@ Archived **FlightRecorder** CSVs kept as evidence for `docs/FLIGHT_VERIFICATION.
 |---|---|---|---|---|
 | `Crew-2_20260831_094132.csv` | **DS‑ASC‑001** | Dragon (S2+Dragon, active) | 1763 | liftoff → MECO → S2 tumble → revert (MET 0→181 s) |
 | `Crew-2_Probe_20260831_094424.csv` | DS‑ASC‑001 | Booster (non‑active recovery) | 158 | separation → entry‑burn prep |
-| `Crew-2_20260831_102133.csv` | **DS‑ASC‑002** | Dragon (S2+Dragon, active) | 1688 | same profile; **the flight the root‑cause regression was run on** |
+| `Crew-2_20260831_102133.csv` | **DS‑ASC‑002** | Dragon (S2+Dragon, active) | 1688 | same profile; **the flight the S2 root‑cause regression was run on** |
 | `Crew-2_Probe_20260831_102425.csv` | DS‑ASC‑002 | Booster (non‑active recovery) | 88 | separation → entry‑burn prep |
+| `Crew-2_20260831_141924.csv` | **DS‑DEO‑001** | Dragon capsule alone (6.8 t, no gimbal) | 833 | autopilot deorbit; capsule spins under the ×1000 over‑read — **the flight the capsule‑authority regression was run on** (n=832) |
+| `Crew-2_deorbit_geometry_dump_manual_2500s.csv` | DS‑DEO‑001 | Dragon capsule alone | 5 parts / 16 thrusters | **geometry dump** (different schema, see below): stock `GetPotentialTorque` vs the geometric, for the deorbit config |
 
-Both flights: crewed Falcon 9 + Crew Dragon, RSS/RO, Cape, AUTO‑BOOSTER‑RECOVERY armed. Both **fail identically** at S2 (upper‑stage attitude tumble, no orbit) and were reverted. The filename time = when the recorder opened the stream (`Crew-2_HHMMSS`; `_Probe_` = the non‑active booster's parallel stream).
+Ascent flights (`DS‑ASC`): crewed Falcon 9 + Crew Dragon, RSS/RO, Cape, AUTO‑BOOSTER‑RECOVERY armed; both **fail identically** at S2 (upper‑stage attitude tumble, no orbit) and were reverted. `DS‑DEO‑001`: the Dragon capsule alone on RCS (engine off) — it **spins under autopilot** from the same ×1000 authority over‑read. The filename time = when the recorder opened the stream (`Crew-2_HHMMSS`; `_Probe_` = the non‑active booster's parallel stream).
+
+## Geometry dump format (`*_geometry_dump_*.csv`) — NOT a recorder CSV
+Written by the read‑only `GeometryDump` instrument (`plugin/src/GeometryDump.cs`, Alt+G in flight). Schema is `row,part_idx,part_name,stage,mass_t,ax,ay,az,bx,by,bz,power_kn,eP,eY,eR,useZ` where the `row` tag selects the meaning: `COM` (a=vessel CoM world), `REF_RIGHT/UP/FORWARD` (a=control‑frame basis in world), `PART` (a=part world pos, `mass_t`), `RCSMOD` (a=stock `GetPotentialTorque` +, b=−; `power_kn`; `mass_t`=thruster count), `THRUSTER` (a=world pos, b=world thrust dir, `power_kn`). Everything needed to recompute nominal `Σr×F` and compare to stock. **Units note:** `RCSMOD` stock torque is kN·m (KSP); the old `ControlTorque` geometric multiplied `power_kn` by 1000 → N·m — that 1000× is the bug fixed in `AttitudeController.cs`.
 
 ## Format
 - **First row is the header = the column schema.** The schema is the single source of truth, defined in `plugin/src/pure/FlightRecorder.cs` (`Schema[]`) — read that file for the authoritative, commented list. Columns are added freely over time, so **look up columns by name, never by position.**
@@ -63,6 +68,42 @@ print("real control torque K =", round(-K), " disturbance D =", round(D))
 # The loop over-reads authority ~137× → commands rates the stage can't achieve → divergent limit cycle.
 ```
 The headless proof of this (a faithful port of `pure/AttitudeLoop.Axis` fed these numbers) lives in `plugin/test/AttitudeLoopTest.cs` (`build.py test`): the 137× over‑read limit‑cycles; the correct estimate converges.
+
+## Reproduce the deorbit / units‑bug resolution
+```python
+import csv, math, statistics
+def nf(x):
+    try: return float(x)
+    except: return None
+
+# (3) The capsule's REAL delivered RCS authority (Dragon alone, engine off) — same regression as S2:
+rows = list(csv.DictReader(open("Crew-2_20260831_141924.csv")))
+seg = [r for r in rows if r.get("rcs_on")=="1" and (nf(r.get("mass_kg")) or 1e9)<12000
+       and nf(r.get("act_pitch")) is not None]
+xs, ys = [], []
+for a, b in zip(seg, seg[1:]):
+    dt = (nf(b["met_s"]) or 0) - (nf(a["met_s"]) or 0)
+    if not dt or dt<=0 or dt>0.5: continue
+    alpha = math.radians(nf(b["rate_pitch_dps"]) - nf(a["rate_pitch_dps"])) / dt
+    xs.append(nf(b["act_pitch"])); ys.append(nf(b["moi_pitch"]) * alpha)
+n=len(xs); sx=sum(xs); sy=sum(ys); sxx=sum(x*x for x in xs); sxy=sum(x*y for x,y in zip(xs,ys))
+K = (n*sxy - sx*sy)/(n*sxx - sx*sx)
+print("capsule delivered pitch authority K =", round(-K), " kN.m  (n=%d)"%n)   # -> ~7
+
+# (4) The bug: the loop's own maxAlpha on the capsule (ctrl_tq / moi, both from the CSV):
+print("capsule maxAlpha as-flown =", round(statistics.median([nf(r["ctrl_tq_pitch"])/nf(r["moi_pitch"])
+      for r in seg if nf(r.get("ctrl_tq_pitch")) and nf(r.get("moi_pitch"))])), "rad/s^2  (real ~0.5)")
+```
+```python
+# (5) The geometry dump shows stock vs the (N.m-bugged) geometric for the SAME config:
+rows = list(csv.DictReader(open("Crew-2_deorbit_geometry_dump_manual_2500s.csv")))
+mods = [r for r in rows if r["row"]=="RCSMOD"]
+stock = sum(max(abs(float(r["ax"])), abs(float(r["bx"]))) for r in mods)   # stock pitch, kN.m
+print("stock GetPotentialTorque pitch =", round(stock), "kN.m")            # -> ~2
+# geometric (Sr x F) in N.m = ~12870; in correct kN.m = ~12.9. Delivered (above) = 7.
+# stock 2 (low), bugged geometric 12870 (1000x high), fixed geometric 12.9 (~ real 7).
+```
+The as‑flown `ctrl_tq_pitch` here is **~12,870** (the N·m geometric); after the fix it reads **~12.9** in this config and **~526** in S2 — the recorder tell that the units fix is live.
 
 ## Related
 - `docs/FLIGHT_VERIFICATION.md` — the flight log + the full root‑cause evidence chain and the proposed fix.
