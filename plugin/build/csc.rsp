@@ -17,8 +17,10 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Alarms.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\ArcGeometry.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Ascent.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\AscentLoss.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\AttitudeHud.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\AttitudeLoop.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Authority.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\AuthorityManager.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\BoosterDescent.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\BoosterDrag.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\CabinEnvironment.cs
@@ -41,6 +43,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\DockCapture.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\DockControl.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\DockCorridor.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\DockingPage.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\DockingPageCentral.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\DragonPalette.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Entry.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\FaultMonitor.cs
@@ -70,6 +73,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\MissionProfile.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\ModeManager.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\NavFilter.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\NavPage.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\NumericReadout.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Orbital.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\PageAction.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\PageSelection.cs
@@ -93,7 +97,9 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\ScreenLayout.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\SelfCal.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\SettingsPage.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\StageStats.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\StatusIndicator.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\StepList.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\TargetReticle.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Terminal.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\ThrustBalance.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Trajectory.cs
@@ -110,9 +116,11 @@ C:\Users\User\Desktop\DragonScreen\plugin\test\ActuatorLagTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\AeroTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\AscentTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\AttitudeLoopTest.cs
+C:\Users\User\Desktop\DragonScreen\plugin\test\AuthorityManagerTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\AuthorityTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\BoosterTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\CoastEtaTest.cs
+C:\Users\User\Desktop\DragonScreen\plugin\test\ComponentsTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\ConicTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\ControlTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\CourseCorrectTest.cs
@@ -121,6 +129,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\test\DispersionTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\DockCaptureTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\DockCorridorTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\DockingTest.cs
+C:\Users\User\Desktop\DragonScreen\plugin\test\FdirAlertTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\FdirFeedsTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\FdirTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\FlightRecorderTest.cs
@@ -132,6 +141,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\test\LaunchTunerTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\LaunchWindowTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\LayoutSweepTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\LayoutTest.cs
+C:\Users\User\Desktop\DragonScreen\plugin\test\MissionPhaseTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\MissionProfileTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\NavFilterTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\OrbitalTest.cs

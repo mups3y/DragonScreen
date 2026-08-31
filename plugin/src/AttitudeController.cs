@@ -197,19 +197,32 @@ namespace DragonScreen
             // the gimbal. Gimbal/control-surface torque always counts (it needs no master). This makes coast
             // (engines off, RCS off) correctly read zero authority, so the loop commands nothing.
             //
-            // ⭐ Campaign 6 (F-RCS-AUTHORITY): the RCS authority is now MAX(stock report, geometric r×F), ALWAYS —
-            // no longer gated on "reported ~0". The stock ModuleRCS.GetPotentialTorque is unreliable on this
-            // vehicle: it FLICKERS ~2 N·m for 91% of RCS-on ticks (median 1.8, but a real ~12-20 kN·m — flight
-            // 003648). That ~2 N·m sat ABOVE the old RcsTorqueFloorNm=1.0 gate, so the geometric fallback almost
-            // never fired, the loop saw ~2 N·m of authority, and actuation=−MOI·α/authority SATURATED the Dracos
-            // (|act_pitch|=1 for 51% of ticks = bang-bang chatter + wasted MMH/NTO = a big part of the C2a waste).
-            // Non-RCS providers (gimbal, fins) keep the trustworthy stock report. Both sums are built in ONE
-            // allocation-free pass (no Modules.GetModules — that allocates a List every tick). The Compute()
-            // SmoothTorque EMA still tames the residual report↔geometric jitter (rises smoothed, drop-to-0 instant).
+            // RCS authority per axis = MAX(stock GetPotentialTorque, geometric Σr×F). Total = non-RCS + RCS.
+            // Both stock and geometric are in kN·m (KSP force unit), consistent with the gimbal report and with
+            // MOI (t·m²), so maxAlpha = controlTorque/MOI comes out in rad/s².
+            //
+            // ⚠ UNITS BUG FIXED 2026-08-31 (docs/FLIGHT_VERIFICATION.md, DS-ASC-001/002 + the deorbit runs):
+            // the geometric sum used to compute per-thruster power as thrusterPower*1000 (N), making the whole
+            // geometric estimate N·m — 1000× the kN·m that stock, the gimbal, and the MOI divisor are in. Since
+            // MAX() then compared a kN·m stock value against an N·m geometric value, the geometric ALWAYS won and
+            // fed maxAlpha a number 1000× too large: S2 maxAlpha read 37.7 rad/s² (real 0.27), capsule 919 rad/s²
+            // (real 0.5) → the loop commanded rates the vehicle can't produce → the S2 ascent tumble AND the
+            // capsule-spins-under-autopilot deorbit failure. Flight regression (net τ = MOI·Δω vs actuation):
+            //     S2  gimbal stock gx = 464 ≈ DELIVERED 445 kN·m (stock gimbal is ACCURATE); RCS delivered ≈ 0
+            //     capsule (no gimbal): stock RCS 2, geometric 12.9, DELIVERED 7 kN·m
+            // So the FIX is the units (power in kN below), NOT dropping the geometric: Campaign-6's MAX(stock,
+            // geometric) is kept because stock under-reads the capsule RCS (2 vs a real 7) and the geometric floors
+            // it closer. A closed-loop sim of pure/AttitudeLoop.Axis converges in both configs with the corrected
+            // estimate and diverges with the old one (plugin/test/AttitudeLoopTest.cs). KNOWN RESIDUAL (secondary,
+            // does NOT destabilise — deferred): the geometric still over-counts ACHIEVABLE torque for asymmetric
+            // layouts (S2 RCS: geometric 62 vs delivered ~0, harmless because the 464 gimbal dominates) — a proper
+            // achievability cap is future work, tracked in FLIGHT_VERIFICATION.
+            // Rule note (V4): flight-proven ControlTorque changed → ascent/abort/booster/deorbit proofs must be
+            // re-flown. Not a phase rule, not a slew clamp; roll-trim + tuning untouched.
             bool rcsOn = v.ActionGroups[KSPActionGroup.RCS];
-            double gx = 0.0, gy = 0.0, gz = 0.0;               // non-RCS (gimbal/fins) reported, per control axis
-            double rrx = 0.0, rry = 0.0, rrz = 0.0;            // RCS reported (stock GetPotentialTorque), per axis
-            Vector3 posT = Vector3.zero, negT = Vector3.zero;  // RCS GEOMETRIC ± torque sums (control frame)
+            double gx = 0.0, gy = 0.0, gz = 0.0;               // non-RCS (gimbal/fins) reported (kN·m), per control axis
+            double rrx = 0.0, rry = 0.0, rrz = 0.0;            // RCS reported (stock GetPotentialTorque, kN·m), per axis
+            Vector3 posT = Vector3.zero, negT = Vector3.zero;  // RCS GEOMETRIC ± torque sums (kN·m, control frame)
             Vector3d com = v.CoM;
             Transform ctf = v.ReferenceTransform;
 
@@ -235,11 +248,12 @@ namespace DragonScreen
                         // (b) PER-AXIS r×F geometric estimate (MechJeb VesselState.RCSTorqueAvailable, ported
                         //     faithfully): each thruster's torque = (pos−CoM) × (thrustDir · power), into the
                         //     control frame, accumulated as Max(Σ+, Σ−) per axis — the same convention as the
-                        //     report path. (The OLD summed thrusterPower×|arm| over ALL thrusters onto EVERY axis
-                        //     → ~9× over-count → the deorbit oscillation; the per-axis form is the correct ~12-20 kN·m.)
+                        //     report path. power is in kN and arm in m → torque in kN·m, matching stock + the
+                        //     gimbal + the MOI divisor. (Was thrusterPower*1000 = N → an N·m estimate 1000× too
+                        //     large; that units bug drove the S2 + deorbit tumbles — see the header note above.)
                         if (ctf != null && rcs.rcsEnabled && rcs.thrusterTransforms != null)
                         {
-                            double power = rcs.thrusterPower * 1000.0 * Math.Max(rcs.thrustPercentage * 0.01, 0.0); // N
+                            double power = rcs.thrusterPower * Math.Max(rcs.thrustPercentage * 0.01, 0.0); // kN
                             if (power > 0.0)
                                 for (int t = 0; t < rcs.thrusterTransforms.Count; t++)
                                 {
@@ -268,8 +282,9 @@ namespace DragonScreen
                 }
             }
 
-            // RCS authority per axis = MAX(stock report, geometric). The geometric floors it at the true ~12-20 kN·m
-            // when the report flickers low; the report wins only when it is genuinely higher. Total = non-RCS + RCS.
+            // RCS authority per axis = MAX(stock report, geometric), both now in kN·m (see the header note).
+            // Stock wins for the gimbal-backed providers and where it is genuinely higher; the geometric floors
+            // the RCS where stock under-reads it (capsule: stock 2 vs a delivered ~7 kN·m). Total = non-RCS + RCS.
             double rcsx = 0.0, rcsy = 0.0, rcsz = 0.0;
             if (rcsOn)
             {
@@ -278,10 +293,10 @@ namespace DragonScreen
                 GeoTorquePitchNm = ex; GeoTorqueRollNm = ey; GeoTorqueYawNm = ez;   // diagnostic (x=pitch, y=roll, z=yaw)
                 if (!rcsFallbackLogged && ex + ey + ez > 0.0 && ex > rrx + AttitudePilot.RcsTorqueFloorNm)
                 {
-                    Debug.LogWarning("[DragonScreen] AttitudeController: stock RCS GetPotentialTorque under-reads ("
-                        + rrx.ToString("F0") + "/" + rry.ToString("F0") + "/" + rrz.ToString("F0")
-                        + " N·m) — using the per-axis geometric RCS torque (" + ex.ToString("F0") + "/"
-                        + ey.ToString("F0") + "/" + ez.ToString("F0") + " N·m pitch/roll/yaw).");
+                    Debug.Log("[DragonScreen] AttitudeController: stock RCS GetPotentialTorque ("
+                        + rrx.ToString("F1") + "/" + rry.ToString("F1") + "/" + rrz.ToString("F1")
+                        + " kN·m) floored by geometric (" + ex.ToString("F1") + "/"
+                        + ey.ToString("F1") + "/" + ez.ToString("F1") + " kN·m pitch/roll/yaw).");
                     rcsFallbackLogged = true;
                 }
             }

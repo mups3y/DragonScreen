@@ -60,21 +60,28 @@ public static class AttitudeLoopTest
         Check("5° slew converges to <0.5°", ConvergesFrom(5.0 * Math.PI / 180.0), "");
         Check("120° flip converges to <0.5°", ConvergesFrom(120.0 * Math.PI / 180.0), "");
 
-        // ============ S2 UPPER-STAGE DIVERGENCE — headless root-cause proof (flights DS-ASC-001/002) ============
-        // Plant taken from the recorded S2+Dragon (DragonScreen_capture/Crew-2_20260831_102133.csv):
-        //   MOI_pitch ≈ 1650 ; controlTorque ≈ 62000. The tell: at COAST (engine OFF → gimbal torque 0) the
-        //   recorder still shows ctrl_tq ≈ rcs_geo ≈ 62000 — that 62 kN·m is the RCS GEOMETRIC estimate ALONE,
-        //   ~5× the entire 9-Merlin S1 gimbal (11846), which is physically impossible for the Dracos (they
-        //   couldn't even hold roll → 54 dps, flight 194334). The loop scales EVERYTHING off
-        //   maxAlpha = controlTorque/MOI, so an over-read torque commands rates the stage cannot achieve.
+        // ============ S2 + DEORBIT DIVERGENCE — headless root-cause proof (flights DS-ASC-001/002 + deorbit) ============
+        // ROOT CAUSE = a ×1000 UNITS BUG in the RCS geometric estimate (ControlTorque computed thruster power as
+        // thrusterPower*1000 = N, so the geometric came out in N·m while stock, the gimbal, and MOI are kN·m/t·m²;
+        // MAX(stock,geometric) then always picked the 1000×-inflated geometric). Plant from the recorded S2+Dragon
+        // (DragonScreen_capture/Crew-2_20260831_102133.csv): MOI_pitch ≈ 1650 t·m²; the loop's ctrl_tq ≈ 62000.
+        //   • Decomposed: ctrl_tq − rcs_geo = the gimbal stock report gx ≈ 464 kN·m, which MATCHES the delivered
+        //     445 kN·m (regression below) — the stock GIMBAL is accurate. The remaining 62000 is the N·m-bugged
+        //     RCS geometric; in correct units it is 62 kN·m (real S2 RCS ≈ 0 — the gimbal carries pitch/yaw).
+        //   • The loop scales EVERYTHING off maxAlpha = controlTorque/MOI, so the 1000×-inflated 62000 made
+        //     maxAlpha read 37.6 rad/s² (real 0.27) → commanded rates the stage can't achieve → tumble.
         const double MoiS1 = 75508.0, CtS1 = 11846.0;   // S1 full stack (recorded) — flew, stable
-        const double MoiS2 = 1650.0;                     // S2+Dragon MOI (recorded)
-        const double CtS2Est = 62000.0;                  // S2 loop ESTIMATE (RCS-geometric over-read, recorded)
+        const double MoiS2 = 1650.0;                     // S2+Dragon MOI (recorded, t·m²)
+        const double CtS2Est = 62000.0;                  // S2 loop ESTIMATE as-flown (N·m-bugged geometric)
+        const double CtS2Fixed = 526.0;                  // units-FIXED estimate: gimbal 464 + RCS-geo 62 (kN·m)
         // CtS2Real: the S2's ACTUAL per-unit control torque, measured from the flight by regressing net torque
-        // (MOI·Δω) against commanded actuation over the S2 window (DS-ASC-002): K ≈ 451 (pitch) / 406 (yaw),
-        // and the regression INTERCEPT (disturbance torque) ≈ 0 → NO external disturbance. So the real authority
-        // is just the gimbal (~451); the RCS (est. 62000) delivers ≈0 effective torque. The over-read is ~137×.
+        // (MOI·Δω) against commanded actuation over the S2 window (DS-ASC-002): K ≈ 445-451, intercept ≈ 0 (NO
+        // disturbance). In the loop's own units this is 451; the as-flown over-read is ~137×.
         const double CtS2Real = 451.0;
+        // Deorbit capsule (Dragon alone, no gimbal; DragonScreen_capture/Crew-2_20260831_141924.csv + geometry
+        // dump manual_2500s): MOI ≈ 14 t·m²; stock RCS 2, N·m-bugged geometric 12870 (→ 12.9 kN·m fixed),
+        // DELIVERED 7 kN·m (regression). As-flown maxAlpha read 919 rad/s² (real 0.5) → the capsule spun.
+        const double MoiCap = 14.0, CtCapEst = 12870.0, CtCapFixed = 12.87, CtCapReal = 7.0;
 
         // (a) OPEN-LOOP: the loop's own maxAlpha from the RECORDED numbers (over-read authority estimate).
         p.Reset(); q.Reset();
@@ -90,12 +97,24 @@ public static class AttitudeLoopTest
         // a small over-read is sluggish-but-stable, but past ~10× the loop commands rates the tiny real
         // authority can't achieve → overshoot → divergent limit-cycle. This is why my earlier stand-in
         // (real≈11846, only 5× over-read) wrongly looked stable; the flight regression put real at ~451.
-        double wM, fM, wI, fI;
-        bool convMatched  = SimMismatch(60.0 * Math.PI / 180.0, CtS2Real, CtS2Real, MoiS2, out wM, out fM);
-        bool convInflated = SimMismatch(60.0 * Math.PI / 180.0, CtS2Est,  CtS2Real, MoiS2, out wI, out fI);
-        Check("FIX: loop estimate = real authority → CONVERGES", convMatched, "worst=" + Deg(wM) + "° final=" + Deg(fM) + "°");
-        Check("recorded 137x over-read (est 62000, real 451) LIMIT-CYCLES — reproduces the tumble, no disturbance",
+        double wM, fM, wI, fI, wX, fX;
+        bool convMatched  = SimMismatch(60.0 * Math.PI / 180.0, CtS2Real,  CtS2Real, MoiS2, out wM, out fM);
+        bool convInflated = SimMismatch(60.0 * Math.PI / 180.0, CtS2Est,   CtS2Real, MoiS2, out wI, out fI);
+        bool convFixed    = SimMismatch(60.0 * Math.PI / 180.0, CtS2Fixed, CtS2Real, MoiS2, out wX, out fX);
+        Check("S2 ideal (estimate = real authority) → CONVERGES", convMatched, "worst=" + Deg(wM) + "° final=" + Deg(fM) + "°");
+        Check("S2 as-flown 137x over-read (est 62000, real 451) LIMIT-CYCLES — reproduces the tumble",
               !convInflated, "worst=" + Deg(wI) + "° final=" + Deg(fI) + "°");
+        Check("S2 UNITS FIX (est 526 = gimbal 464 + RCS-geo 62, real 445) → CONVERGES", convFixed,
+              "worst=" + Deg(wX) + "° final=" + Deg(fX) + "°");
+
+        // Deorbit capsule: same mechanism, no gimbal. As-flown (12870, N·m bug) spins; units-fixed (12.9) holds.
+        double wc, fc, wcf, fcf;
+        bool capBroken = SimMismatch(60.0 * Math.PI / 180.0, CtCapEst,   CtCapReal, MoiCap, out wc,  out fc);
+        bool capFixed  = SimMismatch(60.0 * Math.PI / 180.0, CtCapFixed, CtCapReal, MoiCap, out wcf, out fcf);
+        Check("DEORBIT capsule as-flown (est 12870, real 7) LIMIT-CYCLES — reproduces the spin",
+              !capBroken, "worst=" + Deg(wc) + "° final=" + Deg(fc) + "°");
+        Check("DEORBIT capsule UNITS FIX (est 12.9, real 7) → CONVERGES", capFixed,
+              "worst=" + Deg(wcf) + "° final=" + Deg(fcf) + "°");
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
