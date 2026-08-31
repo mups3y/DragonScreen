@@ -11,7 +11,7 @@
 | Dual-vessel booster control | ✓ | ✓ | ✓ | ✓ | — | PARTIALLY PROVEN | controlled, not landed; `MissionConductor`/`BoosterControl` |
 | Booster RTLS landing | ✓ | ✓ | — | — | — | TESTED | `BoosterControl` |
 | Booster ASDS landing | ✓ | ✓ | — | — | — | TESTED | `BoosterControl` |
-| Rendezvous | ✓ | ✓ | ⛔ | — | — | **FLOWN — FUEL BUG (`DS-ASC-003`)** | far-field TRANSFER burn (`Phasing`) raised ap 200→406 km (~61 m/s maneuver) but spent ~85% of MMH (~370 m/s rocket-eq, ~15–25% eff) via continuous Draco translation (`force_frac` 0.67, no Δv budget guard) → tank empty before terminal approach, no dock. Root-caused, NOT fixed (review-gated). `RendezvousControl`/`Phasing` |
+| Rendezvous | ✓ | ✓ | ⛔→🔧 | — | — | **FUEL FIX (A1) IMPLEMENTED, NEEDS RE-FLY (`DS-ASC-003`)** | Root cause: Dragon RCS translation is ~21% efficient (Isp 240, no per-thruster control) → the far-field Hohmann climb (200→407 km, 61 m/s) spent ~85% of the ~66 m/s MMH budget → stranded. FIX A1: ascent inserts `ParkBelowStationKm` (50) below the target so the climb shrinks to ~11 m/s (budget-sized: ~49/66 m/s fits). `AscentControl.RendezvousParkAltM`. Re-fly owed (proven ascent target changed). `AscentControl`/`Phasing` |
 | Docking (autonomous) | ✓ | ✓ | — | — | — | TESTED | no end-to-end; `DockingControl` |
 | Deorbit / Entry / Splashdown | ✓ | ? | — | — | — | OPEN | 0 autonomous returns; `ReturnControl` |
 | FDIR spine | ✓ | ✓ | ⚠️ | — | — | TESTED — **blind spot found** | observe-only; **did NOT detect the S2 100°+ attitude divergence** (`fdir_fault`=None all rows) → no attitude-divergence monitor; STATE stayed NOMINAL through the tumble |

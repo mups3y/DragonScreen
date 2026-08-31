@@ -72,6 +72,14 @@ namespace DragonScreen
                                                               // NOT lower it — the felt peak now equals this value.
         [Tunable] public static double SecoVgoMps = 2.0;      // SECO cutoff when velocity-to-go drops below this (delivers
                                                               // the FULL Δv → circular target orbit, even under g-limit throttle taper)
+        // ⭐ A1 rendezvous-fuel fix (2026-08-31, DS-ASC-003): insert JUST BELOW the rendezvous target's orbit so the
+        // efficient MVac buys the altitude — the Dragon's ~21%-efficient RCS (Isp 240, no per-thruster control) cannot
+        // afford a large Hohmann climb. Flight DS-ASC-003 stranded raising 200→407 km (61 m/s useful = 85% of a 66 m/s
+        // tank). Budget-sized (docs/FLIGHT_VERIFICATION.md): parking ~50 km below the station leaves a ~11 m/s residual
+        // transfer + ~38 m/s approach/dock = ~49 of the 66 m/s tank, and phases ~4°/orbit. Tunable; re-fly confirms the
+        // terminal per-axis efficiency (lower ⇒ reduce this for more budget headroom, at the cost of slower phasing).
+        [Tunable] public static double ParkBelowStationKm = 50.0;   // insert this far below the selected target's periapsis
+        [Tunable] public static double ParkInsertFloorKm  = 185.0;  // never target an insertion below this (keep a safe orbit)
         static double coastStartUT = -1;
         static bool dragonSeparated;
         static double secoUT = -1.0;   // SECO engine-cut time, to delay separation until thrust has died
@@ -142,14 +150,36 @@ namespace DragonScreen
             }
         }
 
+        // A1 insertion altitude: ParkBelowStationKm below the selected rendezvous target's PERIAPSIS (so the chaser
+        // inserts below the station's lowest point → it still phases), or -1 when there is no usable target. Reads
+        // v.targetObject — the same station source RendezvousControl uses. Guards: same reference body, valid orbit,
+        // and the result must stay above ParkInsertFloorKm (else the target is too low to park below → use the default).
+        static double RendezvousParkAltM(Vessel v, double R)
+        {
+            try
+            {
+                ITargetable tgt = v.targetObject;
+                if (tgt == null) return -1.0;
+                Orbit o = tgt.GetOrbit();
+                if (o == null || o.referenceBody != v.mainBody || o.PeA <= 0.0) return -1.0;
+                double altM = o.PeA - ParkBelowStationKm * 1000.0;
+                return altM > ParkInsertFloorKm * 1000.0 ? altM : -1.0;
+            }
+            catch { return -1.0; }
+        }
+
         static void Fly(Vessel v, MissionProfile mission)
         {
             CelestialBody body = v.mainBody;
             double mu = (body != null) ? body.gravParameter : 0.0;
             double R = (body != null) ? body.Radius : 0.0;
 
-            // target orbit (ISS default ~200 km circular; a free-flyer carries its own apoapsis)
+            // target orbit (ISS default ~200 km circular; a free-flyer carries its own apoapsis).
+            // A1: if a rendezvous target is selected, insert ParkBelowStationKm below IT instead, so the ascent (not
+            // the Dragon's ~21%-efficient RCS) buys the climb. Falls back to the profile default when no usable target.
             double targetAltM = (mission.ApoKm > 0 ? mission.ApoKm : 200.0) * 1000.0;
+            double parkAltM = RendezvousParkAltM(v, R);
+            if (parkAltM > 0.0) targetAltM = parkAltM;
             double targetRadiusM = R + targetAltM;
 
             // ---- measured vehicle numbers ----
