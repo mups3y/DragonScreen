@@ -197,28 +197,25 @@ namespace DragonScreen
             // the gimbal. Gimbal/control-surface torque always counts (it needs no master). This makes coast
             // (engines off, RCS off) correctly read zero authority, so the loop commands nothing.
             //
-            // RCS authority per axis = MAX(stock GetPotentialTorque, geometric Σr×F). Total = non-RCS + RCS.
-            // Both stock and geometric are in kN·m (KSP force unit), consistent with the gimbal report and with
-            // MOI (t·m²), so maxAlpha = controlTorque/MOI comes out in rad/s².
+            // RCS authority per axis = STOCK GetPotentialTorque (achievability-aware). Total = non-RCS + RCS.
+            // Stock, gimbal, and the geometric are all kN·m; MOI is t·m²; so maxAlpha = controlTorque/MOI is rad/s².
             //
-            // ⚠ UNITS BUG FIXED 2026-08-31 (docs/FLIGHT_VERIFICATION.md, DS-ASC-001/002 + the deorbit runs):
-            // the geometric sum used to compute per-thruster power as thrusterPower*1000 (N), making the whole
-            // geometric estimate N·m — 1000× the kN·m that stock, the gimbal, and the MOI divisor are in. Since
-            // MAX() then compared a kN·m stock value against an N·m geometric value, the geometric ALWAYS won and
-            // fed maxAlpha a number 1000× too large: S2 maxAlpha read 37.7 rad/s² (real 0.27), capsule 919 rad/s²
-            // (real 0.5) → the loop commanded rates the vehicle can't produce → the S2 ascent tumble AND the
-            // capsule-spins-under-autopilot deorbit failure. Flight regression (net τ = MOI·Δω vs actuation):
-            //     S2  gimbal stock gx = 464 ≈ DELIVERED 445 kN·m (stock gimbal is ACCURATE); RCS delivered ≈ 0
-            //     capsule (no gimbal): stock RCS 2, geometric 12.9, DELIVERED 7 kN·m
-            // So the FIX is the units (power in kN below), NOT dropping the geometric: Campaign-6's MAX(stock,
-            // geometric) is kept because stock under-reads the capsule RCS (2 vs a real 7) and the geometric floors
-            // it closer. A closed-loop sim of pure/AttitudeLoop.Axis converges in both configs with the corrected
-            // estimate and diverges with the old one (plugin/test/AttitudeLoopTest.cs). KNOWN RESIDUAL (secondary,
-            // does NOT destabilise — deferred): the geometric still over-counts ACHIEVABLE torque for asymmetric
-            // layouts (S2 RCS: geometric 62 vs delivered ~0, harmless because the 464 gimbal dominates) — a proper
-            // achievability cap is future work, tracked in FLIGHT_VERIFICATION.
-            // Rule note (V4): flight-proven ControlTorque changed → ascent/abort/booster/deorbit proofs must be
-            // re-flown. Not a phase rule, not a slew clamp; roll-trim + tuning untouched.
+            // TWO fixes to this estimate, both flight-evidenced (docs/FLIGHT_VERIFICATION.md):
+            //  (1) ⚠ UNITS BUG (DS-ASC-001/002): the geometric sum computed per-thruster power as thrusterPower*1000
+            //      (N) → the whole geometric estimate was N·m, 1000× the kN·m of stock/gimbal/MOI. Fixed: power in kN
+            //      (below). S2 maxAlpha was reading 37.7 rad/s² (real 0.27) → the ascent tumble. Now S2 ctrl_tq ≈ 526.
+            //  (2) ✅ GEOMETRIC MAX DROPPED (DS-ASC-005, applied-actuation regression = the correct technique): even
+            //      in kN·m the geometric OVER-COUNTS achievable RCS torque — the asymmetric Dracos make mostly
+            //      translation/cancellation, not clean rotation. Measured capsule DELIVERED vs estimates (kN·m):
+            //          pitch 0.6 (stock 2.2, geometric 13.5 → 22× over) · roll 1.3 (3.1, 10.7 → 8×) · yaw 2.5 (1.3, 10.3 → 4×)
+            //      The geometric won the old MAX and over-drove the gimballess capsule → Draco saturation → ~85% of
+            //      the terminal MMH burned on attitude (rendezvous ran dry). STOCK (0.5-3.7× of delivered) is far
+            //      closer, so we trust it. (Earlier I kept the MAX believing "stock under-reads 2 vs a real 7"; that
+            //      "7" came from a PRE-PULSE-demand regression — an invalid technique — and is retracted.)
+            // Non-RCS providers (gimbal, fins) already use the accurate stock report; S2 stays correct (gimbal 464 +
+            // RCS-stock ~8 ≈ delivered 445). The geometric is still computed for the rcs_geo_* diagnostics only.
+            // Rule note (V4): flight-proven ControlTorque changed → ascent/abort/booster/deorbit + the rendezvous
+            // proofs must be re-flown. Not a phase rule, not a slew clamp, no deadband change; roll-trim + tuning + PWPF untouched.
             bool rcsOn = v.ActionGroups[KSPActionGroup.RCS];
             double gx = 0.0, gy = 0.0, gz = 0.0;               // non-RCS (gimbal/fins) reported (kN·m), per control axis
             double rrx = 0.0, rry = 0.0, rrz = 0.0;            // RCS reported (stock GetPotentialTorque, kN·m), per axis
@@ -289,14 +286,23 @@ namespace DragonScreen
             if (rcsOn)
             {
                 double ex = Math.Max(posT.x, negT.x), ey = Math.Max(posT.y, negT.y), ez = Math.Max(posT.z, negT.z);
-                rcsx = Math.Max(rrx, ex); rcsy = Math.Max(rry, ey); rcsz = Math.Max(rrz, ez);
-                GeoTorquePitchNm = ex; GeoTorqueRollNm = ey; GeoTorqueYawNm = ez;   // diagnostic (x=pitch, y=roll, z=yaw)
-                if (!rcsFallbackLogged && ex + ey + ez > 0.0 && ex > rrx + AttitudePilot.RcsTorqueFloorNm)
+                // RCS authority = STOCK GetPotentialTorque (achievability-aware). The Campaign-6 geometric MAX is
+                // DROPPED — flight DS-ASC-005 (applied-actuation regression, the correct technique) measured the
+                // capsule's DELIVERED per-axis RCS authority at pitch 0.6 / roll 1.3 / yaw 2.5 kN·m; the geometric
+                // (which won the old MAX) reads 13.5 / 10.7 / 10.3 → it OVER-COUNTS achievable torque by 4-22×
+                // (the asymmetric Dracos make mostly translation/cancellation, not clean rotation). Stock reads
+                // 2.2 / 3.1 / 1.3 → 0.5-3.7× of delivered, far closer. Feeding the 4-22× geometric to maxAlpha made
+                // the capsule loop over-drive → saturate the Dracos → ~85% of the terminal MMH burned on attitude
+                // (DS-ASC-005). Stock keeps S2 correct too (gimbal 464 + RCS-stock ~8 ≈ delivered 445). The geometric
+                // is still computed for the rcs_geo_* diagnostics; it no longer drives control.
+                rcsx = rrx; rcsy = rry; rcsz = rrz;
+                GeoTorquePitchNm = ex; GeoTorqueRollNm = ey; GeoTorqueYawNm = ez;   // diagnostic only (x=pitch, y=roll, z=yaw)
+                if (!rcsFallbackLogged && ex > rrx + AttitudePilot.RcsTorqueFloorNm)
                 {
-                    Debug.Log("[DragonScreen] AttitudeController: stock RCS GetPotentialTorque ("
+                    Debug.Log("[DragonScreen] AttitudeController: RCS authority = stock GetPotentialTorque ("
                         + rrx.ToString("F1") + "/" + rry.ToString("F1") + "/" + rrz.ToString("F1")
-                        + " kN·m) floored by geometric (" + ex.ToString("F1") + "/"
-                        + ey.ToString("F1") + "/" + ez.ToString("F1") + " kN·m pitch/roll/yaw).");
+                        + " kN·m); geometric reads " + ex.ToString("F1") + "/" + ey.ToString("F1") + "/"
+                        + ez.ToString("F1") + " but over-counts unachievable torque (diagnostic only, DS-ASC-005).");
                     rcsFallbackLogged = true;
                 }
             }

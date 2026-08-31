@@ -116,6 +116,22 @@ public static class AttitudeLoopTest
         Check("DEORBIT capsule UNITS FIX (est 12.9, real 7) → CONVERGES", capFixed,
               "worst=" + Deg(wcf) + "° final=" + Deg(fcf) + "°");
 
+        // ===== DS-ASC-005: the geometric OVER-READ drives Draco SATURATION = the terminal fuel drain =====
+        // Applied-actuation regression (correct technique) measured the capsule DELIVERED RCS authority at
+        // pitch 0.6 / roll 1.3 / yaw 2.5 kN·m; the geometric (which won the OLD Max) reads 13.5 / 10.7 / 10.3 →
+        // 4-22× over. Over-reading maxAlpha over-drives the gimballess capsule → the Dracos saturate → ~85% of the
+        // terminal MMH burns on attitude (rendezvous ran dry). The FIX trusts STOCK (2.2 / 3.1 / 1.3), far closer.
+        // Proof: actuator EFFORT (∫|act|, a fuel proxy) from a 10° hold is far higher for the geometric than stock.
+        const double MoiCapAtt = 41.0;
+        double effGeoP = ActEffort(10.0 * Math.PI / 180.0, 13.5, 0.6, MoiCapAtt);   // geometric (as-flown, 22× over)
+        double effStkP = ActEffort(10.0 * Math.PI / 180.0,  2.2, 0.6, MoiCapAtt);   // stock (the fix)
+        double effGeoY = ActEffort(10.0 * Math.PI / 180.0, 10.3, 2.5, MoiCapAtt);
+        double effStkY = ActEffort(10.0 * Math.PI / 180.0,  1.3, 2.5, MoiCapAtt);
+        Check("DS-ASC-005: geometric over-read spends >2× the pitch actuator effort of stock (fuel)",
+              effGeoP > 2.0 * effStkP, "geo=" + effGeoP.ToString("F1") + " stock=" + effStkP.ToString("F1"));
+        Check("DS-ASC-005: geometric over-read spends more yaw actuator effort than stock",
+              effGeoY > effStkY, "geo=" + effGeoY.ToString("F1") + " stock=" + effStkY.ToString("F1"));
+
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
     }
@@ -165,6 +181,24 @@ public static class AttitudeLoopTest
         }
         finalErr = Math.Abs(error);
         return finalErr < 2.0 * Math.PI / 180.0;   // settled within 2°
+    }
+
+    // Closed-loop actuator EFFORT (∫|actuation|dt) from an initial error — a propellant proxy for an on/off RCS.
+    // A too-high ctEst over-drives the loop (aggressive targetOmega the tiny real authority can't arrest) → the
+    // actuation saturates → more effort spent. Same plant as SimMismatch (alpha = -actuation·ctReal/MOI).
+    static double ActEffort(double error0, double ctEst, double ctReal, double moi)
+    {
+        Pid2 pos = new Pid2(), vel = new Pid2();
+        double error = error0, omega = 0.0, effort = 0.0;
+        int steps = (int)(30.0 / DT);
+        for (int i = 0; i < steps; i++)
+        {
+            AttitudeAxisResult r = AttitudeLoop.Axis(error, omega, moi, ctEst, DT, false, pos, vel);
+            effort += Math.Abs(r.Actuation) * DT;
+            double alpha = -r.Actuation * ctReal / moi;
+            omega += alpha * DT; error += -omega * DT;
+        }
+        return effort;
     }
 
     static string Deg(double rad) { return (rad * 180.0 / Math.PI).ToString("F1"); }
