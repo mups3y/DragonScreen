@@ -42,6 +42,12 @@ User signal "12 killed / 17 rescued by hand / 0 autonomously returned" is now **
 
 ## Flight log
 
+### ⚠ DS-ASC-006 — trust-stock fix is LIVE but INSUFFICIENT; the two real reasons are procedure + constant pulsing — 2026-08-31
+- **Build:** trust-stock (`305ef2c`). **Evidence:** `Crew-2_20260831_204829.csv` (7394 rows) + `KSP.log`. Detumble only **2.9 dps** (was 34 — calmer).
+- **✅ Fix confirmed live:** capsule `ctrl_tq_yaw` 2.1 / pitch 2.7 (was 10.3 / 13.5) — the geometric Max is gone. **But it barely helped:** applied attitude duty 59%→**51%**, fuel still **94% attitude**, min range 90→**58 km**, still ran dry (~92 km), **no dock**. So the authority over-read was NOT the dominant cause — I over-invested in the estimate.
+- **⛔ THE TWO REAL REASONS (owner-identified, data-confirmed):** **(1) constant thruster pulsing** — attitude firing is **94% during `Phasing`** (tight continuous prograde hold; zero big att_err jumps → not chasing, just holding to ~0 with no wide deadband) vs 18% in Coast. **(2) wrong rendezvous procedure** — a crude continuous far-field Hohmann → CW-at-100 km, not the real named-burn co-elliptic sequence; range stalls ~93 km, never reaches CW/dock. Both are in `docs/PHASE_3_RENDEZVOUS_RESEARCH.md` (real Dragon = discrete named burns + **free drift** on a co-elliptic orbit ~10 km below → AI at **7.5 km** → CW two-impulse to WP0/1/2 → dock).
+- **→ REBUILD PLANNED (not implemented):** `docs/RENDEZVOUS_REBUILD_PLAN.md` — discrete named burns + co-elliptic drift (fixes constant pulsing) + CW terminal from 7.5 km with R-bar/V-bar waypoints (fixes the procedure). Review-gated; biggest risk = the Δv budget at 21% efficiency (L1 budget test first).
+
 ### ✅ DS-ASC-005 — instrumented re-fly RESOLVES the terminal drain: yaw authority over-read ~4×, attitude ~85% of the fuel — 2026-08-31
 - **Build:** instrumentation (`app_*`, `rcs_pulse_att/trans`, pulse-config log). **Evidence:** `Crew-2_20260831_194036.csv` (5200 rows) + `KSP.log`. Same terminal drain as DS-ASC-004 (mmh 0.90→0.02 over ~530 s at ~90–130 km).
 - **✅ Pulse config PROVEN in-flight (finding 4a):** `KSP.log` — `UseRcsPulse=True deadband=0.050 minOn=0.060 minOff=0.060 full=0.900`. `rcs_pulse_att=1` throughout the terminal → **PWPF was active during the drain.**

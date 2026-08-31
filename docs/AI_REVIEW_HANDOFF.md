@@ -136,7 +136,12 @@ staging/MECO/SECO, and the A1 insertion change. Is the units‑bug diagnosis act
 circular ~50 km below the station regress the just‑proven ascent (Δv margin, g‑limits, guidance) or cause
 slow/failed phasing? Anything unsafe or wrong?
 
-**C. Crew Dragon rendezvous procedures** — assess the architecture (`Phasing.cs` far‑field Hohmann + Clohessy–
+**C. Crew Dragon rendezvous procedures — review `docs/RENDEZVOUS_REBUILD_PLAN.md`.** Three re-flies proved the
+rendezvous still runs dry: the drain is ~85–94% ATTITUDE (constant prograde pulsing, no free drift) and the
+procedure is a crude continuous Hohmann, not the real named-burn co-elliptic sequence. The rebuild plan (discrete
+burns + co-elliptic drift + CW two-impulse from 7.5 km + R-bar/V-bar WP0/1/2) is written against
+`docs/PHASE_3_RENDEZVOUS_RESEARCH.md`. Assess that plan — especially its §8 risks (does the full profile fit the
+~66 m/s Draco budget at 21% efficiency?). Original framing: — assess the architecture (`Phasing.cs` far‑field Hohmann + Clohessy–
 Wiltshire near‑field, 100 km CW hand‑off) against **how a real Crew Dragon rendezvouses with the ISS** (phasing /
 height‑adjust burns, co‑elliptic, R‑bar vs V‑bar approach, waypoints/hold points, the real DRACO Δv budget). Is
 this realistic and fuel‑viable on a Draco‑only vehicle? Is a 100 km CW hand‑off inside CW's linearization validity?
