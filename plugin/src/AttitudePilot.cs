@@ -31,6 +31,15 @@ namespace DragonScreen
         // Retained as the DIAGNOSTIC threshold: when the geometric estimate exceeds the report by more than this,
         // log once that the stock report is under-reading. Kept [Tunable] so saved configs stay valid.
         [Tunable] public static double RcsTorqueFloorNm = 1.0;
+        // ⭐ RCS-hold phase-plane deadband (DS-ASC-007 fuel fix): when the RCS is the ATTITUDE actuator (no gimbal),
+        // the loop COASTS within this (angle, rate) box instead of chattering the Dracos to hold a tiny error —
+        // measured cause of ~97% of rendezvous fuel (52% attitude-only + 45% simultaneous). Applied by
+        // AttitudeController ONLY when the gimbal term is ~0, so the flight-proven ascent is untouched. Wide here
+        // (coast/approach economy); a tighter terminal-dock band is future work. 0 disables.
+        [Tunable] public static double RcsHoldDeadbandDeg = 2.0;
+        [Tunable] public static double RcsHoldRateDbDps   = 0.2;
+        public static double RcsHoldDeadbandRad { get { return RcsHoldDeadbandDeg * 0.0174532925199433; } }
+        public static double RcsHoldRateDbRadps { get { return RcsHoldRateDbDps * 0.0174532925199433; } }
 
         // ---- diagnostics forwarded from the active instance (the recorder / FDIR / AscentControl read these) ----
         public static double PointErrDeg { get { return active.PointErrDeg; } }

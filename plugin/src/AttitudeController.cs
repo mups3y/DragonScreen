@@ -46,6 +46,8 @@ namespace DragonScreen
         // the raw value into actuation=−MOI·α/controlTorque spikes the actuation. Smooth the RISES with an
         // EMA; keep DROPS to zero authority instant (so cutting the engines reads zero immediately).
         const double SmoothTorque = 0.10;
+        double lastGimbalNm;                 // Σ gimbal/fins torque from the last ControlTorque — the deadband gate
+        const double GimbalPresentNm = 1.0;  // gimbal term above this → an engine is steering → RCS is NOT primary
         double smTx, smTy, smTz;
         bool smInit;
 
@@ -142,12 +144,19 @@ namespace DragonScreen
                 double distanceDeg = AttitudeLoop.PointingDistanceRad(errPitch, errYaw) * Rad2Deg;
                 bool rollGate = distanceDeg > AttitudeLoop.RollControlRangeDeg;
 
+                // RCS-hold deadband: apply ONLY when the gimbal is absent (RCS is the attitude actuator) — so the
+                // proven gimbal ascent is untouched. Lets the loop drift within a small (angle,rate) box on coast/
+                // burn/hold instead of chattering the Dracos (DS-ASC-007: ~97% of rendezvous fuel was this).
+                bool rcsPrimary = lastGimbalNm < GimbalPresentNm;
+                double holdDb = rcsPrimary ? AttitudePilot.RcsHoldDeadbandRad : 0.0;
+                double holdRateDb = rcsPrimary ? AttitudePilot.RcsHoldRateDbRadps : 0.0;
+
                 double[] act = new double[3];
                 for (int i = 0; i < 3; i++)
                 {
                     bool suppress = (i == 1) && rollGate;               // index 1 = roll
                     AttitudeAxisResult res = AttitudeLoop.Axis(error[i], omega[i], moi[i], ct[i], dt,
-                                                               suppress, posPid[i], velPid[i]);
+                                                               suppress, posPid[i], velPid[i], holdDb, holdRateDb);
                     act[i] = res.Actuation;
                     if (i == 0) RateCmdRads = res.TargetOmega;          // pitch rate command (representative)
                 }
@@ -308,6 +317,7 @@ namespace DragonScreen
             }
             else { GeoTorquePitchNm = 0.0; GeoTorqueYawNm = 0.0; GeoTorqueRollNm = 0.0; }
 
+            lastGimbalNm = gx + gy + gz;   // gimbal/fins term — ~0 in prox-ops → RCS is the attitude actuator (deadband gate)
             tx = gx + rcsx; ty = gy + rcsy; tz = gz + rcsz;
         }
 

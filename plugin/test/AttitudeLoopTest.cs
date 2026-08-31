@@ -132,6 +132,26 @@ public static class AttitudeLoopTest
         Check("DS-ASC-005: geometric over-read spends more yaw actuator effort than stock",
               effGeoY > effStkY, "geo=" + effGeoY.ToString("F1") + " stock=" + effStkY.ToString("F1"));
 
+        // ===== DS-ASC-007: PHASE-PLANE DEADBAND — a gentle RCS hold COASTS instead of chattering =====
+        // Measured cause of ~97% of rendezvous fuel (52% attitude-only + 45% simultaneous). Within a small
+        // (angle, rate) box → actuation 0 (drift); outside on EITHER angle or rate → fire; off (ascent) → unchanged.
+        Pid2 dp = new Pid2(), dv = new Pid2();
+        double db = 2.0 * Math.PI / 180.0, rdb = 0.2 * Math.PI / 180.0;   // ±2°, ±0.2°/s
+        double small = 0.5 * Math.PI / 180.0, slow = 0.05 * Math.PI / 180.0;
+        Check("deadband: gentle hold inside the box → COASTS (act 0)",
+              AttitudeLoop.Axis(small, slow, 41, 2.5, DT, false, dp, dv, db, rdb).Actuation == 0.0, "");
+        dp.Reset(); dv.Reset();
+        Check("deadband: 3° error (outside) → fires",
+              AttitudeLoop.Axis(3.0 * Math.PI / 180.0, 0.0, 41, 2.5, DT, false, dp, dv, db, rdb).Actuation != 0.0, "");
+        dp.Reset(); dv.Reset();
+        Check("deadband: high rate (0.5°/s, outside) → fires even at tiny angle (arrest drift)",
+              AttitudeLoop.Axis(0.2 * Math.PI / 180.0, 0.5 * Math.PI / 180.0, 41, 2.5, DT, false, dp, dv, db, rdb).Actuation != 0.0, "");
+        dp.Reset(); dv.Reset();
+        Check("deadband OFF (gimbal ascent) → still fires the same small hold (proven ascent unchanged)",
+              AttitudeLoop.Axis(small, slow, 41, 2.5, DT, false, dp, dv, 0.0, 0.0).Actuation != 0.0, "");
+        // (the fuel BENEFIT is the bang-bang/PWPF limit-cycle suppression, which the linear sim here cannot model —
+        //  it is proven in-flight by the re-fly; here we only pin the deadband LOGIC: coast in-box, fire out-of-box.)
+
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
     }
