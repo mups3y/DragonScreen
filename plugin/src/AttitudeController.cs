@@ -46,16 +46,8 @@ namespace DragonScreen
         // the raw value into actuation=−MOI·α/controlTorque spikes the actuation. Smooth the RISES with an
         // EMA; keep DROPS to zero authority instant (so cutting the engines reads zero immediately).
         const double SmoothTorque = 0.10;
-        double lastGimbalNm;                 // Σ gimbal/fins torque from the last ControlTorque — the deadband gate
-        const double GimbalPresentNm = 1.0;  // gimbal term above this → an engine is steering → RCS is NOT primary
         double smTx, smTy, smTz;
         bool smInit;
-
-        // ---- B4 actuator-lag lead compensation: command the gimbal HARDER when it slews slowly, so the torque
-        // reaches the demand faster (a snappier, non-oscillating loop through max-Q). actEst tracks the modeled
-        // gimbal position per axis; the issued command is Compensate()'d against it. Self-disables when the
-        // gimbal is fast / absent (Compensate → desired). The UseLagComp flag lives on AttitudePilot (shared).
-        readonly double[] actEst = { 0.0, 0.0, 0.0 };   // modeled gimbal deflection (pitch, roll, yaw)
 
         // ---- diagnostics for the FlightRecorder (loop internals — the standing instrument-everything rule) ----
         // Instance fields: the Dragon's default instance publishes these through the AttitudePilot facade (so the
@@ -91,7 +83,6 @@ namespace DragonScreen
             ActPitch = ActYaw = ActRoll = 0.0;
             CtrlTorquePitchNm = CtrlTorqueYawNm = CtrlTorqueRollNm = 0.0;
             PitchAccelRadS2 = 0.0;
-            actEst[0] = actEst[1] = actEst[2] = 0.0;   // B4: clear the modeled gimbal state on scene load
         }
 
         // Compute the attitude actuation to point the nose at a world direction. dampRoll = also null the roll
@@ -144,42 +135,21 @@ namespace DragonScreen
                 double distanceDeg = AttitudeLoop.PointingDistanceRad(errPitch, errYaw) * Rad2Deg;
                 bool rollGate = distanceDeg > AttitudeLoop.RollControlRangeDeg;
 
-                // RCS-hold deadband: apply ONLY when the gimbal is absent (RCS is the attitude actuator) — so the
-                // proven gimbal ascent is untouched. Lets the loop drift within a small (angle,rate) box on coast/
-                // burn/hold instead of chattering the Dracos (DS-ASC-007: ~97% of rendezvous fuel was this).
-                bool rcsPrimary = lastGimbalNm < GimbalPresentNm;
-                double holdDb = rcsPrimary ? AttitudePilot.RcsHoldDeadbandRad : 0.0;
-                double holdRateDb = rcsPrimary ? AttitudePilot.RcsHoldRateDbRadps : 0.0;
-
                 double[] act = new double[3];
                 for (int i = 0; i < 3; i++)
                 {
                     bool suppress = (i == 1) && rollGate;               // index 1 = roll
                     AttitudeAxisResult res = AttitudeLoop.Axis(error[i], omega[i], moi[i], ct[i], dt,
-                                                               suppress, posPid[i], velPid[i], holdDb, holdRateDb,
-                                                               AttitudePilot.HoldAuthorityScale);
+                                                               suppress, posPid[i], velPid[i]);
                     act[i] = res.Actuation;
                     if (i == 0) RateCmdRads = res.TargetOmega;          // pitch rate command (representative)
                 }
 
-                // --- B4 actuator-lag lead compensation: issue a command that pulls the LAGGED gimbal to the
-                //     loop's demand this tick (Compensate), tracking the modeled deflection (Step). rs = the
-                //     gimbal gap-closing rate (KSP lerps by responseSpeed·dt); no active gimbal → instant → no-op.
-                bool lag = AttitudePilot.UseLagComp;
-                double rs = lag ? GimbalResponseSpeed(v) : 1e9;
-                double[] issue = { act[0], act[1], act[2] };
-                if (lag)
-                    for (int i = 0; i < 3; i++)
-                    {
-                        issue[i] = ActuatorLag.Compensate(actEst[i], act[i], rs, dt);
-                        actEst[i] = ActuatorLag.Step(actEst[i], issue[i], rs, dt);
-                    }
-
-                // --- build the command: pitch + yaw always; roll only when we own it (else release + keep its
-                //     PID clean, so the entry bank loop's own roll channel is not fighting a stale damping cmd) ---
-                cmd.Pitch = issue[0]; cmd.Yaw = issue[2];
-                if (dampRoll) { cmd.Roll = issue[1]; cmd.HasRoll = true; }
-                else { cmd.HasRoll = false; posPid[1].Reset(); velPid[1].Reset(); actEst[1] = 0.0; }
+                // --- build the command (faithful MechJeb: write the actuation directly — no lag comp, no deadband,
+                //     no hold-scale; those Claude-invented loops are removed). Pitch+yaw always; roll only when owned.
+                cmd.Pitch = act[0]; cmd.Yaw = act[2];
+                if (dampRoll) { cmd.Roll = act[1]; cmd.HasRoll = true; }
+                else { cmd.HasRoll = false; posPid[1].Reset(); velPid[1].Reset(); }
 
                 // --- diagnostics ---
                 Active = true;
@@ -318,33 +288,7 @@ namespace DragonScreen
             }
             else { GeoTorquePitchNm = 0.0; GeoTorqueYawNm = 0.0; GeoTorqueRollNm = 0.0; }
 
-            lastGimbalNm = gx + gy + gz;   // gimbal/fins term — ~0 in prox-ops → RCS is the attitude actuator (deadband gate)
             tx = gx + rcsx; ty = gy + rcsy; tz = gz + rcsz;
-        }
-
-        // The gimbal gap-closing rate (per second) to feed the B4 lag model: KSP lerps the gimbal toward its
-        // target by gimbalResponseSpeed·dt each tick, so responseSpeed IS the model's 1/τ. Take the SLOWEST
-        // active gimbal (the one that governs the lag). No active gimbal, or none using response-speed (instant
-        // gimbals) → a large value so Compensate becomes a no-op. Guarded: any KSP-access issue → instant.
-        static double GimbalResponseSpeed(Vessel v)
-        {
-            double slowest = double.PositiveInfinity;
-            try
-            {
-                for (int i = 0; i < v.parts.Count; i++)
-                {
-                    Part p = v.parts[i];
-                    for (int m = 0; m < p.Modules.Count; m++)
-                    {
-                        ModuleGimbal g = p.Modules[m] as ModuleGimbal;
-                        if (g == null || !g.gimbalActive || !g.useGimbalResponseSpeed) continue;
-                        double rs = g.gimbalResponseSpeed;
-                        if (rs > 0.0 && rs < slowest) slowest = rs;
-                    }
-                }
-            }
-            catch { return 1e9; }
-            return double.IsPositiveInfinity(slowest) ? 1e9 : slowest;   // no lagging gimbal → instant
         }
 
         // Wrap radians to [-π, π].

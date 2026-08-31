@@ -24,33 +24,14 @@ namespace DragonScreen
         public static AttitudeController ActiveController { get { return active; } }
 
         // ---- shared [Tunable] config (read by every AttitudeController instance) ----
-        // B4 lag compensation: command the gimbal harder when it slews slowly (snappier loop through max-Q).
-        // B4 actuator-lag lead compensation. OFF (2026-09-01, RESEARCH, not a guess): read MechJeb's actual
-        // BetterController.cs + PIDLoop2.cs in full — our PID is already IDENTICAL to MechJeb's (PosKp 2.03,
-        // VelKp 7.98, P-only velocity, SmoothIn/Out=1.0=pass-through). MechJeb's controller has NO lag comp; this
-        // was OUR non-MechJeb addition, and it over-drives the gimbal command to the ±1 rail every tick — that
-        // railed command IS the visible steering jitter. Removing it = the faithful MechJeb loop, no extra loop.
-        [Tunable] public static bool UseLagComp = false;
-        // Campaign 6: no longer a GATE — the loop now ALWAYS takes max(stock-reported, geometric) RCS torque
-        // (the stock report flickers ~2 N·m 91% of RCS-on ticks, above any sane gate, and saturated the Dracos).
-        // Retained as the DIAGNOSTIC threshold: when the geometric estimate exceeds the report by more than this,
-        // log once that the stock report is under-reading. Kept [Tunable] so saved configs stay valid.
+        // The Claude-invented control loops (B4 lag compensation, the phase-plane hold deadband, the 1.5× hold-
+        // authority scale) were REMOVED 2026-09-01 (owner: "remove everything invented"). MechJeb's BetterController
+        // — which this loop is a faithful port of — has none of them; they were the interference. The loop is now
+        // plain MechJeb (PosKp 2.03 / VelKp 7.98 / P-only velocity, arrestable-rate curve, SmoothTorque).
+        // Campaign 6: the loop ALWAYS takes max(stock-reported, geometric) RCS torque (the stock report flickers
+        // ~2 N·m 91% of RCS-on ticks, saturating the Dracos). RcsTorqueFloorNm is the DIAGNOSTIC threshold: when the
+        // geometric estimate exceeds the report by more than this, log once that stock is under-reading.
         [Tunable] public static double RcsTorqueFloorNm = 1.0;
-        // HOLD AUTHORITY SCALE — multiply the loop's POSITION-hold gain (AttitudeLoop.PosKp0). REVERTED 1.5→1.0
-        // (2026-09-01): the 1.5× added loop gain that fed the attitude limit cycle (rate-pitch std 0.20→0.28) with
-        // no benefit — our loop was already pointed (att_point 0.1°) and never flipped (the flip was stock SAS).
-        [Tunable] public static double HoldAuthorityScale = 1.0;
-        // ⭐ RCS-hold phase-plane deadband (DS-ASC-007 fuel fix): when the RCS is the ATTITUDE actuator (no gimbal),
-        // the loop COASTS within this (angle, rate) box instead of chattering the Dracos to hold a tiny error —
-        // measured cause of ~97% of rendezvous fuel (52% attitude-only + 45% simultaneous). Applied by
-        // AttitudeController ONLY when the gimbal term is ~0, so the flight-proven ascent is untouched. Wide here
-        // (coast/approach economy); a tighter terminal-dock band is future work. 0 disables.
-        // Reverted to 0 (OFF = pre-change default) 2026-09-01 per owner ("control tuning back to defaults").
-        // Also moot while UseGimbalLoop=false (KSP SAS flies attitude; this custom loop is bypassed).
-        [Tunable] public static double RcsHoldDeadbandDeg = 0.0;
-        [Tunable] public static double RcsHoldRateDbDps   = 0.0;
-        public static double RcsHoldDeadbandRad { get { return RcsHoldDeadbandDeg * 0.0174532925199433; } }
-        public static double RcsHoldRateDbRadps { get { return RcsHoldRateDbDps * 0.0174532925199433; } }
 
         // ---- diagnostics forwarded from the active instance (the recorder / FDIR / AscentControl read these) ----
         public static double PointErrDeg { get { return active.PointErrDeg; } }

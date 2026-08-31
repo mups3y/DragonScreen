@@ -167,7 +167,11 @@ namespace DragonScreen
         // limit cycle that thrashed the Dracos and wasted MMH/NTO (Campaign-6). A near-full command passes
         // through continuous (sustained burns intact); only trim commands are pulsed. MechJeb never does this
         // for RCS — our improvement (docs/MECHJEB_MASTER_MAP.md §3.3). Tunable; false = continuous fallback.
-        [Tunable] public static bool   UseRcsPulse      = true;
+        // ⭐ REMOVED (owner 2026-09-01, "remove Claude-invented loops"): PWPF/pulse modulation of the RCS was a
+        // DragonScreen invention ("MechJeb never does this for RCS") — it chopped the continuous command into
+        // 0.06 s pulses = the "pulsing RCS like crazy" in orbit. MechJeb writes the CONTINUOUS command and lets
+        // KSP's RCS handle it. Off = continuous (MechJeb-faithful). The pulse code below is now dead.
+        [Tunable] public static bool   UseRcsPulse      = false;
         [Tunable] public static double RcsPulseDeadband = 0.05;   // |cmd| below → command nothing (chatter kill)
         [Tunable] public static double RcsPulseMinOn    = 0.06;   // s, minimum pulse width
         [Tunable] public static double RcsPulseMinOff   = 0.06;   // s, minimum gap

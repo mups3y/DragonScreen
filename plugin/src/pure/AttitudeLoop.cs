@@ -92,9 +92,7 @@ namespace DragonScreen
         // the per-axis integrator state across ticks. No authority → actuation 0 and the PIDs reset.
         public static AttitudeAxisResult Axis(double errorRad, double omegaRad, double moi,
                                               double controlTorqueNm, double dt,
-                                              bool suppressOmega, Pid2 posPid, Pid2 velPid,
-                                              double holdDbRad = 0.0, double holdRateDbRadps = 0.0,
-                                              double posKpScale = 1.0)
+                                              bool suppressOmega, Pid2 posPid, Pid2 velPid)
         {
             AttitudeAxisResult r = new AttitudeAxisResult();
             if (!(controlTorqueNm > 0.0) || !(moi > 0.0) || !(dt > 0.0)
@@ -105,21 +103,7 @@ namespace DragonScreen
             double maxAlpha = controlTorqueNm / moi;
             r.MaxAlpha = maxAlpha;
 
-            // ⭐ PHASE-PLANE DEADBAND (RCS attitude-hold fuel fix, DS-ASC-007): within a small (angle, rate) box,
-            // COAST — command nothing, let the vehicle DRIFT — instead of chattering the on/off Dracos to null a
-            // tiny error. It bites ONLY when BOTH |error| and |rate| are tiny (a gentle hold); any slew / abort /
-            // detumble (large error OR rate) is OUTSIDE the box and fires the normal law. Off by default (0) → the
-            // flight-proven gimbal ascent is unchanged; the glue passes a nonzero band ONLY when RCS is the
-            // attitude actuator (no gimbal). The classic on-orbit RCS law real spacecraft use (SAS/MechJeb do NOT).
-            if (!suppressOmega && holdDbRad > 0.0
-                && errorRad > -holdDbRad && errorRad < holdDbRad
-                && omegaRad > -holdRateDbRadps && omegaRad < holdRateDbRadps)
-            {
-                posPid.Reset(); velPid.Reset();
-                return r;   // actuation 0, targetOmega/Alpha 0 → drift within the deadband
-            }
-
-            double posKp = PosKp0 / warpFactor * (posKpScale > 0.0 ? posKpScale : 1.0);   // ⭐ hold-authority scale (owner 1.5×)
+            double posKp = PosKp0 / warpFactor;
             double effLD = Soften * Soften * maxAlpha / (2.0 * posKp * posKp);
             double maxOmega = maxAlpha * MaxStoppingTime;
             double flip = Math.PI / MinFlipTime;

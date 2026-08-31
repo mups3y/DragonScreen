@@ -303,16 +303,11 @@ namespace DragonScreen
             }
 
             // attitude-first: point prograde, burn only once pointed. FarGuide already gates Burn on the pe floor.
-            // ⭐ Campaign 1 (C2a): hold prograde TIGHTLY only when burning; on a far-field coast re-acquire prograde
-            // only after drifting past CoastReacquireDeg, else RELEASE the channel (drift, no RCS). The 0.1° loop
-            // deadband + prograde's ~0.06°/s rotation chattered the Dracos ~every 1.7 s → 69% of far-field firing was
-            // attitude-only (CSV 155116) = the MMH/NTO drain. This band keeps us within ~CoastReacquireDeg (< the 5°
-            // burn gate, so still burn-ready) at a fraction of the RCS. ⛔ far-field ONLY — near-field CW aim is
-            // off-prograde BY DESIGN (do not gate it here).
+            // ⭐ RvCoast release-gate REMOVED (owner 2026-09-01, "remove Claude-invented loops"): the invented
+            // coast re-acquire/RELEASE hysteresis is gone — just HOLD prograde continuously (MechJeb-style).
             Vector3d pro = Steering.Prograde(v);
             double perr = Steering.PointingErrorDeg(v, pro);
-            if (RvCoast.HoldPrograde(fc.Burn, perr, CoastReacquireDeg)) Steering.Point(v, pro);
-            else FlightDriver.ReleaseAttitude();
+            Steering.Point(v, pro);
             if (fc.PeHeld && !floorLogged)
             {
                 Debug.LogWarning("[DragonScreen] RV pe-floor (far): pe " + (peAlt / 1000.0).ToString("F0")
@@ -410,14 +405,12 @@ namespace DragonScreen
                 return true;
             }
 
-            // COAST — drift to the intercept; hold prograde loosely (hysteresis, like the far-field coast);
+            // COAST — hold prograde (continuously, MechJeb-style; the invented RvCoast release-gate is removed);
             // warp toward the latched arrival. Hands back when the range drops into the CW near-field.
             if (rangeM < LambertMinRangeM) { EndLambert(); return false; }
             FlightDriver.ReleaseTranslation();
             Vector3d pro = Steering.Prograde(v);
-            double cperr = Steering.PointingErrorDeg(v, pro);
-            if (RvCoast.HoldPrograde(false, cperr, CoastReacquireDeg)) Steering.Point(v, pro);
-            else FlightDriver.ReleaseAttitude();
+            Steering.Point(v, pro);
             if (CoastWarp && tof > LambertMinTofS && rangeM > CoastWarpMinRangeM)
                 MissionConductor.WarpToEvent(lambArrivalUT);
             else
