@@ -12,6 +12,7 @@ Archived **FlightRecorder** CSVs (and one **geometry dump**) kept as evidence fo
 | `Crew-2_Probe_20260831_102425.csv` | DS‑ASC‑002 | Booster (non‑active recovery) | 88 | separation → entry‑burn prep |
 | `Crew-2_20260831_141924.csv` | **DS‑DEO‑001** | Dragon capsule alone (6.8 t, no gimbal) | 833 | autopilot deorbit; capsule spins under the ×1000 over‑read — **the flight the capsule‑authority regression was run on** (n=832) |
 | `Crew-2_deorbit_geometry_dump_manual_2500s.csv` | DS‑DEO‑001 | Dragon capsule alone | 5 parts / 16 thrusters | **geometry dump** (different schema, see below): stock `GetPotentialTorque` vs the geometric, for the deorbit config |
+| `Crew-2_20260831_151611.csv` | **DS‑ASC‑003** | Dragon (S2+Dragon → capsule) | 4648 | **the units-fix flight: ascent to ORBIT (194×403 km / 51.6°)** then rendezvous. Proves S2 `ctrl_tq`=526 (fix live) and the rendezvous fuel-exhaustion (far-field TRANSFER burns ~85% of MMH ≈ MET 18,577–18,805) |
 
 Ascent flights (`DS‑ASC`): crewed Falcon 9 + Crew Dragon, RSS/RO, Cape, AUTO‑BOOSTER‑RECOVERY armed; both **fail identically** at S2 (upper‑stage attitude tumble, no orbit) and were reverted. `DS‑DEO‑001`: the Dragon capsule alone on RCS (engine off) — it **spins under autopilot** from the same ×1000 authority over‑read. The filename time = when the recorder opened the stream (`Crew-2_HHMMSS`; `_Probe_` = the non‑active booster's parallel stream).
 

@@ -16,7 +16,7 @@ L1 software/math (pure tests) · L2 KSP integration · L3 single-vessel flight �
 ## Protected flight-proof registry (invalidated by touching the listed code, per rule V4)
 | Capability | Level | Status | Evidence | Invalidated by changes to |
 |---|---|---|---|---|
-| ~~Ascent to orbit~~ **ASCENT — S1/MECO OK; S2 phase BROKEN (upper-stage attitude divergence)** | L3→**regressed** | ⛔ **NOT PROVEN post-Phase-2** (was FLIGHT-PROVEN in a *prior* audit before the Phase-2 change) | `DS-ASC-001`+`DS-ASC-002` (2026-08-31): S2 att_err→125–154°, tumble, no SECO | `AscentControl`, `FlightDriver`, staging/sep, `MissionConductor` — **investigate the Phase-2 change first** |
+| **Ascent to orbit (S1→MECO→sep→S2→SECO→orbit)** | **L3** | ✅ **FLIGHT-PROVEN** (2026-08-31, units-fix build `f1a0cbb`) | **`DS-ASC-003`**: reached **194×403 km / 51.6°**; S2 `ctrl_tq_pitch` = 526 (units fix live, was 62,000); attitude tracking clean (S2 rates 0.1–0.4 dps, actuation ~0). Supersedes the `DS-ASC-001/002` S2 tumble. | `AscentControl`, `FlightDriver`, `AttitudeController.ControlTorque`, staging/sep, `MissionConductor` |
 | Max-Q launch escape (attitude authority, geometric RCS fallback, chutes, splashdown, crew survival) | L3 | FLIGHT-PROVEN | prior audit | `AbortControl`, `FlightDriver`, abort latch, RCS authority |
 | Dual-vessel booster control (Dragon active + non-active booster on own `OnFlyByWire`) | L4 | PARTIALLY PROVEN (controlled, not landed) | prior audit (~16k OnFlyByWire callbacks) | `MissionConductor`, `BoosterControl`, `RangeExtender`, `FlightDriver` |
 
@@ -24,8 +24,9 @@ L1 software/math (pure tests) · L2 KSP integration · L3 single-vessel flight �
 >
 > **Gate before Phase 3 — status 2026-08-31 (PARTIAL, see flight log `DS-ASC-001`):**
 > - `DS-RTLS/dual` — **re-confirmed** (controlled, not landed): Dragon active + non-active booster on its own `OnFlyByWire`, both held loaded/unpacked, no authority loss. ✓ *as flown*
-> - `DS-ASC` (ascent to orbit, ~200×197 km / ~51.6°) — **PARTIAL:** ascent nominal & fault-free through S2 ignition, but the flight was **reverted mid-S2 (no SECO)**, so orbit insertion is **not re-proven**. A to-orbit ascent is still owed to fully restore the ascent L3 proof.
-> - `DS-ABORT` (max-Q launch escape → chutes → splashdown, crew survive) — **STILL OWED** (not exercised; `fdir_abort`=0). The abort proof remains INVALIDATED.
+> - `DS-ASC` (ascent to orbit) — ✅ **DONE (`DS-ASC-003`, 2026-08-31):** reached 194×403 km / 51.6° on the units-fix build; S2 `ctrl_tq` 526 (was 62,000), tracking clean. The ascent L3 proof is **restored**.
+> - `DS-ABORT` (max-Q launch escape → chutes → splashdown, crew survive) — **STILL OWED** (not exercised). Also re-invalidated by the `ControlTorque` units fix (`f1a0cbb`) — the abort RCS authority path changed.
+> - `DS-RV/DOCK` (rendezvous → dock) — **BLOCKED by a fuel-budget bug:** the far-field TRANSFER burn drained ~85% of MMH (see `DS-ASC-003` below), leaving nothing for terminal approach/dock.
 >
 > Install with `python plugin/build.py install` (close KSP **and CKAN** first; a DLL change needs a full game restart).
 
@@ -40,6 +41,17 @@ User signal "12 killed / 17 rescued by hand / 0 autonomously returned" is now **
 **Firm fact:** RETURN = OPEN, **0 autonomous returns to date** (two sources). Exact kill/rescue tallies vary by accounting window (KSP-log session ledger vs recorder-CSV scoreboard); the operative signal — the autopilot cannot yet bring the crew home — is confirmed. Return is Phase 14; not touched this session.
 
 ## Flight log
+
+### ✅ DS-ASC-003 — ascent to ORBIT (S2 units-fix flight-proven) + rendezvous fuel-exhaustion — 2026-08-31
+- **Build:** `f1a0cbb` (the `ControlTorque` ×1000 units fix). **Config:** crewed Falcon 9 + Crew Dragon, RSS/RO, Cape; AUTO through ascent + rendezvous. `GeometryDump` (Alt+G) active. **Evidence:** `Crew-2_20260831_151611.csv` (4648 rows, MET 0→20,315 s ≈ 5.6 h with warp) + booster `Crew-2_Probe_20260831_151854.csv`; geometry dumps `geometry_dump_{pad,manual_0s,manual_226s}.csv`.
+- **✅ ASCENT TO ORBIT — PROVEN.** Reached **ap 403.6 / pe 194.4 km, inc 51.64°** (real, stable orbit; both apses positive, SECO reached). The S2 tumble is GONE.
+  - **Units fix confirmed LIVE:** S2 `ctrl_tq_pitch` median **526.6** (= gimbal 464 + RCS-geo 62, exactly as designed; was ~62,000) → `maxAlpha` 0.42 rad/s² (was 37.6). The recorder tell of the fix, seen in flight.
+  - **Attitude tracking is clean:** during S2 the body rates are **0.1–0.4 dps** and `act_pitch` ≈ 0 — no oscillation, no saturation. The loop holds its commanded attitude well.
+  - **The ~15° "att_err" during S2 is ANGLE OF ATTACK, not a tracking error** (`FlightRecorder` sets `att_err_deg = aoaDeg` during ascent, `FlightRecorder.cs:227`). It is the guidance thrust-vector steering the nose off-prograde for insertion; it jumps to ~18° at MVac ignition (a brief transient, rates −11/+10 dps for ~1 s) then bleeds to ~9° — i.e. guidance, plus a minor ignition transient. Ascent control quality is good; no instability to "trim." (If the user's observed "trim" item is something specific on the navball/screens, it needs to be named — the data shows clean tracking.)
+- **⛔ RENDEZVOUS — RAN OUT OF MMH before terminal approach (no dock). ROOT CAUSE (data-established, NOT yet fixed):** the far-field **TRANSFER** burn (`Phasing.FarGuide`: raise ap toward the station, prograde, bounded — *intent is correct*) is grossly **propellant-inefficient**.
+  - The burn (MET 18,577→18,805) raised **ap 200→406 km** (pe held ~197) — a ~**61 m/s** orbital maneuver by vis-viva — but consumed **1171 kg = ~85% of MMH** (`mmh_frac` 0.90→0.09; ~370 m/s by rocket-eq at Isp≈300). **~15–25% efficient.** The tank then emptied during `ApproachInit`; no fuel for velocity-match/dock.
+  - **Why so wasteful:** it uses continuous low-thrust **Draco translation** (the Dragon has no main engine), which (a) cancels ~33% internally (`rcsbal_force_frac` = 0.67), and (b) spends the rest over a long continuous arc rather than an impulsive Δv — and there is **no propellant-budget guard** (`dv_planned_mps` is blank for all 1133 Phasing rows; the transfer burns purely on the "ap < target" condition). Attitude was well-held (att_err 2.6°), so this is an **actuation-efficiency / burn-strategy** problem, not a pointing one.
+  - **NOT FIXED (rules): needs a scoped root-cause + review before touching the rendezvous FSM/glue** (proven across many prior flights per `Phasing.cs`/`RendezvousControl.cs` comments). Candidate directions (for a plan, not yet chosen): impulsive/pulsed transfer instead of continuous burn; a Δv/propellant budget guard on the transfer; revisit whether the far-field transfer altitude/strategy suits a Draco-only vehicle. `ApproachInit` beginning at 467 km also looks mis-scaled — investigate alongside.
 
 ### ⛔ DS-ASC-001 + DS-ASC-002 — ascent FAILS at S2 (upper-stage attitude divergence) — 2026-08-31
 > **CRITICAL, REPRODUCED IN BOTH POST-PHASE-2 RE-FLIES. This supersedes an earlier mis-assessment that called the ascent "nominal" — it is not.** First-stage ascent to MECO is clean, but **at S2 (MVac) ignition the upper-stage attitude control diverges and the S2+Dragon tumbles in pitch/yaw**, the S2 thrust is misdirected, apoapsis stalls and the vehicle **never reaches orbit**. Ascent-to-orbit is currently **BROKEN**.

@@ -6,12 +6,12 @@
 | System | L1 | L2 | L3 | L4 | L5 | Status | Notes / owning code |
 |---|---|---|---|---|---|---|---|
 | Ascent: S1 → MECO → separation | ✓ | ✓ | ✓ | ✓ | — | FLIGHT-PROVEN (as flown) | controlled to MECO, clean sep; `AscentControl`/`FlightDriver` |
-| Ascent: **S2 → SECO → orbit** | ✓ | ✓ | ⛔→🔧 | — | — | **FIX IMPLEMENTED (headless-proven), NEEDS RE-FLY** | **S2 attitude diverged at MVac ignition (tumble, no orbit), BOTH `DS-ASC-001/002`. ROOT CAUSE (confirmed): a ×1000 UNITS BUG — `ControlTorque` built the RCS geometric estimate in N·m (`thrusterPower*1000`) while stock/gimbal/MOI are kN·m/t·m², so `MAX(stock,geometric)` fed `maxAlpha` a value 1000× too high (37.6 vs real 0.27 rad/s²). Gimbal stock (464) MATCHES flight-delivered 445; the 62000 was the N·m-bugged RCS geometric. FIX: compute geometric power in kN (drop `*1000`), keep `MAX(stock,geometric)`; roll-trim/tuning untouched. `AttitudeLoopTest` L1: as-flown limit-cycles, units-fixed converges. Same bug spun the deorbit capsule (est 12870 vs delivered 7). NEEDS L3 RE-FLY to SECO/orbit. TOP BLOCKER until re-flown.** |
+| Ascent: **S2 → SECO → orbit** | ✓ | ✓ | ✓ | — | — | ✅ **FLIGHT-PROVEN (`DS-ASC-003`, 2026-08-31)** | **Reached 194×403 km / 51.6°.** Was the S2 tumble (`DS-ASC-001/002`); ROOT CAUSE was a ×1000 UNITS BUG — `ControlTorque` built the RCS geometric in N·m (`thrusterPower*1000`) vs the kN·m of stock/gimbal/MOI, inflating `maxAlpha` 1000× (37.6 vs real 0.27). FIX (`f1a0cbb`): geometric power in kN, keep `MAX(stock,geometric)`. In-flight confirmed: S2 `ctrl_tq` 526 (was 62000), tracking clean (rates 0.1–0.4 dps). Blocker cleared. |
 | Max-Q launch escape | ✓ | ✓ | ✓ | — | — | FLIGHT-PROVEN | `AbortControl`; protected |
 | Dual-vessel booster control | ✓ | ✓ | ✓ | ✓ | — | PARTIALLY PROVEN | controlled, not landed; `MissionConductor`/`BoosterControl` |
 | Booster RTLS landing | ✓ | ✓ | — | — | — | TESTED | `BoosterControl` |
 | Booster ASDS landing | ✓ | ✓ | — | — | — | TESTED | `BoosterControl` |
-| Rendezvous | ✓ | ✓ | — | — | — | TESTED | reaches region, no dock; `RendezvousControl` |
+| Rendezvous | ✓ | ✓ | ⛔ | — | — | **FLOWN — FUEL BUG (`DS-ASC-003`)** | far-field TRANSFER burn (`Phasing`) raised ap 200→406 km (~61 m/s maneuver) but spent ~85% of MMH (~370 m/s rocket-eq, ~15–25% eff) via continuous Draco translation (`force_frac` 0.67, no Δv budget guard) → tank empty before terminal approach, no dock. Root-caused, NOT fixed (review-gated). `RendezvousControl`/`Phasing` |
 | Docking (autonomous) | ✓ | ✓ | — | — | — | TESTED | no end-to-end; `DockingControl` |
 | Deorbit / Entry / Splashdown | ✓ | ? | — | — | — | OPEN | 0 autonomous returns; `ReturnControl` |
 | FDIR spine | ✓ | ✓ | ⚠️ | — | — | TESTED — **blind spot found** | observe-only; **did NOT detect the S2 100°+ attitude divergence** (`fdir_fault`=None all rows) → no attitude-divergence monitor; STATE stayed NOMINAL through the tumble |
