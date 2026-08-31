@@ -89,6 +89,18 @@ public static class RcsPulseTest
             Check("on-pulses last >= minOn (no buzzing)", minRun == int.MaxValue || minRun >= minTicks, "minRun=" + minRun + " need>=" + minTicks);
         }
 
+        // (6) SATURATED demand still burns: a full-magnitude command that only flips sign occasionally passes
+        // through as (near-)continuous thrust — PWPF's FULL threshold does NOT throttle a saturated command, it only
+        // rescues sub-full trim. So a limit cycle that SATURATES the controller is NOT killed by the deadband
+        // (contrast the sub-deadband jitter in (1b), which fired 0). This is the DS-ASC-004 OPEN QUESTION the
+        // instrumented re-fly must answer: is the terminal attitude DEMAND saturated (→ burns despite PWPF) or
+        // sub-full (→ pulsed)? The recorded pre-pulse act_* cannot distinguish it from delivered firing.
+        {
+            var st = RcsPulseState.Fresh; long on = 0; int flip = 40;   // hold ±1 for `flip` ticks, then reverse
+            for (int i = 0; i < N; i++) { double cmd = ((i / flip) % 2 == 0) ? 1.0 : -1.0; if (RcsPulse.Step(ref st, cmd, dt, db, mn, mf, full) != 0) on++; }
+            Check("saturated ±1 demand fires most ticks (PWPF does NOT throttle a full command)", on > (long)(0.85 * N), "on=" + on + "/" + N);
+        }
+
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
     }

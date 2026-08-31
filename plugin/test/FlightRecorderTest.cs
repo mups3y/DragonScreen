@@ -32,19 +32,25 @@ public static class FlightRecorderTest
         // ---- schema + indices (drift-proof) ----
         Check("schema is non-trivially wide (records everything)", FlightRecorder.Schema.Length >= 55, FlightRecorder.Schema.Length.ToString());
         Check("every index resolves against the schema",
-              FlightRecorder.MetS == 0 && FlightRecorder.RcsGeoRoll == FlightRecorder.Schema.Length - 1
-              && FlightRecorder.SkinTempFrac >= 0 && FlightRecorder.RcsGeoPitch >= 0 && FlightRecorder.RcsGeoYaw >= 0
+              FlightRecorder.MetS == 0 && FlightRecorder.RcsPulseTrans == FlightRecorder.Schema.Length - 1
+              && FlightRecorder.RcsGeoRoll >= 0 && FlightRecorder.RcsGeoPitch >= 0 && FlightRecorder.RcsGeoYaw >= 0
+              && FlightRecorder.SkinTempFrac >= 0
               && FlightRecorder.EngFlameout >= 0 && FlightRecorder.MmhFrac >= 0 && FlightRecorder.NtoFrac >= 0
               && FlightRecorder.KerCurThrustN >= 0 && FlightRecorder.SteerLossMps >= 0
               && FlightRecorder.DragLossMps >= 0 && FlightRecorder.CalKAero >= 0
               && FlightRecorder.RcsBalForceFrac >= 0 && FlightRecorder.CcDsigmaDeg >= 0
               && FlightRecorder.WarpRate >= 0 && FlightRecorder.EngIgnited >= 0
               && FlightRecorder.AoaSignedDeg >= 0 && FlightRecorder.RcsBalTorqueNaive >= 0
-              && FlightRecorder.SteerSignC >= 0 && FlightRecorder.KerAvail >= 0, "");
+              && FlightRecorder.SteerSignC >= 0 && FlightRecorder.KerAvail >= 0
+              && FlightRecorder.AppPitch >= 0 && FlightRecorder.AppYaw >= 0 && FlightRecorder.AppRoll >= 0
+              && FlightRecorder.AppTx >= 0 && FlightRecorder.AppTy >= 0 && FlightRecorder.AppTz >= 0
+              && FlightRecorder.RcsPulseAtt >= 0 && FlightRecorder.RcsPulseTrans >= 0, "");
         Check("named indices point at the right columns",
               FlightRecorder.Schema[FlightRecorder.MetS] == "met_s"
               && FlightRecorder.Schema[FlightRecorder.BankDeg] == "bank_deg"
-              && FlightRecorder.Schema[FlightRecorder.FdirFault] == "fdir_fault", "");
+              && FlightRecorder.Schema[FlightRecorder.FdirFault] == "fdir_fault"
+              && FlightRecorder.Schema[FlightRecorder.AppPitch] == "app_pitch"
+              && FlightRecorder.Schema[FlightRecorder.RcsPulseTrans] == "rcs_pulse_trans", "");
         Check("header column count == schema length", Split(FlightRecorder.Header()).Length == FlightRecorder.Schema.Length, "");
 
         // ---- formatting: invariant, blank for NaN, escaping ----

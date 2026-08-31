@@ -99,6 +99,10 @@ namespace DragonScreen
             // not far above (a >~2× jump vs those spikes = over-estimate → cap it). 0 when the RCS master is off; a
             // control column, so it is zeroed under on-rails warp with the rest.
             "rcs_geo_pitch", "rcs_geo_yaw", "rcs_geo_roll",
+            // APPLIED (post-PWPF-pulse) actuation actually written to FlightCtrlState, + pulse-stage active flags.
+            // The act_*/trans_* columns above are the REQUESTED (pre-pulse) controller demand; these are what the
+            // RCS actually received, so delivered firing is not inferred from demand (DS-ASC-004 verification).
+            "app_pitch", "app_yaw", "app_roll", "app_tx", "app_ty", "app_tz", "rcs_pulse_att", "rcs_pulse_trans",
         };
 
         static int Index(string name)
@@ -154,6 +158,9 @@ namespace DragonScreen
             MmhFrac = Index("mmh_frac"), NtoFrac = Index("nto_frac"), SkinTempFrac = Index("skin_temp_frac");
         public static readonly int RcsGeoPitch = Index("rcs_geo_pitch"), RcsGeoYaw = Index("rcs_geo_yaw"),
             RcsGeoRoll = Index("rcs_geo_roll");
+        public static readonly int AppPitch = Index("app_pitch"), AppYaw = Index("app_yaw"), AppRoll = Index("app_roll"),
+            AppTx = Index("app_tx"), AppTy = Index("app_ty"), AppTz = Index("app_tz"),
+            RcsPulseAtt = Index("rcs_pulse_att"), RcsPulseTrans = Index("rcs_pulse_trans");
 
         // ---- formatting ----
         public static string Num(double v)
@@ -378,6 +385,16 @@ namespace DragonScreen
             Set(c, RcsGeoPitch, geoPitchNm); Set(c, RcsGeoYaw, geoYawNm); Set(c, RcsGeoRoll, geoRollNm);
         }
 
+        // APPLIED (post-PWPF-pulse) actuation written to FlightCtrlState + whether the pulse stage was active
+        // this tick. Pairs with act_*/trans_* (the requested pre-pulse demand) so delivered firing is observable.
+        public static void PutApplied(string[] c, double appPitch, double appYaw, double appRoll,
+                                      double appTx, double appTy, double appTz, bool pulseAtt, bool pulseTrans)
+        {
+            Set(c, AppPitch, appPitch); Set(c, AppYaw, appYaw); Set(c, AppRoll, appRoll);
+            Set(c, AppTx, appTx); Set(c, AppTy, appTy); Set(c, AppTz, appTz);
+            Set(c, RcsPulseAtt, pulseAtt ? 1.0 : 0.0); Set(c, RcsPulseTrans, pulseTrans ? 1.0 : 0.0);
+        }
+
         public static void PutSelfCal(string[] c, SelfCalState s)
         {
             Set(c, CalThrustN, s.Thrust.Theta);
@@ -457,6 +474,7 @@ namespace DragonScreen
                 ActPitchC, ActYawC, ActRollC,
                 CtrlTqPitch, CtrlTqYaw, CtrlTqRoll,
                 RcsGeoPitch, RcsGeoYaw, RcsGeoRoll,
+                AppPitch, AppYaw, AppRoll, AppTx, AppTy, AppTz, RcsPulseAtt, RcsPulseTrans,
                 RatePitchDps, RateRollDps, RateYawDps,
                 ThrustN, RcsThrustN, AccelG,
             };

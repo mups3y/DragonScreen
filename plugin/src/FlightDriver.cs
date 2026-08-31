@@ -174,6 +174,12 @@ namespace DragonScreen
         [Tunable] public static double RcsPulseFull     = 0.90;   // |cmd| at/above → continuous thrust
         static RcsPulseState pX = RcsPulseState.Fresh, pY = RcsPulseState.Fresh, pZ = RcsPulseState.Fresh;
         static RcsPulseState pPitch = RcsPulseState.Fresh, pYaw = RcsPulseState.Fresh, pRoll = RcsPulseState.Fresh;
+        // ⭐ INSTRUMENTATION (read-only, no behaviour change): the APPLIED post-pulse actuation actually written to
+        // FlightCtrlState this tick, + whether the RCS attitude/translation pulse stage was active. Lets the recorder
+        // show REQUESTED (AttitudePilot.Act*/CmdTrans*, pre-pulse) vs APPLIED, so delivered RCS firing is measured,
+        // not inferred from pre-pulse controller demand (DS-ASC-004 verification, 2026-08-31).
+        public static float AppliedPitch, AppliedYaw, AppliedRoll, AppliedTransX, AppliedTransY, AppliedTransZ;
+        public static bool  PulseAttActive, PulseTransActive;
         static float Pulse(ref RcsPulseState st, float cmd, double dt)
         { return (float)RcsPulse.Step(ref st, cmd, dt, RcsPulseDeadband, RcsPulseMinOn, RcsPulseMinOff, RcsPulseFull); }
 
@@ -201,6 +207,12 @@ namespace DragonScreen
             }
             if (attRollOwned) st.roll = rcsAtt ? Pulse(ref pRoll, cmdAttRoll, dt) : cmdAttRoll; // AttitudePilot roll damping
             if (rollOwned)    st.roll = rcsAtt ? Pulse(ref pRoll, cmdRoll, dt)    : cmdRoll;     // entry bank (mutually exclusive)
+
+            // instrumentation snapshot: the APPLIED (post-pulse) actuation + pulse-stage state (read-only).
+            AppliedPitch = st.pitch; AppliedYaw = st.yaw; AppliedRoll = st.roll;
+            AppliedTransX = st.X; AppliedTransY = st.Y; AppliedTransZ = st.Z;
+            PulseAttActive = (attitudeOwned || attRollOwned || rollOwned) && rcsAtt;
+            PulseTransActive = transOwned && pulse;
         }
 
         // Physics-rate tick — control cadence, not display cadence.

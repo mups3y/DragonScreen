@@ -1,10 +1,14 @@
 # AI REVIEW HANDOFF — DragonScreen (read me first)
 
-> A single reading guide + current‑state snapshot for an **external AI reviewing the recent GNC work**.
-> It **points to** the authoritative docs; it does **not** replace them and is **not** a governing plan
-> (the sole plan is `docs/MASTER_BUILD_SPEC.md`). Your job: understand what was done and **check whether it
-> is correct**, against the evidence (the flight CSVs) and the rules below. Be skeptical — the project's own
-> rule is *"code existing ≠ working; only in‑game KSP flight is flight‑proven."*
+> **CLASSIFICATION: HISTORICAL REVIEW MATERIAL — a point‑in‑time snapshot prepared for a specific external
+> review. It is NOT an instruction document and NOT a governing plan.** The authoritative live docs are
+> `docs/MASTER_BUILD_SPEC.md` (the sole governing plan) and `docs/FLIGHT_VERIFICATION.md` (the evidence log);
+> where they and this file disagree, they win. Findings later corrected are flagged inline (see §3 item 5,
+> which a 2026‑08‑31 verification RETRACTED).
+>
+> A reading guide + snapshot for an **external AI reviewing the recent GNC work**: understand what was done
+> and **check whether it is correct**, against the evidence (the flight CSVs) and the rules below. Be skeptical —
+> the project's own rule is *"code existing ≠ working; only in‑game KSP flight is flight‑proven."*
 
 Project: an autonomous **Crew Dragon on Falcon 9 inside Kerbal Space Program** with **Realism Overhaul / Real
 Solar System** (RSS/RO — real Earth radius 6371 km, real µ, real physics). A C# KSP plugin: a Dragon
@@ -77,21 +81,26 @@ DS‑DEO‑001) and **`docs/COMPLETION_MATRIX.md`**. Recent commits: `f1a0cbb..H
    which inhibits + holds + warns once return propellant falls to `RvReturnReserveFrac` (0.20), to prevent a total
    drain. **It tripped correctly in DS‑ASC‑004 but did not save the flight — see #5.**
 
-5. **⚠ DS‑ASC‑004 — STILL ran dry, and it exposed a technique error of mine.** A1 worked, but the drain **moved
-   from translation to a TERMINAL ATTITUDE LIMIT CYCLE.** In the approach the attitude loop oscillates
-   (`rate_yaw` ±4 dps around `att_err` ~3°, `act` ±1 at **68–82% RCS duty**) and drained mmh 0.84→0.02 in ~500 s;
-   after the guard cut translation, **attitude alone drained 0.20→0.02.** Mechanism: the attitude PID has **no
-   deadband/PWPF** (`pure/AttitudeLoop.cs:27`), so holding attitude on the tiny bang‑bang Dracos chatters —
-   worsened by a **~1.5× authority over‑read** (`ctrl_tq_yaw` 10.3 vs a flight‑measured ~7; the "secondary
-   over‑count" residual I deferred at the units fix, **not harmless without a gimbal**). **My error:** I built the
-   translation guard (#4) for the *previous* drain path without first confirming the *current* one. Correct
-   technique — measure the drain path (attitude vs translation duty) before fixing — is now applied.
+5. **⚠ DS‑ASC‑004 — STILL ran dry; my first read was RETRACTED on verification (2026‑08‑31).** A1 worked, but the
+   tank still emptied in the terminal phase (mmh 0.84→0.02 in ~500 s; the guard tripped at 20% yet mmh continued
+   to ~0.02). I first called this a "terminal attitude limit cycle because the loop has no deadband/PWPF" —
+   **that is WRONG.** `FlightDriver.cs` (L170‑203) **already has a PWPF/deadband path** (`UseRcsPulse=true`,
+   `RcsPulseDeadband=0.05`, `RcsPulse.Step` on pitch/yaw/roll when the engine is off), implemented + tested in
+   `pure/RcsPulse.cs` + `test/RcsPulseTest.cs`; my claim read only `AttitudeLoop.cs:27` (the PID's *internal*
+   deadband). And the recorded `act_*`/`trans_*` are **pre‑pulse controller DEMAND** (`FlightLog.cs:100`), not the
+   applied post‑pulse actuation — so my "68–82% duty" measured demand, not delivered firing. I also missed the
+   per‑phase capsule‑RCS scaling (`CapsuleRcs.*Pct`) and `Attitude.CoastMaxRateDps`. **The terminal‑drain mechanism
+   is UNKNOWN — EVIDENCE REQUIRED.** I made an **instrumentation‑only** change (record the applied post‑pulse
+   actuation + pulse flags: `app_*`, `rcs_pulse_att/trans`) and owe **one focused re‑fly** to attribute the drain.
+   No control‑law change until that flight proves the mechanism.
 
-**THE OPEN DECISION (unresolved — I want your recommendation):** to fix the terminal attitude fuel drain, should I
-**(a)** implement an RCS attitude **deadband/PWPF** *and* switch `ControlTorque` to the **achievable** RCS authority
-(~7, not 10.3) together, or **(b)** first **quantify** how much of the drain is the limit cycle vs the over‑read,
-then implement the sized fix? My lean is **(b)** (measure, then fix) given I just misfired on #4. Is a deadband/PWPF
-even the correct primary technique, or is something else the real fix?
+**THE OPEN DECISION (now: verification, not a fix):** the fix is NOT decided — the mechanism isn't proven, and a
+deadband/PWPF already exists. The immediate step is the instrumented re‑fly, THEN quantify each contributor
+(controller demand, post‑PWPF actuation, the ~1.5× authority over‑read `ctrl_tq_yaw` 10.3 vs measured ~7,
+translation, CapsuleRcs scaling), THEN present the smallest root‑cause fix. **Reviewer, please still weigh in on
+Question A below:** given a PWPF stage already exists, what is the most likely real cause, and is a deadband/PWPF
+change even the right lever — or is it authority over‑estimation, the phase RCS scaling, saturated demand passing
+through PWPF's full‑threshold, or the far‑field/approach geometry?
 
 ---
 
@@ -113,8 +122,14 @@ even the correct primary technique, or is something else the real fix?
 
 ## 5. What I'm asking you
 
-**A. The open decision above** — (a) fix together, or (b) measure‑then‑fix? Recommend, and say whether a
-deadband/PWPF is the right primary technique for the terminal attitude limit cycle.
+**A. The terminal fuel drain (mechanism UNKNOWN — a PWPF/deadband already exists in `FlightDriver`).** Inspect the
+full command chain — `AttitudeLoop.Axis` → `AttitudeController`/`AttitudePilot.Act*` (recorded demand) →
+`FlightDriver.OnFlyByWire` ownership + `RcsPulse.Step` (PWPF, `pure/RcsPulse.cs`, `test/RcsPulseTest.cs`) →
+`FlightCtrlState` → RCS thrust/resource → measured rate. What is the most likely real cause of the terminal drain,
+and is a deadband/PWPF change even the right lever, or is it authority over‑estimation, the per‑phase CapsuleRcs
+scaling, saturated demand passing PWPF's full‑threshold, or the approach geometry? Do NOT assume "no PWPF." Also
+sanity‑check the instrumentation I just added (`app_*`, `rcs_pulse_att/trans`) — is it sufficient to attribute the
+drain on the next flight, or is something else needed (e.g. a per‑cause propellant tally)?
 
 **B. Ascent to orbit** — independently hunt for issues in `AscentControl`, the `ControlTorque` units fix,
 staging/MECO/SECO, and the A1 insertion change. Is the units‑bug diagnosis actually right? Could inserting

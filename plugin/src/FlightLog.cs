@@ -127,6 +127,11 @@ namespace DragonScreen
                 // confirm flight PROVES it settles near the stock report's good spikes, not far above (over-reading).
                 FlightRecorder.PutRcsGeo(row, AttitudePilot.GeoTorquePitchNm, AttitudePilot.GeoTorqueYawNm,
                                          AttitudePilot.GeoTorqueRollNm);
+                // APPLIED (post-PWPF-pulse) actuation + pulse-stage state — so delivered RCS firing is measured,
+                // not inferred from the pre-pulse act_*/trans_* demand (DS-ASC-004 verification instrumentation).
+                FlightRecorder.PutApplied(row, FlightDriver.AppliedPitch, FlightDriver.AppliedYaw, FlightDriver.AppliedRoll,
+                                          FlightDriver.AppliedTransX, FlightDriver.AppliedTransY, FlightDriver.AppliedTransZ,
+                                          FlightDriver.PulseAttActive, FlightDriver.PulseTransActive);
                 // KER soft cross-check: what Kerbal Engineer's fuel-flow sim reports for the active vessel, so the
                 // corpus can verify it agrees with our own StageStats/UPFG before any consumer trusts KER over us.
                 KerStage[] ks;
