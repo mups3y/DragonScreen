@@ -25,7 +25,11 @@ namespace DragonScreen
 
         // ---- shared [Tunable] config (read by every AttitudeController instance) ----
         // B4 lag compensation: command the gimbal harder when it slews slowly (snappier loop through max-Q).
-        [Tunable] public static bool UseLagComp = true;
+        // ⭐ REMOVED (owner 2026-09-01, "find the conflicting/runaway loop and remove it"): the B4 actuator-lag
+        // compensator over-drove the gimbal command to the ±1 rail every tick to beat gimbal lag (CSV: act≈0.1 but
+        // applied app rails to 1.0 → constant gimbal spam/jitter during S2). Off = the loop's command goes straight
+        // to the (now-dampened) gimbal, which follows at its own rate. Set true to restore the lead compensator.
+        [Tunable] public static bool UseLagComp = false;
         // Campaign 6: no longer a GATE — the loop now ALWAYS takes max(stock-reported, geometric) RCS torque
         // (the stock report flickers ~2 N·m 91% of RCS-on ticks, above any sane gate, and saturated the Dracos).
         // Retained as the DIAGNOSTIC threshold: when the geometric estimate exceeds the report by more than this,

@@ -78,7 +78,11 @@ namespace DragonScreen
         // tank). Budget-sized (docs/FLIGHT_VERIFICATION.md): parking ~50 km below the station leaves a ~11 m/s residual
         // transfer + ~38 m/s approach/dock = ~49 of the 66 m/s tank, and phases ~4°/orbit. Tunable; re-fly confirms the
         // terminal per-axis efficiency (lower ⇒ reduce this for more budget headroom, at the cost of slower phasing).
-        [Tunable] public static double ParkBelowStationKm = 50.0;   // insert this far below the selected target's periapsis
+        // ⭐ LOWERED 50→200 (owner 2026-09-01, "lower the orbit height / flatten the profile"): a ~50 km-below-ISS
+        // insertion (~367 km) made UPFG loft near-vertical after S2 ignition to gain the altitude (inefficient +
+        // the rapid post-sep slew toward the booster). 200 km below the ISS ≈ 217 km insertion → a flatter S2
+        // ascent; the rendezvous phasing raises the rest. (Trade-off: more phasing Δv than the old high park.)
+        [Tunable] public static double ParkBelowStationKm = 200.0;  // insert this far below the selected target's periapsis
         [Tunable] public static double ParkInsertFloorKm  = 185.0;  // never target an insertion below this (keep a safe orbit)
         static double coastStartUT = -1;
         static bool dragonSeparated;
