@@ -34,6 +34,7 @@ public static class TestMain
         bad += AuthorityManagerTest.Run(); // Phase 2: control-authority arbitration (Auto/Manual/Recovery/Abort, per-vehicle)
         bad += ControlTest.Run();          // L2 control: attitude PD + throttle bucket/g-limit + RCS
         bad += RcsPulseTest.Run();         // Tier-2: PWPF/delta-sigma RCS pulse modulation (Draco chatter fix)
+        bad += RcsAccountingTest.Run();    // instrumentation: physics-rate RCS actuation accounting (category split)
         bad += ConicTest.Run();            // L3 support: Vec3 + conic propagator (UPFG gravity)
         bad += AscentTest.Run();           // L3 ascent: launch azimuth + S1 pitch program + FSM
         bad += LaunchWindowTest.Run();     // L3 ascent: launch-to-rendezvous plane-crossing / RAAN window

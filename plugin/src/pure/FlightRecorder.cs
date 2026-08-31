@@ -100,9 +100,16 @@ namespace DragonScreen
             // control column, so it is zeroed under on-rails warp with the rest.
             "rcs_geo_pitch", "rcs_geo_yaw", "rcs_geo_roll",
             // APPLIED (post-PWPF-pulse) actuation actually written to FlightCtrlState, + pulse-stage active flags.
-            // The act_*/trans_* columns above are the REQUESTED (pre-pulse) controller demand; these are what the
-            // RCS actually received, so delivered firing is not inferred from demand (DS-ASC-004 verification).
+            // The act_*/trans_* columns above are the REQUESTED (pre-pulse) controller demand; app_* are the
+            // post-pulse COMMAND (NOT delivered thruster force — KSP's RCS solver owns that). Per-tick snapshots,
+            // so they ALIAS the 0.06 s pulse dwell — use the acc_* columns below for duty/fuel attribution.
             "app_pitch", "app_yaw", "app_roll", "app_tx", "app_ty", "app_tz", "rcs_pulse_att", "rcs_pulse_trans",
+            // PHYSICS-RATE RCS accounting (pure/RcsAccounting), accumulated over the interval + reset each sample —
+            // NOT aliased. Category TIME (s), delivered RCS IMPULSE (N·s) by category, and requested-vs-applied
+            // command-seconds. Per-category propellant = (category imp / total imp) × the mmh/nto delta this interval.
+            "acc_int_s", "acc_att_s", "acc_trans_s", "acc_both_s", "acc_none_s",
+            "acc_att_imp", "acc_trans_imp", "acc_both_imp",
+            "acc_req_att", "acc_app_att", "acc_req_trans", "acc_app_trans",
         };
 
         static int Index(string name)
@@ -161,6 +168,11 @@ namespace DragonScreen
         public static readonly int AppPitch = Index("app_pitch"), AppYaw = Index("app_yaw"), AppRoll = Index("app_roll"),
             AppTx = Index("app_tx"), AppTy = Index("app_ty"), AppTz = Index("app_tz"),
             RcsPulseAtt = Index("rcs_pulse_att"), RcsPulseTrans = Index("rcs_pulse_trans");
+        public static readonly int AccIntS = Index("acc_int_s"), AccAttS = Index("acc_att_s"),
+            AccTransS = Index("acc_trans_s"), AccBothS = Index("acc_both_s"), AccNoneS = Index("acc_none_s"),
+            AccAttImp = Index("acc_att_imp"), AccTransImp = Index("acc_trans_imp"), AccBothImp = Index("acc_both_imp"),
+            AccReqAtt = Index("acc_req_att"), AccAppAtt = Index("acc_app_att"),
+            AccReqTrans = Index("acc_req_trans"), AccAppTrans = Index("acc_app_trans");
 
         // ---- formatting ----
         public static string Num(double v)
@@ -393,6 +405,17 @@ namespace DragonScreen
             Set(c, AppPitch, appPitch); Set(c, AppYaw, appYaw); Set(c, AppRoll, appRoll);
             Set(c, AppTx, appTx); Set(c, AppTy, appTy); Set(c, AppTz, appTz);
             Set(c, RcsPulseAtt, pulseAtt ? 1.0 : 0.0); Set(c, RcsPulseTrans, pulseTrans ? 1.0 : 0.0);
+        }
+
+        // Physics-rate RCS accounting accumulated over this interval (pure/RcsAccounting), then reset by the caller.
+        public static void PutRcsAccounting(string[] c, RcsAccounting a)
+        {
+            if (a.IntervalS <= 0.0) return;   // no RCS-phase ticks this interval → leave blank
+            Set(c, AccIntS, a.IntervalS);
+            Set(c, AccAttS, a.AttOnlyS); Set(c, AccTransS, a.TransOnlyS); Set(c, AccBothS, a.BothS); Set(c, AccNoneS, a.NoneS);
+            Set(c, AccAttImp, a.AttOnlyImpNs); Set(c, AccTransImp, a.TransOnlyImpNs); Set(c, AccBothImp, a.BothImpNs);
+            Set(c, AccReqAtt, a.ReqAttCs); Set(c, AccAppAtt, a.AppAttCs);
+            Set(c, AccReqTrans, a.ReqTransCs); Set(c, AccAppTrans, a.AppTransCs);
         }
 
         public static void PutSelfCal(string[] c, SelfCalState s)

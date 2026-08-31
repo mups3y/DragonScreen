@@ -32,7 +32,8 @@ public static class FlightRecorderTest
         // ---- schema + indices (drift-proof) ----
         Check("schema is non-trivially wide (records everything)", FlightRecorder.Schema.Length >= 55, FlightRecorder.Schema.Length.ToString());
         Check("every index resolves against the schema",
-              FlightRecorder.MetS == 0 && FlightRecorder.RcsPulseTrans == FlightRecorder.Schema.Length - 1
+              FlightRecorder.MetS == 0 && FlightRecorder.AccAppTrans == FlightRecorder.Schema.Length - 1
+              && FlightRecorder.RcsPulseTrans >= 0 && FlightRecorder.AccIntS >= 0 && FlightRecorder.AccBothImp >= 0
               && FlightRecorder.RcsGeoRoll >= 0 && FlightRecorder.RcsGeoPitch >= 0 && FlightRecorder.RcsGeoYaw >= 0
               && FlightRecorder.SkinTempFrac >= 0
               && FlightRecorder.EngFlameout >= 0 && FlightRecorder.MmhFrac >= 0 && FlightRecorder.NtoFrac >= 0

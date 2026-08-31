@@ -181,6 +181,7 @@ namespace DragonScreen
         public static float AppliedPitch, AppliedYaw, AppliedRoll, AppliedTransX, AppliedTransY, AppliedTransZ;
         public static bool  PulseAttActive, PulseTransActive;
         static bool pulseConfigLogged;   // one-shot: emit the effective pulse config so a flight PROVES the values
+        public static RcsAccounting RcsAcct;   // physics-rate RCS actuation accounting; recorder samples + resets it
         static float Pulse(ref RcsPulseState st, float cmd, double dt)
         { return (float)RcsPulse.Step(ref st, cmd, dt, RcsPulseDeadband, RcsPulseMinOn, RcsPulseMinOff, RcsPulseFull); }
 
@@ -221,6 +222,19 @@ namespace DragonScreen
             AppliedTransX = st.X; AppliedTransY = st.Y; AppliedTransZ = st.Z;
             PulseAttActive = (attitudeOwned || attRollOwned || rollOwned) && rcsAtt;
             PulseTransActive = transOwned && pulse;
+
+            // PHYSICS-RATE RCS accounting (instrumentation only, un-aliased by the 0.06 s pulse dwell). Gated to
+            // the RCS-actuator phases (engine off / translating) so it does not iterate parts during gimbal ascent.
+            if (rcsAtt || (transOwned && pulse))
+            {
+                Vessel av = FlightGlobals.ActiveVessel;
+                double rcsF = av != null ? Actuator.RcsThrustN(av) : 0.0;   // actual Σ thrustForces·power (delivered)
+                double reqAtt = Math.Abs(cmdPitch) + Math.Abs(cmdYaw) + Math.Abs(attRollOwned ? cmdAttRoll : (rollOwned ? cmdRoll : 0.0));
+                double appAtt = Math.Abs(st.pitch) + Math.Abs(st.yaw) + Math.Abs(st.roll);
+                double reqTrans = Math.Abs(transX) + Math.Abs(transY) + Math.Abs(transZ);
+                double appTrans = Math.Abs(st.X) + Math.Abs(st.Y) + Math.Abs(st.Z);
+                RcsAcct.Add(dt, appAtt > 0.5, appTrans > 0.5, rcsF, reqAtt, appAtt, reqTrans, appTrans);
+            }
         }
 
         // Physics-rate tick — control cadence, not display cadence.

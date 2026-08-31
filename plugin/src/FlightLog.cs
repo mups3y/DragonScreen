@@ -132,6 +132,9 @@ namespace DragonScreen
                 FlightRecorder.PutApplied(row, FlightDriver.AppliedPitch, FlightDriver.AppliedYaw, FlightDriver.AppliedRoll,
                                           FlightDriver.AppliedTransX, FlightDriver.AppliedTransY, FlightDriver.AppliedTransZ,
                                           FlightDriver.PulseAttActive, FlightDriver.PulseTransActive);
+                // physics-rate RCS accounting accumulated since the last sample — log it, then reset for the next interval.
+                FlightRecorder.PutRcsAccounting(row, FlightDriver.RcsAcct);
+                FlightDriver.RcsAcct.Reset();
                 // KER soft cross-check: what Kerbal Engineer's fuel-flow sim reports for the active vessel, so the
                 // corpus can verify it agrees with our own StageStats/UPFG before any consumer trusts KER over us.
                 KerStage[] ks;
