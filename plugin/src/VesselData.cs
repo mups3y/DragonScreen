@@ -417,6 +417,16 @@ namespace DragonScreen
             st.ClosingFast = (range < 100.0 && rate < -2.0);
             st.RateText = rate.ToString("F2") + " m/s";
 
+            // Body angular RATES (deg/s) — the BLUE rate under each GREEN correction in the docking
+            // two-number scheme. Published here (rule T3: the docking page showed "—" because nothing
+            // upstream supplied them) from vessel.angularVelocity, axes pitch=x / roll=y / yaw=z, the
+            // same convention FlightLog/FlightRecorder use. Independent of the target, but the page only
+            // reads them when a target is present, so they ride in this block.
+            Vector3 avDps = v.angularVelocity * Mathf.Rad2Deg;
+            st.PitchRateText = DegRate(avDps.x);
+            st.RollRateText  = DegRate(avDps.y);
+            st.YawRateText   = DegRate(avDps.z);
+
             Transform ct = v.ReferenceTransform;
             if (ct != null)
             {
@@ -802,6 +812,12 @@ namespace DragonScreen
         {
             if (double.IsNaN(d)) return "-";
             return d.ToString("F1") + " deg";
+        }
+
+        private static string DegRate(double dps)
+        {
+            if (double.IsNaN(dps) || double.IsInfinity(dps)) return "-";
+            return dps.ToString("F1") + " deg/s";
         }
 
         private static double HullTempC(Vessel v)
