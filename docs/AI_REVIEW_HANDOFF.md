@@ -100,9 +100,10 @@ even the correct primary technique, or is something else the real fix?
 - **Flight CSVs (raw recorder telemetry):** `docs/flights/*.csv` — force‑added past `.gitignore`. Key ones:
   `Crew-2_20260831_102133.csv` (DS‑ASC‑002, the S2 tumble regression), `Crew-2_20260831_141924.csv` +
   `Crew-2_deorbit_geometry_dump_manual_2500s.csv` (DS‑DEO‑001, capsule authority), and the latest
-  `Crew-2_20260831_151611.csv` (DS‑ASC‑003, to‑orbit + first fuel‑out). `docs/flights/README.md` has the column
-  schema and **runnable stdlib‑Python reproduction snippets** for the key numbers (the units bug, the 21% efficiency,
-  the budget). (The DS‑ASC‑004 CSV `Crew-2_20260831_170204.csv` is in the game's capture folder, not yet archived.)
+  `Crew-2_20260831_151611.csv` (DS‑ASC‑003, to‑orbit + first fuel‑out), and `Crew-2_20260831_170204.csv`
+  (DS‑ASC‑004, the A1 flight — reproduce the terminal attitude limit cycle). `docs/flights/README.md` has the
+  column schema and **runnable stdlib‑Python reproduction snippets** for every key number (the units bug, the 21%
+  efficiency, the budget, and the DS‑ASC‑004 attitude‑vs‑translation duty).
 - **Headless proof:** `plugin/test/AttitudeLoopTest.cs` (run `python plugin/build.py test`).
 - **The numbers to sanity‑check yourself:** MOI is in t·m² (full stack ~120,448); the gimbal/stock authority and
   the geometric are meant to be kN·m; Draco Isp 240 (`GameData/TundraExploration/Parts/RodanV2/TE_CD2_POD.cfg`);
