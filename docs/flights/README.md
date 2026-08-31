@@ -2,7 +2,7 @@
 
 Archived **FlightRecorder** CSVs (and one **geometry dump**) kept as evidence for `docs/FLIGHT_VERIFICATION.md`. These files are normally git‑ignored (`.gitignore`: `*.csv`, `DragonScreen_capture/`); they are **force‑added** because they are the evidence behind the S2 ascent root cause, the deorbit/units‑bug resolution, and the screen (DOCKUI) verification. The recorder + `GeometryDump` write to `<KSP>/DragonScreen_capture/` in flight; these are copies.
 
-## What's here (2026‑08‑31 test session)
+## What's here (2026‑08‑31 → 09‑01 test sessions)
 
 | File | Flight ID | Vessel | Rows | Covers |
 |---|---|---|---|---|
@@ -14,7 +14,12 @@ Archived **FlightRecorder** CSVs (and one **geometry dump**) kept as evidence fo
 | `Crew-2_deorbit_geometry_dump_manual_2500s.csv` | DS‑DEO‑001 | Dragon capsule alone | 5 parts / 16 thrusters | **geometry dump** (different schema, see below): stock `GetPotentialTorque` vs the geometric, for the deorbit config |
 | `Crew-2_20260831_151611.csv` | **DS‑ASC‑003** | Dragon (S2+Dragon → capsule) | 4648 | **the units-fix flight: ascent to ORBIT (194×403 km / 51.6°)** then rendezvous. Proves S2 `ctrl_tq`=526 (fix live) and the rendezvous fuel-exhaustion (far-field TRANSFER burns ~85% of MMH ≈ MET 18,577–18,805) |
 | `Crew-2_20260831_170204.csv` | **DS‑ASC‑004** | Dragon (A1 + guard build) | 5694 | **A1 flight:** inserted 366×363 km (50 km below the 417 km ISS), transfer small — but STILL ran dry. `act_pitch/yaw/roll` are PRE‑pulse DEMAND (not delivered firing — the "68–82% duty" is retracted); see DS‑ASC‑005/006 |
+| `Crew-2_20260831_194036.csv` | **DS‑ASC‑005** | Dragon (instrumented build) | 5200 | added `app_*` (post‑PWPF command) + pulse‑config log. Resolved the terminal drain = attitude ~85%; yaw authority over‑read ~4× → the **trust‑stock** fix. Same terminal drain as DS‑ASC‑004 |
 | `Crew-2_20260831_204829.csv` (+ `_KSPlog_excerpt.txt`) | **DS‑ASC‑006** | Dragon (trust‑stock build) | 7394 | trust‑stock fix live (`ctrl_tq` 10→2) but still ran dry; drain still ~94% attitude. The two real reasons = constant pulsing + wrong procedure (see `FLIGHT_VERIFICATION.md`) |
+| `Crew-2_20260831_220928.csv` (+ `_222644.csv`, `_KSPlog_excerpt.txt`) | **DS‑ASC‑007** | Dragon (`acc_*` build) | 4884 (+ cont.) | **first `acc_*` flight** — resolved the RCS‑loss mechanism: ~97% of rendezvous fuel is ATTITUDE (52% attitude‑only + 45% simultaneous), 3% translation. Ran dry at ~91 km, **pre‑deadband baseline** |
+| `Crew-2_20260901_004929.csv` | **DS‑ASC‑008** | Dragon (deadband build `a6eb15f`) | 3778 | **deadband re‑fly:** far‑field fuel FIXED — ended with **58% MMH left** (vs DS‑ASC‑007 dry) — but **stopped at 109 km, 9 km short of the 100 km near‑field hand‑off → terminal approach + dock STILL UNPROVEN.** Ascent 367×336 km + booster hold. Sep tumble still 17% (see `FLIGHT_VERIFICATION.md`) |
+| `Crew-2_Probe_20260901_005210.csv` | DS‑ASC‑008 | Booster (non‑active recovery) | 1314 | separation → EntryBurn → LandingBurn to 11.5 km (controlled, not landed) |
+| `DS-ASC-008_screen1/2/3.png` · `DS-ASC-008_geometry_dump_{pad,manual_0s}.csv` | DS‑ASC‑008 | Dragon | — | the three DOCKUI screen captures + pre‑flight geometry dumps for this flight |
 
 **⚠ Column meaning (do not conflate):** `act_*`/`trans_*` = REQUESTED pre‑pulse controller demand; `app_*`/`rcs_pulse_*` = the **post‑PWPF COMMAND** written to `FlightCtrlState` (**NOT** delivered thruster force — KSP's RCS solver decides that), and they are per‑tick **snapshots that alias the 0.06 s pulse dwell**. For un‑aliased duty/fuel use the **`acc_*`** columns (physics‑rate accounting: category time/impulse split attitude‑only/translation‑only/simultaneous/neither + requested‑vs‑applied command‑seconds; per‑category propellant = category_imp/total_imp × the mmh/nto delta). First flight with `acc_*` = the next one after 2026‑08‑31 20:48.
 

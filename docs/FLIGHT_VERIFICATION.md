@@ -18,15 +18,15 @@ L1 software/math (pure tests) · L2 KSP integration · L3 single-vessel flight �
 |---|---|---|---|---|
 | **Ascent to orbit (S1→MECO→sep→S2→SECO→orbit)** | **L3** | ✅ **FLIGHT-PROVEN** (2026-08-31, units-fix build `f1a0cbb`) | **`DS-ASC-003`**: reached **194×403 km / 51.6°**; S2 `ctrl_tq_pitch` = 526 (units fix live, was 62,000); attitude tracking clean (S2 rates 0.1–0.4 dps, actuation ~0). Supersedes the `DS-ASC-001/002` S2 tumble. | `AscentControl`, `FlightDriver`, `AttitudeController.ControlTorque`, staging/sep, `MissionConductor` |
 | Max-Q launch escape (attitude authority, geometric RCS fallback, chutes, splashdown, crew survival) | L3 | FLIGHT-PROVEN | prior audit | `AbortControl`, `FlightDriver`, abort latch, RCS authority |
-| Dual-vessel booster control (Dragon active + non-active booster on own `OnFlyByWire`) | L4 | PARTIALLY PROVEN (controlled, not landed) | prior audit (~16k OnFlyByWire callbacks) | `MissionConductor`, `BoosterControl`, `RangeExtender`, `FlightDriver` |
+| Dual-vessel booster control (Dragon active + non-active booster on own `OnFlyByWire`) | L4 | PARTIALLY PROVEN (controlled, not landed) | prior audit (~16k OnFlyByWire callbacks); re-confirmed `DS-ASC-008` (probe flew EntryBurn→LandingBurn to 11.5 km) | `MissionConductor`, `BoosterControl`, `RangeExtender`, `FlightDriver` |
 
 > **Re-fly requirement (ACTIVE — the three rows above are currently INVALIDATED, rule V4):** Phase-2 landed as CODE — UNFLIGHTED on 2026-08-31 (commit pending): the AuthorityManager extraction + the `Clamp1`/`Clamp1f`/`Clamp01f` NaN fix touch `FlightDriver` and `BoosterControl`. The extraction is **behavior-preserving by construction** (the proven `OnFlyByWire` actuation path is unchanged; only additive read-only authority publishing + NaN guards were added), so the flights are expected to reproduce the prior results — but they are not re-proven until flown.
 >
 > **Gate before Phase 3 — status 2026-08-31 (PARTIAL, see flight log `DS-ASC-001`):**
 > - `DS-RTLS/dual` — **re-confirmed** (controlled, not landed): Dragon active + non-active booster on its own `OnFlyByWire`, both held loaded/unpacked, no authority loss. ✓ *as flown*
-> - `DS-ASC` (ascent to orbit) — ✅ **DONE (`DS-ASC-003`, 2026-08-31):** reached 194×403 km / 51.6° on the units-fix build; S2 `ctrl_tq` 526 (was 62,000), tracking clean. The ascent L3 proof is **restored**.
-> - `DS-ABORT` (max-Q launch escape → chutes → splashdown, crew survive) — **STILL OWED** (not exercised). Also re-invalidated by the `ControlTorque` units fix (`f1a0cbb`) — the abort RCS authority path changed.
-> - `DS-RV/DOCK` (rendezvous → dock) — **BLOCKED by a fuel-budget bug:** the far-field TRANSFER burn drained ~85% of MMH (see `DS-ASC-003` below), leaving nothing for terminal approach/dock.
+> - `DS-ASC` (ascent to orbit) — ✅ **DONE (`DS-ASC-003`, 2026-08-31; re-confirmed `DS-ASC-008`, 2026-09-01 on the deadband build):** reached 194×403 km / 51.6° (367×336 km on DS-ASC-008); S2 `ctrl_tq` 526 (was 62,000), tracking clean. The ascent L3 proof is **restored** and holds through the deadband change.
+> - `DS-ABORT` (max-Q launch escape → chutes → splashdown, crew survive) — **STILL OWED** (not exercised). Also re-invalidated by the `ControlTorque` units fix (`f1a0cbb`) and the deadband (`a6eb15f`) — the abort RCS authority path changed.
+> - `DS-RV/DOCK` (rendezvous → dock) — **FAR-FIELD now fuel-viable, TERMINAL still OPEN (`DS-ASC-008`, 2026-09-01):** the phase-plane deadband (`a6eb15f`) fixed the far-field drain — phasing coasted 7328→109 km and ended with **58% Draco propellant left** (vs `DS-ASC-007` running dry). **But the flight stopped 9 km short of the 100 km near-field hand-off, so the terminal CW approach + dock was never entered** — the near-field terminal fuel benefit and the dock itself remain **UNPROVEN**. Re-fly owed: fly through the hand-off to a dock.
 >
 > Install with `python plugin/build.py install` (close KSP **and CKAN** first; a DLL change needs a full game restart).
 
@@ -67,6 +67,47 @@ How KSP SAS + MechJeb hold attitude, and whether they solve the RCS pulsing (ver
   ⇒ "Perfect control when it matters (tight terminal), fuel economy otherwise (wide-deadband drift)." Frozen; the `acc_*` flight picks which piece is the first, smallest correction.
 
 ## Flight log
+
+### ⚠ DS-ASC-008 — deadband re-fly: far-field fuel FIXED (58% left vs 0% dry), but the terminal approach + dock is STILL UNPROVEN (stopped 9 km short of near-field) — 2026-09-01
+- **Build:** the phase-plane deadband (`a6eb15f`, ±2°/±0.2°/s, gimbal-gated) — first flight on this build. **Evidence:** `Crew-2_20260901_004929.csv` (3778 rows, MET 0→84,752 s) + probe `Crew-2_Probe_20260901_005210.csv` + `DS-ASC-008_screen1/2/3.png` + geometry dumps, all archived in `docs/flights/`. Existing autonomous profile, no manual maneuvers / no tunable changes. `acc_*` populated.
+- **✅ Ascent + booster HOLD (rule V4 re-confirm, deadband build):** insertion **367 × 336 km / 51.6°** (ascent L3 re-proven on the deadband build); booster probe flew **EntryBurn → LandingBurn** to 11.5 km (PARTIALLY PROVEN, unchanged). No aborts. S2 peak roll **27.5 dps** (the no-roll-authority runaway — see the tumble below).
+- **✅ Far-field fuel FIXED where the loop engages:** phasing coasted **7328 → 109 km over 15.6 orbits**; capsule `mmh_frac` **0.826 → 0.822 across ~70,000 s of coast** (near-zero). Flight **ended at `mmh_frac` 0.584 = 58% Draco propellant REMAINING** vs **DS-ASC-007's 0.000 (ran dry)**. No exhaustion. *(Caveat: the far-field COAST was already cheap via the `RvCoast` channel-release hysteresis — the deadband is belt-and-suspenders there, see the terminal caveat.)*
+- **⚠ HEADLINE — terminal approach + dock STILL UNPROVEN (OPEN):** the flight **stopped at 109 km — 9 km short of the 100 km near-field CW hand-off** (`CwHandoffRangeM`, `RendezvousControl.cs:76`). It stayed **FAR-FIELD** the whole time: `rv_burn_dv` / `dv_planned` / `dv_delivered` / `trans_*` all **0** in the tail; `rv_phase` only ever `Phasing` / `ApproachInit`, and the CSV **`ApproachInit` label = far-field COAST** (`RendezvousControl.cs:349`), **NOT** the real near-field Approach Initiation. DS-ASC-007 (pre-deadband) **did** reach near-field (91 km) but **ran dry there** → the near-field terminal drain is the **unfixed** regime, and DS-ASC-008 never entered it. ⇒ **the deadband's terminal fuel benefit is UNPROVEN; a rendezvous has never been flown through the terminal legs to a dock.**
+- **⚠ ROLL UNDER-CONTROL — ROOT-CAUSED (owner-reported: "ship shakes violently at the same place in ascent, stops when RCS is switched on"; "we rolled uncontrolled during multiple manoeuvres"). One cause, three symptoms (the sep tumble + the 17% detumble fuel + this).** Confirmed against the CSV + the code:
+  - **S2 ascent shake:** the single MVac gimbals pitch/yaw but has **zero roll authority** (`ctrl_tq_roll = 0` for **79% of S2**). `AscentControl.cs:397-414` **disables RCS during S2** and only pulses it back when body rate > `S2RollTrimOnDps` (6 dps), releasing at `S2RollTrimOffDps` (1.5 dps). Result (MET 146→530): roll **winds up uncontrolled in a sawtooth** (peak **27.5 dps**), RCS **toggles 17×** and jerks it back, and the pitch/yaw gimbal **limit-cycles ~2 Hz** (558 actuation sign-flips while RCS off) against a 36–41° error the roll keeps smearing → the visible violent vibration; it stops the instant RCS is on because continuous RCS is the only roll authority. Matches the owner's screenshots (MET 4:42–4:50 ≈ 282–290 s; the RCS-on transition at MET 290.6 damps roll 4.3→2.0 dps live).
+  - **Mission roll drift:** the capsule Dracos DO roll, so here it is the control law: the far-field coast calls `FlightDriver.ReleaseAttitude()` (releases ALL axes → **46% of the rendezvous was full drift**), and `Steering.Point` damps roll RATE but holds **no roll ANGLE** (`rollUpRef=0`, `Steering.cs:102`). Roll was actively commanded only **21%** of the rendezvous; the capsule drifted **~54°** in roll. Modest magnitude here (never reached the terminal), but the mechanism is exactly "roll not held."
+  - **Root cause:** roll is treated as a low-priority / fuel-saving axis — un-held on S2 (hardware can't), un-held on coasts (channel released), never angle-held. **Candidate fix (UNRATIFIED — touches FLIGHT-PROVEN `AscentControl`, STOP-condition "risks a proven system", V4 re-fly gate + owner review before code):** a **continuous roll-only RCS damper with a tight rate/angle deadband, everywhere** (S2 roll-hold the whole burn instead of the wind-up/snap hysteresis; a held roll reference through rendezvous coasts/burns instead of releasing the channel) — the phase-plane deadband extended to a continuous roll channel. Would remove the shake, the sep tumble, most of the 17% detumble fuel, and the mission roll drift together.
+- **⚠ Residual terminal limit cycle (partly mitigated):** even holding the far-field aim in the **realtime** terminal coast, pitch chattered **±2.6 dps** and cost **~7% over ~200 s** (`mmh` 0.654 → 0.584). Far-field COAST is cheap because it **RELEASES** the attitude channel (`CoastReacquireDeg` 3°, drift-no-RCS); the tight-loop terminal **HOLD** + ±0.2 dps deadband still fires — the rate band may be too tight for a *moving* aim point. Investigate the regime, not a knob-twist (S8/P6).
+- **⚠ FDIR `NoControlSolution` + `ResourceCritical` seen (`UNKNOWN — EVIDENCE REQUIRED`):** `ResourceCritical` = the low-propellant warning (expected as the tank drained); `NoControlSolution` is not yet localized (transient during the sep tumble? a low-authority moment?). Not root-caused — not guessed.
+- **§5 exception status:** the exit condition ("rendezvous terminal-drain mechanism proven from an instrumented re-fly") is **NOT met** — DS-ASC-008 stopped short of the terminal. The Phase-9/12 detour continues.
+- **OWED (V1/V4/V5):** a re-fly that does **NOT** stop at ~109 km — cross the 100 km hand-off into near-field CW, through Approach-Init / Midcourse / Arrived → docking L-approach, and **DOCK**, recording `acc_*`. This flight is ONE data point, far-field only — do not overfit (V5).
+
+**Reproduce (Python, stdlib only):**
+```python
+import csv
+def num(x):
+    try: return float(x)
+    except: return None
+def g(r,c):
+    v=num(r.get(c,'')); return v if v is not None else 0.0
+new = list(csv.DictReader(open("Crew-2_20260901_004929.csv")))
+old = list(csv.DictReader(open("Crew-2_20260831_220928.csv")))   # DS-ASC-007, pre-deadband
+
+# (1) Fuel: DS-ASC-008 ends with propellant; DS-ASC-007 ran dry.
+print("DS-ASC-008 mmh end =", g(new[-1],"mmh_frac"))   # -> 0.584 (58% left)
+print("DS-ASC-007 mmh end =", g(old[-1],"mmh_frac"))   # -> 0.000 (dry)
+
+# (2) It never reached the near-field: min range and the far-field-only tail.
+rng = [g(r,"rv_range_m") for r in new if g(r,"rv_range_m")>0]
+print("DS-ASC-008 min range km =", round(min(rng)/1000,1))   # -> 109.5  (>100 km hand-off = still FAR field)
+tail = new[-1]
+print("tail burn/trans:", g(tail,"rv_burn_dv"), g(tail,"trans_x"), g(tail,"trans_y"), g(tail,"trans_z"))  # all 0
+
+# (3) Separation tumble cost (before phasing):
+asc=[r for r in new if r["mission_phase"]=="ASCENT"]
+print("ascent mmh used =", round(100*(g(asc[0],"mmh_frac")-g(asc[-1],"mmh_frac")),1), "%")  # -> 17.3%
+print("S2 peak roll dps =", round(max(abs(g(r,"rate_roll_dps")) for r in asc if r.get("ascent_phase")=="S2Burn"),1))  # -> 27.5
+```
 
 ### ✅ DS-ASC-007 — the `acc_*` physics-rate flight RESOLVES the RCS-loss mechanism: ~97% of rendezvous fuel is ATTITUDE (52% attitude-only + 45% SIMULTANEOUS), 3% translation — 2026-08-31
 - **Build:** the physics-rate `acc_*` instrumentation. **Evidence:** `Crew-2_20260831_220928.csv` (4884 rows) + `..._222644.csv` (continuation) + `..._KSPlog_excerpt.txt`, archived. `acc_*` populated (1820 rows). Existing autonomous profile, no manual maneuvers/tunable changes.

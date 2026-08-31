@@ -3,8 +3,11 @@
 > **CLASSIFICATION: HISTORICAL REVIEW MATERIAL — a point‑in‑time snapshot prepared for a specific external
 > review. It is NOT an instruction document and NOT a governing plan.** The authoritative live docs are
 > `docs/MASTER_BUILD_SPEC.md` (the sole governing plan) and `docs/FLIGHT_VERIFICATION.md` (the evidence log);
-> where they and this file disagree, they win. Findings later corrected are flagged inline (see §3 item 5,
-> which a 2026‑08‑31 verification RETRACTED).
+> where they and this file disagree, they win. The "candidate fixes" in §3/§5 are **unratified reviewer inputs,
+> not a plan** — the roadmap stays `MASTER_BUILD_SPEC.md`. Findings later corrected are flagged inline.
+>
+> **Snapshot date: 2026‑09‑01, after flight DS‑ASC‑008.** (Supersedes the DS‑ASC‑004‑era snapshot; the earlier
+> "mechanism UNKNOWN" ask is now RESOLVED — see §3.)
 >
 > A reading guide + snapshot for an **external AI reviewing the recent GNC work**: understand what was done
 > and **check whether it is correct**, against the evidence (the flight CSVs) and the rules below. Be skeptical —
@@ -51,101 +54,90 @@ Build/test/install: `python plugin/build.py {test|preview|install}` (the test ga
 
 ---
 
-## 3. Current plan / state — what I did, in order (verify each)
+## 3. Current state — what is proven, what is open (verify each)
 
-All of this is detailed with evidence in **`docs/FLIGHT_VERIFICATION.md`** (flight entries DS‑ASC‑001..004,
-DS‑DEO‑001) and **`docs/COMPLETION_MATRIX.md`**. Recent commits: `f1a0cbb..HEAD`.
+Full evidence in **`docs/FLIGHT_VERIFICATION.md`** (flight entries DS‑ASC‑001..008). The "candidate fixes" below
+are **unratified reviewer inputs, not a plan** — the roadmap stays `docs/MASTER_BUILD_SPEC.md`.
 
-1. **S2 ascent tumble → FIXED (flight‑proven).** The Falcon second stage tumbled at MVac ignition (DS‑ASC‑001/002).
-   Root cause: a **×1000 units bug** — `AttitudeController.ControlTorque` built the RCS "geometric" authority
-   estimate in **N·m** (`thrusterPower*1000`) while stock `GetPotentialTorque`, the gimbal report, and MOI are in
-   **kN·m / t·m²**, so `Max(stock, geometric)` fed `maxAlpha = ct/MOI` a value 1000× too high (S2 read 37.6 rad/s²
-   vs a real 0.27). Decomposition proof: `ctrl_tq 62,465 − rcs_geo 62,000 = gimbal 464 kN·m ≈ the flight‑delivered
-   445`. **Fix:** compute the geometric in kN (drop the `*1000`), keep `Max(stock, geometric)`. **Verified:** headless
-   `AttitudeLoopTest` (as‑flown limit‑cycles, units‑fixed converges) + **DS‑ASC‑003 reached a 194×403 km / 51.6°
-   orbit** with S2 `ctrl_tq` reading ~526 (was 62,000). *Check: is the units diagnosis and the kept `Max(stock,
-   geometric)` correct? Any axis/sign error?*
+**PROVEN (flight):**
+- **Ascent to orbit — FLIGHT‑PROVEN.** The S2 tumble (DS‑ASC‑001/002) was a **×1000 units bug**:
+  `AttitudeController.ControlTorque` built the geometric RCS authority in **N·m** (`thrusterPower*1000`) while
+  stock torque / gimbal / MOI are **kN·m / t·m²**, so `maxAlpha = ct/MOI` read 1000× high (S2 37.6 vs ~0.27 rad/s²).
+  Fixed (drop the `*1000`); **DS‑ASC‑003/008 reach orbit** (194×403, then 367×336 km / 51.6°), S2 `ctrl_tq` ~520.
+- **Booster recovery — PARTIALLY PROVEN** (controlled, not landed): DS‑ASC‑008 probe flew EntryBurn→LandingBurn.
 
-2. **Rendezvous ran the MMH tank dry (DS‑ASC‑003).** Measured: the **Dragon Dracos are Isp 240 s, 2 all‑axis
-   `ModuleRCSFX` blocks with no per‑thruster control** (`RCS_BALANCE_FINDING.md`), and RCS translation is only
-   **~21% efficient**; the **whole tank ≈ 66 m/s of useful Δv.** The far‑field Hohmann climb from a 200 km insertion
-   (~61 m/s) cost ~85% of the tank → stranded. A budget model reproduces the stranding (needs ~140 m/s > 66).
-   *Check: is 21% and the 66 m/s budget credible? Is the far‑field strategy itself the problem?*
+**RESOLVED mechanism (the RCS‑loss question the last handoff asked):** the physics‑rate `acc_*` accounting
+(DS‑ASC‑007) showed rendezvous fuel is **~97% ATTITUDE** (52% attitude‑only + 45% simultaneous attitude+translation),
+**3% translation**; PWPF does **not** cut it (saturated demand passes the full‑threshold). Fix implemented: a
+**phase‑plane (angle,rate) attitude‑hold deadband** on the prox‑ops loop (`AttitudeLoop.Axis`, ±2°/±0.2°/s,
+gimbal‑gated so ascent is untouched) — drift inside the box, fire on exit.
 
-3. **Fix A1 (implemented, re‑fly‑confirmed to work):** `AscentControl.RendezvousParkAltM` now inserts
-   `ParkBelowStationKm` (default **50 km**) below the selected target's periapsis when a rendezvous target is set,
-   so the efficient MVac buys the altitude and the Dragon RCS only does prox‑ops (no target → unchanged 200 km).
-   **DS‑ASC‑004 confirmed A1** (inserted 366×363 km below the 417 km ISS; transfer shrank to a ~50 s ap‑raise).
+**OPEN #1 — terminal approach + dock UNPROVEN (headline).** DS‑ASC‑008 (deadband re‑fly) ended with **58% Draco
+propellant left** (vs DS‑ASC‑007 running dry) — but **stopped at 109 km, 9 km short of the 100 km near‑field CW
+hand‑off**, so the terminal CW legs → dock were **never entered**. The deadband is proven for the far field only; a
+rendezvous has never been flown through the terminal legs to a dock.
 
-4. **Fix C (safety net, implemented):** every rendezvous translation routes through `RendezvousControl.RvTranslate`,
-   which inhibits + holds + warns once return propellant falls to `RvReturnReserveFrac` (0.20), to prevent a total
-   drain. **It tripped correctly in DS‑ASC‑004 but did not save the flight — see #5.**
+**OPEN #2 — ROLL UNDER‑CONTROL (owner‑reported this session; root‑caused; one cause, three symptoms).** *"The ship
+shakes violently at the same place in ascent and only stops when RCS is switched on"* and *"we rolled uncontrolled
+during multiple manoeuvres."* Confirmed vs the CSV + code:
+- **S2 ascent:** the single MVac has **zero roll authority** (`ctrl_tq_roll=0` for 79% of S2). `AscentControl.cs:397‑414`
+  disables RCS during S2 and only pulses it back when body rate > 6 dps (release 1.5) → roll **winds up in a sawtooth
+  (peak 27.5 dps)**, RCS toggles **17×**, pitch/yaw gimbal **limit‑cycles ~2 Hz** → the visible violent shake; it
+  stops only with continuous RCS. **Same root cause as the 27.5 dps separation tumble and the ~17% of Draco propellant
+  burned detumbling after separation.**
+- **Mission manoeuvres:** the capsule Dracos DO roll, but the rendezvous coast calls `FlightDriver.ReleaseAttitude()`
+  (releases all axes; 46% of the rendezvous was full drift) and `Steering.Point` damps roll RATE but holds no roll
+  ANGLE (`rollUpRef=0`, `Steering.cs:102`) → roll commanded only 21% of the time; the capsule drifted ~54° in roll.
+- **Root cause:** roll is treated as a low‑priority / fuel‑saving axis, contradicting the spec's "full control at all
+  times / crew orientation." **Touches FLIGHT‑PROVEN ascent → not yet changed (V4 gate + owner review).**
 
-5. **⚠ DS‑ASC‑004 — STILL ran dry; my first read was RETRACTED on verification (2026‑08‑31).** A1 worked, but the
-   tank still emptied in the terminal phase (mmh 0.84→0.02 in ~500 s; the guard tripped at 20% yet mmh continued
-   to ~0.02). I first called this a "terminal attitude limit cycle because the loop has no deadband/PWPF" —
-   **that is WRONG.** `FlightDriver.cs` (L170‑203) **already has a PWPF/deadband path** (`UseRcsPulse=true`,
-   `RcsPulseDeadband=0.05`, `RcsPulse.Step` on pitch/yaw/roll when the engine is off), implemented + tested in
-   `pure/RcsPulse.cs` + `test/RcsPulseTest.cs`; my claim read only `AttitudeLoop.cs:27` (the PID's *internal*
-   deadband). And the recorded `act_*`/`trans_*` are **pre‑pulse controller DEMAND** (`FlightLog.cs:100`), not the
-   applied post‑pulse actuation — so my "68–82% duty" measured demand, not delivered firing. I also missed the
-   per‑phase capsule‑RCS scaling (`CapsuleRcs.*Pct`) and `Attitude.CoastMaxRateDps`. **The terminal‑drain mechanism
-   is UNKNOWN — EVIDENCE REQUIRED.** I made an **instrumentation‑only** change (record the applied post‑pulse
-   actuation + pulse flags: `app_*`, `rcs_pulse_att/trans`) and owe **one focused re‑fly** to attribute the drain.
-   No control‑law change until that flight proves the mechanism.
-
-**THE OPEN DECISION (now: verification, not a fix):** the fix is NOT decided — the mechanism isn't proven, and a
-deadband/PWPF already exists. The immediate step is the instrumented re‑fly, THEN quantify each contributor
-(controller demand, post‑PWPF actuation, the ~1.5× authority over‑read `ctrl_tq_yaw` 10.3 vs measured ~7,
-translation, CapsuleRcs scaling), THEN present the smallest root‑cause fix. **Reviewer, please still weigh in on
-Question A below:** given a PWPF stage already exists, what is the most likely real cause, and is a deadband/PWPF
-change even the right lever — or is it authority over‑estimation, the phase RCS scaling, saturated demand passing
-through PWPF's full‑threshold, or the far‑field/approach geometry?
+**OPEN #3 — secondary:** residual terminal attitude limit cycle (~7%/200 s even with the deadband; the tight terminal
+HOLD does not get the far‑field coast's channel‑release economy); FDIR `NoControlSolution` seen in DS‑ASC‑008
+(unlocalized); phasing is slow (~15.6 orbits). The Lambert mid‑field intercept (`UseLambertIntercept`) is built but OFF.
 
 ---
 
 ## 4. How to check my claims (evidence)
 
-- **Flight CSVs (raw recorder telemetry):** `docs/flights/*.csv` — force‑added past `.gitignore`. Key ones:
-  `Crew-2_20260831_102133.csv` (DS‑ASC‑002, the S2 tumble regression), `Crew-2_20260831_141924.csv` +
-  `Crew-2_deorbit_geometry_dump_manual_2500s.csv` (DS‑DEO‑001, capsule authority), and the latest
-  `Crew-2_20260831_151611.csv` (DS‑ASC‑003, to‑orbit + first fuel‑out), and `Crew-2_20260831_170204.csv`
-  (DS‑ASC‑004, the A1 flight — reproduce the terminal attitude limit cycle). `docs/flights/README.md` has the
-  column schema and **runnable stdlib‑Python reproduction snippets** for every key number (the units bug, the 21%
-  efficiency, the budget, and the DS‑ASC‑004 attitude‑vs‑translation duty).
-- **Headless proof:** `plugin/test/AttitudeLoopTest.cs` (run `python plugin/build.py test`).
-- **The numbers to sanity‑check yourself:** MOI is in t·m² (full stack ~120,448); the gimbal/stock authority and
-  the geometric are meant to be kN·m; Draco Isp 240 (`GameData/TundraExploration/Parts/RodanV2/TE_CD2_POD.cfg`);
-  ISS target ~417×421 km.
+- **Flight CSVs (raw recorder telemetry):** `docs/flights/*.csv` — force‑added past `.gitignore`; `README.md` has the
+  schema + **runnable stdlib‑Python reproduction snippets**. Key ones:
+  - `Crew-2_20260901_004929.csv` (**DS‑ASC‑008**, the deadband re‑fly): the 58%‑left fuel, the 109 km stop, **and the
+    S2 roll wind‑up / shake** (`ascent_phase=S2Burn`, `ctrl_tq_roll`, `rate_roll_dps`, `rcs_on` toggles). The
+    screenshot window is MET ≈ 282–290 s; RCS comes on at MET 290.6 and roll damps live.
+  - `Crew-2_20260831_220928.csv` (**DS‑ASC‑007**, pre‑deadband): the `acc_*` 97%‑attitude split, ran dry at 91 km.
+  - `Crew-2_20260831_102133.csv` (DS‑ASC‑002, the S2 units‑bug tumble) + `Crew-2_20260831_141924.csv` /
+    `..._geometry_dump_manual_2500s.csv` (DS‑DEO‑001, capsule authority + the geometry dump).
+- **Code to read for the roll finding:** `AscentControl.cs:58‑64` + `:397‑414` (the S2 roll‑trim hysteresis);
+  `Steering.cs:102` (`Point` damps roll rate, no roll angle); `RendezvousControl.cs:314‑315, 419‑420` (coast releases
+  the attitude channel). For the terminal fuel: `pure/AttitudeLoop.Axis` (the new deadband) + `pure/RcsAccounting`.
+- **Headless proof:** `plugin/test/AttitudeLoopTest.cs` (`python plugin/build.py test`).
+- **Numbers to sanity‑check:** MOI in t·m² (full stack ~120,448); gimbal/stock/geometric authority in kN·m; Draco
+  Isp 240 (`GameData/TundraExploration/Parts/RodanV2/TE_CD2_POD.cfg`); ISS target ~417×421 km; RCS translation ~21%
+  efficient → whole tank ≈ 66 m/s useful Δv.
 
 ---
 
 ## 5. What I'm asking you
 
-**A. The terminal fuel drain (mechanism UNKNOWN — a PWPF/deadband already exists in `FlightDriver`).** Inspect the
-full command chain — `AttitudeLoop.Axis` → `AttitudeController`/`AttitudePilot.Act*` (recorded demand) →
-`FlightDriver.OnFlyByWire` ownership + `RcsPulse.Step` (PWPF, `pure/RcsPulse.cs`, `test/RcsPulseTest.cs`) →
-`FlightCtrlState` → RCS thrust/resource → measured rate. What is the most likely real cause of the terminal drain,
-and is a deadband/PWPF change even the right lever, or is it authority over‑estimation, the per‑phase CapsuleRcs
-scaling, saturated demand passing PWPF's full‑threshold, or the approach geometry? Do NOT assume "no PWPF." Also
-sanity‑check the instrumentation I just added (`app_*`, `rcs_pulse_att/trans`) — is it sufficient to attribute the
-drain on the next flight, or is something else needed (e.g. a per‑cause propellant tally)?
+**A. Roll control (the freshest, owner‑reported issue — OPEN #2).** The single MVac has no roll authority and the
+ascent deliberately runs RCS in a 6/1.5‑dps hysteresis (`AscentControl.cs:397‑414`), producing the violent S2 shake +
+the 27.5 dps separation tumble + ~17% detumble fuel; the rendezvous never angle‑holds roll and releases the whole
+attitude channel on coast. **Is a continuous roll‑only RCS damper with a tight rate/angle deadband (everywhere) the
+right fix?** What is the smallest safe change, and what is the risk of enabling continuous roll RCS during the
+flight‑proven S2 (fuel, gimbal interaction, MECO/SECO, plane hold)? Is there a way to give S2 roll authority without
+RCS at all? Cite `AscentControl`, `Steering`, `AttitudeLoop`, `RendezvousControl`.
 
-**B. Ascent to orbit** — independently hunt for issues in `AscentControl`, the `ControlTorque` units fix,
-staging/MECO/SECO, and the A1 insertion change. Is the units‑bug diagnosis actually right? Could inserting
-circular ~50 km below the station regress the just‑proven ascent (Δv margin, g‑limits, guidance) or cause
-slow/failed phasing? Anything unsafe or wrong?
+**B. Terminal approach + dock (OPEN #1).** DS‑ASC‑008 ended with 58% propellant but stopped 9 km short of the 100 km
+near‑field CW hand‑off, so the terminal legs → dock are unproven. **Does the far→near architecture actually converge
+the last 100 km, and is 58% enough to dock AND return?** Read `RendezvousControl.FlyNearFieldCw` + `pure/Rendezvous.cs`
+(the named‑burn FSM) + `pure/Cw.cs`. Is the 100 km CW hand‑off inside CW's linearization validity? Why does the
+chaser crawl the last 130→100 km at ~87 m/s with no braking? Is the phasing (15.6 orbits) or the Lambert intercept
+(`UseLambertIntercept`, OFF) the better closing strategy?
 
-**C. Crew Dragon rendezvous procedures — review `docs/RENDEZVOUS_REBUILD_PLAN.md`.** Three re-flies proved the
-rendezvous still runs dry: the drain is ~85–94% ATTITUDE (constant prograde pulsing, no free drift) and the
-procedure is a crude continuous Hohmann, not the real named-burn co-elliptic sequence. The rebuild plan (discrete
-burns + co-elliptic drift + CW two-impulse from 7.5 km + R-bar/V-bar WP0/1/2) is written against
-`docs/PHASE_3_RENDEZVOUS_RESEARCH.md`. Assess that plan — especially its §8 risks (does the full profile fit the
-~66 m/s Draco budget at 21% efficiency?). Original framing: — assess the architecture (`Phasing.cs` far‑field Hohmann + Clohessy–
-Wiltshire near‑field, 100 km CW hand‑off) against **how a real Crew Dragon rendezvouses with the ISS** (phasing /
-height‑adjust burns, co‑elliptic, R‑bar vs V‑bar approach, waypoints/hold points, the real DRACO Δv budget). Is
-this realistic and fuel‑viable on a Draco‑only vehicle? Is a 100 km CW hand‑off inside CW's linearization validity?
-Is inserting 50 km below the station the right call, or should the profile be structured differently? What is
-missing or wrong versus real Dragon prox‑ops?
+**C. Crew Dragon rendezvous realism — `docs/RENDEZVOUS_REBUILD_PLAN.md` (UNDER VERIFICATION).** Assess the far‑field
+Hohmann + near‑field CW architecture against **how a real Crew Dragon rendezvouses with the ISS** (named phasing
+burns, co‑elliptic, R‑bar/V‑bar approach, waypoints/holds, the DRACO Δv budget). Does the full profile fit the ~66 m/s
+budget at 21% efficiency? What is missing or wrong versus real Dragon prox‑ops?
 
-Cite specific files/lines and the flight CSVs. Flag anything that looks like a wrong turn.
+Cite specific files/lines and the flight CSVs. Flag anything that looks like a wrong turn — be skeptical:
+*"code existing ≠ working; only in‑game KSP flight is flight‑proven."*
