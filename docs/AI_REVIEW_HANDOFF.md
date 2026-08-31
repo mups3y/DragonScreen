@@ -91,6 +91,16 @@ during multiple manoeuvres."* Confirmed vs the CSV + code:
 - **Root cause:** roll is treated as a low‑priority / fuel‑saving axis, contradicting the spec's "full control at all
   times / crew orientation." **Touches FLIGHT‑PROVEN ascent → not yet changed (V4 gate + owner review).**
 
+**OPEN #2b — RCS OVER‑THRUST (owner‑reported: "thrusters stop pulsing so much when I drop the thrust limit under 90%";
+CONFIRMED config mistake).** The pod Dracos fire at **5×** the fine‑control design intent: RO sets 0.4 kN, and
+`DragonScreen.cfg:141‑147` multiplies `@thrusterPower *= 5` (confirmed: the flown pod geometry dump reads `power_kn=2`).
+The ×5 was meant to be paired with dialing `thrustPercentage` DOWN per task (`CapsuleRcs` ~20–40% for fine phases,
+`DragonScreen.cfg:134‑139`) — **but that scale‑down was removed** (only the comment survives). So fine attitude hold
+runs at 5× thrust; the min 0.06 s pulse kicks the rate ~0.05–0.50 °/s (≥ the 0.2 °/s deadband) → overshoot → chatter,
+and dropping the limiter past `RcsPulseFull=0.90` (`FlightDriver.cs:174`) makes it fire continuously ("stops pulsing").
+**The phase‑plane deadband (`a6eb15f`) was masking this symptom.** Candidate fix: restore per‑phase RCS thrust scaling
+(fine phases ~20–40%, burns/roll 100%).
+
 **OPEN #3 — secondary:** residual terminal attitude limit cycle (~7%/200 s even with the deadband; the tight terminal
 HOLD does not get the far‑field coast's channel‑release economy); FDIR `NoControlSolution` seen in DS‑ASC‑008
 (unlocalized); phasing is slow (~15.6 orbits). The Lambert mid‑field intercept (`UseLambertIntercept`) is built but OFF.
