@@ -36,8 +36,10 @@ namespace DragonScreen
         // measured cause of ~97% of rendezvous fuel (52% attitude-only + 45% simultaneous). Applied by
         // AttitudeController ONLY when the gimbal term is ~0, so the flight-proven ascent is untouched. Wide here
         // (coast/approach economy); a tighter terminal-dock band is future work. 0 disables.
-        [Tunable] public static double RcsHoldDeadbandDeg = 2.0;
-        [Tunable] public static double RcsHoldRateDbDps   = 0.2;
+        // Reverted to 0 (OFF = pre-change default) 2026-09-01 per owner ("control tuning back to defaults").
+        // Also moot while UseGimbalLoop=false (KSP SAS flies attitude; this custom loop is bypassed).
+        [Tunable] public static double RcsHoldDeadbandDeg = 0.0;
+        [Tunable] public static double RcsHoldRateDbDps   = 0.0;
         public static double RcsHoldDeadbandRad { get { return RcsHoldDeadbandDeg * 0.0174532925199433; } }
         public static double RcsHoldRateDbRadps { get { return RcsHoldRateDbDps * 0.0174532925199433; } }
 

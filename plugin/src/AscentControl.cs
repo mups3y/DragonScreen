@@ -272,7 +272,7 @@ namespace DragonScreen
                     {
                         s2ThrustConfirmed = true;
                         FlightDriver.ReleaseTranslation();
-                        if (!Steering.SasTestMode)               // ⭐ test mode: keep RCS ON so SAS can hold S2 roll (gimbal has none)
+                        if (Steering.UseGimbalLoop)              // ⭐ KSP-SAS mode (UseGimbalLoop=false): keep RCS ON so SAS holds S2 roll (gimbal has none)
                             Actuator.DisableRcs(v);             // gimbal steers the S2 — stop the non-stop Draco firing
                     }
                 }
@@ -399,7 +399,7 @@ namespace DragonScreen
             // (hysteresis) — the gimbal can't roll, so without this roll runs away to 54 dps (flight 194334). The
             // ullage/ignition block owns RCS while lighting (!s2ThrustConfirmed); this takes over for the SUSTAINED
             // burn. Pitch/yaw stay on the gimbal; the brief RCS windows mostly null roll (pitch/yaw errors are small).
-            if (s2Lit && s2ThrustConfirmed && !Steering.SasTestMode)   // ⭐ test mode: SAS holds roll on continuous RCS — no hysteresis toggling
+            if (s2Lit && s2ThrustConfirmed && Steering.UseGimbalLoop)   // ⭐ KSP-SAS mode (UseGimbalLoop=false): SAS holds roll on continuous RCS — skip our hysteresis toggling
             {
                 double rateDps = v.angularVelocity.magnitude * (180.0 / Math.PI);
                 if (rateDps > S2RollTrimOnDps && !lastRcsOn)

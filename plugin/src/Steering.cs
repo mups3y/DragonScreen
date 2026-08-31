@@ -92,22 +92,15 @@ namespace DragonScreen
             return Vector3d.Angle(rt.up, v.srf_velocity);
         }
 
-        // ⛔ Hold the given WORLD direction. The direct gimbal/RCS loop (AttitudePilot) is the real inner
-        // loop now — SAS was too slow for FAR's transonic divergence (lost control 3×). SAS remains behind
-        // UseGimbalLoop as a one-flip fallback only. Point() damps roll (ascent/booster/prox-ops); the entry
-        // bank keeps roll free via PointNoRoll() + FlightDriver.SetRoll.
-        public static bool UseGimbalLoop = true;
+        // ⛔ Hold the given WORLD direction. ⭐ ATTITUDE CONTROL MODE (owner 2026-09-01: "use ksp sas not ours,
+        // switch ours off"). false (this TEST build) = the autopilot computes the aim and hands attitude to
+        // STOCK KSP SAS, which flies it on the Dracos (the Dragon has no reaction wheels) + gimbal — the custom
+        // MechJeb-ported loop is OFF, so its deadband / S2 roll-trim / RCS pulse cannot interfere. true = the
+        // custom direct gimbal/RCS loop (AttitudePilot), the historical default. ⚠ In this build KSP SAS flies
+        // EVERYTHING, including the max-Q ascent (SAS was too slow there before — lost control 3×) and the abort;
+        // flip this back to true to restore the proven custom loop.
+        [Tunable] public static bool UseGimbalLoop = false;
         static bool sasReady;
-
-        // ⭐ SAS TEST MODE (owner 2026-09-01: "is stock SAS + stock RCS enough, without a bunch of trims?").
-        // When SasActive, hand ALL attitude to stock SAS on the DRACOS (the Dragon has no reaction wheels) and
-        // stand the custom loop down — so the deadband, S2 roll-trim, and RCS pulse cannot interfere. SasActive
-        // is set per-tick by FlightDriver ONLY on the nominal DriveActivePhase path; the ABORT path leaves it
-        // false, so a launch escape still flies on the fast gimbal loop (SAS is too slow for that — the whole
-        // reason this loop exists). ⚠ In test mode SAS also flies the powered ascent through max-Q; the
-        // loss-of-control abort is the safety net if it can't. [Tunable] master switch; off by default.
-        [Tunable] public static bool SasTestMode = false;
-        public static bool SasActive;
 
         public static void Point(Vessel v, Vector3d worldDir) { Hold(v, worldDir, true, Vector3d.zero); }
         public static void PointNoRoll(Vessel v, Vector3d worldDir) { Hold(v, worldDir, false, Vector3d.zero); }
@@ -120,11 +113,11 @@ namespace DragonScreen
         static void Hold(Vessel v, Vector3d worldDir, bool dampRoll, Vector3d rollUpRef)
         {
             if (v == null || worldDir.magnitude < 1e-6) return;
-            bool useSas = SasActive || !UseGimbalLoop;
-            if (!useSas) { AttitudePilot.Point(v, worldDir, dampRoll, rollUpRef); return; }
-            try   // ---- SAS holds attitude on the Dracos (SasActive test mode, or UseGimbalLoop=false fallback) ----
+            if (UseGimbalLoop) { AttitudePilot.Point(v, worldDir, dampRoll, rollUpRef); return; }
+            try   // ---- STOCK KSP SAS holds attitude on the Dracos (UseGimbalLoop=false) ----
             {
                 FlightDriver.ReleaseAttitude();   // yield the direct-loop pitch/yaw/roll so OnFlyByWire cannot override SAS
+                if (!v.ActionGroups[KSPActionGroup.RCS]) v.ActionGroups.SetGroup(KSPActionGroup.RCS, true);   // SAS holds on RCS (no reaction wheels)
                 if (!v.ActionGroups[KSPActionGroup.SAS]) v.ActionGroups.SetGroup(KSPActionGroup.SAS, true);
                 if (v.Autopilot != null)
                 {

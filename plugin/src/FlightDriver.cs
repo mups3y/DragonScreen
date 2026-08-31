@@ -192,7 +192,7 @@ namespace DragonScreen
             // pulse only at realtime / physics warp (on-rails HIGH warp freezes control anyway); and pulse
             // ATTITUDE only when the main engine is OFF — i.e. RCS is the attitude actuator (coast / rendezvous
             // / deorbit / entry / dock). During gimbal ascent (throttle on) attitude stays CONTINUOUS.
-            bool pulse = UseRcsPulse && !Steering.SasTestMode && (TimeWarp.WarpMode != TimeWarp.Modes.HIGH || TimeWarp.CurrentRateIndex == 0);
+            bool pulse = UseRcsPulse && (TimeWarp.WarpMode != TimeWarp.Modes.HIGH || TimeWarp.CurrentRateIndex == 0);
             double dt = TimeWarp.fixedDeltaTime;
             if (!pulseConfigLogged)   // instrumentation: prove the in-game pulse config in KSP.log (finding 4a)
             {
@@ -242,7 +242,6 @@ namespace DragonScreen
         {
             Vessel v = FlightGlobals.ActiveVessel;
             if (v == null || !HighLogic.LoadedSceneIsFlight) return;
-            Steering.SasActive = false;   // ⭐ SAS test mode default-OFF each tick; only the nominal DriveActivePhase re-arms it (never the abort path)
 
             try
             {
@@ -373,7 +372,6 @@ namespace DragonScreen
         // controller's phases the throttle authority is dropped so nothing is left commanding.
         static void DriveActivePhase(Vessel v)
         {
-            Steering.SasActive = Steering.SasTestMode;   // ⭐ nominal phases run on SAS when test mode is on; the abort path returns before here, so a launch escape keeps the fast gimbal loop
             // one-shot deployables: solar/antenna out on a stable orbit, retracted before the return deorbit.
             DeployablesControl.Tick(v, CrewProcedureOps.ActivePhase, CrewProcedureOps.IsReturn);
             switch (CrewProcedureOps.ActivePhase)
