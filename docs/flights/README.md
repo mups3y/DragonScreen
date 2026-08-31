@@ -13,6 +13,7 @@ Archived **FlightRecorder** CSVs (and one **geometry dump**) kept as evidence fo
 | `Crew-2_20260831_141924.csv` | **DS‑DEO‑001** | Dragon capsule alone (6.8 t, no gimbal) | 833 | autopilot deorbit; capsule spins under the ×1000 over‑read — **the flight the capsule‑authority regression was run on** (n=832) |
 | `Crew-2_deorbit_geometry_dump_manual_2500s.csv` | DS‑DEO‑001 | Dragon capsule alone | 5 parts / 16 thrusters | **geometry dump** (different schema, see below): stock `GetPotentialTorque` vs the geometric, for the deorbit config |
 | `Crew-2_20260831_151611.csv` | **DS‑ASC‑003** | Dragon (S2+Dragon → capsule) | 4648 | **the units-fix flight: ascent to ORBIT (194×403 km / 51.6°)** then rendezvous. Proves S2 `ctrl_tq`=526 (fix live) and the rendezvous fuel-exhaustion (far-field TRANSFER burns ~85% of MMH ≈ MET 18,577–18,805) |
+| `Crew-2_20260831_170204.csv` | **DS‑ASC‑004** | Dragon (A1 + guard build) | 5694 | **A1 flight:** inserted 366×363 km (50 km below the 417 km ISS), transfer small — but STILL ran dry. The terminal drain is an **attitude limit-cycle** (≈ MET 84,489–85,001): `act_pitch/yaw/roll` ±1 at 68–82% duty while `trans_z` is ~20% duty; guard tripped at mmh 0.20 but attitude alone drained 0.20→0.02 |
 
 Ascent flights (`DS‑ASC`): crewed Falcon 9 + Crew Dragon, RSS/RO, Cape, AUTO‑BOOSTER‑RECOVERY armed; both **fail identically** at S2 (upper‑stage attitude tumble, no orbit) and were reverted. `DS‑DEO‑001`: the Dragon capsule alone on RCS (engine off) — it **spins under autopilot** from the same ×1000 authority over‑read. The filename time = when the recorder opened the stream (`Crew-2_HHMMSS`; `_Probe_` = the non‑active booster's parallel stream).
 
@@ -105,6 +106,32 @@ print("stock GetPotentialTorque pitch =", round(stock), "kN.m")            # -> 
 # stock 2 (low), bugged geometric 12870 (1000x high), fixed geometric 12.9 (~ real 7).
 ```
 The as‑flown `ctrl_tq_pitch` here is **~12,870** (the N·m geometric); after the fix it reads **~12.9** in this config and **~526** in S2 — the recorder tell that the units fix is live.
+
+## Reproduce the DS‑ASC‑004 terminal attitude limit-cycle (why A1 still ran dry)
+```python
+import csv, math, statistics
+def nf(x):
+    try: return float(x)
+    except: return None
+rows = list(csv.DictReader(open("Crew-2_20260831_170204.csv")))
+
+# (6) A1 worked: the insertion orbit is ~365 km (50 km below the 417 km ISS), NOT 200 km:
+ph = [r for r in rows if r.get("mission_phase") == "PHASING"]
+print("A1 insertion: ap=%.0f pe=%.0f km" % (nf(ph[0]["ap_km"]), nf(ph[0]["pe_km"])))   # ~366 x 363
+
+# (7) The drain is ATTITUDE, not translation. Duty cycle over the terminal drain window:
+win = [r for r in rows if 84480 <= (nf(r["met_s"]) or 0) <= 85010]
+def duty(col): return sum(1 for r in win if abs(nf(r.get(col)) or 0) > 0.05) / len(win)
+print("attitude duty  pitch/yaw/roll = %.0f/%.0f/%.0f%%" % (duty("act_pitch")*100, duty("act_yaw")*100, duty("act_roll")*100))
+print("translation duty  trans_z      = %.0f%%" % (duty("trans_z")*100))   # attitude ~68-82%, trans ~20%
+
+# (8) It's a limit cycle: yaw rate swings +/- around a small error (no deadband in AttitudeLoop):
+seg = [r for r in rows if 84600 <= (nf(r["met_s"]) or 0) <= 84880]
+ry = [nf(r["rate_yaw_dps"]) for r in seg if nf(r.get("rate_yaw_dps")) is not None]
+ae = [nf(r["att_err_deg"]) for r in seg if nf(r.get("att_err_deg")) is not None]
+print("rate_yaw swings %.1f..%.1f dps around att_err median %.1f deg (limit cycle)" % (min(ry), max(ry), statistics.median(ae)))
+```
+The guard (`RvTranslate`, holds at 20%) fires in `KSP.log` ("return prop 20% ≤ reserve 20% — translation INHIBITED") but the tank still drains to ~2%, because the limit-cycle burns through the **attitude** channel, which the translation guard does not gate. Root cause: `plugin/src/pure/AttitudeLoop.cs:27` — the PID's deadband is omitted.
 
 ## Related
 - `docs/FLIGHT_VERIFICATION.md` — the flight log + the full root‑cause evidence chain and the proposed fix.
