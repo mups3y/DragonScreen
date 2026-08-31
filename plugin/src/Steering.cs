@@ -92,14 +92,11 @@ namespace DragonScreen
             return Vector3d.Angle(rt.up, v.srf_velocity);
         }
 
-        // ⛔ Hold the given WORLD direction. ⭐ ATTITUDE CONTROL MODE (owner 2026-09-01: "use ksp sas not ours,
-        // switch ours off"). false (this TEST build) = the autopilot computes the aim and hands attitude to
-        // STOCK KSP SAS, which flies it on the Dracos (the Dragon has no reaction wheels) + gimbal — the custom
-        // MechJeb-ported loop is OFF, so its deadband / S2 roll-trim / RCS pulse cannot interfere. true = the
-        // custom direct gimbal/RCS loop (AttitudePilot), the historical default. ⚠ In this build KSP SAS flies
-        // EVERYTHING, including the max-Q ascent (SAS was too slow there before — lost control 3×) and the abort;
-        // flip this back to true to restore the proven custom loop.
-        [Tunable] public static bool UseGimbalLoop = false;
+        // ⛔ Hold the given WORLD direction. ⭐ ATTITUDE CONTROL MODE. true (owner 2026-09-01, "use our sas") =
+        // the custom direct gimbal/RCS loop (AttitudePilot) — OUR SAS. Its hold authority is scaled by
+        // AttitudePilot.HoldAuthorityScale (1.5× per owner). false = hand attitude to STOCK KSP SAS (the last
+        // test build; it over-steered the pitch-over into a flip). The autopilot computes the aim either way.
+        [Tunable] public static bool UseGimbalLoop = true;
         static bool sasReady;
 
         public static void Point(Vessel v, Vector3d worldDir) { Hold(v, worldDir, true, Vector3d.zero); }

@@ -93,7 +93,8 @@ namespace DragonScreen
         public static AttitudeAxisResult Axis(double errorRad, double omegaRad, double moi,
                                               double controlTorqueNm, double dt,
                                               bool suppressOmega, Pid2 posPid, Pid2 velPid,
-                                              double holdDbRad = 0.0, double holdRateDbRadps = 0.0)
+                                              double holdDbRad = 0.0, double holdRateDbRadps = 0.0,
+                                              double posKpScale = 1.0)
         {
             AttitudeAxisResult r = new AttitudeAxisResult();
             if (!(controlTorqueNm > 0.0) || !(moi > 0.0) || !(dt > 0.0)
@@ -118,7 +119,7 @@ namespace DragonScreen
                 return r;   // actuation 0, targetOmega/Alpha 0 → drift within the deadband
             }
 
-            double posKp = PosKp0 / warpFactor;
+            double posKp = PosKp0 / warpFactor * (posKpScale > 0.0 ? posKpScale : 1.0);   // ⭐ hold-authority scale (owner 1.5×)
             double effLD = Soften * Soften * maxAlpha / (2.0 * posKp * posKp);
             double maxOmega = maxAlpha * MaxStoppingTime;
             double flip = Math.PI / MinFlipTime;

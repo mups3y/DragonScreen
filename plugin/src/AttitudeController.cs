@@ -156,7 +156,8 @@ namespace DragonScreen
                 {
                     bool suppress = (i == 1) && rollGate;               // index 1 = roll
                     AttitudeAxisResult res = AttitudeLoop.Axis(error[i], omega[i], moi[i], ct[i], dt,
-                                                               suppress, posPid[i], velPid[i], holdDb, holdRateDb);
+                                                               suppress, posPid[i], velPid[i], holdDb, holdRateDb,
+                                                               AttitudePilot.HoldAuthorityScale);
                     act[i] = res.Actuation;
                     if (i == 0) RateCmdRads = res.TargetOmega;          // pitch rate command (representative)
                 }

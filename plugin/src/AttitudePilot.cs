@@ -31,6 +31,10 @@ namespace DragonScreen
         // Retained as the DIAGNOSTIC threshold: when the geometric estimate exceeds the report by more than this,
         // log once that the stock report is under-reading. Kept [Tunable] so saved configs stay valid.
         [Tunable] public static double RcsTorqueFloorNm = 1.0;
+        // ⭐ HOLD AUTHORITY SCALE (owner 2026-09-01): multiply the loop's POSITION-hold gain (AttitudeLoop.PosKp0)
+        // by this — 1.5× = "our SAS 1.5× stronger hold authority than stock". Firmer attitude tracking, paired
+        // with the S1/S2 gimbal dampening (DragonScreen.cfg) for smoother, more accurate gimbaling. 1.0 = stock.
+        [Tunable] public static double HoldAuthorityScale = 1.5;
         // ⭐ RCS-hold phase-plane deadband (DS-ASC-007 fuel fix): when the RCS is the ATTITUDE actuator (no gimbal),
         // the loop COASTS within this (angle, rate) box instead of chattering the Dracos to hold a tiny error —
         // measured cause of ~97% of rendezvous fuel (52% attitude-only + 45% simultaneous). Applied by
