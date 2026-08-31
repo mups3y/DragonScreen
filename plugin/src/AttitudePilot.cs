@@ -25,20 +25,19 @@ namespace DragonScreen
 
         // ---- shared [Tunable] config (read by every AttitudeController instance) ----
         // B4 lag compensation: command the gimbal harder when it slews slowly (snappier loop through max-Q).
-        // ⭐ REMOVED (owner 2026-09-01, "find the conflicting/runaway loop and remove it"): the B4 actuator-lag
-        // compensator over-drove the gimbal command to the ±1 rail every tick to beat gimbal lag (CSV: act≈0.1 but
-        // applied app rails to 1.0 → constant gimbal spam/jitter during S2). Off = the loop's command goes straight
-        // to the (now-dampened) gimbal, which follows at its own rate. Set true to restore the lead compensator.
-        [Tunable] public static bool UseLagComp = false;
+        // B4 actuator-lag lead compensation. RESTORED true (2026-09-01): the data showed it was STABILIZING the
+        // loop (leading the gimbal to cancel its response lag), not a conflicting loop — removing it GREW the
+        // attitude limit cycle (rate-pitch std 0.28→0.38). Keep it on.
+        [Tunable] public static bool UseLagComp = true;
         // Campaign 6: no longer a GATE — the loop now ALWAYS takes max(stock-reported, geometric) RCS torque
         // (the stock report flickers ~2 N·m 91% of RCS-on ticks, above any sane gate, and saturated the Dracos).
         // Retained as the DIAGNOSTIC threshold: when the geometric estimate exceeds the report by more than this,
         // log once that the stock report is under-reading. Kept [Tunable] so saved configs stay valid.
         [Tunable] public static double RcsTorqueFloorNm = 1.0;
-        // ⭐ HOLD AUTHORITY SCALE (owner 2026-09-01): multiply the loop's POSITION-hold gain (AttitudeLoop.PosKp0)
-        // by this — 1.5× = "our SAS 1.5× stronger hold authority than stock". Firmer attitude tracking, paired
-        // with the S1/S2 gimbal dampening (DragonScreen.cfg) for smoother, more accurate gimbaling. 1.0 = stock.
-        [Tunable] public static double HoldAuthorityScale = 1.5;
+        // HOLD AUTHORITY SCALE — multiply the loop's POSITION-hold gain (AttitudeLoop.PosKp0). REVERTED 1.5→1.0
+        // (2026-09-01): the 1.5× added loop gain that fed the attitude limit cycle (rate-pitch std 0.20→0.28) with
+        // no benefit — our loop was already pointed (att_point 0.1°) and never flipped (the flip was stock SAS).
+        [Tunable] public static double HoldAuthorityScale = 1.0;
         // ⭐ RCS-hold phase-plane deadband (DS-ASC-007 fuel fix): when the RCS is the ATTITUDE actuator (no gimbal),
         // the loop COASTS within this (angle, rate) box instead of chattering the Dracos to hold a tiny error —
         // measured cause of ~97% of rendezvous fuel (52% attitude-only + 45% simultaneous). Applied by
