@@ -40,6 +40,9 @@ namespace DragonScreen
 
         static double lastAoa, lastIgniteAlt, lastDescentSpeed;
         static string lastPhaseWord = "IDLE";
+        static double boosterSepUT = -1.0;     // ⭐ UT of the first recovery tick ≈ separation time
+        static bool predictedImpactLogged;     // ⭐ one-shot: log the predicted impact at sep + ImpactLogDelayS
+        [Tunable] public static double ImpactLogDelayS = 5.0;   // owner: record the predicted impact this long after separation
 
         // ⭐ C2 Step-2: the booster's OWN attitude loop, INDEPENDENT of the Dragon's (AttitudePilot's active
         // instance). When the Dragon stays active and the booster is flown on its own OnFlyByWire, the two loops
@@ -53,6 +56,7 @@ namespace DragonScreen
         {
             phase = BoosterPhase.Idle; currentMode = -1; legsDown = false; finsOut = false;
             smoothedBc = 0.0;
+            boosterSepUT = -1.0; predictedImpactLogged = false;
             att.Reset(); lastDriveLogUT = -999.0; lastThrottle = 0.0;
             BoosterLog.Close();                  // ⭐ R1: close any open booster-recovery stream
         }
@@ -144,6 +148,25 @@ namespace DragonScreen
             // ---- targeting: steer the predicted impact onto the droneship / RTLS pad (L1 predictor) ----
             GridFinInputs fin = BoosterTargeting.Steer(v, smoothedBc);
 
+            // ⭐ PREDICTED-IMPACT RECORD (owner 2026-09-01): ImpactLogDelayS (5 s) after separation, log the L1
+            //    impact predictor's touchdown point — the precise predicted impact for this drop.
+            double nowUT = Planetarium.GetUniversalTime();
+            if (boosterSepUT < 0.0) boosterSepUT = nowUT;
+            if (!predictedImpactLogged && nowUT - boosterSepUT >= ImpactLogDelayS)
+            {
+                predictedImpactLogged = true;
+                Vector3d impactW;
+                if (body != null && BoosterTargeting.PredictImpact(v, smoothedBc, 0.0, out impactW))
+                    Debug.LogWarning("[DragonScreen] ⭐ BOOSTER predicted impact @ sep+" + ImpactLogDelayS.ToString("F0")
+                        + "s: lat " + body.GetLatitude(impactW).ToString("F5") + "  lon " + body.GetLongitude(impactW).ToString("F5")
+                        + "  (dist " + ((impactW - v.CoM).magnitude / 1000.0).ToString("F1") + " km, alt "
+                        + v.radarAltitude.ToString("F0") + " m, spd " + speed.ToString("F0") + " m/s, bc " + smoothedBc.ToString("F0") + ")");
+                else
+                    Debug.LogWarning("[DragonScreen] ⭐ BOOSTER predicted impact @ sep+" + ImpactLogDelayS.ToString("F0")
+                        + "s: no usable ballistic prediction yet (alt " + v.radarAltitude.ToString("F0")
+                        + " m, spd " + speed.ToString("F0") + " m/s — still ascending/no drag data)");
+            }
+
             BoosterInputs bi = new BoosterInputs();
             bi.Valid = true;
             bi.SurfaceVelocity = new Vec3(srfVel.x, srfVel.y, srfVel.z);
@@ -168,6 +191,9 @@ namespace DragonScreen
             if (LetFall) { bc.EngineMode = 0; bc.Throttle = 0.0; }
 
             Vector3d aimDir = new Vector3d(bc.AimForward.X, bc.AimForward.Y, bc.AimForward.Z);
+            // ⭐ PROGRADE HOLD (owner 2026-09-01): the booster holds PROGRADE (nose along the surface velocity) — a
+            //    stable, level coast — through the fall, rather than the descent FSM's retrograde flip. (LetFall.)
+            if (LetFall && speed > 1.0) aimDir = srfVel.normalized;
 
             // ---- engine mode select (absolutely, while off; one ignition per mode) — acts on the booster's
             //      part modules directly, so it is correct whether or not the booster is the active vessel ----
