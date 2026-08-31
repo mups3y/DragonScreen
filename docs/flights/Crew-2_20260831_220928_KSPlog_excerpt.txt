@@ -1,8 +1,0 @@
-[LOG 22:09:28.664] [DragonScreen] RCS pulse config (effective): UseRcsPulse=True deadband=0.050 minOn=0.060 minOff=0.060 full=0.900
-[LOG 22:18:46.698] [DragonScreen] RV detumble: body rate 39.5 dps > 2.0 — holding attitude to settle before phasing
-[LOG 22:18:49.694] [DragonScreen] RV detumble: body rate 9.2 dps > 2.0 — holding attitude to settle before phasing
-[LOG 22:18:50.801] [DragonScreen] RV settled — body rate 2.0 dps, beginning phasing (range 7330 km)
-[LOG 22:19:01.463] [DragonScreen] RV far-field: Phase → Transfer  (ap 367 pe 364 park 407 km, range 132 km)
-[LOG 22:20:34.317] [DragonScreen] RV far-field: Transfer → Coast  (ap 405 pe 365 park 407 km, range 125 km)
-[WRN 22:24:46.607] [DragonScreen] RV propellant reserve: return prop 20% ≤ reserve 20% — rendezvous translation INHIBITED to protect the deorbit/return budget (holding).
-[LOG 22:26:44.906] [DragonScreen] RV settled — body rate 2.0 dps, beginning phasing (range 91 km)
