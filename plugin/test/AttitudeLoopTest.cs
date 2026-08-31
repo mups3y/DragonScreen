@@ -60,6 +60,43 @@ public static class AttitudeLoopTest
         Check("5° slew converges to <0.5°", ConvergesFrom(5.0 * Math.PI / 180.0), "");
         Check("120° flip converges to <0.5°", ConvergesFrom(120.0 * Math.PI / 180.0), "");
 
+        // ============ S2 UPPER-STAGE DIVERGENCE — headless root-cause proof (flights DS-ASC-001/002) ============
+        // Plant taken from the recorded S2+Dragon (DragonScreen_capture/Crew-2_20260831_102133.csv):
+        //   MOI_pitch ≈ 1650 ; controlTorque ≈ 62000. The tell: at COAST (engine OFF → gimbal torque 0) the
+        //   recorder still shows ctrl_tq ≈ rcs_geo ≈ 62000 — that 62 kN·m is the RCS GEOMETRIC estimate ALONE,
+        //   ~5× the entire 9-Merlin S1 gimbal (11846), which is physically impossible for the Dracos (they
+        //   couldn't even hold roll → 54 dps, flight 194334). The loop scales EVERYTHING off
+        //   maxAlpha = controlTorque/MOI, so an over-read torque commands rates the stage cannot achieve.
+        const double MoiS1 = 75508.0, CtS1 = 11846.0;   // S1 full stack (recorded) — flew, stable
+        const double MoiS2 = 1650.0;                     // S2+Dragon MOI (recorded)
+        const double CtS2Est = 62000.0;                  // S2 loop ESTIMATE (RCS-geometric over-read, recorded)
+        // CtS2Real: the S2's ACTUAL per-unit control torque, measured from the flight by regressing net torque
+        // (MOI·Δω) against commanded actuation over the S2 window (DS-ASC-002): K ≈ 451 (pitch) / 406 (yaw),
+        // and the regression INTERCEPT (disturbance torque) ≈ 0 → NO external disturbance. So the real authority
+        // is just the gimbal (~451); the RCS (est. 62000) delivers ≈0 effective torque. The over-read is ~137×.
+        const double CtS2Real = 451.0;
+
+        // (a) OPEN-LOOP: the loop's own maxAlpha from the RECORDED numbers (over-read authority estimate).
+        p.Reset(); q.Reset();
+        double maxAlphaS1 = AttitudeLoop.Axis(0.7, 0.0, MoiS1, CtS1, DT, false, p, q).MaxAlpha;
+        p.Reset(); q.Reset();
+        double maxAlphaS2 = AttitudeLoop.Axis(0.7, 0.0, MoiS2, CtS2Est, DT, false, p, q).MaxAlpha;
+        Check("recorded S1 authority → gentle maxAlpha (<0.3 rad/s²)", maxAlphaS1 < 0.3, "S1=" + maxAlphaS1.ToString("F3"));
+        Check("recorded S2 over-read → absurd maxAlpha (>20 rad/s², ≈2000°/s²)", maxAlphaS2 > 20.0, "S2=" + maxAlphaS2.ToString("F1"));
+
+        // (b) CLOSED-LOOP root-cause PROOF: SAME plant (MOI 1650, flight-measured real authority 451, NO
+        // disturbance); only the loop's torque ESTIMATE differs. The recorded 137× over-read LIMIT-CYCLES
+        // (reproduces the tumble); a correct estimate CONVERGES. Note the instability is a THRESHOLD effect:
+        // a small over-read is sluggish-but-stable, but past ~10× the loop commands rates the tiny real
+        // authority can't achieve → overshoot → divergent limit-cycle. This is why my earlier stand-in
+        // (real≈11846, only 5× over-read) wrongly looked stable; the flight regression put real at ~451.
+        double wM, fM, wI, fI;
+        bool convMatched  = SimMismatch(60.0 * Math.PI / 180.0, CtS2Real, CtS2Real, MoiS2, out wM, out fM);
+        bool convInflated = SimMismatch(60.0 * Math.PI / 180.0, CtS2Est,  CtS2Real, MoiS2, out wI, out fI);
+        Check("FIX: loop estimate = real authority → CONVERGES", convMatched, "worst=" + Deg(wM) + "° final=" + Deg(fM) + "°");
+        Check("recorded 137x over-read (est 62000, real 451) LIMIT-CYCLES — reproduces the tumble, no disturbance",
+              !convInflated, "worst=" + Deg(wI) + "° final=" + Deg(fI) + "°");
+
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
     }
@@ -86,4 +123,30 @@ public static class AttitudeLoopTest
         // settled within 0.5°, and never overshot past ~2× the initial excursion
         return Math.Abs(error) < 0.5 * Math.PI / 180.0 && worst < 2.0 * Math.Abs(error0) + 0.05;
     }
+
+    // Closed-loop sim with a possible authority MISMATCH: the loop is given `ctEst` (what ControlTorque
+    // reports), but the physical plant produces torque from `ctReal` (what the effectors actually deliver).
+    // error' = -omega ; omega' = -actuation·ctReal/MOI. Returns whether it settled (did not diverge/limit-cycle).
+    static bool SimMismatch(double error0, double ctEst, double ctReal, double moi,
+                            out double worst, out double finalErr)
+    {
+        Pid2 pos = new Pid2(), vel = new Pid2();
+        double error = error0, omega = 0.0;
+        worst = Math.Abs(error0);
+        int steps = (int)(20.0 / DT);   // 20 s
+        for (int i = 0; i < steps; i++)
+        {
+            AttitudeAxisResult r = AttitudeLoop.Axis(error, omega, moi, ctEst, DT, false, pos, vel);
+            double alpha = -r.Actuation * ctReal / moi;   // PHYSICAL accel = actuation × the REAL authority
+            omega += alpha * DT;
+            error += -omega * DT;
+            double mag = Math.Abs(error);
+            if (mag > worst) worst = mag;
+            if (double.IsNaN(error) || mag > 4.0 * Math.PI) { finalErr = mag; return false; }   // diverged
+        }
+        finalErr = Math.Abs(error);
+        return finalErr < 2.0 * Math.PI / 180.0;   // settled within 2°
+    }
+
+    static string Deg(double rad) { return (rad * 180.0 / Math.PI).ToString("F1"); }
 }

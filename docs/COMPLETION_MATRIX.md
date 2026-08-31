@@ -5,7 +5,8 @@
 ## Mission / flight systems
 | System | L1 | L2 | L3 | L4 | L5 | Status | Notes / owning code |
 |---|---|---|---|---|---|---|---|
-| Ascent to orbit | ✓ | ✓ | ✓ | ✓ | — | FLIGHT-PROVEN | `AscentControl`; protected |
+| Ascent: S1 → MECO → separation | ✓ | ✓ | ✓ | ✓ | — | FLIGHT-PROVEN (as flown) | controlled to MECO, clean sep; `AscentControl`/`FlightDriver` |
+| Ascent: **S2 → SECO → orbit** | ✓ | ✓ | ⛔ | — | — | **BROKEN — root cause CONFIRMED (headless)** | **S2 attitude diverges at MVac ignition (tumble, no orbit), BOTH `DS-ASC-001/002`. ROOT CAUSE: the loop over-reads control authority ~137× — it credits the RCS geometric estimate (~62000) that the RCS doesn't deliver, while the real (gimbal) authority is only ~451 (flight-regression, disturbance≈0). `AttitudeLoopTest` reproduces the limit-cycle (peakcmd 7.4≈flight 7.6); correct estimate converges. FIX: don't credit RCS pitch/yaw in `ControlTorque` under main-engine thrust + `maxAlpha` clamp (implement+review+re-fly). TOP BLOCKER.** |
 | Max-Q launch escape | ✓ | ✓ | ✓ | — | — | FLIGHT-PROVEN | `AbortControl`; protected |
 | Dual-vessel booster control | ✓ | ✓ | ✓ | ✓ | — | PARTIALLY PROVEN | controlled, not landed; `MissionConductor`/`BoosterControl` |
 | Booster RTLS landing | ✓ | ✓ | — | — | — | TESTED | `BoosterControl` |
@@ -13,10 +14,10 @@
 | Rendezvous | ✓ | ✓ | — | — | — | TESTED | reaches region, no dock; `RendezvousControl` |
 | Docking (autonomous) | ✓ | ✓ | — | — | — | TESTED | no end-to-end; `DockingControl` |
 | Deorbit / Entry / Splashdown | ✓ | ? | — | — | — | OPEN | 0 autonomous returns; `ReturnControl` |
-| FDIR spine | ✓ | ✓ | — | — | — | TESTED | `Fdir`/`FaultMonitor`; observe-only (`FdirActing` off) |
+| FDIR spine | ✓ | ✓ | ⚠️ | — | — | TESTED — **blind spot found** | observe-only; **did NOT detect the S2 100°+ attitude divergence** (`fdir_fault`=None all rows) → no attitude-divergence monitor; STATE stayed NOMINAL through the tumble |
 | Abort latch/authority | ✓ | ✓ | ✓ | — | — | PARTIALLY PROVEN | proven in max-Q; broaden coverage |
 
-> **Post-Phase-2 re-fly status (2026-08-31, flight `DS-ASC-001` — see `FLIGHT_VERIFICATION.md`):** ascent+separation+dual-vessel re-flown **nominal & fault-free, no NaN** (AuthorityManager/`Clamp1` changes show no regression) — but the flight was **reverted mid-S2**, so **orbit insertion is not re-proven** and **max-Q abort was not exercised** (still owed). Booster flip worked (att_err→1.96°) but was **underdamped (20–60° oscillation)** and **never lit its entry burn / landed** (reverted while still ascending).
+> **⛔ Post-Phase-2 re-fly status (2026-08-31, flights `DS-ASC-001`+`DS-ASC-002` — see `FLIGHT_VERIFICATION.md`):** the re-fly **REVEALED A REGRESSION**, not a clean flight. S1 ascent to MECO and separation are controlled; **at S2 ignition the upper-stage attitude diverges (att_err→125–154°, pitch/yaw tumble, apoapsis stalls ~120 km, NO orbit) — reproduced in BOTH flights** and confirmed on the navball (nose ~90–100° off prograde). **Root cause CONFIRMED headlessly (NOT Phase-2/`Clamp1`; NOT a disturbance — regression intercept ≈0): the loop over-reads control authority ~137× (credits ~62000 RCS geometric; real gimbal authority ~451 from flight regression), sizing bang-bang rates the stage can't achieve → divergent limit-cycle. `AttitudeLoopTest` reproduces it. Fix: don't credit RCS pitch/yaw under thrust + `maxAlpha` clamp. See FLIGHT_VERIFICATION.** FDIR did not detect it. Max-Q abort still un-exercised. Booster: retrograde flip reached ~2° but **underdamped (20–60° swing)** and never lit its entry burn / not landed. Dual-vessel *control* + PRE still functioned.
 
 ## Architecture / seam (this program, Phase 0–7)
 | Item | Status | Phase | Notes |
