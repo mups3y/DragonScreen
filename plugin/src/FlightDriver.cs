@@ -180,6 +180,7 @@ namespace DragonScreen
         // not inferred from pre-pulse controller demand (DS-ASC-004 verification, 2026-08-31).
         public static float AppliedPitch, AppliedYaw, AppliedRoll, AppliedTransX, AppliedTransY, AppliedTransZ;
         public static bool  PulseAttActive, PulseTransActive;
+        static bool pulseConfigLogged;   // one-shot: emit the effective pulse config so a flight PROVES the values
         static float Pulse(ref RcsPulseState st, float cmd, double dt)
         { return (float)RcsPulse.Step(ref st, cmd, dt, RcsPulseDeadband, RcsPulseMinOn, RcsPulseMinOff, RcsPulseFull); }
 
@@ -192,6 +193,13 @@ namespace DragonScreen
             // / deorbit / entry / dock). During gimbal ascent (throttle on) attitude stays CONTINUOUS.
             bool pulse = UseRcsPulse && (TimeWarp.WarpMode != TimeWarp.Modes.HIGH || TimeWarp.CurrentRateIndex == 0);
             double dt = TimeWarp.fixedDeltaTime;
+            if (!pulseConfigLogged)   // instrumentation: prove the in-game pulse config in KSP.log (finding 4a)
+            {
+                pulseConfigLogged = true;
+                Debug.Log("[DragonScreen] RCS pulse config (effective): UseRcsPulse=" + UseRcsPulse
+                    + " deadband=" + RcsPulseDeadband.ToString("F3") + " minOn=" + RcsPulseMinOn.ToString("F3")
+                    + " minOff=" + RcsPulseMinOff.ToString("F3") + " full=" + RcsPulseFull.ToString("F3"));
+            }
             bool rcsAtt = pulse && !(throttleOwned && cmdThrottle > 0.01);
 
             if (throttleOwned) st.mainThrottle = (float)cmdThrottle;
