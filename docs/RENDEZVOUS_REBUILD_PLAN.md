@@ -1,9 +1,15 @@
-# Rendezvous Rebuild — design proposal (Phase 12), for review
+# Rendezvous Rebuild — DESIGN NOTES UNDER VERIFICATION (NOT approved, do not implement)
 
-> **CLASSIFICATION: scoped DESIGN PROPOSAL for the active Phase‑12 rendezvous increment — NOT a governing plan.**
-> Authority order: `docs/MASTER_BUILD_SPEC.md` (governs) → `docs/PHASE_3_RENDEZVOUS_RESEARCH.md` + `docs/CREW_DRAGON_GNC_RESEARCH.md`
-> (the real‑world procedure this must match) → this file (how to implement it). If any conflict, those win.
-> This is review‑material to route through the second‑AI reviewer (it answers their Question C). Delete/fold once implemented.
+> **⛔ STATUS: UNDER VERIFICATION — NOT AN INSTRUCTION, NOT APPROVED. A 2026-08-31 review found real DEFECTS in
+> this proposal that are being resolved BEFORE any code change (see `FLIGHT_VERIFICATION.md` "Rendezvous rebuild
+> verification"):** (1) it wrongly called a lower circular orbit "stable co-elliptic" — it is a PHASING orbit that
+> closes along-track (~17 m/s at 10 km below); (2) the removed circularization was not reproduced before proposing
+> to restore it; (3) the "100 km CW invalid / 7.5 km correct" hand-off is asserted, not derived from a CW-vs-truth
+> bound; (4) the Δv budget contradiction (66 m/s useful vs a 100–200 m/s profile) is UNRESOLVED — it hinges on the
+> discrete-burn efficiency, which is UNKNOWN — EVIDENCE REQUIRED; (5) fuel attribution has a sampling caveat;
+> (6) the named-burn / 7.5 km / waypoint values need source-confidence labels. **This file is retained as design
+> notes only; it does NOT govern anything and MUST NOT be built from until the verification gates pass.** Governing
+> plan remains `docs/MASTER_BUILD_SPEC.md` (Phase 0–7 active; the rendezvous work is the recorded Phase-9/12 exception).
 
 ## 1. Why (flight‑proven problem — the owner's two reasons, evidence below)
 The rendezvous runs the MMH tank dry before docking, on **three** instrumented flights. Root causes, measured:

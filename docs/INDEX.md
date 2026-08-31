@@ -13,7 +13,8 @@
 - **[SCREEN_SPEC.md](SCREEN_SPEC.md)** [ACTIVE] — the single screen spec (IA, components, page inventory, visual language); cannot override the master.
 - Supporting ACTIVE docs: **[COMPLETION_MATRIX.md](COMPLETION_MATRIX.md)** · **[SOURCE_OF_TRUTH.md](SOURCE_OF_TRUTH.md)** · **[TELEMETRY_REGISTRY.md](TELEMETRY_REGISTRY.md)** · **[COMMAND_REGISTRY.md](COMMAND_REGISTRY.md)** · **[SCREEN_EVIDENCE_MATRIX.md](SCREEN_EVIDENCE_MATRIX.md)** · **[FLIGHT_VERIFICATION.md](FLIGHT_VERIFICATION.md)** · **[DEPENDENCY_MATRIX.md](DEPENDENCY_MATRIX.md)**.
 - **INDEX.md** [CURRENT] — this file.
-- Handoffs/assessments (HISTORICAL evidence, not instruction): `RESUME_PROMPT.md`, `SESSION_HANDOFF.md`, `GROK_ASSESSMENT_PROMPT.md`, `CHATGPT_ASSESSMENT.md`, `ASSESSMENT_VERIFICATION.md`.
+- Handoffs/assessments (HISTORICAL evidence, not instruction): `RESUME_PROMPT.md`, `SESSION_HANDOFF.md`, `GROK_ASSESSMENT_PROMPT.md`, `CHATGPT_ASSESSMENT.md`, `ASSESSMENT_VERIFICATION.md`, `AI_REVIEW_HANDOFF.md`.
+- `RENDEZVOUS_REBUILD_PLAN.md` [⛔ UNDER VERIFICATION — NOT an instruction/plan]: design notes with review-flagged defects being resolved; do not build from it (see `FLIGHT_VERIFICATION.md` rendezvous verification).
 - **SUPERSEDED (deleted from the repo — only the ACTIVE plan exists; in git history):** `ULTIMATE_PLAN`, `AUTOPILOT_REBUILD_PLAN`, `MASTER_FIX_PLAN`, `CAMPAIGN_PLAN`, `CAPABILITY_BUILD_BACKLOG`, `RETURN_FIX_PLAN`, `NOMINAL_END_TO_END_BUILD`.
 - Memory: `~/.claude/.../memory/MEMORY.md` (index) + running log (read latest).
 

@@ -40,6 +40,17 @@ User signal "12 killed / 17 rescued by hand / 0 autonomously returned" is now **
 
 **Firm fact:** RETURN = OPEN, **0 autonomous returns to date** (two sources). Exact kill/rescue tallies vary by accounting window (KSP-log session ledger vs recorder-CSV scoreboard); the operative signal — the autopilot cannot yet bring the crew home — is confirmed. Return is Phase 14; not touched this session.
 
+## Rendezvous rebuild — VERIFICATION (2026-08-31, reviewer-prompted; gates the plan, no code change)
+Independent verification of the `RENDEZVOUS_REBUILD_PLAN.md` critique (that plan is now marked UNDER VERIFICATION):
+- **P1 orbital terminology — CRITIQUE VALID (my error).** RSS ISS 417×421 → a=6790 km, T=92.8 min. A 409 km circular orbit (10 km below) has Δn=2.5e-6 rad/s → **closes along-track at ~17 m/s; it is a PHASING orbit, NOT "stable co-elliptic drift."** (A1's 367 km closes ~88 m/s.) Only same-a=ISS has zero drift. States tabulated below. **Do not call a lower circular orbit "stable relative to ISS."**
+- **P4 Δv contradiction — PARTIALLY RESOLVED, key gate OPEN.** Hohmann 367→409 = 24 m/s ideal. The "66 m/s useful" came from the BROKEN procedure at 21% efficiency (85% wasted on the constant attitude hold). Discrete burns + free drift should recover toward force_frac ≈ 0.67 → useful ≈ 200 m/s. **But the discrete-burn efficiency is `UNKNOWN — EVIDENCE REQUIRED`;** the profile fits only if η ≳ 0.5. This is the make-or-break gate — a reproducible budget + an η measurement must precede any FSM.
+- **P5 app_* validation — post-pulse CONFIRMED, attribution CAVEATED.** `app_*` values are exactly {−1,0,+1} = the PWPF pulse output (post-`FlightCtrlState`), not a pre-actuator estimate. BUT `rcs_thrust_n` is ~equal app-on vs app-off (21.3 vs 19.1 kN) — a sub-tick snapshot-vs-duty sampling mismatch → **fuel attribution via app_*+rcs_thrust_n is approximate, not exact.** (The attitude-dominates direction still holds from the post-guard attitude-only drain.)
+- **P2 circularization (27 orbits) — `NOT YET REPRODUCED` (owed):** likely low-thrust + apoapsis-arc-limited + control drift, but must be reproduced from the old code + a pure model before restoring circularization.
+- **P3 CW-vs-truth envelope — `UNKNOWN — EVIDENCE REQUIRED` (owed):** my quick check was too crude (linearized "truth"); a proper nonlinear two-body vs CW comparison must DERIVE the hand-off envelope from a stated error bound. Qualitatively 100 km is beyond CW's "tens of km" validity, but "7.5 km correct" is not yet derived.
+- **P6 procedure sources — labels owed:** named-burn sequence + AI 7.5 km/90 s/0.72 m/s are cited (Crew-1 timeline PDF, `PHASE_3_RENDEZVOUS_RESEARCH` §4c) → CONFIRMED/STRONGLY-SUPPORTED; WP0/1/2 (400/200/20 m) are RECONSTRUCTED (need signed-LVLH + KOS check).
+- **P7 doc control — DONE:** plan reclassified UNDER-VERIFICATION; `AI_REVIEW_HANDOFF` + the plan indexed in `INDEX.md`; Phase-9/12 exception already in `MASTER_BUILD_SPEC`.
+- **Smallest justified next increment:** a PURE headless **Δv-budget + efficiency model** (ideal per-phase Δv × the [0.21–0.67] efficiency band, gated on the 66 m/s / return-reserve budget) + a **CW-vs-two-body envelope** — analysis only, NO FSM/waypoints/tuning/circularization change — then re-review.
+
 ## Flight log
 
 ### ⚠ DS-ASC-006 — trust-stock fix is LIVE but INSUFFICIENT; the two real reasons are procedure + constant pulsing — 2026-08-31
