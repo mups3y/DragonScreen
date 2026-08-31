@@ -35,6 +35,38 @@ namespace DragonScreen
                                                                 // (ct.up = nose) → s.Z=−1 raised apoapsis on
                                                                 // flight 131412 (200→419 km). Anchors the
                                                                 // DockingControl RCS sign derivation (all −1).
+        // ⭐ C1 propellant-budget SAFETY NET (2026-08-31, DS-ASC-003): every rendezvous translation goes through
+        // RvTranslate, which INHIBITS the burn once the return propellant (worst-case MMH/NTO fraction) falls to this
+        // floor, then HOLDS + warns. Its job is to prevent the DS-ASC-003 total drain — 0% = no attitude control = a
+        // certainly-dead crew — and to hold back a modest margin for a deorbit/return attempt, so the operator can act
+        // on the reserve instead of stranding. It protects the RETURN, not the dock (it holds short rather than spend
+        // the reserve). ⚠ At the Dragon's ~21% RCS efficiency, a full dock AND a full return do not both fit the tank
+        // (docs/FLIGHT_VERIFICATION.md) — this floor is deliberately MODEST (a catastrophe-preventer, not a return
+        // guarantee) so it does not block a within-budget A1 dock; SIZE IT to the measured deorbit cost on re-fly.
+        [Tunable] public static double RvReturnReserveFrac = 0.20;
+        static bool rvReserveWarned;
+
+        // The guarded translation used by EVERY rendezvous burn (far-field / Lambert / near-field CW). Fires only while
+        // the return propellant is above the reserve; below it, nulls the translation (hold) and surfaces it once.
+        static void RvTranslate(Vessel v, double x, double y, double z)
+        {
+            double rf = (v != null) ? DockedSide.ReturnFraction(v) : 1.0;
+            if (rf <= RvReturnReserveFrac)
+            {
+                FlightDriver.SetTranslation(0.0, 0.0, 0.0);   // hold — protect the deorbit/return budget
+                if (!rvReserveWarned)
+                {
+                    rvReserveWarned = true;
+                    Debug.LogWarning("[DragonScreen] RV propellant reserve: return prop " + (rf * 100.0).ToString("F0")
+                        + "% ≤ reserve " + (RvReturnReserveFrac * 100.0).ToString("F0")
+                        + "% — rendezvous translation INHIBITED to protect the deorbit/return budget (holding).");
+                    ScreenMessages.PostScreenMessage("Rendezvous held — return-propellant reserve reached", 6f,
+                        ScreenMessageStyle.UPPER_CENTER);
+                }
+                return;
+            }
+            FlightDriver.SetTranslation(x, y, z);
+        }
         [Tunable] public static double AttitudeReadyDeg = 5.0;
         // ⭐ Campaign 1 (C2a): far-field coast prograde re-acquire band. On a far-field COAST/PHASE we re-acquire
         // prograde only after drifting past this, then release the attitude channel (drift, no RCS) — a hysteresis
@@ -120,7 +152,7 @@ namespace DragonScreen
         public static void Reset()
         {
             phase = RvPhase.Idle; farPhase = FarPhase.Phase; lastFarPhase = FarPhase.Phase;
-            shroudOpened = false; floorLogged = false;
+            shroudOpened = false; floorLogged = false; rvReserveWarned = false;
             navInit = false;   // re-init the strict-fidelity rel-nav filter on a new rendezvous
             settleDone = false; settleStartUT = -1.0;   // re-arm the detumble-at-entry gate
             lambPhase = LambPhase.Idle;   // re-arm the Lambert intercept FSM on a new rendezvous
@@ -288,7 +320,7 @@ namespace DragonScreen
                 floorLogged = true;
             }
             if (fc.Burn && perr <= AttitudeReadyDeg)
-                FlightDriver.SetTranslation(0, 0, ForwardSign);   // prograde raise on the Dracos
+                RvTranslate(v, 0, 0, ForwardSign);   // prograde raise on the Dracos (guarded by the return reserve)
             else
                 FlightDriver.ReleaseTranslation();
 
@@ -365,7 +397,7 @@ namespace DragonScreen
                     Debug.Log("[DragonScreen] LAMBERT burn complete → coast to intercept (range "
                               + (rangeM / 1000.0).ToString("F0") + " km)");
                 }
-                else if (perr <= AttitudeReadyDeg) { FlightDriver.SetTranslation(0, 0, ForwardSign); burning = true; }
+                else if (perr <= AttitudeReadyDeg) { RvTranslate(v, 0, 0, ForwardSign); burning = true; }
                 else FlightDriver.ReleaseTranslation();
 
                 if (now - lambLastLogUT > 5.0)
@@ -534,7 +566,7 @@ namespace DragonScreen
             }
             bool closingBurn = cmd.Burn && perr <= AttitudeReadyDeg && cmd.BurnDvMps > BurnDoneDvMps && peSafe;
             if (closingBurn)
-                FlightDriver.SetTranslation(0, 0, ForwardSign);      // forward on the nose (Dracos)
+                RvTranslate(v, 0, 0, ForwardSign);      // forward on the nose (Dracos, guarded by the return reserve)
             else
                 FlightDriver.ReleaseTranslation();
 
