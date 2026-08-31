@@ -99,6 +99,16 @@ namespace DragonScreen
         public static bool UseGimbalLoop = true;
         static bool sasReady;
 
+        // ⭐ SAS TEST MODE (owner 2026-09-01: "is stock SAS + stock RCS enough, without a bunch of trims?").
+        // When SasActive, hand ALL attitude to stock SAS on the DRACOS (the Dragon has no reaction wheels) and
+        // stand the custom loop down — so the deadband, S2 roll-trim, and RCS pulse cannot interfere. SasActive
+        // is set per-tick by FlightDriver ONLY on the nominal DriveActivePhase path; the ABORT path leaves it
+        // false, so a launch escape still flies on the fast gimbal loop (SAS is too slow for that — the whole
+        // reason this loop exists). ⚠ In test mode SAS also flies the powered ascent through max-Q; the
+        // loss-of-control abort is the safety net if it can't. [Tunable] master switch; off by default.
+        [Tunable] public static bool SasTestMode = false;
+        public static bool SasActive;
+
         public static void Point(Vessel v, Vector3d worldDir) { Hold(v, worldDir, true, Vector3d.zero); }
         public static void PointNoRoll(Vessel v, Vector3d worldDir) { Hold(v, worldDir, false, Vector3d.zero); }
 
@@ -110,9 +120,11 @@ namespace DragonScreen
         static void Hold(Vessel v, Vector3d worldDir, bool dampRoll, Vector3d rollUpRef)
         {
             if (v == null || worldDir.magnitude < 1e-6) return;
-            if (UseGimbalLoop) { AttitudePilot.Point(v, worldDir, dampRoll, rollUpRef); return; }
-            try   // ---- SAS fallback (UseGimbalLoop=false) ----
+            bool useSas = SasActive || !UseGimbalLoop;
+            if (!useSas) { AttitudePilot.Point(v, worldDir, dampRoll, rollUpRef); return; }
+            try   // ---- SAS holds attitude on the Dracos (SasActive test mode, or UseGimbalLoop=false fallback) ----
             {
+                FlightDriver.ReleaseAttitude();   // yield the direct-loop pitch/yaw/roll so OnFlyByWire cannot override SAS
                 if (!v.ActionGroups[KSPActionGroup.SAS]) v.ActionGroups.SetGroup(KSPActionGroup.SAS, true);
                 if (v.Autopilot != null)
                 {
@@ -126,7 +138,7 @@ namespace DragonScreen
             }
             catch (Exception e)
             {
-                Debug.LogWarning("[DragonScreen] steering point failed: " + e.Message);
+                Debug.LogWarning("[DragonScreen] steering point (SAS) failed: " + e.Message);
             }
         }
 
