@@ -35,6 +35,7 @@ public static class FigmaUINavTest
         CoverCamera();
         SpeccedPages();
         Menu();
+        Rendezvous();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
     }
@@ -97,6 +98,37 @@ public static class FigmaUINavTest
     {
         float sc = H / RefH;
         return FigmaUI.HitTest(UiPage.Cover, 98f * sc, 108f * sc, W, H);
+    }
+
+    static void Rendezvous()
+    {
+        // T6: reached from Docking's letterbox margin - mirrors the HUD's own Docking affordance
+        // (SpeccedPages) - and carries the bottom bar like every page.
+        float sc = (float)H / RefH, ox = (W - RefW * sc) * 0.5f;
+
+        NavHit toRdv = FigmaUI.HitTest(UiPage.Docking, 30f, 0.5f * H, W, H);
+        Check("Docking margin -> Rendezvous", toRdv.Act == NavAct.Goto && toRdv.Target == UiPage.Rendezvous,
+              "got " + toRdv.Act + " " + toRdv.Target);
+
+        float bcx = (46f + 40f) / RefW * W, bcy = (2003f + 40f) * sc;
+        Check("Rendezvous bottom-bar -> Cover",
+              FigmaUI.HitTest(UiPage.Rendezvous, bcx, bcy, W, H).Target == UiPage.Cover, "");
+
+        // Menu (every page but itself) must have picked the new page up automatically.
+        bool sawIt = false;
+        for (int i = 0; i < MenuPage.Entries.Length; i++)
+            if (MenuPage.Entries[i] == UiPage.Rendezvous) sawIt = true;
+        Check("Menu lists Rendezvous", sawIt, "");
+
+        // The left icon rail (RendezvousPage: x 40..220, y 220..1800) is chrome only - the real
+        // icons are not label-legible in the reference photo, so no destination is invented here.
+        NavHit rail = FigmaUI.HitTest(UiPage.Rendezvous, 130f * sc + ox, 420f * sc, W, H);
+        Check("Rendezvous rail is inert", rail.Act == NavAct.None, "got " + rail.Act);
+
+        // The Hold Capture card (RendezvousPage: x 260..1180, y 220..680) and its ◄/► arrows are
+        // display-only until T14 wires touch.
+        NavHit card = FigmaUI.HitTest(UiPage.Rendezvous, 720f * sc + ox, 450f * sc, W, H);
+        Check("Rendezvous Hold-Capture card is inert", card.Act == NavAct.None, "got " + card.Act);
     }
 
     static void SpeccedPages()

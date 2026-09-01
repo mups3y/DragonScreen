@@ -37,7 +37,12 @@ namespace DragonScreen
         VehicleAvionics = 23, VehicleGnc = 24, VehicleThermal = 25,
         // Two real deorbit/prox-ops pages reconstructed from photos + the live docking sim. Manual Chute
         // Deploy is the Cover rail's phase-7 destination; Docking is reached from the attitude HUD.
-        ManualChute = 26, Docking = 27
+        ManualChute = 26, Docking = 27,
+        // The rendezvous orbital-ellipse plot (T6) - the BBC-photographed CENTRE cockpit screen during
+        // a real "Hold Capture" rendezvous (SCREEN_INVENTORY #23/#87, tier-1). Reached from Docking's
+        // own letterbox margin, the same construction as the HUD's Docking affordance. Appended (never
+        // renumbered): the int persists per screen.
+        Rendezvous = 28
     }
 
     public enum NavAct { None, Goto, Back, Forward }
@@ -60,7 +65,7 @@ namespace DragonScreen
         /// overlay. The painter sizes its list to the max of this and the old model.</summary>
         public const int Commands = 360;
 
-        public const int PageCount = 28;
+        public const int PageCount = 29;
 
         const float RefW = 3427f, RefH = 2112f;
 
@@ -101,7 +106,7 @@ namespace DragonScreen
             "VEHICLE OVERVIEW", "SUIT LEAK CHECK", "MECH PANEL", "VIDEO SETTINGS", "TEST VRIO HEALTH LEDS",
             "VEHICLE — CREW", "VEHICLE — PROP", "VEHICLE — POWER",
             "VEHICLE — AVIONICS", "VEHICLE — GNC", "VEHICLE — THERMAL",
-            "MANUAL CHUTE DEPLOY", "MANUAL DOCKING"
+            "MANUAL CHUTE DEPLOY", "MANUAL DOCKING", "RENDEZVOUS"
         };
 
         public static string Name(UiPage p)
@@ -151,6 +156,7 @@ namespace DragonScreen
                 case UiPage.VehicleThermal:    VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Thermal, s); break;
                 case UiPage.ManualChute:       ManualChuteDeployPage.Build(dl, w, h, s, view); break;
                 case UiPage.Docking:           DockingSimPage.Build(dl, w, h); break;
+                case UiPage.Rendezvous:        RendezvousPage.Build(dl, w, h, s); break;
                 default:               PlaceholderPage.Build(dl, w, h, Name(page)); break;
             }
             BottomBarMarker(dl, w, h, page);
@@ -162,7 +168,7 @@ namespace DragonScreen
         {
             switch (p)
             {
-                case UiPage.Hud: case UiPage.Docking: return 1;
+                case UiPage.Hud: case UiPage.Docking: case UiPage.Rendezvous: return 1;
                 case UiPage.Vehicle: case UiPage.VehicleMech:
                 case UiPage.VehicleCrew: case UiPage.VehiclePropulsion: case UiPage.VehiclePower:
                 case UiPage.VehicleAvionics: case UiPage.VehicleGnc: case UiPage.VehicleThermal:
@@ -238,6 +244,16 @@ namespace DragonScreen
                 int ph = CoverPage.PhaseOf(CoverPage.HitTest(px, py, w, h));
                 if (ph >= 0 && ph != 6) return NavHit.Go(UiPage.Cover);
                 return NavHit.None;
+            }
+
+            // Manual Docking: a "RENDEZVOUS" affordance in the matching letterbox margin opens the
+            // rendezvous ellipse plot - the two are the HUD/plot pairing the BBC photo actually shows
+            // together during a real approach, same construction as the HUD's own Docking affordance.
+            if (page == UiPage.Docking)
+            {
+                float sc = h / RefH, ox = (w - RefW * sc) * 0.5f;
+                if (ox > 40f && px >= 12f && px < ox - 12f && py >= h * 0.40f && py < h * 0.60f)
+                    return NavHit.Go(UiPage.Rendezvous);
             }
 
             if (page == UiPage.Cover) return MapCover(CoverPage.HitTest(px, py, w, h));

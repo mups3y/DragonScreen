@@ -473,7 +473,16 @@ namespace DragonScreen
         /// by the engine: it needs no unit convention to be agreed with KSP, and it cannot disagree
         /// with the apogee and perigee printed beside it.
         /// </summary>
-        private static void Orbit(DisplayList dl, PageState s, float mx, float my, float mw, float mh)
+        public static void Orbit(DisplayList dl, PageState s, float mx, float my, float mw, float mh)
+        { Orbit(dl, s, mx, my, mw, mh, false); }
+
+        /// <summary>
+        /// As Orbit, plus an optional approach chord from the vehicle to periapsis (T6's rendezvous
+        /// ellipse plot). Public for the same reason Planet/Map are: one conic calculation, reused
+        /// by the plain NAV page (chord off) and RendezvousPage (chord on), not two that could drift.
+        /// </summary>
+        public static void Orbit(DisplayList dl, PageState s, float mx, float my, float mw, float mh,
+                                 bool showApproachChord)
         {
             float cx = mx + mw * 0.5f, cy = my + mh * 0.5f;
 
@@ -550,6 +559,15 @@ namespace DragonScreen
             float vy = cy - (float)(rNow * System.Math.Sin(nuNow)) * scale;
             dl.Rect(vx - 9f, vy - 1f, 18f, 2f, DragonPalette.Go);
             dl.Rect(vx - 1f, vy - 9f, 2f, 18f, DragonPalette.Go);
+
+            // ---- approach chord (T6) ----
+            // Only drawn with a target actually set, so the plain NAV view (chord always off) and an
+            // idle rendezvous plot never grow an unexplained line. Runs to PERIAPSIS - the next real
+            // apsis pass, already trusted above - because the target's own orbital elements are not
+            // yet in PageState (T13 wires true target-relative closing geometry); this is this task's
+            // stated interpretation of "an approach chord", not an invented target position.
+            if (showApproachChord && s.HasTarget)
+                dl.Line(vx, vy, pxP, cy, 2f, DragonPalette.Caution);
         }
 
         /// <summary>

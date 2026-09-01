@@ -222,8 +222,46 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
   test`: green, 3917 checks, 0 failed (unchanged — T5's DONE-when is preview only, no nav-test required).
   §1.4 respected throughout.
 
-### T6 [S] Rendezvous ellipse plot — **TODO**
+### T6 [S] Rendezvous ellipse plot — **DONE**
 - **Read:** §3 + §8 + Hohmann/Orbital.  **DONE when:** preview + nav test.
+- **DONE 2026-09-02.** §3 row 83 / SCREEN_INVENTORY #23+#87 built as a new page, `UiPage.Rendezvous`
+  (`plugin/src/pure/RendezvousPage.cs`). Source is a REAL flight screengrab (tier-1, not a
+  recreation): the BBC explainer's `_112570366_touchscreens.png`, all three cockpit screens during an
+  actual "Hold Capture" rendezvous — LEFT confirmed our existing HUD/DockingSimPage design, RIGHT was
+  a checklist page (out of scope), CENTRE (this page) showed a left icon sub-nav rail, a "Hold
+  Capture" procedure card (◄/► + RUNNING + status text + a circular mission-patch icon), and a large
+  2D orbital-ellipse plot with the vehicle position + an approach chord.
+  **The ellipse plot is not a second orbit renderer:** `NavPage.Orbit` (the plain NAV page's existing
+  real conic — apogee/perigee → ellipse, current radius → true anomaly) was made public with one
+  addition — an optional approach chord, drawn vehicle→periapsis, shown only when `s.HasTarget` — so
+  there is one orbit calculation, not two that could drift (same rule T4 followed for NavPage.Map).
+  The plain NAV page's own call is the untouched 6-arg overload (chord always off); its rendering is
+  unchanged. **The Hold Capture card's RUNNING/NOT ENGAGED state is real**, not decoration: it reads
+  `PageState.RendezvousEngaged`/`.RendezvousNote`, which the glue already threads from
+  `StationApproach.Engaged`/`.Note` (`_AutopilotStub.cs`) — "NOT ENGAGED" until Part B wires it, the
+  same honest-stub idiom CLAUDE.md requires everywhere else. **What's ours, stated in the code:** the
+  left rail's icons are not label-legible in the source photo (SCREEN_INVENTORY residual research),
+  so it draws as inert chrome with no invented destinations; the circular "mission-patch" icon is a
+  plain roundel (shape confirmed, no artwork invented); the ◄/► step controls are display-only
+  (T14 wires touch, same footing as T5's ALERTS toggle); the approach chord runs to periapsis rather
+  than a true target-relative point, since target orbital elements aren't in PageState yet (T13).
+  **Reachability:** a letterbox-margin affordance on the Manual Docking page (mirroring the HUD's own
+  Docking affordance) opens Rendezvous — the two are the HUD/plot pairing the same photo shows
+  together — plus the universal Menu grid and bottom bar (Hud/Docking/Rendezvous share bar icon 1).
+  **Required side-effect, not scope creep:** `MenuPage`'s grid auto-discovers every `UiPage`
+  (`FigmaUI.PageCount`), so adding a 29th page overflowed its fixed 27-cell (3×9) grid; bumped to
+  3×10 (30 cells) — mechanical upkeep of an existing DONE page's own design, not new scope.
+  **Nav test:** `FigmaUINavTest.Rendezvous()` — Docking margin → Rendezvous, bottom bar → Cover,
+  Menu lists the new page (also proven end-to-end by `Menu()`'s existing all-entries loop), and the
+  rail/card are confirmed inert. `python plugin/build.py test`: green, Figma UI nav suite 167 → 173,
+  3917 → **3923 checks total, 0 failed**.
+  **Preview:** `ui_rendezvous.png` added and inspected — title, 4-slot rail, Hold Capture card (patch
+  roundel, "NOT ENGAGED" in dim text, ◄/► boxes), and the orbital plot (live globe, dotted ellipse,
+  AP/PE markers, vehicle marker, orange approach chord to PE) all render cleanly, no overlap/clipping,
+  no `DisplayList` overflow (205 of 320 commands). `ui_menu.png` re-inspected — 28 cards including the
+  new "RENDEZVOUS" entry, still legible, no overlap. §1.4 respected throughout: every real fact is
+  sourced (the photo, or existing live PageState fields); every invented detail is named as such in
+  the code and above.
 
 ### T7 [S] Deorbit Burn Prep (reconstruct, marked) — **TODO**
 - **Read:** §3 + §8.  **DONE when:** preview.

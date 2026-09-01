@@ -17,10 +17,12 @@ namespace DragonScreen
 {
     public static class MenuPage
     {
-        public const int Commands = 180;   // background + heading + 27 cards (rect+box+text) + bottom bar
+        public const int Commands = 180;   // background + heading + 28 cards (rect+box+text) + bottom bar
         const float RefW = 3427f, RefH = 2112f;
 
-        const int Cols = 3, Rows = 9;
+        // Rows bumped 9->10 (T6, Rendezvous appended): grid cells must cover FigmaUI.PageCount-1
+        // entries, and the count keeps growing every time a page is appended - see BuildEntries.
+        const int Cols = 3, Rows = 10;
         const float Margin = 90f, Top = 210f, Bottom = 1830f, Gap = 24f;
 
         /// <summary>Every page but Menu itself, in enum order (the same order FigmaUI.Name reads).</summary>
