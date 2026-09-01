@@ -9,7 +9,16 @@
 // three-zone form: LEFT subsystem checklist · CENTRE capsule + four headline gauges · RIGHT detail
 // readouts · the shared subsystem tab bar. Values are representative, like the overview's; the real
 // vessel telemetry replaces them in a later pass.
-// ============================================================================================
+//
+// T5: DillonBaird's Vehicle render (+ alt-text, SCREEN_INVENTORY.md "IMAGERY HUNT 2026-09-01") confirms
+// a FUNCTIONS|ALERTS toggle bottom-left next to this subsystem tab bar, and that "the Subview Nav Bar …
+// displays red when alerts exist in that subview." FUNCTIONS is this page's existing content; ALERTS
+// swaps the four-gauge + right-readout zone for an "ALERT ACTIVITY" summary (that column header is
+// itself a REAL confirmed label — Frame 58's own attitude HUD carries one, REFERENCE_PAGES.md) driven
+// by the SAME real severity that colours this subsystem's own tab in VehicleTabBar, so the tab and the
+// page it names can never disagree. Toggle geometry (exact pixel placement) is OURS — not measurable
+// from the source render — same footing as Menu/Reference Content's §14.4(c) layout. Left inert per
+// T14 (touch wiring); this task's DONE-when is preview only.
 using System;
 
 namespace DragonScreen
@@ -43,15 +52,37 @@ namespace DragonScreen
             public string[] RLabel, RVal; public float[] RFrac;                   // right detail readouts
         }
 
-        public static void Build(DisplayList dl, int w, int h, Sub sub)
+        /// <summary>This subsystem's real live severity — the same signal that colours its VehicleTabBar
+        /// tab (T5). Avionics and GNC share the one real fault channel this build has (Alarms.FdirSeverity);
+        /// there is no second, separately-modelled fault source to split them on.</summary>
+        static Severity LiveSeverity(Sub sub, PageState s)
+        {
+            if (!s.Valid) return Severity.Nominal;
+            switch (sub)
+            {
+                case Sub.Crew:       return Alarms.LifeSupport(s.Cabin);
+                case Sub.Propulsion: return Alarms.Low(s.Propellant01);
+                case Sub.Power:      return Alarms.Low(s.Power01);
+                case Sub.Avionics:
+                case Sub.Gnc:        return Alarms.FdirSeverity(s);
+                default:             return Alarms.Thermal(s.Cabin); // Thermal
+            }
+        }
+
+        public static void Build(DisplayList dl, int w, int h, Sub sub, PageState s) { Build(dl, w, h, sub, s, false); }
+
+        /// <summary><paramref name="alerts"/> selects the FUNCTIONS (false, default) or ALERTS (true) tab
+        /// of the T5 toggle — see the file header. FigmaUI doesn't wire the toggle to a touch yet
+        /// (T14), so every caller today passes the 4-arg overload and gets FUNCTIONS.</summary>
+        public static void Build(DisplayList dl, int w, int h, Sub sub, PageState s, bool alerts)
         {
             float sx = w / RefW, sy = h / RefH;
             float PX(float x) => x * sx;
             float PY(float y) => y * sy;
             float SZ(float v) => v * sy;
-            void L(string t, float x, float y, float s, Rgba c) => dl.Text(t, PX(x), PY(y), SZ(s), TextAlign.Left, c);
-            void C(string t, float cx, float y, float s, Rgba c) => dl.Text(t, PX(cx), PY(y), SZ(s), TextAlign.Centre, c);
-            void R(string t, float rx, float y, float s, Rgba c) => dl.Text(t, PX(rx), PY(y), SZ(s), TextAlign.Right, c);
+            void L(string t, float x, float y, float s2, Rgba c) => dl.Text(t, PX(x), PY(y), SZ(s2), TextAlign.Left, c);
+            void C(string t, float cx, float y, float s2, Rgba c) => dl.Text(t, PX(cx), PY(y), SZ(s2), TextAlign.Centre, c);
+            void R(string t, float rx, float y, float s2, Rgba c) => dl.Text(t, PX(rx), PY(y), SZ(s2), TextAlign.Right, c);
 
             // 300° gauge (60° gap at the bottom), value + unit centred, label above — the overview's gauge.
             void Gauge(float cxd, float cyd, float rd, float frac, Rgba col, string label, string val, string unit)
@@ -79,27 +110,59 @@ namespace DragonScreen
                 L(d.CkState[i], 150, y + 48, 26, sc);
             }
 
-            // ---- CENTRE-TOP: four headline gauges ----
-            float[] gx = { 1170f, 1620f, 2070f, 2520f };
-            for (int i = 0; i < d.GLabel.Length && i < 4; i++)
-                Gauge(gx[i], 470, 170, d.GFrac[i], d.GCol[i], d.GLabel[i], d.GVal[i], d.GUnit[i]);
+            Severity sev = LiveSeverity(sub, s);
+
+            if (!alerts)
+            {
+                // ---- CENTRE-TOP: four headline gauges ----
+                float[] gx = { 1170f, 1620f, 2070f, 2520f };
+                for (int i = 0; i < d.GLabel.Length && i < 4; i++)
+                    Gauge(gx[i], 470, 170, d.GFrac[i], d.GCol[i], d.GLabel[i], d.GVal[i], d.GUnit[i]);
+
+                // ---- RIGHT: detail readouts (label · value · bar) ----
+                for (int i = 0; i < d.RLabel.Length; i++)
+                {
+                    float y = 340 + i * 250;
+                    L(d.RLabel[i], 2760, y, 28, Dim);
+                    R(d.RVal[i], 3360, y, 34, White);
+                    dl.Rect(PX(2760), PY(y + 70), 600 * sx, SZ(8), Faint);
+                    float f = d.RFrac[i] > 1f ? 1f : (d.RFrac[i] < 0f ? 0f : d.RFrac[i]);
+                    if (f > 0f) dl.Rect(PX(2760), PY(y + 70), 600 * sx * f, SZ(8), Accent);
+                }
+            }
+            else
+            {
+                // ---- ALERTS: "ALERT ACTIVITY" (real label, REFERENCE_PAGES.md Frame 58) in place of the
+                // gauges, then the one real fault channel (FDIR) in place of the readout column. Both are
+                // driven by LiveSeverity — the exact value already colouring this subsystem's own tab, so
+                // the toggle content and the red-nav can never say different things.
+                Rgba sevCol = sev == Severity.Nominal ? Go : Alarms.Colour(sev);
+                C("ALERT ACTIVITY", 1845, 340, 38, Accent);
+                dl.Rect(PX(1300), PY(390), 1090 * sx, SZ(2), Faint);
+                C(Alarms.Word(sev), 1845, 560, 110, sevCol);
+
+                L("FDIR", 2760, 340, 28, Dim);
+                Rgba fdirCol = s.Valid ? Alarms.Colour(Alarms.FdirSeverity(s)) : Dim;
+                R(s.Valid ? s.FaultText : "NO DATA", 3360, 340, 34, fdirCol);
+                float fdirFrac = Alarms.FdirSeverity(s) == Severity.Nominal ? 0.15f
+                               : Alarms.FdirSeverity(s) == Severity.Caution ? 0.6f : 1f;
+                dl.Rect(PX(2760), PY(410), 600 * sx, SZ(8), Faint);
+                dl.Rect(PX(2760), PY(410), 600 * sx * fdirFrac, SZ(8), fdirCol);
+            }
 
             // ---- CENTRE: capsule diagram (the vehicle, on every vehicle page) ----
             dl.Asset("dragon_crew", PX(1453), PY(760), 520 * sx, 760 * sy, White);
 
-            // ---- RIGHT: detail readouts (label · value · bar) ----
-            for (int i = 0; i < d.RLabel.Length; i++)
-            {
-                float y = 340 + i * 250;
-                L(d.RLabel[i], 2760, y, 28, Dim);
-                R(d.RVal[i], 3360, y, 34, White);
-                dl.Rect(PX(2760), PY(y + 70), 600 * sx, SZ(8), Faint);
-                float f = d.RFrac[i] > 1f ? 1f : (d.RFrac[i] < 0f ? 0f : d.RFrac[i]);
-                if (f > 0f) dl.Rect(PX(2760), PY(y + 70), 600 * sx * f, SZ(8), Accent);
-            }
+            // ---- FUNCTIONS | ALERTS toggle (T5, bottom-left; geometry ours, see file header) ----
+            Rgba fnCol = !alerts ? White : Dim;
+            Rgba alCol = alerts ? White : (sev != Severity.Nominal ? Alarms.Colour(sev) : Dim);
+            L("FUNCTIONS", 150, 1760, 28, fnCol);
+            L("ALERTS", 420, 1760, 28, alCol);
+            dl.Rect(PX(!alerts ? 150f : 420f), PY(1798), (!alerts ? 190f : 110f) * sx, SZ(4),
+                    alerts && sev != Severity.Nominal ? Alarms.Colour(sev) : Accent);
 
             // ---- subsystem tab bar + global bottom bar ----
-            VehicleTabBar.Draw(dl, w, h, d.Tab);
+            VehicleTabBar.Draw(dl, w, h, d.Tab, VehicleTabBar.Severities(s));
             dl.Asset("component_48", 0f, PY(1877), w, SZ(235), White);
         }
 

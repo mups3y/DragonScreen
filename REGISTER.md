@@ -190,8 +190,37 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
   stated in the code. **Logged not done → S10:** the scaled-space RT camera `MAP_MFD_RESEARCH.md` §2
   designs is a separate, glass-only piece.
 
-### T5 [S] Vehicle Alerts + Consumables — **TODO**
+### T5 [S] Vehicle Alerts + Consumables — **DONE**
 - **Read:** §3 + `VehicleOverview`/`SubsystemPage`.  **DONE when:** preview.
+- **DONE 2026-09-02.** §3's two REFINE rows built from DillonBaird's Vehicle render + alt-text
+  (`SCREEN_INVENTORY.md` "IMAGERY HUNT 2026-09-01", tier-2 marked per §1.4).
+  **CONSUMABLES** (`VehicleOverviewPage.cs`): the RIGHT column was orbit telemetry duplicating the
+  FLIGHT page's own strip — replaced with the real CONSUMABLE/QTY/MARGIN table (Power Unit 1/2 Energy,
+  Usable Deorbit Fuel/Oxidizer, Orbit 1/2 Subtank Fuel/Oxidizer, + SHOW MARGINS TO). MARGIN itself isn't
+  in the captured alt-text, so it draws as "—" (the existing no-source-yet idiom, `STATE_CONTRACT.md`)
+  rather than inventing a number.
+  **FUNCTIONS/ALERTS + red sub-nav** (`VehicleSubsystemPage.cs` + `VehicleTabBar.cs`): a real confirmed
+  fact (`REAL_DRAGON_SCREENS.md` §2, tier-1) is that the real subview nav bar "turns red when that
+  subview holds an alert" — built as `VehicleTabBar.Severities(PageState)`, computed from the SAME live
+  signals already used elsewhere in the codebase (`Alarms.LifeSupport`/`Thermal` on the cabin,
+  `Alarms.Low` on propellant/power, `Alarms.FdirSeverity` on the fault spine — Avionics+GNC share the
+  one real fault channel this build has), never a new fake number. `VehicleOverviewPage` and
+  `VehicleSubsystemPage` both now thread `PageState` through so a faulted subsystem's tab reads red from
+  every vehicle page, not just its own (the real "reached in one touch from anywhere" behaviour) —
+  `VehicleMechPage` is untouched (out of this task's declared scope) and keeps the old no-severity
+  overload, logged as **S12**. The ALERTS tab itself ("ALERT ACTIVITY" — a real label, Frame 58's own
+  attitude HUD, `REFERENCE_PAGES.md`) shows the same live severity as a big status word plus the FDIR
+  row, so the tab colour and the page content can never disagree. Toggle pixel geometry is OURS (not
+  measurable from the source render) — same footing as Menu/Reference Content's §14.4(c) layout — and is
+  left **inert**, matching this task's DONE-when (preview only); wiring the tap is **T14**'s job
+  (display-only → real controls).
+  **Preview:** `ui_vehicle.png` (CONSUMABLES column) and all six `ui_vehicle<sub>.png` renders inspected;
+  added `ui_vehiclepower_alerts.png` / `ui_vehiclecrew_alerts.png` (the ALERTS tab content), and
+  `ui_vehiclepower_alarm.png` / `ui_vehicle_alarm.png` (Power01 pushed to the ALARM band to prove the
+  sub-nav genuinely turns red, not just amber, and that it shows from the Overview page too) — all
+  inspected, all clean, no overlap/clipping, no `DisplayList` overflow warnings. `python plugin/build.py
+  test`: green, 3917 checks, 0 failed (unchanged — T5's DONE-when is preview only, no nav-test required).
+  §1.4 respected throughout.
 
 ### T6 [S] Rendezvous ellipse plot — **TODO**
 - **Read:** §3 + §8 + Hohmann/Orbital.  **DONE when:** preview + nav test.
@@ -349,3 +378,13 @@ its content depends only on which command was run most recently — it carries n
 versioning. It is also written with CRLF into a repo whose `.gitattributes` mandates LF, so git warns on
 every touch. T4 restored it to HEAD (`git checkout --`) so the commit carries only real changes.
 **DONE when:** it is gitignored (and untracked), or build.py writes it outside the repo.
+
+### S12 [S] `VehicleMechPage`'s subsystem tab bar isn't severity-aware — **TODO**
+Logged by T5 (C1.1), not done. T5 gave `VehicleTabBar` a `Severities(PageState)`-driven `Draw` overload
+so a faulted subsystem's tab reads red from every vehicle page (`VehicleOverviewPage.cs`,
+`VehicleSubsystemPage.cs`) — real signals per §14.4/§1.4: `Alarms.LifeSupport`/`Thermal`/`Low`/
+`FdirSeverity`. `VehicleMechPage.cs` was out of T5's declared scope (register line names only
+`VehicleOverview`/`SubsystemPage`) and still calls the old 4-arg `VehicleTabBar.Draw(dl,w,h,active)`, so
+its own tab bar always reads nominal even when another subsystem is genuinely alerting. **DONE when:**
+`VehicleMechPage.Build` passes `PageState` through and calls
+`VehicleTabBar.Draw(dl,w,h,3,VehicleTabBar.Severities(s))`, with a preview showing it turn red to match.

@@ -32,18 +32,48 @@ namespace DragonScreen
         /// <summary>Design-x of tab i's centre.</summary>
         public static float CentreX(int i) { return Start + i * Pitch; }
 
-        /// <summary>Draw the strip with tab <paramref name="active"/> lit + underlined.</summary>
-        public static void Draw(DisplayList dl, int w, int h, int active)
+        /// <summary>T5: the real Crew Dragon "subview nav bar ... turns red when that subview holds an
+        /// alert" (REAL_DRAGON_SCREENS.md §2) computed per tab from the SAME live signals the rest of the
+        /// screens already use — Alarms.LifeSupport/Thermal on the cabin, Alarms.Low on propellant/power,
+        /// Alarms.FdirSeverity on the fault spine (Avionics and GNC share the one real fault channel this
+        /// build has; there is no second one to invent). Mech (index 3) has no live signal wired to it yet
+        /// and reports Nominal — honest, not invented. Index matches Tabs: All·Crew·Prop·Mech·Power·
+        /// Avionics·GNC·Thermal. Guarded on s.Valid per the SettingsPage/ScreenPainter precedent.</summary>
+        public static Severity[] Severities(PageState s)
+        {
+            if (!s.Valid)
+                return new[] { Severity.Nominal, Severity.Nominal, Severity.Nominal, Severity.Nominal,
+                               Severity.Nominal, Severity.Nominal, Severity.Nominal, Severity.Nominal };
+
+            Severity crew = Alarms.LifeSupport(s.Cabin);
+            Severity prop = Alarms.Low(s.Propellant01);
+            Severity power = Alarms.Low(s.Power01);
+            Severity fdir = Alarms.FdirSeverity(s);
+            Severity thermal = Alarms.Thermal(s.Cabin);
+            Severity all = Alarms.Worst(Alarms.Worst(crew, prop), Alarms.Worst(power, Alarms.Worst(fdir, thermal)));
+            return new[] { all, crew, prop, Severity.Nominal, power, fdir, fdir, thermal };
+        }
+
+        /// <summary>Draw the strip with tab <paramref name="active"/> lit + underlined. No alert data —
+        /// every tab reads nominal (used by pages T5 hasn't wired yet, e.g. VehicleMechPage).</summary>
+        public static void Draw(DisplayList dl, int w, int h, int active) { Draw(dl, w, h, active, null); }
+
+        /// <summary>As above, plus per-tab alert severity (T5) — a tab in Caution/Alarm draws in that
+        /// colour regardless of active state, so a faulted subsystem is visible from every vehicle page.</summary>
+        public static void Draw(DisplayList dl, int w, int h, int active, Severity[] tabSeverity)
         {
             float sx = w / RefW, sy = h / RefH;
             for (int i = 0; i < Tabs.Length; i++)
             {
                 float cx = CentreX(i);
                 bool on = (i == active);
-                dl.Text(Tabs[i], cx * sx, LabelY * sy, LabelSize * sy, TextAlign.Centre,
-                        on ? DragonPalette.White : DragonPalette.Text6);
+                Severity sev = (tabSeverity != null && i < tabSeverity.Length) ? tabSeverity[i] : Severity.Nominal;
+                Rgba col = sev != Severity.Nominal ? Alarms.Colour(sev)
+                         : on ? DragonPalette.White : DragonPalette.Text6;
+                dl.Text(Tabs[i], cx * sx, LabelY * sy, LabelSize * sy, TextAlign.Centre, col);
                 if (on)
-                    dl.Rect((cx - MarkW * 0.5f) * sx, MarkY * sy, MarkW * sx, MarkH * sy, DragonPalette.Accent);
+                    dl.Rect((cx - MarkW * 0.5f) * sx, MarkY * sy, MarkW * sx, MarkH * sy,
+                            sev != Severity.Nominal ? Alarms.Colour(sev) : DragonPalette.Accent);
             }
         }
 

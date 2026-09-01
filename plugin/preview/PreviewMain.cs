@@ -358,6 +358,44 @@ public static class PreviewMain
                 Render(udl, CW, CH, path);
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + udl.Count + " commands");
             }
+            // ---- VEHICLE ALERTS + red sub-nav (T5) ----
+            // Anything reachable by a control needs a render (the T4 lesson, above). The FUNCTIONS/ALERTS
+            // toggle and VehicleTabBar's per-tab severity aren't wired to touch yet (T14), so their other
+            // states are only reachable by calling Build directly here, same as Cover's camera views.
+            // ps.FaultText isn't set until the DOCKING PAGE PROTOTYPE block below (real glue sets it from
+            // Fdir.FaultName) — the ALERTS view's FDIR row needs it now, so set the same nominal baseline
+            // here first, same as that block does for itself.
+            ps.Fault = FaultKind.None; ps.FaultText = "NOMINAL";
+            foreach (VehicleSubsystemPage.Sub sub in new[] { VehicleSubsystemPage.Sub.Power, VehicleSubsystemPage.Sub.Crew })
+            {
+                DisplayList adl = new DisplayList(VehicleSubsystemPage.Commands + 60);
+                VehicleSubsystemPage.Build(adl, CW, CH, sub, ps, true);
+                if (adl.Overflowed) Console.WriteLine("  WARNING VEHICLE ALERTS " + sub + " OVERFLOWED");
+                string path = Path.Combine(outDir, "ui_vehicle" + sub.ToString().ToLowerInvariant() + "_alerts.png");
+                Render(adl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + adl.Count + " commands");
+            }
+            // ps.Power01 = 0.18 above is deliberately in the CAUTION band so the main Power render already
+            // proves amber; push it into ALARM band here to prove the sub-nav genuinely turns red (not just
+            // amber) from every vehicle page, per REAL_DRAGON_SCREENS.md's "turns red when that subview
+            // holds an alert" — then restore it so every later render matches the documented baseline.
+            {
+                double savedPower = ps.Power01;
+                ps.Power01 = 0.05;
+                DisplayList adl = new DisplayList(VehicleSubsystemPage.Commands + 60);
+                VehicleSubsystemPage.Build(adl, CW, CH, VehicleSubsystemPage.Sub.Power, ps);
+                string path = Path.Combine(outDir, "ui_vehiclepower_alarm.png");
+                Render(adl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + adl.Count + " commands");
+
+                DisplayList odl = new DisplayList(VehicleOverviewPage.Commands + 60);
+                VehicleOverviewPage.Build(odl, CW, CH, ps);
+                path = Path.Combine(outDir, "ui_vehicle_alarm.png");
+                Render(odl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + odl.Count + " commands");
+                ps.Power01 = savedPower;
+            }
+
             // Cover with the LAST phase selected (Manual Chute Deploy, rail slot 6) to prove the expanded
             // seven-item rail + the in-page highlight/heading move to the bottom row.
             {
