@@ -55,9 +55,10 @@ namespace DragonScreen
 
     public static class FigmaUI
     {
-        /// <summary>Worst-case commands any page here emits (Audio is the heaviest at ~220), plus the
-        /// back-chevron overlay. The painter sizes its list to the max of this and the old model.</summary>
-        public const int Commands = 260;
+        /// <summary>Worst-case commands any page here emits - the Cover's MAP camera view is now the
+        /// heaviest (CoverPage.Commands, its ground track a command per segment) - plus the back-chevron
+        /// overlay. The painter sizes its list to the max of this and the old model.</summary>
+        public const int Commands = 360;
 
         public const int PageCount = 28;
 
@@ -114,17 +115,24 @@ namespace DragonScreen
         public static bool WantsDockingCam(UiPage p, PageState s) { return p == UiPage.Hud && s.Steps.NoseConeOpen; }
 
         public static void Build(DisplayList dl, UiPage page, int w, int h, PageState s, MapView view)
-        { Build(dl, page, w, h, s, view, 5, false, 1); }
+        { Build(dl, page, w, h, s, view, 5, false, 1, CoverPage.CoverCam.Earth); }
 
-        /// <summary>As Build, plus the two bits of page state the painter owns: the Suit Leak Check's
-        /// countdown/popup, and the Cover's selected deorbit phase. Every other page ignores them.</summary>
         public static void Build(DisplayList dl, UiPage page, int w, int h, PageState s, MapView view,
                                  int suitCountdown, bool suitPopup, int coverPhase)
+        { Build(dl, page, w, h, s, view, suitCountdown, suitPopup, coverPhase, CoverPage.CoverCam.Earth); }
+
+        /// <summary>As Build, plus the three bits of page state the painter owns: the Suit Leak Check's
+        /// countdown/popup, the Cover's selected deorbit phase, and the Cover's camera view (T4 - which
+        /// of First.vue's Earth / Map / Capsule views its right-hand slot is showing). Every other page
+        /// ignores them.</summary>
+        public static void Build(DisplayList dl, UiPage page, int w, int h, PageState s, MapView view,
+                                 int suitCountdown, bool suitPopup, int coverPhase,
+                                 CoverPage.CoverCam coverCam)
         {
             if (dl == null || w <= 0 || h <= 0) return;
             switch (page)
             {
-                case UiPage.Cover:     CoverPage.Build(dl, w, h, s, view, coverPhase); break;
+                case UiPage.Cover:     CoverPage.Build(dl, w, h, s, view, coverPhase, coverCam); break;
                 case UiPage.Menu:      MenuPage.Build(dl, w, h); break;
                 case UiPage.Hud:       Frame58Hud.Build(dl, w, h, s); break;
                 case UiPage.Audio:     SettingsAudioPage.Build(dl, w, h, 2); break;

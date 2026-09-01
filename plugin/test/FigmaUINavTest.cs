@@ -32,6 +32,7 @@ public static class FigmaUINavTest
         SuitCheck();
         VehicleTabs();
         CoverPhases();
+        CoverCamera();
         SpeccedPages();
         Menu();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
@@ -127,6 +128,115 @@ public static class FigmaUINavTest
         float bcx = (46f + 40f) / RefW * W, bcy = (2003f + 40f) * sc;
         Check("ManualChute bottom-bar -> Cover", FigmaUI.HitTest(UiPage.ManualChute, bcx, bcy, W, H).Target == UiPage.Cover, "");
         Check("Docking bottom-bar -> Cover", FigmaUI.HitTest(UiPage.Docking, bcx, bcy, W, H).Target == UiPage.Cover, "");
+    }
+
+    static void CoverCamera()
+    {
+        // T4. The Cover's right-hand slot is the reference UI's own three-view camera (First.vue's
+        // swapComponent). None of this shows up in a PNG: that the cycle wraps, that the pan cluster
+        // exists ONLY on the map view, and that neither control navigates off the Cover are all
+        // arithmetic on the hit rects — the kind of thing otherwise found in the capsule, at the cost
+        // of a restart.
+        float sc = (float)H / RefH;
+        float extra = W - RefW * sc; if (extra < 0f) extra = 0f;
+
+        Check("cover camera has 3 views", CoverPage.CamCount == 3, "got " + CoverPage.CamCount);
+
+        // swapComponent(): count = (count + 1) % 3.
+        CoverPage.CoverCam c = CoverPage.CoverCam.Earth;
+        c = CoverPage.NextCam(c);
+        Check("NEXT VIEW Earth -> Map", c == CoverPage.CoverCam.Map, "got " + c);
+        c = CoverPage.NextCam(c);
+        Check("NEXT VIEW Map -> Capsule", c == CoverPage.CoverCam.Capsule, "got " + c);
+        c = CoverPage.NextCam(c);
+        Check("NEXT VIEW Capsule -> Earth (wraps)", c == CoverPage.CoverCam.Earth, "got " + c);
+
+        // The headings are First.vue's own viewHeading strings, verbatim.
+        Check("Earth heading", CoverPage.CamHeading(CoverPage.CoverCam.Earth) == "Auto - Earth IO",
+              CoverPage.CamHeading(CoverPage.CoverCam.Earth));
+        Check("Map heading", CoverPage.CamHeading(CoverPage.CoverCam.Map) == "Auto - Map IO",
+              CoverPage.CamHeading(CoverPage.CoverCam.Map));
+        Check("Capsule heading", CoverPage.CamHeading(CoverPage.CoverCam.Capsule) == "Auto - Capsule IO",
+              CoverPage.CamHeading(CoverPage.CoverCam.Capsule));
+
+        // The MapView mode each view needs, so pan/zoom/centre mean the right thing (MapProjection
+        // branches on it): the flat map pans in lat/lon, the other two spin the globe.
+        Check("Map view -> NavMode.Map", CoverPage.CamMapMode(CoverPage.CoverCam.Map) == NavMode.Map, "");
+        Check("Earth view -> NavMode.Planet",
+              CoverPage.CamMapMode(CoverPage.CoverCam.Earth) == NavMode.Planet, "");
+        Check("Capsule view -> NavMode.Planet",
+              CoverPage.CamMapMode(CoverPage.CoverCam.Capsule) == NavMode.Planet, "");
+        Check("WithMode sets the mode without touching the pan",
+              MapProjection.WithMode(MapProjection.Default(), NavMode.Planet).Mode == NavMode.Planet, "");
+
+        CoverPage.CoverCam[] all = {
+            CoverPage.CoverCam.Earth, CoverPage.CoverCam.Map, CoverPage.CoverCam.Capsule };
+
+        // NEXT VIEW is on EVERY view — it is the only way out of one, so it must never be shadowed.
+        float nx, ny, nw, nh;
+        CoverPage.NextViewRect(W, H, out nx, out ny, out nw, out nh);
+        float ncx = nx + nw * 0.5f, ncy = ny + nh * 0.5f;
+        for (int i = 0; i < all.Length; i++)
+            Check("NEXT VIEW hits on the " + all[i] + " view",
+                  CoverPage.HitTest(ncx, ncy, W, H, all[i]) == CoverPage.CoverButton.NextView,
+                  "got " + CoverPage.HitTest(ncx, ncy, W, H, all[i]));
+
+        // ...and it is NOT navigation: the camera changes in-page, like the phase rail.
+        NavHit nv = FigmaUI.HitTest(UiPage.Cover, ncx, ncy, W, H);
+        Check("NEXT VIEW does not navigate", nv.Act == NavAct.None, "got " + nv.Act);
+
+        // The cluster: every button hits its own action on the MAP view, and NOTHING on the other two
+        // (it is not drawn there, so it must not be touchable there either).
+        float[,] pad = { { 0f, 0f }, { 0f, -1f }, { 0f, 1f }, { -1f, 0f }, { 1f, 0f }, { -0.5f, 2f }, { 0.5f, 2f } };
+        CoverPage.CoverButton[] want = {
+            CoverPage.CoverButton.MapCentre, CoverPage.CoverButton.MapPanUp,
+            CoverPage.CoverButton.MapPanDown, CoverPage.CoverButton.MapPanLeft,
+            CoverPage.CoverButton.MapPanRight, CoverPage.CoverButton.MapZoomIn,
+            CoverPage.CoverButton.MapZoomOut };
+
+        for (int i = 0; i < want.Length; i++)
+        {
+            float bx, by, bw, bh;
+            CoverPage.PadRect(W, H, pad[i, 0], pad[i, 1], out bx, out by, out bw, out bh);
+            float cx = bx + bw * 0.5f, cy = by + bh * 0.5f;
+
+            CoverPage.CoverButton got = CoverPage.HitTest(cx, cy, W, H, CoverPage.CoverCam.Map);
+            Check("map cluster " + want[i] + " hits", got == want[i], "got " + got);
+            Check("map cluster " + want[i] + " is inert on Earth",
+                  CoverPage.HitTest(cx, cy, W, H, CoverPage.CoverCam.Earth) == CoverPage.CoverButton.None,
+                  "got " + CoverPage.HitTest(cx, cy, W, H, CoverPage.CoverCam.Earth));
+            Check("map cluster " + want[i] + " is inert on Capsule",
+                  CoverPage.HitTest(cx, cy, W, H, CoverPage.CoverCam.Capsule) == CoverPage.CoverButton.None,
+                  "got " + CoverPage.HitTest(cx, cy, W, H, CoverPage.CoverCam.Capsule));
+            Check("map cluster " + want[i] + " does not navigate",
+                  FigmaUI.HitTest(UiPage.Cover, cx, cy, W, H).Act == NavAct.None, "");
+        }
+
+        // The cluster is drawn OVER the map, so every button must actually be on it.
+        {
+            float mx, my, mw, mh;
+            CoverPage.MapRect(W, H, out mx, out my, out mw, out mh);
+            Check("map rect is the 2:1 equirectangular aspect (zoom 0 fills it)",
+                  Math.Abs(mw - mh * 2f) < 1.5f, "got " + mw + " x " + mh);
+            for (int i = 0; i < want.Length; i++)
+            {
+                float bx, by, bw, bh;
+                CoverPage.PadRect(W, H, pad[i, 0], pad[i, 1], out bx, out by, out bw, out bh);
+                Check("map cluster " + want[i] + " sits inside the map",
+                      bx >= mx && by >= my && bx + bw <= mx + mw && by + bh <= my + mh,
+                      "button " + bx + "," + by + " " + bw + "x" + bh
+                      + "  map " + mx + "," + my + " " + mw + "x" + mh);
+            }
+        }
+
+        // Regression: the new controls must not have eaten the ones that shared their rows. SETTINGS is
+        // the NEXT VIEW pill's twin at the other end of the same row; the rail is the whole left strip.
+        Check("cover Settings still hits with the camera controls in",
+              CoverPage.HitTest(3194f * sc + extra, 1865f * sc, W, H, CoverPage.CoverCam.Map)
+                  == CoverPage.CoverButton.Settings, "");
+        Check("cover rail still hits with the camera controls in",
+              CoverPage.HitTest(110f * sc, (253f + 80f) * sc, W, H, CoverPage.CoverCam.Map)
+                  == CoverPage.CoverButton.PhaseDeport, "");
     }
 
     static void CoverPhases()

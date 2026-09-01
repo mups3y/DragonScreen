@@ -378,6 +378,37 @@ public static class PreviewMain
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + cdl.Count + " commands");
             }
 
+            // ---- COVER CAMERA VIEWS (T4) ----
+            // NEXT VIEW cycles First.vue's three views and cover.png above is only the first of them.
+            // Anything reachable by a control needs a render, not just the state it happens to start in
+            // — the lesson NAV's orbit view and its invisible globe both taught.
+            foreach (CoverPage.CoverCam cam in new[] { CoverPage.CoverCam.Map, CoverPage.CoverCam.Capsule })
+            {
+                MapView cv = MapProjection.WithMode(MapProjection.Default(), CoverPage.CamMapMode(cam));
+                cv = MapProjection.Centre(cv, ps.Latitude, ps.Longitude);
+                DisplayList cdl = new DisplayList(600);
+                CoverPage.Build(cdl, CW, CH, ps, cv, 1, cam);
+                if (cdl.Overflowed)
+                    Console.WriteLine("  WARNING COVER " + cam + " OVERFLOWED at " + cdl.Capacity);
+                string path = Path.Combine(outDir, "ui_cover_cam_" + cam.ToString().ToLowerInvariant() + ".png");
+                Render(cdl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + cdl.Count + " commands");
+            }
+
+            // The MAP view zoomed in, for MapProjection's wrap/clamp — the same reason the NAV preview
+            // is rendered at a moderate zoom rather than at the easy whole-body default.
+            {
+                MapView cv = MapProjection.WithMode(MapProjection.Default(), NavMode.Map);
+                cv = MapProjection.Centre(cv, ps.Latitude, ps.Longitude);
+                cv = MapProjection.Zoom(cv, 2);
+                DisplayList cdl = new DisplayList(600);
+                CoverPage.Build(cdl, CW, CH, ps, cv, 1, CoverPage.CoverCam.Map);
+                if (cdl.Overflowed) Console.WriteLine("  WARNING COVER MAP ZOOM OVERFLOWED at " + cdl.Capacity);
+                string path = Path.Combine(outDir, "ui_cover_cam_map_zoom.png");
+                Render(cdl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + cdl.Count + " commands");
+            }
+
             // Suit Leak Check with the completion popup up (countdown reached 0)
             {
                 DisplayList udl = new DisplayList(600);

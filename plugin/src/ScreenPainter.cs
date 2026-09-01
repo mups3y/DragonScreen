@@ -68,6 +68,12 @@ namespace DragonScreen
         // the rail highlight + centre heading, and unlike the suit state it persists across visits.
         private int coverPhase = 1;   // default: Coast to Trunk Jettison (as the reference defaults)
 
+        // Which of the Cover's three camera views its right-hand slot is showing (T4). NEXT VIEW cycles
+        // it; it opens on EARTH because that is what Frame 67 bakes - see CoverPage.CoverCam. Per screen
+        // and not persisted, for the same reason the map scroll position is not: it is where you happen
+        // to be looking, not a decision to restore.
+        private CoverPage.CoverCam coverCam = CoverPage.CoverCam.Earth;
+
         /// <summary>How many pages the current model has — the new Figma set or the old tab set.</summary>
         private static int PageCount { get { return FigmaMode ? FigmaUI.PageCount : ChromeBar.PageNames.Length; } }
 
@@ -137,7 +143,10 @@ namespace DragonScreen
         /// MapView. Three displays can be looking at three different parts of the world, which is
         /// the entire reason the pages are per-screen in the first place.
         /// </summary>
-        private MapView mapView = MapProjection.Default();
+        // Starts in PLANET mode, not the default MAP: under the Figma UI this view belongs to the
+        // Cover's camera, which opens on the live globe (coverCam above), and Pan/Zoom/Centre read the
+        // mode to decide what they mean.
+        private MapView mapView = MapProjection.WithMode(MapProjection.Default(), NavMode.Planet);
 
         /// <summary>
         /// Which subview tab this screen is on, PER PAGE. Not persisted, for the same reason the map
@@ -336,14 +345,16 @@ namespace DragonScreen
                 }
                 else if (cur == UiPage.Cover)
                 {
-                    // The rail selects a phase; the ◄/► arrows step through them (wrapping over all 7).
-                    CoverPage.CoverButton cb = CoverPage.HitTest(px, py, w, h);
+                    // The rail selects a phase; the ◄/► arrows step through them (wrapping over all 7);
+                    // NEXT VIEW + the map cluster drive the camera (ApplyCoverCam).
+                    CoverPage.CoverButton cb = CoverPage.HitTest(px, py, w, h, coverCam);
                     int ph = CoverPage.PhaseOf(cb);
                     if (ph >= 0) coverPhase = ph;
                     else if (cb == CoverPage.CoverButton.Back)
                         coverPhase = (coverPhase + CoverPage.PhaseCount - 1) % CoverPage.PhaseCount;
                     else if (cb == CoverPage.CoverButton.Forward)
                         coverPhase = (coverPhase + 1) % CoverPage.PhaseCount;
+                    else ApplyCoverCam(cb);
                 }
                 return;
             }
@@ -437,6 +448,37 @@ namespace DragonScreen
                     if (uiHistIndex >= 0 && uiHistIndex < uiHistory.Count - 1)
                     { uiHistIndex++; SelectPage(index, uiHistory[uiHistIndex]); }
                     break;
+            }
+        }
+
+        /// <summary>
+        /// The Cover's camera controls (T4). NEXT VIEW cycles First.vue's three views; the MAP view's
+        /// pan/centre/zoom cluster drives the SAME MapView the globe already uses, through the same pure
+        /// MapProjection calls the NAV page's cluster does - one map state, two front ends.
+        /// </summary>
+        private void ApplyCoverCam(CoverPage.CoverButton cb)
+        {
+            switch (cb)
+            {
+                case CoverPage.CoverButton.NextView:
+                    coverCam = CoverPage.NextCam(coverCam);
+                    // The mode FOLLOWS the camera rather than being a second copy of which view is up:
+                    // Pan/Zoom/Centre branch on it, and the two disagreeing would pan the globe.
+                    mapView = MapProjection.WithMode(mapView, CoverPage.CamMapMode(coverCam));
+                    break;
+
+                case CoverPage.CoverButton.MapPanLeft:  mapView = MapProjection.Pan(mapView, -1.0, 0.0); break;
+                case CoverPage.CoverButton.MapPanRight: mapView = MapProjection.Pan(mapView, 1.0, 0.0); break;
+                case CoverPage.CoverButton.MapPanUp:    mapView = MapProjection.Pan(mapView, 0.0, 1.0); break;
+                case CoverPage.CoverButton.MapPanDown:  mapView = MapProjection.Pan(mapView, 0.0, -1.0); break;
+                case CoverPage.CoverButton.MapZoomIn:   mapView = MapProjection.Zoom(mapView, 1); break;
+                case CoverPage.CoverButton.MapZoomOut:  mapView = MapProjection.Zoom(mapView, -1); break;
+                case CoverPage.CoverButton.MapCentre:
+                {
+                    PageState st = VesselData.State;
+                    mapView = MapProjection.Centre(mapView, st.Latitude, st.Longitude);
+                    break;
+                }
             }
         }
 
@@ -674,7 +716,7 @@ namespace DragonScreen
                 }
 
                 // The new Figma pages carry their own chrome (each has its bottom bar), so no ChromeBar.
-                FigmaUI.Build(page, up, w, h, ps, mapView, suitCount, suitPopup, coverPhase);
+                FigmaUI.Build(page, up, w, h, ps, mapView, suitCount, suitPopup, coverPhase, coverCam);
             }
             else
             {

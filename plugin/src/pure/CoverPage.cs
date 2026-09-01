@@ -17,7 +17,10 @@ namespace DragonScreen
 {
     public static class CoverPage
     {
-        public const int Commands = 240;
+        // The MAP camera view is the heaviest: its 90-sample ground track is a line command per segment
+        // on top of the placed assets, and it measured 258 in the preview at zoom 0 (the Earth view, the
+        // old peak, is 231). Headroom over that.
+        public const int Commands = 340;
         const float RefW = 3427f, RefH = 2112f;
 
         // key | x | y | w | h  — measured asset placements (art/cover/<key>.png)
@@ -78,10 +81,12 @@ namespace DragonScreen
 
         // Baked assets NOT drawn from the export: the dynamic highlight + heading, plus the five baked
         // rail labels and their union dots (the rail is redrawn as seven primitive rows instead).
+        // `camera_auto_earth_io` joins them (T4): the baked caption names ONE of the three camera
+        // views, so it is redrawn as live text at the asset's own measured metrics — see DrawCameraChrome.
         static readonly string[] SkipKeys = {
             "rectangle_178", "rectangle_183", "rectangle_95", "coast_to_trunk_jettison",
             "deport_burn", "coast_to_trunk", "claw_separati", "procedure", "manual_chute",
-            "union_1", "union_2", "union_3", "union_4", "union_5" };
+            "union_1", "union_2", "union_3", "union_4", "union_5", "camera_auto_earth_io" };
 
         // Rail index of "Reference Content" (§14.4(c)): NOT a standalone page — a deorbit quick-reference
         // that replaces the content-panel BODY only, in-page, when this phase is selected. The three baked
@@ -101,10 +106,148 @@ namespace DragonScreen
             "2_after_spacex_go_for_deorbit_verify_entry_is_enabled", "false", "entry_enabled", "true",
             "3_after_entry_is_enabled_dragon_transitions_to_claw" };
 
+        // ============================================================================================
+        // THE CAMERA (T4) - the right-hand view slot, and the NEXT VIEW cycle that changes it
+        // ============================================================================================
+        // NOT invented: the reference UI's own source. First.vue (the deorbit page) composes the
+        // right-hand slot from THREE interchangeable components and cycles them with one button -
+        // assets/reference/dragon2-ui-master/src/views/First.vue:
+        //
+        //     components: { 'view-00': View01, 'view-01': NavEarth, 'view-02': Capsule }
+        //     swapComponent() { this.count = (this.count + 1) % 3 ... }
+        //         view-00 -> viewHeading = 'Auto - Earth IO'      (the 3D Earth, a three.js sphere)
+        //         view-01 -> viewHeading = 'Auto - Map IO'        (NavEarth: the flat, pannable map)
+        //         view-02 -> viewHeading = 'Auto - Capsule IO'    (Capsule: the vehicle itself)
+        //     <button @click="swapComponent()" id="swap-view"> ... NEXT VIEW </button>
+        //
+        // All three occupy the SAME region - #scroll-earth-wrapper and #capsule-wrapper are both
+        // top:10% left:40.5% width:60% height:90% - which is the slot our live globe already fills.
+        // "Camera", the heading and "NEXT VIEW" are all in docs/UI_AUDIT.md's First.vue label list, and
+        // DillonBaird's Navigation render carries the same pair ("2D & 3D map views ... camera-mode
+        // label"), so this is tier-1 on both counts (§1.4). Two deliberate departures, both stated:
+        //   · we OPEN on Earth, not the Vue's view-01 default, because Frame 67 - the design we build -
+        //     bakes "Auto - Earth IO" and the TARGET LAT/LON pair that only that view shows;
+        //   · the Capsule view draws the shipped dragon.png still. The reference spins a 3D model; the
+        //     sprite TURNTABLE that replaces this still is register task T11 (§5), not T4.
+        public enum CoverCam { Earth = 0, Map = 1, Capsule = 2 }
+        public const int CamCount = 3;
+
+        static readonly string[] CamHeadings = { "Auto - Earth IO", "Auto - Map IO", "Auto - Capsule IO" };
+
+        /// <summary>The viewHeading this camera view puts under the CAMERA caption. Verbatim from
+        /// First.vue's swapComponent (and, for Earth, from the baked Figma asset).</summary>
+        public static string CamHeading(CoverCam c)
+        {
+            int i = (int)c;
+            return (i >= 0 && i < CamHeadings.Length) ? CamHeadings[i] : CamHeadings[0];
+        }
+
+        /// <summary>NEXT VIEW: count = (count + 1) % 3, so Earth -> Map -> Capsule -> Earth.</summary>
+        public static CoverCam NextCam(CoverCam c)
+        {
+            int i = (int)c + 1;
+            if (i < 0 || i >= CamCount) i = 0;
+            return (CoverCam)i;
+        }
+
+        /// <summary>Which NavMode the shared MapView must be in for this camera view's pan/zoom/centre
+        /// to mean the right thing - MapProjection.Pan/Zoom/Centre branch on it (the flat map pans in
+        /// lat/lon, the globe spins about its axis). Capsule has no map, so it keeps the globe's.</summary>
+        public static NavMode CamMapMode(CoverCam c)
+        { return (c == CoverCam.Map) ? NavMode.Map : NavMode.Planet; }
+
+        // Shown ONLY on the Earth view - v-if="currentComponent === 'view-00'" on both readouts in
+        // First.vue. They are a ground target's lat/lon, which the flat map and the capsule do not plot.
+        static readonly string[] EarthOnlyKeys = {
+            "target_latitude_26deg_15_00deg_n", "target_longitude_26deg_15_00deg_n" };
+
+        // ---- camera geometry, all in the 3427x2112 design frame ----
+        // The slot: from the content panel's right edge to the frame edge, between the top strip and the
+        // bottom bar (First.vue's wrapper starts at 40.5% = design x 1388; the panel edge, 1442, is the
+        // same slot one hairline in).
+        const float ViewLeft = 1442f, ViewTop = 220f, ViewBottom = 1877f;
+        const float ViewInset = 40f;
+
+        // NEXT VIEW: rectangle_174's EXACT size, on rectangle_174's row, at the other end of the slot.
+        // The reference puts #swap-view bottom-right (top:90% right:5% width:10%) - in Frame 67 that
+        // corner is the SETTINGS button, so the pill moves to the free left end of the same row and is
+        // built as SETTINGS' twin (same size, same dash-then-label interior) so the two read as a pair.
+        const float NextX = 1500f, NextY = 1810f, NextW = 401f, NextH = 111f;
+
+        // The MAP view's pan/centre/zoom cluster, NavEarth.vue's arrangement exactly: a centre button
+        // with the four arrows ONE pitch away (centre right:7em top:7em; arrows at 2/12em, so the pitch
+        // is 5em), and the zoom pair a row below (top:17em) HALF a pitch either side of the centre line
+        // (ZOOM IN right:9em, ZOOM OUT right:4.5em - + on the LEFT is the reference's ordering, not a
+        // slip). Anchored to the MAP's own top-right corner, as NavEarth anchors it to its wrapper's,
+        // rather than to fixed frame coordinates the map band would slide out from under.
+        const float PadS = 104f, PadPitch = 118f, PadInset = 46f, PadLabel = 26f;
+
+        /// <summary>NavEarth's `background-color: rgba(2, 7, 56, 0.75)`: the page background, translucent,
+        /// so the map still reads through the cluster.</summary>
+        static readonly Rgba PadFace = Rgba.Hex("020738", 0.75f);
+
+        // The CAMERA caption, measured off the baked camera_auto_earth_io asset it replaces (346x59 at
+        // 3032,1718): "CAMERA" occupies cap rows 5..19, the heading rows 35..56, both centred on x+173.
+        // Cap height is ~0.7em and a text y is the top of the line box, ~0.1em above the cap.
+        const float CamCx = 3205f;
+        const float CamCapY = 1721f, CamCapSize = 21f;
+        const float CamHeadY = 1750f, CamHeadSize = 31f;
+
+        /// <summary>Panel-pixel rect of the NEXT VIEW pill. One calculation for the draw and the hit -
+        /// PageAction's rule: a control drawn from one and hit from another drifts on first touch.</summary>
+        public static void NextViewRect(int w, int h, out float x, out float y, out float rw, out float rh)
+        {
+            float sc = h / RefH, extra = w - RefW * sc; if (extra < 0f) extra = 0f;
+            x = NextX * sc + extra; y = NextY * sc; rw = NextW * sc; rh = NextH * sc;
+        }
+
+        /// <summary>Panel-pixel rect of one cluster button, in pitches from the centre button: (0,0) is
+        /// CTR, the four unit steps are the arrows, and dy=2 with dx=-0.5/+0.5 is the zoom row. Measured
+        /// off MapRect so the cluster cannot drift off the map when the panel aspect changes, and shared
+        /// by the draw, the hit test and the tests - PageAction's rule.</summary>
+        public static void PadRect(int w, int h, float dx, float dy, out float x, out float y,
+                                   out float rw, out float rh)
+        {
+            float sc = h / RefH;
+            float mx, my, mw, mh;
+            MapRect(w, h, out mx, out my, out mw, out mh);
+            rw = rh = PadS * sc;
+            float pitch = PadPitch * sc, inset = PadInset * sc;
+            // The centre button one pitch in from the map's top-right corner, so the RIGHT arrow's edge
+            // lands on the inset and the UP arrow's top does too.
+            float cx = mx + mw - inset - rw * 0.5f - pitch;
+            float cy = my + inset + rh * 0.5f + pitch;
+            x = cx + dx * pitch - rw * 0.5f;
+            y = cy + dy * pitch - rh * 0.5f;
+        }
+
+        /// <summary>The 2D MAP view's panel rect: the widest 2:1 band that fits the slot, centred in it.
+        /// 2:1 is the equirectangular aspect, so MapProjection's zoom 0 FILLS it instead of letterboxing
+        /// - which is how the reference's #scroll-earth (background-size cover) fills its wrapper. A
+        /// letterboxed default would put the crew's first look at the map inside two dead bands.</summary>
+        public static void MapRect(int w, int h, out float x, out float y, out float rw, out float rh)
+        {
+            float sc = h / RefH;
+            float m = ViewInset * sc;
+            float l = ViewLeft * sc + m, r = w - m;
+            float t = ViewTop * sc + m, b = ViewBottom * sc - m;
+            float aw = r - l, ah = b - t;
+            if (aw < 8f) aw = 8f;
+            if (ah < 8f) ah = 8f;
+            rw = aw; rh = rw * 0.5f;
+            if (rh > ah) { rh = ah; rw = rh * 2f; }
+            x = l + (aw - rw) * 0.5f;
+            y = t + (ah - rh) * 0.5f;
+        }
+
         public static void Build(DisplayList dl, int w, int h, PageState s, MapView view)
-        { Build(dl, w, h, s, view, 1); }
+        { Build(dl, w, h, s, view, 1, CoverCam.Earth); }
 
         public static void Build(DisplayList dl, int w, int h, PageState s, MapView view, int selectedPhase)
+        { Build(dl, w, h, s, view, selectedPhase, CoverCam.Earth); }
+
+        public static void Build(DisplayList dl, int w, int h, PageState s, MapView view,
+                                 int selectedPhase, CoverCam cam)
         {
             // ---- FILL-TO-FIT reflow: scale to the HEIGHT (fills vertically, no top/bottom gap), and
             // put the horizontal slack into the empty gap between the left panel and the globe: anchor
@@ -129,12 +272,10 @@ namespace DragonScreen
             // bottom status bar (Component 48: bg + CURRENT STATE / POINTING MODE / SPX·TDRS·ISS text) — full width
             dl.Asset("component_48", X(0), Y(1877), Wd(0, 3427), Z(235), DragonPalette.White);
 
-            // the LIVE globe, circular, CENTRED in the space to the right of the left content panel
-            // (panel right edge = X(1442)) and vertically centred between the top and bottom bars.
-            float gs = Z(1809);
-            float gcx = (X(1442f) + w) * 0.5f;
-            float gcy = (Y(220f) + Y(1877f)) * 0.5f;
-            NavPage.Planet(dl, s, view, gcx - gs * 0.5f, gcy - gs * 0.5f, gs, gs);
+            // the camera slot: the LIVE globe, the flat map, or the capsule. Drawn HERE, before the
+            // placed assets, so the caption/readouts/bars in the loop below sit over it exactly as the
+            // globe alone used to.
+            DrawCameraView(dl, w, h, s, view, cam);
 
             int sp = selectedPhase < 0 ? 0 : (selectedPhase >= PhaseCount ? PhaseCount - 1 : selectedPhase);
             bool refPhase = (sp == ReferencePhase);
@@ -151,6 +292,7 @@ namespace DragonScreen
                 string k = Keys[i];
                 if (Array.IndexOf(SkipKeys, k) >= 0) continue;
                 if (refPhase && Array.IndexOf(ReferenceSkipKeys, k) >= 0) continue;
+                if (cam != CoverCam.Earth && Array.IndexOf(EarthOnlyKeys, k) >= 0) continue;
                 dl.Asset(k, X(Box[i, 0]), Y(Box[i, 1]), Wd(Box[i, 0], Box[i, 2]), Z(Box[i, 3]), DragonPalette.White);
             }
 
@@ -166,6 +308,130 @@ namespace DragonScreen
                 // within the baked (non-Reference) panel body, so they are skipped on Reference Content.
                 for (int i = 0; i < Lines.GetLength(0); i++)
                     dl.Line(X(Lines[i, 0]), Y(Lines[i, 2]), X(Lines[i, 1]), Y(Lines[i, 2]), St(2), DragonPalette.Text6);
+
+            // the camera caption, the NEXT VIEW pill and (on the MAP view) its d-pad, over everything.
+            DrawCameraChrome(dl, w, h, view, cam);
+        }
+
+        // ---- the three camera views ----------------------------------------------------------------
+
+        /// <summary>Draw whichever of First.vue's three views is up, into the slot they share.</summary>
+        static void DrawCameraView(DisplayList dl, int w, int h, PageState s, MapView view, CoverCam cam)
+        {
+            float sc = h / RefH; float extra = w - RefW * sc; if (extra < 0f) extra = 0f;
+
+            if (cam == CoverCam.Map)
+            {
+                float mx, my, mw, mh;
+                MapRect(w, h, out mx, out my, out mw, out mh);
+                // The well first and always, so the panel has a shape before anything resolves inside
+                // it - and so the map degrades to a graticule rather than to a hole if BodyMap does not
+                // resolve. Same order, and the same reason, as NavPage.Build.
+                dl.Rect(mx, my, mw, mh, DragonPalette.Inset2);
+                NavPage.Map(dl, s, view, mx, my, mw, mh);
+                dl.Box(mx, my, mw, mh, Stroke(sc, 2f), DragonPalette.Hairline);
+                return;
+            }
+
+            if (cam == CoverCam.Capsule)
+            {
+                // The vehicle itself (First.vue's view-02). A still of the shipped dragon.png, centred
+                // in the slot; T11 (§5) replaces it with the pre-rendered turntable sequence + drag.
+                float cx = (ViewLeft * sc + w) * 0.5f;
+                float cy = (ViewTop + ViewBottom) * 0.5f * sc;
+                float ih = (ViewBottom - ViewTop) * sc * 0.86f;
+                float ix, iy, iw, ihh;
+                if (Images.FitHeight(ImageId.Dragon, cx, cy, ih, out ix, out iy, out iw, out ihh))
+                    dl.Image(ImageId.Dragon, ix, iy, iw, ihh, DragonPalette.White);
+                return;
+            }
+
+            // EARTH (First.vue's view-00): the live globe, circular, CENTRED in the space to the right
+            // of the left content panel (panel right edge = 1442) and vertically centred between bars.
+            float gs = 1809f * sc;
+            float gcx = (ViewLeft * sc + w) * 0.5f;
+            float gcy = (ViewTop + ViewBottom) * 0.5f * sc;
+            NavPage.Planet(dl, s, view, gcx - gs * 0.5f, gcy - gs * 0.5f, gs, gs);
+        }
+
+        /// <summary>The CAMERA caption + heading, the NEXT VIEW pill, and - on the MAP view only - the
+        /// NavEarth pan/centre/zoom cluster. Drawn after the placed assets so nothing covers them.</summary>
+        static void DrawCameraChrome(DisplayList dl, int w, int h, MapView view, CoverCam cam)
+        {
+            float sc = h / RefH; float extra = w - RefW * sc; if (extra < 0f) extra = 0f;
+            float X(float v) => v * sc + extra;      // every camera control lives right of the Split
+            float Y(float v) => v * sc;
+            float Z(float v) => v * sc;
+
+            // CAMERA / <heading>, at the baked asset's own measured metrics (see CamCx and friends).
+            dl.Text("CAMERA", X(CamCx), Y(CamCapY), Z(CamCapSize), TextAlign.Centre, DragonPalette.White);
+            dl.Text(CamHeading(cam), X(CamCx), Y(CamHeadY), Z(CamHeadSize), TextAlign.Centre,
+                    DragonPalette.White);
+
+            // NEXT VIEW, built as the SETTINGS pill's twin: the dash icon (ic_sharp-subtract sits at
+            // rectangle_174 + 30,28 in a 56 box) then the label (the `settings` asset at +130,37).
+            float px, py, pw, ph;
+            NextViewRect(w, h, out px, out py, out pw, out ph);
+            Pill(dl, px, py, pw, ph, Stroke(sc, 2f));
+            dl.Rect(px + Z(36f), py + Z(53f), Z(44f), Stroke(sc, 6f), DragonPalette.White);
+            dl.Text("NEXT VIEW", px + Z(130f), py + Z(32f), Z(53f), TextAlign.Left, DragonPalette.White);
+
+            if (cam != CoverCam.Map) return;
+
+            // NavEarth's cluster. Words, not glyph arrows, for NavPage's reason: the font is whatever
+            // the OS resolved and a triangle drawn from rects is not a triangle.
+            PadButton(dl, w, h, 0, -1, "UP", sc, false);
+            PadButton(dl, w, h, -1, 0, "LEFT", sc, false);
+            // CTR lights while the map is FOLLOWING the vehicle, as NAV's does: whether the map is
+            // tracking or has been panned off by hand is otherwise only learnable by watching it drift.
+            PadButton(dl, w, h, 0, 0, "CTR", sc, view.Follow);
+            PadButton(dl, w, h, 1, 0, "RIGHT", sc, false);
+            PadButton(dl, w, h, 0, 1, "DOWN", sc, false);
+            PadButton(dl, w, h, -0.5f, 2, "+", sc, false);   // NavEarth puts ZOOM IN on the left
+            PadButton(dl, w, h, 0.5f, 2, "-", sc, false);
+
+            float zx, zy, zw, zh;
+            PadRect(w, h, 0, 2, out zx, out zy, out zw, out zh);
+            dl.Text("ZOOM x" + (1 << (view.ZoomStep < 0 ? 0 : view.ZoomStep > MapProjection.MaxZoom
+                                      ? MapProjection.MaxZoom : view.ZoomStep)),
+                    zx + zw * 0.5f, zy + zh + Z(10f), Z(30f), TextAlign.Centre, DragonPalette.Text3);
+        }
+
+        /// <summary>A pill exactly like the Figma's SETTINGS button (rectangle_174) and the reference's
+        /// own #swap-view: Panel fill, white 1px edge, fully rounded ends. There is no rounded-rect
+        /// primitive, so the caps are ArcBands and the middle is a rect.</summary>
+        static void Pill(DisplayList dl, float x, float y, float pw, float ph, float stroke)
+        {
+            float r = ph * 0.5f, cy = y + r;
+            if (pw < ph) pw = ph;
+            dl.ArcBand(x + r, cy, 0f, r, 180.0, 360.0, DragonPalette.Panel);          // left cap
+            dl.ArcBand(x + pw - r, cy, 0f, r, 0.0, 180.0, DragonPalette.Panel);       // right cap
+            dl.Rect(x + r, y, pw - 2f * r, ph, DragonPalette.Panel);
+            dl.ArcBand(x + r, cy, r - stroke, r, 180.0, 360.0, DragonPalette.White);
+            dl.ArcBand(x + pw - r, cy, r - stroke, r, 0.0, 180.0, DragonPalette.White);
+            dl.Rect(x + r, y, pw - 2f * r, stroke, DragonPalette.White);
+            dl.Rect(x + r, y + ph - stroke, pw - 2f * r, stroke, DragonPalette.White);
+        }
+
+        /// <summary>One cluster button: NavEarth's `border: 1px solid white; background: rgba(2,7,56,.75)`
+        /// square, with the label centred on its cap height.</summary>
+        static void PadButton(DisplayList dl, int w, int h, float dx, float dy, string label,
+                              float sc, bool on)
+        {
+            float x, y, bw, bh;
+            PadRect(w, h, dx, dy, out x, out y, out bw, out bh);
+            dl.Rect(x, y, bw, bh, on ? DragonPalette.Accent : PadFace);
+            dl.Box(x, y, bw, bh, Stroke(sc, 2f), DragonPalette.White);
+            float ts = PadLabel * sc;
+            dl.Text(label, x + bw * 0.5f, y + bh * 0.5f - ts * 0.45f, ts, TextAlign.Centre,
+                    on ? DragonPalette.Background : DragonPalette.White);
+        }
+
+        /// <summary>A design-frame stroke width in panel pixels, never thinner than one.</summary>
+        static float Stroke(float sc, float refPx)
+        {
+            float t = refPx * sc;
+            return (t < 1f) ? 1f : t;
         }
 
         /// <summary>The deorbit quick-reference (§14.4(c)): entry timeline, parachutes, contingency — all
@@ -246,7 +512,10 @@ namespace DragonScreen
         {
             None, Menu, Back, Forward,
             PhaseDeport, PhaseCoast, PhaseClaw, PhaseProcedure, PhaseProcedure2, PhaseReference, PhaseManual,
-            Settings, ActOnSpaceX, ActDeorbitBrief, ActReview, ActAcknowledge, EntryTrue, EntryFalse
+            Settings, ActOnSpaceX, ActDeorbitBrief, ActReview, ActAcknowledge, EntryTrue, EntryFalse,
+            // T4, the camera: NEXT VIEW is on every view; the cluster belongs to the MAP view alone.
+            NextView,
+            MapPanUp, MapPanDown, MapPanLeft, MapPanRight, MapCentre, MapZoomIn, MapZoomOut
         }
 
         // Rail row index (0..6) → its button. Same order as PhaseName/SlotY. The rail hit rows are
@@ -280,10 +549,40 @@ namespace DragonScreen
         /// <summary>Which cover-page button a touch at panel pixel (px,py) hit — None if it missed.
         /// Uses the SAME Fit map as Build, inverted, so the touch lands on the exact Figma rectangle.</summary>
         public static CoverButton HitTest(float px, float py, int w, int h)
+        { return HitTest(px, py, w, h, CoverCam.Earth); }
+
+        /// <summary>As above, told which camera view is up: the pan/centre/zoom cluster exists only
+        /// while the MAP view is, so it must not be hit-testable behind the globe or the capsule.</summary>
+        public static CoverButton HitTest(float px, float py, int w, int h, CoverCam cam)
         {
             float sc = h / RefH;
             if (sc <= 0f) return CoverButton.None;
             float extra = w - RefW * sc; if (extra < 0f) extra = 0f;
+
+            // NEXT VIEW first: it is on every view, it is how the crew gets out of any of them, and it
+            // must not be shadowed by anything drawn later. (The same "chrome first" rule the bottom bar
+            // gets in FigmaUI.HitTest.)
+            float bx, by, bw, bh;
+            NextViewRect(w, h, out bx, out by, out bw, out bh);
+            if (Control.Hit(px, py, bx, by, bw, bh)) return CoverButton.NextView;
+
+            if (cam == CoverCam.Map)
+            {
+                PadRect(w, h, 0, 0, out bx, out by, out bw, out bh);
+                if (Control.Hit(px, py, bx, by, bw, bh)) return CoverButton.MapCentre;
+                PadRect(w, h, 0, -1, out bx, out by, out bw, out bh);
+                if (Control.Hit(px, py, bx, by, bw, bh)) return CoverButton.MapPanUp;
+                PadRect(w, h, 0, 1, out bx, out by, out bw, out bh);
+                if (Control.Hit(px, py, bx, by, bw, bh)) return CoverButton.MapPanDown;
+                PadRect(w, h, -1, 0, out bx, out by, out bw, out bh);
+                if (Control.Hit(px, py, bx, by, bw, bh)) return CoverButton.MapPanLeft;
+                PadRect(w, h, 1, 0, out bx, out by, out bw, out bh);
+                if (Control.Hit(px, py, bx, by, bw, bh)) return CoverButton.MapPanRight;
+                PadRect(w, h, -0.5f, 2, out bx, out by, out bw, out bh);
+                if (Control.Hit(px, py, bx, by, bw, bh)) return CoverButton.MapZoomIn;
+                PadRect(w, h, 0.5f, 2, out bx, out by, out bw, out bh);
+                if (Control.Hit(px, py, bx, by, bw, bh)) return CoverButton.MapZoomOut;
+            }
             const float Split = 1500f;
             float thr = Split * sc;                                  // panel-x where the right block starts
             float fx = (px < thr) ? px / sc : (px - extra) / sc;     // inverse of the reflow map

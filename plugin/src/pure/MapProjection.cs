@@ -228,6 +228,12 @@ namespace DragonScreen
             return v;
         }
 
+        /// <summary>The same view in a different mode. Pan/Zoom/Centre all branch on Mode - the flat
+        /// map pans in lat/lon, the globe spins about its axis - so a caller that owns the mode by some
+        /// other name (the Cover's camera, CoverPage.CamMapMode) sets it here rather than keeping a
+        /// second, driftable copy of which view is up.</summary>
+        public static MapView WithMode(MapView v, NavMode m) { v.Mode = m; return v; }
+
         public static MapView NextMode(MapView v)
         {
             // Map -> Orbit -> Planet -> Map.

@@ -9,8 +9,12 @@ Part A research, §B1–B15 = Part B research).
 
 ⚠️ **LIVING** (C5): split any task that won't finish before compaction; append stray findings at the bottom;
 never reorder past a DONE without a note.
-🛑 **BUILD-HOLD** is in force — no mod code / no `install` / no glass time until an explicit owner build-go.
-T0 and T1 are harness + docs work and are exempt.
+🟢 **PREVIEW-ONLY BUILD-GO** — owner, 2026-09-02 (recorded by T4; supersedes the blanket BUILD-HOLD the
+banner used to carry, which T2/T3/T4 had already outrun). Part A **pure code + `python plugin/build.py test`
++ `python plugin/build.py preview` are cleared**. `python plugin/build.py install` and glass time are NOT:
+they still need a separate, explicit owner go, so a task whose done-criteria can only be met in the capsule
+(S10's RT planet camera, T10's audible click, T11's drag-rotate) stops and asks rather than installing.
+Part B (T15–T22) remains DESIGNED, not started.
 
 ---
 
@@ -110,8 +114,54 @@ T0 and T1 are harness + docs work and are exempt.
   green, 3864 checks, 0 failed (no new warnings). §1.4 respected: layout reuses real Figma card
   positions; every fact is sourced (§8 / §4's CONFIRMED-real list), nothing invented.
 
-### T4 [O] Cover map-modes (2D/3D + camera) — **TODO**
+### T4 [O] Cover map-modes (2D/3D + camera) — **DONE**
 - **Read:** §3 + `NavPage`.  **DONE when:** preview, modes switch.
+- **DONE 2026-09-02:** §3's REFINE row ("Cover globe → 2D/3D map + camera modes … a Cover mode, not a
+  page") built as the reference UI's OWN three-view camera, not an invented one. `First.vue`'s
+  `swapComponent()` (`assets/reference/dragon2-ui-master/src/views/First.vue`, the same source
+  `UI_AUDIT.md` is generated from — tier-1) cycles exactly three components in the right-hand slot with
+  one button: `view-00` **View01** → `viewHeading` **"Auto - Earth IO"** (the 3D Earth) · `view-01`
+  **NavEarth** → **"Auto - Map IO"** (the flat, pannable map) · `view-02` **Capsule** → **"Auto - Capsule
+  IO"**, `count = (count + 1) % 3`. All three share one region (`#scroll-earth-wrapper` and
+  `#capsule-wrapper` are both `top:10% left:40.5% width:60% height:90%`) — the slot our live globe
+  already filled. New in `pure/CoverPage.cs`: `CoverCam` + `CamHeading` / `NextCam` / `CamMapMode`, the
+  `Build(..., CoverCam)` overload, `DrawCameraView` (the three views) and `DrawCameraChrome` (caption,
+  pill, cluster). **EARTH** = the existing `NavPage.Planet` call, arithmetic unchanged (`cover.png`
+  regression-checked). **MAP** = `NavPage.Map`, made public for CoverPage's use exactly as `Planet`
+  already was, so there is one flat-map renderer and not two that can drift; drawn into `MapRect`, the
+  widest **2:1** band that fits the slot so `MapProjection`'s zoom 0 FILLS it rather than letterboxing
+  (the reference's `#scroll-earth` fills its wrapper). **CAPSULE** = the shipped `art/dragon.png` still,
+  centred — the turntable that replaces it is **T11 (§5)**, flagged in the code. The baked
+  `camera_auto_earth_io` asset is skipped and redrawn as live text at that asset's own **measured**
+  metrics ("CAMERA" cap rows 5–19, the heading rows 35–56, both centred on its x+173), so the caption
+  names whichever view is up. `TARGET LATITUDE`/`LONGITUDE` are now hidden off the Earth view — the
+  source's own `v-if="currentComponent === 'view-00'"`, not a layout choice.
+  **Controls.** `NEXT VIEW` is the reference's own `#swap-view` button (also in `UI_AUDIT.md`'s First.vue
+  label list); its reference position (`top:90% right:5%`) is Frame 67's SETTINGS button, so the pill
+  moves to the free left end of that same row and is built as SETTINGS' twin — `rectangle_174`'s exact
+  401×111, same dash-then-label interior. The MAP view gets NavEarth's pan/centre/zoom cluster at the
+  map's top-right: centre + four arrows one 5em-equivalent pitch out, zoom pair a row below at half a
+  pitch either side, **+ on the LEFT** (`zoomInTrue right:9em` vs `zoomOutTrue right:4.5em` — the
+  reference's ordering, kept), translucent `rgba(2,7,56,0.75)` faces per NavEarth's own CSS, CTR lit
+  while the map is following. `PadRect` is measured off `MapRect`, so the cluster cannot slide off the
+  map at another panel aspect, and Build + HitTest + the tests all read that one calculation.
+  **Glue:** `MapProjection.WithMode` (new); `ScreenPainter` owns `coverCam` (opens on Earth, per Frame
+  67), routes NEXT VIEW + the cluster through `ApplyCoverCam` into the SAME `MapProjection.Pan/Zoom/
+  Centre` calls the NAV cluster uses — one map state, two front ends — and keeps `mapView.Mode` following
+  the camera so pan/zoom cannot mean the wrong thing. `FigmaUI.Build` threads the camera; both older
+  overloads stay and default to Earth.
+  **Gate:** `python plugin/build.py test` **green, 3917 checks, 0 failed** (Figma UI nav suite 114 → 167:
+  the 3-view cycle wraps, the three headings are the source's strings verbatim, NEXT VIEW hits on every
+  view and navigates nowhere, each cluster button hits its own action on MAP and is **inert** on Earth
+  and Capsule, every cluster button lands inside `MapRect`, MapRect is 2:1, and SETTINGS + the phase rail
+  still hit with the new controls in). **Preview:** `ui_cover_cam_map.png`, `ui_cover_cam_capsule.png`
+  and `ui_cover_cam_map_zoom.png` added and inspected (anything reachable by a control needs a render);
+  `cover.png` / `ui_cover_phase5.png` / `ui_cover_phase6.png` re-inspected — unchanged but for the new
+  caption and pill. No display-list overflow; `CoverPage.Commands` 240 → **340** and `FigmaUI.Commands`
+  260 → **360** (the MAP view measures 258, the old Earth peak 231). §1.4 respected throughout: every
+  string, control and ordering is the reference's; the two departures (open on Earth, static capsule) are
+  stated in the code. **Logged not done → S10:** the scaled-space RT camera `MAP_MFD_RESEARCH.md` §2
+  designs is a separate, glass-only piece.
 
 ### T5 [S] Vehicle Alerts + Consumables — **TODO**
 - **Read:** §3 + `VehicleOverview`/`SubsystemPage`.  **DONE when:** preview.
@@ -252,3 +302,23 @@ build session.
   out of "genuinely dark" into DESIGN SET; Ascent becomes data-buildable; the rendezvous ellipse, circular nav
   plot, systems tree and P&ID join Reference; Prop→thruster-schematic joins the refinements; a "settled
   2026-09-02" strip carries §14.4(a–d).  **DONE when:** the published page matches `SCREEN_INVENTORY.md`.
+
+### S10 [O] Scaled-space RT planet camera (`MAP_MFD_RESEARCH.md` §2) — **TODO**
+Logged by T4 (C1.1), not done. `docs/MAP_MFD_RESEARCH.md` §2 designs a dedicated Unity camera copying
+`ScaledCamera.Instance.cam` into a RenderTexture (`src/ScaledPlanetRenderer.cs` + `pure/PlanetGeom.cs` +
+`ImageId.ScaledPlanetLive`), which would replace `NavPage.Globe`'s textured-strip disc with a real
+rendered globe and cull the orbit line behind true geometry. It is **not** what T4's DONE-when asks for
+and cannot be judged by the preview gate at all — there is no Unity camera with the game closed, so the
+preview can only draw "LIVE 3D — NO SIGNAL". It therefore needs `install` + glass time, which BUILD-HOLD
+forbids. T4 shipped the Cover's 2D/3D + camera MODES against the pure globe that already exists; the
+disc underneath is the only part §2 would change. `MAP_MFD_RESEARCH.md` §5 still says this work "is T4" —
+that line needs re-pointing at S10 when this is picked up (or by a docs pass). **DONE when:** the RT
+camera renders in-sim, the orbit line tracks and occludes, and the framing reads well on the glass.
+
+### S11 [S] `plugin/build/csc.rsp` is a generated file, tracked, and churns on every build — **TODO**
+Logged by T4 (C1.1), not done. `build.py` overwrites `plugin/build/csc.rsp` on every invocation with
+whichever compile ran last, so the file shows as modified after any `test` / `preview` / `install` and
+its content depends only on which command was run most recently — it carries no information worth
+versioning. It is also written with CRLF into a repo whose `.gitattributes` mandates LF, so git warns on
+every touch. T4 restored it to HEAD (`git checkout --`) so the commit carries only real changes.
+**DONE when:** it is gitignored (and untracked), or build.py writes it outside the repo.

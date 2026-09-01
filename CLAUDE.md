@@ -20,8 +20,10 @@ flight software as a pinned, privately-namespaced MechJeb** driven by a pure "co
   breaks the build; **Part B fills them in, one controller at a time (§B12.5)** — that is the whole design.
 - a reference to the **planned MechJeb conductor** (§B1–B15 / T15–T22) is **current; leave it**.
 
-🛑 **BUILD-HOLD is in force** until an explicit owner build-go: no mod code, no `install`, no glass
-time. Part B is DESIGNED, not started.
+🟢 **PREVIEW-ONLY BUILD-GO** (owner, 2026-09-02): Part A **pure code + `build.py test` + `build.py
+preview` are cleared**. `build.py install` and glass time are NOT — they need a separate, explicit owner go,
+so a task whose done-criteria can only be met in the capsule stops and asks rather than installing. Part B
+is DESIGNED, not started. `REGISTER.md`'s banner carries the same rule and is the one to keep current.
 
 ## What this repo is now
 
@@ -112,5 +114,5 @@ REPO copy is authoritative.
 
 `/next` → read `CLAUDE.md` → take the FIRST non-DONE `REGISTER.md` line as THE task → read its pointed-to
 section end-to-end → do only that → verify (C1.3 gate) → update `REGISTER.md` → commit (GitHub Desktop) → STOP
-→ new chat. One task per fresh chat; **[O]** on Opus, **[S]** on Sonnet. Build-hold until an explicit owner
-build-go (T0 + T1 are harness/docs work and are exempt).
+→ new chat. One task per fresh chat; **[O]** on Opus, **[S]** on Sonnet. Preview-only build-go (above):
+code + `test` + `preview` yes, `install` + glass time only on a separate owner go.

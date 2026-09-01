@@ -166,8 +166,11 @@ namespace DragonScreen
 
         // ------------------------------------------------------------------ the map view
 
-        private static void Map(DisplayList dl, PageState s, MapView view,
-                                float mx, float my, float mw, float mh)
+        // Public for the same reason Planet is: the Figma Cover page's camera has a 2D MAP view
+        // (First.vue's `view-01` / NavEarth), and a second flat-map renderer over there would drift
+        // from this one the first time either was touched. One map, two pages.
+        public static void Map(DisplayList dl, PageState s, MapView view,
+                               float mx, float my, float mw, float mh)
         {
             // ---- the body itself ----
             MapQuad a, b;
