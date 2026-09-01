@@ -331,8 +331,73 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
   number reuses an existing real source rather than inventing a new one; no `PanelMap.cs` /
   label-doc edits; `plugin/build/csc.rsp` churn reverted before commit (S11).
 
-### T9 [O] Prop thruster schematic + P&ID / systems-tree deep-views — **TODO**
+### T9 [O] Prop thruster schematic + P&ID / systems-tree deep-views — **DONE**
 - **Read:** §11b.  **DONE when:** preview.
+- **DONE 2026-09-02.** All three §11b screens built. Every one is **layout-real / labels-reconstructed
+  + MARKED** — §11b's own verdict on this vein ("the LAYOUTS of the new screens are captured … exact
+  on-screen text is NOT transcribable at these resolutions"), the same footing T7 and T8 established.
+  **1 · Prop thruster schematic** (`plugin/src/pure/PropSchematic.cs`, new; §3's REFINE row /
+  SCREEN_INVENTORY #26, source JSC `jsc2026e404727`). `VehicleSubsystemPage`'s FUNCTIONS view for
+  `Sub.Propulsion` now delegates its centre+right zone to the schematic and skips the upright
+  `dragon_crew` render (which would be a second, contradictory vehicle); its title, left checklist,
+  FUNCTIONS/ALERTS toggle, ALERTS view and tab bar are the shared template, untouched — the five
+  sibling tabs render pixel-identically (`ui_vehiclepower.png` re-inspected). Drawn per §11b: Dragon in
+  **horizontal profile** (line-art at the real 4 m × 4.4 m capsule + 3.7 m trunk proportions, blunt nose
+  cone, heat shield, trunk ribs, SuperDraco sidewall pods), **four Draco quad arc symbols** as callouts
+  around it whose leaders converge on ONE axial pod station (the real arrangement), and a
+  **per-thruster data band** along the bottom (16 rows in 4 quad columns).
+  **The firing indicators are SIMULATED, never faked:** each thruster's duty is the LIVE RCS demand
+  (`PageState.TransX/Y/Z`, `RotPitch/Yaw/Roll` — straight off `FlightCtrlState` in `VesselData.cs`, the
+  same signal the DOCKING page's corner rings already draw) resolved onto that pod's azimuth, gated by
+  the real RCS action group (`PageState.RcsOn`) — nothing moves unless the vehicle's controls moved.
+  **Ours, stated in the code:** the quad names A–D, the per-thruster designators and their four roles
+  (FWD/AFT/LAT/ROLL), and the four-pods-90°-apart-each-with-four-roles geometry — SpaceX's real thruster
+  naming and control allocation are not public. **Nothing was removed:** the template's four
+  headline-gauge values and five detail readouts move intact into the schematic's right column (still
+  representative, still T13's to make live).
+  **2 · Systems tree** (`SystemsTreePage.cs`, new `UiPage.SystemsTree` = 31; SCREEN_INVENTORY #27,
+  source JSC `jsc2024e064449` LEFT screen). The hierarchical box-and-connector diagram §11b describes,
+  drawn as the electrical distribution: SOLAR ARRAY + BATTERIES ×4 → MAIN POWER → **POWER 1 / POWER 2**
+  → **STRING 1A–1C / 2A–2C** → the flight-computer-strings foot. **The box labels are not invented:**
+  POWER 1/2 and STRING 1A–2C are the REAL console's own button legends (`pure/PanelMap.cs`, transcribed
+  — untouched here per C1.4) and §4 confirms them as the main buses + the triple-redundant FC strings
+  (18 units / 54 voting processors, the foot caption); SOLAR ARRAY / BATTERIES ×4 are
+  `VehicleSubsystemPage`'s own Power checklist strings reused verbatim. **Live, not painted:** every box
+  and connector is coloured from `PageState.Systems` (`pure/VehicleSystems.cs` — bus on/off,
+  `Systems.Get`/`StateWord` per string ON/ISOL/TRIP, `Systems.OnlineCount`) plus `Power01` for the SoC
+  bar. Only "DEPLOYED" on the array has no live source (as on the Power page already; T13).
+  **3 · Systems P&ID** (`SystemsPidPage.cs`, new `UiPage.SystemsPid` = 32; SCREEN_INVENTORY's "Vehicle
+  systems P&ID schematic", sources `crew1_3`/`crew3_1`/`demo1_3`, §7 item 5). The inventory's own
+  description built literally — line-art rectangular loops, boxed components, inline valve symbols, and
+  small green status dots on the lines. **Ours, and stated:** WHICH subsystem it plumbs. The inventory
+  says only "likely Prop/Thermal/ECLSS"; we drew the ECLSS + coolant loops because those are the fluid
+  systems this build actually MODELS, so every component has a live state rather than a painted one
+  (`Systems.Oxygen/Nitrogen/CanisterUsed/Suppressant/Fire/Leaking/Isolating` + `Cabin` pressure/ppO2/
+  CO2/temp/loops, banded by the SAME `Alarms`/`CabinLimits` thresholds the gauges use, so a component
+  can never disagree with the gauge for the same quantity). Propulsion's plumbing would have duplicated
+  the schematic above. All numbers come from `PageState`'s pre-formatted text — the draw path formats
+  nothing; quantities with no pre-formatted text draw as bars instead of inventing one.
+  **Reachability:** Menu grid for both new pages (auto-discovered; 21 → 23 cards, well inside the
+  existing 3×10 grid), plus the global bottom bar, whose marker names Vehicle as their parent.
+  Deliberately **not** ninth/tenth `VehicleTabBar` tabs — that strip's eight tabs are confirmed-real
+  from the clean designer mockup, so adding one would be editing a real-sourced label set (C1.4). A real
+  in-page entry point is **T14**'s job, exactly as for T7 and T8.
+  **Gate:** `python plugin/build.py test` **green, Figma UI nav suite 234 → 256 checks, 3984 → 4006
+  total, 0 failed**, no new warnings. New checks: `SystemsDeepViews()` (bottom bar → Cover, Menu lists
+  each, body inert, no phantom tab strip, both are real pages not placeholders) and
+  `PropSchematicDuty()`, which pins the firing model's real properties rather than a screenshot — RCS
+  off fires nothing; a roll demand works every pod's tangential thruster and only that one; a +Z demand
+  works one axial thruster per pod and leaves its opposite idle; a lateral demand lights some pods and
+  not all four (a thruster pushes one way only). **Preview:** `ui_vehiclepropulsion.png` (idle),
+  `ui_vehiclepropulsion_firing.png` (new — live RCS demand, so the quads and per-thruster bars are
+  proven to light), `ui_vehiclepropulsion_alerts.png` (new — the ALERTS pairing, still the untouched
+  template), `ui_systemstree.png` (buses unpowered, the fixture's honest starting state),
+  `ui_systemstree_live.png` (new — buses on with one string TRIPPED and one ISOLATED, proving the live
+  colouring), `ui_systemspid.png` and `ui_menu.png` all rendered and inspected: no overlap, no clipping,
+  no `DisplayList` overflow (heaviest 186 of 360). Sibling vehicle pages re-inspected, unchanged.
+  §1.4 respected throughout; no `PanelMap.cs` / label-doc edits; `plugin/build/csc.rsp` churn reverted
+  before commit (S11). **Logged not done → S15** (the circular nav/orbit plot, #28) and **S16** (the
+  now-stale status marks in `SCREEN_INVENTORY.md` / §3).
 
 ### T10 [O] Lower-panel accuracy pass — **TODO**
 - **Read:** §4 + §14.4(a,b) + `PanelButtons`/`PanelMap`/`FlightCommands`.  **Build:** lighting bright / no-red,
@@ -545,3 +610,27 @@ persists a screen against them, or keep them and give Menu a way to hide placeho
   Burn Prep), all legible, no overlap/clipping, bottom bar intact; the 9 placeholder titles absent. Declared
   outputs only: `MenuPage.cs`, `FigmaUI.cs`, `plugin/test/FigmaUINavTest.cs`, `REGISTER.md` — no
   `PanelMap.cs`/label-doc edits, no memory writes.
+
+### S15 [O] The circular nav / orbit plot (SCREEN_INVENTORY #28) is still unbuilt and unowned — **TODO**
+Logged by T9 (C1.1), not done. `SCREEN_INVENTORY.md` #28 marks the circular nav/orbit plot as
+"🟠 REF, not built (**T6**/**T9**)", but neither task's register line covers it: T6's line is the
+rendezvous *ellipse* plot (built, `RendezvousPage.cs`) and T9's is "Prop thruster schematic + P&ID /
+systems-tree deep-views". So the third of §11b's three newly-characterised screens has no owner. The
+reference is good — JSC `jsc2024e064449`'s RIGHT screen plus the BBC frame: concentric rings, coloured
+target markers (yellow + cyan), orbit arcs and a g/rate readout; §3 says it "pairs with the Rendezvous
+ellipse". Most of what it needs already exists (`NavPage.Orbit`'s real conic, `PageState`'s target/range
+fields), so it is likely a small [S] page rather than an [O] one. **DONE when:** the owner decides
+whether it becomes its own register task (and where in the §7 order), and it is built + previewed —
+or it is explicitly deferred and #28's "(T6/T9)" mark corrected.
+
+### S16 [S] `SCREEN_INVENTORY.md` + §3 status marks are stale after T9 — **TODO**
+Logged by T9 (C1.1), not done — a docs pass, and T9's declared outputs are code + preview only (C1.11),
+so the marks were not edited here. Now inaccurate: **#26 Prop/RCS thruster schematic** still reads
+"🟡 REFINE — we built Prop as a generic gauge template" (it is now the schematic); **#27 Systems /
+electrical TREE** and the **"Vehicle systems P&ID schematic"** entry still read "🟠 REF, not built"
+(both are built pages, `UiPage.SystemsTree` / `UiPage.SystemsPid`); `BUILD_PLAN.md` §3's rows
+"Vehicle · Prop — real look" (REFINE) and "Vehicle systems deep-views" (REF, not built) say the same;
+§7's item 5 ("Vehicle systems P&ID schematic (needs a cleaner frame)") is done to the extent a cleaner
+frame allows. §11b itself is research and stays as written. Fold into the next docs pass together with
+**S9** (the map artifact), which needs the same tally update. **DONE when:** no `docs/` status mark
+contradicts the tree.

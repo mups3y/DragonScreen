@@ -55,7 +55,14 @@ namespace DragonScreen
         // screen despite the name collision; that is why this gets its own value rather than reusing it.
         // Same reachability footing as DeorbitBurnPrep: Menu grid only for now, T14 wires a real entry
         // point. Appended (never renumbered): the int persists per screen.
-        EntryProcedure = 30
+        EntryProcedure = 30,
+        // The two Vehicle systems DEEP-VIEWS (T9) - SCREEN_INVENTORY #27 + the "Vehicle systems P&ID
+        // schematic" entry, both real screens whose layout grammar is photographed but whose text is
+        // not transcribable. Deliberately NOT extra VehicleTabBar tabs: that strip's eight tabs are
+        // confirmed-real from the clean designer mockup, so a ninth would be editing a real-sourced
+        // label set (C1.4). Menu grid only for now; a real in-page entry point is T14's job, the same
+        // footing as DeorbitBurnPrep and EntryProcedure. Appended (never renumbered).
+        SystemsTree = 31, SystemsPid = 32
     }
 
     public enum NavAct { None, Goto, Back, Forward }
@@ -78,7 +85,7 @@ namespace DragonScreen
         /// overlay. The painter sizes its list to the max of this and the old model.</summary>
         public const int Commands = 360;
 
-        public const int PageCount = 31;
+        public const int PageCount = 33;
 
         const float RefW = 3427f, RefH = 2112f;
 
@@ -119,7 +126,8 @@ namespace DragonScreen
             "VEHICLE OVERVIEW", "SUIT LEAK CHECK", "MECH PANEL", "VIDEO SETTINGS", "TEST VRIO HEALTH LEDS",
             "VEHICLE — CREW", "VEHICLE — PROP", "VEHICLE — POWER",
             "VEHICLE — AVIONICS", "VEHICLE — GNC", "VEHICLE — THERMAL",
-            "MANUAL CHUTE DEPLOY", "MANUAL DOCKING", "RENDEZVOUS", "DEORBIT BURN PREP", "ENTRY"
+            "MANUAL CHUTE DEPLOY", "MANUAL DOCKING", "RENDEZVOUS", "DEORBIT BURN PREP", "ENTRY",
+            "SYSTEMS TREE", "SYSTEMS P&ID"
         };
 
         public static string Name(UiPage p)
@@ -172,6 +180,8 @@ namespace DragonScreen
                 case UiPage.Rendezvous:        RendezvousPage.Build(dl, w, h, s); break;
                 case UiPage.DeorbitBurnPrep:   DeorbitBurnPrepPage.Build(dl, w, h, s); break;
                 case UiPage.EntryProcedure:    EntryPage.Build(dl, w, h); break;
+                case UiPage.SystemsTree:       SystemsTreePage.Build(dl, w, h, s); break;
+                case UiPage.SystemsPid:        SystemsPidPage.Build(dl, w, h, s); break;
                 default:               PlaceholderPage.Build(dl, w, h, Name(page)); break;
             }
             BottomBarMarker(dl, w, h, page);
@@ -194,6 +204,7 @@ namespace DragonScreen
                 case UiPage.VehicleAvionics: case UiPage.VehicleGnc: case UiPage.VehicleThermal:
                 case UiPage.ManualChute: case UiPage.Docking: case UiPage.Rendezvous:
                 case UiPage.DeorbitBurnPrep: case UiPage.EntryProcedure:
+                case UiPage.SystemsTree: case UiPage.SystemsPid:
                     return false;
                 default:
                     return true;
@@ -210,6 +221,9 @@ namespace DragonScreen
                 case UiPage.Vehicle: case UiPage.VehicleMech:
                 case UiPage.VehicleCrew: case UiPage.VehiclePropulsion: case UiPage.VehiclePower:
                 case UiPage.VehicleAvionics: case UiPage.VehicleGnc: case UiPage.VehicleThermal:
+                // The two systems deep-views are vehicle pages by subject even though they carry no
+                // subsystem tab bar (see the UiPage comment), so the bar marker names their parent.
+                case UiPage.SystemsTree: case UiPage.SystemsPid:
                     return 2;
                 case UiPage.SuitCheck: return 3;
                 case UiPage.Audio: case UiPage.Cabin: case UiPage.AudioVideo: return 4;

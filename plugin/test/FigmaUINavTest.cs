@@ -39,6 +39,8 @@ public static class FigmaUINavTest
         Rendezvous();
         DeorbitBurnPrep();
         EntryProcedure();
+        SystemsDeepViews();
+        PropSchematicDuty();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
     }
@@ -221,6 +223,75 @@ public static class FigmaUINavTest
 
         NavHit body = FigmaUI.HitTest(UiPage.EntryProcedure, 0.5f * W, 0.4f * H, W, H);
         Check("EntryProcedure body is inert", body.Act == NavAct.None, "got " + body.Act);
+    }
+
+    static void SystemsDeepViews()
+    {
+        // T9: the two systems deep-views (SCREEN_INVENTORY #27 + the P&ID entry). Same reachability
+        // footing as T7/T8 - Menu grid only, bottom bar always present, content display-only. They are
+        // deliberately NOT VehicleTabBar tabs (that strip's eight tabs are confirmed-real, C1.4), so a
+        // touch where the tab strip sits on a REAL vehicle page must stay inert here.
+        float sc = (float)H / RefH;
+        float bcx = (46f + 40f) / RefW * W, bcy = (2003f + 40f) * sc;
+        float tabX = VehicleTabBar.CentreX(4) / RefW * W, tabY = 1812f * sc;
+
+        foreach (UiPage p in new[] { UiPage.SystemsTree, UiPage.SystemsPid })
+        {
+            Check(p + " bottom-bar -> Cover",
+                  FigmaUI.HitTest(p, bcx, bcy, W, H).Target == UiPage.Cover, "");
+
+            bool sawIt = false;
+            for (int i = 0; i < MenuPage.Entries.Length; i++) if (MenuPage.Entries[i] == p) sawIt = true;
+            Check("Menu lists " + p, sawIt, "");
+
+            Check(p + " body is inert",
+                  FigmaUI.HitTest(p, 0.5f * W, 0.4f * H, W, H).Act == NavAct.None, "");
+            Check(p + " has no subsystem tab strip",
+                  FigmaUI.HitTest(p, tabX, tabY, W, H).Act == NavAct.None, "");
+            Check(p + " is a real page, not a placeholder", !FigmaUI.IsPlaceholder(p), "");
+        }
+    }
+
+    static void PropSchematicDuty()
+    {
+        // T9: the Draco quad indicators are the LIVE RCS demand resolved onto each pod, not decoration.
+        // The properties that must hold: nothing fires with RCS off; a pure roll works every pod's
+        // tangential thruster and only that one; a fore/aft demand works one axial thruster per pod and
+        // not its opposite; and a lateral demand is answered by SOME pods and not all four (a thruster
+        // pushes one way only, so the pods on the demand's own side stay quiet).
+        PageState s = new PageState();
+        s.Valid = true;
+
+        s.RcsOn = false; s.RotRoll = 1f;
+        bool anyOff = false;
+        for (int q = 0; q < 4; q++) if (PropSchematic.QuadDuty(s, q) > 0f) anyOff = true;
+        Check("prop schematic: RCS off means no quad fires", !anyOff, "");
+
+        s.RcsOn = true;
+        bool allRoll = true, otherRoles = false;
+        for (int q = 0; q < 4; q++)
+        {
+            if (PropSchematic.ThrusterDuty(s, q, 3) < 0.99f) allRoll = false;
+            for (int r = 0; r < 3; r++) if (PropSchematic.ThrusterDuty(s, q, r) > 0f) otherRoles = true;
+        }
+        Check("prop schematic: roll demand works every tangential thruster", allRoll, "");
+        Check("prop schematic: roll demand works nothing else", !otherRoles, "");
+
+        s.RotRoll = 0f; s.TransZ = 0.5f;
+        bool fwdAll = true, aftAny = false;
+        for (int q = 0; q < 4; q++)
+        {
+            if (Math.Abs(PropSchematic.ThrusterDuty(s, q, 0) - 0.5f) > 0.001f) fwdAll = false;
+            if (PropSchematic.ThrusterDuty(s, q, 1) > 0f) aftAny = true;
+        }
+        Check("prop schematic: +Z works the forward thruster in every pod", fwdAll, "");
+        Check("prop schematic: +Z leaves the opposing aft thrusters idle", !aftAny, "");
+
+        s.TransZ = 0f; s.TransY = 1f;
+        int lit = 0;
+        for (int q = 0; q < 4; q++) if (PropSchematic.ThrusterDuty(s, q, 2) > 0f) lit++;
+        Check("prop schematic: a lateral demand lights some pods, not all", lit > 0 && lit < 4,
+              "lit " + lit);
     }
 
     static void SpeccedPages()

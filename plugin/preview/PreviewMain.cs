@@ -349,7 +349,8 @@ public static class PreviewMain
             int CW = W * 2, CH = H * 2;
             foreach (UiPage up in new[] { UiPage.Cover, UiPage.Menu, UiPage.PhaseDeport, UiPage.Hud, UiPage.SuitCheck, UiPage.Vehicle, UiPage.VehicleMech, UiPage.Cabin, UiPage.AudioVideo, UiPage.VrioTest,
                                           UiPage.VehicleCrew, UiPage.VehiclePropulsion, UiPage.VehiclePower, UiPage.VehicleAvionics, UiPage.VehicleGnc, UiPage.VehicleThermal,
-                                          UiPage.ManualChute, UiPage.Docking, UiPage.Rendezvous, UiPage.DeorbitBurnPrep, UiPage.EntryProcedure })
+                                          UiPage.ManualChute, UiPage.Docking, UiPage.Rendezvous, UiPage.DeorbitBurnPrep, UiPage.EntryProcedure,
+                                          UiPage.SystemsTree, UiPage.SystemsPid })
             {
                 DisplayList udl = new DisplayList(600);
                 FigmaUI.Build(udl, up, CW, CH, ps, MapProjection.Default());
@@ -366,7 +367,11 @@ public static class PreviewMain
             // Fdir.FaultName) — the ALERTS view's FDIR row needs it now, so set the same nominal baseline
             // here first, same as that block does for itself.
             ps.Fault = FaultKind.None; ps.FaultText = "NOMINAL";
-            foreach (VehicleSubsystemPage.Sub sub in new[] { VehicleSubsystemPage.Sub.Power, VehicleSubsystemPage.Sub.Crew })
+            // Propulsion is in the list because T9 gave its FUNCTIONS view a different body (the Draco
+            // schematic); its ALERTS view still uses the shared template, and that pairing needs a render.
+            foreach (VehicleSubsystemPage.Sub sub in new[] { VehicleSubsystemPage.Sub.Power,
+                                                             VehicleSubsystemPage.Sub.Crew,
+                                                             VehicleSubsystemPage.Sub.Propulsion })
             {
                 DisplayList adl = new DisplayList(VehicleSubsystemPage.Commands + 60);
                 VehicleSubsystemPage.Build(adl, CW, CH, sub, ps, true);
@@ -394,6 +399,41 @@ public static class PreviewMain
                 Render(odl, CW, CH, path);
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + odl.Count + " commands");
                 ps.Power01 = savedPower;
+            }
+
+            // ---- T9: the Draco schematic FIRING, and the systems tree POWERED ----
+            // Both pages are driven by live state that is idle in the shared fixture (RCS off, both
+            // buses unpowered — SystemsState.Fresh's own honest starting point). The default renders
+            // above prove the idle look; these prove the live one, the same "anything reachable needs
+            // a render" rule T4/T5 followed. State is restored afterwards.
+            {
+                bool savedRcs = ps.RcsOn;
+                float sTX = ps.TransX, sTY = ps.TransY, sTZ = ps.TransZ;
+                float sRP = ps.RotPitch, sRY = ps.RotYaw, sRR = ps.RotRoll;
+                ps.RcsOn = true;
+                ps.TransX = 0.6f; ps.TransY = -0.35f; ps.TransZ = 0.4f;
+                ps.RotPitch = 0.2f; ps.RotYaw = 0f; ps.RotRoll = 0.5f;
+                DisplayList pdl = new DisplayList(VehicleSubsystemPage.Commands + 60);
+                VehicleSubsystemPage.Build(pdl, CW, CH, VehicleSubsystemPage.Sub.Propulsion, ps);
+                if (pdl.Overflowed) Console.WriteLine("  WARNING PROP SCHEMATIC OVERFLOWED");
+                string path = Path.Combine(outDir, "ui_vehiclepropulsion_firing.png");
+                Render(pdl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + pdl.Count + " commands");
+                ps.RcsOn = savedRcs;
+                ps.TransX = sTX; ps.TransY = sTY; ps.TransZ = sTZ;
+                ps.RotPitch = sRP; ps.RotYaw = sRY; ps.RotRoll = sRR;
+            }
+            {
+                SystemsState savedSys = ps.Systems;
+                ps.Systems.Bus1On = true; ps.Systems.Bus2On = true;
+                ps.Systems.C1 = StringState.Tripped;      // one tripped, one isolated (B2, from the fixture)
+                DisplayList tdl = new DisplayList(SystemsTreePage.Commands + 60);
+                SystemsTreePage.Build(tdl, CW, CH, ps);
+                if (tdl.Overflowed) Console.WriteLine("  WARNING SYSTEMS TREE OVERFLOWED");
+                string path = Path.Combine(outDir, "ui_systemstree_live.png");
+                Render(tdl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + tdl.Count + " commands");
+                ps.Systems = savedSys;
             }
 
             // Cover with the LAST phase selected (Manual Chute Deploy, rail slot 6) to prove the expanded

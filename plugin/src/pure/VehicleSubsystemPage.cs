@@ -19,6 +19,12 @@
 // page it names can never disagree. Toggle geometry (exact pixel placement) is OURS — not measurable
 // from the source render — same footing as Menu/Reference Content's §14.4(c) layout. Left inert per
 // T14 (touch wiring); this task's DONE-when is preview only.
+//
+// T9: Prop is the one tab whose REAL look is known and is not this template — the JSC training photo
+// shows a Draco thruster schematic (§11b / SCREEN_INVENTORY #26), so its FUNCTIONS view delegates the
+// centre+right zone to PropSchematic and skips the upright capsule render. Everything else here — the
+// title, the left checklist, the FUNCTIONS/ALERTS toggle, the ALERTS view and the tab bar — is shared
+// with its five siblings exactly as before.
 using System;
 
 namespace DragonScreen
@@ -112,7 +118,15 @@ namespace DragonScreen
 
             Severity sev = LiveSeverity(sub, s);
 
-            if (!alerts)
+            if (!alerts && sub == Sub.Propulsion)
+            {
+                // ---- T9: Prop's real look is the Draco thruster schematic, not the gauge template
+                // (§3 REFINE / §11b / SCREEN_INVENTORY #26). It fills the centre AND right zones the way
+                // the source photo does, and carries this subsystem's own gauge + detail values into its
+                // bottom data band, so nothing the template showed is lost. See PropSchematic.
+                PropSchematic.Draw(dl, w, h, s, d.GLabel, d.GVal, d.GUnit, d.GFrac, d.RLabel, d.RVal);
+            }
+            else if (!alerts)
             {
                 // ---- CENTRE-TOP: four headline gauges ----
                 float[] gx = { 1170f, 1620f, 2070f, 2520f };
@@ -150,8 +164,11 @@ namespace DragonScreen
                 dl.Rect(PX(2760), PY(410), 600 * sx * fdirFrac, SZ(8), fdirCol);
             }
 
-            // ---- CENTRE: capsule diagram (the vehicle, on every vehicle page) ----
-            dl.Asset("dragon_crew", PX(1453), PY(760), 520 * sx, 760 * sy, White);
+            // ---- CENTRE: capsule diagram (the vehicle, on every vehicle page). Prop's schematic view
+            // draws its OWN vehicle — the horizontal profile line-art the real page uses — so the
+            // rendered upright capsule would be a second, contradictory one (T9). ----
+            if (alerts || sub != Sub.Propulsion)
+                dl.Asset("dragon_crew", PX(1453), PY(760), 520 * sx, 760 * sy, White);
 
             // ---- FUNCTIONS | ALERTS toggle (T5, bottom-left; geometry ours, see file header) ----
             Rgba fnCol = !alerts ? White : Dim;
