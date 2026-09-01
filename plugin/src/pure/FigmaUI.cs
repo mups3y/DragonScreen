@@ -42,7 +42,12 @@ namespace DragonScreen
         // a real "Hold Capture" rendezvous (SCREEN_INVENTORY #23/#87, tier-1). Reached from Docking's
         // own letterbox margin, the same construction as the HUD's Docking affordance. Appended (never
         // renumbered): the int persists per screen.
-        Rendezvous = 28
+        Rendezvous = 28,
+        // Deorbit Burn Prep (T7) - SCREEN_INVENTORY #24, reconstructed from a blurry photo frame (no
+        // Figma/demo ref, same footing as VrioTest). Its natural nav entry point (a phase-rail
+        // "Procedure" tap) is wired in the touch pass (T14, see FigmaUI's VrioTest comment); for now
+        // reached only via the Menu grid. Appended (never renumbered): the int persists per screen.
+        DeorbitBurnPrep = 29
     }
 
     public enum NavAct { None, Goto, Back, Forward }
@@ -65,7 +70,7 @@ namespace DragonScreen
         /// overlay. The painter sizes its list to the max of this and the old model.</summary>
         public const int Commands = 360;
 
-        public const int PageCount = 29;
+        public const int PageCount = 30;
 
         const float RefW = 3427f, RefH = 2112f;
 
@@ -106,7 +111,7 @@ namespace DragonScreen
             "VEHICLE OVERVIEW", "SUIT LEAK CHECK", "MECH PANEL", "VIDEO SETTINGS", "TEST VRIO HEALTH LEDS",
             "VEHICLE — CREW", "VEHICLE — PROP", "VEHICLE — POWER",
             "VEHICLE — AVIONICS", "VEHICLE — GNC", "VEHICLE — THERMAL",
-            "MANUAL CHUTE DEPLOY", "MANUAL DOCKING", "RENDEZVOUS"
+            "MANUAL CHUTE DEPLOY", "MANUAL DOCKING", "RENDEZVOUS", "DEORBIT BURN PREP"
         };
 
         public static string Name(UiPage p)
@@ -157,6 +162,7 @@ namespace DragonScreen
                 case UiPage.ManualChute:       ManualChuteDeployPage.Build(dl, w, h, s, view); break;
                 case UiPage.Docking:           DockingSimPage.Build(dl, w, h); break;
                 case UiPage.Rendezvous:        RendezvousPage.Build(dl, w, h, s); break;
+                case UiPage.DeorbitBurnPrep:   DeorbitBurnPrepPage.Build(dl, w, h, s); break;
                 default:               PlaceholderPage.Build(dl, w, h, Name(page)); break;
             }
             BottomBarMarker(dl, w, h, page);

@@ -332,6 +332,7 @@ namespace DragonScreen
             state.DockNote = DockingOps.Note;
             state.UndockEngaged = UndockOps.Engaged;
             state.UndockNote = UndockOps.Note;
+            state.DeorbitEngaged = DeorbitOps.Engaged;
             state.Docked = DockedSide.Docked(v);
 
             StepInputs si = new StepInputs();

@@ -170,7 +170,7 @@ namespace DragonScreen
         public GateItemView[] GateItems;
 
         /// <summary>Mission-phase buttons: lit when that phase is the one running.</summary>
-        public bool RendezvousEngaged, DockEngaged, UndockEngaged;
+        public bool RendezvousEngaged, DockEngaged, UndockEngaged, DeorbitEngaged;
         /// <summary>What each is doing, shown on the button itself when it is running.</summary>
         public string RendezvousNote, DockNote, UndockNote;
         /// <summary>True once docked - AUTO-DOCK becomes meaningless and UNDOCK becomes the live one.</summary>

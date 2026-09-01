@@ -36,6 +36,7 @@ public static class FigmaUINavTest
         SpeccedPages();
         Menu();
         Rendezvous();
+        DeorbitBurnPrep();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
     }
@@ -129,6 +130,27 @@ public static class FigmaUINavTest
         // display-only until T14 wires touch.
         NavHit card = FigmaUI.HitTest(UiPage.Rendezvous, 720f * sc + ox, 450f * sc, W, H);
         Check("Rendezvous Hold-Capture card is inert", card.Act == NavAct.None, "got " + card.Act);
+    }
+
+    static void DeorbitBurnPrep()
+    {
+        // T7: reached only via the Menu grid for now (its natural phase-rail entry point is T14's
+        // job - see FigmaUI's DeorbitBurnPrep enum comment). Carries the bottom bar like every page,
+        // and the reconstructed content cards are display-only (no invented destinations).
+        float sc = (float)H / RefH;
+        float bcx = (46f + 40f) / RefW * W, bcy = (2003f + 40f) * sc;
+        Check("DeorbitBurnPrep bottom-bar -> Cover",
+              FigmaUI.HitTest(UiPage.DeorbitBurnPrep, bcx, bcy, W, H).Target == UiPage.Cover, "");
+
+        bool sawIt = false;
+        for (int i = 0; i < MenuPage.Entries.Length; i++)
+            if (MenuPage.Entries[i] == UiPage.DeorbitBurnPrep) sawIt = true;
+        Check("Menu lists DeorbitBurnPrep", sawIt, "");
+
+        // A tap in the content area (well clear of the bottom bar) is inert - no interactive control
+        // is claimed by this reconstruction.
+        NavHit body = FigmaUI.HitTest(UiPage.DeorbitBurnPrep, 0.5f * W, 0.4f * H, W, H);
+        Check("DeorbitBurnPrep body is inert", body.Act == NavAct.None, "got " + body.Act);
     }
 
     static void SpeccedPages()

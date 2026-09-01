@@ -263,8 +263,43 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
   sourced (the photo, or existing live PageState fields); every invented detail is named as such in
   the code and above.
 
-### T7 [S] Deorbit Burn Prep (reconstruct, marked) — **TODO**
+### T7 [S] Deorbit Burn Prep (reconstruct, marked) — **DONE**
 - **Read:** §3 + §8.  **DONE when:** preview.
+- **DONE 2026-09-02.** SCREEN_INVENTORY.md #24 / §3 row "Deorbit Burn Prep", sourced only from a
+  **blurry** `discovery` deorbit-burn photo frame (tier-1, real capsule, no legible layout) —
+  "reconstruct + MARK" per §7 item 3, same footing as VrioTestPage (also photo-only, no Figma/demo
+  ref) and the Suit-Leak fail branch (§14.4d). Built as a new standalone page, `UiPage.DeorbitBurnPrep`
+  (`plugin/src/pure/DeorbitBurnPrepPage.cs`) — NOT a Cover phase-rail slot: `FigmaUI.cs`'s own
+  pre-existing comment on `VrioTest` states a "Procedure" rail item's real nav entry point is wired in
+  **the touch pass (T14)**, so re-pointing the Cover rail's generic "Procedure" slots (real label, real
+  photos — SCREEN_INVENTORY's residual research — not invented) at specific content is deliberately
+  left to T14/live-data wiring, not this task; reached for now via the Menu grid (auto-discovered,
+  `FigmaUI.PageCount` 29→30) same as VrioTest.
+  **Real content, two independent sources agreeing on field NAMES (never layout, §1.4):**
+  SCREEN_INVENTORY's photo transcription ("Crew Interrupt Conditions" + "Slew for Deorbit Burn"
+  [Roll/Pitch/Yaw, Maximum altitude rate, FC Slew] + the numbered settle-burn steps) and
+  SCREENS_LOOK_AND_FUNCTION_RESEARCH's read of the community recreation's own First.vue source (the
+  three Crew Interrupt Conditions criteria verbatim). Roll/Pitch/Yaw/Maximum-altitude-rate show "—"
+  (T5's no-source-yet idiom — this is a free-flight slew, not the docking-relative
+  PageState.RollText/.. the HUD uses, and T13 is where a real number could appear); **FC SLEW is real,
+  not decoration** — new `PageState.DeorbitEngaged` threads `DeorbitOps.Engaged`
+  (`_AutopilotStub.cs`, already the live STRING1C source per `PanelButtons.cs`) through
+  `VesselData.cs`, the same honest "NOT ENGAGED" idiom RendezvousPage's Hold Capture card uses (T6).
+  Card-style chrome (accent dot + title + lines) reuses CoverPage.DrawReferenceContent's (T3) visual
+  convention for reconstructed real content; page layout itself is ours (no photo layout to measure).
+  **Flagged for the owner, not silently changed (see S13):** both real sources, and the community
+  Figma's own baked layer name (`600deg_m_altitude_rate` in `CoverPage.cs`), say "altitude" where
+  "ATTITUDE" would make physical sense (an attitude-error/attitude-rate interrupt for a SLEW maneuver)
+  — kept verbatim per C1.4 rather than unilaterally corrected.
+  **Nav test:** new `FigmaUINavTest.DeorbitBurnPrep()` — bottom bar → Cover, Menu lists the new page
+  (also proven end-to-end by `Menu()`'s existing all-entries loop, whose dynamic per-entry check count
+  rose with it), and the content is confirmed inert (no invented destinations). `python
+  plugin/build.py test`: green, Figma UI nav suite 173 → **177**, 3923 → **3927 checks total, 0
+  failed**. **Preview:** `ui_deorbitburnprep.png` inspected — title, three cards (Crew Interrupt
+  Conditions / Slew for Deorbit Burn / Deorbit Burn Settle), no overlap/clipping, no `DisplayList`
+  overflow (27 of 80 commands); `ui_menu.png` re-inspected — 29 cards including "DEORBIT BURN PREP",
+  still legible, no overlap. §1.4 respected throughout: every real fact is sourced; the one ambiguity
+  found is flagged, not silently resolved; nothing in `PanelMap.cs` / label docs touched.
 
 ### T8 [S] Entry page (reconstruct, marked) — **TODO**
 - **Read:** §3 + §8.  **DONE when:** preview.
@@ -426,3 +461,29 @@ so a faulted subsystem's tab reads red from every vehicle page (`VehicleOverview
 its own tab bar always reads nominal even when another subsystem is genuinely alerting. **DONE when:**
 `VehicleMechPage.Build` passes `PageState` through and calls
 `VehicleTabBar.Draw(dl,w,h,3,VehicleTabBar.Severities(s))`, with a preview showing it turn red to match.
+
+### S13 [owner call] "altitude" vs "attitude" in Crew Interrupt Conditions / Slew for Deorbit Burn — **TODO**
+Logged by T7 (C1.1), not done. Every source that names the deorbit-burn interrupt/slew criteria says
+"altitude" — SCREEN_INVENTORY.md's photo transcription, SCREENS_LOOK_AND_FUNCTION_RESEARCH.md's read of
+the community recreation's First.vue source, and the community Figma's own baked layer name
+(`600deg_m_altitude_rate`, `CoverPage.cs` Keys). "30° sustained ALTITUDE error" and "600°/min ALTITUDE
+rate" don't parse physically (altitude is a distance, not a rotational quantity), whereas "ATTITUDE
+error/rate" would — paired with Roll/Pitch/Yaw and an autopilot SLEW-interrupt trigger, "attitude" is
+what the criteria are almost certainly measuring. Not corrected unilaterally (C1.4: never edit a
+real-sourced label without a real-source confirmation) — kept verbatim in `DeorbitBurnPrepPage.cs` and
+its comments so nothing in the codebase disagrees with the already-shipped `CoverPage.cs` wording.
+**DONE when:** the owner confirms which word the real screen actually shows (or that the community
+Figma really typed "altitude"), and the docs + `CoverPage.cs` asset-key comment + `DeorbitBurnPrepPage.cs`
+are updated together if it is "attitude".
+
+### S14 [S] Three dead `UiPage` entries surface confusing Menu cards — **TODO**
+Logged by T7 (C1.1), not done. `UiPage.PhaseDeport`/`PhaseCoast`/`PhaseClaw` (values 6/7/8) predate the
+Cover rail's redraw as a real 7-item IN-PAGE selector (`CoverPage.MapCover` only routes `PhaseManual`
+away; the rest select in-page, `NavHit.None`) — `FigmaUI.Build`'s switch has no case for them, so they
+fall to the honest `PlaceholderPage`, but they still surface as real-looking Menu cards ("DEORBIT BURN",
+"COAST TO TRUNK JETTISON", "CLAW SEPARATION") since `MenuPage` auto-discovers every `UiPage`. "DEORBIT
+BURN" (index 6) now sits one row away from T7's genuine "DEORBIT BURN PREP" card, which reads as two
+different pages about the same thing to anyone browsing the Menu. Owner call: delete the three (their
+explicit int values 6/7/8 would just go unused — nothing else is numbered relative to them) once nothing
+persists a screen against them, or keep them and give Menu a way to hide placeholder-only pages.
+**DONE when:** decided + implemented.
