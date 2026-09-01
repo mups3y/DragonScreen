@@ -1,5 +1,5 @@
 /*
- * DragonScreen headless tests - the capsule turntable (T11a, BUILD_PLAN §5).
+ * DragonScreen headless tests - the capsule turntable (T11a + T11b render half, BUILD_PLAN §5).
  *
  * ---- WHY THIS IS TESTED HERE AND NOT ON THE GLASS ----
  * The turntable is two things: a NAMING convention (which file is frame 9) and a GESTURE (what a
@@ -8,9 +8,12 @@
  * drag from a zero-width slot, none of which you would think to make with a mouse, and each of which
  * costs a full restart to try. Half a second here.
  *
- * The one question these CANNOT settle is which way the real render turns, so whether "drag right"
- * feels like grabbing the vehicle or like orbiting the camera. That needs the render (T11b) and the
- * glass, and Turntable's header says where the sign lives when the answer comes back.
+ * T11a wrote this against a marked stand-in sequence and left one question open: which way the real
+ * render turns, so whether "drag right" reads as grabbing the vehicle or as orbiting the camera.
+ * T11b's render half answered the first half of it - the shipped frames turn the way Turntable's sign
+ * assumes, measured off the frames themselves - so Marking() below now asserts the opposite of what
+ * it did: the sequence is real, and nothing may label it a placeholder. What is still open is only
+ * how the gesture FEELS, which is glass work and is tracked with the other capsule-only checks.
  */
 using System;
 using DragonScreen;
@@ -36,7 +39,7 @@ public static class TurntableTest
 
     public static int Run()
     {
-        Console.WriteLine("DragonScreen capsule turntable (T11a) tests");
+        Console.WriteLine("DragonScreen capsule turntable (T11a + T11b render) tests");
 
         Sequence();
         Naming();
@@ -281,19 +284,53 @@ public static class TurntableTest
 
     static void Marking()
     {
-        // While the shipped sequence is the stand-in set, the page MUST say so. §1.4's rule is that
-        // invented material is never passed off as sourced material, and the only mechanism keeping
-        // that true here is this label - so it is a test, not a comment.
-        if (Turntable.Placeholder)
+        // T11a shipped a marked stand-in sequence and this test asserted the page LABELLED it. T11b's
+        // render half replaced those frames with the real Crew Dragon + trunk (rendered from the
+        // MaTte0 CC-BY model by plugin/build/render_turntable.py, attributed in
+        // assets/ASSET_PROVENANCE.md), so the assertion turns over: the shipped sequence is the real
+        // render, and the page must now print NOTHING that calls it a placeholder.
+        //
+        // §1.4 is what both halves serve - invented material is never passed off as sourced material.
+        // The label was the mechanism while the frames were invented; with sourced frames in, the
+        // mechanism has to be OFF, and a label left drawing over a real render would be its own kind
+        // of lie about the source. So this is still a test rather than a comment, and it still fails
+        // if the flag and the frames on disk ever disagree.
+        Check("the shipped sequence is the real render, not a stand-in",
+              !Turntable.Placeholder, "Turntable.Placeholder is true");
+
+        // The wording is kept for the day the sequence IS stood in again (§5 leaves a 72-frame
+        // variant open), so it must stay usable - but nothing may draw it today.
+        Check("the marking wording is still available for a future stand-in",
+              !string.IsNullOrEmpty(Turntable.PlaceholderLabel)
+              && Turntable.PlaceholderLabel.ToUpperInvariant().Contains("PLACEHOLDER"),
+              Turntable.PlaceholderLabel);
+
+        // The page, not the flag: build the capsule view and read back every string it emits. This is
+        // the assertion that would catch a label drawn from somewhere other than Turntable.Placeholder
+        // - checking the flag alone would only prove the flag.
+        const int W = 2560, H = 1420;
+        DisplayList dl = new DisplayList(600);
+        CoverPage.Build(dl, W, H, new PageState(), MapProjection.Default(), 1,
+                        CoverPage.CoverCam.Capsule, Turntable.AtFrame(7));
+        string marked = null;
+        for (int i = 0; i < dl.Count; i++)
         {
-            Check("placeholder label exists",
-                  !string.IsNullOrEmpty(Turntable.PlaceholderLabel), "empty");
-            Check("placeholder label says placeholder",
-                  Turntable.PlaceholderLabel.ToUpperInvariant().Contains("PLACEHOLDER"),
-                  Turntable.PlaceholderLabel);
-            Check("placeholder label names the task that replaces it",
-                  Turntable.PlaceholderLabel.Contains("T11b"), Turntable.PlaceholderLabel);
+            DrawCmd c = dl.At(i);
+            if (c.Kind != DrawKind.Text || c.Str == null) continue;
+            string u = c.Str.ToUpperInvariant();
+            if (u.Contains("PLACEHOLDER") || u.Contains("NOT A RENDER") || u.Contains("T11B"))
+            { marked = c.Str; break; }
         }
+        Check("the capsule view prints no placeholder marking", marked == null, "drew " + marked);
+
+        // Clearing the flag also gives back the strip CoverPage reserved at the bottom of the slot
+        // for that marking, so the sprite is drawn TALLER than it was under T11a. The strip is a
+        // design-pixel constant private to CoverPage, so what is checked here is the consequence that
+        // is visible from outside: the sprite still fits the slot at the larger size.
+        float cx, cy, cw, ch;
+        CoverPage.CapsuleRect(W, H, out cx, out cy, out cw, out ch);
+        Check("the un-stripped sprite still fits the slot",
+              cy >= 0f && cy + ch <= H, cy + " + " + ch + " in " + H);
     }
 
     // ------------------------------------------------------------------ on the page

@@ -1,5 +1,16 @@
 #!/usr/bin/env python
 """
+SUPERSEDED 2026-09-02 by plugin/build/render_turntable.py — RUNNING THIS OVERWRITES THE REAL SPRITES.
+
+T11b's render half landed: art/cover/dragon_turn_*.png is now the real Crew Dragon + trunk, rendered
+from the MaTte0 CC-BY model, and Turntable.Placeholder is false. This script is kept as the generator
+of record for the stand-in set T11a was built against — everything below describes THAT, and the "not
+in the repo / T11b is held" framing is the position as it stood before the owner placed the model. If
+the sequence ever needs standing in again, run this AND set Turntable.Placeholder back to true; the
+test asserts the two agree, so a half-done swap fails the build rather than shipping unmarked art.
+
+--------------------------------------------------------------------------------------------------
+
 Generate the PLACEHOLDER capsule turntable sequence:
 
     GameData/DragonScreen/art/cover/dragon_turn_000.png ... dragon_turn_035.png

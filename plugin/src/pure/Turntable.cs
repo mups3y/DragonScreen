@@ -11,10 +11,12 @@
 //      T11a (this file)   the MODEL-INDEPENDENT half: the sequence naming, the frame picker, and
 //                         the drag-delta -> frame-index maths with wrap. All pure, so every one of
 //                         those is settled headlessly instead of on the glass.
-//      T11b (held)        the real trunk-inclusive render from the MaTte0 model, the glue that
-//                         turns a finger on the glass into calls to Drag below, and verifying the
-//                         gesture in the capsule. Until then the sequence on disk is the PLACEHOLDER
-//                         set written by plugin/build/make_turntable.py — see Placeholder.
+//      T11b render half   DONE 2026-09-02: the owner placed the MaTte0 model in the repo and the
+//                         real trunk-inclusive sequence is baked by plugin/build/render_turntable.py.
+//                         Placeholder below is now FALSE — see it for what that turns off.
+//      T11b glass half    still open: the glue that turns a finger on the glass into calls to Drag
+//                         below, and confirming how the gesture FEELS in the capsule (tracked with
+//                         the other capsule-only checks under S17).
 //
 // ---- WHY A CONTINUOUS `Turn` AND NOT AN INT FRAME ----
 // The obvious version keeps an int frame and adds `(int)(dx / pxPerFrame)` to it. That silently
@@ -71,21 +73,28 @@ namespace DragonScreen
         public const int FrameW = 512, FrameH = 1024;
 
         /// <summary>
-        /// TRUE while the shipped sequence is the marked PLACEHOLDER set, not the real render.
+        /// TRUE while the shipped sequence is a marked PLACEHOLDER set, not a real render.
         ///
-        /// §1.4 forbids passing invented art off as sourced art, and a stand-in that is not labelled
-        /// is exactly that. The page reads this and draws the label; T11b clears it in the same
-        /// commit that lands the real frames, so the label cannot outlive the placeholders or be
-        /// forgotten separately from them.
+        /// **FALSE since T11b's render half (2026-09-02)**: art/cover/dragon_turn_NNN.png is now the
+        /// real Crew Dragon + trunk, rendered by plugin/build/render_turntable.py from the MaTte0
+        /// CC-BY model (attribution in assets/ASSET_PROVENANCE.md). Clearing it turns off two things
+        /// in one move — the label the page printed over the sprite, and the strip CoverPage reserved
+        /// at the bottom of the slot to fit that label in.
+        ///
+        /// The MECHANISM stays. §1.4 forbids passing invented art off as sourced art, and a stand-in
+        /// that is not labelled is exactly that; if the sequence is ever re-stood-in (the 72-frame
+        /// experiment §5 leaves open, say), setting this back to true is the whole of the marking.
+        /// The test asserts on whichever way it is set, so the two cannot drift apart.
         ///
         /// `static readonly`, not `const`, deliberately: as a const the compiler folds every test of
         /// it and reports the other branch as unreachable code, so flipping it would trade one dead
         /// branch for another and the build would carry a warning either way round.
         /// </summary>
-        public static readonly bool Placeholder = true;
+        public static readonly bool Placeholder = false;
 
-        /// <summary>What the page prints over the placeholder sequence. Names the task that replaces
-        /// it, so the screen itself says what is missing.</summary>
+        /// <summary>What the page prints over a placeholder sequence — drawn only while
+        /// <see cref="Placeholder"/> is true, so nothing prints it today. Names the task that
+        /// replaced the stand-in, so the wording still says what happened.</summary>
         public const string PlaceholderLabel = "PLACEHOLDER SEQUENCE - T11b RENDERS THE REAL CAPSULE";
 
         /// <summary>The asset key for a frame, wrapped — so a caller that computed 36 or -1 gets a
@@ -184,9 +193,15 @@ namespace DragonScreen
         // ---- THE SIGN, AND THE ONE THING GLASS STILL DECIDES ----
         // Drag RIGHT advances the frame index, so the vehicle's near face follows the finger — the
         // "grab it and turn it" reading, not the "orbit the camera" one. That is correct ONLY if the
-        // sequence is rendered turning the same way (a default turntable render, near face moving
-        // right as the frame number rises, is). If T11b's render turns the other way, the fix is the
-        // sign of this one constant, and nothing else in the file moves.
+        // sequence is rendered turning the same way, and as of T11b's render half IT IS: the shipped
+        // frames put the vehicle at +i·10° about the up axis with the camera on the near side, so a
+        // surface feature enters at the LEFT limb and leaves at the RIGHT as the index rises. Both
+        // halves of that claim are checked — render_turntable.py derives it in its header, and the
+        // frames themselves were measured (the trunk's solar array enters at the left limb on frame
+        // 3 and leaves at the right on frame 33, its centroid moving right the whole way, and no
+        // other frame order produces that). What glass still decides is only how the GESTURE feels —
+        // the gearing below — not which way the vehicle turns. If it ever needs reversing, the fix is
+        // the sign of this one constant, and nothing else in the file moves.
 
         /// <summary>Frames advanced by dragging right across the full width of the slot.</summary>
         public const float FramesPerSlot = Count;

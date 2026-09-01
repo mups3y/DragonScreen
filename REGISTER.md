@@ -457,7 +457,7 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
   not clearing its lamp in the pure model (`PanelPolicy.ClearsArmedLamps` now owns both cases for glue and
   board alike).
 
-### T11 [O] Capsule turntable — **SPLIT** into T11a (DONE) + T11b (HELD) — this line is closed, do not take it
+### T11 [O] Capsule turntable — **SPLIT** into T11a (DONE) + T11b (render DONE, glue/glass HELD) — this line is closed, do not take it
 - **Read:** §5.  **Build:** source the MaTte0 model → render sprites → drag-rotate.  **DONE when:** preview,
   drag rotates.
 - **SPLIT 2026-09-02 (owner decision via the overseer; C1.7/C5 — living-register action only, `BUILD_PLAN`
@@ -505,12 +505,14 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
   - **NOT done here, on purpose (C1.1):** the real render, the glue drag plumbing, and the front-reset tap
     — all T11b, below.
 
-### T11b [O] Capsule turntable — real render + drag on glass — **HELD** (needs an owner action + a gate)
-- ⛔ **`/next` skips this line** — the first takeable task after T11a is **T12**.
-- **Held on:** §5's C1 model is **not in the repo**. C7 makes external URLs off-limits as build inputs, so
-  a build chat cannot fetch it — **the owner places a licence-clean, trunk-inclusive Crew Dragon model in
-  the repo** (§5 names MaTte0's Sketchfab CC-BY model; backups listed there). **CC-BY attribution to
-  MaTte0 is required** and must land in `assets/ASSET_PROVENANCE.md` with the render.
+### T11b [O] Capsule turntable — real render + drag on glass — render half **DONE**, glue/glass half **HELD**
+- ⛔ **`/next` still skips this line** — its remaining items need `install` + glass time, which only the
+  owner grants (C1.12). The first takeable task is still **T12**.
+- **Held on (resolved 2026-09-02 for the render half only):** §5's C1 model was not in the repo and C7 barred fetching it. **The
+  owner placed the model** — `assets/reference/models/crew_dragon_falcon_9 (1).glb` (+ a 4k twin and the
+  FBX zip as fallbacks) — and directed this pickup, so the render half ran as an **owner-directed** task
+  (C1.12: the gate was opened by the owner, not by the chat; the work is preview-only and covered by the
+  standing preview-only build-go).
 - **Build:** (1) render §5's C2 turntable — 36 frames @ 10° (72 if 36 reads steppy), capsule **with trunk**,
   written at `Turntable.FrameW`×`FrameH` (512×1024) over `art/cover/dragon_turn_NNN.png`; (2) clear
   `Turntable.Placeholder`, which removes the on-screen marking and the label strip in one move;
@@ -521,9 +523,60 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
   (deliberately not built in T11a: it would have been a control that moves nothing); (6) consider warming
   the sequence in `ImageStore` — 36 first-touch `File.ReadAllBytes` + `LoadImage` calls one per new frame
   is a hitch per frame through the first revolution.
-- **DONE when:** the sheet shows the real vehicle turning, and the drag is confirmed on glass.
-- ⛔ The on-glass half needs `install` + glass time, which are **the owner's to grant** (C1.12); this line
-  does not grant them. **Batch the capsule visit with S17** (the T10 click) **and S10** (the RT camera).
+
+- **RENDER HALF DONE 2026-09-02 — items (1), (2) and (3) above.**
+  - **New `plugin/build/render_turntable.py`** (the `make_turntable.py` precedent) — a headless Blender
+    5.1 / Cycles-CPU script that re-bakes the sequence from the untracked model, so the frames are
+    reproducible rather than a one-off. It **isolates Dragon + trunk and deletes the Falcon 9**, legs and
+    Merlins, splitting on **material** name rather than object name (an artist's object naming survives a
+    re-export less well than the material assignment does) and **refusing to render** if either the Dragon
+    or the booster set is missing — a swapped model fails loudly instead of quietly putting a launch
+    vehicle on the vehicle page. Camera is **orthographic**, so the silhouette cannot breathe between
+    frames; camera + all three lights hang off one rig empty that turns about the vehicle axis, which
+    fixes the lighting **relative to the camera** and stops the sequence strobing.
+  - **The 36 frames** — `art/cover/dragon_turn_000..035.png`, 512×1024 RGBA, transparent film, 10° apart,
+    the placeholder set overwritten in place. Framing is fitted to the **rotation-invariant** radius (the
+    largest distance of any vertex from the axis) at 0.90 of the sprite width, so no frame in the sequence
+    can clip: measured alpha extent is x∈[25,486], y∈[114,910] of 512×1024, identical top and bottom
+    margins. Width, not height, is the binding constraint — the vehicle is 1.73 tall per 1 across and the
+    sprite is 1:2.
+  - **(3) The rotation direction was CHECKED, not assumed, and needed no flip.** The frames were measured:
+    the trunk's solar array enters at the **left** limb on frame 3 and leaves at the **right** on frame 33,
+    its centroid moving monotonically right the whole way — i.e. the near face follows a rightward drag,
+    which is exactly `Turntable`'s documented sign. Brightness is even across the sweep (p95 luminance
+    184–193 on every frame), which is the measurement that says the fixed-to-camera lighting worked.
+  - **(2) `Turntable.Placeholder` cleared** — the on-screen PLACEHOLDER label and the 96 px strip
+    `CoverPage` reserved for it both go in the one move, so the sprite now gets the whole slot. The
+    marking **mechanism** is kept (§5 leaves a 72-frame variant open; a future stand-in must still be able
+    to mark itself), and `TurntableTest.Marking()` was **turned over** rather than deleted: it now asserts
+    the sequence is real, that the capsule view prints **no** placeholder/T11b text (read back off the
+    display list, so a label drawn from anywhere else is caught too), and that the un-stripped sprite
+    still fits the slot.
+  - **Provenance (§1.4 / C1.4):** `assets/ASSET_PROVENANCE.md` gained §6 — "Crew Dragon Falcon 9" by
+    **MaTte0 (@matteomansion)**, Sketchfab, **CC-BY 4.0**, rendered to `art/cover/dragon_turn_*.png` — plus
+    a fourth line in the release-notes attribution list, flagged as the one whose output actually **ships**.
+    The model files stay out of git (`assets/reference/` is gitignored in full), which is noted there along
+    with the consequence: a fresh clone can build the mod but must re-download to re-render.
+  - **One extra edit, declared:** `make_turntable.py` gained a `SUPERSEDED` stamp at the top — it now
+    warns that running it overwrites the real sprites, and marks its "the model is not in the repo /
+    T11b is held" framing as the position before the owner placed the model. Removing that false claim
+    is part of clearing the placeholder, not separate work.
+  - **Gate (C1.3) met:** `python plugin/build.py test` **green — every suite 0 failed, 5797 checks across
+    the run**, the turntable suite 224 → 225. Preview re-rendered and **inspected** —
+    `ui_cover_turntable_0..3.png` walk 0°/90°/180°/270°
+    through the REAL `Turntable.Drag` and close the loop back on frame 0, and `ui_turntable_sheet.png`
+    shows all 36: real capsule + trunk, clean step frame to frame, **no placeholder marks**, no
+    MISSING-asset line, no display-list overflow. No new compiler warnings.
+- **STILL OPEN — items (4), (5), (6):** the glue drag plumbing, the reset/"front" tap, and the `ImageStore`
+  warm. Item (6) now has real numbers to decide on: the sequence went 0.5 MB → **11.5 MB on disk**
+  (≈320 KB a frame, PNG at max compression — photographic gradients, not the stand-in's flat wireframe),
+  and 512×1024 RGBA decodes to **2 MB of texture each**, so a full revolution touches ~75 MB if every frame
+  is held. That is the warm/evict question, and it is a glue decision, not a render one. ⛔ These need
+  `install` + glass time, which are **the owner's to grant** (C1.12); this line does not grant them. The remaining T11b question — **how the drag FEELS on glass** — is already tracked by
+  **S17**, which batches the capsule visit with the T10 click and **S10**'s RT camera, so no new held line
+  is opened here.
+- **DONE when:** the drag is plumbed and confirmed on glass. (The sheet showing the real vehicle turning:
+  met above.)
 
 ### T12 [S] Ascent/Launch page — **TODO**
 - **Read:** §8 + §3.  **Build:** F9 schematic + event list.  **DONE when:** preview.
@@ -754,7 +807,9 @@ frame allows. §11b itself is research and stays as written. Fold into the next 
 contradicts the tree.
 
 ### S17 [owner-gated] Verify T10 audible click on glass — held for a capsule session (batch with T11b drag-rotate + S10 RT camera)
-Logged by T10 (C1.1/C1.7), 2026-09-02. The click is **built and shipped** —
+Logged by T10 (C1.1/C1.7), 2026-09-02. **T11b's render half landed 2026-09-02**, so the T11b item batched
+here is now specifically the **drag feel** — gearing and sign against the real sprites — once its glue is
+plumbed; the sequence itself no longer needs glass. The click is **built and shipped** —
 `GameData/DragonScreen/sounds/panel_click.wav` + `src/PanelAudio.cs`, played on every press — but a 60 ms
 sample cannot be judged from a PNG, so its verification is the one T10 criterion the preview-only build-go
 cannot cover. Needs `install` + glass time, which are **the owner's to grant** (C1.12); this line does not

@@ -99,11 +99,14 @@ font by hand. The release route is MAS's bitmap-font path — a texture plus `Ch
 
 ---
 
-## Attribution owed in the release notes (CC BY 4.0, three lines)
+## Attribution owed in the release notes (CC BY 4.0, four lines)
 
 - SpaceX Crew Dragon Dashboard UI — Figma Community, CC BY 4.0
 - SpaceX Crew Dragon Flight Control UI — Figma Community, CC BY 4.0
 - SpaceX Dragon Interface (Rodrigo do Carmo) — Figma Community, CC BY 4.0
+- Crew Dragon Falcon 9 (MaTte0 / @matteomansion) — Sketchfab, CC BY 4.0 — **shipped**, as the
+  rendered capsule turntable (§6 below). The only one of the four whose output is in the mod's own
+  art folder rather than only informing the layout, so this line is the one that cannot be dropped.
 
 ## Not used
 
@@ -157,3 +160,47 @@ Nobody supplies colliders for Tundra's button meshes, because nobody has built o
 must be created — but the MECHANISM is ported from MIT-licensed MAS, not invented. Neither mod is
 installed: MAS would render nothing (Tundra ships no MAS IVA) and the project already decided
 against depending on it, and MOARdVPlus is an Apollo capsule.
+
+---
+
+## 6. `reference/models/` — the CREW DRAGON 3D MODEL. **SHIPPED as a render.** Added 2026-09-02.
+
+The only entry on this page whose output goes into `plugin/GameData/`. Everything above is reference
+that informs geometry we then draw ourselves; this one is somebody else's model, rendered, and the
+render is in the mod. So the attribution is not optional and not a courtesy.
+
+- **Work:** "Crew Dragon Falcon 9"
+- **Author:** **MaTte0** (**@matteomansion**)
+- **Source:** https://sketchfab.com/3d-models/crew-dragon-falcon-9-c30dd3d60bce45c593af7e25c69638d7
+- **Licence:** **CC BY 4.0** — free to use commercially and in a GPL-3.0 project, **attribution
+  required**. Verified on the model page; recorded in `docs/BUILD_PLAN.md` §5 (C1) as the vetted
+  candidate before it was downloaded.
+- **Used for:** the capsule turntable on the VEHICLE page's Capsule camera view —
+  `plugin/GameData/DragonScreen/art/cover/dragon_turn_000.png … dragon_turn_035.png`, 36 frames at
+  10° of azimuth, 512×1024 RGBA with a transparent background. These files ARE the derivative work
+  the licence covers.
+- **Rendered by:** `plugin/build/render_turntable.py` (Blender 5.1, Cycles CPU, headless). The script
+  isolates the Dragon capsule + trunk and deletes the Falcon 9, legs and Merlins before the camera is
+  placed — the mod ships the spacecraft, not the launch vehicle.
+- **What was NOT taken:** no mesh, texture, material or model file from this work is in
+  `plugin/GameData/`. The mod ships 36 PNGs.
+
+### The model files themselves are NOT in git
+
+`assets/reference/` is gitignored in full (see the top of `.gitignore`) — the same position taken for
+every other third-party source in this tree: republishing someone else's work inside the repo is a
+separate act from using it, and it is not ours to do. The files sit on disk only:
+
+    crew_dragon_falcon_9 (1).glb    3.4 MB, 1k textures   <- the one rendered from
+    crew_dragon_falcon_9.glb        32 MB, 4k textures    <- fallback; identical at sprite size
+    crew-dragon-falcon-9.zip        40 MB, FBX + textures <- fallback
+
+**Consequence to know about:** a fresh clone can rebuild the mod but cannot re-render the turntable —
+the PNGs are the tracked artefact and the script is the record of how they were made. Re-download from
+the Sketchfab link above to re-run it.
+
+### Trademark
+
+Unchanged by this: the render shows SpaceX markings that are part of the model's textures, and the
+trademark position in the section above still applies — the *product* is not branded SpaceX, and the
+"Dragon"/"Crew Dragon" name is not used as product branding.

@@ -360,10 +360,11 @@ namespace DragonScreen
         // ---- THE CAPSULE TURNTABLE (T11a, §5) ------------------------------------------------
         //
         // The sprite fills the same share of the slot the dragon.png still did (0.86 of its height,
-        // centred), with one difference: while the sequence on disk is the PLACEHOLDER set, a strip
-        // is reserved at the bottom of the slot for the label that says so, and the sprite is centred
-        // in what is left. With the real render in (T11b clears Turntable.Placeholder) the strip is
-        // zero and the geometry is exactly what the still had.
+        // centred), with one difference: while the sequence on disk is a PLACEHOLDER set, a strip is
+        // reserved at the bottom of the slot for the label that says so, and the sprite is centred in
+        // what is left. T11b's render half landed the real frames and cleared Turntable.Placeholder,
+        // so the strip is zero today and the geometry is exactly what the still had — the branch is
+        // kept because the marking mechanism is (see Turntable.Placeholder).
         const float CapsuleFill = 0.86f;              // of the available slot height
         const float CapsuleLabelStrip = 96f;          // design px, placeholder marking only
 
