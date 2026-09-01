@@ -514,6 +514,79 @@ public static class PreviewMain
                                   + " (want " + Turntable.FrontFrame + ")");
             }
 
+            // ---- THE GESTURE, AS THE GLUE PLAYS IT (T11b items 4 + 5) ----
+            // The four above are driven by Drag. These are driven by the GESTURE the glue actually
+            // calls - Turntable.Press, one Turntable.Move per pointer sample, then Turntable.Release
+            // - with the pointer positions taken from CoverPage.CapsuleRect, which is the same rect
+            // the sprite is drawn from and the same one CapsuleHit accepts a press in. So this is the
+            // whole chain from "a finger is at page x" to "this frame is on the glass", short only of
+            // ScreenTouch's raycast, which needs the capsule.
+            {
+                float sx, sy, sw, sh;
+                CoverPage.CapsuleRect(CW, CH, out sx, out sy, out sw, out sh);
+                MapView cv = MapProjection.WithMode(MapProjection.Default(), NavMode.Planet);
+
+                // A press in the middle of the vehicle, then a slide to the right delivered as four
+                // samples - the shape ScreenPainter.TouchDrag sees, one per rendered frame.
+                float x0 = sx + sw * 0.5f;
+                TurntableTouch g = Turntable.Press(x0);
+                TurntableState t = Turntable.Front();
+                Console.WriteLine("  gesture: press at x=" + (int)x0 + " on a "
+                                  + (int)sw + " px capsule slot");
+                for (int i = 0; i < 4; i++)
+                {
+                    DisplayList cdl = new DisplayList(600);
+                    CoverPage.Build(cdl, CW, CH, ps, cv, 1, CoverPage.CoverCam.Capsule, t);
+                    if (cdl.Overflowed)
+                        Console.WriteLine("  WARNING COVER GESTURE OVERFLOWED at " + cdl.Capacity);
+                    string path = Path.Combine(outDir, "ui_cover_turntable_drag_" + i + ".png");
+                    Render(cdl, CW, CH, path);
+                    Console.WriteLine("  " + path + "   frame " + Turntable.FrameOf(t)
+                                      + "  az " + (int)Turntable.AngleOf(t)
+                                      + "  travelled " + (int)g.TravelPx + " px");
+                    t = Turntable.Move(t, g, x0 + sw * 0.22f * (i + 1), sw, out g);
+                }
+
+                // Letting go of a real drag leaves the vehicle where the finger left it.
+                TurntableTouch after;
+                Console.WriteLine("  gesture: release after " + (int)g.TravelPx + " px is a "
+                                  + (Turntable.IsTap(g, sw) ? "TAP" : "DRAG"));
+                t = Turntable.Release(t, g, sw, out after);
+                Console.WriteLine("  gesture: after release, frame " + Turntable.FrameOf(t));
+
+                // ---- THE RESET (section 5's C4 "front tap") ----
+                // From that turned state, a press and release that never travelled: the vehicle goes
+                // back to the AUTHORED front, frame 0, which is what this PNG has to show.
+                TurntableTouch tap = Turntable.Press(x0);
+                Console.WriteLine("  gesture: a press with no travel is a "
+                                  + (Turntable.IsTap(tap, sw) ? "TAP" : "DRAG"));
+                t = Turntable.Release(t, tap, sw, out after);
+
+                DisplayList rdl = new DisplayList(600);
+                CoverPage.Build(rdl, CW, CH, ps, cv, 1, CoverPage.CoverCam.Capsule, t);
+                if (rdl.Overflowed)
+                    Console.WriteLine("  WARNING COVER RESET OVERFLOWED at " + rdl.Capacity);
+                string rpath = Path.Combine(outDir, "ui_cover_turntable_reset.png");
+                Render(rdl, CW, CH, rpath);
+                Console.WriteLine("  " + rpath + "   frame " + Turntable.FrameOf(t)
+                                  + "  " + Turntable.KeyOf(t)
+                                  + "   (want frame " + Turntable.FrontFrame + ")");
+
+                // ---- WHAT THE RESIDENCY POLICY WOULD HOLD (T11b item 6) ----
+                // No PNG to show: it is a memory claim, so it is printed. ImageStore acts on exactly
+                // these numbers - this is the same pure policy, asked the same question.
+                int[] one = { Turntable.FrameOf(t), Turntable.NotShowing, Turntable.NotShowing };
+                int[] three = { 0, 12, 24 };
+                Console.WriteLine("  residency: one screen holds " + Turntable.ResidentCount(one)
+                                  + " frames ("
+                                  + (Turntable.ResidentCount(one) * (long)Turntable.FrameBytes / (1024 * 1024))
+                                  + " MB); three diverged screens hold "
+                                  + Turntable.ResidentCount(three) + " ("
+                                  + (Turntable.ResidentCount(three) * (long)Turntable.FrameBytes / (1024 * 1024))
+                                  + " MB); the whole sequence would be "
+                                  + ((long)Turntable.Count * Turntable.FrameBytes / (1024 * 1024)) + " MB");
+            }
+
             // EVERY frame of the sequence on one sheet. Two jobs: it is the only render that touches
             // all 36 keys, so a frame missing from art/cover/ shows up here as a MISSING line rather
             // than on the glass; and it is how the sequence itself is judged - whether consecutive

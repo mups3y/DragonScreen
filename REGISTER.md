@@ -14,8 +14,8 @@ never reorder past a DONE without a note.
 🟢 **PREVIEW-ONLY BUILD-GO — the OWNER's decision, 2026-09-02, granted via the overseer.** Part A **pure
 code + `python plugin/build.py test` + `python plugin/build.py preview` are cleared**. `python
 plugin/build.py install` and glass time are NOT: they need a SEPARATE, explicit owner go, so a task whose
-done-criteria can only be met in the capsule (S10's RT planet camera, T10's audible click, T11b's drag-rotate)
-stops and asks rather than installing. **T2–T4 are covered retroactively by this go** — they are on-plan and
+done-criteria can only be met in the capsule (S10's RT planet camera, T10's audible click, T11b's drag
+FEEL — all three batched under S17) stops and asks rather than installing. **T2–T4 are covered retroactively by this go** — they are on-plan and
 preview-only, so nothing is reverted. Part B (T15–T22) remains DESIGNED, not started.
 ⛔ **Only the OWNER opens or widens this gate.** A build chat never grants one, never lifts one, and never
 records a decision as the owner's unless the owner stated it in that chat (C1.12).
@@ -505,9 +505,12 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
   - **NOT done here, on purpose (C1.1):** the real render, the glue drag plumbing, and the front-reset tap
     — all T11b, below.
 
-### T11b [O] Capsule turntable — real render + drag on glass — render half **DONE**, glue/glass half **HELD**
-- ⛔ **`/next` still skips this line** — its remaining items need `install` + glass time, which only the
-  owner grants (C1.12). The first takeable task is still **T12**.
+### T11b [O] Capsule turntable — real render + drag plumbing — **DONE** (both halves) — this line is closed, do not take it
+- ⛔ **`/next` skips this line.** Nothing is left in it that a build chat can take: the render half landed
+  2026-09-02 and the glue half landed 2026-09-02 (both below). The one T11b question a PNG cannot answer —
+  **how the drag FEELS on glass**, i.e. the sign and the gearing against the real sprites — is tracked by
+  **S17**, batched with the T10 click and S10's RT camera; it is NOT a held T11b item and there is no
+  NEEDS-WORK here. The first takeable task is **T12**.
 - **Held on (resolved 2026-09-02 for the render half only):** §5's C1 model was not in the repo and C7 barred fetching it. **The
   owner placed the model** — `assets/reference/models/crew_dragon_falcon_9 (1).glb` (+ a 4k twin and the
   FBX zip as fallbacks) — and directed this pickup, so the render half ran as an **owner-directed** task
@@ -567,16 +570,56 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
     through the REAL `Turntable.Drag` and close the loop back on frame 0, and `ui_turntable_sheet.png`
     shows all 36: real capsule + trunk, clean step frame to frame, **no placeholder marks**, no
     MISSING-asset line, no display-list overflow. No new compiler warnings.
-- **STILL OPEN — items (4), (5), (6):** the glue drag plumbing, the reset/"front" tap, and the `ImageStore`
-  warm. Item (6) now has real numbers to decide on: the sequence went 0.5 MB → **11.5 MB on disk**
-  (≈320 KB a frame, PNG at max compression — photographic gradients, not the stand-in's flat wireframe),
-  and 512×1024 RGBA decodes to **2 MB of texture each**, so a full revolution touches ~75 MB if every frame
-  is held. That is the warm/evict question, and it is a glue decision, not a render one. ⛔ These need
-  `install` + glass time, which are **the owner's to grant** (C1.12); this line does not grant them. The remaining T11b question — **how the drag FEELS on glass** — is already tracked by
-  **S17**, which batches the capsule visit with the T10 click and **S10**'s RT camera, so no new held line
-  is opened here.
-- **DONE when:** the drag is plumbed and confirmed on glass. (The sheet showing the real vehicle turning:
-  met above.)
+- **GLUE HALF DONE 2026-09-02 — items (4), (5) and (6). Owner-directed pickup (C1.12: the owner opened
+  this, the chat did not); preview-only throughout, so it is covered by the standing preview-only build-go
+  and NOTHING was installed.**
+  - **(4) Press / drag / release.** `ScreenTouch` was `OnMouseDown`-only; it now also takes `OnMouseDrag`
+    and `OnMouseUp` — the same Unity mechanism on the same component, so the MAS-ported raycast is
+    unchanged and simply factored into one `PagePoint()` both paths call. The painter gained
+    `TouchDown` / `TouchDrag` / `TouchUp` (the old `Touch` renamed for what it now is), holds a
+    `TurntableState` + `TurntableTouch` per screen, and threads the state through a new
+    `FigmaUI.Build` overload into `CoverPage.Build`. A press is offered to the capsule **last**, only on
+    what `CoverPage.HitTest` returned `None` for, so the NEXT VIEW pill drawn over the slot still wins.
+  - **(5) The reset is a TAP on the vehicle** (§5 C4), not a new button — nothing is added to a page whose
+    layout is measured from the reference. What separates a tap from a drag is measured in **frames of
+    rotation, not pixels** (`Turntable.TapSlopFrames` = half a frame, through the same gearing), so it is
+    the same gesture at 1280, at 2560 and at the 2× cover render; and travel is the **path**, not the
+    displacement, so a wiggle that ends where it began is a drag and does not snap to the front.
+  - **(6) Resident texture is now BOUNDED.** 36 frames × 512×1024 RGBA = **72 MB** if a full revolution
+    keeps everything it touched. The policy is a **window** — `WarmRadius` 2, so five frames — around what
+    each screen is showing, plus the front pinned while anyone is looking: **one screen holds 5–6 frames
+    (10–12 MB)**, three screens diverged hold 15–16 (30–32 MB), and when no screen is on the capsule view
+    the sequence is released entirely. Residency is the **union over screens** on purpose: one shared
+    window would have three screens evicting each other's frames and re-reading them from disk every
+    frame, which is worse than the hitch it exists to remove. Warming loads **at most one frame per draw**,
+    nearest-first, so arriving at the view costs a little on each of five frames instead of one hitch.
+  - **The split that makes it testable:** all of the above is decided in **pure `Turntable`**
+    (`Press`/`Move`/`Release`/`IsTap`, `InWindow`/`IsResident`/`ResidentCount`/`WarmOffset`/`Distance`)
+    plus `CoverPage.CapsuleHit` (the press region — the SAME `CapsuleRect` the sprite is drawn from,
+    PageAction's one-rect rule). `ScreenTouch` and the painter's three entry points hold **no decisions at
+    all**, which is the most a headless test can be denied. `ImageStore` gained only a load, a `Destroy`
+    and a sweep, acting on the pure policy's answers.
+  - **One extra edit, declared:** `Turntable.Key` now reads a table built once at type init instead of
+    building a string per call. The evict sweep asks for all 36 keys whenever the centre moves, and the
+    draw asks for one every frame; the old version allocated on both paths, against DisplayList's
+    no-allocation rule. Same keys, same wrap — the naming tests are untouched and still pass.
+  - **Gate (C1.3) met — all preview/headless, no `install`, no glass:** `python plugin/build.py test`
+    **green, every suite 0 failed — 10630 checks across the run**; the turntable suite 225 → **5058 checks** with three new sections
+    (`Gesture` plays whole press→move→release chains exactly as the glue calls them, including the tap
+    that resets and the wiggle that must not; `Region` pins the press region to the drawn rect and proves
+    the capsule does not shadow the page's controls; `Residency` sweeps every centre and 864 three-screen
+    combinations and proves the resident set is never the whole sequence). **No new compiler warnings**
+    (11 before, 11 after — all pre-existing). Five new previews rendered and **inspected**:
+    `ui_cover_turntable_drag_0..3.png`, driven through the real gesture from a press at the middle of
+    `CapsuleRect`, step 0 → 8 → 16 → 24 with the vehicle turning the same way throughout; and
+    `ui_cover_turntable_reset.png`, a press with no travel from frame 32, back on the **authored front**
+    (frame 000, flag and meatball square-on) — identical to the press frame. The preview log also prints
+    the residency numbers, from the same pure policy `ImageStore` acts on.
+  - **§1.4 / C1.4:** N/A — no new source content, no art, no label; `PanelMap.cs` and the label docs are
+    untouched. **FRONT unchanged:** the model's authored frame 0 is still the front (the owner's A1
+    decision); nothing was re-baked and `art/cover/` is byte-identical.
+- **DONE when:** ~~the drag is plumbed and confirmed on glass~~ → **the drag is plumbed** (met above).
+  Confirming how it FEELS in the capsule is **S17's**, not this line's.
 
 ### T12 [S] Ascent/Launch page — **TODO**
 - **Read:** §8 + §3.  **Build:** F9 schematic + event list.  **DONE when:** preview.
@@ -807,9 +850,14 @@ frame allows. §11b itself is research and stays as written. Fold into the next 
 contradicts the tree.
 
 ### S17 [owner-gated] Verify T10 audible click on glass — held for a capsule session (batch with T11b drag-rotate + S10 RT camera)
-Logged by T10 (C1.1/C1.7), 2026-09-02. **T11b's render half landed 2026-09-02**, so the T11b item batched
-here is now specifically the **drag feel** — gearing and sign against the real sprites — once its glue is
-plumbed; the sequence itself no longer needs glass. The click is **built and shipped** —
+Logged by T10 (C1.1/C1.7), 2026-09-02. **T11b landed in full 2026-09-02 — render half AND glue half** — so
+the T11b item batched here is now, and only, the **drag feel**: whether the sign reads as grabbing the
+vehicle rather than orbiting the camera, and whether one full sweep of the slot per revolution
+(`Turntable.FramesPerSlot`) is the right gearing on glass. The sequence and the plumbing no longer need
+glass; if the feel is wrong the fix is one constant each (`FramesPerSlot` for the gearing, the sign of the
+drag for the direction) and nothing else moves. **Also check the reset:** a tap on the capsule — under half
+a frame of travel — snaps it back to the authored front, and a slow deliberate turn must NOT be mistaken
+for one. The click is **built and shipped** —
 `GameData/DragonScreen/sounds/panel_click.wav` + `src/PanelAudio.cs`, played on every press — but a 60 ms
 sample cannot be judged from a PNG, so its verification is the one T10 criterion the preview-only build-go
 cannot cover. Needs `install` + glass time, which are **the owner's to grant** (C1.12); this line does not

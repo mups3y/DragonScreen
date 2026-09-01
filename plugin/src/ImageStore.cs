@@ -78,6 +78,88 @@ namespace DragonScreen
             }
         }
 
+        // ---- THE CAPSULE TURNTABLE: A BOUNDED RESIDENT SET (T11b item 6) ----
+        //
+        // Every other asset here obeys "load once, keep for ever", which is right for the couple of
+        // dozen page PNGs and very wrong for the turntable: 36 frames at 512x1024 RGBA is ~75 MB of
+        // texture, and one drag round the vehicle touches all of them. So the sequence is the ONE
+        // asset with a residency policy, and the policy itself is pure - Turntable.IsResident decides
+        // what may be held, this file only does what it says. That split is deliberate: what is left
+        // here is a load, a Destroy and a loop, which is all the glue is allowed to be.
+        //
+        // WHAT THIS DOES PER CALL, AND WHY IT IS CHEAP: nothing at all unless the centre frame moved
+        // (the steady state - the crew is looking, not dragging), and at most ONE decode when it did.
+        // The rest is a 36-iteration integer sweep over precomputed keys, no allocation.
+
+        /// <summary>Frame each screen's capsule view is centred on, or Turntable.NotShowing. Sized
+        /// and indexed exactly as ScreenPainter's livePage: screenIndex 1..3, slot 0 unused.</summary>
+        private static readonly int[] turnCentre = { Turntable.NotShowing, Turntable.NotShowing,
+                                                     Turntable.NotShowing, Turntable.NotShowing };
+
+        /// <summary>
+        /// This screen is showing the capsule view, centred on <paramref name="frame"/>: keep the
+        /// window around it warm and let go of everything outside every screen's window. Called from
+        /// the painter's build path, once per screen per frame.
+        /// </summary>
+        internal static void WarmTurntable(int screen, int frame)
+        {
+            if (screen < 0 || screen >= turnCentre.Length) return;
+            int f = Turntable.WrapFrame(frame);
+            if (turnCentre[screen] == f) { WarmOne(); return; }
+            turnCentre[screen] = f;
+            Sweep();
+            WarmOne();
+        }
+
+        /// <summary>This screen is not showing the capsule view. Frames no OTHER screen wants are
+        /// released - so leaving the page from the last screen showing it frees the sequence.</summary>
+        internal static void ReleaseTurntable(int screen)
+        {
+            if (screen < 0 || screen >= turnCentre.Length) return;
+            if (turnCentre[screen] == Turntable.NotShowing) return;
+            turnCentre[screen] = Turntable.NotShowing;
+            Sweep();
+        }
+
+        /// <summary>Evict every frame the policy no longer allows.</summary>
+        private static void Sweep()
+        {
+            for (int i = 0; i < Turntable.Count; i++)
+            {
+                if (Turntable.IsResident(i, turnCentre)) continue;
+                string key = Turntable.Key(i);
+                Texture2D t;
+                if (!assetCache.TryGetValue(key, out t)) continue;
+                if (t != null) UnityEngine.Object.Destroy(t);
+                assetCache.Remove(key);
+            }
+        }
+
+        /// <summary>
+        /// Load AT MOST ONE not-yet-resident frame, nearest to a centre first. One per call rather
+        /// than the whole window in one go: opening the view would otherwise be five file reads and
+        /// five decodes inside a single frame, which is the hitch this exists to remove, just moved.
+        /// </summary>
+        private static void WarmOne()
+        {
+            for (int s = 0; s < turnCentre.Length; s++)
+            {
+                int c = turnCentre[s];
+                if (c < 0) continue;
+                for (int i = 0; i <= Turntable.WarmSteps; i++)
+                {
+                    // The window nearest-first, and then the pinned front - which the reset tap lands
+                    // on however far away it is, so it is worth having ready even when the drag is
+                    // nowhere near it. Normally already loaded: the view opens on the front.
+                    int f = (i < Turntable.WarmSteps) ? c + Turntable.WarmOffset(i) : Turntable.FrontFrame;
+                    string key = Turntable.Key(f);
+                    if (assetCache.ContainsKey(key) || assetFailed.Contains(key)) continue;
+                    ResolveAsset(key);
+                    return;
+                }
+            }
+        }
+
         // ---- THE BODY MAP ----
         // ---- WHICH SLOT, AND WHY THIS IS A LIST ----
         private static CelestialBody mapBody;
@@ -224,6 +306,10 @@ namespace DragonScreen
                 if (kv.Value != null) UnityEngine.Object.Destroy(kv.Value);
             assetCache.Clear();
             assetFailed.Clear();
+
+            // The turntable's residency goes with the textures it describes; leaving a stale centre
+            // behind would have the next Sweep believe frames are held that were just destroyed.
+            for (int i = 0; i < turnCentre.Length; i++) turnCentre[i] = Turntable.NotShowing;
 
             mapBody = null;
             mapTexture = null;

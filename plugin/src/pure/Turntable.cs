@@ -14,9 +14,13 @@
 //      T11b render half   DONE 2026-09-02: the owner placed the MaTte0 model in the repo and the
 //                         real trunk-inclusive sequence is baked by plugin/build/render_turntable.py.
 //                         Placeholder below is now FALSE — see it for what that turns off.
-//      T11b glass half    still open: the glue that turns a finger on the glass into calls to Drag
-//                         below, and confirming how the gesture FEELS in the capsule (tracked with
-//                         the other capsule-only checks under S17).
+//      T11b glue half     DONE 2026-09-02: the gesture (press / drag / release, and the tap that
+//                         resets to the front) and the RESIDENCY policy that bounds how many 2 MB
+//                         frames may be in memory at once. Both live here, pure, for the same
+//                         reason the maths does — see their own headers below.
+//      T11b glass half    all that is left: how the gesture FEELS in the capsule — the sign and the
+//                         gearing against the real sprites. Tracked with the other capsule-only
+//                         checks under S17; nothing in this file is waiting on it.
 //
 // ---- WHY A CONTINUOUS `Turn` AND NOT AN INT FRAME ----
 // The obvious version keeps an int frame and adds `(int)(dx / pxPerFrame)` to it. That silently
@@ -42,6 +46,22 @@ namespace DragonScreen
     public struct TurntableState
     {
         public float Turn;
+    }
+
+    /// <summary>
+    /// A press in progress on the capsule: the turntable's gesture, between OnMouseDown and
+    /// OnMouseUp. Like TurntableState a VALUE - the caller holds it, every operation returns a new
+    /// one - and for the same reason: it lets a headless test play a whole gesture through the real
+    /// functions the glue calls.
+    /// </summary>
+    public struct TurntableTouch
+    {
+        /// <summary>A press landed on the capsule and has not been released yet.</summary>
+        public bool Dragging;
+        /// <summary>Page x of the most recent sample - the next move is measured from it.</summary>
+        public float LastX;
+        /// <summary>Total |dx| travelled since the press. The path, not the displacement.</summary>
+        public float TravelPx;
     }
 
     public static class Turntable
@@ -97,21 +117,32 @@ namespace DragonScreen
         /// replaced the stand-in, so the wording still says what happened.</summary>
         public const string PlaceholderLabel = "PLACEHOLDER SEQUENCE - T11b RENDERS THE REAL CAPSULE";
 
-        /// <summary>The asset key for a frame, wrapped — so a caller that computed 36 or -1 gets a
-        /// real frame rather than a missing-asset warning. Three digits: 36 frames today, and 72
-        /// (§5's fallback) still fits without renaming the set.</summary>
-        public static string Key(int frame)
+        // Every key, built ONCE at type init. The keys are needed in two places that both run every
+        // frame — the draw (one key) and the warm/evict sweep (all Count of them) — and building
+        // them on demand allocated a char[] and two strings per call, which is the no-allocation
+        // rule in DisplayList's header broken at the least visible place. A 36-entry table is 36
+        // strings, for the life of the process.
+        static readonly string[] Keys = BuildKeys();
+
+        static string[] BuildKeys()
         {
-            int f = WrapFrame(frame);
-            // Built by hand rather than with a format string: this runs inside the draw path, and
-            // the no-allocation rule in DisplayList's header applies to everything it calls. Three
-            // digits, zero-padded, no culture in play.
-            char[] d = new char[3];
-            d[0] = (char)('0' + (f / 100) % 10);
-            d[1] = (char)('0' + (f / 10) % 10);
-            d[2] = (char)('0' + f % 10);
-            return KeyPrefix + new string(d);
+            string[] k = new string[Count];
+            for (int f = 0; f < Count; f++)
+            {
+                // Three digits, zero-padded, no culture in play: 36 frames today, and 72 (§5's
+                // fallback) still fits without renaming the set.
+                char[] d = new char[3];
+                d[0] = (char)('0' + (f / 100) % 10);
+                d[1] = (char)('0' + (f / 10) % 10);
+                d[2] = (char)('0' + f % 10);
+                k[f] = KeyPrefix + new string(d);
+            }
+            return k;
         }
+
+        /// <summary>The asset key for a frame, wrapped — so a caller that computed 36 or -1 gets a
+        /// real frame rather than a missing-asset warning.</summary>
+        public static string Key(int frame) { return Keys[WrapFrame(frame)]; }
 
         /// <summary>The azimuth a frame was rendered at, in degrees, 0 at the front.</summary>
         public static float AngleOf(int frame) { return WrapFrame(frame) * StepDegrees; }
@@ -232,6 +263,184 @@ namespace DragonScreen
             TurntableState o;
             o.Turn = Wrap(Wrap(s.Turn) + DragFrames(dxPanelPx, slotWidthPx));
             return o;
+        }
+
+        // ---- THE GESTURE: PRESS, DRAG, RELEASE (T11b items 4 + 5) ---------------------------
+        //
+        // ---- WHY THE GESTURE IS PURE AND NOT LEFT IN THE GLUE ----
+        // ScreenTouch can only be exercised in the capsule: it needs InternalCamera, a collider and
+        // a mouse. So everything it could get WRONG is moved off it and into here - where the press
+        // remembers its x, how a move turns into a call to Drag, how far a finger travelled, and the
+        // one judgement call in the whole gesture (was that a drag or a tap?). What is left on the
+        // glue side is three one-line forwards, which is the least a headless test can be denied.
+        //
+        // ---- THE RESET IS A TAP ON THE VEHICLE, NOT A BUTTON ----
+        // Section 5's C4 asks for "a reset/front tap". A tap on the capsule itself is the whole
+        // control: it needs no new chrome on a page whose layout is measured from the reference, and
+        // it is the gesture the object already invites - you grabbed it to turn it, you tap it to
+        // let it go back. Nothing else on the page moves, and nothing new is drawn.
+        //
+        // ---- WHAT COUNTS AS A TAP, AND WHY IT IS MEASURED IN FRAMES ----
+        // Not "under N pixels": N would mean a different gesture on the 1280 preview, the 2560
+        // RenderTexture and the 2x cover render, exactly as a fixed pixels-per-frame would (see the
+        // drag header). It is measured in FRAMES OF ROTATION, through the same gearing: a press and
+        // release that turned the vehicle less than half a frame never showed the crew a different
+        // sprite, so calling it a tap cannot contradict anything they saw. Travel is the total PATH,
+        // not the net displacement, so a wiggle that ends where it started is a drag, not a tap.
+
+        /// <summary>Total travel, in frames of rotation, a press-and-release may cover and still be
+        /// a tap. Half a frame: see the header - below this the sprite on the glass never changed.</summary>
+        public const float TapSlopFrames = 0.5f;
+
+        /// <summary>No press in progress.</summary>
+        public static TurntableTouch Idle()
+        {
+            TurntableTouch g; g.Dragging = false; g.LastX = 0f; g.TravelPx = 0f; return g;
+        }
+
+        /// <summary>A press landed on the capsule at page x. Nothing turns yet - a press that never
+        /// moves is a tap, and which of the two it was is only known at release.</summary>
+        public static TurntableTouch Press(float px)
+        {
+            TurntableTouch g; g.Dragging = true; g.LastX = px; g.TravelPx = 0f; return g;
+        }
+
+        /// <summary>
+        /// A drag sample: the pointer is now at page x. Returns where the turntable has turned to;
+        /// <paramref name="moved"/> is the advanced gesture. A sample arriving with no press in
+        /// progress is ignored rather than treated as a press - the glue gets a move every frame the
+        /// button is held, including ones whose press was claimed by some other control.
+        /// </summary>
+        public static TurntableState Move(TurntableState s, TurntableTouch g, float px,
+                                          float slotWidthPx, out TurntableTouch moved)
+        {
+            moved = g;
+            if (!g.Dragging) return s;
+            if (float.IsNaN(px) || float.IsInfinity(px)) return s;   // a sample off a failed raycast
+
+            float dx = px - g.LastX;
+            moved.LastX = px;
+            moved.TravelPx = g.TravelPx + Math.Abs(dx);
+            return Drag(s, dx, slotWidthPx);
+        }
+
+        /// <summary>Was this press-and-release a tap rather than a drag? See TapSlopFrames.</summary>
+        public static bool IsTap(TurntableTouch g, float slotWidthPx)
+        {
+            if (!g.Dragging) return false;
+            float frames = DragFrames(g.TravelPx, slotWidthPx);
+            if (frames < 0f) frames = -frames;
+            return frames <= TapSlopFrames;
+        }
+
+        /// <summary>
+        /// The press ended. A tap resets the sequence to the authored front (C4); a real drag leaves
+        /// the vehicle where the finger left it. Either way the gesture goes idle.
+        /// </summary>
+        public static TurntableState Release(TurntableState s, TurntableTouch g, float slotWidthPx,
+                                             out TurntableTouch idle)
+        {
+            bool tap = IsTap(g, slotWidthPx);
+            idle = Idle();
+            return tap ? Front() : s;
+        }
+
+        // ---- RESIDENCY: WHICH FRAMES MAY BE IN MEMORY (T11b item 6) -------------------------
+        //
+        // ---- THE NUMBER THAT MAKES THIS A POLICY AND NOT A CACHE ----
+        // The sequence is 512x1024 RGBA. That decodes to 2 MB of texture PER FRAME, so a crew member
+        // who drags one full revolution touches all 36 and leaves ~75 MB resident - for a decoration
+        // on one view of one page. ImageStore's ordinary rule (load once, keep for ever) is right for
+        // the couple of dozen page assets and wrong here, and it is wrong by two orders of magnitude.
+        //
+        // ---- A WINDOW, NOT AN LRU ----
+        // The frames a drag is about to want are known: they are the ones either side of where it is
+        // now. So the resident set is a WINDOW around the current frame - a pure function of the
+        // frame, with no use-order to keep, nothing to age, and no way for it to grow. WarmRadius 2
+        // is 20 degrees of look-ahead each way, which a slow drag never outruns and a fast one
+        // outruns whatever the radius is; five frames is 10 MB.
+        //
+        // ---- WHY CENTRES IS AN ARRAY ----
+        // Three screens share one ImageStore and any of them may be showing the capsule, at its own
+        // angle. One shared window would then be evicted and reloaded by each screen in turn - a
+        // disk read PER FRAME, which is worse than the hitch this exists to remove. So residency is
+        // the UNION over the screens, and a screen that is not showing the view says so with
+        // NotShowing and holds nothing. When no screen is showing it, the whole sequence goes.
+        //
+        // ---- THE FRONT IS PINNED WHILE ANYONE IS LOOKING ----
+        // Frame 0 is what the view opens on and what the reset tap snaps to, so it is the one frame
+        // whose load is guaranteed to be noticed. It costs 2 MB to keep it ready.
+
+        /// <summary>A screen that is not showing the capsule view. Any negative value means this;
+        /// the constant exists so the glue does not spell -1 and mean something else by it.</summary>
+        public const int NotShowing = -1;
+
+        /// <summary>Frames either side of the current one that are kept loaded.</summary>
+        public const int WarmRadius = 2;
+
+        /// <summary>Frames in one screen's window - the current one and WarmRadius each side.</summary>
+        public const int WarmSteps = WarmRadius * 2 + 1;
+
+        /// <summary>Decoded bytes one frame costs: RGBA at the nominal sprite size.</summary>
+        public const int FrameBytes = FrameW * FrameH * 4;
+
+        /// <summary>
+        /// The i'th window offset, NEAREST FIRST: 0, -1, +1, -2, +2. The order is the point - the
+        /// glue warms one frame per draw rather than five in the frame the view opens, so arriving
+        /// costs a little on each of five frames instead of landing as one hitch, and the frame
+        /// being LOOKED at is always the one warmed first.
+        /// </summary>
+        public static int WarmOffset(int i)
+        {
+            if (i < 0 || i >= WarmSteps) return 0;
+            int off = (i + 1) / 2;
+            return ((i & 1) == 1) ? -off : off;
+        }
+
+        /// <summary>Shortest distance between two frames, going either way round the seam: frames 35
+        /// and 0 are ONE apart, not thirty-five - which is the whole reason this is not a
+        /// subtraction.</summary>
+        public static int Distance(int a, int b)
+        {
+            int d = WrapFrame(a) - WrapFrame(b);
+            if (d < 0) d = -d;
+            if (d > Count - d) d = Count - d;
+            return d;
+        }
+
+        /// <summary>Is this frame inside one screen's warm window? A NotShowing centre has no window
+        /// at all.</summary>
+        public static bool InWindow(int frame, int centre)
+        {
+            if (centre < 0) return false;
+            return Distance(frame, centre) <= WarmRadius;
+        }
+
+        /// <summary>
+        /// May this frame be in memory, given what every screen is showing? True inside any screen's
+        /// window, and for the pinned front while at least one screen is showing the view. False for
+        /// EVERY frame when none is - which is what releases the sequence when the crew leaves.
+        /// </summary>
+        public static bool IsResident(int frame, int[] centres)
+        {
+            if (centres == null) return false;
+            bool anyShowing = false;
+            for (int i = 0; i < centres.Length; i++)
+            {
+                if (centres[i] < 0) continue;
+                anyShowing = true;
+                if (InWindow(frame, centres[i])) return true;
+            }
+            return anyShowing && WrapFrame(frame) == FrontFrame;
+        }
+
+        /// <summary>How many frames the policy allows to be resident right now. The number the
+        /// memory claim is made of, and what a test asserts against Count.</summary>
+        public static int ResidentCount(int[] centres)
+        {
+            int n = 0;
+            for (int f = 0; f < Count; f++) if (IsResident(f, centres)) n++;
+            return n;
         }
 
         // ---- PLACEMENT ----------------------------------------------------------------------

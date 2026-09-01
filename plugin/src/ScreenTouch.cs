@@ -86,26 +86,68 @@ namespace DragonScreen
 
         public void OnMouseDown()
         {
+            float px, py;
+            if (!PagePoint(out px, out py, true)) return;
+            painter.TouchDown(px, py);
+        }
+
+        // ---- PRESS / DRAG / RELEASE (T11b item 4) ----
+        // Unity raises OnMouseDrag every frame the button is held over this collider and OnMouseUp
+        // once when it is let go, on the same component that got OnMouseDown - so the whole gesture
+        // is three forwards and no state of its own. The DECISIONS (what a move means, whether a
+        // press-and-release was a tap) are pure and live in Turntable, where they are tested; nothing
+        // here judges anything, which is the point.
+
+        public void OnMouseDrag()
+        {
+            float px, py;
+            // A sample whose ray misses is SKIPPED, not treated as the end of the drag: a finger that
+            // slid off the edge of the glass and came back should carry on turning the vehicle.
+            // NOT logged - this runs every frame the button is down, and a per-frame log line is how
+            // a 100 MB KSP.log happens.
+            if (!PagePoint(out px, out py, false)) return;
+            painter.TouchDrag(px, py);
+        }
+
+        public void OnMouseUp()
+        {
+            // No coordinate: the release can land anywhere (including off the collider, where there
+            // is no page pixel to report), and what it means depends on how far the press travelled,
+            // which the painter has been accumulating.
             if (!ready || painter == null) return;
+            painter.TouchUp();
+        }
+
+        /// <summary>
+        /// Where on the page the pointer is, in PAGE pixels. False when there is no camera or the ray
+        /// misses this screen - both ordinary, both meaning "no touch here", neither an error.
+        /// <paramref name="log"/> is set for a PRESS and clear for a drag sample: the same line once
+        /// per click is the instrument below, once per frame it is noise.
+        /// </summary>
+        private bool PagePoint(out float px, out float py, bool log)
+        {
+            px = py = 0f;
+            if (!ready || painter == null) return false;
 
             // InternalCamera can be null between scenes and during staging - MAS guards this too
             // (MASFlightComputer.cs:1857). A touchscreen that throws during staging is worse than one
             // that ignores a click.
-            if (InternalCamera.Instance == null) return;
+            if (InternalCamera.Instance == null) return false;
             if (ivaCamera == null)
             {
                 ivaCamera = InternalCamera.Instance.gameObject.GetComponent<Camera>();
-                if (ivaCamera == null) return;
+                if (ivaCamera == null) return false;
             }
 
-            // The matrix is refreshed per click, not cached forever: the IVA moves with the vessel,
-            // so a matrix captured at load is only valid where the capsule was then. Once per click
-            // is free; once per frame would not be.
+            // The matrix is refreshed per sample, not cached forever: the IVA moves with the vessel,
+            // so a matrix captured at load is only valid where the capsule was then - and DURING a
+            // drag it is moving, which is exactly when a stale one would slide the touch out from
+            // under the finger. It is one property read; it only ever runs while the button is down.
             worldToLocal = transform.worldToLocalMatrix;
 
             RaycastHit hit;
             Ray ray = ivaCamera.ScreenPointToRay(Input.mousePosition);
-            if (!box.Raycast(ray, out hit, Mathf.Infinity)) return;
+            if (!box.Raycast(ray, out hit, Mathf.Infinity)) return false;
 
             Vector3 local = worldToLocal.MultiplyPoint(hit.point) - hitCorner;
             float u = local.x * invSize.x;
@@ -115,14 +157,14 @@ namespace DragonScreen
             // inverted to become a page y. WHETHER u ALSO NEEDS INVERTING IS NOT ASSUMED - the raw
             // normalised values are logged and a marker is drawn where we think the touch landed, so
             // one look settles it instead of an argument about handedness.
-            float px = u * pageW;
-            float py = (1f - v) * pageH;
+            px = u * pageW;
+            py = (1f - v) * pageH;
 
-            Debug.Log("[DragonScreen] touch screen " + index
-                      + "  norm u=" + u.ToString("F3") + " v=" + v.ToString("F3")
-                      + "  -> page " + px.ToString("F0") + "," + py.ToString("F0"));
-
-            painter.Touch(px, py);
+            if (log)
+                Debug.Log("[DragonScreen] touch screen " + index
+                          + "  norm u=" + u.ToString("F3") + " v=" + v.ToString("F3")
+                          + "  -> page " + px.ToString("F0") + "," + py.ToString("F0"));
+            return true;
         }
     }
 }

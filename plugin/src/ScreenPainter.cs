@@ -74,6 +74,13 @@ namespace DragonScreen
         // to be looking, not a decision to restore.
         private CoverPage.CoverCam coverCam = CoverPage.CoverCam.Earth;
 
+        // Where this screen's capsule turntable is pointing, and the press that is turning it (T11b).
+        // Per screen and not persisted, for the same reason coverCam is not: it is where you happen to
+        // be looking. Both are VALUES out of pure/Turntable - this file holds them and forwards touch
+        // samples; every decision about what a sample MEANS is made in there, headlessly tested.
+        private TurntableState turn = Turntable.Front();
+        private TurntableTouch turnTouch = Turntable.Idle();
+
         /// <summary>How many pages the current model has — the new Figma set or the old tab set.</summary>
         private static int PageCount { get { return FigmaMode ? FigmaUI.PageCount : ChromeBar.PageNames.Length; } }
 
@@ -320,9 +327,11 @@ namespace DragonScreen
         }
 
         /// <summary>
-        /// A touch, in PAGE pixels. Called from ScreenTouch on the screen's own collider.
+        /// A press, in PAGE pixels. Called from ScreenTouch on the screen's own collider. Every
+        /// control on every page acts HERE, on the press - only the capsule turntable has anything
+        /// to say about the drag and the release below.
         /// </summary>
-        public void Touch(float px, float py)
+        public void TouchDown(float px, float py)
         {
             // ---- NEW FIGMA UI: the design's own navigation, no chrome bar ----
             // The Cover hub's buttons + each page's back chevron ARE the navigation, so touch routes
@@ -354,6 +363,12 @@ namespace DragonScreen
                         coverPhase = (coverPhase + CoverPage.PhaseCount - 1) % CoverPage.PhaseCount;
                     else if (cb == CoverPage.CoverButton.Forward)
                         coverPhase = (coverPhase + 1) % CoverPage.PhaseCount;
+                    else if (cb == CoverPage.CoverButton.None
+                             && CoverPage.CapsuleHit(px, py, w, h, coverCam))
+                        // LAST, and only on what no button claimed: the capsule fills most of the
+                        // slot, so testing it any earlier would swallow the NEXT VIEW pill it sits
+                        // under. Nothing turns yet - see Turntable.Press.
+                        turnTouch = Turntable.Press(px);
                     else ApplyCoverCam(cb);
                 }
                 return;
@@ -393,6 +408,31 @@ namespace DragonScreen
                                 HullCams.Count));
         }
 
+        // ---- THE TURNTABLE DRAG (T11b) ----
+        // The only gesture on the screens that is more than a press, so it is the only thing that
+        // needs the two entry points below. Both are forwards: the slot the drag is happening in
+        // comes from the SAME CoverPage.CapsuleRect the sprite is drawn from (PageAction's one-rect
+        // rule), and what a sample means is Turntable's to say.
+
+        /// <summary>The pointer moved while held, in PAGE pixels.</summary>
+        public void TouchDrag(float px, float py)
+        {
+            if (!turnTouch.Dragging) return;
+            float sx, sy, sw, sh;
+            CoverPage.CapsuleRect(w, h, out sx, out sy, out sw, out sh);
+            turn = Turntable.Move(turn, turnTouch, px, sw, out turnTouch);
+        }
+
+        /// <summary>The press ended. A press that barely travelled is a TAP, and a tap on the capsule
+        /// is §5 C4's reset - the vehicle goes back to the authored front.</summary>
+        public void TouchUp()
+        {
+            if (!turnTouch.Dragging) return;
+            float sx, sy, sw, sh;
+            CoverPage.CapsuleRect(w, h, out sx, out sy, out sw, out sh);
+            turn = Turntable.Release(turn, turnTouch, sw, out turnTouch);
+        }
+
         /// <summary>
         /// Put a page on a screen, persistently. Screen may be THIS one or another - the SETTINGS
         /// grid can move a page onto a display the crew is not touching.
@@ -409,6 +449,7 @@ namespace DragonScreen
                 selectedPage = page;
                 chrome.SelectedPage = page;
                 suitStart = -1f; suitPopup = false;   // the Suit Leak Check opens fresh each visit
+                turnTouch = Turntable.Idle();         // a press cannot survive the page under it
                 Publish();
             }
             else if (screen >= 0 && screen < livePage.Length)
@@ -715,8 +756,17 @@ namespace DragonScreen
                     else { suitCount = 5 - (int)(el / 0.9f); if (suitCount < 0) suitCount = 0; }
                 }
 
+                // The capsule turntable is the one asset set with a MEMORY BUDGET (T11b): 36 frames
+                // at 2 MB each is ~75 MB if every frame a drag touches is kept. Say what this screen
+                // is looking at and ImageStore keeps the window around it - and only that window. The
+                // claim is made here, in the one place that knows which page and which camera is up.
+                if (up == UiPage.Cover && coverCam == CoverPage.CoverCam.Capsule)
+                    ImageStore.WarmTurntable(index, Turntable.FrameOf(turn));
+                else
+                    ImageStore.ReleaseTurntable(index);
+
                 // The new Figma pages carry their own chrome (each has its bottom bar), so no ChromeBar.
-                FigmaUI.Build(page, up, w, h, ps, mapView, suitCount, suitPopup, coverPhase, coverCam);
+                FigmaUI.Build(page, up, w, h, ps, mapView, suitCount, suitPopup, coverPhase, coverCam, turn);
             }
             else
             {

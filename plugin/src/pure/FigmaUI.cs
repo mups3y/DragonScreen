@@ -147,18 +147,24 @@ namespace DragonScreen
                                  int suitCountdown, bool suitPopup, int coverPhase)
         { Build(dl, page, w, h, s, view, suitCountdown, suitPopup, coverPhase, CoverPage.CoverCam.Earth); }
 
-        /// <summary>As Build, plus the three bits of page state the painter owns: the Suit Leak Check's
-        /// countdown/popup, the Cover's selected deorbit phase, and the Cover's camera view (T4 - which
-        /// of First.vue's Earth / Map / Capsule views its right-hand slot is showing). Every other page
-        /// ignores them.</summary>
         public static void Build(DisplayList dl, UiPage page, int w, int h, PageState s, MapView view,
                                  int suitCountdown, bool suitPopup, int coverPhase,
                                  CoverPage.CoverCam coverCam)
+        { Build(dl, page, w, h, s, view, suitCountdown, suitPopup, coverPhase, coverCam, Turntable.Front()); }
+
+        /// <summary>As Build, plus the four bits of page state the painter owns: the Suit Leak Check's
+        /// countdown/popup, the Cover's selected deorbit phase, the Cover's camera view (T4 - which
+        /// of First.vue's Earth / Map / Capsule views its right-hand slot is showing), and where the
+        /// capsule TURNTABLE is pointing (T11b - the drag the painter accumulates). Every other page
+        /// ignores them.</summary>
+        public static void Build(DisplayList dl, UiPage page, int w, int h, PageState s, MapView view,
+                                 int suitCountdown, bool suitPopup, int coverPhase,
+                                 CoverPage.CoverCam coverCam, TurntableState turn)
         {
             if (dl == null || w <= 0 || h <= 0) return;
             switch (page)
             {
-                case UiPage.Cover:     CoverPage.Build(dl, w, h, s, view, coverPhase, coverCam); break;
+                case UiPage.Cover:     CoverPage.Build(dl, w, h, s, view, coverPhase, coverCam, turn); break;
                 case UiPage.Menu:      MenuPage.Build(dl, w, h); break;
                 case UiPage.Hud:       Frame58Hud.Build(dl, w, h, s); break;
                 case UiPage.Audio:     SettingsAudioPage.Build(dl, w, h, 2); break;

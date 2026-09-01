@@ -368,9 +368,9 @@ namespace DragonScreen
         const float CapsuleFill = 0.86f;              // of the available slot height
         const float CapsuleLabelStrip = 96f;          // design px, placeholder marking only
 
-        /// <summary>Panel-pixel rect of the turntable sprite. ONE function for the draw and — when
-        /// T11b lands the drag — for the gesture region, which is PageAction's standing rule: a
-        /// control drawn from one rectangle and hit from another drifts on first touch.</summary>
+        /// <summary>Panel-pixel rect of the turntable sprite. ONE function for the draw and for
+        /// T11b's gesture region below, which is PageAction's standing rule: a control drawn from
+        /// one rectangle and hit from another drifts on first touch.</summary>
         public static void CapsuleRect(int w, int h, out float x, out float y,
                                        out float rw, out float rh)
         {
@@ -382,6 +382,25 @@ namespace DragonScreen
             float cy = (ViewTop + ViewBottom - strip) * 0.5f * sc;
             float ih = (ViewBottom - ViewTop - strip) * sc * CapsuleFill;
             Turntable.FitHeight(cx, cy, ih, out x, out y, out rw, out rh);
+        }
+
+        /// <summary>
+        /// Did this touch land on the capsule — i.e. does it start a turntable gesture (T11b)? The
+        /// region is the SPRITE, from CapsuleRect, not the whole camera slot: what the crew can grab
+        /// is what they can see, and the slot around it is empty background that the globe and the
+        /// map also use. Only on the Capsule view, so a touch on the globe or the map can never turn
+        /// a vehicle that is not being drawn.
+        ///
+        /// Tested LAST by the painter, after the rail, the pill and the map cluster: the capsule is
+        /// the biggest thing on the page and a control that overlapped it would otherwise be eaten.
+        /// </summary>
+        public static bool CapsuleHit(float px, float py, int w, int h, CoverCam cam)
+        {
+            if (cam != CoverCam.Capsule) return false;
+            float x, y, rw, rh;
+            CapsuleRect(w, h, out x, out y, out rw, out rh);
+            if (rw <= 0f || rh <= 0f) return false;
+            return Control.Hit(px, py, x, y, rw, rh);
         }
 
         /// <summary>The turntable: one frame of art/cover/dragon_turn_NNN.png, plus — only while the
