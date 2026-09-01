@@ -1,6 +1,24 @@
-# COMMAND REGISTRY (ACTIVE)
+# COMMAND REGISTRY
 
-> Every interactive control and its complete command path. Governed by `MASTER_BUILD_SPEC.md`. Rule C4: a control is finished only when it performs the real function end to end. No decorative controls (rule 0.3). A blocked command explains why (rule C5), never silently no-ops.
+> **RECONCILED 2026-09-02 (T1). Governed by `docs/BUILD_PLAN.md` (C7.1)** — `MASTER_BUILD_SPEC.md` was
+> deleted in the 2026-09-01 pivot. **What the plan overrides here, and it is most of the routing:**
+> • **the command path below is a TARGET, not today's code.** `DockingControl` / `NavState3` and the real
+>   `FlightDriver.SetTranslation/SetAttitude` actuation are **gone** (deleted 2026-09-01). What survives is an
+>   idle seam: `MissionOps`, `Actuator`, `AbortControl`, `FlightDriver` are **no-op stubs** in
+>   `src/_AutopilotStub.cs`, and **`AuthorityManager` survives only as a display label** in
+>   `pure/ScreenModes.cs` (it names + colours the GNC lamp; it arbitrates nothing). Part B §B12.5 turns each
+>   row real, one command at a time.
+> • **refusal is silent, not red.** §14.4(a) settled the console behaviour: buttons light BRIGHT when
+>   active/armed/fired, there is **NO red state**, and a refused or inert press = an audible **click**, no
+>   light, no action. The "red dash with a reason" rule below is superseded.
+> • **some controls are deliberately inert.** §14.4(b): SWAP 1/2/3 and the inferred entry-mode toggles
+>   (ENABLE ENTRY REBOOT / BACKUP ENTRY / NORMAL ENTRY) stay inert until a real console-procedure source
+>   verifies them. POWER 1/2, STRING 1A–2C, RESET 1/2, the fire/leak responses and the CONFIRMED entry
+>   commands remain real display-state.
+> The *shape* of this registry — one row per control, with its authority, target, interlock and feedback —
+> is current and is what Part B fills in.
+
+> Every interactive control and its complete command path. A control is finished only when it performs the real function end to end. No decorative controls.
 
 Canonical command path:
 ```

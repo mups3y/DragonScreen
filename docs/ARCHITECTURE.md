@@ -1,5 +1,15 @@
 # F9I Dragon screen — architecture
 
+> 📜 **HISTORICAL — do NOT build from this file. SUPERSEDED, see `docs/BUILD_PLAN.md` (C7.1).**
+> Written 2026-08-04, before the renderer existed. Two of its premises are dead: **there is no kOS bridge and
+> no link to F9I** (every value is read directly in C# from the vessel; the F9I `PartModule` sits unbuilt in
+> `plugin/reference_f9i/`), and the **floating dev window** is not the product — the three IVA screens are.
+> The shipped architecture is the pure/glue split: pure pages emit `pure/DisplayList.cs` commands, walked
+> in-game by `src/ScreenPainter.cs` and offline by `plugin/preview/PreviewMain.cs`. See `SCREEN_SPEC.md` §2.
+> **Still true and worth keeping:** MAS is MIT and is a legitimate *reference* implementation (look, don't
+> ship — it is not installed and is not a dependency), the hairline/stroke-scaling constraint, and the
+> RenderTexture-into-`_MainTex` mechanism — which is exactly what we ended up doing.
+
 **Route confirmed by the user 2026-08-04: C# KSP plugin.** kOS keeps every flight decision; the plugin
 owns rendering, input, layout and animation only. Crew Dragon only — Cargo and the fairing keep the
 existing kOS GUI as a working fallback. The banner stays in kOS, untouched.

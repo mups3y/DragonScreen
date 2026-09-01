@@ -1,5 +1,17 @@
 # DragonScreen — how the screens should LOOK and FUNCTION (comprehensive research)
 
+> **RECONCILED 2026-09-02 (T1). `docs/BUILD_PLAN.md` is the authoritative spec (C7.1).** The resource
+> inventory (§1), the real page set (§2), the real→our page map (§3) and the licence summary (§6) are all
+> **current and still the best short account of what we own**. Four notes:
+> • the "ULTIMATE PLAN" this file was written ahead of no longer exists — `BUILD_PLAN.md` replaced it;
+> • §3's two ❌ gaps are **closed**: the Vehicle Overview page and the Suit Leak Check page were both built
+>   2026-09-01, and the Vehicle page now carries the real **8** sub-tabs (All · Crew · Prop · Mech · Power ·
+>   Avionics · GNC · Thermal), not Overview/Mech;
+> • §3's autopilot-driven cues ("driven by the autopilot phase/FDIR state", manual-takeover wiring) are Part B
+>   targets, not today's code — the flight-command seam is an honest no-op until §B12.5 wires it;
+> • the §5 hidden docking mini-game is **not in the register** — the built `DockingSimPage` covers the
+>   manual-docking screen itself. Treat the mini-game as an owner idea, not a scheduled task.
+
 > **Why (2026-08-28):** before the ULTIMATE PLAN, close the hole — a single comprehensive record of every
 > resource we have + can find on the real Crew Dragon displays, the full page set + function, how it maps to
 > OUR pages, what's now buildable, and the hidden docking mini-game idea. Consolidates the scattered screen

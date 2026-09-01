@@ -1,5 +1,10 @@
 # The IVA is the target surface — what Tundra Exploration already gives us
 
+> **CHECKED 2026-09-02 (T1) — no conflict with `docs/BUILD_PLAN.md`.** This is measured hardware fact
+> (transforms, per-screen materials, the 1.82:1 extents, the buttons, the IMGUI-can't-draw-to-a-RenderTexture
+> catch) and it is all still load-bearing. One dated line: the "deferred" IVA question was answered — the
+> three IVA screens ARE the product now, and the floating window is only a dev view.
+
 Findings from `GameData/TundraExploration/`, 2026-08-05. **Read this before designing anything**: the
 capsule interior is already modelled accurately, and everything we need is a *named transform*. We are
 not building screen geometry, we are lighting up geometry that already exists.

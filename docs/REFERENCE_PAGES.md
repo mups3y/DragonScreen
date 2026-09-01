@@ -106,9 +106,14 @@ the subsystem icon row.
    from. Numbered steps with tick states, inline command buttons, notes panels, `NEXT`, and a
    read-only mode. This is how the real vehicle is *flown*, so it matters for "fly the mission".
 
-6. **The subview nav is an icon row**, not text: `Overview · Life · Comms · Prop · Mech · Power ·
-   Avionics · GNC · Thermal`, with the active one highlighted and alerts coloured. That is the
-   red-when-non-nominal routing from the research, and it is nine subsystems, not four.
+6. **The subview nav is an icon row**, not text, with the active one highlighted and alerts coloured — the
+   red-when-non-nominal routing from the research.
+
+   > ⚠ **CORRECTED 2026-09-02 (T1).** This entry read `Overview · Life · Comms · Prop · Mech · Power ·
+   > Avionics · GNC · Thermal` — "nine subsystems". That set came from `Container.svg`, a community
+   > reconstruction (§1.4 **tier 2**). The real tab bar was later read off the designer's own clean mockup
+   > (`ui1.jpg`, tier 1) and is **eight**: **All · Crew · Prop · Mech · Power · Avionics · GNC · Thermal**.
+   > That is what `VehicleTabBar` ships. Higher tier wins.
 
 ---
 

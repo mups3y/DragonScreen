@@ -33,8 +33,69 @@ public static class FigmaUINavTest
         VehicleTabs();
         CoverPhases();
         SpeccedPages();
+        Menu();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
+    }
+
+    static void Menu()
+    {
+        // T2: the Menu page (UiPage.Menu) is a grid of every OTHER page — one card per entry, tap to
+        // jump. Aim at each card's drawn centre (MenuPage.CellRect, the same source Build draws from);
+        // assert HitTest resolves it to that entry's real page.
+        Check("menu lists every page but itself", MenuPage.Entries.Length == FigmaUI.PageCount - 1,
+              "got " + MenuPage.Entries.Length);
+
+        bool sawSelf = false;
+        for (int i = 0; i < MenuPage.Entries.Length; i++)
+            if (MenuPage.Entries[i] == UiPage.Menu) sawSelf = true;
+        Check("menu never lists itself", !sawSelf, "");
+
+        for (int i = 0; i < MenuPage.Entries.Length; i++)
+        {
+            float cx, cy, cw, ch;
+            MenuPage.CellRect(i, out cx, out cy, out cw, out ch);
+            float px = (cx + cw * 0.5f) / RefW * W;
+            float py = (cy + ch * 0.5f) / RefH * H;
+
+            UiPage want = MenuPage.Entries[i];
+            NavHit hit = FigmaUI.HitTest(UiPage.Menu, px, py, W, H);
+            Check("menu card " + i + " (" + want + ") routes",
+                  hit.Act == NavAct.Goto && hit.Target == want, "got " + hit.Act + " " + hit.Target);
+        }
+
+        // A touch in the gap between two cards (row 0, between column 0 and column 1) is inert.
+        {
+            float c0x, c0y, c0w, c0h, c1x, c1y, c1w, c1h;
+            MenuPage.CellRect(0, out c0x, out c0y, out c0w, out c0h);
+            MenuPage.CellRect(1, out c1x, out c1y, out c1w, out c1h);
+            float gx = (c0x + c0w + c1x) * 0.5f / RefW * W;   // midpoint of the gap
+            float gy = (c0y + c0h * 0.5f) / RefH * H;
+            NavHit hit = FigmaUI.HitTest(UiPage.Menu, gx, gy, W, H);
+            Check("menu gap between cards is inert", hit.Act == NavAct.None, "got " + hit.Act);
+        }
+
+        // Back: Menu is reached from the Cover (CoverPage.CoverButton.Menu -> UiPage.Menu) and carries
+        // the same global bottom bar as every other page, whose Cover icon returns to the Cover — the
+        // one back route every page in this UI has (see BottomBar()).
+        {
+            float sc = H / RefH;
+            float bcx = (46f + 40f) / RefW * W, bcy = (2003f + 40f) * sc;
+            NavHit back = FigmaUI.HitTest(UiPage.Menu, bcx, bcy, W, H);
+            Check("menu bottom-bar -> Cover (back)",
+                  back.Act == NavAct.Goto && back.Target == UiPage.Cover, "got " + back.Act + " " + back.Target);
+
+            NavHit toMenu = MapCoverMenu();
+            Check("cover Menu button -> Menu page",
+                  toMenu.Act == NavAct.Goto && toMenu.Target == UiPage.Menu, "got " + toMenu.Act + " " + toMenu.Target);
+        }
+    }
+
+    /// <summary>Cover's own Menu button (top-left), reached the same way a crew member would.</summary>
+    static NavHit MapCoverMenu()
+    {
+        float sc = H / RefH;
+        return FigmaUI.HitTest(UiPage.Cover, 98f * sc, 108f * sc, W, H);
     }
 
     static void SpeccedPages()

@@ -1,6 +1,19 @@
-# TELEMETRY REGISTRY (ACTIVE)
+# TELEMETRY REGISTRY
 
-> Every important displayed datum and its single authoritative source. Governed by `MASTER_BUILD_SPEC.md` + `SOURCE_OF_TRUTH.md`. The screen may **format** a datum; it may not create a competing version (rule T6). A datum with no legitimate source is flagged `UNKNOWN — EVIDENCE REQUIRED`, not invented.
+> **RECONCILED 2026-09-02 (T1). Governed by `docs/BUILD_PLAN.md` (C7.1)** — `MASTER_BUILD_SPEC.md` and
+> `SOURCE_OF_TRUTH.md` were both deleted in the 2026-09-01 pivot; the source-of-truth hierarchy they carried
+> now lives in the plan as **§1.4** (verified-real → other users' recreations, marked → invention only by
+> owner discussion). **What the plan overrides here:** every **Authority** cell naming `DockingControl` or
+> `NavState3` names code that no longer exists — read those rows as Part B targets. `AuthorityManager`
+> (display label only, `pure/ScreenModes.cs`), `MissionConductor` and `Fdir` (no-op stubs in
+> `src/_AutopilotStub.cs`) still compile but own nothing. **`BOOSTER_STATUS` is dead**: booster recovery was
+> deleted with the autopilot, Part B does not re-introduce it, and `MissionConductor.RecoveryBooster` is a
+> stub returning null behind a screen toggle nothing acts on. Rows sourced directly from KSP
+> (`vessel.orbit`, resources, `missionTime`, action groups) and from the pure display models
+> (`CabinEnvironment`, `PropellantReadout`, `VehicleSystems`) are CURRENT. The rule the file exists for — one
+> authoritative source per datum, `UNKNOWN — EVIDENCE REQUIRED` rather than invention — stands unchanged.
+
+> Every important displayed datum and its single authoritative source. The screen may **format** a datum; it may not create a competing version (rule T6). A datum with no legitimate source is flagged `UNKNOWN — EVIDENCE REQUIRED`, not invented.
 
 Contract columns: **ID · Authority (owning subsystem) · Physical source · Type/Units · Update rate · Fallback · Screen may modify**. Fallbacks: `NO DATA` (unavailable), `INVALID` (NaN/out-of-range), `N/A` (not applicable this phase).
 

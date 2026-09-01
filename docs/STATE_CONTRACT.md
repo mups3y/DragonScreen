@@ -1,5 +1,12 @@
 # F9I Dragon screen — state contract v0
 
+> 📜 **HISTORICAL — do NOT build from this file. SUPERSEDED, see `docs/BUILD_PLAN.md` (C7.1).**
+> This is the 2026-08-04 F9I/kOS-era contract. **DragonScreen has no kOS dependency, no F9I bridge, and none
+> of the ten globals or the `message1/2/3` lines below exist in the mod.** The live contracts are
+> `TELEMETRY_REGISTRY.md` (every datum → its one authoritative source) and `COMMAND_REGISTRY.md` (every
+> control → its command path), both governed by the plan. Layer 1's advice — don't hand-write an accessor
+> for a vessel/target number someone has already debugged — is the one idea here that outlived the design.
+
 The first artefact, and the expensive one to get wrong. **Almost none of it needs to be invented** —
 both halves already exist and were extracted rather than designed.
 

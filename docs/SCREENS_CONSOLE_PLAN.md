@@ -1,5 +1,26 @@
 # DragonScreen screens + console — the "every feature and button working" workstream
 
+> **PARTLY SUPERSEDED — RECONCILED 2026-09-02 (T1). `docs/BUILD_PLAN.md` wins on every conflict (C7.1).**
+> **Superseded here:**
+> • §2's whole policy — *"any button without a documented use → make an educated guess at its function and
+>   wire it"* — is **reversed by §1.4 + §14.4(b)**: no unilateral invention, and the inferred-only controls
+>   (**SWAP 1/2/3**, ENABLE ENTRY REBOOT / BACKUP ENTRY / NORMAL ENTRY) go **INERT** until verified. The
+>   educated-guess column below is a record of an old approach, not an instruction.
+> • **"red dash on refusal"** (§2's rule line) is superseded by **§14.4(a)**: bright when active/armed/fired,
+>   **NO red**, audible click, and a refused press is silent.
+> • Every wiring target named in §2 lost its implementation on 2026-09-01. `AbortResponder`,
+>   `ReturnControl` and `EntrySteering` are **gone outright**; `AbortControl`, `Actuator` and
+>   `FlightDriver.RequestAbort` survive only as **no-op stubs** in `src/_AutopilotStub.cs`. So "verify each
+>   fires the real path" cannot be done today — Part B (§B12.5 / §B13.4) is what re-introduces those paths,
+>   and it is BUILD-HELD.
+> • §6's sequencing ("runs in PARALLEL with the autopilot flight-tuning", "doesn't gate pad→orbit") and its
+>   cross-ref to the deleted `docs/AUTOPILOT_REBUILD_PLAN.md` are obsolete — the live order is `REGISTER.md`.
+> • §5b's "missing pages" are **built**: Vehicle Overview and Suit Leak Check both shipped 2026-09-01.
+> **Still live and worth doing:** §1's two NAV bugs (mirrored 3D globe; orbit polylines never draw the closing
+> segment) — both are pure-code and preview-checkable; §3's per-page audit; §4's error hunt; §4b's
+> performance findings (the non-multiple-of-4 textures failing DXT compression) and the 60 fps floor; and
+> §5's ⛔ keep-list — the abort display stays exactly as it is.
+
 > **Why (2026-08-28, user):** tie EVERYTHING into the DragonScreens + the physical button console — every
 > single screen feature and every console button **assigned and working**, as high-fidelity as we can be.
 > Any button without a documented use → make an educated guess at its function and wire it. Find any and all
@@ -18,17 +39,25 @@
 
 ## 2. Console button audit — every plate, every button (from `pure/PanelMap.cs`, transcribed from the real model)
 The ~39 buttons are already MAPPED to `PanelCommand`s; the task is to confirm each is **wired to a real function**
-(carried out by `FlightCommands`/the executor, red dash on refusal) and to **educated-guess any that are inert**.
+(carried out by `FlightCommands`/the executor, ~~red dash on refusal~~ **→ §14.4(a): click, no light, no
+action, no red**) and to ~~educated-guess any that are inert~~ **→ §14.4(b): inferred-only controls stay
+INERT until verified; no unilateral invention (§1.4)**.
 
 | Plate | Button | Command | Wired to (verify) / educated-guess if inert |
 |---|---|---|---|
 | **Emergency L+R** (shared interlock: ARM→EXECUTE, CANCEL clears) | CANCEL / WATER DEORBIT / DEORBIT NOW / BREAKOUT / EXECUTE | Cancel/WaterDeorbit/DeorbitNow/Breakout/Execute | WATER DEORBIT → `AbortControl` DeorbitReturn to nearest ocean; DEORBIT NOW → immediate deorbit burn; BREAKOUT → KOS-retreat / emergency-undock. Verify each fires the real `AbortControl`/`AbortResponder` path. |
-| Emergency L+R (cabin) | DEPRESS RESPONSE / SURPRESS FIRE / FIRE RESPONSE | DepressResponse/SuppressFire/FireResponse | ⭐ tied to the ABORT DISPLAY (the loved feature): DEPRESS RESPONSE already silences the klaxon + red cabin lights (memory). Verify FIRE RESPONSE + SURPRESS FIRE do a sensible cabin-emergency action (VehicleSystems), red dash if N/A. **Do not change the abort FX.** |
+| Emergency L+R (cabin) | DEPRESS RESPONSE / SURPRESS FIRE / FIRE RESPONSE | DepressResponse/SuppressFire/FireResponse | ⭐ tied to the ABORT DISPLAY (the loved feature): DEPRESS RESPONSE already silences the klaxon + red cabin lights (memory). Verify FIRE RESPONSE + SURPRESS FIRE do a sensible cabin-emergency action (VehicleSystems), ~~red dash if N/A~~ (§14.4(a): silent refusal). **Do not change the abort FX** — the red cabin-light FX is the abort display and is unaffected by the button-lighting decision. |
 | **Power** | POWER 1/2 · STRING 1A/1B/1C · STRING 2A/2B/2C · RESET 1/2 | Power1/2, String1A..2C, Reset1/2 | Educated guess: dual power buses (1/2) each feeding 3 avionics "strings" (A/B/C) — a redundancy/fault-tolerance panel. Wire to a VehicleSystems power/string model: POWER toggles the bus, STRING selects/isolates a flight-computer string, RESET clears a faulted string. Reflect state in the dash light (lit=on, red=faulted). |
 | **Chutes/pyros** (immediate) | ENABLE BACKUP PYROS · JETTISON NOSE CONE · MAINS ONLY · DROGUES & MAINS · ENABLE ENTRY REBOOT · CUT MAINS · FIRE PYRD | as named | Wire to `Actuator`: JETTISON NOSE CONE→open/blow nose shroud; MAINS ONLY / DROGUES & MAINS→chute mode; CUT MAINS→`Actuator.CutChutes`; FIRE PYRD→fire the pyro/decoupler; ENABLE BACKUP PYROS / ENABLE ENTRY REBOOT→arm the backup pyro bus / reboot the entry computer (VehicleSystems flag). |
 | **Entry mode** (immediate) | ENABLE BACKUP ENTRY · SWAP 1/2/3 · ENABLE NORMAL ENTRY | as named | Educated guess: primary vs backup entry-guidance computer, with SWAP 1/2/3 swapping the three avionics strings for entry. Wire to a VehicleSystems entry-mode flag the ReturnControl/EntrySteering reads (normal vs backup entry law). |
 | **Abort handle** | pull + twist | Abort | Verify → `FlightDriver.RequestAbort` → regime-aware `AbortControl`. **The loved path — keep it.** |
-Rule (from PanelMap): a control with genuinely nothing behind it must return `false` → **red dash with a reason**, never be silently inert. So "make every button work" = give each a real action OR an honest refusal.
+~~Rule (from PanelMap): a control with genuinely nothing behind it must return `false` → **red dash with a
+reason**, never be silently inert.~~
+> **SUPERSEDED by §14.4(a,b), 2026-09-02.** The refusal path is now: **click, no light, no action — there is
+> no red state.** And "make every button work" is explicitly NOT the goal any more: a control whose real
+> function is only *inferred* stays **inert on purpose** until a real source verifies it (§1.4 forbids
+> unilateral invention). ⚠ `pure/PanelMap.cs` still carries the old red-dash refusal path in code
+> (`PressResult.Refused`, "light the dash red") — changing it is register task **T10**, not this file's.
 
 ## 3. Screen-feature audit — every page, every control
 Audit each page against `docs/REFERENCE_PAGES.md`, `docs/REAL_DRAGON_SCREENS.md`, `docs/UI_AUDIT.md`, and the

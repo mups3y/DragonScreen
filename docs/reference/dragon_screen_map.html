@@ -1,0 +1,344 @@
+<title>Dragon Screen Map</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Committed single visual world: the Crew Dragon console — cyan-on-navy, painted explicitly so it
+     holds on any host ground. All colors flow from these tokens. */
+  :root{
+    --ground:#04081f;
+    --ground-2:#070d2b;
+    --panel:#0d1642;
+    --panel-2:#101a4e;
+    --hair:#26316f;
+    --hair-soft:#1a2455;
+    --ink:#e4ebff;
+    --ink-2:#aab3df;
+    --ink-3:#7b84b4;
+    --accent:#28f6fb;      /* console cyan — eyebrows, rules, title only */
+    --accent-deep:#1aa8d6;
+    --ok:#3ee06a;          /* built */
+    --spec:#4aa8ff;        /* specced, ready to build */
+    --ref:#ffb74b;         /* strong reference, not built */
+    --none:#ff5d6c;
+    --refine:#9d8cff;   /* folds into a page we already ship */        /* thin / no public reference */
+    --shadow:0 1px 0 rgba(255,255,255,.03), 0 18px 40px -24px rgba(0,0,0,.9);
+    --maxw:1180px;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;background:var(--ground);color:var(--ink);
+    font-family:"IBM Plex Sans",system-ui,sans-serif;line-height:1.5;
+    background-image:
+      radial-gradient(1100px 620px at 82% -8%, rgba(40,246,251,.07), transparent 60%),
+      radial-gradient(900px 500px at 8% 4%, rgba(74,168,255,.06), transparent 55%);
+    background-attachment:fixed;
+  }
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:clamp(22px,4vw,56px) clamp(16px,3.4vw,40px) 80px}
+  .mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+
+  /* ---------- masthead ---------- */
+  header.mast{
+    border:1px solid var(--hair);border-radius:14px;background:linear-gradient(180deg,var(--panel),var(--ground-2));
+    box-shadow:var(--shadow);padding:clamp(18px,3vw,30px) clamp(18px,3vw,32px);
+    position:relative;overflow:hidden;
+  }
+  header.mast::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;
+    background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:.7}
+  .eyebrow{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.28em;
+    text-transform:uppercase;color:var(--accent);margin:0 0 12px}
+  h1{font-family:"Saira",sans-serif;font-weight:700;font-size:clamp(30px,6vw,54px);line-height:.98;
+    margin:0;letter-spacing:.01em;text-wrap:balance}
+  h1 .sub{display:block;font-weight:500;font-size:clamp(14px,2.4vw,18px);color:var(--ink-2);
+    letter-spacing:.02em;margin-top:12px;max-width:60ch}
+
+  .tally{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:26px}
+  .stat{border:1px solid var(--hair-soft);border-radius:10px;background:var(--ground-2);
+    padding:14px 16px;position:relative;overflow:hidden}
+  .stat::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--c)}
+  .stat b{font-family:"Saira",sans-serif;font-weight:700;font-size:34px;display:block;line-height:1;
+    font-variant-numeric:tabular-nums;color:var(--ink)}
+  .stat span{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--ink-3);display:block;margin-top:8px}
+
+  /* ---------- section ---------- */
+  section{margin-top:clamp(34px,5vw,54px)}
+  .shead{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+    padding-bottom:12px;border-bottom:1px solid var(--hair);margin-bottom:20px}
+  .chip{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--ground);background:var(--c);padding:5px 10px;border-radius:5px;font-weight:500;white-space:nowrap}
+  .shead h2{font-family:"Saira",sans-serif;font-weight:600;font-size:clamp(19px,3vw,24px);margin:0;
+    letter-spacing:.01em;color:var(--ink)}
+  .shead .count{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--c);
+    font-variant-numeric:tabular-nums}
+  .shead .meaning{font-size:13.5px;color:var(--ink-3);margin-left:auto;max-width:44ch;text-align:right}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(288px,1fr));gap:14px}
+
+  .card{border:1px solid var(--hair-soft);border-left:3px solid var(--c);border-radius:11px;
+    background:linear-gradient(180deg,var(--panel),var(--ground-2));padding:16px 17px 15px;
+    box-shadow:var(--shadow);display:flex;flex-direction:column;gap:9px;
+    transition:transform .16s ease, border-color .16s ease}
+  .card:hover{transform:translateY(-2px);border-color:var(--hair)}
+  .card .top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  .card h3{font-family:"Saira",sans-serif;font-weight:600;font-size:16.5px;margin:0;line-height:1.18;
+    color:var(--ink);letter-spacing:.005em}
+  .tag{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--ink-2);
+    border:1px solid var(--hair);border-radius:4px;padding:2px 6px;white-space:nowrap;flex-shrink:0;margin-top:1px}
+  .card p{margin:0;font-size:13.5px;color:var(--ink-2);line-height:1.46}
+  .meta{margin-top:2px;border-top:1px dashed var(--hair-soft);padding-top:9px;display:flex;flex-direction:column;gap:5px}
+  .meta div{display:flex;gap:8px;font-family:"IBM Plex Mono",monospace;font-size:11px;line-height:1.4}
+  .meta .k{color:var(--ink-3);flex-shrink:0;min-width:34px;letter-spacing:.08em}
+  .meta .v{color:var(--ink-2)}
+  .meta .need .v{color:var(--ref)}
+  .none-section .meta .need .v{color:var(--none)}
+
+  /* ---------- legend / footer ---------- */
+  .legend{display:flex;flex-wrap:wrap;gap:18px 26px;margin-top:40px;padding-top:22px;border-top:1px solid var(--hair);
+    font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-3);letter-spacing:.06em}
+  .legend .lg{display:flex;align-items:center;gap:8px}
+  .legend .dot{width:11px;height:11px;border-radius:3px;background:var(--c);flex-shrink:0}
+  footer.note{margin-top:26px;font-size:12.5px;color:var(--ink-3);max-width:78ch;line-height:1.6}
+  footer.note b{color:var(--ink-2);font-weight:500}
+  a{color:var(--accent-deep)}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  @media (max-width:560px){.tally{grid-template-columns:repeat(2,1fr)}.shead .meaning{margin-left:0;text-align:left}}
+  @media (prefers-reduced-motion:reduce){.card{transition:none}}
+</style>
+<div class="wrap">
+
+  <header class="mast">
+    <p class="eyebrow">Crew Dragon Displays &middot; Reconciled 2026-09-02</p>
+    <h1>Dragon Screen Map
+      <span class="sub">Every publicly-visible Crew Dragon touchscreen page we&rsquo;ve mapped for the mod, grouped by how ready it is to recreate. The real UI is ~25&ndash;30 pages; this is where each one stands. Mirrors <span class="mono">docs/SCREEN_INVENTORY.md</span>.</span>
+    </h1>
+    <div class="tally">
+      <div class="stat" style="--c:var(--ok)"><b>18</b><span>Built</span></div>
+      <div class="stat" style="--c:var(--spec)"><b>3</b><span>Design set &middot; ready</span></div>
+      <div class="stat" style="--c:var(--ref)"><b>6</b><span>Reference in hand</span></div>
+      <div class="stat" style="--c:var(--refine)"><b>3</b><span>Refinements</span></div>
+    </div>
+  </header>
+  <!-- ============ BUILT ============ -->
+  <section style="--c:var(--ok)">
+    <div class="shead">
+      <span class="chip">Built</span>
+      <h2>Shipping in the mod</h2>
+      <span class="count">18 pages</span>
+      <span class="meaning">Rendering in preview and installed; values representative until live telemetry is wired.</span>
+    </div>
+    <div class="grid">
+
+      <article class="card"><div class="top"><h3>Cover · Deorbit Dashboard</h3><span class="tag">Frame 67</span></div>
+        <p>Deorbit home: the 7-item phase rail, procedure card + live heading, live globe (3 view modes), top orbit telemetry.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">Figma Frame 67 + photos</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Attitude · Docking HUD</h3><span class="tag">Frame 58</span></div>
+        <p>Synthetic attitude bowl + graticule, ROLL/PITCH/YAW, X/Y/Z, RANGE/RATE, corner rings. Nose-open swaps the bowl to the docking cam.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">Figma Frame 58 + photos</span></div><div><span class="k">note</span><span class="v">values not live yet</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Vehicle Overview · All</h3><span class="tag">tab 1/8</span></div>
+        <p>Cabin gauges (PPO2 / temp / pressure / CO₂), coolant loops, net power, connections, cabin mics, capsule diagram.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">demo + ui1 photo</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Vehicle · Mech</h3><span class="tag">tab 4/8</span></div>
+        <p>Radial mechanical schematic — central SEATS ring + five donut nodes (acceleration / centripetal / pressure / resistance / water uprighting).</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">reference demo</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Vehicle · Crew</h3><span class="tag">ECLSS</span></div>
+        <p>Life-support subsystem: cabin atmosphere gauges, O₂/N₂ tanks, humidity, water, crew aboard, CO₂ scrubber status.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">subsystem template</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Vehicle · Prop</h3><span class="tag">tab 3/8</span></div>
+        <p>Propulsion: Draco ×16 / SuperDraco ×8, NTO + MMH tanks, helium pressurant, chamber pressure, prop temp.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">subsystem template</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Vehicle · Power</h3><span class="tag">tab 5/8</span></div>
+        <p>Electrical: battery SOC, main bus A/B voltage, array output, net power, load. Uses the real photo's <span class="mono">+68 W</span> / <span class="mono">0 kW</span>.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">template + photo values</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Vehicle · Avionics</h3><span class="tag">tab 6/8</span></div>
+        <p>Flight computers ×3, VRIO 1/2, data bus, GPS lock, S-band comms, FC load / link margin / storage.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">subsystem template</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Vehicle · GNC</h3><span class="tag">tab 7/8</span></div>
+        <p>Guidance/nav/control: IMU ×2, star trackers, GPS nav, RCS authority, body rates, attitude error, pointing mode.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">subsystem template</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Vehicle · Thermal</h3><span class="tag">tab 8/8</span></div>
+        <p>Coolant loop A/B temps + flow, radiators, heat-shield temp, heat rejection, cabin HX, TPS max.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">subsystem template</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Suit Leak Check</h3><span class="tag">4.011</span></div>
+        <p>ECLSS procedure: INITIATE / HALT, per-suit delta pressure + Nominal status, "did any suit fail?" TROUBLESHOOT branch, completion popup.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">hi-res discovery2 / 3</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Test VRIO Health LEDs</h3><span class="tag">4.700</span></div>
+        <p>Deorbit-prep procedure: start/stop the two VRIO LED tests, verify on the command panel, report to SpaceX; engineering notes.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">real photos</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Audio Settings</h3><span class="tag">tab 1/3</span></div>
+        <p>Per-seat audio (Seat 1/2/Cabin/3/4): GROUND / REG / MAIN (Vox) / INTERCOM / ALERTS with the selected seat highlighted.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">Figma + discovery5</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Cabin Settings</h3><span class="tag">Frame 66</span></div>
+        <p>Cabin hero image + LIGHTING (four display columns of toggles).</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">Figma Frame 66</span></div><div><span class="k">note</span><span class="v">static frame render</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Video Settings</h3><span class="tag">tab 3/3</span></div>
+        <p>The vehicle's real cameras (docking / hull feed) + resolution, themed to match.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">our themed build</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Procedure (generic)</h3><span class="tag">Frame 59</span></div>
+        <p>A procedure/checklist template page — held as a static frame render until mapped to a real procedure.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">Figma Frame 59</span></div><div><span class="k">note</span><span class="v">static · placeholder</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Manual Chute Deploy</h3><span class="tag">rail 7</span></div>
+        <p>Two command sections — High &amp; Standard Altitude Chute Deploy — altitude-gated pyro steps with per-step actions (Arm and verify / Execute / Latch), the shared phase rail + live globe. Opened from the Cover's "Manual Chute" rail item.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">discovery5 / 15 · built 2026-09-01</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Manual ISS Docking</h3><span class="tag">iss-sim</span></div>
+        <p>HUD rings + reticle + green target, ROLL/PITCH/YAW + PYR, RANGE/RATE, rotation &amp; translation clusters with LARGE↔precise toggles, Instructions / Reset / Settings. Opened from the attitude HUD.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">iss-sim DOM · built 2026-09-01</span></div></div></article>
+
+    </div>
+  </section>
+  <!-- ============ DESIGN SET ============ -->
+  <section style="--c:var(--spec)">
+    <div class="shead">
+      <span class="chip">Design set</span>
+      <h2>Resolved &mdash; ready to build</h2>
+      <span class="count">3 pages</span>
+      <span class="meaning">No public frame exists, so these were resolved by owner decision as reconstruct-from-function: real content, our layout, marked as such.</span>
+    </div>
+    <div class="grid">
+
+      <article class="card"><div class="top"><h3>Menu</h3><span class="tag">nav index</span></div>
+        <p>Not a mystery drawer any more: a <b>navigation index</b> &mdash; a grid/list of every built page, tap to jump. It fills the ~25&ndash;30-page need the five-icon bar cannot. Content is real pages; only the layout is ours.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">owner decision &sect;14.4(c) &middot; reconstruct-from-function</span></div>
+          <div><span class="k">was</span><span class="v">&ldquo;needs imagery&rdquo; until 2026-09-02</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Reference Content</h3><span class="tag">rail 6</span></div>
+        <p>Also resolved &mdash; and it is <b>not a standalone page</b>. It is the Cover phase-rail slot, showing a <b>deorbit quick-reference</b> built from the real flight data: entry timeline, altitudes, abort and contingency notes.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">owner decision &sect;14.4(c) + the &sect;8 flight facts</span></div>
+          <div><span class="k">was</span><span class="v">&ldquo;needs imagery&rdquo; until 2026-09-02</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Ascent &middot; Launch</h3><span class="tag">phase</span></div>
+        <p>The one page with <b>no public frame at all</b> &mdash; but its <b>data is known</b>: a Falcon 9 vertical schematic plus the real ascent-event list (liftoff &middot; pitch kick &middot; max-Q &middot; MECO &middot; stage sep &middot; SECO-1 &middot; Dragon sep &middot; nose-cone open). Data real, layout reconstructed and marked.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">DM-2 / Crew-2 mission timelines (&sect;8)</span></div>
+          <div><span class="k">note</span><span class="v">still worth a launch-webcast in-cabin frame if one surfaces</span></div></div></article>
+
+    </div>
+  </section>
+
+  <!-- ============ STRONG REFERENCE ============ -->
+  <section style="--c:var(--ref)">
+    <div class="shead">
+      <span class="chip">Reference</span>
+      <h2>Reference in hand &mdash; not built</h2>
+      <span class="count">6 pages</span>
+      <span class="meaning">Real imagery good enough to build the visual grammar from. Layout-real, labels-reconstructed &mdash; the mockup screens are shot at angles that defeat text.</span>
+    </div>
+    <div class="grid">
+
+      <article class="card"><div class="top"><h3>Rendezvous &middot; Orbital Ellipse</h3><span class="tag">centre display</span></div>
+        <p>The rendezvous view of the centre &ldquo;situational awareness&rdquo; display: a left icon sub-nav rail, a <b>Hold Capture</b> procedure card, and a large <b>2D orbital-ellipse plot</b> with the vehicle position and an approach chord. Distinct from both the Earth globe and the docking HUD.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">BBC explainer &mdash; all three screens mid-rendezvous</span></div>
+          <div><span class="k">note</span><span class="v">probably also answers the old &ldquo;Proximity / ISS plot&rdquo; gap</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Nav &middot; Orbit Plot</h3><span class="tag">circular</span></div>
+        <p>Concentric rings, coloured target markers (yellow + cyan), orbit arcs and a g/rate readout &mdash; the circular situational plot. Pairs with the ellipse view above.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">JSC sim-rig frame (right screen) + BBC</span></div>
+          <div class="need"><span class="k">need</span><span class="v">labels not legible at the shot angle</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Deorbit Burn Prep</h3><span class="tag">phase</span></div>
+        <p>Crew Interrupt Conditions + Slew for Deorbit Burn (roll/pitch/yaw, max altitude rate, FC slew) + the settle-burn steps: &ldquo;~3 min prior, single-pulse burns to settle propellant; 8 min duration; 1 s pulses at 30 s intervals.&rdquo;</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">discovery deorbit-burn frames</span></div>
+          <div class="need"><span class="k">need</span><span class="v">full step text &mdash; glare on the lower rows; reconstruct + mark</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Entry</h3><span class="tag">phase</span></div>
+        <p>The entry/descent procedure page: a &ldquo;Parachute Deployment Altitude&rdquo; section and its steps, reached late in the phase rail.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">discovery &ldquo;Entry&rdquo; frame (partial)</span></div>
+          <div class="need"><span class="k">need</span><span class="v">full step list; reconstruct + mark</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Systems Schematic</h3><span class="tag">P&amp;ID</span></div>
+        <p>A subsystem <em>deep-view</em>: the Dragon&rsquo;s fluid/electrical system as blue line-art &mdash; rectangular loops, ring and hex tanks and valves, inline valve symbols, green status dots. Neither our radial Mech donut nor the rendered-capsule Overview.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">crew1_3 / crew3_1 / demo1_3</span></div>
+          <div class="need"><span class="k">need</span><span class="v">which subsystem it belongs to; a cleaner frame</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Systems Tree</h3><span class="tag">new find</span></div>
+        <p>A <b>hierarchical box-and-connector diagram</b> &mdash; labelled boxes joined by connector lines, reading as a power-distribution or systems-distribution tree. A second, visually distinct deep-view alongside the P&amp;ID plumbing page.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">JSC sim-rig frame (left screen) &mdash; new this pass</span></div>
+          <div class="need"><span class="k">need</span><span class="v">labels not transcribable at the angle</span></div></div></article>
+
+    </div>
+  </section>
+
+  <!-- ============ REFINEMENTS ============ -->
+  <section style="--c:var(--refine)">
+    <div class="shead">
+      <span class="chip">Refinement</span>
+      <h2>Folds into a page we already ship</h2>
+      <span class="count">3 refinements</span>
+      <span class="meaning">Not new pages. Each is a mode, column or corrected look on a page already in the mod &mdash; which is why the page count stays honest.</span>
+    </div>
+    <div class="grid">
+
+      <article class="card"><div class="top"><h3>Navigation &middot; Map modes</h3><span class="tag">&rarr; Cover</span></div>
+        <p>The &ldquo;standalone Nav page&rdquo; turned out not to be one: it is a <b>2D &amp; 3D map with a camera-mode toggle</b> (orbit track, ground stations, ISS, sun, splashdown zone) &mdash; 2D driven by a d-pad, 3D by touch-and-drag. It folds into the Cover&rsquo;s live globe as a view switch.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">DillonBaird nav render + alt-text</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Alerts + Consumables</h3><span class="tag">&rarr; Vehicle</span></div>
+        <p>Two changes to the Vehicle pages: a <b>FUNCTIONS / ALERTS</b> toggle with red sub-nav routing on a faulted system (so the fault surface is per-subsystem, not a page), and swapping the Overview&rsquo;s right column to <b>CONSUMABLES</b> &mdash; power-unit energy, deorbit fuel/oxidizer, orbit subtank fuel/oxidizer, QTY / MARGIN.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">DillonBaird Vehicle render + alt-text</span></div></div></article>
+
+      <article class="card"><div class="top"><h3>Prop &rarr; Thruster Schematic</h3><span class="tag">new find</span></div>
+        <p>We built Vehicle&middot;Prop as a generic gauge template. The <b>real</b> page is a schematic: the Dragon in <b>horizontal profile</b> (capsule + trunk line-art) ringed by <b>Draco thruster-quad arc symbols</b> with per-cluster firing status, per-thruster data along the bottom, and a left alert + sub-nav rail. A correction, not an addition.</p>
+        <div class="meta"><div><span class="k">src</span><span class="v">JSC Crew-13 training frame &mdash; new this pass</span></div></div></article>
+
+    </div>
+  </section>
+
+  <!-- ============ DECISIONS ============ -->
+  <section style="--c:var(--accent-deep)">
+    <div class="shead">
+      <span class="chip">Decided</span>
+      <h2>Settled 2026-09-02 &mdash; these are final</h2>
+      <span class="count">4 clusters</span>
+      <span class="meaning">The four things that had no real evidence <em>and</em> no existing asset. Each was resolved with the owner rather than invented.</span>
+    </div>
+    <div class="grid">
+
+      <article class="card"><div class="top"><h3>Menu &amp; Reference Content</h3><span class="tag">reconstruct</span></div>
+        <p>Both resolved as <b>reconstruct-from-function</b> &mdash; see the Design set above. Real content, our layout, marked as a reconstruction. They stop being dark.</p></article>
+
+      <article class="card"><div class="top"><h3>Console lighting</h3><span class="tag">no red</span></div>
+        <p>Buttons light <b>bright</b> when active, armed or fired &mdash; crew-visible, matching the real console. <b>No red state</b>: nothing public shows a red button, so the old red-on-refusal is removed. Every mechanical press gets an audible <b>click</b>. A refused press is click, no light, no action.</p></article>
+
+      <article class="card"><div class="top"><h3>Inferred controls</h3><span class="tag">inert</span></div>
+        <p>Power, strings, resets, the fire/leak responses and the confirmed entry commands are real display state. <b>SWAP 1/2/3 and the inferred entry-mode toggles stay inert</b> &mdash; they click and do nothing &mdash; until a real console-procedure source verifies what they do. Not guessing is the decision.</p></article>
+
+      <article class="card"><div class="top"><h3>Suit-leak fail branch</h3><span class="tag">keep</span></div>
+        <p><b>Kept, and marked as a reconstruction.</b> A leak check must have a fail path; no single photo captures below the fold. Absence in a photo is not absence &mdash; so the branch stays, honestly labelled.</p></article>
+
+    </div>
+  </section>
+
+  <div class="legend">
+    <span class="lg" style="--c:var(--ok)"><span class="dot"></span>Built &mdash; in the mod</span>
+    <span class="lg" style="--c:var(--spec)"><span class="dot"></span>Design set &mdash; resolved, ready to build</span>
+    <span class="lg" style="--c:var(--ref)"><span class="dot"></span>Reference &mdash; real imagery, not yet built</span>
+    <span class="lg" style="--c:var(--refine)"><span class="dot"></span>Refinement &mdash; folds into a page we ship</span>
+  </div>
+
+  <footer class="note">
+    <b>What changed on 2026-09-02:</b> the &ldquo;genuinely dark&rdquo; column is empty. Menu and Reference Content were resolved by owner decision rather than left blank; Ascent turned out to be data-known with only its layout inferred; and the old Proximity/ISS-plot gap is answered by the rendezvous ellipse and circular nav plot. A pass through the NASA JSC crew-training photo series &mdash; better-lit than any Discovery frame &mdash; added three real screen looks: the Prop thruster schematic, the systems tree, and the circular nav plot.
+    <br><br>
+    <b>The honest limits.</b> Those JSC frames are shot upward at the crew, so <b>layouts are captured and exact on-screen text is not</b> &mdash; every page built from them is layout-real, labels-reconstructed, and labelled that way. The physical console band is still not label-legible in any public image, so the emergency-plate labels remain unverified. What is left is label-level and gated on non-public material; it is carried as a caveat, not a blocker.
+    <br><br>
+    <b>Sources:</b> the hi-res <span class="mono">discovery*.jpg</span> capsule frames, the crew/inspiration4 mission photos, the NASA JSC crew-training series, the live <span class="mono">iss-sim.spacex.com</span> DOM (definitive for manual docking), SpaceX&rsquo;s &ldquo;Crew Training&rdquo; video, the BBC explainer frame, the community Figma set, the neel-dandiwala reference demo, and DillonBaird / space.com / RocketSTEM write-ups (which independently put the real UI at ~25&ndash;30 pages). That is 27 distinct pages plus 3 refinements &mdash; squarely inside the range. Full detail lives in <span class="mono">docs/SCREEN_INVENTORY.md</span>, which this page mirrors; the specification is <span class="mono">docs/BUILD_PLAN.md</span>.
+  </footer>
+
+</div>

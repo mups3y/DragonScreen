@@ -125,6 +125,7 @@ namespace DragonScreen
             switch (page)
             {
                 case UiPage.Cover:     CoverPage.Build(dl, w, h, s, view, coverPhase); break;
+                case UiPage.Menu:      MenuPage.Build(dl, w, h); break;
                 case UiPage.Hud:       Frame58Hud.Build(dl, w, h, s); break;
                 case UiPage.Audio:     SettingsAudioPage.Build(dl, w, h, 2); break;
                 case UiPage.Procedure: FigmaFramePage.Build(dl, w, h, "frame59"); break;
@@ -213,6 +214,14 @@ namespace DragonScreen
                 float sc = h / RefH, ox = (w - RefW * sc) * 0.5f;
                 if (ox > 40f && px >= 12f && px < ox - 12f && py >= h * 0.40f && py < h * 0.60f)
                     return NavHit.Go(UiPage.Docking);
+            }
+
+            // Menu is a grid of every other page; a hit on a card jumps straight there. A tap in the
+            // gaps between cards (or off-grid) is inert, same as everywhere else.
+            if (page == UiPage.Menu)
+            {
+                int mi = MenuPage.HitTest(px, py, w, h);
+                return (mi >= 0) ? NavHit.Go(MenuPage.Entries[mi]) : NavHit.None;
             }
 
             // Manual Chute Deploy shares the Cover's rail; tapping any other phase returns to the Cover.

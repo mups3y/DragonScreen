@@ -1,5 +1,22 @@
 # How the real Crew Dragon screens are arranged and how they work
 
+> **RECONCILED 2026-09-02 (T1). `docs/BUILD_PLAN.md` is the authoritative spec (C7.1).** Three things in this
+> file are now settled elsewhere and the plan wins:
+> 1. **Button lighting** — the 2026-08-06 grey → white → **red-on-refusal** scheme is **SUPERSEDED by
+>    §14.4(a)**: bright when active/armed/fired, **NO red**, rest unlit, plus an audible **click** on every
+>    mechanical press. Corrected in place below.
+> 2. **Which controls do anything** — §14.4(b): POWER 1/2, STRING 1A–2C, RESET 1/2, the fire/leak responses
+>    and the CONFIRMED entry commands are real display-state; **SWAP 1/2/3 and the inferred entry-mode
+>    toggles are INERT** until a real console-procedure source verifies them. See the note under the
+>    "what each one can actually do in KSP" table.
+> 3. **`JETTISON NOSE CONE` is a likely-inaccurate label** — the real nose cone is hinged and stays attached
+>    (§4 of the plan; the real control is probably OPEN/CLOSE NOSE CONE). **The transcription below is left
+>    exactly as read off the model**, because C1.4 forbids editing a label without a real-source
+>    confirmation. Read the caveat in the plan, don't "fix" the text here.
+>
+> Everything else — the hardware description, the plate/button map, the collider findings, the nav-bar
+> research — is unchanged and still load-bearing.
+
 Researched 2026-08-05. Sources at the bottom, all public. **Read the confidence marker on every
 claim** — some of this is SpaceX-adjacent first-hand, some is a careful reconstruction from launch
 footage, and one important thing turns out not to be publicly documented at all.
@@ -65,9 +82,14 @@ that he left unknown screens blank rather than guess; the Medium UX piece is pay
 the five panels we already transcribed better ourselves.
 
 **So the colour scheme is OUR DECISION, not a reconstruction. Never cite it as fact.**
-Decided with the user 2026-08-06: unlit grey as modelled → **white** when pressed or armed → **red**
-when refused. What we do *not* do is add a glow, halo or outline of our own — only the dash Tundra
-already drew is driven.
+
+~~Decided with the user 2026-08-06: unlit grey as modelled → white when pressed or armed → red when
+refused.~~ **SUPERSEDED — owner decision §14.4(a), 2026-09-02:** buttons **LIGHT UP BRIGHT** when
+active / armed / fired (clearly crew-visible, matching the real console); **there is NO red state** — no
+public source shows a red button, so the red-on-refusal idea is removed; everything else stays unlit. Every
+mechanical switch press gets an **audible CLICK** (a new audio asset). A refused or inert press is
+therefore: click, no light, no action. What we still do *not* do is add a glow, halo or outline of our own —
+only the dash Tundra already drew is driven.
 
 Three things the search DID establish, all new:
 
@@ -115,6 +137,16 @@ Separating these now prevents building a panel that promises what it cannot deli
 | ENABLE NORMAL / BACKUP ENTRY | **Yes**, as our own entry-mode state. |
 | POWER 1/2, STRING 1A–1C / 2A–2C, RESET 1/2 | **Partly.** No KSP equivalent to power strings; can drive real electric-charge state and be honest, or stay indicators. **Do not fake a system that does nothing.** |
 | DEPRESS RESPONSE, SURPRESS FIRE, FIRE RESPONSE | **No KSP equivalent.** Cabin emergencies do not exist in stock. Leave inert rather than invent. |
+
+> ⚠ **This table is the 2026-08-05 feasibility read; §14.4(b) settled it differently in two places.**
+> • The cabin emergencies did NOT stay inert — a real cabin/fire/leak model was built (`pure/VehicleSystems`
+>   + `CabinEnvironment`), so DEPRESS RESPONSE / SURPRESS FIRE / FIRE RESPONSE are **real display-state**.
+> • POWER 1/2 · STRING 1A–2C · RESET 1/2 likewise became **real display-state** (a modelled bus/string
+>   system, not a faked one — "simulate, never fake" was honoured, not dodged).
+> • Going the other way, **SWAP 1/2/3 and the inferred entry-mode toggles are now deliberately INERT** —
+>   their semantics are inferred, not verified, so they click and do nothing until a real source lands.
+> • Anything that would actually FLY the vehicle (EJECT, the deorbits, chutes, nose cone, CUT MAINS, undock)
+>   is an honest no-op today; Part B (§B12.5 / §B13.4) wires it, one command at a time.
 
 ### THE BUTTON MAP — SETTLED IN GAME 2026-08-05. Both hypotheses were wrong.
 

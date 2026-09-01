@@ -1,6 +1,16 @@
-# SCREEN EVIDENCE MATRIX (ACTIVE)
+# SCREEN EVIDENCE MATRIX
 
-> Every screen feature carries an evidence class + source confidence, so reconstruction is never presented as confirmed SpaceX fact (rules E1/E2). Governed by `MASTER_BUILD_SPEC.md`. Where public evidence does not exist (some Dragon internals are confidential), the honest label is RECONSTRUCTED or SIMULATION with the confidence stated — never a false claim of fidelity.
+> **RECONCILED 2026-09-02 (T1). Governed by `docs/BUILD_PLAN.md` (C7.1)** — `MASTER_BUILD_SPEC.md` was
+> deleted in the 2026-09-01 pivot. This file's evidence classes map onto the plan's **§1.4 source tiers**
+> (CONFIRMED/STRONGLY SUPPORTED ≈ tier 1 · RECONSTRUCTED/SIMULATION ≈ tier 2, marked · anything with neither
+> real evidence nor an existing asset ≈ tier 3, which requires an owner decision and never a unilateral
+> invention). The **evidence is untouched and still authoritative**; only two implementation notes are stale:
+> the target-waypoint row's `DockingControl.NextGateId` and the `DockCapture` capture-envelope owner are
+> deleted code (Part B targets, §B12), and the AUTO/MANUAL unification is a design requirement, not shipped
+> behaviour. §11b of the plan adds three later-found real screen looks this matrix predates — the Prop/RCS
+> thruster schematic, the systems/electrical tree and the circular nav/orbit plot (JSC training series).
+
+> Every screen feature carries an evidence class + source confidence, so reconstruction is never presented as confirmed SpaceX fact. Where public evidence does not exist (some Dragon internals are confidential), the honest label is RECONSTRUCTED or SIMULATION with the confidence stated — never a false claim of fidelity.
 
 **Classes:** CONFIRMED (direct primary evidence) · STRONGLY SUPPORTED (multiple credible sources) · RECONSTRUCTED (reasonable, public evidence incomplete) · SIMULATION (DragonScreen/KSP feature, not a SpaceX claim).
 **Source confidence:** Very High · High · Medium · Low · Intentional (deliberate simulation).

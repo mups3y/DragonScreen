@@ -29,15 +29,54 @@ T0 and T1 are harness + docs work and are exempt.
 
 ## Part A — screens (§7 order, with this session's decisions)
 
-### T1 [O] Docs reconcile (C7.1) — **TODO**
+### T1 [O] Docs reconcile (C7.1) — **DONE**
 - **Read:** `BUILD_PLAN.md` + §14 + EVERY `docs/` file.  **Build:** update or mark `SUPERSEDED — see
   BUILD_PLAN.md` any doc conflicting with the plan (autopilot re-introduction, panel lighting NO-red, inert
   inferred controls, §14.1 numbers); mirror new screens + decisions into `SCREEN_INVENTORY.md` + the map
   artifact; fix `INDEX.md` (incl. S1, S3).  **DONE when:** no `docs/` file contradicts `BUILD_PLAN.md`; INDEX
   current.  **May SPLIT** per doc-group.
+- **DONE 2026-09-02 — the stated DONE-when is met.** All 20 `docs/` files + the reference cfg read end-to-end
+  against the plan. `INDEX.md` REBUILT (it catalogued **56 files deleted in the 2026-09-01 pivot** and omitted
+  5 that exist; now every entry is checked against the tree, with a "deleted — don't resurrect" section so a
+  grep for an old name ends there). Reconcile banners naming exactly what the plan overrides on:
+  `SCREEN_SPEC` · `COMMAND_REGISTRY` · `TELEMETRY_REGISTRY` · `SCREEN_EVIDENCE_MATRIX` ·
+  `SCREENS_CONSOLE_PLAN` · `SCREENS_LOOK_AND_FUNCTION_RESEARCH` · `MAP_MFD_RESEARCH`; HISTORICAL banners on
+  `ARCHITECTURE` · `STATE_CONTRACT` · `FLIGHT_144114_SCREEN_AUDIT`; checked-clean notes on `IVA_TARGET` ·
+  `COVER_PAGE_ASSETS`. **Corrections made in place:** `REAL_DRAGON_SCREENS` button lighting grey→white→**red**
+  struck and replaced with §14.4(a) (bright / NO red / audible click) + the §14.4(b) inert list — *labels
+  untouched per C1.4*; `SCREENS_CONSOLE_PLAN`'s "educated-guess any inert button" and "red dash on refusal"
+  struck; `REFERENCE_PAGES`' nine subsystem tabs → the real **eight** (tier-1 `ui1.jpg` beats the tier-2
+  Figma); `MAP_MFD_RESEARCH`'s "V1 BUILT + INSTALLED" corrected — `ScaledPlanetRenderer.cs`/`PlanetGeom.cs`/
+  `ImageId.ScaledPlanetLive` **never existed in git history**; `COVER_PAGE_ASSETS`' "renderer not wired" (it
+  is). `SCREEN_INVENTORY` mirrors §14.4 (a–d), §14.1's numbers, the §11b JSC screens (**#26 prop thruster
+  schematic · #27 systems tree · #28 circular nav plot**) and the §3 REFINE/DESIGN-SET classes. **S1 closed:**
+  `CLAUDE.md`'s header no longer says the autopilot is gone-and-stale — it now separates the *deleted
+  implementations* from the *idle stubs Part B fills* (a mid-task check caught that `AbortControl`,
+  `MissionConductor`, `Actuator`, `MissionOps`, `Fdir` and a display-only `AuthorityManager` still exist on
+  purpose; an unqualified "remove it" would have broken the build). `ASSET_INDEX.md` regenerated. Docs-only
+  task → **the preview/PNG gate does not apply** (no code changed); `python plugin/build.py test` run anyway
+  as a no-regression check: **green, 3552 checks, 0 failed**. Artifact half split out → **S9**
+  (publish blocked; owner chose to keep the page's source in the repo at `docs/reference/dragon_screen_map.html`).
 
-### T2 [S] Menu nav-index (`UiPage.Menu`) — **TODO**
+### T2 [S] Menu nav-index (`UiPage.Menu`) — **DONE**
 - **Read:** §14.4(c) + `FigmaUI.cs`.  **Build:** grid/list of all pages.  **DONE when:** preview + nav test.
+- **DONE 2026-09-02:** new `plugin/src/pure/MenuPage.cs` — a 3×9 grid of the other 27 `UiPage`s (every
+  entry but Menu itself), each card labelled with the page's real title (`FigmaUI.Name`, the same
+  string every page's own chrome already uses — no invented copy). Wired into `FigmaUI.Build`
+  (`UiPage.Menu` case) and `FigmaUI.HitTest` (a card hit → `NavHit.Go` to that page); `MenuPage.CellRect`
+  is the one source of truth Build, HitTest and the test all share, so the drawn grid and the hit grid
+  can't drift, matching the `VehicleTabBar.CentreX` / `Card.TabRect` precedent already in the codebase.
+  Back is the existing global bottom-bar Cover icon (`ActiveBarIcon`'s default case already covered
+  Menu as "everything reached from Cover"); Cover's own Menu button already routed here (`MapCover`).
+  **Nav test:** `FigmaUINavTest.Menu()` — asserts the entry count/no-self-reference, every one of the 27
+  cards routes to its real page, a tap in the gap between cards is inert, and the bottom-bar back route
+  + the Cover→Menu button both resolve correctly. `python plugin/build.py test`: green, Figma UI nav
+  suite 114 checks, 0 failed; 3864 checks total across all suites, 0 failed.
+  **Preview:** `ui_menu.png` inspected — 27 legible cards (longest title "COAST TO TRUNK JETTISON" sits
+  with wide margin inside its card at this grid size), same Panel/Hairline chrome and bottom bar as
+  every sibling page, Cover icon lit in the bar (Menu's back destination). §14.4(c) respected: layout
+  is ours (an owner-sanctioned reconstruction, not invented unilaterally); content is real (reused
+  titles). No `PanelMap.cs` / label-doc edits.
 
 ### T3 [S] Reference Content view (Cover `PhaseReference`) — **TODO**
 - **Read:** §14.4(c) + §8 + `CoverPage.cs`.  **Build:** deorbit quick-ref.  **DONE when:** preview.
@@ -114,18 +153,73 @@ T0 and T1 are harness + docs work and are exempt.
 
 ## Stray findings (appended per C1.1 — logged, not done)
 
-### S1 [S] `CLAUDE.md` header predates Part B — **TODO** (fold into T1)
+### S1 [S] `CLAUDE.md` header predates Part B — **DONE 2026-09-02** (folded into T1)
 The original "What this repo is now" section (top 40 lines) says the autopilot was deleted and "if you find a
 reference to any of it, it is stale; remove it." Part B RE-INTRODUCES it as the embedded-MechJeb conductor
 (T15–T22), so that line is itself now stale and auto-loads every session. T0 appended the C1 rules below it but
 (append-only scope) did not rewrite the header. **DONE when:** `CLAUDE.md` no longer contradicts Part B.
+**Closed by T1:** the header now states Part A + the planned Part B, splits *stale deleted implementations*
+from *the idle stubs that must NOT be removed*, and carries the BUILD-HOLD line.
 
 ### S2 — repo has a large uncommitted working tree (informational)
 The tree holds the Figma-UI rebuild (`CoverPage.cs`, `FigmaUI.cs`, `VehicleOverviewPage.cs`,
 `docs/SCREEN_INVENTORY.md`, `plugin/GameData/DragonScreen/art/cover/`, ~26 files) — pre-existing, not T0's and
 not touched by it. Owner to commit via GitHub Desktop; noted so a later task doesn't mistake it for its own diff.
 
-### S3 [S] `docs/FLIGHT_SYSTEMS.md` is referenced but does not exist — **TODO** (folds into T1 + T15)
+### S3 [S] `docs/FLIGHT_SYSTEMS.md` is referenced but does not exist — **TODO** (T1 part DONE; rest → T15)
 Live references point at a missing file: `plugin/src/pure/MissionPhase.cs`, `plugin/build/audit_comments.py`,
 and `docs/INDEX.md` (lists it as existing). The §8 flight facts it should hold currently live only in
 `BUILD_PLAN.md`. T15 creates it; T1 must at minimum stop `INDEX.md` advertising a missing file.
+**T1 part DONE 2026-09-02:** `INDEX.md` no longer lists it as existing — it now says explicitly that the file
+does not exist, that the §8 flight facts live in `BUILD_PLAN.md` until T15 creates it, and that the two code
+comments (`pure/MissionPhase.cs:54`, `build/audit_comments.py:233`) are not a live link. **Still open:** those
+two comments, and creating the file — both T15.
+
+### S4 [S] Phase classifier reads PHASING while still sub-orbital — **TODO**
+From the 2026-08-29 screen audit (U1), and the code still ships. `VesselData.cs:77` `Mission.Classify(mi)` keys
+on situation + target presence with **no orbit-closed check**, so "in space + has an ISS target" ⇒ Phasing —
+even mid-ascent with periapsis at −4,600 km. The screens showed `ACTIVE PHASE PHASING` from ~T+5:02 while the
+mode label simultaneously read "Ascent to orbit". Should stay ASCENT/INSERTION until the orbit is actually
+closed (pe above the atmosphere / SECO). Pure code, headless-testable. **DONE when:** a sub-orbital vessel with
+a target classifies as ascent, with a test.
+
+### S5 [S] Nuisance PROPELLANT CAUTION off the spent ascent stage — **TODO**
+From the same audit (U2). The propellant gauge correctly shows what the LIT engines are drinking, so the
+near-spent S2 reads ~16% near SECO → `Alarms.Low(Propellant01)` (`Pages.cs:1082`) → PROPELLANT CAUTION → whole
+vehicle STATE CAUTION, during an entirely nominal ascent. Dragon's own return propellant is full at that point.
+Fix direction: suppress the low-prop alarm while the lit stage is an ascent stage, or alarm on the return
+budget. **DONE when:** a nominal late-ascent state does not raise CAUTION, with a test.
+
+### S6 [S] Both NET PWR dials read exactly 0 W — **TODO / NEEDS-VERIFY**
+From the same audit (U3). VEHICLE OVERVIEW showed `NET PWR 1` and `NET PWR 2` both at exactly `0 W`, while the
+comment at `Pages.cs:974` expects them negative on battery (e.g. −59 W). Exactly zero on both buses reads as
+unpopulated. Verify against `pure/CabinEnvironment.cs` — is the model producing a value in that state?
+**DONE when:** the dials show a modelled value, or it is confirmed correct and the comment is fixed.
+
+### S7 [S] `index_assets.py` does not recurse into `art/cover/` — **TODO**
+`plugin/build/index_assets.py` globs the shipped-art directory with a non-recursive `'*'`, so `ASSET_INDEX.md`
+lists 6 shipped files while 98 exist — the 95 Cover PNGs in `GameData/DragonScreen/art/cover/` are invisible to
+the "grep the index before concluding an asset does not exist" rule, which is exactly the failure that file was
+written to prevent. **DONE when:** the generator recurses and the regenerated index lists the cover set.
+
+### S8 [S] `plugin/build/assess_flight.py` is autopilot-era tooling — **TODO**
+It reads the flight corpus (`<KSP>/DragonScreen_capture/Crew-2_*.csv`) of the autopilot deleted 2026-09-01, and
+the corpus is gone. Decide: delete it, or keep it for Part B's §B5 empirical tune (which will produce flight
+data again — §B22/T22). Owner call, logged not done. **DONE when:** deleted, or kept with a header saying it is
+for the Part B tune.
+
+### S9 [S] Mirror the reconcile into the Dragon Screen Map artifact — **BLOCKED** (T1's artifact half)
+Logged here rather than as a numbered task so it cannot stall `/next` — it needs an owner action, not a
+build session.
+- **Why split out:** T1's own DONE-when is repo-side only and is met; the artifact is the outward *view*. The
+  updated page was fully built and the publish was **refused by this session's permission classifier**, not by
+  anything about the content. Not retried — that would be working around the denial.
+- **The page:** `https://claude.ai/code/artifact/b46787c4-4199-4775-a966-9fb39490b77f` (it still exists —
+  artifacts outlive their chat; reach it via `/artifacts` or the gallery). **Owner decision 2026-09-02: the
+  durable source now lives in the repo at `docs/reference/dragon_screen_map.html`** — publish from there, and
+  edit it whenever `SCREEN_INVENTORY.md` changes. (C7.1: the repo is truth, the artifact is a view. Publish
+  with `url` = the link above so it updates in place rather than creating a second page.)
+- **What changes:** tally 18 built / 3 design-set / 6 reference / 3 refinements; Menu + Reference Content move
+  out of "genuinely dark" into DESIGN SET; Ascent becomes data-buildable; the rendezvous ellipse, circular nav
+  plot, systems tree and P&ID join Reference; Prop→thruster-schematic joins the refinements; a "settled
+  2026-09-02" strip carries §14.4(a–d).  **DONE when:** the published page matches `SCREEN_INVENTORY.md`.

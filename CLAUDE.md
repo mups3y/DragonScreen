@@ -1,18 +1,37 @@
 # DragonScreen
 
-**DragonScreen is the Crew Dragon IVA screens — the UI mod. It reads the vessel and draws it; it
-flies nothing.** An autopilot that flew the vehicle from these screens was built here and **removed
-2026-09-01** (owner directive: keep only the screens / the UI portion). All the flight-control,
-guidance, rendezvous, docking, booster, entry and FDIR code — and its docs, plans, and flight
-recordings — were deleted. If you find a reference to any of it, it is stale; remove it.
+**DragonScreen is the Crew Dragon IVA screens — the UI mod (PART A) — and, planned but NOT yet built,
+an embedded-MechJeb autopilot "conductor" that flies the vehicle from those screens (PART B).**
+Today the mod reads the vessel and draws it; it flies nothing.
+
+The **hand-written** autopilot that used to live here was **deleted 2026-09-01** (owner directive: keep
+only the screens). It is not coming back in that form. **Part B of `docs/BUILD_PLAN.md` re-introduces
+flight software as a pinned, privately-namespaced MechJeb** driven by a pure "conductor" core
+(register tasks T15–T22). So, when you find a flight-software reference:
+
+- **STALE — remove it.** The deleted *implementations* and everything downstream of them:
+  `DockingControl` / `NavState3`, `ReturnControl`, `BoosterControl`, `EntrySteering`, `AbortResponder`,
+  `DockCapture`, the booster-recovery / entry / FDIR control code, and its docs, plans and flight recordings.
+  None of these exist in the tree.
+- **NOT stale — leave it alone.** `src/_AutopilotStub.cs` deliberately keeps **idle seams** the screen code
+  compiles against: `FlightDriver`, `CrewProcedureOps`, `FlightCommands`, `AbortControl`, `MissionConductor`,
+  `Actuator`, `MissionOps`, `Fdir`. They report "not engaged" and no-op. `pure/ScreenModes.cs` likewise keeps
+  an `AuthorityManager` that is now only a **display label** (the GNC lamp's name + colour). Deleting these
+  breaks the build; **Part B fills them in, one controller at a time (§B12.5)** — that is the whole design.
+- a reference to the **planned MechJeb conductor** (§B1–B15 / T15–T22) is **current; leave it**.
+
+🛑 **BUILD-HOLD is in force** until an explicit owner build-go: no mod code, no `install`, no glass
+time. Part B is DESIGNED, not started.
 
 ## What this repo is now
 
 - Three live IVA touchscreens (VEHICLE / FLIGHT / NAV), each a RenderTexture + camera, drawn from
   live KSP state and driven by touch on the console colliders. See `docs/SCREEN_SPEC.md`.
-- The command buttons that used to engage the autopilot are inert (`src/_AutopilotStub.cs` is the
-  idle seam the screen code compiles against — status reads report "not engaged", flight commands
-  no-op). The power / string / fire **systems** are real (pure `VehicleSystems`, display state only).
+- The command buttons that would engage the autopilot are inert (`src/_AutopilotStub.cs` is the idle
+  seam the screen code compiles against — status reads report "not engaged", flight commands are an
+  honest no-op: click, no light, no action — **no red**, per §14.4(a)). Part B replaces those stubs one
+  controller at a time (§B12.5); the contract the screens compile against does not change.
+  The power / string / fire **systems** are real (pure `VehicleSystems`, display state only).
 
 ## The load-bearing rules (still true)
 
@@ -36,8 +55,10 @@ python plugin/build.py install   # test, then copy the DLL + cfg into KSP  (need
 
 ## Start a session from
 
-`docs/SCREEN_SPEC.md` (the screen spec) · `docs/UI_AUDIT.md` (exact layout source) ·
-`docs/REAL_DRAGON_SCREENS.md` · `docs/PALETTE.md` · `docs/REFERENCE_PAGES.md`.
+`docs/BUILD_PLAN.md` (**the** authoritative spec — Parts A/B/C + the §14.4 decision log) · `REGISTER.md`
+(the task list) · `docs/INDEX.md` (what every other doc is and how fresh it is). Then the screen detail:
+`docs/SCREEN_SPEC.md` · `docs/UI_AUDIT.md` (exact layout source) · `docs/REAL_DRAGON_SCREENS.md` ·
+`docs/PALETTE.md` · `docs/REFERENCE_PAGES.md` · `docs/SCREEN_INVENTORY.md`.
 
 ---
 

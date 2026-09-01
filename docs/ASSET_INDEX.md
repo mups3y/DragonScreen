@@ -10,9 +10,13 @@ mostly embedded rasters — `rasterise_all.py` renders the vectors and drops the
 
 `plugin/GameData/DragonScreen/art`
 
+- `dontpanic.png` — 1024x673 (332 KB)
 - `dragon.png` — 1800x3010 (1350 KB)
+- `hud_darken.png` — 1300x1300 (267 KB)
 - `hud_ring.png` — 650x650 (18 KB)
 - `hud_ring_inner.png` — 650x650 (8 KB)
+- `navball.png` — 512x256 (19 KB)
+- `seat.png` — 408x520 (150 KB)
 
 ## Reference art rendered from the Figma SVGs
 

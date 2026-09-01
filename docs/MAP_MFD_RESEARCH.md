@@ -5,10 +5,19 @@ screen, so the crew never has to leave IVA — *with a live 3D scaled-planet vie
 
 ---
 
-## ✅ BUILD STATUS — V1 BUILT + INSTALLED 2026-08-27 (user: "do the map screen")
+## ⚠ BUILD STATUS — CORRECTED 2026-09-02 (T1): the scaled-space camera is NOT in this repo
 
-The live 3D scaled-planet view is built, headless-green (`build.py test`), and installed (DLL 278.5 KB).
-NAV's **NEXT VIEW** now cycles **GROUND TRACK → ORBIT → 3D PLANET**. What shipped:
+**What is actually here:** NAV's **NEXT VIEW** does cycle **GROUND TRACK → ORBIT → 3D PLANET**, and the
+3D-planet view is drawn by `pure/NavPage.Planet` — a textured globe disc (`NavPage.Globe`, from the
+`BodyMap` texture) with the tested `pure/PlanetOverlay.cs` orbit/marker overlay drawn over it. `CoverPage`
+reuses the same call, so the Cover globe and the NAV globe cannot drift apart.
+
+**What is NOT here, despite the paragraph below claiming it shipped:** `src/ScaledPlanetRenderer.cs`,
+`pure/PlanetGeom.cs`, `test/PlanetGeomTest.cs` and `ImageId.ScaledPlanetLive` **do not exist in this repo and
+never have** (checked against the full git history). So there is no scaled-space RT camera, no
+`CopyFrom(ScaledCamera.Instance.cam)`, and no occlusion-culling behind a real rendered globe. Read the
+following block as the **design** for that camera — which is still the right design — not as a status report.
+Building it is register task **T4** (Cover map-modes: 2D/3D + camera). The original text:
 
 - `src/ScaledPlanetRenderer.cs` (glue) — the RT camera. `CopyFrom(ScaledCamera.Instance.cam)` to inherit
   the exact culling mask/projection the map draws the planets with, then override target/clip/clear and
@@ -128,8 +137,10 @@ select, warp-to, and view rotate/zoom. Each is an API call listed in §3 — a n
 ---
 
 ## 5. Scope + priority
-This is a **screens-side feature**, not autopilot. Per the governing plan, **finish pad→orbit (the S2
-ignition fix) and the proving flights first**; then build the scaled-planet view as the next screens project.
-Nothing here blocks the autopilot, and it reuses infrastructure we already have (RT camera pattern, touch,
-NAV page). Estimated pieces: `ScaledPlanetRenderer` (camera+RT, ~a DockingCamRenderer-sized file) → orbit
-overlay draws in `NavPage` → the node/target/warp controls.
+This is a **screens-side feature**, not autopilot. ~~Per the governing plan, finish pad→orbit (the S2 ignition
+fix) and the proving flights first~~ — **SUPERSEDED 2026-09-02 (T1):** the autopilot that sentence sequenced
+against was deleted on 2026-09-01, and the live order is `REGISTER.md`. This work is **T4 — Cover map-modes
+(2D/3D + camera)**, the first item of the §7 build order, and it is BUILD-HELD until the owner's go.
+It reuses infrastructure we already have (the RT camera pattern from `DockingCamRenderer`/`NavBallRenderer`,
+touch, the NAV page). Estimated pieces: `ScaledPlanetRenderer` (camera+RT, ~a DockingCamRenderer-sized file)
+→ orbit overlay draws in `NavPage` → the node/target/warp controls.

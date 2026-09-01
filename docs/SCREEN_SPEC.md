@@ -1,6 +1,18 @@
-# SCREEN SPEC (ACTIVE — the single screen specification)
+# SCREEN SPEC — the single screen specification
 
-> Detailed screen requirements. Subordinate to `MASTER_BUILD_SPEC.md` (**cannot override it**). This is the ONLY screen spec — no `DRAGONSCREEN_UI_SPEC.md` / `UI_MASTER_SPEC.md`. Build pages from reference *source* (`UI_AUDIT.md`, `REAL_DRAGON_SCREENS.md`), never from screenshots (rule E5). Every feature is classified in `SCREEN_EVIDENCE_MATRIX.md`; every value sourced in `TELEMETRY_REGISTRY.md`; every control pathed in `COMMAND_REGISTRY.md`.
+> **RECONCILED 2026-09-02 (T1). `docs/BUILD_PLAN.md` is the authoritative spec (C7.1); this file is
+> subordinate to it and cannot override it.** The old governing doc named here, `MASTER_BUILD_SPEC.md`, was
+> deleted in the 2026-09-01 screens-only pivot — read `BUILD_PLAN.md` in its place, and read the numbered
+> "rules" cited below (E5, S4, C6, T1…) as this file's own house rules, not as clauses of a live document.
+> **What the plan overrides here:** the command paths in §4/§6 route through a `DockingControl` /
+> `NavState3` / `FlightDriver.Set*` actuation layer that was deleted (`AuthorityManager` survives only as the
+> GNC lamp's display label in `pure/ScreenModes.cs`) — flight commands are an honest no-op today
+> (§14.4(a): click, no light, no action, **no red**), and Part B re-introduces the real paths one at a time
+> (§B12.5). The renderer contract (§2), visual language (§3), component library (§4) and the per-page
+> completion gate (§7) are CURRENT and load-bearing. Page-set truth lives in `SCREEN_INVENTORY.md` + §3 of
+> the plan; "Phase N" numbers below are from the old schedule — the live order is `REGISTER.md`.
+
+> Detailed screen requirements. This is the ONLY screen spec — no `DRAGONSCREEN_UI_SPEC.md` / `UI_MASTER_SPEC.md`. Build pages from reference *source* (`UI_AUDIT.md`, `REAL_DRAGON_SCREENS.md`), never from screenshots (rule E5). Every feature is classified in `SCREEN_EVIDENCE_MATRIX.md`; every value sourced in `TELEMETRY_REGISTRY.md`; every control pathed in `COMMAND_REGISTRY.md`.
 
 ## 1. The screen is a window into the spacecraft
 Presents authoritative state; never invents it (rule T1/T2). Consumes the immutable display snapshot fed by physics → vehicle → nav/mission/FDIR → AuthorityManager. Two fidelities, both required on every page: **visual/interaction** and **operational** (`control → command → controller → physics → movement → nav → telemetry`).

@@ -1,5 +1,16 @@
 # Flight `Crew-2_20260829_144114` — full screen/UI audit (Chris's screenshot tour)
 
+> 📜 **HISTORICAL RECORD — reconciled 2026-09-02 (T1).** This flight was flown by the autopilot that was
+> **deleted 2026-09-01**, and the flight corpus it cites is gone. Everything here about *flying* — the
+> rendezvous self-deorbit, the booster loss, the FDIR safe-mode — is history; do not open a task from it.
+> **The screen-side findings survive, because that code still ships**, and they are carried as register lines:
+> **U1** phase classifier reads PHASING while still sub-orbital (`Mission.Classify`) → **S4**;
+> **U2** nuisance PROPELLANT CAUTION off the spent ascent stage (`Alarms.Low`) → **S5**;
+> **U3** both NET PWR dials read exactly 0 W (`CabinEnvironment`) → **S6**.
+> **F1** (a part overheating on ascent) is a vehicle/craft-file matter, not a screen defect — not carried.
+> The ⛔ RULED-OUT table is the most valuable part of this file: those are checked-and-correct-by-design, and
+> re-raising any of them is wasted work.
+
 > Chris deliberately captured **every DragonScreen page + button** during the C2 Step-2 Tick-3 flight (Steam
 > screenshots, 14:42–14:57 wall-clock). This is the UI-audit pass over that tour. **Every claim below was
 > cross-checked against the source** — several first-glance "bugs" turned out to be intentional, and those are

@@ -84,5 +84,9 @@ top-left in the 3427x2112 reference frame (masked template match against `Frame 
 
 **Total 75** — 64 real PNGs placed, 10 hairlines drawn as primitives, 1 (globe) live.
 
-Not yet done: refine any sub-pixel nudges against the side-by-side, wire the in-game renderer
-(ScreenPainter) to load `art/cover/`, then make each button interactive.
+Not yet done: refine any sub-pixel nudges against the side-by-side, then make each button interactive
+(the touch pass, register **T14**).
+
+> ✅ **CORRECTED 2026-09-02 (T1):** the in-game renderer IS wired — `ImageStore.ResolveAsset` loads
+> `GameData/DragonScreen/art/cover/<key>.png` and `ScreenPainter` draws by `AssetKey`. Only the interactivity
+> is outstanding. No conflict with `docs/BUILD_PLAN.md` otherwise.
