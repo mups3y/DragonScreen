@@ -104,6 +104,15 @@ session and are auto-loaded with this file. Section refs (§n, §Bn, C1–C7.1, 
     stated it in that chat. If a gate blocks the task: **STOP and ask** — never proceed because the work
     looks obviously fine. *(Added 2026-09-02 by owner directive, after a build chat recorded a preview-only
     build-go the owner had not given.)*
+13. **Pose every owner decision as a paste-ready overseer prompt.** When a task needs an owner call — the
+    C1.9 batched question at the END of a task, OR a mid-task stop-and-ask when a gate / source / authority
+    (C1.12 / C7) blocks the work — do NOT leave it as a bare inline question. Phrase it as a SELF-CONTAINED
+    prompt addressed to the overseer: state the situation and what was already done, name the exact decision
+    needed, list the discrete options, and flag which options need an owner gate-open or `OVERRIDE` (C1.12).
+    The owner (Chris) pastes it to the overseer so the two can discuss and decide together; the build chat
+    then acts only on the returned decision. This governs the FORM of asking only — it does NOT let a build
+    chat decide a gated item itself (C1.12 still stands), and questions are still batched at the end (C1.9).
+    *(Added 2026-09-02 by owner directive.)*
 
 ## Off-limits as build sources (C7)
 

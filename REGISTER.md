@@ -56,6 +56,23 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
   Harness/docs-only, no code change → **the preview/PNG gate does not apply** (C1.3); `python plugin/build.py
   test` run as a no-regression check: **green, 3917 checks, 0 failed**. Committed locally per the new C1.5.
 
+### G1 [O] Governance — C1.13 "pose every owner decision as a paste-ready overseer prompt" — **DONE**
+- **Owner directive, 2026-09-02, decided by the owner (Chris) via the overseer** (recorded as the owner's per
+  C1.12). A harness/docs task, exempt from the preview/PNG gate. **Build:** add invariant rule **C1.13** — when
+  a task needs an owner call (the C1.9 batched question at the end, or a mid-task stop-and-ask when a gate /
+  source / authority blocks the work), phrase it as a SELF-CONTAINED prompt addressed to the overseer
+  (situation + what was done, the exact decision, the discrete options, and which options need an owner
+  gate-open or `OVERRIDE`) instead of a bare inline question — then apply it consistently across the harness.
+- **DONE 2026-09-02.** Rule 13 added verbatim-in-substance to the C1 list in **`CLAUDE.md`** and to **C1** in
+  **`docs/BUILD_PLAN.md`** (identical text); no other rule renumbered or altered. Consistency edits (C7.1):
+  `BUILD_PLAN.md` **C1.9** now reads "pose ONE structured question, in the C1.13 overseer-prompt form", and
+  **C6**'s "Questions first" bullet spells out the same form so the owner can paste it straight through;
+  **`.claude/skills/next/SKILL.md`** step 7 now names C1.13 and lists the four things the prompt must carry,
+  step 4's gate-blocked "STOP and ask" points at the same form, and step 1's rule count reads 1–13. C1.13
+  governs the FORM of asking only — C1.12 (never decide a gated item) and C1.9 (batch at the end) both stand.
+  No code change → **the preview/PNG gate does not apply** (C1.3); `python plugin/build.py test` run as a
+  no-regression check: **green, 11 suites / 5292 checks, 0 failed**. Committed locally (C1.5); NOT pushed.
+
 ---
 
 ## Part A — screens (§7 order, with this session's decisions)

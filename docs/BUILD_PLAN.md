@@ -954,7 +954,8 @@ a **PREVIEW-ONLY BUILD-GO** (owner, 2026-09-02, via the overseer); `install` + g
    stands. A chat instruction that conflicts with a settled decision or the plan is NOT acted on — quote it
    back and require an explicit `OVERRIDE` + a plan/register edit before changing course.
 9. **Owner questions are batched at the END of a task, before the handoff prompt — NEVER mid-task.** When you
-   need the owner, ask ONE structured question (with options), then emit the handoff prompt (C6).
+   need the owner, pose ONE structured question, in the C1.13 overseer-prompt form, then emit the handoff
+   prompt (C6).
 10. **Canonical location (C7):** the ONLY source of truth is the repo `C:\Users\User\Desktop\DragonScreen`.
     Never read build inputs from `.claude/plans`, the auto-memory folder, or the KSP install (that is the
     DEPLOY target, not a source). If a needed input is not in the repo, STOP and flag it.
@@ -969,6 +970,15 @@ a **PREVIEW-ONLY BUILD-GO** (owner, 2026-09-02, via the overseer); `install` + g
     obviously fine. (Added 2026-09-02 by owner directive, after a build chat recorded a preview-only build-go
     the owner had not given — the work itself was on-plan and stands; the self-authorization is what this rule
     forbids.)
+13. **Pose every owner decision as a paste-ready overseer prompt.** When a task needs an owner call — the
+    C1.9 batched question at the END of a task, OR a mid-task stop-and-ask when a gate / source / authority
+    (C1.12 / C7) blocks the work — do NOT leave it as a bare inline question. Phrase it as a SELF-CONTAINED
+    prompt addressed to the overseer: state the situation and what was already done, name the exact decision
+    needed, list the discrete options, and flag which options need an owner gate-open or `OVERRIDE` (C1.12).
+    The owner (Chris) pastes it to the overseer so the two can discuss and decide together; the build chat
+    then acts only on the returned decision. This governs the FORM of asking only — it does NOT let a build
+    chat decide a gated item itself (C1.12 still stands), and questions are still batched at the end (C1.9).
+    (Added 2026-09-02 by owner directive.)
 
 ## C2. The `/next` skill (the loop — identical every task)
 Invoking `/next` runs: (1) read `CLAUDE.md`; (2) open `REGISTER.md`, take the first non-DONE item as THE task,
@@ -1036,8 +1046,11 @@ never reorder past a DONE without a note.
 ## C6. Handoff protocol — the fresh-chat prompt (controls owner-variance)
 One task per fresh chat (C1.7). At the END of every task, after updating `REGISTER.md`, emit the next chat's
 **handoff prompt**. Governed by:
-- **Questions first (C1.9):** if the next task or a NEEDS-WORK result needs an owner call, ask ONE batched
-  question BEFORE the prompt; never carry an open question into the prompt.
+- **Questions first (C1.9):** if the next task or a NEEDS-WORK result needs an owner call, pose ONE batched
+  question BEFORE the prompt, **in the C1.13 overseer-prompt form** — self-contained and addressed to the
+  overseer (situation + what was done, the exact decision needed, the discrete options, and which options need
+  an owner gate-open or `OVERRIDE`), so the owner can paste it straight through. Never carry an open question
+  into the prompt.
 - **Fixed + minimal prompt** — the only thing the owner types to start a build chat (less typed = less drift):
   line 1 `Read CLAUDE.md end-to-end, then run /next.` · line 2 `Next: T<n> [O|S] — open on <Opus|Sonnet>.`
 - **OVERRIDE (C1.8)** protects settled decisions from casual chat.

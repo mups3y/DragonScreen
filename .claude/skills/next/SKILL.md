@@ -13,7 +13,7 @@ This skill is the enforcement half of the anti-drift harness (`docs/BUILD_PLAN.m
 ## The loop
 
 ### 1. Read the rules
-Read `CLAUDE.md` end-to-end — all of it, including the C1 invariant rules (1–12) appended at the bottom.
+Read `CLAUDE.md` end-to-end — all of it, including the C1 invariant rules (1–13) appended at the bottom.
 
 ### 2. Take exactly ONE task
 Open `REGISTER.md`. **The first line that is not `DONE` is THE task** (a `DOING` line means a previous session
@@ -46,7 +46,8 @@ Every register line names what to read (`§4`, `§B12.1`, `§14.4(a,b)`, a sourc
 - **Never lift an owner gate (C1.12).** A build-go, an `install` / glass-time go, an `OVERRIDE` or a plan change
   is the OWNER's to give, in this chat, in their own words. Never self-authorize one, and never write a
   decision into `REGISTER.md` / the plan as the owner's unless they said it here. If a gate blocks the task:
-  **STOP and ask** — do not proceed because the work looks obviously fine.
+  **STOP and ask** — do not proceed because the work looks obviously fine. Put that stop-and-ask in the C1.13
+  overseer-prompt form too, so the owner can paste it straight to the overseer.
 - **Never ask the owner a question mid-task.** Batch it for step 7.
 - If the task is too big to finish before context compaction, **SPLIT it in `REGISTER.md`** into the part you
   did and the part(s) left, and finish only the first. Never run to compaction mid-task.
@@ -72,7 +73,16 @@ when they get to it. Tell the owner what you committed, so they know what is sit
 
 ### 7. Hand off, then STOP
 Batch the owner questions here, at the end (C1.9): if the next task or a NEEDS-WORK result needs an owner call,
-ask **ONE** structured question with options — never carry an open question into the handoff prompt.
+pose **ONE** structured question **in the C1.13 overseer-prompt form** — never a bare inline question, and never
+carry an open question into the handoff prompt. That form is a SELF-CONTAINED prompt addressed to the overseer:
+
+- the situation and what this task already did;
+- the exact decision needed;
+- the discrete options;
+- which options would need an owner gate-open or `OVERRIDE` (C1.12).
+
+The owner (Chris) pastes it to the overseer, they decide together, and the NEXT build chat acts only on the
+returned decision. The form governs how you ask — it never lets this chat decide a gated item itself (C1.12).
 
 Then emit the next chat's handoff prompt, exactly two lines and nothing else:
 
