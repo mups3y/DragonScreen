@@ -14,8 +14,11 @@ never reorder past a DONE without a note.
 🟢 **PREVIEW-ONLY BUILD-GO — the OWNER's decision, 2026-09-02, granted via the overseer.** Part A **pure
 code + `python plugin/build.py test` + `python plugin/build.py preview` are cleared**. `python
 plugin/build.py install` and glass time are NOT: they need a SEPARATE, explicit owner go, so a task whose
-done-criteria can only be met in the capsule (S10's RT planet camera, T10's audible click, T11b's drag
-FEEL — all three batched under S17) stops and asks rather than installing. **T2–T4 are covered retroactively by this go** — they are on-plan and
+done-criteria can only be met in the capsule (T10's audible click and T11b's drag FEEL — both under
+**S17**; S10's RT planet camera is a separate hold, and is not verifiable until it is BUILT) stops and
+asks rather than installing. ⚠ **A one-session gate-open is not a standing one:** the owner opened
+`install` + glass for ONE session on 2026-09-02, scoped to T10 + T11b (see S17). That gate closed with
+that session; the standing state is preview-only. **T2–T4 are covered retroactively by this go** — they are on-plan and
 preview-only, so nothing is reverted. Part B (T15–T22) remains DESIGNED, not started.
 ⛔ **Only the OWNER opens or widens this gate.** A build chat never grants one, never lifts one, and never
 records a decision as the owner's unless the owner stated it in that chat (C1.12).
@@ -747,7 +750,12 @@ and cannot be judged by the preview gate at all — there is no Unity camera wit
 preview can only draw "LIVE 3D — NO SIGNAL". It therefore needs `install` + glass time, which the
 preview-only build-go does NOT cover — a separate, explicit owner go first. T4 shipped the Cover's 2D/3D + camera MODES against the pure globe that already exists; the
 disc underneath is the only part §2 would change. `MAP_MFD_RESEARCH.md` §5 still says this work "is T4" —
-that line needs re-pointing at S10 when this is picked up (or by a docs pass). **DONE when:** the RT
+that line needs re-pointing at S10 when this is picked up (or by a docs pass).
+**⛔ REMOVED FROM S17's BATCH, 2026-09-02** (owner directive, in the session that opened the T10 + T11b
+gate). S17 had batched this as a third capsule-only item, which was a category error: S17 VERIFIES things
+that are built, and this is **not built**. So the order is fixed — **build S10 first (preview-only, under
+the standing build-go, as far as it can go), and only then does its glass check need a go of its own.**
+That go is the OWNER's (C1.12) and the T10 + T11b gate did not cover it. **DONE when:** the RT
 camera renders in-sim, the orbit line tracks and occludes, and the framing reads well on the glass.
 
 ### S11 [S] `plugin/build/csc.rsp` is a generated file, tracked, and churns on every build — **TODO**
@@ -849,22 +857,56 @@ frame allows. §11b itself is research and stays as written. Fold into the next 
 **S9** (the map artifact), which needs the same tally update. **DONE when:** no `docs/` status mark
 contradicts the tree.
 
-### S17 [owner-gated] Verify T10 audible click on glass — held for a capsule session (batch with T11b drag-rotate + S10 RT camera)
-Logged by T10 (C1.1/C1.7), 2026-09-02. **T11b landed in full 2026-09-02 — render half AND glue half** — so
-the T11b item batched here is now, and only, the **drag feel**: whether the sign reads as grabbing the
-vehicle rather than orbiting the camera, and whether one full sweep of the slot per revolution
-(`Turntable.FramesPerSlot`) is the right gearing on glass. The sequence and the plumbing no longer need
-glass; if the feel is wrong the fix is one constant each (`FramesPerSlot` for the gearing, the sign of the
-drag for the direction) and nothing else moves. **Also check the reset:** a tap on the capsule — under half
-a frame of travel — snaps it back to the authored front, and a slow deliberate turn must NOT be mistaken
-for one. The click is **built and shipped** —
-`GameData/DragonScreen/sounds/panel_click.wav` + `src/PanelAudio.cs`, played on every press — but a 60 ms
-sample cannot be judged from a PNG, so its verification is the one T10 criterion the preview-only build-go
-cannot cover. Needs `install` + glass time, which are **the owner's to grant** (C1.12); this line does not
-grant them. **Check on glass:** it is audible at IVA distance over cabin ambience; it fires on inert and
-unbacked presses too (SWAP 2, FIRE PYRD) since it is their only feedback now that §14.4(a) removed the red
-dash; the level (`PanelAudio.Volume` × `SHIP_VOLUME`) is right rather than startling; and whether the
-deliberate `spatialBlend = 0` reads as flat — if so, move it to 3D with measured numbers, not guessed ones.
-Also confirm the dashes actually light BRIGHT through the installed shader (`PickColourProperty`'s over-1
-`LitColour`), which is the other half of §14.4(a) a PNG cannot answer. **DONE when:** heard and confirmed in
-the capsule, or a NEEDS-WORK note says what it sounded like instead.
+### S17 [owner-gated] Glass verification — T10 click + lamps, T11b drag feel — **DOING** (session open 2026-09-02; install done, awaiting the owner's on-glass answers)
+Logged by T10 (C1.1/C1.7), 2026-09-02. This line is the ONE capsule session that settles the handful of
+criteria a PNG cannot reach. It covers exactly **two** tasks — **T10** (the click and the lamps) and
+**T11b** (the drag feel). Both are BUILT, SHIPPED and headless-green; what is left in each is a judgement
+that needs eyes, ears and a hand on the glass.
+
+**⛔ S10 IS NOT BATCHED HERE ANY MORE (unbatched 2026-09-02, by owner directive in the session that opened
+the gate).** S17 batched it because it is another capsule-only item, but that was a category error: S10 is
+**not built** — it is a TODO that would ADD `src/ScaledPlanetRenderer.cs` + `pure/PlanetGeom.cs` +
+`ImageId.ScaledPlanetLive` — and there is nothing to verify until it exists. **S10 stays HELD on its own
+line, gated on S10 being BUILT first**, and it needs its own owner go for `install` + glass when it is; the
+gate opened for this session explicitly did **not** cover it and was not widened (C1.12).
+
+**Gate (C1.12) — recorded as the owner stated it:** the owner (Chris) opened the `install` + glass-time
+gate for **THIS SESSION ONLY, scoped to T10 + T11b**, explicitly excluding S10 and anything else. A build
+chat neither granted nor widened it. The standing state remains preview-only; this go does not survive the
+session.
+
+**Install performed 2026-09-02 under that gate.** KSP and CKAN confirmed **closed** first (no matching
+processes). `python plugin/build.py install` ran clean — tests green, **10630 checks, every suite 0
+failed** — and wrote the DLL, the cfg, the art and `sounds/panel_click.wav` to
+`…/Kerbal Space Program/GameData/DragonScreen`. A second run reported **every file unchanged**, which is
+the check that the install is complete and self-consistent rather than half-written. **KSP needs a FULL
+RESTART** to pick up the DLL. `plugin/build/csc.rsp` churn reverted (S11).
+
+**THE SIX CHECKS — all PENDING the owner's answers.** Each names the fix if it fails, because the size of
+the fix is what decides whether it is settled in this session or becomes a follow-up line (C1.1):
+
+| # | Check | If wrong |
+|---|---|---|
+| (a) | **T11b direction.** Dragging RIGHT — does the near face follow the finger (grab-and-turn), or does it read as orbiting the camera the other way? | ONE constant: `Turntable.FramesPerSlot` (`pure/Turntable.cs:238`) `= Count` → `= -Count`. |
+| (b) | **T11b gearing.** One sweep across the vehicle = one full revolution. Too fast, too slow, or right? | ONE constant: the magnitude of the same `FramesPerSlot`. |
+| (c) | **T11b reset threshold.** Does a slow, small, deliberate turn ever snap back to the front? (It must not — only a press that travelled under half a frame should.) | ONE constant: `Turntable.TapSlopFrames` (`pure/Turntable.cs:293`), 0.5 → lower. |
+| (d) | **T10 click level.** Audible at IVA distance over cabin ambience, on inert presses (SWAP 2, FIRE PYRD) where it is the ONLY feedback — right level, or startling / inaudible? | ONE constant: `PanelAudio.Volume` (0.55f). |
+| (e) | **T10 spatialisation.** Does the deliberate `spatialBlend = 0` read as flat / heads-up rather than as coming from the button? | **NOT a constant** — 3D needs a source per button position, a rolloff and measured numbers. → NEEDS-WORK follow-up line, not this session. |
+| (f) | **T10 lamp brightness.** Do the dashes light clearly BRIGHT through the installed shader (`PanelButtons.LitColour`, an over-1 2.2), or merely the normal Tundra dash colour? | Depends on the log line below: if the picked property is emissive/HDR, ONE constant (`LitColour`). If it fell back to `_Color`/`_TintColor`, over-1 CLAMPS and the fix is a shader/property change → NEEDS-WORK follow-up. |
+
+**Where to make each check.** T11b: any screen → the Cover hub → press **NEXT VIEW** until the CAMERA
+caption reads **"Auto - Capsule IO"** (the cycle is Earth → Map → Capsule), then drag on the vehicle
+itself; a **tap** on it (press and release without travelling) must snap it to the authored front — flag
+and NASA meatball square-on. T10: the lower analog panel — **SWAP 2** (`TE_CD2_PROP_BUTTON_4`, BUT8) and
+**FIRE PYRD** (`TE_CD2_PROP_BUTTON_3`, BUT10) are inert/unbacked, so the click is all they give;
+**DEORBIT NOW** (emergency plate, BUT3) arms and its dash must light and STAY bright until **EXECUTE**
+(BUT5) puts it out; **POWER 1** (`TE_CD2_PROP_BUTTON_2`, BUT1) is lit while its bus is powered.
+
+**Three KSP.log lines turn (d) and (f) from opinion into evidence** — worth capturing from the session:
+`[DragonScreen] panel click loaded (0.060s)` (or the missing-sound warning), `[DragonScreen] panel button
+material '…' shader '…' colour properties present: …` (this is what decides (f)'s fix size), and
+`[DragonScreen] touch armed on screen N collider size=…`.
+
+**DONE when:** all six are answered on the glass — each either RESOLVED (confirmed, or fixed by its one
+constant, reinstalled and re-confirmed) or NEEDS-WORK with the specifics and a follow-up line. S10 is not
+part of that and does not hold this line open.
