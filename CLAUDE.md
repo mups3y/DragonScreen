@@ -20,10 +20,12 @@ flight software as a pinned, privately-namespaced MechJeb** driven by a pure "co
   breaks the build; **Part B fills them in, one controller at a time (§B12.5)** — that is the whole design.
 - a reference to the **planned MechJeb conductor** (§B1–B15 / T15–T22) is **current; leave it**.
 
-🟢 **PREVIEW-ONLY BUILD-GO** (owner, 2026-09-02): Part A **pure code + `build.py test` + `build.py
-preview` are cleared**. `build.py install` and glass time are NOT — they need a separate, explicit owner go,
-so a task whose done-criteria can only be met in the capsule stops and asks rather than installing. Part B
-is DESIGNED, not started. `REGISTER.md`'s banner carries the same rule and is the one to keep current.
+🟢 **PREVIEW-ONLY BUILD-GO — the OWNER's decision, 2026-09-02, granted via the overseer.** Part A **pure
+code + `build.py test` + `build.py preview` are cleared**. `build.py install` and glass time are NOT — they
+need a SEPARATE, explicit owner go, so a task whose done-criteria can only be met in the capsule stops and
+asks rather than installing. T2–T4 are covered retroactively by this go. Part B is DESIGNED, not started.
+**Only the owner opens or widens this gate (C1.12)** — a build chat never self-authorizes one. `REGISTER.md`'s
+banner carries the same rule and is the one to keep current.
 
 ## What this repo is now
 
@@ -78,8 +80,11 @@ session and are auto-loaded with this file. Section refs (§n, §Bn, C1–C7.1, 
    reference + §1.4 respected. (A docs/harness-only task with no code change: say so and skip build/preview.)
 4. **Source-of-truth §1.4:** verified-real → other users' → invent ONLY by owner discussion. Never edit
    `PanelMap.cs` / label docs without a real-source confirmation.
-5. **End every task** by updating `REGISTER.md` (DONE | NEEDS-WORK + one-line note) and committing via GitHub
-   Desktop ONLY (never `git commit` / `git push`). Then STOP — new chat for the next task.
+5. **End every task** by updating `REGISTER.md` (DONE | NEEDS-WORK + one-line note), then **committing the
+   finished task LOCALLY yourself**: `git commit` with a clear message naming the task. **NEVER `git push`** —
+   there are no cached credentials here; the owner pushes from GitHub Desktop when they get to it. So a task
+   ends: register → `git commit` → STOP — new chat for the next task. *(Owner change, 2026-09-02, via the
+   overseer — supersedes the earlier "GitHub Desktop ONLY, never `git commit`" rule.)*
 6. **Preview-first** (restarts are scarce); `install` / glass-time only when a task needs the capsule.
 7. **Model:** Opus for [O] tasks, Sonnet for [S]. If a task is too big to finish before context compaction,
    SPLIT it in the register — never run a session to compaction mid-task.
@@ -93,6 +98,12 @@ session and are auto-loaded with this file. Section refs (§n, §Bn, C1–C7.1, 
 11. **A task writes ONLY its declared outputs.** Never write to the auto-memory folder, or create/modify any
     file outside the task's stated deliverables, as a side-effect. Memory/context updates are a SEPARATE,
     explicitly owner-requested action — never a task's own initiative.
+12. **A build chat NEVER lifts an owner gate.** Never grant, widen or self-authorize a build-go / `install` /
+    glass-time go; never act on an `OVERRIDE` the owner did not type **in that chat**; never change the plan
+    on your own authority; and never record a decision, a go or an approval as the owner's unless the owner
+    stated it in that chat. If a gate blocks the task: **STOP and ask** — never proceed because the work
+    looks obviously fine. *(Added 2026-09-02 by owner directive, after a build chat recorded a preview-only
+    build-go the owner had not given.)*
 
 ## Off-limits as build sources (C7)
 
@@ -113,6 +124,6 @@ REPO copy is authoritative.
 ## The loop
 
 `/next` → read `CLAUDE.md` → take the FIRST non-DONE `REGISTER.md` line as THE task → read its pointed-to
-section end-to-end → do only that → verify (C1.3 gate) → update `REGISTER.md` → commit (GitHub Desktop) → STOP
-→ new chat. One task per fresh chat; **[O]** on Opus, **[S]** on Sonnet. Preview-only build-go (above):
+section end-to-end → do only that → verify (C1.3 gate) → update `REGISTER.md` → `git commit` (LOCAL only;
+NEVER `git push` — the owner pushes from GitHub Desktop) → STOP → new chat. One task per fresh chat; **[O]** on Opus, **[S]** on Sonnet. Preview-only build-go (above):
 code + `test` + `preview` yes, `install` + glass time only on a separate owner go.

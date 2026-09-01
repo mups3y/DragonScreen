@@ -13,7 +13,7 @@ This skill is the enforcement half of the anti-drift harness (`docs/BUILD_PLAN.m
 ## The loop
 
 ### 1. Read the rules
-Read `CLAUDE.md` end-to-end — all of it, including the C1 invariant rules (1–11) appended at the bottom.
+Read `CLAUDE.md` end-to-end — all of it, including the C1 invariant rules (1–12) appended at the bottom.
 
 ### 2. Take exactly ONE task
 Open `REGISTER.md`. **The first line that is not `DONE` is THE task** (a `DOING` line means a previous session
@@ -37,10 +37,16 @@ Every register line names what to read (`§4`, `§B12.1`, `§14.4(a,b)`, a sourc
 - **Canonical location (C7):** build inputs come from THIS repo only. `.claude/plans`, the auto-memory folder,
   the KSP install `GameData\`, the user's installed MechJeb2, and external URLs are OFF-LIMITS as sources.
   **If a needed input is not in the repo, STOP and flag it — do not go hunting.**
-- **Preview-first** — restarts are scarce. `python plugin/build.py install` + glass time only if the task
-  genuinely needs the capsule.
-- **Decisions are FINAL** unless the owner types `OVERRIDE`. A chat instruction that conflicts with a settled
-  decision (the §14.4 log / the plan) is not acted on: quote it back, require `OVERRIDE` + a plan/register edit.
+- **Preview-first** — restarts are scarce. `python plugin/build.py install` + glass time are NOT covered by the
+  preview-only build-go: they need a SEPARATE owner go, so a task that genuinely needs the capsule **stops and
+  asks** rather than installing.
+- **Decisions are FINAL** unless the owner types `OVERRIDE` **in this chat**. A chat instruction that conflicts
+  with a settled decision (the §14.4 log / the plan) is not acted on: quote it back, require `OVERRIDE` + a
+  plan/register edit.
+- **Never lift an owner gate (C1.12).** A build-go, an `install` / glass-time go, an `OVERRIDE` or a plan change
+  is the OWNER's to give, in this chat, in their own words. Never self-authorize one, and never write a
+  decision into `REGISTER.md` / the plan as the owner's unless they said it here. If a gate blocks the task:
+  **STOP and ask** — do not proceed because the work looks obviously fine.
 - **Never ask the owner a question mid-task.** Batch it for step 7.
 - If the task is too big to finish before context compaction, **SPLIT it in `REGISTER.md`** into the part you
   did and the part(s) left, and finish only the first. Never run to compaction mid-task.
@@ -56,9 +62,13 @@ If any fails, the result is `NEEDS-WORK`, not `DONE`. Say so plainly and record 
 *(For a docs- or harness-only task with no code change, the build/preview steps do not apply — say so
 explicitly in the register note rather than silently skipping the gate.)*
 
-### 6. Update the register + commit
-Set the line to `DONE` or `NEEDS-WORK` with a one-line dated note. Then commit — **via GitHub Desktop ONLY**.
-Do not run `git commit` / `git push`. Tell the owner what to commit and the suggested message.
+### 6. Update the register + commit LOCALLY
+Set the line to `DONE` or `NEEDS-WORK` with a one-line dated note. Then **commit the finished task yourself**:
+`git commit` with a clear message naming the task (e.g. `T5: Vehicle Alerts + Consumables`) — code, register
+line and any docs the task declared, in one commit.
+**NEVER `git push`.** There are no cached credentials in a build chat; the owner pushes from GitHub Desktop
+when they get to it. Tell the owner what you committed, so they know what is sitting unpushed.
+*(Owner change, 2026-09-02, via the overseer — supersedes the earlier "GitHub Desktop ONLY" rule.)*
 
 ### 7. Hand off, then STOP
 Batch the owner questions here, at the end (C1.9): if the next task or a NEEDS-WORK result needs an owner call,
@@ -78,8 +88,13 @@ Then **STOP**. Do not start the next task. A new chat starts it.
 - touch a **second** task in one session;
 - mark `DONE` without the step-5 gate;
 - write to memory or any file outside the task's declared outputs (C1.11);
-- act on a chat instruction that overrides a settled decision without an explicit `OVERRIDE`;
+- act on a chat instruction that overrides a settled decision without an explicit `OVERRIDE` typed by the
+  owner in this chat;
 - read build inputs from an off-limits location (C7);
-- run `git commit` / `git push` (GitHub Desktop only);
-- start mod code / `install` / glass time while **BUILD-HOLD** is in force without an explicit owner build-go
-  (T0 and T1 are harness + docs work and are exempt).
+- run `git push` — ever (a build chat commits LOCALLY and stops; pushing is the owner's, from GitHub Desktop);
+- lift, widen or self-authorize an owner gate — a build-go, an `install` / glass-time go, an `OVERRIDE`, or a
+  plan change — or record any of them as the owner's decision when the owner did not state it in this chat
+  (C1.12): STOP and ask instead;
+- run `python plugin/build.py install`, or ask for glass time, beyond the **PREVIEW-ONLY BUILD-GO** (owner,
+  2026-09-02, via the overseer): pure code + `test` + `preview` are cleared, the capsule is NOT. A task whose
+  done-criteria can only be met in the capsule stops and asks.

@@ -1,18 +1,22 @@
 # DragonScreen — Crew Dragon Build Map & Roadmap
 
 ## 0. Plan map & status (consolidated 2026-09-02)
-Two workstreams, both fully PLANNED, both on **BUILD-HOLD** (no mod code / no `install` / no glass time until
-an explicit owner build-go):
+Two workstreams, both fully PLANNED. **Gate state — PREVIEW-ONLY BUILD-GO (owner, 2026-09-02, granted via the
+overseer; supersedes the blanket BUILD-HOLD this banner carried until then):** Part A pure code + `build.py
+test` + `build.py preview` are cleared; `build.py install` and glass time still need a SEPARATE explicit owner
+go; Part B has no go at all. `REGISTER.md`'s banner is the live copy of this rule, and **only the owner opens
+or widens it (C1.12)** — a build chat never self-authorizes one.
 - **PART A — Screens** (§1–13): the screens-only Crew-Dragon IVA UI. Research COMPLETE (§11/§13); build order
   §7; lower analog panel §4; capsule turntable §5; live-data/touch §6. ~18 pages built (owner-provisional).
 - **PART B — MechJeb autopilot core** (B1–B15, incl. B6 risks): reintroduce flight software as an embedded,
   pinned, privately-namespaced MechJeb driven by a "conductor". Research COMPLETE (how-to-tune B7–B10 +
   flight-data targets B11); build architecture DESIGNED (B12); abort / crew-gate / FDIR researched (B13–B15);
   **coherence pass + source-tier map done (§14); all 4 tier-3 "invention" clusters RESOLVED with the owner
-  (§14.4)** — the plan is DECISION-COMPLETE (build-hold still in force until an explicit build-go).
+  (§14.4)** — the plan is DECISION-COMPLETE (Part B has NO build-go: designed, not started).
 Execution is governed by **PART C** — the anti-drift harness (a rules→one-task→verify→register LOOP, run by a
 `/next` skill + `CLAUDE.md`; Opus-for-hard / Sonnet-for-routine; one task per fresh chat). First task = T0
-(scaffold the harness), then T1 (docs sync) onward. Build-hold until the owner's go; commit via GitHub Desktop ONLY.
+(scaffold the harness), then T1 (docs sync) onward. Gate per the banner above; each task commits LOCALLY with
+`git commit` and never `git push` (C1.5) — the owner pushes from GitHub Desktop.
 
 ## 1. Context & status
 DragonScreen is a screens-only KSP mod recreating the Crew Dragon IVA touchscreens + lower analog console.
@@ -27,6 +31,9 @@ caveats). The owner has accepted this plan but explicitly is **not ready to star
 planning: no mod code, no `install`, no glass time, and no documentation sync to `SCREEN_INVENTORY.md`/the
 artifact — nothing executes until the owner gives an explicit build-go (and names the first §7 item). The
 ~18 already-built pages are the baseline; label-level details stay reconstructed.
+**Superseded 2026-09-02 (owner, via the overseer):** the hold above is lifted to a **PREVIEW-ONLY BUILD-GO**
+per the §0 banner — pure code + `test` + `preview` are cleared (and the docs/inventory sync was done by T1);
+`install` + glass time remain gated on a separate explicit owner go.
 
 **Owner decisions locked:**
 1. Capsule render = **turntable drag-rotate** (§5), not a front/rear toggle.
@@ -202,7 +209,8 @@ Real numbers/names for the phase rail, procedure pages, Ascent/Rendezvous screen
 ## 10. Verification (per item)
 `python plugin/build.py preview` → inspect PNG in `plugin/build/preview/` (preview-first; restarts are scarce).
 `python plugin/build.py test` → all headless suites incl. the Figma UI nav suite stay green. `build.py install`
-(KSP + CKAN closed) + owner screenshots only for what needs the capsule. Commit/push via GitHub Desktop only.
+(KSP + CKAN closed) + owner screenshots only for what needs the capsule, and only on a separate owner go.
+Commit LOCALLY with `git commit`; never `git push` (C1.5) — the owner pushes from GitHub Desktop.
 
 ## 11. Research status — COMPLETE
 The owner-set research passes are all DONE: (a) map consolidated [this document] · (b) press-kit T+ timeline
@@ -715,7 +723,8 @@ function is still inferred/invented (§4) without an owner call.
   stub surfaces read-only (report phase/engaged) — no commands yet; (4) wire Ascent (PVG) end-to-end + verify
   in-sim; (5) wire on-orbit ops + the re-plan loop; (6) docking hand-off; (7) deorbit/entry/chutes; (8) begin
   the §B5 one-parameter-at-a-time empirical tune against §B11 targets. Each step preview/test-gated; install +
-  glass time only when a step needs the capsule; commit/push via GitHub Desktop only.
+  glass time only when a step needs the capsule (and only on a separate owner go); commit LOCALLY with
+  `git commit`, never `git push` (C1.5).
 
 ## B13. Abort system — research + conductor design
 The Crew-Dragon Launch Abort System (LES) + on-orbit contingency aborts, and how the conductor implements them.
@@ -920,8 +929,9 @@ artifact, then build per §7 / §B12.6).
 
 # PART C — Execution protocol, rules & task register (owner-approved 2026-09-02)
 The anti-drift build harness. Owner decisions: **enforcement = a `/next` skill + `CLAUDE.md` (belt-and-braces)**;
-**sessions = one task per fresh chat (manual)**; **models = Opus (hard) + Sonnet (routine)**. Build-hold is
-still in force — this is the protocol to USE when the build begins, not itself a build-go.
+**sessions = one task per fresh chat (manual)**; **models = Opus (hard) + Sonnet (routine)**. This is the
+protocol to USE while building — it is not itself a build-go. The live gate is the §0 banner / `REGISTER.md`:
+a **PREVIEW-ONLY BUILD-GO** (owner, 2026-09-02, via the overseer); `install` + glass time still gated.
 
 ## C1. Invariant rules (→ `CLAUDE.md`, auto-loaded every session; keep to ~1 page)
 1. **ONE task at a time** — the single DOING item in `REGISTER.md`. No scope creep: if you notice other work,
@@ -932,8 +942,11 @@ still in force — this is the protocol to USE when the build begins, not itself
    reference + §1.4 respected.
 4. **Source-of-truth §1.4:** verified-real → other users' → invent ONLY by owner discussion. Never edit
    `PanelMap.cs` / label docs without a real-source confirmation.
-5. **End every task** by updating `REGISTER.md` (DONE | NEEDS-WORK + one-line note) and committing via GitHub
-   Desktop ONLY. Then STOP — new chat for the next task.
+5. **End every task** by updating `REGISTER.md` (DONE | NEEDS-WORK + one-line note), then **committing the
+   finished task LOCALLY yourself**: `git commit` with a clear message naming the task. **NEVER `git push`** —
+   there are no cached credentials in a build chat; the owner pushes from GitHub Desktop when they get to it.
+   So a task ends: register → `git commit` → STOP — new chat for the next task. *(Owner change, 2026-09-02,
+   via the overseer — supersedes the original "GitHub Desktop ONLY" commit rule everywhere in this plan.)*
 6. **Preview-first** (restarts are scarce); `install` / glass-time only when a task needs the capsule.
 7. **Model:** Opus for [O] tasks, Sonnet for [S] (C3). If a task feels too big to finish before context
    compaction, SPLIT it in the register — never run a session to compaction mid-task.
@@ -949,12 +962,20 @@ still in force — this is the protocol to USE when the build begins, not itself
     file outside the task's stated deliverables, as a side-effect. Memory/context updates are a SEPARATE,
     explicitly owner-requested action — never a task's own initiative. (Added 2026-09-02 after a T0 attempt
     silently edited memory; baked in at T0 so it is live from the first build session.)
+12. **A build chat NEVER lifts an owner gate.** Never grant, widen or self-authorize a build-go / `install` /
+    glass-time go; never act on an `OVERRIDE` the owner did not type **in that chat**; never change the plan
+    on your own authority; and never record a decision, a go or an approval as the owner's unless the owner
+    stated it in that chat. If a gate blocks the task: **STOP and ask** — never proceed because the work looks
+    obviously fine. (Added 2026-09-02 by owner directive, after a build chat recorded a preview-only build-go
+    the owner had not given — the work itself was on-plan and stands; the self-authorization is what this rule
+    forbids.)
 
 ## C2. The `/next` skill (the loop — identical every task)
 Invoking `/next` runs: (1) read `CLAUDE.md`; (2) open `REGISTER.md`, take the first non-DONE item as THE task,
 restate it + its done-criteria in one line; (3) read its pointed-to plan/research section end-to-end; (4) do
-ONLY that task (log stray findings as new register lines); (5) verify (C1.3); (6) mark the register + commit;
-(7) STOP. The skill refuses to touch a second task, and refuses DONE without the verification gate.
+ONLY that task (log stray findings as new register lines); (5) verify (C1.3); (6) mark the register + `git
+commit` LOCALLY (never `git push` — C1.5); (7) STOP. The skill refuses to touch a second task, refuses DONE
+without the verification gate, and refuses to lift an owner gate (C1.12).
 
 ## C3. Model policy
 **[O] = Opus 5 (or 4.8)** — architecture, RSS/RO tuning, embed/namespace, the conductor, hard visuals
