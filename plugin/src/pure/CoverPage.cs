@@ -248,6 +248,13 @@ namespace DragonScreen
 
         public static void Build(DisplayList dl, int w, int h, PageState s, MapView view,
                                  int selectedPhase, CoverCam cam)
+        { Build(dl, w, h, s, view, selectedPhase, cam, Turntable.Front()); }
+
+        /// <summary>As above, told where the capsule TURNTABLE is pointing (T11a, §5). Every other
+        /// overload passes the front frame, which is what the view opens on and — until the glue
+        /// carries a drag (T11b) — what it stays on.</summary>
+        public static void Build(DisplayList dl, int w, int h, PageState s, MapView view,
+                                 int selectedPhase, CoverCam cam, TurntableState turn)
         {
             // ---- FILL-TO-FIT reflow: scale to the HEIGHT (fills vertically, no top/bottom gap), and
             // put the horizontal slack into the empty gap between the left panel and the globe: anchor
@@ -275,7 +282,7 @@ namespace DragonScreen
             // the camera slot: the LIVE globe, the flat map, or the capsule. Drawn HERE, before the
             // placed assets, so the caption/readouts/bars in the loop below sit over it exactly as the
             // globe alone used to.
-            DrawCameraView(dl, w, h, s, view, cam);
+            DrawCameraView(dl, w, h, s, view, cam, turn);
 
             int sp = selectedPhase < 0 ? 0 : (selectedPhase >= PhaseCount ? PhaseCount - 1 : selectedPhase);
             bool refPhase = (sp == ReferencePhase);
@@ -316,7 +323,8 @@ namespace DragonScreen
         // ---- the three camera views ----------------------------------------------------------------
 
         /// <summary>Draw whichever of First.vue's three views is up, into the slot they share.</summary>
-        static void DrawCameraView(DisplayList dl, int w, int h, PageState s, MapView view, CoverCam cam)
+        static void DrawCameraView(DisplayList dl, int w, int h, PageState s, MapView view,
+                                   CoverCam cam, TurntableState turn)
         {
             float sc = h / RefH; float extra = w - RefW * sc; if (extra < 0f) extra = 0f;
 
@@ -335,14 +343,9 @@ namespace DragonScreen
 
             if (cam == CoverCam.Capsule)
             {
-                // The vehicle itself (First.vue's view-02). A still of the shipped dragon.png, centred
-                // in the slot; T11 (§5) replaces it with the pre-rendered turntable sequence + drag.
-                float cx = (ViewLeft * sc + w) * 0.5f;
-                float cy = (ViewTop + ViewBottom) * 0.5f * sc;
-                float ih = (ViewBottom - ViewTop) * sc * 0.86f;
-                float ix, iy, iw, ihh;
-                if (Images.FitHeight(ImageId.Dragon, cx, cy, ih, out ix, out iy, out iw, out ihh))
-                    dl.Image(ImageId.Dragon, ix, iy, iw, ihh, DragonPalette.White);
+                // The vehicle itself (First.vue's view-02). No longer the shipped dragon.png still:
+                // T11a puts the §5 TURNTABLE SEQUENCE in the slot, one frame of it chosen by `turn`.
+                DrawTurntable(dl, w, h, sc, turn);
                 return;
             }
 
@@ -352,6 +355,55 @@ namespace DragonScreen
             float gcx = (ViewLeft * sc + w) * 0.5f;
             float gcy = (ViewTop + ViewBottom) * 0.5f * sc;
             NavPage.Planet(dl, s, view, gcx - gs * 0.5f, gcy - gs * 0.5f, gs, gs);
+        }
+
+        // ---- THE CAPSULE TURNTABLE (T11a, §5) ------------------------------------------------
+        //
+        // The sprite fills the same share of the slot the dragon.png still did (0.86 of its height,
+        // centred), with one difference: while the sequence on disk is the PLACEHOLDER set, a strip
+        // is reserved at the bottom of the slot for the label that says so, and the sprite is centred
+        // in what is left. With the real render in (T11b clears Turntable.Placeholder) the strip is
+        // zero and the geometry is exactly what the still had.
+        const float CapsuleFill = 0.86f;              // of the available slot height
+        const float CapsuleLabelStrip = 96f;          // design px, placeholder marking only
+
+        /// <summary>Panel-pixel rect of the turntable sprite. ONE function for the draw and — when
+        /// T11b lands the drag — for the gesture region, which is PageAction's standing rule: a
+        /// control drawn from one rectangle and hit from another drifts on first touch.</summary>
+        public static void CapsuleRect(int w, int h, out float x, out float y,
+                                       out float rw, out float rh)
+        {
+            x = y = rw = rh = 0f;
+            if (w <= 0 || h <= 0) return;
+            float sc = h / RefH;
+            float strip = Turntable.Placeholder ? CapsuleLabelStrip : 0f;
+            float cx = (ViewLeft * sc + w) * 0.5f;
+            float cy = (ViewTop + ViewBottom - strip) * 0.5f * sc;
+            float ih = (ViewBottom - ViewTop - strip) * sc * CapsuleFill;
+            Turntable.FitHeight(cx, cy, ih, out x, out y, out rw, out rh);
+        }
+
+        /// <summary>The turntable: one frame of art/cover/dragon_turn_NNN.png, plus — only while the
+        /// shipped sequence is the stand-in set — the label that marks it as one. §1.4: a stand-in
+        /// that is not labelled is an invented source, so the marking is drawn by the same code that
+        /// draws the sprite and disappears with it.</summary>
+        static void DrawTurntable(DisplayList dl, int w, int h, float sc, TurntableState turn)
+        {
+            float ix, iy, iw, ih;
+            CapsuleRect(w, h, out ix, out iy, out iw, out ih);
+            if (iw <= 0f || ih <= 0f) return;
+
+            dl.Asset(Turntable.KeyOf(turn), ix, iy, iw, ih, DragonPalette.White);
+
+            if (!Turntable.Placeholder) return;
+
+            int frame = Turntable.FrameOf(turn);
+            float lx = ix + iw * 0.5f, ly = iy + ih + 26f * sc;
+            dl.Text(Turntable.PlaceholderLabel, lx, ly, 30f * sc, TextAlign.Centre,
+                    DragonPalette.Caution);
+            dl.Text("FRAME " + frame + " / " + Turntable.Count
+                    + "   AZ " + (int)Turntable.AngleOf(frame) + " DEG",
+                    lx, ly + 38f * sc, 26f * sc, TextAlign.Centre, DragonPalette.Text5);
         }
 
         /// <summary>The CAMERA caption + heading, the NEXT VIEW pill, and - on the MAP view only - the

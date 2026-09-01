@@ -29,6 +29,7 @@ public static class TestMain
         bad += StageStatsTest.Run();       // display: per-stage dV/TWR/burn-time readout (KER-mirrored)
         bad += KerDataTest.Run();          // KER soft-integration: per-stage selection over the mirrored KER sim data
         bad += FigmaUINavTest.Run();       // new Figma UI: bottom-bar nav + back chevron hit routing
+        bad += TurntableTest.Run();        // screens: the capsule sprite turntable — naming, picker, drag (T11a, §5)
 
         Console.WriteLine(bad == 0 ? "ALL SCREEN SUITES PASSED" : bad + " SUITE(S) FAILED");
         return bad == 0 ? 0 : 1;

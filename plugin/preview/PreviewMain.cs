@@ -487,6 +487,55 @@ public static class PreviewMain
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + cdl.Count + " commands");
             }
 
+            // ---- THE CAPSULE TURNTABLE (T11a, §5) ----
+            // Driven by the REAL drag function, never by a frame index typed in here: four
+            // quarter-sweep drags across the vehicle must walk a quarter revolution each and land
+            // back on the front, which is the whole claim these four PNGs exist to show. A preview
+            // that set the frame directly would prove the ASSETS load and nothing about the maths.
+            {
+                float sx, sy, sw, sh;
+                CoverPage.CapsuleRect(CW, CH, out sx, out sy, out sw, out sh);
+                MapView cv = MapProjection.WithMode(MapProjection.Default(), NavMode.Planet);
+                TurntableState t = Turntable.Front();
+                for (int q = 0; q < 4; q++)
+                {
+                    DisplayList cdl = new DisplayList(600);
+                    CoverPage.Build(cdl, CW, CH, ps, cv, 1, CoverPage.CoverCam.Capsule, t);
+                    if (cdl.Overflowed)
+                        Console.WriteLine("  WARNING COVER TURNTABLE OVERFLOWED at " + cdl.Capacity);
+                    string path = Path.Combine(outDir, "ui_cover_turntable_" + q + ".png");
+                    Render(cdl, CW, CH, path);
+                    Console.WriteLine("  " + path + "   frame " + Turntable.FrameOf(t)
+                                      + "  az " + (int)Turntable.AngleOf(t)
+                                      + "  " + Turntable.KeyOf(t));
+                    t = Turntable.Drag(t, sw * 0.25f, sw);
+                }
+                Console.WriteLine("  turntable closed the loop at frame " + Turntable.FrameOf(t)
+                                  + " (want " + Turntable.FrontFrame + ")");
+            }
+
+            // EVERY frame of the sequence on one sheet. Two jobs: it is the only render that touches
+            // all 36 keys, so a frame missing from art/cover/ shows up here as a MISSING line rather
+            // than on the glass; and it is how the sequence itself is judged - whether consecutive
+            // frames actually step, which is the thing a single still cannot show.
+            {
+                const int Cols = 6, CellW = 150, CellH = 300, Pad = 10;
+                int rows = (Turntable.Count + Cols - 1) / Cols;
+                int shW = Cols * CellW + Pad * 2, shH = rows * CellH + Pad * 2;
+                DisplayList sdl = new DisplayList(Turntable.Count + 8);
+                for (int i = 0; i < Turntable.Count; i++)
+                {
+                    float cxp = Pad + (i % Cols) * CellW, cyp = Pad + (i / Cols) * CellH;
+                    float iw = CellH * 0.9f * ((float)Turntable.FrameW / Turntable.FrameH);
+                    sdl.Asset(Turntable.Key(i), cxp + (CellW - iw) * 0.5f, cyp + CellH * 0.05f,
+                              iw, CellH * 0.9f, DragonPalette.White);
+                }
+                string path = Path.Combine(outDir, "ui_turntable_sheet.png");
+                Render(sdl, shW, shH, path);
+                Console.WriteLine("  " + path + "   " + shW + "x" + shH + "   "
+                                  + sdl.Count + " frames");
+            }
+
             // Suit Leak Check with the completion popup up (countdown reached 0)
             {
                 DisplayList udl = new DisplayList(600);

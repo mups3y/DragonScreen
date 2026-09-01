@@ -4,7 +4,9 @@ The living task list for the build. **One task at a time** (C1.1): the first non
 `/next` reads this file. Full detail for every task: `docs/BUILD_PLAN.md` (Part C = the protocol, §1–§14 =
 Part A research, §B1–B15 = Part B research).
 
-**Status:** `TODO` · `DOING` (at most one) · `DONE` · `NEEDS-WORK` (+ one-line note).
+**Status:** `TODO` · `DOING` (at most one) · `DONE` · `NEEDS-WORK` (+ one-line note) · `HELD` (blocked on an
+owner action or an owner gate — **`/next` SKIPS it** and takes the first `TODO` below; only the owner
+unblocks it) · `SPLIT` (a line closed in favour of the sub-tasks it names — also skipped).
 **Model:** `[O]` = Opus · `[S]` = Sonnet (C3). Escalate [S]→[O] if a task stalls; never downgrade an [O].
 
 ⚠️ **LIVING** (C5): split any task that won't finish before compaction; append stray findings at the bottom;
@@ -12,7 +14,7 @@ never reorder past a DONE without a note.
 🟢 **PREVIEW-ONLY BUILD-GO — the OWNER's decision, 2026-09-02, granted via the overseer.** Part A **pure
 code + `python plugin/build.py test` + `python plugin/build.py preview` are cleared**. `python
 plugin/build.py install` and glass time are NOT: they need a SEPARATE, explicit owner go, so a task whose
-done-criteria can only be met in the capsule (S10's RT planet camera, T10's audible click, T11's drag-rotate)
+done-criteria can only be met in the capsule (S10's RT planet camera, T10's audible click, T11b's drag-rotate)
 stops and asks rather than installing. **T2–T4 are covered retroactively by this go** — they are on-plan and
 preview-only, so nothing is reverted. Part B (T15–T22) remains DESIGNED, not started.
 ⛔ **Only the OWNER opens or widens this gate.** A build chat never grants one, never lifts one, and never
@@ -455,9 +457,73 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
   not clearing its lamp in the pure model (`PanelPolicy.ClearsArmedLamps` now owns both cases for glue and
   board alike).
 
-### T11 [O] Capsule turntable — **TODO**
+### T11 [O] Capsule turntable — **SPLIT** into T11a (DONE) + T11b (HELD) — this line is closed, do not take it
 - **Read:** §5.  **Build:** source the MaTte0 model → render sprites → drag-rotate.  **DONE when:** preview,
   drag rotates.
+- **SPLIT 2026-09-02 (owner decision via the overseer; C1.7/C5 — living-register action only, `BUILD_PLAN`
+  §5 is NOT edited and no `OVERRIDE` was asked for or given).** §5's C1 prerequisite — the MaTte0 CC-BY
+  model — **is not in the repo**, and C7 bars going to look for it; the drag itself needs glass. So the
+  model-independent half was built now and the rest is held.
+
+### T11a [O] Capsule turntable — model-independent half (loader / frame-picker / drag maths) — **DONE**
+- **Read:** §5 (C2–C4) + `CoverPage.cs` (the Capsule camera view).  **Build:** the sequence naming +
+  frame picker + drag-delta→frame-index maths **with wrap**, all in `pure/`, driven against clearly
+  marked PLACEHOLDER frames.  **DONE when:** `build.py test` green (incl. wrap), preview PNG inspected,
+  §1.4 respected.
+- **DONE 2026-09-02 — the stated DONE-when is met.**
+  - **New `plugin/src/pure/Turntable.cs`** — §5's C3 naming (`art/cover/dragon_turn_NNN.png`, 36 frames @
+    10°, resolved by the EXISTING loader: `ImageStore.ResolveAsset` in game, `PreviewMain.DrawCoverAsset`
+    out of it), the frame picker (nearest-frame, wraps at both ends, non-finite resolves to the front so
+    the page is never handed a NaN), and C4's drag maths. The state is a **continuous** `Turn`, not an int
+    frame, so a drag smaller than one frame is not thrown away — 600 × 1 px lands exactly where 1 × 600 px
+    does, and there is a test for it. Gearing is **one full sweep of the vehicle = one revolution**,
+    expressed as a fraction of the slot so the gesture is the same physical sweep at 1280 / 2560 / the 2×
+    cover render. Sign convention (drag right → the near face follows the finger) is documented and
+    isolated in one constant; whether it reads right against the real render is a **glass** question → T11b.
+  - **`CoverPage`** — the Capsule camera view no longer draws the `dragon.png` still; it draws one frame of
+    the sequence, chosen by a new `Build(..., TurntableState)` overload (the older overloads open on the
+    front). New public `CapsuleRect` is the ONE rect for the draw and for T11b's gesture region
+    (PageAction's rule). `dragon.png` is **not** orphaned — `Pages.cs:981` still uses it.
+  - **`plugin/build/make_turntable.py`** + the 36 shipped frames — a deterministic, dependency-light
+    generator (the `make_click.py` precedent) writing **deliberately schematic** wireframes that carry
+    the words PLACEHOLDER / NOT A RENDER - T11b plus their own frame number and azimuth. Rotation is made
+    legible by four cues (near-side ribs, one accent index rib, an orbiting-and-foreshortening hatch, a
+    top-down compass) because a body of revolution has the same silhouette from every angle and 36
+    identical frames would prove nothing. §1.4: the marking is drawn by the same code that draws the
+    sprite, `Turntable.Placeholder` gates both, and a **test** asserts the label exists and names T11b —
+    so the stand-in cannot quietly outlive itself.
+  - **Preview:** `ui_cover_turntable_0..3.png` — four quarter-sweeps applied through the REAL
+    `Turntable.Drag` (not a frame index typed into the harness), giving frames 0 → 9 → 18 → 27 → back to 0;
+    and `ui_turntable_sheet.png`, the only render that touches all 36 keys, so a missing frame shows up
+    there rather than on the glass. Inspected: the sequence steps cleanly, no MISSING-asset line, no
+    display-list overflow.
+  - **`build.py test`: green, every suite 0 failed** — new `TurntableTest` suite, 224 checks (naming +
+    wrap both ends, nearest-frame rounding over the seam, sub-frame accumulation, zero-width/NaN drags,
+    the four-quarter loop, the page emitting exactly the picked frame and no frame on the other two camera
+    views, the command budget). Two CS0162 warnings this work introduced were cleared, so the build is no
+    noisier than it was found.
+  - **NOT done here, on purpose (C1.1):** the real render, the glue drag plumbing, and the front-reset tap
+    — all T11b, below.
+
+### T11b [O] Capsule turntable — real render + drag on glass — **HELD** (needs an owner action + a gate)
+- ⛔ **`/next` skips this line** — the first takeable task after T11a is **T12**.
+- **Held on:** §5's C1 model is **not in the repo**. C7 makes external URLs off-limits as build inputs, so
+  a build chat cannot fetch it — **the owner places a licence-clean, trunk-inclusive Crew Dragon model in
+  the repo** (§5 names MaTte0's Sketchfab CC-BY model; backups listed there). **CC-BY attribution to
+  MaTte0 is required** and must land in `assets/ASSET_PROVENANCE.md` with the render.
+- **Build:** (1) render §5's C2 turntable — 36 frames @ 10° (72 if 36 reads steppy), capsule **with trunk**,
+  written at `Turntable.FrameW`×`FrameH` (512×1024) over `art/cover/dragon_turn_NNN.png`; (2) clear
+  `Turntable.Placeholder`, which removes the on-screen marking and the label strip in one move;
+  (3) confirm the render's rotation direction against `Turntable`'s documented sign — if it turns the
+  other way, one constant flips; (4) the **glue drag plumbing** — `ScreenTouch` is `OnMouseDown`-only
+  today, so press/drag/release → `Turntable.Drag` per frame, with the turntable state held beside
+  `coverCam` in `ScreenPainter` and threaded through `FigmaUI.Build`; (5) §5 C4's **reset/"front" tap**
+  (deliberately not built in T11a: it would have been a control that moves nothing); (6) consider warming
+  the sequence in `ImageStore` — 36 first-touch `File.ReadAllBytes` + `LoadImage` calls one per new frame
+  is a hitch per frame through the first revolution.
+- **DONE when:** the sheet shows the real vehicle turning, and the drag is confirmed on glass.
+- ⛔ The on-glass half needs `install` + glass time, which are **the owner's to grant** (C1.12); this line
+  does not grant them. **Batch the capsule visit with S17** (the T10 click) **and S10** (the RT camera).
 
 ### T12 [S] Ascent/Launch page — **TODO**
 - **Read:** §8 + §3.  **Build:** F9 schematic + event list.  **DONE when:** preview.
@@ -687,7 +753,7 @@ frame allows. §11b itself is research and stays as written. Fold into the next 
 **S9** (the map artifact), which needs the same tally update. **DONE when:** no `docs/` status mark
 contradicts the tree.
 
-### S17 [owner-gated] Verify T10 audible click on glass — held for a capsule session (batch with T11 drag-rotate + S10 RT camera)
+### S17 [owner-gated] Verify T10 audible click on glass — held for a capsule session (batch with T11b drag-rotate + S10 RT camera)
 Logged by T10 (C1.1/C1.7), 2026-09-02. The click is **built and shipped** —
 `GameData/DragonScreen/sounds/panel_click.wav` + `src/PanelAudio.cs`, played on every press — but a 60 ms
 sample cannot be judged from a PNG, so its verification is the one T10 criterion the preview-only build-go
