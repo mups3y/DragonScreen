@@ -47,7 +47,15 @@ namespace DragonScreen
         // Figma/demo ref, same footing as VrioTest). Its natural nav entry point (a phase-rail
         // "Procedure" tap) is wired in the touch pass (T14, see FigmaUI's VrioTest comment); for now
         // reached only via the Menu grid. Appended (never renumbered): the int persists per screen.
-        DeorbitBurnPrep = 29
+        DeorbitBurnPrep = 29,
+        // Entry (T8) - SCREEN_INVENTORY #25, reconstructed from a PARTIAL photo frame (only a
+        // "Parachute Deployment Altitude" section title legible - thinner evidence than DeorbitBurnPrep).
+        // NOT the same thing as UiPage.Entry (14) above, whose Titles entry is "ENTRY GO / NO-GO" - a
+        // leftover phase-rail ACTION-item int from the old numbering (S14), unrelated to this standalone
+        // screen despite the name collision; that is why this gets its own value rather than reusing it.
+        // Same reachability footing as DeorbitBurnPrep: Menu grid only for now, T14 wires a real entry
+        // point. Appended (never renumbered): the int persists per screen.
+        EntryProcedure = 30
     }
 
     public enum NavAct { None, Goto, Back, Forward }
@@ -70,7 +78,7 @@ namespace DragonScreen
         /// overlay. The painter sizes its list to the max of this and the old model.</summary>
         public const int Commands = 360;
 
-        public const int PageCount = 30;
+        public const int PageCount = 31;
 
         const float RefW = 3427f, RefH = 2112f;
 
@@ -111,7 +119,7 @@ namespace DragonScreen
             "VEHICLE OVERVIEW", "SUIT LEAK CHECK", "MECH PANEL", "VIDEO SETTINGS", "TEST VRIO HEALTH LEDS",
             "VEHICLE — CREW", "VEHICLE — PROP", "VEHICLE — POWER",
             "VEHICLE — AVIONICS", "VEHICLE — GNC", "VEHICLE — THERMAL",
-            "MANUAL CHUTE DEPLOY", "MANUAL DOCKING", "RENDEZVOUS", "DEORBIT BURN PREP"
+            "MANUAL CHUTE DEPLOY", "MANUAL DOCKING", "RENDEZVOUS", "DEORBIT BURN PREP", "ENTRY"
         };
 
         public static string Name(UiPage p)
@@ -163,6 +171,7 @@ namespace DragonScreen
                 case UiPage.Docking:           DockingSimPage.Build(dl, w, h); break;
                 case UiPage.Rendezvous:        RendezvousPage.Build(dl, w, h, s); break;
                 case UiPage.DeorbitBurnPrep:   DeorbitBurnPrepPage.Build(dl, w, h, s); break;
+                case UiPage.EntryProcedure:    EntryPage.Build(dl, w, h); break;
                 default:               PlaceholderPage.Build(dl, w, h, Name(page)); break;
             }
             BottomBarMarker(dl, w, h, page);
@@ -184,7 +193,7 @@ namespace DragonScreen
                 case UiPage.VehicleCrew: case UiPage.VehiclePropulsion: case UiPage.VehiclePower:
                 case UiPage.VehicleAvionics: case UiPage.VehicleGnc: case UiPage.VehicleThermal:
                 case UiPage.ManualChute: case UiPage.Docking: case UiPage.Rendezvous:
-                case UiPage.DeorbitBurnPrep:
+                case UiPage.DeorbitBurnPrep: case UiPage.EntryProcedure:
                     return false;
                 default:
                     return true;

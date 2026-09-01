@@ -301,8 +301,35 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
   still legible, no overlap. §1.4 respected throughout: every real fact is sourced; the one ambiguity
   found is flagged, not silently resolved; nothing in `PanelMap.cs` / label docs touched.
 
-### T8 [S] Entry page (reconstruct, marked) — **TODO**
+### T8 [S] Entry page (reconstruct, marked) — **DONE**
 - **Read:** §3 + §8.  **DONE when:** preview.
+- **DONE 2026-09-02.** SCREEN_INVENTORY.md #25 / §3 row "Entry" built as a new standalone page —
+  new `plugin/src/pure/EntryPage.cs`. Source is a **PARTIAL** `discovery` "Entry" photo frame
+  (tier-1, real capsule, thinner than T7's already-blurry Deorbit Burn Prep source): the ONLY
+  legible fact is a "Parachute Deployment Altitude" section title + "steps" — no step TEXT was
+  transcribable. Rather than invent step text, the one card reuses the SAME real, already-shipped
+  drogue/main altitude + action figures from `ManualChuteDeployPage.cs`'s Standard schedule (one
+  real source for one real physical event, not a second independently-invented number that could
+  disagree with it — same discipline T6 applied to `NavPage.Orbit` and T7 applied to reusing
+  `PageState` fields); "(TBC)" kept verbatim as SpaceX's own to-be-confirmed marker. Page chrome
+  (title + one accent-dot card) is ours, in `DeorbitBurnPrepPage`'s own established card style.
+  **Important correction caught before building:** `UiPage.Entry` (14) already existed but was
+  **NOT** repurposed for this page — its `FigmaUI.Titles` entry is "ENTRY GO / NO-GO", one of
+  S14's confirmed-dead leftover phase-rail ACTION ints (unrelated to this screen despite the name
+  collision). A new value, `UiPage.EntryProcedure` (30), was appended instead (`FigmaUI.cs`:
+  enum + `PageCount` 30→31 + `Titles` "ENTRY" + `Build`'s switch + `IsPlaceholder`), so the Menu
+  card's label actually matches the page it opens. Reachability: Menu grid only for now (same
+  footing as T7 — a real phase-rail entry point is T14's job); `PreviewMain.cs`'s UI render loop
+  and `FigmaUINavTest.EntryProcedure()` (bottom-bar → Cover, Menu lists it, body inert) added to
+  match T7's precedent exactly. `MenuPage`'s grid auto-discovers via `IsPlaceholder` — no resize
+  needed (20 → 21 real cards, well under the existing 3×10 capacity).
+  **Nav test + gate:** `python plugin/build.py test` green, Figma UI nav suite 228 → **234**
+  checks, 3978 → **3984** total, 0 failed, no new warnings. **Preview:** `ui_entryprocedure.png`
+  inspected — title "ENTRY", one clean card (6 lines), no overlap/clipping, standard bottom bar;
+  `ui_menu.png` re-inspected — 21 cards including "ENTRY" as the new last card, still legible, no
+  overlap. §1.4 respected: the one real fact (section title) is sourced and marked; every other
+  number reuses an existing real source rather than inventing a new one; no `PanelMap.cs` /
+  label-doc edits; `plugin/build/csc.rsp` churn reverted before commit (S11).
 
 ### T9 [O] Prop thruster schematic + P&ID / systems-tree deep-views — **TODO**
 - **Read:** §11b.  **DONE when:** preview.

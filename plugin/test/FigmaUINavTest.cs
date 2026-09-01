@@ -38,6 +38,7 @@ public static class FigmaUINavTest
         MenuHidesPlaceholders();
         Rendezvous();
         DeorbitBurnPrep();
+        EntryProcedure();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
     }
@@ -200,6 +201,26 @@ public static class FigmaUINavTest
         // is claimed by this reconstruction.
         NavHit body = FigmaUI.HitTest(UiPage.DeorbitBurnPrep, 0.5f * W, 0.4f * H, W, H);
         Check("DeorbitBurnPrep body is inert", body.Act == NavAct.None, "got " + body.Act);
+    }
+
+    static void EntryProcedure()
+    {
+        // T8: same footing as DeorbitBurnPrep (T7) - reached only via the Menu grid for now (its
+        // natural nav entry point is T14's job), carries the bottom bar, and its one reconstructed
+        // content card is display-only (no invented destinations). Distinct from the unrelated
+        // UiPage.Entry (14) - see FigmaUI's EntryProcedure enum comment.
+        float sc = (float)H / RefH;
+        float bcx = (46f + 40f) / RefW * W, bcy = (2003f + 40f) * sc;
+        Check("EntryProcedure bottom-bar -> Cover",
+              FigmaUI.HitTest(UiPage.EntryProcedure, bcx, bcy, W, H).Target == UiPage.Cover, "");
+
+        bool sawIt = false;
+        for (int i = 0; i < MenuPage.Entries.Length; i++)
+            if (MenuPage.Entries[i] == UiPage.EntryProcedure) sawIt = true;
+        Check("Menu lists EntryProcedure", sawIt, "");
+
+        NavHit body = FigmaUI.HitTest(UiPage.EntryProcedure, 0.5f * W, 0.4f * H, W, H);
+        Check("EntryProcedure body is inert", body.Act == NavAct.None, "got " + body.Act);
     }
 
     static void SpeccedPages()
