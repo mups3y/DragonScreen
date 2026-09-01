@@ -73,6 +73,19 @@ namespace DragonScreen
         /// <summary>Image only. ImageId.None for every other kind.</summary>
         public ImageId Image;
 
+        /// <summary>Image only: a NAMED external asset (a Figma-exported PNG in art/cover/&lt;key&gt;.png),
+        /// used by the pixel-exact rebuilt pages. Null for a built-in ImageId or any non-image kind.</summary>
+        public string AssetKey;
+
+        /// <summary>Image only: clip the bitmap to the CIRCLE inscribed in its rect. The navball reads as
+        /// a circle for free (its render has transparent corners), but an OPAQUE feed - the docking
+        /// camera - would show a square where a ball goes, so the caller asks for a mask. The renderers
+        /// paint the square-minus-circle corners with <see cref="ClipBg"/> (the colour that sits behind
+        /// the disc), which is how both stay in step without a scissor rect neither one has.</summary>
+        public bool CircleClip;
+        /// <summary>Image only, CircleClip: the colour the disc sits on, used to mask the corners.</summary>
+        public Rgba ClipBg;
+
         /// <summary>
         /// Image only: which PART of the texture to use. UMin/UMax left to right; VMin is the
         /// texture's BOTTOM edge and VMax its top, because that is texture space's own convention and
@@ -191,6 +204,42 @@ namespace DragonScreen
         public void Image(ImageId id, float x, float y, float w, float h, Rgba tint)
         {
             ImageUV(id, x, y, w, h, 0f, 1f, 0f, 1f, tint);
+        }
+
+        /// <summary>
+        /// Draw a NAMED external asset (a Figma-exported PNG in art/cover/&lt;key&gt;.png) into the rect.
+        /// Used by the pixel-exact rebuilt pages, which place the design's own PNG assets at their
+        /// measured positions rather than reproducing them with primitives. Same tint rule as Image.
+        /// </summary>
+        public void Asset(string key, float x, float y, float w, float h, Rgba tint)
+        {
+            if (string.IsNullOrEmpty(key) || w <= 0f || h <= 0f) return;
+            DrawCmd c = new DrawCmd();
+            c.Kind = DrawKind.Image;
+            c.A = x; c.B = y; c.C = w; c.D = h;
+            c.AssetKey = key;
+            c.Colour = tint;
+            c.UMin = 0f; c.UMax = 1f; c.VMin = 0f; c.VMax = 1f;
+            Add(c);
+        }
+
+        /// <summary>
+        /// Draw a bitmap clipped to the CIRCLE inscribed in its rect. Same tint rule as Image; the
+        /// square-minus-circle corners are masked with <paramref name="clipBg"/> (the colour behind the
+        /// disc) so an OPAQUE feed - the docking camera - reads as a ball, not a square. See
+        /// DrawCmd.CircleClip.
+        /// </summary>
+        public void ImageCircle(ImageId id, float x, float y, float w, float h, Rgba tint, Rgba clipBg)
+        {
+            if (id == ImageId.None || w <= 0f || h <= 0f) return;
+            DrawCmd c = new DrawCmd();
+            c.Kind = DrawKind.Image;
+            c.A = x; c.B = y; c.C = w; c.D = h;
+            c.Image = id;
+            c.Colour = tint;
+            c.UMin = 0f; c.UMax = 1f; c.VMin = 0f; c.VMax = 1f;
+            c.CircleClip = true; c.ClipBg = clipBg;
+            Add(c);
         }
 
         /// <summary>

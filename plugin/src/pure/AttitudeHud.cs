@@ -27,13 +27,29 @@ namespace DragonScreen
     public static class AttitudeHud
     {
         public static void Draw(DisplayList dl, float cx, float cy, float radius, AttitudeHudState s)
+        { Draw(dl, cx, cy, radius, s, ImageId.NavBallLive, DragonPalette.Background); }
+
+        /// <summary>As Draw, but the central disc is a caller-chosen image — the live navball for the
+        /// closed-nose attitude view, or ImageId.DockingCamLive when the nose cone is open (the HUD then
+        /// overlays the docking-camera feed). The overlay (ring, crosshair, readouts) is identical.</summary>
+        public static void Draw(DisplayList dl, float cx, float cy, float radius, AttitudeHudState s, ImageId centre)
+        { Draw(dl, cx, cy, radius, s, centre, DragonPalette.Background); }
+
+        /// <summary>As above; <paramref name="discBg"/> is the colour the disc sits on, used to mask the
+        /// corners of an OPAQUE feed (the docking camera) into a circle. The navball needs no mask — its
+        /// render already has transparent corners — so only the camera disc is clipped.</summary>
+        public static void Draw(DisplayList dl, float cx, float cy, float radius, AttitudeHudState s, ImageId centre, Rgba discBg)
         {
             if (dl == null || radius <= 0f) return;
             float d = radius * 2f;
 
-            // The LIVE navball sphere (real game render; a clipped circular skin in the offline preview),
-            // with a thin ring around it.
-            dl.Image(ImageId.NavBallLive, cx - radius, cy - radius, d, d, DragonPalette.White);
+            // The central disc: the live navball (closed nose) or the docking-cam feed (open nose), with
+            // a thin ring around it. The camera is an opaque rectangle, so it is clipped to the circle;
+            // the navball reads round for free and is drawn plain.
+            if (centre == ImageId.DockingCamLive)
+                dl.ImageCircle(centre, cx - radius, cy - radius, d, d, DragonPalette.White, discBg);
+            else
+                dl.Image(centre, cx - radius, cy - radius, d, d, DragonPalette.White);
             dl.ArcBand(cx, cy, radius, radius + 2f, 0.0, 360.0, DragonPalette.Text5);
 
             // Centre aim crosshair — the mark the target is brought onto.

@@ -46,6 +46,31 @@ namespace DragonScreen
         private bool overlayActive;
         private bool overflowLogged;
 
+        // ---- NEW FIGMA UI NAVIGATION ----
+        // The screens are being rebuilt from the Figma design. This switch drives the new page map
+        // (FigmaUI: Cover hub -> HUD / Audio / procedure / cabin / placeholders) instead of the old
+        // FLIGHT/VEHICLE/NAV/DOCKING/SETTINGS tabs + ChromeBar. The old path is kept intact under the
+        // `else` branches so the build stays valid and the change is reversible while the rebuild runs.
+        // `selectedPage` doubles as the current UiPage int (it already persists per screen); the only
+        // difference is the page COUNT, so persistence and bounds use PageCount below.
+        private const bool FigmaMode = true;
+        private readonly System.Collections.Generic.List<int> uiHistory = new System.Collections.Generic.List<int>();
+        private int uiHistIndex = -1;
+
+        // Suit Leak Check live state (only meaningful while that page is shown). suitStart is the
+        // realtime second START was pressed (<0 = idle); the countdown falls 5->0 over ~0.9s a step and
+        // at 5s the completion popup shows (one-shot, matching the reference Fourth.vue). Reset on any
+        // page change so the page is fresh each time it is opened.
+        private float suitStart = -1f;
+        private bool suitPopup;
+
+        // The Cover's selected deorbit phase (0..4). The rail + ◄/► arrows change it IN-PAGE — it drives
+        // the rail highlight + centre heading, and unlike the suit state it persists across visits.
+        private int coverPhase = 1;   // default: Coast to Trunk Jettison (as the reference defaults)
+
+        /// <summary>How many pages the current model has — the new Figma set or the old tab set.</summary>
+        private static int PageCount { get { return FigmaMode ? FigmaUI.PageCount : ChromeBar.PageNames.Length; } }
+
         // Which screen keeps the abort alert after SUPPRESS RESPONSE — the CENTRE display (DragonScreen.cfg:
         // screenIndex 1 = LEFT, 2 = CENTRE "shared by both seats", 3 = RIGHT).
         private const int CentreScreenIndex = 2;
@@ -173,9 +198,11 @@ namespace DragonScreen
             chrome.LinkUp = true;
             // The saved selection wins; the cfg default is only what a never-touched vessel shows.
             selectedPage = (persist != null)
-                ? persist.GetPage(screenIndex, ChromeBar.PageNames.Length, defaultPageIndex)
-                : defaultPageIndex;
+                ? persist.GetPage(screenIndex, PageCount, FigmaMode ? 0 : defaultPageIndex)
+                : (FigmaMode ? 0 : defaultPageIndex);
             chrome.SelectedPage = selectedPage;
+            // Seed the back/forward history with the page the screen opens on.
+            uiHistory.Clear(); uiHistory.Add(selectedPage); uiHistIndex = 0;
             chrome.AlertMask = 0;
             Publish();
 
@@ -199,11 +226,13 @@ namespace DragonScreen
             if (persist == null || persist.Version == lastStateVersion) return;
             lastStateVersion = persist.Version;
 
-            int page = persist.GetPage(index, ChromeBar.PageNames.Length, selectedPage);
+            int page = persist.GetPage(index, PageCount, selectedPage);
             if (page != selectedPage)
             {
                 selectedPage = page;
                 chrome.SelectedPage = page;
+                // A page adopted from elsewhere restarts local history at that page.
+                uiHistory.Clear(); uiHistory.Add(page); uiHistIndex = 0;
                 Publish();
             }
             brightness = persist.GetBrightness();
@@ -286,6 +315,39 @@ namespace DragonScreen
         /// </summary>
         public void Touch(float px, float py)
         {
+            // ---- NEW FIGMA UI: the design's own navigation, no chrome bar ----
+            // The Cover hub's buttons + each page's back chevron ARE the navigation, so touch routes
+            // straight through FigmaUI (pure) to a NavHit, which ApplyNav carries out.
+            if (FigmaMode)
+            {
+                // Nav (bottom bar / back chevron) wins; anything it does not claim on the Suit Leak
+                // Check page drives its START / HALT / popup-close.
+                NavHit nh = FigmaUI.HitTest((UiPage)selectedPage, px, py, w, h);
+                if (nh.Act != NavAct.None) { ApplyNav(nh); return; }
+                UiPage cur = (UiPage)selectedPage;
+                if (cur == UiPage.SuitCheck)
+                {
+                    switch (SuitCheckPage.HitTest(px, py, w, h, suitPopup))
+                    {
+                        case SuitCheckPage.SuitAct.Start: suitStart = Time.realtimeSinceStartup; suitPopup = false; break;
+                        case SuitCheckPage.SuitAct.Halt:  suitStart = -1f; suitPopup = false; break;
+                        case SuitCheckPage.SuitAct.Close: suitPopup = false; break;
+                    }
+                }
+                else if (cur == UiPage.Cover)
+                {
+                    // The rail selects a phase; the ◄/► arrows step through them (wrapping over all 7).
+                    CoverPage.CoverButton cb = CoverPage.HitTest(px, py, w, h);
+                    int ph = CoverPage.PhaseOf(cb);
+                    if (ph >= 0) coverPhase = ph;
+                    else if (cb == CoverPage.CoverButton.Back)
+                        coverPhase = (coverPhase + CoverPage.PhaseCount - 1) % CoverPage.PhaseCount;
+                    else if (cb == CoverPage.CoverButton.Forward)
+                        coverPhase = (coverPhase + 1) % CoverPage.PhaseCount;
+                }
+                return;
+            }
+
             // ---- CHROME FIRST, ALWAYS ----
             // The nav bar is drawn over every page, so it must be TESTED over every page too. If a
             // page were asked first, a control that happened to overlap the bar would silently eat
@@ -329,12 +391,13 @@ namespace DragonScreen
         /// </summary>
         private void SelectPage(int screen, int page)
         {
-            if (page < 0 || page >= ChromeBar.PageNames.Length) return;
-            if (persist != null) persist.SetPage(screen, page, ChromeBar.PageNames.Length);
+            if (page < 0 || page >= PageCount) return;
+            if (persist != null) persist.SetPage(screen, page, PageCount);
             if (screen == index)
             {
                 selectedPage = page;
                 chrome.SelectedPage = page;
+                suitStart = -1f; suitPopup = false;   // the Suit Leak Check opens fresh each visit
                 Publish();
             }
             else if (screen >= 0 && screen < livePage.Length)
@@ -344,7 +407,37 @@ namespace DragonScreen
                 livePage[screen] = page;
             }
             if (persist != null) lastStateVersion = persist.Version;
-            Debug.Log("[DragonScreen] screen " + screen + " page -> " + ChromeBar.PageNames[page]);
+            string pn = FigmaMode ? FigmaUI.Name((UiPage)page)
+                      : (page >= 0 && page < ChromeBar.PageNames.Length ? ChromeBar.PageNames[page] : "?");
+            Debug.Log("[DragonScreen] screen " + screen + " page -> " + pn);
+        }
+
+        /// <summary>
+        /// Carry out a Figma-UI navigation touch: go to a page (pushing history), or step the
+        /// back/forward history the Cover's arrows drive. Going to a new page truncates any forward
+        /// history, the standard browser rule.
+        /// </summary>
+        private void ApplyNav(NavHit nh)
+        {
+            switch (nh.Act)
+            {
+                case NavAct.Goto:
+                    int p = (int)nh.Target;
+                    if (p == selectedPage) return;
+                    if (uiHistIndex >= 0 && uiHistIndex < uiHistory.Count - 1)
+                        uiHistory.RemoveRange(uiHistIndex + 1, uiHistory.Count - uiHistIndex - 1);
+                    uiHistory.Add(p);
+                    uiHistIndex = uiHistory.Count - 1;
+                    SelectPage(index, p);
+                    break;
+                case NavAct.Back:
+                    if (uiHistIndex > 0) { uiHistIndex--; SelectPage(index, uiHistory[uiHistIndex]); }
+                    break;
+                case NavAct.Forward:
+                    if (uiHistIndex >= 0 && uiHistIndex < uiHistory.Count - 1)
+                    { uiHistIndex++; SelectPage(index, uiHistory[uiHistIndex]); }
+                    break;
+            }
         }
 
         /// <summary>
@@ -561,25 +654,50 @@ namespace DragonScreen
 
             int sub = subview[selectedPage & 7];
 
-            // ---- CLAIM THE CAMERA BEFORE DRAWING ----
-            // One camera, two consumers: DOCKING must have the forward view, the VIDEO tab wants
-            // whatever the crew picked. The painter is the only place that knows which page is about
-            // to draw, so the claim is made here rather than inside ImageStore.
-            if (selectedPage == 3) DockingCamRenderer.Request(DockingCamRenderer.DockingPortView, 1);
-            else if (selectedPage == 4 && sub == SettingsPage.Video)
+            if (FigmaMode)
             {
-                VesselData.ValidateCameraView();
-                DockingCamRenderer.Request(VesselData.CameraView, 0);
+                UiPage up = (UiPage)selectedPage;
+                // The HUD overlays the forward docking camera when the nose cone is open; claim it here,
+                // exactly as the old DOCKING page did, before the disc is drawn.
+                if (FigmaUI.WantsDockingCam(up, ps))
+                    DockingCamRenderer.Request(DockingCamRenderer.DockingPortView, 1);
+                ps.CameraHeldByDocking = DockingCamRenderer.HeldByDocking;
+                ps.CameraResText = DockingCamRenderer.Resolution;
+
+                // Suit Leak Check countdown: advance from the START moment; at 5s raise the popup once.
+                int suitCount = 5;
+                if (up == UiPage.SuitCheck && suitStart >= 0f)
+                {
+                    float el = Time.realtimeSinceStartup - suitStart;
+                    if (el >= 5f) { suitPopup = true; suitStart = -1f; }
+                    else { suitCount = 5 - (int)(el / 0.9f); if (suitCount < 0) suitCount = 0; }
+                }
+
+                // The new Figma pages carry their own chrome (each has its bottom bar), so no ChromeBar.
+                FigmaUI.Build(page, up, w, h, ps, mapView, suitCount, suitPopup, coverPhase);
             }
-            ps.CameraHeldByDocking = DockingCamRenderer.HeldByDocking;
-            ps.CameraResText = DockingCamRenderer.Resolution;
+            else
+            {
+                // ---- CLAIM THE CAMERA BEFORE DRAWING ----
+                // One camera, two consumers: DOCKING must have the forward view, the VIDEO tab wants
+                // whatever the crew picked. The painter is the only place that knows which page is about
+                // to draw, so the claim is made here rather than inside ImageStore.
+                if (selectedPage == 3) DockingCamRenderer.Request(DockingCamRenderer.DockingPortView, 1);
+                else if (selectedPage == 4 && sub == SettingsPage.Video)
+                {
+                    VesselData.ValidateCameraView();
+                    DockingCamRenderer.Request(VesselData.CameraView, 0);
+                }
+                ps.CameraHeldByDocking = DockingCamRenderer.HeldByDocking;
+                ps.CameraResText = DockingCamRenderer.Resolution;
 
-            Pages.Build(page, selectedPage, w, h, ps, mapView, index, sub);
+                Pages.Build(page, selectedPage, w, h, ps, mapView, index, sub);
 
-            // Chrome last, so it draws over the page. STRINGS ARE CACHED IN Configure - nothing here
-            // formats, because this runs every frame on three screens. Real vessel values replace
-            // these when the data layer lands; the layout does not change when they do.
-            ChromeBar.Build(page, w, h, chrome);
+                // Chrome last, so it draws over the page. STRINGS ARE CACHED IN Configure - nothing here
+                // formats, because this runs every frame on three screens. Real vessel values replace
+                // these when the data layer lands; the layout does not change when they do.
+                ChromeBar.Build(page, w, h, chrome);
+            }
 
             // ---- THE TOUCH MARKER IS GONE ----
             // It was an INSTRUMENT: a cross drawn where we believed a click landed, so the
@@ -685,9 +803,11 @@ namespace DragonScreen
                 }
                 else if (c.Kind == DrawKind.Image)
                 {
+                    // A NAMED asset (Figma-exported PNG placed by key) resolves off its string; otherwise
                     // Resolve, not Get: ImageId.BodyMap has no file behind it and comes out of the
-                    // running game. See ImageStore.BodyMap.
-                    img = ImageStore.Resolve(c.Image);
+                    // running game. See ImageStore.BodyMap / ImageStore.ResolveAsset.
+                    img = c.AssetKey != null ? ImageStore.ResolveAsset(c.AssetKey)
+                                             : ImageStore.Resolve(c.Image);
                     // A missing image is skipped, not substituted. ImageStore has already logged it
                     // once; drawing a placeholder rectangle here would put a shape on the glass that
                     // no page asked for.
@@ -726,7 +846,19 @@ namespace DragonScreen
                 if (c.Kind == DrawKind.Rect) DrawRect(c);
                 else if (c.Kind == DrawKind.ArcBand) DrawArcBand(c);
                 else if (c.Kind == DrawKind.Line) DrawLine(c);
-                else if (c.Kind == DrawKind.Image) DrawImage(c);
+                else if (c.Kind == DrawKind.Image)
+                {
+                    DrawImage(c);
+                    if (c.CircleClip)
+                    {
+                        // Mask the square-minus-circle corners with the solid material, so an opaque
+                        // feed (the docking camera) reads as a ball. Switching passes here leaves the
+                        // solid material bound; tell the state machine so the next command rebinds.
+                        mat.SetPass(0);
+                        DrawImageCircleMask(c);
+                        pass = 0;
+                    }
+                }
                 else DrawText(c);
             }
         }
@@ -751,6 +883,35 @@ namespace DragonScreen
             GL.TexCoord2(c.UMax, c.VMax); GL.Vertex3(x1, y0, 0f);
             GL.TexCoord2(c.UMax, c.VMin); GL.Vertex3(x1, y1, 0f);
             GL.TexCoord2(c.UMin, c.VMin); GL.Vertex3(x0, y1, 0f);
+            GL.End();
+        }
+
+        /// <summary>
+        /// Paint the corners of a square image with its background colour, leaving the inscribed circle.
+        ///
+        /// GL immediate mode here has no scissor or stencil, so a circular clip is done by covering the
+        /// square-minus-circle region rather than by clipping. The strip walks the circle (inner edge)
+        /// and the square boundary (outer edge) in lockstep: the two coincide at the four cardinal
+        /// points (zero width) and open to the full corner at the diagonals, so it masks exactly the
+        /// cusps and nothing of the disc. Must be called with the SOLID material bound.
+        /// </summary>
+        private void DrawImageCircleMask(DrawCmd c)
+        {
+            float cx = c.A + c.C * 0.5f, cy = c.B + c.D * 0.5f;
+            float r = (c.C < c.D ? c.C : c.D) * 0.5f;   // circle radius = half the shorter side
+            const int N = 96;
+            GL.Begin(GL.TRIANGLE_STRIP);
+            GL.Color(Tint(c.ClipBg));
+            for (int i = 0; i <= N; i++)
+            {
+                double a = (double)i / N * 2.0 * Math.PI;
+                float dx = (float)Math.Cos(a), dy = (float)Math.Sin(a);
+                // point on the circle
+                GL.Vertex3(cx + dx * r, cy + dy * r, 0f);
+                // point on the square boundary in the same direction (scale so the larger |component| = r)
+                float t = Math.Abs(dx) > Math.Abs(dy) ? Math.Abs(dx) : Math.Abs(dy);
+                GL.Vertex3(cx + dx / t * r, cy + dy / t * r, 0f);
+            }
             GL.End();
         }
 

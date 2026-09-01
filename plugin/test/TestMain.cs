@@ -28,6 +28,7 @@ public static class TestMain
         bad += MissionPhaseTest.Run();     // shared: the phase enum the screens label
         bad += StageStatsTest.Run();       // display: per-stage dV/TWR/burn-time readout (KER-mirrored)
         bad += KerDataTest.Run();          // KER soft-integration: per-stage selection over the mirrored KER sim data
+        bad += FigmaUINavTest.Run();       // new Figma UI: bottom-bar nav + back chevron hit routing
 
         Console.WriteLine(bad == 0 ? "ALL SCREEN SUITES PASSED" : bad + " SUITE(S) FAILED");
         return bad == 0 ? 0 : 1;

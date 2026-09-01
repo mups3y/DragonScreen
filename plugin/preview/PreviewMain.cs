@@ -284,6 +284,100 @@ public static class PreviewMain
             Console.WriteLine("  " + path + "   " + W + "x" + H + "   " + dl.Count + " commands");
         }
 
+        // ---- COVER (Figma rebuild, node 12221-244): the Deorbit dashboard, drawn standalone with
+        // its OWN chrome (its own top bar), so no ChromeBar. ps.Planet is still the inclined-orbit
+        // overlay set up just above, so the cover's globe shows the same live disc + track. ----
+        {
+            MapView planet = MapProjection.NextMode(MapProjection.NextMode(MapProjection.Default()));
+            // Render at 2x the screen size: the Figma assets carry 2px hairline borders that fall to
+            // sub-pixel (~0.7px) at 1280 and drop inconsistently; 2x keeps them crisp (the in-game
+            // RenderTexture should match — screenWidth 2560 in the cfg).
+            int CW = W * 2, CH = H * 2;
+            DisplayList cdl = new DisplayList(CoverPage.Commands + 400);
+            CoverPage.Build(cdl, CW, CH, ps, planet);
+            if (cdl.Overflowed) Console.WriteLine("  WARNING COVER OVERFLOWED at " + cdl.Capacity);
+            string path = Path.Combine(outDir, "cover.png");
+            Render(cdl, CW, CH, path);
+            Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + cdl.Count + " commands");
+        }
+
+        // ---- SETTINGS / AUDIO (Figma rebuild, A-Settings) — Cabin selected, 2x render ----
+        {
+            int CW = W * 2, CH = H * 2;
+            DisplayList sdl = new DisplayList(SettingsAudioPage.Commands + 200);
+            SettingsAudioPage.Build(sdl, CW, CH, 2);
+            if (sdl.Overflowed) Console.WriteLine("  WARNING SETTINGS_AUDIO OVERFLOWED at " + sdl.Capacity);
+            string path = Path.Combine(outDir, "settings_audio.png");
+            Render(sdl, CW, CH, path);
+            Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + sdl.Count + " commands");
+        }
+
+        // ---- Complex frame pages shown from their Figma export (attitude HUD, procedure, cabin) ----
+        foreach (string fk in new[] { "frame58", "frame59", "frame66" })
+        {
+            int CW = W * 2, CH = H * 2;
+            DisplayList fdl = new DisplayList(FigmaFramePage.Commands + 4);
+            FigmaFramePage.Build(fdl, CW, CH, fk);
+            if (fdl.Overflowed) Console.WriteLine("  WARNING " + fk + " OVERFLOWED");
+            string path = Path.Combine(outDir, fk + ".png");
+            Render(fdl, CW, CH, path);
+            Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + fdl.Count + " commands");
+        }
+
+        // ---- Frame 58 LIVE HUD (attitude ball + readouts; nose cone toggles the centre image) ----
+        // Two renders: nose CLOSED -> the live navball attitude view; nose OPEN -> the docking-cam feed
+        // (which has no honest preview still, so the centre is the dark it will have when nothing is in
+        // view — the game supplies the real forward camera there).
+        {
+            int CW = W * 2, CH = H * 2;
+            bool savedNose = ps.Steps.NoseConeOpen;
+            foreach (bool open in new[] { false, true })
+            {
+                ps.Steps.NoseConeOpen = open;
+                DisplayList hdl = new DisplayList(Frame58Hud.Commands + 60);
+                Frame58Hud.Build(hdl, CW, CH, ps);
+                if (hdl.Overflowed) Console.WriteLine("  WARNING FRAME58_HUD OVERFLOWED at " + hdl.Capacity);
+                string path = Path.Combine(outDir, open ? "frame58_hud_noseopen.png" : "frame58_hud.png");
+                Render(hdl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + hdl.Count + " commands");
+            }
+            ps.Steps.NoseConeOpen = savedNose;
+        }
+
+        // ---- Figma UI navigation: dispatcher + placeholder + shared back chevron ----
+        {
+            int CW = W * 2, CH = H * 2;
+            foreach (UiPage up in new[] { UiPage.Cover, UiPage.Menu, UiPage.PhaseDeport, UiPage.Hud, UiPage.SuitCheck, UiPage.Vehicle, UiPage.VehicleMech, UiPage.Cabin, UiPage.AudioVideo, UiPage.VrioTest,
+                                          UiPage.VehicleCrew, UiPage.VehiclePropulsion, UiPage.VehiclePower, UiPage.VehicleAvionics, UiPage.VehicleGnc, UiPage.VehicleThermal,
+                                          UiPage.ManualChute, UiPage.Docking })
+            {
+                DisplayList udl = new DisplayList(600);
+                FigmaUI.Build(udl, up, CW, CH, ps, MapProjection.Default());
+                if (udl.Overflowed) Console.WriteLine("  WARNING UI " + up + " OVERFLOWED");
+                string path = Path.Combine(outDir, "ui_" + up.ToString().ToLowerInvariant() + ".png");
+                Render(udl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + udl.Count + " commands");
+            }
+            // Cover with the LAST phase selected (Manual Chute Deploy, rail slot 6) to prove the expanded
+            // seven-item rail + the in-page highlight/heading move to the bottom row.
+            {
+                DisplayList cdl = new DisplayList(600);
+                CoverPage.Build(cdl, CW, CH, ps, MapProjection.Default(), 6);
+                string path = Path.Combine(outDir, "ui_cover_phase6.png");
+                Render(cdl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + cdl.Count + " commands");
+            }
+
+            // Suit Leak Check with the completion popup up (countdown reached 0)
+            {
+                DisplayList udl = new DisplayList(600);
+                SuitCheckPage.Build(udl, CW, CH, 0, true);
+                string path = Path.Combine(outDir, "ui_suitcheck_popup.png");
+                Render(udl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + udl.Count + " commands");
+            }
+        }
+
         // EVERY SETTINGS TAB. Four subviews behind one page is four things with no cheap evidence
         // channel unless each one is rendered - the lesson NAV's orbit view and the globe both taught.
         for (int t = 0; t < SettingsPage.Tabs.Length; t++)
@@ -674,8 +768,30 @@ public static class PreviewMain
         }
     }
 
+    // Cover-page PNG assets (art/cover/<key>.png), placed at their measured Figma positions.
+    private static readonly System.Collections.Generic.Dictionary<string, Image> coverCache =
+        new System.Collections.Generic.Dictionary<string, Image>();
+
+    private static void DrawCoverAsset(Graphics g, DrawCmd c)
+    {
+        Image img;
+        if (!coverCache.TryGetValue(c.AssetKey, out img))
+        {
+            string dir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            string path = Path.GetFullPath(Path.Combine(dir, "..", "GameData", "DragonScreen", "art", "cover", c.AssetKey + ".png"));
+            img = File.Exists(path) ? Image.FromFile(path) : null;
+            if (img == null) Console.WriteLine("  MISSING cover asset " + c.AssetKey);
+            coverCache[c.AssetKey] = img;
+        }
+        if (img == null) return;
+        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        g.DrawImage(img, new RectangleF(c.A, c.B, c.C, c.D),
+                    new RectangleF(0f, 0f, img.Width, img.Height), GraphicsUnit.Pixel);
+    }
+
     private static void DrawImage(Graphics g, DrawCmd c)
     {
+        if (c.AssetKey != null) { DrawCoverAsset(g, c); return; }
         Image img = LoadImage(c.Image);
         // Skipped, not substituted - same rule as the GL painter. A placeholder rectangle would put
         // a shape on the page that nothing asked for.
@@ -708,7 +824,7 @@ public static class PreviewMain
         // would eventually "fix" a layout that was never wrong. Preview-only: the game draws a real
         // mesh and needs no mask.
         System.Drawing.Drawing2D.GraphicsState st = null;
-        if (c.Image == ImageId.NavBallLive)
+        if (c.Image == ImageId.NavBallLive || c.CircleClip)
         {
             st = g.Save();
             using (var path = new System.Drawing.Drawing2D.GraphicsPath())

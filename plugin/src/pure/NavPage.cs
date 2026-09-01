@@ -316,7 +316,9 @@ namespace DragonScreen
         /// The globe follows the vehicle's longitude (left/right pan spins it; +/- zooms the globe);
         /// the overlay is placed against the SAME centre longitude and pixel radius, so it cannot drift.
         /// </summary>
-        private static void Planet(DisplayList dl, PageState s, MapView view,
+        // Public so the Figma-built pages (CoverPage) can reuse the exact same live globe + orbit
+        // overlay inside their own layout, instead of a second globe renderer that could drift.
+        public static void Planet(DisplayList dl, PageState s, MapView view,
                                    float mx, float my, float mw, float mh)
         {
             float cx = mx + mw * 0.5f, cy = my + mh * 0.5f;

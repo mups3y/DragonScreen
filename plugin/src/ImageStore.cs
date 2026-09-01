@@ -14,12 +14,68 @@ namespace DragonScreen
             new Dictionary<ImageId, Texture2D>();
         private static readonly HashSet<ImageId> failed = new HashSet<ImageId>();
 
+        // NAMED assets (the Figma-exported PNGs the rebuilt pages place by key) live in art/cover/ and
+        // are cached the same way, on their string key rather than an ImageId. See DrawCmd.AssetKey.
+        private static readonly Dictionary<string, Texture2D> assetCache =
+            new Dictionary<string, Texture2D>();
+        private static readonly HashSet<string> assetFailed = new HashSet<string>();
+
         internal static Texture Resolve(ImageId id)
         {
             if (id == ImageId.BodyMap) return BodyMap();
             if (id == ImageId.NavBallLive) return NavBallRenderer.Texture();
             if (id == ImageId.DockingCamLive) return DockingCamRenderer.Texture();
             return Get(id);
+        }
+
+        /// <summary>
+        /// The texture for a NAMED asset (art/cover/&lt;key&gt;.png), loaded once and cached. Same rules
+        /// as Get: a missing or undecodable file logs once and is remembered as failed so it is not
+        /// retried every frame, and the page simply draws without it rather than crashing.
+        /// </summary>
+        internal static Texture2D ResolveAsset(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return null;
+
+            Texture2D t;
+            if (assetCache.TryGetValue(key, out t))
+            {
+                if (t != null) return t;
+                assetCache.Remove(key);
+            }
+            if (assetFailed.Contains(key)) return null;
+
+            try
+            {
+                string path = System.IO.Path.Combine(KSPUtil.ApplicationRootPath,
+                                                     "GameData/DragonScreen/art/cover/" + key + ".png");
+                if (!System.IO.File.Exists(path))
+                {
+                    Debug.LogWarning("[DragonScreen] missing asset: " + path);
+                    assetFailed.Add(key); return null;
+                }
+
+                byte[] data = System.IO.File.ReadAllBytes(path);
+                Texture2D tex = new Texture2D(2, 2, TextureFormat.ARGB32, false);
+                if (!tex.LoadImage(data))
+                {
+                    Debug.LogWarning("[DragonScreen] could not decode asset " + key);
+                    UnityEngine.Object.Destroy(tex);
+                    assetFailed.Add(key); return null;
+                }
+                tex.wrapMode = TextureWrapMode.Clamp;
+                tex.filterMode = FilterMode.Bilinear;
+
+                assetCache[key] = tex;
+                Debug.Log("[DragonScreen] loaded asset " + key + " " + tex.width + "x" + tex.height);
+                return tex;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[DragonScreen] asset load threw for " + key + ": " + e.Message);
+                assetFailed.Add(key);
+                return null;
+            }
         }
 
         // ---- THE BODY MAP ----
@@ -163,6 +219,11 @@ namespace DragonScreen
                 if (kv.Value != null) UnityEngine.Object.Destroy(kv.Value);
             cache.Clear();
             failed.Clear();
+
+            foreach (KeyValuePair<string, Texture2D> kv in assetCache)
+                if (kv.Value != null) UnityEngine.Object.Destroy(kv.Value);
+            assetCache.Clear();
+            assetFailed.Clear();
 
             mapBody = null;
             mapTexture = null;
