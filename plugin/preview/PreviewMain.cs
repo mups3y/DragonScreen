@@ -368,6 +368,16 @@ public static class PreviewMain
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + cdl.Count + " commands");
             }
 
+            // Cover with the Reference Content phase selected (rail slot 5, T3): proves the deorbit
+            // quick-reference body swap replaces the baked Coast-phase content in the three card slots.
+            {
+                DisplayList cdl = new DisplayList(600);
+                CoverPage.Build(cdl, CW, CH, ps, MapProjection.Default(), 5);
+                string path = Path.Combine(outDir, "ui_cover_phase5.png");
+                Render(cdl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + cdl.Count + " commands");
+            }
+
             // Suit Leak Check with the completion popup up (countdown reached 0)
             {
                 DisplayList udl = new DisplayList(600);

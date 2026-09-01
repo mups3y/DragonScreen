@@ -83,6 +83,24 @@ namespace DragonScreen
             "deport_burn", "coast_to_trunk", "claw_separati", "procedure", "manual_chute",
             "union_1", "union_2", "union_3", "union_4", "union_5" };
 
+        // Rail index of "Reference Content" (§14.4(c)): NOT a standalone page — a deorbit quick-reference
+        // that replaces the content-panel BODY only, in-page, when this phase is selected. The three baked
+        // panel-body cards (rectangle_179/180/181) and their captions are all specific to the ONE phase the
+        // community export happened to bake ("Coast to Trunk Jettison") — real content, but the wrong
+        // phase's content — so those particular keys are swapped out here and replaced by real §8 data,
+        // never invented (§1.4). The card BACKGROUNDS (rectangle_179/180/181) are real Figma layout and
+        // stay; only their baked captions/rows are swapped for the reference text.
+        const int ReferencePhase = 5;
+        static readonly string[] ReferenceSkipKeys = {
+            "crew_interrupt_conditions", "union", "30deg_sustained_altitude_error", "far_field_pointing_1",
+            "600deg_m_altitude_rate", "far_field_pointing", "crew_deorbit_preparation", "union_6",
+            "deorbit_burn_3_hrs", "on_spacex_on_begin_procedure_4_700", "nlt_deorbit_burn_1_hr",
+            "deorbit_burn_brief", "bi_arrow_right_short", "nlt_deorbit_burn_30_min", "review_reference_content",
+            "deorbit_entry_and_landing_go_no_go", "acknowledge",
+            "1_monitor_slow_to_free_flight_altitude_sun_geo_pointing",
+            "2_after_spacex_go_for_deorbit_verify_entry_is_enabled", "false", "entry_enabled", "true",
+            "3_after_entry_is_enabled_dragon_transitions_to_claw" };
+
         public static void Build(DisplayList dl, int w, int h, PageState s, MapView view)
         { Build(dl, w, h, s, view, 1); }
 
@@ -118,28 +136,81 @@ namespace DragonScreen
             float gcy = (Y(220f) + Y(1877f)) * 0.5f;
             NavPage.Planet(dl, s, view, gcx - gs * 0.5f, gcy - gs * 0.5f, gs, gs);
 
+            int sp = selectedPhase < 0 ? 0 : (selectedPhase >= PhaseCount ? PhaseCount - 1 : selectedPhase);
+            bool refPhase = (sp == ReferencePhase);
+
             // every placed asset — anchored left/right of the split, bars stretched. rectangle_178 was
             // already drawn behind the bars above, so skip it here. The rail highlight (rectangle_183 +
             // rectangle_95) and the centre heading (coast_to_trunk_jettison) are DYNAMIC — the export
             // baked them onto one phase. The five baked rail rows (labels deport_burn…manual_chute + the
-            // union_1…5 dots) are ALSO skipped: the rail is redrawn below as seven primitive rows.
+            // union_1…5 dots) are ALSO skipped: the rail is redrawn below as seven primitive rows. On the
+            // Reference Content phase the baked panel-BODY captions (ReferenceSkipKeys) are swapped out
+            // too — the three card backgrounds (rectangle_179/180/181) stay, their content is redrawn below.
             for (int i = 0; i < Keys.Length; i++)
             {
                 string k = Keys[i];
                 if (Array.IndexOf(SkipKeys, k) >= 0) continue;
+                if (refPhase && Array.IndexOf(ReferenceSkipKeys, k) >= 0) continue;
                 dl.Asset(k, X(Box[i, 0]), Y(Box[i, 1]), Wd(Box[i, 0], Box[i, 2]), Z(Box[i, 3]), DragonPalette.White);
             }
-
-            int sp = selectedPhase < 0 ? 0 : (selectedPhase >= PhaseCount ? PhaseCount - 1 : selectedPhase);
 
             // the seven-item deorbit phase rail + the selected phase's highlight (shared verbatim with the
             // Manual Chute Deploy page via DrawRail), then the centre heading (Cover-specific).
             DrawRail(dl, w, h, sp);
             dl.Text(PhaseName[sp], X(490), Y(286), Z(58), TextAlign.Left, DragonPalette.White);
 
-            // the hairlines, as crisp primitives at their measured positions
-            for (int i = 0; i < Lines.GetLength(0); i++)
-                dl.Line(X(Lines[i, 0]), Y(Lines[i, 2]), X(Lines[i, 1]), Y(Lines[i, 2]), St(2), DragonPalette.Text6);
+            if (refPhase)
+                DrawReferenceContent(dl, X, Y, Z);
+            else
+                // the hairlines, as crisp primitives at their measured positions — all ten are dividers
+                // within the baked (non-Reference) panel body, so they are skipped on Reference Content.
+                for (int i = 0; i < Lines.GetLength(0); i++)
+                    dl.Line(X(Lines[i, 0]), Y(Lines[i, 2]), X(Lines[i, 1]), Y(Lines[i, 2]), St(2), DragonPalette.Text6);
+        }
+
+        /// <summary>The deorbit quick-reference (§14.4(c)): entry timeline, parachutes, contingency — all
+        /// real §8/§4 flight facts, laid out in the three real card slots (rectangle_179/180/181) the baked
+        /// export used for the Coast-phase body. Drawn only when the Reference Content rail item (index 5)
+        /// is selected.</summary>
+        static void DrawReferenceContent(DisplayList dl, Func<float, float> X, Func<float, float> Y, Func<float, float> Z)
+        {
+            void Card(float titleY, string title, string[] lines, float spacing)
+            {
+                dl.ArcBand(X(333), Y(titleY + 28), Z(4), Z(9), 0, 360, DragonPalette.Accent);
+                dl.Text(title, X(362), Y(titleY), Z(34), TextAlign.Left, DragonPalette.White);
+                float ry = titleY + 56f;
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    dl.Text(lines[i], X(340), Y(ry), Z(26), TextAlign.Left, DragonPalette.Text2);
+                    ry += spacing;
+                }
+            }
+
+            // Return/deorbit sequence — §8 "Return/deorbit". Times are the ones §8 actually gives; no
+            // invented numbers (§1.4).
+            Card(499f, "ENTRY TIMELINE", new[] {
+                "Undock → trunk jettison",
+                "Deorbit burn — ~15 min",
+                "Claw separation — ~1 h 20 m before splashdown",
+                "Nose cone close & lock",
+                "Entry interface",
+                "Drogues, then mains at ~2 km",
+                "Splashdown — T+50 min from burn start" }, 32f);
+
+            // §8 "Parachutes (Mark 3)".
+            Card(848f, "PARACHUTES (MARK 3)", new[] {
+                "2 drogues deploy first",
+                "4 mains deploy at ~2 km",
+                "Land under ≥ 3 mains",
+                "CUT MAINS after splashdown" }, 40f);
+
+            // Contingency / abort notes — the CONFIRMED-real panel functions (§4) + the §8 deorbit
+            // go/no-go timing.
+            Card(1329f, "CONTINGENCY", new[] {
+                "EJECT — SuperDraco abort (8 modes)",
+                "WATER DEORBIT / DEORBIT NOW — contingency immediate deorbit",
+                "Water landing is the norm — 7 designated splashdown sites",
+                "Deorbit go/no-go — ~30 min before claw-sep prep" }, 40f);
         }
 
         /// <summary>Draw the seven-item deorbit phase rail (ring marker + two-line label per row) plus the

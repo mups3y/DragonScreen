@@ -78,8 +78,37 @@ T0 and T1 are harness + docs work and are exempt.
   is ours (an owner-sanctioned reconstruction, not invented unilaterally); content is real (reused
   titles). No `PanelMap.cs` / label-doc edits.
 
-### T3 [S] Reference Content view (Cover `PhaseReference`) — **TODO**
+### T3 [S] Reference Content view (Cover `PhaseReference`) — **DONE**
 - **Read:** §14.4(c) + §8 + `CoverPage.cs`.  **Build:** deorbit quick-ref.  **DONE when:** preview.
+- **DONE 2026-09-02:** Reference Content is a rail slot IN the Cover page (index 5), not a standalone
+  page — confirmed via `FigmaUI.MapCover` (only Menu/Settings/PhaseManual navigate away; the rest,
+  including PhaseReference, select in-page and return `NavHit.None`). Before this task, `CoverPage.Build`
+  drew the SAME baked panel body for all 7 rail phases (only the heading + rail highlight moved) — the
+  body content was always the one phase the Figma export happened to bake ("Coast to Trunk Jettison"),
+  so selecting "Reference Content" showed Coast's crew-interrupt/procedure rows under a mismatched
+  heading. Fixed in `plugin/src/pure/CoverPage.cs`: added `ReferenceSkipKeys` (the ~23 baked asset keys
+  that are Coast-phase-specific body content) skipped only when `sp==ReferencePhase(5)`; the three real
+  Figma card backgrounds (`rectangle_179/180/181`) and all chrome (top bar, rail, globe, bottom bar,
+  camera/target readouts) stay — only the body TEXT swaps. Added `DrawReferenceContent` (a `Card` local
+  helper) drawing three real-data sections in those same three card slots: **ENTRY TIMELINE** (undock →
+  trunk jettison → deorbit burn ~15 min → claw separation ~1h20m before splashdown → nose cone close &
+  lock → entry interface → drogues/mains at ~2 km → splashdown T+50 min from burn start) and
+  **PARACHUTES (MARK 3)** (2 drogues then 4 mains at ~2 km; land under ≥3; CUT MAINS after splashdown),
+  both straight from §8 Return/deorbit + Parachutes; **CONTINGENCY** (EJECT — SuperDraco abort 8 modes;
+  WATER DEORBIT/DEORBIT NOW — contingency immediate deorbit, water landing norm, 7 sites; deorbit
+  go/no-go ~30 min before claw-sep prep) from §4's CONFIRMED-real panel-function list + §8's timing —
+  no invented numbers (§1.4). The baked content-panel hairlines (`Lines[]`, all 10 are dividers within
+  the Coast-phase body) are skipped on this phase too, since they'd cut across the new text at the wrong
+  spots. **Preview:** added a `ui_cover_phase5.png` render to `plugin/preview/PreviewMain.cs` (mirrors the
+  existing phase6/Manual-Chute precedent) and inspected it: rail lights "Reference Content", heading
+  reads "Reference Content", the three cards show the new sections cleanly with no overlap/clipping, and
+  the globe/top-bar/bottom-bar/camera-target chrome is untouched. One title (`—` em dash at 34px) rendered
+  with the following space collapsed in the preview's GDI+ font — reworded to "PARACHUTES (MARK 3)"
+  rather than chase the renderer glitch (out of this task's scope); body-size en dashes (`–`) elsewhere
+  on the same card render with normal spacing. Regression-checked `cover.png` (default phase 1, Coast) —
+  pixel-identical baked body, confirming the skip only fires on `sp==5`. `python plugin/build.py test`:
+  green, 3864 checks, 0 failed (no new warnings). §1.4 respected: layout reuses real Figma card
+  positions; every fact is sourced (§8 / §4's CONFIRMED-real list), nothing invented.
 
 ### T4 [O] Cover map-modes (2D/3D + camera) — **TODO**
 - **Read:** §3 + `NavPage`.  **DONE when:** preview, modes switch.
