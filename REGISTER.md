@@ -399,9 +399,44 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
   before commit (S11). **Logged not done → S15** (the circular nav/orbit plot, #28) and **S16** (the
   now-stale status marks in `SCREEN_INVENTORY.md` / §3).
 
-### T10 [O] Lower-panel accuracy pass — **TODO**
+### T10 [O] Lower-panel accuracy pass — **DONE**
 - **Read:** §4 + §14.4(a,b) + `PanelButtons`/`PanelMap`/`FlightCommands`.  **Build:** lighting bright / no-red,
   audible click, SWAP + inferred-entry INERT.  **DONE when:** preview + panel test, click plays, inferred inert.
+- **SPLIT by owner decision (via the overseer), 2026-09-02, per C1.7:** three of the four done-criteria are
+  preview-verifiable under the standing preview-only build-go; the fourth (the click actually being HEARD) can
+  only be met in the capsule. The click was **BUILT** this session — asset + glue — and only its **on-glass
+  verification** was deferred to the new held **S17** line. No `install`, no glass time, no gate touched (C1.12).
+- **DONE 2026-09-02.** (a) **Lighting — bright, no red.** The policy moved out of the MonoBehaviour into a new
+  pure `pure/PanelBehaviour.cs` (`PanelPolicy` + `PanelBoard`), so the one part of the panel that is a decision
+  is now headless-testable and PNG-previewable. `PanelLight.Failed` **deleted** from `PanelMap.cs` and
+  `FailColour` **deleted** from `PanelButtons.cs` — removed from the enum rather than left unused, since an
+  unused red state is one edit from returning. A press that cannot act is now `PanelPressKind.Nothing`: click,
+  no light, no action, and it does **not** disturb a lamp driven from live state (pressing an unpowered STRING
+  no longer blacks out the row lamp). (b) **Inert:** SWAP 1/2/3 + ENABLE ENTRY REBOOT / BACKUP ENTRY / NORMAL
+  ENTRY gated in `PanelPolicy.IsInert` — the dispatcher is **never called** for them, so no Part B wiring can
+  make one act by accident; their confirmed plate-mates (ENABLE BACKUP PYROS, FIRE PYRD) are untouched.
+  (c) **Click:** `build/make_click.py` synthesises `GameData/DragonScreen/sounds/panel_click.wav` (60 ms, mono
+  16-bit 44.1 kHz, deterministic — two runs are byte-identical); authored here, nothing downloaded (C7), no
+  attribution to keep. `src/PanelAudio.cs` plays it on **every** press including inert and unbacked ones — with
+  the red dash gone the click is their only feedback. Deliberately `spatialBlend = 0`: 3D falloff cannot be
+  judged with the game closed and its failure mode is silence, which is indistinguishable from "never played".
+  (d) **Test:** `test/PanelTest.cs` gained `Lighting()` / `Inert()` / `Board()` — the panel suite went 118 →
+  **1773 checks**, including a sweep that presses all 38 buttons both ways and asserts no lamp is ever anything
+  but bright or as-modelled. `python plugin/build.py test` **green, 5572 checks, 0 failed**.
+- **Gate (C1.3) met:** four preview PNGs rendered from the new preview-only `pure/PanelBoardPage.cs` and
+  **inspected** — `panel_rest` (0 of 38 lit), `panel_armed` (DEORBIT NOW held bright on the left plate, 1 lit),
+  `panel_fired` (EXECUTE from the RIGHT seat bright, POWER 1 holding, the left plate's armed lamp correctly
+  **out**, 2 lit) and `panel_inert_swap` (SWAP 2 pressed → clicked, board entirely dark, 0 lit). No red in any
+  of them; no `DisplayList` overflow. Plate order/spacing come from the prop-space transform dump in
+  `REAL_DRAGON_SCREENS.md`, not from an image. **`PanelBoardPage` is a diagnostic, NOT a screen** — no `UiPage`,
+  no Menu card, `ScreenPainter` never builds it.
+- **§1.4 / C1.4 respected:** no label, plate, button or command row in `PanelMap.cs` was touched (verified by
+  count) and no label doc was edited. The only `PanelMap.cs` changes are the behaviour enum and its comments,
+  which §14.4(a) directs. `plugin/build/csc.rsp` churn reverted before commit (S11).
+- **Bugs found and fixed on the way:** the first `PanelBoard` forced a lamp dark on a do-nothing press, which
+  the glue does not — caught by the new test, model corrected to match the shipped code; and a fired arming was
+  not clearing its lamp in the pure model (`PanelPolicy.ClearsArmedLamps` now owns both cases for glue and
+  board alike).
 
 ### T11 [O] Capsule turntable — **TODO**
 - **Read:** §5.  **Build:** source the MaTte0 model → render sprites → drag-rotate.  **DONE when:** preview,
@@ -568,7 +603,7 @@ its comments so nothing in the codebase disagrees with the already-shipped `Cove
 Figma really typed "altitude"), and the docs + `CoverPage.cs` asset-key comment + `DeorbitBurnPrepPage.cs`
 are updated together if it is "attitude".
 
-### S14 [S] Three dead `UiPage` entries surface confusing Menu cards — **TODO**
+### S14 [S] Three dead `UiPage` entries surface confusing Menu cards — **DONE**
 Logged by T7 (C1.1), not done. `UiPage.PhaseDeport`/`PhaseCoast`/`PhaseClaw` (values 6/7/8) predate the
 Cover rail's redraw as a real 7-item IN-PAGE selector (`CoverPage.MapCover` only routes `PhaseManual`
 away; the rest select in-page, `NavHit.None`) — `FigmaUI.Build`'s switch has no case for them, so they
@@ -634,3 +669,16 @@ electrical TREE** and the **"Vehicle systems P&ID schematic"** entry still read 
 frame allows. §11b itself is research and stays as written. Fold into the next docs pass together with
 **S9** (the map artifact), which needs the same tally update. **DONE when:** no `docs/` status mark
 contradicts the tree.
+
+### S17 [owner-gated] Verify T10 audible click on glass — held for a capsule session (batch with T11 drag-rotate + S10 RT camera)
+Logged by T10 (C1.1/C1.7), 2026-09-02. The click is **built and shipped** —
+`GameData/DragonScreen/sounds/panel_click.wav` + `src/PanelAudio.cs`, played on every press — but a 60 ms
+sample cannot be judged from a PNG, so its verification is the one T10 criterion the preview-only build-go
+cannot cover. Needs `install` + glass time, which are **the owner's to grant** (C1.12); this line does not
+grant them. **Check on glass:** it is audible at IVA distance over cabin ambience; it fires on inert and
+unbacked presses too (SWAP 2, FIRE PYRD) since it is their only feedback now that §14.4(a) removed the red
+dash; the level (`PanelAudio.Volume` × `SHIP_VOLUME`) is right rather than startling; and whether the
+deliberate `spatialBlend = 0` reads as flat — if so, move it to 3D with measured numbers, not guessed ones.
+Also confirm the dashes actually light BRIGHT through the installed shader (`PickColourProperty`'s over-1
+`LitColour`), which is the other half of §14.4(a) a PNG cannot answer. **DONE when:** heard and confirmed in
+the capsule, or a NEEDS-WORK note says what it sounded like instead.

@@ -34,6 +34,9 @@ public static class PanelTest
 
         Map();
         Sequence();
+        Lighting();
+        Inert();
+        Board();
         Steps();
         Simulated();
 
@@ -138,6 +141,233 @@ public static class PanelTest
         k.Press(PanelCommand.DeorbitNow);
         Check("unrelated press ignored", k.Press(PanelCommand.CutMains) == PressResult.Ignored, "");
         Check("arming survives it", k.Armed == PanelCommand.DeorbitNow, k.Armed.ToString());
+    }
+
+    // ------------------------------------------------------------------ lighting (§14.4a)
+
+    static void Lighting()
+    {
+        // ---- THE WHOLE POINT: THERE IS NO THIRD COLOUR ----
+        // §14.4(a) removed the red refused-dash. The way to keep it removed is not a comment saying
+        // so - it is a test that walks every outcome the panel can produce and asserts each one is
+        // either bright or dark. A reintroduced red state cannot get past this without someone
+        // deliberately editing the assertion, which is exactly the friction it is for.
+        foreach (PanelPressKind k in Enum.GetValues(typeof(PanelPressKind)))
+        {
+            PanelLight l = PanelPolicy.LampFor(k);
+            Check("no colour beyond bright/dark for " + k,
+                  l == PanelLight.Lit || l == PanelLight.Dark, l.ToString());
+        }
+        Check("the light enum itself has only two states",
+              Enum.GetValues(typeof(PanelLight)).Length == 2,
+              Enum.GetValues(typeof(PanelLight)).Length.ToString());
+
+        // BRIGHT when active, armed or fired. Dark otherwise - and "otherwise" now includes every
+        // press that could not act, which used to be the loud one.
+        Check("armed is bright", PanelPolicy.LampFor(PanelPressKind.Armed) == PanelLight.Lit, "");
+        Check("fired is bright", PanelPolicy.LampFor(PanelPressKind.Momentary) == PanelLight.Lit, "");
+        Check("a mode coming on is bright",
+              PanelPolicy.LampFor(PanelPressKind.ModeOn) == PanelLight.Lit, "");
+        Check("a mode going off is dark",
+              PanelPolicy.LampFor(PanelPressKind.ModeOff) == PanelLight.Dark, "");
+        Check("a press that could not act is DARK, not red",
+              PanelPolicy.LampFor(PanelPressKind.Nothing) == PanelLight.Dark, "");
+        Check("an inert press is dark",
+              PanelPolicy.LampFor(PanelPressKind.Inert) == PanelLight.Dark, "");
+
+        // Only the states that mean "still true" hold. A flash that latched would leave the console
+        // lit up after an emergency was already dealt with.
+        Check("armed holds", PanelPolicy.Latches(PanelPressKind.Armed), "");
+        Check("a live mode holds", PanelPolicy.Latches(PanelPressKind.ModeOn), "");
+        Check("a fired flash does not hold", !PanelPolicy.Latches(PanelPressKind.Momentary), "");
+        Check("a cancel flash does not hold", !PanelPolicy.Latches(PanelPressKind.Disarmed), "");
+
+        // ---- REFUSAL IS STILL A REFUSAL, IT IS JUST NOT A COLOUR ----
+        // The interlock must keep refusing a bare EXECUTE; what changed is only the answer the panel
+        // gives back. Conflating the two would quietly weaken the interlock.
+        Check("bare execute still refuses in the interlock, and shows nothing",
+              PanelPolicy.ResolveInterlock(PressResult.Refused, false) == PanelPressKind.Nothing, "");
+        Check("a fire nothing acted on shows nothing",
+              PanelPolicy.ResolveInterlock(PressResult.Fire, false) == PanelPressKind.Nothing, "");
+        Check("a fire that acted is bright",
+              PanelPolicy.ResolveInterlock(PressResult.Fire, true) == PanelPressKind.Momentary, "");
+
+        // Both ways of consuming an arming must put the armed lamp out.
+        Check("firing clears the armed lamp", PanelPolicy.ClearsArmedLamps(PressResult.Fire), "");
+        Check("cancelling clears the armed lamp",
+              PanelPolicy.ClearsArmedLamps(PressResult.Cancelled), "");
+        Check("arming does not clear it", !PanelPolicy.ClearsArmedLamps(PressResult.Armed), "");
+
+        // CANCEL with nothing armed and nothing running: the careful press, still unpunished.
+        Check("bare cancel shows nothing",
+              PanelPolicy.ResolveCancel(PressResult.Ignored, false) == PanelPressKind.Nothing, "");
+        Check("cancel that stopped a sequence is bright",
+              PanelPolicy.ResolveCancel(PressResult.Ignored, true) == PanelPressKind.Momentary, "");
+
+        // ---- EVERY PRESS IS AUDIBLE ----
+        // With no red dash, the click is the ONLY feedback an inert or unbacked control gives. A
+        // silent one is indistinguishable from a collider that missed.
+        PanelEntry[] all = PanelMap.All;
+        for (int i = 0; i < all.Length; i++)
+            Check("clicks: " + all[i].Label, PanelPolicy.Clicks(all[i].Command), "silent");
+        Check("the EJECT handle clicks too", PanelPolicy.Clicks(PanelCommand.Abort), "");
+    }
+
+    // ------------------------------------------------------------------ inert controls (§14.4b)
+
+    static void Inert()
+    {
+        // ---- THE SIX, AND ONLY THE SIX ----
+        // SWAP 1/2/3 and the three entry-mode toggles are inferred, not sourced (§4). Naming them
+        // one by one rather than counting means a seventh cannot be added by accident, and none of
+        // these six can quietly go missing.
+        PanelCommand[] inert =
+        {
+            PanelCommand.SwapString1, PanelCommand.SwapString2, PanelCommand.SwapString3,
+            PanelCommand.EnableEntryReboot, PanelCommand.EnableBackupEntry,
+            PanelCommand.EnableNormalEntry
+        };
+        for (int i = 0; i < inert.Length; i++)
+            Check("inert: " + inert[i], PanelPolicy.IsInert(inert[i]), "not inert");
+
+        int count = 0;
+        foreach (PanelCommand c in Enum.GetValues(typeof(PanelCommand)))
+            if (PanelPolicy.IsInert(c)) count++;
+        Check("exactly six controls are inert", count == inert.Length, "got " + count);
+
+        // ---- AND THE CONFIRMED NEIGHBOURS ON THE SAME PLATES ARE NOT ----
+        // ENABLE BACKUP PYROS sits beside ENABLE ENTRY REBOOT and FIRE PYRD sits on the same plate;
+        // both are confirmed-real commands (§4). Being unverified is a property of the control, not
+        // of the plate, and a list that swept the plate would take working controls with it.
+        Check("ENABLE BACKUP PYROS is not inert",
+              !PanelPolicy.IsInert(PanelCommand.EnableBackupPyros), "");
+        Check("FIRE PYRD is not inert", !PanelPolicy.IsInert(PanelCommand.FirePyro), "");
+        Check("the power buses are not inert",
+              !PanelPolicy.IsInert(PanelCommand.Power1) && !PanelPolicy.IsInert(PanelCommand.Power2), "");
+        Check("the STRING buttons are not inert",
+              !PanelPolicy.IsInert(PanelCommand.String1A) && !PanelPolicy.IsInert(PanelCommand.String2C), "");
+        Check("RESET is not inert (owner kept it as display state)",
+              !PanelPolicy.IsInert(PanelCommand.Reset1), "");
+        Check("the fire and leak responses are not inert",
+              !PanelPolicy.IsInert(PanelCommand.SuppressFire)
+              && !PanelPolicy.IsInert(PanelCommand.FireResponse)
+              && !PanelPolicy.IsInert(PanelCommand.DepressResponse), "");
+
+        // ---- CLICK, NO LIGHT, NO ACTION ----
+        // Told with `acted = true`: even if a dispatcher DID carry it out, an inert control lights
+        // nothing. The gate is the control, not the outcome - which is what makes it safe when Part
+        // B starts filling in the dispatcher one command at a time.
+        for (int i = 0; i < inert.Length; i++)
+        {
+            Check("inert press does nothing: " + inert[i],
+                  PanelPolicy.ResolveImmediate(inert[i], true, true) == PanelPressKind.Inert, "");
+            Check("inert press stays dark: " + inert[i],
+                  PanelPolicy.LampFor(PanelPolicy.ResolveImmediate(inert[i], true, true))
+                      == PanelLight.Dark, "");
+            Check("inert control is not a mode lamp: " + inert[i],
+                  !PanelPolicy.IsMode(inert[i]) && !PanelPolicy.IsLiveMode(inert[i]), "");
+        }
+
+        // The confirmed mode next door still latches, or the decision took a working lamp with it.
+        Check("ENABLE BACKUP PYROS still latches",
+              PanelPolicy.ResolveImmediate(PanelCommand.EnableBackupPyros, true, true)
+                  == PanelPressKind.ModeOn, "");
+    }
+
+    // ------------------------------------------------------------------ the whole board
+
+    static void Board()
+    {
+        // ---- ARM ON THE LEFT, EXECUTE ON THE RIGHT ----
+        // The two emergency plates are ONE control set so either seat can reach one, and that is a
+        // board-level property: no single button can be asked whether it holds.
+        PanelBoard b = new PanelBoard();
+        int leftArm = PanelBoard.IndexOf(PanelMap.PlateLeftEmerg, PanelCommand.DeorbitNow);
+        int rightExec = PanelBoard.IndexOf(PanelMap.PlateRightEmerg, PanelCommand.Execute);
+        Check("both plates carry the controls", leftArm >= 0 && rightExec >= 0,
+              leftArm + " / " + rightExec);
+
+        Check("arming on the left is bright",
+              b.Press(leftArm, false, false, false) == PanelPressKind.Armed, "");
+        Check("and it HOLDS", b.Lamp(leftArm) == PanelLight.Lit, b.Lamp(leftArm).ToString());
+        b.FlashesOut();
+        Check("a held arming survives the flash timer", b.Lamp(leftArm) == PanelLight.Lit, "");
+
+        // EXECUTE from the OTHER seat. With no flight software behind DEORBIT NOW it acts on
+        // nothing, so EXECUTE itself shows nothing - but the arming must still be consumed and its
+        // lamp must go out, or the panel says something is armed when nothing is.
+        Check("executing from the right seat fires",
+              b.Press(rightExec, false, false, false) == PanelPressKind.Nothing, "");
+        Check("the left plate's armed lamp went out",
+              b.Lamp(leftArm) == PanelLight.Dark, b.Lamp(leftArm).ToString());
+        Check("nothing anywhere is lit after it", !b.AnyLit(), "");
+
+        // Same again, but the command acts: EXECUTE flashes bright and the arming still clears.
+        PanelBoard c = new PanelBoard();
+        c.Press(leftArm, false, false, false);
+        Check("an EXECUTE that acted is bright",
+              c.Press(rightExec, true, false, false) == PanelPressKind.Momentary, "");
+        Check("the arming cleared anyway", c.Lamp(leftArm) == PanelLight.Dark, "");
+
+        // ---- AN INERT PRESS CHANGES NOTHING ON THE BOARD ----
+        PanelBoard d = new PanelBoard();
+        int swap = PanelBoard.IndexOf(PanelMap.PlateEntry, PanelCommand.SwapString2);
+        Check("SWAP 2 is on the board", swap >= 0, swap.ToString());
+        Check("pressing it is inert", d.Press(swap, true, true, false) == PanelPressKind.Inert, "");
+        Check("it lit nothing at all", !d.AnyLit(), "");
+        Check("but it CLICKED", d.LastClicked, "silent");
+
+        // ---- A LIVE MODE LAMP FOLLOWS THE STATE, NOT THE PRESS ----
+        PanelBoard e = new PanelBoard();
+        int pwr = PanelBoard.IndexOf(PanelMap.PlatePower, PanelCommand.Power1);
+        Check("POWER 1 lights when its bus comes on",
+              e.Press(pwr, true, true, false) == PanelPressKind.ModeOn, "");
+        Check("and holds", e.Lamp(pwr) == PanelLight.Lit, "");
+        e.FlashesOut();
+        Check("still holding after the flash timer", e.Lamp(pwr) == PanelLight.Lit, "");
+        Check("pressing it off goes dark",
+              e.Press(pwr, true, false, false) == PanelPressKind.ModeOff, "");
+        Check("dark", e.Lamp(pwr) == PanelLight.Dark, "");
+        // ...and it can be driven from the touchscreen instead, with no press at all.
+        e.SetModeLamp(PanelCommand.Power1, true);
+        Check("the lamp tracks state set elsewhere", e.Lamp(pwr) == PanelLight.Lit, "");
+
+        // ---- A PRESS THAT COULD NOT ACT LEAVES NO MARK ----
+        // Pressing an unpowered STRING used to flash red. It must now be completely quiet, which
+        // also means it must not stamp on the live lamp it shares the row with.
+        PanelBoard f = new PanelBoard();
+        int s1a = PanelBoard.IndexOf(PanelMap.PlatePower, PanelCommand.String1A);
+        f.SetModeLamp(PanelCommand.String1A, true);
+        Check("a refused press shows nothing",
+              f.Press(s1a, false, false, false) == PanelPressKind.Nothing, "");
+        Check("and does not disturb the lamp's own state",
+              f.Lamp(s1a) == PanelLight.Lit, f.Lamp(s1a).ToString());
+
+        // ---- CANCEL PUTS OUT EVERY ARMED LAMP, ON BOTH PLATES ----
+        PanelBoard g = new PanelBoard();
+        int lArm = PanelBoard.IndexOf(PanelMap.PlateLeftEmerg, PanelCommand.Breakout);
+        int rCancel = PanelBoard.IndexOf(PanelMap.PlateRightEmerg, PanelCommand.Cancel);
+        g.Press(lArm, false, false, false);
+        Check("armed", g.Lamp(lArm) == PanelLight.Lit, "");
+        Check("cancel from the other seat is bright",
+              g.Press(rCancel, false, false, false) == PanelPressKind.Disarmed, "");
+        Check("the arming lamp is out", g.Lamp(lArm) == PanelLight.Dark, "");
+        g.FlashesOut();
+        Check("and the board is dark", !g.AnyLit(), "");
+
+        // ---- NOTHING ON THE BOARD CAN LIGHT ANYTHING BUT BRIGHT OR DARK ----
+        // The board-level restatement of §14.4(a): press every button, both ways, and look at all
+        // 38 lamps each time.
+        PanelBoard h = new PanelBoard();
+        for (int i = 0; i < h.Count; i++)
+        {
+            h.Press(i, true, true, true);
+            h.Press(i, false, false, false);
+            for (int j = 0; j < h.Count; j++)
+                Check("lamp " + j + " stays two-state after pressing " + i,
+                      h.Lamp(j) == PanelLight.Lit || h.Lamp(j) == PanelLight.Dark,
+                      h.Lamp(j).ToString());
+        }
     }
 
     // ------------------------------------------------------------------ FLIGHT's sequence

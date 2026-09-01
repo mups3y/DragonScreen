@@ -57,15 +57,22 @@ namespace DragonScreen
         Abort
     }
 
-    /// <summary>What a button's indicator dash is showing.</summary>
+    /// <summary>
+    /// What a button's indicator dash is showing. TWO STATES, AND THAT IS THE WHOLE LANGUAGE.
+    ///
+    /// A third value, `Failed`, used to sit here and turned the dash RED when a press was refused.
+    /// It was our own 2026-08-06 invention, not a reconstruction, and no source shows a red button
+    /// on this console - so the owner removed it (BUILD_PLAN §14.4(a), 2026-09-02). A press that
+    /// cannot act now CLICKS, does nothing, and leaves the dash dark. The state is gone from the
+    /// enum rather than merely unused, because an unused red state is one edit away from coming
+    /// back. See pure/PanelBehaviour.cs, which is where that decision is now enforced and tested.
+    /// </summary>
     public enum PanelLight
     {
         /// <summary>As modelled - the unlit grey dash.</summary>
         Dark = 0,
-        /// <summary>Pressed, armed, or the mode currently selected.</summary>
-        Lit,
-        /// <summary>The press was refused, or the action could not be carried out.</summary>
-        Failed
+        /// <summary>Active, armed, or fired: BRIGHT, and meant to be seen across the cabin.</summary>
+        Lit
     }
 
     public struct PanelEntry
@@ -166,12 +173,16 @@ namespace DragonScreen
                 || c == PanelCommand.Breakout;
         }
 
-        // ⛔ `IsInert` DELETED 2026-08-12. It listed DepressResponse, SuppressFire and
-        // FireResponse as having nothing behind them, which stopped being true the day
-        // `VehicleSystems` modelled the cabin - but the list outlived the fact and kept three
-        // working controls unreachable. If a control ever genuinely has nothing behind it, the
-        // honest answer is not to add it back here: it is that `FlightCommands` returns false and
-        // the dash goes red with the reason, which is the refusal path everything else uses.
+        // ⛔ `IsInert` WAS DELETED FROM HERE 2026-08-12, AND IT IS NOT COMING BACK TO THIS FILE.
+        // It listed DepressResponse, SuppressFire and FireResponse as having nothing behind them,
+        // which stopped being true the day `VehicleSystems` modelled the cabin - but the list
+        // outlived the fact and kept three working controls unreachable.
+        //
+        // A DIFFERENT inert list now exists in pure/PanelBehaviour.cs (`PanelPolicy.IsInert`), and
+        // the distinction is the whole reason it is allowed to: those three were inert because the
+        // SIMULATION was missing, so writing it made the list wrong. The six there are inert
+        // because the SOURCE is missing - §14.4(b), nobody outside SpaceX knows what SWAP 2 does -
+        // which no code in this repo can change. The map stays a map; policy lives next door.
 
     }
 
@@ -186,7 +197,11 @@ namespace DragonScreen
         Cancelled,
         /// <summary>Carry this command out now.</summary>
         Fire,
-        /// <summary>Refused - light the dash red.</summary>
+        /// <summary>
+        /// Refused. Still a real interlock result - EXECUTE with nothing armed is the press that
+        /// means "I believe something is armed" when nothing is - but since §14.4(a) it is no
+        /// longer answered in colour: the panel clicks and stays dark. See PanelPolicy.
+        /// </summary>
         Refused
     }
 

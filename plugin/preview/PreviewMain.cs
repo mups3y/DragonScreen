@@ -662,7 +662,85 @@ public static class PreviewMain
             Console.WriteLine("  " + gpath + "   " + W + "x" + H + "   " + dl.Count + " commands");
         }
 
+        // ---- THE LOWER CONSOLE (§14.4 a + b) ----------------------------------------------------
+        // NOT a screen - see pure/PanelBoardPage.cs. The console's buttons are meshes on Tundra's IVA
+        // prop and its indicators are Tundra's dashes; this draws them only so the LIGHTING can be
+        // judged with the game closed, which is otherwise the one part of the panel that costs a
+        // restart to look at.
+        //
+        // Four scenes, because the decision has four halves worth seeing: nothing pressed, an arming
+        // holding, that arming fired from the other seat, and an inert control pressed. What must be
+        // true in all four is that no dash is any colour but bright or as-modelled.
+        {
+            const int PW = 3600, PH = 540;
+
+            // -- at rest -------------------------------------------------------------------------
+            PanelBoard rest = new PanelBoard();
+            PanelScene(outDir, "panel_rest", PW, PH, rest, -1,
+                       "LOWER CONSOLE - AT REST",
+                       "No press. Every dash as modelled. This is what the panel looks like for most "
+                       + "of a mission.");
+
+            // -- armed: DEORBIT NOW on the LEFT plate, holding ------------------------------------
+            PanelBoard armed = new PanelBoard();
+            int leftArm = PanelBoard.IndexOf(PanelMap.PlateLeftEmerg, PanelCommand.DeorbitNow);
+            armed.Press(leftArm, false, false, false);
+            armed.FlashesOut();                       // a moment later: only the HELD lamp survives
+            PanelScene(outDir, "panel_armed", PW, PH, armed, leftArm,
+                       "ARMED - DEORBIT NOW, LEFT PLATE",
+                       "Armed and waiting on EXECUTE, so the dash is BRIGHT and it HOLDS "
+                       + "(§14.4a). Nothing else is lit.");
+
+            // -- fired: POWER 1 on, then EXECUTE from the RIGHT seat ------------------------------
+            // Two things at once on purpose. POWER 1 is a real display-state command, so its lamp is
+            // the ACTIVE case; EXECUTE releasing DEORBIT NOW is the FIRED case, and with no flight
+            // software behind it the release acts on nothing - which since §14.4(a) is a click into
+            // silence rather than a red dash. The armed lamp must go out either way.
+            PanelBoard fired = new PanelBoard();
+            int pwr1 = PanelBoard.IndexOf(PanelMap.PlatePower, PanelCommand.Power1);
+            int rightExec = PanelBoard.IndexOf(PanelMap.PlateRightEmerg, PanelCommand.Execute);
+            fired.Press(pwr1, true, true, false);                 // bus 1 on: the lamp holds
+            fired.Press(leftArm, false, false, false);            // arm from the left seat
+            fired.Press(rightExec, true, false, false);           // ...execute from the right one
+            PanelScene(outDir, "panel_fired", PW, PH, fired, rightExec,
+                       "FIRED - EXECUTE FROM THE RIGHT SEAT (POWER 1 ACTIVE)",
+                       "EXECUTE is bright for the moment it fires; the armed DEORBIT NOW lamp has "
+                       + "gone out; POWER 1 holds because its bus is live.");
+
+            // -- inert: SWAP 2 -------------------------------------------------------------------
+            PanelBoard inert = new PanelBoard();
+            int swap2 = PanelBoard.IndexOf(PanelMap.PlateEntry, PanelCommand.SwapString2);
+            PanelPressKind k = inert.Press(swap2, true, true, false);
+            PanelScene(outDir, "panel_inert_swap", PW, PH, inert, swap2,
+                       "INERT - SWAP 2 PRESSED (" + k + ")",
+                       "Clicked" + (inert.LastClicked ? " (audible)" : " (SILENT - WRONG)")
+                       + ", did nothing, lit nothing (§14.4b). The board is entirely dark, and the "
+                       + "dim labels are the six controls held inert until a real source verifies them.");
+        }
+
         return 0;
+    }
+
+    /// <summary>One console scene to PNG. Kept here rather than inline so the four read as four.</summary>
+    private static void PanelScene(string outDir, string name, int w, int h,
+                                   PanelBoard board, int pressed, string title, string note)
+    {
+        DisplayList dl = new DisplayList(PanelBoardPage.Commands);
+        PanelBoardPage.Build(dl, w, h, board, title, note, pressed);
+        if (dl.Overflowed) Console.WriteLine("  WARNING PANEL/" + name + " OVERFLOWED at " + dl.Capacity);
+
+        string path = Path.Combine(outDir, name + ".png");
+        Render(dl, w, h, path);
+        Console.WriteLine("  " + path + "   " + w + "x" + h + "   " + dl.Count + " commands"
+                          + "   lit: " + LitCount(board) + " of " + board.Count);
+    }
+
+    /// <summary>How many dashes are bright - printed so the log alone catches a lamp storm.</summary>
+    private static int LitCount(PanelBoard b)
+    {
+        int n = 0;
+        for (int i = 0; i < b.Count; i++) if (b.Lamp(i) == PanelLight.Lit) n++;
+        return n;
     }
 
     private static void Render(DisplayList dl, int w, int h, string path)

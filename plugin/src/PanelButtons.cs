@@ -26,10 +26,17 @@
  * What IS established is from the model itself: every button carries a small horizontal dash above
  * its label, and that dash is the panel's entire visual language for state.
  *
- * So the colour scheme below - unlit grey as modelled, WHITE when pressed or armed, RED when refused -
- * is OUR DECISION (the user's, 2026-08-06), not a reconstruction. Recorded as such so nobody later
- * cites it as fact. What we do NOT do is invent a glow, an outline or a halo: the dash Tundra already
- * drew is the only thing driven.
+ * The scheme is therefore OURS, and since 2026-09-02 it is the owner's §14.4(a) decision rather than
+ * the 2026-08-06 one this file used to record: unlit as modelled, BRIGHT when active, armed or fired,
+ * and NO RED. The red "refused" dash was invented here and no source shows a red button on this
+ * console, so it is gone - a press that cannot act CLICKS and leaves the dash dark. What we still do
+ * NOT do is invent a glow, an outline or a halo: the dash Tundra already drew is the only thing driven.
+ *
+ * ---- AND THE POLICY ITSELF NOW LIVES IN pure/PanelBehaviour.cs ----
+ * Which lamp a press produces, which controls are inert, and whether a press is audible are
+ * DECISIONS, and decisions in a MonoBehaviour need a running game and a mouse to exercise. They are
+ * in `PanelPolicy` / `PanelBoard` now, where the headless test and the PNG preview run the same code
+ * this does. What is left here is what genuinely needs Unity: the collider, the material, the clock.
  *
  * ---- WHICH MATERIAL PROPERTY, DECIDED BY LOOKING ----
  * Deferred and TexturesUnlimited are both installed and both rewrite shaders on load, so the property
@@ -171,9 +178,6 @@ namespace DragonScreen
         /// <summary>How long a momentary press stays lit, seconds.</summary>
         private const float FlashSeconds = 0.6f;
 
-        /// <summary>How long a refusal stays red. Longer, because it is the one you must notice.</summary>
-        private const float FailSeconds = 1.5f;
-
         private PanelEntry entry;
         private Renderer rend;
         private Material mat;
@@ -209,112 +213,91 @@ namespace DragonScreen
 
             PanelCommand c = entry.Command;
 
-            // ---- ⛔ THE "INERT" GATE IS GONE. IT WAS STANDING IN FRONT OF WORKING CODE. ----
-            // DEPRESS RESPONSE, SUPPRESS FIRE and FIRE RESPONSE were listed as inert back when stock
-            // KSP had no cabin fire and no depressurisation to act on. `pure/VehicleSystems.cs` then
-            // MODELLED all three, and `FlightCommands` grew real handlers for them that isolate the
-            // cabin, discharge the bottle and run the fire procedure - but this gate was never
-            // removed, so every press returned here and logged "no KSP system behind this control"
-            // while a complete implementation sat four lines further down, unreachable.
-            //
-            // On 2026-08-12 the crew pressed all three and got that message from all three. The
-            // simulate-a-system rule was applied and then silently undone by a leftover guard.
+            // ---- THE CLICK IS FIRST AND IT IS UNCONDITIONAL (§14.4(a)) ----
+            // The switch made a noise because the switch MOVED, not because the command worked. It
+            // therefore happens before anything is decided, and it happens for the inert controls
+            // and the unbacked ones too - since the red dash went away it is the only feedback they
+            // have, and a control that answers with nothing at all reads as a missed collider.
+            if (PanelPolicy.Clicks(c)) PanelAudio.Click();
+
+            PanelPressKind kind;
 
             // ---- CANCEL: clear any armed command AND stop any running sequence (user 2026-08-21) ----
-            // Two jobs now. The interlock clears an armed emergency command; CancelAllSequences stops
-            // a running ascent / rendezvous / dock / de-orbit / undock, whether or not anything was
-            // armed. Still never punishes the careful press: with nothing armed and nothing running it
-            // stays dark.
+            // Two jobs. The interlock clears an armed emergency command; CancelAllSequences stops a
+            // running ascent / rendezvous / dock / de-orbit / undock, whether or not anything was
+            // armed. It still never punishes the careful press: with nothing armed and nothing
+            // running it clicks and stays dark.
             if (c == PanelCommand.Cancel)
             {
                 PressResult r = PanelButtons.Lock.Press(c);
-                bool cleared = (r == PressResult.Cancelled);
-                if (cleared) ClearArmedLamps();
+                if (PanelPolicy.ClearsArmedLamps(r)) ClearArmedLamps();
                 bool stopped = FlightCommands.CancelAllSequences();
-                Debug.Log(Tag + "panel: CANCEL -> "
-                          + (cleared ? "armed cleared; " : "")
-                          + (stopped ? "sequence stopped" : (cleared ? "" : "nothing to cancel")));
-                if (cleared || stopped) Flash(PanelLight.Lit, FlashSeconds);
-                return;
+                kind = PanelPolicy.ResolveCancel(r, stopped);
+                Debug.Log(Tag + "panel: CANCEL -> " + kind
+                          + (r == PressResult.Cancelled ? "  (armed cleared)" : "")
+                          + (stopped ? "  (sequence stopped)" : ""));
             }
-
-            if (c == PanelCommand.Execute || PanelMap.NeedsExecute(c))
+            else if (c == PanelCommand.Execute || PanelMap.NeedsExecute(c))
             {
                 PressResult r = PanelButtons.Lock.Press(c);
-                Debug.Log(Tag + "panel: " + entry.Label + " -> " + r
+                if (PanelPolicy.ClearsArmedLamps(r)) ClearArmedLamps();
+
+                // Only a FIRE dispatches. Everything else is a state change inside the interlock.
+                bool acted = (r == PressResult.Fire) && FlightCommands.Run(PanelButtons.Lock.Fired);
+
+                kind = PanelPolicy.ResolveInterlock(r, acted);
+                Debug.Log(Tag + "panel: " + entry.Label + " -> " + r + " / " + kind
                           + (PanelButtons.Lock.Armed != PanelCommand.None
                              ? "  (armed: " + PanelButtons.Lock.Armed + ")" : ""));
-
-                switch (r)
-                {
-                    case PressResult.Armed:
-                        Latch(PanelLight.Lit);
-                        break;
-
-                    case PressResult.Cancelled:
-                        // CANCEL clears every armed lamp on BOTH plates, not just this button's.
-                        ClearArmedLamps();
-                        Flash(PanelLight.Lit, FlashSeconds);
-                        break;
-
-                    case PressResult.Fire:
-                        ClearArmedLamps();
-                        bool ok = FlightCommands.Run(PanelButtons.Lock.Fired);
-                        Flash(ok ? PanelLight.Lit : PanelLight.Failed,
-                              ok ? FlashSeconds : FailSeconds);
-                        break;
-
-                    case PressResult.Refused:
-                        Flash(PanelLight.Failed, FailSeconds);
-                        break;
-
-                    case PressResult.Ignored:
-                        break;
-                }
-                return;
+            }
+            else if (PanelPolicy.IsInert(c))
+            {
+                // ---- §14.4(b): MODELLED, PRESSABLE, AND DELIBERATELY WITHOUT FUNCTION ----
+                // SWAP 1/2/3 and the three entry-mode toggles are inferred, not sourced. The
+                // dispatcher is not called AT ALL - not called and ignoring the result would leave
+                // one edit between here and a control acting on a guess.
+                kind = PanelPressKind.Inert;
+                Debug.Log(Tag + "panel: " + entry.Label
+                          + " -> INERT (function unverified, BUILD_PLAN §14.4(b))");
+            }
+            else
+            {
+                // Everything else acts immediately.
+                bool acted = FlightCommands.Run(c);
+                kind = PanelPolicy.ResolveImmediate(c, acted, ModeIsOn(c));
+                Debug.Log(Tag + "panel: " + entry.Label + " -> " + kind);
             }
 
-            // Everything else acts immediately.
-            bool done = FlightCommands.Run(c);
-            Debug.Log(Tag + "panel: " + entry.Label + " -> " + (done ? "done" : "REFUSED"));
-            if (done && IsMode(c)) Latch(ModeIsOn(c) ? PanelLight.Lit : PanelLight.Dark);
-            else Flash(done ? PanelLight.Lit : PanelLight.Failed,
-                       done ? FlashSeconds : FailSeconds);
+            Show(kind);
         }
 
-        /// <summary>Modes stay lit while they are on, rather than flashing and going out.</summary>
-        private static bool IsMode(PanelCommand c)
+        /// <summary>Turn the pure outcome into this button's dash: bright or dark, held or momentary.</summary>
+        private void Show(PanelPressKind kind)
         {
-            return c == PanelCommand.EnableBackupPyros
-                || c == PanelCommand.EnableEntryReboot
-                || c == PanelCommand.EnableBackupEntry
-                || c == PanelCommand.EnableNormalEntry
-                || IsLiveMode(c);
+            PanelLight want = PanelPolicy.LampFor(kind);
+            if (PanelPolicy.Latches(kind)) Latch(want);
+            else if (want == PanelLight.Lit) Flash(want, FlashSeconds);
+            else if (kind == PanelPressKind.ModeOff) Latch(PanelLight.Dark);
+            // Inert and Nothing: the click already happened and nothing lights. Not even a flash of
+            // dark - leaving the lamp exactly as it was is what "this press did nothing" looks like.
         }
 
         /// <summary>
-        /// Modes whose "on" state is set by something OTHER than this button - the flight-computer
-        /// engage lamps (STRING 1A/1B/1C), which are lit by the phase autopilot being engaged and must
-        /// go dark on their own when it finishes. Refreshed every tick in Update(); the Enable* modes
-        /// above only ever change on their own press, so they are not re-read.
+        /// Which lamps hold their state, and which are driven from somewhere other than their own
+        /// press, are `PanelPolicy`'s calls now - see pure/PanelBehaviour.cs. The three entry-mode
+        /// toggles are no longer among them: §14.4(b) made them inert, so they latch nothing.
         /// </summary>
-        private static bool IsLiveMode(PanelCommand c)
-        {
-            return c == PanelCommand.Power1        // lit while its bus is powered
-                || c == PanelCommand.Power2
-                || c == PanelCommand.String1A      // lit while its phase is engaged (row 1)
-                || c == PanelCommand.String1B
-                || c == PanelCommand.String1C;
-        }
+        private static bool IsLiveMode(PanelCommand c) { return PanelPolicy.IsLiveMode(c); }
 
+        /// <summary>
+        /// The state BEHIND a mode lamp. This one stays in the glue because it reads the dispatcher,
+        /// which is where the game is.
+        /// </summary>
         private static bool ModeIsOn(PanelCommand c)
         {
             switch (c)
             {
                 case PanelCommand.EnableBackupPyros:  return FlightCommands.BackupPyros;
-                case PanelCommand.EnableEntryReboot:  return FlightCommands.EntryReboot;
-                case PanelCommand.EnableBackupEntry:  return FlightCommands.BackupEntry;
-                case PanelCommand.EnableNormalEntry:  return !FlightCommands.BackupEntry;
                 // POWER lamps show which bus is live, so the crew can see the row is armed.
                 case PanelCommand.Power1: return FlightCommands.State.Bus1On;
                 case PanelCommand.Power2: return FlightCommands.State.Bus2On;
@@ -354,9 +337,10 @@ namespace DragonScreen
 
         public void Update()
         {
-            // A momentary flash (press confirmation, or a red refusal) plays out first - even on a
-            // live-mode button, so pressing an unpowered STRING still flashes red before the lamp
-            // returns to tracking its state.
+            // A momentary flash - a press confirmation, the only kind left - plays out first, even on
+            // a live-mode button, so an acted-on press is seen before the lamp goes back to tracking
+            // its state. A press that could NOT act sets no flash at all now (§14.4(a)), so a
+            // live-mode lamp is never interrupted by one.
             if (until > 0f)
             {
                 if (Time.realtimeSinceStartup <= until) return;    // flash still showing
@@ -397,16 +381,17 @@ namespace DragonScreen
         // one that clamps we land on full white - which is exactly what we already had. **This can
         // only improve the contrast, never reduce it**, which is why it is preferred over dimming the
         // resting state: that would have altered art Tundra drew, on every button, all the time.
+        //
+        // ⛔ `FailColour` - the red one - WAS DELETED HERE 2026-09-02 (§14.4(a)). It was ours, no
+        // source shows a red button on this console, and the state that drove it is gone from
+        // `PanelLight` too. Two colours is now the whole language: the dash Tundra drew, or a bright
+        // one.
         private static readonly Color LitColour = new Color(2.2f, 2.2f, 2.2f, 1f);
-        private static readonly Color FailColour = new Color(2.0f, 0.22f, 0.24f, 1f);
 
         private void Apply()
         {
             if (mat == null || colourProp == null || !haveRest) return;
-            Color c = (light == PanelLight.Lit) ? LitColour
-                    : (light == PanelLight.Failed) ? FailColour
-                    : restColour;
-            mat.SetColor(colourProp, c);
+            mat.SetColor(colourProp, (light == PanelLight.Lit) ? LitColour : restColour);
         }
     }
 }
