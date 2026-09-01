@@ -35,6 +35,7 @@ public static class FigmaUINavTest
         CoverCamera();
         SpeccedPages();
         Menu();
+        MenuHidesPlaceholders();
         Rendezvous();
         DeorbitBurnPrep();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
@@ -46,8 +47,14 @@ public static class FigmaUINavTest
         // T2: the Menu page (UiPage.Menu) is a grid of every OTHER page — one card per entry, tap to
         // jump. Aim at each card's drawn centre (MenuPage.CellRect, the same source Build draws from);
         // assert HitTest resolves it to that entry's real page.
-        Check("menu lists every page but itself", MenuPage.Entries.Length == FigmaUI.PageCount - 1,
-              "got " + MenuPage.Entries.Length);
+        // S14: the grid no longer lists EVERY page but Menu — a page that resolves to the honest
+        // PlaceholderPage (FigmaUI.IsPlaceholder, no real Build case) is left off until a real case
+        // is added for it. Count independently from the same predicate MenuPage itself reads.
+        int wantEntries = 0;
+        for (int i = 0; i < FigmaUI.PageCount; i++)
+            if ((UiPage)i != UiPage.Menu && !FigmaUI.IsPlaceholder((UiPage)i)) wantEntries++;
+        Check("menu lists every real page but itself", MenuPage.Entries.Length == wantEntries,
+              "got " + MenuPage.Entries.Length + " want " + wantEntries);
 
         bool sawSelf = false;
         for (int i = 0; i < MenuPage.Entries.Length; i++)
@@ -99,6 +106,48 @@ public static class FigmaUINavTest
     {
         float sc = H / RefH;
         return FigmaUI.HitTest(UiPage.Cover, 98f * sc, 108f * sc, W, H);
+    }
+
+    static void MenuHidesPlaceholders()
+    {
+        // S14: UiPage.PhaseDeport/PhaseCoast/PhaseClaw (and every other page with no real Build case)
+        // are KEPT — never deleted or renumbered, since the int is what a screen persists — but
+        // MenuPage now leaves them off the grid instead of surfacing a look-alike dead card. Don't
+        // just trust FigmaUI.IsPlaceholder's own switch: actually BUILD every page and confirm it
+        // agrees with what PlaceholderPage.Build really draws ("PAGE NOT YET BUILT"), so the
+        // predicate and FigmaUI.Build's switch can never quietly drift apart.
+        var dl = new DisplayList(FigmaUI.Commands);
+        var s = new PageState();
+        var view = MapProjection.Default();
+
+        for (int i = 0; i < FigmaUI.PageCount; i++)
+        {
+            UiPage p = (UiPage)i;
+            dl.Clear();
+            FigmaUI.Build(dl, p, W, H, s, view);
+
+            bool drewPlaceholder = false;
+            for (int c = 0; c < dl.Count; c++)
+                if (dl.At(c).Kind == DrawKind.Text && dl.At(c).Str == "PAGE NOT YET BUILT")
+                { drewPlaceholder = true; break; }
+
+            Check("FigmaUI.IsPlaceholder(" + p + ") matches what Build actually draws",
+                  drewPlaceholder == FigmaUI.IsPlaceholder(p), "drew placeholder=" + drewPlaceholder);
+        }
+
+        // The Menu grid must carry exactly the non-Menu, non-placeholder pages — nothing more, and
+        // nothing less (a real page silently dropped would be just as wrong as a dead one showing).
+        for (int i = 0; i < FigmaUI.PageCount; i++)
+        {
+            UiPage p = (UiPage)i;
+            bool present = false;
+            for (int j = 0; j < MenuPage.Entries.Length; j++)
+                if (MenuPage.Entries[j] == p) { present = true; break; }
+
+            bool want = p != UiPage.Menu && !FigmaUI.IsPlaceholder(p);
+            Check("menu " + (want ? "lists" : "hides") + " " + p, present == want,
+                  "got present=" + present + " want=" + want);
+        }
     }
 
     static void Rendezvous()

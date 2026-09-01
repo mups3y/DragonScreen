@@ -487,3 +487,34 @@ different pages about the same thing to anyone browsing the Menu. Owner call: de
 explicit int values 6/7/8 would just go unused — nothing else is numbered relative to them) once nothing
 persists a screen against them, or keep them and give Menu a way to hide placeholder-only pages.
 **DONE when:** decided + implemented.
+- **DONE 2026-09-02 (owner-directed stray-finding pickup, decided by the owner via the overseer — recorded
+  as such per C1.12; not self-authorized).** **Decision: KEEP, don't delete/renumber.** `UiPage` is a
+  per-screen persisted int (`ScreenPainter.selectedPage` ↔ `DragonScreenState.GetPage`/`SetPage`) and the
+  enum's own comment already forbids renumbering — deleting/renumbering `PhaseDeport`/`PhaseCoast`/`PhaseClaw`
+  was ruled out on that basis, not attempted. Instead, added one shared predicate,
+  `FigmaUI.IsPlaceholder(UiPage)` (`FigmaUI.cs`, next to `Build`'s switch) — true for any page with no real
+  case in `Build`'s switch (so a visit draws the honest `PlaceholderPage` card). `MenuPage.BuildEntries()`
+  now skips both `Menu` itself and any `IsPlaceholder` page, so the grid lists only real pages — no
+  hardcoded names (per the trap warning: the two enums `UiPage.PhaseDeport/Coast/Claw` and
+  `CoverPage.CoverButton.PhaseDeport/Coast/Claw` share names but are unrelated; only `UiPage`/`MenuPage`/
+  `FigmaUI` were touched, `CoverPage`'s live phase rail is untouched).
+  **Correction to this finding's own count:** the general predicate (not a 3-item hardcode) turned out to
+  hide **nine** cards, not three — `PhaseDeport`(6)/`PhaseCoast`(7)/`PhaseClaw`(8) as logged here, plus
+  `PhaseManual`(9)/`ActOnSpaceX`(10)/`ActDeorbitBrief`(11)/`ActReview`(12)/`ActAcknowledge`(13)/`Entry`(14) —
+  grepped and confirmed none of those six have a real `Build` case or any live `NavHit.Go` target anywhere
+  in the tree either (they are leftover ints from the old phase-rail numbering, same footing as the three
+  named here). Menu now shows the real 20 pages (`ui_menu.png`: 124 commands vs. the prior 29-card grid);
+  the grid (3×10, unchanged — T2's sizing) has empty trailing rows now, expected to refill as later tasks
+  (T8+) add real `Build` cases, per this task's own "self-populates" framing.
+  **Drift safety:** rather than trust the hand-written predicate blindly, `FigmaUINavTest.MenuHidesPlaceholders()`
+  actually calls `FigmaUI.Build` for all 30 pages and checks the emitted `DisplayList` for `PlaceholderPage`'s
+  own marker text ("PAGE NOT YET BUILT"), asserting it agrees with `IsPlaceholder` — and separately asserts
+  `MenuPage.Entries` contains exactly the non-Menu, non-placeholder set. `Menu()`'s pre-existing entry-count
+  check was updated (`FigmaUI.PageCount - 1` → computed via the same predicate) since it no longer holds.
+  **Gate:** `python plugin/build.py test` green, Figma UI nav suite 177 → **228** checks, 3927 → **3978**
+  total, 0 failed. `ui_menu.png` re-rendered and inspected: 20 cards (Cover, Attitude HUD, Audio Settings,
+  Procedure, Cabin, Vehicle Overview, Suit Leak Check, Mech Panel, Video Settings, Test Vrio Health LEDs,
+  Vehicle—Crew/Prop/Power/Avionics/GNC/Thermal, Manual Chute Deploy, Manual Docking, Rendezvous, Deorbit
+  Burn Prep), all legible, no overlap/clipping, bottom bar intact; the 9 placeholder titles absent. Declared
+  outputs only: `MenuPage.cs`, `FigmaUI.cs`, `plugin/test/FigmaUINavTest.cs`, `REGISTER.md` — no
+  `PanelMap.cs`/label-doc edits, no memory writes.

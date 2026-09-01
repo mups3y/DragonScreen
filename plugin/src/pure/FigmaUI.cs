@@ -168,6 +168,29 @@ namespace DragonScreen
             BottomBarMarker(dl, w, h, page);
         }
 
+        /// <summary>True if this page has no real case in Build's switch above, so a visit draws the
+        /// honest PlaceholderPage card instead of real content. This is the ONE place that decides
+        /// that — MenuPage reads it to leave such a page off the grid (S14: the enum values are kept,
+        /// never deleted/renumbered per UiPage's own comment, they just don't get a card until a real
+        /// Build case lands), and FigmaUINavTest cross-checks it against what Build actually draws so
+        /// the two can never quietly drift apart. Mirror any change to the switch above here too.</summary>
+        public static bool IsPlaceholder(UiPage page)
+        {
+            switch (page)
+            {
+                case UiPage.Cover: case UiPage.Menu: case UiPage.Hud: case UiPage.Audio:
+                case UiPage.Procedure: case UiPage.Cabin: case UiPage.SuitCheck: case UiPage.Vehicle:
+                case UiPage.VehicleMech: case UiPage.AudioVideo: case UiPage.VrioTest:
+                case UiPage.VehicleCrew: case UiPage.VehiclePropulsion: case UiPage.VehiclePower:
+                case UiPage.VehicleAvionics: case UiPage.VehicleGnc: case UiPage.VehicleThermal:
+                case UiPage.ManualChute: case UiPage.Docking: case UiPage.Rendezvous:
+                case UiPage.DeorbitBurnPrep:
+                    return false;
+                default:
+                    return true;
+            }
+        }
+
         /// <summary>Which bottom-bar icon (0..4) is "active" for this page — its own icon, or its parent's
         /// (the cover's phases/actions map back to the cover icon, Mech to Vehicle, etc.).</summary>
         static int ActiveBarIcon(UiPage p)

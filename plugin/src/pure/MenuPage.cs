@@ -4,11 +4,16 @@
 // has no Menu frame, so this page's LAYOUT is ours. Its CONTENT is not invented — every card is a
 // real UiPage and its real title (FigmaUI.Name, the same string every other page's chrome uses), so
 // the only new copy on the whole page is the "MENU" heading. It fills the real 25-30-page need the
-// 5-icon bottom bar cannot reach: every built (and not-yet-built) page, one tap away.
+// 5-icon bottom bar cannot reach: every built page, one tap away.
 //
-// Every card is wired now, the same rule FigmaUI's header states for the whole UI: a page that
-// exists gets a real destination, a page that does not yet exist still routes there and lands on the
-// honest PlaceholderPage (FigmaUI.Build's default case) rather than a dead tap.
+// S14 (owner decision via the overseer, 2026-09-02): a page with a real FigmaUI.Build case gets a
+// real card. A UiPage that resolves to the honest PlaceholderPage (no case in Build's switch —
+// FigmaUI.IsPlaceholder, the one shared predicate) is left OFF the grid instead of surfacing a
+// look-alike dead card — that was the confusing part (e.g. old placeholder index 6 "DEORBIT BURN"
+// reading as a second, different page from T7's real "DEORBIT BURN PREP"). The UiPage values
+// themselves are NOT deleted or renumbered (the enum's own comment: the int persists per screen via
+// ScreenPainter/DragonScreenState) — a hidden entry simply reappears here the moment a real Build
+// case is added for it, same as every page already does.
 // ============================================================================================
 using System;
 using System.Collections.Generic;
@@ -25,14 +30,19 @@ namespace DragonScreen
         const int Cols = 3, Rows = 10;
         const float Margin = 90f, Top = 210f, Bottom = 1830f, Gap = 24f;
 
-        /// <summary>Every page but Menu itself, in enum order (the same order FigmaUI.Name reads).</summary>
+        /// <summary>Every REAL page but Menu itself (S14: placeholder-only pages excluded), in enum
+        /// order (the same order FigmaUI.Name reads).</summary>
         public static readonly UiPage[] Entries = BuildEntries();
 
         static UiPage[] BuildEntries()
         {
             var list = new List<UiPage>(FigmaUI.PageCount - 1);
             for (int i = 0; i < FigmaUI.PageCount; i++)
-                if ((UiPage)i != UiPage.Menu) list.Add((UiPage)i);
+            {
+                UiPage p = (UiPage)i;
+                if (p == UiPage.Menu || FigmaUI.IsPlaceholder(p)) continue;
+                list.Add(p);
+            }
             return list.ToArray();
         }
 
