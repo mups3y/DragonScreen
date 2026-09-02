@@ -42,6 +42,7 @@ public static class FigmaUINavTest
         SystemsDeepViews();
         PropSchematicDuty();
         Ascent();
+        VehicleLiveValues();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
     }
@@ -313,6 +314,149 @@ public static class FigmaUINavTest
         NavHit body = FigmaUI.HitTest(UiPage.Ascent, 0.5f * W, 0.4f * H, W, H);
         Check("Ascent body is inert", body.Act == NavAct.None, "got " + body.Act);
         Check("Ascent is a real page, not a placeholder", !FigmaUI.IsPlaceholder(UiPage.Ascent), "");
+    }
+
+
+    // ---- T13a: the VEHICLE family reads the vessel, not a constant ----
+    // The PNG preview shows that the numbers LOOK right; it cannot show that they came from PageState.
+    // These do, and they are worth more than an eyeball pass: the failure this catches is a readout that
+    // was wired once, then quietly re-hardcoded, which renders identically in every preview ever taken.
+    // The shape is the same for all three pages — build with fixture A, build with a DIFFERENT fixture B,
+    // and assert every value moved. A constant cannot pass that, whatever its value.
+
+    /// <summary>Did the page draw this exact string anywhere?</summary>
+    static bool Drew(DisplayList dl, string text)
+    {
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind == DrawKind.Text && c.Str == text) return true;
+        }
+        return false;
+    }
+
+    /// <summary>How many arc bands the page drew in this colour — the gauge FILLS, as distinct from the
+    /// faint rings they sit in. A ring that never moves is decoration, and this is how that shows up.</summary>
+    static int Arcs(DisplayList dl, Rgba want)
+    {
+        int n = 0;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind != DrawKind.ArcBand) continue;
+            if (c.Colour.R == want.R && c.Colour.G == want.G && c.Colour.B == want.B) n++;
+        }
+        return n;
+    }
+
+    /// <summary>A vehicle fixture whose every live readout is a distinct, recognisable string.</summary>
+    static PageState VehicleFixture(int variant)
+    {
+        PageState s = new PageState();
+        s.Valid = true;
+        string k = variant == 0 ? "1" : "2";
+        s.Ppo2Text = "3.0" + k;  s.CabinTempText = "21." + k;
+        s.PressText = "14.7" + k; s.Co2Text = "1.0" + k;
+        s.LoopAText = "26." + k; s.LoopBText = "20." + k;
+        s.NetPwr1Text = "-5" + k; s.NetPwr2Text = "-4" + k;
+        s.PowerUnit1Text = "8" + k + " %"; s.PowerUnit2Text = "8" + k + " %";
+        s.DeorbitFuelText = "70" + k + ".0 kg"; s.DeorbitOxText = "130" + k + ".0 kg";
+        s.SolarArrayText = variant == 0 ? "DEPLOYED" : "STOWED";
+        s.BatteryText = variant == 0 ? "4 / 4" : "1 / 4";
+        s.AccelPosText = "1.4" + k; s.AccelNegText = "0.3" + k; s.AccelCentText = "0.88" + k;
+        // The rings come from the raw numbers, never from the text, so they are set independently.
+        s.Cabin.Ppo201 = 0.6; s.Cabin.CabinTemp01 = 0.55; s.Cabin.Press01 = 0.73; s.Cabin.Co201 = 0.2;
+        s.Cabin.LoopA01 = 0.33; s.Cabin.LoopB01 = 0.25;
+        s.Cabin.NetPwr1W = -51.0; s.Cabin.NetPwr2W = -41.0;
+        s.AccelPos01 = 0.28; s.AccelNeg01 = 0.06; s.AccelCent01 = 0.44;
+        s.SeatCount = 4;
+        s.Systems = SystemsState.Fresh();
+        return s;
+    }
+
+    static void VehicleLiveValues()
+    {
+        const int VW = 2560, VH = 1406;
+
+        PageState a = VehicleFixture(0), b = VehicleFixture(1);
+        PageState dead = VehicleFixture(0); dead.Valid = false;
+
+        // ---------------- VEHICLE OVERVIEW ----------------
+        DisplayList da = new DisplayList(VehicleOverviewPage.Commands + 60);
+        DisplayList db = new DisplayList(VehicleOverviewPage.Commands + 60);
+        DisplayList dd = new DisplayList(VehicleOverviewPage.Commands + 60);
+        VehicleOverviewPage.Build(da, VW, VH, a);
+        VehicleOverviewPage.Build(db, VW, VH, b);
+        VehicleOverviewPage.Build(dd, VW, VH, dead);
+
+        string[] ov = { a.Ppo2Text, a.CabinTempText, a.PressText, a.Co2Text,
+                        a.LoopAText, a.LoopBText, a.NetPwr1Text, a.NetPwr2Text,
+                        a.PowerUnit1Text, a.DeorbitFuelText, a.DeorbitOxText };
+        for (int i = 0; i < ov.Length; i++)
+        {
+            Check("overview draws PageState value " + ov[i], Drew(da, ov[i]), "");
+            Check("overview value " + ov[i] + " is not a constant", !Drew(db, ov[i]), "still drawn for a different state");
+            Check("overview drops " + ov[i] + " with no feed", !Drew(dd, ov[i]), "");
+        }
+        // The eight ring FILLS: one per gauge, and none of them when the feed is dead.
+        Check("overview draws no gauge fill with no feed",
+              Arcs(dd, DragonPalette.Go) == 0 && Arcs(dd, DragonPalette.Accent) == 0, "");
+        // Both loop gauges read the two DIFFERENT loops the model computes (S20 is about the label).
+        Check("overview loop gauges read Loop A and Loop B",
+              Drew(da, a.LoopAText) && Drew(da, a.LoopBText) && a.LoopAText != a.LoopBText, "");
+        // The four subtank rows and MARGIN have no source and must stay dashed, never zeroed.
+        Check("overview dashes the unsourced consumables rows", Drew(da, "—"), "");
+        // The values these pages used to hard-code must never come back.
+        string[] gone = { "2.69", "16.43", "14.0", "1.05", "26.05", "21.06", "0.03", "3.02",
+                          "100 %", "791.1 kg", "1308 kg", "67.76 kg", "111.3 kg" };
+        for (int i = 0; i < gone.Length; i++)
+            Check("overview no longer hard-codes " + gone[i], !Drew(da, gone[i]), "");
+
+        // ---------------- MECH PANEL ----------------
+        DisplayList ma = new DisplayList(VehicleMechPage.Commands + 60);
+        DisplayList mb = new DisplayList(VehicleMechPage.Commands + 60);
+        DisplayList md = new DisplayList(VehicleMechPage.Commands + 60);
+        VehicleMechPage.Build(ma, VW, VH, a);
+        VehicleMechPage.Build(mb, VW, VH, b);
+        VehicleMechPage.Build(md, VW, VH, dead);
+
+        string[] mech = { a.AccelPosText, a.AccelNegText, a.AccelCentText, a.PressText };
+        for (int i = 0; i < mech.Length; i++)
+        {
+            Check("mech draws PageState value " + mech[i], Drew(ma, mech[i]), "");
+            Check("mech value " + mech[i] + " is not a constant", !Drew(mb, mech[i]), "");
+            Check("mech drops " + mech[i] + " with no feed", !Drew(md, mech[i]), "");
+        }
+        // Four of the five nodes have a source; WATER UPRIGHTING has none and must draw no fill.
+        Check("mech fills one ring per sourced node", Arcs(ma, DragonPalette.Accent) == 4,
+              "got " + Arcs(ma, DragonPalette.Accent));
+        Check("mech fills no ring with no feed", Arcs(md, DragonPalette.Accent) == 0,
+              "got " + Arcs(md, DragonPalette.Accent));
+        string[] mgone = { "79610.01", "71367.02", "73225.03", "75169.04", "71228.05",
+                           "1204", "1198", "1211", "1207" };
+        for (int i = 0; i < mgone.Length; i++)
+            Check("mech no longer hard-codes " + mgone[i], !Drew(ma, mgone[i]), "");
+        // The SEAT rows follow the capsule's real seat count, not a fixed four.
+        PageState twoSeats = VehicleFixture(0); twoSeats.SeatCount = 2;
+        DisplayList m2 = new DisplayList(VehicleMechPage.Commands + 60);
+        VehicleMechPage.Build(m2, VW, VH, twoSeats);
+        Check("mech draws a row per real seat", Drew(m2, "SEAT 2 TACH") && !Drew(m2, "SEAT 3 TACH"), "");
+
+        // ---------------- SYSTEMS TREE ----------------
+        DisplayList ta = new DisplayList(SystemsTreePage.Commands + 60);
+        DisplayList tb = new DisplayList(SystemsTreePage.Commands + 60);
+        DisplayList td = new DisplayList(SystemsTreePage.Commands + 60);
+        SystemsTreePage.Build(ta, VW, VH, a);
+        SystemsTreePage.Build(tb, VW, VH, b);
+        SystemsTreePage.Build(td, VW, VH, dead);
+
+        Check("tree draws the live array state", Drew(ta, a.SolarArrayText), "");
+        Check("tree array state is not a constant", !Drew(tb, a.SolarArrayText), "");
+        Check("tree draws the live battery count", Drew(ta, a.BatteryText), "");
+        Check("tree battery count is not a constant", !Drew(tb, a.BatteryText), "");
+        Check("tree dashes both sources with no feed",
+              !Drew(td, a.SolarArrayText) && !Drew(td, a.BatteryText), "");
+        Check("tree still names the real vehicle's battery count", Drew(ta, "BATTERIES ×4"), "");
     }
 
     static void SpeccedPages()

@@ -658,8 +658,100 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
   in the code header; no `PanelMap.cs` / label-doc edits. `plugin/build/csc.rsp` churn reverted before
   commit (S11).
 
-### T13 [O] Live-data wiring — **TODO**
+### T13 [O] Live-data wiring — **SPLIT** into T13a + T13b + T13c — this line is closed, do not take it
 - **Read:** §6 + `VesselData.cs`.  **Build:** replace placeholder constants.  **DONE when:** values live in-sim.
+- **SPLIT 2026-09-02 (C1.7 / C5), no scope change.** The end-to-end read of §6 + `VesselData.cs` +
+  `docs/TELEMETRY_REGISTRY.md` found the placeholder surface is ~140 readouts across nine pages — far more
+  than one session, so it is cut into three lines that each finish. §6's own scoping is kept verbatim
+  (*"the numeric VALUES are the placeholders"*): reference COPY — checklist wording, state words, the
+  reference's own duplicate `LOOP A` label — is NOT touched by any of the three (see S19/S20 below).
+  The idiom every line follows is the one **`SystemsPidPage` already ships** (T9): a value with a live or
+  simulated-from-real source is drawn from `PageState`'s pre-formatted text, a value with no authoritative
+  source is `—`, and nothing is invented (`docs/TELEMETRY_REGISTRY.md`: *"anything with no real source is
+  `UNKNOWN — EVIDENCE REQUIRED` or SIMULATION — never invented"*).
+- ⚠ **The old DONE-when ("values live in-sim") is NOT a preview-gate criterion** and no sub-line claims it.
+  Each sub-line is DONE on `build.py test` green + preview inspected + the wiring provably reading
+  `PageState`; **confirming the numbers on the glass belongs to `S18`**, which already names T13 for exactly
+  this (*"Any T13/T14 criterion that turns out to need the capsule belongs here"*). No gate is lifted here.
+
+### T13a [O] Live-data wiring — the VEHICLE page family — **DONE**
+- **Read:** §6 + `docs/TELEMETRY_REGISTRY.md` + `VesselData.cs` + `pure/SystemsPidPage.cs` (the idiom).
+- **Build:** `VehicleOverviewPage` (the eight cabin/loop/net-power gauges + the CONSUMABLES QTY column),
+  `VehicleMechPage` (the five outer node values + the four seat tachs — the page did not even take a
+  `PageState`), `SystemsTreePage` (the solar array's `DEPLOYED` word + the batteries' `4 / 4`, the two
+  the file header itself flags as T13's), plus whatever `PageState` / `VesselData` fields those need.
+- **DONE 2026-09-02.** Every number on the three pages now comes from `PageState`, in the idiom
+  `SystemsPidPage` (T9) already ships — `valid ? s.SomeText : "—"` — and **nothing was invented** where a
+  source is missing (`docs/TELEMETRY_REGISTRY.md`).
+  - **`VehicleOverviewPage`:** the four cabin gauges → `s.Ppo2Text / CabinTempText / PressText / Co2Text`,
+    the two loop gauges → `LoopAText` / **`LoopBText`** (two different loops under the reference's own
+    duplicate `LOOP A` label — see **S20**, the owner's call), the two net-power gauges → `NetPwr1Text /
+    NetPwr2Text`. **Every ring is drawn from the same `CabinReadout` that produced the number inside it**,
+    so a needle can never disagree with its own readout. CONSUMABLES: `Power Unit 1/2 Energy` → the real
+    state of charge, `Usable Deorbit Fuel / Oxidizer` → the Dragon's OWN tanks in kg (the parts that are
+    neither booster nor second stage — the Dracos those tanks feed are what flies the deorbit burn).
+  - **`VehicleMechPage`** (now takes a `PageState`; the `FigmaUI` call site updated): ACCELERATION →
+    `AccelPosText`, RESISTANCE → `AccelNegText`, CENTRIPETAL → `AccelCentText`, PRESSURE → `PressText`.
+    Those four `Accel*Text` fields have been computed in `VesselData` **for this page** since they were
+    written and **nothing drew them** — the field's own comment says "broken out the way the reference's
+    MECH PANEL does". **One extra edit, declared:** each node's ring was a FIXED 240° sweep, i.e.
+    decoration beside a number that now moves; it is now the same 300°-arc-with-a-60°-gap every other
+    vehicle gauge uses, filled from the reading, which needed three raw fractions (`AccelPos01 /
+    AccelNeg01 / AccelCent01`, full scales **stated** in `VesselData.Acceleration`: 5 g axial — the scale
+    the G dial already uses — and 2 g centripetal). The SEAT block now draws **one row per real seat**
+    (`s.SeatCount`), the "draw what exists" rule `Pages.cs` states for `LightCount`.
+  - **`SystemsTreePage`:** SOLAR ARRAY → the real `ModuleDeployableSolarPanel` state
+    (DEPLOYED / STOWED / "n / m" / NONE), BATTERIES → the real count of parts holding charge over the
+    parts that can. Both exceptions its own header listed are now closed.
+  - **What stays dashed, and why it is right:** WATER UPRIGHTING and the four SEAT n TACH readings (no
+    uprighting or per-seat-tachometer model exists anywhere in this build) and the four `Orbit n Subtank`
+    rows + MARGIN (the real vehicle's tank split has no KSP counterpart, so choosing which litres are
+    "Orbit 2 Subtank Oxidizer" would be inventing the number the label asks for). Each is stated at its
+    own site.
+  - **Gate (C1.3) met — preview + headless only, no `install`, no glass.** `python plugin/build.py test`
+    **green, 0 failed**; the Figma UI nav suite 263 → **342 checks** with a new `VehicleLiveValues`
+    section that builds each page with **two different fixtures** and asserts every value moved — a
+    constant cannot pass that, whatever its value — plus no-feed builds, ring-fill counts, and a
+    regression guard naming all 22 of the strings these pages used to hard-code. **The suite was proved
+    non-vacuous:** re-hardcoding PPO2 to its old `"2.69"` fails it (2 checks), and it passes again on
+    revert. **No new compiler warnings** (11 before, 11 after — all pre-existing).
+  - **Previews rendered and inspected:** `ui_vehicle.png` (PPO2 2.86 / TEMP 21.8 / PRESS 14.72 / CO2 1.64
+    with rings that match, LOOP 26.4 + 20.1, NET PWR −59 / −49, CONSUMABLES 18 % · 791.1 kg · 1308.0 kg
+    and four honest dashes), `ui_vehiclemech.png` (1.42 g / 0.881 g / 14.72 psia / 0.00 g, rings moving
+    with them, WATER UPRIGHTING and the seat tachs dashed), `ui_systemstree.png` +
+    `ui_systemstree_live.png` (live sources over both the unpowered and powered trees). **Two NEW
+    previews for the failure mode** — `ui_vehicle_nofeed.png`, `ui_vehiclemech_nofeed.png` — because
+    every value being live makes "no feed" a look of its own, and both confirm dashes and empty rings
+    rather than a plausible zero (`Pages.cs`: a screen confidently reading 0.0 is indistinguishable from
+    a dead one). `plugin/build/csc.rsp` churn reverted before commit (S11).
+  - **§1.4 / C1.4:** respected. No label, no `PanelMap.cs`, no label doc touched; §6's own scoping
+    ("the numeric VALUES are the placeholders") kept, so the reference COPY is reproduced untouched —
+    including two things that are **wrong but not this task's to change**: see **S19** (two mis-transcribed
+    checklist strings), **S20** (the duplicate `LOOP A` label), **S22** and **S23**.
+- ⚠ **Not claimed:** that the numbers are right ON THE GLASS. That needs the capsule and the gate is
+  preview-only, so it stays with **S18**, which already names T13 for exactly this.
+
+### T13b [O] Live-data wiring — the six subsystem sub-tabs + the Prop data band — **TODO**
+- **Read:** §6 + `docs/TELEMETRY_REGISTRY.md` + `pure/VehicleSubsystemPage.cs` + `pure/VehicleSystems.cs`.
+- **Build:** `VehicleSubsystemPage.DefOf`'s six subsystems (Crew · Prop · Power · Avionics · GNC · Thermal),
+  4 headline gauges + 5 detail readouts each = 54 values, and the same numbers where `PropSchematic` re-draws
+  them in its bottom data band (they are passed through, so wiring the source fixes both). Live sources
+  already in hand for a good share of them — `s.Cabin` (Crew's four gauges + Thermal's loops),
+  `s.Systems.Oxygen/Nitrogen/CanisterUsed` (O2/N2 tank, scrubber), `s.Power01` (battery SOC),
+  `s.Propellant01` (OX/FUEL), `s.CrewText`, the body rates for GNC; the rest is `—`.
+- **DONE when:** the same criteria as T13a.
+
+### T13c [O] Live-data wiring — the procedure & prox-ops pages — **TODO**
+- **Read:** §6 + `docs/TELEMETRY_REGISTRY.md` + `pure/ManualChuteDeployPage.cs` / `pure/DockingSimPage.cs` /
+  `pure/SuitCheckPage.cs` / `pure/DeorbitBurnPrepPage.cs` / `pure/NavPage.cs`.
+- **Build:** `ManualChuteDeployPage`'s hard-coded top telemetry strip (ACTIVE PHASE · SPLASHDOWN TIME ·
+  INERTIAL VELOCITY / ALTITUDE / APOGEE / PERIGEE / INCLINATION — every one of them already live in
+  `PageState`); `DockingSimPage`'s ROLL/PITCH/YAW, PYR, RANGE and RATE (the page takes no `PageState`);
+  `SuitCheckPage`'s four SUIT n DELTA PRESSURE rows; `DeorbitBurnPrepPage`'s four dashed SLEW rows (decide
+  live-or-stay-dashed against the registry — it is a commanded inertial slew, which may be Part B's, not
+  T13's); and `NavPage`'s approach chord, which wants the target orbital elements `PageState` does not carry
+  yet (the gap T6 logged at line ~269).
+- **DONE when:** the same criteria as T13a.
 
 ### T14 [O] Touch wiring — **TODO**
 - **Read:** §6 + §4.  **Build:** display-only controls → real per the decisions.  **DONE when:** controls act (+ tests).
@@ -1012,3 +1104,54 @@ is what this line is for.
 
 **DONE when:** both re-checks are confirmed on glass, or a NEEDS-WORK note says which way each is still off
 and what the next step would cost.
+
+### S19 [S] `VehicleOverviewPage`'s checklist copy mis-transcribes the reference — **TODO**
+Found by T13a while reading the reference source for the live-data wiring (not fixed — C1.1, and it is
+label copy, not a value). `plugin/src/pure/VehicleOverviewPage.cs`'s `ChkLabel` reads
+**"RENDEZVOUS BURN BLOW"** and **"BURN GOING-GO"**. The page's own stated source —
+`assets/reference/dragon2-ui-master/src/components/Overview.vue`, lines 527 and 575 — says
+**"RENDEZVOUS BURN SLOW"** and **"BURN GO/NO-GO"**, and `docs/UI_AUDIT.md` (line 310, generated from that
+same CSS/DOM) agrees with the .vue on both. So these are two transcription slips against a source the repo
+holds, not a deliberate deviation. **Fix:** change the two strings to match the .vue + UI_AUDIT; re-render
+`ui_vehicle.png` and check nothing reflows. Tier-2 source (a recreation), quoted verbatim as the page's
+header says it is — no owner call needed, it is a straight correction to the stated source.
+
+### S20 [owner call] The reference labels BOTH coolant gauges `LOOP A` — **TODO**
+Also found by T13a. `VehicleOverviewPage` draws two coolant gauges and labels them both `LOOP A`, which is
+**faithful**: `Overview.vue` lines 222 and 272 both say `LOOP A`, and `docs/UI_AUDIT.md`'s label list carries
+`LOOP A` once. But two of our own docs (`docs/REFERENCE_PAGES.md` lines 75 and 156) document the pair as
+`LOOP A / LOOP B`, our model computes two distinct loops (`Cabin.LoopAC` / `LoopBC`), and T13a has now wired
+the second gauge to **Loop B's** live value — so the page shows two different temperatures under one label.
+The choice is between reproducing a reference bug and correcting it. **Options:** (a) leave both `LOOP A`
+(reference-faithful, reads as a contradiction on the glass); (b) label the second `LOOP B` (matches
+REFERENCE_PAGES, our model and the value actually drawn; deviates from the tier-2 source). **This is a label
+change against a real-sourced page, so it is the owner's (C1.4) — a build chat does not decide it.**
+
+### S21 [S] A zero-byte file named `=` is tracked in `plugin/src/` — **TODO**
+Noticed by T13a while listing the glue sources. `plugin/src/=` is 0 bytes, dated 2026-08-10, and is tracked
+(it came in with the initial import, `14b8c2a`) — the classic leftover of a `... = ...` shell redirect. It is
+not referenced by `plugin/build.py`, compiles to nothing, and only clutters the source listing. **Fix:**
+`git rm plugin/src/=` and confirm `build.py test` is still green. Trivial, but not T13's to do (C1.1).
+
+### S22 [S] The reference's static status words read confidently on a dead feed — **TODO**
+Logged by T13a, deliberately not done (§6 scopes T13 to the numeric VALUES, and this is reference COPY —
+changing it is a different kind of edit). Now that every NUMBER on the vehicle pages dashes when
+`PageState.Valid` is false, the words beside them are the only things left claiming to know something:
+`VehicleOverviewPage`'s seven checklist states (`Normal` / `Applied` / `Awaiting`, in green and amber),
+its `CONNECTIONS → Connected` rows and `CABIN MICS: RECORDING`, and `VehicleMechPage`'s
+`ALL SYSTEMS CHECK / Awaiting`. `ui_vehicle_nofeed.png` and `ui_vehiclemech_nofeed.png` show it plainly:
+every gauge dashes, and a green "Normal" sits next to them. That is the failure `Pages.cs` warns about
+("a screen confidently reading 0.0 is indistinguishable from a dead feed") in word form. **Fix:** decide
+one rule for the whole category and apply it in one pass — most likely dash-and-dim every static status
+word when the feed is invalid, leaving the label. Cheap; it is grouped here rather than split across pages
+so the pages cannot end up disagreeing.
+
+### S23 [owner call] `BATTERIES ×4` names four batteries; the live count beneath it says otherwise — **TODO**
+Also T13a. The systems-tree battery node keeps the label `BATTERIES ×4` — the REAL Crew Dragon's own
+battery count, reused verbatim from the Power checklist — while the state line under it is now this
+vessel's LIVE count of parts holding charge, which on the KSP craft is whatever it is (`2 / 2` in the
+preview). Both halves are correct and they read as a contradiction. **Options:** (a) leave it — the label
+is a vehicle fact, the value is this vessel's state; (b) drop the `×4` so the label makes no count claim;
+(c) make the label itself live. (b) and (c) change a label that came from a real-sourced set, so this is
+the owner's (C1.4). The identical `SOLAR ARRAY` / `BATTERIES ×4` pair on the **Power subsystem page** is
+still fully representative — that page is **T13b**'s, and whatever is decided here should land there too.

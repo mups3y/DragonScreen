@@ -178,7 +178,7 @@ namespace DragonScreen
                 case UiPage.Cabin:     FigmaFramePage.Build(dl, w, h, "frame66"); break;
                 case UiPage.SuitCheck: SuitCheckPage.Build(dl, w, h, suitCountdown, suitPopup); break;
                 case UiPage.Vehicle:   VehicleOverviewPage.Build(dl, w, h, s); break;
-                case UiPage.VehicleMech: VehicleMechPage.Build(dl, w, h); break;
+                case UiPage.VehicleMech: VehicleMechPage.Build(dl, w, h, s); break;
                 case UiPage.AudioVideo:  SettingsVideoPage.Build(dl, w, h, s); break;
                 case UiPage.VrioTest:    VrioTestPage.Build(dl, w, h); break;
                 case UiPage.VehicleCrew:       VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Crew, s); break;

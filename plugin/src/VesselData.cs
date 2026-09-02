@@ -177,6 +177,7 @@ namespace DragonScreen
                 Seats(v);
                 Pyro(v);
                 Acceleration(v);
+                VehicleSources(v);
 
                 state.LightsOn = v.ActionGroups[KSPActionGroup.Light];
                 state.LightCount = CountLights(v);
@@ -731,6 +732,87 @@ namespace DragonScreen
             }
         }
 
+        /// ---- THE VEHICLE PAGE'S OWN SOURCES ----
+        /// T13a. The VEHICLE family (overview / mech / systems tree) drew these as constants. Every one
+        /// here is a REAL count or a REAL resource total read off the vessel; where this vehicle simply
+        /// has no such thing the text is left NULL and the page draws a dash, rather than a plausible
+        /// number being invented at this end (docs/TELEMETRY_REGISTRY.md).
+        ///
+        /// ⛔ ONE PASS OVER THE PARTS. Three readouts want three different things off the same list, and
+        /// VesselData already walks it several times a refresh; adding three more walks for four strings
+        /// is the wrong trade on a vessel with a full stack attached.
+        private static void VehicleSources(Vessel v)
+        {
+            // ---- CONSUMABLES: the two power units ----
+            // ONE real charge pool, reported on both rows. The vehicle's two independent power units are
+            // not modelled, and a bus switch does not change how much energy is STORED - so gating this
+            // on Bus1On/Bus2On would answer a different question than the label asks. See PageState.
+            string energy = Energy();
+            state.PowerUnit1Text = energy;
+            state.PowerUnit2Text = energy;
+
+            double fuel = 0.0, ox = 0.0;
+            bool anyFuel = false, anyOx = false;
+            int panels = 0, extended = 0, cells = 0, liveCells = 0;
+
+            for (int i = 0; i < v.parts.Count; i++)
+            {
+                Part p = v.parts[i];
+                // The DRAGON's own tanks, not the stack's: the Dracos those tanks feed are what flies
+                // the deorbit burn, which is what the row is asking about.
+                bool dragon = !VehicleParts.IsBooster(p.name) && !VehicleParts.IsSecondStage(p.name);
+                bool cell = false;
+
+                for (int k = 0; k < p.Resources.Count; k++)
+                {
+                    PartResource r = p.Resources[k];
+                    if (r.maxAmount <= 0.0) continue;
+
+                    if (r.resourceName == "ElectricCharge") { cell = true; if (r.amount > 0.0) liveCells++; continue; }
+                    if (!dragon || r.info == null || r.info.density <= 0f) continue;
+
+                    // KSP densities are tonnes per unit, so this is tonnes until Kg() scales it.
+                    if (r.resourceName == "Oxidizer") { ox += r.amount * r.info.density; anyOx = true; }
+                    else if (r.resourceName == "LiquidFuel" || r.resourceName == "MonoPropellant")
+                    { fuel += r.amount * r.info.density; anyFuel = true; }
+                }
+                if (cell) cells++;
+
+                for (int m = 0; m < p.Modules.Count; m++)
+                {
+                    ModuleDeployableSolarPanel sp = p.Modules[m] as ModuleDeployableSolarPanel;
+                    if (sp == null) continue;
+                    panels++;
+                    if (sp.deployState == ModuleDeployablePart.DeployState.EXTENDED) extended++;
+                }
+            }
+
+            state.DeorbitFuelText = anyFuel ? Kg(fuel) : null;
+            state.DeorbitOxText   = anyOx   ? Kg(ox)   : null;
+
+            // A body-mounted panel is a ModuleDeployableSolarPanel that is permanently EXTENDED, so it
+            // reads DEPLOYED and that is correct - it is deployed, by construction.
+            state.SolarArrayText = (panels == 0) ? "NONE"
+                                 : (extended == panels) ? "DEPLOYED"
+                                 : (extended == 0) ? "STOWED"
+                                 : extended + " / " + panels;
+            state.BatteryText = (cells == 0) ? "NONE" : liveCells + " / " + cells;
+        }
+
+        /// <summary>A power unit's energy: the vessel's real state of charge, with its unit. Null when
+        /// there is no charge reading at all, which the page draws as a dash.</summary>
+        private static string Energy()
+        {
+            if (string.IsNullOrEmpty(state.PowerText) || state.PowerText == "-") return null;
+            return state.PowerText + " %";
+        }
+
+        private static string Kg(double tonnes)
+        {
+            if (double.IsNaN(tonnes) || double.IsInfinity(tonnes)) return "-";
+            return (tonnes * 1000.0).ToString("F1") + " kg";
+        }
+
         private static void Acceleration(Vessel v)
         {
             double gee = v.geeForce;
@@ -749,6 +831,15 @@ namespace DragonScreen
             double r = v.altitude + ((v.mainBody != null) ? v.mainBody.Radius : 0.0);
             double cent = (r > 1.0) ? (v.obt_speed * v.obt_speed / r) / 9.80665 : 0.0;
             state.AccelCentText = cent.ToString("F3");
+
+            // ---- DIAL FULL SCALES, STATED ----
+            // 5 g for the axial pair, which is the scale the G dial already uses (GForce01 = gee / 5)
+            // so two dials for the same kind of quantity cannot mean different things. 2 g for the
+            // centripetal term, because a low circular orbit sits near 1 g and that puts nominal in the
+            // middle of the dial - the CabinEnvironment rule about a needle that never leaves one end.
+            state.AccelPos01  = Clamp01(along / 5.0);
+            state.AccelNeg01  = Clamp01(-along / 5.0);
+            state.AccelCent01 = Clamp01(cent / 2.0);
         }
 
         /// ---- THE ONE PLACE A SCREEN COMMANDS THE VESSEL, SO FAR ----

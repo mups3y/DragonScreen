@@ -24,9 +24,15 @@
 // simulated power system (PageState.Systems — pure/VehicleSystems.cs, the same model the MECH page and
 // the console's STRING/POWER/RESET buttons drive). A bus that the crew has not powered reads BUS OFF
 // and its branch goes dark; a string reads ON / ISOL / TRIP straight from Systems.StateWord; the state
-// of charge is PageState.Power01, the same signal that raises the vehicle's own POWER caution. The one
-// value with no live source is the array's "Deployed" word, which is representative exactly as it
-// already is on the Power subsystem page (T13 makes it live).
+// of charge is PageState.Power01, the same signal that raises the vehicle's own POWER caution.
+//
+// T13a closed the two exceptions this header used to list. The array's word is now the REAL
+// ModuleDeployableSolarPanel state on the vessel (DEPLOYED / STOWED / "n / m" while a panel is moving or
+// broken / NONE when the craft carries no panel at all), and the battery node's "4 / 4" is now the real
+// count of parts holding charge over the parts that can hold it — so a drained pack reads differently
+// from a full one. Both arrive pre-formatted from VesselData.VehicleSources; NONE is a fact about the
+// vessel, not a missing feed, so it prints as itself while a dead feed still prints "—".
+// (The same "Deployed" word on the Power SUBSYSTEM page is still representative — that page is T13b.)
 //
 // Reachability: the Menu grid, like T7's and T8's pages. It is deliberately NOT a ninth VehicleTabBar
 // tab — that strip's eight tabs are confirmed-real from the clean designer mockup, and adding one
@@ -102,9 +108,21 @@ namespace DragonScreen
             Severity soc = valid ? Alarms.Low(s.Power01) : Severity.Nominal;
             Rgba socCol = valid ? Alarms.Colour(soc) : Faint;
 
-            // ---- sources ----
-            NodeBox(1293f, SrcY, SrcW, SrcH, "SOLAR ARRAY", "DEPLOYED", valid ? DragonPalette.Go : Faint);
-            NodeBox(2134f, SrcY, SrcW, SrcH, "BATTERIES ×4", "4 / 4", valid ? DragonPalette.Go : Faint);
+            // ---- sources (LIVE — VesselData.VehicleSources) ----
+            // A source the vehicle does not carry reads NONE and goes dark: that is a real fact about
+            // this craft, and it must not look the same as a healthy feed.
+            string arrayWord = valid ? s.SolarArrayText : null;
+            string cellWord  = valid ? s.BatteryText : null;
+            bool arrayUp = arrayWord == "DEPLOYED";
+            bool cellsUp = !string.IsNullOrEmpty(cellWord) && cellWord != "NONE";
+            NodeBox(1293f, SrcY, SrcW, SrcH, "SOLAR ARRAY",
+                    string.IsNullOrEmpty(arrayWord) ? "—" : arrayWord,
+                    arrayUp ? DragonPalette.Go : (arrayWord == null ? Faint : DragonPalette.Caution));
+            // The "×4" is the real Crew Dragon's own battery count (§4 / the Power checklist); the state
+            // line beneath it is THIS vessel's live count, which is a different question.
+            NodeBox(2134f, SrcY, SrcW, SrcH, "BATTERIES ×4",
+                    string.IsNullOrEmpty(cellWord) ? "—" : cellWord,
+                    cellsUp ? DragonPalette.Go : Faint);
 
             // sources -> MAIN POWER (a header bus, the way a distribution diagram joins two feeds)
             LN(1293f, SrcY + SrcH, 1293f, SrcBusY, Wire);

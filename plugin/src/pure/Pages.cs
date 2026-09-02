@@ -141,6 +141,32 @@ namespace DragonScreen
         /// <summary>Simulated power strings, consumables, fire and leak. See VehicleSystems.</summary>
         public SystemsState Systems;
 
+        // ---- THE VEHICLE PAGE'S OWN SOURCES (T13a) ----
+        // The VEHICLE family drew these as constants; every one now has an authoritative source, and
+        // the ones that do not are drawn as a dash BY THE PAGE rather than given a plausible value here
+        // (docs/TELEMETRY_REGISTRY.md: no real source -> UNKNOWN / SIMULATION, never invented).
+        //
+        // Pre-formatted, like everything else, because the draw path may not allocate: these carry
+        // their UNIT with them ("84 %", "791.1 kg") since the CONSUMABLES table prints one right-aligned
+        // string per row rather than a value and a unit in separate columns.
+        /// <summary>CONSUMABLES "Power Unit n Energy": the vessel's real state of charge, as a percent.
+        /// BOTH rows report the same number today and that is the honest answer, not a copy-paste: KSP
+        /// has ONE ElectricCharge pool, the real vehicle's two independent power units are not modelled,
+        /// and inventing a split would be inventing the number the label asks for. Two fields, so a real
+        /// per-unit source can fill them separately later without touching the page. (Whether a BUS is
+        /// carrying that energy is a different fact, and the systems tree is where it is shown.)</summary>
+        public string PowerUnit1Text, PowerUnit2Text;
+        /// <summary>CONSUMABLES "Usable Deorbit Fuel / Oxidizer", kg. The Dragon's OWN tanks - the parts
+        /// that are neither booster nor second stage - because the Dracos in those tanks are what flies
+        /// the deorbit burn. Null when the vehicle carries no such resource; the page dashes it.</summary>
+        public string DeorbitFuelText, DeorbitOxText;
+        /// <summary>SYSTEMS TREE, the solar array source node: DEPLOYED / STOWED / PARTIAL / NONE, from
+        /// the real ModuleDeployableSolarPanel state. Null before the glue fills it.</summary>
+        public string SolarArrayText;
+        /// <summary>SYSTEMS TREE, the battery source node: "live / total" parts holding charge. Real
+        /// counts, so a drained pack reads differently from a full one. Null before the glue fills it.</summary>
+        public string BatteryText;
+
         /// <summary>Ascent autopilot: engaged, and which phase it is flying.</summary>
         public bool AutoEngaged;
         public string AutoPhase;
@@ -209,6 +235,10 @@ namespace DragonScreen
         public bool TrunkSet, TrunkFired, DroguesFired, MainsFired, MainsReleased;
         /// <summary>Acceleration broken out the way the reference's MECH PANEL does.</summary>
         public string AccelPosText, AccelNegText, AccelAngText, AccelCentText;
+        /// <summary>The same three readings as DIAL fractions, 0..1 of the full scales VesselData
+        /// states. A ring cannot be derived from the formatted string, and a ring that does not move
+        /// with the number beside it is decoration - which is the thing T13a exists to remove.</summary>
+        public double AccelPos01, AccelNeg01, AccelCent01;
 
         // ---- SETTINGS ----
         public bool LightsOn;

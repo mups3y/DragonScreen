@@ -162,6 +162,9 @@ public static class PreviewMain
         ps.DroguesFired = true; ps.MainsFired = false; ps.MainsReleased = false;
         ps.AccelPosText = "1.42"; ps.AccelNegText = "0.00";
         ps.AccelAngText = "2.10"; ps.AccelCentText = "0.881";
+        // The dial fractions for those same three readings, against VesselData's stated full scales
+        // (5 g axial, 2 g centripetal) — derived here so the fixture's rings and numbers agree.
+        ps.AccelPos01 = 1.42 / 5.0; ps.AccelNeg01 = 0.0; ps.AccelCent01 = 0.881 / 2.0;
         ps.LightCount = 1;                 // what TE_CD2_POD.cfg actually has
         ps.CameraView = 0; ps.CameraResText = "640 x 360"; ps.CameraHeldByDocking = false;
 
@@ -181,6 +184,18 @@ public static class PreviewMain
         // number. Appending it here produced "-59 W" with a "W" beneath it.
         ps.NetPwr1Text   = ps.Cabin.NetPwr1W.ToString("F0");
         ps.NetPwr2Text   = ps.Cabin.NetPwr2W.ToString("F0");
+
+        // ---- THE VEHICLE PAGE'S OWN SOURCES (T13a) ----
+        // Derived here the SAME way VesselData.VehicleSources derives them from a real vessel, so the
+        // fixture cannot drift out of agreement with itself: the power-unit rows are ps.PowerText with
+        // its unit (one charge pool, reported on both rows), and the rest is a plausible Dragon —
+        // capsule propellant in kg, a deployed array, and two battery parts both holding charge.
+        ps.PowerUnit1Text = ps.PowerText + " %";
+        ps.PowerUnit2Text = ps.PowerUnit1Text;
+        ps.DeorbitFuelText = "791.1 kg";
+        ps.DeorbitOxText   = "1308.0 kg";
+        ps.SolarArrayText  = "DEPLOYED";
+        ps.BatteryText     = "2 / 2";
 
         int W = Screens[0].W, H = Screens[0].H;
         // NAV is rendered at a MODERATE ZOOM rather than at the default whole-body view: zoom 0
@@ -434,6 +449,28 @@ public static class PreviewMain
                 Render(tdl, CW, CH, path);
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + tdl.Count + " commands");
                 ps.Systems = savedSys;
+            }
+
+            // ---- T13a: the VEHICLE family with NO FEED ----
+            // Every number on these three pages is live now, so the failure mode has a look of its own and
+            // it is the one that matters most: a screen confidently reading 0.0 is indistinguishable from a
+            // dead one (Pages.cs). These renders prove the dashes appear and the rings empty rather than
+            // the pages drawing a plausible zero. Same "anything reachable needs a render" rule as T4/T5.
+            {
+                bool savedValid = ps.Valid;
+                ps.Valid = false;
+                DisplayList ndl = new DisplayList(VehicleOverviewPage.Commands + 60);
+                VehicleOverviewPage.Build(ndl, CW, CH, ps);
+                string path = Path.Combine(outDir, "ui_vehicle_nofeed.png");
+                Render(ndl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + ndl.Count + " commands");
+
+                DisplayList mdl = new DisplayList(VehicleMechPage.Commands + 60);
+                VehicleMechPage.Build(mdl, CW, CH, ps);
+                path = Path.Combine(outDir, "ui_vehiclemech_nofeed.png");
+                Render(mdl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + mdl.Count + " commands");
+                ps.Valid = savedValid;
             }
 
             // Cover with the LAST phase selected (Manual Chute Deploy, rail slot 6) to prove the expanded

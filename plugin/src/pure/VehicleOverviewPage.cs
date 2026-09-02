@@ -16,6 +16,21 @@
 // Oxidizer, Orbit 1/2 Subtank Fuel/Oxidizer, + a "SHOW MARGINS TO" toggle. MARGIN itself isn't in the
 // captured alt-text, so it draws as "—", the same dash idiom the rest of the mod uses for a value with
 // no source yet (STATE_CONTRACT.md) rather than inventing a number.
+//
+// T13a (live-data wiring, §6): every NUMBER on this page now comes from PageState, in the exact idiom
+// SystemsPidPage (T9) already ships — `valid ? s.SomeText : "—"`, with the gauge fraction taken from the
+// SAME CabinReadout that produced the text so a ring can never disagree with the number inside it. The
+// eight gauges read the simulated-from-real cabin model (pure/CabinEnvironment.cs); the CONSUMABLES
+// column reads the vessel's real charge, its real bus state and its real propellant mass (VesselData.
+// VehicleSources). §6 scopes this to the VALUES: the reference COPY — the seven checklist rows and their
+// state words, CONNECTIONS, CABIN MICS, and the reference's own duplicate `LOOP A` label (Overview.vue
+// 222 + 272; see S20) — is untouched, and so is the layout.
+//
+// WHAT STAYS DASHED, AND WHY: the four "Orbit n Subtank" rows and MARGIN. The real vehicle splits its
+// propellant across a deorbit tank and two orbit subtanks; KSP has no such split, and deciding which
+// KSP litres are "Orbit 2 Subtank Oxidizer" would be inventing the number the label asks for
+// (docs/TELEMETRY_REGISTRY.md). "Usable Deorbit Fuel / Oxidizer" IS answerable — the Dragon's own tanks
+// feed the Dracos that fly the deorbit burn — so those two are live and the other four are honest dashes.
 // ============================================================================================
 using System;
 
@@ -52,7 +67,8 @@ namespace DragonScreen
             "Usable Deorbit Fuel", "Usable Deorbit Oxidizer",
             "Orbit 1 Subtank Fuel", "Orbit 1 Subtank Oxidizer",
             "Orbit 2 Subtank Fuel", "Orbit 2 Subtank Oxidizer" };
-        static readonly string[] ConsQty = { "100 %", "100 %", "791.1 kg", "1308 kg", "67.76 kg", "111.3 kg", "67.76 kg", "111.3 kg" };
+        /// <summary>No-source dash — the one idiom the whole mod uses for a value nothing can supply.</summary>
+        const string Dash = "—";
 
         public static void Build(DisplayList dl, int w, int h, PageState s)
         {
@@ -89,18 +105,31 @@ namespace DragonScreen
                 L(ChkState[i], 150, y + 48, 26, sc);
             }
 
-            // ---- CENTRE-TOP: four cabin gauges ----
-            Gauge(1170, 430, 175, 0.60f, Gold,   "PPO2",           "2.69", "psia");
-            Gauge(1620, 430, 175, 0.52f, Red,    "CABIN TEMP",     "16.43", "°C");
-            Gauge(2070, 430, 175, 0.72f, Yellow, "CABIN PRESSURE", "14.0", "psia");
-            Gauge(2520, 430, 175, 0.30f, Blue,   "CO2",            "1.05", "mmHg");
+            // ---- CENTRE-TOP: four cabin gauges (LIVE — pure/CabinEnvironment.cs) ----
+            // Value and ring come from the same CabinReadout, so the needle can never disagree with the
+            // number printed inside it. No feed -> a dash and an empty ring, never a confident zero.
+            bool valid = s.Valid;
+            float F(double frac) => valid ? (float)frac : 0f;
+            string T(string live) => (valid && !string.IsNullOrEmpty(live)) ? live : Dash;
+
+            Gauge(1170, 430, 175, F(s.Cabin.Ppo201),      Gold,   "PPO2",           T(s.Ppo2Text),      "psia");
+            Gauge(1620, 430, 175, F(s.Cabin.CabinTemp01), Red,    "CABIN TEMP",     T(s.CabinTempText), "°C");
+            Gauge(2070, 430, 175, F(s.Cabin.Press01),     Yellow, "CABIN PRESSURE", T(s.PressText),     "psia");
+            Gauge(2520, 430, 175, F(s.Cabin.Co201),       Blue,   "CO2",            T(s.Co2Text),       "mmHg");
 
             // ---- CENTRE: capsule + loop/power gauges ----
+            // ⚠ BOTH loop gauges are labelled "LOOP A" because the reference labels both that way
+            // (Overview.vue 222 + 272) — reproduced, not a typo here. The VALUES are the two distinct
+            // loops the model computes, which is what the second gauge always meant. See S20: whether to
+            // correct the second label to LOOP B is a label change on a real-sourced page, so it is the
+            // owner's call (C1.4), not this task's.
             dl.Asset("dragon_crew", PX(1560), PY(760), 520 * sx, 760 * sy, White);
-            Gauge(1230, 900,  120, 0.55f, Blue,   "LOOP A", "26.05", "°C");
-            Gauge(1230, 1200, 120, 0.44f, Blue,   "LOOP A", "21.06", "°C");
-            Gauge(2410, 900,  120, 0.10f, Accent, "NET PWR1", "0.03", "W");
-            Gauge(2410, 1200, 120, 0.62f, Accent, "NET PWR2", "3.02", "W");
+            Gauge(1230, 900,  120, F(s.Cabin.LoopA01), Blue, "LOOP A", T(s.LoopAText), "°C");
+            Gauge(1230, 1200, 120, F(s.Cabin.LoopB01), Blue, "LOOP A", T(s.LoopBText), "°C");
+            // Net power is SIGNED — the sign lives in the printed number, the ring shows how hard the
+            // bus is working either way, against the same full scale the model states.
+            Gauge(2410, 900,  120, F(NetPwr01(s.Cabin.NetPwr1W)), Accent, "NET PWR1", T(s.NetPwr1Text), "W");
+            Gauge(2410, 1200, 120, F(NetPwr01(s.Cabin.NetPwr2W)), Accent, "NET PWR2", T(s.NetPwr2Text), "W");
 
             // ---- CONNECTIONS (left of the capsule base) ----
             L("CONNECTIONS", 1130, 1440, 26, Accent);
@@ -119,9 +148,10 @@ namespace DragonScreen
             for (int i = 0; i < ConsLabel.Length; i++)
             {
                 float y = 360 + i * 145;
+                string qty = valid ? Qty(i, s) : null;
                 L(ConsLabel[i], 2760, y, 23, White);
-                R(ConsQty[i], 3160, y, 25, White);
-                R("—", 3360, y, 25, Dim);
+                R(qty ?? Dash, 3160, y, 25, string.IsNullOrEmpty(qty) ? Dim : White);
+                R(Dash, 3360, y, 25, Dim);
                 dl.Rect(PX(2760), PY(y + 30), 600 * sx, SZ(2), Faint);
             }
             L("SHOW MARGINS TO", 2760, 360 + ConsLabel.Length * 145 + 30, 24, Accent);
@@ -133,6 +163,32 @@ namespace DragonScreen
             // here too — the real "reached in one touch from anywhere" behaviour, not just on its own page.
             VehicleTabBar.Draw(dl, w, h, 0, VehicleTabBar.Severities(s));
             dl.Asset("component_48", 0f, PY(1877), w, SZ(235), White);
+        }
+
+        /// <summary>A net-power dial's fill. The reading is SIGNED (negative = draining) and a ring
+        /// cannot show a sign, so the ring carries the MAGNITUDE against the model's own stated full
+        /// scale and the printed number keeps the sign.</summary>
+        static double NetPwr01(double watts)
+        {
+            double f = (watts < 0.0 ? -watts : watts) / Cabin.NetPwrFullScale;
+            return f > 1.0 ? 1.0 : f;
+        }
+
+        /// <summary>One CONSUMABLES row's quantity, or null where nothing can answer the label.
+        /// Row order is <see cref="ConsLabel"/>'s, which is the render's own order (T5).</summary>
+        static string Qty(int row, PageState s)
+        {
+            switch (row)
+            {
+                case 0: return s.PowerUnit1Text;    // Power Unit 1 Energy — real charge, on bus 1
+                case 1: return s.PowerUnit2Text;    // Power Unit 2 Energy — real charge, on bus 2
+                case 2: return s.DeorbitFuelText;   // Usable Deorbit Fuel      — the Dragon's own tanks
+                case 3: return s.DeorbitOxText;     // Usable Deorbit Oxidizer  — the Dragon's own tanks
+                // Orbit 1 / Orbit 2 subtank fuel + oxidizer: the real vehicle's tank split has no KSP
+                // counterpart, and guessing which litres belong to which subtank would be inventing the
+                // number (docs/TELEMETRY_REGISTRY.md). Dashed, like MARGIN beside them.
+                default: return null;
+            }
         }
     }
 }
