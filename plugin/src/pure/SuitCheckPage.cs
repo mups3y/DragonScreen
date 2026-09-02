@@ -10,11 +10,23 @@
 //
 // FLOW: INITIATE runs a 5→0 countdown (~0.9s/step); at 0 the completion POPUP shows ("4.011 - Suit
 // Leak Check / ECLSS / PROCEDURE COMPLETE / Crew can open their visors if desired but must not open
-// zippers or disconnect umbilical."); HALT stops + resets. TIME REMAINING counts the real procedure
-// countdown; the four SUIT n DELTA PRESSURE rows DASH — nothing in this build models a suit, so there
-// is no honest number to put there (T13c; see the note at the rows themselves). The four SUIT n STATUS
-// rows are reference COPY, not values, and are reproduced as the real page words them (S22). NOTE: the real page has NO "CLEAR" line, and NO Failed-Low / TROUBLESHOOT / "2.5
-// Contact SpaceX" content — none of that appears in any real frame, so it is deliberately not drawn.
+// zippers or disconnect umbilical."); HALT stops + resets. FINISH ends the procedure early and raises
+// the same popup (step 2.5's own completion control). TRY ADDITIONAL TIMER re-runs the countdown, which
+// is exactly and only what its words say — a second timed run, no suit state invented to go with it.
+//
+// TIME REMAINING counts the real procedure countdown; the four SUIT n DELTA PRESSURE rows DASH —
+// nothing in this build models a suit, so there is no honest number to put there (T13c; see the note at
+// the rows themselves). The four SUIT n STATUS rows are reference COPY, not values, and are reproduced
+// as the real page words them (S22).
+//
+// ---- WHAT IS REFERENCE AND WHAT IS RECONSTRUCTION, ON THIS PAGE ----
+// The popup's "CLEAR" line, the Failed-Low / TROUBLESHOOT / TRY ADDITIONAL TIMER block and step 2.5
+// ("On completion, contact SpaceX to report results") appear in NO real frame. They are drawn anyway,
+// and deliberately: BUILD_PLAN §14.4(d) is the owner's decision on exactly this content — KEEP it,
+// MARKED as a reconstruction, because a leak check must have a fail path and the real table plainly
+// scrolls past its "Scroll to continue" fold. (An earlier version of this header claimed the opposite,
+// that none of it is drawn; it was written before §14.4(d) and the code never matched it. Corrected
+// here rather than left to mislead someone into deleting an owner-decided reconstruction.)
 //
 // Icons are referenced by asset key (ic_check/ic_dash/ic_grid/ic_refresh/ic_eye/ic_circle).
 // ============================================================================================
@@ -86,7 +98,7 @@ namespace DragonScreen
             L("statuses are nominal after time remaining is 0.", 1160, 628, 30, White);
 
             // ---- the log table ----
-            float tx = 1160, tvx = 2050, tix = 2560, rowH = 92f, y0 = 720f;
+            float tx = 1160, tvx = 2050, tix = 2560, rowH = TableRowH, y0 = TableY0;
             void Row(int i, string label, string val, string icon, Rgba iconTint, Rgba valTint)
             {
                 float y = y0 + i * rowH;
@@ -115,7 +127,7 @@ namespace DragonScreen
             // photos; this is the next step and the completion control.
             L("2.5", 1060, y0 + 9 * rowH + 44, 34, White);
             L("On completion, contact SpaceX to report results.", 1160, y0 + 9 * rowH + 44, 30, White);
-            Pl(1160, y0 + 9 * rowH + 100, 300, 84, Hair); C("FINISH", 1310, y0 + 9 * rowH + 124, 30, White);
+            Pl(1160, FinishY, 300, 84, Hair); C("FINISH", 1310, FinishY + 24f, 30, White);
 
             // ================= RIGHT PANEL: caution + troubleshoot + HALT =================
             dl.Rect(PX(2870), PY(300), 500 * sx, 300 * sy, Panel);
@@ -127,16 +139,26 @@ namespace DragonScreen
             L("automated evaluation of suit", 2910, 488, 26, White);
             L("delta pressure values.", 2910, 534, 26, White);
 
-            // ---- failure branch (reconstructed; see header note). Not in the captured frames, but a
-            // leak check has a fail path and the main table scrolls past "Scroll to continue" — this is
-            // the crew's response when a suit reads "Failed Low". Display-only until the touch pass. ----
+            // ---- failure branch (reconstructed, §14.4(d) KEEP; see header note). Not in the captured
+            // frames, but a leak check has a fail path and the main table scrolls past "Scroll to
+            // continue" — this is the crew's response when a suit reads "Failed Low".
+            //
+            // T14 wired the two controls, and they came out asymmetric for a reason worth stating.
+            // TRY ADDITIONAL TIMER acts: "another timed run" is a complete instruction and this page
+            // already owns the timer. TROUBLESHOOT does not, and cannot honestly: it responds to a suit
+            // reading Failed Low, and NO SUIT CAN READ THAT IN THIS BUILD — no suit is modelled anywhere
+            // (that is the same fact that dashed the four DELTA PRESSURE rows in T13c), so every STATUS
+            // is Nominal and the branch's own question answers itself. So it is drawn DIMMED and does
+            // nothing: the screen says the control is unavailable rather than swallowing the press and
+            // looking broken. It becomes live the day a suit is modelled — see FailBranchLive. ----
             dl.Rect(PX(2870), PY(680), 500 * sx, 640 * sy, Panel);
             L("Did any suit fail the", 2910, 730, 28, White);
             L("leak check?", 2910, 772, 28, White);
             L("A suit reading Failed Low did", 2910, 848, 24, Dim);
             L("not hold pressure.", 2910, 892, 24, Dim);
-            Pl(2910, 970, 420, 110, White);
-            Ico("ic_grid", 2950, 1004, 40, White); C("TROUBLESHOOT", 3150, 1010, 28, White);
+            Rgba tsCol = FailBranchLive ? White : Dim;
+            Pl(2910, 970, 420, 110, tsCol);
+            Ico("ic_grid", 2950, 1004, 40, tsCol); C("TROUBLESHOOT", 3150, 1010, 28, tsCol);
             Pl(2910, 1120, 420, 110, White);
             Ico("ic_refresh", 2950, 1154, 40, White); C("TRY ADDITIONAL TIMER", 3150, 1162, 24, White);
 
@@ -167,10 +189,26 @@ namespace DragonScreen
         }
 
         // ---- INTERACTIVITY ----
-        // START runs the countdown, HALT stops+resets, CLOSE dismisses the completion popup. The rects
-        // below are the exact ones Build draws (keep them in step). While the popup is up only CLOSE is
-        // live, so a stray touch on START/HALT behind the scrim does nothing.
-        public enum SuitAct { None, Start, Halt, Close }
+        // START runs the countdown, HALT stops+resets, CLOSE dismisses the completion popup, FINISH ends
+        // the run at step 2.5 and raises that same popup, RETIME re-runs the countdown, TROUBLESHOOT is
+        // the fail branch's entry and is UNAVAILABLE (see FailBranchLive). The rects below are the exact
+        // ones Build draws (keep them in step). While the popup is up only CLOSE is live, so a stray
+        // touch on anything behind the scrim does nothing.
+        public enum SuitAct { None, Start, Halt, Close, Finish, Retime, Troubleshoot }
+
+        /// <summary>
+        /// Can a suit actually FAIL this check in this build? No — and that is a fact about the model,
+        /// not a switch: nothing here models a suit (see the DELTA PRESSURE rows), so no suit can read
+        /// "Failed Low" and the fail branch's controls have nothing to respond to. It is a named constant
+        /// rather than a `false` buried in the draw so that the day a suit IS modelled there is exactly
+        /// one place to change, and the test can assert the page and the hit test agree about it.
+        /// </summary>
+        public const bool FailBranchLive = false;
+
+        /// <summary>True if this act does something today. TROUBLESHOOT is the one that does not, and it
+        /// is drawn dimmed to say so rather than being left out (§14.4(d) keeps the branch).</summary>
+        public static bool Available(SuitAct a)
+        { return a != SuitAct.None && (a != SuitAct.Troubleshoot || FailBranchLive); }
 
         public static SuitAct HitTest(float px, float py, int w, int h, bool popup)
         {
@@ -184,7 +222,17 @@ namespace DragonScreen
             }
             if (In(2300f, 400f, 470f, 120f)) return SuitAct.Start;
             if (In(2900f, 1600f, 470f, 120f)) return SuitAct.Halt;
+            // step 2.5's FINISH plate, and the two fail-branch plates. FinishY tracks the table the same
+            // way Build's own `y0 + 9 * rowH` does, from the one pair of constants below.
+            if (In(1160f, FinishY, 300f, 84f)) return SuitAct.Finish;
+            if (In(2910f, 970f, 420f, 110f)) return SuitAct.Troubleshoot;
+            if (In(2910f, 1120f, 420f, 110f)) return SuitAct.Retime;
             return SuitAct.None;
         }
+
+        // The log table's origin and pitch, shared by Build and the FINISH rect above so the plate cannot
+        // be hit a row away from where it is drawn.
+        const float TableY0 = 720f, TableRowH = 92f;
+        const float FinishY = TableY0 + 9f * TableRowH + 100f;
     }
 }

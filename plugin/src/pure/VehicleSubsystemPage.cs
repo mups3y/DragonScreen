@@ -182,16 +182,39 @@ namespace DragonScreen
                 dl.Asset("dragon_crew", PX(1453), PY(760), 520 * sx, 760 * sy, White);
 
             // ---- FUNCTIONS | ALERTS toggle (T5, bottom-left; geometry ours, see file header) ----
+            // Live since T14: the two words are hit-tested from the SAME TabX/TabW below that place them.
             Rgba fnCol = !alerts ? White : Dim;
             Rgba alCol = alerts ? White : (sev != Severity.Nominal ? Alarms.Colour(sev) : Dim);
-            L("FUNCTIONS", 150, 1760, 28, fnCol);
-            L("ALERTS", 420, 1760, 28, alCol);
-            dl.Rect(PX(!alerts ? 150f : 420f), PY(1798), (!alerts ? 190f : 110f) * sx, SZ(4),
+            L("FUNCTIONS", TabX[0], TabTextY, 28, fnCol);
+            L("ALERTS", TabX[1], TabTextY, 28, alCol);
+            dl.Rect(PX(TabX[alerts ? 1 : 0]), PY(TabRuleY), TabW[alerts ? 1 : 0] * sx, SZ(4),
                     alerts && sev != Severity.Nominal ? Alarms.Colour(sev) : Accent);
 
             // ---- subsystem tab bar + global bottom bar ----
             VehicleTabBar.Draw(dl, w, h, d.Tab, VehicleTabBar.Severities(s));
             dl.Asset("component_48", 0f, PY(1877), w, SZ(235), White);
+        }
+
+        // ---- THE FUNCTIONS | ALERTS TOGGLE (T5 drew it, T14 wired it) ----
+        // Design-space x of each word and the width of the rule under it. Build draws from these and
+        // ToggleHit tests them, so the word and its touch target are one thing (PageAction's rule). The
+        // hit band is the word's own row, grown to the rule below it: these are 28px words on a 2112px
+        // design, and a touch target the exact size of the glyphs would be unusable on the glass.
+        static readonly float[] TabX = { 150f, 420f };
+        static readonly float[] TabW = { 190f, 110f };
+        const float TabTextY = 1760f, TabRuleY = 1798f, TabHitTop = 1736f, TabHitBot = 1820f;
+
+        /// <summary>Which half of the FUNCTIONS | ALERTS toggle a touch hit: 0 FUNCTIONS, 1 ALERTS,
+        /// -1 neither. The page it is drawn on decides what to do with that - here it only says where the
+        /// finger landed.</summary>
+        public static int ToggleHit(float px, float py, int w, int h)
+        {
+            if (w <= 0 || h <= 0) return -1;
+            float dx = px * RefW / w, dy = py * RefH / h;
+            if (dy < TabHitTop || dy >= TabHitBot) return -1;
+            for (int i = 0; i < TabX.Length; i++)
+                if (dx >= TabX[i] - 20f && dx < TabX[i] + TabW[i] + 20f) return i;
+            return -1;
         }
 
         // ---- per-subsystem content. T13b (live-data wiring, §6): every one of the 54 numbers here now

@@ -480,6 +480,38 @@ public static class PreviewMain
                 ps.Valid = savedValid;
             }
 
+            // ---- T14: the states the TOUCH PASS created ----
+            // The same rule T4/T5 set and T13c followed: anything a control can reach needs a render,
+            // because a state nobody has looked at is a state nobody has checked. Two controls here
+            // change what is DRAWN rather than only what is dispatched, so both get a PNG.
+            {
+                // Manual Chute with ENABLE BACKUP PYROS armed: §14.4(a)'s BRIGHT, on all four of the rows
+                // that carry that command, and on nothing else - the three actuation steps must look
+                // exactly as they did, because they cannot act and so cannot light.
+                bool savedPyros = ps.BackupPyrosArmed;
+                ps.BackupPyrosArmed = true;
+                DisplayList adl = new DisplayList(600);
+                FigmaUI.Build(adl, UiPage.ManualChute, CW, CH, ps, MapProjection.Default());
+                if (adl.Overflowed) Console.WriteLine("  WARNING UI ManualChute armed OVERFLOWED");
+                string path = Path.Combine(outDir, "ui_manualchute_armed.png");
+                Render(adl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + adl.Count + " commands");
+                ps.BackupPyrosArmed = savedPyros;
+            }
+            {
+                // Manual Docking with both cluster magnitude toggles flipped to PRECISE - the one pair of
+                // controls on that page that acts, and the only visible difference it makes.
+                PageControls pc = PageControls.Default;
+                pc.DockRotLarge = false; pc.DockTransLarge = false;
+                DisplayList pdl = new DisplayList(600);
+                FigmaUI.Build(pdl, UiPage.Docking, CW, CH, ps, MapProjection.Default(),
+                              5, false, 1, CoverPage.CoverCam.Earth, Turntable.Front(), pc);
+                if (pdl.Overflowed) Console.WriteLine("  WARNING UI Docking precise OVERFLOWED");
+                string path = Path.Combine(outDir, "ui_docking_precise.png");
+                Render(pdl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + pdl.Count + " commands");
+            }
+
             // ---- VEHICLE ALERTS + red sub-nav (T5) ----
             // Anything reachable by a control needs a render (the T4 lesson, above). The FUNCTIONS/ALERTS
             // toggle and VehicleTabBar's per-tab severity aren't wired to touch yet (T14), so their other

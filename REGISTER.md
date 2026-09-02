@@ -899,8 +899,94 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
   should look at specifically:** the approach chord's endpoint under a real ISS target, which is the
   one value here derived from geometry rather than read straight out of an existing field.
 
-### T14 [O] Touch wiring — **TODO**
+### T14 [O] Touch wiring — **DONE**
 - **Read:** §6 + §4.  **Build:** display-only controls → real per the decisions.  **DONE when:** controls act (+ tests).
+- **DONE 2026-09-02.** §6's touch-wiring bullet names four groups of display-only controls; all four are
+  now settled, three by building and one by verifying it was already built.
+  **What acts, and on whose authority — the whole task is an application of §14.4(a)+(b), never a new
+  decision:**
+  - **Manual Chute Deploy — the 12 per-step ACTION buttons** (`pure/ManualChuteDeployPage.cs`). Four of
+    the five step labels name a control the LOWER CONSOLE PLATE also carries, so they were mapped to the
+    SAME `PanelCommand` by reading the step's own label against §4's modelled inventory — ENABLE BACKUP
+    PYROS→`EnableBackupPyros`, DEPLOY DROGUES→`DroguesAndMains` (§4's confirmed "2 drogues → 4 mains"),
+    DEPLOY MAINS→`MainsOnly`, FIRE PYRO→`FirePyro` — and dispatched through the SAME `FlightCommands.Run`
+    the plate uses, with the outcome read by the SAME `PanelPolicy` (which is where §14.4(a)+(b) live).
+    **No second policy was written and none may be**: pressing DEPLOY DROGUES on the glass and DROGUES &
+    MAINS on the plate cannot come to different answers. Today that means the four ENABLE BACKUP PYROS
+    rows ARM and light BRIGHT, and the rest click into silence — §14.4(a) flight actuation with no flight
+    software yet; Part B (§B12.5) lights them with no edit here. The lamp is read from
+    `PageState.BackupPyrosArmed` ← `FlightCommands.BackupPyros`, i.e. the flag the console dash reads,
+    never a latch of the page's own — the one-state-two-surfaces rule. "Monitor altitude" is the one
+    action naming no command (the crew watching the live ALTITUDE the strip above already draws), so it
+    stays dark, and a test pins that it is the ONLY one.
+  - **Manual Docking — the clusters** (`pure/DockingSimPage.cs`). The two centre **LARGE↔PRECISE**
+    magnitude toggles are REAL (both states are in the iss-sim spec the page was built from; selecting one
+    is screen state and flies nothing) and flip per screen. **Settings** opens the settings page — the
+    destination the Cover's own Settings button already has, so no second destination was invented. The
+    twelve direction pads, plus Reset Positions, would MOVE the vehicle: §14.4(a) makes them an honest
+    no-op, so they resolve to a named act, log, and do nothing — no light, no action, **no red**. They are
+    a seam, not a dead rect (`IsActuation` names the set; Part B replaces the dispatch without touching
+    the geometry). ⚠ Whether they should instead fly the capsule by hand is an OPEN OWNER CALL — **S28**.
+  - **Suit Leak Check — the fail branch + timer** (`pure/SuitCheckPage.cs`). **TRY ADDITIONAL TIMER**
+    re-runs the countdown (a complete instruction; the page already owns the timer) and **FINISH** ends at
+    step 2.5 and raises the completion popup. **TROUBLESHOOT resolves but is UNAVAILABLE, and is drawn
+    dimmed to say so** — it responds to a suit reading "Failed Low" and this build models no suit at all,
+    which is the same fact that dashed the four DELTA PRESSURE rows in T13c. `FailBranchLive` is the one
+    constant to change the day a suit is modelled. Dimming an unavailable control is the existing
+    no-source-so-do-not-pretend idiom applied to a control instead of a value; §14.4(d) keeps the branch
+    drawn, and nothing here removes it.
+  - **The console panel (§4) — VERIFIED ALREADY LIVE, not rebuilt.** T10 shipped it: `PanelButtons.cs`
+    holds the colliders and dispatches through `FlightCommands.Run`, and `pure/PanelBehaviour.cs` is
+    §14.4(a)+(b) in code (two lamp states, no red; SWAP 1/2/3 + the three entry-mode toggles inert). T14
+    adds no code there and asserts its answers instead (`ConsolePanelUnchanged`), because the chute page
+    now BORROWS that policy — a change to it must not silently un-wire a second surface.
+  - **Bonus, and in scope by T5's own note:** the **FUNCTIONS | ALERTS** toggle on the six subsystem
+    sub-tabs. T5 drew it and left it inert, saying in as many words that *"wiring the tap is T14's job"*.
+    It is a pure screen-state flip, so it is now one. Its geometry moved into `TabX`/`TabW`, read by BOTH
+    the draw and the new `ToggleHit`, and the render is pixel-identical (`ui_vehiclepower_alerts.png`
+    re-inspected).
+- **Where the state lives:** a new pure `PageControls` (`pure/PageAction.cs`) carries the three bits a
+  touch flips — the ALERTS tab and the two cluster magnitudes — held per screen by `ScreenPainter`, on the
+  same footing as the Cover camera and the turntable (per screen, not persisted, reset on a page change).
+  Deliberately NOT in `PageState`: that is what the VEHICLE is doing, this is what the crew member at THIS
+  screen is looking at, and putting it there would make `VesselData` invent a value every tick for state
+  it does not own. Threaded through one new `FigmaUI.Build` overload; every existing caller is unchanged.
+- **The one-rect rule (PageAction's own) enforced everywhere it was newly needed:** the chute page's row
+  ladder is now walked ONCE at class-init (`HighY`/`StdY`/`Actions`) and read by both `Build` and
+  `ActionRect`, where `Build` used to accumulate its own `y`; the docking clusters and bottom controls
+  gained `ClusterRect`/`BottomRect`, drawn from and hit through the same call. Both refactors are
+  pixel-neutral — `ui_manualchute.png` and `ui_docking.png` re-rendered and compared.
+- **Gate (C1.3):** `python plugin/build.py test` **green — new `TouchWiringTest` suite, 260 checks, 0
+  failed; 11,010 → 11,270 total, 0 failed, no new warnings.** The new suite aims at the centre of every
+  rect the pages publish, at three screen sizes, and its most important checks are the NEGATIVE ones:
+  the twelve pads + Reset Positions are actuation and the magnitude toggles are not; the three chute
+  actuation commands can never light in either flag state; the modal popup swallows HALT and FINISH;
+  adjacent chute rows do not touch (the 14px dead band is real, so a fat press cannot fire the step
+  below); every cluster button is a distinct act; TROUBLESHOOT is unavailable while the timer control is
+  not. **Preview:** two NEW renders for the states the new controls create — `ui_manualchute_armed.png`
+  (exactly four bright "Arm and verify" plates, label knocked out on accent, every other action
+  unchanged; 279 → 283 commands, no overflow) and `ui_docking_precise.png` (both centre toggles reading
+  PRECISE, cluster geometry unmoved) — plus `ui_manualchute.png`, `ui_docking.png`, `ui_suitcheck.png`
+  (TROUBLESHOOT dimmed, TRY ADDITIONAL TIMER bright, FINISH unmoved) and `ui_vehiclepower_alerts.png`
+  re-inspected. All clean: no overlap, no clipping, no `DisplayList` overflow.
+- **§1.4 / C1.4 respected.** No label, no unit, no `PanelMap.cs`, no label doc touched. Every step→command
+  pairing is read off the step's OWN label against §4's inventory and nothing else — a test re-derives the
+  same map from the labels so the two must keep agreeing. One header CORRECTION, not a content change:
+  `SuitCheckPage`'s header claimed the CLEAR line / Failed-Low / TROUBLESHOOT / "2.5 Contact SpaceX"
+  content was "deliberately not drawn" — the code has always drawn all of it, and §14.4(d) is the owner's
+  decision to KEEP it as a marked reconstruction. The comment predated §14.4(d) and would have talked
+  someone into deleting owner-decided content, so it now says what the code does and why.
+- ⚠ **Deliberately NOT done (logged, not built — C1.1):** the in-page / phase-rail entry points that T7,
+  T8, T9 and T12 each parked on T14. Those tasks assign the JOB here, but WHICH content sits behind the
+  Cover rail's two generic "Procedure" slots is not in any source — `SCREEN_INVENTORY.md` line 83 lists
+  the rail's real per-item content as 🔴 unbuilt — and there are three candidate pages for two slots. That
+  is a §1.4 tier-3 invention, so it is the owner's, not a build chat's (C1.4/C1.12). **Nothing is
+  unreachable meanwhile**: all six pages are on the Menu grid and under the global bottom bar. Logged as
+  **S27** and posed as an overseer prompt.
+- ⚠ **Not claimed:** that any of this is usable ON THE GLASS — whether a finger can hit one chute row,
+  whether an inert docking pad reads as deliberate, whether the dimmed TROUBLESHOOT reads as unavailable.
+  The gate is preview-only, so those go to **S18**, appended to its glass-checklist as **G5–G9** at the
+  moment each arose, per the owner's 2026-09-02 directive.
 
 ---
 
@@ -1243,6 +1329,25 @@ owner's to open, at the time, for this pass.
 button, so **3D audio is not built**; (f) the dashes light BRIGHT through the installed shader. Four owner
 answers, each recorded verbatim on S17.
 
+**GLASS-CHECKLIST — the accumulated T13 / T14 wants.** *Seeded at the START of T14 by owner directive
+(2026-09-02, via the overseer): the decision on WHEN to glass T13's numbers stays the default — this one
+end-of-Part-A pass — but the pass's scope is written down EXPLICITLY here as it accrues, rather than being
+reconstructed from task notes when the gate finally opens. Every item is tagged to the task that raised it.
+T14 APPENDS to this list, at the moment and site each want arises. This seeding is a living-register action
+(C1.7 / C5): it opens no gate, and the standing preview-only gate (C1.12) is untouched.*
+
+| # | From | What to look at on the glass | Why it could not be settled in preview |
+|---|------|------------------------------|-----------------------------------------|
+| G1 | **T13c** | **The approach chord's endpoint under a real ISS target** (`RendezvousPage`) — with a target actually acquired, does the chord run from the vehicle marker to a plausible target position, and does the diamond sit where the ISS is? | The one T13 value DERIVED from geometry rather than read straight out of an existing field. The preview's target is synthetic, so it can only prove the chord is drawn, never that it points at the right place. T13c singled this out by name. |
+| G2 | **T13a** | **Spot-check the VEHICLE-family readouts against a live vessel** — the overview gauges, the alerts/consumables block, the systems tree's live counts. | Preview proves the wiring reads `PageState`; only a live vessel proves the number it reads is the right one. T13a's "⚠ Not claimed" note. |
+| G3 | **T13b** | **Spot-check the six subsystem sub-tabs + the Prop data band** against a live vessel — including the CommNet-fed S-BAND COMMS / Uplink / Downlink (S24) and the Power tab's live source/count rows (S23/S25). | Same reason as G2; CommNet in particular has no headless stand-in, so its three rows have never been seen with a real link. T13b's "⚠ Not claimed" note. |
+| G4 | **T13c** | **Spot-check the procedure & prox-ops readouts** — Manual Chute's live top strip (SPLASHDOWN TIME, apsides), the docking ROLL/PITCH/YAW + PYR pair, RANGE / RATE — against a real approach. | Same reason as G2. Also the first chance to see the "no feed" / "no target" looks arise for real rather than from a forced preview state. T13c's "⚠ Not claimed" note. |
+| G5 | **T14** | **Can a finger hit ONE chute action row?** The Manual Chute page now has 12 tappable action plates, 280×46 design-px, pitched 60 apart — a 14px dead band between neighbours. Press each of the four ENABLE BACKUP PYROS plates and confirm the one you aimed at is the one that lit. | The headless test proves the drawn rect and the hit rect are the same rect at three sizes (`TouchWiringTest`). It cannot prove that rect is big enough for a gloved finger at IVA distance — and the failure mode is firing the row BELOW the one aimed at, which on this page is a chute step. |
+| G6 | **T14** | **One flag, two surfaces.** Tap ENABLE BACKUP PYROS on the Manual Chute glass, then look at the LOWER CONSOLE PLATE: its dash should be lit too, and vice-versa. | The whole design claim of the chute wiring is that the page and the plate cannot disagree because they read one flag. Preview renders the page; only the capsule has both surfaces in view at once. |
+| G7 | **T14** | **Does a docking pad that does nothing read as deliberate, or as broken?** §14.4(a) makes the twelve direction pads an honest no-op, and a SCREEN touch has no click behind it the way a console press does — so pressing FWD produces literally no feedback. Watch someone press one and see whether they press it again. | This is the §14.4(a) "click + no light + no action" rule meeting a surface that cannot click. If it reads as a dead screen it is a NEEDS-WORK, and the fix is a decision (an inert-press affordance) rather than a constant. |
+| G8 | **T14** | **The FUNCTIONS \| ALERTS toggle** — is the hit band usable? Its geometry is OURS (T5 said so explicitly, it is not measurable from the reference), 28px words with a ±20px design-space margin. Tap between the two words and confirm nothing flips. | Same reason as G5, and worse: the target is text rather than a plate, so there is no drawn edge telling the crew where to aim. |
+| G9 | **T14** | **Two legibility spot-checks:** the dimmed TROUBLESHOOT on the Suit Leak Check — does dim read as *unavailable* or as *broken*? — and the docking clusters' **PRECISE** label, which is drawn at 22px against LARGE's 26px so the longer word fits its plate. | Both are judgements about what a crew member reads at cabin distance, which is the one thing the PNG explicitly cannot settle (CLAUDE.md: "a screenshot is still the only way to judge how it LOOKS on the glass"). |
+
 **Batch into this pass whatever else is glass-only by then** — the obvious candidate is **S10**'s RT planet
 camera, but ONLY if S10 has actually been BUILT first (it is a TODO, not a verification; see its line). Any
 T13/T14 criterion that turns out to need the capsule belongs here too rather than in its own visit — that
@@ -1445,3 +1550,61 @@ disagree, which is the safe outcome and as far as a VALUES task may go; whether 
 redundant chrome that should be dropped, or given the second confirmed quantity (the reference's blue
 RATES — `PitchRateText`/`YawRateText`/`RollRateText` are already in `PageState`), is a layout call
 against the iss-sim reference. Take it with the diamond above, in one pass over this page.
+
+### S27 [owner call] The reconstructed pages still have no in-page entry point — four DONE tasks parked it on T14 — **TODO**
+Raised by **T14**, which is the task those four named. `T7` (Deorbit Burn Prep), `T8` (Entry), `T9`
+(Systems Tree + Systems P&ID) and `T12` (Ascent / Launch) each end with a line saying a real phase-rail or
+in-page entry point "is **T14**'s job", and `FigmaUI.cs`'s own `VrioTest` comment says the same of a
+phase-rail "Procedure" item. T14 did not do it, deliberately, and this is why:
+- The Cover rail's seven items are **real** (`REAL_SPACEX_SCREENSHOTS` / `SCREEN_INVENTORY`), and two of
+  them are labelled just **"Procedure"**. What CONTENT sits behind each is **not in any source** —
+  `SCREEN_INVENTORY.md` line 83 lists the rail's real per-item content ("each with numbered command
+  steps") as 🔴 **unbuilt, many**. Pointing slot 3 at a page we happen to have built would be a claim
+  about the real screen that nothing supports: a §1.4 tier-3 invention, which is the owner's call and
+  never a build chat's (C1.4 / C1.12).
+- There are **three** candidate procedure pages (VrioTest 4.700, Deorbit Burn Prep, Entry) for **two**
+  slots, and **two more** (Systems Tree, Systems P&ID) that are vehicle deep-views and do not belong on a
+  deorbit rail at all — T9 already ruled out giving them `VehicleTabBar` tabs for the same C1.4 reason.
+- **Nothing is unreachable in the meantime.** All six are on the Menu grid (auto-discovered) and under the
+  global bottom bar, which is how they have been reached since they were built.
+**Options for the owner:** (a) assign the two "Procedure" slots explicitly (which page behind each, owner
+says); (b) leave the rail alone and give the deep-views an affordance elsewhere (e.g. from the Vehicle
+pages, our geometry, marked as ours like the FUNCTIONS|ALERTS toggle); (c) leave all six on the Menu grid
+and close this. **DONE when:** the owner's choice is recorded here and built, or (c) is chosen and this
+line is closed.
+
+### S28 [owner call] Should the manual-docking clusters actually fly the capsule? — **TODO**
+Raised by **T14** and flagged in `DockingSimPage`'s own header long before it (*"wiring them to RCS (the
+owner's 'hidden mini-game' idea) is a later decision"*). T14 applied the decision that IS settled —
+§14.4(a): flight actuation is an honest no-op until Part B — so the twelve direction pads and Reset
+Positions resolve to a named act, log, and do nothing. That is correct-by-the-plan and it is also the
+least interesting possible answer for a page whose whole subject is flying by hand.
+**Options:** (a) leave them as the §14.4(a) no-op and let **Part B** wire them with everything else
+(§B12.5 / §B10.6 already own the 16-Draco RCS tuning); (b) wire them to KSP's RCS translation/rotation
+inputs NOW as a screens-only exception, which needs an explicit §14.4 entry because it contradicts the
+standing "screens fly nothing" rule; (c) keep them inert permanently and say so on the page.
+**(b) needs an owner `OVERRIDE` + a §14.4 log entry** — it is a change to a settled decision (C1.8).
+The seam is already in place either way: `DockingSimPage.IsActuation` names the set, and the dispatch is
+one method in `ScreenPainter` (`DockAction`), so none of the three options costs geometry or drawing work.
+
+### S29 [S] Four display-only controls remain, all outside §6's list — **TODO**
+Noticed by **T14** while wiring the four groups §6 names (logged, not done — C1.1). None of these is in
+that list, and each wants a decision rather than a wire:
+- `SuitCheckPage`'s two left-panel plates under the caption **"ENTER READ-ONLY"** (`ic_grid` and
+  `ic_eye`). Two plates, one caption — which one enters read-only, and what the other does, is not
+  readable from the reference. A read-only MODE is easy to build (it would grey the page's own controls);
+  which plate arms it is the unknown.
+- `DockingSimPage`'s **"Instructions"** (there is no instructions content in this build) and **"Reset
+  Positions"** (T14 classified it as actuation — it resets a vehicle's position — so it takes the
+  §14.4(a) no-op; if it is meant to reset only the PAGE, it is screen state and could act).
+**DONE when:** each has either an action or a recorded reason for having none.
+
+### S30 [S] `_AutopilotStub.cs` still describes the deleted RED refuse state — **TODO**
+Noticed by **T14** while routing the chute page through `FlightCommands.Run` (comment-only; not fixed,
+C1.1). The file's header says the command buttons "are no-ops that honestly refuse (**a red flash**)" and
+`Run`'s own comments say "true = white flash (actioned), false = **red flash** (honestly cannot)" and
+"honest **red flash**". §14.4(a) **removed the red state** on 2026-09-02 — `PanelLight` has two values,
+`PanelBehaviour` enforces bright-or-dark, and `PanelMap`'s own header records the removal. So this is the
+one file still telling a reader the panel has a colour it does not have, and it is the file every new
+command surface reads first (T14 read it). **Fix:** three comment edits, no code. **DONE when:** the stub
+describes click-no-light-no-action, and `build.py test` is still green.

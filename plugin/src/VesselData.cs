@@ -323,6 +323,10 @@ namespace DragonScreen
             FlightCommands.Charge01 = state.Power01;
             Systems.Update(ref FlightCommands.State, sy);
             state.Systems = FlightCommands.State;
+            // T14: the Manual Chute Deploy page carries ENABLE BACKUP PYROS on two of its steps -
+            // the same command the console plate carries - so its lamp is read from the same flag
+            // the plate's dash is, not from a second latch of its own.
+            state.BackupPyrosArmed = FlightCommands.BackupPyros;
 
             state.AutoEngaged = CrewProcedureOps.Engaged;
             state.AutoPhase = CrewProcedureOps.Engaged ? CrewProcedureOps.PhaseName : null;

@@ -158,14 +158,19 @@ namespace DragonScreen
                                  CoverPage.CoverCam coverCam)
         { Build(dl, page, w, h, s, view, suitCountdown, suitPopup, coverPhase, coverCam, Turntable.Front()); }
 
-        /// <summary>As Build, plus the four bits of page state the painter owns: the Suit Leak Check's
-        /// countdown/popup, the Cover's selected deorbit phase, the Cover's camera view (T4 - which
-        /// of First.vue's Earth / Map / Capsule views its right-hand slot is showing), and where the
-        /// capsule TURNTABLE is pointing (T11b - the drag the painter accumulates). Every other page
-        /// ignores them.</summary>
         public static void Build(DisplayList dl, UiPage page, int w, int h, PageState s, MapView view,
                                  int suitCountdown, bool suitPopup, int coverPhase,
                                  CoverPage.CoverCam coverCam, TurntableState turn)
+        { Build(dl, page, w, h, s, view, suitCountdown, suitPopup, coverPhase, coverCam, turn, PageControls.Default); }
+
+        /// <summary>As Build, plus the page state the painter owns: the Suit Leak Check's
+        /// countdown/popup, the Cover's selected deorbit phase, the Cover's camera view (T4 - which
+        /// of First.vue's Earth / Map / Capsule views its right-hand slot is showing), where the
+        /// capsule TURNTABLE is pointing (T11b - the drag the painter accumulates), and the controls a
+        /// touch flips (T14 - see PageControls). Every other page ignores them.</summary>
+        public static void Build(DisplayList dl, UiPage page, int w, int h, PageState s, MapView view,
+                                 int suitCountdown, bool suitPopup, int coverPhase,
+                                 CoverPage.CoverCam coverCam, TurntableState turn, PageControls ctl)
         {
             if (dl == null || w <= 0 || h <= 0) return;
             switch (page)
@@ -181,14 +186,14 @@ namespace DragonScreen
                 case UiPage.VehicleMech: VehicleMechPage.Build(dl, w, h, s); break;
                 case UiPage.AudioVideo:  SettingsVideoPage.Build(dl, w, h, s); break;
                 case UiPage.VrioTest:    VrioTestPage.Build(dl, w, h); break;
-                case UiPage.VehicleCrew:       VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Crew, s); break;
-                case UiPage.VehiclePropulsion: VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Propulsion, s); break;
-                case UiPage.VehiclePower:      VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Power, s); break;
-                case UiPage.VehicleAvionics:   VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Avionics, s); break;
-                case UiPage.VehicleGnc:        VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Gnc, s); break;
-                case UiPage.VehicleThermal:    VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Thermal, s); break;
+                case UiPage.VehicleCrew:       VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Crew, s, ctl.Alerts); break;
+                case UiPage.VehiclePropulsion: VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Propulsion, s, ctl.Alerts); break;
+                case UiPage.VehiclePower:      VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Power, s, ctl.Alerts); break;
+                case UiPage.VehicleAvionics:   VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Avionics, s, ctl.Alerts); break;
+                case UiPage.VehicleGnc:        VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Gnc, s, ctl.Alerts); break;
+                case UiPage.VehicleThermal:    VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Thermal, s, ctl.Alerts); break;
                 case UiPage.ManualChute:       ManualChuteDeployPage.Build(dl, w, h, s, view); break;
-                case UiPage.Docking:           DockingSimPage.Build(dl, w, h, s); break;
+                case UiPage.Docking:           DockingSimPage.Build(dl, w, h, s, ctl); break;
                 case UiPage.Rendezvous:        RendezvousPage.Build(dl, w, h, s); break;
                 case UiPage.DeorbitBurnPrep:   DeorbitBurnPrepPage.Build(dl, w, h, s); break;
                 case UiPage.EntryProcedure:    EntryPage.Build(dl, w, h); break;
@@ -319,6 +324,12 @@ namespace DragonScreen
                 float sc = h / RefH, ox = (w - RefW * sc) * 0.5f;
                 if (ox > 40f && px >= 12f && px < ox - 12f && py >= h * 0.40f && py < h * 0.60f)
                     return NavHit.Go(UiPage.Rendezvous);
+                // T14: the page's own "Settings" control is navigation, so it resolves HERE rather than
+                // in the painter's page switch — and it goes where the Cover's Settings button already
+                // goes, because there is one settings destination in this UI and inventing a second
+                // would be the drift. Its two neighbours are not navigation and are left to the page.
+                if (DockingSimPage.HitTest(px, py, w, h) == DockingSimPage.DockAct.Settings)
+                    return NavHit.Go(UiPage.Audio);
             }
 
             if (page == UiPage.Cover) return MapCover(CoverPage.HitTest(px, py, w, h));

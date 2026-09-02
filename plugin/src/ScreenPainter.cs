@@ -81,6 +81,13 @@ namespace DragonScreen
         private TurntableState turn = Turntable.Front();
         private TurntableTouch turnTouch = Turntable.Idle();
 
+        // The controls a touch FLIPS on this screen (T14): the subsystem pages' FUNCTIONS|ALERTS tab and
+        // the two docking cluster magnitude toggles. Same footing as coverCam and the turntable - per
+        // screen, not persisted, because it is what this crew member is looking at rather than a decision
+        // to restore. Every DECISION about them is pure (PageControls, and each page's own HitTest); this
+        // file only holds the value and forwards the touch.
+        private PageControls controls = PageControls.Default;
+
         /// <summary>How many pages the current model has — the new Figma set or the old tab set.</summary>
         private static int PageCount { get { return FigmaMode ? FigmaUI.PageCount : ChromeBar.PageNames.Length; } }
 
@@ -345,12 +352,39 @@ namespace DragonScreen
                 UiPage cur = (UiPage)selectedPage;
                 if (cur == UiPage.SuitCheck)
                 {
+                    // T14 added FINISH (end at step 2.5, raise the completion popup), TRY ADDITIONAL
+                    // TIMER (re-run the countdown) and TROUBLESHOOT, which is deliberately not here: it
+                    // responds to a suit reading Failed Low and this build models no suit, so the page
+                    // draws it dimmed and the press does nothing. SuitCheckPage.Available says so, and
+                    // this switch simply has no case for it - one fact, one place.
                     switch (SuitCheckPage.HitTest(px, py, w, h, suitPopup))
                     {
                         case SuitCheckPage.SuitAct.Start: suitStart = Time.realtimeSinceStartup; suitPopup = false; break;
                         case SuitCheckPage.SuitAct.Halt:  suitStart = -1f; suitPopup = false; break;
                         case SuitCheckPage.SuitAct.Close: suitPopup = false; break;
+                        case SuitCheckPage.SuitAct.Finish: suitStart = -1f; suitPopup = true; break;
+                        case SuitCheckPage.SuitAct.Retime: suitStart = Time.realtimeSinceStartup; suitPopup = false; break;
                     }
+                }
+                else if (IsSubsystemPage(cur))
+                {
+                    // FUNCTIONS | ALERTS. T5 drew the toggle and left it inert; this is the tap. It is
+                    // NOT navigation - the page does not change, its body does - so it lands here rather
+                    // than in FigmaUI, which is why FigmaUI.HitTest above did not claim it.
+                    int t = VehicleSubsystemPage.ToggleHit(px, py, w, h);
+                    if (t >= 0) controls.Alerts = (t == 1);
+                }
+                else if (cur == UiPage.ManualChute)
+                {
+                    // The chute procedure's ACTION buttons. Each one IS a console command (see the page),
+                    // so it goes through the SAME dispatcher the lower panel's own button does and gets
+                    // the SAME answer - there is no second policy here and there must never be one.
+                    int a = ManualChuteDeployPage.HitTest(px, py, w, h);
+                    if (a >= 0) ChuteAction(a);
+                }
+                else if (cur == UiPage.Docking)
+                {
+                    DockAction(DockingSimPage.HitTest(px, py, w, h));
                 }
                 else if (cur == UiPage.Cover)
                 {
@@ -408,6 +442,72 @@ namespace DragonScreen
                                 HullCams.Count));
         }
 
+        /// <summary>
+        /// A Manual Chute Deploy action was pressed (T14).
+        ///
+        /// The whole of the decision is elsewhere and that is the point: the command comes from the
+        /// page's own step→command map, the dispatch is `FlightCommands.Run` (the one the console plate
+        /// uses), and what the outcome MEANS is `PanelPolicy.ResolveImmediate` - which is where
+        /// BUILD_PLAN §14.4(a)+(b) live. So pressing DEPLOY DROGUES here and pressing DROGUES & MAINS on
+        /// the plate cannot come to different answers. Today three of the four click into silence
+        /// (§14.4(a) flight actuation, no flight software yet); ENABLE BACKUP PYROS arms, and lights on
+        /// BOTH surfaces because both read the one flag.
+        ///
+        /// There is no lamp to set from here: the page reads its own lit state from PageState each frame
+        /// (ManualChuteDeployPage.Lit), so nothing can latch a light the vehicle state does not support.
+        /// </summary>
+        private void ChuteAction(int action)
+        {
+            PanelCommand c = ManualChuteDeployPage.Actions[action].Command;
+            if (c == PanelCommand.None)
+            {
+                // "Monitor altitude" - the crew watching a number, not a command. Nothing to dispatch.
+                Debug.Log("[DragonScreen] chute action '" + ManualChuteDeployPage.Actions[action].Act
+                          + "' names no command - nothing to do");
+                return;
+            }
+            bool acted = FlightCommands.Run(c);
+            PanelPressKind k = PanelPolicy.ResolveImmediate(c, acted, ModeOn(c));
+            Debug.Log("[DragonScreen] chute " + c + " -> " + k);
+        }
+
+        /// <summary>A mode command's state AFTER the press, for the outcome above. Only the one this page
+        /// can reach is a mode; anything else is not asked about.</summary>
+        private static bool ModeOn(PanelCommand c)
+        { return c == PanelCommand.EnableBackupPyros && FlightCommands.BackupPyros; }
+
+        /// <summary>
+        /// A manual-docking control was pressed (T14).
+        ///
+        /// The two cluster magnitude toggles act - they choose how big a nudge the cluster means, which
+        /// is screen state and flies nothing. The twelve direction pads (and Reset Positions) would MOVE
+        /// the vehicle, so §14.4(a) makes them an honest no-op until Part B: they resolve, they log, and
+        /// nothing happens - no light, no action, no red. `Settings` never arrives here; FigmaUI claims it
+        /// as navigation before the page is asked.
+        /// </summary>
+        private void DockAction(DockingSimPage.DockAct a)
+        {
+            if (a == DockingSimPage.DockAct.None) return;
+            if (a == DockingSimPage.DockAct.RotMagnitude)   { controls.DockRotLarge = !controls.DockRotLarge; return; }
+            if (a == DockingSimPage.DockAct.TransMagnitude) { controls.DockTransLarge = !controls.DockTransLarge; return; }
+            Debug.Log("[DragonScreen] docking " + a
+                      + (DockingSimPage.IsActuation(a) ? " - no flight software installed (screens-only build)"
+                                                       : " - nothing behind this control yet"));
+        }
+
+        /// <summary>The six subsystem sub-tabs, which share the FUNCTIONS | ALERTS toggle. Vehicle and
+        /// VehicleMech are their own pages and draw no toggle, so they are not here.</summary>
+        private static bool IsSubsystemPage(UiPage p)
+        {
+            switch (p)
+            {
+                case UiPage.VehicleCrew: case UiPage.VehiclePropulsion: case UiPage.VehiclePower:
+                case UiPage.VehicleAvionics: case UiPage.VehicleGnc: case UiPage.VehicleThermal:
+                    return true;
+                default: return false;
+            }
+        }
+
         // ---- THE TURNTABLE DRAG (T11b) ----
         // The only gesture on the screens that is more than a press, so it is the only thing that
         // needs the two entry points below. Both are forwards: the slot the drag is happening in
@@ -450,6 +550,7 @@ namespace DragonScreen
                 chrome.SelectedPage = page;
                 suitStart = -1f; suitPopup = false;   // the Suit Leak Check opens fresh each visit
                 turnTouch = Turntable.Idle();         // a press cannot survive the page under it
+                controls = PageControls.Default;      // and neither do the page's own toggles (T14)
                 Publish();
             }
             else if (screen >= 0 && screen < livePage.Length)
@@ -766,7 +867,8 @@ namespace DragonScreen
                     ImageStore.ReleaseTurntable(index);
 
                 // The new Figma pages carry their own chrome (each has its bottom bar), so no ChromeBar.
-                FigmaUI.Build(page, up, w, h, ps, mapView, suitCount, suitPopup, coverPhase, coverCam, turn);
+                FigmaUI.Build(page, up, w, h, ps, mapView, suitCount, suitPopup, coverPhase, coverCam, turn,
+                              controls);
             }
             else
             {

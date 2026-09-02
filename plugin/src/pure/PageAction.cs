@@ -94,6 +94,48 @@ namespace DragonScreen
         SetCamera
     }
 
+    /// <summary>
+    /// The bits of PAGE state a touch sets, that the PAINTER owns (T14).
+    ///
+    /// ---- WHY THESE LIVE WITH THE SCREEN AND NOT WITH THE VESSEL ----
+    /// PageState is what the VEHICLE is doing; this is what the crew member at THIS screen has chosen to
+    /// look at. Which of FUNCTIONS / ALERTS a subsystem page is showing, and how big a docking nudge the
+    /// cluster is set to, are the same kind of thing as the Cover's camera view and the suit countdown -
+    /// per screen, three screens, and none of it is the vessel's business. Keeping them out of PageState
+    /// also keeps them out of VesselData, which would otherwise have to invent a value for each of them
+    /// every tick for state it does not own.
+    ///
+    /// Not persisted, for the reason the Cover's camera is not: it is where you happen to be looking, not
+    /// a decision worth restoring across a load.
+    /// </summary>
+    public struct PageControls
+    {
+        /// <summary>VehicleSubsystemPage: showing ALERTS (true) rather than FUNCTIONS. T5 drew the
+        /// toggle and left it inert; the tap is T14's.</summary>
+        public bool Alerts;
+
+        /// <summary>DockingSimPage: the ROTATION cluster's magnitude toggle - LARGE (true) or
+        /// PRECISE.</summary>
+        public bool DockRotLarge;
+
+        /// <summary>DockingSimPage: the TRANSLATION cluster's magnitude toggle.</summary>
+        public bool DockTransLarge;
+
+        /// <summary>What a screen opens on: FUNCTIONS, and both clusters on LARGE - the states every
+        /// page already drew before the toggles could be tapped, so nothing moved under anyone.</summary>
+        public static PageControls Default
+        {
+            get
+            {
+                PageControls c;
+                c.Alerts = false;
+                c.DockRotLarge = true;
+                c.DockTransLarge = true;
+                return c;
+            }
+        }
+    }
+
     /// <summary>What a touch resolved to. Act = None means the touch hit nothing.</summary>
     public struct PageHit
     {

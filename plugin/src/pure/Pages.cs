@@ -152,6 +152,15 @@ namespace DragonScreen
         /// <summary>Simulated power strings, consumables, fire and leak. See VehicleSystems.</summary>
         public SystemsState Systems;
 
+        /// <summary>
+        /// ENABLE BACKUP PYROS is armed (T14). The console plate's own lamp reads
+        /// `FlightCommands.BackupPyros`; the Manual Chute Deploy page carries the SAME command on two of
+        /// its procedure steps, so it reads the same flag through here rather than keeping a second
+        /// copy. One state, two surfaces - the pair cannot drift into disagreeing about whether the
+        /// backup pyros are armed, which is exactly the failure a second latch would invite.
+        /// </summary>
+        public bool BackupPyrosArmed;
+
         // ---- THE VEHICLE PAGE'S OWN SOURCES (T13a) ----
         // The VEHICLE family drew these as constants; every one now has an authoritative source, and
         // the ones that do not are drawn as a dash BY THE PAGE rather than given a plausible value here
