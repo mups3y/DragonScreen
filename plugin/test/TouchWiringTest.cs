@@ -274,10 +274,13 @@ public static class TouchWiringTest
                       == SuitCheckPage.SuitAct.Close, "");
         }
 
-        // TROUBLESHOOT resolves but is UNAVAILABLE, and that is a fact about the model, not a mood: no
-        // suit is modelled anywhere in this build, so no suit can read "Failed Low" and the branch has
-        // nothing to respond to. The day one is modelled, FailBranchLive is the single edit.
-        Check("no suit can fail this check yet", !SuitCheckPage.FailBranchLive, "");
+        // TROUBLESHOOT resolves but is UNAVAILABLE. S31 changed WHY, and the old reason is gone: a suit
+        // CAN now read "Failed Low" (the marked suit simulation, §14.4(e)), so the branch is no longer
+        // responding to something that cannot happen. What is still unsourced is TROUBLESHOOT's own
+        // ACTION - no reference says what pressing it does - and §1.4 keeps an unverified control inert
+        // rather than inventing a function for it. FailBranchLive is still the single edit the day that
+        // action is sourced; logged in REGISTER.md.
+        Check("the TROUBLESHOOT branch still has no sourced action", !SuitCheckPage.FailBranchLive, "");
         Check("TROUBLESHOOT is unavailable",
               !SuitCheckPage.Available(SuitCheckPage.SuitAct.Troubleshoot), "");
         Check("the timer control IS available",

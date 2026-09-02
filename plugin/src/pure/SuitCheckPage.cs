@@ -8,16 +8,20 @@
 // step 2.3 + INITIATE, step 2.4, and the table (TIME REMAINING IN LEAK CHECK + four SUIT n DELTA
 // PRESSURE + four SUIT n STATUS = "Nominal") + FINISH; RIGHT = the caution note + HALT.
 //
-// FLOW: INITIATE runs a 5→0 countdown (~0.9s/step); at 0 the completion POPUP shows ("4.011 - Suit
-// Leak Check / ECLSS / PROCEDURE COMPLETE / Crew can open their visors if desired but must not open
-// zippers or disconnect umbilical."); HALT stops + resets. FINISH ends the procedure early and raises
-// the same popup (step 2.5's own completion control). TRY ADDITIONAL TIMER re-runs the countdown, which
-// is exactly and only what its words say — a second timed run, no suit state invented to go with it.
+// FLOW: INITIATE runs a 5→0 countdown (~0.9s/step); at 0 the run's RESULT POPUP shows — the completion
+// box ("4.011 - Suit Leak Check / ECLSS / CLEAR / PROCEDURE COMPLETE / Crew can open their visors if
+// desired but must not open zippers or disconnect umbilical.") on a clean run, or, on the 5% run that
+// finds a leak, the same box carrying the leak result and "Repair suit and rerun suit check." (S31, our
+// own copy for our own simulated feature). HALT stops + resets. FINISH ends the procedure early and
+// raises the same popup (step 2.5's own completion control). TRY ADDITIONAL TIMER re-runs the countdown
+// and RE-ROLLS — which is what a second timed run of a leak check is.
 //
-// TIME REMAINING counts the real procedure countdown; the four SUIT n DELTA PRESSURE rows DASH —
-// nothing in this build models a suit, so there is no honest number to put there (T13c; see the note at
-// the rows themselves). The four SUIT n STATUS rows are reference COPY, not values, and are reproduced
-// as the real page words them (S22).
+// TIME REMAINING counts the real procedure countdown. The four SUIT n DELTA PRESSURE rows and the four
+// SUIT n STATUS words are a MARKED SIMULATION (S31, BUILD_PLAN §14.4(e)): the differential is measured
+// against the REAL, TAC-LS-driven cabin pressure, so those rows move when the cabin moves, and STATUS is
+// a verdict COMPUTED from that differential rather than a green word printed unconditionally.
+// pure/SuitLeakSim.cs is the model and states what in it is real, what is simulated and what is rolled.
+// With no vessel feed the whole table dashes, exactly as any other unsourced readout does.
 //
 // ---- WHAT IS REFERENCE AND WHAT IS RECONSTRUCTION, ON THIS PAGE ----
 // The popup's "CLEAR" line, the Failed-Low / TROUBLESHOOT / TRY ADDITIONAL TIMER block and step 2.5
@@ -52,8 +56,13 @@ namespace DragonScreen
         static readonly string[] Suit = { "SUIT 1", "SUIT 2", "SUIT 3", "SUIT 4" };
         const string Dash = "—";     // no source — never a plausible reading
 
-        /// <summary>countdown: the SUIT PRESSURE counter (5..0); showPopup: the completion dialog is up.</summary>
-        public static void Build(DisplayList dl, int w, int h, int countdown, bool showPopup)
+        /// <summary>countdown: the SUIT PRESSURE counter (5..0); showPopup: the run's RESULT dialog is up
+        /// (which of the two it is follows <paramref name="suits"/>); suits: the suit model this page
+        /// reads — four differentials and the verdict they support, from pure/SuitLeakSim.cs. S31 threaded
+        /// it in because until then this page took no vessel state at all and so had nothing to be honest
+        /// about; the countdown is still the painter's own live procedure timer, untouched.</summary>
+        public static void Build(DisplayList dl, int w, int h, int countdown, bool showPopup,
+                                 SuitCheckState suits)
         {
             float sx = w / RefW, sy = h / RefH;
             float PX(float x) => x * sx;
@@ -112,19 +121,47 @@ namespace DragonScreen
                 Ico(icon, tix, y + 16, 40, iconTint);
             }
             Row(0, "TIME REMAINING IN LEAK CHECK", countdown + "s", "ic_refresh", White, White);
-            // ---- SUIT n DELTA PRESSURE: no source, so a dash (T13c) ----
-            // The one readout on this page with nothing behind it. A suit delta pressure is suit
-            // pressure minus cabin pressure, and this build models no suit at all: not in
-            // VehicleSystems, not in CabinEnvironment, and KSP has no per-crew pressure resource to
-            // stand in for one. "0.01psi" was a representative constant, and a constant sitting in a
-            // LEAK CHECK is the worst place in the build for one — four suits reading a confident
-            // 0.01 psi is exactly how a screen says "no leak" when it in fact knows nothing.
-            // TELEMETRY_REGISTRY's rule: no real source -> not invented. Live the day a suit is
-            // modelled; dashed until then.
-            for (int i = 0; i < 4; i++) Row(1 + i, Suit[i] + " DELTA PRESSURE", Dash, "ic_dash", Dim, Dim);
-            // STATUS reads "Nominal" (green) per suit; a suit that fails the check reads "Failed Low" —
-            // the failure branch (right-panel TROUBLESHOOT block) is the crew's response to that.
-            for (int i = 0; i < 4; i++) Row(5 + i, Suit[i] + " STATUS", "Nominal", "ic_check", Go, Go);
+            // ---- SUIT n DELTA PRESSURE: a MARKED simulation off the real cabin (S31, §14.4(e)) ----
+            // A suit delta pressure is suit pressure minus cabin pressure. This row was "0.01psi", a
+            // representative constant — and a constant sitting in a LEAK CHECK is the worst place in the
+            // build for one, since four suits reading a confident 0.01 psi is exactly how a screen says
+            // "no leak" while knowing nothing. T13c replaced it with a permanent dash, because nothing
+            // here modelled a suit: not VehicleSystems, not CabinEnvironment, and KSP has no per-crew
+            // pressure resource to stand in for one.
+            //
+            // §14.4(e) (owner, 2026-09-02) supersedes that dash: a real quantity that is merely
+            // unmodelled goes to an installed mod's value, else to a COHERENT MARKED simulation, and a
+            // dash is kept only for quantities that genuinely do not exist. No installed mod models a
+            // pressure suit, so pure/SuitLeakSim.cs is the model — a regulated suit loop measured against
+            // the REAL, TAC-LS-driven cabin pressure, which is why these four rows move when the cabin
+            // moves rather than sitting still with a unit after them. A leaking suit bleeds down as the
+            // countdown runs, so step 2.4's "monitor suit delta pressure" is something a crew can do.
+            // No vessel feed at all is still a dash: an unreadable vessel has no differential to show,
+            // and that is a different fact from an unmodelled one.
+            for (int i = 0; i < 4; i++)
+            {
+                bool bad = suits.Failed(i);
+                Rgba tint = !suits.Valid ? Dim : (bad ? Amber : White);
+                Row(1 + i, Suit[i] + " DELTA PRESSURE",
+                    suits.Valid ? SuitLeak.Text(suits.Delta(i)) : Dash,
+                    suits.Valid ? "ic_refresh" : "ic_dash", tint, tint);
+            }
+            // ---- SUIT n STATUS: the VERDICT, and it FOLLOWS the sim (S31; §14.4(e)'s guardrail) ----
+            // These four words used to be drawn green and unconditional — the page stating a safety
+            // result it had no way to know, the same shape S22 fixed on the vehicle pages and could not
+            // reach here (S22's dash-and-dim keys off a feed, and this page took no vessel state until
+            // S31 threaded one in). Now "Nominal" can only appear while the modelled differential is
+            // actually holding above SuitLeak.PassPsi; a suit that has bled below it reads "Failed Low",
+            // the wording the reconstructed fail branch below already uses (§14.4(d)). Nothing in this
+            // file writes a verdict in by hand, which is the whole of the §14.4(e) guardrail.
+            for (int i = 0; i < 4; i++)
+            {
+                bool bad = suits.Failed(i);
+                Rgba tint = !suits.Valid ? Dim : (bad ? Amber : Go);
+                Row(5 + i, Suit[i] + " STATUS",
+                    !suits.Valid ? Dash : (bad ? "Failed Low" : "Nominal"),
+                    !suits.Valid ? "ic_dash" : (bad ? "ic_stop" : "ic_check"), tint, tint);
+            }
             dl.Line(PX(tx), PY(y0 + 9 * rowH), PX(2620), PY(y0 + 9 * rowH), St(1), Hair);
 
             // 2.5 + FINISH — the procedure continues below the "Scroll to continue" fold seen in the
@@ -149,12 +186,13 @@ namespace DragonScreen
             //
             // T14 wired the two controls, and they came out asymmetric for a reason worth stating.
             // TRY ADDITIONAL TIMER acts: "another timed run" is a complete instruction and this page
-            // already owns the timer. TROUBLESHOOT does not, and cannot honestly: it responds to a suit
-            // reading Failed Low, and NO SUIT CAN READ THAT IN THIS BUILD — no suit is modelled anywhere
-            // (that is the same fact that dashed the four DELTA PRESSURE rows in T13c), so every STATUS
-            // is Nominal and the branch's own question answers itself. So it is drawn DIMMED and does
-            // nothing: the screen says the control is unavailable rather than swallowing the press and
-            // looking broken. It becomes live the day a suit is modelled — see FailBranchLive. ----
+            // already owns the timer. TROUBLESHOOT still does not — but S31 changed WHY, and the old
+            // reason is gone: a suit CAN now read "Failed Low" (the marked simulation above), so the
+            // branch's own question no longer answers itself. What is missing is TROUBLESHOOT's OWN
+            // action: no reference says what pressing it does, and §1.4 keeps an unverified control
+            // inert rather than inventing a function for it. So it stays drawn DIMMED and does nothing —
+            // the screen says the control is unavailable rather than swallowing the press and looking
+            // broken — and FailBranchLive is still the single edit. Logged in REGISTER.md. ----
             dl.Rect(PX(2870), PY(680), 500 * sx, 640 * sy, Panel);
             L("Did any suit fail the", 2910, 730, 28, White);
             L("leak check?", 2910, 772, 28, White);
@@ -172,7 +210,14 @@ namespace DragonScreen
             // ================= bottom status bar =================
             dl.Asset("component_48", 0f, PY(1877), w, SZ(235), White);
 
-            // ================= completion popup =================
+            // ================= the run's RESULT popup =================
+            // ONE box, two outcomes. The completion box is the photographed one (discovery3) and is
+            // unchanged. The LEAK box is S31's, and is deliberately the SAME box — same scrim, same
+            // panel, same title/ECLSS/status-word/headline/body/close structure, same close control in
+            // the same place — because a result the crew has to read is the same kind of thing whichever
+            // way it went, and a second dialog style would be a second thing to trust. Only the words
+            // and the status word's colour differ, and its copy is OURS (marked): it reports our own
+            // simulated leak, so there is no real frame it could have come from.
             if (showPopup)
             {
                 dl.Rect(0, 0, w, h, new Rgba(0.008f, 0.027f, 0.216f, 0.82f));   // #020738 scrim
@@ -182,11 +227,21 @@ namespace DragonScreen
                 float cx = RefW * 0.5f;
                 C("4.011 - Suit Leak Check", cx, py + 130, 48, White);
                 C("ECLSS", cx, py + 200, 26, Accent);
-                C("CLEAR", cx, py + 280, 34, Accent);
-                C("PROCEDURE COMPLETE", cx, py + 360, 44, White);
-                C("Crew can open their visors if desired but", cx, py + 470, 34, DragonPalette.Text3);
-                C("must not open zippers or disconnect", cx, py + 522, 34, DragonPalette.Text3);
-                C("umbilical.", cx, py + 574, 34, DragonPalette.Text3);
+                if (suits.Leak)
+                {
+                    C("FAILED LOW", cx, py + 280, 34, Amber);
+                    C("SUIT LEAK DETECTED", cx, py + 360, 44, White);
+                    C("Suit " + suits.LeakSuit + " did not hold pressure.", cx, py + 470, 34, DragonPalette.Text3);
+                    C("Repair suit and rerun suit check.", cx, py + 522, 34, DragonPalette.Text3);
+                }
+                else
+                {
+                    C("CLEAR", cx, py + 280, 34, Accent);
+                    C("PROCEDURE COMPLETE", cx, py + 360, 44, White);
+                    C("Crew can open their visors if desired but", cx, py + 470, 34, DragonPalette.Text3);
+                    C("must not open zippers or disconnect", cx, py + 522, 34, DragonPalette.Text3);
+                    C("umbilical.", cx, py + 574, 34, DragonPalette.Text3);
+                }
                 Pl(cx - 90, py + ph - 220, 180, 130, White);
                 Ico("ic_circle", cx - 40, py + ph - 195, 80, White);
             }
@@ -201,11 +256,14 @@ namespace DragonScreen
         public enum SuitAct { None, Start, Halt, Close, Finish, Retime, Troubleshoot }
 
         /// <summary>
-        /// Can a suit actually FAIL this check in this build? No — and that is a fact about the model,
-        /// not a switch: nothing here models a suit (see the DELTA PRESSURE rows), so no suit can read
-        /// "Failed Low" and the fail branch's controls have nothing to respond to. It is a named constant
-        /// rather than a `false` buried in the draw so that the day a suit IS modelled there is exactly
-        /// one place to change, and the test can assert the page and the hit test agree about it.
+        /// Is the fail branch's TROUBLESHOOT control live? Still no, but for a different reason since
+        /// S31. A suit CAN now fail this check — the marked simulation (pure/SuitLeakSim.cs) bleeds a
+        /// leaking suit below the pass threshold and STATUS reads "Failed Low" — so the branch is no
+        /// longer responding to something that cannot happen. What is unsourced now is TROUBLESHOOT's
+        /// own ACTION: no reference frame says what it does, and §1.4 keeps an unverified control inert
+        /// rather than inventing a function for it. Kept as a named constant rather than a `false`
+        /// buried in the draw so that the day that action is sourced there is exactly one place to
+        /// change, and the test can assert the page and the hit test agree about it.
         /// </summary>
         public const bool FailBranchLive = false;
 

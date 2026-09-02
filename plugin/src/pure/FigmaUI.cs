@@ -166,14 +166,22 @@ namespace DragonScreen
                                  CoverPage.CoverCam coverCam, TurntableState turn)
         { Build(dl, page, w, h, s, view, suitCountdown, suitPopup, coverPhase, coverCam, turn, PageControls.Default); }
 
-        /// <summary>As Build, plus the page state the painter owns: the Suit Leak Check's
-        /// countdown/popup, the Cover's selected deorbit phase, the Cover's camera view (T4 - which
-        /// of First.vue's Earth / Map / Capsule views its right-hand slot is showing), where the
-        /// capsule TURNTABLE is pointing (T11b - the drag the painter accumulates), and the controls a
-        /// touch flips (T14 - see PageControls). Every other page ignores them.</summary>
         public static void Build(DisplayList dl, UiPage page, int w, int h, PageState s, MapView view,
                                  int suitCountdown, bool suitPopup, int coverPhase,
                                  CoverPage.CoverCam coverCam, TurntableState turn, PageControls ctl)
+        { Build(dl, page, w, h, s, view, suitCountdown, suitPopup, coverPhase, coverCam, turn, ctl, 0u); }
+
+        /// <summary>As Build, plus the page state the painter owns: the Suit Leak Check's
+        /// countdown/popup, the Cover's selected deorbit phase, the Cover's camera view (T4 - which
+        /// of First.vue's Earth / Map / Capsule views its right-hand slot is showing), where the
+        /// capsule TURNTABLE is pointing (T11b - the drag the painter accumulates), the controls a
+        /// touch flips (T14 - see PageControls), and the Suit Leak Check's RUN SEED (S31 - the painter
+        /// mints one per run; 0 means no run has been made, so nothing has been found). Every other
+        /// page ignores them.</summary>
+        public static void Build(DisplayList dl, UiPage page, int w, int h, PageState s, MapView view,
+                                 int suitCountdown, bool suitPopup, int coverPhase,
+                                 CoverPage.CoverCam coverCam, TurntableState turn, PageControls ctl,
+                                 uint suitSeed)
         {
             if (dl == null || w <= 0 || h <= 0) return;
             switch (page)
@@ -184,7 +192,12 @@ namespace DragonScreen
                 case UiPage.Audio:     SettingsAudioPage.Build(dl, w, h, 2); break;
                 case UiPage.Procedure: FigmaFramePage.Build(dl, w, h, "frame59"); break;
                 case UiPage.Cabin:     FigmaFramePage.Build(dl, w, h, "frame66"); break;
-                case UiPage.SuitCheck: SuitCheckPage.Build(dl, w, h, suitCountdown, suitPopup); break;
+                // S31: the page's suit model is assembled HERE, from the same PageState every other
+                // page reads, so the one thing the painter has to own is the run seed. suitPopup is
+                // also "the run produced a result", which is what decides whether a leaking suit has
+                // finished bleeding down - see SuitLeak.Compute.
+                case UiPage.SuitCheck: SuitCheckPage.Build(dl, w, h, suitCountdown, suitPopup,
+                                                           SuitLeak.From(s, suitCountdown, suitPopup, suitSeed)); break;
                 case UiPage.Vehicle:   VehicleOverviewPage.Build(dl, w, h, s); break;
                 case UiPage.VehicleMech: VehicleMechPage.Build(dl, w, h, s); break;
                 case UiPage.AudioVideo:  SettingsVideoPage.Build(dl, w, h, s); break;

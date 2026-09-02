@@ -63,6 +63,12 @@ namespace DragonScreen
         // page change so the page is fresh each time it is opened.
         private float suitStart = -1f;
         private bool suitPopup;
+        // S31: this run's leak roll. The 5% chance is decided ONCE per run, from a seed minted at the
+        // moment INITIATE (or TRY ADDITIONAL TIMER) was pressed - a verdict re-rolled every frame would
+        // flicker, and both screens showing one run have to agree. The seed is all this glue owns; the
+        // model itself is pure (SuitLeak). 0 = no run has been made, so nothing has been found.
+        private uint suitSeed;
+        private int suitRuns;
 
         // The Cover's selected deorbit phase (0..4). The rail + ◄/► arrows change it IN-PAGE — it drives
         // the rail highlight + centre heading, and unlike the suit state it persists across visits.
@@ -359,11 +365,17 @@ namespace DragonScreen
                     // this switch simply has no case for it - one fact, one place.
                     switch (SuitCheckPage.HitTest(px, py, w, h, suitPopup))
                     {
-                        case SuitCheckPage.SuitAct.Start: suitStart = Time.realtimeSinceStartup; suitPopup = false; break;
-                        case SuitCheckPage.SuitAct.Halt:  suitStart = -1f; suitPopup = false; break;
+                        // START and TRY ADDITIONAL TIMER each begin a run, so each mints a fresh seed:
+                        // re-running re-rolls, which is what a second timed run of a leak check is.
+                        // HALT abandons the run, so its roll goes with it. FINISH ends the run at step
+                        // 2.5 and reports what THAT run found, so it keeps the seed it already has.
+                        case SuitCheckPage.SuitAct.Start: suitStart = Time.realtimeSinceStartup; suitPopup = false;
+                                                          suitSeed = SuitLeak.SeedFrom(suitStart, ++suitRuns); break;
+                        case SuitCheckPage.SuitAct.Halt:  suitStart = -1f; suitPopup = false; suitSeed = 0u; break;
                         case SuitCheckPage.SuitAct.Close: suitPopup = false; break;
                         case SuitCheckPage.SuitAct.Finish: suitStart = -1f; suitPopup = true; break;
-                        case SuitCheckPage.SuitAct.Retime: suitStart = Time.realtimeSinceStartup; suitPopup = false; break;
+                        case SuitCheckPage.SuitAct.Retime: suitStart = Time.realtimeSinceStartup; suitPopup = false;
+                                                           suitSeed = SuitLeak.SeedFrom(suitStart, ++suitRuns); break;
                     }
                 }
                 else if (IsSubsystemPage(cur))
@@ -548,7 +560,7 @@ namespace DragonScreen
             {
                 selectedPage = page;
                 chrome.SelectedPage = page;
-                suitStart = -1f; suitPopup = false;   // the Suit Leak Check opens fresh each visit
+                suitStart = -1f; suitPopup = false; suitSeed = 0u;   // the Suit Leak Check opens fresh each visit
                 turnTouch = Turntable.Idle();         // a press cannot survive the page under it
                 controls = PageControls.Default;      // and neither do the page's own toggles (T14)
                 Publish();
@@ -868,7 +880,7 @@ namespace DragonScreen
 
                 // The new Figma pages carry their own chrome (each has its bottom bar), so no ChromeBar.
                 FigmaUI.Build(page, up, w, h, ps, mapView, suitCount, suitPopup, coverPhase, coverCam, turn,
-                              controls);
+                              controls, suitSeed);
             }
             else
             {

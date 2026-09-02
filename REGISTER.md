@@ -1879,7 +1879,7 @@ describes click-no-light-no-action, and `build.py test` is still green.
   "red flash"/"white flash" text in the file. No behaviour/visual change → preview/PNG gate N/A (C1.3).
   `python plugin/build.py test`: green, all suites, 0 failed. Committed locally (C1.5); not pushed.
 
-### S31 [S] `SuitCheckPage`'s four SUIT n STATUS rows still read a confident "Nominal" — not covered by S22 — **TODO** — [TIER 1: pre-Part-B correctness bug]
+### S31 [O] `SuitCheckPage`'s four SUIT n STATUS rows still read a confident "Nominal" — not covered by S22 — **DONE 2026-09-02** (resolved by §14.4(e): SIMULATE the suit, verdict follows the sim)
 Noticed by **S22** while fixing the static-status-word category on the vehicle pages (not fixed here — C1.1,
 different file, different page). `SuitCheckPage.cs`'s own header (line 20) and its `Row` call (line 127,
 `Row(5 + i, Suit[i] + " STATUS", "Nominal", "ic_check", Go, Go)`) both cite S22 as the reason the four
@@ -1910,3 +1910,67 @@ simulation off real cabin state; a dash is for quantities that genuinely do not 
 "dash STATUS permanently" is no longer the default it reads as here, and the GUARDRAIL applies
 directly: the STATUS verdict must FOLLOW whatever the sim says, never be a hardcoded "Nominal".
 The option list above is left as written for the record; §14.4(e) is what decides between them.
+
+- **DONE 2026-09-02 — owner-directed, run OUT of `/next` order after G2, and decided by the owner (Chris)
+  via the overseer: SUPERSEDE the option list above and SIMULATE the suit life-support state per
+  §14.4(e).** Run on Opus as an [O] (the line was written [S] before the policy turned it from a
+  three-line comment fix into a model + two page states + a test suite).
+  **Built:**
+  · **New `plugin/src/pure/SuitLeakSim.cs`** — the model, with its header stating what is REAL (cabin
+    pressure, from `PageState.Cabin` / `CabinEnvironment`, itself TAC-LS-driven through
+    `LifeSupportBridge`), what is SIMULATED (one regulated suit-loop pressure `SuitLoopPsia` = 15.00
+    psia, small stated per-suit fit offsets so four suits are four readings, and a leaking suit's
+    bleed-down) and what is ROLLED. `SuitCheckState` carries the four differentials; `Failed(i)` is a
+    threshold on them, so it is the VERDICT and there is no path that writes one in by hand.
+  · **The four SUIT n DELTA PRESSURE rows are live** — ΔP = suit loop − REAL cabin pressure, so all four
+    move when the cabin moves (they were "0.01psi", a constant, then a permanent dash after T13c). Nominal
+    ~0.28 psi, printed `0.28psi` in the reference's own format (`docs/UI_AUDIT.md`: `0.01psi`).
+  · **The four SUIT n STATUS words are a verdict on that sim** — "Nominal" only while the differential is
+    holding above `PassPsi` (0.10), "Failed Low" (amber, `ic_stop`) once a suit has bled below it. §14.4(e)'s
+    GUARDRAIL satisfied: the S22-class hardcoded green word is gone. **No feed = the whole table dashes**,
+    the honest case §14.4(e) keeps a dash for.
+  · **The 5% leak roll is SEEDABLE, not a loose RNG** — `SuitLeak.LeakingSuit(seed)` is a pure function of
+    the run seed, so a verdict is stable for a whole run, two screens agree, and both branches are
+    reachable from a test (`SeedForLeak`). `ScreenPainter` mints one seed per run from the real clock at
+    INITIATE / **TRY ADDITIONAL TIMER (so re-running re-rolls)**; HALT drops it; FINISH reports the run it
+    already has; a page change resets it.
+  · **The leak outcome raises the SAME box** — same scrim, panel, title/ECLSS/status-word/headline/body and
+    the same close control as the photographed completion popup, carrying `FAILED LOW` /
+    `SUIT LEAK DETECTED` / "Suit n did not hold pressure." / **"Repair suit and rerun suit check."** Our own
+    copy for our own simulated feature, marked as such in the file.
+  · **Threading:** `SuitCheckPage.Build` now takes `SuitCheckState` as its own input (it took no vessel
+    state at all, which is exactly why S22's fix could not reach it); `FigmaUI.Build` gained a `uint
+    suitSeed` and assembles the state from the `PageState` it already had. **The real procedure countdown
+    is untouched.**
+  · **The two stale "(S22)" comments are corrected**, plus the FLOW paragraph and the fail-branch note that
+    both asserted "no suit is modelled". `PanelMap.cs` and the label docs were NOT touched (§1.4 / C1.4).
+  **Gate (C1.3):** `python plugin/build.py test` **green — 11 suites / 11333 checks, 0 failed**, with new
+  coverage in `FigmaUINavTest.SuitLeakSimulation()` (the roll is deterministic in its seed, lands within
+  4–6% over 40 000 seeds, every suit reachable; a clean run draws "Nominal" exactly 4× and the completion
+  box; a forced-leak run draws it 3× + one "Failed Low" and the repair-and-rerun box; a leaking suit bleeds
+  DOWN through the countdown; no feed and a half-built feed both yield no verdict) and in
+  `ProcedureLiveValues` (all four ΔP strings move between two cabin fixtures; dead feed dashes the table).
+  `TouchWiringTest`'s "no suit can fail this check yet" check was restated — that reason is now false.
+  **Preview inspected:** `ui_suitcheck.png` (four distinct live ΔP, four green Nominal) and the new
+  `ui_suitcheck_leak.png` (the repair-and-rerun box); the underlying leak table was rendered once during
+  the pass to confirm the amber `0.01psi` / `Failed Low` row, then the render restored to the popup state.
+  Committed locally (C1.5); NOT pushed.
+- ⚠ **Logged, not done (C1.1):** see **S32** — TROUBLESHOOT is still inert, and its stated reason changed.
+
+### S32 [owner call] The Suit Leak Check's TROUBLESHOOT is still inert, and its reason has changed — **TODO** — [TIER 3: honest-but-incomplete]
+Found by **S31** (logged, not done — C1.1, different question). Until S31, `SuitCheckPage.FailBranchLive`
+was `false` for a reason that made the control moot: **no suit could fail this check**, so the fail
+branch's own question ("Did any suit fail the leak check?") answered itself and TROUBLESHOOT had nothing
+to respond to. S31's marked simulation (§14.4(e)) removed that: a suit CAN now read "Failed Low", the
+crew CAN now be looking at the branch's question with a real answer in front of them, and the one control
+that responds to it is still drawn dimmed and does nothing. S31 restated the constant's doc-comment, the
+draw-site note and `TouchWiringTest`'s check so none of them still claims "no suit is modelled" — but it
+did NOT flip the constant, because what is missing now is different: **no reference frame says what
+pressing TROUBLESHOOT does.** §1.4 keeps an unverified control inert rather than inventing a function for
+it, and §14.4(d) only decided that the fail BRANCH is kept as a marked reconstruction, not what its button
+does. **Options:** (a) leave it dimmed — honest, and the page already says "unavailable" rather than
+swallowing the press; (b) give it a reconstructed-from-function action under §14.4(d)'s own precedent
+(e.g. it re-opens the branch text / marks the suit for the ground), owner-decided and marked; (c) find a
+real source first (a 4.011 continuation frame past the "Scroll to continue" fold) and only then wire it.
+`FailBranchLive` is still the single edit whichever way this goes. Needs an owner call, not a build-chat
+one (§1.4 tier-3).

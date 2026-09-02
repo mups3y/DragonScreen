@@ -30,6 +30,7 @@ public static class FigmaUINavTest
         Console.WriteLine("DragonScreen Figma UI nav tests");
         BottomBar();
         SuitCheck();
+        SuitLeakSimulation();
         VehicleTabs();
         VehicleDeepViewLinksTest();
         CoverPhases();
@@ -749,6 +750,11 @@ public static class FigmaUINavTest
         s.YawDegText = "7." + k + "°";
         s.RangeText = "11." + k + " m"; s.RateText = "-0." + k + "4 m/s";
 
+        // ---- the cabin the SUIT LEAK CHECK measures against (S31) ----
+        // The suit differential is suit-loop pressure minus THIS, so a different cabin here has to move
+        // all four rows. That is the whole "it is a simulation, not a constant" proof for that page.
+        s.Cabin.PressPsia = variant == 0 ? 14.70 : 14.62;
+
         // ---- the orbit plot the approach chord is drawn on ----
         s.Regime = FlightRegime.Space;
         s.BodyRadiusM = 600000.0; s.AtmosphereDepthM = 70000.0;
@@ -840,14 +846,33 @@ public static class FigmaUINavTest
         for (int i = 0; i < dgone.Length; i++)
             Check("docking no longer hard-codes " + dgone[i], !Drew(da, dgone[i]), "");
 
-        // ---------------- SUIT LEAK CHECK: the four delta pressures have no source ----------------
+        // ---------------- SUIT LEAK CHECK: the four delta pressures follow the CABIN ----------------
+        // S31 / §14.4(e). These were dashed (T13c: nothing modelled a suit); they are now a marked
+        // simulation measured against the real cabin pressure, so the same A/B shape applies to them as
+        // to every other live readout - build with two different cabins and assert all four moved.
+        SuitCheckState sca = SuitLeak.From(a, 5, false, 0u), scb = SuitLeak.From(b, 5, false, 0u);
         DisplayList sa = new DisplayList(SuitCheckPage.Commands + 60);
-        SuitCheckPage.Build(sa, VW, VH, 5, false);
-        Check("suit check dashes the four delta pressures", Drew(sa, "—"), "");
+        DisplayList sb = new DisplayList(SuitCheckPage.Commands + 60);
+        DisplayList sd = new DisplayList(SuitCheckPage.Commands + 60);
+        SuitCheckPage.Build(sa, VW, VH, 5, false, sca);
+        SuitCheckPage.Build(sb, VW, VH, 5, false, scb);
+        SuitCheckPage.Build(sd, VW, VH, 5, false, SuitLeak.From(dead, 5, false, 0u));
+        for (int i = 0; i < 4; i++)
+        {
+            string va = SuitLeak.Text(sca.Delta(i));
+            Check("suit " + (i + 1) + " delta pressure is live", Drew(sa, va), va);
+            Check("suit " + (i + 1) + " delta pressure moved with the cabin", !Drew(sb, va), va);
+            Check("suit " + (i + 1) + " reads its own differential",
+                  Times(sa, va) == 1, "drew " + va + " " + Times(sa, va) + " times");
+        }
         Check("suit check no longer hard-codes 0.01psi", !Drew(sa, "0.01psi"), "");
-        // The row LABELS and the STATUS words are reference copy, not values (S22) - still drawn.
+        // The inverse, and the one that matters most on this page: with NO FEED there is no cabin to
+        // measure against, so there is no differential AND no verdict - not a confident green word.
+        Check("suit check dashes the whole table on a dead feed",
+              Drew(sd, "—") && !Drew(sd, "Nominal") && !Drew(sd, "Failed Low"), "");
+        // The row LABELS and the procedure countdown are the page's own copy - still drawn.
         Check("suit check keeps its reference copy",
-              Drew(sa, "SUIT 1 DELTA PRESSURE") && Drew(sa, "Nominal") && Drew(sa, "5s"), "");
+              Drew(sa, "SUIT 1 DELTA PRESSURE") && Drew(sa, "SUIT 1 STATUS") && Drew(sa, "5s"), "");
 
         // ---------------- DEORBIT BURN PREP: the four SLEW rows stay dashed (T13c's call) ----------
         DisplayList pa = new DisplayList(DeorbitBurnPrepPage.Commands + 60);
@@ -1186,6 +1211,112 @@ public static class FigmaUINavTest
         // Empty space is inert.
         Check("suit empty misses",
               SuitCheckPage.HitTest(PX(1500f), PY(1000f), W, H, false) == SuitCheckPage.SuitAct.None, "");
+    }
+
+    // ============================================================================================
+    // S31 / BUILD_PLAN §14.4(e) - THE SUIT LEAK CHECK'S SIMULATION AND ITS TWO OUTCOMES.
+    //
+    // Three things have to be provable here, and none of them can be proved from a preview PNG:
+    //   1. the 5% roll is INJECTABLE - a seed decides, so BOTH branches are reachable from a test
+    //      rather than one of them being a thing that happens to a player twenty runs from now;
+    //   2. the STATUS words are a VERDICT ON THE SIM, never a green word printed anyway (§14.4(e)'s
+    //      guardrail, and the whole reason S31 exists);
+    //   3. a leaking suit actually BLEEDS DOWN through the countdown, so step 2.4's "monitor suit
+    //      delta pressure" describes something that happens.
+    // ============================================================================================
+    static void SuitLeakSimulation()
+    {
+        const int VW = 2560, VH = 1406;
+        PageState s = new PageState();
+        s.Valid = true;
+        s.Cabin.PressPsia = 14.70;
+
+        // ---- the roll is a function of its seed, and both outcomes are reachable ----
+        uint clean = 0;
+        for (uint k = 1; k < 1000 && clean == 0; k++) if (SuitLeak.LeakingSuit(k) == 0) clean = k;
+        uint leaky = SuitLeak.SeedForLeak(3);
+        Check("a seed that finds no leak exists", clean != 0, "");
+        Check("a seed that finds a leak in suit 3 exists",
+              leaky != 0 && SuitLeak.LeakingSuit(leaky) == 3, "seed " + leaky);
+        Check("the roll is stable for one run", SuitLeak.LeakingSuit(leaky) == SuitLeak.LeakingSuit(leaky), "");
+        Check("no run has found nothing", SuitLeak.LeakingSuit(0) == 0, "");
+        Check("a fresh seed is never the no-run seed",
+              SuitLeak.SeedFrom(0.0, 0) != 0u && SuitLeak.SeedFrom(1234.5, 7) != 0u, "");
+        Check("re-running re-rolls", SuitLeak.SeedFrom(1234.5, 7) != SuitLeak.SeedFrom(1234.5, 8), "");
+
+        // ---- and it is the 5% the owner asked for, not "sometimes" ----
+        int hits = 0; const int N = 40000;
+        bool[] seen = new bool[5];
+        for (uint k = 1; k <= N; k++)
+        {
+            int su = SuitLeak.LeakingSuit(k);
+            if (su != 0) { hits++; seen[su] = true; }
+        }
+        double rate = hits / (double)N;
+        Check("the leak roll lands near 5%", rate > 0.04 && rate < 0.06, "got " + rate.ToString("F4"));
+        Check("any of the four suits can be the leaking one",
+              seen[1] && seen[2] && seen[3] && seen[4], "");
+
+        // ---- A CLEAN RUN: four verdicts the model justifies, and the completion box ----
+        SuitCheckState ok = SuitLeak.From(s, 0, true, clean);
+        DisplayList dok = new DisplayList(SuitCheckPage.Commands + 60);
+        SuitCheckPage.Build(dok, VW, VH, 0, true, ok);
+        Check("a clean run finds no leak", !ok.Leak && ok.LeakSuit == 0, "");
+        Check("a clean run holds all four suits",
+              !ok.Failed(0) && !ok.Failed(1) && !ok.Failed(2) && !ok.Failed(3), "");
+        Check("a clean run reads Nominal exactly four times",
+              Times(dok, "Nominal") == 4, "got " + Times(dok, "Nominal"));
+        Check("a clean run raises the completion box",
+              Drew(dok, "PROCEDURE COMPLETE") && !Drew(dok, "Repair suit and rerun suit check."), "");
+
+        // ---- A LEAK RUN: the verdict FOLLOWS the sim, and the repair box replaces the other one ----
+        SuitCheckState bad = SuitLeak.From(s, 0, true, leaky);
+        DisplayList dbad = new DisplayList(SuitCheckPage.Commands + 60);
+        SuitCheckPage.Build(dbad, VW, VH, 0, true, bad);
+        Check("the leaking suit fell below the pass threshold",
+              bad.Failed(2) && bad.Delta(2) < SuitLeak.PassPsi, "delta " + bad.Delta(2).ToString("F3"));
+        Check("the other three still hold",
+              !bad.Failed(0) && !bad.Failed(1) && !bad.Failed(3), "");
+        // THE S31 CHECK. A page that hard-codes "Nominal" draws it four times whatever the model says;
+        // this run must draw it three times and name the fourth suit's failure.
+        Check("STATUS is a verdict, not a word",
+              Times(dbad, "Nominal") == 3 && Times(dbad, "Failed Low") == 1,
+              "nominal " + Times(dbad, "Nominal") + " failed " + Times(dbad, "Failed Low"));
+        Check("the failed suit's differential is on the page",
+              Drew(dbad, SuitLeak.Text(bad.Delta(2))), SuitLeak.Text(bad.Delta(2)));
+        Check("a leak run raises the repair-and-rerun box",
+              Drew(dbad, "Repair suit and rerun suit check.") && !Drew(dbad, "PROCEDURE COMPLETE"), "");
+        Check("the leak box names the suit that failed",
+              Drew(dbad, "Suit 3 did not hold pressure.") && Drew(dbad, "SUIT LEAK DETECTED"), "");
+        // Same box, same close control: the two outcomes must not become two dialogs.
+        Check("both outcomes use the one box",
+              Drew(dok, "4.011 - Suit Leak Check") && Drew(dbad, "4.011 - Suit Leak Check"), "");
+
+        // ---- the leak BLEEDS DOWN through the countdown rather than snapping at the end ----
+        double t5 = SuitLeak.From(s, 5, false, leaky).Delta(2);
+        double t3 = SuitLeak.From(s, 3, false, leaky).Delta(2);
+        double t0 = SuitLeak.From(s, 0, false, leaky).Delta(2);
+        Check("a leaking suit bleeds down while the timer runs",
+              t5 > t3 && t3 > t0 && t0 <= bad.Delta(2) + 1e-9,
+              t5.ToString("F3") + " -> " + t3.ToString("F3") + " -> " + t0.ToString("F3"));
+        Check("it still reads Nominal before it has bled",
+              !SuitLeak.From(s, 5, false, leaky).Failed(2), "");
+
+        // ---- an idle page has made no run, so it has found nothing ----
+        SuitCheckState idle = SuitLeak.From(s, 5, false, 0u);
+        Check("an idle page reports no leak", !idle.Leak, "");
+        Check("an idle page still shows live differentials",
+              idle.Valid && idle.Delta(0) > 0.0, "");
+
+        // ---- no feed, no verdict ----
+        PageState nofeed = new PageState(); nofeed.Valid = false;
+        SuitCheckState none = SuitLeak.From(nofeed, 0, true, leaky);
+        Check("no feed = no reading and no verdict",
+              !none.Valid && !none.Failed(0) && !none.Failed(2), "");
+        // A half-built feed (Valid true, cabin never filled) must not produce a 15 psi differential and
+        // a confident Nominal beside it.
+        PageState halfBuilt = new PageState(); halfBuilt.Valid = true;
+        Check("an unfilled cabin is not a cabin", !SuitLeak.From(halfBuilt, 0, true, 0u).Valid, "");
     }
 
     static void BottomBar()

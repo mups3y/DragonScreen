@@ -837,13 +837,30 @@ public static class PreviewMain
                                   + sdl.Count + " frames");
             }
 
-            // Suit Leak Check with the completion popup up (countdown reached 0)
+            // ---- S31: the Suit Leak Check's TWO RESULTS ----
+            // The page itself comes out of the loop above in its resting state (a run not yet made, the
+            // four differentials live off the fixture's cabin, every STATUS a verdict on them). Its two
+            // RESULTS only exist behind a run, so each needs its own render or neither has a cheap
+            // evidence channel. The 5% roll is seedable exactly so this is possible without waiting for
+            // one: seed 0 is a run that found nothing, SeedForLeak(3) is one that found a leak in suit 3.
             {
                 DisplayList udl = new DisplayList(600);
-                SuitCheckPage.Build(udl, CW, CH, 0, true);
+                SuitCheckPage.Build(udl, CW, CH, 0, true, SuitLeak.From(ps, 0, true, 0u));
+                if (udl.Overflowed) Console.WriteLine("  WARNING UI SUITCHECK/POPUP OVERFLOWED");
                 string path = Path.Combine(outDir, "ui_suitcheck_popup.png");
                 Render(udl, CW, CH, path);
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + udl.Count + " commands");
+            }
+            {
+                uint leak = SuitLeak.SeedForLeak(3);
+                DisplayList udl = new DisplayList(600);
+                SuitCheckPage.Build(udl, CW, CH, 0, true, SuitLeak.From(ps, 0, true, leak));
+                if (udl.Overflowed) Console.WriteLine("  WARNING UI SUITCHECK/LEAK OVERFLOWED");
+                string path = Path.Combine(outDir, "ui_suitcheck_leak.png");
+                Render(udl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + udl.Count
+                                  + " commands   seed " + leak
+                                  + "   suit 3 delta " + SuitLeak.Text(SuitLeak.From(ps, 0, true, leak).Delta(2)));
             }
         }
 
