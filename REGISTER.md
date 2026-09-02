@@ -756,10 +756,13 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
     `flowRate` (ring = flow / their own `chargeRate`, a real fraction, not a chosen full scale); Net Power +
     Charge Rate → the two `NetPwr*W` added up, in W and in kW. Bus A / Bus B volts, Bus Load and Battery Temp
     dash: KSP charge has no voltage and there is no per-bus-load or battery-thermal model.
-  - **AVIONICS (0 live / 9 dash) — the honest answer, not a gap.** This build models no computer load, bus
-    traffic, link budget, storage or GPS state, and no KSP quantity stands in for them, so all nine dash.
-    The tab's one live signal is its FDIR severity, which already colours the tab and fills the ALERTS view.
-    A real source may exist for part of it — see **S24**, an owner call.
+  - **AVIONICS (2 live / 7 dash) — nearly the honest answer, not a gap.** This build models no computer
+    load, bus traffic, link budget, storage or GPS state, and no KSP quantity stands in for FC LOAD, BUS
+    TRAFFIC, LINK MARGIN, STORAGE, FC1/2/3, GPS Sats or Data Rate, so those seven dash. **S24** (owner
+    call, resolved 2026-09-02 to option (b)) wires Uplink + Downlink — and the S-BAND COMMS checklist row
+    — to stock KSP's own CommNet (`Vessel.Connection`), the one honest source this subsystem has; GPS
+    stays untouched (a comm link is not a GPS source). The tab's other live signal is its FDIR severity,
+    which already colours the tab and fills the ALERTS view.
   - **GNC (9 live / 0 dash with a target):** roll/pitch/yaw rate → `vessel.angularVelocity`, **hoisted out of
     `Docking()`** into a new `VesselData.Rates()` — they are not target-dependent and inside that block they
     were simply stale on this tab with no target; RCS FUEL → the Prop tab's own combined tank fraction (the
@@ -1217,7 +1220,7 @@ is a vehicle fact, the value is this vessel's state; (b) drop the `×4` so the l
 the owner's (C1.4). The identical `SOLAR ARRAY` / `BATTERIES ×4` pair on the **Power subsystem page** is
 still fully representative — that page is **T13b**'s, and whatever is decided here should land there too.
 
-### S24 [owner call] The AVIONICS tab reads nine dashes — is CommNet a legitimate source for part of it? — **TODO**
+### S24 [owner call] The AVIONICS tab reads nine dashes — is CommNet a legitimate source for part of it? — **DONE 2026-09-02** (resolved to (b): S-BAND COMMS / Uplink / Downlink wired to stock CommNet, everything else stays dashed)
 Found by T13b, which wired the other five subsystem tabs and left this one entirely dashed because that is
 what `docs/TELEMETRY_REGISTRY.md` requires: nothing in this build models flight-computer load, data-bus
 traffic, storage, GPS lock or a link budget, and no KSP quantity stands in for them. `ui_vehicleavionics.png`
@@ -1232,6 +1235,42 @@ no new dependency; (b) adopt CommNet for the link rows only, dashing `LINK MARGI
 gauges; (c) adopt CommNet and additionally define a stated dB mapping. **Adopting a new authoritative source
 is a §1.4 decision, so it is the owner's** — a build chat does not add one on its own. (b) is the smallest
 honest step if the answer is "yes".
+
+**Decision (owner, via the overseer, 2026-09-02) = (b).** Populate Uplink / Downlink / S-BAND COMMS from
+stock CommNet; dash LINK MARGIN (no dB conversion from a 0..1 strength — inventing one violates §1.4), FC
+LOAD / BUS TRAFFIC / STORAGE (no KSP source) and GPS (a comm link is not a GPS source; do not borrow
+connection state for it — left exactly as it was, untouched).
+
+**DONE 2026-09-02.** Source: `Vessel.Connection` → `CommNet.CommNetVessel` (confirmed present in KSP's own
+`Assembly-CSharp.dll` by reflecting the installed assembly before writing any code — `IsConnected` (bool),
+`SignalStrength` (double, 0..1) — plus the static `CommNet.CommNetScenario.CommNetEnabled` difficulty flag).
+Real stock state, same footing as every other `vessel.*` read in `VesselData.cs` — nothing invented (§1.4).
+- New glue: `VesselData.Avionics(Vessel)` (`plugin/src/VesselData.cs`), called from `Refresh()` alongside
+  `VehicleSources`. Gated on `CommNetEnabled`; `conn == null` (CommNet off, or this vessel carries no
+  `CommNetVessel`) sets everything null/false so the page dashes exactly like any other unsourced row —
+  never a stale "Linked". Uplink and Downlink are the SAME real signal strength (CommNet has no separate
+  up/down budget) — two fields for one number, the same reasoning already used for
+  `PowerUnit1Text`/`PowerUnit2Text`.
+- New `PageState` fields (`plugin/src/pure/Pages.cs`): `SBandText`, `UplinkText`, `DownlinkText`,
+  `SBandLinked`, `CommSignal01`.
+- `VehicleSubsystemPage.DefOf` (`Sub.Avionics`): S-BAND COMMS checklist row now reads `T(st.SBandText)`
+  with a live checkmark colour (green linked / amber no-signal / white-neutral dashed); Uplink/Downlink
+  rows read `T(st.UplinkText)`/`T(st.DownlinkText)` with `st.CommSignal01` driving both bars, formatted as
+  a percentage (`Pct()`), never a fabricated unit. FC1/2/3, GPS Sats, Data Rate, and all four headline
+  gauges (FC LOAD/BUS TRAFFIC/LINK MARGIN/STORAGE) are untouched. GPS checklist row untouched.
+- **Test (`plugin/test/FigmaUINavTest.cs`):** `VehicleFixture` grows the three new fields (varying between
+  the A/B fixtures); `SubsystemLiveValues`' Avionics entry in `live[]` now asserts S-BAND/Uplink/Downlink
+  move with the fixture and dash with no feed, same as every other tab's wired values; the cross-tab
+  "avionics invents no value" loop now skips Avionics' own index (else it would assert the opposite of
+  what this wires in); a new dedicated block builds an OTHERWISE-VALID fixture with the three CommNet
+  fields nulled out (simulating CommNet off/absent while the vessel itself is fine) and asserts all three
+  dash gracefully. `python plugin/build.py test`: **green, 0 failed** (Figma UI nav suite 547 checks).
+- **Preview:** `ui_vehicleavionics.png` (linked: S-BAND "Linked" in green, Uplink/Downlink "82 %" with a
+  filled bar) and a new `ui_vehicleavionics_commoff.png` (CommNet off: S-BAND "—" white-neutral,
+  Uplink/Downlink "—" with an empty bar) both inspected — the four gauges and the other three readouts
+  stay dashed in both, GPS is unaffected either way. §1.4 respected: no `PanelMap.cs` / label-doc edit:
+  the checklist LABELS (`CkLabel`) were already real-sourced copy and are untouched, only the live VALUE
+  and its colour changed.
 
 ### S25 [S] The Power tab's checklist still reads `4 / 4` and `Deployed` beside the live sources for both — **TODO**
 Found by T13b, deliberately not done: §6 scopes T13 to the numeric VALUES and the register line scoped T13b

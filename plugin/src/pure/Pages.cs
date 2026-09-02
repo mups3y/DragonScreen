@@ -231,6 +231,20 @@ namespace DragonScreen
         public double BodyRollDps, BodyPitchDps, BodyYawDps;
         public string BodyRollText, BodyPitchText, BodyYawText, BodyRateText;
 
+        /// <summary>AVIONICS - S-BAND COMMS (left checklist) and the Uplink / Downlink readouts, from
+        /// stock KSP's OWN CommNet (`Vessel.Connection.IsConnected` / `.SignalStrength`) - S24, owner
+        /// decision (b). CommNet carries ONE link, not a separate uplink and downlink budget, so both
+        /// rows report the SAME real signal strength - two fields for one number, same reasoning as
+        /// <see cref="PowerUnit1Text"/>/<see cref="PowerUnit2Text"/> above. All null/false when CommNet
+        /// itself is off (the game's own difficulty toggle) or this vessel has no CommNetVessel at all:
+        /// an absent comm system must dash exactly like any other unsourced row here, never read as a
+        /// live "No Signal". LINK MARGIN has no dB conversion from a 0..1 strength, and FC LOAD, BUS
+        /// TRAFFIC, STORAGE and GPS have no KSP source at all - none of those five are touched by this
+        /// and stay dashed (docs/TELEMETRY_REGISTRY.md, REGISTER.md S24).</summary>
+        public string SBandText, UplinkText, DownlinkText;
+        public bool SBandLinked;
+        public double CommSignal01;
+
         /// <summary>Ascent autopilot: engaged, and which phase it is flying.</summary>
         public bool AutoEngaged;
         public string AutoPhase;

@@ -13,8 +13,10 @@
 // each — were representative constants, like the overview's were before T13a. Every one of them now
 // comes from PageState or is an honest dash; see DefOf, which is where the whole wiring lives. Prop's
 // numbers travel unchanged into PropSchematic's bottom data band (they are passed through), so wiring
-// the source fixed both looks at once. AVIONICS is the one tab that dashes end to end, and that is the
-// correct answer rather than a gap — see the block above its own case.
+// the source fixed both looks at once. AVIONICS dashes almost end to end — this build models none of
+// its computer/bus/storage/GPS state — and that is the correct answer rather than a gap; see the block
+// above its own case. S24 (owner decision) wires its S-BAND COMMS / Uplink / Downlink to stock KSP's
+// own CommNet, the one honest source the tab has.
 //
 // T5: DillonBaird's Vehicle render (+ alt-text, SCREEN_INVENTORY.md "IMAGERY HUNT 2026-09-01") confirms
 // a FUNCTIONS|ALERTS toggle bottom-left next to this subsystem tab bar, and that "the Subview Nav Bar …
@@ -274,24 +276,35 @@ namespace DragonScreen
                 case Sub.Avionics:
                     s.Title = "AVIONICS"; s.Tab = 5;
                     s.CkLabel = new[] { "FLIGHT COMP x3", "VRIO 1 / 2", "DATA BUS", "GPS", "S-BAND COMMS", "SW WATCHDOG" };
-                    s.CkState = new[] { "3 / 3", "Nominal", "Nominal", "Lock", "Linked", "Armed" };
-                    s.CkKey   = new[] { 1, 1, 1, 1, 1, 0 };
-                    // ---- EVERY VALUE ON THIS TAB DASHES, AND THAT IS THE ANSWER ----
+                    // S24 (owner decision (b)): S-BAND COMMS is the one checklist row this tab wires,
+                    // off stock KSP's OWN CommNet (VesselData.Avionics) — T(), so a dead feed or CommNet
+                    // itself being off dashes it exactly like every other unsourced row, rather than
+                    // reading a stale "Linked". The other five rows are untouched (S25 territory, not
+                    // this task) and GPS stays exactly as it was — CommNet is a comm link, not a GPS fix.
+                    s.CkState = new[] { "3 / 3", "Nominal", "Nominal", "Lock", T(st.SBandText), "Armed" };
+                    s.CkKey   = new[] { 1, 1, 1, 1, (valid && st.SBandText != null) ? (st.SBandLinked ? 1 : 2) : 0, 0 };
+                    // ---- MOST OF THIS TAB STILL DASHES, AND THAT IS THE ANSWER ----
                     // The real vehicle's avionics — triple-redundant flight computers, the data bus, GPS,
-                    // S-band — are the one subsystem this build models NOTHING of: there is no computer
-                    // load, no bus traffic, no link budget, no storage and no GPS state anywhere in the
-                    // tree, and no KSP quantity stands in for them. Under docs/TELEMETRY_REGISTRY.md that
-                    // makes all nine a dash; the alternative is nine invented numbers that would look
-                    // exactly as convincing when the feed is dead. The tab's own live signal is its FDIR
-                    // severity, which colours the tab and fills the ALERTS view (see LiveSeverity).
+                    // storage, a link budget — are almost entirely a subsystem this build models NOTHING
+                    // of, and no KSP quantity stands in for FC LOAD, BUS TRAFFIC, LINK MARGIN (no dB
+                    // conversion exists for a 0..1 CommNet strength), STORAGE, FC1/2/3, GPS Sats or Data
+                    // Rate — docs/TELEMETRY_REGISTRY.md, so all seven stay a dash rather than seven
+                    // invented numbers that would look exactly as convincing when the feed is dead.
+                    // Uplink/Downlink are the exception (S24): stock CommNet is a real, honest source for
+                    // a comm link, so those two — and S-BAND COMMS above — are wired to it. The tab's
+                    // other live signal is its FDIR severity, which colours the tab and fills the ALERTS
+                    // view (see LiveSeverity).
                     s.GLabel  = new[] { "FC LOAD", "BUS TRAFFIC", "LINK MARGIN", "STORAGE" };
                     s.GVal    = new[] { Dash, Dash, Dash, Dash };
                     s.GUnit   = new[] { "%", "%", "dB", "%" };
                     s.GFrac   = new[] { 0f, 0f, 0f, 0f };
                     s.GCol    = new[] { Accent, Accent, Go, Blue };
                     s.RLabel  = new[] { "FC1 / 2 / 3", "GPS Sats", "Uplink", "Downlink", "Data Rate" };
-                    s.RVal    = new[] { Dash, Dash, Dash, Dash, Dash };
-                    s.RFrac   = new[] { 0f, 0f, 0f, 0f, 0f };
+                    // Uplink and Downlink report the SAME real CommNet signal strength — the link has no
+                    // separate up/down budget in stock KSP — as a percentage bar/text, never a fabricated
+                    // unit (no "dB", no "kbps": nothing here models a data rate).
+                    s.RVal    = new[] { Dash, Dash, T(st.UplinkText), T(st.DownlinkText), Dash };
+                    s.RFrac   = new[] { 0f, 0f, F(st.CommSignal01), F(st.CommSignal01), 0f };
                     break;
 
                 case Sub.Gnc:

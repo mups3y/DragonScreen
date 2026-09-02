@@ -195,6 +195,7 @@ namespace DragonScreen
                 Acceleration(v);
                 Rates(v);
                 VehicleSources(v);
+                Avionics(v);
 
                 state.LightsOn = v.ActionGroups[KSPActionGroup.Light];
                 state.LightCount = CountLights(v);
@@ -863,6 +864,28 @@ namespace DragonScreen
             double netW = state.Cabin.NetPwr1W + state.Cabin.NetPwr2W;
             state.NetPowerText   = Signed(netW, 0, " W");
             state.ChargeRateText = Signed(netW / 1000.0, 2, " kW");
+        }
+
+        /// <summary>AVIONICS: S-BAND COMMS + Uplink / Downlink, from stock KSP's OWN CommNet (S24, owner
+        /// decision (b) - REGISTER.md). `Vessel.Connection` is the same "read the game's real state,
+        /// never invent one" rule every other field in this file follows - `CommNet.CommNetVessel`,
+        /// gated on the game's own CommNet difficulty toggle so an RSS/RO table that has turned CommNet
+        /// off (or a vessel with no CommNetVessel at all - `Connection` can be null) dashes rather than
+        /// reporting a link this build is not really tracking. CommNet has no separate uplink/downlink
+        /// budget, so both readouts are the ONE real signal strength - not a copy-paste, the same
+        /// reasoning as PowerUnit1Text/PowerUnit2Text above. LINK MARGIN (no dB conversion exists for a
+        /// 0..1 strength), FC LOAD, BUS TRAFFIC, STORAGE and GPS are untouched by this - see Pages.cs.</summary>
+        private static void Avionics(Vessel v)
+        {
+            CommNet.CommNetVessel conn = CommNet.CommNetScenario.CommNetEnabled ? v.Connection : null;
+            bool linked = conn != null && conn.IsConnected;
+            double sig01 = (conn != null) ? Clamp01(conn.SignalStrength) : 0.0;
+
+            state.SBandText   = (conn != null) ? (linked ? "Linked" : "No Signal") : null;
+            state.SBandLinked = linked;
+            state.CommSignal01 = sig01;
+            state.UplinkText   = (conn != null) ? Pct(sig01) : null;
+            state.DownlinkText = state.UplinkText;
         }
 
         /// <summary>A power unit's energy: the vessel's real state of charge, with its unit. Null when

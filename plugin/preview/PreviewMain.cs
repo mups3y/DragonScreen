@@ -221,6 +221,12 @@ public static class PreviewMain
         // where a moving one is proved, exactly as it is for the schematic's own segments.
         ps.DracoDutyText = "0 %";
 
+        // S24 (owner decision (b)): the one part of AVIONICS with a real source, stock KSP's own
+        // CommNet. The baseline fixture is a GOOD link - the ui_vehicleavionics_commoff render further
+        // down is where CommNet being off/absent is proved to dash gracefully instead.
+        ps.SBandText = "Linked"; ps.SBandLinked = true;
+        ps.CommSignal01 = 0.82; ps.UplinkText = "82 %"; ps.DownlinkText = "82 %";
+
         // A single deployed array making 2.6 kW of its 3.4 kW rating - a real Dragon attitude, not a
         // panel pointed perfectly at the sun.
         ps.Array01 = 2.6 / 3.4;
@@ -536,6 +542,26 @@ public static class PreviewMain
                 Render(sdl2, CW, CH, path);
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + sdl2.Count + " commands");
                 ps.Valid = savedValid;
+            }
+
+            // ---- S24: AVIONICS with CommNet off/absent, vessel otherwise VALID ----
+            // Distinct from the no-feed renders above: this vessel is fine, it simply has no CommNetVessel
+            // (CommNet disabled in difficulty settings, RemoteTech installed, or no comm hardware) - the
+            // one case S24's own guard names. S-BAND COMMS / Uplink / Downlink must dash exactly like the
+            // tab's other unsourced rows, never keep showing the linked-fixture's stale text.
+            {
+                string savedBand = ps.SBandText; bool savedLinked = ps.SBandLinked;
+                string savedUp = ps.UplinkText, savedDown = ps.DownlinkText;
+                double savedSig = ps.CommSignal01;
+                ps.SBandText = null; ps.SBandLinked = false;
+                ps.UplinkText = null; ps.DownlinkText = null; ps.CommSignal01 = 0.0;
+                DisplayList codl = new DisplayList(VehicleSubsystemPage.Commands + 60);
+                VehicleSubsystemPage.Build(codl, CW, CH, VehicleSubsystemPage.Sub.Avionics, ps);
+                string path = Path.Combine(outDir, "ui_vehicleavionics_commoff.png");
+                Render(codl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + codl.Count + " commands");
+                ps.SBandText = savedBand; ps.SBandLinked = savedLinked;
+                ps.UplinkText = savedUp; ps.DownlinkText = savedDown; ps.CommSignal01 = savedSig;
             }
 
             // Cover with the LAST phase selected (Manual Chute Deploy, rail slot 6) to prove the expanded

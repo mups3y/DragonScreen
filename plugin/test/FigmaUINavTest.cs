@@ -397,6 +397,11 @@ public static class FigmaUINavTest
         // to carry it too: a target to be misaligned with, an orbit, and a control-authority word.
         s.HasTarget = true; s.Align01 = 0.06; s.AlignText = "5.4" + j + " deg";
         s.ModeText = variant == 0 ? "AUTO" : "MANUAL";
+        // S24: AVIONICS' one wired checklist row + its two CommNet readouts. Uplink and Downlink share
+        // ONE value (CommNet has no separate up/down budget), like PowerUnit1Text/PowerUnit2Text above.
+        s.SBandText = variant == 0 ? "Linked" : "No Signal"; s.SBandLinked = variant == 0;
+        s.UplinkText = "8" + j + " %"; s.DownlinkText = "8" + j + " %";
+        s.CommSignal01 = variant == 0 ? 0.83 : 0.84;
         s.Regime = FlightRegime.Space;
         s.Altitude = "123.4" + j + " km";
         s.Velocity = "228" + j + " m/s"; s.SurfaceVelocity = "17" + j + " m/s";
@@ -494,9 +499,11 @@ public static class FigmaUINavTest
     // ---- T13b: the six subsystem sub-tabs read the vessel, not a constant ----
     // Same shape and the same reasoning as VehicleLiveValues above: build each tab with fixture A, build
     // it again with a DIFFERENT fixture B, and assert every value moved. The extra thing worth proving
-    // here is the OPPOSITE for AVIONICS — this build models none of that subsystem, so its nine values
-    // must dash and must NOT move with the fixture; a later "improvement" that quietly fills them with a
-    // plausible constant is exactly what this catches.
+    // here is the OPPOSITE for most of AVIONICS — this build models almost none of that subsystem, so
+    // its seven unsourced gauge/row values must dash and must NOT move with the fixture; a later
+    // "improvement" that quietly fills them with a plausible constant is exactly what this catches.
+    // S24 (owner decision) is the one exception: S-BAND COMMS + Uplink/Downlink are wired to stock
+    // CommNet, so those three DO move like every other tab's live values — checked the same way below.
     static void SubsystemLiveValues()
     {
         const int VW = 2560, VH = 1406;
@@ -518,7 +525,9 @@ public static class FigmaUINavTest
             new[] { a.DragonOxText, a.DragonFuelText, a.PropRemainingText, a.DracoDutyText },
             // POWER: state of charge, array output twice (gauge + row), net flow twice (W and kW).
             new[] { a.PowerText, a.ArrayKwText, a.ArrayOutputText, a.NetPowerText, a.ChargeRateText },
-            new string[0],                                                   // AVIONICS — see below
+            // AVIONICS (S24): S-BAND COMMS' checklist state + the two CommNet readouts. Everything else
+            // on this tab is asserted NOT to move, below.
+            new[] { a.SBandText, a.UplinkText, a.DownlinkText },
             // GNC: three body rates, the RCS tank, alignment, total rate, altitude, velocity, authority.
             new[] { a.BodyRollText, a.BodyPitchText, a.BodyYawText, a.DragonPropText,
                     a.AlignText, a.BodyRateText, a.Altitude, a.Velocity, a.ModeText },
@@ -567,18 +576,41 @@ public static class FigmaUINavTest
             Check(subs[i] + " dashes everything with no feed", Drew(dd, "—"), "");
         }
 
-        // ---- AVIONICS: nothing on it moves, because nothing on it is modelled ----
-        // Stronger than "it drew a dash": not one value from EITHER fixture may appear anywhere on it.
+        // ---- AVIONICS: no OTHER tab's numbers leak onto it, and it fills no gauge ring ----
+        // Stronger than "it drew a dash": not one value from another subsystem, in EITHER fixture, may
+        // appear anywhere on this tab. Its OWN three CommNet values (S24) are checked in the main loop
+        // above like any other tab's live values — skipped here, or this would assert the opposite of
+        // what S24 wired in.
         DisplayList av = new DisplayList(VehicleSubsystemPage.Commands + 60);
         DisplayList av2 = new DisplayList(VehicleSubsystemPage.Commands + 60);
         VehicleSubsystemPage.Build(av, VW, VH, VehicleSubsystemPage.Sub.Avionics, a);
         VehicleSubsystemPage.Build(av2, VW, VH, VehicleSubsystemPage.Sub.Avionics, b);
         for (int i = 0; i < live.Length; i++)
+        {
+            if (subs[i] == VehicleSubsystemPage.Sub.Avionics) continue;
             for (int k = 0; k < live[i].Length; k++)
                 Check("avionics invents no value (" + live[i][k] + ")",
                       !Drew(av, live[i][k]) && !Drew(av2, live[i][k]), "");
+        }
+        // The four headline gauges (FC LOAD / BUS TRAFFIC / LINK MARGIN / STORAGE) stay unsourced and
+        // must never fill — unaffected by S24, which only wires two RIGHT-column readouts.
         Check("avionics fills no gauge ring", Arcs(av, DragonPalette.Accent) == 0
               && Arcs(av, DragonPalette.Go) == 0, "");
+
+        // ---- S24's OWN guard: an OTHERWISE-VALID vessel with CommNet off/absent must dash gracefully ----
+        // Distinct from the "dead"/Valid=false fixture above (no vessel feed at all): this is a live
+        // vessel where VesselData.Avionics found no CommNetVessel (CommNet off in difficulty settings,
+        // RemoteTech installed, or — RSS/RO — no comm hardware) and left the three fields null, exactly
+        // as it does. The page must never keep showing a stale "Linked" / signal percentage.
+        PageState commOff = VehicleFixture(0);
+        commOff.SBandText = null; commOff.SBandLinked = false;
+        commOff.UplinkText = null; commOff.DownlinkText = null; commOff.CommSignal01 = 0.0;
+        DisplayList avOff = new DisplayList(VehicleSubsystemPage.Commands + 60);
+        VehicleSubsystemPage.Build(avOff, VW, VH, VehicleSubsystemPage.Sub.Avionics, commOff);
+        Check("avionics dashes S-BAND with no CommNet", !Drew(avOff, a.SBandText), "");
+        Check("avionics dashes Uplink with no CommNet", !Drew(avOff, a.UplinkText), "");
+        Check("avionics dashes Downlink with no CommNet", !Drew(avOff, a.DownlinkText), "");
+        Check("avionics still shows a dash with no CommNet", Drew(avOff, "—"), "");
 
         // ---- the rings move with the numbers, and empty when the feed dies ----
         // CREW is the tab where all four gauges have a source; a fill per gauge is the count to hold.
