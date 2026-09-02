@@ -71,7 +71,12 @@ namespace DragonScreen
         // one step past DeorbitBurnPrep/EntryProcedure (those had a blurry/partial photo; this has none,
         // so the whole page chrome is ours, not just the spacing). Menu grid only for now; a real entry
         // point is T14's job, same footing as the other reconstructed pages. Appended (never renumbered).
-        Ascent = 33
+        Ascent = 33,
+        // The circular nav/orbit plot (S15) - SCREEN_INVENTORY #28, the third of §11b's three
+        // newly-characterised JSC screens (T9 built the other two). Same footing as Ascent: Menu grid
+        // only for now, a real entry point is T14's job. Appended (never renumbered): the int persists
+        // per screen.
+        NavOrbitPlot = 34
     }
 
     public enum NavAct { None, Goto, Back, Forward }
@@ -94,7 +99,7 @@ namespace DragonScreen
         /// overlay. The painter sizes its list to the max of this and the old model.</summary>
         public const int Commands = 360;
 
-        public const int PageCount = 34;
+        public const int PageCount = 35;
 
         const float RefW = 3427f, RefH = 2112f;
 
@@ -136,7 +141,7 @@ namespace DragonScreen
             "VEHICLE — CREW", "VEHICLE — PROP", "VEHICLE — POWER",
             "VEHICLE — AVIONICS", "VEHICLE — GNC", "VEHICLE — THERMAL",
             "MANUAL CHUTE DEPLOY", "MANUAL DOCKING", "RENDEZVOUS", "DEORBIT BURN PREP", "ENTRY",
-            "SYSTEMS TREE", "SYSTEMS P&ID", "ASCENT / LAUNCH"
+            "SYSTEMS TREE", "SYSTEMS P&ID", "ASCENT / LAUNCH", "NAV / ORBIT PLOT"
         };
 
         public static string Name(UiPage p)
@@ -216,6 +221,7 @@ namespace DragonScreen
                 case UiPage.SystemsTree:       SystemsTreePage.Build(dl, w, h, s); break;
                 case UiPage.SystemsPid:        SystemsPidPage.Build(dl, w, h, s); break;
                 case UiPage.Ascent:            AscentPage.Build(dl, w, h, s); break;
+                case UiPage.NavOrbitPlot:      NavOrbitPlotPage.Build(dl, w, h, s); break;
                 default:               PlaceholderPage.Build(dl, w, h, Name(page)); break;
             }
             BottomBarMarker(dl, w, h, page);
@@ -239,6 +245,7 @@ namespace DragonScreen
                 case UiPage.ManualChute: case UiPage.Docking: case UiPage.Rendezvous:
                 case UiPage.DeorbitBurnPrep: case UiPage.EntryProcedure:
                 case UiPage.SystemsTree: case UiPage.SystemsPid: case UiPage.Ascent:
+                case UiPage.NavOrbitPlot:
                     return false;
                 default:
                     return true;

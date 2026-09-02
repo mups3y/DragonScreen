@@ -100,7 +100,7 @@ hand, needs building · **🟡 REFINE** — folds into a page we already ship, n
 | 25 | **Entry** | “Parachute Deployment Altitude” section + steps — the entry/descent procedure page | `discovery` “Entry” frame (partial) | 🟠 REF, not built — reconstruct + MARK (**T8**) |
 | 26 | **Prop / RCS thruster schematic** | The AUTHENTIC look of Vehicle·Prop: the Dragon in **horizontal profile** (capsule + trunk line-art) ringed by **Draco thruster-quad arc symbols** with per-cluster firing/status, per-thruster data along the bottom, a LEFT alert + sub-nav rail | **JSC `jsc2026e404727`** (Crew-13 training) | ✅ BUILT 2026-09-02 (**T9**, `PropSchematic.cs`) — Prop's FUNCTIONS view now draws this schematic, per-thruster firing LIVE off real RCS demand, replacing the generic gauge template |
 | 27 | **Systems / electrical TREE** | A **hierarchical box-and-connector diagram** (labelled boxes joined by connector lines) — a power-distribution / systems tree. A subsystem deep-view, distinct from the P&ID plumbing view | **JSC `jsc2024e064449`** (sim rig, LEFT screen) | ✅ BUILT 2026-09-02 (**T9**, `SystemsTreePage.cs`, `UiPage.SystemsTree`) — boxes/connectors live-coloured off `PageState.Systems` |
-| 28 | **Nav / orbit plot (circular)** | Concentric rings + coloured target markers (yellow + cyan) + orbit arcs + a g/rate readout — the circular situational plot. Pairs with #23's ellipse view | **JSC `jsc2024e064449`** (sim rig, RIGHT screen) + BBC | 🟠 REF, not built — owned by **S15**, not T9 (T6 is the rendezvous *ellipse*; T9 is the other two JSC screens; neither register line covers this one) |
+| 28 | **Nav / orbit plot (circular)** | Concentric rings + coloured target markers (yellow + cyan) + orbit arcs + a g/rate readout — the circular situational plot. Pairs with #23's ellipse view | **JSC `jsc2024e064449`** (sim rig, RIGHT screen) + BBC | ✅ BUILT 2026-09-02 (**S15**, `NavOrbitPlotPage.cs`, `UiPage.NavOrbitPlot`) — the ellipse/AP/PE/target-chord are `NavPage.Orbit`'s real conic (T6's calculation, reused not reinvented); concentric rings + the VEHICLE/TARGET colour-key chips are ours (ring scale + marker glyphs not legible in either source); the g/rate readout is `PageState.GForceText`/`.RateText`/`.RangeText`, real fields already read elsewhere |
 
 ## NEW findings this session (record)
 - **4.700 "Test VRIO Health LEDs" is REAL** — reconstructed from photos + built (`VrioTestPage`). VRIO =
@@ -263,12 +263,11 @@ contact-sheeted; the screen-facing ones re-pulled at 3240–3840 px.** Result:
 - **Three new real screen LOOKS captured** — rows **#26 Prop/RCS thruster schematic**, **#27 systems tree**
   and **#28 circular nav/orbit plot** above. The left screens in the same set (`jsc2024e079789`,
   `jsc2025e064540`, `jsc2022e068644`) show the attitude/nav HUD and **corroborate our built HUD (#2)**.
-  **Update 2026-09-02 (T9):** #26 and #27, plus the P&ID entry below, are now ✅ BUILT; #28 is still
-  🟠 REF, not built — owned by **S15**, not T9.
+  **Update 2026-09-02 (T9):** #26 and #27, plus the P&ID entry below, are now ✅ BUILT.
+  **Update 2026-09-02 (S15):** #28 is now ✅ BUILT too — all three JSC-sourced screen looks are built.
 - **Layouts yes, text no.** The mockup screens were shot at steep angles with glare, so exact on-screen
-  text was **not transcribable** at any resolution available. The two built pages (plus the P&ID) are
-  **layout-real / labels-reconstructed** — the same honest status as our other from-photo pages; #28 will
-  be the same when it's built.
+  text was **not transcribable** at any resolution available. All three built pages (plus the P&ID) are
+  **layout-real / labels-reconstructed** — the same honest status as our other from-photo pages.
 - **The console is still not label-legible** in ANY JSC frame — every shot is upward-at-crew.
   `jsc2024e064449` gives the **best-lit console band yet** (button-group plates, a labelled rotary, a red
   guarded control) and it is still not readable at that angle. So the §4 panel-label verification remains

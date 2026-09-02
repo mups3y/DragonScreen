@@ -1338,7 +1338,7 @@ persists a screen against them, or keep them and give Menu a way to hide placeho
   outputs only: `MenuPage.cs`, `FigmaUI.cs`, `plugin/test/FigmaUINavTest.cs`, `REGISTER.md` — no
   `PanelMap.cs`/label-doc edits, no memory writes.
 
-### S15 [O] The circular nav / orbit plot (SCREEN_INVENTORY #28) is still unbuilt and unowned — **TODO** — [TIER 4: scheduled build/polish]
+### S15 [O] The circular nav / orbit plot (SCREEN_INVENTORY #28) is still unbuilt and unowned — **DONE 2026-09-02**
 Logged by T9 (C1.1), not done. `SCREEN_INVENTORY.md` #28 marks the circular nav/orbit plot as
 "🟠 REF, not built (**T6**/**T9**)", but neither task's register line covers it: T6's line is the
 rendezvous *ellipse* plot (built, `RendezvousPage.cs`) and T9's is "Prop thruster schematic + P&ID /
@@ -1349,6 +1349,50 @@ ellipse". Most of what it needs already exists (`NavPage.Orbit`'s real conic, `P
 fields), so it is likely a small [S] page rather than an [O] one. **DONE when:** the owner decides
 whether it becomes its own register task (and where in the §7 order), and it is built + previewed —
 or it is explicitly deferred and #28's "(T6/T9)" mark corrected.
+- **Owner directive (via the overseer), 2026-09-02:** BUILD it now, as its own task, run on **[S]** (the
+  register's own guess above — most of what it needs already exists). Reference confirmed: JSC
+  `jsc2024e064449`'s RIGHT screen + the BBC frame, same footing as T6/T9 (layout-real /
+  labels-reconstructed + MARKED).
+- **DONE 2026-09-02.** New `plugin/src/pure/NavOrbitPlotPage.cs`, `UiPage.NavOrbitPlot` (34), and
+  `FigmaUI.PageCount` 34→**35**. **Not a second orbit renderer** (§1.4, the same rule T6 followed for
+  its ellipse): it calls `NavPage.Orbit(dl, s, ..., true)` — the SAME real conic (apogee/perigee →
+  ellipse, current radius → true anomaly, target phase → approach chord) T6's rendezvous plot already
+  trusts, so there is still one orbit calculation in the codebase, not a third. The AP/PE markers, the
+  vehicle cross and the target-chord diamond it draws are its own real markers, untouched.
+  **The g/rate readout is real, not a new field:** `PageState.GForceText`/`.GForce01` (the same field
+  the Vehicle Overview's G-FORCE dial reads) and `.RateText`/`.RangeText`/`.TargetName` (the same
+  docking-approach fields the Rendezvous chord and the Docking page already read) — no new `PageState`
+  field was added for this task, exactly the reuse the task called for.
+  **Ours, stated in the code (§1.4):** the concentric range rings (ring count/spacing — no scale is
+  legible in either source, so none is printed) and the small "VEHICLE" (cyan) / target-name (yellow)
+  colour-key chips — the JSC frame shows two coloured markers but not their exact glyphs, so the key
+  names the colour convention (matching the reference's yellow+cyan) rather than inventing an unreadable
+  icon shape, the same "shape confirmed, artwork not invented" call T6 made for its mission-patch
+  roundel.
+  **Reachability:** Menu grid only (auto-discovered via `FigmaUI.IsPlaceholder`, no MenuPage resize
+  needed — 25 real cards, well inside the existing 3×10 grid) + the bottom bar (present + correctly
+  routing on every page automatically) — the same footing T12's Ascent established, not T6's
+  letterbox-margin pairing (the task's own reachability line named Menu + bottom bar, not a new
+  Rendezvous↔plot link, so none was added — no scope creep).
+  **Nav test:** new `FigmaUINavTest.NavOrbitPlot()` — bottom bar → Cover, Menu lists the new page, the
+  body is inert (no invented destinations), and it is a real page, not a placeholder. `python
+  plugin/build.py test`: **green, Figma UI nav suite 0 failed, all 14 suites 0 failed** (no new
+  warnings; the pre-existing CS0162/CS0219 warnings in `ScreenPainter.cs`/`Pages.cs` are untouched by
+  this task).
+  **Preview:** `ui_navorbitplot.png` inspected — concentric rings, the live globe + dotted ellipse +
+  AP/PE + vehicle cross, the amber approach chord to "SPACE X STATION" with its diamond endpoint, the
+  cyan/amber colour key, and the G-FORCE/RATE/RANGE readout all render cleanly in the plot well, no
+  overlap/clipping, no `DisplayList` overflow (179 of 340 commands). Added
+  `ui_navorbitplot_notarget.png` (mirroring the existing Docking/Rendezvous no-target renders, from the
+  SAME target-off fixture toggle) — the chord and diamond correctly vanish, the key reads "NO TARGET",
+  RATE/RANGE correctly dash, G-FORCE (not target-gated) still reads; `ui_menu.png` re-inspected — 25
+  cards including the new "NAV / ORBIT PLOT" as the last card, still legible, no overlap.
+  **Docs:** `SCREEN_INVENTORY.md` #28 flipped 🟠 REF, not built → **✅ BUILT**, naming the real source
+  file/`UiPage` and what's real vs. ours; the "RESEARCH PASS 2026-09-02" JSC-vein summary paragraph
+  updated in place (it read "#28 is still … not built — owned by S15" — now says built, all three
+  JSC-sourced looks done). `docs/BUILD_PLAN.md` left **frozen** per the task's own instruction (its
+  stale §3 REF/REFINE marks are the known, already-logged **S16**-adjacent gap — status lives in the
+  living inventory, not the spec, C7.1). §1.4 respected throughout; no `PanelMap.cs` / label-doc edits.
 
 ### S16 [S] `SCREEN_INVENTORY.md` + §3 status marks are stale after T9 — **DONE 2026-09-02** (owner-directed, scoped to `SCREEN_INVENTORY.md` only — C1.1)
 Logged by T9 (C1.1), not done — a docs pass, and T9's declared outputs are code + preview only (C1.11),

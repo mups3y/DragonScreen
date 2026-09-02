@@ -420,7 +420,7 @@ public static class PreviewMain
             foreach (UiPage up in new[] { UiPage.Cover, UiPage.Menu, UiPage.PhaseDeport, UiPage.Hud, UiPage.SuitCheck, UiPage.Vehicle, UiPage.VehicleMech, UiPage.Cabin, UiPage.AudioVideo, UiPage.VrioTest,
                                           UiPage.VehicleCrew, UiPage.VehiclePropulsion, UiPage.VehiclePower, UiPage.VehicleAvionics, UiPage.VehicleGnc, UiPage.VehicleThermal,
                                           UiPage.ManualChute, UiPage.Docking, UiPage.Rendezvous, UiPage.DeorbitBurnPrep, UiPage.EntryProcedure,
-                                          UiPage.SystemsTree, UiPage.SystemsPid, UiPage.Ascent })
+                                          UiPage.SystemsTree, UiPage.SystemsPid, UiPage.Ascent, UiPage.NavOrbitPlot })
             {
                 DisplayList udl = new DisplayList(600);
                 FigmaUI.Build(udl, up, CW, CH, ps, MapProjection.Default());
@@ -467,6 +467,14 @@ public static class PreviewMain
                 path = Path.Combine(outDir, "ui_rendezvous_notarget.png");
                 Render(rdl, CW, CH, path);
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + rdl.Count + " commands");
+
+                // S15's nav/orbit plot shares the SAME chord + reads the SAME RateText/RangeText, so the
+                // same switch-off proves its readout dashes and the chord vanishes here too.
+                DisplayList ndl = new DisplayList(600);
+                FigmaUI.Build(ndl, UiPage.NavOrbitPlot, CW, CH, ps, MapProjection.Default());
+                path = Path.Combine(outDir, "ui_navorbitplot_notarget.png");
+                Render(ndl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + ndl.Count + " commands");
                 ps.HasTarget = savedTarget; ps.HasTargetOrbit = savedOrbit;
             }
             {
