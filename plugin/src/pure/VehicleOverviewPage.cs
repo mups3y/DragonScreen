@@ -23,8 +23,8 @@
 // eight gauges read the simulated-from-real cabin model (pure/CabinEnvironment.cs); the CONSUMABLES
 // column reads the vessel's real charge, its real bus state and its real propellant mass (VesselData.
 // VehicleSources). §6 scopes this to the VALUES: the reference COPY — the seven checklist rows and their
-// state words, CONNECTIONS, CABIN MICS, and the reference's own duplicate `LOOP A` label (Overview.vue
-// 222 + 272; see S20) — is untouched, and so is the layout.
+// state words, CONNECTIONS, CABIN MICS — is untouched, and so is the layout. The second coolant gauge's
+// label is the one exception: see S20 below.
 //
 // WHAT STAYS DASHED, AND WHY: the four "Orbit n Subtank" rows and MARGIN. The real vehicle splits its
 // propellant across a deorbit tank and two orbit subtanks; KSP has no such split, and deciding which
@@ -118,14 +118,16 @@ namespace DragonScreen
             Gauge(2520, 430, 175, F(s.Cabin.Co201),       Blue,   "CO2",            T(s.Co2Text),       "mmHg");
 
             // ---- CENTRE: capsule + loop/power gauges ----
-            // ⚠ BOTH loop gauges are labelled "LOOP A" because the reference labels both that way
-            // (Overview.vue 222 + 272) — reproduced, not a typo here. The VALUES are the two distinct
-            // loops the model computes, which is what the second gauge always meant. See S20: whether to
-            // correct the second label to LOOP B is a label change on a real-sourced page, so it is the
-            // owner's call (C1.4), not this task's.
+            // ⚠ DIVERGENCE from the tier-2 source, 2026-09-02 (S20, owner decision via the overseer):
+            // Overview.vue labels BOTH coolant gauges "LOOP A" (lines 222 + 272) — a recreation copy-paste
+            // error, not a deliberate reference choice. The real Dragon has two coolant loops, A and B
+            // (tier-1 fact); our model computes two distinct loops (Cabin.LoopAC / LoopBC) and the second
+            // gauge is wired to Loop B's live value (T13a) — so reproducing "LOOP A" on both would show two
+            // different temperatures under one label. docs/REFERENCE_PAGES.md already documents this pair
+            // as LOOP A / LOOP B. Owner's call (C1.4): label the second gauge "LOOP B".
             dl.Asset("dragon_crew", PX(1560), PY(760), 520 * sx, 760 * sy, White);
             Gauge(1230, 900,  120, F(s.Cabin.LoopA01), Blue, "LOOP A", T(s.LoopAText), "°C");
-            Gauge(1230, 1200, 120, F(s.Cabin.LoopB01), Blue, "LOOP A", T(s.LoopBText), "°C");
+            Gauge(1230, 1200, 120, F(s.Cabin.LoopB01), Blue, "LOOP B", T(s.LoopBText), "°C");
             // Net power is SIGNED — the sign lives in the printed number, the ring shows how hard the
             // bus is working either way, against the same full scale the model states.
             Gauge(2410, 900,  120, F(NetPwr01(s.Cabin.NetPwr1W)), Accent, "NET PWR1", T(s.NetPwr1Text), "W");

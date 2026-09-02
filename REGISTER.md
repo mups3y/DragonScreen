@@ -1378,7 +1378,7 @@ holds, not a deliberate deviation. **Fix:** change the two strings to match the 
 `ui_vehicle.png` and check nothing reflows. Tier-2 source (a recreation), quoted verbatim as the page's
 header says it is — no owner call needed, it is a straight correction to the stated source.
 
-### S20 [owner call] The reference labels BOTH coolant gauges `LOOP A` — **TODO** — [TIER 3: owner decision pending]
+### S20 [owner call] The reference labels BOTH coolant gauges `LOOP A` — **DONE 2026-09-02** (resolved to (b): label the second gauge `LOOP B`)
 Also found by T13a. `VehicleOverviewPage` draws two coolant gauges and labels them both `LOOP A`, which is
 **faithful**: `Overview.vue` lines 222 and 272 both say `LOOP A`, and `docs/UI_AUDIT.md`'s label list carries
 `LOOP A` once. But two of our own docs (`docs/REFERENCE_PAGES.md` lines 75 and 156) document the pair as
@@ -1388,6 +1388,22 @@ The choice is between reproducing a reference bug and correcting it. **Options:*
 (reference-faithful, reads as a contradiction on the glass); (b) label the second `LOOP B` (matches
 REFERENCE_PAGES, our model and the value actually drawn; deviates from the tier-2 source). **This is a label
 change against a real-sourced page, so it is the owner's (C1.4) — a build chat does not decide it.**
+
+**Decision (owner, via the overseer, 2026-09-02) = (b).** Rationale on record: the real Dragon has two
+coolant loops A and B (tier-1), our model draws two distinct loops (`Cabin.LoopAC` / `LoopBC`) and T13a
+wired the second gauge to Loop B's live value, and `Overview.vue`'s `LOOP A`/`LOOP A` is a recreation
+copy-paste error (tier-2), not a deliberate reference choice — leaving it shows two different temperatures
+under one label.
+
+**DONE 2026-09-02.** `plugin/src/pure/VehicleOverviewPage.cs`'s second coolant `Gauge` call: label
+`"LOOP A"` → **`"LOOP B"`** (the value/fraction args, `s.Cabin.LoopB01` / `s.LoopBText`, were already
+correct since T13a — only the label string changes). A dated divergence note replaces the old "reproduced,
+not a typo" comment at the call site, and the page header's own summary of what T13a left untouched is
+updated to point at S20 instead of asserting the duplicate label is untouched. **Verify (C1.3):**
+`python plugin/build.py test` green (11003 checks across all suites, 0 failed, no new warnings);
+`ui_vehicle.png` re-rendered and inspected — gauges now read `LOOP A 26.4°C` / `LOOP B 20.1°C`, nothing else
+reflowed. No other page/test hard-codes a duplicate `LOOP A` (`SystemsPidPage`, `VehicleSubsystemPage`,
+`SettingsPage`, `Pages.cs` already used `LOOP A`/`LOOP B` correctly), so no other site needed a change.
 
 ### S21 [S] A zero-byte file named `=` is tracked in `plugin/src/` — **TODO** — [TIER 2: pre-Part-B hygiene]
 Noticed by T13a while listing the glue sources. `plugin/src/=` is 0 bytes, dated 2026-08-10, and is tracked
