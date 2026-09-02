@@ -95,22 +95,26 @@ namespace DragonScreen
             dl.Rect(0, 0, w, h, Bg);
             C("VEHICLE OVERVIEW", 1713, 40, 46, White);
 
-            // ---- LEFT: systems checklist ----
-            for (int i = 0; i < ChkLabel.Length; i++)
-            {
-                float y = 300 + i * 200;
-                Rgba sc = ChkKey[i] == 1 ? Go : ChkKey[i] == 2 ? Amber : White;
-                dl.Asset("ic_check", PX(90), PY(y), SZ(38), SZ(38), sc);
-                L(ChkLabel[i], 150, y + 4, 28, White);
-                L(ChkState[i], 150, y + 48, 26, sc);
-            }
-
             // ---- CENTRE-TOP: four cabin gauges (LIVE — pure/CabinEnvironment.cs) ----
             // Value and ring come from the same CabinReadout, so the needle can never disagree with the
             // number printed inside it. No feed -> a dash and an empty ring, never a confident zero.
             bool valid = s.Valid;
             float F(double frac) => valid ? (float)frac : 0f;
             string T(string live) => (valid && !string.IsNullOrEmpty(live)) ? live : Dash;
+
+            // ---- LEFT: systems checklist ----
+            // S22: these seven states are reference COPY, not live data (§6 scoped T13 to the numeric
+            // VALUES) — but a dead feed must not leave a confident green "Normal" beside dashed gauges,
+            // so the whole row (icon + state word) dashes-and-dims exactly like the CONSUMABLES table's
+            // no-source rows and every other dash on this page. The label stays put.
+            for (int i = 0; i < ChkLabel.Length; i++)
+            {
+                float y = 300 + i * 200;
+                Rgba sc = !valid ? Dim : ChkKey[i] == 1 ? Go : ChkKey[i] == 2 ? Amber : White;
+                dl.Asset("ic_check", PX(90), PY(y), SZ(38), SZ(38), sc);
+                L(ChkLabel[i], 150, y + 4, 28, White);
+                L(T(ChkState[i]), 150, y + 48, 26, sc);
+            }
 
             Gauge(1170, 430, 175, F(s.Cabin.Ppo201),      Gold,   "PPO2",           T(s.Ppo2Text),      "psia");
             Gauge(1620, 430, 175, F(s.Cabin.CabinTemp01), Red,    "CABIN TEMP",     T(s.CabinTempText), "°C");
@@ -134,14 +138,18 @@ namespace DragonScreen
             Gauge(2410, 1200, 120, F(NetPwr01(s.Cabin.NetPwr2W)), Accent, "NET PWR2", T(s.NetPwr2Text), "W");
 
             // ---- CONNECTIONS (left of the capsule base) ----
+            // S22: "Connected" / "RECORDING" are reference COPY too, same as the checklist above — dash
+            // and dim them on a dead feed rather than let a confident green/red word sit beside dashed
+            // gauges. The row labels and the CONNECTIONS/CABIN MICS section labels are untouched.
             L("CONNECTIONS", 1130, 1440, 26, Accent);
             string[] cn = { "Manual Rings", "Changelog", "Airlock", "Wing" };
             for (int i = 0; i < 4; i++)
             {
                 L(cn[i], 1130, 1500 + i * 56, 24, White);
-                L("Connected", 1400, 1500 + i * 56, 24, Go);
+                L(T("Connected"), 1400, 1500 + i * 56, 24, valid ? Go : Dim);
             }
-            L("CABIN MICS:", 1130, 1748, 26, White); dl.Text("RECORDING", PX(1290), PY(1748), SZ(26), TextAlign.Left, Red);
+            L("CABIN MICS:", 1130, 1748, 26, White);
+            dl.Text(T("RECORDING"), PX(1290), PY(1748), SZ(26), TextAlign.Left, valid ? Red : Dim);
 
             // ---- RIGHT: CONSUMABLES table (T5) ----
             L("CONSUMABLE", 2760, 300, 24, Accent);

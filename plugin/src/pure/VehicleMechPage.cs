@@ -120,8 +120,11 @@ namespace DragonScreen
                 L(SeatLabel[i], ccx - 220, ccy - 120 + i * 80, 26, White);
                 R(Dash, ccx + 220, ccy - 120 + i * 80, 26, Dim);
             }
+            // S22: "Awaiting" is reference COPY, not a live reading — dash-and-dim it on a dead feed,
+            // same rule as VehicleOverviewPage's checklist, so the two pages can't disagree. The
+            // "ALL SYSTEMS CHECK" label itself is untouched.
             C("ALL SYSTEMS CHECK", ccx, ccy + 250, 24, Dim);
-            C("Awaiting", ccx, ccy + 290, 26, Amber);
+            C(s.Valid ? "Awaiting" : Dash, ccx, ccy + 290, 26, s.Valid ? Amber : Dim);
 
             // outer donut nodes
             for (int i = 0; i < NodeLabel.Length; i++)
