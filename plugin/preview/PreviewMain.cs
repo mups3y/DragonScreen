@@ -350,7 +350,7 @@ public static class PreviewMain
             foreach (UiPage up in new[] { UiPage.Cover, UiPage.Menu, UiPage.PhaseDeport, UiPage.Hud, UiPage.SuitCheck, UiPage.Vehicle, UiPage.VehicleMech, UiPage.Cabin, UiPage.AudioVideo, UiPage.VrioTest,
                                           UiPage.VehicleCrew, UiPage.VehiclePropulsion, UiPage.VehiclePower, UiPage.VehicleAvionics, UiPage.VehicleGnc, UiPage.VehicleThermal,
                                           UiPage.ManualChute, UiPage.Docking, UiPage.Rendezvous, UiPage.DeorbitBurnPrep, UiPage.EntryProcedure,
-                                          UiPage.SystemsTree, UiPage.SystemsPid })
+                                          UiPage.SystemsTree, UiPage.SystemsPid, UiPage.Ascent })
             {
                 DisplayList udl = new DisplayList(600);
                 FigmaUI.Build(udl, up, CW, CH, ps, MapProjection.Default());

@@ -41,6 +41,7 @@ public static class FigmaUINavTest
         EntryProcedure();
         SystemsDeepViews();
         PropSchematicDuty();
+        Ascent();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
     }
@@ -292,6 +293,26 @@ public static class FigmaUINavTest
         for (int q = 0; q < 4; q++) if (PropSchematic.ThrusterDuty(s, q, 2) > 0f) lit++;
         Check("prop schematic: a lateral demand lights some pods, not all", lit > 0 && lit < 4,
               "lit " + lit);
+    }
+
+    static void Ascent()
+    {
+        // T12: same reachability footing as DeorbitBurnPrep (T7) / EntryProcedure (T8) - reached only
+        // via the Menu grid for now (a real entry point is T14's job), carries the bottom bar, and its
+        // reconstructed content (the F9 schematic + event callouts) is display-only.
+        float sc = (float)H / RefH;
+        float bcx = (46f + 40f) / RefW * W, bcy = (2003f + 40f) * sc;
+        Check("Ascent bottom-bar -> Cover",
+              FigmaUI.HitTest(UiPage.Ascent, bcx, bcy, W, H).Target == UiPage.Cover, "");
+
+        bool sawIt = false;
+        for (int i = 0; i < MenuPage.Entries.Length; i++)
+            if (MenuPage.Entries[i] == UiPage.Ascent) sawIt = true;
+        Check("Menu lists Ascent", sawIt, "");
+
+        NavHit body = FigmaUI.HitTest(UiPage.Ascent, 0.5f * W, 0.4f * H, W, H);
+        Check("Ascent body is inert", body.Act == NavAct.None, "got " + body.Act);
+        Check("Ascent is a real page, not a placeholder", !FigmaUI.IsPlaceholder(UiPage.Ascent), "");
     }
 
     static void SpeccedPages()

@@ -624,8 +624,39 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
 - **DONE when:** ~~the drag is plumbed and confirmed on glass~~ → **the drag is plumbed** (met above).
   Confirming how it FEELS in the capsule is **S17's**, not this line's.
 
-### T12 [S] Ascent/Launch page — **TODO**
+### T12 [S] Ascent/Launch page — **DONE**
 - **Read:** §8 + §3.  **Build:** F9 schematic + event list.  **DONE when:** preview.
+- **DONE 2026-09-02.** SCREEN_INVENTORY.md #14 / §3 row "Ascent / Launch" built as a new standalone page,
+  `UiPage.Ascent` (`plugin/src/pure/AscentPage.cs`) — the one screen with **no public in-cabin frame at
+  all** (confirmed absent, not just unfound), so §3 marks it "DATA-BUILDABLE, layout reconstructed +
+  MARKED", one step past DeorbitBurnPrep (T7) / EntryProcedure (T8): those had a blurry/partial photo to
+  anchor a layout guess against; this has none, so the whole page CHROME is ours, not just the spacing.
+  **Real, from §8's mission-timeline pass (tier-1):** all 11 T+ events transcribed verbatim — Liftoff ·
+  Pitch kick ~0:10 · Max-Q ~1:00 · Mach 1 ~1:09 · Stage-1b abort mode ~1:14 · MECO ~2:30–2:35 · stage sep
+  ~2:35–2:39 · S2 ignition ~2:36–2:47 · SECO-1/orbit insertion ~4:20–8:43 · Dragon separation ~9:00–12:02 ·
+  nose-cone open ~12:48–13:23. **Real, public Falcon 9 facts** (well-documented by SpaceX, not
+  Dragon-interior-specific, same footing as PropSchematic's "16 Dracos in 4 quads" — no owner discussion
+  needed): 9 Merlin 1D on stage 1, 1 Merlin Vacuum on stage 2. **"ACTIVE PHASE" is live, not decoration:**
+  it reads `PageState.Phase`, the SAME field `DockingPage`/`DockingPageCentral` already display (threaded
+  live by `VesselData.cs` from `Mission.Classify`) — reused, not new wiring (T13 still does that job),
+  the same discipline T6/T7/T9 followed reusing their own live signals.
+  **Ours, stated in the code:** the F9 + Dragon line-art profile (nose/capsule/trunk/interstage/stage
+  proportions, grid-fin/leg/engine marks) and where each real event is called out against it — there is no
+  photo to measure a layout from, so placement is a narrative ordering (ground → orbit reads bottom → top,
+  matching the physical stack) rather than a scaled timeline or altitude plot.
+  **Reachability:** Menu grid only for now (auto-discovered via `FigmaUI.IsPlaceholder`, 23 → 24 real
+  cards, well inside the existing 3×10 grid capacity) plus the universal bottom bar (parents to Cover, same
+  footing as DeorbitBurnPrep/EntryProcedure); a real phase-rail entry point is **T14**'s job.
+  **Nav test:** new `FigmaUINavTest.Ascent()` — bottom bar → Cover, Menu lists it, body inert, confirmed a
+  real page not a placeholder. `python plugin/build.py test`: green, Figma UI nav suite 256 → **263**
+  checks, 0 failed. **Preview:** `ui_ascent.png` inspected — title, live "ACTIVE PHASE — ORBITING" line,
+  the F9/Dragon stack (nose cone, capsule/trunk with ribs, payload/core step, interstage, grid fins,
+  landing legs, engine ticks) with all 11 real event callouts legible and non-overlapping, no
+  `DisplayList` overflow (54 of 100 commands); `ui_menu.png` re-inspected — 24 cards including
+  "ASCENT / LAUNCH" as the new last card, still legible, no overlap. §1.4 respected throughout: every real
+  fact is sourced (§8, or the existing live `PageState.Phase`); the reconstructed layout is named as such
+  in the code header; no `PanelMap.cs` / label-doc edits. `plugin/build/csc.rsp` churn reverted before
+  commit (S11).
 
 ### T13 [O] Live-data wiring — **TODO**
 - **Read:** §6 + `VesselData.cs`.  **Build:** replace placeholder constants.  **DONE when:** values live in-sim.

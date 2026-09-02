@@ -62,7 +62,13 @@ namespace DragonScreen
         // confirmed-real from the clean designer mockup, so a ninth would be editing a real-sourced
         // label set (C1.4). Menu grid only for now; a real in-page entry point is T14's job, the same
         // footing as DeorbitBurnPrep and EntryProcedure. Appended (never renumbered).
-        SystemsTree = 31, SystemsPid = 32
+        SystemsTree = 31, SystemsPid = 32,
+        // Ascent / Launch (T12) - SCREEN_INVENTORY #14, the one screen with NO public in-cabin frame at
+        // all (confirmed absent, not just unfound) - "DATA-BUILDABLE, layout reconstructed + MARKED",
+        // one step past DeorbitBurnPrep/EntryProcedure (those had a blurry/partial photo; this has none,
+        // so the whole page chrome is ours, not just the spacing). Menu grid only for now; a real entry
+        // point is T14's job, same footing as the other reconstructed pages. Appended (never renumbered).
+        Ascent = 33
     }
 
     public enum NavAct { None, Goto, Back, Forward }
@@ -85,7 +91,7 @@ namespace DragonScreen
         /// overlay. The painter sizes its list to the max of this and the old model.</summary>
         public const int Commands = 360;
 
-        public const int PageCount = 33;
+        public const int PageCount = 34;
 
         const float RefW = 3427f, RefH = 2112f;
 
@@ -127,7 +133,7 @@ namespace DragonScreen
             "VEHICLE — CREW", "VEHICLE — PROP", "VEHICLE — POWER",
             "VEHICLE — AVIONICS", "VEHICLE — GNC", "VEHICLE — THERMAL",
             "MANUAL CHUTE DEPLOY", "MANUAL DOCKING", "RENDEZVOUS", "DEORBIT BURN PREP", "ENTRY",
-            "SYSTEMS TREE", "SYSTEMS P&ID"
+            "SYSTEMS TREE", "SYSTEMS P&ID", "ASCENT / LAUNCH"
         };
 
         public static string Name(UiPage p)
@@ -188,6 +194,7 @@ namespace DragonScreen
                 case UiPage.EntryProcedure:    EntryPage.Build(dl, w, h); break;
                 case UiPage.SystemsTree:       SystemsTreePage.Build(dl, w, h, s); break;
                 case UiPage.SystemsPid:        SystemsPidPage.Build(dl, w, h, s); break;
+                case UiPage.Ascent:            AscentPage.Build(dl, w, h, s); break;
                 default:               PlaceholderPage.Build(dl, w, h, Name(page)); break;
             }
             BottomBarMarker(dl, w, h, page);
@@ -210,7 +217,7 @@ namespace DragonScreen
                 case UiPage.VehicleAvionics: case UiPage.VehicleGnc: case UiPage.VehicleThermal:
                 case UiPage.ManualChute: case UiPage.Docking: case UiPage.Rendezvous:
                 case UiPage.DeorbitBurnPrep: case UiPage.EntryProcedure:
-                case UiPage.SystemsTree: case UiPage.SystemsPid:
+                case UiPage.SystemsTree: case UiPage.SystemsPid: case UiPage.Ascent:
                     return false;
                 default:
                     return true;
