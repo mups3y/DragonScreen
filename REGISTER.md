@@ -1076,11 +1076,35 @@ vehicle STATE CAUTION, during an entirely nominal ascent. Dragon's own return pr
 Fix direction: suppress the low-prop alarm while the lit stage is an ascent stage, or alarm on the return
 budget. **DONE when:** a nominal late-ascent state does not raise CAUTION, with a test.
 
-### S6 [S] Both NET PWR dials read exactly 0 W — **TODO / NEEDS-VERIFY** — [TIER 1: pre-Part-B correctness bug]
-From the same audit (U3). VEHICLE OVERVIEW showed `NET PWR 1` and `NET PWR 2` both at exactly `0 W`, while the
-comment at `Pages.cs:974` expects them negative on battery (e.g. −59 W). Exactly zero on both buses reads as
-unpopulated. Verify against `pure/CabinEnvironment.cs` — is the model producing a value in that state?
-**DONE when:** the dials show a modelled value, or it is confirmed correct and the comment is fixed.
+### S6 [S] Both NET PWR dials read exactly 0 W — **DONE**
+- **Verified against `pure/CabinEnvironment.cs`: the model is correct, the bug was in the glue.**
+  `Cabin.Compute` turns `CabinInputs.PowerFlow` into signed watts with a plain `* 120.0` scale + 0.55/0.45
+  split (`CabinEnvironment.cs:183-185`) — given a nonzero `PowerFlow` it produces exactly the negative
+  reading the `Pages.cs` comment names: the preview's own fixture (`PreviewMain.cs:183`,
+  `pci.PowerFlow = -0.9`) renders NET PWR1 **−59 W** / NET PWR2 **−49 W**, bit-for-bit the comment's example.
+  So the model was never the problem, and the `Pages.cs` comment was not stale — it correctly describes
+  what the model does whenever it is fed a nonzero flow.
+- **Root cause, in `VesselData.cs` (glue):** the flow derivative clocked itself off
+  `Time.realtimeSinceStartup` — wall-clock time, which keeps advancing while KSP is paused.
+  `ScreenPainter.OnPostRender` (which drives `VesselData.Refresh()`) keeps firing every paused frame too
+  (the IVA cameras don't stop rendering on pause), so during any pause — exactly what a deliberate
+  "screenshot every button" tour does — `ElectricCharge` was frozen (`amt` unchanged) while the wall-clock
+  denominator kept growing, so `(amt - lastCharge) / (now - lastChargeAt)` evaluated to **exactly** 0.0
+  every paused frame. Both dials read exactly 0 W together because they are the same underlying
+  `PowerFlow` split 55/45 — consistent with a bit-exact-zero upstream value, not independent rounding.
+- **Fix:** clock the derivative off `v.missionTime` (simulation time — frozen while paused, already read
+  elsewhere in the same method) instead of `Time.realtimeSinceStartup`. While paused, `now` no longer
+  advances past `lastChargeAt`, so the existing `now > lastChargeAt` guard now does what it always meant
+  to: hold the last real reading instead of overwriting it with a pause artifact.
+  `plugin/src/VesselData.cs:20-22,144-153` (glue only — `pure/CabinEnvironment.cs` untouched).
+- Glue-only change; the preview path feeds `CabinInputs.PowerFlow` from a hardcoded fixture and never
+  exercises this real-time derivative, so `ui_vehicle.png` is unaffected by design — re-rendered anyway to
+  confirm: NET PWR1/2 still **−59 W / −49 W**, unchanged.
+- `python plugin/build.py test`: **green, ALL SCREEN SUITES PASSED**. No headless test added — the bug and
+  fix live entirely in KSP-facing glue (`Vessel.missionTime`, `OnPostRender` pause behaviour), which the
+  headless harness has no vessel to exercise; verified by code inspection + the preview fixture cross-check
+  above instead.
+- **DONE when** met: the dials show a modelled value once wired correctly (fixed), not a stale-comment case.
 
 ### S7 [S] `index_assets.py` does not recurse into `art/cover/` — **TODO** — [TIER 2: pre-Part-B hygiene]
 `plugin/build/index_assets.py` globs the shipped-art directory with a non-recursive `'*'`, so `ASSET_INDEX.md`
@@ -1432,7 +1456,7 @@ Noticed by T13a while listing the glue sources. `plugin/src/=` is 0 bytes, dated
 not referenced by `plugin/build.py`, compiles to nothing, and only clutters the source listing. **Fix:**
 `git rm plugin/src/=` and confirm `build.py test` is still green. Trivial, but not T13's to do (C1.1).
 
-### S22 [S] The reference's static status words read confidently on a dead feed — **TODO** — [TIER 1: pre-Part-B correctness bug]
+### S22 [S] The reference's static status words read confidently on a dead feed — **DONE 2026-09-02**
 Logged by T13a, deliberately not done (§6 scopes T13 to the numeric VALUES, and this is reference COPY —
 changing it is a different kind of edit). Now that every NUMBER on the vehicle pages dashes when
 `PageState.Valid` is false, the words beside them are the only things left claiming to know something:
@@ -1444,6 +1468,25 @@ every gauge dashes, and a green "Normal" sits next to them. That is the failure 
 one rule for the whole category and apply it in one pass — most likely dash-and-dim every static status
 word when the feed is invalid, leaving the label. Cheap; it is grouped here rather than split across pages
 so the pages cannot end up disagreeing.
+
+**DONE 2026-09-02.** One rule, applied in one pass to every static status word named above: on
+`!PageState.Valid` the word becomes the same no-source dash (`"—"`) the numbers already use, coloured
+`Dim` (`DragonPalette.Text6`) — the exact colour the codebase already uses for a dash everywhere else
+(the CONSUMABLES table, `VehicleMechPage`'s own SEAT TACH rows and donut nodes). The LABEL beside each
+word is untouched. `VehicleOverviewPage.cs`: the seven checklist rows' state word AND their `ic_check`
+icon now dim together (the icon carries the same Go/Amber/White status the word does, so leaving it
+lit while the word dashed would be its own version of the same lie); `CONNECTIONS`'s four `Connected`
+rows and `CABIN MICS: RECORDING` dash the same way, reusing the page's own `T()` no-source helper
+(hoisted above the checklist loop so it's in scope there too) rather than a second implementation.
+`VehicleMechPage.cs`: `Awaiting` dashes/dims the same way; `ALL SYSTEMS CHECK` (already `Dim` as a
+label) is untouched. Nothing here touches a live-wired row — `SystemsTreePage`/`VehicleSubsystemPage`'s
+own Go/Amber/neutral checklist logic (S25) is a different, already-live category and was not touched.
+**Verify (C1.3):** `python plugin/build.py test` green (same suite set, 0 failed, no new warnings).
+Preview: `ui_vehicle_nofeed.png` and `ui_vehiclemech_nofeed.png` re-rendered and inspected — every
+checklist icon+word, `CONNECTIONS` row and `CABIN MICS` now reads a dim `—` beside the dashed gauges,
+no stale green/amber/red word remains; `ui_vehicle.png` and `ui_vehiclemech.png` (live feed) re-rendered
+and inspected — `Normal`/`Applied`/`Awaiting`, `Connected` and `RECORDING` still read in their original
+colours, confirming the dash-and-dim path only engages on `!Valid`.
 
 ### S23 [owner call] `BATTERIES ×4` names four batteries; the live count beneath it says otherwise — **DONE 2026-09-02** (resolved to (b): drop the `×4`, on both the systems tree and the Power subsystem page)
 Also T13a. The systems-tree battery node keeps the label `BATTERIES ×4` — the REAL Crew Dragon's own
@@ -1705,3 +1748,27 @@ C1.1). The file's header says the command buttons "are no-ops that honestly refu
 one file still telling a reader the panel has a colour it does not have, and it is the file every new
 command surface reads first (T14 read it). **Fix:** three comment edits, no code. **DONE when:** the stub
 describes click-no-light-no-action, and `build.py test` is still green.
+
+### S31 [S] `SuitCheckPage`'s four SUIT n STATUS rows still read a confident "Nominal" — not covered by S22 — **TODO** — [TIER 1: pre-Part-B correctness bug]
+Noticed by **S22** while fixing the static-status-word category on the vehicle pages (not fixed here — C1.1,
+different file, different page). `SuitCheckPage.cs`'s own header (line 20) and its `Row` call (line 127,
+`Row(5 + i, Suit[i] + " STATUS", "Nominal", "ic_check", Go, Go)`) both cite S22 as the reason the four
+SUIT n STATUS words are reproduced as static reference copy — but they are drawn unconditionally, green,
+every time, and S22's fix never touched this file. The reason is structural, not an oversight in S22's
+pass: `SuitCheckPage.Build` (line 56) takes `(DisplayList dl, int w, int h, int countdown, bool showPopup)`
+— no `PageState`, no `s.Valid` — so there is no feed-validity signal on this page for a dash-and-dim rule
+to key off of at all; S22's fix (dash-and-dim on `!PageState.Valid`) has nothing to attach to here. The
+four SUIT n DELTA PRESSURE rows beside them already dash permanently (T13c: no suit is modelled, so there
+is no source ever, feed-valid or not) — STATUS sits right next to a permanent dash reading a permanent
+"Nominal", which is the same "screen confidently reading a state it cannot know" shape S22 just fixed
+elsewhere, just not feed-gated since this page has no feed concept. **Options for whoever takes this:**
+(a) leave it — this page's checklist rows are load-bearing UI, not telemetry, and the procedure countdown
+IS this page's real live state (already honestly wired); (b) since nothing models a suit at all (T13c),
+dash STATUS permanently too, the same way DELTA PRESSURE already does — consistent with "no source = dash"
+rather than "no source = a static green word"; (c) thread `PageState`/`Valid` into this page so STATUS can
+follow the same dash-and-dim rule as everywhere else, wiring in the vessel feed just to gate a checklist
+word this page didn't otherwise need. (b) looks like the smallest honest fix (matches the row right next
+to it, no new dependency) but (a)/(b) is a §1.4-adjacent call about what "reference COPY" means on a
+procedure page vs a telemetry page, so this is flagged rather than picked. Also correct the two stale
+"(S22)" comments (`SuitCheckPage.cs:20` and `:127`'s neighbourhood) once this is resolved — they now point
+at a task that does not cover this file.

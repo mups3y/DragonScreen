@@ -18,7 +18,7 @@ namespace DragonScreen
         private static string met = "T+ 00:00:00";
 
         private static double lastCharge = -1.0;
-        private static float lastChargeAt = -1f;
+        private static double lastChargeAt = -1.0;
         private static double powerFlow;
 
         // ---- GROUND TRACK ----
@@ -141,7 +141,14 @@ namespace DragonScreen
                 state.Power01 = (max > 0.0) ? amt / max : 0.0;
                 state.PowerText = Percent(state.Power01, max);
 
-                float now = Time.realtimeSinceStartup;
+                // S6: this used to clock itself off Time.realtimeSinceStartup (wall-clock, keeps
+                // ticking while KSP is paused). OnPostRender - and so Refresh() - fires every paused
+                // frame too, so a paused session kept recomputing (amt - lastCharge) / (real dt) with
+                // amt frozen and dt growing: an exact 0 W flow, every dial, every screenshot taken
+                // while paused. v.missionTime is simulation time - it does not advance while paused,
+                // so the guard below now holds the last REAL reading instead of overwriting it with a
+                // pause artifact.
+                double now = v.missionTime;
                 if (lastCharge >= 0.0 && now > lastChargeAt)
                     powerFlow = (amt - lastCharge) / (now - lastChargeAt);
                 lastCharge = amt;
