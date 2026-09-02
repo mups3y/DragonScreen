@@ -167,6 +167,70 @@ namespace DragonScreen
         /// counts, so a drained pack reads differently from a full one. Null before the glue fills it.</summary>
         public string BatteryText;
 
+        // ---- THE SIX SUBSYSTEM SUB-TABS' OWN SOURCES (T13b) ----
+        // Same rule as the T13a block above: a real (or simulated-from-real) source per datum, NULL
+        // where this build models no such thing, and the page draws a dash for a null rather than a
+        // plausible number being invented at either end (docs/TELEMETRY_REGISTRY.md).
+        //
+        // TWO FORMATS FOR ONE DATUM, WHERE THE TEMPLATE SHOWS IT TWICE. A headline GAUGE prints its
+        // unit on its own line under the number, so its text must be bare ("3.4"); a detail ROW prints
+        // one right-aligned string, so its text carries the unit ("3.4 kW"). Where the same quantity
+        // appears as both, there are two fields - formatted side by side in VesselData from the SAME
+        // value, so the two can never disagree.
+
+        /// <summary>CREW - O2 / N2 tank contents, percent. From the simulated stores in
+        /// pure/VehicleSystems.cs (SystemsState.Oxygen / .Nitrogen), which fall with real crew count,
+        /// real power and a real leak - the same signals the P&amp;ID page already draws.</summary>
+        public string O2TankText, N2TankText;
+        /// <summary>CREW - potable water: TAC-LS's own Water resource on OUR side of a dock, in litres,
+        /// and its fraction of capacity for the bar. Null when no life-support mod supplies it.</summary>
+        public string WaterText;
+        public double Water01;
+        /// <summary>CREW - the "Crew Aboard" bar. The text is <see cref="CrewText"/> ("3 / 4"); a bar
+        /// needs the fraction, which a formatted string cannot give back.</summary>
+        public double Crew01;
+
+        /// <summary>PROP - the Dragon's OWN tanks, the propellant the Dracos burn, as a fraction of
+        /// their capacity BY MASS, so these agree with the kilogram rows the overview prints from the
+        /// same tanks. NTO/MMH where RealFuels supplies them, stock Oxidizer / LiquidFuel+MonoPropellant
+        /// otherwise; null when the vehicle carries neither. Bare text: these are gauges.</summary>
+        public string DragonOxText, DragonFuelText;
+        public double DragonOx01, DragonFuel01;
+        /// <summary>PROP + GNC - both tanks together, by mass. The Dracos ARE the RCS, so the Prop page's
+        /// "Prop Remaining" row and the GNC page's "RCS FUEL" gauge are one number - hence one source and
+        /// the two formats (the row carries the unit, the gauge does not).</summary>
+        public string DragonPropText, PropRemainingText;
+        public double DragonProp01;
+        /// <summary>PROP - how hard the hardest-working Draco quad is being asked to fire, percent, from
+        /// the LIVE RCS demand (PropSchematic.MaxDuty over the same TransX/RotPitch the schematic draws).
+        /// Null with no feed.</summary>
+        public string DracoDutyText;
+
+        /// <summary>POWER - solar array output. Bare kW for the ARRAY gauge, kW-with-unit for the
+        /// "Array Output" row, and the fraction of the panels' own RATED output for the ring - a real
+        /// fraction, not a guessed full scale. Null when the vehicle has no deployable panel.</summary>
+        public string ArrayKwText, ArrayOutputText;
+        public double Array01;
+        /// <summary>POWER - net electrical flow, both buses together: the SAME quantity the overview's
+        /// two NET PWR dials split (pure/CabinEnvironment.cs states the watt scale), printed once in W
+        /// for the "Net Power" row and once in kW for "Charge Rate", which is what a charge rate is - a
+        /// negative one is a discharge.</summary>
+        public string NetPowerText, ChargeRateText;
+
+        /// <summary>THERMAL - the hottest structure on the vehicle in degrees C, which through an entry
+        /// IS the heat shield. Bare for the SHIELD gauge, with its unit for the "TPS Max" row. The ring
+        /// is <see cref="HullTemp01"/>: that part's temperature over its OWN maximum, so the gauge reads
+        /// margin-to-limit rather than a temperature against an invented scale.</summary>
+        public string HullTempText, TpsMaxText;
+        public double HullTemp01;
+
+        /// <summary>GNC - body rates, deg/s, off vessel.angularVelocity: the SAME read the docking page's
+        /// <see cref="RollRateText"/> trio prints, now published unconditionally (it used to be computed
+        /// inside the target-gated docking block, so with no target it was stale). Bare text for the three
+        /// rate gauges, raw for their rings, and the magnitude with its unit for the "Body Rate" row.</summary>
+        public double BodyRollDps, BodyPitchDps, BodyYawDps;
+        public string BodyRollText, BodyPitchText, BodyYawText, BodyRateText;
+
         /// <summary>Ascent autopilot: engaged, and which phase it is flying.</summary>
         public bool AutoEngaged;
         public string AutoPhase;

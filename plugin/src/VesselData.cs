@@ -152,7 +152,13 @@ namespace DragonScreen
                 CabinInputs ci = new CabinInputs();
                 ci.Crew = v.GetCrewCount();
                 ci.CrewCapacity = v.GetCrewCapacity();
-                ci.HullTempC = HullTempC(v);
+                double hullC = HullTempC(v);
+                ci.HullTempC = hullC;
+                // THERMAL tab (T13b). One reading, two formats: the SHIELD gauge puts its unit on its own
+                // line, the "TPS Max" row prints one string. Formatted side by side so they cannot drift.
+                string hullText = hullC.ToString("F0");
+                state.HullTempText = hullText;
+                state.TpsMaxText   = hullText + " °C";
                 ci.MissionTime = v.missionTime;
                 ci.Power01 = state.Power01;
                 ci.PowerFlow = powerFlow;
@@ -162,6 +168,10 @@ namespace DragonScreen
                 ci.HasLifeSupport = ls.Present;
                 ci.OxygenFrac = ls.Oxygen01;
                 ci.Co2Frac = ls.Co201;
+                // CREW tab (T13b): potable water is the life-support mod's own Water resource, in its own
+                // unit. No mod, or no water tank on this vehicle -> null, and the row draws a dash.
+                state.WaterText = ls.HasWater ? ls.WaterLitres.ToString("F0") + " L" : null;
+                state.Water01 = ls.Water01;
 
                 CabinReadout cb = Cabin.Compute(ci);
                 state.Cabin = cb;
@@ -174,9 +184,16 @@ namespace DragonScreen
                 state.NetPwr1Text   = cb.NetPwr1W.ToString("F0");
                 state.NetPwr2Text   = cb.NetPwr2W.ToString("F0");
                 state.CrewText      = ci.Crew + " / " + ci.CrewCapacity;
+                state.Crew01 = (ci.CrewCapacity > 0) ? (double)ci.Crew / ci.CrewCapacity : 0.0;
+                // The CREW tab's two gas-store rows. SIMULATED, from pure/VehicleSystems.cs, whose stores
+                // fall with the real crew count, the real power state and a real leak - the same signals
+                // the P&ID page draws. Set here because Steps() has just published state.Systems.
+                state.O2TankText = Pct(state.Systems.Oxygen);
+                state.N2TankText = Pct(state.Systems.Nitrogen);
                 Seats(v);
                 Pyro(v);
                 Acceleration(v);
+                Rates(v);
                 VehicleSources(v);
 
                 state.LightsOn = v.ActionGroups[KSPActionGroup.Light];
@@ -194,6 +211,12 @@ namespace DragonScreen
                 }
 
                 state.Valid = true;
+
+                // PROP tab (T13b): how hard the hardest-working Draco quad is being asked to fire. Read
+                // through PropSchematic.MaxDuty - the SAME function that lights the schematic's rings -
+                // so the number in the data band and the segments above it can never disagree. It reads
+                // the control demand and the RCS action group set just above, hence its position here.
+                state.DracoDutyText = Pct(PropSchematic.MaxDuty(state));
 
                 met = "T+ " + Clock(v.missionTime);
                 Docking(v, ref state);
@@ -289,6 +312,10 @@ namespace DragonScreen
             sy.Charge01 = state.Power01;
             sy.GForce = v.geeForce;
             sy.HottestPart01 = HottestPart(v);
+            // T13b: the THERMAL tab's SHIELD ring is that same hottest reading as a fraction of the
+            // part's OWN maximum - margin to limit, not a temperature against an invented full scale.
+            // Taken here because HottestPart walks every part and this is the one place it is called.
+            state.HullTemp01 = sy.HottestPart01;
             FlightCommands.Charge01 = state.Power01;
             Systems.Update(ref FlightCommands.State, sy);
             state.Systems = FlightCommands.State;
@@ -419,15 +446,10 @@ namespace DragonScreen
             st.ClosingFast = (range < 100.0 && rate < -2.0);
             st.RateText = rate.ToString("F2") + " m/s";
 
-            // Body angular RATES (deg/s) — the BLUE rate under each GREEN correction in the docking
-            // two-number scheme. Published here (rule T3: the docking page showed "—" because nothing
-            // upstream supplied them) from vessel.angularVelocity, axes pitch=x / roll=y / yaw=z, the
-            // same convention FlightLog/FlightRecorder use. Independent of the target, but the page only
-            // reads them when a target is present, so they ride in this block.
-            Vector3 avDps = v.angularVelocity * Mathf.Rad2Deg;
-            st.PitchRateText = DegRate(avDps.x);
-            st.RollRateText  = DegRate(avDps.y);
-            st.YawRateText   = DegRate(avDps.z);
+            // ⚠ The body angular RATES used to be computed here. They are NOT target-dependent, and the
+            // GNC subsystem tab needs them with no target at all - inside this block they were simply
+            // stale there (T13b). They now live in Rates(), which runs every refresh; this block keeps
+            // only what a target actually defines.
 
             Transform ct = v.ReferenceTransform;
             if (ct != null)
@@ -752,8 +774,10 @@ namespace DragonScreen
             state.PowerUnit2Text = energy;
 
             double fuel = 0.0, ox = 0.0;
+            double fuelMax = 0.0, oxMax = 0.0;
             bool anyFuel = false, anyOx = false;
             int panels = 0, extended = 0, cells = 0, liveCells = 0;
+            double arrayFlow = 0.0, arrayRated = 0.0;
 
             for (int i = 0; i < v.parts.Count; i++)
             {
@@ -771,10 +795,18 @@ namespace DragonScreen
                     if (r.resourceName == "ElectricCharge") { cell = true; if (r.amount > 0.0) liveCells++; continue; }
                     if (!dragon || r.info == null || r.info.density <= 0f) continue;
 
-                    // KSP densities are tonnes per unit, so this is tonnes until Kg() scales it.
-                    if (r.resourceName == "Oxidizer") { ox += r.amount * r.info.density; anyOx = true; }
-                    else if (r.resourceName == "LiquidFuel" || r.resourceName == "MonoPropellant")
-                    { fuel += r.amount * r.info.density; anyFuel = true; }
+                    // KSP densities are tonnes per unit, so these are tonnes until Kg() scales them.
+                    // ⛔ CAPACITY IS ACCUMULATED BESIDE THE CONTENTS, not derived from it: the PROP tab's
+                    // OX / FUEL gauges are the fraction of these same tanks BY MASS, so the percentage and
+                    // the kilogram row beside it are two views of one number rather than two claims.
+                    // NTO / MMH are here because that is what the real Dracos burn and what RealFuels
+                    // names them; the stock analogues stand in where RealFuels is not installed, exactly
+                    // as DockedSide.ReturnProps already falls back for the return-propellant fraction.
+                    if (r.resourceName == "Oxidizer" || r.resourceName == "NTO")
+                    { ox += r.amount * r.info.density; oxMax += r.maxAmount * r.info.density; anyOx = true; }
+                    else if (r.resourceName == "LiquidFuel" || r.resourceName == "MonoPropellant"
+                             || r.resourceName == "MMH")
+                    { fuel += r.amount * r.info.density; fuelMax += r.maxAmount * r.info.density; anyFuel = true; }
                 }
                 if (cell) cells++;
 
@@ -784,11 +816,38 @@ namespace DragonScreen
                     if (sp == null) continue;
                     panels++;
                     if (sp.deployState == ModuleDeployablePart.DeployState.EXTENDED) extended++;
+                    // POWER tab (T13b): what the array is MAKING, and what it could make. The ring is the
+                    // ratio of the two - a real fraction off the panels' own rating rather than a full
+                    // scale someone chose - and a shadowed or badly-pointed array reads low, correctly.
+                    arrayFlow += sp.flowRate;
+                    arrayRated += sp.chargeRate;
                 }
             }
 
             state.DeorbitFuelText = anyFuel ? Kg(fuel) : null;
             state.DeorbitOxText   = anyOx   ? Kg(ox)   : null;
+
+            // ---- PROP + GNC: the Dragon's own tanks as fractions (T13b) ----
+            // Bare text for the gauges, unit-carrying text for the row, one source for all of it. Both
+            // tanks together is what "Prop Remaining" and the GNC tab's "RCS FUEL" ask for: the Dracos
+            // ARE the RCS, so those two readouts are one number on two pages.
+            state.DragonOx01   = (oxMax   > 0.0) ? Clamp01(ox   / oxMax)   : 0.0;
+            state.DragonFuel01 = (fuelMax > 0.0) ? Clamp01(fuel / fuelMax) : 0.0;
+            double propMax = oxMax + fuelMax;
+            state.DragonProp01 = (propMax > 0.0) ? Clamp01((ox + fuel) / propMax) : 0.0;
+            state.DragonOxText   = (oxMax   > 0.0) ? Bare(state.DragonOx01)   : null;
+            state.DragonFuelText = (fuelMax > 0.0) ? Bare(state.DragonFuel01) : null;
+            state.DragonPropText    = (propMax > 0.0) ? Bare(state.DragonProp01) : null;
+            state.PropRemainingText = (propMax > 0.0) ? Pct(state.DragonProp01)  : null;
+
+            // ---- POWER: solar array output (T13b) ----
+            // KSP's electric charge has no defined wattage, so the SCALE is the one pure/CabinEnvironment.cs
+            // already states for the net-power dials (120 W per EC/s) - reused rather than a second scale
+            // invented here, so the two power numbers on this page are in the same currency.
+            state.Array01 = (arrayRated > 0.0) ? Clamp01(arrayFlow / arrayRated) : 0.0;
+            double arrayKw = arrayFlow * EcWatts / 1000.0;
+            state.ArrayKwText     = (panels > 0) ? arrayKw.ToString("F2") : null;
+            state.ArrayOutputText = (panels > 0) ? arrayKw.ToString("F2") + " kW" : null;
 
             // A body-mounted panel is a ModuleDeployableSolarPanel that is permanently EXTENDED, so it
             // reads DEPLOYED and that is correct - it is deployed, by construction.
@@ -797,6 +856,13 @@ namespace DragonScreen
                                  : (extended == 0) ? "STOWED"
                                  : extended + " / " + panels;
             state.BatteryText = (cells == 0) ? "NONE" : liveCells + " / " + cells;
+
+            // ---- POWER: net electrical flow, both buses (T13b) ----
+            // The SAME watts the overview's two NET PWR dials split. Signed: negative is draining, and
+            // "Charge Rate" is that same flow in kW, which is what a charge rate is.
+            double netW = state.Cabin.NetPwr1W + state.Cabin.NetPwr2W;
+            state.NetPowerText   = Signed(netW, 0, " W");
+            state.ChargeRateText = Signed(netW / 1000.0, 2, " kW");
         }
 
         /// <summary>A power unit's energy: the vessel's real state of charge, with its unit. Null when
@@ -807,10 +873,64 @@ namespace DragonScreen
             return state.PowerText + " %";
         }
 
+        /// <summary>W per unit of KSP electric charge per second. NOT a physical constant - KSP's charge
+        /// has no defined wattage - but the one pure/CabinEnvironment.cs already picked for the net-power
+        /// dials, reused here so two power readouts on one page cannot be in different currencies.</summary>
+        private const double EcWatts = 120.0;
+
+        /// <summary>A 0..1 fraction as a whole percent with NO unit - a headline gauge draws its unit on
+        /// its own line beneath the number, so appending one here prints it twice. T13b.</summary>
+        private static string Bare(double frac)
+        {
+            if (double.IsNaN(frac) || double.IsInfinity(frac)) return null;
+            return (frac * 100.0).ToString("F0");
+        }
+
+        /// <summary>A SIGNED reading with its unit. The sign is the whole point of a net-power or
+        /// charge-rate row - "68 W" and "-68 W" are opposite facts - so a positive one is written with
+        /// its plus rather than left to look like an unsigned quantity. T13b.</summary>
+        private static string Signed(double v, int dp, string unit)
+        {
+            if (double.IsNaN(v) || double.IsInfinity(v)) return null;
+            string s = v.ToString(dp == 0 ? "F0" : "F" + dp);
+            return ((v > 0.0) ? "+" : "") + s + unit;
+        }
+
+        /// <summary>A 0..1 fraction as a whole percent WITH its unit - the format the subsystem tabs'
+        /// detail rows print (one right-aligned string per row). T13b.</summary>
+        private static string Pct(double frac)
+        {
+            if (double.IsNaN(frac) || double.IsInfinity(frac)) return null;
+            return (frac * 100.0).ToString("F0") + " %";
+        }
+
         private static string Kg(double tonnes)
         {
             if (double.IsNaN(tonnes) || double.IsInfinity(tonnes)) return "-";
             return (tonnes * 1000.0).ToString("F1") + " kg";
+        }
+
+        /// ---- BODY RATES BELONG TO THE VEHICLE, NOT TO A TARGET ----
+        /// T13b. vessel.angularVelocity, axes pitch=x / roll=y / yaw=z - the same convention
+        /// FlightLog/FlightRecorder use. This used to sit inside Docking(), which returns early with no
+        /// target, so the GNC subsystem tab would have shown whatever the last docked approach left
+        /// behind. One read, three consumers, and the two FORMATS come off the same numbers: bare for a
+        /// gauge that prints its unit on its own line, with the unit for a row that prints one string.
+        private static void Rates(Vessel v)
+        {
+            Vector3 dps = v.angularVelocity * Mathf.Rad2Deg;
+            state.BodyPitchDps = dps.x;
+            state.BodyRollDps  = dps.y;
+            state.BodyYawDps   = dps.z;
+
+            state.PitchRateText = DegRate(dps.x);
+            state.RollRateText  = DegRate(dps.y);
+            state.YawRateText   = DegRate(dps.z);
+
+            state.BodyPitchText = dps.x.ToString("F2");
+            state.BodyRollText  = dps.y.ToString("F2");
+            state.BodyYawText   = dps.z.ToString("F2");
+            state.BodyRateText  = DegRate(dps.magnitude);
         }
 
         private static void Acceleration(Vessel v)

@@ -7,8 +7,14 @@
 // no Figma frame for these; the layout follows the confirmed real grammar (blue capsule line-art
 // surrounded by large numeric readouts — SCREEN_EVIDENCE_MATRIX) mapped onto the Vehicle Overview's
 // three-zone form: LEFT subsystem checklist · CENTRE capsule + four headline gauges · RIGHT detail
-// readouts · the shared subsystem tab bar. Values are representative, like the overview's; the real
-// vessel telemetry replaces them in a later pass.
+// readouts · the shared subsystem tab bar.
+//
+// T13b (live-data wiring, §6): the 54 values on these six tabs — 4 headline gauges + 5 detail readouts
+// each — were representative constants, like the overview's were before T13a. Every one of them now
+// comes from PageState or is an honest dash; see DefOf, which is where the whole wiring lives. Prop's
+// numbers travel unchanged into PropSchematic's bottom data band (they are passed through), so wiring
+// the source fixed both looks at once. AVIONICS is the one tab that dashes end to end, and that is the
+// correct answer rather than a gap — see the block above its own case.
 //
 // T5: DillonBaird's Vehicle render (+ alt-text, SCREEN_INVENTORY.md "IMAGERY HUNT 2026-09-01") confirms
 // a FUNCTIONS|ALERTS toggle bottom-left next to this subsystem tab bar, and that "the Subview Nav Bar …
@@ -48,6 +54,9 @@ namespace DragonScreen
         static readonly Rgba Red    = Rgba.Hex("D12C30");
         static readonly Rgba Yellow = Rgba.Hex("FCD533");
         static readonly Rgba Blue   = Rgba.Hex("2983ED");
+
+        /// <summary>No-source dash - the one idiom the whole mod uses for a value nothing can supply.</summary>
+        const string Dash = "—";
 
         // ---- one subsystem's content ----
         struct Sys
@@ -101,7 +110,7 @@ namespace DragonScreen
                 C(unit, cxd, cyd + rd * 0.30f, 24, Dim);
             }
 
-            Sys d = DefOf(sub);
+            Sys d = DefOf(sub, s);
 
             dl.Rect(0, 0, w, h, Bg);
             C(d.Title, 1713, 40, 46, White);
@@ -183,9 +192,21 @@ namespace DragonScreen
             dl.Asset("component_48", 0f, PY(1877), w, SZ(235), White);
         }
 
-        // ---- per-subsystem content. Representative values, as the reference demo's are. ----
-        static Sys DefOf(Sub sub)
+        // ---- per-subsystem content. T13b (live-data wiring, §6): every one of the 54 numbers here now
+        // comes from PageState, in the idiom SystemsPidPage (T9) and the VEHICLE family (T13a) already
+        // ship — `T(s.SomeText)`, with each gauge's fraction taken from the SAME source that produced
+        // the text, so a ring can never disagree with the number inside it. A quantity this build models
+        // nothing for is `Dash` with an empty ring: never a plausible constant, and never a confident
+        // zero (docs/TELEMETRY_REGISTRY.md; Pages.cs). Labels, units and the left checklist are the
+        // template's own COPY and are untouched — §6 scopes this to the VALUES.
+        static Sys DefOf(Sub sub, PageState st)
         {
+            bool valid = st.Valid;
+            // A live string, or the no-source dash. The same helper, by the same name, as the overview's.
+            string T(string live) => (valid && !string.IsNullOrEmpty(live)) ? live : Dash;
+            // A live fraction, or an empty ring: a dead feed must not leave a ring sitting where it was.
+            float F(double frac) => valid ? (float)frac : 0f;
+
             Sys s = new Sys();
             switch (sub)
             {
@@ -194,14 +215,18 @@ namespace DragonScreen
                     s.CkLabel = new[] { "CABIN ATMOSPHERE", "O2 SUPPLY", "CO2 SCRUBBER", "SUIT LOOP", "WATER SYSTEM", "SMOKE DETECT" };
                     s.CkState = new[] { "Nominal", "Nominal", "Active", "Standby", "Nominal", "Clear" };
                     s.CkKey   = new[] { 1, 1, 1, 0, 1, 1 };
+                    // The four cabin gauges are the overview's four, read off the same CabinReadout.
                     s.GLabel  = new[] { "PPO2", "CABIN TEMP", "CABIN PRESS", "CO2" };
-                    s.GVal    = new[] { "2.69", "22.4", "14.7", "1.05" };
+                    s.GVal    = new[] { T(st.Ppo2Text), T(st.CabinTempText), T(st.PressText), T(st.Co2Text) };
                     s.GUnit   = new[] { "psia", "°C", "psia", "mmHg" };
-                    s.GFrac   = new[] { 0.60f, 0.55f, 0.72f, 0.30f };
+                    s.GFrac   = new[] { F(st.Cabin.Ppo201), F(st.Cabin.CabinTemp01),
+                                        F(st.Cabin.Press01), F(st.Cabin.Co201) };
                     s.GCol    = new[] { Gold, Red, Yellow, Blue };
                     s.RLabel  = new[] { "Humidity", "O2 Tank", "N2 Tank", "Potable Water", "Crew Aboard" };
-                    s.RVal    = new[] { "44 %", "96 %", "88 %", "72 L", "4 / 4" };
-                    s.RFrac   = new[] { 0.44f, 0.96f, 0.88f, 0.60f, 1.00f };
+                    // Humidity: nothing in this build models cabin humidity, so it dashes.
+                    s.RVal    = new[] { Dash, T(st.O2TankText), T(st.N2TankText), T(st.WaterText), T(st.CrewText) };
+                    s.RFrac   = new[] { 0f, F(st.Systems.Oxygen), F(st.Systems.Nitrogen),
+                                        F(st.Water01), F(st.Crew01) };
                     break;
 
                 case Sub.Propulsion:
@@ -210,13 +235,18 @@ namespace DragonScreen
                     s.CkState = new[] { "16 / 16", "Armed", "Open", "Nominal", "Ready", "None" };
                     s.CkKey   = new[] { 1, 2, 1, 1, 1, 1 };
                     s.GLabel  = new[] { "OX (NTO)", "FUEL (MMH)", "HELIUM", "PROP TEMP" };
-                    s.GVal    = new[] { "84", "82", "310", "24.6" };
+                    // HELIUM pressurant and propellant temperature: no KSP resource and no model answers
+                    // either, and a bar pressure would be a number invented to fill the dial.
+                    s.GVal    = new[] { T(st.DragonOxText), T(st.DragonFuelText), Dash, Dash };
                     s.GUnit   = new[] { "%", "%", "bar", "°C" };
-                    s.GFrac   = new[] { 0.84f, 0.82f, 0.78f, 0.50f };
+                    s.GFrac   = new[] { F(st.DragonOx01), F(st.DragonFuel01), 0f, 0f };
                     s.GCol    = new[] { Gold, Gold, Blue, Red };
                     s.RLabel  = new[] { "Chamber Press", "Prop Remaining", "Draco Duty", "SuperDraco Temp", "Thrust Avail" };
-                    s.RVal    = new[] { "0 psia", "83 %", "0 %", "18 °C", "100 %" };
-                    s.RFrac   = new[] { 0.00f, 0.83f, 0.00f, 0.30f, 1.00f };
+                    // Chamber pressure, SuperDraco temperature and thrust availability have no source:
+                    // KSP models no per-engine chamber pressure and no pod temperature, and nothing here
+                    // tracks which of the sixteen Dracos would still answer a command.
+                    s.RVal    = new[] { Dash, T(st.PropRemainingText), T(st.DracoDutyText), Dash, Dash };
+                    s.RFrac   = new[] { 0f, F(st.DragonProp01), valid ? PropSchematic.MaxDuty(st) : 0f, 0f, 0f };
                     break;
 
                 case Sub.Power:
@@ -225,13 +255,20 @@ namespace DragonScreen
                     s.CkState = new[] { "Nominal", "Nominal", "4 / 4", "Deployed", "Nominal", "Off" };
                     s.CkKey   = new[] { 1, 1, 1, 1, 1, 0 };
                     s.GLabel  = new[] { "BATTERY SOC", "BUS A", "BUS B", "ARRAY" };
-                    s.GVal    = new[] { "100", "120", "120", "3.4" };
+                    // BUS A / BUS B are VOLTAGES. KSP's ElectricCharge has no voltage, and the two buses
+                    // this build does model are ON/OFF (pure/VehicleSystems.cs) — a different fact, and
+                    // one the systems tree already shows. 120 V here would assert a meter that is not there.
+                    s.GVal    = new[] { T(st.PowerText), Dash, Dash, T(st.ArrayKwText) };
                     s.GUnit   = new[] { "%", "V", "V", "kW" };
-                    s.GFrac   = new[] { 1.00f, 0.80f, 0.80f, 0.68f };
+                    s.GFrac   = new[] { F(st.Power01), 0f, 0f, F(st.Array01) };
                     s.GCol    = new[] { Accent, Accent, Accent, Yellow };
                     s.RLabel  = new[] { "Array Output", "Net Power", "Bus Load", "Battery Temp", "Charge Rate" };
-                    s.RVal    = new[] { "3.4 kW", "+68 W", "50 %", "19 °C", "0 kW" };
-                    s.RFrac   = new[] { 0.68f, 0.55f, 0.50f, 0.30f, 0.00f };
+                    // "Array Output" is the ARRAY gauge's own datum in the row's format, and "Charge Rate"
+                    // is "Net Power" in kW — the template shows each of those quantities twice, so both
+                    // readings come from ONE source rather than two that could drift apart. Bus load and
+                    // battery temperature have none: no per-bus load model, no battery thermal model.
+                    s.RVal    = new[] { T(st.ArrayOutputText), T(st.NetPowerText), Dash, Dash, T(st.ChargeRateText) };
+                    s.RFrac   = new[] { F(st.Array01), F(NetPwr01(st)), 0f, 0f, F(NetPwr01(st)) };
                     break;
 
                 case Sub.Avionics:
@@ -239,14 +276,22 @@ namespace DragonScreen
                     s.CkLabel = new[] { "FLIGHT COMP x3", "VRIO 1 / 2", "DATA BUS", "GPS", "S-BAND COMMS", "SW WATCHDOG" };
                     s.CkState = new[] { "3 / 3", "Nominal", "Nominal", "Lock", "Linked", "Armed" };
                     s.CkKey   = new[] { 1, 1, 1, 1, 1, 0 };
+                    // ---- EVERY VALUE ON THIS TAB DASHES, AND THAT IS THE ANSWER ----
+                    // The real vehicle's avionics — triple-redundant flight computers, the data bus, GPS,
+                    // S-band — are the one subsystem this build models NOTHING of: there is no computer
+                    // load, no bus traffic, no link budget, no storage and no GPS state anywhere in the
+                    // tree, and no KSP quantity stands in for them. Under docs/TELEMETRY_REGISTRY.md that
+                    // makes all nine a dash; the alternative is nine invented numbers that would look
+                    // exactly as convincing when the feed is dead. The tab's own live signal is its FDIR
+                    // severity, which colours the tab and fills the ALERTS view (see LiveSeverity).
                     s.GLabel  = new[] { "FC LOAD", "BUS TRAFFIC", "LINK MARGIN", "STORAGE" };
-                    s.GVal    = new[] { "38", "42", "8.4", "61" };
+                    s.GVal    = new[] { Dash, Dash, Dash, Dash };
                     s.GUnit   = new[] { "%", "%", "dB", "%" };
-                    s.GFrac   = new[] { 0.38f, 0.42f, 0.70f, 0.61f };
+                    s.GFrac   = new[] { 0f, 0f, 0f, 0f };
                     s.GCol    = new[] { Accent, Accent, Go, Blue };
                     s.RLabel  = new[] { "FC1 / 2 / 3", "GPS Sats", "Uplink", "Downlink", "Data Rate" };
-                    s.RVal    = new[] { "ONLINE", "11", "Strong", "Strong", "256 kbps" };
-                    s.RFrac   = new[] { 1.00f, 0.85f, 0.90f, 0.92f, 0.60f };
+                    s.RVal    = new[] { Dash, Dash, Dash, Dash, Dash };
+                    s.RFrac   = new[] { 0f, 0f, 0f, 0f, 0f };
                     break;
 
                 case Sub.Gnc:
@@ -255,13 +300,28 @@ namespace DragonScreen
                     s.CkState = new[] { "Nominal", "2 / 2", "Lock", "Enabled", "Valid", "Auto" };
                     s.CkKey   = new[] { 1, 1, 1, 1, 1, 0 };
                     s.GLabel  = new[] { "ROLL RATE", "PITCH RATE", "YAW RATE", "RCS FUEL" };
-                    s.GVal    = new[] { "0.02", "0.01", "0.03", "83" };
+                    // The Dracos ARE the RCS, so "RCS FUEL" is the propulsion tab's own tank fraction —
+                    // one datum, one source, two pages.
+                    s.GVal    = new[] { T(st.BodyRollText), T(st.BodyPitchText), T(st.BodyYawText),
+                                        T(st.DragonPropText) };
                     s.GUnit   = new[] { "°/s", "°/s", "°/s", "%" };
-                    s.GFrac   = new[] { 0.10f, 0.08f, 0.12f, 0.83f };
+                    s.GFrac   = new[] { F(Rate01(st.BodyRollDps)), F(Rate01(st.BodyPitchDps)),
+                                        F(Rate01(st.BodyYawDps)), F(st.DragonProp01) };
                     s.GCol    = new[] { Accent, Accent, Accent, Gold };
                     s.RLabel  = new[] { "Attitude Err", "Body Rate", "Altitude", "Velocity", "Pointing" };
-                    s.RVal    = new[] { "0.4°", "0.04 °/s", "380.5 km", "6.68 km/s", "AUTO / SUN" };
-                    s.RFrac   = new[] { 0.10f, 0.10f, 0.78f, 0.62f, 0.50f };
+                    // Attitude error is an error AGAINST SOMETHING: with no target there is nothing to be
+                    // misaligned with, so it dashes rather than reporting a confident zero — the same
+                    // precondition the docking page states for its own HUD. ALTITUDE and VELOCITY are the
+                    // vehicle's live orbital state, and VELOCITY goes through OrbitReadout so this page
+                    // cannot show orbital speed on the pad while FLIGHT shows surface speed (Pages.cs's
+                    // "this is the third time"). POINTING is the live control-authority word.
+                    string align = st.HasTarget ? st.AlignText : null;
+                    string vCap, vVal; double vMps;
+                    OrbitReadout.Velocity(st, out vCap, out vVal, out vMps);
+                    s.RVal    = new[] { T(align), T(st.BodyRateText), T(st.Altitude), T(vVal), T(st.ModeText) };
+                    s.RFrac   = new[] { F(st.HasTarget ? st.Align01 : 0.0), F(Rate01(BodyRateDps(st))),
+                                        F(BarScale.Altitude(st.AltitudeM, st.AtmosphereDepthM, st.BodyRadiusM)),
+                                        F(BarScale.Velocity(vMps, st.CircularSpeedMps)), 0f };
                     break;
 
                 default: // Thermal
@@ -270,16 +330,56 @@ namespace DragonScreen
                     s.CkState = new[] { "Nominal", "Nominal", "Deployed", "Nominal", "Auto", "Nominal" };
                     s.CkKey   = new[] { 1, 1, 1, 1, 0, 1 };
                     s.GLabel  = new[] { "LOOP A", "LOOP B", "RADIATOR", "SHIELD" };
-                    s.GVal    = new[] { "26.1", "21.1", "8.2", "34" };
+                    // RADIATOR: the coolant model (pure/CabinEnvironment.cs) carries the two loops but no
+                    // separate radiator outlet, and the trunk radiators are not modelled at all.
+                    s.GVal    = new[] { T(st.LoopAText), T(st.LoopBText), Dash, T(st.HullTempText) };
                     s.GUnit   = new[] { "°C", "°C", "°C", "°C" };
-                    s.GFrac   = new[] { 0.55f, 0.44f, 0.35f, 0.40f };
+                    s.GFrac   = new[] { F(st.Cabin.LoopA01), F(st.Cabin.LoopB01), 0f, F(st.HullTemp01) };
                     s.GCol    = new[] { Blue, Blue, Accent, Red };
                     s.RLabel  = new[] { "Loop A Flow", "Loop B Flow", "Heat Reject", "Cabin HX", "TPS Max" };
-                    s.RVal    = new[] { "1.2 L/s", "1.1 L/s", "3.1 kW", "22 °C", "34 °C" };
-                    s.RFrac   = new[] { 0.70f, 0.66f, 0.55f, 0.45f, 0.20f };
+                    // The loops are modelled as TEMPERATURES, not as a flow rate, a rejected-heat figure or
+                    // a heat-exchanger outlet; three litres-per-second that nothing computes would be three
+                    // inventions. "TPS Max" is the SHIELD gauge's own datum in the row's format.
+                    s.RVal    = new[] { Dash, Dash, Dash, Dash, T(st.TpsMaxText) };
+                    s.RFrac   = new[] { 0f, 0f, 0f, 0f, F(st.HullTemp01) };
                     break;
             }
             return s;
+        }
+
+        /// <summary>The net-power ROWS' bar: both buses together against both dials' full scale, so this
+        /// bar and the overview's two NET PWR dials are the same reading at the same scale. A signed value
+        /// has no bar direction, so the bar carries the MAGNITUDE and the printed number keeps the sign —
+        /// exactly what VehicleOverviewPage's own net-power dials do.</summary>
+        static double NetPwr01(PageState s)
+        {
+            double w = s.Cabin.NetPwr1W + s.Cabin.NetPwr2W;
+            if (w < 0.0) w = -w;
+            double f = w / (Cabin.NetPwrFullScale * 2.0);
+            return f > 1.0 ? 1.0 : f;
+        }
+
+        /// <summary>Total body rate, deg/s, from the same three axes the gauges above draw — so the
+        /// "Body Rate" row and the three rate dials cannot tell different stories.</summary>
+        static double BodyRateDps(PageState s)
+        {
+            return Math.Sqrt(s.BodyRollDps * s.BodyRollDps
+                           + s.BodyPitchDps * s.BodyPitchDps
+                           + s.BodyYawDps * s.BodyYawDps);
+        }
+
+        /// <summary>FULL SCALE for a body-rate dial, STATED: 2 °/s. Every rate that matters on this
+        /// vehicle — a docking approach, a coast attitude hold — lives well under it, so the needle sits
+        /// where the useful readings are, and a hard manual slew pegs the dial, which is itself the right
+        /// reading. A rate's nominal IS zero, so this is the one kind of dial that belongs at the bottom
+        /// of its scale rather than in the middle third (CabinEnvironment's rule is for set points).</summary>
+        public const double RateFullScaleDps = 2.0;
+
+        static double Rate01(double dps)
+        {
+            double d = (dps < 0.0) ? -dps : dps;
+            double f = d / RateFullScaleDps;
+            return f > 1.0 ? 1.0 : f;
         }
     }
 }

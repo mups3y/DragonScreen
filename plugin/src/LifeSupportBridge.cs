@@ -11,6 +11,12 @@ namespace DragonScreen
         public bool Present;
         public double Oxygen01;
         public double Co201;
+        /// <summary>T13b: potable water on OUR side of a dock. HasWater is separate from Present because
+        /// a life-support mod can be installed and this vehicle still carry no water tank - the Crew tab
+        /// dashes the row in that case rather than printing a confident zero. Litres, TAC's own unit.</summary>
+        public bool HasWater;
+        public double WaterLitres;
+        public double Water01;
     }
 
     public static class LifeSupportBridge
@@ -32,6 +38,14 @@ namespace DragonScreen
 
             double co2Cap = DockedSide.Capacity(v, CarbonDioxide);
             s.Co201 = (co2Cap > 0.0) ? Clamp01(DockedSide.Resource(v, CarbonDioxide) / co2Cap) : 0.0;
+
+            double waterCap = DockedSide.Capacity(v, Water);
+            if (waterCap > 0.0)
+            {
+                s.HasWater = true;
+                s.WaterLitres = DockedSide.Resource(v, Water);
+                s.Water01 = Clamp01(s.WaterLitres / waterCap);
+            }
             return s;
         }
 

@@ -43,6 +43,7 @@ public static class FigmaUINavTest
         PropSchematicDuty();
         Ascent();
         VehicleLiveValues();
+        SubsystemLiveValues();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
     }
@@ -357,7 +358,9 @@ public static class FigmaUINavTest
         string k = variant == 0 ? "1" : "2";
         s.Ppo2Text = "3.0" + k;  s.CabinTempText = "21." + k;
         s.PressText = "14.7" + k; s.Co2Text = "1.0" + k;
-        s.LoopAText = "26." + k; s.LoopBText = "20." + k;
+        // 27, not 26: "26.1" was the THERMAL tab's own old hard-coded LOOP A, and a fixture value
+        // equal to the constant it replaced makes that tab's "no longer hard-codes" guard vacuous.
+        s.LoopAText = "27." + k; s.LoopBText = "20." + k;
         s.NetPwr1Text = "-5" + k; s.NetPwr2Text = "-4" + k;
         s.PowerUnit1Text = "8" + k + " %"; s.PowerUnit2Text = "8" + k + " %";
         s.DeorbitFuelText = "70" + k + ".0 kg"; s.DeorbitOxText = "130" + k + ".0 kg";
@@ -371,6 +374,34 @@ public static class FigmaUINavTest
         s.AccelPos01 = 0.28; s.AccelNeg01 = 0.06; s.AccelCent01 = 0.44;
         s.SeatCount = 4;
         s.Systems = SystemsState.Fresh();
+
+        // ---- T13b: the six subsystem tabs' own sources ----
+        // A second variant digit, so a new value can never accidentally equal one of the T13a strings
+        // above (which would make a "this moved" check pass for the wrong reason).
+        string j = variant == 0 ? "3" : "4";
+        s.CrewText = (variant == 0 ? "3" : "2") + " / 4";
+        s.Crew01 = variant == 0 ? 0.75 : 0.5;
+        s.O2TankText = "6" + j + " %"; s.N2TankText = "7" + j + " %";
+        s.WaterText = "10" + j + " L"; s.Water01 = 0.72;
+        s.DragonOxText = "9" + j; s.DragonFuelText = "7" + j; s.DragonPropText = "5" + j;
+        s.PropRemainingText = "5" + j + " %"; s.DracoDutyText = "3" + j + " %";
+        s.DragonOx01 = 0.87; s.DragonFuel01 = 0.83; s.DragonProp01 = 0.85;
+        s.PowerText = "1" + j; s.Power01 = 0.13;
+        s.ArrayKwText = "2.6" + j; s.ArrayOutputText = "2.6" + j + " kW"; s.Array01 = 0.76;
+        s.NetPowerText = "-9" + j + " W"; s.ChargeRateText = "-0.09" + j + " kW";
+        s.HullTempText = "31" + j; s.TpsMaxText = "31" + j + " °C"; s.HullTemp01 = 0.41;
+        s.BodyRollText = "-0.05" + j; s.BodyPitchText = "0.12" + j; s.BodyYawText = "0.31" + j;
+        s.BodyRateText = "0." + j + "3 deg/s";
+        s.BodyRollDps = -0.05; s.BodyPitchDps = 0.12; s.BodyYawDps = 0.31;
+        // GNC's four right-hand rows come from state the FLIGHT pages already carry, so the fixture has
+        // to carry it too: a target to be misaligned with, an orbit, and a control-authority word.
+        s.HasTarget = true; s.Align01 = 0.06; s.AlignText = "5.4" + j + " deg";
+        s.ModeText = variant == 0 ? "AUTO" : "MANUAL";
+        s.Regime = FlightRegime.Space;
+        s.Altitude = "123.4" + j + " km";
+        s.Velocity = "228" + j + " m/s"; s.SurfaceVelocity = "17" + j + " m/s";
+        s.VelocityMps = 2280.0; s.SurfaceVelocityMps = 175.0; s.CircularSpeedMps = 2426.0;
+        s.AltitudeM = 123400.0; s.AtmosphereDepthM = 70000.0; s.BodyRadiusM = 600000.0;
         return s;
     }
 
@@ -457,6 +488,156 @@ public static class FigmaUINavTest
         Check("tree dashes both sources with no feed",
               !Drew(td, a.SolarArrayText) && !Drew(td, a.BatteryText), "");
         Check("tree still names the real vehicle's battery count", Drew(ta, "BATTERIES ×4"), "");
+    }
+
+
+    // ---- T13b: the six subsystem sub-tabs read the vessel, not a constant ----
+    // Same shape and the same reasoning as VehicleLiveValues above: build each tab with fixture A, build
+    // it again with a DIFFERENT fixture B, and assert every value moved. The extra thing worth proving
+    // here is the OPPOSITE for AVIONICS — this build models none of that subsystem, so its nine values
+    // must dash and must NOT move with the fixture; a later "improvement" that quietly fills them with a
+    // plausible constant is exactly what this catches.
+    static void SubsystemLiveValues()
+    {
+        const int VW = 2560, VH = 1406;
+
+        PageState a = VehicleFixture(0), b = VehicleFixture(1);
+        PageState dead = VehicleFixture(0); dead.Valid = false;
+
+        VehicleSubsystemPage.Sub[] subs = {
+            VehicleSubsystemPage.Sub.Crew, VehicleSubsystemPage.Sub.Propulsion,
+            VehicleSubsystemPage.Sub.Power, VehicleSubsystemPage.Sub.Avionics,
+            VehicleSubsystemPage.Sub.Gnc, VehicleSubsystemPage.Sub.Thermal };
+
+        // Every value each tab is claimed to have wired, by tab. Avionics is deliberately EMPTY.
+        string[][] live = {
+            // CREW: four cabin gauges + O2 / N2 / water / crew aboard.
+            new[] { a.Ppo2Text, a.CabinTempText, a.PressText, a.Co2Text,
+                    a.O2TankText, a.N2TankText, a.WaterText, a.CrewText },
+            // PROP: both tanks, the combined remaining, the live Draco duty.
+            new[] { a.DragonOxText, a.DragonFuelText, a.PropRemainingText, a.DracoDutyText },
+            // POWER: state of charge, array output twice (gauge + row), net flow twice (W and kW).
+            new[] { a.PowerText, a.ArrayKwText, a.ArrayOutputText, a.NetPowerText, a.ChargeRateText },
+            new string[0],                                                   // AVIONICS — see below
+            // GNC: three body rates, the RCS tank, alignment, total rate, altitude, velocity, authority.
+            new[] { a.BodyRollText, a.BodyPitchText, a.BodyYawText, a.DragonPropText,
+                    a.AlignText, a.BodyRateText, a.Altitude, a.Velocity, a.ModeText },
+            // THERMAL: both loops and the hull temperature, twice (SHIELD gauge + TPS Max row).
+            new[] { a.LoopAText, a.LoopBText, a.HullTempText, a.TpsMaxText } };
+
+        // The constants each tab used to hard-code. None may EVER come back — a value wired once and
+        // then quietly re-hardcoded renders identically in every preview ever taken.
+        string[][] gone = {
+            new[] { "2.69", "22.4", "14.7", "1.05", "44 %", "96 %", "88 %", "72 L" },
+            new[] { "84", "82", "310", "24.6", "0 psia", "83 %", "18 °C", "100 %" },
+            new[] { "100", "120", "3.4", "3.4 kW", "+68 W", "50 %", "19 °C", "0 kW" },
+            new[] { "38", "42", "8.4", "61", "ONLINE", "11", "Strong", "256 kbps" },
+            new[] { "0.02", "0.01", "0.03", "83", "0.4°", "0.04 °/s", "380.5 km", "6.68 km/s", "AUTO / SUN" },
+            new[] { "26.1", "21.1", "8.2", "34", "1.2 L/s", "1.1 L/s", "3.1 kW", "22 °C", "34 °C" } };
+
+        for (int i = 0; i < subs.Length; i++)
+        {
+            DisplayList da = new DisplayList(VehicleSubsystemPage.Commands + 60);
+            DisplayList db = new DisplayList(VehicleSubsystemPage.Commands + 60);
+            DisplayList dd = new DisplayList(VehicleSubsystemPage.Commands + 60);
+            VehicleSubsystemPage.Build(da, VW, VH, subs[i], a);
+            VehicleSubsystemPage.Build(db, VW, VH, subs[i], b);
+            VehicleSubsystemPage.Build(dd, VW, VH, subs[i], dead);
+
+            for (int k = 0; k < live[i].Length; k++)
+            {
+                string want = live[i][k];
+                Check(subs[i] + " draws PageState value " + want, Drew(da, want), "");
+                Check(subs[i] + " value " + want + " is not a constant", !Drew(db, want),
+                      "still drawn for a different state");
+                Check(subs[i] + " drops " + want + " with no feed", !Drew(dd, want), "");
+            }
+            for (int k = 0; k < gone[i].Length; k++)
+                Check(subs[i] + " no longer hard-codes " + gone[i][k], !Drew(da, gone[i][k]), "");
+
+            // A tab with an unsourced readout must SAY so on the LIVE fixture too — that is where a
+            // plausible invented number would otherwise hide. GNC is the exception and the exception is
+            // the point: with a target present every one of its nine values has a source, so it is the
+            // one tab that legitimately shows no dash at all.
+            if (subs[i] != VehicleSubsystemPage.Sub.Gnc)
+                Check(subs[i] + " dashes what it has no source for", Drew(da, "—"), "");
+            else
+                Check("gnc has no unsourced readout with a target", !Drew(da, "—"), "");
+            // And with no feed at all, every value on every tab dashes.
+            Check(subs[i] + " dashes everything with no feed", Drew(dd, "—"), "");
+        }
+
+        // ---- AVIONICS: nothing on it moves, because nothing on it is modelled ----
+        // Stronger than "it drew a dash": not one value from EITHER fixture may appear anywhere on it.
+        DisplayList av = new DisplayList(VehicleSubsystemPage.Commands + 60);
+        DisplayList av2 = new DisplayList(VehicleSubsystemPage.Commands + 60);
+        VehicleSubsystemPage.Build(av, VW, VH, VehicleSubsystemPage.Sub.Avionics, a);
+        VehicleSubsystemPage.Build(av2, VW, VH, VehicleSubsystemPage.Sub.Avionics, b);
+        for (int i = 0; i < live.Length; i++)
+            for (int k = 0; k < live[i].Length; k++)
+                Check("avionics invents no value (" + live[i][k] + ")",
+                      !Drew(av, live[i][k]) && !Drew(av2, live[i][k]), "");
+        Check("avionics fills no gauge ring", Arcs(av, DragonPalette.Accent) == 0
+              && Arcs(av, DragonPalette.Go) == 0, "");
+
+        // ---- the rings move with the numbers, and empty when the feed dies ----
+        // CREW is the tab where all four gauges have a source; a fill per gauge is the count to hold.
+        DisplayList cr = new DisplayList(VehicleSubsystemPage.Commands + 60);
+        DisplayList crDead = new DisplayList(VehicleSubsystemPage.Commands + 60);
+        VehicleSubsystemPage.Build(cr, VW, VH, VehicleSubsystemPage.Sub.Crew, a);
+        VehicleSubsystemPage.Build(crDead, VW, VH, VehicleSubsystemPage.Sub.Crew, dead);
+        int crewFills = Arcs(cr, Rgba.Hex("D7B733")) + Arcs(cr, Rgba.Hex("D12C30"))
+                      + Arcs(cr, Rgba.Hex("FCD533")) + Arcs(cr, Rgba.Hex("2983ED"));
+        Check("crew fills one ring per sourced gauge", crewFills == 4, "got " + crewFills);
+        int crewDeadFills = Arcs(crDead, Rgba.Hex("D7B733")) + Arcs(crDead, Rgba.Hex("D12C30"))
+                          + Arcs(crDead, Rgba.Hex("FCD533")) + Arcs(crDead, Rgba.Hex("2983ED"));
+        Check("crew fills no ring with no feed", crewDeadFills == 0, "got " + crewDeadFills);
+        // THERMAL has three sourced gauges of four: the RADIATOR has no model and must stay empty.
+        DisplayList th = new DisplayList(VehicleSubsystemPage.Commands + 60);
+        VehicleSubsystemPage.Build(th, VW, VH, VehicleSubsystemPage.Sub.Thermal, a);
+        int thermFills = Arcs(th, Rgba.Hex("2983ED")) + Arcs(th, Rgba.Hex("D12C30"))
+                       + Arcs(th, DragonPalette.Accent);
+        Check("thermal leaves the unsourced radiator ring empty", thermFills == 3, "got " + thermFills);
+
+        // ---- the PROP data band carries the same numbers, because it is passed the same source ----
+        // PropSchematic re-draws this tab's gauge + detail values; wiring the source had to fix both.
+        Check("prop schematic band draws the live tank fractions",
+              Drew(DrawProp(a, VW, VH), a.DragonOxText) && Drew(DrawProp(a, VW, VH), a.DragonFuelText), "");
+        // Draco duty is derived from the LIVE RCS demand, and MaxDuty is what both the band's number and
+        // the schematic's own segments read — so a firing vehicle cannot show an idle duty.
+        PageState firing = VehicleFixture(0);
+        firing.RcsOn = true; firing.TransZ = 0.5f; firing.RotRoll = 0.25f;
+        Check("prop duty follows the live RCS demand",
+              PropSchematic.MaxDuty(firing) > 0.4f && PropSchematic.MaxDuty(a) == 0f,
+              "firing " + PropSchematic.MaxDuty(firing) + " idle " + PropSchematic.MaxDuty(a));
+
+        // ---- GNC's body rates survive with NO TARGET, which is the bug that moved them out of Docking ----
+        PageState noTgt = VehicleFixture(0); noTgt.HasTarget = false;
+        DisplayList gn = new DisplayList(VehicleSubsystemPage.Commands + 60);
+        VehicleSubsystemPage.Build(gn, VW, VH, VehicleSubsystemPage.Sub.Gnc, noTgt);
+        Check("gnc keeps its rates with no target",
+              Drew(gn, a.BodyRollText) && Drew(gn, a.BodyPitchText) && Drew(gn, a.BodyYawText), "");
+        Check("gnc dashes attitude error with no target", !Drew(gn, a.AlignText), "");
+        // VELOCITY goes through the shared OrbitReadout rule, so this page cannot read orbital speed on
+        // the ground while FLIGHT reads surface speed (Pages.cs, "this is the third time").
+        PageState ground = VehicleFixture(0);
+        ground.Regime = FlightRegime.Ground;
+        DisplayList gg = new DisplayList(VehicleSubsystemPage.Commands + 60);
+        VehicleSubsystemPage.Build(gg, VW, VH, VehicleSubsystemPage.Sub.Gnc, ground);
+        Check("gnc velocity follows OrbitReadout on the ground",
+              Drew(gg, ground.SurfaceVelocity) && !Drew(gg, ground.Velocity), "");
+
+        // ---- the rate dial's full scale is STATED, and the dial has to survive it ----
+        Check("body-rate dial full scale is stated", VehicleSubsystemPage.RateFullScaleDps > 0.0, "");
+    }
+
+    /// <summary>The Prop tab's FUNCTIONS view, which is PropSchematic — its data band is fed the same
+    /// values the template's gauges and rows carry, so it is checked through the page, not around it.</summary>
+    static DisplayList DrawProp(PageState s, int w, int h)
+    {
+        DisplayList dl = new DisplayList(VehicleSubsystemPage.Commands + 60);
+        VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Propulsion, s);
+        return dl;
     }
 
     static void SpeccedPages()

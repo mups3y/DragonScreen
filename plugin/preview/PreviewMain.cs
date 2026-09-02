@@ -197,6 +197,47 @@ public static class PreviewMain
         ps.SolarArrayText  = "DEPLOYED";
         ps.BatteryText     = "2 / 2";
 
+        // ---- THE SIX SUBSYSTEM SUB-TABS' OWN SOURCES (T13b) ----
+        // Derived here the SAME way VesselData derives them from a real vessel, so the fixture cannot
+        // drift out of agreement with itself: the two gas-store rows are ps.Systems' own fractions (set
+        // above), the water row is a TAC-sized tank, the propellant fractions are the same Dragon tanks
+        // whose kilograms the CONSUMABLES rows print, and net power is the two NET PWR dials added up.
+        // Where the tab has no source at all the field stays NULL and the page draws its dash - which is
+        // most of AVIONICS, and is exactly what should be previewed.
+        ps.O2TankText = (ps.Systems.Oxygen * 100.0).ToString("F0") + " %";
+        ps.N2TankText = (ps.Systems.Nitrogen * 100.0).ToString("F0") + " %";
+        ps.Water01 = 0.72; ps.WaterText = "108 L";
+        ps.Crew01 = 3.0 / 4.0;                       // matches ps.CrewText "3 / 4" above
+
+        // 791.1 kg of 950 usable fuel, 1308.0 kg of 1500 oxidiser - the CONSUMABLES rows' own masses.
+        ps.DragonFuel01 = 791.1 / 950.0;
+        ps.DragonOx01   = 1308.0 / 1500.0;
+        ps.DragonProp01 = (791.1 + 1308.0) / (950.0 + 1500.0);
+        ps.DragonFuelText    = (ps.DragonFuel01 * 100.0).ToString("F0");
+        ps.DragonOxText      = (ps.DragonOx01   * 100.0).ToString("F0");
+        ps.DragonPropText    = (ps.DragonProp01 * 100.0).ToString("F0");
+        ps.PropRemainingText = ps.DragonPropText + " %";
+        // RCS is off in the baseline fixture, so the honest duty is zero - the FIRING render below is
+        // where a moving one is proved, exactly as it is for the schematic's own segments.
+        ps.DracoDutyText = "0 %";
+
+        // A single deployed array making 2.6 kW of its 3.4 kW rating - a real Dragon attitude, not a
+        // panel pointed perfectly at the sun.
+        ps.Array01 = 2.6 / 3.4;
+        ps.ArrayKwText = "2.60"; ps.ArrayOutputText = "2.60 kW";
+        double netW = ps.Cabin.NetPwr1W + ps.Cabin.NetPwr2W;
+        ps.NetPowerText   = (netW > 0.0 ? "+" : "") + netW.ToString("F0") + " W";
+        ps.ChargeRateText = (netW > 0.0 ? "+" : "") + (netW / 1000.0).ToString("F2") + " kW";
+
+        // Mid-entry (the moment the MECH panel above is set for): the shield is hot and well inside the
+        // part's own limit, which is what the ring shows.
+        ps.HullTempText = "312"; ps.TpsMaxText = "312 °C"; ps.HullTemp01 = 0.41;
+
+        // Body rates: a slow coast attitude hold, off the same axes the docking page's rate lines use.
+        ps.BodyPitchDps = 0.12; ps.BodyRollDps = -0.05; ps.BodyYawDps = 0.31;
+        ps.BodyPitchText = "0.12"; ps.BodyRollText = "-0.05"; ps.BodyYawText = "0.31";
+        ps.BodyRateText = "0.3 deg/s";
+
         int W = Screens[0].W, H = Screens[0].H;
         // NAV is rendered at a MODERATE ZOOM rather than at the default whole-body view: zoom 0
         // letterboxes and hides the wrap and clamp logic, which is exactly the part most likely to
@@ -401,7 +442,14 @@ public static class PreviewMain
             // holds an alert" — then restore it so every later render matches the documented baseline.
             {
                 double savedPower = ps.Power01;
+                string savedPowerText = ps.PowerText, savedUnit1 = ps.PowerUnit1Text, savedUnit2 = ps.PowerUnit2Text;
                 ps.Power01 = 0.05;
+                // T13b: the Power tab's BATTERY SOC gauge now reads Power01 AND PowerText, so pushing the
+                // fraction into the alarm band without the number would put a 5 % ring under an 18 % readout
+                // - the exact disagreement this wiring exists to make impossible. VesselData formats them
+                // together; so does the fixture.
+                ps.PowerText = "5";
+                ps.PowerUnit1Text = "5 %"; ps.PowerUnit2Text = "5 %";
                 DisplayList adl = new DisplayList(VehicleSubsystemPage.Commands + 60);
                 VehicleSubsystemPage.Build(adl, CW, CH, VehicleSubsystemPage.Sub.Power, ps);
                 string path = Path.Combine(outDir, "ui_vehiclepower_alarm.png");
@@ -414,6 +462,8 @@ public static class PreviewMain
                 Render(odl, CW, CH, path);
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + odl.Count + " commands");
                 ps.Power01 = savedPower;
+                ps.PowerText = savedPowerText;
+                ps.PowerUnit1Text = savedUnit1; ps.PowerUnit2Text = savedUnit2;
             }
 
             // ---- T9: the Draco schematic FIRING, and the systems tree POWERED ----
@@ -428,6 +478,11 @@ public static class PreviewMain
                 ps.RcsOn = true;
                 ps.TransX = 0.6f; ps.TransY = -0.35f; ps.TransZ = 0.4f;
                 ps.RotPitch = 0.2f; ps.RotYaw = 0f; ps.RotRoll = 0.5f;
+                // T13b: the "Draco Duty" readout in the data band is derived from this same demand, the
+                // way VesselData derives it — so the number and the segments above it move together here
+                // too, instead of the fixture's idle 0 % sitting over a firing schematic.
+                string savedDuty = ps.DracoDutyText;
+                ps.DracoDutyText = (PropSchematic.MaxDuty(ps) * 100f).ToString("F0") + " %";
                 DisplayList pdl = new DisplayList(VehicleSubsystemPage.Commands + 60);
                 VehicleSubsystemPage.Build(pdl, CW, CH, VehicleSubsystemPage.Sub.Propulsion, ps);
                 if (pdl.Overflowed) Console.WriteLine("  WARNING PROP SCHEMATIC OVERFLOWED");
@@ -435,6 +490,7 @@ public static class PreviewMain
                 Render(pdl, CW, CH, path);
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + pdl.Count + " commands");
                 ps.RcsOn = savedRcs;
+                ps.DracoDutyText = savedDuty;
                 ps.TransX = sTX; ps.TransY = sTY; ps.TransZ = sTZ;
                 ps.RotPitch = sRP; ps.RotYaw = sRY; ps.RotRoll = sRR;
             }
@@ -470,6 +526,15 @@ public static class PreviewMain
                 path = Path.Combine(outDir, "ui_vehiclemech_nofeed.png");
                 Render(mdl, CW, CH, path);
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + mdl.Count + " commands");
+
+                // T13b: the same failure mode on the subsystem template, which all six tabs share. CREW
+                // is the tab with the most live values on it, so it is the one where a stale ring or a
+                // leftover number would show most plainly.
+                DisplayList sdl2 = new DisplayList(VehicleSubsystemPage.Commands + 60);
+                VehicleSubsystemPage.Build(sdl2, CW, CH, VehicleSubsystemPage.Sub.Crew, ps);
+                path = Path.Combine(outDir, "ui_vehiclecrew_nofeed.png");
+                Render(sdl2, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + sdl2.Count + " commands");
                 ps.Valid = savedValid;
             }
 

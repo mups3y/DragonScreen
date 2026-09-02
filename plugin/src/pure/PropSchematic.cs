@@ -18,8 +18,9 @@
 // exact on-screen text is NOT transcribable", the same footing as DeorbitBurnPrepPage (T7) and
 // EntryPage (T8): every STRING drawn here. The quad names A–D, the per-thruster designators and their
 // four roles are OURS; SpaceX's real thruster naming and control allocation are not public. The four
-// propellant readouts and the five detail readouts in the bottom band are the template's own existing
-// representative values, passed in unchanged — moved, never re-invented, and still T13's to make live.
+// propellant readouts and the five detail readouts in the bottom band are the subsystem template's own
+// values, passed in unchanged — moved, never re-invented. T13b made that source LIVE, so the band now
+// reads the Dragon's real tanks and the live Draco duty alongside the firing indicators below.
 //
 // ---- THE FIRING INDICATORS ARE SIMULATED, NEVER FAKED ----
 // Every lit segment here is the LIVE RCS demand resolved onto the pod that would have to answer it:
@@ -117,6 +118,16 @@ namespace DragonScreen
         {
             float d = 0f;
             for (int r = 0; r < 4; r++) { float t = ThrusterDuty(s, quad, r); if (t > d) d = t; }
+            return d;
+        }
+
+        /// <summary>The whole cluster's indicator: the hardest-working QUAD, 0..1 — the Prop page's
+        /// "Draco Duty" readout (T13b). Derived from the same live RCS demand the schematic's own rings
+        /// are drawn from, so the number in the data band and the segments above it are one signal.</summary>
+        public static float MaxDuty(PageState s)
+        {
+            float d = 0f;
+            for (int q = 0; q < 4; q++) { float t = QuadDuty(s, q); if (t > d) d = t; }
             return d;
         }
 

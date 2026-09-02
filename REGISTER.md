@@ -731,15 +731,76 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
 - ⚠ **Not claimed:** that the numbers are right ON THE GLASS. That needs the capsule and the gate is
   preview-only, so it stays with **S18**, which already names T13 for exactly this.
 
-### T13b [O] Live-data wiring — the six subsystem sub-tabs + the Prop data band — **TODO**
+### T13b [O] Live-data wiring — the six subsystem sub-tabs + the Prop data band — **DONE**
 - **Read:** §6 + `docs/TELEMETRY_REGISTRY.md` + `pure/VehicleSubsystemPage.cs` + `pure/VehicleSystems.cs`.
 - **Build:** `VehicleSubsystemPage.DefOf`'s six subsystems (Crew · Prop · Power · Avionics · GNC · Thermal),
   4 headline gauges + 5 detail readouts each = 54 values, and the same numbers where `PropSchematic` re-draws
-  them in its bottom data band (they are passed through, so wiring the source fixes both). Live sources
-  already in hand for a good share of them — `s.Cabin` (Crew's four gauges + Thermal's loops),
-  `s.Systems.Oxygen/Nitrogen/CanisterUsed` (O2/N2 tank, scrubber), `s.Power01` (battery SOC),
-  `s.Propellant01` (OX/FUEL), `s.CrewText`, the body rates for GNC; the rest is `—`.
-- **DONE when:** the same criteria as T13a.
+  them in its bottom data band (they are passed through, so wiring the source fixes both).
+- **DONE 2026-09-02.** All 54 now come from `PageState` in the idiom `SystemsPidPage` (T9) and T13a already
+  ship — `T(s.SomeText)` with each ring's fraction taken from the SAME source that produced its number — or
+  are an honest dash. **30 live, 24 dashed**, and nothing invented (`docs/TELEMETRY_REGISTRY.md`). `DefOf`
+  now takes the `PageState`; every wiring decision is stated at its own site.
+  - **CREW (8 live / 1 dash):** the four cabin gauges are the overview's own `CabinReadout`; O2 / N2 tanks →
+    the simulated stores in `VehicleSystems` (they fall with real crew, real power, a real leak); Potable
+    Water → **TAC's own `Water` resource on our side of a dock** (new `LsState.HasWater/WaterLitres/Water01`
+    — no mod or no tank ⇒ dash); Crew Aboard → `s.CrewText` + a new `Crew01` for its bar. Humidity dashes:
+    nothing models it.
+  - **PROP (4 live / 5 dash):** OX (NTO) and FUEL (MMH) → the **Dragon's own tanks as a fraction BY MASS**,
+    accumulated in the SAME single parts pass that already prints their kilograms, so the percentage and the
+    kg row beside it are two views of one number. Prop Remaining → both tanks together; Draco Duty → the live
+    RCS demand through the new `PropSchematic.MaxDuty`, the same function that lights the schematic's own
+    segments. Helium, prop temp, chamber pressure, SuperDraco temp and thrust-available dash — no resource
+    and no model answers any of them. **One fix carried in passing:** `NTO`/`MMH` are now in the propellant
+    buckets, so T13a's `Usable Deorbit Fuel / Oxidizer` rows also stop reading `—` under RealFuels.
+  - **POWER (5 live / 4 dash):** BATTERY SOC → `PowerText`/`Power01`; ARRAY + Array Output → the panels' real
+    `flowRate` (ring = flow / their own `chargeRate`, a real fraction, not a chosen full scale); Net Power +
+    Charge Rate → the two `NetPwr*W` added up, in W and in kW. Bus A / Bus B volts, Bus Load and Battery Temp
+    dash: KSP charge has no voltage and there is no per-bus-load or battery-thermal model.
+  - **AVIONICS (0 live / 9 dash) — the honest answer, not a gap.** This build models no computer load, bus
+    traffic, link budget, storage or GPS state, and no KSP quantity stands in for them, so all nine dash.
+    The tab's one live signal is its FDIR severity, which already colours the tab and fills the ALERTS view.
+    A real source may exist for part of it — see **S24**, an owner call.
+  - **GNC (9 live / 0 dash with a target):** roll/pitch/yaw rate → `vessel.angularVelocity`, **hoisted out of
+    `Docking()`** into a new `VesselData.Rates()` — they are not target-dependent and inside that block they
+    were simply stale on this tab with no target; RCS FUEL → the Prop tab's own combined tank fraction (the
+    Dracos ARE the RCS, so it is one number on two pages); Attitude Err → `AlignText`, dashed with no target
+    (an error needs something to be an error against); Body Rate, Altitude, Velocity (through the shared
+    `OrbitReadout`, so this page cannot read orbital speed on the pad while FLIGHT reads surface speed) and
+    Pointing → the live authority word.
+  - **THERMAL (4 live / 5 dash):** LOOP A / LOOP B → the coolant model; SHIELD + TPS Max → the hottest
+    structure in °C, ringed by that part's fraction of its OWN maximum (margin to limit, no invented scale).
+    Radiator, both loop flows, heat reject and cabin HX dash — the loops are modelled as temperatures, not
+    as flows.
+  - **Two formats for one datum, stated:** a gauge prints its unit on its own line so its text is bare
+    ("2.60"), a row prints one string so its carries the unit ("2.60 kW"). Where the template shows the same
+    quantity as both, `VesselData` formats the pair side by side from one value, so they cannot drift.
+  - **Gate (C1.3) met — preview + headless only, no `install`, no glass.** `python plugin/build.py test`
+    **green, 0 failed**; the Figma UI nav suite 342 → **534 checks** with a new `SubsystemLiveValues` section
+    that builds all six tabs with two different fixtures and asserts every wired value moved, that each drops
+    to a dash with no feed, that the 50 old hard-coded constants never return, that the rings fill one per
+    sourced gauge and empty on a dead feed, that the Prop data band carries the same live values, that GNC
+    keeps its rates with NO target and follows `OrbitReadout` on the ground — and, inverted, that **AVIONICS
+    invents nothing**: not one fixture value may appear on it, on either fixture. **Proved non-vacuous:**
+    re-hardcoding PPO2 to `"2.69"` and Array Output to `"3.4 kW"` fails it (4 checks), and it passes again on
+    revert. **No new compiler warnings** (11 before, 11 after — all pre-existing).
+  - **Previews rendered and inspected:** `ui_vehiclecrew` (2.86 / 21.8 / 14.72 / 1.64 with matching rings,
+    86 % · 93 % · 108 L · 3 / 4, Humidity dashed), `ui_vehiclepropulsion` (OX 87 / FUEL 83, Prop Remaining
+    86 %, Draco Duty 0 % at rest), `ui_vehiclepropulsion_firing` (**Draco Duty 67 %** with the quads lit —
+    the number and the segments move together), `ui_vehiclepower` (SOC 18, ARRAY 2.60 kW, Net Power −108 W,
+    Charge Rate −0.11 kW, four dashes), `ui_vehicleavionics` (nine dashes and four empty rings — the look of
+    an unmodelled subsystem, and the strongest argument in the set), `ui_vehiclegnc` (−0.05 / 0.12 / 0.31
+    °/s, RCS FUEL 86, 5.4 deg, 123.4 km, 2280 m/s, AUTO), `ui_vehiclethermal` (26.4 / 20.1 / — / 312 °C),
+    `ui_vehiclepower_alarm` re-inspected. **One NEW preview** — `ui_vehiclecrew_nofeed.png` — because the
+    template is shared by all six tabs and "no feed" is now a look of its own: every value dashes, every
+    ring empties. Two fixture bugs the wiring exposed were fixed in the same pass: the FIRING render's duty
+    and the ALARM render's SOC are now derived the way `VesselData` derives them, so neither shows a number
+    that disagrees with the ring beside it. `plugin/build/csc.rsp` churn reverted before commit (S11).
+- **§1.4 / C1.4:** respected. No label, no unit, no `PanelMap.cs`, no label doc touched; §6's own scoping
+  ("the numeric VALUES are the placeholders") kept, so the left checklist and every caption are reproduced
+  untouched — including the Power tab's static `4 / 4` and `Deployed` beside now-live sources (**S25**) and
+  the status words that stay confident on a dead feed (**S22**).
+- ⚠ **Not claimed:** that the numbers are right ON THE GLASS. That needs the capsule and the gate is
+  preview-only, so it stays with **S18**, which already names T13 for exactly this.
 
 ### T13c [O] Live-data wiring — the procedure & prox-ops pages — **TODO**
 - **Read:** §6 + `docs/TELEMETRY_REGISTRY.md` + `pure/ManualChuteDeployPage.cs` / `pure/DockingSimPage.cs` /
@@ -1155,3 +1216,32 @@ is a vehicle fact, the value is this vessel's state; (b) drop the `×4` so the l
 (c) make the label itself live. (b) and (c) change a label that came from a real-sourced set, so this is
 the owner's (C1.4). The identical `SOLAR ARRAY` / `BATTERIES ×4` pair on the **Power subsystem page** is
 still fully representative — that page is **T13b**'s, and whatever is decided here should land there too.
+
+### S24 [owner call] The AVIONICS tab reads nine dashes — is CommNet a legitimate source for part of it? — **TODO**
+Found by T13b, which wired the other five subsystem tabs and left this one entirely dashed because that is
+what `docs/TELEMETRY_REGISTRY.md` requires: nothing in this build models flight-computer load, data-bus
+traffic, storage, GPS lock or a link budget, and no KSP quantity stands in for them. `ui_vehicleavionics.png`
+shows the result — nine dashes and four empty rings. It is *correct*, and it is also the only tab with no
+live number on it. **What might change that:** stock KSP's own CommNet carries real state
+(`vessel.Connection.IsConnected` / `SignalStrength`, and the control level), which could honestly answer
+`Uplink`, `Downlink` and `GPS Sats`-adjacent rows, and `S-BAND COMMS` in the checklist. It could NOT answer
+`LINK MARGIN` in **dB** without inventing a conversion from a 0..1 strength, and it says nothing about
+`FC LOAD`, `BUS TRAFFIC` or `STORAGE`. The registry's own note that comm-link readouts are "SIMULATION
+unless a comms mod supplies them" points the same way. **Options:** (a) leave the tab dashed — no new source,
+no new dependency; (b) adopt CommNet for the link rows only, dashing `LINK MARGIN` and the three computer
+gauges; (c) adopt CommNet and additionally define a stated dB mapping. **Adopting a new authoritative source
+is a §1.4 decision, so it is the owner's** — a build chat does not add one on its own. (b) is the smallest
+honest step if the answer is "yes".
+
+### S25 [S] The Power tab's checklist still reads `4 / 4` and `Deployed` beside the live sources for both — **TODO**
+Found by T13b, deliberately not done: §6 scopes T13 to the numeric VALUES and the register line scoped T13b
+to the 54 gauge + readout values, so the left checklist was left untouched. `VehicleSubsystemPage`'s Power
+checklist carries `BATTERIES x4 → "4 / 4"` and `SOLAR ARRAY → "Deployed"` as static strings, while
+`PageState.BatteryText` and `PageState.SolarArrayText` — the REAL counts and the REAL
+`ModuleDeployableSolarPanel` state, wired by T13a — are already in hand and are what the systems tree draws
+two pages away. So the same vessel can read `2 / 2` on one page and `4 / 4` on the other. **Fix:** point both
+checklist states at those two fields, the way the systems tree does. ⚠ **Do this WITH S23, not before it:**
+S23 is the owner's call on the `BATTERIES ×4` LABEL and says explicitly that whatever is decided there should
+land here too — wiring the value first would leave the label question half-answered on two pages instead of
+one. Also related: **S22** (the static status words that stay confident on a dead feed) covers this
+checklist's other five rows.
