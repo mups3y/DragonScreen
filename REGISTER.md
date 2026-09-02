@@ -1149,11 +1149,19 @@ PHASING without the gate. `python plugin/build.py test`: green, ALL SCREEN SUITE
   above instead.
 - **DONE when** met: the dials show a modelled value once wired correctly (fixed), not a stale-comment case.
 
-### S7 [S] `index_assets.py` does not recurse into `art/cover/` — **TODO** — [TIER 2: pre-Part-B hygiene]
+### S7 [S] `index_assets.py` does not recurse into `art/cover/` — **DONE**
 `plugin/build/index_assets.py` globs the shipped-art directory with a non-recursive `'*'`, so `ASSET_INDEX.md`
 lists 6 shipped files while 98 exist — the 95 Cover PNGs in `GameData/DragonScreen/art/cover/` are invisible to
 the "grep the index before concluding an asset does not exist" rule, which is exactly the failure that file was
 written to prevent. **DONE when:** the generator recurses and the regenerated index lists the cover set.
+- **DONE 2026-09-02 (hygiene sweep, owner-directed).** The `SECTIONS` table gained a per-entry `recursive`
+  flag; only the SHIPPED entry sets it `True` (the other six sections have no subdirectories to miss, so
+  their behaviour is unchanged). When set, the glob becomes `glob.glob(os.path.join(d, '**', pat),
+  recursive=True)`, which also matches files directly in `d` (Python's `**` matches zero directories too).
+  Regenerated `docs/ASSET_INDEX.md`: SHIPPED now lists **134** files (6 top-level + 127 in `cover/` + 1
+  directory-count quirk resolved — every `cover/*.png` now has its own `cover/<name>.png` line with size),
+  up from 6. No behaviour/visual change (a docs-generator + regenerated doc) → preview/PNG gate N/A (C1.3).
+  `python plugin/build.py test`: green, all suites, 0 failed. Committed locally (C1.5); not pushed.
 
 ### S8 [S] `plugin/build/assess_flight.py` is autopilot-era tooling — **DONE**
 - **Owner decision (via the overseer, 2026-09-02):** KEEP the file — retained for Part B's §B5 empirical tune
@@ -1196,13 +1204,19 @@ the standing build-go, as far as it can go), and only then does its glass check 
 That go is the OWNER's (C1.12) and the T10 + T11b gate did not cover it. **DONE when:** the RT
 camera renders in-sim, the orbit line tracks and occludes, and the framing reads well on the glass.
 
-### S11 [S] `plugin/build/csc.rsp` is a generated file, tracked, and churns on every build — **TODO** — [TIER 2: pre-Part-B hygiene]
+### S11 [S] `plugin/build/csc.rsp` is a generated file, tracked, and churns on every build — **DONE**
 Logged by T4 (C1.1), not done. `build.py` overwrites `plugin/build/csc.rsp` on every invocation with
 whichever compile ran last, so the file shows as modified after any `test` / `preview` / `install` and
 its content depends only on which command was run most recently — it carries no information worth
 versioning. It is also written with CRLF into a repo whose `.gitattributes` mandates LF, so git warns on
 every touch. T4 restored it to HEAD (`git checkout --`) so the commit carries only real changes.
 **DONE when:** it is gitignored (and untracked), or build.py writes it outside the repo.
+- **DONE 2026-09-02 (hygiene sweep, owner-directed).** Added `plugin/build/csc.rsp` to `.gitignore`
+  (under the existing "BUILD ARTEFACTS" section, beside `preview/`/`tmp/`/`refart/`) and `git rm --cached`
+  it — the file stays on disk (build.py still writes it) but git no longer tracks it, so it can't churn
+  the working tree again. Working tree was already clean at session start (no dirty csc.rsp to clear this
+  time). No behaviour/visual change → preview/PNG gate N/A (C1.3). `python plugin/build.py test`: green,
+  all suites, 0 failed. Committed locally (C1.5); not pushed.
 
 ### S12 [S] `VehicleMechPage`'s subsystem tab bar isn't severity-aware — **TODO** — [TIER 2: pre-Part-B hygiene]
 Logged by T5 (C1.1), not done. T5 gave `VehicleTabBar` a `Severities(PageState)`-driven `Draw` overload
@@ -1493,11 +1507,14 @@ updated to point at S20 instead of asserting the duplicate label is untouched. *
 reflowed. No other page/test hard-codes a duplicate `LOOP A` (`SystemsPidPage`, `VehicleSubsystemPage`,
 `SettingsPage`, `Pages.cs` already used `LOOP A`/`LOOP B` correctly), so no other site needed a change.
 
-### S21 [S] A zero-byte file named `=` is tracked in `plugin/src/` — **TODO** — [TIER 2: pre-Part-B hygiene]
+### S21 [S] A zero-byte file named `=` is tracked in `plugin/src/` — **DONE**
 Noticed by T13a while listing the glue sources. `plugin/src/=` is 0 bytes, dated 2026-08-10, and is tracked
 (it came in with the initial import, `14b8c2a`) — the classic leftover of a `... = ...` shell redirect. It is
 not referenced by `plugin/build.py`, compiles to nothing, and only clutters the source listing. **Fix:**
 `git rm plugin/src/=` and confirm `build.py test` is still green. Trivial, but not T13's to do (C1.1).
+- **DONE 2026-09-02 (hygiene sweep, owner-directed).** `git rm plugin/src/=`. No behaviour/visual change →
+  preview/PNG gate N/A (C1.3). `python plugin/build.py test`: green, all suites, 0 failed. Committed
+  locally (C1.5); not pushed.
 
 ### S22 [S] The reference's static status words read confidently on a dead feed — **DONE 2026-09-02**
 Logged by T13a, deliberately not done (§6 scopes T13 to the numeric VALUES, and this is reference COPY —
@@ -1782,7 +1799,7 @@ site in the code:
 checks needed — no behaviour changed). Preview N/A (no render change). §1.4 respected: no invented
 function, no `PanelMap.cs` / label-doc edit.
 
-### S30 [S] `_AutopilotStub.cs` still describes the deleted RED refuse state — **TODO** — [TIER 2: pre-Part-B hygiene]
+### S30 [S] `_AutopilotStub.cs` still describes the deleted RED refuse state — **DONE**
 Noticed by **T14** while routing the chute page through `FlightCommands.Run` (comment-only; not fixed,
 C1.1). The file's header says the command buttons "are no-ops that honestly refuse (**a red flash**)" and
 `Run`'s own comments say "true = white flash (actioned), false = **red flash** (honestly cannot)" and
@@ -1791,6 +1808,12 @@ C1.1). The file's header says the command buttons "are no-ops that honestly refu
 one file still telling a reader the panel has a colour it does not have, and it is the file every new
 command surface reads first (T14 read it). **Fix:** three comment edits, no code. **DONE when:** the stub
 describes click-no-light-no-action, and `build.py test` is still green.
+- **DONE 2026-09-02 (hygiene sweep, owner-directed).** Four comment edits in `plugin/src/_AutopilotStub.cs`
+  (the header's "a red flash", the dispatcher banner's "(red flash)", `Run`'s "white flash (actioned) /
+  red flash (honestly cannot)", and the FLY/actuate section banner's "honest red flash") all now read
+  click-no-light-no-action / "honestly cannot" — no code changed, comments only. Confirmed no remaining
+  "red flash"/"white flash" text in the file. No behaviour/visual change → preview/PNG gate N/A (C1.3).
+  `python plugin/build.py test`: green, all suites, 0 failed. Committed locally (C1.5); not pushed.
 
 ### S31 [S] `SuitCheckPage`'s four SUIT n STATUS rows still read a confident "Nominal" — not covered by S22 — **TODO** — [TIER 1: pre-Part-B correctness bug]
 Noticed by **S22** while fixing the static-status-word category on the vehicle pages (not fixed here — C1.1,
