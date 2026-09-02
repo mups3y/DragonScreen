@@ -1320,7 +1320,7 @@ fields), so it is likely a small [S] page rather than an [O] one. **DONE when:**
 whether it becomes its own register task (and where in the §7 order), and it is built + previewed —
 or it is explicitly deferred and #28's "(T6/T9)" mark corrected.
 
-### S16 [S] `SCREEN_INVENTORY.md` + §3 status marks are stale after T9 — **TODO** — [TIER 2: pre-Part-B hygiene]
+### S16 [S] `SCREEN_INVENTORY.md` + §3 status marks are stale after T9 — **DONE 2026-09-02** (owner-directed, scoped to `SCREEN_INVENTORY.md` only — C1.1)
 Logged by T9 (C1.1), not done — a docs pass, and T9's declared outputs are code + preview only (C1.11),
 so the marks were not edited here. Now inaccurate: **#26 Prop/RCS thruster schematic** still reads
 "🟡 REFINE — we built Prop as a generic gauge template" (it is now the schematic); **#27 Systems /
@@ -1331,6 +1331,28 @@ electrical TREE** and the **"Vehicle systems P&ID schematic"** entry still read 
 frame allows. §11b itself is research and stays as written. Fold into the next docs pass together with
 **S9** (the map artifact), which needs the same tally update. **DONE when:** no `docs/` status mark
 contradicts the tree.
+- **DONE 2026-09-02, owner-directed this session — explicitly narrowed to `SCREEN_INVENTORY.md`.**
+  `BUILD_PLAN.md` §3 is deliberately **left frozen** on the owner's instruction (unchanged since G1;
+  status now lives in this living inventory, not the spec, per C7.1) — its stale REFINE/REF marks are
+  **known and intentionally not touched** here, not missed.
+- **`docs/SCREEN_INVENTORY.md` edits:** table rows **#26** and **#27** flipped to ✅ BUILT (T9), each
+  naming its real source file (`PropSchematic.cs`; `SystemsTreePage.cs`/`UiPage.SystemsTree`) and what
+  makes it live, not painted. Row **#28** stays 🟠 REF, not built, but its stale `(T6/T9)` owner tag is
+  corrected to **`S15`** — T6 built the rendezvous *ellipse*, T9 built the other two JSC screens, neither
+  register line actually covers #28 (this also satisfies the mark-correction half of S15's own
+  DONE-when; S15 itself stays TODO — the build-or-defer call hasn't been made). The prose
+  "Vehicle systems P&ID schematic" research bullet gets the same ✅ BUILT 2026-09-02 (T9,
+  `SystemsPidPage.cs`) tag, plus one line on why it landed as ECLSS + coolant loops rather than Prop
+  (Prop's plumbing would have duplicated #26). The "RESEARCH PASS 2026-09-02" summary paragraph is
+  updated in place so it no longer reads as if all three JSC screens are still un-built.
+- **Not touched, on purpose (C1.1, no scope creep):** the file's older "~18 built" headline count/page
+  list (stale since well before T9 — T2/T3/T6/T7/T8/T9 all post-date it) and `docs/BUILD_PLAN.md` §3.
+  Both are already the stated job of **S9** (BLOCKED on an owner publish action) once it runs, so no new
+  stray line was opened for them.
+- Docs-only, no code change → the preview/PNG gate does not apply (C1.3); `python plugin/build.py test`
+  run as a no-regression check: **green, 12 suites, all passed, 0 failed** (unchanged from before this
+  edit — a docs-only diff, as expected). §1.4 respected: every status flip cites the real file/type it
+  points at; no `PanelMap.cs` / label-doc edits.
 
 ### S17 [owner-gated] Glass verification — T10 click + lamps, T11b drag feel — **DONE 2026-09-02** (all six answered on glass: 4 confirmed, 2 wrong and fixed; the two re-checks carried to **S18**)
 Logged by T10 (C1.1/C1.7), 2026-09-02. This line is the ONE capsule session that settles the handful of

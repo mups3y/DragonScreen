@@ -98,9 +98,9 @@ hand, needs building · **🟡 REFINE** — folds into a page we already ship, n
 | 23 | **Rendezvous orbital-ellipse plot** | Left icon sub-nav rail + a “Hold Capture” procedure card + a large **2D orbital-ellipse plot** with the vehicle position and an approach chord. The CENTRE situational-awareness display's rendezvous view | BBC `touchscreens.png` (all three screens, Hold-Capture phase) | 🟠 REF, not built (**T6**) — likely also covers the Proximity/ISS plot gap (#13) |
 | 24 | **Deorbit Burn Prep** | “Crew Interrupt Conditions” + “Slew for Deorbit Burn” (Roll/Pitch/Yaw, max attitude rate — see S13 divergence note above, FC Slew) + numbered settle-burn steps (~3 min prior, 1 s pulses at 30 s intervals, 8 min duration) | `discovery` deorbit-burn frames (blurry) | 🟠 REF, not built — reconstruct + MARK (**T7**) |
 | 25 | **Entry** | “Parachute Deployment Altitude” section + steps — the entry/descent procedure page | `discovery` “Entry” frame (partial) | 🟠 REF, not built — reconstruct + MARK (**T8**) |
-| 26 | **Prop / RCS thruster schematic** | The AUTHENTIC look of Vehicle·Prop: the Dragon in **horizontal profile** (capsule + trunk line-art) ringed by **Draco thruster-quad arc symbols** with per-cluster firing/status, per-thruster data along the bottom, a LEFT alert + sub-nav rail | **JSC `jsc2026e404727`** (Crew-13 training) | 🟡 REFINE — we built Prop as a generic gauge template; this is what it should be (**T9**) |
-| 27 | **Systems / electrical TREE** | A **hierarchical box-and-connector diagram** (labelled boxes joined by connector lines) — a power-distribution / systems tree. A subsystem deep-view, distinct from the P&ID plumbing view | **JSC `jsc2024e064449`** (sim rig, LEFT screen) | 🟠 REF, not built (**T9**) |
-| 28 | **Nav / orbit plot (circular)** | Concentric rings + coloured target markers (yellow + cyan) + orbit arcs + a g/rate readout — the circular situational plot. Pairs with #23's ellipse view | **JSC `jsc2024e064449`** (sim rig, RIGHT screen) + BBC | 🟠 REF, not built (**T6**/**T9**) |
+| 26 | **Prop / RCS thruster schematic** | The AUTHENTIC look of Vehicle·Prop: the Dragon in **horizontal profile** (capsule + trunk line-art) ringed by **Draco thruster-quad arc symbols** with per-cluster firing/status, per-thruster data along the bottom, a LEFT alert + sub-nav rail | **JSC `jsc2026e404727`** (Crew-13 training) | ✅ BUILT 2026-09-02 (**T9**, `PropSchematic.cs`) — Prop's FUNCTIONS view now draws this schematic, per-thruster firing LIVE off real RCS demand, replacing the generic gauge template |
+| 27 | **Systems / electrical TREE** | A **hierarchical box-and-connector diagram** (labelled boxes joined by connector lines) — a power-distribution / systems tree. A subsystem deep-view, distinct from the P&ID plumbing view | **JSC `jsc2024e064449`** (sim rig, LEFT screen) | ✅ BUILT 2026-09-02 (**T9**, `SystemsTreePage.cs`, `UiPage.SystemsTree`) — boxes/connectors live-coloured off `PageState.Systems` |
+| 28 | **Nav / orbit plot (circular)** | Concentric rings + coloured target markers (yellow + cyan) + orbit arcs + a g/rate readout — the circular situational plot. Pairs with #23's ellipse view | **JSC `jsc2024e064449`** (sim rig, RIGHT screen) + BBC | 🟠 REF, not built — owned by **S15**, not T9 (T6 is the rendezvous *ellipse*; T9 is the other two JSC screens; neither register line covers this one) |
 
 ## NEW findings this session (record)
 - **4.700 "Test VRIO Health LEDs" is REAL** — reconstructed from photos + built (`VrioTestPage`). VRIO =
@@ -180,11 +180,13 @@ dillonbaird.io (~25–30 pages, 6 categories), space.com/rocketstem (3 panels, ~
     "1.4 km (TBC) 6 nm mains" → ENABLE BACKUP PYROS → DEPLOY MAINS → FIRE PYRO.
   - **Right-side ACTION per step** (the touch target): Check latched · Arm and verify · Execute · Monitor
     altitude · Halt · Latch. Values marked "(TBC)" on-screen (SpaceX's own to-be-confirmed placeholders).
-- **Vehicle systems P&ID schematic** (`crew1_3`, `crew3_1`, `demo1_3`): a distinct deep-view — the Dragon's
-  fluid/electrical system as **line-art**: rectangular loops, ring/hex components (tanks/valves/pumps),
-  inline valve symbols, small **green status dots** along the lines. NOT our radial Mech donut and NOT the
-  rendered `dragon_crew`. Likely a subsystem detail (Prop/Thermal/ECLSS) or dedicated schematic. A build
-  refinement for the subsystem pages (add a schematic view alongside the gauge grammar).
+- **Vehicle systems P&ID schematic** (`crew1_3`, `crew3_1`, `demo1_3`) — ✅ BUILT 2026-09-02 (**T9**,
+  `SystemsPidPage.cs`, `UiPage.SystemsPid`): a distinct deep-view — the Dragon's fluid/electrical system as
+  **line-art**: rectangular loops, ring/hex components (tanks/valves/pumps), inline valve symbols, small
+  **green status dots** along the lines. NOT our radial Mech donut and NOT the rendered `dragon_crew`. Built
+  as the **ECLSS + coolant loops** — the inventory named the subsystem ambiguously ("likely
+  Prop/Thermal/ECLSS"); ECLSS/coolant are the fluid systems this build actually models (every component
+  gets a live state), and Prop's own plumbing would have duplicated the #26 schematic above.
 - **Circular proximity/nav plot** (`crew2_1/2_2` right screen): concentric-ring plot with centre marker —
   the docking/attitude/relative plot (overlaps HUD #2 and the prox screen #13).
 - Manual ISS Docking (#11) fully specced from the live sim DOM — see the table row above.
@@ -257,9 +259,12 @@ contact-sheeted; the screen-facing ones re-pulled at 3240–3840 px.** Result:
 - **Three new real screen LOOKS captured** — rows **#26 Prop/RCS thruster schematic**, **#27 systems tree**
   and **#28 circular nav/orbit plot** above. The left screens in the same set (`jsc2024e079789`,
   `jsc2025e064540`, `jsc2022e068644`) show the attitude/nav HUD and **corroborate our built HUD (#2)**.
-- **Layouts yes, text no.** The mockup screens are shot at steep angles with glare, so exact on-screen text
-  is **not transcribable** at any resolution available. These three pages, when built, are
-  **layout-real / labels-reconstructed** — the same honest status as our other from-photo pages.
+  **Update 2026-09-02 (T9):** #26 and #27, plus the P&ID entry below, are now ✅ BUILT; #28 is still
+  🟠 REF, not built — owned by **S15**, not T9.
+- **Layouts yes, text no.** The mockup screens were shot at steep angles with glare, so exact on-screen
+  text was **not transcribable** at any resolution available. The two built pages (plus the P&ID) are
+  **layout-real / labels-reconstructed** — the same honest status as our other from-photo pages; #28 will
+  be the same when it's built.
 - **The console is still not label-legible** in ANY JSC frame — every shot is upward-at-crew.
   `jsc2024e064449` gives the **best-lit console band yet** (button-group plates, a labelled rotary, a red
   guarded control) and it is still not readable at that angle. So the §4 panel-label verification remains
