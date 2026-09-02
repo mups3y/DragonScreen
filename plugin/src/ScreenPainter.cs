@@ -63,8 +63,17 @@ namespace DragonScreen
         // page change so the page is fresh each time it is opened.
         private float suitStart = -1f;
         private bool suitPopup;
+        // S32: the countdown is a FIELD, and it STAYS where the run left it (0 once a run has ended)
+        // rather than springing back to 5 the moment suitStart goes idle. The suit model reads it as
+        // "how far through the check this run got", so a run that found a leak has to keep reading 0
+        // after its result box is closed - otherwise closing that box un-bleeds the leaking suit, the
+        // table goes back to four green Nominals, and TROUBLESHOOT (which responds to exactly that
+        // verdict, and is only reachable once the box is out of the way) could never be pressed. A new
+        // run, HALT, or a page change puts it back to 5.
+        private int suitCountdown = 5;
         // S31: this run's leak roll. The 5% chance is decided ONCE per run, from a seed minted at the
-        // moment INITIATE (or TRY ADDITIONAL TIMER) was pressed - a verdict re-rolled every frame would
+        // moment a run began (INITIATE, TRY ADDITIONAL TIMER, or S32's TROUBLESHOOT repair - see
+        // StartSuitRun, the one place that begins one) - a verdict re-rolled every frame would
         // flicker, and both screens showing one run have to agree. The seed is all this glue owns; the
         // model itself is pure (SuitLeak). 0 = no run has been made, so nothing has been found.
         private uint suitSeed;
@@ -358,24 +367,37 @@ namespace DragonScreen
                 UiPage cur = (UiPage)selectedPage;
                 if (cur == UiPage.SuitCheck)
                 {
-                    // T14 added FINISH (end at step 2.5, raise the completion popup), TRY ADDITIONAL
-                    // TIMER (re-run the countdown) and TROUBLESHOOT, which is deliberately not here: it
-                    // responds to a suit reading Failed Low and this build models no suit, so the page
-                    // draws it dimmed and the press does nothing. SuitCheckPage.Available says so, and
-                    // this switch simply has no case for it - one fact, one place.
+                    // T14 added FINISH (end at step 2.5, raise the result popup) and TRY ADDITIONAL
+                    // TIMER (re-run the countdown), and left TROUBLESHOOT out because nothing modelled
+                    // a suit, so nothing could fail. S31 made a suit able to fail and S32 (owner, via
+                    // the overseer) gave the control its action: it is the fail branch's RECOVERY, so
+                    // it acts only while the model says a suit failed, and what it does is repair that
+                    // suit and re-run the check - the same state change TRY ADDITIONAL TIMER makes, so
+                    // it goes through that same path rather than a second one. The gate is
+                    // SuitCheckPage.Available, which the page also lights the control from: a dimmed
+                    // TROUBLESHOOT cannot act, and a live one cannot look unavailable.
+                    SuitCheckState suits = SuitLeak.From(VesselData.State, suitCountdown, suitPopup, suitSeed);
                     switch (SuitCheckPage.HitTest(px, py, w, h, suitPopup))
                     {
                         // START and TRY ADDITIONAL TIMER each begin a run, so each mints a fresh seed:
                         // re-running re-rolls, which is what a second timed run of a leak check is.
                         // HALT abandons the run, so its roll goes with it. FINISH ends the run at step
-                        // 2.5 and reports what THAT run found, so it keeps the seed it already has.
-                        case SuitCheckPage.SuitAct.Start: suitStart = Time.realtimeSinceStartup; suitPopup = false;
-                                                          suitSeed = SuitLeak.SeedFrom(suitStart, ++suitRuns); break;
-                        case SuitCheckPage.SuitAct.Halt:  suitStart = -1f; suitPopup = false; suitSeed = 0u; break;
-                        case SuitCheckPage.SuitAct.Close: suitPopup = false; break;
-                        case SuitCheckPage.SuitAct.Finish: suitStart = -1f; suitPopup = true; break;
-                        case SuitCheckPage.SuitAct.Retime: suitStart = Time.realtimeSinceStartup; suitPopup = false;
-                                                           suitSeed = SuitLeak.SeedFrom(suitStart, ++suitRuns); break;
+                        // 2.5 and reports what THAT run found, so it keeps the seed it already has -
+                        // and parks the countdown at 0, because a finished run is a finished run and
+                        // the table must go on agreeing with the verdict the crew was just shown.
+                        case SuitCheckPage.SuitAct.Start:  StartSuitRun(); break;
+                        case SuitCheckPage.SuitAct.Halt:   suitStart = -1f; suitPopup = false; suitSeed = 0u;
+                                                           suitCountdown = 5; break;
+                        case SuitCheckPage.SuitAct.Close:  suitPopup = false; break;
+                        case SuitCheckPage.SuitAct.Finish: suitStart = -1f; suitPopup = true;
+                                                           suitCountdown = 0; break;
+                        case SuitCheckPage.SuitAct.Retime: StartSuitRun(); break;
+                        // S32: REPAIR + RERUN. The repair is what clears the failure the crew is looking
+                        // at; the rerun is the same fresh-seed run the timer control makes, so the next
+                        // verdict is ROLLED honestly rather than declared clean by the press.
+                        case SuitCheckPage.SuitAct.Troubleshoot:
+                            if (SuitCheckPage.Available(SuitCheckPage.SuitAct.Troubleshoot, suits)) StartSuitRun();
+                            break;
                     }
                 }
                 else if (IsSubsystemPage(cur))
@@ -561,6 +583,7 @@ namespace DragonScreen
                 selectedPage = page;
                 chrome.SelectedPage = page;
                 suitStart = -1f; suitPopup = false; suitSeed = 0u;   // the Suit Leak Check opens fresh each visit
+                suitCountdown = 5;
                 turnTouch = Turntable.Idle();         // a press cannot survive the page under it
                 controls = PageControls.Default;      // and neither do the page's own toggles (T14)
                 Publish();
@@ -634,6 +657,18 @@ namespace DragonScreen
                     break;
                 }
             }
+        }
+
+        /// <summary>Begin a Suit Leak Check run: the countdown from the top, no result yet, and a FRESH
+        /// seed so the 5% roll is made again (S31). INITIATE, TRY ADDITIONAL TIMER and S32's TROUBLESHOOT
+        /// repair all begin a run, and they must begin the SAME one - a second copy of this is how the
+        /// repair path would quietly drift away from the timer path.</summary>
+        private void StartSuitRun()
+        {
+            suitStart = Time.realtimeSinceStartup;
+            suitPopup = false;
+            suitCountdown = 5;
+            suitSeed = SuitLeak.SeedFrom(suitStart, ++suitRuns);
         }
 
         /// <summary>
@@ -861,12 +896,13 @@ namespace DragonScreen
                 ps.CameraResText = DockingCamRenderer.Resolution;
 
                 // Suit Leak Check countdown: advance from the START moment; at 5s raise the popup once.
-                int suitCount = 5;
+                // S32: it lands on 0 and STAYS there (the field, not a local reset to 5 every frame), so
+                // the table behind and after the result box keeps reading the verdict that run reached.
                 if (up == UiPage.SuitCheck && suitStart >= 0f)
                 {
                     float el = Time.realtimeSinceStartup - suitStart;
-                    if (el >= 5f) { suitPopup = true; suitStart = -1f; }
-                    else { suitCount = 5 - (int)(el / 0.9f); if (suitCount < 0) suitCount = 0; }
+                    if (el >= 5f) { suitPopup = true; suitStart = -1f; suitCountdown = 0; }
+                    else { suitCountdown = 5 - (int)(el / 0.9f); if (suitCountdown < 0) suitCountdown = 0; }
                 }
 
                 // The capsule turntable is the one asset set with a MEMORY BUDGET (T11b): 36 frames
@@ -879,7 +915,7 @@ namespace DragonScreen
                     ImageStore.ReleaseTurntable(index);
 
                 // The new Figma pages carry their own chrome (each has its bottom bar), so no ChromeBar.
-                FigmaUI.Build(page, up, w, h, ps, mapView, suitCount, suitPopup, coverPhase, coverCam, turn,
+                FigmaUI.Build(page, up, w, h, ps, mapView, suitCountdown, suitPopup, coverPhase, coverCam, turn,
                               controls, suitSeed);
             }
             else

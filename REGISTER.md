@@ -1955,9 +1955,13 @@ The option list above is left as written for the record; §14.4(e) is what decid
   `ui_suitcheck_leak.png` (the repair-and-rerun box); the underlying leak table was rendered once during
   the pass to confirm the amber `0.01psi` / `Failed Low` row, then the render restored to the popup state.
   Committed locally (C1.5); NOT pushed.
+- ✅ **Constants RATIFIED as built — owner (Chris), via the overseer, 2026-09-02 (Q1 = (a), no change):**
+  `SuitLoopPsia` 15.00 · `PassPsi` 0.10 · `LeakFallPsi` 0.28 · the four `Fit` offsets · `LeakChance` 0.05
+  stand exactly as S31 built them; the ΔP magnitude's legibility on the real glass is to be eyeballed at
+  the **S18** glass pass (recorded here by S32's commit — a decision logged, not a second task).
 - ⚠ **Logged, not done (C1.1):** see **S32** — TROUBLESHOOT is still inert, and its stated reason changed.
 
-### S32 [owner call] The Suit Leak Check's TROUBLESHOOT is still inert, and its reason has changed — **TODO** — [TIER 3: honest-but-incomplete]
+### S32 [owner call] The Suit Leak Check's TROUBLESHOOT is still inert, and its reason has changed — **DONE 2026-09-02** (owner chose (b): a MARKED reconstructed-from-function action — repair + rerun)
 Found by **S31** (logged, not done — C1.1, different question). Until S31, `SuitCheckPage.FailBranchLive`
 was `false` for a reason that made the control moot: **no suit could fail this check**, so the fail
 branch's own question ("Did any suit fail the leak check?") answered itself and TROUBLESHOOT had nothing
@@ -1974,3 +1978,60 @@ swallowing the press; (b) give it a reconstructed-from-function action under §1
 real source first (a 4.011 continuation frame past the "Scroll to continue" fold) and only then wire it.
 `FailBranchLive` is still the single edit whichever way this goes. Needs an owner call, not a build-chat
 one (§1.4 tier-3).
+
+- **DONE 2026-09-02 — owner-directed (run OUT of `/next` order), decided by the owner (Chris) via the
+  overseer: option (b).** TROUBLESHOOT gets a **reconstructed-from-function** action under
+  **§14.4(d)+(e)**, MARKED in code and NOT claimed as real — option (c) is closed, not deferred: there is
+  no 4.011 continuation frame to find (the real table scrolls past its "Scroll to continue" fold and that
+  content is ITAR-class), so waiting for a source would leave the control dead forever. The function is
+  read off the page's own instruction to the crew, "Repair suit and rerun suit check."
+  **Built:**
+  · **`SuitCheckPage.FailBranchLive` flipped to `true`**, its doc-comment rewritten to say what the action
+    is, where it came from and why no source is coming; the header's reconstruction block, the FLOW
+    paragraph and the fail-branch draw-site note all restated to match (nothing left claiming it is inert).
+  · **`Available` now takes the suit state** (`Available(SuitAct, SuitCheckState)`): TROUBLESHOOT is live
+    **only while the model is actually reading a suit below `PassPsi`** — `SuitCheckState.AnyFailed`, a new
+    one-line property that is the fail branch's own printed question answered from the sim. Clean run, a
+    run that has not bled yet, or no feed → dimmed and inert exactly as before. **Build lights the plate
+    from the same call the glue gates the press on**, so a dimmed control cannot act and a live one cannot
+    look unavailable — one verdict, one place.
+  · **The press routes through S31's existing re-run path.** `ScreenPainter.StartSuitRun()` is now the ONE
+    place a run begins (INITIATE / TRY ADDITIONAL TIMER / the TROUBLESHOOT repair all call it): countdown
+    back to the top, no result yet, and a **fresh seed**, so the repair's re-run is **rolled** like any
+    other rather than declared clean by the press.
+  · **The countdown now PERSISTS at 0 once a run ends** (a painter field, not a local that sprang back to 5
+    whenever the timer went idle). Without this the feature is unreachable on glass: the result box is
+    modal, so TROUBLESHOOT can only be pressed after CLOSE — and on CLOSE the old code un-bled the leaking
+    suit, so the table snapped back to four green "Nominal" and the control went dim again. HALT, a new
+    run, or a page change put it back to 5; FINISH parks it at 0 for the same reason (the table has to keep
+    agreeing with the verdict the crew was just shown).
+  · `PanelMap.cs` and the label docs were **NOT** touched (§1.4 / C1.4).
+  **Gate (C1.3):** `python plugin/build.py test` **green — 11347 checks, 0 failed**, with new coverage in
+  `TouchWiringTest.SuitControls()` (the branch has an action; a failed suit makes it available; a clean run,
+  an unbled run and a dead feed all leave it inert) and in `FigmaUINavTest.SuitLeakSimulation()` (the same
+  three, plus: the failed table draws TROUBLESHOOT in `White` and a clean page in `Text6` — a new `ColourOf`
+  helper, since "dimmed" is a claim only a colour can settle; the failed table still reads its verdict with
+  the box closed; a repair mints a different run, the repaired suit is holding again at the top of it and
+  the control goes back to inert; a later run that finds a leak lights it again, so the recovery repeats).
+  **Preview inspected:** `ui_suitcheck.png` — resting, 5s, four live ΔP, four green Nominal, TROUBLESHOOT
+  **dim**; `ui_suitcheck_leak.png` — **re-aimed by this task** at the state the crew actually acts in (leak
+  found, result box closed): `0s`, SUIT 3 `0.01psi` + `Failed Low` in amber, three Nominal, and TROUBLESHOOT
+  **lit white, matching TRY ADDITIONAL TIMER**. The leak RESULT BOX that file used to hold is preserved as
+  the new **`ui_suitcheck_leak_popup.png`** (beside the clean `ui_suitcheck_popup.png`) — it was moved
+  because an 82%-opaque scrim sits over the fail branch, so the one thing S32 changed cannot be judged
+  through it. Committed locally (C1.5); NOT pushed.
+- ⚠ **Logged, not done (C1.1):** see **S33** — `docs/SCREEN_INVENTORY.md`'s row for screen #5 predates S31
+  and S32.
+
+### S33 [S] `docs/SCREEN_INVENTORY.md`'s Suit Leak Check row predates S31/S32 — **TODO** — [TIER 4: docs hygiene]
+Noticed by **S32** while checking the docs for claims the code had just falsified (not fixed here — C1.1,
+and S32's declared outputs were code + register only). Line 83 still describes screen #5 as
+"per-suit DELTA PRESSURE + STATUS(**Nominal**)", which was true when the four status words were static
+reference copy and has not been since **S31** made them a verdict computed off a marked simulation
+(§14.4(e)). Line 125's "TROUBLESHOOT/TIMER display-only until the touch pass" is likewise now two steps
+stale: T14 wired the timer and **S32** gave TROUBLESHOOT its owner-decided reconstructed action, live only
+on a failed suit. Neither line is *wrong about the reference* — they describe what was built at the time —
+but C7.1 says the older doc gets updated when the plan/code moves past it. **DONE when:** #5's row and the
+#5 note read the way the page now behaves (STATUS = a computed verdict, ΔP live off real cabin pressure,
+TROUBLESHOOT = live-on-failure repair-and-rerun, both marked reconstructions), with no other row touched
+and no code change (so the build/preview gate is N/A per C1.3).

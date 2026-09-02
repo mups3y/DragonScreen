@@ -14,7 +14,10 @@
 // finds a leak, the same box carrying the leak result and "Repair suit and rerun suit check." (S31, our
 // own copy for our own simulated feature). HALT stops + resets. FINISH ends the procedure early and
 // raises the same popup (step 2.5's own completion control). TRY ADDITIONAL TIMER re-runs the countdown
-// and RE-ROLLS — which is what a second timed run of a leak check is.
+// and RE-ROLLS — which is what a second timed run of a leak check is. TROUBLESHOOT (S32) is the fail
+// branch's own control: it lights ONLY while a suit is reading "Failed Low", and pressing it REPAIRS
+// that suit and re-runs the check on a fresh roll — the recovery the leak result box itself instructs
+// ("Repair suit and rerun suit check."), taken through that same re-run path rather than a second one.
 //
 // TIME REMAINING counts the real procedure countdown. The four SUIT n DELTA PRESSURE rows and the four
 // SUIT n STATUS words are a MARKED SIMULATION (S31, BUILD_PLAN §14.4(e)): the differential is measured
@@ -31,6 +34,12 @@
 // scrolls past its "Scroll to continue" fold. (An earlier version of this header claimed the opposite,
 // that none of it is drawn; it was written before §14.4(d) and the code never matched it. Corrected
 // here rather than left to mislead someone into deleting an owner-decided reconstruction.)
+//
+// S32 (owner, via the overseer, 2026-09-02) extends that decision to what TROUBLESHOOT DOES.
+// RECONSTRUCTED-FROM-FUNCTION under §14.4(d)+(e), MARKED, and NOT claimed as real: there is no 4.011
+// continuation frame to verify against — the real table scrolls past its "Scroll to continue" fold and
+// that content is ITAR-class, so no source for it is coming. The function is read off the page's own
+// instruction to the crew instead: a suit that failed is repaired, and the check is run again.
 //
 // Icons are referenced by asset key (ic_check/ic_dash/ic_grid/ic_refresh/ic_eye/ic_circle).
 // ============================================================================================
@@ -184,21 +193,24 @@ namespace DragonScreen
             // frames, but a leak check has a fail path and the main table scrolls past "Scroll to
             // continue" — this is the crew's response when a suit reads "Failed Low".
             //
-            // T14 wired the two controls, and they came out asymmetric for a reason worth stating.
-            // TRY ADDITIONAL TIMER acts: "another timed run" is a complete instruction and this page
-            // already owns the timer. TROUBLESHOOT still does not — but S31 changed WHY, and the old
-            // reason is gone: a suit CAN now read "Failed Low" (the marked simulation above), so the
-            // branch's own question no longer answers itself. What is missing is TROUBLESHOOT's OWN
-            // action: no reference says what pressing it does, and §1.4 keeps an unverified control
-            // inert rather than inventing a function for it. So it stays drawn DIMMED and does nothing —
-            // the screen says the control is unavailable rather than swallowing the press and looking
-            // broken — and FailBranchLive is still the single edit. Logged in REGISTER.md. ----
+            // T14 wired the two controls and they came out asymmetric; S32 (owner, via the overseer)
+            // closed that gap. TRY ADDITIONAL TIMER always acted: "another timed run" is a complete
+            // instruction and this page already owns the timer. TROUBLESHOOT now acts too, but only
+            // when there is something to troubleshoot: the model has to be reading a suit below the
+            // pass threshold, which S31 made possible and this control now responds to. Its action is
+            // RECONSTRUCTED FROM FUNCTION (§14.4(d)+(e), marked — see the header): repair the failed
+            // suit and re-run the check, which is what the result box tells the crew to do.
+            //
+            // The lit state and the live state are ONE question, asked once: Available() reads
+            // SuitCheckState.AnyFailed, the same verdict this block draws from and the same one the
+            // glue gates the press on. So a dimmed TROUBLESHOOT cannot act, a live one cannot look
+            // unavailable, and with all four suits holding it is dimmed and silent exactly as before. ----
             dl.Rect(PX(2870), PY(680), 500 * sx, 640 * sy, Panel);
             L("Did any suit fail the", 2910, 730, 28, White);
             L("leak check?", 2910, 772, 28, White);
             L("A suit reading Failed Low did", 2910, 848, 24, Dim);
             L("not hold pressure.", 2910, 892, 24, Dim);
-            Rgba tsCol = FailBranchLive ? White : Dim;
+            Rgba tsCol = Available(SuitAct.Troubleshoot, suits) ? White : Dim;
             Pl(2910, 970, 420, 110, tsCol);
             Ico("ic_grid", 2950, 1004, 40, tsCol); C("TROUBLESHOOT", 3150, 1010, 28, tsCol);
             Pl(2910, 1120, 420, 110, White);
@@ -248,29 +260,43 @@ namespace DragonScreen
         }
 
         // ---- INTERACTIVITY ----
-        // START runs the countdown, HALT stops+resets, CLOSE dismisses the completion popup, FINISH ends
-        // the run at step 2.5 and raises that same popup, RETIME re-runs the countdown, TROUBLESHOOT is
-        // the fail branch's entry and is UNAVAILABLE (see FailBranchLive). The rects below are the exact
-        // ones Build draws (keep them in step). While the popup is up only CLOSE is live, so a stray
-        // touch on anything behind the scrim does nothing.
+        // START runs the countdown, HALT stops+resets, CLOSE dismisses the result popup, FINISH ends the
+        // run at step 2.5 and raises that same popup, RETIME re-runs the countdown, and TROUBLESHOOT is
+        // the fail branch's recovery — live only while a suit is actually reading "Failed Low" (S32; see
+        // Available). The rects below are the exact ones Build draws (keep them in step). While the popup
+        // is up only CLOSE is live, so a stray touch on anything behind the scrim does nothing.
         public enum SuitAct { None, Start, Halt, Close, Finish, Retime, Troubleshoot }
 
         /// <summary>
-        /// Is the fail branch's TROUBLESHOOT control live? Still no, but for a different reason since
-        /// S31. A suit CAN now fail this check — the marked simulation (pure/SuitLeakSim.cs) bleeds a
-        /// leaking suit below the pass threshold and STATUS reads "Failed Low" — so the branch is no
-        /// longer responding to something that cannot happen. What is unsourced now is TROUBLESHOOT's
-        /// own ACTION: no reference frame says what it does, and §1.4 keeps an unverified control inert
-        /// rather than inventing a function for it. Kept as a named constant rather than a `false`
-        /// buried in the draw so that the day that action is sourced there is exactly one place to
-        /// change, and the test can assert the page and the hit test agree about it.
+        /// Does the fail branch's TROUBLESHOOT control have an ACTION at all? Since S32 it does, and the
+        /// two reasons it did not fell in that order. S31's marked simulation (pure/SuitLeakSim.cs) took
+        /// the first: a suit CAN now bleed below the pass threshold and read "Failed Low", so the branch
+        /// is no longer answering a question that answered itself. The second was that no reference says
+        /// what pressing it DOES — and none ever will, because the real procedure scrolls past its
+        /// "Scroll to continue" fold and that content is ITAR-class. So the owner decided it (via the
+        /// overseer, 2026-09-02) the way §14.4(d) decided the branch itself: RECONSTRUCT FROM FUNCTION,
+        /// marked, not claimed as real. The function comes from the page's own instruction to the crew,
+        /// "Repair suit and rerun suit check." — pressing TROUBLESHOOT repairs the failed suit and
+        /// re-runs the check on a fresh roll, through the path TRY ADDITIONAL TIMER already uses.
+        ///
+        /// This constant says the branch HAS an action; whether the control is live RIGHT NOW is
+        /// Available(), which asks the model whether a suit has actually failed. It stays a named
+        /// constant so that a real source contradicting any of this still has exactly one place to
+        /// change, and so the test can assert the page and the hit test agree about it.
         /// </summary>
-        public const bool FailBranchLive = false;
+        public const bool FailBranchLive = true;
 
-        /// <summary>True if this act does something today. TROUBLESHOOT is the one that does not, and it
-        /// is drawn dimmed to say so rather than being left out (§14.4(d) keeps the branch).</summary>
-        public static bool Available(SuitAct a)
-        { return a != SuitAct.None && (a != SuitAct.Troubleshoot || FailBranchLive); }
+        /// <summary>True if this act does something on the state in front of the crew. TROUBLESHOOT is
+        /// the conditional one: it responds to a suit that FAILED, so while all four are holding there
+        /// is nothing to troubleshoot and it stays dimmed and inert exactly as it did before S32. Build
+        /// lights the control from this same call, so the lit control and the live control cannot
+        /// disagree; the glue asks it once more before acting, so neither can the press.</summary>
+        public static bool Available(SuitAct a, SuitCheckState suits)
+        {
+            if (a == SuitAct.None) return false;
+            if (a == SuitAct.Troubleshoot) return FailBranchLive && suits.AnyFailed;
+            return true;
+        }
 
         public static SuitAct HitTest(float px, float py, int w, int h, bool popup)
         {

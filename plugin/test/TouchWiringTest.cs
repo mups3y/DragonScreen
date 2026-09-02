@@ -274,19 +274,37 @@ public static class TouchWiringTest
                       == SuitCheckPage.SuitAct.Close, "");
         }
 
-        // TROUBLESHOOT resolves but is UNAVAILABLE. S31 changed WHY, and the old reason is gone: a suit
-        // CAN now read "Failed Low" (the marked suit simulation, §14.4(e)), so the branch is no longer
-        // responding to something that cannot happen. What is still unsourced is TROUBLESHOOT's own
-        // ACTION - no reference says what pressing it does - and §1.4 keeps an unverified control inert
-        // rather than inventing a function for it. FailBranchLive is still the single edit the day that
-        // action is sourced; logged in REGISTER.md.
-        Check("the TROUBLESHOOT branch still has no sourced action", !SuitCheckPage.FailBranchLive, "");
-        Check("TROUBLESHOOT is unavailable",
-              !SuitCheckPage.Available(SuitCheckPage.SuitAct.Troubleshoot), "");
+        // TROUBLESHOOT resolves, and since S32 it can ACT - but only on a state that justifies it, which
+        // is the whole of the S32 check. The two reasons it was inert fell in order: S31's marked
+        // simulation (§14.4(e)) made a suit able to read "Failed Low", and the owner (via the overseer,
+        // 2026-09-02) decided the action itself as a marked reconstruction-from-function (§14.4(d)+(e)),
+        // since no 4.011 continuation frame exists to verify one against. So the assertion is no longer
+        // "it never acts" but "it acts on a failure and on nothing else" - the failure mode that would
+        // matter on glass is a control that lights, or acts, while all four suits are holding.
+        Check("the fail branch now has an action (S32, reconstructed)", SuitCheckPage.FailBranchLive, "");
+
+        PageState cabin = new PageState();
+        cabin.Valid = true;
+        cabin.Cabin.PressPsia = 14.70;
+        uint cleanSeed = 0u;
+        for (uint k = 1; k < 1000 && cleanSeed == 0u; k++) if (SuitLeak.LeakingSuit(k) == 0) cleanSeed = k;
+        SuitCheckState clean  = SuitLeak.From(cabin, 0, true, cleanSeed);
+        SuitCheckState failed = SuitLeak.From(cabin, 0, true, SuitLeak.SeedForLeak(2));
+        SuitCheckState nofeed = SuitLeak.From(new PageState(), 0, true, SuitLeak.SeedForLeak(2));
+        SuitCheckState fresh  = SuitLeak.From(cabin, 5, false, SuitLeak.SeedForLeak(2));
+
+        Check("a failed suit makes TROUBLESHOOT available",
+              failed.AnyFailed && SuitCheckPage.Available(SuitCheckPage.SuitAct.Troubleshoot, failed), "");
+        Check("a clean run leaves TROUBLESHOOT inert",
+              !clean.AnyFailed && !SuitCheckPage.Available(SuitCheckPage.SuitAct.Troubleshoot, clean), "");
+        Check("a run that has not bled yet leaves TROUBLESHOOT inert",
+              !fresh.AnyFailed && !SuitCheckPage.Available(SuitCheckPage.SuitAct.Troubleshoot, fresh), "");
+        Check("no feed leaves TROUBLESHOOT inert",
+              !SuitCheckPage.Available(SuitCheckPage.SuitAct.Troubleshoot, nofeed), "");
         Check("the timer control IS available",
-              SuitCheckPage.Available(SuitCheckPage.SuitAct.Retime), "");
-        Check("FINISH is available", SuitCheckPage.Available(SuitCheckPage.SuitAct.Finish), "");
-        Check("None is never available", !SuitCheckPage.Available(SuitCheckPage.SuitAct.None), "");
+              SuitCheckPage.Available(SuitCheckPage.SuitAct.Retime, clean), "");
+        Check("FINISH is available", SuitCheckPage.Available(SuitCheckPage.SuitAct.Finish, clean), "");
+        Check("None is never available", !SuitCheckPage.Available(SuitCheckPage.SuitAct.None, failed), "");
     }
 
     // ============================================================================================

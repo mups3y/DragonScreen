@@ -21,7 +21,8 @@
 //                loose RNG — LeakingSuit() is a pure function of the run's SEED, so the same run
 //                always reaches the same verdict, two screens showing one run agree, and the preview
 //                and the headless tests DRIVE both branches instead of waiting for one (SeedForLeak).
-//                The glue mints the seed from the real clock at the moment INITIATE is pressed.
+//                The glue mints the seed from the real clock at the moment a run BEGINS — INITIATE,
+//                TRY ADDITIONAL TIMER, or (S32) a TROUBLESHOOT repair.
 //
 // ---- THE VERDICT IS COMPUTED, NEVER STATED (§14.4(e) GUARDRAIL) ----
 // SuitCheckState.Failed() is a threshold on the simulated differential, so a STATUS word can only say
@@ -73,6 +74,13 @@ namespace DragonScreen
         /// <summary>THE VERDICT, and it is computed rather than stated: a suit whose differential has
         /// fallen below the pass threshold did not hold pressure. No feed = no verdict at all.</summary>
         public bool Failed(int i) { return Valid && Delta(i) < SuitLeak.PassPsi; }
+
+        /// <summary>Did ANY suit fail? The fail branch's own printed question ("Did any suit fail the
+        /// leak check?") answered from the model, and since S32 it is what makes TROUBLESHOOT live: the
+        /// page lights the control from it, SuitCheckPage.Available gates the press on it and the glue
+        /// acts only when it agrees, so a lit control and a live control are the same control and
+        /// neither can appear while the model says all four suits are holding.</summary>
+        public bool AnyFailed { get { return Failed(0) || Failed(1) || Failed(2) || Failed(3); } }
     }
 
     public static class SuitLeak
@@ -180,9 +188,10 @@ namespace DragonScreen
             return 0;
         }
 
-        /// <summary>Mint a run seed. The glue passes the real clock at the moment INITIATE (or TRY
-        /// ADDITIONAL TIMER) was pressed plus the run's index, so re-running re-rolls; pure so the
-        /// mint itself is testable. Never returns 0, which means "no run".</summary>
+        /// <summary>Mint a run seed. The glue passes the real clock at the moment a run began —
+        /// INITIATE, TRY ADDITIONAL TIMER, or (S32) a TROUBLESHOOT repair — plus the run's index, so
+        /// re-running re-rolls and a repair's re-run is rolled like any other; pure so the mint itself
+        /// is testable. Never returns 0, which means "no run".</summary>
         public static uint SeedFrom(double clockSeconds, int runIndex)
         {
             unchecked

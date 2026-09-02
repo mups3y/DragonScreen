@@ -339,6 +339,22 @@ public static class FigmaUINavTest
         return false;
     }
 
+    /// <summary>The colour the page drew this exact string in, the first time it drew it. A control
+    /// that is DIMMED to say it is unavailable differs from a live one only by its colour, so that
+    /// claim cannot be tested by looking for the string (S32's TROUBLESHOOT).</summary>
+    static Rgba ColourOf(DisplayList dl, string text)
+    {
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind == DrawKind.Text && c.Str == text) return c.Colour;
+        }
+        return new Rgba(0f, 0f, 0f, 0f);
+    }
+
+    static bool SameColour(Rgba a, Rgba b)
+    { return a.R == b.R && a.G == b.G && a.B == b.B && a.A == b.A; }
+
     /// <summary>How many TIMES the page drew this exact string. A page that draws one datum in two
     /// places (DockingSimPage's ring readouts and its PYR block are the same group) has to draw the SAME
     /// string in both, and this is how that is proved rather than assumed.</summary>
@@ -1317,6 +1333,49 @@ public static class FigmaUINavTest
         // a confident Nominal beside it.
         PageState halfBuilt = new PageState(); halfBuilt.Valid = true;
         Check("an unfilled cabin is not a cabin", !SuitLeak.From(halfBuilt, 0, true, 0u).Valid, "");
+
+        // ---- S32: TROUBLESHOOT answers the verdict, and only the verdict ----
+        // The control's action is a MARKED reconstruction-from-function (owner, via the overseer,
+        // 2026-09-02; §14.4(d)+(e)) - repair the failed suit and re-run the check, which is what the
+        // result box already tells the crew to do. What has to hold is that it responds to a real
+        // failure and to nothing else: a control that lights, or acts, over four holding suits would be
+        // the same "screen asserting something the model does not say" S31 just removed from this page.
+        Check("the fail branch has an action at all (S32)", SuitCheckPage.FailBranchLive, "");
+        Check("a leak run makes TROUBLESHOOT available",
+              bad.AnyFailed && SuitCheckPage.Available(SuitCheckPage.SuitAct.Troubleshoot, bad), "");
+        Check("a clean run leaves TROUBLESHOOT inert",
+              !ok.AnyFailed && !SuitCheckPage.Available(SuitCheckPage.SuitAct.Troubleshoot, ok), "");
+        Check("no feed leaves TROUBLESHOOT inert",
+              !SuitCheckPage.Available(SuitCheckPage.SuitAct.Troubleshoot, none), "");
+
+        // The LIT control and the LIVE control are one control: the page paints it from the same
+        // Available() the glue gates the press on, so these two colours are the visible half of the
+        // assertions above rather than a second opinion about them.
+        DisplayList dtable = new DisplayList(SuitCheckPage.Commands + 60);
+        SuitCheckPage.Build(dtable, VW, VH, 0, false, bad);          // the box closed: what the crew acts in
+        Check("the failed table draws TROUBLESHOOT lit",
+              SameColour(ColourOf(dtable, "TROUBLESHOOT"), DragonPalette.White),
+              "got " + ColourOf(dtable, "TROUBLESHOOT").R.ToString("F2"));
+        Check("a clean page draws TROUBLESHOOT dimmed",
+              SameColour(ColourOf(dok, "TROUBLESHOOT"), DragonPalette.Text6), "");
+        Check("the failed table still reads its verdict with the box closed",
+              Times(dtable, "Failed Low") == 1 && Times(dtable, "Nominal") == 3, "");
+
+        // PRESSING IT: repair + re-run. The press mints a fresh run seed and puts the countdown back to
+        // the top - the same state change TRY ADDITIONAL TIMER makes - so the failure the crew was
+        // looking at is gone and the NEXT verdict is rolled rather than declared clean.
+        uint reseed = SuitLeak.SeedFrom(1234.5, 2);
+        Check("a repair mints a different run", reseed != 0u && reseed != leaky, "seed " + reseed);
+        SuitCheckState after = SuitLeak.From(s, 5, false, reseed);
+        Check("the repaired suit is holding again at the top of the new run",
+              after.Valid && !after.AnyFailed && !after.Failed(2), "");
+        Check("and the control goes back to inert until the new run finds something",
+              !SuitCheckPage.Available(SuitCheckPage.SuitAct.Troubleshoot, after), "");
+        // ...and a re-run that DOES find one lights it again, so the recovery is repeatable rather than
+        // a one-shot that silently stops working the second time a suit fails.
+        SuitCheckState again = SuitLeak.From(s, 0, true, SuitLeak.SeedForLeak(1));
+        Check("a re-run that finds a leak lights it again",
+              again.Failed(0) && SuitCheckPage.Available(SuitCheckPage.SuitAct.Troubleshoot, again), "");
     }
 
     static void BottomBar()

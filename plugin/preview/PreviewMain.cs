@@ -837,12 +837,13 @@ public static class PreviewMain
                                   + sdl.Count + " frames");
             }
 
-            // ---- S31: the Suit Leak Check's TWO RESULTS ----
-            // The page itself comes out of the loop above in its resting state (a run not yet made, the
-            // four differentials live off the fixture's cabin, every STATUS a verdict on them). Its two
-            // RESULTS only exist behind a run, so each needs its own render or neither has a cheap
-            // evidence channel. The 5% roll is seedable exactly so this is possible without waiting for
-            // one: seed 0 is a run that found nothing, SeedForLeak(3) is one that found a leak in suit 3.
+            // ---- S31/S32: the Suit Leak Check's RESULTS, and the state the crew acts in ----
+            // The page itself comes out of the loop above in its RESTING state (no run made, the four
+            // differentials live off the fixture's cabin, every STATUS a verdict on them, TROUBLESHOOT
+            // dimmed) - that is ui_suitcheck.png. Everything below only exists behind a run, so each
+            // needs its own render or none of it has a cheap evidence channel. The 5% roll is seedable
+            // exactly so this is possible without waiting for one: seed 0 is a run that found nothing,
+            // SeedForLeak(3) is one that found a leak in suit 3.
             {
                 DisplayList udl = new DisplayList(600);
                 SuitCheckPage.Build(udl, CW, CH, 0, true, SuitLeak.From(ps, 0, true, 0u));
@@ -852,15 +853,34 @@ public static class PreviewMain
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + udl.Count + " commands");
             }
             {
+                // S32 RE-AIMED THIS RENDER. It was the leak RESULT BOX (now ui_suitcheck_leak_popup.png
+                // below, beside the clean box). The box sits under an 82%-opaque scrim, so the one thing
+                // S32 changed - TROUBLESHOOT lighting up - is not inspectable through it. What this file
+                // shows instead is the state the crew actually acts in: the run found a leak, the box has
+                // been closed, the table is still reading "Failed Low" (the countdown parks at 0 rather
+                // than springing back to 5) and the fail branch's control is LIVE.
                 uint leak = SuitLeak.SeedForLeak(3);
+                SuitCheckState st = SuitLeak.From(ps, 0, true, leak);
                 DisplayList udl = new DisplayList(600);
-                SuitCheckPage.Build(udl, CW, CH, 0, true, SuitLeak.From(ps, 0, true, leak));
+                SuitCheckPage.Build(udl, CW, CH, 0, false, st);
                 if (udl.Overflowed) Console.WriteLine("  WARNING UI SUITCHECK/LEAK OVERFLOWED");
                 string path = Path.Combine(outDir, "ui_suitcheck_leak.png");
                 Render(udl, CW, CH, path);
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + udl.Count
                                   + " commands   seed " + leak
-                                  + "   suit 3 delta " + SuitLeak.Text(SuitLeak.From(ps, 0, true, leak).Delta(2)));
+                                  + "   suit 3 delta " + SuitLeak.Text(st.Delta(2))
+                                  + "   troubleshoot "
+                                  + (SuitCheckPage.Available(SuitCheckPage.SuitAct.Troubleshoot, st)
+                                     ? "LIVE" : "inert"));
+            }
+            {
+                uint leak = SuitLeak.SeedForLeak(3);
+                DisplayList udl = new DisplayList(600);
+                SuitCheckPage.Build(udl, CW, CH, 0, true, SuitLeak.From(ps, 0, true, leak));
+                if (udl.Overflowed) Console.WriteLine("  WARNING UI SUITCHECK/LEAK-POPUP OVERFLOWED");
+                string path = Path.Combine(outDir, "ui_suitcheck_leak_popup.png");
+                Render(udl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + udl.Count + " commands");
             }
         }
 
