@@ -1056,13 +1056,18 @@ does not exist, that the §8 flight facts live in `BUILD_PLAN.md` until T15 crea
 comments (`pure/MissionPhase.cs:54`, `build/audit_comments.py:233`) are not a live link. **Still open:** those
 two comments, and creating the file — both T15.
 
-### S4 [S] Phase classifier reads PHASING while still sub-orbital — **TODO** — [TIER 1: pre-Part-B correctness bug]
-From the 2026-08-29 screen audit (U1), and the code still ships. `VesselData.cs:77` `Mission.Classify(mi)` keys
-on situation + target presence with **no orbit-closed check**, so "in space + has an ISS target" ⇒ Phasing —
-even mid-ascent with periapsis at −4,600 km. The screens showed `ACTIVE PHASE PHASING` from ~T+5:02 while the
-mode label simultaneously read "Ascent to orbit". Should stay ASCENT/INSERTION until the orbit is actually
-closed (pe above the atmosphere / SECO). Pure code, headless-testable. **DONE when:** a sub-orbital vessel with
-a target classifies as ascent, with a test.
+### S4 [S] Phase classifier reads PHASING while still sub-orbital — **DONE 2026-09-02**
+From the 2026-08-29 screen audit (U1). **Turned out already fixed** — the SAME-DAY audit-response commit
+`98cf500` ("U1: phase classifier stays ASCENT until the orbit is closed") had already added
+`MissionInputs.OrbitClosed` (`pure/MissionPhase.cs`), populated it in `VesselData.cs:78` as
+`v.orbit.PeA > v.mainBody.atmosphereDepth`, gated `Mission.Classify`'s Phasing/Approach branch behind it
+(`pure/MissionPhase.cs:76-84`), and added the regression check `"targeted but orbit not closed is still
+ascent (U1)"` in `plugin/test/LayoutTest.cs:525`. This S4 register line was logged from the same audit finding
+without noticing the fix commit had already landed — a duplicate, not a live bug.
+**This session:** read both files end-to-end, confirmed the orbit-closed gate and test are present and
+committed (`git log -S"OrbitClosed"` → `98cf500`, ancestor of HEAD), confirmed no other code path re-reads
+PHASING without the gate. `python plugin/build.py test`: green, ALL SCREEN SUITES PASSED (MissionPhase suite
+6/6, including the U1 check). No code changed this session → no label changed → preview re-render N/A (C1.3).
 
 ### S5 [S] Nuisance PROPELLANT CAUTION off the spent ascent stage — **TODO** — [TIER 1: pre-Part-B correctness bug]
 From the same audit (U2). The propellant gauge correctly shows what the LIT engines are drinking, so the
