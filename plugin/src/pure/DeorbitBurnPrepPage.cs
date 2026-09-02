@@ -23,10 +23,23 @@
 // verbatim as sourced rather than corrected unilaterally (C1.4) — matches the existing shipped
 // wording so nothing in the codebase disagrees with itself.
 // Roll / Pitch / Yaw and "Maximum altitude rate" are real FIELD NAMES with no legible VALUE in the
-// source photo, and no live vehicle quantity to source them from yet (this is a free-flight/inertial
-// attitude slew, not the docking-relative PageState.RollText/PitchText/YawText the HUD uses) — T13
-// (Live-data wiring) is where a real number could ever appear here, so they show "—", the same
-// no-source-yet idiom T5 used for the CONSUMABLES margin column. "FC Slew" is not decoration: it reads
+// source photo, and no live vehicle quantity to source them from (this is a free-flight/inertial
+// attitude slew, not the docking-relative PageState.RollText/PitchText/YawText the HUD uses).
+//
+// ---- T13c LOOKED AT THESE FOUR ROWS AND LEFT THEM DASHED, DELIBERATELY ----
+// T13c's register line asked for exactly this call, "live or stay dashed, against the registry", and
+// the answer is STAY DASHED. The four rows are a COMMANDED slew, not a measurement: ROLL / PITCH /
+// YAW under "SLEW FOR DEORBIT BURN" are the attitude the vehicle is being TOLD to hold for the burn,
+// and docs/TELEMETRY_REGISTRY.md carries no row for any of them — no SLEW_* datum, no authority,
+// no source. The near-misses were considered and rejected as inventions of MEANING rather than of a
+// number: the docking-relative errors are an error against a docking TARGET, not against a burn
+// attitude; the body rates VesselData.Rates() publishes are how fast we are turning, not where we
+// are being told to turn to; and a latched peak rate under "MAXIMUM ALTITUDE RATE" would be a
+// plausible number under a label whose meaning this build cannot confirm — which is exactly what the
+// registry's rule ("anything with no real source is UNKNOWN — EVIDENCE REQUIRED ... never invented")
+// exists to stop. Their real source is the thing that will COMMAND the slew: the Part B conductor
+// (T21, deorbit/entry/chutes). Until it exists they read "—", the same no-source-yet idiom T5
+// used for the CONSUMABLES margin column. "FC Slew" is not decoration: it reads
 // PageState.DeorbitEngaged, which the glue already threads from DeorbitOps.Engaged (_AutopilotStub.cs,
 // the same idle stub STRING1C already reports through PanelButtons) — "NOT ENGAGED" until Part B wires
 // it, the same honest-stub idiom every other command surface in this build reports (RendezvousPage's
@@ -78,7 +91,11 @@ namespace DragonScreen
                 "Far-field pointing",
                 "600°/min altitude rate" }, C1Y, 40f);
 
-            // ---- SLEW FOR DEORBIT BURN — real field names; live values not yet sourced (T13) ----
+            // ---- SLEW FOR DEORBIT BURN — real field names; deliberately dashed (T13c) ----
+            // The four values below have no source and are deliberately not given one — see the
+            // header for the call and its reasoning. FC SLEW underneath them IS live, and is the row
+            // that shows why: it reads the same Part B seam (PageState.DeorbitEngaged) that will one
+            // day COMMAND the slew those four describe.
             const float C2Y = 500f;
             Dot(C2Y); Title("SLEW FOR DEORBIT BURN", C2Y);
             void Row(string label, string value, Rgba valueColour, float ry)

@@ -71,6 +71,10 @@ namespace DragonScreen
         /// <summary>Climbing. The half of the orbit plot the conic cannot supply.</summary>
         public bool Ascending;
         public string InclinationText, PeriodText, TimeToApText, TimeToPeText;
+        /// <summary>T13c. Inclination in the glyph form the reference's own top strip prints
+        /// ("51.64°"), beside InclinationText's "51.64 deg". One value, two renderings - see
+        /// RollDegText for why both exist.</summary>
+        public string InclinationDegText;
 
         /// <summary>
         /// Time to splashdown. SHOWN ONLY ON A REAL DESCENT - see VesselData for the model and its
@@ -116,6 +120,13 @@ namespace DragonScreen
         /// until plumbed in VesselData (Phase 4/7). See TELEMETRY_REGISTRY DOCK_*_RATE.
         /// </summary>
         public string PitchRateText, YawRateText, RollRateText;
+        /// <summary>
+        /// T13c. The SAME docking attitude error as RollText/PitchText/YawText, rendered the way the
+        /// MANUAL docking page prints it ("15.0°") rather than the way the attitude HUD prints it
+        /// ("15.0 deg"). Two renderings of ONE value, formatted side by side in VesselData, so the two
+        /// docking surfaces cannot drift apart - the rule T13b stated for the gauge-vs-row units.
+        /// </summary>
+        public string RollDegText, PitchDegText, YawDegText;
         /// <summary>Angle between our port axis and the line to the target, 0..1 of 90 degrees.</summary>
         public double Align01;
         public string AlignText;
@@ -293,6 +304,21 @@ namespace DragonScreen
         public bool HasTargetGround;
         public double TargetLat, TargetLon;
         public string TargetLatText, TargetLonText;
+        /// <summary>
+        /// T13c. WHERE THE TARGET IS ON OUR OWN ORBIT PLOT - the rendezvous plot's approach chord had
+        /// no target position to run to (T6 drew it to periapsis as a stand-in and said so).
+        ///
+        /// TargetPhaseRad is the PHASE ANGLE: the signed in-plane angle from OUR position to the
+        /// TARGET's, about our angular-momentum vector, so POSITIVE means ahead of us along the
+        /// direction of travel. Relative on purpose - the plot places us from our own radius, and an
+        /// angle measured from us cannot disagree with that marker however the conic is drawn.
+        /// TargetRadiusM is the target's distance from the same body centre the plot is focused on.
+        ///
+        /// False when there is no target, or its orbit is not around our body: the plot then draws no
+        /// chord at all rather than a line to a point it had to invent.
+        /// </summary>
+        public bool HasTargetOrbit;
+        public double TargetRadiusM, TargetPhaseRad;
         /// <summary>Live 3D scaled-planet overlay (viewport fractions), OWNED BY THE GLUE and reused
         /// every frame. Null in the PNG preview and until the renderer fills it - the page checks
         /// Ready. See PlanetOverlay.</summary>

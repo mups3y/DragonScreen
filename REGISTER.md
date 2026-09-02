@@ -805,7 +805,7 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
 - ⚠ **Not claimed:** that the numbers are right ON THE GLASS. That needs the capsule and the gate is
   preview-only, so it stays with **S18**, which already names T13 for exactly this.
 
-### T13c [O] Live-data wiring — the procedure & prox-ops pages — **TODO**
+### T13c [O] Live-data wiring — the procedure & prox-ops pages — **DONE**
 - **Read:** §6 + `docs/TELEMETRY_REGISTRY.md` + `pure/ManualChuteDeployPage.cs` / `pure/DockingSimPage.cs` /
   `pure/SuitCheckPage.cs` / `pure/DeorbitBurnPrepPage.cs` / `pure/NavPage.cs`.
 - **Build:** `ManualChuteDeployPage`'s hard-coded top telemetry strip (ACTIVE PHASE · SPLASHDOWN TIME ·
@@ -816,6 +816,88 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
   T13's); and `NavPage`'s approach chord, which wants the target orbital elements `PageState` does not carry
   yet (the gap T6 logged at line ~269).
 - **DONE when:** the same criteria as T13a.
+- **DONE 2026-09-02.** The five pages the line names are wired, in the idiom `SystemsPidPage` (T9),
+  T13a and T13b already ship — a value with a source comes from `PageState`, a value without one is an
+  honest dash, and nothing is invented (`docs/TELEMETRY_REGISTRY.md`). **13 readouts made live, 8 kept
+  dashed on purpose, 1 chord made real.** Every decision is stated at its own site.
+  - **`ManualChuteDeployPage` — the top telemetry strip (7 live).** ACTIVE PHASE → `s.Phase`,
+    SPLASHDOWN TIME → `s.SplashdownText` **gated on `SplashdownShown`** (the registry's "N/A
+    off-return" for SPLASHDOWN_ETA), INERTIAL VELOCITY → `s.Velocity`, ALTITUDE → `s.Altitude`,
+    APOGEE / PERIGEE → `s.Apoapsis`/`s.Periapsis` **gated on `ApogeeShown`/`PerigeeShown`**, the same
+    flags every other page's apsides follow, INCLINATION → a new `s.InclinationDegText`. The seven
+    strings replaced were the reference export's own baked values ("7.67 km/s", "T-01:08:36", …) —
+    §6's "the numeric VALUES are the placeholders". The PROCEDURE COPY below the strip (altitudes,
+    step names, actions) is reference text and is untouched.
+  - **`DockingSimPage` — ROLL / PITCH / YAW, PYR, RANGE, RATE (5 live, drawn in 8 places).** The page
+    did not take a `PageState`; it does now (`FigmaUI` call site updated). The ring readouts and the PYR
+    block are **the same group, not two** — `docs/SCREEN_EVIDENCE_MATRIX.md` has them as "Rotation
+    readouts ROLL / PITCH / YAW (grouped 'PYR'), each a value in degrees" — so both now read the SAME
+    strings. The placeholder era had them **disagreeing** (`0.0°` around the rings, `180.0` in the
+    block), which is exactly the "a needle that disagrees with its own readout" failure T13a's wiring
+    exists to make impossible. RANGE / RATE are the HUD's own `RangeText`/`RateText`, so there is one
+    range and one closing rate in the build. **No target ⇒ all eight dash**: there is nothing to be
+    misaligned with, and a confident `0.0°` of error against nothing is the worst reading on the page.
+  - **`SuitCheckPage` — the four SUIT n DELTA PRESSURE rows: DASHED, and that is the finding.** Nothing
+    in this build models a suit (not `VehicleSystems`, not `CabinEnvironment`, and KSP has no per-crew
+    pressure resource), so `"0.01psi"` had no source at all — and a constant sitting in a LEAK CHECK is
+    the worst place in the build for one: four suits reading a confident 0.01 psi is how a screen says
+    "no leak" when it knows nothing. TIME REMAINING keeps the real procedure countdown; the STATUS
+    words are reference copy (**S22**), untouched.
+  - **`DeorbitBurnPrepPage` — the four SLEW rows: STAY DASHED, decided (this line asked for the call).**
+    ROLL / PITCH / YAW / MAXIMUM ALTITUDE RATE under "SLEW FOR DEORBIT BURN" are a **commanded** inertial
+    slew, and `docs/TELEMETRY_REGISTRY.md` carries no row for any of them — no SLEW_* datum, no
+    authority, no source. The near-misses were considered and rejected **as inventions of MEANING, not
+    of a number**: the docking-relative errors are an error against a docking TARGET; the body rates
+    `Rates()` publishes are how fast we are turning, not where we are being told to turn to; a latched
+    peak rate under "MAXIMUM ALTITUDE RATE" would be a plausible number under a label this build cannot
+    confirm the meaning of. Their real source is the thing that will COMMAND the slew — **Part B, T21**.
+    Written into the page header, and **guarded by a test** that no fixture value may appear on those
+    rows. FC SLEW beside them stays live on the same Part B seam.
+  - **`NavPage`'s approach chord — now target-relative (the T6 gap at line ~269 is closed).** T6 ran the
+    chord to PERIAPSIS and said why: the target's orbital state was not in `PageState`. It is now —
+    `HasTargetOrbit` / `TargetRadiusM` / `TargetPhaseRad`, filled by a new `VesselData.TargetPlot()` —
+    so the chord runs to **where the target actually is**, with a small diamond marking the endpoint (a
+    line has to end somewhere identifiable; **no label is invented** for it). The angle is a **phase
+    angle measured from US**, not from periapsis, so the far end inherits the same guarantee the near
+    end has: the plot places our marker from our own radius, and an angle measured off that marker
+    cannot disagree with it. **Stated approximation:** the target is projected into our orbital plane
+    (a 2D plot has nowhere else to put it; on a real rendezvous the planes are all but identical).
+    A target with no orbit around our body draws **no chord at all** rather than reverting to a line it
+    had to invent.
+  - **Gate (C1.3) met — preview + headless only, no `install`, no glass.** `python plugin/build.py test`
+    **green, 0 failed**; the Figma UI nav suite 534 → **633 checks** with a new `ProcedureLiveValues`
+    section that builds each page with **two different fixtures** and asserts every wired value moved,
+    that each drops to a dash with no feed / no target, that the 11 old hard-coded constants never
+    return, that the three docking axes are each drawn **exactly twice from one string**, that the
+    chord's ENDPOINT moves with the phase angle (the "not a constant" proof for a line rather than a
+    string), that there is **no chord** with no target or no comparable orbit, that the plain NAV view
+    never grows one — and, inverted, that **the deorbit SLEW rows invent nothing**: not one fixture
+    value may appear on them. **Proved non-vacuous:** re-hardcoding the ROLL readout to `"0.0°"` and
+    INERTIAL VELOCITY to `"7.67 km/s"` fails it (6 checks), and it passes again on revert. **No new
+    compiler warnings** (11 before, 11 after — all pre-existing).
+  - **Previews rendered and inspected:** `ui_manualchute.png` (ORBITING · 2280 m/s · 123.4 km · 124.0
+    km · 121.9 km · 0.13°, SPLASHDOWN TIME correctly dashed **off** a return), `ui_docking.png`
+    (ROLL 15.0° / PITCH 0.1° / YAW 0.1° with the PYR block reading the identical 0.1 / 0.1 / 15.0,
+    RANGE 202.6 m, RATE −0.25 m/s), `ui_rendezvous.png` (the chord now runs from the vehicle marker to
+    a diamond OUTSIDE the ellipse — a target above and ahead, which is what an approach from a lower
+    phasing orbit looks like), `ui_suitcheck.png` (four dashed ΔP rows with dimmed dash icons),
+    `ui_deorbitburnprep.png` re-inspected (four dashes + NOT ENGAGED, unchanged). **Four NEW previews
+    for the states the new values create** — `ui_manualchute_descent.png` (the strip fully live, T−
+    01:08:36), `ui_manualchute_nofeed.png` (all seven dashed and dim), `ui_docking_notarget.png` (all
+    eight dashed), `ui_rendezvous_notarget.png` (no chord, no diamond, plot otherwise intact) — because
+    every value being live makes "no feed" and "no target" looks of their own.
+    `plugin/build/csc.rsp` churn reverted before commit (S11).
+- **§1.4 / C1.4:** respected. No label, no unit, no `PanelMap.cs`, no label doc touched; §6's scoping
+  ("the numeric VALUES are the placeholders") kept, so all the procedure copy — the chute steps and
+  actions, the suit checklist and its STATUS words (**S22**), the Crew Interrupt Conditions' "altitude"
+  wording (**S13**) — is reproduced untouched. One rendering note, not a change: SPLASHDOWN TIME prints
+  the shared formatter's `"T- 01:08:36"` where the reference export baked `"T-01:08:36"`; the space
+  comes from `VesselData`'s one splashdown formatter and bending it for a single page would be the
+  drift this wiring exists to prevent.
+- ⚠ **Not claimed:** that the numbers are right ON THE GLASS. That needs the capsule and the gate is
+  preview-only, so it stays with **S18**, which already names T13 for exactly this. **One thing S18
+  should look at specifically:** the approach chord's endpoint under a real ISS target, which is the
+  one value here derived from geometry rather than read straight out of an existing field.
 
 ### T14 [O] Touch wiring — **TODO**
 - **Read:** §6 + §4.  **Build:** display-only controls → real per the decisions.  **DONE when:** controls act (+ tests).
@@ -1338,3 +1420,28 @@ read the identical live text for the identical vessel.
   before commit (S11 precedent).
 - **§1.4 / C1.4 respected:** the checklist LABELS were real-sourced copy and only the one owner-authorized
   edit (S23) touched a label; no `PanelMap.cs` edit; no other label doc touched.
+
+### S26 [S] Manual docking: the target diamond is fixed, and the axis group is drawn twice — **TODO**
+Found by T13c, deliberately not done (C1.1). `DockingSimPage` now prints live ROLL / PITCH / YAW, RANGE and
+RATE, but the green target diamond is still drawn at a FIXED offset from the reticle (`tx = HCX + 70f,
+ty = HCY - 48f`) — so it sits off-centre while the page reads 0.1° of error, and `ui_docking_notarget.png`
+shows it still hovering there with **no target at all**. Same class of thing T13a fixed on the MECH panel's
+fixed 240° rings: decoration beside a number that now moves.
+Not fixed here for two reasons. It is a LAYOUT/geometry change, and §6 scopes T13 to the numeric VALUES;
+and unlike T13a's rings the fractions are not already in hand — placing the diamond honestly needs the
+pitch/yaw bearings as raw doubles in `PageState` (only their text exists today) plus a decision about how
+many degrees of error equal the ring radius, which no source in the repo states.
+**When it is taken:** add the raw bearings beside `PitchDegText`/`YawDegText`, place the diamond from them,
+hide it entirely with no target, and state the ring's degrees-full-scale at its own site the way
+`VehicleSubsystemPage` states its 2 °/s rate dial. Note the two things the iss-sim reference DOES confirm
+(SCREEN_INVENTORY #11): the diamond is the target, and the readouts go green when corrected — the second is
+a colour rule this build does not implement either, and belongs with the same task.
+
+**Second, related layout question on the same page** (the other thing `DockingSimPage`'s header points
+here for). The page draws the ROLL / PITCH / YAW group TWICE — once around the rings, once as the PYR
+block — and `docs/SCREEN_EVIDENCE_MATRIX.md` describes ONE group ("Rotation readouts ROLL / PITCH / YAW
+(grouped 'PYR'), each a value in degrees"). T13c wired both to one source so they can no longer
+disagree, which is the safe outcome and as far as a VALUES task may go; whether one of the two is
+redundant chrome that should be dropped, or given the second confirmed quantity (the reference's blue
+RATES — `PitchRateText`/`YawRateText`/`RollRateText` are already in `PageState`), is a layout call
+against the iss-sim reference. Take it with the diamond above, in one pass over this page.

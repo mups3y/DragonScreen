@@ -82,6 +82,9 @@ public static class PreviewMain
         ps.OffXText = "22.7 m"; ps.OffYText = "0.1 m"; ps.OffZText = "0.0 m";
         ps.PitchText = "0.1 deg"; ps.YawText = "0.1 deg"; ps.RollText = "15.0 deg";
         ps.PitchRateText = "0.0 deg/s"; ps.YawRateText = "0.1 deg/s"; ps.RollRateText = "0.0 deg/s";
+        // T13c: the same three errors in the glyph form the MANUAL docking page prints. VesselData
+        // formats the pair off one value; the fixture keeps them consistent for the same reason.
+        ps.PitchDegText = "0.1°"; ps.YawDegText = "0.1°"; ps.RollDegText = "15.0°";
         ps.Align01 = 0.06; ps.AlignText = "5.4 deg";
         ps.Mode = ControlMode.Auto; ps.ModeText = "AUTO";
         // ---- THE SIMULATED SYSTEMS ----
@@ -120,11 +123,16 @@ public static class PreviewMain
         ps.CircularSpeedMps = 2426.0;      // sqrt(mu/R) for Kerbin
         ps.Ascending = true;
         ps.InclinationText = "0.13 deg";
+        ps.InclinationDegText = "0.13°";      // T13c: the Manual Chute strip's own rendering
         ps.PeriodText = "31.4 min";
         ps.TimeToApText = "00:12:07";
         ps.TimeToPeText = "00:27:49";
         ps.SplashdownShown = false; ps.SplashdownText = "-";
         ps.RangeM = 202.6;
+        // T13c: where the target sits on the rendezvous plot. A little ABOVE and 0.7 rad AHEAD of
+        // us, which is what a real approach from a lower phasing orbit looks like - and it puts the
+        // chord across open panel rather than along the ellipse where it could not be judged.
+        ps.HasTargetOrbit = true; ps.TargetRadiusM = 728000.0; ps.TargetPhaseRad = 0.7;
 
         // ---- NAV ----
         // A synthetic track: a 51.6 degree inclination pass, which is a shape that makes a wrong
@@ -421,6 +429,57 @@ public static class PreviewMain
                 Render(udl, CW, CH, path);
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + udl.Count + " commands");
             }
+
+            // ---- T13c: the prox-ops / procedure pages in the states their new live values have ----
+            // The loop above renders each of these once, from the shared orbit fixture. Both pages now
+            // have a SECOND look that only appears when the vessel is in a different state, and the same
+            // "anything reachable needs a render" rule T4/T5 set applies to a state as much as to a
+            // control. The Manual Chute strip is the deorbit look (SPLASHDOWN TIME is only meaningful on
+            // a real descent); the Docking readouts are the no-target look, which is the failure mode
+            // that matters most here - nothing to be misaligned with must read as dashes, not as a
+            // confident 0.0 degrees of error against nothing.
+            {
+                bool savedShown = ps.SplashdownShown;
+                string savedSplash = ps.SplashdownText;
+                ps.SplashdownShown = true; ps.SplashdownText = "T- 01:08:36";
+                DisplayList cdl = new DisplayList(600);
+                FigmaUI.Build(cdl, UiPage.ManualChute, CW, CH, ps, MapProjection.Default());
+                if (cdl.Overflowed) Console.WriteLine("  WARNING UI ManualChute descent OVERFLOWED");
+                string path = Path.Combine(outDir, "ui_manualchute_descent.png");
+                Render(cdl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + cdl.Count + " commands");
+                ps.SplashdownShown = savedShown; ps.SplashdownText = savedSplash;
+            }
+            {
+                bool savedTarget = ps.HasTarget, savedOrbit = ps.HasTargetOrbit;
+                ps.HasTarget = false; ps.HasTargetOrbit = false;
+                DisplayList ddl = new DisplayList(600);
+                FigmaUI.Build(ddl, UiPage.Docking, CW, CH, ps, MapProjection.Default());
+                if (ddl.Overflowed) Console.WriteLine("  WARNING UI Docking no-target OVERFLOWED");
+                string path = Path.Combine(outDir, "ui_docking_notarget.png");
+                Render(ddl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + ddl.Count + " commands");
+
+                // The rendezvous plot's approach chord is drawn from the SAME target state, so the same
+                // switch-off proves it vanishes rather than reverting to some other line.
+                DisplayList rdl = new DisplayList(600);
+                FigmaUI.Build(rdl, UiPage.Rendezvous, CW, CH, ps, MapProjection.Default());
+                path = Path.Combine(outDir, "ui_rendezvous_notarget.png");
+                Render(rdl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + rdl.Count + " commands");
+                ps.HasTarget = savedTarget; ps.HasTargetOrbit = savedOrbit;
+            }
+            {
+                bool savedValid = ps.Valid;
+                ps.Valid = false;
+                DisplayList ndl = new DisplayList(600);
+                FigmaUI.Build(ndl, UiPage.ManualChute, CW, CH, ps, MapProjection.Default());
+                string path = Path.Combine(outDir, "ui_manualchute_nofeed.png");
+                Render(ndl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + ndl.Count + " commands");
+                ps.Valid = savedValid;
+            }
+
             // ---- VEHICLE ALERTS + red sub-nav (T5) ----
             // Anything reachable by a control needs a render (the T4 lesson, above). The FUNCTIONS/ALERTS
             // toggle and VehicleTabBar's per-tab severity aren't wired to touch yet (T14), so their other

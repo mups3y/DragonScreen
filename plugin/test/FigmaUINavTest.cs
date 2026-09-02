@@ -44,6 +44,7 @@ public static class FigmaUINavTest
         Ascent();
         VehicleLiveValues();
         SubsystemLiveValues();
+        ProcedureLiveValues();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
     }
@@ -334,6 +335,35 @@ public static class FigmaUINavTest
             if (c.Kind == DrawKind.Text && c.Str == text) return true;
         }
         return false;
+    }
+
+    /// <summary>How many TIMES the page drew this exact string. A page that draws one datum in two
+    /// places (DockingSimPage's ring readouts and its PYR block are the same group) has to draw the SAME
+    /// string in both, and this is how that is proved rather than assumed.</summary>
+    static int Times(DisplayList dl, string text)
+    {
+        int n = 0;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind == DrawKind.Text && c.Str == text) n++;
+        }
+        return n;
+    }
+
+    /// <summary>The line commands drawn in this colour, in order. The rendezvous plot's approach chord
+    /// is the only thing on that page drawn as a Caution line, so this is how a chord that moved, or a
+    /// chord that should not be there at all, is checked without reaching into the page.</summary>
+    static System.Collections.Generic.List<DrawCmd> Lines(DisplayList dl, Rgba want)
+    {
+        var hits = new System.Collections.Generic.List<DrawCmd>();
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind != DrawKind.Line) continue;
+            if (c.Colour.R == want.R && c.Colour.G == want.G && c.Colour.B == want.B) hits.Add(c);
+        }
+        return hits;
     }
 
     /// <summary>How many arc bands the page drew in this colour — the gauge FILLS, as distinct from the
@@ -691,6 +721,184 @@ public static class FigmaUINavTest
         DisplayList dl = new DisplayList(VehicleSubsystemPage.Commands + 60);
         VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Propulsion, s);
         return dl;
+    }
+
+    /// <summary>A prox-ops / procedure fixture: every live readout a distinct, recognisable string, and
+    /// a target sitting somewhere specific on the orbit plot.</summary>
+    static PageState ProcFixture(int variant)
+    {
+        PageState s = new PageState();
+        s.Valid = true;
+        string k = variant == 0 ? "1" : "2";
+
+        // ---- the Manual Chute top strip ----
+        s.Phase = variant == 0 ? "DEORBIT COAST" : "ENTRY";
+        s.SplashdownShown = true; s.SplashdownText = "T- 0" + k + ":08:36";
+        s.Velocity = "7.6" + k + " km/s";
+        s.Altitude = "406." + k + " km";
+        s.ApogeeShown = true;  s.Apoapsis = "428." + k + " km";
+        s.PerigeeShown = true; s.Periapsis = "380." + k + " km";
+        s.InclinationText = "51.6" + k + " deg";
+        s.InclinationDegText = "51.6" + k + "°";
+
+        // ---- the manual docking readouts ----
+        s.HasTarget = true; s.TargetName = "SPACE X STATION";
+        s.RollDegText = "15." + k + "°";
+        s.PitchDegText = "3." + k + "°";
+        s.YawDegText = "7." + k + "°";
+        s.RangeText = "11." + k + " m"; s.RateText = "-0." + k + "4 m/s";
+
+        // ---- the orbit plot the approach chord is drawn on ----
+        s.Regime = FlightRegime.Space;
+        s.BodyRadiusM = 600000.0; s.AtmosphereDepthM = 70000.0;
+        s.AltitudeM = 123400.0; s.ApogeeM = 124000.0; s.PerigeeM = 121900.0;
+        s.Ascending = true;
+        s.HasTargetOrbit = true;
+        s.TargetRadiusM = 728000.0;
+        s.TargetPhaseRad = variant == 0 ? 0.7 : -0.9;   // ahead of us, then behind
+        return s;
+    }
+
+    // ---- T13c: the procedure + prox-ops pages read the vessel, not a constant ----
+    // Same shape and the same reasoning as VehicleLiveValues / SubsystemLiveValues: build each page with
+    // fixture A, build it again with a DIFFERENT fixture B, and assert every wired value MOVED - a
+    // constant cannot pass that whatever its value. Then the inverses that matter on these pages: the
+    // Manual Chute strip must dash on a dead feed and on a quantity its own flags call meaningless; the
+    // docking readouts must dash with NO TARGET rather than read a confident zero error against nothing;
+    // the suit delta pressures and the four deorbit SLEW rows must stay dashed and must never pick up a
+    // fixture value (this build models no suit, and the slew is Part B's to command).
+    static void ProcedureLiveValues()
+    {
+        const int VW = 2560, VH = 1406;
+        PageState a = ProcFixture(0), b = ProcFixture(1);
+        PageState dead = ProcFixture(0); dead.Valid = false;
+
+        // ---------------- MANUAL CHUTE DEPLOY: the top telemetry strip ----------------
+        DisplayList ca = new DisplayList(ManualChuteDeployPage.Commands + 60);
+        DisplayList cb = new DisplayList(ManualChuteDeployPage.Commands + 60);
+        DisplayList cd = new DisplayList(ManualChuteDeployPage.Commands + 60);
+        ManualChuteDeployPage.Build(ca, VW, VH, a, MapProjection.Default());
+        ManualChuteDeployPage.Build(cb, VW, VH, b, MapProjection.Default());
+        ManualChuteDeployPage.Build(cd, VW, VH, dead, MapProjection.Default());
+
+        string[] strip = { a.Phase, a.SplashdownText, a.Velocity, a.Altitude,
+                           a.Apoapsis, a.Periapsis, a.InclinationDegText };
+        for (int i = 0; i < strip.Length; i++)
+        {
+            Check("chute strip draws PageState value " + strip[i], Drew(ca, strip[i]), "");
+            Check("chute strip value " + strip[i] + " is not a constant", !Drew(cb, strip[i]),
+                  "still drawn for a different state");
+            Check("chute strip drops " + strip[i] + " with no feed", !Drew(cd, strip[i]), "");
+        }
+        Check("chute strip dashes with no feed", Drew(cd, "—"), "");
+        // The apsides follow the same flags every other page's do, and SPLASHDOWN TIME follows the
+        // registry's "N/A off-return" - none of the three may keep printing a stale number.
+        PageState onPad = ProcFixture(0);
+        onPad.ApogeeShown = false; onPad.PerigeeShown = false; onPad.SplashdownShown = false;
+        DisplayList cp = new DisplayList(ManualChuteDeployPage.Commands + 60);
+        ManualChuteDeployPage.Build(cp, VW, VH, onPad, MapProjection.Default());
+        Check("chute strip dashes an apogee that is not meaningful", !Drew(cp, a.Apoapsis), "");
+        Check("chute strip dashes a perigee that is not meaningful", !Drew(cp, a.Periapsis), "");
+        Check("chute strip dashes splashdown off a return", !Drew(cp, a.SplashdownText), "");
+        Check("chute strip keeps the live values that ARE meaningful",
+              Drew(cp, a.Velocity) && Drew(cp, a.Altitude), "");
+        // The reference export's own baked strings must never come back.
+        string[] cgone = { "7.67 km/s", "406.4 km", "428.9 km", "380.7 km", "51.64°",
+                           "T-01:08:36", "Deorbit Coast" };
+        for (int i = 0; i < cgone.Length; i++)
+            Check("chute strip no longer hard-codes " + cgone[i], !Drew(ca, cgone[i]), "");
+        // The PROCEDURE COPY beneath it is reference text, not a value - it must be untouched.
+        Check("chute procedure copy is untouched",
+              Drew(ca, "ENABLE BACKUP PYROS") && Drew(ca, "DEPLOY MAINS"), "");
+
+        // ---------------- MANUAL DOCKING: the axis readouts, PYR, RANGE, RATE ----------------
+        PageState noTgt = ProcFixture(0); noTgt.HasTarget = false; noTgt.HasTargetOrbit = false;
+        DisplayList da = new DisplayList(DockingSimPage.Commands + 60);
+        DisplayList db = new DisplayList(DockingSimPage.Commands + 60);
+        DisplayList dn = new DisplayList(DockingSimPage.Commands + 60);
+        DockingSimPage.Build(da, VW, VH, a);
+        DockingSimPage.Build(db, VW, VH, b);
+        DockingSimPage.Build(dn, VW, VH, noTgt);
+
+        string[] dock = { a.RollDegText, a.PitchDegText, a.YawDegText, a.RangeText, a.RateText };
+        for (int i = 0; i < dock.Length; i++)
+        {
+            Check("docking draws PageState value " + dock[i], Drew(da, dock[i]), "");
+            Check("docking value " + dock[i] + " is not a constant", !Drew(db, dock[i]), "");
+            Check("docking drops " + dock[i] + " with no target", !Drew(dn, dock[i]), "");
+        }
+        Check("docking dashes with no target", Drew(dn, "—"), "");
+        // The ring readouts and the PYR block are the SAME group (SCREEN_EVIDENCE_MATRIX), so each of the
+        // three has to appear TWICE, as one string. The placeholder era had them disagreeing.
+        Check("docking draws each axis twice, from one source",
+              Times(da, a.RollDegText) == 2 && Times(da, a.PitchDegText) == 2 &&
+              Times(da, a.YawDegText) == 2,
+              "roll " + Times(da, a.RollDegText) + " pitch " + Times(da, a.PitchDegText) +
+              " yaw " + Times(da, a.YawDegText));
+        string[] dgone = { "0.0°", "180.0", "11.6 m", "-0.2 m/s" };
+        for (int i = 0; i < dgone.Length; i++)
+            Check("docking no longer hard-codes " + dgone[i], !Drew(da, dgone[i]), "");
+
+        // ---------------- SUIT LEAK CHECK: the four delta pressures have no source ----------------
+        DisplayList sa = new DisplayList(SuitCheckPage.Commands + 60);
+        SuitCheckPage.Build(sa, VW, VH, 5, false);
+        Check("suit check dashes the four delta pressures", Drew(sa, "—"), "");
+        Check("suit check no longer hard-codes 0.01psi", !Drew(sa, "0.01psi"), "");
+        // The row LABELS and the STATUS words are reference copy, not values (S22) - still drawn.
+        Check("suit check keeps its reference copy",
+              Drew(sa, "SUIT 1 DELTA PRESSURE") && Drew(sa, "Nominal") && Drew(sa, "5s"), "");
+
+        // ---------------- DEORBIT BURN PREP: the four SLEW rows stay dashed (T13c's call) ----------
+        DisplayList pa = new DisplayList(DeorbitBurnPrepPage.Commands + 60);
+        DeorbitBurnPrepPage.Build(pa, VW, VH, a);
+        Check("deorbit prep dashes the four slew rows", Drew(pa, "—"), "");
+        // The inverse, and the point of the check: NOTHING in the fixture may appear on those rows. A
+        // later pass that "improves" them by reaching for the nearest plausible number fails here.
+        string[] notSlew = { a.RollDegText, a.PitchDegText, a.YawDegText, a.InclinationDegText,
+                             a.RangeText, a.RateText, a.Velocity, a.Altitude };
+        for (int i = 0; i < notSlew.Length; i++)
+            Check("deorbit prep invents no slew value from " + notSlew[i], !Drew(pa, notSlew[i]), "");
+        // FC SLEW underneath them IS live, and stays so.
+        PageState eng = ProcFixture(0); eng.DeorbitEngaged = true;
+        DisplayList pe = new DisplayList(DeorbitBurnPrepPage.Commands + 60);
+        DeorbitBurnPrepPage.Build(pe, VW, VH, eng);
+        Check("deorbit prep FC SLEW reads the Part B seam",
+              Drew(pa, "NOT ENGAGED") && Drew(pe, "ENGAGED") && !Drew(pe, "NOT ENGAGED"), "");
+
+        // ---------------- RENDEZVOUS PLOT: the approach chord runs to the TARGET ----------------
+        DisplayList ra = new DisplayList(RendezvousPage.Commands + 60);
+        DisplayList rb = new DisplayList(RendezvousPage.Commands + 60);
+        RendezvousPage.Build(ra, VW, VH, a);
+        RendezvousPage.Build(rb, VW, VH, b);
+        var la = Lines(ra, DragonPalette.Caution);
+        var lb = Lines(rb, DragonPalette.Caution);
+        Check("rendezvous draws the chord and its endpoint marker", la.Count == 5, "got " + la.Count);
+        // The chord ENDS where the target is, so a different phase angle has to move that end. This is
+        // the "not a constant" proof for a line rather than for a string.
+        Check("chord endpoint follows the target",
+              lb.Count == 5 && la.Count == 5 &&
+              (Math.Abs(la[0].C - lb[0].C) > 1f || Math.Abs(la[0].D - lb[0].D) > 1f),
+              "a " + la.Count + " b " + lb.Count);
+        // T6 ran the chord to PERIAPSIS as a stated stand-in. It must not do that any more: with a
+        // target whose orbit is not around our body there is no honest endpoint, so there is NO chord.
+        PageState noOrbit = ProcFixture(0); noOrbit.HasTargetOrbit = false;
+        PageState noneAtAll = ProcFixture(0); noneAtAll.HasTarget = false; noneAtAll.HasTargetOrbit = false;
+        DisplayList rn = new DisplayList(RendezvousPage.Commands + 60);
+        DisplayList rz = new DisplayList(RendezvousPage.Commands + 60);
+        RendezvousPage.Build(rn, VW, VH, noOrbit);
+        RendezvousPage.Build(rz, VW, VH, noneAtAll);
+        Check("no chord to periapsis when the target has no comparable orbit",
+              Lines(rn, DragonPalette.Caution).Count == 0,
+              "got " + Lines(rn, DragonPalette.Caution).Count);
+        Check("no chord with no target at all",
+              Lines(rz, DragonPalette.Caution).Count == 0,
+              "got " + Lines(rz, DragonPalette.Caution).Count);
+        // The plain NAV page never grows one: its overload passes the chord flag false.
+        DisplayList nav = new DisplayList(400);
+        NavPage.Orbit(nav, a, 0f, 0f, VW * 0.5f, VH * 0.5f);
+        Check("the plain NAV orbit view draws no chord",
+              Lines(nav, DragonPalette.Caution).Count == 0,
+              "got " + Lines(nav, DragonPalette.Caution).Count);
     }
 
     static void SpeccedPages()

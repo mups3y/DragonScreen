@@ -110,6 +110,9 @@ namespace DragonScreen
 
                 state.InclinationDeg = v.orbit.inclination;
                 state.InclinationText = v.orbit.inclination.ToString("F2") + " deg";
+                // T13c: the same number in the glyph form the reference's top strip prints. Formatted
+                // here, beside its twin, so the two renderings come off one value (Pages.InclinationDegText).
+                state.InclinationDegText = v.orbit.inclination.ToString("F2") + "°";
                 state.PeriodText = state.ApogeeShown ? Period(v.orbit.period) : "-";
                 state.TimeToApText = state.ApogeeShown ? Clock(v.orbit.timeToAp) : "-";
                 state.TimeToPeText = state.PerigeeShown ? Clock(v.orbit.timeToPe) : "-";
@@ -417,6 +420,7 @@ namespace DragonScreen
             ITargetable tgt = v.targetObject;
             st.HasTarget = (tgt != null);
             st.HasTargetGround = false;
+            st.HasTargetOrbit = false;
             if (!st.HasTarget) return;
 
             Transform tt = tgt.GetTransform();
@@ -467,10 +471,12 @@ namespace DragonScreen
             if (ct != null && range > 0.001)
             {
                 Vector3d axis = ct.up;
-                st.YawText   = Deg(Math.Atan2(Vector3d.Dot(rel, ct.right),
-                                              Vector3d.Dot(rel, axis)) * 180.0 / Math.PI);
-                st.PitchText = Deg(Math.Atan2(Vector3d.Dot(rel, ct.forward),
-                                              Vector3d.Dot(rel, axis)) * 180.0 / Math.PI);
+                double yawDeg = Math.Atan2(Vector3d.Dot(rel, ct.right),
+                                           Vector3d.Dot(rel, axis)) * 180.0 / Math.PI;
+                double pitchDeg = Math.Atan2(Vector3d.Dot(rel, ct.forward),
+                                             Vector3d.Dot(rel, axis)) * 180.0 / Math.PI;
+                st.YawText   = Deg(yawDeg);    st.YawDegText   = DegSym(yawDeg);
+                st.PitchText = Deg(pitchDeg);  st.PitchDegText = DegSym(pitchDeg);
 
                 Vector3d ourR = Flatten(ct.right, axis);
                 Vector3d tgtR = Flatten(tt.right, axis);
@@ -479,9 +485,53 @@ namespace DragonScreen
                     double roll = Vector3d.Angle(ourR, tgtR);
                     if (Vector3d.Dot(Vector3d.Cross(ourR, tgtR), axis) < 0.0) roll = -roll;
                     st.RollText = Deg(roll);
+                    st.RollDegText = DegSym(roll);
                 }
-                else st.RollText = "-";
+                else { st.RollText = "-"; st.RollDegText = "-"; }
             }
+
+            TargetPlot(v, tgt, ref st);
+        }
+
+        /// ---- WHERE THE TARGET SITS ON OUR OWN ORBIT PLOT (T13c) ----
+        /// The rendezvous plot's approach chord had nowhere real to run to: T6 drew it to periapsis as a
+        /// stated stand-in because the target's orbital state was not in PageState. It is now, as the two
+        /// numbers the plot actually needs - the target's radius from the same body centre the plot is
+        /// focused on, and its PHASE ANGLE from us.
+        ///
+        /// The angle is measured FROM OUR POSITION, not from periapsis, and that is the point: the plot
+        /// places our own marker from our current radius (so it can never disagree with the apogee and
+        /// perigee printed beside it), and an angle measured from that marker inherits the same guarantee.
+        /// Sign is right-handed about our angular momentum r x v, so positive is AHEAD of us along the
+        /// direction of travel, whatever frame convention KSP hands back - both vectors come from the
+        /// same call, and a dot or a cross between them does not care.
+        ///
+        /// APPROXIMATION, STATED: the target is projected into OUR orbital plane, so a target in a
+        /// different plane is drawn at its in-plane bearing and its true distance. On a real rendezvous
+        /// the two planes are all but identical (that is what the plane-change burn is for), and a 2D
+        /// plot has nowhere else to put it. Not around our body at all -> no chord (HasTargetOrbit false).
+        private static void TargetPlot(Vessel v, ITargetable tgt, ref PageState st)
+        {
+            Orbit us = v.orbit, to = (tgt != null) ? tgt.GetOrbit() : null;
+            if (us == null || to == null || to.referenceBody != us.referenceBody) return;
+            try
+            {
+                double now = Planetarium.GetUniversalTime();
+                Vector3d rUs = us.getRelativePositionAtUT(now);
+                Vector3d h   = Vector3d.Cross(rUs, us.getOrbitalVelocityAtUT(now));
+                Vector3d rT  = to.getRelativePositionAtUT(now);
+                if (h.magnitude < 1e-6 || rUs.magnitude < 1.0 || rT.magnitude < 1.0) return;
+
+                Vector3d hHat = h / h.magnitude;
+                Vector3d tp = rT - hHat * Vector3d.Dot(rT, hHat);      // target, in OUR plane
+                if (tp.magnitude < 1.0) return;                        // straight over a pole of the plane
+
+                st.TargetPhaseRad = Math.Atan2(Vector3d.Dot(Vector3d.Cross(rUs, tp), hHat),
+                                               Vector3d.Dot(rUs, tp));
+                st.TargetRadiusM = rT.magnitude;
+                st.HasTargetOrbit = !double.IsNaN(st.TargetPhaseRad);
+            }
+            catch (Exception) { st.HasTargetOrbit = false; }
         }
 
         /// ---- THE BODY TURNS UNDERNEATH, AND THAT IS THE WHOLE PROBLEM ----
@@ -1047,6 +1097,14 @@ namespace DragonScreen
         {
             if (double.IsNaN(d)) return "-";
             return d.ToString("F1") + " deg";
+        }
+
+        /// <summary>T13c. Deg's twin, in the glyph form the manual docking page prints ("15.0°").
+        /// Same value, same guard, one rendering per surface - see PageState.RollDegText.</summary>
+        private static string DegSym(double d)
+        {
+            if (double.IsNaN(d)) return "-";
+            return d.ToString("F1") + "°";
         }
 
         private static string DegRate(double dps)

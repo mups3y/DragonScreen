@@ -7,6 +7,12 @@
 // cluster (Roll/Pitch/Yaw) and a TRANSLATION cluster (Up/Down/Left/Right/Fwd/Back) each with a centre
 // LARGE↔precise toggle, and Instructions / Reset Positions / Settings.
 //
+// The READOUTS are live (T13c): ROLL / PITCH / YAW, the PYR block, RANGE and RATE all read PageState —
+// the same relative-attitude and closing geometry the attitude HUD draws — and dash with no target,
+// because there is nothing to be misaligned with. The green TARGET DIAMOND is still drawn at a fixed
+// offset, which now visibly disagrees with the numbers beside it (S26). The centre reticle is not a
+// bug: it is our own boresight, and it belongs at the centre.
+//
 // Reached from the attitude HUD (a "MANUAL DOCKING" affordance in its letterbox margin). Controls are
 // display-only for now — wiring them to RCS (the owner's "hidden mini-game" idea) is a later decision.
 // ============================================================================================
@@ -28,8 +34,9 @@ namespace DragonScreen
         static readonly Rgba Panel  = DragonPalette.Panel;
 
         const float HCX = 1713f, HCY = 900f, R1 = 600f, R2 = 388f;
+        const string Dash = "—";     // no target / no feed — never a plausible zero
 
-        public static void Build(DisplayList dl, int w, int h)
+        public static void Build(DisplayList dl, int w, int h, PageState s)
         {
             if (dl == null || w <= 0 || h <= 0) return;
             float sc = h / RefH, ox = (w - RefW * sc) * 0.5f; if (ox < 0f) ox = 0f;
@@ -49,8 +56,8 @@ namespace DragonScreen
             for (int i = 0; i < 12; i++)
             {
                 double a = i * Math.PI / 6.0;
-                float c = (float)Math.Cos(a), s = (float)Math.Sin(a);
-                dl.Line(X(HCX + c * (R1 - 30)), Y(HCY + s * (R1 - 30)), X(HCX + c * R1), Y(HCY + s * R1), St(2), Faint);
+                float cs = (float)Math.Cos(a), sn = (float)Math.Sin(a);   // not c/s: the page now takes a PageState s
+                dl.Line(X(HCX + cs * (R1 - 30)), Y(HCY + sn * (R1 - 30)), X(HCX + cs * R1), Y(HCY + sn * R1), St(2), Faint);
             }
             // green target diamond (offset from centre) + centre reticle
             float tx = HCX + 70f, ty = HCY - 48f, d = 26f;
@@ -58,18 +65,38 @@ namespace DragonScreen
             dl.Line(X(tx), Y(ty + d), X(tx - d), Y(ty), St(3), Go); dl.Line(X(tx - d), Y(ty), X(tx), Y(ty - d), St(3), Go);
             TargetReticle.Crosshair(dl, X(HCX), Y(HCY), Z(60), DragonPalette.Text2);
 
-            // ---- axis readouts around the rings ----
-            C("ROLL", HCX, HCY - R1 - 96, 26, Dim);  C("0.0°", HCX, HCY - R1 - 60, 40, Go);
-            C("YAW", HCX, HCY + R1 + 30, 26, Dim);   C("0.0°", HCX, HCY + R1 + 66, 40, Go);
-            L("PITCH", HCX + R1 + 44, HCY - 34, 26, Dim); L("0.0°", HCX + R1 + 44, HCY + 2, 40, Go);
-            // PYR block (left) — the three axis errors
+            // ---- axis readouts around the rings, and the PYR block: LIVE (T13c) ----
+            // ONE datum, drawn twice. SCREEN_EVIDENCE_MATRIX has the rotation readouts as
+            // "ROLL / PITCH / YAW (grouped 'PYR'), each a value in degrees" — the ring labels and the
+            // PYR block are the same group, and this page's layout happens to render both. So both read
+            // the SAME PageState strings: the placeholder era had them disagreeing (0.0° around the
+            // rings, 180.0 in the block), which is precisely the "a needle that disagrees with its own
+            // readout" failure T13a's wiring exists to make impossible. VesselData formats
+            // Roll/Pitch/YawDegText from the same values the attitude HUD prints as "15.0 deg", so the
+            // two docking surfaces cannot drift either. (Whether the page should draw the group twice at
+            // all is a LAYOUT question, not a value one — logged as S26, not decided here.)
+            // No target: there is nothing to be misaligned WITH, so all three dash.
+            bool tgt = s.Valid && s.HasTarget;
+            string A(string t) => (tgt && !string.IsNullOrEmpty(t)) ? t : Dash;
+            string roll = A(s.RollDegText), pitch = A(s.PitchDegText), yaw = A(s.YawDegText);
+            Rgba axisTint = tgt ? Go : Dim;
+            C("ROLL", HCX, HCY - R1 - 96, 26, Dim);  C(roll, HCX, HCY - R1 - 60, 40, axisTint);
+            C("YAW", HCX, HCY + R1 + 30, 26, Dim);   C(yaw, HCX, HCY + R1 + 66, 40, axisTint);
+            L("PITCH", HCX + R1 + 44, HCY - 34, 26, Dim); L(pitch, HCX + R1 + 44, HCY + 2, 40, axisTint);
+            // PYR block (left) — the same three axis errors, in the order the label names them.
             L("PYR", HCX - R1 - 230, HCY - 118, 24, Accent);
-            string[] pyr = { "180.0", "180.0", "180.0" };
-            for (int i = 0; i < 3; i++) L(pyr[i], HCX - R1 - 230, HCY - 64 + i * 60, 40, White);
+            string[] pyr = { pitch, yaw, roll };
+            for (int i = 0; i < 3; i++)
+                L(pyr[i], HCX - R1 - 230, HCY - 64 + i * 60, 40, tgt ? White : Dim);
 
-            // ---- RANGE / RATE (below the rings) ----
-            C("RANGE", HCX - 260, 1590, 24, Dim);  C("11.6 m", HCX - 260, 1626, 44, White);
-            C("RATE", HCX + 260, 1590, 24, Dim);   C("-0.2 m/s", HCX + 260, 1626, 44, Accent);
+            // ---- RANGE / RATE (below the rings): LIVE (T13c) ----
+            // The same RangeText/RateText the attitude HUD draws — one range and one closing rate in the
+            // build, not a second pair that could disagree. RATE is signed and closing is NEGATIVE
+            // (VesselData's stated convention), which is what the reference's own "-0.2 m/s" showed.
+            C("RANGE", HCX - 260, 1590, 24, Dim);
+            C(A(s.RangeText), HCX - 260, 1626, 44, tgt ? White : Dim);
+            C("RATE", HCX + 260, 1590, 24, Dim);
+            C(A(s.RateText), HCX + 260, 1626, 44, tgt ? Accent : Dim);
 
             // ---- control clusters ----
             Cluster(dl, X, Y, Z, St, 560f, 980f, "ROTATION",

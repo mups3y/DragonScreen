@@ -560,14 +560,33 @@ namespace DragonScreen
             dl.Rect(vx - 9f, vy - 1f, 18f, 2f, DragonPalette.Go);
             dl.Rect(vx - 1f, vy - 9f, 2f, 18f, DragonPalette.Go);
 
-            // ---- approach chord (T6) ----
+            // ---- approach chord (T6, made target-relative by T13c) ----
             // Only drawn with a target actually set, so the plain NAV view (chord always off) and an
-            // idle rendezvous plot never grow an unexplained line. Runs to PERIAPSIS - the next real
-            // apsis pass, already trusted above - because the target's own orbital elements are not
-            // yet in PageState (T13 wires true target-relative closing geometry); this is this task's
-            // stated interpretation of "an approach chord", not an invented target position.
-            if (showApproachChord && s.HasTarget)
-                dl.Line(vx, vy, pxP, cy, 2f, DragonPalette.Caution);
+            // idle rendezvous plot never grow an unexplained line.
+            //
+            // T6 ran it to PERIAPSIS and said why: the target's own orbital state was not in PageState,
+            // so the chord pointed at the next real apsis as a stated stand-in. It is in PageState now
+            // (HasTargetOrbit / TargetRadiusM / TargetPhaseRad, see VesselData.TargetPlot), so the chord
+            // runs to WHERE THE TARGET ACTUALLY IS. The phase angle is measured from US, so the far end
+            // is placed relative to the same marker the near end is drawn at - the two cannot disagree
+            // however the conic came out. Endpoint marked with a small diamond in the chord's own
+            // colour: a line has to end somewhere identifiable, and no label is invented for it.
+            //
+            // A target with no orbit around our body (another SOI, or a body itself) leaves
+            // HasTargetOrbit false and draws NO chord - the plot says nothing rather than something
+            // it had to make up.
+            if (showApproachChord && s.HasTarget && s.HasTargetOrbit && s.TargetRadiusM > 0.0)
+            {
+                double nuT = nuNow + s.TargetPhaseRad;
+                float tx = cx + (float)(s.TargetRadiusM * System.Math.Cos(nuT)) * scale;
+                float ty = cy - (float)(s.TargetRadiusM * System.Math.Sin(nuT)) * scale;
+                dl.Line(vx, vy, tx, ty, 2f, DragonPalette.Caution);
+                const float d = 7f;
+                dl.Line(tx, ty - d, tx + d, ty, 2f, DragonPalette.Caution);
+                dl.Line(tx + d, ty, tx, ty + d, 2f, DragonPalette.Caution);
+                dl.Line(tx, ty + d, tx - d, ty, 2f, DragonPalette.Caution);
+                dl.Line(tx - d, ty, tx, ty - d, 2f, DragonPalette.Caution);
+            }
         }
 
         /// <summary>

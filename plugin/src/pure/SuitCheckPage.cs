@@ -10,8 +10,10 @@
 //
 // FLOW: INITIATE runs a 5→0 countdown (~0.9s/step); at 0 the completion POPUP shows ("4.011 - Suit
 // Leak Check / ECLSS / PROCEDURE COMPLETE / Crew can open their visors if desired but must not open
-// zippers or disconnect umbilical."); HALT stops + resets. Rows are static reference values (real suit
-// sensors later). NOTE: the real page has NO "CLEAR" line, and NO Failed-Low / TROUBLESHOOT / "2.5
+// zippers or disconnect umbilical."); HALT stops + resets. TIME REMAINING counts the real procedure
+// countdown; the four SUIT n DELTA PRESSURE rows DASH — nothing in this build models a suit, so there
+// is no honest number to put there (T13c; see the note at the rows themselves). The four SUIT n STATUS
+// rows are reference COPY, not values, and are reproduced as the real page words them (S22). NOTE: the real page has NO "CLEAR" line, and NO Failed-Low / TROUBLESHOOT / "2.5
 // Contact SpaceX" content — none of that appears in any real frame, so it is deliberately not drawn.
 //
 // Icons are referenced by asset key (ic_check/ic_dash/ic_grid/ic_refresh/ic_eye/ic_circle).
@@ -36,6 +38,7 @@ namespace DragonScreen
         static readonly Rgba Go     = DragonPalette.Go;
 
         static readonly string[] Suit = { "SUIT 1", "SUIT 2", "SUIT 3", "SUIT 4" };
+        const string Dash = "—";     // no source — never a plausible reading
 
         /// <summary>countdown: the SUIT PRESSURE counter (5..0); showPopup: the completion dialog is up.</summary>
         public static void Build(DisplayList dl, int w, int h, int countdown, bool showPopup)
@@ -93,7 +96,16 @@ namespace DragonScreen
                 Ico(icon, tix, y + 16, 40, iconTint);
             }
             Row(0, "TIME REMAINING IN LEAK CHECK", countdown + "s", "ic_refresh", White, White);
-            for (int i = 0; i < 4; i++) Row(1 + i, Suit[i] + " DELTA PRESSURE", "0.01psi", "ic_dash", Dim, White);
+            // ---- SUIT n DELTA PRESSURE: no source, so a dash (T13c) ----
+            // The one readout on this page with nothing behind it. A suit delta pressure is suit
+            // pressure minus cabin pressure, and this build models no suit at all: not in
+            // VehicleSystems, not in CabinEnvironment, and KSP has no per-crew pressure resource to
+            // stand in for one. "0.01psi" was a representative constant, and a constant sitting in a
+            // LEAK CHECK is the worst place in the build for one — four suits reading a confident
+            // 0.01 psi is exactly how a screen says "no leak" when it in fact knows nothing.
+            // TELEMETRY_REGISTRY's rule: no real source -> not invented. Live the day a suit is
+            // modelled; dashed until then.
+            for (int i = 0; i < 4; i++) Row(1 + i, Suit[i] + " DELTA PRESSURE", Dash, "ic_dash", Dim, Dim);
             // STATUS reads "Nominal" (green) per suit; a suit that fails the check reads "Failed Low" —
             // the failure branch (right-panel TROUBLESHOOT block) is the crew's response to that.
             for (int i = 0; i < 4; i++) Row(5 + i, Suit[i] + " STATUS", "Nominal", "ic_check", Go, Go);

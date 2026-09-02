@@ -6,6 +6,11 @@
 // pixel-identical), the two chute-procedure sections in the CENTRE content panel, and the live globe on
 // the RIGHT. Reached from the Cover's "Manual Chute" rail item (FigmaUI); the rail returns to the Cover.
 //
+// The top telemetry strip is LIVE (T13c): ACTIVE PHASE / SPLASHDOWN TIME / INERTIAL VELOCITY /
+// ALTITUDE / APOGEE / PERIGEE / INCLINATION all read PageState, and dash when the feed is dead or the
+// quantity is not meaningful. The PROCEDURE COPY below is untouched reference text — the altitudes,
+// the step names and the actions are what the real screen says, not values to wire.
+//
 // Each command step carries a right-side ACTION the crew taps (Arm and verify / Execute / Latch / Monitor
 // altitude / Halt); altitude-gate rows are dim context. Altitudes are marked "(TBC)" — that is SpaceX's
 // own to-be-confirmed placeholder text on the real screen, kept verbatim. Actions are display-only until
@@ -27,6 +32,7 @@ namespace DragonScreen
         static readonly Rgba Alarm = DragonPalette.Alarm;
         static readonly Rgba Hair  = DragonPalette.Hairline;
         static readonly Rgba Panel = DragonPalette.Panel;
+        const string Dash = "—";     // no source / not meaningful — never a plausible zero
 
         // one procedure step: label · action (empty = an altitude-gate context row, drawn dim, no button)
         struct Step { public string Label, Act; public bool Gate;
@@ -79,13 +85,31 @@ namespace DragonScreen
             float gcy = (Y(220f) + Y(1877f)) * 0.5f;
             NavPage.Planet(dl, s, view, gcx - gs * 0.5f, gcy - gs * 0.5f, gs, gs);
 
-            // top-bar telemetry (drawn — the Cover's baked bar assets are private to it)
-            L("ACTIVE PHASE", 250, 44, 22, Dim);   L("Deorbit Coast", 250, 78, 40, White);
-            C("SPLASHDOWN TIME", 690, 44, 22, Dim); C("T-01:08:36", 690, 78, 40, White);
+            // ---- top-bar telemetry: LIVE (T13c) ----
+            // Drawn rather than placed because the Cover's baked bar assets are private to it. The seven
+            // values were the reference export's own baked strings ("7.67 km/s", "T-01:08:36", ...) —
+            // §6's "the numeric VALUES are the placeholders" — and every one of them was already in
+            // PageState, formatted by VesselData in exactly these renderings. No feed, or a quantity the
+            // vehicle's own state says is meaningless, draws a dash: apogee and perigee follow the same
+            // ApogeeShown/PerigeeShown flags every other page's apsides do (a conic through a landed
+            // vessel is a real solution and a meaningless number), and SPLASHDOWN TIME follows
+            // SplashdownShown, which is the registry's "N/A off-return" for SPLASHDOWN_ETA.
+            bool ok = s.Valid;
+            string T(string t) => (ok && !string.IsNullOrEmpty(t)) ? t : Dash;
+            L("ACTIVE PHASE", 250, 44, 22, Dim);   L(T(s.Phase), 250, 78, 40, White);
+            C("SPLASHDOWN TIME", 690, 44, 22, Dim);
+            C(ok && s.SplashdownShown ? T(s.SplashdownText) : Dash, 690, 78, 40, White);
             string[] tl = { "INERTIAL VELOCITY", "ALTITUDE", "APOGEE", "PERIGEE", "INCLINATION" };
-            string[] tv = { "7.67 km/s", "406.4 km", "428.9 km", "380.7 km", "51.64°" };
+            string[] tv = { T(s.Velocity), T(s.Altitude),
+                            ok && s.ApogeeShown ? T(s.Apoapsis) : Dash,
+                            ok && s.PerigeeShown ? T(s.Periapsis) : Dash,
+                            T(s.InclinationDegText) };
             float[] tx = { 1900f, 2300f, 2620f, 2940f, 3260f };
-            for (int i = 0; i < tl.Length; i++) { C(tl[i], tx[i], 44, 20, Dim); C(tv[i], tx[i], 78, 34, White); }
+            for (int i = 0; i < tl.Length; i++)
+            {
+                C(tl[i], tx[i], 44, 20, Dim);
+                C(tv[i], tx[i], 78, 34, tv[i] == Dash ? Dim : White);
+            }
 
             // the shared 7-item phase rail with "Manual Chute" (index 6) lit
             CoverPage.DrawRail(dl, w, h, 6);

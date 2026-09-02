@@ -188,7 +188,7 @@ namespace DragonScreen
                 case UiPage.VehicleGnc:        VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Gnc, s); break;
                 case UiPage.VehicleThermal:    VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Thermal, s); break;
                 case UiPage.ManualChute:       ManualChuteDeployPage.Build(dl, w, h, s, view); break;
-                case UiPage.Docking:           DockingSimPage.Build(dl, w, h); break;
+                case UiPage.Docking:           DockingSimPage.Build(dl, w, h, s); break;
                 case UiPage.Rendezvous:        RendezvousPage.Build(dl, w, h, s); break;
                 case UiPage.DeorbitBurnPrep:   DeorbitBurnPrepPage.Build(dl, w, h, s); break;
                 case UiPage.EntryProcedure:    EntryPage.Build(dl, w, h); break;
