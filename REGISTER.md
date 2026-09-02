@@ -1383,16 +1383,21 @@ is what this line is for.
 **DONE when:** both re-checks are confirmed on glass, or a NEEDS-WORK note says which way each is still off
 and what the next step would cost.
 
-### S19 [S] `VehicleOverviewPage`'s checklist copy mis-transcribes the reference — **TODO** — [TIER 1: pre-Part-B correctness bug]
+### S19 [S] `VehicleOverviewPage`'s checklist copy mis-transcribes the reference — **DONE 2026-09-02**
 Found by T13a while reading the reference source for the live-data wiring (not fixed — C1.1, and it is
-label copy, not a value). `plugin/src/pure/VehicleOverviewPage.cs`'s `ChkLabel` reads
+label copy, not a value). `plugin/src/pure/VehicleOverviewPage.cs`'s `ChkLabel` read
 **"RENDEZVOUS BURN BLOW"** and **"BURN GOING-GO"**. The page's own stated source —
 `assets/reference/dragon2-ui-master/src/components/Overview.vue`, lines 527 and 575 — says
 **"RENDEZVOUS BURN SLOW"** and **"BURN GO/NO-GO"**, and `docs/UI_AUDIT.md` (line 310, generated from that
-same CSS/DOM) agrees with the .vue on both. So these are two transcription slips against a source the repo
-holds, not a deliberate deviation. **Fix:** change the two strings to match the .vue + UI_AUDIT; re-render
-`ui_vehicle.png` and check nothing reflows. Tier-2 source (a recreation), quoted verbatim as the page's
-header says it is — no owner call needed, it is a straight correction to the stated source.
+same CSS/DOM) agrees with the .vue on both. So these were two transcription slips against a source the
+repo holds, not a deliberate deviation. Tier-2 source (a recreation), quoted verbatim as the page's header
+says it is — no owner call needed, a straight correction to the stated source.
+
+**DONE 2026-09-02.** `ChkLabel`'s two entries changed to `"RENDEZVOUS BURN SLOW"` / `"BURN GO/NO-GO"`,
+verified against `Overview.vue` lines 527/575 and `UI_AUDIT.md` line 310 (both re-checked, both agree).
+**Verify (C1.3):** `python plugin/build.py test` green, same suites/counts, no new warnings; `ui_vehicle.png`
+re-rendered and inspected — both checklist rows now read correctly, nothing else reflowed, and S20's
+`LOOP A` / `LOOP B` gauge labels (26.4°C / 20.1°C) are still intact.
 
 ### S20 [owner call] The reference labels BOTH coolant gauges `LOOP A` — **DONE 2026-09-02** (resolved to (b): label the second gauge `LOOP B`)
 Also found by T13a. `VehicleOverviewPage` draws two coolant gauges and labels them both `LOOP A`, which is

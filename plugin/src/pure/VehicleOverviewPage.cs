@@ -56,8 +56,8 @@ namespace DragonScreen
 
         // left checklist: label | status | status colour key (0 normal, 1 applied/go, 2 awaiting)
         static readonly string[] ChkLabel = {
-            "ALL SYSTEMS CHECK", "RENDEZVOUS BURN BLOW", "PREPARE RENDEZVOUS BURN", "THERMAL SHIELD",
-            "BURN GOING-GO", "POWER COMPLETION", "STATION DECK CHECK" };
+            "ALL SYSTEMS CHECK", "RENDEZVOUS BURN SLOW", "PREPARE RENDEZVOUS BURN", "THERMAL SHIELD",
+            "BURN GO/NO-GO", "POWER COMPLETION", "STATION DECK CHECK" };
         static readonly string[] ChkState = { "Normal", "Normal", "Normal", "Applied", "Normal", "Awaiting", "Normal" };
         static readonly int[]    ChkKey   = { 0, 0, 0, 1, 0, 2, 0 };
 
