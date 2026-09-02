@@ -7,11 +7,25 @@
 // cluster (Roll/Pitch/Yaw) and a TRANSLATION cluster (Up/Down/Left/Right/Fwd/Back) each with a centre
 // LARGE↔precise toggle, and Instructions / Reset Positions / Settings.
 //
-// The READOUTS are live (T13c): ROLL / PITCH / YAW, the PYR block, RANGE and RATE all read PageState —
-// the same relative-attitude and closing geometry the attitude HUD draws — and dash with no target,
-// because there is nothing to be misaligned with. The green TARGET DIAMOND is still drawn at a fixed
-// offset, which now visibly disagrees with the numbers beside it (S26). The centre reticle is not a
-// bug: it is our own boresight, and it belongs at the centre.
+// The READOUTS are live (T13c): ROLL / PITCH / YAW, RANGE and RATE all read PageState — the same
+// relative-attitude and closing geometry the attitude HUD draws — and dash with no target, because
+// there is nothing to be misaligned with. The centre reticle is not a bug: it is our own boresight, and
+// it belongs at the centre.
+//
+// S26 (this pass): the green TARGET DIAMOND used to sit at a FIXED offset that disagreed with the
+// numbers beside it, and the page drew the SAME pitch/yaw/roll correction twice (once around the rings,
+// once as the "PYR" block) where SCREEN_EVIDENCE_MATRIX describes one group. Both are fixed together:
+//   - the diamond now moves from the live PitchDeg/YawDeg bearings (PageState, raw doubles behind
+//     PitchDegText/YawDegText) and is HIDDEN entirely with no target — nothing to be off-boresight from.
+//   - the ring readouts go GREEN when that axis is within a small tolerance of zero ("corrected",
+//     iss-sim: SCREEN_INVENTORY #11) and WHITE otherwise, instead of a blanket green whenever a target
+//     exists (which was true regardless of how far off the axis actually was).
+//   - the "PYR" block, no longer a redundant echo, now carries the reference's OTHER confirmed
+//     quantity: the BLUE per-axis RATE (PitchRateText/YawRateText/RollRateText — vehicle body rates,
+//     already in PageState from T13b). DockingPage.cs's own header names this exact "GREEN correction /
+//     BLUE rate, two numbers per axis" scheme as "the key design takeaway from iss-sim" — this page had
+//     the correction twice and the rate nowhere; now each of iss-sim's two confirmed colours has one
+//     place on screen, matching that precedent instead of inventing a new one.
 //
 // Reached from the attitude HUD (a "MANUAL DOCKING" affordance in its letterbox margin).
 //
@@ -58,6 +72,28 @@ namespace DragonScreen
         const float HCX = 1713f, HCY = 900f, R1 = 600f, R2 = 388f;
         const string Dash = "—";     // no target / no feed — never a plausible zero
 
+        /// <summary>FULL SCALE for the target diamond, STATED (S26, no source gives the real ring a
+        /// number — the same position VehicleSubsystemPage.RateFullScaleDps was in): the diamond reaches
+        /// the INNER ring (R2, the one the crosshair sits inside of) at this many degrees of pitch/yaw
+        /// pointing error, and PEGS there for anything larger — a rough capture attempt pins the diamond
+        /// at the ring edge instead of flying off the HUD, the same "peg rather than escape the dial"
+        /// rule RateFullScaleDps uses. 8° gives the diamond real travel for the few-degree corrections a
+        /// final approach actually makes.</summary>
+        public const float RingFullScaleDeg = 8f;
+
+        /// <summary>How close a pointing error must be to zero to read as CORRECTED — iss-sim: the axis
+        /// goes GREEN when corrected (SCREEN_INVENTORY #11). STATED, not sourced: tight enough that
+        /// "green" still means aligned, loose enough that RollDegText/PitchDegText/YawDegText's own
+        /// one-decimal rounding doesn't make the colour flicker at the boundary.</summary>
+        public const float CorrectedToleranceDeg = 0.5f;
+
+        static float Clamp11(double v)
+        {
+            if (v > 1.0) return 1f;
+            if (v < -1.0) return -1f;
+            return (float)v;
+        }
+
         public static void Build(DisplayList dl, int w, int h, PageState s)
         { Build(dl, w, h, s, PageControls.Default); }
 
@@ -86,35 +122,50 @@ namespace DragonScreen
                 float cs = (float)Math.Cos(a), sn = (float)Math.Sin(a);   // not c/s: the page now takes a PageState s
                 dl.Line(X(HCX + cs * (R1 - 30)), Y(HCY + sn * (R1 - 30)), X(HCX + cs * R1), Y(HCY + sn * R1), St(2), Faint);
             }
-            // green target diamond (offset from centre) + centre reticle
-            float tx = HCX + 70f, ty = HCY - 48f, d = 26f;
-            dl.Line(X(tx), Y(ty - d), X(tx + d), Y(ty), St(3), Go); dl.Line(X(tx + d), Y(ty), X(tx), Y(ty + d), St(3), Go);
-            dl.Line(X(tx), Y(ty + d), X(tx - d), Y(ty), St(3), Go); dl.Line(X(tx - d), Y(ty), X(tx), Y(ty - d), St(3), Go);
-            TargetReticle.Crosshair(dl, X(HCX), Y(HCY), Z(60), DragonPalette.Text2);
-
-            // ---- axis readouts around the rings, and the PYR block: LIVE (T13c) ----
-            // ONE datum, drawn twice. SCREEN_EVIDENCE_MATRIX has the rotation readouts as
-            // "ROLL / PITCH / YAW (grouped 'PYR'), each a value in degrees" — the ring labels and the
-            // PYR block are the same group, and this page's layout happens to render both. So both read
-            // the SAME PageState strings: the placeholder era had them disagreeing (0.0° around the
-            // rings, 180.0 in the block), which is precisely the "a needle that disagrees with its own
-            // readout" failure T13a's wiring exists to make impossible. VesselData formats
-            // Roll/Pitch/YawDegText from the same values the attitude HUD prints as "15.0 deg", so the
-            // two docking surfaces cannot drift either. (Whether the page should draw the group twice at
-            // all is a LAYOUT question, not a value one — logged as S26, not decided here.)
-            // No target: there is nothing to be misaligned WITH, so all three dash.
+            // No target: there is nothing to be misaligned WITH or off-boresight from, so every readout
+            // below dashes and the diamond does not appear at all.
             bool tgt = s.Valid && s.HasTarget;
             string A(string t) => (tgt && !string.IsNullOrEmpty(t)) ? t : Dash;
+
+            // green target diamond — placed from the LIVE pitch/yaw bearing (S26), not a fixed offset.
+            // Sign: positive yaw (target toward our +right) moves the diamond right; positive pitch
+            // (target toward our +forward) moves it up. Full scale is RingFullScaleDeg, pegged at the
+            // inner ring (R2) past that — see the constant's own comment for why 8°.
+            bool haveBearing = tgt && !string.IsNullOrEmpty(s.PitchDegText) && !string.IsNullOrEmpty(s.YawDegText);
+            if (haveBearing)
+            {
+                float yawOff = Clamp11(s.YawDeg / RingFullScaleDeg) * R2;
+                float pitchOff = Clamp11(s.PitchDeg / RingFullScaleDeg) * R2;
+                float tx = HCX + yawOff, ty = HCY - pitchOff, d = 26f;
+                dl.Line(X(tx), Y(ty - d), X(tx + d), Y(ty), St(3), Go); dl.Line(X(tx + d), Y(ty), X(tx), Y(ty + d), St(3), Go);
+                dl.Line(X(tx), Y(ty + d), X(tx - d), Y(ty), St(3), Go); dl.Line(X(tx - d), Y(ty), X(tx), Y(ty - d), St(3), Go);
+            }
+            // The centre reticle is not target-dependent — it is our own boresight, always at centre.
+            TargetReticle.Crosshair(dl, X(HCX), Y(HCY), Z(60), DragonPalette.Text2);
+
+            // ---- axis readouts around the rings: the pitch/yaw/roll CORRECTION, LIVE (T13c) ----
+            // GREEN when that axis is within CorrectedToleranceDeg of zero ("corrected", iss-sim:
+            // SCREEN_INVENTORY #11), WHITE while a target exists but the axis is not yet aligned, DIM
+            // with no target — not a blanket green whenever a target exists regardless of how far off.
+            Rgba RingTint(double deg) => !tgt ? Dim : (Math.Abs(deg) <= CorrectedToleranceDeg ? Go : White);
             string roll = A(s.RollDegText), pitch = A(s.PitchDegText), yaw = A(s.YawDegText);
-            Rgba axisTint = tgt ? Go : Dim;
-            C("ROLL", HCX, HCY - R1 - 96, 26, Dim);  C(roll, HCX, HCY - R1 - 60, 40, axisTint);
-            C("YAW", HCX, HCY + R1 + 30, 26, Dim);   C(yaw, HCX, HCY + R1 + 66, 40, axisTint);
-            L("PITCH", HCX + R1 + 44, HCY - 34, 26, Dim); L(pitch, HCX + R1 + 44, HCY + 2, 40, axisTint);
-            // PYR block (left) — the same three axis errors, in the order the label names them.
+            Rgba rollTint = RingTint(s.RollDeg), pitchTint = RingTint(s.PitchDeg), yawTint = RingTint(s.YawDeg);
+            C("ROLL", HCX, HCY - R1 - 96, 26, Dim);  C(roll, HCX, HCY - R1 - 60, 40, rollTint);
+            C("YAW", HCX, HCY + R1 + 30, 26, Dim);   C(yaw, HCX, HCY + R1 + 66, 40, yawTint);
+            L("PITCH", HCX + R1 + 44, HCY - 34, 26, Dim); L(pitch, HCX + R1 + 44, HCY + 2, 40, pitchTint);
+
+            // ---- PYR block (left): the OTHER iss-sim-confirmed quantity, BLUE per-axis RATE (S26) ----
+            // This used to redraw the same correction the ring already shows (SCREEN_EVIDENCE_MATRIX
+            // describes ONE rotation-readout group, not two). Dropping it would lose a confirmed iss-sim
+            // quantity this build already has wired (PitchRateText/YawRateText/RollRateText, vehicle body
+            // rates, T13b) — DockingPage.cs's "GREEN correction / BLUE rate" scheme, its own header names
+            // as iss-sim's key design takeaway, is exactly this: one axis, two numbers, two colours. So
+            // the ring keeps the correction and PYR becomes the rate, rather than two of the same number.
             L("PYR", HCX - R1 - 230, HCY - 118, 24, Accent);
-            string[] pyr = { pitch, yaw, roll };
+            string[] pyr = { A(s.PitchRateText), A(s.YawRateText), A(s.RollRateText) };
+            Rgba rateTint = tgt ? Accent : Dim;
             for (int i = 0; i < 3; i++)
-                L(pyr[i], HCX - R1 - 230, HCY - 64 + i * 60, 40, tgt ? White : Dim);
+                L(pyr[i], HCX - R1 - 230, HCY - 64 + i * 60, 40, rateTint);
 
             // ---- RANGE / RATE (below the rings): LIVE (T13c) ----
             // The same RangeText/RateText the attitude HUD draws — one range and one closing rate in the

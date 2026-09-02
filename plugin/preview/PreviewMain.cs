@@ -85,6 +85,9 @@ public static class PreviewMain
         // T13c: the same three errors in the glyph form the MANUAL docking page prints. VesselData
         // formats the pair off one value; the fixture keeps them consistent for the same reason.
         ps.PitchDegText = "0.1°"; ps.YawDegText = "0.1°"; ps.RollDegText = "15.0°";
+        // S26: the raw doubles behind the three lines above - DockingSimPage's target diamond and its
+        // "green when corrected" ring tint read these, not the text, so the fixture has to carry both.
+        ps.PitchDeg = 0.1; ps.YawDeg = 0.1; ps.RollDeg = 15.0;
         ps.Align01 = 0.06; ps.AlignText = "5.4 deg";
         ps.Mode = ControlMode.Auto; ps.ModeText = "AUTO";
         // ---- THE SIMULATED SYSTEMS ----
@@ -476,6 +479,23 @@ public static class PreviewMain
                 Render(ndl, CW, CH, path);
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + ndl.Count + " commands");
                 ps.HasTarget = savedTarget; ps.HasTargetOrbit = savedOrbit;
+            }
+            {
+                // S26: the OTHER state the ring readouts' colour rule needs a look at - all three axes
+                // within DockingSimPage.CorrectedToleranceDeg of zero, so ROLL/PITCH/YAW read GREEN
+                // (iss-sim: SCREEN_INVENTORY #11) and the diamond sits centred on the boresight.
+                double savedRoll = ps.RollDeg, savedPitch = ps.PitchDeg, savedYaw = ps.YawDeg;
+                string savedRollT = ps.RollDegText, savedPitchT = ps.PitchDegText, savedYawT = ps.YawDegText;
+                ps.RollDeg = 0.1; ps.PitchDeg = -0.2; ps.YawDeg = 0.1;
+                ps.RollDegText = "0.1°"; ps.PitchDegText = "-0.2°"; ps.YawDegText = "0.1°";
+                DisplayList gdl = new DisplayList(600);
+                FigmaUI.Build(gdl, UiPage.Docking, CW, CH, ps, MapProjection.Default());
+                if (gdl.Overflowed) Console.WriteLine("  WARNING UI Docking corrected OVERFLOWED");
+                string gpath = Path.Combine(outDir, "ui_docking_corrected.png");
+                Render(gdl, CW, CH, gpath);
+                Console.WriteLine("  " + gpath + "   " + CW + "x" + CH + "   " + gdl.Count + " commands");
+                ps.RollDeg = savedRoll; ps.PitchDeg = savedPitch; ps.YawDeg = savedYaw;
+                ps.RollDegText = savedRollT; ps.PitchDegText = savedPitchT; ps.YawDegText = savedYawT;
             }
             {
                 bool savedValid = ps.Valid;

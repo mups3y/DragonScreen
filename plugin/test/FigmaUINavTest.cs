@@ -784,10 +784,15 @@ public static class FigmaUINavTest
 
         // ---- the manual docking readouts ----
         s.HasTarget = true; s.TargetName = "SPACE X STATION";
-        s.RollDegText = "15." + k + "°";
-        s.PitchDegText = "3." + k + "°";
-        s.YawDegText = "7." + k + "°";
+        s.RollDegText = "15." + k + "°";  s.RollDeg  = variant == 0 ? 15.1 : 15.2;
+        s.PitchDegText = "3." + k + "°";  s.PitchDeg = variant == 0 ? 3.1  : 3.2;
+        s.YawDegText = "7." + k + "°";    s.YawDeg   = variant == 0 ? 7.1  : 7.2;
         s.RangeText = "11." + k + " m"; s.RateText = "-0." + k + "4 m/s";
+        // S26: the PYR block's own quantity (body rates, T13b) — distinct strings from the DegText
+        // trio above so a test that finds one can never accidentally be satisfied by the other.
+        s.PitchRateText = "0." + k + "5 deg/s";
+        s.YawRateText   = "0." + k + "6 deg/s";
+        s.RollRateText  = "0." + k + "7 deg/s";
 
         // ---- the cabin the SUIT LEAK CHECK measures against (S31) ----
         // The suit differential is suit-loop pressure minus THIS, so a different cabin here has to move
@@ -866,7 +871,8 @@ public static class FigmaUINavTest
         DockingSimPage.Build(db, VW, VH, b);
         DockingSimPage.Build(dn, VW, VH, noTgt);
 
-        string[] dock = { a.RollDegText, a.PitchDegText, a.YawDegText, a.RangeText, a.RateText };
+        string[] dock = { a.RollDegText, a.PitchDegText, a.YawDegText, a.RangeText, a.RateText,
+                          a.PitchRateText, a.YawRateText, a.RollRateText };
         for (int i = 0; i < dock.Length; i++)
         {
             Check("docking draws PageState value " + dock[i], Drew(da, dock[i]), "");
@@ -874,16 +880,50 @@ public static class FigmaUINavTest
             Check("docking drops " + dock[i] + " with no target", !Drew(dn, dock[i]), "");
         }
         Check("docking dashes with no target", Drew(dn, "—"), "");
-        // The ring readouts and the PYR block are the SAME group (SCREEN_EVIDENCE_MATRIX), so each of the
-        // three has to appear TWICE, as one string. The placeholder era had them disagreeing.
-        Check("docking draws each axis twice, from one source",
-              Times(da, a.RollDegText) == 2 && Times(da, a.PitchDegText) == 2 &&
-              Times(da, a.YawDegText) == 2,
+        // S26: the ring readouts (the correction) and the PYR block (now the rate, not an echo of the
+        // correction) are TWO DIFFERENT quantities, so each string appears exactly ONCE - the "one datum
+        // drawn twice" failure this task fixed would show up here as a 2.
+        Check("docking draws the ring correction once, not echoed in PYR",
+              Times(da, a.RollDegText) == 1 && Times(da, a.PitchDegText) == 1 &&
+              Times(da, a.YawDegText) == 1,
               "roll " + Times(da, a.RollDegText) + " pitch " + Times(da, a.PitchDegText) +
               " yaw " + Times(da, a.YawDegText));
+        Check("docking draws the PYR rate once, not the correction value",
+              Times(da, a.PitchRateText) == 1 && Times(da, a.YawRateText) == 1 &&
+              Times(da, a.RollRateText) == 1,
+              "pitch " + Times(da, a.PitchRateText) + " yaw " + Times(da, a.YawRateText) +
+              " roll " + Times(da, a.RollRateText));
         string[] dgone = { "0.0°", "180.0", "11.6 m", "-0.2 m/s" };
         for (int i = 0; i < dgone.Length; i++)
             Check("docking no longer hard-codes " + dgone[i], !Drew(da, dgone[i]), "");
+
+        // ---------------- MANUAL DOCKING: the target diamond (S26) ----------------
+        // The diamond is the only Line command this page draws in Go - the graticule ticks are Faint and
+        // every button is a Box, so counting/inspecting Go lines isolates it cleanly.
+        var diamondNoTgt = Lines(dn, DragonPalette.Go);
+        Check("docking diamond is hidden with no target", diamondNoTgt.Count == 0,
+              "drew " + diamondNoTgt.Count + " green line(s) with no target");
+        var diamondA = Lines(da, DragonPalette.Go);
+        var diamondB = Lines(db, DragonPalette.Go);
+        Check("docking diamond is drawn with a target", diamondA.Count == 4,
+              "drew " + diamondA.Count + " green line(s)");
+        Check("docking diamond moves with the pitch/yaw bearings",
+              diamondA.Count == 4 && diamondB.Count == 4 &&
+              (diamondA[0].A != diamondB[0].A || diamondA[0].B != diamondB[0].B),
+              "fixture A and B (different YawDeg/PitchDeg) drew the diamond at the same spot");
+
+        // ---------------- MANUAL DOCKING: readouts go GREEN when corrected (S26) ----------------
+        PageState corrected = ProcFixture(0);
+        corrected.RollDeg = 0.1; corrected.RollDegText = "0.1°";     // within CorrectedToleranceDeg
+        corrected.YawDeg = -0.2; corrected.YawDegText = "-0.2°";     // within CorrectedToleranceDeg
+        corrected.PitchDeg = 5.0; corrected.PitchDegText = "5.0°";   // NOT corrected
+        DisplayList dc = new DisplayList(DockingSimPage.Commands + 60);
+        DockingSimPage.Build(dc, VW, VH, corrected);
+        Check("docking axis reads GREEN when corrected",
+              SameColour(ColourOf(dc, corrected.RollDegText), DragonPalette.Go) &&
+              SameColour(ColourOf(dc, corrected.YawDegText), DragonPalette.Go), "");
+        Check("docking axis reads WHITE with a target but not yet corrected",
+              SameColour(ColourOf(dc, corrected.PitchDegText), DragonPalette.White), "");
 
         // ---------------- SUIT LEAK CHECK: the four delta pressures follow the CABIN ----------------
         // S31 / §14.4(e). These were dashed (T13c: nothing modelled a suit); they are now a marked

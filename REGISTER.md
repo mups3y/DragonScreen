@@ -1865,7 +1865,7 @@ read the identical live text for the identical vessel.
 - **§1.4 / C1.4 respected:** the checklist LABELS were real-sourced copy and only the one owner-authorized
   edit (S23) touched a label; no `PanelMap.cs` edit; no other label doc touched.
 
-### S26 [S] Manual docking: the target diamond is fixed, and the axis group is drawn twice — **TODO** — [TIER 4: scheduled build/polish]
+### S26 [S] Manual docking: the target diamond is fixed, and the axis group is drawn twice — **DONE 2026-09-02** — [TIER 4: scheduled build/polish]
 Found by T13c, deliberately not done (C1.1). `DockingSimPage` now prints live ROLL / PITCH / YAW, RANGE and
 RATE, but the green target diamond is still drawn at a FIXED offset from the reticle (`tx = HCX + 70f,
 ty = HCY - 48f`) — so it sits off-centre while the page reads 0.1° of error, and `ui_docking_notarget.png`
@@ -1889,6 +1889,38 @@ disagree, which is the safe outcome and as far as a VALUES task may go; whether 
 redundant chrome that should be dropped, or given the second confirmed quantity (the reference's blue
 RATES — `PitchRateText`/`YawRateText`/`RollRateText` are already in `PageState`), is a layout call
 against the iss-sim reference. Take it with the diamond above, in one pass over this page.
+
+**Built, owner-directed (2026-09-02, via the overseer).** One pass over `DockingSimPage`:
+- Added `RollDeg`/`PitchDeg`/`YawDeg` (raw doubles) to `PageState` beside the existing `*DegText`
+  strings ([Pages.cs](plugin/src/pure/Pages.cs)); `VesselData` now sets both from the same value
+  ([VesselData.cs](plugin/src/VesselData.cs)).
+- The diamond now places itself from `YawDeg`/`PitchDeg` against a new STATED constant
+  `DockingSimPage.RingFullScaleDeg = 8f` (pegs at the inner ring past 8°, documented in code — no
+  source states a real number, same footing as `VehicleSubsystemPage.RateFullScaleDps`), and is
+  **hidden entirely** with no target (was drawn unconditionally at a fixed offset).
+- Ring axis readouts (ROLL/PITCH/YAW) now go **GREEN when corrected** — within a new STATED
+  `CorrectedToleranceDeg = 0.5f` of zero (iss-sim: SCREEN_INVENTORY #11) — and **WHITE** otherwise,
+  replacing the old "green whenever a target exists regardless of error" tint.
+- **The duplicate-PYR decision:** gave the PYR block the reference's other confirmed quantity, BLUE
+  per-axis RATE (`PitchRateText`/`YawRateText`/`RollRateText`, T13b body rates), instead of dropping
+  it. Chosen over dropping because `DockingPage.cs`'s own header already names iss-sim's "GREEN
+  correction / BLUE rate, two numbers per axis" scheme as its key design takeaway from that same
+  reference — this page had the correction drawn twice and the rate nowhere, so it now matches that
+  existing precedent (one axis, two colours, one place each) rather than inventing a third scheme.
+  Not a genuine owner call in the end: the reference argument was concrete enough to decide in code
+  (stated in `DockingSimPage.cs`'s own header), so C1.9/C1.13 was not invoked.
+- §1.4/C1.4: no `PanelMap.cs` edit, no label-doc edit; both new constants are STATED/marked in code as
+  ours, not sourced.
+- **Gate:** `python plugin/build.py test` green, 0 failed (Figma UI nav suite 724 checks, up from 560;
+  no new compiler warnings — same 6× CS0162 / 2× CS0219 / 1× CS0649 baseline). New checks: the diamond
+  is hidden with no target (0 green `Line` commands), drawn with a target (4 green `Line` commands),
+  and moves between two fixtures with different `YawDeg`/`PitchDeg`; each axis correction now draws
+  ONCE (not twice) and each PYR rate draws once; an axis reads GREEN when within tolerance and WHITE
+  when not.
+- **Preview:** `ui_docking.png` (mixed state: PITCH/YAW corrected → green, ROLL not → white, PYR shows
+  live rates), `ui_docking_notarget.png` (diamond and all readouts gone, dashes only — re-inspected,
+  unaffected) and a new `ui_docking_corrected.png` (all three axes within tolerance → all green, diamond
+  centred) all inspected and match the intended behaviour.
 
 ### S27 [owner call] The reconstructed pages still have no in-page entry point — four DONE tasks parked it on T14 — **DONE 2026-09-02** (resolved to (b): no Cover-rail assignment; built a Vehicle-page affordance to the two systems deep-views instead)
 Raised by **T14**, which is the task those four named. `T7` (Deorbit Burn Prep), `T8` (Entry), `T9`

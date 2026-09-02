@@ -490,8 +490,8 @@ namespace DragonScreen
                                            Vector3d.Dot(rel, axis)) * 180.0 / Math.PI;
                 double pitchDeg = Math.Atan2(Vector3d.Dot(rel, ct.forward),
                                              Vector3d.Dot(rel, axis)) * 180.0 / Math.PI;
-                st.YawText   = Deg(yawDeg);    st.YawDegText   = DegSym(yawDeg);
-                st.PitchText = Deg(pitchDeg);  st.PitchDegText = DegSym(pitchDeg);
+                st.YawText   = Deg(yawDeg);    st.YawDegText   = DegSym(yawDeg);   st.YawDeg   = yawDeg;
+                st.PitchText = Deg(pitchDeg);  st.PitchDegText = DegSym(pitchDeg); st.PitchDeg = pitchDeg;
 
                 Vector3d ourR = Flatten(ct.right, axis);
                 Vector3d tgtR = Flatten(tt.right, axis);
@@ -501,8 +501,9 @@ namespace DragonScreen
                     if (Vector3d.Dot(Vector3d.Cross(ourR, tgtR), axis) < 0.0) roll = -roll;
                     st.RollText = Deg(roll);
                     st.RollDegText = DegSym(roll);
+                    st.RollDeg = roll;
                 }
-                else { st.RollText = "-"; st.RollDegText = "-"; }
+                else { st.RollText = "-"; st.RollDegText = "-"; st.RollDeg = 0.0; }
             }
 
             TargetPlot(v, tgt, ref st);

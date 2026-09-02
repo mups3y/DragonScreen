@@ -127,6 +127,14 @@ namespace DragonScreen
         /// docking surfaces cannot drift apart - the rule T13b stated for the gauge-vs-row units.
         /// </summary>
         public string RollDegText, PitchDegText, YawDegText;
+        /// <summary>
+        /// S26. The raw doubles behind RollDegText/PitchDegText/YawDegText, before the one-decimal
+        /// text formatting. DockingSimPage needs the actual numbers for two things text can't do: place
+        /// its target diamond off boresight (PitchDeg/YawDeg, a 2-D bearing — roll doesn't move it,
+        /// it only rotates about the boresight) and threshold each axis for the iss-sim "green when
+        /// corrected" rule (SCREEN_INVENTORY #11). Same value as the Text trio, just before ToString.
+        /// </summary>
+        public double RollDeg, PitchDeg, YawDeg;
         /// <summary>Angle between our port axis and the line to the target, 0..1 of 90 degrees.</summary>
         public double Align01;
         public string AlignText;
