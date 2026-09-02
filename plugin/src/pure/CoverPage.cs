@@ -30,6 +30,12 @@ namespace DragonScreen
             "rectangle_169","splashdown_time_t_01_24_51","inertial_velocity_7_69km_s","altitude_393_3km",
             "apogee_416_2km","perigee_379_4km","inclination_51_62deg","active_phase_deorbit_coast","eva_menu_fill",
             "gridicons_refresh","running_00_22_57","coast_to_trunk_jettison","ic_sharp_arrow_back","ic_sharp_arrow_back_1",
+            // 2026-09-02 (S13, owner decision via the overseer): the human-facing label for these two baked
+            // assets reads ATTITUDE, not altitude — "30° sustained attitude error" / "600°/min attitude
+            // rate" — a blurry-photo transcription corrected on physics grounds (C1.4/C7.1), applied in
+            // DeorbitBurnPrepPage.cs (full writeup there). The key strings below are the community Figma's
+            // own baked filenames (still literally "altitude") and are left verbatim so the asset loader
+            // still finds art/cover/<key>.png — only the label/comments changed, never the baked key.
             "deport_burn","coast_to_trunk","crew_interrupt_conditions","union","30deg_sustained_altitude_error",
             "far_field_pointing_1","claw_separati","600deg_m_altitude_rate","far_field_pointing","procedure",
             "crew_deorbit_preparation","union_6","deorbit_burn_3_hrs","on_spacex_on_begin_procedure_4_700","manual_chute",

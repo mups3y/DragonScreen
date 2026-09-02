@@ -24,6 +24,17 @@ kept marked · **the chute altitudes are INTENTIONALLY two different things** �
 “(TBC)” altitudes are SpaceX's own placeholder text kept verbatim. **Neither should be edited to match the
 other.**
 
+**S13 divergence note (owner, 2026-09-02, via the overseer):** screen **#24** below, "Deorbit Burn Prep" —
+the Crew Interrupt Conditions / Slew for Deorbit Burn criteria — read **ATTITUDE**, not altitude. Every
+source that names them (this file's own blurry-photo transcription, `SCREENS_LOOK_AND_FUNCTION_RESEARCH.md`'s
+read of the community First.vue source, and the community Figma's own baked asset filename
+`600deg_m_altitude_rate`) literally says "altitude", but that doesn't parse physically for a rotational,
+degrees/degrees-per-minute slew criterion paired with Roll/Pitch/Yaw — and the tier-1 photo transcription is
+the likely origin, with the tier-2 sources sharing one lineage rather than confirming it independently, so
+§1.4 "verified-real" is weak here and physics is decisive (C1.4/C7.1). Corrected below and in
+`plugin/src/pure/DeorbitBurnPrepPage.cs` (full writeup), `CoverPage.cs`'s asset-key comment, and
+`SCREENS_LOOK_AND_FUNCTION_RESEARCH.md` together. The literal community assets still read "altitude".
+
 ## Headline fact
 The real Dragon UI has **~25–30 individual pages** (DillonBaird recreation, from a SpaceX crew-displays
 source; astronaut Doug Hurley quote). We now have **~18 built** (Cover, HUD, Vehicle Overview/All + Mech + 6 subsystem tabs, Suit Leak Check,
@@ -85,7 +96,7 @@ hand, needs building · **🟡 REFINE** — folds into a page we already ship, n
 | … | **Menu** | **Navigation index** — a grid/list of every built page, tap to jump (`UiPage.Menu`, opened by the Cover Menu button). Fills the ~25–30-page need the 5-icon bar can't | §14.4(c); content = real pages, layout ours | 🟦 DESIGN SET (**T2**) |
 | … | **Alert / Fault** | **NOT a page** — a FUNCTIONS/ALERTS toggle on every Vehicle subsystem page + red sub-nav routing | DillonBaird Vehicle render | 🟡 REFINE of the subsystem pages (**T5**) |
 | 23 | **Rendezvous orbital-ellipse plot** | Left icon sub-nav rail + a “Hold Capture” procedure card + a large **2D orbital-ellipse plot** with the vehicle position and an approach chord. The CENTRE situational-awareness display's rendezvous view | BBC `touchscreens.png` (all three screens, Hold-Capture phase) | 🟠 REF, not built (**T6**) — likely also covers the Proximity/ISS plot gap (#13) |
-| 24 | **Deorbit Burn Prep** | “Crew Interrupt Conditions” + “Slew for Deorbit Burn” (Roll/Pitch/Yaw, max altitude rate, FC Slew) + numbered settle-burn steps (~3 min prior, 1 s pulses at 30 s intervals, 8 min duration) | `discovery` deorbit-burn frames (blurry) | 🟠 REF, not built — reconstruct + MARK (**T7**) |
+| 24 | **Deorbit Burn Prep** | “Crew Interrupt Conditions” + “Slew for Deorbit Burn” (Roll/Pitch/Yaw, max attitude rate — see S13 divergence note above, FC Slew) + numbered settle-burn steps (~3 min prior, 1 s pulses at 30 s intervals, 8 min duration) | `discovery` deorbit-burn frames (blurry) | 🟠 REF, not built — reconstruct + MARK (**T7**) |
 | 25 | **Entry** | “Parachute Deployment Altitude” section + steps — the entry/descent procedure page | `discovery` “Entry” frame (partial) | 🟠 REF, not built — reconstruct + MARK (**T8**) |
 | 26 | **Prop / RCS thruster schematic** | The AUTHENTIC look of Vehicle·Prop: the Dragon in **horizontal profile** (capsule + trunk line-art) ringed by **Draco thruster-quad arc symbols** with per-cluster firing/status, per-thruster data along the bottom, a LEFT alert + sub-nav rail | **JSC `jsc2026e404727`** (Crew-13 training) | 🟡 REFINE — we built Prop as a generic gauge template; this is what it should be (**T9**) |
 | 27 | **Systems / electrical TREE** | A **hierarchical box-and-connector diagram** (labelled boxes joined by connector lines) — a power-distribution / systems tree. A subsystem deep-view, distinct from the P&ID plumbing view | **JSC `jsc2024e064449`** (sim rig, LEFT screen) | 🟠 REF, not built (**T9**) |
@@ -121,7 +132,8 @@ hand, needs building · **🟡 REFINE** — folds into a page we already ship, n
     PYROS / DEPLOY DROGUES / FIRE PYRO / DEPLOY MAINS, each with an Arm-and-verify / Execute / Latch /
     Check-latched action. This is the Cover phase-rail item #7 (Manual Chute Deploy). Rich — its own build.
   - **Deorbit Burn Prep** (`discovery` deorbit-burn frames): "Crew Interrupt Conditions" + "Slew for
-    Deorbit Burn" (Roll/Pitch/Yaw + Maximum altitude rate + FC Slew) + numbered steps ("~3 min prior to
+    Deorbit Burn" (Roll/Pitch/Yaw + Maximum attitude rate [S13, 2026-09-02: corrected from "altitude" —
+    see the divergence note above] + FC Slew) + numbered steps ("~3 min prior to
     burn Dragon performs single-pulse burns to settle propellant; 8 min duration; 1 sec pulses at 30 sec
     intervals; state oscillates between Deorbit Burn Prep and Deorbit Burn Settle"). A deorbit procedure page.
   - **Entry** (`discovery` "Entry" frame): "Parachute Deployment Altitude" section + steps — the entry/

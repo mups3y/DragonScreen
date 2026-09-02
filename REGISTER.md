@@ -1142,19 +1142,30 @@ its own tab bar always reads nominal even when another subsystem is genuinely al
 `VehicleMechPage.Build` passes `PageState` through and calls
 `VehicleTabBar.Draw(dl,w,h,3,VehicleTabBar.Severities(s))`, with a preview showing it turn red to match.
 
-### S13 [owner call] "altitude" vs "attitude" in Crew Interrupt Conditions / Slew for Deorbit Burn — **TODO** — [TIER 3: owner decision pending]
-Logged by T7 (C1.1), not done. Every source that names the deorbit-burn interrupt/slew criteria says
-"altitude" — SCREEN_INVENTORY.md's photo transcription, SCREENS_LOOK_AND_FUNCTION_RESEARCH.md's read of
-the community recreation's First.vue source, and the community Figma's own baked layer name
-(`600deg_m_altitude_rate`, `CoverPage.cs` Keys). "30° sustained ALTITUDE error" and "600°/min ALTITUDE
-rate" don't parse physically (altitude is a distance, not a rotational quantity), whereas "ATTITUDE
-error/rate" would — paired with Roll/Pitch/Yaw and an autopilot SLEW-interrupt trigger, "attitude" is
-what the criteria are almost certainly measuring. Not corrected unilaterally (C1.4: never edit a
-real-sourced label without a real-source confirmation) — kept verbatim in `DeorbitBurnPrepPage.cs` and
-its comments so nothing in the codebase disagrees with the already-shipped `CoverPage.cs` wording.
-**DONE when:** the owner confirms which word the real screen actually shows (or that the community
-Figma really typed "altitude"), and the docs + `CoverPage.cs` asset-key comment + `DeorbitBurnPrepPage.cs`
-are updated together if it is "attitude".
+### S13 [owner call] "altitude" vs "attitude" in Crew Interrupt Conditions / Slew for Deorbit Burn — **DONE**
+Logged by T7 (C1.1). Every source that names the deorbit-burn interrupt/slew criteria says "altitude" —
+SCREEN_INVENTORY.md's photo transcription, SCREENS_LOOK_AND_FUNCTION_RESEARCH.md's read of the community
+recreation's First.vue source, and the community Figma's own baked layer name (`600deg_m_altitude_rate`,
+`CoverPage.cs` Keys). "30° sustained ALTITUDE error" and "600°/min ALTITUDE rate" don't parse physically
+(altitude is a distance, not a rotational quantity), whereas "ATTITUDE error/rate" would — paired with
+Roll/Pitch/Yaw and an autopilot SLEW-interrupt trigger, "attitude" is what the criteria are almost
+certainly measuring.
+- **DONE 2026-09-02 (owner-directed session, decided by the owner via the overseer — recorded as such per
+  C1.12).** **Decision: ATTITUDE.** The deorbit interrupt/slew criteria are rotational (degrees,
+  degrees/min) and pair with Roll/Pitch/Yaw + a SLEW interrupt, so the real quantity is attitude, not
+  altitude; the only tier-1 source is a blurry photo whose transcription is the likely error, and the
+  tier-2 community sources share one lineage (not independent), so §1.4 "verified-real" is weak and
+  physics is decisive (C1.4/C7.1). Applied to the human-facing label + comments only — the baked Figma
+  asset key (`600deg_m_altitude_rate`, real community-asset filename) is **NOT** renamed. Updated
+  together so nothing in the tree disagrees: `DeorbitBurnPrepPage.cs` (on-screen strings "30° sustained
+  attitude error" / "600°/min attitude rate" / "MAXIMUM ATTITUDE RATE", plus a full 2026-09-02 divergence
+  note replacing the old "flagged for owner" note), `CoverPage.cs` (a comment beside the two baked Keys
+  entries recording the divergence — key strings themselves untouched), `docs/SCREEN_INVENTORY.md` (a
+  divergence-note paragraph + both inline "altitude rate" mentions for screen #24), and
+  `docs/SCREENS_LOOK_AND_FUNCTION_RESEARCH.md` (a bullet in the top RECONCILED note + the §2 item 1 inline
+  mention). Preview `ui_deorbitburnprep.png` inspected — shows "attitude" throughout; `ui_cover.png`
+  inspected — the baked Cover asset still reads "altitude" verbatim, as intended (literal community
+  asset, not relabelled). `python plugin/build.py test` green (all suites passed).
 
 ### S14 [S] Three dead `UiPage` entries surface confusing Menu cards — **DONE**
 Logged by T7 (C1.1), not done. `UiPage.PhaseDeport`/`PhaseCoast`/`PhaseClaw` (values 6/7/8) predate the

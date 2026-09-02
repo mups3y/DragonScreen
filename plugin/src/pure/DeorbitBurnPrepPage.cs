@@ -8,21 +8,35 @@
 // ---- WHAT IS REAL, WHAT IS OURS (§1.4) ----
 // Two independent real sources agree on this screen's field NAMES (never its pixel layout):
 //   · SCREEN_INVENTORY.md's transcription of the blurry photo: "Crew Interrupt Conditions" +
-//     "Slew for Deorbit Burn" (Roll/Pitch/Yaw, Maximum altitude rate, FC Slew) + numbered settle-burn
+//     "Slew for Deorbit Burn" (Roll/Pitch/Yaw, Maximum attitude rate, FC Slew) + numbered settle-burn
 //     steps ("~3 min prior to burn Dragon performs single-pulse burns to settle propellant; 8 min
 //     duration; 1 sec pulses at 30 sec intervals; state oscillates between Deorbit Burn Prep and
 //     Deorbit Burn Settle").
 //   · SCREENS_LOOK_AND_FUNCTION_RESEARCH.md's read of the community recreation's own First.vue source
-//     (tier-1/2, UI_AUDIT.md's source): "Crew Interrupt Conditions (30° sustained altitude error /
-//     FAR-FIELD POINTING / 600°/min altitude rate)".
+//     (tier-1/2, UI_AUDIT.md's source): "Crew Interrupt Conditions (30° sustained attitude error /
+//     FAR-FIELD POINTING / 600°/min attitude rate)".
 // The three Crew Interrupt Conditions criteria and the settle-burn sequence text below are transcribed
-// from those two sources, not invented. NOTE (flagged for the owner, not silently changed): both
-// sources — and the community Figma's own baked layer name, `600deg_m_altitude_rate` in
-// CoverPage.cs's Keys — say "altitude", which plausibly should read "ATTITUDE" (an attitude-error /
-// attitude-rate interrupt makes physical sense for a SLEW maneuver; "altitude" does not). Kept
-// verbatim as sourced rather than corrected unilaterally (C1.4) — matches the existing shipped
-// wording so nothing in the codebase disagrees with itself.
-// Roll / Pitch / Yaw and "Maximum altitude rate" are real FIELD NAMES with no legible VALUE in the
+// from those two sources, not invented — see the 2026-09-02 divergence note immediately below for the
+// one word this build reads differently from those sources' own transcriptions.
+//
+// ---- 2026-09-02 DIVERGENCE NOTE (S13, owner decision via the overseer) ----
+// Every source that names these Crew Interrupt Conditions / Slew criteria literally reads "altitude":
+// SCREEN_INVENTORY.md's blurry-photo transcription, SCREENS_LOOK_AND_FUNCTION_RESEARCH.md's read of the
+// community recreation's First.vue source, and the community Figma's own baked layer name,
+// `600deg_m_altitude_rate` in CoverPage.cs's Keys (kept verbatim there — see the comment beside it; a
+// baked asset filename is not relabelled). "30° sustained ALTITUDE error" and "600°/min ALTITUDE rate"
+// don't parse physically — altitude is a distance, not a rotational quantity, and these criteria are
+// degrees / degrees-per-minute — whereas ATTITUDE error/rate does, paired with Roll/Pitch/Yaw and a SLEW
+// interrupt. The tier-1 source is a blurry photo whose transcription is the likely origin of the error,
+// and the tier-2 community sources share one lineage rather than independently confirming "altitude", so
+// §1.4 "verified-real" is weak here and physics is decisive (C1.4/C7.1). The owner resolved this via the
+// overseer (S13, 2026-09-02): the label reads ATTITUDE. Applied here, in the CoverPage.cs asset-key
+// comment, and in SCREEN_INVENTORY.md / SCREENS_LOOK_AND_FUNCTION_RESEARCH.md together so nothing in the
+// tree disagrees. The literal community assets — and those two docs' original transcriptions — still say
+// "altitude"; this is a corrected reading of an ambiguous source, not a claim the sources were mistyped
+// by this build.
+//
+// Roll / Pitch / Yaw and "Maximum attitude rate" are real FIELD NAMES with no legible VALUE in the
 // source photo, and no live vehicle quantity to source them from (this is a free-flight/inertial
 // attitude slew, not the docking-relative PageState.RollText/PitchText/YawText the HUD uses).
 //
@@ -34,8 +48,8 @@
 // no source. The near-misses were considered and rejected as inventions of MEANING rather than of a
 // number: the docking-relative errors are an error against a docking TARGET, not against a burn
 // attitude; the body rates VesselData.Rates() publishes are how fast we are turning, not where we
-// are being told to turn to; and a latched peak rate under "MAXIMUM ALTITUDE RATE" would be a
-// plausible number under a label whose meaning this build cannot confirm — which is exactly what the
+// are being told to turn to; and a latched peak rate under "MAXIMUM ATTITUDE RATE" would be a
+// plausible number under a label with no live source to confirm it — which is exactly what the
 // registry's rule ("anything with no real source is UNKNOWN — EVIDENCE REQUIRED ... never invented")
 // exists to stop. Their real source is the thing that will COMMAND the slew: the Part B conductor
 // (T21, deorbit/entry/chutes). Until it exists they read "—", the same no-source-yet idiom T5
@@ -87,9 +101,9 @@ namespace DragonScreen
             const float C1Y = 260f;
             Dot(C1Y); Title("CREW INTERRUPT CONDITIONS", C1Y);
             Lines(new[] {
-                "30° sustained altitude error",
+                "30° sustained attitude error",
                 "Far-field pointing",
-                "600°/min altitude rate" }, C1Y, 40f);
+                "600°/min attitude rate" }, C1Y, 40f);
 
             // ---- SLEW FOR DEORBIT BURN — real field names; deliberately dashed (T13c) ----
             // The four values below have no source and are deliberately not given one — see the
@@ -107,7 +121,7 @@ namespace DragonScreen
             Row("ROLL", "—", DragonPalette.Text6, rowY); rowY += 40f;
             Row("PITCH", "—", DragonPalette.Text6, rowY); rowY += 40f;
             Row("YAW", "—", DragonPalette.Text6, rowY); rowY += 40f;
-            Row("MAXIMUM ALTITUDE RATE", "—", DragonPalette.Text6, rowY); rowY += 40f;
+            Row("MAXIMUM ATTITUDE RATE", "—", DragonPalette.Text6, rowY); rowY += 40f;
             bool slewing = s.DeorbitEngaged;
             Row("FC SLEW", slewing ? "ENGAGED" : "NOT ENGAGED", slewing ? DragonPalette.Go : DragonPalette.Text6, rowY);
 

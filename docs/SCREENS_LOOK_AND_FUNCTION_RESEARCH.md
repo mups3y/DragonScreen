@@ -10,7 +10,16 @@
 > • §3's autopilot-driven cues ("driven by the autopilot phase/FDIR state", manual-takeover wiring) are Part B
 >   targets, not today's code — the flight-command seam is an honest no-op until §B12.5 wires it;
 > • the §5 hidden docking mini-game is **not in the register** — the built `DockingSimPage` covers the
->   manual-docking screen itself. Treat the mini-game as an owner idea, not a scheduled task.
+>   manual-docking screen itself. Treat the mini-game as an owner idea, not a scheduled task;
+> • **S13 divergence note (owner, 2026-09-02, via the overseer):** §2 item 1's "Crew Interrupt Conditions"
+>   criteria below read **ATTITUDE**, not altitude — this file's own transcription of the community
+>   First.vue source literally says "altitude" (as does `SCREEN_INVENTORY.md`'s photo transcription and
+>   the community Figma's baked asset filename), but that doesn't parse physically for a rotational
+>   slew criterion paired with Roll/Pitch/Yaw, and the tier-1 photo is the likely origin with the tier-2
+>   sources sharing one lineage rather than confirming it independently — physics is decisive (C1.4/C7.1).
+>   Corrected below and in `plugin/src/pure/DeorbitBurnPrepPage.cs` (full writeup), `CoverPage.cs`'s
+>   asset-key comment, and `SCREEN_INVENTORY.md` together; the literal community source still reads
+>   "altitude".
 
 > **Why (2026-08-28):** before the ULTIMATE PLAN, close the hole — a single comprehensive record of every
 > resource we have + can find on the real Crew Dragon displays, the full page set + function, how it maps to
@@ -40,8 +49,9 @@ so faithful HTML/vector recreations (Figma + the Vue demo) ARE close to the real
 The faithful recreation (and the real UI) is a small set of full-screen pages, cycled by a NEXT-VIEW control:
 1. **Deorbit / NAV** (`First.vue`) — ACTIVE PHASE (e.g. "Deorbit Coast"), SPLASHDOWN TIME, INERTIAL VELOCITY,
    ALTITUDE/APOGEE/PERIGEE/INCLINATION, the **deorbit procedure list** (Depart & burn → Coast to Trunk → Claw
-   Separation → Manual Chute), **Crew Interrupt Conditions** (30° sustained altitude error / FAR-FIELD POINTING
-   / 600°/min altitude rate), the **Crew Deorbit Preparation timeline** (Deorbit burn −3 hr … −1 hr … −30 min,
+   Separation → Manual Chute), **Crew Interrupt Conditions** (30° sustained attitude error / FAR-FIELD POINTING
+   / 600°/min attitude rate — corrected from "altitude", S13, see note above), the **Crew Deorbit Preparation
+   timeline** (Deorbit burn −3 hr … −1 hr … −30 min,
    Go/No-Go, Acknowledge), ENTRY ENABLED true/false, TARGET LAT/LON, a 3D Earth. NEXT VIEW.
 2. **Manual Flight / DOCKING** (`Second.vue`) — the **navball** + HUD ring, **YAW / PITCH / ROLL** numbers,
    **RANGE / RATE / ACCELERATION**, XYZ translation, FLIGHT COMMANDS (WASD move, R\|F up/down, Q\|E roll,
