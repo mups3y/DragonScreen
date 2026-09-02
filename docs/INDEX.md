@@ -54,7 +54,9 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
   measured positions in the 3427×2112 frame, and how `CoverPage.cs` uses each.
 - **[MAP_MFD_RESEARCH.md](MAP_MFD_RESEARCH.md)** [PARTLY SUPERSEDED] — the NAV globe / map-MFD research. §1–§4
   (why you cannot pipe KSP's map view; how to build it ourselves) is sound; its "V1 BUILT + INSTALLED" status
-  block describes files this repo does not contain — see its banner. Feeds **T4**.
+  block describes files this repo did not contain — see its banner, corrected 2026-09-02 by **S10a**, which
+  built the pure half (`pure/PlanetGeom.cs`, the `ImageId.ScaledPlanetLive` seam, the honest no-signal state).
+  §2's Unity camera is still absent and is **S10b**. Feeds **S10a/S10b** (it fed T4 for the map MODES only).
 - **[SCREENS_LOOK_AND_FUNCTION_RESEARCH.md](SCREENS_LOOK_AND_FUNCTION_RESEARCH.md)** [PARTLY SUPERSEDED] —
   the resource inventory (with licences), the real page set + function, and the real→our page map.
 - **[SCREENS_CONSOLE_PLAN.md](SCREENS_CONSOLE_PLAN.md)** [PARTLY SUPERSEDED] — the older screens/console

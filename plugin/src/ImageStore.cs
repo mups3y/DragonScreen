@@ -25,8 +25,28 @@ namespace DragonScreen
             if (id == ImageId.BodyMap) return BodyMap();
             if (id == ImageId.NavBallLive) return NavBallRenderer.Texture();
             if (id == ImageId.DockingCamLive) return DockingCamRenderer.Texture();
+            if (id == ImageId.ScaledPlanetLive) return ScaledPlanetTexture();
             return Get(id);
         }
+
+        // ---- THE LIVE 3D PLANET SEAM (S10a). ONE LINE OF THIS FILE IS S10b'S WHOLE HOOK-UP. ----
+        //
+        // docs/MAP_MFD_RESEARCH.md §2 renders scaled space into a RenderTexture through a camera
+        // built with CopyFrom(ScaledCamera.Instance.cam), aimed by the pure PlanetGeom. That renderer
+        // - src/ScaledPlanetRenderer.cs - is NOT in the build: it cannot be exercised at all with the
+        // game closed (build.py compiles the glue on every `test`, but nothing here RUNS a Unity
+        // camera), so it is S10b, behind a separate owner install + glass go.
+        //
+        // So this returns null, honestly and on purpose, and everything downstream is already wired
+        // for that answer: PageState.PlanetCamLive goes false, NavPage draws the textured disc under
+        // PlanetGeom.NoSignalLabel, and the preview does the same. S10b replaces the body of this
+        // method with `return ScaledPlanetRenderer.Texture();` and the view lights up.
+        private static Texture ScaledPlanetTexture() { return null; }
+
+        /// <summary>Is there a live scaled-space render this frame? False until S10b - see
+        /// ScaledPlanetTexture. Read by VesselData into PageState.PlanetCamLive, so the PAGE never
+        /// asks about textures and the GLUE never decides what a page says.</summary>
+        internal static bool ScaledPlanetLive() { return ScaledPlanetTexture() != null; }
 
         /// <summary>
         /// The texture for a NAMED asset (art/cover/&lt;key&gt;.png), loaded once and cached. Same rules

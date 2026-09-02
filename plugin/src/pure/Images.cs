@@ -15,7 +15,14 @@ namespace DragonScreen
         Seat = 7,
         DockingCamLive = 8,
         HudDarken = 9,
-        DontPanic = 10   // user-supplied art/dontpanic.png, shown on the abort overlay (optional)
+        DontPanic = 10,  // user-supplied art/dontpanic.png, shown on the abort overlay (optional)
+        /// <summary>The LIVE 3D scaled-planet render (docs/MAP_MFD_RESEARCH.md §2) - a dedicated
+        /// camera copied from ScaledCamera.Instance.cam into a RenderTexture, aimed by PlanetGeom.
+        /// ⚠ NOTHING SERVES IT YET: the camera is S10b (it cannot exist with the game closed), so
+        /// ImageStore resolves it to null and NavPage draws PlanetGeom.NoSignalLabel instead. The id
+        /// exists now so the page, the glue and the preview all agree on the seam before the renderer
+        /// lands - the same idle-seam pattern src/_AutopilotStub.cs uses.</summary>
+        ScaledPlanetLive = 11
     }
 
     public static class Images
@@ -23,7 +30,7 @@ namespace DragonScreen
         public static bool IsRuntime(ImageId id)
         {
             return id == ImageId.BodyMap || id == ImageId.NavBallLive
-                || id == ImageId.DockingCamLive;
+                || id == ImageId.DockingCamLive || id == ImageId.ScaledPlanetLive;
         }
 
         // An OPTIONAL image is user-supplied — dropped into art/ by the player, NOT shipped with the mod,

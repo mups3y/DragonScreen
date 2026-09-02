@@ -23,6 +23,7 @@ public static class TestMain
         bad += ComponentsTest.Run();       // Phase 6: pure display widgets (NumericReadout/StatusIndicator/TargetReticle)
         bad += PanelTest.Run();
         bad += GlobeProjectionTest.Run();  // screens: orthographic globe projection + occlusion (NAV 3D)
+        bad += PlanetGeomTest.Run();       // screens: scaled-space camera framing/projection/occlusion (S10a)
         bad += OrbitalTest.Run();          // shared display math: orbit readouts
         bad += VehiclePartsTest.Run();     // screens: part classification for the systems display
         bad += MissionPhaseTest.Run();     // shared: the phase enum the screens label

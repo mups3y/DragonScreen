@@ -12,12 +12,21 @@ screen, so the crew never has to leave IVA — *with a live 3D scaled-planet vie
 `BodyMap` texture) with the tested `pure/PlanetOverlay.cs` orbit/marker overlay drawn over it. `CoverPage`
 reuses the same call, so the Cover globe and the NAV globe cannot drift apart.
 
-**What is NOT here, despite the paragraph below claiming it shipped:** `src/ScaledPlanetRenderer.cs`,
-`pure/PlanetGeom.cs`, `test/PlanetGeomTest.cs` and `ImageId.ScaledPlanetLive` **do not exist in this repo and
-never have** (checked against the full git history). So there is no scaled-space RT camera, no
-`CopyFrom(ScaledCamera.Instance.cam)`, and no occlusion-culling behind a real rendered globe. Read the
-following block as the **design** for that camera — which is still the right design — not as a status report.
-Building it is register task **T4** (Cover map-modes: 2D/3D + camera). The original text:
+**What is NOT here** — the T1 correction, now **half-answered by S10a (2026-09-02)**. T1 found that
+`src/ScaledPlanetRenderer.cs`, `pure/PlanetGeom.cs`, `test/PlanetGeomTest.cs` and `ImageId.ScaledPlanetLive`
+did not exist in this repo and never had (checked against the full git history), despite the paragraph below
+reading as though they had shipped. Where that stands now:
+
+- **BUILT by S10a:** `pure/PlanetGeom.cs` (the camera placement, its projection and its ray/sphere occlusion),
+  `test/PlanetGeomTest.cs`, `ImageId.ScaledPlanetLive` + `PageState.PlanetCamLive` +
+  `ImageStore.ScaledPlanetLive()` (the seam), and `NavPage.Planet`'s live path with the honest
+  `LIVE 3D — NO SIGNAL` marking for the state where no camera is rendering — which is every state today.
+- **STILL NOT HERE — S10b:** `src/ScaledPlanetRenderer.cs`. There is no scaled-space RT camera, no
+  `CopyFrom(ScaledCamera.Instance.cam)` and nothing occlusion-culled behind a really rendered globe. It cannot
+  be exercised with the game closed, so it is behind a separate owner `install` + glass go (§5).
+
+Read the following block as the **design** for that camera — which is still the right design, and which
+`PlanetGeom` now implements the arithmetic of — not as a status report. The original text:
 
 - `src/ScaledPlanetRenderer.cs` (glue) — the RT camera. `CopyFrom(ScaledCamera.Instance.cam)` to inherit
   the exact culling mask/projection the map draws the planets with, then override target/clip/clear and
@@ -139,8 +148,26 @@ select, warp-to, and view rotate/zoom. Each is an API call listed in §3 — a n
 ## 5. Scope + priority
 This is a **screens-side feature**, not autopilot. ~~Per the governing plan, finish pad→orbit (the S2 ignition
 fix) and the proving flights first~~ — **SUPERSEDED 2026-09-02 (T1):** the autopilot that sentence sequenced
-against was deleted on 2026-09-01, and the live order is `REGISTER.md`. This work is **T4 — Cover map-modes
-(2D/3D + camera)**, the first item of the §7 build order, and it is BUILD-HELD until the owner's go.
+against was deleted on 2026-09-01, and the live order is `REGISTER.md`.
+
+~~This work is **T4 — Cover map-modes (2D/3D + camera)**, the first item of the §7 build order, and it is
+BUILD-HELD until the owner's go.~~ — **RE-POINTED 2026-09-02 (S10a), and this was the stale line S10's
+register entry flagged.** T4 was a different task and is DONE: it shipped the Cover's 2D/3D map MODES against
+the pure globe that already existed, never the camera. §2's scaled-space camera is **S10**, which SPLITS the
+way T11a/T11b did, because its RenderTexture renders nothing with the game closed and the standing go is
+preview-only:
+
+- **S10a — DONE 2026-09-02, preview-only.** The pure geometry (`pure/PlanetGeom.cs` + `test/PlanetGeomTest.cs`),
+  the seam (`ImageId.ScaledPlanetLive`, `PageState.PlanetCamLive`, `ImageStore.ScaledPlanetLive()`), and
+  `NavPage.Planet`'s live path — which draws the RT when one exists and otherwise keeps the textured disc and
+  the projected orbit under an honest `LIVE 3D — NO SIGNAL` marking (§14.4(e)). The NAV sub-heading no longer
+  claims `LIVE CAMERA` when there is no camera.
+- **S10b — HELD, needs a separate owner `install` + glass go.** `src/ScaledPlanetRenderer.cs` itself (the
+  camera, the RT, the `CopyFrom(ScaledCamera.Instance.cam)` and the lifetime), plus the three judgements only
+  the capsule can settle: does the globe render, does the orbit line track and occlude behind true geometry,
+  does the framing read at cabin distance. Carried on `REGISTER.md`'s **S18** glass checklist as **G11**.
+
 It reuses infrastructure we already have (the RT camera pattern from `DockingCamRenderer`/`NavBallRenderer`,
-touch, the NAV page). Estimated pieces: `ScaledPlanetRenderer` (camera+RT, ~a DockingCamRenderer-sized file)
-→ orbit overlay draws in `NavPage` → the node/target/warp controls.
+touch, the NAV page). What is left for S10b: `ScaledPlanetRenderer` (camera+RT, ~a DockingCamRenderer-sized
+file) aimed by `PlanetGeom.Frame`, one line in `ImageStore.ScaledPlanetTexture()` to hand the texture over,
+then the node/target/warp controls of §4.

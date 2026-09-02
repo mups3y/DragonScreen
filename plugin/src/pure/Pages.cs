@@ -332,6 +332,17 @@ namespace DragonScreen
         /// every frame. Null in the PNG preview and until the renderer fills it - the page checks
         /// Ready. See PlanetOverlay.</summary>
         public PlanetOverlay Planet;
+        /// <summary>
+        /// A live scaled-space RENDER is behind the 3D PLANET view this frame (ImageId.ScaledPlanetLive
+        /// resolves to a texture).
+        ///
+        /// ⚠ FALSE EVERYWHERE TODAY, and false in the PNG preview for ever: the camera that would set
+        /// it is S10b, which needs install + glass time. While it is false the view draws the textured
+        /// strip disc and the projected orbit - both real - under PlanetGeom.NoSignalLabel, so the
+        /// page never claims a live camera it has not got. The glue reads it from the image store, so
+        /// S10b turns the whole thing on by returning a texture and changes nothing here.
+        /// </summary>
+        public bool PlanetCamLive;
 
         // ---- CREW, BY SEAT ----
         // Indexed by IVA seat, which is the capsule's OWN numbering (part.internalModel.seats), not

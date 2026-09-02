@@ -145,9 +145,15 @@ namespace DragonScreen
             // The demo labels the current view `CAMERA / Auto - Map IO`; ours says which of the three
             // views is up and, on the map, whether it is following the vehicle, because that is the
             // state a crew member would otherwise have to work out by watching whether it drifts.
+            // ⛔ THE PLANET SUB-LABEL IS CONDITIONAL, AND THAT IS THE POINT (S10a).
+            // It used to say LIVE CAMERA unconditionally, which was a claim the page could not back:
+            // there is no scaled-space camera in the build yet (S10b), so what the crew was looking at
+            // was the textured disc. It now says so, and goes back to LIVE CAMERA the moment one is
+            // actually rendering - see PlanetGeom.NoSignalLabel for the rest of the marking.
             string sub = (view.Mode == NavMode.Map)
                 ? (view.Follow ? "TRACKING VEHICLE" : "MANUAL PAN")
-                : (view.Mode == NavMode.Orbit) ? "PLANE VIEW" : "LIVE CAMERA";
+                : (view.Mode == NavMode.Orbit) ? "PLANE VIEW"
+                : (s.PlanetCamLive ? "LIVE CAMERA" : "GLOBE + ORBIT");
             dl.Text(sub, mx + mw, HeaderY, Typography.Caption, TextAlign.Right, DragonPalette.Text6);
 
             // The well the map sits in. Drawn first and always, so the panel has a shape even before
@@ -156,7 +162,7 @@ namespace DragonScreen
 
             if (view.Mode == NavMode.Map) Map(dl, s, view, mx, my, mw, mh);
             else if (view.Mode == NavMode.Orbit) Orbit(dl, s, mx, my, mw, mh);
-            else Planet(dl, s, view, mx, my, mw, mh);
+            else Planet(dl, s, view, mx, my, mw, mh, true);   // NAV owns the live 3D view (S10)
 
             dl.Box(mx, my, mw, mh, 2f, DragonPalette.Hairline);
 
@@ -310,6 +316,19 @@ namespace DragonScreen
         private const float GlobeLineW = 2.5f;
 
         /// <summary>
+        /// The globe's radius as a fraction of the SMALLER side of the map well, at zoom 0.
+        ///
+        /// ⛔ NOT A FREE NUMBER ANY MORE (S10a). It is PlanetGeom.DiscFillOfHalfHeight halved -
+        /// the same 0.44 it always was, now stated once. The live scaled-space camera solves its
+        /// DISTANCE from that same fill fraction (PlanetGeom.Distance), so the rendered globe and this
+        /// textured disc put their limbs in exactly the same place and the view does not jump when a
+        /// camera appears behind it. Change it here and the camera follows; change it there and this
+        /// follows. That only holds while the well is wider than it is tall, so the smaller side is
+        /// the height the camera's vertical field of view is measured against - asserted in PageTest.
+        /// </summary>
+        private const float GlobeDiscFrac = (float)(PlanetGeom.DiscFillOfHalfHeight * 0.5);
+
+        /// <summary>
         /// The 3D globe view: the SAME textured, correctly-aligned Earth the ORBIT view draws
         /// (NavPage.Globe, from the game's own scaled-space map), with the orbit, target orbit and
         /// markers projected ONTO it by the pure orthographic GlobeProjection - so the far side of the
@@ -323,16 +342,53 @@ namespace DragonScreen
         // overlay inside their own layout, instead of a second globe renderer that could drift.
         public static void Planet(DisplayList dl, PageState s, MapView view,
                                    float mx, float my, float mw, float mh)
+        { Planet(dl, s, view, mx, my, mw, mh, false); }
+
+        /// <summary>
+        /// As Planet, but able to show the LIVE scaled-space render (S10, MAP_MFD_RESEARCH §2).
+        ///
+        /// <paramref name="live"/> asks for the RT camera feed; NAV's own 3D PLANET view passes true,
+        /// the Cover globe and the Manual Chute globe deliberately do NOT - they are small decorative
+        /// slots showing the body, not a camera view, and putting a camera feed and a no-signal notice
+        /// into them would change two finished pages for nothing.
+        ///
+        /// Even with live asked for, the render only appears when one EXISTS (s.PlanetCamLive). It
+        /// does not today: the camera is S10b. Until then this draws the textured disc and the
+        /// projected orbit - which are both real - and Planet() marks them as not being the live
+        /// render. See PlanetGeom.NoSignalLabel.
+        /// </summary>
+        public static void Planet(DisplayList dl, PageState s, MapView view,
+                                   float mx, float my, float mw, float mh, bool live)
+        {
+            PlanetBody(dl, s, view, mx, my, mw, mh, live);
+
+            // Drawn LAST and outside PlanetBody so it survives every early return in there - a state
+            // with no orbit to plot is exactly the state where an unmarked disc would read as a feed.
+            if (live && !s.PlanetCamLive) NoSignalMark(dl, mx, my);
+        }
+
+        /// <summary>The globe and its overlay. Split from Planet only so the no-signal marking cannot
+        /// be skipped by an early return - see Planet.</summary>
+        private static void PlanetBody(DisplayList dl, PageState s, MapView view,
+                                       float mx, float my, float mw, float mh, bool live)
         {
             float cx = mx + mw * 0.5f, cy = my + mh * 0.5f;
-            float r = System.Math.Min(mw, mh) * 0.44f * (float)System.Math.Pow(1.25, view.PlanetZoom);
+            float r = System.Math.Min(mw, mh) * GlobeDiscFrac
+                      * (float)System.Math.Pow(PlanetGeom.ZoomBase, view.PlanetZoom);
             if (r < 24f) r = 24f;
 
             // Follow the vehicle's longitude, plus the crew's manual spin.
             double lonCentre = (s.Valid && s.HasFix ? s.Longitude : 0.0) + view.PlanetRotDeg;
 
-            // The real Earth - the same disc the ORBIT view is built from.
-            Globe(dl, cx, cy, r, lonCentre);
+            // ---- the globe: the live render if there is one, else the textured disc ----
+            // The feed FILLS THE WELL, the way every other camera view on these screens does
+            // (DockingPage draws its cam over the whole panel). Its globe still lands on the disc's
+            // limb, because PlanetGeom solved the camera distance from the same fill fraction the disc
+            // is sized by - so the orbit overlay below is projected against one radius either way.
+            if (live && s.PlanetCamLive)
+                dl.Image(ImageId.ScaledPlanetLive, mx, my, mw, mh, DragonPalette.White);
+            else
+                Globe(dl, cx, cy, r, lonCentre);   // the real Earth - the same disc the ORBIT view uses
 
             PlanetOverlay ov = s.Planet;
             if (ov == null || !ov.Ready)
@@ -384,6 +440,25 @@ namespace DragonScreen
                 dl.Rect(sx - 1f, sy - 9f, 2f, 18f, DragonPalette.Go);
                 dl.Box(sx - 5f, sy - 5f, 10f, 10f, 2f, DragonPalette.Go);
             }
+        }
+
+        /// <summary>
+        /// The honest "this is not the live render" marking, in the well's top-left corner - the one
+        /// part of the well the centred disc never reaches, and clear of the ON SURFACE / NO DATA
+        /// notices at the bottom.
+        ///
+        /// Caution amber, not alarm red: nothing has failed. The scaled-space camera simply is not
+        /// built yet, and what is on the glass beneath this - the body's own texture, the real orbit,
+        /// the real markers - is correct. That is §14.4(e)'s marked stand-in, and §14.4(a)'s "no red
+        /// for something that is not a fault". The wording lives in PlanetGeom so the label naming
+        /// S10b cannot drift from the code that would clear it.
+        /// </summary>
+        private static void NoSignalMark(DisplayList dl, float mx, float my)
+        {
+            dl.Text(PlanetGeom.NoSignalLabel, mx + 12f, my + 10f, Typography.Caption,
+                    TextAlign.Left, DragonPalette.Caution);
+            dl.Text(PlanetGeom.NoSignalDetail, mx + 12f, my + 30f, Typography.Dense,
+                    TextAlign.Left, DragonPalette.Text6);
         }
 
         /// <summary>

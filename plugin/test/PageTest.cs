@@ -59,6 +59,7 @@ public static class PageTest
         Velocity();
         Propellant();
         DockingLayout();
+        PlanetLiveSeam();
         Capacity();
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
@@ -1071,6 +1072,137 @@ public static class PageTest
         Check("no target keeps the reticle", ring2, "");
         Check("no target draws no navball", !navball2, "");
         Check("no target withholds RANGE", !range2, "");
+    }
+
+    // ------------------------------------------------------------------ the live 3D planet seam (S10a)
+
+    /// <summary>
+    /// NAV's 3D PLANET view must never claim a live camera it has not got, and must not lose the
+    /// globe when it has not got one.
+    ///
+    /// This is the whole S10a contract in one place: with no render behind it (the state today, and
+    /// the state of the PNG preview for ever) the page draws the textured disc, prints
+    /// PlanetGeom.NoSignalLabel over it and drops the LIVE CAMERA sub-heading; with a render behind
+    /// it - the state S10b creates by returning a texture from ImageStore - the page draws
+    /// ImageId.ScaledPlanetLive instead, and the marking disappears on its own.
+    ///
+    /// The other two globes (the Cover's and Manual Chute's) are checked NOT to change, because they
+    /// are finished pages that happen to call the same function.
+    /// </summary>
+    static void PlanetLiveSeam()
+    {
+        PageState s = Healthy();
+        s.HasFix = true; s.Longitude = 0.0;
+        s.BodyRadiusM = 600000.0; s.ApogeeM = 124000.0; s.PerigeeM = 121900.0;
+        s.AltitudeM = 123400.0;
+
+        PlanetOverlay ov = new PlanetOverlay();
+        int N = PlanetOverlay.DefaultSamples;
+        double[] olat = new double[N], olon = new double[N], orat = new double[N];
+        for (int i = 0; i < N; i++)
+        {
+            double f = (double)i / (N - 1);
+            olat[i] = -60.0 + 120.0 * f; olon[i] = -80.0 + 160.0 * f; orat[i] = 1.05;
+        }
+        ov.Ready = true;
+        ov.OrbitLat = olat; ov.OrbitLon = olon; ov.OrbitRatio = orat; ov.OrbitCount = N;
+        ov.Vessel = new GlobePoint { Lat = 28, Lon = 0, Ratio = 1.05, Has = true };
+        s.Planet = ov;
+
+        MapView planet = MapProjection.WithMode(MapProjection.Default(), NavMode.Planet);
+
+        // ---- no camera: the honest marked state ----
+        DisplayList dark = new DisplayList(Pages.Commands + 4);
+        s.PlanetCamLive = false;
+        Pages.Build(dark, 2, W, H1, s, planet, 2);
+        Check("NAV 3D prints the no-signal label with no camera",
+              HasText(dark, PlanetGeom.NoSignalLabel), "");
+        Check("...and the line naming S10b", HasText(dark, PlanetGeom.NoSignalDetail), "");
+        Check("...and does NOT ask for a render that does not exist",
+              !HasImage(dark, ImageId.ScaledPlanetLive), "");
+        Check("...and does NOT claim LIVE CAMERA", !HasText(dark, "LIVE CAMERA"), "");
+        Check("...and still draws the textured globe", HasImage(dark, ImageId.BodyMap), "");
+        Check("...and still draws the orbit over it", HasLine(dark), "");
+
+        // ---- camera live (the state S10b creates): the render, and the marking gone ----
+        DisplayList lit = new DisplayList(Pages.Commands + 4);
+        s.PlanetCamLive = true;
+        Pages.Build(lit, 2, W, H1, s, planet, 2);
+        Check("NAV 3D draws the live render when there is one",
+              HasImage(lit, ImageId.ScaledPlanetLive), "");
+        Check("...and drops the no-signal label", !HasText(lit, PlanetGeom.NoSignalLabel), "");
+        Check("...and says LIVE CAMERA", HasText(lit, "LIVE CAMERA"), "");
+        Check("...and does not draw the strip disc as well",
+              !HasImage(lit, ImageId.BodyMap), "");
+        Check("...and still draws the orbit over it", HasLine(lit), "");
+
+        // ---- the marking survives the states with no orbit to draw ----
+        // A globe with no overlay is exactly where an unmarked disc would read as a camera feed, and
+        // it is the state the page takes an early return through.
+        PageState bare = Healthy();
+        bare.PlanetCamLive = false;
+        bare.Planet = null;
+        DisplayList none = new DisplayList(Pages.Commands + 4);
+        Pages.Build(none, 2, W, H1, bare, planet, 2);
+        Check("the no-signal label survives an empty overlay",
+              HasText(none, PlanetGeom.NoSignalLabel), "");
+
+        // ---- the other two globes are untouched ----
+        // Both lists are checked for OVERFLOW as well: these are NEGATIVE assertions, and a dropped
+        // command would let one pass by not having been drawn at all.
+        s.PlanetCamLive = false;
+        DisplayList cover = new DisplayList(Pages.Commands * 2);
+        CoverPage.Build(cover, W * 2, H1 * 2, s, planet);
+        Check("the Cover page fits (so the checks below mean something)", !cover.Overflowed,
+              "used " + cover.Count + " of " + cover.Capacity);
+        Check("the Cover globe carries no no-signal label",
+              !HasText(cover, PlanetGeom.NoSignalLabel), "");
+        Check("...and asks for no live render", !HasImage(cover, ImageId.ScaledPlanetLive), "");
+
+        DisplayList chute = new DisplayList(Pages.Commands * 2);
+        ManualChuteDeployPage.Build(chute, W, H1, s, planet);
+        Check("the Manual Chute page fits (so the check below means something)", !chute.Overflowed,
+              "used " + chute.Count + " of " + chute.Capacity);
+        Check("the Manual Chute globe carries no no-signal label",
+              !HasText(chute, PlanetGeom.NoSignalLabel), "");
+
+        // ---- the shared fill constant, and the assumption it rests on ----
+        // NavPage sizes the disc off min(well); the camera's fill fraction is of the render's HALF
+        // HEIGHT. Those are the same number only while the well is wider than it is tall. If a future
+        // layout inverts that, the rendered globe and the disc would part company - so it is asserted
+        // rather than assumed, at both real screen heights.
+        foreach (int h in new int[] { H1, H2 })
+        {
+            float mx, my, mw, mh;
+            NavPage.MapRect(W, h, out mx, out my, out mw, out mh);
+            Check("the NAV map well is wider than tall (h" + h + ")", mw >= mh,
+                  mw.ToString("F0") + " x " + mh.ToString("F0"));
+        }
+        Eq("the disc's fill is PlanetGeom's fill",
+           PlanetGeom.DiscFillOfHalfHeight, 0.88, 1e-12);
+        Eq("the disc and the camera zoom by the same factor",
+           PlanetGeom.ZoomBase, 1.25, 1e-12);
+    }
+
+    static bool HasText(DisplayList dl, string want)
+    {
+        for (int i = 0; i < dl.Count; i++)
+            if (dl.At(i).Kind == DrawKind.Text && dl.At(i).Str == want) return true;
+        return false;
+    }
+
+    static bool HasImage(DisplayList dl, ImageId id)
+    {
+        for (int i = 0; i < dl.Count; i++)
+            if (dl.At(i).Kind == DrawKind.Image && dl.At(i).Image == id) return true;
+        return false;
+    }
+
+    static bool HasLine(DisplayList dl)
+    {
+        for (int i = 0; i < dl.Count; i++)
+            if (dl.At(i).Kind == DrawKind.Line) return true;
+        return false;
     }
 
     // ------------------------------------------------------------------ display list capacity

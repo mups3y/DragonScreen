@@ -1334,6 +1334,16 @@ public static class PreviewMain
         // shows the dark background it will have when nothing is in view.
         if (id == ImageId.DockingCamLive) return null;
 
+        // ---- AND NEITHER DOES THE LIVE 3D PLANET (S10a) ----
+        // Exactly the same trap, one step worse: the shared stand-in below IS an equirectangular
+        // Earth, so falling through would put a real-looking planet in the frame and let the preview
+        // claim the scaled-space camera renders when there is no camera in the build at all (it is
+        // S10b). The page never asks for this image unless PageState.PlanetCamLive is set, which
+        // nothing here sets - this is the belt to that braces, so a forced preview state cannot
+        // manufacture a render that does not exist. The honest picture is the textured disc under
+        // PlanetGeom.NoSignalLabel, which is what NAV/PLANET draws.
+        if (id == ImageId.ScaledPlanetLive) return null;
+
         if (id == ImageId.NavBallLive)
         {
             string skin = Path.GetFullPath(Path.Combine(dir, "..",

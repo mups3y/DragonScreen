@@ -18,7 +18,9 @@ done-criteria can only be met in the capsule stops and asks rather than installi
 gate-open is not a standing one:** the owner opened `install` + glass for ONE session on 2026-09-02,
 scoped to T10 + T11b. **S17 used it and is DONE.** That gate **closed with that session** — the standing
 state is preview-only again. What still wants glass is collected on **S18** (an end-of-Part-A pass, by
-the owner's call) and on **S10** (not verifiable until it is BUILT); each needs its own fresh owner go. **T2–T4 are covered retroactively by this go** — they are on-plan and
+the owner's call) and on **S10b** (S10 SPLIT 2026-09-02: **S10a** is built and preview-verified; **S10b** —
+the Unity camera itself — cannot even be BUILT without the capsule to exercise it); each needs its own fresh
+owner go. **T2–T4 are covered retroactively by this go** — they are on-plan and
 preview-only, so nothing is reverted. Part B (T15–T22) remains DESIGNED, not started.
 ⛔ **Only the OWNER opens or widens this gate.** A build chat never grants one, never lifts one, and never
 records a decision as the owner's unless the owner stated it in that chat (C1.12).
@@ -1217,7 +1219,14 @@ build session.
   plot, systems tree and P&ID join Reference; Prop→thruster-schematic joins the refinements; a "settled
   2026-09-02" strip carries §14.4(a–d).  **DONE when:** the published page matches `SCREEN_INVENTORY.md`.
 
-### S10 [O] Scaled-space RT planet camera (`MAP_MFD_RESEARCH.md` §2) — **TODO** — [TIER 4: scheduled build/polish]
+### S10 [O] Scaled-space RT planet camera (`MAP_MFD_RESEARCH.md` §2) — **SPLIT** into S10a (DONE) + S10b (HELD) — this line is closed, do not take it
+**SPLIT 2026-09-02, on the owner's directive to BUILD it** (via the overseer). The split is T11a/T11b's, for
+T11a/T11b's reason: the part that can be judged with the game closed was built under the standing preview-only
+go, and the part that can only be judged in the capsule waits for a gate of its own. **S10a** is the pure
+geometry, the seam and the honest no-signal state — **DONE**, below. **S10b** is the Unity camera itself plus
+the three in-sim judgements — **HELD**, below, and it needs a separate owner `install` + glass go (C1.12).
+The original line follows.
+
 Logged by T4 (C1.1), not done. `docs/MAP_MFD_RESEARCH.md` §2 designs a dedicated Unity camera copying
 `ScaledCamera.Instance.cam` into a RenderTexture (`src/ScaledPlanetRenderer.cs` + `pure/PlanetGeom.cs` +
 `ImageId.ScaledPlanetLive`), which would replace `NavPage.Globe`'s textured-strip disc with a real
@@ -1233,6 +1242,71 @@ that are built, and this is **not built**. So the order is fixed — **build S10
 the standing build-go, as far as it can go), and only then does its glass check need a go of its own.**
 That go is the OWNER's (C1.12) and the T10 + T11b gate did not cover it. **DONE when:** the RT
 camera renders in-sim, the orbit line tracks and occludes, and the framing reads well on the glass.
+*(That DONE-when is now **S10b's**; S10a's is on its own line.)*
+
+### S10a [O] Scaled-space RT planet camera — the half the preview gate can judge — **DONE 2026-09-02**
+Owner-directed BUILD (via the overseer, 2026-09-02), taken as THE task of its session rather than the `/next`
+default. Everything in `MAP_MFD_RESEARCH.md` §2 that is decidable with the game closed, under the standing
+preview-only go. **The line was drawn at "can it be EXERCISED", not "can it be compiled":** `build.py`
+compiles all of `src/` — glue included — on every `test`, so a Unity camera file would have compiled here;
+but nothing in `test` or `preview` can RUN a `Camera`, so the renderer would have shipped unexercised. It
+therefore went to S10b, and everything that can be run and seen was built here.
+- **`plugin/src/pure/PlanetGeom.cs` (new).** The scaled-space camera arithmetic: a `ScaledVec` (pure code
+  cannot reference `UnityEngine.Vector3`), `Frame()` — the default 3/4 orbital-chase placement, built on the
+  ORBIT's basis so `CTR` returns to it exactly — `Distance()`/`Fill()`/`ApparentFill()`, a `Project()` twin of
+  `Camera.WorldToViewportPoint`, `ViewportToPanel()`, and `Occluded()`, the true-geometry ray/sphere twin of
+  `GlobeProjection`'s orthographic test.
+- **⭐ ONE NUMBER TIES THE TWO GLOBES TOGETHER.** The camera distance is not a tuned constant: it is SOLVED
+  from `PlanetGeom.DiscFillOfHalfHeight` (0.88) — the fraction of the well's half-height `NavPage.Globe`'s
+  textured disc already fills — and the camera's own vertical FOV. So the rendered limb lands exactly on the
+  disc's limb, the view cannot jump when a camera appears behind it, and the orbit overlay is projected
+  against one radius either way. `NavPage`'s old free-standing `0.44f` now derives from that constant, and
+  both globes zoom by the same 1.25. A test round-trips the solve and lands the projected limb on it — at the
+  TANGENT point, not the equator point, which is a real 5%-of-a-radius difference under perspective.
+- **The seam.** `ImageId.ScaledPlanetLive` (+ `Images.IsRuntime`), `PageState.PlanetCamLive`, and
+  `ImageStore.ScaledPlanetTexture()` — which returns null, honestly, with the comment saying S10b replaces its
+  body with `return ScaledPlanetRenderer.Texture();`. `VesselData` reads it into `PlanetCamLive` (and clears
+  it on the no-vessel and exception paths), so the PAGE never asks about textures and the GLUE never decides
+  what a page says. The preview's `LoadStandIn` returns null for it too — the shared stand-in IS an
+  equirectangular Earth, so falling through would have let a PNG claim a render that does not exist.
+- **The honest state (§14.4(e)).** `NavPage.Planet` gained a `live` flag. NAV's 3D PLANET view passes true and
+  draws the RT when one exists; with none it keeps the textured disc and the projected orbit — both real — and
+  prints `LIVE 3D — NO SIGNAL` + a second line naming S10b in the well's top-left, Caution amber, not Alarm
+  red (nothing has failed). The marking is drawn OUTSIDE the body so no early return can skip it. The
+  sub-heading, which said `LIVE CAMERA` unconditionally and could not back the claim, now says `GLOBE + ORBIT`
+  until a camera is actually rendering. Same marking mechanism as T11a's placeholder sequence, label naming
+  the task that clears it, asserted by a test.
+- **⚠ NOT CHANGED, deliberately:** the Cover globe and the Manual Chute globe call the same `NavPage.Planet`
+  and pass `live: false` — they are finished pages with small decorative body slots, not camera views, and a
+  feed plus a no-signal notice in them would have been a regression for nothing. Asserted by test, and
+  confirmed against both previews.
+- **Gate (C1.3):** `python plugin/build.py test` **green**, all suites, 0 failed — 66 new `PlanetGeomTest`
+  checks + a new `PageTest.PlanetLiveSeam` (both states of the seam, the two untouched globes, and the
+  well-is-wider-than-tall assumption the shared fill constant rests on, at both screen heights).
+  `python plugin/build.py preview` re-rendered; `page2_nav_planet.png` inspected — the marking reads, the
+  globe and orbit are unchanged beneath it; `cover.png` and `ui_manualchute.png` unchanged. No `install`, no
+  glass (C1.12). Committed locally (C1.5); not pushed.
+- **Docs:** `MAP_MFD_RESEARCH.md` §5's stale "this work is T4" re-pointed at S10a/S10b, and the §BUILD STATUS
+  block's "`PlanetGeom.cs` does not exist and never has" corrected to say which half now does.
+
+### S10b [owner-gated] Scaled-space RT planet camera — the Unity camera + the in-sim verify — **HELD** (`/next` SKIPS it) — [TIER 5: held / owner-action / Part-B-bound]
+The half S10a could not touch. **⛔ NEEDS A SEPARATE, EXPLICIT OWNER `install` + GLASS GO** — the standing go
+is preview-only, and this line neither grants nor inherits one (C1.12).
+**What it builds:** `src/ScaledPlanetRenderer.cs` — the camera + RenderTexture on the `DockingCamRenderer`
+pattern (`cam.CopyFrom(ScaledCamera.Instance.cam)` to inherit the exact culling mask/clip/projection the map
+draws planets with, then override target/enabled/transform; re-aimed in `OnPreCull` so it is never a frame
+stale; `Idle()` off when unwatched; validate-not-remember across scene loads). It is aimed by
+`PlanetGeom.Frame`, which is built and tested. **Hook-up is one line:** `ImageStore.ScaledPlanetTexture()`
+returns the texture instead of null, and `PlanetCamLive`, the page, the sub-heading and the marking all follow
+on their own. Then §2.2's overlay re-projection through the camera's own `WorldToViewportPoint` +
+`PlanetGeom.Occluded` — note S10a's overlay is still the ORTHOGRAPHIC `GlobeProjection` one, which is right
+for the disc and approximate over a perspective render at ~2.2 body radii.
+**What it verifies (the three a PNG cannot answer):** does the globe render in-sim; does the orbit line track
+and disappear behind TRUE geometry; does the framing/zoom read well on the glass — including whether
+`PlanetGeom.DefaultAzimuthDeg`/`DefaultPitchDeg` (-55 / +30, CHOSEN not measured, and marked as such in the
+source) are the right 3/4 view. **Batched onto `S18`'s glass checklist as G11, tagged S10.**
+**DONE when:** the RT camera renders in-sim, the orbit line tracks and occludes, and the framing reads well
+on the glass.
 
 ### S11 [S] `plugin/build/csc.rsp` is a generated file, tracked, and churns on every build — **DONE**
 Logged by T4 (C1.1), not done. `build.py` overwrites `plugin/build/csc.rsp` on every invocation with
@@ -1564,9 +1638,14 @@ T14 APPENDS to this list, at the moment and site each want arises. This seeding 
 | G8 | **T14** | **The FUNCTIONS \| ALERTS toggle** — is the hit band usable? Its geometry is OURS (T5 said so explicitly, it is not measurable from the reference), 28px words with a ±20px design-space margin. Tap between the two words and confirm nothing flips. | Same reason as G5, and worse: the target is text rather than a plate, so there is no drawn edge telling the crew where to aim. |
 | G9 | **T14** | **Legibility spot-check:** the docking clusters' **PRECISE** label, which is drawn at 22px against LARGE's 26px so the longer word fits its plate — does it read clearly at cabin distance? | This is a judgement about what a crew member reads at cabin distance, which is the one thing the PNG explicitly cannot settle (CLAUDE.md: "a screenshot is still the only way to judge how it LOOKS on the glass"). |
 | G10 | **S31/S32** | **Suit Leak Check, three checks in one visit:** (1) does the **lit** TROUBLESHOOT (white, "act now") read distinctly from its dim resting state at IVA distance? (2) run the repair→rerun flow end-to-end on the collider — CLOSE the leak result box, press TROUBLESHOOT, watch the countdown restart from 5; (3) is the ΔP magnitude legible at cabin distance — a nominal **~0.28 psi** and a bled-down leaking suit's **~0.01 psi**? | Same reason as G9: a legibility/affordance judgement the PNG cannot settle. S31 ratified its constants as built but deferred the ΔP magnitude's glass eyeball to this pass; S32 added the lit-vs-dim state change and the repair-and-rerun flow, which preview can prove is WIRED but not that it reads right or feels discoverable on glass. |
+| G11 | **S10b** | **The live 3D planet camera, three checks in one visit** — requires `src/ScaledPlanetRenderer.cs` to have been BUILT first (S10b), which needs this same go: (1) does the scaled-space RT actually render the globe on the NAV 3D PLANET view, and does `LIVE 3D — NO SIGNAL` clear itself and the sub-heading go back to `LIVE CAMERA` when it does? (2) does the orbit line track the vehicle and DISAPPEAR behind the real rendered planet (`PlanetGeom.Occluded` against true geometry, not the orthographic approximation)? (3) does the framing read at cabin distance — is `PlanetGeom.DefaultAzimuthDeg`/`DefaultPitchDeg` (-55 / +30) the right 3/4 view, and does the limb sit where the textured disc's did so the view does not jump on the switch? | There is no Unity camera with the game closed, so the preview can only ever draw the no-signal state — which is exactly what S10a built and what `page2_nav_planet.png` shows. S10a proved the arithmetic headlessly (66 checks) and the seam by test; nothing offline can prove a render. Framing is also a judgement at cabin distance, the one thing the PNG explicitly cannot settle (G9's reason). |
 
-**Batch into this pass whatever else is glass-only by then** — the obvious candidate is **S10**'s RT planet
-camera, but ONLY if S10 has actually been BUILT first (it is a TODO, not a verification; see its line). Any
+**Batch into this pass whatever else is glass-only by then** — the obvious candidate WAS **S10**'s RT planet
+camera, and it is now written down as **G11** above. ⚠ S10 SPLIT on 2026-09-02: **S10a** (the pure geometry,
+the seam and the honest no-signal state) is **DONE** and preview-verified, but **S10b** — `ScaledPlanetRenderer`
+itself — is still **HELD** and unbuilt, and it needs THIS pass's `install` go to be built at all, not merely to
+be checked. So G11 is a build-then-verify item, not a pure verification, and it should be done FIRST in the
+visit if it is done at all. Any
 T13/T14 criterion that turns out to need the capsule belongs here too rather than in its own visit — that
 is what this line is for.
 

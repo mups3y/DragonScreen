@@ -56,6 +56,9 @@ namespace DragonScreen
             if (v == null || v.orbit == null)
             {
                 state.Valid = false;
+                // No vessel means no scaled-space camera to be watching either (S10) - and a stale
+                // true here would let the 3D view claim LIVE CAMERA over a frozen last frame.
+                state.PlanetCamLive = false;
                 return;
             }
 
@@ -235,6 +238,7 @@ namespace DragonScreen
             catch (Exception e)
             {
                 state.Valid = false;
+                state.PlanetCamLive = false;      // same reason as the no-vessel path above (S10)
                 Debug.LogWarning("[DragonScreen] vessel read failed: " + e.Message);
             }
         }
@@ -628,6 +632,13 @@ namespace DragonScreen
         {
             planetOverlay.Reset();
             state.Planet = planetOverlay;
+
+            // Is a scaled-space camera actually rendering behind the 3D view (S10)? Asked of the image
+            // store, never assumed: the page must not print LIVE CAMERA over a textured disc. False
+            // until S10b builds the renderer - see ImageStore.ScaledPlanetTexture. Set BEFORE the
+            // early returns below, because "no orbit to plot" is exactly the state where an unmarked
+            // globe would read as a feed.
+            state.PlanetCamLive = ImageStore.ScaledPlanetLive();
 
             CelestialBody b = v.mainBody;
             if (b == null || b.Radius <= 0.0 || v.orbit == null) return;
