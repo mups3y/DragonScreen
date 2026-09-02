@@ -1218,7 +1218,7 @@ every touch. T4 restored it to HEAD (`git checkout --`) so the commit carries on
   time). No behaviour/visual change → preview/PNG gate N/A (C1.3). `python plugin/build.py test`: green,
   all suites, 0 failed. Committed locally (C1.5); not pushed.
 
-### S12 [S] `VehicleMechPage`'s subsystem tab bar isn't severity-aware — **TODO** — [TIER 2: pre-Part-B hygiene]
+### S12 [S] `VehicleMechPage`'s subsystem tab bar isn't severity-aware — **DONE**
 Logged by T5 (C1.1), not done. T5 gave `VehicleTabBar` a `Severities(PageState)`-driven `Draw` overload
 so a faulted subsystem's tab reads red from every vehicle page (`VehicleOverviewPage.cs`,
 `VehicleSubsystemPage.cs`) — real signals per §14.4/§1.4: `Alarms.LifeSupport`/`Thermal`/`Low`/
@@ -1227,6 +1227,18 @@ so a faulted subsystem's tab reads red from every vehicle page (`VehicleOverview
 its own tab bar always reads nominal even when another subsystem is genuinely alerting. **DONE when:**
 `VehicleMechPage.Build` passes `PageState` through and calls
 `VehicleTabBar.Draw(dl,w,h,3,VehicleTabBar.Severities(s))`, with a preview showing it turn red to match.
+- **DONE 2026-09-02 (owner-directed).** `VehicleMechPage.Build` already took `PageState s` as a
+  parameter (used throughout for the node readings), so the only change needed was the tab-bar call
+  itself: `VehicleTabBar.Draw(dl, w, h, 3)` → `VehicleTabBar.Draw(dl, w, h, 3, VehicleTabBar.Severities(s))`
+  — the exact overload T5 built for `VehicleOverviewPage`/`VehicleSubsystemPage`, no new signals invented.
+  Added an `ui_vehiclemech_alarm.png` render to `PreviewMain.cs` alongside the existing
+  `ui_vehiclepower_alarm`/`ui_vehicle_alarm` block (same forced-into-alarm-band `Power01`), so the Mech
+  page's sub-nav is proven to turn red the same way Overview's does, not just compile. Previews inspected:
+  `ui_vehiclemech.png` (baseline — All/Power amber per the fixture's own Caution-band Power01, Mech tab
+  itself white/active, matches pre-change look) and `ui_vehiclemech_alarm.png` (All/Power now **red**,
+  Mech tab still white/active since nothing alerts on Mech itself — matches `ui_vehicle_alarm.png`'s
+  behaviour). S22's "ALL SYSTEMS CHECK" dash-and-dim (`Dash`/`Dim` on `s.Valid` false) confirmed intact
+  and unchanged in both renders. `python plugin/build.py test`: green, all suites, 0 failed.
 
 ### S13 [owner call] "altitude" vs "attitude" in Crew Interrupt Conditions / Slew for Deorbit Burn — **DONE**
 Logged by T7 (C1.1). Every source that names the deorbit-burn interrupt/slew criteria says "altitude" —

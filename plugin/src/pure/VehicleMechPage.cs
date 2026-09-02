@@ -148,7 +148,9 @@ namespace DragonScreen
             }
 
             // ---- subsystem tab bar (Mech active) + bottom status bar ----
-            VehicleTabBar.Draw(dl, w, h, 3);
+            // S12: same Severities(s) T5 wired into Overview/Subsystem — this page was out of T5's
+            // declared scope, so its tab bar was still reading nominal on a genuine subsystem alert.
+            VehicleTabBar.Draw(dl, w, h, 3, VehicleTabBar.Severities(s));
             VehicleDeepViewLinks.Draw(dl, w, h);
             dl.Asset("component_48", 0f, PY(1877), w, SZ(235), White);
         }

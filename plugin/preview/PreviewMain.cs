@@ -558,6 +558,14 @@ public static class PreviewMain
                 path = Path.Combine(outDir, "ui_vehicle_alarm.png");
                 Render(odl, CW, CH, path);
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + odl.Count + " commands");
+
+                // S12: VehicleMechPage's tab bar wasn't wired to Severities(s) at all, so it always read
+                // nominal even on this same alarm; proves it now turns red like every other vehicle page.
+                DisplayList mdl2 = new DisplayList(VehicleMechPage.Commands + 60);
+                VehicleMechPage.Build(mdl2, CW, CH, ps);
+                path = Path.Combine(outDir, "ui_vehiclemech_alarm.png");
+                Render(mdl2, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + mdl2.Count + " commands");
                 ps.Power01 = savedPower;
                 ps.PowerText = savedPowerText;
                 ps.PowerUnit1Text = savedUnit1; ps.PowerUnit2Text = savedUnit2;
