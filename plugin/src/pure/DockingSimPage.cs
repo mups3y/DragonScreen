@@ -29,8 +29,14 @@
 // take — see the register.
 //
 // "Settings" opens the settings page, the same destination the Cover's own Settings button has.
-// "Instructions" and "Reset Positions" have nothing behind them (there is no instructions content, and
-// resetting a position is actuation), so they take the same honest no-op as the direction pads.
+// "Instructions" and "Reset Positions" have nothing behind them, for two DIFFERENT recorded reasons
+// (S29, owner via the overseer, 2026-09-02 — confirming rather than changing what T14 already built):
+// "Instructions" is simply content this build does not have — no source gives it a body, so it stays
+// inert with nothing to be actuation OR screen-state (not in IsActuation). "Reset Positions" IS actuation
+// — the reference does not say whether it resets the VEHICLE (flying it, §14.4(a) no-op) or only the
+// PAGE'S OWN VIEW (screen state, could act) — so per §1.4 it stays classified the conservative way, the
+// same no-op as the twelve direction pads, until a source confirms which. Neither is invented open;
+// see REGISTER.md S29.
 // ============================================================================================
 using System;
 

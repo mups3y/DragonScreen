@@ -75,7 +75,11 @@ namespace DragonScreen
             L("SUIT", 120, 350, 28, Accent);
             Ico("ic_check", 120, 452, 38, White); L("1. PREPARE SUITS FOR LEAK CHECK", 176, 458, 26, White);
             Ico("ic_check", 120, 560, 38, White); L("2. EXECUTE SUIT LEAK CHECK", 176, 566, 26, White);
-            // read-only controls (bottom)
+            // read-only controls (bottom) — S29 (owner, via the overseer, 2026-09-02): both plates stay
+            // INERT, drawn only, no HitTest entry. One caption, two plates: the reference does not say
+            // which of ic_grid/ic_eye arms read-only mode or what the other one does, so §1.4 (inert
+            // until verified) applies rather than inventing a real-only-console function for either. Not
+            // wired by T14 either (outside §6's four groups). Recorded, not built; see REGISTER.md S29.
             dl.Line(PX(120), PY(1560), PX(700), PY(1560), St(2), Hair);
             Pl(210, 1600, 130, 130, White); Ico("ic_grid", 245, 1635, 60, White);
             Pl(430, 1600, 130, 130, White); Ico("ic_eye", 465, 1635, 60, White);

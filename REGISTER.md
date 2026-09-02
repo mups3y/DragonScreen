@@ -1652,17 +1652,28 @@ play and §14.4 is not amended. **Recorded 2026-09-02 — bookkeeping only, no b
 `DockingSimPage.IsActuation` / `ScreenPainter.DockAction` already carries this exactly as it should; there
 is no code change for (a) to make. This line is closed as decided.
 
-### S29 [S] Four display-only controls remain, all outside §6's list — **TODO** — [TIER 3: owner decision pending]
+### S29 [S] Four display-only controls remain, all outside §6's list — **DONE, 2026-09-02**
 Noticed by **T14** while wiring the four groups §6 names (logged, not done — C1.1). None of these is in
-that list, and each wants a decision rather than a wire:
+that list, and each wanted a decision rather than a wire.
+
+**Decision (owner, via the overseer, 2026-09-02):** the DONE-when's "recorded reason for having none"
+branch for all four — do not invent a real control's function without a source (§1.4, the
+inert-until-verified discipline of §14.4b). No behaviour or geometry change; recorded at each control's
+site in the code:
 - `SuitCheckPage`'s two left-panel plates under the caption **"ENTER READ-ONLY"** (`ic_grid` and
-  `ic_eye`). Two plates, one caption — which one enters read-only, and what the other does, is not
-  readable from the reference. A read-only MODE is easy to build (it would grey the page's own controls);
-  which plate arms it is the unknown.
-- `DockingSimPage`'s **"Instructions"** (there is no instructions content in this build) and **"Reset
-  Positions"** (T14 classified it as actuation — it resets a vehicle's position — so it takes the
-  §14.4(a) no-op; if it is meant to reset only the PAGE, it is screen state and could act).
-**DONE when:** each has either an action or a recorded reason for having none.
+  `ic_eye`) — stay inert, comment added at the draw site ([SuitCheckPage.cs](plugin/src/pure/SuitCheckPage.cs)):
+  the reference does not say which plate arms read-only or what the other does, and neither was in T14's
+  §6 wiring scope.
+- `DockingSimPage`'s **"Instructions"** — stays inert, header comment expanded
+  ([DockingSimPage.cs](plugin/src/pure/DockingSimPage.cs)): this build has no instructions content, so
+  there is nothing to be actuation or screen-state.
+- `DockingSimPage`'s **"Reset Positions"** — keeps T14's §14.4(a) no-op, same header comment: the
+  reference does not confirm whether it resets the vehicle (actuation) or only the page view (screen
+  state), so it stays the conservative classification until confirmed.
+
+`python plugin/build.py test`: green, 260 T14 touch-wiring checks + all other suites unchanged (no new
+checks needed — no behaviour changed). Preview N/A (no render change). §1.4 respected: no invented
+function, no `PanelMap.cs` / label-doc edit.
 
 ### S30 [S] `_AutopilotStub.cs` still describes the deleted RED refuse state — **TODO** — [TIER 2: pre-Part-B hygiene]
 Noticed by **T14** while routing the chute page through `FlightCommands.Run` (comment-only; not fixed,
