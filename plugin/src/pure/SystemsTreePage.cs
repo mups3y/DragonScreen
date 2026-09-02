@@ -16,8 +16,14 @@
 // own button legends (pure/PanelMap.cs, transcribed — never edited without a real-source confirmation,
 // C1.4), and §4 confirms POWER 1/2 as the main buses and the strings as the triple-redundant
 // flight-computer strings (18 units / 54 voting processors — the caption at the foot of the tree).
-// SOLAR ARRAY and BATTERIES ×4 are VehicleSubsystemPage's own Power checklist entries, reused verbatim
+// SOLAR ARRAY and BATTERIES are VehicleSubsystemPage's own Power checklist entries, reused verbatim
 // so no second wording can disagree with the one already on the glass.
+//
+// S23 (owner decision (b), via the overseer, 2026-09-02): the real screen's own label is "BATTERIES
+// ×4" — the real Crew Dragon's fixed battery count — and that transcription is not in dispute. It is
+// DROPPED here (and on the Power subsystem page, VehicleSubsystemPage.cs) because the box's own state
+// line is this VESSEL's live count, and a static "×4" over it reads as "N of 4 present" on any craft
+// that isn't 4 batteries — a count claim the live value can contradict. See REGISTER.md S23/S25.
 //
 // ---- SIMULATE, NEVER FAKE ----
 // The tree is not a picture of a wiring diagram: every box and every connector is coloured by the LIVE
@@ -118,9 +124,9 @@ namespace DragonScreen
             NodeBox(1293f, SrcY, SrcW, SrcH, "SOLAR ARRAY",
                     string.IsNullOrEmpty(arrayWord) ? "—" : arrayWord,
                     arrayUp ? DragonPalette.Go : (arrayWord == null ? Faint : DragonPalette.Caution));
-            // The "×4" is the real Crew Dragon's own battery count (§4 / the Power checklist); the state
-            // line beneath it is THIS vessel's live count, which is a different question.
-            NodeBox(2134f, SrcY, SrcW, SrcH, "BATTERIES ×4",
+            // S23 (b): the "×4" is dropped — see the file header. The state line beneath the label is
+            // THIS vessel's live count, which is a different question from the real vehicle's fixed one.
+            NodeBox(2134f, SrcY, SrcW, SrcH, "BATTERIES",
                     string.IsNullOrEmpty(cellWord) ? "—" : cellWord,
                     cellsUp ? DragonPalette.Go : Faint);
 

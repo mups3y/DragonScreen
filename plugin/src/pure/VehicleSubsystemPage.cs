@@ -253,9 +253,22 @@ namespace DragonScreen
 
                 case Sub.Power:
                     s.Title = "ELECTRICAL POWER"; s.Tab = 4;
-                    s.CkLabel = new[] { "MAIN BUS A", "MAIN BUS B", "BATTERIES x4", "SOLAR ARRAY", "PWR DISTRIB", "LOAD SHED" };
-                    s.CkState = new[] { "Nominal", "Nominal", "4 / 4", "Deployed", "Nominal", "Off" };
-                    s.CkKey   = new[] { 1, 1, 1, 1, 1, 0 };
+                    // S23 (owner decision (b), 2026-09-02): the real screen's "BATTERIES ×4" names the
+                    // real vehicle's fixed battery count; dropped here — and on the systems tree,
+                    // SystemsTreePage.cs — because a static count claim over the live count in the row
+                    // below misleads on any craft that isn't 4 batteries. See REGISTER.md S23.
+                    s.CkLabel = new[] { "MAIN BUS A", "MAIN BUS B", "BATTERIES", "SOLAR ARRAY", "PWR DISTRIB", "LOAD SHED" };
+                    // S25: BATTERIES / SOLAR ARRAY now read the SAME live PageState fields the systems
+                    // tree draws (T13a) — T() so a dead feed dashes them like every other live row on
+                    // this tab, never a stale "4 / 4" / "Deployed". Icon colour mirrors the tree's own
+                    // logic exactly: batteries are Go whenever the vessel carries charge-holding parts at
+                    // all (neutral only if it carries none, or the feed is dead); the array is Go only
+                    // when fully DEPLOYED, amber for any other real state (STOWED / mid-deploy / NONE),
+                    // neutral with no feed.
+                    bool cellsUp = valid && !string.IsNullOrEmpty(st.BatteryText) && st.BatteryText != "NONE";
+                    bool arrayUp = valid && st.SolarArrayText == "DEPLOYED";
+                    s.CkState = new[] { "Nominal", "Nominal", T(st.BatteryText), T(st.SolarArrayText), "Nominal", "Off" };
+                    s.CkKey   = new[] { 1, 1, cellsUp ? 1 : 0, !valid ? 0 : (arrayUp ? 1 : 2), 1, 0 };
                     s.GLabel  = new[] { "BATTERY SOC", "BUS A", "BUS B", "ARRAY" };
                     // BUS A / BUS B are VOLTAGES. KSP's ElectricCharge has no voltage, and the two buses
                     // this build does model are ON/OFF (pure/VehicleSystems.cs) — a different fact, and

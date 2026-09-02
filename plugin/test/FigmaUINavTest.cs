@@ -365,7 +365,13 @@ public static class FigmaUINavTest
         s.PowerUnit1Text = "8" + k + " %"; s.PowerUnit2Text = "8" + k + " %";
         s.DeorbitFuelText = "70" + k + ".0 kg"; s.DeorbitOxText = "130" + k + ".0 kg";
         s.SolarArrayText = variant == 0 ? "DEPLOYED" : "STOWED";
-        s.BatteryText = variant == 0 ? "4 / 4" : "1 / 4";
+        // 2 / 5, not 4 / 4: "4 / 4" was the Power checklist's own old hard-coded BATTERIES state
+        // (pre-S25), and a fixture value equal to the constant it replaced makes that tab's
+        // "no longer hard-codes" guard vacuous — the same reasoning LoopAText's comment gives above.
+        // "/ 5" (not 3, 4 or 2) also keeps it distinct from AVIONICS' own static "3 / 3" and GNC's
+        // static "2 / 2", which the cross-tab "avionics/other tabs invent no value" checks would
+        // otherwise trip on by coincidence.
+        s.BatteryText = variant == 0 ? "2 / 5" : "1 / 5";
         s.AccelPosText = "1.4" + k; s.AccelNegText = "0.3" + k; s.AccelCentText = "0.88" + k;
         // The rings come from the raw numbers, never from the text, so they are set independently.
         s.Cabin.Ppo201 = 0.6; s.Cabin.CabinTemp01 = 0.55; s.Cabin.Press01 = 0.73; s.Cabin.Co201 = 0.2;
@@ -492,7 +498,10 @@ public static class FigmaUINavTest
         Check("tree battery count is not a constant", !Drew(tb, a.BatteryText), "");
         Check("tree dashes both sources with no feed",
               !Drew(td, a.SolarArrayText) && !Drew(td, a.BatteryText), "");
-        Check("tree still names the real vehicle's battery count", Drew(ta, "BATTERIES ×4"), "");
+        // S23 (owner decision (b)): the count claim is DROPPED — the box now reads plain "BATTERIES",
+        // never "×4"/"x4" beside a live count that can disagree with it.
+        Check("tree battery label carries no count claim", Drew(ta, "BATTERIES"), "");
+        Check("tree battery label drops the ×4", !Drew(ta, "BATTERIES ×4") && !Drew(ta, "BATTERIES x4"), "");
     }
 
 
@@ -523,8 +532,11 @@ public static class FigmaUINavTest
                     a.O2TankText, a.N2TankText, a.WaterText, a.CrewText },
             // PROP: both tanks, the combined remaining, the live Draco duty.
             new[] { a.DragonOxText, a.DragonFuelText, a.PropRemainingText, a.DracoDutyText },
-            // POWER: state of charge, array output twice (gauge + row), net flow twice (W and kW).
-            new[] { a.PowerText, a.ArrayKwText, a.ArrayOutputText, a.NetPowerText, a.ChargeRateText },
+            // POWER: state of charge, array output twice (gauge + row), net flow twice (W and kW),
+            // and (S25) the checklist's own BATTERIES / SOLAR ARRAY states — the same two fields the
+            // systems tree draws (T13a), so the two pages can no longer disagree.
+            new[] { a.PowerText, a.ArrayKwText, a.ArrayOutputText, a.NetPowerText, a.ChargeRateText,
+                    a.BatteryText, a.SolarArrayText },
             // AVIONICS (S24): S-BAND COMMS' checklist state + the two CommNet readouts. Everything else
             // on this tab is asserted NOT to move, below.
             new[] { a.SBandText, a.UplinkText, a.DownlinkText },
@@ -539,7 +551,7 @@ public static class FigmaUINavTest
         string[][] gone = {
             new[] { "2.69", "22.4", "14.7", "1.05", "44 %", "96 %", "88 %", "72 L" },
             new[] { "84", "82", "310", "24.6", "0 psia", "83 %", "18 °C", "100 %" },
-            new[] { "100", "120", "3.4", "3.4 kW", "+68 W", "50 %", "19 °C", "0 kW" },
+            new[] { "100", "120", "3.4", "3.4 kW", "+68 W", "50 %", "19 °C", "0 kW", "4 / 4", "Deployed" },
             new[] { "38", "42", "8.4", "61", "ONLINE", "11", "Strong", "256 kbps" },
             new[] { "0.02", "0.01", "0.03", "83", "0.4°", "0.04 °/s", "380.5 km", "6.68 km/s", "AUTO / SUN" },
             new[] { "26.1", "21.1", "8.2", "34", "1.2 L/s", "1.1 L/s", "3.1 kW", "22 °C", "34 °C" } };
@@ -575,6 +587,15 @@ public static class FigmaUINavTest
             // And with no feed at all, every value on every tab dashes.
             Check(subs[i] + " dashes everything with no feed", Drew(dd, "—"), "");
         }
+
+        // ---- S23: the Power checklist's BATTERIES label carries no count claim ----
+        // The label itself is static (CkLabel, not a fixture-driven value), so the main loop above
+        // doesn't touch it — checked once here, on either fixture build.
+        DisplayList pw = new DisplayList(VehicleSubsystemPage.Commands + 60);
+        VehicleSubsystemPage.Build(pw, VW, VH, VehicleSubsystemPage.Sub.Power, a);
+        Check("power checklist names BATTERIES with no count claim", Drew(pw, "BATTERIES"), "");
+        Check("power checklist drops the ×4",
+              !Drew(pw, "BATTERIES ×4") && !Drew(pw, "BATTERIES x4"), "");
 
         // ---- AVIONICS: no OTHER tab's numbers leak onto it, and it fills no gauge ring ----
         // Stronger than "it drew a dash": not one value from another subsystem, in EITHER fixture, may

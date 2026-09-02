@@ -1210,7 +1210,7 @@ one rule for the whole category and apply it in one pass — most likely dash-an
 word when the feed is invalid, leaving the label. Cheap; it is grouped here rather than split across pages
 so the pages cannot end up disagreeing.
 
-### S23 [owner call] `BATTERIES ×4` names four batteries; the live count beneath it says otherwise — **TODO**
+### S23 [owner call] `BATTERIES ×4` names four batteries; the live count beneath it says otherwise — **DONE 2026-09-02** (resolved to (b): drop the `×4`, on both the systems tree and the Power subsystem page)
 Also T13a. The systems-tree battery node keeps the label `BATTERIES ×4` — the REAL Crew Dragon's own
 battery count, reused verbatim from the Power checklist — while the state line under it is now this
 vessel's LIVE count of parts holding charge, which on the KSP craft is whatever it is (`2 / 2` in the
@@ -1219,6 +1219,24 @@ is a vehicle fact, the value is this vessel's state; (b) drop the `×4` so the l
 (c) make the label itself live. (b) and (c) change a label that came from a real-sourced set, so this is
 the owner's (C1.4). The identical `SOLAR ARRAY` / `BATTERIES ×4` pair on the **Power subsystem page** is
 still fully representative — that page is **T13b**'s, and whatever is decided here should land there too.
+
+**Decision (owner, via the overseer, 2026-09-02) = (b).** Drop the `×4` count-claim; the label reads plain
+`BATTERIES`. Rationale on record: a static "×4" over a live count misleads (reads as "N of 4 present") on
+any craft that isn't 4 batteries. Explicitly done together with **S25** (below), in one pass, across both
+pages, so neither page could be left one edit ahead of the other.
+
+**DONE 2026-09-02 (with S25, one pass, both pages).** `SystemsTreePage.cs`'s battery `NodeBox` label
+"BATTERIES ×4" → **"BATTERIES"**; `VehicleSubsystemPage.cs`'s Power `CkLabel` "BATTERIES x4" →
+**"BATTERIES"**. **Label-doc handling (C1.4/C7.1):** no separate `docs/` file was found to record this
+transcription (checked `UI_AUDIT.md`, `REFERENCE_PAGES.md`, `REAL_DRAGON_SCREENS.md`,
+`SCREEN_INVENTORY.md`, `SCREEN_EVIDENCE_MATRIX.md`, `BUILD_PLAN.md` — none mention it; the checklist
+content came in with the initial 2026-09-02 import, `864c2e4`, with no separate doc behind it) — the only
+places that recorded "BATTERIES ×4" as real were `SystemsTreePage.cs`'s own header/inline comments and
+this register entry. Both are KEPT (the real transcription — "the real screen shows BATTERIES ×4" — is
+still stated) with a dated note added alongside explaining the drop is this owner decision, not a
+re-transcription (see `SystemsTreePage.cs`'s file header and its battery `NodeBox` comment). Nothing
+falsified: the record says what the real screen shows AND what this build now displays and why they
+differ. **Gate + test:** see S25's DONE note — one gate covers both.
 
 ### S24 [owner call] The AVIONICS tab reads nine dashes — is CommNet a legitimate source for part of it? — **DONE 2026-09-02** (resolved to (b): S-BAND COMMS / Uplink / Downlink wired to stock CommNet, everything else stays dashed)
 Found by T13b, which wired the other five subsystem tabs and left this one entirely dashed because that is
@@ -1272,7 +1290,7 @@ Real stock state, same footing as every other `vessel.*` read in `VesselData.cs`
   the checklist LABELS (`CkLabel`) were already real-sourced copy and are untouched, only the live VALUE
   and its colour changed.
 
-### S25 [S] The Power tab's checklist still reads `4 / 4` and `Deployed` beside the live sources for both — **TODO**
+### S25 [S] The Power tab's checklist still reads `4 / 4` and `Deployed` beside the live sources for both — **DONE 2026-09-02**
 Found by T13b, deliberately not done: §6 scopes T13 to the numeric VALUES and the register line scoped T13b
 to the 54 gauge + readout values, so the left checklist was left untouched. `VehicleSubsystemPage`'s Power
 checklist carries `BATTERIES x4 → "4 / 4"` and `SOLAR ARRAY → "Deployed"` as static strings, while
@@ -1284,3 +1302,39 @@ S23 is the owner's call on the `BATTERIES ×4` LABEL and says explicitly that wh
 land here too — wiring the value first would leave the label question half-answered on two pages instead of
 one. Also related: **S22** (the static status words that stay confident on a dead feed) covers this
 checklist's other five rows.
+
+**Done together with S23, one pass (owner decision, via the overseer, 2026-09-02 — recorded as the
+owner's per C1.12).** `VehicleSubsystemPage.cs`'s Power case (`DefOf`): `CkState[2]`/`CkState[3]` now read
+`T(st.BatteryText)` / `T(st.SolarArrayText)` — the SAME two `PageState` fields `SystemsTreePage.cs` draws
+(T13a) — instead of the static `"4 / 4"` / `"Deployed"`, so a dead feed dashes them like every other live
+row on the tab rather than holding a stale value. `CkKey[2]`/`CkKey[3]` (the checkmark + state-text
+colour) now mirror the systems tree's own live-colour logic exactly rather than staying a flat green:
+BATTERIES is Go whenever the vessel carries any charge-holding parts (`BatteryText` not empty/`"NONE"`),
+neutral only if it carries none or the feed is dead; SOLAR ARRAY is Go only when fully `DEPLOYED`, amber
+for any other real state (`STOWED` / mid-deploy / `NONE`), neutral with no feed — the tree's own
+Go/Caution/Faint three-way, mapped onto the checklist's Go/Amber/neutral vocabulary (no separate "Faint"
+colour exists there). The other five checklist rows are untouched (S22's territory, not this task — no
+scope creep). Consequence: the `2/2`-vs-`4/4` contradiction the finding named is gone — both pages now
+read the identical live text for the identical vessel.
+- **Test (`plugin/test/FigmaUINavTest.cs`):** `SubsystemLiveValues`'s POWER entry in `live[]` grows
+  `a.BatteryText`/`a.SolarArrayText` (asserts both move with the fixture and dash with no feed, the same
+  loop every other tab's wired values go through); POWER's `gone[]` grows `"4 / 4"`/`"Deployed"` (the two
+  retired hard-codes must never come back). `VehicleFixture`'s `BatteryText` changed from `"4 / 4"` (which
+  would have made that new `gone[]` guard vacuous — equal to the very constant it replaced, the same
+  problem `LoopAText`'s existing comment flags) to `"2 / 5"` / `"1 / 5"`, picked to avoid colliding with
+  AVIONICS' own static `"3 / 3"` and GNC's static `"2 / 2"` (both would have false-failed the cross-tab
+  "avionics/other tabs invent no value" checks by coincidence — caught by a first failing run, fixed).
+  New dedicated checks: the Power checklist draws exactly `"BATTERIES"` and never `"BATTERIES ×4"` /
+  `"BATTERIES x4"` (S23's own regression guard, on either page — the systems tree's matching old assertion
+  was updated the same way). `python plugin/build.py test`: **green, 0 failed** — Figma UI nav suite 547 →
+  **560 checks** (all other suites unchanged).
+- **Preview:** `ui_vehiclepower.png` inspected — `BATTERIES` / `2 / 2` and `SOLAR ARRAY` / `DEPLOYED`, both
+  green, matching `ui_systemstree.png`'s `BATTERIES` / `2 / 2` and `SOLAR ARRAY` / `DEPLOYED` on the SAME
+  fixture — the contradiction is gone. `ui_systemstree_live.png` re-inspected — unaffected (label only,
+  the state colouring/values there were already live since T13a). `ui_vehiclepower_alerts.png`
+  re-inspected — the checklist (drawn outside the FUNCTIONS/ALERTS toggle) shows the same live values on
+  the ALERTS view too, no overlap/clipping. No new `DisplayList` overflow; no new compiler warnings (same
+  6× CS0162 / 2× CS0219 / 1× CS0649 baseline as before this task). `plugin/build/csc.rsp` churn reverted
+  before commit (S11 precedent).
+- **§1.4 / C1.4 respected:** the checklist LABELS were real-sourced copy and only the one owner-authorized
+  edit (S23) touched a label; no `PanelMap.cs` edit; no other label doc touched.
