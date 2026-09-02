@@ -1025,6 +1025,15 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
 
 ## Stray findings (appended per C1.1 — logged, not done)
 
+## Stray triage (owner, via the overseer, 2026-09-02)
+Open strays are triaged into 5 tiers. Recommended pre-Part-B order: **Tier 1** (correctness bugs)
+then **Tier 2** (hygiene) — S4 → S5 → S22 → S6 → S19, then the hygiene items. The trivial hygiene
+items **S7 + S11 + S21 + S30** MAY be run as one scoped "hygiene sweep" chat. **Tier 3** are
+owner-decisions pending. **Tier 4** are deliberately-scheduled builds — S15 is a real unbuilt Part A
+screen; build it or consciously cut it before Part B. **Tier 5** stay held / owner-action. Starting
+T15 / Part B is the owner's separate gate call — the standing build-go is scoped to "Part A pure
+code" only. **Applied 2026-09-02.**
+
 ### S1 [S] `CLAUDE.md` header predates Part B — **DONE 2026-09-02** (folded into T1)
 The original "What this repo is now" section (top 40 lines) says the autopilot was deleted and "if you find a
 reference to any of it, it is stale; remove it." Part B RE-INTRODUCES it as the embedded-MechJeb conductor
@@ -1038,7 +1047,7 @@ The tree holds the Figma-UI rebuild (`CoverPage.cs`, `FigmaUI.cs`, `VehicleOverv
 `docs/SCREEN_INVENTORY.md`, `plugin/GameData/DragonScreen/art/cover/`, ~26 files) — pre-existing, not T0's and
 not touched by it. Owner to commit via GitHub Desktop; noted so a later task doesn't mistake it for its own diff.
 
-### S3 [S] `docs/FLIGHT_SYSTEMS.md` is referenced but does not exist — **TODO** (T1 part DONE; rest → T15)
+### S3 [S] `docs/FLIGHT_SYSTEMS.md` is referenced but does not exist — **TODO** (T1 part DONE; rest → T15) — [TIER 5: held / owner-action / Part-B-bound]
 Live references point at a missing file: `plugin/src/pure/MissionPhase.cs`, `plugin/build/audit_comments.py`,
 and `docs/INDEX.md` (lists it as existing). The §8 flight facts it should hold currently live only in
 `BUILD_PLAN.md`. T15 creates it; T1 must at minimum stop `INDEX.md` advertising a missing file.
@@ -1047,7 +1056,7 @@ does not exist, that the §8 flight facts live in `BUILD_PLAN.md` until T15 crea
 comments (`pure/MissionPhase.cs:54`, `build/audit_comments.py:233`) are not a live link. **Still open:** those
 two comments, and creating the file — both T15.
 
-### S4 [S] Phase classifier reads PHASING while still sub-orbital — **TODO**
+### S4 [S] Phase classifier reads PHASING while still sub-orbital — **TODO** — [TIER 1: pre-Part-B correctness bug]
 From the 2026-08-29 screen audit (U1), and the code still ships. `VesselData.cs:77` `Mission.Classify(mi)` keys
 on situation + target presence with **no orbit-closed check**, so "in space + has an ISS target" ⇒ Phasing —
 even mid-ascent with periapsis at −4,600 km. The screens showed `ACTIVE PHASE PHASING` from ~T+5:02 while the
@@ -1055,32 +1064,32 @@ mode label simultaneously read "Ascent to orbit". Should stay ASCENT/INSERTION u
 closed (pe above the atmosphere / SECO). Pure code, headless-testable. **DONE when:** a sub-orbital vessel with
 a target classifies as ascent, with a test.
 
-### S5 [S] Nuisance PROPELLANT CAUTION off the spent ascent stage — **TODO**
+### S5 [S] Nuisance PROPELLANT CAUTION off the spent ascent stage — **TODO** — [TIER 1: pre-Part-B correctness bug]
 From the same audit (U2). The propellant gauge correctly shows what the LIT engines are drinking, so the
 near-spent S2 reads ~16% near SECO → `Alarms.Low(Propellant01)` (`Pages.cs:1082`) → PROPELLANT CAUTION → whole
 vehicle STATE CAUTION, during an entirely nominal ascent. Dragon's own return propellant is full at that point.
 Fix direction: suppress the low-prop alarm while the lit stage is an ascent stage, or alarm on the return
 budget. **DONE when:** a nominal late-ascent state does not raise CAUTION, with a test.
 
-### S6 [S] Both NET PWR dials read exactly 0 W — **TODO / NEEDS-VERIFY**
+### S6 [S] Both NET PWR dials read exactly 0 W — **TODO / NEEDS-VERIFY** — [TIER 1: pre-Part-B correctness bug]
 From the same audit (U3). VEHICLE OVERVIEW showed `NET PWR 1` and `NET PWR 2` both at exactly `0 W`, while the
 comment at `Pages.cs:974` expects them negative on battery (e.g. −59 W). Exactly zero on both buses reads as
 unpopulated. Verify against `pure/CabinEnvironment.cs` — is the model producing a value in that state?
 **DONE when:** the dials show a modelled value, or it is confirmed correct and the comment is fixed.
 
-### S7 [S] `index_assets.py` does not recurse into `art/cover/` — **TODO**
+### S7 [S] `index_assets.py` does not recurse into `art/cover/` — **TODO** — [TIER 2: pre-Part-B hygiene]
 `plugin/build/index_assets.py` globs the shipped-art directory with a non-recursive `'*'`, so `ASSET_INDEX.md`
 lists 6 shipped files while 98 exist — the 95 Cover PNGs in `GameData/DragonScreen/art/cover/` are invisible to
 the "grep the index before concluding an asset does not exist" rule, which is exactly the failure that file was
 written to prevent. **DONE when:** the generator recurses and the regenerated index lists the cover set.
 
-### S8 [S] `plugin/build/assess_flight.py` is autopilot-era tooling — **TODO**
+### S8 [S] `plugin/build/assess_flight.py` is autopilot-era tooling — **TODO** — [TIER 3: owner decision pending]
 It reads the flight corpus (`<KSP>/DragonScreen_capture/Crew-2_*.csv`) of the autopilot deleted 2026-09-01, and
 the corpus is gone. Decide: delete it, or keep it for Part B's §B5 empirical tune (which will produce flight
 data again — §B22/T22). Owner call, logged not done. **DONE when:** deleted, or kept with a header saying it is
 for the Part B tune.
 
-### S9 [S] Mirror the reconcile into the Dragon Screen Map artifact — **BLOCKED** (T1's artifact half)
+### S9 [S] Mirror the reconcile into the Dragon Screen Map artifact — **BLOCKED** (T1's artifact half) — [TIER 5: held / owner-action / Part-B-bound]
 Logged here rather than as a numbered task so it cannot stall `/next` — it needs an owner action, not a
 build session.
 - **Why split out:** T1's own DONE-when is repo-side only and is met; the artifact is the outward *view*. The
@@ -1096,7 +1105,7 @@ build session.
   plot, systems tree and P&ID join Reference; Prop→thruster-schematic joins the refinements; a "settled
   2026-09-02" strip carries §14.4(a–d).  **DONE when:** the published page matches `SCREEN_INVENTORY.md`.
 
-### S10 [O] Scaled-space RT planet camera (`MAP_MFD_RESEARCH.md` §2) — **TODO**
+### S10 [O] Scaled-space RT planet camera (`MAP_MFD_RESEARCH.md` §2) — **TODO** — [TIER 4: scheduled build/polish]
 Logged by T4 (C1.1), not done. `docs/MAP_MFD_RESEARCH.md` §2 designs a dedicated Unity camera copying
 `ScaledCamera.Instance.cam` into a RenderTexture (`src/ScaledPlanetRenderer.cs` + `pure/PlanetGeom.cs` +
 `ImageId.ScaledPlanetLive`), which would replace `NavPage.Globe`'s textured-strip disc with a real
@@ -1113,7 +1122,7 @@ the standing build-go, as far as it can go), and only then does its glass check 
 That go is the OWNER's (C1.12) and the T10 + T11b gate did not cover it. **DONE when:** the RT
 camera renders in-sim, the orbit line tracks and occludes, and the framing reads well on the glass.
 
-### S11 [S] `plugin/build/csc.rsp` is a generated file, tracked, and churns on every build — **TODO**
+### S11 [S] `plugin/build/csc.rsp` is a generated file, tracked, and churns on every build — **TODO** — [TIER 2: pre-Part-B hygiene]
 Logged by T4 (C1.1), not done. `build.py` overwrites `plugin/build/csc.rsp` on every invocation with
 whichever compile ran last, so the file shows as modified after any `test` / `preview` / `install` and
 its content depends only on which command was run most recently — it carries no information worth
@@ -1121,7 +1130,7 @@ versioning. It is also written with CRLF into a repo whose `.gitattributes` mand
 every touch. T4 restored it to HEAD (`git checkout --`) so the commit carries only real changes.
 **DONE when:** it is gitignored (and untracked), or build.py writes it outside the repo.
 
-### S12 [S] `VehicleMechPage`'s subsystem tab bar isn't severity-aware — **TODO**
+### S12 [S] `VehicleMechPage`'s subsystem tab bar isn't severity-aware — **TODO** — [TIER 2: pre-Part-B hygiene]
 Logged by T5 (C1.1), not done. T5 gave `VehicleTabBar` a `Severities(PageState)`-driven `Draw` overload
 so a faulted subsystem's tab reads red from every vehicle page (`VehicleOverviewPage.cs`,
 `VehicleSubsystemPage.cs`) — real signals per §14.4/§1.4: `Alarms.LifeSupport`/`Thermal`/`Low`/
@@ -1131,7 +1140,7 @@ its own tab bar always reads nominal even when another subsystem is genuinely al
 `VehicleMechPage.Build` passes `PageState` through and calls
 `VehicleTabBar.Draw(dl,w,h,3,VehicleTabBar.Severities(s))`, with a preview showing it turn red to match.
 
-### S13 [owner call] "altitude" vs "attitude" in Crew Interrupt Conditions / Slew for Deorbit Burn — **TODO**
+### S13 [owner call] "altitude" vs "attitude" in Crew Interrupt Conditions / Slew for Deorbit Burn — **TODO** — [TIER 3: owner decision pending]
 Logged by T7 (C1.1), not done. Every source that names the deorbit-burn interrupt/slew criteria says
 "altitude" — SCREEN_INVENTORY.md's photo transcription, SCREENS_LOOK_AND_FUNCTION_RESEARCH.md's read of
 the community recreation's First.vue source, and the community Figma's own baked layer name
@@ -1188,7 +1197,7 @@ persists a screen against them, or keep them and give Menu a way to hide placeho
   outputs only: `MenuPage.cs`, `FigmaUI.cs`, `plugin/test/FigmaUINavTest.cs`, `REGISTER.md` — no
   `PanelMap.cs`/label-doc edits, no memory writes.
 
-### S15 [O] The circular nav / orbit plot (SCREEN_INVENTORY #28) is still unbuilt and unowned — **TODO**
+### S15 [O] The circular nav / orbit plot (SCREEN_INVENTORY #28) is still unbuilt and unowned — **TODO** — [TIER 4: scheduled build/polish]
 Logged by T9 (C1.1), not done. `SCREEN_INVENTORY.md` #28 marks the circular nav/orbit plot as
 "🟠 REF, not built (**T6**/**T9**)", but neither task's register line covers it: T6's line is the
 rendezvous *ellipse* plot (built, `RendezvousPage.cs`) and T9's is "Prop thruster schematic + P&ID /
@@ -1200,7 +1209,7 @@ fields), so it is likely a small [S] page rather than an [O] one. **DONE when:**
 whether it becomes its own register task (and where in the §7 order), and it is built + previewed —
 or it is explicitly deferred and #28's "(T6/T9)" mark corrected.
 
-### S16 [S] `SCREEN_INVENTORY.md` + §3 status marks are stale after T9 — **TODO**
+### S16 [S] `SCREEN_INVENTORY.md` + §3 status marks are stale after T9 — **TODO** — [TIER 2: pre-Part-B hygiene]
 Logged by T9 (C1.1), not done — a docs pass, and T9's declared outputs are code + preview only (C1.11),
 so the marks were not edited here. Now inaccurate: **#26 Prop/RCS thruster schematic** still reads
 "🟡 REFINE — we built Prop as a generic gauge template" (it is now the schematic); **#27 Systems /
@@ -1299,7 +1308,7 @@ two constants do not justify their own capsule visit when restarts are the scarc
 wait and go in with whatever else has accumulated by the time the screens are built. The **installed build
 already carries both fixes**, so nothing is lost by waiting.
 
-### S18 [owner-gated] End-of-Part-A glass pass — **HELD** (deferred here by owner directive 2026-09-02; `/next` SKIPS it)
+### S18 [owner-gated] End-of-Part-A glass pass — **HELD** (deferred here by owner directive 2026-09-02; `/next` SKIPS it) — [TIER 5: held / owner-action / Part-B-bound]
 The one capsule visit to make **once the screen build is complete** — Part A's remaining tasks are
 **T12** (Ascent/Launch), **T13** (live-data wiring) and **T14** (touch wiring). Opened because S17 finished
 its six checks and produced two fixes that want a second look, and **the owner's call was not to spend a
@@ -1356,7 +1365,7 @@ is what this line is for.
 **DONE when:** both re-checks are confirmed on glass, or a NEEDS-WORK note says which way each is still off
 and what the next step would cost.
 
-### S19 [S] `VehicleOverviewPage`'s checklist copy mis-transcribes the reference — **TODO**
+### S19 [S] `VehicleOverviewPage`'s checklist copy mis-transcribes the reference — **TODO** — [TIER 1: pre-Part-B correctness bug]
 Found by T13a while reading the reference source for the live-data wiring (not fixed — C1.1, and it is
 label copy, not a value). `plugin/src/pure/VehicleOverviewPage.cs`'s `ChkLabel` reads
 **"RENDEZVOUS BURN BLOW"** and **"BURN GOING-GO"**. The page's own stated source —
@@ -1367,7 +1376,7 @@ holds, not a deliberate deviation. **Fix:** change the two strings to match the 
 `ui_vehicle.png` and check nothing reflows. Tier-2 source (a recreation), quoted verbatim as the page's
 header says it is — no owner call needed, it is a straight correction to the stated source.
 
-### S20 [owner call] The reference labels BOTH coolant gauges `LOOP A` — **TODO**
+### S20 [owner call] The reference labels BOTH coolant gauges `LOOP A` — **TODO** — [TIER 3: owner decision pending]
 Also found by T13a. `VehicleOverviewPage` draws two coolant gauges and labels them both `LOOP A`, which is
 **faithful**: `Overview.vue` lines 222 and 272 both say `LOOP A`, and `docs/UI_AUDIT.md`'s label list carries
 `LOOP A` once. But two of our own docs (`docs/REFERENCE_PAGES.md` lines 75 and 156) document the pair as
@@ -1378,13 +1387,13 @@ The choice is between reproducing a reference bug and correcting it. **Options:*
 REFERENCE_PAGES, our model and the value actually drawn; deviates from the tier-2 source). **This is a label
 change against a real-sourced page, so it is the owner's (C1.4) — a build chat does not decide it.**
 
-### S21 [S] A zero-byte file named `=` is tracked in `plugin/src/` — **TODO**
+### S21 [S] A zero-byte file named `=` is tracked in `plugin/src/` — **TODO** — [TIER 2: pre-Part-B hygiene]
 Noticed by T13a while listing the glue sources. `plugin/src/=` is 0 bytes, dated 2026-08-10, and is tracked
 (it came in with the initial import, `14b8c2a`) — the classic leftover of a `... = ...` shell redirect. It is
 not referenced by `plugin/build.py`, compiles to nothing, and only clutters the source listing. **Fix:**
 `git rm plugin/src/=` and confirm `build.py test` is still green. Trivial, but not T13's to do (C1.1).
 
-### S22 [S] The reference's static status words read confidently on a dead feed — **TODO**
+### S22 [S] The reference's static status words read confidently on a dead feed — **TODO** — [TIER 1: pre-Part-B correctness bug]
 Logged by T13a, deliberately not done (§6 scopes T13 to the numeric VALUES, and this is reference COPY —
 changing it is a different kind of edit). Now that every NUMBER on the vehicle pages dashes when
 `PageState.Valid` is false, the words beside them are the only things left claiming to know something:
@@ -1526,7 +1535,7 @@ read the identical live text for the identical vessel.
 - **§1.4 / C1.4 respected:** the checklist LABELS were real-sourced copy and only the one owner-authorized
   edit (S23) touched a label; no `PanelMap.cs` edit; no other label doc touched.
 
-### S26 [S] Manual docking: the target diamond is fixed, and the axis group is drawn twice — **TODO**
+### S26 [S] Manual docking: the target diamond is fixed, and the axis group is drawn twice — **TODO** — [TIER 4: scheduled build/polish]
 Found by T13c, deliberately not done (C1.1). `DockingSimPage` now prints live ROLL / PITCH / YAW, RANGE and
 RATE, but the green target diamond is still drawn at a FIXED offset from the reticle (`tx = HCX + 70f,
 ty = HCY - 48f`) — so it sits off-centre while the page reads 0.1° of error, and `ui_docking_notarget.png`
@@ -1625,7 +1634,7 @@ play and §14.4 is not amended. **Recorded 2026-09-02 — bookkeeping only, no b
 `DockingSimPage.IsActuation` / `ScreenPainter.DockAction` already carries this exactly as it should; there
 is no code change for (a) to make. This line is closed as decided.
 
-### S29 [S] Four display-only controls remain, all outside §6's list — **TODO**
+### S29 [S] Four display-only controls remain, all outside §6's list — **TODO** — [TIER 3: owner decision pending]
 Noticed by **T14** while wiring the four groups §6 names (logged, not done — C1.1). None of these is in
 that list, and each wants a decision rather than a wire:
 - `SuitCheckPage`'s two left-panel plates under the caption **"ENTER READ-ONLY"** (`ic_grid` and
@@ -1637,7 +1646,7 @@ that list, and each wants a decision rather than a wire:
   §14.4(a) no-op; if it is meant to reset only the PAGE, it is screen state and could act).
 **DONE when:** each has either an action or a recorded reason for having none.
 
-### S30 [S] `_AutopilotStub.cs` still describes the deleted RED refuse state — **TODO**
+### S30 [S] `_AutopilotStub.cs` still describes the deleted RED refuse state — **TODO** — [TIER 2: pre-Part-B hygiene]
 Noticed by **T14** while routing the chute page through `FlightCommands.Run` (comment-only; not fixed,
 C1.1). The file's header says the command buttons "are no-ops that honestly refuse (**a red flash**)" and
 `Run`'s own comments say "true = white flash (actioned), false = **red flash** (honestly cannot)" and
