@@ -33,6 +33,9 @@
 // centre+right zone to PropSchematic and skips the upright capsule render. Everything else here — the
 // title, the left checklist, the FUNCTIONS/ALERTS toggle, the ALERTS view and the tab bar — is shared
 // with its five siblings exactly as before.
+//
+// S27: VehicleDeepViewLinks (SYSTEMS TREE / SYSTEMS P&ID, right of the tab strip) is drawn here too —
+// same footing as the FUNCTIONS/ALERTS toggle above, an invented control on a real page, marked as ours.
 using System;
 
 namespace DragonScreen
@@ -192,6 +195,7 @@ namespace DragonScreen
 
             // ---- subsystem tab bar + global bottom bar ----
             VehicleTabBar.Draw(dl, w, h, d.Tab, VehicleTabBar.Severities(s));
+            VehicleDeepViewLinks.Draw(dl, w, h);
             dl.Asset("component_48", 0f, PY(1877), w, SZ(235), White);
         }
 

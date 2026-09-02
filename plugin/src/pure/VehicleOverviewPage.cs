@@ -162,6 +162,7 @@ namespace DragonScreen
             // T5: severity-aware (VehicleTabBar.Severities) so a faulted subsystem's tab reads red from
             // here too — the real "reached in one touch from anywhere" behaviour, not just on its own page.
             VehicleTabBar.Draw(dl, w, h, 0, VehicleTabBar.Severities(s));
+            VehicleDeepViewLinks.Draw(dl, w, h);
             dl.Asset("component_48", 0f, PY(1877), w, SZ(235), White);
         }
 

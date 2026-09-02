@@ -146,6 +146,7 @@ namespace DragonScreen
 
             // ---- subsystem tab bar (Mech active) + bottom status bar ----
             VehicleTabBar.Draw(dl, w, h, 3);
+            VehicleDeepViewLinks.Draw(dl, w, h);
             dl.Asset("component_48", 0f, PY(1877), w, SZ(235), White);
         }
     }

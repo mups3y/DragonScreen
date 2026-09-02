@@ -60,8 +60,11 @@ namespace DragonScreen
         // schematic" entry, both real screens whose layout grammar is photographed but whose text is
         // not transcribable. Deliberately NOT extra VehicleTabBar tabs: that strip's eight tabs are
         // confirmed-real from the clean designer mockup, so a ninth would be editing a real-sourced
-        // label set (C1.4). Menu grid only for now; a real in-page entry point is T14's job, the same
-        // footing as DeorbitBurnPrep and EntryProcedure. Appended (never renumbered).
+        // label set (C1.4). S27 (owner decision (b), 2026-09-02): rather than assign a Cover rail
+        // "Procedure" slot to either (no source names what belongs there - a §1.4 tier-3 invention,
+        // C1.4/C1.12), both are reachable from every Vehicle-family page via VehicleDeepViewLinks, our
+        // own geometry, marked as ours - same footing as DeorbitBurnPrep/EntryProcedure's Menu-grid
+        // reachability, plus this one extra path. Appended (never renumbered).
         SystemsTree = 31, SystemsPid = 32,
         // Ascent / Launch (T12) - SCREEN_INVENTORY #14, the one screen with NO public in-cabin frame at
         // all (confirmed absent, not just unfound) - "DATA-BUILDABLE, layout reconstructed + MARKED",
@@ -277,6 +280,11 @@ namespace DragonScreen
             {
                 int t = VehicleTabBar.HitTest(px, py, w, h);
                 if (t >= 0) return NavHit.Go(VehicleTab[t]);
+
+                // S27: VehicleDeepViewLinks (SYSTEMS TREE / SYSTEMS P&ID) - our own affordance, reachable
+                // from every Vehicle-family page, since no source assigns either a real Cover rail slot.
+                int link = VehicleDeepViewLinks.HitTest(px, py, w, h);
+                if (link >= 0) return NavHit.Go(VehicleDeepViewLinks.Target[link]);
             }
 
             // Settings Audio/Cabin/Video sub-tabs switch between the three sibling pages.

@@ -1551,7 +1551,7 @@ redundant chrome that should be dropped, or given the second confirmed quantity 
 RATES — `PitchRateText`/`YawRateText`/`RollRateText` are already in `PageState`), is a layout call
 against the iss-sim reference. Take it with the diamond above, in one pass over this page.
 
-### S27 [owner call] The reconstructed pages still have no in-page entry point — four DONE tasks parked it on T14 — **TODO**
+### S27 [owner call] The reconstructed pages still have no in-page entry point — four DONE tasks parked it on T14 — **DONE 2026-09-02** (resolved to (b): no Cover-rail assignment; built a Vehicle-page affordance to the two systems deep-views instead)
 Raised by **T14**, which is the task those four named. `T7` (Deorbit Burn Prep), `T8` (Entry), `T9`
 (Systems Tree + Systems P&ID) and `T12` (Ascent / Launch) each end with a line saying a real phase-rail or
 in-page entry point "is **T14**'s job", and `FigmaUI.cs`'s own `VrioTest` comment says the same of a
@@ -1573,7 +1573,38 @@ pages, our geometry, marked as ours like the FUNCTIONS|ALERTS toggle); (c) leave
 and close this. **DONE when:** the owner's choice is recorded here and built, or (c) is chosen and this
 line is closed.
 
-### S28 [owner call] Should the manual-docking clusters actually fly the capsule? — **TODO**
+**Decision (owner, via the overseer, 2026-09-02) = (b).** The Cover phase rail's two "Procedure" slots are
+left unassigned — no source names what belongs there, and assigning one of VrioTest / Deorbit Burn Prep /
+Entry would be a §1.4 tier-3 claim on a real screen (C1.4). All three stay reachable via the Menu grid +
+bottom bar exactly as before. `SystemsTree` / `SystemsPid` get an affordance FROM the Vehicle pages
+instead — the (b) branch, scoped to just those two (T7/T8's procedure pages are a separate, still-open
+question the rail-slot options above cover; this task does not touch them).
+
+**DONE 2026-09-02.** New `plugin/src/pure/VehicleDeepViewLinks.cs` — two links, "SYSTEMS TREE" /
+"SYSTEMS P&ID", drawn on every Vehicle-family page (`VehicleOverviewPage`, `VehicleSubsystemPage`'s six
+sub-tabs including both the FUNCTIONS and ALERTS views, `VehicleMechPage` — `FigmaUI.IsVehiclePage`'s own
+set), same footing as T5's FUNCTIONS|ALERTS toggle and T6's Docking→Rendezvous affordance: our own
+geometry, marked as ours in the file's header comment, one rect shared by `Draw` and `HitTest` (PageAction's
+rule) so drawing and hit-testing can never drift apart. Deliberately NOT a ninth/tenth `VehicleTabBar` tab
+(T9 already ruled that out — C1.4); placed to the right of the tab strip's own hit region, past its
+rightmost real tab (`VehicleTabBar.CentreX(7)`'s hit edge at design-x 2533.5), in the row's own unused
+space, so a drawn or hit-tested link can never collide with a real tab. Wired in `FigmaUI.HitTest` inside
+the existing `IsVehiclePage(page)` branch, right after the tab-strip check; `UiPage.SystemsTree`/`SystemsPid`'s
+enum comments in `FigmaUI.cs` updated to point at the new path instead of the stale "T14's job" line.
+**Nav test:** new `FigmaUINavTest.VehicleDeepViewLinksTest()` — both links route to the right page from
+all eight Vehicle-family pages (16 routes checked), the real Thermal tab still resolves correctly (no
+overlap with the link geometry), the gap between the two links is inert, the links are inert on a
+non-vehicle page (Hud), and both destinations are real pages, not placeholders. `python plugin/build.py
+test`: **green, Figma UI nav suite 654 checks, 0 failed**, no new warnings. **Preview:** `ui_vehicle.png`,
+`ui_vehiclemech.png`, `ui_vehiclepropulsion.png` (the tightest sibling — Prop's own thruster data band
+sits well clear, ends ~y1652 design-space vs. the links' 1778+) and `ui_vehiclepower_alerts.png` (the
+ALERTS view) all inspected — the two accent-coloured links sit cleanly to the right of the tab strip on
+every one, no overlap/clipping with any existing content, `ui_systemstree.png`/`ui_systemspid.png`
+re-inspected unchanged (the destinations draw no tab strip and no links of their own, as before). §1.4
+respected: no `PanelMap.cs` / label-doc edit; the two new label strings are stated as ours, not
+transcribed from any source.
+
+### S28 [owner call] Should the manual-docking clusters actually fly the capsule? — **decided-(a), recorded 2026-09-02 — not built (Part B's job)**
 Raised by **T14** and flagged in `DockingSimPage`'s own header long before it (*"wiring them to RCS (the
 owner's 'hidden mini-game' idea) is a later decision"*). T14 applied the decision that IS settled —
 §14.4(a): flight actuation is an honest no-op until Part B — so the twelve direction pads and Reset
@@ -1586,6 +1617,13 @@ standing "screens fly nothing" rule; (c) keep them inert permanently and say so 
 **(b) needs an owner `OVERRIDE` + a §14.4 log entry** — it is a change to a settled decision (C1.8).
 The seam is already in place either way: `DockingSimPage.IsActuation` names the set, and the dispatch is
 one method in `ScreenPainter` (`DockAction`), so none of the three options costs geometry or drawing work.
+
+**Decision (owner, via the overseer, 2026-09-02) = (a).** The twelve direction pads and Reset Positions
+stay the §14.4(a) honest no-op — click, log, no action — and **Part B** (§B12.5 / §B10.6, which already own
+the 16-Draco RCS tuning) wires them when the conductor lands. No `OVERRIDE` was given, so (b) is not in
+play and §14.4 is not amended. **Recorded 2026-09-02 — bookkeeping only, no build (C1.1):** the seam
+`DockingSimPage.IsActuation` / `ScreenPainter.DockAction` already carries this exactly as it should; there
+is no code change for (a) to make. This line is closed as decided.
 
 ### S29 [S] Four display-only controls remain, all outside §6's list — **TODO**
 Noticed by **T14** while wiring the four groups §6 names (logged, not done — C1.1). None of these is in

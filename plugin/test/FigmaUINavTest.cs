@@ -31,6 +31,7 @@ public static class FigmaUINavTest
         BottomBar();
         SuitCheck();
         VehicleTabs();
+        VehicleDeepViewLinksTest();
         CoverPhases();
         CoverCamera();
         SpeccedPages();
@@ -1115,6 +1116,52 @@ public static class FigmaUINavTest
         float tx = VehicleTabBar.CentreX(2) / RefW * W, ty = 1815f / RefH * H;
         Check("veh tab strip inert off-vehicle",
               FigmaUI.HitTest(UiPage.Hud, tx, ty, W, H).Act == NavAct.None, "");
+    }
+
+    static void VehicleDeepViewLinksTest()
+    {
+        // S27: an our-geometry affordance (VehicleDeepViewLinks), same footing as T5's FUNCTIONS|ALERTS
+        // toggle and T6's Docking->Rendezvous affordance, reaching the two vehicle systems deep-views
+        // (T9) from every Vehicle-family page — because no source assigns either a real Cover rail
+        // "Procedure" slot to them (the option NOT taken, see the register).
+        UiPage[] vehiclePages = {
+            UiPage.Vehicle, UiPage.VehicleMech, UiPage.VehicleCrew, UiPage.VehiclePropulsion,
+            UiPage.VehiclePower, UiPage.VehicleAvionics, UiPage.VehicleGnc, UiPage.VehicleThermal };
+        UiPage[] want = { UiPage.SystemsTree, UiPage.SystemsPid };
+
+        float cy = 1815f / RefH * H;   // inside the link band, same row as the tab strip
+
+        foreach (UiPage vp in vehiclePages)
+        {
+            for (int i = 0; i < want.Length; i++)
+            {
+                // Aim at the same centre Draw uses (link left edge + half its width) — one rect, shared.
+                float cx = (2650f + 155f + i * 310f) / RefW * W;   // X[i] + LinkW*0.5 for i=0,1
+                NavHit hit = FigmaUI.HitTest(vp, cx, cy, W, H);
+                Check(vp + " deep-view link " + i + " (" + want[i] + ") routes",
+                      hit.Act == NavAct.Goto && hit.Target == want[i],
+                      "got " + hit.Act + " " + hit.Target);
+            }
+        }
+
+        // The two links must not share a hit region with each other or with the real tab strip's own
+        // rightmost tab (Thermal, index 7) — geometry that would let one touch resolve two ways.
+        float thermalCx = VehicleTabBar.CentreX(7) / RefW * W;
+        NavHit thermal = FigmaUI.HitTest(UiPage.Vehicle, thermalCx, cy, W, H);
+        Check("thermal tab still routes to VehicleThermal (no link overlap)",
+              thermal.Act == NavAct.Goto && thermal.Target == UiPage.VehicleThermal,
+              "got " + thermal.Act + " " + thermal.Target);
+        float gapCx = ((2650f + 260f) + 2960f) * 0.5f / RefW * W;   // midpoint of the gap between links
+        Check("gap between the two links is inert",
+              FigmaUI.HitTest(UiPage.Vehicle, gapCx, cy, W, H).Act == NavAct.None, "");
+
+        // Inert on a non-vehicle page — this is a Vehicle-family affordance, not a global one.
+        Check("deep-view links inert off-vehicle",
+              FigmaUI.HitTest(UiPage.Hud, (2650f + 155f) / RefW * W, cy, W, H).Act == NavAct.None, "");
+
+        // Both destinations are real pages a crew member can actually land on.
+        Check("SystemsTree is a real page, not a placeholder", !FigmaUI.IsPlaceholder(UiPage.SystemsTree), "");
+        Check("SystemsPid is a real page, not a placeholder", !FigmaUI.IsPlaceholder(UiPage.SystemsPid), "");
     }
 
     static void SuitCheck()
