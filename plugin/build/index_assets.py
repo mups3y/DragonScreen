@@ -21,13 +21,15 @@ def png_size(p):
     except Exception: return ''
 
 SECTIONS = [
-    ('SHIPPED - these go into the game', 'plugin/GameData/DragonScreen/art', '*'),
-    ('Reference art rendered from the Figma SVGs', 'plugin/build/refart', '*.png'),
-    ('EMBEDDED artwork extracted from inside those SVGs', 'plugin/build/refart/embedded', '*'),
-    ('Vue recreation assets (Apache-2.0)', 'assets/reference/dragon2-ui-assets/docs/img', '*'),
-    ('Vue recreation, top level', 'assets/reference/dragon2-ui-assets/docs', '*.png'),
-    ('Fonts', 'assets/d-din', '*.ttf'),
-    ('Source SVGs', 'assets/figma', '*/*.svg'),
+    # SHIPPED recurses (True): art/cover/ holds 127 of its files one level down, and a
+    # non-recursive '*' silently missed all of them (S7).
+    ('SHIPPED - these go into the game', 'plugin/GameData/DragonScreen/art', '*', True),
+    ('Reference art rendered from the Figma SVGs', 'plugin/build/refart', '*.png', False),
+    ('EMBEDDED artwork extracted from inside those SVGs', 'plugin/build/refart/embedded', '*', False),
+    ('Vue recreation assets (Apache-2.0)', 'assets/reference/dragon2-ui-assets/docs/img', '*', False),
+    ('Vue recreation, top level', 'assets/reference/dragon2-ui-assets/docs', '*.png', False),
+    ('Fonts', 'assets/d-din', '*.ttf', False),
+    ('Source SVGs', 'assets/figma', '*/*.svg', False),
 ]
 
 lines = ['# Asset index — everything we own, one line each', '',
@@ -36,9 +38,12 @@ lines = ['# Asset index — everything we own, one line each', '',
          'mostly embedded rasters — `rasterise_all.py` renders the vectors and drops the images;',
          '`extract_embedded.py` pulls the images out. Either alone is misleading.', '']
 
-for title, rel, pat in SECTIONS:
+for title, rel, pat, recursive in SECTIONS:
     d = os.path.join(ROOT, rel)
-    found = sorted(glob.glob(os.path.join(d, pat)))
+    if recursive:
+        found = sorted(glob.glob(os.path.join(d, '**', pat), recursive=True))
+    else:
+        found = sorted(glob.glob(os.path.join(d, pat)))
     lines.append('## %s' % title)
     lines.append('')
     lines.append('`%s`' % rel)

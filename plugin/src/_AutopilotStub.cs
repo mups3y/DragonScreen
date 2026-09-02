@@ -7,7 +7,7 @@
 //
 // This file is the seam the screens compile against. Every controller/type the screen code still
 // references is provided here as an IDLE stand-in: status reads report "not engaged / no fault", and
-// the command buttons are no-ops that honestly refuse (a red flash) rather than pretending to act.
+// the command buttons are no-ops that honestly refuse (click, no light, no action) rather than pretending to act.
 // The genuinely display-only systems surface (power buses / strings / fire response — pure
 // VehicleSystems, which only mutates on-screen state and flies nothing) stays REAL.
 //
@@ -83,8 +83,8 @@ namespace DragonScreen
         public static bool Undock(Vessel v) { return false; }
     }
 
-    // ---- command dispatcher the panel drives. Flight commands are no-ops (red flash); the power/
-    // ---- string/fire systems are REAL (pure VehicleSystems, display state only). ----
+    // ---- command dispatcher the panel drives. Flight commands are no-ops (click, no light, no action);
+    // ---- the power/string/fire systems are REAL (pure VehicleSystems, display state only). ----
     public static class FlightCommands
     {
         public static bool BackupPyros, EntryReboot, BackupEntry;
@@ -93,7 +93,7 @@ namespace DragonScreen
         public static double Charge01;
         public static bool CancelAllSequences() { return false; }
 
-        // true = white flash (actioned), false = red flash (honestly cannot). With no flight software,
+        // true = actioned, false = honestly cannot (click, no light, no action). With no flight software,
         // everything that would COMMAND the vehicle returns false; only the display-state systems act.
         public static bool Run(PanelCommand c)
         {
@@ -123,7 +123,7 @@ namespace DragonScreen
                 case PanelCommand.EnableBackupEntry: BackupEntry = true;  return true;
                 case PanelCommand.EnableNormalEntry: BackupEntry = false; return true;
 
-                // ---- everything that would FLY / actuate the vehicle: no flight software → honest red flash ----
+                // ---- everything that would FLY / actuate the vehicle: no flight software → click, no light, no action ----
                 // Abort, Breakout, DeorbitNow, WaterDeorbit, chutes/shroud, Cancel, and the unverified commands.
                 default: return false;
             }

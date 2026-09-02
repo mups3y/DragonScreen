@@ -22,6 +22,10 @@ plugin/build/refart/
 plugin/build/*.exe
 plugin/build/*.pdf
 
+# Rewritten by build.py on every invocation (whichever compile ran last) -
+# carries no information worth versioning, and churns the working tree.
+plugin/build/csc.rsp
+
 # The compiled mod. `build.py install` produces it; committing it means the
 # binary and the source can silently disagree about which is current.
 plugin/GameData/DragonScreen/DragonScreen.dll
