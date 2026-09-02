@@ -5,6 +5,11 @@
 #    read current recordings, which use the 89-col schema (met_s / ascent_phase / att_point_deg / ...).
 #    For CURRENT + future flights use  plugin/tools/assess_flight.py  instead. This is kept only to read
 #    the historical flight_*.csv corpus (pre-2026-08-26). Do not extend it — extend the tools/ one.
+#
+# KEPT, not deleted (owner decision via the overseer, 2026-09-02, S8): this is autopilot-era tooling,
+#    retained for Part B's §B5 empirical tune (T22), which will regenerate a flight corpus once the
+#    MechJeb conductor flies again. The old Crew-2_*.csv corpus this script reads is gone (deleted with
+#    the 2026-09-01 autopilot removal), so it will not run until T22 produces new data.
 # ============================================================================================
 """
 assess_flight.py - the WHOLE flight, every column, one command.

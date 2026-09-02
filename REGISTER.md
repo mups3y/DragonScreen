@@ -1083,11 +1083,13 @@ lists 6 shipped files while 98 exist — the 95 Cover PNGs in `GameData/DragonSc
 the "grep the index before concluding an asset does not exist" rule, which is exactly the failure that file was
 written to prevent. **DONE when:** the generator recurses and the regenerated index lists the cover set.
 
-### S8 [S] `plugin/build/assess_flight.py` is autopilot-era tooling — **TODO** — [TIER 3: owner decision pending]
-It reads the flight corpus (`<KSP>/DragonScreen_capture/Crew-2_*.csv`) of the autopilot deleted 2026-09-01, and
-the corpus is gone. Decide: delete it, or keep it for Part B's §B5 empirical tune (which will produce flight
-data again — §B22/T22). Owner call, logged not done. **DONE when:** deleted, or kept with a header saying it is
-for the Part B tune.
+### S8 [S] `plugin/build/assess_flight.py` is autopilot-era tooling — **DONE**
+- **Owner decision (via the overseer, 2026-09-02):** KEEP the file — retained for Part B's §B5 empirical tune
+  (T22), which will regenerate a flight corpus; the old corpus is gone, so it will not run until then.
+- **DONE 2026-09-02.** Added a header block stating the retention rationale (kept, not deleted; for T22/§B5;
+  won't run until T22 produces new data) above the existing OLD-SCHEMA note, which is unchanged. Comment-only,
+  no code change → preview/PNG gate N/A (C1.3). `python plugin/build.py test` run as a no-regression check:
+  **green, ALL SCREEN SUITES PASSED** (14 suites, 0 failed). Committed locally (C1.5); not pushed.
 
 ### S9 [S] Mirror the reconcile into the Dragon Screen Map artifact — **BLOCKED** (T1's artifact half) — [TIER 5: held / owner-action / Part-B-bound]
 Logged here rather than as a numbered task so it cannot stall `/next` — it needs an owner action, not a
