@@ -46,6 +46,8 @@ per the §0 banner — pure code + `test` + `preview` are cleared (and the docs/
    (3) ONLY where there is no real evidence AND no existing asset for an element is invention permitted — and
    invention is a **JOINT owner discussion, never unilateral**. (Supersedes the older "infer as a marked last
    resort" wording; the same three tiers apply to the coherence pass §14.)
+   **EXTENDED 2026-09-02 by §14.4(e)** (simulation-for-immersion): a not-yet-modelled real quantity goes to an
+   installed mod's value, else a COHERENT MARKED simulation — a dash ONLY where the quantity truly does not exist.
 
 ## 2. How we build (principles — all confirmed adoptable for our pipeline)
 Our renderer is pure C# `DisplayList` draw-commands → two must-agree renderers: `ScreenPainter` (in-game GL)
@@ -156,6 +158,8 @@ turntable that reads as 3D**:
 - **Live data / parameterize:** replace representative constants in `VehicleSubsystemPage`,
   `VehicleOverviewPage`, `SuitCheckPage`, etc. with `PageState`/`VesselData` values (the stateless-UI
   principle). Chrome, globe, nose-cone state are already live; the numeric VALUES are the placeholders.
+- **Simulation-for-immersion (§14.4(e)):** a placeholder with no source is not defaulted to a dash — take the
+  value from an installed mod, else SIMULATE it coherently off real state and MARK it; dash only if absent.
 - **Touch wiring:** the display-only controls (Manual Chute per-step actions, Docking clusters, Suit Leak
   TROUBLESHOOT/timer, and the console panel per §4) → real state/actions once behaviour is defined.
 
@@ -919,6 +923,18 @@ is the standing owner-decision list; **no unilateral invention.**
 - **(d) Suit-Leak fail branch — RESOLVED 2026-09-02: KEEP, marked as a reconstruction.** A leak check must have
   a fail path (reconstruct-from-function); exact step wording (Failed Low / TROUBLESHOOT / step 2.5) is marked
   reconstructed, not verified-real. Drops to tier-2. Honors the earlier add-don't-take-away rule.
+- **(e) Simulation-for-immersion policy — RESOLVED 2026-09-02.** Where a physically-real vehicle quantity is
+  not yet modelled, do **NOT** default to an honest dash when that dash costs immersion. In order: (1) **read
+  it from an existing installed mod** if one provides it (tier-2, MARKED — cabin O2/CO2/water already come
+  from TAC-LS via `LifeSupportBridge`); (2) failing a mod, **SIMULATE** it, but only as a **COHERENT model
+  driven off real vessel/cabin state** (never a static constant), **MARKED as simulated in code** (tier-3
+  invention, jointly decided per §1.4); (3) keep an **honest dash ONLY where the quantity genuinely does not
+  exist in that state** (no target → no docking error; return leg → no splashdown-relative; a value only
+  Part B's flight software will command, e.g. the deorbit SLEW rows → dash until Part B).
+  **GUARDRAIL:** a simulated value must **never fabricate a safety VERDICT the sim cannot justify** — a
+  verdict (e.g. a suit-leak "Nominal") follows the simulation honestly, never hardcoded.
+  This **EXTENDS §1.4** (real → other-users'/mod → simulate-marked → dash-for-absent); it does **not** license
+  unmarked invention. First application: the suit leak check (S31).
 
 **All 4 tier-3 clusters RESOLVED (§14.4) → nothing in the plan now requires invention-discussion; every element
 is tier-1, tier-2, or an owner-decided reconstruction. The plan is DECISION-COMPLETE and build-ready on the
@@ -942,6 +958,8 @@ a **PREVIEW-ONLY BUILD-GO** (owner, 2026-09-02, via the overseer); `install` + g
    reference + §1.4 respected.
 4. **Source-of-truth §1.4:** verified-real → other users' → invent ONLY by owner discussion. Never edit
    `PanelMap.cs` / label docs without a real-source confirmation.
+   **§14.4(e):** a not-yet-modelled real quantity → an installed mod's value, else a COHERENT MARKED
+   simulation; a dash ONLY where the quantity truly does not exist.
 5. **End every task** by updating `REGISTER.md` (DONE | NEEDS-WORK + one-line note), then **committing the
    finished task LOCALLY yourself**: `git commit` with a clear message naming the task. **NEVER `git push`** —
    there are no cached credentials in a build chat; the owner pushes from GitHub Desktop when they get to it.

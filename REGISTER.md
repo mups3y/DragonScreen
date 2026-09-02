@@ -78,6 +78,36 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
   No code change → **the preview/PNG gate does not apply** (C1.3); `python plugin/build.py test` run as a
   no-regression check: **green, 11 suites / 5292 checks, 0 failed**. Committed locally (C1.5); NOT pushed.
 
+### G2 [O] Governance — §14.4(e) simulation-for-immersion policy — **DONE**
+- **Owner directive, 2026-09-02, decided by the owner (Chris) via the overseer** (recorded as the owner's per
+  C1.12). An authorized plan change — it intentionally changes the settled "dash when no source" idiom, so it
+  is an owner decision, not a build-chat one (C1.8). A docs-only task, exempt from the preview/PNG gate.
+  **Build:** add **§14.4(e)** to the Owner-invention-decisions running log, substance verbatim; cross-reference
+  it at **§1.4** and **§6** so the plan does not contradict itself (C7.1).
+- **DONE 2026-09-02.** **§14.4(e) added** to `docs/BUILD_PLAN.md`'s §14.4 log, after (d), substance verbatim:
+  where a physically-real vehicle quantity is not yet modelled, do NOT default to an honest dash when that dash
+  costs immersion — (1) read it from an existing installed mod if one provides it (tier-2, MARKED — cabin
+  O2/CO2/water already come from TAC-LS via `LifeSupportBridge`); (2) failing a mod, SIMULATE it, but only as a
+  COHERENT model driven off real vessel/cabin state (never a static constant), MARKED as simulated in code
+  (tier-3 invention, jointly decided per §1.4); (3) keep an honest dash ONLY where the quantity genuinely does
+  not exist in that state (no target → no docking error; return leg → no splashdown-relative; a value only
+  Part B's flight software will command, e.g. the deorbit SLEW rows → dash until Part B). GUARDRAIL: a simulated
+  value must never fabricate a safety VERDICT the sim cannot justify — a verdict (e.g. a suit-leak "Nominal")
+  follows the simulation honestly, never hardcoded. It EXTENDS §1.4 (real → other-users'/mod → simulate-marked
+  → dash-for-absent) and does NOT license unmarked invention. First application: **S31** (suit leak check).
+  **Cross-references added (C7.1):** §1.4's owner-decision 4 now carries an "EXTENDED 2026-09-02 by §14.4(e)"
+  line, and §6 (cross-cutting / live-data) gained a "Simulation-for-immersion (§14.4(e))" bullet beside the
+  live-data one, so neither reads as "dash when no source" any more. **Optional pointer taken:** the one-line
+  §14.4(e) clause is appended to **C1.4** in `CLAUDE.md` (auto-loaded every session, which is where the old
+  idiom would otherwise be applied) and mirrored identically into **C1.4 in `docs/BUILD_PLAN.md`** so the two
+  copies of the rule stay word-identical (C7.1). No other rule renumbered or altered; `LifeSupportBridge` +
+  the TAC-LS path confirmed present in the tree before citing them. This was the ONLY plan edit of the session.
+  No code change → **the preview/PNG gate does not apply** (C1.3); `python plugin/build.py test` run as a
+  no-regression check: **green, 11 suites / 7998 checks, 0 failed**. Committed locally (C1.5); NOT pushed.
+- ⚠ **Naming collision, logged not acted on (C1.1):** the GLASS-CHECKLIST table further down this file also
+  numbers its rows G1–G9. Those are glass-time gaps, unrelated to the G0/G1/G2 governance tasks up here. A
+  future chat asking for "G2" should say which. Left as-is — renaming either scheme is out of this task's scope.
+
 ---
 
 ## Part A — screens (§7 order, with this session's decisions)
@@ -1872,3 +1902,11 @@ to it, no new dependency) but (a)/(b) is a §1.4-adjacent call about what "refer
 procedure page vs a telemetry page, so this is flagged rather than picked. Also correct the two stale
 "(S22)" comments (`SuitCheckPage.cs:20` and `:127`'s neighbourhood) once this is resolved — they now point
 at a task that does not cover this file.
+
+**⚠ SUPERSEDING POLICY (G2, 2026-09-02): read §14.4(e) BEFORE choosing.** The owner's
+simulation-for-immersion policy landed after this line was written and it governs this task — a real
+quantity that is simply not modelled yet goes to an installed mod's value, else a COHERENT MARKED
+simulation off real cabin state; a dash is for quantities that genuinely do not exist. So option (b)
+"dash STATUS permanently" is no longer the default it reads as here, and the GUARDRAIL applies
+directly: the STATUS verdict must FOLLOW whatever the sim says, never be a hardcoded "Nominal".
+The option list above is left as written for the record; §14.4(e) is what decides between them.
