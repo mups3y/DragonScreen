@@ -14,11 +14,11 @@ never reorder past a DONE without a note.
 🟢 **PREVIEW-ONLY BUILD-GO — the OWNER's decision, 2026-09-02, granted via the overseer.** Part A **pure
 code + `python plugin/build.py test` + `python plugin/build.py preview` are cleared**. `python
 plugin/build.py install` and glass time are NOT: they need a SEPARATE, explicit owner go, so a task whose
-done-criteria can only be met in the capsule (T10's audible click and T11b's drag FEEL — both under
-**S17**; S10's RT planet camera is a separate hold, and is not verifiable until it is BUILT) stops and
-asks rather than installing. ⚠ **A one-session gate-open is not a standing one:** the owner opened
-`install` + glass for ONE session on 2026-09-02, scoped to T10 + T11b (see S17). That gate closed with
-that session; the standing state is preview-only. **T2–T4 are covered retroactively by this go** — they are on-plan and
+done-criteria can only be met in the capsule stops and asks rather than installing. ⚠ **A one-session
+gate-open is not a standing one:** the owner opened `install` + glass for ONE session on 2026-09-02,
+scoped to T10 + T11b. **S17 used it and is DONE.** That gate **closed with that session** — the standing
+state is preview-only again. What still wants glass is collected on **S18** (an end-of-Part-A pass, by
+the owner's call) and on **S10** (not verifiable until it is BUILT); each needs its own fresh owner go. **T2–T4 are covered retroactively by this go** — they are on-plan and
 preview-only, so nothing is reverted. Part B (T15–T22) remains DESIGNED, not started.
 ⛔ **Only the OWNER opens or widens this gate.** A build chat never grants one, never lifts one, and never
 records a decision as the owner's unless the owner stated it in that chat (C1.12).
@@ -857,7 +857,7 @@ frame allows. §11b itself is research and stays as written. Fold into the next 
 **S9** (the map artifact), which needs the same tally update. **DONE when:** no `docs/` status mark
 contradicts the tree.
 
-### S17 [owner-gated] Glass verification — T10 click + lamps, T11b drag feel — **DOING** (session open 2026-09-02; all six answered, 4 RESOLVED + 2 FIXED and reinstalled, awaiting the owner's re-check of those 2)
+### S17 [owner-gated] Glass verification — T10 click + lamps, T11b drag feel — **DONE 2026-09-02** (all six answered on glass: 4 confirmed, 2 wrong and fixed; the two re-checks carried to **S18**)
 Logged by T10 (C1.1/C1.7), 2026-09-02. This line is the ONE capsule session that settles the handful of
 criteria a PNG cannot reach. It covers exactly **two** tasks — **T10** (the click and the lamps) and
 **T11b** (the drag feel). Both are BUILT, SHIPPED and headless-green; what is left in each is a judgement
@@ -930,7 +930,54 @@ the ones already inspected; what changed is the **travel**, which fell from 104 
 rotation. That number is the gearing change made visible. **Reinstalled** with KSP and CKAN confirmed
 closed; a second install run wrote **nothing**, which is the self-consistency check.
 
-**DONE when:** the owner re-checks (b) and (d) on glass after a full KSP restart — the drag geared so a
-natural sweep is one revolution, and the click at the higher level — and either confirms them or reports
-which way they are still off. (a), (c), (e) and (f) are settled and are not revisited. S10 is not part of
-this line and does not hold it open.
+**DONE 2026-09-02 — the stated DONE-when is met: all six were heard, seen and felt in the capsule.** Four
+came back confirmed and are **settled — they are not revisited**. Two came back wrong, were one constant
+each exactly as this line predicted, and were fixed, tested, previewed and reinstalled inside the same
+session. That is the whole of what a verification line can do; what is left is not verification but a
+**re-check of two fixes**, which is a different job.
+
+**⛔ THE GATE THIS LINE USED IS CLOSED.** It was opened by the owner for ONE session, scoped to T10 + T11b.
+It did not survive the session, was never widened, and nothing here grants a new one (C1.12).
+
+**→ The two re-checks are carried to `S18`** (end-of-Part-A glass pass) **by owner directive, 2026-09-02:**
+two constants do not justify their own capsule visit when restarts are the scarce resource (C1.6), so they
+wait and go in with whatever else has accumulated by the time the screens are built. The **installed build
+already carries both fixes**, so nothing is lost by waiting.
+
+### S18 [owner-gated] End-of-Part-A glass pass — **HELD** (deferred here by owner directive 2026-09-02; `/next` SKIPS it)
+The one capsule visit to make **once the screen build is complete** — Part A's remaining tasks are
+**T12** (Ascent/Launch), **T13** (live-data wiring) and **T14** (touch wiring). Opened because S17 finished
+its six checks and produced two fixes that want a second look, and **the owner's call was not to spend a
+restart on two constants**: restarts are the scarce resource (C1.6), so these wait and go in as one pass
+with whatever else has accumulated. Nothing is lost by waiting — **the installed build already carries both
+fixes**, so when the gate opens this may need only a restart rather than a reinstall (it WILL need a
+reinstall if the DLL has moved on by then, which T12–T14 will do).
+
+**⛔ NEEDS A FRESH OWNER GO.** The 2026-09-02 gate was for one session, scoped to T10 + T11b, and closed
+with it. This line does not grant, inherit or widen anything (C1.12) — `install` + glass time are the
+owner's to open, at the time, for this pass.
+
+**Carries — the two S17 fixes, each needing one look:**
+1. **T11b (b) — the drag gearing.** `Turntable.FramesPerSlot` is now **48** (`Count / UsableSweepFraction`,
+   the fraction being 0.75 as measured on glass), so a natural left-to-right sweep across the vehicle should
+   now be **exactly one revolution** where it previously managed three quarters. **Check:** does it come
+   round once? Over- or under-shooting, and roughly by how much? **If still off:** one constant
+   (`UsableSweepFraction`, `pure/Turntable.cs`) — and the number it wants is readable straight off the
+   answer, since the fraction IS the measurement.
+2. **T10 (d) — the click level.** `PanelAudio.Volume` is now **0.85** (was 0.55, heard as too quiet).
+   **Check:** right, still quiet, or too far? **If still quiet:** 1.0 is the LAST step available as a pure
+   constant — beyond it the sample itself has to be regenerated hotter in `build/make_click.py`, which is
+   more than a constant and becomes its own line rather than being done in the pass.
+
+**⛔ SETTLED AT S17 — DO NOT RE-LITIGATE:** (a) the drag direction reads as grabbing the vehicle;
+(c) a deliberate turn holds while a tap resets to the front; (e) the 2D click reads as coming from the
+button, so **3D audio is not built**; (f) the dashes light BRIGHT through the installed shader. Four owner
+answers, each recorded verbatim on S17.
+
+**Batch into this pass whatever else is glass-only by then** — the obvious candidate is **S10**'s RT planet
+camera, but ONLY if S10 has actually been BUILT first (it is a TODO, not a verification; see its line). Any
+T13/T14 criterion that turns out to need the capsule belongs here too rather than in its own visit — that
+is what this line is for.
+
+**DONE when:** both re-checks are confirmed on glass, or a NEEDS-WORK note says which way each is still off
+and what the next step would cost.
