@@ -1518,7 +1518,8 @@ T14 APPENDS to this list, at the moment and site each want arises. This seeding 
 | G6 | **T14** | **One flag, two surfaces.** Tap ENABLE BACKUP PYROS on the Manual Chute glass, then look at the LOWER CONSOLE PLATE: its dash should be lit too, and vice-versa. | The whole design claim of the chute wiring is that the page and the plate cannot disagree because they read one flag. Preview renders the page; only the capsule has both surfaces in view at once. |
 | G7 | **T14** | **Does a docking pad that does nothing read as deliberate, or as broken?** §14.4(a) makes the twelve direction pads an honest no-op, and a SCREEN touch has no click behind it the way a console press does — so pressing FWD produces literally no feedback. Watch someone press one and see whether they press it again. | This is the §14.4(a) "click + no light + no action" rule meeting a surface that cannot click. If it reads as a dead screen it is a NEEDS-WORK, and the fix is a decision (an inert-press affordance) rather than a constant. |
 | G8 | **T14** | **The FUNCTIONS \| ALERTS toggle** — is the hit band usable? Its geometry is OURS (T5 said so explicitly, it is not measurable from the reference), 28px words with a ±20px design-space margin. Tap between the two words and confirm nothing flips. | Same reason as G5, and worse: the target is text rather than a plate, so there is no drawn edge telling the crew where to aim. |
-| G9 | **T14** | **Two legibility spot-checks:** the dimmed TROUBLESHOOT on the Suit Leak Check — does dim read as *unavailable* or as *broken*? — and the docking clusters' **PRECISE** label, which is drawn at 22px against LARGE's 26px so the longer word fits its plate. | Both are judgements about what a crew member reads at cabin distance, which is the one thing the PNG explicitly cannot settle (CLAUDE.md: "a screenshot is still the only way to judge how it LOOKS on the glass"). |
+| G9 | **T14** | **Legibility spot-check:** the docking clusters' **PRECISE** label, which is drawn at 22px against LARGE's 26px so the longer word fits its plate — does it read clearly at cabin distance? | This is a judgement about what a crew member reads at cabin distance, which is the one thing the PNG explicitly cannot settle (CLAUDE.md: "a screenshot is still the only way to judge how it LOOKS on the glass"). |
+| G10 | **S31/S32** | **Suit Leak Check, three checks in one visit:** (1) does the **lit** TROUBLESHOOT (white, "act now") read distinctly from its dim resting state at IVA distance? (2) run the repair→rerun flow end-to-end on the collider — CLOSE the leak result box, press TROUBLESHOOT, watch the countdown restart from 5; (3) is the ΔP magnitude legible at cabin distance — a nominal **~0.28 psi** and a bled-down leaking suit's **~0.01 psi**? | Same reason as G9: a legibility/affordance judgement the PNG cannot settle. S31 ratified its constants as built but deferred the ΔP magnitude's glass eyeball to this pass; S32 added the lit-vs-dim state change and the repair-and-rerun flow, which preview can prove is WIRED but not that it reads right or feels discoverable on glass. |
 
 **Batch into this pass whatever else is glass-only by then** — the obvious candidate is **S10**'s RT planet
 camera, but ONLY if S10 has actually been BUILT first (it is a TODO, not a verification; see its line). Any
@@ -2023,7 +2024,7 @@ one (§1.4 tier-3).
 - ⚠ **Logged, not done (C1.1):** see **S33** — `docs/SCREEN_INVENTORY.md`'s row for screen #5 predates S31
   and S32.
 
-### S33 [S] `docs/SCREEN_INVENTORY.md`'s Suit Leak Check row predates S31/S32 — **TODO** — [TIER 4: docs hygiene]
+### S33 [S] `docs/SCREEN_INVENTORY.md`'s Suit Leak Check row predates S31/S32 — **DONE 2026-09-02** — [TIER 4: docs hygiene]
 Noticed by **S32** while checking the docs for claims the code had just falsified (not fixed here — C1.1,
 and S32's declared outputs were code + register only). Line 83 still describes screen #5 as
 "per-suit DELTA PRESSURE + STATUS(**Nominal**)", which was true when the four status words were static
@@ -2035,3 +2036,22 @@ but C7.1 says the older doc gets updated when the plan/code moves past it. **DON
 #5 note read the way the page now behaves (STATUS = a computed verdict, ΔP live off real cabin pressure,
 TROUBLESHOOT = live-on-failure repair-and-rerun, both marked reconstructions), with no other row touched
 and no code change (so the build/preview gate is N/A per C1.3).
+
+- **DONE 2026-09-02 — owner directive (via the overseer), widened to cover both suit-check doc surfaces
+  S31/S32 left stale (S33's own scope was `SCREEN_INVENTORY.md` only).**
+  1. **`docs/SCREEN_INVENTORY.md`** — row #5's Function/Status cells and the "NEW findings" bullet
+     (the old "STATUS(Nominal)" / "TROUBLESHOOT/TIMER display-only until the touch pass" wording) both
+     rewritten to state: ΔP + STATUS are a MARKED §14.4(e) simulation (ΔP = suit loop − real cabin
+     pressure, four live readings; STATUS a computed verdict, never a hardcoded word), and TROUBLESHOOT
+     is S32's live-on-failure repair-and-rerun, not display-only. No other row touched; `BUILD_PLAN.md`
+     NOT edited (frozen per this task's scope).
+  2. **`REGISTER.md`'s S18 glass checklist** (S18 itself stays **HELD** — only its checklist content
+     changed, no gate opened, C1.12): (a) **added G10**, tagged S31/S32, covering the S32 TROUBLESHOOT
+     lit-vs-dim affordance at IVA distance, the repair→rerun touch-flow end-to-end on the collider
+     (CLOSE → TROUBLESHOOT → countdown restarts), and the S31 ΔP-magnitude legibility (~0.28 psi nominal,
+     ~0.01 psi bled-down); (b) **trimmed G9** — dropped its now-stale "does the dimmed TROUBLESHOOT read
+     as unavailable" sub-point (TROUBLESHOOT is no longer always dim; G10 now covers it), kept G9's
+     docking-cluster PRECISE-label half intact.
+  **Docs/register only, no code change → the preview/PNG gate is N/A (C1.3).** `python plugin/build.py
+  test` run as a no-regression check: **green, 11347 checks, 0 failed** (unchanged from S32 — no code
+  touched). Committed locally (C1.5); NOT pushed.
