@@ -1246,7 +1246,7 @@ namespace DragonScreen
 
             Dot(dl, bx + pitch * 0f, top + 10f, "LIFE SUPPORT", life, s.Valid);
             Dot(dl, bx + pitch * 1f, top + 10f, "POWER", Alarms.Low(s.Power01), s.Valid);
-            Dot(dl, bx + pitch * 2f, top + 10f, "PROPELLANT", Alarms.Low(s.Propellant01),
+            Dot(dl, bx + pitch * 2f, top + 10f, "PROPELLANT", Alarms.PropellantSeverity(s),
                 s.Valid);
             Dot(dl, bx + pitch * 3f, top + 10f, "THERMAL", thermal, s.Valid);
         }

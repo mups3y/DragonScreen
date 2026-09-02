@@ -1069,12 +1069,55 @@ committed (`git log -S"OrbitClosed"` → `98cf500`, ancestor of HEAD), confirmed
 PHASING without the gate. `python plugin/build.py test`: green, ALL SCREEN SUITES PASSED (MissionPhase suite
 6/6, including the U1 check). No code changed this session → no label changed → preview re-render N/A (C1.3).
 
-### S5 [S] Nuisance PROPELLANT CAUTION off the spent ascent stage — **TODO** — [TIER 1: pre-Part-B correctness bug]
-From the same audit (U2). The propellant gauge correctly shows what the LIT engines are drinking, so the
-near-spent S2 reads ~16% near SECO → `Alarms.Low(Propellant01)` (`Pages.cs:1082`) → PROPELLANT CAUTION → whole
-vehicle STATE CAUTION, during an entirely nominal ascent. Dragon's own return propellant is full at that point.
-Fix direction: suppress the low-prop alarm while the lit stage is an ascent stage, or alarm on the return
-budget. **DONE when:** a nominal late-ascent state does not raise CAUTION, with a test.
+### S5 [S] Nuisance PROPELLANT CAUTION off the spent ascent stage — **DONE 2026-09-02**
+- **Owner-directed task (not the `/next` default, C1.1).** From the same audit (U2). The propellant gauge
+  correctly shows what the LIT engines are drinking, so the near-spent S2 reads ~16% near SECO →
+  `Alarms.Low(Propellant01)` → PROPELLANT CAUTION → whole vehicle STATE CAUTION, during an entirely nominal
+  ascent. Dragon's own return propellant is full at that point.
+- **Chosen fix: alarm on Dragon's own return-propellant budget, not "suppress while an ascent stage is lit."**
+  `VesselData.VehicleSources` already computes `PageState.DragonProp01` — the Dragon-only tanks (parts that
+  are neither booster nor second stage) as a fraction by mass, the exact number the PROP/GNC pages already
+  show as "Prop Remaining" / "RCS FUEL". That field is a direct, already-tested answer to "does the crew have
+  enough propellant", independent of which stage happens to be firing — it does not need a new "is this an
+  ascent stage" classifier (which would only patch the ascent case and would need re-deriving for every other
+  phase a non-Dragon stage might be lit), and it can never itself go wrong when the wrong engine is lit,
+  because Dragon's tanks do not move when the booster's or second stage's do.
+- **Build (`plugin/src/pure/Alarms.cs`):** new `Alarms.PropellantSeverity(PageState s)` = `Low(s.DragonProp01)`
+  — ONE function (this file's own "ONE FUNCTION, BOTH CALLERS" rule), documented with the rationale above, so
+  every propellant-alarm consumer routes through it and can never disagree. `Alarms.Mask`'s FLIGHT bit and
+  `Alarms.VehicleSeverity` (→ `SystemSeverity` → `ScreenPainter`'s STATE CAUTION banner) now call it instead of
+  `Low(s.Propellant01)` directly. Three call sites outside `Alarms.cs` switched the same way: the FLIGHT page's
+  "PROPELLANT" status dot (`pure/Pages.cs`'s `Status`), the Vehicle page's PROP sub-tab colour
+  (`VehicleTabBar.Severities`), and the Propulsion subsystem banner (`VehicleSubsystemPage.LiveSeverity`).
+  **Left unchanged, on purpose:** `s.Propellant01` itself (still correctly "what the lit engines are
+  drinking" for the FLIGHT page's own dial, `Pages.cs:716`, captioned with the stage it reads) and
+  `StepInputs.Propellant01` (`StepList.cs`'s `PropellantLoad` pre-launch fuelling-complete check, a different
+  question about the currently-active stage's own load) — neither is an alarm read, so neither needed to move.
+- **Test (`plugin/test/PageTest.cs`, `AlarmRouting`):** `Healthy()` now also sets `DragonProp01 = 0.8` (it only
+  set `Propellant01` before, which would have silently defaulted `DragonProp01` to 0.0 — an accidental ALARM
+  — once the routing changed); the existing "low propellant lights FLIGHT/VEHICLE" regression now drives
+  `DragonProp01` (what actually lights it post-fix) instead of `Propellant01`. New **S5 regression**: a
+  `lateAscent` state with `Propellant01 = 0.16` (near-spent S2, matching the audit's ~16%) and
+  `DragonProp01 = 0.97` (Dragon's own tanks untouched) — asserts the raw stage reading alone WOULD have
+  alarmed (`Alarms.Low` on it is non-nominal, proving the test is not vacuous), then asserts
+  `PropellantSeverity`/`VehicleSeverity`/`SystemSeverity`/`Mask` are all nominal/zero for that same state —
+  covering the FLIGHT-tab bit, the vehicle-wide severity, and the STATE CAUTION banner in one fixture.
+- **Verified no other fixture regressed:** checked every `PageState`/`DragonProp01` construction site across
+  `plugin/test/` and `plugin/preview/` — `FigmaUINavTest.VehicleFixture` already sets `DragonProp01 = 0.85`
+  (unaffected), `PreviewMain`'s shared base fixture already sets a nominal `DragonProp01 ≈ 0.858` from the
+  same CONSUMABLES kilograms it prints (unaffected — `build.py preview` renders identically), and no other
+  severity/alarm assertion in the suite depends on `Propellant01` driving the alarm.
+- **Gate (C1.3):** pure logic fix, no layout/new page — no new preview PNG is meaningful here (the existing
+  base fixture's propellant values were already nominal under both old and new routing, so nothing visibly
+  moves); `python plugin/build.py test` **green, 15 suites, 0 failed** (Figma UI nav 654, page tests 695
+  including the 5 new S5 checks, no new warnings). §1.4 respected: no `PanelMap.cs` / label-doc edits.
+- **Left uncommitted, not mine to touch (C1.1):** the working tree already carried unrelated, unstaged edits
+  to `VesselData.cs` / `VehicleMechPage.cs` / `VehicleOverviewPage.cs` (S22's own payload — S22's REGISTER
+  entry reads DONE and is already committed, but that commit evidently did not include its code) and a
+  REGISTER.md addition logging **S31**, from work already in progress before this session started. Neither is
+  S5's concern; both are left exactly as found, staged out of this task's commit. **Flagged for the owner,
+  not decided here:** S22 shows DONE + committed in `REGISTER.md`/git log, but its code changes are sitting
+  uncommitted in the working tree — worth a look before that work is lost to a `git clean`/reset elsewhere.
 
 ### S6 [S] Both NET PWR dials read exactly 0 W — **DONE**
 - **Verified against `pure/CabinEnvironment.cs`: the model is correct, the bug was in the glue.**

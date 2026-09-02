@@ -613,14 +613,40 @@ public static class PageTest
         PageState ok = Healthy();
         Check("healthy raises no alarms", Alarms.Mask(ok) == 0, "mask " + Alarms.Mask(ok));
 
-        // Propellant in the warning band lights FLIGHT and VEHICLE, which are the two pages that
-        // show it. That is the routing working: the alarm appears where the value lives.
+        // Dragon's own return propellant in the warning band lights FLIGHT and VEHICLE, which are the
+        // two pages that show it. That is the routing working: the alarm appears where the value lives.
+        // (S5: the alarm reads DragonProp01, the crew's actual abort/RCS/deorbit budget - NOT
+        // Propellant01, which is whatever engine happens to be lit. See LateAscentPropellant below.)
         PageState low = Healthy();
-        low.Propellant01 = 0.05;
+        low.DragonProp01 = 0.05;
         int m = Alarms.Mask(low);
         Check("low propellant lights FLIGHT", (m & 1) != 0, "mask " + m);
         Check("low propellant lights VEHICLE", (m & 2) != 0, "mask " + m);
         Check("low propellant leaves NAV alone", (m & 4) == 0, "mask " + m);
+
+        // ---- S5: A NUISANCE CAUTION OFF THE SPENT ASCENT STAGE (SCREEN_INVENTORY audit U2) ----
+        // Propellant01 correctly tracks whatever engine is CURRENTLY LIT - so a near-spent second
+        // stage at SECO reads ~16% there, which is nominal (MECO/SECO is meant to happen) but was
+        // wrongly driving PROPELLANT CAUTION -> whole-vehicle STATE CAUTION. Dragon's own tanks
+        // (DragonProp01) are what the crew's abort/RCS/deorbit budget actually depends on, and those
+        // are full at this point in a nominal ascent - so a state built exactly like that must raise
+        // no caution anywhere, even though the raw stage reading alone would have.
+        PageState lateAscent = Healthy();
+        lateAscent.Propellant01 = 0.16;              // near-spent S2, SECO approaching - nominal
+        lateAscent.DragonProp01 = 0.97;               // Dragon's own tanks, untouched so far
+        Check("the raw stage reading alone would have alarmed",
+              Alarms.Low(lateAscent.Propellant01) != Severity.Nominal, "");
+        Check("late-ascent propellant reads nominal",
+              Alarms.PropellantSeverity(lateAscent) == Severity.Nominal,
+              "got " + Alarms.PropellantSeverity(lateAscent));
+        Check("late-ascent VEHICLE severity is nominal",
+              Alarms.VehicleSeverity(lateAscent) == Severity.Nominal,
+              "got " + Alarms.VehicleSeverity(lateAscent));
+        Check("late-ascent STATE severity is nominal",
+              Alarms.SystemSeverity(lateAscent) == Severity.Nominal,
+              "got " + Alarms.SystemSeverity(lateAscent));
+        Check("a nominal late-ascent state raises no CAUTION on the bar",
+              Alarms.Mask(lateAscent) == 0, "mask " + Alarms.Mask(lateAscent));
 
         // Alignment error alone must NOT light DOCKING - every approach has some, and a bar that
         // cries wolf on every approach is a bar nobody reads.
@@ -741,7 +767,7 @@ public static class PageTest
     {
         PageState s = new PageState();
         s.Valid = true;
-        s.Propellant01 = 0.8; s.Power01 = 0.8; s.GForce01 = 0.1;
+        s.Propellant01 = 0.8; s.DragonProp01 = 0.8; s.Power01 = 0.8; s.GForce01 = 0.1;
         CabinInputs ci = new CabinInputs();
         ci.Crew = 4; ci.CrewCapacity = 4; ci.HullTempC = 21.0;
         ci.MissionTime = 500.0; ci.Power01 = 0.8; ci.PowerFlow = 0.0; ci.Powered = true;

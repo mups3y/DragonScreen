@@ -34,7 +34,8 @@ namespace DragonScreen
 
         /// <summary>T5: the real Crew Dragon "subview nav bar ... turns red when that subview holds an
         /// alert" (REAL_DRAGON_SCREENS.md §2) computed per tab from the SAME live signals the rest of the
-        /// screens already use — Alarms.LifeSupport/Thermal on the cabin, Alarms.Low on propellant/power,
+        /// screens already use — Alarms.LifeSupport/Thermal on the cabin, Alarms.PropellantSeverity/Low
+        /// on Dragon's own propellant and power,
         /// Alarms.FdirSeverity on the fault spine (Avionics and GNC share the one real fault channel this
         /// build has; there is no second one to invent). Mech (index 3) has no live signal wired to it yet
         /// and reports Nominal — honest, not invented. Index matches Tabs: All·Crew·Prop·Mech·Power·
@@ -46,7 +47,7 @@ namespace DragonScreen
                                Severity.Nominal, Severity.Nominal, Severity.Nominal, Severity.Nominal };
 
             Severity crew = Alarms.LifeSupport(s.Cabin);
-            Severity prop = Alarms.Low(s.Propellant01);
+            Severity prop = Alarms.PropellantSeverity(s);
             Severity power = Alarms.Low(s.Power01);
             Severity fdir = Alarms.FdirSeverity(s);
             Severity thermal = Alarms.Thermal(s.Cabin);

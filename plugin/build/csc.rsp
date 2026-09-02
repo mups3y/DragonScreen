@@ -11,6 +11,7 @@
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\AbortOverlay.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Alarms.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\ArcGeometry.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\AscentPage.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\AttitudeHud.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\CabinEnvironment.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Card.cs
@@ -69,6 +70,7 @@ C:\Users\User\Desktop\DragonScreen\plugin\src/pure\TargetReticle.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Tunable.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Turntable.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\Typography.cs
+C:\Users\User\Desktop\DragonScreen\plugin\src/pure\VehicleDeepViewLinks.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\VehicleMechPage.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\VehicleOverviewPage.cs
 C:\Users\User\Desktop\DragonScreen\plugin\src/pure\VehicleParts.cs
@@ -88,5 +90,6 @@ C:\Users\User\Desktop\DragonScreen\plugin\test\PageTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\PanelTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\StageStatsTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\TestMain.cs
+C:\Users\User\Desktop\DragonScreen\plugin\test\TouchWiringTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\TurntableTest.cs
 C:\Users\User\Desktop\DragonScreen\plugin\test\VehiclePartsTest.cs

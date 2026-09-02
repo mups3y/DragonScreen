@@ -36,6 +36,19 @@ namespace DragonScreen
             return (a > b) ? a : b;
         }
 
+        // ---- PROPELLANT CAUTION: DRAGON'S OWN RETURN BUDGET, NOT WHICHEVER STAGE IS LIT (S5 fix) ----
+        // s.Propellant01 correctly shows what the LIT engines are drinking (SCREEN_INVENTORY audit U2) -
+        // that is right for the FLIGHT page's own dial, which is captioned with the stage it is reading.
+        // But a near-spent second stage at SECO is NOMINAL, not a crew emergency: Dragon's own tanks are
+        // what the crew's abort / RCS / deorbit budget actually depends on, and those are full at that
+        // point. So every ALARM/severity read of "is propellant low" uses s.DragonProp01 (the Dragon-only
+        // fraction VehicleSources already computes for the PROP/GNC pages) instead - one function, so the
+        // status dot, the vehicle tab strip and the subsystem page banner can never disagree.
+        public static Severity PropellantSeverity(PageState s)
+        {
+            return Low(s.DragonProp01);
+        }
+
         public static Rgba Colour(Severity s)
         {
             if (s == Severity.Alarm) return DragonPalette.Alarm;
@@ -78,7 +91,7 @@ namespace DragonScreen
 
             int mask = 0;
 
-            Severity flight = Worst(High(s.GForce01), Low(s.Propellant01));
+            Severity flight = Worst(High(s.GForce01), PropellantSeverity(s));
             flight = Worst(flight, Low(s.Power01));
             flight = Worst(flight, FdirSeverity(s));   // FDIR faults escalate the FLIGHT tab (real spine, not invented)
             if (flight >= Severity.Caution) mask |= 1 << 0;
@@ -109,7 +122,7 @@ namespace DragonScreen
         public static Severity VehicleSeverity(PageState s)
         {
             Severity v = Worst(LifeSupport(s.Cabin), Thermal(s.Cabin));
-            v = Worst(v, Low(s.Propellant01));
+            v = Worst(v, PropellantSeverity(s));
             v = Worst(v, Low(s.Power01));
             return v;
         }

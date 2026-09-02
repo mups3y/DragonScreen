@@ -81,7 +81,7 @@ namespace DragonScreen
             switch (sub)
             {
                 case Sub.Crew:       return Alarms.LifeSupport(s.Cabin);
-                case Sub.Propulsion: return Alarms.Low(s.Propellant01);
+                case Sub.Propulsion: return Alarms.PropellantSeverity(s);
                 case Sub.Power:      return Alarms.Low(s.Power01);
                 case Sub.Avionics:
                 case Sub.Gnc:        return Alarms.FdirSeverity(s);
