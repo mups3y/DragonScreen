@@ -51,6 +51,16 @@ public static class TurntableTest
         Check(what, Math.Abs(got - want) <= tol, "got " + got + " want " + want);
     }
 
+    /// <summary>How far apart two continuous turns are ON THE CIRCLE, going whichever way is
+    /// shorter. 35.9999 and 0.0 are next to each other, not a whole revolution apart, and any
+    /// comparison of two turn positions that does not know that will fail on the seam and only on
+    /// the seam - which is exactly the case worth testing.</summary>
+    static float Apart(float a, float b)
+    {
+        float d = Math.Abs(Turntable.Wrap(a) - Turntable.Wrap(b));
+        return Math.Min(d, Turntable.Count - d);
+    }
+
     public static int Run()
     {
         Console.WriteLine("DragonScreen capsule turntable (T11a + T11b) tests");
@@ -84,7 +94,16 @@ public static class TurntableTest
 
         // The gearing is expressed in frames per slot, and one slot must be one revolution - the
         // property that makes the vehicle come back where it started when the finger does.
-        Near("one slot = one revolution", Turntable.FramesPerSlot, Turntable.Count, 1e-4f);
+        // THE GEARING, AS GLASS SET IT (S17, 2026-09-02). T11a's guess was one whole sprite rect
+        // per revolution; the capsule said that is too slow, because a comfortable sweep only covers
+        // about three quarters of the rect. So the relation that must hold is not "a rect is a
+        // revolution" but "a USABLE SWEEP is a revolution" - and that is what is asserted, with the
+        // resulting 48 pinned beside it so a silent change to either number fails here.
+        Near("a usable sweep is one revolution",
+             Turntable.FramesPerSlot * Turntable.UsableSweepFraction, Turntable.Count, 1e-3f);
+        Near("the gearing is 48 frames per rect", Turntable.FramesPerSlot, 48f, 1e-3f);
+        Check("a whole rect is MORE than one revolution (it is not a sweep anybody makes)",
+              Turntable.FramesPerSlot > Turntable.Count, "got " + Turntable.FramesPerSlot);
 
         for (int i = 0; i < Turntable.Count; i++)
             Near("angle of frame " + i, Turntable.AngleOf(i), i * 10f, 1e-3f);
@@ -191,12 +210,19 @@ public static class TurntableTest
     {
         const float Slot = 800f;
 
-        // The gearing, on its own.
-        Near("full slot = one revolution", Turntable.DragFrames(Slot, Slot), Turntable.Count, 1e-3f);
-        Near("half slot = half a revolution", Turntable.DragFrames(Slot * 0.5f, Slot),
+        // The gearing, on its own. `Sweep` is the drag that means one full revolution - the one
+        // measured on glass, three quarters of the sprite's rect. Everything below that wants a
+        // known amount of TURN is expressed in it, so the numbers read as turns and not as pixels.
+        const float Sweep = Slot * Turntable.UsableSweepFraction;
+
+        Near("a usable sweep = one revolution", Turntable.DragFrames(Sweep, Slot),
+             Turntable.Count, 1e-3f);
+        Near("half a sweep = half a revolution", Turntable.DragFrames(Sweep * 0.5f, Slot),
              Turntable.Count * 0.5f, 1e-3f);
-        Near("left is negative", Turntable.DragFrames(-Slot * 0.25f, Slot),
+        Near("left is negative", Turntable.DragFrames(-Sweep * 0.25f, Slot),
              -Turntable.Count * 0.25f, 1e-3f);
+        // The whole rect is a revolution and a third - the direct statement of what glass changed.
+        Near("the whole rect overshoots by a third", Turntable.DragFrames(Slot, Slot), 48f, 1e-3f);
 
         // A slot with no width yields no rotation rather than an infinity. This is not theoretical:
         // a page built at h=0 (which the layout sweep does) hands exactly this in.
@@ -208,18 +234,18 @@ public static class TurntableTest
         // DIRECTION. Documented convention: right advances the frame index, so the near face follows
         // the finger. Whether that reads correctly against the real render is a glass question
         // (T11b); that it is what the code does is not.
-        TurntableState s = Turntable.Drag(Turntable.Front(), Slot * 0.25f, Slot);
+        TurntableState s = Turntable.Drag(Turntable.Front(), Sweep * 0.25f, Slot);
         Check("drag right advances", Turntable.FrameOf(s) == 9, "got " + Turntable.FrameOf(s));
 
         // WRAP BELOW ZERO - dragging left from the front must land on the far end, not on frame 0.
-        s = Turntable.Drag(Turntable.Front(), -Slot * 0.25f, Slot);
+        s = Turntable.Drag(Turntable.Front(), -Sweep * 0.25f, Slot);
         Check("drag left wraps under", Turntable.FrameOf(s) == 27, "got " + Turntable.FrameOf(s));
 
         // WRAP OVER THE TOP - a full sweep is a full revolution and lands back on the front.
-        s = Turntable.Drag(Turntable.Front(), Slot, Slot);
+        s = Turntable.Drag(Turntable.Front(), Sweep, Slot);
         Check("one full sweep returns to the front", Turntable.FrameOf(s) == 0,
               "got " + Turntable.FrameOf(s));
-        s = Turntable.Drag(Turntable.Front(), Slot * 3f, Slot);
+        s = Turntable.Drag(Turntable.Front(), Sweep * 3f, Slot);
         Check("three sweeps return to the front", Turntable.FrameOf(s) == 0,
               "got " + Turntable.FrameOf(s));
 
@@ -230,7 +256,7 @@ public static class TurntableTest
         {
             Check("quarter sweep " + q, Turntable.FrameOf(s) == want[q],
                   "got " + Turntable.FrameOf(s) + " want " + want[q]);
-            s = Turntable.Drag(s, Slot * 0.25f, Slot);
+            s = Turntable.Drag(s, Sweep * 0.25f, Slot);
         }
         Check("four quarter sweeps close the loop", Turntable.FrameOf(s) == 0,
               "got " + Turntable.FrameOf(s));
@@ -239,10 +265,17 @@ public static class TurntableTest
         // This is the whole reason the state is a float. Six hundred one-pixel drags must arrive at
         // exactly the same place one six-hundred-pixel drag does; an int frame would arrive at the
         // front, having eaten every one of them.
+        //
+        // COMPARED THE WAY A CIRCLE HAS TO BE. Not `many.Turn` against `one.Turn`: under the gearing
+        // glass settled on (S17), 600 px is EXACTLY one revolution, so the accumulated path lands a
+        // hair under 36 and the single drag lands exactly on it - the same point, 36 apart as raw
+        // numbers. The old gearing put this test comfortably mid-circle and hid that; the assertion
+        // was always meant to be "the same place", so it now says so, and it is the seam case - the
+        // most interesting one - that it is being asked about.
         TurntableState many = Turntable.Front();
         for (int i = 0; i < 600; i++) many = Turntable.Drag(many, 1f, Slot);
         TurntableState one = Turntable.Drag(Turntable.Front(), 600f, Slot);
-        Near("600 x 1px == 1 x 600px", many.Turn, one.Turn, 0.05f);
+        Near("600 x 1px == 1 x 600px", Apart(many.Turn, one.Turn), 0f, 0.05f);
         Check("600 x 1px picks the same frame",
               Turntable.FrameOf(many) == Turntable.FrameOf(one),
               "got " + Turntable.FrameOf(many) + " vs " + Turntable.FrameOf(one));
@@ -456,13 +489,14 @@ public static class TurntableTest
         // ---- THE GLUE SEQUENCE, PLAYED THROUGH ----
         // press at x, then absolute pointer positions as they arrive frame by frame. This is exactly
         // what ScreenPainter.TouchDrag does with each sample, so what passes here is what runs.
+        const float Sweep = Slot * Turntable.UsableSweepFraction;   // one revolution, as glass set it
         g = Turntable.Press(100f);
         s = Turntable.Front();
-        s = Turntable.Move(s, g, 100f + Slot * 0.25f, Slot, out g);
-        Check("a quarter-slot drag lands on frame 9", Turntable.FrameOf(s) == 9,
+        s = Turntable.Move(s, g, 100f + Sweep * 0.25f, Slot, out g);
+        Check("a quarter-turn drag lands on frame 9", Turntable.FrameOf(s) == 9,
               "got " + Turntable.FrameOf(s));
-        Near("travel is the distance moved", g.TravelPx, Slot * 0.25f, 1e-2f);
-        Near("the gesture tracks the pointer", g.LastX, 100f + Slot * 0.25f, 1e-2f);
+        Near("travel is the distance moved", g.TravelPx, Sweep * 0.25f, 1e-2f);
+        Near("the gesture tracks the pointer", g.LastX, 100f + Sweep * 0.25f, 1e-2f);
 
         // MANY SAMPLES == ONE SAMPLE. A drag arrives as one move per rendered frame, so the same
         // sweep delivered in 50 steps must land where it lands in one - the remainder-keeping claim
@@ -470,13 +504,13 @@ public static class TurntableTest
         TurntableTouch many = Turntable.Press(100f);
         TurntableState ms = Turntable.Front();
         for (int i = 1; i <= 50; i++)
-            ms = Turntable.Move(ms, many, 100f + Slot * 0.25f * i / 50f, Slot, out many);
+            ms = Turntable.Move(ms, many, 100f + Sweep * 0.25f * i / 50f, Slot, out many);
         Near("50 samples == 1 sample", ms.Turn, s.Turn, 0.05f);
-        Near("50 samples travelled the same distance", many.TravelPx, Slot * 0.25f, 1e-1f);
+        Near("50 samples travelled the same distance", many.TravelPx, Sweep * 0.25f, 1e-1f);
 
         // Dragging LEFT wraps under, through the gesture rather than through Drag directly.
         TurntableTouch lg = Turntable.Press(600f);
-        TurntableState ls = Turntable.Move(Turntable.Front(), lg, 600f - Slot * 0.25f, Slot, out lg);
+        TurntableState ls = Turntable.Move(Turntable.Front(), lg, 600f - Sweep * 0.25f, Slot, out lg);
         Check("dragging left wraps under", Turntable.FrameOf(ls) == 27,
               "got " + Turntable.FrameOf(ls));
 

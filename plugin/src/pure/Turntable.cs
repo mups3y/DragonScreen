@@ -215,11 +215,20 @@ namespace DragonScreen
         // physical sweep across the glass at every resolution, which is the only definition of "the
         // same drag" that survives all three.
         //
-        // ---- ONE FULL SLOT = ONE FULL REVOLUTION ----
-        // Chosen, not measured: there is no reference for it (the reference UI's capsule is a live
-        // three.js model with its own orbit control, not a sprite set). A whole revolution for a
-        // whole sweep of the view is the ratio a turntable widget conventionally uses, and it brings
-        // the vehicle back where it started when the finger comes back where it started.
+        // ---- THE GEARING WAS CHOSEN, THEN MEASURED ON GLASS (S17, 2026-09-02) ----
+        // T11a chose "one full sweep of the slot = one revolution" because there is no reference for
+        // it (the reference UI's capsule is a live three.js model with its own orbit control, not a
+        // sprite set) and it is the ratio a turntable widget conventionally uses. It was explicitly
+        // left for the capsule to confirm, and the capsule DID NOT confirm it: the owner's natural
+        // left-to-right drag across the vehicle turned it about THREE QUARTERS of a revolution and
+        // read as too slow.
+        //
+        // The reason is geometric, not a mistake in the maths. The gesture is measured against the
+        // SPRITE's rect (CoverPage.CapsuleRect - the same rect the vehicle is drawn in, which is what
+        // a crew member is actually grabbing), and the sprite is 1:2 in a much wider slot: it is only
+        // ~474 px across on a 2560 px panel. A comfortable sweep does not traverse all of it, so
+        // "one whole rect" was never a gesture anybody was going to make. What people DO make is
+        // about three quarters of it, and that is what a revolution is now geared to.
         //
         // ---- THE SIGN, AND THE ONE THING GLASS STILL DECIDES ----
         // Drag RIGHT advances the frame index, so the vehicle's near face follows the finger — the
@@ -230,12 +239,28 @@ namespace DragonScreen
         // halves of that claim are checked — render_turntable.py derives it in its header, and the
         // frames themselves were measured (the trunk's solar array enters at the left limb on frame
         // 3 and leaves at the right on frame 33, its centroid moving right the whole way, and no
-        // other frame order produces that). What glass still decides is only how the GESTURE feels —
-        // the gearing below — not which way the vehicle turns. If it ever needs reversing, the fix is
-        // the sign of this one constant, and nothing else in the file moves.
+        // other frame order produces that). **Glass CONFIRMED the sign (S17, 2026-09-02): dragging
+        // right reads as grabbing the vehicle and turning it, not as orbiting the camera.** So the
+        // sign stays as it is; if it ever did need reversing, the fix is the sign of the one constant
+        // below and nothing else in the file moves.
 
-        /// <summary>Frames advanced by dragging right across the full width of the slot.</summary>
-        public const float FramesPerSlot = Count;
+        /// <summary>
+        /// The share of the sprite's rect a comfortable left-to-right drag actually covers.
+        /// **MEASURED on glass, S17 2026-09-02**, not chosen: under the original one-rect-one-
+        /// revolution gearing the owner's natural sweep turned the vehicle three quarters of the way
+        /// round. The gearing below is set so that THAT sweep — the one people make — is one full
+        /// revolution.
+        ///
+        /// It is expressed as a fraction rather than folded into the number so the measurement stays
+        /// legible, and so the harness can ask for "a quarter turn" without doing the arithmetic:
+        /// a quarter turn is slotWidth × UsableSweepFraction × 0.25.
+        /// </summary>
+        public const float UsableSweepFraction = 0.75f;
+
+        /// <summary>Frames advanced by dragging right across the full width of the sprite's rect.
+        /// 48 — a rect-and-a-third per revolution, because only about three quarters of the rect is
+        /// a sweep anybody makes. See UsableSweepFraction.</summary>
+        public const float FramesPerSlot = Count / UsableSweepFraction;
 
         /// <summary>
         /// The frame delta a horizontal drag means. Split out from <see cref="Drag"/> so the gearing

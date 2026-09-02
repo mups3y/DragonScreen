@@ -857,7 +857,7 @@ frame allows. §11b itself is research and stays as written. Fold into the next 
 **S9** (the map artifact), which needs the same tally update. **DONE when:** no `docs/` status mark
 contradicts the tree.
 
-### S17 [owner-gated] Glass verification — T10 click + lamps, T11b drag feel — **DOING** (session open 2026-09-02; install done, awaiting the owner's on-glass answers)
+### S17 [owner-gated] Glass verification — T10 click + lamps, T11b drag feel — **DOING** (session open 2026-09-02; all six answered, 4 RESOLVED + 2 FIXED and reinstalled, awaiting the owner's re-check of those 2)
 Logged by T10 (C1.1/C1.7), 2026-09-02. This line is the ONE capsule session that settles the handful of
 criteria a PNG cannot reach. It covers exactly **two** tasks — **T10** (the click and the lamps) and
 **T11b** (the drag feel). Both are BUILT, SHIPPED and headless-green; what is left in each is a judgement
@@ -882,31 +882,55 @@ failed** — and wrote the DLL, the cfg, the art and `sounds/panel_click.wav` to
 the check that the install is complete and self-consistent rather than half-written. **KSP needs a FULL
 RESTART** to pick up the DLL. `plugin/build/csc.rsp` churn reverted (S11).
 
-**THE SIX CHECKS — all PENDING the owner's answers.** Each names the fix if it fails, because the size of
-the fix is what decides whether it is settled in this session or becomes a follow-up line (C1.1):
+**THE SIX CHECKS — ALL SIX ANSWERED ON GLASS by the owner, 2026-09-02.** Four confirmed as built; two
+were wrong and were each one constant, so both were fixed, rebuilt and reinstalled in the same session,
+per the task's own rule that only a fix bigger than a constant becomes a follow-up line.
 
-| # | Check | If wrong |
-|---|---|---|
-| (a) | **T11b direction.** Dragging RIGHT — does the near face follow the finger (grab-and-turn), or does it read as orbiting the camera the other way? | ONE constant: `Turntable.FramesPerSlot` (`pure/Turntable.cs:238`) `= Count` → `= -Count`. |
-| (b) | **T11b gearing.** One sweep across the vehicle = one full revolution. Too fast, too slow, or right? | ONE constant: the magnitude of the same `FramesPerSlot`. |
-| (c) | **T11b reset threshold.** Does a slow, small, deliberate turn ever snap back to the front? (It must not — only a press that travelled under half a frame should.) | ONE constant: `Turntable.TapSlopFrames` (`pure/Turntable.cs:293`), 0.5 → lower. |
-| (d) | **T10 click level.** Audible at IVA distance over cabin ambience, on inert presses (SWAP 2, FIRE PYRD) where it is the ONLY feedback — right level, or startling / inaudible? | ONE constant: `PanelAudio.Volume` (0.55f). |
-| (e) | **T10 spatialisation.** Does the deliberate `spatialBlend = 0` read as flat / heads-up rather than as coming from the button? | **NOT a constant** — 3D needs a source per button position, a rolloff and measured numbers. → NEEDS-WORK follow-up line, not this session. |
-| (f) | **T10 lamp brightness.** Do the dashes light clearly BRIGHT through the installed shader (`PanelButtons.LitColour`, an over-1 2.2), or merely the normal Tundra dash colour? | Depends on the log line below: if the picked property is emissive/HDR, ONE constant (`LitColour`). If it fell back to `_Color`/`_TintColor`, over-1 CLAMPS and the fix is a shader/property change → NEEDS-WORK follow-up. |
+| # | Check | The owner's answer | Outcome |
+|---|---|---|---|
+| (a) | **T11b direction** — does dragging right read as grabbing the vehicle? | *"yes perfect"* | ✅ **RESOLVED, no change.** The sign was right. `render_turntable.py` derived it, the frames were measured, and the capsule agrees — all three now say the same thing. |
+| (b) | **T11b gearing** — is one sweep = one revolution right? | *"too slow, does 3/4 of revolution dragging from left to right"* | 🔧 **FIXED — awaiting re-check.** See below. |
+| (c) | **T11b reset threshold** — does a slow deliberate turn ever snap to the front? | *"stays; tap snaps to front"* | ✅ **RESOLVED, no change.** `TapSlopFrames` = 0.5 separates the two gestures correctly: a deliberate turn holds, a tap resets. |
+| (d) | **T10 click level** — audible over cabin ambience? | *"too quiet"* | 🔧 **FIXED — awaiting re-check.** See below. |
+| (e) | **T10 spatialisation** — does 2D read as flat? | *"sounds good, like it's coming from the button"* | ✅ **RESOLVED, no change — and this CLOSES the 3D branch.** S17 had said "if it reads as flat, move it to 3D with measured numbers". It does not read as flat, so the 3D version is **not built**: it would cost a source per button, a rolloff and a set of measurements to replace something that already reads correctly. `PanelAudio`'s header records that the fail-safe choice turned out to be the right-sounding one. |
+| (f) | **T10 lamp brightness** — do the dashes light BRIGHT through the installed shader? | *"correct"* | ✅ **RESOLVED, no change.** The over-1 `LitColour` (2.2) does reach an HDR-capable colour property in the installed material — the case that would have made this a NEEDS-WORK (an over-1 clamped on `_Color`) did not happen. §14.4(a)'s bright/no-red language is now confirmed end to end. |
 
-**Where to make each check.** T11b: any screen → the Cover hub → press **NEXT VIEW** until the CAMERA
-caption reads **"Auto - Capsule IO"** (the cycle is Earth → Map → Capsule), then drag on the vehicle
-itself; a **tap** on it (press and release without travelling) must snap it to the authored front — flag
-and NASA meatball square-on. T10: the lower analog panel — **SWAP 2** (`TE_CD2_PROP_BUTTON_4`, BUT8) and
-**FIRE PYRD** (`TE_CD2_PROP_BUTTON_3`, BUT10) are inert/unbacked, so the click is all they give;
-**DEORBIT NOW** (emergency plate, BUT3) arms and its dash must light and STAY bright until **EXECUTE**
-(BUT5) puts it out; **POWER 1** (`TE_CD2_PROP_BUTTON_2`, BUT1) is lit while its bus is powered.
+**(b) THE GEARING — the one real finding of the session, and it was a geometry mistake, not a maths one.**
+T11a chose "one full sweep of the sprite's rect = one revolution", explicitly flagged as *chosen, not
+measured*, and left it for the capsule. The capsule disagreed: a natural left-to-right drag turned the
+vehicle about **three quarters** of the way round. The reason is that the gesture is measured against
+`CoverPage.CapsuleRect` — the rect the sprite is drawn in, which is right, because it is what a crew member
+is grabbing — but that rect is **1:2 in a much wider slot: only ~474 px across on a 2560 px panel**. A
+comfortable sweep never traverses all of it, so "one whole rect" was a gesture nobody was going to make.
+**Fix — one constant, as predicted:** a new `Turntable.UsableSweepFraction = 0.75f` records the measurement,
+and `FramesPerSlot` is now `Count / UsableSweepFraction` = **48** (was 36). The measured sweep is now
+exactly one revolution. The fraction is kept as a named constant rather than folded into 48 so the glass
+measurement stays legible, and so the harness can ask for "a quarter turn" without arithmetic.
 
-**Three KSP.log lines turn (d) and (f) from opinion into evidence** — worth capturing from the session:
-`[DragonScreen] panel click loaded (0.060s)` (or the missing-sound warning), `[DragonScreen] panel button
-material '…' shader '…' colour properties present: …` (this is what decides (f)'s fix size), and
-`[DragonScreen] touch armed on screen N collider size=…`.
+**(d) THE CLICK LEVEL.** `PanelAudio.Volume` **0.55 → 0.85**, still under 1 (a switch under your hands
+should not be an event) and still a multiplier on `SHIP_VOLUME`, so a crew member who has turned the ship
+down still gets a quieter panel. The **sample is unchanged** — the level is applied at `PlayOneShot`, not
+baked in — so only the DLL moved.
 
-**DONE when:** all six are answered on the glass — each either RESOLVED (confirmed, or fixed by its one
-constant, reinstalled and re-confirmed) or NEEDS-WORK with the specifics and a follow-up line. S10 is not
-part of that and does not hold this line open.
+**One test-design fix the new gearing exposed, declared.** `600 x 1px == 1 x 600px` compared two raw
+`Turn` values. Under the new gearing 600 px is *exactly* one revolution, so the accumulated path lands a
+hair under 36 while the single drag lands exactly on it — the same point on the circle, 36 apart as raw
+numbers. The old gearing put this test comfortably mid-circle and hid that. The assertion always meant "the
+same place", so it now says so, via a seam-aware `Apart()` helper — and it is now asking about the seam,
+which is the interesting case. **Not a code bug: the shipped `Wrap` was correct throughout.**
+
+**Verification of the fixes (C1.3).** `python plugin/build.py test` **green — every suite 0 failed**, the
+turntable suite 5058 → **5061 checks** (the gearing assertions turned over from "a rect is a revolution" to
+"a usable sweep is a revolution", with the resulting 48 pinned beside it so a silent change to either
+number fails). **No new compiler warnings** (11 before, 11 after). Previews re-rendered: every frame lands
+on **exactly** the index it did before — `ui_cover_turntable_0..3` on 0/9/18/27 closing the loop,
+`ui_cover_turntable_drag_0..3` on 0/8/16/24, `ui_cover_turntable_reset` on the authored front — because
+every harness drag distance is now expressed in the measured sweep. The renders are therefore identical to
+the ones already inspected; what changed is the **travel**, which fell from 104 px to **78 px** for the same
+rotation. That number is the gearing change made visible. **Reinstalled** with KSP and CKAN confirmed
+closed; a second install run wrote **nothing**, which is the self-consistency check.
+
+**DONE when:** the owner re-checks (b) and (d) on glass after a full KSP restart — the drag geared so a
+natural sweep is one revolution, and the click at the higher level — and either confirms them or reports
+which way they are still off. (a), (c), (e) and (f) are settled and are not revisited. S10 is not part of
+this line and does not hold it open.

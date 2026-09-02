@@ -26,8 +26,15 @@
  *
  * spatialBlend = 0 cannot fail that way. It is the version that is audible or obviously broken,
  * never silently wrong, which is the right trade for something whose first hearing is a whole
- * capsule session away (REGISTER.md S17). If it reads as flat on the glass, that session moves it
- * to 3D with real numbers instead of guessed ones.
+ * capsule session away (REGISTER.md S17).
+ *
+ * ---- AND GLASS SETTLED IT: IT STAYS 2D (S17, 2026-09-02) ----
+ * The open question was whether 2D would read as flat. Heard in the capsule, it does not - the click
+ * reads as coming from the button that was pushed. So the 3D version is NOT built: it would cost a
+ * source per button position, a rolloff curve and a set of measured numbers, to replace something
+ * that already reads correctly. The fail-safe choice turned out to be the right-sounding one too,
+ * which is the good outcome and not a lucky one - at this scale the cabin is small enough that
+ * pan and falloff have almost nothing to do.
  *
  * ---- A MISSING FILE IS A STATE, NOT A CRASH ----
  * Same rule as ImageStore: log once, remember the failure, and let the panel go on working
@@ -44,8 +51,13 @@ namespace DragonScreen
         /// <summary>GameData-relative, no extension - that is how GameDatabase keys audio.</summary>
         private const string ClipPath = "DragonScreen/sounds/panel_click";
 
-        /// <summary>Under 1 because a switch under your hands should not be an event.</summary>
-        private const float Volume = 0.55f;
+        /// <summary>
+        /// Still under 1 because a switch under your hands should not be an event — but 0.55 was too
+        /// quiet against cabin ambience, **heard on glass (S17, 2026-09-02)**, so it went up. The
+        /// number is the multiplier on SHIP_VOLUME below, not an absolute: a crew member who has
+        /// turned the ship down still gets a quieter panel.
+        /// </summary>
+        private const float Volume = 0.85f;
 
         private static AudioClip clip;
         private static AudioSource source;

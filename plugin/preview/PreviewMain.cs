@@ -508,7 +508,7 @@ public static class PreviewMain
                     Console.WriteLine("  " + path + "   frame " + Turntable.FrameOf(t)
                                       + "  az " + (int)Turntable.AngleOf(t)
                                       + "  " + Turntable.KeyOf(t));
-                    t = Turntable.Drag(t, sw * 0.25f, sw);
+                    t = Turntable.Drag(t, sw * Turntable.UsableSweepFraction * 0.25f, sw);
                 }
                 Console.WriteLine("  turntable closed the loop at frame " + Turntable.FrameOf(t)
                                   + " (want " + Turntable.FrontFrame + ")");
@@ -544,7 +544,8 @@ public static class PreviewMain
                     Console.WriteLine("  " + path + "   frame " + Turntable.FrameOf(t)
                                       + "  az " + (int)Turntable.AngleOf(t)
                                       + "  travelled " + (int)g.TravelPx + " px");
-                    t = Turntable.Move(t, g, x0 + sw * 0.22f * (i + 1), sw, out g);
+                    t = Turntable.Move(t, g, x0 + sw * Turntable.UsableSweepFraction * 0.22f * (i + 1),
+                                       sw, out g);
                 }
 
                 // Letting go of a real drag leaves the vehicle where the finger left it.
