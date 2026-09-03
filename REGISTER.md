@@ -1820,7 +1820,11 @@ already are).
 - **DONE when:** INDEX complete, both docs banner-marked, the two named errors fixed, `build.py test` green
   (docs-only, no preview gate).
 
-### M1 [S] Mod-first evidence sweep — before B1 — **TODO**
+### M1 [S] Mod-first evidence sweep — before B1 — **DONE** *(2026-09-04: `docs/reference/INSTALLED_MODS.md`
+  created from in-repo owner/overseer evidence + public research — 17-mod list, all five named candidates
+  (life support/suit pressure, engine FDIR, aero, heat, comms) searched and recorded; both pre-resolved items
+  restated; one found-but-not-installed candidate (Kerbalism) written up as an Open Question, not installed.
+  Docs-only — no code changed, build/preview gate N/A per the skill's docs-only carve-out.)*
 - **Read:** C1.15 (`CLAUDE.md`), §14.4(e)/(f).
 - **Build:** Produce `docs/reference/INSTALLED_MODS.md` from the current installed-mod list (supplied as
   overseer evidence — C7 keeps GameData itself off-limits; work from the supplied list plus public
