@@ -141,6 +141,12 @@ session and are auto-loaded with this file. Section refs (§n, §Bn, C1–C7.1, 
     installed sources (RealFuels propellant-settling state, already read by reflection in the recovered
     `Ullage.cs`; TestFlight's failure/reliability model) sitting unused while a screens-only pass had begun
     inventing simulations for adjacent quantities instead of checking first.
+16. **RESEARCH IS NEVER DELETED.** Code may be deleted, rewritten or superseded at any time — it can be
+    rebuilt from research. Research cannot: it has to be re-earned, and re-earning it costs more than
+    keeping it. No task may delete a file under `docs/` as part of removing code. If a document is wrong,
+    mark it `SUPERSEDED` per C7.1; if it is obsolete, say so in it. Deleting it is not an option a build
+    chat has. (Added 2026-09-04 after `8b81816` removed ~60 research documents alongside the autopilot,
+    and six later tasks — M1, W8, S60, W23, LZ1, W11 — were built without research that already existed.)
 
 ## Off-limits as build sources (C7)
 

@@ -6231,6 +6231,45 @@ the missions whose target is actually placed.
 
 ---
 
+### W26 [O] Recover the deleted RESEARCH — §B12.8's waves recovered code and forgot the documents — **DOING** — [TIER 1: 53 research documents missing since 2026-09-01; six tasks were built without them]
+Owner-directed, 2026-09-04. **The gap.** `8b81816` removed the flight software **and ~60 research
+documents**. R1 (`docs/AUTOPILOT_RECOVERY_AUDIT.md` §5.4) catalogued them on 2026-09-03 and verdicted almost
+all **RECOVER-REFERENCE**; §B12.8's Waves A–D and W11's Wave E covered **only `.cs` files**, and no task was
+ever created for a document. Verified damage: **M1** rebuilt the mod register without `MODS_HARVEST_2.md`
+and **missed ThrottleControlledAvionics**; **W24** was about to specify the steering law without
+`ATTITUDE_CONTROL_RESEARCH.md`; **W8/S60** re-extracted the F9I method with `F9I_PORT_MAP.md` deleted;
+**W23** settled the unfocused-command question empirically with `BOOSTER_DUAL_FLIGHT_RESEARCH.md` and
+`TIME_WARP_RESEARCH.md` deleted; **S3** asks for `FLIGHT_SYSTEMS.md`, which was in git all along.
+**Scope.** A RECOVERY task, not a research task — everything comes from `8b81816^`. **R1 §5.4's verdicts
+decide what comes back, not this chat's judgement.** RECOVER-REFERENCE → recover. SUPERSEDED → recover WITH
+a banner. OBSOLETE → do not. Pure chat scaffolding (`RESUME_PROMPT`, `SESSION_HANDOFF`, `AI_REVIEW_HANDOFF`,
+`CHATGPT_ASSESSMENT`, `GROK_ASSESSMENT_PROMPT`) → skipped regardless of verdict.
+⛔ **Every recovered file gets a header banner** — RECOVERED / R1 verdict / **REFERENCE ONLY, `BUILD_PLAN.md`
+WINS (C7.1)** / written-before date / any specific contradiction visible. ⛔ **Recovering a document is not
+obeying it** — W26 acted on the content of none of them.
+**Reconciliation against R1 §5.4 (row by row, done first).** 62 markdown files were deleted at `8b81816`
+(60 in `docs/`, plus `flights/README.md` and `tuning/TUNING_DB.md`). **4 were already recovered** by earlier
+tasks — `VEHICLE_AUDIT.md` + `CRAFT_DUMP_VEHICLE_MAP.md` (W0), `F9I_BOOSTER_TARGETS.md` +
+`flights/README.md` (H1) — and are byte-identical or already bannered; **5 are the skipped scaffolding**.
+That leaves **53 files / 732 KB** to recover. ⚠ **The brief's "58 documents / ~830 KB" is the pre-check
+figure; the verified number is 53 / 732 KB** — the difference is the 4 already back and the fact that the
+830 KB counted the skipped set.
+**Also delivered:** new rule **C1.16 — RESEARCH IS NEVER DELETED** — written verbatim-identical into
+`CLAUDE.md` and `docs/BUILD_PLAN.md` §C1 (G0's sync requirement); `docs/INDEX.md` §7 rewritten from
+"deleted, do not resurrect" to the recovered catalogue, one entry per file.
+**Batches** (committed separately, C1.7): **B1** the 11 that unblock queued work · **B2** the RO/RSS
+environment, Crew-2/real-mission and phase sets · **B3** the remainder.
+**DONE when:** every R1-recoverable document is back with its banner, `docs/INDEX.md` lists every one,
+C1.16 is in both rule lists, `python plugin/build.py test` is unmoved (markdown only — **no preview PNG
+applies, docs-only task, C1.3**), and `git status` shows only the declared outputs.
+
+**PROGRESS — BATCH 1 committed 2026-09-04 (11 files):** `ATTITUDE_CONTROL_RESEARCH` · `MODS_HARVEST_2` ·
+`MECHJEB_CAPABILITY_CHECKLIST` · `MECHJEB_MASTER_MAP` · `MECHJEBLIB_PORT` · `MECHJEB_WIKI_RESEARCH` ·
+`FLIGHT_SYSTEMS` · `F9I_PORT_MAP` · `BOOSTER_DUAL_FLIGHT_RESEARCH` · `TIME_WARP_RESEARCH` ·
+`RENDEZVOUS_REBUILD_PLAN`. **Remaining: 42** (batches 2 + 3).
+
+---
+
 ## Open questions for the owner — G6 (C1.14)
 
 *Posed per C1.13 as a self-contained overseer prompt. **Situation:** the owner's decision of 2026-09-04 (via

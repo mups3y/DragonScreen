@@ -165,9 +165,13 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
   current C# source. ⚠ Its §2.2 (the boostback-is-RTLS-only phase table) and §2.4 (the "no craft files"
   claim + the by-position engine procedure) carry a **PARTLY SUPERSEDED** banner, corrected 2026-09-04 by
   **H1** — see `BUILD_PLAN.md` §B12.7/§B16.2/§B16.4/§B16.7. On any conflict THE PLAN WINS (C7.1).
-- **`FLIGHT_SYSTEMS.md` — DOES NOT EXIST YET.** `plugin/src/pure/MissionPhase.cs` and
-  `plugin/build/audit_comments.py` both point at it. Until **T15** creates it, the §8 flight facts live in
-  `BUILD_PLAN.md`. Do not treat those two comments as a live link.
+- **[FLIGHT_SYSTEMS.md](FLIGHT_SYSTEMS.md)** [HIST — recovered] — recovered by **W26** (2026-09-04) from
+  `8b81816^`; see §7. The owner's 2026-08-05 direction to build the flight systems from **MechJeb +
+  Trajectories** rather than reinvent them, with the licence position (both GPL-3.0) and the scope question.
+  It is the direction §B12.1 is the current form of — **not** a flight-facts reference: the §8 flight facts
+  live in `BUILD_PLAN.md`. ⚠ `plugin/build/audit_comments.py:232` now points at a file that exists again,
+  but `plugin/src/pure/MissionPhase.cs:54` cites this file for the drogue/main chute altitudes (5486 / 1830),
+  **which it does not contain** — that citation is still wrong and is what remains of register line **S3**.
 - **[VEHICLE_AUDIT.md](VEHICLE_AUDIT.md)** [REF] — recovered by **W0** (2026-09-03) from before the
   2026-09-01 pivot. Every Part-B actuation decision binds to named hardware from the craft dump; this file
   carries the dump-taking PROCEDURE (§A — pad, fully fuelled, all stages present) and a per-part ledger
@@ -255,25 +259,85 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
   the navball preview.
 - ⚠ `plugin/build/assess_flight.py` reads the flight corpus of the deleted autopilot (register line S8).
 
-## 7. Deleted in the 2026-09-01 screens-only pivot — recoverable from git history only
+## 7. The 2026-09-01 deletion — the research, RECOVERED (W26, 2026-09-04)
 
-The autopilot workstream took 56 `docs/` files with it. **Do not resurrect them**: Part B supersedes the ones
-that still matter, and the rest describe code that no longer exists. Named here so a grep for them ends at this
-line instead of a hunt: `MASTER_BUILD_SPEC` · `SOURCE_OF_TRUTH` · `COMPLETION_MATRIX` · `DEPENDENCY_MATRIX` ·
-`FLIGHT_VERIFICATION` · `VALIDATION_AND_ROBUSTNESS` · `PHASE_ACCEPTANCE_CRITERIA` · `SEQUENCE_MAP` ·
-`TRUE_AUTOPILOT_ARCHITECTURE` · `FLIGHT_SOFTWARE_PLAN` · `FLIGHT_SYSTEMS` ·
-`OPERATING_PROCEDURE` · `AUTOPILOT_HARVEST` · `MODS_HARVEST_2` · `AUTOPILOT_MINING_3` ·
-`MECHJEB_CAPABILITY_INTEGRATION` · `MECHJEB_MASTER_MAP` · `MECHJEB_WIKI_RESEARCH` · `MECHJEBLIB_PORT` ·
-`ATTITUDE_CONTROL_RESEARCH` · `LAUNCH_AND_ASCENT_RESEARCH` · `ASCENT_GUIDANCE_UPFG` ·
-`ASCENT_GUIDANCE_DECISION` · `PHASE_2`…`PHASE_6_*_RESEARCH` · `BOOSTER_*` · `RENDEZVOUS_*` ·
-`ABORT_PROCEDURES_RESEARCH` · `CREW_DRAGON_GNC_RESEARCH` · `CREW2_*` · `CREW_MISSION_TELEMETRY` ·
-`REAL_CREW_DRAGON_MISSION` · `MISSION_PROFILES_FREEFLYER` · `INSTALLED_MODS_RESEARCH` · `MOD_*_RESEARCH` ·
-`RO_*` · `F9I_*` · the assessment/handoff set · `data/crew_missions.json` +
-`data/dm1_ascent_*.json` · the `dashboard/` folder.
-`VEHICLE_AUDIT` and `CRAFT_DUMP_VEHICLE_MAP` were recovered by **W0** (2026-09-03) — see §3, they are no
-longer in this deleted set. `F9I_BOOSTER_TARGETS` and `docs/flights/README.md` were recovered by **H1**
-(2026-09-04) — see §3, they too are no longer in this deleted set (the rest of `docs/flights/` — the CSV
-corpus itself — remains unsalvaged).
+Commit `8b81816` ("Delete the autopilot entirely") removed the flight software **and ~60 research
+documents**. `AUTOPILOT_RECOVERY_AUDIT.md` (R1) §5.4 catalogued them and verdicted almost all of them
+**RECOVER-REFERENCE**; §B12.8's Waves A–E then recovered **only `.cs` files**, so the documents stayed
+deleted and six later tasks (M1, W8, S60, W23, LZ1, W11) were built without research that already existed.
+**W26 recovered them.** Rule **C1.16** now forbids a task from deleting anything under `docs/`.
+
+> ⛔ **Every recovered file carries a header banner: REFERENCE ONLY — `BUILD_PLAN.md` WINS on any conflict
+> (C7.1).** They were written before the current plan existed. Read them for method, evidence and reasoning
+> — **never as a current instruction.** Each banner states the file's R1 verdict, the date it was written
+> before, and any specific contradiction with today's plan that W26 could see. W26 recovered them; it did
+> **not** reconcile them, and acted on none of them.
+
+**MechJeb + the embed (§B12.1 / §B12.5):**
+
+- **[MECHJEB_MASTER_MAP.md](MECHJEB_MASTER_MAP.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE — HIGHEST
+  for §B12.1*. MechJeb's architecture end-to-end, read from the source: the module system, the attitude
+  stack, the ascent/rendezvous/docking autopilots and how a KSP autopilot is actually assembled.
+- **[MECHJEB_CAPABILITY_CHECKLIST.md](MECHJEB_CAPABILITY_CHECKLIST.md)** [HIST — recovered] — R1:
+  *RECOVER-REFERENCE — HIGH (§B12.5 scope)*. Every MechJeb capability as a tick-list for the owner.
+- **[MECHJEB_WIKI_RESEARCH.md](MECHJEB_WIKI_RESEARCH.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE —
+  HIGH*. All 15 MechJeb wiki pages, including **Attitude Adjustment (the PIDs)** and the FlightRecorder note.
+- **[MECHJEBLIB_PORT.md](MECHJEBLIB_PORT.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE — HIGHEST for
+  §B12.1*. The MechJebLib port record. ⚠ It documents the **gen-1 vendored `pure/mechjeblib/` tree** (R1
+  §6.2) — a PRIOR attempt at what §B12.1 plans, not the current one.
+- **[MODS_HARVEST_2.md](MODS_HARVEST_2.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE*. The
+  **ThrottleControlledAvionics** / KerbalEngineer / ModularFlightIntegrator harvest — the TCA source behind
+  B3. ⚠ **This is the document M1 was built without**, and why TCA was missed from the mod register.
+- **[FLIGHT_SYSTEMS.md](FLIGHT_SYSTEMS.md)** [HIST — recovered] — see §3. The 2026-08-05 owner direction:
+  build from MechJeb + Trajectories, don't reinvent. Licences (both GPL-3.0) and the scope question.
+
+**Booster recovery (§B16):**
+
+- **[BOOSTER_DUAL_FLIGHT_RESEARCH.md](BOOSTER_DUAL_FLIGHT_RESEARCH.md)** [HIST — recovered] — R1:
+  *RECOVER-REFERENCE — HIGHEST for §B16*. The **two-vessel problem researched**: fly the booster to a
+  landing without sacrificing the capsule. ⚠ **W23 established this empirically while this file sat
+  deleted.** Cross-reference `BOOSTER_RECOVERY_ARCHITECTURE.md` and the settled §B16.7 focus protocol.
+- **[F9I_PORT_MAP.md](F9I_PORT_MAP.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE — ⛔ method only*. The
+  F9I → C# port map, built after three flights were lost. ⚠ **W8/S60 re-extracted the F9I method while this
+  file sat deleted.** ⛔ **STOCK regime — no number in it transfers** (R1 §0.1).
+
+**Rendezvous:**
+
+- **[RENDEZVOUS_REBUILD_PLAN.md](RENDEZVOUS_REBUILD_PLAN.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE*.
+  ⛔ Its **own** banner: *"UNDER VERIFICATION — NOT AN INSTRUCTION, NOT APPROVED"* — a 2026-08-31 review
+  found real defects in it. Read it as the record of a review, never as a plan.
+
+**Attitude control — the component that already failed:**
+
+- **[ATTITUDE_CONTROL_RESEARCH.md](ATTITUDE_CONTROL_RESEARCH.md)** [HIST — recovered] — R1:
+  *RECOVER-REFERENCE — HIGH*. The frame-conversion source behind R1 §3.2, and **the record of the reasoning
+  that failed** at max-Q — read it together with `AUTOPILOT_RECOVERY_AUDIT.md` §7. ⚠ **W24 (the steering
+  law) was about to be specified without it.**
+
+**Operations:**
+
+- **[TIME_WARP_RESEARCH.md](TIME_WARP_RESEARCH.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE — T15–T22*.
+  *"Never miss a manoeuvre"* (Chris, 2026-08-29) — the warp discipline the conductor needs. ⚠ **W23 worked
+  the unfocused-command question while this file sat deleted.**
+
+### Deliberately NOT recovered
+
+**Chat scaffolding, not research** — skipped by W26 regardless of verdict: `RESUME_PROMPT.md` (R1:
+SUPERSEDED, by `CLAUDE.md` + `/next`) · `SESSION_HANDOFF.md` (R1: OBSOLETE) · `AI_REVIEW_HANDOFF.md` (R1:
+OBSOLETE, self-marked *"HISTORICAL REVIEW MATERIAL"*) · `CHATGPT_ASSESSMENT.md` (R1: RECOVER-REFERENCE — a
+verbatim external assessment; `ASSESSMENT_VERIFICATION.md`, which checks it, **is** recovered) ·
+`GROK_ASSESSMENT_PROMPT.md` (R1: OBSOLETE — *"a prompt, not a finding"*). `plugin/build/csc.rsp` is R1
+OBSOLETE — generated and gitignored; never restore the committed copy.
+
+**Already recovered by earlier tasks, no W26 action:** `VEHICLE_AUDIT.md` + `CRAFT_DUMP_VEHICLE_MAP.md`
+(**W0**, 2026-09-03) · `F9I_BOOSTER_TARGETS.md` + `flights/README.md` (**H1**, 2026-09-04) — all four in §3.
+
+**Still deleted — DATA, not documents:** the RSS-RO flight corpus (`docs/flights/*.csv`, the two `KSPlog`
+excerpts, the three geometry dumps, `DS-ASC-008_screen{1,2,3}.png`) and `docs/tuning/TUNING_DB.json` +
+`exclude.txt`. R1 verdicts these **RECOVER-REFERENCE — HIGHEST** and *"irreplaceable"*, but they are ~21 MB
+of recordings, not research prose, and R1's own **Q2** (re-fly vs trust the distillates) is an open owner
+call. `TUNING_DB.md` — the human-readable distillate — **is** recovered. W26 raised this as its Q1.
 
 **Where their content went:** MechJeb semantics + tuning → `BUILD_PLAN.md` §B7–§B11 · abort → §B13 · crew
-gates → §B14 · FDIR → §B15 · real mission numbers → §8 · the tuned cfg → `reference/`.
+gates → §B14 · FDIR → §B15 · real mission numbers → §8 · the tuned cfg → `reference/`. Those summaries stay
+authoritative; the recovered originals are the evidence beneath them, not a replacement for them.
