@@ -2820,3 +2820,87 @@ with `if (built) return;`) and `Tuning.Poll()` in `ScreenPainter.Update()`
 - **What is still open:** the two in-sim halves of the DONE-when — does `tuning.reference.cfg` actually
   appear in `GameData/DragonScreen/PluginData/`, and does an override move a `[Tunable]` live within ~1 s.
   Both are answered by **S18's visit**, at no extra cost, because G11(c) is about to use the mechanism.
+
+### S45 [O] KER data research — every live value Kerbal Engineer exposes, and how to wire each — **DONE 2026-09-03** — [TIER 1: research, mod-first step for §6]
+- **Owner-directed research task, 2026-09-03.** RESEARCH + ONE DOC ONLY, no code change, no plan edit
+  (`BUILD_PLAN.md` frozen). Docs-only → **the preview/PNG gate does not apply** (C1.3). Rationale: KER is an
+  installed mod, and **§14.4(e) step (1)** makes an installed mod's value the FIRST fallback for a
+  not-yet-modelled real quantity (tier-2, MARKED) — so KER is the preferred real source for the many flight
+  values our pages dash or approximate. **Deliverable: `docs/KER_DATA_RESEARCH.md`, covering 1–5 in order.**
+- **DONE 2026-09-03.** `docs/KER_DATA_RESEARCH.md` written — the task's ONLY declared output (C1.11).
+  **(1) ACCESS METHOD — SETTLED.** There IS a clean way: pure reflection, no compile-time reference. But the
+  gating answer is **reading a static does NOT force a compute**. KER's values live on *processor* classes
+  (`SimulationProcessor`, `ImpactProcessor`, `AtmosphericProcessor`, `RendezvousProcessor`, `ManoeuvreProcessor`,
+  `ThermalProcessor`, `AttitudeProcessor`) that implement `IUpdateRequest`; `FlightEngineerCore.UpdateModules()`
+  calls `Update()` ONLY when `UpdateRequested` is set, and only for processors REGISTERED via `AddUpdatable` —
+  which KER does from a readout's `Reset()`, i.e. only for readouts the user has enabled. So we must drive them
+  ourselves: `AddUpdatable(<P>.Instance)` once per flight scene, `<P>.RequestUpdate()` per tick, read next tick
+  gated on `ShowDetails`. `FlightEngineerCore` is `[KSPAddon(FlightAndKSC)]`, so it runs with KER's window shut.
+  Cadence lines up: KER's `minSimTime` is 150 ms, `VesselData.Refresh()` is already 5 Hz / 200 ms.
+  **Verified against BOTH KER's source (GitHub) AND the installed binary** — KER **1.1.9.5** (jrbudda's RO fork)
+  on KSP 1.12.5; every type/method/property/field cited was confirmed present by a metadata scan of the shipped
+  `KerbalEngineer.dll`, not just against upstream master.
+  **(2) INVENTORY** — all seven readout categories in full (Vessel/Δv/TWR, Surface, Orbital, Rendezvous,
+  ManoeuvreNode, Thermal, Body) plus all 26 `Stage` fields, each with units, meaning, source/accuracy and the
+  exact access path. Units not independently confirmed are MARKED *(inferred)* and listed for a capsule check.
+  **(3) MAPPING** — cross-referenced `TELEMETRY_REGISTRY.md` and the real dash sites in the pages. The wiring
+  path is the EXISTING five-hop chain the TAC-LS water row already proves (`KerBridge` → `KerData` → a
+  `Propulsion(v);` sibling in the one-liner block at `VesselData.cs:206-211` → a `PageState` field → the page's
+  `T()`/`F()` dash guard). Biggest wins, ranked: per-stage/remaining Δv + TWR + burn time + Isp + stage mass
+  (**nothing of the kind exists anywhere on the glass today**); closest approach (not computed at all); true
+  phase angle + relative inclination (ours is a self-confessed in-plane approximation, `VesselData.cs:525`);
+  splashdown/impact time + point (ours is `radarAltitude / -verticalSpeed`); FAR-aware terminal velocity
+  (FAR IS installed).
+  **(4) KER vs SELF-COMPUTE vs KSP-DIRECT** — explicitly does NOT route everything through KER. KER earns ONE
+  simulation (fuel flow, and the suicide burn built on it) + THREE solvers (impact trace, rendezvous encounter
+  geometry, manoeuvre-node maths) + ONE FAR shim (terminal velocity). Everything else stays put: **KER's
+  `DynamicPressure`, `AtmosphericPressure`, `MachNumber` and `GeeForce` readouts are literally
+  `vessel.dynamicPressurekPa` / `staticPressurekPa` / `vessel.mach` / `ship_geeForce`**, and every Orbital and
+  Body readout wraps `vessel.orbit` / `CelestialBody` — proxying those would add a dependency and a frame of lag
+  for zero accuracy gain, and would break the registry's one-authoritative-source-per-datum rule. Thermal,
+  attitude rates and target range/rate we already compute correctly.
+  **(5) DEPENDENCY / GUARDING / LICENCE** — SOFT only (standing owner policy 2026-08-28, restated at
+  `KerBridge.cs:8`); three guard levels already in the tree (`Available` probe → a per-datum "has a result" flag
+  in the shape of `LsState.HasWater` → `null` → `Dash`), plus a **docked guard**: KSP merges both craft into one
+  `Vessel` and KER simulates the merged stack, so a berthed Δv/TWR/mass row must dash. **KER is GPL-3.0**
+  (CYBUTEK / jrbudda); DragonScreen is GPL-3.0 already, so the question is moot in practice — but the doc states
+  the position in the §B2/§B3 house style and notes the material difference from the MechJeb embed: reflection
+  copies no code, holds no compile-time reference and redistributes nothing. What IS missing is **attribution**
+  in `README.md`'s existing style.
+- **THE HEADLINE FINDING, and it reframes the whole thing:** **KER is already half-integrated, and the half that
+  exists is wired to nothing.** `plugin/src/KerBridge.cs` + `plugin/src/pure/KerData.cs` exist, compile, ship in
+  the DLL and are headless-tested (`KerDataTest`, 11 checks) — but a whole-tree grep finds **no call site** in
+  `VesselData`, `ScreenPainter`, `DragonScreenMonitor`, `PageState` or any page. Its consumer was the guidance
+  layer, deleted 2026-09-01. So the wiring job is the last three hops of an existing chain, not a new
+  architecture.
+- **Verify (C1.3):** docs-only, no code change → no preview to inspect. `python plugin/build.py test` run as a
+  no-regression check: **green, ALL SCREEN SUITES PASSED, 0 failed**, counts unchanged (306 / 2323 / 747 / 29 /
+  1773 / 18 / 67 / 158 / 13 / 6 / 15 / 11 / 724 / 5061 / 263 / 14). Committed locally (C1.5); NOT pushed.
+- **LOGGED, NOT DONE (C1.1)** — six findings, all recorded in the doc's §6.3, none acted on:
+  1. **`KerBridge.RequestSimulation()` can never cause a simulation to run.** It binds and calls only
+     `SimManager.RequestSimulation()`, which just sets `bRequested`; **`TryStartSimulation()` is what kicks the
+     run**, and in flight its only caller is `SimulationProcessor.Update()`, which we never drive. Latent rather
+     than live, because nothing calls `KerBridge` at all.
+  2. **Two dangling doc references** — `KerBridge.cs:8` and `pure/KerData.cs:1` both cite
+     `docs/MOD_INTEGRATION_RESEARCH.md`, deleted 2026-09-01 (`8b81816`). They should point at the new doc.
+  3. **Two stale fallback promises** — the same two headers claim a `pure/Hoverslam` fallback. **No such file
+     exists**; it went with the autopilot. The comments promise a safety net that is not there.
+  4. `KerBridge.cs` ships as **dead code** in every built DLL (`build.py:187` globs all of `src/`).
+  5. `docs/INDEX.md` does not list the new doc — deliberately not updated (C1.11: a task writes ONLY its
+     declared outputs).
+  6. `docs/TELEMETRY_REGISTRY.md` is well behind the code — no row for any of the six Vehicle sub-tabs, and its
+     `SPLASHDOWN_ETA` / `TGT_LAT` / `TGT_LON` rows still name deleted code (`ReturnControl`) as authority.
+- ⚠ **FOUR THINGS NEED THE CAPSULE** (doc §6.2; each needs its own owner glass go, C1.12 — none taken here):
+  **V1** whether `AddUpdatable` is actually required or whether touching `Instance` self-registers — the ONE
+  open item in the access method, unsettleable from source (MAS reflects `RequestUpdate` but is not seen calling
+  `AddUpdatable`); **V2** the `KerBridge.cs:10-13` cross-check that has NEVER run — kN→N, t→kg and the `Number`
+  ordering, all unvalidated against a live game because no consumer exists; **V3** the *(inferred)* units;
+  **V4** KER's behaviour while docked.
+- **THREE OWNER DECISIONS BATCHED (C1.9), posed as an overseer prompt (C1.13):** (a) **scope** — which of the
+  §3.3 wins to build and in what order, or none yet; (b) **marking** — which of the three mechanisms a
+  KER-sourced number gets (doc + registry row only, as `WaterText` does today / a `PageState` bool + an on-glass
+  label, as `PlanetCamLive` + `NoSignalLabel` do / KER-and-ours side by side, which is what `KerBridge.cs:10-13`
+  asks for during validation) — option 2 changes what the crew sees, so it is not a build-chat call;
+  (c) **there is no propulsion-performance readout anywhere on the three screens today**, so the Δv/TWR family
+  is a NEW page region, not a dash to fill, and §1.4's source-of-truth ladder governs its layout before
+  anything is drawn.
