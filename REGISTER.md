@@ -4455,7 +4455,7 @@ tripping with the buses would make word and pipe colour honest off state the cre
 **DONE when:** the tree's buses/strings are touchable from the glass through the existing dispatcher, and the
 P&ID's pumps/fans/valves read modelled state. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H32/H33.
 
-### S57 [S] Orphaned live code with no caller — harvest or retire — **TODO** — [TIER 4: hygiene + harvest]
+### S57 [S] Orphaned live code with no caller — harvest or retire — **HELD 2026-09-04 (blocked on the OWNER's answer to audit Q1)** — [TIER 4: hygiene + harvest]
 Logged by **S49** (H36, H39, H43, H44). Working, tested code that nothing calls: **`pure/Orbital.cs`**
 (vis-viva, anomalies, ground range/bearing) and **`pure/Hohmann.cs`** (Δv1/Δv2, phase lead, wait time) — zero
 screen callers, though *displaying* a rendezvous plan needs no flight control and is the natural live
@@ -4471,6 +4471,68 @@ feed `ScaledPlanetRenderer`, whose only `Request` call site is in the dead branc
 S37 / S42 own that camera and are HELD), but noted so a future tuning session does not spend glass time on
 three knobs that cannot move anything. **DONE when:** each item is either harvested into a reachable surface
 or explicitly retired with a note. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H36/H39/H43/H44 + owner Q1.
+- ⛔ **HELD 2026-09-04 — NOT STARTED, and this is a STOP-AND-ASK (C1.12), not a deferral of convenience.**
+  Reached in the 2026-09-04 batch session (the owner-authorised deviation from C1.1/C1.7). **This line's
+  DONE-when IS audit Q1's question.** *"Harvested into a reachable surface **or** explicitly retired"* is
+  precisely the harvest-vs-retire choice `docs/SCREEN_LIVENESS_AUDIT.md` §8 **Q1** puts to the owner —
+  *"(a) harvest them into Figma pages one at a time … (b) harvest only `StepList` + the NAV cluster and
+  formally retire the rest as dead code; (c) leave everything stranded and rebuild fresh where needed.
+  Which?"* — and this line's own Detail cites *"+ owner Q1"* as its source. **Q1 is posed and unanswered**
+  (S49 recorded all four questions 2026-09-03; no answer is recorded anywhere in this register). A build
+  chat decides none and proceeds past none (C1.14), so nothing was changed: **no file in `plugin/` was
+  touched by this line.**
+- **Four of the six items are blocked, and by two different things:**
+  1. `pure/Orbital.cs` + `pure/Hohmann.cs` — **Q1.** "Harvest" here means *building a rendezvous-plan
+     readout*, a new reachable surface; "retire" means deleting working, tested code that this very line
+     calls *"the natural live replacement for the Hold-Capture card's permanent NOT ENGAGED"*. Neither is
+     hygiene, and which one applies is (a)-vs-(b)/(c).
+  2. `LifeSupport.Margins` — **Q1**, and it is also the filling for the MARGIN column that **S75** now owns
+     (logged by S54 in this same batch). Sequence them; do not land the column twice.
+  3. The **NAV pan/zoom/NEXT-VIEW cluster** — blocked on **S43**, which this line and audit H36 both say to
+     *"do together"*. S43 was outside the batch's whitelist.
+  4. `defaultPage` in `DragonScreen.cfg` — it is discarded by `FigmaMode ? 0 : defaultPageIndex`, so whether
+     it is honoured or retired follows from what happens to the stranded UI. **Q1 again.**
+- ✅ **Two items ARE settled without Q1, and are recorded here so the follow-up chat does not re-derive them:**
+  `RangeExtender.cs` is a **HOLD, not a harvest and never a retire** — §B16 claims it and the tree now says so
+  in two places (`src/BoosterHost.cs:50-51` and `pure/BoosterHostPlan.cs:245` both name it as **W9**'s, per
+  §B16.7 step 1). The three `[Tunable]` knobs (H43) are explicitly *not a defect* and were **record-only**
+  from the start; the record exists, so there is nothing to do.
+- ⭐ **THREE OF THE FINDING'S OWN CLAIMS HAVE MOVED SINCE S49 WROTE IT — verified by grep 2026-09-04, and the
+  follow-up chat should start from these rather than the audit's text.** The audit is 2026-09-03 and Wave A
+  landed after it.
+  1. **`pure/Orbital.cs` is NOT orphaned any more.** `pure/Predict.cs:53-55, 130` calls `Orbital.TrueToMean`,
+     `.Wrap` and `.AltitudeToTrueAnomaly` — a real, live, non-screen caller that arrived with **W1**'s Wave A.
+     What is still true is the narrower claim: **no SCREEN calls it**, and its vis-viva / ground-range /
+     bearing half remains unused. **It must not be retired**; the question is only what to display.
+  2. **`Hohmann.cs` genuinely has zero callers** — the grep is clean outside its own file and its test. It is
+     the only one of the pair that is orphaned in the full sense.
+  3. **`LifeSupport.Margins` HAS callers now** — `src/LifeSupportBridge.cs:54, 60, 66, 86` compute it into
+     `s.Margins`. **The orphanage moved from the computation to the DISPLAY:** `grep` finds **no consumer of
+     `s.Margins` anywhere**. So the work is not "wire the maths up", it is "show what is already computed" —
+     which is exactly S75's MARGIN column, and is cheaper than the audit's wording implies.
+
+#### Open questions for the owner (C1.14) — S57
+
+**S57-Q1. This line cannot start until audit Q1 is answered. Re-posing it, narrowed to what S57 needs.**
+*Situation.* `docs/SCREEN_LIVENESS_AUDIT.md` §8 Q1 asked what to do with the UI stranded behind
+`ScreenPainter.cs:56`'s `FigmaMode = true`. It is unanswered. S57's DONE-when ("harvested **or** explicitly
+retired") is that same choice, so the batch stopped here rather than half-closing the line. The state of play
+is above: two of six items are already settled, and three of the audit's claims have moved (`Orbital` has a
+live caller, `Margins` is computed but never displayed, `Hohmann` alone is fully orphaned).
+1. **Answer Q1 as (a) — harvest one at a time, as the (A) work reaches each; retire nothing yet.**
+   *(recommended: it is the audit's own recommendation, it is what S75 is already about to do for
+   `LifeSupport.Margins`, and it costs nothing to defer a deletion. Two of the five assets — `Orbital` and
+   `RangeExtender` — turn out to be claimed by live code and by §B16 respectively, so a blanket retire under
+   (b) would have deleted something the tree needs. That is an argument for harvest-or-hold as the default.)*
+2. **Answer Q1 as (b)** — harvest `StepList` + the NAV cluster, formally retire the rest. ⚠ If chosen, the
+   retire list must EXCLUDE `Orbital.cs` (live caller in `Predict.cs`) and `RangeExtender.cs` (§B16 / W9);
+   in practice that leaves only `Hohmann.cs` and the `defaultPage` cfg key genuinely retirable.
+3. **Answer Q1 as (c)** — leave everything stranded, rebuild fresh where needed. Then S57 closes as a pure
+   record: nothing harvested, nothing deleted, each item noted as intentionally stranded.
+4. **Split S57 into its six items** and let each ride with the task that actually touches it — the NAV
+   cluster with **S43**, `Margins` with **S75**, `RangeExtender` with **W9** — leaving only `Hohmann.cs` and
+   `defaultPage` on this line. *(a defensible alternative to 1: it removes the coupling that made this line
+   un-startable, and every one of those host tasks already exists.)*
 
 ### S58 [S] `docs/INDEX.md` is missing the three newest research docs — **DONE 2026-09-04 (H1)** — [TIER 2: hygiene]
 Logged by **G4** (2026-09-03), noticed while making G4's C7.1 consistency pass over `INDEX.md`. `INDEX.md` is
