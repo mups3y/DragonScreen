@@ -1457,6 +1457,18 @@ on the glass.
   renders whatever shader the body is wearing and never asks for a texture slot, so **G11 may well pass
   under RSS while the flat map still fails**. The flood itself is fixed (**S40**): that warning now says
   itself once per body+shader.
+- ⭐ **RESEARCHED AND RE-DIAGNOSED 2026-09-03 by S61 — read `docs/NAV_MAP_RENDERING_RESEARCH.md` before
+  spending a glass go on this.** Two findings change what this line needs. **(1) The design is CONFIRMED
+  sound:** a camera cloned from `ScaledCamera.Instance.cam` renders whatever material the body wears and
+  never asks for a texture slot, so it does get the real 16 K-textured globe — with one named limit,
+  `Camera.CopyFrom` copies camera *settings* and not the *components* on that camera's GameObject, so
+  scatterer's scaled-scattering hook, ParallaxContinued's raymarched scaled shadows and TUFX's grade do not
+  come across (the render is real, just crisper and flatter than map view). **(2) ⛔ But G11 is currently
+  UNANSWERABLE, and this is an ordering blocker, not a scheduling one:** `FigmaMode` leaves
+  `ScaledPlanetRenderer.Request` and `NavPage.Build` in a dead branch and **no `UiPage` reaches the NAV
+  page**, so the camera can never be claimed — proven independently by a full flight log containing **zero**
+  `scaled-planet` lines while the sibling logged `docking cam ready`. So the 38-frame session did not "miss"
+  the NAV page; there is no NAV page to open. **Fix `S62` first or the go is wasted.**
 
 ### S37 [O] The 3D PLANET overlay is still orthographic over a perspective render (§2.2) — **HELD** (rides S10b's gate) — [TIER 5: held / owner-action / Part-B-bound]
 Logged by the S10b commit, 2026-09-03. `ScaledPlanetRenderer` renders the globe in PERSPECTIVE from a 3/4
@@ -1468,6 +1480,15 @@ through the camera's own `WorldToViewportPoint` plus `PlanetGeom.Occluded` for t
 camera actually renders — which is S10b's in-capsule gate. It is deliberately its own line rather than
 smuggled into S10b (the committed file's header says exactly that), so whoever opens that gate can decide
 whether to spend the same visit on both.
+- ⭐ **PROMOTED AND RE-SIZED 2026-09-03 by S61 (`docs/NAV_MAP_RENDERING_RESEARCH.md` §4.1).** The research
+  confirms the camera renders in PERSPECTIVE from a MOVED eye point, so the orthographic overlay mismatch is
+  **certain, not suspected** — this stops being an optional companion to S10b and becomes REQUIRED for the
+  view to be usable at all. **And it is bigger than "re-project the existing points":** the overlay's samples
+  are `PlanetOverlay`'s **rotation-corrected ground track** (`VesselData.GroundTrack` subtracts `360·dt/rot`
+  from every longitude, `VesselData.cs:590`) — right for the flat map, **wrong for a 3D inertial view**,
+  because Earth turns ~22° in one LEO orbit. S37 therefore needs its own **inertial scaled-space sample
+  buffer**, not a re-projection of the existing arrays. The two halves it can reuse unchanged are
+  `PlanetGeom.Project` and `PlanetGeom.Occluded`, both already written and tested and called by nothing.
 
 ### S11 [S] `plugin/build/csc.rsp` is a generated file, tracked, and churns on every build — **DONE**
 Logged by T4 (C1.1), not done. `build.py` overwrites `plugin/build/csc.rsp` on every invocation with
@@ -2843,6 +2864,26 @@ rejected by `MinMapPixels = 64`) and the NAV **MAP** view — plus the strip-tex
 - ⛔ **Needs a separate, explicit owner `install` + glass go**; the standing go is preview-only and this line
   neither grants nor inherits one (C1.12). **Batched onto S18's glass checklist as G12**, and it should ride
   the same visit as **G11** because both are answered by opening the NAV page once, in orbit.
+- ⛔⭐ **THIS LINE'S CENTRAL VERDICT IS FACTUALLY WRONG — found 2026-09-03 by S61
+  (`docs/NAV_MAP_RENDERING_RESEARCH.md` §0.2). NOT re-verdicted here: that is the owner's call (C1.8/C1.12)
+  and it is posed to them.** The evidence is in the *same* `KSP.log` that produced the slot list. Line
+  **104544** reads `[DragonScreen] body map Earth 16384x8192 from _ColorMap on 'Custom/HapkeScaled'` —
+  **1.74 s after** the warning at line 104405. So `_ColorMap` **does** carry a colour map, our first-listed
+  slot finds it, and the flat MAP view is textured in flight. It was a **load-timing race, not an absent
+  slot**: ParallaxContinued ships `loadTexturesImmediately = False`, and Kopernicus's `ScaledSpaceOnDemand`
+  loads/unloads Earth's scaled textures on renderer visibility (the log shows the full load→unload→reload
+  cycle). The `_MainTex=4x4` is Kopernicus's deliberate `Earth_Dummy.dds` placeholder, because **Parallax,
+  not Kopernicus, owns Earth's appearance on this install**. `ImageStore.BodyMap` already copes correctly —
+  it never caches a null, and its `mapTexture != null` guard is Unity's overload, so a destroyed texture
+  re-resolves next frame. ⚠ **Premise correction that goes with it: there is no RSS here.** No
+  `RealSolarSystem` folder exists; the pack is **Sol** on Kopernicus + ParallaxContinued, and
+  `Custom/HapkeScaled` is **AdvancedPQSTools'** shader. RealismOverhaul/RP-1 are installed, so "RSS" was
+  right about the 1:1 regime and wrong about the planet pack and its shader.
+  **What is actually left:** not an architecture branch — one cosmetic fix. The warning is phrased as a
+  permanent verdict ("NAV draws the grid and track only") for a **not-yet**; it should hold off for a few
+  seconds / N attempts before escalating, the same shape as `ScaledPlanetRenderer.Build`'s deliberate
+  non-latching. **G12(1) and G12(2) are answered off the log; only G12(3) (the camera) still rides S10b** —
+  and that now waits on **S62**.
 
 ### S43 [S] The ORBIT plot is a hairline when the orbit is small against the body (RSS LEO) — **TODO** — [TIER 3: scheduled polish]
 Logged by S41, 2026-09-03, from its own preview. `NavPage.Orbit` fits **the whole orbit AND the body** into
@@ -2859,6 +2900,17 @@ currently ignores it. Wiring the existing control, rather than inventing a new s
 option and probably the right one.
 **DONE when:** an RSS-scale LEO orbit is legible on this plot — the ring/arc separated from the limb and the
 apsis markers not overlapping it — with the closed Kerbin-scale case unchanged, judged on both preview PNGs.
+- ✅ **CHECKED AND LEFT ALONE 2026-09-03 by S61** (`docs/NAV_MAP_RENDERING_RESEARCH.md` §5). The NAV-map
+  architecture research was asked whether the KSP-native-rendering route made this moot. **It does not — this
+  line is entirely untouched by it.** The hairline is the flat ORBIT schematic, which never involved the
+  globe camera, the scaled-space shader or the 3D projection; its cause is the `max(a(1+e), R)` extent rule
+  at `NavPage.cs:591-597` with **no zoom wired** (`Controls()` marks the cluster inactive for `NavMode.Orbit`,
+  `NavPage.cs:899`). Its own diagnosis — wire the existing ZOOM control rather than invent a scale rule —
+  stands, and picked up supporting evidence: **KSP solves the identical problem the same way**, hiding orbits
+  outside a camera-distance-vs-semi-major-axis band (`OrbitRendererBase.upperCamVsSmaRatio` /
+  `lowerCamVsSmaRatio`). ⚠ One wording note for whoever takes it: "RSS-scale" here means the 1:1 regime, which
+  is real on this install — but the planet pack is **Sol**, not RealSolarSystem (S61 §0.1). The geometry the
+  line describes is unaffected.
 
 ### S44 [S] `Tuning` was never invoked — every `[Tunable]` field was dead — **WIRED + INSTALLED 2026-09-03; in-sim confirm rides S18's visit** — [TIER 2: real defect]
 Found by **S18**, 2026-09-03, while verifying the walk-sheet's own instructions before the owner's capsule
@@ -3562,3 +3614,87 @@ falsified (§B0–§B16, the "build-held" heading); adding the missing entries i
   per the INDEX's own "add a line whenever a doc is created" rule (the owner's "per the INDEX convention") —
   ⚠ **it landed in S59's commit**, a concurrent session having staged `INDEX.md` first; this task's commit
   carries only the task-number correction in it. Committed locally (C1.5); NOT pushed.
+
+### S61 [O] NAV-map rendering RESEARCH — the real globe, the native orbit line, and what map view actually is — **DONE 2026-09-03** — [TIER 1: research, decides the NAV-map architecture]
+Owner-directed research task (via the overseer, 2026-09-03), taken as THE task of its session rather than the
+`/next` default. **RESEARCH + DOC ONLY — no code, no gate, no plan edit** (BUILD_PLAN frozen). The question:
+can we put the ACTUAL Earth globe KSP's map view renders on our NAV/MAP screen, with the NATIVE orbit line and
+markers — and does that make S37 / G12 / S43 moot? **Deliverable:** `docs/NAV_MAP_RENDERING_RESEARCH.md` (new,
+per the INDEX convention), covering (1) the globe, (2) the orbit line + markers, (3) the whole map view,
+(4) the recommendation, and the S10b/S37/G12/S43 impact.
+- **THE ANSWERS.** **(1) THE GLOBE — YES**, and §2's prediction is confirmed: a camera cloned from
+  `ScaledCamera.Instance.cam` renders whatever material the body wears and **never asks for a texture slot**,
+  so it gets the real 16 K-textured Earth. One named limit: `Camera.CopyFrom` copies camera *settings*, not the
+  *components* on that camera's GameObject, so scatterer's scaled-scattering hook, ParallaxContinued's
+  raymarched scaled shadows and TUFX's grade do **not** come across — the render is real but crisper and
+  flatter than map view. **(2) THE NATIVE LINE — NO**, for three independent reasons: KSP's orbit renderers
+  self-gate on `MapView.MapIsEnabled` (proven by Kopernicus's own `RuntimeUtility.ApplyOrbitVisibility`); the
+  lines are Vectrosity, whose `SetCamera3D` is a **single global** KSP swaps on camera-mode change; and the
+  Ap/Pe/AN/DN markers are `KSP.UI.Screens.Mapview.MapNode`, i.e. **UI canvas**, invisible to any world-space
+  RT camera. **(3) THE WHOLE MAP VIEW — NO**: it is a four-camera rig (`mapCamera`, `vectorCam`,
+  `mapFxCameraNear/Far`) plus that canvas, and `Map` is a `CameraManager.CameraMode` exclusive with IVA.
+  **(4) RECOMMENDATION —** the hybrid the code is already shaped for: KSP's real scaled render underneath,
+  our own re-projected vector overlay on top, and — the one genuinely native thing available — **KSP's own
+  `OrbitIcons` atlas** for the markers (`MapView.OrbitIconsMaterial` / `PatchColors` are statics that do not
+  need map view; MAS's `MASLoader.cs:109-131` is the proven way to grab the newer atlas).
+- ⭐ **THE BIG CORRECTION — S42's settled verdict is factually WRONG, and the evidence is in the same log that
+  produced it.** S42 concluded "no slot on `Custom/HapkeScaled` carries a colour map … **ruled out**, not
+  merely unproven." But `KSP.log` line **104544** reads
+  `[DragonScreen] body map Earth 16384x8192 from _ColorMap on 'Custom/HapkeScaled'` — **1.74 s after** the
+  warning at line 104405. It was a **load-timing race, not an absent slot**: ParallaxContinued ships
+  `loadTexturesImmediately = False` and Kopernicus's `ScaledSpaceOnDemand` cycles Earth's scaled textures on
+  renderer visibility (the log shows load/unload/reload). `_MainTex=4x4` is Kopernicus's deliberate
+  `Earth_Dummy.dds` placeholder, because **Parallax, not Kopernicus, owns Earth's appearance here**.
+  `ImageStore.BodyMap` already handles it correctly (it never caches a null, and its `mapTexture != null`
+  guard is Unity's overload, so a destroyed texture re-resolves). ⛔ **This chat did NOT re-verdict S42** —
+  it is owner-gated and re-opening a settled line is the owner's call (C1.8/C1.12). Posed to the owner.
+- ⚠ **AND A PREMISE CORRECTION: THERE IS NO RSS ON THIS INSTALL.** No `RealSolarSystem` folder exists; the
+  planet pack is **Sol** (`Sol-Configs`/`-Textures`/`-Visuals`, `FOR[SolSystem]`) on Kopernicus 1.0.247 +
+  ParallaxContinued 1.0.0, and `Custom/HapkeScaled` is **AdvancedPQSTools'** shader loaded by Parallax, not
+  RSS's. RealismOverhaul/RP-1 *are* installed, so "RSS" was right about the **regime** (1:1 scale, Earth
+  6371 km — all S43's reasoning needs) and wrong about the **planet pack and its shader**.
+- ⛔ **AND THE FINDING THAT RE-DIAGNOSES G11: the scaled-space camera has never run, once.** `FigmaMode`
+  puts `ScaledPlanetRenderer.Request` (`ScreenPainter.cs:958`) and `Pages.Build` — the only route to
+  `NavPage.Build` — in the dead `else` branch, and no `UiPage` reaches `NavPage.Build`. Proven independently:
+  a full flight session's log contains **zero** occurrences of `scaled-planet`, while the sibling camera
+  logged `docking cam ready`. So G11's "the NAV page was never opened" was not a scheduling accident —
+  **there is no NAV page to open.** Logged as **S62**.
+- **Method:** two read-only Explore sweeps (our own NAV/globe/camera code; the installed KSP/mod reality) plus
+  WebSearch/WebFetch on the platform API, with every load-bearing claim re-verified first-hand before it was
+  written down. Platform reads (KSP.log, `Assembly-CSharp.dll` via the shipped `Mono.Cecil`,
+  `globalgamemanagers`' layer table, the Sol/Parallax cfgs) are **evidence about the platform, not build
+  inputs** — the owner scoped it that way in the brief, so **C7 is intact**.
+- **Files:** `docs/NAV_MAP_RENDERING_RESEARCH.md` (new) · `docs/INDEX.md` (one entry, per its own rule) ·
+  `docs/MAP_MFD_RESEARCH.md` (a PARTLY-SUPERSEDED banner on §1–§2 per C7.1; §3–§4 untouched) · `REGISTER.md`.
+- **Verify (C1.3):** research/docs-only, no code change → **no preview to inspect, the PNG gate does not
+  apply**. `python plugin/build.py test` run as a no-regression check: **green, ALL SCREEN SUITES PASSED,
+  0 failed**. Committed locally (C1.5); NOT pushed.
+- **Batched owner questions (C1.9), posed as paste-ready overseer prompts (C1.13):** doc §5 — (a) does S42
+  get re-verdicted and closed on this evidence; (b) does the MAP view's warning get the "not-yet" fix; (c)
+  does S61 (the page route) precede any further glass spend on G11.
+
+### S62 [O] There is no `UiPage` that reaches the NAV page — so the scaled-space camera is unreachable and G11 cannot be answered — **TODO** — [TIER 2: real defect — the prerequisite for S10b/G11]
+Logged by **S61**, 2026-09-03 (C1.1 — found, not fixed). S49 §1.1 already recorded that `FigmaMode` strands a
+second UI and that **there is no `UiPage.Nav`**; this line records the consequence S49 did not draw, which is
+that an owner-gated glass check is currently **unanswerable**, not merely unscheduled.
+**The chain, verified against source:** `ScreenPainter.cs:56` `FigmaMode = true` → the `else` branch never runs
+→ `ScaledPlanetRenderer.Request(...)` (`ScreenPainter.cs:958`, its **only** call site) is never called →
+`lastWanted` stays `-999` → `ScaledPlanetRenderer.Texture()` returns null at its claim gate
+(`ScaledPlanetRenderer.cs:143`) → the camera is never built and never enabled → `PageState.PlanetCamLive` is
+never true. The same dead branch holds `Pages.Build`, whose `case 2:` (`Pages.cs:588`) is the only route to
+`NavPage.Build`, and `FigmaUI.Build`'s switch (`FigmaUI.cs:194-225`) has no case that reaches it. The two
+globes the Figma UI *can* reach — `CoverPage.cs:397` and `ManualChuteDeployPage.cs:197` — both call the 4-arg
+`NavPage.Planet`, i.e. `live: false`, deliberately (S10a decided that, and it is still right: they are small
+decorative body slots, not camera views).
+**Independent proof it has never run:** a full flight session's `KSP.log` has **zero** hits for `scaled-planet`,
+though `Build()` and `Texture()` both log on success and the sibling `docking cam ready` line is present.
+**Why it matters beyond hygiene:** **G11 is batched onto an owner `install` + glass go, and spending that go
+before this is fixed cannot answer any of S10b's three criteria** — the camera will not be claimed no matter
+what the crew touches. Same for G12 part 3. So this is an ordering prerequisite, not a parallel task.
+**Not decided here (C1.1/C1.12):** *how* it is reached — a new `UiPage.Nav` routing to `NavPage.Build`, or a
+3D-PLANET view added to an existing Figma page, or the Cover's globe promoted to `live: true` — is a design
+call with a real §1.4/§14.4 dimension (the Cover globe is a reference-matched decorative slot), and S49
+explicitly declined to propose flipping `FigmaMode`. **DONE when:** some reachable page claims
+`ScaledPlanetRenderer` and draws `NavPage.Planet(..., live: true)`, `build.py test` is green and the preview
+shows the honest `LIVE 3D — NO SIGNAL` state on that page — at which point G11/G12(3) become answerable on one
+glass visit.

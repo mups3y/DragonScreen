@@ -3,6 +3,18 @@
 **Goal (user 2026-08-27):** all the capability of the KSP map screen on the DragonScreen round-earth NAV
 screen, so the crew never has to leave IVA — *with a live 3D scaled-planet view* as the chosen centrepiece.
 
+> ⚠ **§1 and §2 are PARTLY SUPERSEDED by [`NAV_MAP_RENDERING_RESEARCH.md`](NAV_MAP_RENDERING_RESEARCH.md)**
+> (owner-directed research, 2026-09-03) — read that first, and where the two disagree **it wins**; it was
+> written from the installed binaries, the shipped configs, a real flight log and KSP's own assembly
+> metadata. What it changes here: §1's "you cannot pipe the map view" is **confirmed**, with the mechanism
+> named (four cameras + a UI canvas, map-only renderers, a single global Vectrosity camera). §2's core
+> prediction — a cloned `ScaledCamera` renders the real body and never asks for a texture slot — is
+> **confirmed**, with one named limit (no scatterer halo, no Parallax scaled shadows, no TUFX grade). But
+> §2.1's culling mask is **layers 9 + 10** (Atmosphere + Scaled Scenery), not layer 10 alone; §2.2's plan to
+> re-project the *existing* overlay samples is **wrong** (they are the rotation-corrected ground track, not
+> an inertial orbit); and the markers have a better source than drawing our own — KSP's own `OrbitIcons`
+> atlas. §3 and §4 below are untouched and still stand.
+
 ---
 
 ## ⚠ BUILD STATUS — CORRECTED 2026-09-02 (T1): the scaled-space camera is NOT in this repo
