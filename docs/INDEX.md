@@ -58,6 +58,15 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
   block describes files this repo did not contain — see its banner, corrected 2026-09-02 by **S10a**, which
   built the pure half (`pure/PlanetGeom.cs`, the `ImageId.ScaledPlanetLive` seam, the honest no-signal state).
   §2's Unity camera is still absent and is **S10b**. Feeds **S10a/S10b** (it fed T4 for the map MODES only).
+  ⚠ Its §1–§2 are now **partly corrected by `NAV_MAP_RENDERING_RESEARCH.md`** — read that one first.
+- **[NAV_MAP_RENDERING_RESEARCH.md](NAV_MAP_RENDERING_RESEARCH.md)** [REF] — ⭐ the NAV-map **architecture**
+  verdict (owner-directed research, 2026-09-03): can the real KSP globe, the native orbit line and the
+  native markers reach our screen? Settles the globe (**yes** — a cloned `ScaledCamera` renders the real
+  body and never asks for a texture slot), the native line (**no** — map-only renderers, a global Vectrosity
+  camera, UI-canvas markers) and the whole map view (**no** — a four-camera rig plus a canvas). **Supersedes
+  `MAP_MFD_RESEARCH.md` §1–§2 on conflict**, corrects **S42**'s "no colour map exists" verdict (`_ColorMap`
+  resolves 16384×8192; it was a load race), and finds that `FigmaMode` leaves the scaled-space camera
+  **unreachable** — which re-diagnoses **G11**. States the impact on S10b / S37 / G12 / S43.
 - **[SCREENS_LOOK_AND_FUNCTION_RESEARCH.md](SCREENS_LOOK_AND_FUNCTION_RESEARCH.md)** [PARTLY SUPERSEDED] —
   the resource inventory (with licences), the real page set + function, and the real→our page map.
 - **[SCREENS_CONSOLE_PLAN.md](SCREENS_CONSOLE_PLAN.md)** [PARTLY SUPERSEDED] — the older screens/console
@@ -80,6 +89,22 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
 - **`reference/mechjeb_settings_type_Crew-Dragon.cfg`** [REF] — the tuned per-vessel-type MechJeb parameter
   store (the Crew-2 profile), copied into the repo by T0. The canonical starting profile for the §B5 tune;
   the copy in the KSP install is a runtime artifact, not a source.
+- **[BLACKBOX_RESEARCH.md](BLACKBOX_RESEARCH.md)** [SPEC — research] — the **BlackBox flight recorder**
+  specification (S59, 2026-09-03): real FDR/CVR/spacecraft-telemetry practice, our parameter set with a
+  per-parameter sample rate, what to COMPOSE from the surviving corpus tooling vs build fresh, the
+  file format / time base / performance budget / replay path, and the C7 evidence boundary. **Not built** —
+  the recorder that fed `plugin/tools/assess_flight.py` was deleted 2026-09-01; the analysers survive, the
+  writer does not. Where it lands in the Part-B order is an open owner call (its §6.1 Q4).
+- **[BOOSTER_RECOVERY_ARCHITECTURE.md](BOOSTER_RECOVERY_ARCHITECTURE.md)** [SPEC — research] — the **§B16
+  architecture** research (S50, 2026-09-03): the **two-vessel concurrency problem** settled (loaded/unpacked
+  vs on-rails, the `OnFlyByWire` fact, the range arithmetic, the floating-origin rule "whoever holds focus
+  gets the precision"), the four candidate methods costed (concurrent · coast · FMRS · StageRecovery) with a
+  **staged recommendation**, what the installed environment does and does not give, the **five §B16
+  amendments** a governance task would make, and the **guidance method** for RTLS *and* ASDS as one guidance
+  with a target mode — boostback targeting, entry-burn trigger/sizing, the AoA-clamped aero-descent steering
+  law, and the landing-burn ignition solution + throttle law, mapped onto MechJeb's attitude + prediction
+  modules. ⚠ **Tier-2, marked and attributed** (F9I; surgical9's kOS RTLS script) — **method only, no kOS
+  code**. Pairs with `MECHJEB_MISSION_TUNING.md` PHASE 2 (the per-setting recipe); **§B16 is unamended.**
 - **`FLIGHT_SYSTEMS.md` — DOES NOT EXIST YET.** `plugin/src/pure/MissionPhase.cs` and
   `plugin/build/audit_comments.py` both point at it. Until **T15** creates it, the §8 flight facts live in
   `BUILD_PLAN.md`. Do not treat those two comments as a live link.

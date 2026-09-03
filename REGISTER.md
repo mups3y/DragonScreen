@@ -3417,3 +3417,74 @@ starts booster work from `INDEX.md` alone will not find it), **`KER_DATA_RESEARC
 **`SCREEN_LIVENESS_AUDIT.md`** (S49 — the source cited by S50–S57). G4 fixed only the lines its own edits
 falsified (§B0–§B16, the "build-held" heading); adding the missing entries is separate work (C1.1).
 **DONE when:** all three have an `INDEX.md` entry with a freshness tag, in the right section.
+
+### S59 [O] BlackBox flight-recorder RESEARCH — the spec for recording a flight as evidence — **DONE 2026-09-03** — [TIER 1: research, Part-B preparatory]
+- **Owner-directed research task, 2026-09-03** (not from the register; taken as THE task per C1.1).
+  **RESEARCH + ONE DOC ONLY** — no code, no gate opened or widened, no plan edit (`BUILD_PLAN.md` untouched).
+  **Read:** `CLAUDE.md` end-to-end · `docs/KER_DATA_RESEARCH.md` (S45) · `BUILD_PLAN.md` §B5 / §B7-B8 / §B10.7
+  (+ §B9, §B11, §B12-B16, §14.4). **Why (the owner's own framing):** every flight assessment so far has rested
+  on screenshots and verbal description, and that path already produced **S36** (the "stale DLL" theory, premise
+  false), **S34→S38** (a P&ID "mis-wiring" that was an oblique-angle legibility illusion) and **S18** (a glass
+  pass whose checklist went half-unanswered and unrecorded). Visual description is not admissible evidence for
+  a precision assessment.
+- **DONE 2026-09-03. Output: `docs/BLACKBOX_RESEARCH.md` (942 lines)** — settles all five required questions:
+  **(1) REAL PRACTICE.** 14 CFR Part 121 Appendix M's 91 parameters **with their per-parameter sampling
+  intervals** (8 Hz normal accel → 64 s near-static) and the three lessons that transfer — rate follows
+  BANDWIDTH not importance; mode + "selected" values (#10/#25/#48-53) are first-class and are the FDR's answer
+  to *what did the system know and when*; **display format is recorded (#55/#56)**. Plus ED-112A CVR (4
+  channels + area mic + datalink; 2 h → 25 h), JPL/AMMOS **EVR vs channelized EHA**, **SCLK↔SCET** time
+  correlation, Columbia's OEX/MADS (valid data ~1 min past loss of signal — the case for writing to disk), and
+  six investigative principles distilled from the NTSB FDR Handbook + the NTSB-BEA MOA + FOQA exceedance
+  practice (one deliberate time base; independent cross-checks; what-did-it-know; transitions as the skeleton;
+  **validity recorded, not implied**; raw data first, every derived artefact regenerable).
+  **(2) OUR SET + RATES.** A four-tier ladder, each rate justified against Appendix M's own tiers: **R0**
+  physics-rate ACCUMULATED (never sampled — the anti-aliasing tier), **R1 10 Hz** dynamic (q/AoA/pitch/accel/
+  control/vgo-tgo), **R2 2 Hz** state, **R3 10 s** slow, **R4** event-driven; ~120 k rows / ~110 MB per 19 h
+  mission. Nine parameter groups fully tabulated with source, units and a per-row rate justification: time+frame ·
+  vehicle state · propulsion · control/actuation · guidance · mission+crew gates · **crew & screens (the CVR
+  analogue)** · systems/faults · the discrete event log.
+  **(3) REUSE.** ⚠ Corrects a conflation the repo carries: there were **TWO** recorders — A (`flight_*.csv`,
+  263 cols, 5 Hz, read by `plugin/build/assess_flight.py`) and B (`Crew-2_*.csv`, **136** cols measured, 4 Hz,
+  read by `plugin/tools/assess_flight.py`). A 30-row COMPOSE-vs-BREAK-vs-BUILD-FRESH table. Compose: the
+  `Schema[]`-as-single-source + derived indices, blank-means-not-filled, RFC-4180 escaping, `VerifyWidth()`,
+  25-row explicit flush, the always-on base snapshot, the `acc_*` physics-rate accumulators, the warp/ignition
+  fidelity trio, and **both surviving analysers** (`tools/assess_flight.py` + `tools/tuning_db.py` — extend,
+  never replace; `build/`'s copy stays untouched per S8, but its booster deck-miss geometry gets ported).
+  Break: the `xx_` prefixes, the `-`/`Idle` sentinels, per-engage/per-vessel file rotation, and **MET-only
+  timing — adding a `ut` column is the single most important fix** (B has no UT, so A's mission-chaining cannot
+  be ported). Build fresh: the event log, the CVR channel, a unified `control_id`, the manifest, screen replay.
+  **MechJeb's FlightRecorder**: 18 fields at 0.2 s but `HistorySize = 3000` with **no wraparound = a hard 600 s
+  cap**, in memory only — an excellent ascent instrument, structurally incapable of a 19 h mission; take its
+  field list as the minimum ascent set, do not depend on it.
+  **(4) FORMAT.** Three files per mission — `params.csv` (rectangular, reuses the corpus format), `events.jsonl`
+  (**consciously NOT CSV** — heterogeneous payloads), `manifest.json` (the FDR "dataframe layout": schema/units/
+  periods/provenance/mod versions/`mechjeb_cfg_sha`, which is also where §14.4(f) SIMULATED marking lives, once
+  and cheaply). `mission_id` as a COLUMN retires the 120 s gap heuristic and the "a recording is half a mission"
+  failure; rotation only on revert or a 512 MB ceiling. Validity = **blank, never a plausible number**; on-rails
+  warp BLANKS the control block (B zeroed it — blanking is strictly better, since 0 is a legal control value)
+  and floors the rate at 1 row per WALL second. Budget < 0.3 ms/row, zero steady-state allocation, and the
+  load-bearing rule **"read what is already computed; never drive a processor"** (KER's solve is already driven
+  at `VesselData.cs:719`). **Replay: the seam already exists** — `PreviewMain.cs:70` builds a `PageState`
+  synthetically and renders it through the same `Pages.Build`/`FigmaUI.Build`, so a recorded row rehydrates into
+  the exact frame the crew saw (honest limit stated: it settles CONTENT, not legibility-in-the-seat).
+  **(5) C7/EVIDENCE.** Stated explicitly: the recorder WRITES to `<KSP>/DragonScreen_capture/` (deploy target,
+  write-only, already git-ignored, already the screenshot landing zone) and writes nothing in the repo; the
+  overseer READS recordings as **evidence**, exactly as it reads KSP.log and screenshots — ✅ the basis of a
+  finding, ⛔ never a build source, never a label/value authority (§1.4's ladder unchanged).
+- **Batched owner questions (C1.9), posed as paste-ready overseer prompts (C1.13):** doc §6.1 Q1–Q5 — where
+  recordings live and how the overseer gets them (touches `.gitignore`, needs an owner call) · fixed vs adaptive
+  row rate · one stream per vessel vs parallel per-vehicle columns (§B16) · **Q4: where the BlackBox lands in the
+  Part-B order — "the first recorded flight" that T22 waits on currently has nothing to record it** · does it
+  ship enabled.
+- **Logged, not done (C1.1):** doc §6.2, ten items — `tools/assess_flight.py:3`'s stale "105-col" (measured:
+  136) · `build/assess_flight.py`'s self-contradicting banner (line 7 right, line 11 wrong) · `INDEX.md` still
+  missing `tools/assess_flight.py` + `tuning_db.py` (**→ add to S58**) · `MECHJEB_MISSION_TUNING.md:252`'s "the
+  tooling already exists" (true of the analysers, NOT of the recorder) · `docs/tuning/` absent ·
+  `build/assess_flight.py:52-54`'s now-unsourced F9I constants · **salvage
+  `git show 8b81816^:docs/flights/README.md` before any recorder is built** · `FigmaMode` making
+  `TouchDown:445+` unreachable (S49) · `KerBridge`'s unit conversions still flight-unverified (S47) · no
+  `[KSPAddon]`/`FixedUpdate` in `plugin/src` today.
+- **Verify (C1.3):** research/docs-only, no code change → **no preview to inspect, the PNG gate does not apply**.
+  `python plugin/build.py test` run as a no-regression check: **green, ALL SCREEN SUITES PASSED, 0 failed**.
+  One-line `docs/INDEX.md` entry added per the INDEX's own "add a line whenever a doc is created" rule (the
+  owner's "per the INDEX convention"). Committed locally (C1.5); NOT pushed.
