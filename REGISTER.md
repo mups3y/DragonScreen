@@ -3007,3 +3007,105 @@ with `if (built) return;`) and `Tuning.Poll()` in `ScreenPainter.Update()`
   scene — not per frame. (V3, the *(inferred)* units, is NOT in scope here: none of those values is wired.)
 - ⛔ **Needs an owner `install` + glass go of its own (C1.12).** S46 did not ride S18's gate and this line does
   not assume one.
+
+### S48 [O] MechJeb mission-tuning recipe — the per-setting flight book for a nominal Crew-Dragon mission — **DONE 2026-09-03** — [TIER 1: research, Part-B preparatory]
+- **Owner-directed research task, 2026-09-03.** RESEARCH + ONE DOC ONLY, no code, no gate, no plan edit
+  (`BUILD_PLAN.md` frozen — this is a NEW doc, **not** a §B edit). **It does NOT open the Part-B build gate
+  (T15)**; it is preparatory research exactly like §B5–§B11. Brief: **CONSOLIDATE** §B5–§B11 + the tuned
+  Crew-Dragon cfg + the §8/§B11 real targets into an operational, per-setting recipe for 7 phases —
+  1 launch→insertion→phasing (PVG per §B8, with the ascent-curve / max-Q / throttle knobs named **explicitly**,
+  not glossed) · 2 **Falcon-9 booster recovery (⚠ NEW SCOPE)** · 3 rendezvous · 4 docking · 5 undock+departure ·
+  6 the re-entry starting orbit · 7 deorbit+entry to a designated LZ. Each phase: the module(s), the exact
+  settings + values, **how** to set each (cfg key ⟂ API field ⟂ GUI), and the gotchas / ⚠ flags.
+  **Deliverable: `docs/MECHJEB_MISSION_TUNING.md`.**
+- **DONE 2026-09-03.** `docs/MECHJEB_MISSION_TUNING.md` written — 932 lines, the task's ONLY declared output
+  (C1.11). Every `[cfg]` value in it is quoted from `docs/reference/mechjeb_settings_type_Crew-Dragon.cfg`;
+  every `[DOC]`/`[EST]` target from §8/§B11; the tuning METHOD from §B5/§B8. **Nothing was re-derived** — §0.4
+  carries the phase-number mapping back onto §B9's Phase 0–10 so the two docs stay in step.
+  **What the doc adds that §B5–§B11 did not have:**
+  **(1) THE ASCENT PROFILE, ENUMERATED (§1B).** Four tables instead of §B8's prose: the **ascent-curve** knobs
+  (`AscentTypeInteger` · `PitchStartVelocity` 70 · **`PitchRate` 0.75 — the #1 knob** · `TurnStartAltitude/
+  Velocity` · the CLASSIC block that is inert under PVG · `ForceRoll`+rolls); the **max-Q** knobs
+  (`DynamicPressureTrigger` 10 kPa = the open-loop→PVG hand-off · `LimitQaEnabled`+`LimitQa` 2000 ·
+  `LimitAoA`+`MaxAoA` 5 · `AOALimitFadeoutPressure` · `CorrectiveSteering`+gain 3); the **throttle/speed**
+  knobs (`LimiterMinThrottle`/`MinThrottle`/`DifferentialThrottle`, the g-limiter, `ClampAutoStageThrustPct`);
+  and target-orbit / PVG-stage-coast / staging / attitude-PID. Plus **§1B.v, the tuning method itself** — the
+  Flight-Recorder AoA/Q/pitch read, the overlofted / overpitched / optimal signatures, and ±0.1 °/s steps —
+  and §1B.vi, §B8's four still-open ⚠ (throttle vs bang-bang · hot vs cold staging · attach-alt vs
+  free-optimise · fairing logic on a fairingless Dragon).
+  **(2) BOOSTER RECOVERY (§2), with the SCOPE FLAG stated plainly** at the top of the doc and again at the top
+  of §2: **§B1–§B15 covers the DRAGON CAPSULE only**, the booster is a **separate `Vessel`**, and this is an
+  owner-directed **EXTENSION to fold into the plan when Part B starts** — a new §B section + its own register
+  task(s) — **not** a silent widening and **not** a licence to build it. Contents: the real Crew-2 booster
+  timeline **[DOC]** (entry burn T+7:27 · landing burn T+9:03 · landing T+9:30, an **ASDS** recovery so **no
+  boostback**) and the RTLS-vs-ASDS split (3-engine boostback / 3-engine entry / **1-engine landing**; ~10 % vs
+  ~6 % of propellant); **the established RSS/RO five-phase method** (boostback → coast → entry burn → aero
+  descent → landing burn) with its parameter set, sourced from BoosterGuidance, whose existence **is** the
+  finding that MechJeb's landing AP was not built for limited-ignition/limited-throttle boosters; the correct
+  **MechJeb landing-guidance setup** for a booster (its own vessel-type cfg — `DeployGears` **True** and
+  `DeployChutes` **False**, i.e. the opposite of Dragon) **and what MechJeb cannot do** (no boostback, no entry
+  burn, no grid fins, no per-phase engine count) plus the RO landing-burn-armed-too-early mass trap and its
+  30 m touchdown-margin mitigation.
+  **(3) THE OWNER'S ENGINE DIRECTIVE, captured precisely (§2.3).** **Do NOT cycle "next engine mode"** — RO's
+  `ModuleEngineConfigs` mode-cycling causes engine **RE-IGNITIONS** and **lag**; instead read the **craft
+  file's** engine list, identify the **THREE landing engines**, and **control them separately** (the 3→1
+  landing-burn throttle profile). Documented with the mechanics that make it matter (RO `ignitions` is a
+  finite per-engine resource; a failed light **still spends one**; a config switch is a part-level
+  reconfiguration that cannot say "these three, not those six") and the per-engine path that replaces it —
+  `ModuleEngines.Activate()`/`Shutdown()`, **`independentThrottle` + `independentThrottlePercentage`**,
+  `thrustPercentage` — plus the five-step 3→1 profile and the rule **never command zero throttle mid-landing-
+  burn** (RealFuels shuts the engine off instantly, and the relight costs an ignition).
+  **(4) The craft-dump handling (§2.4).** C7 forbids reading the KSP install and **there are no `.craft` files
+  in the repo** — so the doc gives the METHOD (filter by `VehicleParts.IsBooster` `".S1."` → list
+  `ModuleEngines`/`ModuleEnginesRF` parts → identify centre + two opposed outboards **by position** → freeze a
+  named engine table at staging) against an **owner-supplied** engine list, and leaves the engine table
+  **empty on purpose** — filling it now would be invention (§1.4). O4 in the doc's §10.2.
+  **(5) Phases 3–7 as per-setting recipes**, incl. §6 **THE RE-ENTRY STARTING ORBIT — a phase §B9 never names**
+  (near-circular ~400–420 km × 51.6°, Pe ≥ the repo's own 150 km floor, and the real content: **ground-track
+  phasing onto the LZ**, for which `OperationSemiMajor` is the right tool), and §7's two mutually-exclusive
+  deorbit routes (corridor-controlled `OperationPeriapsis` vs site-targeted `LandAtPositionTarget`, with the
+  warning that the latter will happily plan a plane change Dragon cannot afford).
+  **(6) §9 the tune ORDER** (12 steps by leverage, each with its validation target + which existing repo tool
+  measures it — `plugin/tools/assess_flight.py`, `plugin/tools/tuning_db.py`, `plugin/build/assess_flight.py`,
+  which is retained precisely for T22), and **§10 the consolidated ⚠ list: 11 empirical items vs 9 OWNER
+  decisions** (C1.12 — none decided here).
+- **⚠ NAME-DRIFT FINDING (doc §0.3), the one place this research CORRECTS the plan's mechanics rather than
+  consolidating them.** §B10.1/§B10.2 took several identifiers from the **kRPC** MechJeb wrapper, which tracks
+  an **older** MechJeb. Against current MechJeb2 `dev` source: `OperationTransfer.cs` defines class
+  **`OperationGeneric`** (`Capture`/`PlanCapture`/`MatchOrbit`/`LagTime`/`Coplanar`), **not** `OperationTransfer`
+  with `intercept_only`/`simple_transfer`/`period_offset`; `OperationCourseCorrection`'s knob is
+  **`InterceptDistance`** (default 200 m); and **`NodeExecutor` has no `tolerance` field at all** — cutoff is
+  angle-from-node (stock) or `_dvLeft <= 0` (Principia), so **§B9's "Tolerance ~0.1, tighten to 0.05" has
+  nothing to set** and the precision knob that does exist is `AlignedToleranceDegrees` (1°). `LeadTime` (3 s),
+  `Autowarp`, `speedLimit`, and the whole Landing-AP field set **are** confirmed real and match our cfg 1:1.
+  The plan's *intent* is unchanged; every identifier must be re-verified against the **PINNED** source at T15.
+- **Verify (C1.3):** docs-only, no code change → **no preview to inspect, the PNG gate does not apply**.
+  `python plugin/build.py test` run as a no-regression check: **green, ALL SCREEN SUITES PASSED, 0 failed**.
+  Committed locally (C1.5); NOT pushed.
+- **LOGGED, NOT DONE (C1.1)** — eight findings, all in the doc's §10.3, none acted on:
+  1. **`docs/TELEMETRY_REGISTRY.md:9` now contradicts the owner's directive** — it states "**Part B does not
+     re-introduce** [booster recovery]". True when written; it is what O1 changes. Update **if and when** the
+     owner folds the extension in.
+  2. **`plugin/src/pure/VehicleParts.cs:32-46` encodes the forbidden path** — `EngineSwitchModule =
+     "ModuleTundraEngineSwitch"`, `EngineSwitchAction = "next engine mode"`, `EngineIdThree`/`EngineIdCentre`,
+     `OctawebModeFor(int)`. The constants correctly describe the part; only the **flight-software use** is
+     forbidden by the directive. Not changed.
+  3. §B10.1's `NodeExecutor.tolerance` does not exist (above).
+  4. §B10.2's `OperationTransfer` field names are kRPC-era (above).
+  5. **`pure/MissionPhase.cs:56-57`** — `DrogueAltitude` 5486.0 / `MainAltitude` 1830.0 are declared but
+     **never read by `Classify()`** (it branches on the `DroguesOut`/`MainsOut` booleans). Dead constants.
+  6. **`KerData.HasRecoveryReserve(stages, reserveMps)` has no default reserve value** anywhere in the repo —
+     phase 2 needs that number, net of RealFuels residuals.
+  7. `docs/INDEX.md` does not list the new doc — deliberately not updated (C1.11).
+  8. `docs/FLIGHT_SYSTEMS.md` is still a dangling reference (`pure/MissionPhase.cs:54`,
+     `build/audit_comments.py`); T15 owns creating it, and this doc may be part of what it should point at.
+- **NINE OWNER DECISIONS BATCHED (C1.9), posed as an overseer prompt (C1.13)** — doc §10.2, headed by
+  **O1** fold booster recovery into Part B at all · **O2** how the booster is flown (our conductor on MechJeb's
+  attitude/prediction modules · MechJeb's landing AP as-is · or **BoosterGuidance**, GPL-3.0, as a second mod
+  dependency — §B3's packaging decision covers **MechJeb only**) · **O3** vessel focus / second conductor
+  (§B12 assumes ONE vessel; recovery historically called `ForceSetActiveVessel(booster)`, which takes the
+  crew's view off the Dragon) · **O4** **the craft dump — a build input that is not in the repo (C7)**, without
+  which §2.4's engine table cannot be filled · **O5** RTLS or ASDS + the aim point · **O6** docking AP vs
+  hand-off (open since §B9 P4) · **O7** the seven splashdown sites have **no coordinates anywhere** and NASA
+  does not publish them · **O8** entry lifting-bank vs ballistic · **O9** ascent throttle realism vs PVG
+  bang-bang.
