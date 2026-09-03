@@ -4805,7 +4805,13 @@ wave either — the same gap **W6** found for `pure/CourseCorrect.cs`. Rather th
 rider (c) rules that **the first Wave E line needing a pure file lands it**; every line below names its own,
 so no separate register line was created and nothing is left unowned.
 
-### W12 [S] The preview harness invents crew-gate text, and it now provably contradicts the restored catalog — **TODO** — [TIER 4: hygiene — a preview that misrepresents the real page]
+### W12 [S] The preview harness invents crew-gate text, and it now provably contradicts the restored catalog — **DONE 2026-09-04** — [TIER 4: hygiene — a preview that misrepresents the real page]
+Fixed: `plugin/preview/PreviewMain.cs`'s flight-gate card block now pulls G7 (`CrewGates.ById(default(MissionProfile),
+GateId.LaunchGoG7)`) and builds `GateItemView[]` from its real `Title`/`Items` instead of a hardcoded sample —
+`ItemKind.CrewAck` → `CrewActionable = true`. `CrewGates.cs` itself untouched (§1.4 source-of-truth). Verified:
+`page0_flight_gate.png` now shows "GO/NO-GO FOR LAUNCH" with the real 3 items (1 AUTO "Consumables margin ≥
+mission + reserve", 2 CREW "Dragon crew — GO" / "GO for launch") — matches the catalog exactly. `build.py test`
+green.
 Logged by **W4**, 2026-09-04 (C1.1 — found while inspecting `page0_flight_gate.png` for the C1.3 gate).
 **The finding.** `plugin/preview/PreviewMain.cs:1077-1079` builds the gate card from a **hardcoded
 `GateItemView` sample** — *"GO/NO-GO poll complete" · "Dragon crew - GO" · "SpaceX - GO for launch"* — not

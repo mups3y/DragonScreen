@@ -1069,15 +1069,15 @@ public static class PreviewMain
         // The flagship interactive moment: the crew works the GO/NO-GO poll on the FLIGHT page. Rendered
         // GO-ready so the checked items and the green GO / amber NO-GO / red ABORT plates are all visible.
         {
+            Gate g7 = CrewGates.ById(default(MissionProfile), GateId.LaunchGoG7);
             ps.GateActive = true;
-            ps.GateTitle = "GO / NO-GO FOR LAUNCH";
+            ps.GateTitle = g7.Title;
             ps.GateStage = GatePhase.GoReady;
-            ps.GateItems = new GateItemView[]
-            {
-                new GateItemView { Label = "GO/NO-GO poll complete", Checked = true, CrewActionable = true },
-                new GateItemView { Label = "Dragon crew - GO",       Checked = true, CrewActionable = true },
-                new GateItemView { Label = "SpaceX - GO for launch",  Checked = true, CrewActionable = true }
-            };
+            ps.GateItems = new GateItemView[g7.Items.Length];
+            for (int gi = 0; gi < g7.Items.Length; gi++)
+                ps.GateItems[gi] = new GateItemView {
+                    Label = g7.Items[gi].Label, Checked = true,
+                    CrewActionable = g7.Items[gi].Kind == ItemKind.CrewAck };
             dl.Clear();
             Pages.Build(dl, 0, W, H, ps, MapProjection.Default(), 2);
             ChromeState cs = new ChromeState();
