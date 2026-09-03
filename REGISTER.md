@@ -4885,7 +4885,7 @@ and re-run `MissionProfileTest.cs` (it may also assert the wrong value and need 
 **DONE when:** `build.py test` green, the six lines corrected, and the header no longer overstates what the
 W4 cross-check covered.
 
-### W13 [S] Wave E-1 `src/GeometryDump.cs` — the read-only RCS-geometry probe, zero control risk — **TODO** — [TIER 4: scheduled recovery, no control path]
+### W13 [S] Wave E-1 `src/GeometryDump.cs` — the read-only RCS-geometry probe, zero control risk — **DONE 2026-09-04** — [TIER 4: scheduled recovery, no control path]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 1 of 9).
 **The file.** `plugin/src/GeometryDump.cs` (8,122 B at `8b81816^`), R1 §5.2 **RECOVER-CODE** — *"READ-ONLY
 diagnostic; touches nothing in the control path"*, *"safe, zero control risk"*. It captures the RCS actuator
@@ -4904,6 +4904,14 @@ API requires; confirm by comment-stripped diff that nothing else changed (the W2
 consumer `pure/Authority.cs` is already in the tree (Wave A / W1) — do not re-land it.
 **DONE when:** `build.py test` green, the file compiles in today's tree, the diff against `8b81816^` is empty
 but for stated API adaptations, and **no screen and no control path changed** (grep: nothing calls it).
+**Closed 2026-09-04:** restored byte-identical from `8b81816^` (`diff` against that ref is empty — zero API
+adaptations needed; today's tree already uses the same `ModuleRCS` members — `thrusterTransforms`, `useZaxis`,
+`thrusterPower` — in `Actuator.cs`). `grep -rn GeometryDump plugin/src` finds only the file itself — no
+screen or control path references it. `build.py test` green (all suites) and `build.py` (full glue build,
+126 source files) green with no new warnings. `build.py preview` re-rendered and one page spot-checked —
+unaffected, as expected: `GeometryDump.cs` has no `pure/` half and preview never links it. §1.4: verified-real
+source (git ref `8b81816^`, R1 §5.2). Found in passing, logged not fixed (C1.1): `CraftDumpAddon.cs`'s header
+comment now overstates itself now that `GeometryDumpProbe` also carries a `[KSPAddon]` → **S72**.
 
 ### W14 [S] Wave E-2 `src/DeployablesControl.cs` — solar/antenna deploy + pre-return retract — **TODO** — [TIER 3: scheduled recovery]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 2 of 9).
@@ -5405,6 +5413,15 @@ SOURCE"* for `reference/dragon2-ui-vue/` — false, since `dragon_crew.png` (shi
 `plugin/GameData/DragonScreen/art/cover/`) is sourced from that same repo's bundled art. **Build:** correct
 the §3 header and add a line noting the one shipped asset, cross-referencing `NOTICE` (S69) for the full
 attribution. Docs-only; no `.cs` change; `build.py test` as no-regression check.
+
+### S72 [S] `CraftDumpAddon.cs`'s header comment is now false — **TODO** — [TIER 2: hygiene, doc accuracy]
+Found by **W13**, 2026-09-04 (C1.1 — noticed while restoring `GeometryDump.cs`, not touched by W13 since it is
+outside that task's declared outputs). `plugin/src/CraftDumpAddon.cs:5` reads *"Our tree has no `[KSPAddon]`
+anywhere else"* — false as of W13: `GeometryDumpProbe` (`plugin/src/GeometryDump.cs`) carries its own
+`[KSPAddon(KSPAddon.Startup.Flight, false)]`, by design (R1 §5.2: isolated, no host dependency). **Build:**
+reword the comment to say there are now two independent `[KSPAddon]`s (`CraftDumpAddon` and
+`GeometryDumpProbe`), both read-only diagnostics, neither touching the render or control path. Docs-comment-only;
+no behavior change; `build.py test` as no-regression check.
 
 ### W22 [S] `pure/Trajectory.cs`'s 4-band L/D schedule is UNMARKED, and R1 §7.4 files it under the wrong file — **TODO** — [TIER 3: a disclosed unmeasured constant carrying no marking]
 Logged by **W6**, 2026-09-04 (C1.1 — found on re-confirming R1's verdict against the restored content, which
