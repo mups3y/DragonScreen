@@ -61,6 +61,7 @@ public static class PageTest
         Propellant();
         DockingLayout();
         PlanetLiveSeam();
+        SubsystemWords();   // S51 / H14+H15+H16: the six subsystem tabs' state column
         Capacity();
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
@@ -1354,6 +1355,164 @@ public static class PageTest
            PlanetGeom.DiscFillOfHalfHeight, 0.88, 1e-12);
         Eq("the disc and the camera zoom by the same factor",
            PlanetGeom.ZoomBase, 1.25, 1e-12);
+    }
+
+    // ------------------------------------------------------------------ S51: the state words that lied
+
+    /// <summary>Draw one subsystem tab and hand back its display list, so the words it actually emits
+    /// can be read rather than inferred from the code that emits them.</summary>
+    static DisplayList Tab(VehicleSubsystemPage.Sub sub, PageState st)
+    {
+        DisplayList dl = new DisplayList(VehicleSubsystemPage.Commands);
+        VehicleSubsystemPage.Build(dl, 2560, 1406, sub, st);
+        return dl;
+    }
+
+    static void SubsystemWords()
+    {
+        // ---- H14: THE DEAD-FEED GUARD S22 NEVER REACHED ----
+        // S22 fixed the Overview: a dashed gauge must not sit beside a confident green state word. These
+        // six tabs never got it, so a dead feed dashed all four gauges while the left column went on
+        // reading Nominal / Active / Clear / 16 / 16 / Open / Ready in green. Every state word on every
+        // one of the six must now be gone on !Valid — the LABELS stay, they are still true.
+        PageState dead = new PageState();
+        dead.Valid = false;
+        string[] mustVanish = {
+            "Nominal", "Active", "Standby", "Clear", "16 / 16", "Armed", "Open", "Ready",
+            "None", "Lock", "Enabled", "Valid", "Auto", "Deployed", "2 / 2", "3 / 3", "Off" };
+        VehicleSubsystemPage.Sub[] all = {
+            VehicleSubsystemPage.Sub.Crew, VehicleSubsystemPage.Sub.Propulsion,
+            VehicleSubsystemPage.Sub.Power, VehicleSubsystemPage.Sub.Avionics,
+            VehicleSubsystemPage.Sub.Gnc, VehicleSubsystemPage.Sub.Thermal };
+        for (int t = 0; t < all.Length; t++)
+        {
+            DisplayList dl = Tab(all[t], dead);
+            for (int i = 0; i < mustVanish.Length; i++)
+                Check("no feed, " + all[t] + ": \"" + mustVanish[i] + "\" is not asserted",
+                      !HasText(dl, mustVanish[i]), "");
+            // ...and the labels DO survive, or the guard has blanked the page instead of the claims.
+            Check("no feed, " + all[t] + ": the row LABELS still stand",
+                  HasText(dl, "PWR DISTRIB") || HasText(dl, "SMOKE DETECT") || HasText(dl, "HEATERS")
+                  || HasText(dl, "DRACO x16") || HasText(dl, "GPS NAV") || HasText(dl, "DATA BUS"), "");
+        }
+
+        // ---- H16: THE ALERTS VIEW'S GREEN "NOMINAL" ON A DEAD FEED ----
+        // It printed a confident all-clear beside its own honest NO DATA, in the same panel.
+        {
+            DisplayList dl = new DisplayList(VehicleSubsystemPage.Commands);
+            VehicleSubsystemPage.Build(dl, 2560, 1406, VehicleSubsystemPage.Sub.Crew, dead, true);
+            Check("no feed, ALERTS: no green NOMINAL beside the NO DATA", !HasText(dl, "NOMINAL"), "");
+            Check("no feed, ALERTS: it says NO DATA instead", HasText(dl, "NO DATA"), "");
+        }
+
+        // ---- H15: EIGHT WORDS THAT CONTRADICTED LIVE STATE ON THEIR OWN SCREEN ----
+        // Each pair below drives the SOURCE FIELD to both of its states and demands the word follow. A
+        // hardcoded literal passes the first half of every pair and fails the second — which is exactly
+        // how these eight went unnoticed.
+
+        // SMOKE DETECT vs Systems.Fire (Crew).
+        {
+            PageState calm = Healthy();
+            Check("SMOKE DETECT reads Clear with no fire", HasText(Tab(VehicleSubsystemPage.Sub.Crew, calm), "Clear"), "");
+            PageState burning = Healthy();
+            burning.Systems.FireIntensity = 0.5;
+            Check("...(fixture) the model calls that a fire", burning.Systems.Fire, "");
+            DisplayList dl = Tab(VehicleSubsystemPage.Sub.Crew, burning);
+            Check("SMOKE DETECT says Detected in a fire", HasText(dl, "Detected"), "");
+            Check("...and stops saying Clear", !HasText(dl, "Clear"), "");
+        }
+
+        // OMS / RCS and RCS AUTHORITY vs RcsOn (Prop and GNC — ONE switch, two tabs).
+        {
+            PageState off = Healthy(); off.RcsOn = false;
+            PageState on = Healthy(); on.RcsOn = true;
+            Check("OMS / RCS says Off with the RCS off",
+                  HasText(Tab(VehicleSubsystemPage.Sub.Propulsion, off), "Off"), "");
+            Check("OMS / RCS says Ready with the RCS on",
+                  HasText(Tab(VehicleSubsystemPage.Sub.Propulsion, on), "Ready"), "");
+            Check("...and it does NOT say Ready with the RCS off",
+                  !HasText(Tab(VehicleSubsystemPage.Sub.Propulsion, off), "Ready"), "");
+            Check("RCS AUTHORITY says Disabled with the RCS off",
+                  HasText(Tab(VehicleSubsystemPage.Sub.Gnc, off), "Disabled"), "");
+            Check("RCS AUTHORITY says Enabled with the RCS on",
+                  HasText(Tab(VehicleSubsystemPage.Sub.Gnc, on), "Enabled"), "");
+            Check("...and it does NOT say Enabled with the RCS off",
+                  !HasText(Tab(VehicleSubsystemPage.Sub.Gnc, off), "Enabled"), "");
+        }
+
+        // ATT CONTROL vs ModeText — the word four rows above the readout that prints the same field.
+        {
+            PageState idle = Healthy();
+            idle.Mode = ControlMode.Idle; idle.ModeText = AuthorityManager.Name(ControlMode.Idle);
+            DisplayList di = Tab(VehicleSubsystemPage.Sub.Gnc, idle);
+            Check("ATT CONTROL reads IDLE when nothing is flying", HasText(di, "IDLE"), "");
+            Check("...and never the old hardcoded Auto", !HasText(di, "Auto"), "");
+
+            PageState auto = Healthy();
+            auto.Mode = ControlMode.Auto; auto.ModeText = AuthorityManager.Name(ControlMode.Auto);
+            Check("ATT CONTROL reads AUTO when the autopilot has it",
+                  HasText(Tab(VehicleSubsystemPage.Sub.Gnc, auto), "AUTO"), "");
+
+            PageState abort = Healthy();
+            abort.Mode = ControlMode.Abort; abort.ModeText = AuthorityManager.Name(ControlMode.Abort);
+            Check("ATT CONTROL reads ABORT in an abort",
+                  HasText(Tab(VehicleSubsystemPage.Sub.Gnc, abort), "ABORT"), "");
+        }
+
+        // COOLANT LOOP A / B and HEAT SHIELD vs the numbers this same tab draws.
+        {
+            PageState cool = Healthy();
+            Check("COOLANT LOOPs read Nominal on a cool vehicle",
+                  HasText(Tab(VehicleSubsystemPage.Sub.Thermal, cool), "Nominal"), "");
+
+            // Drive the loops over CabinLimits.LoopAlarm (55 C) through the model's own input, not by
+            // poking the readout: the word must follow the SAME number the LOOP A gauge prints.
+            CabinInputs hot = new CabinInputs();
+            // The loops follow HullTempC's excess over nominal (pure/CabinEnvironment.cs), so the
+            // fixture heats the HULL and lets the model carry that into the loops - rather than writing a
+            // loop temperature straight into the readout, which would prove nothing about the wiring.
+            hot.Crew = 4; hot.CrewCapacity = 4; hot.HullTempC = 500.0;
+            hot.MissionTime = 500.0; hot.Power01 = 0.8; hot.Powered = true; hot.PowerFlow = 0.0;
+            PageState boiling = Healthy();
+            boiling.Cabin = Cabin.Compute(hot);
+            if (boiling.Cabin.LoopAC >= CabinLimits.LoopAlarm)
+            {
+                DisplayList dl = Tab(VehicleSubsystemPage.Sub.Thermal, boiling);
+                Check("COOLANT LOOP A says Alarm when its own gauge is over the alarm limit",
+                      HasText(dl, "Alarm"), "loopA = " + boiling.Cabin.LoopAC.ToString("F1"));
+            }
+            else
+            {
+                // The model would not go that hot from this input; say so rather than passing quietly.
+                Check("(fixture) the coolant model can be driven over its alarm limit", false,
+                      "loopA only reached " + boiling.Cabin.LoopAC.ToString("F1"));
+            }
+
+            // HEAT SHIELD bands HullTemp01 through the SHARED Alarms.High rule (0.75 / 0.90) — the same
+            // fraction the SHIELD gauge on this tab rings, so word and ring move together. No new number.
+            PageState searing = Healthy(); searing.HullTemp01 = 0.95;
+            Check("(fixture) 0.95 of a part's own maximum is Alarms.High's alarm band",
+                  Alarms.High(0.95) == Severity.Alarm, "");
+            DisplayList ds = Tab(VehicleSubsystemPage.Sub.Thermal, searing);
+            Check("HEAT SHIELD says Alarm at 0.95 of the shield's own limit", HasText(ds, "Alarm"), "");
+            PageState warm = Healthy(); warm.HullTemp01 = 0.8;
+            Check("HEAT SHIELD says Caution in the caution band",
+                  HasText(Tab(VehicleSubsystemPage.Sub.Thermal, warm), "Caution"), "");
+        }
+
+        // MANIFOLD LEAK is DASHED, not wired: the only leak this build models is the CABIN's, and putting
+        // it under a propellant-manifold label would trade one false word for a worse one. Pinned so a
+        // later chat cannot quietly wire the cabin leak here without changing this check on purpose.
+        {
+            PageState leaking = Healthy();
+            leaking.Systems.LeakRate = 0.5;
+            Check("(fixture) the model calls that a cabin leak", leaking.Systems.Leaking, "");
+            DisplayList dl = Tab(VehicleSubsystemPage.Sub.Propulsion, leaking);
+            Check("MANIFOLD LEAK does not claim None with no manifold-leak source",
+                  !HasText(dl, "None"), "");
+            Check("MANIFOLD LEAK does not report the CABIN leak under a propellant label",
+                  !HasText(dl, "Detected") && !HasText(dl, "Isolating"), "");
+        }
     }
 
     static bool HasText(DisplayList dl, string want)

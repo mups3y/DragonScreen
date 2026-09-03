@@ -4217,7 +4217,7 @@ designed and previewed, and coordinates come from `docs/UI_AUDIT.md` (the refere
 screenshot). ⚠ New rows land on two pages **S39** lists — adopt S38's label→value remedy, do not inherit the
 defect. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H1/H2/H10 + §1.3.
 
-### S51 [S] The six subsystem tabs never got S22's guard, and eight status words contradict live state on their own screen — **TODO** — [TIER 2: real defect]
+### S51 [S] The six subsystem tabs never got S22's guard, and eight status words contradict live state on their own screen — **DONE 2026-09-04** — [TIER 2: real defect]
 Logged by **S49** (H14, H15). **S22 fixed `VehicleOverviewPage` + `VehicleMechPage` only.** Verified: the
 Overview gates its checklist on `!valid` (`VehicleOverviewPage.cs:113`), **`VehicleSubsystemPage.cs:130-131`
 does not**, and its literal words are not routed through `T()`. On a dead feed all four gauges dash while the
@@ -4233,6 +4233,80 @@ dead feed beside its own honest `NO DATA`. ⚠ **Coordinate with S35** — if th
 gauge colour, the word fixes belong in the same pass so colour and word cannot disagree.
 **DONE when:** no status word asserts a state nothing checks, `!Valid` dims every one, and previews of the
 live + no-feed states are inspected. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H14/H15/H16.
+- **DONE 2026-09-04** (⚠ **batch session** — the owner-authorised deviation from C1.1/C1.7 of 2026-09-04, via
+  the overseer, for that batch ONLY). All three halves landed in `pure/VehicleSubsystemPage.cs`, and **no new
+  model and no new threshold was introduced** — every word now reads a field the page was already drawing,
+  through severity rules the rest of the mod already uses. That was the constraint, and it held.
+- **(1) H14 — the guard S22 never reached.** `Build` now takes the Overview's rule verbatim: `!s.Valid` dims
+  the WHOLE row (icon + word) and the word goes through a local `CT()`, exactly as `VehicleOverviewPage.cs:113`
+  does. The row LABEL stays — it names which subsystem the row is, which is true with or without a feed.
+- **(2) H15 — seven of the eight contradicted words are now wired to the field that contradicted them.**
+  `SMOKE DETECT` → `Systems.Fire` (Detected/Clear, the same model the P&ID draws as FIRE DETECTED/NONE) ·
+  `OMS / RCS` **and** `RCS AUTHORITY` → the one live `RcsOn`, so the PROP and GNC tabs cannot disagree about a
+  single switch · `ATT CONTROL` → `T(st.ModeText)`, the very word this tab already prints four rows right in
+  its own "Pointing" readout · `COOLANT LOOP A/B` → `Alarms.Band(LoopAC/LoopBC, LoopCaution, LoopAlarm)`, the
+  **identical call `SystemsPidPage` makes for the same two loops** · `HEAT SHIELD` → `Alarms.High(HullTemp01)`,
+  the shared 0.75/0.90 rule over the same fraction the SHIELD gauge on this tab already rings. Two small pure
+  helpers (`SevWord` / `SevKey`) put a `Severity` into this column's title-case idiom; `Alarms.Word` keeps its
+  caps for the ALERTS banner, so the two differ in typography only and never in state.
+- **(3) H16 — the ALERTS view's dead-feed "NOMINAL".** It printed a confident green all-clear (from
+  `LiveSeverity`'s own `!Valid → Nominal` shortcut) beside its own honest `NO DATA` in the same panel. It now
+  reads `NO DATA`, dimmed. The severity computation itself is untouched.
+- ⛔ **THE EIGHTH WORD — `MANIFOLD LEAK` — IS DASHED, NOT WIRED, AND THAT IS A DELIBERATE REFUSAL.** This line
+  pairs it with `s.Systems.Leaking`, but that field is the **CABIN's** leak (`LeakRate`, sprung by G-overstress,
+  reported under its own label on the P&ID as **CABIN LEAK**). Reading it under a **PROPELLANT MANIFOLD** label
+  would trade one false word for a worse one — a new misattribution rather than a correction. Nothing in this
+  build models a propellant manifold leak, so §14.4(e)'s dash is the honest answer: no source, no claim. That
+  satisfies this line's own DONE-when (*"no status word asserts a state nothing checks"*) without inventing.
+  **The alternative is a real question and it is put to the owner below rather than decided here** (C1.14).
+- **Headless checks, in `PageTest`'s new `SubsystemWords()` section** (suite 771→**879 checks, 0 failed**).
+  It reads the words the page **actually emits** via `HasText` on the display list, not the code that emits
+  them. Structure: seventeen state words × all six tabs must be **gone** on `!Valid` while the labels survive
+  (so the guard dims claims, not the page); the ALERTS pair; then, for each wired row, **the source field is
+  driven to BOTH of its states and the word must follow** — which is the check that matters, because a
+  hardcoded literal passes the first half of every pair and fails the second. That is precisely how these
+  eight went unnoticed. The coolant check heats the **hull** and lets `Cabin.Compute` carry that into the
+  loops, rather than writing a loop temperature straight into the readout, and it **fails loudly** if the
+  model cannot be driven past its own alarm limit instead of passing quietly. `MANIFOLD LEAK`'s refusal is
+  pinned too: with a live cabin leak the PROP tab must say neither "None" nor "Detected".
+- **Mutation-checked.** Reverting the word to the raw literal (`L(d.CkState[i], …)`) reddens the whole no-feed
+  block across every tab; re-hardcoding `ATT CONTROL` to `"Auto"` reddens exactly *"...and never the old
+  hardcoded Auto"*. Both reverted and re-verified green.
+- **Gate (C1.3) — previews of BOTH states inspected, as the DONE-when requires.**
+  `ui_vehiclecrew_nofeed.png`: every checklist row now shows a **dash** under its label with a dimmed icon,
+  beside the four dashed gauges — the green `Nominal / Nominal / Active / Standby / Nominal / Clear` column is
+  gone. `ui_vehiclegnc.png` (live): `RCS AUTHORITY` now reads **"Disabled"** in neutral white (the fixture has
+  the RCS off — it used to read a green "Enabled"), and `ATT CONTROL` reads **AUTO**, matching the "Pointing"
+  readout four rows right that prints the same field. `ui_vehiclethermal.png` (live): LOOP A 26.4 °C / LOOP B
+  20.1 °C → **computed** "Nominal", and HEAT SHIELD "Nominal" at 312 °C — correct, because `HullTemp01` is that
+  part's temperature over its OWN maximum. `build.py test` green, all suites.
+- ⚠ **S35 coordination, resolved rather than deferred.** This line warns that if the owner rules severity
+  drives gauge COLOUR, the word fixes belong in the same pass. They do not conflict: S51 changed **words**,
+  S35 is about the gauge **arc identity colours**, and every word here is computed from a `Severity` — so when
+  S35 lands, colour and word will be reading the same rule and cannot disagree. `ui_vehiclethermal.png` shows
+  the S35 defect still standing and now clearly isolated: the SHIELD arc is `#D12C30` **red** by identity
+  while the row beside it correctly says **Nominal**. Nothing here pre-empts that decision.
+
+#### Open questions for the owner (C1.14) — S51
+
+**S51-Q1. `MANIFOLD LEAK` on the PROPULSION tab: dash, or model a propellant-manifold leak?**
+*Situation.* S51 named this row as one of eight words contradicted by live state, pairing it with
+`s.Systems.Leaking`. On inspection that field is the **cabin** leak — sprung by G-overstress in
+`pure/VehicleSystems.cs`, closed by DEPRESS RESPONSE, and already reported under its own name on the P&ID as
+**CABIN LEAK**. This build models **no propellant manifold leak at all**. S51 therefore dashed the row (no
+source, no claim) rather than reporting a cabin leak under a propellant label, and did not invent a model —
+§14.4(f) prefers a marked simulation to a dash, so the choice is genuinely the owner's, not this chat's.
+1. **Leave it dashed** — no source, no claim; revisit if a propellant-leak source ever appears.
+   *(recommended: it is honest today, it costs nothing, and it cannot mislead a crew. The row is one of very
+   few on these tabs with no candidate source at all, so it is consistent with `Humidity`, `Chamber Press`
+   and the AVIONICS column, all of which dash for the same reason.)*
+2. **Build a marked propellant-manifold-leak micro-sim** (a slow tank-mass anomaly against `DragonProp01`,
+   marked as ours) so §14.4(f)'s "included and filled" applies. ⚠ This is a NEW SUBSYSTEM, not a word fix —
+   it needs its own register line, and **C1.15 binds it**: a documented search against
+   `docs/reference/INSTALLED_MODS.md` must come first (does an installed mod — TestFlight, RealFuels —
+   already model a propellant leak or tank failure we should read instead of simulating?).
+3. **Wire it to `s.Systems.Leaking` as this line literally reads.** ⛔ Not recommended: it puts a cabin leak
+   under a propellant-manifold label, which is a new false statement rather than the removal of one.
 
 ### S52 [O] `SuitLeakSim`'s provenance comment contradicts the code, and cabin pressure ignores the live leak — **TODO** — [TIER 2: real defect + documentation defect]
 Logged by **S49** (H20, H37). `SuitLeakSim`'s header states the suit ΔP is measured against cabin pressure

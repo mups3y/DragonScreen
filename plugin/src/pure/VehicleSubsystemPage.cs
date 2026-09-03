@@ -121,17 +121,27 @@ namespace DragonScreen
             C(d.Title, 1713, 40, 46, White);
 
             // ---- LEFT: subsystem checklist ----
+            // S51 / audit H14: THIS COLUMN NEVER GOT S22'S GUARD. S22 gave `VehicleOverviewPage` a dead-feed
+            // rule — a dashed gauge must not sit beside a confident green state word — and stopped there.
+            // On these six tabs a dead feed dashed all four gauges while the left column went on reading
+            // `Nominal / Active / Clear / 16 / 16 / Open / Ready / …` in green. Same failure, one page over.
+            // The guard is now the overview's, verbatim: `!valid` dims the WHOLE row (icon + word) and the
+            // word goes through `T()`, exactly as `VehicleOverviewPage.cs:113` does. The LABEL stays put —
+            // it says which subsystem the row is, which is true whether or not there is a feed.
+            bool ckValid = s.Valid;
+            string CT(string live) => (ckValid && !string.IsNullOrEmpty(live)) ? live : Dash;
             for (int i = 0; i < d.CkLabel.Length; i++)
             {
                 float y = 300 + i * 195;
                 // 0 neutral · 1 go · 2 caution · 3 alarm. Key 3 arrived with the bus rows (QC-AUDIT
                 // finding 3): a bus the crew has powered whose three strings are ALL down is an alarm on
                 // the systems tree, and this column has to be able to say the same thing.
-                Rgba sc = d.CkKey[i] == 1 ? Go : d.CkKey[i] == 2 ? Amber
+                Rgba sc = !ckValid ? Dim
+                        : d.CkKey[i] == 1 ? Go : d.CkKey[i] == 2 ? Amber
                         : d.CkKey[i] == 3 ? DragonPalette.Alarm : White;
                 dl.Asset("ic_check", PX(90), PY(y), SZ(38), SZ(38), sc);
                 L(d.CkLabel[i], 150, y + 4, 28, White);
-                L(d.CkState[i], 150, y + 48, 26, sc);
+                L(CT(d.CkState[i]), 150, y + 48, 26, sc);
             }
 
             Severity sev = LiveSeverity(sub, s);
@@ -172,10 +182,15 @@ namespace DragonScreen
                 // gauges, then the one real fault channel (FDIR) in place of the readout column. Both are
                 // driven by LiveSeverity — the exact value already colouring this subsystem's own tab, so
                 // the toggle content and the red-nav can never say different things.
-                Rgba sevCol = sev == Severity.Nominal ? Go : Alarms.Colour(sev);
+                // S51 / audit H16: on a dead feed this printed a green "NOMINAL" — a confident all-clear
+                // computed from `LiveSeverity`'s own `!Valid -> Nominal` shortcut — directly beside the
+                // honest "NO DATA" in the FDIR column below it. One panel, two answers. With no feed there
+                // is no alert activity to report, so the word dashes and dims like every other unsourced
+                // readout on this page; the severity itself is unchanged.
+                Rgba sevCol = !s.Valid ? Dim : sev == Severity.Nominal ? Go : Alarms.Colour(sev);
                 C("ALERT ACTIVITY", 1845, 340, 38, Accent);
                 dl.Rect(PX(1300), PY(390), 1090 * sx, SZ(2), Faint);
-                C(Alarms.Word(sev), 1845, 560, 110, sevCol);
+                C(s.Valid ? Alarms.Word(sev) : "NO DATA", 1845, 560, 110, sevCol);
 
                 L("FDIR", 2760, 340, 28, Dim);
                 Rgba fdirCol = s.Valid ? Alarms.Colour(Alarms.FdirSeverity(s)) : Dim;
@@ -236,6 +251,41 @@ namespace DragonScreen
         // healthy row on this template is spelled: Nominal.
         static readonly string[] BusOnline3 = { "0 / 3 Online", "1 / 3 Online", "2 / 3 Online", "Nominal" };
 
+        // ---- S51 / audit H15: EIGHT WORDS THAT CONTRADICTED LIVE STATE ON THEIR OWN SCREEN ----
+        // The deeper half of S51. Beyond the dead-feed guard above, eight of this column's literals
+        // asserted a state NOTHING CHECKED, while the field that would have contradicted them was already
+        // being drawn on the same page — SMOKE DETECT "Clear" beside a live `Systems.Fire`, OMS/RCS
+        // "Ready" and RCS AUTHORITY "Enabled" beside a live `RcsOn`, ATT CONTROL "Auto" four rows above a
+        // "Pointing" readout printing `ModeText`, COOLANT LOOP A/B and HEAT SHIELD "Nominal" beside the
+        // very numbers `Alarms` bands. NO NEW MODEL AND NO NEW THRESHOLD: every one reads a field that was
+        // already there, through the severity rules the rest of the mod already uses. This is exactly what
+        // QC-AUDIT finding 3 did for MAIN BUS A/B, applied to the rest of the column.
+
+        /// <summary>A severity in this column's idiom. `Alarms.Word` shouts in caps for the ALERTS banner;
+        /// the checklist is title-case ("Nominal"), so the two are spelled differently on purpose and both
+        /// come from the SAME `Severity` — they cannot disagree about the state, only about typography.</summary>
+        static string SevWord(Severity v)
+        {
+            return v == Severity.Alarm ? "Alarm" : v == Severity.Caution ? "Caution" : "Nominal";
+        }
+
+        /// <summary>...and its checklist colour key. 1 go · 2 caution · 3 alarm, the keys already in use.</summary>
+        static int SevKey(Severity v)
+        {
+            return v == Severity.Alarm ? 3 : v == Severity.Caution ? 2 : 1;
+        }
+
+        /// <summary>ATT CONTROL: who owns the vehicle, off the SAME `ModeText` this tab already prints in
+        /// its own "Pointing" readout. With no flight software that reads IDLE, which is §14.4(a)'s honest
+        /// answer — the old literal "Auto" claimed an autopilot was flying.</summary>
+        static int ModeKey(ControlMode m)
+        {
+            if (m == ControlMode.Abort) return 3;
+            if (m == ControlMode.Recovery) return 2;
+            if (m == ControlMode.Auto) return 1;
+            return 0;                                  // Idle / Manual: neutral, not a fault
+        }
+
         static bool BusOn(PageState st, int bus)
         {
             return bus == 1 ? st.Systems.Bus1On : st.Systems.Bus2On;
@@ -279,8 +329,13 @@ namespace DragonScreen
                 case Sub.Crew:
                     s.Title = "CREW · LIFE SUPPORT"; s.Tab = 1;
                     s.CkLabel = new[] { "CABIN ATMOSPHERE", "O2 SUPPLY", "CO2 SCRUBBER", "SUIT LOOP", "WATER SYSTEM", "SMOKE DETECT" };
-                    s.CkState = new[] { "Nominal", "Nominal", "Active", "Standby", "Nominal", "Clear" };
-                    s.CkKey   = new[] { 1, 1, 1, 0, 1, 1 };
+                    // S51/H15: SMOKE DETECT reads the live fire model — the same `Systems.Fire` the P&ID
+                    // draws as FIRE DETECTED / NONE — instead of a hardcoded "Clear" that stayed green
+                    // through a cabin fire. Same source, same two states, this column's wording.
+                    bool smoke = valid && st.Systems.Fire;
+                    s.CkState = new[] { "Nominal", "Nominal", "Active", "Standby", "Nominal",
+                                        smoke ? "Detected" : "Clear" };
+                    s.CkKey   = new[] { 1, 1, 1, 0, 1, smoke ? 3 : 1 };
                     // The four cabin gauges are the overview's four, read off the same CabinReadout.
                     s.GLabel  = new[] { "PPO2", "CABIN TEMP", "CABIN PRESS", "CO2" };
                     s.GVal    = new[] { T(st.Ppo2Text), T(st.CabinTempText), T(st.PressText), T(st.Co2Text) };
@@ -298,8 +353,20 @@ namespace DragonScreen
                 case Sub.Propulsion:
                     s.Title = "PROPULSION"; s.Tab = 2;
                     s.CkLabel = new[] { "DRACO x16", "SUPERDRACO x8", "PROP ISOLATION", "HE PRESSURANT", "OMS / RCS", "MANIFOLD LEAK" };
-                    s.CkState = new[] { "16 / 16", "Armed", "Open", "Nominal", "Ready", "None" };
-                    s.CkKey   = new[] { 1, 2, 1, 1, 1, 1 };
+                    // S51/H15, two rows.
+                    // OMS / RCS: reads the live RCS action group (`RcsOn`, off `KSPActionGroup.RCS`) rather
+                    // than a hardcoded "Ready" that said Ready with the RCS switched off. It is the SAME
+                    // field GNC's RCS AUTHORITY row reads, so the two tabs cannot disagree about one switch.
+                    // MANIFOLD LEAK: DASHED, deliberately, and this is the one row in the eight that is NOT
+                    // wired. The only leak this build models is the CABIN's (`SystemsState.LeakRate`, sprung
+                    // by G-overstress and reported under its own label on the P&ID as CABIN LEAK). Reading
+                    // it here would put a cabin leak under a PROPELLANT MANIFOLD label — trading one false
+                    // word for a worse one. Nothing models a propellant manifold leak, so §14.4(e)'s dash
+                    // is the honest answer: no source, no claim. See S51's open question in REGISTER.md.
+                    bool rcsUp = valid && st.RcsOn;
+                    s.CkState = new[] { "16 / 16", "Armed", "Open", "Nominal",
+                                        rcsUp ? "Ready" : "Off", Dash };
+                    s.CkKey   = new[] { 1, 2, 1, 1, rcsUp ? 1 : 0, 0 };
                     s.GLabel  = new[] { "OX (NTO)", "FUEL (MMH)", "HELIUM", "PROP TEMP" };
                     // HELIUM pressurant and propellant temperature: no KSP resource and no model answers
                     // either, and a bar pressure would be a number invented to fill the dial.
@@ -401,8 +468,17 @@ namespace DragonScreen
                 case Sub.Gnc:
                     s.Title = "GUIDANCE, NAV & CONTROL"; s.Tab = 6;
                     s.CkLabel = new[] { "IMU 1 / 2", "STAR TRACKERS", "GPS NAV", "RCS AUTHORITY", "NAV STATE", "ATT CONTROL" };
-                    s.CkState = new[] { "Nominal", "2 / 2", "Lock", "Enabled", "Valid", "Auto" };
-                    s.CkKey   = new[] { 1, 1, 1, 1, 1, 0 };
+                    // S51/H15, two rows.
+                    // RCS AUTHORITY: the same live `RcsOn` the PROP tab's OMS / RCS row reads — one switch,
+                    // one source, two tabs. "Enabled" beside a disabled RCS was the contradiction.
+                    // ATT CONTROL: reads `ModeText`, the control-authority word this very tab already
+                    // prints four rows below in its "Pointing" readout. They were disagreeing on one screen:
+                    // the checklist said "Auto" while the readout said IDLE. With no flight software the
+                    // honest answer is IDLE (§14.4(a)) and both now say it.
+                    bool rcsAuth = valid && st.RcsOn;
+                    s.CkState = new[] { "Nominal", "2 / 2", "Lock", rcsAuth ? "Enabled" : "Disabled",
+                                        "Valid", T(st.ModeText) };
+                    s.CkKey   = new[] { 1, 1, 1, rcsAuth ? 1 : 0, 1, valid ? ModeKey(st.Mode) : 0 };
                     s.GLabel  = new[] { "ROLL RATE", "PITCH RATE", "YAW RATE", "RCS FUEL" };
                     // The Dracos ARE the RCS, so "RCS FUEL" is the propulsion tab's own tank fraction —
                     // one datum, one source, two pages.
@@ -431,8 +507,23 @@ namespace DragonScreen
                 default: // Thermal
                     s.Title = "THERMAL CONTROL"; s.Tab = 7;
                     s.CkLabel = new[] { "COOLANT LOOP A", "COOLANT LOOP B", "RADIATORS", "HEAT SHIELD", "HEATERS", "HX FLOW" };
-                    s.CkState = new[] { "Nominal", "Nominal", "Deployed", "Nominal", "Auto", "Nominal" };
-                    s.CkKey   = new[] { 1, 1, 1, 1, 0, 1 };
+                    // S51/H15, three rows — all reading numbers this same tab already draws.
+                    // COOLANT LOOP A/B: banded by `Alarms.Band(LoopAC/LoopBC, LoopCaution, LoopAlarm)` —
+                    // the IDENTICAL call `SystemsPidPage` makes for the same two loops, so the P&ID and
+                    // this column cannot band one loop two ways. The old "Nominal" stayed green at 60 °C
+                    // while the LOOP A gauge two zones right printed that very number.
+                    // HEAT SHIELD: banded by `Alarms.High(HullTemp01)` — the hottest structure over its OWN
+                    // maximum, which is the fraction the SHIELD gauge on this tab already rings, through the
+                    // shared 0.75/0.90 rule. NO NEW THRESHOLD is introduced: `Alarms.High` is the existing
+                    // one, so this row and the ring beside it move together.
+                    Severity loopA = valid ? Alarms.Band(st.Cabin.LoopAC, CabinLimits.LoopCaution,
+                                                         CabinLimits.LoopAlarm) : Severity.Nominal;
+                    Severity loopB = valid ? Alarms.Band(st.Cabin.LoopBC, CabinLimits.LoopCaution,
+                                                         CabinLimits.LoopAlarm) : Severity.Nominal;
+                    Severity shield = valid ? Alarms.High(st.HullTemp01) : Severity.Nominal;
+                    s.CkState = new[] { SevWord(loopA), SevWord(loopB), "Deployed", SevWord(shield),
+                                        "Auto", "Nominal" };
+                    s.CkKey   = new[] { SevKey(loopA), SevKey(loopB), 1, SevKey(shield), 0, 1 };
                     s.GLabel  = new[] { "LOOP A", "LOOP B", "RADIATOR", "SHIELD" };
                     // RADIATOR: the coolant model (pure/CabinEnvironment.cs) carries the two loops but no
                     // separate radiator outlet, and the trunk radiators are not modelled at all.
