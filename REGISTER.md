@@ -6294,10 +6294,55 @@ applies, docs-only task, C1.3**), and `git status` shows only the declared outpu
 markdown remains deleted; `git status` showed only the declared outputs at each commit;
 `python plugin/build.py test` **ALL SUITES PASSED**, unmoved (markdown only, no preview PNG applies —
 C1.3 docs-only). **S3 is nearly closed** by the recovery — one wrong citation remains on its line.
-**Still out of scope and raised as W26-Q1:** the ~21 MB of RSS-RO flight recordings and
-`tuning/TUNING_DB.json` — data, not documents, and R1's own Q2 territory.
+**W26-Q1 ANSWERED BY THE OWNER, IN CHAT, 2026-09-04 — "recover the flight corpus too" — and EXECUTED.**
+The ~21 MB of RSS-RO flight data was raised as a question rather than actioned, because it is data and not
+documents and because R1's own Q2 overlaps it; the owner answered option 1, all of it. **23 files restored
+from `8b81816^`:** `docs/flights/` — 10 Crew-2 CSVs (incl. `Crew-2_20260901_004929.csv`, the last flown
+file, 136 columns), 3 probe/booster CSVs, 2 `KSPlog` excerpts, 3 geometry dumps, 3 `DS-ASC-008_screen*.png`
+— plus `docs/tuning/TUNING_DB.json` and `exclude.txt`. R1 §5.4 verdicts every one **RECOVER-REFERENCE —
+HIGHEST**, *"irreplaceable… the only raw flight data in the repo"*.
+⚠ **A CSV cannot carry a markdown banner**, so `docs/flights/README.md` (recovered earlier by H1) now
+carries the provenance + REFERENCE-ONLY warning **on the corpus's behalf**, including the two things a
+reader must know: the recorder that wrote these files is still deleted, and these are recordings of the
+**deleted hand-written autopilot** — the numbers are our only RSS-RO empirical source, the control behaviour
+is what failed (R1 §7). Three W26 banners that said "still deleted" were corrected in the same pass
+(`FLIGHT_VERIFICATION.md`, `tuning/TUNING_DB.md`, `INDEX.md` §7).
+✅ **Nothing R1 verdicted recoverable is missing from this repo any more** — 53 documents + 23 data files.
+⛔ The owner decided this; the build chat decided nothing (C1.12). **R1's own Q2 (re-fly vs trust the
+distillates) is NOT closed by it** — having the corpus back is not a ruling on whether we re-fly.
 
 ---
+
+
+### W27 [S] `assess_flight.py`'s header says the flight corpus is gone — it came back on 2026-09-04 — **TODO** — [TIER 3: doc accuracy, and it gates whether a working tool gets used]
+Logged by **W26**, 2026-09-04 (C1.1 — noticed while recovering the corpus; not fixed, out of scope).
+**The finding.** `plugin/build/assess_flight.py` carries a header block added by **S8** (2026-09-02) on the
+owner's decision to KEEP the file: it states that the old corpus is gone and that the tool *"won't run until
+T22 produces new data"*. **That is no longer true.** W26 restored `docs/flights/` in full, and the analysers
+`assess_flight.py` + `tuning_db.py` survived the 2026-09-01 deletion reading **exactly this schema** — so
+the tool can run today, against the same 55 flights `docs/tuning/TUNING_DB.md` was built from.
+⚠ **Do not change the retention decision** — S8's owner decision to keep the file stands (C1.8). This line is
+about the header telling a reader the wrong thing, and about the fact that a usable tool is currently
+labelled unusable. `docs/INDEX.md` §6 carries the same correction pointing here.
+**DONE when:** the header states the corpus is present again (naming W26 and the date), keeps S8's retention
+rationale intact, and says plainly what the tool can and cannot do against a corpus recorded by a recorder
+that no longer exists. Comment-only → preview/PNG gate N/A (C1.3); `python plugin/build.py test` as a
+no-regression check.
+
+### W28 [S] `.gitignore`'s blanket `*.csv` still swallows `docs/flights/` — the exact mechanism that lost the corpus — **TODO** — [TIER 2: a silent-data-loss trap that has already fired twice]
+Logged by **W26**, 2026-09-04 (C1.1 — noticed on restoring the corpus; not fixed, out of scope).
+**The finding.** `.gitignore:41` is a blanket `*.csv`, with a single negation at `:52` —
+`!docs/reference/*.csv` — added after that same rule silently swallowed `docs/reference/craftdump.csv`
+(the comment at `:45` says so in as many words). **`docs/flights/*.csv` has no such negation.** The 13
+recordings W26 restored were originally **force-added** for exactly this reason (`docs/flights/README.md`
+says so in its first paragraph), and §B16.8 records the same mechanism as how the RSS-RO corpus was lost.
+The restored files are safe — they are tracked now, and `.gitignore` does not apply to tracked files — but
+**the next recorded flight dropped into `docs/flights/` will vanish silently**, which is precisely what
+§B16.8 commits us to doing (re-flying to rebuild the corpus).
+**DONE when:** `docs/flights/*.csv` is negated the way `docs/reference/*.csv` is, with a comment naming why;
+`git check-ignore -v` on a new `docs/flights/*.csv` path reports no match; and no currently-tracked file
+changes status. ⚠ Consider whether the `.txt` excerpts and `docs/tuning/*.json` need the same treatment.
+
 
 ## Open questions for the owner — W26 (C1.14)
 
@@ -6308,7 +6353,9 @@ that were still missing (732 KB)**, each with a REFERENCE-ONLY banner naming its
 **C1.16 (research is never deleted)** to both rule lists. W26 **decided nothing gated (C1.12)** and **acted
 on the content of none of the recovered documents**. Three questions follow from what recovery exposed.*
 
-**W26-Q1 — The RSS-RO flight corpus is still deleted. It is DATA, not documents. Does it come back?**
+**W26-Q1 — ✅ CLOSED by the owner in chat, 2026-09-04: *"recover the flight corpus too"* — option 1,
+recovered in full (23 files, 21 MB). Kept below for the record of what was asked and why.**
+~~The RSS-RO flight corpus is still deleted. It is DATA, not documents. Does it come back?~~
 W26 recovered the prose: `FLIGHT_VERIFICATION.md` (the evidence ledger) and `tuning/TUNING_DB.md` (the
 55-flight distillate). It did **not** recover what those two describe — `docs/flights/*.csv` (10 Crew-2
 flights incl. `Crew-2_20260901_004929.csv`, the last flown file, 136 columns), 3 probe CSVs, 2 KSP.log

@@ -1,7 +1,7 @@
 > **RECOVERED 2026-09-04 by W26** from `8b81816^` (deleted by `8b81816`). R1 verdict: **RECOVER-REFERENCE — HIGHEST (§4.3)**.
 > **REFERENCE ONLY — `docs/BUILD_PLAN.md` WINS on any conflict (C7.1).** Written before 2026-08-29; the
 > plan has since moved on. Read it for method, evidence and reasoning — never as current instruction.
-> ⚠ It indexes 55 RSS-RO flights whose **raw CSVs are still deleted** (`docs/flights/*.csv`, `docs/tuning/TUNING_DB.json`) — see W26's open question Q1.
+> ✅ It indexes 55 RSS-RO flights whose **raw CSVs are back** (`docs/flights/*.csv`), as is its own machine-readable half `TUNING_DB.json` and the `exclude.txt` exclusion list — W26 recovered all of it on 2026-09-04 by the owner's decision (W26-Q1).
 
 # DragonScreen control-authority / tuning database
 

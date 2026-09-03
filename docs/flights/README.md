@@ -1,5 +1,17 @@
 # Flight recordings — how to read them
 
+> **THE CORPUS IS BACK — recovered 2026-09-04 by W26** from `8b81816^` (deleted by `8b81816`), on the
+> **owner's decision in chat**, closing W26-Q1. R1 verdict on every file below: **RECOVER-REFERENCE —
+> HIGHEST**, *"irreplaceable… the only raw flight data in the repo"* (`AUTOPILOT_RECOVERY_AUDIT.md` §5.4).
+> **21 MB, 23 files**: 10 Crew-2 CSVs, 3 probe CSVs, 2 KSP.log excerpts, 3 geometry dumps, 3 screenshots,
+> plus `../tuning/TUNING_DB.json` and `exclude.txt`. This README itself was recovered earlier by **H1**.
+> ⚠ **The recorder that WROTE these files is still deleted.** The schema below is the deleted
+> `FlightRecorder`'s; `docs/BLACKBOX_RESEARCH.md` §3.2 calls this file *"already 90% of a recording-format
+> spec — salvage it before writing anything"*, and §B16.8 adds what a re-derivation of ballistic
+> coefficients needs on top. **REFERENCE ONLY — `docs/BUILD_PLAN.md` WINS on any conflict (C7.1).**
+> ⚠ These are RSS-RO recordings of the **deleted hand-written autopilot**. Their NUMBERS are our only
+> RSS-RO empirical source; their CONTROL BEHAVIOUR is the thing that failed (R1 §7).
+
 Archived **FlightRecorder** CSVs (and one **geometry dump**) kept as evidence for `docs/FLIGHT_VERIFICATION.md`. These files are normally git‑ignored (`.gitignore`: `*.csv`, `DragonScreen_capture/`); they are **force‑added** because they are the evidence behind the S2 ascent root cause, the deorbit/units‑bug resolution, and the screen (DOCKUI) verification. The recorder + `GeometryDump` write to `<KSP>/DragonScreen_capture/` in flight; these are copies.
 
 ## What's here (2026‑08‑31 → 09‑01 test sessions)

@@ -1,7 +1,7 @@
 > **RECOVERED 2026-09-04 by W26** from `8b81816^` (deleted by `8b81816`). R1 verdict: **RECOVER-REFERENCE — HIGH (the primary evidence ledger)**.
 > **REFERENCE ONLY — `docs/BUILD_PLAN.md` WINS on any conflict (C7.1).** Written before 2026-09-01; the
 > plan has since moved on. Read it for method, evidence and reasoning — never as current instruction.
-> ⚠ The raw flight recordings it cites (`docs/flights/*.csv`) are **still deleted** — see W26's open question Q1.
+> ✅ The raw flight recordings it cites (`docs/flights/*.csv`) are **back in the repo** — W26 recovered them on 2026-09-04 by the owner's decision (W26-Q1). This ledger and its evidence are reunited.
 
 # FLIGHT VERIFICATION — evidence log (ACTIVE)
 

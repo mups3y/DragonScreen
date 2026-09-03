@@ -127,8 +127,19 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
 - **[flights/README.md](flights/README.md)** [HIST — recovered] — salvaged **H1** (2026-09-04) from
   `8b81816^`. How to read the archived `FlightRecorder` CSVs (DS-ASC-001…008, DS-DEO-001): what each file
   covers, row counts, and the geometry-dump schema. `BLACKBOX_RESEARCH.md` §3.2 calls it *"already 90% of a
-  recording-format spec"* — read before writing a new one. ⚠ Describes the DELETED recorder's schema; the
-  CSVs it documents are not yet re-salvaged into this repo.
+  recording-format spec"* — read before writing a new one. ⚠ Describes the DELETED recorder's schema.
+  ✅ **The CSVs it documents are BACK** — `docs/flights/` holds the whole 21 MB corpus again since **W26**
+  (2026-09-04, the owner's decision); see §7.
+- **`docs/flights/` — the RSS-RO FLIGHT CORPUS** [HIST — recovered] — ⭐ **the only raw flight data this
+  project has ever had**, recovered by **W26** (2026-09-04) on the owner's decision. 10 Crew-2 recordings
+  (incl. `Crew-2_20260901_004929.csv`, the last flown file, 136 columns), 3 parallel probe/booster
+  recordings, 2 KSP.log excerpts, 3 geometry dumps and the 3 DS-ASC-008 screenshots that were cross-checked
+  against the CSV. R1 §5.4: **RECOVER-REFERENCE — HIGHEST**, *"irreplaceable"*. Read `flights/README.md`
+  first — it is the format spec. ⚠ **RSS-RO recordings of the DELETED hand-written autopilot:** the numbers
+  are our only RSS-RO empirical source, the control behaviour is what failed (R1 §7).
+- **`docs/tuning/TUNING_DB.json` + `exclude.txt`** [HIST — recovered] — the machine-readable 55-flight
+  per-phase control statistics behind `TUNING_DB.md`, and the 5 contaminated flights excluded from the
+  pooled stats (R1: *"the exclusion judgement is itself evidence"*). Recovered by **W26** with the corpus.
 - **[F9I_BOOSTER_TARGETS.md](F9I_BOOSTER_TARGETS.md)** [HIST — recovered] — salvaged **H1** (2026-09-04) from
   `8b81816^`. Measured booster-landing targets from F9I's own black box (`bb_booster_001..008`). ⚠ **STOCK
   (F9I) — the numbers are F9I's stock landings; do NOT seed §B16 from them** (`AUTOPILOT_RECOVERY_AUDIT.md`
@@ -258,6 +269,8 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
 - `plugin/build/audit_comments.py` · `check_live.py` · `navball_preview.py` — the comment/telemetry audits and
   the navball preview.
 - ⚠ `plugin/build/assess_flight.py` reads the flight corpus of the deleted autopilot (register line S8).
+  ⚠ **Its header now misstates the situation:** it says the corpus is gone and it cannot run until T22
+  regenerates one. **The corpus came back on 2026-09-04 (W26).** Logged as register line **W27**.
 
 ## 7. The 2026-09-01 deletion — the research, RECOVERED (W26, 2026-09-04)
 
@@ -463,11 +476,14 @@ OBSOLETE — generated and gitignored; never restore the committed copy.
 **Already recovered by earlier tasks, no W26 action:** `VEHICLE_AUDIT.md` + `CRAFT_DUMP_VEHICLE_MAP.md`
 (**W0**, 2026-09-03) · `F9I_BOOSTER_TARGETS.md` + `flights/README.md` (**H1**, 2026-09-04) — all four in §3.
 
-**Still deleted — DATA, not documents:** the RSS-RO flight corpus (`docs/flights/*.csv`, the two `KSPlog`
-excerpts, the three geometry dumps, `DS-ASC-008_screen{1,2,3}.png`) and `docs/tuning/TUNING_DB.json` +
-`exclude.txt`. R1 verdicts these **RECOVER-REFERENCE — HIGHEST** and *"irreplaceable"*, but they are ~21 MB
-of recordings, not research prose, and R1's own **Q2** (re-fly vs trust the distillates) is an open owner
-call. `TUNING_DB.md` — the human-readable distillate — **is** recovered. W26 raised this as its Q1.
+**The DATA came back too — the owner's decision, 2026-09-04, stated in chat (W26-Q1 closed).** W26 first
+recovered only the prose and raised the ~21 MB RSS-RO flight corpus as a question, because it is data rather
+than research and because R1's own **Q2** (re-fly vs trust the distillates) overlaps it. The owner answered:
+recover it. So `docs/flights/` (10 Crew-2 CSVs, 3 probe CSVs, 2 `KSPlog` excerpts, 3 geometry dumps, 3
+`DS-ASC-008_screen*.png`) and `docs/tuning/TUNING_DB.json` + `exclude.txt` are **back — 23 files, 21 MB** —
+listed in §3 above. Nothing R1 verdicted recoverable is missing from this repo any more.
+⚠ **A data file cannot carry a markdown banner**, so `flights/README.md` carries the provenance and the
+REFERENCE-ONLY warning **on the corpus's behalf** — read it before reading a CSV.
 
 **Where their content went:** MechJeb semantics + tuning → `BUILD_PLAN.md` §B7–§B11 · abort → §B13 · crew
 gates → §B14 · FDIR → §B15 · real mission numbers → §8 · the tuned cfg → `reference/`. Those summaries stay
