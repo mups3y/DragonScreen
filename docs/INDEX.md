@@ -320,6 +320,62 @@ deleted and six later tasks (M1, W8, S60, W23, LZ1, W11) were built without rese
   *"Never miss a manoeuvre"* (Chris, 2026-08-29) — the warp discipline the conductor needs. ⚠ **W23 worked
   the unfocused-command question while this file sat deleted.**
 
+**The RSS-RO environment — what the regime actually IS (C1.15's evidence base):**
+
+- **[RO_RSS_ENVIRONMENT.md](RO_RSS_ENVIRONMENT.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE — HIGHEST,
+  "the regime definition itself"*. Read from the real configs: the planet pack is **Sol** (a real-scale
+  RSS-family pack), and what that means for scale, atmosphere and orbital mechanics. **This is the document
+  that says what "RSS-RO" means in this install** — every regime caveat in R1 §0.1 resolves here.
+- **[RO_MODS_MECHANICS.md](RO_MODS_MECHANICS.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE — HIGH*. RO's
+  mechanics, captured from the actual `GameData/`. ✅ **C7 forbids re-reading the KSP install; this document
+  is the sanctioned in-repo capture of it.**
+- **[RO_TESTFLIGHT_MECHANICS.md](RO_TESTFLIGHT_MECHANICS.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE —
+  HIGH*. TestFlight's ignition + reliability model from the real configs. **Bears directly on the
+  ullage/ignition failure** (register H1b) and on C1.15's "check the installed mod first" rule.
+- **[INSTALLED_MODS_RESEARCH.md](INSTALLED_MODS_RESEARCH.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE*.
+  Ground truth of the 114-mod RSS/RO install. ⚠ **`reference/INSTALLED_MODS.md` is the register C1.15 makes
+  every simulation search run against** — this is the older survey behind it, not a substitute for it.
+- **[MOD_INVENTORY_RESEARCH.md](MOD_INVENTORY_RESEARCH.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE*. A
+  complete sweep of everything installed. Same caveat as above.
+- **[MOD_INTEGRATION_RESEARCH.md](MOD_INTEGRATION_RESEARCH.md)** [HIST — recovered] — R1:
+  *RECOVER-REFERENCE — HIGH (§B12.1 pins)*. ⭐⭐ the **mod-dependency policy** — optional vs RO/RSS hard-dep.
+  ⚠ Its **KER section is superseded and corrected by `KER_DATA_RESEARCH.md`** (that doc's §1.5 wins).
+- **[DEPENDENCY_MATRIX.md](DEPENDENCY_MATRIX.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE*. The
+  classification of the installed environment that §B12.1's dependency policy rests on.
+
+**The real Crew Dragon — the §1.4 verified-real fidelity target:**
+
+- **[REAL_CREW_DRAGON_MISSION.md](REAL_CREW_DRAGON_MISSION.md)** [HIST — recovered] — R1:
+  *RECOVER-REFERENCE, §1.4 verified-real*. *"Every number here has a source"* — the mission as flown.
+- **[CREW2_REAL_MISSION_TECHNIQUES.md](CREW2_REAL_MISSION_TECHNIQUES.md)** [HIST — recovered] — R1:
+  *RECOVER-REFERENCE, §1.4 verified-real*. Crew-2 primary sources — the fidelity target.
+- **[CREW2_RSS_RESEARCH.md](CREW2_RSS_RESEARCH.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE — HIGH*.
+  *"Primary sources only… the fidelity target and the physics the guidance must obey"*, in **RSS**.
+- **[CREW_MISSION_TELEMETRY.md](CREW_MISSION_TELEMETRY.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE*.
+  Telemetry from every crewed Crew Dragon mission.
+- **[CREW_DRAGON_GNC_RESEARCH.md](CREW_DRAGON_GNC_RESEARCH.md)** [HIST — recovered] — R1:
+  *RECOVER-REFERENCE*. Docking + entry fidelity and the real sensor limits.
+- **[LAUNCH_AND_ASCENT_RESEARCH.md](LAUNCH_AND_ASCENT_RESEARCH.md)** [HIST — recovered] — R1:
+  *RECOVER-REFERENCE*. Source-backed reference for how SpaceX/NASA actually fly a crewed Falcon 9.
+
+**The phase set — real-world facts, one document per mission phase:**
+
+- **[PHASE_2_BOOSTER_RECOVERY_RESEARCH.md](PHASE_2_BOOSTER_RECOVERY_RESEARCH.md)** [HIST — recovered] — R1:
+  *RECOVER-REFERENCE — HIGH (§B16)*. Separation → droneship touchdown, real-world.
+- **[PHASE_3_RENDEZVOUS_RESEARCH.md](PHASE_3_RENDEZVOUS_RESEARCH.md)** [HIST — recovered] — R1:
+  *RECOVER-REFERENCE*. Separation → approach corridor.
+- **[PHASE_4_DOCKING_RESEARCH.md](PHASE_4_DOCKING_RESEARCH.md)** [HIST — recovered] — R1:
+  *RECOVER-REFERENCE*. Corridor → capture.
+- **[PHASE_5_UNDOCKING_DEPARTURE_RESEARCH.md](PHASE_5_UNDOCKING_DEPARTURE_RESEARCH.md)** [HIST — recovered]
+  — R1: *RECOVER-REFERENCE*. Hatch close → departure burn.
+- **[PHASE_6_DEORBIT_ENTRY_SPLASHDOWN_RESEARCH.md](PHASE_6_DEORBIT_ENTRY_SPLASHDOWN_RESEARCH.md)** [HIST —
+  recovered] — R1: *RECOVER-REFERENCE*. Trunk jettison → splashdown.
+- **[PHASE_ACCEPTANCE_CRITERIA.md](PHASE_ACCEPTANCE_CRITERIA.md)** [HIST — recovered] — R1:
+  *RECOVER-REFERENCE — HIGH*. Per-phase first-flight acceptance criteria — R1 §5.4 calls them directly
+  reusable for **§B12.5's per-controller gates**. ⚠ The gates are the plan's to set, not this file's.
+- **[MISSION_PROFILES_FREEFLYER.md](MISSION_PROFILES_FREEFLYER.md)** [HIST — recovered] — R1:
+  *RECOVER-REFERENCE*. The four free-flyer mission profiles.
+
 ### Deliberately NOT recovered
 
 **Chat scaffolding, not research** — skipped by W26 regardless of verdict: `RESUME_PROMPT.md` (R1:
