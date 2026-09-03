@@ -71,4 +71,34 @@ _The real/Figma pages (see `SCREEN_EVIDENCE_MATRIX.md`) display these; each is m
 | FRAME | DOCK_FRAME | fixed LVLH (`pure/Lvlh.cs`) | enum (LVLH) | LVLH |
 | CAMERA | DOCK_CAMERA | `DockingCamRenderer` / camera selector | enum (Virtual/…) | NO DATA |
 
+## Kerbal Engineer — tier-2, an installed mod's value (S46)
+
+Added 2026-09-03. **§14.4(e) step (1)**: a real quantity this build does not model is read from an INSTALLED
+MOD before it is simulated and long before it is invented. KER (Kerbal Engineer Redux 1.1.9.5, GPL-3.0,
+CYBUTEK / jrbudda) runs a RealFuels/RO-accurate fuel-flow simulation of the real part tree; `src/KerBridge.cs`
+drives its `SimulationProcessor` and reads it **by reflection** — a SOFT dependency, no compile-time
+reference. Access method, inventory and guarding: `docs/KER_DATA_RESEARCH.md`.
+
+**One fallback covers every failure, and it is a dash:** KER absent · KER present but no result yet for this
+vessel (`SimulationProcessor.ShowDetails` false) · **DOCKED** — KSP merges both craft into one `Vessel` and
+KER then simulates the STACK, so the Dragon's own figure is unknowable and a number would be the station's ·
+a non-finite value anywhere in the group. All four leave `PageState.Ker` empty, every string null, and the
+page's `T()` draws `—`. There is no fallback VALUE and deliberately no second source (`:16`, one
+authoritative source per datum).
+
+| ID | Real label | Authority / source | Type/Units | Rate | Fallback | Modify |
+|---|---|---|---|---|---|---|
+| THRUST_AVAIL | PROPULSION · "Thrust Avail" | **KER** `SimManager.Stages[current].thrust` → `KerBridge` (kN→N) → `KerData.Performance` | force, printed **kN** (SI internally: N) | 5 Hz | `—` (see above) | format only |
+
+⚠ **CARRIED BUT NOT ON THE GLASS.** `KerPerformance` also carries this stage's **Δv, remaining Δv, actual
+thrust, TWR (start / current / max), Isp, burn time and stage / total / propellant mass** — wired, tested and
+ready. **None of it is displayed anywhere**, because no propulsion-performance region exists on any of the
+three screens and choosing where one goes is an owner decision under §1.4 (`KER_DATA_RESEARCH.md` §6.1(c)).
+No row is written here for a value nothing draws; add one when a home is chosen.
+
+⚠ **UNVERIFIED IN FLIGHT.** S46 is KER's first consumer in this build, so the kN→N / t→kg conversions and the
+stage-number ordering have never been cross-checked against a live game, and neither has the docked behaviour
+or whether `AddUpdatable` is required at all. Held for an owner glass go — `KER_DATA_RESEARCH.md` §6.2
+V1/V2/V4, and S47 in `REGISTER.md`.
+
 > Comm-link readouts (SPX / GND / TDRS / ISS) are **SIMULATION** unless a comms mod supplies them — degrade gracefully (S10). The systems big-number values (power/thermal/data) come from real KSP/RO + TAC-LS state, formatted like the reference.

@@ -233,6 +233,22 @@ namespace DragonScreen
         /// the LIVE RCS demand (PropSchematic.MaxDuty over the same TransX/RotPitch the schematic draws).
         /// Null with no feed.</summary>
         public string DracoDutyText;
+        /// <summary>PROP - the propulsion-performance group from KERBAL ENGINEER's fuel-flow simulation:
+        /// Δv, TWR, thrust, Isp, burn time and stage mass for the current stage. TIER-2 under §14.4(e) step
+        /// (1) - an INSTALLED MOD's value, not ours and not modelled - and MARKED as such in code and in
+        /// docs/TELEMETRY_REGISTRY.md (§5.3 mechanism 1), which is why it arrives as one named group rather
+        /// than loose strings: the source is a property of the whole group.
+        ///
+        /// <para>Units, the null contract and the docked guard are all stated on
+        /// <see cref="KerPerformance"/> itself. In short: every text field is null (=&gt; the page dashes)
+        /// unless KER is installed, driving, and we are NOT docked - KSP merges both craft into one Vessel
+        /// when berthed and KER then simulates the STACK.</para>
+        ///
+        /// <para>ONLY "Thrust Avail" is on the glass today (S46). The rest of the group is carried, tested
+        /// and ready, but Δv/TWR/burn-time/Isp/stage-mass have no home on any of the three screens and
+        /// choosing one is an owner decision under §1.4 - see docs/KER_DATA_RESEARCH.md §6.1(c). Filling a
+        /// page with them is NOT this field's licence to do so.</para></summary>
+        public KerPerformance Ker;
 
         /// <summary>POWER - solar array output. Bare kW for the ARRAY gauge, kW-with-unit for the
         /// "Array Output" row, and the fraction of the panels' own RATED output for the ring - a real

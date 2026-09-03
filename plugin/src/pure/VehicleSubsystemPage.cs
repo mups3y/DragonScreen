@@ -308,10 +308,15 @@ namespace DragonScreen
                     s.GFrac   = new[] { F(st.DragonOx01), F(st.DragonFuel01), 0f, 0f };
                     s.GCol    = new[] { Gold, Gold, Blue, Red };
                     s.RLabel  = new[] { "Chamber Press", "Prop Remaining", "Draco Duty", "SuperDraco Temp", "Thrust Avail" };
-                    // Chamber pressure, SuperDraco temperature and thrust availability have no source:
-                    // KSP models no per-engine chamber pressure and no pod temperature, and nothing here
-                    // tracks which of the sixteen Dracos would still answer a command.
-                    s.RVal    = new[] { Dash, T(st.PropRemainingText), T(st.DracoDutyText), Dash, Dash };
+                    // Chamber pressure and SuperDraco temperature have no source: KSP models no per-engine
+                    // chamber pressure and no pod temperature. THRUST AVAIL now does (S46) - Kerbal Engineer's
+                    // fuel-flow simulation of the real part tree, the MAXIMUM the current stage can make,
+                    // because the label asks what is available rather than what the throttle is using. Tier-2
+                    // (§14.4(e) step 1), null when KER is absent / has no result / we are docked, and null
+                    // dashes exactly like the two beside it. Its ring stays EMPTY: a fraction needs a full
+                    // scale, and this vehicle publishes no rated thrust to divide by - inventing one to make
+                    // the bar look alive is precisely what §14.4(e) forbids.
+                    s.RVal    = new[] { Dash, T(st.PropRemainingText), T(st.DracoDutyText), Dash, T(st.Ker.ThrustAvailText) };
                     s.RFrac   = new[] { 0f, F(st.DragonProp01), valid ? PropSchematic.MaxDuty(st) : 0f, 0f, 0f };
                     break;
 

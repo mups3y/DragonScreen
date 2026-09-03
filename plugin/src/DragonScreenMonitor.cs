@@ -196,6 +196,16 @@ namespace DragonScreen
             // with it, which is also why it sits outside the try below rather than inside it.
             Tuning.Build();
 
+            // ---- REGISTER WITH KERBAL ENGINEER (S46) ----
+            // KER computes nothing unless its processor is BOTH registered with the flight scene's
+            // FlightEngineerCore and asked to update; VesselData.Refresh() does the asking at 5 Hz, and this
+            // is the registration. Here for the same reason Tuning.Build() is: first DragonScreen code in a
+            // flight scene. It is idempotent by core identity, so the three screen modules on the prop cost
+            // one registration - and if FlightEngineerCore has not woken yet, this is a no-op and the 5 Hz
+            // path retries until it has. Outside the try below, and catching its own exceptions, because a
+            // missing optional mod must never take a screen with it.
+            KerBridge.Attach();
+
             // FAIL SOFT AND SAY SO. A throw here takes the prop - and possibly the whole IVA - with
             // it, and the failure mode we actually expect (a transform name that is subtly wrong) is
             // one where the game is otherwise perfectly healthy. Log, dump what IS there, carry on.

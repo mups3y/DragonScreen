@@ -75,6 +75,10 @@ Also drawn on, with attribution at each site:
 - **[MechJeb2](https://github.com/MuMech/MechJeb2)** (GPL-3.0) — the fuel-flow / stage-Δv maths.
 - **[Avionics Systems / MAS](https://github.com/MOARdV/AvionicsSystems)** (MIT) — the RenderTexture
   and GL glyph techniques, and the collider/touch mechanism.
+- **[Kerbal Engineer Redux](https://github.com/jrbudda/KerbalEngineer)** (GPL-3.0, CYBUTEK and
+  jrbudda) — its fuel-flow simulation, read live by reflection where it is installed, is the source of
+  the propulsion-performance numbers (thrust, Δv, TWR, Isp, burn time, stage mass). Optional: absent,
+  those readouts draw a dash. No code is copied and there is no compile-time reference.
 - **[SpaceX-Dragon2-UI](https://github.com/Neel-Dandiwala/SpaceX-Dragon2-UI)** — the reference the
   page layouts are measured from.
 - **Tundra Exploration** — the Dragon V2 parts and IVA this mod attaches to.

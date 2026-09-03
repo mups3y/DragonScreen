@@ -232,6 +232,24 @@ public static class PreviewMain
         // where a moving one is proved, exactly as it is for the schematic's own segments.
         ps.DracoDutyText = "0 %";
 
+        // S46: the PROPULSION tab's "Thrust Avail", from Kerbal Engineer's fuel-flow simulation. Built by
+        // calling the REAL pure path (KerData.Performance) over a synthetic KER stage rather than by
+        // assigning the string, so the preview exercises the same selection, docked guard and kN formatting
+        // the game will - a fixture that hard-codes "568.0 kN" would render identically no matter what the
+        // conversion did. Two SuperDraco pairs' worth of thrust on a ~9.5 t capsule, in SI as KerBridge
+        // hands it over (newtons, kilograms). The KER-ABSENT render further down is where the dash is proved.
+        {
+            KerStage k = new KerStage();
+            k.Number = 0; k.Valid = true;
+            k.DeltaVMps = 390.0; k.TotalDeltaVMps = 415.0;
+            k.ThrustN = 568000.0; k.ActualThrustN = 142000.0;
+            k.Twr = 6.09; k.ActualTwr = 1.52; k.MaxTwr = 7.40;
+            k.IspS = 235.0;
+            k.MassKg = 9525.0; k.TotalMassKg = 12055.0; k.ResourceMassKg = 1388.0;
+            k.BurnTimeS = 31.0;
+            ps.Ker = KerData.Performance(new[] { k }, false);
+        }
+
         // S24 (owner decision (b)): the one part of AVIONICS with a real source, stock KSP's own
         // CommNet. The baseline fixture is a GOOD link - the ui_vehicleavionics_commoff render further
         // down is where CommNet being off/absent is proved to dash gracefully instead.
@@ -708,6 +726,24 @@ public static class PreviewMain
                 ps.DracoDutyText = savedDuty;
                 ps.TransX = sTX; ps.TransY = sTY; ps.TransZ = sTZ;
                 ps.RotPitch = sRP; ps.RotYaw = sRY; ps.RotRoll = sRR;
+            }
+            // ---- S46: the same tab with NO Kerbal Engineer ----
+            // The baseline render above shows "Thrust Avail" live. This is the other half of that claim and
+            // the half that is easy to get wrong: KER not installed, or installed with no result yet for this
+            // vessel, or DOCKED (KSP merges both craft into one Vessel and KER then simulates the STACK, so
+            // the Dragon's own thrust is unknowable). All three arrive as an EMPTY group, and the row must
+            // fall back to the page's dash - never a stale number, never a confident zero. Distinct from the
+            // Valid=false "no feed at all" case: everything else on this tab is still live here.
+            {
+                KerPerformance savedKer = ps.Ker;
+                ps.Ker = new KerPerformance();
+                DisplayList kdl = new DisplayList(VehicleSubsystemPage.Commands + 60);
+                VehicleSubsystemPage.Build(kdl, CW, CH, VehicleSubsystemPage.Sub.Propulsion, ps);
+                if (kdl.Overflowed) Console.WriteLine("  WARNING PROP KER-ABSENT OVERFLOWED");
+                string path = Path.Combine(outDir, "ui_vehiclepropulsion_kerabsent.png");
+                Render(kdl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + kdl.Count + " commands");
+                ps.Ker = savedKer;
             }
             {
                 SystemsState savedSys = ps.Systems;

@@ -2904,3 +2904,106 @@ with `if (built) return;`) and `Tuning.Poll()` in `ScreenPainter.Update()`
   (c) **there is no propulsion-performance readout anywhere on the three screens today**, so the Δv/TWR family
   is a NEW page region, not a dash to fill, and §1.4's source-of-truth ladder governs its layout before
   anything is drawn.
+
+### S46 [O] KER incorporation, increment 1 — drive the SimulationProcessor, and `Thrust Avail` on the glass — **DONE 2026-09-03** — [TIER 1: live data, §6 / §14.4(e) step (1)]
+- **Owner-directed, 2026-09-03**, as the FIRST increment of S45's findings (C1.1 — this increment only).
+  **Read:** `docs/KER_DATA_RESEARCH.md` end-to-end; the spec is that doc, §1.6 (the drive recipe), §3.1 (the
+  five hops + the docked caveat), §5.2 (the guards), §5.3 (marking), §5.4 (licence/attribution).
+  **Preview-only under the standing go — no `install`, no glass (C1.12); S18's gate was NOT ridden.**
+- **SCOPE CORRECTION vs. the doc, decided by the owner.** §3.3's #1 win (Δv/TWR/burn-time/Isp/stage mass) is
+  **NOT placed** here: §3.2 records it as *"nothing on the glass anywhere"* and §6.1(c) reserves its placement
+  as an owner decision under §1.4. So hops 1–4 carry the FULL group, tested and ready for a home to be chosen
+  later; **hop 5 is `Thrust Avail` ALONE** — the dash at `pure/VehicleSubsystemPage.cs:314`, which §3.2 row 1
+  explicitly maps to `KerStage.ThrustN` from the same SIM source. No other home was invented.
+- **§6.1(b) MARKING resolved by the owner to §5.3 mechanism 1** — doc-comment + a `docs/TELEMETRY_REGISTRY.md`
+  row. NOT mechanism 2: **nothing new is marked on the crew's glass**, and the row reads like every other row.
+- **DONE 2026-09-03.** The last hops of a chain that already shipped: `KerBridge.cs` and `pure/KerData.cs`
+  existed, compiled, were tested and were wired to NOTHING (S45's headline finding). Nothing new was
+  architected — the TAC-LS water row's five hops were followed exactly.
+  - **Hop 1 — `src/KerBridge.cs`, the drive (§1.6).** The gating fix from §1.3/§1.4: KER computes nothing
+    unless its processor is BOTH registered and asked. New `Attach()` binds
+    `FlightEngineerCore.Instance.AddUpdatable(SimulationProcessor.Instance)`; new `RequestUpdate()` calls
+    `SimulationProcessor.RequestUpdate()` and the value is read the NEXT tick; new `ShowDetails` is KER's own
+    validity gate (**not** `ResultsReady()`, which is `!bRunning` and true before the first run ever happens —
+    §1.5); new `TryGetPerformance()` is the read a consumer should use. All by reflection, no compile-time
+    reference. `Attach()` is **idempotent by FlightEngineerCore identity** — it is a `[KSPAddon(FlightAndKSC)]`
+    MonoBehaviour, so a fresh one per scene with an empty module list means identity IS the scene test, and
+    re-registering is exactly what a scene change needs.
+    ⚠ `SimManager.RequestSimulation()` is **left exactly as it was** (S45 finding 1 — logged, not fixed) and
+    nothing calls it; a comment now says why it is not the live path. The live path is `RequestUpdate()`.
+  - **Hop 2 — `pure/KerData.cs`.** New `KerPerformance` struct + `KerData.Performance(stages, docked)`: the
+    stage choice, the guards, the finite check and the formatting, all pure and all headless-tested. Carries
+    the FULL group — Δv, remaining Δv, thrust, actual thrust, TWR ×3, Isp, burn time, stage/total/propellant
+    mass — in SI **and** pre-formatted.
+  - **Hop 3 — `src/VesselData.cs`.** A `Propulsion(v);` one-liner in the existing block, inside `Refresh()`'s
+    5 Hz throttle and its `try/catch`. ⛔ NOT `ScreenPainter.Update()`, which runs once per SCREEN, three times
+    a frame — the solve walks the whole part tree. It reads `DockedSide.Docked(v)` **itself** rather than
+    `state.Docked`, which is written further down the same `Refresh()`: reading the field would use LAST tick's
+    answer, and the tick a vessel docks on is precisely the one where a stale `false` shows the merged stack's
+    thrust as the Dragon's. The second part walk is the price of not coupling this to that ordering.
+  - **Hop 4 — `pure/Pages.cs`.** One field, `public KerPerformance Ker;` — a named group, not loose strings,
+    because the SOURCE is a property of the whole group. Doc-comment names source, units, what `null` means,
+    and states in terms that the rest of the group is carried but deliberately **not placed**.
+  - **Hop 5 — `pure/VehicleSubsystemPage.cs:314`.** `Dash` → `T(st.Ker.ThrustAvailText)`. **MAXIMUM** thrust,
+    not `actualThrust`, because the label asks what is AVAILABLE, not what the throttle is using. Its ring
+    stays EMPTY: a fraction needs a full scale and this vehicle publishes no rated thrust to divide by —
+    inventing one to make the bar look alive is exactly what §14.4(e) forbids.
+  - **Lifecycle** at the `DragonScreenMonitor.Start()` seam S44 used, immediately after `Tuning.Build()` and
+    OUTSIDE the `try { Init(); }` for the same reason: an optional mod must never take a screen with it.
+    `RequestUpdate()` re-attaches too, so a core that had not woken when the prop's `Start()` ran is picked up
+    by the 5 Hz path.
+- **GUARDS (§5.2), all four collapsing to ONE outcome — a dash:** (1) `Available` — the assembly probe, with
+  **partial-match rejection**; the processor plane got its OWN latch, `Driven`, so a KER build that renamed a
+  processor member degrades this row rather than taking the whole bridge down; (2) `ShowDetails` — KER has a
+  result for THIS vessel; (3) **DOCKED** — KSP merges both craft into one `Vessel` and KER simulates the STACK,
+  and `DockedSide` cannot help because the merge happens inside KER's own simulation, before we see the number
+  (§3.1); (4) a non-finite value anywhere poisons the whole group (registry rule N2). No fallback VALUE exists
+  and deliberately none was written.
+- **MARKED (§5.3 mechanism 1, all three non-optional items):** a REAL/MODELLED header note in `KerBridge.cs`
+  *(REAL: everything; MODELLED: nothing; ABSENT → dash)* and in `pure/KerData.cs`; the `KerPerformance` /
+  `PageState.Ker` doc-comments naming source, units and the null contract; and a new
+  **`docs/TELEMETRY_REGISTRY.md` section** with a `THRUST_AVAIL` row naming KER as authority, plus the standing
+  note that the rest of the group is carried and NOT drawn. **README.md** gains KER attribution in its existing
+  style (§5.4 — GPL-3.0, CYBUTEK and jrbudda, optional, no code copied, no compile-time reference).
+- **Verify (C1.3), preview-only:** `python plugin/build.py test` **green — ALL SCREEN SUITES PASSED, 0 failed**;
+  **KerData 11 → 46 checks**, every other suite unchanged (306 / 2323 / 747 / 29 / 1773 / 18 / 67 / 158 / 13 /
+  6 / 15 / **46** / 724 / 5061 / 263 / 14). **No new compiler warnings** — the same set as before, with
+  `Pages.cs`'s two CS0219 `pad` lines moving 1125/1258 → 1141/1274 because the doc-comment was added above them.
+  New fixtures cover KER present-with-values → populated, and absent / no-result / stages-present-but-invalid /
+  **docked** / NaN / infinity → dashed — **and they end at the GLASS**: the last checks build the real
+  PROPULSION tab and assert `Thrust Avail` prints `568.0 kN` with a result, the page's own `—` without one, that
+  the label is untouched either way, and that a different sim renders a different number (not hard-coded).
+  **Preview PNGs rendered and INSPECTED, both states:** `ui_vehiclepropulsion.png` shows
+  `Thrust Avail   568.0 kN`, right-aligned in the SYSTEM block beside its neighbours; the new
+  `ui_vehiclepropulsion_kerabsent.png` shows `Thrust Avail   —`, matching `Chamber Press` and
+  `SuperDraco Temp` exactly, with nothing else on the page changed between the two. The preview fixture calls
+  the REAL pure path (`KerData.Performance` over a synthetic KER stage) rather than assigning the string, so a
+  broken kN conversion would show up in the render instead of being hidden by a hard-coded fixture.
+- **Committed locally (C1.5); NOT pushed.**
+- **LOGGED, NOT DONE (C1.1)** — S45's six findings stand as recorded; this task fixed none of them and
+  deliberately touched only what its own hops needed. Finding 1 (`RequestSimulation()` cannot start a run) is
+  now MOOT ON THE LIVE PATH — nothing calls it and `RequestUpdate()` is the path — but the method itself is
+  unchanged and the finding stays open.
+
+### S47 [owner-gated] S46's IN-SIM DRIVE CONFIRM — does driving KER's processor actually yield real values in flight? — **HELD** (`/next` SKIPS it; needs an owner glass go, C1.12) — [TIER 5: held / owner-action]
+- **Raised by S46, 2026-09-03.** The wiring, the guards and the headless tests are green and the preview shows
+  both states — but **every one of those is a claim about code, not about KER**. S46 created KER's first
+  consumer in this build, so the whole reflection path has still never run against a live game. One visit
+  settles all of it; it costs nothing extra if batched onto the next glass go (S18's, or its successor).
+- **What the visit must confirm** — `docs/KER_DATA_RESEARCH.md` §6.2:
+  - **V1 — is `AddUpdatable` actually required?** The ONE open item in the access method, unsettleable from
+    source: MAS reflects `RequestUpdate` but is not seen calling `AddUpdatable`, so it may quietly rely on the
+    user having KER's own readouts enabled. §1.6's recipe is correct either way; what is unknown is whether
+    `Attach()` is load-bearing or belt-and-braces. **The test:** with KER's own window SHUT and no Δv readout
+    enabled, does `Thrust Avail` show a number? If yes, `Attach()` works and is (at minimum) sufficient.
+  - **V2 — the cross-check that has NEVER run.** kN→N and t→kg at `KerBridge.cs`, and the `Number` ordering
+    `KerData.Current` sorts on. **A 1000× or off-by-one disagreement is the tell.** Compare `Thrust Avail`
+    against KER's own Thrust readout, on the same vessel, at the same moment.
+  - **V4 — docked behaviour.** Berth, and confirm `Thrust Avail` DASHES rather than reporting the merged
+    stack's thrust. The guard is written and headless-tested; what is unconfirmed is that KSP's merge behaves
+    as §3.1 describes on this vehicle.
+- **Also worth a glance while there:** the log line `KerBridge: Kerbal Engineer FOUND … SimulationProcessor
+  drivable.` should appear once, and `SimulationProcessor registered with FlightEngineerCore.` once per flight
+  scene — not per frame. (V3, the *(inferred)* units, is NOT in scope here: none of those values is wired.)
+- ⛔ **Needs an owner `install` + glass go of its own (C1.12).** S46 did not ride S18's gate and this line does
+  not assume one.

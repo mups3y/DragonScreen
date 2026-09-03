@@ -209,6 +209,7 @@ namespace DragonScreen
                 Rates(v);
                 VehicleSources(v);
                 Avionics(v);
+                Propulsion(v);
 
                 state.LightsOn = v.ActionGroups[KSPActionGroup.Light];
                 state.LightCount = CountLights(v);
@@ -699,6 +700,31 @@ namespace DragonScreen
             }
             catch (Exception) { g.Has = false; }
             return g;
+        }
+
+        // ---- PROPULSION PERFORMANCE, FROM KERBAL ENGINEER (S46) ----
+        // TIER-2 under BUILD_PLAN §14.4(e) step (1): a quantity we do not model, read from an INSTALLED MOD
+        // rather than invented. KER runs a RealFuels/RO-accurate fuel-flow solve of the real part tree; we read
+        // it by reflection through KerBridge and never link against it. Absent, not yet solved, or docked -> the
+        // group is empty, every string null, and the page dashes the row. See docs/KER_DATA_RESEARCH.md.
+        //
+        // WHY THIS IS IN Refresh() AND NOWHERE ELSE. KER does not compute continuously: RequestUpdate() sets the
+        // flag that makes FlightEngineerCore tick the processor THIS frame, and the answer is read on the NEXT
+        // call. Refresh() is frame-guarded and throttled to 5 Hz, which sits right beside KER's own 150 ms
+        // simulation floor - one request per refresh is the natural cadence and needs no timer of its own.
+        // ⛔ NOT ScreenPainter.Update(), which runs once per SCREEN, three times a frame: the solve walks the
+        // whole part tree, so that would be three full-vessel simulations a frame.
+        private static void Propulsion(Vessel v)
+        {
+            KerBridge.RequestUpdate();
+
+            KerStage[] stages;
+            bool got = KerBridge.TryGetPerformance(out stages);
+            // DockedSide.Docked(v), not state.Docked: that field is written further down this same Refresh(),
+            // so reading it here would use LAST tick's answer - and the tick a vessel docks on is exactly the
+            // one where a stale false shows the merged stack's thrust as the Dragon's. The second part walk is
+            // the price of not coupling this to the order of the block below.
+            state.Ker = KerData.Performance(got ? stages : null, DockedSide.Docked(v));
         }
 
         private static readonly string[] seatNames = new string[8];
