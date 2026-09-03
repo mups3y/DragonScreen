@@ -2210,3 +2210,121 @@ and no code change (so the build/preview gate is N/A per C1.3).
   **Docs/register only, no code change → the preview/PNG gate is N/A (C1.3).** `python plugin/build.py
   test` run as a no-regression check: **green, 11347 checks, 0 failed** (unchanged from S32 — no code
   touched). Committed locally (C1.5); NOT pushed.
+
+### S34 [O] QC-AUDIT sweep of the 2026-09-03 glass findings — **DONE 2026-09-03** — [TIER 2: real defect]
+Owner-directed sweep (that chat), six findings brought back from the capsule. Audited each against the
+code first, fixed the three that were real defects, and closed two as NOT defects with the source that
+settles them. The sixth is systemic and is a `§1.4` source question, so it is logged as **S35** rather
+than decided here (C1.12). PREVIEW-ONLY throughout — no `install`, no glass.
+
+- **(3) SYSTEMS TREE vs ELECTRICAL POWER disagreed on the bus state — REAL, FIXED.** The tree read
+  `MAIN BUS A/B` off the live `SystemsState` and said `BUS OFF`; the ELECTRICAL POWER tab hard-coded a
+  green `"Nominal"`. Two surfaces, one truth, disagreeing (C7.1) — and `VehicleSystems.Fresh()` starts
+  both buses **off**, so the tab was wrong the moment the page opened. `VehicleSubsystemPage.cs`'s two
+  bus rows now read `SystemsState` through new `BusWord`/`BusKey` helpers that mirror `SystemsTreePage`'s
+  own rule exactly: unpowered → `Off` (neutral), 3/3 → `Nominal` (go), 1–2/3 → `n / 3 Online` (caution),
+  a powered bus with every string down → `0 / 3 Online` (alarm). That last case needed a fourth checklist
+  colour key (`3` → `DragonPalette.Alarm`); keys 0–2 are untouched. Words are pre-built (`BusOnline3`),
+  so the draw path still formats no strings.
+- **(4) The Cover still read "altitude" while DeorbitBurnPrep read "attitude" — REAL, FIXED.** S13's
+  residual. The two Crew Interrupt Conditions captions are baked community PNGs whose pixels say
+  "altitude", so S13 could only correct `DeorbitBurnPrepPage`; the Cover kept disagreeing on glass.
+  `CoverPage.cs` now **skips** those two asset keys (`AttitudeSkipKeys`) and redraws the rows as
+  primitives carrying `DeorbitBurnPrepPage`'s own S13 strings — `30° sustained attitude error` /
+  `600°/min attitude rate`. The asset KEYS and the PNG files are still untouched, per S13's rule; they
+  are simply not placed. Geometry is read out of `Keys`/`Box` rather than re-typed, so the rows stay on
+  their hairlines: measured in the render at 211→466 px with the leader starting at 485 (row 1) and
+  211→411 with the leader at 421 (row 2) — no overlap, and the type matches the still-baked
+  `FAR FIELD POINTING` beside it. **No asset re-render was needed, so no follow-up line is opened.**
+- **(6) TEXT OVERFLOWING ITS CONTAINER — REAL, FIXED.** On the Cover's Reference Content phase the
+  seven-step `ENTRY TIMELINE` overhung its card by 13 design units and rendered half on the card, half
+  on the page ground. Cause: the three baked card slots are 317 / 449 / 550 tall and the densest list is
+  in the **shortest** one. Fixed structurally, not by retyping one string: `CoverPage.FitRows` scales the
+  row size and pitch by the same factor when a block does not fit its own slot, floored at
+  `Typography.Min` and never letting rows overlap; the three cards now pass their measured slot bottoms
+  (read from `Box`, one source of truth). Cards 2 and 3 already fitted and are byte-identical.
+- **(2) SYSTEMS P&ID READOUTS "mis-wired" — NOT REPRODUCED, no defect found.** Traced end-to-end:
+  `VesselData.cs:191-194` assigns each text field from its own `CabinReadout` member, and
+  `SystemsPidPage.cs`'s READOUTS rows pair each label with that same field. `ui_systemspid.png` re-read
+  after this task: LOOP A 26.4 °C · LOOP B 20.1 °C · CABIN TEMP 21.8 °C · CABIN PRESS 14.72 psia ·
+  PPO2 2.86 psia · CO2 1.64 mmHg — correct, and every row nominal green. Nothing was changed. ⚠ Worth
+  knowing for the NEXT glass session: the last `install` was **S17**, which predates S19–S33, so glass
+  was showing an older DLL than this tree — see the S35 prompt.
+- **(5) The "Changelog" CONNECTIONS row — NOT a mis-transcription, no change.** Unlike S19 this one is
+  faithful: `docs/UI_AUDIT.md:310` (generated from the reference's own source) lists `Changelog` among
+  the page's labels, and **both** reference copies agree —
+  `assets/reference/dragon2-ui-vue/src/components/Overview.vue:9` and `…dragon2-ui-master/…:9`. Changing
+  it would need a verified-real source we do not have (§1.4), so it stands.
+
+**Gate (C1.3):** `python plugin/build.py test` **green — 11364 checks, 0 failed**, including 18 new
+regression checks in `plugin/test/LayoutTest.cs` (`FitRows` fit/floor/no-overlap/proportion, an
+end-to-end "no text crosses a card slot's bottom edge" guard over the built display list, the Cover's
+attitude strings + the absence of the two baked captions, and a four-state tree-vs-tab bus agreement
+check that compares what the crew SEES on each page). `python plugin/build.py preview` re-rendered and
+**inspected**: `ui_cover.png` (both rows read attitude), `ui_cover_phase5.png` (all seven ENTRY TIMELINE
+rows inside the card), `ui_vehiclepower.png` (`MAIN BUS A/B` → `Off`), `ui_systemstree.png` (`BUS OFF` —
+the two now agree), plus `ui_systemspid.png`, `ui_vehiclecrew.png`, `ui_vehicle.png`, `ui_vehiclethermal.png`,
+`ui_vehiclegnc.png` and `ui_deorbitburnprep.png` swept for further overflow — none found.
+⛔ Per this task's scope, **no** flight-actuation no-op (§14.4(a)) or inert inferred control (§14.4(b))
+was wired, and no `PanelMap`/label-doc was edited.
+**Note on the working tree:** the S10b session's work was still uncommitted when this ran. This task
+touched only `plugin/src/pure/CoverPage.cs`, `plugin/src/pure/VehicleSubsystemPage.cs` and
+`plugin/test/LayoutTest.cs` — **no overlap** with S10b's six files — and the commit names those three
+paths explicitly, so S10b's tree is left exactly as it was found.
+
+### S35 [owner call] Gauge identity colours make a NOMINAL reading look like an alarm — **TODO** — [TIER 3: owner decision]
+Logged by S34 (C1.1), not done — it needs an owner call, so S34 stopped and asked rather than repainting
+reference-sourced elements on its own authority (C1.4 / C1.12).
+
+**The finding was real, the diagnosis in it was not.** Glass reported "gauge colour-banding: nominal
+values render in caution/alarm colours". There is **no threshold bug**. `CabinLimits` is correct and
+physically sensible (`Ppo2Caution 2.5 / Alarm 2.0` descending · `Co2 4.0 / 6.0` · `Press 13.0 / 11.0`
+descending · `CabinTemp 30 / 35` · `Loop 45 / 55`) and `Alarms.Band` handles both directions correctly —
+`SystemsPidPage`, the one surface that *does* colour by severity, renders every one of those quantities
+**green** at the same values that look red on the gauges.
+
+**The actual cause is that the gauge arcs never consult severity at all — they are fixed identity
+colours, and the reference's own choices collide with our state palette:**
+- `assets/reference/dragon2-ui-vue/src/components/Overview.vue` sets `stroke: #d12c30` on the CABIN TEMP
+  arc, `#d7b733` on PPO2, `#fcd533` on CABIN PRESSURE, `#2983ed`/`#2886f6` on CO2 and the loops. Ours are
+  a faithful transcription (`DragonPalette.Gauge*`, `VehicleOverviewPage.cs:120`).
+- `#d12c30` **is** `DragonPalette.Alarm`, byte for byte, and `#d7b733`/`#fcd533` read as
+  `DragonPalette.Caution`. Everywhere else in the mod red means alarm and amber means caution, so the
+  crew reads an alarm off a healthy cabin.
+- `VehicleSubsystemPage.cs` extends the same idiom to the reconstructed tabs, which is why THERMAL's
+  `SHIELD` is red and GNC's `RCS FUEL` is gold at 100 % (`s.GCol` is a literal array on every tab —
+  lines ~253 / 272 / 306 / 341 / 363 / 391 — never a severity).
+
+**Paste-ready overseer prompt (C1.13):**
+> DragonScreen, S35. A glass pass found that healthy cabin readings look like alarms: CABIN TEMP ~22 °C
+> draws a RED arc on Crew and Vehicle Overview, PPO2 and CABIN PRESS draw amber, THERMAL's SHIELD draws
+> red and GNC's RCS FUEL draws gold at 100 %. The build chat audited it and found the alarm thresholds
+> are NOT wrong — the P&ID page, which is the one surface that colours by severity, shows all the same
+> quantities green. The gauge arcs simply never look at severity: they use fixed per-gauge identity
+> colours transcribed faithfully from the reference UI's own CSS, and the reference happens to have
+> picked `#d12c30` for CABIN TEMP — the exact hex this mod uses for ALARM — plus two yellows that read
+> as CAUTION. So the collision is between the reference's decorative palette and our state palette.
+> Nothing has been changed; the chat stopped here because fixing it means deviating from the reference,
+> which is a C1.4 §1.4 source decision only the owner makes. The options:
+> **(a) Leave it.** The reference is the source of truth and the colours are its own. Cheapest, but the
+> crew keeps reading a red gauge on a healthy cabin, and it contradicts S22's "don't read confidently
+> when you shouldn't" direction.
+> **(b) Severity wins.** Drive every gauge arc from `Alarms.Band` — green nominal, amber caution, red
+> alarm — and retire the identity colours. Most legible and internally consistent; the biggest visual
+> departure from the reference, and it loses the at-a-glance "which gauge is this" cue.
+> **(c) Keep identity colours, but re-pick the clashing ones.** Move CABIN TEMP off `#d12c30` and the two
+> yellows off the caution amber, onto hues that are not in the state palette (the reference's own blues,
+> say), so red and amber mean only one thing anywhere on the glass. Keeps the reference's *idea* — a
+> per-gauge colour — while removing the false alarm. Needs the owner to pick the replacement hues.
+> **(d) Identity colour normally, severity colour on exceedance.** The arc keeps its reference hue while
+> the value is nominal and switches to amber/red only when `Alarms.Band` says so. Preserves both cues;
+> the most code, and a red CABIN TEMP would then mean two different things depending on the value —
+> which is the confusion this is trying to remove.
+> Options (b), (c) and (d) all change reference-sourced pages, so each needs an explicit `OVERRIDE` plus
+> a plan/register edit before a build chat may act (C1.12). Which one, and if (c), which hues?
+>
+> **Also worth deciding in the same breath:** this glass pass ran against the **S17** DLL, which predates
+> S19–S33, so at least one of its six findings (the SYSTEMS P&ID readouts "shifted by one") did not
+> reproduce against the current tree and appears to be already-fixed rather than live. Should the next
+> `install` + glass go be scoped to re-checking the S18 list against a CURRENT build before any new
+> findings are logged?

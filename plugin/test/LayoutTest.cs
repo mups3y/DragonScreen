@@ -28,6 +28,34 @@ public static class LayoutTest
               "got " + got.ToString("F4") + " want " + want.ToString("F4"));
     }
 
+    // ---- QC-AUDIT finding 3: read one surface's word for MAIN BUS A / POWER 1 out of its own draw
+    // list, so the test compares what the CREW sees on each page rather than what each page's code
+    // says. The state line is the first text drawn after the row's label. ----
+    static string WordAfter(DisplayList dl, string label)
+    {
+        for (int i = 0; i < dl.Count; i++)
+            if (dl.At(i).Kind == DrawKind.Text && dl.At(i).Str == label)
+                for (int j = i + 1; j < dl.Count; j++)
+                    if (dl.At(j).Kind == DrawKind.Text) return dl.At(j).Str;
+        return null;
+    }
+
+    static string TabBusWord(SystemsState sys)
+    {
+        PageState bs = new PageState(); bs.Valid = true; bs.Systems = sys;
+        DisplayList bd = new DisplayList(VehicleSubsystemPage.Commands);
+        VehicleSubsystemPage.Build(bd, 2560, 1406, VehicleSubsystemPage.Sub.Power, bs);
+        return WordAfter(bd, "MAIN BUS A");
+    }
+
+    static string TreeBusWord(SystemsState sys)
+    {
+        PageState ts = new PageState(); ts.Valid = true; ts.Systems = sys;
+        DisplayList td = new DisplayList(SystemsTreePage.Commands);
+        SystemsTreePage.Build(td, 2560, 1406, ts);
+        return WordAfter(td, "POWER 1");
+    }
+
     public static int Run()
     {
         Console.WriteLine("DragonScreen layout tests");
@@ -813,6 +841,125 @@ public static class LayoutTest
                 if (pg.At(i).Kind == DrawKind.Text && pg.At(i).Str == "-598.4 km") leaked = true;
             Check("page " + ChromeBar.PageNames[pageIdx] + " hides a meaningless perigee",
                   !leaked, "");
+        }
+
+        // ============================================================================================
+        // QC-AUDIT 2026-09-03 - the three glass findings that turned out to be real defects
+        // ============================================================================================
+
+        // ---- FINDING 6: TEXT MUST FIT ITS BOX -------------------------------------------------------
+        // The Reference Content cards sit in three baked slots of very unequal height (317 / 449 / 550)
+        // and the densest list, the seven-step ENTRY TIMELINE, is in the SHORTEST one. Its last row used
+        // to render half on the card and half on the page ground. CoverPage.FitRows is the fix, so the
+        // fix is what gets pinned - not the one string that happened to overflow.
+        {
+            float size, gap;
+
+            // ENTRY TIMELINE: 7 rows from y=555 in a slot ending at 760. The design pitch does not fit.
+            CoverPage.FitRows(555f, 760f, 7, CoverPage.RowSize, 32f, out size, out gap);
+            Check("QC6 a card too dense for its slot shrinks", size < CoverPage.RowSize, "size " + size);
+            Eq("QC6 ...to exactly the slot, less the bottom pad",
+               555f + gap * 6f + size, 760f - CoverPage.RowPad, 0.02f);
+            Check("QC6 ...and its rows still do not overlap", gap >= size,
+                  "gap " + gap + " size " + size);
+            Check("QC6 ...and the block keeps its proportions",
+                  Math.Abs(gap / size - 32f / CoverPage.RowSize) < 0.001f, "ratio " + (gap / size));
+
+            // PARACHUTES: 4 rows from 904 in a slot ending at 1241. Already fits, so nothing may move.
+            CoverPage.FitRows(904f, 1241f, 4, CoverPage.RowSize, 40f, out size, out gap);
+            Check("QC6 a card that already fits is left alone",
+                  size == CoverPage.RowSize && gap == 40f, "size " + size + " gap " + gap);
+
+            // A slot far too short must not answer with illegible type: Typography.Min is a MEASURED
+            // floor, so the block overflows visibly rather than turning to mush.
+            CoverPage.FitRows(0f, 60f, 6, CoverPage.RowSize, 40f, out size, out gap);
+            Check("QC6 type never goes under Typography.Min", size >= Typography.Min, "size " + size);
+        }
+
+        // ...and the end-to-end guard: NO text drawn inside one of the three card slots may cross that
+        // slot's bottom edge. This is the check that would have caught the defect on the preview PNG.
+        {
+            const float CoverRefH = 2112f;
+            int cw = 2560, ch = 1406;
+            float csc = ch / CoverRefH;
+            // rectangle_179 / _180 / _181, the baked card backgrounds, as measured in CoverPage.Box.
+            float[,] slot = { { 443f, 760f }, { 792f, 1241f }, { 1273f, 1823f } };
+            PageState rs = new PageState(); rs.Valid = true;
+            DisplayList rd = new DisplayList(CoverPage.Commands);
+            CoverPage.Build(rd, cw, ch, rs, MapProjection.Default(), 5);   // Reference Content phase
+            for (int c = 0; c < 3; c++)
+            {
+                float top = slot[c, 0] * csc, bot = slot[c, 1] * csc;
+                float worst = 0f; string worstStr = null;
+                for (int i = 0; i < rd.Count; i++)
+                {
+                    DrawCmd t = rd.At(i);
+                    // the card column only: left of it is the phase rail, right of it is the globe.
+                    if (t.Kind != DrawKind.Text || t.A < 240f * csc || t.A > 1427f * csc) continue;
+                    if (t.B < top || t.B >= bot) continue;
+                    if (t.B + t.C > bot && t.B + t.C - bot > worst)
+                    { worst = t.B + t.C - bot; worstStr = t.Str; }
+                }
+                Check("QC6 card " + (c + 1) + " keeps every row inside its slot", worstStr == null,
+                      worstStr + " overhangs by " + worst + " px");
+            }
+        }
+
+        // ---- FINDING 4: ONE READING OF THE INTERRUPT CRITERIA (S13's residual) ----------------------
+        // S13 settled the quantity as ATTITUDE and applied it to DeorbitBurnPrepPage, but the Cover kept
+        // showing the baked "altitude" captions, so the two surfaces disagreed on glass (C7.1).
+        {
+            PageState cs = new PageState(); cs.Valid = true;
+            DisplayList cd = new DisplayList(CoverPage.Commands);
+            CoverPage.Build(cd, 2560, 1406, cs, MapProjection.Default(), 1);   // a baked-body phase
+            bool err = false, rate = false, baked = false;
+            for (int i = 0; i < cd.Count; i++)
+            {
+                DrawCmd t = cd.At(i);
+                if (t.Kind == DrawKind.Text && t.Str == "30° sustained attitude error") err = true;
+                if (t.Kind == DrawKind.Text && t.Str == "600°/min attitude rate") rate = true;
+                if (t.Kind == DrawKind.Image &&
+                    (t.AssetKey == "30deg_sustained_altitude_error" || t.AssetKey == "600deg_m_altitude_rate"))
+                    baked = true;
+            }
+            Check("QC4 the Cover states the interrupt criterion as ATTITUDE error", err, "");
+            Check("QC4 ...and the rate the same way", rate, "");
+            Check("QC4 ...and no longer places the two baked altitude captions over it", !baked, "");
+        }
+
+        // ---- FINDING 3: ONE TRUTH FOR THE TWO MAIN BUSES --------------------------------------------
+        // The systems tree read the buses off SystemsState; the ELECTRICAL POWER tab hard-coded a green
+        // "Nominal". The buses START OFF (VehicleSystems.Fresh), so the tab was wrong on open.
+        {
+            SystemsState fresh = SystemsState.Fresh();
+            Check("QC3 the tree calls an unpowered bus off", TreeBusWord(fresh) == "BUS OFF",
+                  "tree said " + TreeBusWord(fresh));
+            Check("QC3 ...and the POWER tab no longer calls the same bus Nominal",
+                  TabBusWord(fresh) == "Off", "tab said " + TabBusWord(fresh));
+
+            SystemsState up = SystemsState.Fresh();
+            Systems.ToggleBus(ref up, 1);
+            for (int i = 0; i < 3; i++) Systems.Set(ref up, 1, i, StringState.Online);
+            Check("QC3 a fully online bus reads 3/3 on the tree",
+                  TreeBusWord(up) == "3 / 3 ONLINE", "tree said " + TreeBusWord(up));
+            Check("QC3 ...and Nominal on the tab", TabBusWord(up) == "Nominal",
+                  "tab said " + TabBusWord(up));
+
+            SystemsState part = SystemsState.Fresh();
+            Systems.ToggleBus(ref part, 1);
+            Systems.Set(ref part, 1, 0, StringState.Online);
+            Systems.Set(ref part, 1, 1, StringState.Online);
+            Systems.Set(ref part, 1, 2, StringState.Tripped);
+            Check("QC3 a partly online bus says so on both surfaces",
+                  TreeBusWord(part) == "2 / 3 ONLINE" && TabBusWord(part) == "2 / 3 Online",
+                  "tree " + TreeBusWord(part) + " / tab " + TabBusWord(part));
+
+            SystemsState dead = SystemsState.Fresh();
+            Systems.ToggleBus(ref dead, 1);
+            for (int i = 0; i < 3; i++) Systems.Set(ref dead, 1, i, StringState.Tripped);
+            Check("QC3 a powered bus with no string left reads 0/3 on both",
+                  TreeBusWord(dead) == "0 / 3 ONLINE" && TabBusWord(dead) == "0 / 3 Online",
+                  "tree " + TreeBusWord(dead) + " / tab " + TabBusWord(dead));
         }
 
         Console.WriteLine(failures == 0

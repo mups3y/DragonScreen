@@ -124,7 +124,11 @@ namespace DragonScreen
             for (int i = 0; i < d.CkLabel.Length; i++)
             {
                 float y = 300 + i * 195;
-                Rgba sc = d.CkKey[i] == 1 ? Go : d.CkKey[i] == 2 ? Amber : White;
+                // 0 neutral · 1 go · 2 caution · 3 alarm. Key 3 arrived with the bus rows (QC-AUDIT
+                // finding 3): a bus the crew has powered whose three strings are ALL down is an alarm on
+                // the systems tree, and this column has to be able to say the same thing.
+                Rgba sc = d.CkKey[i] == 1 ? Go : d.CkKey[i] == 2 ? Amber
+                        : d.CkKey[i] == 3 ? DragonPalette.Alarm : White;
                 dl.Asset("ic_check", PX(90), PY(y), SZ(38), SZ(38), sc);
                 L(d.CkLabel[i], 150, y + 4, 28, White);
                 L(d.CkState[i], 150, y + 48, 26, sc);
@@ -221,6 +225,35 @@ namespace DragonScreen
             return -1;
         }
 
+        // ---- MAIN BUS A / B: the systems tree's own truth, in this column's idiom (QC-AUDIT finding 3)
+        // Pre-built so the draw path never formats a string, exactly as SystemsTreePage.Online3 is. The
+        // words are shorter here because the checklist column is narrower than a tree node, but they say
+        // the same thing about the same SystemsState, and "3 / 3 online" is spelled the way every other
+        // healthy row on this template is spelled: Nominal.
+        static readonly string[] BusOnline3 = { "0 / 3 Online", "1 / 3 Online", "2 / 3 Online", "Nominal" };
+
+        static bool BusOn(PageState st, int bus)
+        {
+            return bus == 1 ? st.Systems.Bus1On : st.Systems.Bus2On;
+        }
+
+        /// <summary>MAIN BUS A/B's state word, off the same SystemsState the systems tree draws.</summary>
+        static string BusWord(PageState st, bool valid, int bus)
+        {
+            if (!valid) return Dash;
+            if (!BusOn(st, bus)) return "Off";
+            return BusOnline3[Systems.OnlineCount(st.Systems, bus)];
+        }
+
+        /// <summary>...and its checklist colour key, mirroring SystemsTreePage's bus rule exactly:
+        /// unpowered is neutral, 3/3 is go, 0/3 on a powered bus is an alarm, anything else a caution.</summary>
+        static int BusKey(PageState st, bool valid, int bus)
+        {
+            if (!valid || !BusOn(st, bus)) return 0;
+            int online = Systems.OnlineCount(st.Systems, bus);
+            return online == 3 ? 1 : online == 0 ? 3 : 2;
+        }
+
         // ---- per-subsystem content. T13b (live-data wiring, §6): every one of the 54 numbers here now
         // comes from PageState, in the idiom SystemsPidPage (T9) and the VEHICLE family (T13a) already
         // ship — `T(s.SomeText)`, with each gauge's fraction taken from the SAME source that produced
@@ -294,8 +327,17 @@ namespace DragonScreen
                     // neutral with no feed.
                     bool cellsUp = valid && !string.IsNullOrEmpty(st.BatteryText) && st.BatteryText != "NONE";
                     bool arrayUp = valid && st.SolarArrayText == "DEPLOYED";
-                    s.CkState = new[] { "Nominal", "Nominal", T(st.BatteryText), T(st.SolarArrayText), "Nominal", "Off" };
-                    s.CkKey   = new[] { 1, 1, cellsUp ? 1 : 0, !valid ? 0 : (arrayUp ? 1 : 2), 1, 0 };
+                    // QC-AUDIT finding 3, 2026-09-03: MAIN BUS A / B were a hard-coded green "Nominal"
+                    // while the systems tree read the SAME two buses off the live model and said BUS OFF.
+                    // Two surfaces, one truth, disagreeing on glass (C7.1) — and the buses START OFF
+                    // (VehicleSystems.Fresh), so "Nominal" was wrong the moment the page opened. Both
+                    // rows now read SystemsState, in exactly the tree's own logic: off is off, a fully
+                    // online bus is Nominal, a partly online one is a caution, and a powered bus with no
+                    // string left is an alarm.
+                    s.CkState = new[] { BusWord(st, valid, 1), BusWord(st, valid, 2),
+                                        T(st.BatteryText), T(st.SolarArrayText), "Nominal", "Off" };
+                    s.CkKey   = new[] { BusKey(st, valid, 1), BusKey(st, valid, 2),
+                                        cellsUp ? 1 : 0, !valid ? 0 : (arrayUp ? 1 : 2), 1, 0 };
                     s.GLabel  = new[] { "BATTERY SOC", "BUS A", "BUS B", "ARRAY" };
                     // BUS A / BUS B are VOLTAGES. KSP's ElectricCharge has no voltage, and the two buses
                     // this build does model are ON/OFF (pure/VehicleSystems.cs) — a different fact, and

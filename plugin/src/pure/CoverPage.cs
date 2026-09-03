@@ -94,6 +94,35 @@ namespace DragonScreen
             "deport_burn", "coast_to_trunk", "claw_separati", "procedure", "manual_chute",
             "union_1", "union_2", "union_3", "union_4", "union_5", "camera_auto_earth_io" };
 
+        // ---- S13's RESIDUAL, CLOSED 2026-09-03 (QC-AUDIT, owner-directed in that chat) ----
+        // S13 decided the deorbit interrupt criteria are ATTITUDE, not altitude, and applied it to
+        // DeorbitBurnPrepPage.cs — but left these two BAKED captions reading "altitude", so the two
+        // surfaces that state the same criterion disagreed on glass (C7.1). The baked PNGs cannot be
+        // relabelled without re-rendering community art, so the two captions are SKIPPED here and
+        // redrawn as primitives from DeorbitBurnPrepPage's own S13-corrected strings. The asset KEYS
+        // are still untouched (S13's rule) — the files stay on disk, they are simply not placed.
+        static readonly string[] AttitudeSkipKeys = {
+            "30deg_sustained_altitude_error", "600deg_m_altitude_rate" };
+
+        // Their replacements sit in the baked assets' OWN measured boxes, read out of Keys/Box rather
+        // than re-typed, so the rows cannot drift off the hairlines if the placement is ever re-measured.
+        // Vertically centred in the box the PNG occupied; the size is set to match the neighbouring
+        // baked captions (FAR FIELD POINTING, on the same two rows, is still baked).
+        const float AttSize = 32f;
+        static readonly float AttX  = BoxOf("30deg_sustained_altitude_error", 0);
+        static readonly float AttY1 = BoxOf("30deg_sustained_altitude_error", 1)
+                                    + (BoxOf("30deg_sustained_altitude_error", 3) - AttSize) * 0.5f;
+        static readonly float AttY2 = BoxOf("600deg_m_altitude_rate", 1)
+                                    + (BoxOf("600deg_m_altitude_rate", 3) - AttSize) * 0.5f;
+
+        /// <summary>One column of a placed asset's measured box, by key. Used only by static
+        /// initialisers, never per frame.</summary>
+        static float BoxOf(string key, int col)
+        {
+            int i = Array.IndexOf(Keys, key);
+            return i < 0 ? 0f : Box[i, col];
+        }
+
         // Rail index of "Reference Content" (§14.4(c)): NOT a standalone page — a deorbit quick-reference
         // that replaces the content-panel BODY only, in-page, when this phase is selected. The three baked
         // panel-body cards (rectangle_179/180/181) and their captions are all specific to the ONE phase the
@@ -304,6 +333,7 @@ namespace DragonScreen
             {
                 string k = Keys[i];
                 if (Array.IndexOf(SkipKeys, k) >= 0) continue;
+                if (Array.IndexOf(AttitudeSkipKeys, k) >= 0) continue;
                 if (refPhase && Array.IndexOf(ReferenceSkipKeys, k) >= 0) continue;
                 if (cam != CoverCam.Earth && Array.IndexOf(EarthOnlyKeys, k) >= 0) continue;
                 dl.Asset(k, X(Box[i, 0]), Y(Box[i, 1]), Wd(Box[i, 0], Box[i, 2]), Z(Box[i, 3]), DragonPalette.White);
@@ -313,6 +343,10 @@ namespace DragonScreen
             // Manual Chute Deploy page via DrawRail), then the centre heading (Cover-specific).
             DrawRail(dl, w, h, sp);
             dl.Text(PhaseName[sp], X(490), Y(286), Z(58), TextAlign.Left, DragonPalette.White);
+
+            // the two skipped interrupt-condition captions, redrawn as ATTITUDE (see AttitudeSkipKeys).
+            // Not on the Reference Content phase: there the whole baked body is swapped out anyway.
+            if (!refPhase) DrawAttitudeCriteria(dl, X, Y, Z);
 
             if (refPhase)
                 DrawReferenceContent(dl, X, Y, Z);
@@ -512,27 +546,77 @@ namespace DragonScreen
             return (t < 1f) ? 1f : t;
         }
 
+        // ---- THE THREE REFERENCE-CONTENT CARD SLOTS, AND THE TYPE THAT HAS TO FIT IN THEM ----
+        // The slots are the baked card BACKGROUNDS (rectangle_179/180/181) and their measured heights are
+        // very unequal — 317 / 449 / 550 — while the densest list, the seven-step ENTRY TIMELINE, sits in
+        // the SHORTEST one. At the design row pitch its last row overhung the card by 13 design units and
+        // rendered half on the panel, half on the page ground (QC-AUDIT 2026-09-03, finding 6). FitRows
+        // scales a block to its own slot instead, so no card can overflow when a row is added later.
+        public const float RowTop = 56f, RowSize = 26f, RowPad = 12f;
+        static readonly float Card1Bottom = BoxOf("rectangle_179", 1) + BoxOf("rectangle_179", 3);
+        static readonly float Card2Bottom = BoxOf("rectangle_180", 1) + BoxOf("rectangle_180", 3);
+        static readonly float Card3Bottom = BoxOf("rectangle_181", 1) + BoxOf("rectangle_181", 3);
+
+        /// <summary>Fit `count` rows starting at `top` inside a slot ending at `slotBottom`. Hands back
+        /// the wanted size/pitch untouched when the block already fits; otherwise scales BOTH by the same
+        /// factor, so the block keeps its proportions rather than just crushing the leading. Type never
+        /// goes below Typography.Min (the measured legibility floor) and rows never overlap — a slot too
+        /// short for one legible line overflows visibly instead of turning to mush.</summary>
+        public static void FitRows(float top, float slotBottom, int count, float wantSize, float wantGap,
+                                   out float size, out float gap)
+        {
+            size = wantSize; gap = wantGap;
+            if (count < 1) return;
+            float avail = slotBottom - RowPad - top;
+            float need = wantGap * (count - 1) + wantSize;
+            if (avail <= 0f || need <= avail) return;
+            float k = avail / need;
+            size = wantSize * k; gap = wantGap * k;
+            if (size < Typography.Min)
+            {
+                size = Typography.Min;
+                gap = (count > 1) ? (avail - size) / (count - 1) : wantGap;
+            }
+            if (gap < size) gap = size;
+        }
+
+        /// <summary>The two Crew Interrupt Conditions captions, drawn as primitives because their baked
+        /// PNGs read "altitude" and S13 settled the quantity as ATTITUDE. The strings are
+        /// DeorbitBurnPrepPage's own S13-corrected ones, so the two surfaces that state this criterion
+        /// now read identically (C7.1). Geometry is the baked assets' own measured box (Keys/Box rows
+        /// `30deg_sustained_altitude_error` and `600deg_m_altitude_rate`), so the rows stay on the
+        /// hairlines and keep their FAR FIELD POINTING values aligned.</summary>
+        static void DrawAttitudeCriteria(DisplayList dl, Func<float, float> X, Func<float, float> Y, Func<float, float> Z)
+        {
+            dl.Text("30° sustained attitude error", X(AttX), Y(AttY1), Z(AttSize), TextAlign.Left,
+                    DragonPalette.White);
+            dl.Text("600°/min attitude rate", X(AttX), Y(AttY2), Z(AttSize), TextAlign.Left,
+                    DragonPalette.White);
+        }
+
         /// <summary>The deorbit quick-reference (§14.4(c)): entry timeline, parachutes, contingency — all
         /// real §8/§4 flight facts, laid out in the three real card slots (rectangle_179/180/181) the baked
         /// export used for the Coast-phase body. Drawn only when the Reference Content rail item (index 5)
         /// is selected.</summary>
         static void DrawReferenceContent(DisplayList dl, Func<float, float> X, Func<float, float> Y, Func<float, float> Z)
         {
-            void Card(float titleY, string title, string[] lines, float spacing)
+            void Card(float titleY, float slotBottom, string title, string[] lines, float spacing)
             {
+                float size, gap;
+                FitRows(titleY + RowTop, slotBottom, lines.Length, RowSize, spacing, out size, out gap);
                 dl.ArcBand(X(333), Y(titleY + 28), Z(4), Z(9), 0, 360, DragonPalette.Accent);
                 dl.Text(title, X(362), Y(titleY), Z(34), TextAlign.Left, DragonPalette.White);
-                float ry = titleY + 56f;
+                float ry = titleY + RowTop;
                 for (int i = 0; i < lines.Length; i++)
                 {
-                    dl.Text(lines[i], X(340), Y(ry), Z(26), TextAlign.Left, DragonPalette.Text2);
-                    ry += spacing;
+                    dl.Text(lines[i], X(340), Y(ry), Z(size), TextAlign.Left, DragonPalette.Text2);
+                    ry += gap;
                 }
             }
 
             // Return/deorbit sequence — §8 "Return/deorbit". Times are the ones §8 actually gives; no
             // invented numbers (§1.4).
-            Card(499f, "ENTRY TIMELINE", new[] {
+            Card(499f, Card1Bottom, "ENTRY TIMELINE", new[] {
                 "Undock → trunk jettison",
                 "Deorbit burn — ~15 min",
                 "Claw separation — ~1 h 20 m before splashdown",
@@ -542,7 +626,7 @@ namespace DragonScreen
                 "Splashdown — T+50 min from burn start" }, 32f);
 
             // §8 "Parachutes (Mark 3)".
-            Card(848f, "PARACHUTES (MARK 3)", new[] {
+            Card(848f, Card2Bottom, "PARACHUTES (MARK 3)", new[] {
                 "2 drogues deploy first",
                 "4 mains deploy at ~2 km",
                 "Land under ≥ 3 mains",
@@ -550,7 +634,7 @@ namespace DragonScreen
 
             // Contingency / abort notes — the CONFIRMED-real panel functions (§4) + the §8 deorbit
             // go/no-go timing.
-            Card(1329f, "CONTINGENCY", new[] {
+            Card(1329f, Card3Bottom, "CONTINGENCY", new[] {
                 "EJECT — SuperDraco abort (8 modes)",
                 "WATER DEORBIT / DEORBIT NOW — contingency immediate deorbit",
                 "Water landing is the norm — 7 designated splashdown sites",
