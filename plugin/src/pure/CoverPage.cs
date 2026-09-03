@@ -708,14 +708,45 @@ namespace DragonScreen
             {(int)CoverButton.EntryFalse,  1125,1544, 100, 55}
         };
 
+        // ---- S54 / audit H8: THE SIX ROWS THAT ARE NOT DRAWN ON THE REFERENCE CONTENT PHASE ----
+        // `Build` swaps the whole baked panel BODY out on rail slot 5 (`refPhase` → `ReferenceSkipKeys`)
+        // and draws the deorbit quick-reference over that space instead. Six of the `Hits` rows below are
+        // labels inside that swapped-out body, so on slot 5 they are INVISIBLE — but the rectangles were
+        // unconditional, and fired over the ENTRY TIMELINE / PARACHUTES / CONTINGENCY text.
+        // ⛔ IT IS HARMLESS ONLY WHILE THE TARGETS ARE NO-OPS. The moment the Cover action buttons are
+        // wired (audit H5), a tap on the reference text would trigger deorbit actions — which is why H8
+        // says fix this FIRST. Each entry names the `ReferenceSkipKeys` key that suppresses its label, so
+        // the two lists can be checked against each other by eye.
+        static bool HiddenOnReferencePhase(CoverButton b)
+        {
+            return b == CoverButton.ActOnSpaceX        // "on_spacex_on_begin_procedure_4_700"
+                || b == CoverButton.ActDeorbitBrief    // "deorbit_burn_brief"
+                || b == CoverButton.ActReview          // "review_reference_content"
+                || b == CoverButton.ActAcknowledge     // "acknowledge"
+                || b == CoverButton.EntryTrue          // "true"  (with "entry_enabled")
+                || b == CoverButton.EntryFalse;        // "false" (with "entry_enabled")
+        }
+
+        /// <summary>Passed as `selectedPhase` when the caller genuinely has no phase to give. It is NOT
+        /// the Reference Content phase, so every row stays live — the behaviour these overloads had
+        /// before S54. Only a caller that can actually dispatch an action needs to pass the real phase.</summary>
+        public const int NoPhase = -1;
+
         /// <summary>Which cover-page button a touch at panel pixel (px,py) hit — None if it missed.
         /// Uses the SAME Fit map as Build, inverted, so the touch lands on the exact Figma rectangle.</summary>
         public static CoverButton HitTest(float px, float py, int w, int h)
-        { return HitTest(px, py, w, h, CoverCam.Earth); }
+        { return HitTest(px, py, w, h, CoverCam.Earth, NoPhase); }
 
         /// <summary>As above, told which camera view is up: the pan/centre/zoom cluster exists only
         /// while the MAP view is, so it must not be hit-testable behind the globe or the capsule.</summary>
         public static CoverButton HitTest(float px, float py, int w, int h, CoverCam cam)
+        { return HitTest(px, py, w, h, cam, NoPhase); }
+
+        /// <summary>The full test: which camera view is up AND which rail phase is selected. The phase
+        /// matters because the Reference Content phase (slot 5) replaces the panel body, so the six rows
+        /// `HiddenOnReferencePhase` names are not on the glass and must not be touchable (S54 / H8).
+        /// A control the crew cannot see must never fire.</summary>
+        public static CoverButton HitTest(float px, float py, int w, int h, CoverCam cam, int selectedPhase)
         {
             float sc = h / RefH;
             if (sc <= 0f) return CoverButton.None;
@@ -757,11 +788,19 @@ namespace DragonScreen
                     if (fy >= SlotY[i] - 4f && fy < SlotY[i] + RailBoxH + 14f)
                         return PhaseButton[i];
 
+            // The same clamp `Build` applies to `selectedPhase`, so the hit map and the drawing agree on
+            // which phase is up even for an out-of-range index — they must never disagree about slot 5.
+            bool refPhase = selectedPhase != NoPhase
+                && (selectedPhase < 0 ? 0 : (selectedPhase >= PhaseCount ? PhaseCount - 1 : selectedPhase))
+                   == ReferencePhase;
+
             for (int i = 0; i < Hits.GetLength(0); i++)
             {
+                CoverButton b = (CoverButton)Hits[i, 0];
+                if (refPhase && HiddenOnReferencePhase(b)) continue;   // S54: not drawn → not touchable
                 if (fx >= Hits[i, 1] && fx < Hits[i, 1] + Hits[i, 3] &&
                     fy >= Hits[i, 2] && fy < Hits[i, 2] + Hits[i, 4])
-                    return (CoverButton)Hits[i, 0];
+                    return b;
             }
             return CoverButton.None;
         }

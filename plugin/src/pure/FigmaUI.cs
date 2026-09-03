@@ -360,6 +360,10 @@ namespace DragonScreen
                     return NavHit.Go(UiPage.Audio);
             }
 
+            // No selected phase is passed, and that is correct rather than an oversight (S54): `MapCover`
+            // resolves ONLY Menu and Settings, neither of which the Reference Content phase suppresses, and
+            // this path dispatches no Act*/Entry action at all. The painter is the caller that can, and it
+            // passes the real phase into the six-argument overload.
             if (page == UiPage.Cover) return MapCover(CoverPage.HitTest(px, py, w, h));
             return NavHit.None;
         }

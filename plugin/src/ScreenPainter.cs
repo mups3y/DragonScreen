@@ -424,7 +424,10 @@ namespace DragonScreen
                 {
                     // The rail selects a phase; the ◄/► arrows step through them (wrapping over all 7);
                     // NEXT VIEW + the map cluster drive the camera (ApplyCoverCam).
-                    CoverPage.CoverButton cb = CoverPage.HitTest(px, py, w, h, coverCam);
+                    // S54: the SELECTED PHASE goes in too. On the Reference Content phase the six
+                    // action/entry rows are not drawn, so they must not be touchable either — this is
+                    // the one caller that can ever dispatch them, so this is where the real phase belongs.
+                    CoverPage.CoverButton cb = CoverPage.HitTest(px, py, w, h, coverCam, coverPhase);
                     int ph = CoverPage.PhaseOf(cb);
                     if (ph >= 0) coverPhase = ph;
                     else if (cb == CoverPage.CoverButton.Back)

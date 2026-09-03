@@ -1175,6 +1175,81 @@ public static class FigmaUINavTest
         Check("cover Menu still hits", CoverPage.HitTest(98f * sc, 108f * sc, W, H) == CoverPage.CoverButton.Menu, "");
         Check("cover Settings still hits",
               CoverPage.HitTest(3194f * sc + (W - RefW * sc), 1865f * sc, W, H) == CoverPage.CoverButton.Settings, "");
+
+        // ---- S54 / audit H8: A CONTROL THAT IS NOT DRAWN MUST NOT FIRE ----
+        // On rail slot 5 (Reference Content) `CoverPage.Build` swaps the baked panel BODY out and draws the
+        // deorbit quick-reference over that space. Six `Hits` rows are labels inside that swapped-out body:
+        // the four Act* rows and the two Entry rows. Their rectangles used to fire anyway — over the ENTRY
+        // TIMELINE / PARACHUTES / CONTINGENCY text — which is harmless only while the targets are no-ops.
+        // Wire the Cover actions (H5) with this unfixed and tapping reference text triggers deorbit actions.
+        // Each pair below aims at the SAME pixel twice: it must hit on a normal phase and miss on slot 5.
+        {
+            const int RefPhase = 5;   // CoverPage.ReferencePhase — private, so mirrored (and pinned below)
+            float ox = W - RefW * sc; // right-block reflow offset, as the Hits table's own x's are frame-local
+            // button | frame x,y of a point INSIDE its rect (from CoverPage.Hits) | is it right-of-Split
+            float[][] hidden = new float[][] {
+                new float[] { 800f, 950f },    // ActOnSpaceX      779,930  591x60
+                new float[] { 1150f, 1010f },  // ActDeorbitBrief 1093,996  277x60
+                new float[] { 1000f, 1080f },  // ActReview        964,1062 406x60
+                new float[] { 1200f, 1140f },  // ActAcknowledge  1158,1128 212x60
+                new float[] { 800f, 1560f },   // EntryTrue        770,1548  90x50
+                new float[] { 1150f, 1560f },  // EntryFalse      1125,1544 100x55
+            };
+            CoverPage.CoverButton[] hidWant = {
+                CoverPage.CoverButton.ActOnSpaceX, CoverPage.CoverButton.ActDeorbitBrief,
+                CoverPage.CoverButton.ActReview, CoverPage.CoverButton.ActAcknowledge,
+                CoverPage.CoverButton.EntryTrue, CoverPage.CoverButton.EntryFalse };
+
+            for (int i = 0; i < hidden.Length; i++)
+            {
+                // all six sit left of the 1500 Split, so the frame->panel map is a plain scale
+                float px = hidden[i][0] * sc, py = hidden[i][1] * sc;
+                Check("cover " + hidWant[i] + " hits on a normal phase (phase 0)",
+                      CoverPage.HitTest(px, py, W, H, CoverPage.CoverCam.Earth, 0) == hidWant[i],
+                      "got " + CoverPage.HitTest(px, py, W, H, CoverPage.CoverCam.Earth, 0));
+                Check("cover " + hidWant[i] + " does NOT fire on Reference Content (phase 5)",
+                      CoverPage.HitTest(px, py, W, H, CoverPage.CoverCam.Earth, RefPhase)
+                          == CoverPage.CoverButton.None,
+                      "got " + CoverPage.HitTest(px, py, W, H, CoverPage.CoverCam.Earth, RefPhase));
+                // every OTHER phase leaves it live - the gate is slot 5's alone, not a blanket disable
+                for (int ph = 0; ph < CoverPage.PhaseCount; ph++)
+                {
+                    if (ph == RefPhase) continue;
+                    Check("cover " + hidWant[i] + " still live on phase " + ph,
+                          CoverPage.HitTest(px, py, W, H, CoverPage.CoverCam.Earth, ph) == hidWant[i], "");
+                }
+            }
+
+            // WHAT IS STILL DRAWN ON SLOT 5 IS STILL TOUCHABLE. The gate must not cost the crew the rail,
+            // the chrome or the camera on the one phase that most needs a way out of itself.
+            Check("Reference Content: Menu still hits",
+                  CoverPage.HitTest(98f * sc, 108f * sc, W, H, CoverPage.CoverCam.Earth, RefPhase)
+                      == CoverPage.CoverButton.Menu, "");
+            Check("Reference Content: Settings still hits",
+                  CoverPage.HitTest(3194f * sc + ox, 1865f * sc, W, H, CoverPage.CoverCam.Earth, RefPhase)
+                      == CoverPage.CoverButton.Settings, "");
+            Check("Reference Content: Back still hits",
+                  CoverPage.HitTest(300f * sc, 300f * sc, W, H, CoverPage.CoverCam.Earth, RefPhase)
+                      == CoverPage.CoverButton.Back, "");
+            Check("Reference Content: Forward still hits",
+                  CoverPage.HitTest(420f * sc, 300f * sc, W, H, CoverPage.CoverCam.Earth, RefPhase)
+                      == CoverPage.CoverButton.Forward, "");
+            for (int i = 0; i < CoverPage.PhaseCount; i++)
+                Check("Reference Content: rail row " + i + " still selectable",
+                      CoverPage.HitTest(110f * sc, (slotY[i] + 80f) * sc, W, H,
+                                        CoverPage.CoverCam.Earth, RefPhase) == want[i], "");
+
+            // The mirrored slot index is pinned to the rail, so a re-pitch of the phases cannot silently
+            // point this gate at the wrong row: slot 5 IS the phase whose button is PhaseReference.
+            Check("slot 5 is the Reference Content phase (the mirrored index is still right)",
+                  CoverPage.PhaseOf(CoverPage.CoverButton.PhaseReference) == RefPhase,
+                  "got " + CoverPage.PhaseOf(CoverPage.CoverButton.PhaseReference));
+
+            // The legacy overloads keep their pre-S54 behaviour (NoPhase = every row live) — the painter
+            // is the caller that dispatches, and it passes the real phase.
+            Check("the phase-less overload still resolves the Act* rows (NoPhase, not slot 5)",
+                  CoverPage.HitTest(1000f * sc, 1080f * sc, W, H) == CoverPage.CoverButton.ActReview, "");
+        }
     }
 
     static void VehicleTabs()

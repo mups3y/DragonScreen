@@ -4261,7 +4261,7 @@ return theirs correctly. That is §14.4(a)'s click-no-light-no-action honesty, i
 **DONE when:** both lamps report the state they actually control, with headless checks pinning each.
 Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H41/H42.
 
-### S54 [S] Phantom Act*/Entry hit rects fire over the Reference Content text — **TODO** — [TIER 2: latent defect — fix BEFORE wiring the Cover actions]
+### S54 [S] Phantom Act*/Entry hit rects fire over the Reference Content text — **DONE 2026-09-04** — [TIER 2: latent defect — fix BEFORE wiring the Cover actions]
 Logged by **S49** (H8). `CoverPage.HitTest` takes `cam` but **not** the selected phase, and its `Hits` table is
 unconditional. On rail slot 5 (Reference Content) the Act*/Entry labels are correctly suppressed by
 `ReferenceSkipKeys` — **but their six rectangles still fire**, over the ENTRY TIMELINE / PARACHUTES /
@@ -4271,6 +4271,37 @@ buttons are wired (S49 H5), tapping the reference text triggers deorbit actions.
 Vehicle Overview's `SHOW MARGINS TO` are **drawn to look like controls with no hit rect at all** — worse than
 a no-op, which at least resolves to a named action. **DONE when:** no rect fires on a phase whose label is not
 drawn, pinned by a test. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H8/H18.
+- **DONE 2026-09-04** (⚠ **batch session** — the owner-authorised deviation from C1.1/C1.7 of 2026-09-04, via
+  the overseer, for that batch ONLY). **The fix is exactly the one H8 prescribes:** a new
+  `CoverPage.HitTest(px, py, w, h, cam, selectedPhase)` overload gates the six rows through a named
+  `HiddenOnReferencePhase(CoverButton)` predicate, and `ScreenPainter.cs:427` — **the only caller that can
+  ever dispatch these buttons** — now passes its live `coverPhase`. Each of the six entries carries, in a
+  comment beside it, the `ReferenceSkipKeys` key that suppresses its label, so the hit list and the draw list
+  can be checked against each other by eye. The gate re-applies `Build`'s own clamp to `selectedPhase`, so an
+  out-of-range index cannot make the hit map and the drawing disagree about slot 5.
+- **The two legacy overloads are kept and made explicit rather than silently defaulted.** They pass a named
+  `CoverPage.NoPhase = -1`, which is not the Reference phase, so their pre-S54 behaviour is unchanged and the
+  existing `FigmaUINavTest` / `TurntableTest` call sites still mean what they meant. `FigmaUI.cs:363`'s
+  phase-less call is **left as-is and annotated**: `MapCover` resolves only Menu and Settings — neither
+  suppressed — and that path dispatches no Act*/Entry action at all.
+- **Pinned by a test, and the test is mutation-checked.** `FigmaUINavTest` grows a block that aims at the
+  SAME pixel inside each of the six rects twice: it must **hit on a normal phase and miss on slot 5**, and it
+  is re-checked live on **all six** non-Reference phases so the gate is slot 5's alone and not a blanket
+  disable. The block also pins what must STAY touchable on slot 5 — Menu, Settings, Back, Forward and all
+  seven rail rows — and pins the mirrored slot index against the rail itself
+  (`PhaseOf(PhaseReference) == 5`), so a re-pitch of the phases cannot point the gate at the wrong row.
+  Suite 731→**785 checks, 0 failed**. **Mutation check:** deleting the one `continue` reddens exactly the six
+  *"does NOT fire on Reference Content"* checks and nothing else; the file was restored and re-verified green.
+- **Gate (C1.3):** `build.py test` **green, all suites**. `build.py preview` re-rendered and **both** cover
+  PNGs inspected side by side — `ui_cover_phase5.png` draws ENTRY TIMELINE / PARACHUTES (MARK 3) /
+  CONTINGENCY with **no Act/Entry label anywhere on the glass** (that text is exactly what the phantom rects
+  sat over), while `ui_cover.png` on the Coast phase still draws all six — *"On SpaceX, On, begin procedure
+  4.700"*, *"Deorbit Burn Brief"*, *"Review Reference Content"*, *"Acknowledge"*, *"True"*, *"False"*.
+  Rendering is unchanged: this task changed hit-testing only, no draw call.
+- ⛔ **The two "no hit rect at all" items in this line's last sentence are NOT closed by it** — they are the
+  opposite defect (painted control, no rectangle), they are outside this DONE-when (*"no rect fires on a phase
+  whose label is not drawn"*), and giving either one a rect means first deciding what it DOES. Logged as their
+  own line so closing S54 does not bury them → **S75**.
 
 ### S55 [O] No procedure page is step-tracked — and the one real step state machine is stranded — **TODO** — [TIER 3: scheduled build — the §14.4(f) headline]
 Logged by **S49** (H19, H21, H22, H31, H34). **Not one of the five procedure screens has a step index, a
@@ -5773,6 +5804,25 @@ stale in tense now that `plugin/test/BoosterDragTest.cs` is in the tree and gree
 clause to point at the suite that now guards the table (S63, DONE 2026-09-04), keeping the ruling-1 substance
 exactly as it stands — the curve is still the best number we have and still not evidence, and **not one digit
 of the table may be touched**. Comment-only; `build.py test` as a no-regression check.
+
+### S75 [S] Two painted controls with NO hit rect at all — `SHOW MARGINS TO` and the Cover's refresh glyph — **TODO** — [TIER 2: the "looks like a control, isn't one" defect class]
+Split out of **S54**, 2026-09-04, when that line was closed (C1.1). S54 fixed the *opposite* defect — a rect
+that fires with no label — and its DONE-when (*"no rect fires on a phase whose label is not drawn"*) does not
+reach these two, which are **labels drawn with no rect**. S49 (H18) calls that *worse than a no-op: a no-op at
+least resolves to a named action*.
+**The two.** (1) **`SHOW MARGINS TO` on the Vehicle Overview** is a painted button with no hit rect, and the
+whole MARGIN column beside it is a hardcoded dash. (2) **The Cover's `gridicons_refresh` glyph** is drawn with
+no hit rect (top-right of the content panel in `plugin/build/preview/ui_cover.png`, beside RUNNING).
+**Why it is not a five-minute fix, and why it is its own line.** Neither can be given a rectangle until it is
+decided what the rectangle DOES, and for (1) that answer is already sitting in the tree: H18/H39 record that
+`LifeSupport.Margins` (`pure/LifeSupport.cs:36-47`) computes exactly the remaining ÷ rate answer the MARGIN
+column wants, off real TAC-LS rates, **and has no caller anywhere** — which is **S57**'s harvest list. So (1)
+is a READOUT under §14.4(f) and should land **with or after S57**, not before it. (2) has no such source: what
+a refresh control refreshes on this page is a §1.4 question, not a build-chat guess.
+**Read:** `docs/SCREEN_LIVENESS_AUDIT.md` H18 + H39, §14.4(f), then S57's `LifeSupport.Margins` row.
+**DONE when:** neither glyph is a painted lie — each either gains a real hit rect wired to a named action, or
+is drawn as inert text rather than as a button — and the MARGIN column reads modelled margins rather than a
+hardcoded dash, pinned by a test in the same style as S54's.
 
 ### W22 [S] `pure/Trajectory.cs`'s 4-band L/D schedule is UNMARKED, and R1 §7.4 files it under the wrong file — **TODO** — [TIER 3: a disclosed unmeasured constant carrying no marking]
 Logged by **W6**, 2026-09-04 (C1.1 — found on re-confirming R1's verdict against the restored content, which
