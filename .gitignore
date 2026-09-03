@@ -41,6 +41,16 @@ plugin/GameData/DragonScreen/DragonScreen.dll
 *.csv
 DragonScreen_capture/
 
+# ...but docs/reference/ is a BUILD INPUT, not recorder output. This blanket
+# *.csv is what silently swallowed docs/reference/craftdump.csv - copied in,
+# never tracked, and `git status` said nothing. It is the same mechanism that
+# LOST THE RSS-RO FLIGHT CORPUS: the raw CSVs behind BoosterDrag.cs's 48-flight
+# bc curve and the 55-flight TUNING_DB were gitignored and never committed, so
+# neither distillate can ever be re-derived (docs/AUTOPILOT_RECOVERY_AUDIT.md
+# 3.5 / 4.3, and BUILD_PLAN.md B16.8). Anything under docs/reference/ is a
+# source the build reads, so it is tracked.
+!docs/reference/*.csv
+
 # ---------------------------------------------------------------------------
 # LOCAL
 # ---------------------------------------------------------------------------

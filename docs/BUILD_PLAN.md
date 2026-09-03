@@ -21,6 +21,15 @@ or widens it (C1.12)** — a build chat never self-authorizes one.
   (§14.4)** — the plan is DECISION-COMPLETE, and **Part B is now GO** (owner, 2026-09-03 — see the banner
   above), built from RO defaults. **§B16 (owner scope addition, 2026-09-03) folds in Falcon-9 booster
   recovery** — a SEPARATE-VESSEL autopilot, distinct from the Dragon conductor.
+  **Amended 2026-09-03 by G5a** with the owner's settled decisions on booster recovery and direct control:
+  **§B12.7** (direct part control — no staging, no action groups, binding on ALL of Part B), **§B12.8**
+  (Part B starts from RECOVERY — four dependency-ordered waves over the 103 RECOVER-CODE files R1 inventoried),
+  **§B12.1a** (T15 = a full MechJeb port, headless, full settings authority), **§B8** (autostage OFF —
+  prediction stays, actuation is the conductor's), **§B13.4** (direct SuperDraco commanding), and
+  **§B16.1/§B16.4–§B16.9** (our own booster core and steering law · the craft dump is in the repo and the
+  engines bind by `engineID` · the guidance decision SETTLED · the focus protocol · un-converged constants ·
+  Kerbal-Konstructs landing zones). Open items are at the end of this document under
+  **"Open questions for the owner"**.
 Execution is governed by **PART C** — the anti-drift harness (a rules→one-task→verify→register LOOP, run by a
 `/next` skill + `CLAUDE.md`; Opus-for-hard / Sonnet-for-routine; one task per fresh chat). First task = T0
 (scaffold the harness), then T1 (docs sync) onward. Gate per the banner above; each task commits LOCALLY with
@@ -323,9 +332,10 @@ LOCKED) · B4 Conductor model · B5 Tuning methodology (knowledge-first → one-
 B7 Ascent tuning first-cut (mechanics) · B8 Ascent FULL guidance · B9 Full mission sequence (every phase → op
 → knobs) · B10 On-orbit modules FULL per-parameter guidance · B11 Flight-data TARGET reference ([DOC]/[EST]) ·
 B12 Build architecture (the conductor: embed · pure core + glue driver · phase FSM · re-plan loop · screen
-front-end · build order) · B13 Abort system · B14 Crew-gate procedures · B15 FDIR/fault detection · **B16
-Falcon-9 booster recovery** (owner scope addition 2026-09-03 — a SEPARATE-VESSEL autopilot; per-setting recipe
-in `docs/MECHJEB_MISSION_TUNING.md` §2) · B6 Honest risks. (Cross-cutting capstone: **§14 Coherence pass &
+front-end · build order · **B12.7 direct part control** · **B12.8 recovery-first build order**) · B13 Abort
+system · B14 Crew-gate procedures · B15 FDIR/fault detection · **B16 Falcon-9 booster recovery** (owner scope
+addition 2026-09-03 — a SEPARATE-VESSEL autopilot, §B16.1–§B16.9; per-setting recipe in
+`docs/MECHJEB_MISSION_TUNING.md` §2) · B6 Honest risks. (Cross-cutting capstone: **§14 Coherence pass &
 source-tier map**, at the very end.)
 
 ## B1. Direction (owner)
@@ -359,6 +369,12 @@ namespace/assembly to avoid any clash; drive headless via its module API). A tru
 if we must modify MechJeb internals. **DECISION LOCKED (owner, 2026-09-01): embed a pinned, privately-
 namespaced MechJeb built inside DragonScreen, driven headless via its API.** (Distribution is public → ship
 DragonScreen + the embedded MechJeb source under GPLv3; pin the exact tuned version.)
+
+**SCOPE AMENDED 2026-09-03 (owner, via the overseer) — the port is FULL AND COMPLETE.** T15 vendors a
+**complete MechJeb2 port from the most up-to-date GitHub source — everything, dead code included** — not a
+subset of the modules the conductor happens to call. And the conductor must be able to **edit and set ALL
+user-editable settings**, acting as an expert human would at the UI. The full detail, and the three tensions
+this scope creates, are in **§B12.1**; nothing here narrows it.
 
 ## B4. Conductor model (how it will work)
 Per mission phase, the conductor engages the right MechJeb module with the locked params — exactly as an
@@ -422,8 +438,21 @@ Sources: RP-1 wiki *TroubleshootingMechJebPVG* (authoritative RO PVG guide), Mec
 cfg (current tune), §8 flight facts. **Core principle: PVG is a VACUUM-only optimizer. The ascent has two
 regimes — (1) an OPEN-LOOP pitch program the human tunes for the aerodynamic climb, handed off at the Max-Q
 trigger to (2) CLOSED-LOOP PVG that optimizes the vacuum arc to the target orbit.** Bang-bang throttle (full)
-is optimal for PVG; autostaging MUST be on for its prediction; don't change staging after liftoff (Reset
-Guidance instead).
+is optimal for PVG; don't change staging after liftoff (Reset Guidance instead).
+
+⛔ **AUTOSTAGE IS OFF — GUIDANCE-PREDICTION IS SEPARATED FROM ACTUATION (owner directive, 2026-09-03, via the
+overseer).** An earlier version of this line read *"autostaging MUST be on for its prediction"*. That
+conflated two different things and it is **superseded**. The resolution the owner directed:
+- **PVG KEEPS ITS FULL STAGE MODEL** — the stage list, `OptimizeStageInternal`, `MinDeltaV`, the coast-arc
+  settings and the burnout prediction are all unchanged. PVG must still *know* the staging schedule to
+  optimize the arc; that is what the stage model is for.
+- **`MechJebModuleStagingController.Autostage` = FALSE.** MechJeb never actuates a separation or an ignition.
+- **The conductor performs every separation and every ignition DIRECTLY, at the times PVG predicts**, through
+  the named-part path of **§B12.7** (`ModuleDecouple.Decouple()`, `ModuleEngines.Activate()` per engine) —
+  never staging, never an action group.
+- **A T18 chat must not read the old sentence and switch autostage back on.** If PVG's arc looks wrong, the
+  fault is in the stage MODEL or in the conductor's separation timing — fix those. Turning autostage on hands
+  actuation back to MechJeb and breaks §B12.7, which is binding on all of Part B.
 
 Per-parameter (what · RO default · Crew-Dragon target · why / how-to-tune):
 - **AscentType** — CLASSIC(0)/PVG(1). Target **PVG(1)**. Why: RSS/RO needs the vacuum optimizer; Crew-2 ✓.
@@ -444,7 +473,8 @@ Per-parameter (what · RO default · Crew-Dragon target · why / how-to-tune):
   SkipCircularization = True (Crew-2) — PVG inserts directly to the target; verify against real insertion.
 - **PVG stage/coast:** OptimizeStageInternal (Crew-2 = 8) = the stage PVG optimizes burnout on (= last powered
   stage). MinDeltaV 40 m/s (exclude ullage/RCS stages). MaxCoast 450 s / MinCoast 0 / FixedCoast — coast arc
-  between stages; keep unless a specific coast is needed. Autostage ON.
+  between stages; keep unless a specific coast is needed. **Autostage OFF** — the stage model stays, the
+  actuation is the conductor's (the §B8 autostage rule above; §B12.7).
 - **Attach altitude / FPA:** AttachAltFlag + DesiredAttachAlt/FPA — force a specific insertion (burnout
   elevation). Crew-2 sets AttachAlt 210 km + FixedCoast — ⚠️ VERIFY this matches Dragon's real insertion vs
   letting PVG free-optimize; attach is mainly for shuttle-style 90×180 inserts.
@@ -452,9 +482,13 @@ Per-parameter (what · RO default · Crew-Dragon target · why / how-to-tune):
   `ThrustController.LimiterMinThrottle=True` — REVIEW: real F9 throttles down around max-Q + for a G-limit,
   which conflicts with PVG's bang-bang assumption. Decide whether to model F9's real throttle program or accept
   PVG bang-bang. (A genuine RSS-accuracy vs PVG-optimality tension to resolve empirically.)
-- **Staging flags** (StagingController): ⚠️ Crew-2 `HotStaging=True` — real F9 does COLD stage sep, so review
-  hot-staging lead-time semantics. FairingMaxDynamicPressure 5 kPa / FairingMinAltitude 50 km control fairing
-  jettison — Dragon has no fairing (hinged nose cone stays), so confirm these don't mis-trigger.
+- **Staging flags** (StagingController): with **Autostage OFF** these become inert — the StagingController
+  never fires, so `HotStaging`, the lead times and the fairing rules cannot mis-trigger. They stay recorded
+  because the BEHAVIOUR they describe is now the conductor's to reproduce: real F9 does a **COLD** stage sep
+  (so the conductor separates, then ignites, with its own lead time — it does not hot-stage), and Dragon has
+  **no fairing** (the hinged nose cone stays), so there is no fairing event to schedule at all.
+  Crew-2's persisted values (`HotStaging=True`, FairingMaxDynamicPressure 5 kPa, FairingMinAltitude 50 km) are
+  left as-is in the cfg and simply not acted on.
 - **Attitude (BetterController PID)** — Crew-2 PosKp 2.03 / PosTi 1.97 / VelKp 7.98 / RollControlRange 5 /
   MaxStoppingTime 2 / MinFlipTime 120 / Soften 0.5. The launch pointing controller; tune only if the stack
   oscillates or is sluggish on the gravity turn.
@@ -544,7 +578,9 @@ done; conductor releases control. Tune: none.
 
 **Cross-phase modules the conductor leans on:** **SmartASS** (attitude modes: SURFACE/ORBITAL/TARGET, pro/
 retrograde, kill-rot — coast, entry, docking pointing), **SmartRCS + RCS Balancer** (translation/ullage on the
-16 Dracos), **Node Executor** (flies every planned node), **Staging** (ascent only), **Warp Helper** (skip the
+16 Dracos), **Node Executor** (flies every planned node), **Staging** (⚠ **prediction only — `Autostage` is
+OFF and the StagingController never actuates**; the conductor separates and ignites directly, §B8/§B12.7),
+**Warp Helper** (skip the
 long phasing coast), **Flight Recorder** (the Q/AoA/pitch graphs that drive the §B8 ascent tune). ⚠️ Open
 per-phase decisions to resolve empirically: phasing-orbit altitude ladder (P2), transfer optimize vs simple
 (P3), docking autopilot vs manual-screen hand-off + speedLimit ladder (P4), entry lifting vs ballistic (P8),
@@ -704,6 +740,33 @@ one controller at a time — the screen-facing contract already exists and does 
 - GPLv3 (§B2): public distribution ⇒ ship DragonScreen + the embedded MechJeb source under GPLv3; pin+record
   the exact upstream commit.
 
+#### B12.1a T15's scope — FULL PORT, FULL SETTINGS AUTHORITY (owner, 2026-09-03, via the overseer)
+Two directives, both binding on T15:
+1. **A FULL AND COMPLETE MechJeb2 port from the most up-to-date GitHub source — everything, dead code
+   included.** Do NOT vendor only the modules the conductor calls, and do NOT prune. A complete tree is what
+   makes the pin meaningful and the GPLv3 source-shipping obligation clean, and it means a later conductor
+   increment can reach a module nobody anticipated without a second port.
+2. **The conductor edits and sets ALL user-editable settings**, behaving as an expert human at the MechJeb UI.
+   Concretely: it drives the **Maneuver Planner** to build a multi-burn ISS rendezvous — **NOT the rendezvous
+   autopilot**, which §B1 already rules out for RSS/RO. §B10.1–§B10.7 is the parameter surface it must be able
+   to reach; the point of the full port is that nothing on that surface is out of reach.
+
+**Three tensions this scope creates. Two are resolved here; one is an owner call.**
+- **"Most up to date" vs "pinned" — RESOLVED: take the NEWEST source at port time, then PIN it and RECORD the
+  commit** (hash + date + branch) in this section and in the shipped source header. The two words are not in
+  conflict: "most up to date" governs *what you fetch*, "pinned" governs *what happens after*. There is no
+  standing obligation to track upstream; a later re-pin is its own task.
+- **WHICH repository — UNRESOLVED, an owner call (see "Open questions for the owner", G5a-Q1).** Upstream
+  **MuMech/MechJeb2** and an **RO-oriented fork** are not the same tree, and the choice changes the ascent
+  guidance we inherit. **Do not assume upstream.** The one hard datum: the user's INSTALLED build has **PVG**
+  (§B2, verified from `MechJeb2/Plugins/` + the Crew-2 cfg's `AscentTypeInteger = 1`), so whatever is vendored
+  must carry PVG. **Confirm the repository with the owner before fetching** rather than inferring it from the
+  install (C7 forbids the install as a source anyway).
+- **HEADLESS IS MANDATORY EVEN THOUGH THE UI IS PORTED.** The full port brings MechJeb's whole GUI with it. It
+  must be vendored but **never registered/shown**: a user who already runs MechJeb would otherwise get **two
+  MechJeb UIs**, one of which they cannot configure and must not touch. The private namespace (§B3) prevents
+  the assembly clash; suppressing the GUI is a separate, equally mandatory job. Ported ≠ enabled.
+
 ### B12.2 The conductor — two layers (honors the pure/glue split)
 - **Pure core** `plugin/src/pure/Conductor*.cs` (NO Unity/MechJeb refs → headless-testable): the phase state
   machine + the re-plan decision logic. Input = a plain telemetry snapshot (extend `MissionInputs`/read
@@ -743,9 +806,24 @@ Abort, `GatePhase`) advance the conductor's holds (1 km Go/No-Go, KOS entry, CHO
 power/string/fire/entry-lamp commands STAY as-is (already real display state). Never wire a command whose real
 function is still inferred/invented (§4) without an owner call.
 
+**How an increment lands — the stub is a FACADE, not a placeholder (owner, 2026-09-03; §B12.8(a)).**
+`_AutopilotStub.cs:143-150` declares the lamp surfaces the screens compile against — `AutoPilot`,
+`StationApproach`, `DockingOps`, `DeorbitOps`, `UndockOps`, `BoosterRecovery` — each currently returning
+`false` / `null`. These names STAY. A recovered or newly-written controller **registers INTO them**: the stub
+class stops being a no-op and becomes a **thin adapter** that reports the live controller's state, so
+**each increment flips exactly ONE facade property from constant-false to live** and **no screen file changes
+at all**. That is CLAUDE.md's *"the contract the screens compile against does not change"*, taken literally —
+the contract is these property signatures, and they are never renamed to match whatever the controller
+underneath is called (§B12.8's two-generation rule).
+
 ### B12.6 Single-core safety, packaging, testing
-- **One commanding core:** detect a user's own MechJeb; ensure exactly ONE `MechJebCore` actually commands the
-  Dragon (use ours; never double-drive). Belt-and-braces: our core is the private-namespace one.
+- **One commanding core — THE RULE IS PER-VESSEL, AND THE VESSEL IS THE DRAGON.** Detect a user's own MechJeb;
+  ensure exactly ONE `MechJebCore` actually commands **the capsule** (use ours; never double-drive).
+  Belt-and-braces: our core is the private-namespace one. **Clarified 2026-09-03:** this governs the DRAGON
+  only. It is **not** a ban on a second controller on a **different vessel** — §B16's booster flies on its own
+  vessel with **its own compiled core and its own steering law** (§B16.1), which is not a MechJebCore at all,
+  so it cannot be a violation of this rule. Read literally as "one core in the game", §B12.6 would forbid §B16
+  outright; that is not what it means and never was.
 - **Testing (mandatory, per the glue law):** headless tests for the pure conductor core (feed synthetic
   telemetry+phase, assert the `ConductorAction` + phase transitions + re-plan triggers) — the analogue of
   `FigmaUINavTest`. The glue driver stays thin enough to eyeball. `python plugin/build.py test` must stay green.
@@ -756,17 +834,123 @@ function is still inferred/invented (§4) without an owner call.
   the §B5 one-parameter-at-a-time empirical tune against §B11 targets — which, per the 2026-09-03 gate opening
   (§0), is **DEFERRED until after the first recorded flight**: steps (1)–(7) are built at **RO defaults**.
   **(9) BOOSTER RECOVERY — §B16**, the owner's 2026-09-03 scope addition: a SEPARATE-VESSEL autopilot, so it is
-  its own track, NOT a phase of (1)–(7). It cannot start before (1)–(4) (the embed + a flown ascent) and needs
-  the owner-supplied craft dump (§B16.4) plus the §B16.5 guidance decision; it may be built before or after (8)
-  — the owner's call. Each step preview/test-gated; install + glass time only when a step needs the capsule
+  its own track, NOT a phase of (1)–(7). It cannot start before (1)–(4) (the embed + a flown ascent); it may be
+  built before or after (8) — the owner's call. **Its two former prerequisites are both now closed:** the craft
+  dump is **in the repo** (§B16.4) and the **guidance decision is SETTLED** (§B16.5).
+  ⚠ **And (1)–(9) are all preceded by the RECOVERY WAVES of §B12.8** — W0 (done) then Waves A–D. Part B's first
+  code is a recovery, not a green field; §B16 is **Wave C**. Each step preview/test-gated; install + glass time only when a step needs the capsule
   (and only on a separate owner go); commit LOCALLY with `git commit`, never `git push` (C1.5).
+
+### B12.7 Direct part control — NO staging, NO action groups (owner directive, 2026-09-03)
+> **The autopilot NEVER stages and NEVER fires an action-group binding to actuate the vehicle. It reaches the
+> live PART MODULES and calls them.**
+
+Binding on **all** of Part B — the conductor, the abort path (§B13.4), the chutes, the nose cone, and §B16's
+booster. It is the general rule that §B16.3's engine-mode ban is one instance of.
+
+**This is not new work — it already exists, and it is recovery, not invention.** `docs/AUTOPILOT_RECOVERY_AUDIT.md`
+§3.1 confirms `plugin/src/Actuator.cs` at `8b81816^` — **868 lines, 37 public methods**, verdict
+**RECOVER-CODE, highest priority** — does exactly this, and carries the rule as its own header hard rule. Its
+coverage is effectively complete for this stack: engines (`ActivateEngines`/`ShutdownEngines`/`FindEngine`/
+`IgniteOctawebLiftoff`/`ShutdownBoosterEngines`), separation (`SeparateBooster`/`FireDecoupler(role)`/
+`SeparateDragon`/`JettisonTrunk`/`Undock`), pad (`ReleaseHoldDowns`/`OpenErector`), abort (`FireAbort`), shroud
+(`Open/Close/ToggleNoseShroud`), RCS, deployables (legs, **grid fins**, panels, antennas) and chutes
+(`DeployChutes`/`CutChutes`). It was the actuation path on every recorded RSS-RO flight.
+- **Its missing dependency:** `pure/Actuation.cs` — the capability→role classifier (`EngineRoleOf`,
+  `DecouplerRole`) — was **deleted with it**, as was `test/ActuationTest.cs`. All three come back together
+  (§B12.8 Wave B) or none of them do.
+- **Its surviving dependency:** `pure/VehicleParts.cs` **was not deleted** and is live in today's tree.
+- **Its collision:** today's `_AutopilotStub.cs` declares a no-op `Actuator`; recovering the real one retires
+  that stub class (§B12.8(a)).
+- **The ONE documented exception, and it stays:** the RCS *master* toggle (`KSPActionGroup.RCS`). A thruster
+  only answers translation input while the vessel-level RCS flag is set, so `EnableRcs` sets both the
+  per-thruster `rcsEnabled` **and** the master — a stock vessel enable, not a VAB-dependent AG binding, which
+  is the class of thing the rule forbids. MechJeb does the same in every controller that translates on RCS.
+
+**THE BINDING RULE — the dump is the SPECIFICATION, the runtime lookup is the BINDING.**
+- `docs/reference/craftdump.csv` tells you **what the vehicle is**: which parts exist, which modules they
+  carry, which events/actions/fields those modules expose. That is what you design against.
+- The flight software **finds its parts on the LIVE vessel at runtime**, by **module type and identity** —
+  `ModuleEngines`/`ModuleEnginesRF` (+ `engineID`), `ModuleDecouple` / custom decouplers, `RealChuteModule`,
+  `ModuleAnimateGeneric`, part **name** where the name is the identity. Resolve ONCE at the phase boundary
+  into a named table; never re-search per frame.
+- ⛔ **NEVER hardcode a `persistent_id` (or any other dump-local index) as the binding key.** Those change
+  between craft revisions — the 23:21 2026-09-03 dump is already a different vessel revision from the 26 Aug
+  one — so a hardcoded id **breaks silently the first time the craft is edited in the VAB**, which is the worst
+  available failure mode: no compile error, no exception, just an actuation that quietly addresses nothing.
+
+**⚠ The escalation, stated plainly: because control is direct, the craft dump gates essentially ALL Part-B
+actuation** — ascent separation and ignition (§B8's autostage-off rule), trunk jettison, the nose cone, the
+chutes, the abort motor — **not just the booster**. §B16.4 previously carried this as a booster-only
+dependency; it is not.
+
+**Where the dump now is (C7 satisfied).** It is **IN the repo**: `docs/reference/craftdump.csv`, regenerated by
+**W0** (2026-09-03) via the recovered `plugin/src/CraftDump.cs`. §B16.4's older *"the owner supplies it / STOP
+and ask"* wording is amended there accordingly.
+⚠ **The craft is a WORK IN PROGRESS (owner, 2026-09-03) and a RE-DUMP IS PENDING.** The current dump holds
+**20 parts** and is **missing the drogues, the mains, the trunk adapter/decoupler and all four S2 RCS
+thrusters**. So: design the actuation against the METHOD and the parts that are visibly there, and **make no
+claim about which chute, decoupler or RCS parts exist** — those bindings are resolved at runtime against the
+current dump, and the sections that need them say so rather than naming parts that may not survive the
+re-dump (§1.4: invent no part names).
+ℹ **A partial cross-check exists, and it is evidence, not a part table.** The 16 owner-supplied
+`docs/reference/<mission>.loadmeta` files each carry a `partNames` + `partModules` manifest for their
+`.craft` (e.g. `Crew-2.loadmeta`: 27 parts, 9 stages) — and those manifests **do** list parts the 20-part dump
+lacks. Use them to know **what the vehicle is meant to contain**; do **not** promote a name from them into a
+binding. The dump is the specification and the runtime lookup is the binding (above), and the **re-dump** is
+what makes the dump authoritative again.
+
+### B12.8 Part B starts from RECOVERY, not from scratch (owner, 2026-09-03, via the overseer)
+`docs/AUTOPILOT_RECOVERY_AUDIT.md` (R1) inventoried the flight software deleted on 2026-09-01 and found
+**103 files classified RECOVER-CODE** — pure guidance, glue and tests — plus 77 more to read as evidence
+without making them live. **Part B's first code is therefore a RECOVERY, in FOUR DEPENDENCY-ORDERED WAVES, one
+register task each**, each ending green under the preview-only gate (§0). G5c writes the register lines; this
+section fixes the shape.
+
+**W0 (`plugin/src/CraftDump.cs` + a fresh dump) is already DONE** and sits ahead of Wave A — §B12.7's binding
+rule has nothing to design against without it.
+
+| Wave | Contents | Why here |
+|---|---|---|
+| **A** | Collision-free `pure/` support: `Vec3`, `Conic`, `Trajectory`, `BoosterDrag`, `Predict`, `Aero`, `Authority`, `Lambert`, `Maneuver`, `Lvlh`, `Cw` — **plus their tests** | Nothing depends on these and they collide with nothing in today's tree, so the wave is pure gain and provably green. `Trajectory` + `BoosterDrag` are the prediction engine §B16.5 now commits to (§B16.8). |
+| **B** | `pure/Actuation.cs` + `Actuator.cs` + `test/ActuationTest.cs` | §B12.7's actuation layer. Retires the `Actuator` stub — the first real facade swap. Everything that flies needs it. |
+| **C** | The booster set — `pure/BoosterDescent.cs`, `pure/Hoverslam.cs`, `pure/GridFin.cs`, `test/BoosterTest.cs` (and §B16.8's provenance marking) | §B16. Depends on A (prediction) and B (per-engine actuation). Never flown (§B16.8) — recovered as a **starting point**, not as working code. |
+| **D** | The conductor set — `ModeManager`, `WarpPlan`, `CoastEta`, `MissionConductor`, `CrewProcedureOps` | **This is where most stub collisions land**, so it goes last, when A–C have already proven the pattern. |
+
+**(a) THE STUB NAMES ARE THE DISPLAY-FACING FACADE — keep them.** `_AutopilotStub.cs:143-150` holds the
+**gen-1** names the screens compile against (`AutoPilot`, `StationApproach`, `DockingOps`, `DeorbitOps`,
+`UndockOps`, `BoosterRecovery`); the recovered controllers are **gen-2** and are named differently. The
+resolution: **gen-2 controllers register INTO the gen-1 facade.** The stub becomes a thin adapter rather than a
+no-op, each controller flips one facade property live (§B12.5), and **the screens never change**. Do not rename
+a facade property to match a controller, and do not add a parallel surface beside it.
+
+**(b) TWO FILES ARE NOT RECOVERED AS-IS — and this is the whole reason to state it up front.**
+- ⛔ **`Steering.cs` is NEVER recovered.** Its replacement is **written fresh** against the pinned MechJeb.
+  Reason (R1 §7.2): its **last committed state is `UseGimbalLoop = false` — attitude handed to stock SAS**.
+  Recovering the file silently re-imports that decision, which is precisely the arrangement Part B replaces
+  with MechJeb's `BetterController`. It is read as reference; it never becomes live.
+- ⚠ **`AscentControl.cs` is recovered WITH THE ROLL-TRIM BLOCK (`:397-414`) REMOVED — removed, not fixed.**
+  That block is R1 §7.1's named, located, **unfixed** defect (*"sawtooths roll to 27.5 dps + toggles RCS 17× +
+  2 Hz gimbal chatter = the shake"*); the fix was deliberately withheld at the time because it *"touches PROVEN
+  ascent"*. **Flag, loudly:** ascent control is the **ONLY flight-validated subsystem we have** (R1 §4.2 —
+  DB-validated, `pe_p95 < 0.4°`). Cutting code out of it is therefore not a tidy-up. It gets **its own register
+  line and its own test**, and it is **never a quiet deletion inside another task's diff**.
+
+**The two-generation rule (R1 §0.2) — it prevents a build break, not a style problem.** Two generations of
+flight software **share class names**. **GEN 2** (newest at `8b81816^`) is the recovery target and the whole of
+the table above. **GEN 1** (newest at `158eb2a^`) is **never restored as code** — taking both produces
+duplicate types and the build fails. Gen 1's only role is as reference, and the gen-1 *names* survive solely
+as the display facade in (a).
 
 ## B13. Abort system — research + conductor design
 The Crew-Dragon Launch Abort System (LES) + on-orbit contingency aborts, and how the conductor implements them.
 Sources: Wikipedia *Crew Dragon Launch Abort System*, CBS *rescue scenarios*, NASA escape-system release,
 Space.com Demo-2 steps, the §4 panel research. **Abort is NOT a MechJeb module** (MechJeb has none) — it is
 conductor-owned, composed from the KSP abort action-group + SmartASS + the chute logic, with the mode
-PHASE-SELECTED exactly as the real vehicle autonomously selects it.
+PHASE-SELECTED exactly as the real vehicle autonomously selects it. **Corrected 2026-09-03:** an earlier
+version of this line said abort was composed from the *KSP abort action group*; it is not. Abort actuates
+through **§B12.7 direct part control** — the SuperDraco engine modules and the decouplers by name — plus
+SmartASS and the chute logic. No action group, no staging.
 
 ### B13.1 Hardware & trigger
 - **8 SuperDraco engines, 4 pods of 2**, side-mounted, **71 kN each** (~16,000 lbf), hypergolic NTO/MMH,
@@ -808,8 +992,17 @@ max-Q, 42 km apogee, Atlantic); C204 was a **ground-test anomaly** Apr 2019 (not
   — B12 replaces them). On trigger (manual EJECT via `FlightCommands.Run(Abort)`, or an autonomous FDIR check
   the pure core runs), the conductor:
   1. **Selects the mode** from `MissionPhase` + T+/energy (pad/1a/1b/2a…2e) — pure, testable decision.
-  2. **Ascent abort:** fire the KSP **Abort action group** (SuperDraco staged on the Dragon part) for pad/1a/1b;
-     for 2a+ command S2 separation + Draco/SuperDraco shaping burns (SmartASS + RCS); 2e → resume on-orbit.
+  2. **Ascent abort — DIRECT SuperDraco commanding (owner directive, 2026-09-03: NEVER staging, NEVER action
+     groups; §B12.7).** For pad/1a/1b: **command the SuperDraco engine modules directly** — resolve them on the
+     live vessel at the abort boundary and `Activate()` them (the recovered `Actuator.FireAbort` is exactly
+     this path, R1 §3.1), then fire the capsule↔trunk/booster decoupler by role through `FireDecoupler` —
+     never `KSPActionGroup.Abort`, never a staging call. An action-group binding is authored in the VAB and can
+     be absent, re-ordered or wired to the wrong part; on the one control path that must never silently fail,
+     that is unacceptable. For 2a+: command S2 separation the same way, then Draco/SuperDraco shaping burns
+     (SmartASS + RCS); 2e → resume on-orbit.
+     ⚠ **Which parts:** the SuperDraco set and the separation decouplers are resolved **at runtime against the
+     current craft dump** (§B12.7), not named here — the craft is a work in progress and a re-dump is pending,
+     so this section states the method and names no part.
   3. **Stabilize:** SmartASS `surface_retrograde`/KILL-ROT (heat-shield/blunt-forward), trunk retained.
   4. **Recover:** hand to the chute logic (drogues at 5486 m, mains at 1830 m — the existing `MissionPhase`
      constants) → splashdown.
@@ -902,6 +1095,13 @@ Ascent → Phasing → Rendezvous → Docking → Docked → Undock → Deorbit 
 conductor design assumes ONE controlled vessel. Falcon-9 first-stage recovery appears nowhere in it. This
 section adds it, in the same gate as the rest of Part B (the §0 banner).
 
+**AMENDED 2026-09-03 by G5a** with the owner's settled decisions, relayed through the overseer: §B16.1's
+architecture (our own compiled core with its own steering law — **not** a second `MechJebCore`), §B16.4 (the
+craft dump is IN the repo; the three engines bind by `engineID`), §B16.5 (**the guidance decision is settled**
+— our own five-phase core on our own integrator), §B16.6 (it is **Wave C** of §B12.8), and three new
+subsections: **§B16.7** the focus protocol, **§B16.8** the un-converged constants, **§B16.9** the
+Kerbal-Konstructs landing zones.
+
 **This section is a SCOPE + ARCHITECTURE statement, not a tuning derivation.** The per-setting flight book
 already exists: **`docs/MECHJEB_MISSION_TUNING.md` (S48) — PHASE 2 (§2.0–§2.6)**, whose SCOPE FLAG anticipated
 exactly this fold-in. Read it for every value, knob and gotcha; §B16 does not restate them and must not drift
@@ -914,15 +1114,25 @@ from them (C7.1 — on any number, THE PLAN WINS, and where the plan is silent S
   vessel, and KSP gives only ONE vessel focus at a time.
 - **It is a different flight regime** from everything else in Part B: a powered, atmospheric, target-accurate
   landing under **limited ignitions and limited throttle**, not orbital or entry guidance.
-- **Architecture consequence:** a `BoosterRecovery*` track that MIRRORS §B12's split (pure decision core +
-  thin glue driver, headless-tested) but owns its own vessel, its own `MechJebCore`/attitude use, and its own
-  `mechjeb_settings_type_*.cfg` — the booster is a different vessel type from the Dragon (S48 §2.5). The
-  Dragon conductor does not become a two-vessel machine; the two tracks coexist and share only the seams
+- **Architecture consequence — OUR OWN COMPILED CORE WITH ITS OWN STEERING LAW (owner decision, 2026-09-03,
+  via the overseer; supersedes this bullet's earlier "its own `MechJebCore`" wording).** A `BoosterRecovery*`
+  track that MIRRORS §B12's split — **pure decision core + thin glue driver, headless-tested** — and owns:
+  **its own vessel**, **its own parameter store / cfg** (the booster is a different vehicle from the Dragon,
+  S48 §2.5), and **its OWN STEERING LAW**. ⛔ **It is NOT a second `MechJebCore`, and a build chat must not
+  attach one to the booster.** The earlier wording would have sent a chat to do exactly that.
+  The owner's statement of intent, verbatim in substance: *a `.dll` version of our kOS-style landings with even
+  better attitude and manoeuvre precision* — a **perfect flip and boostback with no roll and no wasted
+  movement**, and a **9-3-1 engine schedule with no relight lag**. That is a purpose-built controller for one
+  known plant, which is why it is ours rather than a general-purpose autopilot's: the steering law is
+  §B16.5/§B16.2's, the attitude command shaper is the booster core's own, and it is **independent of the
+  MechJeb instance flying the Dragon mission** — the two never share a core, a controller or a settings store.
+  The Dragon conductor does not become a two-vessel machine; the two tracks coexist and share only the seams
   already in the tree (`MissionConductor.AutoRecoverBooster`, `BoosterRecovery.Tracked`, `RangeExtender.cs`,
-  `pure/VehicleParts.cs`'s octaweb model — inventoried in S48 §2.0).
-- **Open design question (S48 §2.6, gotcha 8 — owner call):** recovery historically used `ForceSetActiveVessel(booster)`
-  so the crew can watch the landing — that switches focus AWAY from the Dragon mid-ascent. Not a build-chat
-  decision.
+  `pure/VehicleParts.cs`'s octaweb model — inventoried in S48 §2.0). Single-core safety is unaffected: see
+  **§B12.6**, which governs the DRAGON.
+- **Vessel focus — SETTLED. See §B16.7.** This bullet previously carried `ForceSetActiveVessel(booster)` as an
+  open design question (S48 §2.6 gotcha 8). The owner settled it on 2026-09-03: **focus never leaves the upper
+  stage.** The protocol, and the accepted risk it bounds, are **§B16.7**.
 
 ### B16.2 The recovery profile — boostback / entry / landing burns
 The five-phase decomposition the RSS/RO community converged on (S48 §2.2 carries the exit conditions and the
@@ -932,6 +1142,14 @@ off, grid fins steer) → **5 LANDING BURN** (ignite EARLY to cover the RO ignit
 Profiles: **RTLS** = boostback + 3-engine entry + 1-engine landing, ~10 % of total propellant; **ASDS /
 droneship** = NO boostback, 3-engine entry, 1-engine (or 3-then-1) landing, ~6 %. Crew-2 — the mission our
 cfg is tuned for — was an **ASDS** recovery (S48 §2.1 has its timeline and both aim points).
+
+⚠ **OPEN, and it changes the state machine's shape: "ASDS = no boostback" is contradicted by the tier-2
+source.** `docs/BOOSTER_GUIDANCE_METHOD.md` §3.1/§8.1 records that F9I's ASDS path *does* run the same
+boostback routine — flipped to 170°, steering retrograde with a 5° offset against a shifted aim point — i.e. a
+short retrograde **trim** rather than a large return burn, but the same code and the same throttle law. If that
+is adopted, boostback is a **shared** phase with a mode-dependent magnitude (**one** state, always entered),
+not an RTLS-only optional one. **Per C7.1 THE PLAN WINS until the owner rules**, so §B16.2 stands as written
+and a build chat implements no-boostback-on-ASDS. Logged as **G5a-Q2** under "Open questions for the owner".
 
 ### B16.3 ⛔ RO engine handling — the owner's operational direction (2026-09-03)
 > **Do NOT cycle "next engine mode".** RO's `ModuleEngineConfigs` mode-cycling causes engine **RE-IGNITIONS**
@@ -953,36 +1171,256 @@ This is binding on the flight software. Consequences, in full in S48 §2.3:
 - **Ullage is the failure we have already had** (`docs/FLIGHT_144114_SCREEN_AUDIT.md`: *booster ballistic, eng
   never lit → LOST*): settle propellant with RCS before EVERY relight (S48 §2.6).
 
-### B16.4 ⚠ The craft dump is an owner-supplied input (C7)
-The exact 3-engine configuration is per-craft, and **C7 forbids reading the KSP install**: there are no
-`.craft` files in this repo (re-verified 2026-09-03 by G4). So the **OWNER supplies the craft dump**, and until
-it is in the repo this workstream documents the METHOD only and **invents no part names** (§1.4). The
-resolution procedure — filter to the booster with `VehicleParts.IsBooster(part.name)` (the `".S1."` marker),
-list the parts carrying `ModuleEngines`/`ModuleEnginesRF` (expect `OctawebEngineCount = 9`), identify the
-centre engine and its two burn partners **by position**, and record a fixed named engine table resolved ONCE
-at staging, never re-searched per frame — is S48 §2.4, table included. **T15-onward work must STOP and ask if it needs the dump
-and the dump is not in the repo** (C7/C1.12).
+### B16.4 The craft dump — IN THE REPO, and how the three engines are actually bound
+**C7 status: SATISFIED.** This section previously said *"the OWNER supplies the craft dump… T15-onward work
+must STOP and ask if it needs the dump and the dump is not in the repo."* **The dump is now in the repo** —
+`docs/reference/craftdump.csv`, regenerated by **W0** (2026-09-03) with the recovered
+`plugin/src/CraftDump.cs`, plus 15 owner-supplied `.craft`/`.loadmeta` pairs under `docs/reference/`. No task
+needs to stop and ask for it. §B12.7 records the escalation that follows: because all actuation is direct, the
+dump gates **essentially all** Part-B actuation, not only the booster.
+⚠ **Work in progress — a RE-DUMP IS PENDING** (owner, 2026-09-03). The current dump has **20 parts** and is
+**missing the drogues, the mains, the trunk adapter/decoupler and all four S2 RCS thrusters**. Design against
+the method and the parts that are there; name no chute, decoupler or S2-RCS part.
 
-### B16.5 ⚠ The guidance decision the owner still owes (S48 §2.5/§10)
-MechJeb supplies the pieces (`MechJebModuleLandingAutopilot.LandAtPositionTarget` + landing-guidance
-coordinates, `MechJebModuleLandingPredictions`, `SmartASS SURFACE_RETROGRADE`, `BetterController`;
-`MechJebModuleStagingController` **off**) but has **no boostback phase, no entry-burn phase, no grid-fin
-steering and no phase-by-phase engine count** — its landing autopilot assumes a freely-throttleable lander
-with unlimited relights. The three options are: implement the §B16.2 five-phase method **inside our own
-booster core** on top of MechJeb's attitude + prediction modules; accept MechJeb's landing autopilot as-is with
-its limits; or take **BoosterGuidance** (GPL-3.0, licence-compatible) as a second dependency. **§B3's packaging
-decision covers MechJeb ONLY** — vendoring or depending on a second mod is an owner call, not a build-chat one.
+#### ⛔ The old engine-resolution procedure was WRONG for this craft — do not follow it
+It said: list the parts carrying `ModuleEngines`/`ModuleEnginesRF`, **expect `OctawebEngineCount = 9`**, and
+identify the centre engine and its two burn partners **by position**. **Verified twice against
+`docs/reference/craftdump.csv`, including W0's fresh 23:21 dump of 2026-09-03: there are NOT nine engine
+parts.** The `expect OctawebEngineCount = 9` expectation is **deleted**; position-based identification is
+**deleted**. What the dump actually shows:
 
-### B16.6 Register status
-§B16 is scope + architecture. **No register task has been created for it** — whether booster recovery enters
-`REGISTER.md` as its own T-series or is folded into the existing T15–T22 line-up is an owner call, posed by G4
-and not decided here (C1.12). §B12.6 step (9) records its position in the build order; the gate it is built
-under is the §0 banner, the same as the rest of Part B.
+- **The octaweb is ONE part** — `TE.19.F9.S1.Engine`, *"Falcon 9/Heavy Full Thrust Octoweb"* — carrying
+  **THREE `ModuleEnginesRF` modules**, distinguished by `engineID`:
+
+  | `engineID` | Engines | Role |
+  |---|---|---|
+  | `AllEngines` | **9** | liftoff / ascent |
+  | `ThreeLanding` | **3** | boostback, entry burn, landing-burn start |
+  | `CenterOnly` | **1** | the 3→1 handover, terminal landing burn |
+
+- **These three ARE "the 3 individual engine control modes from the craft dump"** in the owner's 2026-09-03
+  directive, and they **ARE the 9-3-1 schedule** §B16.2 describes. There is no fourth thing to find.
+- Each also appears as a matching `ModuleEngineConfigs` block (configuration `Merlin1D` / `Merlin1D++`).
+
+#### The binding procedure — BY `engineID` STRING, and nothing else
+1. **Find the booster part** with `VehicleParts.IsBooster(part.name)` — the `".S1."` marker (`VehicleParts.cs:9`).
+2. **Bind the three `ModuleEnginesRF` instances on it BY THEIR `engineID` STRING** — `AllEngines`,
+   `ThreeLanding`, `CenterOnly` — resolved ONCE at the phase boundary into a named table, never re-searched
+   per frame. Throttle a bound instance with `independentThrottle` + `independentThrottlePercentage` (both
+   confirmed present on this part) and start/stop it with `Activate()`/`Shutdown()`, per §B16.3.
+   *(Note: `VehicleParts.cs:34-35` already carries `EngineIdThree = "Three"` / `EngineIdCentre = "Center"`,
+   which do match `ThreeLanding` / `CenterOnly` as substrings — but the dump strings above are the identity;
+   bind to them.)*
+3. ⛔ **NEVER by position. NEVER by engine-part count. NEVER by `persistent_id`** — ids change between craft
+   revisions (the 23:21 dump is already a different vessel revision from the 26 Aug one), so a hardcoded id
+   breaks silently on the next VAB edit (§B12.7).
+
+#### ⛔ The ban, with the forbidden members NAMED
+§B16.3 forbids mode-cycling; on this part the forbidden members are, exactly:
+`ModuleTundraEngineSwitch.NextEngineModeEvent` · `.NextEngineModeAction` · `.ToggleEngineModeAction` (and by
+the same rule `PreviousEngineModeEvent`/`.PreviousEngineModeAction`), and **`ModuleEngineConfigs`** as a
+switching mechanism. All are present on `TE.19.F9.S1.Engine` and none may be called by the flight software.
+`ModuleTundraEngineSwitch`'s read-only fields (`currentEngineDisplay`, `primaryEngineID`, `secondaryEngineID`,
+`tertiaryEngineID`, `selectedIndex`) may be **read** for annunciation. `ToggleIndependentThrottleAction` also
+sits on this part — an **action**, therefore out (set the `independentThrottle` field directly instead).
+
+#### ⚠ HARD ASSERTION — a SECOND Falcon 9 is now installed, and the binding must refuse it
+The owner installed **Kartoffelkuchen "Launchers Pack"** on 2026-09-03. Its parts are prefixed **`KK_SPX_`** /
+**`KK_F9demo_`** and it ships **its own octaweb, `KK_SPX_F9_Octaweb`**. So the booster binding **MUST**:
+- **assert that EXACTLY ONE octaweb is found**, and that it is **the Tundra one** (`TE.19.F9.S1.Engine`);
+- **reject any part whose name contains `"KK_SPX"` or `"KK_F9demo"`**;
+- **refuse and annunciate** on either failure rather than picking one — a booster controller that binds the
+  wrong vehicle's engines is a lost booster with no error message.
+- **This assertion must be GUARDED BY A TEST** (the recovered `test/ActuationTest.cs` pattern: assert the
+  capability map against the real dump, headless).
+Verified 2026-09-03: **no Kartoffelkuchen part name contains `".S1."`**, so `IsBooster` still discriminates
+today. The assertion exists so that it cannot silently bind the wrong vehicle **if that ever changes**.
+
+#### ⚠ TestFlight sits on this exact part
+`TE.19.F9.S1.Engine` also carries **`TestFlightFailure_IgnitionFail`** (alongside
+`TestFlightFailure_ShutdownEngine`, `_ReducedMaxThrust`, `_EnginePerformanceLoss`, `_Explode`,
+`TestFlightReliability_EngineCycle`, and `ModuleGimbal`). **Ignition failure is the failure class that lost the
+booster** (`docs/FLIGHT_144114_SCREEN_AUDIT.md`: *"booster ballistic, eng never lit → LOST"*) and the reason
+register line **H1b** exists. The ullage/ignition discipline of §B16.3 and R1 §7.1 is therefore not defensive
+padding on this vehicle — it is the known failure mode, present on the part, with dice attached.
+
+### B16.5 The guidance decision — SETTLED (owner, 2026-09-03, via the overseer)
+This section used to be *"the guidance decision the owner still owes"*, offering three options. **It is no
+longer an open question.** The answer is **its own option 1: the §B16.2 five-phase method, implemented inside
+OUR OWN booster core** (§B16.1) — with **one correction from R1: the PREDICTION comes from OUR OWN INTEGRATOR.**
+
+**What is chosen**
+- **The method:** §B16.2's five phases (boostback → coast → entry burn → aero descent → landing burn), with
+  the laws and their tier-2 attribution in `docs/BOOSTER_GUIDANCE_METHOD.md` §4 — one guidance, a target mode
+  (`Rtls`/`Asds`), one steering law for the whole descent, three throttle laws layered on it.
+- **The prediction engine: `plugin/src/pure/Trajectory.cs` + `plugin/src/pure/BoosterDrag.cs`, ours.**
+  R1 §3.5 establishes why: `Trajectory` is a **body-agnostic RK4 predictor** — `Mu`, `BodyRadiusM`,
+  `BodyOmega`, `AtmosphereDepthM`, `BallisticCoefficient` and the `DensityAt` / `SpeedOfSoundAt` /
+  `DragFactorAt` delegates are all **inputs**, so there is **no hardcoded planet in the file** — and it is
+  **unit-proven against analytic conics** (`test/TrajectoryTest.cs`, 12.8 KB). `BoosterDrag` feeds it a
+  **Mach-binned ballistic-coefficient curve**. Both are **RECOVER-CODE** (R1 §3.5) and land in **§B12.8 Wave A**.
+  The design note that motivated them is still the argument: *drag only ever shortens a trajectory, so a
+  vacuum answer is always LONG* — by tens of km on an entry — and *the drag term is MEASURED, not modelled*.
+
+**What is NOT chosen — all three exclusions are load-bearing**
+- ⛔ **NOT a second `MechJebCore`.** §B16.1: the booster gets our own compiled core with its own steering law.
+  A build chat must not attach a `MechJebCore` to the booster vessel.
+- ⛔ **NOT MechJeb's landing autopilot.** `MechJebModuleLandingAutopilot` assumes a freely-throttleable lander
+  with unlimited relights, and has **no boostback phase, no entry-burn phase, no grid-fin steering and no
+  phase-by-phase engine count**. On a limited-ignition, throttle-floored booster it is the wrong instrument —
+  S48 §2.5 and `BOOSTER_GUIDANCE_METHOD.md` §4.5 reach that from opposite directions.
+- ⛔ **NOT `BoosterGuidance` as a dependency.** Not needed now. **The general rule stands: §B3's packaging
+  decision covers MechJeb ONLY — vendoring or depending on any second mod is an OWNER call, never a
+  build-chat one.** That includes **Trajectories**, which the tier-2 source uses for its impact prediction and
+  which our own integrator exists precisely to avoid.
+
+**Consequence for `docs/BOOSTER_GUIDANCE_METHOD.md` (that doc is unedited; the plan governs).** Its §4 maps
+each law onto `MechJebModuleAttitudeController` + `MechJebModuleLandingPredictions`. Those mappings are
+**superseded by §B16.1 + this section**: with no `MechJebCore` on the booster there is no MechJeb attitude
+controller or prediction module on that vessel either. **The LAWS transfer unchanged** — read every
+*"in C#/MechJeb"* note as *"in C#, in our own booster core"*, with attitude commanded by the booster core's own
+controller and impact supplied by `pure/Trajectory.cs`. Its §5 two-tier prediction fallback (a coarse Keplerian
+answer when the good one is unavailable) is worth keeping on the same reasoning it gives.
+⚠ **And its §10 still applies in full: the constants do not transfer** — see **§B16.8**.
+
+### B16.6 Register status — the SHAPE is settled; the lines are G5c's to write
+G4 posed this as an owner call. **The owner settled it on 2026-09-03 (via the overseer): the recovery enters
+`REGISTER.md` as FOUR DEPENDENCY-ORDERED WAVES, ONE REGISTER TASK EACH**, each ending green under the
+preview-only gate. The waves, their contents and their ordering are **§B12.8** (A = collision-free `pure/`
+support · B = actuation · **C = the booster set** · D = the conductor set), with **W0 already DONE** ahead of
+Wave A. So §B16 is no longer a track with no register position: **it is Wave C.**
+
+**The register lines are written by G5c, not here.** G5c owns every `REGISTER.md` line (this task wrote none);
+§B12.6 step (9) still records the build-order position, and the gate is the §0 banner, the same as the rest of
+Part B.
+
+### B16.7 The focus protocol, and the risk it bounds (owner decision O-B1 REVISED, 2026-09-03)
+> ⛔ **FOCUS NEVER LEAVES THE UPPER STAGE.**
+
+The sequence, in order:
+1. **PhysicsRangeExtender expands the range** so the booster stays loaded and physically simulated at
+   separation distance (`RangeExtender.cs` is already a seam in the tree, S48 §2.0).
+2. **The booster lands UNFOCUSED** — flown by its own core (§B16.1) on the non-active vessel.
+3. **+10 s settle** after touchdown, so the landed state is stable before anything is asked of it.
+4. **Auto-recover** the booster.
+5. **PhysicsRangeExtender OFF; the default range restored.**
+
+**Why this, and not `ForceSetActiveVessel(booster)`:**
+- **It preserves IVA immersion.** This is a Crew-Dragon IVA mod. Yanking the camera out of the capsule
+  mid-ascent to watch a booster is the one thing the whole of Part A exists to prevent.
+- **It sidesteps the S60 `ActiveVessel` defect entirely.** S60 (`docs/BOOSTER_RECOVERY_ARCHITECTURE.md`) found
+  a focus-switch defect in the two-vessel handover. **With no focus switch, it never bites.** Still **fix it
+  defensively** — a latent defect on a path nobody takes is cheap to fix and expensive to rediscover — but the
+  fix is **off the critical path** and blocks nothing.
+
+**⚠ THE ACCEPTED RISK, stated plainly rather than buried.** An **unfocused** booster at roughly **1500 km**
+separation is **well past PhysicsRangeExtender's own >100 km caution**, and KSP's floating-origin rule is
+*"whoever holds focus gets the precision"* (S60) — so the vessel we are landing accurately is the one running
+at the coarser end of the physics. This is a **knowingly accepted risk, not an oversight**: the protocol above
+**bounds** it (loaded and unpacked only for as long as the landing needs, then recovered and the range
+restored), and **the BlackBox's two-vessel recording is what will actually answer it** —
+`docs/BLACKBOX_RESEARCH.md`, recording the booster as its own stream (R1 names `BoosterLog.cs` as the
+reference for how a non-active vessel gets its own recording stream). Until a recorded flight says otherwise,
+the risk is open and documented; nobody should be surprised by it later.
+
+### B16.8 Provenance of the booster constants — they are UN-CONVERGED
+> **Owner decision, 2026-09-03 (R1 open question Q2): RE-FLY.**
+
+**Two RSS-RO distillates survive the deletion, and only two:**
+| Artefact | What it is |
+|---|---|
+| `plugin/src/pure/BoosterDrag.cs` | the Falcon-9 booster's Mach-binned ballistic-coefficient curve — **18,080 clean unpowered in-atmosphere descent samples across 48 recorded RSS/RO flights**, median bc per 0.5-Mach bin (R1 §3.5, citing commit `0d6423d`) |
+| `docs/tuning/TUNING_DB.json` (+ `.md`) | per-phase statistics over a **55-flight** RSS/RO corpus, 2026-08-26 → 08-29 (R1 §4.3) |
+
+⛔ **THE RAW CSVs BEHIND BOTH ARE GONE.** They were **gitignored and never committed** (R1 §3.5, §4.3) — the
+same `.gitignore` mechanism this task closes. **Neither distillate can be re-derived, re-binned or re-checked
+from anything in this repo.** If the curve is ever doubted, there is nothing here to doubt it against.
+
+**Therefore, three rulings:**
+1. **Both are REFERENCE WITH STATED PROVENANCE, not seed truth.** Recover them, keep them, and **mark them in
+   place**: *derived from a 48-flight (bc curve) / 55-flight (tuning DB) RSS-RO corpus whose raw data is lost;
+   distillate only, not re-derivable.* A number you cannot re-derive is still the best number you have — it is
+   simply not evidence any more.
+2. **Every booster constant is marked UN-CONVERGED for RSS-RO.** That includes both the recovered ones and
+   every `[F9I]` value in `docs/BOOSTER_GUIDANCE_METHOD.md` §4 — whose §1.1 already says the laws transfer and
+   the constants do not (F9I is **stock Kerbin**), and whose §10 gives the re-convergence priority order:
+   the 2700 m boostback overshoot bias first (it is a **drag budget**, and RO's atmosphere is not Kerbin's),
+   then the entry-burn gate/cutoff, the `altitude/100` AoA taper, the landing-burn margins and flare
+   altitude, and the single-engine thrust ratio. Add to that R1 §7.4's regime-unstated defects —
+   `pure/Hoverslam.cs`'s ignition anchors and `BoosterTargeting.cs`'s coordinates, whose regime **is recorded
+   nowhere** and must be established before the number is used.
+3. **The corpus is rebuilt by RECORDED RE-FLIGHTS.** That needs the **BlackBox**
+   (`docs/BLACKBOX_RESEARCH.md`) and it needs **glass time — a SEPARATE owner gate, per session** (§0). A
+   booster task cannot converge a constant under the preview-only gate; it can only build the thing that
+   would.
+
+**⚠ What the BlackBox MUST capture, or the bc curve cannot be re-derived at all.** The back-solve is
+`BC = 0.5 · rho · v² / a_drag`, so the recorder must log, per sample: **atmospheric density**, **Mach**,
+**drag acceleration** (or the terms it is computed from — total acceleration, gravity, thrust), **mass**, and
+an **explicit marking of the unpowered phase** (the 18,080 samples were *clean unpowered in-atmosphere
+descent* — without that flag the powered samples poison the bins). This is a **requirement on the BlackBox
+spec**, recorded here so it is not discovered after the first re-flight.
+
+### B16.9 The landing zones are KERBAL KONSTRUCTS STATICS, not craft (owner directive, 2026-09-03)
+**The decision.** In RSS-RO **the seas are too rough for the droneship `.craft`** — flying a barge as a vessel
+is ruled out. We use **the SAME droneship in Kerbal-Konstructs STATIC form**, placed at **real coordinates**
+under the **real droneship name**, and the **per-mission choice is resolved by craft name in the VAB** (O5).
+Guidance targets a **KK group centre's lat/lon**.
+
+**⚠ NAMING TRAP — state it so no later chat repeats it.** In `RealismOverhaul/RO_SuggestedMods/`, the folder
+**"KK Launchers"** means **KARTOFFELKUCHEN**, *not* Kerbal Konstructs. Its siblings are `RO_KK_AtlasV_*`,
+`RO_KK_DeltaIV_*`, `RO_KK_Vulcan_*`, `RO_KK_MinotaurV`. Two different mods answer to "KK" in this install.
+
+**The verified install state, recorded so LZ1 does not re-derive it** (owner/overseer evidence of 2026-09-03;
+C7 — this is written down here as evidence, and no task needs to go looking in the install for it):
+- **Kerbal Konstructs is installed.** `Space_X_barge_lander-2.0` supplies the barge static
+  (`pointername = SpaceXbarge2`); `zzz_TundraRO_Fixes/Droneship_ROFix.cfg` patches it for RO.
+  **TundraSpaceCenter** also ships a second barge static (`TSC_Barge` / `TE_Barge`, *"Funny, It Worked Last
+  Time… Droneship"*).
+- **NEW 2026-09-03 — the RTLS gap is CLOSED with real assets.** **Fossil Industries "SpaceX Landing Pads"**
+  supplies the RTLS statics: **`Fossil_LZ1`, `Fossil_LZ2`, `Fossil_LZ4`, `Fossil_StarbasePad`** (*"SpaceX
+  Landing Zone 1 / 2 / 4"*, *"SpaceX Starbase Landing Zone"*). **No invention is required** for RTLS — which
+  closes `BOOSTER_GUIDANCE_METHOD.md` §8.3's *"a `TargetMode.Rtls` has nothing to aim at today"*.
+- **ALSO new 2026-09-03:** Kartoffelkuchen's Launchers Pack means **`KK_SPX_ASDS`** and
+  **`KK_SPX_LandingZone1`** now **exist**, so RO's `RO_KK_Falcon9_LandingZones.cfg` finally applies to them.
+  **These are PARTS, not statics.** ⛔ **DECISION TO RECORD: we place the KK STATICS and leave those parts
+  unused.** Guidance targets a KK group centre's lat/lon; flying a barge as a vessel is what the owner ruled
+  out. (Same pack is why §B16.4 carries a hard assertion against `KK_SPX` / `KK_F9demo` parts.)
+- **EXACTLY ONE barge is placed today:** Group **"Of Course I Still Love You"**, `RefLatitude` **32.7875**,
+  `RefLongitude` **−76.6445**, `Heading` **13.320014** — which **IS** the `BARGE (32.787551, −76.644507)` aim
+  point already in our code (`plugin/build/assess_flight.py`). **The KK GROUP CENTRE's lat/lon is therefore
+  what guidance targets** — not a vessel position, not a static's own offset.
+- **Placement takes two files** (recorded so the LZ1 task does not have to rediscover the schema):
+  `KerbalKonstructs/NewInstances/KK_GroupCenter_Earth_<Group>.cfg` — `Group`, `CelestialBody = Earth`,
+  `RefLatitude`, `RefLongitude`, `Heading`, `RadiusOffset`, `SeaLevelAsReference` — and
+  `<static>-instances.cfg` — `STATIC { pointername, Instances { UUID, RelativePosition, Orientation, Group,
+  LaunchSite { LaunchSiteName = <Group>_<static>_0, … } } }`.
+- **GAP: "Just Read The Instructions" and "A Shortfall Of Gravitas" are NOT placed — and need NO download.**
+  The droneship **NAME is the KK Group name**; the **MODEL is the static we already have**. Two more
+  group-centre + instance entries place them.
+
+**What §B16.9 does NOT do.** The **per-mission craft-name → droneship/LZ table is REAL FLIGHT DATA**: it must
+be **SOURCED and MARKED per §1.4**, never invented. Sourcing that table, placing the two missing droneships and
+placing `Fossil_LZ1` is the **LZ1** task, which the overseer issues separately. **This section states the
+requirement; it does not carry the table.**
+ℹ **One source LZ1 already has in the repo:** the 16 owner-supplied `docs/reference/<mission>.craft` files
+(committed by G5a) each carry a mission description naming that flight's **recovery mode** — e.g. `Crew-2`
+*"Recovery: OCISLY droneship"*, `Ax-2` *"RARE crew RTLS (boostback to land, not droneship)"*, `Ax-3`
+*"crew RTLS"*. That is a per-mission, in-repo, owner-supplied datum keyed by exactly the craft name the VAB
+selection resolves on. LZ1 still has to source and mark it properly (and reconcile it against a real flight
+record), but the table does not start from nothing.
 
 ## B6. Honest risks
 GPLv3 source-shipping obligation (public); MechJeb version pinning + private-namespace build tooling; **RSS/RO
 ascent tuning (PVG) is the genuinely hard part**; the conductor's live re-plan state machine is the main new
-code; ensuring a single MechJebCore (no double-run with a user's MechJeb).
+code; ensuring a single MechJebCore commands the Dragon (no double-run with a user's MechJeb — §B12.6).
+**Added 2026-09-03, with §B16 and §B12.8 folded in:** a **full** MechJeb port means porting the GUI too and
+then keeping it suppressed forever (§B12.1a); **direct part control** moves every actuation failure from
+"MechJeb didn't stage" to "we addressed the wrong part", which is why the dump binds at runtime and the
+booster binding is test-guarded (§B12.7/§B16.4); the **unfocused booster at ~1500 km** is a knowingly accepted
+precision risk (§B16.7); **every booster constant is un-converged and its raw evidence is lost**, so the first
+numbers will be wrong and only recorded re-flights can fix them (§B16.8); and the recovery waves reintroduce
+**103 files that mostly never flew** — recovered ≠ working (§B12.8, R1 §4.2).
 
 ---
 
@@ -1263,3 +1701,80 @@ The repo must contain ONLY current, correct content — anything a build task mi
   `.claude/plans`), the REPO copy is authoritative; the other is a runtime/ephemeral artifact.
 - ⚠️ I have NOT read all 19 `docs/` files this session — their line-level correctness is UNVERIFIED; **T1
   reconciles them before any page is built on them.**
+
+---
+
+## Open questions for the owner
+
+Raised by **G5a** (2026-09-03), which baked the owner's settled booster + direct-control decisions into this
+plan. **Nothing below was decided by the build chat** (C1.12); each is posed in the C1.13 overseer-prompt form.
+
+### G5a-Q1 — WHICH MechJeb repository does T15 vendor?
+**Situation.** §B3/§B12.1a now record the owner's scope: a **full and complete MechJeb2 port from the most
+up-to-date GitHub source**, everything included, then **pinned** at the commit taken. "Most up to date" vs
+"pinned" resolved cleanly (fetch newest, then pin and record the hash). **Which repository was never named**,
+and it is not a detail: upstream and an RO fork are different trees and we inherit different ascent guidance
+from each. The one hard datum is that the user's INSTALLED build has **PVG** (§B2), so whatever is vendored
+must carry PVG — and C7 forbids reading that install as a source, so we cannot settle it by inspection.
+
+**Options.**
+1. **Upstream `MuMech/MechJeb2`, newest commit at port time** — the canonical tree, PVG present upstream,
+   cleanest provenance and the easiest to re-pin later.
+2. **An RO-oriented fork** (owner to name it) — may carry RO-specific fixes we would otherwise re-discover
+   empirically, at the cost of a less canonical, possibly stale base.
+3. **Owner confirms it is whatever their installed build came from**, identified by name/version so T15
+   fetches the matching source from GitHub rather than the install.
+
+**Recommendation: option 1**, unless the owner knows of a specific RO fork they rely on. Upstream carries PVG,
+is the tree the RP-1 PVG guidance in §B8 is written against, and keeps the GPLv3 provenance simple; if a fork
+turns out to be needed, re-pinning is its own bounded task. **A C7 exception is NOT needed** (GitHub source is
+fetched as the port, exactly as §B12.1 already provides for) — but the owner must **name the repository**
+before T15 fetches anything.
+
+### G5a-Q2 — Does the ASDS profile run a trim boostback, or none at all?
+**Situation.** §B16.2 states the ASDS profile has **no boostback burn**. `docs/BOOSTER_GUIDANCE_METHOD.md`
+§3.1/§8.1 records that the tier-2 accuracy source **does** run one on ASDS — flipped to 170°, retrograde with
+a 5° offset against an aim point shifted 2700 m downrange — i.e. the **same code and the same throttle law**,
+sized as a short trim rather than a return burn. Per C7.1 **the plan wins and this chat changed nothing**;
+§B16.2 now carries the conflict as a flag. It matters architecturally: if ASDS trims, boostback is **one
+shared state always entered** with a mode-dependent magnitude, rather than an RTLS-only optional state — and
+that shape decision is cheaper to make before Wave C than after.
+
+**Options.**
+1. **Keep §B16.2 as written** — ASDS truly skips boostback; the state machine makes it optional.
+2. **`OVERRIDE` §B16.2 to the source's behaviour** — one always-entered boostback state, magnitude and aim
+   offset from the target mode's parameter block.
+3. **Build the state as always-entered but allow a zero-magnitude configuration** — the shape of (2), the
+   flown behaviour of (1) until a recorded flight rules.
+
+**Recommendation: option 3.** It costs nothing now, cannot be wrong about the flown profile (a zero-magnitude
+trim is exactly "no boostback"), and avoids a state-machine refactor mid-Wave-C if the trim turns out to
+matter in RO. ⚠ Options 2 and 3 both amend a written plan section and therefore need an explicit owner
+**`OVERRIDE`** plus this edit (C1.8/C1.12).
+
+### G5a-Q3 — Three docs now contradict the amended plan, and G5a was not allowed to touch them
+**Situation.** G5a's declared outputs were `BUILD_PLAN.md`, `.gitignore`, `INDEX.md` and the untracked
+reference/doc files (C1.11), so three files that the amendments contradict were **deliberately left alone**:
+- `docs/MECHJEB_MISSION_TUNING.md` **§2.2** — *"ASDS = no boostback"* (the Q2 conflict) and **§2.4 / O4** —
+  *"the craft dump cannot be filled; there are no `.craft` files in the repo"*, which is **no longer true**
+  (§B16.4). Its §2.4 also carries the deleted `expect OctawebEngineCount = 9` / by-position procedure.
+- `docs/BOOSTER_RECOVERY_ARCHITECTURE.md` (S60) — its banner says *"§B16 is unamended"* (now false), and its
+  staged focus recommendation is superseded by the settled **§B16.7** protocol.
+- `plugin/src/pure/VehicleParts.cs:37` — `OctawebEngineCount = 9`. It correctly describes the **vehicle**
+  (nine nozzles) but must never be used as an expected **part count**; §B16.4 now says so. It is a `.cs` file
+  and explicitly out of G5a's scope.
+Per C7.1 the plan wins on every one of these, so nothing is ambiguous *for a chat that reads the plan* — but a
+chat that opens S48 §2.4 first will follow a deleted procedure.
+
+**Options.**
+1. **One doc-sync register line** (G5c writes it) that marks all three: banner S48 and S60
+   `PARTLY SUPERSEDED — see BUILD_PLAN.md §B12.7/§B16.4/§B16.7`, and adds the in-file caveat comment on
+   `VehicleParts.cs:37`.
+2. **Split it** — a docs-only line now (S48 + S60, no code) and fold the `VehicleParts.cs` comment into
+   Wave B, which touches that file's neighbourhood anyway.
+3. **Leave all three** and rely on C7.1's "the plan wins".
+
+**Recommendation: option 2.** The two stale docs are the real hazard and a docs-only line closes them under
+the preview-only gate with no code risk; the one-line comment on `VehicleParts.cs` is safest inside a task
+that is already compiling and testing that area. Option 3 is the one to avoid — S48 §2.4 is *exactly* the
+section a booster chat will open first. No gate-open or `OVERRIDE` is needed for any option.

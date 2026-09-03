@@ -89,12 +89,24 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
 - **`reference/mechjeb_settings_type_Crew-Dragon.cfg`** [REF] — the tuned per-vessel-type MechJeb parameter
   store (the Crew-2 profile), copied into the repo by T0. The canonical starting profile for the §B5 tune;
   the copy in the KSP install is a runtime artifact, not a source.
+- **[AUTOPILOT_RECOVERY_AUDIT.md](AUTOPILOT_RECOVERY_AUDIT.md)** [SPEC — inventory] — ⭐ **R1** (2026-09-03):
+  a row-per-file audit of the flight software deleted on 2026-09-01. **332 files** classified —
+  **103 RECOVER-CODE**, 77 RECOVER-REFERENCE, 8 superseded, 10 obsolete — with each file's **regime**
+  (RSS-RO / stock / n/a) and **whether it ever flew**. Also: the **two-generation trap** (gen-1 and gen-2 share
+  class names — taking both breaks the build), **what was ever flight-validated** (ascent control + abort, and
+  nothing else), the **three named unfixed defects**, and where the RSS-RO numbers actually live. **This is the
+  source for `BUILD_PLAN.md` §B12.7/§B12.8 and §B16.8** — Part B's recovery waves are built from it. Its own
+  Q1/Q2/Q4 are now settled by the owner and baked into the plan by **G5a**.
 - **[BLACKBOX_RESEARCH.md](BLACKBOX_RESEARCH.md)** [SPEC — research] — the **BlackBox flight recorder**
   specification (S59, 2026-09-03): real FDR/CVR/spacecraft-telemetry practice, our parameter set with a
   per-parameter sample rate, what to COMPOSE from the surviving corpus tooling vs build fresh, the
   file format / time base / performance budget / replay path, and the C7 evidence boundary. **Not built** —
   the recorder that fed `plugin/tools/assess_flight.py` was deleted 2026-09-01; the analysers survive, the
   writer does not. Where it lands in the Part-B order is an open owner call (its §6.1 Q4).
+  ⚠ **§B16.8 adds a hard requirement on it** (G5a, 2026-09-03): the RSS-RO flight corpus is gone and is
+  rebuilt by recorded re-flights, so the recorder MUST capture what a ballistic-coefficient re-derivation
+  needs — **density, Mach, drag acceleration, mass, and an explicit unpowered-phase marking** — plus the
+  booster as its own two-vessel stream (§B16.7).
 - **[BOOSTER_RECOVERY_ARCHITECTURE.md](BOOSTER_RECOVERY_ARCHITECTURE.md)** [SPEC — research] — the **§B16
   architecture** research (S60, 2026-09-03): the **two-vessel concurrency problem** settled (loaded/unpacked
   vs on-rails, the `OnFlyByWire` fact, the range arithmetic, the floating-origin rule "whoever holds focus
@@ -104,7 +116,22 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
   with a target mode — boostback targeting, entry-burn trigger/sizing, the AoA-clamped aero-descent steering
   law, and the landing-burn ignition solution + throttle law, mapped onto MechJeb's attitude + prediction
   modules. ⚠ **Tier-2, marked and attributed** (F9I; surgical9's kOS RTLS script) — **method only, no kOS
-  code**. Pairs with `MECHJEB_MISSION_TUNING.md` PHASE 2 (the per-setting recipe); **§B16 is unamended.**
+  code**. Pairs with `MECHJEB_MISSION_TUNING.md` PHASE 2 (the per-setting recipe).
+  ⚠ **PARTLY SUPERSEDED 2026-09-03 by G5a** — its banner still says *"§B16 is unamended"*, which is now false:
+  **§B16 IS amended** (§B16.1/§B16.4–§B16.9). Its staged **focus** recommendation is superseded by the settled
+  **§B16.7** protocol (focus never leaves the upper stage), and its MechJeb-module mappings by **§B16.5** (our
+  own core, our own integrator). On any conflict THE PLAN WINS (C7.1).
+- **[BOOSTER_GUIDANCE_METHOD.md](BOOSTER_GUIDANCE_METHOD.md)** [REF — tier-2 method] — the **F9I guidance
+  method extracted for §B16.5**, under the owner's in-chat C7 exception of 2026-09-03 (`mups3y/Falcon-9-Interface`,
+  GPL-3.0, pinned commit). **Method only — no kOS code is reproduced, by direction.** One guidance with a
+  target mode; the flip as a rate-limited command shaper; the proportional-error boostback throttle law and
+  its 2700 m overshoot bias; the entry-burn altitude gate / velocity cutoff with payload-mass compensation;
+  the **one AoA-clamped steering law that flies the whole aero descent** and its authority taper; the
+  landing-burn ignition solution + self-correcting throttle law and the 3→1 handover; the ullage/spool
+  discipline; and ⛔ **what must NOT be ported** (the engine-mode-cycling actuation layer, §B16.3).
+  ⚠ **Every constant in it is STOCK KERBIN** — the laws transfer, the numbers do not (its §1.1/§10, and
+  **§B16.8**). Committed by **G5a** (2026-09-03), unedited; its §4 *"in C#/MechJeb"* mappings are read as
+  *"in C#, in our own booster core"* per §B16.5.
 - **`FLIGHT_SYSTEMS.md` — DOES NOT EXIST YET.** `plugin/src/pure/MissionPhase.cs` and
   `plugin/build/audit_comments.py` both point at it. Until **T15** creates it, the §8 flight facts live in
   `BUILD_PLAN.md`. Do not treat those two comments as a live link.
@@ -119,6 +146,24 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
 - **`plugin/src/CraftDump.cs`** [CURRENT] — recovered by **W0** (2026-09-03). The static dumper; fires once
   per flight scene via the new `CraftDumpAddon` (`[KSPAddon(Flight)]`) when the active vessel is on the pad
   with parts loaded. Writes `<KSP>/DragonScreen_capture/craftdump.csv`.
+- **`reference/craftdump.csv`** [GEN — the craft SPECIFICATION] — ⭐ the live craft's parts/modules/events/
+  actions/fields, produced by `CraftDump.cs`; taken by **W0** at 23:21 on 2026-09-03 and **committed by G5a**.
+  **Every Part-B actuation decision is designed against this file** (`BUILD_PLAN.md` §B12.7 — the dump is the
+  specification, the runtime lookup is the binding; never hardcode a `persistent_id`). It is what settled
+  §B16.4's engine binding: the octaweb is **one** part carrying **three** `ModuleEnginesRF` modules
+  (`AllEngines` 9 / `ThreeLanding` 3 / `CenterOnly` 1), not nine engine parts.
+  ⚠ **20 parts — a WORK IN PROGRESS, re-dump PENDING:** missing the drogues, the mains, the trunk
+  adapter/decoupler and all four S2 RCS thrusters. ⚠ It was **untracked until 2026-09-03** — the blanket
+  `*.csv` rule swallowed it silently; `.gitignore` now negates `docs/reference/*.csv` for exactly that reason
+  (the same mechanism lost the RSS-RO flight corpus — §B16.8).
+- **`reference/<mission>.craft` + `.loadmeta`** [REF — owner-supplied] — **16 pairs** committed by G5a
+  (2026-09-03), unedited: `DM-2`, `Crew-1`…`Crew-11`, `Ax-1`…`Ax-4`. The real per-mission Falcon-9 + Crew
+  Dragon vehicles, each `.craft` with a mission description (date, crew, booster tail number, capsule name,
+  orbit, **recovery mode**) and each `.loadmeta` with a `partNames`/`partModules` manifest + part/stage counts.
+  Two uses: the **per-mission recovery mode** feeds §B16.9's craft-name → droneship/LZ resolution (the table
+  itself is the **LZ1** task's to source, never to invent — §1.4), and the manifests are a **cross-check** on
+  what the 20-part dump is missing. ⚠ **Evidence, not a part table** — bindings still resolve at runtime
+  against the dump (§B12.7).
 
 ## 4. Historical — background only, do NOT build from these
 
