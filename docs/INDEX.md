@@ -87,7 +87,8 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
   tuning guidance, the flight-data targets, the build architecture, abort, crew gates, FDIR, and **§B16
   Falcon-9 booster recovery** (owner scope addition 2026-09-03 — a separate-vessel autopilot).
 - **`reference/mechjeb_settings_type_Crew-Dragon.cfg`** [REF] — the tuned per-vessel-type MechJeb parameter
-  store (the Crew-2 profile), copied into the repo by T0. The canonical starting profile for the §B5 tune;
+  store (the Crew-2 profile), copied into the repo by T0. The §B5 tune's **target/reference profile** —
+  NOT what flight 1 loads (that's RO's own shipped defaults; see `BUILD_PLAN.md` §B5's two-profile split);
   the copy in the KSP install is a runtime artifact, not a source.
 - **[AUTOPILOT_RECOVERY_AUDIT.md](AUTOPILOT_RECOVERY_AUDIT.md)** [SPEC — inventory] — ⭐ **R1** (2026-09-03):
   a row-per-file audit of the flight software deleted on 2026-09-01. **332 files** classified —

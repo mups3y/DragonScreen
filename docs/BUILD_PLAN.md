@@ -28,8 +28,11 @@ or widens it (C1.12)** — a build chat never self-authorizes one.
   prediction stays, actuation is the conductor's), **§B13.4** (direct SuperDraco commanding), and
   **§B16.1/§B16.4–§B16.9** (our own booster core and steering law · the craft dump is in the repo and the
   engines bind by `engineID` · the guidance decision SETTLED · the focus protocol · un-converged constants ·
-  Kerbal-Konstructs landing zones). Open items are at the end of this document under
-  **"Open questions for the owner"**.
+  Kerbal-Konstructs landing zones). **Further amended 2026-09-03 by G5b** with the two-profile split (§B5),
+  the MechJeb-repository + ASDS-boostback resolutions (closing G5a-Q1/Q2), and three more settled Dragon-
+  mission decisions: **§B10.3/§B12.3/§B9 P4** (auto-dock default, O6), **§B9 P8/§B10.5** (entry attitude-hold
+  baseline, no bank, O8), **§B8/§B10.6** (MechJeb auto-throttle over PVG bang-bang, O9). Open items are at the
+  end of this document under **"Open questions for the owner"**.
 Execution is governed by **PART C** — the anti-drift harness (a rules→one-task→verify→register LOOP, run by a
 `/next` skill + `CLAUDE.md`; Opus-for-hard / Sonnet-for-routine; one task per fresh chat). First task = T0
 (scaffold the harness), then T1 (docs sync) onward. Gate per the banner above; each task commits LOCALLY with
@@ -371,10 +374,11 @@ namespaced MechJeb built inside DragonScreen, driven headless via its API.** (Di
 DragonScreen + the embedded MechJeb source under GPLv3; pin the exact tuned version.)
 
 **SCOPE AMENDED 2026-09-03 (owner, via the overseer) — the port is FULL AND COMPLETE.** T15 vendors a
-**complete MechJeb2 port from the most up-to-date GitHub source — everything, dead code included** — not a
-subset of the modules the conductor happens to call. And the conductor must be able to **edit and set ALL
-user-editable settings**, acting as an expert human would at the UI. The full detail, and the three tensions
-this scope creates, are in **§B12.1**; nothing here narrows it.
+**complete port of upstream `MuMech/MechJeb2`, newest commit at port time, from GitHub — everything, dead code
+included** — not a subset of the modules the conductor happens to call. (The repository is named outright
+here, not left a blank to fill in — see §B12.1a's RESOLVED G5a-Q1 for the research behind the choice.) And
+the conductor must be able to **edit and set ALL user-editable settings**, acting as an expert human would at
+the UI. The full detail, and the three tensions this scope creates, are in **§B12.1**; nothing here narrows it.
 
 ## B4. Conductor model (how it will work)
 Per mission phase, the conductor engages the right MechJeb module with the locked params — exactly as an
@@ -395,8 +399,25 @@ module list from `MechJeb2/Icons/`. Build as a new reference doc added to our Me
 **Tuning METHODOLOGY (owner):** begin from **RO's default settings** (not a blank slate), then tune **one
 parameter at a time, validated against real Crew-Dragon flight data** (the §8 flight-facts + real telemetry),
 converging each knob until the profile matches nominal real missions — then lock it into the per-vessel-type
-cfg. Knowledge first (this task) → then the one-by-one empirical tune. The existing `Crew-2` cfg is the
-starting profile to refine, not the finished answer.
+cfg. Knowledge first (this task) → then the one-by-one empirical tune.
+
+**The two-profile split — what flight 1 actually loads (owner, 2026-09-03, via the overseer).** "Stock" means
+**RSS-RO DEFAULTS** (never the bare word — see CLAUDE.md's C1 rule); `docs/reference/mechjeb_settings_type_
+Crew-Dragon.cfg` (the tuned Crew-2 profile T0 copied in) is **NOT what flies first.**
+- **Flight 1 loads RO's OWN shipped MechJeb defaults** for every ascent-shaping / attitude / throttle /
+  staging KNOB — the values §B7/§B8 label "RO default". **NOT** the Crew-2 cfg's already-researched values
+  (Pitch Rate 0.75, Pitch Start Velocity 70, etc.) — those are **DEMOTED to the §B5 tune's TARGET**, alongside
+  §B11's [DOC]/[EST] numbers, both converged toward empirically in **build-order step (8)** (§B12.6) using
+  flight-1 BlackBox data, per the standing "fine tune deferred until after the first recorded flight" gate
+  (§0).
+- **Target-orbit values are the one exception — and here is why.** `DesiredInclination`/`DesiredOrbitAltitude`
+  etc. are not ascent-shaping knobs at all — they are **MISSION FACTS** (the real Crew-2 orbit, ~210 km ×
+  51.63°, §8). A destination is not something you tune toward; it is data you already have. These load
+  correctly from flight 1 regardless of which profile (RO-default or Crew-2-tuned) is active.
+- **The booster is a different case, stated here so the two are never conflated.** It has **no MechJeb
+  baseline at all** — it isn't a MechJeb vehicle (§B16.1/§B16.5). Its flight-1 constants are the **recovered,
+  explicitly un-converged values** of §B16.8 (the 48-flight drag curve, the 55-flight tuning DB), not an
+  RO-default/Crew-2 split. This is unrelated to the Dragon two-profile policy above.
 
 ## B7. Ascent tuning reference — FIRST CUT (MechJebModuleAscentSettings, source + Crew-2 cfg)
 `AscentType` enum = **CLASSIC (0) / PVG (1)** → Crew-2 `AscentTypeInteger = 1` = **PVG** (RSS/RO-correct).
@@ -406,7 +427,9 @@ starting profile to refine, not the finished answer.
 via the module's Editable field (handles the scale) or write both cfg values. (WebFetch's "units" for Mult
 fields were the DISPLAY unit; ValConfig is the authority.)
 
-Ascent params grouped (name · type · stock default · role):
+Ascent params grouped (name · type · RO default · role). **Per §B5's two-profile split: every "Crew-2: <value>"
+annotation below is a TARGET for the §B5 tune, not what flight 1 loads — flight 1 loads the RO default named
+in each bullet, and the Crew-2 value is what later flights converge toward.**
 - **Target orbit:** DesiredOrbitAltitude (Mult, m) · DesiredApoapsis (Mult, km disp) · DesiredInclination
   (deg) · DesiredLan (deg) · RelativeLAN (bool). Crew-2: 210 km / incl -51.6316 (ISS).
 - **PVG-specific:** AttachAltFlag (bool) + DesiredAttachAlt/Fixed (Mult, m) · DesiredFPA (rad) · DesiredArgP
@@ -478,10 +501,15 @@ Per-parameter (what · RO default · Crew-Dragon target · why / how-to-tune):
 - **Attach altitude / FPA:** AttachAltFlag + DesiredAttachAlt/FPA — force a specific insertion (burnout
   elevation). Crew-2 sets AttachAlt 210 km + FixedCoast — ⚠️ VERIFY this matches Dragon's real insertion vs
   letting PVG free-optimize; attach is mainly for shuttle-style 90×180 inserts.
-- **Throttle:** RP-1 says PVG wants **bang-bang (full throttle), limiters OFF**. ⚠️ Crew-2 has
-  `ThrustController.LimiterMinThrottle=True` — REVIEW: real F9 throttles down around max-Q + for a G-limit,
-  which conflicts with PVG's bang-bang assumption. Decide whether to model F9's real throttle program or accept
-  PVG bang-bang. (A genuine RSS-accuracy vs PVG-optimality tension to resolve empirically.)
+- **Throttle — SETTLED (O9, owner, 2026-09-03, via the overseer): MechJeb's own auto-throttle controls, NOT
+  PVG bang-bang.** RP-1 says PVG wants bang-bang (full throttle, limiters OFF); the owner **explicitly reverses
+  that recommendation** — MechJeb's auto-throttle (max-Q throttle-down etc.) is preferred for precision, "more
+  precise especially for fine manoeuvres that need precise low-throttle control." Two distinct cases: **ascent**
+  max-Q throttle-down costs PVG some optimality (an accepted trade, expect more T22 tuning to compensate);
+  **on-orbit** low-throttle burns (§B10.2 ops, fine rendezvous corrections) involve no PVG at all and are a pure
+  win with no trade-off. `ThrustController.LimiterMinThrottle=True` (Crew-2's persisted value) is therefore the
+  RIGHT setting, not a review item — it stays **True**. Only the exact throttle curve/floor is still an
+  empirical T22 tune (a different, still-open thing from the mechanism decided here).
 - **Staging flags** (StagingController): with **Autostage OFF** these become inert — the StagingController
   never fires, so `HotStaging`, the lead times and the fairing rules cannot mis-trigger. They stay recorded
   because the BEHAVIOUR they describe is now the conductor's to reproduce: real F9 does a **COLD** stage sep
@@ -493,8 +521,10 @@ Per-parameter (what · RO default · Crew-Dragon target · why / how-to-tune):
   MaxStoppingTime 2 / MinFlipTime 120 / Soften 0.5. The launch pointing controller; tune only if the stack
   oscillates or is sluggish on the gravity turn.
 
-**Open ⚠️ flags to resolve empirically (RSS-accuracy vs PVG-optimality):** throttle limiter vs bang-bang;
-hot vs cold staging; attach-altitude vs free-optimize; fairing logic on a fairingless Dragon.
+**Open ⚠️ flags to resolve empirically (RSS-accuracy vs PVG-optimality):** hot vs cold staging (moot —
+Autostage is OFF, see above); attach-altitude vs free-optimize; fairing logic on a fairingless Dragon
+(also moot under Autostage OFF). **Throttle limiter vs bang-bang is SETTLED (O9): MechJeb auto-throttle wins**
+— only the exact throttle curve remains an empirical T22 tune.
 
 ## B9. Full mission sequence — the conductor's phase-by-phase MechJeb use & tune
 The complete Crew-Dragon flight, step by step. Each phase: **real events (§8) → the MechJeb module/operation
@@ -539,12 +569,13 @@ after every burn (residuals + drift):
   ignition (ties to GuidanceController.UllageLeadTime 20 s from §B8). ⚠️ Verify NodeExecutor cfg key names.
 
 **Phase 4 — Proximity ops & docking (Approach Ellipsoid → Keep-Out Sphere → WP1 → WP0 → CHOP → capture at
-IDA-2).** Two options the conductor can take: (a) **Docking Autopilot** — knob **speedLimit** (m/s; Crew-2 = 1;
-real Dragon creeps in far slower, ~0.1–0.2 m/s at contact → tune speedLimit DOWN through the waypoints), plus
-approach-distance/roll-alignment settings, on Draco RCS; or (b) **hand off to the Manual ISS Docking screen**
-(already built) for crew-flown final approach, with **SmartASS TARGET/parallel** holding the pointing. CHOP =
-last abort point (the panel BREAKOUT function, §4). ⚠️ Decide autopilot-docks vs screen-hands-off (owner call);
-tune speedLimit ladder to the real keep-out/waypoint speeds.
+IDA-2).** **Auto-dock is the DEFAULT (O6, owner, 2026-09-03, via the overseer):** the **Docking Autopilot**
+flies the approach — knob **speedLimit** (m/s; Crew-2 = 1; real Dragon creeps in far slower, ~0.1–0.2 m/s at
+contact → tune speedLimit DOWN through the waypoints), plus approach-distance/roll-alignment settings, on Draco
+RCS. Pressing the manual docking button **switches to the Manual ISS Docking screen and shuts down the Docking
+Autopilot** (couples to S28, which T20 makes live) for crew-flown final approach, with **SmartASS TARGET/
+parallel** holding the pointing until the crew retakes it. CHOP = last abort point (the panel BREAKOUT
+function, §4). Tune speedLimit ladder to the real keep-out/waypoint speeds.
 
 **Phase 5 — Docked ops.** MechJeb essentially idle; **SmartASS OFF / KILL-ROT** or station attitude hold.
 No planner burns. (Reboosts, if modelled, = `OperationPeriapsis`/`Apoapsis` + Node Executor.)
@@ -563,8 +594,10 @@ not MechJeb burns.
 
 **Phase 8 — Entry.** Real: nose cone closed+locked, entry interface, heat-shield-forward. → **SmartASS
 SURFACE/RETROGRADE** (heat-shield forward) attitude hold through peak heating/g; **Landing Guidance** runs the
-descent prediction. Tune: entry attitude + any bank; Dragon is a low-L/D ballistic-ish entry, so mostly
-attitude-hold, not active guidance. ⚠️ Confirm whether we model lifting-entry bank or pure ballistic.
+descent prediction. **Lifting bank vs pure ballistic — RESOLVED (O8, owner, 2026-09-03, via the overseer):
+attitude hold, NO active steering, is the BASELINE.** The nominal ballistic entry+landing is captured with
+plain heat-shield-forward attitude hold and no commanded bank; active steering is added ONLY LATER, for
+off-target cases (a future increment, not flight 1). Tune: entry attitude only — no bank at baseline.
 
 **Phase 9 — Descent & chutes.** Real: 2 drogues → 4 mains at ~2 km (§8; matches the Manual Chute Deploy page).
 → **Landing Autopilot** (`DeployChutes` = True, **TouchdownSpeed** Crew-2 0.5) for the prediction/timeline, and
@@ -583,8 +616,9 @@ OFF and the StagingController never actuates**; the conductor separates and igni
 **Warp Helper** (skip the
 long phasing coast), **Flight Recorder** (the Q/AoA/pitch graphs that drive the §B8 ascent tune). ⚠️ Open
 per-phase decisions to resolve empirically: phasing-orbit altitude ladder (P2), transfer optimize vs simple
-(P3), docking autopilot vs manual-screen hand-off + speedLimit ladder (P4), entry lifting vs ballistic (P8),
-chute-altitude schedule (P9). Each of these gets the one-parameter-at-a-time flight-data tune (§B5) once built.
+(P3), the speedLimit ladder (P4 — auto-dock-default vs manual-override is settled, O6; only the ladder values
+are still an empirical tune), chute-altitude schedule (P9). Each of these gets the one-parameter-at-a-time
+flight-data tune (§B5) once built.
 
 ## B10. On-orbit modules — FULL per-parameter tuning guidance (mirrors §B8 depth)
 Read against the LIVE Crew-2 cfg. **Two kinds of param:** *persisted* (in the cfg = the permanent store) vs
@@ -629,8 +663,11 @@ target · why · how-to-set (cfg key ⟂ API field).
   most important docking knob. How-to-set: cfg `speedLimit` ⟂ API `DockingAutopilot.speed_limit`.
 - Non-persisted (running defaults, settable): **overrideSafeDistance/safeDistance** (m — keep-out radius),
   **overrideTargetSize/targetSize**, **forceRol/rol** (roll-align to the port). Target: enable roll-align to
-  the IDA-2 port; safe-distance ≈ the Keep-Out Sphere. ⚠️ Owner decision (P4): docking AP vs hand-off to the
-  Manual ISS Docking screen; if hand-off, this module idles and SmartASS `parallel_plus` holds pointing.
+  the IDA-2 port; safe-distance ≈ the Keep-Out Sphere. **Docking AP vs hand-off — RESOLVED (O6, owner,
+  2026-09-03, via the overseer): the Docking Autopilot is the DEFAULT** for the Approach phase (§B12.3).
+  Pressing the manual docking button switches to the **Manual ISS Docking screen** and **shuts down the
+  Docking Autopilot** (couples to S28 screen behaviour, which T20 makes live) — a crew override, not a
+  standing choice the conductor makes.
 
 ### B10.4 Landing Autopilot (`MechJebModuleLandingAutopilot`) — persisted; used for deorbit-targeting + chutes.
 - **DeployChutes** (bool) — cfg **True**. Arm chute auto-deploy. Keep True (Dragon lands under chutes). API
@@ -650,8 +687,10 @@ SURFACE {surface_prograde/retrograde, horizontal±, vertical_plus, surface(custo
 {target_plus/minus, relative±, **parallel_plus** = docking-axis aligned/minus}. Controls: **force_pitch/yaw/
 roll** (bool), **surface_heading/pitch/roll** (° — pitch 0=horizon,90=up), **surface_vel_*** (° trims).
 Phase map: coast = OFF or KILL_ROT · pre-burn pointing when not using Node Executor = NODE · entry (P8) =
-**surface_retrograde** (heat-shield forward) + force_roll for any bank · docking (P4) = **target_plus /
-parallel_plus** · departure (P6) = retrograde/target_minus. No cfg persistence — pure API per phase.
+**surface_retrograde** (heat-shield forward), attitude-hold baseline — **`force_roll` is NOT engaged at
+baseline** (O8: pure ballistic, no commanded bank; `force_roll` is reserved for the later off-target-steering
+increment, §B9 P8) · docking (P4) = **target_plus / parallel_plus** · departure (P6) =
+retrograde/target_minus. No cfg persistence — pure API per phase.
 
 ### B10.6 RCS control — the 16-Draco translation/rotation. Persisted: RCSController PID + RCSBalancer.
 - **RCSController** (attitude-hold-on-RCS PID) — cfg **Tf 1 · Kp 0.125 · Ki 0.07 · Kd 0.53**. The RCS attitude
@@ -660,8 +699,9 @@ parallel_plus** · departure (P6) = retrograde/target_minus. No cfg persistence 
   (torque 1 / translate 0.005 / waste 1). Balances thruster groups for pure translation (prox-ops). Target:
   enable **smartTranslation=True** for clean docking translation if cross-coupling shows up. **SmartRcs** (cfg
   EMPTY, live) = the translate-toward-target helper during prox-ops. ⚠️ Tune during the P3/P4 empirical pass.
-- **ThrustController** — cfg LimiterMinThrottle **True**, MinThrottle 0, DifferentialThrottle False. (Ascent
-  bang-bang flag lives here — see the §B8 throttle ⚠️.) On-orbit: leave default.
+- **ThrustController** — cfg LimiterMinThrottle **True**, MinThrottle 0, DifferentialThrottle False. This is
+  the setting O9 settles: MechJeb auto-throttle over PVG bang-bang, so `LimiterMinThrottle=True` is correct
+  as-is, not a review item (§B8's throttle bullet). On-orbit: leave default.
 
 ### B10.7 Coast/warp/ullage helpers.
 - **WarpHelper** (`phaseAngle` cfg 0) — auto-warp helper to skip the long phasing coast (P2). Set the lead/
@@ -709,7 +749,8 @@ Conversation (entry), CBS / Spaceflight Now (approach rates), the §8 mission ti
 - Entry flight-path angle **[EST]**: ~**−1.4° to −1.6°** inertial (corridor: too shallow skips, too steep
   over-heats/over-g). → the deorbit-Pe tune; validate the FPA in-sim.
 - Peak entry decel **[DOC/EST]**: generic crew capsule ~**7–8 g** worst-case; **Dragon nominal ~4–4.5 g** →
-  entry attitude/bank target (P8), lifting-vs-ballistic ⚠️. Heat shield ~1927 °C **[DOC]**.
+  the entry attitude target (P8; pure ballistic, no commanded bank at baseline — O8). Heat shield ~1927 °C
+  **[DOC]**.
 - Trunk jettison before entry; **claw sep ~1 h 20 m** before splashdown; **deorbit ~50 min** before splashdown
   **[§8]**. → the P7 sequencing.
 
@@ -756,12 +797,16 @@ Two directives, both binding on T15:
   commit** (hash + date + branch) in this section and in the shipped source header. The two words are not in
   conflict: "most up to date" governs *what you fetch*, "pinned" governs *what happens after*. There is no
   standing obligation to track upstream; a later re-pin is its own task.
-- **WHICH repository — UNRESOLVED, an owner call (see "Open questions for the owner", G5a-Q1).** Upstream
-  **MuMech/MechJeb2** and an **RO-oriented fork** are not the same tree, and the choice changes the ascent
-  guidance we inherit. **Do not assume upstream.** The one hard datum: the user's INSTALLED build has **PVG**
-  (§B2, verified from `MechJeb2/Plugins/` + the Crew-2 cfg's `AscentTypeInteger = 1`), so whatever is vendored
-  must carry PVG. **Confirm the repository with the owner before fetching** rather than inferring it from the
-  install (C7 forbids the install as a source anyway).
+- **WHICH repository — RESOLVED (owner, 2026-09-03, via the overseer; see G5a-Q1 in "Open questions for the
+  owner" for the full research finding).** **T15 vendors upstream `MuMech/MechJeb2`, newest commit at port
+  time, then pins and records it (§B12.1a's own "newest-then-pin" resolution above).** Researched, not
+  assumed: no current or endorsed RO fork exists — `lamont-granquist/PrimerVectorMechJeb` (where PVG guidance
+  was originally developed) has been **archived since 2021-07**, an experimental dev branch, not a maintained
+  release; the RP-1 wiki's own `TroubleshootingMechJebPVG` page (already cited by §B8) points RSS/RO players
+  at the **standard Sarbian/MuMech release** (`ksp.sarbian.com/jenkins/job/MechJeb2-Release`, CKAN 2.15+), not
+  a fork. The one hard datum that motivated the question stands and is satisfied: the user's INSTALLED build
+  has **PVG** (§B2, verified from `MechJeb2/Plugins/` + the Crew-2 cfg's `AscentTypeInteger = 1`), and upstream
+  carries PVG natively — no fork was needed to get it, and C7 still forbids reading the install as a source.
 - **HEADLESS IS MANDATORY EVEN THOUGH THE UI IS PORTED.** The full port brings MechJeb's whole GUI with it. It
   must be vendored but **never registered/shown**: a user who already runs MechJeb would otherwise get **two
   MechJeb UIs**, one of which they cannot configure and must not touch. The private namespace (§B3) prevents
@@ -783,8 +828,9 @@ Two directives, both binding on T15:
 Over `MissionPhase` (the enum already exists): **Prelaunch** → load profile + target ISS + arm PVG · **Ascent**
 → PVG ascent (§B8) · **Coast/Phasing** → Maneuver-Planner circularize/apsis ops + Node Executor (§B10.2, P2) ·
 **Approach** → the rendezvous op chain Plane→Transfer→CourseCorrection→KillRelVel + Node Executor, **re-planned
-live** (§B12.4), then hand off at the Keep-Out Sphere to the Docking AP **or** the Manual ISS Docking screen
-(§B10.3 owner ⚠️) · **Docked** → idle/KILL-ROT · **Entry** → deorbit via OperationPeriapsis beforehand, then
+live** (§B12.4), then hand off at the Keep-Out Sphere to the **Docking AP — the DEFAULT** (O6, §B10.3); the
+crew's manual docking button overrides to the Manual ISS Docking screen and shuts the Docking AP down ·
+**Docked** → idle/KILL-ROT · **Entry** → deorbit via OperationPeriapsis beforehand, then
 SmartASS heat-shield-forward (§B10.5) · **Drogues/Mains** → chute triggering (the real 5486/1830 m constants
 already in `MissionPhase.cs`) + the Manual Chute page · **Splashdown** → release control. Transitions are
 gated by telemetry (the existing `Classify()` inputs) + crew Go/No-Go where the real mission holds.
@@ -1136,20 +1182,26 @@ from them (C7.1 — on any number, THE PLAN WINS, and where the plan is silent S
 
 ### B16.2 The recovery profile — boostback / entry / landing burns
 The five-phase decomposition the RSS/RO community converged on (S48 §2.2 carries the exit conditions and the
-full parameter table): **1 BOOSTBACK** (RTLS only — flip and null the target error) → **2 COAST** (ballistic,
-retrograde) → **3 ENTRY BURN** (three engines, steer slightly off retrograde) → **4 AERO DESCENT** (engines
-off, grid fins steer) → **5 LANDING BURN** (ignite EARLY to cover the RO ignition delay; decelerate to ~zero).
-Profiles: **RTLS** = boostback + 3-engine entry + 1-engine landing, ~10 % of total propellant; **ASDS /
-droneship** = NO boostback, 3-engine entry, 1-engine (or 3-then-1) landing, ~6 %. Crew-2 — the mission our
+full parameter table): **1 BOOSTBACK** → **2 COAST** (ballistic, retrograde) → **3 ENTRY BURN** (three
+engines, steer slightly off retrograde) → **4 AERO DESCENT** (engines off, grid fins steer) → **5 LANDING
+BURN** (ignite EARLY to cover the RO ignition delay; decelerate to ~zero). Profiles: **RTLS** = full boostback
++ 3-engine entry + 1-engine landing, ~10 % of total propellant; **ASDS/droneship** = a **zero-magnitude
+boostback trim** (below) + 3-engine entry + 1-engine (or 3-then-1) landing, ~6 %. Crew-2 — the mission our
 cfg is tuned for — was an **ASDS** recovery (S48 §2.1 has its timeline and both aim points).
 
-⚠ **OPEN, and it changes the state machine's shape: "ASDS = no boostback" is contradicted by the tier-2
-source.** `docs/BOOSTER_GUIDANCE_METHOD.md` §3.1/§8.1 records that F9I's ASDS path *does* run the same
-boostback routine — flipped to 170°, steering retrograde with a 5° offset against a shifted aim point — i.e. a
-short retrograde **trim** rather than a large return burn, but the same code and the same throttle law. If that
-is adopted, boostback is a **shared** phase with a mode-dependent magnitude (**one** state, always entered),
-not an RTLS-only optional one. **Per C7.1 THE PLAN WINS until the owner rules**, so §B16.2 stands as written
-and a build chat implements no-boostback-on-ASDS. Logged as **G5a-Q2** under "Open questions for the owner".
+✅ **RESOLVED — boostback is ONE ALWAYS-ENTERED state for both profiles (owner, 2026-09-03, via the overseer;
+closes G5a-Q2, recorded in full under that entry in "Open questions for the owner"; this IS the C1.8 `OVERRIDE`
+of the line below, and the chat that raised the question flagged exactly this edit as the mechanism it would
+need).** An earlier version of this section gave RTLS a boostback phase and ASDS none. That is superseded.
+**Boostback is now a single state entered on every recovery**, with its **magnitude and aim-point offset
+parameterized by target mode**: RTLS runs the full flip-and-null-target-error return burn; **ASDS defaults to
+a ZERO-MAGNITUDE trim** until a recorded flight says otherwise. The zero-magnitude default is not a guess —
+`docs/BOOSTER_GUIDANCE_METHOD.md` §3.1/§8.1's tier-2 source runs a **170° flip / 5° retrograde offset / 2700 m
+downrange aim** on ASDS, same code as RTLS boostback, just sized as a trim rather than a return burn; ASDS
+starts at zero magnitude (matching the old "no boostback" behaviour exactly) and converges toward that tier-2
+shape empirically, the same way every other un-converged booster constant does (§B16.8). A build chat must
+implement the state as **always-entered, mode-parameterized magnitude/aim-offset**, never an RTLS-only
+optional state.
 
 ### B16.3 ⛔ RO engine handling — the owner's operational direction (2026-09-03)
 > **Do NOT cycle "next engine mode".** RO's `ModuleEngineConfigs` mode-cycling causes engine **RE-IGNITIONS**
@@ -1410,6 +1462,13 @@ requirement; it does not carry the table.**
 selection resolves on. LZ1 still has to source and mark it properly (and reconcile it against a real flight
 record), but the table does not start from nothing.
 
+**O5/O7 cross-reference (G5b, no duplicate table).** Both are already resolved and recorded **in full at
+§B16.9 above** — **O5** (per-vehicle-name LZ resolution, "resolved by craft name in the VAB") and **O7**
+(mod-first RTLS/droneship sourcing — Fossil Industries "SpaceX Landing Pads" for RTLS, Kerbal Konstructs
+statics for ASDS, no invention required for either). The per-mission **craft-name → LZ table** itself is the
+**LZ1** task's deliverable, not this one's — §B16.9's closing paragraph already says so; this note just closes
+the O5/O7 loop without restating that content here.
+
 ## B6. Honest risks
 GPLv3 source-shipping obligation (public); MechJeb version pinning + private-namespace build tooling; **RSS/RO
 ascent tuning (PVG) is the genuinely hard part**; the conductor's live re-plan state machine is the main new
@@ -1669,8 +1728,9 @@ and reference / other-users' assets (`assets/` — DillonBaird `dragon2-ui-asset
    prancing-parnas.md` (ephemeral). → copy to `docs/BUILD_PLAN.md`.
 2. **The tuned Crew-2 MechJeb cfg** (permanent tuning store, B2/B7–B11) lives ONLY in the KSP install
    `…\Kerbal Space Program\GameData\MechJeb2\Plugins\PluginData\MechJeb2\mechjeb_settings_type_Crew-2.cfg`. →
-   copy into the repo as `docs/reference/mechjeb_settings_type_Crew-Dragon.cfg` (canonical starting profile;
-   the KSP-install copy is a runtime artifact, NOT the source).
+   copy into the repo as `docs/reference/mechjeb_settings_type_Crew-Dragon.cfg` (the §B5 tune's
+   **target/reference profile**, NOT the flight-1 config — see §B5's two-profile split; the KSP-install copy
+   is a runtime artifact, NOT the source).
 3. **`docs/FLIGHT_SYSTEMS.md` is referenced by `MissionPhase.cs` but does NOT exist** — the §8 flight facts have
    no repo home. `BUILD_PLAN.md` carries them; create/point `FLIGHT_SYSTEMS.md` when Part B starts.
 
@@ -1731,6 +1791,15 @@ turns out to be needed, re-pinning is its own bounded task. **A C7 exception is 
 fetched as the port, exactly as §B12.1 already provides for) — but the owner must **name the repository**
 before T15 fetches anything.
 
+**RESOLVED (owner, 2026-09-03, via the overseer).** Option 1 — **T15 vendors upstream `MuMech/MechJeb2`**,
+newest commit at port time, then pinned and recorded, per §B12.1a's existing "newest-then-pin" resolution.
+Owner's original framing: *"if there is a RO version/fork of MechJeb2 then we want that."* Researched, not
+assumed: **no current or endorsed RO fork exists.** `lamont-granquist/PrimerVectorMechJeb` — the repo where
+PVG guidance was originally developed — has been **archived since 2021-07**, an experimental dev branch, not
+a maintained release. Decisively: the RP-1 wiki's own `TroubleshootingMechJebPVG` page (already cited by this
+plan's §B8) points RSS/RO players at the **standard Sarbian/MuMech release**
+(`ksp.sarbian.com/jenkins/job/MechJeb2-Release`, CKAN 2.15+) — not a fork. Baked into §B3 and §B12.1a above.
+
 ### G5a-Q2 — Does the ASDS profile run a trim boostback, or none at all?
 **Situation.** §B16.2 states the ASDS profile has **no boostback burn**. `docs/BOOSTER_GUIDANCE_METHOD.md`
 §3.1/§8.1 records that the tier-2 accuracy source **does** run one on ASDS — flipped to 170°, retrograde with
@@ -1751,6 +1820,14 @@ that shape decision is cheaper to make before Wave C than after.
 trim is exactly "no boostback"), and avoids a state-machine refactor mid-Wave-C if the trim turns out to
 matter in RO. ⚠ Options 2 and 3 both amend a written plan section and therefore need an explicit owner
 **`OVERRIDE`** plus this edit (C1.8/C1.12).
+
+**RESOLVED (owner, 2026-09-03, via the overseer) — option 3, the chat's own recommendation, agreed.**
+§B16.2 is amended (recorded there in full): **boostback becomes ONE ALWAYS-ENTERED state** for both RTLS and
+ASDS profiles, with magnitude and aim-point offset parameterized by target mode; **ASDS defaults to a
+ZERO-MAGNITUDE trim** until a recorded flight says otherwise — per `docs/BOOSTER_GUIDANCE_METHOD.md` §3.1/§8.1's
+tier-2 source, which runs a 170° flip / 5° retrograde offset / 2700 m downrange aim on ASDS (the same code as
+RTLS boostback, sized as a trim rather than a return burn). This owner statement, relayed via the overseer, IS
+the C1.8 `OVERRIDE` the chat itself flagged as required to change §B16.2's written text.
 
 ### G5a-Q3 — Three docs now contradict the amended plan, and G5a was not allowed to touch them
 **Situation.** G5a's declared outputs were `BUILD_PLAN.md`, `.gitignore`, `INDEX.md` and the untracked
