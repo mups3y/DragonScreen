@@ -55,6 +55,7 @@ public static class PageTest
         Scales();
         AlarmRouting();
         Conic();
+        OpenTrajectory();
         Chrome();
         Velocity();
         Propellant();
@@ -798,6 +799,177 @@ public static class PageTest
 
         // A circular orbit has no periapsis to speak of and must not divide by a zero eccentricity.
         Eq("circular orbit is safe", OrbitPlot.TrueAnomaly(700000.0, 700000.0, 0.0, true), 0.0, 1e-9);
+    }
+
+    // --------------------------------------------------- the plot when the trajectory does NOT close
+
+    static bool SameColour(Rgba a, Rgba b)
+    { return a.R == b.R && a.G == b.G && a.B == b.B && a.A == b.A; }
+
+    /// <summary>The globe Orbit() drew: its base disc is the first ArcBand in the list, and it is the
+    /// SAME centre and radius the conic is scaled against - so measuring the arc against it is
+    /// measuring the picture against itself rather than against a number recomputed in the test.</summary>
+    static bool GlobeDisc(DisplayList dl, out double cx, out double cy, out double r)
+    {
+        cx = cy = r = 0.0;
+        for (int i = 0; i < dl.Count; i++)
+            if (dl.At(i).Kind == DrawKind.ArcBand)
+            { cx = dl.At(i).A; cy = dl.At(i).B; r = dl.At(i).D; return true; }
+        return false;
+    }
+
+    /// <summary>Distance from the globe centre to the nearest and furthest orbit dot, in units of the
+    /// globe's own radius. AccentDim 3x3 rects are the arc and nothing else in this plot uses it.</summary>
+    static int ArcRadii(DisplayList dl, double cx, double cy, double r,
+                        out double nearest, out double furthest)
+    {
+        nearest = double.MaxValue; furthest = 0.0; int n = 0;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind != DrawKind.Rect || !SameColour(c.Colour, DragonPalette.AccentDim)) continue;
+            if (c.C > 4f || c.D > 4f) continue;                     // the dots are 3x3
+            double dx = (c.A + c.C * 0.5) - cx, dy = (c.B + c.D * 0.5) - cy;
+            double d = Math.Sqrt(dx * dx + dy * dy) / r;
+            if (d < nearest) nearest = d;
+            if (d > furthest) furthest = d;
+            n++;
+        }
+        if (n == 0) nearest = 0.0;
+        return n;
+    }
+
+    static PageState Flying(double bodyR, double atmo, double apoM, double periM, double altM)
+    {
+        PageState s = new PageState();
+        s.Valid = true;
+        s.Regime = FlightRegime.Space;
+        s.BodyRadiusM = bodyR; s.AtmosphereDepthM = atmo;
+        s.ApogeeM = apoM; s.PerigeeM = periM; s.AltitudeM = altM;
+        s.ApogeeShown = OrbitReadout.ApogeeMeaningful(s.Regime);
+        s.PerigeeShown = OrbitReadout.PerigeeMeaningful(s.Regime, periM, atmo);
+        s.Ascending = true;
+        return s;
+    }
+
+    static DisplayList Plot(PageState s)
+    {
+        DisplayList dl = new DisplayList(600);
+        NavPage.Orbit(dl, s, 0f, 0f, 520f, 460f);
+        return dl;
+    }
+
+    /// <summary>
+    /// S41. THE ORBIT PLOT USED TO ASSUME THE CONIC CLOSES, AND FOR MOST OF A FLIGHT IT DOES NOT.
+    ///
+    /// The 2026-09-03 flight went up sub-orbital before circularising - periapsis thousands of
+    /// kilometres below the surface, which is what every ascent looks like until the circularisation
+    /// burn - and the plot drew the whole ellipse: dots buried inside the globe, a PE box near the
+    /// planet's core, and the vehicle drawn underneath its own planet while it was 148 km above it.
+    ///
+    /// The invariant that catches it is one line, and it is measured against the globe the plot drew
+    /// rather than against arithmetic repeated here: NO PART OF THE DRAWN ARC IS INSIDE THE PLANET.
+    /// </summary>
+    static void OpenTrajectory()
+    {
+        const double R = 6371000.0, Atmo = 140000.0;   // RSS Earth, the install the flight was flown on
+        double cx, cy, r, near, far;
+
+        // ---- 1. A CLOSED ORBIT IS UNCHANGED ----
+        // The fix must not cost the case that already worked, so this is checked first and checked
+        // hardest: the full 360 sweep, both apsis markers, and no caption explaining a cut that is
+        // not there.
+        PageState orbit = Flying(R, Atmo, 420000.0, 400000.0, 410000.0);
+        DisplayList dOrbit = Plot(orbit);
+        Check("closed orbit draws a globe", GlobeDisc(dOrbit, out cx, out cy, out r), "");
+        int nClosed = ArcRadii(dOrbit, cx, cy, r, out near, out far);
+        Check("closed orbit draws the full 72-step sweep", nClosed == 72, "got " + nClosed);
+        Check("closed orbit is entirely outside the planet", near >= 0.999, "nearest " + near);
+        Check("closed orbit marks PE", HasText(dOrbit, "PE"), "");
+        Check("closed orbit marks AP", HasText(dOrbit, "AP"), "");
+        Check("closed orbit says nothing about the surface",
+              !HasText(dOrbit, "TRAJECTORY INTERSECTS SURFACE")
+              && !HasText(dOrbit, "NO TRAJECTORY ABOVE SURFACE"), "");
+
+        // ---- 2. THE ASCENT THAT WAS FLOWN: AP 210 km, PE -5900 km, ALT 148 km ----
+        PageState ascent = Flying(R, Atmo, 210000.0, -5900000.0, 148000.0);
+        Check("the readout column dashes this periapsis", !ascent.PerigeeShown, "");
+        DisplayList dAsc = Plot(ascent);
+        Check("sub-orbital ascent draws a globe", GlobeDisc(dAsc, out cx, out cy, out r), "");
+        int nAsc = ArcRadii(dAsc, cx, cy, r, out near, out far);
+        Check("sub-orbital ascent draws an arc at all", nAsc > 0, "got " + nAsc);
+        // THE ONE THAT WAS FAILING. Before the fix the whole ellipse was inside the globe, so the
+        // furthest dot was about 0.5 of a body radius from the centre - not just the nearest.
+        Check("no part of the ascent arc is inside the planet", near >= 0.999, "nearest " + near);
+        Check("the arc reaches apoapsis, above the surface", far > 1.0, "furthest " + far);
+        // It is CUT, not merely lifted: the ends sit on the limb the globe drew.
+        Check("the arc ends exactly at the surface", Math.Abs(near - 1.0) < 0.002, "nearest " + near);
+        Check("no PE marker where there is no periapsis", !HasText(dAsc, "PE"), "");
+        Check("AP is still marked", HasText(dAsc, "AP"), "");
+        Check("and the plot says why the line stops",
+              HasText(dAsc, "TRAJECTORY INTERSECTS SURFACE"), "");
+
+        // The vehicle tick is drawn, and it is drawn ABOVE the ground it is 148 km above.
+        double vr = -1.0;
+        for (int i = 0; i < dAsc.Count; i++)
+        {
+            DrawCmd c = dAsc.At(i);
+            if (c.Kind != DrawKind.Rect || !SameColour(c.Colour, DragonPalette.Go)) continue;
+            if (c.C < 17f) continue;                     // the horizontal bar of the cross
+            double dx = (c.A + c.C * 0.5) - cx, dy = (c.B + c.D * 0.5) - cy;
+            vr = Math.Sqrt(dx * dx + dy * dy) / r;
+        }
+        Check("the vehicle tick is drawn", vr > 0.0, "");
+        Check("the vehicle tick is outside the planet", vr >= 0.999, "at " + vr.ToString("F4"));
+
+        // ---- 3. A DEORBIT IS THE SAME GEOMETRY AND MUST BEHAVE THE SAME ----
+        // Periapsis -30 km is deliberate and the NUMBER matters, so PerigeeShown stays true. The
+        // POINT is still underground, so the marker is still absent and the arc is still cut. This
+        // is the case that proves the plot's rule is geometric, not a copy of the readout's rule.
+        PageState deorbit = Flying(600000.0, 70000.0, 100000.0, -30000.0, 95000.0);
+        Check("a deorbit periapsis is still worth printing", deorbit.PerigeeShown, "");
+        DisplayList dDeo = Plot(deorbit);
+        Check("deorbit draws a globe", GlobeDisc(dDeo, out cx, out cy, out r), "");
+        int nDeo = ArcRadii(dDeo, cx, cy, r, out near, out far);
+        Check("deorbit draws an arc", nDeo > 0, "got " + nDeo);
+        Check("no part of the deorbit arc is inside the planet", near >= 0.999, "nearest " + near);
+        Check("the deorbit arc ends at the surface", Math.Abs(near - 1.0) < 0.002, "nearest " + near);
+        Check("no PE marker under the ground on a deorbit", !HasText(dDeo, "PE"), "");
+        Check("deorbit says why the line stops",
+              HasText(dDeo, "TRAJECTORY INTERSECTS SURFACE"), "");
+
+        // ---- 4. STRAIGHT UP: NOTHING OF THE CONIC CLEARS THE SURFACE ----
+        // Early in a vertical ascent the periapsis is at the centre of the planet, the conic
+        // degenerates to a line, and there is no arc to draw. Draw none, and say so, rather than the
+        // near-degenerate ellipse the eccentricity clamp used to produce.
+        PageState up = Flying(R, Atmo, 40000.0, -6371000.0, 22000.0);
+        DisplayList dUp = Plot(up);
+        Check("vertical ascent still draws a globe", GlobeDisc(dUp, out cx, out cy, out r), "");
+        Check("vertical ascent draws no arc",
+              ArcRadii(dUp, cx, cy, r, out near, out far) == 0, "");
+        Check("vertical ascent draws no apsis markers",
+              !HasText(dUp, "PE") && !HasText(dUp, "AP"), "");
+        Check("vertical ascent says there is nothing above the surface",
+              HasText(dUp, "NO TRAJECTORY ABOVE SURFACE"), "");
+
+        // ---- 5. THE GROUND CASE IS UNTOUCHED ----
+        // ON SURFACE - NO ORBIT is decided before any of this and still returns first.
+        PageState pad = Flying(R, Atmo, 0.0, -6371000.0, 0.0);
+        pad.Regime = FlightRegime.Ground;
+        pad.ApogeeShown = OrbitReadout.ApogeeMeaningful(pad.Regime);
+        DisplayList dPad = Plot(pad);
+        Check("on the pad the plot still says ON SURFACE - NO ORBIT",
+              HasText(dPad, "ON SURFACE - NO ORBIT"), "");
+        Check("and does not also say something about a trajectory",
+              !HasText(dPad, "TRAJECTORY INTERSECTS SURFACE")
+              && !HasText(dPad, "NO TRAJECTORY ABOVE SURFACE"), "");
+
+        // ---- 6. NOTHING OVERFLOWED ----
+        // The open arc includes both endpoints (73 dots to the closed sweep's 72) and drops the PE
+        // box, so the budget is not the issue - but a plot that silently truncated would pass every
+        // check above by drawing less.
+        Check("no plot overflowed its list",
+              !dOrbit.Overflowed && !dAsc.Overflowed && !dDeo.Overflowed && !dUp.Overflowed, "");
     }
 
     // ------------------------------------------------------------------ chrome crowding

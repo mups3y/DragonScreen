@@ -314,6 +314,88 @@ public static class PreviewMain
             Console.WriteLine("  " + path + "   " + W + "x" + H + "   " + dl.Count + " commands");
         }
 
+        // ---- NAV / ORBIT, MID-ASCENT: THE TRAJECTORY THAT IS NOT A CLOSED ORBIT (S41) ----
+        // The 2026-09-03 flight went up sub-orbital before it circularised, which is what every
+        // real ascent does for several minutes, and the ORBIT view had never been previewed in
+        // that state - only in the closed 123x122 km orbit above. Periapsis is then hundreds of
+        // kilometres BELOW the surface: the conic through the vehicle is a real solution and the
+        // part of it under the ground is not a place the vehicle will ever be.
+        //
+        // RSS Earth numbers, because that is the install the flight was flown on and the one whose
+        // radius makes the sub-surface arc enormous; the geometry itself is scale-free. PerigeeShown
+        // is FALSE here and that is correct - OrbitReadout rejects a periapsis this far below the
+        // surface as the radius artefact it is - so the readouts dash while the plot still has a
+        // trajectory to draw. The two are not in conflict: there is no PERIAPSIS worth printing,
+        // and there IS an arc worth flying.
+        {
+            MapView orbit = MapProjection.NextMode(MapProjection.Default());
+            PageState sub = ps;                       // PageState is a struct: this is a copy
+            sub.Phase = "ASCENT";
+            sub.Body = "EARTH";
+            sub.Regime = FlightRegime.Space;
+            sub.BodyRadiusM = 6371000.0; sub.AtmosphereDepthM = 140000.0;
+            sub.ApogeeM = 210000.0; sub.PerigeeM = -5900000.0;
+            sub.AltitudeM = 148000.0; sub.Altitude = "148.0 km";
+            sub.Apoapsis = "210.0 km"; sub.Periapsis = "-5900.0 km";
+            sub.ApogeeShown = true; sub.PerigeeShown = false;
+            sub.Ascending = true;
+            sub.TimeToApText = "00:03:41"; sub.TimeToPeText = "-"; sub.PeriodText = "-";
+            sub.HasTarget = false; sub.HasTargetOrbit = false;
+
+            dl.Clear();
+            Pages.Build(dl, 2, W, H, sub, orbit, 2);
+            ChromeState cs = new ChromeState();
+            cs.Met = "T+ 00:04:52"; cs.VehicleState = "NOMINAL";
+            cs.LinkName = "COM1/TLM"; cs.LinkTimer = "00:04:12"; cs.LinkUp = true;
+            cs.SelectedPage = 2;
+            ChromeBar.Build(dl, W, H, cs);
+
+            if (dl.Overflowed)
+                Console.WriteLine("  WARNING page NAV/ORBIT SUBORBITAL OVERFLOWED at " + dl.Capacity);
+
+            string path = Path.Combine(outDir, "page2_nav_orbit_suborbital.png");
+            Render(dl, W, H, path);
+            Console.WriteLine("  " + path + "   " + W + "x" + H + "   " + dl.Count + " commands");
+        }
+
+        // ---- THE SAME OPEN ARC AT KERBIN SCALE, WHERE IT CAN ACTUALLY BE JUDGED (S41) ----
+        // The RSS render above is correct and nearly invisible: a 210 km trajectory over a 6371 km
+        // radius is 3% of the globe, so the honest arc is a hairline on the limb. That is a
+        // SCALE property of this plot, not a property of the fix - the closed RSS orbit the flight
+        // ended in draws the same hairline ring - and it is logged as S43 rather than fixed here.
+        // This scene is the same geometry on Kerbin's 600 km radius, where the arc is a third of a
+        // radius tall and the shape of the fix is plain: it rises out of the limb, arcs over
+        // apoapsis, and goes back into the planet, with no PE marker because PE is underground.
+        {
+            MapView orbit = MapProjection.NextMode(MapProjection.Default());
+            PageState sub = ps;                       // PageState is a struct: this is a copy
+            sub.Phase = "ASCENT";
+            sub.Regime = FlightRegime.Space;
+            sub.ApogeeM = 200000.0; sub.PerigeeM = -250000.0;
+            sub.AltitudeM = 88000.0;
+            sub.Apoapsis = "200.0 km"; sub.Periapsis = "-250.0 km";
+            sub.Altitude = "88.0 km";
+            sub.ApogeeShown = true; sub.PerigeeShown = false;
+            sub.Ascending = true;
+            sub.TimeToApText = "00:02:18"; sub.TimeToPeText = "-"; sub.PeriodText = "-";
+            sub.HasTarget = false; sub.HasTargetOrbit = false;
+
+            dl.Clear();
+            Pages.Build(dl, 2, W, H, sub, orbit, 2);
+            ChromeState cs = new ChromeState();
+            cs.Met = "T+ 00:03:10"; cs.VehicleState = "NOMINAL";
+            cs.LinkName = "COM1/TLM"; cs.LinkTimer = "00:04:12"; cs.LinkUp = true;
+            cs.SelectedPage = 2;
+            ChromeBar.Build(dl, W, H, cs);
+
+            if (dl.Overflowed)
+                Console.WriteLine("  WARNING page NAV/ORBIT SUBORBITAL KERBIN OVERFLOWED at " + dl.Capacity);
+
+            string path = Path.Combine(outDir, "page2_nav_orbit_suborbital_kerbin.png");
+            Render(dl, W, H, path);
+            Console.WriteLine("  " + path + "   " + W + "x" + H + "   " + dl.Count + " commands");
+        }
+
         // NAV / PLANET: the 3D globe view. The globe itself is the same textured disc the ORBIT view
         // draws (from the body-map stand-in here), and the orbit overlay is pure 2D projection, so
         // unlike a camera view the preview shows the WHOLE thing - which is exactly what makes the

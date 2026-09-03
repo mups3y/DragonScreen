@@ -32,6 +32,7 @@ public static class TestMain
         bad += FigmaUINavTest.Run();       // new Figma UI: bottom-bar nav + back chevron hit routing
         bad += TurntableTest.Run();        // screens: the capsule sprite turntable — naming, picker, drag (T11a, §5)
         bad += TouchWiringTest.Run();      // screens: the touch pass (T14) - chute actions, docking clusters, suit fail branch
+        bad += LogGateTest.Run();          // diagnostics: the seen-set that stops a standing warning flooding KSP.log (S40)
 
         Console.WriteLine(bad == 0 ? "ALL SCREEN SUITES PASSED" : bad + " SUITE(S) FAILED");
         return bad == 0 ? 0 : 1;

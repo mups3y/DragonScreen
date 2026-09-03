@@ -1341,6 +1341,21 @@ on the glass.
 - **Still not built, unchanged:** §2.2's overlay RE-PROJECTION. The orbit line over this view is still
   S10a's ORTHOGRAPHIC `GlobeProjection`, which is right over the textured disc and NOT right over a
   perspective render from a 3/4 angle. The committed file's own header says so. Carried on **S37**.
+- ⚠ **NEEDS-WORK ADDED 2026-09-03 by the flight-surfaced screen-bugs pass — the RSS COMPAT GAP (now S42).**
+  The owner's 2026-09-03 in-orbit flight produced no DragonScreen exception at all, but it did produce one
+  standing warning ~450 times, once per frame:
+  `[DragonScreen] no usable scaled-space map for Earth on shader 'Custom/HapkeScaled' - NAV draws the grid
+  and track only. Texture slots: _MainTex=4x4, _BumpMap=null, ..., _Skybox=4096x4096, ...`
+  Under RSS the planet wears a **custom Hapke scaled-space shader whose texture slots are not the stock
+  ones**, so `ImageStore.BodyMap`'s `_ColorMap` / `_MainTex` / `mainTexture` lookup finds nothing usable
+  (`_MainTex` is a 4×4 stub, correctly rejected by `MinMapPixels`) and the NAV **MAP** view — and the
+  strip-textured globe under the **3D PLANET** view — fall back to grid + track with no planet on them.
+  **This is a real compat gap and it is NOT S10b's three criteria**; it is logged as **S42** and its glass
+  check as **G12**. What it does mean for THIS line: when G11 is finally run, G12 rides the same visit,
+  because the two questions share one screen. Note the §2 prediction worth testing there — the camera
+  renders whatever shader the body is wearing and never asks for a texture slot, so **G11 may well pass
+  under RSS while the flat map still fails**. The flood itself is fixed (**S40**): that warning now says
+  itself once per body+shader.
 
 ### S37 [O] The 3D PLANET overlay is still orthographic over a perspective render (§2.2) — **HELD** (rides S10b's gate) — [TIER 5: held / owner-action / Part-B-bound]
 Logged by the S10b commit, 2026-09-03. `ScaledPlanetRenderer` renders the globe in PERSPECTIVE from a 3/4
@@ -1684,6 +1699,7 @@ T14 APPENDS to this list, at the moment and site each want arises. This seeding 
 | G9 | **T14** | **Legibility spot-check:** the docking clusters' **PRECISE** label, which is drawn at 22px against LARGE's 26px so the longer word fits its plate — does it read clearly at cabin distance? | This is a judgement about what a crew member reads at cabin distance, which is the one thing the PNG explicitly cannot settle (CLAUDE.md: "a screenshot is still the only way to judge how it LOOKS on the glass"). |
 | G10 | **S31/S32** | **Suit Leak Check, three checks in one visit:** (1) does the **lit** TROUBLESHOOT (white, "act now") read distinctly from its dim resting state at IVA distance? (2) run the repair→rerun flow end-to-end on the collider — CLOSE the leak result box, press TROUBLESHOOT, watch the countdown restart from 5; (3) is the ΔP magnitude legible at cabin distance — a nominal **~0.28 psi** and a bled-down leaking suit's **~0.01 psi**? | Same reason as G9: a legibility/affordance judgement the PNG cannot settle. S31 ratified its constants as built but deferred the ΔP magnitude's glass eyeball to this pass; S32 added the lit-vs-dim state change and the repair-and-rerun flow, which preview can prove is WIRED but not that it reads right or feels discoverable on glass. |
 | G11 | **S10b** | **The live 3D planet camera, three checks in one visit** — requires `src/ScaledPlanetRenderer.cs` to have been BUILT first (S10b), which needs this same go: (1) does the scaled-space RT actually render the globe on the NAV 3D PLANET view, and does `LIVE 3D — NO SIGNAL` clear itself and the sub-heading go back to `LIVE CAMERA` when it does? (2) does the orbit line track the vehicle and DISAPPEAR behind the real rendered planet (`PlanetGeom.Occluded` against true geometry, not the orthographic approximation)? (3) does the framing read at cabin distance — is `PlanetGeom.DefaultAzimuthDeg`/`DefaultPitchDeg` (-55 / +30) the right 3/4 view, and does the limb sit where the textured disc's did so the view does not jump on the switch? | There is no Unity camera with the game closed, so the preview can only ever draw the no-signal state — which is exactly what S10a built and what `page2_nav_planet.png` shows. S10a proved the arithmetic headlessly (66 checks) and the seam by test; nothing offline can prove a render. Framing is also a judgement at cabin distance, the one thing the PNG explicitly cannot settle (G9's reason). |
+| G12 | **S42** | **Does the NAV globe have a picture under RSS at all?** Two answers in one visit: (1) on the **MAP** and **3D PLANET** views, is there a body texture, or only the graticule and the track? The 2026-09-03 log says the flat map had none — `ImageStore.BodyMap` found no usable slot on `Custom/HapkeScaled`. (2) With the log now saying it **once** (S40), read the single `no usable scaled-space map ... Texture slots:` line out of KSP.log and **write the full slot list into S42** — that list is the missing input the fix needs and it exists nowhere else. Then (3) does the S10b **camera** view show a real globe regardless, as §2 predicts it should, since a camera renders whatever shader the body wears and never asks for a texture slot? | The shader is RSS's; the preview build has no RSS, no Kopernicus and no Unity material, so nothing offline can enumerate its slots or render it. C7 forbids reading the KSP install for the answer, which leaves the flight log — and one visit yields both the slot list and the verdict on whether the camera route sidesteps the problem entirely. |
 
 **Batch into this pass whatever else is glass-only by then** — the obvious candidate WAS **S10**'s RT planet
 camera, and it is now written down as **G11** above. ⚠ S10 SPLIT on 2026-09-02: **S10a** (the pure geometry,
@@ -2504,3 +2520,124 @@ screen's `GROUND TRACK` / `TRACKING VEHICLE` pair (110×) · `ManualChute`'s hea
 **Also worth deciding here:** whether the C1.3 gate wording should say out loud that a PNG preview cannot
 see this class, so a future task does not read "preview inspected" as "legible in the capsule". S38's test
 comment says it; the protocol does not.
+
+### S40 [S] The RSS "no usable scaled-space map" warning floods KSP.log ~450×/flight — **DONE 2026-09-03** — [TIER 2: real defect]
+Logged and fixed by the owner-directed flight-surfaced screen-bugs pass, 2026-09-03 (finding **A**). Evidence:
+the owner's KSP.log from that day's in-orbit flight carries
+`[DragonScreen] no usable scaled-space map for Earth on shader 'Custom/HapkeScaled' - NAV draws the grid and
+track only. Texture slots: _MainTex=4x4, _BumpMap=null, ..., _Skybox=4096x4096, ...` about **450 times, once
+per frame, for the whole flight**.
+- **The mechanism, and why the obvious fix would have been wrong.** `ImageStore.BodyMap` caches the map on
+  `ReferenceEquals(b, mapBody) && mapTexture != null` — so a body whose map does NOT resolve is never cached
+  and the whole lookup re-runs every frame. **That retry is deliberate and correct** (scaled space can be
+  built late by Kopernicus; the body changes on an SOI transition), so it is untouched. What was wrong is
+  that the retry also **re-said its diagnosis**, and re-built the string to say it with — a per-frame
+  `GetTexturePropertyNames()` plus concatenation in the draw path.
+- **The fix.** New pure `plugin/src/pure/LogGate.cs`: a seen-set of string keys, `First(key)` true once.
+  `BodyMap`'s warning is now `else if (LogGate.First(MapFailKey(b.bodyName, shader)))`, so it is said **once
+  per body+shader** — a new body, or the same body after a shader swap, is a new diagnosis and IS heard. The
+  slot-enumeration is built INSIDE the gate, so silent frames also allocate nothing. The `catch` branch's
+  `body map lookup failed` was flooding by the same mechanism and is gated the same way, keyed on
+  body+exception type.
+- **Why the gate is pure.** `ImageStore` is glue and cannot run headless — it needs `FlightGlobals` and a
+  `Material`. The RULE ("same key once, different key again") is decidable with the game closed, so it lives
+  in `pure/` and is tested there; the glue keeps the `Debug.LogWarning` and the gate never knows what a log is.
+  A single bool, the `PanelButtons.PickColourProperty` pattern, would have silenced the SECOND body for the
+  wrong reason — `LogGateTest` checks exactly that case.
+- **Gate (C1.3):** `python plugin/build.py test` **green**, all suites, 0 failed — new `LogGateTest` suite,
+  14 checks, including the 450-frames-one-line case as it actually happened. No visual change → the PNG gate
+  is N/A for this finding (the previews for S41 were re-rendered and inspected in the same session). No
+  `install`, no glass (C1.12). ⚠ **It cannot be confirmed on the glass until the next flight** — the proof is
+  that the next KSP.log carries that line ONCE. Batched onto **G12**, which needs to read that single line
+  anyway.
+- **Files:** `plugin/src/pure/LogGate.cs` (new) · `plugin/src/ImageStore.cs` · `plugin/test/LogGateTest.cs`
+  (new) · `plugin/test/TestMain.cs` (registration).
+
+### S41 [O] The ORBIT plot forced a closed ellipse through a sub-orbital trajectory — **DONE 2026-09-03** — [TIER 2: real defect]
+Logged and fixed by the same pass (finding **B**). The owner's 2026-09-03 flight was **sub-orbital for the
+first several minutes of ascent** — negative periapsis, the trajectory not yet closed — which is what every
+ascent looks like until circularisation, and the ORBIT view had never been previewed in that state.
+- **CONFIRMED OURS, not KSP's map.** The brief asked for this to be established first. `NavPage.Orbit` is
+  pure and deterministic, so it was settled by building the fixture and rendering it BEFORE touching
+  anything. The pre-fix PNG is unambiguous and worse than predicted: the ellipse is drawn **entirely inside
+  the globe**, the `PE` box sits near the planet's core, and the vehicle marker — 148 km ABOVE the ground —
+  is painted underneath its own planet. Nothing about that comes from KSP or MechJeb; it is this function
+  assuming the conic closes. (The weird in-game map ascent trajectory the owner flagged as MechJeb PVG
+  re-planning was **not** chased, per the brief.)
+- **The rule.** The plot now draws only the part of the conic **at or above the surface**. With
+  `p = a(1-e²)`, `r(ν) ≥ R` exactly when `cos ν ≤ (p/R - 1)/e`; that one threshold decides everything —
+  `≥ +1` the periapsis clears the surface and the orbit closes (draw all 360, unchanged); in `(-1, +1)` an
+  **open arc through apoapsis**, from `+νSurf` round to `-νSurf`, both ends included so it visibly touches
+  the limb; `≤ -1` nothing clears the surface, so no arc is drawn. The globe is drawn from the SAME radius
+  at the SAME focus, so the arc's ends meet the drawn limb exactly rather than approximately.
+- **`PE` is drawn only where PE exists**, and that is the deliberate part. On an open trajectory the
+  periapsis is underground, and a box labelled PE inside the planet is the same lie in miniature — it is
+  dropped, not moved and not relabelled. The readout column already dashes PERIGEE in this state for its own
+  reason (`OrbitReadout` rejects a periapsis that far below the surface as the body-radius artefact), so the
+  page says one thing twice rather than two different things. **On a deorbit the two rules deliberately
+  differ**: `PeA = -30 km` is a target worth printing, and the point is still underground, so the number
+  shows and the marker does not. The plot's rule is geometric; the readout's is editorial.
+- **The cut is captioned** — `TRAJECTORY INTERSECTS SURFACE`, in the same slot and weight as
+  `ON SURFACE - NO ORBIT`, and in wording that is true of an ascent and a deorbit alike so no phase is
+  claimed; `NO TRAJECTORY ABOVE SURFACE` for the degenerate near-vertical case, where the vehicle tick is
+  also skipped rather than placed wherever a clamped `acos` fell.
+- **Gate (C1.3):** `python plugin/build.py test` **green**, all suites, 0 failed. **The new test was proved
+  to catch the bug**: `NavPage.cs` was reverted alone and `PageTest` went to **11 failures** — the ascent
+  arc's nearest dot was **0.074 body radii** from the planet's centre, the deorbit arc's **0.95** — then
+  restored to green. The closed-orbit checks passed against BOTH versions, which is the evidence that the
+  fix costs the case that already worked nothing. `python plugin/build.py preview` re-rendered and inspected:
+  `page2_nav_orbit.png` (closed) unchanged; new `page2_nav_orbit_suborbital.png` is the flown RSS case; new
+  `page2_nav_orbit_suborbital_kerbin.png` shows the arc rising out of the limb, over apoapsis, and back into
+  the planet, AP on the arc and no PE. No `install`, no glass (C1.12).
+- ⚠ **One thing the RSS PNG shows that is NOT this defect:** at RSS scale a 210 km trajectory over a 6371 km
+  radius is a **hairline on the limb** — honest, and nearly unreadable. That is a property of the plot's
+  fit-the-whole-orbit-plus-the-body scale rule, and the CLOSED orbit the flight ended in draws the same
+  hairline ring. Logged as **S43**, not fixed here (C1.1).
+- **Files:** `plugin/src/pure/NavPage.cs` · `plugin/test/PageTest.cs` (`OpenTrajectory`, +23 checks) ·
+  `plugin/preview/PreviewMain.cs` (two scenes).
+
+### S42 [owner-gated] The RSS scaled-space globe: `Custom/HapkeScaled` defeats the body-map lookup — **HELD** (`/next` SKIPS it; build-then-verify-on-glass) — [TIER 5: held / owner-action / Part-B-bound]
+Logged by the same pass (finding **C**), and **deliberately NOT claimed as fixed** — the brief said escalate,
+and the escalation is right. Evidence is S40's log line: under RSS the planet wears
+**`Custom/HapkeScaled`**, whose texture slots are not the stock ones, so `ImageStore.BodyMap`'s
+`_ColorMap` / `_MainTex` / `mainTexture` list finds nothing usable (`_MainTex` is a 4×4 stub, correctly
+rejected by `MinMapPixels = 64`) and the NAV **MAP** view — plus the strip-textured globe under **3D PLANET**
+— fall back to grid + track with no planet on them.
+- ⛔ **WHY NOTHING WAS BUILT HERE, AND THIS IS THE POINT.** The brief allowed a best-effort source-and-fallback
+  *only if it could be done without guessing*. It cannot, from inside the repo:
+  - The one slot name that would settle it is in the elided middle of the owner's log excerpt
+    (`..., _BumpMap=null, ..., _Skybox=4096x4096, ...`). The **full** line has it; this chat does not.
+  - The obvious generic fallback — "no known slot matched, so take the biggest usable texture on the
+    material" — is a **guess, and the log proves it is a dangerous one**: the biggest texture on that
+    material is `_Skybox` at 4096×4096, so a size-ranked fallback would paint the NAV map with the
+    **skybox**. That is worse than the honest grid, and it would look plausible enough to ship.
+  - C7 forbids the two places the answer lives outside the repo (the KSP install; external URLs), so the
+    remaining legitimate source is **the flight log itself** — which is exactly why G12 asks for it.
+- **What §2 predicts, and it may make most of this moot.** A scaled-space **camera** renders whatever shader
+  the body is wearing and never asks for a texture slot at all. `src/ScaledPlanetRenderer.cs` is already
+  written (S10b) and does exactly that. So the **3D PLANET** view may already be immune to this under RSS,
+  while the flat **MAP** quad — which genuinely needs a bitmap — is not. Testing that is one look at one
+  screen, and it is folded into **G12**.
+- **DONE when:** the full `Texture slots:` list from a real RSS flight is written into this line; and either
+  a named, verified slot is read from it (a source, not a guess) and wired with the same `Usable` guard, or
+  it is established that no slot on that shader carries a colour map — in which case the honest answer is the
+  MAP view saying so, and the 3D PLANET camera being the route that works.
+- ⛔ **Needs a separate, explicit owner `install` + glass go**; the standing go is preview-only and this line
+  neither grants nor inherits one (C1.12). **Batched onto S18's glass checklist as G12**, and it should ride
+  the same visit as **G11** because both are answered by opening the NAV page once, in orbit.
+
+### S43 [S] The ORBIT plot is a hairline when the orbit is small against the body (RSS LEO) — **TODO** — [TIER 3: scheduled polish]
+Logged by S41, 2026-09-03, from its own preview. `NavPage.Orbit` fits **the whole orbit AND the body** into
+the panel — deliberately, and for a good reason recorded in the source: leaving the body out of the extent
+once blew a 790 px globe into a 520 px panel on the pad. The cost shows up at RSS scale: a 200 km orbit over
+a **6371 km** radius is 3% of the globe, so the ring (or, sub-orbital, the arc) is a **hairline hugging the
+limb**, with the AP box, its label and the vehicle tick all piled on top of each other. Compare
+`page2_nav_orbit_suborbital.png` (RSS — correct and nearly unreadable) with
+`page2_nav_orbit_suborbital_kerbin.png` (same geometry, 600 km radius — perfectly clear).
+**Not a correctness bug** — the plot is telling the truth, and it is the truth that is thin — so it is polish,
+not TIER 2. **Worth noting it is the ZOOM control's natural job:** the NAV page already has `ZOOM ×1` with
+`-` / `+` beside this view, and `MapView` already carries a zoom step the MAP view uses; the ORBIT view
+currently ignores it. Wiring the existing control, rather than inventing a new scale rule, is the cheap
+option and probably the right one.
+**DONE when:** an RSS-scale LEO orbit is legible on this plot — the ring/arc separated from the limb and the
+apsis markers not overlapping it — with the closed Kerbin-scale case unchanged, judged on both preview PNGs.

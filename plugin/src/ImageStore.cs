@@ -185,6 +185,17 @@ namespace DragonScreen
 
         // ---- THE BODY MAP ----
         // ---- WHICH SLOT, AND WHY THIS IS A LIST ----
+        //
+        // ---- AND WHY THE FAILURE IS SAID ONCE (S40, from the 2026-09-03 flight) ----
+        // A body whose map does not resolve leaves mapTexture null, and null is deliberately NOT
+        // cached: the texture can appear later (Kopernicus builds scaled space late), so the lookup
+        // is retried. The RETRY is right. What was wrong is that the retry also re-said its
+        // diagnosis - the in-orbit flight of 2026-09-03 put ~450 identical "no usable scaled-space
+        // map for Earth on shader 'Custom/HapkeScaled'" lines in KSP.log, one per frame, for a
+        // condition that never changed. The line now goes through LogGate keyed on the body AND the
+        // shader, so it is written once per distinct condition and a new body or a shader swap is
+        // still reported. The expensive part - enumerating every texture property to name the slots
+        // - is built INSIDE that gate, so the frames that say nothing also allocate nothing.
         private static CelestialBody mapBody;
         private static Texture mapTexture;
 
@@ -230,7 +241,7 @@ namespace DragonScreen
                     Debug.Log("[DragonScreen] body map " + b.bodyName + " " + best.width + "x"
                               + best.height + " from " + bestSlot + " on '" + shader + "'");
                 }
-                else
+                else if (LogGate.First(MapFailKey(b.bodyName, shader)))
                 {
                     string names = "";
                     try
@@ -247,15 +258,25 @@ namespace DragonScreen
 
                     Debug.LogWarning("[DragonScreen] no usable scaled-space map for " + b.bodyName
                                      + " on shader '" + shader + "' - NAV draws the grid and track "
-                                     + "only. Texture slots: " + names);
+                                     + "only. Said once per body+shader. Texture slots: " + names);
                 }
             }
             catch (Exception e)
             {
-                Debug.LogWarning("[DragonScreen] body map lookup failed: " + e.Message);
+                // Same gate, same reason: a lookup that throws this frame throws every frame.
+                if (LogGate.First(MapFailKey(b.bodyName, "throw:" + e.GetType().Name)))
+                    Debug.LogWarning("[DragonScreen] body map lookup failed: " + e.Message
+                                     + " - said once per body+cause");
                 mapTexture = null;
             }
             return mapTexture;
+        }
+
+        /// <summary>The LogGate key for a body-map failure: the body AND what it is wearing, so a
+        /// different body, or the same body after a shader swap, is a new diagnosis and is said.</summary>
+        private static string MapFailKey(string bodyName, string shader)
+        {
+            return "bodymap|" + bodyName + "|" + shader;
         }
 
         private static bool Usable(Texture t)

@@ -610,24 +610,97 @@ namespace DragonScreen
                 return;
             }
 
+            // ---- THE CONIC IS CLIPPED AT THE SURFACE, AND MOST OF A FLIGHT NEEDS THAT (S41) ----
+            // Everything above assumed the trajectory CLOSES. On the 2026-09-03 orbit flight it did
+            // not for the first several minutes - the ascent's periapsis was thousands of kilometres
+            // below the surface, which is what every ascent looks like until the circularisation
+            // burn - and this plot drew the whole ellipse anyway. The preview of that state (see
+            // page2_nav_orbit_suborbital.png, rendered BEFORE this fix) is unambiguous: a dotted
+            // ellipse painted entirely INSIDE the globe, a PE box sitting near the planet's core,
+            // and the vehicle - which is 148 km above the ground - drawn underneath its own planet.
+            // A closed ellipse there is not a rounding error; it is a picture of a place the vehicle
+            // cannot be. The SAME defect covers a deorbit, where periapsis is deliberately negative.
+            //
+            // So the arc drawn is the part of the conic at or above the surface, and nothing else.
+            // r(nu) >= R exactly when cos(nu) <= (p/R - 1)/e, with p = a(1-e^2) the semi-latus
+            // rectum; that threshold is the whole rule:
+            //   >= +1          the periapsis itself clears the surface -> it closes, draw all 360
+            //   in (-1, +1)    an OPEN arc through apoapsis, from +nuSurf round to -nuSurf
+            //   <= -1          no part of the conic clears the surface -> there is no arc to draw
+            // The globe is drawn from the SAME radius at the SAME focus, so the arc's ends meet the
+            // limb exactly rather than approximately, and the picture cannot disagree with itself.
+            double semiLatus = aAxis * (1.0 - ecc * ecc);
+            double cosNuSurf;
+            if (ecc < 1e-9) cosNuSurf = (aAxis >= s.BodyRadiusM) ? 1.0 : -1.0;   // circular: all or none
+            else cosNuSurf = (semiLatus / s.BodyRadiusM - 1.0) / ecc;
+
+            bool closed = cosNuSurf >= 1.0;
+            bool anyArc = cosNuSurf > -1.0;
+
             const int Steps = 72;
-            for (int i = 0; i < Steps; i++)
+            if (closed)
             {
-                double nu = (i * 360.0 / Steps) * System.Math.PI / 180.0;
-                double r = aAxis * (1.0 - ecc * ecc) / (1.0 + ecc * System.Math.Cos(nu));
-                float px = cx + (float)(r * System.Math.Cos(nu)) * scale;
-                float py = cy - (float)(r * System.Math.Sin(nu)) * scale;
-                dl.Rect(px - 1.5f, py - 1.5f, 3f, 3f, DragonPalette.AccentDim);
+                for (int i = 0; i < Steps; i++)
+                {
+                    double nu = (i * 360.0 / Steps) * System.Math.PI / 180.0;
+                    double r = aAxis * (1.0 - ecc * ecc) / (1.0 + ecc * System.Math.Cos(nu));
+                    float px = cx + (float)(r * System.Math.Cos(nu)) * scale;
+                    float py = cy - (float)(r * System.Math.Sin(nu)) * scale;
+                    dl.Rect(px - 1.5f, py - 1.5f, 3f, 3f, DragonPalette.AccentDim);
+                }
+            }
+            else if (anyArc)
+            {
+                // Both ends included, so the arc visibly TOUCHES the limb it is cut off by.
+                double nuSurf = System.Math.Acos(cosNuSurf);
+                double span = 2.0 * (System.Math.PI - nuSurf);
+                for (int i = 0; i <= Steps; i++)
+                {
+                    double nu = nuSurf + span * i / Steps;
+                    double r = aAxis * (1.0 - ecc * ecc) / (1.0 + ecc * System.Math.Cos(nu));
+                    float px = cx + (float)(r * System.Math.Cos(nu)) * scale;
+                    float py = cy - (float)(r * System.Math.Sin(nu)) * scale;
+                    dl.Rect(px - 1.5f, py - 1.5f, 3f, 3f, DragonPalette.AccentDim);
+                }
             }
 
             // Apsides. Periapsis is true anomaly 0 by definition, apoapsis 180 - no search needed.
-            float pxP = cx + (float)(rP * scale), pxA = cx - (float)(rA * scale);
-            dl.Box(pxP - 5f, cy - 5f, 10f, 10f, 2f, DragonPalette.Text3);
-            dl.Text("PE", pxP, cy + 10f, Typography.Dense, TextAlign.Centre, DragonPalette.Text5);
-            dl.Box(pxA - 5f, cy - 5f, 10f, 10f, 2f, DragonPalette.Text3);
-            dl.Text("AP", pxA, cy + 10f, Typography.Dense, TextAlign.Centre, DragonPalette.Text5);
+            //
+            // PE IS DRAWN ONLY WHERE PE EXISTS. On an open trajectory the periapsis is under the
+            // ground, and a box labelled PE inside the planet is the same lie in miniature as the
+            // buried ellipse was. It is dropped, not moved and not relabelled - the readout column
+            // beside the plot already dashes PERIGEE in this state for its own reason (OrbitReadout
+            // rejects a periapsis that far below the surface as the body-radius artefact it is), so
+            // the page says one thing twice rather than two different things. On a DEORBIT the
+            // number is meaningful and is shown, and the marker is still absent, because the point
+            // is still underground: the number is a target, the marker would be a location.
+            float pxA = cx - (float)(rA * scale);
+            if (closed)
+            {
+                float pxP = cx + (float)(rP * scale);
+                dl.Box(pxP - 5f, cy - 5f, 10f, 10f, 2f, DragonPalette.Text3);
+                dl.Text("PE", pxP, cy + 10f, Typography.Dense, TextAlign.Centre, DragonPalette.Text5);
+            }
+            if (anyArc)
+            {
+                dl.Box(pxA - 5f, cy - 5f, 10f, 10f, 2f, DragonPalette.Text3);
+                dl.Text("AP", pxA, cy + 10f, Typography.Dense, TextAlign.Centre, DragonPalette.Text5);
+            }
+
+            // ---- SAY WHY THE LINE STOPS ----
+            // An arc that simply ends could be a drawing fault. Caption it, in the same slot and the
+            // same weight as ON SURFACE - NO ORBIT, and in wording that is true of an ascent and a
+            // deorbit alike: no phase is claimed, only the geometry that is on the screen.
+            if (!closed)
+            {
+                dl.Text(anyArc ? "TRAJECTORY INTERSECTS SURFACE" : "NO TRAJECTORY ABOVE SURFACE",
+                        cx, my + mh - 34f, Typography.Caption, TextAlign.Centre, DragonPalette.Text6);
+            }
 
             // Us, from the current radius. Ascending puts us on the near half, descending the far one.
+            // Skipped when there is no arc at all: with nothing above the surface to sit on, the tick
+            // would land wherever the clamped acos happened to fall, which is a guess wearing a marker.
+            if (!anyArc) return;
             double rNow = s.BodyRadiusM + s.AltitudeM;
             double nuNow = OrbitPlot.TrueAnomaly(rNow, aAxis, ecc, s.Ascending);
             float vx = cx + (float)(rNow * System.Math.Cos(nuNow)) * scale;
