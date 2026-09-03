@@ -3143,3 +3143,200 @@ with `if (built) return;`) and `Tuning.Poll()` in `ScreenPainter.Update()`
   hand-off (open since §B9 P4) · **O7** the seven splashdown sites have **no coordinates anywhere** and NASA
   does not publish them · **O8** entry lifting-bank vs ballistic · **O9** ascent throttle realism vs PVG
   bang-bang.
+
+### S49 [O] Screen-liveness / gap audit — every page's static-vs-live-vs-no-op state, every hole classified — **DONE 2026-09-03** — [TIER 1: research, gates the whole §14.4(f) fill]
+- **Owner-directed research task, 2026-09-03** (do only this, C1.1). **Read:** `CLAUDE.md` + `BUILD_PLAN.md`
+  §3 / §6 / §14.4 / §B12.5 / §B14 + `SCREEN_INVENTORY.md` + `TELEMETRY_REGISTRY.md` + the open strays.
+  **Build:** nothing — **RESEARCH + ONE DOC ONLY**, no code, no gate, no plan edit.
+  **DONE when:** `docs/SCREEN_LIVENESS_AUDIT.md` exists, every screen walked, every hole classified A/B/C
+  with a research/build note, cross-referenced to the strays, with a recommended order for the (A) holes.
+- **DONE 2026-09-03.** Five parallel read-only walks over all 35 `UiPage` pages, the 7 Cover phases and the
+  38-button console + EJECT handle, cross-read against the plan and the strays. Output:
+  **`docs/SCREEN_LIVENESS_AUDIT.md`** — the only file this task wrote besides this register line (C1.11).
+  Docs/research-only, no code change → **the preview/PNG + `build.py test` gate does not apply** (C1.3).
+- **The classification axis is the OWNER'S, not this task's.** **§14.4(f) landed the same day** (G3,
+  `a913270`) and draws the line itself: **READOUTS** are included-and-filled (live source, else a coherent
+  marked sim that behaves live, dash only for a genuinely-absent state) while **ACTUATION** is UNCHANGED —
+  §14.4(a) honest-no-op until Part B (`BUILD_PLAN.md:962-965`). So (A) = readout or screen-state-only
+  control; (B) = commands the vehicle or reads a conductor-only engagement state; (C) = correctly static.
+  **The distinction that does the most work:** a procedure step's TRACKING is a readout → (A); the same
+  step's ACTION BUTTON fires a pyro → (B). They sit on the same row and belong in different classes.
+- **THREE STRUCTURAL FINDINGS, re-verified directly against source (not taken from the walks):**
+  - **`ScreenPainter.cs:56` `FigmaMode = true` strands an entire second UI.** Gates both the draw path
+    (`:899`, `Pages.Build` in the dead `else` at `:961`) and the touch path (`:361`, returning at `:442`
+    before `Apply(Pages.HitTest(...))` at `:475`). Unreachable as a result: **`StepList`** — a 15-row LIVE
+    ascent/prelaunch state machine (Max-Q latched peak, MECO, stage sep, SECO, nose-cone) plus an 8-mode
+    `AbortMode()`, **the only real procedure state machine in the tree**; `GateCard` + `PageAct.AckStep`;
+    **`SettingsPage.cs` (478 lines) with eight WORKING handlers** (lights really call
+    `ActionGroups.SetGroup`, brightness really tints the render); the complete wired NAV pan/zoom/NEXT-VIEW
+    cluster (**there is no `UiPage.Nav`** — verified, zero matches in the enum); `ChromeBar` and its alert
+    routing. `Alarms.Mask` is computed every frame at `:893` and discarded. **The audit does NOT propose
+    flipping the flag** — the Figma rebuild is the current design; it proposes harvesting (owner Q1).
+  - **The idle stub pins 19 `PageState` fields to a constant** — `AutoEngaged`, `Mode`/`ModeText` (always
+    `IDLE`), `Fault*` (always `NOMINAL`), `Gate*`, `Rendezvous/Dock/Undock/DeorbitEngaged`. These are **not**
+    Part-A holes; they are Part B's sockets, already correct at the display end. One stub read degrades
+    gracefully and stays live (`Mission.AuthoritativePhase`) — that is the pattern the rest should copy.
+  - **On three surfaces the readouts are PIXELS IN A PNG**, not constants in C#. Verified: the **Cover's
+    entire top telemetry strip** (`CoverPage.cs:30-31` keys, `:52-53` boxes; files on disk; and **grep
+    confirms `CoverPage.cs` never reads `s.Altitude`/`s.Velocity`/`s.Apoapsis`/`s.Periapsis`/`s.Phase`/
+    `s.SplashdownText`/`s.InclinationDegText`** — `PageState` reaches exactly one function, the camera
+    view); **the whole Frame 58 HUD** (`Frame58Hud.Build` is FIVE draw calls; the only `PageState` read in
+    the file is `s.Steps.NoseConeOpen`, so every ROLL/PITCH/YAW, X/Y/Z, RANGE, RATE, ACCELERATION is baked);
+    and **the bottom status bar on every page** (`component_48.png`, ~30 call sites). The data is not
+    missing — `PageState` carries it live and pre-formatted. **It is not drawn.**
+- **The brief's headline question, answered: NO procedure page in the build is step-tracked.** No step
+  index, no cursor, no advance on any of the five procedure screens. Suit Leak draws both left ticks
+  CHECKED at page-open and never leaves "SECTION 2: IN PROGRESS"; VrioTest has **no `PageState` parameter,
+  no HitTest and no glue branch** (its checklist is a literal `bool[]`, and it has no health LEDs at all —
+  the "VRIO 1/2 LED" items are dim note text); Manual Chute's altitude gates are literal strings never
+  compared to `s.Altitude`; `EntryPage.Build(dl,w,h)` **takes no `PageState`** — structurally provable;
+  Ascent's 11 events are a static array while `StepList` computes live equivalents of six of them.
+- **Docking, answered:** the **bearings are genuinely LIVE** (S26 — diamond off real `YawDeg`/`PitchDeg`,
+  green-when-corrected, PYR rates, RANGE/RATE, all dashing with no target), but it is a **DISPLAY, not a
+  functioning interface**: the 12 pads + Reset Positions are §14.4(a) no-ops (**S28 decided-(a)** — Part B's,
+  and the audit proposes no Part-A build for them), and the page has **no camera** behind the rings while
+  the stranded `DockingPage.cs:73` shows the full-bleed feed.
+- **45 holes logged (H1–H45), each classified with a research/build note**, plus a recommended 10-step order
+  for the (A) work — cheapest-and-most-visible first: **(1)** draw the Cover strip live, **(2)** draw the
+  HUD readouts live (both need ZERO new data), **(3)** make the status words honest, **(4)** fix the lamps
+  and rects that lie, **(5)** one cabin-pressure story, **(6)** live step-tracking, … **(10)** the dashed-
+  quantity sweep last, behind an owner scope call. Sequencing constraints called out: **H8 before H5**
+  (phantom hit rects would otherwise fire deorbit actions over the reference text), **H36 with S43** (same
+  work), **H15 with S35's outcome** (colour and word must not disagree), **H20 with H37** (same root cause).
+- **Stray cross-reference (§4 of the doc).** **Absorbed, do not re-log:** S22 (extended — see S51), S26
+  (confirmed live), S28 (decided-(a), recorded only), S29 (both controls carried), S31/S32 (the exemplar),
+  S15, S44 (refined by H43), S43 (= H36, do together), S35 (intersects S51). Held/untouched: S3, S9, S10b,
+  S18, S37, S42, S47. **Genuinely new → logged below as S50–S57.**
+- **Four owner questions posed in the doc §8 as one paste-ready overseer prompt (C1.13):** Q1 the stranded
+  UI (harvest / partial-harvest / rebuild); Q2 what `ENTRY ENABLED` means (crew-verification → (A), vs
+  vehicle-arming → (B)); Q3 how far §14.4(f)'s sweep reaches (~27 currently-honest dashes become
+  fill-with-micro-sim — the single biggest expansion in the audit); Q4 whether the deorbit SLEW rows stay
+  dashed (§14.4(e)(3) names them explicitly; the audit read them as still (B) and changed nothing).
+- **§1.4 / C1.4 respected:** no label, no unit, no `PanelMap.cs`, no label doc, no plan and no gate touched.
+  ⚠ **Verification honesty:** the three structural findings were re-verified directly; the per-element
+  tables are the walks' findings at the cited lines, spot-checked rather than exhaustively re-derived, and
+  the doc says so at its head. Two commits landed mid-audit (`40fe9c1` S48, `a913270` G3) — line numbers
+  drift; re-read a site before editing it.
+- ⚠ **Correction to a premise the task was briefed with:** **RESET 1/2 are NOT inert.**
+  `PanelPolicy.IsInert` (`PanelBehaviour.cs:78-86`) lists exactly six commands and RESET is not among them;
+  `BUILD_PLAN.md:136-137` records the owner's option-B choice keeping RESET as real display-state.
+
+### S50 [O] The Cover top strip and the whole Frame 58 HUD are baked art — `PageState` already carries every value live — **TODO** — [TIER 2: real defect / the biggest immersion win]
+Logged by **S49** (H1, H2, H10), not fixed there (C1.1). The Cover's SPLASHDOWN TIME / INERTIAL VELOCITY /
+ALTITUDE / APOGEE / PERIGEE / INCLINATION / ACTIVE PHASE and the HUD's ROLL/PITCH/YAW (correction and rate),
+X/Y/Z, RANGE, RATE, ACCELERATION are **pixels in PNGs**, and both files are verified never to read the
+matching `PageState` fields. Every value already exists live and pre-formatted — `s.SplashdownText`+`Shown`,
+`s.Velocity`, `s.Altitude`, `s.Apoapsis`+`ApogeeShown`, `s.Periapsis`+`PerigeeShown`, `s.InclinationDegText`
+(which exists *specifically* for this glyph form), `s.Phase`; and `RollDegText`, `PitchDegText`, `YawDegText`,
+`Roll/Pitch/YawRateText`, `OffX/Y/ZText`, `RangeText`, `RateText`, `AccelPosText`. `ManualChuteDeployPage`
+(T13c) and `DockingSimPage` (S26/T13c) already draw the same fields correctly — this is the same work on two
+more pages. **Zero new data, zero new model.** Also in scope: the Cover's frozen `RUNNING 00:22:57` clock.
+**DONE when:** both surfaces read live, the baked keys are in `SkipKeys`, the no-feed / no-target looks are
+designed and previewed, and coordinates come from `docs/UI_AUDIT.md` (the reference's own source, never a
+screenshot). ⚠ New rows land on two pages **S39** lists — adopt S38's label→value remedy, do not inherit the
+defect. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H1/H2/H10 + §1.3.
+
+### S51 [S] The six subsystem tabs never got S22's guard, and eight status words contradict live state on their own screen — **TODO** — [TIER 2: real defect]
+Logged by **S49** (H14, H15). **S22 fixed `VehicleOverviewPage` + `VehicleMechPage` only.** Verified: the
+Overview gates its checklist on `!valid` (`VehicleOverviewPage.cs:113`), **`VehicleSubsystemPage.cs:130-131`
+does not**, and its literal words are not routed through `T()`. On a dead feed all four gauges dash while the
+left column still reads green `Nominal / Active / Clear / 16 / 16 / Open / Ready / None / Lock / Enabled /
+Valid / Auto / Deployed` — S22's exact failure, one page over (~31 words: Crew 6, Prop 6, Power 2, Avionics 5,
+GNC 6, Thermal 6). **The second, deeper half:** eight of those words are contradicted by live state **already
+on the same screen** — `SMOKE DETECT "Clear"` vs live `s.Systems.Fire`, `MANIFOLD LEAK "None"` vs
+`s.Systems.Leaking`, `OMS/RCS "Ready"` + `RCS AUTHORITY "Enabled"` vs `s.RcsOn`, `ATT CONTROL "Auto"` vs
+`st.ModeText` (drawn four rows below), `COOLANT LOOP A/B "Nominal"` vs `Alarms.Band(Cabin.LoopAC,…)`,
+`HEAT SHIELD "Nominal"` vs `s.HullTemp01`. **No new model — read the field, drop the literal**; QC-AUDIT
+finding 3 already did exactly this for MAIN BUS A/B. Also here: the ALERTS view prints a green `NOMINAL` on a
+dead feed beside its own honest `NO DATA`. ⚠ **Coordinate with S35** — if the owner rules that severity drives
+gauge colour, the word fixes belong in the same pass so colour and word cannot disagree.
+**DONE when:** no status word asserts a state nothing checks, `!Valid` dims every one, and previews of the
+live + no-feed states are inspected. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H14/H15/H16.
+
+### S52 [O] `SuitLeakSim`'s provenance comment contradicts the code, and cabin pressure ignores the live leak — **TODO** — [TIER 2: real defect + documentation defect]
+Logged by **S49** (H20, H37). `SuitLeakSim`'s header states the suit ΔP is measured against cabin pressure
+*"driven by real TAC Life Support state via LifeSupportBridge"*. It is not: `CabinEnvironment.cs:145` is
+`r.PressPsia = PressNominal + slower * 0.06` where `slower = sin(MissionTime/113.0)` — verified — and TAC
+drives **only** ppO2 and CO2. The rows do move off a real clock so §14.4(e)'s "never a constant" holds, but
+the comment misleads the next reader about provenance, which matters because S31 is the pattern every other
+micro-sim is told to copy. **The bigger half:** `SystemsState.LeakRate` is live and **unconnected to cabin
+pressure**, so the P&ID can print `CABIN LEAK: DETECTED` beside a rock-steady `14.70 psia`, and with a ±0.06
+psi swing against `PressCaution = 13.0` the **pressure alarm can never fire**. Cabin pressure is drawn as a
+headline gauge in four places and drives `Alarms.LifeSupport`, which colours the Crew tab and the P&ID cabin
+outline. **DONE when:** the comment matches the code, `s.Systems.LeakRate` feeds `CabinInputs`, pressure falls
+on a real leak and recovers on `DepressResponse`/`Isolating`, and leak + valve + alert word + suit ΔP + gauge
+tell one story. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H20/H37.
+
+### S53 [S] Two console lamps that lie: STRING 1A/1B/1C can never light, and `DepressResponse` discards its refusal — **TODO** — [TIER 2: real defect]
+Logged by **S49** (H41, H42). **(a)** Pressing STRING 1A/1B/1C genuinely changes the simulated string state
+(`Systems.ToggleString`), but `PanelPolicy.IsLiveMode` routes their lamps to `ModeIsOn`, which reads
+`AutoPilot.Engaged` / `StationApproach.Engaged` / `DockingOps.Engaged` — three hard-`false` stubs — and
+`PanelButton.Update` re-darkens them every tick. **The dash can never light.** Their siblings 2A/2B/2C are not
+live-mode and flash correctly. The string model is Part A's own micro-sim, so this is **not** a Part-B item —
+the lamp should read `Systems.Get(State, 1, i)`. **(b)** `_AutopilotStub.cs`'s `DepressResponse` case calls
+`Systems.DepressResponse(ref State); return true;` — **discarding the bool** — so the lamp flashes "acted"
+even when the model refused because there is no leak; its two plate-siblings (`SuppressFire`, `FireResponse`)
+return theirs correctly. That is §14.4(a)'s click-no-light-no-action honesty, inverted.
+**DONE when:** both lamps report the state they actually control, with headless checks pinning each.
+Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H41/H42.
+
+### S54 [S] Phantom Act*/Entry hit rects fire over the Reference Content text — **TODO** — [TIER 2: latent defect — fix BEFORE wiring the Cover actions]
+Logged by **S49** (H8). `CoverPage.HitTest` takes `cam` but **not** the selected phase, and its `Hits` table is
+unconditional. On rail slot 5 (Reference Content) the Act*/Entry labels are correctly suppressed by
+`ReferenceSkipKeys` — **but their six rectangles still fire**, over the ENTRY TIMELINE / PARACHUTES /
+CONTINGENCY text. Harmless **only** because those actions are currently no-ops. **The moment the Cover action
+buttons are wired (S49 H5), tapping the reference text triggers deorbit actions.** Fix: pass `sp` into
+`HitTest` and gate the six rows. Same class, logged with it: the Cover's `gridicons_refresh` glyph and the
+Vehicle Overview's `SHOW MARGINS TO` are **drawn to look like controls with no hit rect at all** — worse than
+a no-op, which at least resolves to a named action. **DONE when:** no rect fires on a phase whose label is not
+drawn, pinned by a test. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H8/H18.
+
+### S55 [O] No procedure page is step-tracked — and the one real step state machine is stranded — **TODO** — [TIER 3: scheduled build — the §14.4(f) headline]
+Logged by **S49** (H19, H21, H22, H31, H34). **Not one of the five procedure screens has a step index, a
+cursor or an advance.** Suit Leak draws both left ticks CHECKED at page-open and never leaves "SECTION 2: IN
+PROGRESS"; **VrioTest has no `PageState` parameter, no HitTest and no glue branch** (checklist = a literal
+`bool[]`; it has no health LEDs at all — the "VRIO 1/2 LED" items are dim note text); Manual Chute's altitude
+gates are literal strings never compared to `s.Altitude`; **`EntryPage.Build(dl,w,h)` takes no `PageState`**;
+Ascent's 11 events are a static array. Meanwhile **`pure/StepList.cs` is a 15-row LIVE state machine** (crew
+aboard, escape armed, prop load, liftoff, latched Max-Q, MECO, stage sep, SECO, Dragon sep, nose-cone open,
+plus an 8-mode `AbortMode()`) that renders only through `Pages.Build` — stranded by `FigmaMode` (S49 §1.1).
+Under §14.4(f) step TRACKING is a READOUT → Part-A-achievable now; the step's ACTION BUTTON is actuation →
+Part B, unchanged. **Suggested order (S49 §6 step 6):** Manual Chute first (cleanest — track `s.AltitudeM`
+against the page's own gates), then Entry, then Suit Leak's step flow, then Ascent (harvest `StepList`), then
+VrioTest last (needs a new marked VRIO-health micro-sim; what a VRIO lamp reports is not public).
+⚠ **Do NOT "fix" the chute altitudes to match `MissionPhase`'s constants** — `SCREEN_INVENTORY.md` records
+that the FSM numbers (5486/1830) and the page's "(TBC)" figures are **intentionally two different things**,
+SpaceX's own placeholder text kept verbatim. Track against the page's stated gates.
+**DONE when:** each procedure's steps advance off real state, verdicts are computed not hardcoded (the S31
+guardrail), and previews show pending / current / passed. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` §3 + §6.
+
+### S56 [S] The systems tree and the P&ID are read-only while their toggle model exists and works — **TODO** — [TIER 3: scheduled build]
+Logged by **S49** (H32, H33). Neither page is in `FigmaUI.IsVehiclePage`, neither has a `HitTest`, and
+`ScreenPainter` has no branch for either — so `POWER 1/2` and the six `STRING nX` nodes are **untouchable**,
+while `Systems.ToggleBus` / `ToggleString` / `ResetBus` exist, work, and are wired **only** to the physical IVA
+plate. A crew member can see BUS OFF on the glass and can do nothing about it. **Nothing here flies the
+vehicle** — the model is entirely local (`SystemsState`) and the dispatcher already exists; route through the
+same `FlightCommands.Run` / `PanelPolicy` the plate uses so the two surfaces cannot disagree (T14's rule).
+Logged with it (H33): the P&ID's plumbing is a static drawing with live tenants — every inline valve but the
+overboard one is a fixed-colour glyph, `CABIN FAN "RUNNING"` is a literal with a hardcoded `Severity.Nominal`,
+`PUMP A/B "RUNNING"` is a literal **not even `live`-guarded**, and `CABIN HX A/B` are empty strings (should be
+`—`, so they read as "no source" rather than "nothing here"). A `FanOn`/`PumpAOn`/`PumpBOn` in `SystemsState`
+tripping with the buses would make word and pipe colour honest off state the crew can already switch.
+**DONE when:** the tree's buses/strings are touchable from the glass through the existing dispatcher, and the
+P&ID's pumps/fans/valves read modelled state. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H32/H33.
+
+### S57 [S] Orphaned live code with no caller — harvest or retire — **TODO** — [TIER 4: hygiene + harvest]
+Logged by **S49** (H36, H39, H43, H44). Working, tested code that nothing calls: **`pure/Orbital.cs`**
+(vis-viva, anomalies, ground range/bearing) and **`pure/Hohmann.cs`** (Δv1/Δv2, phase lead, wait time) — zero
+screen callers, though *displaying* a rendezvous plan needs no flight control and is the natural live
+replacement for the Hold-Capture card's permanent `NOT ENGAGED`; **`LifeSupport.Margins`** — real TAC-LS rates,
+never called, and the natural filling for the Vehicle Overview's hardcoded-dash MARGIN column; **the NAV
+pan/zoom/NEXT-VIEW cluster** — fully implemented and wired with no `UiPage` to host it (⚠ **this is also
+S43's cheap fix** — S43 already identifies wiring the existing zoom control as the right remedy for the
+hairline RSS orbit plot; **do S43 and this together**); **`RangeExtender.cs`** — 76 lines, no caller, left by
+the 2026-09-01 autopilot deletion; and `defaultPage` in `DragonScreen.cfg`, parsed and warned about then
+discarded by `FigmaMode ? 0 : defaultPageIndex`. Also recorded: three of the five `[Tunable]` knobs S44 wired
+feed `ScaledPlanetRenderer`, whose only `Request` call site is in the dead branch — **not a defect** (S10b /
+S37 / S42 own that camera and are HELD), but noted so a future tuning session does not spend glass time on
+three knobs that cannot move anything. **DONE when:** each item is either harvested into a reachable surface
+or explicitly retired with a note. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H36/H39/H43/H44 + owner Q1.
