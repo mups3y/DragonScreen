@@ -5004,7 +5004,7 @@ unaffected, as expected: `GeometryDump.cs` has no `pure/` half and preview never
 source (git ref `8b81816^`, R1 §5.2). Found in passing, logged not fixed (C1.1): `CraftDumpAddon.cs`'s header
 comment now overstates itself now that `GeometryDumpProbe` also carries a `[KSPAddon]` → **S72**.
 
-### W14 [S] Wave E-2 `src/DeployablesControl.cs` — solar/antenna deploy + pre-return retract — **TODO** — [TIER 3: scheduled recovery]
+### W14 [S] Wave E-2 `src/DeployablesControl.cs` — solar/antenna deploy + pre-return retract — **DONE 2026-09-04** — [TIER 3: scheduled recovery]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 2 of 9).
 **The file.** `plugin/src/DeployablesControl.cs` (2,828 B at `8b81816^`), R1 §5.2 **RECOVER-CODE**, flown
 **YES**, regime n/a — *"On-orbit solar/antenna deploy, pre-return retract"*. The smallest real controller in
@@ -5022,6 +5022,24 @@ a lamp the vehicle is not honouring (§14.4(a)).
 increment-sized dispatch. Add its own test if the restore needs one to be honest about the phase trigger.
 **DONE when:** `build.py test` green, the three `Actuator` calls bind to the live methods, the controller
 advances only when the host ticks it, and no facade property changed state.
+- **DONE 2026-09-04** (⚠ **batch session** — an owner-authorised deviation from C1.1/C1.7, 2026-09-04 via the
+  overseer, for this batch ONLY; the next chat is back to one task per chat). `plugin/src/DeployablesControl.cs`
+  restored **byte-identical** from `8b81816^` (`cmp` clean, 2,828 B — the size R1 §5.2 records), same convention
+  as W13. All four compile-time dependencies verified present in today's tree, not assumed:
+  `Actuator.DeploySolarPanels` (`src/Actuator.cs:709`), `.RetractSolarPanels` (`:724`), `.DeployAntennas`
+  (`:737`), plus `MissionPhase` (`src/pure/MissionPhase.cs` — `Phasing`/`Approach`/`Docked`/`Entry`/`Drogues`
+  all present) and `[Tunable]` (`src/pure/Tunable.cs`). `build.py test` green (all suites, 0 failed); glue build
+  128→**129 source files**, **no new warnings**. `build.py preview` re-rendered and `page1_vehicle_mech.png`
+  inspected — unchanged, as expected: this file has no `pure/` half and preview never links the glue.
+- ⚠ **IT LANDS DORMANT, AND THAT IS THE COMPLIANT READING, NOT A SHORTCUT.** `grep -rn DeployablesControl
+  plugin/src plugin/test` finds **only the file itself** — nothing calls `Tick`. The Build clause above says
+  *"wired into W10's host"*, and **W10 is still TODO**: W10 *"OWNS THE HOST OUTRIGHT"* and §B12.8 rider (c)
+  states plainly that **no Wave E line restores `FlightDriver.cs`** — each merely *grows* the host W10 lands.
+  So creating a host here would be doing W10's task (C1.1 scope creep) and the line's own ⚠ forbids the only
+  other option (*"Do not tick it from a screen addon"*). All four DONE-when criteria hold as restored: test is
+  green, the three `Actuator` calls bind (the compile proves it), the controller **advances only when ticked
+  and nothing ticks it**, and no facade property moved — this controller backs none, so §14.4(a)'s honest
+  no-op is untouched and no lamp can lie. **W10 adds the one-line dispatch when the host exists.**
 
 ### W15 [S] Wave E-3 `src/LandingSiteScan.cs` — the safe-water splashdown scan both return paths need — **TODO** — [TIER 3: scheduled recovery]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 3 of 9).
