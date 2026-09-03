@@ -48,6 +48,9 @@ per the §0 banner — pure code + `test` + `preview` are cleared (and the docs/
    resort" wording; the same three tiers apply to the coherence pass §14.)
    **EXTENDED 2026-09-02 by §14.4(e)** (simulation-for-immersion): a not-yet-modelled real quantity goes to an
    installed mod's value, else a COHERENT MARKED simulation — a dash ONLY where the quantity truly does not exist.
+   **AMENDED 2026-09-03 by §14.4(f)** (completeness + simulate-to-fill): for READOUTS the dash-last-resort above
+   is SUPERSEDED — every real-screen feature is included and filled, live source first, else a coherent MARKED
+   simulation that behaves live; a dash only for a genuinely-absent state. Actuation is unchanged (§14.4(a)).
 
 ## 2. How we build (principles — all confirmed adoptable for our pipeline)
 Our renderer is pure C# `DisplayList` draw-commands → two must-agree renderers: `ScreenPainter` (in-game GL)
@@ -160,6 +163,10 @@ turntable that reads as 3D**:
   principle). Chrome, globe, nose-cone state are already live; the numeric VALUES are the placeholders.
 - **Simulation-for-immersion (§14.4(e)):** a placeholder with no source is not defaulted to a dash — take the
   value from an installed mod, else SIMULATE it coherently off real state and MARK it; dash only if absent.
+- **Completeness + simulate-to-fill (§14.4(f), 2026-09-03):** every feature the real screens have is INCLUDED
+  and FILLED — live source first, else a coherent MARKED simulation that BEHAVES live (safety verdicts computed
+  from the model, never hardcoded); a dash only for a genuinely-absent state. READOUTS only — the touch-wiring
+  bullet below (actuation) is UNCHANGED and stays §14.4(a) honest-no-op until Part B.
 - **Touch wiring:** the display-only controls (Manual Chute per-step actions, Docking clusters, Suit Leak
   TROUBLESHOOT/timer, and the console panel per §4) → real state/actions once behaviour is defined.
 
@@ -916,6 +923,8 @@ is the standing owner-decision list; **no unilateral invention.**
 - **(a) panel lighting — RESOLVED 2026-09-02 (toward the real look):** buttons light BRIGHT when active/armed/
   fired (crew-visible, real-console look); **NO red** (no evidence — red-refused removed); rest unlit; **audible
   CLICK** on every mechanical press (new audio asset). Screens-only refuse = click + no light + no action.
+  **UNCHANGED by §14.4(f) (2026-09-03) — the scope boundary:** (f) governs READOUTS only; flight ACTUATION
+  stays this honest no-op until Part B wires it (§B12.5), never a simulated flight path.
 - **(b) inferred panel semantics — RESOLVED 2026-09-02 (inert until verified):** keep POWER/STRING/RESET as
   display-state; **SWAP 1/2/3 + the inferred entry-mode toggles (ENTRY REBOOT / BACKUP ENTRY / NORMAL ENTRY) go
   INERT** (click, no function, unlit) until a real console-procedure source verifies them. Confirmed commands
@@ -935,6 +944,27 @@ is the standing owner-decision list; **no unilateral invention.**
   verdict (e.g. a suit-leak "Nominal") follows the simulation honestly, never hardcoded.
   This **EXTENDS §1.4** (real → other-users'/mod → simulate-marked → dash-for-absent); it does **not** license
   unmarked invention. First application: the suit leak check (S31).
+  **EXTENDED 2026-09-03 into a completeness mandate by (f)** — for READOUTS, (2)'s coherent marked simulation
+  is now the DEFAULT fill and (3)'s dash narrows to a genuinely-absent state; see §14.4(f).
+- **(f) Completeness + simulate-to-fill — RESOLVED 2026-09-03 (owner, via the overseer).** Every feature the
+  real Dragon screens have is **INCLUDED** — nothing is dropped for lack of a source. Fill each feature's
+  values **LIVE from a real source** (KSP / installed mods / computed) wherever one exists — the default, the
+  extensive active display. Where no live source exists for a physically-real quantity, **SIMULATE** it: this
+  **REPLACES the honest-dash fallback** (supersedes §14.4(e)(2)'s dash-emphasis and §1.4's dash-last-resort)
+  **FOR READOUTS** — a coherent marked simulation is now the default fill, not a dash. A simulation MUST:
+  (i) **BEHAVE live** — a coherent model driven off real vessel/cabin state, moving and responding, never a
+  static constant dressed as live; (ii) compute any **SAFETY VERDICT** (leak / fire / abort / go-no-go) from
+  its own model, **never hardcoded** (the S31/S32 guardrail); (iii) be **MARKED as simulated in code**
+  (provenance), while reading live to the in-game crew. A **DASH** still stands only for a genuinely-absent
+  state within an included feature (no target → no docking error) — which is how a real live readout reads
+  with no input. **FRAMING** (subordinate to the guardrails above): it is a game, so all display is
+  simulation; a simulated readout that behaves like a real live value IS the feature.
+  ⛔ **SCOPE: this governs READOUTS / DISPLAYS only.** Flight **ACTUATION** — controls that fly the vehicle
+  (docking clusters, the deorbit / abort / chute / EJECT panel) — is **UNCHANGED**: it stays §14.4(a)
+  honest-no-op until Part B wires it (or a specific owner `OVERRIDE`), because simulating actuation forks a
+  screens-only flight path Part B must reconcile. §1.4's source hierarchy (verified-real → other-users'/mod
+  → simulate-marked) still governs WHICH source; (f) only changes the LAST RESORT from dash to
+  coherent-marked-sim.
 
 **All 4 tier-3 clusters RESOLVED (§14.4) → nothing in the plan now requires invention-discussion; every element
 is tier-1, tier-2, or an owner-decided reconstruction. The plan is DECISION-COMPLETE and build-ready on the
@@ -960,6 +990,10 @@ a **PREVIEW-ONLY BUILD-GO** (owner, 2026-09-02, via the overseer); `install` + g
    `PanelMap.cs` / label docs without a real-source confirmation.
    **§14.4(e):** a not-yet-modelled real quantity → an installed mod's value, else a COHERENT MARKED
    simulation; a dash ONLY where the quantity truly does not exist.
+   **§14.4(f) (2026-09-03) — supersedes the dash-last-resort FOR READOUTS:** every real-screen feature is
+   INCLUDED and FILLED — live source first, else a coherent MARKED simulation that BEHAVES live (safety
+   verdicts computed from the model, never hardcoded). Dash only for a genuinely-absent state. READOUTS only:
+   flight ACTUATION stays §14.4(a) honest-no-op until Part B.
 5. **End every task** by updating `REGISTER.md` (DONE | NEEDS-WORK + one-line note), then **committing the
    finished task LOCALLY yourself**: `git commit` with a clear message naming the task. **NEVER `git push`** —
    there are no cached credentials in a build chat; the owner pushes from GitHub Desktop when they get to it.

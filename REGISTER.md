@@ -110,6 +110,40 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
   numbers its rows G1–G9. Those are glass-time gaps, unrelated to the G0/G1/G2 governance tasks up here. A
   future chat asking for "G2" should say which. Left as-is — renaming either scheme is out of this task's scope.
 
+### G3 [O] Governance — §14.4(f) completeness + simulate-to-fill — **DONE**
+- **Owner directive, 2026-09-03, decided by the owner (Chris) via the overseer and confirmed in-chat** (recorded
+  as the owner's per C1.12). An authorized plan change — it AMENDS the settled §14.4(e)/§1.4 dash-fallback, so it
+  is an owner decision, not a build-chat one (C1.8). A docs/plan-only task, exempt from the preview/PNG gate.
+  **Build:** add **§14.4(f)** to the Owner-invention-decisions running log, substance verbatim; cross-reference it
+  at **§1.4**, **§6**, **§14.4(e)** and **§14.4(a)** so the plan does not contradict itself (C7.1).
+- **DONE 2026-09-03.** **§14.4(f) added** to `docs/BUILD_PLAN.md`'s §14.4 log, after (e), **substance verbatim**
+  (machine-checked word-for-word against the owner's text — only markdown emphasis added): every feature the real
+  Dragon screens have is INCLUDED (nothing dropped for lack of a source); fill LIVE from a real source
+  (KSP / installed mods / computed) wherever one exists; where no live source exists for a physically-real
+  quantity, SIMULATE — this REPLACES the honest-dash fallback FOR READOUTS, so a coherent marked simulation is
+  the default fill, not a dash. A simulation MUST (i) BEHAVE live off real vessel/cabin state, never a static
+  constant dressed as live; (ii) compute any SAFETY VERDICT (leak / fire / abort / go-no-go) from its own model,
+  never hardcoded (the S31/S32 guardrail); (iii) be MARKED as simulated in code, while reading live to the crew.
+  A DASH stands only for a genuinely-absent state within an included feature. ⛔ **SCOPE: READOUTS / DISPLAYS
+  only** — flight ACTUATION (docking clusters, the deorbit / abort / chute / EJECT panel) is UNCHANGED and stays
+  §14.4(a) honest-no-op until Part B wires it (or a specific owner `OVERRIDE`). §1.4 still governs WHICH source;
+  (f) only changes the LAST RESORT from dash to coherent-marked-sim.
+  **Cross-references added (C7.1), one line each:** **§1.4** — "AMENDED 2026-09-03 by §14.4(f)", the
+  dash-last-resort superseded for readouts; **§6** — a "Completeness + simulate-to-fill (§14.4(f))" bullet beside
+  the live-data + §14.4(e) ones, pointing out that the touch-wiring (actuation) bullet below it is unchanged;
+  **§14.4(e)** — "EXTENDED 2026-09-03 into a completeness mandate by (f)", its (2) now the default fill and its
+  (3) dash narrowed; **§14.4(a)** — "UNCHANGED by §14.4(f) — the scope boundary", actuation stays the honest
+  no-op until §B12.5. **Optional pointer taken** (as G2 did): the one-line §14.4(f) clause appended to **C1.4 in
+  `CLAUDE.md`** (auto-loaded every session — where the old dash idiom would otherwise be applied) and mirrored
+  into **C1.4 in `docs/BUILD_PLAN.md`**; the two copies verified word-identical. No rule renumbered or altered;
+  `.claude/skills/next/SKILL.md` needed no edit (it never carried the dash idiom). This was the ONLY plan edit
+  of the session. No code change → **the preview/PNG gate does not apply** (C1.3); `python plugin/build.py test`
+  run as a no-regression check: **green, 15 suites / 11257 checks, 0 failed**. Committed locally (C1.5); NOT pushed.
+- ⚠ **Wording point, logged not acted on (C1.1/C1.8):** (f) cites "§14.4(e)(2)'s dash-emphasis", but the dash is
+  **(e)(3)** — (e)(2) is the simulate clause. The owner's text was entered VERBATIM as directed and is not
+  edited here; the substance is unambiguous (the dash-last-resort is what (f) supersedes) and the (e) cross-ref
+  line names (3) correctly. A one-word owner fix — (e)(2) → (e)(3) — would close it; it needs an owner call.
+
 ---
 
 ## Part A — screens (§7 order, with this session's decisions)

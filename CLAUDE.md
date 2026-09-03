@@ -82,6 +82,10 @@ session and are auto-loaded with this file. Section refs (§n, §Bn, C1–C7.1, 
    `PanelMap.cs` / label docs without a real-source confirmation.
    **§14.4(e):** a not-yet-modelled real quantity → an installed mod's value, else a COHERENT MARKED
    simulation; a dash ONLY where the quantity truly does not exist.
+   **§14.4(f) (2026-09-03) — supersedes the dash-last-resort FOR READOUTS:** every real-screen feature is
+   INCLUDED and FILLED — live source first, else a coherent MARKED simulation that BEHAVES live (safety
+   verdicts computed from the model, never hardcoded). Dash only for a genuinely-absent state. READOUTS only:
+   flight ACTUATION stays §14.4(a) honest-no-op until Part B.
 5. **End every task** by updating `REGISTER.md` (DONE | NEEDS-WORK + one-line note), then **committing the
    finished task LOCALLY yourself**: `git commit` with a clear message naming the task. **NEVER `git push`** —
    there are no cached credentials here; the owner pushes from GitHub Desktop when they get to it. So a task
