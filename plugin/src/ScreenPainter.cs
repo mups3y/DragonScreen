@@ -759,6 +759,9 @@ namespace DragonScreen
             // Switch the docking camera off when no screen has asked for it lately - a full
             // scene camera is not free and most of a mission is not spent on DOCKING.
             DockingCamRenderer.Idle();
+            // Same for the scaled-space planet camera (S10b): only NAV's 3D PLANET view asks for it,
+            // and that is a small fraction of a mission.
+            ScaledPlanetRenderer.Idle();
 
             // ---- ⛔ THE AUTOPILOT USED TO BE TICKED FROM HERE. IT MUST NOT BE. ----
             // FlightCommands, AutoPilot and FlightRecorder now live in FlightDriver, a flight-scene
@@ -932,6 +935,20 @@ namespace DragonScreen
                 }
                 ps.CameraHeldByDocking = DockingCamRenderer.HeldByDocking;
                 ps.CameraResText = DockingCamRenderer.Resolution;
+
+                // ---- AND CLAIM THE SCALED-SPACE CAMERA THE SAME WAY (S10b) ----
+                // NAV's 3D PLANET view is the one page that draws the live globe, so it is the one
+                // page that keeps a second full camera alive. The crew's spin and zoom go with the
+                // claim because the painter owns the MapView; the camera never reads display state
+                // for itself.
+                //
+                // PlanetCamLive is then re-read HERE rather than trusted from VesselData: that runs
+                // at the top of the frame, before this claim, and on a 0.2 s cadence besides, so the
+                // flag it left is up to five frames stale. Re-reading is per-screen and same-frame,
+                // which is what the page needs - screen 2 on NAV must not make screen 1 claim a feed.
+                if (selectedPage == 2 && mapView.Mode == NavMode.Planet)
+                    ScaledPlanetRenderer.Request(mapView.PlanetRotDeg, mapView.PlanetZoom);
+                ps.PlanetCamLive = ImageStore.ScaledPlanetLive();
 
                 Pages.Build(page, selectedPage, w, h, ps, mapView, index, sub);
 

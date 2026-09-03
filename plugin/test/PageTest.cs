@@ -1117,7 +1117,7 @@ public static class PageTest
         Pages.Build(dark, 2, W, H1, s, planet, 2);
         Check("NAV 3D prints the no-signal label with no camera",
               HasText(dark, PlanetGeom.NoSignalLabel), "");
-        Check("...and the line naming S10b", HasText(dark, PlanetGeom.NoSignalDetail), "");
+        Check("...and the line saying no camera is rendering", HasText(dark, PlanetGeom.NoSignalDetail), "");
         Check("...and does NOT ask for a render that does not exist",
               !HasImage(dark, ImageId.ScaledPlanetLive), "");
         Check("...and does NOT claim LIVE CAMERA", !HasText(dark, "LIVE CAMERA"), "");

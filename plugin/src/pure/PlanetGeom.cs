@@ -352,11 +352,18 @@ namespace DragonScreen
         /// is §14.4(e) - a coherent MARKED stand-in, never a dash over a quantity that exists - and it
         /// is the same marking T11a used for the placeholder capsule sequence. The label names the
         /// task that fills it in, so the wording stays true as the build moves.
+        ///
+        /// ⭐ AND THE BUILD MOVED (S10b, 2026-09-03). The detail line used to say "S10b RENDERS THE
+        /// SCALED-SPACE CAMERA", naming the task that would clear it. S10b is built, so that sentence
+        /// became false the moment it shipped: the camera EXISTS now, and this state means it is not
+        /// rendering THIS FRAME - nobody claimed it, or there was no vessel/body/plane to frame. The
+        /// wording says that instead, and stays true in the PNG preview too, where there is no Unity
+        /// camera at all and so never will be one.
         /// </summary>
         public const string NoSignalLabel = "LIVE 3D — NO SIGNAL";
 
-        /// <summary>The second line: what IS on the glass, and who replaces it.</summary>
-        public const string NoSignalDetail = "S10b RENDERS THE SCALED-SPACE CAMERA — GLOBE + ORBIT ARE REAL";
+        /// <summary>The second line: what IS on the glass, and why it is not the feed.</summary>
+        public const string NoSignalDetail = "NO SCALED-SPACE CAMERA — THE GLOBE + ORBIT BELOW ARE REAL";
 
         private static double Clamp(double v, double lo, double hi)
         { return (v < lo) ? lo : (v > hi) ? hi : v; }

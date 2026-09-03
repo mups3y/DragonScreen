@@ -1307,6 +1307,40 @@ and disappear behind TRUE geometry; does the framing/zoom read well on the glass
 source) are the right 3/4 view. **Batched onto `S18`'s glass checklist as G11, tagged S10.**
 **DONE when:** the RT camera renders in-sim, the orbit line tracks and occludes, and the framing reads well
 on the glass.
+- **CODE WRITTEN AND COMMITTED 2026-09-03 (owner directive, that chat) — the line STAYS HELD.** The renderer
+  had been left uncommitted in the working tree; the owner asked for it to be committed, so it now is
+  (`src/ScaledPlanetRenderer.cs` + the `ImageStore` hook-up + the painter's claim/idle + the `PlanetGeom`
+  marking reword + its test). **This does NOT make S10b DONE and does not open any gate.** Its three
+  done-criteria are exactly the three things a PNG cannot answer, so they are all still open, and the
+  standing state remains preview-only (C1.12). What IS verified: `python plugin/build.py test` green
+  (11476 checks, 0 failed) and `page2_nav_planet.png` inspected — the view still draws the marked
+  `LIVE 3D — NO SIGNAL` state over the real orthographic globe + orbit, which is correct, because the PNG
+  preview never links the glue and so can never have a Unity camera behind it.
+- ⛔ **A GATE CLAIM WAS CORRECTED ON THE WAY IN (C1.12).** Two comments in the committed code asserted that
+  the glass gate had been opened and used — `ImageStore.cs`: *"S18's install + glass go built it"*, and
+  `ScaledPlanetRenderer.cs`'s header: *"the camera waited for install + glass time, which is S18's gate.
+  This is that camera."* **No such go is on the record:** S18 is `HELD` (deferred by owner directive
+  2026-09-02), this very line says it "neither grants nor inherits one", and the owner's instruction in the
+  committing chat restated that the standing state is preview-only. C1.12 forbids recording a go as the
+  owner's unless the owner stated it in that chat, so both comments were rewritten to state only what is
+  verifiable — the camera is WRITTEN, it has never rendered a frame, and S10b's three in-sim checks are
+  still open behind a HELD gate. Comments only; no behaviour changed. **The owner should confirm whether a
+  glass session actually happened on 2026-09-03** — if it did, the register missed it and S18/S36 need
+  updating; if it did not, the code was describing a session that never took place.
+- **Still not built, unchanged:** §2.2's overlay RE-PROJECTION. The orbit line over this view is still
+  S10a's ORTHOGRAPHIC `GlobeProjection`, which is right over the textured disc and NOT right over a
+  perspective render from a 3/4 angle. The committed file's own header says so. Carried on **S37**.
+
+### S37 [O] The 3D PLANET overlay is still orthographic over a perspective render (§2.2) — **HELD** (rides S10b's gate) — [TIER 5: held / owner-action / Part-B-bound]
+Logged by the S10b commit, 2026-09-03. `ScaledPlanetRenderer` renders the globe in PERSPECTIVE from a 3/4
+chase angle, but the orbit line, the AP/PE markers and the vessel tick drawn over it still come from S10a's
+ORTHOGRAPHIC `GlobeProjection` — the two look at the globe from different places, so once the feed is live
+the overlay will not sit on the globe underneath it. `docs/MAP_MFD_RESEARCH.md` §2.2 is the plan: re-project
+through the camera's own `WorldToViewportPoint` plus `PlanetGeom.Occluded` for the behind-the-limb half.
+**Why it is HELD, not TODO:** the defect it fixes cannot be SEEN, and the fix cannot be judged, until the
+camera actually renders — which is S10b's in-capsule gate. It is deliberately its own line rather than
+smuggled into S10b (the committed file's header says exactly that), so whoever opens that gate can decide
+whether to spend the same visit on both.
 
 ### S11 [S] `plugin/build/csc.rsp` is a generated file, tracked, and churns on every build — **DONE**
 Logged by T4 (C1.1), not done. `build.py` overwrites `plugin/build/csc.rsp` on every invocation with

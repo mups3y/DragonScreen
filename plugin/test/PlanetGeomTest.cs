@@ -229,13 +229,22 @@ public static class PlanetGeomTest
 
         // ---------------------------------------------------------------- the marking
 
-        // The label must name the task that clears it, or it stops being true the day one lands. Same
-        // rule as Turntable.PlaceholderLabel, and asserted for the same reason.
         Check("the no-signal label says NO SIGNAL",
               PlanetGeom.NoSignalLabel.IndexOf("NO SIGNAL", StringComparison.Ordinal) >= 0,
               PlanetGeom.NoSignalLabel);
-        Check("the no-signal detail names S10b",
-              PlanetGeom.NoSignalDetail.IndexOf("S10b", StringComparison.Ordinal) >= 0,
+
+        // ⭐ THIS ASSERTION CHANGED WHEN S10b LANDED, AND THAT IS THE ASSERTION WORKING.
+        // It used to require the detail line to NAME the task that would clear it (the
+        // Turntable.PlaceholderLabel rule), so the wording could not rot while the camera was
+        // unbuilt. The camera is built now, so naming S10b as pending became the false statement -
+        // and this check failed, which is exactly what it was for. What has to stay true is the
+        // §14.4(e) half: the line says the globe and orbit UNDER the marking are real, so a marked
+        // stand-in is never read as a dead panel; and it no longer names a task that has shipped.
+        Check("the no-signal detail says what really is on the glass",
+              PlanetGeom.NoSignalDetail.IndexOf("REAL", StringComparison.Ordinal) >= 0,
+              PlanetGeom.NoSignalDetail);
+        Check("...and does not name S10b, which has shipped",
+              PlanetGeom.NoSignalDetail.IndexOf("S10b", StringComparison.Ordinal) < 0,
               PlanetGeom.NoSignalDetail);
 
         // The seam: the live 3D image is a RUNTIME image - no file, no shipped bytes. LayoutTest

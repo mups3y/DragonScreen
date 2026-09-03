@@ -29,23 +29,26 @@ namespace DragonScreen
             return Get(id);
         }
 
-        // ---- THE LIVE 3D PLANET SEAM (S10a). ONE LINE OF THIS FILE IS S10b'S WHOLE HOOK-UP. ----
+        // ---- THE LIVE 3D PLANET SEAM (S10a), NOW CLOSED (S10b). ----
         //
         // docs/MAP_MFD_RESEARCH.md §2 renders scaled space into a RenderTexture through a camera
-        // built with CopyFrom(ScaledCamera.Instance.cam), aimed by the pure PlanetGeom. That renderer
-        // - src/ScaledPlanetRenderer.cs - is NOT in the build: it cannot be exercised at all with the
-        // game closed (build.py compiles the glue on every `test`, but nothing here RUNS a Unity
-        // camera), so it is S10b, behind a separate owner install + glass go.
+        // built with CopyFrom(ScaledCamera.Instance.cam), aimed by the pure PlanetGeom. S10a wired
+        // everything downstream of this line for BOTH answers and left the renderer itself to S10b,
+        // because a Unity camera cannot be exercised with the game closed. That renderer is now
+        // WRITTEN - src/ScaledPlanetRenderer.cs - and this is the one line that was S10b's whole
+        // hook-up. It has NOT been run in the capsule: S18's install + glass gate is still HELD, so
+        // S10b's three in-sim checks remain open and nothing below this line has rendered a frame.
         //
-        // So this returns null, honestly and on purpose, and everything downstream is already wired
-        // for that answer: PageState.PlanetCamLive goes false, NavPage draws the textured disc under
-        // PlanetGeom.NoSignalLabel, and the preview does the same. S10b replaces the body of this
-        // method with `return ScaledPlanetRenderer.Texture();` and the view lights up.
-        private static Texture ScaledPlanetTexture() { return null; }
+        // It still returns null most of the time, honestly: the renderer hands back a texture only
+        // while a page has actually claimed the camera and the geometry could be framed. Everything
+        // downstream is unchanged and already handles that - PageState.PlanetCamLive goes false,
+        // NavPage draws the textured disc under PlanetGeom.NoSignalLabel, and the PNG preview, which
+        // never links this file at all, does the same for ever.
+        private static Texture ScaledPlanetTexture() { return ScaledPlanetRenderer.Texture(); }
 
-        /// <summary>Is there a live scaled-space render this frame? False until S10b - see
-        /// ScaledPlanetTexture. Read by VesselData into PageState.PlanetCamLive, so the PAGE never
-        /// asks about textures and the GLUE never decides what a page says.</summary>
+        /// <summary>Is there a live scaled-space render this frame? See ScaledPlanetTexture. Read by
+        /// VesselData into PageState.PlanetCamLive, so the PAGE never asks about textures and the
+        /// GLUE never decides what a page says.</summary>
         internal static bool ScaledPlanetLive() { return ScaledPlanetTexture() != null; }
 
         /// <summary>
