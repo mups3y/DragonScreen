@@ -3488,3 +3488,77 @@ falsified (§B0–§B16, the "build-held" heading); adding the missing entries i
   `python plugin/build.py test` run as a no-regression check: **green, ALL SCREEN SUITES PASSED, 0 failed**.
   One-line `docs/INDEX.md` entry added per the INDEX's own "add a line whenever a doc is created" rule (the
   owner's "per the INDEX convention"). Committed locally (C1.5); NOT pushed.
+
+### S60 [O] Booster-recovery ARCHITECTURE research — the two-vessel problem and the guidance method — **DONE 2026-09-03** — [TIER 1: research, §B16 preparatory]
+- **Owner-directed research task, 2026-09-03** (not a `/next` pick — the owner set it directly). **Research +
+  doc ONLY: no code, no gate, no plan edit** (`docs/BUILD_PLAN.md` FROZEN; §B16 is **unamended**). **Read:**
+  `CLAUDE.md` end-to-end · `BUILD_PLAN.md` §B16.1–§B16.6 + §B12.6 · `MECHJEB_MISSION_TUNING.md` PHASE 2
+  (§2.0–§2.6). **Settle:** (1) what actually works for recovering a boosted first stage in KSP; (2) which
+  method fits §B16 + the owner's intent; (3) what installed helps; (4) the impact on §B16; (5) the F9I RTLS
+  **guidance method**, both profiles, **method only — no kOS code**. **Output:**
+  `docs/BOOSTER_RECOVERY_ARCHITECTURE.md`.
+- **DONE 2026-09-03.** Doc written, 8 sections. **(1) The concurrency question is RESOLVED, and it was already
+  resolved in this repo:** it is an **UNPACK** question, not an active-vessel one — a **LOADED + UNPACKED**
+  non-active vessel is fully simulated *and* controllable via `Vessel.OnFlyByWire` (kOS documents the
+  constraint as unpack-scoped; BDArmory flies many non-active craft that way and hard-depends on PRE;
+  `plugin/src/RangeExtender.cs` is already our own source port of PRE's method, 76 lines, correct, zero
+  callers). **So "both fly at once" is achievable in principle — the constraint is DISTANCE, not the API.**
+  **The decisive new finding is the FLOATING ORIGIN:** KSP re-centres on the *active* vessel, so **the far
+  vessel is the one that shakes ⇒ whoever holds focus gets the precision ⇒ the BOOSTER must hold focus**, or
+  the hoverslam cannot be accurate. Separation arithmetic **[EST]** over the 411 s recovery window: upper
+  stage **coasting** → ~220 km (ASDS) / ~820 km (RTLS); upper stage **flying to orbit** → ~1500 km (ASDS) /
+  ~2100 km (RTLS), against PRE's own ">100 km ⇒ phantom forces" warning. **(2) RECOMMENDED: ONE architecture,
+  TWO range settings, staged B→A** — Stage 1 = the owner's own 2026-08-29 design (focus-follows-booster, upper
+  stage coasts loaded, ~600 km, **ASDS**), which needs **no new dependency and no new gate** and proves every
+  hard part; Stage 2 = stop suspending MechJeb on the upper stage and widen the range, which is the only thing
+  that delivers "concurrently" as stated. **Limitation stated plainly, not papered over:** Stage 1 does **not**
+  give the owner what they asked for (MechJeb holds, the ascent resumes after a ~411 s suborbital coast — and
+  *whether PVG can still close the orbit after that coast is the make-or-break unknown*), and Stage 2 is 15×
+  beyond PRE's documented trouble threshold. FMRS is the fallback and is **OVERRIDE-level**. **(3) Installed:**
+  KerbalReusabilityExpansion + Space_X_barge_lander-2.0 + KerbalKonstructs/pads + KSPWheel + FAR + RO/RealFuels
+  — **hardware and environment only; NOTHING installed addresses concurrency.** FMRS and StageRecovery are
+  absent from the tree *and* from git history; PhysicsRangeExtender's two in-repo inventories **disagree**
+  (2026-08-28 names it, the exhaustive 2026-08-31 snapshot does not) and C7 forbids checking — **flagged, not
+  resolved; it blocks nothing** because our port needs no install. Trajectories likewise absent —
+  `MechJebModuleLandingPredictions` replaces it, **do not add a dependency for it**. **(4) §B16 impact — five
+  amendments a GOVERNANCE task would make** (not made here, C1.12): §B16.1 holds but needs the mechanism + the
+  focus rule + **a NEW requirement — the screens must be focus-hardened**; §B16.2 holds but should **state
+  ASDS as the default** (Crew-2 flew it, it is mission-realistic for crewed F9, and it is the range-friendly
+  one) and say **ONE guidance + a TARGET MODE**; §B12.6 step (9) keeps its position but gains a third
+  prerequisite; §B16.5's evidence now favours option (a); and a new **§B16.7** is needed to hold the
+  concurrency material. **(5) Guidance method:** the five phases confirmed by two further independent
+  tier-2 sources that agree on the *shape* — **RTLS and ASDS differ ONLY in the aim point and whether Phase 1
+  boostback runs; phases 2–5 are identical**, so the core carries one guidance and a target mode. Extracted as
+  C#-implementable laws: the predicted-impact error signal (the repo's own along/cross decomposition at
+  `assess_flight.py:405-419`), the boostback throttle taper + three-condition cut-off, the nose-up coast, the
+  entry-burn trigger/velocity-target/over-burn guard, **the AoA-clamped aero-descent steering law**
+  `d = −v_srf + K·e` clamped to an altitude-scheduled AoA cone, and the landing-burn **ignition solution**
+  (`v²/2a` closed form ⇒ **replaced by** MechJeb's numerical descent-integration + root-solve extended with
+  drag and the ~3.5 s spool — which this repo has already solved once) + `throttle = stopDist/trueAlt` with a
+  **never-zero** floor and the 3→1 engine schedule. Plus F9I's **acceptance targets** (443° total roll across
+  six phases, mean 6.7° off retrograde on descent) — the repo's assessor already scores against them.
+  ⚠ **Tier-2, marked and attributed** per §1.4: **F9I** (the owner's own kOS project, GPL-3.0 — ⚠ its scripts
+  are **OUT OF REPO**, so everything F9I is reconstructed from the repo's own surviving records incl. two docs
+  read from git history) and **surgical9's KSP Falcon-9 kOS RTLS script** (MIT). **⛔ No kOS code copied or
+  transcribed**, per the owner's directive.
+- **Batched owner questions (C1.9), posed as a paste-ready overseer prompt (C1.13):** doc §7.1 — **O-B1** the
+  concurrency method (A / B / C / staged B→A; **C needs an OVERRIDE**) · **O-B2** is PhysicsRangeExtender
+  actually installed (record hygiene; blocks nothing) · **O-B3** does §B16 get the five amendments and does
+  booster recovery get its own register T-series. Plus the three already-open S48 items **O2 / O3 / O5**, on
+  which this doc now supplies evidence but decides nothing.
+- **Logged, not done (C1.1):** doc §7.3, seven items — ⭐ **the screens are NOT focus-hardened**
+  (`VesselData.cs:55/776/1122`, `NavBallRenderer.cs:237`, `ScaledPlanetRenderer.cs:280` read
+  `FlightGlobals.ActiveVessel` directly; only `DockingCamRenderer.OurVessel()` is hardened — a focus switch
+  repoints the Dragon's whole telemetry snapshot, navball and planet renderer at the booster; **no register
+  line exists**) · the **AUTO BOOSTER RECOVERY toggle is a live control with a dead effect** and
+  `SCREEN_LIVENESS_AUDIT.md` (S49) **has no booster row at all** · `RangeExtender.Enable/Disable` still have
+  zero callers (already protected) · two dangling `BoosterRecovery:*` references · `HasRecoveryReserve` still
+  has no default reserve value and exists twice on different inputs · `INDEX.md`'s missing
+  `MECHJEB_MISSION_TUNING.md` line (**→ S58**) · `check_live.py`/`audit_comments.py` hard-code an out-of-repo
+  F9I path (the C7 boundary that forced §6.1's reconstruction).
+- **Verify (C1.3):** research/docs-only, no code change → **no preview to inspect, the PNG gate does not
+  apply**. `python plugin/build.py test` run as a no-regression check: **green, ALL SCREEN SUITES PASSED, 0 failed**.
+  One-line `docs/INDEX.md` entry added
+  per the INDEX's own "add a line whenever a doc is created" rule (the owner's "per the INDEX convention") —
+  ⚠ **it landed in S59's commit**, a concurrent session having staged `INDEX.md` first; this task's commit
+  carries only the task-number correction in it. Committed locally (C1.5); NOT pushed.

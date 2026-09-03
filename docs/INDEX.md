@@ -96,7 +96,7 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
   the recorder that fed `plugin/tools/assess_flight.py` was deleted 2026-09-01; the analysers survive, the
   writer does not. Where it lands in the Part-B order is an open owner call (its §6.1 Q4).
 - **[BOOSTER_RECOVERY_ARCHITECTURE.md](BOOSTER_RECOVERY_ARCHITECTURE.md)** [SPEC — research] — the **§B16
-  architecture** research (S50, 2026-09-03): the **two-vessel concurrency problem** settled (loaded/unpacked
+  architecture** research (S60, 2026-09-03): the **two-vessel concurrency problem** settled (loaded/unpacked
   vs on-rails, the `OnFlyByWire` fact, the range arithmetic, the floating-origin rule "whoever holds focus
   gets the precision"), the four candidate methods costed (concurrent · coast · FMRS · StageRecovery) with a
   **staged recommendation**, what the installed environment does and does not give, the **five §B16
