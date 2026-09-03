@@ -1326,12 +1326,18 @@ on the glass.
   to say what actually happened, and the gate opening is recorded here where it belongs. **The correction
   was still the right call at the time** — C1.12 forbids a build chat recording a go as the owner's on the
   strength of a code comment, and the fix for that is exactly what happened: state the verifiable version,
-  flag it, let the owner settle it. ⚠ **What is still NOT established:** whether S10b's camera itself was
-  exercised. Eight of the 38 frames were sampled (Cover ×3, Docking, Manual Docking, Propulsion, Thermal,
-  P&ID, Suit Check, Audio) and **none shows the NAV 3D PLANET view**, so its three in-sim criteria are not
-  recorded as answered and this line stays **HELD** on that alone. The vessel was also `Landed` throughout
-  ("ON SURFACE - NO ORBIT"), which is the degenerate case for `PlanetGeom`'s orbit-plane framing — so even
-  if the view was opened, it is not the state that answers "does the orbit line occlude".
+  flag it, let the owner settle it. ⛔ **THE CAMERA WAS NOT EXERCISED — ALL 38 FRAMES CHECKED (2026-09-03).** The owner asked for the
+  rest of the screenshots to be swept, so all 38 were, by contact sheet. **Not one shows the NAV page**, in
+  any of its three views. The session covered the VEHICLE family end to end (Overview, Crew, Prop, Mech,
+  Power, Avionics, GNC, Thermal, Systems Tree ×3, Systems P&ID), the Cover's deorbit rail through every
+  phase and all three camera views, DOCKING and MANUAL DOCKING, all three Settings tabs, and the Suit Leak
+  Check — but the NAV page was never opened, so `ScaledPlanetRenderer` was never claimed and never rendered
+  a frame. **S10b's three in-sim criteria are therefore untouched and this line stays HELD** — the gate was
+  opened and spent on other pages, which is a perfectly reasonable use of a restart, but it is not S10b.
+  ⚠ And when it IS opened, note the state: the vessel was `Landed` for the whole session
+  ("ON SURFACE - NO ORBIT"), which is the DEGENERATE case for `PlanetGeom`'s orbit-plane framing — the
+  normal falls back to the body's north axis. Answering "does the orbit line track and occlude" needs the
+  vehicle **in orbit**, so whoever plans that visit should put it there first or the check cannot be made.
 - **Still not built, unchanged:** §2.2's overlay RE-PROJECTION. The orbit line over this view is still
   S10a's ORTHOGRAPHIC `GlobeProjection`, which is right over the textured disc and NOT right over a
   perspective render from a 3/4 angle. The committed file's own header says so. Carried on **S37**.
@@ -2265,6 +2271,11 @@ than decided here (C1.12). PREVIEW-ONLY throughout — no `install`, no glass.
   a powered bus with every string down → `0 / 3 Online` (alarm). That last case needed a fourth checklist
   colour key (`3` → `DragonPalette.Alarm`); keys 0–2 are untouched. Words are pre-built (`BusOnline3`),
   so the draw path still formats no strings.
+  ✅ **CORROBORATED ON GLASS 2026-09-03**, in two frames twelve seconds apart: `20260903120456_1.jpg`
+  (ELECTRICAL POWER) shows `MAIN BUS A — Nominal` and `MAIN BUS B — Nominal`, both green, while
+  `20260903120508_1.jpg` (SYSTEMS TREE) shows `POWER 2 — BUS OFF` in grey with all three of its strings
+  dashed. The same vessel, the same bus, the same minute, two screens, opposite answers. This is the
+  finding exactly as reported, and the fix removes it.
 - **(4) The Cover still read "altitude" while DeorbitBurnPrep read "attitude" — REAL, FIXED.** S13's
   residual. The two Crew Interrupt Conditions captions are baked community PNGs whose pixels say
   "altitude", so S13 could only correct `DeorbitBurnPrepPage`; the Cover kept disagreeing on glass.
@@ -2336,6 +2347,11 @@ colours, and the reference's own choices collide with our state palette:**
 - `#d12c30` **is** `DragonPalette.Alarm`, byte for byte, and `#d7b733`/`#fcd533` read as
   `DragonPalette.Caution`. Everywhere else in the mod red means alarm and amber means caution, so the
   crew reads an alarm off a healthy cabin.
+- ✅ **Seen on glass 2026-09-03, so this is not a preview artefact:** `20260903120439_1.jpg` (VEHICLE
+  OVERVIEW) and `20260903120447_1.jpg` (CREW) both show PPO2 `3.00` gold, CABIN TEMP `22.4` **red**, CABIN
+  PRESS `14.70` gold, CO2 `1.00` blue — a completely healthy cabin with a red gauge in the middle of it.
+  `20260903120502_1.jpg` (GNC) shows `RCS FUEL 100` in gold, and `20260903120523_1.jpg` (THERMAL) shows
+  `SHIELD 27 °C` in red.
 - `VehicleSubsystemPage.cs` extends the same idiom to the reconstructed tabs, which is why THERMAL's
   `SHIELD` is red and GNC's `RCS FUEL` is gold at 100 % (`s.GCol` is a literal array on every tab —
   lines ~253 / 272 / 306 / 341 / 363 / 391 — never a severity).
