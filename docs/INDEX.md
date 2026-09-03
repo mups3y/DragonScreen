@@ -108,6 +108,17 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
 - **`FLIGHT_SYSTEMS.md` — DOES NOT EXIST YET.** `plugin/src/pure/MissionPhase.cs` and
   `plugin/build/audit_comments.py` both point at it. Until **T15** creates it, the §8 flight facts live in
   `BUILD_PLAN.md`. Do not treat those two comments as a live link.
+- **[VEHICLE_AUDIT.md](VEHICLE_AUDIT.md)** [REF] — recovered by **W0** (2026-09-03) from before the
+  2026-09-01 pivot. Every Part-B actuation decision binds to named hardware from the craft dump; this file
+  carries the dump-taking PROCEDURE (§A — pad, fully fuelled, all stages present) and a per-part ledger
+  (§B–§E) that is only as fresh as the last dump run against it.
+- **[CRAFT_DUMP_VEHICLE_MAP.md](CRAFT_DUMP_VEHICLE_MAP.md)** [REF] — recovered by **W0** (2026-09-03), same
+  origin as above. Maps the dumped parts to their control-capability modules/events/actions. ⚠ Its own banner
+  flags that its part/module/event/action counts describe the **superseded Aug-26 dump**, not the current
+  `docs/reference/craftdump.csv`.
+- **`plugin/src/CraftDump.cs`** [CURRENT] — recovered by **W0** (2026-09-03). The static dumper; fires once
+  per flight scene via the new `CraftDumpAddon` (`[KSPAddon(Flight)]`) when the active vessel is on the pad
+  with parts loaded. Writes `<KSP>/DragonScreen_capture/craftdump.csv`.
 
 ## 4. Historical — background only, do NOT build from these
 
@@ -148,15 +159,17 @@ The autopilot workstream took 56 `docs/` files with it. **Do not resurrect them*
 that still matter, and the rest describe code that no longer exists. Named here so a grep for them ends at this
 line instead of a hunt: `MASTER_BUILD_SPEC` · `SOURCE_OF_TRUTH` · `COMPLETION_MATRIX` · `DEPENDENCY_MATRIX` ·
 `FLIGHT_VERIFICATION` · `VALIDATION_AND_ROBUSTNESS` · `PHASE_ACCEPTANCE_CRITERIA` · `SEQUENCE_MAP` ·
-`VEHICLE_AUDIT` · `TRUE_AUTOPILOT_ARCHITECTURE` · `FLIGHT_SOFTWARE_PLAN` · `FLIGHT_SYSTEMS` ·
+`TRUE_AUTOPILOT_ARCHITECTURE` · `FLIGHT_SOFTWARE_PLAN` · `FLIGHT_SYSTEMS` ·
 `OPERATING_PROCEDURE` · `AUTOPILOT_HARVEST` · `MODS_HARVEST_2` · `AUTOPILOT_MINING_3` ·
 `MECHJEB_CAPABILITY_INTEGRATION` · `MECHJEB_MASTER_MAP` · `MECHJEB_WIKI_RESEARCH` · `MECHJEBLIB_PORT` ·
 `ATTITUDE_CONTROL_RESEARCH` · `LAUNCH_AND_ASCENT_RESEARCH` · `ASCENT_GUIDANCE_UPFG` ·
 `ASCENT_GUIDANCE_DECISION` · `PHASE_2`…`PHASE_6_*_RESEARCH` · `BOOSTER_*` · `RENDEZVOUS_*` ·
 `ABORT_PROCEDURES_RESEARCH` · `CREW_DRAGON_GNC_RESEARCH` · `CREW2_*` · `CREW_MISSION_TELEMETRY` ·
 `REAL_CREW_DRAGON_MISSION` · `MISSION_PROFILES_FREEFLYER` · `INSTALLED_MODS_RESEARCH` · `MOD_*_RESEARCH` ·
-`RO_*` · `CRAFT_DUMP_VEHICLE_MAP` · `F9I_*` · the assessment/handoff set · `data/crew_missions.json` +
+`RO_*` · `F9I_*` · the assessment/handoff set · `data/crew_missions.json` +
 `data/dm1_ascent_*.json` · the `dashboard/` folder.
+`VEHICLE_AUDIT` and `CRAFT_DUMP_VEHICLE_MAP` were recovered by **W0** (2026-09-03) — see §3, they are no
+longer in this deleted set.
 
 **Where their content went:** MechJeb semantics + tuning → `BUILD_PLAN.md` §B7–§B11 · abort → §B13 · crew
 gates → §B14 · FDIR → §B15 · real mission numbers → §8 · the tuned cfg → `reference/`.

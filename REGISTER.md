@@ -3698,3 +3698,42 @@ explicitly declined to propose flipping `FigmaMode`. **DONE when:** some reachab
 `ScaledPlanetRenderer` and draws `NavPage.Planet(..., live: true)`, `build.py test` is green and the preview
 shows the honest `LIVE 3D — NO SIGNAL` state on that page — at which point G11/G12(3) become answerable on one
 glass visit.
+
+### W0 [O] Recover CraftDump.cs and take a fresh craft dump — **DONE 2026-09-03**
+Owner directive via the overseer ("do W0 first"), 2026-09-03: every Part-B actuation decision binds to named
+hardware from the craft dump, the owner rebuilt the craft and installed new mods, and the tool that produces
+the dump was deleted at `8b81816`. **G5c will formalise the W-series (recovery Waves A-D) around this line** —
+this is a standalone recovery task run ahead of that governance pass, per explicit owner authority.
+- **DONE 2026-09-03.** Restored `plugin/src/CraftDump.cs` from `8b81816^` (190 lines / 7,737 B, byte-identical).
+  Added ONE new call site: `plugin/src/CraftDumpAddon.cs`, a dedicated `[KSPAddon(Flight)]` MonoBehaviour
+  whose `Update()` calls `CraftDump.Auto()` — nothing else touches `ScreenPainter`/`DragonScreenMonitor` or the
+  render path. Recovered `docs/VEHICLE_AUDIT.md` and `docs/CRAFT_DUMP_VEHICLE_MAP.md` from `8b81816^` as
+  REFERENCE (the latter banner-marked: its 27/304/652/273 counts describe the superseded Aug-26 dump).
+  `docs/INDEX.md` updated: entries for both docs + `CraftDump.cs`, removed from the §7 deleted-files list.
+  `build.py test`: green, ALL SCREEN SUITES PASSED, 0 failed, before `install` was run.
+  Owner-authorised `install` **for this task only** (C1.12) ran after confirming KSP/CKAN closed; owner then
+  loaded `New Crew-2`, rolled to the pad fully fuelled with all stages present, and confirmed. `KSP.log`:
+  `[DragonScreen] CRAFT DUMP (pad) -> ...craftdump.csv  (20 parts, New Crew-2)`. Fresh dump copied over
+  `docs/reference/craftdump.csv` (gitignored by `*.csv` — was never git-tracked in this repo's history either,
+  so this is a working-tree overwrite only, no commit content).
+  **Fresh dump: 20 part instances / 13 distinct part types (was 27 / 17), 265 modules, 570 events, 239
+  actions, 6,019 fields.** Sanity check (C1.14 gate) **PASSED**: exactly one octaweb, part
+  `TE.19.F9.S1.Engine`, carrying three `ModuleEnginesRF` keyed `engineID = AllEngines / ThreeLanding /
+  CenterOnly`; zero parts named `KK_SPX*` or `KK_F9demo*` anywhere in the dump — no trace of the newly
+  installed Kartoffelkuchen Launchers Pack Falcon 9 on this vessel.
+  ⚠ **The part SET changed beyond a rename**, flagged for the owner, not acted on here: the 4 distinct types
+  that dropped out are `TE.19.C.Dragon.Decoupler` (×1), `TE.CD2.POD.DROGUES` (×1), `TE.CD2.POD.MAINS` (×1) and
+  `TE.F9.S2.RCS` (×4) — exactly accounting for the 27→20 instance drop. The current `New Crew-2` on the pad has
+  **no parachutes, no Dragon/S2 decoupler, and no S2 RCS thrusters** in this dump. `KRE-FalconLegMk2-M` also
+  renamed to `KRE-FalconLeg-M` (still 4 legs, same role). No preview PNG for this task — no screen changed,
+  gate N/A, stated explicitly per C1.3. `git status` after: only the declared outputs (below) touched.
+  Committed locally (C1.5); NOT pushed.
+- **Batched owner question (C1.9), posed per C1.13:** the fresh dump is missing recovery-critical hardware
+  (both parachute types, the S2 decoupler, all four S2 RCS thrusters) relative to the Aug-26 dump. Options:
+  (a) the craft rebuild genuinely omitted these and needs another pass in the VAB before any further Part-B
+  work binds to this dump: (b) they exist on the vessel but under a differently-named part this dump's
+  `KK_SPX`/`KK_F9demo` check wouldn't catch, and the owner wants a targeted re-check; (c) accept the dump as
+  the new ground truth and let Part-B tasks discover the gap organically. Recommendation: (a) — re-check the
+  craft in the VAB before anything downstream (VEHICLE_AUDIT §E, CRAFT_DUMP_VEHICLE_MAP) is revised against
+  this dump, since a Dragon that can't jettison its second stage or open its chutes is not flight-composable
+  regardless of Part-B. This needs an owner decision, not a build-chat fix (C1.12).
