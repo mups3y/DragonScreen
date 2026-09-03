@@ -71,6 +71,10 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
   the resource inventory (with licences), the real page set + function, and the real→our page map.
 - **[SCREENS_CONSOLE_PLAN.md](SCREENS_CONSOLE_PLAN.md)** [PARTLY SUPERSEDED] — the older screens/console
   workstream. Its NAV bugs and performance notes are live; its button-wiring policy is overridden by §14.4.
+- **[SCREEN_LIVENESS_AUDIT.md](SCREEN_LIVENESS_AUDIT.md)** [REF] — owner-directed research (2026-09-03): a
+  systematic per-page walk of every screen classifying each element LIVE / STATIC / NO-OP / MICRO-SIM, with
+  every claim carrying a `file:line`. **The source cited by register lines S50–S57** (the screen-gap sweep).
+  No code changed, no plan edited.
 
 ## 2. Contracts — where a value or a control comes from
 
@@ -78,6 +82,11 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
   authoritative source. The KSP-sourced rows are current; rows naming deleted autopilot owners are marked.
 - **[COMMAND_REGISTRY.md](COMMAND_REGISTRY.md)** [PARTLY SUPERSEDED] — every interactive control and its
   command path. The refusal/lighting policy is overridden by §14.4(a,b) — see its banner.
+- **[KER_DATA_RESEARCH.md](KER_DATA_RESEARCH.md)** [REF] — owner-directed research (2026-09-03): Kerbal
+  Engineer Redux as a live data source for the screens, read from KER's actual source + the actual installed
+  binary. **Supersedes and corrects** the KER section of the deleted `MOD_INTEGRATION_RESEARCH.md`; where
+  they disagree, this doc wins (its §1.5). `plugin/src/KerBridge.cs:8` and `plugin/src/pure/KerData.cs:1`
+  still cite the dead path.
 
 ## 3. Flight facts & the autopilot (Part B — **GO since 2026-09-03**, at RO defaults; `install`/glass still gated)
 
@@ -108,6 +117,15 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
   rebuilt by recorded re-flights, so the recorder MUST capture what a ballistic-coefficient re-derivation
   needs — **density, Mach, drag acceleration, mass, and an explicit unpowered-phase marking** — plus the
   booster as its own two-vessel stream (§B16.7).
+- **[flights/README.md](flights/README.md)** [HIST — recovered] — salvaged **H1** (2026-09-04) from
+  `8b81816^`. How to read the archived `FlightRecorder` CSVs (DS-ASC-001…008, DS-DEO-001): what each file
+  covers, row counts, and the geometry-dump schema. `BLACKBOX_RESEARCH.md` §3.2 calls it *"already 90% of a
+  recording-format spec"* — read before writing a new one. ⚠ Describes the DELETED recorder's schema; the
+  CSVs it documents are not yet re-salvaged into this repo.
+- **[F9I_BOOSTER_TARGETS.md](F9I_BOOSTER_TARGETS.md)** [HIST — recovered] — salvaged **H1** (2026-09-04) from
+  `8b81816^`. Measured booster-landing targets from F9I's own black box (`bb_booster_001..008`). ⚠ **STOCK
+  (F9I) — the numbers are F9I's stock landings; do NOT seed §B16 from them** (`AUTOPILOT_RECOVERY_AUDIT.md`
+  §5.4). Its *recording schema* is what transfers, per the owner.
 - **[BOOSTER_RECOVERY_ARCHITECTURE.md](BOOSTER_RECOVERY_ARCHITECTURE.md)** [SPEC — research] — the **§B16
   architecture** research (S60, 2026-09-03): the **two-vessel concurrency problem** settled (loaded/unpacked
   vs on-rails, the `OnFlyByWire` fact, the range arithmetic, the floating-origin rule "whoever holds focus
@@ -133,6 +151,13 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
   ⚠ **Every constant in it is STOCK KERBIN** — the laws transfer, the numbers do not (its §1.1/§10, and
   **§B16.8**). Committed by **G5a** (2026-09-03), unedited; its §4 *"in C#/MechJeb"* mappings are read as
   *"in C#, in our own booster core"* per §B16.5.
+- **[MECHJEB_MISSION_TUNING.md](MECHJEB_MISSION_TUNING.md)** [PARTLY SUPERSEDED] — **S48** (2026-09-02): the
+  operational, per-setting MechJeb recipe for every phase of a nominal Crew-Dragon flight — the exact
+  user-editable setting, its value, and how to set it (cfg key ⟂ C#/API field ⟂ GUI control) — plus the
+  Falcon-9 booster-recovery method (§B16's per-setting recipe) and a name-drift check against MechJeb's
+  current C# source. ⚠ Its §2.2 (the boostback-is-RTLS-only phase table) and §2.4 (the "no craft files"
+  claim + the by-position engine procedure) carry a **PARTLY SUPERSEDED** banner, corrected 2026-09-04 by
+  **H1** — see `BUILD_PLAN.md` §B12.7/§B16.2/§B16.4/§B16.7. On any conflict THE PLAN WINS (C7.1).
 - **`FLIGHT_SYSTEMS.md` — DOES NOT EXIST YET.** `plugin/src/pure/MissionPhase.cs` and
   `plugin/build/audit_comments.py` both point at it. Until **T15** creates it, the §8 flight facts live in
   `BUILD_PLAN.md`. Do not treat those two comments as a live link.
@@ -215,7 +240,9 @@ line instead of a hunt: `MASTER_BUILD_SPEC` · `SOURCE_OF_TRUTH` · `COMPLETION_
 `RO_*` · `F9I_*` · the assessment/handoff set · `data/crew_missions.json` +
 `data/dm1_ascent_*.json` · the `dashboard/` folder.
 `VEHICLE_AUDIT` and `CRAFT_DUMP_VEHICLE_MAP` were recovered by **W0** (2026-09-03) — see §3, they are no
-longer in this deleted set.
+longer in this deleted set. `F9I_BOOSTER_TARGETS` and `docs/flights/README.md` were recovered by **H1**
+(2026-09-04) — see §3, they too are no longer in this deleted set (the rest of `docs/flights/` — the CSV
+corpus itself — remains unsalvaged).
 
 **Where their content went:** MechJeb semantics + tuning → `BUILD_PLAN.md` §B7–§B11 · abort → §B13 · crew
 gates → §B14 · FDIR → §B15 · real mission numbers → §8 · the tuned cfg → `reference/`.

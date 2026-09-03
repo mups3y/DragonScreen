@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# DragonScreen - assess_flight.py  (CURRENT 105-col recorder schema (+P0.0 warp_rate/eng_ignited/eng_flameout; warp rows excluded from control stats): met_s / ascent_phase / att_point_deg ...)
+# DragonScreen - assess_flight.py  (matches the DELETED recorder's FINAL schema — 135 names in
+# `FlightRecorder.cs`'s Schema[], 136 in the last flown header `Crew-2_20260901_004929.csv`, per
+# docs/AUTOPILOT_RECOVERY_AUDIT.md §3.1; +P0.0 warp_rate/eng_ignited/eng_flameout; warp rows excluded
+# from control stats): met_s / ascent_phase / att_point_deg ...)
 # =============================================================================================
 # The WHOLE flight, every phase, one command — the full structured pass the memory rule requires
 # ([[full-structured-flight-analysis]]: never spot-check, the full pass yields the right conclusion).
@@ -14,8 +17,10 @@
 #   self-deorbit check)   6 deorbit/entry/chute   7 abort + FDIR   8 control authority   9 verdict.
 # Anything it does NOT flag has been CHECKED, not skipped.
 #
-# NOTE the OLD plugin/build/assess_flight.py is the DELETED-autopilot schema (ut / a_phase / x_owner)
-# and cannot read current recordings — this file supersedes it.
+# NOTE plugin/build/assess_flight.py reads an EARLIER, gen-1 schema (ut / a_phase / x_owner) and
+# cannot read this file's schema. Both are historical-corpus tools now — the recorder that wrote
+# either schema was deleted 2026-09-01 (owner directive, screens-only). A fresh recorder is BlackBox
+# (docs/BLACKBOX_RESEARCH.md, T22); neither script reads anything "current" until it flies.
 # =============================================================================================
 import csv, os, sys, glob, math
 

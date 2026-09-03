@@ -249,12 +249,15 @@ This is `PitchRate`, and only `PitchRate`, tuned against the **Flight Recorder**
 **[DOC]** ascent targets: max-Q 30–35 kPa at ~12 km / T+1:02; MECO ~T+2:36 at **~80 km, ~Mach 10**;
 SECO-1 ~T+8:47; insertion 190–210 km × 51.63°.
 
-**The tooling for this already exists in the repo** and does not need writing: `plugin/tools/assess_flight.py`
+**The ANALYSIS tooling for this already exists in the repo** and does not need writing: `plugin/tools/assess_flight.py`
 (per-phase flight assessment — ascent, booster, rendezvous/phasing, deorbit/entry/chute, abort/FDIR, control
 authority) and `plugin/tools/tuning_db.py` (per-phase statistics of every control signal — rates, actuation,
-pointing error, throttle, AoA, q, g — written to `docs/tuning/TUNING_DB.json`). Both need a **flight corpus**,
-which only exists once Part B flies. `plugin/build/assess_flight.py` is the older-schema copy, retained
-deliberately for exactly this tune (T22).
+pointing error, throttle, AoA, q, g — written to `docs/tuning/TUNING_DB.json`). **The RECORDER that produces
+the flight corpus for them to read does NOT exist** — it was deleted with the rest of the autopilot (2026-09-01)
+and must be rebuilt fresh as BlackBox (`docs/BLACKBOX_RESEARCH.md`, S59); the analysers themselves survive
+only as historical-corpus readers until then (Open Question Q3, `docs/AUTOPILOT_RECOVERY_AUDIT.md`). Both
+need a **flight corpus**, which only exists once Part B flies BlackBox. `plugin/build/assess_flight.py` is
+the older-schema copy, retained deliberately for exactly this tune (T22).
 
 ### 1B.vi ⚠ The four open ascent questions (§B8, still open — none is a build-chat call)
 
@@ -358,6 +361,13 @@ the aim point — *not* the group centre or a waypoint. Deck is **50 m × 25 m**
 
 ## 2.2 The established RSS/RO method — five phases
 
+⚠ **PARTLY SUPERSEDED 2026-09-03 (G5a-Q3) — see `BUILD_PLAN.md` §B12.7/§B16.2/§B16.4/§B16.7.** The phase
+table below still shows row 1 as **"BOOSTBACK (RTLS only)"** — that is the pre-amendment split. §B16.2 was
+amended (owner, 2026-09-03): **boostback is now ONE ALWAYS-ENTERED state for BOTH profiles**, magnitude and
+aim-point parameterized by target mode, with ASDS defaulting to a ZERO-MAGNITUDE trim until a recorded
+flight says otherwise. On any conflict THE PLAN WINS (C7.1); this section's method/parameter names still
+stand, only the "RTLS only" gating on boostback does not.
+
 This is the decomposition the RSS/RO community converged on (it is what **BoosterGuidance** implements —
 *"has arisen out of the HopperGuidance mod… made to work in Realism Overhaul where limited throttleable
 engines and limited ignitions mean you can achieve successful recoveries"*, GPL-3.0). **That the mod exists
@@ -435,6 +445,15 @@ conductor would need*, whoever implements the guidance):
    ignition the vehicle may not have. Hold a floor above the engine's minimum instead.
 
 ## 2.4 ⚠ The craft dump — owner-supplied, and the ONLY source for the engine list
+
+⚠ **PARTLY SUPERSEDED 2026-09-03 (G5a-Q3) — see `BUILD_PLAN.md` §B12.7/§B16.2/§B16.4/§B16.7.** Two claims
+below are now false/wrong. **(1)** *"there are no `.craft` files in this repo"* — **16 mission `.craft` +
+`.loadmeta` pairs were committed by G5a** (`docs/reference/`, `INDEX.md` §3); the craft-dump prerequisite
+this section calls OPEN is resolved. **(2)** the by-position engine procedure (*"Expect
+`OctawebEngineCount = 9`"*, step 3 below) is **superseded by §B16.4**: the octaweb is confirmed **one part**
+carrying **three** `ModuleEnginesRF` modules (`AllEngines`/`ThreeLanding`/`CenterOnly`), not nine engine
+parts — binding is by module role against `reference/craftdump.csv`, never by position-counting nine parts.
+On any conflict THE PLAN WINS (C7.1).
 
 **C7 forbids reading the KSP install**, and **there are no `.craft` files in this repo** (verified: no
 `*.craft`, no `Ships/`, no `.sfs`; `CRAFT_DUMP_VEHICLE_MAP` was deleted 2026-09-01). So:

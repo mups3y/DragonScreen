@@ -23,6 +23,14 @@ stands unchanged), not a plan edit, and not authority to build anything.
 **[T2]** = another user's method, marked and attributed, never presented as verified-real · **[DOC]** =
 public documentation of the real vehicle or of a KSP API/mod · **[EST]** = arithmetic done here.
 
+⚠ **PARTLY SUPERSEDED 2026-09-03 (G5a-Q3) — see `BUILD_PLAN.md` §B12.7/§B16.2/§B16.4/§B16.7.** This doc was
+written when **§B16 was unamended**; that is now false — §B16 **IS amended** (§B16.1/§B16.4–§B16.9). Two
+things below no longer hold as written: this doc's **staged focus recommendation** is superseded by the
+settled **§B16.7** protocol (focus never leaves the upper stage), and its **MechJeb-module mappings** are
+superseded by **§B16.5** (our own booster core, our own integrator, not MechJeb's landing autopilot). On any
+conflict THE PLAN WINS (C7.1); the two-vessel concurrency mechanism and guidance-method content below still
+stand.
+
 ---
 
 # 1. The concurrency problem — what KSP actually does

@@ -2,8 +2,9 @@
 # -*- coding: utf-8 -*-
 # ============================================================================================
 # ⛔ OLD-SCHEMA (deleted-autopilot recorder: ut / a_phase / b_phase / x_owner / r_stage). It CANNOT
-#    read current recordings, which use the 89-col schema (met_s / ascent_phase / att_point_deg / ...).
-#    For CURRENT + future flights use  plugin/tools/assess_flight.py  instead. This is kept only to read
+#    read the later recorder's schema (met_s / ascent_phase / att_point_deg / ... — 135 names in
+#    FlightRecorder.cs's Schema[], 136 in the last flown header, per docs/AUTOPILOT_RECOVERY_AUDIT.md
+#    §3.1). For that schema use  plugin/tools/assess_flight.py  instead. This is kept only to read
 #    the historical flight_*.csv corpus (pre-2026-08-26). Do not extend it — extend the tools/ one.
 #
 # KEPT, not deleted (owner decision via the overseer, 2026-09-02, S8): this is autopilot-era tooling,

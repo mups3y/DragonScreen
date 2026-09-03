@@ -1806,7 +1806,7 @@ already are).
   outcome — the same three pieces in the same order. **(2) needs an `OVERRIDE` you must type yourself**
   (C1.12): no build chat can grant it, and this one has not.
 
-### H1 [S] Housekeeping — INDEX/salvage + mark the two now-stale docs superseded — **TODO**
+### H1 [S] Housekeeping — INDEX/salvage + mark the two now-stale docs superseded — **DONE 2026-09-04**
 - **Read:** the S58 stray (below), G5a-Q3's RESOLVED block (`docs/BUILD_PLAN.md`, "Open questions for the
   owner"), R1 §5.4.
 - **Build (original scope, Phase 0):** `S58` INDEX entries; salvage `docs/flights/README.md` +
@@ -1819,6 +1819,22 @@ already are).
   unamended" claim is now false).
 - **DONE when:** INDEX complete, both docs banner-marked, the two named errors fixed, `build.py test` green
   (docs-only, no preview gate).
+- **Done 2026-09-04.** `INDEX.md`: added `MECHJEB_MISSION_TUNING.md` (§3, now PARTLY SUPERSEDED),
+  `KER_DATA_RESEARCH.md` (§2) and `SCREEN_LIVENESS_AUDIT.md` (§1) — closes **S58**. Salvaged
+  `docs/flights/README.md` (146 lines) and `docs/F9I_BOOSTER_TARGETS.md` (53 lines) verbatim from
+  `8b81816^`, both index-listed (§3) and removed from §7's deleted-set list. Fixed
+  `MECHJEB_MISSION_TUNING.md:252`'s "the tooling already exists" claim — split ANALYSIS tooling (exists,
+  `assess_flight.py`/`tuning_db.py`) from the RECORDER that feeds it (deleted 2026-09-01, not yet rebuilt as
+  BlackBox/S59). Fixed `plugin/tools/assess_flight.py`'s stale "CURRENT 105-col" header — it now cites R1's
+  measured ground truth (135 names in `FlightRecorder.cs`'s `Schema[]`, 136 in the last flown header, per
+  `AUTOPILOT_RECOVERY_AUDIT.md` §3.1) instead of an unsourced number, and no longer claims to read anything
+  "current" since no live recorder exists; `plugin/build/assess_flight.py`'s contradicting "89-col" claim
+  fixed the same way for consistency between the two files. Banner-marked `MECHJEB_MISSION_TUNING.md` §2.2
+  (boostback-RTLS-only, superseded by §B16.2) + §2.4 (no-craft-files + by-position engine procedure, both
+  false — 16 `.craft` pairs exist, §B16.4 settled module-role binding) and `BOOSTER_RECOVERY_ARCHITECTURE.md`
+  (staged-focus + MechJeb-module-mapping claims, superseded by §B16.5/§B16.7), all as PARTLY SUPERSEDED —
+  see `BUILD_PLAN.md` §B12.7/§B16.2/§B16.4/§B16.7. `build.py test` green (2966+ checks, all suites pass);
+  docs/comment-only, no preview gate per this line's own done-criteria. No open questions.
 
 ### M1 [S] Mod-first evidence sweep — before B1 — **DONE** *(2026-09-04: `docs/reference/INSTALLED_MODS.md`
   created from in-repo owner/overseer evidence + public research — 17-mod list, all five named candidates
@@ -1843,7 +1859,7 @@ already are).
   recorded search result; anything found-but-not-installed is written up as an Open Question (C1.14), never
   installed.
 
-### LZ1 [S] LZ/droneship sourcing — the per-mission table + the two missing statics — **TODO**
+### LZ1 [S] LZ/droneship sourcing — the per-mission table + the two missing statics — **DOING**
 - **Read:** §B16.9 in full (the two-file KK placement schema is already there).
 - **Build:** Source the per-mission craft-name → recovery-target table as REAL FLIGHT DATA (§1.4 —
   verified-real first, marked where inferred). The 16 owner-supplied `docs/reference/<mission>.craft` files
@@ -4202,7 +4218,7 @@ S37 / S42 own that camera and are HELD), but noted so a future tuning session do
 three knobs that cannot move anything. **DONE when:** each item is either harvested into a reachable surface
 or explicitly retired with a note. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H36/H39/H43/H44 + owner Q1.
 
-### S58 [S] `docs/INDEX.md` is missing the three newest research docs — **TODO** — [TIER 2: hygiene]
+### S58 [S] `docs/INDEX.md` is missing the three newest research docs — **DONE 2026-09-04 (H1)** — [TIER 2: hygiene]
 Logged by **G4** (2026-09-03), noticed while making G4's C7.1 consistency pass over `INDEX.md`. `INDEX.md` is
 "what every other doc is and how fresh it is" (CLAUDE.md points every session at it), but three `docs/` files
 have no entry at all: **`MECHJEB_MISSION_TUNING.md`** (S48 — now §B16's per-setting recipe, so a session that
