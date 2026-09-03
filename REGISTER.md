@@ -4762,3 +4762,59 @@ finding (this file's line 4736-ish, now **S66**) before noticing the collision. 
 Not LZ1's to finish or commit (C1.1/C1.11) — left untouched, staged by no one. Logged so **the next session
 does not reuse "S65" either**, and so the owner knows there is real, apparently owner-directed work sitting
 uncommitted in the tree from outside this session.
+**RESOLVED 2026-09-04 by S65 (below).** That work was owner-directed after all; the tree was clean again at
+the start of the S65 session (`git status` empty at `a720e33`), so nothing was recovered — S65 redid it as a
+declared task, took the number the header had already claimed, and committed it. **S65 is now used; the next
+free number is S68.**
+
+---
+
+### S65 [O] Redraw the Dragon PROPULSION schematic in DisplayList — the crude wedge is gone — **DONE 2026-09-04** — [TIER 2: real defect — the page contradicted its own caption]
+Owner-directed task, given directly as the session prompt (not previously in this register — S65 written by
+the task itself; the number is the one **S67** above had already reserved for exactly this work).
+**The defect.** The Prop page's vehicle illustration was a crude wedge with a blank rectangle for a trunk,
+and it parked all four Draco quads at one MID-BODY station. Its own on-screen text already said "16 in 4
+quads, 8 SuperDracos in 4 pods of 2" — the drawing did not agree with it, and the radial arrangement (which
+quad is where around the hull) was not shown at all. That is the accuracy gap the owner raised.
+**What was done.** `plugin/src/pure/PropSchematic.cs` now draws an accurate Crew Dragon in horizontal
+profile — hinged nosecone over the docking mechanism, conical pressure vessel, **four Draco quads at the
+FORWARD shoulder**, four SuperDraco engine pods in raised sidewall fairings (the fairing *is* the silhouette
+over its span), windows, the convex PICA-X base, the claw umbilical, and the finned trunk with its solar /
+radiator split — with the reference's own seven callouts (NOSECONE · 16x DRACO THRUSTERS · WINDOWS · ENGINE
+POD · 8x SUPERDRACO ENGINES · UMBILICAL · FIN) and a new **AXIAL KEY**: a looking-forward section showing the
+four engine pods at 0/90/180/270 and the four Draco quads clocked 45 deg off them. The four QUAD A–D rings
+moved to the page corners **in clock order** (A upper-right, B lower-right, C lower-left, D upper-left) so
+their placement on the page IS their placement around the hull, and the key's marks are lit by the SAME
+`QuadDuty(s, q)` that lights each ring — the two cannot disagree.
+**What was NOT touched.** `ThrusterDuty()` / `QuadDuty()` / `MaxDuty()` — the live RCS-demand model — are
+byte-identical; `FigmaUINavTest.PropSchematicDuty()` still guards them. §14.4(f) respected: a live thing did
+not regress to static art. Still vector, still `DisplayList`, still rendered identically by `ScreenPainter`
+and `PreviewMain`. No other page, no `PanelMap.cs`, no `REAL_DRAGON_SCREENS.md`, no `BUILD_PLAN.md`, and the
+3D-render / turntable workstream untouched (owner: *"3D renders are to be left alone"*).
+**⛔ Licence (owner decision, 2026-09-04, via the overseer).** The arrangement reference is a commercial
+third-party SpaceX blueprint poster: **REDRAWN, never cropped, never trace-copied, and the image is NOT in
+this repo and must never be added** (the mod is publicly distributed and goes GPLv3 at the MechJeb embed,
+§B2/§B3). Only its written element list / arrangement was used — facts, not protected expression. Stated in
+the file header and in `docs/ART_SPEC_DRAGON.md` §0.
+**⚠ No dimension is asserted.** §8, §B11 and `docs/reference/craftdump.csv` were searched and **none of the
+three authorities carries a linear dimension for Dragon**; the poster is barred from evidencing one (its two
+versions disagree). So the profile is drawn to PROPORTION only, no metre figure reaches the glass, and the
+old header's unsourced "4 m across / 4.4 m capsule / 3.7 m trunk" claim was removed. Recorded in
+`ART_SPEC_DRAGON.md` §4.
+**Verified (C1.3, preview gate fully applied).** `python plugin/build.py test` — ALL SUITES PASSED.
+`python plugin/build.py preview` — no `OVERFLOWED` warning; Prop renders at **286 commands** against a 360
+ceiling. PNGs INSPECTED, full-page and at 2× crop: `ui_vehiclepropulsion.png` (idle — quads read OFF, bars
+empty, Draco Duty 0 %), `ui_vehiclepropulsion_firing.png`, `ui_vehiclepropulsion_kerabsent.png`,
+`ui_vehiclepropulsion_alerts.png` (unchanged — the ALERTS view does not use this drawing). Per-page QC:
+every string inside its box, no overlap, no clipping, no leader crossing another leader or running inside a
+solid; the key's A/B/C/D letters agree with the corner rings. Two defects were found in the first draft by
+looking at the PNG and fixed before DONE — the fairing drawn *over* the bare cone (a floating ridge) and
+solid-filled windows that read as grey blocks.
+**Outputs (C1.11, nothing else):** `plugin/src/pure/PropSchematic.cs` · `docs/ART_SPEC_DRAGON.md` (new) ·
+`docs/INDEX.md` (one entry) · this line · one local commit. NOT pushed (C1.5).
+**Batched owner questions (C1.9), posed per C1.13:** three, written into the deliverable at
+`docs/ART_SPEC_DRAGON.md` §6 — (Q1) confirm the 45-deg clocking between the Draco quads and the engine pods,
+which this chat had to ASSERT because the poster is not in the repo and must not be added (C7/§0); (Q2)
+whether the FIN callout should carry a count, which nothing in the repo evidences; (Q3) whether the callout
+text at reference size 22 is big enough on the glass — a PNG cannot settle it, and S38 has already shown
+once that this console's oblique viewing angle beats a PNG judgement. Recommendations: 1 / 1 / 1.
