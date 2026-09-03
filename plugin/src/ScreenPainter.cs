@@ -763,6 +763,14 @@ namespace DragonScreen
             // and that is a small fraction of a mission.
             ScaledPlanetRenderer.Idle();
 
+            // Re-read PluginData/tuning.cfg so a [Tunable] can be dialled while looking at the glass
+            // (S44 - nothing called this before, so the file was inert and the trims were dead).
+            // The note below is right that this Update runs once per SCREEN, three times a frame -
+            // and Poll is the same shape as the two Idle() calls above it: a global static that is
+            // safe to call redundantly because it guards itself, in this case to one file-stat per
+            // second. Three calls a frame therefore still cost one stat a second, not three.
+            Tuning.Poll();
+
             // ---- ⛔ THE AUTOPILOT USED TO BE TICKED FROM HERE. IT MUST NOT BE. ----
             // FlightCommands, AutoPilot and FlightRecorder now live in FlightDriver, a flight-scene
             // KSPAddon. This object belongs to the IVA, and the IVA is destroyed whenever the Dragon

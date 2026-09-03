@@ -186,6 +186,16 @@ namespace DragonScreen
             // Props exist in the editor's IVA preview too. Only flight has a vessel worth drawing.
             if (!HighLogic.LoadedSceneIsFlight) return;
 
+            // ---- BRING THE TUNABLES UP (S44) ----
+            // Tuning catalogues every [Tunable] field, writes PluginData/tuning.reference.cfg and
+            // applies PluginData/tuning.cfg. It has to be CALLED, and until S44 nothing called it -
+            // so tuning.cfg was silently inert and every [Tunable] sat pinned to its code default.
+            // Here because this is the first DragonScreen code to run in a flight scene. Build()
+            // opens with `if (built) return;`, so the three screen modules on the prop cost one
+            // build, and it catches its own exceptions - a tuning failure must never take a screen
+            // with it, which is also why it sits outside the try below rather than inside it.
+            Tuning.Build();
+
             // FAIL SOFT AND SAY SO. A throw here takes the prop - and possibly the whole IVA - with
             // it, and the failure mode we actually expect (a transform name that is subtly wrong) is
             // one where the game is otherwise perfectly healthy. Log, dump what IS there, carry on.

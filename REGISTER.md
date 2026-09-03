@@ -2758,3 +2758,65 @@ currently ignores it. Wiring the existing control, rather than inventing a new s
 option and probably the right one.
 **DONE when:** an RSS-scale LEO orbit is legible on this plot — the ring/arc separated from the limb and the
 apsis markers not overlapping it — with the closed Kerbin-scale case unchanged, judged on both preview PNGs.
+
+### S44 [S] `Tuning` was never invoked — every `[Tunable]` field was dead — **WIRED + INSTALLED 2026-09-03; in-sim confirm rides S18's visit** — [TIER 2: real defect]
+Found by **S18**, 2026-09-03, while verifying the walk-sheet's own instructions before the owner's capsule
+visit — i.e. found by checking advice rather than by using the feature, which is why it survived this long.
+**`Tuning.Build()` and `Tuning.Poll()` have ZERO call sites in the whole plugin.** `plugin/src/Tuning.cs`
+compiles (it is in `plugin/src/`, so `build.py` builds it) but nothing ever reaches it: it is a
+`public static class` with no `[KSPAddon]`, it is not a `MonoBehaviour`, and no other file references the
+type at all — `grep -rn "Tuning\." plugin/src/ --include=*.cs` outside the file itself returns nothing.
+**The consequences, all silent:**
+- `GameData/DragonScreen/PluginData/tuning.reference.cfg` — the catalogue `WriteReference()` promises is
+  "regenerated every flight" — **is never written**, so the feature is undiscoverable from the install.
+- `tuning.cfg` is **never read**, so an override file looks right, is well-formed, and does nothing.
+- Every `[Tunable]` field is therefore **pinned to its code default for ever**:
+  `ScaledPlanetRenderer.FovDeg` (60), `AzimuthTrimDeg` (0), `PitchTrimDeg` (0), plus the
+  `DockingCamRenderer` tunables.
+- Nothing logs a warning, because the code that would log is the code that never runs.
+**Why this matters beyond hygiene, and why S18 hit it:** `ScaledPlanetRenderer`'s own header says these
+exist *"so the framing can be dialled in the capsule and the answer read straight off the file rather than
+guessed between restarts"* — that is the designed answer to **G11(c)**, the -55/+30 3/4 framing judgement,
+and it is exactly the kind of question that otherwise costs one restart per attempt (C1.6, restarts are the
+scarce resource). So the one feature built to make a glass judgement cheap is the one feature that was
+never plugged in.
+**The fix looks like two call sites, both into methods that are already idempotent/self-throttling by
+design** — which is itself evidence this was meant to be wired and simply never was:
+`Tuning.Build()` in `DragonScreenMonitor.Start()` (`plugin/src/DragonScreenMonitor.cs:184`; `Build` opens
+with `if (built) return;`) and `Tuning.Poll()` in `ScreenPainter.Update()`
+(`plugin/src/ScreenPainter.cs:756`; `Poll` self-limits to one file-stat per second).
+**DONE when:** a `tuning.cfg` override changes a `[Tunable]` field live in flight within ~1 s,
+`tuning.reference.cfg` is written on flight entry with the full catalogue and its code defaults, and
+`build.py test` is green. ⚠ Verifying it needs the capsule, so the in-sim half rides an owner glass go
+(C1.12); the wiring and the test do not.
+
+- **WIRED 2026-09-03, on the owner's explicit in-chat direction ("wire it now, KSP still closed"), inside
+  S18's open install gate.** Exactly the two call sites the diagnosis named, both into methods already
+  built to be called this way:
+  - `Tuning.Build()` in **`DragonScreenMonitor.Start():197`**, immediately after the
+    `LoadedSceneIsFlight` guard — the first DragonScreen code to run in a flight scene. `Build` opens
+    with `if (built) return;`, so the three screen modules on the prop cost one build, and it catches its
+    own exceptions, which is also why it sits OUTSIDE the `try { Init(); }` rather than inside it: a
+    tuning failure must never take a screen with it.
+  - `Tuning.Poll()` in **`ScreenPainter.Update():772`**, beside the existing `DockingCamRenderer.Idle()` /
+    `ScaledPlanetRenderer.Idle()` calls. That method's own comment warns it runs **once per SCREEN, three
+    times a frame** — which is fine here for the same reason it is fine for the two `Idle()` calls it
+    now sits with: `Poll` is a global static that guards itself, to **one file-stat per second**, so three
+    calls a frame still cost one stat a second. The comment at the site says so, so the next reader does
+    not have to re-derive it.
+- **Verify (C1.3):** `python plugin/build.py test` green — every suite 0 failed, counts unchanged
+  (306 / 2323 / 747 / 29 / 1773 / 18 / 67 / 158 / 13 / 6 / 15 / 11 / 724 / 5061 / 263 / 14). **No new
+  compiler warnings** — the same set as before, with `ScreenPainter`'s existing CS0162 line moving
+  930 → 938 because lines were added above it. No pure/display change, so no preview to re-inspect
+  (C1.3's docs/harness carve-out reasoning: this is glue lifecycle only, it draws nothing).
+  **Reinstalled** with KSP and CKAN confirmed closed; `DragonScreen.dll` the only file written, and a
+  second run wrote **nothing** — the self-consistency check.
+- ⚠ **ONE WRINKLE WORTH KNOWING, NOT FIXED HERE.** `Build()`'s `built` flag is **static**, so the
+  catalogue is written once per **KSP session** (at the first flight-scene entry), not once per flight as
+  `WriteReference()`'s own file header claims ("regenerated every flight"). Harmless — `Poll()` still
+  picks up `tuning.cfg` edits made at any time afterwards, including a file created after `Build` ran —
+  but the header sentence is inaccurate. Left alone deliberately: changing `Tuning`'s semantics is more
+  than the wiring the owner asked for (C1.1), and it costs nothing to know.
+- **What is still open:** the two in-sim halves of the DONE-when — does `tuning.reference.cfg` actually
+  appear in `GameData/DragonScreen/PluginData/`, and does an override move a `[Tunable]` live within ~1 s.
+  Both are answered by **S18's visit**, at no extra cost, because G11(c) is about to use the mechanism.
