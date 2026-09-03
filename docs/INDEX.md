@@ -190,6 +190,13 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
   itself is the **LZ1** task's to source, never to invent — §1.4), and the manifests are a **cross-check** on
   what the 20-part dump is missing. ⚠ **Evidence, not a part table** — bindings still resolve at runtime
   against the dump (§B12.7).
+- **[LZ_RECOVERY_TABLE.md](reference/LZ_RECOVERY_TABLE.md)** [REF] — **LZ1** (2026-09-04): the per-mission
+  craft-name → real recovery-target table (8 droneship, 8 RTLS, all sourced against public flight records),
+  the KK placement schema + real coordinate for the `Fossil_LZ1` RTLS pad, and the two missing droneship
+  (JRTI/ASOG) placements blocked on a real coordinate — no single citable point exists (§1.4 tier-3, needs
+  owner discussion, its own Open Questions). ⚠ Flags a correctness disagreement in `MissionProfile.cs`'s
+  `RecoveryMode` for 6 missions (Crew-7/8/9/10, Ax-4, Crew-11 — coded `Droneship`, really `RTLS`) — logged
+  as a stray, not fixed here (out of LZ1's scope).
 
 ## 4. Historical — background only, do NOT build from these
 

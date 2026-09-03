@@ -1859,7 +1859,7 @@ already are).
   recorded search result; anything found-but-not-installed is written up as an Open Question (C1.14), never
   installed.
 
-### LZ1 [S] LZ/droneship sourcing — the per-mission table + the two missing statics — **DOING**
+### LZ1 [S] LZ/droneship sourcing — the per-mission table + the two missing statics — **NEEDS-WORK 2026-09-04**
 - **Read:** §B16.9 in full (the two-file KK placement schema is already there).
 - **Build:** Source the per-mission craft-name → recovery-target table as REAL FLIGHT DATA (§1.4 —
   verified-real first, marked where inferred). The 16 owner-supplied `docs/reference/<mission>.craft` files
@@ -1873,6 +1873,20 @@ already are).
 - **DONE when:** the table exists (either `docs/reference/` or a new doc, INDEX-listed either way), both
   missing droneships are placed and group-centre-verified, an RTLS target is confirmed placed, `build.py
   test` green.
+- **Result: NEEDS-WORK — 2 of 3 done-criteria met, one blocked on a real source.** Delivered
+  `docs/reference/LZ_RECOVERY_TABLE.md` (INDEX-listed): the full 16-mission table, sourced and verified
+  against public flight records (8 droneship, 8 RTLS — 2 corrections over the `.craft` files' generic
+  wording, 1 direct correction of a `.craft` file's wrong claim for Ax-4); the RTLS target **confirmed
+  placed** — `Fossil_LZ1` at LZ‑1's real surveyed coordinate `28.48583, -80.54444`, the same pad all 8 RTLS
+  missions used. **NOT done:** the two missing droneships (JRTI, ASOG) are **not placed** — no single real
+  coordinate exists for either (droneship position is mission-variable by design; a wide search, including
+  community RSS/RO KK packs, found only a documented range, never a citable point), and CLAUDE.md §1.4
+  reserves inventing one for **joint owner discussion**, not a build chat's unilateral call. Proposed
+  candidates + the schema are in the doc, awaiting the owner's pick (see the batched question below).
+  `build.py test` green (docs-only change; no code touched, preview gate does not apply). ⚠ Also logged
+  **S66**: sourcing this table surfaced that `MissionProfile.cs`'s `RecoveryMode` disagrees with the real
+  record for 6 missions (Crew-7/8/9/10, Ax-4, Crew-11 — coded Droneship, really RTLS) — out of LZ1's scope,
+  not fixed here.
 
 ---
 
@@ -4718,3 +4732,22 @@ the harness renders the authoritative titles, items and CREW/AUTO kinds. Do **no
 match the preview — R1 §5.1: its text is §1.4 source-of-truth material.
 **DONE when:** `build.py preview` renders the gate card from the catalog, `page0_flight_gate.png` shows G7's
 real items with the right crew/auto split, and `build.py test` is green.
+
+### S66 [S] `MissionProfile.cs`'s `RecoveryMode` is wrong for 6 missions — coded Droneship, really RTLS — **TODO** — [TIER 2: real defect]
+Logged by **LZ1**, 2026-09-04 (C1.1 — found while sourcing the per-mission recovery table against public
+flight records; out of LZ1's own declared scope, which produces the table, not pure/ edits).
+**The finding.** `plugin/src/pure/MissionProfile.cs:84-92` codes **Crew-7, Crew-8, Crew-9, Crew-10, Ax-4 and
+Crew-11** as `RecoveryMode.Droneship`. All six actually flew **RTLS to LZ‑1** — sourced independently per
+mission (Wikipedia mission articles/launch-list tables, NASASpaceFlight, Spaceflight Now; full citations in
+`docs/reference/LZ_RECOVERY_TABLE.md` §1/Sources). The W4/G5c "all 16 `.craft` files agree with the restored
+table" check (this register, the W4 entry) only verified the two IN-REPO artifacts against each other — the
+`.craft` files themselves say generic "droneship" for these six (never named a specific ship or RTLS), so
+that check never touched the real-world record. LZ1 did, and the two disagree.
+**Why it matters:** `RecoveryMode` is what a booster-recovery autopilot (§B16, Part B) would branch on to
+pick ASDS-hoverslam vs. RTLS-boostback guidance — six missions would fly the wrong recovery profile if this
+ships unfixed. It is TIER 2 (a real defect in restored, committed code), not a docs nit.
+**Build:** correct the six `RecoveryMode.Droneship` → `RecoveryMode.RTLS` at `MissionProfile.cs:84-92`
+(Crew-7/8/9/10, Ax-4, Crew-11), update the header's "all 16 agree" claim to say what was actually checked,
+and re-run `MissionProfileTest.cs` (it may also assert the wrong value and need updating).
+**DONE when:** `build.py test` green, the six lines corrected, and the header no longer overstates what the
+W4 cross-check covered.
