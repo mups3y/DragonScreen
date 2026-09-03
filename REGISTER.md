@@ -1710,8 +1710,93 @@ visit if it is done at all. Any
 T13/T14 criterion that turns out to need the capsule belongs here too rather than in its own visit — that
 is what this line is for.
 
-**DONE when:** both re-checks are confirmed on glass, or a NEEDS-WORK note says which way each is still off
-and what the next step would cost.
+---
+
+## ⏳ THE PASS IS RUNNING — 2026-09-03, in orbit. (Session record, updated as answers come in.)
+
+**GATE, recorded as the owner stated it IN THIS CHAT (C1.12).** The owner opened `install` + glass time for
+**THIS ONE SESSION**, scoped to **S18** and explicitly including **G11/S10b, G12/S42 and S37**, on
+2026-09-03. **It CLOSES with the session** — the standing state returns to preview-only after, and nothing
+here widens it. The owner also set the SETUP the last visit lacked: the vehicle **in orbit**, with a
+station/ISS **target** acquired.
+
+**STEP 1 — INSTALL: DONE.** KSP and CKAN both confirmed **closed** (no matching processes) before and after.
+`python plugin/build.py install` ran clean: every suite **0 failed** — layout 306, sweep 2323, page 747,
+display components 29, panel+sequence 1773, globe-projection 18, planet-geometry 67, orbital toolbox 158,
+octaweb 13, MissionPhase 6, StageStats 15, KerData 11, Figma nav 724, turntable 5061, touch wiring 263,
+log-gate 14. **`DragonScreen.dll` was the ONLY file written** — every art/cfg/sound file reported
+`unchanged` — and a **second install run wrote nothing at all**, which is the self-consistency check S17
+established. So the installed build is now HEAD (`2b01ca7`), and it carries **S40, S41 and the S10b camera
+for the first time**. KSP needs a FULL RESTART to pick up the DLL. No `csc.rsp` churn (S11 gitignored it).
+
+**⭐ G12 PART 2 — ANSWERED WITHOUT SPENDING ANY GLASS TIME, AND JUST IN TIME.** The full `Texture slots:`
+line — the input S42 called "the missing input the fix needs, and it exists nowhere else" — was **still in
+`KSP.log` from the owner's 13:44–13:53 flight**, and was captured **before** the reinstall + restart
+overwrote it. It is written verbatim into **S42**, with the verdict: **21 slots, 19 of them `null`**
+(`_ColorMap`, `_EmissiveMap` and every `_MainTex{Low,Mid,High,Steep}` among them), the only two non-null
+being the **4×4 `_MainTex` stub** and the **4096×4096 `_Skybox`**. The list is **exhaustive** — `BodyMap`
+builds it from `Material.GetTexturePropertyNames()` — so **no slot on `Custom/HapkeScaled` carries a colour
+map**, and S42's "read a named, verified slot" branch is **ruled out**, not merely unproven. That leaves
+S42 with exactly one open question, and it is the camera one (G12 part 3 = G11(a)).
+
+**A WALK-SHEET was prepared for the capsule visit** (scratchpad, not a repo output — C1.11): the G11-first
+order, what a live camera looks like versus the known dead state, the ⚠ that **the orbit line WILL sit
+wrong and that is S37's evidence rather than a G11 failure**, the two re-checks with their constants and
+their limits, and G1–G10 in walking order. It also carries the thing that makes **G11(c) settleable in one
+visit**: `ScaledPlanetRenderer.FovDeg` / `AzimuthTrimDeg` / `PitchTrimDeg` are `[Tunable]`, and `Tuning`
+re-reads `GameData/DragonScreen/PluginData/tuning.cfg` **live, in flight, within ~1 s** — so the -55/+30
+framing can be dialled against the real render and the answer read straight off the file, with no rebuild
+and no second restart.
+
+### THE RESULTS TABLE (S17 format — one row per criterion, the owner's answer verbatim)
+| # | Check | The owner's answer | Outcome |
+|---|---|---|---|
+| **G11(a)** | Does the scaled-space RT render the globe, and does `LIVE 3D — NO SIGNAL` clear to `LIVE CAMERA`? | — | ⏳ **PENDING** — needs the restart + orbit. **Answer this first: it decides G12/S42 and gates S37.** |
+| **G11(b)** | Does the orbit line track, and DISAPPEAR behind true geometry? | — | ⏳ **PENDING** |
+| **G11(c)** | Does the -55/+30 3/4 framing read at cabin distance; does the limb jump on the switch? | — | ⏳ **PENDING** — live-tunable in flight, so a wrong answer is a number, not a rebuild. |
+| **G12(1)** | MAP + flat disc under RSS: body texture, or grid + track only? | — | ⏳ **PENDING** *(predicted: grid + track only — there is no colour map to find)* |
+| **G12(2)** | The full `Texture slots:` list, read out of a real RSS flight and written into S42 | *(read from `KSP.log`: 192 occurrences, one body + shader, zero `body map` successes)* | ✅ **ANSWERED — S42 updated.** 19/21 slots `null`; only a 4×4 stub and the skybox. **No slot to wire.** |
+| **G12(3)** | Does the CAMERA view show a real globe regardless, as §2 predicts? | — | ⏳ **PENDING** — this is all that is left of S42. |
+| **S37** | Re-project the overlay through `WorldToViewportPoint` + `PlanetGeom.Occluded` (§2.2) | — | ⏳ **PENDING G11(a).** Deliberately NOT built blind — see the note below. |
+| **re-check 1** | T11b gearing — `FramesPerSlot` 48: is one sweep now one revolution? | — | ⏳ **PENDING** |
+| **re-check 2** | T10 click level — `PanelAudio.Volume` 0.85: right, still quiet, or too far? | — | ⏳ **PENDING** *(1.0 is the last constant step)* |
+| **G1** | The approach chord + target diamond, under a REAL acquired target | — | ⏳ **PENDING** *(unanswerable last visit — the vessel was landed with no target)* |
+| **G2** | VEHICLE-family readouts against a live vessel | — | ⏳ **PENDING** |
+| **G3** | The six subsystem sub-tabs + Prop band; CommNet S-BAND rows; Power source/count | — | ⏳ **PENDING** |
+| **G4** | Procedure + prox-ops readouts against a real approach | — | ⏳ **PENDING** |
+| **G5** | Can a finger hit ONE chute action row? | — | ⏳ **PENDING** |
+| **G6** | One flag, two surfaces — page and lower console plate agree | — | ⏳ **PENDING** |
+| **G7** | Does a dead docking pad read as deliberate, or as broken? | — | ⏳ **PENDING** *(reads-as-broken → NEEDS-WORK decision, not a constant)* |
+| **G8** | The FUNCTIONS / ALERTS toggle hit band | — | ⏳ **PENDING** |
+| **G9** | PRECISE at 22px — legible at cabin distance? | — | ⏳ **PENDING** |
+| **G10** | Suit Leak Check: lit-vs-dim, repair→rerun flow, ΔP legibility | — | ⏳ **PENDING** |
+
+### ⛔ WHY S37 WAS NOT BUILT AHEAD OF THE LOOK — a deliberate call, with the sizing done
+The brief allowed S37 to ride this visit and said to NEEDS-WORK it if it outgrew the visit's appetite. It
+was **sized first, not skipped**, and the sizing is the argument:
+- The pure half is **already built and tested** — `PlanetGeom.Project` (perspective → viewport),
+  `ViewportToPanel` and `Occluded` all exist and are covered by the 67-check planet-geometry suite. That is
+  not the hard part.
+- The hard part is the **data**. The overlay (`PlanetOverlay`) carries **body-fixed lat/lon/ratio**, and its
+  track arrays are shared refs to `VesselData`'s **ground-track** buffers, which are *rotation-corrected* —
+  a ground track, not an inertial path. §2.2 wants `getPositionAtUT` sampled over a period and converted
+  with `LocalToScaledSpace`. Over one LEO orbit Earth turns ~22°, so **re-using the ground track as a 3D
+  orbit would draw a visibly wrong curve**. S37 therefore needs new inertial scaled-space sample buffers,
+  the camera's `PlanetCamFrame` + fov + aspect published into `PageState`, a pure projection path with the
+  orthographic one kept as the no-camera fallback, and tests. That is a task, not a constant.
+- And it **cannot be judged until G11(a) says the camera renders at all**. Shipping an unverifiable
+  re-projection into the one glass visit would confound G11(b) — S10b's own closing criterion — with a
+  brand-new untested projection, and leave no way to tell which of the two was wrong. Today's orthographic
+  overlay is at least a **known, documented** behaviour, which is what makes G11(b) readable.
+
+**DONE when — refreshed 2026-09-03 to the full list this pass actually carries:**
+1. **G1–G12** are each either confirmed on glass or carry a NEEDS-WORK note saying which way it is off and
+   what the next step would cost;
+2. **both S17 re-checks** (gearing, click level) are answered the same way;
+3. **S10b's three in-sim criteria** are answered — the line comes off HELD, to DONE or NEEDS-WORK;
+4. **S42/G12** is resolved (subsumed by the camera route) or carries a NEEDS-WORK;
+5. **S37** is done or carries a NEEDS-WORK with what is left;
+6. the results table above is filled in, and the pass is committed locally (C1.5). The gate is then spent.
 
 ### S19 [S] `VehicleOverviewPage`'s checklist copy mis-transcribes the reference — **DONE 2026-09-02**
 Found by T13a while reading the reference source for the live-data wiring (not fixed — C1.1, and it is
@@ -2618,6 +2703,38 @@ rejected by `MinMapPixels = 64`) and the NAV **MAP** view — plus the strip-tex
   written (S10b) and does exactly that. So the **3D PLANET** view may already be immune to this under RSS,
   while the flat **MAP** quad — which genuinely needs a bitmap — is not. Testing that is one look at one
   screen, and it is folded into **G12**.
+- ✅ **THE FULL SLOT LIST — READ OFF A REAL RSS FLIGHT, 2026-09-03 (S18's glass session, G12 part 2).**
+  This is the input the line said "exists nowhere else", and it was still in `KSP.log` from the owner's
+  13:44–13:53 flight, so it was captured BEFORE the reinstall + restart overwrote it. **192 occurrences,
+  one body, one shader (`Earth | Custom/HapkeScaled`), and not one `[DragonScreen] body map …` success
+  line in the whole session** — Earth never resolved a map. Verbatim, the slot list from the warning:
+
+  ```
+  Texture slots: _MainTex=4x4, _BumpMap=null, _OcclusionMap=null, _ResourceMap=null, _MainTexLow=null,
+  _BumpMapLow=null, _InfluenceMap=null, _MainTexMid=null, _BumpMapMid=null, _MainTexHigh=null,
+  _BumpMapHigh=null, _MainTexSteep=null, _BumpMapSteep=null, _DisplacementMap=null, _ColorMap=null,
+  _HeightMap=null, _EmissiveMap=null, _AtmosphereRimMap=null, _Skybox=4096x4096, _ScatteringTex=null,
+  _SurgeTex=null
+  ```
+
+  **This is EXHAUSTIVE, not a candidate list** — `ImageStore.BodyMap` builds it from
+  `Material.GetTexturePropertyNames()`, i.e. every texture property the material declares, each with its
+  assigned texture's dimensions. So it can be read as a verdict rather than as a hint.
+- ✅ **THE VERDICT: no slot on `Custom/HapkeScaled` carries a colour map. This is the line's SECOND
+  branch, and it is settled on evidence rather than by guessing.** Twenty-one slots; **nineteen are
+  `null`**, including every one that could plausibly have held it — `_ColorMap`, `_EmissiveMap`,
+  `_MainTexLow/Mid/High/Steep`. The two that are not null are the two that are no use:
+  `_MainTex` is the **4×4 stub** (correctly rejected by `MinMapPixels = 64`) and `_Skybox` is the
+  **4096×4096 skybox**. So RSS's Hapke scaled shader does not colour the globe from a bitmap this
+  material exposes at all, and **there is no slot to wire** — the "read a named, verified slot" branch
+  is not merely unproven, it is **ruled out**. The line's own warning is confirmed in the strongest
+  form: a size-ranked fallback would have picked `_Skybox` and painted the NAV map with the sky. Not
+  building it was correct.
+- **What is therefore LEFT of this line:** exactly one question, and it is the camera one —
+  **G12 part 3 / G11 part (a)**: does the 3D PLANET camera show a real globe regardless, as §2 predicts
+  (a camera renders whatever shader the body wears and never asks for a slot)? If it does, the flat-MAP
+  problem is **SUBSUMED by the camera route**, the honest grid-and-track MAP view stands as the right
+  answer for the flat quad, and this line resolves. That needs the render, which is G11 on the glass.
 - **DONE when:** the full `Texture slots:` list from a real RSS flight is written into this line; and either
   a named, verified slot is read from it (a source, not a guess) and wired with the same `Usable` guard, or
   it is established that no slot on that shader carries a colour map — in which case the honest answer is the
