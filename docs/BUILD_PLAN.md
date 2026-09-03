@@ -949,9 +949,12 @@ what makes the dump authoritative again.
 ### B12.8 Part B starts from RECOVERY, not from scratch (owner, 2026-09-03, via the overseer)
 `docs/AUTOPILOT_RECOVERY_AUDIT.md` (R1) inventoried the flight software deleted on 2026-09-01 and found
 **103 files classified RECOVER-CODE** — pure guidance, glue and tests — plus 77 more to read as evidence
-without making them live. **Part B's first code is therefore a RECOVERY, in FOUR DEPENDENCY-ORDERED WAVES, one
-register task each**, each ending green under the preview-only gate (§0). G5c writes the register lines; this
-section fixes the shape.
+without making them live. **Part B's first code is therefore a RECOVERY, in DEPENDENCY-ORDERED WAVES**, each
+ending green under the preview-only gate (§0). G5c writes the register lines; this section fixes the shape.
+⚠ **Amended by W11, 2026-09-04:** the original shape was *four* waves, *one register task each*. Waves A–D are
+still one task each, but cross-checking R1 §5.2 row by row showed **ten RECOVER-CODE glue files in no wave at
+all** — so `FlightDriver.cs` went to **W10** and the other nine became **Wave E, one register line per file**
+(rider **(c)**), on the owner's decision of 2026-09-04 via the overseer.
 
 **W0 (`plugin/src/CraftDump.cs` + a fresh dump) is already DONE** and sits ahead of Wave A — §B12.7's binding
 rule has nothing to design against without it.
@@ -962,6 +965,7 @@ rule has nothing to design against without it.
 | **B** | `pure/Actuation.cs` + `Actuator.cs` + `test/ActuationTest.cs` | §B12.7's actuation layer. Retires the `Actuator` stub — the first real facade swap. Everything that flies needs it. |
 | **C** | The booster set — `pure/BoosterDescent.cs`, `pure/Hoverslam.cs`, `pure/GridFin.cs`, `test/BoosterTest.cs` (and §B16.8's provenance marking) | §B16. Depends on A (prediction) and B (per-engine actuation). Never flown (§B16.8) — recovered as a **starting point**, not as working code. |
 | **D** | The conductor set — `ModeManager`, `WarpPlan`, `CoastEta`, `MissionConductor`, `CrewProcedureOps` | **This is where most stub collisions land**, so it goes last, when A–C have already proven the pattern. |
+| **E** — **NINE register lines, one file each** (not one task) | The remaining `plugin/src/` glue R1 §5.2 verdicts RECOVER-CODE: `GeometryDump` · `DeployablesControl` · `LandingSiteScan` · `EntrySteering` · `DeorbitBurn` · `ReturnControl` · `AbortControl` · `RendezvousControl` · `DockingControl` — **each with its own §5.1 pure half and its own test** | Added by **W11**, 2026-09-04, on the owner's decision of that date (via the overseer): waves A–D never contained these, so **four facade names had no owner at all**. They are too heterogeneous for one task (a 40 KB never-flown rendezvous controller beside an 8 KB read-only diagnostic) and one lumped line is the C1.7 compaction failure mode — so **one register line per file, in §B12.5 increment order**, each flipping at most ONE facade property. The order and every dependency are rider **(c)**. |
 
 **(a) THE STUB NAMES ARE THE DISPLAY-FACING FACADE — keep them.** `_AutopilotStub.cs:143-150` holds the
 **gen-1** names the screens compile against (`AutoPilot`, `StationApproach`, `DockingOps`, `DeorbitOps`,
@@ -981,6 +985,72 @@ a facade property to match a controller, and do not add a parallel surface besid
   ascent"*. **Flag, loudly:** ascent control is the **ONLY flight-validated subsystem we have** (R1 §4.2 —
   DB-validated, `pe_p95 < 0.4°`). Cutting code out of it is therefore not a tidy-up. It gets **its own register
   line and its own test**, and it is **never a quiet deletion inside another task's diff**.
+
+**(c) WAVE E — THE NINE REMAINING GLUE FILES, AND WHY THEY LAND IN THIS ORDER (W11, 2026-09-04).**
+R1 §5.2 verdicts **sixteen** `plugin/src/` files RECOVER-CODE. Six already have an owner — `Actuator` (Wave B,
+done), `CraftDump` (W0, done), `AscentControl` (**W7**), `Ullage` (**W5**), `MissionConductor` (Wave D /
+**W9**), `CrewProcedureOps` (Wave D / **W10**). **`FlightDriver.cs` (59,523 B, R1's "the Part-B host") is
+owned OUTRIGHT by W10** — the host is not a Wave E file, and no Wave E line restores it; each Wave E line
+instead **grows W10's read-only host** by exactly the dispatch its own controller needs (§B12.6 step (3) →
+§B12.5, one increment at a time). The nine that remain are Wave E, and they are ordered by **verified
+dependency**, not by mission phase:
+
+| # | Line | File (bytes) | Its §5.1 pure half | Facade flipped |
+|---|---|---|---|---|
+| 1 | **W13** | `GeometryDump.cs` (8,122) | — (`pure/Authority.cs` already in tree) | none |
+| 2 | **W14** | `DeployablesControl.cs` (2,828) | — (drives the live `Actuator`) | none |
+| 3 | **W15** | `LandingSiteScan.cs` (4,364) | `SafeLandingSite.cs` | none |
+| 4 | **W16** | `EntrySteering.cs` (9,687) | `Entry.cs` | none |
+| 5 | **W17** | `DeorbitBurn.cs` (6,733) | `DeorbitGuidance.cs` | none |
+| 6 | **W18** | `ReturnControl.cs` (22,827) | `Departure.cs` + `Chutes.cs` | **`UndockOps`, then `DeorbitOps`** |
+| 7 | **W19** | `AbortControl.cs` (23,536) | `AbortResponder.cs` | retires the `AbortControl` + `AbortMode` **stub** |
+| 8 | **W20** | `RendezvousControl.cs` (40,628) | `Rendezvous.cs` + `Phasing.cs` + `RvIntercept.cs` + `NavFilter.cs` | **`StationApproach`** |
+| 9 | **W21** | `DockingControl.cs` (15,447) | `DockApproach.cs` + `DockCapture.cs` + `DockControl.cs` + `DockCorridor.cs` | **`DockingOps`** |
+
+**The spine of the order is `Steering.cs`, and it is a measured split, not a preference.** Rider (b) says
+`Steering.cs` is **NEVER recovered**; its replacement is written fresh against the pinned MechJeb (**T15**).
+Reading the nine files at `8b81816^`, **six of them call it** — `ReturnControl` (13 distinct members),
+`AbortControl` (`Point`×6, `Up`×3, `Prograde`×2, `PointingErrorDeg`, `PointNoRoll`), `RendezvousControl`
+(`Point`×5, `PointingErrorDeg`×4, `Prograde`×2, `Release`), `DeorbitBurn` (`Point`, `PointingErrorDeg`×2,
+`Up`), `DockingControl` (`Point`, `PointingErrorDeg`, `Release`) and `EntrySteering` (`Up`×2 — **geometry
+only**). So:
+- **Lines 1–4 need NO attitude channel** and can land before T15: W13 is isolated (its own `[KSPAddon]`,
+  **zero** references to `Steering`/`Actuator`/`FlightDriver` — it needs no host at all); W14's only calls are
+  `Actuator.DeploySolarPanels` / `.DeployAntennas` / `.RetractSolarPanels`, **all three present in today's
+  `src/Actuator.cs` with matching signatures**; W15 calls only `pure/SafeLandingSite.cs`; W16 calls only
+  `Steering.Up`, a body-up unit vector that is geometry, not a command.
+- **Lines 5–9 all command attitude** and are therefore **gated on T15's fresh steering layer**. A Wave E line
+  must not close that gap by reviving `Steering.cs`, and must not half-wire the facade (rider (a)).
+- ⚠ **`Steering.cs` is also ReturnControl's ENTRY STATE BUS, not just its attitude channel.** It calls
+  `Steering.PredictDownErrAtBank`, `MeasuredBankRad`, `MeasureBc`, `LastSigmaRad`, `FootprintError`,
+  `EntryLoverD` and `SetSplashTarget` — the bank/footprint measurement R1 §5.2 names as **EntrySteering's own
+  job**, parked in the one file that never comes back. **W18 must say where that state lives instead**; this is
+  a design decision inside the line, not a rename.
+
+**Three more rules Wave E inherits, stated so a later chat cannot lose them:**
+1. **A line carries its own pure half and its own test.** The §5.1 files above are RECOVER-CODE and are in no
+   wave either (the same gap **W6** found for `pure/CourseCorrect.cs`); rather than a second pure wave, **the
+   first Wave E line that needs a pure file lands it**, and later lines consume it. Wave A's `Cw`, `Lvlh`,
+   `Lambert`, `Maneuver`, `Trajectory`, `Authority` are already in the tree and are not re-landed.
+2. **One facade property per increment (§B12.5) survives a file that backs two.** `ReturnControl.cs` backs
+   **both** `UndockOps` and `DeorbitOps`. It lands on ONE register line — one file, one restore — but flips the
+   two properties as **two sequenced increments**, undock/departure first, deorbit/return second. §B12.5's rule
+   is about increments, not about register lines.
+3. **Every recovered constant is UN-CONVERGED for RSS-RO unless R1 records it as flown** (§B16.8 ruling 2's
+   marking, applied outside the booster too). In Wave E that binds `pure/Entry.cs`'s 4-band L/D schedule
+   (R1 §7.4 — honestly self-marked, still unmeasured) and `pure/NavFilter.cs`'s noise tunables (R1 §7.4 —
+   regime **unstated**, a defect). `pure/Terminal.cs` stays **RECOVER-REFERENCE**: its own text says its
+   altitudes are Kerbin's.
+
+⚠ **Two Wave E controllers sit under a SETTLED owner decision that hands their job to MechJeb, and a build
+chat must not quietly overrule it.** §B12.3 + §B10.3 (O6, owner 2026-09-03) make the **Docking AP the DEFAULT**
+from the Keep-Out Sphere inward, and §B12.4 has the conductor compose MechJeb **planner ops** for the approach
+because MechJeb's rendezvous *autopilot* is unreliable in RSS/RO. The recovered `DockingControl.cs` (**never
+flown**) and `RendezvousControl.cs` (flown far-field to 109 km only) are the gen-2 hand-written versions of
+exactly those jobs. So W20 and W21 are scoped to what holds under **either** answer — the facade adapter, the
+verified-real geometry gates (`DockCapture`'s IDSS envelope, `DockCorridor`'s KOS breach test), and the
+targeting MechJeb's planner ops need — and the question of whether the recovered servo/FSM ever flies is
+**the owner's** (W11's open question 1). This is also why they are last: the answer arrives before the code.
 
 **The two-generation rule (R1 §0.2) — it prevents a build break, not a style problem.** Two generations of
 flight software **share class names**. **GEN 2** (newest at `8b81816^`) is the recovery target and the whole of

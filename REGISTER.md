@@ -4681,14 +4681,25 @@ sites bound to §B16.1's fresh core (or to nothing, explicitly and honestly, if 
 `BoosterRecovery` facade or the facade still carries a stated reason, and no `BoosterControl` byte is back.
 ⚠ **Ordering:** this line depends on **W10** (the host) and on §B16.1 (the booster core). Do not take it first.
 
-### W10 [O] `src/CrewProcedureOps.cs` + the `FlightDriver` host — the conductor glue, and the only thing that ticks it — **TODO** — [TIER 2: real gap — the restored Wave-D pure layer has no driver]
+### W10 [O] `src/CrewProcedureOps.cs` + `src/FlightDriver.cs` — the conductor glue, and the only thing that ticks it — **W10 OWNS THE HOST OUTRIGHT** — **TODO** — [TIER 2: real gap — the restored Wave-D pure layer has no driver]
 Logged by **W4**, 2026-09-04 (C1.1 — §B12.8's Wave D row names `CrewProcedureOps`; it compiles, but landing
 it alone would make a screen lie).
 **The finding.** `plugin/src/CrewProcedureOps.cs` (20,016 B at `8b81816^`, R1 §5.2 **RECOVER-CODE**) drives
 the whole pure layer W4 restored — `ModeManager` + `CrewGate` + `CrewGates` + `MissionProfile` — and its
 entire state machine advances inside **`Tick(Vessel)`**. A repo-wide grep at `8b81816^` shows **the only
 caller of `Tick` is `FlightDriver.cs:341`** (and of `ForceReset()`, `FlightDriver.Start()`). `FlightDriver.cs`
-(59,523 B) is R1 §5.2's *"the Part-B host"* — **and it is in no §B12.8 wave at all** (see **W11**).
+(59,523 B) is R1 §5.2's *"the Part-B host"* — and it was in no §B12.8 wave at all (**W11**).
+✅ **OVERLAP RESOLVED — W11, 2026-09-04.** W11's finding listed `FlightDriver.cs` among the ten unowned files
+while this line already claimed it; two lines must not both own a 59 KB host, so **W10 owns the file, outright
+and by name**, and W11 dropped it from Wave E. **Why W10 and not a Wave E line of its own:** the host is not
+optional scaffolding for this line — `CrewProcedureOps.Tick` has exactly one caller in the whole pre-deletion
+tree and it is `FlightDriver.cs:341`, so a separate host line would either block W10 entirely or force W10 to
+land a conductor that cannot tick, which is the very thing this line exists to prevent. **What that ownership
+means in practice:** W10 restores §B12.6 step (3)'s **read-only** host — the flight-scene addon, `OnFlyByWire`,
+tick the conductor, report phase/engaged, command nothing — and **every later Wave E line GROWS this same
+host** by exactly the dispatch its own controller needs (§B12.5, one increment at a time). No Wave E line
+re-restores `FlightDriver.cs`, and none of them may add a member to it speculatively. §B12.8 rider (c) records
+this.
 ⛔ **Why it must not land alone.** `ScreenPainter.cs:739` already routes AUTO SEQUENCE to
 `CrewProcedureOps.Toggle()`. With the real class and no host, that press **engages** a conductor that can
 never tick: the gate card appears, its items tick, and the crew's GO latches into `goPressed` for nobody to
@@ -4714,7 +4725,7 @@ property to go live (§B12.5: exactly one per increment). **May SPLIT** if the h
 is consumed on the frame it is pressed, `AutoPilot.Engaged` is backed by a real controller, and nothing on
 any screen claims a phase the vehicle is not in.
 
-### W11 [O] TEN R1 §5.2 RECOVER-CODE glue files belong to NO §B12.8 wave — four facade names have no owner — **TODO** — [TIER 2: real gap in the recovery plan itself]
+### W11 [O] TEN R1 §5.2 RECOVER-CODE glue files belong to NO §B12.8 wave — four facade names have no owner — **DONE 2026-09-04** — [TIER 2: real gap in the recovery plan itself]
 Logged by **W4**, 2026-09-04 (C1.1 — found on satisfying W4's own done-criterion, which asks what backs each
 gen-1 facade name).
 **The finding.** §B12.8's four waves are A = collision-free `pure/` support, B = actuation, C = the booster
@@ -4736,6 +4747,63 @@ prior. **`Steering.cs` is NEVER recovered** (§B12.8 rider (b)) and is not in th
 **DONE when:** every R1 §5.2 RECOVER-CODE file is assigned to a named register line or explicitly excluded
 with a reason, §B12.8's table reflects it, and no facade name is left with "no wave owns this" as its
 stated reason.
+
+✅ **DONE 2026-09-04.** Owner's shape (2026-09-04, via the overseer): **per-file register lines in §B12.5
+increment order.** Docs + register only — **no `.cs` file was written** (C1.11), so no preview PNG applies;
+`python plugin/build.py test` run as a no-regression check and **GREEN**.
+
+**The count reconciles.** R1 §5.2 verdicts **16** files RECOVER-CODE (of 24 rows: 1 obsolete 0-byte artefact,
+7 RECOVER-REFERENCE). **6 already had an owner** — `Actuator` (Wave B / W2, done) · `CraftDump` (W0, done) ·
+`AscentControl` (**W7**) · `Ullage` (**W5**) · `MissionConductor` (Wave D / **W9**) · `CrewProcedureOps`
+(Wave D / **W10**). **10 had none**, and all 10 now do: **1 to W10** (`FlightDriver.cs`, the overlap below)
+**+ 9 new lines W13–W21**. 6 + 1 + 9 = **16 ✓**. **Zero exclusions** — every RECOVER-CODE file in §5.2 is
+assigned to a named line.
+
+**The W10/W11 overlap is resolved: W10 owns `FlightDriver.cs` outright**, by name in its heading, with the
+reason recorded on that line — `CrewProcedureOps.Tick`'s only pre-deletion caller is `FlightDriver.cs:341`, so
+a separate host line would either block W10 or force it to land a conductor that cannot tick. Wave E dropped
+the host and instead **grows W10's read-only host** one dispatch at a time (§B12.5).
+
+**Every facade name now has a named owner** — `AutoPilot` → **W10** · `StationApproach` → **W20** ·
+`DockingOps` → **W21** · `DeorbitOps` + `UndockOps` → **W18** (two sequenced increments on one line) ·
+`BoosterRecovery` → **W9**, then §B16. ⚠ **The W4-era comment text inside `_AutopilotStub.cs:196-208` still
+reads *"in no wave"*, and this task did not touch it** — its declared outputs exclude every `.cs` file
+(C1.11), and rewriting a facade comment is the landing line's own increment, not an assigning task's. So each
+of W18/W20/W21 carries an explicit clause: **when it flips its property it replaces that file's W4 reason
+line.** The *state* "no wave owns this" is closed here; the *comment* is closed by the line that makes the
+lamp live. Nothing on any screen changed, and nothing was made to claim an owner it does not have.
+
+**§B12.8 now says it** — a **Wave E row** in the wave table (labelled *nine register lines, one file each*, so
+it can never be re-read as the single lumped task the owner rejected), a new rider **(c)** carrying the full
+order + dependency table, and the section's opening *"FOUR ... waves, one register task each"* corrected.
+
+**The order is derived, not asserted — and its spine is `Steering.cs`.** Rider (b) never recovers that file,
+and reading the nine at `8b81816^` shows **six of them call it**. Counting the call sites split the set
+cleanly: **W13–W16 need no attitude channel and can land before T15** (W13 is isolated — its own `[KSPAddon]`
+and **zero** references to `Steering`/`Actuator`/`FlightDriver`; W14's three `Actuator` calls all exist in
+today's `src/Actuator.cs` with matching signatures — verified, not assumed; W15 calls only
+`pure/SafeLandingSite.cs`; W16 calls only `Steering.Up`, which is geometry), while **W17–W21 command attitude
+and are gated on T15's fresh steering layer**. Two further findings ride along: `Steering.cs` is also
+**ReturnControl's entry BANK/FOOTPRINT state bus** (7 members, including the measurement R1 §5.2 calls
+EntrySteering's own job) so W18 must re-home that state; and `RendezvousControl`/`ReturnControl` call
+`MissionConductor.WarpToEvent`/`.Realtime`, which the stub does not have — **W9**.
+
+⚠ **Two of the nine sit under a settled owner decision and were NOT decided here (C1.12).** §B12.3/§B10.3 (O6)
+make the **Docking AP the DEFAULT** and §B12.4 has the conductor compose MechJeb planner ops for the approach —
+which is what the recovered `DockingControl` (never flown) and `RendezvousControl` do by hand. W20/W21 are
+therefore scoped to what holds under **either** answer, they are last in the order so the answer arrives before
+the code, and the question is put to the owner below.
+
+**Batched owner questions (C1.9), posed per C1.13: THREE** — written under `## Open questions for the
+owner — W11 (C1.14)` at the bottom of this file. **Q1:** how much of `RendezvousControl` / `DockingControl`
+is actually recovered, given O6 hands both jobs to MechJeb. **Q2:** five Wave E lines are gated on **T15** —
+is that ordering acceptable, or does T15 move up. **Q3:** who rewrites `_AutopilotStub.cs`'s stale facade
+comments — each landing line as it flips, or a small line now.
+
+**Also logged (C1.1, not done):** the §5.1 **pure halves** of these nine controllers are RECOVER-CODE and in no
+wave either — the same gap **W6** found for `pure/CourseCorrect.cs`. Rather than a second pure wave, §B12.8
+rider (c) rules that **the first Wave E line needing a pure file lands it**; every line below names its own,
+so no separate register line was created and nothing is left unowned.
 
 ### W12 [S] The preview harness invents crew-gate text, and it now provably contradicts the restored catalog — **TODO** — [TIER 4: hygiene — a preview that misrepresents the real page]
 Logged by **W4**, 2026-09-04 (C1.1 — found while inspecting `page0_flight_gate.png` for the C1.3 gate).
@@ -4773,6 +4841,263 @@ ships unfixed. It is TIER 2 (a real defect in restored, committed code), not a d
 and re-run `MissionProfileTest.cs` (it may also assert the wrong value and need updating).
 **DONE when:** `build.py test` green, the six lines corrected, and the header no longer overstates what the
 W4 cross-check covered.
+
+### W13 [S] Wave E-1 `src/GeometryDump.cs` — the read-only RCS-geometry probe, zero control risk — **TODO** — [TIER 4: scheduled recovery, no control path]
+Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 1 of 9).
+**The file.** `plugin/src/GeometryDump.cs` (8,122 B at `8b81816^`), R1 §5.2 **RECOVER-CODE** — *"READ-ONLY
+diagnostic; touches nothing in the control path"*, *"safe, zero control risk"*. It captures the RCS actuator
+GEOMETRY (per-thruster world position + thrust direction + power, per-`ModuleRCS` stock `GetPotentialTorque`,
+the CoM and the control-frame basis) to a CSV, so the *"achievable pitch/yaw authority ≈ 0 while the geometric
+estimate is ≈ 62000"* question can be **proven from real thruster data instead of inferred**.
+**Why it is FIRST in Wave E.** It is the only file in the set with **no dependencies at all** — verified at
+`8b81816^`: its own `[KSPAddon]`, and **zero** references to `Steering`, `Actuator` or `FlightDriver`. It does
+not need W10's host, it does not need T15's steering layer, and it cannot change what the vehicle does. It is
+the cheapest possible proof of the Wave E recovery idiom, and it is CraftDump's (W0's) sibling.
+ℹ It writes to `<KSP>/DragonScreen_capture/` at runtime and re-dumps on **Alt+G**. That is a runtime output
+path, not a build input — C7 is untouched.
+**Read:** §B12.8 rider (c), R1 §5.2's row, the file's own header at `8b81816^`.
+**Build:** restore `src/GeometryDump.cs` from `8b81816^`, unmodified apart from whatever the current tree's
+API requires; confirm by comment-stripped diff that nothing else changed (the W2/W3 provenance idiom). Its
+consumer `pure/Authority.cs` is already in the tree (Wave A / W1) — do not re-land it.
+**DONE when:** `build.py test` green, the file compiles in today's tree, the diff against `8b81816^` is empty
+but for stated API adaptations, and **no screen and no control path changed** (grep: nothing calls it).
+
+### W14 [S] Wave E-2 `src/DeployablesControl.cs` — solar/antenna deploy + pre-return retract — **TODO** — [TIER 3: scheduled recovery]
+Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 2 of 9).
+**The file.** `plugin/src/DeployablesControl.cs` (2,828 B at `8b81816^`), R1 §5.2 **RECOVER-CODE**, flown
+**YES**, regime n/a — *"On-orbit solar/antenna deploy, pre-return retract"*. The smallest real controller in
+the whole recovery, and its own header already states the §B12.7 rule: *"direct part-module
+(`Actuator.Deploy*`/`Retract*`), never an action group"*.
+**Why it is second, and why it is cheap — verified, not assumed.** Its **only** outbound calls at `8b81816^`
+are `Actuator.DeploySolarPanels`, `Actuator.DeployAntennas` and `Actuator.RetractSolarPanels`, and **all three
+exist in today's `plugin/src/Actuator.cs` with matching signatures** (W2 / Wave B, lines 709 / 737 / 724). It
+touches `Steering` not at all. So it is the first genuine ACTUATION increment in Wave E and it exercises the
+host → `Actuator` dispatch path end-to-end on a controller that **backs no facade property** — it cannot light
+a lamp the vehicle is not honouring (§14.4(a)).
+⚠ It still needs something to tick it: that is **W10**'s host. Do not tick it from a screen addon.
+**Read:** §B12.8 rider (c), §B12.7 (direct part control), R1 §5.2's row.
+**Build:** restore `src/DeployablesControl.cs` from `8b81816^`, wired into W10's host as the first
+increment-sized dispatch. Add its own test if the restore needs one to be honest about the phase trigger.
+**DONE when:** `build.py test` green, the three `Actuator` calls bind to the live methods, the controller
+advances only when the host ticks it, and no facade property changed state.
+
+### W15 [S] Wave E-3 `src/LandingSiteScan.cs` — the safe-water splashdown scan both return paths need — **TODO** — [TIER 3: scheduled recovery]
+Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 3 of 9).
+**The file.** `plugin/src/LandingSiteScan.cs` (4,364 B at `8b81816^`), R1 §5.2 **RECOVER-CODE**, regime
+**RSS** (*"the ocean fix is RSS-specific"*), flown **❌ NO**. *"Shared ground-track → safe-water splashdown
+site scan."* Its pure half is `pure/SafeLandingSite.cs` (3,023 B, R1 §5.1 **RECOVER-CODE**, regime **RSS**) —
+verified: the file's only outbound calls are `SafeLandingSite.PickDeorbitTarget` and `.PickNearestWater`.
+**Why it is third.** No attitude channel, no `Actuator`, no host state — it picks a target, it commands
+nothing. And **both** later return paths consume it: `ReturnControl` (**W18**) and `AbortControl` (**W19**)
+each call it directly. Landing it here means neither of those lines has to invent a splashdown target.
+⚠ **Its RSS ocean-detection fix is the whole point of the file** (`e2f74aa`) — a stock-Kerbin ocean test is
+the defect it exists to correct. Restore the fix and its reason, not just the scan.
+⚠ **UN-CONVERGED (§B16.8 ruling 2, applied outside the booster):** it never flew. Every margin and every
+search-band constant is marked un-converged for RSS-RO; convergence needs a recorded flight (owner gate).
+**Read:** §B12.8 rider (c), R1 §5.2 + §5.1's `SafeLandingSite.cs` row, §B16.8 ruling 2 for the marking idiom.
+**Build:** restore `src/LandingSiteScan.cs` + `pure/SafeLandingSite.cs` from `8b81816^` with its test (R1 §5.3
+— check for a `SafeLandingSiteTest.cs` and register it in `TestMain.cs`), and add the §B16.8 marking.
+**DONE when:** `build.py test` green with the pure half tested headless, the RSS ocean fix is present and
+stated, and every constant carries its un-converged marking.
+
+### W16 [S] Wave E-4 `src/EntrySteering.cs` — the lifting bank-angle entry, on an UNMEASURED L/D prior — **TODO** — [TIER 3: scheduled recovery + a disclosed unmeasured constant]
+Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 4 of 9).
+**The file.** `plugin/src/EntrySteering.cs` (9,687 B at `8b81816^`), R1 §5.2 **RECOVER-CODE**, regime
+**L/D prior**, flown **❌ NO**. *"The lifting bank-angle entry — footprint + bank measurement."* Its pure half
+is `pure/Entry.cs` (10,109 B, R1 §5.1 **RECOVER-CODE**, *"L/D bands = marked prior"*, no lifting entry ever
+flown).
+**Why it is fourth — the last line that needs no attitude channel.** Verified at `8b81816^`: its **only**
+`Steering.*` calls are `Steering.Up` ×2 — the body-up unit vector, which is **geometry, not a command**. Every
+Wave E line after this one commands attitude and is gated on T15. Its other dependency, `pure/Trajectory.cs`,
+is already in the tree (Wave A / W1).
+⛔ **THE FLAG THAT MUST RIDE ALONG — R1 §7.4.** `pure/Entry.cs`'s **4-band L/D schedule is an UNMEASURED
+PRIOR**. R1 is precise about its status: it is **honestly self-marked**, so this is a *disclosed* gap rather
+than a hidden one — but it is still an unmeasured number, and **§B16.8 ruling 2 applies**: it is
+**UN-CONVERGED for RSS-RO** and stays so until a recorded flight says otherwise (owner gate; a preview-only
+task **cannot** converge it, only build the thing that would). The same prior is `pure/CourseCorrect.cs`'s,
+which is **W6** — if W6 has already landed the marking idiom, match it exactly rather than inventing a second.
+⚠ **And the state-bus problem (see W18).** R1 §5.2 calls *bank measurement* this file's job, but at
+`8b81816^` the measured bank/footprint state (`MeasuredBankRad`, `MeasureBc`, `LastSigmaRad`,
+`FootprintError`, `EntryLoverD`, `PredictDownErrAtBank`) is read off **`Steering.cs`, which is NEVER
+recovered** (§B12.8 rider (b)). This line does not have to solve that — W18 does — but it must not park new
+state in a file that is not coming back.
+**Read:** §B12.8 rider (b) + (c), R1 §5.2 + §5.1's `Entry.cs` row, R1 §7.4, §B16.8 ruling 2.
+**Build:** restore `src/EntrySteering.cs` + `pure/Entry.cs` + their test from `8b81816^`, with the L/D prior
+carrying its §B16.8 marking and its R1 §7.4 provenance in the file's own header.
+**DONE when:** `build.py test` green, the pure entry guidance is tested headless, the L/D bands are marked
+UN-CONVERGED with the marking visible in the file, and no `Steering.cs` byte is back.
+
+### W17 [O] Wave E-5 `src/DeorbitBurn.cs` — the ONE Draco retrograde burn; its only flight carried a units bug — **TODO** — [TIER 2: real defect + recovery; FIRST line gated on T15]
+Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 5 of 9).
+**The file.** `plugin/src/DeorbitBurn.cs` (6,733 B at `8b81816^`), R1 §5.2 **RECOVER-CODE**, regime
+**RSS-RO**, flown **one units-bug flight**. *"The ONE Draco retrograde deorbit burn, shared by both callers"* —
+verified: the callers are `ReturnControl` (**W18**) and `AbortControl` (**W19**), which is why it lands before
+both. Its pure half is `pure/DeorbitGuidance.cs` (6,169 B, R1 §5.1 **RECOVER-CODE**, RSS-RO with the ocean
+detection fixed for RSS, *"one units-bug flight (DS-DEO-001)"*).
+⛔ **THE FLAG: its one flight was a FAILURE, and the file's own header records it.** At `8b81816^` the header
+states that the retired rescue path (`AbortControl.RunDeorbitBurn`) throttled the SuperDraco and *"196.9→196.1
+km unchanged) → the crew stranded"*. **Recover it as a file whose single flight did not work** — restore the
+header's account verbatim, and pin the failing case with a test rather than assuming the surviving nominal
+path (`ReturnControl.FlyDeorbitEntry`) is proven. It is not: R1 §4.2 lists only ascent and abort as validated.
+⛔ **THIS IS THE FIRST WAVE E LINE THAT COMMANDS ATTITUDE, and `Steering.cs` is NEVER recovered** (§B12.8
+rider (b)). Verified call sites: `Steering.Point` ×1, `Steering.PointingErrorDeg` ×2 (retrograde hold + the
+`AttitudeReady` gate), `Steering.Up` ×1. **This line is therefore GATED ON T15's fresh steering layer.** Do
+not close the gap by restoring `Steering.cs`, and do not half-wire the facade to fake it (§B12.8(a)) — if T15
+has not landed, **STOP and say so** rather than shipping a burn that cannot point.
+⚠ **UN-CONVERGED (§B16.8 ruling 2):** `attitudeReadyDeg` and every burn margin stay marked until a recorded
+flight converges them.
+**Read:** §B12.8 rider (b) + (c), §B12.7, R1 §5.2 + §5.1's `DeorbitGuidance.cs` row, R1 §4.2, §B16.8.
+**Build:** restore `src/DeorbitBurn.cs` + `pure/DeorbitGuidance.cs` + their test from `8b81816^`; bind the
+attitude calls to T15's steering layer (or STOP); state the units-bug flight in the header and pin it with a
+test. Grow **W10's host** with only the dispatch this burn needs — no speculative members.
+**DONE when:** `build.py test` green, the units-bug case is test-pinned, the attitude calls bind to the fresh
+layer with no `Steering.cs` byte back, and every constant is marked.
+
+### W18 [O] Wave E-6 `src/ReturnControl.cs` — undock → splashdown; flips **UndockOps** then **DeorbitOps** — **TODO** — [TIER 2: real gap — one file, two facade names, and an entry state bus that no longer exists]
+Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 6 of 9).
+**The file.** `plugin/src/ReturnControl.cs` (22,827 B at `8b81816^`), R1 §5.2 **RECOVER-CODE**, regime
+**RSS-RO**, flown **❌ NO**. *"KSP glue seam 6: the return — undock → splashdown."* Pure halves:
+`pure/Departure.cs` (9,847 B, the undock + departure-burn FSM, never flown) and `pure/Chutes.cs` (7,535 B,
+drogue/main/splashdown, RSS-RO RealChute, *"partially — chute descent recorded in aborts"*).
+**It is the line that closes TWO facade names**, and §B12.5 allows exactly one property per increment. So:
+**one register line, one file, one restore — but TWO SEQUENCED INCREMENTS.** (1) the undock/departure leg →
+**`UndockOps`** goes live; then (2) the deorbit/return leg → **`DeorbitOps`** goes live. Never both in one
+step, and each increment replaces that name's W4 reason comment in `_AutopilotStub.cs:196-208` as it flips.
+**May SPLIT** into W18a/W18b if the two legs outgrow one session (C1.7).
+⛔ **THE STRUCTURAL DEFECT THIS LINE MUST SOLVE — `Steering.cs` is this file's ENTRY STATE BUS.** It is the
+heaviest `Steering` consumer in the tree (**13 distinct members** at `8b81816^`), and seven of them are not an
+attitude channel at all: `PredictDownErrAtBank`, `MeasuredBankRad`, `MeasureBc`, `LastSigmaRad`,
+`FootprintError`, `EntryLoverD`, `SetSplashTarget` — the **bank/footprint measurement R1 §5.2 calls
+`EntrySteering`'s own job**, parked in the one file §B12.8 rider (b) says **NEVER comes back**. Rebinding the
+six attitude calls to T15 does **not** close this. **W18 must decide where that entry state lives** (the
+natural home is `EntrySteering` + `pure/Entry.cs`, W16) and say so in its own diff — it is a design decision,
+not a rename, and it is this line's declared output, never a quiet edit inside another task's.
+⚠ **Blocked on four lines, all named:** **W15** (`LandingSiteScan`), **W16** (`EntrySteering`), **W17**
+(`DeorbitBurn`) — all called directly — plus **W9**: it calls `MissionConductor.WarpToEvent` and `.Realtime`,
+which today's stub `MissionConductor` **does not have and must not gain** (§B12.8(a)). It also calls
+`CrewProcedureOps.PhaseComplete` → **W10**. And it commands attitude → **T15**.
+ℹ `pure/Terminal.cs` stays **RECOVER-REFERENCE** (R1 §5.1) — its own text says *"⚠ THESE ALTITUDES ARE
+KERBIN'S, NOT THE REAL DRAGON'S"*. Its **ordering argument** (drogues out → engines proven lit → then cut) is
+worth keeping; **every altitude must be re-derived for RSS**. Do not make it live to satisfy this line.
+⚠ **UN-CONVERGED (§B16.8 ruling 2):** the file never flew. Every constant is marked.
+**Read:** §B12.8 rider (b) + (c), §B12.5, R1 §5.2 + §5.1's `Departure.cs`/`Chutes.cs`/`Terminal.cs` rows.
+**Build:** restore `src/ReturnControl.cs` + `pure/Departure.cs` + `pure/Chutes.cs` + their tests from
+`8b81816^`; re-home the entry state bus; land increment (1) → `UndockOps`, then increment (2) → `DeorbitOps`,
+each replacing its own W4 reason comment.
+**DONE when:** `build.py test` green, both facade properties are backed by a real controller **in two
+increments**, the entry bank/footprint state has a stated home that is not `Steering.cs`, no `Steering.cs` or
+`Terminal.cs` byte is live, and no screen claims a phase the vehicle is not in.
+
+### W19 [O] Wave E-7 `src/AbortControl.cs` — the flight-validated abort executor; retires the `AbortControl`/`AbortMode` stub — **TODO** — [TIER 2: recovery of the ONLY other flight-validated subsystem]
+Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 7 of 9).
+**The file.** `plugin/src/AbortControl.cs` (23,536 B at `8b81816^`), R1 §5.2 **RECOVER-CODE — HIGH, §B12.7**,
+regime **RSS-RO**, flown **YES — flight-validated**. *"The SELF-AWARE abort executor — 7 regimes, mode LATCHED
+at the first tick."* Its pure half is `pure/AbortResponder.cs` (8,635 B, R1 §5.1 **RECOVER-CODE**, RSS-RO
+thresholds researched, *"abort is flight-validated"*).
+**Flag it as loudly as W7 does for ascent:** with `AscentControl`, this is **one of only two flight-validated
+subsystems we have** (R1 §4.2). Treat it accordingly — it is recovered, not rewritten.
+⚠ **THE STUB COLLISION, RESOLVED PRECISELY (this is why the line names it).** Today's
+`_AutopilotStub.cs` declares **both** `class AbortControl` (`:97`, one member: `Mode`) and
+`enum AbortMode : byte { None, DeorbitReturn }` (`:34`). The real pure `AbortResponder.cs` declares
+`AbortMode` with **eight** members (`None, LaunchEscape, AbortToOrbit, DeorbitReturn, KosRetreat,
+EmergencyUndock, RideItDown, SafeHold`). **Verified by grep, 2026-09-04: NOTHING in the tree reads either the
+stub class or the stub enum** — the only `AbortMode` hits are `pure/StepList.AbortMode(...)`, an unrelated
+display-string helper, and its test. So this is the **Actuator precedent (W2) exactly**: delete both stub
+declarations, let the real ones stand, and **no screen file changes**. Two declarations of a type break the
+build (§B12.8's two-generation rule) — do not leave a stub behind.
+**What actually goes live on the glass:** `ScreenPainter.cs:984` gates the abort overlay on
+`FlightDriver.Aborting` + `AbortFxSuppressed` — so the overlay becomes real only once **W10**'s host publishes
+them. That is the honest order; do not light it from here.
+⚠ **Blocked on:** **W17** (`DeorbitBurn`), **W15** (`LandingSiteScan`), `pure/Chutes.cs` (lands with **W18**),
+`CrewProcedureOps.ActivePhase` (**W10**) — all verified call sites — and **T15** for attitude (`Steering.Point`
+×6, `Up` ×3, `Prograde` ×2, `PointingErrorDeg`, `PointNoRoll`; `Steering.cs` is never recovered).
+ℹ Its regime research lives in `docs/ABORT_PROCEDURES_RESEARCH.md`, **deleted** — read it from `8b81816^`
+(repo git history is in-repo; C7 is satisfied), and check R1 §5.4 for its verdict before quoting it.
+⚠ **§B13 is the design of record** for abort, and it is conductor-owned and **phase-selected**, actuated by
+§B12.7 direct part control — no action group, no staging. Reconcile the recovered executor with §B13 rather
+than assuming either supersedes the other.
+**Read:** §B13 END-TO-END, §B12.7, §B12.8(a) + rider (c), R1 §5.2 + §5.1's `AbortResponder.cs` row, R1 §4.2.
+**Build:** restore `src/AbortControl.cs` + `pure/AbortResponder.cs` + their tests from `8b81816^`; delete the
+two stub declarations in the same diff (that IS the facade swap, stated in the stub file's retirement comment
+the way W2 stated Actuator's); bind attitude to T15 or STOP.
+**DONE when:** `build.py test` green, both stub declarations are gone with a stated retirement comment, the
+7 regimes and the first-tick LATCH survive intact, no screen file changed, and the abort overlay stays dark
+until W10's host publishes `Aborting`.
+
+### W20 [O] Wave E-8 `src/RendezvousControl.cs` — flips **StationApproach**; carries R1's flagged defects and a settled MechJeb decision — **TODO** — [TIER 2: recovery under an open owner decision]
+Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 8 of 9).
+**The file.** `plugin/src/RendezvousControl.cs` (40,628 B at `8b81816^` — **the largest file in Wave E**),
+R1 §5.2 **RECOVER-CODE**, regime **RSS-RO**, flown **◐ far-field to 109 km ONLY**. *"KSP glue seam 4: the
+coarse rendezvous controller."* Backs the **`StationApproach`** facade (a gen-1 name).
+⛔ **R1 FLAGS IT WITH DEFECTS, AND THE DEFECT DOCUMENT IS ITSELF DELETED.** R1 §5.2: *"⚠ defects flagged in
+`RENDEZVOUS_REBUILD_PLAN.md`"*, and R1 §5.4 verdicts that document (10,583 B) **RECOVER-REFERENCE** with
+*"⛔ never treat as an instruction"* — its own banner reads *"UNDER VERIFICATION — NOT AN INSTRUCTION, NOT
+APPROVED. A 2026-08-31 review found real DEFECTS"*. So: **read it from `8b81816^` as EVIDENCE of what is
+wrong, enumerate the defects in this line's own diff, and take no instruction from it.** The same review
+flagged `pure/Rendezvous.cs` (R1 §5.1, same wording).
+⚠ **The terminal leg was NEVER FLOWN.** *"Far-field to 109 km"* is the whole of its flight validation — the
+close-in half is unproven, and `pure/Cw.cs` (terminal CW targeting, already in the tree from Wave A) is
+explicitly *"❌ terminal never flown"*.
+⚠ **A SETTLED OWNER DECISION BEARS ON WHAT THIS FILE IS FOR — do not overrule it (C1.8/C1.12).** §B12.4:
+MechJeb's rendezvous *autopilot* is unreliable in RSS/RO, so **the conductor composes MechJeb planner ops
+itself and re-plans live**; §B12.3 hands off at the Keep-Out Sphere to the Docking AP. The recovered file is
+the gen-2 **hand-written** version of that job. Scope this line to what holds under **either** answer — the
+`StationApproach` facade adapter, the phase/plane/intercept targeting the planner ops need a target from, and
+the far-field logic that actually flew — and put the rest to the owner (**W11 open question 1**) rather than
+deciding it here.
+**Its pure half — four files, all RECOVER-CODE and in no wave:** `pure/Rendezvous.cs` (7,072, defect-flagged),
+`pure/Phasing.cs` (7,369, far-field flown to 109 km), `pure/RvIntercept.cs` (6,462, never flown),
+`pure/NavFilter.cs` (8,827). `Cw`, `Lvlh`, `Lambert`, `Maneuver` are already in the tree (Wave A) — do not
+re-land them.
+⛔ **`pure/NavFilter.cs` is an R1 §7.4 REGIME-UNSTATED DEFECT** — its IMU/RGPS process- and measurement-noise
+tunables are *"researched"* with **the research source not named in the file**. §0.1: *"every one must have
+its regime established before the number is used."* Mark it, do not quietly seed it.
+⚠ **Blocked on:** **W9** (`MissionConductor.WarpToEvent` / `.Realtime` — verified call sites the stub does not
+have and must not gain), **W10** (`CrewProcedureOps.PhaseComplete`), and **T15** for attitude (`Steering.Point`
+×5, `PointingErrorDeg` ×4, `Prograde` ×2, `Release`).
+**Read:** §B12.3, §B12.4, §B10.2, §B12.8(a) + rider (c), R1 §5.2 + §5.1's four rows, R1 §7.4, and
+`RENDEZVOUS_REBUILD_PLAN.md` at `8b81816^` **as evidence only**.
+**Build:** restore the glue + its four pure files + tests from `8b81816^`; enumerate the flagged defects in the
+diff and pin each with a test or state it as an open defect (the W5 idiom); mark `NavFilter`'s regime; flip
+**`StationApproach`** and replace that name's W4 reason comment in `_AutopilotStub.cs`. **May SPLIT** (C1.7) —
+40 KB of glue plus four pure files is a plausible two-session line.
+**DONE when:** `build.py test` green, `StationApproach` is backed by a real controller, every flagged defect is
+either fixed with the owner's agreement or pinned and stated, the never-flown terminal leg is marked as such,
+and `NavFilter`'s constants carry their regime.
+
+### W21 [O] Wave E-9 `src/DockingControl.cs` — flips **DockingOps**; ⛔ the dock was NEVER FLOWN — **TODO** — [TIER 2: recovery of unproven code under an open owner decision]
+Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 9 of 9 — last by design).
+**The file.** `plugin/src/DockingControl.cs` (15,447 B at `8b81816^`), R1 §5.2 **RECOVER-CODE**, regime n/a,
+flown **❌ NO — dock UNPROVEN**. *"KSP glue seam 5: terminal approach + docking."* Backs the **`DockingOps`**
+facade (a gen-1 name).
+⛔ **SAY IT IN THE FILE, NOT JUST HERE: THE DOCK WAS NEVER FLOWN.** R1 §5.2 records it as **UNPROVEN**, and
+every one of its pure halves is `❌ NO` as well — `pure/DockApproach.cs` (5,803, the R-bar→V-bar L-approach
+FSM), `pure/DockControl.cs` (3,276, the 6-DOF glideslope servo), `pure/DockCorridor.cs` (2,712, the
+approach-corridor / KOS-breach test), `pure/DockCapture.cs` (2,822, the IDSS soft-capture envelope gate).
+**This must not be recovered as though it were proven code**: the restored header states the never-flown
+status, every constant carries §B16.8 ruling 2's UN-CONVERGED marking, and `DockingOps` going live must not be
+read as "docking works" — it means a controller is behind the lamp, nothing more.
+ℹ **Two of the four pure files are §1.4 VERIFIED-REAL and are worth having regardless of the decision below:**
+`DockCapture.cs` encodes **IDSS IDD Rev E Table 3.3.1.1-2** (R1 §5.1 names it a verified-real source) and
+`DockCorridor.cs` encodes real-world corridor geometry. Those are measurement, not invention — do not edit
+them without a real-source confirmation (§1.4).
+⚠ **A SETTLED OWNER DECISION SAYS MECHJEB DOES THIS JOB — do not overrule it (C1.8/C1.12).** §B12.3 + §B10.3
+(**O6, owner 2026-09-03, via the overseer**): from the Keep-Out Sphere inward the **Docking AP is the
+DEFAULT**, with the crew's manual docking button overriding to the Manual ISS Docking screen and shutting the
+Docking AP down. `pure/DockControl.cs`'s 6-DOF glideslope servo is **precisely** the thing that decision hands
+to MechJeb. So this line is scoped to what holds under **either** answer — the `DockingOps` facade adapter, the
+two verified-real geometry gates, and the KOS hand-off — and whether the recovered servo/FSM ever flies is
+**the owner's call** (**W11 open question 1**). Being last in Wave E is deliberate: the answer arrives first.
+⚠ **Blocked on:** **W20** (it calls `RendezvousControl` directly, and shares `pure/NavFilter.cs` with it),
+**W10** (`CrewProcedureOps.NextGateId` / `.PhaseComplete`), and **T15** for attitude (`Steering.Point`,
+`PointingErrorDeg`, `Release`).
+**Read:** §B10.3 + §B12.3 + §B14 END-TO-END, §B12.8(a) + rider (c), R1 §5.2 + §5.1's four dock rows, §1.4.
+**Build:** restore `src/DockingControl.cs` + the four pure files + tests from `8b81816^` at the scope the
+owner's answer permits; state the never-flown status in the header; mark every constant; flip **`DockingOps`**
+and replace that name's W4 reason comment in `_AutopilotStub.cs`.
+**DONE when:** `build.py test` green, `DockingOps` is backed by a real controller, the never-flown status is
+stated in the file itself, the IDSS envelope and corridor geometry are unchanged from their real sources, and
+nothing on any screen implies a proven dock.
 
 ### S67 — `plugin/src/pure/PropSchematic.cs` has an uncommitted, in-progress redraw already claiming "S65" (informational)
 Found by **LZ1**, 2026-09-04, while checking `git status` before committing (same pattern as **S2**). The
@@ -4926,3 +5251,62 @@ file itself was touched.
    editing that drawing" doc, so the half that is stale is exactly the half a reader would act on.)*
 2. Mark its geometry section `SUPERSEDED` in place with a one-line header edit and nothing more.
 3. Leave it entirely — the INDEX entry already warns the reader.
+
+---
+
+## Open questions for the owner — W11 (C1.14)
+
+*Posed per C1.13 as a self-contained overseer prompt. **Situation:** W11 gave the ten unowned R1 §5.2
+RECOVER-CODE glue files an owner — `FlightDriver.cs` to W10 (overlap resolved), the other nine to new per-file
+register lines **W13–W21** in the order §B12.8 rider (c) now records. Docs + register only; no `.cs` file was
+written; `build.py test` green. Two of those nine hit a decision a build chat must not take (C1.12), and one
+touches a comment inside a file this task was told not to write.*
+
+**Q1 — `RendezvousControl.cs` (W20) and `DockingControl.cs` (W21) do the job a SETTLED owner decision already
+gave to MechJeb. How much of each is actually recovered?**
+§B12.3 + §B10.3 (**O6, owner 2026-09-03, via the overseer**) make the **MechJeb Docking Autopilot the DEFAULT**
+from the Keep-Out Sphere inward, and §B12.4 has the conductor compose MechJeb **planner ops** for the approach
+because MechJeb's rendezvous *autopilot* is unreliable in RSS/RO. The two recovered files are the gen-2
+**hand-written** versions of exactly those jobs: `RendezvousControl` (40,628 B, flown far-field to 109 km only,
+R1-flagged with defects) and `DockingControl` (15,447 B, **the dock was never flown**, its 6-DOF glideslope
+servo being precisely what O6 hands to MechJeb). W11 did not decide this — it scoped both lines to what holds
+under either answer and placed them **last** in Wave E so the answer arrives before the code.
+1. **Recover the ADAPTER + the verified-real geometry only** — the `StationApproach` / `DockingOps` facade
+   adapters, `DockCapture`'s IDSS envelope (IDD Rev E Table 3.3.1.1-2) and `DockCorridor`'s corridor/KOS test,
+   and the phase/plane/intercept targeting MechJeb's planner ops need a target from. The hand-written
+   FSM and the 6-DOF servo stay **RECOVER-REFERENCE**. *(recommended: it honours O6 as written, it keeps the
+   two §1.4 verified-real files that are worth having under any answer, and it never makes a never-flown servo
+   live alongside the autopilot that is meant to be flying.)*
+2. **Recover both files in full as the primary path**, and treat MechJeb's Docking AP as the fallback. Needs an
+   explicit `OVERRIDE` of O6 (C1.8) plus a §B12.3/§B10.3 edit.
+3. **Recover both in full but keep them dormant** behind the facade — code in the tree, MechJeb still flying —
+   as a measured comparison for after the first recorded flight.
+4. **Do not recover either** — close W20/W21 with the reason stated, and let T19/T20 build the approach and the
+   dock on MechJeb alone. (This leaves `StationApproach` and `DockingOps` permanently dark, which is honest but
+   means two lamps on the glass never light.)
+
+**Q2 — Wave E's five later lines are gated on T15. Is that ordering acceptable, or should T15 move up?**
+`Steering.cs` is **NEVER recovered** (§B12.8 rider (b)) and its replacement is written fresh against the pinned
+MechJeb — which is **T15**. Reading the nine files at `8b81816^`, **six call `Steering`**, so W17–W21 cannot
+land until T15 exists; only W13–W16 are free of it (W13 needs nothing at all, W16 needs `Steering.Up`, which is
+geometry). Wave E currently sits before T15 in the register, so a `/next` run would reach a blocked line and
+have to stop.
+1. **Leave the order as written** — W13–W16 land first and are useful on their own; W17–W21 stop and say so if
+   T15 has not landed. *(recommended: it needs no plan change, the four unblocked lines are real progress, and
+   a line that stops honestly is the C1.12 behaviour we want anyway.)*
+2. **Move T15 ahead of W17** in the register, so the steering layer exists before the first line that needs it.
+3. **Split the difference:** land W13–W16, then T15/T16, then W17–W21 — i.e. interleave Wave E with the Part-B
+   build order rather than running it as one block.
+
+**Q3 — `_AutopilotStub.cs`'s facade comments still read "in no wave". Who rewrites them?**
+W11's done-criterion says no facade name may be left with *"no wave owns this"* as its stated reason, and W11's
+declared outputs exclude **every** `.cs` file (C1.11). The *state* is closed — every one of the six names now
+has a named owner (`AutoPilot`→W10, `StationApproach`→W20, `DockingOps`→W21, `DeorbitOps`+`UndockOps`→W18,
+`BoosterRecovery`→W9) — but the **W4-era comment text at `_AutopilotStub.cs:196-208` still says otherwise**,
+and a comment that contradicts the register is exactly the kind of stale claim C7.1 exists to stop.
+1. **Each landing line rewrites its own name's comment as it flips the property** — which is how W18/W20/W21
+   are written. *(recommended: the comment and the behaviour change in the same diff, so they cannot drift
+   apart, and no separate task touches a file it is not otherwise changing.)*
+2. **Open a small [S] line now** to refresh all six comments to point at W9/W10/W18/W20/W21 immediately, so the
+   file stops contradicting the register in the meantime.
+3. Both — option 2 now for accuracy, option 1 thereafter for each flip.
