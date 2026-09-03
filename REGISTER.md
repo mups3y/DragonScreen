@@ -4571,7 +4571,7 @@ R1 §7.1 and R1 §5.1's two rows END-TO-END first.
 either the fix is landed with the owner's agreement or the line is closed with the fix written down and
 assigned. ⚠ Nothing here converges a constant — that needs a recorded flight (§B16.8 ruling 3, owner gate).
 
-### W6 [S] `pure/CourseCorrect.cs` — the B8 impact divert, §B16-tagged by R1 but named in no wave — **TODO** — [TIER 3: scheduled recovery]
+### W6 [S] `pure/CourseCorrect.cs` — the B8 impact divert, §B16-tagged by R1 but named in no wave — **DONE 2026-09-04** — [TIER 3: scheduled recovery]
 Logged by **W3**, 2026-09-04 (C1.1 — found while deriving Wave C's file list from R1 §5.1 row by row).
 **The finding:** R1 §5.1 gives `pure/CourseCorrect.cs` (6,857 B) verdict **RECOVER-CODE — §B16**, and R1
 §5.3 gives `test/CourseCorrectTest.cs` (6,581 B) **RECOVER-CODE**, calling it *"divert solve against a KNOWN
@@ -4589,6 +4589,37 @@ booster set).
 `TestMain.cs` beside the Wave C block. Read R1 §5.1's row, R1 §5.3's row, R1 §7.4 and §B16.5 first.
 **DONE when:** `build.py test` green with the new suite, the L/D prior carries its marking, nothing from
 gen 1 restored.
+✅ **DONE 2026-09-04.** `pure/CourseCorrect.cs` (6,857 B) + `test/CourseCorrectTest.cs` (6,581 B) restored
+from `8b81816^` — **both byte counts match R1 §5.1/§5.3 exactly**, which is the audit's row confirmed against
+the artefact rather than taken on trust. `CourseCorrectTest.Run()` registered in `TestMain.cs` after the
+Wave C block, with the wave's own ⚠-header idiom. `build.py test` **GREEN**, new suite **15 checks**.
+**Two-generation rule: satisfied trivially** — `git log --all --follow` gives this file exactly two commits,
+`a266420` (B8, gen 2) → `8b81816` (the deletion). There is **no gen-1 copy** at `0d6423d`, `158eb2a^` or
+`158eb2a`; nothing from gen 1 was read or restored. ⛔ Steering / AttitudePilot / AttitudeController /
+`pure/AttitudeLoop.cs` untouched and still absent (§B12.8 rider (b), R1 §3.2).
+⛔ **ONE substantive edit, a DELETION, declared not quiet (§B12.8 rider (b)):** the restored file declared its
+own `struct ImpactError`, which now **collides with W8's `pure/BoosterDescent.cs:168`** — same namespace, same
+two field names, same `+ = LONG` sign, plus `Valid`/`GreatCircleM`. Two declarations do not compile, and they
+must not: `BoosterDescent.ErrorTo` is the PRODUCER of the very error this class CONSUMES, so they have to name
+one type. The duplicate was removed and the live struct used; the test's `new ImpactError(d, c)` calls became a
+local `Err(d, c)` helper. **Comment-stripped diff against `8b81816^` is otherwise identical** in both files —
+no check, tolerance, fixture or assertion altered. (Recorded because no wave predicted this collision: W6 was
+scoped from R1, and W8 wrote its `ImpactError` after R1 was written.)
+**Marking (§B16.8 ruling 2):** R1 §5.1 records the module **flown ❌ NO** and `e90a63f` grades it *"○ — no
+lifting-entry flight in the corpus"*, so all three declared constants — `DampingGain` 0.7, `MinSensitivityM`
+1.0 m, `MinDetFrac` 1.0e-3 — carry `[UN-CONVERGED]` in place, and both headers say a green suite proves
+ARITHMETIC ONLY (its fixtures are analytic by R1 §5.3's own description, not flight data).
+**Mutation-tested,** since an all-green recovered suite proves nothing by itself: five separate mutations —
+dropping the rank-deficiency refusal, dropping the observability refusal, dropping the damping, flipping a
+Cramer-rule sign, and defeating the step clamp — each **fail** the suite. The refusals and the damping are
+genuinely guarded, not just present.
+⚠ **R1 §7.4 is WRONG about this file, and W6's own line inherited the error.** Both say the 4-band L/D
+schedule is `CourseCorrect.cs`'s and must be marked here. **It is not in this file at all** — this file is
+pure linear algebra over a caller-supplied error and declares only the three constants above. The schedule is
+`pure/Trajectory.cs`'s `EntryLdBand` + `LdAtmosEntry`/`LdHighAltitude`/`LdLowAltitude`/`LdFinalApproach`,
+**already in the tree from W1 and still UNMARKED**. `a266420` shipped both files, which is how the audit came
+to name them together. W6 did not widen into another wave's file — logged as **W22** (C1.1).
+**No screen changed → no preview PNG applies.**
 
 ### W7 [O] `AscentControl.cs` — recover it with the roll-trim block REMOVED, on its own line — **TODO** — [TIER 2: real defect + recovery; touches the ONLY flight-validated subsystem]
 Logged by **W3**, 2026-09-04 (C1.1 — W3's Build text asked which wave owns this file; the answer is **none**).
@@ -4928,6 +4959,11 @@ than a hidden one — but it is still an unmeasured number, and **§B16.8 ruling
 **UN-CONVERGED for RSS-RO** and stays so until a recorded flight says otherwise (owner gate; a preview-only
 task **cannot** converge it, only build the thing that would). The same prior is `pure/CourseCorrect.cs`'s,
 which is **W6** — if W6 has already landed the marking idiom, match it exactly rather than inventing a second.
+✅ **CORRECTED by W6, 2026-09-04 — do not go looking for the schedule in `CourseCorrect.cs`.** It is not there;
+that file declares only `DampingGain` / `MinSensitivityM` / `MinDetFrac`. **The marking idiom to match is
+`pure/CourseCorrect.cs`'s header + its in-place `[UN-CONVERGED]` comments** (and `pure/GridFin.cs`'s, which it
+follows). The in-tree twin of the L/D schedule is `pure/Trajectory.cs`'s, still unmarked — **W22**, not this
+line; W16 still owns `pure/Entry.cs`'s own copy.
 ⚠ **And the state-bus problem (see W18).** R1 §5.2 calls *bank measurement* this file's job, but at
 `8b81816^` the measured bank/footprint state (`MeasuredBankRad`, `MeasureBc`, `LastSigmaRad`,
 `FootprintError`, `EntryLoverD`, `PredictDownErrAtBank`) is read off **`Steering.cs`, which is NEVER
@@ -5369,3 +5405,42 @@ SOURCE"* for `reference/dragon2-ui-vue/` — false, since `dragon_crew.png` (shi
 `plugin/GameData/DragonScreen/art/cover/`) is sourced from that same repo's bundled art. **Build:** correct
 the §3 header and add a line noting the one shipped asset, cross-referencing `NOTICE` (S69) for the full
 attribution. Docs-only; no `.cs` change; `build.py test` as no-regression check.
+
+### W22 [S] `pure/Trajectory.cs`'s 4-band L/D schedule is UNMARKED, and R1 §7.4 files it under the wrong file — **TODO** — [TIER 3: a disclosed unmeasured constant carrying no marking]
+Logged by **W6**, 2026-09-04 (C1.1 — found on re-confirming R1's verdict against the restored content, which
+W6's own VERIFY step required rather than trusting the audit blind).
+**The finding, in two parts.**
+1. **The misattribution.** R1 §7.4's regime-unstated row reads *"`plugin/src/pure/Entry.cs` / `CourseCorrect.cs`
+   | The 4-band L/D schedule"*, and W6's line and **W16**'s both inherited it. **`pure/CourseCorrect.cs` has no
+   L/D schedule** — verified against the file W6 restored byte-for-byte from `8b81816^`: it is caller-supplied
+   linear algebra whose only constants are `DampingGain`, `MinSensitivityM` and `MinDetFrac`. The schedule
+   lives in **`pure/Trajectory.cs`** (`EntryLdBand` + `LdAtmosEntry` 0.18 / `LdHighAltitude` 0.20 /
+   `LdLowAltitude` 0.26 / `LdFinalApproach` 0.24, consumed via `TrajectoryInputs.UseLdBand`) and in
+   `pure/Entry.cs`. Commit `a266420` shipped all three together — *"B8 (pure): CourseCorrect impact-divert
+   solver **+ 4-band entry L/D prior**"* — which is how one audit row came to name the wrong pair.
+2. **The actual gap.** `pure/Trajectory.cs` **is already in the tree** (Wave A / **W1**) and its four L/D
+   constants are **UNMARKED**. They are `[Tunable]` and the file's own comment does disclose the prior
+   (*"a predictor prior for the bands not yet measured"*) — R1 §7.4 is explicit that this is **honestly
+   self-marked, a disclosed gap rather than a hidden one** — but it carries **no `[UN-CONVERGED]` marking**,
+   and `grep -rn "UN-CONVERGED" plugin/src/` returns seven files, none of them this one. Every other recovered
+   file holding an unattributed number (`Hoverslam`, `GridFin`, `ThrustBalance`, `RcsBalance`, `WarpPlan`,
+   `BoosterDescent`, `Actuator`) carries it. **§B16.8 ruling 2 applies to these four numbers too** — no
+   lifting entry has ever been flown (R1 §5.1 `Entry.cs`: *"❌ NO lifting entry flown"*), so a value inside the
+   *"Dragon L/D 0.18–0.27 envelope"* is a prior, not a measurement.
+⚠ **Why it matters more than tidiness:** `Trajectory.cs` is **the §B16.5 prediction engine** — the booster
+FSM (`BoosterDescent.PredictImpact`) and, once **W16** lands, the entry guidance both steer on its answer. It
+is the one place an unmarked prior propagates into two separate flight paths. (`BoosterDescent.cs:463-464`
+sets `UseLdBand = false` for the booster, so today's booster path does **not** touch the schedule — this is a
+marking gap, not a live wrong number. State that in the marking rather than overstating the risk.)
+**Read:** R1 §7.4, R1 §5.1's `Trajectory.cs` + `Entry.cs` rows, §B16.8 ruling 2, §B16.5, and
+`pure/CourseCorrect.cs` + `pure/GridFin.cs`'s headers for the established idiom.
+**Build:** add the §B16.8 marking to `pure/Trajectory.cs`'s four L/D constants and its `EntryLdBand` comment
+block, in the idiom W3/W6/W8 already use — **comment-only, no behaviour change, no number edited**. Correct
+R1 §7.4's row in `docs/AUTOPILOT_RECOVERY_AUDIT.md` to name `Trajectory.cs` instead of `CourseCorrect.cs`
+(the audit is a record; fix the row and say it was W6's finding, do not rewrite its verdicts).
+⚠ **Coordinate with W16**, which restores `pure/Entry.cs`'s own copy of the same prior and must not invent a
+second idiom — W16's line already carries a pointer here.
+**DONE when:** `build.py test` green (comment-only, so a no-regression check), the four L/D constants carry
+`[UN-CONVERGED]` with R1 §7.4's *"honestly self-marked / still unmeasured"* status stated in place, the
+`UseLdBand = false` nuance is recorded so the marking is not read as a live defect, and R1 §7.4's row names
+the right file.

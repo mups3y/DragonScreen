@@ -77,6 +77,20 @@ public static class TestMain
         bad += BoosterTest.Run();          // §B16 booster: hoverslam solver + grid-fin steering + the recovery FSM
         bad += OctawebResolveTest.Run();   // §B16.4 step 2: the octaweb binder, guard-first, against the real dump
 
+        // ---- PART B RECOVERY, W6 (§B16, R1-tagged but in NO §B12.8 wave) - the B8 impact divert ----
+        // pure/CourseCorrect.cs is the layer between the two above: it turns a predicted-impact ERROR
+        // (BoosterDescent.ErrorTo, over pure/Trajectory.cs) into the control change that nulls it - a 2x2
+        // finite-difference Jacobian for the booster's down/cross grid-fin steer, and a 1x1 Newton step for
+        // the capsule entry range channel. R1 §5.1 gives it RECOVER-CODE - §B16 but no wave named it, so it
+        // is its own register line (W6) rather than a quiet passenger in someone else's diff.
+        // ⚠ NEVER FLOWN (R1 §5.1: "❌ NO"; e90a63f: "no lifting-entry flight in the corpus"). Its three
+        // constants are UN-CONVERGED for RSS-RO (§B16.8 ruling 2) and this suite's fixtures are ANALYTIC -
+        // a known linear impact model, chosen because it has an exact closed-form divert. Green proves the
+        // linear algebra recovers that answer, the damping leaves exactly its residual, and the solve
+        // REFUSES rather than diverting on noise when the Jacobian is unobservable or rank-deficient. It
+        // proves nothing about a tuned number. The file's header says so.
+        bad += CourseCorrectTest.Run();    // B8 impact-point divert: the 2x2 Jacobian solve + the 1x1 Newton step
+
         // ---- PART B RECOVERY, WAVE D (W4, §B12.8) - the PURE conductor set ----
         // The mission-conductor decision layer: ModeManager (the mission plan + the phase sequencer),
         // CrewGate (the crew-in-the-loop GATE state machine), CrewGates (the real G1..G15 catalog),
