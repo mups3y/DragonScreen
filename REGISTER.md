@@ -4751,3 +4751,14 @@ ships unfixed. It is TIER 2 (a real defect in restored, committed code), not a d
 and re-run `MissionProfileTest.cs` (it may also assert the wrong value and need updating).
 **DONE when:** `build.py test` green, the six lines corrected, and the header no longer overstates what the
 W4 cross-check covered.
+
+### S67 — `plugin/src/pure/PropSchematic.cs` has an uncommitted, in-progress redraw already claiming "S65" (informational)
+Found by **LZ1**, 2026-09-04, while checking `git status` before committing (same pattern as **S2**). The
+working tree carries an unstaged, unrelated rewrite of `PropSchematic.cs` (T9's Prop thruster schematic) —
+its own header cites *"redrawn by S65"* and an *"owner decision, 2026-09-04, via the overseer"* on
+licensing/reference material (`docs/ART_SPEC_DRAGON.md`, which does not yet exist in the committed tree
+either). **That S65 was never added to this register** — LZ1 had independently picked "S65" for its own
+finding (this file's line 4736-ish, now **S66**) before noticing the collision. Renumbered to avoid it.
+Not LZ1's to finish or commit (C1.1/C1.11) — left untouched, staged by no one. Logged so **the next session
+does not reuse "S65" either**, and so the owner knows there is real, apparently owner-directed work sitting
+uncommitted in the tree from outside this session.
