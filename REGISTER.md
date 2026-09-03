@@ -5737,6 +5737,173 @@ and state the phase span in its DONE-when. ⚠ Not G6's to do: G6's declared out
 **DONE when:** T21's title and DONE-when agree on which §B9 phases it covers, and every facade name §B12.5a
 assigns still has exactly one owner afterwards.
 
+### W23 [O] The booster HOST — run the scripted return on the booster vessel, at separation — **DONE 2026-09-04** — [TIER 1: the owner's 2026-09-04 direction; W8's script had no caller]
+**Not previously in this register — this line was written by the task itself** (the overseer issued it
+directly; W22 was the last W, so W23 is the next free number).
+**OWNER DIRECTION, 2026-09-04, via the overseer:** *"we use MechJeb for all upper stage manoeuvres as
+planned. **BOOSTER SCRIPTED.**"* and *"**as soon as the booster gets dropped it runs its script.**"* Two
+systems that must NOT interfere with each other's flights. **W8** built the script
+(`pure/BoosterDescent.cs`, five flying phases) and recorded in its own header that **nothing called it**.
+This line built the caller.
+⛔ **SCOPE — THE HOST ONLY. THE STEERING LAW WAS EXPLICITLY OUT** (`Guide()`'s unit `AimForward` → torque is
+a control law, and it is exactly what `AttitudePilot` was: R1 §3.2 ⛔ RECOVER-REFERENCE ONLY). It is logged
+as its own line — **W24** — so it gets its own scrutiny and its own gate.
+
+✅ **DONE 2026-09-04.** Three files, and nothing else touched.
+- **`plugin/src/pure/BoosterHostPlan.cs`** (NEW, pure) — every decision the host makes: `Select` (which
+  vessel, and above all which NOT), `StopReason`, `Blocked` (the command gate), `CommandedRole` (the
+  `EngineMode == 0` ambiguity), `ProfileFor` (the target mode).
+- **`plugin/src/BoosterHost.cs`** (NEW, glue) — `[KSPAddon(Flight)]` addon; binds ONCE at separation, holds
+  the reference + the `OctawebEngines` table, ticks `Guide()` every physics frame on live state carrying
+  `CommandedForward` / `CommandedThrottle` / `DtS`, dispatches, reports, releases cleanly.
+- **`plugin/test/BoosterHostTest.cs`** (NEW) + its registration in `plugin/test/TestMain.cs` — **93 checks**.
+
+⭐ **(a) THE GATING QUESTION — CAN AN UNFOCUSED, LOADED VESSEL BE COMMANDED? YES. PROVEN IN FLIGHT, TWICE,
+BY THIS PROJECT. §B16.7's protocol STANDS; no STOP was needed.** The constraint is **UNPACKED, not ACTIVE**
+(`docs/BOOSTER_RECOVERY_ARCHITECTURE.md` §1.1's three states). Evidence, [REPO] tier, from this repo's own
+git history — recorded in full in `src/BoosterHost.cs`'s header so no later chat re-derives it:
+- **Flight 134620** (`8fd533d`): *"KSP drives the non-active booster's OnFlyByWire under PRE (cbEntered=2250,
+  **body-rate 7.9→36 dps**, loaded+unpacked throughout) → control reaches it."* The body rate CHANGED — the
+  axes did not merely get written, they took effect.
+- **Flight `Crew-2_20260829_144114`** (`e2b7ea6`): *"The non-active booster's OWN OnFlyByWire flew the full
+  recovery FSM: **16,139 calls**, EntryBurn→LandingBurn, **grid fins**, **engine mode AllEngines→ThreeLanding
+  switched exactly once**, attitude loop live (att.err 105→6 deg). **Two vehicles controlled at once.**"* — in
+  the same flight the Dragon reached orbit 200×197.7 km. That flight exercised **all four** command classes
+  this host uses on a non-active vessel: attitude axes, throttle via `FlightCtrlState.mainThrottle`, engine
+  ACTIVATION by `ModuleEngines.Activate()` on the matching-`engineID` module, and part actions (fin deploy).
+- ⚠ **The one thing that did NOT work was not a focus problem.** Same flight: *"Booster engine never lit
+  (eng_ignited=0 whole descent) → ballistic → **LOST** @14 km. **Root = RealFuels ullage.**"* The activation
+  REACHED the engine; RealFuels refused the ignition. That is **H1b / W5**.
+- **What remains is PHYSICS, not permissions** — §B16.7's already-accepted floating-origin risk. Keeping the
+  booster loaded+unpacked at range is PRE's job (`src/RangeExtender.cs`, §B16.7 step 1) and belongs to
+  **W9**: `RangeExtender.Enable` writes `vesselRanges` on EVERY vessel including the Dragon, so this host
+  must not and does not call it. Until W9 lands a real flight packs the booster out within a few km and the
+  host says so and lets go — `BoosterCommandBlock.Packed`, tested.
+- ⚠ **Not proven in flight:** `independentThrottle` / `independentThrottlePercentage` on a non-active vessel
+  (the flown path was `s.mainThrottle`). Both are written, with the **same value**, so they cannot disagree.
+
+⛔ **(b) ATTITUDE IS UNCOMMANDED, AND THE STEERING LAW IS NOW `W24`'s.** `AimForward` is computed every tick,
+surfaced (`BoosterHost.AimForward`, `AttitudeUncommanded`) and logged with a literal **"⛔ ATT UNCMD"** on
+every line. `s.pitch` / `s.yaw` / `s.roll` are **never written** (§14.4(a)). The real `ReferenceTransform.up`
+is fed to the flip's lead gate deliberately, so the reported flip **does not complete** — that is the truth
+rather than a flip that is not happening.
+
+**THE NON-INTERFERENCE GUARANTEE, made structural rather than intended.** The Dragon is excluded **three
+independent ways**, and the suite checks each one ALONE: (a) it carries a POD, (b) it carries no `.S1.` part,
+(c) it is the ACTIVE vessel (`RequireNonActive`; free under §B16.7). Plus §B16.4's foreign-vehicle veto
+(`KK_SPX` / `KK_F9demo`) scanned FIRST across the whole scene, and an ambiguity refusal. The scene that
+matters most is tested: **focus on the booster → NOTHING is bound; the Dragon is never the fallback.**
+
+**What it executes, all through the W2/W3 glue — no new actuation written.** Engines by `engineID` through
+`OctawebEngines.For(role)`, selected absolutely while OFF, **only on a role change** (one ignition per set) ·
+throttle to the bound `ModuleEngines` **and** `s.mainThrottle` · `UllageRcs` → `Actuator.EnableRcs` + a
+body-frame settle translation (`s.Z = −1` = fore, flight-anchored to 131412 via the RECOVER-REFERENCE
+`DockingControl.cs` — read and quoted, no code taken) · `DeployFins`/`DeployLegs` → `Actuator`, latched.
+⛔ No staging, no action groups, no `NextEngineModeAction`, no `ModuleEngineConfigs`, no `selectedIndex`,
+no `MechJebCore`, no per-frame engine search, no range widening.
+
+⚠ **THE HOST RUNS BUT DOES NOT WRITE: `BoosterHost.Actuate` defaults to FALSE, and that is Q1 to the owner.**
+The script binds, ticks and reports from the moment of separation (the owner's *"runs its script"*); the
+WRITE is gated on one named `[Tunable]` flag. **Reason, evidence-backed, not caution:** this task's scope
+excluded the steering law, and a booster that lights an engine with an uncontrolled attitude is **flight
+194334** — `8225df7` finding A1: *"fires thr=1.0 0.3 s after MECO at 'sep 0 km', attitude diverges 2→85 deg,
+LOST in ~10 s — **and its 0-km burn kicks the upper stage**"* (A2: yaw +14.7 dps on the stack). That is the
+exact interference the owner asked this task to prevent, and the owner's own fix was `LetFall = true`.
+**W24 flips it, or the owner does** (one line in `PluginData/tuning.cfg`, no recompile). Nothing in the tree
+sets it. **The same flight is the source of the ONE new interlock this line added:** a HOLD-OFF — no command
+within `HoldOffSeparationM` (500 m) or `HoldOffSinceBindS` (10 s) of separation, with an **unmeasurable
+separation treated as TOO CLOSE, never as clear** (L6's `sep 0 km` defect). Both figures are **[UN-CONVERGED]**
+(§B16.8 ruling 2): 194334 gives the FAILING point, never a converged safe value.
+
+**⛔ TWO GAPS ARE HELD OPEN HONESTLY RATHER THAN FILLED.**
+1. **The ullage gate is CLOSED.** `BoosterInputs.Ullaged` comes from `BoosterHost.UllageSettled`, a null hook
+   → NOT settled → every phase that wants thrust raises `UllageRcs` and refuses to burn. **C1.15 recorded:**
+   searched `docs/reference/INSTALLED_MODS.md` for a propellant-settling source — **RealFuels is installed
+   and IS the source** (row 1 names it, and names `src/Ullage.cs` as the reader); no other installed mod
+   models ullage; **so no simulation was written**. `Ullage.cs` + `pure/IgnitionGate.cs` are **W5**'s, and
+   C1.1 / §B12.8 rider (b) forbid restoring them inside this diff.
+2. **There is NO AIM POINT in the tree**, so `TargetBearing` / `DownrangeErrM` / the grid-fin errors are
+   supplied as ZERO and the FSM's own refusals fire honestly (RTLS boostback: *"no target bearing to aim
+   at"*; ASDS is inert at magnitude 0). `src/BoosterTargeting.cs` is RECOVER-REFERENCE and LZ1's
+   `docs/reference/LZ_RECOVERY_TABLE.md` is a **doc, not code**. ⛔ No latitude/longitude was put in this
+   file. Logged as **W25**.
+ℹ **W8's dangling seam now has a consumer:** the target MODE is resolved from an in-repo source only —
+`Missions.Resolve(vesselName)` → `RecoveryMode` → `BoosterDescent.TargetModeFor` → `BoosterProfile`, with an
+**unresolved craft name falling back to ASDS (magnitude 0, inert), never RTLS**. Tested, including the
+KSP-renamed `"Crew-2 Debris"` case.
+
+**VERIFY (C1.3):** `python plugin/build.py test` **GREEN** — plugin compiles (126 → 128 source files, no new
+warnings), **13,259 → 13,352 checks, 0 failed**; the new suite is 93 of them. **No screen changed, so no
+preview PNG applies** — stated rather than skipped silently; `git status` shows exactly the three new files
+plus `TestMain.cs`'s registration and this register entry. **Four open questions** for the owner at the foot
+of `plugin/src/BoosterHost.cs` (C1.14) — Q1 is the sharp one: whether to arm `Actuate` now, with the
+owner's own `LetFall` (fins/legs/RCS, never engines) offered as the middle option.
+
+### W24 [O] The booster STEERING LAW — the one component that has failed before, on its own line and its own gate — **TODO** — [TIER 1: the last thing between the host and a landing; and the known failure]
+Logged by **W23**, 2026-09-04 (C1.1 — carved out of W23 by the task's own instruction: *"Do not write a
+steering law in this task… log the steering law as its own register line so it gets its own scrutiny and its
+own gate. Bundling it here is how that failure repeats."*).
+**The finding.** `pure/BoosterDescent.Guide()` returns a definite unit `AimForward` every tick, in every
+phase, and **`src/BoosterHost.cs` executes none of it** — `s.pitch` / `s.yaw` / `s.roll` are never written.
+The booster therefore has a complete guidance and no attitude control: it can be told where to point and
+cannot point there. Until this line lands the recovery cannot work, and `BoosterHost.Actuate` stays false.
+⛔ **WHY THIS IS NOT A ROUTINE PORT — READ R1 §3.2 END-TO-END FIRST.** The component already existed:
+`src/AttitudePilot.cs` (5,310 B) + `src/AttitudeController.cs` (20,434 B) + `pure/AttitudeLoop.cs` (8,026 B).
+It is **the piece that failed** — DS-ASC-005/006/007/008 all flew it, DS-ASC-007 resolved *"RCS loss = ~97%
+attitude"*, `1603998` switched attitude to stock SAS entirely, it was reverted three times and the owner
+ordered the invented loops stripped (`70dc239`: *"Everything invented by reading flight data and chasing your
+tail needs to go"*). R1 §3.2's verdict is ⛔ **RECOVER-REFERENCE ONLY — never live code (owner directive)**,
+on all three files. **Nothing from them may be restored as code.**
+ℹ **What they ARE reference for** (R1 §3.2's own list): (a) the **frame-conversion block** — hard-won and
+independent of the gains; (b) the **two-vessel instantiation pattern** — §B16 needs exactly two independent
+loops and two `FlightCtrlState` sinks, and `BoosterHost` already owns the booster's sink; (c) the
+`max(stock-reported, geometric)` RCS-torque workaround; (d) which MechJeb `BetterController` fields matter.
+⛔ **AND IT CANNOT BE MechJeb'S.** §B16.1 forbids a `MechJebCore` on the booster and O2 forbids using the
+MechJeb that flies the mission, so R1 §3.2's *"the pinned MechJeb embed supplies the real replacement"* is
+true for the DRAGON only. The booster's steering law is **ours**, per §B16.1's *"our own compiled core with
+its own steering law"* — and the owner's stated intent for it is *"a perfect flip and boostback with no roll
+and no wasted movement"*.
+⚠ **`BoosterHost` already surfaces what it needs and nothing more:** `AimForward` (unit, world frame, every
+tick), `AttitudeUncommanded`, the bound vessel, and a `FlightCtrlState` sink that today writes only throttle
+and the ullage translation. **This line adds the axes to that sink and flips `Actuate`** — it does not
+re-shape the host.
+**Read:** R1 §3.2 END-TO-END, §B16.1, §B16.5, `docs/ATTITUDE_CONTROL_RESEARCH.md` §1–2, §B12.5, and
+`src/BoosterHost.cs`'s header + its Q1.
+**DONE when:** `build.py test` green; the law is pure + headless-tested wherever it can be; every gain and
+threshold is marked **[UN-CONVERGED]** (§B16.8 ruling 2 — MechJeb's own defaults are not RSS-RO booster
+gains either); no byte of `AttitudePilot` / `AttitudeController` / `AttitudeLoop` is in the tree; and the
+`Actuate` decision is taken **by the owner** (W23 Q1), not by the build chat (C1.12).
+
+### W25 [S] The booster AIM POINT — LZ1's sourced table is a DOC; the guidance has nothing to steer at — **TODO** — [TIER 2: real gap — a complete guidance with a zeroed target]
+Logged by **W23**, 2026-09-04 (C1.1 — found on wiring the host: every target-derived input had to be
+supplied as zero because no aim point exists in code).
+**The finding.** `BoosterInputs.TargetBearing`, `.DownrangeErrM`, `.InitialDownrangeErrM` and the whole
+`GridFinInputs` error set need a landing target. **There is none in the tree.** `src/BoosterTargeting.cs` is
+RECOVER-REFERENCE (R1 §7.4 records its site coordinates as **regime-unstated**, and §B16.9 hands the table
+to LZ1 anyway); **LZ1 delivered `docs/reference/LZ_RECOVERY_TABLE.md` — real, sourced, verified against
+public flight records, and a DOCUMENT.** So `BoosterHost` supplies zeros, honestly, and the FSM's own
+refusals fire: RTLS boostback annunciates *"no target bearing to aim at"*, ASDS is inert at magnitude 0, and
+the grid-fin law steers toward zero error (i.e. holds retrograde). ⛔ W23 put **no latitude or longitude** in
+any code file (§1.4).
+**What the line owns.** (1) The aim point: LZ1's per-mission table → a live target lat/lon, resolved by
+craft name, targeting the **KK GROUP CENTRE** (§B16.9 is explicit — not a vessel position, not a static's own
+offset). (2) The impact ERROR: `BoosterDescent.PredictImpact` over `pure/Trajectory.cs` fed by
+`pure/BoosterDrag.cs`, then `BoosterDescent.ErrorTo` — **the two-tier prediction §B16.5 SETTLED**, with the
+measured ballistic coefficient smoothed while COASTING (`Trajectory.BallisticCoefficientFrom` /
+`SmoothBc`; thrust masks drag when lit). ⛔ **No second predictor, and Trajectories is an owner call, never a
+build chat's** (§B16.5).
+⚠ **LZ1 is NEEDS-WORK and this line inherits its open item:** JRTI and ASOG are **not placed** — no single
+citable coordinate exists for either, and §1.4 reserves inventing one for owner discussion. So this line can
+deliver **LZ-1 (RTLS, `Fossil_LZ1`, `28.48583, −80.54444`) and OCISLY** today and must **refuse, marked**,
+for the two unplaced droneships rather than pick a point.
+**Read:** §B16.9 in full, §B16.5, `docs/reference/LZ_RECOVERY_TABLE.md` (all of it, including its open
+questions), `pure/BoosterDescent.cs`'s `PredictImpact` / `ErrorTo`, and `src/BoosterHost.cs`'s "THERE IS NO
+AIM POINT" block.
+**DONE when:** `build.py test` green; a resolved mission yields a live aim point or an honest, marked refusal
+(never an invented coordinate); `DownrangeErrM` is fed from our own integrator; every new constant is
+marked [UN-CONVERGED] (§B16.8); and an RTLS mission's boostback stops annunciating *"no target bearing"* for
+the missions whose target is actually placed.
+
 ---
 
 ## Open questions for the owner — G6 (C1.14)

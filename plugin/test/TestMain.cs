@@ -77,6 +77,20 @@ public static class TestMain
         bad += BoosterTest.Run();          // §B16 booster: hoverslam solver + grid-fin steering + the recovery FSM
         bad += OctawebResolveTest.Run();   // §B16.4 step 2: the octaweb binder, guard-first, against the real dump
 
+        // ---- PART B RECOVERY, W23 (§B16) - the booster HOST: the thing that RUNS the script ----
+        // W8 built the five-phase script and recorded that NOTHING CALLED IT. W23 built the caller:
+        // pure/BoosterHostPlan.cs (the decisions) + src/BoosterHost.cs (the KSP glue). This suite proves
+        // the decision half - WHICH VESSEL (and above all which NOT), WHEN TO STOP, WHETHER A COMMAND MAY
+        // GO OUT, and WHICH ENGINE SET a command names. Its sharpest checks are NEGATIVE: the DRAGON is
+        // exercised as a candidate from every angle and must never be selected, with each of the three
+        // independent exclusions checked ALONE.
+        // ⚠ NOTHING FLIES. `BoosterHost.Actuate` is FALSE by default - there is no steering law (register
+        // W24), and a booster that lights an engine with an uncontrolled attitude is flight 194334
+        // (`8225df7`: "fires thr=1.0 0.3 s after MECO at 'sep 0 km' ... LOST in ~10 s - and its 0-km burn
+        // kicks the upper stage"). The suite pins that default. The two hold-off constants it exercises
+        // are [UN-CONVERGED] (§B16.8): 194334 gives the FAILING point, never a converged safe value.
+        bad += BoosterHostTest.Run();      // §B16 booster host: selection, stop, command gate, engine roles
+
         // ---- PART B RECOVERY, W6 (§B16, R1-tagged but in NO §B12.8 wave) - the B8 impact divert ----
         // pure/CourseCorrect.cs is the layer between the two above: it turns a predicted-impact ERROR
         // (BoosterDescent.ErrorTo, over pure/Trajectory.cs) into the control change that nulls it - a 2x2
