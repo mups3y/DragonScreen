@@ -60,6 +60,23 @@ public static class TestMain
         bad += ActuationTest.Run();        // §B12.7 capability->role map + §B16.4's octaweb binding assertion
         bad += ThrustBalanceTest.Run();    // B3 TCA torque-nulling solver + its engine-out / RCS wrappers
 
+        // ---- PART B RECOVERY, WAVE C (W3, §B12.8) - the booster set (§B16) ----
+        // BoosterTest proves the three restored booster modules: the hoverslam ignition solver
+        // (pure/Hoverslam.cs), the grid-fin steering law (pure/GridFin.cs) and the recovery FSM
+        // (pure/BoosterDescent.cs). OctawebResolveTest proves W3's octaweb BINDER (pure/OctawebResolve.cs)
+        // - guard first, then bind the three ModuleEnginesRF BY engineID into a named table, resolved
+        // ONCE - and, like ActuationTest, reads the REAL `docs/reference/craftdump.csv` off disk, so a
+        // MISSING DUMP FAILS IT DELIBERATELY.
+        // ⚠ THE BOOSTER WAS NEVER RECOVERED IN FLIGHT (R1 §4.2) and every constant these suites touch is
+        // UN-CONVERGED for RSS-RO with its regime recorded NOWHERE (R1 §7.4, §B16.8). BoosterTest's
+        // fixture IS that defect - it carries the wave's only anchors, and they disagree with the only
+        // other written set. These are PROPERTY checks: monotonicity, sign, unit-length, the AoA cap, the
+        // FSM contract. Green here means the ARITHMETIC is right. It means NOTHING about tuning, and the
+        // FSM under test is four phases where §B16.2 specifies five (no boostback state). Each file says
+        // so in its own header; read one before trusting a number that came through it.
+        bad += BoosterTest.Run();          // §B16 booster: hoverslam solver + grid-fin steering + the recovery FSM
+        bad += OctawebResolveTest.Run();   // §B16.4 step 2: the octaweb binder, guard-first, against the real dump
+
         Console.WriteLine(bad == 0 ? "ALL SUITES PASSED" : bad + " SUITE(S) FAILED");
         return bad == 0 ? 0 : 1;
     }

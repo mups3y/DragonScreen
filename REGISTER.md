@@ -1461,7 +1461,7 @@ already are).
   settled by the compiler, not by preference: `Actuator.cs` does not build without them, and R1 §3.1 (in
   this line's Read list) already directs that they *"be recovered with the Actuator"*.
 
-### W3 [O] Wave C — the booster set — **TODO**
+### W3 [O] Wave C — the booster set — **DONE**
 - ⚠ **FOUR FILES OF THIS WAVE ARE ALREADY IN THE TREE — W2 restored them 2026-09-04. Do NOT restore them
   again; duplicate types break the build (§B12.8's two-generation rule).** `pure/ThrustBalance.cs`,
   `pure/RcsBalance.cs`, `pure/DiffThrottle.cs` and `test/ThrustBalanceTest.cs` are hard COMPILE dependencies
@@ -1481,6 +1481,156 @@ already are).
   note (§B12.8 rider b) — confirm which wave actually owns it from R1's map rather than assuming.
 - **DONE when:** `build.py test` green, nothing from gen 1 restored, every restored booster constant carries
   §B16.8's UN-CONVERGED marking.
+- **DONE 2026-09-04 — all three done-criteria met.** The booster set is back: `pure/BoosterDescent.cs` (the
+  recovery FSM), `pure/Hoverslam.cs` (the drag-aware landing-burn ignition solver) and `pure/GridFin.cs`
+  (the grid-fin AoA steering law), with `test/BoosterTest.cs`, all restored from `8b81816^`; **nothing from
+  gen 1 was restored**; and **every booster constant in the wave now carries §B16.8's UN-CONVERGED
+  marking**. The second requirement on this line — **the octaweb binder** — is built and, for the first
+  time, `pure/OctawebBinding.cs` has a caller.
+- **THE FILE LIST IS §B12.8's, DERIVED FROM R1 §5.1 ROW BY ROW RATHER THAN GUESSED — and the delta is
+  stated so the next wave is not surprised.** §B12.8's Wave C row names exactly four files and this task
+  restored exactly those four. Cross-checking R1 §5.1 for every row tagged **§B16** finds **nine**:
+  `BoosterDescent` · `GridFin` · `Hoverslam` (this wave) · `BoosterDrag` · `Trajectory` (**already in the
+  tree — W1**) · `ThrustBalance` · `RcsBalance` · `DiffThrottle` (**already in the tree — W2**, as
+  `Actuator.cs`'s hard compile dependencies; this line's own ⚠ said not to restore them again, and they
+  were not) · and **two that are NOT in §B12.8's Wave C row and are deliberately NOT taken here**:
+  - `pure/IgnitionGate.cs` (+ `test/IgnitionGateTest.cs`, + glue `src/Ullage.cs`) — R1 §7.1 and §B16.4
+    both assign these to **register line H1b** by name: they are the UNFIXED ullage/ignition defect that
+    **lost the booster** (*"booster ballistic, eng never lit → LOST"*), not a clean recovery. Restoring a
+    known-defective gate inside a recovery diff is exactly what §B12.8 rider (b) forbids for
+    `AscentControl`. ⚠ **H1b does not exist in this register** — logged below as **W5**.
+  - `pure/CourseCorrect.cs` (+ `test/CourseCorrectTest.cs`) — B8 impact-point divert, §B16-tagged by R1
+    but named in no wave. Logged below as **W6**.
+- **AND THE WAVE OWNS NO GLUE — `AscentControl.cs` BELONGS TO NO WAVE AT ALL.** This line asked to
+  *"confirm which wave actually owns it from R1's map rather than assuming"*. **The answer is: none of the
+  four.** §B12.8's waves are A = collision-free `pure/` support, B = actuation, C = the booster set,
+  D = the conductor set; `AscentControl.cs` is the DRAGON's ascent phase controller (§B12.5 ascent), is
+  not in any row, and §B12.8 rider (b) is explicit that it *"gets its own register line and its own
+  test"* and is *"never a quiet deletion inside another task's diff"*. So it was **not** touched here, and
+  it now has that line — logged below as **W7**. Same reasoning excluded the three `src/` booster files
+  R1 marks **RECOVER-REFERENCE**: `BoosterControl.cs` (CLAUDE.md: *"the deleted `BoosterControl`
+  implementation still stays deleted"*), `BoosterLog.cs` and `BoosterTargeting.cs` (whose site
+  coordinates R1 §7.4 records as regime-unstated, and which §B16.9 hands to **LZ1** anyway).
+- **BYTE-LEVEL PROVENANCE, CHECKED RATHER THAN TRUSTED.** All four restored files match R1's inventory
+  sizes exactly: `BoosterDescent.cs` 8,382 · `Hoverslam.cs` 4,684 · `GridFin.cs` 2,962 ·
+  `BoosterTest.cs` 8,991. And a **comment-stripped diff against `8b81816^` is IDENTICAL for all four** —
+  every W3 edit to a restored file is comment-only. (The same check on `pure/BoosterDrag.cs` against
+  `HEAD` is also identical: its §B16.8 marking below is comment-only, and not one digit of the ten-point
+  curve was touched.)
+- **THE TWO-GENERATION TRAP DID ARISE HERE, and the mechanical rule settled it.** `BoosterDescent.cs`,
+  `GridFin.cs` and `BoosterTest.cs` are **ABSENT** at `0d6423d` / `158eb2a^` — no gen-1 copy, nothing to
+  be tempted by. **`Hoverslam.cs` is NOT:** a 7,819-byte gen-1 file of the same name exists, with a
+  companion `test/HoverslamTest.cs` (4,836 B). It was **NOT taken**, on W1's own mechanical test — its
+  `HoverslamInputs` is a DIFFERENT STRUCT (`VerticalSpeed`/`MassT`/`ThrustKn`/`MdotTps`/`DragRefAccel`/
+  `DragRefSpeed` vs gen-2's `DescentSpeedMps`/`ThrustAccelMps2`/`TerminalSpeedMps`), so it is not a
+  comment-stripped copy of the gen-2 file and taking it would mean importing gen-1 LOGIC and duplicate
+  types (R1 §0.2). Its **commentary** is cited in the gen-2 header as provenance evidence; its **code**
+  is not in the tree. ✅ *"nothing from gen 1 restored"* — verified on the bytes, not assumed.
+- **§B16.8's UN-CONVERGED MARKING — landed on all four files, plus `BoosterDrag.cs`, comment-only.**
+  Ruling 2 (*every booster constant is marked UN-CONVERGED for RSS-RO*) is now in each file's own header:
+  - `BoosterDescent.cs` — `EntryBurnStartAltM` 70 km, `EntryBurnCutSpeedMps` 1300, `FinDeployAltM` 70 km,
+    `LegsDeployAltM` 500, `LandedSpeedMps` 2 are researched defaults, **never DB-seeded, never flown**
+    (R1 §5.1), and the research documents they came from were deleted 2026-09-01, so they cannot be
+    re-checked against their own source either.
+  - `Hoverslam.cs` / `GridFin.cs` — ⚠ **a precision R1 §7.4 does not make: NEITHER FILE DECLARES A
+    PHYSICAL CONSTANT.** `Hoverslam`'s only literal is the `Dt = 0.05` integration step (arithmetic, not
+    tuning) and every anchor — descent speed, thrust accel, terminal speed, dead time, spool — is an
+    INPUT; `GridFin`'s `AoaMaxDeg` / `GainDegPerKm` / `LeadTauS` are likewise all inputs. **The §7.4
+    defect therefore lives in the FIXTURE and in the future caller, not in the solver**, and each header
+    now says exactly that so nobody hunts for a number that isn't there.
+  - `BoosterTest.cs` — where the anchors actually are, and the marking is blunt about it. ⚠ **W3 checked
+    the anchor provenance on the bytes and it is worse than R1 §7.4 records:** R1 quotes gen-1
+    `HoverslamTest.cs`'s *"the real 0824 landing (v_term 244, 31 t, 1925 kN, spool 3.5 s)"* with the
+    regime unrecorded — but **that header disagrees with its own fixture** (`SpoolS = 1.2`,
+    `DeadTimeS = 5.4`), and **both disagree with this wave's** (2,227 kN, `DeadTimeS = 6.0`,
+    `SpoolS = 0.0`). **Three anchor sets, one named landing, regime recorded nowhere.**
+  - `pure/BoosterDrag.cs` — **§B16.8 ruling 1** (*reference with stated provenance, not seed truth*),
+    which W1 had not landed: the 18,080 samples across 48 RSS/RO flights were gitignored and never
+    committed, so the ten-point curve and the deleted `TUNING_DB.json` are the **only surviving
+    distillates and neither can be re-derived, re-binned or re-checked from anything in this repo**. The
+    header also records what a re-flight MUST capture for the back-solve `BC = 0.5·ρ·v²/a_drag` to be
+    redoable at all — density, Mach, drag accel (or accel/gravity/thrust), mass, and an **explicit
+    unpowered-phase flag** — because without that flag the powered samples poison the bins.
+- **THE OCTAWEB BINDER IS BUILT, AND `OctawebBinding` FINALLY HAS A CALLER.** This line's second ⚠ made
+  the binder Wave C's job. Two new files, both W3-authored and marked NOT-restored in their headers:
+  - **`plugin/src/pure/OctawebResolve.cs`** (pure, headless-tested) — the decision: *given every part
+    name on the vessel and every (part, engineID) pair carrying an engine module, is there exactly one
+    complete octaweb role table, and which entry plays `AllEngines` / `ThreeLanding` / `CenterOnly`?* It
+    **calls `OctawebBinding.Bind` FIRST, always, before a single engineID is looked at**, and refuses on
+    anything but `Ok`. It returns **INDICES into the caller's own array**, never objects — which is what
+    keeps the decision pure and dump-testable. **Four refusal paths**, each a refusal rather than a
+    guess: `GuardRefused` (§B16.4's three), `ModeMissing` (a 9-3-1 schedule with a hole is not flyable),
+    `ModeDuplicate` (two claimants — picking is the move §B16.4 forbids), and **`ForeignPart`** — an
+    octaweb-role engine on a booster part that is **not the bound octaweb**, which W3 added because
+    `Actuation.EngineRoleOf` classifies on `IsBooster` (the `.S1.` marker) + engineID, so ANY booster
+    part could otherwise offer a role and silently discard the identity check the guard just performed.
+    Every refusal binds **nothing** (no half-table survives) and **annunciates**; a guard refusal defers
+    to the guard's own wording so the operator sees WHICH §B16.4 failure it was.
+  - **`plugin/src/OctawebEngines.cs`** (glue) — the **named table, resolved ONCE and held** (§B12.7:
+    never re-searched per frame). It walks the live parts once, hands the pure resolver the pairs, keeps
+    the three `ModuleEngines` references it names, and offers `For(role)` + `StillValid(vessel)` so a
+    stale table is **re-resolved at the next phase boundary rather than falling back to a live search
+    mid-descent**. ⛔ It **never actuates** — no Activate, no Shutdown, no throttle; direct part control
+    stays `Actuator`'s ([[direct-part-control-hard-rule]]) and this file only READS the part list. ⛔ And
+    it never cycles engine modes: `ModuleTundraEngineSwitch` and `ModuleEngineConfigs`-as-a-switch are
+    §B16.3/§B16.4-forbidden, and selecting a mode means ACTIVATING the bound module while it is off.
+  - **`test/OctawebResolveTest.cs` (67 checks)** proves the pure half and, like `ActuationTest`, **reads
+    the REAL `docs/reference/craftdump.csv` off disk** — building the table the way a phase boundary
+    would and asserting the bound indices point at exactly the three engineID strings §B16.4 names, all
+    three on the one octaweb part. ⚠ **A missing dump fails it deliberately.** It also re-proves the
+    deleted by-count procedure fails on the real craft (3 modes ≠ `OctawebEngineCount` 9) and that the
+    indices follow the **caller's order**, never a fixed position.
+- **⛔ ONE COMMENT CORRECTION INSIDE A RESTORED FILE — flagged, not buried.** `BoosterDescent.cs`'s
+  LandingBurn comment offered *"set `ModuleTundraEngineSwitch.selectedIndex = 2`"* as an equal
+  alternative to activating the bound `CenterOnly` module. **It is not one.** §B16.4 lists `selectedIndex`
+  among that module's fields that may be **READ** for annunciation, and §B16.3 bans the module as a
+  **switching** mechanism outright — writing it is exactly the RO mode-cycle that causes the re-ignitions
+  and lag the owner directed us away from. The comment predated §B16.3/§B16.4 and would have talked the
+  next glue author into the one thing the section forbids. **Comment-only: no code changed** (the
+  comment-stripped diff above is still identical), and the correction says what it replaced and why.
+- **Gate (C1.3), preview-only — nothing here needs the capsule.**
+  **`python plugin/build.py test` GREEN.** Glue DLL builds **118 source files (was 113 after W2),
+  347.0 KB**, with **NO new warning** — all 11 warnings name `ScreenPainter.cs` (6), `Pages.cs` (2×2) and
+  `LayoutSweepTest.cs` (1), every one pre-existing and none touched here; **zero** warnings from any
+  restored or new file. Tests build **122 source files (was 116)** and report **12,243 checks, 0 failed,
+  ALL SUITES PASSED** — the 26 prior suites unchanged, plus W3's two: **`BoosterTest` 37** and
+  **`OctawebResolveTest` 67**, i.e. **+104**.
+  **`python plugin/build.py preview` run as a no-regression check: all 112 PNGs BYTE-IDENTICAL**
+  (sha256 over every file, before/after) — nothing on any page reads these modules. **PNGs inspected
+  anyway** (C1.3 taken literally): `panel_rest.png` — the lower console still shows the §14.4(a) no-red
+  board, **0 of 38 lamps lit**, every dim-label INERT mark as before; `page0_flight_gate.png` — the
+  FLIGHT gate page renders unchanged. **W3 draws nothing; there is no new PNG to judge.**
+- **§1.4 / C1.4 respected.** No label, no unit, no `PanelMap.cs`, no label doc touched; no screen file
+  touched at all. **Nothing was invented.** Every part name and every `engineID` string in the new code is
+  **verified-real** from `docs/reference/craftdump.csv` and already written into §B16.4; the two foreign
+  markers `KK_SPX` / `KK_F9demo` are §B16.4's own words; the synthetic name `TE.19.F9.S1.Tank` in the
+  `ForeignPart` test is a deliberate NEGATIVE fixture (a hypothetical second booster part) and is
+  asserted about, never claimed to be on the craft.
+- **C1.15 (evidence-gated mod-first) — not engaged, and stated rather than skipped silently.** This task
+  wrote **no simulation of any kind** for any real quantity. It restores flight code and adds a
+  name/engineID-matching binder whose evidence is the repo's own craft dump. No not-yet-modelled quantity
+  was filled, so no `docs/reference/INSTALLED_MODS.md` search was owed.
+- **⚠ NOT CLAIMED, and the list is longer than usual because this is the never-flown wave.** Not claimed:
+  that any of this FLIES anything — the three restored modules have **no caller anywhere** in
+  `plugin/src` or `plugin/test` outside their own test, and `OctawebEngines` has no caller either
+  (§B16.1's booster core is written FRESH and is not this wave; `BoosterControl.cs` stays deleted). Every
+  flight command on every screen is still §14.4(a)'s honest no-op. Not claimed: that any number here is
+  tuned — see the markings; **the booster was NEVER RECOVERED in flight** (R1 §4.2). Not claimed: that
+  the FSM is complete — **it is four phases where §B16.2 specifies five**, with no BOOSTBACK state and no
+  `TargetMode`, so as restored it can fly neither profile's return leg (logged as **W8**; closing it is a
+  rewrite, and §B12.8 says Wave C recovers *"a STARTING POINT, not working code"*). Not claimed: that the
+  binder has been checked on a live vessel — it is checked against the dump, headless, and §B12.7's rule
+  is that the dump is the SPECIFICATION and the runtime lookup is the BINDING. And the glue half
+  (`OctawebEngines.cs`) is **untested by construction** — the headless build cannot compile KSP types —
+  which is why it is as thin as it is; that is stated in its own header and in the test's.
+- **Deliberately NOT done (logged, not built — C1.1):** **W5** (H1b — the ullage/ignition gate), **W6**
+  (`CourseCorrect`), **W7** (`AscentControl` recovery with the roll-trim block removed), **W8** (the
+  §B16.2 boostback/coast phases + `TargetMode`). All four are appended at the bottom of this register.
+- **Open questions for the owner (C1.14): NONE.** Nothing here hit a gate, a missing source or an
+  authority limit. The two judgement calls were both settled mechanically rather than by preference:
+  whether to take the gen-1 `Hoverslam.cs` (settled by the struct mismatch — it is not a comment-stripped
+  copy, so W1's rule excludes it), and which of R1's nine §B16-tagged rows this wave owns (settled by
+  §B12.8's Wave C row, with the two exclusions each already assigned elsewhere by the plan itself).
 
 ### W4 [O] Wave D — the conductor set (where the stub collisions land) — **TODO**
 - **Read:** §B12.8 Wave D, §B12.5 (amended — stub names are the facade), R1 §5.2 and its Q4 resolution.
@@ -4198,3 +4348,92 @@ is committed to, so a silent edit would surface as a landing miss, not as a test
 shape claim the file's own header makes. Register it in `TestMain.cs` beside the Wave A block.
 **DONE when:** `build.py test` green with the new suite, and the pinned values are cited to R1 §3.5 in the
 test's header so a future editor sees where the authority for them is (and that it is the last copy).
+
+### W5 [O] H1b — the ullage/ignition gate that lost the booster, recovered as an OPEN DEFECT — **TODO** — [TIER 2: real defect + Part-B recovery]
+Logged by **W3**, 2026-09-04 (C1.1 — the register line R1 §7.1 and §B16.4 both cite by name does not exist).
+**The finding:** `docs/BUILD_PLAN.md` §B16.4 says *"…the reason register line **H1b** exists"* and R1 §7.1
+lists `pure/IgnitionGate.cs` + `src/Ullage.cs` under *"directly implicated — a named, located, UNFIXED
+defect"*, status ⛔ **UNFIXED — register H1b**. **There is no H1b line in this register.** So the one defect
+the plan names twice has no task, and W3 declined to fold it into a recovery diff (§B12.8 rider (b)'s rule:
+a known-defective file is never a quiet restore inside another task's wave).
+**Why it matters:** this is the failure that **lost the booster** — `docs/FLIGHT_144114_SCREEN_AUDIT.md`:
+*"booster ballistic, eng never lit → LOST"*. R1 §5.1 marks `IgnitionGate.cs` **RECOVER-CODE — HIGH, §B16**
+and *"**YES — and it FAILED**"*; `src/Ullage.cs` is **RECOVER-CODE — HIGH, §B16**, RSS-RO (RealFuels),
+*"irreplaceable, no stock analogue"*, and reads RealFuels propellant-settling state by reflection (C1.15
+names it as the mod-first source a screens pass had been ignoring). §B16.3 makes the discipline binding
+— *settle propellant with RCS before EVERY relight* — and §B16.4 records that `TestFlightFailure_IgnitionFail`
+sits **on this exact part**, so this is the known failure mode with dice attached, not defensive padding.
+**Build:** restore `pure/IgnitionGate.cs` + `src/Ullage.cs` + `test/IgnitionGateTest.cs` from `8b81816^`
+(sizes 2,502 / 3,917 / 2,944 — check them), **as an OPEN DEFECT**: the gate comes back with its failure
+stated in its own header, a test that pins the failing case, and the fix proposed rather than slipped in.
+Then wire it to the §B16.3 rule the booster core will need. Read §B16.3, §B16.4's TestFlight paragraph,
+R1 §7.1 and R1 §5.1's two rows END-TO-END first.
+**DONE when:** `build.py test` green, the gate is restored with its defect stated and pinned by a test, and
+either the fix is landed with the owner's agreement or the line is closed with the fix written down and
+assigned. ⚠ Nothing here converges a constant — that needs a recorded flight (§B16.8 ruling 3, owner gate).
+
+### W6 [S] `pure/CourseCorrect.cs` — the B8 impact divert, §B16-tagged by R1 but named in no wave — **TODO** — [TIER 3: scheduled recovery]
+Logged by **W3**, 2026-09-04 (C1.1 — found while deriving Wave C's file list from R1 §5.1 row by row).
+**The finding:** R1 §5.1 gives `pure/CourseCorrect.cs` (6,857 B) verdict **RECOVER-CODE — §B16**, and R1
+§5.3 gives `test/CourseCorrectTest.cs` (6,581 B) **RECOVER-CODE**, calling it *"divert solve against a KNOWN
+LINEAR impact model — the decisive check"*. **But §B12.8's four wave rows do not name it** (A = collision-free
+`pure/` support, B = actuation, C = the booster set's three modules, D = the conductor set), so it is
+§B16-tagged recovery work with no wave and no line. W3 restored only §B12.8's Wave C row and logged this
+rather than widening its own scope.
+**What it is:** the B8 finite-difference impact-point divert solve — the layer that turns a predicted-impact
+error (from `pure/Trajectory.cs`, in the tree since W1) into a correction. It is the natural consumer of the
+prediction engine §B16.5 commits to, and the natural producer of the error `pure/GridFin.cs` steers on.
+⚠ R1 §7.4 records its 4-band L/D schedule as an **unmeasured prior** — *honestly self-marked*, so a disclosed
+gap rather than a hidden one, but still un-converged (§B16.8 ruling 2 marking required, as W3 did for the
+booster set).
+**Build:** restore both files from `8b81816^`, add the §B16.8 UN-CONVERGED marking, register the suite in
+`TestMain.cs` beside the Wave C block. Read R1 §5.1's row, R1 §5.3's row, R1 §7.4 and §B16.5 first.
+**DONE when:** `build.py test` green with the new suite, the L/D prior carries its marking, nothing from
+gen 1 restored.
+
+### W7 [O] `AscentControl.cs` — recover it with the roll-trim block REMOVED, on its own line — **TODO** — [TIER 2: real defect + recovery; touches the ONLY flight-validated subsystem]
+Logged by **W3**, 2026-09-04 (C1.1 — W3's Build text asked which wave owns this file; the answer is **none**).
+**The finding:** R1 §5.2 gives `plugin/src/AscentControl.cs` (55,054 B) verdict **RECOVER-CODE — HIGH**,
+regime **RSS-RO — DB-VALIDATED**, flown **YES**. But it is the DRAGON's ascent phase controller (§B12.5
+ascent), and **§B12.8's four waves do not contain it** — A is collision-free pure support, B actuation,
+C the booster set, D the conductor set. §B12.8 rider (b) is explicit that it *"gets **its own register line**
+and its own test"* and is *"**never a quiet deletion inside another task's diff**"*. This is that line.
+**⛔ Read this before starting.** The file carries R1 §7.1's named, located, **UNFIXED** defect at
+**`:397-414`** — the S2 roll-trim hysteresis, *"sawtooths roll to 27.5 dps + toggles RCS 17× + 2 Hz gimbal
+chatter = the shake"*. §B12.8 rider (b): it comes back with that block **REMOVED — removed, not fixed**.
+**And flag it loudly, as the plan does:** ascent control is the **ONLY flight-validated subsystem we have**
+(R1 §4.2 — DB-validated, `pe_p95 < 0.4°`). Cutting code out of it is not a tidy-up.
+⚠ Also from R1: `src/Steering.cs` is **NEVER recovered** (§B12.8 rider (b) — its last committed state is
+`UseGimbalLoop = false`, attitude handed to stock SAS, which is precisely what Part B replaces), and
+`pure/Ascent.cs` / `test/AscentTest.cs` are the pure half this glue drives — confirm from R1 §5.1/§5.3
+whether they come with it or need their own line before restoring anything.
+**Build:** restore `src/AscentControl.cs` from `8b81816^` with `:397-414` removed, plus its own test proving
+the removal (no roll-trim hysteresis path remains) and that nothing else in the file changed — a
+comment-stripped diff against `8b81816^` minus that block, the W2/W3 provenance idiom.
+**DONE when:** `build.py test` green, the removal is test-guarded and stated in the file's header, and the
+diff shows the block gone and nothing else in the proven ascent path altered.
+
+### W8 [O] The recovered booster FSM is FOUR phases; §B16.2 and the owner's boostback decision need FIVE — **TODO** — [TIER 2: real gap — the recovered starting point cannot fly either profile]
+Logged by **W3**, 2026-09-04 (C1.1 — found on restoring `pure/BoosterDescent.cs`; closing it is a rewrite,
+and §B12.8 says Wave C recovers *"a STARTING POINT, not working code"*).
+**The finding:** the restored `BoosterPhase` enum is `Idle · Flip · EntryBurn · AeroDescent · LandingBurn ·
+Landed`. **§B16.2's profile is BOOSTBACK → COAST → ENTRY BURN → AERO DESCENT → LANDING BURN**, and the owner
+settled on **2026-09-03** (via the overseer, closing G5a-Q2, and §B16.2 records it as the C1.8 `OVERRIDE`
+of the older text) that **BOOSTBACK IS ONE ALWAYS-ENTERED STATE for both profiles**, with its **magnitude
+and aim-point offset parameterized by target mode** — RTLS running the full flip-and-null-target-error
+return burn, **ASDS defaulting to a ZERO-MAGNITUDE trim** until a recorded flight says otherwise. §B16.2 is
+explicit: *"A build chat must implement the state as always-entered, mode-parameterized magnitude/aim-offset,
+**never an RTLS-only optional state**."*
+**So, precisely:** there is **no boostback state**, **no ballistic coast state** and **no `TargetMode`
+(`Rtls`/`Asds`) anywhere in the module** — nothing consumes the target mode §B16.9's per-mission LZ
+resolution produces. As restored the FSM can fly neither profile's return leg. `test/BoosterTest.cs`
+therefore exercises nothing of the boostback, and a green suite must not be read as a complete FSM (its
+header says so).
+**Build:** extend the FSM to §B16.2's five phases with an always-entered, mode-parameterized boostback and a
+`TargetMode`, keeping the file's own headline contract — `Guide()` ALWAYS returns a definite unit
+`AimForward`, AoA always capped and held. Every new constant is UN-CONVERGED and carries §B16.8 ruling 2's
+marking; the tier-2 shape §B16.2 cites (170° flip / 5° retrograde offset / 2700 m downrange aim) is a
+**convergence target, not a seed** — ASDS starts at zero magnitude, matching the old behaviour exactly.
+Read §B16.2, §B16.5, §B16.8 and `docs/BOOSTER_GUIDANCE_METHOD.md` §3.1/§4/§8.1/§10 END-TO-END first.
+**DONE when:** `build.py test` green, both profiles enter boostback, ASDS's default magnitude is zero, the
+unit-`AimForward` and AoA-cap contracts still hold in every phase, and every new number is marked.

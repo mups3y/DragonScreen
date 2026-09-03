@@ -29,6 +29,26 @@
  * LOGIC is imported by that choice.
  * ⚠ The curve is a FALCON-9 BOOSTER curve (R1 §5.1): it is not valid for the Dragon capsule or S2.
  * Nothing in Wave A calls it yet - it is the dataset §B16's booster core will read.
+ *
+ * ---- ⛔ §B16.8 RULING 1 - REFERENCE WITH STATED PROVENANCE, NOT SEED TRUTH (added by W3, Wave C,
+ * 2026-09-04; comment-only, not one digit of the table touched) ----
+ * THE RAW EVIDENCE BEHIND THIS CURVE IS GONE. The 18,080 samples across 48 recorded RSS/RO flights were
+ * `flight_0825_*.csv` and their siblings: GITIGNORED AND NEVER COMMITTED (R1 §3.5, §4.3 - only the
+ * DS-ASC-00x and Crew-2 recordings were ever force-added). The ten numbers in the table above, and the
+ * per-phase aggregate in the also-deleted `docs/tuning/TUNING_DB.json`, are the ONLY SURVIVING
+ * DISTILLATES. **Neither can be re-derived, re-binned or re-checked from anything in this repository.**
+ * If a digit here is ever doubted - or silently changed - there is nothing in the tree to check it
+ * against, and the symptom would be a landing miss, not a test failure (which is why register line S63
+ * exists: pin the table in a test).
+ * ⇒ Treat this curve as THE BEST NUMBER WE HAVE AND NOT AS EVIDENCE. A number you cannot re-derive is
+ * still worth keeping; it has simply stopped being proof of anything. Owner decision, 2026-09-03 (R1
+ * open question Q2): RE-FLY. The corpus is rebuilt by RECORDED re-flights, which needs the BlackBox
+ * (`docs/BLACKBOX_RESEARCH.md`) and a SEPARATE owner glass gate (S0 banner) - no task can converge this
+ * curve under the preview-only gate; it can only build the thing that would.
+ * ⚠ What such a re-flight MUST record, or the back-solve `BC = 0.5*rho*v^2 / a_drag` cannot be redone at
+ * all (§B16.8): per sample - atmospheric DENSITY, MACH, DRAG ACCELERATION (or total accel + gravity +
+ * thrust), MASS, and an EXPLICIT UNPOWERED-PHASE FLAG. Without that flag the powered samples poison the
+ * bins - the surviving 18,080 were "clean unpowered in-atmosphere descent" samples for that reason.
  */
 namespace DragonScreen
 {
