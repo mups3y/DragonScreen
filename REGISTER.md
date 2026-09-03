@@ -1316,17 +1316,22 @@ on the glass.
   (11476 checks, 0 failed) and `page2_nav_planet.png` inspected — the view still draws the marked
   `LIVE 3D — NO SIGNAL` state over the real orthographic globe + orbit, which is correct, because the PNG
   preview never links the glue and so can never have a Unity camera behind it.
-- ⛔ **A GATE CLAIM WAS CORRECTED ON THE WAY IN (C1.12).** Two comments in the committed code asserted that
-  the glass gate had been opened and used — `ImageStore.cs`: *"S18's install + glass go built it"*, and
-  `ScaledPlanetRenderer.cs`'s header: *"the camera waited for install + glass time, which is S18's gate.
-  This is that camera."* **No such go is on the record:** S18 is `HELD` (deferred by owner directive
-  2026-09-02), this very line says it "neither grants nor inherits one", and the owner's instruction in the
-  committing chat restated that the standing state is preview-only. C1.12 forbids recording a go as the
-  owner's unless the owner stated it in that chat, so both comments were rewritten to state only what is
-  verifiable — the camera is WRITTEN, it has never rendered a frame, and S10b's three in-sim checks are
-  still open behind a HELD gate. Comments only; no behaviour changed. **The owner should confirm whether a
-  glass session actually happened on 2026-09-03** — if it did, the register missed it and S18/S36 need
-  updating; if it did not, the code was describing a session that never took place.
+- ✅ **THE GLASS SESSION DID HAPPEN — the register had simply missed it.** The committed code carried two
+  comments asserting an owner install + glass go (`ImageStore.cs`: *"S18's install + glass go built it"*;
+  `ScaledPlanetRenderer.cs`: *"the camera waited for install + glass time, which is S18's gate. This is
+  that camera."*). Nothing in the register recorded such a go, so the committing chat rewrote both to claim
+  only what it could verify, and flagged it. **The owner then confirmed it, and the KSP screenshots prove
+  it** — 38 frames, 12:02:48–12:06:13 on 2026-09-03, showing a build current through S26. So the original
+  claim was substantially TRUE and the rewrite was over-cautious; both comments have been corrected again
+  to say what actually happened, and the gate opening is recorded here where it belongs. **The correction
+  was still the right call at the time** — C1.12 forbids a build chat recording a go as the owner's on the
+  strength of a code comment, and the fix for that is exactly what happened: state the verifiable version,
+  flag it, let the owner settle it. ⚠ **What is still NOT established:** whether S10b's camera itself was
+  exercised. Eight of the 38 frames were sampled (Cover ×3, Docking, Manual Docking, Propulsion, Thermal,
+  P&ID, Suit Check, Audio) and **none shows the NAV 3D PLANET view**, so its three in-sim criteria are not
+  recorded as answered and this line stays **HELD** on that alone. The vessel was also `Landed` throughout
+  ("ON SURFACE - NO ORBIT"), which is the degenerate case for `PlanetGeom`'s orbit-plane framing — so even
+  if the view was opened, it is not the state that answers "does the orbit line occlude".
 - **Still not built, unchanged:** §2.2's overlay RE-PROJECTION. The orbit line over this view is still
   S10a's ORTHOGRAPHIC `GlobeProjection`, which is right over the textured disc and NOT right over a
   perspective render from a 3/4 angle. The committed file's own header says so. Carried on **S37**.
@@ -2281,9 +2286,15 @@ than decided here (C1.12). PREVIEW-ONLY throughout — no `install`, no glass.
   `VesselData.cs:191-194` assigns each text field from its own `CabinReadout` member, and
   `SystemsPidPage.cs`'s READOUTS rows pair each label with that same field. `ui_systemspid.png` re-read
   after this task: LOOP A 26.4 °C · LOOP B 20.1 °C · CABIN TEMP 21.8 °C · CABIN PRESS 14.72 psia ·
-  PPO2 2.86 psia · CO2 1.64 mmHg — correct, and every row nominal green. Nothing was changed. ⚠ Worth
-  knowing for the NEXT glass session: the last `install` was **S17**, which predates S19–S33, so glass
-  was showing an older DLL than this tree — see **S36**.
+  PPO2 2.86 psia · CO2 1.64 mmHg — correct, and every row nominal green. Nothing was changed.
+  ⛔ **CORRECTED 2026-09-03, same day, after the owner supplied the glass screenshots.** The verdict
+  above (no wiring defect) is right; **the reason this task gave for it was wrong.** It guessed the
+  finding came from a stale DLL. It did not — see **S36**, now closed — and the real cause is worse:
+  the readouts genuinely DO read mis-paired on the glass, because the value column sits ~920 design
+  units right of its labels and the console is viewed obliquely, so the whole column reads about one
+  row HIGH. The crew was reading the panel correctly; the panel is misleading at the IVA angle. That
+  is a real legibility defect and is now **S38**. This task should have asked for the screenshots
+  instead of theorising about the build.
 - **(5) The "Changelog" CONNECTIONS row — NOT a mis-transcription, no change.** Unlike S19 this one is
   faithful: `docs/UI_AUDIT.md:310` (generated from the reference's own source) lists `Changelog` among
   the page's labels, and **both** reference copies agree —
@@ -2360,44 +2371,62 @@ colours, and the reference's own choices collide with our state palette:**
 *(The "was glass even running a current build?" half of this — S34's other open question — was split out
 to **S36** by owner directive, 2026-09-03, so the two can be decided separately.)*
 
-### S36 [owner call] The 2026-09-03 glass pass ran on the S17 DLL — re-baseline before the next findings? — **TODO** — [TIER 3: owner decision]
-Logged by S34, split out of S35's prompt by owner directive (that chat, 2026-09-03) so it is its own
-decision rather than a rider on the gauge-colour call. Needs an owner call: it is a question about when
-an `install` + glass gate opens and what that session is FOR, which a build chat never decides (C1.12).
+### S36 [owner call] The 2026-09-03 glass pass ran on the S17 DLL — re-baseline before the next findings? — **CLOSED 2026-09-03: THE PREMISE WAS FALSE** — [TIER 3: owner decision]
+Logged by S34, split out of S35's prompt by owner directive. **Closed the same day, unasked, because the
+owner supplied the glass screenshots and they disprove it. No owner decision is needed.**
 
-**The evidence.** The last `install` this register records is **S17** (2026-09-02). S19–S33 all landed
-after it, preview-only, so the DLL on the glass that produced the 2026-09-03 findings predates roughly
-fifteen tasks of fixes. It shows: S34 audited all six findings and **finding 2 did not reproduce** — the
-SYSTEMS P&ID readouts were reported "shifted by one" (CABIN TEMP showing the pressure, CABIN PRESS
-showing ppO2, PPO2 showing CO2), but `VesselData.cs:191-194` assigns each field from its own
-`CabinReadout` member, `SystemsPidPage`'s rows pair each label with that same field, and the re-rendered
-`ui_systemspid.png` reads correctly and nominal-green on every row. Either it was fixed between S17 and
-now, or it was a misread on the glass; **neither is a live defect in this tree.** Two more findings (2
-and 5) cost a full audit each to close as not-defects.
+**What this line claimed:** that the glass session was running the S17 DLL (2026-09-02), which predates
+S19–S33, and that this explained why one of the six findings did not reproduce.
 
-**Why it matters.** Findings taken against a stale DLL cost real audit time, can send a build chat
-looking for a bug that is already fixed, and — worse — could mask a live one behind a "we already looked
-at that". S18 is the standing end-of-Part-A glass list and is where the next glass go is expected to be
-spent, so this is the moment to decide what that session's first job is.
+**What the screenshots show** (`Steam\userdata\...\220200\screenshots`, 38 frames, 12:02:48–12:06:13 on
+2026-09-03 — the owner pointed here; they are evidence handed over, not a build source, so C7 is intact):
+- **THERMAL CONTROL** labels its two coolant gauges `LOOP A` and `LOOP B`. That is **S20** (2026-09-02),
+  which landed AFTER S17. The reference labels both `LOOP A`; only the post-S20 build says `LOOP B`.
+- **MANUAL DOCKING** draws the PYR block as per-axis RATE with no fixed target diamond. That is **S26**
+  (`d8e718b`) — the HEAD commit immediately before the QC-audit session.
+- **The Suit Leak Check** shows S31/S32's popup, verdict word and TROUBLESHOOT affordance.
 
-**Paste-ready overseer prompt (C1.13):**
-> DragonScreen, S36. The glass pass that produced the 2026-09-03 QC findings was running the **S17**
-> DLL — the last `install` this project made — which predates S19 through S33. One of its six findings
-> (the SYSTEMS P&ID readouts being shifted by one column) does not reproduce against the current tree at
-> all; the code is correct and the re-rendered PNG is correct, so it was either already fixed or misread.
-> Two of the six cost a full audit to close as not-defects. Nothing is broken and nothing is blocked —
-> this is purely about how the NEXT glass session is scoped, and only the owner opens or scopes a glass
-> gate (C1.12). The options:
-> **(a) Re-baseline first.** The next `install` + glass go begins by re-walking the six 2026-09-03
-> findings and the S18 checklist against a CURRENT build, and no new findings are logged until that pass
-> is done. Costs part of a session; guarantees every finding after it is real.
-> **(b) Fold it in.** Run S18 as written and simply re-check the 2026-09-03 six as they come up.
-> Cheaper, but mixes stale-DLL noise into a list that is meant to close Part A.
-> **(c) Install-then-look, as a standing rule.** Make it protocol that any glass session begins with a
-> fresh `install` of the current tree, so glass is never read against an older DLL again. This is the
-> only option that stops it recurring, and it would want a line in Part C / `CLAUDE.md` rather than just
-> a register note.
-> **(d) Nothing.** Accept that findings may be stale and audit each one against the code first — which
-> is what S34 did, and it worked, just at a cost.
-> Which one? If (c), a build chat will need an explicit `OVERRIDE` plus the plan/`CLAUDE.md` edit before
-> it may add that rule (C1.12).
+So the glass was running a build **current through at least S26**, i.e. everything S17 through S33. The
+"stale DLL" theory was invented to explain a finding that did not reproduce in preview, and it was wrong.
+**The correct explanation is S38.** Nothing about the install cadence needs changing, and the option (c)
+"install-then-look as a standing rule" this line proposed is unnecessary — the owner already did exactly
+that.
+
+**The lesson, which is the part worth keeping:** a build chat that cannot reproduce a glass finding should
+**ask for the screenshots**, not theorise about which DLL was running. The evidence existed the whole time.
+
+
+### S38 [O] Label→value rows read ONE ROW OFF on the glass — the console is viewed obliquely — **TODO** — [TIER 2: real defect]
+Logged 2026-09-03 from the owner's glass screenshots. **This is what QC finding 2 actually was.** S34
+closed that finding as "not reproduced" against the preview PNG and was right about the CODE and wrong
+about the CREW: the pages are correctly wired, and they are still misread in the capsule.
+
+**The defect.** `SystemsPidPage`'s READOUTS column draws each label at `rx = 2150` and its value
+right-aligned at `3070` — **920 design units apart**, with nothing joining them. On the glass the console
+is a tilted quad, so a row that is horizontal in the RenderTexture is a sloping line in the crew's view,
+and the value column lifts relative to its labels. Measured on `20260903120540_1.jpg`: row pitch ~25 px,
+value column displaced ~24 px upward — almost exactly one row. The crew reads:
+`CABIN TEMP 14.70 psia` (the pressure) · `CABIN PRESS 3.00 psia` (the ppO2) · `PPO2 1.00 mmHg` (the CO2)
+· `CO2` blank, with the first value stranded on the `READOUTS` heading.
+**The units travel with the values, which is the proof it is not a wiring bug:** the code draws each unit
+at its LABEL's y and each value 4 units above, so a data mis-pairing could not carry `psia` up onto the
+CABIN TEMP line. A rigid displacement of the whole right-hand column can, and does. Cross-checked against
+the same frame's own diagram boxes — CABIN 14.70, SUIT LOOP 3.00, CO2 SCRUBBER 1.00, RADIATOR A 27.1,
+RADIATOR B 20.4 — every one agrees with the TRUE pairing and none with the apparent one.
+
+**It is not just the P&ID.** The Cover's `Crew Interrupt Conditions` shows the same thing at a gentler
+angle (`20260903120255_1.jpg`): both `FAR FIELD POINTING` values sit ~14 px above their labels on a 21 px
+pitch, so the first value floats above the first label. Anything built as "label left, value far right,
+nothing in between" is exposed. **This is a legibility class, not one page** — audit for it, do not fix
+one instance.
+
+**Why preview never caught it, and what that means for the harness:** `build.py preview` renders the
+panel flat and square-on, so the rows align perfectly and always will. **No PNG check can find this
+defect.** That is the interesting part: it is the first class of defect in this project that is invisible
+to the preview gate by construction, and the C1.3 gate should probably say so.
+
+**Fix direction (not decided — whoever takes this picks, and it is a design call):** bind label and value
+into one visual row rather than trusting horizontal alignment across a wide gap — a leader line that
+actually spans the gap (the Cover has short ones and still misreads, so they must reach), a banded or
+boxed row, or simply moving the value column in beside its label. The last is cheapest and most robust
+and costs nothing but a layout change to a page that is ours, not the reference's.

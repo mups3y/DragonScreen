@@ -9,15 +9,17 @@
  * (pure/PlanetGeom.cs, 66 headless checks), the seam (ImageId.ScaledPlanetLive ->
  * ImageStore.ScaledPlanetTexture -> PageState.PlanetCamLive), and the honest LIVE 3D - NO SIGNAL
  * state for a view with no camera behind it. What it could not do is RUN a Camera: build.py compiles
- * this glue on every `test`, but nothing headless renders. So the camera waits for install + glass
- * time, which is S18's gate - and that gate is still HELD.
+ * this glue on every `test`, but nothing headless renders. So the camera waited for install + glass
+ * time. THE OWNER OPENED THAT GATE AND RAN A GLASS SESSION ON 2026-09-03 - confirmed by the owner and
+ * by the KSP screenshots from 12:02-12:06 that day - which is what this file was written for and
+ * against. (S18's own end-of-Part-A CHECKLIST is a different thing and is still HELD and unworked;
+ * the gate opening is not the checklist being run.)
  *
- * ⛔ SO READ THIS FILE AS WRITTEN, NOT AS VERIFIED. It compiles, and everything it decides was
- * decided and tested in PlanetGeom, but no line below has ever rendered a frame: S10b's three in-sim
- * questions - does the globe render, does the orbit line occlude against true geometry, does the 3/4
- * framing read at cabin distance - are all still open, and only the owner opens the gate that answers
- * them (C1.12). It is deliberately thin - it holds a transform to apply and a texture to hand over,
- * and every decision it makes was already made and tested in PlanetGeom.
+ * ⚠ WHAT IS STILL OPEN. S10b's three in-sim questions - does the globe render, does the orbit line
+ * occlude against TRUE geometry, does the 3/4 framing read at cabin distance - are the criteria that
+ * close S10b, and the register does not yet record them as answered. Treat the framing constants as
+ * unsettled until it does. It is deliberately thin - it holds a transform to apply and a texture to
+ * hand over, and every decision it makes was already made and tested in PlanetGeom.
  *
  * ---- IT IS THE DOCKING CAM, POINTED SOMEWHERE ELSE ----
  * Same lifetime rules as src/DockingCamRenderer.cs, for the same reasons, and read that file's

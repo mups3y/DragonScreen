@@ -34,10 +34,10 @@ namespace DragonScreen
         // docs/MAP_MFD_RESEARCH.md §2 renders scaled space into a RenderTexture through a camera
         // built with CopyFrom(ScaledCamera.Instance.cam), aimed by the pure PlanetGeom. S10a wired
         // everything downstream of this line for BOTH answers and left the renderer itself to S10b,
-        // because a Unity camera cannot be exercised with the game closed. That renderer is now
-        // WRITTEN - src/ScaledPlanetRenderer.cs - and this is the one line that was S10b's whole
-        // hook-up. It has NOT been run in the capsule: S18's install + glass gate is still HELD, so
-        // S10b's three in-sim checks remain open and nothing below this line has rendered a frame.
+        // because a Unity camera cannot be exercised with the game closed. That renderer exists now -
+        // src/ScaledPlanetRenderer.cs, written for the owner's 2026-09-03 install + glass session -
+        // and this is the one line that was S10b's whole hook-up. S10b's three in-sim criteria are
+        // not recorded as answered yet, so the LINE stays HELD; see REGISTER.md.
         //
         // It still returns null most of the time, honestly: the renderer hands back a texture only
         // while a page has actually claimed the camera and the geometry could be framed. Everything
