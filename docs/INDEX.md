@@ -265,7 +265,8 @@ Commit `8b81816` ("Delete the autopilot entirely") removed the flight software *
 documents**. `AUTOPILOT_RECOVERY_AUDIT.md` (R1) §5.4 catalogued them and verdicted almost all of them
 **RECOVER-REFERENCE**; §B12.8's Waves A–E then recovered **only `.cs` files**, so the documents stayed
 deleted and six later tasks (M1, W8, S60, W23, LZ1, W11) were built without research that already existed.
-**W26 recovered them.** Rule **C1.16** now forbids a task from deleting anything under `docs/`.
+**W26 recovered all 53 that were still missing** (732 KB), on 2026-09-04. Rule **C1.16** now forbids
+a task from deleting anything under `docs/`.
 
 > ⛔ **Every recovered file carries a header banner: REFERENCE ONLY — `BUILD_PLAN.md` WINS on any conflict
 > (C7.1).** They were written before the current plan existed. Read them for method, evidence and reasoning
@@ -375,6 +376,80 @@ deleted and six later tasks (M1, W8, S60, W23, LZ1, W11) were built without rese
   reusable for **§B12.5's per-controller gates**. ⚠ The gates are the plan's to set, not this file's.
 - **[MISSION_PROFILES_FREEFLYER.md](MISSION_PROFILES_FREEFLYER.md)** [HIST — recovered] — R1:
   *RECOVER-REFERENCE*. The four free-flyer mission profiles.
+
+**Harvesting the other autopilots, and the architecture the conductor descends from:**
+
+- **[AUTOPILOT_HARVEST.md](AUTOPILOT_HARVEST.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE — HIGH
+  (§B12.1)*. MechJeb2 **and the other installed autopilot**, and **how they interfere with each other** —
+  the interference question §B12.1's private namespace exists to answer.
+- **[AUTOPILOT_MINING_3.md](AUTOPILOT_MINING_3.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE*. *"Mine the
+  OTHER autopilot systems for every nugget of gold."*
+- **[MECHJEB_CAPABILITY_INTEGRATION.md](MECHJEB_CAPABILITY_INTEGRATION.md)** [HIST — recovered] — R1:
+  *RECOVER-REFERENCE — HIGH*. *"List EVERY MechJeb capability useful to our build in ANY way."*
+- **[TRUE_AUTOPILOT_ARCHITECTURE.md](TRUE_AUTOPILOT_ARCHITECTURE.md)** [HIST — recovered] — R1:
+  *RECOVER-REFERENCE — HIGH*. *"A complete, standalone build guide for a genuine autonomous spacecraft
+  autopilot."* ⚠ The conductor (T15–T22) is a **descendant** of this architecture, not this architecture.
+- **[FLIGHT_SOFTWARE_PLAN.md](FLIGHT_SOFTWARE_PLAN.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE*.
+  2026-08-06: *"use MechJeb2 and Trajectories as a base but tailor-made"* — the original direction, and
+  §B12.1's pinned embed is its current form.
+
+**Guidance research — the hand-written loop that was deleted; method and reasoning only:**
+
+- **[ASCENT_GUIDANCE_UPFG.md](ASCENT_GUIDANCE_UPFG.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE —
+  HIGH*. *"The RSS ascent is the mission gate"* — the UPFG design.
+- **[ASCENT_GUIDANCE_DECISION.md](ASCENT_GUIDANCE_DECISION.md)** [HIST — recovered] — R1:
+  *RECOVER-REFERENCE*. Why PVG/UPFG was chosen over the alternatives.
+- **[ABORT_PROCEDURES_RESEARCH.md](ABORT_PROCEDURES_RESEARCH.md)** [HIST — recovered] — R1:
+  *RECOVER-REFERENCE — HIGH (§B12.7)*. **The 7 abort regimes, from a real proving flight** — RSS-RO, and
+  abort is one of only two subsystems that was ever flight-validated (R1 §4.2). Feeds **W19** and **§B13**.
+- **[BOOSTER_GUIDANCE_DESIGN.md](BOOSTER_GUIDANCE_DESIGN.md)** [HIST — recovered] — R1:
+  *RECOVER-REFERENCE — HIGHEST for §B16*. *"How did the real Crew-2 booster fly its atmosphere phase?"*
+  Cross-reference `BOOSTER_GUIDANCE_METHOD.md` and §B16.5.
+- **[RENDEZVOUS_RESEARCH_2026-08-20.md](RENDEZVOUS_RESEARCH_2026-08-20.md)** [HIST — recovered] — R1:
+  *RECOVER-REFERENCE*. From `flight_0820_203834` (mono hit 0 at 210 m) — RSS-RO rendezvous experience.
+- **[RCS_BALANCE_FINDING.md](RCS_BALANCE_FINDING.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE*. The
+  RCS-balance finding, *"wired as a recorded diagnostic; per-thruster application deliberately deferred"*.
+
+**Operations — what the crew does, and when:**
+
+- **[SEQUENCE_MAP.md](SEQUENCE_MAP.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE — HIGH*. *"What to do
+  and when, with all the alternate paths per phase"* (Chris, 2026-08-29). **The conductor's sequence spec.**
+- **[OPERATING_PROCEDURE.md](OPERATING_PROCEDURE.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE*. What to
+  press, when, and what the vehicle will do on its own — the crew-facing contract the screens implement.
+  ⚠ It describes actions against the **deleted** autopilot; actuation today is an honest no-op (§14.4(a)).
+
+**Verification and V&V — the evidence ledgers:**
+
+- **[FLIGHT_VERIFICATION.md](FLIGHT_VERIFICATION.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE — HIGH*.
+  ⭐ *"The record of what has actually been verified, at which level, with evidence"* — **the primary
+  evidence ledger behind R1 §4.2**, and it holds the **DS-ASC-008 roll root-cause in full**. ⚠ The raw CSVs
+  it cites are still deleted (see below).
+- **[tuning/TUNING_DB.md](tuning/TUNING_DB.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE — HIGHEST
+  (§4.3)*. The human-readable 55-flight tuning DB with the per-flight `pe_p95` / `sat_duty` verdict table —
+  **the distillate of the RSS-RO corpus, and the closest thing to it that survives**. ⚠ Its machine-readable
+  half (`TUNING_DB.json`) and the raw flights are still deleted.
+- **[INTEGRATION_SCORECARD.md](INTEGRATION_SCORECARD.md)** [HIST — recovered] — R1: *RECOVER-REFERENCE*. The
+  C1 evidence artifact — the longest clean recorded prefix.
+- **[VALIDATION_AND_ROBUSTNESS.md](VALIDATION_AND_ROBUSTNESS.md)** [HIST — recovered] — R1:
+  *RECOVER-REFERENCE — HIGH (§B10)*. The **Tier-1…Tier-4 V&V ladder** (`DispersionTest` implemented Tier 2).
+- **[ASSESSMENT_VERIFICATION.md](ASSESSMENT_VERIFICATION.md)** [HIST — recovered] — R1:
+  *RECOVER-REFERENCE*. The verification pass over the external assessment. (The verbatim assessment itself,
+  `CHATGPT_ASSESSMENT.md`, was skipped as chat scaffolding — see below.)
+
+**Superseded governance — recovered for the record of what we used to believe, and why it changed:**
+
+- **[MASTER_BUILD_SPEC.md](MASTER_BUILD_SPEC.md)** [HIST — recovered] — R1: **SUPERSEDED** by
+  `BUILD_PLAN.md`. ⛔ **It calls itself *"ACTIVE · AUTHORITY — the one governing build specification"*. It
+  is not.** Recovered because R1 §5.4 flags its **subsystem acceptance content** as not fully reproduced in
+  the plan — mine that, and nothing else, from it.
+- **[ISSUE_REGISTER.md](ISSUE_REGISTER.md)** [HIST — recovered] — R1: **SUPERSEDED** by `REGISTER.md`. The
+  old enforcement mechanism. ⚠ **Mine for open defects only — register line H1b (ullage) traces here.**
+  Never take a line in it as a task.
+- **[COMPLETION_MATRIX.md](COMPLETION_MATRIX.md)** [HIST — recovered] — R1: **SUPERSEDED** by R1 §4.2 +
+  `BUILD_PLAN.md`. One status grid per subsystem; it describes code that no longer exists.
+- **[SOURCE_OF_TRUTH.md](SOURCE_OF_TRUTH.md)** [HIST — recovered] — R1: **SUPERSEDED** by
+  `STATE_CONTRACT.md`, which is live. Kept because it declares the single authoritative owner of each
+  spacecraft-state concept, and R1 asks for a coverage check before that judgement is discarded.
 
 ### Deliberately NOT recovered
 

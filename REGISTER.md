@@ -2042,7 +2042,7 @@ The tree holds the Figma-UI rebuild (`CoverPage.cs`, `FigmaUI.cs`, `VehicleOverv
 `docs/SCREEN_INVENTORY.md`, `plugin/GameData/DragonScreen/art/cover/`, ~26 files) — pre-existing, not T0's and
 not touched by it. Owner to commit via GitHub Desktop; noted so a later task doesn't mistake it for its own diff.
 
-### S3 [S] `docs/FLIGHT_SYSTEMS.md` is referenced but does not exist — **TODO** (T1 part DONE; rest → T15) — [TIER 5: held / owner-action / Part-B-bound]
+### S3 [S] `docs/FLIGHT_SYSTEMS.md` is referenced but does not exist — **NEARLY CLOSED by W26** (file recovered 2026-09-04; ONE wrong citation left) — [TIER 3: doc accuracy]
 Live references point at a missing file: `plugin/src/pure/MissionPhase.cs`, `plugin/build/audit_comments.py`,
 and `docs/INDEX.md` (lists it as existing). The §8 flight facts it should hold currently live only in
 `BUILD_PLAN.md`. T15 creates it; T1 must at minimum stop `INDEX.md` advertising a missing file.
@@ -2050,6 +2050,16 @@ and `docs/INDEX.md` (lists it as existing). The §8 flight facts it should hold 
 does not exist, that the §8 flight facts live in `BUILD_PLAN.md` until T15 creates it, and that the two code
 comments (`pure/MissionPhase.cs:54`, `build/audit_comments.py:233`) are not a live link. **Still open:** those
 two comments, and creating the file — both T15.
+**W26 2026-09-04 — the file was never lost, only deleted.** `docs/FLIGHT_SYSTEMS.md` existed at `8b81816^`
+all along (16,912 bytes, last touched 2026-08-13) and W26 recovered it with the REFERENCE-ONLY banner. So:
+**T15 does not need to create it**; `INDEX.md` now links it rather than declaring it absent; and
+`build/audit_comments.py:232`'s reference is **live and correct again** — that comment is specifically about
+the Starship citation this file records having got wrong, and the file says exactly that at its line 110.
+⛔ **What is still open is ONE line, and it is a real defect, not a dangling link:**
+`plugin/src/pure/MissionPhase.cs:54` cites `docs/FLIGHT_SYSTEMS.md` for the drogue/main chute altitudes
+(`5486.0` / `1830.0`). **The file does not contain those numbers** — it is the 2026-08-05 MechJeb+Trajectories
+direction doc, not a flight-facts reference. The chute altitudes live in `BUILD_PLAN.md` §8. W26 did not
+touch that comment (C1.1, out of its scope). **DONE when** that one citation points at `BUILD_PLAN.md` §8.
 
 ### S4 [S] Phase classifier reads PHASING while still sub-orbital — **DONE 2026-09-02**
 From the 2026-08-29 screen audit (U1). **Turned out already fixed** — the SAME-DAY audit-response commit
@@ -6231,7 +6241,7 @@ the missions whose target is actually placed.
 
 ---
 
-### W26 [O] Recover the deleted RESEARCH — §B12.8's waves recovered code and forgot the documents — **DOING** — [TIER 1: 53 research documents missing since 2026-09-01; six tasks were built without them]
+### W26 [O] Recover the deleted RESEARCH — §B12.8's waves recovered code and forgot the documents — **DONE 2026-09-04** — [TIER 1: 53 research documents missing since 2026-09-01; six tasks were built without them]
 Owner-directed, 2026-09-04. **The gap.** `8b81816` removed the flight software **and ~60 research
 documents**. R1 (`docs/AUTOPILOT_RECOVERY_AUDIT.md` §5.4) catalogued them on 2026-09-03 and verdicted almost
 all **RECOVER-REFERENCE**; §B12.8's Waves A–D and W11's Wave E covered **only `.cs` files**, and no task was
@@ -6272,9 +6282,78 @@ applies, docs-only task, C1.3**), and `git status` shows only the declared outpu
 (`REAL_CREW_DRAGON_MISSION` · `CREW2_REAL_MISSION_TECHNIQUES` · `CREW2_RSS_RESEARCH` ·
 `CREW_MISSION_TELEMETRY` · `CREW_DRAGON_GNC_RESEARCH` · `LAUNCH_AND_ASCENT_RESEARCH`) and the phase set
 (`PHASE_2`…`PHASE_6_*_RESEARCH` · `PHASE_ACCEPTANCE_CRITERIA` · `MISSION_PROFILES_FREEFLYER`).
-**Remaining: 22** (batch 3).
+**BATCH 3 committed 2026-09-04 (22 files):** the harvest/architecture set (`AUTOPILOT_HARVEST` ·
+`AUTOPILOT_MINING_3` · `MECHJEB_CAPABILITY_INTEGRATION` · `TRUE_AUTOPILOT_ARCHITECTURE` ·
+`FLIGHT_SOFTWARE_PLAN`), the guidance set (`ASCENT_GUIDANCE_UPFG` · `ASCENT_GUIDANCE_DECISION` ·
+`ABORT_PROCEDURES_RESEARCH` · `BOOSTER_GUIDANCE_DESIGN` · `RENDEZVOUS_RESEARCH_2026-08-20` ·
+`RCS_BALANCE_FINDING`), operations (`SEQUENCE_MAP` · `OPERATING_PROCEDURE`), verification
+(`FLIGHT_VERIFICATION` · `tuning/TUNING_DB.md` · `INTEGRATION_SCORECARD` · `VALIDATION_AND_ROBUSTNESS` ·
+`ASSESSMENT_VERIFICATION`) and the four SUPERSEDED governance docs (`MASTER_BUILD_SPEC` · `ISSUE_REGISTER` ·
+`COMPLETION_MATRIX` · `SOURCE_OF_TRUTH`).
+**RESULT — 53 of 53 recovered, 732 KB, every one bannered, every one indexed.** Verified: no R1-recoverable
+markdown remains deleted; `git status` showed only the declared outputs at each commit;
+`python plugin/build.py test` **ALL SUITES PASSED**, unmoved (markdown only, no preview PNG applies —
+C1.3 docs-only). **S3 is nearly closed** by the recovery — one wrong citation remains on its line.
+**Still out of scope and raised as W26-Q1:** the ~21 MB of RSS-RO flight recordings and
+`tuning/TUNING_DB.json` — data, not documents, and R1's own Q2 territory.
 
 ---
+
+## Open questions for the owner — W26 (C1.14)
+
+*Posed per C1.13 as a self-contained overseer prompt. **Situation:** `8b81816` deleted the autopilot and ~60
+research documents; R1 §5.4 verdicted them recoverable in 2026-09-03, but §B12.8's waves only ever covered
+`.cs` files, so the documents sat deleted while six tasks were built without them. **W26 recovered all 53
+that were still missing (732 KB)**, each with a REFERENCE-ONLY banner naming its R1 verdict, and added rule
+**C1.16 (research is never deleted)** to both rule lists. W26 **decided nothing gated (C1.12)** and **acted
+on the content of none of the recovered documents**. Three questions follow from what recovery exposed.*
+
+**W26-Q1 — The RSS-RO flight corpus is still deleted. It is DATA, not documents. Does it come back?**
+W26 recovered the prose: `FLIGHT_VERIFICATION.md` (the evidence ledger) and `tuning/TUNING_DB.md` (the
+55-flight distillate). It did **not** recover what those two describe — `docs/flights/*.csv` (10 Crew-2
+flights incl. `Crew-2_20260901_004929.csv`, the last flown file, 136 columns), 3 probe CSVs, 2 KSP.log
+excerpts, 3 geometry dumps, 3 PNGs, plus `tuning/TUNING_DB.json` and `exclude.txt` — about **21 MB**. R1
+verdicts every one of them **RECOVER-REFERENCE — HIGHEST** and calls the raw flights *"irreplaceable… the
+only raw flight data in the repo"*. W26 left them out because the brief scoped itself to documents (~830 KB)
+and because **R1's own Q2 — re-fly to rebuild the corpus, or trust the distillates — is an open owner call**
+that this question is a subset of. It is a `git checkout` away; it is also 21 MB in a repo the owner pushes
+by hand.
+1. **Recover all of it now, in one commit.** *(recommended: it is one command, it is the only RSS-RO flight
+   data that has ever existed, §B16.8 already commits us to re-deriving ballistic coefficients from recorded
+   flights, and `assess_flight.py` + `tuning_db.py` — which survive — read exactly this schema. A 21 MB
+   repo is cheaper than a re-flight campaign.)*
+2. Recover the CSVs + `TUNING_DB.json` + `exclude.txt`, skip the 3 PNGs (~900 KB of screenshots whose
+   cross-check finding is already written down in `FLIGHT_VERIFICATION.md`).
+3. Recover nothing; treat `TUNING_DB.md` + `FLIGHT_VERIFICATION.md` as sufficient and rebuild the corpus by
+   recorded re-flights once the BlackBox exists.
+4. Defer until R1-Q2 is answered, since that answer decides this one.
+
+**W26-Q2 — Two SUPERSEDED documents were recovered with an explicit "mine before discarding" note. Who
+mines them?**
+R1 §5.4 attaches a ⚠ to exactly two files: `MASTER_BUILD_SPEC.md` — *"its subsystem acceptance content is
+not all reproduced in `BUILD_PLAN.md` — mine before discarding"* — and `ISSUE_REGISTER.md` — *"mine for open
+defects before discarding; register H1b (ullage) traces here"*. Both are now back and bannered, but **W26
+mined neither** (C1.1: recovery was the task). Until someone does, the plan may still be missing acceptance
+criteria and the register may still be missing defects that were known in August.
+1. **Two register lines, both [S]:** one to reconcile `MASTER_BUILD_SPEC.md`'s subsystem acceptance content
+   into `BUILD_PLAN.md` §B12.5's per-controller gates, one to sweep `ISSUE_REGISTER.md` for defects that are
+   still live against today's tree. *(recommended: they are different skills against different targets, and
+   the acceptance one feeds §B12.5 directly — it is wanted before the first controller lands, not after.)*
+2. One combined [O] line — "mine the two superseded governance docs" — since both end in plan/register edits.
+3. Neither; the banners are enough and a future task will read them when it needs them.
+
+**W26-Q3 — 53 documents are back, bannered but UNRECONCILED. Is that the end state?**
+The banner says *"REFERENCE ONLY — the plan wins"* and names the contradictions W26 happened to see. It does
+**not** claim the files agree with today's plan, and a full 53-document reconciliation was explicitly out of
+scope (it would have run this session out of context). So the tree now contains a large, honest,
+partly-stale corpus. That is exactly what was asked for — the question is whether anything more is wanted.
+1. **Leave it. The banner is the contract.** *(recommended: these are evidence documents, not instructions,
+   and reconciling research against a plan tends to destroy the very thing that makes it worth keeping —
+   the record of what was believed and why. C7.1 already settles every conflict in the plan's favour.)*
+2. Reconcile the highest-value few only — `SEQUENCE_MAP` (the conductor's sequence spec) and
+   `ABORT_PROCEDURES_RESEARCH` (§B13/W19) — as one [O] line, because those two are about to be *used*.
+3. Reconcile all 53 as a numbered wave, like §B12.8's code waves.
+
 
 ## Open questions for the owner — G6 (C1.14)
 
