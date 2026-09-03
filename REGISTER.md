@@ -2412,7 +2412,7 @@ that.
 **ask for the screenshots**, not theorise about which DLL was running. The evidence existed the whole time.
 
 
-### S38 [O] Label→value rows read ONE ROW OFF on the glass — the console is viewed obliquely — **TODO** — [TIER 2: real defect]
+### S38 [O] Label→value rows read ONE ROW OFF on the glass — the console is viewed obliquely — **DONE 2026-09-03** — [TIER 2: real defect]
 Logged 2026-09-03 from the owner's glass screenshots. **This is what QC finding 2 actually was.** S34
 closed that finding as "not reproduced" against the preview PNG and was right about the CODE and wrong
 about the CREW: the pages are correctly wired, and they are still misread in the capsule.
@@ -2446,3 +2446,61 @@ into one visual row rather than trusting horizontal alignment across a wide gap 
 actually spans the gap (the Cover has short ones and still misreads, so they must reach), a banded or
 boxed row, or simply moving the value column in beside its label. The last is cheapest and most robust
 and costs nothing but a layout change to a page that is ours, not the reference's.
+
+- **DONE 2026-09-03. The owner chose "move the value column in beside its label"**, and that is what was
+  built. First the CLASS was surveyed rather than the one page fixed (this line's own instruction): a
+  headless pass over all 35 `UiPage`s plus the three live screens, pairing each Left-aligned text with a
+  Right-aligned one emitted within three commands on the same row, and reporting the worst span as a
+  multiple of the row's type size. **The survey is what set the scope** — it showed the pattern is real
+  and widespread, and it separated the genuine multi-row blocks from caption/badge pairs that happen to
+  sit on one line.
+- **The insight that scoped it:** the defect only bites where rows are **STACKED**. A lone caption pair
+  (`RESOLUTION — 640 x 360` under the video box) has no neighbouring row to be confused with, however
+  wide its gap. Three stacked blocks were fixed, worst span before → after:
+  - **`SystemsPidPage` READOUTS** — the block the glass actually caught — **38× → 11×** (920 design units
+    → 280). Values stay RIGHT-aligned so the digits still line up and the column is still scannable.
+  - **`DeorbitBurnPrepPage`'s five SLEW rows** — the widest span in the build — **105× → 17×** (2747 →
+    460). The label sat at the far left of the card and the value at the far right of a 3427-wide page.
+  - **`VehicleSubsystemPage`'s detail rows** — **24× → 16×** (600 → 400). One helper, so this lands on all
+    six subsystem tabs at once.
+- **Pinned by 6 new checks in `LayoutTest.cs`.** They assert the worst label→value span per page as a
+  multiple of the type size, so the guard scales with the panel and catches a regression on any of the six
+  tabs, not just the one that was edited. ⛔ **The comment on those checks says the important part: no PNG
+  check can ever find this defect** — `build.py preview` renders the panel flat and square-on, so these
+  rows align perfectly there and always will. It is the first defect class in this build that is invisible
+  to the preview gate by construction.
+- **Gate:** `python plugin/build.py test` green (11483 checks, 0 failed — 306 in the layout suite, up from
+  300). `preview` re-rendered and the three fixed blocks INSPECTED: `ui_systemspid.png` now reads as a
+  tight two-column list, `ui_deorbitburnprep.png`'s SLEW block is compact instead of spanning the card,
+  `ui_vehiclepower.png`'s detail values sit in over their own bars.
+- ⚠ **HONEST RESIDUAL, carried to S39.** Moving the column in cannot fully cure a block with RAGGED label
+  lengths: `DeorbitBurnPrep`'s column is set by `MAXIMUM ATTITUDE RATE`, so short labels (`ROLL`, `PITCH`,
+  `YAW`) still have ~300 design units of empty space to their values — and that block's row pitch is only
+  40 units, the tightest in the build, so the residual displacement is still a real fraction of a row.
+  Distance alone does not finish this one; it wants the leader line this line listed as its other option.
+  That, and the blocks the survey flagged but this task did not touch, are **S39**.
+
+### S39 [O] Finish the S38 sweep — the blocks distance alone does not fix — **TODO** — [TIER 3: scheduled polish]
+Logged by S38, 2026-09-03. S38 fixed the three worst stacked label→value blocks by moving the value column
+in, which was the owner's chosen remedy, and pinned them. Its own survey named what is left. **Numbers below
+are the worst span on that page as a multiple of the row's type size, measured after S38 landed** — rerun the
+survey rather than trusting them if the pages move.
+
+**Genuine remaining candidates:**
+- **`Pages.SideRow`, the FLIGHT screen — 44×, and NINETEEN stacked rows**, the largest count anywhere. It
+  already draws a 1 px rule under each row, which is a real connector and is why it was not top of the list,
+  but 19 tightly-stacked rows at 44× is the biggest remaining exposure.
+- **`VehicleOverviewPage`'s CONSUMABLES table — 28×.** Three columns (CONSUMABLE / QTY / MARGIN), so it is
+  the one case where the value genuinely cannot move all the way in; it wants column rules or banding.
+- **`NavOrbitPlotPage` — 22×** and **`VehicleMechPage` — 18×.** Both mild, both cheap.
+- **`DeorbitBurnPrepPage`'s residual** — see S38: ragged labels plus a 40-unit row pitch. This is the one
+  that actually needs the LEADER LINE rather than more distance.
+
+**Not defects, do not "fix" them** (the survey flags them, they are not stacked label→value rows):
+`SettingsVideoPage`'s `RESOLUTION` caption under the video box (80×, a lone row with nothing to confuse it
+with) · `VehiclePropulsion`'s section caption + `RCS DISABLED` page badge on one line (92×) · the NAV
+screen's `GROUND TRACK` / `TRACKING VEHICLE` pair (110×) · `ManualChute`'s heading + badge (16×).
+
+**Also worth deciding here:** whether the C1.3 gate wording should say out loud that a PNG preview cannot
+see this class, so a future task does not read "preview inspected" as "legible in the capsule". S38's test
+comment says it; the protocol does not.

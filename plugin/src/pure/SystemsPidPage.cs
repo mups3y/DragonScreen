@@ -180,11 +180,26 @@ namespace DragonScreen
             // ================= right-hand live readouts =================
             float rx = 2150f;
             L("READOUTS", rx, 1000f, 26, Accent);
+            // ---- S38: THE VALUE COLUMN SITS BESIDE ITS LABEL, NOT ACROSS THE PAGE FROM IT ----
+            // These six rows used to put the label at rx and the value right-aligned at 3070 - 920
+            // design units apart with nothing between them. On the glass that is a misreading: the
+            // console is a tilted quad in IVA, so a row that is horizontal in the RenderTexture is a
+            // SLOPING line to the crew, and over a gap that wide the value column lifts by about a
+            // whole row. The 2026-09-03 screenshots show the crew's own life-support panel reading
+            // CABIN TEMP 14.70 psia (the pressure), CABIN PRESS 3.00 (the ppO2), PPO2 1.00 (the CO2),
+            // with LOOP A's value stranded up on the READOUTS heading. The data was right the whole
+            // time; the layout was lying about which value belonged to which label.
+            //
+            // The fix is distance. The values stay RIGHT-aligned - a column of numbers has to align on
+            // its digits to be scannable - but the column is now 280 units from the labels instead of
+            // 920, which is narrower than the row pitch, so no plausible viewing angle can slide a
+            // value onto its neighbour's line. LayoutTest pins the span.
+            const float ValueSpan = 280f;
             void Row(string label, string value, string unit, float ry, Rgba c)
             {
                 L(label, rx, ry, 24, Faint);
-                R(value, 3070f, ry - 4f, 28, c);
-                L(unit, 3086f, ry, 22, Faint);
+                R(value, rx + ValueSpan, ry - 4f, 28, c);
+                L(unit, rx + ValueSpan + 16f, ry, 22, Faint);
             }
             Row("LOOP A", valid ? s.LoopAText : "—", "°C", 1070f, valid ? Alarms.Colour(loopASev) : unk);
             Row("LOOP B", valid ? s.LoopBText : "—", "°C", 1150f, valid ? Alarms.Colour(loopBSev) : unk);

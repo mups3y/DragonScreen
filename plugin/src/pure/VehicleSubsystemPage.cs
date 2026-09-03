@@ -156,7 +156,11 @@ namespace DragonScreen
                 {
                     float y = 340 + i * 250;
                     L(d.RLabel[i], 2760, y, 28, Dim);
-                    R(d.RVal[i], 3360, y, 34, White);
+                    // S38: 3160, not 3360. The value used to sit on the far end of the 600-unit bar
+                    // from its label; the bar underneath is a connector, which helps, but 600 units is
+                    // still enough for an IVA viewing angle to lift the value toward the row above.
+                    // It stays right-aligned and still sits over its own bar, just closer in.
+                    R(d.RVal[i], 3160, y, 34, White);
                     dl.Rect(PX(2760), PY(y + 70), 600 * sx, SZ(8), Faint);
                     float f = d.RFrac[i] > 1f ? 1f : (d.RFrac[i] < 0f ? 0f : d.RFrac[i]);
                     if (f > 0f) dl.Rect(PX(2760), PY(y + 70), 600 * sx * f, SZ(8), Accent);

@@ -112,10 +112,18 @@ namespace DragonScreen
             // day COMMAND the slew those four describe.
             const float C2Y = 500f;
             Dot(C2Y); Title("SLEW FOR DEORBIT BURN", C2Y);
+            // ---- S38: the value column moved in beside the labels ----
+            // These five rows had the label at the far LEFT of the card and the value right-aligned at
+            // the far RIGHT - 2747 design units apart, the widest label-to-value span in the build, on
+            // a page that stacks five of them. At an IVA viewing angle a span that wide slides the
+            // value column a full row off its labels (S38; measured on the P&ID, whose gap is a third
+            // of this one). ValueRight puts the numbers just past the longest label - MAXIMUM ATTITUDE
+            // RATE - and they stay right-aligned so the column still reads as a column.
+            const float ValueRight = CardX + 500f;
             void Row(string label, string value, Rgba valueColour, float ry)
             {
                 dl.Text(label, X(CardX + 40f), Y(ry), Z(26), TextAlign.Left, DragonPalette.Text2);
-                dl.Text(value, X(CardX + CardW - 40f), Y(ry), Z(26), TextAlign.Right, valueColour);
+                dl.Text(value, X(ValueRight), Y(ry), Z(26), TextAlign.Right, valueColour);
             }
             float rowY = C2Y + 56f;
             Row("ROLL", "—", DragonPalette.Text6, rowY); rowY += 40f;

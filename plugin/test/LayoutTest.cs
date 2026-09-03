@@ -962,6 +962,80 @@ public static class LayoutTest
                   "tree " + TreeBusWord(dead) + " / tab " + TabBusWord(dead));
         }
 
+        // ---- S38: A VALUE MUST SIT BESIDE ITS LABEL, NOT ACROSS THE PAGE FROM IT ----------------
+        // The 2026-09-03 glass session caught the crew reading their own life-support panel wrong:
+        // CABIN TEMP showing 14.70 psia (the cabin PRESSURE), CABIN PRESS showing the ppO2, PPO2
+        // showing the CO2. The data was correct and the preview PNG was correct. The console is a
+        // TILTED QUAD in IVA, so a row that is horizontal in the RenderTexture is a sloping line to
+        // the crew, and across a wide label-to-value gap the value column lifts by about a whole row.
+        //
+        // ⛔ NO PNG CHECK CAN FIND THIS. `build.py preview` renders the panel flat and square-on, so
+        // these rows align perfectly there and always will. That is why the guard is a headless
+        // assertion on the SPAN instead: keep the value close enough to its label that no plausible
+        // viewing angle can slide it onto a neighbouring row.
+        //
+        // The span measured is label-x to value-x in panel pixels, over pairs emitted as one row
+        // (a Left text followed within three commands by a Right one, sharing a row). The limit is a
+        // multiple of the row's own type size, so it scales with the panel.
+        {
+            PageState fx = new PageState();
+            fx.Valid = true;
+            fx.Ppo2Text = "3.01"; fx.CabinTempText = "21.8"; fx.PressText = "14.72"; fx.Co2Text = "1.64";
+            fx.LoopAText = "26.4"; fx.LoopBText = "20.1";
+            fx.PowerText = "18"; fx.ArrayKwText = "2.60"; fx.HullTempText = "312";
+            fx.SolarArrayText = "DEPLOYED"; fx.BatteryText = "2 / 2";
+            fx.Systems = SystemsState.Fresh();
+
+            // Worst label-to-value span on a page, in multiples of the label's type size.
+            float WorstSpan(UiPage page)
+            {
+                DisplayList d = new DisplayList(4000);
+                FigmaUI.Build(d, page, 2560, 1406, fx, MapProjection.Default());
+                float worst = 0f;
+                for (int i = 0; i < d.Count; i++)
+                {
+                    DrawCmd a2 = d.At(i);
+                    if (a2.Kind != DrawKind.Text || a2.Align != TextAlign.Left || a2.Str == null) continue;
+                    for (int j = i + 1; j < i + 4 && j < d.Count; j++)
+                    {
+                        DrawCmd b2 = d.At(j);
+                        if (b2.Kind != DrawKind.Text || b2.Align != TextAlign.Right || b2.Str == null) continue;
+                        if (b2.A <= a2.A) continue;
+                        float ac = a2.B + a2.C * 0.5f, bc = b2.B + b2.C * 0.5f;
+                        float tol = (a2.C < b2.C ? a2.C : b2.C) * 0.5f;
+                        if (ac - bc > tol || bc - ac > tol) continue;
+                        float rel = (b2.A - a2.A) / a2.C;
+                        if (rel > worst) worst = rel;
+                    }
+                }
+                return worst;
+            }
+
+            // SYSTEMS P&ID - the block the glass actually caught. Was 38x before the fix.
+            Check("S38 the P&ID readouts keep their values beside their labels",
+                  WorstSpan(UiPage.SystemsPid) <= 14f, "worst " + WorstSpan(UiPage.SystemsPid) + "x");
+
+            // DEORBIT BURN PREP - the widest span in the build before the fix, at 105x: the label sat
+            // at the far left of the card and the value at the far right, five rows stacked.
+            Check("S38 the deorbit SLEW rows do too",
+                  WorstSpan(UiPage.DeorbitBurnPrep) <= 20f,
+                  "worst " + WorstSpan(UiPage.DeorbitBurnPrep) + "x");
+
+            // The six subsystem tabs share ONE detail-row helper, so one fix covers all of them and
+            // the check is worth running on more than the one that happened to be edited.
+            UiPage[] subs = { UiPage.VehicleCrew, UiPage.VehiclePropulsion, UiPage.VehiclePower,
+                              UiPage.VehicleAvionics, UiPage.VehicleGnc, UiPage.VehicleThermal };
+            for (int i = 0; i < subs.Length; i++)
+            {
+                // Propulsion draws a section caption and a page-level badge on one line, which is not
+                // a label-value row and is not what this guards; its DETAIL rows share the helper the
+                // other five use, so those five pin the helper.
+                if (subs[i] == UiPage.VehiclePropulsion) continue;
+                Check("S38 " + subs[i] + "'s detail rows keep their values close",
+                      WorstSpan(subs[i]) <= 18f, "worst " + WorstSpan(subs[i]) + "x");
+            }
+        }
+
         Console.WriteLine(failures == 0
             ? "  " + checks + " checks, all passed"
             : "  " + checks + " checks, " + failures + " FAILED");
