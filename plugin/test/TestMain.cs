@@ -77,6 +77,23 @@ public static class TestMain
         bad += BoosterTest.Run();          // §B16 booster: hoverslam solver + grid-fin steering + the recovery FSM
         bad += OctawebResolveTest.Run();   // §B16.4 step 2: the octaweb binder, guard-first, against the real dump
 
+        // ---- PART B RECOVERY, WAVE D (W4, §B12.8) - the PURE conductor set ----
+        // The mission-conductor decision layer: ModeManager (the mission plan + the phase sequencer),
+        // CrewGate (the crew-in-the-loop GATE state machine), CrewGates (the real G1..G15 catalog),
+        // MissionProfile (mission-as-data, resolved from the VAB craft name), WarpPlan (the never-overshoot
+        // time-warp rule) and CoastEta (a range-closing coast's ETA, so a long chase can be warped).
+        // CrewGateTest is the one suite that covers CrewGate + CrewGates + ModeManager together.
+        // ⚠ NOTHING HERE FLIES ANYTHING. Wave D restored the PURE half only: the two GLUE files that would
+        // call it (`src/CrewProcedureOps.cs`, `src/MissionConductor.cs`) are NOT in the tree - they need a
+        // host (`FlightDriver`) and a booster core that no wave owns yet (register W9/W10). So these suites
+        // prove DECISIONS, not a flown mission; every flight command on every screen is still §14.4(a)'s
+        // honest no-op. CrewGates' gate TITLES and CHECKLIST ITEMS are §1.4 source-of-truth material
+        // (transcribed NASA/SpaceX callouts) - do not edit one to make a test pass.
+        bad += MissionProfileTest.Run();   // L-S0b mission-as-data: the 19-mission catalog + craft-name resolve
+        bad += CrewGateTest.Run();         // L4 crew gate machine + the real gate catalog + the phase sequencer
+        bad += WarpPlanTest.Run();         // conductor: the on-rails rate that can never overshoot the drop-out
+        bad += CoastEtaTest.Run();         // conductor: range-closing coast ETA -> the warp target UT
+
         Console.WriteLine(bad == 0 ? "ALL SUITES PASSED" : bad + " SUITE(S) FAILED");
         return bad == 0 ? 0 : 1;
     }

@@ -18,15 +18,38 @@ using UnityEngine;
 
 namespace DragonScreen
 {
-    // ---- idle stand-in types the screen code still names (were the crew-gate / FDIR data types) ----
-    public enum ItemKind : byte { CrewAck, AutoCheck }
-    public struct ChecklistItem { public string Label; public ItemKind Kind; }
-    public struct Gate { public string Title; public ChecklistItem[] Items; }
-    public struct ProcState { public GatePhase Phase; public bool[] Satisfied; }
+    // ---- ⛔ FOUR CREW-GATE DISPLAY TYPES MOVED OUT (W4 / Wave D, 2026-09-04). ----
+    // `ItemKind`, `ChecklistItem`, `Gate` and `ProcState` used to be declared here as idle stand-ins. They are
+    // now the AUTHORITATIVE ones in `pure/CrewGate.cs`, restored from `8b81816^` — which is where they were
+    // before the demolition, and which that file's own header says in as many words. Do NOT re-declare them
+    // here; two declarations of the same type break the build (§B12.8's two-generation rule).
+    // ⚠ The screens' reads are unchanged: `g.Title`, `g.Items[i].Label`, `g.Items[i].Kind == ItemKind.CrewAck`,
+    // `pr.Phase`, `pr.Satisfied` (VesselData.cs:361-371) all exist on the restored types with the same shapes.
+    // `Gate` gains an `Id` (`GateId`) and `ChecklistItem` gains `Crew()`/`Sys()` factories — additions only.
+    // The one RENAME is `ItemKind.AutoCheck` → `ItemKind.Auto`; nothing in the tree read that member (grep,
+    // 2026-09-04), so no screen file changed. `GatePhase` stays in `pure/MissionPhase.cs` where it already was.
+    //
+    // ---- idle stand-in types the screen code still names (the FDIR / abort data types) ----
     public struct FdirReport { public FaultKind Fault; public Recovery Response; }
     public enum AbortMode : byte { None, DeorbitReturn }
 
     // ---- the crew-in-the-loop conductor: never engaged, no gate ever active ----
+    // ⚠ W4 (Wave D) RESTORED THE PURE HALF UNDER THIS STUB, AND DELIBERATELY LEFT THE STUB IN PLACE.
+    // `pure/ModeManager.cs` (the plan), `pure/CrewGate.cs` (the gate machine), `pure/CrewGates.cs` (the G1..G15
+    // catalog) and `pure/MissionProfile.cs` (mission-as-data) are all back and headless-tested. The GLUE that
+    // drives them — `src/CrewProcedureOps.cs`, 20,016 B at `8b81816^` — is NOT restored, and the reason is
+    // §14.4(a), not difficulty: its whole state machine advances inside `Tick(Vessel)`, and the ONLY caller of
+    // `Tick` in the entire pre-deletion tree is `FlightDriver.cs:341` (checked, not assumed). FlightDriver is
+    // R1 §5.2's "the Part-B host", it is in NO §B12.8 wave, and it is not in this tree. Landing the real
+    // CrewProcedureOps without it would make the AUTO SEQUENCE button (`ScreenPainter.cs:739`) ENGAGE a
+    // conductor that can never tick: a gate card would appear, its items would tick, and the crew's GO press
+    // would latch into `goPressed` and be consumed by nobody — a lit button and a dead GO. That is strictly
+    // WORSE than the honest no-op §14.4(a) requires (click, no light, no action), so it waits for its host.
+    // ⇒ Register **W10** lands `src/CrewProcedureOps.cs` together with a `FlightDriver` that ticks it.
+    // ⛔ Do NOT "fix" this by ticking CrewProcedureOps from a screen addon: its `AutoAdvanceGates` default is
+    // `true`, so a tick with no flight software behind it auto-clears the whole countdown and parks the plan on
+    // the Ascent Fly step, which nothing completes — the screens would then report a mission phase that is not
+    // happening. A conductor with no controllers must not be ticked at all.
     public static class CrewProcedureOps
     {
         public static bool Engaged { get { return false; } }
@@ -77,6 +100,18 @@ namespace DragonScreen
     }
 
     // ---- mission orchestration: a display-only booster-recovery arm flag, no recovery booster ----
+    // ⚠ W4 (Wave D) RESTORED THIS ONE'S PURE HALF TOO, AND COULD NOT RESTORE THE GLUE. `pure/WarpPlan.cs`
+    // (the never-overshoot warp rule) and `pure/CoastEta.cs` (a coast's ETA → the warp target UT) are back and
+    // headless-tested. `src/MissionConductor.cs` (24,299 B at `8b81816^`) is NOT, because it does not COMPILE
+    // in this tree, on two counts that are both settled decisions rather than missing effort:
+    //   1. its booster-recovery FSM calls `BoosterControl.Reset()` / `.IsRecoverableBooster()` /
+    //      `.DriveNonActive()` — and CLAUDE.md is explicit that *"the deleted `BoosterControl` implementation
+    //      still stays deleted"* (R1 §5.2 files it RECOVER-REFERENCE; §B16.1 writes the booster core FRESH,
+    //      on its own vessel). Restoring MissionConductor as-is would drag it back in through the side door.
+    //   2. its burn-guard reads `FlightDriver.CmdTransX/Y/Z`, which the stub FlightDriver below does not have
+    //      and must not gain — half-wiring a facade from here is what §B12.8(a) forbids.
+    // Cutting the recovery half out to make it build is exactly the "quiet deletion inside another task's
+    // diff" §B12.8 rider (b) bans, so it was not done. ⇒ Register **W9**.
     public static class MissionConductor
     {
         public static bool AutoRecoverBooster;         // a screen toggle only — nothing acts on it now
@@ -148,7 +183,33 @@ namespace DragonScreen
         }
     }
 
-    // ---- phase / mode lamps the screens read: nothing is ever engaged ----
+    // ================== THE GEN-1 DISPLAY FACADE (§B12.8(a) / §B12.5 / R1 Q4) ==================
+    // These six names are the CONTRACT THE SCREENS COMPILE AGAINST. They are GEN-1 names; the gen-2
+    // controllers that do those jobs are called something else, and §B12.8(a)'s resolution is that the gen-2
+    // controllers REGISTER INTO THESE NAMES rather than the names moving to match a controller. So: never
+    // rename one of these to match whatever lands behind it, never add a parallel surface beside it, and
+    // never delete one — each increment flips exactly ONE of these from constant-false to live (§B12.5).
+    //
+    // ---- W4 (Wave D) STATUS, ONE LINE EACH — the done-criterion is "backed by a real controller OR still a
+    // ---- no-op with a STATED REASON; never a silent gap". Wave D backed NONE of them, and here is why: not
+    // ---- one of the five files §B12.8's Wave D row names is the controller behind any of these six. The
+    // ---- backing controllers are all in R1 §5.2 as RECOVER-CODE and all sit in NO §B12.8 wave (logged W11).
+    //
+    //  AutoPilot        → gen-2 `CrewProcedureOps.Engaged` (the AUTO SEQUENCE master). NO-OP: the glue is not
+    //                     in the tree and must not be until it has a host — see the block above. **W10.**
+    //  StationApproach  → gen-2 `RendezvousControl.cs` (R1 §5.2, 40,628 B, RECOVER-CODE, flown far-field to
+    //                     109 km only). NO-OP: in no wave, not in the tree. **W11.**
+    //  DockingOps       → gen-2 `DockingControl.cs` (R1 §5.2, 15,447 B, RECOVER-CODE, **dock UNPROVEN — never
+    //                     flown**). NO-OP: in no wave, not in the tree. **W11.**
+    //  DeorbitOps       → gen-2 `ReturnControl.cs` (R1 §5.2, 22,827 B, RECOVER-CODE, never flown). NO-OP: in
+    //                     no wave, not in the tree. **W11.**
+    //  UndockOps        → gen-2 `ReturnControl.cs`, the same file's undock/departure leg. NO-OP, same reason.
+    //  BoosterRecovery  → gen-2 `MissionConductor.RecoveryBooster` (the vessel the recovery FSM is flying).
+    //                     NO-OP: MissionConductor does not compile here, and the `BoosterControl` under it
+    //                     STAYS DELETED — §B16.1 writes that core fresh. **W9**, then §B16.
+    //
+    // ⛔ NOTHING BELOW IS LIVE, AND NOTHING BELOW LIES. Every one still returns false/null, so every lamp
+    // these feed is dark and every flight command is §14.4(a)'s honest no-op — unchanged by Wave D.
     public static class AutoPilot { public static bool Engaged { get { return false; } } }
     public static class StationApproach { public static bool Engaged { get { return false; } } public static string Note { get { return null; } } }
     public static class DockingOps { public static bool Engaged { get { return false; } } public static string Note { get { return null; } } }

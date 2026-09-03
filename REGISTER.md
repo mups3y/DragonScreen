@@ -1632,7 +1632,7 @@ already are).
   copy, so W1's rule excludes it), and which of R1's nine §B16-tagged rows this wave owns (settled by
   §B12.8's Wave C row, with the two exclusions each already assigned elsewhere by the plan itself).
 
-### W4 [O] Wave D — the conductor set (where the stub collisions land) — **TODO**
+### W4 [O] Wave D — the conductor set (where the stub collisions land) — **DONE**
 - **Read:** §B12.8 Wave D, §B12.5 (amended — stub names are the facade), R1 §5.2 and its Q4 resolution.
 - **Build:** Restore `ModeManager`, `WarpPlan`, `CoastEta`, `MissionConductor`, `CrewProcedureOps` + tests
   per R1's file map. Register the recovered gen-2 controllers INTO the gen-1 facade names at
@@ -1640,6 +1640,171 @@ already are).
   `BoosterRecovery`) — the stub becomes a thin adapter; no screen file changes.
 - **DONE when:** `build.py test` green, every gen-1 facade name is backed by a real controller or is still a
   no-op with a stated reason — never a silent gap.
+- **DONE 2026-09-04 — both done-criteria met, and the headline is the SPLIT, stated first rather than
+  buried.** The conductor set's **PURE half is back and green**; its **two GLUE files are NOT**, each for a
+  reason that is a SETTLED DECISION rather than missing effort, and each now has its own register line
+  (**W9** / **W10**, below). Restored from `8b81816^`: `pure/ModeManager.cs` (the mission plan + phase
+  sequencer), `pure/WarpPlan.cs` (the never-overshoot warp rule), `pure/CoastEta.cs` (a range-closing coast's
+  ETA) **plus the three hard compile dependencies §B12.8's Wave D row does not name** —
+  `pure/CrewGate.cs`, `pure/CrewGates.cs`, `pure/MissionProfile.cs` — and the **four** `test/` suites that
+  cover them. **The stub collision Wave D exists to resolve is resolved**, and **no screen file changed**.
+- **THE THREE UNNAMED FILES WERE NOT OPTIONAL, and the pairing was derived, not assumed (the W1/W2 idiom).**
+  `ModeManager.Plan(MissionProfile)` needs `MissionProfile.cs`, and every `MissionStep.AtGate(GateId…)` needs
+  `GateId`, which is declared in `CrewGates.cs`, which in turn needs `Gate`/`ChecklistItem` from
+  `CrewGate.cs`. Without all three the wave does not compile and no done-criterion is reachable. R1 §5.1
+  files all three **RECOVER-CODE**. The TEST pairing was found the same way — by grepping every candidate
+  suite at `8b81816^` for the module types it names, not by matching filenames — which is how
+  **`CrewGateTest.cs` turned out to be the ONE suite covering `CrewGate` + `CrewGates` + `ModeManager`
+  together**, and why `MissionProfileTest.cs` came too. There is **no `ModeManagerTest`** anywhere in the
+  pre-deletion tree; `CrewGateTest` is its only cover.
+- **⛔ `src/MissionConductor.cs` (24,299 B) IS NOT RESTORED — it does not COMPILE in this tree, on two
+  counts.** (1) Its booster-recovery FSM calls `BoosterControl.Reset()` / `.IsRecoverableBooster()` /
+  `.DriveNonActive()`, and CLAUDE.md is explicit that *"the deleted `BoosterControl` implementation still
+  stays deleted"* (R1 §5.2 files it RECOVER-REFERENCE; §B16.1 writes the booster core **fresh**, on its own
+  vessel) — restoring MissionConductor as-is drags it back through the side door. (2) Its burn-guard reads
+  `FlightDriver.CmdTransX/Y/Z`, which the stub `FlightDriver` does not have and must not gain (§B12.8(a)
+  forbids half-wiring a facade). **Cutting the recovery half out to make it build is exactly the "quiet
+  deletion inside another task's diff" §B12.8 rider (b) bans**, so it was not done. ⇒ **W9.**
+- **⛔ `src/CrewProcedureOps.cs` (20,016 B) IS NOT RESTORED EITHER — it compiles, and landing it would make a
+  screen LIE.** Its whole state machine advances inside `Tick(Vessel)`, and **the only caller of `Tick` in
+  the entire pre-deletion tree is `FlightDriver.cs:341`** (checked with a repo-wide grep at `8b81816^`, not
+  assumed; `ForceReset` likewise, from `FlightDriver.Start()`). `FlightDriver.cs` is R1 §5.2's *"the Part-B
+  host"*, is in **NO** §B12.8 wave, and is not in this tree. Land CrewProcedureOps without it and the AUTO
+  SEQUENCE button (`ScreenPainter.cs:739` → `Toggle()`) **engages a conductor that can never tick**: a gate
+  card appears, its items tick, and the crew's GO latches into `goPressed` for nobody to consume — **a lit
+  button and a dead GO, strictly worse than §14.4(a)'s honest no-op** (click, no light, no action). And it
+  cannot be rescued by ticking it from a screen addon: `AutoAdvanceGates` defaults to **`true`**, so a tick
+  with no controllers behind it auto-clears the whole countdown and parks the plan on the Ascent Fly step
+  that nothing completes — the screens would then report a mission phase that is not happening. ⇒ **W10.**
+- **THE FACADE — the done-criterion taken literally, and the answer is "none of them, and here is why".**
+  §B12.8's Wave D row names five files; **not one of them is the controller behind any of the six gen-1
+  facade names.** `AutoPilot` → `CrewProcedureOps` (**W10**); `StationApproach` → `RendezvousControl.cs`;
+  `DockingOps` → `DockingControl.cs`; `DeorbitOps` / `UndockOps` → `ReturnControl.cs`; `BoosterRecovery` →
+  `MissionConductor.RecoveryBooster` (**W9**, then §B16). The middle four are all **RECOVER-CODE in R1 §5.2
+  and in NO §B12.8 wave** — a real gap in the recovery plan, logged as **W11**. So all six stay
+  constant-`false`/`null` and each now carries **its stated reason, by name, in `_AutopilotStub.cs`**, under
+  a block that also restates §B12.8(a)'s rule (never rename a facade property to match a controller, never
+  add a parallel surface, never delete one). **Never a silent gap** — that is the criterion, and it is met.
+- **THE COLLISION, RESOLVED — four types moved out of the stub, and NO SCREEN FILE CHANGED.** A sweep of
+  every top-level type the six restored files declare (`StepKind`, `MissionStep`, `ModeInputs`, `ModeStep`,
+  `ModeManager`, `WarpPlan`, `CoastEta`, `ItemKind`, `ChecklistItem`, `Gate`, `ProcState`, `CrewGateInputs`,
+  `CrewGateStep`, `CrewGate`, `GateId`, `CrewGates`, `MissionKind`, `RecoveryMode`, `MissionProfile`,
+  `Missions`) against the **255** types declared in today's `plugin/src` + `plugin/test` found **exactly
+  four** collisions, all of them the stub's own idle stand-ins: **`ItemKind` · `ChecklistItem` · `Gate` ·
+  `ProcState`**. They are now the authoritative declarations in `pure/CrewGate.cs`, which is where that
+  file's own header says they belong. ⚠ **Every member the screens read still exists with the same shape** —
+  `g.Title`, `g.Items[i].Label`, `g.Items[i].Kind == ItemKind.CrewAck` (`VesselData.cs:361-371`),
+  `pr.Phase`, `pr.Satisfied`; `Gate` GAINS an `Id` and `ChecklistItem` gains `Crew()`/`Sys()` factories
+  (additions only); the one RENAME is `ItemKind.AutoCheck` → `ItemKind.Auto`, and **nothing in the tree read
+  that member** (grep). `GatePhase` was never in the stub — it stays in `pure/MissionPhase.cs`.
+  ⚠ **Refinement to R1 §5.1:** its `MissionProfile.cs` row says *"Collides with the live
+  `pure/MissionPhase.cs`"* — on the bytes it does **not**. That file declares `Mission` (singular);
+  `MissionProfile.cs` declares `Missions` (plural). Different types, no collision, and the build proves it.
+- **BYTE-LEVEL PROVENANCE, CHECKED RATHER THAN TRUSTED.** All ten restored files match R1's inventory sizes
+  **exactly**: `ModeManager` 7,647 · `WarpPlan` 4,068 · `CoastEta` 3,077 · `CrewGate` 4,765 · `CrewGates`
+  6,094 · `MissionProfile` 7,178 · `CrewGateTest` 8,695 · `MissionProfileTest` 4,251 · `CoastEtaTest` 3,488
+  · `WarpPlanTest` 3,232. And a **comment-stripped diff against `8b81816^` is IDENTICAL for all ten** —
+  **every W4 edit to a restored file is comment-only.**
+- **THE TWO-GENERATION TRAP AROSE FOR THE THIRD TIME, and the mechanical rule settled it again.** Eight of
+  the ten files are **ABSENT** at `0d6423d` — no gen-1 copy to be tempted by. **Two are not:**
+  `pure/CrewGates.cs` (gen-1 5,854 B) and `pure/MissionProfile.cs` (gen-1 6,905 B). **Neither was taken.**
+  Both are gen-1 **smaller** than gen-2, so neither can be the "gen 2 plus comments" case W1's rule allows,
+  and the comment-stripped diff proves they are **different implementations with different APIs**: gen-1
+  `CrewGates` is `Outbound(MissionProfile)` returning a `List<Gate>` over an `AutoCheck` enum with gate ids
+  `Ingress`/`SuitLeakCheck`/`GoForLaunch` (vs gen-2's `Countdown()`/`Approach()`/`Return()` and
+  `IngressCommG1`…`DeorbitGoG15`); gen-1 `MissionProfile` is a `Crewed`/`RecoverBooster` struct carrying
+  waypoint + droneship + splashdown coordinates and a `Valid()` **method**, against gen-2's
+  `Kind`/`Recovery`/`Capsule`/`BoosterTail`/`BoosterFlight` and a `Valid` **field**. Taking either would
+  import gen-1 LOGIC and duplicate types (R1 §0.2). ✅ *"nothing from gen 1 restored"* — on the bytes.
+- **⭐ AN UNLOOKED-FOR §1.4 RE-CONFIRMATION: the mission catalog was checked against an IN-REPO REAL
+  SOURCE, and all 16 agree.** `MissionProfile.cs`'s header says it mirrors `data/crew_missions.json` — a
+  file **deleted 2026-09-01** (R1 §5.4) and not in the working tree, so "regen from the DB" cannot be done
+  today. But the **16 owner-supplied `docs/reference/<mission>.craft` files each carry a description naming
+  that flight's capsule, booster tail, booster flight number and recovery mode**, and **every one of the 16
+  agrees with the restored table on every one of those fields** (DM-2 · Crew-1…Crew-11 · Ax-1…Ax-4 — e.g.
+  Ax-2 `B1080` flight 1, Freedom, **RTLS (LZ-1)**; Crew-2 `B1061` flight 2, Endeavour, **OCISLY droneship**).
+  The catalog is 19 rows; the three with no `.craft` in the repo are the free-flyers **Inspiration4, Polaris
+  Dawn, Fram2**, which stay uncorroborated in-repo. The finding is recorded in the file's own header.
+  ℹ Logged, not done (C1.1): those descriptions also name **which** droneship (OCISLY / JRTI / ASOG) where
+  `RecoveryMode` can only say `Droneship` — that per-mission detail is **LZ1**'s deliverable, and
+  `RecoveryMode` was deliberately **not** widened to hold it.
+- **§B16.8-STYLE MARKINGS LANDED WHERE THIS WAVE'S NUMBERS ACTUALLY ARE — comment-only.** `WarpPlan`'s four
+  `[Tunable]`s (`BurnLeadS` 12 s / `SettleMarginS` 3 s / `MinWarpGapS` 30 s / `LookaheadTicks` 3) are
+  researched defaults with **no recorded regime**, shaping an orchestration that was never flown against a
+  measured overshoot; they are **margins, not physics** (bigger = earlier drop-out, safe by construction),
+  and the header now says so. `CoastEta`'s only literal is `ClosingEpsMps = 0.1` (a divide-by-zero guard,
+  not tuning). `ModeManager` / `CrewGate` / `CrewGates` / `MissionProfile` declare **no physical constant at
+  all** — the same precision W3 had to make about `Hoverslam`/`GridFin`, and each header says it rather than
+  leaving a reader hunting a number that is not there. ⛔ `CrewGates` additionally carries R1 §5.1's verdict
+  as a rule in its own header: its gate **titles and checklist items are §1.4 source-of-truth material**
+  (transcribed NASA/SpaceX callouts) — *do NOT edit without a real-source confirmation*, and never to make a
+  test pass.
+- **`TestMain.cs` — the four suites registered, with the wave's honesty note in place.** The Wave D block
+  says what the suites prove (decisions) and what they do **not** (a flown mission), names the two absent
+  glue files and their register lines, and repeats the §1.4 rule on `CrewGates`. A suite is still registered
+  only once the module it proves is in the tree.
+- **Gate (C1.3), preview-only — nothing here needs the capsule.**
+  **`python plugin/build.py test` GREEN.** Glue DLL builds **124 source files (was 118 after W3), 358.5 KB**
+  (was 347.0), with **NO new warning** — all 11 warnings name `ScreenPainter.cs` (6), `Pages.cs` (2×2) and
+  `LayoutSweepTest.cs` (1), every one pre-existing and none touched here; **zero** warnings from any
+  restored file. Tests build **132 source files (was 122)** and report **12,324 checks, 0 failed, ALL SUITES
+  PASSED** — **31 suites (was 27)**, the prior 27 unchanged, plus W4's four: **`MissionProfileTest` 21**,
+  **`CrewGateTest` 38**, **`WarpPlanTest` 12**, **`CoastEtaTest` 10** = **+81**, which is exactly the
+  12,243 → 12,324 delta.
+  **`python plugin/build.py preview` run as a no-regression check: all 112 PNGs BYTE-IDENTICAL** (sha256
+  over every file, before/after) — nothing on any page reads these modules. **PNGs inspected anyway** (C1.3
+  taken literally): `panel_rest.png` — the lower console still shows the §14.4(a) no-red board, **0 of 38
+  lamps lit**, every dim-label INERT mark as before; `page0_flight_gate.png` — the gate card renders exactly
+  as it did, because it is drawn from the preview harness's own sample, not from `CrewGates` (see **W12**).
+  **W4 draws nothing; there is no new PNG to judge.**
+- **§1.4 / C1.4 respected.** No label, no unit, no `PanelMap.cs`, no label doc touched; **no screen file
+  touched at all** — the only non-restored file edited is `src/_AutopilotStub.cs`, and every edit to it is a
+  comment or the removal of four type declarations that moved to `pure/CrewGate.cs`. **Nothing was
+  invented**: every byte of the ten restored files is `8b81816^`'s, no gen-1 commentary was transplanted,
+  and the one new factual claim in a header (the 16-craft catalog agreement) is a check against files
+  already in the repo.
+- **C1.15 (evidence-gated mod-first) — not engaged, and stated rather than skipped silently.** This task
+  wrote **no simulation of any kind** for any real quantity. It restores flight-decision code and adds no
+  modelled signal, so no not-yet-modelled quantity was filled and no `docs/reference/INSTALLED_MODS.md`
+  search was owed. (That file still does not exist — **M1**.)
+- **⚠ NOT CLAIMED.** Not claimed: that any of this FLIES anything — the six restored modules have **no
+  caller anywhere** in `plugin/src` or `plugin/test` outside their own tests, because both files that would
+  call them are the two this wave could not land. Every flight command on every screen is still §14.4(a)'s
+  honest no-op, `AutoPilot.Engaged` is still `false`, and **not one facade property went live**. Not
+  claimed: that the mission plan is complete — `ModeManager.Plan` emits Fly steps for phases whose L3
+  controllers (`AscentControl`, `RendezvousControl`, `DockingControl`, `ReturnControl`) are **none of them
+  in the tree**, so the plan describes a mission nothing can fly. Not claimed: that `WarpPlan`'s margins are
+  tuned — see the marking. Not claimed: that the catalog's three free-flyer rows are corroborated in-repo.
+- **Deliberately NOT done (logged, not built — C1.1):** **W9** (`MissionConductor`), **W10**
+  (`CrewProcedureOps` + the `FlightDriver` host), **W11** (the ten R1 §5.2 RECOVER-CODE glue files that
+  belong to no §B12.8 wave — the gap that leaves four facade names unowned), **W12** (the preview harness's
+  invented gate text, now provably diverging from the restored authoritative catalog). All four are appended
+  at the bottom of this register.
+- **Open questions for the owner (C1.14): ONE.**
+  **Q1 — W4's Build line named five files; three landed and two were deferred to W9/W10. Is that split
+  right, or should W4 be re-opened?**
+  *Situation.* §B12.8's Wave D row and W4's Build line name `ModeManager`, `WarpPlan`, `CoastEta`,
+  `MissionConductor` and `CrewProcedureOps`. This session restored the first three (plus three unnamed hard
+  dependencies and four test suites) and **deferred the last two**, because each collides with a decision
+  the owner has already settled: `MissionConductor` cannot compile without `BoosterControl`, which CLAUDE.md
+  keeps deleted and §B16.1 replaces with a fresh core; `CrewProcedureOps` compiles but has no host, and
+  landing it lights the AUTO SEQUENCE button over a GO press nothing can consume — worse than §14.4(a)'s
+  honest no-op. **Both done-criteria on the line are nevertheless met** (`test` green; every facade name
+  carries a stated reason), so the line is marked **DONE** rather than NEEDS-WORK — but the deliverable is
+  narrower than the Build text names, which is the owner's call to accept or reject, not this chat's.
+  *Options.* **(1) Accept the split as done** — W4 DONE, `MissionConductor` → **W9**, `CrewProcedureOps` +
+  `FlightDriver` → **W10**, and the four unowned facade controllers → **W11**, each taken in its own
+  session. **(2) Re-open W4 as NEEDS-WORK** and require the two glue files inside it — which needs an
+  explicit `OVERRIDE` (C1.8) of *either* CLAUDE.md's "BoosterControl stays deleted" *or* §B12.8 rider (b)'s
+  ban on a quiet in-diff deletion, plus a decision on shipping a lit button with a dead GO.
+  **(3) Accept the split, but FOLD W9/W10/W11 into one "Wave E" line** so the glue lands as a single
+  dependency-ordered pass rather than three sessions.
+  *Recommendation: **(1)**, with **(3)** as a reasonable variant if you would rather see one line than
+  three.* It is the only option that changes no settled decision, it matches the W3 precedent exactly (W3
+  deferred two of R1's nine §B16 rows and logged them as W5/W6 rather than restoring a known-defective
+  file), and it keeps the screens at §14.4(a) honesty. **(3)** is a scheduling preference, not a different
+  outcome — the same three pieces in the same order. **(2) needs an `OVERRIDE` you must type yourself**
+  (C1.12): no build chat can grant it, and this one has not.
 
 ### H1 [S] Housekeeping — INDEX/salvage + mark the two now-stale docs superseded — **TODO**
 - **Read:** the S58 stray (below), G5a-Q3's RESOLVED block (`docs/BUILD_PLAN.md`, "Open questions for the
@@ -4437,3 +4602,99 @@ marking; the tier-2 shape §B16.2 cites (170° flip / 5° retrograde offset / 27
 Read §B16.2, §B16.5, §B16.8 and `docs/BOOSTER_GUIDANCE_METHOD.md` §3.1/§4/§8.1/§10 END-TO-END first.
 **DONE when:** `build.py test` green, both profiles enter boostback, ASDS's default magnitude is zero, the
 unit-`AimForward` and AoA-cap contracts still hold in every phase, and every new number is marked.
+
+### W9 [O] `src/MissionConductor.cs` — the warp + focus glue, blocked on the booster core and the host — **TODO** — [TIER 3: scheduled recovery]
+Logged by **W4**, 2026-09-04 (C1.1 — found on trying to restore it; §B12.8's Wave D row names it, and it
+does not compile in this tree).
+**The finding.** `plugin/src/MissionConductor.cs` (24,299 B at `8b81816^`, R1 §5.2 **RECOVER-CODE**) is two
+machines in one file: the **WARP** orchestration (`WarpToEvent` / `Realtime` / `ApplyRailWarp`, driving the
+now-restored `pure/WarpPlan.cs`) and the **BOOSTER-RECOVERY focus/PRE** state machine. It will not build
+here on two counts: (1) the recovery FSM calls `BoosterControl.Reset()`, `.IsRecoverableBooster()` and
+`.DriveNonActive()`, and CLAUDE.md keeps `BoosterControl` **deleted** (R1 §5.2 RECOVER-REFERENCE; §B16.1
+writes that core **fresh**, on its own vessel); (2) its universal burn-guard reads
+`FlightDriver.CmdTransX/Y/Z`, which the stub `FlightDriver` does not have and must not gain (§B12.8(a) bans
+half-wiring a facade). **Its pure half is already in the tree** — `pure/WarpPlan.cs` + `pure/CoastEta.cs`,
+restored and tested by W4 — so this line is glue only.
+⛔ **Do not close this by cutting the recovery half out inside another task's diff** — that is precisely what
+§B12.8 rider (b) forbids; if the split is wanted it is this line's declared, tested output.
+**Read:** §B12.8(a), §B12.6 (single-core / per-vessel), §B16.1 (the fresh booster core), R1 §5.2.
+**Build:** restore the warp + focus glue against a booster core that exists, with the `BoosterControl` call
+sites bound to §B16.1's fresh core (or to nothing, explicitly and honestly, if §B16.1 has not landed), and
+`CmdTransX/Y/Z` supplied by a real `FlightDriver` (**W10**) rather than by the stub.
+**DONE when:** `build.py test` green, `MissionConductor.RecoveryBooster` genuinely backs the
+`BoosterRecovery` facade or the facade still carries a stated reason, and no `BoosterControl` byte is back.
+⚠ **Ordering:** this line depends on **W10** (the host) and on §B16.1 (the booster core). Do not take it first.
+
+### W10 [O] `src/CrewProcedureOps.cs` + the `FlightDriver` host — the conductor glue, and the only thing that ticks it — **TODO** — [TIER 2: real gap — the restored Wave-D pure layer has no driver]
+Logged by **W4**, 2026-09-04 (C1.1 — §B12.8's Wave D row names `CrewProcedureOps`; it compiles, but landing
+it alone would make a screen lie).
+**The finding.** `plugin/src/CrewProcedureOps.cs` (20,016 B at `8b81816^`, R1 §5.2 **RECOVER-CODE**) drives
+the whole pure layer W4 restored — `ModeManager` + `CrewGate` + `CrewGates` + `MissionProfile` — and its
+entire state machine advances inside **`Tick(Vessel)`**. A repo-wide grep at `8b81816^` shows **the only
+caller of `Tick` is `FlightDriver.cs:341`** (and of `ForceReset()`, `FlightDriver.Start()`). `FlightDriver.cs`
+(59,523 B) is R1 §5.2's *"the Part-B host"* — **and it is in no §B12.8 wave at all** (see **W11**).
+⛔ **Why it must not land alone.** `ScreenPainter.cs:739` already routes AUTO SEQUENCE to
+`CrewProcedureOps.Toggle()`. With the real class and no host, that press **engages** a conductor that can
+never tick: the gate card appears, its items tick, and the crew's GO latches into `goPressed` for nobody to
+consume — a **lit button and a dead GO**, strictly worse than §14.4(a)'s honest no-op. And it cannot be
+rescued by ticking it from a screen addon: `AutoAdvanceGates` defaults to **`true`**, so a tick with no
+controllers behind it auto-clears the entire countdown, sets `launchPending` for nobody, and parks the plan
+on the Ascent Fly step nothing completes — the screens would then report a mission phase that is not
+happening. **A conductor with no controllers must not be ticked at all.**
+ℹ Two things to settle when it lands, both already visible in the restored file: **`AutoAdvanceGates = true`**
+is a *"⛔ TEMPORARY (user 2026-08-27)"* hands-off test-flight setting that synthesises the crew's taps and the
+GO press — shipping it `true` makes the interactive gates decorative, and flipping it is a behaviour change
+that belongs on this line, not in a quiet edit; and **a gen-1 `CrewProcedureOps.cs` exists** (15,868 B at
+`0d6423d`) which, on W1's mechanical rule, must be diffed comment-stripped before any of it is considered —
+it is *smaller* than gen-2, so it is almost certainly a different implementation, as both gen-1 files W4
+checked turned out to be.
+**Read:** §B12.5, §B12.6 build-order step (3) (*"glue driver implements the stub surfaces read-only — no
+commands yet"*), §B12.8(a), R1 §5.2.
+**Build:** restore `src/CrewProcedureOps.cs` **together with** enough of `src/FlightDriver.cs` to host it —
+§B12.6 step (3)'s read-only driver is the natural shape: own the flight-scene addon + `OnFlyByWire`, tick
+the conductor, report phase/engaged, **command nothing**. `AutoPilot.Engaged` is then the first gen-1 facade
+property to go live (§B12.5: exactly one per increment). **May SPLIT** if the host outgrows one session.
+**DONE when:** `build.py test` green, AUTO SEQUENCE engages a conductor that actually advances its gates, GO
+is consumed on the frame it is pressed, `AutoPilot.Engaged` is backed by a real controller, and nothing on
+any screen claims a phase the vehicle is not in.
+
+### W11 [O] TEN R1 §5.2 RECOVER-CODE glue files belong to NO §B12.8 wave — four facade names have no owner — **TODO** — [TIER 2: real gap in the recovery plan itself]
+Logged by **W4**, 2026-09-04 (C1.1 — found on satisfying W4's own done-criterion, which asks what backs each
+gen-1 facade name).
+**The finding.** §B12.8's four waves are A = collision-free `pure/` support, B = actuation, C = the booster
+set, D = the conductor set. Cross-checking R1 §5.2 row by row, **ten files verdicted RECOVER-CODE sit in
+none of them**: `FlightDriver.cs` (the host, 59,523 B) · `RendezvousControl.cs` (40,628) ·
+`ReturnControl.cs` (22,827) · `AbortControl.cs` (23,536, flight-validated) · `DockingControl.cs` (15,447,
+**dock UNPROVEN**) · `EntrySteering.cs` (9,687) · `DeorbitBurn.cs` (6,733) · `LandingSiteScan.cs` (4,364) ·
+`DeployablesControl.cs` (2,828) · `GeometryDump.cs` (8,122, read-only diagnostic, zero control risk).
+`AscentControl.cs` was the eleventh and already has **W7**.
+**Why it matters now, concretely:** four of the six gen-1 facade names — `StationApproach`, `DockingOps`,
+`DeorbitOps`, `UndockOps` — are backed by `RendezvousControl` / `DockingControl` / `ReturnControl`, so **no
+wave in the plan makes them live**. W4 left each a no-op with that reason stated in `_AutopilotStub.cs`;
+this line is where the gap gets an owner.
+**Build:** decide the shape with the owner (C1.14) — a "Wave E" for the remaining glue, per-file lines in
+§B12.5 increment order, or fold them into T17–T21 — then amend **§B12.8's table** so the plan says it, and
+write the register lines. ⚠ Several carry R1 flags that must ride along: `RendezvousControl`'s defects
+(R1 §5.2), `DockingControl`'s never-flown status, `AbortControl`'s stub collision, `EntrySteering`'s L/D
+prior. **`Steering.cs` is NEVER recovered** (§B12.8 rider (b)) and is not in this list.
+**DONE when:** every R1 §5.2 RECOVER-CODE file is assigned to a named register line or explicitly excluded
+with a reason, §B12.8's table reflects it, and no facade name is left with "no wave owns this" as its
+stated reason.
+
+### W12 [S] The preview harness invents crew-gate text, and it now provably contradicts the restored catalog — **TODO** — [TIER 4: hygiene — a preview that misrepresents the real page]
+Logged by **W4**, 2026-09-04 (C1.1 — found while inspecting `page0_flight_gate.png` for the C1.3 gate).
+**The finding.** `plugin/preview/PreviewMain.cs:1077-1079` builds the gate card from a **hardcoded
+`GateItemView` sample** — *"GO/NO-GO poll complete" · "Dragon crew - GO" · "SpaceX - GO for launch"* — not
+from the gate catalog. W4 restored that catalog, and `pure/CrewGates.cs`'s **`LaunchGoG7`** actually reads
+*"GO/NO-GO FOR LAUNCH"* with **`Consumables margin ≥ mission + reserve` (an AUTO item)**, *"Dragon crew — GO"*
+and *"GO for launch"*. So the preview shows **three crew-actionable items where the real gate has two plus
+one auto item**, and one line of text that exists nowhere in the source of truth.
+**Why it is worth a line:** the preview PNG is how layout and legibility get judged without a restart
+(CLAUDE.md's load-bearing rule), so a preview that draws different text — and a different crew/auto mix,
+which changes the tick-box rendering — is judging the wrong page. It is **not** a §1.4 violation in the
+shipped mod (nothing on the glass reads `PreviewMain`), which is why it is TIER 4 and not TIER 2.
+**Build:** drive the preview's gate card from `CrewGates.ById(...)` (or from `Countdown()`'s G7 directly) so
+the harness renders the authoritative titles, items and CREW/AUTO kinds. Do **not** edit `CrewGates.cs` to
+match the preview — R1 §5.1: its text is §1.4 source-of-truth material.
+**DONE when:** `build.py preview` renders the gate card from the catalog, `page0_flight_gate.png` shows G7's
+real items with the right crew/auto split, and `build.py test` is green.
