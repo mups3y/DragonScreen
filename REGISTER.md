@@ -4823,7 +4823,13 @@ match the preview — R1 §5.1: its text is §1.4 source-of-truth material.
 **DONE when:** `build.py preview` renders the gate card from the catalog, `page0_flight_gate.png` shows G7's
 real items with the right crew/auto split, and `build.py test` is green.
 
-### S66 [S] `MissionProfile.cs`'s `RecoveryMode` is wrong for 6 missions — coded Droneship, really RTLS — **TODO** — [TIER 2: real defect]
+### S66 [S] `MissionProfile.cs`'s `RecoveryMode` is wrong for 6 missions — coded Droneship, really RTLS — **DONE** — [TIER 2: real defect]
+Fixed 2026-09-04: the six `RecoveryMode.Droneship` → `RecoveryMode.RTLS` at `MissionProfile.cs:84-92`
+(Crew-7/8/9/10, Ax-4, Crew-11), header corrected to say the W4 `.craft` cross-check covered capsule/tail/
+flight only, never `RecoveryMode` (the `.craft` files only ever say generic "droneship"). No screen renders
+`RecoveryMode` today (only unwired Part-B consumer `BoosterDescent.TargetModeFor`), so C1.3's preview gate
+does not apply; `build.py test` green (mission-profile resolver suite: 21 checks). `MissionProfileTest.cs`
+had no wrong assertions to fix.
 Logged by **LZ1**, 2026-09-04 (C1.1 — found while sourcing the per-mission recovery table against public
 flight records; out of LZ1's own declared scope, which produces the table, not pure/ edits).
 **The finding.** `plugin/src/pure/MissionProfile.cs:84-92` codes **Crew-7, Crew-8, Crew-9, Crew-10, Ax-4 and

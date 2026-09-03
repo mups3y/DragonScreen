@@ -13,11 +13,16 @@
 // ⚠ ITS MIRROR SOURCE IS NOT IN THE TREE. The catalog below says it mirrors `data/crew_missions.json`; that
 // file was deleted 2026-09-01 (R1 §5.4) and survives only in git history at `8b81816^`, so "regen this table
 // from it when the DB changes" cannot be done from the working tree today.
-// ✅ BUT THE CATALOG WAS RE-CONFIRMED AGAINST AN IN-REPO SOURCE (W4, §1.4). The 16 owner-supplied
-// `docs/reference/<mission>.craft` files each carry a description naming that flight's capsule, booster tail,
-// booster flight number and recovery mode — and ALL 16 AGREE WITH THIS TABLE ON EVERY ONE OF THOSE FIELDS
+// ✅ THE CATALOG WAS RE-CONFIRMED AGAINST AN IN-REPO SOURCE (W4, §1.4) FOR CAPSULE/TAIL/FLIGHT. The 16
+// owner-supplied `docs/reference/<mission>.craft` files each carry a description naming that flight's
+// capsule, booster tail and booster flight number, and ALL 16 AGREE WITH THIS TABLE ON THOSE THREE FIELDS
 // (DM-2 · Crew-1..Crew-11 · Ax-1..Ax-4). The catalog is 19 entries; the three with no `.craft` in the repo
 // are the free-flyers Inspiration4, Polaris Dawn and Fram2, whose rows stay uncorroborated in-repo.
+// ⚠ THAT CHECK DID NOT COVER `RecoveryMode`. The `.craft` descriptions only ever say generic "droneship" —
+// never a specific ship or RTLS — so W4's cross-check could not and did not verify `RecoveryMode` against
+// anything but itself. Register **S66** (2026-09-04) sourced `RecoveryMode` independently against public
+// flight records and found six rows wrong (Crew-7, Crew-8, Crew-9, Crew-10, Ax-4, Crew-11 — coded Droneship,
+// really RTLS); corrected here. Full per-mission citations: `docs/reference/LZ_RECOVERY_TABLE.md` §1/Sources.
 // ℹ The `.craft` descriptions also name WHICH droneship (OCISLY / JRTI / ASOG) where `RecoveryMode` can only
 // say `Droneship`. That per-mission recovery-target detail is register **LZ1**'s deliverable, not this
 // enum's — do not widen `RecoveryMode` here to hold it.
@@ -81,15 +86,15 @@ namespace DragonScreen
             Iss ("Crew-5",       "2022-10-05", "Endurance",  "B1077", 1, RecoveryMode.Droneship),
             Iss ("Crew-6",       "2023-03-02", "Endeavour",  "B1078", 1, RecoveryMode.Droneship),
             Iss ("Ax-2",         "2023-05-21", "Freedom",    "B1080", 1, RecoveryMode.RTLS),
-            Iss ("Crew-7",       "2023-08-26", "Endurance",  "B1081", 1, RecoveryMode.Droneship),
+            Iss ("Crew-7",       "2023-08-26", "Endurance",  "B1081", 1, RecoveryMode.RTLS),
             Iss ("Ax-3",         "2024-01-18", "Freedom",    "B1080", 5, RecoveryMode.RTLS),
-            Iss ("Crew-8",       "2024-03-04", "Endeavour",  "B1083", 1, RecoveryMode.Droneship),
+            Iss ("Crew-8",       "2024-03-04", "Endeavour",  "B1083", 1, RecoveryMode.RTLS),
             Free("Polaris Dawn", "2024-09-10", "Resilience", "B1083", 4, 51.7, 190, 1400),
-            Iss ("Crew-9",       "2024-09-28", "Freedom",    "B1085", 2, RecoveryMode.Droneship),
-            Iss ("Crew-10",      "2025-03-14", "Endurance",  "B1090", 2, RecoveryMode.Droneship),
+            Iss ("Crew-9",       "2024-09-28", "Freedom",    "B1085", 2, RecoveryMode.RTLS),
+            Iss ("Crew-10",      "2025-03-14", "Endurance",  "B1090", 2, RecoveryMode.RTLS),
             Free("Fram2",        "2025-03-31", "Resilience", "B1085", 6, 90.01, 202, 413),
-            Iss ("Ax-4",         "2025-06-25", "Grace",      "B1094", 2, RecoveryMode.Droneship),
-            Iss ("Crew-11",      "2025-07-31", "Endeavour",  "B1094", 3, RecoveryMode.Droneship),
+            Iss ("Ax-4",         "2025-06-25", "Grace",      "B1094", 2, RecoveryMode.RTLS),
+            Iss ("Crew-11",      "2025-07-31", "Endeavour",  "B1094", 3, RecoveryMode.RTLS),
         };
 
         // No craft-name match: a generic ISS-crew plane so nothing is undefined, but Valid=false so the
