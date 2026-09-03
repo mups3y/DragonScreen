@@ -105,6 +105,24 @@ public static class TestMain
         // proves nothing about a tuned number. The file's header says so.
         bad += CourseCorrectTest.Run();    // B8 impact-point divert: the 2x2 Jacobian solve + the 1x1 Newton step
 
+        // ---- PART B RECOVERY, WAVE E-3 (W15, §B12.8 rider (c)) - the safe-water splashdown selector ----
+        // pure/SafeLandingSite.cs picks WHICH point on the sampled ground track a returning capsule aims at:
+        // the nearest OPEN WATER inside the reachable entry-glide window, else -1 so the glue coasts a step.
+        // Its glue half (`src/LandingSiteScan.cs`, restored with it) does the body sampling and carries the
+        // F4 water gate - `TerrainAltitude(lat, lon, true)`, the three-arg overload that returns the real
+        // negative seabed height; the default two-arg call CLAMPS ocean depth to 0, so an RSS scan reads
+        // ZERO water and never commits. That fix is the reason the file exists (R1 §5.2: regime RSS).
+        // ⚠ NOTHING CALLS EITHER FILE YET. Both intended callers are absent - `AbortControl` is W19 and
+        // `ReturnControl` (W18) is now RECOVER-REFERENCE and lands no code - so the module is restored
+        // DORMANT, for them to consume. This suite is the only thing exercising it.
+        // ⚠ NEVER FLOWN (R1 §5.1/§5.2: flown ❌ NO). The glide window it selects against is [UN-CONVERGED]
+        // for RSS-RO (§B16.8 ruling 2), marked on `src/LandingSiteScan.cs` which supplies the band; the pure
+        // selector defines no constant at all. Three of the checks are RECOVERED VERBATIM from the deleted
+        // `test/FdirTest.cs:152-164` (the rest of that suite stays deleted - it is `AbortResponder`/`Fdir`
+        // coverage and neither type is in the tree). The fixtures are ANALYTIC. Green proves the selector
+        // picks the right sample; it proves nothing about the window being the right window.
+        bad += SafeLandingSiteTest.Run();  // W15: nearest safe water inside the reachable glide window
+
         // ---- PART B RECOVERY, WAVE D (W4, §B12.8) - the PURE conductor set ----
         // The mission-conductor decision layer: ModeManager (the mission plan + the phase sequencer),
         // CrewGate (the crew-in-the-loop GATE state machine), CrewGates (the real G1..G15 catalog),

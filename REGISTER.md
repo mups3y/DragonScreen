@@ -5041,7 +5041,7 @@ advances only when the host ticks it, and no facade property changed state.
   and nothing ticks it**, and no facade property moved — this controller backs none, so §14.4(a)'s honest
   no-op is untouched and no lamp can lie. **W10 adds the one-line dispatch when the host exists.**
 
-### W15 [S] Wave E-3 `src/LandingSiteScan.cs` — the safe-water splashdown scan both return paths need — **TODO** — [TIER 3: scheduled recovery]
+### W15 [S] Wave E-3 `src/LandingSiteScan.cs` — the safe-water splashdown scan both return paths need — **DONE 2026-09-04** — [TIER 3: scheduled recovery]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 3 of 9).
 **The file.** `plugin/src/LandingSiteScan.cs` (4,364 B at `8b81816^`), R1 §5.2 **RECOVER-CODE**, regime
 **RSS** (*"the ocean fix is RSS-specific"*), flown **❌ NO**. *"Shared ground-track → safe-water splashdown
@@ -5059,6 +5059,42 @@ search-band constant is marked un-converged for RSS-RO; convergence needs a reco
 — check for a `SafeLandingSiteTest.cs` and register it in `TestMain.cs`), and add the §B16.8 marking.
 **DONE when:** `build.py test` green with the pure half tested headless, the RSS ocean fix is present and
 stated, and every constant carries its un-converged marking.
+- **DONE 2026-09-04** (⚠ **batch session** — the owner-authorised deviation from C1.1/C1.7 of 2026-09-04, via
+  the overseer, for that batch ONLY). Both files restored **byte-identical** from `8b81816^` before marking —
+  `src/LandingSiteScan.cs` **4,364 B** and `src/pure/SafeLandingSite.cs` **3,023 B**, `cmp` clean, exactly R1
+  §5.2's and §5.1's recorded figures. No name collided (`grep` for `LandingSiteScan` / `SafeLandingSite` /
+  `GroundSample` / `SiteScanResult` across `plugin/src` + `plugin/test` was empty), and the gen-1 check is
+  clean too: `158eb2a^` holds `pure/LandingSites.cs`, a **different name**, so W1's duplicate-type risk does
+  not arise and nothing gen-1 was taken.
+- **The RSS ocean fix is present and now stated as such.** The restored line is
+  `body.ocean && body.TerrainAltitude(lat, lon, true) < 0.0` with its own ⭐ F4 (2026-08-29) comment intact —
+  the **three-arg** overload that returns the real negative seabed height, where the default two-arg call
+  clamps ocean depth to 0 so an RSS scan reads **zero water and never commits**. The added header names it as
+  the one thing in the file that is a **fix for a verified defect, not a tuned figure**.
+- **§B16.8 ruling 2 marking added, and it lands where the constants actually are.** `LandingSiteScan.cs`
+  carries the `[UN-CONVERGED]` header + an inline marking on its only two literals (the `50.0` m/s srfSpeed
+  validity floor and the `7000.0` m/s ground-speed stand-in — both scale `DownrangeM`, hence the window the
+  selector tests against), and states that the **search band itself is caller-supplied** (`samples`, `stepS`,
+  `minGlideM`, `maxGlideM`), so the marking travels to W18/W19. `SafeLandingSite.cs` **defines no constant at
+  all** — every threshold is an argument — and its header now says so explicitly, so a later chat does not
+  read a marking-free pure file as a converged one.
+- **Test: `plugin/test/SafeLandingSiteTest.cs`, new, registered in `TestMain.cs` — 18 checks, 0 failed.** R1
+  §5.3 lists no `SafeLandingSiteTest.cs` because **none existed**: a sweep of all 54 test files at `8b81816^`
+  found the module tested in exactly one place, `test/FdirTest.cs:152-164`. Those **three checks are recovered
+  verbatim**, fixture and assertions unaltered, and are marked `(recovered)` in the new suite; **the rest of
+  `FdirTest.cs` stays deleted** — it is `AbortResponder` / `Fdir` coverage and neither type is in the tree
+  (W19 owns `AbortResponder`). Fifteen further checks were added because the recovered three only exercise the
+  interior of the band: both null guards, the empty and all-land tracks, the inverted window, nearest-not-first
+  ordering, the deterministic tie rule, and **both inclusive band edges** (the code rejects on `< min` / `> max`).
+  **Mutation-checked, not assumed green:** deleting the `d > maxGlideM` half of the guard makes the suite go
+  red on exactly the right check (*"water only BEYOND the window → -1"*) and the file was restored after.
+- **Gate (C1.3):** `build.py test` **green, all suites, 0 failed**; glue 129→**131 source files**, **no new
+  warnings**. `build.py preview` re-rendered and `page0_flight_gate.png` inspected — **unchanged**, as
+  expected: no page consumes this selector.
+- ⚠ **IT LANDS DORMANT, and the line predicted this.** `grep` finds no caller for either file: the two
+  intended consumers are **W18** (`ReturnControl`, now RECOVER-REFERENCE by G6 — it lands **no code at all**)
+  and **W19** (`AbortControl`, still TODO). That is the point of landing it third — *"neither of those lines
+  has to invent a splashdown target"*. The suite is currently the only thing exercising it.
 
 ### W16 [S] Wave E-4 `src/EntrySteering.cs` — **RE-VERDICTED RECOVER-REFERENCE (G6)**: the lifting-entry L/D prior, mined for MechJeb's entry hold — **TODO** — [TIER 4: reference extraction — read, mined, quoted; no code lands]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 4 of 9).
