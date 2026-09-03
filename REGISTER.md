@@ -5310,3 +5310,50 @@ and a comment that contradicts the register is exactly the kind of stale claim C
 2. **Open a small [S] line now** to refresh all six comments to point at W9/W10/W18/W20/W21 immediately, so the
    file stops contradicting the register in the meantime.
 3. Both — option 2 now for accuracy, option 1 thereafter for each flip.
+
+---
+
+### S69 [S] Apache-2.0 attribution for the Dandiwala derivation — **DONE 2026-09-04** — [TIER 1: licence compliance]
+Overseer finding (2026-09-04, not previously in this register — S68 is used, so S69 is the next free
+number): `plugin/GameData/DragonScreen/art/cover/dragon_crew.png` and the pages built from it derive from
+`github:neel-dandiwala/SpaceX-Dragon2-UI`, which is **Apache-2.0**. GPLv3-compatible one-way, so shipping is
+fine — but Apache-2.0 requires attribution, a licence copy and a statement of changes, and the tree carried
+none. `VehicleOverviewPage.cs:1-6` states the derivation is substantial ("its exact layout, palette and
+copy"), so this was broader than the one PNG.
+**Build:** added `NOTICE` at the repo root (Apache convention, alongside `LICENSE`) covering: the asset
+(`dragon_crew.png`, taken unmodified), the VEHICLE OVERVIEW page (`VehicleOverviewPage.cs` — layout, palette
+AND on-screen copy, the most substantial derivation), the SUIT LEAK CHECK page (`SuitCheckPage.cs` — layout
+only, copy already replaced with real wording per its own header), and the nav-bar icon routing
+(`FigmaUI.cs`'s `BarTarget`); the full Apache-2.0 licence text; and a statement of what changed (Vue/WebGL →
+C# `DisplayList`, no source code carried over, static demo values → live-or-marked KSP data).
+**Grepped the tree for every other file crediting that repo, as asked — none needed editing (declared
+outputs are `NOTICE` + this index + this line, C1.11), but two are stale and are logged below rather than
+fixed here (C1.1):** `README.md`'s licence section already names the repo but doesn't state it's Apache-2.0
+and says *"None of those are redistributed here"* — false for `dragon_crew.png`, which is shipped.
+`assets/ASSET_PROVENANCE.md` §3 headlines the same repo *"LAYOUT REFERENCE ONLY. NOT AN ASSET SOURCE"* —
+also false for the same reason. Everything else that names the repo (`.gitignore`, `docs/BUILD_PLAN.md`,
+`docs/SCREEN_INVENTORY.md`, `docs/REAL_DRAGON_SCREENS.md`, `docs/REFERENCE_PAGES.md`,
+`docs/SCREENS_LOOK_AND_FUNCTION_RESEARCH.md`, `docs/UI_AUDIT.md`, `docs/reference/dragon_screen_map.html`)
+is research/orientation prose, cites no code or asset reuse, and needed no change.
+**Verified (C1.3):** docs-only task, no `.cs` change — no preview PNG applies. `python plugin/build.py test`
+run as the no-regression check: **ALL SUITES PASSED** (unchanged from before this task).
+**Outputs (C1.11, nothing else):** `NOTICE` (new) · `docs/INDEX.md` (one entry) · this line · one local
+commit. NOT pushed (C1.5). No `.cs` file touched.
+**Batched owner questions (C1.9):** none — this task is a compliance fix with no design decision, so nothing
+needs an owner call. The two stale-doc findings above are recorded as new register lines (S70/S71) rather
+than asked as questions, per C1.1.
+
+### S70 [S] Fix `README.md`'s licence section for the Dandiwala derivation — **TODO** — [TIER 3: doc accuracy]
+Found by **S69** while grepping the tree for files crediting `neel-dandiwala/SpaceX-Dragon2-UI` (2026-09-04).
+`README.md`'s Licence section lists the repo without naming its licence (Apache-2.0) and states *"None of
+those are redistributed here"* — false: `dragon_crew.png` is shipped verbatim in
+`plugin/GameData/DragonScreen/art/cover/`, per `NOTICE` (S69). **Build:** name the licence, point at
+`NOTICE` for the full attribution, and correct the redistribution claim to carve out the one shipped asset.
+Docs-only; no `.cs` change; `build.py test` as no-regression check.
+
+### S71 [S] Fix `assets/ASSET_PROVENANCE.md` §3's "not an asset source" claim — **TODO** — [TIER 3: doc accuracy]
+Found by **S69**, same pass as S70 (2026-09-04). §3's header reads *"LAYOUT REFERENCE ONLY. NOT AN ASSET
+SOURCE"* for `reference/dragon2-ui-vue/` — false, since `dragon_crew.png` (shipped in
+`plugin/GameData/DragonScreen/art/cover/`) is sourced from that same repo's bundled art. **Build:** correct
+the §3 header and add a line noting the one shipped asset, cross-referencing `NOTICE` (S69) for the full
+attribution. Docs-only; no `.cs` change; `build.py test` as no-regression check.

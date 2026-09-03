@@ -238,6 +238,11 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
   code-drawn from live `PageState`, and the spec's element list, arrangement and licence sections still stand.
 - `../assets/ASSET_PROVENANCE.md` — licences + where each reference asset came from. Check it before
   re-gathering anything.
+- **[../NOTICE](../NOTICE)** [CURRENT] — **S69** (2026-09-04): the Apache-2.0 attribution this repo owes
+  `SpaceX-Dragon2-UI` (Neel Dandiwala) — the full licence text, what was taken (`dragon_crew.png`, the
+  VEHICLE OVERVIEW page's layout/palette/copy, SuitCheckPage's layout, the nav-bar icon routing) and the
+  statement of changes Apache-2.0 §4(b) requires. Sits beside `LICENSE` (this repo's own GPL-3.0, which
+  Apache-2.0 is one-way compatible with) at the repo root.
 
 ## 6. Tools
 
