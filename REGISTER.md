@@ -4818,3 +4818,89 @@ which this chat had to ASSERT because the poster is not in the repo and must not
 whether the FIN callout should carry a count, which nothing in the repo evidences; (Q3) whether the callout
 text at reference size 22 is big enough on the glass — a PNG cannot settle it, and S38 has already shown
 once that this console's oblique viewing angle beats a PNG judgement. Recommendations: 1 / 1 / 1.
+
+---
+
+### S68 [O] Put the owner's Crew Dragon art on the PROP page — bitmap **C1.8 `OVERRIDE` granted** — **DONE 2026-09-04** — [TIER 2: owner-directed accuracy + provenance correction]
+Owner-directed task, given directly as the session prompt (not previously in this register — S68 written by
+the task itself; S65–S67 are used, so this is the next free number).
+**⚖ THE TWO OWNER DECISIONS THIS LINE RECORDS (2026-09-04, via the overseer — C1.12).**
+1. **PROVENANCE.** `assets/reference/crew dragon with trunk.jpg` is the **OWNER'S OWN generated work**, filed
+   in that folder by habit. It is **OURS TO SHIP, not third-party.** That folder's `.gitignore` banner says
+   "THIRD-PARTY SOURCE", and on that information an earlier chat correctly refused it — **the refusal was
+   right on the information it had.** Recorded in `docs/INDEX.md` so nobody re-litigates it.
+2. **ARCHITECTURE — C1.8 `OVERRIDE` GRANTED for this page.** S65 wrote "vector, and still LIVE … No bitmaps"
+   as an absolute; it was written too absolutely (the overseer's error). `DisplayList.Asset()` already exists
+   and BOTH renderers already draw bitmaps — `dragon_crew.png` proves it — so a bitmap here breaks no
+   two-renderer contract. **The override is scoped to the Prop page's vehicle drawing and to nothing else.**
+   `docs/BUILD_PLAN.md` carries no "no bitmap" wording for this page, so nothing needed amending there (C7.1);
+   the stale half of `ART_SPEC_DRAGON.md` — its drawn geometry — is marked superseded from the INDEX entry.
+**What was done.** `assets/reference/crew dragon with trunk.jpg` (JPEG/RGB/800×1303, baked on black) was
+converted with the overseer's own proven parameters — luminance key on `max(r,g,b)`, alpha 0 below 8, ramped
+8→60, opaque above 60, then rotated **90° COUNTER-CLOCKWISE (expand)** — and saved with alpha as
+`plugin/GameData/DragonScreen/art/cover/dragon_prop_elevation.png` (1303×800 RGBA), named by the convention
+`ImageStore.ResolveAsset` already uses (`art/cover/<key>.png`, lower_snake_case, as `dragon_crew`). The `.jpg`
+is NOT shipped and nothing was committed into `assets/reference/`. `PropSchematic.cs` now draws that asset as
+the vehicle — nose LEFT, so §11b's TIER-1 horizontal profile (JSC `jsc2026e404727`) is preserved, which
+rotating an axially symmetric elevation does not disturb.
+**THE ALIGNMENT — the point of the task.** The four Draco quad rings were **re-registered to the artwork's
+own Draco clusters**: `QPx/QPy` are the measured bright-pixel centroids of the four nozzle clusters in the
+ROTATED asset's own 1303×800 pixel space, and `AXd()/AYd()` map that space onto the page — so the ring that
+says QUAD A sits on the hull position it annotates, and re-scaling or moving the art moves the rings with it;
+the two cannot drift. Every callout leader likewise ends on a MEASURED asset pixel (nosecone cover, both
+windows, the umbilical latch, the sidewall aft of the quads, the trunk fin), not on a remembered coordinate.
+A/D are the pair above the roll axis and B/C the pair below, chosen to agree with the axial key — an
+elevation cannot tell 45° from 315° (both project "up"), so that pairing is OURS and is said in the header.
+**KEPT LIVE (§14.4(f)).** `ThrusterDuty()` / `QuadDuty()` / `MaxDuty()` are **byte-identical** —
+`FigmaUINavTest.PropSchematicDuty()` still guards them. The quad rings, the **sixteen** per-thruster bars, the
+axial key and every callout are still CODE-DRAWN ON TOP from live `PageState`; the art is a backdrop and
+never a replacement for the instrument. The rings are small **because** they are registered (the clusters are
+~85 design units apart), so each ring's readable text moved out to a label on a leader — the page's own
+callout grammar — and the per-thruster ring ticks were dropped, losing no signal: all 16 thrusters keep their
+own live bar in the data band. S65's separate "16× DRACO THRUSTERS" callout was dropped as redundant: the
+zone heading already says "16 THRUSTERS IN 4 QUADS" and four labelled rings now name each quad.
+**Verified (C1.3, preview gate fully applied).** `python plugin/build.py test` — **ALL SUITES PASSED**.
+`python plugin/build.py preview` — no `OVERFLOWED` warning; Prop renders at **176 commands** (190 firing)
+against the file's 300 ceiling, down from S65's 286 because one asset replaces ~60 hull strokes. PNGs
+**INSPECTED**, full-page and at 3–4× crop: `ui_vehiclepropulsion.png` (idle), `_firing.png`,
+`_kerabsent.png`, `_alerts.png` (unchanged — the ALERTS view does not use this drawing). Confirmed by eye:
+**no black box**, no JPEG fringing on the page navy, the vehicle reads **nose-LEFT**, and **each of the four
+rings encloses its own nozzle cluster**; firing lights the ring arcs, the four labels, the axial-key marks
+and the 16 bars from one signal ("Draco Duty 67 %" agrees). Per-page QC: every string inside its box, no
+overlap, no clipping, no leader crossing another leader or its own label — **three defects were found by
+LOOKING at the PNG and fixed before DONE**: the key's text column crowding the SYSTEM readouts, the UMBILICAL
+leader drawn straight through the "ENGINE POD" callout, and three leaders starting inside their own labels.
+**Outputs (C1.11, nothing else):** `plugin/GameData/DragonScreen/art/cover/dragon_prop_elevation.png` ·
+`plugin/src/pure/PropSchematic.cs` · `docs/INDEX.md` (one entry) · this line · one local commit. NOT pushed
+(C1.5). The other Vehicle tabs, `dragon_crew.png`, the 3D-render/turntable workstream, `PanelMap.cs` and
+`REAL_DRAGON_SCREENS.md` were not touched.
+**Batched owner questions (C1.9), posed per C1.13:** two — written under `## Open questions for the owner`
+at the bottom of this file, since this task's deliverables are an asset, a source file and this line (C1.14).
+
+---
+
+## Open questions for the owner — S68 (C1.14)
+
+**Q1 — Do the four quad rings need to be BIGGER than their clusters, or is registered-and-small right?**
+The four Draco clusters the artwork draws are only ~85 design units apart, so a ring wide enough to hold its
+own "QUAD A / FIRING" text (S65's rings were 208 units across) would cover its neighbour. This chat kept the
+ring **registered and small** (54 units) and moved the readable text out to a label on a leader. A PNG cannot
+settle whether the small lit ring is legible at IVA distance — the same doubt S65 raised as its Q3, and S38
+has already shown once that this console's oblique viewing angle beats a PNG judgement.
+1. **Keep it as built** — small registered ring on the cluster, text on a leader. *(recommended: it is the
+   only option in which the ring is actually over the hardware it reports, which is what this task was for;
+   the readable text is unaffected, and the same duty is also on the page as a bar and as a percentage.)*
+2. Make the rings large again and accept that they overlap each other and cover the art.
+3. Keep the rings small but drop them to a plain lit dot, and let the labels alone carry firing state.
+4. Leave it until glass time and judge it in the capsule (needs the `install` + glass gate, C1.12).
+
+**Q2 — Should `docs/ART_SPEC_DRAGON.md` be rewritten, or left as a historical record?**
+S65 wrote that spec to describe a **code-drawn** vehicle; its drawn-geometry half is now superseded by this
+bitmap, and the INDEX entry says so. Its element list, its arrangement research and its licence bar are all
+still live and still correct. Rewriting it is outside this task's declared outputs (C1.11), so nothing in the
+file itself was touched.
+1. **Open a register line to rewrite it** — keep the element list / arrangement / licence, replace the
+   geometry section with the asset + registration it now describes. *(recommended: it is a "read me before
+   editing that drawing" doc, so the half that is stale is exactly the half a reader would act on.)*
+2. Mark its geometry section `SUPERSEDED` in place with a one-line header edit and nothing more.
+3. Leave it entirely — the INDEX entry already warns the reader.

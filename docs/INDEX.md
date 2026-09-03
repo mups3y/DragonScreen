@@ -224,6 +224,18 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
   not exist.** ⚠ It does not yet recurse into `art/cover/` (register line S7).
 - `../assets/` — REFERENCE only (DillonBaird, Kenney, MAS `AvionicsSystems`, the Figma SVGs, D-DIN, the Vue
   recreation). **Look, don't ship.** The only shippable art lives in `plugin/GameData/DragonScreen/art/`.
+- **`plugin/GameData/DragonScreen/art/cover/dragon_prop_elevation.png`** [SHIPPED ART] — the Crew Dragon line-art
+  elevation drawn on the Vehicle · Prop page by `pure/PropSchematic.cs` (**S68**). 1303×800 RGBA, made from
+  `assets/reference/crew dragon with trunk.jpg` by a luminance key (JPEG carries no alpha, so the art arrives
+  baked on black) and a 90° counter-clockwise rotation, which puts the nose LEFT for the page's horizontal
+  profile. ✅ **PROVENANCE — this is the OWNER'S OWN generated work** (owner decision, 2026-09-04, via the
+  overseer), filed in `assets/reference/` by habit only. **It is OURS TO SHIP.** That folder's `.gitignore`
+  banner reads "THIRD-PARTY SOURCE"; on that information an earlier chat correctly refused to ship this file —
+  the refusal was right, the label simply is not true of this one file, and nobody should re-litigate it. The
+  separate S65 licence bar is untouched: the commercial third-party SpaceX blueprint poster stays out of the
+  repo for ever. ⚠ This supersedes the *drawn-geometry* half of `ART_SPEC_DRAGON.md` (the vehicle is now this
+  bitmap); everything that MOVES on that page — quad rings, 16 thruster bars, axial key, callouts — is still
+  code-drawn from live `PageState`, and the spec's element list, arrangement and licence sections still stand.
 - `../assets/ASSET_PROVENANCE.md` — licences + where each reference asset came from. Check it before
   re-gathering anything.
 

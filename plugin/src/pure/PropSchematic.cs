@@ -1,4 +1,4 @@
-// DragonScreen — PropSchematic  (PURE: the Draco RCS thruster schematic — T9, redrawn by S65)
+// DragonScreen — PropSchematic  (PURE: the Draco RCS thruster schematic — T9, art backdrop by S68)
 // ============================================================================================
 // SCREEN_INVENTORY.md #26 / BUILD_PLAN.md §3 row "Vehicle · Prop — real look = thruster/RCS schematic"
 // / §11b. A REAL Crew Dragon propulsion page, photographed in the NASA JSC crew-training series
@@ -8,45 +8,62 @@
 // sub-nav rail". Our LEFT rail is the page's existing subsystem checklist plus VehicleTabBar (whose
 // eight tabs are themselves confirmed-real, C1.4 — no tab is added here).
 //
-// ---- S65: THE VEHICLE IS REDRAWN, THE MODEL BELOW IT IS NOT ----
-// The first cut drew the Dragon as a wedge with a blank box for a trunk, and parked all four Draco
-// pods at one mid-body station. This file now draws the real ARRANGEMENT — hinged nosecone over the
-// docking mechanism, conical pressure vessel, four Draco quads at the FORWARD shoulder, four
-// SuperDraco engine pods in raised sidewall fairings further aft, windows, the convex PICA-X base,
-// the claw umbilical, and the finned trunk — plus an AXIAL KEY (a looking-forward section) that says
-// where the four quads actually sit around the hull, which is the accuracy the drawing owed its own
-// caption. ThrusterDuty() / QuadDuty() / MaxDuty() are UNTOUCHED: this task changed the DRAWING,
-// never the behaviour (§14.4(f) — a live thing does not regress to static art).
+// ---- S68: THE VEHICLE IS THE OWNER'S OWN ARTWORK; THE INSTRUMENT ON TOP IS STILL CODE ----
+// S65 drew the vehicle as vector geometry and wrote "vector, and still LIVE … No bitmaps" into its
+// spec. The OWNER overrode that for this page on 2026-09-04 (via the overseer): the constraint was
+// absolute where it did not need to be — `DisplayList.Asset` already exists and BOTH renderers already
+// draw bitmaps (`dragon_crew` proves it), so a bitmap here breaks no two-renderer contract. The
+// vehicle is now `art/cover/dragon_prop_elevation.png`, the owner's OWN generated line-art elevation,
+// rotated 90 deg counter-clockwise so the nose points LEFT — the horizontal profile §11b's TIER-1
+// photo shows. Rotating an axially symmetric vehicle's elevation preserves that layout grammar.
 //
-// ---- ⛔ LICENCE: REDRAWN, NEVER COPIED (owner decision, 2026-09-04, via the overseer) ----
-// The arrangement reference is a commercial third-party SpaceX blueprint poster. It is NOT in this
-// repo, must never be added to it, and nothing here is cropped, traced or derived pixel-wise from it.
-// This mod is publicly distributed and becomes GPLv3 once MechJeb is embedded (§B2/§B3), so shipping
-// that image — even "as reference" — would be redistribution. What was used is the WRITTEN element
-// list and arrangement (part names, counts, which part sits where): facts, not protected expression.
-// Every line below is our own geometry, authored from that written spec. See docs/ART_SPEC_DRAGON.md.
+// The art is a BACKDROP, never a replacement for the instrument. Everything that MOVES is still drawn
+// in code, on top, from live PageState: the four quad duty rings, the sixteen per-thruster bars, the
+// axial key and every callout. ThrusterDuty() / QuadDuty() / MaxDuty() are UNTOUCHED (§14.4(f) — a
+// live thing does not regress to static art), and FigmaUINavTest.PropSchematicDuty() still guards them.
+//
+// ---- WHERE THE FOUR QUAD RINGS SIT, AND WHY THAT IS THE POINT ----
+// The artwork itself draws the Draco clusters — four grouped-oval nozzle clusters on the capsule
+// shoulders, two projecting above the roll axis and two below. The four rings are registered to THOSE
+// CLUSTERS by pixel: QPx/QPy are positions in the ROTATED asset's own 1303x800 pixel space, measured
+// as the bright-pixel centroid of each cluster, and AXd/AYd map that space onto the page. So the ring
+// that says QUAD A is over the hull position it annotates, and moving or re-scaling the art moves the
+// rings with it — the two cannot drift apart.
+// Which cluster is called A/B/C/D is OURS (see §1.4 below): an elevation cannot distinguish a quad at
+// 45 deg from one at 315 deg — both project "up" — so the pairing is chosen to agree with the axial
+// key (A,D above the axis; B,C below), and the key's marks are lit by the SAME QuadDuty as the rings.
+//
+// ---- ⛔ PROVENANCE: THE ART IS THE OWNER'S OWN WORK (owner decision, 2026-09-04, via the overseer) ----
+// `assets/reference/crew dragon with trunk.jpg` is the OWNER'S OWN generated work, filed in that folder
+// by habit. That folder's .gitignore banner says "THIRD-PARTY SOURCE", and on that information an
+// earlier chat correctly refused to ship it — the refusal was right, the label was simply not true of
+// this one file. It is OURS to ship. Recorded in docs/INDEX.md so nobody has to re-litigate it.
+// The S65 licence bar is UNCHANGED and still stands: the commercial third-party SpaceX blueprint poster
+// used for the ARRANGEMENT is NOT in this repo and must never be added.
 //
 // ---- WHAT IS REAL, WHAT IS OURS (§1.4) ----
-// TIER 1 — the LAYOUT GRAMMAR from the JSC photo: horizontal profile, quad arc symbols with
-//   per-cluster firing/status, the per-thruster data band along the bottom, the left rail. Kept.
+// TIER 1 — the LAYOUT GRAMMAR from the JSC photo: horizontal profile, quad symbols with per-cluster
+//   firing/status, the per-thruster data band along the bottom, the left rail. Kept.
 // TIER 1 (repo) — public vehicle facts already shipped in this codebase (VehicleSubsystemPage's own
 //   Prop checklist) and independently confirmed by docs/reference/craftdump.csv: 16 Dracos in 4 quads
 //   of 4, 8 SuperDracos in 4 pods of 2, NTO/MMH, helium pressurant, a NASA Docking System, a PICA-X
 //   heat shield, and a trunk carrying solar array + radiator (§8) and lifting surfaces (the fins).
-// TIER 2, MARKED — the ARRANGEMENT: which part sits at which axial station, and the RADIAL clocking
-//   (four engine pods 90 deg apart, four Draco quads 90 deg apart and clocked 45 deg off them). Taken
-//   from the poster's element list + its three axial views as relayed in the S65 task spec, then
-//   REDRAWN. The on-glass "QUADS CLOCKED / 45 DEG FROM PODS" note marks it for the crew.
-// OURS — every STRING that is not in that element list: the quad names A-D, the per-thruster
+// OWNER ART — the vehicle drawing itself, and every hull feature the callouts name: the nosecone and
+//   its covers, the windows, the umbilical, the trunk and its fin. Each callout leader ends on a
+//   MEASURED pixel of that artwork, not on a guess.
+// TIER 2, MARKED — the RADIAL clocking (four quads 90 deg apart, clocked 45 deg off the four engine
+//   pods) drawn in the axial key. The on-glass "QUADS CLOCKED / 45 DEG FROM PODS" note marks it.
+//   The ENGINE POD / SUPERDRACO callouts land on the capsule sidewall aft of the quads — the pods'
+//   real station — because this artwork does not draw a separate pod fairing to point at.
+// OURS — every STRING that is not in the element list: the quad names A-D, the per-thruster
 //   designators and their four roles. §11b's verdict on this screen is "layout-real /
 //   labels-reconstructed … exact on-screen text is NOT transcribable"; SpaceX's real thruster naming
 //   and control allocation are not public. The four propellant readouts and the five detail readouts
 //   in the bottom band are the subsystem template's own LIVE values, passed in unchanged.
-// NO DIMENSION IS ASSERTED. The profile is drawn to PROPORTION only. Two versions of the poster
-//   disagree with each other on overall length and neither matches the vehicle, and §8 / §B11 /
-//   craftdump.csv — the three authorities — carry no linear dimension for Dragon at all. So no metre
-//   figure is taken from the reference and none is drawn: every number on this page comes from
-//   PageState. See docs/ART_SPEC_DRAGON.md, "Open questions for the owner".
+// NO DIMENSION IS ASSERTED. §8, §B11 and craftdump.csv — the three authorities — carry no linear
+//   dimension for Dragon, so none is drawn: every number on this page comes from PageState.
+// S65's separate "16x DRACO THRUSTERS" callout is gone: the zone heading already says "16 THRUSTERS IN
+//   4 QUADS" and four labelled rings now name each quad, so it pointed at what two other elements said.
 //
 // ---- THE FIRING INDICATORS ARE SIMULATED, NEVER FAKED ----
 // Every lit segment here is the LIVE RCS demand resolved onto the pod that would have to answer it:
@@ -60,25 +77,39 @@ namespace DragonScreen
 {
     public static class PropSchematic
     {
-        /// <summary>Worst case: the profile + its callouts + 4 quad rings + the axial key + the
-        /// per-thruster band + the readout columns. Measured at ~250; the headroom keeps the whole
-        /// Prop page inside VehicleSubsystemPage.Commands.</summary>
+        /// <summary>Worst case: the art + its callouts + 4 quad rings + the axial key + the
+        /// per-thruster band + the readout columns. Measured well under this; the headroom keeps the
+        /// whole Prop page inside VehicleSubsystemPage.Commands.</summary>
         public const int Commands = 300;
         const float RefW = 3427f, RefH = 2112f;
 
-        static readonly Rgba Hull   = DragonPalette.Text5;    // the vehicle's own outline
         static readonly Rgba Detail = DragonPalette.Text6;    // labels + secondary structure
         static readonly Rgba Faint  = DragonPalette.Text7;
-        static readonly Rgba Hidden = DragonPalette.Hairline; // leaders + detail under a cover
+        static readonly Rgba Hidden = DragonPalette.Hairline; // leaders
         static readonly Rgba White  = DragonPalette.White;
         static readonly Rgba Accent = DragonPalette.Accent;
 
+        // ---- the vehicle: the owner's own elevation, nose LEFT ----
+        // art/cover/dragon_prop_elevation.png is 1303x800 with alpha. The placement keeps that aspect
+        // exactly (a stretched vehicle would be a lie about a real shape), sits clear of the readout
+        // columns at x >= 2250, and leaves a label band above and below it.
+        const string ArtKey = "dragon_prop_elevation";
+        const float ArtPxW = 1303f, ArtPxH = 800f;
+        const float ArtX = 920f, ArtY = 402f, ArtW = 1070f;
+        const float ArtH = ArtW * ArtPxH / ArtPxW;
+        const float ArtK = ArtW / ArtPxW;          // asset pixels -> design units
+
+        /// <summary>Design-space x of an asset pixel. Every anchor on the vehicle goes through this,
+        /// so the overlay is registered to the ARTWORK and not to a remembered position.</summary>
+        static float AXd(float px) { return ArtX + px * ArtK; }
+        static float AYd(float py) { return ArtY + py * ArtK; }
+
         // ---- the four Draco quads ----
-        // The four callout rings sit at the four corners IN CLOCK ORDER, so their placement on the
-        // page is their placement around the hull: A upper-right, B lower-right, C lower-left,
-        // D upper-left — exactly what the axial key below the vehicle shows against the hull circle.
-        static readonly float[] QX = { 2040f, 2040f, 1100f, 1100f };
-        static readonly float[] QY = {  320f, 1130f, 1130f,  320f };
+        // Positions are the measured bright-pixel centroids of the four nozzle clusters in the ROTATED
+        // asset, in its own pixel space. A/D are the pair above the roll axis, B/C the pair below,
+        // which is the pairing the axial key's azimuths below describe.
+        static readonly float[] QPx = { 438.4f, 437.4f, 495.1f, 496.7f };
+        static readonly float[] QPy = { 263.7f, 531.6f, 617.6f, 161.4f };
         // Roll-axis azimuth of each pod, degrees (instrument convention: 0 at twelve o'clock,
         // increasing clockwise, viewed LOOKING FORWARD). Four pods 90 deg apart, clocked 45 deg off
         // the four engine pods, is the arrangement (tier 2, marked); which pod is called which is ours.
@@ -86,58 +117,22 @@ namespace DragonScreen
         static readonly string[] QuadName = { "QUAD A", "QUAD B", "QUAD C", "QUAD D" };
         static readonly string[] QuadLetter = { "A", "B", "C", "D" };
 
-        // Per-pod thruster roles, in index order, and where each sits on the pod's ring.
-        static readonly string[] Role    = { "FWD", "AFT", "LAT", "ROLL" };
-        static readonly float[]  TickDeg = { 0f, 180f, 90f, 270f };
-        static readonly string[][] Des = {
-            new[] { "A1", "A2", "A3", "A4" }, new[] { "B1", "B2", "B3", "B4" },
-            new[] { "C1", "C2", "C3", "C4" }, new[] { "D1", "D2", "D3", "D4" } };
+        // The rings are small because they are REGISTERED: the clusters they sit on are ~89 design
+        // units apart at this art scale, so a ring wide enough to hold text would cover its neighbour.
+        // The readable text lives in the label band, on a leader — the page's own callout grammar.
+        const float QuadRi = 18f, QuadR = 27f;
 
-        const float QuadRi = 66f, QuadR = 84f;    // duty band; ticks run QuadR+4 .. QuadR+20
+        // Where each quad's label sits, and where its leader leaves the label. Top pair above the art,
+        // bottom pair below it, ordered left-to-right so no two leaders cross.
+        static readonly float[] QLabX = { 1130f, 1130f, 1500f, 1500f };
+        static readonly float[] QLabY = {  250f, 1200f, 1200f,  250f };
+        static readonly float[] QLeadX = { 1160f, 1160f, 1470f, 1470f };
+        static readonly float[] QLeadY = {  322f, 1160f, 1160f,  322f };
 
-        // ---- the vehicle, in horizontal profile: nose LEFT, trunk RIGHT ----
-        // PROPORTION ONLY (see the header): capsule, trunk and diameter are drawn in the vehicle's own
-        // ratio to each other; no linear dimension is claimed and none is drawn.
-        const float HullCY   = 725f;
-        const float BaseHH   = 172f;   // heat-shield radius = the widest point
-        const float FwdHH    =  85f;   // capsule forward ring, where the nosecone hinges
-        const float NoseTipX = 1225f, ShoulderX = 1351f, BaseX = 1603f, ApexX = 1633f;
-        const float TrunkX0  = 1653f, TrunkX1 = 1971f;
-        const float FinX0    = 1893f, FinHH = 204f;
-        const float PodX0    = 1362f, PodX1 = 1432f;    // the Draco quad station (forward shoulder)
-        const float FairX0   = 1480f, FairX1 = 1584f;   // the SuperDraco engine-pod fairings
-        const float FairH    =   30f;                   // how proud of the sidewall a fairing stands
-        const float ConeK    = (BaseHH - FwdHH) / (BaseX - ShoulderX);
-
-        // The nosecone's own profile — a blunt hinged cover, not a point.
-        static readonly float[] NoseSx = { 1225f, 1258f, 1305f, 1351f };
-        static readonly float[] NoseSh = {   22f,   48f,   72f,   85f };
-
-        // The convex PICA-X base, rim inward: (x, half-height). The shield bulges AFT.
-        static readonly float[] ShieldX = { 1603f, 1618f, 1629f, ApexX };
-        static readonly float[] ShieldH = {  172f,  142f,   84f,    0f };
-
-        // ---- the axial key (a looking-forward section, under the vehicle) ----
-        const float KeyCX = 1570f, KeyCY = 1130f;
+        // ---- the axial key (a looking-forward section), in the strip aft of the trunk ----
+        const float KeyCX = 2115f, KeyCY = 725f;
 
         static float Clamp01(float v) { return v < 0f ? 0f : (v > 1f ? 1f : v); }
-
-        /// <summary>Half-height of the drawn profile at design-x, so any callout leader or pod lands
-        /// exactly on the hull the renderer actually draws.</summary>
-        static float HalfHeight(float x)
-        {
-            if (x <= NoseTipX) return 0f;
-            if (x < ShoulderX)
-            {
-                for (int i = 1; i < NoseSx.Length; i++)
-                    if (x < NoseSx[i])
-                        return NoseSh[i - 1] + (x - NoseSx[i - 1]) / (NoseSx[i] - NoseSx[i - 1])
-                                             * (NoseSh[i] - NoseSh[i - 1]);
-                return FwdHH;
-            }
-            if (x >= BaseX) return BaseHH;
-            return FwdHH + (x - ShoulderX) * ConeK;
-        }
 
         /// <summary>One thruster's duty, 0..1: the share of the LIVE RCS demand a pod at this azimuth
         /// would have to answer through this role. A thruster only pushes one way, so the opposing
@@ -181,6 +176,12 @@ namespace DragonScreen
             return d;
         }
 
+        // Per-pod thruster roles, in index order, and where each sits on the pod's ring.
+        static readonly string[] Role = { "FWD", "AFT", "LAT", "ROLL" };
+        static readonly string[][] Des = {
+            new[] { "A1", "A2", "A3", "A4" }, new[] { "B1", "B2", "B3", "B4" },
+            new[] { "C1", "C2", "C3", "C4" }, new[] { "D1", "D2", "D3", "D4" } };
+
         /// <summary>Draw the schematic across the Prop page's centre + right zone. The caller's four
         /// headline-gauge values and five detail readouts are passed through so their LIVE numbers move
         /// into the data band rather than being lost or re-invented.</summary>
@@ -197,168 +198,79 @@ namespace DragonScreen
             void R(string t, float x, float y, float sz, Rgba c) => dl.Text(t, PX(x), PY(y), SZ(sz), TextAlign.Right, c);
             void LN(float x0, float y0, float x1, float y1, Rgba c) =>
                 dl.Line(PX(x0), PY(y0), PX(x1), PY(y1), SZ(3f), c);
-            // One stroke drawn on BOTH sides of the roll axis — the profile is symmetric, and saying so
-            // once keeps the two halves from drifting apart under a later edit.
-            void MIR(float x0, float d0, float x1, float d1, Rgba c)
-            { LN(x0, HullCY - d0, x1, HullCY - d1, c); LN(x0, HullCY + d0, x1, HullCY + d1, c); }
-            void BOX(float x0, float y0, float x1, float y1, Rgba c) =>
-                dl.Box(PX(x0), PY(y0), (x1 - x0) * sx, SZ(y1 - y0), SZ(3f), c);
-            // A callout: the reference's own word, and a hairline leader to the thing it names.
-            void CO(string t, float tx, float ty, float lx0, float ly0, float lx1, float ly1)
-            { L(t, tx, ty, 22, Detail); LN(lx0, ly0, lx1, ly1, Hidden); }
+            // A callout: the element's own name, and a hairline leader to the MEASURED asset pixel it
+            // names — (ax, ay) are in the artwork's pixel space, never in page space.
+            void CO(string t, float tx, float ty, float lx, float ly, float ax, float ay)
+            { L(t, tx, ty, 22, Detail); LN(lx, ly, AXd(ax), AYd(ay), Hidden); }
 
             // ---- zone heading + the real RCS master state ----
             L("DRACO RCS · 16 THRUSTERS IN 4 QUADS", 900, 130, 30, Accent);
             bool rcs = s.Valid && s.RcsOn;
             R(rcs ? "RCS ENABLED" : "RCS DISABLED", 3380, 130, 30, rcs ? DragonPalette.Go : Faint);
 
-            // ================= THE VEHICLE, IN HORIZONTAL PROFILE =================
-            // NOSECONE — the hinged cover, blunt tip, hinging at the capsule's forward ring.
-            LN(NoseSx[0], HullCY - NoseSh[0], NoseSx[0], HullCY + NoseSh[0], Hull);
-            for (int i = 1; i < NoseSx.Length; i++)
-                MIR(NoseSx[i - 1], NoseSh[i - 1], NoseSx[i], NoseSh[i], Hull);
-            LN(ShoulderX, HullCY - FwdHH, ShoulderX, HullCY + FwdHH, Hidden);   // the hinge line
+            // ================= THE VEHICLE =================
+            // White, not a palette tint: the GL painter multiplies this colour into the texture and the
+            // PNG preview ignores it, so anything but white would make the glass and the preview — the
+            // thing layout is judged from — disagree.
+            dl.Asset(ArtKey, PX(ArtX), PY(ArtY), ArtW * sx, SZ(ArtH), White);
 
-            // DOCKING MECHANISM — the NASA Docking System ring (craftdump part 19) sits UNDER the
-            // closed nosecone, so it is drawn as the ring seen edge-on inside the cover: present,
-            // never pretending to be visible from outside.
-            LN(1308f, HullCY - 58f, 1346f, HullCY - 58f, Faint);
-            LN(1308f, HullCY + 58f, 1346f, HullCY + 58f, Faint);
+            // ---- callouts: each leader ends on a measured pixel of the artwork ----
+            CO("NOSECONE",              950,  300, 1010,  340,  250f,   215f);   // the hinged cover
+            CO("UMBILICAL",            1620,  300, 1610,  320,  616.5f, 268.7f);
+            CO("ENGINE POD",           1560,  455, 1555,  465,  652f,   169f);   // sidewall, aft of the quads
+            CO("WINDOWS",               950, 1160, 1010, 1148,  294.6f, 499.9f);
+            CO("8× SUPERDRACO ENGINES",1560, 1110, 1555, 1098,  652f,   630f);
+            CO("FIN",                  1880, 1160, 1930, 1148, 1150f,   763f);
 
-            // CAPSULE — the conical pressure vessel. The sidewall runs from the forward ring to where
-            // the first engine-pod fairing takes over the silhouette.
-            MIR(ShoulderX, FwdHH, FairX0, HalfHeight(FairX0), Hull);
-
-            // ENGINE POD / 8x SUPERDRACO ENGINES — four pods of two in raised sidewall fairings, 90 deg
-            // apart. Two are edge-on in profile, so over their span the FAIRING is the outline, not the
-            // bare cone; the third faces the viewer and projects onto the roll axis; the fourth is
-            // hidden behind the vehicle. Two canted nozzles per pod — that is the eight.
-            float fh0 = HalfHeight(FairX0) + FairH, fh1 = HalfHeight(FairX1) + FairH;
-            for (int side = -1; side <= 1; side += 2)
-            {
-                LN(FairX0, HullCY + side * HalfHeight(FairX0), 1500f, HullCY + side * fh0, Hull);
-                LN(1500f, HullCY + side * fh0, FairX1, HullCY + side * fh1, Hull);
-                LN(FairX1, HullCY + side * fh1, BaseX, HullCY + side * BaseHH, Hull);
-                LN(1540f, HullCY + side * 178f, 1556f, HullCY + side * 192f, Hull);
-                LN(1560f, HullCY + side * 187f, 1576f, HullCY + side * 201f, Hull);
-            }
-            // The near-side pod, seen face-on: same outline, projected onto the axis.
-            LN(1500f, HullCY - 34f, 1580f, HullCY - 34f, Faint);
-            LN(1500f, HullCY + 34f, 1580f, HullCY + 34f, Faint);
-            LN(1500f, HullCY - 34f, 1486f, HullCY, Faint);
-            LN(1486f, HullCY, 1500f, HullCY + 34f, Faint);
-            LN(1580f, HullCY - 34f, 1594f, HullCY, Faint);
-            LN(1594f, HullCY, 1580f, HullCY + 34f, Faint);
-
-            // HEAT SHIELD — the capsule's blunt base, convex AFT (PICA-X, craftdump part 1).
-            for (int i = 1; i < ShieldX.Length; i++)
-                MIR(ShieldX[i - 1], ShieldH[i - 1], ShieldX[i], ShieldH[i], Hull);
-
-            // WINDOWS — on the near face; a window off the roll axis projects inboard of the
-            // silhouette, which is why they sit inside the outline rather than on it.
-            for (int side = -1; side <= 1; side += 2)
-            {
-                float wy = HullCY + side * 68f - 12f;
-                BOX(1445f, wy, 1485f, wy + 24f, Detail);
-                BOX(1495f, wy, 1535f, wy + 24f, Detail);
-            }
-
-            // 16x DRACO THRUSTERS — four quads at the FORWARD shoulder, 90 deg apart and clocked
-            // 45 deg off the engine pods, so in profile two project above the axis and two below, both
-            // inboard of the silhouette. Four nozzles on each pod's outer face — that is the sixteen.
-            for (int side = -1; side <= 1; side += 2)
-            {
-                float cy = HullCY + side * 71f, face = cy + side * 13f;
-                BOX(PodX0, cy - 13f, PodX1, cy + 13f, Hull);
-                for (int n = 0; n < 4; n++)
-                {
-                    float nx = PodX0 + 10f + n * 18f;
-                    LN(nx, face, nx, face + side * 12f, Hull);
-                }
-            }
-
-            // UMBILICAL — the claw, the trunk-to-capsule thermal/power/avionics link (§8), bridging the
-            // heat-shield plane and the trunk's forward ring.
-            BOX(1610f, HullCY + 172f, 1690f, HullCY + 204f, Detail);
-
-            // TRUNK — the cylindrical body below the capsule: half solar array (the panel joints above
-            // the split), half radiator (the loops below it) per §8, and it carries the fins (craftdump:
-            // the trunk is the part holding the lifting surface).
-            LN(TrunkX0, HullCY - BaseHH, TrunkX0, HullCY + BaseHH, Hull);
-            MIR(TrunkX0, BaseHH, TrunkX1, BaseHH, Hull);
-            LN(TrunkX1, HullCY - BaseHH, TrunkX1, HullCY + BaseHH, Hull);
-            LN(TrunkX0, HullCY, TrunkX1, HullCY, Hidden);              // the array / radiator split
-            LN(1723f, HullCY - BaseHH, 1723f, HullCY, Hidden);
-            LN(1793f, HullCY - BaseHH, 1793f, HullCY, Hidden);
-            LN(1863f, HullCY - BaseHH, 1863f, HullCY, Hidden);
-            LN(1665f, HullCY + 58f, 1959f, HullCY + 58f, Hidden);
-            LN(1665f, HullCY + 116f, 1959f, HullCY + 116f, Hidden);
-
-            // FIN — the trunk's aerodynamic stabiliser, flaring aft. Two stand on the silhouette.
-            for (int side = -1; side <= 1; side += 2)
-            {
-                LN(FinX0, HullCY + side * BaseHH, TrunkX1, HullCY + side * FinHH, Hull);
-                LN(TrunkX1, HullCY + side * FinHH, TrunkX1, HullCY + side * BaseHH, Hull);
-            }
-
-            // ---- callouts: the reference's own element names, on our own geometry ----
-            CO("NOSECONE",              1180, 455, 1230, 489, 1268, 668);
-            CO("16× DRACO THRUSTERS",   1330, 455, 1400, 489, 1397, 641);
-            CO("ENGINE POD",            1600, 455, 1660, 489, 1590, 528);
-            CO("WINDOWS",               1180, 950, 1230, 946, 1498, 792);
-            CO("8× SUPERDRACO ENGINES", 1330, 950, 1440, 946, 1543, 906);
-            CO("UMBILICAL",             1620, 950, 1670, 946, 1660, 930);
-            CO("FIN",                   1880, 950, 1900, 946, 1935, 912);
-
-            // ================= THE FOUR QUAD INDICATORS =================
+            // ================= THE FOUR QUAD INDICATORS, ON THEIR CLUSTERS =================
             for (int q = 0; q < 4; q++)
             {
-                float cx = QX[q], cy = QY[q];
+                float cx = AXd(QPx[q]), cy = AYd(QPy[q]);
                 float duty = QuadDuty(s, q);
+                bool firing = duty > 0.01f;
 
-                dl.ArcBand(PX(cx), PY(cy), SZ(QuadRi), SZ(QuadR), 0, 360, Faint);
-                if (duty > 0.01f)
+                dl.ArcBand(PX(cx), PY(cy), SZ(QuadRi), SZ(QuadR), 0, 360, Detail);
+                if (firing)
                     dl.ArcBand(PX(cx), PY(cy), SZ(QuadRi), SZ(QuadR), 0, 360.0 * duty, Accent);
 
-                for (int r = 0; r < 4; r++)
-                {
-                    float td = ThrusterDuty(s, q, r);
-                    dl.ArcBand(PX(cx), PY(cy), SZ(QuadR + 4f), SZ(QuadR + 20f),
-                               TickDeg[r] - 9f, TickDeg[r] + 9f, td > 0.01f ? Accent : Faint);
-                }
-
-                C(QuadName[q], cx, cy - 34f, 26, White);
-                C(duty > 0.01f ? "FIRING" : (rcs ? "IDLE" : "OFF"), cx, cy + 2f,
-                  22, duty > 0.01f ? Accent : Faint);
+                // The readable half, out in the label band on a leader that STOPS at the ring's edge:
+                // run it to the centre and the line is drawn straight through the gauge it points at.
+                float dx = cx - QLeadX[q], dy = cy - QLeadY[q];
+                float len = (float)Math.Sqrt(dx * dx + dy * dy);
+                float t = (len > QuadR + 6f) ? (len - QuadR - 6f) / len : 0f;
+                LN(QLeadX[q], QLeadY[q], QLeadX[q] + dx * t, QLeadY[q] + dy * t, Hidden);
+                C(QuadName[q], QLabX[q], QLabY[q], 24, firing ? Accent : White);
+                C(firing ? "FIRING" : (rcs ? "IDLE" : "OFF"), QLabX[q], QLabY[q] + 34f,
+                  22, firing ? Accent : Faint);
             }
 
             // ================= THE AXIAL KEY — where the quads actually are =================
-            // The accuracy a profile cannot give: a looking-forward section of the hull carrying the
+            // The accuracy an elevation cannot give: a looking-forward section of the hull carrying the
             // four engine pods and, clocked 45 deg off them, the four Draco quads. Each quad mark
             // lights from the SAME QuadDuty that lights its ring, so the key can never disagree.
-            dl.ArcBand(PX(KeyCX), PY(KeyCY), SZ(72), SZ(76), 0, 360, Hull);
-            dl.ArcBand(PX(KeyCX), PY(KeyCY), SZ(28), SZ(32), 0, 360, Hidden);   // the docking ring
+            dl.ArcBand(PX(KeyCX), PY(KeyCY), SZ(58), SZ(62), 0, 360, Detail);
+            dl.ArcBand(PX(KeyCX), PY(KeyCY), SZ(22), SZ(25), 0, 360, Hidden);   // the docking ring
             for (int p = 0; p < 4; p++)
-                dl.ArcBand(PX(KeyCX), PY(KeyCY), SZ(78), SZ(92), p * 90.0 - 9.0, p * 90.0 + 9.0, Faint);
+                dl.ArcBand(PX(KeyCX), PY(KeyCY), SZ(64), SZ(76), p * 90.0 - 9.0, p * 90.0 + 9.0, Faint);
             for (int q = 0; q < 4; q++)
             {
                 float d = QuadDuty(s, q);
-                dl.ArcBand(PX(KeyCX), PY(KeyCY), SZ(78), SZ(94),
+                dl.ArcBand(PX(KeyCX), PY(KeyCY), SZ(64), SZ(78),
                            QAz[q] - 12.0, QAz[q] + 12.0, d > 0.01f ? Accent : Detail);
                 double az = QAz[q] * Math.PI / 180.0;
                 float ux = (float)Math.Sin(az), uy = -(float)Math.Cos(az);
-                C(QuadLetter[q], KeyCX + ux * 112f, KeyCY + uy * 112f - 13f, 24,
+                C(QuadLetter[q], KeyCX + ux * 92f, KeyCY + uy * 92f - 12f, 22,
                   d > 0.01f ? Accent : White);
             }
-            C("AXIAL VIEW · LOOKING FWD", KeyCX, KeyCY + 120f, 22, Detail);
-
-            L("DRACO ×16",        1250, 1052, 22, Detail);
-            L("4 QUADS OF 4",     1250, 1086, 22, Faint);
-            L("SUPERDRACO ×8",    1250, 1136, 22, Detail);
-            L("4 PODS OF 2",      1250, 1170, 22, Faint);
+            C("AXIAL VIEW",       KeyCX, KeyCY + 122f, 22, Detail);
+            C("LOOKING FWD",      KeyCX, KeyCY + 152f, 22, Detail);
             // The clocking is tier-2 ARRANGEMENT, not a measurement — say so where the crew can see it.
-            L("QUADS CLOCKED",    1700, 1090, 22, Faint);
-            L("45 DEG FROM PODS", 1700, 1124, 22, Faint);
+            C("QUADS CLOCKED",    KeyCX, KeyCY + 210f, 22, Faint);
+            C("45 DEG FROM PODS", KeyCX, KeyCY + 240f, 22, Faint);
+            C("DRACO ×16",        KeyCX, KeyCY + 300f, 22, Detail);
+            C("4 QUADS OF 4",     KeyCX, KeyCY + 330f, 22, Faint);
+            C("SUPERDRACO ×8",    KeyCX, KeyCY + 380f, 22, Detail);
+            C("4 PODS OF 2",      KeyCX, KeyCY + 410f, 22, Faint);
 
             // ---- RIGHT: this subsystem's own readouts, beside the vehicle ----
             // The template's four headline-gauge values and five detail readouts, moved here intact.
