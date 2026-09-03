@@ -45,6 +45,19 @@ public static class TestMain
         bad += PredictTest.Run();          // where we will be / hit / pass closest - damped fixed point
         bad += LambertTest.Run();          // B7 Lambert two-point BVP, self-inverted against our propagator
         bad += RendezvousMathTest.Run();   // L3 rendezvous: the LVLH frame + Clohessy-Wiltshire targeting
+        // S63's guard on the one irreplaceable RSS-RO dataset in the tree. `pure/BoosterDrag.cs` had no
+        // suite and NEVER did (a grep of the whole pre-deletion tree at `8b81816^` finds its name in two
+        // places: the file, and a prose sentence in `Aero.cs`). Its ten Mach-binned bc values came from
+        // 18,080 samples over 48 RSS/RO flights whose raw CSVs were GITIGNORED AND NEVER COMMITTED
+        // (R1 §3.5/§4.3, §B16.8 ruling 1) - so a changed digit could not be detected OR re-derived here,
+        // and would surface as a landing miss rather than a red build. The suite transcribes the numbers
+        // from R1 §3.5's verbatim quotation (a second surviving copy in the repo) rather than reading them
+        // back out of the module, which is what makes it a guard and not a tautology.
+        // ⚠ It pins the TABLE and the interpolator's SHAPE. It does not validate the curve - R1 is a
+        // quotation of the same lost corpus, not an independent measurement - and R1 §3.5 records that the
+        // data came from flights that mostly did NOT land, with no after-case for the miss it fixed. Only a
+        // recorded RE-FLIGHT converges this (owner decision on R1 Q2), which needs glass time: an owner gate.
+        bad += BoosterDragTest.Run();      // S63: the corpus bc-vs-Mach curve, pinned against R1 §3.5
 
         // ---- PART B RECOVERY, WAVE B (W2, §B12.8) - the actuation layer (§B12.7 direct part control) ----
         // ActuationTest proves the pure capability->role classifier the restored glue `src/Actuator.cs` acts

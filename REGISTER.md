@@ -4621,7 +4621,7 @@ UNDOCK acting for real is wanted **now** or should wait for the conductor to own
 this is the FIRST screen button that would actually move the vehicle. **Pose (4) as an overseer prompt
 (C1.13) before building** — it is an actuation-scope call, not a build-chat call.
 
-### S63 [S] `pure/BoosterDrag.cs` is the one irreplaceable RSS-RO dataset in the tree and NOTHING tests it — **TODO** — [TIER 2: real gap — cheap guard on an un-re-derivable asset]
+### S63 [S] `pure/BoosterDrag.cs` is the one irreplaceable RSS-RO dataset in the tree and NOTHING tests it — **DONE 2026-09-04** — [TIER 2: real gap — cheap guard on an un-re-derivable asset]
 Logged by **W1**, 2026-09-04 (C1.1 — found while pairing Wave A's modules to their tests, not fixed there).
 **The finding:** every other module W1 restored has a suite; `BoosterDrag.cs` has none, and never did — a grep
 of the whole pre-deletion `plugin/` tree at `8b81816^` finds its name in exactly two places, the file itself
@@ -4638,6 +4638,37 @@ is committed to, so a silent edit would surface as a landing miss, not as a test
 shape claim the file's own header makes. Register it in `TestMain.cs` beside the Wave A block.
 **DONE when:** `build.py test` green with the new suite, and the pinned values are cited to R1 §3.5 in the
 test's header so a future editor sees where the authority for them is (and that it is the last copy).
+- **DONE 2026-09-04** (⚠ **batch session** — the owner-authorised deviation from C1.1/C1.7 of 2026-09-04, via
+  the overseer, for that batch ONLY). New `plugin/test/BoosterDragTest.cs`, registered in `TestMain.cs`
+  immediately after the Wave A block (beside `RendezvousMathTest`) — **41 checks, 0 failed**; whole run
+  **green, all suites**. All five build items covered: **(a)** the ten values pinned by **exact equality**,
+  not a tolerance — every breakpoint lands on a bin edge whose interpolation weight is exactly 1.0 (each gap
+  is 0.5, exact in binary), so exact compare is available and it is the only compare that catches a one-digit
+  edit; **(b)** the flat holds below Mach 0.5 and above Mach 5.0, including Mach 25 (never extrapolated) and a
+  negative Mach; **(c)** interpolation at three midpoints (mean of the bracketing bins) plus a quarter-point
+  and a no-overshoot check; **(d)** `DragFactor == 1/bc` at all ten bins, Reynolds provably ignored; **(e)**
+  the shape claim — a 6,000-point sweep proving the minimum **is** 1075 and **sits at Mach 2.0**, the maximum
+  is the subsonic 2582, and subsonic − transonic > 1000 (i.e. it is not a scalar, the bug the file exists to
+  fix). Header cites `docs/AUTOPILOT_RECOVERY_AUDIT.md` **§3.5** as the authority, and states what green does
+  and does not mean.
+- ⭐ **ONE CORRECTION TO THIS LINE'S OWN PREMISE, worth recording because it changes what the test IS.** The
+  line says *"nothing in this repo can detect it"* — **not quite: R1 §3.5 quotes the ten digits VERBATIM**
+  (under *"The drag curve — plugin/src/pure/BoosterDrag.cs"*, transcribed from `0d6423d`). So a second
+  surviving copy exists inside the repo, and the suite transcribes **from R1**, not from the module under
+  test — which is what makes it a guard rather than a tautology restating the file to itself. The line's
+  substance is untouched: R1 is a **quotation of the same lost corpus**, not an independent measurement, so a
+  value wrong in `0d6423d` is wrong in both, and **nothing here can still re-derive a digit**. Only a recorded
+  re-flight can (owner decision on R1 Q2: RE-FLY — BlackBox + glass time, a separate owner gate).
+- **Mutation-checked, not assumed green (the whole point of the line):** editing one digit in the table,
+  `1075 → 1076`, turns **six** checks red across four of the five build items — the bin value, the midpoint,
+  the quarter-point, the `DragFactor`, the guard-minimum and the shape minimum. The file was restored
+  afterwards and re-verified green. The tripwire fires.
+- **Gate (C1.3):** `build.py test` **green**. **No `plugin/src` file was touched** — `git status` shows only
+  `test/BoosterDragTest.cs` (new) and `test/TestMain.cs` — so the shipped DLL and every preview PNG are
+  unchanged **by construction**; C1.3's harness-only parenthetical applies and preview is not re-inspected.
+  ⛔ Deliberately NOT done (C1.1, logged not fixed): `pure/BoosterDrag.cs`'s header still reads *"which is why
+  register line S63 exists: pin the table in a test"* — now stale in tense, and a `plugin/src` edit outside
+  this task's declared outputs → **S74**.
 
 ### W5 [O] H1b — the ullage/ignition gate that lost the booster, recovered as an OPEN DEFECT — **TODO** — [TIER 2: real defect + Part-B recovery]
 Logged by **W3**, 2026-09-04 (C1.1 — the register line R1 §7.1 and §B16.4 both cite by name does not exist).
@@ -5732,6 +5763,16 @@ anywhere else"* — false as of W13: `GeometryDumpProbe` (`plugin/src/GeometryDu
 reword the comment to say there are now two independent `[KSPAddon]`s (`CraftDumpAddon` and
 `GeometryDumpProbe`), both read-only diagnostics, neither touching the render or control path. Docs-comment-only;
 no behavior change; `build.py test` as no-regression check.
+
+### S74 [S] `pure/BoosterDrag.cs`'s header points forward to a test that now exists — **TODO** — [TIER 4: hygiene, doc accuracy]
+Found by **S63**, 2026-09-04 (C1.1 — noticed while writing that test; not touched there because
+`plugin/src/pure/BoosterDrag.cs` is outside S63's declared outputs, which are `test/BoosterDragTest.cs` +
+`TestMain.cs`). The module header's §B16.8 ruling-1 block ends *"…the symptom would be a landing miss, not a
+test failure (which is why register line **S63** exists: pin the table in a test)"* — true when W3 wrote it,
+stale in tense now that `plugin/test/BoosterDragTest.cs` is in the tree and green. **Build:** reword that
+clause to point at the suite that now guards the table (S63, DONE 2026-09-04), keeping the ruling-1 substance
+exactly as it stands — the curve is still the best number we have and still not evidence, and **not one digit
+of the table may be touched**. Comment-only; `build.py test` as a no-regression check.
 
 ### W22 [S] `pure/Trajectory.cs`'s 4-band L/D schedule is UNMARKED, and R1 §7.4 files it under the wrong file — **TODO** — [TIER 3: a disclosed unmeasured constant carrying no marking]
 Logged by **W6**, 2026-09-04 (C1.1 — found on re-confirming R1's verdict against the restored content, which
