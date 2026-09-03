@@ -7,8 +7,11 @@
 > `NavState3` names code that no longer exists — read those rows as Part B targets. `AuthorityManager`
 > (display label only, `pure/ScreenModes.cs`), `MissionConductor` and `Fdir` (no-op stubs in
 > `src/_AutopilotStub.cs`) still compile but own nothing. **`BOOSTER_STATUS` is dead**: booster recovery was
-> deleted with the autopilot, Part B does not re-introduce it, and `MissionConductor.RecoveryBooster` is a
-> stub returning null behind a screen toggle nothing acts on. Rows sourced directly from KSP
+> deleted with the autopilot, and `MissionConductor.RecoveryBooster` is a stub returning null behind a screen
+> toggle nothing acts on. ⚠ **Amended 2026-09-03 (G4):** the clause "Part B does not re-introduce it" is
+> **no longer true** — the owner folded Falcon-9 booster recovery into Part B as **§B16** (a separate-vessel
+> autopilot). The row stays DEAD until that work lands; read it as a **Part-B/§B16 target**, not as a
+> permanent state. Rows sourced directly from KSP
 > (`vessel.orbit`, resources, `missionTime`, action groups) and from the pure display models
 > (`CabinEnvironment`, `PropellantReadout`, `VehicleSystems`) are CURRENT. The rule the file exists for — one
 > authoritative source per datum, `UNKNOWN — EVIDENCE REQUIRED` rather than invention — stands unchanged.

@@ -1,18 +1,26 @@
 # DragonScreen — Crew Dragon Build Map & Roadmap
 
-## 0. Plan map & status (consolidated 2026-09-02)
+## 0. Plan map & status (consolidated 2026-09-02; gate updated 2026-09-03)
 Two workstreams, both fully PLANNED. **Gate state — PREVIEW-ONLY BUILD-GO (owner, 2026-09-02, granted via the
-overseer; supersedes the blanket BUILD-HOLD this banner carried until then):** Part A pure code + `build.py
-test` + `build.py preview` are cleared; `build.py install` and glass time still need a SEPARATE explicit owner
-go; Part B has no go at all. `REGISTER.md`'s banner is the live copy of this rule, and **only the owner opens
+overseer; supersedes the blanket BUILD-HOLD this banner carried until then), EXTENDED TO PART B (owner,
+2026-09-03, granted via the overseer and confirmed in-chat):** pure code + `build.py test` + `build.py preview`
+are cleared for **Part A AND Part B**. **The Part-B build gate is OPEN** — **T15 onward** (the pinned,
+privately-namespaced MechJeb embed, GPLv3 per §B2/§B3/§B12.1, and the conductor) is **GO**, to be built at
+**RSS-RO DEFAULT settings as the baseline to tune from** (§B5's "begin from RO defaults"); the
+one-parameter-at-a-time **fine tune is DEFERRED until after the first recorded flight**. `build.py install`
+and glass time are **NOT** covered by either go: they remain **SEPARATE owner gates, granted per session**, so
+a task whose done-criteria can only be met in the capsule (the Part-B "in-sim" criteria included) **stops and
+asks** rather than installing. `REGISTER.md`'s banner is the live copy of this rule, and **only the owner opens
 or widens it (C1.12)** — a build chat never self-authorizes one.
 - **PART A — Screens** (§1–13): the screens-only Crew-Dragon IVA UI. Research COMPLETE (§11/§13); build order
   §7; lower analog panel §4; capsule turntable §5; live-data/touch §6. ~18 pages built (owner-provisional).
-- **PART B — MechJeb autopilot core** (B1–B15, incl. B6 risks): reintroduce flight software as an embedded,
+- **PART B — MechJeb autopilot core** (B1–B16, incl. B6 risks): reintroduce flight software as an embedded,
   pinned, privately-namespaced MechJeb driven by a "conductor". Research COMPLETE (how-to-tune B7–B10 +
   flight-data targets B11); build architecture DESIGNED (B12); abort / crew-gate / FDIR researched (B13–B15);
   **coherence pass + source-tier map done (§14); all 4 tier-3 "invention" clusters RESOLVED with the owner
-  (§14.4)** — the plan is DECISION-COMPLETE (Part B has NO build-go: designed, not started).
+  (§14.4)** — the plan is DECISION-COMPLETE, and **Part B is now GO** (owner, 2026-09-03 — see the banner
+  above), built from RO defaults. **§B16 (owner scope addition, 2026-09-03) folds in Falcon-9 booster
+  recovery** — a SEPARATE-VESSEL autopilot, distinct from the Dragon conductor.
 Execution is governed by **PART C** — the anti-drift harness (a rules→one-task→verify→register LOOP, run by a
 `/next` skill + `CLAUDE.md`; Opus-for-hard / Sonnet-for-routine; one task per fresh chat). First task = T0
 (scaffold the harness), then T1 (docs sync) onward. Gate per the banner above; each task commits LOCALLY with
@@ -299,14 +307,26 @@ out of plan mode, mirror the new screens into `docs/SCREEN_INVENTORY.md` + the m
 
 # PART B — MechJeb Autopilot Core (NEW workstream, 2026-09-01)
 
+🟢 **PART-B BUILD GATE OPEN — the OWNER's decision, 2026-09-03, granted via the overseer and confirmed in-chat
+(recorded as the owner's per C1.12).** The standing preview-only build-go (§0) is **EXTENDED to cover Part-B
+code**: **T15 onward** — the pinned, privately-namespaced **MechJeb embed (GPLv3, §B2/§B3/§B12.1)** and the
+conductor — is **GO**, built at **RSS-RO DEFAULT settings as the baseline to tune from** (§B5's "begin from RO
+defaults"), with the one-parameter-at-a-time **fine tune DEFERRED until after the first recorded flight**
+(§B5 / T22). The same limits apply as to Part A: **pure code + `build.py test` + `build.py preview` only** —
+**`build.py install` and glass time REMAIN SEPARATE owner gates, granted per session** (C1.12 unchanged), so a
+Part-B step whose done-criteria are "in-sim" (T17 onward) **stops and asks** rather than installing. **Only the
+owner opens or widens this gate**; a build chat never self-authorizes one.
+
 ### B0. Part B reading order & contents (numbers are labels, THIS is the order)
 B1 Direction · B2 Grounding (MechJeb installed · Crew-2 cfg · GPLv3) · B3 Packaging (embed pinned/namespaced —
 LOCKED) · B4 Conductor model · B5 Tuning methodology (knowledge-first → one-by-one empirical vs real data) ·
 B7 Ascent tuning first-cut (mechanics) · B8 Ascent FULL guidance · B9 Full mission sequence (every phase → op
 → knobs) · B10 On-orbit modules FULL per-parameter guidance · B11 Flight-data TARGET reference ([DOC]/[EST]) ·
 B12 Build architecture (the conductor: embed · pure core + glue driver · phase FSM · re-plan loop · screen
-front-end · build order) · B13 Abort system · B14 Crew-gate procedures · B15 FDIR/fault detection · B6 Honest
-risks. (Cross-cutting capstone: **§14 Coherence pass & source-tier map**, at the very end.)
+front-end · build order) · B13 Abort system · B14 Crew-gate procedures · B15 FDIR/fault detection · **B16
+Falcon-9 booster recovery** (owner scope addition 2026-09-03 — a SEPARATE-VESSEL autopilot; per-setting recipe
+in `docs/MECHJEB_MISSION_TUNING.md` §2) · B6 Honest risks. (Cross-cutting capstone: **§14 Coherence pass &
+source-tier map**, at the very end.)
 
 ## B1. Direction (owner)
 Reintroduce flight software (the autopilot was deleted for the screens-only pivot) as a **MechJeb-driven
@@ -733,9 +753,13 @@ function is still inferred/invented (§4) without an owner call.
   Crew-Dragon cfg; (2) pure conductor core + tests (phases as pure decisions); (3) glue driver implements the
   stub surfaces read-only (report phase/engaged) — no commands yet; (4) wire Ascent (PVG) end-to-end + verify
   in-sim; (5) wire on-orbit ops + the re-plan loop; (6) docking hand-off; (7) deorbit/entry/chutes; (8) begin
-  the §B5 one-parameter-at-a-time empirical tune against §B11 targets. Each step preview/test-gated; install +
-  glass time only when a step needs the capsule (and only on a separate owner go); commit LOCALLY with
-  `git commit`, never `git push` (C1.5).
+  the §B5 one-parameter-at-a-time empirical tune against §B11 targets — which, per the 2026-09-03 gate opening
+  (§0), is **DEFERRED until after the first recorded flight**: steps (1)–(7) are built at **RO defaults**.
+  **(9) BOOSTER RECOVERY — §B16**, the owner's 2026-09-03 scope addition: a SEPARATE-VESSEL autopilot, so it is
+  its own track, NOT a phase of (1)–(7). It cannot start before (1)–(4) (the embed + a flown ascent) and needs
+  the owner-supplied craft dump (§B16.4) plus the §B16.5 guidance decision; it may be built before or after (8)
+  — the owner's call. Each step preview/test-gated; install + glass time only when a step needs the capsule
+  (and only on a separate owner go); commit LOCALLY with `git commit`, never `git push` (C1.5).
 
 ## B13. Abort system — research + conductor design
 The Crew-Dragon Launch Abort System (LES) + on-orbit contingency aborts, and how the conductor implements them.
@@ -870,6 +894,90 @@ thresholds / abort commit criteria are ITAR-private → tier-2 inference, marked
   conservatively and mark; in-sim, **autonomous FDIR is an OPTIONAL layer — the guaranteed abort path is the
   manual EJECT handle** (§B13). String/bus voting is modelled as display-state (as today), not a real KSP
   compute-failure sim. `Fdir.FaultName` (stub) already renders fault text.
+
+## B16. Falcon-9 booster recovery — SEPARATE-VESSEL autopilot (owner scope addition, 2026-09-03)
+**Authority.** Owner directive, 2026-09-03, granted via the overseer and confirmed in-chat (recorded as the
+owner's per C1.12). **§B1–§B15 cover the DRAGON CAPSULE's flight only** — §B9's phase list runs Prelaunch →
+Ascent → Phasing → Rendezvous → Docking → Docked → Undock → Deorbit → Entry → Chutes → Splashdown, and §B12's
+conductor design assumes ONE controlled vessel. Falcon-9 first-stage recovery appears nowhere in it. This
+section adds it, in the same gate as the rest of Part B (the §0 banner).
+
+**This section is a SCOPE + ARCHITECTURE statement, not a tuning derivation.** The per-setting flight book
+already exists: **`docs/MECHJEB_MISSION_TUNING.md` (S48) — PHASE 2 (§2.0–§2.6)**, whose SCOPE FLAG anticipated
+exactly this fold-in. Read it for every value, knob and gotcha; §B16 does not restate them and must not drift
+from them (C7.1 — on any number, THE PLAN WINS, and where the plan is silent S48 is the recipe).
+
+### B16.1 Why it is a separate autopilot, not another conductor phase
+- **It is a SEPARATE VESSEL.** At stage separation KSP splits the stack into two `Vessel` objects: the Dragon
+  conductor follows the capsule, the booster becomes a second, independently-flown craft needing its own
+  autopilot. Nothing in §B12 — one `MechJebCore`, one phase FSM, one screen front-end — addresses a second
+  vessel, and KSP gives only ONE vessel focus at a time.
+- **It is a different flight regime** from everything else in Part B: a powered, atmospheric, target-accurate
+  landing under **limited ignitions and limited throttle**, not orbital or entry guidance.
+- **Architecture consequence:** a `BoosterRecovery*` track that MIRRORS §B12's split (pure decision core +
+  thin glue driver, headless-tested) but owns its own vessel, its own `MechJebCore`/attitude use, and its own
+  `mechjeb_settings_type_*.cfg` — the booster is a different vessel type from the Dragon (S48 §2.5). The
+  Dragon conductor does not become a two-vessel machine; the two tracks coexist and share only the seams
+  already in the tree (`MissionConductor.AutoRecoverBooster`, `BoosterRecovery.Tracked`, `RangeExtender.cs`,
+  `pure/VehicleParts.cs`'s octaweb model — inventoried in S48 §2.0).
+- **Open design question (S48 §2.6, gotcha 8 — owner call):** recovery historically used `ForceSetActiveVessel(booster)`
+  so the crew can watch the landing — that switches focus AWAY from the Dragon mid-ascent. Not a build-chat
+  decision.
+
+### B16.2 The recovery profile — boostback / entry / landing burns
+The five-phase decomposition the RSS/RO community converged on (S48 §2.2 carries the exit conditions and the
+full parameter table): **1 BOOSTBACK** (RTLS only — flip and null the target error) → **2 COAST** (ballistic,
+retrograde) → **3 ENTRY BURN** (three engines, steer slightly off retrograde) → **4 AERO DESCENT** (engines
+off, grid fins steer) → **5 LANDING BURN** (ignite EARLY to cover the RO ignition delay; decelerate to ~zero).
+Profiles: **RTLS** = boostback + 3-engine entry + 1-engine landing, ~10 % of total propellant; **ASDS /
+droneship** = NO boostback, 3-engine entry, 1-engine (or 3-then-1) landing, ~6 %. Crew-2 — the mission our
+cfg is tuned for — was an **ASDS** recovery (S48 §2.1 has its timeline and both aim points).
+
+### B16.3 ⛔ RO engine handling — the owner's operational direction (2026-09-03)
+> **Do NOT cycle "next engine mode".** RO's `ModuleEngineConfigs` mode-cycling causes engine **RE-IGNITIONS**
+> and **lag**. Instead **read the CRAFT FILE's engine list** to identify the **THREE landing engines**, and
+> **control them SEPARATELY** — the 3-engine → 1-engine landing-burn throttle profile.
+
+This is binding on the flight software. Consequences, in full in S48 §2.3:
+- **The forbidden path is already in our tree and must not be called by the recovery guidance:**
+  `pure/VehicleParts.cs`'s `EngineSwitchModule = "ModuleTundraEngineSwitch"` / `EngineSwitchAction =
+  "next engine mode"` / `OctawebModeFor(int)`. The constants stay (they correctly describe the part); what
+  changes is what the autopilot calls.
+- **The method instead is per-engine control** through the stock `ModuleEngines` API that RO's
+  `ModuleEnginesRF` derives from: `Activate()` / `Shutdown()` per engine, and **`independentThrottle` +
+  `independentThrottlePercentage`** to throttle a named engine independently of the vessel throttle — the
+  field that makes a 3-engine → 1-engine profile possible without touching engine modes.
+- **RO ignitions are a finite per-engine resource** — read `ignitions`, budget them, and refuse a phase the
+  budget cannot cover. **Never command zero throttle mid-landing-burn** (that is an instant shutdown; the
+  relight costs an ignition): hold a floor above the engine minimum.
+- **Ullage is the failure we have already had** (`docs/FLIGHT_144114_SCREEN_AUDIT.md`: *booster ballistic, eng
+  never lit → LOST*): settle propellant with RCS before EVERY relight (S48 §2.6).
+
+### B16.4 ⚠ The craft dump is an owner-supplied input (C7)
+The exact 3-engine configuration is per-craft, and **C7 forbids reading the KSP install**: there are no
+`.craft` files in this repo (re-verified 2026-09-03 by G4). So the **OWNER supplies the craft dump**, and until
+it is in the repo this workstream documents the METHOD only and **invents no part names** (§1.4). The
+resolution procedure — filter to the booster with `VehicleParts.IsBooster(part.name)` (the `".S1."` marker),
+list the parts carrying `ModuleEngines`/`ModuleEnginesRF` (expect `OctawebEngineCount = 9`), identify the
+centre engine and its two burn partners **by position**, and record a fixed named engine table resolved ONCE
+at staging, never re-searched per frame — is S48 §2.4, table included. **T15-onward work must STOP and ask if it needs the dump
+and the dump is not in the repo** (C7/C1.12).
+
+### B16.5 ⚠ The guidance decision the owner still owes (S48 §2.5/§10)
+MechJeb supplies the pieces (`MechJebModuleLandingAutopilot.LandAtPositionTarget` + landing-guidance
+coordinates, `MechJebModuleLandingPredictions`, `SmartASS SURFACE_RETROGRADE`, `BetterController`;
+`MechJebModuleStagingController` **off**) but has **no boostback phase, no entry-burn phase, no grid-fin
+steering and no phase-by-phase engine count** — its landing autopilot assumes a freely-throttleable lander
+with unlimited relights. The three options are: implement the §B16.2 five-phase method **inside our own
+booster core** on top of MechJeb's attitude + prediction modules; accept MechJeb's landing autopilot as-is with
+its limits; or take **BoosterGuidance** (GPL-3.0, licence-compatible) as a second dependency. **§B3's packaging
+decision covers MechJeb ONLY** — vendoring or depending on a second mod is an owner call, not a build-chat one.
+
+### B16.6 Register status
+§B16 is scope + architecture. **No register task has been created for it** — whether booster recovery enters
+`REGISTER.md` as its own T-series or is folded into the existing T15–T22 line-up is an owner call, posed by G4
+and not decided here (C1.12). §B12.6 step (9) records its position in the build order; the gate it is built
+under is the §0 banner, the same as the rest of Part B.
 
 ## B6. Honest risks
 GPLv3 source-shipping obligation (public); MechJeb version pinning + private-namespace build tooling; **RSS/RO

@@ -25,6 +25,13 @@ plan wins** (C7.1) and the disagreement is flagged here, not silently resolved.
 
 ## ⚠ SCOPE FLAG — booster recovery is an EXTENSION of Part B, not part of it
 
+> ✅ **FOLDED IN 2026-09-03 (owner directive, via the overseer — G4).** The owner has added booster recovery
+> to the plan as **`docs/BUILD_PLAN.md` §B16**, and opened the Part-B build gate. This flag is kept as the
+> record of why the extension exists; **§B16 is now the scope + architecture statement and this PHASE 2 is its
+> per-setting recipe** (the plan wins on any conflict, C7.1). §B16.3 carries the engine-control directive
+> below verbatim in substance; §2.4's craft-dump prerequisite and §2.5's guidance decision remain OPEN owner
+> items. Building it still requires a register task — none exists yet (§B16.6).
+
 **The current Part-B plan (§B1–§B15) covers the DRAGON CAPSULE's flight only.** §B9's phase list runs
 Prelaunch → Ascent → Phasing → Rendezvous → Docking → Docked → Undock → Deorbit → Entry → Chutes →
 Splashdown. **Falcon-9 booster recovery appears nowhere in it**, and §B12's conductor design assumes a single

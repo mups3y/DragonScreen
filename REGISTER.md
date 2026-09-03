@@ -11,9 +11,10 @@ unblocks it) · `SPLIT` (a line closed in favour of the sub-tasks it names — a
 
 ⚠️ **LIVING** (C5): split any task that won't finish before compaction; append stray findings at the bottom;
 never reorder past a DONE without a note.
-🟢 **PREVIEW-ONLY BUILD-GO — the OWNER's decision, 2026-09-02, granted via the overseer.** Part A **pure
-code + `python plugin/build.py test` + `python plugin/build.py preview` are cleared**. `python
-plugin/build.py install` and glass time are NOT: they need a SEPARATE, explicit owner go, so a task whose
+🟢 **PREVIEW-ONLY BUILD-GO — the OWNER's decision, 2026-09-02, granted via the overseer.** **Pure
+code + `python plugin/build.py test` + `python plugin/build.py preview` are cleared** (Part A, and Part B
+since 2026-09-03 — see the next banner).
+`python plugin/build.py install` and glass time are NOT: they need a SEPARATE, explicit owner go, so a task whose
 done-criteria can only be met in the capsule stops and asks rather than installing. ⚠ **A one-session
 gate-open is not a standing one:** the owner opened `install` + glass for ONE session on 2026-09-02,
 scoped to T10 + T11b. **S17 used it and is DONE.** That gate **closed with that session** — the standing
@@ -21,7 +22,17 @@ state is preview-only again. What still wants glass is collected on **S18** (an 
 the owner's call) and on **S10b** (S10 SPLIT 2026-09-02: **S10a** is built and preview-verified; **S10b** —
 the Unity camera itself — cannot even be BUILT without the capsule to exercise it); each needs its own fresh
 owner go. **T2–T4 are covered retroactively by this go** — they are on-plan and
-preview-only, so nothing is reverted. Part B (T15–T22) remains DESIGNED, not started.
+preview-only, so nothing is reverted.
+🟢 **PART-B BUILD GATE OPEN — the OWNER's decision, 2026-09-03, granted via the overseer and confirmed
+in-chat (recorded by G4).** The preview-only go above is **EXTENDED to cover Part-B code**: **T15 onward** —
+the pinned, privately-namespaced **MechJeb embed (GPLv3; §B2/§B3/§B12.1)** and the conductor — is **GO**, to
+be built at **RSS-RO DEFAULT settings as the baseline to tune from** (§B5's "begin from RO defaults"), with
+the one-parameter-at-a-time **fine tune DEFERRED until after the first recorded flight** (so **T22 waits**).
+**Same limits as Part A: pure code + `test` + `preview` only** — **`python plugin/build.py install` and glass
+time REMAIN SEPARATE owner gates, granted per session** (C1.12 unchanged), so a Part-B step whose
+done-criteria are "in-sim" (T17 onward) **stops and asks** rather than installing. **Scope addition, same
+directive:** Falcon-9 booster recovery is folded into the plan as **§B16** — a SEPARATE-VESSEL autopilot,
+distinct from the Dragon conductor (per-setting recipe: `docs/MECHJEB_MISSION_TUNING.md` §2).
 ⛔ **Only the OWNER opens or widens this gate.** A build chat never grants one, never lifts one, and never
 records a decision as the owner's unless the owner stated it in that chat (C1.12).
 
@@ -143,6 +154,61 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
   **(e)(3)** — (e)(2) is the simulate clause. The owner's text was entered VERBATIM as directed and is not
   edited here; the substance is unambiguous (the dash-last-resort is what (f) supersedes) and the (e) cross-ref
   line names (3) correctly. A one-word owner fix — (e)(2) → (e)(3) — would close it; it needs an owner call.
+
+### G4 [O] Governance — Part-B gate opening + §B16 Falcon-9 booster recovery — **DONE**
+- **Owner directive, 2026-09-03, decided by the owner (Chris) via the overseer and confirmed in-chat** (recorded
+  as the owner's per C1.12). An authorized plan change on TWO counts — it OPENS a build gate and it ADDS SCOPE to
+  Part B, both owner decisions, never a build-chat one (C1.8/C1.12). A docs/plan-only task, exempt from the
+  preview/PNG gate. **Build:** (1) record the Part-B gate opening in this file's banner and at `BUILD_PLAN.md`
+  §0 + the Part-B header, in the same style as the preview-only go; (2) add a new §B section for Falcon-9
+  booster recovery as a SCOPE + ARCHITECTURE statement, cross-referenced from §B0's reading order and §B12.6's
+  build order.
+- **DONE 2026-09-03.** **(1) PART-B GATE OPEN, recorded in three places** — this file's banner (a second 🟢
+  block under the preview-only one), **`docs/BUILD_PLAN.md` §0** (the gate paragraph now reads "EXTENDED TO
+  PART B", and §0's Part-B bullet drops "no build-go: designed, not started") and a **🟢 banner under the PART B
+  header**. Substance, identical in all three: **T15 onward is GO** — the pinned, privately-namespaced MechJeb
+  embed (GPLv3, §B2/§B3/§B12.1) + the conductor — built at **RSS-RO DEFAULT settings as the baseline to tune
+  from** (§B5's "begin from RO defaults"), with the **one-parameter-at-a-time fine tune DEFERRED until after the
+  first recorded flight** (so **T22 waits**); the standing **preview-only** limit is what is extended — **pure
+  code + `test` + `preview` only**, and **`install` + glass time REMAIN SEPARATE owner gates, granted per
+  session (C1.12 unchanged)**, so a Part-B step whose done-criteria are "in-sim" (T17 onward) **stops and asks**.
+  **(2) §B16 ADDED** to `BUILD_PLAN.md`, between §B15 and §B6 (B6-risks-last is §B0's own reading order):
+  **B16.1** why it is a separate autopilot — at stage sep KSP splits the stack, the booster is its own `Vessel`
+  with its own regime (powered, atmospheric, limited ignitions/throttle), so it gets a `BoosterRecovery` track
+  MIRRORING §B12's pure-core/thin-glue split with its own core, its own vessel-type cfg and the seams already in
+  the tree, rather than making the Dragon conductor two-vessel; **B16.2** the profile — the five-phase
+  boostback → coast → entry burn → aero descent → landing burn decomposition, RTLS vs ASDS; **B16.3** the
+  owner's RO engine directive, quoted: **do NOT cycle "next engine mode"** (`ModuleEngineConfigs` mode-cycling
+  causes RE-IGNITIONS + lag), **identify the THREE landing engines from the craft file and control them
+  SEPARATELY** (3-engine → 1-engine landing burn) — with the consequences: the mode-cycling API already in
+  `pure/VehicleParts.cs` must not be CALLED by the guidance (the constants stay, they describe the part
+  correctly), per-engine `Activate()`/`Shutdown()`/`independentThrottlePercentage` is the method, ignitions are
+  a finite budgeted resource, never zero-throttle mid-landing-burn, settle for ullage before every relight;
+  **B16.4** the craft dump is an OWNER-supplied input (C7 — re-verified 2026-09-03: no `.craft` in the repo), so
+  the method is documented and **no part name is invented** (§1.4); **B16.5** the still-open owner guidance
+  decision (own five-phase core / MechJeb landing AP as-is / BoosterGuidance as a second dependency — §B3
+  covers MechJeb only); **B16.6** no register task exists for it yet, and creating one is an owner call.
+  **§B16 deliberately does NOT re-derive S48** — `docs/MECHJEB_MISSION_TUNING.md` PHASE 2 (§2.0–§2.6) is cited
+  throughout as the per-setting recipe. Every code identifier it names was verified against the tree
+  (`VehicleParts.BoosterMarker/.IsBooster/.OctawebEngineCount/.EngineSwitchModule/.EngineSwitchAction/
+  .OctawebModeFor`, the `FLIGHT_144114` ullage line).
+  **Cross-references + C7.1 consistency (the plan must not contradict itself):** **§B0**'s reading order now
+  lists B16 before B6; **§B12.6**'s build order gains **step (9)** — booster recovery is its OWN track, not a
+  phase of (1)–(7), cannot start before (1)–(4), needs the §B16.4 dump + the §B16.5 decision, and may run
+  before or after (8) — and its step (8) now says the tune is deferred per the gate; **`CLAUDE.md`**'s banner
+  carries the extension (and its stale-reference guide now reads §B1–B16, noting §B16 re-introduces booster
+  recovery while the deleted `BoosterControl` stays deleted); **`docs/INDEX.md`** §0 + §3 now read §B0–§B16 and
+  its "build-held" heading is corrected; **`docs/MECHJEB_MISSION_TUNING.md`**'s SCOPE FLAG is marked FOLDED IN
+  (its PHASE 2 is now §B16's recipe, §2.4/§2.5 still open); **`docs/TELEMETRY_REGISTRY.md`**'s "Part B does not
+  re-introduce it" clause for `BOOSTER_STATUS` is amended — the row stays dead, but as a §B16 target, not a
+  permanent state. The stray-triage note "starting T15 is the owner's separate gate call" is marked superseded,
+  and **S57**'s `RangeExtender.cs` retire-or-harvest item is annotated (§B16 claims it). This was the ONLY plan
+  edit of the session. No code change → **the preview/PNG gate does not apply** (C1.3); `python plugin/build.py
+  test` run as a no-regression check: **green, 15 suites / 11563 checks, 0 failed**. Committed locally (C1.5); NOT pushed.
+- ⚠ **Logged, not done (C1.1):** **S58** — `docs/INDEX.md` never got entries for the three newest research docs.
+- 📋 **Owner questions posed at the end of G4 (C1.9/C1.13):** whether §B16 gets its own register tasks (and
+  where in the T-series), plus the two §B16 items only the owner can close — the craft dump (§B16.4) and the
+  guidance choice (§B16.5).
 
 ---
 
@@ -1098,7 +1164,8 @@ items **S7 + S11 + S21 + S30** MAY be run as one scoped "hygiene sweep" chat. **
 owner-decisions pending. **Tier 4** are deliberately-scheduled builds — S15 is a real unbuilt Part A
 screen; build it or consciously cut it before Part B. **Tier 5** stay held / owner-action. Starting
 T15 / Part B is the owner's separate gate call — the standing build-go is scoped to "Part A pure
-code" only. **Applied 2026-09-02.**
+code" only. **Applied 2026-09-02.** ⚠ **Superseded 2026-09-03 (G4): the owner has OPENED the Part-B gate** —
+see the banner at the top of this file; the pre-Part-B stray order above is now a recommendation, not a gate.
 
 ### S1 [S] `CLAUDE.md` header predates Part B — **DONE 2026-09-02** (folded into T1)
 The original "What this repo is now" section (top 40 lines) says the autopilot was deleted and "if you find a
@@ -3334,9 +3401,19 @@ never called, and the natural filling for the Vehicle Overview's hardcoded-dash 
 pan/zoom/NEXT-VIEW cluster** — fully implemented and wired with no `UiPage` to host it (⚠ **this is also
 S43's cheap fix** — S43 already identifies wiring the existing zoom control as the right remedy for the
 hairline RSS orbit plot; **do S43 and this together**); **`RangeExtender.cs`** — 76 lines, no caller, left by
-the 2026-09-01 autopilot deletion; and `defaultPage` in `DragonScreen.cfg`, parsed and warned about then
+the 2026-09-01 autopilot deletion (⚠ **do NOT retire it**: **§B16** claims it — the booster is unloaded and
+deleted without it, S48 §2.6 gotcha 7; harvest-or-hold only, added 2026-09-03 by G4); and `defaultPage` in `DragonScreen.cfg`, parsed and warned about then
 discarded by `FigmaMode ? 0 : defaultPageIndex`. Also recorded: three of the five `[Tunable]` knobs S44 wired
 feed `ScaledPlanetRenderer`, whose only `Request` call site is in the dead branch — **not a defect** (S10b /
 S37 / S42 own that camera and are HELD), but noted so a future tuning session does not spend glass time on
 three knobs that cannot move anything. **DONE when:** each item is either harvested into a reachable surface
 or explicitly retired with a note. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H36/H39/H43/H44 + owner Q1.
+
+### S58 [S] `docs/INDEX.md` is missing the three newest research docs — **TODO** — [TIER 2: hygiene]
+Logged by **G4** (2026-09-03), noticed while making G4's C7.1 consistency pass over `INDEX.md`. `INDEX.md` is
+"what every other doc is and how fresh it is" (CLAUDE.md points every session at it), but three `docs/` files
+have no entry at all: **`MECHJEB_MISSION_TUNING.md`** (S48 — now §B16's per-setting recipe, so a session that
+starts booster work from `INDEX.md` alone will not find it), **`KER_DATA_RESEARCH.md`** (S45) and
+**`SCREEN_LIVENESS_AUDIT.md`** (S49 — the source cited by S50–S57). G4 fixed only the lines its own edits
+falsified (§B0–§B16, the "build-held" heading); adding the missing entries is separate work (C1.1).
+**DONE when:** all three have an `INDEX.md` entry with a freshness tag, in the right section.

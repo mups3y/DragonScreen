@@ -17,7 +17,8 @@
 ## 0. START HERE — the governing set
 
 - **[BUILD_PLAN.md](BUILD_PLAN.md)** [SPEC] — ⭐ **THE single authoritative specification.** Part A §1–§13
-  (screens), Part B §B0–§B15 (the MechJeb-conductor autopilot), Part C (the execution protocol), and the
+  (screens), Part B §B0–§B16 (the MechJeb-conductor autopilot, incl. §B16 booster recovery), Part C (the
+  execution protocol), and the
   **§14.4 owner-decision log**. On ANY conflict with another `docs/` file, **the plan wins** (C7.1).
 - **[../REGISTER.md](../REGISTER.md)** [CURRENT] — the task register. The first non-`DONE` line IS the task.
 - **[../CLAUDE.md](../CLAUDE.md)** [CURRENT] — the invariant build rules (C1 1–11), auto-loaded every session.
@@ -69,12 +70,13 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
 - **[COMMAND_REGISTRY.md](COMMAND_REGISTRY.md)** [PARTLY SUPERSEDED] — every interactive control and its
   command path. The refusal/lighting policy is overridden by §14.4(a,b) — see its banner.
 
-## 3. Flight facts & the autopilot (Part B — planned, build-held)
+## 3. Flight facts & the autopilot (Part B — **GO since 2026-09-03**, at RO defaults; `install`/glass still gated)
 
 - **[BUILD_PLAN.md](BUILD_PLAN.md) §8** [SPEC] — the Crew Dragon flight-facts reference (ascent T+ events,
   rendezvous burn names, approach geometry, return/deorbit, chutes). **This is where the flight numbers live.**
-- **[BUILD_PLAN.md](BUILD_PLAN.md) §B0–§B15** [SPEC] — the embedded-MechJeb conductor: packaging, per-module
-  tuning guidance, the flight-data targets, the build architecture, abort, crew gates, FDIR.
+- **[BUILD_PLAN.md](BUILD_PLAN.md) §B0–§B16** [SPEC] — the embedded-MechJeb conductor: packaging, per-module
+  tuning guidance, the flight-data targets, the build architecture, abort, crew gates, FDIR, and **§B16
+  Falcon-9 booster recovery** (owner scope addition 2026-09-03 — a separate-vessel autopilot).
 - **`reference/mechjeb_settings_type_Crew-Dragon.cfg`** [REF] — the tuned per-vessel-type MechJeb parameter
   store (the Crew-2 profile), copied into the repo by T0. The canonical starting profile for the §B5 tune;
   the copy in the KSP install is a runtime artifact, not a source.

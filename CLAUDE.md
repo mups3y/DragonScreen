@@ -18,12 +18,19 @@ flight software as a pinned, privately-namespaced MechJeb** driven by a pure "co
   `Actuator`, `MissionOps`, `Fdir`. They report "not engaged" and no-op. `pure/ScreenModes.cs` likewise keeps
   an `AuthorityManager` that is now only a **display label** (the GNC lamp's name + colour). Deleting these
   breaks the build; **Part B fills them in, one controller at a time (§B12.5)** — that is the whole design.
-- a reference to the **planned MechJeb conductor** (§B1–B15 / T15–T22) is **current; leave it**.
+- a reference to the **planned MechJeb conductor** (§B1–B16 / T15–T22) is **current; leave it**.
+  §B16 (owner, 2026-09-03) also **re-introduces Falcon-9 booster recovery** — as a SEPARATE-VESSEL autopilot,
+  distinct from the conductor; the deleted `BoosterControl` implementation still stays deleted.
 
-🟢 **PREVIEW-ONLY BUILD-GO — the OWNER's decision, 2026-09-02, granted via the overseer.** Part A **pure
+🟢 **PREVIEW-ONLY BUILD-GO — the OWNER's decision, 2026-09-02, granted via the overseer.** **Pure
 code + `build.py test` + `build.py preview` are cleared**. `build.py install` and glass time are NOT — they
 need a SEPARATE, explicit owner go, so a task whose done-criteria can only be met in the capsule stops and
-asks rather than installing. T2–T4 are covered retroactively by this go. Part B is DESIGNED, not started.
+asks rather than installing. T2–T4 are covered retroactively by this go.
+🟢 **EXTENDED TO PART B — the OWNER's decision, 2026-09-03, via the overseer (G4).** **Part B is GO** (T15
+onward: the pinned, privately-namespaced MechJeb embed + the conductor), built at **RSS-RO DEFAULT settings**
+as the baseline to tune from — the one-by-one fine tune is deferred until after the first recorded flight.
+**`install` + glass time REMAIN separate owner gates, per session.** Same directive added **§B16** — Falcon-9
+booster recovery, a SEPARATE-VESSEL autopilot distinct from the conductor.
 **Only the owner opens or widens this gate (C1.12)** — a build chat never self-authorizes one. `REGISTER.md`'s
 banner carries the same rule and is the one to keep current.
 
