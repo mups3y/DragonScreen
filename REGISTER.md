@@ -210,6 +210,90 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
   where in the T-series), plus the two §B16 items only the owner can close — the craft dump (§B16.4) and the
   guidance choice (§B16.5).
 
+### G5a [O] Governance — bake the settled booster + direct-control decisions into the plan — **DONE**
+- **Owner decisions of 2026-09-03, relayed through the overseer**, plus `docs/AUTOPILOT_RECOVERY_AUDIT.md`
+  (R1, `a54b8eb`), which the overseer verified first-hand. Nothing here was decided by the build chat
+  (C1.12). Docs-only, exempt from the preview/PNG gate; `REGISTER.md`/`CLAUDE.md` were explicitly OUT of
+  scope (G5c's job, retroactively closed by this same G5c line).
+- **DONE 2026-09-03 (`5d576fd`).** 14 edits to `docs/BUILD_PLAN.md`: **§B12.7 NEW** — direct part control (no
+  staging, no action groups) binding on all of Part B, recoverable from `Actuator.cs` (R1 §3.1, 868
+  lines/37 methods) + its `pure/Actuation.cs` dependency; the binding rule — the craft dump is the
+  SPECIFICATION, the runtime lookup is the BINDING, by module type + identity, never a hardcoded
+  `persistent_id`. **§B12.8 NEW** — Part B starts from RECOVERY: four dependency-ordered waves over R1's 103
+  RECOVER-CODE files (W0 already done ahead of Wave A), rider (a) gen-2 controllers register INTO the gen-1
+  facade names at `_AutopilotStub.cs:143-150` so the screens never change, rider (b) `Steering.cs` is NEVER
+  recovered (last state hands attitude to stock SAS) and `AscentControl.cs` comes back with the roll-trim
+  block `:397-414` REMOVED, not fixed. **§B8** — autostage OFF: PVG keeps its stage model for prediction
+  only, the conductor separates/ignites directly at the predicted times. **§B3 + §B12.1a** — T15's scope: a
+  full and complete MechJeb2 port (dead code included), conductor edits ALL user-editable settings via the
+  Maneuver Planner (not the rendezvous autopilot, which RSS/RO rules out); three tensions recorded, two
+  resolved, one posed as **G5a-Q1**. **§B12.6** — the single-core rule governs the Dragon only; a booster
+  core on another vessel is not a violation. **§B13.4** — direct SuperDraco commanding; the KSP Abort action
+  group is gone from the abort path. **§B16.1** — the booster gets its OWN compiled core with its own
+  steering law, its own vessel, not a second `MechJebCore`. **§B16.5** — settled as option 1 (the five-phase
+  method in our own core), prediction from our own integrator (`pure/Trajectory.cs` body-agnostic RK4 +
+  `pure/BoosterDrag.cs`'s Mach-binned bc curve). **§B16.4** — the craft dump is IN the repo (W0); the octoweb
+  is ONE part (`TE.19.F9.S1.Engine`) carrying three `ModuleEnginesRF` instances distinguished by `engineID`
+  (`AllEngines`/`ThreeLanding`/`CenterOnly` = the 9-3-1 schedule) — bind by `engineID` STRING, never
+  position/count/`persistent_id`; a hard assertion added against a second installed Falcon 9
+  (Kartoffelkuchen's `KK_SPX_`/`KK_F9demo_` parts, its own `KK_SPX_F9_Octaweb`). **§B16.6** — register shape
+  settled (four waves, one task each; G5c writes them — this line). **§B16.7 NEW** — the focus protocol:
+  focus NEVER leaves the upper stage, the booster lands UNFOCUSED, +10s settle, auto-recover, range
+  restored; the accepted risk (unfocused at ~1500 km, past PhysicsRangeExtender's own >100 km caution)
+  stated plainly, bounded by the protocol and answered by the BlackBox's two-vessel recording. **§B16.8
+  NEW** — booster constants are UN-CONVERGED (owner: RE-FLY, R1 Q2); the two surviving RSS-RO distillates
+  (`BoosterDrag.cs`'s 18,080 samples/48 flights, `TUNING_DB.json`'s 55) have their raw CSVs gone (gitignored,
+  never committed) so neither can be re-derived or re-checked from this repo — both kept as reference with
+  stated provenance, not seed truth; every booster constant marked un-converged. **§B16.9 NEW** — landing
+  zones are Kerbal Konstructs STATICS, not craft (RSS-RO seas too rough for the droneship `.craft`); records
+  the verified install state (`Space_X_barge_lander-2.0`'s `SpaceXbarge2` static, Fossil Industries' SpaceX
+  Landing Pads closing the RTLS gap, the naming trap "KK Launchers" = Kartoffelkuchen not Kerbal Konstructs,
+  the one placed barge OCISLY at 32.7875/−76.6445 = the code's own BARGE aim point, the two-file KK
+  placement schema, the JRTI/ASOG gap needing no download) so **LZ1** does not re-derive it. Consistency
+  sweep (C7.1) across §0/§B0/§B16 header/§B12.6 step 9/§B9/§B6.
+  `.gitignore` — added `!docs/reference/*.csv` (line 41's blanket `*.csv` is the exact mechanism that lost
+  the RSS-RO flight corpus, R1 §3.5/§4.3, now fixed). Committed as owner-supplied inputs, unedited:
+  `docs/reference/craftdump.csv` (now actually tracked), 16 `.craft`+`.loadmeta` pairs (DM-2, Crew-1..11,
+  Ax-1..4), `docs/BOOSTER_GUIDANCE_METHOD.md`. `INDEX.md` updated for all of the above (incl. R1 itself);
+  `BOOSTER_RECOVERY_ARCHITECTURE.md` marked PARTLY SUPERSEDED. Three open questions posed for the owner
+  (**G5a-Q1** which MechJeb repository, **G5a-Q2** the ASDS trim-boostback conflict, **G5a-Q3** the three
+  files G5a's declared outputs did not cover that now contradict the plan).
+  Docs-only → the preview/PNG half of C1.3 does not apply (stated, not skipped); `python plugin/build.py
+  test` run as a no-regression check: **green, all screen suites passed.** Committed locally (C1.5); NOT
+  pushed.
+
+### G5b [S] Governance — the two-profile split, closing G5a's Q1/Q2, and the O6/O8/O9/O5-O7 Dragon-mission decisions — **DONE**
+- **Owner decisions of 2026-09-03, relayed through the overseer.** Nothing here was decided by the build
+  chat (C1.12). Docs-only, exempt from the preview/PNG gate; `REGISTER.md` was explicitly OUT of scope
+  (G5c's job, retroactively closed by this same G5c line); `MECHJEB_MISSION_TUNING.md` and
+  `BOOSTER_RECOVERY_ARCHITECTURE.md`'s banner edits are H1's job (below), not this task's.
+- **DONE 2026-09-03 (`7f68ac6`).** 9 edits (E1-E9) to `docs/BUILD_PLAN.md` + a consistency sweep. **E1 NEW
+  POLICY — the two-profile split (§B5):** "stock" means RSS-RO DEFAULTS, not the tuned Crew-2 cfg — flight 1
+  loads RO's own shipped MechJeb defaults for every ascent-shaping/attitude/throttle/staging knob, and the
+  Crew-2 values are DEMOTED to the §B5 tune's TARGET, converged empirically post-flight-1 from BlackBox data
+  (target-orbit values like `DesiredInclination` are the one exception — mission facts, not tuning knobs;
+  the booster has no MechJeb baseline at all, an unrelated case). **E2** — fixed the "canonical starting
+  profile" mislabel in `§C7` gap #2 and `INDEX.md`'s cfg entry, now the §B5 tune's target/reference profile.
+  **E3** — `§B7` header "stock default" → "RO default" + a policy line marking every Crew-2 annotation as a
+  TARGET, not what flight 1 loads. **E4 — closed G5a-Q1** (which MechJeb repo): T15 vendors upstream
+  `MuMech/MechJeb2` — `lamont-granquist/PrimerVectorMechJeb` has been archived since 2021-07, and the RP-1
+  wiki's own PVG troubleshooting page points at the standard Sarbian/MuMech release, not a fork. **E5 —
+  closed G5a-Q2** (ASDS boostback): owner agreed with the chat's own recommended option 3 (the C1.8
+  `OVERRIDE` this required) — `§B16.2` amended so boostback is ONE always-entered state for both RTLS/ASDS,
+  magnitude and aim-offset parameterized by target mode, ASDS defaulting to a ZERO-magnitude trim until a
+  recorded flight says otherwise. **E6 — O6** (auto-dock default): Docking Autopilot is the default for
+  Approach; the manual docking button switches to the Manual ISS Docking screen and shuts the Docking AP
+  down — edited `§B10.3`/`§B12.3`/`§B9` Phase 4. **E7 — O8** (entry baseline): pure ballistic, no commanded
+  bank, is the baseline; active steering is a later increment for off-target cases — edited `§B9` Phase 8,
+  `§B10.5`, `§B11`. **E8 — O9** (MechJeb auto-throttle over PVG bang-bang): owner explicitly reverses the
+  RP-1 bang-bang recommendation — `LimiterMinThrottle=True` is now the settled setting, not a review item —
+  edited `§B8`, `§B10.6`. **E9 — O5/O7** cross-reference: both already resolved in full at `§B16.9`; a short
+  note added there rather than a duplicate table (the craft-name → LZ table itself is **LZ1**'s). Consistency
+  sweep across `§B5/§B7/§B8/§B9/§B10.3/§B10.5/§B10.6/§B12.1a/§B12.3/§B16.2`, plus a "further amended by G5b"
+  note on the Part-B intro banner.
+  `python plugin/build.py test` green (no regression expected, docs only). `git status` showed only
+  `BUILD_PLAN.md` + `INDEX.md` before staging. Committed locally (C1.5); NOT pushed.
+
 ---
 
 ## Part A — screens (§7 order, with this session's decisions)
@@ -1122,9 +1206,112 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
 
 ---
 
+## Part B — recovery (2026-09-03, must complete before Part B autopilot work)
+
+§B12.8 (baked in by G5a) settled that Part B's first code is a RECOVERY of the flight software deleted
+2026-09-01, not a from-scratch build starting at T15. `docs/AUTOPILOT_RECOVERY_AUDIT.md` (R1, `a54b8eb`)
+is the full inventory; **W0** (`plugin/src/CraftDump.cs` + a fresh dump, `6ebb012`) is already DONE ahead of
+Wave A. **W1-W4 are dependency-ordered AMONG THEMSELVES (§B12.8) and must stay in that order** — `/next`
+resolves them correctly by file position alone. **H1 / M1 / LZ1 touch no recovered file** and may run in
+parallel with any wave, in a separate chat the owner starts by name (they do not change where they sit in
+this file; `/next` is a single-lane tool — parallel work is always addressed directly, as R1/R2/R3/R4
+already are).
+
+### W1 [O] Wave A — collision-free `pure/` support — **TODO**
+- **Read:** §B12.8 Wave A, R1 §3.5 + §5.1 (the per-file audit rows).
+- **Build:** Restore from `8b81816^`: `pure/Vec3.cs`, `Conic.cs`, `Trajectory.cs`, `BoosterDrag.cs`,
+  `Predict.cs`, `Aero.cs`, `Authority.cs`, `Lambert.cs`, `Maneuver.cs`, `Lvlh.cs`, `Cw.cs` + their `test/`
+  counterparts — none collide with `_AutopilotStub.cs`.
+- **DONE when:** `build.py test` green, R1's per-file verdicts for this set re-confirmed against the actual
+  restored file content (not re-trusted from the audit blind).
+
+### W2 [O] Wave B — Actuation + Actuator (retires the Actuator stub) — **TODO**
+- **Read:** §B12.7, §B12.8 Wave B, §B16.4 (the engine-binding rule this wave must satisfy), R1 §3.1.
+- **Build:** Restore `pure/Actuation.cs` + `Actuator.cs` (868 lines / 37 methods) + `test/ActuationTest.cs`
+  from `8b81816^`. Rider (G5a-Q3, owner-confirmed option 2): add a one-line comment on
+  `pure/VehicleParts.cs:37` — `OctawebEngineCount = 9` correctly describes the vehicle's engine COUNT and
+  must never be read as an expected PART count (§B16.4). Also land §B16.4's hard assertion (exactly one
+  octaweb found, reject any `KK_SPX_`/`KK_F9demo_` part) here, as a guarded test against
+  `docs/reference/craftdump.csv`.
+- **DONE when:** `build.py test` green, the assertion test exists and passes, `_AutopilotStub.cs`'s Actuator
+  surface is backed by the real class.
+
+### W3 [O] Wave C — the booster set — **TODO**
+- **Read:** §B16 in full, R1 §3.5 and §5.1/§7.
+- **Build:** Restore the booster-specific RECOVER-CODE set per R1's own file map (do not guess the list —
+  R1 §5.1 names it row by row) + tests. EXCLUDES: AttitudePilot / AttitudeController / `pure/AttitudeLoop.cs`
+  (RECOVER-REFERENCE ONLY, never live — R1 §3.2), `Steering.cs` (never recovered — §B12.8 rider b), and the
+  five files `70dc239` condemned. If `AscentControl.cs` belongs to this wave per R1's map, it comes back
+  with the roll-trim block `:397-414` REMOVED (not fixed), guarded by its own test and its own register
+  note (§B12.8 rider b) — confirm which wave actually owns it from R1's map rather than assuming.
+- **DONE when:** `build.py test` green, nothing from gen 1 restored, every restored booster constant carries
+  §B16.8's UN-CONVERGED marking.
+
+### W4 [O] Wave D — the conductor set (where the stub collisions land) — **TODO**
+- **Read:** §B12.8 Wave D, §B12.5 (amended — stub names are the facade), R1 §5.2 and its Q4 resolution.
+- **Build:** Restore `ModeManager`, `WarpPlan`, `CoastEta`, `MissionConductor`, `CrewProcedureOps` + tests
+  per R1's file map. Register the recovered gen-2 controllers INTO the gen-1 facade names at
+  `_AutopilotStub.cs:143-150` (`AutoPilot`, `StationApproach`, `DockingOps`, `DeorbitOps`, `UndockOps`,
+  `BoosterRecovery`) — the stub becomes a thin adapter; no screen file changes.
+- **DONE when:** `build.py test` green, every gen-1 facade name is backed by a real controller or is still a
+  no-op with a stated reason — never a silent gap.
+
+### H1 [S] Housekeeping — INDEX/salvage + mark the two now-stale docs superseded — **TODO**
+- **Read:** the S58 stray (below), G5a-Q3's RESOLVED block (`docs/BUILD_PLAN.md`, "Open questions for the
+  owner"), R1 §5.4.
+- **Build (original scope, Phase 0):** `S58` INDEX entries; salvage `docs/flights/README.md` +
+  `F9I_BOOSTER_TARGETS.md` from `8b81816^`; fix `MECHJEB_MISSION_TUNING.md:252` (claims the recorder tooling
+  exists — it was deleted); fix `assess_flight.py`'s stale 105-column claim + self-contradiction.
+- **Build (ADDED, G5a-Q3, owner-confirmed option 2, 2026-09-03):** banner `docs/MECHJEB_MISSION_TUNING.md`
+  §2.2 (the ASDS-no-boostback claim, now superseded by §B16.2) and §2.4 (the "no craft in repo" claim + the
+  deleted by-position engine procedure, both now false/wrong) as **PARTLY SUPERSEDED — see BUILD_PLAN.md
+  §B12.7/§B16.2/§B16.4/§B16.7**; banner `docs/BOOSTER_RECOVERY_ARCHITECTURE.md` the same way (its "§B16 is
+  unamended" claim is now false).
+- **DONE when:** INDEX complete, both docs banner-marked, the two named errors fixed, `build.py test` green
+  (docs-only, no preview gate).
+
+### M1 [S] Mod-first evidence sweep — before B1 — **TODO**
+- **Read:** C1.15 (`CLAUDE.md`), §14.4(e)/(f).
+- **Build:** Produce `docs/reference/INSTALLED_MODS.md` from the current installed-mod list (supplied as
+  overseer evidence — C7 keeps GameData itself off-limits; work from the supplied list plus public
+  research, never by going looking in the install). For each Part-B/BlackBox/screen simulation candidate
+  this session has touched or that §14.4(e)/(f) would otherwise reach for — at minimum: life support / suit
+  pressure, engine reliability/FDIR, aero (Q/AoA/drag), heat, comms link budget — record what mod (if any)
+  from the list already supplies it, one line of rationale each. Two items are already resolved by this
+  session's own evidence; do not re-search them: (a) TestFlight IS the fault/reliability model — §B15's
+  FDIR should read it, not invent thresholds (`pure/IgnitionGate.cs`/`Ullage.cs`, RECOVER-CODE, already read
+  RealFuels propellant-settling state by reflection — the pattern this rule generalizes is already proven in
+  our own recovered code); (b) `SpaceXSuits` (a TextureReplacer suit combo, confirmed installed 2026-09-03)
+  supplies the SpaceX-look kerbal suit TEXTURE — cosmetic only, does NOT supply suit-loop PRESSURE
+  telemetry, so it does NOT by itself retire `SuitLeakSim.cs`'s simulation; confirm from the supplied list
+  whether anything else does before concluding the simulation still stands.
+- **DONE when:** `INSTALLED_MODS.md` exists and covers the supplied list; every flagged candidate has a
+  recorded search result; anything found-but-not-installed is written up as an Open Question (C1.14), never
+  installed.
+
+### LZ1 [S] LZ/droneship sourcing — the per-mission table + the two missing statics — **TODO**
+- **Read:** §B16.9 in full (the two-file KK placement schema is already there).
+- **Build:** Source the per-mission craft-name → recovery-target table as REAL FLIGHT DATA (§1.4 —
+  verified-real first, marked where inferred). The 16 owner-supplied `docs/reference/<mission>.craft` files
+  each already carry a mission description naming that flight's real recovery mode (e.g. `Crew-2` "OCISLY
+  droneship", `Ax-2` "RARE crew RTLS") — start there, then verify/extend against public mission records.
+  Place the two missing droneship KK statics — Just Read The Instructions, A Shortfall Of Gravitas — using
+  the `SpaceXbarge2` static + §B16.9's two-file schema, at each vessel's real historical coordinates.
+  Confirm and place an RTLS target using Fossil Industries' SpaceX Landing Pads statics (confirmed installed
+  2026-09-03) — verify the specific static actually exists and is placeable before writing a table entry
+  that depends on it; do not assume the exact part/static name.
+- **DONE when:** the table exists (either `docs/reference/` or a new doc, INDEX-listed either way), both
+  missing droneships are placed and group-centre-verified, an RTLS target is confirmed placed, `build.py
+  test` green.
+
+---
+
 ## Part B — autopilot (§B12.6 order; all [O])
 
 ### T15 [O] Embed MechJeb — **TODO**
+- ⚠ **Blocked on the "Part B — recovery" section above (2026-09-03) — W1-W4/H1/M1/LZ1 come first.** T15's
+  own scope is unchanged: see §B12.1a (full port, full settings authority, upstream `MuMech/MechJeb2`,
+  closed by G5b/G5a-Q1).
 - **Read:** §B2 / §B3 / §B12.1.  **Build:** pinned + privately-namespaced; headless core loads the Crew-Dragon
   cfg (`docs/reference/mechjeb_settings_type_Crew-Dragon.cfg`). Also create/point `docs/FLIGHT_SYSTEMS.md` (S3).
   **DONE when:** one core loads, no clash, cfg applied.

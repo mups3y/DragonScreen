@@ -1636,6 +1636,21 @@ a **PREVIEW-ONLY BUILD-GO** (owner, 2026-09-02, via the overseer); `install` + g
     then acts only on the returned decision. This governs the FORM of asking only — it does NOT let a build
     chat decide a gated item itself (C1.12 still stands), and questions are still batched at the end (C1.9).
     (Added 2026-09-02 by owner directive.)
+14. **Every research or build chat MUST write its open questions into its deliverable file**, under
+    `## Open questions for the owner`. Each: the situation, 2-4 numbered options, and the chat's
+    recommendation with reasoning. Chat-only questions do not count as asked. The overseer puts every one to
+    the owner as multiple choice with a recommendation. **The owner decides. Always.** A build chat decides
+    none and proceeds past none.
+15. **Evidence-gated mod-first (extends §14.4(e)/(f)).** Before writing ANY new simulation for a
+    not-yet-modelled real quantity, the task's OWN deliverable must record a documented search against
+    `docs/reference/INSTALLED_MODS.md`: what was searched for, what candidates exist in that list, and why
+    each was accepted or rejected. A candidate found but NOT installed is a proposal to the owner (C1.14),
+    never a build-chat install — C7 forbids reading or modifying the KSP install directly regardless. Until
+    `docs/reference/INSTALLED_MODS.md` exists, a task facing this situation STOPS and flags it (C1.12) rather
+    than searching ad hoc or simulating unchecked. This exists because this session found real, already-
+    installed sources (RealFuels propellant-settling state, already read by reflection in the recovered
+    `Ullage.cs`; TestFlight's failure/reliability model) sitting unused while a screens-only pass had begun
+    inventing simulations for adjacent quantities instead of checking first.
 
 ## C2. The `/next` skill (the loop — identical every task)
 Invoking `/next` runs: (1) read `CLAUDE.md`; (2) open `REGISTER.md`, take the first non-DONE item as THE task,
