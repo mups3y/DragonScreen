@@ -2249,7 +2249,7 @@ than decided here (C1.12). PREVIEW-ONLY throughout — no `install`, no glass.
   after this task: LOOP A 26.4 °C · LOOP B 20.1 °C · CABIN TEMP 21.8 °C · CABIN PRESS 14.72 psia ·
   PPO2 2.86 psia · CO2 1.64 mmHg — correct, and every row nominal green. Nothing was changed. ⚠ Worth
   knowing for the NEXT glass session: the last `install` was **S17**, which predates S19–S33, so glass
-  was showing an older DLL than this tree — see the S35 prompt.
+  was showing an older DLL than this tree — see **S36**.
 - **(5) The "Changelog" CONNECTIONS row — NOT a mis-transcription, no change.** Unlike S19 this one is
   faithful: `docs/UI_AUDIT.md:310` (generated from the reference's own source) lists `Changelog` among
   the page's labels, and **both** reference copies agree —
@@ -2322,9 +2322,48 @@ colours, and the reference's own choices collide with our state palette:**
 > which is the confusion this is trying to remove.
 > Options (b), (c) and (d) all change reference-sourced pages, so each needs an explicit `OVERRIDE` plus
 > a plan/register edit before a build chat may act (C1.12). Which one, and if (c), which hues?
->
-> **Also worth deciding in the same breath:** this glass pass ran against the **S17** DLL, which predates
-> S19–S33, so at least one of its six findings (the SYSTEMS P&ID readouts "shifted by one") did not
-> reproduce against the current tree and appears to be already-fixed rather than live. Should the next
-> `install` + glass go be scoped to re-checking the S18 list against a CURRENT build before any new
-> findings are logged?
+
+*(The "was glass even running a current build?" half of this — S34's other open question — was split out
+to **S36** by owner directive, 2026-09-03, so the two can be decided separately.)*
+
+### S36 [owner call] The 2026-09-03 glass pass ran on the S17 DLL — re-baseline before the next findings? — **TODO** — [TIER 3: owner decision]
+Logged by S34, split out of S35's prompt by owner directive (that chat, 2026-09-03) so it is its own
+decision rather than a rider on the gauge-colour call. Needs an owner call: it is a question about when
+an `install` + glass gate opens and what that session is FOR, which a build chat never decides (C1.12).
+
+**The evidence.** The last `install` this register records is **S17** (2026-09-02). S19–S33 all landed
+after it, preview-only, so the DLL on the glass that produced the 2026-09-03 findings predates roughly
+fifteen tasks of fixes. It shows: S34 audited all six findings and **finding 2 did not reproduce** — the
+SYSTEMS P&ID readouts were reported "shifted by one" (CABIN TEMP showing the pressure, CABIN PRESS
+showing ppO2, PPO2 showing CO2), but `VesselData.cs:191-194` assigns each field from its own
+`CabinReadout` member, `SystemsPidPage`'s rows pair each label with that same field, and the re-rendered
+`ui_systemspid.png` reads correctly and nominal-green on every row. Either it was fixed between S17 and
+now, or it was a misread on the glass; **neither is a live defect in this tree.** Two more findings (2
+and 5) cost a full audit each to close as not-defects.
+
+**Why it matters.** Findings taken against a stale DLL cost real audit time, can send a build chat
+looking for a bug that is already fixed, and — worse — could mask a live one behind a "we already looked
+at that". S18 is the standing end-of-Part-A glass list and is where the next glass go is expected to be
+spent, so this is the moment to decide what that session's first job is.
+
+**Paste-ready overseer prompt (C1.13):**
+> DragonScreen, S36. The glass pass that produced the 2026-09-03 QC findings was running the **S17**
+> DLL — the last `install` this project made — which predates S19 through S33. One of its six findings
+> (the SYSTEMS P&ID readouts being shifted by one column) does not reproduce against the current tree at
+> all; the code is correct and the re-rendered PNG is correct, so it was either already fixed or misread.
+> Two of the six cost a full audit to close as not-defects. Nothing is broken and nothing is blocked —
+> this is purely about how the NEXT glass session is scoped, and only the owner opens or scopes a glass
+> gate (C1.12). The options:
+> **(a) Re-baseline first.** The next `install` + glass go begins by re-walking the six 2026-09-03
+> findings and the S18 checklist against a CURRENT build, and no new findings are logged until that pass
+> is done. Costs part of a session; guarantees every finding after it is real.
+> **(b) Fold it in.** Run S18 as written and simply re-check the 2026-09-03 six as they come up.
+> Cheaper, but mixes stale-DLL noise into a list that is meant to close Part A.
+> **(c) Install-then-look, as a standing rule.** Make it protocol that any glass session begins with a
+> fresh `install` of the current tree, so glass is never read against an older DLL again. This is the
+> only option that stops it recurring, and it would want a line in Part C / `CLAUDE.md` rather than just
+> a register note.
+> **(d) Nothing.** Accept that findings may be stale and audit each one against the code first — which
+> is what S34 did, and it worked, just at a cost.
+> Which one? If (c), a build chat will need an explicit `OVERRIDE` plus the plan/`CLAUDE.md` edit before
+> it may add that rule (C1.12).
