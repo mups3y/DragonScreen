@@ -6228,7 +6228,7 @@ plus `TestMain.cs`'s registration and this register entry. **Four open questions
 of `plugin/src/BoosterHost.cs` (C1.14) — Q1 is the sharp one: whether to arm `Actuate` now, with the
 owner's own `LetFall` (fins/legs/RCS, never engines) offered as the middle option.
 
-### W24 [O] The booster STEERING LAW — the one component that has failed before, on its own line and its own gate — **TODO** — [TIER 1: the last thing between the host and a landing; and the known failure]
+### W24 [O] The booster STEERING LAW — the one component that has failed before, on its own line and its own gate — **BLOCKED at STEP 1 — OWNER CALL (2026-09-04)** — [TIER 1: the last thing between the host and a landing; and the known failure]
 Logged by **W23**, 2026-09-04 (C1.1 — carved out of W23 by the task's own instruction: *"Do not write a
 steering law in this task… log the steering law as its own register line so it gets its own scrutiny and its
 own gate. Bundling it here is how that failure repeats."*).
@@ -6262,6 +6262,88 @@ re-shape the host.
 threshold is marked **[UN-CONVERGED]** (§B16.8 ruling 2 — MechJeb's own defaults are not RSS-RO booster
 gains either); no byte of `AttitudePilot` / `AttitudeController` / `AttitudeLoop` is in the tree; and the
 `Actuate` decision is taken **by the owner** (W23 Q1), not by the build chat (C1.12).
+
+⛔ **PROGRESS 2026-09-04 — STOPPED AT STEP 1, BY THE TASK'S OWN INSTRUCTION. NO CONTROL LAW WAS WRITTEN.**
+The brief's STEP 1 required the C1.15 documented mod-first search **before** any control law, warned that
+`docs/reference/INSTALLED_MODS.md` is incomplete, named **TCA's T-SAS** as the candidate, and said in terms:
+*"⛔ If TCA (or anything else) can serve, STOP AND ASK… Report what you find; do not adopt or reject a
+dependency yourself."* The search is **`docs/BOOSTER_STEERING_MOD_SEARCH.md`** (NEW — the deliverable), and
+it could **neither rule TCA in nor rule it out**, so STEP 2's stated precondition (*"ONLY IF NO MOD SERVES"*)
+is not met and C1.12 forbids this chat from meeting it by fiat.
+**What the search established, from in-repo evidence only (C7 — no DLL, no install, no upstream repo read):**
+- **TCA IS installed, and `ModuleTCA` is on this stack** — `docs/reference/craftdump.csv`, **42 rows**, on
+  **`TE.18.DRAGONV2.POD` (`GroupMaster=True`)** *and* **`TE.19.F9.S1.Interstage`**, in **one shared TCA group**
+  (`b90d60bb…cacccb`). ⚠ **So it is not a booster-only decision** — the group master is on the **Dragon**.
+  ⚠ Two corrections to the brief: there is **no `New Crew-2.craft` in this repo** and **no `.craft` file
+  contains `ModuleTCA`** (the module is applied at load, which is why it is in the DUMP, not the file); the
+  substance of the claim holds, the citation changes.
+- **T-SAS covers at most 3 of the 6 phases.** Flip, Coast and AeroDescent are **engines-off** — there is no
+  thrust vector to control — and §B16.2 makes **grid fins the primary authority** in AeroDescent, a capability
+  `MODS_HARVEST_2.md` records nowhere in TCA. Its *concept* is already this tree's convention: `AimForward` is
+  defined as *"the direction THRUST PUSHES the vehicle"*.
+- ⛔ **The decisive unknown is unresolvable here: does TCA command an UNFOCUSED vessel?** §B16.7 lands the
+  booster unfocused. W23 proved **our** path does; nothing in the repo says TCA's does, and C7 bars the only
+  sources that would. **Glass time answers it — a separate owner gate.**
+- **VSC + radar altimeter: REJECTED on evidence.** `radarAltitude` is KSP-direct and `BoosterHost` already
+  reads it (§14.4(e) step 0 — not a gap); a vertical-speed **hold** law cannot serve a stage that **cannot
+  hover** (`pure/Hoverslam.cs`'s own opening) on an engine carrying `ignitions = 1` — the identical reasoning
+  §B16.5 used to reject MechJeb's landing autopilot. **HSC** is the one capability with no in-tree
+  counterpart, and it is blocked on the missing aim point either way (**W25**), not on W24.
+- **TCA's balancing solver was already taken the right way** — `pure/ThrustBalance.cs` / `RcsBalance.cs` /
+  `DiffThrottle.cs` are its `EngineOptimizer`/`RCSOptimizer` **method** as our own pure code, under
+  `MODS_HARVEST_2.md`'s standing rule *"we take the math/decision logic, never the plumbing."* That is the
+  precedent behind Q1's recommended option.
+- **Adoption collides with three settled decisions** — §B16.1 (*"its OWN steering law"*, so a C1.8 `OVERRIDE`,
+  not merely a dependency go), §B12.7 (direct part control) and W23's three-way non-interference guarantee —
+  **and owes a licence check** (DragonScreen is GPL-3.0; TCA's licence is recorded nowhere in this repo; the
+  `NOTICE`/Dandiwala check is the precedent, and it was done at owner level). ⚠ **O2 does not decide TCA** —
+  its ban was on the MechJeb flying the mission; §B16.5 and §B16.1 are what block it.
+⛔ **STEP 3 NOT DONE, DELIBERATELY: `BoosterHost.Actuate` IS STILL `false` and untouched.** Arming a thrust
+path with no attitude path is flight **194334** (`8225df7` A1). ⛔ **No byte of `AttitudePilot` /
+`AttitudeController` / `pure/AttitudeLoop.cs` entered the tree** — R1 §3.2's verdict intact.
+**TWO OWNER QUESTIONS** in the deliverable's `## Open questions for the owner` (C1.13/C1.14): **Q1** the TCA
+dependency (4 options; recommendation: **ours, TCA's METHOD borrowed, no dependency** — the only option that
+satisfies §B16.1 + §B12.7 + §B16.5 + non-interference at once, needs no gate, and covers the two phases TCA
+cannot); **Q2** the **phase-plane deadband** — DS-ASC-008 cut `act_yaw` reversals **0.37 → 0.07**, `act_roll`
+**0.53 → 0.08**, saturation duty **0.771 → 0.463**, and it is the **only** recording that did not run its tank
+dry (58.4% MMH) — against `70dc239`'s strip directive; recommendation: a **marked, `[UN-CONVERGED]`,
+default-ZERO** seam (behaviourally the stripped state), because that evidence is **Dragon-regime** and R1 §7.5
+says the booster is a different plant. **Q2 is needed whichever way Q1 goes.**
+**VERIFY (C1.3):** `python plugin/build.py test` **GREEN — `ALL SUITES PASSED`, 0 failed** (13,657 checks
+summed across every suite line; **no code changed**, so this is a no-regression check, not a new number).
+⚠ Recorded as measured: W23's entry states 13,352, which counts only the suites printing *"N checks, M
+failed"* (13,351 here) and omits the one printing *"306 checks, all passed"* — a **counting** difference, not
+a moved test. **No screen changed, so no preview PNG applies** — stated, not skipped. `git status` shows exactly
+the declared outputs: `docs/BOOSTER_STEERING_MOD_SEARCH.md` (new), `docs/INDEX.md` (one entry) and this
+register entry. **W24 stays open** and resumes at STEP 2 on the returned decision.
+
+### W29 [S] `docs/reference/INSTALLED_MODS.md` omits ThrottleControlledAvionics — the register that C1.15 makes every task check is incomplete — **TODO** — [TIER 2: the gap already cost one task, and C1.15 points every future task at this file]
+Found by **W24**, 2026-09-04 (C1.1 — logged, not done: M1's file says in its own words that it is updated *"as
+a separate task"*, and W24's declared outputs do not include it, C1.11).
+**The finding.** C1.15 makes `docs/reference/INSTALLED_MODS.md` the file every not-yet-modelled-quantity
+search must check **before** writing a simulation. It does not list **ThrottleControlledAvionics** — searched
+for `TCA`, `ThrottleControlled`, `Avionics`, `T-SAS`: **zero hits**. The omission has already cost once, and
+the repo says so: `docs/MODS_HARVEST_2.md`'s recovered banner reads *"This is the document M1 was built
+without — it is why ThrottleControlledAvionics was missed from the mod register"*, and **W26**'s entry names
+**M1** as verified damage from the deleted research.
+**The evidence to close it now exists in-repo and is tier-1** (§1.4): `docs/reference/craftdump.csv` carries
+**42 `ModuleTCA` rows** — 21 on `TE.18.DRAGONV2.POD` (`GroupMaster=True`) and 21 on `TE.19.F9.S1.Interstage`
+(`GroupMaster=False`), same TCA group `b90d60bb01ee4e448523168699cacccb`, `TCA_Active=False` on both — plus
+`docs/MODS_HARVEST_2.md`'s own record of the owner adding TCA on **2026-08-27**. ⛔ **No `.craft` file contains
+`ModuleTCA`**; the module is applied at load, so the DUMP is the citation, never a craft file. ⛔ C7 still
+forbids looking in the install — everything needed is already written down.
+⚠ **Adding the ROW is not adopting the MOD.** This line records that TCA is installed and what it supplies; it
+decides nothing about depending on it (§B16.5 — an owner call, open as **W24 Q1** in
+`docs/BOOSTER_STEERING_MOD_SEARCH.md`). Cross-reference that file rather than restating its verdicts.
+⚠ **And check the rest of the list while there:** `MODS_HARVEST_2.md` §5 is a full install scan naming mods
+absent from M1's §1 (KerbalEngineer is present; ModularFlightIntegrator, HotStaging, KSPCommunityFixes,
+KerbalJointReinforcement, AtmosphereAutopilot, SolverEngines and others are not) — M1 was built without that
+document. Add what §5 evidences, each with its citation; invent nothing.
+**DONE when:** TCA has a row in §1 with its craft-dump evidence and a §2-style candidate assessment that
+points at `docs/BOOSTER_STEERING_MOD_SEARCH.md` for the open call; every other mod `MODS_HARVEST_2.md` §5
+evidences is either listed or explicitly accounted for; `docs/INDEX.md`'s entry still describes the file
+accurately; docs-only → **no preview PNG applies** (say so, C1.3) and `python plugin/build.py test` is a
+no-regression check.
 
 ### W25 [S] The booster AIM POINT — LZ1's sourced table is a DOC; the guidance has nothing to steer at — **TODO** — [TIER 2: real gap — a complete guidance with a zeroed target]
 Logged by **W23**, 2026-09-04 (C1.1 — found on wiring the host: every target-derived input had to be

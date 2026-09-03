@@ -150,6 +150,21 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
   call under its own gate. Three findings that change how other numbers read: **`torque_cmd` was never
   written in any file**, `att_err_deg` and `att_point_deg` are **different signals**, and `mode_holding` /
   `mode_flying` carry no state. Its §6 records the §B16.8 correction of fact.
+- **[BOOSTER_STEERING_MOD_SEARCH.md](BOOSTER_STEERING_MOD_SEARCH.md)** [SPEC — evidence + **OPEN OWNER
+  CALL**] — ⭐ **W24's STEP-1 C1.15 mod-first search, and the reason W24 STOPPED at it** (2026-09-04). Asks
+  whether an installed mod can supply the booster's steering law before one is written. Findings:
+  **ThrottleControlledAvionics IS installed** — evidenced in-repo from `docs/reference/craftdump.csv`'s **42
+  `ModuleTCA` rows**, on the **Dragon pod (group master)** *and* on `TE.19.F9.S1.Interstage`, **one shared TCA
+  group** — so TCA is not a booster-only decision; its **T-SAS** covers at most **3 of the 6 phases** (Flip,
+  Coast and AeroDescent are engines-off, and AeroDescent is grid-fin-steered); its **VSC + radar altimeter are
+  rejected on in-repo evidence** (KSP's `radarAltitude` is already read by `BoosterHost`, and a hover law
+  cannot serve a stage that cannot hover — `pure/Hoverslam.cs`); **whether TCA commands an UNFOCUSED vessel is
+  unknown and unresolvable under C7**, which §B16.7 makes decisive. Records that TCA's balancing solver was
+  already taken **the right way** — as our own `pure/ThrustBalance.cs` — and that adoption would collide with
+  **§B16.1, §B12.7 and W23's non-interference guarantee** plus owe a licence check. ⚠ **It decides nothing**
+  (C1.12; §B16.5: a second mod dependency is an owner call): **two questions** wait in its `## Open questions
+  for the owner` — Q1 the TCA dependency, Q2 the DS-ASC-008 deadband `70dc239` stripped. Its §3 restates the
+  measured design brief (the ascent failure was a **divergence**, `act_yaw` the saturating axis).
 - **`docs/tuning/TUNING_DB.json` + `exclude.txt`** [HIST — recovered] — the machine-readable 55-flight
   per-phase control statistics behind `TUNING_DB.md`, and the 5 contaminated flights excluded from the
   pooled stats (R1: *"the exclusion judgement is itself evidence"*). Recovered by **W26** with the corpus.
