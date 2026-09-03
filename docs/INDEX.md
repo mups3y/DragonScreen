@@ -137,6 +137,19 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
   against the CSV. R1 §5.4: **RECOVER-REFERENCE — HIGHEST**, *"irreplaceable"*. Read `flights/README.md`
   first — it is the format spec. ⚠ **RSS-RO recordings of the DELETED hand-written autopilot:** the numbers
   are our only RSS-RO empirical source, the control behaviour is what failed (R1 §7).
+- **[FLIGHT_CORPUS_ASSESSMENT.md](FLIGHT_CORPUS_ASSESSMENT.md)** [HIST — evidence] — ⭐ **what the recovered
+  corpus actually contains**, produced by **S76** (2026-09-04) by re-pointing `plugin/tools/assess_flight.py`
+  at `docs/flights/` (it had been globbing only the KSP install + the quarantine archive, both outside the
+  repo — a C7 violation as well as a staleness bug) and running it over **all 13 recorder CSVs, 13 of 13
+  read**. Per-file inventory with a USABLE / MARGINAL / JUNK verdict; the corpus covers **launch → orbit →
+  far-field rendezvous and stops** (no docking, no entry, no chute, no delivered deorbit burn, no landed
+  booster anywhere in it). ⭐ **Its §3 is the attitude-telemetry evidence pack for W24** — when the S2 error
+  diverged and what was commanded at the time, why that is a divergence and not a limit cycle, where the
+  limit cycle IS (the actuation, at ~1 reversal/s and 81–89% duty, not the error), and the `act_sat` /
+  `angacc_*_auth` saturation per phase. ⚠ It **reports and decides nothing** — the steering law is W24's
+  call under its own gate. Three findings that change how other numbers read: **`torque_cmd` was never
+  written in any file**, `att_err_deg` and `att_point_deg` are **different signals**, and `mode_holding` /
+  `mode_flying` carry no state. Its §6 records the §B16.8 correction of fact.
 - **`docs/tuning/TUNING_DB.json` + `exclude.txt`** [HIST — recovered] — the machine-readable 55-flight
   per-phase control statistics behind `TUNING_DB.md`, and the 5 contaminated flights excluded from the
   pooled stats (R1: *"the exclusion judgement is itself evidence"*). Recovered by **W26** with the corpus.
@@ -269,8 +282,21 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
 - `plugin/build/audit_comments.py` · `check_live.py` · `navball_preview.py` — the comment/telemetry audits and
   the navball preview.
 - ⚠ `plugin/build/assess_flight.py` reads the flight corpus of the deleted autopilot (register line S8).
-  ⚠ **Its header now misstates the situation:** it says the corpus is gone and it cannot run until T22
-  regenerates one. **The corpus came back on 2026-09-04 (W26).** Logged as register line **W27**.
+  Its header was **corrected by S76** (2026-09-04): it never read `Crew-2_*.csv` (it globs `flight_*.csv`),
+  and the Crew-2 corpus is no longer gone. **No `flight_*.csv` exists anywhere in this repo**, so it still
+  has nothing to read — and it is still not the script to extend; extend `plugin/tools/assess_flight.py`.
+  *(This was register line **W27**, closed by S76.)*
+- ⭐ **`plugin/tools/assess_flight.py`** — **the** flight-corpus analyser: eight sections (recorder health,
+  physics self-check, ascent, booster, rendezvous, deorbit/entry/chute, abort+FDIR, control authority) over
+  the gen-2 `Crew-2*.csv` schema, with `is_warp()` filtering and vis-viva self-checks. **S76 pointed it at
+  `docs/flights/` (repo first, C7)** and it now reads all 13 recordings. `--list` · `--all` · `<file.csv>` ·
+  `--external` (opt-in sweep of the KSP capture dir + quarantine archive — **not** a build source).
+- **`plugin/tools/tuning_db.py`** — pools the corpus into per-phase control statistics with the derived
+  authority metrics `act_sat` and `angacc_*_auth`. **S76** gave it the same repo-first corpus and an
+  **overwrite guard**: with no `<out_dir>` it now REFUSES to run rather than replace the recovered
+  **55-flight** `docs/tuning/TUNING_DB.{json,md}` with a 13-flight rebuild (C1.16). Always pass an out dir.
+  ⚠ Two known limitations, logged not fixed: **no warp filter**, and **no `boost_phase` case** in
+  `segment_label()` (booster rows pool into a phantom `MISSION/-`). See `FLIGHT_CORPUS_ASSESSMENT.md` Q2.
 
 ## 7. The 2026-09-01 deletion — the research, RECOVERED (W26, 2026-09-04)
 

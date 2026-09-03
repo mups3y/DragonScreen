@@ -9,8 +9,20 @@
 #
 # KEPT, not deleted (owner decision via the overseer, 2026-09-02, S8): this is autopilot-era tooling,
 #    retained for Part B's §B5 empirical tune (T22), which will regenerate a flight corpus once the
-#    MechJeb conductor flies again. The old Crew-2_*.csv corpus this script reads is gone (deleted with
-#    the 2026-09-01 autopilot removal), so it will not run until T22 produces new data.
+#    MechJeb conductor flies again.
+#
+# CORRECTED 2026-09-04 (S76). The two statements that stood here were both false:
+#    (1) "the old Crew-2_*.csv corpus this script reads" - this script has never read Crew-2_*.csv. Its
+#        `newest()` globs **flight_*.csv**, the gen-1 recorder's filename. The Crew-2_* files are the
+#        gen-2 recorder's, and plugin/tools/assess_flight.py is the script that reads them.
+#    (2) "is gone (deleted with the 2026-09-01 autopilot removal)" - the Crew-2_* corpus is BACK: W26
+#        recovered 13 recordings + 3 geometry dumps into `docs/flights/` (see
+#        docs/FLIGHT_CORPUS_ASSESSMENT.md). That recovery does NOT feed this script, because none of
+#        those files is a `flight_*.csv`.
+#    So the accurate statement is: **no `flight_*.csv` exists anywhere in this repo**, and this script
+#    still has nothing to read until a gen-1-schema recording appears. Its `CAPTURE`/`ARCHIVE` paths are
+#    both outside the repo (C7) and are left as-is deliberately - this file is not extended (see above);
+#    extend plugin/tools/assess_flight.py instead.
 # ============================================================================================
 """
 assess_flight.py - the WHOLE flight, every column, one command.

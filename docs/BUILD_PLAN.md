@@ -1604,9 +1604,21 @@ the risk is open and documented; nobody should be surprised by it later.
 | `plugin/src/pure/BoosterDrag.cs` | the Falcon-9 booster's Mach-binned ballistic-coefficient curve — **18,080 clean unpowered in-atmosphere descent samples across 48 recorded RSS/RO flights**, median bc per 0.5-Mach bin (R1 §3.5, citing commit `0d6423d`) |
 | `docs/tuning/TUNING_DB.json` (+ `.md`) | per-phase statistics over a **55-flight** RSS/RO corpus, 2026-08-26 → 08-29 (R1 §4.3) |
 
-⛔ **THE RAW CSVs BEHIND BOTH ARE GONE.** They were **gitignored and never committed** (R1 §3.5, §4.3) — the
-same `.gitignore` mechanism this task closes. **Neither distillate can be re-derived, re-binned or re-checked
-from anything in this repo.** If the curve is ever doubted, there is nothing here to doubt it against.
+⛔ **THE RAW CSVs BEHIND THESE TWO DISTILLATES ARE GONE — and that is now a narrower claim than it was.**
+Both corpora were **gitignored and never committed** (R1 §3.5, §4.3) — the same `.gitignore` mechanism this
+task closes — so **neither the 48-flight `BoosterDrag` bc corpus nor the 55-flight TUNING_DB corpus is in
+this repo, and neither distillate can be re-derived, re-binned or re-checked from it.** If the curve is
+ever doubted, there is nothing here to doubt it against. **That remains true of those two corpora.**
+
+✅ **What is NO LONGER true is the general statement.** **W26** (2026-09-04, the owner's decision) recovered
+**16 CSVs — 13 `FlightRecorder` recordings + 3 geometry dumps — into `docs/flights/`** (DS-ASC-001…008 and
+DS-DEO-001, 2026-08-31 → 09-01, 21 MB with the log excerpts and screenshots). Raw RSS-RO flight data **does**
+exist in this repo again, and **S76** re-pointed `plugin/tools/assess_flight.py` at it and read all 13
+— see **`docs/FLIGHT_CORPUS_ASSESSMENT.md`** for what they contain, which are usable and which are junk.
+⚠ **They are NOT the two corpora above:** they are 13 flights, not 48 or 55; they are a later window; and
+they carry no atmospheric density, drag acceleration or unpowered-phase marking, so they cannot re-derive a
+ballistic coefficient. **Ruling 2 below is UNCHANGED** — every recovered constant stays UN-CONVERGED until a
+task actually re-derives it, and no constant is re-verdicted by this correction of fact (C1.12).
 
 **Therefore, three rulings:**
 1. **Both are REFERENCE WITH STATED PROVENANCE, not seed truth.** Recover them, keep them, and **mark them in

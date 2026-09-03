@@ -6057,6 +6057,60 @@ stand on its own rather than leaning on a sibling file that is never coming back
 `UseLdBand = false` nuance is recorded so the marking is not read as a live defect, and R1 §7.4's row names
 the right file.
 
+### S76 [O] Reunite the analyser with the recovered flight corpus, and report what it says — **DONE** (2026-09-04) — [TIER 1: a working tool and its data could not see each other]
+Not from a prior line — raised directly by the owner, 2026-09-04, after **W26** (`cdd37f5`) recovered the
+21 MB RSS-RO corpus into `docs/flights/`. **The defect:** `plugin/tools/assess_flight.py` and
+`plugin/tools/tuning_db.py` read the right schema and the right filename pattern but globbed only the KSP
+install and `Desktop\quarantine\dragonscreen_flightdata` — **both outside the repo (C7)** — so the analyser
+and its data could not see each other.
+**Done:** (1) both tools now read `docs/flights/` FIRST and, by default, ALONE; the external dirs became an
+explicit opt-in (`--external` / an explicit `<corpus_dir>`), because an analysis that silently mixes
+uncommitted files is not reproducible from the repo. (2) Two reader bugs found by actually running it and
+fixed: `*geometry_dump*` matches the `Crew-2*.csv` glob but is a different schema (now excluded), and the two
+DS-ASC-001/002 probe files end with a **torn row** (36 and 77 of 116 fields — the stream was cut mid-line on
+revert), which `DictReader`'s default `restval=None` turned into a phantom phase transition that crashed
+sections 4–8; `restval=""` plus a `torn_rows()` report. (3) `tuning_db.py` gained an **overwrite guard**: with
+no `<out_dir>` it refuses to run rather than replace the recovered **55-flight** `docs/tuning/TUNING_DB.*`
+with a 13-flight rebuild (C1.16). (4) `plugin/build/assess_flight.py`'s two false header statements
+corrected — closes **W27**. (5) **Ran it over all 13 recorder CSVs: 13 of 13 read, 0 failed.**
+(6) `docs/FLIGHT_CORPUS_ASSESSMENT.md` written — per-file inventory with USABLE/MARGINAL/JUNK verdicts, and
+§3 is the **attitude-telemetry evidence pack for W24** (reported, never prescribed). (7) §B16.8's wording
+narrowed — correction of fact only, ruling 2 untouched. (8) `docs/INDEX.md` entries.
+**Verify:** docs + tooling only, **no screen code changed → no preview PNG applies** (said, not skipped);
+`python plugin/build.py test` GREEN. **Three owner questions** are in the deliverable's
+`## Open questions for the owner` (C1.14) — the biggest is **Q1**.
+⚠ **Q1 IS THE ONE TO READ.** The quarantine archive `Desktop\quarantine\dragonscreen_flightdata`
+**still exists on this machine and holds ~128 `Crew-2*.csv` files dated 2026-08-26 → 09-01** — the same
+window §B16.8 attributes to the lost 55-flight TUNING_DB corpus. S76 read **none** of it (C7) and decided
+nothing about it (C1.12). It is an owner call.
+
+### S77 [S] `tuning_db.py` pools warp rows and has no `boost_phase` segment — **TODO** — [TIER 2: it silently mislabels 1,560 booster rows and pools ~9,000 frozen ones]
+Found by **S76**, 2026-09-04 (C1.1 — logged, not done: S76's declared change to that file was the corpus path
+plus the overwrite guard, and these are behaviour changes). Two defects, both surfaced by running the tool
+over `docs/flights/`:
+1. **No warp filter.** `assess_flight.py:is_warp()` excludes on-rails high-warp rows because the recorder
+   **blanks the control columns** there; `tuning_db.py` pools them into every statistic. In this corpus that
+   is ~9,000 rows, most of them a **pre-launch pad hold at MET 0** — e.g. 978 of DS-ASC-001's 1763 rows.
+2. **`segment_label()` has no `boost_phase` case.** It tests `ascent/abort/entry/deorbit/dep/dock/rv/chute`
+   and never `boost_phase`, so all **1,560 booster rows** in the three probe files fall through to a phantom
+   `MISSION/-` segment instead of `BOOST/EntryBurn` / `BOOST/LandingBurn`. The booster's authority statistics
+   are therefore both missing from where they belong and contaminating where they are.
+⛔ **Do NOT regenerate `docs/tuning/TUNING_DB.{json,md}`** while fixing this — that file is the recovered
+**55-flight** distillate and this repo's 13 recordings cannot rebuild it (§B16.8, C1.16). S76 added a guard
+that refuses exactly that; verify against a scratch `<out_dir>`.
+**DONE when:** `is_warp()` (or an equivalent) is applied before pooling and reported in the coverage note;
+`BOOST/<phase>` appears as its own segment; `docs/tuning/TUNING_DB.*` is **unchanged** on disk;
+`python plugin/build.py test` green. Tooling-only → preview/PNG gate N/A (C1.3).
+
+### S78 [S] `plugin/tools/assess_flight.py`'s header promises a ninth section it does not print — **TODO** — [TIER 4: hygiene, doc accuracy]
+Found by **S76**, 2026-09-04 (C1.1). The header lists what the tool reports as *"1 recorder health … 8 control
+authority **9 verdict**"*, and `assess()` calls exactly eight section functions — there is no verdict section
+in the file. Nothing it prints is wrong; the header over-promises. **Build:** either drop *"9 verdict"* from
+the header, or add the verdict section it advertises — **an owner-free call, but pick one and say which**, and
+if the section is added it must summarise only what the eight sections already computed (⛔ no new physics,
+no simulation — the file's own ban). Comment-or-print only; `python plugin/build.py test` as a no-regression
+check.
+
 ### S73 [S] `T21`'s title says "Deorbit/entry/chutes" but its scope now starts at §B9 Phase 6 (undock) — **TODO** — [TIER 4: hygiene — a task title narrower than the task]
 Found by **G6**, 2026-09-04 (C1.1 — logged, not done), while assigning the facade names their real future
 owners. **The finding.** §B12.5a gives **T21** both `UndockOps` **and** `DeorbitOps`, because T21's DONE-when
@@ -6314,7 +6368,7 @@ distillates) is NOT closed by it** — having the corpus back is not a ruling on
 ---
 
 
-### W27 [S] `assess_flight.py`'s header says the flight corpus is gone — it came back on 2026-09-04 — **TODO** — [TIER 3: doc accuracy, and it gates whether a working tool gets used]
+### W27 [S] `assess_flight.py`'s header says the flight corpus is gone — it came back on 2026-09-04 — **DONE** (by **S76**, 2026-09-04) — [TIER 3: doc accuracy, and it gates whether a working tool gets used]
 Logged by **W26**, 2026-09-04 (C1.1 — noticed while recovering the corpus; not fixed, out of scope).
 **The finding.** `plugin/build/assess_flight.py` carries a header block added by **S8** (2026-09-02) on the
 owner's decision to KEEP the file: it states that the old corpus is gone and that the tool *"won't run until
@@ -6328,6 +6382,12 @@ labelled unusable. `docs/INDEX.md` §6 carries the same correction pointing here
 rationale intact, and says plainly what the tool can and cannot do against a corpus recorded by a recorder
 that no longer exists. Comment-only → preview/PNG gate N/A (C1.3); `python plugin/build.py test` as a
 no-regression check.
+**CLOSED by S76**, 2026-09-04 — the header correction was inside S76's declared outputs, so it was done there
+rather than left to be redone. S76 also corrected **two factual errors in this line itself**: (1) the header
+in question is `plugin/**build**/assess_flight.py`'s, and that script **never read `Crew-2_*.csv`** — it globs
+`flight_*.csv`, of which the repo contains none, so it still has nothing to read; (2) `docs/flights/` holds
+**13 recordings, not "the same 55 flights `TUNING_DB.md` was built from"** — that 55-flight corpus is a
+different, earlier window and is still not in the repo (§B16.8). S8's retention decision is untouched (C1.8).
 
 ### W28 [S] `.gitignore`'s blanket `*.csv` still swallows `docs/flights/` — the exact mechanism that lost the corpus — **TODO** — [TIER 2: a silent-data-loss trap that has already fired twice]
 Logged by **W26**, 2026-09-04 (C1.1 — noticed on restoring the corpus; not fixed, out of scope).

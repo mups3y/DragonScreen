@@ -12,10 +12,25 @@
 # so it accumulates automatically as new recordings land. Output: docs/tuning/TUNING_DB.json (machine) +
 # docs/tuning/TUNING_DB.md (human-readable per-phase tables) + a coverage note (how much data per phase).
 #
-#   python tools/tuning_db.py                 # default capture dir + docs/tuning output
-#   python tools/tuning_db.py <capture_dir> <out_dir>
+#   python plugin/tools/tuning_db.py                       # the REPO corpus (docs/flights) -> docs/tuning
+#   python plugin/tools/tuning_db.py <corpus_dir> <out_dir>
+#
+# CORPUS LOCATION (S76, 2026-09-04): the corpus is `docs/flights/` IN THE REPO (C7 - the repo is the only
+# source of truth), not the KSP capture dir. The KSP capture dir and the quarantine archive are kept as
+# named constants because that is where a NEW recording lands, but they are used only when passed
+# explicitly as <corpus_dir>. Whatever is worth analysing belongs in `docs/flights/`.
+#
+# OVERWRITE GUARD (S76): `docs/tuning/TUNING_DB.{json,md}` in this repo is the RECOVERED distillate of a
+# 55-flight corpus (BUILD_PLAN §B16.8) that this repo's 13 recordings CANNOT reproduce. Re-running over it
+# would silently replace 55 flights of statistics with 13. So the script REFUSES to overwrite an existing
+# TUNING_DB unless --force is passed; write somewhere else instead. (C1.16: research is never deleted.)
 # =============================================================================================
 import csv, os, sys, json, math, statistics, glob
+
+REPO_ROOT    = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+REPO_FLIGHTS = os.path.join(REPO_ROOT, "docs", "flights")
+CAPTURE      = r"C:\Program Files (x86)\Steam\steamapps\common\Kerbal Space Program\DragonScreen_capture"
+ARCHIVE      = r"C:\Users\User\Desktop\quarantine\dragonscreen_flightdata"
 
 # The control signals we profile. (label -> csv column). Absent columns (older CSVs) are skipped safely.
 SIGNALS = {
@@ -70,31 +85,43 @@ def stats(vals):
             "max": round(max(av), 5), "min": round(min(v), 5)}
 
 def main():
-    cap = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-        "C:/Program Files (x86)/Steam/steamapps/common/Kerbal Space Program", "DragonScreen_capture")
-    out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "docs", "tuning")
-    out = os.path.abspath(out)
+    argv = [a for a in sys.argv[1:] if a != "--force"]
+    force = "--force" in sys.argv[1:]
+    cap = argv[0] if len(argv) > 0 else REPO_FLIGHTS
+    out = os.path.abspath(argv[1] if len(argv) > 1 else os.path.join(REPO_ROOT, "docs", "tuning"))
     os.makedirs(out, exist_ok=True)
+    existing = [f for f in ("TUNING_DB.json", "TUNING_DB.md") if os.path.exists(os.path.join(out, f))]
+    if existing and not force:
+        print("REFUSING to overwrite %s in %s." % (" + ".join(existing), out))
+        print("  That file is the RECOVERED 55-flight distillate (BUILD_PLAN.md B16.8); the corpus that")
+        print("  produced it is NOT in this repo, so a re-run REPLACES it with a smaller one and the")
+        print("  original cannot be rebuilt. Pass an <out_dir> to write elsewhere, or --force if you")
+        print("  genuinely intend to replace it.")
+        return 2
 
-    # Read the live capture dir AND the quarantine archive, so a recording keeps counting in the
-    # corpus after it is moved out of the KSP folder into quarantine\dragonscreen_flightdata. Dedupe
-    # by basename (capture wins) in case a file briefly exists in both during a move.
-    ARCHIVE = r"C:\Users\User\Desktop\quarantine\dragonscreen_flightdata"
+    # S76: read ONE named corpus directory (default: the repo's docs/flights). It used to also sweep the
+    # quarantine archive unconditionally, which mixed uncommitted, unreviewed files into every run - an
+    # analysis that cannot be reproduced from the repo (C7). Point <corpus_dir> at CAPTURE or ARCHIVE
+    # explicitly if that is what you want.
+    # `*_geometry_dump_*.csv` matches the glob but is the GeometryDump instrument's own schema, not a
+    # recorder tick stream - excluded, or every one of its rows pools in as a phantom MISSION/Unknown row.
     by_name = {}
-    for d in (ARCHIVE, cap):          # cap last so a live capture overrides an archived namesake
-        for p in glob.glob(os.path.join(d, "Crew-2*.csv")):
-            by_name[os.path.basename(p)] = p
+    for p in glob.glob(os.path.join(cap, "Crew-2*.csv")):
+        if "geometry_dump" in os.path.basename(p): continue
+        by_name[os.path.basename(p)] = p
     files = sorted(by_name.values(), key=lambda p: os.path.basename(p))
     if not files:
-        print("no Crew-2*.csv in " + cap + " or " + ARCHIVE); return
+        print("no recorder Crew-2*.csv in " + cap); return
 
     # ⛔ TRUST THE DATA ONLY WHEN IT IS CORRECT. A flight that flew a BROKEN trajectory (retrograde plane, a
     # loss-of-control, an aborted mess) records CORRECT numbers for a WRONG flight — pooling it poisons the
     # per-phase authority stats. So exclude known-contaminated flights (listed in docs/tuning/exclude.txt, one
     # filename-substring per line, '#' comments) and report which flights are IN vs OUT. Curate to a clean corpus
     # before tuning off it. (This does not delete anything — it just scopes the aggregate.)
+    # exclude.txt lives beside the output; fall back to the repo's canonical copy when writing elsewhere.
     excl_path = os.path.join(out, "exclude.txt")
+    if not os.path.exists(excl_path):
+        excl_path = os.path.join(REPO_ROOT, "docs", "tuning", "exclude.txt")
     excludes = []
     if os.path.exists(excl_path):
         for ln in open(excl_path, encoding="utf-8"):
@@ -222,4 +249,4 @@ def main():
     print("segments: " + ", ".join("%s(%d)" % (s, db["segments"][s]["flight_count"]) for s in sorted(db["segments"])))
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)
