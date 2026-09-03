@@ -4612,7 +4612,7 @@ comment-stripped diff against `8b81816^` minus that block, the W2/W3 provenance 
 **DONE when:** `build.py test` green, the removal is test-guarded and stated in the file's header, and the
 diff shows the block gone and nothing else in the proven ascent path altered.
 
-### W8 [O] The recovered booster FSM is FOUR phases; §B16.2 and the owner's boostback decision need FIVE — **TODO** — [TIER 2: real gap — the recovered starting point cannot fly either profile]
+### W8 [O] The recovered booster FSM is FOUR phases; §B16.2 and the owner's boostback decision need FIVE — **DONE** — [TIER 2: real gap — the recovered starting point cannot fly either profile]
 Logged by **W3**, 2026-09-04 (C1.1 — found on restoring `pure/BoosterDescent.cs`; closing it is a rewrite,
 and §B12.8 says Wave C recovers *"a STARTING POINT, not working code"*).
 **The finding:** the restored `BoosterPhase` enum is `Idle · Flip · EntryBurn · AeroDescent · LandingBurn ·
@@ -4636,6 +4636,28 @@ marking; the tier-2 shape §B16.2 cites (170° flip / 5° retrograde offset / 27
 Read §B16.2, §B16.5, §B16.8 and `docs/BOOSTER_GUIDANCE_METHOD.md` §3.1/§4/§8.1/§10 END-TO-END first.
 **DONE when:** `build.py test` green, both profiles enter boostback, ASDS's default magnitude is zero, the
 unit-`AimForward` and AoA-cap contracts still hold in every phase, and every new number is marked.
+✅ **DONE 2026-09-04.** `pure/BoosterDescent.cs` now flies separation → landing as ONE guidance with a
+`TargetMode` (`Rtls`/`Asds`): `Idle · Flip · Boostback · Coast · EntryBurn · AeroDescent · LandingBurn ·
+Landed`, with `BoosterProfile.For(mode)` as the mode's whole parameter block and
+`TargetModeFor(RecoveryMode)` as the seam §B16.9's LZ resolution feeds (W3: it had no consumer). Boostback
+is ONE ALWAYS-ENTERED state, magnitude/aim-offset mode-parameterized, **ASDS default magnitude 0.0**
+(mutation-tested: forcing it to 1.0 fails 5 checks). Laws recreated from `BOOSTER_GUIDANCE_METHOD.md`:
+§4.1 rate-limited flip shaper (lead gate / free-run / snap), §4.2 proportional-error boostback throttle
+with the signed long/short cut, §4.3 gate + cutoff with the payload correction, §4.4 the one steering law
+plus the AoA authority taper (mutation-tested: disabling it fails 6 checks), §4.5 live `stop/alt + margin`
+throttle, flare and the negative terminal AoA schedule, §5's signed great-circle `ErrorTo` + a two-tier
+`PredictImpact` over `pure/Trajectory.cs` fed by `pure/BoosterDrag.cs` (no second predictor), §6 ullage
+gate + spool ramp. §B16.3 ignition budgeting added: phases refuse and annunciate rather than command a
+dead engine. ⛔ Three deliberate NON-PORTS, stated in the header: the engine actuation layer (§7 — ours,
+`OctawebResolve`), the 3→1 handover (craftdump `ignitions = 1` per set; C7.1 the repo wins), the four
+lat/lng PIDs. Contracts (1) unit `AimForward`, (2) `|AoaDeg| <= AoaCapDeg`, (3) the aim sits exactly
+`|AoaDeg|` off retrograde — checked in all 8 phases × both modes × 8 altitudes, plus NaN/zero-Up garbage.
+`build.py test` GREEN, booster suite **37 → 957 checks**. No screen changed → no preview PNG applies.
+Only `[RSS-RO SOURCED]` numbers are the craft dump's own `_minThrottle` (0.361003 / 0.390625); the 170°
+flip, 5° offset and 2700 m aim are `[NOT SEEDED]` (start at 0/geometry); every other constant is
+`[Tunable]` and marked `[UN-CONVERGED]`. **Four open questions** for the owner at the foot of
+`pure/BoosterDescent.cs` — Q1 is the sharp one: **on the craft as dumped, an RTLS boostback has no
+ignition left** (`ThreeLanding` has one, owed to the entry burn), so the §B16.3 guard refuses it.
 
 ### W9 [O] `src/MissionConductor.cs` — the warp + focus glue, blocked on the booster core and the host — **TODO** — [TIER 3: scheduled recovery]
 Logged by **W4**, 2026-09-04 (C1.1 — found on trying to restore it; §B12.8's Wave D row names it, and it
