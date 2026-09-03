@@ -159,7 +159,11 @@ namespace DragonScreen
                 case PanelCommand.SuppressFire:  return Systems.SuppressFire(ref State);
                 case PanelCommand.FireResponse:  return Systems.FireResponse(ref State);
                 // ---- suppress the abort FX + isolate a leak (the leak isolate is real display state) ----
-                case PanelCommand.DepressResponse: Systems.DepressResponse(ref State); return true;
+                // S53 / H42: RETURN the model's answer, do not discard it. This case used to throw the
+                // bool away and `return true`, so the lamp flashed "acted" even when the model refused
+                // for want of a leak - §14.4(a)'s click-no-light-no-action, inverted. Its two
+                // plate-siblings beside it always returned theirs; this one is now consistent with them.
+                case PanelCommand.DepressResponse: return Systems.DepressResponse(ref State);
 
                 // ---- entry-mode arming lamps (display flags the lamps read) ----
                 case PanelCommand.EnableBackupPyros: BackupPyros = true;  return true;

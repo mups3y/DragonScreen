@@ -301,13 +301,18 @@ namespace DragonScreen
                 // POWER lamps show which bus is live, so the crew can see the row is armed.
                 case PanelCommand.Power1: return FlightCommands.State.Bus1On;
                 case PanelCommand.Power2: return FlightCommands.State.Bus2On;
-                // The flight-computer engage lamps track the live phase state (grid column A/B/C),
-                // however the phase was started - the physical STRING button OR the touchscreen.
-                case PanelCommand.String1A: return AutoPilot.Engaged;                        // ASCENT
-                case PanelCommand.String1B: return StationApproach.Engaged
-                                                || DockingOps.Engaged;                       // RNDZ/DOCK
-                case PanelCommand.String1C: return DeorbitOps.Engaged;                       // DEORBIT
             }
+
+            // S53 / H41: the row-1 STRING lamps report THEIR OWN STRING, read back out of the same
+            // model their press writes to (`FlightCommands.Run` -> `Systems.ToggleString`). They used
+            // to read `AutoPilot.Engaged` / `StationApproach.Engaged` / `DockingOps.Engaged` - three
+            // hard-`false` stubs - so `Update` re-darkened them every tick and the dash could never
+            // light. Which string and what counts as lit are `PanelPolicy`'s calls, so both are
+            // headless-testable; this stays in the glue only because `FlightCommands.State` is here.
+            int bus, index;
+            if (PanelPolicy.StringLamp(c, out bus, out index))
+                return PanelPolicy.StringLampOn(Systems.Get(FlightCommands.State, bus, index));
+
             return false;
         }
 

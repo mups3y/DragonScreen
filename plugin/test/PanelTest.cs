@@ -37,6 +37,7 @@ public static class PanelTest
         Lighting();
         Inert();
         Board();
+        LampsThatLied();   // S53 / H41 + H42: the STRING 1A/1B/1C lamps and DEPRESS RESPONSE
         Steps();
         Simulated();
 
@@ -272,6 +273,125 @@ public static class PanelTest
         Check("ENABLE BACKUP PYROS still latches",
               PanelPolicy.ResolveImmediate(PanelCommand.EnableBackupPyros, true, true)
                   == PanelPressKind.ModeOn, "");
+    }
+
+    // ------------------------------------------------------------------ S53: the two lamps that lied
+
+    static void LampsThatLied()
+    {
+        // ---- (a) H41: STRING 1A/1B/1C COULD NEVER LIGHT ----
+        // They are live-mode lamps, so `PanelButton.Update` re-reads `ModeIsOn` every tick and
+        // re-darkens on a false. `ModeIsOn` read `AutoPilot.Engaged` / `StationApproach.Engaged` /
+        // `DockingOps.Engaged` — three hard-`false` stubs — while the PRESS went to
+        // `Systems.ToggleString(ref State, 1, 0..2)`. Sim state changed; the dash never moved.
+        // The lamp's two decisions are now pure, so the composition the glue performs is pinned here.
+        PanelCommand[] row1 = { PanelCommand.String1A, PanelCommand.String1B, PanelCommand.String1C };
+
+        for (int i = 0; i < row1.Length; i++)
+        {
+            int bus, index;
+            Check("STRING 1" + (char)('A' + i) + " is a string lamp",
+                  PanelPolicy.StringLamp(row1[i], out bus, out index), "");
+            Check("STRING 1" + (char)('A' + i) + " reports bus 1, index " + i,
+                  bus == 1 && index == i, "got bus " + bus + " index " + index);
+            Check("STRING 1" + (char)('A' + i) + " is still a live-mode lamp (it tracks state, not its press)",
+                  PanelPolicy.IsLiveMode(row1[i]), "");
+        }
+
+        // Nothing else claims to be a string lamp — above all not the row-2 siblings, which are
+        // deliberately momentary, and not the POWER buses that share the plate.
+        PanelCommand[] notStrings = {
+            PanelCommand.String2A, PanelCommand.String2B, PanelCommand.String2C,
+            PanelCommand.Power1, PanelCommand.Power2, PanelCommand.Reset1, PanelCommand.Reset2,
+            PanelCommand.DepressResponse, PanelCommand.EnableBackupPyros, PanelCommand.None };
+        for (int i = 0; i < notStrings.Length; i++)
+        {
+            int bus, index;
+            Check("not a string lamp: " + notStrings[i],
+                  !PanelPolicy.StringLamp(notStrings[i], out bus, out index), "");
+            Check("...and it hands back no bus/index to read by mistake: " + notStrings[i],
+                  bus == -1 && index == -1, "got bus " + bus + " index " + index);
+        }
+
+        // THE DECISIVE CHECK: press the button through the same model the glue writes to, and the
+        // lamp must follow. Online → lit; the crew isolating it → dark; a fault tripping it → dark.
+        {
+            SystemsState st = SystemsState.Fresh(); st.Bus1On = true;
+            for (int i = 0; i < row1.Length; i++)
+            {
+                int bus, index;
+                PanelPolicy.StringLamp(row1[i], out bus, out index);
+                Check("a fresh online string lights its lamp: 1" + (char)('A' + i),
+                      PanelPolicy.StringLampOn(Systems.Get(st, bus, index)), "");
+                Systems.ToggleString(ref st, bus, index);          // the press the crew makes
+                Check("isolating it darkens the lamp: 1" + (char)('A' + i),
+                      !PanelPolicy.StringLampOn(Systems.Get(st, bus, index)),
+                      Systems.Get(st, bus, index).ToString());
+                Systems.ToggleString(ref st, bus, index);          // and back
+                Check("closing it again re-lights the lamp: 1" + (char)('A' + i),
+                      PanelPolicy.StringLampOn(Systems.Get(st, bus, index)),
+                      Systems.Get(st, bus, index).ToString());
+            }
+
+            // A TRIPPED string is dark too — a two-state dash has no third answer, and the crew reads
+            // isolated-vs-tripped off the glass. Trip it the way the model does: undervoltage.
+            SystemsState tr = SystemsState.Fresh(); tr.Bus1On = true;
+            // 0.12 is under TripCharge (0.15) but ABOVE TripCharge*0.6 (0.09), so ONLY the C string
+            // trips — which is what makes the neighbours check below mean something. (0.05, as used
+            // elsewhere in this file, would take B down with it.)
+            SystemsInputs flat = Quiet(1.0); flat.Charge01 = 0.12;
+            Systems.Update(ref tr, flat);
+            Check("undervoltage tripped the C string (fixture precondition)",
+                  Systems.Get(tr, 1, 2) == StringState.Tripped, Systems.Get(tr, 1, 2).ToString());
+            Check("a tripped string is dark, not lit",
+                  !PanelPolicy.StringLampOn(Systems.Get(tr, 1, 2)), "");
+            Check("...and its neighbours are unaffected",
+                  PanelPolicy.StringLampOn(Systems.Get(tr, 1, 0))
+                  && PanelPolicy.StringLampOn(Systems.Get(tr, 1, 1)), "");
+        }
+
+        // Exactly the three StringState values are covered, and only Online lights.
+        Check("Online lights", PanelPolicy.StringLampOn(StringState.Online), "");
+        Check("Isolated does not", !PanelPolicy.StringLampOn(StringState.Isolated), "");
+        Check("Tripped does not", !PanelPolicy.StringLampOn(StringState.Tripped), "");
+
+        // ---- (b) H42: DEPRESS RESPONSE FLASHED "ACTED" OVER A REFUSAL ----
+        // The dispatcher case called `Systems.DepressResponse(ref State)` and then `return true`,
+        // discarding the model's answer, so the lamp lit even with no leak to isolate. The model's
+        // refusal was always correct; only the glue threw it away. Pinned here as the COMPOSITION the
+        // glue performs — model answer → `ResolveImmediate` → lamp — so a re-discarded bool shows up.
+        {
+            SystemsState calm = SystemsState.Fresh();
+            bool actedCalm = Systems.DepressResponse(ref calm);
+            Check("no leak: the model refuses", !actedCalm, "");
+            Check("no leak: the press resolves to Nothing",
+                  PanelPolicy.ResolveImmediate(PanelCommand.DepressResponse, actedCalm, false)
+                      == PanelPressKind.Nothing, "");
+            Check("no leak: THE LAMP STAYS DARK (§14.4(a): click, no light, no action)",
+                  PanelPolicy.LampFor(PanelPolicy.ResolveImmediate(
+                      PanelCommand.DepressResponse, actedCalm, false)) == PanelLight.Dark, "");
+            Check("no leak: and the state is untouched by the refusal",
+                  !calm.Isolating && !calm.Leaking, "");
+
+            SystemsState lk = SystemsState.Fresh();
+            SystemsInputs hard = Quiet(1.0); hard.GForce = 14.0;
+            Systems.Update(ref lk, hard);
+            Check("a real leak exists (fixture precondition)", lk.Leaking, "");
+            bool actedLeak = Systems.DepressResponse(ref lk);
+            Check("with a leak: the model acts", actedLeak && lk.Isolating, "");
+            Check("with a leak: THE LAMP LIGHTS",
+                  PanelPolicy.LampFor(PanelPolicy.ResolveImmediate(
+                      PanelCommand.DepressResponse, actedLeak, false)) == PanelLight.Lit, "");
+            Check("the two answers actually differ — the bool is load-bearing, not decoration",
+                  actedLeak != actedCalm, "");
+
+            // Its two plate-siblings always returned theirs; they must still behave the same way, or
+            // this fix has quietly changed the honest ones instead of the dishonest one.
+            SystemsState nofire = SystemsState.Fresh();
+            Check("SUPPRESS FIRE still refuses with no fire, and stays dark",
+                  PanelPolicy.LampFor(PanelPolicy.ResolveImmediate(PanelCommand.SuppressFire,
+                      Systems.SuppressFire(ref nofire), false)) == PanelLight.Dark, "");
+        }
     }
 
     // ------------------------------------------------------------------ the whole board

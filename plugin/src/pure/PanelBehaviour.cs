@@ -115,9 +115,48 @@ namespace DragonScreen
         {
             return c == PanelCommand.Power1        // lit while its bus is powered
                 || c == PanelCommand.Power2
-                || c == PanelCommand.String1A      // lit while its phase is engaged (row 1)
+                || c == PanelCommand.String1A      // lit while ITS OWN STRING is online (see StringLamp)
                 || c == PanelCommand.String1B
                 || c == PanelCommand.String1C;
+        }
+
+        // ---- S53 / audit H41: WHAT A ROW-1 STRING LAMP ACTUALLY REPORTS ----
+        // These three were live-mode lamps pointed at the WRONG STATE. The glue read them as
+        // "flight-computer engage" lamps - `AutoPilot.Engaged` / `StationApproach.Engaged` /
+        // `DockingOps.Engaged` - and all three of those are hard-`false` stubs (§14.4(a)), while
+        // `PanelButton.Update` re-darkens a live-mode lamp every tick. So the dash COULD NEVER LIGHT,
+        // on a button whose press genuinely changes state: `FlightCommands.Run` sends STRING 1A/1B/1C
+        // straight to `Systems.ToggleString(ref State, 1, 0..2)`, and the POWER plate's own label says
+        // what they are. A lamp reports the thing its button controls; these now do.
+        // ⚠ NOT a Part-B item and not waiting on one: the power-string model is Part A's own micro-sim
+        // (`pure/VehicleSystems.cs`), which is why this could be fixed rather than logged.
+        // The row-2 siblings are deliberately NOT live-mode - they flash on an accepted press - and
+        // this change does not touch them; making all six agree is a bigger decision than this defect.
+
+        /// <summary>
+        /// Which power string a lamp reports, if it is one of the row-1 STRING buttons: bus + index
+        /// into `VehicleSystems`' 2x3 grid. False (and bus/index = -1) for every other command, so a
+        /// caller cannot accidentally read a string state for a button that has none.
+        /// </summary>
+        public static bool StringLamp(PanelCommand c, out int bus, out int index)
+        {
+            bus = -1; index = -1;
+            if (c == PanelCommand.String1A) { bus = 1; index = 0; return true; }
+            if (c == PanelCommand.String1B) { bus = 1; index = 1; return true; }
+            if (c == PanelCommand.String1C) { bus = 1; index = 2; return true; }
+            return false;
+        }
+
+        /// <summary>
+        /// Lit means THE STRING IS CARRYING. Isolated (the crew switched it out) and Tripped (it
+        /// faulted) are both dark, because a two-state dash has no third answer to give - §14.4(a)
+        /// is the rule that there are exactly two, and the panel has no caution colour to spend on
+        /// the distinction. The crew reads Isolated-vs-Tripped off the glass, where the systems tree
+        /// names the state in words; the lamp answers only "is this string up?".
+        /// </summary>
+        public static bool StringLampOn(StringState st)
+        {
+            return st == StringState.Online;
         }
 
         /// <summary>

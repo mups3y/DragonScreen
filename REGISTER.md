@@ -4248,7 +4248,7 @@ outline. **DONE when:** the comment matches the code, `s.Systems.LeakRate` feeds
 on a real leak and recovers on `DepressResponse`/`Isolating`, and leak + valve + alert word + suit ΔP + gauge
 tell one story. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H20/H37.
 
-### S53 [S] Two console lamps that lie: STRING 1A/1B/1C can never light, and `DepressResponse` discards its refusal — **TODO** — [TIER 2: real defect]
+### S53 [S] Two console lamps that lie: STRING 1A/1B/1C can never light, and `DepressResponse` discards its refusal — **DONE 2026-09-04** — [TIER 2: real defect]
 Logged by **S49** (H41, H42). **(a)** Pressing STRING 1A/1B/1C genuinely changes the simulated string state
 (`Systems.ToggleString`), but `PanelPolicy.IsLiveMode` routes their lamps to `ModeIsOn`, which reads
 `AutoPilot.Engaged` / `StationApproach.Engaged` / `DockingOps.Engaged` — three hard-`false` stubs — and
@@ -4260,6 +4260,50 @@ even when the model refused because there is no leak; its two plate-siblings (`S
 return theirs correctly. That is §14.4(a)'s click-no-light-no-action honesty, inverted.
 **DONE when:** both lamps report the state they actually control, with headless checks pinning each.
 Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H41/H42.
+- **DONE 2026-09-04** (⚠ **batch session** — the owner-authorised deviation from C1.1/C1.7 of 2026-09-04, via
+  the overseer, for that batch ONLY). Both lamps now report the state they control, and **the decision behind
+  each one was moved into `pure/` so it could be pinned headless** — which is what the DONE-when asks for and
+  is why the fix is not just two edited lines.
+- **(a) H41 — the STRING 1A/1B/1C lamps.** `PanelButtons.ModeIsOn` read `AutoPilot.Engaged` /
+  `StationApproach.Engaged` / `DockingOps.Engaged` (three hard-`false` stubs) while the PRESS went to
+  `Systems.ToggleString(ref State, 1, 0..2)` — and because they are live-mode lamps, `PanelButton.Update`
+  re-darkened them every tick, so the dash **could never light**. `ModeIsOn` now resolves them through two new
+  pure helpers in `pure/PanelBehaviour.cs`: **`PanelPolicy.StringLamp(cmd, out bus, out index)`** (which
+  string a lamp reports — bus 1, index 0/1/2 — and `false`/`-1`/`-1` for everything else, so no caller can
+  read a string state for a button that has none) and **`PanelPolicy.StringLampOn(StringState)`**. Only the
+  read of `FlightCommands.State` stays in the glue, because that is where the game is.
+  **Lit = the string is CARRYING (Online).** Isolated and Tripped are both dark, and that is a stated choice,
+  not an oversight: `PanelLight` has exactly two values by §14.4(a) and the console has no caution colour to
+  spend on the distinction — the crew reads isolated-vs-tripped off the glass, where the systems tree names it
+  in words. The comment on `IsLiveMode` that called these *"lit while its phase is engaged"* — the sentence
+  that encoded the bug — is corrected.
+  ⚠ **The row-2 siblings are deliberately left alone.** 2A/2B/2C are not live-mode (they flash on an accepted
+  press) and were never broken; making all six agree is a bigger decision than this defect and is not this
+  line's to take. `PanelMap.cs` was not touched (§1.4).
+- **(b) H42 — `DepressResponse`.** `_AutopilotStub.cs` called `Systems.DepressResponse(ref State);` and then
+  `return true`, **discarding the model's answer**, so the lamp flashed "acted" even when the model refused for
+  want of a leak — §14.4(a)'s click-no-light-no-action, inverted. It now returns the bool, like its two
+  plate-siblings `SuppressFire` / `FireResponse` always did. One line, plus the comment saying why.
+- **Headless checks pinning each, in `test/PanelTest.cs`'s new `LampsThatLied()` section** (suite
+  1758→**1826 checks, 0 failed**). For (a): the bus/index mapping for all three; ten commands that must NOT
+  claim to be string lamps (including all three row-2 siblings, both POWER buses and `None`) and that hand
+  back `-1`/`-1`; then the decisive round trip — press through the same model the glue writes to and watch the
+  lamp follow (online → lit, crew isolates → dark, closes again → lit); a **tripped** string dark with its
+  neighbours still lit; and all three `StringState` values covered. For (b): the **composition the glue
+  performs** — model answer → `ResolveImmediate` → `LampFor` — dark on a refusal, lit on a real leak, with an
+  explicit check that the two answers differ so the bool is load-bearing rather than decoration, plus a guard
+  that `SuppressFire` still behaves as before (this fix must not "fix" the honest siblings).
+  ⚠ **Fixture sharpened while writing it:** the tripped-string check uses `Charge01 = 0.12`, not the `0.05`
+  used elsewhere in the file — 0.05 is below `TripCharge * 0.6` and takes the **B** string down too, which
+  would have made the "neighbours unaffected" check meaningless. The reason is in a comment beside it.
+- **Mutation-checked, both halves.** Forcing `StringLampOn` to `false` (i.e. restoring the can-never-light
+  behaviour) reddens six checks; restoring the discarded-bool glue shape (`actedCalm = true`) reddens four,
+  including *"THE LAMP STAYS DARK"*. Both were reverted and re-verified green.
+- **Gate (C1.3):** `build.py test` **green, all suites**; 131 source files, no new warnings. `build.py preview`
+  re-rendered and `panel_armed.png` inspected — **unchanged, and expected to be**: the panel preview is the
+  static plate diagnostic (`lit: 1 of 38`, the armed DEORBIT NOW, identical command counts 197/201/201/201 to
+  the run before this change), and it cannot exercise `PanelButton.Update`, which is Unity glue. **The lamp
+  behaviour is proven by the headless checks, not by the PNG** — stated plainly rather than implied.
 
 ### S54 [S] Phantom Act*/Entry hit rects fire over the Reference Content text — **DONE 2026-09-04** — [TIER 2: latent defect — fix BEFORE wiring the Cover actions]
 Logged by **S49** (H8). `CoverPage.HitTest` takes `cam` but **not** the selected phase, and its `Hits` table is
