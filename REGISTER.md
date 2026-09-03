@@ -1320,7 +1320,7 @@ already are).
   a mechanical test (the code is byte-identical or the file is not taken), not by preference, so it needed
   no owner call.
 
-### W2 [O] Wave B — Actuation + Actuator (retires the Actuator stub) — **TODO**
+### W2 [O] Wave B — Actuation + Actuator (retires the Actuator stub) — **DONE**
 - **Read:** §B12.7, §B12.8 Wave B, §B16.4 (the engine-binding rule this wave must satisfy), R1 §3.1.
 - **Build:** Restore `pure/Actuation.cs` + `Actuator.cs` (868 lines / 37 methods) + `test/ActuationTest.cs`
   from `8b81816^`. Rider (G5a-Q3, owner-confirmed option 2): add a one-line comment on
@@ -1330,8 +1330,148 @@ already are).
   `docs/reference/craftdump.csv`.
 - **DONE when:** `build.py test` green, the assertion test exists and passes, `_AutopilotStub.cs`'s Actuator
   surface is backed by the real class.
+- **DONE 2026-09-04 — all three done-criteria met.** The actuation layer is back: `pure/Actuation.cs` (the
+  capability→role classifier) + `src/Actuator.cs` (the direct part-module glue) + `test/ActuationTest.cs`,
+  restored from `8b81816^`; the §B16.4 hard assertion is landed and passing against the real dump; and the
+  stub `Actuator` is **retired** — the first genuine §B12.5 facade swap.
+- **THREE FILES CAME WITH THEM THAT THE WAVE-B TABLE DOES NOT NAME, and they were not optional.**
+  `Actuator.BalanceOctawebThrust` calls `DiffThrottle.Solve`, and `Actuator.RcsInducedTorque` calls
+  `ThrustBalance.Solve` + reads `RcsBalance.SelectDotFrac` — so **`pure/ThrustBalance.cs`,
+  `pure/RcsBalance.cs` and `pure/DiffThrottle.cs` are HARD COMPILE dependencies**: without them
+  `Actuator.cs` does not build and no done-criterion is reachable. §B12.8's table lists them under Wave C's
+  "§B16 octaweb" heading and R1 §3.1's *Missing dependency* row names only `Actuation.cs` +
+  `ActuationTest.cs` — but R1 §3.1's own caveat paragraph is explicit: *"Both should be recovered **with**
+  the Actuator."* Followed that, since R1 §3.1 is in this line's Read list. All three are **RECOVER-CODE**
+  (R1 §5.1), pure, and collision-free. `test/ThrustBalanceTest.cs` came with them — it is the only suite
+  covering all three, on W1's precedent of restoring a module with its test counterpart.
+  ⇒ **W3 must NOT restore these four again** — duplicate types break the build (§B12.8's two-generation
+  rule); a note to that effect is on the W3 line.
+- **BYTE-LEVEL PROVENANCE, checked rather than trusted.** All seven restored files match R1's inventory
+  sizes exactly: `Actuation.cs` 4,100 · `ThrustBalance.cs` 5,723 · `RcsBalance.cs` 2,514 ·
+  `DiffThrottle.cs` 1,778 · `Actuator.cs` 48,171 · `ActuationTest.cs` 6,448 · `ThrustBalanceTest.cs`
+  6,226. And a **comment-stripped diff against `8b81816^` is IDENTICAL for all five source files**
+  (`Actuator.cs` included) — every W2 edit to a restored file is comment-only. `ActuationTest.cs` is the
+  one file with added code, and that addition is this line's own §B16.4 deliverable.
+- **THE TWO-GENERATION TRAP DOES NOT ARISE HERE, and that was checked, not assumed.** W1 had to diff
+  gen-1 `0d6423d` copies for recoverable commentary. **None of Wave B's five source files exists at
+  `0d6423d` at all** (`git cat-file -e` on each: ABSENT), so there was no gen-1 copy to be tempted by and
+  no commentary to recover — the `8b81816^` files already carry their full headers, including
+  `Actuator.cs`'s `[[direct-part-control-hard-rule]]` block that §B12.7 quotes.
+- **THE STUB SWAP, and why it is safe.** `_AutopilotStub.cs`'s no-op `Actuator` (`ToggleNoseShroud` /
+  `DeployChutes` / `Undock`) is **deleted**; the real class carries **all three with identical signatures**
+  (`Actuator.cs:484` / `:755` / `:457`), so the type the screens compile against did not change — only what
+  stands behind it (§B12.8(a): the stub names are the facade; keep them). A comment block replaces the
+  class where it was, telling the next reader not to re-add it.
+  ⚠ **Nothing on any screen calls `Actuator` today** — a grep of all of `plugin/src` + `plugin/test`
+  outside the stub returns **zero** references — so **no screen behaviour changed with the swap**, and none
+  can until a controller calls it. Every flight command in `FlightCommands.Run` is still §14.4(a)'s honest
+  no-op.
+- **ONE SEAM ADDED TO THE STUB, and it is honest.** `Actuator.FireAbort` calls
+  `FlightDriver.SetThrottle(1.0)` (the SuperDracos fire at full), and the stub `FlightDriver` had no such
+  member — so restoring the actuation layer required it to exist. Added as
+  `public static void SetThrottle(double t) { }` — **an explicit no-op**, commented as such: nothing is
+  throttled and nothing pretends to be. The real body arrives when **Wave D** restores `FlightDriver`;
+  half-wiring it from the stub is exactly what §B12.8(a) forbids.
+- **§B16.4's HARD ASSERTION — built, and it refuses in all three ways.** New pure
+  **`plugin/src/pure/OctawebBinding.cs`** (W2-authored, marked NOT-restored in its header): `Bind(vessel
+  part names) → Ok | NotFound | Ambiguous | ForeignVehicle`, plus `Annunciation(verdict)`. Identity is the
+  **whole part name** `TE.19.F9.S1.Engine`, never a substring — Kartoffelkuchen's octaweb is also named
+  `…Octaweb`, so a marker test would match both, which is the failure the assertion exists to prevent.
+  A `KK_SPX` / `KK_F9demo` part **anywhere on the vessel loses, even when our own octaweb is also
+  present**: §B16.4 says *refuse and annunciate rather than picking one*, and a mixed-pack craft is
+  precisely where picking is the wrong move. Kept in its own file so `Actuation.cs` stays byte-provable
+  against `8b81816^`.
+- **The assertion is GUARDED BY A TEST THAT READS THE REAL DUMP** — `test/ActuationTest.cs`'s new W2
+  section opens `docs/reference/craftdump.csv` off disk (located by assembly path, the idiom
+  `LayoutTest.cs` already uses) and asserts against it: the binding returns **Ok**, binds
+  `TE.19.F9.S1.Engine`, finds **no** `KK_SPX`/`KK_F9demo` part, and the octaweb carries **exactly three**
+  engine modules with `engineID` **AllEngines / ThreeLanding / CenterOnly** once each — each mapped
+  through `Actuation.EngineRoleOf` to OctawebAll / Three / Centre. It also proves the **deleted**
+  by-count procedure would fail: 3 modes ≠ `OctawebEngineCount` (9). The three refusal paths use
+  synthetic name sets, because the dump cannot show a failure that has not happened yet.
+  ⚠ **A MISSING DUMP FAILS THE SUITE deliberately** — an assertion that passes with no dump is worthless.
+  Splitting the CSV on `,` is safe **by construction, not by luck**: `CraftDump.C()` replaces every comma
+  in a value with `;` before writing (`plugin/src/CraftDump.cs:185`), and the test asserts the header names
+  and a uniform column count as a second guard.
+- **⚠ WHAT THE ASSERTION DOES *NOT* DO: nothing calls it.** Wave B is the actuation layer; the
+  phase-boundary resolution §B12.7/§B16.4 describe — find the booster part, bind its three
+  `ModuleEnginesRF` **by `engineID`** into a named table, resolve **once**, never per frame — belongs to
+  the booster controller in **Wave C**. `OctawebBinding` is the guard that binder **must call before it
+  binds**; it is not itself a binder and it guards nothing live today. Stated on the W3 line too, so it
+  cannot be missed.
+- **THE RIDER (G5a-Q3, owner-confirmed option 2) is in place** — `pure/VehicleParts.cs:37` now carries the
+  caveat: `OctawebEngineCount = 9` is **NOZZLES, NOT PARTS**; the real craft is ONE octaweb part with three
+  `ModuleEnginesRF` by `engineID`; the old *"expect 9 engine parts, identify the centre by position"*
+  procedure is deleted; bind by the `engineID` string and nothing else. The constant itself is unchanged.
+- **R1 §7.4's UNATTRIBUTED CONSTANTS ARE MARKED IN PLACE (comment-only, no number touched).** R1 §7.4
+  lists `ThrustBalance.cs` / `RcsBalance.cs` / `DiffThrottle.cs` as *"constants with NO STATED REGIME —
+  defects"*: the **method** is TCA's (mod-derived, regime-free) but `StepFactor`, `TorqueCutoffNm`,
+  `PrecisionFrac`, `MaxIterations` and `SelectDotFrac` are recorded only as *"researched defaults"*
+  (`e90a63f`) with the source named nowhere in this repo — and R1 §5.1 records that **engine-out was NEVER
+  FLOWN** and the RCS path was a recorded **diagnostic only**. Per §B16.8 ruling 2 each file (and
+  `Actuator.DiffTorqueDeadbandNm`, the same class of number) now says so in its own header: UN-CONVERGED /
+  UNATTRIBUTED, establish the regime from a recorded flight before trusting it. Marked, not changed — W2
+  restores; it does not tune.
+- **⚠ R1 §7.2 flags `Actuator.RcsInducedTorque` as part of the implicated attitude path.** Recovered, per
+  R1 §5.2's whole-file RECOVER-CODE verdict, and it is the **safe** member of that set: the file's own
+  header states it is *deliberately NOT actuated* — it reads the live thrusters and reports what a
+  torque-nulling solve would remove. Nothing calls it, so it computes nothing today either.
+- **⚠ REFINEMENT TO R1 §3.1 — the "37 public methods" headline is a MISCOUNT; the file has 35.** Verified
+  on the bytes: `Actuator.cs` at `8b81816^` is **868 lines** (R1 correct) and declares **35 public static
+  methods** plus one public `[Tunable]` field (`DiffTorqueDeadbandNm`) — 37 `public static` lines in total,
+  which is plausibly where 37 came from. **R1's own coverage TABLE is right**: its nine groups name
+  9+1+6+3+1+3+5+5+2 = **35** methods. So the table is authoritative and the headline number is not; this
+  line's Build text inherited the 37 from it. No verdict changes.
+- **Gate (C1.3), preview-only — nothing here needs the capsule.**
+  **`python plugin/build.py test` GREEN.** Glue DLL builds **113 source files (was 107 after W1), 340.5 KB**,
+  with **NO new warning** — all 11 warnings emitted name `ScreenPainter.cs` (6), `Pages.cs` (2×2) and
+  `LayoutSweepTest.cs` (1), every one pre-existing and none of them touched here; **zero** warnings from any
+  restored or new file. Tests build **116 source files (was 109)** and report **12,139 checks, 0 failed,
+  ALL SUITES PASSED** — the 24 prior suites unchanged, plus W2's two: **`ActuationTest` 74** (31 restored
+  + 43 new §B16.4 checks) and **`ThrustBalanceTest` 22**, i.e. **+96**.
+  **`python plugin/build.py preview` run as a no-regression check: all 112 PNGs BYTE-IDENTICAL**
+  (sha256 over every file, before/after) — the strongest available form of *"no screen changed"*, since
+  nothing on any page reads these modules. **PNGs inspected anyway** (C1.3 taken literally, not assumed):
+  `panel_rest.png` — the lower console still shows the §14.4(a) no-red board, 0 of 38 lamps lit, every
+  dim-label INERT mark as before; `cover.png` — the Cover page renders unchanged against the reference.
+  **W2 draws nothing; there is no new PNG to judge.**
+- **§1.4 / C1.4 respected.** No label, no unit, no `PanelMap.cs`, no label doc touched; no screen file
+  touched at all. **Nothing was invented.** Every part name and every `engineID` string in the new code is
+  **verified-real** from `docs/reference/craftdump.csv` and already written into §B16.4; the two foreign
+  markers `KK_SPX` / `KK_F9demo` are §B16.4's own words. The restored test's three names the current
+  20-part dump cannot confirm (`KRE-FalconLegMk2-M`, DROGUES, MAINS) were **left exactly as restored and
+  annotated**, not corrected or guessed — they are classifier assertions about a name, true whether or not
+  the part is on today's craft, and the re-dump is pending (§B12.7).
+- **C1.15 (evidence-gated mod-first) — not engaged, and stated so rather than skipped silently.** This task
+  wrote **no simulation of any kind** for any real quantity: it restores flight code and adds a
+  name-matching assertion whose evidence is the repo's own craft dump. No not-yet-modelled quantity was
+  filled, so no `docs/reference/INSTALLED_MODS.md` search was owed.
+- **Deliberately NOT done (logged, not built — C1.1):** **S64** — `MissionOps.Undock()` is still an honest
+  no-op logging *"no flight/actuation software installed"* while `Actuator.Undock(Vessel)` is now real and
+  signature-matched, and `ScreenPainter.cs:744` dispatches a real UNDOCK button to it. That is a §B12.5
+  facade fill for a DIFFERENT stub, it would make a screen button release the docking hooks for real, and
+  the preview gate cannot verify a hook release — so it gets its own line, not a quiet edit in this diff.
+- **⚠ Not claimed:** that any of this FLIES anything. Wave B is the actuation layer **with no caller** —
+  callers arrive in Waves C/D. Not claimed either: that any restored number is tuned (see the §7.4
+  markings), that engine-out or the RCS balance has ever been exercised in flight (R1 §5.1: it has not),
+  or that the binding has been checked on a live vessel — it is checked against the dump, headless, and
+  §B12.7's rule is that the dump is the SPECIFICATION and the runtime lookup is the BINDING.
+- **Open questions for the owner (C1.14): NONE.** Nothing here hit a gate, a missing source or an authority
+  limit. The one judgement call — whether pulling in the three balance modules is scope creep — was
+  settled by the compiler, not by preference: `Actuator.cs` does not build without them, and R1 §3.1 (in
+  this line's Read list) already directs that they *"be recovered with the Actuator"*.
 
 ### W3 [O] Wave C — the booster set — **TODO**
+- ⚠ **FOUR FILES OF THIS WAVE ARE ALREADY IN THE TREE — W2 restored them 2026-09-04. Do NOT restore them
+  again; duplicate types break the build (§B12.8's two-generation rule).** `pure/ThrustBalance.cs`,
+  `pure/RcsBalance.cs`, `pure/DiffThrottle.cs` and `test/ThrustBalanceTest.cs` are hard COMPILE dependencies
+  of `Actuator.cs` (R1 §5.1 files them under "§B16 octaweb", but Wave B could not build without them), and
+  their R1 §7.4 UN-CONVERGED marking is already in place. Cross them off R1's map for this wave.
+- ⚠ **AND THE OCTAWEB BINDER IS THIS WAVE'S JOB.** W2 built §B16.4's hard assertion as pure
+  `pure/OctawebBinding.cs` + its dump-backed test, but **nothing calls it**. Wave C's booster controller
+  **MUST** call `OctawebBinding.Bind(…)` and refuse + annunciate on anything but `Ok` **before** it binds
+  the three `ModuleEnginesRF` by `engineID` into its named table (§B12.7: resolve ONCE at the phase
+  boundary, never per frame; NEVER by position, count or `persistent_id`).
 - **Read:** §B16 in full, R1 §3.5 and §5.1/§7.
 - **Build:** Restore the booster-specific RECOVER-CODE set per R1's own file map (do not guess the list —
   R1 §5.1 names it row by row) + tests. EXCLUDES: AttitudePilot / AttitudeController / `pure/AttitudeLoop.cs`
@@ -4021,6 +4161,25 @@ this is a standalone recovery task run ahead of that governance pass, per explic
   regardless of Part-B. This needs an owner decision, not a build-chat fix (C1.12).
 
 ---
+
+### S64 [O] `MissionOps.Undock()` still refuses while `Actuator.Undock` is now real — **TODO** — [TIER 3: §B12.5 facade fill — needs glass, owner-gated]
+Logged by **W2**, 2026-09-04 (C1.1 — found while retiring the `Actuator` stub, deliberately not fixed there).
+**The finding:** W2 restored the real `Actuator`, so `Actuator.Undock(Vessel)` now genuinely releases the
+docking hooks (`ModuleDockingNode.Undock()`, idempotent, a non-docked node skipped). But the UNDOCK button's
+dispatcher is a DIFFERENT stub: `ScreenPainter.cs:744` routes `PageAct.Undock` to `MissionOps.Undock()`, which
+is still `_AutopilotStub.cs`'s no-op logging *"no flight/actuation software installed (screens-only build)"* —
+a message that is now **half false**: the actuation software for this one command is installed.
+**Why W2 did not do it (and this is the honest reason, not a dodge):** it is a §B12.5 facade fill for a stub
+outside W2's declared outputs (C1.11), it converts a screen button from an honest no-op into a **real
+actuation** on the live vessel, and **the preview gate cannot verify a hook release** — no PNG shows whether
+the hooks let go. It therefore needs its own line and, for the confirm, **glass time (a separate owner gate,
+C1.12)**.
+**The work:** (1) point `MissionOps.Undock()` at `Actuator.Undock(FlightGlobals.ActiveVessel)`; (2) return /
+annunciate the honest outcome — `false` means no docked node was found, which is a real refusal, not a
+failure; (3) correct the stub's log line, which will no longer be true; (4) decide with the owner whether
+UNDOCK acting for real is wanted **now** or should wait for the conductor to own it (§B13 / Wave D), since
+this is the FIRST screen button that would actually move the vehicle. **Pose (4) as an overseer prompt
+(C1.13) before building** — it is an actuation-scope call, not a build-chat call.
 
 ### S63 [S] `pure/BoosterDrag.cs` is the one irreplaceable RSS-RO dataset in the tree and NOTHING tests it — **TODO** — [TIER 2: real gap — cheap guard on an un-re-derivable asset]
 Logged by **W1**, 2026-09-04 (C1.1 — found while pairing Wave A's modules to their tests, not fixed there).

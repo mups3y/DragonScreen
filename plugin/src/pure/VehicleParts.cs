@@ -34,6 +34,12 @@ namespace DragonScreen
         public const string EngineIdThree = "Three";
         public const string EngineIdCentre = "Center";
 
+        // ⚠ NINE NOZZLES, NOT NINE PARTS (§B16.4; rider on W2, owner-confirmed G5a-Q3 option 2).
+        // This is the vehicle's engine COUNT and must NEVER be read as an expected PART count. The real craft
+        // (docs/reference/craftdump.csv) carries ONE octaweb part, TE.19.F9.S1.Engine, holding THREE
+        // ModuleEnginesRF distinguished by engineID (AllEngines=9 / ThreeLanding=3 / CenterOnly=1). The old
+        // "expect OctawebEngineCount = 9 engine parts, identify the centre by position" procedure was WRONG
+        // for this craft and is deleted; bind BY THE engineID STRING and nothing else (§B16.4, OctawebBinding).
         public const int OctawebEngineCount = 9;
 
         public const int ModeAllEngines = 0, ModeThreeEngine = 1, ModeCentreOnly = 2;

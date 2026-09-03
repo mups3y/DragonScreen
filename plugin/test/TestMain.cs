@@ -46,6 +46,20 @@ public static class TestMain
         bad += LambertTest.Run();          // B7 Lambert two-point BVP, self-inverted against our propagator
         bad += RendezvousMathTest.Run();   // L3 rendezvous: the LVLH frame + Clohessy-Wiltshire targeting
 
+        // ---- PART B RECOVERY, WAVE B (W2, §B12.8) - the actuation layer (§B12.7 direct part control) ----
+        // ActuationTest proves the pure capability->role classifier the restored glue `src/Actuator.cs` acts
+        // on, and carries W2's added §B16.4 HARD ASSERTION - read against the REAL `docs/reference/craftdump.csv`
+        // on disk, so a wrong-vehicle bind (the Kartoffelkuchen Falcon 9, installed 2026-09-03) is caught
+        // headless. ⚠ A MISSING DUMP FAILS this suite deliberately: the assertion is worthless without one.
+        // ThrustBalanceTest proves the B3 balancer trio (ThrustBalance + DiffThrottle + RcsBalance), which
+        // came back in this wave because `Actuator.BalanceOctawebThrust` / `RcsInducedTorque` will not compile
+        // without them (R1 §3.1: "both should be recovered *with* the Actuator").
+        // ⚠ Their CONSTANTS are UN-CONVERGED and UNATTRIBUTED (R1 §7.4) and engine-out was NEVER FLOWN
+        // (R1 §5.1) - the suites prove the solver's ARITHMETIC, never that any of it is tuned. Each file
+        // carries that marking in its own header; do not read a green suite as a validated number.
+        bad += ActuationTest.Run();        // §B12.7 capability->role map + §B16.4's octaweb binding assertion
+        bad += ThrustBalanceTest.Run();    // B3 TCA torque-nulling solver + its engine-out / RCS wrappers
+
         Console.WriteLine(bad == 0 ? "ALL SUITES PASSED" : bad + " SUITE(S) FAILED");
         return bad == 0 ? 0 : 1;
     }

@@ -54,6 +54,14 @@ namespace DragonScreen
         public static void RequestAbort() { }
         public static void SuppressAbortFx() { }
         public static void RequestDeorbit(bool propulsive) { }
+
+        // ---- W2 (Wave B) seam: the throttle-authority entry point the REAL Actuator calls ----
+        // `Actuator.FireAbort` owns the throttle (SuperDracos fire at full), so restoring the actuation layer
+        // needs this member to exist. The real FlightDriver (`8b81816^`) latches a commanded throttle and its
+        // OnFlyByWire hook applies it; that hook is Wave D's, so here it stays an HONEST NO-OP — §14.4(a):
+        // nothing is throttled, and nothing pretends to be. Do NOT make this write to a vessel: the facade
+        // gets its real body when Wave D restores FlightDriver, not by half-wiring it from here (§B12.8(a)).
+        public static void SetThrottle(double t) { }
     }
 
     // ---- FDIR fault-name helper (display text). No autopilot → always nominal. ----
@@ -75,13 +83,14 @@ namespace DragonScreen
         public static Vessel RecoveryBooster { get { return null; } }
     }
 
-    // ---- direct part actuation is gone with the autopilot: the manual command buttons refuse honestly ----
-    public static class Actuator
-    {
-        public static bool ToggleNoseShroud(Vessel v) { return false; }
-        public static void DeployChutes(Vessel v, bool drogues) { }
-        public static bool Undock(Vessel v) { return false; }
-    }
+    // ---- ⛔ THE Actuator STUB IS RETIRED (W2 / Wave B, 2026-09-04). ----
+    // It used to declare a no-op `Actuator` with three refusing methods (ToggleNoseShroud / DeployChutes /
+    // Undock). The REAL one is back — `src/Actuator.cs`, restored from `8b81816^` per §B12.8 Wave B — and it
+    // carries all three with identical signatures, so this is the first genuine facade swap of §B12.5: the
+    // class name the screens compile against did not change, only what stands behind it. Do NOT re-add a stub
+    // Actuator here; two declarations of the same type break the build (§B12.8's two-generation rule).
+    // ⚠ Nothing on any screen calls Actuator today (verified by grep, 2026-09-04), so no screen behaviour
+    // changed with the swap — the callers arrive with Waves C/D.
 
     // ---- command dispatcher the panel drives. Flight commands are no-ops (click, no light, no action);
     // ---- the power/string/fire systems are REAL (pure VehicleSystems, display state only). ----
