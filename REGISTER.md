@@ -294,6 +294,97 @@ records a decision as the owner's unless the owner stated it in that chat (C1.12
   `python plugin/build.py test` green (no regression expected, docs only). `git status` showed only
   `BUILD_PLAN.md` + `INDEX.md` before staging. Committed locally (C1.5); NOT pushed.
 
+### G6 [O] Governance — the upper-stage / booster split: five Wave E lines re-verdicted RECOVER-REFERENCE — **DONE 2026-09-04** — [TIER 2: the recovery plan pointed five lines at a job MechJeb already owns]
+- **OWNER DECISION, 2026-09-04, via the overseer — stated twice and confirmed.** Recorded as the owner's per
+  C1.12; **this chat decided nothing.**
+  > **"We use MechJeb for ALL UPPER STAGE MANOEUVRES as planned. BOOSTER SCRIPTED."**
+
+  Explicitly: **launch → rendezvous → docking → undocking → re-entry orbit** (Manoeuvre Planner, then execute
+  next node) **→ re-entry → landing are ALL MechJeb.** The booster's return and recovery is **our own scripted
+  `.dll`**, which runs at separation. **Two systems that must not interfere with each other's flights.**
+  ⚠ The owner briefly floated our own `.dll` doing rendezvous and then **RETRACTED** it. **The retraction is
+  the decision** — the retracted version is not implemented and must not be revived by a later chat reading
+  only the first half of that exchange.
+- **This RESTORES the original plan; it does not change it.** §B1 ("MechJeb's rendezvous *autopilot* is
+  unreliable in RSS/RO, so the conductor composes the **planners + Node Executor**"), §B9 Phases 2–10, §B10.2,
+  §B10.3 (O6) and §B12.3/§B12.4 always had **MechJeb flying the Dragon mission**; §B16 added the booster as a
+  **separate scripted vessel**. What this task corrects is only the *recovery* plan W11 wrote on top of it.
+- **The consequence, and this task's whole purpose: five of the nine Wave E lines are for upper-stage
+  manoeuvres MechJeb now owns.** Re-verdicted **RECOVER-CODE → RECOVER-REFERENCE** — read, mined, quoted;
+  **never made live**: **W16** `EntrySteering.cs` (MechJeb + SmartASS attitude hold, O8 baseline) · **W17**
+  `DeorbitBurn.cs` (`OperationPeriapsis` + Node Executor, §B9 P7) · **W18** `ReturnControl.cs` (undock →
+  deorbit → entry → splashdown) · **W20** `RendezvousControl.cs` (planner composition, §B9 P3 / §B1) ·
+  **W21** `DockingControl.cs` (Docking Autopilot, O6 / §B10.3).
+- **⚠ THIS IS A RE-VERDICT, NOT A DELETION — the reference value is the point.** `RendezvousControl.cs` was
+  flown **far-field to 109 km in RSS-RO** (R1 §5.2, "the coarse rendezvous controller") — **the only real
+  RSS-RO rendezvous experience that exists anywhere in this project**, and directly useful for tuning
+  MechJeb's planner composition against §B9 P3 / §B11. `DeorbitBurn`'s units bug and `EntrySteering`'s L/D
+  prior are the same kind of asset: **lessons that are cheaper to read than to rediscover in flight.** Every
+  re-verdicted line below therefore says what it is still good **FOR**, not merely that it is not restored.
+- **⛔ R1 IS NOT REWRITTEN.** `docs/AUTOPILOT_RECOVERY_AUDIT.md` is a historical audit and its RECOVER-CODE
+  verdicts were **correct on the evidence it had** (it inventoried deleted code; it was never told which jobs
+  MechJeb would take). This decision **SUPERSEDES** those five rows; it does not falsify them. The supersession
+  is recorded here and in §B12.8 rider (d) — **not one byte of R1 was edited** (verified: `git status`).
+- **UNCHANGED, still RECOVER-CODE — four lines, not three.** **W13** `GeometryDump` (DONE) · **W14**
+  `DeployablesControl` (actuation, not a manoeuvre) · **W15** `LandingSiteScan` (splashdown-site data both
+  return paths need) · **W19** `AbortControl`. ℹ **W19 is the one the brief's "three code" arithmetic omitted,
+  and it is left as CODE deliberately:** abort is **not** in the owner's manoeuvre list, §B13 is explicit that
+  *"abort is a conductor state, not a MechJeb call"* actuated by §B12.7 direct part control, and it is **one of
+  only two flight-validated subsystems we have** (R1 §4.2). A build chat may not re-verdict a line the owner
+  did not name (C1.12), so it stands — and the check is put to the owner below (**G6-Q1**).
+- **W9 and W10 both SURVIVE the split — checked, not assumed** (the brief asked for reasons, not an implication):
+  - **W10** (`CrewProcedureOps.cs` + the `FlightDriver.cs` host) — **survives, and matters MORE.** Nothing it
+    owns is a manoeuvre: `CrewProcedureOps` is the **crew-gate / mission-phase state machine** (§B14) that
+    `ScreenPainter.cs:739`'s AUTO SEQUENCE already routes to, and `FlightDriver.cs` is R1's *"the Part-B host"*
+    — the flight-scene addon that ticks it. **MechJeb flies; something still has to tell it which phase the
+    mission is in and consume the crew's GO.** §B12.6 step (3) calls for exactly that read-only host, and the
+    booster's scripted `.dll` needs a host to tick it at separation too. W10's own hard rule — *"a conductor
+    with no controllers must not be ticked at all"* — is unaffected. ⚠ **One overlap to settle at landing, not
+    here:** W10's read-only host and **T17** ("Glue driver, read-only") now describe the same object from two
+    directions; see **G6-Q2**.
+  - **W9** (`MissionConductor.cs` — warp + focus glue) — **survives, and is now almost entirely booster-side.**
+    Its two machines split cleanly along the owner's line: the **WARP** half (`WarpToEvent` / `Realtime` /
+    `ApplyRailWarp` over the restored `pure/WarpPlan.cs`) is generic mission plumbing that MechJeb's own
+    autowarp does not replace — the conductor still has to skip the ~19 h phasing coast (§B9 P2) — and the
+    **focus / PRE state machine** is **§B16.7's protocol verbatim**: PhysicsRangeExtender on, booster lands
+    **unfocused**, +10 s settle, auto-recover, range restored. That is booster-side and scripted, so it is
+    squarely ours. ℹ Its two blockers are unchanged and one of them **eases**: the `BoosterControl` call sites
+    still bind to §B16.1's fresh core, and `FlightDriver.CmdTransX/Y/Z` still comes from **W10** — but the
+    manual-translation burn-guard those feed now guards a *MechJeb* burn, which is one more reason the guard
+    has to exist rather than fewer.
+- **Read:** CLAUDE.md (C1 end-to-end), §B1, §B9 P2–P10, §B10.2/§B10.3, §B12.3/§B12.4/§B12.5/§B12.8,
+  §B16.1/§B16.7, R1 §5.2, and the five register lines below.
+- **Build (four declared outputs, and nothing else):** (1) re-verdict the five register lines — verdict, tier,
+  and a DONE-when restated as a **reading/extraction** outcome naming what is written and where; (2) amend
+  **§B12.8** — the Wave E row, rider (c)'s table (a new **Verdict** column), and a new rider **(d)** carrying
+  the decision + the supersession; (3) **`plugin/src/_AutopilotStub.cs` — COMMENTS ONLY**, naming each facade's
+  real future owner; (4) write the facade-transition **process** down once, as **§B12.5a**, and point the
+  register lines at it.
+- ✅ **DONE 2026-09-04.** All four landed. **The count reconciles:** Wave E is **nine lines — FOUR
+  RECOVER-CODE** (W13 done, W14, W15, W19) **+ FIVE RECOVER-REFERENCE** (W16, W17, W18, W20, W21), plus the
+  host `FlightDriver.cs` owned outright by **W10** (never a Wave E line). 9 + 1 = the **ten** R1 §5.2
+  RECOVER-CODE files W11 found unowned, and **every one still has exactly one owner** — verified by re-reading
+  W11's reconciliation against the five re-verdicted headings: no file gained a second owner and none lost its
+  only one, because a re-verdict changes what a line *does with* its file, not *which* line owns it.
+  **W11's "lines 5–9 are gated on T15's fresh steering layer" is now MOOT for the five** — nothing of theirs
+  will ever command attitude, so the T15 gate falls away for W16/W17/W18/W20/W21 and survives only where it
+  still bites: **W19**, the one remaining code line that points the vehicle.
+  **Facade owners are now named honestly** in `_AutopilotStub.cs`: `AutoPilot` → **W10** then **T17** ·
+  `StationApproach` → **T19** · `DockingOps` → **T20** · `DeorbitOps` + `UndockOps` → **T21** ·
+  `BoosterRecovery` → **W9**, then §B16 — replacing W4's *"in no §B12.8 wave"* and W11's W18/W20/W21 pointers,
+  **both of which are now wrong**. ⛔ The classes are **still constant-false no-ops** — the explanation changed,
+  the behaviour did not; §14.4(a) holds and no lamp lit.
+  **Verification (C1.3):** docs + register + a **comments-only** `.cs` edit → **no preview PNG applies, and it
+  is not being skipped silently** — nothing drawable changed, `_AutopilotStub.cs` has no `pure/` half and the
+  preview harness never links it. `python plugin/build.py test` **GREEN** (a comments-only change must not move
+  it, and it did not). `git status` showed **only three files** — `REGISTER.md`, `docs/BUILD_PLAN.md` (where outputs 2 and 4 both
+  live) and `plugin/src/_AutopilotStub.cs` — and nothing else was created or touched (C1.11). **Found in passing, logged not fixed
+  (C1.1):** **S73** (T21's title vs its §B9 Phase-6 scope).
+- **Open questions for the owner (C1.14): THREE** — under `## Open questions for the owner — G6 (C1.14)` at
+  the bottom of this file. **G6-Q1:** W19 `AbortControl` — confirm it stays RECOVER-CODE. **G6-Q2:** W10's
+  read-only host vs **T17**, which now describe the same object. **G6-Q3:** W11's open Q1 (how much of
+  W20/W21 is recovered) is **answered by this decision** — confirm it may be closed.
+
 ---
 
 ## Part A — screens (§7 order, with this session's decisions)
@@ -4951,8 +5042,22 @@ search-band constant is marked un-converged for RSS-RO; convergence needs a reco
 **DONE when:** `build.py test` green with the pure half tested headless, the RSS ocean fix is present and
 stated, and every constant carries its un-converged marking.
 
-### W16 [S] Wave E-4 `src/EntrySteering.cs` — the lifting bank-angle entry, on an UNMEASURED L/D prior — **TODO** — [TIER 3: scheduled recovery + a disclosed unmeasured constant]
+### W16 [S] Wave E-4 `src/EntrySteering.cs` — **RE-VERDICTED RECOVER-REFERENCE (G6)**: the lifting-entry L/D prior, mined for MechJeb's entry hold — **TODO** — [TIER 4: reference extraction — read, mined, quoted; no code lands]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 4 of 9).
+🔁 **RE-VERDICTED RECOVER-CODE → RECOVER-REFERENCE by G6, on the OWNER's decision of 2026-09-04 via
+the overseer** (*"we use MechJeb for ALL UPPER STAGE MANOEUVRES as planned"*). **Entry is MechJeb's**:
+§B9 Phase 8 under **O8** (owner, 2026-09-03) is **SmartASS SURFACE/RETROGRADE attitude hold, NO active
+steering** — plain ballistic, heat-shield forward, as the baseline, with active steering added ONLY LATER for
+off-target cases. `EntrySteering.cs` **is** that active steering; it is the thing O8 already declined for
+flight 1. So **nothing in this file becomes live** — `src/EntrySteering.cs` and `pure/Entry.cs` are read,
+mined and quoted, and **no `.cs` file lands**. The T15 gate was never on this line (its only `Steering.*`
+calls are `Steering.Up` ×2, geometry) and the W18 state-bus worry below is **moot**: this line now parks no
+state anywhere.
+🎯 **WHAT IT IS STILL GOOD FOR — the reason it is re-verdicted and not closed.** `pure/Entry.cs`'s
+**4-band L/D schedule** is the only lifting-entry L/D estimate this project has for the Dragon, and R1 §7.4
+records it as an UNMEASURED PRIOR that the file **honestly self-marks**. It is the prior a future off-target
+bank increment (O8's *"added ONLY LATER"*) starts from, and the number a first recorded ballistic entry can
+be sanity-checked against. Reading it costs an hour; re-deriving it costs a flight.
 **The file.** `plugin/src/EntrySteering.cs` (9,687 B at `8b81816^`), R1 §5.2 **RECOVER-CODE**, regime
 **L/D prior**, flown **❌ NO**. *"The lifting bank-angle entry — footprint + bank measurement."* Its pure half
 is `pure/Entry.cs` (10,109 B, R1 §5.1 **RECOVER-CODE**, *"L/D bands = marked prior"*, no lifting entry ever
@@ -4977,14 +5082,37 @@ line; W16 still owns `pure/Entry.cs`'s own copy.
 `FootprintError`, `EntryLoverD`, `PredictDownErrAtBank`) is read off **`Steering.cs`, which is NEVER
 recovered** (§B12.8 rider (b)). This line does not have to solve that — W18 does — but it must not park new
 state in a file that is not coming back.
-**Read:** §B12.8 rider (b) + (c), R1 §5.2 + §5.1's `Entry.cs` row, R1 §7.4, §B16.8 ruling 2.
-**Build:** restore `src/EntrySteering.cs` + `pure/Entry.cs` + their test from `8b81816^`, with the L/D prior
-carrying its §B16.8 marking and its R1 §7.4 provenance in the file's own header.
-**DONE when:** `build.py test` green, the pure entry guidance is tested headless, the L/D bands are marked
-UN-CONVERGED with the marking visible in the file, and no `Steering.cs` byte is back.
+**Read:** §B9 Phase 8 + **O8**, §B10.4 (Landing Guidance) + §B10.5 (SmartASS) — who actually flies entry now —
+§B12.5a, §B12.8 rider (c) + (d), R1 §5.2 + §5.1's `Entry.cs` row, R1 §7.4, §B16.8 ruling 2.
+**Build (a READ, not a restore):** read `src/EntrySteering.cs` + `pure/Entry.cs` at `8b81816^`; **write down**
+(a) the 4-band L/D schedule verbatim, band boundaries included, with R1 §7.4's UN-CONVERGED status, and
+(b) the footprint / bank-measurement method in one paragraph — enough that a later off-target increment can
+rebuild it without re-reading 9,687 B of glue. **Where it goes:** `docs/MECHJEB_MISSION_TUNING.md` §7.2
+(Entry), as a block headed `[FROM DELETED GEN-2 EntrySteering.cs / pure/Entry.cs — REFERENCE ONLY, NEVER
+LIVE]`, and a one-line pointer from this line's DONE note. ⛔ No `.cs` file is created, restored or edited.
+**DONE when:** the L/D schedule and the bank-measurement method are recorded in `MECHJEB_MISSION_TUNING.md`
+§7.2 with their UN-CONVERGED marking and their `8b81816^` provenance, this line states that entry is flown by
+MechJeb per §B9 P8 / O8, and **`git status` shows no `.cs` file touched**. Docs-only → the preview/PNG gate
+does not apply (say so, do not skip it silently); `build.py test` run as a no-regression check.
 
-### W17 [O] Wave E-5 `src/DeorbitBurn.cs` — the ONE Draco retrograde burn; its only flight carried a units bug — **TODO** — [TIER 2: real defect + recovery; FIRST line gated on T15]
+### W17 [O] Wave E-5 `src/DeorbitBurn.cs` — **RE-VERDICTED RECOVER-REFERENCE (G6)**: the units-bug deorbit, mined as a failure lesson — **TODO** — [TIER 4: reference extraction — a real defect, recorded rather than restored]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 5 of 9).
+🔁 **RE-VERDICTED RECOVER-CODE → RECOVER-REFERENCE by G6, on the OWNER's decision of 2026-09-04 via
+the overseer** (*"...re-entry orbit (Manoeuvre Planner, then execute next node)..."*). **The deorbit burn is
+MechJeb's, by name:** §B9 Phase 7 plans it with **`OperationPeriapsis`** (`new_periapsis` = the entry-corridor
+Pe) and flies it with the **Node Executor** — which is, word for word, the *"Manoeuvre Planner, then execute
+next node"* the owner described. A hand-written Draco retrograde burn is the gen-2 version of that job.
+**Nothing here becomes live**, and W11's *"FIRST line gated on T15"* **falls away**: this line will never
+point the vehicle, so it needs no steering layer.
+🎯 **WHAT IT IS STILL GOOD FOR — and it is the most direct lesson in Wave E.** Its **one flight was a
+FAILURE**, and the file's own header at `8b81816^` records it: the retired rescue path
+(`AbortControl.RunDeorbitBurn`) throttled the SuperDraco and the periapsis went *"196.9→196.1 km unchanged)
+→ the crew stranded"*. **That is a units bug in a deorbit burn, written down by the people it stranded.** It
+outlives the code twice over: it names a failure mode the Node Executor's tolerance / lead-time settings must
+be checked against (§B10.1), and it is a standing warning about which engine a deorbit uses. ⚠ It is also the
+**only** flight evidence about our deorbit at all — R1 §4.2 validates ascent and abort, nothing else — so the
+surviving nominal path (`ReturnControl.FlyDeorbitEntry`) was never proven either. **MechJeb inherits an
+unproven phase, not a solved one**, and that is worth knowing before the first return.
 **The file.** `plugin/src/DeorbitBurn.cs` (6,733 B at `8b81816^`), R1 §5.2 **RECOVER-CODE**, regime
 **RSS-RO**, flown **one units-bug flight**. *"The ONE Draco retrograde deorbit burn, shared by both callers"* —
 verified: the callers are `ReturnControl` (**W18**) and `AbortControl` (**W19**), which is why it lands before
@@ -5002,15 +5130,46 @@ not close the gap by restoring `Steering.cs`, and do not half-wire the facade to
 has not landed, **STOP and say so** rather than shipping a burn that cannot point.
 ⚠ **UN-CONVERGED (§B16.8 ruling 2):** `attitudeReadyDeg` and every burn margin stay marked until a recorded
 flight converges them.
-**Read:** §B12.8 rider (b) + (c), §B12.7, R1 §5.2 + §5.1's `DeorbitGuidance.cs` row, R1 §4.2, §B16.8.
-**Build:** restore `src/DeorbitBurn.cs` + `pure/DeorbitGuidance.cs` + their test from `8b81816^`; bind the
-attitude calls to T15's steering layer (or STOP); state the units-bug flight in the header and pin it with a
-test. Grow **W10's host** with only the dispatch this burn needs — no speculative members.
-**DONE when:** `build.py test` green, the units-bug case is test-pinned, the attitude calls bind to the fresh
-layer with no `Steering.cs` byte back, and every constant is marked.
+**Read:** §B9 Phase 7, §B10.1 (Node Executor) + §B10.2 (`OperationPeriapsis`), §B12.5a, §B12.8 rider (c) +
+(d), R1 §5.2 + §5.1's `DeorbitGuidance.cs` row, R1 §4.2, §B16.8 ruling 2.
+**Build (a READ, not a restore):** read `src/DeorbitBurn.cs` + `pure/DeorbitGuidance.cs` at `8b81816^`;
+**write down** (a) the DS-DEO-001 units-bug account **verbatim from the file's own header**, naming the engine
+it throttled and the 196.9→196.1 km result; (b) the entry-corridor Pe / flight-path-angle targets its guidance
+aimed at — those are exactly the numbers `OperationPeriapsis`'s `new_periapsis` has to be given; and (c)
+`attitudeReadyDeg` and the burn margins, marked UN-CONVERGED (§B16.8 ruling 2). **Where it goes:**
+`docs/MECHJEB_MISSION_TUNING.md` §7.1 (the two ways to fly the deorbit), headed `[FROM DELETED GEN-2
+DeorbitBurn.cs — REFERENCE ONLY, NEVER LIVE]`, with the units bug as a ⚠ callout, not a footnote. ⛔ No `.cs`
+file is created, restored or edited, and **the bug is not "fixed"** — there is nothing live to fix.
+**DONE when:** the units-bug flight, the entry-corridor targets and the marked constants are recorded in
+`MECHJEB_MISSION_TUNING.md` §7.1 with their `8b81816^` provenance, this line states that the deorbit is
+planned by `OperationPeriapsis` + Node Executor per §B9 P7, and **`git status` shows no `.cs` file touched**.
+Docs-only → the preview/PNG gate does not apply (say so); `build.py test` run as a no-regression check.
 
-### W18 [O] Wave E-6 `src/ReturnControl.cs` — undock → splashdown; flips **UndockOps** then **DeorbitOps** — **TODO** — [TIER 2: real gap — one file, two facade names, and an entry state bus that no longer exists]
+### W18 [O] Wave E-6 `src/ReturnControl.cs` — **RE-VERDICTED RECOVER-REFERENCE (G6)**: the whole return, mined; **UndockOps** + **DeorbitOps** move to **T21** — **TODO** — [TIER 4: reference extraction — the two facade names change owner, not this file]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 6 of 9).
+🔁 **RE-VERDICTED RECOVER-CODE → RECOVER-REFERENCE by G6, on the OWNER's decision of 2026-09-04 via
+the overseer** (*"...undocking → re-entry orbit ... → re-entry → landing are ALL MechJeb"*). **Every leg of
+this file is a manoeuvre MechJeb now owns:** undock/departure = §B9 Phase 6 (SmartASS backout + small
+`OperationApoapsis`/`Ellipticize` departure burns → Node Executor); deorbit = Phase 7; entry = Phase 8 under
+O8's attitude hold; chutes/splashdown = Phases 9–10 (Landing Autopilot for prediction + chute triggering).
+**Nothing here becomes live**, and with nothing restored **the whole blocker list below falls away** — W15,
+W16, W17, W9, W10 and the T15 steering gate all cease to bind this line. It is a read, and it can be done now.
+⚠ **THE TWO FACADE NAMES DO NOT DIE WITH THIS LINE — THEY CHANGE OWNER.** W11 gave `UndockOps` and
+`DeorbitOps` to this line as two sequenced increments; **§B12.5a now gives both to `T21`**, the conductor
+increment that flies §B9 Phases 6–10. §B12.5's one-property-per-increment rule is unchanged and rides along:
+T21 flips `UndockOps` on the departure leg first, `DeorbitOps` on the return leg second. **This line flips
+nothing**, and G6 has already re-pointed both W4 comments in `_AutopilotStub.cs`.
+✅ **AND THE STRUCTURAL DEFECT DISSOLVES — stated, not quietly dropped.** W11's hardest Wave E finding was
+that `Steering.cs` is this file's **entry state bus** (13 distinct members, 7 of them bank/footprint
+measurement) parked in the one file §B12.8 rider (b) says never comes back, and that **W18 had to decide where
+that state lives**. With nothing restored there is no state to re-home: the measurement is MechJeb's Landing
+Guidance prediction (§B10.4), plus — if an off-target bank increment is ever built — `pure/Entry.cs`'s method
+as recorded by **W16**. That design decision is **retired, not deferred**, and it is retired here in the open.
+🎯 **WHAT IT IS STILL GOOD FOR.** It is the only end-to-end **ordering** of the return this project has —
+undock → departure burn → back away clear of the Keep-Out Sphere → trunk jettison → deorbit → entry attitude
+→ drogues → mains → splashdown — and T21's sequencer has to reproduce that order whatever flies it.
+`pure/Chutes.cs` also carries the one leg with **real recorded data**: chute descent was recorded in the
+aborts (R1 §5.1, *"partially"*), which is more than the rest of the return can say.
 **The file.** `plugin/src/ReturnControl.cs` (22,827 B at `8b81816^`), R1 §5.2 **RECOVER-CODE**, regime
 **RSS-RO**, flown **❌ NO**. *"KSP glue seam 6: the return — undock → splashdown."* Pure halves:
 `pure/Departure.cs` (9,847 B, the undock + departure-burn FSM, never flown) and `pure/Chutes.cs` (7,535 B,
@@ -5036,13 +5195,22 @@ which today's stub `MissionConductor` **does not have and must not gain** (§B12
 KERBIN'S, NOT THE REAL DRAGON'S"*. Its **ordering argument** (drogues out → engines proven lit → then cut) is
 worth keeping; **every altitude must be re-derived for RSS**. Do not make it live to satisfy this line.
 ⚠ **UN-CONVERGED (§B16.8 ruling 2):** the file never flew. Every constant is marked.
-**Read:** §B12.8 rider (b) + (c), §B12.5, R1 §5.2 + §5.1's `Departure.cs`/`Chutes.cs`/`Terminal.cs` rows.
-**Build:** restore `src/ReturnControl.cs` + `pure/Departure.cs` + `pure/Chutes.cs` + their tests from
-`8b81816^`; re-home the entry state bus; land increment (1) → `UndockOps`, then increment (2) → `DeorbitOps`,
-each replacing its own W4 reason comment.
-**DONE when:** `build.py test` green, both facade properties are backed by a real controller **in two
-increments**, the entry bank/footprint state has a stated home that is not `Steering.cs`, no `Steering.cs` or
-`Terminal.cs` byte is live, and no screen claims a phase the vehicle is not in.
+**Read:** §B9 Phases 6–10, §B10.4 (Landing Autopilot) + §B10.5 (SmartASS), §B12.5a (who flips the two facade
+names now), §B12.8 rider (c) + (d), R1 §5.2 + §5.1's `Departure.cs`/`Chutes.cs`/`Terminal.cs` rows.
+**Build (a READ, not a restore):** read `src/ReturnControl.cs` + `pure/Departure.cs` + `pure/Chutes.cs` at
+`8b81816^`; **write down** (a) the return as an **ordered phase list with each transition's trigger** — this
+is the spec T21's sequencer is built against; (b) `pure/Chutes.cs`'s drogue/main/splashdown schedule with its
+RSS-RO RealChute specifics, and the note that chute descent is the return's only recorded leg; and (c) the
+departure-burn Δv and the Keep-Out-Sphere clearance rule from `pure/Departure.cs`. Mark every constant
+UN-CONVERGED (§B16.8 ruling 2 — the file never flew). **Where it goes:** `docs/MECHJEB_MISSION_TUNING.md`
+§6 (undock/departure) and §7.3–§7.4 (chutes/splashdown), each headed `[FROM DELETED GEN-2 ReturnControl.cs —
+REFERENCE ONLY, NEVER LIVE]`. ⛔ No `.cs` file is created, restored or edited, and **no facade property
+changes**.
+**DONE when:** the return phase order, the chute schedule and the departure rule are recorded in
+`MECHJEB_MISSION_TUNING.md` with their `8b81816^` provenance and their UN-CONVERGED marking, this line records
+that `UndockOps` + `DeorbitOps` are **T21's** to flip and that the entry-state-bus decision is retired, and
+**`git status` shows no `.cs` file touched**. Docs-only → the preview/PNG gate does not apply (say so);
+`build.py test` run as a no-regression check.
 
 ### W19 [O] Wave E-7 `src/AbortControl.cs` — the flight-validated abort executor; retires the `AbortControl`/`AbortMode` stub — **TODO** — [TIER 2: recovery of the ONLY other flight-validated subsystem]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 7 of 9).
@@ -5067,6 +5235,18 @@ them. That is the honest order; do not light it from here.
 ⚠ **Blocked on:** **W17** (`DeorbitBurn`), **W15** (`LandingSiteScan`), `pure/Chutes.cs` (lands with **W18**),
 `CrewProcedureOps.ActivePhase` (**W10**) — all verified call sites — and **T15** for attitude (`Steering.Point`
 ×6, `Up` ×3, `Prograde` ×2, `PointingErrorDeg`, `PointNoRoll`; `Steering.cs` is never recovered).
+🔁 **AMENDED BY G6, 2026-09-04 — two of those blockers will never land code, so this line inherits their
+pure files.** The owner's upper-stage/booster split re-verdicted **W17** and **W18** RECOVER-REFERENCE, so
+`pure/DeorbitGuidance.cs` and `pure/Chutes.cs` are **no longer landed by anyone else**. §B12.8 rider (c) rule 1
+already settles what follows — *"the first Wave E line that needs a pure file lands it"* — and W19 is now the
+first and only such line, so it lands both **with its own tests**. That is the existing rule applying itself,
+not a new decision. **W19 itself stays RECOVER-CODE** and the T15 attitude gate still binds it: abort is **not**
+in the owner's manoeuvre list, §B13 is explicit that *"abort is a conductor state, not a MechJeb call"*
+actuated by §B12.7 direct part control, and it is one of only two flight-validated subsystems we have
+(R1 §4.2). ⚠ **What W19 must decide in its own diff, and G6 did not (C1.12):** whether the abort's own
+deorbit leg re-uses the recovered `pure/DeorbitGuidance.cs` or hands off to MechJeb like the nominal return —
+reconcile it against §B13, and see **G6-Q1** at the bottom of this file, which puts the whole question to the
+owner.
 ℹ Its regime research lives in `docs/ABORT_PROCEDURES_RESEARCH.md`, **deleted** — read it from `8b81816^`
 (repo git history is in-repo; C7 is satisfied), and check R1 §5.4 for its verdict before quoting it.
 ⚠ **§B13 is the design of record** for abort, and it is conductor-owned and **phase-selected**, actuated by
@@ -5080,8 +5260,30 @@ the way W2 stated Actuator's); bind attitude to T15 or STOP.
 7 regimes and the first-tick LATCH survive intact, no screen file changed, and the abort overlay stays dark
 until W10's host publishes `Aborting`.
 
-### W20 [O] Wave E-8 `src/RendezvousControl.cs` — flips **StationApproach**; carries R1's flagged defects and a settled MechJeb decision — **TODO** — [TIER 2: recovery under an open owner decision]
+### W20 [O] Wave E-8 `src/RendezvousControl.cs` — **RE-VERDICTED RECOVER-REFERENCE (G6)**: the ONLY real RSS-RO rendezvous experience we have, mined to tune MechJeb — **TODO** — [TIER 4: reference extraction — the highest-value read in Wave E]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 8 of 9).
+🔁 **RE-VERDICTED RECOVER-CODE → RECOVER-REFERENCE by G6, on the OWNER's decision of 2026-09-04 via
+the overseer** (*"...rendezvous ... ALL MechJeb"*). This **closes W11's open question 1** in the direction the
+plan always pointed: §B1 and §B12.4 already had the conductor composing MechJeb's **Maneuver Planner ops +
+Node Executor** — `OperationPlane` → `OperationTransfer` → `OperationCourseCorrection` → `OperationKillRelVel`,
+re-planned after every burn (§B9 Phase 3) — because MechJeb's rendezvous *autopilot* is unreliable in RSS/RO.
+The recovered file is the gen-2 hand-written version of exactly that. **Nothing here becomes live**; the
+`StationApproach` facade moves to **T19** (§B12.5a), and the W9 / W10 / T15 blockers below all fall away.
+🎯 **⭐ WHAT IT IS STILL GOOD FOR — THE MOST VALUABLE READ IN WAVE E, AND THE REASON THIS LINE SURVIVES.**
+It was flown **far-field to 109 km in RSS-RO** (R1 §5.2, *"the coarse rendezvous controller"*). **That is the
+only real RSS-RO rendezvous experience that exists anywhere in this project** — every other number in §B9
+Phase 3 is a target or an estimate. So it is **directly useful for TUNING** the planner composition against
+§B9 P3 / §B11: which phasing altitudes actually closed the phase angle, what the far-field burn magnitudes
+were, where the re-plan cadence had to sit, what the residuals looked like. A tune that starts here starts
+from a flight. ⚠ Two honest limits ride with it: the **terminal leg was never flown** (`pure/Cw.cs` is
+explicitly *"❌ terminal never flown"*), so only the far-field half is evidence; and R1 §5.2 flags the
+controller with **defects** enumerated in `RENDEZVOUS_REBUILD_PLAN.md`, itself RECOVER-REFERENCE with
+*"⛔ never treat as an instruction"*.
+⛔ **`pure/NavFilter.cs` remains an R1 §7.4 REGIME-UNSTATED DEFECT** — its IMU/RGPS process- and
+measurement-noise tunables are *"researched"* with the source **not named in the file**, and §0.1 requires a
+regime before a number is used. As a reference read that becomes a **transcription duty**, not a build risk:
+record the numbers *together with* the fact that their regime is unstated, so nobody later mistakes them for
+measured RSS-RO values.
 **The file.** `plugin/src/RendezvousControl.cs` (40,628 B at `8b81816^` — **the largest file in Wave E**),
 R1 §5.2 **RECOVER-CODE**, regime **RSS-RO**, flown **◐ far-field to 109 km ONLY**. *"KSP glue seam 4: the
 coarse rendezvous controller."* Backs the **`StationApproach`** facade (a gen-1 name).
@@ -5111,18 +5313,52 @@ its regime established before the number is used."* Mark it, do not quietly seed
 ⚠ **Blocked on:** **W9** (`MissionConductor.WarpToEvent` / `.Realtime` — verified call sites the stub does not
 have and must not gain), **W10** (`CrewProcedureOps.PhaseComplete`), and **T15** for attitude (`Steering.Point`
 ×5, `PointingErrorDeg` ×4, `Prograde` ×2, `Release`).
-**Read:** §B12.3, §B12.4, §B10.2, §B12.8(a) + rider (c), R1 §5.2 + §5.1's four rows, R1 §7.4, and
+**Read:** §B1, §B9 Phase 3, §B10.2 (the `Operation*` classes) + §B10.1 (Node Executor), §B11 (the targets a
+tune converges to), §B12.4, §B12.5a, §B12.8 rider (c) + (d), R1 §5.2 + §5.1's four rows, R1 §7.4, and
 `RENDEZVOUS_REBUILD_PLAN.md` at `8b81816^` **as evidence only**.
-**Build:** restore the glue + its four pure files + tests from `8b81816^`; enumerate the flagged defects in the
-diff and pin each with a test or state it as an open defect (the W5 idiom); mark `NavFilter`'s regime; flip
-**`StationApproach`** and replace that name's W4 reason comment in `_AutopilotStub.cs`. **May SPLIT** (C1.7) —
-40 KB of glue plus four pure files is a plausible two-session line.
-**DONE when:** `build.py test` green, `StationApproach` is backed by a real controller, every flagged defect is
-either fixed with the owner's agreement or pinned and stated, the never-flown terminal leg is marked as such,
-and `NavFilter`'s constants carry their regime.
+**Build (a READ, not a restore) — the extraction IS the deliverable, so do it properly:** read
+`src/RendezvousControl.cs` + `pure/Rendezvous.cs` + `pure/Phasing.cs` + `pure/RvIntercept.cs` +
+`pure/NavFilter.cs` at `8b81816^`; **write down** (a) ⭐ **the flown far-field experience** — phasing-orbit
+altitudes, the burn sequence and magnitudes, the re-plan trigger and cadence, and whatever the files record
+about what actually happened out to 109 km — mapped **op by op onto §B9 Phase 3's planner chain**, so every
+item reads as a tuning input for a NAMED MechJeb operation rather than as loose history; (b) the enumerated
+defects from `RENDEZVOUS_REBUILD_PLAN.md`, each stated as *"this is what went wrong"* and never as an
+instruction; (c) `NavFilter`'s noise tunables **with their regime marked UNSTATED**; and (d) the
+evidence boundary — exactly where the flown far-field half ends and the never-flown terminal half begins.
+**Where it goes:** `docs/MECHJEB_MISSION_TUNING.md` §3.1–§3.3 (operation chain / Node Executor settings /
+gotchas), headed `[FROM DELETED GEN-2 RendezvousControl.cs — FLOWN FAR-FIELD TO 109 km IN RSS-RO — REFERENCE
+ONLY, NEVER LIVE]`. ⛔ No `.cs` file is created, restored or edited. **May SPLIT** (C1.7) — 40 KB of glue plus
+four pure files is a plausible two-session read.
+**DONE when:** the far-field flight experience is recorded against §B9 Phase 3's op chain in
+`MECHJEB_MISSION_TUNING.md` §3, the flagged defects are enumerated as evidence, `NavFilter`'s constants carry
+their unstated-regime marking, the never-flown terminal boundary is stated, this line records that
+`StationApproach` is **T19's** to flip, and **`git status` shows no `.cs` file touched**. Docs-only → the
+preview/PNG gate does not apply (say so); `build.py test` run as a no-regression check.
 
-### W21 [O] Wave E-9 `src/DockingControl.cs` — flips **DockingOps**; ⛔ the dock was NEVER FLOWN — **TODO** — [TIER 2: recovery of unproven code under an open owner decision]
+### W21 [O] Wave E-9 `src/DockingControl.cs` — **RE-VERDICTED RECOVER-REFERENCE (G6)**: the never-flown dock, mined for its two VERIFIED-REAL geometry gates — **TODO** — [TIER 4: reference extraction — two §1.4 verified-real sources worth keeping]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 9 of 9 — last by design).
+🔁 **RE-VERDICTED RECOVER-CODE → RECOVER-REFERENCE by G6, on the OWNER's decision of 2026-09-04 via
+the overseer** (*"...docking ... ALL MechJeb"*). This **closes W11's open question 1** in the direction **O6**
+had already settled (owner, 2026-09-03; §B12.3 + §B10.3): from the Keep-Out Sphere inward the **MechJeb
+Docking Autopilot is the DEFAULT**, `speedLimit` tuned down through the waypoints, with the crew's manual
+docking button overriding to the Manual ISS Docking screen and shutting the Docking AP down.
+`pure/DockControl.cs`'s 6-DOF glideslope servo is precisely what O6 hands to MechJeb. **Nothing here becomes
+live**; the `DockingOps` facade moves to **T20** (§B12.5a). Its blockers soften rather than vanish: W10 and T15
+fall away entirely, and the **W20** dependency is now only *read `pure/NavFilter.cs` in the order W20 records
+it* — still the cheaper path, no longer a hard gate.
+🎯 **WHAT IT IS STILL GOOD FOR — two of the four pure files are §1.4 VERIFIED-REAL, and they are worth
+having under any answer.** `pure/DockCapture.cs` encodes the **IDSS IDD Rev E Table 3.3.1.1-2** soft-capture
+envelope (R1 §5.1 names it a verified-real source) and `pure/DockCorridor.cs` encodes real-world
+approach-corridor / keep-out-sphere geometry. **Those are measurement, not invention** — and MechJeb's Docking
+AP does not supply them: it flies an approach, it does not know the IDSS envelope it has to arrive inside, nor
+where the corridor boundary CHOP/BREAKOUT is judged against lies. They are exactly what §B9 Phase 4's
+`speedLimit` ladder and the §B14 gates get tuned against. `pure/DockApproach.cs`'s **R-bar → V-bar L-approach
+ordering** deserves the same treatment: the shape of the approach outlives the servo that flew it.
+⛔ **AND SAY IT PLAINLY WHEREVER IT IS QUOTED: THE DOCK WAS NEVER FLOWN.** R1 §5.2 records it UNPROVEN and
+all four pure halves are `❌ NO`. A reference read must not launder that: every extracted number carries
+§B16.8 ruling 2's UN-CONVERGED marking **except** the two verified-real geometry sources, which carry their
+real citation instead (§1.4 — quote them from the file, never from memory, and never edit them without a
+real-source confirmation).
 **The file.** `plugin/src/DockingControl.cs` (15,447 B at `8b81816^`), R1 §5.2 **RECOVER-CODE**, regime n/a,
 flown **❌ NO — dock UNPROVEN**. *"KSP glue seam 5: terminal approach + docking."* Backs the **`DockingOps`**
 facade (a gen-1 name).
@@ -5147,13 +5383,22 @@ two verified-real geometry gates, and the KOS hand-off — and whether the recov
 ⚠ **Blocked on:** **W20** (it calls `RendezvousControl` directly, and shares `pure/NavFilter.cs` with it),
 **W10** (`CrewProcedureOps.NextGateId` / `.PhaseComplete`), and **T15** for attitude (`Steering.Point`,
 `PointingErrorDeg`, `Release`).
-**Read:** §B10.3 + §B12.3 + §B14 END-TO-END, §B12.8(a) + rider (c), R1 §5.2 + §5.1's four dock rows, §1.4.
-**Build:** restore `src/DockingControl.cs` + the four pure files + tests from `8b81816^` at the scope the
-owner's answer permits; state the never-flown status in the header; mark every constant; flip **`DockingOps`**
-and replace that name's W4 reason comment in `_AutopilotStub.cs`.
-**DONE when:** `build.py test` green, `DockingOps` is backed by a real controller, the never-flown status is
-stated in the file itself, the IDSS envelope and corridor geometry are unchanged from their real sources, and
-nothing on any screen implies a proven dock.
+**Read:** §B9 Phase 4, §B10.3 (Docking Autopilot) + §B10.6 (RCS), §B14 END-TO-END, §B12.3, §B12.5a,
+§B12.8 rider (c) + (d), R1 §5.2 + §5.1's four dock rows, §1.4.
+**Build (a READ, not a restore):** read `src/DockingControl.cs` + `pure/DockApproach.cs` +
+`pure/DockCapture.cs` + `pure/DockControl.cs` + `pure/DockCorridor.cs` at `8b81816^`; **write down** (a) the
+**IDSS IDD Rev E Table 3.3.1.1-2 soft-capture envelope verbatim, with its citation**; (b) the
+approach-corridor / KOS-breach geometry; (c) the R-bar → V-bar L-approach waypoint ordering and the speed
+flown on each leg — the direct input to §B9 Phase 4's **`speedLimit` ladder**; and (d) the 6-DOF glideslope
+servo's gains in one short paragraph, marked UN-CONVERGED and never-flown. **Where it goes:**
+`docs/MECHJEB_MISSION_TUNING.md` §4.1–§4.3, headed `[FROM DELETED GEN-2 DockingControl.cs — DOCK NEVER FLOWN
+— REFERENCE ONLY, NEVER LIVE]`, with the two verified-real sources in their own clearly-cited block so they
+are never confused with the un-converged ones. ⛔ No `.cs` file is created, restored or edited.
+**DONE when:** the IDSS envelope and the corridor geometry are recorded **unchanged from their real sources
+and cited**, the waypoint/speed ladder is recorded as a tuning input for `speedLimit`, every non-verified
+constant carries its UN-CONVERGED + never-flown marking, this line records that `DockingOps` is **T20's** to
+flip, and **`git status` shows no `.cs` file touched**. Docs-only → the preview/PNG gate does not apply (say
+so); `build.py test` run as a no-regression check.
 
 ### S67 — `plugin/src/pure/PropSchematic.cs` has an uncommitted, in-progress redraw already claiming "S65" (informational)
 Found by **LZ1**, 2026-09-04, while checking `git status` before committing (same pattern as **S2**). The
@@ -5312,6 +5557,17 @@ file itself was touched.
 
 ## Open questions for the owner — W11 (C1.14)
 
+> 🔁 **STATUS, 2026-09-04 (G6): Q1 and Q3 are ANSWERED; Q2 is largely MOOT.** The owner's
+> upper-stage/booster decision of 2026-09-04 (see **G6** above) settles **Q1** — neither `RendezvousControl`
+> nor `DockingControl` is recovered as code; both become **RECOVER-REFERENCE** reads whose extractions tune
+> MechJeb (this is nearest to option 1, but broader: not even the adapter is restored, because the facades
+> move to T19/T20). **Q3** is answered by the owner's *"do it in the most logical way for success, maybe have
+> one chat write the whole process so it is streamlined"* — G6 is that one chat: it rewrote all six facade
+> comments and wrote the process down once as **§B12.5a**. **Q2** loses four of its five gated lines
+> (W17/W18/W20/W21 never command attitude now); only **W19** is still gated on T15, so the ordering question
+> shrinks to that single line. The text below is left **unedited as the historical record** — it is not
+> re-asked. G6's own questions are at the bottom of this file.
+
 *Posed per C1.13 as a self-contained overseer prompt. **Situation:** W11 gave the ten unowned R1 §5.2
 RECOVER-CODE glue files an owner — `FlightDriver.cs` to W10 (overlap resolved), the other nine to new per-file
 register lines **W13–W21** in the order §B12.8 rider (c) now records. Docs + register only; no `.cs` file was
@@ -5455,9 +5711,92 @@ marking gap, not a live wrong number. State that in the marking rather than over
 block, in the idiom W3/W6/W8 already use — **comment-only, no behaviour change, no number edited**. Correct
 R1 §7.4's row in `docs/AUTOPILOT_RECOVERY_AUDIT.md` to name `Trajectory.cs` instead of `CourseCorrect.cs`
 (the audit is a record; fix the row and say it was W6's finding, do not rewrite its verdicts).
-⚠ **Coordinate with W16**, which restores `pure/Entry.cs`'s own copy of the same prior and must not invent a
-second idiom — W16's line already carries a pointer here.
+⚠ **Coordinate with W16** — **AMENDED BY G6, 2026-09-04.** W16 was re-verdicted RECOVER-REFERENCE, so it no
+longer *restores* `pure/Entry.cs`; it **records** the same 4-band prior into `docs/MECHJEB_MISSION_TUNING.md`
+§7.2 as a read. That makes this line's job **larger, not smaller**: `pure/Trajectory.cs` is now the **only
+in-tree copy** of the L/D schedule and the only one that can carry a marking at all, so the marking has to
+stand on its own rather than leaning on a sibling file that is never coming back. Keep the idiom identical to
+`pure/CourseCorrect.cs` / `pure/GridFin.cs`, and point the marking's provenance note at W16's extraction.
 **DONE when:** `build.py test` green (comment-only, so a no-regression check), the four L/D constants carry
 `[UN-CONVERGED]` with R1 §7.4's *"honestly self-marked / still unmeasured"* status stated in place, the
 `UseLdBand = false` nuance is recorded so the marking is not read as a live defect, and R1 §7.4's row names
 the right file.
+
+### S73 [S] `T21`'s title says "Deorbit/entry/chutes" but its scope now starts at §B9 Phase 6 (undock) — **TODO** — [TIER 4: hygiene — a task title narrower than the task]
+Found by **G6**, 2026-09-04 (C1.1 — logged, not done), while assigning the facade names their real future
+owners. **The finding.** §B12.5a gives **T21** both `UndockOps` **and** `DeorbitOps`, because T21's DONE-when
+is *"return + splash in-sim"* and a return begins at **undock** — §B9 **Phase 6** (SmartASS backout + small
+`OperationApoapsis`/`Ellipticize` departure burns → Node Executor), not at Phase 7. T21's title names only
+*"Deorbit/entry/chutes + abort wiring"*, so the undock/departure leg is inside its DONE-when and outside its
+title, and **T19** ("On-orbit ops + re-plan loop", DONE-when *"rendezvous to the KOS in-sim"*) plainly stops
+before it. **Why it is worth a line rather than a silent fix:** a later chat taking T21 from its title alone
+would build Phases 7–10 and leave `UndockOps` with no owner — the exact class of gap **W11** existed to close.
+**Build:** retitle T21 to name §B9 Phases 6–10 (or split the departure leg onto its own line, owner's call),
+and state the phase span in its DONE-when. ⚠ Not G6's to do: G6's declared outputs are the five re-verdicts,
+§B12.8, §B12.5a and the stub comments (C1.11).
+**DONE when:** T21's title and DONE-when agree on which §B9 phases it covers, and every facade name §B12.5a
+assigns still has exactly one owner afterwards.
+
+---
+
+## Open questions for the owner — G6 (C1.14)
+
+*Posed per C1.13 as a self-contained overseer prompt. **Situation:** the owner's decision of 2026-09-04 (via
+the overseer, stated twice and confirmed) — **"We use MechJeb for ALL UPPER STAGE MANOEUVRES as planned.
+BOOSTER SCRIPTED."** — was applied by **G6**. Five Wave E lines (W16 `EntrySteering`, W17 `DeorbitBurn`,
+W18 `ReturnControl`, W20 `RendezvousControl`, W21 `DockingControl`) were re-verdicted RECOVER-CODE →
+**RECOVER-REFERENCE**, each restated as a reading/extraction task that says what it is still good FOR;
+§B12.8 gained rider **(d)**; **§B12.5a** now records the facade-transition process once; and
+`_AutopilotStub.cs`'s facade comments were rewritten (comments only — every class is still a constant-false
+no-op). `python plugin/build.py test` is green. **G6 decided nothing gated (C1.12);** three checks remain.*
+
+**G6-Q1 — `W19` `AbortControl.cs` was NOT in the five. Confirm it stays RECOVER-CODE, and say who flies the
+abort's own deorbit leg.**
+The brief's arithmetic said *"nine lines, three code, five reference"*, but nine minus five is **four**: W13
+`GeometryDump` (done), W14 `DeployablesControl`, W15 `LandingSiteScan` and **W19 `AbortControl`**. G6 left W19
+as **code**, because abort is not in the owner's manoeuvre list, §B13 states outright that *"abort is a
+conductor state, not a MechJeb call"* actuated by §B12.7 direct part control, and it is one of only **two
+flight-validated subsystems** we have (R1 §4.2). ⚠ **The knock-on is real either way:** W19's blocker list
+named `pure/DeorbitGuidance.cs` (via W17) and `pure/Chutes.cs` (via W18), and **neither line lands code any
+more**, so under §B12.8 rider (c) rule 1 W19 now lands both itself.
+1. **Confirm: W19 stays RECOVER-CODE and lands the two orphaned pure files with its own tests.** Its
+   `DeorbitReturn` mode keeps its own guidance, because an abort deorbit is a contingency the conductor owns,
+   not a planned manoeuvre. *(recommended: it matches §B13 as written, it keeps the one flight-validated
+   return-side subsystem we have, and an abort that has to wait on MechJeb to plan a node is an abort that is
+   too slow to be one.)*
+2. **W19 stays code, but its deorbit leg hands off to MechJeb** (`OperationPeriapsis` + Node Executor) like the
+   nominal return — so `pure/DeorbitGuidance.cs` is never landed and W19 carries only the 7 regimes, the
+   first-tick latch and the direct-part actuation.
+3. **W19 is re-verdicted RECOVER-REFERENCE too** — the abort becomes a MechJeb-flown contingency and Wave E
+   ends three code / six reference. *(This one needs an explicit owner instruction: it re-verdicts a line the
+   2026-09-04 decision did not name, and it would make `AbortControl`'s flight validation unusable.)*
+
+**G6-Q2 — `W10`'s read-only host and `T17` now describe the same object. Which one builds it?**
+G6 confirmed **W10 survives** (nothing it owns is a manoeuvre: `CrewProcedureOps` is the crew-gate / phase
+state machine, `FlightDriver.cs` is R1's *"the Part-B host"*, and something must still tell MechJeb which phase
+the mission is in and consume the crew's GO). But **T17** is *"Glue driver, read-only — report phase/engaged,
+no commands"*, and **W10** is *"§B12.6 step (3)'s read-only driver — own the flight-scene addon + `OnFlyByWire`,
+tick the conductor, report phase/engaged, command nothing."* Those are the same sentence. With the manoeuvre
+controllers gone from Wave E, the overlap is no longer academic — the host is now the *main* thing Wave E
+leaves behind.
+1. **W10 builds it; T17 becomes the MechJeb-side wiring on top of W10's host** (bind the pinned core, publish
+   phase/engaged from it) rather than a second driver. *(recommended: W10 already owns `FlightDriver.cs`
+   outright by name after the W10/W11 overlap was resolved, and `CrewProcedureOps.Tick` has exactly one caller
+   in the whole pre-deletion tree — `FlightDriver.cs:341` — so splitting the host across two lines re-opens the
+   very gap W11 closed.)*
+2. **T17 builds it fresh against the pinned MechJeb; W10 shrinks to `CrewProcedureOps` alone** and is
+   re-sequenced to land after T17.
+3. **Merge them into one line** and note the supersession on the other.
+
+**G6-Q3 — W11's open Q1 and Q3 are answered by this decision. Confirm they may be closed.**
+G6 marked W11's question block with a status note rather than editing it (the text stands as the historical
+record). **Q1** (*how much of `RendezvousControl` / `DockingControl` is recovered*) is settled: **neither, as
+code** — both are reference reads, and the facades move to T19/T20. That is *broader* than Q1's recommended
+option 1, which would still have recovered the adapters. **Q3** (*who rewrites the stale facade comments*) is
+answered by the owner's *"maybe have one chat write the whole process so it is streamlined"* — G6 was that
+chat. **Q2** (T15 ordering) is not closed but shrinks to one line: only **W19** still commands attitude.
+1. **Close Q1 and Q3; leave Q2 open, narrowed to W19.** *(recommended: it records exactly what the decision
+   did and does not quietly close a question the decision did not touch.)*
+2. **Close all three** — answer Q2 as *"leave the order as written; W19 stops and says so if T15 has not
+   landed"*, which was W11's own recommendation and is now a one-line risk instead of a five-line one.
+3. Keep all three open until after the first recorded flight.

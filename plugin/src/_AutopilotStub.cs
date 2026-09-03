@@ -190,26 +190,43 @@ namespace DragonScreen
     // rename one of these to match whatever lands behind it, never add a parallel surface beside it, and
     // never delete one — each increment flips exactly ONE of these from constant-false to live (§B12.5).
     //
-    // ---- W4 (Wave D) STATUS, ONE LINE EACH — the done-criterion is "backed by a real controller OR still a
-    // ---- no-op with a STATED REASON; never a silent gap". Wave D backed NONE of them, and here is why: not
-    // ---- one of the five files §B12.8's Wave D row names is the controller behind any of these six. The
-    // ---- backing controllers are all in R1 §5.2 as RECOVER-CODE and all sit in NO §B12.8 wave (logged W11).
+    // ---- STATUS, ONE LINE EACH — the standing rule is "backed by a real controller OR still a no-op with a
+    // ---- STATED REASON; never a silent gap". THE PROCESS THAT TURNS ONE OF THESE LIVE IS WRITTEN DOWN ONCE,
+    // ---- IN §B12.5a — which increment owns each name, the five steps it follows, this comment convention,
+    // ---- and the four things it must never do. Read that section before touching anything below.
     //
-    //  AutoPilot        → gen-2 `CrewProcedureOps.Engaged` (the AUTO SEQUENCE master). NO-OP: the glue is not
-    //                     in the tree and must not be until it has a host — see the block above. **W10.**
-    //  StationApproach  → gen-2 `RendezvousControl.cs` (R1 §5.2, 40,628 B, RECOVER-CODE, flown far-field to
-    //                     109 km only). NO-OP: in no wave, not in the tree. **W11.**
-    //  DockingOps       → gen-2 `DockingControl.cs` (R1 §5.2, 15,447 B, RECOVER-CODE, **dock UNPROVEN — never
-    //                     flown**). NO-OP: in no wave, not in the tree. **W11.**
-    //  DeorbitOps       → gen-2 `ReturnControl.cs` (R1 §5.2, 22,827 B, RECOVER-CODE, never flown). NO-OP: in
-    //                     no wave, not in the tree. **W11.**
-    //  UndockOps        → gen-2 `ReturnControl.cs`, the same file's undock/departure leg. NO-OP, same reason.
-    //  BoosterRecovery  → gen-2 `MissionConductor.RecoveryBooster` (the vessel the recovery FSM is flying).
-    //                     NO-OP: MissionConductor does not compile here, and the `BoosterControl` under it
-    //                     STAYS DELETED — §B16.1 writes that core fresh. **W9**, then §B16.
+    // ---- ⚠ REWRITTEN BY G6, 2026-09-04 — the two previous answers here were BOTH wrong, and the second was
+    // ---- wrong in a way only the register could reveal. W4 wrote "the backing controller is in NO §B12.8
+    // ---- wave"; W11 then gave four of these names to the Wave E lines W18/W20/W21. The OWNER's
+    // ---- upper-stage/booster decision of 2026-09-04 ("we use MechJeb for ALL UPPER STAGE MANOEUVRES as
+    // ---- planned. BOOSTER SCRIPTED.") re-verdicted those three lines RECOVER-REFERENCE — they are READS
+    // ---- now, they restore no code, and they will never flip a property. So each name below points at the
+    // ---- T-series conductor increment that will ACTUALLY back it (§B12.8 rider (d), §B12.5a).
     //
-    // ⛔ NOTHING BELOW IS LIVE, AND NOTHING BELOW LIES. Every one still returns false/null, so every lamp
-    // these feed is dark and every flight command is §14.4(a)'s honest no-op — unchanged by Wave D.
+    //  AutoPilot        → gen-2 `CrewProcedureOps.Engaged` (the AUTO SEQUENCE master). NO-OP: the glue has no
+    //                     host yet and must not be ticked without one — see the block above. **W10** lands
+    //                     the read-only host; **T17** then binds the pinned MechJeb core to it.
+    //  StationApproach  → the CONDUCTOR's §B9 Phase-3 approach: MechJeb Maneuver-Planner ops composed and
+    //                     re-planned live (§B1/§B12.4), flown by the Node Executor. NO-OP: that phase is not
+    //                     built. **T19.** (Not W20 — W20 is a reference READ of the deleted hand-written
+    //                     `RendezvousControl.cs`, mined to TUNE this phase; it lands no code.)
+    //  DockingOps       → the MechJeb **Docking Autopilot**, the DEFAULT from the Keep-Out Sphere inward
+    //                     (O6, owner 2026-09-03; §B10.3/§B12.3), with the manual button overriding to the
+    //                     Manual ISS Docking screen. NO-OP: not built. **T20.** (Not W21 — that is a
+    //                     reference READ, kept for the IDSS envelope + corridor geometry MechJeb lacks.)
+    //  UndockOps        → the conductor's §B9 Phase 6: SmartASS backout + small departure burns → Node
+    //                     Executor. NO-OP: not built. **T21, increment 1** (§B12.5a: one property per
+    //                     increment, undock before deorbit).
+    //  DeorbitOps       → the conductor's §B9 Phase 7: `OperationPeriapsis` → Node Executor, then P8 entry
+    //                     attitude hold (O8) and P9 chutes. NO-OP: not built. **T21, increment 2.**
+    //  BoosterRecovery  → the SCRIPTED booster autopilot on its OWN vessel (§B16) — ours, not MechJeb's —
+    //                     surfaced through gen-2 `MissionConductor.RecoveryBooster`'s focus/PRE machine
+    //                     (§B16.7). NO-OP: MissionConductor does not compile here, and the `BoosterControl`
+    //                     under it STAYS DELETED — §B16.1 writes that core fresh. **W9**, then §B16.
+    //
+    // ⛔ NOTHING BELOW IS LIVE, AND NOTHING BELOW LIES. G6 changed the EXPLANATION, never the behaviour:
+    // every one still returns false/null, so every lamp these feed is dark and every flight command is
+    // §14.4(a)'s honest no-op — click, no light, no action, and no red.
     public static class AutoPilot { public static bool Engaged { get { return false; } } }
     public static class StationApproach { public static bool Engaged { get { return false; } } public static string Note { get { return null; } } }
     public static class DockingOps { public static bool Engaged { get { return false; } } public static string Note { get { return null; } } }

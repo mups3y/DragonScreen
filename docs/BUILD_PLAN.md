@@ -31,8 +31,15 @@ or widens it (C1.12)** — a build chat never self-authorizes one.
   Kerbal-Konstructs landing zones). **Further amended 2026-09-03 by G5b** with the two-profile split (§B5),
   the MechJeb-repository + ASDS-boostback resolutions (closing G5a-Q1/Q2), and three more settled Dragon-
   mission decisions: **§B10.3/§B12.3/§B9 P4** (auto-dock default, O6), **§B9 P8/§B10.5** (entry attitude-hold
-  baseline, no bank, O8), **§B8/§B10.6** (MechJeb auto-throttle over PVG bang-bang, O9). Open items are at the
-  end of this document under **"Open questions for the owner"**.
+  baseline, no bank, O8), **§B8/§B10.6** (MechJeb auto-throttle over PVG bang-bang, O9).
+  **Amended 2026-09-04 by W11 then G6** — §B12.8's recovery shape. W11 added **Wave E** (rider (c): nine
+  register lines for the glue files no wave owned). **G6** then applied the owner's **upper-stage / booster
+  split** of 2026-09-04 (*"we use MechJeb for ALL UPPER STAGE MANOEUVRES as planned. BOOSTER SCRIPTED."*) as
+  **§B12.8 rider (d)** — which re-verdicts **five** Wave E lines RECOVER-CODE → **RECOVER-REFERENCE** (read
+  and mined, never made live), leaving Wave E at **four code + five reference** — and wrote **§B12.5a**, the
+  one account of how a facade property goes from constant-false to live and which increment owns each. That
+  split **RESTORES** §B1/§B9's original division of labour rather than changing it.
+  Open items are at the end of this document under **"Open questions for the owner"**.
 Execution is governed by **PART C** — the anti-drift harness (a rules→one-task→verify→register LOOP, run by a
 `/next` skill + `CLAUDE.md`; Opus-for-hard / Sonnet-for-routine; one task per fresh chat). First task = T0
 (scaffold the harness), then T1 (docs sync) onward. Gate per the banner above; each task commits LOCALLY with
@@ -862,6 +869,68 @@ at all**. That is CLAUDE.md's *"the contract the screens compile against does no
 the contract is these property signatures, and they are never renamed to match whatever the controller
 underneath is called (§B12.8's two-generation rule).
 
+### B12.5a HOW A FACADE GOES LIVE — THE ONE PROCESS (written once, followed everywhere)
+*Added by **G6**, 2026-09-04, at the owner's request — "do it in the most logical way for success, maybe have
+one chat write the whole process so it is streamlined" — rather than leaving each landing line to invent its
+own idiom. **This is the single account.** Every later increment points here instead of re-explaining itself,
+and `plugin/src/_AutopilotStub.cs`'s facade comment block points here too.*
+
+**(i) THE SIX NAMES AND THEIR REAL FUTURE OWNER.** These are the properties at `_AutopilotStub.cs:143-150`.
+The owner column is the increment that will actually flip each one — **not** a recovery line that will never
+produce code. That distinction is the whole reason this table exists: W4's comments named *"no §B12.8 wave"*,
+W11 re-pointed four of them at W18/W20/W21, and the owner's 2026-09-04 upper-stage decision (rider (d)) made
+**both** answers wrong — those three lines are reference reads now and will never flip anything.
+
+| Facade property | What it reports on the glass | The increment that flips it | What that increment must satisfy FIRST |
+|---|---|---|---|
+| `AutoPilot.Engaged` | AUTO SEQUENCE master lamp | **W10** (the read-only host + `CrewProcedureOps`), then **T17** binds the pinned core to it | a conductor that genuinely ticks and advances its gates; GO consumed on the frame it is pressed (W10's own rule: *a conductor with no controllers must not be ticked at all*) |
+| `StationApproach.Engaged` / `.Note` | far-field → Keep-Out-Sphere approach | **T19** (on-orbit ops + re-plan loop) | §B9 Phase 3's planner chain composing (`OperationPlane` → `OperationTransfer` → `OperationCourseCorrection` → `OperationKillRelVel`), Node Executor flying the nodes, the §B12.4 re-plan loop live |
+| `DockingOps.Engaged` / `.Note` | KOS-inward docking | **T20** (docking hand-off + `speedLimit` ladder) | the Docking Autopilot as DEFAULT per **O6** / §B10.3, and the manual-docking-button override that shuts it down |
+| `UndockOps.Engaged` / `.Note` | undock → departure | **T21**, increment **1** | §B9 Phase 6: SmartASS backout + the small `OperationApoapsis`/`Ellipticize` departure burns → Node Executor, clear of the KOS |
+| `DeorbitOps.Engaged` | deorbit → splashdown | **T21**, increment **2** | §B9 Phase 7: `OperationPeriapsis` (entry-corridor Pe) → Node Executor; then P8 attitude hold (**O8**) and P9 chutes |
+| `BoosterRecovery.Tracked` | the HullCam's booster follow | **W9** (warp + focus glue), then §B16 | §B16.1's fresh booster core existing **on its own vessel**, and §B16.7's focus protocol (range extended, lands unfocused, +10 s, auto-recover, range restored) |
+
+⚠ **`UndockOps` and `DeorbitOps` are ONE task, TWO increments.** §B12.5's one-property-per-increment rule is
+about increments, not register lines: T21 flips `UndockOps` on the departure leg, then `DeorbitOps` on the
+return leg. Never both in one step. (See the register's **S73** — T21's *title* names only
+"Deorbit/entry/chutes" while its DONE-when spans §B9 Phases 6–10.)
+
+**(ii) THE FIVE STEPS, IN ORDER.** An increment that cannot complete step 1 does not start step 2; it STOPS
+and says so (C1.12).
+1. **The controller exists and ticks.** Something real is behind the name and something real calls it every
+   frame — W10's host for the Dragon, the booster's own script for §B16. A property may not go live because a
+   controller merely compiles.
+2. **The stub class becomes a THIN ADAPTER, not a rewrite.** The constant-`false`/`null` body is replaced by a
+   read of the live controller's state, and **nothing else about the class changes**: same name, same property
+   signatures, same file. This is §B12.8(a) — gen-2 controllers register INTO the gen-1 names.
+3. **Exactly ONE property flips per increment** (§B12.5). A file that backs two names flips them in two
+   sequenced increments.
+4. **The comment for that name is rewritten IN THE SAME DIFF** — never as a later tidy-up. A facade comment
+   and the behaviour it describes must not be able to drift apart; they have already drifted twice (W4, then
+   W11), which is why this is a numbered step rather than an aside.
+5. **`python plugin/build.py test` green, and the lamp is HONEST.** Engaged controller → lit lamp; idle or
+   absent controller → dark lamp; **never lit ahead of the vehicle** (§14.4(a): click, no light, no action,
+   and no red). If a preview page shows the lamp, re-render it and look at the PNG.
+
+**(iii) THE COMMENT CONVENTION — one block, one entry per name, two forms only.**
+```
+//  <Name>  → <what really backs it> (<§ / R1 / task ref>). LIVE since <task id>, <date>.
+//  <Name>  → <the increment that will back it>. NO-OP: <one sentence, the honest reason>.
+```
+The dark form's reason must name **an increment that will actually produce code** and say why the name is not
+live yet in one sentence — not a wave label, not a recovery line that is only a read. Keep the block in
+`_AutopilotStub.cs` directly above the class declarations, alphabetically stable, and keep the ⛔ footer that
+states nothing below it is live.
+
+**(iv) FOUR THINGS AN INCREMENT MUST NEVER DO.**
+- **Never rename a facade property** to match whatever the controller behind it is called (§B12.8(a)).
+- **Never add a parallel surface beside one** — a second "real" status class next to the facade is the same
+  drift by another route.
+- **Never half-wire one**: a property that reports engaged while the vehicle is not being commanded is worse
+  than the honest no-op it replaced (§B12.8(a), §14.4(a)).
+- **Never point a comment at a task that will never produce code.** That is the exact defect G6 fixed, and it
+  is only detectable by reading the register — so check the owning line's verdict, not just its number.
+
 ### B12.6 Single-core safety, packaging, testing
 - **One commanding core — THE RULE IS PER-VESSEL, AND THE VESSEL IS THE DRAGON.** Detect a user's own MechJeb;
   ensure exactly ONE `MechJebCore` actually commands **the capsule** (use ours; never double-drive).
@@ -955,6 +1024,10 @@ ending green under the preview-only gate (§0). G5c writes the register lines; t
 still one task each, but cross-checking R1 §5.2 row by row showed **ten RECOVER-CODE glue files in no wave at
 all** — so `FlightDriver.cs` went to **W10** and the other nine became **Wave E, one register line per file**
 (rider **(c)**), on the owner's decision of 2026-09-04 via the overseer.
+⚠ **Amended again by G6, later on 2026-09-04:** on the owner's upper-stage/booster decision of that date,
+**five of Wave E's nine lines were re-verdicted RECOVER-CODE → RECOVER-REFERENCE** — they are read and mined,
+never made live. Wave E is now **four code lines + five reference lines**. The decision, the reasoning and the
+supersession of R1's five rows are rider **(d)**.
 
 **W0 (`plugin/src/CraftDump.cs` + a fresh dump) is already DONE** and sits ahead of Wave A — §B12.7's binding
 rule has nothing to design against without it.
@@ -965,7 +1038,7 @@ rule has nothing to design against without it.
 | **B** | `pure/Actuation.cs` + `Actuator.cs` + `test/ActuationTest.cs` | §B12.7's actuation layer. Retires the `Actuator` stub — the first real facade swap. Everything that flies needs it. |
 | **C** | The booster set — `pure/BoosterDescent.cs`, `pure/Hoverslam.cs`, `pure/GridFin.cs`, `test/BoosterTest.cs` (and §B16.8's provenance marking) | §B16. Depends on A (prediction) and B (per-engine actuation). Never flown (§B16.8) — recovered as a **starting point**, not as working code. |
 | **D** | The conductor set — `ModeManager`, `WarpPlan`, `CoastEta`, `MissionConductor`, `CrewProcedureOps` | **This is where most stub collisions land**, so it goes last, when A–C have already proven the pattern. |
-| **E** — **NINE register lines, one file each** (not one task) | The remaining `plugin/src/` glue R1 §5.2 verdicts RECOVER-CODE: `GeometryDump` · `DeployablesControl` · `LandingSiteScan` · `EntrySteering` · `DeorbitBurn` · `ReturnControl` · `AbortControl` · `RendezvousControl` · `DockingControl` — **each with its own §5.1 pure half and its own test** | Added by **W11**, 2026-09-04, on the owner's decision of that date (via the overseer): waves A–D never contained these, so **four facade names had no owner at all**. They are too heterogeneous for one task (a 40 KB never-flown rendezvous controller beside an 8 KB read-only diagnostic) and one lumped line is the C1.7 compaction failure mode — so **one register line per file, in §B12.5 increment order**, each flipping at most ONE facade property. The order and every dependency are rider **(c)**. |
+| **E** — **NINE register lines, one file each** (not one task): **FOUR code + FIVE reference** | The remaining `plugin/src/` glue R1 §5.2 verdicts RECOVER-CODE. **RECOVER-CODE (4):** `GeometryDump` (W13, done) · `DeployablesControl` (W14) · `LandingSiteScan` (W15) · `AbortControl` (W19) — each with its own §5.1 pure half and its own test. **RECOVER-REFERENCE (5), re-verdicted by G6:** `EntrySteering` (W16) · `DeorbitBurn` (W17) · `ReturnControl` (W18) · `RendezvousControl` (W20) · `DockingControl` (W21) — read, mined and quoted into `docs/MECHJEB_MISSION_TUNING.md`; **no `.cs` file lands.** | Added by **W11**, 2026-09-04: waves A–D never contained these, so **four facade names had no owner at all**. They are too heterogeneous for one task (a 40 KB rendezvous controller beside an 8 KB read-only diagnostic) and one lumped line is the C1.7 compaction failure mode — so **one register line per file**, each flipping at most ONE facade property. Order + dependencies: rider **(c)**. ⚠ **Amended by G6, 2026-09-04:** the owner's upper-stage/booster split gave every *manoeuvre* in Wave E to MechJeb, so five lines became **reference reads** and **no Wave E line flips a facade property any more** — the facades moved to T19/T20/T21 (§B12.5a). Rider **(d)**. |
 
 **(a) THE STUB NAMES ARE THE DISPLAY-FACING FACADE — keep them.** `_AutopilotStub.cs:143-150` holds the
 **gen-1** names the screens compile against (`AutoPilot`, `StationApproach`, `DockingOps`, `DeorbitOps`,
@@ -995,17 +1068,17 @@ instead **grows W10's read-only host** by exactly the dispatch its own controlle
 §B12.5, one increment at a time). The nine that remain are Wave E, and they are ordered by **verified
 dependency**, not by mission phase:
 
-| # | Line | File (bytes) | Its §5.1 pure half | Facade flipped |
-|---|---|---|---|---|
-| 1 | **W13** | `GeometryDump.cs` (8,122) | — (`pure/Authority.cs` already in tree) | none |
-| 2 | **W14** | `DeployablesControl.cs` (2,828) | — (drives the live `Actuator`) | none |
-| 3 | **W15** | `LandingSiteScan.cs` (4,364) | `SafeLandingSite.cs` | none |
-| 4 | **W16** | `EntrySteering.cs` (9,687) | `Entry.cs` | none |
-| 5 | **W17** | `DeorbitBurn.cs` (6,733) | `DeorbitGuidance.cs` | none |
-| 6 | **W18** | `ReturnControl.cs` (22,827) | `Departure.cs` + `Chutes.cs` | **`UndockOps`, then `DeorbitOps`** |
-| 7 | **W19** | `AbortControl.cs` (23,536) | `AbortResponder.cs` | retires the `AbortControl` + `AbortMode` **stub** |
-| 8 | **W20** | `RendezvousControl.cs` (40,628) | `Rendezvous.cs` + `Phasing.cs` + `RvIntercept.cs` + `NavFilter.cs` | **`StationApproach`** |
-| 9 | **W21** | `DockingControl.cs` (15,447) | `DockApproach.cs` + `DockCapture.cs` + `DockControl.cs` + `DockCorridor.cs` | **`DockingOps`** |
+| # | Line | File (bytes) | Its §5.1 pure half | **Verdict (G6, 2026-09-04)** | Facade flipped |
+|---|---|---|---|---|---|
+| 1 | **W13** | `GeometryDump.cs` (8,122) | — (`pure/Authority.cs` already in tree) | **RECOVER-CODE** (DONE) | none |
+| 2 | **W14** | `DeployablesControl.cs` (2,828) | — (drives the live `Actuator`) | **RECOVER-CODE** — actuation, not a manoeuvre | none |
+| 3 | **W15** | `LandingSiteScan.cs` (4,364) | `SafeLandingSite.cs` | **RECOVER-CODE** — splashdown-site data both return paths need | none |
+| 4 | **W16** | `EntrySteering.cs` (9,687) | `Entry.cs` | 🔁 **RECOVER-REFERENCE** — entry is §B9 P8 SmartASS hold (**O8**); mined for the 4-band L/D prior | none — never had one |
+| 5 | **W17** | `DeorbitBurn.cs` (6,733) | `DeorbitGuidance.cs` | 🔁 **RECOVER-REFERENCE** — §B9 P7 `OperationPeriapsis` + Node Executor; mined for the DS-DEO-001 units bug + the entry-corridor Pe | none — never had one |
+| 6 | **W18** | `ReturnControl.cs` (22,827) | `Departure.cs` + `Chutes.cs` | 🔁 **RECOVER-REFERENCE** — §B9 P6–10 are MechJeb's; mined for the return ORDER + the chute schedule | **moved to T21** (undock inc. 1, deorbit inc. 2) |
+| 7 | **W19** | `AbortControl.cs` (23,536) | `AbortResponder.cs` | **RECOVER-CODE** — abort is a conductor state, not a MechJeb call (§B13); flight-validated (R1 §4.2). **Now also lands `DeorbitGuidance.cs` + `Chutes.cs`**, orphaned by W17/W18 | retires the `AbortControl` + `AbortMode` **stub** |
+| 8 | **W20** | `RendezvousControl.cs` (40,628) | `Rendezvous.cs` + `Phasing.cs` + `RvIntercept.cs` + `NavFilter.cs` | 🔁 **RECOVER-REFERENCE** — §B9 P3 planner composition (§B1); ⭐ mined for the **only real RSS-RO rendezvous experience in the project** (flown far-field to 109 km) | **moved to T19** |
+| 9 | **W21** | `DockingControl.cs` (15,447) | `DockApproach.cs` + `DockCapture.cs` + `DockControl.cs` + `DockCorridor.cs` | 🔁 **RECOVER-REFERENCE** — Docking AP is DEFAULT (**O6**, §B10.3); mined for the two §1.4 VERIFIED-REAL gates (IDSS envelope, KOS corridor) | **moved to T20** |
 
 **The spine of the order is `Steering.cs`, and it is a measured split, not a preference.** Rider (b) says
 `Steering.cs` is **NEVER recovered**; its replacement is written fresh against the pinned MechJeb (**T15**).
@@ -1021,6 +1094,11 @@ only**). So:
   `Steering.Up`, a body-up unit vector that is geometry, not a command.
 - **Lines 5–9 all command attitude** and are therefore **gated on T15's fresh steering layer**. A Wave E line
   must not close that gap by reviving `Steering.cs`, and must not half-wire the facade (rider (a)).
+  ⚠ **MOOT FOR FOUR OF THE FIVE since G6, 2026-09-04.** W17, W18, W20 and W21 are **reference reads** now —
+  they restore nothing, so **nothing of theirs will ever command attitude** and the T15 gate simply does not
+  apply to them. It survives on exactly **one** line: **W19**, the only remaining Wave E code line that points
+  the vehicle. The dependency analysis below is left standing as the record of *why* the order was built that
+  way; it is no longer a schedule constraint for the four.
 - ⚠ **`Steering.cs` is also ReturnControl's ENTRY STATE BUS, not just its attitude channel.** It calls
   `Steering.PredictDownErrAtBank`, `MeasuredBankRad`, `MeasureBc`, `LastSigmaRad`, `FootprintError`,
   `EntryLoverD` and `SetSplashTarget` — the bank/footprint measurement R1 §5.2 names as **EntrySteering's own
@@ -1042,15 +1120,87 @@ only**). So:
    regime **unstated**, a defect). `pure/Terminal.cs` stays **RECOVER-REFERENCE**: its own text says its
    altitudes are Kerbin's.
 
-⚠ **Two Wave E controllers sit under a SETTLED owner decision that hands their job to MechJeb, and a build
-chat must not quietly overrule it.** §B12.3 + §B10.3 (O6, owner 2026-09-03) make the **Docking AP the DEFAULT**
-from the Keep-Out Sphere inward, and §B12.4 has the conductor compose MechJeb **planner ops** for the approach
-because MechJeb's rendezvous *autopilot* is unreliable in RSS/RO. The recovered `DockingControl.cs` (**never
-flown**) and `RendezvousControl.cs` (flown far-field to 109 km only) are the gen-2 hand-written versions of
-exactly those jobs. So W20 and W21 are scoped to what holds under **either** answer — the facade adapter, the
-verified-real geometry gates (`DockCapture`'s IDSS envelope, `DockCorridor`'s KOS breach test), and the
-targeting MechJeb's planner ops need — and the question of whether the recovered servo/FSM ever flies is
-**the owner's** (W11's open question 1). This is also why they are last: the answer arrives before the code.
+✅ **W11's open question 1 — how much of `RendezvousControl` / `DockingControl` is actually recovered — is
+ANSWERED: neither, as code.** W11 scoped both lines to what held under either answer and placed them last so
+the answer would arrive first; it did, on 2026-09-04 (rider (d)). §B12.3 + §B10.3 (**O6**, owner 2026-09-03)
+make the **Docking AP the DEFAULT** from the Keep-Out Sphere inward, and §B12.4 has the conductor compose
+MechJeb **planner ops** for the approach because MechJeb's rendezvous *autopilot* is unreliable in RSS/RO —
+and the owner's upper-stage decision confirms both. So `DockingControl.cs` (**never flown**) and
+`RendezvousControl.cs` (flown far-field to 109 km only) are **RECOVER-REFERENCE**: not even the facade adapter
+is restored, because `StationApproach` and `DockingOps` moved to **T19** and **T20** (§B12.5a). What survives
+is the **extraction** — `DockCapture`'s IDSS envelope and `DockCorridor`'s KOS-breach geometry (both §1.4
+verified-real, and MechJeb's Docking AP does not supply them), the waypoint/speed ladder that tunes
+`speedLimit`, and ⭐ the far-field RSS-RO rendezvous experience that tunes the §B9 P3 planner chain.
+
+**(d) THE UPPER-STAGE / BOOSTER SPLIT — FIVE WAVE E LINES ARE RECOVER-REFERENCE (owner, 2026-09-04, via the
+overseer; applied by G6).** Stated twice and confirmed:
+
+> **"We use MechJeb for ALL UPPER STAGE MANOEUVRES as planned. BOOSTER SCRIPTED."**
+
+Explicitly: **launch → rendezvous → docking → undocking → re-entry orbit** (Manoeuvre Planner, then execute
+next node) **→ re-entry → landing are ALL MechJeb.** The booster's return and recovery is **our own scripted
+`.dll`**, running at separation. **Two systems that must not interfere with each other's flights.** ⚠ The owner
+briefly floated our own `.dll` doing rendezvous and then **RETRACTED** it — **the retraction is the decision**;
+the retracted version is not implemented, and a later chat reading only the first half of that exchange must
+not revive it.
+
+**This RESTORES the plan rather than changing it.** §B1, §B9 Phases 2–10, §B10.2, §B10.3 (O6), §B12.3 and
+§B12.4 always had MechJeb flying the Dragon mission; §B16 always had the booster as a separate scripted vessel.
+What it corrects is the *recovery* plan built on top: **five of Wave E's nine lines were pointed at manoeuvres
+MechJeb owns.** Their verdicts move **RECOVER-CODE → RECOVER-REFERENCE** — read, mined, quoted, **never made
+live** — with the MechJeb owner of each job named beside it:
+
+| Line | File | The MechJeb path that owns the job |
+|---|---|---|
+| **W16** | `EntrySteering.cs` | §B9 P8 — SmartASS SURFACE/RETROGRADE attitude hold, **no** active steering (**O8** baseline) |
+| **W17** | `DeorbitBurn.cs` | §B9 P7 — `OperationPeriapsis` → Node Executor (literally *"Manoeuvre Planner, then execute next node"*) |
+| **W18** | `ReturnControl.cs` | §B9 P6–10 — departure burns, deorbit, entry hold, Landing Autopilot for chute prediction |
+| **W20** | `RendezvousControl.cs` | §B9 P3 / §B1 — Maneuver Planner op composition + Node Executor, re-planned live (§B12.4) |
+| **W21** | `DockingControl.cs` | §B9 P4 / §B10.3 — the Docking Autopilot as DEFAULT (**O6**) |
+
+**⚠ A RE-VERDICT IS NOT A DELETION, AND THE REFERENCE VALUE IS THE POINT.** Each of the five register lines
+must say what its file is still good **FOR**, not merely that it is not restored:
+- ⭐ **`RendezvousControl.cs` was flown far-field to 109 km in RSS-RO** (R1 §5.2, *"the coarse rendezvous
+  controller"*). **That is the only real RSS-RO rendezvous experience that exists anywhere in this project** —
+  every other number in §B9 Phase 3 is a target or an estimate — so it is directly useful for **tuning** the
+  planner composition against §B9 P3 / §B11 targets. Its terminal leg was never flown; that boundary is stated,
+  not blurred.
+- **`DeorbitBurn.cs`'s units bug** (DS-DEO-001: the SuperDraco throttled, *"196.9→196.1 km unchanged) → the crew
+  stranded"*) and **`EntrySteering.cs` / `pure/Entry.cs`'s 4-band L/D prior** (R1 §7.4, honestly self-marked and
+  still unmeasured) are **lessons that are cheaper to read than to rediscover in flight**.
+- **`DockingControl.cs` carries two §1.4 VERIFIED-REAL sources** MechJeb does not supply: `pure/DockCapture.cs`'s
+  **IDSS IDD Rev E Table 3.3.1.1-2** soft-capture envelope and `pure/DockCorridor.cs`'s corridor / keep-out
+  geometry. The Docking AP flies an approach; it does not know the envelope it must arrive inside.
+- **`ReturnControl.cs` holds the only end-to-end ORDERING of the return** — the spec T21's sequencer is built
+  against — and `pure/Chutes.cs` is the one return leg with real recorded data (chute descent, in the aborts).
+
+**Three consequences, stated so nothing is lost in the change:**
+1. **No Wave E line flips a facade property any more.** `UndockOps` + `DeorbitOps` → **T21**, `StationApproach`
+   → **T19**, `DockingOps` → **T20** (§B12.5a). W11's per-line "replace that name's W4 comment as it flips"
+   clauses are superseded; G6 rewrote all six comments once instead.
+2. **W18's entry-state-bus problem is RETIRED, not deferred.** With nothing restored there is no
+   bank/footprint state to re-home off the never-recovered `Steering.cs`: the measurement is MechJeb's Landing
+   Guidance prediction (§B10.4), plus `pure/Entry.cs`'s method as *recorded* by W16 if an off-target bank
+   increment is ever built.
+3. **W19 inherits two orphaned pure files.** `pure/DeorbitGuidance.cs` (W17) and `pure/Chutes.cs` (W18) are no
+   longer landed by anyone, so rider (c) rule 1 — *"the first Wave E line that needs a pure file lands it"* —
+   makes **W19** land both with its own tests. **W19 itself stays RECOVER-CODE**: abort is not in the owner's
+   manoeuvre list, §B13 states outright that *"abort is a conductor state, not a MechJeb call"* actuated by
+   §B12.7 direct part control, and it is one of only two flight-validated subsystems we have (R1 §4.2).
+
+**⛔ R1 IS SUPERSEDED ON THESE FIVE ROWS, NOT FALSIFIED — and it is NOT rewritten.**
+`docs/AUTOPILOT_RECOVERY_AUDIT.md` inventoried deleted code and was never told which jobs MechJeb would take;
+its RECOVER-CODE verdicts were **correct on the evidence it had**. This rider supersedes the five rows above.
+**No byte of R1 was edited**, here or in the register — a historical audit stays a historical record, and the
+supersession lives where the current plan lives.
+
+**Where the extractions go.** Each of the five lines writes its findings into
+`docs/MECHJEB_MISSION_TUNING.md`'s matching phase section — §3 (rendezvous), §4 (docking), §6 (undock/
+departure), §7.1–§7.4 (deorbit / entry / chutes / splashdown) — as a block headed
+`[FROM DELETED GEN-2 <file> — REFERENCE ONLY, NEVER LIVE]`, with `8b81816^` provenance and §B16.8 ruling 2's
+UN-CONVERGED marking on every constant that never flew. That doc is the per-phase MechJeb recipe (§B4's
+"expert operator's flight book"), which is exactly where a tuning input belongs. **The plan still wins on any
+conflict of numbers** (C7.1).
 
 **The two-generation rule (R1 §0.2) — it prevents a build break, not a style problem.** Two generations of
 flight software **share class names**. **GEN 2** (newest at `8b81816^`) is the recovery target and the whole of
