@@ -2,10 +2,10 @@
  * Headless test runner. Every suite returns a failure count; the process exit code is non-zero if any
  * of them failed, so build.py stops rather than cheerfully reporting "ok" over a broken build.
  *
- * ⛔ THE AUTOPILOT WAS DELETED FOR A GROUND-UP REBUILD (docs/AUTOPILOT_REBUILD_PLAN.md, 2026-08-26).
- * Only the SCREEN suites remain here. As each rebuilt autopilot layer lands, re-register its (verified)
- * test — the L0 math suites (Kepler/UPFG/CW/Hohmann/Hoverslam/FuelFlow) are in _deleted_autopilot/test/,
- * ready to return with their layer.
+ * PART B RECOVERY IS UNDER WAY (§B12.8). The autopilot deleted 2026-09-01 comes back in four
+ * dependency-ordered waves, and each wave RE-REGISTERS the suites that prove it, below. Wave A (W1)
+ * is the collision-free pure support layer; Waves B-D follow. A suite is registered here only once
+ * the module it proves is actually in the tree - never ahead of it.
  */
 using System;
 
@@ -13,9 +13,8 @@ public static class TestMain
 {
     public static int Main()
     {
-        // ⛔ THE AUTOPILOT WAS DELETED (2026-09-01, owner directive: keep ONLY the Dragon screens / UI).
-        // Only the SCREEN + shared-display-math suites remain. The autopilot suites (control / guidance /
-        // rendezvous / docking / booster / FDIR / self-cal) were removed with the code they tested.
+        // The SCREEN + shared-display-math suites. The autopilot suites removed on 2026-09-01 return
+        // wave by wave underneath them (§B12.8); the ones still missing are the ones whose modules are.
         int bad = 0;
         bad += LayoutTest.Run();
         bad += LayoutSweepTest.Run();
@@ -34,7 +33,20 @@ public static class TestMain
         bad += TouchWiringTest.Run();      // screens: the touch pass (T14) - chute actions, docking clusters, suit fail branch
         bad += LogGateTest.Run();          // diagnostics: the seen-set that stops a standing warning flooding KSP.log (S40)
 
-        Console.WriteLine(bad == 0 ? "ALL SCREEN SUITES PASSED" : bad + " SUITE(S) FAILED");
+        // ---- PART B RECOVERY, WAVE A (W1, §B12.8) - the collision-free pure support layer ----
+        // Recovered from `8b81816^` with their modules. The fixtures are as they were: ConicTest and
+        // LambertTest are RSS (mu = 3.986e14); TrajectoryTest and PredictTest are a STOCK Kerbin fixture
+        // DELIBERATELY - they prove the integrator's ARITHMETIC against closed forms, and prove nothing
+        // about RSS-RO tuning (R1 §3.5). Do not "fix" a fixture into RSS thinking it validates more.
+        bad += AeroTest.Run();             // L1 derived aero: q, speed of sound, Mach, isothermal density
+        bad += AuthorityTest.Run();        // L1 the vehicle's own control authority (torque / MOI)
+        bad += ConicTest.Run();            // L3 support: Vec3 + universal-variable conic propagation
+        bad += TrajectoryTest.Run();       // §B16 prediction engine: RK4 through-atmosphere, drag MEASURED
+        bad += PredictTest.Run();          // where we will be / hit / pass closest - damped fixed point
+        bad += LambertTest.Run();          // B7 Lambert two-point BVP, self-inverted against our propagator
+        bad += RendezvousMathTest.Run();   // L3 rendezvous: the LVLH frame + Clohessy-Wiltshire targeting
+
+        Console.WriteLine(bad == 0 ? "ALL SUITES PASSED" : bad + " SUITE(S) FAILED");
         return bad == 0 ? 0 : 1;
     }
 }

@@ -1217,13 +1217,108 @@ parallel with any wave, in a separate chat the owner starts by name (they do not
 this file; `/next` is a single-lane tool — parallel work is always addressed directly, as R1/R2/R3/R4
 already are).
 
-### W1 [O] Wave A — collision-free `pure/` support — **TODO**
+### W1 [O] Wave A — collision-free `pure/` support — **DONE**
 - **Read:** §B12.8 Wave A, R1 §3.5 + §5.1 (the per-file audit rows).
 - **Build:** Restore from `8b81816^`: `pure/Vec3.cs`, `Conic.cs`, `Trajectory.cs`, `BoosterDrag.cs`,
   `Predict.cs`, `Aero.cs`, `Authority.cs`, `Lambert.cs`, `Maneuver.cs`, `Lvlh.cs`, `Cw.cs` + their `test/`
   counterparts — none collide with `_AutopilotStub.cs`.
 - **DONE when:** `build.py test` green, R1's per-file verdicts for this set re-confirmed against the actual
   restored file content (not re-trusted from the audit blind).
+- **DONE 2026-09-04.** All 11 modules restored from `8b81816^`, plus the **seven** `test/` counterparts that
+  actually cover them: `AeroTest` (Aero), `AuthorityTest` (Authority), `ConicTest` (**Vec3 + Conic**),
+  `TrajectoryTest` (Trajectory), `PredictTest` (Predict), `LambertTest` (**Lambert + Maneuver**),
+  `RendezvousMathTest` (**Lvlh + Cw**). The pairing was derived by grepping each candidate suite at
+  `8b81816^` for the module types it names, not assumed — which is how the four two-module suites were
+  found, and how the one **uncovered** module was: **`BoosterDrag.cs` has no test anywhere in the
+  pre-deletion tree** (its only other reference in the whole `8b81816^` `plugin/` tree is a prose mention
+  in `Aero.cs`). It is restored as the dataset it is; a guard test for it is logged, not built — **S63**.
+- **The collision claim was CHECKED, not assumed.** Every top-level type the 11 files declare — `Vec3`,
+  `Conic`, `TrajectoryInputs`, `PathSample`, `TrajectoryResult`, `Trajectory`, `AeroProfile`, `BoosterDrag`,
+  `Predict`, `Impact`, `Approach`, `Aero`, `ControlAuthority`, `Authority`, `LambertSolution`, `Lambert`,
+  `Maneuver`, `LvlhState`, `Lvlh`, `CwSolution`, `Cw` — was matched against the 189 types declared in
+  today's `plugin/src/` + `plugin/src/pure/` (`_AutopilotStub.cs` included). **Zero collisions**, as R1
+  §5.1 says, and the green build is the second proof. Same namespace (`DragonScreen`) throughout.
+- **R1's per-file verdicts, RE-CONFIRMED against the restored bytes** (the done-criterion). Every
+  RECOVER-CODE row for this set holds; two refinements are recorded because the content is more specific
+  than the audit's regime column:
+  - **`Trajectory.cs`** — confirmed body-agnostic in code: `Mu`, `BodyRadiusM`, `BodyOmega`,
+    `AtmosphereDepthM`, `BallisticCoefficient`, `ImpactAltitudeM` are all `TrajectoryInputs` FIELDS and the
+    atmosphere arrives as three delegates. A grep for `3.986*` / `6371` / `600000` / `3.5316` over all 11
+    modules returns **one hit in total**, and it is `Maneuver.G0 = 9.80665` (standard gravity for the rocket
+    equation — universal, not a body constant). ⚠ **Refinement:** R1's regime cell "n/a — body-agnostic" is
+    true of the BODY constants; the file does carry a **vehicle** constant set, the four `[Tunable]` B8 L/D
+    band values (0.18 / 0.20 / 0.26 / 0.24). R1 §3.5's claim that *"the file marks the prior honestly"* is
+    **true** — the block says in as many words that it is a predictor-only prior *"for bands not yet flown"*
+    and does NOT command the CoM shifter. Left exactly as found.
+  - **`Aero.cs`** — ⚠ **Refinement to R1's "regime n/a":** it holds `Gamma = 1.4` and `RSpecific = 287.05`,
+    which are **Earth-air** constants, not universal ones. In RSS they are simply correct, so the
+    RECOVER-CODE verdict is unaffected — but the cell should read "Earth air", and anyone reusing this file
+    outside RSS has two numbers to look at. Everything else in it (`IsothermalDensity`) takes sea-level
+    density and scale height as arguments and is genuinely body-agnostic.
+  - **`BoosterDrag.cs`** — the ten-point curve in the restored file is **digit-for-digit** R1 §3.5's quoted
+    table (2582 / 1485 / 1796 / 1075 / 1331 / 1321 / 1481 / 1580 / 1582 / 1439 kg/m² at Mach 0.5–5.0).
+    Since R1 Q2 records that the raw CSVs behind it are gone and it cannot be re-derived from this repo,
+    that check was worth doing on the bytes rather than on the prose.
+  - `Vec3` / `Conic` / `Authority` / `Lambert` / `Maneuver` / `Lvlh` / `Cw` / `Predict`: purposes match R1
+    §5.1 exactly (minimal 3-vector; universal-variable Stumpff propagation; torque÷MOI + the
+    `sqrt(2·alpha·theta)` arrestable-rate bound; the universal-variable Lambert built on **our own**
+    `Conic.StumpffC/S`; finite-burn timing + half-burn lead + Lambert intercept Δv; the LVLH basis; the
+    closed-form CW STM with the passive-abort free-drift check; the damped fixed-point `ImpactUT`).
+- **The `0d6423d` commentary recovery R1 §3.5 / §5.1 asks for, done — and done SAFELY.** `158eb2a` stripped
+  these files' headers to bare section banners; R1 directs recovering them from `0d6423d`, which is a
+  **gen-1** commit — so taking a file from there is exactly the two-generation trap (§B12.8). The rule
+  applied: **take a `0d6423d` copy only where a comment-stripped diff proves the CODE is byte-identical to
+  `8b81816^`.**
+  - `BoosterDrag.cs`, `Predict.cs` — code proved identical, so the `0d6423d` copy was taken whole (this is
+    how `Predict` gets back its XML docs and the *"undamped, it oscillates between a mountain and the valley
+    behind it"* rationale that R1 calls "the whole file").
+  - `Trajectory.cs` — code is **NOT** identical (`a266420`'s lift / bank / L-D-band model came after
+    `0d6423d`), so only the header block was transplanted onto the unchanged gen-2 body.
+  - ⛔ **The trap this rule caught, and W2–W4 will meet it again:** `0d6423d`'s `Lvlh.cs` is 7,037 bytes
+    against gen-2's 2,857 and looks like the same "un-stripped" case — it is **not**. It is a different
+    implementation with a different API (`RadialM`/`AlongM`/`CrossM` + `out`-parameter helpers vs gen-2's
+    `Vec3`-based `Project`). **Never take a `0d6423d` file on size, or on the assumption that gen 1 is gen 2
+    plus comments — diff the stripped code first.** `Lvlh.cs` was left exactly as `8b81816^` has it.
+  - Each of the three carries a short **PROVENANCE** block naming what came from where and stating that no
+    gen-1 logic came with it. All three were re-verified after editing: comment-stripped diff vs
+    `8b81816^` = **identical**, all three.
+- **`TestMain.cs` — the seven suites registered, and the runner's story corrected.** Its header and its
+  in-method note both still said the autopilot *"was deleted"* full stop and that *"only the SCREEN suites
+  remain"*; both now say recovery is under way in waves, and that a suite is registered **only once the
+  module it proves is in the tree, never ahead of it**. The Wave A block carries the fixture warning in
+  place, so the next reader cannot mistake it: `ConicTest` / `LambertTest` / `RendezvousMathTest` are **RSS**
+  fixtures (mu = 3.986e14) and `TrajectoryTest` / `PredictTest` are a **STOCK Kerbin** fixture
+  **deliberately** — they prove the integrator's arithmetic against closed forms and prove nothing about
+  RSS-RO tuning (R1 §3.5). The final line changed from `ALL SCREEN SUITES PASSED` to `ALL SUITES PASSED`,
+  which is now the true statement; nothing but old register prose reads that string.
+- **One unlooked-for gain:** `RendezvousMathTest` also exercises **`pure/Hohmann.cs`, which is live in
+  today's tree** and had no suite of its own — R1 §5.3's row for it names only LVLH + CW. It compiles and
+  passes against the live file unchanged, so a screen-side module picked up test cover for free.
+- **Gate (C1.3), preview-only — nothing here needs the capsule.** `python plugin/build.py test` **green:
+  the glue DLL builds (96 → 107 source files, 322.5 KB) with NO new warning — every warning emitted names
+  `ScreenPainter.cs` / `Pages.cs` / `LayoutSweepTest.cs`, all pre-existing and none of them touched here;
+  the 17 pre-existing suites still report 11,257 checks, 0 failed, and the seven restored suites add 480
+  (Aero 13 / Authority 15 / Conic 21 / Trajectory 45 / Predict 354 / Lambert 14 / RendezvousMath 18) —
+  11,737 total, 0 failed.** **Preview:** `python plugin/build.py preview` run as a no-regression check and
+  **all 112 PNGs are BYTE-IDENTICAL** (sha256 before/after), which is the strongest available form of "no
+  screen changed": nothing on any page reads these modules yet. No new PNG to inspect — W1 draws nothing.
+- **The one runtime-visible side effect, stated rather than buried:** `Tuning.Build()` reflects over the
+  whole assembly for `[Tunable]` fields, so the PluginData `tuning.reference.cfg` catalogue grows from
+  **8 to 14** entries (Trajectory's four L/D bands, Lambert's `MaxIter` + `TofTolFrac`). Catalogue only —
+  the code default stays the authority, per `Tuning.cs`'s own rule — and nothing reads those six fields
+  yet, because nothing calls `Trajectory` or `Lambert` yet.
+- **§1.4 / C1.4 respected.** No label, no unit, no `PanelMap.cs`, no label doc touched; no screen file
+  touched at all. Nothing was invented — every byte is either `8b81816^`'s or (for three headers)
+  `0d6423d`'s own commentary, and both provenances are stated in the files themselves.
+- **Deliberately NOT done (logged, not built — C1.1):** the `BoosterDrag` guard test (**S63**).
+  ⚠ **Not claimed:** that any of this FLIES anything. Wave A is inert support code with no caller —
+  `_AutopilotStub.cs` is untouched, every flight command is still §14.4(a)'s honest no-op, and W2–W4 are
+  where callers appear. R1's "flown?" column is **not** re-verified here and cannot be: it is a claim about
+  the deleted flight corpus, not about file content.
+- **Open questions for the owner (C1.14): NONE.** Nothing in this task hit a gate, a missing source or an
+  authority limit. The one judgement call — whether to take a gen-1 file for its comments — was resolved by
+  a mechanical test (the code is byte-identical or the file is not taken), not by preference, so it needed
+  no owner call.
 
 ### W2 [O] Wave B — Actuation + Actuator (retires the Actuator stub) — **TODO**
 - **Read:** §B12.7, §B12.8 Wave B, §B16.4 (the engine-binding rule this wave must satisfy), R1 §3.1.
@@ -3924,3 +4019,23 @@ this is a standalone recovery task run ahead of that governance pass, per explic
   craft in the VAB before anything downstream (VEHICLE_AUDIT §E, CRAFT_DUMP_VEHICLE_MAP) is revised against
   this dump, since a Dragon that can't jettison its second stage or open its chutes is not flight-composable
   regardless of Part-B. This needs an owner decision, not a build-chat fix (C1.12).
+
+---
+
+### S63 [S] `pure/BoosterDrag.cs` is the one irreplaceable RSS-RO dataset in the tree and NOTHING tests it — **TODO** — [TIER 2: real gap — cheap guard on an un-re-derivable asset]
+Logged by **W1**, 2026-09-04 (C1.1 — found while pairing Wave A's modules to their tests, not fixed there).
+**The finding:** every other module W1 restored has a suite; `BoosterDrag.cs` has none, and never did — a grep
+of the whole pre-deletion `plugin/` tree at `8b81816^` finds its name in exactly two places, the file itself
+and a prose sentence in `Aero.cs`. So the ten-point Mach→ballistic-coefficient curve is unguarded.
+**Why that matters more than a normal coverage gap:** R1 §3.5 and its **Q2** record that the 18,080 samples
+across 48 RSS/RO flights behind this curve were **gitignored and never committed**. The numbers in this file
+and the aggregate in the (also deleted) `docs/tuning/TUNING_DB.json` are the ONLY surviving distillates —
+**if a digit is ever changed, correctly or by accident, nothing in this repo can detect it and nothing can
+re-derive the right value.** It is also, per §B16.8, the drag half of the prediction engine the booster core
+is committed to, so a silent edit would surface as a landing miss, not as a test failure.
+**Build:** a small `test/BoosterDragTest.cs` pinning (a) the ten table values exactly as R1 §3.5 quotes them,
+(b) the hold-flat behaviour below Mach 0.5 and above Mach 5.0, (c) linear interpolation at a bin midpoint,
+(d) `DragFactor == 1/bc` and its zero-guard, and (e) the transonic minimum actually sitting at Mach 2.0 — the
+shape claim the file's own header makes. Register it in `TestMain.cs` beside the Wave A block.
+**DONE when:** `build.py test` green with the new suite, and the pinned values are cited to R1 §3.5 in the
+test's header so a future editor sees where the authority for them is (and that it is the last copy).
