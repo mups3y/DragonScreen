@@ -271,6 +271,20 @@ conflict (C7.1).
   profile). ⛔ Its §1.5 marks every `NavFilter` noise constant **REGIME-UNSTATED** (R1 §7.4); ⛔ its §5 draws
   the boundary — **the far field flew, the terminal legs and the dock never did**.
 
+- **[EXTRACT_RETURN_CONTROL.md](EXTRACT_RETURN_CONTROL.md)** [REF — extraction] — **W18** (2026-09-04),
+  from the deleted gen-2 `ReturnControl.cs` + `pure/Departure.cs` / `pure/Chutes.cs`. ⭐ **The only end-to-end
+  ORDERING of the return this project has** — undock → 4 departure hops → ground-track phasing → trunk
+  jettison → deorbit burn → LZ select → entry → drogues → mains → splashdown — as a **15-row phase list with
+  each transition's trigger**, the spec **T21's sequencer** is built against. Also: the **Keep-Out-Sphere
+  clearance rule** (offset CW aims, first hop up-and-over, never inside 2×KOS) with the four aim points; the
+  chute schedule with its **RealChute specifics** (arm once — re-invoking deploy **reset inflation**; drogues
+  are **never cut**, after a mains-failed abort became a 122 m/s free-fall); and the CoM shifter as **a mode
+  engaged once, never a steering actuator** (owner §1.4). ⛔ **Every constant UN-CONVERGED (§B16.8 ruling 2)
+  — the file never flew**, and §4.4 corrects the *"chute descent recorded in aborts"* marking: the recording
+  is **gone with the lost RSS-RO corpus**, only its lessons survive. ✅ Records that **`UndockOps` +
+  `DeorbitOps` are T21's to flip** (§B12.5a) and that the **`Steering.cs` entry-state-bus decision is RETIRED**
+  — the measurement is MechJeb Landing Guidance's, and O8's no-bank baseline means there is no bank to measure.
+
 ## 4. Historical — background only, do NOT build from these
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** [HIST] — the 2026-08-04 F9I-era architecture note (kOS bridge, MAS as

@@ -5451,7 +5451,7 @@ file is created, restored or edited, and **the bug is not "fixed"** — there is
 planned by `OperationPeriapsis` + Node Executor per §B9 P7, and **`git status` shows no `.cs` file touched**.
 Docs-only → the preview/PNG gate does not apply (say so); `build.py test` run as a no-regression check.
 
-### W18 [O] Wave E-6 `src/ReturnControl.cs` — **RE-VERDICTED RECOVER-REFERENCE (G6)**: the whole return, mined; **UndockOps** + **DeorbitOps** move to **T21** — **TODO** — [TIER 4: reference extraction — the two facade names change owner, not this file]
+### W18 [O] Wave E-6 `src/ReturnControl.cs` — **RE-VERDICTED RECOVER-REFERENCE (G6)**: the whole return, mined; **UndockOps** + **DeorbitOps** move to **T21** — **DONE** (2026-09-04) — [TIER 4: reference extraction — the two facade names change owner, not this file]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 6 of 9).
 🔁 **RE-VERDICTED RECOVER-CODE → RECOVER-REFERENCE by G6, on the OWNER's decision of 2026-09-04 via
 the overseer** (*"...undocking → re-entry orbit ... → re-entry → landing are ALL MechJeb"*). **Every leg of
@@ -5517,6 +5517,33 @@ changes**.
 that `UndockOps` + `DeorbitOps` are **T21's** to flip and that the entry-state-bus decision is retired, and
 **`git status` shows no `.cs` file touched**. Docs-only → the preview/PNG gate does not apply (say so);
 `build.py test` run as a no-regression check.
+✅ **DONE 2026-09-04 — `docs/EXTRACT_RETURN_CONTROL.md`.** Read `src/ReturnControl.cs` + `pure/Departure.cs`
++ `pure/Chutes.cs` at `8b81816^`. Recorded: (a) the return as a **15-row ordered phase list with every
+transition's trigger** — undock → 2 sep pushes to a 40 m standoff → Depart0..3 CW hops → ground-track phasing
+→ trunk jettison → settle → retrograde deorbit burn on measured Pe → shroud CLOSE (after the burn, never at
+trunk sep) → LZ select (latched) → coast-to-interface → CoM shifter ONCE → entry → drogues → mains →
+splashdown — each mapped to its §B9 P6–10 owner, plus the six ordering properties T21's sequencer must
+preserve; (b) the **chute schedule** (state-based, 5,486 m / 1,830 m, independently gated) with its **RSS-RO
+RealChute specifics** — arm each canopy ONCE because re-invoking deploy **reset inflation**, and the drogues
+are **never cut** after a mains-failed abort became a **122 m/s free-fall**; and (c) the **departure Δv**
+(2 × 0.2 m/s sep + CW-solver hops + a 10 km Hohmann apsis-lower; **no total budget exists in the file**) and
+the **Keep-Out-Sphere clearance rule** — offset CW aims, first hop **up-and-over**, never inside **2 × the
+200 m KOS**, with all four aim points resolved. ⛔ **Every constant marked UN-CONVERGED (§B16.8 ruling 2)**;
+three disagreements with the plan recorded, not reconciled (120 vs 122 km interface; +50 km deorbit Pe vs an
+FPA-derived low/negative Pe; the 10 km phasing lower vs §6.3's "do not lower"). ⚠ **Correction of fact
+(§4.4):** R1 §5.1's *"chute descent recorded in aborts"* is accurate as history, but
+`FLIGHT_CORPUS_ASSESSMENT.md` shows **no surviving CSV holds a single chute transition** — the recording went
+with the lost RSS-RO corpus (§B16.8); only its two lessons survive, so the return is **un-flown evidence
+throughout**. Raised as **Q3**. ✅ Records that **`UndockOps` + `DeorbitOps` are T21's to flip** (§B12.5a, two
+sequenced increments) — **this line flipped nothing, and no facade property changed** — and that the
+**`Steering.cs` entry-state-bus decision is RETIRED**, with each of the seven measurement members re-homed in
+the open (footprint/Bc → MechJeb Landing Guidance; bank/L-over-D → **nowhere at baseline**, since O8 settled
+flight 1 as attitude-hold with no commanded bank; splash target → `TargetController`, coordinates still
+absent from the repo and not to be invented). ✅ `build.py test` **GREEN, unchanged** (ALL SUITES PASSED);
+docs-only → **the preview/PNG gate does not apply** (no screen code changed), stated rather than skipped
+silently; **`git status` shows no `.cs` file touched**. ⚠ Run under the **OWNER-AUTHORISED batch deviation
+from C1.1/C1.7 of 2026-09-04 (via the overseer)** — five Wave E lines in one session; batch only, does not
+generalise.
 
 ### W19 [O] Wave E-7 `src/AbortControl.cs` — the flight-validated abort executor; retires the `AbortControl`/`AbortMode` stub — **TODO** — [TIER 2: recovery of the ONLY other flight-validated subsystem]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 7 of 9).
