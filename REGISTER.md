@@ -5401,7 +5401,7 @@ LIVE]`, and a one-line pointer from this line's DONE note. ⛔ No `.cs` file is 
 MechJeb per §B9 P8 / O8, and **`git status` shows no `.cs` file touched**. Docs-only → the preview/PNG gate
 does not apply (say so, do not skip it silently); `build.py test` run as a no-regression check.
 
-### W17 [O] Wave E-5 `src/DeorbitBurn.cs` — **RE-VERDICTED RECOVER-REFERENCE (G6)**: the units-bug deorbit, mined as a failure lesson — **TODO** — [TIER 4: reference extraction — a real defect, recorded rather than restored]
+### W17 [O] Wave E-5 `src/DeorbitBurn.cs` — **RE-VERDICTED RECOVER-REFERENCE (G6)**: the units-bug deorbit, mined as a failure lesson — **DONE** (2026-09-04) — [TIER 4: reference extraction — a real defect, recorded rather than restored]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 5 of 9).
 🔁 **RE-VERDICTED RECOVER-CODE → RECOVER-REFERENCE by G6, on the OWNER's decision of 2026-09-04 via
 the overseer** (*"...re-entry orbit (Manoeuvre Planner, then execute next node)..."*). **The deorbit burn is
@@ -5450,6 +5450,32 @@ file is created, restored or edited, and **the bug is not "fixed"** — there is
 `MECHJEB_MISSION_TUNING.md` §7.1 with their `8b81816^` provenance, this line states that the deorbit is
 planned by `OperationPeriapsis` + Node Executor per §B9 P7, and **`git status` shows no `.cs` file touched**.
 Docs-only → the preview/PNG gate does not apply (say so); `build.py test` run as a no-regression check.
+✅ **DONE 2026-09-04 — `docs/EXTRACT_DEORBIT_BURN.md`.** Read `src/DeorbitBurn.cs` + `pure/DeorbitGuidance.cs`
+at `8b81816^`. Recorded: (a) the failure account **verbatim from the file's own header** — the retired rescue
+path threw the **SuperDraco** (`EngineRole.PodAbort`), *abort-reserved and EMPTY on a return*, so flight
+**024400** ran throttle 0.36 against `thrust_n` **0** and pe went *"196.9→196.1 km unchanged) → the crew
+stranded"*; ⚠ **and a correction of fact — there are TWO distinct zero-delivery deorbits, not one**: 024400
+is the **engine-role** bug (fixed, path deleted, its recording NOT among the 13 surviving CSVs), while
+**DS-DEO-001** (`Crew-2_20260831_141924.csv`, the one that survives) delivered **0.00 of a planned 78.04 m/s**
+because the **×1000 `ControlTorque` units bug** made `maxAlpha` read **919 rad/s²** against a real **0.5** and
+spun the capsule, so the burn's `AttitudeReady` gate never opened — raised as **Q3**, and named as **exactly
+the failure class §B10.1's `AlignedToleranceDegrees` / `LeadTime` must be checked against**; (b) the
+entry-corridor targets — the closed-form Hohmann Δv formula, the **closed-loop-on-MEASURED-periapsis** cutoff
+(never an open-loop clock), the real **~12–16.5 min / Crew-1 Resilience 987 s** burn duration, and the
+78.04 m/s planned vs §B11's ~100 m/s **[EST]** — plus ⛔ the finding that **the pure guidance documented its
+target as the ~120 km entry interface while `ReturnControl` passed 50 km**, a 70 km disagreement no flight
+ever exposed, and that **neither is an entry-corridor periapsis: nobody has ever derived one from §B11's
+−1.4°/−1.6° FPA** (**Q2**); and (c) `attitudeReadyDeg` **5.0°**, `settleS` **3.0 s**, `targetPeM` **50 km**
+and `forwardSign` **−1.0**, every one marked **UN-CONVERGED** (§B16.8 ruling 2) — the file has no constants of
+its own. Also kept: the **nose-shroud sequencing trap** (kept OPEN through the burn because the forward
+Dracos are the attitude authority; the old code closed it AT trunk sep, *"obstructing the very thrusters
+holding retrograde"*). ⚠ Records that **R1 §4.2 validates ascent and abort only**, so the surviving nominal
+path was never proven either — **MechJeb inherits an unproven phase, not a solved one**. States that the
+deorbit is planned by **`OperationPeriapsis` + Node Executor per §B9 P7**; ⛔ **the bug is NOT "fixed" — there
+is nothing live to fix**. ✅ `build.py test` **GREEN, unchanged** (ALL SUITES PASSED); docs-only → **the
+preview/PNG gate does not apply** (no screen code changed), stated rather than skipped silently; **`git
+status` shows no `.cs` file touched**. ⚠ Run under the **OWNER-AUTHORISED batch deviation from C1.1/C1.7 of
+2026-09-04 (via the overseer)** — five Wave E lines in one session; batch only, does not generalise.
 
 ### W18 [O] Wave E-6 `src/ReturnControl.cs` — **RE-VERDICTED RECOVER-REFERENCE (G6)**: the whole return, mined; **UndockOps** + **DeorbitOps** move to **T21** — **DONE** (2026-09-04) — [TIER 4: reference extraction — the two facade names change owner, not this file]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 6 of 9).

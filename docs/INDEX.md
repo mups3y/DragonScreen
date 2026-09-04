@@ -300,6 +300,22 @@ conflict (C7.1).
   number §B11 forbids for crew docking. ✅ Records that **`DockingOps` is T20's to flip** (§B12.5a) — and that
   a live facade means a controller is behind the lamp, **never that docking works**.
 
+- **[EXTRACT_DEORBIT_BURN.md](EXTRACT_DEORBIT_BURN.md)** [REF — extraction] — **W17** (2026-09-04), from
+  the deleted gen-2 `DeorbitBurn.cs` + `pure/DeorbitGuidance.cs`. ⭐ **The most direct failure lesson in Wave
+  E**, and it separates **TWO** zero-delivery deorbits the older records conflate: **flight 024400** threw the
+  **SuperDraco** — abort-reserved and **empty on a return** — so throttle 0.36 met `thrust_n` 0 and pe went
+  *"196.9→196.1 km unchanged → the crew stranded"* (fixed, path deleted); and **DS-DEO-001** delivered
+  **0.00 of a planned 78.04 m/s** because the **×1000 `ControlTorque` units bug** spun the capsule
+  (`maxAlpha` read **919 rad/s²** against a real **0.5**) so the burn's attitude gate never opened. ⛔ **That
+  second class — a burn that never fires because the vehicle cannot point — is exactly what §B10.1's
+  `AlignedToleranceDegrees` / `LeadTime` must be checked against**; check `dv_delivered` vs `dv_planned`
+  first on the first return. Also records the entry-corridor targets (the closed-form Hohmann Δv, the
+  closed-loop-on-**measured**-periapsis cutoff, the real **~12–16.5 min / Crew-1 Resilience 987 s** burn), the
+  nose-shroud sequencing trap (**OPEN through the burn** — the old code closed it at trunk sep, obstructing
+  the thrusters holding retrograde), and ⛔ that **the pure guidance targeted ~120 km while the glue passed
+  50 km** — neither an entry-corridor periapsis, and **nobody has ever derived one from §B11's −1.4°/−1.6°
+  FPA**. ⚠ R1 §4.2 validates ascent and abort only, so **MechJeb inherits an unproven phase, not a solved one**.
+
 ## 4. Historical — background only, do NOT build from these
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** [HIST] — the 2026-08-04 F9I-era architecture note (kOS bridge, MAS as
