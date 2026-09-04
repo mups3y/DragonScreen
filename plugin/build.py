@@ -131,10 +131,44 @@ MECH_REFS = REFS + ['Assembly-CSharp-firstpass.dll', 'UnityEngine.AnimationModul
 # without the analyser). Vendored, not compiled; VENDOR.md says so out loud.
 MECH_SKIP = ('properties/assemblyinfo.cs', 'globalsuppressions.cs')
 
+# ---------------------------------------------------------------- the three [KSPAddon]s (T15b)
+# ⛔ THESE THREE ARE A SAFETY EXCLUSION, NOT TIDINESS, AND THEY MUST NOT COME BACK.
+#
+# KSP instantiates [KSPAddon] classes by SCANNING EVERY ASSEMBLY IN GameData. Nobody has to
+# attach anything: no part cfg, no MechJebCore, no user action. Vendoring MechJeb's whole tree
+# (§B12.1a, and correct) therefore ships three self-starting MonoBehaviours that would run
+# inside DragonScreen's own assembly and speak with MechJeb's voice:
+#
+#   MechJeb2/CompatibilityChecker.cs:52   Startup.Instantly - version check, can raise a POPUP
+#   MechJeb2/InstallChecker.cs:20         Startup.MainMenu  - MechJeb's "you installed it wrong"
+#                                         POPUP. It looks for GameData/MechJeb2, and our layout
+#                                         deliberately has none, so it is LIKELY TO FIRE.
+#   MechJeb2/MechjebBundlesManager.cs:14  Startup.MainMenu  - loads Bundles/shaders.bundle from
+#                                         a path we do not ship; for a user who runs the real
+#                                         MechJeb2 it is a path ALREADY LOADED BY THEM, and
+#                                         Unity refuses the second load.
+#
+# §B12.1a: the ported GUI must be "vendored but never registered/shown" - ported != enabled. An
+# addon that registers ITSELF is precisely what that forbids, so the answer is to keep all three
+# in the tree (the pin stays complete) and take them out of the COMPILE, which is the same
+# distinction T15a already drew for MechJebKos/ and MechJebLibTest/.
+#
+# ⚠ THE CLASS NAMES ARE NOT ALL THE FILE NAMES. MechjebBundlesManager.cs declares
+# `MechJebBundlesManager` (different capital J), which is why this list is BY PATH.
+#
+# Only the third has compiled dependents - GuiUtils.cs:905-906 and MechJebModuleDebugArrows.cs
+# read its three statics - so it, and only it, has a substitute: _dragonscreen/_BundlesManager.cs.
+# The other two are referenced by nothing outside their own file (verified by grep over the whole
+# compiled set, T15b) and are simply gone.
+MECH_ADDONS_EXCLUDED = ('mechjeb2/compatibilitychecker.cs',
+                        'mechjeb2/installchecker.cs',
+                        'mechjeb2/mechjebbundlesmanager.cs')
+
 
 def mech_sources():
     """The .cs that go into DragonScreen.Mech.dll - named projects only, see MECH_PROJECTS."""
     out = []
+    seen_addons = set()
     for proj in MECH_PROJECTS:
         p = os.path.join(MECH, proj)
         if not os.path.isdir(p):
@@ -147,7 +181,20 @@ def mech_sources():
                 rel  = os.path.relpath(full, MECH).replace('\\', '/').lower()
                 if any(rel.endswith(s) for s in MECH_SKIP):
                     continue
+                if rel in MECH_ADDONS_EXCLUDED:
+                    seen_addons.add(rel)
+                    continue
                 out.append(full)
+    # A re-pin that renames or moves one of the three [KSPAddon] files would silently put a
+    # self-registering MonoBehaviour back into the shipped assembly - the one thing T15b exists
+    # to prevent. Fail the build instead, loudly, rather than discover it in the capsule.
+    if out:
+        missing = [a for a in MECH_ADDONS_EXCLUDED if a not in seen_addons]
+        if missing:
+            sys.exit('vendored tree has moved or renamed a [KSPAddon] file that MUST stay out of\n'
+                     '    the compile: %s\n'
+                     '    Find it, update MECH_ADDONS_EXCLUDED, and re-check plugin/mech/VENDOR.md '
+                     '§3.1.' % ', '.join(missing))
     return sorted(out)
 
 

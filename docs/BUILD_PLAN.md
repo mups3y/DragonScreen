@@ -847,6 +847,79 @@ Both checks in `VENDOR.md` §5, summarised in `NOTICE`.
 
 ⚠ **The GUI is vendored and NOT yet suppressed.** T15a was the port; suppression is **T15b**, and until it
 lands this assembly must not be given a `MechJebCore` — see the register's T15b line.
+✅ **Superseded by §B12.1b below — T15b landed 2026-09-05.**
+
+##### B12.1b — HOW HEADLESS IS ACTUALLY ACHIEVED (T15b, 2026-09-05). Read this before touching the host.
+§B12.1 says *"attach/find ONE `MechJebCore` on the Dragon part, no GUI, enable only the modules the conductor
+uses"*, and §B12.1a says *"ported ≠ enabled"*. Both stand. This section records the **mechanism**, because
+four things about it are counter-intuitive and each one, got wrong, fails only in the capsule.
+
+**(1) "Enable only the modules the conductor uses" is a statement about ENABLEMENT, not construction.**
+`MechJebCore.LoadComputerModules()` (`plugin/mech/MechJeb2/MechJebCore.cs:707`) builds its registry from
+`AppDomain.CurrentDomain.GetAssemblies()` and **instantiates every non-abstract `ComputerModule` subclass**
+at `:757` — 55 of them on the pin. You cannot have a core without having them all. What you *can* control is
+`ComputerModule.Enabled`, which defaults **false** for all but four (`MechJebModuleDebugArrows`,
+`MechJebModuleMenu`, `MechJebModuleStageStats`, `MechJebModuleWarpController`). So §B12.1's sentence is
+satisfied by the conductor enabling what it needs — not by anything at load time.
+
+**(2) The `blacklist` [KSPField] is a SUBSTRING match, and it refuses more than it names.**
+`:753` tests `!blacklist.Contains(t.Name)`, so any module whose name is a substring of *another* entry is
+refused too, silently, at construction. Measured on the pin, the obvious "blacklist every window" list would
+also have refused **`MechJebModuleAscentSettings`** (→ `core.AscentSettings`, the PVG surface),
+**`MechJebModuleRCSBalancer`** (→ `core.Rcsbal`), `MechJebModuleFlightRecorder` and
+`MechJebModuleRendezvousAutopilot` — leaving core fields null for the ascent code to dereference.
+⇒ The blacklist and its collateral now live in `plugin/src/pure/MechProfile.cs` and are **re-proved against
+the vendored tree itself on every `build.py test`** (`plugin/test/MechHostTest.cs`), not against a typed list.
+
+**(3) ⛔ THE BLACKLIST CANNOT DO THE GUI JOB — this is the finding that reshaped the task.** The four modules
+that produce the visible UI are dereferenced **with no null check** from paths that run whether or not
+anything is drawn: `MechJebModuleMenu` (`MechJebCore.Update():680`, every frame, editor included),
+`MechJebModuleCustomWindowEditor` (`MechJebCore.OnLoad():911`, every part load), and
+`MechJebModuleThrustWindow` + `MechJebModuleAscentMenu` (`MechJebModuleThrustController.cs:357,792` — **live
+flight code** reading `.Hidden` off two window modules). Blacklisting them converts a cosmetic problem into a
+`NullReferenceException` per frame. ⇒ **Suppression is done at the ENABLE level**, in `plugin/src/MechHost.cs`:
+every `DisplayModule` is held `Enabled = false` (which is exactly the gate `OnGUI` draws through, `:1153`),
+and the app-launcher button is refused through the menu's own `[Persistent]` `useAppLauncher`/`hideButton`.
+**Blacklist = "never built". MechHost = "never shown". Both are needed; neither substitutes for the other.**
+
+**(4) §B3's private namespace does NOT cover the PartModule cfg name.** It stops a CLR *type* clashing with a
+user's `MechJeb2.dll`. But KSP resolves `MODULE { name = … }` by **class name across every loaded assembly**,
+and after the rename shell our class is still called `MechJebCore` — so a cfg node naming it is ambiguous on
+any machine that also runs the real MechJeb, and could hand our Dragon **their** core, GUI and all. ⇒ the
+shipped patch names **`DragonMechJebCore`**, a subclass in `plugin/src/` (no vendored file touched), on the
+**two Dragon parts only** — never MechJeb's own `MechJebNoCommandPod.cfg` behaviour of patching every pod.
+
+**(5) The settings path is a USER path, and it is written to every five seconds.** `MuUtils.cs:19` hardcodes
+`<KSP>/GameData/MechJeb2/Plugins/PluginData/MechJeb2`, and `MechJebCore.Update()` calls `OnSave(null)` on a
+5-second timer (`:648`), which writes `mechjeb_settings_global.cfg` + `mechjeb_settings_type_<vessel>.cfg`
+there. Unhandled, an embedded core **rewrites a user's real MechJeb configuration during flight**, and creates
+a phantom `GameData/MechJeb2` tree for a user who has none. §B12.1's *"the conductor loads it, never the
+user"* is about reading; this is worse. ⇒ `DragonMechJebCore.OnSave` drops the `sfsNode == null` call
+(the only file-writing path) and keeps the stock craft save; a `[KSPAddon(Instantly)]` of ours also redirects
+`MuUtils._cfgPath` to `GameData/DragonScreen/PluginData` so the **read** side stops at our own mod too. The
+redirect is reflection over a compiled private field — **not an edit to the vendored tree** — and is
+non-fatal: if it is refused, the write ban still holds on its own.
+
+**(6) WHICH TUNE PROFILE THE SHIPPED FILE IS — say it once, so T22 cannot inherit a confusion.**
+`mechjeb_settings_type_Crew-Dragon.cfg` now ships at `GameData/DragonScreen/PluginData/` (under `PluginData`
+so KSP does not parse it into the game database) and is applied by name through MechJeb's **TYPE** pass,
+independent of what the craft is called. **It is the TUNED Crew-2 profile — §B5's TUNING TARGET — NOT the
+flight-1 baseline**, which §B5 says is RSS-RO's own shipped MechJeb defaults. T15b built the loader §B12.1
+asks for; **which profile flight 1 applies is T22's call**, and `DragonMechJebCore.tuneFile` (blank = load
+nothing) is the seam it turns. Nothing flies either way today — §14.4(a) still holds.
+⚠ Recorded while shipping it: the cfg predates the pin, and **8 of its 64 node names match no module in the
+pinned tree** — three are the upstream **PVG → PSG** rename (`MechJebModuleAscentPVGAutopilot`,
+`…PVGSettingsMenu`, `MechJebModulePVGGlueBall`), five are modules upstream deleted. **All eight are EMPTY, so
+nothing is lost today**; they are pinned in `MechProfile.KnownOrphanTuneNodes` and the test fails if a node
+that *carries values* ever orphans.
+
+**(7) Cross-assembly module leakage — CONFIRMED SAFE, in writing, as T15b was asked to.** The registry scan at
+`:711` walks **every** loaded assembly, so a user's `MechJeb2.dll` is in it. The filter is
+`t.IsSubclassOf(typeof(ComputerModule))`, and inside our assembly that `typeof` binds to
+`DragonScreen.Mech.MuMech.ComputerModule` while theirs is `MuMech.ComputerModule` — **different CLR types, in
+differently-named assemblies, so neither is a subclass of the other**. Our core cannot construct their
+modules and theirs cannot construct ours. Read from the source, not assumed. The residual risk was never CLR
+type identity; it was **name**-level resolution one layer up, which is (4) above and is closed by the subclass.
 
 ### B12.2 The conductor — two layers (honors the pure/glue split)
 - **Pure core** `plugin/src/pure/Conductor*.cs` (NO Unity/MechJeb refs → headless-testable): the phase state

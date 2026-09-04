@@ -189,6 +189,11 @@ public static class TestMain
         // with `pure/blackbox/` and `BlackBoxRecorder.cs` deleted. Verified by physical removal (S85).
         bad += CrewPressTest.Run();      // S85: the CVR press channel - the control_id namespace + buffer
 
+        // T15b: the embedded MechJeb's HOST rules, checked against the pinned tree itself - the
+        // blacklist's substring behaviour (and its collateral), the three [KSPAddon]s staying out
+        // of the compile, and the shipped tune. Nothing here loads a core; that needs the game.
+        bad += MechHostTest.Run();
+
         Console.WriteLine(bad == 0 ? "ALL SUITES PASSED" : bad + " SUITE(S) FAILED");
         return bad == 0 ? 0 : 1;
     }

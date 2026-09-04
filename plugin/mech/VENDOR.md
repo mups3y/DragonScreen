@@ -119,6 +119,39 @@ exactly as upstream wrote them. Anything that later wants to compile one must re
 Both are enforced in one place — `build.py`'s `MECH_SKIP` — so the exclusion is code, not a comment
 that can drift.
 
+### 3.4 The three `[KSPAddon]`s — vendored, NOT compiled (added by **T15b**, 2026-09-05)
+
+**This is a SAFETY exclusion, and it is the one on this page that must never be reverted casually.**
+§7's warning block below found the problem; T15b closed it. **KSP instantiates `[KSPAddon]` classes
+by scanning every assembly in `GameData` — nobody has to attach anything**, so vendoring MechJeb's
+whole tree (§B12.1a, and correct) ships three self-starting `MonoBehaviour`s that would run inside
+DragonScreen's assembly and speak with MechJeb's voice. §B12.1a's rule — *"vendored but never
+registered/shown … ported ≠ enabled"* — is exactly what an addon that registers itself defeats.
+
+| Excluded file | Addon | Why it had to go |
+|---|---|---|
+| `MechJeb2/CompatibilityChecker.cs` | `Startup.Instantly, true` | Version check that **can raise a popup dialog**. Referenced by nothing else in the compiled set (verified by grep over all 245 files). |
+| `MechJeb2/InstallChecker.cs` | `Startup.MainMenu, true` | MechJeb's *"you installed it wrong"* **popup**. It looks for `GameData/MechJeb2`, which this layout deliberately does not have, so it is **likely to fire**. Referenced by nothing else. |
+| `MechJeb2/MechjebBundlesManager.cs` | `Startup.MainMenu, false` | Loads `GameData/MechJeb2/Bundles/shaders.bundle`. For a user with no MechJeb that path does not exist; **for a user who has one it is a bundle already loaded by them**, and Unity refuses a second load of the same files — we would be printing errors into someone else's mod. |
+
+⚠ **The class name is not always the file name.** `MechjebBundlesManager.cs` declares
+`MechJebBundlesManager` (different capital J), which is why `build.py`'s `MECH_ADDONS_EXCLUDED`
+lists them **by path**, and why a grep for the class name alone would have missed the file.
+
+**One of the three has compiled dependents, so it has a SUBSTITUTE.** `GuiUtils.cs:905-906` and
+`MechJebModuleDebugArrows.cs:319-320,614` read `MechJebBundlesManager`'s three statics, so dropping
+the file alone is `CS0103`. `_dragonscreen/_BundlesManager.cs` supplies the three fields and nothing
+else — the same shape as §4.3's `JetBrains.Annotations` substitution, and in the same DragonScreen-
+owned directory. **`null` is not a degradation:** those fields are non-null only if the bundle
+loaded, and in this layout upstream's own file would have hit its `if (assetBundle == null) yield
+break` and left all three null anyway. Both consumers are GUI/debug paths this build never runs.
+
+**⛔ THIS DOES NOT WEAKEN THE PIN, and the distinction is T15a's own.** All three files are still
+**vendored, byte-exact** — §B12.1a's full-tree rule governs what is *vendored*, not what is
+*compiled*, which is precisely the ground on which `MechJebKos/`, `MechJebLibTest/` and
+`MechJeb2-Unity/` sit in §3.2. `mech_sources()` **fails the build** if a re-pin renames or moves one
+of the three, rather than silently letting a self-registering addon back into the assembly.
+
 ---
 
 ## 4. WHAT WAS CHANGED — the rename shell, and nothing else
@@ -307,6 +340,18 @@ Stated plainly, because it is easy to read `test` as more than it is:
 - The screens still fly nothing. §14.4(a) holds: the command buttons remain an honest no-op. This
   task shipped an assembly, not an autopilot — **and the GUI in it is not yet suppressed**, which is
   T15b's first job (§B12.1a: *ported ≠ enabled*).
+
+### ✅ CLOSED BY T15b, 2026-09-05 — the three addons are out of the compiled assembly
+
+**The block below is T15a's finding and stands as written; this note records what answered it.**
+All three `[KSPAddon]` files are still vendored and are no longer compiled — see **§3.4** for the
+mechanism, the substitute the third one needed, and the build-time guard that stops a re-pin from
+quietly undoing it. The compiled set went **247 → 245** files (−3 addons, +1 substitute).
+
+⚠ **`install` and glass time are still separate owner gates and T15b did not open either**, so this
+DLL has still never been near the game. What changed is that the reason for the ban is gone: the
+count of self-registering `[KSPAddon]`s in `DragonScreen.Mech.dll` is now **zero**, verified from
+`mech_sources()` and re-checked on every `build.py test` (`test/MechHostTest.cs`).
 
 ### ⛔ DO NOT `install` THIS BUILD UNTIL T15b LANDS — and the reason is sharper than "no core yet"
 
