@@ -86,8 +86,14 @@
 // • NEVER STAGE, NEVER FIRE AN ACTION GROUP, NEVER `NextEngineModeAction`, NEVER `ModuleEngineConfigs`
 //   as a switch, NEVER write `ModuleTundraEngineSwitch.selectedIndex` (§B16.3 / §B16.4). Engine sets are
 //   selected ABSOLUTELY by activating the matching-`engineID` module WHILE OFF.
-// • NEVER RE-LIGHT A LIT SET. Each `engineID` set carries `ignitions = 1` in the dump; the role change is
-//   the only thing that touches an engine.
+// • NEVER RE-LIGHT A LIT SET. The rule stands regardless of ignition count — a re-light is a real
+//   shutdown plus a real spool mid-flight — so the role change is the only thing that ever touches an
+//   engine. ⚠ **THE IGNITION COUNT IS UNMEASURED, not the fact this line used to assert.**
+//   `docs/reference/craftdump.csv` reads `ignitions = 1` on each `engineID` set, but that is a PRELAUNCH
+//   pad read; register [[BB8]] records the install's own `%ignitions = -1` (RealFuels: unlimited)
+//   ConfigCache carrying −1 on the octaweb nine times, and nobody has sampled it in flight. See
+//   `SelectEngineSet`'s own doc comment below (fixed by [[OCT4]]) and [[OCT7]], which corrected this line
+//   and `pure/BoosterDescent.cs`'s file header — the only two sites that still stated the pad read as fact.
 // • NEVER WIDEN PHYSICS RANGES (that is global, and therefore the Dragon's too — register W9).
 // • NEVER SEARCH FOR AN ENGINE PER FRAME. `OctawebEngines.Resolve` once, `StillValid` thereafter.
 // ============================================================================================

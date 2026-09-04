@@ -3196,7 +3196,7 @@ under the existing preview-only build-go.
 has never run, and OCT6 just created the project's first mid-burn bank change. That is a build task, not
 an owner call — flagged here only so it is not lost behind the question above.
 
-### OCT7 [S] Two file headers still assert `ignitions = 1` as established fact — **TODO** — [logged by OCT6 per C1.1; the brief named this one log-only]
+### OCT7 [S] Two file headers still assert `ignitions = 1` as established fact — **DONE 2026-09-05** — [logged by OCT6 per C1.1; the brief named this one log-only; batched with OCT8+OCT9]
 - **The finding, two places:** `pure/BoosterDescent.cs:52-57` (§4.5 non-port **(b)**) still reads
   *"`docs/reference/craftdump.csv` records `ignitions = 1` on EACH of the three `ModuleEnginesRF`.
   Stepping 3→1 during the brake would spend `CenterOnly`'s single ignition ... The landing burn lights
@@ -3213,8 +3213,23 @@ an owner call — flagged here only so it is not lost behind the question above.
   A comment-only change; no behaviour, no test.
 - **DONE when:** neither header states the ignition count as fact, both point at BB8, and the
   BoosterDescent header describes the burn the file actually flies. `build.py test` green.
+- **BUILT, exactly as scoped — comment-only, no behaviour, no test.**
+  1. `pure/BoosterDescent.cs:52-57`'s non-port (b) rewritten: opens `[SUPERSEDED — the 3→1 handover
+     mid-landing-burn IS now flown.]`, keeps the ORIGINAL reasoning verbatim underneath it (C1.16 — never
+     deleted, only marked overruled), states the `ignitions = 1` premise is UNMEASURED citing [[BB8]]'s
+     `%ignitions = -1` ConfigCache finding, then quotes the owner's actual 2026-09-05 ruling in full
+     (*"1. (2)"* / *"comput[ed] from current hover slam solver"*) and names [[OCT6]]/[[OCT9]] as what
+     replaced it. The list's own intro line ("three of them... each for a reason recorded") is corrected
+     to flag (b) as superseded rather than presenting all three as equally current.
+  2. `src/BoosterHost.cs:89-90`'s "NEVER DO" bullet rewritten: the RULE ("never re-light a lit set")
+     stands, restated as holding regardless of ignition count; the `ignitions = 1` claim is now marked
+     UNMEASURED citing BB8, with a pointer to `SelectEngineSet`'s doc comment (fixed by [[OCT4]]) as the
+     one site already correct, so a reader lands on the accurate version.
+- **VERIFIED (C1.3).** Comment-only — no test to break, none written. `python plugin/build.py test`
+  green (see OCT9's run, same commit). `preview` green, no PNG differs (this task touches no drawing
+  path).
 
-### OCT8 [S] `EnginesFor`'s "0" case is narrower than its own comment claims — **TODO** — [logged by OCT6 per C1.1: a real gap, found while writing its first test]
+### OCT8 [S] `EnginesFor`'s "0" case is narrower than its own comment claims — **DONE 2026-09-05** — [logged by OCT6 per C1.1: a real gap, found while writing its first test; batched with OCT7+OCT9]
 - **The finding:** `pure/Hoverslam.cs:105-114`'s comment says it returns *"0 if even three cannot stop"*.
   The code returns 3 whenever `sThree.ThrustAccelMps2 > sThree.GravityMps2` — a thrust-to-weight test
   ONLY. It never asks whether three engines can arrest **in the altitude that is left**, which is exactly
@@ -3228,8 +3243,89 @@ an owner call — flagged here only so it is not lost behind the question above.
   `IgnitionAltitude` returns `AltitudeM` when `a <= g`, so a naive `IgnitionAltitude(sThree) <
   sThree.AltitudeM` is false at the boundary for a different reason than it is false when out of room.
 - **DONE when:** the comment and the code agree, with a test for whichever behaviour is chosen.
+- **BUILT — made SYMMETRIC with the one-engine branch, exactly the ANSWERED text's shape.**
+  `pure/Hoverslam.cs`'s `EnginesFor` now reads `sThree.ThrustAccelMps2 > sThree.GravityMps2 &&
+  IgnitionAltitude(sThree) < sThree.AltitudeM` → 3, else 0. A comment in place explains why the trap the
+  brief warned about (`IgnitionAltitude` returning `AltitudeM` — "light now" — when `a <= g`, which would
+  make a naive altitude test false for the wrong reason at that boundary) cannot fire: the TWR conjunct
+  immediately before it already excludes `a <= g`, so `IgnitionAltitude(sThree)` is always a genuinely
+  solved value by the time this line runs.
+- ⚠ **THIS IS A BEHAVIOUR CHANGE, as the brief said it would be.** A stage too low and too fast for three
+  engines — TWR > 1 for `ThreeLanding` but out of altitude to actually arrest — now gets the honest `0`
+  refusal [[OCT6]] already wired (`"landing burn refused: even the 3-engine bank cannot arrest from
+  here"`), instead of a `3` and a burn it cannot fly.
+- **TESTED — `EnginesForChecks` in `test/BoosterTest.cs`.** New case: the stage sat at HALF the altitude
+  the three-engine bank needs to arrest (TWR comfortably above 1 for BOTH banks) now returns 0, not 3.
+  **MUTATION-PROVED:** reverted the new conjunct to the old bare TWR test → **RED**, `FAIL  OCT8: too
+  low/fast for the 3-engine bank returns 0, not 3 - even with 3-engine TWR > 1   ignThree=438 alt=219`.
+  Restored → GREEN.
+- **VERIFIED (C1.3).** `python plugin/build.py test` green (997 checks in the booster suite, up from
+  995). `preview` green, no PNG differs (no drawing path touched).
 
-### OCT9 [S] The computed shed point has ZERO margin for the swap transient — **TODO** — [logged by OCT6 per C1.1; MEASURED by OCT6's own mutation run, not hypothesised]
+### OCT9 [S] The computed shed point has ZERO margin for the swap transient — **DONE 2026-09-05** — [OWNER RULING: "(2), and give me OCT4" — quoted verbatim below (C1.12); logged by OCT6 per C1.1, MEASURED by OCT6's own mutation run; batched with OCT7+OCT8]
+
+- 🟢 **OWNER RULING, 2026-09-05, VERBATIM (C1.12 evidentiary standard), relayed into this chat by the
+  task brief:** *"(2), and give me OCT4."* — option (2) from OCT6's open question: **the shed criterion
+  gains a margin DERIVED from the solver's own terms, not an invented constant.**
+  ⚠ **"give me OCT4", answered:** [[OCT4]] is DONE (`35fe11f`, 2026-09-05) — it found and fixed a real
+  defect: `BoosterHost.cs`'s `Blocked` call never passed OCT6's shed latch, so the gate ran on its `false`
+  default and refused `CenterOnly` on every post-shed tick — OCT6's shed could never have reached the
+  vehicle. Fixed via a new `BlockedFor` taking the whole command, mutation-proved by re-introducing the
+  omission. See OCT4's own headline block above for the full account; not re-done or re-verified here.
+
+- **THE FIX, FRAMED AS RECONCILING TWO SPOOL MODELS (not "adding a margin").** `s.Land.SpoolS` is fed
+  `0.0` by `BoosterHost.cs:471` — *"instant-spool Merlin"* — true of the ENGINE, given our
+  `throttleResponseRate` patch. But the centre bank a shed lights has never fired this burn, and
+  `BoosterDescent.RampThrottle` (§6) imposes this FSM's OWN policy on top of the engine — *"ignite at a
+  trickle, then RAMP; never step"* (`[Tunable] ThrottleRampPerS = 1.333`) — which the solver was never
+  told about. It computed the shed point assuming thrust it would not have for roughly half a second, and
+  OCT6's mutation run measured the consequence: 0.8 s after the shed the margin has already gone
+  negative. `HoverslamInputs.SpoolS` already models exactly "time for thrust to reach full" (the
+  brake-phase ramp in `Hoverslam.IgnitionAltitude`), so the fix feeds the SHED TEST ONLY — not
+  `LandingThrottle`, not the AeroDescent hand-over gate ([[OCT10]], untouched) — a `SpoolS` derived as
+  `1.0 / ThrottleRampPerS`: the time OUR OWN throttle ramp takes to cross the full range. `pure/
+  BoosterDescent.cs`'s `LandingBurn` case now builds a `landForShed` copy of `s.Land` with that `SpoolS`
+  and calls `Hoverslam.EnginesFor(landForShed, s.LandThree)` in place of the raw call. `ThrottleRampPerS`
+  itself gained a one-line cross-reference at its declaration recording that OCT9 now reads it too.
+
+- ⚠ **BE HONEST ABOUT WHAT THIS INHERITS, PER THE BRIEF — stated plainly, not claimed as ruling 2
+  satisfied outright.** `ThrottleRampPerS = 1.333` sits under the file's own "[UN-CONVERGED] F9I stock
+  figures... the numbers are placeholders" header. This fix does **NOT** escape an un-converged constant
+  — it makes the shed margin TRACK one that is already in the model and already flagged, instead of
+  inventing a second. §B16.8 ruling 2 is not violated by that, but it is not fully discharged either:
+  `ThrottleRampPerS` itself still awaits a recorded RSS-RO re-flight to re-converge. **No new tuned
+  constant was introduced.**
+
+- **THE MEASURED EFFECT, and why it is a DELAY, not an earlier shed — worth stating because it is
+  counter-intuitive.** `IgnitionAltitude` grows with a wider spool ("a slow spool RAISES the ignition
+  altitude" — the pre-existing `HoverslamChecks` property), so the margined criterion is HARDER to
+  satisfy at any given (speed, altitude) than the raw one. Since the vehicle's actual three-engine
+  trajectory is unaffected by which criterion decides the shed instant, this means the FSM holds
+  `ThreeLanding` (which has spare deceleration to give) for LONGER — past the tick the un-margined solver
+  would already have committed to `CenterOnly` — and only sheds once the ramp-honest model says one
+  engine will actually make it. That extra held time IS the margin: banked three-engine braking, spent
+  before committing to a bank that must then ramp up.
+
+- **TESTED — extended the whole-landing-burn walk (`LandingBurnWalkChecks`/`FlyLandingBurn`,
+  `test/BoosterTest.cs`), per the brief.** `BurnWalk` now tracks `RawCrossTick` (the first tick the RAW,
+  un-margined `Hoverslam.EnginesFor(b.Land, b.LandThree)` — built fresh each tick with `SpoolS = 0`, same
+  convention `BoosterHost` feeds — would already say `1`) and `ShedTick` (the tick the FSM, running the
+  margined criterion, actually sheds). New assertion: `ShedTick > RawCrossTick` — the shed is held back
+  past the un-margined boundary, not fired at it.
+  **MUTATION-PROVED:** reverted the `LandingBurn` case to call `Hoverslam.EnginesFor(s.Land, s.LandThree)`
+  directly (dropping `landForShed`) → **RED**, `FAIL  OCT9: the shed is HELD BACK past the un-margined
+  boundary (extra 3-engine braking banked)   shedTick=7 rawCrossTick=7` — the pre-fix shed lands EXACTLY
+  on the un-margined boundary, zero margin, precisely the finding this line was opened on. Restored →
+  GREEN.
+- **THE 0 CASE IS REACHABLE**, per the brief's separate requirement: covered by [[OCT8]]'s new
+  `EnginesForChecks` case in the same commit — the two register lines share one test file and one test
+  run, listed once here to avoid duplicating the mutation account.
+
+- **VERIFIED (C1.3).** `python plugin/build.py test` — **GREEN, ALL SUITES PASSED**: booster recovery FSM
+  **997 checks** (up from 995; +1 OCT8, the walk's assertion changed shape rather than adding a check).
+  `python plugin/build.py preview` green, no PNG differs — this task touches no drawing path, run anyway
+  per the verify gate. No `install`, no glass.
+- **Strays:** none newly found. OCT10, OCT4's gate and OCT6's latch semantics are untouched, as scoped.
 - **The finding, measured:** OCT6's whole-burn walk sheds 3→1 at the first tick the single engine can
   *just* arrest — `EnginesFor` has no margin term — and the spool ramp then takes the centre bank ~0.46 s
   to reach the thrust the solve assumed. OCT6's latch-removal mutation dated the consequence exactly:

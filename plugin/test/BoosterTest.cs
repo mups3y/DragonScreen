@@ -159,6 +159,19 @@ public static class BoosterTest
         Check("...and a three-engine bank that CAN decelerate is never reported as 0",
               Hoverslam.EnginesFor(Bank(5.0, 500.0, 200.0), Bank(EngThreeAccel, 500.0, 200.0)) == 3, "");
 
+        // ---- BRANCH "0", REACHABLE EVEN WHEN THREE ENGINES OUT-THRUST GRAVITY (OCT8, 2026-09-05) ----
+        // Before OCT8 the three-engine branch was a bare TWR test, so "0" was reachable only when three
+        // engines ALSO couldn't out-thrust gravity — almost never, and narrower than the function's own
+        // comment ("0 if even three cannot stop") ever promised. Sit the stage at HALF the altitude three
+        // engines need to arrest — TWR comfortably above 1 for BOTH banks, too low and too fast for
+        // EITHER to actually stop in the room that is left.
+        double ignThree = Hoverslam.IgnitionAltitude(Bank(EngThreeAccel, 0.0, vHigh));
+        HoverslamInputs oneTooLow = Bank(EngCentreAccel, ignThree / 2.0, vHigh);
+        HoverslamInputs threeTooLow = Bank(EngThreeAccel, ignThree / 2.0, vHigh);
+        Check("OCT8: too low/fast for the 3-engine bank returns 0, not 3 — even with 3-engine TWR > 1",
+              Hoverslam.EnginesFor(oneTooLow, threeTooLow) == 0,
+              "ignThree=" + ignThree.ToString("F0") + " alt=" + (ignThree / 2.0).ToString("F0"));
+
         // ---- MONOTONICITY — the property the ONE-WAY LATCH rests on ----
         // At a fixed altitude, sweeping the descent speed DOWN (which is what a landing burn does), the
         // answer must move 3 -> 1 and never back. `IgnitionAltitude` is monotonic in speed (checked
@@ -951,6 +964,15 @@ public static class BoosterTest
         public bool SawThree, SawCentre, ThreeAfterCentre, EverIllegal;
         public string FirstIllegal;
         public int Sheds;
+        // OCT9 — the margin is measured as a DELAY, not an early shed. `IgnitionAltitude` grows with a
+        // wider spool, so the margined criterion is HARDER to satisfy at any given (v, altitude) than the
+        // raw one — the FSM holds `ThreeLanding` (which has plenty of spare deceleration) for LONGER,
+        // past the tick the un-margined solver would already have committed to `CenterOnly`, and only
+        // sheds once the ramp-honest model says one engine will actually make it. `RawCrossTick` is the
+        // first tick the RAW (un-margined) solver would have sheared; `ShedTick` is the tick the FSM
+        // actually did. `ShedTick > RawCrossTick` is the margin: extra ticks of full three-engine braking
+        // banked before committing to the bank that must then ramp up.
+        public int RawCrossTick, ShedTick;
     }
 
     static BurnWalk FlyLandingBurn(double dt, int maxTicks)
@@ -986,10 +1008,21 @@ public static class BoosterTest
                 w.EverIllegal = true;
             }
 
+            // OCT9 — `b.Land`/`b.LandThree` here are the RAW banks this tick built (SpoolS = 0, the same
+            // convention `BoosterHost` feeds), so calling `EnginesFor` on them directly is exactly the
+            // UN-MARGINED shed test OCT6 shipped. Record the FIRST tick it would already shed, whether or
+            // not the (margined) FSM has actually shed yet.
+            if (w.RawCrossTick == 0 && Hoverslam.EnginesFor(b.Land, b.LandThree) == 1)
+                w.RawCrossTick = w.Ticks;
+
             bool three = c.EnginesLit && c.EngineMode == VehicleParts.ModeThreeEngine;
             bool centre = c.EnginesLit && c.EngineMode == VehicleParts.ModeCentreOnly;
             if (three && w.SawCentre) w.ThreeAfterCentre = true;
-            if (centre && !w.SawCentre && w.SawThree) w.Sheds++;
+            if (centre && !w.SawCentre && w.SawThree)
+            {
+                w.Sheds++;
+                w.ShedTick = w.Ticks;
+            }
             if (three) w.SawThree = true;
             if (centre) w.SawCentre = true;
 
@@ -1023,6 +1056,14 @@ public static class BoosterTest
         // the spool ramp means the newly-selected centre bank is not yet at the thrust the solve assumed.
         Check("OCT6: the bank NEVER returns to ThreeLanding after shedding — the latch holds across ticks",
               !w.ThreeAfterCentre, "");
+        // ⛔ THE OCT9 MUTATION TARGET. Drop the `landForShed.SpoolS` line in `BoosterDescent`'s LandingBurn
+        // case (call `Hoverslam.EnginesFor(s.Land, s.LandThree)` directly again) and this goes red: the
+        // FSM then sheds on EXACTLY the tick the raw solver first crosses (`ShedTick == RawCrossTick`,
+        // the zero-margin behaviour OCT9 was opened against), instead of banking extra three-engine
+        // braking time first.
+        Check("OCT9: the shed is HELD BACK past the un-margined boundary (extra 3-engine braking banked)",
+              w.Sheds == 1 && w.RawCrossTick > 0 && w.ShedTick > w.RawCrossTick,
+              "shedTick=" + w.ShedTick + " rawCrossTick=" + w.RawCrossTick);
     }
 
     // =====================================================================================

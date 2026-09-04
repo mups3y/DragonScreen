@@ -100,15 +100,25 @@ namespace DragonScreen
             return hIgnite - IgnitionAltitude(s);
         }
 
-        // Fewest engines that can still arrest from here: try the centre engine first, then three. Returns
-        // 1 or 3 (0 if even three cannot stop → the caller flags an un-recoverable landing to FDIR).
+        // Fewest engines that can still arrest from here: try the centre engine first, then three, each
+        // asked the SAME question — can it ignite low enough to arrest in the altitude that is left?
+        // Returns 1 or 3 (0 if even three cannot stop → the caller flags an un-recoverable landing to FDIR).
         public static int EnginesFor(HoverslamInputs sOne, HoverslamInputs sThree)
         {
             // if one engine can ignite low enough that its ignition altitude is under the current altitude
             // with margin, one engine suffices; otherwise three are needed to arrest the speed.
             if (sOne.ThrustAccelMps2 > sOne.GravityMps2 && IgnitionAltitude(sOne) < sOne.AltitudeM)
                 return 1;
-            if (sThree.ThrustAccelMps2 > sThree.GravityMps2)
+            // OCT8 (2026-09-05) — SYMMETRIC with the branch above. The old test asked only whether three
+            // engines out-thrust gravity, never whether three could arrest in the altitude actually left,
+            // so a stage too low and too fast for even the three-engine bank still got "3" and a burn it
+            // could not fly — not the un-recoverable verdict this function's own comment always promised.
+            // ⚠ `IgnitionAltitude` returns `AltitudeM` (i.e. "light now") when `a <= g`, which would make a
+            // naive `IgnitionAltitude(sThree) < sThree.AltitudeM` false at that boundary for the WRONG
+            // reason — but the TWR conjunct immediately before it already excludes `a <= g`, so by the time
+            // `IgnitionAltitude(sThree)` runs here it is always a genuinely solved value, never the
+            // fallback, and that trap cannot fire.
+            if (sThree.ThrustAccelMps2 > sThree.GravityMps2 && IgnitionAltitude(sThree) < sThree.AltitudeM)
                 return 3;
             return 0;
         }

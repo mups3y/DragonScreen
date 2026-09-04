@@ -42,19 +42,31 @@
 // Re-convergence needs RECORDED RSS-RO RE-FLIGHTS: the BlackBox (`docs/BLACKBOX_RESEARCH.md`) and a
 // SEPARATE owner glass gate (§B16.8 ruling 3). No task can converge one under the preview-only gate.
 //
-// ⛔ WHAT WAS DELIBERATELY **NOT** PORTED — three of them, each for a reason recorded in the repo:
+// ⛔ WHAT W8 DELIBERATELY DID **NOT** PORT — three of them, each for a reason recorded in the repo. ⚠ (b)
+// WAS SUPERSEDED 2026-09-05 ([[OCT6]]/[[OCT7]]) and is kept per C1.16 — reasoning is never deleted, only
+// recorded as overruled:
 //   (a) **The engine actuation layer** (method §7). F9I switches engine counts by cycling the Tundra
 //       engine-switch module's "next engine mode" action — precisely what §B16.3 forbids, and the source
 //       itself is the evidence (it retries the write three times and warns that "landing may be wrong").
 //       Engine commanding is OURS and already landed: `pure/OctawebBinding.cs` + `pure/OctawebResolve.cs`
 //       bind the three `ModuleEnginesRF` BY `engineID` STRING (`AllEngines`/`ThreeLanding`/`CenterOnly`)
 //       with the foreign-vehicle guard. This file only ever NAMES a mode and a throttle.
-//   (b) **The 3→1 handover mid-landing-burn** (method §4.5). `docs/reference/craftdump.csv` records
-//       `ignitions = 1` on EACH of the three `ModuleEnginesRF`. Stepping 3→1 during the brake would spend
-//       `CenterOnly`'s single ignition and spool mid-braking. F9I never faced RO ignition limits and
+//   (b) **[SUPERSEDED — the 3→1 handover mid-landing-burn IS now flown.]** THE ORIGINAL REASONING, kept
+//       verbatim rather than deleted: it was not ported because `docs/reference/craftdump.csv` records
+//       `ignitions = 1` on EACH of the three `ModuleEnginesRF`, so stepping 3→1 during the brake would
+//       spend `CenterOnly`'s single ignition and spool mid-braking; F9I never faced RO ignition limits and
 //       method §10 item 4 says so plainly — "the 3→1 handover is an extra ignition event F9I spends
-//       without thinking about it". **C7.1: the repo wins.** The landing burn lights `CenterOnly` ONCE and
-//       runs it to the deck, exactly as the restored module already did.
+//       without thinking about it." **That `ignitions = 1` premise is UNMEASURED, not established** — the
+//       dump's figure is a PRELAUNCH pad read, while register [[BB8]] records the install's own
+//       `%ignitions = -1` (RealFuels: unlimited) ConfigCache carrying −1 on the octaweb nine times, and
+//       nobody has sampled it in flight. **The owner OVERRULED this reasoning, 2026-09-05, verbatim**
+//       (quoted in full where [[OCT6]] built the replacement): asked which of two options to fly,
+//       *"1. (2)"* — `ThreeLanding` shedding to `CenterOnly` — with the shed point *"comput[ed] from
+//       current hover slam solver"*. OCT6 built the handover as a ONE-WAY LATCH with NO new ignition-
+//       budget guard laid on the unmeasured count (the pre-existing `IgnitionsCentreOnly == 0` refusal,
+//       reading the LIVE module, is untouched); [[OCT9]] is the shed criterion's own derived margin. The
+//       `LandingBurn` case below is what the file actually flies now — read it, not this paragraph, for
+//       current behaviour.
 //   (c) **The four supporting lat/lng PID pairs** (method §4.4's aside). The vector steering law is what
 //       flies the flown path; the doc itself says a port should start there rather than bring four
 //       untested PIDs across.
@@ -368,6 +380,9 @@ namespace DragonScreen
         // ---- §6 ULLAGE + SPOOL ----------------------------------------------------------------------
         // [UN-CONVERGED] F9I stock figures. "Ignite at a trickle, then RAMP — never step." Respecting
         // spool rather than commanding instant thrust is the discipline; the numbers are placeholders.
+        // ⚠ OCT9 (2026-09-05) also reads `ThrottleRampPerS` to derive the landing-burn shed criterion's
+        // margin (the `LandingBurn` case, below) — not a second tuned figure, the SAME placeholder used
+        // twice, so re-converging it re-converges both consumers together.
         [Tunable] public static double IgnitionTrickle  = 0.025;
         [Tunable] public static double ThrottleRampPerS = 1.333;
 
@@ -964,7 +979,34 @@ namespace DragonScreen
                         else if (s.LandingShedLatched)
                             bank = 1;                    // already shed — never re-evaluated.
                         else
-                            bank = Hoverslam.EnginesFor(s.Land, s.LandThree);
+                        {
+                            // OCT9 (2026-09-05, owner ruling "(2), and give me OCT4") — RECONCILE TWO
+                            // SPOOL MODELS rather than invent a margin. `s.Land.SpoolS` is fed 0 by
+                            // `BoosterHost` — "instant-spool Merlin", true of the ENGINE given our
+                            // `throttleResponseRate` patch. But the centre bank a shed lights has never
+                            // fired THIS burn, and this FSM imposes its OWN §6 policy on top of the
+                            // engine — "ignite at a trickle, then RAMP; never step" (`RampThrottle`,
+                            // `ThrottleRampPerS`) — which the solver above was never told about. OCT6's
+                            // mutation run measured the consequence: shed at the bare boundary, margin
+                            // already negative 8 ticks (0.8 s) later.
+                            // `HoverslamInputs.SpoolS` already models exactly "time for thrust to reach
+                            // full" (see `Hoverslam.IgnitionAltitude`'s brake-phase ramp), so feed the
+                            // SHED TEST — and only the shed test; `LandingThrottle` and the AeroDescent
+                            // hand-over gate ([[OCT10]]) are untouched — the time OUR OWN throttle ramp
+                            // actually takes to cross the full range. This TRACKS `ThrottleRampPerS`,
+                            // itself [UN-CONVERGED] and already flagged above, rather than adding a
+                            // second, invented figure: the shed simply moves to the altitude where one
+                            // engine can arrest INCLUDING the ramp, not the altitude where it could arrest
+                            // if it were already at full throttle the instant it lit.
+                            // ⛔ HONESTY, PER THE BRIEF: this does not escape an un-converged constant —
+                            // it makes the margin TRACK one already in the model and already flagged,
+                            // instead of inventing a second. §B16.8 ruling 2 is not violated by that, but
+                            // is not fully discharged either — `ThrottleRampPerS` itself still awaits a
+                            // recorded RSS-RO re-flight.
+                            HoverslamInputs landForShed = s.Land;
+                            landForShed.SpoolS = ThrottleRampPerS > 1e-6 ? 1.0 / ThrottleRampPerS : 0.0;
+                            bank = Hoverslam.EnginesFor(landForShed, s.LandThree);
+                        }
 
                         if (bank == 0)
                         {
