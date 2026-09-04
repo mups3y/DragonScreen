@@ -79,11 +79,17 @@ Also drawn on, with attribution at each site:
   jrbudda) — its fuel-flow simulation, read live by reflection where it is installed, is the source of
   the propulsion-performance numbers (thrust, Δv, TWR, Isp, burn time, stage mass). Optional: absent,
   those readouts draw a dash. No code is copied and there is no compile-time reference.
-- **[SpaceX-Dragon2-UI](https://github.com/Neel-Dandiwala/SpaceX-Dragon2-UI)** — the reference the
-  page layouts are measured from.
+- **[SpaceX-Dragon2-UI](https://github.com/Neel-Dandiwala/SpaceX-Dragon2-UI)** (Apache-2.0, Neel
+  Dandiwala) — the reference the page layouts are measured from, **and the source of one shipped
+  asset** (`dragon_crew.png` — see below).
 - **Tundra Exploration** — the Dragon V2 parts and IVA this mod attaches to.
 
-None of those are redistributed here; `.gitignore` keeps them out and the code cites them by path.
+Everything above except SpaceX-Dragon2-UI is not redistributed here; `.gitignore` keeps it out and the
+code cites it by path. SpaceX-Dragon2-UI is the one exception: `dragon_crew.png` is shipped verbatim in
+`plugin/GameData/DragonScreen/art/cover/`. Apache-2.0 is one-way compatible with this project's GPL-3.0,
+so shipping it is permitted, subject to Apache-2.0's own attribution requirements. See **`NOTICE`** at
+the repo root for the full attribution, the licence text, and the statement of changes — the single
+source of truth for this; not restated here.
 
 ## Requirements
 

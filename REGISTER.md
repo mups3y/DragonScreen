@@ -5961,7 +5961,17 @@ commit. NOT pushed (C1.5). No `.cs` file touched.
 needs an owner call. The two stale-doc findings above are recorded as new register lines (S70/S71) rather
 than asked as questions, per C1.1.
 
-### S70 [S] Fix `README.md`'s licence section for the Dandiwala derivation — **TODO** — [TIER 3: doc accuracy]
+### S70 [S] Fix `README.md`'s licence section for the Dandiwala derivation — **DONE** (2026-09-04) — [TIER 3: doc accuracy] ⚠ batch deviation from C1.1/C1.7 authorised by owner 2026-09-04 via overseer
+**Done:** `README.md`'s Licence section now names SpaceX-Dragon2-UI's licence (Apache-2.0, Neel Dandiwala)
+inline, corrects *"None of those are redistributed here"* to carve out `dragon_crew.png` (shipped verbatim
+in `plugin/GameData/DragonScreen/art/cover/`), states the one-way Apache-2.0/GPL-3.0 compatibility, and
+points at `NOTICE` (S69) as the single source for the full attribution + licence text + statement of
+changes rather than restating any of it (C7.1 — no duplicate truth). Docs-only; no `.cs` file touched.
+**Verified (C1.3):** docs-only, no `.cs` change — no preview PNG applies (said, not skipped).
+`python plugin/build.py test` run as the no-regression check: **ALL SUITES PASSED**.
+**Outputs (C1.11, nothing else):** `README.md` · this line · one local commit. NOT pushed (C1.5).
+**Batched owner questions (C1.9):** none.
+
 Found by **S69** while grepping the tree for files crediting `neel-dandiwala/SpaceX-Dragon2-UI` (2026-09-04).
 `README.md`'s Licence section lists the repo without naming its licence (Apache-2.0) and states *"None of
 those are redistributed here"* — false: `dragon_crew.png` is shipped verbatim in
