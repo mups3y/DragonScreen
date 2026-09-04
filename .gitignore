@@ -51,6 +51,12 @@ DragonScreen_capture/
 # source the build reads, so it is tracked.
 !docs/reference/*.csv
 
+# ...and docs/flights/ is the recovered RSS-RO flight corpus (W26) plus wherever
+# the BlackBox (BB1-BB4) writes future recordings - the same kind of source, not
+# recorder scratch. Without this negation the next flight dropped in there
+# vanishes the same way the original corpus did (W28).
+!docs/flights/*.csv
+
 # ---------------------------------------------------------------------------
 # LOCAL
 # ---------------------------------------------------------------------------

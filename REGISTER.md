@@ -6540,7 +6540,17 @@ in question is `plugin/**build**/assess_flight.py`'s, and that script **never re
 **13 recordings, not "the same 55 flights `TUNING_DB.md` was built from"** — that 55-flight corpus is a
 different, earlier window and is still not in the repo (§B16.8). S8's retention decision is untouched (C1.8).
 
-### W28 [S] `.gitignore`'s blanket `*.csv` still swallows `docs/flights/` — the exact mechanism that lost the corpus — **TODO** — [TIER 2: a silent-data-loss trap that has already fired twice]
+### W28 [S] `.gitignore`'s blanket `*.csv` still swallows `docs/flights/` — the exact mechanism that lost the corpus — **DONE** — [TIER 2: a silent-data-loss trap that has already fired twice] ⚠ batch deviation from C1.1/C1.7 authorised by owner 2026-09-04 via overseer
+Added `!docs/flights/*.csv` to `.gitignore` right after the existing `!docs/reference/*.csv` negation, with a
+comment naming the mechanism and why (same fix, same reasoning). Verified: `git check-ignore -v` on a new
+`docs/flights/*.csv` path reports the negation pattern as the match (identical behaviour to the pre-existing
+`docs/reference/*.csv` negation — confirmed side-by-side); `git status` on a freshly-touched
+`docs/flights/new_test_flight.csv` shows it as untracked (`??`), i.e. NOT ignored; no currently-tracked file
+changed status (`git status --porcelain` showed only the `.gitignore` edit itself). Considered the `.txt`
+KSPlog excerpts and `docs/tuning/*.json`/`exclude.txt` per the line's note: neither is covered by any blanket
+rule in `.gitignore` (no `*.txt` or `*.json` pattern exists), so they were never at risk and need no
+negation. No code change — build/preview N/A; `python plugin/build.py test` run anyway, green (957+ checks
+across all suites, `ALL SUITES PASSED`).
 Logged by **W26**, 2026-09-04 (C1.1 — noticed on restoring the corpus; not fixed, out of scope).
 **The finding.** `.gitignore:41` is a blanket `*.csv`, with a single negation at `:52` —
 `!docs/reference/*.csv` — added after that same rule silently swallowed `docs/reference/craftdump.csv`
