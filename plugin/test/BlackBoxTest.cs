@@ -52,6 +52,7 @@ public static class BlackBoxTest
         Coverage();
         Events();
         Manifest();
+        Latency();          // BB7
         Pipeline();
         Naming();            // BB2
         ScopeDeclarations(); // BB2
@@ -698,6 +699,7 @@ public static class BlackBoxTest
         m.ClosedUt = 4242.0;
         m.RowsWritten = 1234;
         m.MaxRecBuildUs = 87.5;
+        m.P50RecBuildUs = 32.0; m.P90RecBuildUs = 64.0; m.P99RecBuildUs = 90.5;
         CoverageFinding cf;
         cf.Column = "thrust_n"; cf.Kind = "never_written"; cf.Defect = true; cf.Declared = "declared Live";
         m.Coverage.Add(cf);
@@ -708,8 +710,66 @@ public static class BlackBoxTest
               "rows_written is recorded — a reader compares it to the CSV and detects a torn tail exactly");
         Check(closed.Contains("\"max_rec_build_us\": 87.5"),
               "the recorder's own worst frame cost is a NUMBER in the file, not an argument (§1.4(b))");
+        // BB7: the max alone cannot say spike-vs-sustained — the distribution rides alongside it.
+        Check(closed.Contains("\"p50_rec_build_us\": 32") && closed.Contains("\"p90_rec_build_us\": 64")
+              && closed.Contains("\"p99_rec_build_us\": 90.5"),
+              "p50/p90/p99 rec_build_us are recorded alongside the max (BB7)");
         Check(closed.Contains("\"column\": \"thrust_n\"") && closed.Contains("\"defect\": true"),
               "the coverage verdict lands in the manifest");
+    }
+
+    // ---------------------------------------------------------------- BB7: rec_build_us distribution
+    /// <summary>
+    /// `LatencyHistogram` is the pure engine behind BB7's fix: a bounded-memory, O(1)-per-sample
+    /// percentile estimate that lets the manifest report p50/p90/p99 alongside the max, so a reader can
+    /// tell a one-off spike (a GC pause) from a sustained regression without re-deriving it from the
+    /// CSV's own per-row column by hand.
+    /// </summary>
+    static void Latency()
+    {
+        // ---- empty: nothing fabricated ----
+        LatencyHistogram empty = LatencyHistogram.Fresh();
+        Check(empty.Count == 0, "a fresh histogram has recorded nothing");
+        Check(empty.Max == 0.0, "…and reports no max");
+        Check(empty.Percentile(0.50) == 0.0, "…and reports 0, not a fabricated percentile, on no data");
+
+        // ---- a KNOWN distribution: values 1..1000 us, each recorded once, so the true (exact) ----
+        // ---- percentiles are p50=500, p90=900, p99=990 — checked against the bucketed ESTIMATE. ----
+        LatencyHistogram h = LatencyHistogram.Fresh();
+        for (int us = 1; us <= 1000; us++) h.Record(us);
+        Check(h.Count == 1000, "every recorded sample is counted");
+        Check(h.Max == 1000.0, "Max is the exact top sample, not bucket-rounded");
+        double p50 = h.Percentile(0.50), p90 = h.Percentile(0.90), p99 = h.Percentile(0.99);
+        Check(p50 >= 450.0 && p50 <= 550.0, "p50 estimates the true 500us median within the bucket width (got " + p50 + ")");
+        Check(p90 >= 800.0 && p90 <= 980.0, "p90 estimates the true 900us within the bucket width (got " + p90 + ")");
+        Check(p99 >= 900.0 && p99 <= 1080.0, "p99 estimates the true 990us within the bucket width (got " + p99 + ")");
+        Check(p50 < p90 && p90 < p99 && p99 <= h.Max, "percentiles are monotone and none exceeds the max");
+
+        // ---- BB7's own finding, reproduced: a recorder that is fine (median far under budget) with ----
+        // ---- ONE unrelated spike must not report as "over budget" once the distribution is read. ----
+        LatencyHistogram flight = LatencyHistogram.Fresh();
+        var rng = new Random(12345);
+        for (int i = 0; i < 3398; i++)
+        {
+            // a realistic sub-200us row-build cost, log-ish spread — never the point of this test,
+            // only that it stays far under the 2000us §4.7 budget so the spike below is the outlier.
+            double us = 20.0 + rng.NextDouble() * rng.NextDouble() * 300.0;
+            flight.Record(us);
+        }
+        flight.Record(7267.0);   // row 1: warm-up — recorded like any other row, per this file's header
+        flight.Record(47544.0);  // row 2848: the unexplained spike BB7 found
+        const double BudgetUs = 2000.0;
+        Check(flight.Percentile(0.50) < BudgetUs, "median stays far under the §4.7 budget despite the spike");
+        Check(flight.Percentile(0.99) < BudgetUs, "p99 stays under budget too — the spike is one row in 3400, not a regression");
+        Check(flight.Max > BudgetUs, "…while Max still surfaces the real spike — nothing is hidden, only summarised better");
+
+        // ---- mutation check: a histogram that only ever recorded the max (BB1/BB recorder A/B's own ----
+        // ---- failure mode, one level up) could not have told this story — prove OUR engine can. ----
+        LatencyHistogram allSpikes = LatencyHistogram.Fresh();
+        for (int i = 0; i < 100; i++) allSpikes.Record(47544.0);
+        Check(allSpikes.Percentile(0.50) > BudgetUs,
+              "control: a histogram of ALL spikes correctly reports a median OVER budget — the low median "
+              + "above is a genuine finding about the mixed distribution, not an artefact of Percentile()");
     }
 
     // ---------------------------------------------------------------- the whole pure pipeline

@@ -3529,9 +3529,10 @@ checks (2) and (3) fail — the false-alarm trade this line's ⚠ warns against,
 dropping the `c.Fit == Fit.Live` guard made check (4) fail. `python plugin/build.py test` green throughout
 (1770 checks in `BlackBoxTest`, up from 1765; headless; no install, no glass — none needed).
 
-### BB7 [S] `max_rec_build_us = 47544` — the recorder is 23x over its own frame budget — **TODO** — [TIER 2: the instrument is trustworthy, the number it reports is not]
+### BB7 [S] `max_rec_build_us = 47544` — the recorder is 23x over its own frame budget — **DONE 2026-09-05 — ANSWERED: NOT a performance defect, INVERTED to a metric defect** (batched with BB10 + S98) — [TIER 2: the instrument is trustworthy, the number it reports is not]
 - **Provenance:** measured by the overseer from mission `New_Crew-2_20260905_005707`, 2026-09-05, and relayed
-  into this chat by prompt — not read by this chat.
+  into this chat by prompt — not read by this chat (C7). This chat did not install, fly, or open the
+  recording; the distribution numbers below are the overseer's, relayed verbatim, not re-derived here.
 - **Finding:** the confirm flight reported `max_rec_build_us = 47544`, i.e. 47.5 ms building a single row
   inside one frame, against §4.7's 2 ms budget. BB1 instrumented this correctly (Stopwatch, on every row) —
   the instrument worked, the number is just bad.
@@ -3541,6 +3542,48 @@ dropping the `c.Fit == Fit.Live` guard made check (4) fail. `python plugin/build
 - **DONE when:** the spike-vs-sustained question is answered from the existing per-row distribution, and
   either a fix lands or the finding is re-filed as a scoped follow-up with that distribution attached as
   evidence.
+
+**ANSWERED 2026-09-05, on the overseer-relayed distribution (this chat did not read the recording, C7):**
+rows with a value 3400, mean 118 us, median 63 us, p90 176 us, p99 360 us, max 47544 us — 2 rows of 3400
+(0.06%) over the 2000 us budget. Row 1 (warm-up) is 7267 us and decays immediately (rows 2/3: 692/392 us).
+Row 2848 (seq=2848, met_s=290.50, 47544 us) correlates with nothing in `events.jsonl` for MET 283-298 and
+is not a flush boundary (2848 is not a multiple of 25) — a GC pause, not a sustained cost, per the
+overseer's own analysis. **The median is 63 us against a 2000 us budget — 32x UNDER, not 23x over.**
+⛔ **No optimisation was performed** — there is nothing to optimise; a well-behaved recorder was misread
+as 23x over budget because `max_rec_build_us` alone reports a single outlier as if it characterised the
+whole recorder, the same class of defect as **[[BB5]]**/**[[BB6]]**: a number that misleads a reader.
+**Build, done:** the recorder now reports the DISTRIBUTION, not just the max. New pure
+`plugin/src/pure/blackbox/BlackBoxLatency.cs` — `LatencyHistogram`, a bounded-memory (256 `long` counters,
+8 buckets/octave, ~9% resolution — checked against the overseer's own numbers: median 63→64, p90 176→~181,
+p99 360→~362, all within ~3%), O(1)-per-sample online percentile estimate, so the manifest's memory
+footprint stays flat regardless of mission length rather than storing every `rec_build_us` sample for the
+life of the flight. `BlackBoxRecorder.cs`'s `maxRecBuildUs` double is replaced with a `LatencyHistogram`
+(`recBuildStats`), `.Record(us)` on every built row, and `ManifestInfo` gains
+`P50/P90/P99RecBuildUs` (`BlackBoxManifest.cs`), written into the JSON as `p50_rec_build_us` /
+`p90_rec_build_us` / `p99_rec_build_us` alongside the existing `max_rec_build_us`; the close-time log line
+now prints `p50/p90/p99/max` together instead of max alone.
+**Row 1 (warm-up), decided and stated (BB7's own "decide and state"):** NOT excluded from the histogram.
+Two reasons, both in `BlackBoxLatency.cs`'s header comment: (1) `MaxRecBuildUs` already didn't need it
+excluded — on the confirm flight the max was row 2848's 47544 us, not row 1's 7267 us, so the existing
+worst-case figure was never row-1's artefact to begin with; (2) a percentile's sensitivity to any one
+sample is bounded by 1/N — with N in the thousands, row 1 can move a reported percentile by at most one
+bucket, usually not even that. A hardcoded "skip sample #1" exception would buy less than a rounding error.
+**Verified:** `BlackBoxTest.cs`'s new `Latency()` section (called from `Run()`) — an empty histogram reports
+0/0/0, never a fabricated percentile; a known 1..1000us distribution's bucketed p50/p90/p99 land within the
+bucket-width tolerance of the true 500/900/990; a synthetic 3400-row distribution shaped like the confirm
+flight (rng-spread ~20-320us plus the two real outliers, 7267 and 47544) reproduces BB7's own finding —
+median and p99 both stay under the 2000us budget despite the spike, while `Max` still surfaces it — and a
+control case (a histogram of ALL 47544us spikes) confirms the low median above is a genuine property of the
+mixed distribution, not an artefact of `Percentile()` always returning something small.
+**One bug caught and fixed during this verification, not part of the original design:** `Percentile()`'s
+bucket-upper-bound estimate can round PAST the true observed max for a sample near its bucket's top (e.g.
+990us's bucket rounds to 1024) — the 1..1000us test caught `p99 (1024) > Max (1000)`, which would have let
+a manifest report a percentile bigger than its own max, a contradiction to any reader even though both
+numbers were individually honest. Fixed by clamping `Percentile()`'s return to `Max`.
+`python plugin/build.py test`: **green, ALL SUITES PASSED, 1791 checks in `BlackBoxTest`** (up from 1770).
+No preview — this is recorder-internal, not a rendered screen (§C1.3's PNG gate does not apply, matching
+BB5/BB6/BB9's precedent). No install, no glass — none needed; a manifest-shape addition is provable
+headless. Committed locally (C1.5); NEVER pushed.
 
 ### BB8 [S] Record `ignitions` per octaweb bank IN FLIGHT — **TODO** — [TIER 2: a live guard and an owner ruling both depend on a number nobody has measured in flight]
 - **Provenance:** relayed by the overseer from the confirm flight and the repo's own config/persistence
@@ -10811,7 +10854,7 @@ a fresh test file dropped in the same directory, and on this file itself immedia
 plugin/build/__pycache__/navball_preview.cpython-313.pyc` → matched by `.gitignore:72`, same rule S91
 added. No `.gitignore` change needed, as this line said.
 
-### BB10 [S] `mission_phase`/`phase_classified` are ALSO Tier.R2 — BB3's ascent row-selection reads them as if they were dense — **TODO** — [TIER 2: the likely explanation for BB5's third relayed false reading, `seco_s = 157.54`]
+### BB10 [S] `mission_phase`/`phase_classified` are ALSO Tier.R2 — BB3's ascent row-selection reads them as if they were dense — **DONE 2026-09-05** (batched with BB7 + S98) — [TIER 2: the likely explanation for BB5's third relayed false reading, `seco_s = 157.54`]
 Logged by the **BB5+BB6 batched task**, 2026-09-05 (C1.1 — noticed while explaining BB5's accessor gap;
 not fixed, because it is a row-SELECTION defect in `ascent()`, a different mechanism from the
 blank-fed-into-arithmetic fabrication BB5's own done-criteria named, and fixing it was not needed to
@@ -10839,6 +10882,95 @@ classifier cell.
 `asc` row-set including every genuinely-ascending row regardless of `mission_phase`/`phase_classified`
 decimation, and the SECO/insertion anchor row is no longer sensitive to which rows happened to land on an
 R2-due tick.
+
+**DONE 2026-09-05.** Chose the FIRST build option: forward-fill, matching §4.6's own documented contract
+for a decimated column ("blank on every other row, and the manifest's period_s tells a reader exactly how
+far forward to fill" — the same contract BB5 quoted). This is not the "guessing" BB5 warns against: BB5's
+fabrication was inventing a NUMBER (0, -9999) for a quantity that could legitimately be absent; forward-fill
+of a classifier tag is the documented reader-side interpretation of a value that WAS measured, just not on
+this particular row. A row before the column's first-ever fill is left `""` — never back-filled, never
+guessed. New `_ffill(rows, col)` in `plugin/tools/assess_flight.py` (beside `gkm`, same file BB5 fixed):
+walks `rows` once, carrying the last non-`BLANKS` value of `col` forward, `""` until the first fill. In
+`ascent()`, the row-selection block is now:
+```
+mp_ff = _ffill(st.rows, "mission_phase")
+pc_ff = _ffill(st.rows, "phase_classified")
+asc = [r for r, mp, pc in zip(st.rows, mp_ff, pc_ff) if mp == "ASCENT" or pc == "ASCENT"]
+```
+— replacing the raw `sval(r, "mission_phase") == "ASCENT" or sval(r, "phase_classified") == "ASCENT"` read.
+`return_entry()` (`assess_flight.py:1237-1238`) has the IDENTICAL raw-equality pattern over the same two
+columns and was NOT fixed here (C1.1, out of BB10's declared scope, which names `ascent()` specifically) —
+flagged as a new stray for a future line, not yet numbered.
+**Verified, mutation-proven, in `--selftest`:** a new hand-built ~146-row fixture (not `_synth`'s big one,
+same precedent as BB5) with a LONG classifier gap spanning the real thrust death: `mission_phase`/
+`phase_classified` tagged `"ASCENT"` only at met=0 and met=50, then blank for 90 rows through the genuine
+thrust-to-zero point at met=140, with the next classified value (`"COAST"`) not appearing until met=141 —
+a gap wide enough that the OLD code's `lastIdx=50` forward-scan (bounded to +80 rows, only as far as
+met=130) could never reach met=140. **Fixed code:** `seco_s` reads **143.00 s**. **Mutation-proven by hand**
+(reverted `ascent()`'s selection to the raw equality read, ran `--selftest`, restored the fix immediately
+after): the reverted code reproduces **exactly** the predicted stale value, `seco_s = 50.00 s` — the last
+row the raw read can literally see as `"ASCENT"` before the gap — confirming the new assertion catches a
+real regression, not merely a green run. `diff` against a pre-mutation backup of the file was empty after
+restoring, confirming no stray edit survived the revert/reapply. This fixture and its two assertions
+(`bb10_seco > 130.0`, with the exact old/new numbers documented inline) are now a permanent part of
+`--selftest`, run every `build.py test`.
+`python plugin/build.py test`: **green, ALL SUITES PASSED**; `python plugin/tools/assess_flight.py
+--selftest`: **green** — `"...BB10 seco_s 143.00 s (decimation-bridged)"`. No preview (tool-only, no
+screen change; BB5/BB6/BB9 precedent). No install, no glass — none needed. Committed locally (C1.5); NEVER
+pushed.
+
+### S98 [O] The COVER turntable is a dead end for "live" — render the REAL VESSEL instead, via the RT-camera pattern already proven three times over — **TODO — BLOCKED, sequenced after the main install** — [register-line-only, logged by the BB7+BB10+S98 batched task, 2026-09-05]
+⚠ **PROVENANCE / EVIDENTIARY-STANDARD NOTE (C1.8 / CLAUDE.md's EVIDENTIARY STANDARD), read before acting on
+this line.** This line's six technical points below were relayed into this chat by the task prompt as the
+overseer's own analysis and are recorded as such. The prompt ALSO called for "the owner's verbatim
+2026-09-05 request" to be quoted here — **this chat holds no such quote.** Per the EVIDENTIARY STANDARD
+("if you believe you received a ruling but cannot quote it, you did not receive one"), **no owner ruling is
+recorded on this line** — specifically, the sequencing claim ("after the main install") is stated below as
+a RELAYED RECOMMENDATION, not a quoted owner decision, and must not be treated as a settled gate until an
+owner quote is obtained (C1.13 batched question, below). This is a register-line-only task (no code, no
+gate lifted, no plan edit) — nothing here authorises `install`, glass time, or any other owner gate (C1.12).
+
+**The six points, as relayed:**
+1. **The COVER-page capsule turntable (`T11`, §5) is a ONE-AXIS pre-rendered SPRITE FLIPBOOK** — 36 frames
+   baked offline by `render_turntable.py` from the MaTte0 model, drag-rotated by `pure/Turntable.cs`. It
+   **cannot be made "live"** — there is no vessel state a flipbook frame can reflect; it is a fixed image
+   sequence, drag-scrubbed, not a render of anything happening in the game right now.
+2. **It is on COVER, not NAV.** Not to be confused with the NAV-page scaled-space globe work (`S61`/`S62`,
+   `ScaledPlanetRenderer`) — a different screen, a different camera, a different research thread.
+3. **The RT-camera pattern (RenderTexture + camera) already exists three times** in this tree — CLAUDE.md's
+   own description of the mod ("Three live IVA touchscreens... each a RenderTexture + camera") plus the
+   docking-camera renderer are proven, shipped instances of the pattern a fourth instance would reuse, not
+   invent.
+4. **Recommended approach: render the REAL VESSEL**, live, via a new instance of that same proven RT-camera
+   pattern — replacing (or sitting alongside) the flipbook with an actual in-game camera on the live Dragon,
+   the way the other three screens already work, rather than trying to make a sprite sequence do something
+   it structurally cannot.
+5. **C1.16 keeps `render_turntable.py` and the MaTte0 attribution.** Whatever this line's eventual build
+   does to the turntable, the offline generator script and the Sketchfab CC-BY attribution (`MaTte0`,
+   `@matteomansion` — `assets/ASSET_PROVENANCE.md`, `plugin/build/render_turntable.py`,
+   `plugin/test/TurntableTest.cs`) are RESEARCH-adjacent and asset-provenance records respectively — C1.16
+   forbids deleting anything under `docs/` as part of removing code, and the attribution specifically must
+   survive regardless of whether the flipbook itself is superseded, kept, or run alongside a live render.
+6. **Sequenced after the main install, per the relayed recommendation** — this is new render/camera work,
+   not a fix to what already ships, and (per the note above) waits on an owner decision this chat does not
+   hold a quote for.
+- **Build (not done here — register line only, per this task's own scope):** design and build a fourth
+  RT-camera instance framed on the live Dragon vessel for the COVER page, reusing the existing
+  RenderTexture+camera pattern (§ point 3) rather than extending `Turntable.cs`'s frame-picker; decide
+  whether it replaces T11's flipbook outright or coexists with it (e.g. as a toggle); keep
+  `render_turntable.py` + the MaTte0 attribution regardless (§ point 5, C1.16).
+- **DONE when (for the eventual build task, not this line):** COVER shows a live render of the real vessel
+  through a proven RT-camera instance, `render_turntable.py` and the MaTte0 attribution are untouched or
+  explicitly marked `SUPERSEDED` (never deleted), and the change is sequenced after the main install per an
+  owner ruling this chat can actually quote.
+- **Batched owner question (C1.9/C1.13), posed as a paste-ready overseer prompt:** *"S98 (COVER's capsule
+  turntable) is on the register as a relayed recommendation — replace/augment the pre-rendered sprite
+  flipbook with a live RT-camera render of the real vessel, reusing the RenderTexture+camera pattern already
+  shipped on the three touchscreens, sequenced after the main install. This build chat holds no verbatim
+  owner quote authorising either the approach or the sequencing (CLAUDE.md's EVIDENTIARY STANDARD requires
+  one before either is treated as decided). Options: (1) confirm the recommendation and its 'after the main
+  install' sequencing in your own words, so a future chat can quote you directly; (2) reject or amend the
+  approach; (3) leave it OPEN/BLOCKED as-is until you weigh in unprompted."*
 
 ### MJ1 [S] The vendored MechJeb compiles with warnings OFF — a re-pin has no warning baseline — **TODO** — [logged by T15a per C1.1: noticed while wiring `build_mech()`, deliberately not acted on]
 **Finding.** `plugin/build.py`'s `build_mech()` compiles `DragonScreen.Mech.dll` with `-warn:0`, and that is

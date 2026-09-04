@@ -631,7 +631,10 @@ namespace DragonScreen.BlackBox
         long seq;
         long eventsWritten;
         int writeErrors, consecutiveWriteErrors;
-        double maxRecBuildUs;
+        // BB7: the max alone misreports a well-behaved recorder as wildly over budget when the max is a
+        // one-off spike rather than a sustained cost — see BlackBoxLatency.cs's header. The histogram
+        // gives p50/p90/p99 alongside the max at the same O(1)-per-row cost.
+        LatencyHistogram recBuildStats;
         bool widthChecked;
         bool closing;
         /// <summary>
@@ -713,6 +716,7 @@ namespace DragonScreen.BlackBox
             seq = 0;
             rate = RateState.Fresh();
             accum = BlackBoxAccum.Fresh();
+            recBuildStats = LatencyHistogram.Fresh();
             widthChecked = false;
             closing = false;
             pending.Length = 0; pendingRows = 0;
@@ -788,7 +792,10 @@ namespace DragonScreen.BlackBox
                 manifest.RowsWritten = seq;
                 manifest.EventsWritten = eventsWritten;
                 manifest.WriteErrors = writeErrors;
-                manifest.MaxRecBuildUs = maxRecBuildUs;
+                manifest.MaxRecBuildUs = recBuildStats.Max;
+                manifest.P50RecBuildUs = recBuildStats.Percentile(0.50);
+                manifest.P90RecBuildUs = recBuildStats.Percentile(0.90);
+                manifest.P99RecBuildUs = recBuildStats.Percentile(0.99);
                 manifest.EverFocused = everFocused;
                 // ⭐ BB2: a stream whose vessel never held the camera correctly wrote no `Scope.Capsule`
                 // column, and the coverage pass is told so — otherwise every two-vessel flight would
@@ -810,8 +817,11 @@ namespace DragonScreen.BlackBox
                 }
                 Debug.Log(Tag + "closed " + Stem + " (" + reason + "): " + seq + " rows, "
                           + eventsWritten + " events, " + writeErrors + " write error(s), "
-                          + defects + " coverage defect(s), max rec_build "
-                          + maxRecBuildUs.ToString("F0", CultureInfo.InvariantCulture) + " us");
+                          + defects + " coverage defect(s), rec_build p50/p90/p99/max "
+                          + manifest.P50RecBuildUs.ToString("F0", CultureInfo.InvariantCulture) + "/"
+                          + manifest.P90RecBuildUs.ToString("F0", CultureInfo.InvariantCulture) + "/"
+                          + manifest.P99RecBuildUs.ToString("F0", CultureInfo.InvariantCulture) + "/"
+                          + manifest.MaxRecBuildUs.ToString("F0", CultureInfo.InvariantCulture) + " us");
             }
             catch (Exception e) { Debug.LogWarning(Tag + "manifest finalise: " + e.Message); }
         }
@@ -891,7 +901,7 @@ namespace DragonScreen.BlackBox
             }
 
             double us = ElapsedUs(t0);
-            if (us > maxRecBuildUs) maxRecBuildUs = us;
+            recBuildStats.Record(us);
             BlackBoxSchema.Set(row, BlackBoxCols.RecBuildUs, us);
 
             // ---- §4.6, LAST so nothing can re-fill a voided cell: on rails the physics loop is OFF

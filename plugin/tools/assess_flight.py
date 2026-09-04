@@ -969,6 +969,26 @@ def gkm(v):
     return v / 1000.0 if v is not None else None
 
 
+# ⛔ BB10: `mission_phase`/`phase_classified` are ALSO Tier.R2 (BlackBoxSchema.cs:379-380), blank on
+# exactly the same non-R2 rows `alt_m` is - a raw `sval(r, col) == "ASCENT"` equality read is blind to
+# that decimation and silently drops a genuinely-ascending row ~4 times in 5 during a 10 Hz dynamic
+# phase. §4.6's own documented contract for a decimated column is forward-fill ("blank on every other
+# row, and the manifest's period_s tells a reader exactly how far forward to fill") - so the fix is to
+# carry the last KNOWN classification forward, never to guess one for a row that was never classified.
+# A row before the column's FIRST fill stays "" (BB5's lesson, one level up: a blank staying blank beats
+# a blank becoming a confident value) - it is never back-filled.
+def _ffill(rows, col):
+    """The column's value at each row, forward-filled across Tier.R2 decimation gaps. 1:1 with `rows`."""
+    out = []
+    last = ""
+    for r in rows:
+        v = sval(r, col)
+        if v not in BLANKS:
+            last = v
+        out.append(last)
+    return out
+
+
 def ascent(M, st):
     sec("3. ASCENT (event-by-event, against §B11's targets)  [%s]" % st.label)
     ev = [e for e in M.events if e.get("vessel") == st.vessel] or M.events
@@ -998,8 +1018,10 @@ def ascent(M, st):
     if has_col(st, "ascent_phase") and col_active(st.rows, "ascent_phase"):
         asc = [r for r in st.rows if sval(r, "ascent_phase") not in BLANKS]
     else:
-        asc = [r for r in st.rows if sval(r, "mission_phase") == "ASCENT"
-               or sval(r, "phase_classified") == "ASCENT"]
+        # BB10: forward-filled, not a raw per-row equality read - see `_ffill`'s header above.
+        mp_ff = _ffill(st.rows, "mission_phase")
+        pc_ff = _ffill(st.rows, "phase_classified")
+        asc = [r for r, mp, pc in zip(st.rows, mp_ff, pc_ff) if mp == "ASCENT" or pc == "ASCENT"]
     if not asc:
         asc = st.rows
 
@@ -2265,8 +2287,58 @@ def selftest(verbose=False):
         assert not any("SUBORBITAL" in a for a in bb5_alerts), \
             "BB5: a blank pe_km still raised a fabricated SUBORBITAL alert: %r" % bb5_alerts
 
-        print("SELFTEST OK - %d sections, %d report lines, deck miss %.1f m, %d finding(s), BB5 refusal proven" %
-              (len(need), out.count(chr(10)), float(m.group(1)), len(ALERTS)))
+        # ---- BB10: ascent()'s row-selection must not starve on mission_phase/phase_classified's -----
+        # ---- OWN Tier.R2 decimation - a LONG gap spanning the real thrust death, reproducing the ----
+        # ---- mechanism behind the overseer-relayed false `seco_s = 157.54`. "ASCENT" is tagged only
+        # at met=0 and met=50, then BLANK for 90 rows through the real thrust death at met=140 (thrust
+        # drops to 0 there) - long enough that the OLD raw-equality selection's lastIdx=50 forward-scan
+        # (+80 rows, only as far as met=130) can never reach met=140, and reports the stale met=50 row
+        # as if it were SECO. The fix's forward-fill carries "ASCENT" through the gap (per §4.6's
+        # documented contract) up to met=141, the next classified row (tagged "COAST" - the genuine
+        # transition), landing lastIdx there instead and letting the forward-scan find the real thrust
+        # death within a few rows.
+        bb10_rows = []
+        for met in range(0, 146):
+            phase = "ASCENT" if met in (0, 50) else ("COAST" if met == 141 else "")
+            bb10_rows.append({
+                "vessel": "Crew-2", "ut": str(1000000.0 + met), "met_s": str(met),
+                "thrust_n": str(7000000.0 if met < 140 else 0.0), "mach": "1.0",
+                "alt_m": str(1000.0 * met), "pe_km": "150", "ap_km": "210",
+                "inc_deg": "51.6", "raan_deg": "120",
+                "q_pa": "0", "q_pa_peak": "0", "accel_g": "0.5", "accel_g_peak": "0.5",
+                "mission_phase": phase, "phase_classified": phase,
+            })
+        bb10_events = [{"mission_id": "selftest-bb10", "vessel": "Crew-2", "ut": 1000000.0, "met_s": 0.0,
+                        "seq": 1, "kind": "flight.liftoff", "p": {}}]
+        bb10_stream = Stream("selftest-bb10.params.csv", bb10_rows, manifest={}, label="bb10-fixture")
+        bb10_mission = Mission("selftest-bb10", [bb10_stream], events=bb10_events)
+        saved_alerts = list(ALERTS)
+        ALERTS[:] = []
+        buf3 = io.StringIO()
+        _SINK.append(buf3)
+        _QUIET[0] = True
+        try:
+            ascent(bb10_mission, bb10_stream)
+        finally:
+            _QUIET[0] = False
+            _SINK.remove(buf3)
+            bb10_out = buf3.getvalue()
+            ALERTS[:] = saved_alerts
+        m10 = re.search(r"seco_s\s+([\d.]+)\s*s", bb10_out)
+        assert m10, "BB10: seco_s line not found in ascent() output:\n" + bb10_out
+        bb10_seco = float(m10.group(1))
+        # The stale-early value the OLD raw-equality selection reports on this exact fixture is 50.00
+        # (the last row it can literally see as "ASCENT" before the 90-row gap) - proven by hand, then
+        # reverted, per this line's register entry. > 130 requires the fix to have bridged the gap.
+        assert bb10_seco > 130.0, (
+            "BB10: ascent()'s row-selection still starves on the mission_phase/phase_classified R2 gap - "
+            "seco_s read %.2f s (the OLD code reads the stale met=50 row's value, 50.00, on this exact "
+            "fixture); forward-fill should have carried ASCENT through the gap to the real thrust death "
+            "near met=140" % bb10_seco)
+
+        print("SELFTEST OK - %d sections, %d report lines, deck miss %.1f m, %d finding(s), "
+              "BB5 refusal proven, BB10 seco_s %.2f s (decimation-bridged)" %
+              (len(need), out.count(chr(10)), float(m.group(1)), len(ALERTS), bb10_seco))
         return 0
     except AssertionError as e:
         print("SELFTEST FAILED: %s" % e)

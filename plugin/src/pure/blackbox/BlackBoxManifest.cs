@@ -111,6 +111,13 @@ namespace DragonScreen.BlackBox
         public long EventsWritten;
         public int WriteErrors;
         public double MaxRecBuildUs;
+        /// <summary>
+        /// BB7: a single max misreports a well-behaved recorder as wildly over budget when the max is a
+        /// one-off spike (a GC pause) rather than a sustained cost — median/p90 are what tell a reader
+        /// which. Estimated from a bounded-memory <see cref="LatencyHistogram"/>, not the exact value;
+        /// see that file's header for why and for the accuracy this buys. 0 on a mission with no rows.
+        /// </summary>
+        public double P50RecBuildUs, P90RecBuildUs, P99RecBuildUs;
         /// <summary>The coverage pass's findings, rendered — see <see cref="BlackBoxCoverage"/>.</summary>
         public List<CoverageFinding> Coverage;
 
@@ -230,6 +237,11 @@ namespace DragonScreen.BlackBox
             sb.Append("  \"events_written\": ").Append(I(m.EventsWritten)).Append(",\n");
             sb.Append("  \"write_errors\": ").Append(I(m.WriteErrors)).Append(",\n");
             sb.Append("  \"max_rec_build_us\": ").Append(N(m.MaxRecBuildUs)).Append(",\n");
+            // BB7: the distribution alongside the max, so a reader can tell a spike from a regression
+            // without re-deriving it from the CSV's own per-row `rec_build_us` column.
+            sb.Append("  \"p50_rec_build_us\": ").Append(N(m.P50RecBuildUs)).Append(",\n");
+            sb.Append("  \"p90_rec_build_us\": ").Append(N(m.P90RecBuildUs)).Append(",\n");
+            sb.Append("  \"p99_rec_build_us\": ").Append(N(m.P99RecBuildUs)).Append(",\n");
 
             // ---- the coverage verdict. An EMPTY array is a positive statement, not an absence: every
             // ---- Live column produced values and no Unfitted one did. That is the property S76 had to
