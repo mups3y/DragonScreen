@@ -2697,6 +2697,12 @@ the family is the net, the measured string is the specimen.
 #### Open questions for the owner (C1.14)
 
 **OCT3-Q1 — the landing burn: which engine count, and does it change mid-burn?**
+⭐ **RESOLVED by the OWNER, 2026-09-05 — option (2). VERBATIM (C1.12): on the engine count, *"1. (2)"*;
+on what triggers the shed, *"yes to computing from current hover slam solver"*.** Relayed into the OCT6
+build chat by the owner in its task brief. ⇒ `ThreeLanding` shedding to `CenterOnly`, the shed point
+COMPUTED from the Hoverslam solver — **NOT** the option (1) this line recommended below, and not a stated
+constant. **BUILT by [[OCT6]]**, including the `AllowedRoleForPhase` third case this line predicted would
+be needed. The text below is left standing as the question as it was ASKED; read the ruling first.
 Real Falcon 9 flies BOTH a three-engine landing burn shedding to one for the hover-slam (higher margin, more
 fuel) and a single-engine burn throughout (leaner). The code today (`BoosterDescent.cs`, unchanged by this
 line) lights `CenterOnly` for the WHOLE landing burn — option 1 below. **No ruling on record.**
@@ -2715,6 +2721,11 @@ would need a THIRD case (a `LandingBurn`-substate or a new phase) to let `ThreeL
 burn — flagged here so that future work does not have to rediscover it.
 
 ### OCT4 [S] Wire the octaweb mode-CHANGE actuation (Activate/Shutdown on the banks) against OCT3's gate — **TODO** — [logged by OCT3 per C1.1, NOT done]
+- ⚠ **RAISED FROM "HARDENING" TO PREREQUISITE BY [[OCT6]] (2026-09-05).** When this line was written no
+  phase commanded a mid-burn bank change, so auditing the sequencing was tidy-up. OCT6 built one: on the
+  owner's ruling the landing burn now OPENS on `ThreeLanding` and SHEDS to `CenterOnly` mid-brake. **That
+  is the first real mid-burn engine-mode change in this project, and it will fly through
+  `Dispatch`/`SelectEngineSet` code no line has audited.** Do this before a landing burn is flown.
 - **Stray found while fixing OCT3, deliberately left alone** (C1.1: log it, do not do it; OCT3's own SCOPE
   section named this as the next line explicitly).
 - **The finding:** `BoosterHostPlan.Blocked` now refuses an illegal engine mode for the current phase
@@ -2780,6 +2791,212 @@ burn — flagged here so that future work does not have to rediscover it.
   defective producer, per the brief's scope.
 - ⛔ OCT3-Q1 (open, owner's — the landing-burn engine count) was **not resolved**. OCT4 (the mode-CHANGE
   actuation audit) was **not started**. No install, no glass.
+
+### OCT6 [O] The landing burn flies THREE engines and sheds to ONE, on the solver's own answer — **DONE 2026-09-05** — [TIER 1: closes OCT3-Q1 on an owner ruling; `Hoverslam.EnginesFor` had no caller and no test]
+
+- **OWNER RULINGS, 2026-09-05, VERBATIM (C1.12 evidentiary standard).** Relayed into this chat by the
+  owner in the task brief:
+  - OCT3-Q1, on whether the landing burn flies one engine or three: **"1. (2)"** — i.e. option (2),
+    `ThreeLanding` shedding to `CenterOnly`. **NOT** `CenterOnly` throughout (which was OCT3-Q1's
+    recommended option 1, and what the code flew until this line).
+  - On what triggers the shed: **"yes to computing from current hover slam solver"** — the shed point is
+    COMPUTED from the existing Hoverslam solver. NOT a stated constant, and NOT deferred to a
+    convergence flight.
+  ⇒ **OCT3-Q1 is CLOSED by these words.** OCT3's own line above still carries the question as open with
+  option 1 recommended; the ruling supersedes that recommendation.
+
+- **VERIFIED BEFORE BUILDING ANYTHING (the brief required both, neither taken on faith):**
+  (a) `Hoverslam.EnginesFor` (`pure/Hoverslam.cs:105`) had **NO call site anywhere in `plugin/`** — a
+      whole-repo grep returns its own definition and one prose mention in `docs/F9I_PORT_MAP.md:274`
+      (a doc, about F9I's `EnginesFor(Flip)`, not a call). It was dead code carrying the decision.
+  (b) It had **NO test** — `BoosterTest.HoverslamChecks` exercised only `IgnitionAltitude`.
+  Both confirmed. And `BoosterHost.cs` was already measuring both banks' live thrust
+  (`centreN`/`threeN`) and throwing `threeN` away one line later.
+
+- **BUILT — four pieces, in the brief's order.**
+  1. **FED THE SOLVER.** `BoosterInputs` gained `LandThree` — the same `HoverslamInputs` solve for the
+     THREE-engine bank, built in the glue from `threeN` over the LIVE mass exactly as `Land` is built
+     from `centreN`, so the S48 §2.5 "LIVE thrust and LIVE mass, never a pre-computed schedule" property
+     holds for both banks. ⛔ **Supplied only when BOTH banks measured** (`centreN > 0 && threeN > 0`):
+     `land` already falls back to `threeN` when the centre module reports nothing, so an unconditional
+     supply could hand the solver the same measurement twice and let it "decide" between a bank and
+     itself. `ThrustAccelMps2 <= 0` = NOT SUPPLIED (the struct's existing `Ignitions*` convention) → the
+     shed is INERT and the burn flies `CenterOnly` throughout, i.e. the pre-OCT6 behaviour, unchanged.
+     ⚠ **`LandingThrottle` now solves against the bank actually lit** (a new overload taking the bank +
+     its own min-throttle; the one-argument form is unchanged and still solves `Land`). Commanding three
+     engines while the stop-distance solve models one is not "fly three" — the modelled bank is weaker,
+     so `stopDistance` comes out large and the law over-throttles a bank three times stronger than the
+     one it solved for. **No number changes:** `MinThrottleThreeLanding == MinThrottleCentreOnly ==
+     0.390625` in `docs/reference/craftdump.csv`.
+  2. **FLY 3, SHED TO 1, ON THE SOLVER'S ANSWER + THE ONE-WAY LATCH.** The `LandingBurn` case asks
+     `Hoverslam.EnginesFor(s.Land, s.LandThree)` and commands the bank it names — 3 → `ModeThreeEngine`,
+     1 → `ModeCentreOnly`. **The latch persists in the mechanism that already persists `phase`**: a
+     `BoosterInputs`/`BoosterCommand` field pair (`LandingShedLatched`) round-tripped through a
+     `BoosterHost` static, the same carried-state idiom as `CommandedForward`/`CommandedThrottle`, reset
+     only where `phase` is reset (fresh bind, release). `Guide()` carries it through EVERY phase and
+     every exit path and **never clears it**; only the `bank == 1` branch raises it. Once raised,
+     `EnginesFor` is not re-evaluated at all.
+     **`EnginesFor` returning 0 produces an honest refusal**, in the style of the two already in this
+     file: `"landing burn refused: even the 3-engine bank cannot arrest from here"`, no bank lit,
+     `EngineMode = ModeOff`. No silent fallback.
+  3. **THE GATE — OPTION (iii), the latch passed in. MY CALL, and the reasoning (the brief left the
+     mechanism to me and forbade escalating it).** `AllowedRoleForPhase`/`PhaseAllows`/`Blocked` each
+     gained a `bool landingShed = false` parameter; `LandingBurn`'s one legal bank is `OctawebThree`
+     before the shed and `OctawebCentre` after. **Why not (ii) "accept both banks":** it destroys the
+     property OCT3 actually built — exactly ONE legal bank per gate query — and would leave
+     `ThreeLanding` legal late in the burn, which the latch forbids but the gate would no longer refuse;
+     the gate would then be documentation, not an interlock. **Why not (i) "split the phase in two":**
+     `BoosterPhase` is a recorded value — the BlackBox writes it, and BB4's confirm-flight recording
+     (`New_Crew-2_20260905_005707`) already carries the current membership — so splitting the enum
+     changes what past recordings mean and lands enum churn on every switch, including the dispatch path
+     **OCT4 has not audited**. (iii) buys the ordered pair for one optional parameter and keeps OCT3's
+     strictness exactly. The default `false` is the state a landing burn STARTS in, not a neutral, so a
+     caller that forgets the latch refuses the terminal `CenterOnly` command — a refusal, never a wrong
+     actuation. `BoosterHost` passes the latch from the SAME `BoosterCommand` it decodes the role from,
+     so gate and FSM read one latch on one tick (OCT3's identical-decode rule).
+  4. **TESTED WHAT IS NOW LIVE** — see the verification block below.
+
+- ⚠ **I CHANGED PASSING TESTS, AND THE RULING IS WHY (C1.3 / W11's failure mode — stated, not quiet).**
+  Three green assertions asserted a decision the owner then overturned:
+  1. `BoosterHostTest.PhaseGateTests`: **`"ThreeLanding refused during LandingBurn (that phase's bank is
+     Centre, not Three)"`** and its partner `"CenterOnly legal at LandingBurn"`, plus the `Blocked`
+     wiring check `"Blocked refuses ThreeLanding during LandingBurn"`. The brief AUTHORISED this change
+     explicitly. Replaced by the ORDERED PAIR — 4 `PhaseAllows` checks + 4 `Blocked` checks + one that
+     pins the two halves to DIFFERENT banks — which is strictly more assertion than was removed, and
+     still mutation-provable in both directions.
+  2. `BoosterTest.LandingBurnChecks`: **`"the landing burn NEVER steps back to the 3-engine set (no 3→1
+     handover — ignitions = 1)"`**, an altitude sweep requiring `everThree == false`. Its premise is now
+     doubly wrong: the ruling makes the burn OPEN on three, and the `ignitions = 1` reason is unmeasured
+     ([[BB8]]). Replaced by the half that survives and is strengthened — the burn OPENS on three, its
+     throttle is solved against three, and the identical state that asked for three commands CENTRE once
+     latched (that being exactly the tick un-latched code chatters on).
+  3. `BoosterTest.cs`'s file header line, *"the NON-PORTS: the landing burn never commands the 3-engine
+     set (no 3→1 handover)"* — rewritten to record the supersession rather than deleted.
+
+- **FALSE COMMENTS CORRECTED (in scope), reasoning KEPT not deleted (C1.16's spirit).**
+  `BoosterDescent.cs`'s `LandingBurn` case said *"each engineID set [carries] ONE ignition, so we do NOT
+  step 3→1 during the burn — that would re-ignite CenterOnly and spool mid-braking"*, and repeated *"one
+  ignition, no re-light"* on the mode write. Both rewritten to state the ruling, to RECORD that the old
+  reasoning was overruled and by what, and to mark the ignition count **UNMEASURED**, citing [[BB8]]:
+  the dump does say `ignitions = 1` on each of the three octaweb `ModuleEnginesRF` (verified in-repo,
+  `docs/reference/craftdump.csv`, three rows) but that is a **PRELAUNCH pad read**, while BB8 records the
+  install's `%ignitions = -1` patch and a ConfigCache carrying −1 nine times. Config and persistence say
+  unlimited; only the pad said 1; **nobody has measured it in flight** and BB8 is the line that will.
+  ⛔ **NO new ignition-budget guard was built on the unverified count.** The pre-existing
+  `IgnitionsCentreOnly == 0` refusal is untouched, byte for byte, and still reads the LIVE module.
+
+- **VERIFIED (C1.3).** `python plugin/build.py test` **GREEN — ALL SUITES PASSED**: booster recovery FSM
+  **995 checks** (up from 975), booster HOST **161** (up from 128). `python plugin/build.py preview`
+  green — this task touches no drawing path; run anyway per the verify gate, no PNG differs.
+  **MUTATION-PROVED TWICE, both results recorded:**
+  1. **The latch.** Removed it from the `LandingBurn` case (bank re-evaluated every tick, the latch still
+     recorded and read by the gate) → **RED, 3 failures**, exactly the three that should go:
+     `FAIL OCT6: the bank NEVER returns to ThreeLanding after shedding — the latch holds across ticks`,
+     `FAIL OCT6: once shed, the identical state that asked for THREE commands CENTRE instead  mode=1`,
+     and the whole-burn gate walk naming the offending tick:
+     `FAIL OCT6: every command the whole burn returned is legal under the phase gate   tick 8 alt=1421
+     v=229 phase=LandingBurn role=OctawebThree shed=True`. Restored → GREEN again.
+     ⇒ **The chatter is real and it is 8 ticks (0.8 s) after the shed**, caused by the spool ramp: the
+     newly-selected centre bank is not yet at the thrust the solve assumed, margin goes negative, and an
+     un-latched `EnginesFor` immediately re-demands three.
+  2. **The gate, against "silently widened".** Stubbed `PhaseAllows` to `return true` for `LandingBurn`
+     (i.e. option (ii), both banks legal) → **RED, 4 failures**, all four "REFUSED" halves of the ordered
+     pair. Restored → GREEN. So the gate is provably narrower than accept-both.
+
+- **THE NEW TEST — a WHOLE landing burn, tick by tick, across the shed** (`BoosterTest`:
+  `LandingBurnWalkChecks` / `FlyLandingBurn`, wired into `PhaseCommandGateInvariantChecks`). Every other
+  check in the suite drives `Guide()` at one hand-placed state; the shed is a TRANSITION and chatter only
+  exists across ticks, so this closes the loop: `Guide()` flies the stage, the stage's response to the
+  commanded bank and throttle feeds the next tick, and phase / throttle / latch are handed back exactly as
+  `src/BoosterHost.cs` hands them back, with a real `DtS` so the spool ramp is LIVE. Asserts the burn ran,
+  lit three, shed, shed EXACTLY ONCE, never returned to three, and that EVERY command it returned is
+  legal under the phase gate. ⚠ The integrator is a TEST HARNESS (the same arithmetic `Hoverslam` uses,
+  coarse fixed step) and the banks are a property fixture — it is **not** a flight model and **not**
+  evidence about the vehicle; the file header's anchor warning applies to every number in it.
+  `EnginesFor` also got its first direct tests (`EnginesForChecks`): both branches, the 0 case, a check
+  that the "3" is not vacuous, and the 3→1-and-never-back monotonicity the latch rests on.
+
+- **Built:** `pure/BoosterDescent.cs` (`BoosterInputs.LandThree` + `.LandingShedLatched`,
+  `BoosterCommand.LandingShedLatched`, the latch carry in `Guide`'s defaults, the `LandingBurn` bank
+  decision + refusal, the `LandingThrottle` bank overload, `ThreeBankSupplied`), `pure/BoosterHostPlan.cs`
+  (`landingShed` on `AllowedRoleForPhase` / `PhaseAllows` / `Blocked`), `src/BoosterHost.cs` (`LandThree`
+  from `threeN`, the `landingShed` static + its two resets, the latch into `Blocked`),
+  `test/BoosterTest.cs`, `test/BoosterHostTest.cs`.
+
+- ⛔ **SCOPE — what this line did NOT do, and one thing that belongs on the record.**
+  **OCT4 (the mode-CHANGE actuation audit) HAS NOT RUN.** It was TODO when this task started and is TODO
+  now. ⚠ **So the first real mid-burn engine-mode change in this project — which is what OCT6 just
+  created — will fly through `Dispatch`/`SelectEngineSet` code that no line has audited.** That is stated
+  here because the brief required it to be on the record, and it raises OCT4 from "hardening" to
+  "prerequisite for flying a landing burn". OCT5's fix, the Boostback/EntryBurn cases and
+  `Hoverslam.IgnitionAltitude`'s maths were not touched. No install, no glass.
+
+- **Strays LOGGED, not fixed (C1.1):** [[OCT7]], [[OCT8]], [[OCT9]], [[OCT10]] below.
+
+### OCT7 [S] Two file headers still assert `ignitions = 1` as established fact — **TODO** — [logged by OCT6 per C1.1; the brief named this one log-only]
+- **The finding, two places:** `pure/BoosterDescent.cs:52-57` (§4.5 non-port **(b)**) still reads
+  *"`docs/reference/craftdump.csv` records `ignitions = 1` on EACH of the three `ModuleEnginesRF`.
+  Stepping 3→1 during the brake would spend `CenterOnly`'s single ignition ... The landing burn lights
+  `CenterOnly` ONCE and runs it to the deck"* — a description of behaviour the file **no longer has**
+  after OCT6, resting on a premise [[BB8]] shows is unestablished. And `src/BoosterHost.cs:89-90`'s
+  "NEVER DO" list says *"Each `engineID` set carries `ignitions = 1` in the dump"*.
+- ⚠ **The BoosterHost one is not false** — it accurately cites the dump, and its RULE ("never re-light a
+  lit set") stands regardless. The BoosterDescent header is the one that now contradicts its own file.
+- **Why it was not fixed here:** OCT6's brief scoped it explicitly — *"Also LOG, do not fix"* — and C1.1
+  forbids taking it anyway. Recorded because a reader who trusts the header will be told the landing burn
+  never steps 3→1, which stopped being true in commit OCT6.
+- **Build:** rewrite non-port (b) to record that it was OVERRULED (owner, 2026-09-05, quoted in OCT6)
+  rather than deleting the reasoning (C1.16's spirit), and mark the ignition count UNMEASURED citing BB8.
+  A comment-only change; no behaviour, no test.
+- **DONE when:** neither header states the ignition count as fact, both point at BB8, and the
+  BoosterDescent header describes the burn the file actually flies. `build.py test` green.
+
+### OCT8 [S] `EnginesFor`'s "0" case is narrower than its own comment claims — **TODO** — [logged by OCT6 per C1.1: a real gap, found while writing its first test]
+- **The finding:** `pure/Hoverslam.cs:105-114`'s comment says it returns *"0 if even three cannot stop"*.
+  The code returns 3 whenever `sThree.ThrustAccelMps2 > sThree.GravityMps2` — a thrust-to-weight test
+  ONLY. It never asks whether three engines can arrest **in the altitude that is left**, which is exactly
+  the question it asks of the single engine one line above (`IgnitionAltitude(sOne) < sOne.AltitudeM`).
+  So a stage far too low and too fast for even the three-engine bank gets `3` and a burn it cannot make,
+  not the un-recoverable verdict the comment promises.
+- **Why it matters now:** OCT6 made this the live landing-burn decision and wired the 0 case to a real
+  refusal. The refusal is currently only reachable when three engines have TWR < 1 — i.e. almost never.
+- **Build:** decide (owner call if it changes the flown decision, C1.14) whether the three-engine branch
+  should carry the same altitude test as the one-engine branch. ⚠ Note it cannot simply be symmetric:
+  `IgnitionAltitude` returns `AltitudeM` when `a <= g`, so a naive `IgnitionAltitude(sThree) <
+  sThree.AltitudeM` is false at the boundary for a different reason than it is false when out of room.
+- **DONE when:** the comment and the code agree, with a test for whichever behaviour is chosen.
+
+### OCT9 [S] The computed shed point has ZERO margin for the swap transient — **TODO** — [logged by OCT6 per C1.1; MEASURED by OCT6's own mutation run, not hypothesised]
+- **The finding, measured:** OCT6's whole-burn walk sheds 3→1 at the first tick the single engine can
+  *just* arrest — `EnginesFor` has no margin term — and the spool ramp then takes the centre bank ~0.46 s
+  to reach the thrust the solve assumed. OCT6's latch-removal mutation dated the consequence exactly:
+  `tick 8 alt=1421 v=229` — 0.8 s after the shed, an un-latched solver re-demands THREE, i.e. **the
+  margin has already gone negative by then.** The latch correctly refuses to chatter; it cannot give the
+  margin back.
+- **Why this is not a latch bug:** the latch is doing the right thing. The SHED CRITERION is what has no
+  headroom. Real Falcon 9 sheds well before the single-engine limit for exactly this reason.
+- ⚠ **Do not "fix" this by inventing a margin constant.** Any figure is [UN-CONVERGED] under §B16.8
+  ruling 2 and this repo has never recovered a booster. The honest options are a margin expressed in the
+  solver's OWN terms (e.g. shed when the single engine can arrest with the spool time added as dead time,
+  which is a modelled quantity, not a tuned one) or deferral to a recorded flight — an owner call (C1.14).
+- **DONE when:** the shed criterion either carries a derived (not invented) margin with a test, or the
+  deferral is recorded with the owner's words.
+
+### OCT10 [S] The landing burn now opens on three engines but is still ARMED off the centre bank's ignition altitude — **TODO** — [logged by OCT6 per C1.1: a consequence of OCT6, deliberately not folded into it]
+- **The finding:** `BoosterDescent.cs`'s `AeroDescent` case hands over with
+  `if (s.AltitudeM <= Hoverslam.IgnitionAltitude(s.Land))` — `s.Land` being the CENTRE bank. Since OCT6
+  the burn that then starts is a THREE-engine burn, which needs far less altitude, so the stage lights
+  three engines meaningfully higher than three engines require.
+- **Direction of the error:** CONSERVATIVE (igniting early wastes propellant; igniting late loses the
+  booster), and it is also what makes `EnginesFor` return 3 on the opening tick by construction — the
+  hand-over altitude IS the single-engine ignition altitude, so one engine is out of margin exactly
+  there. Changing the trigger therefore changes WHICH BANK the burn opens on, which is why it was not
+  done inside OCT6.
+- **Build:** decide whether the hand-over should arm off the bank it intends to light (and what that does
+  to the opening bank choice), against the propellant cost of the current early light. Needs a recorded
+  flight to judge the cost, so it is probably downstream of [[OCT9]] and §B16.8 ruling 2.
+- **DONE when:** the hand-over trigger and the opening bank are consistent, or the inconsistency is
+  recorded as deliberate with the reason.
 
 ### BB4 [owner-gated] Install the BlackBox + confirm on the glass — **DONE 2026-09-05 (closed on overseer-relayed evidence, NOT first-hand-verified by this chat — see provenance note below; blocker CLEARED: BB1 `aa7bfa2`, BB2 `bedb4a6`, BB3 `6604644` are all DONE)** — [TIER 1: the owner's own "before the first flight" deadline]
 - ⚠ **The owner ALREADY AUTHORISED `install` for the BlackBox specifically** (2026-09-03: *"build and install
@@ -2871,6 +3088,11 @@ burn — flagged here so that future work does not have to rediscover it.
 - **Why it matters beyond curiosity:** `BoosterDescent.cs:790-793` refuses the entry burn when
   `IgnitionsThreeLanding == 0`, and OCT3-Q1's option 2 was argued against on the basis of a one-ignition
   budget. A live guard and an owner ruling both depend on a number nobody has measured in flight.
+  ⭐ **UPDATE, 2026-09-05: the owner CHOSE option 2 anyway** (OCT3-Q1, verbatim *"1. (2)"*), and
+  [[OCT6]] built it — so the 3→1 shed is now flown on a vehicle whose ignition budget is still
+  UNMEASURED. OCT6 deliberately built NO new guard on the unverified count (the pre-existing
+  `IgnitionsCentreOnly == 0` refusal is untouched). **This line is what closes that gap**, and it is the
+  in-repo source OCT6's comments cite for "unmeasured".
 - **Build:** add per-bank `ignitions` columns to the BlackBox schema (AllEngines / ThreeLanding / CenterOnly),
   sampled IN FLIGHT rather than at PRELAUNCH, so the next recording settles it.
 - **Stray, NOT to be fixed here:** `BoosterDescent.cs:53-55` still states "`ignitions = 1` on EACH" as fact.

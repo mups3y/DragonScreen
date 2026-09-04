@@ -201,6 +201,13 @@ namespace DragonScreen
         static Vec3 commandedForward = Vec3.Zero;
         static double commandedThrottle;
 
+        /// <summary>OCT6's one-way shed latch, carried across ticks in the SAME mechanism that carries
+        /// `phase`: a host static, handed into `Guide()` and read back out of its command every tick. A
+        /// per-call local could not hold it, and `EnginesFor` sits on its own boundary — un-latched, the
+        /// 3→1 shed would chatter, and every flip is a real shutdown plus a real re-ignition. Cleared
+        /// ONLY where `phase` is cleared: on a fresh bind and on release.</summary>
+        static bool landingShed;
+
         // What we have actually done to the vehicle, so nothing is repeated (one ignition per set).
         static EngineRole currentRole = EngineRole.None;
         static bool finsOut, legsDown;
@@ -341,6 +348,7 @@ namespace DragonScreen
             phase = BoosterPhase.Idle;
             commandedForward = Vec3.Zero;
             commandedThrottle = 0.0;
+            landingShed = false;                 // OCT6 — a fresh binding is a fresh, un-shed burn
             currentRole = EngineRole.None;
             finsOut = false; legsDown = false;
             landedSinceUT = -1.0;
@@ -457,6 +465,24 @@ namespace DragonScreen
             land.SpoolS = 0.0;       // instant-spool Merlin
             bi.Land = land;
 
+            // ⛔ OCT6 — THE SECOND BANK, so `Hoverslam.EnginesFor` can be asked the question it exists to
+            // answer (owner ruling: three engines brake, one flies the touchdown, and the shed point is
+            // *"comput[ed] from current hover slam solver"*). Built the SAME way as `land` — LIVE thrust
+            // off the bound `ThreeLanding` module over LIVE mass — so the S48 §2.5 trap stays sidestepped
+            // for both banks alike.
+            // ⛔ SUPPLIED ONLY WHEN **BOTH** BANKS WERE MEASURED. `land` falls back to `threeN` when the
+            // centre module reports nothing, so supplying `LandThree` unconditionally could hand the
+            // solver the same bank twice and let it "decide" between one measurement and itself. Left
+            // unsupplied (`ThrustAccelMps2 == 0`), the FSM's shed is INERT and the landing burn flies
+            // `CenterOnly` throughout — the pre-OCT6 behaviour, which is the right thing to fly when we
+            // cannot see both banks.
+            if (centreN > 0.0 && threeN > 0.0 && massKg > 1.0)
+            {
+                HoverslamInputs landThree = land;
+                landThree.ThrustAccelMps2 = threeN / massKg;
+                bi.LandThree = landThree;
+            }
+
             // ⚠ NO AIM POINT EXISTS (see the header block). Everything target-derived stays ZERO, so the
             // FSM's own refusals fire honestly instead of steering at an invented coordinate.
             bi.Fin = new GridFinInputs();
@@ -470,6 +496,7 @@ namespace DragonScreen
             // The carried state — the shaper needs continuity across ticks or it is not a shaper.
             bi.CommandedForward = commandedForward;
             bi.CommandedThrottle = commandedThrottle;
+            bi.LandingShedLatched = landingShed;      // OCT6 — the shed latch is carried state, like the above
             bi.DtS = TimeWarp.fixedDeltaTime;
 
             // ⛔ THE REAL FACING, so the flip's LEAD GATE tells the truth. `ReferenceTransform.up` is the
@@ -491,6 +518,7 @@ namespace DragonScreen
             phase = c.Phase;
             commandedForward = c.AimForward;
             commandedThrottle = c.Throttle;
+            landingShed = c.LandingShedLatched;       // OCT6 — one way; `Guide()` never clears it
             AimForward = c.AimForward;               // reported EVERY tick, dispatched or not.
             Refusal = c.Refusal;
 
@@ -781,6 +809,7 @@ namespace DragonScreen
             bound = null; octaweb = null; hooked = false;
             phase = BoosterPhase.Idle;
             commandedForward = Vec3.Zero; commandedThrottle = 0.0;
+            landingShed = false;                 // OCT6
             currentRole = EngineRole.None;
             finsOut = false; legsDown = false;
             fbwOwned = false; fbwThrottle = 0.0; fbwUllage = false;

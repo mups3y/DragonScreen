@@ -14,7 +14,11 @@
 //   · the §4.1 flip shaper, §4.2 boostback throttle law, §4.3 payload correction, §4.4 authority taper,
 //     §4.5 landing throttle + terminal AoA schedule, §5's signed long/short test and two-tier
 //     prediction, §6's ullage gate and spool ramp, and §B16.3's ignition-budget refusal;
-//   · the NON-PORTS: the landing burn never commands the 3-engine set (no 3→1 handover).
+//   · OCT6 (2026-09-05): the landing burn's 3→1 SHED. The owner ruled *"1. (2)"* — `ThreeLanding`
+//     shedding to `CenterOnly` — with the shed point *"comput[ed] from current hover slam solver"*, so
+//     W8's "NON-PORT: never commands the 3-engine set" claim above it is SUPERSEDED. What is asserted
+//     now is the ORDERED pair and the ONE-WAY latch: three engines brake, one flies the touchdown, and
+//     the burn never returns to three.
 //
 // ⛔ WHAT A GREEN RUN OF THIS SUITE DOES AND DOES NOT PROVE. R1 §7.4 names this file, with
 // `pure/Hoverslam.cs`, as a "constants with NO STATED REGIME" DEFECT, and the fixture below is where that
@@ -57,6 +61,7 @@ public static class BoosterTest
         Console.WriteLine("DragonScreen booster recovery tests (§B16: hoverslam + grid fins + the 5-phase FSM)");
 
         HoverslamChecks();
+        EnginesForChecks();
         GridFinChecks();
         ContractChecks();
         FlipChecks();
@@ -101,6 +106,76 @@ public static class BoosterTest
         HoverslamInputs weak = s; weak.ThrustAccelMps2 = 5.0;   // TWR < 1: cannot decelerate
         Check("a stage that cannot arrest lights immediately (returns current altitude)",
               Math.Abs(Hoverslam.IgnitionAltitude(weak) - weak.AltitudeM) < 1.0, "");
+    }
+
+    // =====================================================================================
+    // OCT6 (2026-09-05) — `Hoverslam.EnginesFor`, WHICH HAD NO CALLER AND NO TEST.
+    // =====================================================================================
+    // It has carried the landing burn's engine-count decision since it was written — *"Fewest engines
+    // that can still arrest from here"* — and nothing in `plugin/` ever called it and nothing tested it.
+    // The owner's ruling (*"1. (2)"* — ThreeLanding shedding to CenterOnly; the shed point
+    // *"comput[ed] from current hover slam solver"*) makes it the live decision, so it gets its first
+    // test here: BOTH branches, the 0 case, and the monotonicity the one-way latch depends on.
+    //
+    // The two banks below are a PROPERTY fixture, not a converged profile: a centre bank at TWR ~2.4 and
+    // a three-engine bank at exactly 3x its acceleration, which is the ONE relationship between the banks
+    // that is structural (nested subsets of the same nozzles, one throttle — OCT3's mechanism note)
+    // rather than tuned. Nothing here is evidence about the real vehicle (see the file header).
+    const double EngG = 9.8, EngCentreAccel = 24.0, EngThreeAccel = 72.0, EngVterm = 244.0;
+
+    static HoverslamInputs Bank(double accel, double altM, double vMps)
+    {
+        return new HoverslamInputs {
+            AltitudeM = altM, DescentSpeedMps = vMps, ThrustAccelMps2 = accel,
+            GravityMps2 = EngG, TerminalSpeedMps = EngVterm, DeadTimeS = 0.0, SpoolS = 0.0 };
+    }
+
+    static void EnginesForChecks()
+    {
+        // ---- BRANCH "3": the single engine cannot ignite below where we already are, three can brake ----
+        // Sit the stage EXACTLY at the single engine's own ignition altitude — the moment the aero descent
+        // hands over. One engine is then out of margin by construction; three are not.
+        double vHigh = 244.0;
+        double ignOne = Hoverslam.IgnitionAltitude(Bank(EngCentreAccel, 0.0, vHigh));
+        HoverslamInputs oneAtHandover = Bank(EngCentreAccel, ignOne, vHigh);
+        HoverslamInputs threeAtHandover = Bank(EngThreeAccel, ignOne, vHigh);
+        Check("OCT6: at the hand-over altitude the solver calls for THREE engines",
+              Hoverslam.EnginesFor(oneAtHandover, threeAtHandover) == 3,
+              "ignOne=" + ignOne.ToString("F0") + " alt=" + ignOne.ToString("F0"));
+        Check("...and that 3 is not vacuous — three engines really do stop shorter than one",
+              Hoverslam.IgnitionAltitude(threeAtHandover) < Hoverslam.IgnitionAltitude(oneAtHandover),
+              Hoverslam.IgnitionAltitude(threeAtHandover).ToString("F0") + " vs " + ignOne.ToString("F0"));
+
+        // ---- BRANCH "1": comfortably above the single engine's ignition altitude ----
+        HoverslamInputs oneRoomy = Bank(EngCentreAccel, ignOne * 3.0, vHigh);
+        HoverslamInputs threeRoomy = Bank(EngThreeAccel, ignOne * 3.0, vHigh);
+        Check("OCT6: with three times the altitude it needs, ONE engine suffices",
+              Hoverslam.EnginesFor(oneRoomy, threeRoomy) == 1, "");
+
+        // ---- BRANCH "0": the un-recoverable case its own comment names ----
+        // Both banks below a thrust-to-weight of one: neither can decelerate against gravity at all.
+        Check("OCT6: neither bank able to decelerate returns 0 (the un-recoverable landing)",
+              Hoverslam.EnginesFor(Bank(5.0, 500.0, 200.0), Bank(9.0, 500.0, 200.0)) == 0, "");
+        Check("...and a three-engine bank that CAN decelerate is never reported as 0",
+              Hoverslam.EnginesFor(Bank(5.0, 500.0, 200.0), Bank(EngThreeAccel, 500.0, 200.0)) == 3, "");
+
+        // ---- MONOTONICITY — the property the ONE-WAY LATCH rests on ----
+        // At a fixed altitude, sweeping the descent speed DOWN (which is what a landing burn does), the
+        // answer must move 3 -> 1 and never back. `IgnitionAltitude` is monotonic in speed (checked
+        // above), so the crossing happens exactly once — that is what makes a latch honest rather than a
+        // way of hiding a solver that wanders.
+        const double sweepAlt = 900.0;
+        int last = 3, flips = 0; bool everBack = false;
+        for (double v = 250.0; v >= 2.0; v -= 1.0)
+        {
+            int n = Hoverslam.EnginesFor(Bank(EngCentreAccel, sweepAlt, v), Bank(EngThreeAccel, sweepAlt, v));
+            if (n != last) { flips++; if (n == 3 && last == 1) everBack = true; last = n; }
+        }
+        Check("OCT6: as the stage slows the answer goes 3 -> 1 and NEVER back to 3",
+              !everBack && flips == 1 && last == 1, "flips=" + flips + " last=" + last);
+        Check("...and it really did start at 3 (the sweep is not vacuously all-ones)",
+              Hoverslam.EnginesFor(Bank(EngCentreAccel, sweepAlt, 250.0),
+                                   Bank(EngThreeAccel, sweepAlt, 250.0)) == 3, "");
     }
 
     // =====================================================================================
@@ -493,27 +568,65 @@ public static class BoosterTest
         land.Land = Flight(); land.Land.AltitudeM = 400.0; land.Land.DescentSpeedMps = 50.0;
         BoosterCommand lb = BoosterDescent.Guide(land, BoosterPhase.LandingBurn);
 
-        Check("the landing burn is the SINGLE CENTRE engine",
+        // ⛔ `land` supplies NO `LandThree`, which is the struct's "0 = NOT SUPPLIED" convention: with
+        // only one bank measured the OCT6 shed is INERT and the burn flies CenterOnly throughout, exactly
+        // as it did before OCT6. That inert path is what the next few checks pin.
+        Check("with no three-engine bank supplied, the landing burn is the SINGLE CENTRE engine",
               lb.EnginesLit && lb.EngineMode == VehicleParts.ModeCentreOnly, "mode=" + lb.EngineMode);
+        Check("...and it reports the shed latch SET, because CenterOnly is what it commanded",
+              lb.LandingShedLatched, "");
         Check("...never below the engine's own measured minimum throttle (§B16.3: no zero mid-burn)",
               lb.Throttle >= BoosterDescent.MinThrottleCentreOnly - 1e-12, lb.Throttle.ToString("F6"));
         Check("legs deploy in the final hundreds of metres", lb.DeployLegs, "");
         Check("the fins are still out", lb.DeployFins, "");
 
-        // ⛔ THE NON-PORT: no 3→1 handover. Each engineID set carries ONE ignition (craftdump).
-        bool everThree = false;
-        for (double a = 3000.0; a >= 1.0; a -= 7.0)
-        {
-            BoosterInputs w = Booster(TargetMode.Asds);
-            w.AltitudeM = a; w.DescentSpeedMps = 40.0 + a / 20.0;
-            w.Land = Flight(); w.Land.AltitudeM = a; w.Land.DescentSpeedMps = w.DescentSpeedMps;
-            BoosterCommand wc = BoosterDescent.Guide(w, BoosterPhase.LandingBurn);
-            if (wc.EnginesLit && wc.EngineMode == VehicleParts.ModeThreeEngine) everThree = true;
-        }
-        Check("the landing burn NEVER steps back to the 3-engine set (no 3→1 handover — ignitions = 1)",
-              !everThree, "");
-        Check("the entry burn and the landing burn are DISTINCT ignitions",
+        // ⛔ OCT6 REPLACED THE ASSERTION THAT USED TO STAND HERE. It read *"the landing burn NEVER
+        // steps back to the 3-engine set (no 3→1 handover — ignitions = 1)"*, swept the altitude band
+        // and required `everThree == false`. It was GREEN and it was WRONG after the owner's ruling
+        // (*"1. (2)"*): the burn now STARTS on three. The half of it that survives the ruling — and is
+        // in fact strengthened by it — is the direction: never back to three ONCE SHED. Same sweep,
+        // now with both banks supplied and the latch carried, which is how the host runs it.
+        // At the HAND-OVER state — the altitude `AeroDescent` gives up the stage at, which is by
+        // definition the single engine's own ignition altitude — three engines are what can still arrest.
+        double handoverAlt = Hoverslam.IgnitionAltitude(Bank(EngCentreAccel, 0.0, 244.0));
+        BoosterInputs opening = Booster(TargetMode.Asds);
+        opening.AltitudeM = handoverAlt; opening.DescentSpeedMps = 244.0;
+        opening.Land = Bank(EngCentreAccel, handoverAlt, 244.0);
+        opening.LandThree = Bank(EngThreeAccel, handoverAlt, 244.0);
+        BoosterCommand oc = BoosterDescent.Guide(opening, BoosterPhase.LandingBurn);
+        Check("OCT6: the landing burn OPENS on the 3-engine bank (the ruling, not W8's non-port)",
+              oc.EnginesLit && oc.EngineMode == VehicleParts.ModeThreeEngine, "mode=" + oc.EngineMode);
+        Check("...and has not latched the shed yet",
+              !oc.LandingShedLatched, "");
+        Check("...and its throttle is solved against the THREE-engine bank it just lit, not the centre one",
+              Math.Abs(oc.Throttle
+                       - BoosterDescent.LandingThrottle(opening, opening.LandThree,
+                                                        BoosterDescent.MinThrottleThreeLanding)) < 1e-12,
+              oc.Throttle.ToString("F6"));
+
+        // ⛔ AND THE LATCH, at the one state that can prove it in isolation: the SAME inputs that just
+        // returned three, with the latch already set, must return CENTRE and stay there. `EnginesFor`
+        // still says 3 here — this is the tick the un-latched code would chatter on.
+        BoosterInputs reopened = opening; reopened.LandingShedLatched = true;
+        BoosterCommand rc2 = BoosterDescent.Guide(reopened, BoosterPhase.LandingBurn);
+        Check("OCT6: once shed, the identical state that asked for THREE commands CENTRE instead",
+              rc2.EnginesLit && rc2.EngineMode == VehicleParts.ModeCentreOnly
+              && Hoverslam.EnginesFor(opening.Land, opening.LandThree) == 3, "mode=" + rc2.EngineMode);
+        Check("...and the latch stays set — nothing in the FSM ever clears it",
+              rc2.LandingShedLatched, "");
+        Check("the entry burn and the landing burn are DISTINCT engine sets",
               VehicleParts.ModeThreeEngine != VehicleParts.ModeCentreOnly, "");
+
+        // The 0 case reaches the command as an honest REFUSAL, never a silent fallback to some bank.
+        BoosterInputs hopeless = Booster(TargetMode.Asds);
+        hopeless.AltitudeM = 500.0; hopeless.DescentSpeedMps = 200.0;
+        hopeless.Land = Bank(5.0, 500.0, 200.0);        // TWR < 1 on one engine...
+        hopeless.LandThree = Bank(9.0, 500.0, 200.0);   // ...and on three
+        BoosterCommand hc = BoosterDescent.Guide(hopeless, BoosterPhase.LandingBurn);
+        Check("OCT6: 'even three cannot arrest' REFUSES rather than falling back to a bank",
+              !hc.EnginesLit && hc.EngineMode == VehicleParts.ModeOff && hc.Refusal != null, hc.Refusal);
+        Check("...and the refusal says which impossibility it is",
+              hc.Refusal != null && hc.Refusal.IndexOf("3-engine") >= 0, hc.Refusal);
 
         // THE THROTTLE LAW: stopDistance / trueAltitude + margin, self-correcting, evaluated live.
         // "tight" = far more braking distance needed than altitude left; "roomy" = comfortably above it.
@@ -717,10 +830,13 @@ public static class BoosterTest
     static void GateCheck(string where, BoosterCommand c)
     {
         EngineRole role = BoosterHostPlan.CommandedRole(c.EnginesLit, c.EngineMode);
+        // OCT6: the latch is read off the RETURNED command, which is exactly what `src/BoosterHost.cs`
+        // does — one latch, one tick, so the gate and the FSM can never disagree about which bank is
+        // the legal one.
         Check("OCT5: the FSM's own command is gate-legal — " + where,
-              BoosterHostPlan.PhaseAllows(c.Phase, role),
+              BoosterHostPlan.PhaseAllows(c.Phase, role, c.LandingShedLatched),
               "commanded phase=" + c.Phase + " EnginesLit=" + c.EnginesLit
-              + " EngineMode=" + c.EngineMode + " role=" + role);
+              + " EngineMode=" + c.EngineMode + " role=" + role + " shed=" + c.LandingShedLatched);
     }
 
     static void PhaseCommandGateInvariantChecks()
@@ -811,6 +927,102 @@ public static class BoosterTest
         BoosterInputs landed = Booster(TargetMode.Asds);
         landed.AltitudeM = 0.0; landed.DescentSpeedMps = 0.0;
         GateCheck("Landed (terminal)", BoosterDescent.Guide(landed, BoosterPhase.Landed));
+
+        // ---- OCT6: THE WHOLE LANDING BURN, ACROSS THE SHED ----
+        LandingBurnWalkChecks();
+    }
+
+    // =====================================================================================
+    // OCT6 (2026-09-05) — A WHOLE LANDING BURN, TICK BY TICK, ACROSS THE SHED.
+    // =====================================================================================
+    // Every check above drives `Guide()` at a single hand-placed state. The 3→1 shed is not a state, it
+    // is a TRANSITION between two of them, and the thing that can go wrong with it — chatter — only
+    // exists across ticks. So this closes the loop: `Guide()` flies the stage, the stage's own response
+    // to the commanded bank and throttle feeds the next tick's inputs, and the carried state (phase,
+    // throttle, shed latch) is handed back exactly as `src/BoosterHost.cs` hands it back.
+    //
+    // ⚠ The integrator is the SAME arithmetic `Hoverslam` uses (gravity, v-squared drag against a
+    // terminal speed, thrust) at a coarse fixed step. It is a TEST HARNESS for the command sequence,
+    // NOT a flight model and NOT evidence about the vehicle: the banks are the property fixture from
+    // `EnginesForChecks`, and the file header's warning about anchors applies to every number here.
+    struct BurnWalk
+    {
+        public int Ticks;
+        public bool SawThree, SawCentre, ThreeAfterCentre, EverIllegal;
+        public string FirstIllegal;
+        public int Sheds;
+    }
+
+    static BurnWalk FlyLandingBurn(double dt, int maxTicks)
+    {
+        BurnWalk w = new BurnWalk();
+        double v = 244.0;
+        double alt = Hoverslam.IgnitionAltitude(Bank(EngCentreAccel, 0.0, v));   // the hand-over altitude
+        BoosterPhase phase = BoosterPhase.LandingBurn;
+        bool shed = false;
+        double lastThrottle = 0.0;
+
+        for (int i = 0; i < maxTicks && alt > 0.0 && phase == BoosterPhase.LandingBurn; i++)
+        {
+            BoosterInputs b = Booster(TargetMode.Asds);
+            b.AltitudeM = alt; b.DescentSpeedMps = v;
+            b.SurfaceVelocity = new Vec3(-v, 5.0, 0.0);      // descending along -Up, a little downrange
+            b.SpeedMps = Math.Sqrt(v * v + 25.0);
+            b.Land = Bank(EngCentreAccel, alt, v);
+            b.LandThree = Bank(EngThreeAccel, alt, v);
+            b.LandingShedLatched = shed;
+            b.CommandedThrottle = lastThrottle;
+            b.DtS = dt;                                      // ⛔ a real clock: the spool ramp is LIVE,
+                                                             // which is what makes the swap transient real
+            BoosterCommand c = BoosterDescent.Guide(b, phase);
+            w.Ticks++;
+
+            EngineRole role = BoosterHostPlan.CommandedRole(c.EnginesLit, c.EngineMode);
+            if (!BoosterHostPlan.PhaseAllows(c.Phase, role, c.LandingShedLatched))
+            {
+                if (!w.EverIllegal)
+                    w.FirstIllegal = "tick " + w.Ticks + " alt=" + alt.ToString("F0") + " v=" + v.ToString("F0")
+                                     + " phase=" + c.Phase + " role=" + role + " shed=" + c.LandingShedLatched;
+                w.EverIllegal = true;
+            }
+
+            bool three = c.EnginesLit && c.EngineMode == VehicleParts.ModeThreeEngine;
+            bool centre = c.EnginesLit && c.EngineMode == VehicleParts.ModeCentreOnly;
+            if (three && w.SawCentre) w.ThreeAfterCentre = true;
+            if (centre && !w.SawCentre && w.SawThree) w.Sheds++;
+            if (three) w.SawThree = true;
+            if (centre) w.SawCentre = true;
+
+            double a = 0.0;
+            if (three) a = EngThreeAccel * c.Throttle;
+            else if (centre) a = EngCentreAccel * c.Throttle;
+            double drag = EngG * (v * v) / (EngVterm * EngVterm);
+            v += (EngG - drag - a) * dt;
+            if (v < 0.0) v = 0.0;
+            alt -= v * dt;
+
+            phase = c.Phase;
+            shed = c.LandingShedLatched;
+            lastThrottle = c.Throttle;
+        }
+        return w;
+    }
+
+    static void LandingBurnWalkChecks()
+    {
+        BurnWalk w = FlyLandingBurn(0.1, 4000);
+
+        Check("OCT6: the whole landing burn actually ran (not a one-tick walk)", w.Ticks > 20, "ticks=" + w.Ticks);
+        Check("OCT6: the burn LIT THREE ENGINES (the owner's ruling, flown)", w.SawThree, "");
+        Check("OCT6: the burn SHED to the centre engine", w.SawCentre, "");
+        Check("OCT6: it shed exactly ONCE", w.Sheds == 1, "sheds=" + w.Sheds);
+        Check("OCT6: every command the whole burn returned is legal under the phase gate",
+              !w.EverIllegal, w.FirstIllegal);
+        // ⛔ THE MUTATION TARGET. Remove the latch in `BoosterDescent`'s LandingBurn case and this is the
+        // check that goes red: `EnginesFor` re-demands three engines during the swap transient, because
+        // the spool ramp means the newly-selected centre bank is not yet at the thrust the solve assumed.
+        Check("OCT6: the bank NEVER returns to ThreeLanding after shedding — the latch holds across ticks",
+              !w.ThreeAfterCentre, "");
     }
 
     // =====================================================================================

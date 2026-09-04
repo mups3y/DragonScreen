@@ -196,7 +196,29 @@ namespace DragonScreen
         public bool AllNominal;
         public double OffsetToMissM;    // cross-deck bias applied until nominal
 
-        public HoverslamInputs Land;    // for the landing ignition altitude
+        public HoverslamInputs Land;    // for the landing ignition altitude — the CENTRE (CenterOnly) bank
+
+        /// <summary>OCT6 — the SAME solve for the THREE-engine (`ThreeLanding`) bank, so
+        /// <see cref="Hoverslam.EnginesFor"/> can be asked the question it was written to answer: the
+        /// FEWEST engines that can still arrest from here. Built by the glue from the THREE bank's LIVE
+        /// `maxThrust` over the LIVE mass, exactly as <see cref="Land"/> is built from the centre bank's —
+        /// never a pre-computed schedule (the S48 §2.5 RO trap; `src/BoosterHost.cs` says so in place).
+        /// ⛔ **`ThrustAccelMps2 &lt;= 0` = NOT SUPPLIED**, the same "0 = inert" convention
+        /// <see cref="IgnitionsThreeLanding"/> uses. The 3→1 shed is then INERT and the landing burn flies
+        /// `CenterOnly` throughout, exactly as it did before OCT6 — the shed is a decision between two
+        /// MEASURED banks, and a bank nobody measured is not a bank this FSM will light.</summary>
+        public HoverslamInputs LandThree;
+
+        /// <summary>OCT6's ONE-WAY SHED LATCH, and the reason it is an INPUT: `Guide()` is a pure
+        /// function, so the latch — like <see cref="CommandedForward"/> and
+        /// <see cref="CommandedThrottle"/> — is carried by the caller and handed back in
+        /// <see cref="BoosterCommand.LandingShedLatched"/> every tick.
+        /// ⛔ **WHY IT LATCHES.** `EnginesFor` is evaluated EVERY frame and sits near its own boundary by
+        /// construction (the throttle law drives `stopDistance/altitude` to ≈1, which is the same
+        /// comparison the shed turns on). Un-latched it chatters, and every flip is a real shutdown plus a
+        /// real re-ignition: physically you cannot un-shut a hoverslam, and no ignition budget survives
+        /// chatter. Once `CenterOnly` is commanded the burn NEVER returns to `ThreeLanding`.</summary>
+        public bool LandingShedLatched;
 
         // ---- W8: the target mode and the return leg ----------------------------------------------
 
@@ -264,6 +286,13 @@ namespace DragonScreen
         public bool DeployFins, DeployLegs;
         public bool UllageRcs;          // settle propellant NOW: an ignition is wanted and Ullaged is false
         public string Refusal;          // null = nothing refused; otherwise WHY a phase declined to burn
+
+        /// <summary>OCT6 — the shed latch as it stands AFTER this tick. Hand it straight back in
+        /// <see cref="BoosterInputs.LandingShedLatched"/> next tick; it only ever goes false→true, and
+        /// `Guide()` never clears it. The host's phase gate reads THIS field on THIS tick so the gate and
+        /// the FSM can never disagree about which bank is the legal one (OCT3's identical-decode rule,
+        /// one level up).</summary>
+        public bool LandingShedLatched;
     }
 
     public static class BoosterDescent
@@ -656,7 +685,19 @@ namespace DragonScreen
         /// </summary>
         public static double LandingThrottle(BoosterInputs s)
         {
-            HoverslamInputs lit = s.Land;
+            return LandingThrottle(s, s.Land, MinThrottleCentreOnly);
+        }
+
+        /// <summary>OCT6 — the same law, solved against the bank that is ACTUALLY LIT. Flying three
+        /// engines while the stop-distance solve models one is not "fly three": the modelled bank is
+        /// weaker, so `stopDistance` comes out large, the ratio comes out high and the law over-throttles
+        /// a bank three times stronger than the one it solved for. The bank is therefore passed in,
+        /// alongside its own measured minimum throttle — the two `_minThrottle` figures are numerically
+        /// EQUAL today (both 0.390625, `docs/reference/craftdump.csv`), so this changes no number; it
+        /// stops the law naming a bank it is not flying.</summary>
+        public static double LandingThrottle(BoosterInputs s, HoverslamInputs bank, double minThrottle)
+        {
+            HoverslamInputs lit = bank;
             lit.DeadTimeS = 0.0;                 // the engine is ALREADY lit — no dead fall left to cover
             lit.SpoolS = 0.0;
             double stop = Hoverslam.IgnitionAltitude(lit);
@@ -666,9 +707,14 @@ namespace DragonScreen
 
             double t = s.AltitudeM > 1.0 ? stop / s.AltitudeM + margin : 1.0;
             if (t > 1.0) t = 1.0;
-            if (t < MinThrottleCentreOnly) t = MinThrottleCentreOnly;
+            if (t < minThrottle) t = minThrottle;
             return t;
         }
+
+        /// <summary>OCT6 — the three-engine landing bank as the solver should see it, or `Land` when the
+        /// glue supplied no three-engine thrust. `ThrustAccelMps2 &lt;= 0` is the struct's own
+        /// "0 = NOT SUPPLIED" convention (<see cref="BoosterInputs.LandThree"/>).</summary>
+        public static bool ThreeBankSupplied(BoosterInputs s) { return s.LandThree.ThrustAccelMps2 > 0.0; }
 
         /// <summary>§6 — ignite at a TRICKLE, then RAMP; never step. Walks the commanded throttle toward
         /// the law's value at a bounded rate in both directions, respecting spool-up rather than
@@ -697,6 +743,10 @@ namespace DragonScreen
             c.AimForward = s.Valid ? Retro(s.SurfaceVelocity, s.Up) : Unit(s.Up, LastResort);
             c.Throttle = 0.0; c.EngineMode = VehicleParts.ModeOff; c.EnginesLit = false;
             c.AoaDeg = 0.0; c.AoaCapDeg = 0.0; c.Refusal = null;
+            // OCT6 — the shed latch is CARRIED, in every phase and on every exit path including the
+            // invalid-input bail below. It only ever goes false→true, and only in the LandingBurn case:
+            // nothing here, and nothing anywhere else in this FSM, ever clears it.
+            c.LandingShedLatched = s.LandingShedLatched;
 
             if (!s.Valid) { c.Phase = BoosterPhase.Idle; c.AimForward = Unit(s.Up, LastResort); return c; }
 
@@ -844,14 +894,36 @@ namespace DragonScreen
 
                 case BoosterPhase.LandingBurn:
                 {
-                    // ⛔ Hoverslam on the SINGLE CENTRE ENGINE (`CenterOnly`), lit ONCE and run
-                    // continuously to the deck. `docs/reference/craftdump.csv` gives each engineID set ONE
-                    // ignition, so we do NOT step 3→1 during the burn — that would re-ignite CenterOnly
-                    // and spool mid-braking. The glue selects the set ABSOLUTELY, WHILE OFF and before
-                    // ignition, by ACTIVATING the `CenterOnly` `ModuleEnginesRF` BOUND BY ITS engineID
-                    // (§B16.4 step 2 / `pure/OctawebResolve.cs`) — NEVER by cycling NextEngineMode, and
-                    // NEVER by writing `ModuleTundraEngineSwitch.selectedIndex` (§B16.3 bans that module
-                    // as a switching mechanism outright; it may be READ for annunciation only).
+                    // ⛔ OCT6 (owner ruling, 2026-09-05) — THE LANDING BURN LIGHTS **THREE** ENGINES AND
+                    // SHEDS TO ONE, and the shed point is COMPUTED, not stated. Asked which of the two
+                    // options to fly, the owner answered *"1. (2)"* — option (2), `ThreeLanding` shedding
+                    // to `CenterOnly` — and, asked what triggers the shed, *"yes to computing from current
+                    // hover slam solver"*. So `Hoverslam.EnginesFor` (which has carried exactly this
+                    // decision since it was written, with no caller) is asked EVERY tick against the two
+                    // measured banks, and the burn flies the FEWEST engines that can still arrest.
+                    //
+                    // ⛔ WHAT THIS OVERRULED, AND WHY THE REASONING IS KEPT (C1.16's spirit). Until this
+                    // ruling the case read: *"each engineID set carries ONE ignition, so we do NOT step
+                    // 3→1 during the burn — that would re-ignite CenterOnly and spool mid-braking"*, and
+                    // the file header's §4.5 non-port (b) still says so. That premise is **UNMEASURED**.
+                    // `docs/reference/craftdump.csv` does record `ignitions = 1` on each of the three
+                    // octaweb `ModuleEnginesRF` — but that is a PRELAUNCH pad read, and register **BB8**
+                    // records that the install's own `Crew2_Patches/F9_Engines_InstantSpool.cfg` sets
+                    // `%ignitions = -1` (RealFuels: unlimited) with the final ModuleManager ConfigCache
+                    // carrying −1 on the octaweb nine times and no other value. Config and persistence
+                    // both say unlimited; only the pad read said 1. ⚠ **NOBODY HAS MEASURED IT IN
+                    // FLIGHT** — BB8 is the line that will. So the ignition count is not evidence for or
+                    // against the shed, and NO new ignition-budget guard is built on it here: the ONE
+                    // budget refusal below is the pre-existing `IgnitionsCentreOnly == 0` guard, reading
+                    // the LIVE module, unchanged.
+                    //
+                    // The glue selects the set ABSOLUTELY by ACTIVATING that bank's `ModuleEnginesRF`
+                    // BOUND BY ITS engineID (§B16.4 step 2 / `pure/OctawebResolve.cs`) — NEVER by cycling
+                    // NextEngineMode, and NEVER by writing `ModuleTundraEngineSwitch.selectedIndex`
+                    // (§B16.3 bans that module as a switching mechanism outright; READ for annunciation
+                    // only). ⚠ Whether that dispatch SEQUENCES a mid-burn bank change correctly is
+                    // register **OCT4**, and OCT4 has not run: this is the first mid-burn mode change in
+                    // the project and it will fly through dispatch code no line has audited.
                     c.Phase = BoosterPhase.LandingBurn;
 
                     // §4.5's TERMINAL AoA SCHEDULE — the cap goes NEGATIVE and tightens, leaning the
@@ -879,9 +951,41 @@ namespace DragonScreen
                     }
                     else
                     {
-                        wantThrottle = LandingThrottle(s);
-                        c.EngineMode = VehicleParts.ModeCentreOnly;      // one ignition, no re-light
-                        c.EnginesLit = true;
+                        // ⛔ THE SHED DECISION, and it LATCHES ONE WAY. `EnginesFor` returns the fewest
+                        // engines that can still arrest — 3, 1, or 0 for "not even three can". Once it has
+                        // said 1 the latch holds `CenterOnly` for the rest of the burn: shedding is a real
+                        // shutdown, un-shedding is a real re-ignition mid-brake, and the solver sits on its
+                        // own boundary (the throttle law drives stop/altitude to ≈1 — the same comparison),
+                        // so an un-latched answer chatters. There is no path back to `ThreeLanding`.
+                        int bank;
+                        if (!ThreeBankSupplied(s))
+                            bank = 1;                    // no measured three-engine bank → the shed is
+                                                         // inert and this is the pre-OCT6 burn, unchanged.
+                        else if (s.LandingShedLatched)
+                            bank = 1;                    // already shed — never re-evaluated.
+                        else
+                            bank = Hoverslam.EnginesFor(s.Land, s.LandThree);
+
+                        if (bank == 0)
+                        {
+                            // `EnginesFor`'s own un-recoverable case: even THREE engines cannot null the
+                            // descent from here. Say so — a fallback to some bank would be a landing this
+                            // FSM has already computed it cannot make, flown silently.
+                            c.Refusal = "landing burn refused: even the 3-engine bank cannot arrest from here";
+                        }
+                        else if (bank == 1)
+                        {
+                            c.LandingShedLatched = true;                 // ⛔ ONE WAY. Never cleared.
+                            wantThrottle = LandingThrottle(s, s.Land, MinThrottleCentreOnly);
+                            c.EngineMode = VehicleParts.ModeCentreOnly;
+                            c.EnginesLit = true;
+                        }
+                        else
+                        {
+                            wantThrottle = LandingThrottle(s, s.LandThree, MinThrottleThreeLanding);
+                            c.EngineMode = VehicleParts.ModeThreeEngine;
+                            c.EnginesLit = true;
+                        }
                     }
 
                     c.DeployFins = true;

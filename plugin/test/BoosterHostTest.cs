@@ -349,6 +349,15 @@ public static class BoosterHostTest
     // in every phase that is not its own. Every check below has a partner that asserts the OPPOSITE of
     // "always true" / "always false", so a gate mutated into a stub (always accept, or always refuse)
     // fails at least one of them — that is what proves it can fail by mutation, not a runtime toggle.
+    //
+    // ⛔ OCT6 (2026-09-05) CHANGED WHAT "ITS OWN PHASE" MEANS FOR THE LANDING BURN, and therefore changed
+    // two of OCT3's own passing assertions. The owner ruled the landing burn flies THREE engines and
+    // SHEDS to one (*"1. (2)"*, shed point *"comput[ed] from current hover slam solver"*), so
+    // "CenterOnly legal at LandingBurn" / "ThreeLanding refused during LandingBurn" were correct code
+    // asserting a decision the owner then overturned. They are replaced below by the ORDERED PAIR —
+    // Three legal only before the shed, Centre legal only after — which keeps OCT3's actual property
+    // (exactly ONE legal bank per gate query) rather than widening the gate to accept both. The pair is
+    // mutation-provable in both directions the same way the rest of this section is.
     static void PhaseGateTests()
     {
         BoosterPhase[] all = (BoosterPhase[])Enum.GetValues(typeof(BoosterPhase));
@@ -358,40 +367,62 @@ public static class BoosterHostTest
             BoosterPhase.AeroDescent, BoosterPhase.Landed
         };
 
-        // ⛔ THE ASCENT-ONLY BANK, REFUSED EVERYWHERE. There is no phase in this FSM it is legal in.
+        bool[] shedStates = { false, true };   // OCT6 — the landing burn's two halves
+
+        // ⛔ THE ASCENT-ONLY BANK, REFUSED EVERYWHERE, in BOTH halves of the landing burn.
         for (int i = 0; i < all.Length; i++)
-            Check("OctawebAll (ascent/liftoff) refused in phase " + all[i],
-                  !BoosterHostPlan.PhaseAllows(all[i], EngineRole.OctawebAll), all[i].ToString());
+            for (int k = 0; k < shedStates.Length; k++)
+                Check("OctawebAll (ascent/liftoff) refused in phase " + all[i] + " (shed=" + shedStates[k] + ")",
+                      !BoosterHostPlan.PhaseAllows(all[i], EngineRole.OctawebAll, shedStates[k]), all[i].ToString());
 
         // Off is always legal — refusing "nothing lit" would make the interlock itself a hazard.
         for (int i = 0; i < all.Length; i++)
-            Check("no bank lit is legal in every phase, phase " + all[i],
-                  BoosterHostPlan.PhaseAllows(all[i], EngineRole.None), all[i].ToString());
+            for (int k = 0; k < shedStates.Length; k++)
+                Check("no bank lit is legal in every phase, phase " + all[i] + " (shed=" + shedStates[k] + ")",
+                      BoosterHostPlan.PhaseAllows(all[i], EngineRole.None, shedStates[k]), all[i].ToString());
 
         // Each landing-phase bank is legal in its OWN phase(s)...
         Check("ThreeLanding legal at Boostback",
               BoosterHostPlan.PhaseAllows(BoosterPhase.Boostback, EngineRole.OctawebThree), "");
         Check("ThreeLanding legal at EntryBurn",
               BoosterHostPlan.PhaseAllows(BoosterPhase.EntryBurn, EngineRole.OctawebThree), "");
-        Check("CenterOnly legal at LandingBurn",
-              BoosterHostPlan.PhaseAllows(BoosterPhase.LandingBurn, EngineRole.OctawebCentre), "");
 
-        // ...and refused everywhere a bank must stay dark (Idle / Flip / Coast / AeroDescent / Landed).
+        // ⛔ OCT6 — THE LANDING BURN'S ORDERED PAIR. This REPLACES OCT3's single
+        // "CenterOnly legal at LandingBurn" / "ThreeLanding refused during LandingBurn" pair, which the
+        // owner's 2026-09-05 ruling (*"1. (2)"* — ThreeLanding shedding to CenterOnly, the shed point
+        // *"comput[ed] from current hover slam solver"*) makes WRONG. The gate is NOT widened: it still
+        // names exactly ONE legal bank per query, and the other bank is refused in each half.
+        Check("OCT6: ThreeLanding legal at LandingBurn BEFORE the shed (three engines brake)",
+              BoosterHostPlan.PhaseAllows(BoosterPhase.LandingBurn, EngineRole.OctawebThree, false), "");
+        Check("OCT6: CenterOnly REFUSED at LandingBurn before the shed (the burn has not shed yet)",
+              !BoosterHostPlan.PhaseAllows(BoosterPhase.LandingBurn, EngineRole.OctawebCentre, false), "");
+        Check("OCT6: CenterOnly legal at LandingBurn AFTER the shed (one engine flies the touchdown)",
+              BoosterHostPlan.PhaseAllows(BoosterPhase.LandingBurn, EngineRole.OctawebCentre, true), "");
+        Check("OCT6: ThreeLanding REFUSED at LandingBurn after the shed — the shed is ONE WAY",
+              !BoosterHostPlan.PhaseAllows(BoosterPhase.LandingBurn, EngineRole.OctawebThree, true), "");
+        Check("OCT6: the landing burn still has exactly ONE legal bank per half, and they DIFFER",
+              BoosterHostPlan.AllowedRoleForPhase(BoosterPhase.LandingBurn, false) == EngineRole.OctawebThree
+              && BoosterHostPlan.AllowedRoleForPhase(BoosterPhase.LandingBurn, true) == EngineRole.OctawebCentre, "");
+
+        // ...and refused everywhere a bank must stay dark (Idle / Flip / Coast / AeroDescent / Landed) —
+        // in BOTH shed states, since the latch must never open a bank outside the landing burn.
         for (int i = 0; i < noBankPhases.Length; i++)
-        {
-            Check("ThreeLanding refused at " + noBankPhases[i],
-                  !BoosterHostPlan.PhaseAllows(noBankPhases[i], EngineRole.OctawebThree), "");
-            Check("CenterOnly refused at " + noBankPhases[i],
-                  !BoosterHostPlan.PhaseAllows(noBankPhases[i], EngineRole.OctawebCentre), "");
-        }
+            for (int k = 0; k < shedStates.Length; k++)
+            {
+                Check("ThreeLanding refused at " + noBankPhases[i] + " (shed=" + shedStates[k] + ")",
+                      !BoosterHostPlan.PhaseAllows(noBankPhases[i], EngineRole.OctawebThree, shedStates[k]), "");
+                Check("CenterOnly refused at " + noBankPhases[i] + " (shed=" + shedStates[k] + ")",
+                      !BoosterHostPlan.PhaseAllows(noBankPhases[i], EngineRole.OctawebCentre, shedStates[k]), "");
+            }
 
         // ⛔ AND VICE VERSA — a landing-phase bank commanded in the OTHER landing phase is still wrong.
-        // CenterOnly is Hoverslam's single-engine burn; ThreeLanding is boostback/entry. Crossing them is
-        // exactly the "landing mode during ascent and vice versa" shape of mistake, one phase-pair over.
+        // CenterOnly is Hoverslam's touchdown engine; ThreeLanding is boostback/entry (and, since OCT6,
+        // the first half of the landing burn). Crossing them is exactly the "landing mode during ascent
+        // and vice versa" shape of mistake, one phase-pair over.
         Check("CenterOnly refused during Boostback (that phase's bank is Three, not Centre)",
               !BoosterHostPlan.PhaseAllows(BoosterPhase.Boostback, EngineRole.OctawebCentre), "");
-        Check("ThreeLanding refused during LandingBurn (that phase's bank is Centre, not Three)",
-              !BoosterHostPlan.PhaseAllows(BoosterPhase.LandingBurn, EngineRole.OctawebThree), "");
+        Check("CenterOnly refused during EntryBurn (that phase's bank is Three, not Centre)",
+              !BoosterHostPlan.PhaseAllows(BoosterPhase.EntryBurn, EngineRole.OctawebCentre), "");
 
         // ---- Wired through the ACTUAL command gate the host calls, not just the predicate ----
         BoosterFlightSnapshot s = Flying();
@@ -404,9 +435,18 @@ public static class BoosterHostTest
         Check("Blocked lets ThreeLanding through during EntryBurn (its own phase)",
               BoosterHostPlan.Blocked(true, s, farEnough, longEnough, BoosterPhase.EntryBurn, EngineRole.OctawebThree)
                   == BoosterCommandBlock.None, "");
-        Check("Blocked refuses ThreeLanding during LandingBurn (wrong bank for that phase)",
-              BoosterHostPlan.Blocked(true, s, farEnough, longEnough, BoosterPhase.LandingBurn, EngineRole.OctawebThree)
-                  == BoosterCommandBlock.WrongEngineForPhase, "");
+        Check("OCT6: Blocked lets ThreeLanding through during LandingBurn BEFORE the shed",
+              BoosterHostPlan.Blocked(true, s, farEnough, longEnough, BoosterPhase.LandingBurn,
+                                      EngineRole.OctawebThree, false) == BoosterCommandBlock.None, "");
+        Check("OCT6: Blocked REFUSES ThreeLanding during LandingBurn AFTER the shed (no re-ignition)",
+              BoosterHostPlan.Blocked(true, s, farEnough, longEnough, BoosterPhase.LandingBurn,
+                                      EngineRole.OctawebThree, true) == BoosterCommandBlock.WrongEngineForPhase, "");
+        Check("OCT6: Blocked REFUSES CenterOnly during LandingBurn before the shed",
+              BoosterHostPlan.Blocked(true, s, farEnough, longEnough, BoosterPhase.LandingBurn,
+                                      EngineRole.OctawebCentre, false) == BoosterCommandBlock.WrongEngineForPhase, "");
+        Check("OCT6: Blocked lets CenterOnly through during LandingBurn after the shed",
+              BoosterHostPlan.Blocked(true, s, farEnough, longEnough, BoosterPhase.LandingBurn,
+                                      EngineRole.OctawebCentre, true) == BoosterCommandBlock.None, "");
 
         // A pre-OCT3 caller that names no phase/role at all (every CommandGateTests() call above) must
         // still compile and answer exactly as before: Idle + None is always allowed.

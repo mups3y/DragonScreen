@@ -253,17 +253,19 @@ namespace DragonScreen
         /// `phase` / `commandedRole` default to `Idle` / `None` — always mutually legal (see
         /// <see cref="PhaseAllows"/>) — so every pre-OCT3 caller (every test that predates the phase gate)
         /// keeps compiling and keeps its answer unchanged; only a caller that names a real phase and role
-        /// exercises the new check.
+        /// exercises the new check. `landingShed` (OCT6) is the FSM's one-way shed latch, read only in
+        /// `LandingBurn`; it defaults to the un-shed state the burn starts in.
         /// </summary>
         public static BoosterCommandBlock Blocked(bool armed, BoosterFlightSnapshot s,
                                                   double separationM, double sinceBindS,
                                                   BoosterPhase phase = BoosterPhase.Idle,
-                                                  EngineRole commandedRole = EngineRole.None)
+                                                  EngineRole commandedRole = EngineRole.None,
+                                                  bool landingShed = false)
         {
             if (!armed) return BoosterCommandBlock.NotArmed;
             if (s.Packed) return BoosterCommandBlock.Packed;
             if (!s.OctawebStillValid) return BoosterCommandBlock.NoOctaweb;
-            if (!PhaseAllows(phase, commandedRole)) return BoosterCommandBlock.WrongEngineForPhase;
+            if (!PhaseAllows(phase, commandedRole, landingShed)) return BoosterCommandBlock.WrongEngineForPhase;
             if (HoldingOff(separationM, sinceBindS)) return BoosterCommandBlock.HoldOff;
             return BoosterCommandBlock.None;
         }
@@ -334,9 +336,28 @@ namespace DragonScreen
         // legal. This is the second half of OCT3, alongside `VehicleParts.ModeOff`: that gave OFF an
         // honest value, this refuses the ambiguous one outright if it is ever commanded anyway.
 
+        // ⛔ OCT6 (owner ruling, 2026-09-05) — THE LANDING BURN HAS TWO LEGAL BANKS, IN A DEFINED ORDER.
+        // OCT3-Q1 asked whether the landing burn flies one engine or three; the owner answered *"1. (2)"*
+        // — option (2), `ThreeLanding` shedding to `CenterOnly` — and, on what triggers the shed,
+        // *"yes to computing from current hover slam solver"*. So `LandingBurn` is no longer a
+        // one-bank phase. **It is still a ONE-BANK GATE**: the phase plus the FSM's one-way shed latch
+        // names exactly one legal bank, Three before the shed and Centre after, and the other is refused
+        // in each half. That is the whole reason the latch is passed in rather than the gate simply being
+        // taught to accept both banks in this phase — accepting both would leave `ThreeLanding` legal late
+        // in the burn, which the latch forbids but a widened gate would no longer refuse.
+        //
+        // `landingShed` defaults to FALSE — "the burn has not shed yet", which is the state a landing
+        // burn STARTS in, so the default is the burn's own initial state rather than a neutral. A caller
+        // that names `LandingBurn` and forgets the latch therefore gets the EARLY half's answer: it
+        // refuses the terminal `CenterOnly` command. That is the fail-safe direction (a refusal, never a
+        // wrong actuation), and `src/BoosterHost.cs` passes the latch from the SAME `BoosterCommand` it
+        // decodes the role from, so the gate and the FSM read one latch on one tick.
+
         /// <summary>The ONE engine bank a phase may legally light. `EngineRole.None` = no bank may be lit
-        /// at all in this phase — see the OCT3 table (Idle · Flip · Coast · AeroDescent · Landed).</summary>
-        public static EngineRole AllowedRoleForPhase(BoosterPhase phase)
+        /// at all in this phase — see the OCT3 table (Idle · Flip · Coast · AeroDescent · Landed).
+        /// `landingShed` is the FSM's one-way shed latch (`BoosterCommand.LandingShedLatched`) and is read
+        /// only in `LandingBurn`, where it picks which half of the burn we are in.</summary>
+        public static EngineRole AllowedRoleForPhase(BoosterPhase phase, bool landingShed = false)
         {
             switch (phase)
             {
@@ -344,8 +365,8 @@ namespace DragonScreen
                 case BoosterPhase.EntryBurn:
                     return EngineRole.OctawebThree;
                 case BoosterPhase.LandingBurn:
-                    return EngineRole.OctawebCentre;   // OCT3-Q1 (open, owner's to decide): CenterOnly
-                                                        // throughout — matches the code as it stands today
+                    // OCT6: three engines brake, one flies the touchdown — and once shed, never back.
+                    return landingShed ? EngineRole.OctawebCentre : EngineRole.OctawebThree;
                 default:
                     return EngineRole.None;            // Idle, Flip, Coast, AeroDescent, Landed
             }
@@ -354,12 +375,13 @@ namespace DragonScreen
         /// <summary>May `role` be commanded while the FSM is in `phase`? `None` (off) is always legal —
         /// refusing to command nothing would make the interlock itself a hazard. `OctawebAll` is refused
         /// in EVERY phase this enum can name (the comment block above explains why); any other role must
-        /// match the phase's one legal bank exactly.</summary>
-        public static bool PhaseAllows(BoosterPhase phase, EngineRole role)
+        /// match the phase's one legal bank exactly — which in `LandingBurn` is the one the shed latch
+        /// names (OCT6).</summary>
+        public static bool PhaseAllows(BoosterPhase phase, EngineRole role, bool landingShed = false)
         {
             if (role == EngineRole.None) return true;
             if (role == EngineRole.OctawebAll) return false;
-            return role == AllowedRoleForPhase(phase);
+            return role == AllowedRoleForPhase(phase, landingShed);
         }
 
         // =========================================================================================
