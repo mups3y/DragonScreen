@@ -5976,7 +5976,12 @@ SOURCE"* for `reference/dragon2-ui-vue/` — false, since `dragon_crew.png` (shi
 the §3 header and add a line noting the one shipped asset, cross-referencing `NOTICE` (S69) for the full
 attribution. Docs-only; no `.cs` change; `build.py test` as no-regression check.
 
-### S72 [S] `CraftDumpAddon.cs`'s header comment is now false — **TODO** — [TIER 2: hygiene, doc accuracy]
+### S72 [S] `CraftDumpAddon.cs`'s header comment is now false — **DONE** — [TIER 2: hygiene, doc accuracy] ⚠ batch deviation from C1.1/C1.7 authorised by owner 2026-09-04 via overseer
+Reworded `plugin/src/CraftDumpAddon.cs:4-9`'s header: "Our tree has no `[KSPAddon]` anywhere else" → now
+names both independent `[KSPAddon]`s (`CraftDumpAddon` here, `GeometryDumpProbe` in `GeometryDump.cs`,
+confirmed at `GeometryDump.cs:30`), both read-only diagnostics touching neither render nor control path.
+Kept the rest of the comment (DragonScreenMonitor / excisability) as-is. Comment-only, no behavior change.
+`python plugin/build.py test` green (`ALL SUITES PASSED`); no preview PNG applies (docs-comment-only, C1.3).
 Found by **W13**, 2026-09-04 (C1.1 — noticed while restoring `GeometryDump.cs`, not touched by W13 since it is
 outside that task's declared outputs). `plugin/src/CraftDumpAddon.cs:5` reads *"Our tree has no `[KSPAddon]`
 anywhere else"* — false as of W13: `GeometryDumpProbe` (`plugin/src/GeometryDump.cs`) carries its own
