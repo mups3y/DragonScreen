@@ -67,6 +67,7 @@ public static class BoosterTest
         LandingBurnChecks();
         PredictionChecks();
         UllageAndSpoolChecks();
+        PhaseCommandGateInvariantChecks();
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
@@ -701,6 +702,115 @@ public static class BoosterTest
         BoosterCommand rc = BoosterDescent.Guide(ramped, BoosterPhase.Boostback);
         Check("the FSM's first boostback tick is a spool, not a step",
               rc.EnginesLit && rc.Throttle > 0.0 && rc.Throttle < 1.0, rc.Throttle.ToString("F4"));
+    }
+
+    // =====================================================================================
+    // OCT5 (2026-09-05): THE FSM'S OWN OUTPUT AGAINST THE HOST'S PHASE GATE — mutation-proven.
+    // BoosterHostTest.PhaseGateTests proves `BoosterHostPlan.PhaseAllows` correct against HAND-BUILT
+    // (phase, role) pairs; it never asks whether THIS FSM's own commands satisfy it. OCT3 lit the
+    // Boostback bank then flipped the phase to Coast on the same tick without clearing it — a real
+    // command the gate would refuse, from a producer nothing exercised. For every phase this drives
+    // Guide() through both its engine-lighting branch (stays in phase, still burning) and its exit
+    // branch (transitions out, on the SAME tick the bank was lit where that is reachable), and asserts
+    // the gate accepts the RETURNED command — never a hand-built stand-in for it.
+    // =====================================================================================
+    static void GateCheck(string where, BoosterCommand c)
+    {
+        EngineRole role = BoosterHostPlan.CommandedRole(c.EnginesLit, c.EngineMode);
+        Check("OCT5: the FSM's own command is gate-legal — " + where,
+              BoosterHostPlan.PhaseAllows(c.Phase, role),
+              "commanded phase=" + c.Phase + " EnginesLit=" + c.EnginesLit
+              + " EngineMode=" + c.EngineMode + " role=" + role);
+    }
+
+    static void PhaseCommandGateInvariantChecks()
+    {
+        // ---- Idle: no lighting branch; exits straight to Flip ----
+        BoosterInputs idle = Booster(TargetMode.Rtls);
+        idle.AltitudeM = 150000.0; idle.Land.AltitudeM = 150000.0; idle.DtS = 0.0;
+        GateCheck("Idle -> Flip", BoosterDescent.Guide(idle, BoosterPhase.Idle));
+
+        // ---- Flip: no lighting branch; stays slewing, and exits (late/degenerate) to Boostback ----
+        BoosterInputs flipStays = Booster(TargetMode.Rtls);
+        flipStays.AltitudeM = 150000.0; flipStays.Land.AltitudeM = 150000.0;
+        flipStays.DtS = 0.02; flipStays.Facing = Retro(flipStays); flipStays.CommandedForward = Vec3.Zero;
+        GateCheck("Flip, still slewing", BoosterDescent.Guide(flipStays, BoosterPhase.Flip));
+
+        BoosterInputs flipExits = Booster(TargetMode.Rtls);
+        flipExits.AltitudeM = 40000.0; flipExits.DtS = 0.02; flipExits.Facing = Retro(flipExits);
+        GateCheck("Flip -> Boostback (late/degenerate)", BoosterDescent.Guide(flipExits, BoosterPhase.Flip));
+
+        // ---- Boostback: THE OCT5 SHAPE. Lit while staying, and lit while EXITING on the same tick —
+        // via the ALTITUDE gate (the report's own scenario: the entry gate is reached independently of
+        // the downrange error) and via BoostbackComplete's DEADBAND (a residual error too small to keep
+        // burning for but still large enough, at the throttle floor, to command > 0). ----
+        BoosterInputs bbStays = Booster(TargetMode.Rtls);
+        bbStays.AltitudeM = 150000.0; bbStays.Land.AltitudeM = 150000.0;
+        bbStays.DownrangeErrM = 400000.0; bbStays.InitialDownrangeErrM = 400000.0;
+        GateCheck("Boostback, still burning", BoosterDescent.Guide(bbStays, BoosterPhase.Boostback));
+
+        BoosterInputs bbExitsAlt = Booster(TargetMode.Rtls);
+        double gateAlt = BoosterDescent.EntryGateAltM(bbExitsAlt.Profile.Normalized(), bbExitsAlt.PayloadMassKg);
+        bbExitsAlt.AltitudeM = gateAlt; bbExitsAlt.Land.AltitudeM = gateAlt;
+        bbExitsAlt.DownrangeErrM = 400000.0; bbExitsAlt.InitialDownrangeErrM = 400000.0;
+        GateCheck("Boostback -> Coast at the entry gate, still burning to the last tick (OCT5)",
+                   BoosterDescent.Guide(bbExitsAlt, BoosterPhase.Boostback));
+
+        BoosterInputs bbExitsDeadband = Booster(TargetMode.Rtls);
+        bbExitsDeadband.AltitudeM = 150000.0; bbExitsDeadband.Land.AltitudeM = 150000.0;
+        bbExitsDeadband.DownrangeErrM = bbExitsDeadband.Profile.DownrangeAimM + BoosterDescent.BoostbackDeadbandM / 2.0;
+        bbExitsDeadband.InitialDownrangeErrM = 400000.0;
+        GateCheck("Boostback -> Coast inside the deadband, still throttling at the floor (OCT5)",
+                   BoosterDescent.Guide(bbExitsDeadband, BoosterPhase.Boostback));
+
+        // ---- Coast: no lighting branch; exits both ways (fast -> EntryBurn, slow -> AeroDescent) ----
+        BoosterInputs coastStays = Booster(TargetMode.Asds);
+        coastStays.AltitudeM = 150000.0; coastStays.Land.AltitudeM = 150000.0; coastStays.SpeedMps = 2200.0;
+        GateCheck("Coast, still ballistic", BoosterDescent.Guide(coastStays, BoosterPhase.Coast));
+
+        BoosterInputs coastFast = Booster(TargetMode.Asds);
+        coastFast.AltitudeM = 60000.0; coastFast.Land.AltitudeM = 60000.0; coastFast.SpeedMps = 2000.0;
+        GateCheck("Coast -> EntryBurn", BoosterDescent.Guide(coastFast, BoosterPhase.Coast));
+
+        BoosterInputs coastSlow = Booster(TargetMode.Asds);
+        coastSlow.AltitudeM = 60000.0; coastSlow.Land.AltitudeM = 60000.0; coastSlow.SpeedMps = 900.0;
+        GateCheck("Coast -> AeroDescent", BoosterDescent.Guide(coastSlow, BoosterPhase.Coast));
+
+        // ---- EntryBurn: lit while staying, and lit while exiting on the speed cut ----
+        BoosterInputs ebStays = Booster(TargetMode.Asds);
+        ebStays.AltitudeM = 60000.0; ebStays.Land.AltitudeM = 60000.0; ebStays.SpeedMps = 2000.0;
+        GateCheck("EntryBurn, still burning", BoosterDescent.Guide(ebStays, BoosterPhase.EntryBurn));
+
+        BoosterInputs ebExits = Booster(TargetMode.Asds);
+        ebExits.SpeedMps = 1200.0; ebExits.AltitudeM = 40000.0; ebExits.Land.AltitudeM = 40000.0;
+        GateCheck("EntryBurn -> AeroDescent at the speed cut", BoosterDescent.Guide(ebExits, BoosterPhase.EntryBurn));
+
+        // ---- AeroDescent: no lighting branch; stays gliding, and exits to LandingBurn ----
+        BoosterInputs aeroStays = Booster(TargetMode.Asds);
+        aeroStays.AltitudeM = 20000.0; aeroStays.Land.AltitudeM = 20000.0; aeroStays.Fin.DownrangeErrM = 3000.0;
+        GateCheck("AeroDescent, still gliding", BoosterDescent.Guide(aeroStays, BoosterPhase.AeroDescent));
+
+        BoosterInputs aeroExits = Booster(TargetMode.Asds);
+        aeroExits.AltitudeM = 1200.0; aeroExits.DescentSpeedMps = 244.0;
+        aeroExits.Land = Flight(); aeroExits.Land.AltitudeM = 1200.0;
+        GateCheck("AeroDescent -> LandingBurn at the ignition altitude",
+                   BoosterDescent.Guide(aeroExits, BoosterPhase.AeroDescent));
+
+        // ---- LandingBurn: lit while staying, and lit while exiting at touchdown ----
+        BoosterInputs lbStays = Booster(TargetMode.Asds);
+        lbStays.AltitudeM = 400.0; lbStays.DescentSpeedMps = 50.0;
+        lbStays.Land = Flight(); lbStays.Land.AltitudeM = 400.0; lbStays.Land.DescentSpeedMps = 50.0;
+        GateCheck("LandingBurn, still hoverslamming", BoosterDescent.Guide(lbStays, BoosterPhase.LandingBurn));
+
+        BoosterInputs lbExits = lbStays;
+        lbExits.AltitudeM = 0.5; lbExits.DescentSpeedMps = 1.0;
+        lbExits.Land.AltitudeM = 0.5; lbExits.Land.DescentSpeedMps = 1.0;
+        GateCheck("LandingBurn -> Landed at touchdown", BoosterDescent.Guide(lbExits, BoosterPhase.LandingBurn));
+
+        // ---- Landed: the terminal default branch, never lights anything ----
+        BoosterInputs landed = Booster(TargetMode.Asds);
+        landed.AltitudeM = 0.0; landed.DescentSpeedMps = 0.0;
+        GateCheck("Landed (terminal)", BoosterDescent.Guide(landed, BoosterPhase.Landed));
     }
 
     // =====================================================================================

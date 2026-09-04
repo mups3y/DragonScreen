@@ -2723,6 +2723,57 @@ burn — flagged here so that future work does not have to rediscover it.
 - **DONE when:** the transition sequencing is traced and tested against the OCT3 table, `build.py test` green.
 - `[S]` — this is an audit/hardening pass on already-working dispatch code, not a new capability.
 
+### OCT5 [S] Boostback lights a bank then hands Coast a stale, still-live command — **DONE 2026-09-05** — [TIER 1: overseer-found defect, OCT3's own phase gate refuses the FSM's own nominal-RTLS output]
+- **Found by the overseer, 2026-09-05**, in `pure/BoosterDescent.cs`'s `BoosterPhase.Boostback` case
+  (then lines 763-766, verified before touching anything): `if (wantThrottle > 0.0) { c.EngineMode =
+  ModeThreeEngine; c.EnginesLit = true; }` lights the bank, and the very next `if` can flip
+  `c.Phase = BoosterPhase.Coast` **on the same tick** without clearing either field. `OCT3`'s
+  `AllowedRoleForPhase(Coast) == EngineRole.None`, so `PhaseAllows` is false and
+  `BoosterHostPlan.Blocked` returns `WrongEngineForPhase` for that frame — refusing the FSM's OWN
+  nominal-RTLS output and, per `BoosterHost.Actuate`'s all-or-nothing dispatch, dropping steering with it.
+- **VERIFIED REACHABLE on the nominal RTLS path (brief's own instruction — not taken on faith), two
+  independent ways, both now in the invariant test:** (a) **the ALTITUDE gate**, `s.AltitudeM <= gateAlt`,
+  fires independently of downrange error — a full-authority burn (`wantThrottle = 1.0`) can still be
+  commanded the instant the vehicle reaches the entry gate; (b) **`BoostbackComplete`'s DEADBAND** — a
+  residual error positive but under `BoostbackDeadbandM` reads Complete via its deadband branch while
+  `BoostbackThrottle` is still pulled up to `ThrottleFloor` (`MinThrottleThreeLanding`) and stays > 0.
+  ASDS was confirmed NOT exposed (`BoostbackMagnitude` defaults to 0, so `wantThrottle` is always 0 and
+  the exit-with-a-live-bank shape cannot occur on that profile).
+- **FIX (1) — mirrors EntryBurn's already-correct exit (:806-808), condition unchanged.** The Boostback
+  exit block now clears the command the same way: `c.EnginesLit = false; wantThrottle = 0.0;
+  c.EngineMode = VehicleParts.ModeOff;` inside the existing `if`, before `break`. The transition
+  CONDITION (`Refusal != null || BoostbackComplete(...) || AltitudeM <= gateAlt`) was not touched, per
+  scope.
+- **Swept the rest of the switch for the same shape (C1.1: log, don't fix, if it's a behaviour change) —
+  none found.** `Idle`/`Flip` never light an engine. `Coast` and `AeroDescent` never light an engine
+  themselves, so their exits have nothing to clear. `EntryBurn`→`AeroDescent` (:806-808) and
+  `LandingBurn`→`Landed` (:885-887) already clear `EnginesLit`/`EngineMode` on exit — these were the
+  reference pattern, not additional instances of the bug. Nothing else needed touching.
+- **FIX (2) — the invariant test that would have caught this**, `BoosterTest.PhaseCommandGateInvariantChecks`
+  (new; wired into `BoosterTest.Run()`). For every `BoosterPhase`, drives `BoosterDescent.Guide` with
+  inputs reaching that phase's engine-lighting branch (stays in phase, still burning) AND its exit branch
+  (transitions out — on the SAME tick the bank was lit, where that is reachable: both Boostback exits
+  above, plus EntryBurn's speed-cut and LandingBurn's touchdown for symmetry), then asserts
+  `BoosterHostPlan.PhaseAllows(c.Phase, BoosterHostPlan.CommandedRole(c.EnginesLit, c.EngineMode))` on the
+  RETURNED command — 16 new checks. This is the gap `BoosterHostTest.PhaseGateTests` (OCT3) left: that
+  suite feeds hand-built `(phase, role)` pairs and proves the gate correct in isolation; it never asks
+  whether the FSM's OWN output satisfies its own gate.
+- **MUTATION-PROVED (both results recorded):** reverted fix (1) only (the test stayed); `build.py test`
+  went **RED — 2 failures**, both in the new test, both naming the exact defect:
+  `FAIL  OCT5: the FSM's own command is gate-legal - Boostback -> Coast at the entry gate, still burning
+  to the last tick (OCT5)   commanded phase=Coast EnginesLit=True EngineMode=1 role=OctawebThree` and the
+  same for the deadband scenario. Restored fix (1); `build.py test` **GREEN — ALL SUITES PASSED** again
+  (booster recovery suite 975 checks, up from 959).
+- **Verified (C1.3):** `python plugin/build.py test` green (975 booster-recovery checks, 128 booster-host
+  checks, all suites passed). `python plugin/build.py preview` green — this task touches no drawing path,
+  ran anyway per the verify gate; no PNG differs (pure FSM/host logic + a test file only).
+- **Built:** `pure/BoosterDescent.cs` (the Boostback exit block only), `test/BoosterTest.cs`
+  (`GateCheck` + `PhaseCommandGateInvariantChecks`, called from `Run()`). `BoosterHostPlan.cs`
+  (`AllowedRoleForPhase`/`PhaseAllows`) was **not touched** — the gate is correct; the FSM was the
+  defective producer, per the brief's scope.
+- ⛔ OCT3-Q1 (open, owner's — the landing-burn engine count) was **not resolved**. OCT4 (the mode-CHANGE
+  actuation audit) was **not started**. No install, no glass.
+
 ### BB4 [owner-gated] Install the BlackBox + confirm on the glass — **DOING 2026-09-05 (blocker CLEARED: BB1 `aa7bfa2`, BB2 `bedb4a6`, BB3 `6604644` are all DONE; BB2 and BB3 each state "No install, no glass time" — this session is the first to act on the line)** — [TIER 1: the owner's own "before the first flight" deadline]
 - ⚠ **The owner ALREADY AUTHORISED `install` for the BlackBox specifically** (2026-09-03: *"build and install
   before the first flight as we will need it for troubleshooting and diagnoses"*). **This authority extends

@@ -763,7 +763,14 @@ namespace DragonScreen
                     if (wantThrottle > 0.0) { c.EngineMode = VehicleParts.ModeThreeEngine; c.EnginesLit = true; }
 
                     if (c.Refusal != null || BoostbackComplete(p, s.DownrangeErrM) || s.AltitudeM <= gateAlt)
+                    {
+                        // OCT5: the exit can fire on the SAME tick the bank above was lit (a residual
+                        // downrange error under the deadband, or the entry gate reached independently of
+                        // it) — mirror EntryBurn's exit (below) so Coast never inherits a live bank.
                         c.Phase = BoosterPhase.Coast;
+                        c.EnginesLit = false; wantThrottle = 0.0;
+                        c.EngineMode = VehicleParts.ModeOff;
+                    }
                     break;
                 }
 
