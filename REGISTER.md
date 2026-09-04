@@ -3727,7 +3727,7 @@ beside `BlockNote`, `SchemaVersion` still 1, headless tests added and mutation-p
   (the `DragonScreen.Mech` assembly step), `docs/BUILD_PLAN.md` (§B12.1a pin block), `NOTICE` (MechJeb2 +
   alglib entries), this file.
 
-### T15b [O] Host ONE MechJebCore, headless — **AND SUPPRESS THE GUI** — **NEEDS-WORK — the code is BUILT and green; every DONE-criterion is IN-SIM and needs the `install` + glass gate (C1.12). See the glass checklist + the C1.13 prompt at the end of this line.**
+### T15b [O] Host ONE MechJebCore, headless — **AND SUPPRESS THE GUI** — **NEEDS-WORK — WALKED ON THE GLASS 2026-09-05 AND THREE ROWS FAILED; T15d (below) rebuilt the suppression and REWROTE this line's checklist for a re-run. Still NEEDS-WORK: every DONE-criterion is IN-SIM and needs a fresh `install` + glass gate (C1.12).**
 - **Depends on T15a** (done). Not blocked on anything else — see the corrected T15 line above.
 - ⚠ **THE REQUIREMENT THAT MUST NOT BE LOST, carried verbatim from §B12.1a:** *"HEADLESS IS MANDATORY EVEN
   THOUGH THE UI IS PORTED. The full port brings MechJeb's whole GUI with it. It must be vendored but **never
@@ -3881,21 +3881,35 @@ DragonScreen.cfg` · `plugin/GameData/DragonScreen/PluginData/mechjeb_settings_t
    (`plugin/mech/MechJeb2/MechJebCore.cs:112+`), which §B12.1 forbids. Glass row (7); if the owner wants them
    gone it is a plan question, not a build-chat one.
 
-#### T15b — GLASS CHECKLIST (S17/S18 format). ⛔ NEEDS A FRESH OWNER GO for `install` + glass; this line grants none (C1.12).
-*Written so the eventual capsule session is a walkthrough, not a rediscovery. Every row is a thing to LOOK
-AT, with what "right" looks like and what the fix would be if it is wrong. Rows 1-3 are T15b's own
-DONE-criteria; 4-8 are what the mechanism above could not prove without the game.*
+#### T15b — GLASS CHECKLIST — **REWRITTEN BY T15d, 2026-09-05, FOR A RE-RUN.** ⛔ Needs a fresh owner go for `install` + glass; this line grants none (C1.12).
+**The first version of this table was walked by the owner on 2026-09-05, 08:06–08:13, and THREE OF ITS ROWS
+FAILED** (2, 5 and part of 3). Those failures are the whole content of T15d. This table replaces it: rows
+**R1–R6 are the re-checks** that say whether T15d's fix worked, and rows **C1–C4 are carried forward
+unchanged** from the first version because they were never in doubt. Every row is still a thing to LOOK AT,
+with what "right" looks like and what to do if it is wrong.
+
+⚠ **BEFORE THE RE-RUN, TWO HOUSEKEEPING STEPS — they are the owner's to do, not a build chat's (C7: the KSP
+install is a deploy target, never ours to touch):**
+1. **Delete the two files the 08:11 run left in `GameData/DragonScreen/PluginData/`** —
+   `mechjeb_settings_global.cfg` and `mechjeb_settings_type_New Crew-2.cfg`. Leave the shipped
+   `mechjeb_settings_type_Crew-Dragon.cfg` alone. Without this, row **R3** cannot tell a new write from an old
+   one.
+2. **Note the timestamp on your own `GameData/MechJeb2/Plugins/PluginData/MechJeb2/mechjeb_settings_global.cfg`
+   before launching** (it read 08:00 last time). Row **R4** is the regression check on the one defence that
+   held, and it needs a before-value.
 
 | # | What to look at on the glass | Why it could not be settled in preview | If it is wrong |
 |---|---|---|---|
-| 1 | **A user who already runs MechJeb sees exactly ONE MechJeb toolbar button and ONE menu** — not two. Check the stock app-launcher **and** the blizzy toolbar if installed, in flight, in the VAB, and at the space centre. | `ApplicationLauncher` only exists in the game. `mjButton` is a `static` **per assembly**, so ours and theirs are different fields — the whole point of the `useAppLauncher = False` push. | The push happens in `GoHeadless()` each frame; if a button still appears, read the log for `MechJeb GUI suppression failed`, then fall back to reflection on the `readonly` field. |
-| 2 | **No MechJeb window of ours draws, ever** — including after pressing F2 twice (which re-fires `onShowUI` and sets `ShowGui` back to true). Try a vessel loaded from an existing save, and one launched fresh. | `OnGUI` and `GameEvents` need the game. The defence is `Enabled = false` re-asserted every `OnUpdate`, not `ShowGui`, precisely so F2 cannot undo it — but that is reasoning, not a sighting. | If a window appears only after F2, the per-frame sweep is not running: check `PartModule.OnUpdate` is being called on the pod (it is not called for unloaded vessels). |
-| 3 | **The tune actually landed.** Log line `[DragonScreen] MechJeb tune applied from the mod: … N module(s)`. **Expect N = 11** — the eleven nodes carrying values. Anything less means a node did not resolve. | Requires a core, which requires KSP. The count is derivable here; the *landing* is not. | The warning line names the module that rejected its node. A count of 0 with no warning means `tuneFile` resolved to the wrong directory — see row 5. |
-| 4 | **Exactly one core, on the Dragon, and nowhere else.** Right-click the pod (one MechJeb PAW section, not two); confirm no core appeared on any other command pod in the VAB parts list. | Part patching is ModuleManager at load time. | `@PART[…]` in `DragonScreen.cfg` names two parts explicitly; a core elsewhere means something else is patching, not us. |
-| 5 | **`GameData/DragonScreen/PluginData/` still contains ONLY the shipped tune after a flight + a quit** — no `mechjeb_settings_global.cfg`, no `mechjeb_settings_type_*.cfg`, and the shipped file **unmodified** (compare against `docs/reference/`). | The write ban is `OnSave`'s `sfsNode == null` early return; nothing writes during `build.py test`. | A settings file appearing here means the override is not being reached — check `DragonMechJebCore` is the class actually instantiated, not a plain `MechJebCore`. |
-| 6 | **`GameData/MechJeb2/` is NOT created, and — if the user has one — is NOT modified.** Note its `mechjeb_settings_global.cfg` timestamp before and after a flight. Log line `[DragonScreen] embedded MechJeb settings directory -> …`. | The redirect is reflection over a `private static readonly` field. Mono permits it; this build cannot prove it. | The warning `MechJeb cfg redirect did not take` is the tell. **The write ban holds regardless**, so the failure mode is a stray read, not damage. |
-| 7 | **The Dragon's action-group list in the VAB shows NO MechJeb entries** — none of orbit prograde/retrograde/normal/antinormal/radial in/out, kill rotation, deactivate SmartACS, land somewhere, land at KSC, PANIC, the six translatron actions, or ascent AP toggle (the 18 `[KSPAction]`s MechJebCore declares). **Verification, not a question — owner ruling, 2026-09-05, verbatim: "remove vab action group list" (T15c).** | Action groups are a VAB UI; `Actions.Clear()` runs in `DragonMechJebCore.OnStart` (`src/MechHost.cs`), which only the game executes. | If any of the 18 still appear, `RemoveInheritedActions()` did not run or threw — check the log for `MechJeb action-group removal failed`, then confirm the part in the VAB is actually running `DragonMechJebCore` (not a plain `MechJebCore`, per row 5's same check). |
-| 8 | **KSP.log is clean of MechJeb noise at the MAIN MENU** — no `Failed to load AssetBundle`, no install-checker popup, no compatibility popup. This is the direct test of (A). | `[KSPAddon]`s only run in the game. | Any of the three firing means a file came back into the compile — `build.py test` should have caught it first. |
+| **R1** | ⛔ **ZERO `ArgumentOutOfRangeException` in `KSP.log`** — search for `GetPotentialTorque`, and for `DragonScreen.Mech.MuMech.VesselState`. Last run: **6,935** of them. There should now be **none at all**, because our core is no longer the vessel's master and `MechJebCore.OnFlyByWire` returns before `Drive` ever calls `VesselState.Update()`. | `Drive` only runs under `FlightInputHandler.FixedUpdate`, i.e. only in the game. The mechanism is readable in the vendored source (`MechJebCore.cs:1062,1077-1091`); the absence of the exception is not. | Any remaining throw means `running` is being restored somewhere we did not look. Search the log for `MechJeb drive authority -> ENGAGED` (nothing should call `AuthorizeDrive` yet) and for `BARE MechJebCore(s) of our own assembly` (row R5). |
+| **R2** | ⛔ **NO MechJeb window of ours draws, ever** — the Hoverslam window the last run showed must be gone. Check in flight, in the VAB, and after pressing F2 twice. Also: **no MechJeb toolbar button of ours** in the stock app-launcher (or blizzy, if installed) — a user with the real MechJeb must see exactly ONE, theirs. | `OnGUI` and `ApplicationLauncher` exist only in the game. The defence is now `MechJebCore.OnGUI`'s own master test (`:1132`) rather than our per-frame `Enabled = false` sweep — the sweep could not reach a window owned by a core that is not ours, which is why the last run failed. | A window still drawing means something is master. Read the log for `MechJeb core name guard:` (row R5) — a **bare** core answering somebody else's `MODULE{name=MechJebCore}` node is the leading explanation and would draw a full MechJeb UI. |
+| **R3** | ⛔ **`GameData/DragonScreen/PluginData/` contains ONLY the shipped tune after a flight + a quit** — no `mechjeb_settings_global.cfg`, no `mechjeb_settings_type_*.cfg`, and `mechjeb_settings_type_Crew-Dragon.cfg` byte-unmodified (compare against `docs/reference/`). Last run: **both files appeared at 08:11.** | Nothing writes a settings file during `build.py test`. | This is now blocked twice — `DragonMechJebCore.OnSave`'s `node == null` return, and `MechJebCore.OnSave`'s own *"Only Masters can save"* (`:938`) now that we are not master. A file appearing anyway means a core that is **neither** ours **nor** master-gated: that is the bare-core route, and row R5's log lines say whether the guard caught it. |
+| **R4** | ✅ **REGRESSION ROW — DO NOT LET THIS ONE BREAK.** `GameData/MechJeb2/` is **not created**, and if you have one, its `mechjeb_settings_global.cfg` timestamp is **unchanged** from the value you noted above. Log line: `[DragonScreen] embedded MechJeb settings directory -> …GameData\DragonScreen\PluginData (was …MechJeb2)`. | The redirect is reflection over a `private static readonly` field; Mono permits it, this build cannot prove it. | **This PASSED last run and is the only reason the failures did no damage.** T15d changed nothing about it. If it ever stops passing, that is the most serious possible regression in this file — stop and say so. |
+| **R5** | 🆕 **The three new log lines say what they should.** (a) `[DragonScreen] MechJeb core name guard: our 'MechJebCore' is out of KSP's PartModule name table (N entries)` — **this is the fix for the bare-core route**; the other wording (`was not under KSP's PartModule key`) means the guard found nothing to remove and is the first thing to suspect if R1–R3 fail. (b) **NO** line reading `BARE MechJebCore(s) of our own assembly were found` — if it IS there, the guard did not hold but containment caught it, and R1–R3 should still pass. (c) **NO** `MechJeb drive authority -> ENGAGED` — nothing calls `AuthorizeDrive` until T18. | `[KSPAddon]`s and `PartModule.OnStart` only run in the game. | (a) failing is a KSP-version difference in `AssemblyLoader`'s type tables; it is non-fatal by design and the containment sweep is what remains. Report the exact wording — the fix would be to find the table that build actually indexes. |
+| **R6** | 🆕 **The tune line now reads two numbers, and both should match.** `[DragonScreen] MechJeb tune applied from the mod: … - 51 module(s) matched a node (expected 51), of which 11 carried values (expected 11).` **⚠ The old row 3's "expect N = 11" was WRONG** — it named the value-carrying count while the code printed the matched-module count. Both are now printed and both are pinned in `pure/MechProfile.cs` and re-derived from the cfg + the vendored tree by `build.py test`. | The counts are derivable headlessly (and now are); the *landing* still needs a live core. | A mismatch on either number means the pin moved without the suite noticing — that would be a test bug, not a capsule finding. The warning line above it names any module that rejected its node. |
+| **C1** | **Exactly one core, on the Dragon, and nowhere else.** Right-click the pod (one MechJeb PAW section, not two); confirm no core appeared on any other command pod in the VAB parts list. ⚠ **Also new:** the PAW must show **no** `MechJeb: Enabled/Disabled` toggle — T15d hides it, because it is `MechJebCore.running`, the very field the fix holds down. | Part patching is ModuleManager at load time. | `@PART[…]` in `DragonScreen.cfg` names two parts explicitly; a core elsewhere means something else is patching, not us — and after T15d that "something else" can no longer be answered by our class (row R5(a)). |
+| **C2** | **The Dragon's action-group list in the VAB shows NO MechJeb entries** — none of orbit prograde/retrograde/normal/antinormal/radial in/out, kill rotation, deactivate SmartACS, land somewhere, land at KSC, PANIC, the six translatron actions, or ascent AP toggle (the 18 `[KSPAction]`s `MechJebCore` declares). **Verification, not a question — owner ruling, 2026-09-05, verbatim: "remove vab action group list" (T15c).** | Action groups are a VAB UI; `Actions.Clear()` runs in `DragonMechJebCore.OnStart`, which only the game executes. | If any of the 18 still appear, `RemoveInheritedActions()` did not run or threw — check the log for `MechJeb action-group removal failed`, then confirm the part is actually running `DragonMechJebCore` and not a plain `MechJebCore` (row R5(b) is the same question). |
+| **C3** | **`KSP.log` is clean of MechJeb noise at the MAIN MENU** — no `Failed to load AssetBundle`, no install-checker popup, no compatibility popup. The direct test of T15b(A). | `[KSPAddon]`s only run in the game. | Any of the three firing means a file came back into the compile — `build.py test` should have caught it first. |
+| **C4** | **The screens still work, and still fly nothing.** Walk the three IVA pages; press a flight command. §14.4(a) says: click, no light, no action, **no red**. | The screens are the mod. A MechJeb change must not have moved them. | Nothing in T15d touches the screen path; a change here means something unrelated came in with the build. |
 
 #### T15b — C1.13 OVERSEER PROMPT (paste-ready). The owner (Chris) pastes this; the build chat acts only on what comes back.
 
@@ -3935,6 +3949,10 @@ DONE-criteria; 4-8 are what the mechanism above could not prove without the game
 > options are **leave them** (recommended: harmless, and the pin stays clean) or **raise a plan change** to
 > allow that one edit. **No ruling on record; this line is open.**
 > *(Answered by T15c, below — the owner ruled, and no vendored-file edit was needed after all.)*
+>
+> ⚠ **SUPERSEDED 2026-09-05 by events, kept per C1.16.** The owner opened the gate, installed this build
+> himself and walked the checklist (08:06–08:13). **Three rows failed.** The prompt below — T15d's — is the
+> live one; this one is the record of how the first pass was asked for.
 
 ### T15c [S] Remove MechJeb's inherited action-group entries from the Dragon — **DONE 2026-09-05**
 - **Owner ruling, quoted verbatim (C1.12):** *"remove vab action group list"* — answering T15b's glass row
@@ -3967,6 +3985,181 @@ DONE-criteria; 4-8 are what the mechanism above could not prove without the game
   (above) is rewritten from a taste question into that verification, with a "what to check if it failed"
   column matching the other seven rows.
 - **Files:** `src/MechHost.cs`, this file.
+
+### T15d [O] The headless core must not be MASTER — fix the suppression at the gate that decides it — **DONE 2026-09-05**
+- **Why this exists.** T15b/T15c's build was installed **by the owner**, who walked T15b's 8-row checklist on
+  **2026-09-05, 08:06–08:13**; the overseer read `KSP.log` and relayed four findings to this chat.
+  ⚠ **PROVENANCE, stated plainly (C1.12): this build chat measured NONE of it, ran no `install`, and had no
+  glass time.** Everything below about in-sim behaviour is overseer-relayed evidence, not this chat's
+  observation. What this chat did verify itself is the *mechanism*, line by line, in the vendored source.
+- **The findings.** ⛔ (1) **6,935 `ArgumentOutOfRangeException`s** in one session out of
+  `ModuleGimbal.GetPotentialTorque` ← `VesselState.AnalyzeParts` ← `VesselState.Update` ← `MechJebCore.Drive`
+  ← `OnFlyByWire`; the owner's own MechJeb2 threw it **zero** times in the same session. ⛔ (2) **a MechJeb
+  window of ours drew** (Hoverslam fields; `MechJebModuleHoverslamAutopilot` is in our vendored tree and the
+  string "Hoverslam" is absent from the owner's installed `MechJeb2.dll`) — **row 2 FAILED**. ⛔ (3)
+  **`mechjeb_settings_global.cfg` + `mechjeb_settings_type_New Crew-2.cfg` were written** into
+  `GameData/DragonScreen/PluginData/` at 08:11 despite the `OnSave` ban — **row 5 FAILED**. ✅ (4) **the
+  `MuUtils._cfgPath` redirect HELD** and is the only reason nothing of the owner's was damaged — **row 6
+  PASSED, untouched by this task, and now carried as regression row R4.** ⚠ (5) row 3 read `51 module(s)`
+  where the checklist predicted 11.
+- **Read:** `plugin/src/MechHost.cs` end-to-end, T15b's line + checklist, and in the pin
+  `MechJebCore.cs:1062` (`OnFlyByWire`), `:1077-1091` (`Drive`), `:633` (`Update`), `:540` (`FixedUpdate`),
+  `:938` (`OnSave`), `:1132` (`OnGUI`), `:68` (`running`), `VesselExtensions.cs:92-104` (`GetMasterMechJeb`).
+- **(A) THE SUPPRESSION WAS ONE LAYER TOO HIGH — confirmed in the source, not taken on report.**
+  `MechJebCore.Drive` runs `_ready = VesselState.Update();` at `:1080` **unconditionally** and only reaches
+  `if (module.Enabled)` at `:1091`. `VesselState.Update()` is where `AnalyzeParts` throws ⇒ **no amount of
+  disabling modules could ever have stopped finding (1).** The gate that decides is `OnFlyByWire` (`:1062`),
+  and mastership is one public field: `GetMasterMechJeb` is `vessel.GetModule<MechJebCore>(p => p.running)`
+  over `public bool running = true` (`:68`). ⇒ **`DragonMechJebCore` now holds `running = false`**
+  (`HoldDriveAuthority()`, re-asserted in `OnAwake`/`OnLoad`/`OnStart`/`OnUpdate`).
+  **⭐ ONE LEVER, FIVE GATES — all five carry the same master test, which is why this is the right layer:**
+  `OnFlyByWire :1062` → no `Drive` → no `VesselState.Update` → **finding (1)**; `OnGUI :1132` → nothing draws
+  at all, ours or not → **finding (2), same lever, no separate fix needed**; `Update :633` → no five-second
+  `OnSave(null)` **and** no `OnMenuUpdate` (so no toolbar button) → **finding (3)**; `FixedUpdate :540`;
+  `OnSave :938` *"Only Masters can save"* → **finding (3) again, a second independent lock.**
+- **⛔ `DeactivateControl` WAS NOT USED, deliberately.** Its getter *and* setter operate on
+  `vessel.GetMasterMechJeb()._deactivateControl` (`:80-95`) — somebody else's field. If a user's own core were
+  ever master, setting it would silently disable **their** autopilot. `running` is per-instance.
+- **⚠ AND THE PAW TOGGLE IS HIDDEN.** `running` is `[KSPField(isPersistant = true, guiActive = true,
+  guiActiveEditor = true, guiName = "MechJeb")]` behind a `UI_Toggle` — a player-clickable, save-persisted
+  switch whose only effect would be to undo this fix. Its two `gui*` flags are cleared on our own instance's
+  `BaseField` (`HideDriveToggle()`); no vendored edit. Re-asserting from `OnLoad` also means a stale
+  `running = True` in an existing save cannot resurrect it.
+- **⚠ IT DOES NOT BREAK THE TUNE — the question the task asked, answered by reading, not by assuming.**
+  `LoadComputerModules` (`:747-786`), `OnLoad` (`:795-916`), `OnStart` (`:431-510`) and our `ApplyTune` are
+  all reached without reference to the master. A non-master core is fully **built** and fully **configured**;
+  it is simply never asked to fly. `build.py test`'s 105 MechJeb checks are unchanged and green.
+- **⭐ (B) THE T18 RE-ENABLE SEAM, NAMED AND DOCUMENTED NOW — the task's third question.**
+  `DragonMechJebCore.AuthorizeDrive(bool)` is the **one and only** way this core is ever handed the vessel and
+  the only way it is taken back. T18 calls `AuthorizeDrive(true)` on engage and `AuthorizeDrive(false)` on
+  disengage; no cfg field, no PAW toggle and no persisted value can set `running`. **Nothing calls it today**
+  — §14.4(a) holds and the screens' flight commands are still an honest no-op. ⚠ Turning it on **re-arms every
+  gate above, including `VesselState.Update` and its stock-KSP `GetPotentialTorque` throw** — T18 owns that,
+  and it is exactly why §B12.1b's write ban and enable sweep are **kept** as the inner layers behind it.
+- **(C) WHY THE WRITE BAN DID NOT HOLD — the deduction, labelled as one.** The **only** code in our assembly
+  that writes those two filenames is `MechJebCore.OnSave` at `:1003`/`:1010`, on the `sfsNode == null` path,
+  and our override intercepts that path on **every** instance of our subclass. The same session's log carries
+  our `MechJeb tune applied from the mod` line ⇒ **the subclass was instantiated and its overrides were live.**
+  Therefore a **second core existed whose `OnSave` was the base one** — an instance of `MuMech.MechJebCore`
+  itself. We ship no node naming it. ⇒ **KSP built it from somebody else's node.**
+  **⛔ THE HOLE, AND T15b's HEADER CLAIMED IT WAS CLOSED** (verbatim, now corrected in `src/MechHost.cs`):
+  *"the ambiguity is gone in both directions: nothing of theirs can satisfy our node and nothing of ours can
+  satisfy one of theirs."* **The second half is false.** KSP resolves `MODULE { name = … }` by `Type.Name`
+  across every loaded assembly and takes the first hit, and after the rename shell our assembly still exports
+  a PartModule called `MechJebCore`. A node **we do not ship** — a user's MechJeb2 patch, an RO/RP-1 patch, or
+  a `MechJebCore` already persisted in a craft/save — can therefore be answered by **our** class, producing a
+  bare core with none of our overrides: **it drives (1), it draws (2), and it writes (3).** One mechanism,
+  all three failures. ⚠ **Deduced, not measured** — rows R1/R2/R3/R5 confirm or refute it.
+- **THE CLOSE, two layers, no vendored edit.** **(a) `MechCoreNameGuard`** — a `[KSPAddon(Instantly)]` that
+  removes our `MuMech.MechJebCore` from KSP's PartModule name tables before PartLoader compiles a part. Our
+  `DragonMechJebCore` is a different name, a different entry, untouched; a user **with** MechJeb2 gets
+  **their** core for their node (what §B12.1a wants); a user without gets KSP's ordinary "module not found"
+  for a node they never meant us to answer. ⚠ Verified not to break MechJeb's own module registry, which
+  builds from `AppDomain.CurrentDomain.GetAssemblies()` + `ass.GetTypes()` (`MechJebCore.cs:710-717`), i.e.
+  CLR reflection, entirely independent of `AssemblyLoader`'s tables. **(b) `NeuterForeignCores()`** — sets
+  `running = false` on any `MuMech.MechJebCore` that is not a `DragonMechJebCore`, on our part or our vessel.
+  ⛔ **Type-exact, and that is the safety property:** a user's own core is `MuMech.MechJebCore` from **their**
+  assembly — a different CLR type in a differently-named assembly — so the test is simply false for it and
+  their autopilot can never be touched. ⚠ **Residual, stated not hidden:** (b) only sees vessels the Dragon is
+  on, so if (a) is refused (it says so in the log) a stray core elsewhere is uncovered.
+- **(D) THE 51-vs-11 COUNT — RESOLVED, AND THE CHECKLIST WAS THE THING THAT WAS WRONG.** `ApplyTune` counts
+  every **constructed module whose type name appears as a node**, empty node or not — and **53 of the cfg's 64
+  nodes are empty**. **51 = 41 + 10:** 41 distinct node names resolving to a non-abstract `ComputerModule` in
+  the pin, minus the six the blacklist refuses, minus `MechJebModuleCustomInfoWindow` (hard-excluded from
+  auto-construction at `MechJebCore.cs:751-753`); plus **10** `MechJebModuleCustomInfoWindow` *instances*, one
+  per `CreateWindowFromSharingString` call in `AddDefaultWindows` (`MechJebModuleCustomInfoWindow.cs:697-712`),
+  each a separate module with the same type name. **11 is the value-carrying count** — the number that means
+  "the tune landed". ⇒ `ApplyTune` logs **both**, `MechProfile.TuneNodesCarryingValues` (11) /
+  `DefaultCustomWindows` (10) / `ExpectedTuneModulesApplied` (51) carry the reasoning, and **`build.py test`
+  re-derives all three from the cfg + the vendored tree** (+3 checks, 102 → 105) so a re-pin cannot move the
+  number the capsule is told to expect without failing the suite first.
+- **⚠ A CORRECTION TO THIS TASK'S OWN BRIEF, verified here:** the brief said *"`src/` glue is excluded from
+  `build.py test` (`build.py:199-213`)"*. It is **not**. `build.py`'s `__main__` calls `build_plugin()`
+  **unconditionally** (`:477`), which compiles `sources('src')` — 148 files, including `MechHost.cs`. Lines
+  199-213 are the generic `sources()`/`preflight()` helpers, not an exclusion. Only the **headless suite** is
+  pure-only (`build_tests()` builds `src/pure` + `test`). ⇒ every API in this change **is** compile-checked
+  against the real KSP references, and it compiles clean with no new warnings.
+- **WHAT STILL NEEDS THE GAME, said plainly.** Compilation proves the API; it proves no behaviour. Not one of
+  the four findings can be re-checked headlessly: `Drive`/`OnGUI`/`OnSave` need a live vessel, and
+  `MechCoreNameGuard` needs KSP's `AssemblyLoader`. ⇒ **T15b's checklist is rewritten above** (R1–R6 re-checks
+  + C1–C4 carried), with two housekeeping steps the owner must do first. **This chat ran no `install` and
+  claims no glass result (C1.12).**
+- **DONE gate (C1.3):** `python plugin/build.py test` **GREEN** — all suites, MechJeb host suite 102 → 105.
+  **No preview PNG:** this task changes no page (C1.3's carve-out, as T15b/T15c used).
+- **Files:** `plugin/src/MechHost.cs` · `plugin/src/pure/MechProfile.cs` · `plugin/test/MechHostTest.cs` ·
+  `plugin/GameData/DragonScreen/DragonScreen.cfg` (comment only) · `docs/BUILD_PLAN.md` (new §B12.1c) · this
+  file. ⛔ **Nothing under `plugin/mech/` was touched** (§B12.1 rename shell intact), and neither were W10's
+  `FlightDriver.cs`/`CrewProcedureOps.cs` nor T15c's `RemoveInheritedActions()`.
+- **Strays LOGGED, not done (C1.1):**
+  1. **The PAW's `[KSPEvent]`s and `Fields` are still inherited**, beyond the one `running` toggle T15d hides.
+     That is checklist row C1's "one MechJeb PAW section, not two" — a different question from T15c's
+     action-group ruling, and still unanswered. Not extended here.
+  2. **`MechCoreNameGuard` cannot be proven headlessly**, and its "nothing to remove" outcome reads like
+     success. Row R5(a) is written to catch that; if a KSP build indexes PartModules elsewhere, finding that
+     table is its own line.
+  3. **Where the foreign `MODULE{name=MechJebCore}` node comes from is unidentified.** The vendored
+     `Parts/MechJebNoCommandPod.cfg` — MechJeb's own blanket command-pod patch — is
+     `:NEEDS[!MechJebUseCommandPod,!RP-0,!RealismOverhaul]`, so on the owner's RSS-RO install **it does not
+     apply**; the node is more likely RO/RP-1's own or already persisted in the craft. **Not investigated:
+     C7 forbids reading the KSP install.** The fix does not depend on knowing — it closes the route, not the
+     source — but if R1–R3 fail again, this is the next thing to find out, and only the owner can look.
+  4. **The two settings files from the 08:11 run are still in the KSP install.** Deleting them is the owner's
+     step 1 above; a build chat may not touch `GameData/` (C7).
+
+#### T15d — Open questions for the owner (C1.14)
+
+**Only one, and it is a GATE — C1.14(1), the owner's alone. A build chat cannot grant, widen or infer it
+(C1.12), and this one has not.**
+
+#### T15d — C1.13 OVERSEER PROMPT (paste-ready). The owner (Chris) pastes this; the build chat acts only on what comes back.
+
+> **T15d is BUILT and headless-green. It is the fix for the three rows that FAILED when you installed T15c's
+> build and walked T15b's checklist on 2026-09-05 (08:06–08:13). It is asking for ONE re-run. It did not
+> touch the gate, ran no `install`, and claims no glass result.**
+>
+> **What the failures were, in one line each:** our embedded core was the vessel's MASTER MechJeb, so it
+> reached `MechJebCore.Drive` — 6,935 exceptions out of `VesselState.Update → AnalyzeParts →
+> ModuleGimbal.GetPotentialTorque`; a MechJeb window of ours drew; and two `mechjeb_settings_*.cfg` files
+> were written despite the write ban. The settings **redirect** held, and is the only reason none of your own
+> MechJeb configuration was damaged.
+>
+> **What was done, without the game.** The suppression was one layer too high: `Drive` runs
+> `VesselState.Update()` *before* it checks whether any module is enabled, so disabling modules could never
+> have stopped it. The real gate is mastership, and mastership is one public field — `running`. Our core now
+> holds `running = false`, which closes **five** MechJeb entry points at once (drive, GUI, the five-second
+> settings save, the toolbar button, and MechJeb's own "only masters can save"), and the player-facing PAW
+> toggle for that field is hidden so a click cannot undo it. Separately, a hole T15b's own header wrongly
+> claimed was closed: KSP resolves a part-cfg `MODULE { name = MechJebCore }` by class name across every
+> loaded assembly, so **somebody else's** node — RO's, MechJeb2's, or one already saved in the craft — could
+> be answered by **our** class, producing a bare core with none of our safeguards. That is the single
+> mechanism that explains all three failures together, and it is now closed twice over. `python
+> plugin/build.py test` is green (MechJeb suite 102 → 105 checks). The `T18` re-enable seam is named and
+> documented: `AuthorizeDrive(bool)`, called by nothing today.
+>
+> **Why it cannot close itself:** none of the three failures can be re-checked without the game. Compilation
+> proves the API; it proves no behaviour.
+>
+> **The decision needed:** does the owner open `install` + glass for ONE session scoped to the rewritten
+> checklist on T15b's line (rows **R1–R6** re-checks + **C1–C4** carried)? It is a ten-minute pass and needs
+> two housekeeping steps first, both listed on that line: delete the two stray `mechjeb_settings_*.cfg` files
+> the 08:11 run left in `GameData/DragonScreen/PluginData/`, and note the timestamp on your own
+> `GameData/MechJeb2/…/mechjeb_settings_global.cfg` before launching. ⛔ **Owner-only (C1.12).**
+>
+> 1. **Open the gate, scoped to the R1–R6 / C1–C4 re-run.** The three failed rows are the ones that protect
+>    your own MechJeb install and your frame rate; every later Part-B task inherits them.
+> 2. **Open it wider, batching the re-run with the still-held S18 end-of-Part-A pass** (two constants awaiting
+>    a look, already written up, no new build). Cheaper in restarts.
+> 3. **Keep it shut.** T15b and T15d both stay open and T16/T17 proceed on a host whose fix is unverified.
+>    ⚠ Not recommended — the last unverified host produced 6,935 exceptions per session.
+>
+> **Recommendation: (1).** Last time the pass turned up three real failures in ten minutes; keeping the
+> session narrow is what made them legible. S18 can have its own.
+>
+> **One thing this chat could NOT find out, and only you can:** *which* mod puts a plain
+> `MODULE { name = MechJebCore }` node on your Dragon. MechJeb's own blanket command-pod patch is disabled on
+> a Realism Overhaul install, so it is more likely RO/RP-1's or already saved into the craft file. C7 forbids
+> a build chat reading your `GameData`, and **the fix does not depend on the answer** — it closes the route,
+> not the source. It only matters if rows R1–R3 fail again.
 
 ### T16 [O] Pure conductor core + tests — **re-scoped to the `ConductorAction` gap only, 2026-09-05 (G9 item 2)** — **TODO**
 - **Read:** §B9 / §B12.2-3 + `pure/MissionPhase.cs`.

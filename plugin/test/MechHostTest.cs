@@ -152,6 +152,38 @@ public static class MechHostTest
             }
         }
 
+        // ---- (5) T15d: the two tune COUNTS, derived rather than remembered --------------
+        // T15b's glass row 3 predicted the log would read "11 module(s)"; the glass read 51. The
+        // checklist was wrong, not the loader - see MechProfile's note. Both numbers are re-derived
+        // here from the cfg and the pinned tree so a re-pin cannot silently move what the capsule
+        // session is told to expect.
+        if (File.Exists(shipped) && Directory.Exists(mech))
+        {
+            Check("the tune's value-carrying node count is what MechProfile pins",
+                  TuneNodesWithValues(shipped).Count == MechProfile.TuneNodesCarryingValues,
+                  "derived=" + TuneNodesWithValues(shipped).Count);
+
+            List<string> modules = ComputerModuleNames(Path.Combine(mech, "MechJeb2"));
+            int autoConstructed = 0;
+            foreach (string node in TuneNodes(shipped))
+            {
+                if (!modules.Contains(node)) continue;                       // orphan - no module
+                if (MechProfile.Blacklist.IndexOf(node, StringComparison.Ordinal) >= 0) continue;
+                // MechJebCore.cs:751-753 hard-excludes this one from auto-construction; it exists
+                // only as the windows AddDefaultWindows makes, counted separately below.
+                if (node == "MechJebModuleCustomInfoWindow") continue;
+                autoConstructed++;
+            }
+
+            int windows = DefaultWindowCount(Path.Combine(mech, "MechJeb2"));
+            Check("AddDefaultWindows still makes the number of windows MechProfile pins",
+                  windows == MechProfile.DefaultCustomWindows, "derived=" + windows);
+            Check("the expected 'N module(s) matched a node' is what MechProfile pins",
+                  autoConstructed + windows == MechProfile.ExpectedTuneModulesApplied,
+                  "derived=" + (autoConstructed + windows) + " (" + autoConstructed + " types + "
+                  + windows + " default windows)");
+        }
+
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
     }
@@ -193,6 +225,41 @@ public static class MechHostTest
         }
         outNames.Sort(StringComparer.Ordinal);
         return outNames;
+    }
+
+    /// <summary>
+    /// EVERY distinct top-level node name in a MechJeb settings cfg, empty nodes included -
+    /// which is the set MechHost.ApplyTune tests each constructed module against.
+    /// </summary>
+    static List<string> TuneNodes(string path)
+    {
+        var outNames = new List<string>();
+        string[] lines = File.ReadAllLines(path);
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (!Regex.IsMatch(lines[i], @"^[A-Za-z]")) continue;
+            string name = lines[i].Trim();
+            if (i + 1 >= lines.Length || lines[i + 1].Trim() != "{") continue;
+            if (!outNames.Contains(name)) outNames.Add(name);
+        }
+        return outNames;
+    }
+
+    /// <summary>
+    /// How many MechJebModuleCustomInfoWindow instances AddDefaultWindows creates, read out of the
+    /// vendored source - one per CreateWindowFromSharingString call in its body. Read rather than
+    /// remembered so a re-pin that adds or drops a preset moves the expectation with it.
+    /// </summary>
+    static int DefaultWindowCount(string dir)
+    {
+        string f = Path.Combine(dir, "MechJebModuleCustomInfoWindow.cs");
+        if (!File.Exists(f)) return -1;
+        string txt = File.ReadAllText(f);
+        int at = txt.IndexOf("public void AddDefaultWindows()", StringComparison.Ordinal);
+        if (at < 0) return -1;
+        int end = txt.IndexOf("\n        }", at, StringComparison.Ordinal);
+        if (end < 0) return -1;
+        return Regex.Matches(txt.Substring(at, end - at), @"CreateWindowFromSharingString\(").Count;
     }
 
     /// <summary>Top-level node names in a MechJeb settings cfg that actually carry key/value lines.</summary>

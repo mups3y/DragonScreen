@@ -137,6 +137,55 @@ namespace DragonScreen.Pure
         // either way: §14.4(a) holds, the screens' flight commands are still an honest no-op.
         public const string TuneFileName = "mechjeb_settings_type_Crew-Dragon.cfg";
 
+        // ── HOW MANY MODULES THE TUNE ACTUALLY TOUCHES ──────────────────────────────────
+        //
+        // ⚠ T15d, RESOLVING T15b's GLASS ROW 3. That row said the log line
+        // "MechJeb tune applied from the mod: … N module(s)" should read N = 11. On the glass it
+        // read 51, and the CHECKLIST was the thing that was wrong, not the loader: 11 and 51 are
+        // two different quantities and the row asked for the one MechHost was not printing.
+        //
+        //   MechHost.ApplyTune counts a module when `type.HasNode(module.GetType().Name)` - i.e.
+        //   every CONSTRUCTED module whose type name appears as a node, empty node or not. The
+        //   shipped cfg has 64 top-level nodes; only ELEVEN of them carry any values at all, and
+        //   the other 53 are empty shells an older MechJeb wrote out.
+        //
+        //   51 = 41 + 10, and both halves are derived, not guessed:
+        //     41  distinct node names that resolve to a non-abstract ComputerModule in the pinned
+        //         tree, minus the six the Blacklist refuses construction to, minus
+        //         MechJebModuleCustomInfoWindow - which LoadComputerModules hard-excludes from
+        //         auto-construction alongside the four abstract bases (MechJebCore.cs:751-753);
+        //     10  MechJebModuleCustomInfoWindow INSTANCES, which are not auto-constructed but are
+        //         created one per CreateWindowFromSharingString call in
+        //         MechJebModuleCustomWindowEditor.AddDefaultWindows (MechJebModuleCustomInfoWindow
+        //         .cs:697-712), reached from MechJebCore.OnLoad:911-914. Each is a separate module
+        //         with the same type name, so each matches the cfg's node and each is counted.
+        //
+        // Both numbers are re-derived from the cfg and from the vendored tree by
+        // test/MechHostTest.cs on every build, so a re-pin that adds a module, renames one, or
+        // changes AddDefaultWindows fails the suite instead of quietly moving the number the
+        // capsule is asked to check.
+
+        /// <summary>
+        /// Nodes in the shipped tune that carry values - THE number that means "the tune landed".
+        /// The other 53 nodes are empty and change nothing.
+        /// </summary>
+        public const int TuneNodesCarryingValues = 11;
+
+        /// <summary>
+        /// <c>MechJebModuleCustomInfoWindow</c> instances <c>AddDefaultWindows</c> creates. Not
+        /// auto-constructed modules - windows, made one per sharing string, all disabled on
+        /// creation and held disabled by MechHost.GoHeadless.
+        /// </summary>
+        public const int DefaultCustomWindows = 10;
+
+        /// <summary>
+        /// What <c>MechHost.ApplyTune</c>'s "N module(s) matched a node" should read: 41 distinct
+        /// constructed module types named by the cfg, plus one per
+        /// <see cref="DefaultCustomWindows"/>. This is a COVERAGE number, not a success number -
+        /// <see cref="TuneNodesCarryingValues"/> is the one to read as success.
+        /// </summary>
+        public const int ExpectedTuneModulesApplied = 51;
+
         /// <summary>
         /// Node names in the shipped Crew-Dragon tune that match no module in the pinned
         /// tree, with the reason. ALL EIGHT ARE EMPTY NODES — checked value by value — so

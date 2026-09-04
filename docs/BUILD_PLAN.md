@@ -921,6 +921,82 @@ differently-named assemblies, so neither is a subclass of the other**. Our core 
 modules and theirs cannot construct ours. Read from the source, not assumed. The residual risk was never CLR
 type identity; it was **name**-level resolution one layer up, which is (4) above and is closed by the subclass.
 
+### B12.1c Headless is a MASTERSHIP property, not an enable property — T15d, 2026-09-05
+
+⛔ **§B12.1b's suppression did NOT hold on the glass.** The owner installed the T15c build and walked T15b's
+checklist on 2026-09-05 (08:06–08:13); the overseer read `KSP.log` and relayed the result to the T15d build
+chat, **which measured none of it itself.** Four findings, three of them failures:
+
+1. **6,935 `ArgumentOutOfRangeException`s in one session**, from `ModuleGimbal.GetPotentialTorque` ←
+   `VesselState.AnalyzeParts` ← `VesselState.Update` ← `MechJebCore.Drive` ← `OnFlyByWire` ←
+   `FlightInputHandler.FixedUpdate`. **The owner's own MechJeb2 threw this zero times in the same session.**
+2. **A MechJeb window drew** — the owner saw Hoverslam fields (`#MechJeb_HoverslamIgnitionLead`, …).
+   `MechJebModuleHoverslamAutopilot` exists in **our** vendored tree and the string "Hoverslam" appears **zero**
+   times in the owner's installed `MechJeb2.dll`, so the window cannot have been theirs. **Row 2 FAILED.**
+3. **`GameData/DragonScreen/PluginData/` gained `mechjeb_settings_global.cfg` (30,959 B) and
+   `mechjeb_settings_type_New Crew-2.cfg`** at 08:11, despite §B12.1b(5)'s write ban. **Row 5 FAILED.**
+4. ✅ **The `MuUtils._cfgPath` redirect HELD**, and is the only reason (3) did no damage: the owner's real
+   `mechjeb_settings_global.cfg` is still stamped 08:00, from his own earlier session. **Row 6 PASSED — and
+   must keep passing. Do not regress it.**
+
+**(a) WHY THE SUPPRESSION MISSED: it was one layer too high.** `MechJebCore.Drive` (`MechJebCore.cs:1077`)
+runs `_ready = VesselState.Update();` at `:1080` **unconditionally**, and only reaches `if (module.Enabled)`
+at `:1091`. `VesselState.Update()` is where `AnalyzeParts` throws — so **no amount of disabling modules can
+stop it.** The gate that actually decides is `OnFlyByWire` (`:1062`): `if (_deactivateControl ||
+!CheckControlledVessel() || this != vessel.GetMasterMechJeb()) return;`. `OnGUI` (`:1132`), `Update` (`:633`),
+`FixedUpdate` (`:540`) and `OnSave` (`:938`, *"Only Masters can save"*) carry the **same** master test.
+
+**(b) MASTERSHIP IS ONE PUBLIC FIELD.** `VesselExtensions.GetMasterMechJeb` (`:92-104`) is
+`vessel.GetModule<MechJebCore>(p => p.running)`, over `public bool running = true` (`MechJebCore.cs:68`). ⇒
+**`DragonMechJebCore` holds `running = false`**, re-asserted in `OnAwake`/`OnLoad`/`OnStart`/`OnUpdate`, which
+closes all five entry points at once. It does **not** break the tune: construction, `OnLoad`, `OnStart` and
+`ApplyTune` are all reached without reference to the master. ⛔ **`DeactivateControl` (`:80-95`) is NOT the
+lever** — its getter *and* setter operate on `vessel.GetMasterMechJeb()._deactivateControl`, so if a user's own
+core were ever master it would silently disable **their** autopilot. ⚠ `running` is
+`[KSPField(isPersistant = true, guiActive = true, guiActiveEditor = true)]` behind a `UI_Toggle`, i.e. a
+player-clickable, save-persisted switch — so its two `gui*` flags are cleared on our own instance's
+`BaseField` as well.
+
+**⭐ (c) THE T18 RE-ENABLE SEAM, NAMED NOW.** `DragonMechJebCore.AuthorizeDrive(bool)` is the **one and only**
+way this core is ever handed the vessel, and the only way it is taken back. T18 calls `AuthorizeDrive(true)`
+when the conductor engages and `AuthorizeDrive(false)` the instant it disengages; no cfg field, no PAW toggle
+and no persisted value can set `running`. Nothing calls it today — §14.4(a) holds. ⚠ **Turning it on re-arms
+every path in (a), including `VesselState.Update` and the stock-KSP `GetPotentialTorque` throw**, which is why
+§B12.1b(2)'s write ban and §B12.1b(3)'s enable sweep are both KEPT as the inner layers behind it.
+
+**(d) §B12.1b(4) WAS ONLY HALF THE STORY, AND T15b's code header CLAIMED IT WAS ALL OF IT** (*"the ambiguity
+is gone in both directions"* — `src/MechHost.cs`, since corrected). Our node names `DragonMechJebCore`, which
+nothing else can answer. **The reverse was never closed:** KSP resolves `MODULE { name = … }` by `Type.Name`
+across every loaded assembly and takes the first hit, and after the rename shell our assembly still exports a
+PartModule called `MechJebCore`. So a node **we do not ship** — a user's MechJeb2 patch, an RO/RP-1 patch, or a
+`MechJebCore` already persisted in a craft/save — can be answered by **our** class, producing a **bare
+`MuMech.MechJebCore`** with none of our overrides: it drives, it draws, and it writes settings.
+**This is the one mechanism that explains all three failures together**, and it is the only thing that explains
+(3): the only code in our assembly that writes those two filenames is `MechJebCore.OnSave` at `:1003`/`:1010`
+on the `sfsNode == null` path, which our override intercepts on **every** instance of our subclass — and the
+same log carries our `MechJeb tune applied from the mod` line, proving the subclass was live. ⚠ **Deduced from
+the vendored source plus a relayed log, NOT measured** — the rewritten checklist has the rows that confirm or
+refute it. ⇒ closed in two layers, neither a vendored edit: **`MechCoreNameGuard`** (a `[KSPAddon(Instantly)]`
+that removes our `MuMech.MechJebCore` from KSP's PartModule name tables before PartLoader runs — our
+`DragonMechJebCore` entry is a different name and is untouched, and a user with the real MechJeb2 simply gets
+**their** core for their node), and **`DragonMechJebCore.NeuterForeignCores()`** (sets `running = false` on any
+`MuMech.MechJebCore` that is not one of ours, on our part or our vessel — **type-exact, so a user's own core,
+being a different CLR type in a differently-named assembly, can never be touched**). ⚠ Residual: containment
+only covers vessels the Dragon is on.
+
+**(e) THE 51-vs-11 COUNT — the CHECKLIST was wrong, not the loader.** Row 3 predicted
+`MechJeb tune applied … N module(s)` would read **11**; it read **51**. They are two different quantities.
+`ApplyTune` counts every **constructed module whose type name appears as a node**, empty node or not — and
+**53 of the shipped cfg's 64 nodes are empty**. **51 = 41 + 10**, both halves derived: **41** distinct node
+names resolving to a non-abstract `ComputerModule` in the pin, minus the six the blacklist refuses, minus
+`MechJebModuleCustomInfoWindow` (hard-excluded from auto-construction at `MechJebCore.cs:751-753`); **10**
+`MechJebModuleCustomInfoWindow` *instances*, one per `CreateWindowFromSharingString` call in
+`AddDefaultWindows` (`MechJebModuleCustomInfoWindow.cs:697-712`), each a separate module with the same type
+name. **11 is the number that means "the tune landed"** — the nodes carrying values. ⇒ `ApplyTune` now logs
+**both**, and `MechProfile.TuneNodesCarryingValues` / `DefaultCustomWindows` / `ExpectedTuneModulesApplied`
+are re-derived from the cfg and the vendored tree by `build.py test`, so a re-pin cannot move the number the
+capsule is told to expect without failing the suite first.
+
 ### B12.2 The conductor — two layers (honors the pure/glue split)
 - **Pure core** `plugin/src/pure/Conductor*.cs` (NO Unity/MechJeb refs → headless-testable): the phase state
   machine + the re-plan decision logic. Input = a plain telemetry snapshot (extend `MissionInputs`/read
