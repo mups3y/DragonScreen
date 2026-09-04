@@ -892,8 +892,8 @@ W11 re-pointed four of them at W18/W20/W21, and the owner's 2026-09-04 upper-sta
 
 ⚠ **`UndockOps` and `DeorbitOps` are ONE task, TWO increments.** §B12.5's one-property-per-increment rule is
 about increments, not register lines: T21 flips `UndockOps` on the departure leg, then `DeorbitOps` on the
-return leg. Never both in one step. (See the register's **S73** — T21's *title* names only
-"Deorbit/entry/chutes" while its DONE-when spans §B9 Phases 6–10.)
+return leg. Never both in one step. (T21's title used to name only "Deorbit/entry/chutes" while its
+DONE-when spanned §B9 Phases 6–10 — fixed per the register's **S73**, DONE 2026-09-04.)
 
 **(ii) THE FIVE STEPS, IN ORDER.** An increment that cannot complete step 1 does not start step 2; it STOPS
 and says so (C1.12).
@@ -1942,7 +1942,8 @@ task stalls; never downgrade an [O] task to save cost. Higher reasoning-effort f
 - **T18 Wire Ascent (PVG)** — read §B8/B11 → DONE: PVG flies to insertion in-sim.
 - **T19 On-orbit ops + re-plan loop** — read §B10.2/B12.4/B9 → DONE: rendezvous to the KOS in-sim. (SPLIT if large.)
 - **T20 Docking hand-off + speedLimit ladder** — read §B10.3/B14 → DONE: dock in-sim.
-- **T21 Deorbit/entry/chutes + abort wiring** — read §B13/B10.4/B9 → DONE: return + splash in-sim, EJECT abort works.
+- **T21 Undock/departure/deorbit/entry/chutes + abort wiring (§B9 Phases 6–10)** — read §B13/B10.4/B9 → DONE:
+  undock clear of the KOS, return + splash in-sim, EJECT abort works.
 - **T22 Empirical tune** (one param at a time vs §B11) — read §B5/B7-11 → DONE: profile matches nominal, the 4
   [EST] numbers pinned into the cfg. (SPLIT per phase.)
 

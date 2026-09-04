@@ -6192,7 +6192,22 @@ if the section is added it must summarise only what the eight sections already c
 no simulation — the file's own ban). Comment-or-print only; `python plugin/build.py test` as a no-regression
 check.
 
-### S73 [S] `T21`'s title says "Deorbit/entry/chutes" but its scope now starts at §B9 Phase 6 (undock) — **TODO** — [TIER 4: hygiene — a task title narrower than the task]
+### S73 [S] `T21`'s title says "Deorbit/entry/chutes" but its scope now starts at §B9 Phase 6 (undock) — **DONE** (2026-09-04) — [TIER 4: hygiene — a task title narrower than the task] ⚠ batch deviation from C1.1/C1.7 authorised by owner 2026-09-04 via overseer
+**Done:** picked retitle-not-split (the line itself offers either as owner's call; a Tier-4 hygiene line is
+the wrong place to make a scope-split decision, so took the option that changes nothing about ownership).
+`docs/BUILD_PLAN.md` §C4's T21 line retitled *"Deorbit/entry/chutes + abort wiring"* →
+*"Undock/departure/deorbit/entry/chutes + abort wiring (§B9 Phases 6–10)"*, and its DONE-when now states
+*"undock clear of the KOS, return + splash in-sim, EJECT abort works"* (was just the return half).
+Also updated §B12.5a's parenthetical (`docs/BUILD_PLAN.md` line ~895-896) that quoted the OLD title
+verbatim — left unfixed it would have re-introduced the exact same title/scope mismatch this line closes,
+one paragraph below the fix — now reads past-tense, citing S73 DONE 2026-09-04. No `UndockOps`/`DeorbitOps`
+ownership changed; T21 still the sole owner of both increments (§B12.5a's own DONE-when for this line).
+**Verified (C1.3):** docs-only, no `.cs` change — no preview PNG applies (said, not skipped).
+`python plugin/build.py test` run as the no-regression check: **ALL SUITES PASSED**.
+**Outputs (C1.11, nothing else):** `docs/BUILD_PLAN.md` (T21's line + the one cross-referencing
+parenthetical) · this line · one local commit. NOT pushed (C1.5).
+**Batched owner questions (C1.9):** none.
+
 Found by **G6**, 2026-09-04 (C1.1 — logged, not done), while assigning the facade names their real future
 owners. **The finding.** §B12.5a gives **T21** both `UndockOps` **and** `DeorbitOps`, because T21's DONE-when
 is *"return + splash in-sim"* and a return begins at **undock** — §B9 **Phase 6** (SmartASS backout + small
