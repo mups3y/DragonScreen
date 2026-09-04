@@ -150,8 +150,11 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
   call under its own gate. Three findings that change how other numbers read: **`torque_cmd` was never
   written in any file**, `att_err_deg` and `att_point_deg` are **different signals**, and `mode_holding` /
   `mode_flying` carry no state. Its §6 records the §B16.8 correction of fact.
-- **[BOOSTER_STEERING_MOD_SEARCH.md](BOOSTER_STEERING_MOD_SEARCH.md)** [SPEC — evidence + **OPEN OWNER
-  CALL**] — ⭐ **W24's STEP-1 C1.15 mod-first search, and the reason W24 STOPPED at it** (2026-09-04). Asks
+- **[BOOSTER_STEERING_MOD_SEARCH.md](BOOSTER_STEERING_MOD_SEARCH.md)** [SPEC — evidence; **owner RULED,
+  2026-09-04**] — ⭐ **W24's STEP-1 C1.15 mod-first search** — the reason W24 stopped there is resolved: the
+  owner ruled Q1 (ours, TCA's method borrowed, no dependency) and Q2 (a marked, default-zero deadband seam),
+  and W24 built `pure/BoosterSteer.cs` on those rulings. This file's OWN verdicts are unchanged; only its
+  open questions are no longer open. Asks
   whether an installed mod can supply the booster's steering law before one is written. Findings:
   **ThrottleControlledAvionics IS installed** — evidenced in-repo from `docs/reference/craftdump.csv`'s **42
   `ModuleTCA` rows**, on the **Dragon pod (group master)** *and* on `TE.19.F9.S1.Interstage`, **one shared TCA

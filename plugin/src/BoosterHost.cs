@@ -58,16 +58,24 @@
 // `ApplyThrottle`.
 //
 // ============================================================================================
-// ⛔ ATTITUDE IS UNCOMMANDED. THIS IS THE WHOLE SHAPE OF THIS TASK.
-// `Guide()` returns a unit `AimForward` every tick. **Nothing here executes it.** Turning an aim vector
-// into torque is a CONTROL LAW, and it is precisely the component that failed before: `AttitudePilot` /
-// `AttitudeController` / `pure/AttitudeLoop.cs` — RCS chatter, a roll under-control, an attitude limit
-// cycle, DS-ASC-007's *"RCS loss = ~97% attitude"* — reverted three times, ordered stripped by the owner
-// (`70dc239`), and filed by R1 §3.2 as ⛔ **RECOVER-REFERENCE ONLY — never live code (owner directive)**.
-// It gets its own register line, its own scrutiny and its own gate: **W24**.
-// So: `AimForward` is COMPUTED, REPORTED and LOGGED as the commanded attitude **with nothing executing
-// it**, and `s.pitch` / `s.yaw` / `s.roll` are never written. §14.4(a): an uncommanded axis must never
-// read as commanded, so every log line this file emits carries "ATT UNCMD".
+// ⭐ ATTITUDE IS NOW COMMANDED — register W24, 2026-09-04.
+// `Guide()` returns a unit `AimForward` every tick. Turning an aim vector into torque is a CONTROL LAW,
+// and it is precisely the component that failed before: `AttitudePilot` / `AttitudeController` /
+// `pure/AttitudeLoop.cs` — RCS chatter, a roll under-control, an attitude limit cycle, DS-ASC-007's
+// *"RCS loss = ~97% attitude"* — reverted three times, ordered stripped by the owner (`70dc239`), and
+// filed by R1 §3.2 as ⛔ **RECOVER-REFERENCE ONLY — never live code (owner directive)**. It got its own
+// register line, its own scrutiny and its own gate — **W24** — and NO BYTE of those three files is here.
+// `docs/FLIGHT_CORPUS_ASSESSMENT.md` §3 corrected the inherited diagnosis: the ascent failure was a
+// DIVERGENCE (an unbounded commanded rate), not a limit cycle, so `pure/BoosterSteer.cs`'s law makes that
+// specific shape structurally unreachable (a fixed rate ceiling, never a live authority estimate) rather
+// than merely re-tuning it.
+// `AttitudeError()` below converts `AimForward` into per-axis pitch/yaw/roll DEGREES using the ONE piece
+// of the deleted law R1 §3.2 names as reusable independent of its gains — the frame-conversion formula,
+// freshly written here, no code copied. `pure/BoosterSteer.Steer()` turns those (plus `v.angularVelocity`)
+// into a bounded command, which `Fbw()` now writes to `s.pitch`/`s.yaw`/`s.roll` — gated, like every other
+// axis this host writes, on `fbwOwned` and on `Actuate`. §14.4(a) still governs: while blocked or unbound,
+// nothing is written (the axes are RELEASED, not zeroed), and `AttitudeUncommanded` reports which state
+// is in force so no screen can show a command that is not actually live.
 //
 // ============================================================================================
 // ⛔ WHAT THIS FILE MUST NEVER DO
@@ -101,30 +109,33 @@ namespace DragonScreen
     public static class BoosterHost
     {
         // =========================================================================================
-        // THE ARM — one flag, default OFF, and the reason is not timidity
+        // THE ARM — register W24 flips this to TRUE, per the owner's ruling on W23's Q1
         // =========================================================================================
-        // ⛔ **`Actuate = false` MEANS NO COMMAND LEAVES THIS HOST.** The script still runs — it binds at
-        // separation, ticks every physics frame on live state, advances its phases and reports — which is
-        // the owner's *"as soon as the booster gets dropped it runs its script"*. What is gated is the
-        // WRITE.
+        // ⛔ **HISTORY, KEPT BECAUSE IT IS WHY THIS FLAG EXISTS.** `Actuate = false` used to mean no
+        // command left this host at all — the script bound at separation, ticked every physics frame,
+        // advanced its phases and reported, but the WRITE was gated because there was no steering law:
+        // a booster that lights an engine with an uncontrolled attitude is not a landing — it is flight
+        // 194334. `8225df7`, finding A1: *"Booster recovery self-destructs: fires thr=1.0 0.3 s after
+        // MECO at 'sep 0 km', attitude diverges 2→85 deg, LOST in ~10 s — and its 0-km burn kicks the
+        // upper stage."* The owner's own fix at the time was to stop the engines firing (`LetFall = true`).
         //
-        // **Why it is off, in one sentence: there is no steering law yet, and a booster that lights an
-        // engine with an uncontrolled attitude is not a landing — it is flight 194334.**
-        //   `8225df7`, finding A1: *"Booster recovery self-destructs: fires thr=1.0 0.3 s after MECO at
-        //   'sep 0 km', attitude diverges 2→85 deg, LOST in ~10 s — and its 0-km burn kicks the upper
-        //   stage."* The owner's own fix was to stop the engines firing (`LetFall = true`).
-        // Arming a thrust path before the attitude path exists reproduces exactly that, and it breaks the
-        // very non-interference guarantee this task was asked to preserve.
+        // ⭐ **W24 (2026-09-04) BUILT THE STEERING LAW** (`pure/BoosterSteer.cs` + this file's attitude
+        // wiring below) and flips this flag, per the owner's own recorded ruling on W23's Q1 option 1:
+        // *"Leave `Actuate = false`; W24 (the steering law) flips it as part of its own gate."* That is
+        // exactly what this is — not a build chat closing a gate on its own authority (C1.12); the owner
+        // named this task as the one that gets to make this call, in the open question that asked it.
         //
-        // ⚠ **This is not a build chat closing a gate the owner opened (C1.12).** The Part-B gate is a
-        // gate to BUILD; the whole command path below is built, wired and reviewable. This flag is a
-        // default, it is one line, it is named and greppable, and flipping it is posed to the owner as
-        // Q1 in the open questions at the foot of this file. **W24 (the steering law) flips it, or the
-        // owner does.** Nothing in the tree sets it today.
-        // ℹ It is `[Tunable]`, so the owner can arm it from `PluginData/tuning.cfg` with no recompile —
-        //   the override lands once `Tuning.Build()` has run (`DragonScreenMonitor`, i.e. after the IVA
-        //   screens have ticked once). The CODE DEFAULT stays the authority, as `Tuning.cs` says.
-        [Tunable] public static bool Actuate = false;
+        // ⚠ **STATED PLAINLY: the next flight is the first time this host commands a real vessel.** The
+        // steering law is fresh, its gains are `[UN-CONVERGED]` (§B16.8 ruling 2) and its per-axis SIGN is
+        // UNVERIFIED — there is no recorded flight to derive it from (see the open question at the foot of
+        // this file). `install` and glass time remain a SEPARATE owner gate (CLAUDE.md's build-go section)
+        // — this flag changes what the CODE will do once that separate gate opens, not whether it opens.
+        // ℹ It is `[Tunable]`, so the owner can hold it back at `false` from `PluginData/tuning.cfg` with
+        //   no recompile if that is preferred instead — the override lands once `Tuning.Build()` has run
+        //   (`DragonScreenMonitor`, i.e. after the IVA screens have ticked once). The CODE DEFAULT is now
+        //   TRUE, per the ruling above; `Tuning.cs`'s rule that the code default stays the authority still
+        //   applies to whatever value is actually in force.
+        [Tunable] public static bool Actuate = true;
 
         // =========================================================================================
         // THE SEAM W5 FILLS — and until it does, the ullage gate is CLOSED
@@ -202,6 +213,13 @@ namespace DragonScreen
         static bool fbwOwned;
         static double fbwThrottle;
         static bool fbwUllage;
+        static double fbwPitch, fbwYaw, fbwRoll;           // register W24 — the steering law's output
+
+        // ⭐ OBSERVABILITY (the owner's Q2 refinement on `docs/BOOSTER_STEERING_MOD_SEARCH.md`): whether
+        // the deadband suppressed each axis' error THIS TICK, and what value it ran at. A future BlackBox
+        // column (register BB1) reads these; this host invents no recording mechanism of its own.
+        static bool steerPitchDeadbanded, steerYawDeadbanded, steerRollDeadbanded;
+        static double steerDeadbandDeg;
 
         static double lastLogUT = -999.0;
         static double lastBindTryUT = -999.0;
@@ -216,13 +234,29 @@ namespace DragonScreen
         public static BoosterPhase Phase { get { return phase; } }
         public static TargetMode Mode { get { return profile.Mode; } }
 
-        /// <summary>⛔ THE COMMANDED ATTITUDE, WITH NOTHING EXECUTING IT (§14.4(a)). Unit, every tick, in
-        /// the world frame. A reader must present this as COMMANDED-NOT-FLOWN until W24 lands.</summary>
+        /// <summary>THE COMMANDED ATTITUDE, unit, every tick, in the world frame. Register W24's steering
+        /// law (`pure/BoosterSteer.cs`) now closes the loop on this — see `AttitudeUncommanded` for
+        /// whether it is actually reaching the vehicle THIS tick.</summary>
         public static Vec3 AimForward { get; private set; }
 
-        /// <summary>True while `AimForward` has no controller behind it — i.e. always, today. Any display
+        /// <summary>§14.4(a): true whenever nothing is actually driving the axes this tick — unbound,
+        /// blocked (hold-off, packed, `Actuate=false`), or the axes were simply released rather than
+        /// zeroed. False exactly when `Fbw()` is about to write `s.pitch`/`s.yaw`/`s.roll`. Any display
         /// that shows the aim MUST show this with it.</summary>
-        public static bool AttitudeUncommanded { get { return true; } }
+        public static bool AttitudeUncommanded { get { return !fbwOwned; } }
+
+        /// <summary>The steering law's own commanded axes, [-1,1], for the same tick as `AimForward` —
+        /// reported REGARDLESS of `fbwOwned`, exactly as `AimForward` always was, so a screen or a future
+        /// BlackBox can show what was COMPUTED even while it is not being WRITTEN.</summary>
+        public static double SteerPitch { get; private set; }
+        public static double SteerYaw { get; private set; }
+        public static double SteerRoll { get; private set; }
+
+        // ⭐ Q2 OBSERVABILITY — read-only, for a screen or the BlackBox (register BB1) to surface.
+        public static bool SteerPitchDeadbanded { get { return steerPitchDeadbanded; } }
+        public static bool SteerYawDeadbanded { get { return steerYawDeadbanded; } }
+        public static bool SteerRollDeadbanded { get { return steerRollDeadbanded; } }
+        public static double SteerDeadbandDeg { get { return steerDeadbandDeg; } }
 
         public static double Throttle { get { return fbwThrottle; } }
         public static string Refusal { get; private set; }        // the FSM's own refusal, verbatim
@@ -311,6 +345,9 @@ namespace DragonScreen
             finsOut = false; legsDown = false;
             landedSinceUT = -1.0;
             fbwOwned = false; fbwThrottle = 0.0; fbwUllage = false;
+            fbwPitch = 0.0; fbwYaw = 0.0; fbwRoll = 0.0;
+            steerPitchDeadbanded = false; steerYawDeadbanded = false; steerRollDeadbanded = false;
+            steerDeadbandDeg = 0.0;
             Refusal = null; BlockNote = null;
 
             // The TARGET MODE, from an in-repo source and nothing else: the vessel name → the mission
@@ -430,10 +467,8 @@ namespace DragonScreen
 
             // ⛔ THE REAL FACING, so the flip's LEAD GATE tells the truth. `ReferenceTransform.up` is the
             // direction thrust pushes a bottom-engined stack — the same convention `AimForward` uses.
-            // ⚠ CONSEQUENCE, STATED RATHER THAN HIDDEN: with nothing flying the attitude, the vehicle
-            // never tracks the command, the lead gate never opens, and the reported flip DOES NOT
-            // COMPLETE. That is the truth (§14.4(a)); supplying zero here would fake a flip that is not
-            // happening. It resolves itself when W24 lands.
+            // ⭐ Register W24 landed the steering law, so the vehicle now actually tracks this — the flip's
+            // lead gate can open and the reported flip can complete, exactly as designed.
             Transform rt = v.ReferenceTransform;
             if (rt != null) { Vector3 f = rt.up; bi.Facing = new Vec3(f.x, f.y, f.z); }
 
@@ -449,15 +484,35 @@ namespace DragonScreen
             phase = c.Phase;
             commandedForward = c.AimForward;
             commandedThrottle = c.Throttle;
-            AimForward = c.AimForward;               // ⛔ reported. NOT flown.
+            AimForward = c.AimForward;               // reported EVERY tick, dispatched or not.
             Refusal = c.Refusal;
+
+            // ---- register W24: THE STEERING LAW -----------------------------------------------------
+            // Convert `AimForward` into per-axis pitch/yaw/roll DEGREES (glue, needs Quaternion/Transform)
+            // and hand them, with the live body rates, to the pure law. Computed and REPORTED every tick
+            // regardless of whether anything may be dispatched — same rule `AimForward` has always
+            // followed — so a screen or the BlackBox can show what was decided even while it is blocked.
+            double pitchErrDeg, yawErrDeg, rollErrDeg;
+            AttitudeError(rt, c.AimForward, out pitchErrDeg, out yawErrDeg, out rollErrDeg);
+            Vector3 rateDps = v.angularVelocity * Mathf.Rad2Deg;   // x=pitch, y=roll, z=yaw (VesselData T13b)
+
+            BoosterSteerInputs steerIn = new BoosterSteerInputs();
+            steerIn.PitchErrDeg = pitchErrDeg; steerIn.YawErrDeg = yawErrDeg; steerIn.RollErrDeg = rollErrDeg;
+            steerIn.PitchRateDps = rateDps.x; steerIn.YawRateDps = rateDps.z; steerIn.RollRateDps = rateDps.y;
+            BoosterSteerCommand steer = BoosterSteer.Steer(steerIn);
+
+            SteerPitch = steer.Pitch; SteerYaw = steer.Yaw; SteerRoll = steer.Roll;
+            steerPitchDeadbanded = steer.PitchDeadbanded;
+            steerYawDeadbanded = steer.YawDeadbanded;
+            steerRollDeadbanded = steer.RollDeadbanded;
+            steerDeadbandDeg = steer.DeadbandDegApplied;
 
             // ---- MAY ANYTHING GO OUT? ------------------------------------------------------------
             double sep = SeparationM(v);
             BoosterCommandBlock block = BoosterHostPlan.Blocked(Actuate, snap, sep, Now() - bindUT);
             BlockNote = BoosterHostPlan.Annunciation(block);
 
-            if (block == BoosterCommandBlock.None) Dispatch(v, c);
+            if (block == BoosterCommandBlock.None) Dispatch(v, c, steer);
             else
             {
                 // ⛔ RELEASE THE AXES — do not write a zero. And do NOT shut an engine that is already
@@ -465,15 +520,53 @@ namespace DragonScreen
                 // anyway, and §B16.3 is explicit that commanding zero mid-burn is an instant shutdown
                 // whose relight costs an ignition this vehicle does not have. `Release` shuts what we lit.
                 fbwOwned = false; fbwThrottle = 0.0; fbwUllage = false;
+                fbwPitch = 0.0; fbwYaw = 0.0; fbwRoll = 0.0;
             }
 
             Report(v, c, block, sep);
         }
 
+        /// <summary>
+        /// Register W24's frame conversion — `AimForward` (world, unit) to per-axis pitch/yaw/roll ERROR
+        /// degrees, in the vehicle's own control frame. Reuses, freshly written, the ONE piece of the
+        /// deleted `AttitudeController.cs` that R1 §3.2 names as reference independent of its gains:
+        /// *"current = ReferenceTransform.rotation * Euler(-90,0,0) ... yaw NEGATED"* — no code copied,
+        /// only the documented formula. The vehicle's OWN current roll reference is used as
+        /// `LookRotation`'s "up" (the same convention), which is what makes the returned roll error ~0 by
+        /// construction: `AimForward` is a single direction and cannot define a roll target on its own,
+        /// and inventing one here would be manufacturing a failure mode the guidance never asked for.
+        /// </summary>
+        static void AttitudeError(Transform rt, Vec3 aimWorld, out double pitchErrDeg, out double yawErrDeg,
+                                   out double rollErrDeg)
+        {
+            pitchErrDeg = 0.0; yawErrDeg = 0.0; rollErrDeg = 0.0;
+            if (rt == null) return;
+            Vector3 aim = new Vector3((float)aimWorld.X, (float)aimWorld.Y, (float)aimWorld.Z);
+            if (aim.sqrMagnitude < 1e-9f) return;
+
+            Quaternion current = rt.rotation * Quaternion.Euler(-90f, 0f, 0f);   // nose -> +Z, LookRotation convention
+            Vector3 rollRef = current * Vector3.up;                              // own current roll ref: rollErr ~ 0
+            Quaternion requested = Quaternion.LookRotation(aim, rollRef);
+            Quaternion delta = Quaternion.Inverse(current) * requested;
+            Vector3 euler = delta.eulerAngles;
+
+            pitchErrDeg = ClampPi(euler.x);
+            rollErrDeg = ClampPi(euler.z);
+            yawErrDeg = -ClampPi(euler.y);
+        }
+
+        static double ClampPi(float deg)
+        {
+            double d = deg;
+            while (d > 180.0) d -= 360.0;
+            while (d < -180.0) d += 360.0;
+            return d;
+        }
+
         // =========================================================================================
         // DISPATCH — the only place a command reaches the vehicle, and it reaches ONE vessel
         // =========================================================================================
-        static void Dispatch(Vessel v, BoosterCommand c)
+        static void Dispatch(Vessel v, BoosterCommand c, BoosterSteerCommand steer)
         {
             // ---- ENGINES. `EnginesLit` is the authority, never the mode: `EngineMode == 0` is BOTH
             // `ModeAllEngines` AND the struct's default (the command struct says so itself), so the mode
@@ -489,7 +582,35 @@ namespace DragonScreen
             double thr = want == EngineRole.None ? 0.0 : c.Throttle;
             ApplyThrottle(want, thr);
             fbwThrottle = thr;
+
+            // ---- register W24: ATTITUDE. Gimbal steering reaches the octaweb automatically from
+            // `s.pitch`/`s.yaw`/`s.roll` — `ModuleGimbal` (and, in AeroDescent, the grid fins' own control
+            // surface) reads the SAME `FlightCtrlState` axes, so writing them once here is the whole
+            // dispatch; no separate gimbal call exists or is needed.
+            fbwPitch = steer.Pitch; fbwYaw = steer.Yaw; fbwRoll = steer.Roll;
             fbwOwned = true;                      // a dispatch ran — the callback may write this frame
+
+            // ---- ENGINE-OUT DIFFERENTIAL THROTTLE (B3). With <2 live modules in the role (today's
+            // octaweb: one multi-nozzle `ModuleEngines` per set) this is a no-op that HOLDS the thrust
+            // limiters at 100% and leaves steering to the gimbal — exactly what a single-module role
+            // needs. Vec3.Zero: this call is not asking for torque, only for the limiters to stay full;
+            // wiring a live torque demand through here is engine-OUT contingency, a separate concern
+            // (§B12.5(4)) this task does not add. `Feasible=false` is logged, never treated as fatal — the
+            // gimbal path above is entirely independent of it.
+            if (want != EngineRole.None)
+            {
+                bool feasible = Actuator.BalanceOctawebThrust(v, want, Vec3.Zero);
+                if (!feasible && LogGate.First("booster-host-thrustbalance:" + want))
+                    Debug.LogWarning("[DragonScreen] booster host: BalanceOctawebThrust reports infeasible for "
+                                      + want + " (informational — gimbal steering is unaffected)");
+            }
+            else
+            {
+                // ---- register W24: RCS is the ONLY rotation authority with no engine lit (Flip / Coast /
+                // AeroDescent) — the gimbal has nothing to deflect. Idempotent and per-vessel (Actuator.cs
+                // header), so this never reaches the Dragon.
+                Actuator.EnableRcs(v);
+            }
 
             // ---- ULLAGE. §B16.3: settle before EVERY relight. `EnableRcs` does the per-thruster enable
             // AND the vessel-level master KSP requires for translation to actuate — both per-vessel, so
@@ -577,7 +698,7 @@ namespace DragonScreen
         }
 
         // =========================================================================================
-        // THE CONTROL-PIPELINE HOOK — throttle and ullage translation ONLY. NEVER AN ATTITUDE AXIS.
+        // THE CONTROL-PIPELINE HOOK — throttle, ullage translation, and (register W24) attitude.
         // =========================================================================================
         static void Hook(Vessel v)
         {
@@ -599,11 +720,12 @@ namespace DragonScreen
         /// can reach the Dragon. Proven to fire for a loaded, non-active, unpacked craft (flights 134620
         /// and Crew-2_20260829_144114 — see the header).
         ///
-        /// ⛔ IT WRITES AT MOST TWO THINGS: the throttle, and the ullage settle translation — and only
-        /// while `fbwOwned` says a dispatch actually ran this frame. It NEVER writes `pitch`, `yaw` or
-        /// `roll` — there is no steering law (register W24), and §14.4(a) says an uncommanded axis must
-        /// never read as commanded. Leaving an axis untouched leaves whatever the vessel would have done
-        /// alone, which is the honest state.
+        /// ⛔ IT WRITES AT MOST FIVE THINGS: the throttle, the ullage settle translation, and — register
+        /// W24 — `pitch`/`yaw`/`roll`, all gated identically on `fbwOwned` saying a dispatch actually ran
+        /// this frame. `ModuleGimbal` and the grid fins' own control surface both read these SAME axes
+        /// automatically; nothing else in this file "drives" them. Unowned, it writes NOTHING AT ALL —
+        /// §14.4(a): leaving an axis untouched leaves whatever the vessel would have done alone, which is
+        /// the honest state, and is never the same as commanding a zero.
         /// </summary>
         static void Fbw(FlightCtrlState s)
         {
@@ -612,6 +734,9 @@ namespace DragonScreen
                 if (s == null || bound == null || !fbwOwned) return;
                 s.mainThrottle = (float)Clamp01(fbwThrottle);
                 if (fbwUllage) s.Z = (float)Clamp1(UllageFwdSign * UllageTranslate);
+                s.pitch = (float)Clamp1(fbwPitch);
+                s.yaw = (float)Clamp1(fbwYaw);
+                s.roll = (float)Clamp1(fbwRoll);
             }
             catch (Exception e) { Debug.LogWarning("[DragonScreen] booster fly-by-wire write failed: " + e.Message); }
         }
@@ -648,8 +773,12 @@ namespace DragonScreen
             currentRole = EngineRole.None;
             finsOut = false; legsDown = false;
             fbwOwned = false; fbwThrottle = 0.0; fbwUllage = false;
+            fbwPitch = 0.0; fbwYaw = 0.0; fbwRoll = 0.0;
+            steerPitchDeadbanded = false; steerYawDeadbanded = false; steerRollDeadbanded = false;
+            steerDeadbandDeg = 0.0;
             landedSinceUT = -1.0;
             AimForward = Vec3.Zero; Refusal = null; BlockNote = null;
+            SteerPitch = 0.0; SteerYaw = 0.0; SteerRoll = 0.0;
             lastBindVerdict = BoosterBind.NoVessel;
         }
 
@@ -664,6 +793,9 @@ namespace DragonScreen
 
             string aim = "aim(" + c.AimForward.X.ToString("F3") + "," + c.AimForward.Y.ToString("F3")
                        + "," + c.AimForward.Z.ToString("F3") + ")";
+            string steer = "steer(p=" + SteerPitch.ToString("F2") + (steerPitchDeadbanded ? "db" : "")
+                          + " y=" + SteerYaw.ToString("F2") + (steerYawDeadbanded ? "db" : "")
+                          + " r=" + SteerRoll.ToString("F2") + (steerRollDeadbanded ? "db" : "") + ")";
 
             Debug.Log("[DragonScreen] booster " + c.Phase + "/" + c.Mode
                       + " alt=" + v.radarAltitude.ToString("F0") + "m"
@@ -673,7 +805,7 @@ namespace DragonScreen
                       + " thr=" + fbwThrottle.ToString("F2")
                       + (c.UllageRcs ? " ULLAGE" : "")
                       + (c.DeployFins ? " FINS" : "") + (c.DeployLegs ? " LEGS" : "")
-                      + " | " + aim + " ⛔ ATT UNCMD (no steering law — W24)"
+                      + " | " + aim + " " + steer + (fbwOwned ? " (LIVE)" : " ⛔ ATT UNCMD (not dispatched)")
                       + (block != BoosterCommandBlock.None
                             ? " | NO COMMAND: " + BoosterHostPlan.Annunciation(block) : "")
                       + (c.Refusal != null ? " | FSM REFUSED: " + c.Refusal : ""));
@@ -755,30 +887,24 @@ namespace DragonScreen
 // Per C1.14, written into this task's own deliverable, each with options and a recommendation. **W23
 // decided none of them and proceeded past none** — every one of them is inert by default today.
 //
-// ---- Q1. THE HOST IS BUILT AND WIRED, BUT `Actuate` DEFAULTS TO **FALSE** ------------------------
-// **Situation.** The owner's direction is *"as soon as the booster gets dropped it runs its script."*
-// It does: the host binds at separation, ticks `Guide()` every physics frame on live vessel state,
-// advances the phases and reports. What it does NOT do by default is WRITE — throttle, engine
-// activation, RCS and part actions are all built, wired and reviewable behind one named flag that is
-// off. The reason is not caution in the abstract: **this task's scope explicitly excludes the steering
-// law, and a booster that lights an engine with an uncontrolled attitude is flight 194334** — `8225df7`
-// finding A1, *"fires thr=1.0 0.3 s after MECO at 'sep 0 km', attitude diverges 2→85 deg, LOST in ~10 s
-// — and its 0-km burn kicks the upper stage"* — which is also the exact non-interference failure the
-// owner asked this task to prevent. A build chat should not flip that default on its own (C1.12).
-// **Options.**
-//   1. Leave `Actuate = false`; **W24 (the steering law) flips it** as part of its own gate. The host
-//      still runs, reports and is fully reviewable in the meantime.
-//   2. Owner flips it now: the booster gets throttle/engine/RCS/fin/leg commands with attitude
-//      uncontrolled. (Note the hold-off interlock below still forbids a burn within
-//      `HoldOffSeparationM` / `HoldOffSinceBindS` of separation, so it cannot reproduce A2's stack kick;
-//      it can still tumble the booster.)
-//   3. Flip it PARTIALLY — allow fins/legs/RCS but never engines — i.e. re-create the owner's own
-//      `LetFall` behaviour from 2026-08-30 as a third state.
-// **Recommendation: (1)**, with (3) as the interesting middle if the owner wants something visible in
-// the next flight: `LetFall` was the owner's own answer to this exact situation, and a booster that
-// deploys fins and legs and falls stably is a real, safe, recordable step that needs no steering law.
-// ℹ **Whichever is chosen costs no recompile.** `Actuate` is `[Tunable]`, so option 2 is one line in
-// `PluginData/tuning.cfg`; option 3 would need the extra state written (a small, declared change).
+// ---- Q1. THE HOST IS BUILT AND WIRED, BUT `Actuate` DEFAULTS TO **FALSE** -- ⭐ RESOLVED BY W24 -----
+// **Resolution (2026-09-04, owner ruling relayed via the overseer on W24's resume): option 1.** W24
+// built the steering law (`pure/BoosterSteer.cs` + this file's attitude wiring) and flips `Actuate` to
+// `true` as part of its own gate, exactly as this question's recommendation named. The original
+// situation and the three options are kept below for the record.
+// **Situation (as it stood before W24).** The owner's direction is *"as soon as the booster gets
+// dropped it runs its script."* It does: the host binds at separation, ticks `Guide()` every physics
+// frame on live vessel state, advances the phases and reports. What it did NOT do by default was WRITE
+// — throttle, engine activation, RCS and part actions were all built, wired and reviewable behind one
+// named flag that was off. The reason was not caution in the abstract: this task's scope explicitly
+// excluded the steering law, and a booster that lights an engine with an uncontrolled attitude is
+// flight 194334 — `8225df7` finding A1, *"fires thr=1.0 0.3 s after MECO at 'sep 0 km', attitude
+// diverges 2→85 deg, LOST in ~10 s — and its 0-km burn kicks the upper stage"* — which is also the exact
+// non-interference failure the owner asked W23 to prevent.
+// **Options (historical).**
+//   1. Leave `Actuate = false`; W24 (the steering law) flips it as part of its own gate. ⭐ CHOSEN.
+//   2. Owner flips it now, with attitude uncontrolled.
+//   3. Flip it PARTIALLY — fins/legs/RCS but never engines (`LetFall`, 2026-08-30) as a third state.
 //
 // ---- Q2. THE HOST REFUSES TO BIND THE ACTIVE VESSEL, SO FOCUSING THE BOOSTER STOPS IT ------------
 // **Situation.** `BoosterHostPlan.RequireNonActive` is a THIRD independent guarantee that the Dragon can
@@ -825,4 +951,34 @@ namespace DragonScreen
 //      the raw flight CSVs behind 194334 were gitignored and never committed (§B16.8).
 // **Recommendation: (1).** It is the standing rule for every booster constant, and the interlock is
 // correct at any value in this range; only its cost is uncertain.
+//
+// ---- Q5 (register W24). THE STEERING LAW'S PER-AXIS SIGN IS UNVERIFIED -----------------------------
+// **Situation.** `pure/BoosterSteer.cs` implements a fresh, negative-feedback control law (never
+// AttitudeLoop's), and `AttitudeError()` above computes the per-axis error the SAME way R1 §3.2's
+// frame-conversion formula defines it (reused as documented reference, not code). But the deleted law's
+// FINAL line — the one that applied that error to `s.pitch`/`s.yaw`/`s.roll` with whatever sign made the
+// feedback negative on THIS vehicle — is not recoverable (R1 §3.2 verdicts the files RECOVER-REFERENCE
+// ONLY, and that line lived in `AttitudeController.cs`, one of the three). There is also no recorded
+// booster ATTITUDE flight anywhere in this repo to derive it from empirically (R1 §4.2). Getting a sign
+// wrong on one axis means POSITIVE feedback on that axis alone — an immediate, accelerating divergence,
+// distinguishable from a merely-undertuned gain within a tick or two of telemetry.
+// **This is not a not-yet-modelled quantity under §14.4(e)/(f)** — it is a control-loop sign that
+// literally cannot be settled without either the deleted source (forbidden, R1 §3.2) or a flight (which
+// this task's own gate is what authorizes). It is recorded here rather than guessed past silently.
+// **Options.**
+//   1. Fly it as built (`PitchSign = YawSign = RollSign = +1.0`) and watch the FIRST tick's telemetry —
+//      `BoosterHost.SteerPitch/SteerYaw/SteerRoll` plus the recorded body rates. A wrong-signed axis
+//      shows as an accelerating divergence on exactly that axis within 1-2 seconds; flip that ONE sign
+//      from `PluginData/tuning.cfg` (no recompile) and re-fly.
+//   2. Hold `Actuate = false` (override this task's flip from `tuning.cfg`) until the sign can be
+//      verified some other way — costs another flight cycle with the booster still falling ballistically.
+//   3. Recover `AttitudeController.cs`'s final application line as READ-ONLY evidence (not code) to check
+//      the sign against — ⚠ R1 §3.2 verdicts the file RECOVER-REFERENCE ONLY; reading a single line for a
+//      sign check is a narrower ask than resurrecting the controller, but it is still a call on a file
+//      this task was told not to touch, so it is offered here rather than done.
+// **Recommendation: (1).** The owner's own ruling on this resume already states *"the next flight is the
+// first time this commands a real vessel"* — the sign is exactly the thing that first flight tests, the
+// mitigation (a one-line, no-recompile flip per axis) is already built, and this is a KSP simulation: a
+// wrong sign costs a reverted flight, not real hardware. (3) is offered because it is cheap to say no to
+// explicitly rather than to leave unmentioned.
 // ============================================================================================

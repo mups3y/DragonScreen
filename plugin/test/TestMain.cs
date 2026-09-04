@@ -104,6 +104,21 @@ public static class TestMain
         // are [UN-CONVERGED] (§B16.8): 194334 gives the FAILING point, never a converged safe value.
         bad += BoosterHostTest.Run();      // §B16 booster host: selection, stop, command gate, engine roles
 
+        // ---- PART B RECOVERY, W24 (§B16) - the booster STEERING LAW -------------------------------
+        // `docs/BOOSTER_STEERING_MOD_SEARCH.md` (C1.15) could neither rule TCA in nor out; the owner ruled
+        // (via the overseer, 2026-09-04): OURS, TCA's METHOD borrowed, no dependency (Q1), and a marked,
+        // [UN-CONVERGED], DEFAULT-ZERO deadband seam (Q2). `pure/BoosterSteer.cs` is that law. It is
+        // written against the ACTUAL failure `docs/FLIGHT_CORPUS_ASSESSMENT.md` §3 found — a DIVERGENCE
+        // (an unbounded commanded rate), not the limit cycle the inherited folklore blamed — by making the
+        // outer angle-to-rate stage structurally incapable of demanding more than a fixed ceiling.
+        // ⚠ NO BYTE of `AttitudePilot.cs`/`AttitudeController.cs`/`pure/AttitudeLoop.cs` is here (R1 §3.2:
+        // RECOVER-REFERENCE ONLY, owner directive) — only the documented frame-conversion FORMULA is
+        // reused, in the glue (`src/BoosterHost.cs`), per R1's own list of what those files are reference
+        // FOR. Every gain is [UN-CONVERGED] (§B16.8 ruling 2) and the per-axis SIGN is UNVERIFIED — this
+        // law has no recorded flight of its own. `BoosterHost.Actuate` flips to TRUE with this task, per
+        // the owner's ruling on W23's Q1: the next flight is the first time this commands a real vessel.
+        bad += BoosterSteerTest.Run();     // W24: the steering law - rate ceiling, deadband seam, bounds
+
         // ---- PART B RECOVERY, W6 (§B16, R1-tagged but in NO §B12.8 wave) - the B8 impact divert ----
         // pure/CourseCorrect.cs is the layer between the two above: it turns a predicted-impact ERROR
         // (BoosterDescent.ErrorTo, over pure/Trajectory.cs) into the control change that nulls it - a 2x2

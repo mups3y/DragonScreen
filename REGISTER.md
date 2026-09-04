@@ -6228,7 +6228,7 @@ plus `TestMain.cs`'s registration and this register entry. **Four open questions
 of `plugin/src/BoosterHost.cs` (C1.14) — Q1 is the sharp one: whether to arm `Actuate` now, with the
 owner's own `LetFall` (fins/legs/RCS, never engines) offered as the middle option.
 
-### W24 [O] The booster STEERING LAW — the one component that has failed before, on its own line and its own gate — **BLOCKED at STEP 1 — OWNER CALL (2026-09-04)** — [TIER 1: the last thing between the host and a landing; and the known failure]
+### W24 [O] The booster STEERING LAW — the one component that has failed before, on its own line and its own gate — **DONE (2026-09-04)** — [TIER 1: the last thing between the host and a landing; and the known failure]
 Logged by **W23**, 2026-09-04 (C1.1 — carved out of W23 by the task's own instruction: *"Do not write a
 steering law in this task… log the steering law as its own register line so it gets its own scrutiny and its
 own gate. Bundling it here is how that failure repeats."*).
@@ -6316,6 +6316,75 @@ failed"* (13,351 here) and omits the one printing *"306 checks, all passed"* —
 a moved test. **No screen changed, so no preview PNG applies** — stated, not skipped. `git status` shows exactly
 the declared outputs: `docs/BOOSTER_STEERING_MOD_SEARCH.md` (new), `docs/INDEX.md` (one entry) and this
 register entry. **W24 stays open** and resumes at STEP 2 on the returned decision.
+
+⭐ **RESUMED AND COMPLETED 2026-09-04 — STEP 1's two questions RULED by the owner (via the overseer), STEP 2
+(the law) and STEP 3 (`Actuate → true`) done.**
+
+**Q1 ruling — OURS, TCA's METHOD borrowed, no dependency.** Needs no gate/`OVERRIDE`, per the same precedent
+`pure/ThrustBalance.cs` already set with TCA's `EngineOptimizer`. ⭐ Decisive extra reason from the overseer's
+own check of the craft dump: `ModuleTCA` is wired **across both vehicles** — group master on the Dragon pod,
+member on the booster interstage, one shared group — so adopting TCA would run the booster's controller from
+a module whose group master sits on the OTHER vessel across separation, exactly the cross-vehicle interference
+W23 built three independent guarantees to prevent. **Q2 ruling — a marked, `[UN-CONVERGED]`, DEFAULT-ZERO
+deadband seam**, NOT seeded from DS-ASC-008 (Dragon-regime RCS evidence; R1 §7.5: a different plant), and made
+**OBSERVABLE** per the owner's refinement (below).
+
+**What was built, all fresh — NO byte of `AttitudePilot.cs`/`AttitudeController.cs`/`pure/AttitudeLoop.cs`
+(R1 §3.2's RECOVER-REFERENCE ONLY verdict intact):**
+- **`plugin/src/pure/BoosterSteer.cs` (NEW)** — the steering law. Designed against the ACTUAL failure
+  `docs/FLIGHT_CORPUS_ASSESSMENT.md` §3 found, not the inherited folklore: the ascent failure was a
+  **DIVERGENCE** (a commanded rate reaching 195–436 dps against a measured rate that never exceeded 68 dps,
+  driven by a live authority estimate that was 90x too high), **not** the limit cycle, which in fact lived in
+  a different vehicle's terminal-rendezvous actuation (§3.2). The structural fix: the law's outer
+  (angle→desired-rate) stage is capped at a FIXED `MaxRateDegPerS` ceiling — it can never demand more, no
+  matter the error size or any authority estimate, because it uses no authority estimate at all. Q2's deadband
+  is a `[Tunable]`, default-zero seam, and `Steer()` reports per-axis whether it fired and at what value
+  (`BoosterHost.SteerPitchDeadbanded` etc. + `SteerDeadbandDeg`) — the owner's "the seam must be OBSERVABLE"
+  refinement, left for register **BB1** to wire into an actual recording rather than inventing a channel here.
+- **`plugin/src/BoosterHost.cs`** — `AttitudeError()` (NEW): converts `AimForward` to per-axis pitch/yaw/roll
+  degrees, reusing (freshly written, no code copied) the ONE piece of the deleted law R1 §3.2 names as
+  reference independent of its gains — the `Quaternion`/`LookRotation` frame-conversion formula, with the
+  vehicle's OWN current roll reference standing in for `LookRotation`'s "up" (so roll error is ~0 by
+  construction — matches the evidence: `act_roll` never exceeded 0.09 in the corpus, §3.1). Rates come
+  straight off `v.angularVelocity` (already the right frame + axis convention, `VesselData.cs` T13b). `Fly()`
+  now calls `BoosterSteer.Steer()` every tick (reported regardless of dispatch, same rule `AimForward` always
+  followed) and `Dispatch()`/`Fbw()` write `s.pitch`/`s.yaw`/`s.roll` — gated identically to every other axis
+  on `fbwOwned`, so a blocked or unbound tick still writes NOTHING (§14.4(a): released, never zeroed).
+  `Dispatch()` also calls `Actuator.BalanceOctawebThrust(v, want, Vec3.Zero)` when an engine is lit (today a
+  no-op that holds the limiters at 100% and logs, never blocks, if it reports infeasible — the octaweb is one
+  multi-nozzle module per role, so gimbal steering is the primary and entirely independent path) and
+  `Actuator.EnableRcs(v)` when no engine is lit (Flip/Coast/AeroDescent have no gimbal at all — RCS is the
+  only rotation authority those phases have).
+  ⚠ **`Actuate` flips `false → true`** — the owner's own ruling on W23's Q1 option 1 ("W24 flips it"),
+  restated explicitly on this resume together with *"the next flight is the first time this commands a real
+  vessel"*. **STATED PLAINLY, as directed:** the recorded failure this host was built not to repeat (flight
+  194334 / `8225df7` A1 — a booster that lit an engine with uncontrolled attitude, diverged 2→85°, lost in
+  ~10 s, and kicked the upper stage on the way) is exactly the scenario this task closes the loop against;
+  `install` and glass time remain a SEPARATE owner gate per CLAUDE.md, so this code change alone flies nothing.
+- **`plugin/test/BoosterSteerTest.cs` (NEW)**, registered in `plugin/test/TestMain.cs` — 158 checks: output
+  always in `[-1,1]`/finite for a bounds+garbage sweep (NaN/Infinity in every argument); the rate ceiling
+  actually bounds the command regardless of error magnitude (directly re-creating and refuting §3.1's
+  divergence shape); a 400-tick closed-loop simulation from a 170° initial error (the flip's own scale) never
+  approaches the recorded 195–436 dps divergence and converges rather than runs away; the deadband is
+  observable and exactly suppresses small error when enabled while defaulting to zero/off; negative-feedback
+  sign and rate-damping behaviour. **What it does NOT prove:** every gain is `[UN-CONVERGED]` (§B16.8 ruling
+  2 — no recorded booster attitude flight exists, R1 §4.2) and the `|AoaDeg| <= AoaCapDeg` contract is
+  `pure/BoosterDescent.cs`'s own (proven, unmodified, in `BoosterTest.cs`) — this law only tracks whatever
+  `AimForward` it is handed and cannot manufacture an angle the guidance did not already cap.
+
+**ONE OPEN QUESTION**, posed per C1.13/C1.14 at the foot of `src/BoosterHost.cs` as **Q5**: the steering law's
+per-axis SIGN is fresh and UNVERIFIED — there is no recoverable final application line from the deleted
+`AttitudeController.cs` (R1 §3.2: code, not reference) and no recorded booster attitude flight to derive it
+from. Recommendation: fly as built (`PitchSign=YawSign=RollSign=+1.0`) and watch the first tick's telemetry —
+a wrong sign shows as an accelerating single-axis divergence within 1-2 seconds, and each sign is a one-line,
+no-recompile flip in `PluginData/tuning.cfg`.
+
+**VERIFY (C1.3):** `python plugin/build.py test` **GREEN — `ALL SUITES PASSED`, 0 failed.** New suite:
+"DragonScreen booster steering law tests (register W24) — 158 checks, 0 failed"; every other suite unchanged,
+including `BoosterTest`/`BoosterHostTest`. **No screen changed, so no preview PNG applies** — stated, not
+skipped. `git status` shows exactly the declared outputs: `plugin/src/pure/BoosterSteer.cs` (new),
+`plugin/test/BoosterSteerTest.cs` (new), `plugin/src/BoosterHost.cs` (attitude wiring + `Actuate=true`),
+`plugin/test/TestMain.cs` (one registration) and this register entry.
 
 ### W29 [S] `docs/reference/INSTALLED_MODS.md` omits ThrottleControlledAvionics — the register that C1.15 makes every task check is incomplete — **TODO** — [TIER 2: the gap already cost one task, and C1.15 points every future task at this file]
 Found by **W24**, 2026-09-04 (C1.1 — logged, not done: M1's file says in its own words that it is updated *"as
