@@ -2,8 +2,9 @@
 
 **Register:** LZ1 [S] — *"LZ/droneship sourcing — the per-mission table + the two missing statics."*
 **Reads:** `BUILD_PLAN.md` §B16.9 in full (the two-file KK placement schema).
-**Source-of-truth tier (§1.4):** verified-real, sourced per row below. Two group-centre coordinates could
-not be sourced to that tier — see **Open questions for the owner**.
+**Source-of-truth tier (§1.4):** verified-real, sourced per row below, except the two JRTI/ASOG group-centre
+coordinates in §2 — those are tier-3 COHERENT/representative, invented only after joint owner discussion
+(**Q1, RESOLVED 2026-09-04** — see **Open questions for the owner**).
 
 ## 1. The per-mission table
 
@@ -49,20 +50,115 @@ for OCISLY. Two files per droneship (`KerbalKonstructs/NewInstances/KK_GroupCent
 `<static>-instances.cfg`), same schema as the existing OCISLY placement (`RefLatitude`/`RefLongitude` is
 what guidance targets — the KK **group centre**, not a vessel position).
 
-**⚠ NOT WRITTEN — blocked on a real coordinate (§1.4 tier 3, owner discussion required).** Unlike LZ‑1 (a
-fixed ground pad with a published surveyed position, §3 below) or the existing OCISLY placement (already an
-established in-code aim point, `assess_flight.py:405`), a droneship's recovery position is **mission-variable
-by design** — SpaceX moves it along each flight's downrange track, not to a fixed dock coordinate. A
-search across Wikipedia, NASASpaceflight, space-offshore.com (a site specializing in droneship tracking)
-and SpaceX-RSS-RO community KK packs on GitHub (`pmborg/SpaceX-RO-Falcons` — a kOS-scripted vessel
-droneship, not a KK static; no config with real coordinates found) turned up only a **range**, never a
-single citable point: ASOG operates "300–650 km downrange from KSC/CCSFS" (space-offshore.com); JRTI's
-first Atlantic test was "~320 km NE of Cape Canaveral, ~266 km SE of Charleston SC" (Wikipedia/Planetary
-Society, a 2015 CRS-6-era position, not necessarily representative of its later 2022–23 Crew-5/6 slot).
-Picking one point within those ranges is **invention**, which CLAUDE.md §1.4 reserves for **joint owner
-discussion**, not a build chat's unilateral call. See the open question below — once the owner picks a
-candidate (or supplies a sourced one), the two-file pairs are a mechanical fill-in of the schema already
-proven by OCISLY.
+**Real basis, and why no single citable point exists.** Unlike LZ‑1 (a fixed ground pad with a published
+surveyed position, §3 below) or the existing OCISLY placement (already an established in-code aim point,
+`assess_flight.py:405`), a droneship's recovery position is **mission-variable by design** — SpaceX moves it
+along each flight's downrange track, not to a fixed dock coordinate. A search across Wikipedia,
+NASASpaceflight, space-offshore.com (a site specializing in droneship tracking) and SpaceX-RSS-RO community
+KK packs on GitHub (`pmborg/SpaceX-RO-Falcons` — a kOS-scripted vessel droneship, not a KK static; no config
+with real coordinates found) turned up only a **range**, never a single citable point: ASOG operates
+"300–650 km downrange from KSC/CCSFS" (space-offshore.com); JRTI's first Atlantic test was "~320 km NE of
+Cape Canaveral, ~266 km SE of Charleston SC" (Wikipedia/Planetary Society, a 2015 CRS-6-era position, not
+necessarily representative of its later 2022–23 Crew-5/6 slot).
+
+**Q1 RESOLVED (owner, 2026-09-04) — option 1: a representative point within the documented envelope, marked
+COHERENT, offset from OCISLY so the three groups don't overlap.** Both points below are computed from
+`Fossil_LZ1`'s real surveyed coordinate (`28.48583, -80.54444`, §3) using great-circle bearing/range —
+**COHERENT/representative, NOT historical fact** (same honesty standard as §14.4(e); no source states either
+droneship's exact recovery position for any of the six missions in §1).
+
+- **JRTI — bearing 045° (NE), 320 km**, matching the Planetary Society's stated "~320 km NE of Cape
+  Canaveral" test position directly (no corridor-offset needed; the real description already gives a single
+  bearing + range). Great-circle projection from `Fossil_LZ1` → **30.51, -78.18**. Sanity check against the
+  same source's second figure ("~266 km SE of Charleston SC", Charleston ≈ `32.7765, -79.9311`): this point
+  computes to ≈302 km from Charleston at a SE bearing — same ballpark as the stated 266 km, consistent with
+  a single-bearing approximation of a real, if dated, test position.
+- **ASOG — same corridor bearing as OCISLY, shorter range so the groups don't overlap.** OCISLY's own point
+  (`32.7875, -76.6445`) is itself ≈607 km from `Fossil_LZ1` at bearing ≈038° — near the top of ASOG's
+  documented 300–650 km envelope. Projecting the **same 038° bearing at 400 km** (mid-envelope, clearly
+  short of OCISLY's 607 km) keeps ASOG in "the same East-coast route" the recommendation described, without
+  the two groups coinciding: **31.27, -77.95**.
+
+`Heading` has no real source for either (droneship approach heading is set per-mission, same as position);
+carried forward at OCISLY's own value (`13.320014`) as a coherent default for the shared static model, not a
+sourced figure — flagged here so it reads as such, not silently copied.
+
+**Placement (proposed, not yet written into a live install — C7 preview-only gate).** Two files per
+droneship, same two-file schema §B16.9 records for OCISLY:
+
+`KerbalKonstructs/NewInstances/KK_GroupCenter_Earth_Just Read The Instructions.cfg`:
+```
+GROUPCENTER
+{
+    Group = Just Read The Instructions
+    CelestialBody = Earth
+    RefLatitude = 30.51
+    RefLongitude = -78.18
+    Heading = 13.320014
+    RadiusOffset = 0
+    SeaLevelAsReference = True
+}
+```
+
+`KerbalKonstructs/NewInstances/SpaceXbarge2-instances.cfg` (adds to the file the existing OCISLY instance
+already lives in — same static, a second `Instances` entry under its own `Group`):
+```
+STATIC
+{
+    pointername = SpaceXbarge2
+    Instances
+    {
+        UUID = <assign at placement time>
+        RelativePosition = 0,0,0
+        Orientation = 0,0,0
+        Group = Just Read The Instructions
+        LaunchSite
+        {
+            LaunchSiteName = Just Read The Instructions_SpaceXbarge2_0
+        }
+    }
+}
+```
+
+`KerbalKonstructs/NewInstances/KK_GroupCenter_Earth_A Shortfall Of Gravitas.cfg`:
+```
+GROUPCENTER
+{
+    Group = A Shortfall Of Gravitas
+    CelestialBody = Earth
+    RefLatitude = 31.27
+    RefLongitude = -77.95
+    Heading = 13.320014
+    RadiusOffset = 0
+    SeaLevelAsReference = True
+}
+```
+
+And a second `Instances` entry in the same `SpaceXbarge2-instances.cfg`:
+```
+STATIC
+{
+    pointername = SpaceXbarge2
+    Instances
+    {
+        UUID = <assign at placement time>
+        RelativePosition = 0,0,0
+        Orientation = 0,0,0
+        Group = A Shortfall Of Gravitas
+        LaunchSite
+        {
+            LaunchSiteName = A Shortfall Of Gravitas_SpaceXbarge2_0
+        }
+    }
+}
+```
+
+The `GROUPCENTER` node name and field set follow §B16.9's recorded field list (`Group`, `CelestialBody`,
+`RefLatitude`, `RefLongitude`, `Heading`, `RadiusOffset`, `SeaLevelAsReference`) and the `STATIC`/`Instances`
+shape §3 below already uses for `Fossil_LZ1` — this session did not open the live install to re-verify exact
+KK syntax (C7); the owner should confirm the node keyword against KK's in-game Group/Statics editor (the
+normal way to create these) when applying this at the next authorized `install` + glass-time session, same
+gate as §3's LZ‑1 block.
 
 ## 3. RTLS target — Fossil_LZ1
 
@@ -106,8 +202,12 @@ and glass time are a separate owner gate, per CLAUDE.md's preview-only build-go)
 
 ## Open questions for the owner (C1.14)
 
-**Q1 — JRTI and ASOG have no citable single real coordinate (only a documented downrange range). Which
-group-centre position should the two-file KK placement use?**
+**Q1 — RESOLVED (owner, 2026-09-04, via the overseer): option 1.** JRTI and ASOG group centres are now
+computed and written into §2 above, both marked COHERENT/representative per the owner's choice — see §2 for
+the method and the resulting coordinates. Original question preserved below for the record.
+
+**Q1 (as posed) — JRTI and ASOG have no citable single real coordinate (only a documented downrange range).
+Which group-centre position should the two-file KK placement use?**
 
 *Situation.* §2 above. LZ‑1 (fixed pad) and the existing OCISLY placement (an established in-code aim
 point) both have a defensible single coordinate; JRTI and ASOG do not — droneship position is genuinely

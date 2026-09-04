@@ -1950,7 +1950,7 @@ already are).
   recorded search result; anything found-but-not-installed is written up as an Open Question (C1.14), never
   installed.
 
-### LZ1 [S] LZ/droneship sourcing — the per-mission table + the two missing statics — **NEEDS-WORK 2026-09-04**
+### LZ1 [S] LZ/droneship sourcing — the per-mission table + the two missing statics — **DONE 2026-09-04**
 - **Read:** §B16.9 in full (the two-file KK placement schema is already there).
 - **Build:** Source the per-mission craft-name → recovery-target table as REAL FLIGHT DATA (§1.4 —
   verified-real first, marked where inferred). The 16 owner-supplied `docs/reference/<mission>.craft` files
@@ -1978,6 +1978,18 @@ already are).
   **S66**: sourcing this table surfaced that `MissionProfile.cs`'s `RecoveryMode` disagrees with the real
   record for 6 missions (Crew-7/8/9/10, Ax-4, Crew-11 — coded Droneship, really RTLS) — out of LZ1's scope,
   not fixed here.
+- **Closed 2026-09-04.** Owner answered **Q1** (asked in this chat via `AskUserQuestion`, not self-decided —
+  C1.12): **option 1**, the doc's own recommendation. `docs/reference/LZ_RECOVERY_TABLE.md` §2 now carries
+  JRTI (`30.51, -78.18`, bearing 045°/320 km from `Fossil_LZ1`, matching the Planetary Society's stated test
+  position) and ASOG (`31.27, -77.95`, same ≈038° corridor bearing as OCISLY's real point but at 400 km vs
+  OCISLY's ≈607 km, so the groups don't overlap) as COHERENT/representative group centres, each with the
+  proposed two-file KK placement (`GROUPCENTER` + `STATIC`/`Instances`), same **proposed-not-installed**
+  framing §3 already used for `Fossil_LZ1` (C7 preview-only gate — none of this was written to a live
+  install). All three done-criteria now met: table (8 droneship + 8 RTLS, sourced), both droneships placed
+  (proposed, group-centre-verified against their documented envelopes), RTLS target confirmed placed.
+  **VERIFY (C1.3):** docs-only change, no code touched — build/preview gate does not apply per the C1.3
+  exception; `python plugin/build.py test` still run as the no-regression check, green (957+ checks across
+  all suites, unaffected). `git status` showed only `docs/reference/LZ_RECOVERY_TABLE.md` changed.
 
 ---
 
