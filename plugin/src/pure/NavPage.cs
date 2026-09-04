@@ -788,17 +788,26 @@ namespace DragonScreen
             // the page says one thing twice rather than two different things. On a DEORBIT the
             // number is meaningful and is shown, and the marker is still absent, because the point
             // is still underground: the number is a target, the marker would be a location.
+            // ---- LABELS OFFSET ALONG THE LOCAL NORMAL, NOT A FLAT 10 PX DOWN (S83) ----
+            // The box marks a point ON the conic and does not move. At true anomaly 0 and pi the
+            // conic's tangent (d/dnu of r*cos nu, r*sin nu) is exactly vertical for every
+            // eccentricity - apsis is where dr/dnu = 0, so only the r*(-sin nu, cos nu) term
+            // survives and it points straight up/down. A label dropped straight down from the box
+            // therefore sits ON that tangent every time; offset HORIZONTALLY (the local normal)
+            // instead, outward from the focus, and it can never land on the arc. Same 10 px gap
+            // from the box centre the old vertical offset used, just turned 90 degrees.
+            float labelY = cy - 7f;   // vertical centre of the 12 px Dense line against the 10 px box
             float pxA = cx - (float)(rA * scale);
             if (closed)
             {
                 float pxP = cx + (float)(rP * scale);
                 dl.Box(pxP - 5f, cy - 5f, 10f, 10f, 2f, DragonPalette.Text3);
-                dl.Text("PE", pxP, cy + 10f, Typography.Dense, TextAlign.Centre, DragonPalette.Text5);
+                dl.Text("PE", pxP + 10f, labelY, Typography.Dense, TextAlign.Left, DragonPalette.Text5);
             }
             if (anyArc)
             {
                 dl.Box(pxA - 5f, cy - 5f, 10f, 10f, 2f, DragonPalette.Text3);
-                dl.Text("AP", pxA, cy + 10f, Typography.Dense, TextAlign.Centre, DragonPalette.Text5);
+                dl.Text("AP", pxA - 10f, labelY, Typography.Dense, TextAlign.Right, DragonPalette.Text5);
             }
 
             // ---- SAY WHY THE LINE STOPS ----

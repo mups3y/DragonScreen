@@ -3942,7 +3942,13 @@ surface-intersection rule) at every reachable zoom. **All met — evidence below
 
 #### Open questions for the owner (C1.14) — S43
 
-**S43-Q3. Does the ORBIT page OPEN at the whole-orbit view, or at a default zoom?**
+- ✅ **OWNER RULING, 2026-09-04, via the overseer: S43-Q3 = OPTION 1, THE PAGE OPENS AT THE WHOLE
+  ORBIT.** That is exactly what S43 already built — it chose the no-behaviour-change default and
+  posed the question rather than deciding it. **No code change from this ruling**; it closes
+  S43-Q3 (below) so it does not sit open on a line already marked DONE.
+
+**S43-Q3. Does the ORBIT page OPEN at the whole-orbit view, or at a default zoom? — ANSWERED, see
+ruling above (option 1, as built).**
 *Situation.* The ruling settled the mechanism and explicitly left this open — option 2's text says "the
 DEFAULT render stays a hairline **unless a default zoom is also chosen**". It is now a one-line change
 (`MapProjection.Default()` sets `OrbitZoom`), and both answers are rendered: `page2_nav_orbit_leo_x1.png` is
@@ -7603,7 +7609,7 @@ pre-empt it.
 **DONE when:** EITHER the stranded UI's fate is settled and this screen is retired with a note (nothing to
 fix), OR it is harvested to a reachable surface and the block is then fixed with S38/S39's remedy and pinned.
 
-### S83 [S] The ORBIT plot's apsis LABEL can sit on the arc it marks — **TODO** — [TIER 4: hygiene]
+### S83 [S] The ORBIT plot's apsis LABEL can sit on the arc it marks — **DONE 2026-09-04** — [TIER 4: hygiene]
 Noticed by **S43**, 2026-09-04, in `page2_nav_orbit_suborbital_x4.png`, and **deliberately not fixed there**
 (C1.1, and a stronger reason below). The `AP` / `PE` boxes are drawn ON the conic, which is correct — they
 mark a point on the orbit — but their text label is placed a flat **10 px below the box** with no regard for
@@ -7618,3 +7624,48 @@ placement (a text offset), not the marker's.
 **DONE when:** either the owner confirms the label may be offset along the local normal (or flipped to the
 inside) so it never lies on the arc, and it is done and previewed at both scales; or the line records that
 the flat offset is accepted and closes.
+
+- ✅ **OWNER RULING, 2026-09-04, via the overseer: FIX IT, THE NARROW WAY.** The label offset is
+  authorised. **The box does NOT move** — it stays exactly where it was, on the conic, marking the
+  apsis; only the label's placement changes. This is emphatically **not** S43-Q1's option 4 (moving
+  the box+label radially with a leader), which the owner did not choose — nothing about the box or
+  the marker changed here.
+
+**What was built.** `pure/NavPage.cs`, `Orbit(..., MapView view)`: the true-anomaly parametrisation
+r(nu)=p/(1+e cos nu) has dr/dnu = 0 exactly at nu=0 and nu=pi (the apsides, by definition of "the
+radius stops changing there"), so the conic's tangent there is the pure r*(-sin nu, cos nu) term,
+which is exactly VERTICAL for every eccentricity — not "sometimes near-vertical", always exactly so.
+A label dropped straight down from the box therefore always sits on that tangent; the fix drops the
+vertical offset and moves the label HORIZONTALLY instead — the local NORMAL at the apsis — outward
+from the focus: PE's label to the right of its box, AP's label to the left of its box. Same 10 px gap
+from the box centre the old vertical offset used (box half-width 5 + 5 px clearance), just turned
+90 degrees; vertical position centres the 12 px Dense line on the 10 px box using the same
+`(h-size)*0.5-1` convention already used elsewhere (GateCard, PageAction). The box-drawing lines
+(`dl.Box(...)`) are byte-for-byte untouched — only the two `dl.Text(...)` calls changed. Diff is
+6 lines touched, both `dl.Text` calls only.
+
+#### Gate (C1.3)
+- **`python plugin/build.py test` GREEN**, all suites, 0 failed.
+- **`python plugin/build.py preview` re-rendered and every scene with an AP/PE box INSPECTED**
+  (zoomed crops for the two flagged ones):
+  - `page2_nav_orbit_suborbital_x4.png` (the scene this was logged from, ×4) — **fixed**: `AP` sits
+    clear to the left of its box, off the cyan arc entirely, confirmed on a pixel-cropped zoom.
+  - `page2_nav_orbit_suborbital.png` (the SAME scene at ×1, predating the zoom per this line's own
+    text) — **fixed**, same check, same result.
+  - `page2_nav_orbit_leo_x1.png` / `page2_nav_orbit.png` — both AP and PE visible on the full ring,
+    both labels clear of it, PE now reading to the right, AP to the left.
+  - `page2_nav_orbit_suborbital_kerbin.png` — AP clear of the arc.
+  - `ui_navorbitplot.png` / `ui_navorbitplot_notarget.png` (the Figma-built NAV page reusing the same
+    `Orbit()`) — both labels clear.
+  - `page2_nav_orbit_kerbin_x4.png`, `page2_nav_orbit_leo_x4.png`, `page2_nav_orbit_leo_x8.png`,
+    `page2_nav_orbit_leo_x4_pan.png` — no apsis box in frame at these zoom/pan states (same as
+    before this change; unaffected).
+  - **PER-PAGE QC:** every string in its box, no overlap, no clipping, legible at IVA distance, on
+    every scene checked.
+- **THE BOXES ARE UNMOVED — confirmed by inspection, not just by not touching the code.** The AP/PE
+  markers sit at the exact same screen positions in every re-rendered PNG as they did before
+  (same distance from the limb/globe, same side of the conic); only the label text moved. The
+  `git diff` for this task touches only the two `dl.Text(...)` calls — the two `dl.Box(...)` calls
+  read identically before and after.
+- ⛔ No `install`, no glass time — preview-only, per the standing go (C1.12).
+- **Files:** `plugin/src/pure/NavPage.cs`.
