@@ -1197,6 +1197,12 @@ namespace DragonScreen.BlackBox
                 BlackBoxSchema.Set(c, BlackBoxCols.LoopAC, ps.Cabin.LoopAC);
                 BlackBoxSchema.Set(c, BlackBoxCols.LoopBC, ps.Cabin.LoopBC);
                 BlackBoxSchema.Set(c, BlackBoxCols.CamView, ps.CameraView);
+                // S86: shared by all three displays (ScreenPainter.Brightness is one static, not a
+                // per-panel one), so the three columns legitimately carry the same value.
+                int brightness = ScreenPainter.Brightness;
+                BlackBoxSchema.Set(c, BlackBoxCols.BrightnessL, brightness);
+                BlackBoxSchema.Set(c, BlackBoxCols.BrightnessC, brightness);
+                BlackBoxSchema.Set(c, BlackBoxCols.BrightnessR, brightness);
 
                 // ⛔ READ ONLY. KER's fuel-flow solve is ALREADY driven by `VesselData.cs:719` on the
                 // screens' tick; calling `KerBridge.RequestUpdate()` here would double a whole-part-tree
@@ -1244,6 +1250,8 @@ namespace DragonScreen.BlackBox
             BlackBoxSchema.Set(c, BlackBoxCols.BoostThrottle, BoosterHost.Throttle);
             BlackBoxSchema.Set(c, BlackBoxCols.BoostPhase, BoosterHost.Phase.ToString());
             BlackBoxSchema.Set(c, BlackBoxCols.BoostUncommanded, BoosterHost.AttitudeUncommanded);
+            // BB9: WHY, decoded the same way boost_phase is — the stable enum name, not BlockNote's prose.
+            BlackBoxSchema.Set(c, BlackBoxCols.BoostBlock, BoosterHost.Block.ToString());
         }
 
         // ============================== writing ==============================

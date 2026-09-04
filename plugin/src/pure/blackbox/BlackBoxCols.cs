@@ -131,6 +131,7 @@ namespace DragonScreen.BlackBox
         public static readonly int BoostThrottle = BlackBoxSchema.Index("boost_throttle");
         public static readonly int BoostPhase = BlackBoxSchema.Index("boost_phase");
         public static readonly int BoostUncommanded = BlackBoxSchema.Index("boost_uncommanded");
+        public static readonly int BoostBlock = BlackBoxSchema.Index("boost_block");   // BB9
         public static readonly int GncEngaged = BlackBoxSchema.Index("gnc_engaged");
         public static readonly int ModeIndex = BlackBoxSchema.Index("mode_index");
         public static readonly int GncModule = BlackBoxSchema.Index("gnc_module");
@@ -162,6 +163,9 @@ namespace DragonScreen.BlackBox
         public static readonly int PageC = BlackBoxSchema.Index("page_c");
         public static readonly int PageR = BlackBoxSchema.Index("page_r");
         public static readonly int CamView = BlackBoxSchema.Index("cam_view");
+        public static readonly int BrightnessL = BlackBoxSchema.Index("brightness_l");   // S86
+        public static readonly int BrightnessC = BlackBoxSchema.Index("brightness_c");   // S86
+        public static readonly int BrightnessR = BlackBoxSchema.Index("brightness_r");   // S86
         public static readonly int Bus1On = BlackBoxSchema.Index("bus1_on");
         public static readonly int Bus2On = BlackBoxSchema.Index("bus2_on");
         public static readonly int StrA1 = BlackBoxSchema.Index("str_a1");

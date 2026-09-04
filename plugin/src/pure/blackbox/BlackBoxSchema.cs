@@ -342,6 +342,11 @@ namespace DragonScreen.BlackBox
             Cond("boost_throttle",    "0..1", Tier.R1, "ksp-direct", "BoosterHost.Throttle",    WhenBooster),
             Cond("boost_phase",       "enum", Tier.R2, "ksp-direct", "BoosterHost.Phase",       WhenBooster),
             Cond("boost_uncommanded", "0/1",  Tier.R2, "ksp-direct", "BoosterHost.AttitudeUncommanded — the axes were NOT held this tick", WhenBooster),
+            // BB9: WHY boost_uncommanded is 1 this tick. `BoosterHost.Block`, the stable enum
+            // `BoosterHostPlan.BlockedFor` returns (NotArmed/Packed/NoOctaweb/WrongEngineForPhase/
+            // HoldOff/None) — recorded by name (`.ToString()`), exactly as boost_phase is, so a reader
+            // filters on it without depending on BlockNote's prose, which Annunciation is free to reword.
+            Cond("boost_block", "enum", Tier.R2, "ksp-direct", "BoosterHost.Block", WhenBooster),
 
             // ================= E — GUIDANCE (§2.5) =================
             // The seams are idle (`src/_AutopilotStub.cs`). gnc_engaged and mode_index have REAL writers
@@ -389,6 +394,16 @@ namespace DragonScreen.BlackBox
             CondCap("page_c",   "enum", Tier.R2, "screens", "PageState.ScreenPages[2]", WhenScreens),
             CondCap("page_r",   "enum", Tier.R2, "screens", "PageState.ScreenPages[3]", WhenScreens),
             CondCap("cam_view", "int",  Tier.R3, "screens", "VesselData.CameraView",    WhenScreens),
+            // S86: `ScreenPainter.Brightness` is a SHARED static (one cabin brightness knob, not a
+            // per-panel one — see its own header) so all three columns legitimately carry the SAME
+            // value every tick; that is the real behaviour of this mod, not a fabrication. `cover_cam`
+            // and `cover_phase` are NOT declared here — see S86's register line for why an honest single
+            // column cannot be built for them (they are independent per-`ScreenPainter`-instance state,
+            // one screen per column with no such split, and any one-of-three pick would misrepresent the
+            // other two).
+            CondCap("brightness_l", "tenths", Tier.R3, "screens", "ScreenPainter.Brightness", WhenScreens),
+            CondCap("brightness_c", "tenths", Tier.R3, "screens", "ScreenPainter.Brightness", WhenScreens),
+            CondCap("brightness_r", "tenths", Tier.R3, "screens", "ScreenPainter.Brightness", WhenScreens),
 
             // ================= H — SYSTEMS, ENVIRONMENT AND FAULTS (§2.8) =================
             // FlightCommands.State is the systems model itself and exists whether or not the screens

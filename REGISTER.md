@@ -3364,6 +3364,79 @@ an owner call — flagged here only so it is not lost behind the question above.
 - **DONE when:** the schema carries per-bank ignitions sampled in flight, and a recorded flight shows real
   in-flight values (not just -1, and not just a PRELAUNCH artifact) for at least one bank.
 
+### BB9 [S] `boost_uncommanded` says the axes were not held; nothing says WHY — **DONE 2026-09-05** — [TIER 1: the same defect class as BB5/BB6/S90 — a channel that exists but cannot say what happened]
+🟢 Owner-directed via the overseer, 2026-09-05. Batched with **[[S86]]** (same task, same schema file, both
+pure append-only column additions to `pure/blackbox/BlackBoxSchema.cs` — see below for why the batching was
+safe). Cross-links: **[[OCT4]]** (the audit that surfaced the gap while answering OCT4-Q1), **[[BB5]]**/
+**[[BB6]]** (the sibling telemetry-blindness defects this is the same class as).
+
+**The gap, as found (before this line's own edit — see Build below for the post-edit lines).**
+`BoosterHost.cs:574-575` computed, every tick, the reason no command may leave the host:
+```
+BoosterCommandBlock block = BoosterHostPlan.BlockedFor(Actuate, snap, sep, Now() - bindUT, c);
+BlockNote = BoosterHostPlan.Annunciation(block);
+```
+The recorder carries `boost_uncommanded` (`BlackBoxSchema.cs` — "the axes were NOT held this tick") and
+NOTHING that says why. A recording can show `boost_uncommanded = 1` with `boost_throttle` frozen, and
+`NotArmed`, `Packed`, `NoOctaweb`, `WrongEngineForPhase` and `HoldOff` are indistinguishable in the file.
+
+**Why it matters, concretely.** OCT1's 264 refusals were only diagnosable once the reason was named in the
+log; **OCT4-Q1** — the standing-`WrongEngineForPhase` policy question this same session raised while fixing
+OCT4's gate-wiring defect — is explicitly recommended to be revisited "if a recorded landing burn ever shows
+a standing refusal" (option 4/the follow-up to the chosen option 1). **That revisit cannot happen while the
+telemetry cannot tell the five block reasons apart from each other or from a healthy `WrongEngineForPhase`
+blip.** This is the same defect class as [[BB5]] (`alt_m` silently blank, poisoning a verdict) and [[BB6]]
+(a coverage pass blind to a partially-written column): a channel exists, is even written every tick, and
+still cannot say what happened.
+
+**Build.** Appended `boost_block` to `BlackBoxSchema.Columns`, beside `boost_uncommanded`: `Conditional`
+(a real source — a bound, armed booster — can legitimately be absent), `Scope.Vessel`/`WhenBooster` (this is
+the BOOSTER's own state, never the capsule's, exactly as `boost_uncommanded`/`boost_phase` already are —
+NOT `CondCap`), same `Tier.R2` as its sibling. **Recorded the STABLE ENUM, not `BlockNote`'s prose**: added
+`BoosterHost.Block` (a new `static BoosterCommandBlock lastBlock` field + read-only property, reset to
+`None` at both existing `Refusal = null; BlockNote = null;` reset points — fresh-bind in `TryBind` and
+`Release` — and assigned beside `BlockNote` at the one call site), written via `.ToString()` **exactly as
+`boost_phase` already decodes `BoosterHost.Phase`** — so the two columns decode the same way, and a reader
+filters on `NotArmed`/`Packed`/`NoOctaweb`/`WrongEngineForPhase`/`HoldOff`/`None` rather than on
+`Annunciation`'s prose, which is free to reword.
+
+**⛔ SchemaVersion untouched — this is a pure append.** `boost_block` was inserted textually beside
+`boost_uncommanded` (readability only); nothing existing was reordered or removed, so `SchemaVersion` stays
+1 (asserted: `BlackBoxTest.ScopeDeclarations` checks `SchemaVersion == 1` and still passes).
+
+**Why batching S86 into this task was safe, stated per this task's own brief.** Both lines needed to append
+`Col` entries to the SAME `BlackBoxSchema.cs` array and the SAME `BlackBoxCols.cs` index list for values
+that already exist in the tree; running them in separate chats would have meant two sessions editing one
+schema file back-to-back for no benefit. Neither touches `S84` (blocked on `pure/RcsAccounting.cs`, untouched
+here), `S85` (the `control_id` design question, untouched here) or `BB5`–`BB8` (their own TODO lines, read
+for cross-reference only, not edited).
+
+**Verification, stated plainly (BB6 applies — see S86's line for the shared limitation in full).** Headless:
+`boost_block` exists, binds in `BlackBoxCols`, is `Conditional`/`Scope.Vessel`/`Tier.R2` matching its
+siblings (`BlackBoxTest.Schema()` + `ScopeDeclarations()`'s `perVessel` list); `BoosterCommandBlock`'s six
+values decode to six distinct, non-empty names (a new assertion — the property the recording actually
+depends on); `BlackBoxCoverage` reports zero defects on a fully-filled synthetic booster stream.
+**MUTATION-PROVEN:** the `boost_block` `Col` entry was removed from `BlackBoxSchema.Columns`, `build.py test`
+went red — 4 named failures (`boost_block exists`, `...is declared Conditional...`, `...rides the same
+tier...`, and the generic `ScopeDeclarations` per-vessel check) — then restored; `build.py test` green again
+(1705 checks, 0 failed). NOT verified, and cannot be headlessly: `BoosterHost.cs`/`BlackBoxRecorder.cs` are
+glue (`src/`, not `src/pure/`) and are excluded from the `test`/`preview` compiles by `build.py` itself
+(`build.py:199-213`) — so whether `BoosterHost.Block` actually reads the SAME tick's `BlockedFor` result
+that reaches `BlockNote`, and whether the value that lands in the CSV really is `BoosterHost.Block` and not
+some other tick's, is unverifiable outside the game; that is register **BB4**'s job on a real flight, exactly
+as it already is for `boost_phase`/`boost_uncommanded`/the whole booster observability block. Separately: the
+FULL glue compile (`python plugin/build.py`, in-repo DLL only, no `install`, no owner gate needed) succeeds
+clean.
+
+**⛔ SCOPE — what this line did NOT touch.** `S84`, `S85`, `BB5`–`BB8` untouched (read only). OCT3's gate,
+OCT4's fix, OCT6's shed latch and the OCT4-Q1 POLICY question itself (hold/shut/abort on a standing
+`WrongEngineForPhase`) are UNCHANGED — this line adds OBSERVABILITY for that question, it does not answer it.
+No install, no glass time.
+
+**DONE when** (met): `boost_block` appended with correct `Fit`/`Scope`/tier, `BoosterHost.Block` wired
+beside `BlockNote`, `SchemaVersion` still 1, headless tests added and mutation-proven, `build.py test` and
+`build.py preview` green, what could not be verified stated plainly.
+
 ---
 
 ## Part B — autopilot (§B12.6 order; all [O])
@@ -9116,17 +9189,99 @@ BlackBox would make excision a code edit in a screen file instead of a delete.
 enum, `acted`, `press_kind`, the lamp, and the `alarm_mask`/`sev_system` at that instant; excisability is
 re-tested by physical removal exactly as BB1 did.
 
-### S86 [S] Three screen-state columns the BlackBox cannot reach — `brightness_l/c/r`, `cover_cam`, `cover_phase` — **TODO** — [TIER 4: hygiene — a §2.7 column set with no accessor]
-Logged by **BB1**, 2026-09-04 (C1.1).
-**The gap.** §2.7 lists `brightness_l/c/r` (R3), `cover_cam` and `cover_phase` (R3). All three are state of
-a **`ScreenPainter` INSTANCE** (`brightness` `:249`, `coverCam` `:90`, `coverPhase` `:84`) with no public or
-internal accessor; `ps.Brightness` is written onto a per-screen LOCAL copy of `PageState` (`:915`), not onto
-the shared `VesselData.State`. BB1 left them out of the schema rather than declaring columns it cannot fill.
-`cam_view` IS recorded — `VesselData.CameraView` is internal and reachable.
-**DONE when:** either a read-only accessor exists (a static array the three painters publish into, exactly
-as `livePage` already does at `:199`/`:280-283` — which is the precedent and costs one line each) and the
-columns are appended as `Conditional`, or this line records the decision not to carry them.
-⚠ Adding an accessor does NOT break BB1's excisability: the arrow still points BlackBox → tree.
+### S86 [S] Three screen-state columns the BlackBox cannot reach — `brightness_l/c/r`, `cover_cam`, `cover_phase` — **DONE (PARTIAL) 2026-09-05** — [TIER 4: hygiene — a §2.7 column set with no accessor]
+Logged by **BB1**, 2026-09-04 (C1.1). Batched with **[[BB9]]** (same task, same schema file, both pure
+append-only column additions — see BB9's line for why batching the two was safe).
+**The gap, as found.** §2.7 lists `brightness_l/c/r` (R3), `cover_cam` and `cover_phase` (R3). All three are
+state of a `ScreenPainter` instance (`brightness` `:208`, `coverCam` `:90`, `coverPhase` `:84`) with no
+public or internal accessor; `ps.Brightness` is written onto a per-screen LOCAL copy of `PageState`
+(`ScreenPainter.cs:915` at the time BB1 found this; `:923` after this line's own edits above it shifted it),
+not onto the shared `VesselData.State`. BB1 left them out of the schema rather
+than declaring columns it cannot fill. `cam_view` IS recorded — `VesselData.CameraView` is internal and
+reachable.
+
+**BRIGHTNESS: BUILT, following the `livePage` precedent named by the line.** `brightness` (`ScreenPainter.cs:208`)
+is `private static`, SHARED BY ALL THREE DISPLAYS BY DESIGN (its own header comment: "dimming for a night
+pass and having only the display you touched go dark would be a bug, not a feature") — so unlike `coverCam`/
+`coverPhase` below, there is exactly ONE real value, and a `livePage`-style per-screen array was unnecessary:
+one `internal static int Brightness { get; }` (`ScreenPainter.cs:208` area) reads the existing static field.
+Appended `brightness_l/c/r` to `BlackBoxSchema` as `CondCap`/`Conditional`/`Scope.Capsule` (same treatment as
+`page_l/c/r`/`cam_view` — screens hardware, not whichever vessel is focused), `WhenScreens`. Wired in
+`BlackBoxRecorder.PutScreens`'s R3 (`slow`) branch, beside `cam_view`, under the SAME focused-vessel +
+`ps.Valid` guard that already implements `WhenScreens` for that block. All three columns legitimately carry
+the IDENTICAL value every tick — that is the real, shared-by-design behaviour of this mod, not a
+fabrication (contrast with a `Scope.Capsule` LEAK, which is a *different* vessel's value; this is the SAME
+vessel's one real reading, reported three times because the schema asks for three columns).
+
+**COVER_CAM / COVER_PHASE: NOT CARRIED — S86's own allowed alternative, taken with reason.** Unlike
+`brightness`, `coverCam` (`ScreenPainter.cs:90`) and `coverPhase` (`:84`) are genuinely PER-INSTANCE — each
+of the three `ScreenPainter`s holds its own, independently mutated by that screen's own touches
+(`:450/:452` and `:682` respectively, at this line's own edited revision), with no synchronisation between
+them (confirmed: `grep` for `coverCam =`/`coverPhase =`
+finds no cross-instance write, unlike `livePage`/`Publish()` which explicitly IS the cross-instance
+mechanism). §2.7 / `docs/BLACKBOX_RESEARCH.md:352` names `cover_cam`/`cover_phase` as ONE column each (no
+l/c/r split, unlike `brightness_l/c/r` — a distinction this task's own brief preserves), and — concretely,
+not hypothetically — **every screen can default there simultaneously**: `ScreenPainter.Configure`
+(`:246-248`) starts every screen at page index 0 in `FigmaMode`, which IS `UiPage.Cover`, on any mission
+without a prior save. So on an ordinary flight three independent `coverCam`/`coverPhase` values can exist at
+once, and the single documented column name has no rule for picking one without inventing a policy §1.4
+reserves for owner discussion (not a build chat) — the same class of error the `Scope` header warns against
+("writing capsule state onto an unfocused booster's row... a fabrication, not a recording"), one level up:
+picking ONE of three equally-live screens and calling it "the" cover state would misrepresent the other two.
+**Taking S86's explicitly-allowed alternative:** the columns are NOT declared. `BlackBoxTest.Schema()` now
+asserts `BlackBoxSchema.Index("cover_cam") < 0 && Index("cover_phase") < 0` — a positive assertion of the
+decision, so a future add is deliberate, not a silent gap. Open question posed to the owner below (C1.14).
+
+**Verification, stated plainly (BB6 applies).** What IS verified, headlessly: the four new columns
+(`brightness_l/c/r` here, `boost_block` in BB9) exist, bind in `BlackBoxCols`, and declare the right
+`Fit`/`Scope`/tier (`BlackBoxTest.Schema()` + `ScopeDeclarations()`); `BlackBoxCoverage` reports no defect
+against a fully-filled synthetic row; and each is MUTATION-PROVEN — its `BlackBoxSchema.Columns` entry was
+removed, `build.py test` went red (named failures, both `Schema()`'s explicit checks and the generic
+`ScopeDeclarations()` list), then restored to green. What is NOT and CANNOT be verified headlessly, and BB6
+is exactly why a green run here is not proof of correctness: `ScreenPainter.cs`/`BlackBoxRecorder.cs` are
+glue (`src/`, not `src/pure/`) and `build.py test`/`preview` compile `src/pure` + `test`/`preview` ONLY
+(`build.py:199-213` — the same limitation `BoosterHostTest.cs` already states for `BoosterHost.cs`), so the
+ACTUAL glass-time wiring — does `PutScreens` really read the live `ScreenPainter.Brightness` into the right
+cell on the right tick — cannot be exercised by any test in this repo; that is register **BB4**'s job, on a
+real flight. Separately confirmed by running the FULL glue compile (`python plugin/build.py`, no `install` —
+produces `plugin/GameData/DragonScreen/DragonScreen.dll` in-repo only, not the KSP install, so no gate is
+needed): compiles clean, only pre-existing unrelated warnings.
+⚠ Adding the accessor did NOT break BB1's excisability: the arrow still points BlackBox → tree — the
+painter publishes a value; nothing in `ScreenPainter.cs` calls into `BlackBox.*`.
+
+#### Open questions for the owner (C1.14)
+
+**S86-Q1 — `cover_cam`/`cover_phase` are per-screen state with no single canonical value. Split them into
+`_l/c/r` columns, pick a canonical screen, or leave them uncarried?**
+*(Paste-ready for the overseer, C1.13.)*
+
+**Situation.** S86 asked for a read-only accessor onto `ScreenPainter.coverCam`/`coverPhase` so the BlackBox
+could record which Cover-page camera view and deorbit phase a screen is showing (§2.7). `brightness_l/c/r`
+built cleanly, because `brightness` is one shared static by design. `coverCam`/`coverPhase` are NOT shared —
+each of the three screens holds its own, independently, and any of them can be showing the Cover page (all
+three default there on a fresh mission). §2.7's spec names `cover_cam`/`cover_phase` as ONE column each,
+with no rule for which screen's value that column means when more than one screen legitimately differs.
+
+**The decision needed.** How should `cover_cam`/`cover_phase` be recorded, if at all?
+1. **Split into `cover_cam_l/c/r` and `cover_phase_l/c/r`** — six columns, matching `brightness_l/c/r`'s
+   shape and `page_l/c/r`'s precedent exactly. Fully honest; no canonical-screen guess. Costs three columns
+   each and deviates from `docs/BLACKBOX_RESEARCH.md:352`'s existing (un-suffixed) naming, which would need
+   a `SUPERSEDED`-style update (C7.1).
+2. **Pick a canonical screen** (e.g. CENTRE, `ScreenPainter.cs`'s own `CentreScreenIndex = 2` — "shared by
+   both seats" is already this project's precedent for a shared/singleton reading) and record ONLY that
+   screen's `coverCam`/`coverPhase`, with the manifest `Note` stating the limitation. Matches the spec's
+   existing single-column naming with no doc change. Silently wrong the moment a LEFT or RIGHT screen is
+   the one actually on Cover with a crew member looking at it — a real, not hypothetical, gap.
+3. **Leave them uncarried** (today's state, this line's outcome) until real telemetry shows how often
+   screens diverge on Cover — S86 already took this option and can be revisited on evidence rather than a
+   guess now.
+
+**Recommendation: (3), as already taken, with (1) as the fix if a recorded flight or the owner's own use of
+the screens shows simultaneous divergent Cover viewing matters for what the BlackBox is for.** (2) is the
+one to avoid on the CURRENT evidence: it manufactures a single number that reads as authoritative while
+silently dropping two-thirds of the real state, which is the exact failure class §4.8/the `Scope` header
+exist to prevent. No gate-open or `OVERRIDE` is needed for any option — this is a new column-shape decision,
+not a change to a settled decision.
 
 ### S87 [S] Three docking/phasing quantities reach `PageState` only as FORMATTED TEXT — **TODO** — [TIER 3: a real value that survives only as a string]
 Logged by **BB1**, 2026-09-04 (C1.1).

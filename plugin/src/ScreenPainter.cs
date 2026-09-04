@@ -208,6 +208,14 @@ namespace DragonScreen
         private static int brightness = SettingsPage.MaxBright;
 
         /// <summary>
+        /// S86: read-only so the BlackBox (`src/BlackBoxRecorder.cs`) can record the cabin brightness
+        /// setting without the screens taking a dependency on it — the arrow stays BlackBox -> tree,
+        /// exactly as it does for `livePage`. Shared by all three displays (see `brightness` above), so
+        /// the three `brightness_l/c/r` columns legitimately carry the same value every tick.
+        /// </summary>
+        internal static int Brightness { get { return brightness; } }
+
+        /// <summary>
         /// Chrome values. PLACEHOLDERS until the data layer exists, and cached rather than formatted
         /// per frame even though they are constant - because the moment they become live, formatting
         /// in the draw path is the bug that would appear, and the shape of the code should not have

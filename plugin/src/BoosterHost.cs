@@ -269,6 +269,12 @@ namespace DragonScreen
         public static string Refusal { get; private set; }        // the FSM's own refusal, verbatim
         public static string BlockNote { get; private set; }      // why no command left the host this tick
 
+        /// <summary>BB9: the SAME reason as `BlockNote`, as the stable enum `BoosterHostPlan.BlockedFor`
+        /// returned, for a recording to filter on — `BlockNote` is prose and `Annunciation`'s wording is
+        /// free to change; this is not.</summary>
+        public static BoosterCommandBlock Block { get { return lastBlock; } }
+        static BoosterCommandBlock lastBlock;
+
         // =========================================================================================
         // THE TICK
         // =========================================================================================
@@ -356,7 +362,7 @@ namespace DragonScreen
             fbwPitch = 0.0; fbwYaw = 0.0; fbwRoll = 0.0;
             steerPitchDeadbanded = false; steerYawDeadbanded = false; steerRollDeadbanded = false;
             steerDeadbandDeg = 0.0;
-            Refusal = null; BlockNote = null;
+            Refusal = null; BlockNote = null; lastBlock = BoosterCommandBlock.None;
 
             // The TARGET MODE, from an in-repo source and nothing else: the vessel name → the mission
             // catalog → `RecoveryMode` → `TargetMode`. An unresolved name falls back to ASDS, whose
@@ -572,6 +578,7 @@ namespace DragonScreen
             // gate and the FSM cannot be handed a different tick's answer or be missing one.
             double sep = SeparationM(v);
             BoosterCommandBlock block = BoosterHostPlan.BlockedFor(Actuate, snap, sep, Now() - bindUT, c);
+            lastBlock = block;                                  // BB9: the stable reason, beside the prose
             BlockNote = BoosterHostPlan.Annunciation(block);
 
             if (block == BoosterCommandBlock.None) Dispatch(v, c, steer);
@@ -916,7 +923,7 @@ namespace DragonScreen
             steerPitchDeadbanded = false; steerYawDeadbanded = false; steerRollDeadbanded = false;
             steerDeadbandDeg = 0.0;
             landedSinceUT = -1.0;
-            AimForward = Vec3.Zero; Refusal = null; BlockNote = null;
+            AimForward = Vec3.Zero; Refusal = null; BlockNote = null; lastBlock = BoosterCommandBlock.None;
             SteerPitch = 0.0; SteerYaw = 0.0; SteerRoll = 0.0;
             lastBindVerdict = BoosterBind.NoVessel;
         }

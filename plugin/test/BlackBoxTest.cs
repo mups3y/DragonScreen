@@ -106,6 +106,43 @@ public static class BlackBoxTest
         Check(BlackBoxCols.BoostDbDeg >= 0,
               "the booster deadband-VALUE column exists (owner Q2, BoosterSteer.cs:43)");
 
+        // ⭐ BB9 — the gap OCT4-Q1 exposed: `boost_uncommanded` says the axes were not held, `boost_block`
+        // says WHY. Beside its sibling, Conditional (a real source can legitimately be absent), Scope
+        // Vessel (it is the BOOSTER's own state, not a capsule singleton — WhenBooster, like boost_phase).
+        Check(BlackBoxCols.BoostBlock >= 0, "boost_block exists (BB9 — OCT4-Q1's five block reasons)");
+        Check(BlackBoxCols.BoostBlock >= 0 && BlackBoxSchema.Columns[BlackBoxCols.BoostBlock].Fit == Fit.Conditional,
+              "boost_block is declared Conditional, not Live — a source can legitimately be absent");
+        Check(BlackBoxCols.BoostBlock >= 0 && TierOf("boost_block") == TierOf("boost_uncommanded"),
+              "boost_block rides the same tier as its sibling boost_uncommanded");
+        // ⚠ THE POINT OF RECORDING THE ENUM, NOT THE PROSE: OCT4-Q1's five reasons must decode as five
+        // DISTINCT, stable names — `BlockNote`'s wording (`Annunciation`) is free to change; this is not.
+        var blockNames = new HashSet<string>
+        {
+            BoosterCommandBlock.None.ToString(), BoosterCommandBlock.NotArmed.ToString(),
+            BoosterCommandBlock.Packed.ToString(), BoosterCommandBlock.NoOctaweb.ToString(),
+            BoosterCommandBlock.WrongEngineForPhase.ToString(), BoosterCommandBlock.HoldOff.ToString()
+        };
+        Check(blockNames.Count == 6, "BoosterCommandBlock's six values decode to six distinct names "
+                                     + "(got " + blockNames.Count + ") — a reader filters on these");
+
+        // ⭐ S86 — the three screen-state columns BB1 could not reach for want of an accessor.
+        // Conditional (blank unless the screens are running) and, like page_l/c/r and cam_view,
+        // Capsule-scoped: they describe the screens hardware, not whichever vessel is focused.
+        bool brightnessBinds = BlackBoxCols.BrightnessL >= 0 && BlackBoxCols.BrightnessC >= 0
+                               && BlackBoxCols.BrightnessR >= 0;
+        Check(brightnessBinds, "brightness_l/c/r exist (S86 — ScreenPainter.Brightness now has a read-only accessor)");
+        Check(!brightnessBinds
+              || (BlackBoxSchema.Columns[BlackBoxCols.BrightnessL].Fit == Fit.Conditional
+                  && BlackBoxSchema.Columns[BlackBoxCols.BrightnessC].Fit == Fit.Conditional
+                  && BlackBoxSchema.Columns[BlackBoxCols.BrightnessR].Fit == Fit.Conditional),
+              "brightness_l/c/r are Conditional — blank unless the screens are running");
+        // S86 did NOT carry cover_cam / cover_phase: unlike brightness (one shared static), coverCam and
+        // coverPhase are independent PER-`ScreenPainter`-INSTANCE state, and §2.7 names them as a single
+        // (non-l/c/r) column each — no honest single value exists across three independent screens. See
+        // S86's register line and its open question for the owner.
+        Check(BlackBoxSchema.Index("cover_cam") < 0 && BlackBoxSchema.Index("cover_phase") < 0,
+              "cover_cam/cover_phase are deliberately NOT declared — see S86's recorded non-carry decision");
+
         // Tier discipline: the A block is on every row by definition (§2.1), and any other tier there
         // would make one of the ten unconditional columns conditional without saying so.
         Check(TierOf("mission_id") == Tier.Every && TierOf("seq") == Tier.Every
@@ -764,6 +801,7 @@ public static class BlackBoxTest
             "cabin_psia", "ppo2_psia", "co2_mmhg", "cabin_temp_c", "loop_a_c", "loop_b_c",
             "sev_system", "sev_vehicle", "sev_ls", "sev_thermal", "alarm_mask",
             "prop_frac", "page_l", "page_c", "page_r", "cam_view",
+            "brightness_l", "brightness_c", "brightness_r",   // S86
             "align_deg", "roll_err_deg", "pitch_err_deg", "yaw_err_deg",
             "ker_avail", "ker_stage_dv", "ker_total_dv", "ker_twr", "ker_isp", "ker_burn_s",
             "ker_stage_mass_kg", "ker_thrust_avail_n",
@@ -783,7 +821,7 @@ public static class BlackBoxTest
         {
             "alt_m", "srf_speed_mps", "mach", "q_pa", "accel_g", "pitch_deg", "aoa_deg", "thrust_n",
             "eng_ignited", "app_pitch", "mass_kg", "lat_deg", "lon_deg", "downrange_m", "stage",
-            "phase_classified", "boost_phase", "boost_steer_pitch", "ls_present", "comm_linked",
+            "phase_classified", "boost_phase", "boost_block", "boost_steer_pitch", "ls_present", "comm_linked",
             "skin_temp_frac", "ut", "met_s", "vessel", "focus",
         };
         for (int i = 0; i < perVessel.Length; i++)
