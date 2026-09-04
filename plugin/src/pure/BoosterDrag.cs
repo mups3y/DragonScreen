@@ -38,8 +38,8 @@
  * per-phase aggregate in the also-deleted `docs/tuning/TUNING_DB.json`, are the ONLY SURVIVING
  * DISTILLATES. **Neither can be re-derived, re-binned or re-checked from anything in this repository.**
  * If a digit here is ever doubted - or silently changed - there is nothing in the tree to check it
- * against, and the symptom would be a landing miss, not a test failure (which is why register line S63
- * exists: pin the table in a test).
+ * against, and the symptom would be a landing miss, not a test failure - which is why the table is now
+ * pinned by `test/BoosterDragTest.cs` (register line S63, DONE 2026-09-04).
  * ⇒ Treat this curve as THE BEST NUMBER WE HAVE AND NOT AS EVIDENCE. A number you cannot re-derive is
  * still worth keeping; it has simply stopped being proof of anything. Owner decision, 2026-09-03 (R1
  * open question Q2): RE-FLY. The corpus is rebuilt by RECORDED re-flights, which needs the BlackBox

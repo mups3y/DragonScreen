@@ -5990,7 +5990,13 @@ reword the comment to say there are now two independent `[KSPAddon]`s (`CraftDum
 `GeometryDumpProbe`), both read-only diagnostics, neither touching the render or control path. Docs-comment-only;
 no behavior change; `build.py test` as no-regression check.
 
-### S74 [S] `pure/BoosterDrag.cs`'s header points forward to a test that now exists — **TODO** — [TIER 4: hygiene, doc accuracy]
+### S74 [S] `pure/BoosterDrag.cs`'s header points forward to a test that now exists — **DONE** — [TIER 4: hygiene, doc accuracy] ⚠ batch deviation from C1.1/C1.7 authorised by owner 2026-09-04 via overseer
+Reworded `plugin/src/pure/BoosterDrag.cs:41-42`'s ruling-1 clause: "...which is why register line S63
+exists: pin the table in a test" (future tense) → now says the table IS pinned by `test/BoosterDragTest.cs`
+(register line S63, DONE 2026-09-04). Kept ruling-1's substance exactly as it stands — the curve is still
+the best number we have and not evidence, not one digit of the table touched. Confirmed
+`plugin/test/BoosterDragTest.cs` exists and S63 is DONE before rewording. Comment-only, no behavior change.
+`python plugin/build.py test` green (`ALL SUITES PASSED`); no preview PNG applies (docs-comment-only, C1.3).
 Found by **S63**, 2026-09-04 (C1.1 — noticed while writing that test; not touched there because
 `plugin/src/pure/BoosterDrag.cs` is outside S63's declared outputs, which are `test/BoosterDragTest.cs` +
 `TestMain.cs`). The module header's §B16.8 ruling-1 block ends *"…the symptom would be a landing miss, not a
