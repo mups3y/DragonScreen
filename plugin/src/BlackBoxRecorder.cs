@@ -45,6 +45,57 @@
 //  (4) WARP ROWS POLLUTED EVERY STATISTIC with no way to exclude them → `warp_rate`/`warp_rails` on
 //      every row (§2.1) and `BlackBoxVoid` blanking the control block, so a reader filters without
 //      inferring anything.
+//
+// ============================================================================================
+// ⭐ ============== REGISTER BB2 — TWO-VESSEL RECORDING (§4.4, §B16.7, S59 §6.1 Q3) ==============
+//
+// ---- THE PROBLEM, IN §B16.7's OWN WORDS ----
+// The Falcon-9 booster "lands UNFOCUSED — flown by its own core on the non-active vessel", roughly
+// 1500 km from the camera, and §B16.7 states the accepted risk plainly: the vessel we are landing
+// accurately is the one running at the coarser end of KSP's floating-origin precision, and **"the
+// BlackBox's two-vessel recording is what will actually answer it"**. BB1 recorded the camera holder
+// and nothing else, so the booster — the only vehicle in the mission with an un-converged control law
+// (§B16.8 ruling 2) and no recorded flight to derive its gains from — flew unrecorded. Worse, BB1's
+// whole booster observability block (`boost_db_*`, `boost_steer_*`, `boost_phase`, the owner's own Q2
+// refinement) is written ONLY on the stream whose vessel IS the booster, so with one focused stream it
+// was never written anywhere: ten declared columns, structurally unreachable.
+//
+// ---- THE SHAPE, SETTLED BY S59 §6.1 Q3 AND NOT RE-OPENED HERE ----
+// ONE STREAM PER VESSEL, joined by the shared `mission_id` and `ut` — not parallel per-vehicle column
+// blocks in one row. So a mission is now:
+//     <MissionId>.params.csv            the focused vessel  (unchanged: a one-vessel mission is
+//     <MissionId>.manifest.json          byte-for-byte the BB1 file set)
+//     <MissionId>.<Vessel>.params.csv   the tracked unfocused vessel, SAME mission id (§4.4)
+//     <MissionId>.<Vessel>.manifest.json
+//     <MissionId>.events.jsonl          ⭐ ONE, SHARED. Every event line already carries its own
+//                                        `vessel`, so both craft are already one ordered narrative —
+//                                        which is what §4.10's new §10 section asks for, and splitting
+//                                        it would force a reader to re-merge on a clock what was never
+//                                        two things.
+//
+// ---- WHAT MOVED FROM THE STREAM TO THE MISSION ----
+// The mission id, the event log, the launch reference (so `downrange_m` means the same on both files)
+// and REVERT DETECTION are mission-level now. A revert branches the MISSION (`_r2`, `_r3` …) and every
+// stream re-opens under the new branch together — §4.4's "one mission = one set", which BB1 could only
+// half-honour because its mission id was per stream.
+//
+// ---- ⭐ THE ONE THING THAT WOULD HAVE MADE THE SECOND STREAM A LIE: `Scope` ----
+// Most columns are read from the stream's own `Vessel` and are simply true of it. But
+// `FlightCommands.State`, `CrewProcedureOps`, `FlightDriver`, `AbortControl` and `VesselData.State` are
+// STATICS describing the CAPSULE. Copying them onto the booster's row would file the Dragon's bus
+// voltages, gates, FDIR verdict and mission phase under the booster and call it a measurement — §4.8's
+// NEVER FABRICATE, and the same class of error as the frozen-under-warp control values that
+// manufactured a phantom RCS thrash. So every column declares `Scope` (`BlackBoxSchema`), and a
+// `Scope.Capsule` column is written ONLY while this stream's vessel holds the camera. `stage` gets the
+// same treatment for the same reason: `StageManager.CurrentStage` is the ACTIVE vessel's stage manager,
+// so an unfocused stream reads `Vessel.currentStage` instead of the camera holder's number.
+//
+// ---- WHAT IS RECORDED, AND FOR HOW LONG ----
+// The tracked vessel is `BoosterHost.Booster` (what W23/W24 actually bind) or `BoosterRecovery.Tracked`
+// (the declared seam, a null stub today), while it is LOADED and is not the camera holder. Once opened,
+// its stream is kept until the vessel unloads or dies — deliberately INCLUDING after BoosterHost
+// releases it, because §B16.7's touchdown, its +10 s settle and the recovery are the part of the
+// booster flight the recorder most exists for.
 // ============================================================================================
 using System;
 using System.Collections.Generic;
@@ -95,8 +146,30 @@ namespace DragonScreen.BlackBox
         [Tunable] public static int SelfDisableAfter = 5;
         /// <summary>§4.4's hard ceiling. Should never be reached; present so an unattended run cannot fill a disk.</summary>
         [Tunable] public static double MaxFileMB = 512.0;
+        /// <summary>
+        /// ⭐ BB2. The second stream, for a tracked UNFOCUSED vessel (§B16.7's booster). On by default —
+        /// an unrecorded booster is the failure BB2 exists to prevent — and `[Tunable]`, so it can be
+        /// held off from `PluginData/tuning.cfg` with no rebuild if a flight ever needs the frame back.
+        /// </summary>
+        [Tunable] public static bool RecordTrackedVessel = true;
 
-        static BlackBoxStream capsule;
+        /// <summary>
+        /// Hard cap on concurrent streams. Two is the design (capsule + booster); the third slot exists
+        /// only so a released booster's tail can still be closing while a new one binds. A cap rather
+        /// than an assumption, because "how many vessels can be loaded" is the game's call, not ours.
+        /// </summary>
+        const int MaxStreams = 3;
+
+        // ---- MISSION-LEVEL STATE (BB2). One mission = one id, one event log, one launch reference. ----
+        static readonly List<BlackBoxStream> streams = new List<BlackBoxStream>(MaxStreams);
+        static BlackBoxEventLog log;
+        static string missionId;
+        static bool primaryTaken;
+        static double lastMissionUt = double.NaN;
+        static double launchLat, launchLon;
+        static bool haveLaunchRef;
+        static bool cappedWarned;
+
         static bool disabled;
         static string captureDir;
 
@@ -104,7 +177,14 @@ namespace DragonScreen.BlackBox
         static bool resIdsResolved;
         static int mmhId, ntoId, ecId;
 
-        public static bool Recording { get { return capsule != null && capsule.Open; } }
+        public static bool Recording
+        {
+            get
+            {
+                for (int i = 0; i < streams.Count; i++) if (streams[i].Open) return true;
+                return false;
+            }
+        }
 
         // ============================== lifecycle ==============================
 
@@ -121,24 +201,33 @@ namespace DragonScreen.BlackBox
             if (disabled || !Enabled) return;
             try
             {
-                Vessel v = FlightGlobals.ActiveVessel;
-                if (v == null || v.orbit == null) return;
+                Vessel act = FlightGlobals.ActiveVessel;
+                if (act == null || act.orbit == null) return;
+                double ut = Planetarium.GetUniversalTime();
 
-                if (capsule == null || capsule.PersistentId != v.persistentId)
+                // ---- §4.4: a REVERT is UT moving backwards, and it is a MISSION-level fact, not a
+                // ---- per-stream one. BB1 detected it inside the single stream; with two streams that
+                // ---- would branch one file and leave the other on the old id, which is exactly the
+                // ---- "half a mission" failure §4.4's one-mission-one-set rule exists to prevent.
+                if (missionId != null && !double.IsNaN(lastMissionUt) && ut < lastMissionUt - 1.0)
+                    Revert(lastMissionUt, ut);
+                lastMissionUt = ut;
+
+                if (!EnsureMission(act)) return;
+
+                Vessel trk = TrackedVessel(act);
+
+                // Mission-level edges FIRST, so an event lands between the rows it falls between and
+                // carries the seq of the row before it (§4.5), exactly as the per-stream edges do.
+                MissionEdges(ut, act);
+
+                Reconcile(act, trk);
+
+                for (int i = 0; i < streams.Count; i++)
                 {
-                    // BB1 records ONE stream — the vessel that has the camera. A second, UNFOCUSED
-                    // stream (the §B16 booster, which flies without the camera and would otherwise fly
-                    // unrecorded) is register **BB2**, built on this core: it opens
-                    // `<MissionId>.<Vessel>.params.csv` under the SAME mission id. The structure here
-                    // is per-stream state in `Stream` precisely so that is an added instance and not a
-                    // rewrite.
-                    if (capsule != null) capsule.Emit(BlackBoxEvents.RecVesselChange,
-                        new[] { Kv.Str("from", capsule.VesselName), Kv.Str("to", v.vesselName) });
-                    OpenFor(v);
+                    BlackBoxStream s = streams[i];
+                    if (s.Open) s.Tick();
                 }
-                if (capsule == null || !capsule.Open) return;
-
-                capsule.Tick(v);
             }
             catch (Exception e)
             {
@@ -148,25 +237,48 @@ namespace DragonScreen.BlackBox
             }
         }
 
+        /// <summary>Close the whole mission — every stream, then the shared event log.</summary>
         public static void Close(string reason)
         {
-            if (capsule == null) return;
-            try { capsule.Close(reason); } catch (Exception e) { Debug.LogWarning(Tag + "close: " + e.Message); }
-            capsule = null;
+            for (int i = 0; i < streams.Count; i++)
+            {
+                try { if (streams[i].Open) streams[i].Close(reason); }
+                catch (Exception e) { Debug.LogWarning(Tag + "close: " + e.Message); }
+            }
+            streams.Clear();
+            if (log != null)
+            {
+                try { log.Close(); } catch (Exception e) { Debug.LogWarning(Tag + "event log close: " + e.Message); }
+                log = null;
+            }
+            missionId = null;
+            primaryTaken = false;
+            haveLaunchRef = false;
+            cappedWarned = false;
+            lastMissionUt = double.NaN;
+            lastFocus = null;
+            lastWarpRate = -1.0;
         }
 
         /// <summary>Stop everything for the rest of the session — §4.7's self-disable rung.</summary>
         static void Disable(string why)
         {
-            if (capsule != null) capsule.Emit(BlackBoxEvents.RecSelfDisable, new[] { Kv.Str("why", why) });
+            EmitMission(BlackBoxEvents.RecSelfDisable, lastMissionUt, new[] { Kv.Str("why", why) });
             Debug.LogError(Tag + "SELF-DISABLED: " + why + ". No further recording this session.");
             Close("self_disable");
             disabled = true;
         }
 
-        static void OpenFor(Vessel v)
+        // ============================== the mission (BB2) ==============================
+
+        /// <summary>
+        /// Open the mission if it is not open: the id, the shared event log and the launch reference,
+        /// all latched ONCE from the first vessel seen. Returns false if the capture directory or the
+        /// event log could not be opened, in which case nothing else is attempted this tick.
+        /// </summary>
+        static bool EnsureMission(Vessel first)
         {
-            Close("vessel_change");
+            if (missionId != null && log != null && log.Open) return true;
             try
             {
                 // §4.4 / §5: the deploy target, already git-ignored, already where the screen PNGs go.
@@ -174,13 +286,206 @@ namespace DragonScreen.BlackBox
                 if (captureDir == null)
                     captureDir = Path.Combine(KSPUtil.ApplicationRootPath, "DragonScreen_capture");
                 Directory.CreateDirectory(captureDir);
-                capsule = new BlackBoxStream(captureDir, v, Policy());
+
+                if (missionId == null)
+                    missionId = BlackBoxNaming.MissionId(first.vesselName,
+                                                         DateTime.Now.ToString("yyyyMMdd_HHmmss"));
+                if (!haveLaunchRef)
+                {
+                    // ⭐ THE MISSION's launch reference, not the stream's. Both files then measure
+                    // `downrange_m` from the same point, so the booster's deck-miss (§4.10 §4) and the
+                    // capsule's downrange are the same quantity rather than two offset ones.
+                    launchLat = first.latitude; launchLon = first.longitude; haveLaunchRef = true;
+                }
+                if (log == null || !log.Open) log = new BlackBoxEventLog(captureDir, missionId);
+                return true;
             }
             catch (Exception e)
             {
                 Debug.LogWarning(Tag + "could not open a recording: " + e.Message);
-                capsule = null;
+                missionId = null;
+                log = null;
+                return false;
             }
+        }
+
+        /// <summary>
+        /// §4.4: a revert branches the MISSION with `_r2`, `_r3`, … Every stream closes cleanly (the
+        /// S76 torn-row fix — the old streams cut mid-line on exactly this) and re-opens under the new
+        /// branch on the next tick, so the two vessels stay on one id.
+        /// </summary>
+        static void Revert(double fromUt, double toUt)
+        {
+            EmitMission(BlackBoxEvents.RecRevert, fromUt,
+                        new[] { Kv.Num("from_ut", fromUt), Kv.Num("to_ut", toUt),
+                                Kv.Str("branches_to", BlackBoxNaming.BranchMissionId(missionId)) });
+
+            string branched = BlackBoxNaming.BranchMissionId(missionId);
+            Close("revert");
+            missionId = branched;   // Close() cleared it; the branch chain is the one thing that survives
+            Debug.Log(Tag + "revert detected — mission branches to " + missionId);
+        }
+
+        /// <summary>
+        /// ⭐ THE TRACKED UNFOCUSED VESSEL — the whole reason BB2 exists (§B16.7).
+        ///
+        /// `BoosterHost.Booster` is what W23/W24 actually bind and fly on the non-active vessel;
+        /// `BoosterRecovery.Tracked` is the declared seam (`_AutopilotStub.cs`, a null stub today) that
+        /// `HullCams` already follows, so it is read as the fallback and starts working the day it is
+        /// filled — without this file having to change.
+        ///
+        /// ⛔ LOADED ONLY. An unloaded vessel's `parts` list is EMPTY, so every part-walk column
+        /// (thrust, ignition counts, control authority, skin temperature) would read a confident ZERO
+        /// for a vehicle we cannot see. §4.6 is explicit: blank, never a plausible number. §B16.7 keeps
+        /// the booster loaded via PhysicsRangeExtender for exactly as long as the landing needs, and
+        /// that is exactly the window this records.
+        /// </summary>
+        static Vessel TrackedVessel(Vessel act)
+        {
+            if (!RecordTrackedVessel) return null;
+            Vessel b = null;
+            try { b = BoosterHost.Booster; } catch { }
+            if (b == null) { try { b = BoosterRecovery.Tracked; } catch { } }
+            if (b == null) return null;
+            // One vessel, one stream: if the camera is on it, the focused stream already records it.
+            if (act != null && b.persistentId == act.persistentId) return null;
+            if (b.orbit == null || !b.loaded) return null;
+            return b;
+        }
+
+        /// <summary>
+        /// Bring the open streams into line with what should be recorded this tick.
+        ///
+        /// A stream is KEPT while its vessel is the camera holder, or the tracked vessel, or — and this
+        /// is deliberate — while it WAS the tracked vessel and its vessel is still loaded. §B16.7's
+        /// booster is released by `BoosterHost` at the end of its own FSM, and the touchdown, the +10 s
+        /// settle and the recovery that follow are the part of the flight the recorder most exists for.
+        /// Anything else closes with a stated reason and a `rec.stream_end`, never silently.
+        ///
+        /// ⛔ A stream that closed ITSELF (a row threw, the width failed, the size ceiling hit) stays in
+        /// the list as a tombstone while its vessel is still wanted, so it is never re-opened. That is
+        /// Recorder A's rule kept intact: a recording that stopped stopped for a reason.
+        /// </summary>
+        static void Reconcile(Vessel act, Vessel trk)
+        {
+            for (int i = streams.Count - 1; i >= 0; i--)
+            {
+                BlackBoxStream s = streams[i];
+                bool keep;
+                string why;
+                if (s.V == null) { keep = false; why = "vessel_gone"; }
+                else if (act != null && s.PersistentId == act.persistentId) { keep = true; why = null; }
+                else if (trk != null && s.PersistentId == trk.persistentId) { keep = true; why = null; }
+                else if (s.Tracked && s.V.loaded) { keep = true; why = null; }
+                else { keep = false; why = s.Tracked ? "tracked_unloaded" : "vessel_change"; }
+
+                if (keep) continue;
+                if (s.Open) { try { s.Close(why); } catch (Exception e) { Debug.LogWarning(Tag + "close: " + e.Message); } }
+                streams.RemoveAt(i);
+            }
+
+            if (Find(act.persistentId) == null) OpenStream(act, false);
+            if (trk != null && Find(trk.persistentId) == null) OpenStream(trk, true);
+        }
+
+        static BlackBoxStream Find(uint persistentId)
+        {
+            for (int i = 0; i < streams.Count; i++)
+                if (streams[i].PersistentId == persistentId) return streams[i];
+            return null;
+        }
+
+        static void OpenStream(Vessel v, bool tracked)
+        {
+            if (streams.Count >= MaxStreams)
+            {
+                if (!cappedWarned)
+                {
+                    cappedWarned = true;
+                    Debug.LogWarning(Tag + "stream cap (" + MaxStreams + ") reached; not opening one for '"
+                                     + v.vesselName + "'. This is a guard, not an expected state.");
+                }
+                return;
+            }
+            try
+            {
+                // §4.4: the FIRST stream of a mission is unqualified, so a one-vessel mission produces
+                // exactly the BB1 file set; every later one is vessel-qualified under the SAME id.
+                string suffix = BlackBoxNaming.StreamSuffix(!primaryTaken, v.vesselName);
+                suffix = BlackBoxNaming.UniqueSuffix(missionId, suffix, OpenStems());
+                bool first = !primaryTaken;
+                var s = new BlackBoxStream(captureDir, v, Policy(), missionId, suffix, log, tracked,
+                                           launchLat, launchLon, haveLaunchRef);
+                streams.Add(s);
+                primaryTaken = true;
+                // Only for a GENUINE change. The mission's first stream is announced by its own
+                // `rec.open`, which already carries the vessel, the role and the file name; emitting a
+                // "change" alongside it would be the same fact twice in an ordered narrative.
+                if (!first)
+                    EmitMission(BlackBoxEvents.RecVesselChange, lastMissionUt, new[]
+                    {
+                        Kv.Str("added", v.vesselName),
+                        Kv.Str("role", tracked ? "tracked" : "focused"),
+                        Kv.Int("streams", streams.Count),
+                    });
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning(Tag + "could not open a stream for '" + v.vesselName + "': " + e.Message);
+            }
+        }
+
+        static List<string> OpenStems()
+        {
+            var stems = new List<string>(streams.Count);
+            for (int i = 0; i < streams.Count; i++) stems.Add(streams[i].Stem);
+            return stems;
+        }
+
+        // ---- the two edges that belong to the MISSION, not to either vessel ----
+        // Focus and warp are single global facts. BB1 detected them inside its one stream; with two
+        // streams that would emit each of them twice, and a duplicated event in an ordered narrative is
+        // worse than a missing one because it reads as two occurrences. They are emitted once, with
+        // `vessel: null`, carrying the focused stream's `seq` so they are still joinable to a row.
+        static string lastFocus;
+        static double lastWarpRate = -1.0;
+
+        static void MissionEdges(double ut, Vessel act)
+        {
+            string focus = act != null ? act.vesselName : null;
+            if (focus != lastFocus)
+            {
+                if (lastFocus != null)
+                    EmitMission(BlackBoxEvents.RecFocusChange, ut,
+                                new[] { Kv.Str("from", lastFocus), Kv.Str("to", focus) });
+                lastFocus = focus;
+            }
+
+            double warp = TimeWarp.CurrentRate;
+            if (Math.Abs(warp - lastWarpRate) > 1e-6)
+            {
+                if (lastWarpRate >= 0.0)
+                    EmitMission(BlackBoxEvents.RecWarpChange, ut, new[]
+                    {
+                        Kv.Num("from", lastWarpRate), Kv.Num("to", warp), Kv.Bit("rails", RailsWarp()),
+                    });
+                lastWarpRate = warp;
+            }
+        }
+
+        /// <summary>
+        /// A mission-level event: `vessel` is null (it is not any one craft's), `met_s` is null (MET
+        /// restarts per vessel, §4.5, so a mission event has none), and `seq` is the focused stream's
+        /// current row counter — "the row it falls between", which is what §4.5 asks `seq` to mean.
+        /// </summary>
+        internal static void EmitMission(string kind, double ut, Kv[] payload)
+        {
+            if (log == null || !log.Open) return;
+            long seq = 0;
+            for (int i = 0; i < streams.Count; i++)
+                if (!streams[i].Tracked) { seq = streams[i].Seq; break; }
+            log.Write(BlackBoxEvents.Line(missionId, null,
+                                          double.IsNaN(ut) ? 0.0 : ut, double.NaN, seq, kind, payload));
         }
 
         internal static RatePolicy Policy()
@@ -191,6 +496,12 @@ namespace DragonScreen.BlackBox
         internal static void ReportWriteFailure(int consecutive, string why)
         {
             if (consecutive >= SelfDisableAfter) Disable(why);
+        }
+
+        internal static bool RailsWarp()
+        {
+            try { return TimeWarp.WarpMode == TimeWarp.Modes.HIGH && TimeWarp.CurrentRateIndex > 0; }
+            catch { return false; }
         }
 
         // ============================== shared reads ==============================
@@ -236,8 +547,57 @@ namespace DragonScreen.BlackBox
     }
 
     // ============================================================================================
+    // ⭐ BB2 — THE MISSION'S ONE EVENT LOG, shared by every vessel's stream.
+    //
+    // §4.1 lists THREE artefacts "per mission"; §4.4 qualifies only the PARAMS file per vessel. Every
+    // event line already carries its own `vessel`, so one log is one ordered narrative across both
+    // craft — which is exactly what §4.10's new §10 section ("the whole events.jsonl as one ordered
+    // narrative") asks for, and a per-vessel split would force a reader to merge two files on a clock
+    // to recover something that was never two things. §1.4(d): a transition is a fact with a time, and
+    // the whole point of a shared log is that a booster event and a capsule event sort against each
+    // other without a join.
+    //
+    // Flushed per event, for BB1's reason: events are rare (~0.1/s), each one is a transition somebody
+    // will correlate against a log line or a screenshot, and a per-event flush guarantees the narrative
+    // survives an unexpected end even when the last few parameter rows do not.
+    // ============================================================================================
+    internal sealed class BlackBoxEventLog
+    {
+        StreamWriter w;
+        public string FileName { get; private set; }
+        public bool Open { get { return w != null; } }
+        public long Written { get; private set; }
+
+        public BlackBoxEventLog(string dir, string missionId)
+        {
+            FileName = missionId + ".events.jsonl";
+            w = new StreamWriter(Path.Combine(dir, FileName), false, new UTF8Encoding(false));
+            w.NewLine = "\n";
+        }
+
+        /// <summary>Returns false on a write failure, so the CALLING STREAM counts it against its own
+        /// self-disable ladder — the log has no rung of its own and must not invent one.</summary>
+        public bool Write(string line)
+        {
+            if (w == null) return false;
+            try { w.WriteLine(line); w.Flush(); Written++; return true; }
+            catch { return false; }
+        }
+
+        public void Close()
+        {
+            if (w == null) return;
+            try { w.Flush(); w.Close(); } catch { }
+            w = null;
+        }
+    }
+
+    // ============================================================================================
     // ONE RECORDED VESSEL = ONE STREAM. All per-stream state lives here, so BB2's second (unfocused)
-    // vessel is a second instance and not a second code path.
+    // vessel is a second instance and not a second code path — which is exactly how it turned out:
+    // the mission id, the event log, the launch reference and revert detection moved UP to
+    // `BlackBoxRecorder`, and everything below is unchanged except for the `focused` gate that keeps
+    // the capsule singletons off another vessel's rows.
     // ============================================================================================
     internal sealed class BlackBoxStream
     {
@@ -245,15 +605,28 @@ namespace DragonScreen.BlackBox
 
         readonly string dir;
         readonly RatePolicy policy;
+        readonly BlackBoxEventLog log;   // BB2: the MISSION's log, not this stream's
 
-        StreamWriter csv, events;
+        StreamWriter csv;
         readonly StringBuilder pending = new StringBuilder(8192);
         int pendingRows;
 
         public string MissionId { get; private set; }
+        /// <summary>`<MissionId>` or `<MissionId>.<Vessel>` — this stream's own file stem (§4.4).</summary>
+        public string Stem { get; private set; }
         public string VesselName { get; private set; }
         public uint PersistentId { get; private set; }
+        /// <summary>
+        /// ⭐ BB2. The vessel this stream records, held rather than passed in per tick — because a
+        /// TRACKED stream has to be able to answer "is my vessel still loaded?" on a tick where the
+        /// camera holder is somebody else entirely. Unity's null-comparison makes a destroyed vessel
+        /// compare equal to null, which is how `Reconcile` detects one that is simply gone.
+        /// </summary>
+        public Vessel V { get; private set; }
+        /// <summary>Opened for a tracked UNFOCUSED vessel (§B16.7's booster) rather than the camera holder.</summary>
+        public bool Tracked { get; private set; }
         public bool Open { get { return csv != null; } }
+        public long Seq { get { return seq; } }
 
         long seq;
         long eventsWritten;
@@ -261,6 +634,12 @@ namespace DragonScreen.BlackBox
         double maxRecBuildUs;
         bool widthChecked;
         bool closing;
+        /// <summary>
+        /// Did this stream's vessel EVER hold the camera? `Scope.Capsule` columns are written only
+        /// while it does, so this is what tells `BlackBoxCoverage` whether their blanks are the
+        /// expected state or the ghost-column defect. It lands in the manifest as `ever_focused`.
+        /// </summary>
+        bool everFocused;
 
         RateState rate = RateState.Fresh();
         BlackBoxAccum accum = BlackBoxAccum.Fresh();
@@ -268,8 +647,11 @@ namespace DragonScreen.BlackBox
         ManifestInfo manifest;
 
         // ---- launch reference for downrange (composed from Recorder B's FlightLog) ----
-        double launchLat, launchLon;
-        bool haveLaunchRef;
+        // BB2: latched at MISSION level and handed in, so both vessels measure downrange from the
+        // same point. A booster stream latching its own at separation would report a downrange offset
+        // by the separation distance and make its deck-miss uncomparable with the capsule's.
+        readonly double launchLat, launchLon;
+        readonly bool haveLaunchRef;
 
         // ---- edge state for the event log (§2.9). Every one of these exists because a TRANSITION is a
         // ---- fact with a time (§1.4(d)) and quantising it to the row period throws the narrative away.
@@ -278,8 +660,6 @@ namespace DragonScreen.BlackBox
         double lastPhysUt = double.NaN;
         MissionPhase lastPhase = (MissionPhase)255;
         ControlMode lastMode = (ControlMode)255;
-        double lastWarpRate = -1.0;
-        string lastFocus;
         int lastStage = int.MinValue;
         int lastIgnited = -1, lastFlameout = -1;
         int lastAlarmMask = -1;
@@ -292,47 +672,54 @@ namespace DragonScreen.BlackBox
         // ---- rate-limited thermal detail, composed from Recorder B ----
         double lastThermalLogUt = -1e9;
 
-        public BlackBoxStream(string dir, Vessel v, RatePolicy policy)
+        public BlackBoxStream(string dir, Vessel v, RatePolicy policy, string missionId, string suffix,
+                              BlackBoxEventLog log, bool tracked,
+                              double launchLat, double launchLon, bool haveLaunchRef)
         {
             this.dir = dir;
             this.policy = policy;
-            OpenFiles(v, null);
+            this.log = log;
+            this.Tracked = tracked;
+            this.launchLat = launchLat;
+            this.launchLon = launchLon;
+            this.haveLaunchRef = haveLaunchRef;
+            MissionId = missionId;
+            Stem = BlackBoxNaming.Stem(missionId, suffix);
+            OpenFiles(v);
         }
 
         // ============================== files ==============================
 
-        void OpenFiles(Vessel v, string revertSuffix)
+        void OpenFiles(Vessel v)
         {
-            // §4.4: `<SanitizedVesselName>_<yyyyMMdd_HHmmss>`. Keeps the existing `Crew-2*` glob in
-            // `plugin/tools/assess_flight.py` working and groups the three files by prefix. The id is
-            // ALSO a column on every row, so a file that is moved or renamed still self-identifies —
-            // which is the fix for "a recording is half a mission".
+            // §4.4: the mission id is `<SanitizedVesselName>_<yyyyMMdd_HHmmss>` and belongs to the
+            // MISSION (BB2), not to this stream; the stream adds a vessel-qualified suffix if it is not
+            // the first. Keeps the existing `Crew-2*` glob in `plugin/tools/assess_flight.py` working
+            // and groups every file of the mission by one prefix. The id is ALSO a column on every row,
+            // so a file that is moved or renamed still self-identifies AND still joins to its sibling —
+            // which is the fix for "a recording is half a mission" and for the old paired probe streams
+            // that could only be associated by their timestamps.
+            V = v;
             VesselName = v.vesselName;
             PersistentId = v.persistentId;
-            MissionId = Sanitize(v.vesselName) + "_" + DateTime.Now.ToString("yyyyMMdd_HHmmss")
-                      + (revertSuffix ?? "");
 
-            string stem = Path.Combine(dir, MissionId);
-            csv = new StreamWriter(stem + ".params.csv", false, new UTF8Encoding(false));
+            csv = new StreamWriter(Path.Combine(dir, Stem + ".params.csv"), false, new UTF8Encoding(false));
             csv.NewLine = "\n";                       // §4.1: UTF-8, \n, RFC-4180
             csv.WriteLine(BlackBoxSchema.Header());
             csv.Flush();
-
-            events = new StreamWriter(stem + ".events.jsonl", false, new UTF8Encoding(false));
-            events.NewLine = "\n";
 
             seq = 0;
             rate = RateState.Fresh();
             accum = BlackBoxAccum.Fresh();
             widthChecked = false;
-            closing = false;   // a revert reopens THIS instance — without this, the new stream could never close
+            closing = false;
             pending.Length = 0; pendingRows = 0;
 
-            launchLat = v.latitude; launchLon = v.longitude; haveLaunchRef = true;
             // so `rec.open` carries the real clock rather than 0 — an event with a wrong ut is
             // worse than one with none, because it is joinable to the wrong row.
             lastUt = Planetarium.GetUniversalTime();
             lastMet = v.missionTime;
+            everFocused = IsFocused();
 
             BuildManifest(v);
             WriteManifest();
@@ -341,14 +728,28 @@ namespace DragonScreen.BlackBox
             {
                 Kv.Str("mission_id", MissionId),
                 Kv.Str("vessel", VesselName),
+                Kv.Str("role", Tracked ? "tracked" : "focused"),
+                Kv.Str("params_file", Stem + ".params.csv"),
                 Kv.Int("schema_version", BlackBoxSchema.SchemaVersion),
                 Kv.Int("columns", BlackBoxSchema.Width),
                 Kv.Str("row_rate_mode", policy.Mode == RateMode.Fixed ? "fixed" : "adaptive"),
                 Kv.Num("row_rate_dynamic_hz", policy.RowRateDynamicHz),
                 Kv.Num("row_rate_quiescent_hz", policy.RowRateQuiescentHz),
             });
-            Debug.Log(Tag + "recording -> " + MissionId + ".{params.csv,events.jsonl,manifest.json}  ("
-                      + BlackBoxSchema.Width + " columns, schema v" + BlackBoxSchema.SchemaVersion + ")");
+            Debug.Log(Tag + "recording -> " + Stem + ".params.csv (+ " + MissionId + ".events.jsonl, "
+                      + Stem + ".manifest.json)  [" + (Tracked ? "TRACKED, unfocused" : "focused") + ", "
+                      + BlackBoxSchema.Width + " columns, schema v" + BlackBoxSchema.SchemaVersion + "]");
+        }
+
+        /// <summary>Does this stream's vessel hold the camera right now? The `Scope.Capsule` gate.</summary>
+        bool IsFocused()
+        {
+            try
+            {
+                Vessel act = FlightGlobals.ActiveVessel;
+                return act != null && act.persistentId == PersistentId;
+            }
+            catch { return false; }
         }
 
         public void Close(string reason)
@@ -360,14 +761,21 @@ namespace DragonScreen.BlackBox
                 // ---- S76 DEFECT 3, GUARD 1: the last thing in the event log says the stream ENDED.
                 // A reader that finds no `rec.stream_end` knows the recording was cut, and knows it
                 // WITHOUT having to guess from a short final CSV line.
-                Emit(BlackBoxEvents.RecStreamEnd, new[] { Kv.Str("reason", reason), Kv.Int("rows", (int)seq) });
+                Emit(BlackBoxEvents.RecStreamEnd, new[]
+                {
+                    Kv.Str("reason", reason), Kv.Int("rows", (int)seq),
+                    Kv.Str("role", Tracked ? "tracked" : "focused"),
+                    Kv.Bit("ever_focused", everFocused),
+                });
 
                 Flush();
                 csv.Flush(); csv.Close();
-                events.Flush(); events.Close();
+                // ⛔ The event log is the MISSION's (BB2) and outlives this stream — a booster stream
+                // closing at touchdown must not take the capsule's narrative down with it.
+                // `BlackBoxRecorder.Close` owns it.
             }
             catch (Exception e) { Debug.LogWarning(Tag + "close: " + e.Message); }
-            csv = null; events = null;
+            csv = null;
 
             try
             {
@@ -379,7 +787,12 @@ namespace DragonScreen.BlackBox
                 manifest.EventsWritten = eventsWritten;
                 manifest.WriteErrors = writeErrors;
                 manifest.MaxRecBuildUs = maxRecBuildUs;
-                manifest.Coverage = coverage.Findings();
+                manifest.EverFocused = everFocused;
+                // ⭐ BB2: a stream whose vessel never held the camera correctly wrote no `Scope.Capsule`
+                // column, and the coverage pass is told so — otherwise every two-vessel flight would
+                // report ~27 ghost-column defects that are not defects, and a defect that always fires
+                // is one nobody reads.
+                manifest.Coverage = coverage.Findings(everFocused);
                 WriteManifest();
 
                 int defects = 0;
@@ -393,7 +806,7 @@ namespace DragonScreen.BlackBox
                     Debug.LogError(Tag + "COVERAGE DEFECT (" + f.Kind + "): column '" + f.Column
                                    + "' — " + f.Declared);
                 }
-                Debug.Log(Tag + "closed " + MissionId + " (" + reason + "): " + seq + " rows, "
+                Debug.Log(Tag + "closed " + Stem + " (" + reason + "): " + seq + " rows, "
                           + eventsWritten + " events, " + writeErrors + " write error(s), "
                           + defects + " coverage defect(s), max rec_build "
                           + maxRecBuildUs.ToString("F0", CultureInfo.InvariantCulture) + " us");
@@ -405,7 +818,7 @@ namespace DragonScreen.BlackBox
         {
             try
             {
-                File.WriteAllText(Path.Combine(dir, MissionId + ".manifest.json"),
+                File.WriteAllText(Path.Combine(dir, Stem + ".manifest.json"),
                                   BlackBoxManifest.Build(manifest), new UTF8Encoding(false));
             }
             catch (Exception e) { Debug.LogWarning(Tag + "manifest write: " + e.Message); }
@@ -413,30 +826,23 @@ namespace DragonScreen.BlackBox
 
         // ============================== the tick ==============================
 
-        public void Tick(Vessel v)
+        public void Tick()
         {
+            Vessel v = V;
+            if (v == null) return;
             double ut = Planetarium.GetUniversalTime();
             double wall = Time.realtimeSinceStartup;
 
-            // ---- §4.4: a REVERT is UT moving backwards. Recorder A's chainer had to detect this as
-            // ---- "a negative gap"; making it explicit retires the heuristic AND closes the old stream
-            // ---- cleanly, which is the fix for S76 defect 3 (the probe files cut mid-line on revert).
-            if (!double.IsNaN(lastUt) && ut < lastUt - 1.0)
-            {
-                double from = lastUt;
-                Emit(BlackBoxEvents.RecRevert, new[] { Kv.Num("from_ut", from), Kv.Num("to_ut", ut) });
-                string nextSuffix = NextRevertSuffix(MissionId);
-                Close("revert");
-                try { OpenFiles(v, nextSuffix); }
-                catch (Exception e) { Debug.LogWarning(Tag + "revert reopen: " + e.Message); return; }
-                lastUt = ut;
-                return;
-            }
+            // ⭐ BB2. Recomputed every tick, not latched at open: it is a per-ROW fact (§4.4 forbids
+            // rotating on focus, so the file boundary cannot carry it) and it is the gate on every
+            // `Scope.Capsule` column and every capsule-singleton event below.
+            bool focused = IsFocused();
+            if (focused) everFocused = true;
 
             // ---- R0: accumulate EVERY physics tick, whatever the row cadence is (§2.0). ----
             AccumulateTick(v, ut);
 
-            bool rails = RailsWarp();
+            bool rails = BlackBoxRecorder.RailsWarp();
             RateInputs now;
             now.Ut = ut; now.Wall = wall; now.RailsWarp = rails;
 
@@ -448,13 +854,17 @@ namespace DragonScreen.BlackBox
             bool hasTarget = v.targetObject != null;
             double tgtRange = hasTarget ? TargetRange(v) : double.NaN;
 
-            now.Dynamic = BlackBoxRate.IsDynamic(classified, FlightDriver.Aborting, thrustN,
+            // `FlightDriver.Aborting` is a capsule singleton, so it only raises the cadence on the
+            // capsule's own stream. A tracked booster's dynamic test is its own thrust and phase —
+            // which is the right answer anyway: an abort of the Dragon does not make the booster's
+            // descent more interesting, its own engine lighting does.
+            now.Dynamic = BlackBoxRate.IsDynamic(classified, focused && FlightDriver.Aborting, thrustN,
                                                  transCmd, tgtRange, hasTarget);
 
             // ---- edge events are latched at the instant they are DETECTED, with their OWN ut, not
             // ---- the next row's (§2.9's sub-frame edge latching). So they run BEFORE the row gate.
             lastMet = v.missionTime;
-            DetectEvents(v, ut, classified, ignited, flameout, thrustN, rails);
+            DetectEvents(v, ut, classified, ignited, flameout, thrustN, focused);
             lastUt = ut;
 
             RowPlan plan = BlackBoxRate.Plan(policy, rate, now);
@@ -464,8 +874,8 @@ namespace DragonScreen.BlackBox
             string[] row;
             try
             {
-                row = BuildRow(v, ut, wall, plan, rails, classified, thrustN, availN, ignited, flameout,
-                               hasTarget, tgtRange);
+                row = BuildRow(v, ut, wall, plan, rails, focused, classified, thrustN, availN,
+                               ignited, flameout, hasTarget, tgtRange);
             }
             catch (Exception e)
             {
@@ -495,7 +905,7 @@ namespace DragonScreen.BlackBox
 
         // ============================== the row ==============================
 
-        string[] BuildRow(Vessel v, double ut, double wall, RowPlan plan, bool rails,
+        string[] BuildRow(Vessel v, double ut, double wall, RowPlan plan, bool rails, bool focused,
                           MissionPhase classified, double thrustN, double availN,
                           int ignited, int flameout, bool hasTarget, double tgtRange)
         {
@@ -572,8 +982,13 @@ namespace DragonScreen.BlackBox
             PutBooster(c, v);
 
             // ---------- H: R1 abort ----------
-            BlackBoxSchema.Set(c, BlackBoxCols.Aborting, FlightDriver.Aborting);
-            BlackBoxSchema.Set(c, BlackBoxCols.AbortMode, AbortControl.Mode.ToString());
+            // ⛔ Scope.Capsule (BB2). `FlightDriver`/`AbortControl` are the CAPSULE's abort state; on a
+            // booster's row they would report the Dragon's abort as the booster's. Blank, per §4.6.
+            if (focused)
+            {
+                BlackBoxSchema.Set(c, BlackBoxCols.Aborting, FlightDriver.Aborting);
+                BlackBoxSchema.Set(c, BlackBoxCols.AbortMode, AbortControl.Mode.ToString());
+            }
             if (hasTarget) BlackBoxSchema.Set(c, BlackBoxCols.ClosingMps, ClosingRate(v));
 
             // ================= R2: the state block =================
@@ -607,7 +1022,14 @@ namespace DragonScreen.BlackBox
                     BlackBoxSchema.Set(c, BlackBoxCols.TApS, o.timeToAp);
                     BlackBoxSchema.Set(c, BlackBoxCols.TPeS, o.timeToPe);
                 }
-                BlackBoxSchema.Set(c, BlackBoxCols.Stage, StageManager.CurrentStage);
+                // ⛔ BB2. `StageManager` is a SCENE singleton wired to the ACTIVE vessel's staging
+                // stack, so on an unfocused stream it would report the camera holder's stage number
+                // as the recorded vessel's — a plausible integer that is about somebody else.
+                // `Vessel.currentStage` is the same quantity for the vessel actually being recorded.
+                // The focused stream keeps `StageManager` unchanged from BB1, because that is the one
+                // the staging EVENTS are read from and the two must not disagree by construction.
+                BlackBoxSchema.Set(c, BlackBoxCols.Stage,
+                                   focused ? StageManager.CurrentStage : v.currentStage);
                 BlackBoxSchema.Set(c, BlackBoxCols.RcsOn, v.ActionGroups[KSPActionGroup.RCS]);
 
                 BlackBoxRecorder.ResolveResIds();
@@ -629,44 +1051,57 @@ namespace DragonScreen.BlackBox
                     BlackBoxSchema.Set(c, BlackBoxCols.HullTempC, tempC);
                 }
 
-                // ---- E/F: the idle seams. §2.5 is explicit that recording the CONSTANT is itself the
-                // ---- proof the seam was idle — so these are Live columns with a real (constant) writer,
-                // ---- not Unfitted ones. On the day §B12.5 flips one, the column starts moving and the
-                // ---- file shows exactly when.
-                BlackBoxSchema.Set(c, BlackBoxCols.GncEngaged, AutoPilot.Engaged);
-                BlackBoxSchema.Set(c, BlackBoxCols.ModeIndex, FlightDriver.MissionMode.ToString());
-                MissionPhase authoritative = Mission.AuthoritativePhase(
-                    CrewProcedureOps.Engaged, CrewProcedureOps.ActivePhase, classified);
-                BlackBoxSchema.Set(c, BlackBoxCols.MissionPhase, Mission.Name(authoritative));
                 // ⭐ Recorded SEPARATELY from the authoritative phase (§2.6) so a conductor/classifier
                 // disagreement is VISIBLE rather than resolved silently — a (b)-class independent
-                // cross-check on our own FSM, for the price of one column.
+                // cross-check on our own FSM, for the price of one column. Scope.Vessel: it is built
+                // from THIS stream's vessel, so the booster carries its own real phase.
                 BlackBoxSchema.Set(c, BlackBoxCols.PhaseClassified, Mission.Name(classified));
 
-                Gate g = CrewProcedureOps.CurrentGate();
-                ProcState pr = CrewProcedureOps.Proc;
-                BlackBoxSchema.Set(c, BlackBoxCols.GateId, g.Id.ToString());
-                BlackBoxSchema.Set(c, BlackBoxCols.GatePhase, pr.Phase.ToString());
-                BlackBoxSchema.Set(c, BlackBoxCols.CrewAction, CrewProcedureOps.CrewActionNeeded());
-                BlackBoxSchema.Set(c, BlackBoxCols.GateSatisfiedMask, PackBits(pr.Satisfied));
+                // ---- ⛔ Scope.Capsule from here to `PutScreens` (BB2) ----
+                // Everything in this block is read from a DragonScreen/conductor SINGLETON. Those
+                // describe the CAPSULE whichever vessel is asking, so writing them on a tracked
+                // booster's row would file the Dragon's mission phase, gates, FDIR verdict, bus
+                // voltages, fire suppressant and leak rate under the booster and call each one a
+                // measurement. §4.8: NEVER FABRICATE. §4.6: blank, never a plausible number.
+                // The manifest declares each of them `scope: "capsule"` and `ever_focused: false`, so
+                // the blanks in a booster file are readable as withheld rather than broken.
+                if (focused)
+                {
+                    // ---- E/F: the idle seams. §2.5 is explicit that recording the CONSTANT is itself
+                    // ---- the proof the seam was idle — so these are Live columns with a real
+                    // ---- (constant) writer, not Unfitted ones. On the day §B12.5 flips one, the
+                    // ---- column starts moving and the file shows exactly when.
+                    BlackBoxSchema.Set(c, BlackBoxCols.GncEngaged, AutoPilot.Engaged);
+                    BlackBoxSchema.Set(c, BlackBoxCols.ModeIndex, FlightDriver.MissionMode.ToString());
+                    MissionPhase authoritative = Mission.AuthoritativePhase(
+                        CrewProcedureOps.Engaged, CrewProcedureOps.ActivePhase, classified);
+                    BlackBoxSchema.Set(c, BlackBoxCols.MissionPhase, Mission.Name(authoritative));
 
-                FdirReport fr = FlightDriver.LastFdirReport;
-                BlackBoxSchema.Set(c, BlackBoxCols.FdirFault, fr.Fault.ToString());
-                BlackBoxSchema.Set(c, BlackBoxCols.FdirRecovery, fr.Response.ToString());
+                    Gate g = CrewProcedureOps.CurrentGate();
+                    ProcState pr = CrewProcedureOps.Proc;
+                    BlackBoxSchema.Set(c, BlackBoxCols.GateId, g.Id.ToString());
+                    BlackBoxSchema.Set(c, BlackBoxCols.GatePhase, pr.Phase.ToString());
+                    BlackBoxSchema.Set(c, BlackBoxCols.CrewAction, CrewProcedureOps.CrewActionNeeded());
+                    BlackBoxSchema.Set(c, BlackBoxCols.GateSatisfiedMask, PackBits(pr.Satisfied));
 
-                SystemsState sys = FlightCommands.State;
-                BlackBoxSchema.Set(c, BlackBoxCols.Bus1On, sys.Bus1On);
-                BlackBoxSchema.Set(c, BlackBoxCols.Bus2On, sys.Bus2On);
-                BlackBoxSchema.Set(c, BlackBoxCols.StrA1, sys.A1.ToString());
-                BlackBoxSchema.Set(c, BlackBoxCols.StrB1, sys.B1.ToString());
-                BlackBoxSchema.Set(c, BlackBoxCols.StrC1, sys.C1.ToString());
-                BlackBoxSchema.Set(c, BlackBoxCols.StrA2, sys.A2.ToString());
-                BlackBoxSchema.Set(c, BlackBoxCols.StrB2, sys.B2.ToString());
-                BlackBoxSchema.Set(c, BlackBoxCols.StrC2, sys.C2.ToString());
-                BlackBoxSchema.Set(c, BlackBoxCols.FireIntensity, sys.FireIntensity);
-                BlackBoxSchema.Set(c, BlackBoxCols.Suppressant, sys.Suppressant);
-                BlackBoxSchema.Set(c, BlackBoxCols.LeakRate, sys.LeakRate);
-                BlackBoxSchema.Set(c, BlackBoxCols.Isolating, sys.Isolating);
+                    FdirReport fr = FlightDriver.LastFdirReport;
+                    BlackBoxSchema.Set(c, BlackBoxCols.FdirFault, fr.Fault.ToString());
+                    BlackBoxSchema.Set(c, BlackBoxCols.FdirRecovery, fr.Response.ToString());
+
+                    SystemsState sys = FlightCommands.State;
+                    BlackBoxSchema.Set(c, BlackBoxCols.Bus1On, sys.Bus1On);
+                    BlackBoxSchema.Set(c, BlackBoxCols.Bus2On, sys.Bus2On);
+                    BlackBoxSchema.Set(c, BlackBoxCols.StrA1, sys.A1.ToString());
+                    BlackBoxSchema.Set(c, BlackBoxCols.StrB1, sys.B1.ToString());
+                    BlackBoxSchema.Set(c, BlackBoxCols.StrC1, sys.C1.ToString());
+                    BlackBoxSchema.Set(c, BlackBoxCols.StrA2, sys.A2.ToString());
+                    BlackBoxSchema.Set(c, BlackBoxCols.StrB2, sys.B2.ToString());
+                    BlackBoxSchema.Set(c, BlackBoxCols.StrC2, sys.C2.ToString());
+                    BlackBoxSchema.Set(c, BlackBoxCols.FireIntensity, sys.FireIntensity);
+                    BlackBoxSchema.Set(c, BlackBoxCols.Suppressant, sys.Suppressant);
+                    BlackBoxSchema.Set(c, BlackBoxCols.LeakRate, sys.LeakRate);
+                    BlackBoxSchema.Set(c, BlackBoxCols.Isolating, sys.Isolating);
+                }
 
                 if (hasTarget) BlackBoxSchema.Set(c, BlackBoxCols.RangeM, tgtRange);
 
@@ -677,11 +1112,17 @@ namespace DragonScreen.BlackBox
             if (plan.FillR3)
             {
                 if (body != null) BlackBoxSchema.Set(c, BlackBoxCols.Body, body.bodyName);
-                SystemsState sys = FlightCommands.State;
-                BlackBoxSchema.Set(c, BlackBoxCols.O2Store, sys.Oxygen);
-                BlackBoxSchema.Set(c, BlackBoxCols.N2Store, sys.Nitrogen);
-                BlackBoxSchema.Set(c, BlackBoxCols.CanisterUsed, sys.CanisterUsed);
-                BlackBoxSchema.Set(c, BlackBoxCols.IsReturn, CrewProcedureOps.IsReturn);
+                // ⛔ Scope.Capsule (BB2) — the Dragon's consumables and its return flag, not the
+                // recorded vessel's. A booster has no O2 store, and reporting the capsule's on its
+                // row would be a number about the wrong vehicle.
+                if (focused)
+                {
+                    SystemsState sys = FlightCommands.State;
+                    BlackBoxSchema.Set(c, BlackBoxCols.O2Store, sys.Oxygen);
+                    BlackBoxSchema.Set(c, BlackBoxCols.N2Store, sys.Nitrogen);
+                    BlackBoxSchema.Set(c, BlackBoxCols.CanisterUsed, sys.CanisterUsed);
+                    BlackBoxSchema.Set(c, BlackBoxCols.IsReturn, CrewProcedureOps.IsReturn);
+                }
 
                 CommNet.CommNetVessel conn = null;
                 try { conn = CommNet.CommNetScenario.CommNetEnabled ? v.Connection : null; } catch { }
@@ -892,7 +1333,7 @@ namespace DragonScreen.BlackBox
             {
                 // Never during a close: Close -> Flush -> CheckRotate -> Close would recurse.
                 if (closing || BlackBoxRecorder.MaxFileMB <= 0.0) return;
-                var fi = new FileInfo(Path.Combine(dir, MissionId + ".params.csv"));
+                var fi = new FileInfo(Path.Combine(dir, Stem + ".params.csv"));
                 if (!fi.Exists || fi.Length < BlackBoxRecorder.MaxFileMB * 1024.0 * 1024.0) return;
                 Emit(BlackBoxEvents.RecRotate, new[] { Kv.Num("bytes", fi.Length) });
                 Debug.LogWarning(Tag + "size ceiling reached; stopping this stream cleanly rather than "
@@ -910,76 +1351,80 @@ namespace DragonScreen.BlackBox
         /// </summary>
         public void Emit(string kind, Kv[] payload)
         {
-            if (events == null) return;
+            if (log == null || !log.Open) return;
             try
             {
                 // ⛔ THIS STREAM'S vessel's MET, latched on the last tick — never the ACTIVE vessel's.
                 // MET restarts per vessel (§4.5), so borrowing the camera-holder's clock would put a
                 // booster event on the capsule's timeline, which is the exact class of error the
-                // shared `ut` exists to make impossible.
+                // shared `ut` exists to make impossible. Both vessels write into the MISSION's one log
+                // (BB2) and each line carries its own `vessel`, so the narrative is already ordered
+                // across both craft and nothing has to be merged on a clock afterwards.
                 double ut = double.IsNaN(lastUt) ? 0.0 : lastUt;
-                events.WriteLine(BlackBoxEvents.Line(MissionId, VesselName, ut, lastMet, seq, kind, payload));
-                events.Flush();
-                eventsWritten++;
+                if (log.Write(BlackBoxEvents.Line(MissionId, VesselName, ut, lastMet, seq, kind, payload)))
+                {
+                    eventsWritten++;
+                    return;
+                }
+                // ⛔ COUNTED HERE, NOT THROUGH `OnWriteError`. `OnWriteError` emits a `rec.write_error`
+                // EVENT, which would come straight back here and recurse without bound the moment the
+                // log itself is the thing that is broken. The self-disable ladder is still fed.
+                writeErrors++; consecutiveWriteErrors++;
+                BlackBoxRecorder.ReportWriteFailure(consecutiveWriteErrors, "event log write failed");
             }
-            catch (Exception e) { OnWriteError("event", e); }
+            catch { writeErrors++; }
         }
 
         // ============================== event edges (§2.9) ==============================
 
         void DetectEvents(Vessel v, double ut, MissionPhase classified, int ignited, int flameout,
-                          double thrustN, bool rails)
+                          double thrustN, bool focused)
         {
-            // ---- phase, mode, focus, warp ----
-            MissionPhase authoritative = Mission.AuthoritativePhase(
-                CrewProcedureOps.Engaged, CrewProcedureOps.ActivePhase, classified);
-            if (authoritative != lastPhase)
-            {
-                if (lastPhase != (MissionPhase)255)
-                    Emit(BlackBoxEvents.PhaseTransition, new[]
-                    {
-                        Kv.Str("from", Mission.Name(lastPhase)),
-                        Kv.Str("to", Mission.Name(authoritative)),
-                        Kv.Str("classified", Mission.Name(classified)),
-                        Kv.Bit("conductor_engaged", CrewProcedureOps.Engaged),
-                        Kv.Num("alt_m", v.altitude), Kv.Num("srf_speed_mps", v.srfSpeed),
-                    });
-                lastPhase = authoritative;
-            }
+            // ⭐ BB2 SPLITS THIS METHOD IN TWO, and the split is the same one `Scope` makes in the row.
+            //   • PER-VESSEL edges — staging, engines, liftoff, max-Q, chutes, touchdown — run on EVERY
+            //     stream, because they are facts about the vessel being recorded. The booster's own
+            //     touchdown is precisely the event §B16.7 exists to produce.
+            //   • CAPSULE-SINGLETON edges — mission phase, GNC mode, bus trips, fire, leak, the alarm
+            //     channel, the page timeline — run ONLY on the stream that holds the camera. Emitting
+            //     them from both streams would put the same fact in the log twice, and in an ordered
+            //     narrative a duplicated event is worse than a missing one: it reads as two occurrences.
+            //   • FOCUS and WARP are single global facts and moved up to `BlackBoxRecorder.MissionEdges`
+            //     for that same reason — once per mission, with `vessel: null`.
 
-            ControlMode mode = FlightDriver.MissionMode;
-            if (mode != lastMode)
+            // ---- capsule singletons: phase and GNC mode ----
+            if (focused)
             {
-                if (lastMode != (ControlMode)255)
-                    Emit(BlackBoxEvents.GncModeChange,
-                         new[] { Kv.Str("from", lastMode.ToString()), Kv.Str("to", mode.ToString()) });
-                lastMode = mode;
-            }
+                MissionPhase authoritative = Mission.AuthoritativePhase(
+                    CrewProcedureOps.Engaged, CrewProcedureOps.ActivePhase, classified);
+                if (authoritative != lastPhase)
+                {
+                    if (lastPhase != (MissionPhase)255)
+                        Emit(BlackBoxEvents.PhaseTransition, new[]
+                        {
+                            Kv.Str("from", Mission.Name(lastPhase)),
+                            Kv.Str("to", Mission.Name(authoritative)),
+                            Kv.Str("classified", Mission.Name(classified)),
+                            Kv.Bit("conductor_engaged", CrewProcedureOps.Engaged),
+                            Kv.Num("alt_m", v.altitude), Kv.Num("srf_speed_mps", v.srfSpeed),
+                        });
+                    lastPhase = authoritative;
+                }
 
-            Vessel act = FlightGlobals.ActiveVessel;
-            string focus = act != null ? act.vesselName : null;
-            if (focus != lastFocus)
-            {
-                if (lastFocus != null)
-                    Emit(BlackBoxEvents.RecFocusChange,
-                         new[] { Kv.Str("from", lastFocus), Kv.Str("to", focus) });
-                lastFocus = focus;
-            }
-
-            double warp = TimeWarp.CurrentRate;
-            if (Math.Abs(warp - lastWarpRate) > 1e-6)
-            {
-                if (lastWarpRate >= 0.0)
-                    Emit(BlackBoxEvents.RecWarpChange, new[]
-                    {
-                        Kv.Num("from", lastWarpRate), Kv.Num("to", warp), Kv.Bit("rails", rails),
-                    });
-                lastWarpRate = warp;
+                ControlMode mode = FlightDriver.MissionMode;
+                if (mode != lastMode)
+                {
+                    if (lastMode != (ControlMode)255)
+                        Emit(BlackBoxEvents.GncModeChange,
+                             new[] { Kv.Str("from", lastMode.ToString()), Kv.Str("to", mode.ToString()) });
+                    lastMode = mode;
+                }
             }
 
             // ---- staging + engines. §2.3: eng_ignited/eng_flameout exist because "delivered thrust
             // ---- = 0" cannot distinguish DID NOT COMMAND from COMMANDED AND FAILED.
-            int stage = StageManager.CurrentStage;
+            // BB2: `StageManager` is the ACTIVE vessel's stack, so an unfocused stream reads its own
+            // vessel's `currentStage` — otherwise the booster would log the capsule's staging as its own.
+            int stage = focused ? StageManager.CurrentStage : v.currentStage;
             if (stage != lastStage)
             {
                 if (lastStage != int.MinValue)
@@ -1053,6 +1498,11 @@ namespace DragonScreen.BlackBox
                              Kv.Num("vspeed_mps", v.verticalSpeed) });
             }
 
+            // ---- ⛔ EVERYTHING BELOW IS A CAPSULE SINGLETON (BB2): the systems model, the alarm
+            // ---- channel and the page timeline all describe the Dragon. A tracked booster's stream
+            // ---- does not emit them, because they are not its events and the log already has them.
+            if (!focused) return;
+
             // ---- systems edges: a trip cascade is instantaneous, so the EDGE is the event and the
             // ---- R2 column is only context (§2.8).
             SystemsState sys = FlightCommands.State;
@@ -1085,7 +1535,7 @@ namespace DragonScreen.BlackBox
 
             // ---- the alarm channel + the page timeline: screens-derived, so guarded the same way the
             // ---- screens-derived COLUMNS are. A stale mask would raise a fault that is not happening.
-            if (act != null && act.persistentId == PersistentId)
+            // ---- (The focus half of that guard is the `if (!focused) return` above.)
             {
                 PageState ps = VesselData.State;
                 if (ps.Valid)
@@ -1168,7 +1618,11 @@ namespace DragonScreen.BlackBox
         static void EngineState(Vessel v, out int ignited, out int flameout, out double thrustN, out double availN)
         {
             ignited = 0; flameout = 0; thrustN = 0.0; availN = 0.0;
-            if (v == null || v.parts == null) return;
+            // ⛔ BB2: `loaded` as well as null. An UNLOADED vessel's part list is EMPTY, so this walk
+            // would return a confident 0 engines / 0 N for a vehicle nobody can see — a plausible
+            // number where §4.6 demands a blank. The out-params stay NaN-free by contract, so the
+            // caller's `false` return is what leaves the cells empty.
+            if (v == null || !v.loaded || v.parts == null) return;
             try
             {
                 for (int i = 0; i < v.parts.Count; i++)
@@ -1192,7 +1646,7 @@ namespace DragonScreen.BlackBox
         static void Authority(Vessel v, out double pitch, out double yaw, out double roll, out double rcsN)
         {
             pitch = 0.0; yaw = 0.0; roll = 0.0; rcsN = 0.0;
-            if (v == null || v.parts == null) return;
+            if (v == null || !v.loaded || v.parts == null) return;   // BB2: unloaded = no part walk
             try
             {
                 for (int i = 0; i < v.parts.Count; i++)
@@ -1230,7 +1684,7 @@ namespace DragonScreen.BlackBox
         bool HottestSkin(Vessel v, double ut, out double frac, out double tempC)
         {
             frac = 0.0; tempC = 0.0;
-            if (v == null || v.parts == null) return false;
+            if (v == null || !v.loaded || v.parts == null) return false;   // BB2: unloaded = no part walk
             Part hottest = null;
             try
             {
@@ -1397,7 +1851,7 @@ namespace DragonScreen.BlackBox
 
         static void Chutes(Vessel v, ref MissionInputs mi)
         {
-            if (v.parts == null) return;
+            if (!v.loaded || v.parts == null) return;   // BB2: unloaded = no part walk
             try
             {
                 for (int i = 0; i < v.parts.Count; i++)
@@ -1442,6 +1896,14 @@ namespace DragonScreen.BlackBox
             manifest.Body = v.mainBody != null ? v.mainBody.bodyName : null;
             manifest.TargetName = v.targetObject != null ? v.targetObject.GetName() : null;
             manifest.Policy = policy;
+            // ---- BB2: which stream of the mission this is, and where its siblings are ----
+            manifest.StreamRole = Tracked ? "tracked" : "focused";
+            manifest.EverFocused = everFocused;
+            manifest.ParamsFile = Stem + ".params.csv";
+            manifest.EventsFile = (log != null ? log.FileName : MissionId + ".events.jsonl");
+            manifest.LaunchLatDeg = launchLat;
+            manifest.LaunchLonDeg = launchLon;
+            manifest.HaveLaunchRef = haveLaunchRef;
             manifest.DynamicPhaseRule =
                 "Ascent | Entry | Drogues | Mains | aborting | thrust_n > 0 | RCS translation commanded "
                 + "| Approach inside 1 km  (BlackBoxRate.IsDynamic)";
@@ -1555,32 +2017,9 @@ namespace DragonScreen.BlackBox
         static long TickNow() { return System.Diagnostics.Stopwatch.GetTimestamp(); }
         static double ElapsedUs(long t0) { return (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * TicksToUs; }
 
-        /// <summary>§4.4: a revert branches the mission id with `_r2`, `_r3`, … rather than a new mission.</summary>
-        static string NextRevertSuffix(string missionId)
-        {
-            int at = missionId.LastIndexOf("_r", StringComparison.Ordinal);
-            if (at > 0)
-            {
-                int n;
-                if (int.TryParse(missionId.Substring(at + 2), NumberStyles.Integer, CultureInfo.InvariantCulture, out n))
-                    return "_r" + (n + 1);
-            }
-            return "_r2";
-        }
-
-        static bool RailsWarp()
-        {
-            try { return TimeWarp.WarpMode == TimeWarp.Modes.HIGH && TimeWarp.CurrentRateIndex > 0; }
-            catch { return false; }
-        }
-
-        static string Sanitize(string s)
-        {
-            if (string.IsNullOrEmpty(s)) return "flight";
-            var sb = new StringBuilder(s.Length);
-            foreach (char ch in s)
-                sb.Append((char.IsLetterOrDigit(ch) || ch == '-' || ch == '_') ? ch : '_');
-            return sb.ToString();
-        }
+        // ⛔ `NextRevertSuffix`, `RailsWarp` and `Sanitize` MOVED (BB2). The first two are mission-level
+        // facts and now live on `BlackBoxRecorder` / `BlackBoxNaming`; `Sanitize` is `BlackBoxNaming`'s,
+        // where the whole naming rule is pure and headlessly asserted. Nothing was reimplemented — the
+        // bodies are the same, in one place instead of two.
     }
 }

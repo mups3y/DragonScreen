@@ -58,6 +58,36 @@ namespace DragonScreen.BlackBox
         public string Body;
         public string TargetName;
 
+        // ---- ⭐ BB2: WHICH STREAM OF THE MISSION THIS IS, AND WHERE ITS SIBLINGS ARE ----
+        // §4.4's two-vessel rule ("the same mission id") is what makes two streams one mission, and
+        // this is where a reader learns it WITHOUT globbing a directory and guessing from filenames —
+        // which is precisely how the old paired `Crew-2_*.csv` / `Crew-2_Probe_*.csv` streams had to be
+        // associated, by timestamp, and why §4.4 calls this the fix for them.
+        /// <summary>"focused" (opened for the camera holder) or "tracked" (an unfocused vessel, §B16.7).</summary>
+        public string StreamRole;
+        /// <summary>
+        /// Did this stream's vessel EVER hold the camera? The `Scope.Capsule` columns are written only
+        /// while it does, so this is the flag that says whether their blanks are expected — and it is
+        /// what `BlackBoxCoverage.Findings(everFocused)` was given at close.
+        /// </summary>
+        public bool EverFocused;
+        /// <summary>This stream's own parameter file, by name — `<MissionId>[.<Vessel>].params.csv`.</summary>
+        public string ParamsFile;
+        /// <summary>
+        /// The mission's SHARED event log. One per mission, not one per stream (§4.1: "per mission,
+        /// three artefacts"; §4.4 qualifies only the params file per vessel), so both vessels' events
+        /// are already one ordered narrative — which is what §4.10's new §10 section asks for.
+        /// </summary>
+        public string EventsFile;
+        /// <summary>
+        /// The MISSION's launch reference, latched once when its first stream opened, and shared by
+        /// every stream so `downrange_m` means the same thing on both. A booster stream that latched
+        /// its own reference at separation would measure downrange from the separation point, and its
+        /// deck-miss (§4.10 §4) would be uncomparable with the capsule's by exactly that offset.
+        /// </summary>
+        public double LaunchLatDeg, LaunchLonDeg;
+        public bool HaveLaunchRef;
+
         // ---- §4.5's UT / MET / wall correlation record (the SCLK-SCET kernel analogue) ----
         public double LaunchUt;
         public double UtAtOpen;
@@ -135,6 +165,17 @@ namespace DragonScreen.BlackBox
             sb.Append("  \"body\": ").Append(S(m.Body)).Append(",\n");
             sb.Append("  \"target_name\": ").Append(S(m.TargetName)).Append(",\n");
 
+            // ---- BB2: this stream's place in the mission, and the join that reunites the two ----
+            sb.Append("  \"stream_role\": ").Append(S(m.StreamRole)).Append(",\n");
+            sb.Append("  \"ever_focused\": ").Append(m.EverFocused ? "true" : "false").Append(",\n");
+            sb.Append("  \"params_file\": ").Append(S(m.ParamsFile)).Append(",\n");
+            sb.Append("  \"events_file\": ").Append(S(m.EventsFile)).Append(",\n");
+            // Stated rather than implied. S59 §6.1 Q3 settled ONE STREAM PER VESSEL "joined by the
+            // shared mission_id and ut", and a reader should not have to know that from a research doc.
+            sb.Append("  \"stream_join_on\": [\"mission_id\", \"ut\"],\n");
+            sb.Append("  \"launch_lat_deg\": ").Append(m.HaveLaunchRef ? N(m.LaunchLatDeg) : "null").Append(",\n");
+            sb.Append("  \"launch_lon_deg\": ").Append(m.HaveLaunchRef ? N(m.LaunchLonDeg) : "null").Append(",\n");
+
             // ---- §4.5: the one owner of the time base, and one documented offset ----
             sb.Append("  \"launch_ut\": ").Append(N(m.LaunchUt)).Append(",\n");
             sb.Append("  \"ut_at_open\": ").Append(N(m.UtAtOpen)).Append(",\n");
@@ -169,6 +210,11 @@ namespace DragonScreen.BlackBox
                 sb.Append(", \"provenance\": ").Append(S(c.Provenance));
                 sb.Append(", \"source\": ").Append(S(c.Source));
                 sb.Append(", \"fit\": ").Append(S(BlackBoxSchema.FitName(c.Fit)));
+                // BB2. "vessel" = true of the craft named in this file's `vessel` column; "capsule" =
+                // a DragonScreen/conductor singleton, written ONLY while this stream's vessel holds the
+                // camera and blank otherwise. Without it, a reader of the booster's file cannot tell a
+                // withheld capsule column from a broken one.
+                sb.Append(", \"scope\": ").Append(S(BlackBoxSchema.ScopeName(c.Scope)));
                 sb.Append(", \"note\": ").Append(c.Note == null ? "null" : S(c.Note));
                 sb.Append('}');
                 if (i < cols.Length - 1) sb.Append(',');

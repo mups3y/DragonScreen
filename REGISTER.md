@@ -2225,7 +2225,7 @@ went wrong.
    halves the resolution of the §B8 AoA/Q traces the whole tune depends on.
 *No gate; a design preference with a size and analysis-ergonomics consequence.*
 
-### BB2 [O] TWO-VESSEL recording — the booster flies unfocused and unrecorded without this — **TODO** — [TIER 1: §B16.7's accepted risk names the BlackBox as its own answer]
+### BB2 [O] TWO-VESSEL recording — the booster flies unfocused and unrecorded without this — **DONE 2026-09-04** — [TIER 1: §B16.7's accepted risk names the BlackBox as its own answer]
 - **Read:** `docs/BLACKBOX_RESEARCH.md` §4.4 (a second tracked vessel opens
   `<MissionId>.<Vessel>.params.csv` under the same mission id — the fix for the old paired
   `Crew-2_*.csv` / `Crew-2_Probe_*.csv` streams that could only be associated by timestamp), §B16.7 in
@@ -2244,6 +2244,151 @@ went wrong.
   camera focus; `python plugin/build.py test` green; preview N/A unless glue touches a page.
 - Ends per C1.5: register update + local commit; install/glass confirmation is **BB4**.
 
+#### DONE 2026-09-04 — what was built
+
+**Files (the ONLY files this task wrote):** `plugin/src/pure/blackbox/BlackBoxNaming.cs` (NEW — the §4.4
+naming rule, made pure so it can be asserted) · `BlackBoxSchema.cs` · `BlackBoxCoverage.cs` ·
+`BlackBoxManifest.cs` · `plugin/src/BlackBoxRecorder.cs` · `plugin/test/BlackBoxTest.cs` · this file.
+`git status` shows exactly those. **No column added, removed or reordered — `schema_version` stays 1
+(§4.2), so a BB1 recording still chains with a BB2 one; `recorder_version` moves to `BB2.0`.**
+
+**What a two-vessel mission now writes (§4.4, and it is the SAME mission id — the whole point):**
+```
+<MissionId>.params.csv            the focused vessel     ← unqualified, so a ONE-vessel mission is
+<MissionId>.manifest.json                                   byte-for-byte the BB1 file set
+<MissionId>.<Vessel>.params.csv   the tracked unfocused vessel
+<MissionId>.<Vessel>.manifest.json
+<MissionId>.events.jsonl          ⭐ ONE, SHARED by both craft
+```
+§4.1 says "per mission, three artefacts" and §4.4 qualifies only the PARAMS file per vessel, so the event
+log is one ordered narrative across both craft — which is exactly what §4.10's NEW §10 section ("the whole
+`events.jsonl` as one ordered narrative") asks for, and every line already carries its own `vessel`.
+Splitting it would force a reader to re-merge on a clock what was never two things.
+
+**What moved from the stream up to the MISSION.** The mission id, the event log, the launch reference and
+**revert detection**. BB1's mission id was per stream, so it could only half-honour §4.4's "one mission =
+one set": a second stream would have got its own id and its own timestamp, which is precisely the paired
+`Crew-2_*.csv` / `Crew-2_Probe_*.csv` failure §4.4 names this line as the fix for. A revert now branches
+the MISSION (`_r2`, `_r3` …) and every stream re-opens under the new branch together.
+
+⭐ **THE ONE THING THAT WOULD HAVE MADE THE SECOND STREAM A LIE — `Scope`, a second axis on every column.**
+Most columns are read from the stream's own `Vessel` and are simply true of it. But `FlightCommands.State`,
+`CrewProcedureOps`, `FlightDriver`, `AbortControl` and `VesselData.State` are **statics describing the
+CAPSULE**, whichever vessel is asking. Copying them onto the booster's rows would file the Dragon's bus
+voltages, strings, fire suppressant, leak rate, gates, FDIR verdict, abort mode and mission phase **under
+the booster** and call each one a measurement — §4.8's NEVER FABRICATE, and the same class of error as the
+frozen-under-warp control values that manufactured a phantom RCS thrash. So:
+- every column declares `Scope.Vessel` or `Scope.Capsule` (**56 marked capsule**, hand-listed and asserted
+  in the suite so a later task that adds a capsule column and forgets the declaration FAILS rather than
+  ships), the manifest carries `scope` per column, and `BuildRow` writes a capsule column **only while this
+  stream's vessel holds the camera** — a per-ROW condition, because §4.4 forbids rotating on focus;
+- `stage` got the same treatment for the same reason: `StageManager.CurrentStage` is a scene singleton
+  wired to the ACTIVE vessel, so an unfocused stream reads **`Vessel.currentStage`** instead of the camera
+  holder's number. `stage.staged` events likewise;
+- `DetectEvents` splits the same way — per-vessel edges (staging, engines, liftoff, max-Q, chutes,
+  **touchdown**) run on every stream; capsule-singleton edges (phase, GNC mode, bus trips, fire, leak, the
+  alarm channel, the page timeline) only on the focused one. Focus and warp are single GLOBAL facts and
+  moved to `BlackBoxRecorder.MissionEdges`, emitted once with `vessel: null`, because a duplicated event in
+  an ordered narrative is worse than a missing one: it reads as two occurrences.
+- ⚠ `Fit.Unfitted` columns are **deliberately left unscoped**. Nothing writes them, so a declaration would
+  be a guess, and T17/T18/T19/S55 are the lines that will know whose state each turned out to be. Asserted:
+  no Unfitted column carries a scope.
+
+⭐ **AND THE COVERAGE PASS HAD TO LEARN THE DIFFERENCE, or BB2 would have broken BB1's best mechanism.**
+A tracked stream correctly writes none of those 56 columns. Judged by BB1's rule that would close every
+two-vessel flight with **~27 ghost-column DEFECTS that are not defects** — and this file's own header
+rejects exactly that ("a defect that always fires is a defect nobody reads"). `Findings(everFocused)` now
+reports them as NOTES carrying the reason, and the symmetric check takes over instead: a capsule value that
+DID reach a never-focused stream is a new defect kind, **`capsule_leak`** — the check that catches the
+`focused` gate being removed by a later edit. `ever_focused` lands in the manifest so a reader of the
+booster's file can tell **withheld** from **broken** without knowing any of this.
+
+**What is recorded, and for how long.** The tracked vessel is `BoosterHost.Booster` (what W23/W24 actually
+bind and fly on the non-active vessel) or `BoosterRecovery.Tracked` (the declared seam `HullCams` already
+follows — a null stub today, so it starts working the day it is filled, with no edit here). **Loaded only:**
+an unloaded vessel's `parts` list is EMPTY, so every part walk would return a confident **zero** engines /
+zero thrust / zero authority for a vehicle nobody can see — §4.6 says blank, never a plausible number — so
+the four part walks now guard on `v.loaded` too. Once opened, the stream is kept until the vessel unloads or
+dies, **deliberately including after `BoosterHost` releases it**: §B16.7's touchdown, its +10 s settle and
+the recovery are the part of the booster flight the recorder most exists for. A hard cap of 3 concurrent
+streams is a guard, not an expectation. `[Tunable] RecordTrackedVessel` (default TRUE) can hold the second
+stream off from `PluginData/tuning.cfg` with no rebuild, and lands in the manifest's `tunables[]` like
+everything else.
+
+⭐ **BB1's booster observability block was, until now, STRUCTURALLY UNREACHABLE.** `PutBooster` writes
+`boost_db_pitch/yaw/roll`, `boost_db_deg`, `boost_steer_*`, `boost_throttle`, `boost_phase`,
+`boost_uncommanded` **only on the stream whose vessel IS the booster** — and BB1 had no such stream. Ten
+declared columns, including the owner's own Q2 observability refinement (2026-09-04) and the deadband seam
+`pure/BoosterSteer.cs:43` names its reader for, could not be written anywhere. BB2 is what makes them
+produce data.
+
+**Also in the manifest (per stream):** `stream_role` (focused | tracked), `ever_focused`, `params_file`,
+`events_file` (both streams naming the ONE shared log), `stream_join_on: ["mission_id","ut"]` — S59 §6.1
+Q3's settled join **stated in the file** rather than left in a research doc — and `launch_lat_deg` /
+`launch_lon_deg`, the MISSION's launch reference, latched once and shared, so `downrange_m` means the same
+quantity on both files. A booster stream latching its own at separation would have reported a downrange
+offset by the separation distance, making its deck-miss (§4.10 §4) uncomparable with the capsule's.
+
+**Two defects found and fixed while building, both introduced by the shared log:** (1) `Emit`'s failure
+path called `OnWriteError`, which emits a `rec.write_error` EVENT — straight back into `Emit`, recursing
+without bound the moment the log itself is what is broken. Counted directly now, self-disable ladder still
+fed. (2) `RailsWarp`, `Sanitize` and `NextRevertSuffix` were about to exist twice; they are in one place
+(`BlackBoxRecorder` / `BlackBoxNaming`), bodies unchanged.
+
+**C1.15 (evidence-gated mod-first), searched against `docs/reference/INSTALLED_MODS.md`:** BB2 writes **no
+new simulation for any quantity** — it adds no column, and every value it moves was already a direct live
+read in BB1 — so the rule's trigger does not fire. Searched anyway for an installed mod that records a
+SECOND, UNFOCUSED vessel to disk: **MechJeb2** ships `MechJebModuleFlightRecorder`, already rejected with
+reasons by §3.3 and BB1 (`HistorySize = 3000` × 0.2 s with no wraparound = 600 s from the last `Mark()`,
+in-memory only, writes nothing to disk) — and it is additionally **single-vessel by construction**, so it
+could not answer §B16.7 even if the other three objections were fixed. **KER / FAR / TAC-LS / RealFuels /
+TestFlight** are data SOURCES, not recorders. **TCA, Kerbal Konstructs, TundraSpaceCenter, Fossil
+Industries, Kartoffelkuchen, RPM, FreeIva, SCANRPMStorage, SpaceXSuits, TE** supply nothing of this kind.
+Nothing in that list records flight data to disk at all, let alone for an unfocused vessel. Conclusion
+unchanged from BB1: build ours, read theirs.
+
+⛔ **EXCISABILITY RE-TESTED, NOT ASSUMED** (the owner's 2026-09-03 constraint; BB2 adds a file, so the
+constraint had to be re-proved rather than inherited). The plugin and the whole test suite were compiled
+with `src/pure/blackbox/`, `src/BlackBoxRecorder.cs` and `test/BlackBoxTest.cs` **excluded from the source
+list** and the one `TestMain.cs` registry line stripped: **132 source files instead of 142, plugin DLL
+builds, ALL SUITES PASSED.** Done by filtering the compile rather than by deleting files, so nothing in the
+working tree was disturbed. `grep -rl BlackBox plugin/ --include=*.cs` finds it named outside those four
+paths **only in comments** (`BoosterHost.cs`, `BoosterSteer.cs`, `BoosterDescent.cs`, `BoosterDrag.cs`,
+`Hoverslam.cs`, `ThrustBalance.cs`, two booster test files) plus the one `TestMain.cs` line. The dependency
+arrow still points one way: BB2 READS `BoosterHost.Booster` and `BoosterRecovery.Tracked`; neither knows it
+exists.
+
+**VERIFY (C1.3):** `python plugin/build.py test` **GREEN — ALL SUITES PASSED**, `BlackBoxTest` now
+**1662 checks, 0 failed** (BB1's 1442 + **220 new**). The new sections are `Naming`, `ScopeDeclarations`,
+`TrackedCoverage` and `TwoVesselPipeline`; the last drives a 200-row synthetic post-separation segment
+through the same `focused` gate `BuildRow` applies and asserts the three properties the design rests on —
+**every row of both streams carries the same `mission_id`**, **every capsule row joins a booster row on
+`ut` exactly (200 of 200)**, and **not one capsule singleton reached the booster's rows** — plus both
+streams header-width, the booster's own stage/altitude/vessel/focus columns, the shared log's per-vessel
+tagging and its null-vessel mission event, and the two manifests pointing at one another's mission.
+⭐ **THE NEW CHECKS WERE PROVED CAPABLE OF FAILING** rather than assumed to be: un-marking ONE column
+(`Cap("bus1_on"` → `C("bus1_on"`) produced **4 real failures** across three sections, and was restored.
+`python plugin/build.py preview` re-run and **green: no page changed and none was expected to** — BB2
+touches no screen, which this line's own done-criteria allow ("preview N/A unless glue touches a page");
+`page0_flight_gate.png` inspected and unchanged. **No `install`, no glass time** — the BlackBox install
+authority on record belongs to **BB4** and this line did not use it (C1.12).
+
+⚠ **WHAT THE HEADLESS SUITE STILL CANNOT PROVE, stated as BB1 stated it.** That the GLUE opens a second
+stream when `BoosterHost` actually binds, and that it keeps writing while the camera stays on the capsule.
+That needs a Vessel and a separation, and it is **BB4**'s job on the glass. What is proved here is that the
+glue COMPILES against the real KSP assemblies (`build.py test` builds the plugin first — 142 files, no new
+warning), and that every property decidable without KSP holds.
+
+- Ends per C1.5: register update + local commit; commit subject starts "BB2:"; never pushed.
+
+#### Open questions for the owner (C1.14) — BB2
+
+**None from this line.** BB2 needed no owner call: S59 §6.1 Q3 (one stream per vessel) was already settled
+and was not re-opened, §B16.7's focus protocol is a recorded owner decision, and no gate blocked the work —
+`install` and glass time were not needed and were not used. **BB1-Q1 (fixed vs adaptive row rate) remains
+OPEN and unchanged above**; BB2 did not touch the cadence, and both streams run the same `RatePolicy`, so
+whichever way Q1 is decided applies to both from the one `[Tunable]` with no further edit.
+
 ### BB3 [O] The report generator, §4.10 — the program that reads a recording back — **TODO** — [TIER 1: owner named this explicitly, 2026-09-04]
 - **Read:** `docs/BLACKBOX_RESEARCH.md` §4.10 (the twelve-section extension of `assess_flight.py`), §3.2
   (what the surviving analysers already do and why), §3.4's row for `plugin/tools/assess_flight.py` /
@@ -2256,6 +2401,13 @@ went wrong.
   context (not the flag alone — rule-based exceedance ignores correlations between parameters). Owner
   (2026-09-04): *"include the program that will read that data and return to you the correct and full
   recorded mission."*
+- ⭐ **What BB2 actually produced, so §0 does not have to rediscover it** (added by BB2, 2026-09-04):
+  a mission is now `<MissionId>.params.csv` + `<MissionId>.<Vessel>.params.csv` (same id) + ONE shared
+  `<MissionId>.events.jsonl` + one `.manifest.json` PER STREAM. Each manifest carries `stream_role`,
+  `ever_focused`, `params_file`, `events_file`, `stream_join_on: ["mission_id","ut"]`,
+  `launch_lat_deg`/`launch_lon_deg`, and a per-column `scope` (`vessel` | `capsule`). §0 must report
+  scope alongside provenance: a blank `capsule` column on a stream with `ever_focused: false` is
+  WITHHELD, not missing, and §1's dormant/empty-column check must not read it as a fault.
 - **DONE when:** run against a BB1/BB2 test recording, the tool prints all twelve §4.10 sections, regenerable
   from the three raw files alone; `python plugin/build.py test` green (a headless check on the report logic
   where practical); preview N/A (a Python tool, not a screen).
@@ -8141,3 +8293,40 @@ skipped silently. `python plugin/build.py test` run as the no-regression check: 
 `python plugin/build.py test` run as the no-regression check: **ALL SUITES PASSED**. `git status` clean apart
 from the four declared outputs (`CLAUDE.md`, `docs/BUILD_PLAN.md`, `.claude/skills/next/SKILL.md`,
 `REGISTER.md`).
+
+---
+
+### S90 [S] Three BlackBox event kinds are DECLARED and never emitted — the ghost-column defect, one level up — **TODO** — [TIER 3: a named channel that can never fire]
+Logged by **BB2**, 2026-09-04 (C1.1 — noticed while re-reading the event vocabulary, deliberately not fixed).
+
+`plugin/src/pure/blackbox/BlackBoxEvents.cs` declares `RecClose` (`rec.close`), `RecSceneChange`
+(`rec.scene_change`) and `SysStringState` (`sys.string_state`) as named kinds. **Nothing emits any of the
+three.** `grep` across the tree: each name appears exactly once, at its own declaration.
+
+This is **precisely the S76 ghost-column defect in the EVENT namespace** rather than the column one —
+`torque_cmd` was a column that existed and was always empty, and a reader looking for the commanded torque
+found it, found it blank, and concluded the loop commanded nothing. A reader filtering `events.jsonl` for
+`sys.string_state` will find nothing and conclude no string ever changed state. The file's own header says
+the constants exist so "a typo is a compile error and not a lost channel", which is true and is not the
+same property as "every declared kind has an emitter".
+
+⚠ Two of the three are arguably already covered and should be **removed** rather than wired: `rec.close`
+and `rec.scene_change` are both said by `rec.stream_end`, which carries a `reason` (`"scene_change"` is one
+of the reasons actually passed). `sys.string_state` is the genuine gap — `SystemsState.A1…C2` are recorded
+as R2 columns but a string TRANSITION has no event, while the bus/fire/leak transitions beside it do.
+**Not fixed here** (C1.1: BB2's scope is the second stream), and not decided either — "wire it" and "delete
+it" are both defensible and the choice is a one-line register call, not an owner gate.
+BB1's own `BlackBoxCoverage` is the model for the fix if one is wanted: declare, then check at close.
+
+### S91 [S] `plugin/__pycache__/build.cpython-313.pyc` is COMMITTED — a build artefact under version control — **TODO** — [TIER 4: hygiene]
+Logged by **BB2**, 2026-09-04 (C1.1 — noticed because it bit).
+
+`git status` lists `plugin/__pycache__/build.cpython-313.pyc` as a TRACKED, modifiable file. Any task that
+imports or re-runs `plugin/build.py` under a different Python invocation rewrites it, so it turns up as an
+unrelated modification in an otherwise clean tree — which is exactly what happened during BB2's excisability
+test, and had to be reverted by hand to keep C1.11's "a task writes only its declared outputs" true.
+
+It is a compiled cache of a file that is itself in the repo: it carries no information, is regenerated on
+demand, and is Python-version-specific (`313` — it will be a different file the day the interpreter moves).
+**Fix:** `git rm --cached` it and add `__pycache__/` to `.gitignore`. **Not done here** (C1.1); one line of
+`.gitignore` and one `git rm --cached`, and it stops silently polluting every future task's `git status`.

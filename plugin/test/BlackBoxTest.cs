@@ -40,7 +40,8 @@ public static class BlackBoxTest
     public static int Run()
     {
         bad = 0; checks = 0;
-        Console.WriteLine("BlackBoxTest (BB1 — recorder core: schema, validity, rates, manifest, coverage)");
+        Console.WriteLine("BlackBoxTest (BB1 recorder core + BB2 two-vessel: schema, validity, rates, "
+                          + "manifest, coverage, naming, scope, the two-stream join)");
 
         Schema();
         Formatting();
@@ -52,6 +53,10 @@ public static class BlackBoxTest
         Events();
         Manifest();
         Pipeline();
+        Naming();            // BB2
+        ScopeDeclarations(); // BB2
+        TrackedCoverage();   // BB2
+        TwoVesselPipeline(); // BB2
 
         Console.WriteLine("  " + checks + " checks, " + bad + " failed");
         return bad == 0 ? 0 : 1;
@@ -679,5 +684,382 @@ public static class BlackBoxTest
         Check(json.Contains("\"rows_written\": " + lines.Count),
               "the manifest's row count matches the stream — which is how a torn tail is detected");
         Check(json.EndsWith("}" + (char)10), "the manifest is a complete JSON document");
+    }
+
+    // ================================================================================================
+    // ⭐ REGISTER BB2 — TWO-VESSEL RECORDING
+    //
+    // §B16.7's booster "lands UNFOCUSED — flown by its own core on the non-active vessel", and that
+    // section names the BlackBox's two-vessel recording as the thing that will answer its accepted
+    // precision risk. S59 §6.1 Q3 settled the shape: ONE STREAM PER VESSEL, joined by the shared
+    // `mission_id` and `ut`. Three properties carry the whole design, and all three are decidable
+    // without KSP, so all three are asserted here:
+    //   1. both streams carry the SAME mission id and differ only by a vessel-qualified stem (§4.4);
+    //   2. a tracked stream writes NO capsule singleton — the Dragon's buses, gates, phase and FDIR
+    //      verdict never appear on the booster's rows (§4.8 NEVER FABRICATE / §4.6 blank-not-plausible);
+    //   3. and the coverage pass knows the difference, so those blanks are notes, not a wall of ~27
+    //      ghost-column defects on every two-vessel flight.
+    // ================================================================================================
+
+    // ---------------------------------------------------------------- §4.4 the naming rule
+    static void Naming()
+    {
+        Check(BlackBoxNaming.Sanitize("Crew-2") == "Crew-2", "a clean vessel name is unchanged");
+        Check(BlackBoxNaming.Sanitize("F9 S1 / booster") == "F9_S1___booster",
+              "spaces and separators become underscores — a path-safe stem");
+        Check(BlackBoxNaming.Sanitize("") == "flight",
+              "an empty name is 'flight', never an empty stem (a '.params.csv' is a HIDDEN file)");
+        Check(BlackBoxNaming.Sanitize(null) == "flight", "...and a null name likewise");
+
+        string mid = BlackBoxNaming.MissionId("Crew 2", "20260904_101500");
+        Check(mid == "Crew_2_20260904_101500", "the mission id is <SanitizedVessel>_<stamp> (4.4)");
+        Check(mid.StartsWith("Crew_2"), "...so plugin/tools/assess_flight.py's Crew-2* glob still bites");
+
+        // ⭐ THE PROPERTY THE WHOLE TWO-VESSEL DESIGN RESTS ON. §4.4: "A second tracked vessel opens
+        // `<MissionId>.<Vessel>.params.csv` — THE SAME MISSION ID. This is the fix for the paired
+        // Crew-2_*.csv / Crew-2_Probe_*.csv streams that could only be associated by their timestamps."
+        string capsuleStem = BlackBoxNaming.Stem(mid, BlackBoxNaming.StreamSuffix(true, "Crew 2"));
+        string boostStem = BlackBoxNaming.Stem(mid, BlackBoxNaming.StreamSuffix(false, "F9 Booster"));
+        Check(capsuleStem == mid, "the FIRST stream is unqualified — a one-vessel mission is the BB1 file set");
+        Check(boostStem == mid + ".F9_Booster", "the second stream is vessel-qualified");
+        Check(boostStem.StartsWith(mid + "."), "...UNDER THE SAME MISSION ID — the 4.4 fix, in one check");
+        Check(capsuleStem != boostStem, "and the two stems are distinct, so neither truncates the other");
+
+        // Two vessels CAN share a name (KSP allows it; a booster cloned from one craft file routinely
+        // does). Two streams sharing a stem would silently truncate one recording into the other, and
+        // the survivor would look complete.
+        var taken = new List<string>();
+        string a = BlackBoxNaming.UniqueSuffix(mid, ".Booster", taken);
+        Check(a == ".Booster", "a free stem is used as-is");
+        taken.Add(BlackBoxNaming.Stem(mid, a));
+        string b = BlackBoxNaming.UniqueSuffix(mid, ".Booster", taken);
+        Check(b == ".Booster_2", "a COLLIDING stem is disambiguated rather than overwritten");
+        taken.Add(BlackBoxNaming.Stem(mid, b));
+        Check(BlackBoxNaming.UniqueSuffix(mid, ".Booster", taken) == ".Booster_3", "...and again");
+
+        // §4.4: a revert branches the MISSION (so both vessels re-open together), not one stream.
+        Check(BlackBoxNaming.NextRevertSuffix(mid) == "_r2", "the first revert branches to _r2");
+        string r2 = BlackBoxNaming.BranchMissionId(mid);
+        Check(r2 == mid + "_r2", "the branched mission id appends the suffix");
+        string r3 = BlackBoxNaming.BranchMissionId(r2);
+        Check(r3 == mid + "_r3", "a second revert REPLACES _r2 with _r3 rather than stacking suffixes");
+        Check(BlackBoxNaming.BranchMissionId(r3) == mid + "_r4", "...and keeps counting");
+    }
+
+    // ---------------------------------------------------------------- BB2's Scope declarations
+    static void ScopeDeclarations()
+    {
+        // The columns whose source is a DragonScreen/conductor SINGLETON. Naming them here, by hand,
+        // is the point: this list is the claim, and the schema has to agree with it. If a later task
+        // adds a capsule-sourced column and forgets the declaration, this fails rather than shipping a
+        // column that quietly lands on the booster's rows.
+        string[] capsule =
+        {
+            "gnc_engaged", "mode_index", "mission_phase", "gate_id", "gate_phase", "crew_action",
+            "gate_satisfied_mask", "is_return", "step_ack_mask",
+            "bus1_on", "bus2_on", "str_a1", "str_b1", "str_c1", "str_a2", "str_b2", "str_c2",
+            "fire_intensity", "suppressant", "leak_rate", "isolating",
+            "o2_store", "n2_store", "canister_used",
+            "fdir_fault", "fdir_recovery", "aborting", "abort_mode",
+            "cabin_psia", "ppo2_psia", "co2_mmhg", "cabin_temp_c", "loop_a_c", "loop_b_c",
+            "sev_system", "sev_vehicle", "sev_ls", "sev_thermal", "alarm_mask",
+            "prop_frac", "page_l", "page_c", "page_r", "cam_view",
+            "align_deg", "roll_err_deg", "pitch_err_deg", "yaw_err_deg",
+            "ker_avail", "ker_stage_dv", "ker_total_dv", "ker_twr", "ker_isp", "ker_burn_s",
+            "ker_stage_mass_kg", "ker_thrust_avail_n",
+        };
+        for (int i = 0; i < capsule.Length; i++)
+        {
+            int idx = BlackBoxSchema.Index(capsule[i]);
+            Check(idx >= 0, "capsule column '" + capsule[i] + "' exists in the schema");
+            if (idx >= 0)
+                Check(BlackBoxSchema.Columns[idx].Scope == Scope.Capsule,
+                      "'" + capsule[i] + "' is declared Scope.Capsule");
+        }
+
+        // And the other side of the claim: the load-bearing physics columns are the RECORDED VESSEL's,
+        // which is why an unfocused booster stream is worth having at all.
+        string[] perVessel =
+        {
+            "alt_m", "srf_speed_mps", "mach", "q_pa", "accel_g", "pitch_deg", "aoa_deg", "thrust_n",
+            "eng_ignited", "app_pitch", "mass_kg", "lat_deg", "lon_deg", "downrange_m", "stage",
+            "phase_classified", "boost_phase", "boost_steer_pitch", "ls_present", "comm_linked",
+            "skin_temp_frac", "ut", "met_s", "vessel", "focus",
+        };
+        for (int i = 0; i < perVessel.Length; i++)
+        {
+            int idx = BlackBoxSchema.Index(perVessel[i]);
+            Check(idx >= 0, "per-vessel column '" + perVessel[i] + "' exists");
+            if (idx >= 0)
+                Check(BlackBoxSchema.Columns[idx].Scope == Scope.Vessel,
+                      "'" + perVessel[i] + "' is Scope.Vessel — read from the stream's own vessel");
+        }
+
+        // ⚠ An Unfitted column's scope is DELIBERATELY left at the default: nothing writes it, so a
+        // declaration would be a guess, and the register line that fits it (T17/T18/T19/S55) is the one
+        // that will know whose state it turned out to be. See BlackBoxSchema's header.
+        for (int i = 0; i < BlackBoxSchema.Columns.Length; i++)
+        {
+            Col c = BlackBoxSchema.Columns[i];
+            if (c.Fit == Fit.Unfitted && c.Scope == Scope.Capsule)
+                Check(false, "'" + c.Name + "' is Unfitted AND scoped — that scope is a guess (see the header)");
+        }
+
+        Check(BlackBoxSchema.IsCapsule(BlackBoxSchema.Index("bus1_on")), "IsCapsule agrees for a capsule column");
+        Check(!BlackBoxSchema.IsCapsule(BlackBoxCols.AltM), "...and for a vessel one");
+        Check(!BlackBoxSchema.IsCapsule(-1), "an absent column is not capsule-scoped (and does not throw)");
+        Check(BlackBoxSchema.ScopeName(Scope.Capsule) == "capsule"
+              && BlackBoxSchema.ScopeName(Scope.Vessel) == "vessel", "the manifest's scope words");
+
+        // BB2 adds no column, removes none, reorders none — so a BB1 recording still chains with a BB2
+        // one (§4.2's rule), and only the RECORDER version moves.
+        Check(BlackBoxSchema.SchemaVersion == 1, "BB2 did not bump schema_version — it added no column");
+        Check(BlackBoxSchema.RecorderVersion == "BB2.0", "the recorder version says which build wrote the file");
+    }
+
+    // ---------------------------------------------------------------- BB2's coverage verdict
+    static void TrackedCoverage()
+    {
+        // A TRACKED stream: it wrote every per-vessel column and, correctly, no capsule one.
+        var tracked = new BlackBoxCoverage();
+        tracked.Note(FilledRow(false));
+
+        List<CoverageFinding> f = tracked.Findings(false);
+        int defects = 0;
+        for (int i = 0; i < f.Count; i++) if (f[i].Defect) defects++;
+        // ⭐ THE HEADLINE. Without this, every two-vessel flight would close with ~27 ghost-column
+        // DEFECTS that are not defects — and a defect that always fires is one nobody reads, which is
+        // exactly the failure mode BlackBoxCoverage's header rejects for a blanket empty-column warning.
+        Check(defects == 0, "a tracked stream that withheld every capsule column reports ZERO defects "
+                            + "(got " + defects + ")");
+
+        bool noted = false, notedAsDefect = false;
+        for (int i = 0; i < f.Count; i++)
+            if (f[i].Column == "bus1_on") { noted = true; notedAsDefect = f[i].Defect; }
+        Check(noted, "...but the withheld column is still REPORTED — silence would hide it");
+        Check(!notedAsDefect, "...as a note carrying the reason, not as a defect");
+
+        // The SAME rows judged as a focused stream: those blanks now ARE the ghost-column defect,
+        // because a capsule stream is the one that must write them.
+        int asFocused = 0;
+        List<CoverageFinding> ff = tracked.Findings(true);
+        for (int i = 0; i < ff.Count; i++) if (ff[i].Defect) asFocused++;
+        Check(asFocused > 20, "the same blanks on a FOCUSED stream are defects — the gate is everFocused, "
+                              + "not a blanket exemption (got " + asFocused + ")");
+
+        // A non-capsule Live column left blank is STILL a defect on a tracked stream. The exemption is
+        // scoped to the capsule singletons and to nothing else.
+        var holed = new BlackBoxCoverage();
+        string[] r2 = FilledRow(false);
+        r2[BlackBoxCols.ThrustN] = "";
+        holed.Note(r2);
+        bool namedIt = false;
+        f = holed.Findings(false);
+        for (int i = 0; i < f.Count; i++)
+            if (f[i].Column == "thrust_n" && f[i].Defect && f[i].Kind == "never_written") namedIt = true;
+        Check(namedIt, "a per-vessel LIVE column blank on a TRACKED stream is still the torque_cmd defect");
+
+        // ⛔ THE LEAK, the other direction. A capsule value on a stream that never held the camera means
+        // the Dragon's state is filed under another vessel — silent in the file, because the cell looks
+        // like every other cell. This is the check that would catch the `focused` gate in BuildRow being
+        // removed by a later edit.
+        var leak = new BlackBoxCoverage();
+        string[] r3 = FilledRow(false);
+        r3[BlackBoxSchema.Index("bus1_on")] = "1";      // the leak
+        leak.Note(r3);
+        bool flagged = false;
+        f = leak.Findings(false);
+        for (int i = 0; i < f.Count; i++)
+            if (f[i].Column == "bus1_on" && f[i].Kind == "capsule_leak" && f[i].Defect) flagged = true;
+        Check(flagged, "a capsule value on a never-focused stream is a DEFECT named capsule_leak");
+
+        // ...and the same value on the CAPSULE's own stream is simply correct.
+        bool falsePositive = false;
+        f = leak.Findings(true);
+        for (int i = 0; i < f.Count; i++) if (f[i].Kind == "capsule_leak") falsePositive = true;
+        Check(!falsePositive, "the leak check never fires on a stream that DID hold the camera");
+    }
+
+    // ---------------------------------------------------------------- the two-stream mission
+    static void TwoVesselPipeline()
+    {
+        // A synthetic post-separation segment: the capsule holds the camera throughout (§B16.7 — "FOCUS
+        // NEVER LEAVES THE UPPER STAGE") and the booster is tracked and unfocused. Both rows are built
+        // with the same `focused` gate `BuildRow` applies, so what is asserted below is the shape of a
+        // real two-vessel recording rather than of a hand-made pair of files.
+        const string mid = "Crew-2_20260904_101500";
+        string capStem = BlackBoxNaming.Stem(mid, BlackBoxNaming.StreamSuffix(true, "Crew-2"));
+        string bstStem = BlackBoxNaming.Stem(mid, BlackBoxNaming.StreamSuffix(false, "Falcon 9 S1"));
+
+        var capRows = new List<string[]>();
+        var bstRows = new List<string[]>();
+        var capCov = new BlackBoxCoverage();
+        var bstCov = new BlackBoxCoverage();
+        var events = new List<string>();
+        long capSeq = 0, bstSeq = 0;
+
+        for (int i = 0; i < 200; i++)
+        {
+            double ut = 300150.0 + i * 0.5;    // ⭐ both streams share ONE clock (§4.5)
+            capRows.Add(Row(mid, "Crew-2", "Crew-2", ut, ++capSeq, true, 3, 90000.0 + i * 120.0));
+            bstRows.Add(Row(mid, "Falcon 9 S1", "Crew-2", ut, ++bstSeq, false, 1, 60000.0 - i * 250.0));
+            capCov.Note(capRows[capRows.Count - 1]);
+            bstCov.Note(bstRows[bstRows.Count - 1]);
+        }
+
+        // Both craft write into ONE ordered narrative (§4.1 / §4.10 §10), each line naming its vessel.
+        events.Add(BlackBoxEvents.Line(mid, "Crew-2", 300150.0, 150.0, 1, BlackBoxEvents.FlightStaged,
+                                       new[] { Kv.Int("from", 3), Kv.Int("to", 2) }));
+        events.Add(BlackBoxEvents.Line(mid, "Falcon 9 S1", 300220.0, 220.0, 140, BlackBoxEvents.EngineIgnite,
+                                       new[] { Kv.Int("to", 3) }));
+        events.Add(BlackBoxEvents.Line(mid, "Falcon 9 S1", 300400.0, 400.0, 500, BlackBoxEvents.FlightTouchdown,
+                                       new[] { Kv.Num("vspeed_mps", -1.8) }));
+        // A MISSION-level event: not either craft's, so `vessel` is null rather than a borrowed name.
+        events.Add(BlackBoxEvents.Line(mid, null, 300500.0, double.NaN, 700, BlackBoxEvents.RecWarpChange,
+                                       new[] { Kv.Num("from", 1.0), Kv.Num("to", 100.0) }));
+
+        // ---- 1. the §4.4 property: ONE mission, two stems, and the id is on every row of both ----
+        Check(capStem == mid && bstStem == mid + ".Falcon_9_S1", "two stems, one mission id");
+        bool sameId = true;
+        for (int i = 0; i < capRows.Count; i++)
+            if (capRows[i][BlackBoxCols.MissionId] != mid || bstRows[i][BlackBoxCols.MissionId] != mid)
+                sameId = false;
+        Check(sameId, "every row of BOTH streams carries the same mission_id — so a moved file still joins");
+
+        // ---- 2. joinable on ut, which is the shape S59 §6.1 Q3 settled on ----
+        int joined = 0;
+        for (int i = 0; i < capRows.Count; i++)
+        {
+            double cu = double.Parse(capRows[i][BlackBoxCols.Ut], CultureInfo.InvariantCulture);
+            double bu = double.Parse(bstRows[i][BlackBoxCols.Ut], CultureInfo.InvariantCulture);
+            if (Math.Abs(cu - bu) < 1e-9) joined++;
+        }
+        Check(joined == capRows.Count, "every capsule row joins a booster row on `ut` exactly (got "
+                                       + joined + " of " + capRows.Count + ")");
+
+        // ---- 3. the booster row is the BOOSTER's, and the capsule's singletons are not on it ----
+        int leaked = 0;
+        for (int i = 0; i < bstRows.Count; i++)
+            for (int c = 0; c < bstRows[i].Length; c++)
+                if (BlackBoxSchema.IsCapsule(c) && !string.IsNullOrEmpty(bstRows[i][c])) leaked++;
+        Check(leaked == 0, "NOT ONE capsule singleton reached the booster's rows (4.8 never fabricate) "
+                           + "— got " + leaked + " leaked cell(s)");
+        Check(!string.IsNullOrEmpty(capRows[0][BlackBoxSchema.Index("bus1_on")]),
+              "...while the capsule's own stream carries them, so the gate is a gate and not a deletion");
+
+        // The booster's stream carries ITS state: its own name, its own stage, its own altitude — and
+        // the `focus` column names the capsule on every row, which is how a reader knows the booster
+        // was flying unfocused without inferring it (§B16.7's accepted risk, made visible).
+        Check(bstRows[0][BlackBoxCols.Vessel] == "Falcon 9 S1", "the booster's rows name the booster");
+        Check(bstRows[0][BlackBoxCols.Focus] == "Crew-2", "...and record that the CAPSULE held the camera");
+        Check(bstRows[0][BlackBoxSchema.Index("stage")] == "1"
+              && capRows[0][BlackBoxSchema.Index("stage")] == "3",
+              "each stream carries its OWN stage — not the camera holder's StageManager number");
+        double a0 = double.Parse(bstRows[0][BlackBoxCols.AltM], CultureInfo.InvariantCulture);
+        double a1 = double.Parse(bstRows[bstRows.Count - 1][BlackBoxCols.AltM], CultureInfo.InvariantCulture);
+        Check(a1 < a0, "the booster is descending while the capsule climbs — two vehicles, two histories");
+
+        // ---- 4. both streams are exactly header-width, quoting included ----
+        int want = BlackBoxSchema.CountFields(BlackBoxSchema.Header());
+        bool wide = true;
+        for (int i = 0; i < capRows.Count; i++)
+        {
+            if (BlackBoxSchema.CountFields(BlackBoxSchema.Row(capRows[i])) != want) wide = false;
+            if (BlackBoxSchema.CountFields(BlackBoxSchema.Row(bstRows[i])) != want) wide = false;
+        }
+        Check(wide, "every row of BOTH streams is exactly header-width");
+
+        // ---- 5. the shared event log ----
+        bool oneLine = true;
+        for (int i = 0; i < events.Count; i++) if (events[i].IndexOf('\n') >= 0) oneLine = false;
+        Check(oneLine, "every event is one JSONL line, both vessels' alike");
+        Check(events[1].Contains("\"vessel\":\"Falcon 9 S1\""), "a booster event names the booster");
+        Check(events[0].Contains("\"vessel\":\"Crew-2\""), "...and a capsule event the capsule, in ONE file");
+        Check(events[3].Contains("\"vessel\":null"),
+              "a MISSION-level event has a null vessel — it is not either craft's, and borrowing a name "
+              + "would file a global fact under one vehicle");
+        Check(events[3].Contains("\"met_s\":null"),
+              "...and a null MET, because MET restarts per vessel (4.5) so a mission event has none");
+        bool allTagged = true;
+        for (int i = 0; i < events.Count; i++)
+            if (!events[i].Contains("\"mission_id\":\"" + mid + "\"")) allTagged = false;
+        Check(allTagged, "every event line carries the mission id, so the log joins to both streams");
+
+        // ---- 6. the two coverage verdicts, each judged by its own role ----
+        int capDefects = 0, bstDefects = 0;
+        List<CoverageFinding> cf = capCov.Findings(true);
+        List<CoverageFinding> bf = bstCov.Findings(false);
+        for (int i = 0; i < cf.Count; i++) if (cf[i].Defect) capDefects++;
+        for (int i = 0; i < bf.Count; i++) if (bf[i].Defect) bstDefects++;
+        Check(bstDefects == 0, "the booster stream closes with no coverage defect (got " + bstDefects + ")");
+        Check(capDefects == 0, "and so does the capsule stream (got " + capDefects + ")");
+        Check(capCov.Rows == 200 && bstCov.Rows == 200, "both streams counted their own rows");
+
+        // ---- 7. the two manifests: same mission, different role, each pointing at the shared log ----
+        string capJson = StreamManifest(mid, capStem, "Crew-2", "focused", true);
+        string bstJson = StreamManifest(mid, bstStem, "Falcon 9 S1", "tracked", false);
+        Check(capJson.Contains("\"mission_id\": \"" + mid + "\"")
+              && bstJson.Contains("\"mission_id\": \"" + mid + "\""),
+              "both manifests declare the same mission id");
+        Check(bstJson.Contains("\"stream_role\": \"tracked\"") && bstJson.Contains("\"ever_focused\": false"),
+              "the booster's manifest says it was tracked and never focused — so its blanks are readable");
+        Check(capJson.Contains("\"stream_role\": \"focused\"") && capJson.Contains("\"ever_focused\": true"),
+              "the capsule's says the opposite");
+        Check(bstJson.Contains("\"params_file\": \"" + bstStem + ".params.csv\""),
+              "each manifest names its own params file");
+        Check(bstJson.Contains("\"events_file\": \"" + mid + ".events.jsonl\"")
+              && capJson.Contains("\"events_file\": \"" + mid + ".events.jsonl\""),
+              "...and BOTH name the one shared event log");
+        Check(bstJson.Contains("\"stream_join_on\": [\"mission_id\", \"ut\"]"),
+              "the join is STATED in the file, not left in a research doc");
+        Check(bstJson.Contains("\"launch_lat_deg\": 28.6") && capJson.Contains("\"launch_lat_deg\": 28.6"),
+              "both share the MISSION's launch reference, so downrange_m means the same on both");
+        Check(bstJson.Contains("\"scope\": \"capsule\"") && bstJson.Contains("\"scope\": \"vessel\""),
+              "every column declares its scope, so a reader can tell withheld from broken");
+        Check(bstJson.Contains("\"recorder_version\": \"BB2.0\""), "the manifest names the recorder build");
+    }
+
+    /// <summary>
+    /// A row filled the way `BuildRow` fills it: every fitted per-vessel column, and the capsule
+    /// singletons ONLY when this stream's vessel holds the camera. The `focused` argument IS the gate.
+    /// </summary>
+    static string[] FilledRow(bool focused)
+    {
+        string[] r = BlackBoxSchema.NewRow();
+        for (int i = 0; i < r.Length; i++)
+        {
+            Col c = BlackBoxSchema.Columns[i];
+            if (c.Fit == Fit.Unfitted) continue;
+            if (c.Scope == Scope.Capsule && !focused) continue;   // ⭐ exactly as BuildRow has it
+            r[i] = "1";
+        }
+        return r;
+    }
+
+    static string[] Row(string mid, string vessel, string focus, double ut, long seq,
+                        bool focused, int stage, double altM)
+    {
+        string[] r = FilledRow(focused);
+        BlackBoxSchema.Set(r, BlackBoxCols.MissionId, mid);
+        BlackBoxSchema.Set(r, BlackBoxCols.Vessel, vessel);
+        BlackBoxSchema.Set(r, BlackBoxCols.Focus, focus);
+        BlackBoxSchema.Set(r, BlackBoxCols.Ut, ut);
+        BlackBoxSchema.Set(r, BlackBoxCols.Seq, (double)seq);
+        BlackBoxSchema.Set(r, BlackBoxCols.AltM, altM);
+        BlackBoxSchema.Set(r, BlackBoxSchema.Index("stage"), (double)stage);
+        return r;
+    }
+
+    static string StreamManifest(string mid, string stem, string vessel, string role, bool everFocused)
+    {
+        ManifestInfo m = ManifestInfo.Fresh();
+        m.MissionId = mid;
+        m.Vessel = vessel;
+        m.StreamRole = role;
+        m.EverFocused = everFocused;
+        m.ParamsFile = stem + ".params.csv";
+        m.EventsFile = mid + ".events.jsonl";
+        m.LaunchLatDeg = 28.6; m.LaunchLonDeg = -80.6; m.HaveLaunchRef = true;
+        return BlackBoxManifest.Build(m);
     }
 }

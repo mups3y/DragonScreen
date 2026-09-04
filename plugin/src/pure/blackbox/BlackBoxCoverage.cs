@@ -41,7 +41,11 @@ namespace DragonScreen.BlackBox
     public struct CoverageFinding
     {
         public string Column;
-        /// <summary>"never_written" (a Live column produced nothing) or "unexpected_writer" (an Unfitted one did).</summary>
+        /// <summary>
+        /// "never_written" (a Live column produced nothing), "unexpected_writer" (an Unfitted one did),
+        /// or BB2's "capsule_leak" (a `Scope.Capsule` column carried a value on a stream whose vessel
+        /// never held the camera — the capsule's state filed under another vessel).
+        /// </summary>
         public string Kind;
         /// <summary>True for the two DEFECT cases; false for the Conditional note.</summary>
         public bool Defect;
@@ -78,11 +82,26 @@ namespace DragonScreen.BlackBox
         }
 
         /// <summary>
+        /// The close-out pass for a stream that held the camera for at least one row. Kept so a
+        /// single-vessel mission reads exactly as it did under BB1.
+        /// </summary>
+        public List<CoverageFinding> Findings() { return Findings(true); }
+
+        /// <summary>
         /// The close-out pass. Empty list = every Live column produced values and no Unfitted one did.
         /// A stream with no rows at all returns nothing: "the recorder never ran" is a different fault
         /// and is already reported by `rows_written = 0` in the manifest.
+        ///
+        /// ⭐ BB2's `everFocused`. A tracked UNFOCUSED stream (the §B16 booster) correctly writes NO
+        /// `Scope.Capsule` column — those are the Dragon's singletons, and copying them onto the
+        /// booster's rows is the fabrication the scope declaration exists to prevent. Reporting each of
+        /// those ~27 blanks as a ghost-column DEFECT would fire on every two-vessel flight, and a
+        /// defect that always fires is a defect nobody reads — the exact failure mode this file's
+        /// header rejects for the blanket empty-column warning. So on a stream that never held the
+        /// camera they are NOTES carrying the reason, and the symmetric check takes over instead:
+        /// a capsule value that DID reach a never-focused stream is a defect in its own right.
         /// </summary>
-        public List<CoverageFinding> Findings()
+        public List<CoverageFinding> Findings(bool everFocused)
         {
             var found = new List<CoverageFinding>();
             if (Rows == 0) return found;
@@ -91,13 +110,29 @@ namespace DragonScreen.BlackBox
             for (int i = 0; i < cols.Length; i++)
             {
                 Col c = cols[i];
+                bool capsuleOnOther = c.Scope == Scope.Capsule && !everFocused;
+
                 if (!written[i])
                 {
-                    if (c.Fit == Fit.Live)
+                    if (capsuleOnOther)
+                        found.Add(Make(c.Name, "never_written", false,
+                            "declared Scope.Capsule and this stream's vessel never held the camera, so "
+                            + "the capsule singleton was withheld rather than copied (BB2): " + c.Source));
+                    else if (c.Fit == Fit.Live)
                         found.Add(Make(c.Name, "never_written", true, "declared Live: " + c.Source));
                     else if (c.Fit == Fit.Conditional)
                         found.Add(Make(c.Name, "never_written", false, c.Note));
                     // Unfitted + never written is its declared state. Silence is correct.
+                }
+                else if (capsuleOnOther)
+                {
+                    // ⛔ THE LEAK. A stream whose vessel never held the camera carries a value in a
+                    // column sourced from the capsule's singletons — so somebody's bus voltage, gate or
+                    // mission phase is filed under the wrong vessel. That is §4.8's NEVER FABRICATE
+                    // breached, and it is silent in the file: the cell looks like every other cell.
+                    found.Add(Make(c.Name, "capsule_leak", true,
+                        "declared Scope.Capsule but written on a stream that never held the camera — "
+                        + "the capsule's state is filed under another vessel: " + c.Source));
                 }
                 else if (c.Fit == Fit.Unfitted)
                 {
