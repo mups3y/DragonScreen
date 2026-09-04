@@ -13,11 +13,18 @@ This skill is the enforcement half of the anti-drift harness (`docs/BUILD_PLAN.m
 ## The loop
 
 ### 1. Read the rules
-Read `CLAUDE.md` end-to-end — all of it, including the C1 invariant rules (1–13) appended at the bottom.
+Read `CLAUDE.md` end-to-end — all of it, including the C1 invariant rules (1–16) appended at the bottom.
 
 ### 2. Take exactly ONE task
-Open `REGISTER.md`. **The first line that is not `DONE` is THE task** (a `DOING` line means a previous session
-stopped mid-task — pick that one up, don't skip it). Mark it `DOING`.
+Open `REGISTER.md`.
+
+Take the first line marked DOING — a previous session stopped mid-task, pick it up rather than skip it.
+If there is none, take the first line marked TODO or NEEDS-WORK. Skip DONE, SPLIT, HELD, and any line
+whose status says it is blocked. If you skip a blocked line, LIST it and its blocker in your report so
+blockers cannot accumulate unseen. If every remaining line is blocked, STOP and say so — never reach
+past a block to find work.
+
+That is THE task. Mark it `DOING`.
 
 Then **restate the task and its done-criteria in one line** back to the owner. If you cannot, you have not
 understood it — go to step 3 and come back.

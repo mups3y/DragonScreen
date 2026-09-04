@@ -1902,11 +1902,18 @@ a **PREVIEW-ONLY BUILD-GO** (owner, 2026-09-02, via the overseer); `install` + g
     and six later tasks — M1, W8, S60, W23, LZ1, W11 — were built without research that already existed.)
 
 ## C2. The `/next` skill (the loop — identical every task)
-Invoking `/next` runs: (1) read `CLAUDE.md`; (2) open `REGISTER.md`, take the first non-DONE item as THE task,
-restate it + its done-criteria in one line; (3) read its pointed-to plan/research section end-to-end; (4) do
-ONLY that task (log stray findings as new register lines); (5) verify (C1.3); (6) mark the register + `git
-commit` LOCALLY (never `git push` — C1.5); (7) STOP. The skill refuses to touch a second task, refuses DONE
-without the verification gate, and refuses to lift an owner gate (C1.12).
+Invoking `/next` runs: (1) read `CLAUDE.md`; (2) open `REGISTER.md` and take THE task —
+
+Take the first line marked DOING — a previous session stopped mid-task, pick it up rather than skip it.
+If there is none, take the first line marked TODO or NEEDS-WORK. Skip DONE, SPLIT, HELD, and any line
+whose status says it is blocked. If you skip a blocked line, LIST it and its blocker in your report so
+blockers cannot accumulate unseen. If every remaining line is blocked, STOP and say so — never reach
+past a block to find work.
+
+— then restate it + its done-criteria in one line; (3) read its pointed-to plan/research section end-to-end;
+(4) do ONLY that task (log stray findings as new register lines); (5) verify (C1.3); (6) mark the register +
+`git commit` LOCALLY (never `git push` — C1.5); (7) STOP. The skill refuses to touch a second task, refuses
+DONE without the verification gate, and refuses to lift an owner gate (C1.12).
 
 ## C3. Model policy
 **[O] = Opus 5 (or 4.8)** — architecture, RSS/RO tuning, embed/namespace, the conductor, hard visuals

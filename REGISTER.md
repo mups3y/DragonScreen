@@ -1,6 +1,13 @@
 # DragonScreen — Task Register
 
-The living task list for the build. **One task at a time** (C1.1): the first non-DONE line below IS the task.
+The living task list for the build. **One task at a time** (C1.1): THE task is chosen by this rule —
+
+Take the first line marked DOING — a previous session stopped mid-task, pick it up rather than skip it.
+If there is none, take the first line marked TODO or NEEDS-WORK. Skip DONE, SPLIT, HELD, and any line
+whose status says it is blocked. If you skip a blocked line, LIST it and its blocker in your report so
+blockers cannot accumulate unseen. If every remaining line is blocked, STOP and say so — never reach
+past a block to find work.
+
 `/next` reads this file. Full detail for every task: `docs/BUILD_PLAN.md` (Part C = the protocol, §1–§14 =
 Part A research, §B1–B15 = Part B research).
 
@@ -8737,6 +8744,59 @@ skipped silently. `python plugin/build.py test` run as the no-regression check: 
 from the four declared outputs (`CLAUDE.md`, `docs/BUILD_PLAN.md`, `.claude/skills/next/SKILL.md`,
 `REGISTER.md`).
 
+### G8 [S] Governance — the loop rule (TODO/NEEDS-WORK, not "first non-DONE") + five CLAUDE.md staleness fixes — **DONE 2026-09-05**
+- **OWNER AUTHORISATION, 2026-09-05, verbatim: "go, and use your loop rule."** Recorded as the owner's per
+  C1.12 (Part A of this task only — B1–B5 are corrections of fact, not new policy, so they need no gate).
+  Every claim below was measured against the tree before being written, not taken on the overseer's word.
+- **PART A — the loop rule.** All four files said some form of "the first non-DONE line is THE task", which
+  literally routes `/next` to `T13` (`REGISTER.md:968`, **SPLIT**, closed) — verified: `T13` is the first
+  line after `T0`/`T1`/… that is not `DONE`, and its own text says *"this line is closed, do not take it"*.
+  `REGISTER.md`'s status legend (:14-16) already had the right behaviour (HELD/SPLIT skipped); only :3
+  stated the wrong rule. **Rewrote the rule, byte-identical, into all four named spots:**
+  `CLAUDE.md:184-192` ("The loop"), `.claude/skills/next/SKILL.md:18-27` (step 2),
+  `docs/BUILD_PLAN.md:1904-1916` (C2 item 2 — nothing else in that file touched), `REGISTER.md:3-9` (header).
+  **Proof, not eyeballing:** extracted the five-line rule paragraph from each file with `grep -A4` and ran
+  `diff` pairwise (CLAUDE.md vs the other three) — all three diffs **empty**. The rule: take the first
+  `DOING` line if one exists (a stopped-mid-task pickup); else the first `TODO` or `NEEDS-WORK`; skip `DONE`,
+  `SPLIT`, `HELD` and any blocked line, LISTING skipped blockers in the report; if everything left is
+  blocked, STOP and say so.
+- **PART B — five staleness fixes in `CLAUDE.md`, each verified on the tree before writing:**
+  - **B1 (line 5).** Verified `plugin/src/BoosterHost.cs:138` is `[Tunable] public static bool Actuate =
+    true;` — the booster host actuates today. Rewrote the opening paragraph: the **Dragon** flies nothing
+    (Part B/T15–T22 unbuilt, §14.4(a) no-op stands), the **separate-vessel** Falcon-9 booster autopilot
+    (§B16) already does.
+  - **B2 (was lines 16-20, now `CLAUDE.md:19-26`).** Verified `plugin/src/_AutopilotStub.cs:121` — *"THE `Actuator` STUB IS
+    RETIRED (W2 / Wave B, 2026-09-04)"* — and `plugin/src/Actuator.cs` is real (48,492 B). Verified the other
+    seven idle-seam names (`FlightDriver`, `CrewProcedureOps`, `FlightCommands`, `AbortControl`,
+    `MissionConductor`, `MissionOps`, `Fdir`) are still declared in the stub (`grep` on each class). Dropped
+    `Actuator` from the idle-seam list, pointed at the real file + the stub's own retirement comment; the
+    other seven left exactly as they were.
+  - **B3 (lines 12-15).** The header's STALE-removal clause licensed deleting "its docs, plans and flight
+    recordings" for the seven named deleted implementations — verified all seven (`DockingControl`/
+    `NavState3`, `ReturnControl`, `BoosterControl`, `EntrySteering`, `AbortResponder`, `DockCapture`) are
+    genuinely absent from the tree (`grep`, no hits outside register history) — that half is correct and
+    kept. The docs-deletion clause directly contradicts **C1.16** (added 2026-09-04 after `8b81816` deleted
+    ~60 research docs this way) — struck it and made the paragraph defer to C1.16 (`SUPERSEDED`, never
+    deleted) explicitly.
+  - **B4 (C1.15).** Verified `docs/reference/INSTALLED_MODS.md` exists (16,652 B, per M1) — retired the dead
+    "until it exists, STOP and flag it" sentence; nothing else in C1.15 touched.
+  - **B5 (`SKILL.md:16`).** Counted the C1 rules in `CLAUDE.md`: **16**, not 13 (C1.14–C1.16 were added after
+    G1 last set this count to 13). Fixed the reference to "(1–16)".
+- **Strays found, LOGGED not fixed (C1.1 — outside this task's four named spots / outside C2-item-2-only
+  scope on `BUILD_PLAN.md`):** appended **S92** (`docs/BUILD_PLAN.md:978` still describes
+  `_AutopilotStub.cs`'s `Actuator` in the present tense, stale since W2/Wave B retired it — Part B prose,
+  not C2 item 2) and **S93** (`.claude/skills/next/SKILL.md:3`, the frontmatter `description`, restates
+  "the single first non-DONE task" — a fifth stale spot not in this task's named four). See below.
+- **No C1 rule renumbered, added or reworded in policy** (only the loop-rule TEXT changed, per the owner's
+  authorisation, and B1–B5 are factual corrections). `PanelMap.cs`, `docs/REAL_DRAGON_SCREENS.md` and all
+  code: untouched.
+- **VERIFY (C1.3).** Docs/harness-only, no code change — **no preview PNG applies**, stated rather than
+  skipped. `python plugin/build.py test` run as the no-regression check: **ALL SUITES PASSED, 0 failed**
+  (38 suites, unchanged from before this task). `git status` / `git show --stat` confirmed the commit touches
+  only `CLAUDE.md`, `docs/BUILD_PLAN.md`, `REGISTER.md`, `.claude/skills/next/SKILL.md`.
+- **Open questions for the owner (C1.14): NONE.** Every fact was verified; nothing here hit a gate this
+  authorisation didn't already cover.
+
 ---
 
 ### S90 [S] Three BlackBox event kinds are DECLARED and never emitted — the ghost-column defect, one level up — **TODO** — [TIER 3: a named channel that can never fire]
@@ -8773,3 +8833,27 @@ It is a compiled cache of a file that is itself in the repo: it carries no infor
 demand, and is Python-version-specific (`313` — it will be a different file the day the interpreter moves).
 **Fix:** `git rm --cached` it and add `__pycache__/` to `.gitignore`. **Not done here** (C1.1); one line of
 `.gitignore` and one `git rm --cached`, and it stops silently polluting every future task's `git status`.
+
+### S92 [S] `docs/BUILD_PLAN.md:978` describes `_AutopilotStub.cs`'s `Actuator` in the present tense — stale since W2/Wave B retired it — **TODO** — [TIER 3: a research doc contradicting the live stub it describes]
+Logged by **G8**, 2026-09-05 (C1.1 — noticed while reading Part B prose to scope G8's docs/BUILD_PLAN.md
+edit to C2 item 2 only; not fixed, because this task's authority did not extend past that one item).
+
+`docs/BUILD_PLAN.md:978` still reads *"today's `_AutopilotStub.cs` declares a no-op `Actuator`; recovering
+the real one retires that stub class (§B12.8(a))"* — present tense, as if the recovery were still pending.
+It is not: `plugin/src/_AutopilotStub.cs:121`'s own header says the `Actuator` stub was **retired** by W2
+(Wave B, 2026-09-04), and the real `plugin/src/Actuator.cs` (48,492 B) has stood behind that class name
+since. `CLAUDE.md`'s matching paragraph was corrected for the same fact by G8 (B2); this BUILD_PLAN.md line
+is the same staleness one level up, in the Wave B rationale prose rather than the summary. **Fix:** reword
+:978 to past tense (the collision existed, W2 resolved it) — a small, self-contained edit, not a §B rewrite.
+
+### S93 [S] `.claude/skills/next/SKILL.md:3` (frontmatter `description`) still says "the single first non-DONE task" — the same stale rule G8 fixed at :18-27, one level up — **TODO** — [TIER 4: a description string, not the enforced instruction]
+Logged by **G8**, 2026-09-05 (C1.1 — noticed while re-reading the whole file to place the loop-rule fix at
+step 2; not fixed, because the owner's authorisation named four specific locations and this was not one of
+them).
+
+The skill's YAML frontmatter (`SKILL.md:3`) reads: *"...Reads CLAUDE.md + REGISTER.md, does the single
+first non-DONE task, verifies it, updates the register, and stops."* That is the exact rule G8 rewrote at
+`SKILL.md:18-27` (step 2) because it routes `/next` to a closed `SPLIT` line (`T13`). The frontmatter
+`description` is not the enforced instruction — the skill body is — but it is user-facing (shown wherever
+skills are listed) and states the old, wrong rule. **Fix:** reword the clause to something the new rule
+doesn't contradict, e.g. "does the next eligible task" — a one-line frontmatter edit.

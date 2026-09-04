@@ -2,7 +2,9 @@
 
 **DragonScreen is the Crew Dragon IVA screens — the UI mod (PART A) — and, planned but NOT yet built,
 an embedded-MechJeb autopilot "conductor" that flies the vehicle from those screens (PART B).**
-Today the mod reads the vessel and draws it; it flies nothing.
+Today the mod reads the vessel and draws it: the Dragon flies nothing — Part B (T15–T22) is unbuilt and
+the screens' flight commands stay an honest no-op (§14.4(a)) — but the separate-vessel Falcon-9 booster
+autopilot (§B16) already does actuate.
 
 The **hand-written** autopilot that used to live here was **deleted 2026-09-01** (owner directive: keep
 only the screens). It is not coming back in that form. **Part B of `docs/BUILD_PLAN.md` re-introduces
@@ -11,13 +13,17 @@ flight software as a pinned, privately-namespaced MechJeb** driven by a pure "co
 
 - **STALE — remove it.** The deleted *implementations* and everything downstream of them:
   `DockingControl` / `NavState3`, `ReturnControl`, `BoosterControl`, `EntrySteering`, `AbortResponder`,
-  `DockCapture`, the booster-recovery / entry / FDIR control code, and its docs, plans and flight recordings.
-  None of these exist in the tree.
+  `DockCapture`, the booster-recovery / entry / FDIR control code. None of these exist in the tree. Their
+  docs, plans and flight recordings are NOT part of that removal — **C1.16 forbids deleting anything under
+  `docs/` as part of removing code**; a stale doc gets marked `SUPERSEDED` (C7.1), never deleted.
 - **NOT stale — leave it alone.** `src/_AutopilotStub.cs` deliberately keeps **idle seams** the screen code
   compiles against: `FlightDriver`, `CrewProcedureOps`, `FlightCommands`, `AbortControl`, `MissionConductor`,
-  `Actuator`, `MissionOps`, `Fdir`. They report "not engaged" and no-op. `pure/ScreenModes.cs` likewise keeps
-  an `AuthorityManager` that is now only a **display label** (the GNC lamp's name + colour). Deleting these
-  breaks the build; **Part B fills them in, one controller at a time (§B12.5)** — that is the whole design.
+  `MissionOps`, `Fdir`. They report "not engaged" and no-op. `Actuator` is NOT one of these any more — the
+  stub's own retirement comment (`_AutopilotStub.cs`, W2/Wave B, 2026-09-04) says so: the real
+  `src/Actuator.cs` is back and stands behind the same class name (§B12.5's first facade swap). `pure/
+  ScreenModes.cs` likewise keeps an `AuthorityManager` that is now only a **display label** (the GNC lamp's
+  name + colour). Deleting these breaks the build; **Part B fills them in, one controller at a time
+  (§B12.5)** — that is the whole design.
 - a reference to the **planned MechJeb conductor** (§B1–B16 / T15–T22) is **current; leave it**.
   §B16 (owner, 2026-09-03) also **re-introduces Falcon-9 booster recovery** — as a SEPARATE-VESSEL autopilot,
   distinct from the conductor; the deleted `BoosterControl` implementation still stays deleted.
@@ -147,10 +153,9 @@ session and are auto-loaded with this file. Section refs (§n, §Bn, C1–C7.1, 
     not-yet-modelled real quantity, the task's OWN deliverable must record a documented search against
     `docs/reference/INSTALLED_MODS.md`: what was searched for, what candidates exist in that list, and why
     each was accepted or rejected. A candidate found but NOT installed is a proposal to the owner (C1.14),
-    never a build-chat install — C7 forbids reading or modifying the KSP install directly regardless. Until
-    `docs/reference/INSTALLED_MODS.md` exists, a task facing this situation STOPS and flags it (C1.12) rather
-    than searching ad hoc or simulating unchecked. This exists because this session found real, already-
-    installed sources (RealFuels propellant-settling state, already read by reflection in the recovered
+    never a build-chat install — C7 forbids reading or modifying the KSP install directly regardless. This
+    exists because this session found real, already-installed sources (RealFuels propellant-settling
+    state, already read by reflection in the recovered
     `Ullage.cs`; TestFlight's failure/reliability model) sitting unused while a screens-only pass had begun
     inventing simulations for adjacent quantities instead of checking first.
 16. **RESEARCH IS NEVER DELETED.** Code may be deleted, rewritten or superseded at any time — it can be
@@ -178,7 +183,15 @@ REPO copy is authoritative.
 
 ## The loop
 
-`/next` → read `CLAUDE.md` → take the FIRST non-DONE `REGISTER.md` line as THE task → read its pointed-to
-section end-to-end → do only that → verify (C1.3 gate) → update `REGISTER.md` → `git commit` (LOCAL only;
-NEVER `git push` — the owner pushes from GitHub Desktop) → STOP → new chat. One task per fresh chat; **[O]** on Opus, **[S]** on Sonnet. Preview-only build-go (above):
+`/next` → read `CLAUDE.md` → take THE task from `REGISTER.md`:
+
+Take the first line marked DOING — a previous session stopped mid-task, pick it up rather than skip it.
+If there is none, take the first line marked TODO or NEEDS-WORK. Skip DONE, SPLIT, HELD, and any line
+whose status says it is blocked. If you skip a blocked line, LIST it and its blocker in your report so
+blockers cannot accumulate unseen. If every remaining line is blocked, STOP and say so — never reach
+past a block to find work.
+
+→ read its pointed-to section end-to-end → do only that → verify (C1.3 gate) → update `REGISTER.md` →
+`git commit` (LOCAL only; NEVER `git push` — the owner pushes from GitHub Desktop) → STOP → new chat.
+One task per fresh chat; **[O]** on Opus, **[S]** on Sonnet. Preview-only build-go (above):
 code + `test` + `preview` yes, `install` + glass time only on a separate owner go.
