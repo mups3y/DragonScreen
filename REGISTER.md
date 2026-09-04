@@ -2541,7 +2541,7 @@ line.** BB3 READS the cadence from the manifest (`row_rate_mode` / `row_rate_dyn
 a row period, so whichever way Q1 is decided the report is correct with no further edit. §3.4 files
 "hard-coded row period in the analyser" as BREAK for exactly this reason.
 
-### BB4 [owner-gated] Install the BlackBox + confirm on the glass — **TODO (blocked: needs BB1–BB3 DONE first)** — [TIER 1: the owner's own "before the first flight" deadline]
+### BB4 [owner-gated] Install the BlackBox + confirm on the glass — **DOING 2026-09-05 (blocker CLEARED: BB1 `aa7bfa2`, BB2 `bedb4a6`, BB3 `6604644` are all DONE; BB2 and BB3 each state "No install, no glass time" — this session is the first to act on the line)** — [TIER 1: the owner's own "before the first flight" deadline]
 - ⚠ **The owner ALREADY AUTHORISED `install` for the BlackBox specifically** (2026-09-03: *"build and install
   before the first flight as we will need it for troubleshooting and diagnoses"*). **This authority extends
   to nothing else** — no other pending line may cite it, and this line still needs BB1–BB3 DONE and green
