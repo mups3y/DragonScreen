@@ -363,10 +363,21 @@ namespace DragonScreen
         // (used when TrajectoryInputs.UseLdBand is set) — it does NOT command the CoM shifter, which is engaged
         // ONCE and never toggled to steer (the entry hard rule). The live MeasureAero L/D still overrides when
         // available; the schedule is the prior for bands not yet flown.
-        [Tunable] public static double LdAtmosEntry    = 0.18;   // 50–100% depth (thin air, hypersonic)
-        [Tunable] public static double LdHighAltitude  = 0.20;   // 25–50%
-        [Tunable] public static double LdLowAltitude   = 0.26;   // 5–25% (dense, near peak L/D)
-        [Tunable] public static double LdFinalApproach = 0.24;   // <5% (subsonic terminal)
+        //
+        // ⛔ UN-CONVERGED FOR RSS-RO (§B16.8 ruling 2, W22 2026-09-04). R1 §5.1: no lifting entry has ever been
+        // flown, so a value inside the "Dragon L/D 0.18–0.27 envelope" above is a prior, not a measurement —
+        // honestly self-marked in the prose above (the comment already says "not yet measured"/"not yet
+        // flown"), but that disclosure carried no `[UN-CONVERGED]` tag until now, unlike every other recovered
+        // file holding an unattributed number (`Hoverslam`, `GridFin`, `ThrustBalance`, `RcsBalance`,
+        // `WarpPlan`, `BoosterDescent`, `Actuator`). Re-converge from a recorded RSS-RO lifting-entry flight
+        // before trusting the schedule for a commanded divert (ruling 3 — needs glass time, a SEPARATE owner
+        // gate). ℹ Today's booster path does NOT touch this schedule: `BoosterDescent.cs:463-464` sets
+        // `UseLdBand = false` for the booster's vacuum-fallback solve, so this is a marking gap, not a live
+        // wrong number — the only live consumer is entry guidance, once §B16.5/W16 wires it up.
+        [Tunable] public static double LdAtmosEntry    = 0.18;   // [UN-CONVERGED] 50–100% depth (thin air, hypersonic)
+        [Tunable] public static double LdHighAltitude  = 0.20;   // [UN-CONVERGED] 25–50%
+        [Tunable] public static double LdLowAltitude   = 0.26;   // [UN-CONVERGED] 5–25% (dense, near peak L/D)
+        [Tunable] public static double LdFinalApproach = 0.24;   // [UN-CONVERGED] <5% (subsonic terminal)
 
         public static double EntryLdBand(double altRatio)
         {

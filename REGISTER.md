@@ -6025,7 +6025,25 @@ a refresh control refreshes on this page is a §1.4 question, not a build-chat g
 is drawn as inert text rather than as a button — and the MARGIN column reads modelled margins rather than a
 hardcoded dash, pinned by a test in the same style as S54's.
 
-### W22 [S] `pure/Trajectory.cs`'s 4-band L/D schedule is UNMARKED, and R1 §7.4 files it under the wrong file — **TODO** — [TIER 3: a disclosed unmeasured constant carrying no marking]
+### W22 [S] `pure/Trajectory.cs`'s 4-band L/D schedule is UNMARKED, and R1 §7.4 files it under the wrong file — **DONE** (2026-09-04) — [TIER 3: a disclosed unmeasured constant carrying no marking] ⚠ batch deviation from C1.1/C1.7 authorised by owner 2026-09-04 via overseer
+**Done:** added a `⛔ UN-CONVERGED FOR RSS-RO (§B16.8 ruling 2, W22 2026-09-04)` block comment directly above
+`pure/Trajectory.cs`'s 4-band L/D schedule (covering both the four constants and `EntryLdBand`), in the
+`CourseCorrect.cs`/`GridFin.cs` idiom, plus a `[UN-CONVERGED]` inline tag on each of `LdAtmosEntry` /
+`LdHighAltitude` / `LdLowAltitude` / `LdFinalApproach`. States R1 §5.1's "no lifting entry ever flown" basis
+and records the `BoosterDescent.cs:463-464` `UseLdBand = false` nuance so the marking reads as a gap, not a
+live wrong number. Comment/tag-only — no number touched, no behaviour change.
+**R1 §7.4 correction:** did **not** edit the audit's row (G6: a historical audit's verdicts are not
+rewritten). Appended a dated `⚠ CORRECTION (W22, 2026-09-04)` block after the row in
+`docs/AUTOPILOT_RECOVERY_AUDIT.md` §7.4, naming `pure/Trajectory.cs` as the schedule's actual home (not
+`pure/CourseCorrect.cs`, which only declares `DampingGain`/`MinSensitivityM`/`MinDetFrac`), explaining the
+`a266420` co-ship that caused the misattribution, and noting the row's *"honestly self-marked / disclosed
+gap"* judgment stands — only the file name was wrong.
+**Verified (C1.3):** comment/doc-only, no behaviour change — no preview PNG applies (said, not skipped).
+`python plugin/build.py test`: **ALL SUITES PASSED**.
+**Outputs (C1.11, nothing else):** `plugin/src/pure/Trajectory.cs` · `docs/AUTOPILOT_RECOVERY_AUDIT.md` ·
+this line · one local commit. NOT pushed (C1.5).
+**Batched owner questions (C1.9):** none.
+
 Logged by **W6**, 2026-09-04 (C1.1 — found on re-confirming R1's verdict against the restored content, which
 W6's own VERIFY step required rather than trusting the audit blind).
 **The finding, in two parts.**

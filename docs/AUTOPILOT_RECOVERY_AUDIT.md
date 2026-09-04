@@ -926,6 +926,20 @@ repo. **Every one must have its regime established before the number is used.**
 | `plugin/src/pure/QAlpha.cs` | The aero-stiffness seed — *"researched"*, source not named in-file |
 | `plugin/src/pure/Entry.cs` / `CourseCorrect.cs` | The 4-band L/D schedule — **honestly self-marked as a prior**, so this is a *disclosed* gap rather than a hidden one, but it is still an unmeasured number |
 
+⚠ **CORRECTION (W22, 2026-09-04).** The row above misattributes the file: **`pure/CourseCorrect.cs` has no
+L/D schedule** — verified against the file W6 restored byte-for-byte from `8b81816^`, it is caller-supplied
+2×2 finite-difference linear algebra whose only constants are `DampingGain`, `MinSensitivityM` and
+`MinDetFrac` (themselves correctly un-converged, just not this schedule). The 4-band schedule
+(`EntryLdBand` + `LdAtmosEntry`/`LdHighAltitude`/`LdLowAltitude`/`LdFinalApproach`) lives in
+**`plugin/src/pure/Trajectory.cs`** (restored by W1) — `Entry.cs` is correctly named alongside it, per R1
+§5.1's own `Trajectory.cs` + `Entry.cs` rows. Commit `a266420` shipped `CourseCorrect.cs`, `Trajectory.cs`
+and `Entry.cs` together, which is how this row came to name the wrong pair. This is a correction of
+attribution, not a re-verdict — the row's *"honestly self-marked … disclosed gap"* judgment was and remains
+correct on the evidence; only the file name is wrong. The gap itself (no `[UN-CONVERGED]` marking on
+`Trajectory.cs`'s four L/D constants) is fixed by register line **W22** in `plugin/src/pure/Trajectory.cs`
+directly; this document's row is left as originally written, per G6 (a historical audit's verdicts are not
+rewritten — only appended to).
+
 ### 7.5 The qualifier — this failure does not predict §B16
 
 Restating §2.3 because it governs how §7.2 is read: everything in §7.1–7.2 is **ascent + Dragon-RCS
