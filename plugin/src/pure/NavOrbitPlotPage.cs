@@ -82,7 +82,21 @@ namespace DragonScreen
 
             // ---- g / rate readout: real PageState fields, the same ones the Vehicle Overview's
             // G-FORCE dial and the Docking/Rendezvous approach readouts already read ----
-            float rowX0 = PlotX + PlotW - 40f, rowLabelX = PlotX + PlotW - 620f, rowY = PlotY + 26f;
+            // ---- S39 (finishing S38's sweep): THE VALUE COLUMN SITS BESIDE ITS LABEL ----
+            // These three rows were the widest REACHABLE stacked label-value block left after S38:
+            // 580 design units of empty space at a 26-unit type size (22.3x), on a row pitch of only
+            // 44 - a span-to-pitch ratio of 13, the second-tightest in the build after the
+            // DeorbitBurnPrep block S38 could not cure by distance. The console is a tilted quad in
+            // IVA, so a horizontal row is a SLOPING line to the crew and a wide gap lifts the value
+            // column toward its neighbour's line; three stacked rows with nothing joining them across
+            // the gap is exactly the arrangement that misread on the glass.
+            // The remedy is the owner's own choice from S38 - move the value column IN - not a new
+            // mechanism. Values stay RIGHT-aligned so the digits still line up and the column is still
+            // scannable; the span goes 580 -> 280, which is well under the 44-unit row pitch's reach.
+            // ⛔ No PNG check can find this class (the preview renders the panel flat and square-on),
+            // so the guard is LayoutTest's headless span assertion, not the preview.
+            const float ValueSpan = 280f;
+            float rowX0 = PlotX + PlotW - 40f, rowLabelX = rowX0 - ValueSpan, rowY = PlotY + 26f;
             void Row(string label, string value, float ry)
             {
                 dl.Text(label, X(rowLabelX), Y(ry), Z(26), TextAlign.Left, DragonPalette.Text6);

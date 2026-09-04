@@ -3575,7 +3575,7 @@ and costs nothing but a layout change to a page that is ours, not the reference'
   Distance alone does not finish this one; it wants the leader line this line listed as its other option.
   That, and the blocks the survey flagged but this task did not touch, are **S39**.
 
-### S39 [O] Finish the S38 sweep — the blocks distance alone does not fix — **TODO** — [TIER 3: scheduled polish]
+### S39 [O] Finish the S38 sweep — the blocks distance alone does not fix — **DONE 2026-09-04 for the reachable blocks the owner's chosen remedy closes; SPLIT — the two blocks needing a NEW mechanism → S81, the stranded FLIGHT screen → S82 (C1.7)** — [TIER 3: scheduled polish] ⚠ batch deviation from C1.1/C1.7 authorised by owner 2026-09-04 via overseer
 Logged by S38, 2026-09-03. S38 fixed the three worst stacked label→value blocks by moving the value column
 in, which was the owner's chosen remedy, and pinned them. Its own survey named what is left. **Numbers below
 are the worst span on that page as a multiple of the row's type size, measured after S38 landed** — rerun the
@@ -3599,6 +3599,92 @@ screen's `GROUND TRACK` / `TRACKING VEHICLE` pair (110×) · `ManualChute`'s hea
 **Also worth deciding here:** whether the C1.3 gate wording should say out loud that a PNG preview cannot
 see this class, so a future task does not read "preview inspected" as "legible in the capsule". S38's test
 comment says it; the protocol does not.
+
+- ✅ **THE SURVEY WAS RERUN FIRST, as this line instructs — and it changed the scope.** S38's own measure
+  (worst label→value span as a multiple of the row's type size) was re-run headless over all 35 `UiPage`s
+  **and** the three old `Pages` screens, at 2560×1406. Everything over 12×:
+
+  | page | span | reachable? | verdict |
+  |---|---|---|---|
+  | `Pages[0]` FLIGHT (old UI) | **57.5×**, **19 pairs** | ❌ **NO** | stranded behind `FigmaMode` → **S82** |
+  | `Pages[2]` NAV (old UI) | 110.6× | ❌ no | the `GROUND TRACK` / `TRACKING VEHICLE` pair this line calls "not a defect" |
+  | `Pages[4]` SETTINGS (old UI) | 22.5× | ❌ no | stranded → **S82** |
+  | `VehiclePropulsion` | 92.8× | ✅ | **not a defect** — a section caption beside a page badge, named as such by this line |
+  | `AudioVideo` | 81.0× | ✅ | **not a defect** — the lone `RESOLUTION` caption, named as such by this line |
+  | **`Vehicle`** (CONSUMABLES) | **29.3×** | ✅ | needs a NEW mechanism → **S81** |
+  | **`NavOrbitPlot`** | **22.3×** | ✅ | **FIXED HERE** |
+  | **`VehicleMech`** | **19.0×** | ✅ | **FIXED HERE** |
+  | `DeorbitBurnPrep` | 17.7× | ✅ | the ragged-label residual → **S81** |
+  | the six subsystem tabs, `ManualChute` | 16.0× | ✅ | S38's shared helper, already fixed and pinned |
+
+- ⭐ **THE FINDING THAT ACTUALLY FINISHES THIS SWEEP — the span number ALONE is not the discriminator, and
+  reading it as one is what makes this line look bigger than it is.** S38 measured span ÷ type size. But the
+  glass defect is a *rigid upward displacement of the value column*, and whether that displacement lands on a
+  neighbouring row depends on **span against ROW PITCH**, and on **whether a connector spans the gap**. Sorted
+  by span alone, the worst reachable page is `VehiclePropulsion` at 92.8× — which this line already knew was
+  not a defect at all. Sorted by the real mechanism, the order changes completely:
+  - `NavOrbitPlot`: 580 units, pitch **44**, span:pitch **13**, **no connector**, 3 stacked rows → the worst
+    reachable block in the build after S38. Fixed.
+  - `VehicleMech`: 440 units, pitch 80, span:pitch 5.5, no connector, up to 4 stacked rows → same class,
+    milder. Fixed.
+  - `Vehicle`'s CONSUMABLES: 600 units, pitch **145** (the loosest anywhere), and a **full-width 2-unit rule
+    under every single row** — a connector that already spans the entire gap, which is precisely the mechanism
+    S38 found missing. Its 29.3× is the *least* dangerous of the three despite being the largest number. That
+    is why it is not fixed here and why "it wants column rules or banding" is a design question rather than
+    outstanding work → **S81**.
+  ⇒ **A future sweep should measure span:pitch and connector-presence, not span:type-size alone.** Recorded in
+  `LayoutTest.cs` beside the new checks so the next reader meets it there too.
+- ✅ **FIXED — `NavOrbitPlotPage`'s G-FORCE / RATE / RANGE rows.** Span **580 → 280** design units (22.3× →
+  ~10.8×), by the owner's own S38 remedy — move the value column in, values still RIGHT-aligned so the digits
+  line up and the column stays scannable. No new mechanism, no new glyph.
+- ✅ **FIXED — `VehicleMechPage`'s SEAT n TACH rows.** Span **440 → 240** (19.0× → ~9.2×). The label moved out
+  as far as the value moved in, so **the block stays centred on the donut's axis** — moving only the value
+  column would have pulled it off the ring, which is the one thing this page's layout cannot give up.
+- **Pinned by 2 new `LayoutTest` checks in S38's own style** (`WorstSpan(NavOrbitPlot) <= 12f`,
+  `WorstSpan(VehicleMech) <= 12f`), with a comment recording, in terms, the four pages that are deliberately
+  **not** asserted and why — the two "not defects", the CONSUMABLES block waiting on S81, and the stranded
+  FLIGHT screen. ⛔ The comment repeats S38's warning: **no PNG check can ever find this class**, because
+  `build.py preview` renders the panel flat and square-on, so these rows align perfectly there and always will.
+- **✅ `python plugin/build.py test` GREEN** — `ALL SUITES PASSED`; the layout suite went 306 → **308 checks**.
+- **✅ PREVIEW GATE MET — both changed pages rendered and INSPECTED** (the pages changed, so the gate applies
+  even though the *defect class* is invisible to it — this is per-page QC, not a check of the fix):
+  - `ui_navorbitplot.png`: G-FORCE `0.2 g` / RATE `-0.25 m/s` / RANGE `202.6 m` now read as a tight
+    two-column list in the plot's top-right corner, values right-aligned on their digits, every string inside
+    the plot frame, clear of the VEHICLE / SPACE X STATION colour key opposite. No overlap, no clipping.
+  - `ui_vehiclemech.png`: the four SEAT n TACH rows sit as a compact block with each dash close to its own
+    label, the block still centred under the SEATS heading and inside the donut, clear of ALL SYSTEMS CHECK
+    below. Longest label (`SEAT 4 TACH`, and all four are the same length) leaves ~84 design units of clear
+    space before the dash column, so no label can reach its value.
+- **⚠ SPLIT (C1.7) — this line was bigger than its wording, exactly as the batch brief anticipated.** Two
+  things on it are not "finish the sweep with the remedy already chosen"; they are new decisions and new
+  scope, so they are their own lines rather than being run long here:
+  - **→ S81** — the two blocks that need a **NEW visual mechanism** rather than more distance
+    (`DeorbitBurnPrep`'s ragged-label residual wants the LEADER LINE; `Vehicle`'s three-column CONSUMABLES
+    wants column rules or banding). S38 itself called the choice of mechanism "a design call", and the owner
+    made that call once already for S38 (they chose "move the column in"). They should make this one too.
+  - **→ S82** — the FLIGHT screen's 19-pair, 57.5× block, which is on the **stranded** old UI.
+- **Files changed (declared outputs, C1.11):** `plugin/src/pure/NavOrbitPlotPage.cs`,
+  `plugin/src/pure/VehicleMechPage.cs`, `plugin/test/LayoutTest.cs`, `REGISTER.md`.
+
+#### Open questions for the owner (C1.14) — S39
+
+**S39-Q1. Should the C1.3 gate wording say out loud that a PNG preview cannot see this defect class?**
+*Situation.* This line's own body asks it, and S38 raised it first. C1.3 requires "preview PNG inspected" before
+DONE, and for the oblique-viewing-angle class that inspection is **structurally incapable** of finding the
+defect — `build.py preview` renders the panel flat and square-on, so a misreading row looks perfect. The risk
+is that a future task reads "preview inspected" as "legible in the capsule". S38's test comment says so; the
+protocol does not. ⛔ **This needs the owner: it edits the build protocol, and C1.12 forbids a build chat from
+changing the plan on its own authority.** No wording was drafted into `CLAUDE.md` or `BUILD_PLAN.md` by this
+task.
+1. **Add one clause to C1.3** — e.g. *"…preview PNG inspected (note: the preview renders the panel flat, so it
+   cannot judge oblique-angle legibility — that class is guarded headlessly and settled on the glass)"*.
+   *(recommended: it is one sentence, it is already true, and it costs nothing. The failure it prevents has
+   already happened once — S34 closed the finding as "not reproduced" against the preview and was right about
+   the code and wrong about the crew, which is what became S38.)*
+2. **Leave C1.3 alone and rely on the test comments**, which already say it at both S38's and S39's checks.
+   Keeps the protocol short; relies on a task reading the right file.
+3. **Add it to `BUILD_PLAN.md` §14.4 instead** as a decision-log entry rather than to the C1 rules, so the
+   invariant rules stay a short list.
 
 ### S40 [S] The RSS "no usable scaled-space map" warning floods KSP.log ~450×/flight — **DONE 2026-09-03** — [TIER 2: real defect]
 Logged and fixed by the owner-directed flight-surfaced screen-bugs pass, 2026-09-03 (finding **A**). Evidence:
@@ -7445,3 +7531,78 @@ chat. **Q2** (T15 ordering) is not closed but shrinks to one line: only **W19** 
 2. **Close all three** — answer Q2 as *"leave the order as written; W19 stops and says so if T15 has not
    landed"*, which was W11's own recommendation and is now a one-line risk instead of a five-line one.
 3. Keep all three open until after the first recorded flight.
+
+### S81 [O] The two label→value blocks that need a NEW mechanism, not more distance — **TODO (blocked: owner design call)** — [TIER 3: scheduled polish]
+Split out of **S39**, 2026-09-04 (C1.7), when that line finished S38's sweep for every block the
+already-chosen remedy closes. These two are what is left, and neither is more of the same work: both need a
+**visual mechanism this build does not yet use**, and choosing it is a design call the owner has already made
+once (for S38 they chose "move the value column in" over a leader line and over banding).
+**Read first:** S38's close and its ⚠ HONEST RESIDUAL · S39's close, especially its ⭐ span:pitch finding ·
+`plugin/test/LayoutTest.cs`'s S38/S39 block · `pure/DeorbitBurnPrepPage.cs` · `pure/VehicleOverviewPage.cs:154-166`.
+
+**The two blocks.**
+1. **`DeorbitBurnPrepPage`'s SLEW residual — the one distance genuinely cannot cure.** S38 pulled the span
+   from 105× to 17.7×, and said so honestly: the column position is set by the LONGEST label
+   (`MAXIMUM ATTITUDE RATE`), so the short labels (`ROLL`, `PITCH`, `YAW`) still have ~300 design units of
+   empty space to their values. **And this block has the tightest row pitch in the build at 40 units**, so on
+   S39's span:pitch measure it is the worst case anywhere on a reachable page. S38 named the remedy in terms:
+   **the leader line** — and warned it has to actually REACH, because the Cover already has short ones and
+   still misreads.
+2. **`VehicleOverviewPage`'s CONSUMABLES table — the three-column case.** CONSUMABLE / QTY / MARGIN, so the
+   value genuinely cannot move all the way in. S39 measured it at 29.3× — the largest reachable number — and
+   then found it is the **least** dangerous of the three candidates it looked at: a 145-unit row pitch (the
+   loosest in the build) and a **full-width 2-unit rule under every row**, which is already a connector
+   spanning the whole gap. So this is not a defect waiting on a fix; it is a question of whether it wants
+   more (column rules, or row banding) as well.
+⚠ **Do not start either without the owner's answer** — the mechanism is the whole of the work, and inventing
+one is what C1.4/§1.4 and C1.12 reserve to the owner. ⚠ Coordinate the CONSUMABLES half with **S79**, which
+owns that table's MARGIN column CONTENT; this line is its LAYOUT. They must not both restyle the same rows.
+**DONE when:** the owner has named the mechanism for each block, it is built, `test` is green with a
+`LayoutTest` guard in S38/S39's style, and both pages are re-previewed and inspected.
+
+#### Open questions for the owner (C1.14) — S81
+
+**S81-Q1. `DeorbitBurnPrepPage`'s ragged SLEW rows: which mechanism?**
+*Situation.* Five stacked rows, a 40-unit pitch (the tightest in the build), and a value column set by the
+longest label so the short ones keep ~300 units of empty space. Distance has already been spent — S38 took it
+from 105× to 17.7% of what it was and explicitly could not finish it.
+1. **A leader line that spans the FULL gap** — a dotted or hairline rule from the end of each label to its
+   value, per row. *(recommended: it is S38's own named remedy, it is the only option that fixes the RAGGED
+   case rather than the average case, and it adds no vertical space to a block that has none to give. S38's
+   warning applies: it must reach the whole way — the Cover's short leaders still misread.)*
+2. **Right-align the labels** so every value sits a fixed short distance from the end of its own label. No new
+   glyph at all, and it makes every row's span identical. Costs the left-edge alignment of the label column,
+   which is how the crew scans for a row by name.
+3. **Band the rows** (alternate faint fills). Cheapest to draw, but it fights the card's own background and
+   this page is reference-derived.
+4. **Open the row pitch from 40** and re-measure. Honest, but the card has no spare height without dropping a
+   row, which is a content change and not this line's to make.
+
+**S81-Q2. `VehicleOverviewPage`'s CONSUMABLES table: does it need anything at all?**
+*Situation.* Largest reachable span (29.3×) but the loosest row pitch (145) and a full-width rule already
+under every row. S39 judged it already protected by the mechanism S38 found missing everywhere else.
+1. **Leave it alone; record it as already-protected.** *(recommended: the connector S38 asked for is there,
+   the pitch is 3.6× the DeorbitBurnPrep block's, and the page is reference-derived — adding a visual
+   treatment it does not need is the cost, not the saving.)*
+2. **Add faint row banding** as S39's line originally suggested. Small, safe, but changes the look of a
+   reference-derived table and would want doing WITH **S79**, not before it.
+3. **Add vertical column rules** between CONSUMABLE | QTY | MARGIN. Strongest for a three-column table, and
+   the most visible change to the reference's look.
+
+### S82 [S] The old FLIGHT screen's 19-pair label→value block — the largest count anywhere, on UI no crew can reach — **TODO (blocked: audit Q1, the stranded UI)** — [TIER 4: hygiene, stranded-UI-gated]
+Split out of **S39**, 2026-09-04 (C1.7). S39's re-run of the S38 survey measured the old `Pages` FLIGHT screen
+at **57.5×, over NINETEEN label→value pairs — the largest count anywhere in the build**, which is why S39's
+own line called it "the biggest remaining exposure". **It is not an exposure, because nothing can reach it.**
+⛔ **Verified 2026-09-04, not assumed:** `Pages.Build` has exactly one caller, `ScreenPainter.cs:994`, and it
+sits in the **`else` branch of `if (FigmaMode)`** — and `ScreenPainter.cs:56` pins `FigmaMode = true`. So the
+whole old VEHICLE / FLIGHT / NAV / DOCKING / SETTINGS tab UI is drawn by nothing. `Pages[2]` (110.6×) and
+`Pages[4]` (22.5×) are on the same stranded path; `Pages[2]`'s number is the `GROUND TRACK` /
+`TRACKING VEHICLE` pair S39's line already names as **not a defect** even if it were reachable.
+**Why this is blocked rather than TODO-now:** fixing legibility on UI no crew can see is work on the stranded
+assets `docs/SCREEN_LIVENESS_AUDIT.md` §8 **Q1** exists to decide. The owner answered Q1 on 2026-09-04, but
+**only for S57's six items** (as option 4 — route each to the line that touches it); S57's close records in
+terms that `StepList`, the crew-gate card and the settings page — the rest of the stranded UI, which is what
+this screen IS — **remain undecided** under that Q1. So this line follows the stranded UI's fate; it does not
+pre-empt it.
+**DONE when:** EITHER the stranded UI's fate is settled and this screen is retired with a note (nothing to
+fix), OR it is harvested to a reachable surface and the block is then fixed with S38/S39's remedy and pinned.

@@ -1034,6 +1034,37 @@ public static class LayoutTest
                 Check("S38 " + subs[i] + "'s detail rows keep their values close",
                       WorstSpan(subs[i]) <= 18f, "worst " + WorstSpan(subs[i]) + "x");
             }
+
+            // ---- S39: THE TWO BLOCKS S38'S SURVEY LEFT THAT THE SAME REMEDY CLOSES ----
+            // S39 re-ran the survey and found the span number alone is not the discriminator - what
+            // decides whether a wide gap MISREADS is the span against the ROW PITCH, and whether a
+            // connector spans the gap. These two are the reachable blocks where both went the wrong
+            // way: a wide span, a tight pitch, and nothing joining label to value.
+            //
+            // NAV ORBIT PLOT - three stacked rows, 580 units at a 44-unit pitch (span:pitch = 13),
+            // the second-tightest in the build after the DeorbitBurnPrep residual. Was 22.3x.
+            Check("S39 the orbit plot's g/rate rows keep their values beside their labels",
+                  WorstSpan(UiPage.NavOrbitPlot) <= 12f,
+                  "worst " + WorstSpan(UiPage.NavOrbitPlot) + "x");
+
+            // VEHICLE MECH - up to seven stacked seat rows, 440 units at an 80-unit pitch. Milder,
+            // same class, same remedy. Was 19.0x. The block stays CENTRED in the donut, so the label
+            // moved out as far as the value moved in.
+            Check("S39 the Mech page's seat rows do too",
+                  WorstSpan(UiPage.VehicleMech) <= 12f,
+                  "worst " + WorstSpan(UiPage.VehicleMech) + "x");
+
+            // ⛔ NOT ASSERTED HERE, AND ON PURPOSE - see the S39 register line:
+            //   · UiPage.Vehicle's CONSUMABLES table (29.3x) is three columns on a 145-unit pitch with
+            //     a FULL-WIDTH RULE under every row - a connector that already spans the whole gap,
+            //     which is the mechanism S38 found missing. Whether it also wants banding is a design
+            //     call the owner has not made; a guard here would freeze a layout that may change.
+            //   · UiPage.AudioVideo (81x) and UiPage.VehiclePropulsion (92.8x) are NOT stacked
+            //     label-value rows - a lone caption under the video box, and a section caption beside
+            //     a page badge. S39's own line names both as "not defects, do not fix them".
+            //   · The old (non-Figma) FLIGHT screen measures 57.5x over NINETEEN pairs - the largest
+            //     count anywhere - but Pages.Build sits in ScreenPainter's `else` branch behind
+            //     FigmaMode = true, so no crew can reach it. It is stranded UI, not a live defect.
         }
 
         Console.WriteLine(failures == 0

@@ -115,10 +115,18 @@ namespace DragonScreen
             C("SEATS", ccx, ccy - 190, 30, Accent);
             int seats = (s.Valid && s.SeatCount > 0) ? s.SeatCount : SeatLabel.Length;
             if (seats > SeatLabel.Length) seats = SeatLabel.Length;
+            // ---- S39 (finishing S38's sweep): THE SEAT ROWS' DASH COLUMN COMES IN ----
+            // Up to seven stacked label-value rows, 440 design units apart at a 26-unit type size
+            // (19x) on an 80-unit pitch, with nothing joining label to value across the gap. Milder
+            // than the NavOrbitPlot block (the pitch is nearly twice as forgiving) but the same class
+            // and the same cheap remedy: bring the column in. 440 -> 240, and the block STAYS CENTRED
+            // in the donut - moving only the value column would have pulled it off the ring's axis,
+            // which is the one thing this page's layout cannot give up.
+            const float SeatHalfSpan = 120f;
             for (int i = 0; i < seats; i++)
             {
-                L(SeatLabel[i], ccx - 220, ccy - 120 + i * 80, 26, White);
-                R(Dash, ccx + 220, ccy - 120 + i * 80, 26, Dim);
+                L(SeatLabel[i], ccx - SeatHalfSpan, ccy - 120 + i * 80, 26, White);
+                R(Dash, ccx + SeatHalfSpan, ccy - 120 + i * 80, 26, Dim);
             }
             // S22: "Awaiting" is reference COPY, not a live reading — dash-and-dim it on a dead feed,
             // same rule as VehicleOverviewPage's checklist, so the two pages can't disagree. The
