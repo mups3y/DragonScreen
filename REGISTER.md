@@ -9283,6 +9283,13 @@ silently dropping two-thirds of the real state, which is the exact failure class
 exist to prevent. No gate-open or `OVERRIDE` is needed for any option — this is a new column-shape decision,
 not a change to a settled decision.
 
+**S86-Q1 — CLOSED 2026-09-05.** Answered by the overseer, pasted into the build chat that opened **S94**
+(C1.12's evidentiary standard — quoting the actual words received in that chat, not a summary): *"S86-Q1
+is CLOSED, answered by the overseer 2026-09-05 under the owner's standing directive that the overseer
+settles questions with knowable answers... S86 recorded three options for `cover_cam`/`cover_phase`; the
+answer is OPTION 1, SPLIT THEM."* Built by S94: `cover_cam_l/c/r` + `cover_phase_l/c/r`, six columns,
+`BlackBoxSchema.cs` §G. See S94's own line for what was built and its stated limits.
+
 ### S87 [S] Three docking/phasing quantities reach `PageState` only as FORMATTED TEXT — **TODO** — [TIER 3: a real value that survives only as a string]
 Logged by **BB1**, 2026-09-04 (C1.1).
 **The gap.** §2.8 asks for `off_x/y/z_m` (R2, R1 inside 1 km), `phase_angle_rad` and `tgt_radius_m` (R3).
@@ -9497,3 +9504,97 @@ first non-DONE task, verifies it, updates the register, and stops."* That is the
 `description` is not the enforced instruction — the skill body is — but it is user-facing (shown wherever
 skills are listed) and states the old, wrong rule. **Fix:** reword the clause to something the new rule
 doesn't contradict, e.g. "does the next eligible task" — a one-line frontmatter edit.
+
+### S94 [S] `cover_cam`/`cover_phase` split into six per-screen columns — closing S86-Q1 (owner → the overseer, 2026-09-05) — **DONE 2026-09-05** — [TIER 4: hygiene — the rest of S86's §2.7 column set]
+Assigned directly by the owner, 2026-09-05, as the resolution of **S86**'s open question (C1.14). ⚠ **A
+numbering note, stated plainly rather than silently worked around:** the task brief that opened this line
+called it "S93". That ID was already taken by a different, unrelated `TODO` (`.claude/skills/next/
+SKILL.md:3`'s stale frontmatter, logged by **G8** the same day) — see the line immediately above. Recorded
+here as **S94**, the next free number, so neither line overwrites or shadows the other.
+
+**S86-Q1, closed.** The overseer's answer is quoted in full on S86's own line, above (C1.12's evidentiary
+standard): option 1, split into `_l/c/r`. Built exactly that.
+
+**WHAT WAS BUILT.**
+- **Schema (`plugin/src/pure/blackbox/BlackBoxSchema.cs:407-422`):** `cover_cam_l/c/r` and
+  `cover_phase_l/c/r`, six `CondCap` columns riding `page_l/c/r`'s shape exactly — Tier.R2 (NOT
+  brightness's R3: a rail step or NEXT VIEW touch changes on the same cadence as a page change, not a
+  slow cabin setting), `Scope.Capsule`, `WhenScreens`. `SchemaVersion` untouched (pure append, §4.2).
+  Updated the file's own two stale comment blocks that still called `cover_cam`/`cover_phase`
+  undeclared (the header's "WHAT IS NOT DECLARED" list and §G's inline note) rather than leaving them
+  self-contradicting next to the new columns.
+- **Publish mechanism (`plugin/src/ScreenPainter.cs`), mirroring `livePage`/`Brightness`:** two new
+  static arrays, `liveCoverCam` (`CoverPage.CoverCam[4]`) and `liveCoverPhase` (`int[4]`) — one slot per
+  screen index, NOT a shared static like `brightness`, because S86 already verified `coverCam`/
+  `coverPhase` are genuinely per-`ScreenPainter`-instance. A new `PublishCover()` beside `Publish()`
+  writes both from the instance fields; called from `Configure()` (so the field DEFAULTS are visible
+  before any touch) and once at the end of the Cover-page touch dispatch block, covering all four
+  mutation sites (three `coverPhase` branches + `ApplyCoverCam`'s `coverCam`) with one call, since at
+  most one changes per touch. Read-only accessors `CoverCamL/C/R` / `CoverPhaseL/C/R`, same shape as
+  `Brightness`. Excisability held: nothing in `ScreenPainter.cs` calls into `BlackBox.*` (checked by
+  hand — the only new dependency is `BlackBoxRecorder` reading `ScreenPainter.*`, the same direction
+  `Brightness` already established).
+- **Recorder (`plugin/src/BlackBoxRecorder.cs`, `PutScreens`'s R2/`!slow` branch, beside `page_l/c/r`):**
+  reads the six new accessors.
+- **Cols (`plugin/src/pure/blackbox/BlackBoxCols.cs`):** the six derived indices, beside `BrightnessL/C/R`.
+
+**RECORDING FORMAT — cover_cam by NAME, cover_phase by INDEX, and why they differ (a design call this
+line had to make, not a mechanical copy of the brief).** `cover_cam_*` is a real `CoverPage.CoverCam`
+enum — recorded via `.ToString()`, never an ordinal, exactly as instructed. `cover_phase` is a plain
+`int` (0..6) in `ScreenPainter`, NOT a C# enum, and `CoverPage.PhaseName[]` — the only name table for it
+— is NOT safe to record: indices 3 and 4 BOTH display `"Procedure"` (`CoverPage.cs:76-78`), so a name
+would silently conflate two distinct phases — the exact class of information loss this whole task exists
+to avoid. Recorded as the raw index instead. Documented inline at both points of use.
+
+**DOC UPDATE (C7.1).** `docs/BLACKBOX_RESEARCH.md` §2.7's table previously named `cam_view`, `cover_cam`,
+`cover_phase` together as three R3 single columns (one row). Split `cam_view` onto its own row (unchanged
+— still R3/single) and replaced the `cover_cam`/`cover_phase` row with the six `_l/c/r` columns at R2,
+followed by a dated `> SUPERSEDED 2026-09-05` note that KEEPS S86's original reasoning for why the
+single-column form was never honestly fillable (C1.16 — recorded as superseded-by-which-shape, not
+deleted or overwritten as if it had been wrong to write).
+
+**TESTS.** `BlackBoxTest.Schema()`: the old "cover_cam/cover_phase are NOT declared" check is kept
+(reworded) — it is STILL true, since only the suffixed `_l/c/r` names were ever declared — plus new
+checks that the six bind, are `Fit.Conditional`, and ride `page_l/c/r`'s Tier.R2 (not brightness's R3);
+and a `CoverCam`-decodes-to-three-distinct-names check, the same pattern BB9 used for
+`BoosterCommandBlock`. `ScopeDeclarations()`: all six added to the `capsule` string array, so a future
+edit that drops `Scope.Capsule` on one of them fails by name. **MUTATION-PROVEN, live, not asserted:**
+temporarily removed `cover_phase_c`'s `BlackBoxSchema.Columns` entry, ran `build.py test` — went red,
+exactly two named failures (`"cover_phase_l/c/r exist..."` and `"capsule column 'cover_phase_c' exists in
+the schema"`), nothing else broke (1757 checks, 2 failed); restored the entry, reran — green, 1765
+checks/0 failed, matching the pre-mutation baseline exactly.
+
+**VERIFICATION — limits stated plainly, TWICE OVER (BB6 applies, same as S86/BB9's line).** Headless, and
+true: the six columns exist, bind, declare the right Fit/Scope/Tier; `BlackBoxCoverage` reports zero
+defects against a fully-filled synthetic row (`FilledRow()` is generic, `Fit`/`Scope`-driven — needed no
+changes); each is mutation-proven, above. **What this does NOT and CANNOT prove:** (1) BB6 — a coverage
+pass that only sees a FULLY-written synthetic row cannot detect a column that fills WRONG (e.g.
+`cover_cam_l` silently reading screen C's value) — that needs BB4, on a real flight. (2)
+`ScreenPainter.cs`/`BlackBoxRecorder.cs` are glue, and `build.py test` compiles `src/pure` + tests ONLY
+(`build.py:199-213`) — neither `PublishCover()`'s wiring nor `PutScreens`'s new `Set` calls are exercised
+by anything in this repo's headless suite. Ran the FULL glue compile instead (`python plugin/build.py`,
+no `install` — writes only `plugin/GameData/DragonScreen/DragonScreen.dll` IN-REPO, no gate needed):
+compiles clean, the same pre-existing unrelated warnings as before this task (`ScreenPainter.cs`
+unreachable-code x6, `Pages.cs` unused `pad` x2), none from this task's own code. That confirms the code
+TYPE-CHECKS, not that the right screen's value lands in the right cell on the right tick — that is BB4's
+job, exactly where S86 left it.
+
+**SCOPE.** Did not touch S84, S85, BB5-BB8, or anything in the booster lane. One stray noticed while
+editing the doc row immediately above the one this task changed, NOT fixed (C1.1), logged as **S95**.
+
+**Build:** `python plugin/build.py test` green (1765 checks, 0 failed), `python plugin/build.py preview`
+green, `python plugin/build.py` (full glue compile, no `install`) clean. No `install`, no glass time —
+none of this needed anything past the standing preview-only build-go.
+
+### S95 [S] `docs/BLACKBOX_RESEARCH.md`'s `brightness_l/c/r` row cites the wrong source — **TODO** — [TIER 4: doc accuracy]
+Logged by **S94**, 2026-09-05 (C1.1 — noticed while editing the adjacent `cover_cam`/`cover_phase` row for
+S86-Q1's closure; not fixed, because it is a different column and outside S94's declared deliverable).
+
+§2.7's table in `docs/BLACKBOX_RESEARCH.md` (the row directly above the one S94 replaced) reads:
+`brightness_l/c/r | R3 | PageState.Brightness per screen (ScreenPainter.cs:881) | 0..1`. Both halves are
+wrong as of **S86** (2026-09-05): the real source is `ScreenPainter.Brightness`
+(`ScreenPainter.cs:216`-area at S94's revision), a SINGLE shared static — "dimming for a night pass and
+having only the display you touched go dark would be a bug, not a feature", its own header comment — not
+`PageState.Brightness`, and not "per screen" (all three columns legitimately carry the identical value by
+design, per S86's line). **Fix:** correct the Source cell and drop "per screen" from the description; a
+one-row doc edit, C7.1.

@@ -61,8 +61,9 @@
 // will fill it. They are LOGGED as register lines instead (C1.1) and are absent from the schema:
 //   • `acc_att_imp` / `acc_trans_imp` / `acc_both_imp` (delivered RCS impulse) — needs the deleted
 //     `pure/RcsAccounting.cs`.
-//   • `brightness_l/c/r`, `cover_cam`, `cover_phase` — private to a `ScreenPainter` INSTANCE; reading
-//     them means editing `ScreenPainter`, and BB1 is excisable-by-design (§4.8 / the register line).
+//   • (S86, then S94/S86-Q1 filled the rest: `brightness_l/c/r`, `cover_cam_l/c/r`, `cover_phase_l/c/r`
+//     WERE listed here as "private to a `ScreenPainter` INSTANCE, no accessor" — that gap is closed;
+//     see §2.7 below for all nine.)
 //   • `crew.touch` / `crew.press` / `crew.dispatch` events and the flat `control_id` namespace (§2.7's
 //     ⚠) — that is a hook at two choke points inside the screens, i.e. a tree edit, and a separate line.
 //   • `off_x/y/z_m`, `phase_angle_rad`, `tgt_radius_m` — only their FORMATTED text reaches `PageState`.
@@ -396,14 +397,29 @@ namespace DragonScreen.BlackBox
             CondCap("cam_view", "int",  Tier.R3, "screens", "VesselData.CameraView",    WhenScreens),
             // S86: `ScreenPainter.Brightness` is a SHARED static (one cabin brightness knob, not a
             // per-panel one — see its own header) so all three columns legitimately carry the SAME
-            // value every tick; that is the real behaviour of this mod, not a fabrication. `cover_cam`
-            // and `cover_phase` are NOT declared here — see S86's register line for why an honest single
-            // column cannot be built for them (they are independent per-`ScreenPainter`-instance state,
-            // one screen per column with no such split, and any one-of-three pick would misrepresent the
-            // other two).
+            // value every tick; that is the real behaviour of this mod, not a fabrication.
             CondCap("brightness_l", "tenths", Tier.R3, "screens", "ScreenPainter.Brightness", WhenScreens),
             CondCap("brightness_c", "tenths", Tier.R3, "screens", "ScreenPainter.Brightness", WhenScreens),
             CondCap("brightness_r", "tenths", Tier.R3, "screens", "ScreenPainter.Brightness", WhenScreens),
+            // S94 — S86-Q1 (asked by S86, answered by the overseer 2026-09-05: option 1, split into
+            // l/c/r). Unlike brightness, `coverCam`/`coverPhase` are independent per-`ScreenPainter`-
+            // INSTANCE state (S86 verified: no cross-instance write, unlike `livePage`/`Publish()`), and
+            // every screen can default onto Cover simultaneously — so a single `cover_cam`/`cover_phase`
+            // column has no honest value to report and would silently drop two-thirds of the real state,
+            // the exact failure §4.8/the `Scope` header exist to prevent (S86's option 2, refused). Rides
+            // page_l/c/r's shape exactly: same tier (R2 — a camera/phase pick changes on the same touch
+            // cadence as a page change, not a slow cabin setting like brightness), same Cond/Capsule/
+            // WhenScreens. `cover_cam` is a real `CoverPage.CoverCam` enum — recorded by NAME (`.ToString()`),
+            // never an ordinal, exactly as `boost_block`/`boost_phase` are. `cover_phase` is a plain
+            // `int` in `ScreenPainter` (0..6), NOT a C# enum, and `CoverPage.PhaseName[]` cannot round-
+            // trip it losslessly — indices 3 and 4 BOTH display "Procedure" — so the raw index is
+            // recorded rather than a name that would conflate two distinct phases.
+            CondCap("cover_cam_l",   "enum",  Tier.R2, "screens", "ScreenPainter.CoverCamL",   WhenScreens),
+            CondCap("cover_cam_c",   "enum",  Tier.R2, "screens", "ScreenPainter.CoverCamC",   WhenScreens),
+            CondCap("cover_cam_r",   "enum",  Tier.R2, "screens", "ScreenPainter.CoverCamR",   WhenScreens),
+            CondCap("cover_phase_l", "index", Tier.R2, "screens", "ScreenPainter.CoverPhaseL", WhenScreens),
+            CondCap("cover_phase_c", "index", Tier.R2, "screens", "ScreenPainter.CoverPhaseC", WhenScreens),
+            CondCap("cover_phase_r", "index", Tier.R2, "screens", "ScreenPainter.CoverPhaseR", WhenScreens),
 
             // ================= H — SYSTEMS, ENVIRONMENT AND FAULTS (§2.8) =================
             // FlightCommands.State is the systems model itself and exists whether or not the screens

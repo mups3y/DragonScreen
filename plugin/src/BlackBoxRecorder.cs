@@ -1181,6 +1181,18 @@ namespace DragonScreen.BlackBox
                     BlackBoxSchema.Set(c, BlackBoxCols.PageC, ps.ScreenPages[2]);
                     BlackBoxSchema.Set(c, BlackBoxCols.PageR, ps.ScreenPages[3]);
                 }
+                // S94 (S86-Q1, answered by the overseer 2026-09-05): split l/c/r, same tier as page_l/c/r
+                // immediately above (R2 — a rail step or NEXT VIEW touch changes it on the same cadence
+                // as a page change). `cover_cam_*` is a real `CoverPage.CoverCam` enum, recorded by NAME.
+                // `cover_phase_*` is a plain 0..6 index (not a C# enum) and `CoverPage.PhaseName[]` is
+                // NOT recorded here — indices 3 and 4 both display "Procedure", so a name would conflate
+                // two distinct phases; the raw index round-trips losslessly and the name is not.
+                BlackBoxSchema.Set(c, BlackBoxCols.CoverCamL, ScreenPainter.CoverCamL.ToString());
+                BlackBoxSchema.Set(c, BlackBoxCols.CoverCamC, ScreenPainter.CoverCamC.ToString());
+                BlackBoxSchema.Set(c, BlackBoxCols.CoverCamR, ScreenPainter.CoverCamR.ToString());
+                BlackBoxSchema.Set(c, BlackBoxCols.CoverPhaseL, ScreenPainter.CoverPhaseL);
+                BlackBoxSchema.Set(c, BlackBoxCols.CoverPhaseC, ScreenPainter.CoverPhaseC);
+                BlackBoxSchema.Set(c, BlackBoxCols.CoverPhaseR, ScreenPainter.CoverPhaseR);
                 if (ps.HasTarget)
                 {
                     BlackBoxSchema.Set(c, BlackBoxCols.AlignDeg, ps.Align01 * 90.0);

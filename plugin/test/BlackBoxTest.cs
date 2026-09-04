@@ -136,12 +136,46 @@ public static class BlackBoxTest
                   && BlackBoxSchema.Columns[BlackBoxCols.BrightnessC].Fit == Fit.Conditional
                   && BlackBoxSchema.Columns[BlackBoxCols.BrightnessR].Fit == Fit.Conditional),
               "brightness_l/c/r are Conditional — blank unless the screens are running");
-        // S86 did NOT carry cover_cam / cover_phase: unlike brightness (one shared static), coverCam and
-        // coverPhase are independent PER-`ScreenPainter`-INSTANCE state, and §2.7 names them as a single
-        // (non-l/c/r) column each — no honest single value exists across three independent screens. See
-        // S86's register line and its open question for the owner.
+        // ⭐ S94 — S86-Q1 answered (the overseer, 2026-09-05): split, not shared, not un-carried. Unlike
+        // brightness, coverCam/coverPhase are per-`ScreenPainter`-INSTANCE (S86), so each gets its own
+        // l/c/r triple rather than S86's shared-static shape. Same Conditional/Capsule/WhenScreens
+        // treatment as brightness_l/c/r and page_l/c/r; same TIER as page_l/c/r (R2), not brightness (R3)
+        // — a rail step or NEXT VIEW touch changes cadence-with-a-page-change, not a slow cabin setting.
         Check(BlackBoxSchema.Index("cover_cam") < 0 && BlackBoxSchema.Index("cover_phase") < 0,
-              "cover_cam/cover_phase are deliberately NOT declared — see S86's recorded non-carry decision");
+              "the un-suffixed cover_cam/cover_phase names from the old spec were never declared — "
+              + "only the l/c/r split below was (S94/S86-Q1)");
+        bool coverCamBinds = BlackBoxCols.CoverCamL >= 0 && BlackBoxCols.CoverCamC >= 0
+                            && BlackBoxCols.CoverCamR >= 0;
+        bool coverPhaseBinds = BlackBoxCols.CoverPhaseL >= 0 && BlackBoxCols.CoverPhaseC >= 0
+                              && BlackBoxCols.CoverPhaseR >= 0;
+        Check(coverCamBinds, "cover_cam_l/c/r exist (S94 — ScreenPainter.CoverCamL/C/R now have "
+                             + "read-only accessors)");
+        Check(coverPhaseBinds, "cover_phase_l/c/r exist (S94 — ScreenPainter.CoverPhaseL/C/R now have "
+                               + "read-only accessors)");
+        Check(!coverCamBinds
+              || (BlackBoxSchema.Columns[BlackBoxCols.CoverCamL].Fit == Fit.Conditional
+                  && BlackBoxSchema.Columns[BlackBoxCols.CoverCamC].Fit == Fit.Conditional
+                  && BlackBoxSchema.Columns[BlackBoxCols.CoverCamR].Fit == Fit.Conditional),
+              "cover_cam_l/c/r are Conditional — blank unless the screens are running");
+        Check(!coverPhaseBinds
+              || (BlackBoxSchema.Columns[BlackBoxCols.CoverPhaseL].Fit == Fit.Conditional
+                  && BlackBoxSchema.Columns[BlackBoxCols.CoverPhaseC].Fit == Fit.Conditional
+                  && BlackBoxSchema.Columns[BlackBoxCols.CoverPhaseR].Fit == Fit.Conditional),
+              "cover_phase_l/c/r are Conditional — blank unless the screens are running");
+        Check(!coverCamBinds || !coverPhaseBinds
+              || (TierOf("cover_cam_l") == Tier.R2 && TierOf("cover_phase_l") == Tier.R2
+                  && TierOf("cover_cam_c") == Tier.R2 && TierOf("cover_phase_c") == Tier.R2
+                  && TierOf("cover_cam_r") == Tier.R2 && TierOf("cover_phase_r") == Tier.R2),
+              "cover_cam_*/cover_phase_* ride page_l/c/r's tier (R2), not brightness's (R3)");
+        // ⚠ THE POINT OF RECORDING cover_cam BY NAME: CoverCam's three values must decode as three
+        // DISTINCT, stable names — an ordinal would silently break the moment the enum is reordered.
+        var coverCamNames = new HashSet<string>
+        {
+            CoverPage.CoverCam.Earth.ToString(), CoverPage.CoverCam.Map.ToString(),
+            CoverPage.CoverCam.Capsule.ToString()
+        };
+        Check(coverCamNames.Count == 3, "CoverCam's three values decode to three distinct names "
+                                        + "(got " + coverCamNames.Count + ") — a reader filters on these");
 
         // Tier discipline: the A block is on every row by definition (§2.1), and any other tier there
         // would make one of the ten unconditional columns conditional without saying so.
@@ -802,6 +836,8 @@ public static class BlackBoxTest
             "sev_system", "sev_vehicle", "sev_ls", "sev_thermal", "alarm_mask",
             "prop_frac", "page_l", "page_c", "page_r", "cam_view",
             "brightness_l", "brightness_c", "brightness_r",   // S86
+            "cover_cam_l", "cover_cam_c", "cover_cam_r",       // S94 (S86-Q1)
+            "cover_phase_l", "cover_phase_c", "cover_phase_r", // S94 (S86-Q1)
             "align_deg", "roll_err_deg", "pitch_err_deg", "yaw_err_deg",
             "ker_avail", "ker_stage_dv", "ker_total_dv", "ker_twr", "ker_isp", "ker_burn_s",
             "ker_stage_mass_kg", "ker_thrust_avail_n",

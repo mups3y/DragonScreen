@@ -166,6 +166,12 @@ namespace DragonScreen.BlackBox
         public static readonly int BrightnessL = BlackBoxSchema.Index("brightness_l");   // S86
         public static readonly int BrightnessC = BlackBoxSchema.Index("brightness_c");   // S86
         public static readonly int BrightnessR = BlackBoxSchema.Index("brightness_r");   // S86
+        public static readonly int CoverCamL = BlackBoxSchema.Index("cover_cam_l");       // S94 (S86-Q1)
+        public static readonly int CoverCamC = BlackBoxSchema.Index("cover_cam_c");       // S94 (S86-Q1)
+        public static readonly int CoverCamR = BlackBoxSchema.Index("cover_cam_r");       // S94 (S86-Q1)
+        public static readonly int CoverPhaseL = BlackBoxSchema.Index("cover_phase_l");   // S94 (S86-Q1)
+        public static readonly int CoverPhaseC = BlackBoxSchema.Index("cover_phase_c");   // S94 (S86-Q1)
+        public static readonly int CoverPhaseR = BlackBoxSchema.Index("cover_phase_r");   // S94 (S86-Q1)
         public static readonly int Bus1On = BlackBoxSchema.Index("bus1_on");
         public static readonly int Bus2On = BlackBoxSchema.Index("bus2_on");
         public static readonly int StrA1 = BlackBoxSchema.Index("str_a1");

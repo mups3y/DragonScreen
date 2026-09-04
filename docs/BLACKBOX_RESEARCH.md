@@ -349,7 +349,21 @@ Appendix M #55); a press is an act (record it as an event, CVR-style).
 |---|---|---|---|
 | `page_l`, `page_c`, `page_r` | R2 | `ScreenPainter.livePage[1..3]` (`ScreenPainter.cs:199`, published `:280-283`); names via `FigmaUI.Name(UiPage)` (`FigmaUI.cs:147`) | `UiPage` enum (values are persistence-stable — `FigmaUI.cs:19-20`) |
 | `brightness_l/c/r` | R3 | `PageState.Brightness` per screen (`ScreenPainter.cs:881`) | 0..1 |
-| `cam_view`, `cover_cam`, `cover_phase` | R3 | `VesselData.cameraView` `:216`, `ScreenPainter.coverCam` `:90`, `coverPhase` `:428-433` | int / enum |
+| `cam_view` | R3 | `VesselData.cameraView` `:216` | int |
+| `cover_cam_l/c/r`, `cover_phase_l/c/r` | R2 | `ScreenPainter.CoverCamL/C/R`, `CoverPhaseL/C/R` — one read-only property per screen, each reading THAT screen's own `coverCam`/`coverPhase` instance field | `cover_cam_*`: `CoverPage.CoverCam` enum, by name. `cover_phase_*`: a raw 0..6 index (not a name — see the SUPERSEDED note below) |
+
+> **SUPERSEDED 2026-09-05 (S94, closing S86-Q1).** This row named `cover_cam`/`cover_phase` as ONE
+> column each, no `l/c/r` split — unlike `brightness_l/c/r` directly above. S86 (2026-09-05) found that
+> spec un-fillable honestly: `coverCam`/`coverPhase` are genuinely PER-`ScreenPainter`-INSTANCE state
+> (verified: no cross-instance write, unlike `livePage`), and every screen can default onto the Cover
+> page simultaneously — so a single column has no one true value to report, and picking one screen's
+> value to stand for all three would silently drop two-thirds of the real state (S86's option 2,
+> considered and refused for exactly that reason). S86 left both columns undeclared and posed the
+> question to the owner (C1.14); the overseer answered 2026-09-05, under the owner's standing directive
+> that the overseer settles questions with knowable answers: **option 1, split into six `_l/c/r`
+> columns**, matching `brightness_l/c/r`'s and `page_l/c/r`'s shape. The reasoning above is kept, not
+> deleted (C1.16) — it is still why the single-column form was never buildable, only superseded by which
+> shape replaced it.
 
 **The interaction events** (§2.9 `crew.*`) are captured at two choke points, both of which already exist and
 both of which are single:

@@ -216,6 +216,30 @@ namespace DragonScreen
         internal static int Brightness { get { return brightness; } }
 
         /// <summary>
+        /// S94 (S86-Q1, answered by the overseer 2026-09-05: split, not shared). What each screen's
+        /// Cover page is showing, mirroring `livePage`'s shape rather than `brightness`'s: `coverCam`
+        /// (`:90` below) and `coverPhase` (`:84`) are genuinely PER-`ScreenPainter`-INSTANCE — S86
+        /// verified no cross-instance write exists, unlike `livePage`/`Publish()` — so a shared static
+        /// would misrepresent two of the three screens the moment they diverge on Cover, which every
+        /// screen can do simultaneously (`Configure` opens every screen on Cover with no prior save).
+        /// One array slot per screen index, same as `livePage`; written by `PublishCover()`.
+        /// </summary>
+        private static readonly CoverPage.CoverCam[] liveCoverCam = new CoverPage.CoverCam[4];
+        private static readonly int[] liveCoverPhase = new int[4];
+
+        /// <summary>
+        /// S94: read-only, same reason as `Brightness` above — lets the BlackBox record which Cover
+        /// camera view / deorbit phase EACH screen is showing without the screens depending on it. Per
+        /// screen, not shared, per `liveCoverCam`/`liveCoverPhase`'s own header.
+        /// </summary>
+        internal static CoverPage.CoverCam CoverCamL { get { return liveCoverCam[1]; } }
+        internal static CoverPage.CoverCam CoverCamC { get { return liveCoverCam[2]; } }
+        internal static CoverPage.CoverCam CoverCamR { get { return liveCoverCam[3]; } }
+        internal static int CoverPhaseL { get { return liveCoverPhase[1]; } }
+        internal static int CoverPhaseC { get { return liveCoverPhase[2]; } }
+        internal static int CoverPhaseR { get { return liveCoverPhase[3]; } }
+
+        /// <summary>
         /// Chrome values. PLACEHOLDERS until the data layer exists, and cached rather than formatted
         /// per frame even though they are constant - because the moment they become live, formatting
         /// in the draw path is the bug that would appear, and the shape of the code should not have
@@ -251,6 +275,8 @@ namespace DragonScreen
             uiHistory.Clear(); uiHistory.Add(selectedPage); uiHistIndex = 0;
             chrome.AlertMask = 0;
             Publish();
+            PublishCover();   // S94: publish the field defaults before any touch, so a BlackBox read
+                               // between Configure and the first Cover touch sees the real starting state
 
             if (persist != null)
             {
@@ -288,6 +314,20 @@ namespace DragonScreen
         private void Publish()
         {
             if (index >= 0 && index < livePage.Length) livePage[index] = selectedPage;
+        }
+
+        /// <summary>
+        /// S94: publish THIS screen's Cover camera/phase, mirroring `Publish()`'s array-per-screen-index
+        /// shape. A separate method rather than folded into `Publish()`, because the trigger is
+        /// different: `Publish()` fires on a PAGE change, but coverCam/coverPhase can change while the
+        /// screen stays on Cover (the rail arrows, NEXT VIEW) — publishing only on page change would
+        /// leave the array reading stale the whole time a crew member is actually using the page.
+        /// </summary>
+        private void PublishCover()
+        {
+            if (index < 0 || index >= liveCoverCam.Length) return;
+            liveCoverCam[index] = coverCam;
+            liveCoverPhase[index] = coverPhase;
         }
 
         /// <summary>
@@ -457,6 +497,10 @@ namespace DragonScreen
                         // under. Nothing turns yet - see Turntable.Press.
                         turnTouch = Turntable.Press(px);
                     else ApplyCoverCam(cb);
+                    // S94: coverPhase (three branches above) and coverCam (inside ApplyCoverCam) are
+                    // the only two places either field is ever written - republish unconditionally here
+                    // rather than at each branch, since at most one of them changed this touch anyway.
+                    PublishCover();
                 }
                 return;
             }
