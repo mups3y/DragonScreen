@@ -63,14 +63,23 @@ def fnum(s):
     try: return float(s)
     except: return None
 
+# ⭐ S77 (same idiom as assess_flight.py's is_warp()): exclude ONLY on-rails HIGH-warp rows — those are
+# the ones the recorder blanks (physics warp ≤4x keeps control LIVE and must stay pooled). The test is
+# "warped AND the recorder blanked the control columns", not "warp_rate>1" alone.
+def is_warp(r):
+    w = fnum(r.get("warp_rate"))
+    if w is None or w <= 1.0: return False                       # realtime
+    return r.get("ctrl_tq_pitch", "") == "" and r.get("act_pitch", "") == ""   # on-rails = control blanked
+
 def segment_label(r):
     """The phase/manoeuvre this row belongs to — the most specific active phase column."""
     ap = r.get("ascent_phase", "")
     if ap: return "ASCENT/" + ap
     am = r.get("abort_mode", "")
     if am and am != "None": return "ABORT/" + am
-    for col, pre in (("entry_phase", "ENTRY"), ("deorbit_phase", "DEORBIT"), ("dep_phase", "DEPART"),
-                     ("dock_phase", "DOCK"), ("rv_phase", "RV"), ("chute_phase", "CHUTE")):
+    for col, pre in (("boost_phase", "BOOST"), ("entry_phase", "ENTRY"), ("deorbit_phase", "DEORBIT"),
+                     ("dep_phase", "DEPART"), ("dock_phase", "DOCK"), ("rv_phase", "RV"),
+                     ("chute_phase", "CHUTE")):
         v = r.get(col, "")
         if v and v != "Idle": return pre + "/" + v
     return "MISSION/" + (r.get("mission_phase", "") or "Unknown")
@@ -143,6 +152,7 @@ def main():
     #   point_err_p95  — the pointing error 95% of the phase stays under (a real loss of plane/control shows here)
     #   act_sat_duty   — FRACTION of the phase with |actuation| > 0.95 (sustained saturation = out of authority)
     fq = {}            # flight -> seg -> {rows, act_sat_hi, pe:[...]}
+    nwarp = 0          # S77: on-rails warp rows excluded before pooling (control columns blanked there)
     for path in files:
         fn = os.path.basename(path)
         try:
@@ -151,6 +161,9 @@ def main():
             print("skip " + fn + ": " + str(e)); continue
         prev_t = prev_thr = None
         for r in rows:
+            if is_warp(r):
+                nwarp += 1
+                continue   # S77: on-rails, control columns blanked — not a real control-authority sample
             seg = segment_label(r)
             pool.setdefault(seg, {})
             seg_flights.setdefault(seg, set()).add(fn)
@@ -179,6 +192,7 @@ def main():
                 "act_sat_duty": round(q["act_sat_hi"] / q["rows"], 3) if q["rows"] else None}
     db = {"corpus": [os.path.basename(f) for f in files],
           "excluded": [os.path.basename(f) for f in excluded],
+          "warp_rows_excluded": nwarp,
           "flight_quality": {fn: {s: quality(q) for s, q in segs.items()} for fn, segs in fq.items()},
           "segments": {}}
     for seg in sorted(pool):
@@ -208,7 +222,9 @@ def main():
              " available; **rate_\\*_dps**: the rates flown.",
              "", "Values are |abs| unless noted (min is signed).", "",
              "**Corpus (included):** " + (", ".join(db["corpus"]) or "none"),
-             "**Excluded (contaminated, see exclude.txt):** " + (", ".join(db["excluded"]) or "none"), "",
+             "**Excluded (contaminated, see exclude.txt):** " + (", ".join(db["excluded"]) or "none"),
+             "**Warp rows excluded (on-rails, control columns blanked — not pooled into any statistic):** "
+             + str(db["warp_rows_excluded"]), "",
              "### Flight quality — spot contamination BEFORE trusting the pooled stats",
              "A flight whose pointing error or actuation saturation is large in a phase flew that phase BROKEN "
              "(retrograde plane, loss of control). Add it to `exclude.txt` and re-run.", "",
@@ -246,6 +262,7 @@ def main():
         f.write("\n".join(lines))
 
     print("tuning DB built from %d included flight(s) (%d excluded) -> %s" % (len(files), len(excluded), out))
+    print("  %d on-rails warp row(s) excluded before pooling (control columns blanked there)" % nwarp)
     print("segments: " + ", ".join("%s(%d)" % (s, db["segments"][s]["flight_count"]) for s in sorted(db["segments"])))
 
 if __name__ == "__main__":

@@ -6095,7 +6095,29 @@ narrowed — correction of fact only, ruling 2 untouched. (8) `docs/INDEX.md` en
 window §B16.8 attributes to the lost 55-flight TUNING_DB corpus. S76 read **none** of it (C7) and decided
 nothing about it (C1.12). It is an owner call.
 
-### S77 [S] `tuning_db.py` pools warp rows and has no `boost_phase` segment — **TODO** — [TIER 2: it silently mislabels 1,560 booster rows and pools ~9,000 frozen ones]
+### S77 [S] `tuning_db.py` pools warp rows and has no `boost_phase` segment — **DONE** (2026-09-04) — [TIER 2: it silently mislabels 1,560 booster rows and pools ~9,000 frozen ones] ⚠ batch deviation from C1.1/C1.7 authorised by owner 2026-09-04 via overseer
+**Done:** ported `assess_flight.py`'s `is_warp(r)` verbatim into `tuning_db.py` (same on-rails-and-blanked
+test) and skip pooling for any warp row before it ever reaches `pool`/`seg_flights`/`fq`, instead of only
+filtering inside one report section. Added `("boost_phase", "BOOST")` to `segment_label()`'s column loop
+(alongside `entry_phase`/`deorbit_phase`/etc., matching the order `assess_flight.py`'s own `control()` uses).
+The excluded-row count is now carried as `db["warp_rows_excluded"]`, printed at the end of a run, and stated
+in `TUNING_DB.md`'s coverage note next to the existing corpus/excluded lines.
+**Ran against `docs/flights/` into a scratch `<out_dir>` (not `docs/tuning/` — the overwrite guard's 55-flight
+distillate untouched, confirmed by `git status --porcelain docs/tuning/` empty after the run) and diffed
+against a `git stash`-restored pre-fix run over the same corpus:**
+- **7,773 on-rails warp rows** now excluded before pooling (close to the line's ~9,000 estimate — the
+  difference is rows where `warp_rate` was blank/≤1, not "high-warp-with-blanked-controls").
+- **`BOOST/EntryBurn` (3 flights) and `BOOST/LandingBurn` (1 flight)** now appear as their own segments —
+  previously absent entirely; those 1,560 booster rows fell into `MISSION/-` instead.
+- **`MISSION/-`'s pooled `throttle` sample dropped from n=1568 to n=9** — the phantom warp-row pooling this
+  line described, now gone; `MISSION/-`'s flight count also dropped 11→9 (two flights' `MISSION/-` rows were
+  entirely warp, now correctly contribute zero stats there instead of frozen ones).
+**Verified (C1.3):** tooling-only, no `.cs` change — no preview PNG applies (said, not skipped).
+`python plugin/build.py test`: **ALL SUITES PASSED**.
+**Outputs (C1.11, nothing else):** `plugin/tools/tuning_db.py` · this line · one local commit. NOT pushed
+(C1.5). `docs/tuning/TUNING_DB.*` on disk unchanged (confirmed above, per §B16.8/C1.16).
+**Batched owner questions (C1.9):** none.
+
 Found by **S76**, 2026-09-04 (C1.1 — logged, not done: S76's declared change to that file was the corpus path
 plus the overwrite guard, and these are behaviour changes). Two defects, both surfaced by running the tool
 over `docs/flights/`:
