@@ -254,7 +254,9 @@ namespace DragonScreen
         public TargetMode Mode;
         public Vec3 AimForward;         // ALWAYS a unit vector — the direction thrust pushes the vehicle
         public double Throttle;
-        public int EngineMode;          // VehicleParts consts: 0=ModeAllEngines, 1=ModeThreeEngine, 2=ModeCentreOnly
+        public int EngineMode;          // VehicleParts consts: -1=ModeOff (no bank; OCT3), 0=ModeAllEngines
+                                        // (ASCENT ONLY — BoosterHostPlan refuses it in every descent phase),
+                                        // 1=ModeThreeEngine, 2=ModeCentreOnly
         public bool EnginesLit;         // ⚠ EngineMode 0 is AMBIGUOUS (ModeAllEngines == 0). THIS is the
                                         // "are the engines commanded on" answer; read it, not EngineMode != 0.
         public double AoaDeg;           // SIGNED, held angle of attack (negative = §4.5's terminal lean)
@@ -693,7 +695,7 @@ namespace DragonScreen
             c.Phase = phase;
             c.Mode = s.Profile.Mode;
             c.AimForward = s.Valid ? Retro(s.SurfaceVelocity, s.Up) : Unit(s.Up, LastResort);
-            c.Throttle = 0.0; c.EngineMode = VehicleParts.ModeAllEngines; c.EnginesLit = false;
+            c.Throttle = 0.0; c.EngineMode = VehicleParts.ModeOff; c.EnginesLit = false;
             c.AoaDeg = 0.0; c.AoaCapDeg = 0.0; c.Refusal = null;
 
             if (!s.Valid) { c.Phase = BoosterPhase.Idle; c.AimForward = Unit(s.Up, LastResort); return c; }
@@ -803,7 +805,7 @@ namespace DragonScreen
                     {
                         c.Phase = BoosterPhase.AeroDescent;
                         c.EnginesLit = false; wantThrottle = 0.0;
-                        c.EngineMode = VehicleParts.ModeAllEngines;
+                        c.EngineMode = VehicleParts.ModeOff;
                     }
                     break;
                 }
@@ -881,7 +883,7 @@ namespace DragonScreen
                     {
                         c.Phase = BoosterPhase.Landed;
                         wantThrottle = 0.0; c.EnginesLit = false;
-                        c.EngineMode = VehicleParts.ModeAllEngines;
+                        c.EngineMode = VehicleParts.ModeOff;
                         c.AoaDeg = 0.0; c.AoaCapDeg = 0.0;
                         c.AimForward = retro;
                     }
@@ -891,7 +893,7 @@ namespace DragonScreen
                 default:
                     c.Phase = BoosterPhase.Landed;
                     wantThrottle = 0.0; c.EnginesLit = false;
-                    c.EngineMode = VehicleParts.ModeAllEngines;
+                    c.EngineMode = VehicleParts.ModeOff;
                     c.AimForward = up;
                     break;
             }

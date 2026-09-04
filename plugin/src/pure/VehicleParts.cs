@@ -44,6 +44,14 @@ namespace DragonScreen
 
         public const int ModeAllEngines = 0, ModeThreeEngine = 1, ModeCentreOnly = 2;
 
+        // ⛔ OCT3 (2026-09-05): "off" gets its OWN value, unambiguous with `ModeAllEngines`. Before this,
+        // "no bank lit" was spelled `ModeAllEngines` (0) plus a separate `EnginesLit` bool — a comment,
+        // not a guard. `ModeAllEngines` is the ASCENT (liftoff) set and must never be commanded on a
+        // descending booster (owner ruling, register OCT3); giving OFF its own value means the dangerous
+        // state does not have to be inferred from a second field. Never bound to a real `engineID` —
+        // `EngineIdIsMode` is never called with it.
+        public const int ModeOff = -1;
+
         public static int OctawebModeFor(int engines)
         {
             if (engines <= 1) return ModeCentreOnly;

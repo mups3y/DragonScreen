@@ -2642,6 +2642,87 @@ the family is the net, the measured string is the specimen.
 - ⚠ **NOT urgent the way OCT1 was:** nothing here is currently broken — this removes the luck, it does not
   fix a failure. `[S]`.
 
+### OCT3 [S] Octaweb engine modes are PHASE-GATED, and "off" stops being spelled "all nine" — **DONE 2026-09-05** — [TIER 1: owner ruling — landing and ascent engine modes must be mutually exclusive]
+- **Owner ruling, verbatim (2026-09-05):** *"you must differentiate between landing mode etc for the engines
+  as we cannot use landing mode during accent and vice versa."*
+- **THE MECHANISM (measured, `docs/reference/craftdump.csv`):** one octaweb part carries THREE
+  `ModuleEnginesRF` — `AllEngines`/`ThreeLanding`/`CenterOnly` — as NESTED SUBSETS of the same nine nozzles,
+  sharing one throttle (`independentThrottle = False`). The mode is purely which bank is lit; stepping down
+  is SUBTRACTIVE.
+- **TWO DEFECTS, BOTH FIXED:**
+  1. **NO PHASE GATE.** `BoosterHostPlan.RoleFor` decoded a mode with no idea what flight phase the vehicle
+     was in, so an ascent bank (`OctawebAll`) was commandable in any descent phase and vice versa. Fixed by
+     extending the EXISTING idiom rather than inventing a new one: `BoosterCommandBlock` gained
+     `WrongEngineForPhase`, and `BoosterHostPlan.Blocked` (the "may anything go out this tick" gate) now
+     takes the current `BoosterPhase` and the commanded `EngineRole` (optional params, defaulting to
+     `Idle`/`None` so every pre-existing caller keeps compiling unchanged) and refuses via two new pure
+     functions: `AllowedRoleForPhase` (the one legal bank per phase — `Boostback`/`EntryBurn` → `ThreeLanding`,
+     `LandingBurn` → `CenterOnly`, everything else → none) and `PhaseAllows` (`OctawebAll` refused in EVERY
+     phase this FSM can name — it has no ascent state to allow it in; any other role must match the phase's
+     one legal bank exactly). `BoosterHost.cs` now decodes the wanted role BEFORE calling `Blocked` and hands
+     it both the role and `c.Phase`, so the gate and `Dispatch` read the identical decode.
+  2. **THE OFF-STATE WAS SPELLED AS ASCENT.** `ModeAllEngines == 0`, so every "no bank lit" reset in
+     `BoosterDescent.Guide` (the struct default, `AeroDescent`'s cut, `Landed`'s touchdown, the `default:`
+     case) wrote `c.EngineMode = VehicleParts.ModeAllEngines` and relied on `EnginesLit` plus a comment to
+     stop it being read as "light the nine." Gave OFF its OWN value — `VehicleParts.ModeOff = -1`, never
+     bound to a real `engineID` — and switched all four off-state writes to it. Combined with (1), the
+     dangerous state is now refused even if a future bug ever set `EnginesLit = true` with `EngineMode == 0`
+     during a descent phase, not merely undocumented.
+- **Verified (C1.3):** `python plugin/build.py test` **GREEN — ALL SUITES PASSED** (booster HOST tests 128
+  checks, up from ~100; booster recovery FSM tests 959; octaweb engine-mode tests 14, up from 12).
+  `python plugin/build.py preview` green (this task touches no drawing path; ran anyway per the verify gate).
+  **MUTATION-PROVED:** temporarily replaced `PhaseAllows` with `return true;` — the new `PhaseGateTests`
+  immediately failed (5+ `FAIL OctawebAll ... refused in phase ...` lines); reverted, suite green again.
+  The new test (`BoosterHostTest.PhaseGateTests`) checks BOTH directions for every phase — `OctawebAll`
+  refused everywhere, each landing bank refused outside its own phase, `ThreeLanding`↔`CenterOnly` refused
+  in EACH OTHER's phase — so a gate stubbed to always-accept OR always-refuse fails at least one check.
+- **Built:** `pure/VehicleParts.cs` (`ModeOff`), `pure/BoosterDescent.cs` (struct comment + 4 off-writes),
+  `pure/BoosterHostPlan.cs` (`WrongEngineForPhase`, `Blocked`'s new params, `AllowedRoleForPhase`,
+  `PhaseAllows`, the `Annunciation` case), `src/BoosterHost.cs` (the `Blocked` call site), tests in
+  `VehiclePartsTest.cs`, `BoosterTest.cs` (2 checks pinning the off-writes to `ModeOff`), and the new
+  `PhaseGateTests` section in `BoosterHostTest.cs`.
+- ⛔ **OUT OF SCOPE, logged as a stray per C1.1 (see OCT4 below):** this line does NOT write the mode-CHANGE
+  actuation (issuing `Activate`/`Shutdown` on the banks in `BoosterHost.SelectEngineSet`) — it makes the
+  illegal command impossible and the off-state unambiguous; commanding the transition against the new gate
+  is separate work.
+- ⛔ OCT1's binding (`8b81816`-adjacent, `b421e58`) was not touched.
+
+#### Open questions for the owner (C1.14)
+
+**OCT3-Q1 — the landing burn: which engine count, and does it change mid-burn?**
+Real Falcon 9 flies BOTH a three-engine landing burn shedding to one for the hover-slam (higher margin, more
+fuel) and a single-engine burn throughout (leaner). The code today (`BoosterDescent.cs`, unchanged by this
+line) lights `CenterOnly` for the WHOLE landing burn — option 1 below. **No ruling on record.**
+1. **CenterOnly throughout** — simplest, matches the existing Hoverslam work, and is what `AllowedRoleForPhase`
+   encodes today (`LandingBurn` → `OctawebCentre` only). *(recommended — no code change needed)*
+2. **ThreeLanding then shed to CenterOnly at a defined trigger** — real, higher authority, but needs the
+   trigger specified (altitude? speed? Δv remaining?) and `docs/reference/craftdump.csv` gives each
+   `ModuleEnginesRF` only ONE ignition, so shedding costs `ThreeLanding` an ignition it cannot get back —
+   this is also why `BoosterDescent.cs`'s header records the 3→1 handover as deliberately NOT ported (§4.5).
+3. **Mode chosen by margin at EntryBurn end** — decides which of (1)/(2) to fly per-flight from propellant
+   state; needs (2)'s trigger settled first, so it is downstream of it, not an alternative to it.
+**Recommendation (1):** it is already what flies, it respects the one-ignition-per-set budget without a new
+guard, and (2)/(3) both need a re-convergence flight to define their trigger (§B16.8 ruling 2) that has not
+happened yet. If a converged trigger becomes available, (2) is the natural next step and `AllowedRoleForPhase`
+would need a THIRD case (a `LandingBurn`-substate or a new phase) to let `ThreeLanding` be legal early in the
+burn — flagged here so that future work does not have to rediscover it.
+
+### OCT4 [S] Wire the octaweb mode-CHANGE actuation (Activate/Shutdown on the banks) against OCT3's gate — **TODO** — [logged by OCT3 per C1.1, NOT done]
+- **Stray found while fixing OCT3, deliberately left alone** (C1.1: log it, do not do it; OCT3's own SCOPE
+  section named this as the next line explicitly).
+- **The finding:** `BoosterHostPlan.Blocked` now refuses an illegal engine mode for the current phase
+  (`WrongEngineForPhase`), and `BoosterHost.Dispatch` → `SelectEngineSet` already shuts every unwanted
+  octaweb set and activates the wanted one BY `engineID` (§B16.4) whenever `BoosterCommandBlock.None` — but
+  no line has audited that the ACTUAL Activate/Shutdown sequencing (not just the gate deciding whether to
+  call it) is correct across every phase transition the new gate now allows/refuses, e.g. that a `Blocked`
+  tick correctly leaves the currently-lit bank alone rather than shutting it (per `BoosterHost.cs`'s own
+  "do NOT shut an engine that is already burning" comment near the block-vs-dispatch branch).
+- **Build:** trace `SelectEngineSet`/`Dispatch` against every legal phase transition in OCT3's table with the
+  new gate live, confirm no case double-ignites a one-ignition set, and add a glue-level (or pure, if it can
+  be extracted) test for the transition sequencing itself, not just the gate's yes/no.
+- **DONE when:** the transition sequencing is traced and tested against the OCT3 table, `build.py test` green.
+- `[S]` — this is an audit/hardening pass on already-working dispatch code, not a new capability.
+
 ### BB4 [owner-gated] Install the BlackBox + confirm on the glass — **DOING 2026-09-05 (blocker CLEARED: BB1 `aa7bfa2`, BB2 `bedb4a6`, BB3 `6604644` are all DONE; BB2 and BB3 each state "No install, no glass time" — this session is the first to act on the line)** — [TIER 1: the owner's own "before the first flight" deadline]
 - ⚠ **The owner ALREADY AUTHORISED `install` for the BlackBox specifically** (2026-09-03: *"build and install
   before the first flight as we will need it for troubleshooting and diagnoses"*). **This authority extends

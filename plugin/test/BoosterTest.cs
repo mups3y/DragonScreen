@@ -259,6 +259,8 @@ public static class BoosterTest
         Check("the FSM STAYS in Flip while the slew is still running", f.Phase == BoosterPhase.Flip, f.Phase.ToString());
         Check("Idle enters Flip", BoosterDescent.Guide(high, BoosterPhase.Idle).Phase == BoosterPhase.Flip, "");
         Check("nothing burns during the flip", !f.EnginesLit && f.Throttle == 0.0, "");
+        Check("OCT3: the flip's OFF state is spelled ModeOff, never the ascent (all-engines) mode",
+              f.EngineMode == VehicleParts.ModeOff, "mode=" + f.EngineMode);
 
         // late/degenerate: already at the entry gate, so there is no return leg left to fly.
         BoosterInputs late = Booster(TargetMode.Rtls);
@@ -570,6 +572,8 @@ public static class BoosterTest
         BoosterCommand dc = BoosterDescent.Guide(down, BoosterPhase.LandingBurn);
         Check("touchdown ends the burn", dc.Phase == BoosterPhase.Landed && !dc.EnginesLit && dc.Throttle == 0.0, "");
         Check("...and claims no AoA", dc.AoaDeg == 0.0 && dc.AoaCapDeg == 0.0, "");
+        Check("OCT3: Landed's OFF state is spelled ModeOff, never the ascent (all-engines) mode",
+              dc.EngineMode == VehicleParts.ModeOff, "mode=" + dc.EngineMode);
 
         // §B16.3's budget refusal, on the landing burn too.
         BoosterInputs spent = land; spent.IgnitionsThreeLanding = 1; spent.IgnitionsCentreOnly = 0;

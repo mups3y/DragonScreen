@@ -58,6 +58,12 @@ public static class VehiclePartsTest
         Check("3 engines -> three mode", VehicleParts.OctawebModeFor(3) == VehicleParts.ModeThreeEngine, "");
         Check("1 engine  -> centre mode", VehicleParts.OctawebModeFor(1) == VehicleParts.ModeCentreOnly, "");
 
+        // ---- OCT3: "off" is its OWN value, never confusable with the ascent-only all-engines mode. ----
+        Check("ModeOff is distinct from every real octaweb mode",
+              VehicleParts.ModeOff != VehicleParts.ModeAllEngines
+              && VehicleParts.ModeOff != VehicleParts.ModeThreeEngine
+              && VehicleParts.ModeOff != VehicleParts.ModeCentreOnly, "");
+
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures > 0 ? 1 : 0;
     }

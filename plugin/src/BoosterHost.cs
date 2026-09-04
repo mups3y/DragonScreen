@@ -515,8 +515,12 @@ namespace DragonScreen
             steerDeadbandDeg = steer.DeadbandDegApplied;
 
             // ---- MAY ANYTHING GO OUT? ------------------------------------------------------------
+            // OCT3: the phase gate reads the SAME decode `Dispatch` uses (`CommandedRole`), so a command
+            // `Blocked` lets through and one `Dispatch` would actuate never disagree on which bank it is.
             double sep = SeparationM(v);
-            BoosterCommandBlock block = BoosterHostPlan.Blocked(Actuate, snap, sep, Now() - bindUT);
+            EngineRole wantRole = BoosterHostPlan.CommandedRole(c.EnginesLit, c.EngineMode);
+            BoosterCommandBlock block = BoosterHostPlan.Blocked(Actuate, snap, sep, Now() - bindUT,
+                                                                 c.Phase, wantRole);
             BlockNote = BoosterHostPlan.Annunciation(block);
 
             if (block == BoosterCommandBlock.None) Dispatch(v, c, steer);

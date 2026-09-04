@@ -82,10 +82,11 @@ namespace DragonScreen
     public enum BoosterCommandBlock : byte
     {
         None,
-        NotArmed,       // `BoosterHost.Actuate` is false — the default, and the reason is in its comment
-        Packed,         // loaded but PACKED: KSP does not run the control path for a packed vessel
-        NoOctaweb,      // the §B16.4 guard refused, or the table went stale — never guess at an engine
-        HoldOff         // too close to the stack / too soon after separation — flight 194334
+        NotArmed,             // `BoosterHost.Actuate` is false — the default, and the reason is in its comment
+        Packed,               // loaded but PACKED: KSP does not run the control path for a packed vessel
+        NoOctaweb,            // the §B16.4 guard refused, or the table went stale — never guess at an engine
+        WrongEngineForPhase,  // OCT3 — the commanded bank is illegal in this flight phase (see `PhaseAllows`)
+        HoldOff               // too close to the stack / too soon after separation — flight 194334
     }
 
     public static class BoosterHostPlan
@@ -248,12 +249,21 @@ namespace DragonScreen
         ///
         /// Ordered so the reported reason is the most fundamental one that applies.
         /// </summary>
+        /// <summary>
+        /// `phase` / `commandedRole` default to `Idle` / `None` — always mutually legal (see
+        /// <see cref="PhaseAllows"/>) — so every pre-OCT3 caller (every test that predates the phase gate)
+        /// keeps compiling and keeps its answer unchanged; only a caller that names a real phase and role
+        /// exercises the new check.
+        /// </summary>
         public static BoosterCommandBlock Blocked(bool armed, BoosterFlightSnapshot s,
-                                                  double separationM, double sinceBindS)
+                                                  double separationM, double sinceBindS,
+                                                  BoosterPhase phase = BoosterPhase.Idle,
+                                                  EngineRole commandedRole = EngineRole.None)
         {
             if (!armed) return BoosterCommandBlock.NotArmed;
             if (s.Packed) return BoosterCommandBlock.Packed;
             if (!s.OctawebStillValid) return BoosterCommandBlock.NoOctaweb;
+            if (!PhaseAllows(phase, commandedRole)) return BoosterCommandBlock.WrongEngineForPhase;
             if (HoldingOff(separationM, sinceBindS)) return BoosterCommandBlock.HoldOff;
             return BoosterCommandBlock.None;
         }
@@ -278,6 +288,8 @@ namespace DragonScreen
                     return "booster PACKED — KSP runs no control path for a packed vessel (PRE is register W9's)";
                 case BoosterCommandBlock.NoOctaweb:
                     return "no valid octaweb table — refusing to command an engine we have not bound";
+                case BoosterCommandBlock.WrongEngineForPhase:
+                    return "WRONG ENGINE FOR PHASE — an ascent/landing bank commanded outside its phase (OCT3)";
                 case BoosterCommandBlock.HoldOff:
                     return "HOLD-OFF — too close to / too soon after the stack (flight 194334: a 0-km burn kicks it)";
                 default: return null;
@@ -307,6 +319,47 @@ namespace DragonScreen
         public static EngineRole CommandedRole(bool enginesLit, int engineMode)
         {
             return enginesLit ? RoleFor(engineMode) : EngineRole.None;
+        }
+
+        // =========================================================================================
+        // 4b. THE PHASE GATE — OCT3 (owner, 2026-09-05, verbatim): *"you must differentiate between
+        // landing mode etc for the engines as we cannot use landing mode during accent and vice versa"*.
+        // =========================================================================================
+        // ⛔ `BoosterPhase` (`pure/BoosterDescent.cs`) has NO ascent state — this host runs ONLY on the
+        // separated booster, so every phase it knows is a DESCENT phase. `EngineRole.OctawebAll` (the
+        // nine-nozzle, liftoff set — `VehicleParts.ModeAllEngines`) therefore belongs to a vehicle state
+        // this host never occupies, and is refused OUTRIGHT in every phase, not merely the ones that
+        // happen not to ask for it. The three/centre banks are further pinned to the ONE descent phase
+        // each is measured to burn in (§B16.2 method); everywhere else, only OFF (`EngineRole.None`) is
+        // legal. This is the second half of OCT3, alongside `VehicleParts.ModeOff`: that gave OFF an
+        // honest value, this refuses the ambiguous one outright if it is ever commanded anyway.
+
+        /// <summary>The ONE engine bank a phase may legally light. `EngineRole.None` = no bank may be lit
+        /// at all in this phase — see the OCT3 table (Idle · Flip · Coast · AeroDescent · Landed).</summary>
+        public static EngineRole AllowedRoleForPhase(BoosterPhase phase)
+        {
+            switch (phase)
+            {
+                case BoosterPhase.Boostback:
+                case BoosterPhase.EntryBurn:
+                    return EngineRole.OctawebThree;
+                case BoosterPhase.LandingBurn:
+                    return EngineRole.OctawebCentre;   // OCT3-Q1 (open, owner's to decide): CenterOnly
+                                                        // throughout — matches the code as it stands today
+                default:
+                    return EngineRole.None;            // Idle, Flip, Coast, AeroDescent, Landed
+            }
+        }
+
+        /// <summary>May `role` be commanded while the FSM is in `phase`? `None` (off) is always legal —
+        /// refusing to command nothing would make the interlock itself a hazard. `OctawebAll` is refused
+        /// in EVERY phase this enum can name (the comment block above explains why); any other role must
+        /// match the phase's one legal bank exactly.</summary>
+        public static bool PhaseAllows(BoosterPhase phase, EngineRole role)
+        {
+            if (role == EngineRole.None) return true;
+            if (role == EngineRole.OctawebAll) return false;
+            return role == AllowedRoleForPhase(phase);
         }
 
         // =========================================================================================

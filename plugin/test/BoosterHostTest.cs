@@ -76,6 +76,7 @@ public static class BoosterHostTest
         StopTests();
         CommandGateTests();
         EngineRoleTests();
+        PhaseGateTests();
         ProfileTests();
         AnnunciationTests();
 
@@ -338,6 +339,82 @@ public static class BoosterHostTest
     }
 
     // =====================================================================================
+    // 5b. THE PHASE GATE (OCT3) — landing mode during ascent, or vice versa, must be REFUSED
+    // =====================================================================================
+    // Owner ruling, 2026-09-05, verbatim: *"you must differentiate between landing mode etc for the
+    // engines as we cannot use landing mode during accent and vice versa"*. `BoosterPhase` has no ascent
+    // state at all (this host runs only on the separated booster), so "ascent mode accepted in an ascent
+    // phase never arising here" is proven the other way round: `OctawebAll` — the ascent/liftoff bank —
+    // must be refused in EVERY phase this enum can name, and each landing-designated bank must be refused
+    // in every phase that is not its own. Every check below has a partner that asserts the OPPOSITE of
+    // "always true" / "always false", so a gate mutated into a stub (always accept, or always refuse)
+    // fails at least one of them — that is what proves it can fail by mutation, not a runtime toggle.
+    static void PhaseGateTests()
+    {
+        BoosterPhase[] all = (BoosterPhase[])Enum.GetValues(typeof(BoosterPhase));
+        BoosterPhase[] noBankPhases =
+        {
+            BoosterPhase.Idle, BoosterPhase.Flip, BoosterPhase.Coast,
+            BoosterPhase.AeroDescent, BoosterPhase.Landed
+        };
+
+        // ⛔ THE ASCENT-ONLY BANK, REFUSED EVERYWHERE. There is no phase in this FSM it is legal in.
+        for (int i = 0; i < all.Length; i++)
+            Check("OctawebAll (ascent/liftoff) refused in phase " + all[i],
+                  !BoosterHostPlan.PhaseAllows(all[i], EngineRole.OctawebAll), all[i].ToString());
+
+        // Off is always legal — refusing "nothing lit" would make the interlock itself a hazard.
+        for (int i = 0; i < all.Length; i++)
+            Check("no bank lit is legal in every phase, phase " + all[i],
+                  BoosterHostPlan.PhaseAllows(all[i], EngineRole.None), all[i].ToString());
+
+        // Each landing-phase bank is legal in its OWN phase(s)...
+        Check("ThreeLanding legal at Boostback",
+              BoosterHostPlan.PhaseAllows(BoosterPhase.Boostback, EngineRole.OctawebThree), "");
+        Check("ThreeLanding legal at EntryBurn",
+              BoosterHostPlan.PhaseAllows(BoosterPhase.EntryBurn, EngineRole.OctawebThree), "");
+        Check("CenterOnly legal at LandingBurn",
+              BoosterHostPlan.PhaseAllows(BoosterPhase.LandingBurn, EngineRole.OctawebCentre), "");
+
+        // ...and refused everywhere a bank must stay dark (Idle / Flip / Coast / AeroDescent / Landed).
+        for (int i = 0; i < noBankPhases.Length; i++)
+        {
+            Check("ThreeLanding refused at " + noBankPhases[i],
+                  !BoosterHostPlan.PhaseAllows(noBankPhases[i], EngineRole.OctawebThree), "");
+            Check("CenterOnly refused at " + noBankPhases[i],
+                  !BoosterHostPlan.PhaseAllows(noBankPhases[i], EngineRole.OctawebCentre), "");
+        }
+
+        // ⛔ AND VICE VERSA — a landing-phase bank commanded in the OTHER landing phase is still wrong.
+        // CenterOnly is Hoverslam's single-engine burn; ThreeLanding is boostback/entry. Crossing them is
+        // exactly the "landing mode during ascent and vice versa" shape of mistake, one phase-pair over.
+        Check("CenterOnly refused during Boostback (that phase's bank is Three, not Centre)",
+              !BoosterHostPlan.PhaseAllows(BoosterPhase.Boostback, EngineRole.OctawebCentre), "");
+        Check("ThreeLanding refused during LandingBurn (that phase's bank is Centre, not Three)",
+              !BoosterHostPlan.PhaseAllows(BoosterPhase.LandingBurn, EngineRole.OctawebThree), "");
+
+        // ---- Wired through the ACTUAL command gate the host calls, not just the predicate ----
+        BoosterFlightSnapshot s = Flying();
+        double farEnough = BoosterHostPlan.HoldOffSeparationM + 1.0;
+        double longEnough = BoosterHostPlan.HoldOffSinceBindS + 1.0;
+
+        Check("Blocked refuses OctawebAll during AeroDescent (would light all nine on a descending booster)",
+              BoosterHostPlan.Blocked(true, s, farEnough, longEnough, BoosterPhase.AeroDescent, EngineRole.OctawebAll)
+                  == BoosterCommandBlock.WrongEngineForPhase, "");
+        Check("Blocked lets ThreeLanding through during EntryBurn (its own phase)",
+              BoosterHostPlan.Blocked(true, s, farEnough, longEnough, BoosterPhase.EntryBurn, EngineRole.OctawebThree)
+                  == BoosterCommandBlock.None, "");
+        Check("Blocked refuses ThreeLanding during LandingBurn (wrong bank for that phase)",
+              BoosterHostPlan.Blocked(true, s, farEnough, longEnough, BoosterPhase.LandingBurn, EngineRole.OctawebThree)
+                  == BoosterCommandBlock.WrongEngineForPhase, "");
+
+        // A pre-OCT3 caller that names no phase/role at all (every CommandGateTests() call above) must
+        // still compile and answer exactly as before: Idle + None is always allowed.
+        Check("an unnamed phase/role defaults to Idle/None, which is always open",
+              BoosterHostPlan.Blocked(true, s, farEnough, longEnough) == BoosterCommandBlock.None, "");
+    }
+
+    // =====================================================================================
     // 6. THE TARGET MODE — resolved from the in-repo mission catalog, never invented
     // =====================================================================================
     static void ProfileTests()
@@ -410,6 +487,7 @@ public static class BoosterHostTest
               !string.IsNullOrEmpty(BoosterHostPlan.Annunciation(BoosterCommandBlock.NotArmed))
               && !string.IsNullOrEmpty(BoosterHostPlan.Annunciation(BoosterCommandBlock.Packed))
               && !string.IsNullOrEmpty(BoosterHostPlan.Annunciation(BoosterCommandBlock.NoOctaweb))
+              && !string.IsNullOrEmpty(BoosterHostPlan.Annunciation(BoosterCommandBlock.WrongEngineForPhase))
               && !string.IsNullOrEmpty(BoosterHostPlan.Annunciation(BoosterCommandBlock.HoldOff)), "");
     }
 }
