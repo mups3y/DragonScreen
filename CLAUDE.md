@@ -135,6 +135,16 @@ session and are auto-loaded with this file. Section refs (§n, §Bn, C1–C7.1, 
     that produced no answer. The rule was already present and was quoted while being broken. What was
     missing was any way to tell a real ruling from an invented one without asking the owner. Unwound by S89
     (`8580c81`).)
+    **GUARDED-FILE STANDARD (added 2026-09-05, owner ruling — G10).** `docs/BUILD_PLAN.md` itself is a
+    guarded file: a build chat does not edit it without owner authority, and "never change the plan on your
+    own authority" above covers this file BY NAME, not only the decisions it records. **ADDING a section
+    counts as changing the plan — even a section that only documents what the task built.** A chat with
+    plan-grade material still has a legitimate move: write it into the task's OWN register line, and let a
+    LATER GOVERNANCE LINE (a `G`-task, owner-authorised per this rule) carry it into `docs/BUILD_PLAN.md`.
+    (Added after `T15b` (`9d7a8ab`) and `T15d` (`df1fecc`) each added a full new subsection to this file
+    while believing they were only recording what they built — the content was sound and stands, ratified
+    after the fact by `G10`; the gap was that no rule named this file, so neither chat read "never change the
+    plan" as covering a documentation addition. See `docs/BUILD_PLAN.md` §0a for the ledger this rule feeds.)
 13. **Pose every owner decision as a paste-ready overseer prompt.** When a task needs an owner call — the
     C1.9 batched question at the END of a task, OR a mid-task stop-and-ask when a gate / source / authority
     (C1.12 / C7) blocks the work — do NOT leave it as a bare inline question. Phrase it as a SELF-CONTAINED

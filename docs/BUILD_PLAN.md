@@ -45,6 +45,58 @@ Execution is governed by **PART C** — the anti-drift harness (a rules→one-ta
 (scaffold the harness), then T1 (docs sync) onward. Gate per the banner above; each task commits LOCALLY with
 `git commit` and never `git push` (C1.5) — the owner pushes from GitHub Desktop.
 
+## 0a. Plan Amendment Ledger (added 2026-09-05 by `G10`)
+
+**The rule this ledger enforces, from here forward: an entry in this table, or the edit was not authorised.**
+C1.12's GUARDED-FILE STANDARD (added by this same task) names `docs/BUILD_PLAN.md` as a guarded file — a
+build chat does not add to it, including a section that only documents what it built, without owner
+authority. The honest route for plan-grade material a build chat produces is its OWN register line, carried
+into this file later by a governance (`G`-) line. This ledger lives here, not in the overseer's memory,
+because it was the overseer's memory that missed two unauthorised edits for two assess cycles running
+(§B12.1b, §B12.1c below).
+
+**Built from `git log --oneline --follow -- docs/BUILD_PLAN.md`, verified commit-by-commit against
+`git show --stat`/`git show`, not copied from any prompt or recalled.** Every commit that has ever touched
+this file, oldest first:
+
+| Date | Commit | Task | Governance (`G`) line? | Authorised? |
+|---|---|---|---|---|
+| 2026-09-02 | `864c2e4` | T0 (scaffold) | no | yes — T0 is the plan's own first task (C4); this commit creates the file |
+| 2026-09-02 | `576fe28` | G0 | **yes** | yes |
+| 2026-09-02 | `b498225` | G1 | **yes** | yes |
+| 2026-09-03 | `154f9a9` | G2 | **yes** | yes |
+| 2026-09-03 | `a913270` | G3 | **yes** | yes — **missing from the overseer's Assess #23 list, see below** |
+| 2026-09-03 | `99ef7d3` | G4 | **yes** | yes |
+| 2026-09-03 | `5d576fd` | G5a | **yes** | yes — adds §B12.1a |
+| 2026-09-04 | `7f68ac6` | G5b | **yes** | yes — **missing from the overseer's list, see below** |
+| 2026-09-04 | `24f822a` | G5c | **yes** | yes — **missing from the overseer's list, see below** |
+| 2026-09-04 | `60a869f` | W11 | no | ⚠ NOT REVIEWED by this ledger's authority — inline owner-attribution ("the owner's decision of 2026-09-04, via the overseer") but no `G`-line; added 73 lines to §B12.8. Flagged, not ratified, not unwound (C1.16) |
+| 2026-09-04 | `c60c7aa` | G6 | **yes** | yes |
+| 2026-09-04 | `5497695` | W26 batch 1 | no | ⚠ NOT REVIEWED — added invariant rule **C1.16 itself** to §C1 (6 lines), mirrored in `CLAUDE.md`, outside the governance-line pattern this same rule now describes. Flagged, not unwound |
+| 2026-09-04 | `7e5d624` | S76 | no | ⚠ NOT REVIEWED — narrowed §B16.8's wording (15 ins/3 del), self-described in its own commit message as "a correction of fact, not of policy (C1.12)". Flagged as a boundary case |
+| 2026-09-04 | `6f33ccd` | S73 | no | yes — commit states "Batch run authorised by owner 2026-09-04 via overseer (deviation from C1.1/C1.7, batch only)"; explicit owner authority present, though not in `G`-line form |
+| 2026-09-04 | `fdbcaa3` | G8 | **yes** | yes |
+| 2026-09-04 | `e9838af` | G7 | **yes** | yes |
+| 2026-09-05 | `6bf52e6` | S3+S91+S92 | no | ⚠ NOT REVIEWED — 2 lines, a stale-tense/citation correction. Flagged as minor |
+| 2026-09-05 | `ce6d182` | T15a | no | ⚠ NOT REVIEWED — added §B12.1a's "the pin as vendored" record (29 lines). The record was called for by §B12.1a's own text, but written by a build chat with no `G`-line, in the **same shape as §B12.1b/§B12.1c below** — not covered by item 1's ratification. Flagged for the owner/overseer, not ratified here |
+| 2026-09-05 | `010b793` | G9 | **yes** | yes |
+| 2026-09-05 | `9d7a8ab` | T15b | no (at the time) | **RATIFIED by `G10`** (this task, item 1) — see the banner at §B12.1b |
+| 2026-09-05 | `4a03617` | W10 | no | ⚠ NOT REVIEWED — 1 line, a facade-table name correction. Flagged as minor |
+| 2026-09-05 | `df1fecc` | T15d | no (at the time) | **RATIFIED by `G10`** (this task, item 1) — see the banner at §B12.1c |
+| 2026-09-05 | *(this commit)* | G10 | **yes** | yes — owner authorisation quoted on the register line |
+
+**Discrepancy against the overseer's Assess #23 reading, as this task was asked to check.** The overseer's
+stated list of authorised lines was `G0, G1, G2, G4, G5a, G7, G8, G9`. This ledger finds the true history
+LARGER than that: **`G3`, `G5b`, `G5c` and `G6` are also governance lines that touched this file and are
+equally authorised** — the overseer's list omitted them; it did not find them absent, and nothing here
+suggests they lack authority. Separately, and explicitly OUTSIDE `G10`'s own authority (item 1 ratifies only
+§B12.1b and §B12.1c, named by task and commit): seven more non-`G` commits touched this file —
+`T15a` (`ce6d182`), `W10` (`4a03617`), `W11` (`60a869f`), `W26 batch 1` (`5497695`), `S73` (`6f33ccd`),
+`S76` (`7e5d624`), `S3+S91+S92` (`6bf52e6`). Of these, `W26 batch 1` added a whole new invariant rule
+outside the governance-line pattern, and `T15a` added a documented subsection in the same shape as the two
+sections this task ratifies — both are real open questions this ledger surfaces rather than resolves; `G10`
+was not authorised to rule on them (the owner's "1 and 3" covered §B12.1b/§B12.1c specifically) and does not.
+
 ## 1. Context & status
 DragonScreen is a screens-only KSP mod recreating the Crew Dragon IVA touchscreens + lower analog console.
 This is the consolidated **build map** and execution roadmap, built from a deep research pass (designer
@@ -850,6 +902,14 @@ lands this assembly must not be given a `MechJebCore` — see the register's T15
 ✅ **Superseded by §B12.1b below — T15b landed 2026-09-05.**
 
 ##### B12.1b — HOW HEADLESS IS ACTUALLY ACHIEVED (T15b, 2026-09-05). Read this before touching the host.
+✅ **RATIFIED 2026-09-05 (owner, via the overseer, verbatim: "1 and 3, write that governance prompt" —
+`G10`, answering the overseer's Assess #23).** This section was written by `T15b` (commit `9d7a8ab`), a BUILD
+chat with no owner authority to add a new section to this guarded file (C1.12) — the overseer's own audit
+missed it for two assesses because it checked commit scope against a truncated file list. **The content
+stands exactly as written below; only its authorisation was missing, and this banner is that authorisation,
+applied after the fact.** Nothing below is edited or deleted (C1.16). See §0a (Plan Amendment Ledger) and
+C1.12's GUARDED-FILE STANDARD, which this ratification also motivated.
+
 §B12.1 says *"attach/find ONE `MechJebCore` on the Dragon part, no GUI, enable only the modules the conductor
 uses"*, and §B12.1a says *"ported ≠ enabled"*. Both stand. This section records the **mechanism**, because
 four things about it are counter-intuitive and each one, got wrong, fails only in the capsule.
@@ -922,6 +982,14 @@ modules and theirs cannot construct ours. Read from the source, not assumed. The
 type identity; it was **name**-level resolution one layer up, which is (4) above and is closed by the subclass.
 
 ### B12.1c Headless is a MASTERSHIP property, not an enable property — T15d, 2026-09-05
+
+✅ **RATIFIED 2026-09-05 (owner, via the overseer, verbatim: "1 and 3, write that governance prompt" —
+`G10`, answering the overseer's Assess #23).** This section was written by `T15d` (commit `df1fecc`), a
+BUILD chat with no owner authority to add a new section to this guarded file (C1.12) — same gap as
+§B12.1b above, caught in the same audit. **The content stands exactly as written below; only its
+authorisation was missing, and this banner is that authorisation, applied after the fact.** Nothing below
+is edited or deleted (C1.16). See §0a (Plan Amendment Ledger) and C1.12's GUARDED-FILE STANDARD, which this
+ratification also motivated.
 
 ⛔ **§B12.1b's suppression did NOT hold on the glass.** The owner installed the T15c build and walked T15b's
 checklist on 2026-09-05 (08:06–08:13); the overseer read `KSP.log` and relayed the result to the T15d build
@@ -2069,6 +2137,16 @@ a **PREVIEW-ONLY BUILD-GO** (owner, 2026-09-02, via the overseer); `install` + g
     that produced no answer. The rule was already present and was quoted while being broken. What was
     missing was any way to tell a real ruling from an invented one without asking the owner. Unwound by S89
     (`8580c81`).)
+    **GUARDED-FILE STANDARD (added 2026-09-05, owner ruling — G10).** `docs/BUILD_PLAN.md` itself is a
+    guarded file: a build chat does not edit it without owner authority, and "never change the plan on your
+    own authority" above covers this file BY NAME, not only the decisions it records. **ADDING a section
+    counts as changing the plan — even a section that only documents what the task built.** A chat with
+    plan-grade material still has a legitimate move: write it into the task's OWN register line, and let a
+    LATER GOVERNANCE LINE (a `G`-task, owner-authorised per this rule) carry it into `docs/BUILD_PLAN.md`.
+    (Added after `T15b` (`9d7a8ab`) and `T15d` (`df1fecc`) each added a full new subsection to this file
+    while believing they were only recording what they built — the content was sound and stands, ratified
+    after the fact by `G10`; the gap was that no rule named this file, so neither chat read "never change the
+    plan" as covering a documentation addition. See `docs/BUILD_PLAN.md` §0a for the ledger this rule feeds.)
 13. **Pose every owner decision as a paste-ready overseer prompt.** When a task needs an owner call — the
     C1.9 batched question at the END of a task, OR a mid-task stop-and-ask when a gate / source / authority
     (C1.12 / C7) blocks the work — do NOT leave it as a bare inline question. Phrase it as a SELF-CONTAINED

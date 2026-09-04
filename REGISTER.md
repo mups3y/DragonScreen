@@ -10897,3 +10897,69 @@ the dispatch fell between them. It has no owner; this line is that owner.
 else; every phase it is keyed on is in `HasControllerFor`; nothing on any screen claims a phase or an action
 that is not happening; and the owner has been asked whether the read-only host may take its first command
 (⛔ **this is a gate question — C1.12/C1.14: a build chat does not decide it**).
+
+### G10 [S] Governance — ratify §B12.1b/§B12.1c, build the in-repo Plan Amendment Ledger, close the rule gap that let both land unauthorised — **DONE 2026-09-05**
+- **OWNER AUTHORISATION, 2026-09-05, verbatim: "1 and 3, write that governance prompt"** — answering the
+  overseer's Assess #23, which offered (1) ratify the two unauthorised plan sections, (2) relocate them, or
+  (3) tighten the rule that let it happen. Recorded as the owner's per C1.12; this chat decided nothing,
+  only transcribed and acted within it. This authorises the guarded-file edits named in the three items
+  below and **NOTHING ELSE** in `docs/BUILD_PLAN.md` / `CLAUDE.md`.
+- **What happened, so the record is clear.** `docs/BUILD_PLAN.md` §B12.1a was added by **G5a** — a
+  governance task, the correct pattern. §B12.1b was added by `T15b` (`9d7a8ab`, +73 lines) and §B12.1c by
+  `T15d` (`df1fecc`, +76 lines) — both BUILD chats, neither a `G`-line, neither with owner authority. The
+  overseer's own audit missed the first for two assesses because it checked commit scope against a
+  truncated file list. The content of both sections was never in question — accurate, plan-grade, and
+  correctly quoting the owner's own glass session — only the authorisation was missing.
+
+**ITEM 1 — RATIFIED §B12.1b and §B12.1c in place.** Each now carries a banner naming its task, its commit,
+that it was written without authority, and the owner's 2026-09-05 words above. **Nothing in either section
+was rewritten or deleted** (C1.16) — verified: `git diff` on both sections outside the two inserted banner
+paragraphs is empty.
+
+**ITEM 2 — built `docs/BUILD_PLAN.md` §0a, the Plan Amendment Ledger, in the repo.** There was no in-repo
+record of which plan edits were authorised — only the overseer's memory, which is exactly why §B12.1b/c went
+unnoticed. Seeded from `git log --oneline --follow -- docs/BUILD_PLAN.md`, verified commit-by-commit with
+`git show --stat`/`git show` — **not** copied from this task's own prompt or from memory. Result: the
+overseer's reading (`G0, G1, G2, G4, G5a, G7, G8, G9` authorised, plus `T15b`/`T15d` now ratified) was
+**short four governance lines** — `G3`, `G5b`, `G5c` and `G6` also touched this file and are equally
+authorised; the overseer's list omitted them without evidence they lack authority. The ledger also surfaces
+seven further non-`G` commits that touched this file (`T15a`, `W10`, `W11`, `W26 batch 1`, `S73`, `S76`,
+`S3+S91+S92`) — of these, `W26 batch 1` added invariant rule C1.16 itself outside the governance-line
+pattern, and `T15a` added a documented subsection in the same shape as §B12.1b/c. **Both are flagged in the
+ledger, not ratified and not unwound** — this task's authority covers only §B12.1b/§B12.1c by name (C1.12);
+ruling on the other seven is not this line's to make and is left as an open item below.
+
+**ITEM 3 — closed the rule gap, byte-identically.** No rule named `docs/BUILD_PLAN.md` as a file a build
+chat does not edit; C1.4's guarded-file list names only `PanelMap.cs`/label docs, and C1.12's "never change
+the plan on your own authority" read, to both T15b and T15d, as being about DECISIONS rather than
+documenting-what-was-built. Added a **GUARDED-FILE STANDARD** paragraph to C1.12 (not a new rule number —
+C1.1–C1.16 unrenumbered, C1.12/C1.4's existing text unweakened) in both `CLAUDE.md` and `docs/BUILD_PLAN.md`
+§C1: names `docs/BUILD_PLAN.md` explicitly as guarded, states that ADDING a section counts as changing the
+plan even when it only records what was built, and gives the legitimate route — plan-grade material goes in
+the task's OWN register line, carried into the plan later by a governance line. **Byte-identical, proven**:
+extracted rule 12's full block (header sentence through the paragraph immediately before rule 13) from both
+files with `awk` and ran `diff` — **empty**.
+
+**VERIFY (C1.3).** Docs + register only, no code — **no preview PNG applies**, stated rather than skipped.
+`python plugin/build.py test`: not run — no `.cs`/`.py` file touched by this task, only `CLAUDE.md`,
+`docs/BUILD_PLAN.md`, `REGISTER.md` (a docs/harness-only task per C1.3's own carve-out). `git show --stat
+HEAD` after committing lists only those three files.
+
+**Open questions for the owner (C1.14) — the ledger's flagged items, none of them gates, none decided here:**
+1. **`T15a` (`ce6d182`) added §B12.1a's "pin as vendored" record** in the same shape as §B12.1b/c (a build
+   chat writing a documented subsection with no `G`-line) — but arguably pre-authorised by §B12.1a's own text
+   ("this is the record §B12.1a asked for"). Options: (a) ratify it alongside §B12.1b/c by the same standard,
+   (b) leave it flagged as a distinguishable case (the plan asked for it by name) and take no action, (c)
+   something else. Recommend (b) — the plan's own text already called for exactly this record, which is a
+   materially different case from B12.1b/c's novel, unsolicited findings.
+2. **`W26 batch 1` (`5497695`) added invariant rule C1.16 itself** without a `G`-line. Options: (a) treat
+   settled precedent as sufficient (the rule is sound, in force, and cited by name throughout the plan since),
+   (b) retroactively ratify with a banner like §B12.1b/c's, (c) require a follow-up `G`-line specifically for
+   rule additions going forward. Recommend (a) plus (c) — unwinding a load-bearing rule already relied on by
+   six later tasks would be actively harmful (C1.16 itself forbids exactly this kind of unwind-for-technicality);
+   the guarded-file standard added by this task already prevents a repeat.
+3. **`W11`, `S76`, `S3+S91+S92`, `W10`, `S73`** — smaller non-`G` edits to this file, ranging from a
+   1-line factual correction to a 73-line section. Recommend no action: each is either explicitly
+   owner-authorised in its own commit message (`S73`) or a narrow correction of fact rather than a new
+   decision (the rest) — but they are named here so the owner/overseer can pull any one of them for a closer
+   look, since this ledger's job is visibility, not adjudication.
