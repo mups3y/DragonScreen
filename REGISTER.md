@@ -3757,7 +3757,7 @@ rejected by `MinMapPixels = 64`) and the NAV **MAP** view — plus the strip-tex
   non-latching. **G12(1) and G12(2) are answered off the log; only G12(3) (the camera) still rides S10b** —
   and that now waits on **S62**.
 
-### S43 [S] The ORBIT plot is a hairline when the orbit is small against the body (RSS LEO) — **TODO** — [TIER 3: scheduled polish]
+### S43 [S] The ORBIT plot is a hairline when the orbit is small against the body (RSS LEO) — **HELD 2026-09-04 (blocked: its own cheap fix is arithmetically impossible; owner must pick the mechanism)** — [TIER 3: scheduled polish]
 Logged by S41, 2026-09-03, from its own preview. `NavPage.Orbit` fits **the whole orbit AND the body** into
 the panel — deliberately, and for a good reason recorded in the source: leaving the body out of the extent
 once blew a 790 px globe into a 520 px panel on the pad. The cost shows up at RSS scale: a 200 km orbit over
@@ -3783,6 +3783,86 @@ apsis markers not overlapping it — with the closed Kerbin-scale case unchanged
   `lowerCamVsSmaRatio`). ⚠ One wording note for whoever takes it: "RSS-scale" here means the 1:1 regime, which
   is real on this install — but the planet pack is **Sol**, not RealSolarSystem (S61 §0.1). The geometry the
   line describes is unaffected.
+
+- ⛔ **HELD 2026-09-04 — NOT STARTED, and this is a STOP-AND-ASK (C1.12/C1.14), not a deferral.** Reached in
+  the 2026-09-04 batch session (the owner-authorised deviation from C1.1/C1.7). **No file in `plugin/` was
+  touched by this line.** The line's own recommended fix — *"wire the existing ZOOM control rather than
+  invent a scale rule"*, re-affirmed by **S61** (`NAV_MAP_RENDERING_RESEARCH.md` §5, *"Its own diagnosis …
+  stands"*) — **cannot reach this line's own DONE-when. That is arithmetic, not judgement, and it is set out
+  below so the next chat does not re-derive it or, worse, ship the zoom and find out afterwards.**
+- **MEASURED, off the two PNGs the line names** (`page2_nav_orbit_suborbital.png` and
+  `..._kerbin.png`, both 1280×703, both re-rendered 2026-09-04). Both draw the body at the **same** size:
+  centre x = 488, limb at x = 252 and x = 724 on the centre line y = 336, so **body radius = 236 px**.
+  - **RSS** (R = 6371 km, apogee 210 km): `rA/R` = 1.0330 → ring radius 243.8 px → **7.8 px of separation**.
+    Measured: the arc, the AP box and the vehicle tick all fall inside **x = 244…251** — an 8 px band against
+    a 236 px limb, with the 10 px apsis box straddling the limb.
+  - **Kerbin** (R = 600 km, apogee 200 km): `rA/R` = 1.3333 → ring radius 314.7 px → **78.7 px**. Measured
+    cluster at x = 173…183, i.e. 69–79 px clear. This is what "legible" looks like and is the target.
+  - The line's headline case, a **circular 200 km RSS LEO**: `rA/R` = 1.0314 → **7.4 px**, with a 10 px apsis
+    box centred on the ring, so the box overlaps the limb on both sides.
+- ⛔ **WHY ZOOM CANNOT FIX IT.** For a near-circular orbit the drawn separation is
+  `bodyRadiusPx × h/R` — **exactly**, and `h/R` is 3.1% at RSS LEO. A **uniform** zoom `Z` multiplies the
+  separation and the ring radius **by the same `Z`**, so the ratio never improves. To get an apsis box clear
+  of the limb with visible daylight (≈25 px) needs `Z ≥ 3.2`; at `Z = 3.2` the apogee ring radius is
+  **780 px** against a panel half-height of **272 px** and half-width of **465 px** — AP is off-panel and
+  roughly two thirds of the ring is outside the frame. **Zoom shows the separation or it shows the orbit,
+  never both.** (Removing the body from the extent rule does nothing either, and this was checked: with
+  `rA` only 3% above `R`, `max(a(1+e), R)` is dominated by the ORBIT already — dropping `R` changes the
+  RSS scale by under 1%. The `max` is not the cause; the 3% is.)
+- **What that leaves is a real choice about what this plot IS at LEO scale**, and every option changes the
+  screen — which is why nothing was built. Written up below (C1.14). ⚠ **S61's §5 verdict is not wrong about
+  the ARCHITECTURE** (the hairline has nothing to do with the globe camera, the shader or the projection —
+  confirmed again here); it is wrong only in endorsing zoom as the remedy, and it endorsed it from the
+  register's own wording rather than from the geometry. Do not treat that as a settled decision to override.
+- ⚠ **S57's item 3 says to do S43 and the orphaned NAV pan/zoom/NEXT-VIEW cluster together (audit H36).**
+  That coupling survives whichever option is chosen — options 1, 2 and 4 below all need the cluster live for
+  `NavMode.Orbit`, which today reads inactive (`NavPage.cs:899`, `bool active = Map || Planet`). The cluster
+  itself is **S57's** to harvest and S57 is HELD on audit Q1, so an answer here does not unblock the work on
+  its own: **S43 and S57 need answering together.**
+
+#### Open questions for the owner (C1.14) — S43
+
+**S43-Q1. At RSS LEO the true picture is a hairline. What should this plot show instead?**
+*Situation.* The plot is correct and unreadable at the same time: a 200 km orbit over a 6371 km body is 3.1%
+of the globe, so ring and limb are 7.8 px apart on a 236 px globe and the apsis box sits on top of the limb
+(measured above). The DONE-when asks for *"the ring/arc separated from the limb and the apsis markers not
+overlapping it"* **with the closed Kerbin-scale case unchanged**, judged on the default preview renders — so
+a manual-only control does not satisfy it either, because the default render is what is judged. Each option
+below is a different answer to "what is this plot for", and each is defensible.
+1. **Radial (altitude) exaggeration, MARKED on the plot.** Draw radius as `R_draw + k·(r − R)`, with `k`
+   chosen so apogee lands at a fixed fraction of the panel, and a caption saying the altitude scale is
+   exaggerated. Keeps the body circle, the ring's closedness, apsis order, every angular position and the
+   surface-intersection logic; distorts only radial proportion. *(recommended: it is the only option that
+   keeps a whole orbit AND a legible altitude band in one frame, it is what altitude-profile displays do, it
+   degrades to `k = 1` — i.e. exactly today's picture — at Kerbin scale where nothing needs fixing, and the
+   marking keeps it honest. ⚠ It does mean the plot stops being proportionally true, which is a §1.4-flavoured
+   change to what a real-screen element depicts, and that is the owner's call, not a build chat's.)*
+2. **Zoom + pan, wired for `NavMode.Orbit`, and accept losing the whole-orbit view when zoomed in.** The
+   existing cluster becomes live; at `Z ≥ 3.2` the crew gets a truthful magnified view of the band around the
+   vehicle (limb as a shallow curve, trajectory above it) and AP/PE leave the frame. Truthful throughout,
+   nothing invented. ⚠ The DEFAULT render stays a hairline unless a default zoom is also chosen, so as
+   written this does **not** meet the DONE-when — picking it means also relaxing the DONE-when to "legible
+   when zoomed".
+3. **Both: exaggeration as the default, the zoom cluster live on top of it.** Most capable, most work, and
+   two scale mechanisms on one plot is two things to explain on the glass.
+4. **Leave the geometry alone and fix only the collisions** — move the AP/PE box and label radially outward
+   with a short leader so nothing overlaps the limb or the vehicle tick, and thicken the ring. Cheap, honest,
+   strictly better than today. ⚠ It satisfies only half the DONE-when: the markers stop overlapping, the ring
+   is still 7.8 px off the limb. Choosing it means re-scoping the line to that half and saying so.
+
+**S43-Q2. S57 item 3 and audit H36 both say "do S43 and the NAV control cluster together". Confirm the
+pairing, or split it.**
+*Situation.* Options 1–4 above all touch `NavPage.Controls()`, whose pan/zoom/NEXT-VIEW cluster is drawn
+inactive for `NavMode.Orbit` and is itself on **S57's** harvest list — and S57 is HELD on audit Q1. So even
+with Q1 answered, whoever takes S43 either reaches into S57's item or stops again.
+1. **Answer audit Q1 (or S57-Q1) in the same pass, so S43 and the cluster land together.** *(recommended: it
+   is what both the audit and S57 ask for in terms, and it is the only order in which S43 can be finished in
+   one sitting.)*
+2. **Release the NAV cluster from S57 to S43** — S57's own option 4 (split it into its six items and let each
+   ride with the task that touches it) already proposes exactly this. Then S43 is self-contained.
+3. **Take option 4 of S43-Q1** (collisions only), which is the one path that needs no control wiring at all,
+   and leave the pairing for later.
+
 
 ### S44 [S] `Tuning` was never invoked — every `[Tunable]` field was dead — **WIRED + INSTALLED 2026-09-03; in-sim confirm rides S18's visit** — [TIER 2: real defect]
 Found by **S18**, 2026-09-03, while verifying the walk-sheet's own instructions before the owner's capsule
