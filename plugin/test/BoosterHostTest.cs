@@ -80,6 +80,7 @@ public static class BoosterHostTest
         SwitchSequenceTests();
         ProfileTests();
         AnnunciationTests();
+        CommandedNotIgnitedTests();
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures == 0 ? 0 : 1;
@@ -706,6 +707,47 @@ public static class BoosterHostTest
               && !string.IsNullOrEmpty(BoosterHostPlan.Annunciation(BoosterCommandBlock.NoOctaweb))
               && !string.IsNullOrEmpty(BoosterHostPlan.Annunciation(BoosterCommandBlock.WrongEngineForPhase))
               && !string.IsNullOrEmpty(BoosterHostPlan.Annunciation(BoosterCommandBlock.HoldOff)), "");
+    }
+
+    // =====================================================================================
+    // 9. [[OCT11]] THE COMMANDED-VS-LIT DIVERGENCE — a command record is not a sensor
+    // =====================================================================================
+    // The overseer's ruling (2026-09-05) is: `currentRole` stays a COMMAND record; the divergence is
+    // MADE VISIBLE; NO RETRY IS BUILT. This suite proves the one-line predicate that states it — every
+    // branch, both sides of both operators, so a mutant that flips `!=`→`==`, drops the `!`, or swaps
+    // `&&`→`||` goes red. It does NOT and CANNOT prove anything about `src/BoosterHost.cs`'s per-tick
+    // wiring (`CommandedNotIgnited`, `BankIgnited`, the BlackBox event edges) — that file cannot compile
+    // headlessly at all (see the file header). Only glass confirms the glue actually reads the bound
+    // module and emits the paired BlackBox events on the real rising/falling edges.
+    static void CommandedNotIgnitedTests()
+    {
+        EngineRole none = EngineRole.None, three = EngineRole.OctawebThree, centre = EngineRole.OctawebCentre;
+        EngineRole all = EngineRole.OctawebAll;
+
+        // No bank commanded → never a divergence, whichever way `ignited` reads. (Kills a `&&`→`||`
+        // mutant: with role=None, `!ignited` is true when ignited=false, so `||` would wrongly say yes.)
+        Check("nothing commanded, not ignited → no divergence", !BoosterHostPlan.CommandedNotIgnited(none, false), "");
+        Check("nothing commanded, ignited → no divergence", !BoosterHostPlan.CommandedNotIgnited(none, true), "");
+
+        // A bank commanded AND lit → no divergence. (Kills a mutant that drops the `!ignited` check, and
+        // the `!=`→`==` mutant: role != None is true here, so a dropped/flipped ignited check is what
+        // this isolates.)
+        Check("three commanded and ignited → no divergence", !BoosterHostPlan.CommandedNotIgnited(three, true), "");
+        Check("centre commanded and ignited → no divergence", !BoosterHostPlan.CommandedNotIgnited(centre, true), "");
+
+        // A bank commanded and NOT lit → THE divergence, for every role that can be commanded.
+        Check("three commanded, not ignited → divergence", BoosterHostPlan.CommandedNotIgnited(three, false), "");
+        Check("centre commanded, not ignited → divergence", BoosterHostPlan.CommandedNotIgnited(centre, false), "");
+        Check("all commanded, not ignited → divergence", BoosterHostPlan.CommandedNotIgnited(all, false), "");
+
+        // The prose channel: silent when there is nothing to say, and names the bank when there is.
+        Check("no annunciation for None", BoosterHostPlan.AnnunciationCommandedNotIgnited(none) == null, "");
+        Check("three's annunciation names the bank",
+              BoosterHostPlan.AnnunciationCommandedNotIgnited(three) != null
+              && BoosterHostPlan.AnnunciationCommandedNotIgnited(three).Contains("OctawebThree"), "");
+        Check("centre's annunciation names the bank",
+              BoosterHostPlan.AnnunciationCommandedNotIgnited(centre) != null
+              && BoosterHostPlan.AnnunciationCommandedNotIgnited(centre).Contains("OctawebCentre"), "");
     }
 }
 

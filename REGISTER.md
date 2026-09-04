@@ -2934,7 +2934,7 @@ convert a hypothetical into a guaranteed loss of the stage, and neither has a co
 landing burn ever shows a standing refusal, that is the evidence to revisit on. **No gate-open or
 `OVERRIDE` is needed for any option** — this is new policy, not a change to a settled decision.
 
-### OCT11 [S] `currentRole` is a record of what we COMMANDED, not a reading of what is lit — **TODO** — [logged by OCT4 per C1.1: found while answering OCT4's own "is `currentRole` consistent?" question]
+### OCT11 [S] `currentRole` is a record of what we COMMANDED, not a reading of what is lit — **DONE 2026-09-05** — [logged by OCT4 per C1.1: found while answering OCT4's own "is `currentRole` consistent?" question]
 - **The finding:** `BoosterHost.Dispatch` sets `currentRole = want` unconditionally after calling
   `SelectEngineSet`, whether or not the activate took. It does not take when `Activate()` throws (caught
   and logged at `Light`), and — the case with flight evidence — when **RealFuels refuses the ignition on
@@ -2955,6 +2955,54 @@ landing burn ever shows a standing refusal, that is the evidence to revisit on. 
   ignited" annunciation so the screens and the BlackBox can show the divergence rather than hide it.
 - **DONE when:** the divergence is either eliminated or made visible, and whichever is chosen is recorded
   with its reason.
+
+- **⛔ THE RULING (relayed via the overseer, 2026-09-05 — quoted verbatim, C1.12's evidentiary standard):**
+  *"OPTION (b): `currentRole` STAYS A COMMAND RECORD. MAKE THE DIVERGENCE VISIBLE. BUILD NO RETRY."* — with
+  the reasoning that re-deriving it would create an UNBOUNDED RETRY, which is dangerous here specifically:
+  `docs/BUILD_PLAN.md` §B16.4 records `TestFlightFailure_IgnitionFail` sitting on this exact part, so every
+  `Activate()` attempt rolls ignition-failure dice, and RealFuels' ignition count is UNMEASURED (register
+  [[BB8]] — the cfg sets `-1`; only a PRELAUNCH read ever gave 1). **The retry policy is W5's, not this
+  line's** — W5 owns `pure/IgnitionGate.cs` + `src/Ullage.cs` (both deleted, both scoped for restoration as
+  an open defect) and is explicitly the line for the failure that lost the booster. This line does not
+  pre-empt it.
+
+- **Fix (states the divergence, builds no retry):**
+  - `pure/BoosterHostPlan.cs` — `CommandedNotIgnited(EngineRole commandedRole, bool ignited)`, the one-line
+    pure predicate (`commandedRole != None && !ignited`), plus `AnnunciationCommandedNotIgnited(role)` for
+    the prose channel, on the SAME pattern `BoosterCommandBlock`/`Annunciation(BoosterCommandBlock)` already
+    use for `BlockNote`.
+  - `src/BoosterHost.cs` — `CommandedRole` (a read-only mirror of `currentRole`), `CommandedNotIgnited` and
+    `CommandedNotIgnitedNote`, recomputed EVERY tick in `Fly()` (dispatched or blocked) off a NEW per-bank
+    helper `BankIgnited(role)` that reads `octaweb.For(role).EngineIgnited` — the cheap, already-bound
+    per-bank reading the task asked for, strictly more precise than the vessel-wide `eng_ignited` count.
+    Reset alongside the other command-record fields on fresh bind and on `Release`.
+  - `pure/blackbox/BlackBoxEvents.cs` — two new stable kinds, `boost.commanded_not_ignited` (rising edge)
+    and `boost.ignition_resolved` (falling edge, carries `held_s`), BB9's idiom: a stable name, not prose.
+  - `pure/blackbox/BlackBoxSchema.cs` + `BlackBoxCols.cs` — `boost_cmd_not_ignited` (0/1, `Cond`/`WhenBooster`,
+    same shape as `boost_block`).
+  - `src/BlackBoxRecorder.cs` — `PutBooster` sets the new column; `DetectEvents` edge-detects
+    `BoosterHost.CommandedNotIgnited` into the two event kinds above, in the PER-VESSEL section (not gated
+    on focus — a fact about the booster whether or not it holds the camera), following the exact
+    `lastIgnited`/`EngineIgnite`/`EngineShutdown` idiom already there for the vessel-wide count.
+  - `test/BoosterHostTest.cs` — `CommandedNotIgnitedTests()`, every branch of the pure predicate.
+    **Mutation-proved by hand**: `!=`→`==`, dropping `!ignited`, and `&&`→`||` were each introduced in turn
+    and each turned red (3/3/5 failures respectively), then reverted; `build.py test` is green on the
+    reverted, correct code (all suites; this file's own count is 246 checks after the new group).
+
+- **⛔ SCOPE — what this line did NOT touch.** `Dispatch`'s command logic, `SelectEngineSet`, OCT4's gate and
+  OCT6's latch are untouched. **No retry was built anywhere** — `CommandedNotIgnited` is read-only
+  observability; nothing reads it to re-arm an `Activate()`. OCT4's mitigation (the shutdown sweep names
+  banks we do NOT believe are lit) still holds and is unaffected: this divergence can still only leave a
+  bank DARK that we think is lit, never one BURNING that we think is out.
+
+- **What only glass can confirm (not exercised here — `src/BoosterHost.cs` is excluded from `build.py test`,
+  `build.py:199-213`):** that `Fly()` actually calls the new computation every tick with the real bound
+  module; that `BankIgnited` reads the correct `ModuleEngines` off `octaweb.For`; that `DetectEvents`' edge
+  actually fires exactly once per rising/falling transition on a real flight and not, e.g., once per row
+  cadence; and the wording/usefulness of the payloads (`role`, `phase`, `held_s`) against a real ignition-
+  refusal flight. No install, no glass, run in this task (preview-only build-go; this task has no screen/UI
+  change so `build.py preview` does not apply — C1.3's docs/harness-only skip does not apply either, since
+  code changed, but there is nothing visual to render).
 
 ### OCT5 [S] Boostback lights a bank then hands Coast a stale, still-live command — **DONE 2026-09-05** — [TIER 1: overseer-found defect, OCT3's own phase gate refuses the FSM's own nominal-RTLS output]
 - **Found by the overseer, 2026-09-05**, in `pure/BoosterDescent.cs`'s `BoosterPhase.Boostback` case

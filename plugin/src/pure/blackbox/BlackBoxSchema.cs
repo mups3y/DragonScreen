@@ -348,6 +348,15 @@ namespace DragonScreen.BlackBox
             // HoldOff/None) — recorded by name (`.ToString()`), exactly as boost_phase is, so a reader
             // filters on it without depending on BlockNote's prose, which Annunciation is free to reword.
             Cond("boost_block", "enum", Tier.R2, "ksp-direct", "BoosterHost.Block", WhenBooster),
+            // [[OCT11]]: `currentRole` is a COMMAND record, not a reading (see BoosterHost.Dispatch's own
+            // doc comment) — it can be wrong for one tick or many (an Activate() throw, or RealFuels
+            // refusing ignition on ullage: flight Crew-2_20260829_144114, "eng_ignited=0 whole descent").
+            // `eng_ignited` already lets a reader INFER that from the vessel-wide count; this STATES it,
+            // per-bank, off the already-bound module. The retry policy (if any) is register W5's — this
+            // column and its paired BlackBox event (`boost.commanded_not_ignited` / `.ignition_resolved`)
+            // only announce.
+            Cond("boost_cmd_not_ignited", "0/1", Tier.R2, "ksp-direct",
+                 "BoosterHost.CommandedNotIgnited — currentRole commands a bank this module reports unlit", WhenBooster),
 
             // ================= E — GUIDANCE (§2.5) =================
             // The seams are idle (`src/_AutopilotStub.cs`). gnc_engaged and mode_index have REAL writers

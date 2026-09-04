@@ -281,6 +281,29 @@ namespace DragonScreen
         public static BoosterCommandBlock Block { get { return lastBlock; } }
         static BoosterCommandBlock lastBlock;
 
+        /// <summary>[[OCT11]] What `currentRole` currently claims lit — i.e. what `Dispatch` last
+        /// commanded. Read-only mirror of the private command record, so a screen or the BlackBox can
+        /// NAME the bank in the commanded-vs-lit divergence below rather than merely inferring it.</summary>
+        public static EngineRole CommandedRole { get { return currentRole; } }
+
+        /// <summary>[[OCT11]] THE COMMANDED-VS-LIT DIVERGENCE, STATED. True when `currentRole` names a
+        /// bank and that SAME bank's own `ModuleEngines.EngineIgnited` says it is not burning — the exact
+        /// shape that lost the booster on flight Crew-2_20260829_144114 (*"eng_ignited=0 whole descent"*).
+        /// Recomputed EVERY tick in `Fly()` from the bound per-bank module, independent of whether a
+        /// dispatch ran this tick, so it tracks RESOLUTION too (a bank commanded now can light several
+        /// ticks later once ullage settles) — not just the moment it was first commanded.
+        /// ⛔ **THIS PROPERTY ANNOUNCES. IT DOES NOT RETRY.** `pure/BoosterHostPlan.CommandedNotIgnited`
+        /// carries the overseer ruling (2026-09-05) in full: re-deriving `currentRole` from this predicate
+        /// would retry `Activate()` every tick against RealFuels' UNMEASURED ignition budget while
+        /// `TestFlightFailure_IgnitionFail` sits on this exact part (§B16.4) — register W5's call, not
+        /// this one's.</summary>
+        public static bool CommandedNotIgnited { get; private set; }
+
+        /// <summary>[[OCT11]] Prose for the divergence above, on the SAME channel `BlockNote` uses (a free-
+        /// text field beside a stable enum/bool a recording or screen actually keys on) — `null` when
+        /// there is no divergence to report.</summary>
+        public static string CommandedNotIgnitedNote { get; private set; }
+
         // =========================================================================================
         // THE TICK
         // =========================================================================================
@@ -369,6 +392,7 @@ namespace DragonScreen
             steerPitchDeadbanded = false; steerYawDeadbanded = false; steerRollDeadbanded = false;
             steerDeadbandDeg = 0.0;
             Refusal = null; BlockNote = null; lastBlock = BoosterCommandBlock.None;
+            CommandedNotIgnited = false; CommandedNotIgnitedNote = null;   // [[OCT11]] — fresh bind, fresh record
 
             // The TARGET MODE, from an in-repo source and nothing else: the vessel name → the mission
             // catalog → `RecoveryMode` → `TargetMode`. An unresolved name falls back to ASDS, whose
@@ -620,6 +644,18 @@ namespace DragonScreen
                 fbwOwned = false; fbwThrottle = 0.0; fbwUllage = false;
                 fbwPitch = 0.0; fbwYaw = 0.0; fbwRoll = 0.0;
             }
+
+            // ---- [[OCT11]]: THE COMMANDED-VS-LIT DIVERGENCE, EVERY TICK, DISPATCHED OR NOT. ------------
+            // Read PER-BANK off the already-bound module (`octaweb.For`, no search — §B16.4 step 2), which
+            // is strictly more precise than the vessel-wide `eng_ignited` count. This runs regardless of
+            // `block` on purpose: a bank commanded on an earlier, unblocked tick can still be dark on a
+            // LATER tick that is itself blocked (e.g. `Packed`), and the divergence must not appear to
+            // clear just because this tick's dispatch didn't run. It also runs regardless of RESOLUTION
+            // timing — a bank that lights several ticks after being commanded (ullage settling) clears the
+            // flag the same tick it actually lights, with no retry logic of this file's own.
+            CommandedNotIgnited = BoosterHostPlan.CommandedNotIgnited(currentRole, BankIgnited(currentRole));
+            CommandedNotIgnitedNote = CommandedNotIgnited
+                ? BoosterHostPlan.AnnunciationCommandedNotIgnited(currentRole) : null;
 
             Report(v, c, block, sep);
         }
@@ -931,6 +967,7 @@ namespace DragonScreen
             landedSinceUT = -1.0;
             AimForward = Vec3.Zero; Refusal = null; BlockNote = null; lastBlock = BoosterCommandBlock.None;
             SteerPitch = 0.0; SteerYaw = 0.0; SteerRoll = 0.0;
+            CommandedNotIgnited = false; CommandedNotIgnitedNote = null;   // [[OCT11]] — released, nothing commanded
             lastBindVerdict = BoosterBind.NoVessel;
         }
 
@@ -980,6 +1017,17 @@ namespace DragonScreen
             if (active == null || v == null || ReferenceEquals(active, v)) return 0.0;
             try { return (v.CoM - active.CoM).magnitude; }
             catch { return 0.0; }
+        }
+
+        /// <summary>[[OCT11]] Per-bank ignition reading, off the already-bound module — cheap, no search
+        /// (§B16.4 step 2). `EngineRole.None` never makes this matter: `CommandedNotIgnited` short-
+        /// circuits on it, so a missing module only reads as "not ignited" for a bank we actually asked
+        /// for, which is the honest answer — we cannot tell it is lit if we cannot even find it.</summary>
+        static bool BankIgnited(EngineRole role)
+        {
+            if (role == EngineRole.None) return true;
+            ModuleEngines e = octaweb != null ? octaweb.For(role) : null;
+            return e != null && e.EngineIgnited;
         }
 
         static double MaxThrustN(EngineRole role)

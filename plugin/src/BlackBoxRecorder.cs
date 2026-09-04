@@ -666,6 +666,8 @@ namespace DragonScreen.BlackBox
         bool lastBus1, lastBus2, haveBusState;
         bool lastFire, lastLeak;
         bool liftoffSeen, maxQSeen, droguesSeen, mainsSeen, downSeen;
+        bool lastBoostCni, haveBoostCni;             // [[OCT11]] — commanded-vs-lit divergence edge
+        double boostCniSinceUt = double.NaN;
         double peakQSoFar;
         int lastPageL = -1, lastPageC = -1, lastPageR = -1;
 
@@ -1266,6 +1268,8 @@ namespace DragonScreen.BlackBox
             BlackBoxSchema.Set(c, BlackBoxCols.BoostUncommanded, BoosterHost.AttitudeUncommanded);
             // BB9: WHY, decoded the same way boost_phase is — the stable enum name, not BlockNote's prose.
             BlackBoxSchema.Set(c, BlackBoxCols.BoostBlock, BoosterHost.Block.ToString());
+            // [[OCT11]]: the commanded-vs-lit divergence, STATED rather than only inferable from eng_ignited.
+            BlackBoxSchema.Set(c, BlackBoxCols.BoostCmdNotIgnited, BoosterHost.CommandedNotIgnited);
         }
 
         // ============================== writing ==============================
@@ -1534,6 +1538,45 @@ namespace DragonScreen.BlackBox
                                                            : BlackBoxEvents.FlightTouchdown,
                      new[] { Kv.Num("lat_deg", v.latitude), Kv.Num("lon_deg", v.longitude),
                              Kv.Num("vspeed_mps", v.verticalSpeed) });
+            }
+
+            // ---- [[OCT11]]: the commanded-vs-lit divergence, PER-VESSEL (the booster's own stream) and
+            // ---- NOT gated on focus — a fact about the booster whether or not it holds the camera, same
+            // ---- as the engine/staging edges above. `BoosterHost.CommandedNotIgnited` is the per-tick
+            // ---- reading; this only edge-detects it into the log, exactly as eng_ignited's rise/fall is
+            // ---- edge-detected above it. ⛔ Announces only — see BoosterHostPlan.CommandedNotIgnited's own
+            // ---- header for why no retry is built on this signal (register W5's call).
+            Vessel boosterV = null;
+            try { boosterV = BoosterHost.Booster; } catch { }
+            if (boosterV != null && boosterV.persistentId == v.persistentId)
+            {
+                bool cni = BoosterHost.CommandedNotIgnited;
+                if (!haveBoostCni) { lastBoostCni = cni; haveBoostCni = true; if (cni) boostCniSinceUt = ut; }
+                else if (cni != lastBoostCni)
+                {
+                    if (cni)
+                    {
+                        boostCniSinceUt = ut;
+                        Emit(BlackBoxEvents.BoostCommandedNotIgnited, new[]
+                        {
+                            Kv.Str("role", BoosterHost.CommandedRole.ToString()),
+                            Kv.Str("phase", BoosterHost.Phase.ToString()),
+                            Kv.Num("alt_radar_m", v.radarAltitude), Kv.Num("srf_speed_mps", v.srfSpeed),
+                        });
+                    }
+                    else
+                    {
+                        double heldS = double.IsNaN(boostCniSinceUt) ? -1.0 : ut - boostCniSinceUt;
+                        Emit(BlackBoxEvents.BoostIgnitionResolved, new[]
+                        {
+                            Kv.Str("role", BoosterHost.CommandedRole.ToString()),
+                            Kv.Str("phase", BoosterHost.Phase.ToString()),
+                            Kv.Num("held_s", heldS),
+                        });
+                        boostCniSinceUt = double.NaN;
+                    }
+                    lastBoostCni = cni;
+                }
             }
 
             // ---- ⛔ EVERYTHING BELOW IS A CAPSULE SINGLETON (BB2): the systems model, the alarm

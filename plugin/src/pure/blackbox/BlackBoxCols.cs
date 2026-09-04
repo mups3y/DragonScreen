@@ -132,6 +132,7 @@ namespace DragonScreen.BlackBox
         public static readonly int BoostPhase = BlackBoxSchema.Index("boost_phase");
         public static readonly int BoostUncommanded = BlackBoxSchema.Index("boost_uncommanded");
         public static readonly int BoostBlock = BlackBoxSchema.Index("boost_block");   // BB9
+        public static readonly int BoostCmdNotIgnited = BlackBoxSchema.Index("boost_cmd_not_ignited");   // [[OCT11]]
         public static readonly int GncEngaged = BlackBoxSchema.Index("gnc_engaged");
         public static readonly int ModeIndex = BlackBoxSchema.Index("mode_index");
         public static readonly int GncModule = BlackBoxSchema.Index("gnc_module");

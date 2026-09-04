@@ -177,5 +177,19 @@ namespace DragonScreen.BlackBox
         public const string FaultRaised    = "fault.raised";
         public const string FaultCleared   = "fault.cleared";
         public const string Exception      = "exception";
+
+        /// <summary>⭐ [[OCT11]]. The host has COMMANDED a bank (`BoosterHost.CommandedRole`) and that
+        /// bank's own ignition state says it is not lit — the exact shape that lost the booster on flight
+        /// Crew-2_20260829_144114 (*"eng_ignited=0 whole descent" → ballistic → LOST @14 km. Root =
+        /// RealFuels ullage"*, register H1b / W5). Raised on the RISING edge only (`boost.ignition_resolved`
+        /// is the falling one) so a reader sees exactly one pair per standing occurrence, not one line per
+        /// tick. ⛔ Announces only — nothing may read this kind as a signal to retry the activate; that
+        /// policy is register W5's (`pure/BoosterHostPlan.CommandedNotIgnited`'s own header has the ruling).</summary>
+        public const string BoostCommandedNotIgnited = "boost.commanded_not_ignited";
+        /// <summary>⭐ [[OCT11]]. The falling edge of the above: the bank the host was holding lit finally
+        /// ignited, or the command was withdrawn (role changed / host released). A separate kind from its
+        /// rising edge — as `stage.engine_ignite`/`stage.engine_shutdown` already are for the vessel-wide
+        /// count — so a reader measures how long the divergence stood without diffing two payload shapes.</summary>
+        public const string BoostIgnitionResolved = "boost.ignition_resolved";
     }
 }

@@ -299,6 +299,51 @@ namespace DragonScreen
         }
 
         // =========================================================================================
+        // [[OCT11]] THE COMMANDED-VS-LIT DIVERGENCE — STATED, NOT RE-DERIVED
+        // =========================================================================================
+        // `BoosterHost.currentRole` (see its own doc comment at the `Dispatch` call site) is a record of
+        // what was COMMANDED, not a reading of the vehicle: it advances even when `Activate()` throws, or
+        // — the case with flight evidence — RealFuels refuses the ignition on ullage. Flight
+        // `Crew-2_20260829_144114`: *"Booster engine never lit (eng_ignited=0 whole descent) → ballistic
+        // → LOST @14 km. Root = RealFuels ullage"* (register H1b / W5).
+        //
+        // ⛔ **OVERSEER RULING, 2026-09-05 (relayed on OCT11): `currentRole` STAYS a command record. The
+        // divergence is MADE VISIBLE. NO RETRY IS BUILT.** Re-deriving `currentRole` from this predicate
+        // every tick would turn a failed ignition into an unbounded per-tick retry, and that is dangerous
+        // here specifically, not merely noisy: §B16.4 records `TestFlightFailure_IgnitionFail` sitting on
+        // this exact part, so every `Activate()` attempt rolls ignition-failure dice, and RealFuels'
+        // ignition count is UNMEASURED (register [[BB8]] — the cfg sets `-1`; only a PRELAUNCH read ever
+        // gave 1). A per-tick retry rolls those dice every tick against a budget nobody has counted.
+        // ⛔ **THE RETRY POLICY BELONGS TO REGISTER W5**, which owns `pure/IgnitionGate.cs` + `src/Ullage.cs`
+        // (both deleted, both scoped for restoration as an open defect) and is explicitly the line for the
+        // failure that lost the booster. This predicate does not pre-empt it — it only ANNOUNCES.
+        //
+        // `eng_ignited` (`BlackBoxSchema.cs`) already lets a reader INFER the divergence from
+        // `eng_ignited == 0` while a bank is commanded — but inferable is not stated, and that inference
+        // is exactly what flight `Crew-2_20260829_144114` was diagnosed from AFTER THE FACT, from a CSV.
+        // This predicate + its BlackBox event/column (`src/BoosterHost.cs`, `BlackBoxEvents.cs`) is what
+        // makes it announce itself instead.
+        /// <summary>True when the host has COMMANDED a bank (`commandedRole != None`) and that SAME bank's
+        /// own ignition state says it is not lit. `ignited` is deliberately the CALLER's to supply — the
+        /// glue reads it PER-BANK off the already-bound module (`OctawebEngines.For`, no search, §B16.4
+        /// step 2), which is strictly more precise than the vessel-wide `eng_ignited` count and costs
+        /// nothing extra since the module is already bound.</summary>
+        public static bool CommandedNotIgnited(EngineRole commandedRole, bool ignited)
+        {
+            return commandedRole != EngineRole.None && !ignited;
+        }
+
+        /// <summary>Prose for the divergence, in the same channel `Annunciation(BoosterCommandBlock)`
+        /// already gives `BlockNote` — free text, INFORMATIONAL ONLY. A recording or a future screen keys
+        /// off `CommandedNotIgnited` (the bool) or the stable BlackBox event kind, never off this
+        /// string's wording, exactly as BB9 already requires of `BlockNote`.</summary>
+        public static string AnnunciationCommandedNotIgnited(EngineRole commandedRole)
+        {
+            if (commandedRole == EngineRole.None) return null;
+            return commandedRole + " COMMANDED, NOT IGNITED — retry is register W5's, not built here";
+        }
+
+        // =========================================================================================
         // 4. ENGINE-ROLE MAPPING — and the ambiguity the command struct warns about
         // =========================================================================================
 
