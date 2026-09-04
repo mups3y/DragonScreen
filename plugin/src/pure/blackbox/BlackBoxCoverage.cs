@@ -1,5 +1,20 @@
 // DragonScreen — BlackBox / COVERAGE  (register BB1; the S76 ghost-column defect, stated as a check)
 // ============================================================================================
+// ⭐ BB6 (2026-09-05). `column_never_written` fires on a column written NEVER — `alt_m` IS written,
+// sometimes, so a hole eaten INTO an otherwise-live column was invisible to it by construction: the
+// confirm flight behind [[BB5]] reported "0 coverage defects" over exactly such a column. Quoting this
+// file's own words back at itself, one level up: "The failure is not that the cells were blank. It is
+// that NOTHING IN THE FILE SAID SO." — here, the file said "0 defects" over a column with holes in it.
+//
+// So `Note` now also tracks, per column, how many rows it was ELIGIBLE to be written on, not just
+// whether it EVER was — and `Findings` compares filled-count to eligible-count. "Eligible" is NOT "every
+// row": a Tier.R2/R3 column is only due on the rows its own period reaches (BlackBoxRate.cs's decimation
+// ladder), and a `BlackBoxVoid.Control` column is legitimately blank on a rails-warp row (§4.6) — firing
+// on either would trade this blind spot for a false alarm on every normal flight, which is no defect
+// report anybody would read. Both are read from the SAME declarations the writer itself obeys, not
+// re-guessed, so the eligibility check can never drift from what BuildRow actually does. A column that
+// is eligible and still comes up short IS the hole this line exists to catch.
+// ============================================================================================
 // PURE. ⭐ THE DEFECT THIS FILE EXISTS FOR, quoted from BB1's register line:
 //
 //   "(1) `torque_cmd` was declared in the schema and never written in any file — a column that exists
@@ -43,8 +58,11 @@ namespace DragonScreen.BlackBox
         public string Column;
         /// <summary>
         /// "never_written" (a Live column produced nothing), "unexpected_writer" (an Unfitted one did),
-        /// or BB2's "capsule_leak" (a `Scope.Capsule` column carried a value on a stream whose vessel
-        /// never held the camera — the capsule's state filed under another vessel).
+        /// BB2's "capsule_leak" (a `Scope.Capsule` column carried a value on a stream whose vessel never
+        /// held the camera — the capsule's state filed under another vessel), or BB6's
+        /// "partially_written" (a Live column was written on SOME of the rows it was eligible for and
+        /// blank on the rest — the hole `column_never_written` cannot see because the column is not
+        /// never written, just not written enough).
         /// </summary>
         public string Kind;
         /// <summary>True for the two DEFECT cases; false for the Conditional note.</summary>
@@ -54,26 +72,68 @@ namespace DragonScreen.BlackBox
     }
 
     /// <summary>
-    /// Tracks, per column, whether ANY row of this stream ever carried a non-blank cell there.
+    /// Tracks, per column, whether ANY row of this stream ever carried a non-blank cell there — AND
+    /// (BB6) how many rows it was actually ELIGIBLE for versus how many of those it filled, so a column
+    /// that is written SOMETIMES but not on every row its own tier reaches still shows up.
     /// One instance per stream (a two-vessel mission has two — BB2), because a column can legitimately
     /// be live on one vessel and absent on the other.
     /// </summary>
     public sealed class BlackBoxCoverage
     {
         readonly bool[] written;
+        readonly int[] filled;      // BB6: rows where the cell was non-blank
+        readonly int[] eligible;    // BB6: rows where the cell was DUE to be non-blank (see Eligible)
 
-        public BlackBoxCoverage() { written = new bool[BlackBoxSchema.Width]; }
+        public BlackBoxCoverage()
+        {
+            written = new bool[BlackBoxSchema.Width];
+            filled = new int[BlackBoxSchema.Width];
+            eligible = new int[BlackBoxSchema.Width];
+        }
 
         /// <summary>Rows counted, so a finding can say "never, across N rows" rather than just "never".</summary>
         public int Rows { get; private set; }
 
-        /// <summary>Call once per row, AFTER every filler has run and AFTER the warp void (§4.6).</summary>
-        public void Note(string[] cells)
+        /// <summary>
+        /// Call once per row, AFTER every filler has run and AFTER the warp void (§4.6). `fillR2`/`fillR3`
+        /// are the SAME `RowPlan` flags BuildRow used to decide whether to fill this row's R2/R3 block —
+        /// read from the plan, not re-derived, so eligibility can never disagree with what was actually
+        /// asked to be written. `rails` is `warp_rails` for this row (§4.6's control-column void).
+        /// </summary>
+        public void Note(string[] cells, bool fillR2, bool fillR3, bool rails)
         {
             Rows++;
+            Col[] cols = BlackBoxSchema.Columns;
             int n = cells.Length < written.Length ? cells.Length : written.Length;
             for (int i = 0; i < n; i++)
-                if (!written[i] && !string.IsNullOrEmpty(cells[i])) written[i] = true;
+            {
+                if (Eligible(cols[i], i, fillR2, fillR3, rails)) eligible[i]++;
+                if (!string.IsNullOrEmpty(cells[i]))
+                {
+                    written[i] = true;
+                    filled[i]++;
+                }
+            }
+        }
+
+        /// <summary>
+        /// The BB1 shape, kept for every existing caller that only cares about never-vs-ever-written:
+        /// every row counts as eligible for every column, which is exactly today's behaviour and matches
+        /// a fixture/test that has no R2/R3/rails cadence to report in the first place.
+        /// </summary>
+        public void Note(string[] cells) { Note(cells, true, true, false); }
+
+        /// <summary>
+        /// Is column `i` DUE on this row? Tier.R2/R3 are due only when the SAME rate-ladder flag that
+        /// gated the writer says so (BlackBoxRate.cs); everything else is due every row UNLESS it is one
+        /// of `BlackBoxVoid`'s control columns on a rails-warp row, where §4.6 blanks it on purpose.
+        /// </summary>
+        static bool Eligible(Col c, int i, bool fillR2, bool fillR3, bool rails)
+        {
+            if (c.Tier == Tier.R2) return fillR2;
+            if (c.Tier == Tier.R3) return fillR3;
+            if (rails && BlackBoxVoid.IsControlColumn(i)) return false;
+            return true;
         }
 
         public bool WasWritten(int col)
@@ -138,6 +198,18 @@ namespace DragonScreen.BlackBox
                 {
                     found.Add(Make(c.Name, "unexpected_writer", true,
                         "declared Unfitted, pending " + c.Note + " — the manifest's provenance is now wrong"));
+                }
+                // ⭐ BB6: written[i] is true (the column is not a ghost) but that alone was the blind
+                // spot — check it FILLED EVERY ROW IT WAS ELIGIBLE FOR, not merely "at least once".
+                // Fit.Conditional is deliberately EXEMPT, same as `never_written` above: a conditional
+                // source (no target, screens not running, KER absent) legitimately comes and goes across
+                // a flight, and firing on that would be the false alarm this line was built to avoid —
+                // see S85/S94/BB9's columns, which are ALL Conditional for exactly this reason.
+                else if (c.Fit == Fit.Live && eligible[i] > 0 && filled[i] < eligible[i])
+                {
+                    found.Add(Make(c.Name, "partially_written", true,
+                        string.Format("declared Live: filled {0}/{1} eligible row(s) — {2}",
+                            filled[i], eligible[i], c.Source)));
                 }
             }
             return found;

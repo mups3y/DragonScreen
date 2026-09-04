@@ -3390,7 +3390,7 @@ an owner call — flagged here only so it is not lost behind the question above.
 - Ends per C1.5: register update + local commit; never push. Glass-time confirmation only — no further owner
   go needed for BlackBox install specifically, per the authority already on record above.
 
-### BB5 [S] `alt_m` is intermittently BLANK, and it poisons the §B11 assessment — **TODO** — [TIER 1: false failures, not real ones, are landing in BB3's mission-safety verdicts]
+### BB5 [S] `alt_m` is intermittently BLANK, and it poisons the §B11 assessment — **DONE 2026-09-05** (batched, BB5+BB6 — BB6 is why BB5 was invisible) — [TIER 1: false failures, not real ones, are landing in BB3's mission-safety verdicts]
 - **Provenance:** measured by the overseer from the confirm flight, mission `New_Crew-2_20260905_005707`,
   2026-09-05, and relayed into this chat by prompt. This chat has not opened the recording (C7) and verified
   none of the following first-hand.
@@ -3409,7 +3409,37 @@ an owner call — flagged here only so it is not lost behind the question above.
   BB3 demonstrably refuses — rather than fabricates — a §B11 verdict on a column with holes in it, verified
   against a recording that reproduces the gap.
 
-### BB6 [S] The coverage pass cannot see a PARTIALLY written column — **TODO** — [TIER 1: "0 defects" was reported over a column with holes in it]
+**DONE 2026-09-05. (i) The gap, explained — not a bug, stated with evidence.** `alt_m` is declared
+`Tier.R2` (`BlackBoxSchema.cs:215`), and `BlackBoxRecorder.BuildRow` only fills the R2 block — `alt_m`,
+`ap_km`, `pe_km`, `mission_phase`, `phase_classified` and the rest of it — inside `if (plan.FillR2)`
+(`BlackBoxRecorder.cs:995`). `mach` is `Tier.R1` and is set UNCONDITIONALLY in the same method's R1 block
+(`BlackBoxRecorder.cs:932`), which is why it reads on every row while `alt_m` does not: two different
+tiers, not two different reliabilities. `BlackBoxRate.cs`'s own header calls this the intended contract
+verbatim — "a decimated column is written on the rows where its own period has elapsed and blank on every
+other row, and the manifest's `period_s` tells a reader exactly how far forward to fill." So the accessor
+is not broken and is not fixed; it is working as designed, and that design is what BB3 was not honouring.
+**(ii) BB3 fixed to refuse, not fabricate.** `plugin/tools/assess_flight.py`'s `ascent()`/`return_entry()`
+read a blank R2 cell with `g(mrow, "alt_m")` (correctly `None`), but every one of six call sites then
+defaulted it before `_vs` ever saw it — `(g(...) or 0) / 1000.0` for `meco_alt_km`/`ei_alt_km`/
+`mains_alt_km`/`maxq_alt_km`, `abs(... or 0.0)` for `touchdown_mps`, and `pe if pe is not None else -9999`
+for the orbit call — turning "not sampled this row" into the exact fabricated numbers the overseer
+relayed (`meco_alt_km = 0.00`, `insertion pe -9999.0` → a fabricated `*** SUBORBITAL ***`). `_vs` already
+prints "not recorded" and raises no alert for `None`; the fix is a new `gkm()` helper (metres → km,
+`None`-preserving) applied at every such call site, plus rewriting the orbit call so a blank `pe_km`
+prints "ORBIT STATUS NOT DETERMINED" instead of guessing `-9999`. **Verified:** a new hand-built fixture
+inside `assess_flight.py --selftest` (not `_synth`'s big one) reproduces BOTH cited false failures
+verbatim — a MECO row with `alt_m` blank, an insertion row with `pe_km` blank — and asserts `meco_alt_km`
+reads "not recorded" with no fabricated §B11 alert, and the orbit call reads "NOT DETERMINED" with no
+fabricated `SUBORBITAL` alert. MUTATION-PROVEN: reverting either fix (by hand, then re-applied) makes the
+new assertions fail with the exact pre-fix numbers, confirming the test catches a regression, not just a
+green run. `python plugin/build.py test` green throughout (headless; no install, no glass — none needed).
+**Stray, not fixed here (C1.1):** `mission_phase`/`phase_classified` are ALSO `Tier.R2`
+(`BlackBoxSchema.cs:379-380`), and `ascent()`'s row-membership filter reads them with raw equality
+(`sval(r, "mission_phase") == "ASCENT"`) rather than accounting for the same decimation — a LIKELY
+explanation for the third relayed false reading, `seco_s = 157.54`, which this line's fix does not touch
+(it is a row-SELECTION defect, not a blank-fed-into-arithmetic one). Logged as **[[BB10]]**.
+
+### BB6 [S] The coverage pass cannot see a PARTIALLY written column — **DONE 2026-09-05** (batched, BB5+BB6) — [TIER 1: "0 defects" was reported over a column with holes in it]
 - **Provenance:** relayed by the overseer from the same confirm flight, mission
   `New_Crew-2_20260905_005707`, 2026-09-05 — not independently verified by this chat.
 - **Finding:** BB1's coverage pass reported 0 defects on both streams of the confirm flight while [[BB5]]
@@ -3422,6 +3452,34 @@ an owner call — flagged here only so it is not lost behind the question above.
   column that should be dense and is not raises a defect. Do not weaken `column_never_written` — add to it.
 - **DONE when:** the coverage pass flags a partially-written column (verified against a recording with a
   known gap, e.g. the one behind [[BB5]]), and still catches a fully-unwritten column as before.
+
+**DONE 2026-09-05.** `BlackBoxCoverage` (`plugin/src/pure/blackbox/BlackBoxCoverage.cs`) now tracks, per
+column, `filled[i]` (rows where the cell was non-blank) alongside the existing `written[i]` bool, and a
+new `eligible[i]` (rows where the cell was DUE). "Due" is read from the SAME flags the writer itself
+obeys, not re-derived: `Note(cells, fillR2, fillR3, rails)` takes `RowPlan.FillR2`/`FillR3` (so a
+`Tier.R2`/`R3` column is only eligible on the rows its own period reached — the S85/S94/BB9 ⚠ this line's
+brief warns about: every column those tasks added is `Fit.Conditional`, which is exempt from the new
+check exactly as it is exempt from `column_never_written`) and `warp_rails` (so a `BlackBoxVoid.Control`
+column is not eligible on a rails-voided row, §4.6). `BlackBoxRecorder.cs`'s one call site now passes
+`plan.FillR2, plan.FillR3, rails` (`BlackBoxRecorder.cs:900`); the old `Note(cells)` shape is kept as an
+overload (`fillR2=true, fillR3=true, rails=false`) so every existing caller — all of `BlackBoxTest.cs`'s
+prior coverage tests — is unchanged and still passes. `Findings()` adds one new `else if` branch, after
+the existing `Unfitted`-written check, that fires `"partially_written"` (a DEFECT) when
+`c.Fit == Fit.Live && filled[i] < eligible[i]`; `column_never_written`'s own branch (`!written[i]`) is
+untouched, so a fully-unwritten column still reports exactly as before.
+**Verified, with FOUR new `BlackBoxTest.cs` cases (in `Coverage()` and `Pipeline()`):** (1) a Live column
+filled on some eligible rows and blank on others IS flagged `partially_written`, by name, and is STILL
+also `WasWritten` (proving `never_written` does not also fire); (2) a `Tier.R2` column blanked EXACTLY on
+the rows its own tier was not due — `alt_m`'s real, legitimate shape per BB5's finding above — raises NO
+defect; (3) `Pipeline()`'s existing real rate-ladder-driven synthetic mission (genuine R2 decimation AND
+genuine rails-warp in one run) asserts neither `alt_m` nor the rails-voided `q_pa` is flagged; (4) a
+`Fit.Conditional` column (`range_m`) written on only half its rows — the condition legitimately coming and
+going — is still not a defect. MUTATION-PROVEN, three separate mutations, each reverted after: (a)
+disabling the new `partially_written` branch entirely made check (1) fail with the exact pre-fix
+"0 defects" symptom; (b) making `Eligible()` return `true` unconditionally (ignoring tier/rails) made
+checks (2) and (3) fail — the false-alarm trade this line's ⚠ warns against, reproduced and caught; (c)
+dropping the `c.Fit == Fit.Live` guard made check (4) fail. `python plugin/build.py test` green throughout
+(1770 checks in `BlackBoxTest`, up from 1765; headless; no install, no glass — none needed).
 
 ### BB7 [S] `max_rec_build_us = 47544` — the recorder is 23x over its own frame budget — **TODO** — [TIER 2: the instrument is trustworthy, the number it reports is not]
 - **Provenance:** measured by the overseer from mission `New_Crew-2_20260905_005707`, 2026-09-05, and relayed
@@ -9971,3 +10029,32 @@ a fresh test file dropped in the same directory, and on this file itself immedia
 --cached`). Post-fix, verified: `git ls-files | grep -i pycache` returns nothing; `git check-ignore -v
 plugin/build/__pycache__/navball_preview.cpython-313.pyc` → matched by `.gitignore:72`, same rule S91
 added. No `.gitignore` change needed, as this line said.
+
+### BB10 [S] `mission_phase`/`phase_classified` are ALSO Tier.R2 — BB3's ascent row-selection reads them as if they were dense — **TODO** — [TIER 2: the likely explanation for BB5's third relayed false reading, `seco_s = 157.54`]
+Logged by the **BB5+BB6 batched task**, 2026-09-05 (C1.1 — noticed while explaining BB5's accessor gap;
+not fixed, because it is a row-SELECTION defect in `ascent()`, a different mechanism from the
+blank-fed-into-arithmetic fabrication BB5's own done-criteria named, and fixing it was not needed to
+satisfy BB5's or BB6's stated DONE-when).
+
+**Finding.** `BlackBoxSchema.cs:379-380` declares `mission_phase` and `phase_classified` `Tier.R2`, and
+`BlackBoxRecorder.BuildRow` writes both only inside the same `if (plan.FillR2)` block as `alt_m`
+(`BlackBoxRecorder.cs:1058`, `:1078`) — so both are blank on exactly the same non-R2 rows `alt_m` is.
+`plugin/tools/assess_flight.py`'s `ascent()` builds its ascent row-set with a raw equality read —
+`asc = [r for r in st.rows if sval(r, "mission_phase") == "ASCENT" or sval(r, "phase_classified") ==
+"ASCENT"]` — which is blind to the same decimation BB5 found for `alt_m`: on a non-R2 row the cell reads
+`""`, not `"ASCENT"`, so a genuinely-ascending row is silently EXCLUDED from `asc` roughly 4 times out of
+5 during a 10 Hz dynamic phase. `ascent()` then picks `lastIdx = max(index of r in asc)` as the anchor for
+the SECO/insertion read (`assess_flight.py`, the `# SECO orbit` block) — if the true last ascent row
+happens to fall on a gap (its `mission_phase`/`phase_classified` cell blank), `lastIdx` lands on an
+EARLIER row than the real end of ascent, and every value read off `last` (including `seco_s =
+g(last, "met_s")`) is time-shifted early. This is a plausible, unverified (C7 — no first-hand read of the
+confirm flight) explanation for the overseer-relayed `seco_s = 157.54` (target 480-570 s) sitting next to
+the two BB5 already explains.
+**Build (not done here):** either forward-fill `mission_phase`/`phase_classified` before the equality
+check (matching §4.6's documented forward-fill contract for a decimated column), or pick `asc`'s last row
+by a Tier.Every/R1 signal (e.g. `thrust_n` dropping to 0 and staying there) instead of a Tier.R2
+classifier cell.
+**DONE when:** a recording (real or a targeted fixture reproducing the gap pattern) shows `ascent()`'s
+`asc` row-set including every genuinely-ascending row regardless of `mission_phase`/`phase_classified`
+decimation, and the SECO/insertion anchor row is no longer sensitive to which rows happened to land on an
+R2-due tick.

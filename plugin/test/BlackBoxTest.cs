@@ -561,6 +561,66 @@ public static class BlackBoxTest
         acc.Note(a2); acc.Note(a1); acc.Note(a2);
         Check(acc.WasWritten(BlackBoxCols.ThrustN), "one non-blank row is enough to prove a writer exists");
         Check(acc.Rows == 3, "rows are counted");
+
+        // ---- ⭐ BB6: the "0 defects over a column with holes in it" defect, stated as a check ----
+        // `alt_m` in the confirm flight behind [[BB5]] was written SOME rows and blank on others, and
+        // `column_never_written` — which fires only on a column written NEVER — could not see it. Two
+        // rows, both eligible (the default `Note()` overload treats every row as eligible for every
+        // column, matching every OTHER assertion in this method), one with thrust_n written and one not.
+        var holey = new BlackBoxCoverage();
+        string[] h1 = BlackBoxSchema.NewRow();
+        string[] h2 = BlackBoxSchema.NewRow();
+        for (int i = 0; i < h1.Length; i++)
+            if (BlackBoxSchema.Columns[i].Fit != Fit.Unfitted) { h1[i] = "1"; h2[i] = "1"; }
+        h2[BlackBoxCols.ThrustN] = "";      // eligible, but blank on THIS row only — the BB6 shape
+        holey.Note(h1);
+        holey.Note(h2);
+        bool partial = false;
+        f = holey.Findings();
+        for (int i = 0; i < f.Count; i++)
+            if (f[i].Column == "thrust_n" && f[i].Defect && f[i].Kind == "partially_written") partial = true;
+        Check(partial, "BB6: a column filled on SOME eligible rows and blank on others is a defect, named");
+        Check(holey.WasWritten(BlackBoxCols.ThrustN),
+              "...and it is still 'written' by the old bool check — never_written must not ALSO fire");
+
+        // ⛔ the false alarm this rule must NOT trade the blind spot for: a Tier.R2 column blanked
+        // EXACTLY on the rows its own tier was not due — `alt_m`'s actual, LEGITIMATE shape, once BB5's
+        // R2 decimation is accounted for. filled == eligible, so this is not a hole.
+        var decimated = new BlackBoxCoverage();
+        for (int k = 0; k < 5; k++)
+        {
+            string[] r = BlackBoxSchema.NewRow();
+            for (int i = 0; i < r.Length; i++)
+                if (BlackBoxSchema.Columns[i].Fit != Fit.Unfitted && BlackBoxSchema.Columns[i].Tier != Tier.R2
+                    && BlackBoxSchema.Columns[i].Tier != Tier.R3) r[i] = "1";
+            bool dueR2 = (k % 5) == 0;                      // due once in five, like a 10 Hz row / 2 Hz tier
+            if (dueR2) r[BlackBoxCols.AltM] = "5000";
+            decimated.Note(r, dueR2, dueR2, false);
+        }
+        bool altHole = false;
+        f = decimated.Findings();
+        for (int i = 0; i < f.Count; i++)
+            if (f[i].Column == "alt_m" && f[i].Kind == "partially_written") altHole = true;
+        Check(!altHole, "BB6: an R2 column blank ONLY on rows its own tier was not due is not a defect");
+
+        // ⛔ the ⚠ in BB6's register line, taken literally: EVERY column S85/S94/BB9 added is
+        // Fit.Conditional, and a conditional source coming and going across a flight (no target, screens
+        // not running) must not become a new false alarm just because the ratio rule now exists.
+        var conditional = new BlackBoxCoverage();
+        for (int k = 0; k < 4; k++)
+        {
+            string[] r = BlackBoxSchema.NewRow();
+            for (int i = 0; i < r.Length; i++)
+                if (BlackBoxSchema.Columns[i].Fit == Fit.Live) r[i] = "1";
+            if (k % 2 == 0) r[BlackBoxCols.RangeM] = "1000";   // Conditional (WhenTarget) - on for half the rows
+            conditional.Note(r);
+        }
+        f = conditional.Findings();
+        for (int i = 0; i < f.Count; i++)
+            if (f[i].Column == "range_m")
+                Check(!f[i].Defect,
+                      "BB6: a Conditional column partially written (the condition coming and going) is "
+                      + "still not a defect");
     }
 
     // ---------------------------------------------------------------- §2.9 / §4.1 the event log
@@ -714,7 +774,7 @@ public static class BlackBoxTest
             BlackBoxSchema.Set(row, BlackBoxCols.RecBuildUs, 40.0);
             if (rails) { BlackBoxVoid.Apply(row); warpRows++; }
 
-            cov.Note(row);
+            cov.Note(row, plan.FillR2, plan.FillR3, rails);
             lines.Add(BlackBoxSchema.Row(row));
             st = BlackBoxRate.Advance(st, plan, now);
         }
@@ -745,6 +805,19 @@ public static class BlackBoxTest
         Check(cov.Rows == lines.Count, "coverage counted every row");
         Check(cov.WasWritten(BlackBoxCols.AltM), "an R2 column written on some rows counts as written");
         Check(!cov.WasWritten(BlackBoxCols.PvgVgoMps), "an unfitted column stays unwritten");
+
+        // ⭐ BB6: this run has genuine R2 decimation (r2Rows < lines.Count) AND genuine rails-voiding
+        // (warpRows > 0) - the two legitimate-absence cases the new fill-ratio rule must not misread as
+        // a hole, exercised here on a REAL sequence of rows rather than a hand-built one.
+        List<CoverageFinding> pf = cov.Findings();
+        bool altPartial = false, qpaPartial = false;
+        for (int i = 0; i < pf.Count; i++)
+        {
+            if (pf[i].Column == "alt_m" && pf[i].Kind == "partially_written") altPartial = true;
+            if (pf[i].Column == "q_pa" && pf[i].Kind == "partially_written") qpaPartial = true;
+        }
+        Check(!altPartial, "BB6: an R2 column legitimately decimated across the ladder is NOT a hole");
+        Check(!qpaPartial, "BB6: a control column legitimately voided under rails warp is NOT a hole");
 
         ManifestInfo m = ManifestInfo.Fresh();
         m.MissionId = "PIPE_20260904_000000";

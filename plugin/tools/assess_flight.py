@@ -957,6 +957,18 @@ def _vs(name, v, unit=""):
     return ok
 
 
+# ---- BB5: a Tier.R2/R3 column (alt_m, pe_km, ...) is written on ITS OWN period and blank on every
+# ---- other row by design (BlackBoxRate.cs's decimation ladder - see its header comment). `g()` is a
+# ---- raw single-row read, so it comes back None on a row the tier hasn't reached yet. `_vs` already
+# ---- prints "not recorded" and raises no alert for a None - the bug was every call site upstream of it
+# ---- doing `(g(...) or 0)` before `_vs` ever saw the blank, turning "not measured this row" into a
+# ---- confident, fabricated 0.00 (or -9999 for a sentinel default) that then fails a §B11 band check.
+# ---- `gkm` is the fix, applied at every such call site: convert units WITHOUT manufacturing a value.
+def gkm(v):
+    """metres -> km, preserving None. `(None or 0) / 1000.0 == 0.0`; `gkm(None) is None`."""
+    return v / 1000.0 if v is not None else None
+
+
 def ascent(M, st):
     sec("3. ASCENT (event-by-event, against §B11's targets)  [%s]" % st.label)
     ev = [e for e in M.events if e.get("vessel") == st.vessel] or M.events
@@ -996,9 +1008,9 @@ def ascent(M, st):
     gmax = max([g(r, "accel_g_peak") or g(r, "accel_g") or 0 for r in asc] or [0])
     qrow = max(asc, key=lambda r: (g(r, "q_pa_peak") or g(r, "q_pa") or 0))
     mq = next((e for e in ev if e.get("kind") == "flight.maxq"), None)
-    qalt = ((mq.get("p") or {}).get("alt_m") if mq else g(qrow, "alt_m")) or 0
+    qalt = (mq.get("p") or {}).get("alt_m") if mq else g(qrow, "alt_m")
     _vs("maxq_pa", qmax, " Pa")
-    _vs("maxq_alt_km", qalt / 1000.0, " km")
+    _vs("maxq_alt_km", gkm(qalt), " km")
     _vs("ascent_g", gmax, " g")
 
     # MECO: the engine-shutdown event if there is one, else the biggest thrust drop.
@@ -1013,7 +1025,7 @@ def ascent(M, st):
         mrow = best[1] if best else None
     if mrow is not None:
         P("     MECO at met %.1f s" % (g(mrow, "met_s") or 0))
-        _vs("meco_alt_km", (g(mrow, "alt_m") or 0) / 1000.0, " km")
+        _vs("meco_alt_km", gkm(g(mrow, "alt_m")), " km")
         _vs("meco_mach", g(mrow, "mach"), "")
 
     # ⛔ SECO orbit = the SETTLED orbit AFTER the engine cuts - NOT the last ascent-phase row (which is
@@ -1033,10 +1045,19 @@ def ascent(M, st):
     _vs("insert_ap_km", ap, " km")
     _vs("insert_pe_km", pe, " km")
     _vs("insert_inc_deg", inc, " deg")
-    orbit = (pe if pe is not None else -9999) > 100
-    P("  --> %s" % ("REACHED ORBIT" if orbit else "*** SUBORBITAL (pe <= 100 km) ***"))
-    if not orbit:
-        ALERTS.append("SUBORBITAL: insertion pe %.1f km" % (pe if pe is not None else -9999))
+    # ⛔ BB5: pe_km is Tier.R2 - blank on most rows by design (BlackBoxRate.cs). `last` is picked by
+    # thrust/time, not by which rows the R2 tier actually filled, so pe can legitimately be None here.
+    # The old code defaulted a None pe to the sentinel -9999, which reads as "> 100 is False" and prints
+    # a confident, fabricated "*** SUBORBITAL ***" for a value that was simply never sampled on this row.
+    # A blank pe means the reached-orbit call cannot be made - it is refused, not guessed at -9999.
+    if pe is None:
+        orbit = None
+        P("  --> ORBIT STATUS NOT DETERMINED (pe_km not recorded on the settled-orbit row)")
+    else:
+        orbit = pe > 100
+        P("  --> %s" % ("REACHED ORBIT" if orbit else "*** SUBORBITAL (pe <= 100 km) ***"))
+        if not orbit:
+            ALERTS.append("SUBORBITAL: insertion pe %.1f km" % pe)
     return {"ap": ap, "pe": pe, "inc": inc, "orbit": orbit, "qmax": qmax, "gmax": gmax}
 
 
@@ -1234,11 +1255,11 @@ def return_entry(M, st):
                and (g(r, "vspeed_mps") or 0) < 0), None)
     if ei is not None:
         P("     entry interface at met %.1f" % (g(ei, "met_s") or 0))
-        _vs("ei_alt_km", (g(ei, "alt_m") or 0) / 1000.0, " km")
+        _vs("ei_alt_km", gkm(g(ei, "alt_m")), " km")
         _vs("ei_speed_mps", g(ei, "speed_mps"), " m/s")
     mains = next((e for e in rev if e.get("kind") == "flight.main_deploy"), None)
     if mains:
-        _vs("mains_alt_km", ((mains.get("p") or {}).get("alt_radar_m") or 0) / 1000.0, " km")
+        _vs("mains_alt_km", gkm((mains.get("p") or {}).get("alt_radar_m")), " km")
     if ret_rows:
         gs = [g(r, "accel_g") for r in ret_rows if g(r, "accel_g") is not None]
         if gs:
@@ -1254,8 +1275,8 @@ def return_entry(M, st):
       ((g(tail, "alt_m") or 0) / 1000.0, g(tail, "srf_speed_mps") or 0, g(tail, "vspeed_mps") or 0))
     down = next((e for e in rev if e.get("kind") in ("flight.splashdown", "flight.touchdown")), None)
     if down:
-        vsd = abs((down.get("p") or {}).get("vspeed_mps") or 0.0)
-        _vs("touchdown_mps", vsd, " m/s")
+        vspd = (down.get("p") or {}).get("vspeed_mps")
+        _vs("touchdown_mps", abs(vspd) if vspd is not None else None, " m/s")
 
 
 # =============================================================================================
@@ -2198,7 +2219,53 @@ def selftest(verbose=False):
         # the booster is 'Landed' at a point ~6 m off the deck centre, so the miss must be small but real
         m = re.search(r"MISS vs DECK CENTRE = ([\d.]+) m", out)
         assert m and 0.1 < float(m.group(1)) < 200.0, "deck miss reads %s" % (m and m.group(1))
-        print("SELFTEST OK - %d sections, %d report lines, deck miss %.1f m, %d finding(s)" %
+
+        # ---- BB5: a blank Tier.R2 cell must refuse a §B11 verdict, not fabricate one ----------------
+        # A hand-built, minimal fixture (not `_synth`'s big one) so the injected gap is exact: the MECO
+        # row's alt_m is blank and the SECO/insertion row's pe_km is blank - reproducing, verbatim, the
+        # overseer-relayed false failures this register line exists for (meco_alt_km = 0.00,
+        # insertion pe -9999.0). Before the fix, `(g(mrow,"alt_m") or 0) / 1000.0` and
+        # `pe if pe is not None else -9999` turned each blank into exactly those numbers.
+        bb5_rows = [
+            {"vessel": "Crew-2", "ut": "0", "met_s": "0", "thrust_n": "7000000", "mach": "0.5",
+             "alt_m": "5000", "pe_km": "", "ap_km": "", "inc_deg": "", "raan_deg": "",
+             "q_pa": "20000", "q_pa_peak": "20000", "accel_g": "1.5", "accel_g_peak": "1.5"},
+            {"vessel": "Crew-2", "ut": "137", "met_s": "137", "thrust_n": "0", "mach": "10.0",
+             "alt_m": "",  # <-- the injected gap: MECO row, blank alt_m (R2 tier not yet reached)
+             "pe_km": "", "ap_km": "", "inc_deg": "", "raan_deg": "",
+             "q_pa": "500", "q_pa_peak": "500", "accel_g": "0.1", "accel_g_peak": "0.1"},
+            {"vessel": "Crew-2", "ut": "512", "met_s": "512", "thrust_n": "0", "mach": "9.0",
+             "alt_m": "200000",
+             "pe_km": "",  # <-- the injected gap: insertion row, blank pe_km
+             "ap_km": "205", "inc_deg": "51.6", "raan_deg": "120",
+             "q_pa": "0", "q_pa_peak": "0", "accel_g": "0.0", "accel_g_peak": "0.0"},
+        ]
+        bb5_events = [{"mission_id": "selftest-bb5", "vessel": "Crew-2", "ut": 137.0, "met_s": 137.0,
+                       "seq": 2, "kind": "stage.engine_shutdown", "p": {"from": 9, "to": 0, "thrust_n": 0.0}}]
+        bb5_stream = Stream("selftest-bb5.params.csv", bb5_rows, manifest={}, label="bb5-fixture")
+        bb5_mission = Mission("selftest-bb5", [bb5_stream], events=bb5_events)
+        saved_alerts = list(ALERTS)
+        ALERTS[:] = []
+        buf2 = io.StringIO()
+        _SINK.append(buf2)
+        _QUIET[0] = True
+        try:
+            ascent(bb5_mission, bb5_stream)
+        finally:
+            _QUIET[0] = False
+            _SINK.remove(buf2)
+            bb5_out, bb5_alerts = buf2.getvalue(), list(ALERTS)
+            ALERTS[:] = saved_alerts
+        assert "meco_alt_km" in bb5_out and "not recorded" in bb5_out, \
+            "BB5: meco_alt_km line missing, or a blank cell no longer reads 'not recorded':\n" + bb5_out
+        assert not any("meco_alt_km" in a for a in bb5_alerts), \
+            "BB5: a blank alt_m on the MECO row still raised a fabricated §B11 alert: %r" % bb5_alerts
+        assert "ORBIT STATUS NOT DETERMINED" in bb5_out, \
+            "BB5: a blank pe_km on the insertion row did not refuse the orbit verdict:\n" + bb5_out
+        assert not any("SUBORBITAL" in a for a in bb5_alerts), \
+            "BB5: a blank pe_km still raised a fabricated SUBORBITAL alert: %r" % bb5_alerts
+
+        print("SELFTEST OK - %d sections, %d report lines, deck miss %.1f m, %d finding(s), BB5 refusal proven" %
               (len(need), out.count(chr(10)), float(m.group(1)), len(ALERTS)))
         return 0
     except AssertionError as e:

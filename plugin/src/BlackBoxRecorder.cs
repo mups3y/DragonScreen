@@ -897,7 +897,9 @@ namespace DragonScreen.BlackBox
             // ---- legitimate control value and a blank is not.
             if (rails) BlackBoxVoid.Apply(row);
 
-            coverage.Note(row);
+            // BB6: the SAME plan flags that decided whether this row's R2/R3 block got filled, so the
+            // coverage pass's idea of "eligible" can never disagree with what BuildRow actually did.
+            coverage.Note(row, plan.FillR2, plan.FillR3, rails);
             WriteRow(row);
             accum = BlackBoxAccum.Fresh();
             rate = BlackBoxRate.Advance(rate, plan, now);
