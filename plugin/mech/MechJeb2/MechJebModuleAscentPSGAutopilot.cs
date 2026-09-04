@@ -1,0 +1,197 @@
+// VENDORED - MechJeb2, upstream MuMech/MechJeb2, branch dev, commit
+// c5a6d8fed6bf458f85c9aafc49c7e282cd4e2ffa (2026-08-08).  Pinned by DragonScreen T15a; see plugin/mech/VENDOR.md.
+// GPLv3 (plugin/mech/LICENSE.md).  UNMODIFIED except the rename shell: this file's whole
+// body is wrapped in `namespace DragonScreen.Mech` (B3 private namespace) and any
+// `extern alias JetBrainsAnnotations` is folded to a plain `using`.  No other edit.
+
+namespace DragonScreen.Mech
+{
+using System;
+using KSP.Localization;
+using UnityEngine;
+
+/*
+ * Optimized launches for RSS/RO
+ */
+
+namespace MuMech
+{
+    public class MechJebModuleAscentPSGAutopilot : MechJebModuleAscentBaseAutopilot
+    {
+        public MechJebModuleAscentPSGAutopilot(MechJebCore core) : base(core)
+        {
+        }
+
+        private MechJebModuleAscentSettings _ascentSettings => Core.AscentSettings;
+
+        protected override void OnModuleEnabled()
+        {
+            base.OnModuleEnabled();
+            Debug.Log("Enabling PSG Ascent Autopilot");
+            _mode = AscentMode.VERTICAL_ASCENT;
+            Core.Guidance.Users.Add(this);
+            Core.Guidance.CascadeDisable(this); // disable this module if guidance is disabled
+            Core.Glueball.Users.Add(this);
+        }
+
+        protected override void OnModuleDisabled()
+        {
+            base.OnModuleDisabled();
+            Debug.Log("Disabling PSG Ascent Autopilot");
+            Core.Guidance.Users.Remove(this);
+            Core.Glueball.Users.Remove(this);
+        }
+
+        public override void Drive(FlightCtrlState s)
+        {
+            if (TimedLaunch)
+            {
+                if (TMinus <= AscentSettings.WarpCountDown)
+                {
+                    SetTarget();
+                    Core.Guidance.AssertStart(false);
+                }
+            }
+            else
+            {
+                SetTarget();
+                Core.Guidance.AssertStart();
+            }
+
+            base.Drive(s);
+        }
+
+        private enum AscentMode
+        {
+            VERTICAL_ASCENT,
+            PITCHPROGRAM,
+            GUIDANCE,
+            EXIT
+        }
+
+        private AscentMode _mode;
+
+        protected override bool DriveAscent2()
+        {
+            switch (_mode)
+            {
+                case AscentMode.VERTICAL_ASCENT:
+                    DriveVerticalAscent();
+                    break;
+
+                case AscentMode.PITCHPROGRAM:
+                    DrivePitchProgram();
+                    break;
+
+                case AscentMode.GUIDANCE:
+                    DriveGuidance();
+                    break;
+            }
+
+            return _mode != AscentMode.EXIT;
+        }
+
+        private void SetTarget()
+        {
+            double peR = MainBody.Radius + AscentSettings.DesiredOrbitAltitude;
+            double apR = MainBody.Radius + AscentSettings.DesiredApoapsis;
+            if (_ascentSettings.DesiredApoapsis < 0)
+                apR = _ascentSettings.DesiredApoapsis;
+            double attR = MainBody.Radius +
+                (!AscentSettings.OptimizeStageFlag ? AscentSettings.DesiredAttachAltFixed : AscentSettings.DesiredAttachAlt);
+
+            bool lanflag = _ascentSettings.LaunchingToPlane || _ascentSettings.LaunchingToMatchLan || _ascentSettings.LaunchingToLan;
+            double lan = _ascentSettings.LaunchingToPlane || _ascentSettings.LaunchingToMatchLan
+                ? Core.Target.TargetOrbit.LAN
+                : (double)AscentSettings.DesiredLan;
+
+            double inclination = AscentSettings.DesiredInclination;
+            bool attachAltFlag = !AscentSettings.OptimizeStageFlag || AscentSettings.AttachAltFlag;
+
+            // if we are launchingToPlane other code in MJ fixes the sign of the inclination to be correct
+            // FIXME: can we just use autopilot.desiredInclination here and rely on the other code to update that value?
+            if (_ascentSettings.LaunchingToPlane)
+                inclination = Math.Sign(inclination) * Core.Target.TargetOrbit.inclination;
+
+            // FIXME: kinda need to break this up it is getting very magical with all the non-obvious ignored combinations of options
+            Core.Glueball.SetTarget(peR, apR, attR, inclination, lan, AscentSettings.DesiredFPA, attachAltFlag, lanflag);
+        }
+
+        private double _pitchStartTime;
+
+        private void DriveVerticalAscent()
+        {
+            //during the vertical ascent we just thrust straight up at max throttle
+            VerticalHeadingTo(Core.Guidance.Heading);
+
+            bool liftedOff = Vessel.LiftedOff() && !Vessel.Landed;
+
+            if (!liftedOff)
+            {
+                Status = Localizer.Format("#MechJeb_Ascent_status12"); //"Awaiting liftoff"
+                return;
+            }
+
+            if (VesselState.AltitudeBottom > AscentSettings.PitchStartHeight)
+            {
+                _mode = AscentMode.PITCHPROGRAM;
+                _pitchStartTime = MET;
+                return;
+            }
+
+            double dh = AscentSettings.PitchStartHeight - VesselState.AltitudeBottom;
+            Status = $"Vertical ascent {dh:F2}m to go";
+        }
+
+        private void DrivePitchProgram()
+        {
+            double dt = MET - _pitchStartTime;
+            double theta = dt * AscentSettings.PitchRate;
+            double pitch = 90 - theta;
+
+            Status = Localizer.Format("#MechJeb_Ascent_status15", $"{pitch - Core.Guidance.Pitch:F}"); //Pitch program <<1>>° to guidance
+
+            if (CheckForGuidanceTransition(pitch))
+            {
+                _mode = AscentMode.GUIDANCE;
+                return;
+            }
+
+            AttitudeTo(pitch, Core.Guidance.Heading);
+        }
+
+        private bool CheckForGuidanceTransition(double pitch)
+        {
+            if (!MainBody.atmosphere) return true;
+
+            if (pitch <= Core.Guidance.Pitch && Core.Guidance.IsStable()) return true;
+
+            return false;
+        }
+
+        private void DriveGuidance()
+        {
+            if (Core.Guidance.Status == PSGStatus.FINISHED)
+            {
+                _mode = AscentMode.EXIT;
+                return;
+            }
+
+            if (!Core.Guidance.IsStable())
+            {
+                double pitch = Math.Min(Math.Min(90, SrfvelPitch()), VesselState.Pitch);
+                AttitudeTo(pitch, SrfvelHeading());
+                Status = Localizer.Format("#MechJeb_Ascent_status16"); //"WARNING: Unstable Guidance"
+            }
+            else
+            {
+                double ang = Vector3d.Angle(Core.Guidance.Inertial, VesselState.Forward);
+                // FIXME: should be able to set status color to yellow for ang > 2 and red for ang > 5 or so
+                Status = $"Stable Guidance: {ang:F}° deviation";
+                AttitudeTo(Core.Guidance.Inertial);
+            }
+        }
+    }
+}
+
+}

@@ -1,0 +1,413 @@
+// VENDORED - MechJeb2, upstream MuMech/MechJeb2, branch dev, commit
+// c5a6d8fed6bf458f85c9aafc49c7e282cd4e2ffa (2026-08-08).  Pinned by DragonScreen T15a; see plugin/mech/VENDOR.md.
+// GPLv3 (plugin/mech/LICENSE.md).  UNMODIFIED except the rename shell: this file's whole
+// body is wrapped in `namespace DragonScreen.Mech` (B3 private namespace) and any
+// `extern alias JetBrainsAnnotations` is folded to a plain `using`.  No other edit.
+
+namespace DragonScreen.Mech
+{
+/*
+ * Copyright Lamont Granquist, Sebastien Gaggini and the MechJeb contributors
+ * SPDX-License-Identifier: LicenseRef-PD-hp OR Unlicense OR CC0-1.0 OR 0BSD OR MIT-0 OR MIT OR LGPL-2.1+
+ */
+
+using System;
+using System.Globalization;
+using static MechJebLib.Utils.Statics;
+using static System.Math;
+
+// ReSharper disable UnusedMember.Global
+// ReSharper disable MemberCanBePrivate.Global
+// ReSharper disable InconsistentNaming
+// ReSharper disable NonReadonlyMemberInGetHashCode
+namespace MechJebLib.Primitives
+{
+    public readonly struct Q3 : IEquatable<Q3>, IFormattable
+    {
+        public readonly double x, y, z, w;
+
+        // Access the x, y, z, w components using [0], [1], [2], [3] respectively.
+        public double this[int index]
+        {
+            get
+            {
+                switch (index)
+                {
+                    case 0: return x;
+                    case 1: return y;
+                    case 2: return z;
+                    case 3: return w;
+                    default:
+                        throw new IndexOutOfRangeException("Invalid Q3 index!");
+                }
+            }
+        }
+
+        public Q3(double x, double y, double z, double w)
+        {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.w = w;
+        }
+
+        // The identity rotation (RO). This quaternion corresponds to "no rotation": the object
+        public static Q3 identity { get; } = new Q3(0.0, 0.0, 0.0, 1.0);
+
+        // Combines rotations /lhs/ and /rhs/.
+        public static Q3 operator *(Q3 q1, Q3 q2) =>
+            new Q3(
+                q1.w * q2.x + q1.x * q2.w + q1.y * q2.z - q1.z * q2.y,
+                q1.w * q2.y - q1.x * q2.z + q1.y * q2.w + q1.z * q2.x,
+                q1.w * q2.z + q1.x * q2.y - q1.y * q2.x + q1.z * q2.w,
+                q1.w * q2.w - q1.x * q2.x - q1.y * q2.y - q1.z * q2.z
+            );
+
+        // Rotates the point /point/ with /rotation/.
+        public static V3 operator *(Q3 q, V3 v)
+        {
+            double x = q.x * 2.0;
+            double y = q.y * 2.0;
+            double z = q.z * 2.0;
+            double xx = q.x * x;
+            double yy = q.y * y;
+            double zz = q.z * z;
+            double xy = q.x * y;
+            double xz = q.x * z;
+            double yz = q.y * z;
+            double wx = q.w * x;
+            double wy = q.w * y;
+            double wz = q.w * z;
+
+            var res = new V3(
+                (1.0 - (yy + zz)) * v.x + (xy - wz) * v.y + (xz + wy) * v.z,
+                (xy + wz) * v.x + (1.0 - (xx + zz)) * v.y + (yz - wx) * v.z,
+                (xz - wy) * v.x + (yz + wx) * v.y + (1.0 - (xx + yy)) * v.z
+            );
+            return res;
+        }
+
+        public static Q3 operator *(Q3 q, double s) => new Q3(q.x * s, q.y * s, q.z * s, q.w * s);
+
+        public static Q3 operator *(double s, Q3 q) => new Q3(q.x * s, q.y * s, q.z * s, q.w * s);
+
+        // ReSharper disable CompareOfFloatsByEqualityOperator
+        public static bool operator ==(Q3 lhs, Q3 rhs) => lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+        // ReSharper restore CompareOfFloatsByEqualityOperator
+
+        public static bool operator !=(Q3 lhs, Q3 rhs) => !(lhs == rhs);
+
+        public static Q3 operator /(Q3 q, double d) => new Q3(q.x / d, q.y / d, q.z / d, q.w / d);
+
+        public static Q3 operator -(Q3 q) => new Q3(-q.x, -q.y, -q.z, -q.w);
+
+        public static double Dot(Q3 a, Q3 b) => a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+
+        public double max_magnitude => Max(Max(Max(Abs(w), Abs(x)), Abs(y)), Abs(z));
+        public double min_magnitude => Min(Min(Min(Abs(w), Abs(x)), Abs(y)), Abs(z));
+
+        private double _internal_magnitude => Sqrt(w * w + x * x + y * y + z * z);
+
+        public double magnitude
+        {
+            get
+            {
+                double c = max_magnitude;
+                return c > 0 ? Max(c, c * (this / c)._internal_magnitude) : 0;
+            }
+        }
+
+        public Q3 conjugate => new Q3(-x, -y, -z, w);
+
+        /*
+        public void SetLookRotation(V3 view)
+        {
+            V3 up = V3.up;
+            SetLookRotation(view, up);
+        }
+
+
+        // Creates a rotation with the specified /forward/ and /upwards/ directions.
+        public void SetLookRotation(V3 view, V3 up)
+        {
+            this = LookRotation(view, up);
+        }
+        */
+
+        // FIXME: small angle precision?
+        // Returns the angle in radians between two rotations /a/ and /b/.
+        public static double Angle(Q3 a, Q3 b)
+        {
+            Q3 q = a * b.conjugate;
+            if (q.w < 0.0)
+                q = -q;
+
+            return 2.0 * Atan2(Sqrt(q.x * q.x + q.y * q.y + q.z * q.z), q.w);
+        }
+
+        // FIXME: kill degrees with fire, fix euler angles
+        // Makes euler angles positive 0/360 with 0.0001 hacked to support old behaviour of Q3ToEuler
+        private static V3 Internal_MakePositive(V3 euler)
+        {
+            double negativeFlip = Rad2Deg(-0.0001f);
+            double positiveFlip = 360.0f + negativeFlip;
+
+            if (euler.x < negativeFlip)
+                euler.x += 360.0f;
+            else if (euler.x > positiveFlip)
+                euler.x -= 360.0f;
+
+            if (euler.y < negativeFlip)
+                euler.y += 360.0f;
+            else if (euler.y > positiveFlip)
+                euler.y -= 360.0f;
+
+            if (euler.z < negativeFlip)
+                euler.z += 360.0f;
+            else if (euler.z > positiveFlip)
+                euler.z -= 360.0f;
+
+            return euler;
+        }
+
+        // this produces the mathematical ZYX intrinsic euler angles, which is aircraft roll, pitch, yaw
+        public static V3 ToEulerAngles(Q3 q)
+        {
+            var angles = new V3();
+
+            // roll (x-axis rotation)
+            double sinr_cosp = 2 * (q.w * q.x + q.y * q.z);
+            double cosr_cosp = 1 - 2 * (q.x * q.x + q.y * q.y);
+            angles.x = Atan2(sinr_cosp, cosr_cosp);
+
+            // negative pitch (y-axis rotation)
+            double sinp = 2 * (q.w * q.y - q.z * q.x);
+            angles.y = SafeAsin(sinp);
+
+            // negative yaw (z-axis rotation)
+            double siny_cosp = 2 * (q.w * q.z + q.x * q.y);
+            double cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
+            angles.z = Atan2(siny_cosp, cosy_cosp);
+
+            return angles;
+        }
+
+        public V3 eulerAngles => ToEulerAngles(this);
+        //   set { this = Internal_FromEulerRad(Deg2Rad(value)); }
+        /*
+        public static Q3 Euler(double x, double y, double z) { return Internal_FromEulerRad(Rad2Deg(new V3(x, y, z))); }
+        public static Q3 Euler(V3 euler) { return Internal_FromEulerRad(Deg2Rad(euler)); }
+        public void ToAngleAxis(out double angle, out V3 axis) { Internal_ToAxisAngleRad(this, out axis, out angle); angle = Rad2Deg(angle);  }
+        public void SetFromToRotation(V3 fromDirection, V3 toDirection) { this = FromToRotation(fromDirection, toDirection); }
+
+        public static Q3 RotateTowards(Q3 from, Q3 to, double maxDegreesDelta)
+        {
+            double angle = Q3.Angle(from, to);
+            if (angle == 0.0f) return to;
+            return SlerpUnclamped(from, to, Min(1.0f, maxDegreesDelta / angle));
+        }
+        */
+
+        public static Q3 LookRotation(V3 forward, V3 upwards = default)
+        {
+            if (upwards == V3.zero)
+                upwards = V3.up;
+
+            if (forward == V3.zero)
+                return identity;
+
+            forward = V3.Normalize(forward);
+            var right = V3.Normalize(V3.Cross(forward, upwards));
+            if (right == V3.zero)
+                return FromToRotation(V3.forward, forward);
+            upwards = V3.Cross(right, forward);
+
+            double m00 = forward.x;
+            double m01 = forward.y;
+            double m02 = forward.z;
+            double m10 = right.x;
+            double m11 = right.y;
+            double m12 = right.z;
+            double m20 = -upwards.x;
+            double m21 = -upwards.y;
+            double m22 = -upwards.z;
+
+            double trace = m00 + m11 + m22;
+            if (trace > 0f)
+            {
+                double num = Sqrt(trace + 1);
+                double fiveonum = 0.5 / num;
+                return new Q3(
+                    (m12 - m21) * fiveonum,
+                    (m20 - m02) * fiveonum,
+                    (m01 - m10) * fiveonum,
+                    num * 0.5
+                );
+            }
+
+            if (m00 >= m11 && m00 >= m22)
+            {
+                double num7 = Sqrt(1 + m00 - m11 - m22);
+                double num4 = 0.5 / num7;
+                return new Q3(
+                    0.5 * num7,
+                    (m01 + m10) * num4,
+                    (m02 + m20) * num4,
+                    (m12 - m21) * num4
+                );
+            }
+
+            if (m11 > m22)
+            {
+                double num6 = Sqrt(1 + m11 - m00 - m22);
+                double num3 = 0.5 / num6;
+                return new Q3(
+                    (m10 + m01) * num3,
+                    0.5 * num6,
+                    (m21 + m12) * num3,
+                    (m20 - m02) * num3
+                );
+            }
+
+            double num5 = Sqrt(1 + m22 - m00 - m11);
+            double num2 = 0.5 / num5;
+            return new Q3(
+                (m20 + m02) * num2,
+                (m21 + m12) * num2,
+                0.5 * num5,
+                (m01 - m10) * num2
+            );
+        }
+
+        public static Q3 Lerp(Q3 a, Q3 b, double t)
+        {
+            return new Q3(
+                a.x + t * (b.x - a.x),
+                a.y + t * (b.y - a.y),
+                a.z + t * (b.z - a.z),
+                a.w + t * (b.w - a.w)
+            ).normalized;
+        }
+
+        public static Q3 Slerp(Q3 a, Q3 b, double t)
+        {
+            double dot = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+
+            Q3 end = b;
+            if (dot < 0)
+            {
+                dot = -dot;
+                end = new Q3(-b.x, -b.y, -b.z, -b.w);
+            }
+
+            if (dot > 0.99999999)
+                return Lerp(a, end, t);
+
+            double theta = Acos(dot);
+            double sinTheta = Sin(theta);
+
+            double wa = Sin((1 - t) * theta) / sinTheta;
+            double wb = Sin(t * theta) / sinTheta;
+
+            return new Q3(
+                wa * a.x + wb * end.x,
+                wa * a.y + wb * end.y,
+                wa * a.z + wb * end.z,
+                wa * a.w + wb * end.w
+            );
+        }
+
+        public static Q3 FromToRotation(V3 fromDirection, V3 toDirection)
+        {
+            if (fromDirection == V3.zero || toDirection == V3.zero)
+                return identity;
+
+            fromDirection.Normalize();
+            toDirection.Normalize();
+
+            double dot = V3.Dot(fromDirection, toDirection);
+
+            if (dot < -0.9999999999) // Vectors are pointing in opposite directions (zero cross-product)
+            {
+                var orthogonal = V3.Cross(fromDirection, Abs(fromDirection.x) < 1.0 / Sqrt(2.0) ? new V3(1, 0, 0) : new V3(0, 1, 0));
+
+                orthogonal.Normalize();
+
+                return new Q3(orthogonal.x, orthogonal.y, orthogonal.z, 0);
+            }
+
+            /*
+            if (dot > 0.9999999999) // Vectors are nearly identical (zero cross-product)
+                return identity; */
+
+            var cross = V3.Cross(fromDirection, toDirection);
+            double s = Sqrt((1.0 + dot) * 2.0);
+            double invs = 1 / s;
+
+            return new Q3(
+                cross.x * invs,
+                cross.y * invs,
+                cross.z * invs,
+                s * 0.5
+            );
+        }
+
+        public static Q3 AngleAxis(double angle, V3 axis)
+        {
+            V3 a = axis.normalized;
+            return new Q3(
+                a.x * Sin(angle / 2.0),
+                a.y * Sin(angle / 2.0),
+                a.z * Sin(angle / 2.0),
+                Cos(angle / 2.0)
+            );
+        }
+
+        public static Q3 Inverse(Q3 q)
+        {
+            double mag2 = Dot(q, q);
+
+            return new Q3(-q.x / mag2, -q.y / mag2, -q.z / mag2, q.w / mag2);
+        }
+
+        // FIXME: precision
+        public static Q3 Normalize(Q3 q)
+        {
+            double mag = q.magnitude;
+
+            return mag < EPS ? identity : new Q3(q.x / mag, q.y / mag, q.z / mag, q.w / mag);
+        }
+
+        public Q3 normalized => Normalize(this);
+
+        public override string ToString() => ToString(null, CultureInfo.InvariantCulture.NumberFormat);
+
+        public string ToString(string format) => ToString(format, CultureInfo.InvariantCulture.NumberFormat);
+
+        public string ToString(string? format, IFormatProvider formatProvider)
+        {
+            if (string.IsNullOrEmpty(format))
+                format = "G";
+            return
+                $"({x.ToString(format, formatProvider)}, {y.ToString(format, formatProvider)}, {z.ToString(format, formatProvider)}, {w.ToString(format, formatProvider)})";
+        }
+
+        public bool Equals(Q3 other) => x.Equals(other.x) && y.Equals(other.y) && z.Equals(other.z) && w.Equals(other.w);
+
+        public override bool Equals(object? obj) => obj is Q3 other && Equals(other);
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                int hashCode = x.GetHashCode();
+                hashCode = (hashCode * 397) ^ y.GetHashCode();
+                hashCode = (hashCode * 397) ^ z.GetHashCode();
+                hashCode = (hashCode * 397) ^ w.GetHashCode();
+                return hashCode;
+            }
+        }
+    }
+}
+
+}

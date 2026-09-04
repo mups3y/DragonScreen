@@ -1,0 +1,225 @@
+// VENDORED - MechJeb2, upstream MuMech/MechJeb2, branch dev, commit
+// c5a6d8fed6bf458f85c9aafc49c7e282cd4e2ffa (2026-08-08).  Pinned by DragonScreen T15a; see plugin/mech/VENDOR.md.
+// GPLv3 (plugin/mech/LICENSE.md).  UNMODIFIED except the rename shell: this file's whole
+// body is wrapped in `namespace DragonScreen.Mech` (B3 private namespace) and any
+// `extern alias JetBrainsAnnotations` is folded to a plain `using`.  No other edit.
+
+namespace DragonScreen.Mech
+{
+using System;
+using KSP.Localization;
+using UnityEngine;
+using static MechJebLib.Utils.Statics;
+
+namespace MuMech
+{
+    public class MechJebModuleAscentClassicPathMenu : DisplayModule
+    {
+        public MechJebModuleAscentClassicPathMenu(MechJebCore core)
+            : base(core)
+        {
+            Hidden = true;
+        }
+
+        private MechJebModuleAscentSettings _ascentSettings;
+        private MechJebModuleAscentClassicAutopilot _path;
+        private static readonly Texture2D _pathTexture = new Texture2D(400, 100);
+        private MechJebModuleFlightRecorder _recorder;
+        private double _lastMaxAtmosphereAltitude = -1;
+
+        public override void OnStart(PartModule.StartState state)
+        {
+            _recorder = Core.GetComputerModule<MechJebModuleFlightRecorder>();
+            _ascentSettings = Core.GetComputerModule<MechJebModuleAscentSettings>();
+            _path = Core.GetComputerModule<MechJebModuleAscentClassicAutopilot>();
+        }
+
+        protected override GUILayoutOption[] WindowOptions() => new[] { GuiUtils.LayoutWidth(300), GUILayout.Height(100) };
+
+        protected override void WindowGUI(int windowID)
+        {
+            // ReSharper disable once CompareOfFloatsByEqualityOperator
+            if (_lastMaxAtmosphereAltitude != MainBody.RealMaxAtmosphereAltitude())
+            {
+                _lastMaxAtmosphereAltitude = MainBody.RealMaxAtmosphereAltitude();
+                UpdateAtmoTexture(_pathTexture, MainBody,
+                    _ascentSettings.AutoPath ? _ascentSettings.AutoTurnEndAltitude : _ascentSettings.TurnEndAltitude);
+            }
+
+            GUILayout.BeginVertical();
+
+            double oldTurnShapeExponent = _ascentSettings.TurnShapeExponent;
+
+            _ascentSettings.AutoPath = GUILayout.Toggle(_ascentSettings.AutoPath, Localizer.Format("#MechJeb_AscentPathEd_auto"),
+                GuiUtils.LayoutNoExpandWidth); //"Automatic Altitude Turn"
+            if (_ascentSettings.AutoPath)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(Localizer.Format("#MechJeb_AscentPathEd_label1"), GuiUtils.LayoutWidth(60)); //"Altitude: "
+                // 1 to 200 / 200 = 0.5% to 105%, without this mess would the slider cause lots of garbage floats like 0.9999864
+                _ascentSettings.AutoTurnPerc = Mathf.Floor(GUILayout.HorizontalSlider(_ascentSettings.AutoTurnPerc * 200f, 1f, 210.5f)) / 200f;
+                GUILayout.EndHorizontal();
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(Localizer.Format("#MechJeb_AscentPathEd_label2"), GuiUtils.LayoutWidth(60)); //"Velocity: "
+                _ascentSettings.AutoTurnSpdFactor = Mathf.Floor(GUILayout.HorizontalSlider(_ascentSettings.AutoTurnSpdFactor * 2f, 8f, 160f)) / 2f;
+                GUILayout.EndHorizontal();
+            }
+
+            if (_ascentSettings.AutoPath)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(Localizer.Format("#MechJeb_AscentPathEd_label3"), GuiUtils.LayoutNoExpandWidth); //"Turn start when Altitude is "
+                GUILayout.Label(_ascentSettings.AutoTurnStartAltitude.ToSI(2) + "m ", GuiUtils.LayoutNoExpandWidth);
+                GUILayout.Label(Localizer.Format("#MechJeb_AscentPathEd_label4"), GuiUtils.LayoutNoExpandWidth); //"or Velocity reach "
+                GUILayout.Label(_ascentSettings.AutoTurnStartVelocity.ToSI(3) + "m/s", GuiUtils.LayoutNoExpandWidth); //
+                GUILayout.EndHorizontal();
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(Localizer.Format("#MechJeb_AscentPathEd_label5")); //"Turn end altitude: "
+                GUILayout.Label(_ascentSettings.AutoTurnEndAltitude.ToSI(2) + "m", GuiUtils.MiddleRightLabel,
+                    GuiUtils.LayoutExpandWidth);
+                GUILayout.EndHorizontal();
+            }
+            else
+            {
+                GuiUtils.SimpleTextBox(Localizer.Format("#MechJeb_AscentPathEd_label6"), _ascentSettings.TurnStartAltitude,
+                    "km"); //"Turn start altitude:"
+                GuiUtils.SimpleTextBox(Localizer.Format("#MechJeb_AscentPathEd_label7"), _ascentSettings.TurnStartVelocity,
+                    "m/s"); //"Turn start velocity:"
+                GuiUtils.SimpleTextBox(Localizer.Format("#MechJeb_AscentPathEd_label8"), _ascentSettings.TurnEndAltitude,
+                    "km"); //"Turn end altitude:"
+            }
+
+            GuiUtils.SimpleTextBox(Localizer.Format("#MechJeb_AscentPathEd_label9"), _ascentSettings.TurnEndAngle, "°"); //"Final flight path angle:"
+            GuiUtils.SimpleTextBox(Localizer.Format("#MechJeb_AscentPathEd_label10"), _ascentSettings.TurnShapeExponent, "%"); //"Turn shape:"
+
+            // Round the slider's value (0..1) to sliderPrecision decimal places.
+            const int SLIDER_PRECISION = 3;
+
+            double sliderTurnShapeExponent = GUILayout.HorizontalSlider((float)_ascentSettings.TurnShapeExponent, 0.0F, 1.0F);
+            if (Math.Round(Math.Abs(sliderTurnShapeExponent - oldTurnShapeExponent), SLIDER_PRECISION) > 0)
+            {
+                _ascentSettings.TurnShapeExponent.Val = Math.Round(sliderTurnShapeExponent, SLIDER_PRECISION);
+            }
+
+            GUILayout.Box(_pathTexture);
+
+            if (Event.current.type == EventType.Repaint)
+            {
+                Rect r = GUILayoutUtility.GetLastRect();
+                r.xMin += GUI.skin.box.margin.left;
+                r.yMin += GUI.skin.box.margin.top;
+
+                r.xMax -= GUI.skin.box.margin.right;
+                r.yMax -= GUI.skin.box.margin.bottom;
+
+                float scale = (float)((_ascentSettings.AutoPath ? _ascentSettings.AutoTurnEndAltitude : _ascentSettings.TurnEndAltitude) / r.height);
+
+                DrawnPath(r, scale, scale, _path, Color.red);
+                DrawnTrajectory(r, _recorder);
+            }
+
+            GUILayout.EndVertical();
+
+            base.WindowGUI(windowID);
+        }
+
+        //redraw the picture of the planned flight path
+        public static void UpdateAtmoTexture(Texture2D texture, CelestialBody mainBody, double maxAltitude, bool realAtmo = false)
+        {
+            double scale = maxAltitude / texture.height; //meters per pixel
+
+            double maxAtmosphereAltitude = mainBody.RealMaxAtmosphereAltitude();
+            double pressureSeaLevel = mainBody.atmospherePressureSeaLevel;
+
+            for (int y = 0; y < texture.height; y++)
+            {
+                double alt = scale * y;
+
+                if (realAtmo)
+                {
+                    alt = mainBody.GetPressure(alt) / pressureSeaLevel;
+                }
+                else
+                {
+                    alt = 1.0 - alt / maxAtmosphereAltitude;
+                }
+
+                float v = (float)(mainBody.atmosphere ? alt : 0.0F);
+                var c = new Color(0.0F, 0.0F, v);
+
+                for (int x = 0; x < texture.width; x++)
+                {
+                    texture.SetPixel(x, y, c);
+
+                    if (mainBody.atmosphere && (int)(maxAtmosphereAltitude / scale) == y)
+                        texture.SetPixel(x, y, XKCDColors.LightGreyBlue);
+                }
+            }
+
+            texture.Apply();
+        }
+
+        private void DrawnPath(Rect r, float scaleX, float scaleY, MechJebModuleAscentClassicAutopilot path, Color color)
+        {
+            float alt = 0;
+            float downrange = 0;
+            var p1 = new Vector2(r.xMin, r.yMax);
+            var p2 = new Vector2();
+
+            while (alt < (_ascentSettings.AutoPath ? _ascentSettings.AutoTurnEndAltitude : _ascentSettings.TurnEndAltitude) &&
+                   downrange < r.width * scaleX)
+            {
+                float desiredAngle = (float)(alt < path.VerticalAscentEnd() ? 90 : path.FlightPathAngle(alt, 0));
+
+                alt += scaleY * Mathf.Sin(desiredAngle * Mathf.Deg2Rad);
+                downrange += scaleX * Mathf.Cos(desiredAngle * Mathf.Deg2Rad);
+
+                p2.x = r.xMin + downrange / scaleX;
+                p2.y = r.yMax - alt / scaleY;
+
+                if ((p1 - p2).sqrMagnitude >= 1.0)
+                {
+                    Drawing.DrawLine(p1, p2, color, 2, true);
+                    p1.x = p2.x;
+                    p1.y = p2.y;
+                }
+            }
+        }
+
+        private void DrawnTrajectory(Rect r, MechJebModuleFlightRecorder recorder)
+        {
+            if (recorder.History.Length <= 2 || recorder.HistoryIdx == 0)
+                return;
+
+            float scale = (float)((_ascentSettings.AutoPath ? _ascentSettings.AutoTurnEndAltitude : _ascentSettings.TurnEndAltitude) /
+                r.height); //meters per pixel
+
+            int t = 1;
+
+            var p1 = new Vector2(r.xMin + (float)(recorder.History[0].DownRange / scale), r.yMax - (float)(recorder.History[0].AltitudeASL / scale));
+            var p2 = new Vector2();
+
+            while (t <= recorder.HistoryIdx && t < recorder.History.Length)
+            {
+                MechJebModuleFlightRecorder.RecordStruct rec = recorder.History[t];
+                p2.x = r.xMin + (float)(rec.DownRange / scale);
+                p2.y = r.yMax - (float)(rec.AltitudeASL / scale);
+
+                if ((r.Contains(p2) && (p1 - p2).sqrMagnitude >= 1.0) || t < 2)
+                {
+                    Drawing.DrawLine(p1, p2, Color.white, 2, true);
+                    p1.x = p2.x;
+                    p1.y = p2.y;
+                }
+
+                t++;
+            }
+        }
+
+        public override string GetName() => Localizer.Format("#MechJeb_AscentPathEd_title"); //"Ascent Path Editor"
+
+        public override string IconName() => "Ascent Path Editor";
+    }
+}
+
+}

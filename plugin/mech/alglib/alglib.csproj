@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net48;netstandard2.0</TargetFrameworks>
+        <RootNamespace>alglib</RootNamespace>
+        <AssemblyName>alglib</AssemblyName>
+        <ProjectGuid>{E8CBCDDD-BCFC-4F03-9309-F58395CA4762}</ProjectGuid>
+        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+        <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
+    </PropertyGroup>
+
+</Project>

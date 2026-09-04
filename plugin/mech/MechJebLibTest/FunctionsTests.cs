@@ -1,0 +1,628 @@
+/*
+ * Copyright Lamont Granquist, Sebastien Gaggini and the MechJeb contributors
+ * SPDX-License-Identifier: LicenseRef-PD-hp OR Unlicense OR CC0-1.0 OR 0BSD OR MIT-0 OR MIT OR LGPL-2.1+
+ */
+
+using System;
+using MechJebLib.Functions;
+using MechJebLib.Primitives;
+using MechJebLib.TwoBody;
+using Xunit;
+using Xunit.Abstractions;
+using static MechJebLib.Utils.Statics;
+using static System.Math;
+
+namespace MechJebLibTest.MathsTests
+{
+    public class FunctionsTests
+    {
+        private const double PERIOD = 86164.0905;
+
+        private const double ACC = EPS * 16;
+        private const double ACC2 = 1e-7; // due west launches have some mathematical irregularities
+
+        private readonly ITestOutputHelper _testOutputHelper;
+
+        public FunctionsTests(ITestOutputHelper testOutputHelper)
+        {
+            _testOutputHelper = testOutputHelper;
+        }
+
+        [Fact]
+        public void HeadingForInclinationTest1()
+        {
+            double heading = Astro.HeadingForInclination(Deg2Rad(0), 0);
+            heading.ShouldEqual(Deg2Rad(90), 1e-15);
+            heading = Astro.HeadingForInclination(Deg2Rad(45), 0);
+            heading.ShouldEqual(Deg2Rad(45), 1e-15);
+            heading = Astro.HeadingForInclination(Deg2Rad(90), 0);
+            heading.ShouldEqual(Deg2Rad(0), 1e-15);
+            heading = Astro.HeadingForInclination(Deg2Rad(135), 0);
+            heading.ShouldEqual(Deg2Rad(315), 1e-15);
+            heading = Astro.HeadingForInclination(Deg2Rad(180), 0);
+            heading.ShouldEqual(Deg2Rad(270), 1e-15);
+            heading = Astro.HeadingForInclination(Deg2Rad(-45), 0);
+            heading.ShouldEqual(Deg2Rad(135), 1e-15);
+            heading = Astro.HeadingForInclination(Deg2Rad(-90), 0);
+            heading.ShouldEqual(Deg2Rad(180), 1e-15);
+            heading = Astro.HeadingForInclination(Deg2Rad(-135), 0);
+            heading.ShouldEqual(Deg2Rad(225), 1e-15);
+            heading = Astro.HeadingForInclination(Deg2Rad(-180), 0);
+            heading.ShouldEqual(Deg2Rad(270), 1e-15);
+
+            heading = Astro.HeadingForInclination(Deg2Rad(0), Deg2Rad(45));
+            heading.ShouldEqual(Deg2Rad(90), 1e-15);
+            heading = Astro.HeadingForInclination(Deg2Rad(45), Deg2Rad(45));
+            heading.ShouldEqual(Deg2Rad(90), 1e-15);
+            heading = Astro.HeadingForInclination(Deg2Rad(90), Deg2Rad(45));
+            heading.ShouldEqual(Deg2Rad(0), 1e-15);
+        }
+
+        [Fact]
+        public void ECIToPitchHeadingTest1()
+        {
+            (double pitch, double heading) = Astro.ECIToPitchHeading(new V3(10, 10, 0), new V3(0, 0, 10));
+            Assert.Equal(0, pitch, 9);
+            Assert.Equal(0, heading, 9);
+            (pitch, heading) = Astro.ECIToPitchHeading(new V3(10, 10, 0), new V3(0, 0, -10));
+            Assert.Equal(0, pitch, 9);
+            Assert.Equal(Deg2Rad(180), heading, 9);
+            (pitch, heading) = Astro.ECIToPitchHeading(new V3(10, 10, 0), new V3(-10, 10, 0));
+            Assert.Equal(0, pitch, 9);
+            Assert.Equal(Deg2Rad(90), heading, 9);
+            (pitch, heading) = Astro.ECIToPitchHeading(new V3(10, 10, 0), new V3(10, -10, 0));
+            Assert.Equal(0, pitch, 9);
+            Assert.Equal(Deg2Rad(270), heading, 9);
+            (pitch, heading) = Astro.ECIToPitchHeading(new V3(10, 10, 0), new V3(10, 10, 0));
+            Assert.Equal(Deg2Rad(90), pitch, 9);
+            Assert.Equal(Deg2Rad(90), heading, 9);
+            (pitch, heading) = Astro.ECIToPitchHeading(new V3(10, 10, 0), new V3(10, 10, Sqrt(200)));
+            Assert.Equal(Deg2Rad(45), pitch, 9);
+            Assert.Equal(0, heading, 9);
+            (pitch, heading) = Astro.ECIToPitchHeading(new V3(10, 10, 0), new V3(10, 10, -Sqrt(200)));
+            Assert.Equal(Deg2Rad(45), pitch, 9);
+            Assert.Equal(Deg2Rad(180), heading, 9);
+        }
+
+        [Fact]
+        public void IncFromStateVectorsTest1()
+        {
+            double inc = Astro.IncFromStateVectors(new V3(10, 10, 0), new V3(0, 10, 0));
+            Assert.Equal(0, inc);
+            inc = Astro.IncFromStateVectors(new V3(10, 10, 0), new V3(0, 0, 10));
+            Assert.Equal(PI / 2, inc);
+            inc = Astro.IncFromStateVectors(new V3(10, 10, 0), new V3(0, -10, 0));
+            Assert.Equal(PI, inc);
+            inc = Astro.IncFromStateVectors(new V3(10, 10, 0), new V3(0, 0, -10));
+            Assert.Equal(PI / 2, inc);
+        }
+
+        [Fact]
+        public void VelocityForHeadingTest1()
+        {
+            V3 vf = Astro.VelocityForHeading(new V3(10, 0, 0), new V3(0, 10, 0), 0);
+            Assert.Equal(0, vf[0], 9);
+            Assert.Equal(0, vf[1], 9);
+            Assert.Equal(10, vf[2], 9);
+            vf = Astro.VelocityForHeading(new V3(10, 0, 0), new V3(0, 10, 0), PI / 2);
+            Assert.Equal(0, vf[0], 9);
+            Assert.Equal(10, vf[1], 9);
+            Assert.Equal(0, vf[2], 9);
+            vf = Astro.VelocityForHeading(new V3(10, 0, 0), new V3(0, 10, 0), PI);
+            Assert.Equal(0, vf[0], 9);
+            Assert.Equal(0, vf[1], 9);
+            Assert.Equal(-10, vf[2], 9);
+            vf = Astro.VelocityForHeading(new V3(10, 0, 0), new V3(0, 10, 0), 3 * PI / 2);
+            Assert.Equal(0, vf[0], 9);
+            Assert.Equal(-10, vf[1], 9);
+            Assert.Equal(0, vf[2], 9);
+            vf = Astro.VelocityForHeading(new V3(10, 0, 0), new V3(10, 10, 0), 0);
+            Assert.Equal(10, vf[0], 9);
+            Assert.Equal(0, vf[1], 9);
+            Assert.Equal(10, vf[2], 9);
+            vf = Astro.VelocityForHeading(new V3(10, 0, 0), new V3(10, 10, 0), PI / 2);
+            Assert.Equal(10, vf[0], 9);
+            Assert.Equal(10, vf[1], 9);
+            Assert.Equal(0, vf[2], 9);
+            vf = Astro.VelocityForHeading(new V3(10, 0, 0), new V3(10, 10, 0), PI);
+            Assert.Equal(10, vf[0], 9);
+            Assert.Equal(0, vf[1], 9);
+            Assert.Equal(-10, vf[2], 9);
+            vf = Astro.VelocityForHeading(new V3(10, 0, 0), new V3(10, 10, 0), 3 * PI / 2);
+            Assert.Equal(10, vf[0], 9);
+            Assert.Equal(-10, vf[1], 9);
+            Assert.Equal(0, vf[2], 9);
+        }
+
+        [Fact]
+        public void VelocityForInclinationTest1()
+        {
+            V3 vf = Astro.VelocityForInclination(new V3(10, 0, 0), new V3(0, 10, 0), 0);
+            Assert.Equal(0, vf[0], 9);
+            Assert.Equal(10, vf[1], 9);
+            Assert.Equal(0, vf[2], 9);
+            vf = Astro.VelocityForInclination(new V3(10, 0, 0), new V3(0, 10, 0), PI / 2);
+            Assert.Equal(0, vf[0], 9);
+            Assert.Equal(0, vf[1], 9);
+            Assert.Equal(10, vf[2], 9);
+            vf = Astro.VelocityForInclination(new V3(10, 0, 0), new V3(0, 10, 0), PI);
+            Assert.Equal(0, vf[0], 9);
+            Assert.Equal(-10, vf[1], 9);
+            Assert.Equal(0, vf[2], 9);
+            vf = Astro.VelocityForInclination(new V3(10, 0, 0), new V3(0, 10, 0), -PI / 2);
+            Assert.Equal(0, vf[0], 9);
+            Assert.Equal(0, vf[1], 9);
+            Assert.Equal(-10, vf[2], 9);
+            vf = Astro.VelocityForInclination(new V3(10, 0, 0), new V3(10, 10, 0), 0);
+            Assert.Equal(10, vf[0], 9);
+            Assert.Equal(10, vf[1], 9);
+            Assert.Equal(0, vf[2], 9);
+        }
+
+        [Fact]
+        public void TimeToNextRadiusTest()
+        {
+            const double mu = 3.986004418e+14;
+            const double rearth = 6.371e+6;
+            const double r185 = rearth + 185e+3;
+            const double r1000 = rearth + 1000e+3;
+
+            (double sma, double _) = Astro.SmaEccFromApsides(r185, r1000);
+            double v185 = Astro.VmagFromVisViva(mu, sma, r185);
+            var r0 = new V3(r185, 0, 0);
+            var v0 = new V3(0, v185, 0);
+
+            double period = Astro.PeriodFromStateVectors(mu, r0, v0);
+
+            (V3 r1, V3 _) = Shepperd.Solve(mu, period / 3.0, r0, v0);
+            (V3 r2, V3 _) = Shepperd.Solve(mu, period * 0.75, r0, v0);
+
+            Assert.Equal(period / 3.0, Astro.TimeToNextRadius(mu, r0, v0, r1.magnitude), 9);
+            Assert.Equal(period * 0.25, Astro.TimeToNextRadius(mu, r0, v0, r2.magnitude), 9);
+            Assert.Equal(period / 2.0, Astro.TimeToNextRadius(mu, r0, v0, r1000), 9);
+        }
+
+        [Fact]
+        public void StateVectorsAtDistanceTest()
+        {
+            const double mu = 3.986004418e+14;
+            const double rearth = 6.371e+6;
+            const double r185 = rearth + 185e+3;
+            const double r1000 = rearth + 1000e+3;
+
+            (double sma, double _) = Astro.SmaEccFromApsides(r185, r1000);
+            double v185 = Astro.VmagFromVisViva(mu, sma, r185);
+            var r0 = new V3(r185, 0, 0);
+            var v0 = new V3(0, v185, 0);
+
+            // elliptical orbit, distance well within the first arc
+            const double distance = 100e+3;
+            (V3 r, V3 v) = Astro.StateVectorsAtDistance(mu, r0, v0, distance);
+            Assert.Equal(1.0, (r - r0).magnitude / distance, 9); // chord matches
+            Assert.Equal(1.0, Astro.SmaFromStateVectors(mu, r, v) / sma, 9); // still on the same orbit
+
+            // circular orbit (mu = 1)
+            var cr0 = new V3(1, 0, 0);
+            var cv0 = new V3(0, 1, 0);
+            const double cd = 0.1;
+            (V3 cr, V3 _) = Astro.StateVectorsAtDistance(1.0, cr0, cv0, cd);
+            Assert.Equal(1.0, (cr - cr0).magnitude / cd, 9);
+
+            // hyperbolic orbit (no period cap), large distance
+            double vesc = Astro.EscapeVelocity(mu, r185);
+            var hv0 = new V3(0, 1.5 * vesc, 0);
+            (V3 hr, V3 _) = Astro.StateVectorsAtDistance(mu, r0, hv0, rearth);
+            Assert.Equal(1.0, (hr - r0).magnitude / rearth, 9);
+
+            // distance unreachable on a bound orbit (greater than the major axis 2*sma)
+            Assert.Throws<Exception>(() => Astro.StateVectorsAtDistance(mu, r0, v0, 3.0 * sma));
+        }
+
+        [Fact]
+        public void ApoapsisFromStateVectorsTest()
+        {
+            const double mu = 3.986004418e+14;
+            const double rearth = 6.371e+6;
+            const double r185 = rearth + 185e+3;
+            const double r1000 = rearth + 1000e+3;
+
+            (double sma, double _) = Astro.SmaEccFromApsides(r185, r1000);
+            double v185 = Astro.VmagFromVisViva(mu, sma, r185);
+            var r0 = new V3(r185, 0, 0);
+            var v0 = new V3(0, v185, 0);
+
+            Assert.Equal(1.0, Astro.ApoapsisFromStateVectors(mu, r0, v0) / r1000, 14);
+            Assert.Equal(1.0, Astro.PeriapsisFromStateVectors(mu, r0, v0) / r185, 14);
+        }
+
+        [Fact]
+        public void ApsidesFromKeplerianTest()
+        {
+            const double rearth = 6.371e+6;
+            const double r185 = rearth + 185e+3;
+            const double r1000 = rearth + 1000e+3;
+
+            (double sma, double ecc) = Astro.SmaEccFromApsides(r185, r1000);
+            Assert.Equal(r185, Astro.PeriapsisFromKeplerian(sma, ecc));
+            Assert.Equal(r1000, Astro.ApoapsisFromKeplerian(sma, ecc));
+        }
+
+        [Fact]
+        private void Test90()
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                for (int j = 0; j < 8; j++)
+                {
+                    double lng = i * 45;
+                    double lan = j * 45;
+
+                    // zero degree advance
+                    double delay = PERIOD / 8 * ((j - i + 8) % 8);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(PERIOD, 28.608, lng, lan, 90).ShouldEqual(delay, ACC);
+                        Astro.TimeToPlane(PERIOD, -28.608, lng, lan, 90).ShouldEqual(delay, ACC);
+                    }
+
+                    // reverse
+                    delay = PERIOD / 8 * ((i - j + 8) % 8);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(-PERIOD, 28.608, lng, lan, 90).ShouldEqual(delay, ACC);
+                        Astro.TimeToPlane(-PERIOD, -28.608, lng, lan, 90).ShouldEqual(delay, ACC);
+                    }
+
+                    // advance by 180 degrees
+                    delay = PERIOD / 8 * ((j - i + 8 + 4) % 8);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(PERIOD, 28.608, lng, lan, -90).ShouldEqual(delay, ACC);
+                        Astro.TimeToPlane(PERIOD, -28.608, lng, lan, -90).ShouldEqual(delay, ACC);
+                    }
+
+                    // reverse and advance by 180 degrees
+                    delay = PERIOD / 8 * ((i - j + 8 + 4) % 8);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(-PERIOD, 28.608, lng, lan, -90).ShouldEqual(delay, ACC);
+                        Astro.TimeToPlane(-PERIOD, -28.608, lng, lan, -90).ShouldEqual(delay, ACC);
+                    }
+                }
+            }
+        }
+
+        [Fact]
+        private void Test45At45()
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                for (int j = 0; j < 8; j++)
+                {
+                    double lng = i * 45;
+                    double lan = j * 45;
+
+                    // advance by 90 degrees
+                    double delay = PERIOD / 8 * ((j - i + 8 + 2) % 8);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(PERIOD, 45, lng, lan, 45).ShouldEqual(delay, ACC);
+                        Astro.TimeToPlane(PERIOD, 45, lng, lan, -45).ShouldEqual(delay, ACC);
+                    }
+
+                    // advance by 270 degrees
+                    delay = PERIOD / 8 * ((j - i + 8 + 6) % 8);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(PERIOD, -45, lng, lan, 45).ShouldEqual(delay, ACC);
+                        Astro.TimeToPlane(PERIOD, -45, lng, lan, -45).ShouldEqual(delay, ACC);
+                    }
+
+                    // reverse and advance by 270 degrees
+                    delay = PERIOD / 8 * ((i - j + 8 + 6) % 8);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(-PERIOD, 45, lng, lan, 45).ShouldEqual(delay, ACC);
+                        Astro.TimeToPlane(-PERIOD, 45, lng, lan, -45).ShouldEqual(delay, ACC);
+                    }
+
+                    // reverse and advance by 90 degrees
+                    delay = PERIOD / 8 * ((i - j + 8 + 2) % 8);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(-PERIOD, -45, lng, lan, 45).ShouldEqual(delay, ACC);
+                        Astro.TimeToPlane(-PERIOD, -45, lng, lan, -45).ShouldEqual(delay, ACC);
+                    }
+                }
+            }
+        }
+
+        [Fact]
+        private void Test135At45()
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                for (int j = 0; j < 8; j++)
+                {
+                    double lng = i * 45;
+                    double lan = j * 45;
+
+                    // advance by 270 degrees
+                    double delay = PERIOD / 8 * ((j - i + 8 + 6) % 8);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(PERIOD, 45, lng, lan, 135).ShouldEqual(delay, ACC2);
+                        Astro.TimeToPlane(PERIOD, 45, lng, lan, -135).ShouldEqual(delay, ACC2);
+                    }
+
+                    // advance by 90 degrees
+                    delay = PERIOD / 8 * ((j - i + 8 + 2) % 8);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(PERIOD, -45, lng, lan, 135).ShouldEqual(delay, ACC2);
+                        Astro.TimeToPlane(PERIOD, -45, lng, lan, -135).ShouldEqual(delay, ACC2);
+                    }
+
+                    // reverse and advance by 90 degrees
+                    delay = PERIOD / 8 * ((i - j + 8 + 2) % 8);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(-PERIOD, 45, lng, lan, 135).ShouldEqual(delay, ACC2);
+                        Astro.TimeToPlane(-PERIOD, 45, lng, lan, -135).ShouldEqual(delay, ACC2);
+                    }
+
+                    // reverse and advance by 270 degrees
+                    delay = PERIOD / 8 * ((i - j + 8 + 6) % 8);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(-PERIOD, -45, lng, lan, 135).ShouldEqual(delay, ACC2);
+                        Astro.TimeToPlane(-PERIOD, -45, lng, lan, -135).ShouldEqual(delay, ACC2);
+                    }
+                }
+            }
+        }
+
+        [Fact]
+        private void EquatorialAt45()
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                for (int j = 0; j < 8; j++)
+                {
+                    double lng = i * 45;
+                    double lan = j * 45;
+
+                    double delay = 0;
+
+                    Astro.TimeToPlane(PERIOD, 45, lng, lan, 0).ShouldEqual(delay, ACC);
+
+                    Astro.TimeToPlane(PERIOD, -45, lng, lan, 0).ShouldEqual(delay, ACC);
+
+                    Astro.TimeToPlane(-PERIOD, 45, lng, lan, 0).ShouldEqual(delay, ACC);
+
+                    Astro.TimeToPlane(-PERIOD, -45, lng, lan, 0).ShouldEqual(delay, ACC);
+                }
+            }
+        }
+
+        [Fact]
+        private void RetrogradeEquatorialAt45()
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                for (int j = 0; j < 8; j++)
+                {
+                    double lng = i * 45;
+                    double lan = j * 45;
+
+                    double delay = 0;
+
+
+                    Astro.TimeToPlane(PERIOD, 45, lng, lan, 180).ShouldEqual(delay, ACC2);
+                    Astro.TimeToPlane(PERIOD, 45, lng, lan, -180).ShouldEqual(delay, ACC2);
+
+
+                    Astro.TimeToPlane(PERIOD, -45, lng, lan, 180).ShouldEqual(delay, ACC2);
+                    Astro.TimeToPlane(PERIOD, -45, lng, lan, -180).ShouldEqual(delay, ACC2);
+
+                    Astro.TimeToPlane(-PERIOD, 45, lng, lan, 180).ShouldEqual(delay, ACC2);
+                    Astro.TimeToPlane(-PERIOD, 45, lng, lan, -180).ShouldEqual(delay, ACC2);
+
+                    Astro.TimeToPlane(-PERIOD, -45, lng, lan, 180).ShouldEqual(delay, ACC2);
+                    Astro.TimeToPlane(-PERIOD, -45, lng, lan, -180).ShouldEqual(delay, ACC2);
+                }
+            }
+        }
+
+        [Fact]
+        private void Test47AtKSCLat()
+        {
+            // this produces a 330 degree LAN from 28.608 so everything is 30 degrees offset
+            const double inc = 47.486638356389;
+
+            for (int i = 0; i < 12; i++)
+            {
+                for (int j = 0; j < 12; j++)
+                {
+                    double lng = i * 30;
+                    double lan = j * 30;
+
+                    // advance by 30 degrees
+                    double delay = PERIOD / 12 * ((j - i + 12 + 1) % 12);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(PERIOD, 28.608, lng, lan, inc).ShouldEqual(delay, ACC);
+                    }
+
+                    // advance by 150 degrees
+                    delay = PERIOD / 12 * ((j - i + 12 + 5) % 12);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(PERIOD, 28.608, lng, lan, -inc).ShouldEqual(delay, ACC);
+                    }
+
+                    // advance by 330 degrees
+                    delay = PERIOD / 12 * ((j - i + 12 + 11) % 12);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(PERIOD, -28.608, lng, lan, inc).ShouldEqual(delay, ACC);
+                    }
+
+                    // advance by 210 degrees
+                    delay = PERIOD / 12 * ((j - i + 12 + 7) % 12);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(PERIOD, -28.608, lng, lan, -inc).ShouldEqual(delay, ACC);
+                    }
+
+                    // reverse and advance by 330 degrees
+                    delay = PERIOD / 12 * ((i - j + 12 + 11) % 12);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(-PERIOD, 28.608, lng, lan, inc).ShouldEqual(delay, ACC);
+                    }
+
+                    // reverse and advance by 210 degrees
+                    delay = PERIOD / 12 * ((i - j + 12 + 7) % 12);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(-PERIOD, 28.608, lng, lan, -inc).ShouldEqual(delay, ACC);
+                    }
+
+                    // advance by 30 degrees
+                    delay = PERIOD / 12 * ((i - j + 12 + 1) % 12);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(-PERIOD, -28.608, lng, lan, inc).ShouldEqual(delay, ACC);
+                    }
+
+                    // advance by 150 degrees
+                    delay = PERIOD / 12 * ((i - j + 12 + 5) % 12);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(-PERIOD, -28.608, lng, lan, -inc).ShouldEqual(delay, ACC);
+                    }
+                }
+            }
+        }
+
+        [Fact]
+        private void Test132AtKSCLat()
+        {
+            // similar to the 47 degree tests only retrograde
+            const double inc = 180 - 47.486638356389;
+
+            for (int i = 0; i < 12; i++)
+            {
+                for (int j = 0; j < 12; j++)
+                {
+                    double lng = i * 30;
+                    double lan = j * 30;
+
+                    // advance by 330 degrees
+                    double delay = PERIOD / 12 * ((j - i + 12 + 11) % 12);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(PERIOD, 28.608, lng, lan, inc).ShouldEqual(delay, ACC);
+                    }
+
+                    // advance by 210 degrees
+                    delay = PERIOD / 12 * ((j - i + 12 + 7) % 12);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(PERIOD, 28.608, lng, lan, -inc).ShouldEqual(delay, ACC);
+                    }
+
+                    // advance by 30 degrees
+                    delay = PERIOD / 12 * ((j - i + 12 + 1) % 12);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(PERIOD, -28.608, lng, lan, inc).ShouldEqual(delay, ACC);
+                    }
+
+                    // advance by 150 degrees
+                    delay = PERIOD / 12 * ((j - i + 12 + 5) % 12);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(PERIOD, -28.608, lng, lan, -inc).ShouldEqual(delay, ACC);
+                    }
+
+                    // reverse and advance by 30 degrees
+                    delay = PERIOD / 12 * ((i - j + 12 + 1) % 12);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(-PERIOD, 28.608, lng, lan, inc).ShouldEqual(delay, ACC);
+                    }
+
+                    // reverse and advance by 150 degrees
+                    delay = PERIOD / 12 * ((i - j + 12 + 5) % 12);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(-PERIOD, 28.608, lng, lan, -inc).ShouldEqual(delay, ACC);
+                    }
+
+                    // reverse and advance by 330 degrees
+                    delay = PERIOD / 12 * ((i - j + 12 + 11) % 12);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(-PERIOD, -28.608, lng, lan, inc).ShouldEqual(delay, ACC);
+                    }
+
+                    // reverse and advance by 210 degrees
+                    delay = PERIOD / 12 * ((i - j + 12 + 7) % 12);
+
+                    if (delay != 0)
+                    {
+                        Astro.TimeToPlane(-PERIOD, -28.608, lng, lan, -inc).ShouldEqual(delay, ACC);
+                    }
+                }
+            }
+        }
+
+        [Fact]
+        private void Poles()
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                for (int j = 0; j < 8; j++)
+                {
+                    for (int k = 0; k <= 8; k++)
+                    {
+                        double lng = i * 45;
+                        double lan = j * 45;
+                        double inc = k * 45 - 180;
+                        Astro.TimeToPlane(PERIOD, 90, lng, lan, inc).ShouldBeZero(ACC);
+                        Astro.TimeToPlane(PERIOD, -90, lng, lan, inc).ShouldBeZero(ACC);
+                    }
+                }
+            }
+        }
+    }
+}

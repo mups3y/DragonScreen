@@ -3643,13 +3643,121 @@ beside `BlockNote`, `SchemaVersion` still 1, headless tests added and mutation-p
 
 ## Part B — autopilot (§B12.6 order; all [O])
 
-### T15 [O] Embed MechJeb — **TODO**
-- ⚠ **Blocked on the "Part B — recovery" section above (2026-09-03) — W1-W4/H1/M1/LZ1 come first.** T15's
-  own scope is unchanged: see §B12.1a (full port, full settings authority, upstream `MuMech/MechJeb2`,
-  closed by G5b/G5a-Q1).
-- **Read:** §B2 / §B3 / §B12.1.  **Build:** pinned + privately-namespaced; headless core loads the Crew-Dragon
-  cfg (`docs/reference/mechjeb_settings_type_Crew-Dragon.cfg`). Also create/point `docs/FLIGHT_SYSTEMS.md` (S3).
-  **DONE when:** one core loads, no clash, cfg applied.
+### T15 [O] Embed MechJeb — **SPLIT 2026-09-05 into T15a (vendor) + T15b (host the core headless)**
+- ✅ **THE BLOCKER TEXT ON THIS LINE WAS STALE AND IS CORRECTED HERE.** It read *"Blocked on the 'Part B —
+  recovery' section above (2026-09-03) — W1-W4/H1/M1/LZ1 come first."* Two things were wrong with it.
+  **(1) It is spent.** W1 (`1318`), W2 (`1421`), W3 (`1562`), W4 (`1733`), H1 (`1907`) and M1 (`1937`) are all
+  **DONE** — verified line by line in this file, not assumed. **(2) LZ1 was never a blocker of T15.** The
+  recovery section's own preamble (line `1313`) already says so: *"**H1 / M1 / LZ1 touch no recovered file**
+  and may run in parallel with any wave."* LZ1 is a landing-zone coordinate table for the §B16 **booster**
+  autopilot — a SEPARATE-VESSEL workstream — and has no technical bearing on embedding MechJeb; it is also
+  still `NEEDS-WORK — BLOCKED ON OWNER ACTION`, so leaving it named here would have parked T15 behind an
+  owner action it does not depend on. **Determination cited, verbatim, from the T15a task instruction
+  (2026-09-05):** *"The overseer checked, 2026-09-05: W1-W4, H1 and M1 are DONE, and LZ1 is NOT a blocker —
+  the approved phase order puts T15 in Phase 2 and LZ1 in Phase 3, and a landing-zone coordinate table has no
+  technical bearing on embedding MechJeb. CORRECT the stale blocker text as part of this task and cite this
+  determination."* **T15 is not blocked.**
+- ⚠ **Also stale on this line:** *"Also create/point `docs/FLIGHT_SYSTEMS.md` (S3)"*. **W26 recovered that
+  file on 2026-09-04** (see line `3713`); it exists (`docs/FLIGHT_SYSTEMS.md`, 17 KB) and T15 has nothing to
+  create. Dropped from both sub-tasks.
+- Scope itself unchanged: §B12.1a (full port, full settings authority, upstream `MuMech/MechJeb2`, closed by
+  G5b/G5a-Q1). It is split because the two halves have different shapes and different risk: **T15a** is a
+  large mechanical vendoring that must not sit in master's working tree beside other lanes, and **T15b** is
+  small, delicate KSP-facing glue whose central requirement (GUI suppression) is a *safety* property.
+
+### T15a [O] Vendor MechJeb2 — pin, private namespace + assembly, licences — **DONE 2026-09-05**
+- **Gate:** inside the open Part-B gate, not lifting one. Quoted from the task instruction: *"🟢 GATE: Part B
+  is GO — owner, 2026-09-03 via the overseer (G4), recorded at CLAUDE.md:29-33. `install` and glass remain
+  separate gates; you need neither."* Neither was needed and neither was used.
+- **Source, and why C7 is satisfied:** quoted from the task instruction — *"🟢 SOURCE — PLACED BY THE OWNER,
+  2026-09-05, who supplied this exact path in response to the overseer flagging that C7 barred you from
+  fetching it: `C:\Users\User\Desktop\MechJeb2-dev.zip`. Its use is authorised."* Nothing was fetched from a
+  URL and the installed `MechJeb2` was never read.
+- **Read:** §B2 / §B3 / §B12.1 / §B12.1a, end to end.
+- **Built, in a separate worktree on branch `t15a-vendor-mechjeb`:**
+  - **`plugin/mech/` — the full tree.** All **339** upstream `.cs`, nothing pruned (§B12.1a directive 1),
+    458 files, 25 MB.
+  - **THE PIN — `dev` BRANCH, commit `c5a6d8fed6bf458f85c9aafc49c7e282cd4e2ffa`, dated 2026-08-08**, repo
+    `MuMech/MechJeb2`. ⚠ `dev` is MuMech's **development** branch — what "most up to date" resolves to for
+    this project. §B12.1a: *"most up to date" governs what was fetched; "pinned" governs everything after.*
+    **No obligation to track upstream from here; only a deliberate re-pin task may move this hash.**
+    Recorded in **§B12.1a** (`docs/BUILD_PLAN.md`, new "THE PIN AS VENDORED" block), in
+    `plugin/mech/_dragonscreen/_Pin.cs` (compiled into the DLL) and as a banner on every compiled file.
+  - **Private namespace + assembly (§B3/§B12.1):** every compiled file's body wrapped verbatim in
+    `namespace DragonScreen.Mech`; the assembly is `DragonScreen.Mech.dll`, shipped beside
+    `DragonScreen.dll`. **VERIFIED, not assumed** — two probes compiled against the finished DLL:
+    `DragonScreen.Mech.MuMech.MechJebCore` resolves; `MuMech`, `MechJebLib`, `alglib` and `MechJebLibBindings`
+    are **CS0246 at global scope**, so a user's own `MechJeb2.dll` has nothing of ours to collide with.
+  - **RENAME SHELL ONLY (§B12.1).** Three changes, no fourth: the namespace wrap (244 files); dropping
+    `extern alias JetBrainsAnnotations` and folding its using (46 files, because this build has no NuGet);
+    and two added files of ours in `_dragonscreen/`. **No MechJeb method edited, no warning fixed, no module
+    improved.** Things noticed and NOT done are logged as strays below (C1.1), not acted on.
+  - **Exclusions RECORDED, never silent** — `plugin/mech/VENDOR.md` §3 carries the file-by-file arithmetic.
+    Not vendored: `bin/`, `.github/`, `.idea/`, and — for a specific reason, not tidiness — `.gitignore` +
+    `.gitattributes`, which would have taken effect on *our* repo and could silently drop a future upstream
+    file, quietly falsifying the pin. Vendored whole but **not compiled**: **`MechJebLibTest/`** (the explicit
+    decision the task demanded — 64 `.cs`, needs xunit + FluentAssertions, kept complete because it is
+    upstream's own statement of what MechJebLib's maths should do), **`MechJebKos/`** (needs `kOS.dll` from
+    the KSP install — **C7-barred**, and no other copy exists in the repo), **`MechJeb2-Unity/`** (a Unity
+    *editor* project), plus each project's `Properties/AssemblyInfo.cs` and `GlobalSuppressions.cs`. The
+    not-compiled projects also did **not** get the rename shell — they sit exactly as upstream wrote them.
+  - **BOTH licence checks done separately (VENDOR.md §5, summarised in `NOTICE`).** **(a) MechJeb2 = GPLv3**
+    (`plugin/mech/LICENSE.md`: *"This software is released under the GNU GPL version 3"*); the repo licence is
+    already GPL-3.0 and the embedded source ships, so the §B2/§B12.1 obligation is met, not merely noted.
+    **(b) `alglib/` checked SEPARATELY, because it is dual-licensed GPL/commercial upstream: the vendored copy
+    is the FREE GPL EDITION** — all 15 files carry *"GNU General Public License … either version 2 of the
+    License, or (at your option) any later version"*, i.e. **GPL-2.0-or-later ⇒ GPLv3-compatible**. The
+    `! COMMERCIAL EDITION OF ALGLIB` blocks are sales-copy comments and the `#if _ALGLIB_COMMERCIAL` regions
+    never compile (this build defines only `UNITY_2017_1`). Nothing was ambiguous, so nothing was escalated.
+    Five further third-party components inside MechJeb were checked at the same standard and are all
+    compatible; one (`MechJeb2/UnityToolbag/`) carries **no upstream licence notice** and is recorded as an
+    upstream gap, redistributed unmodified under MechJeb2's GPLv3 rather than "fixed" past the rename shell.
+- **DONE gate (C1.3):** `python plugin/build.py test` **GREEN** — 247 files compile into
+  `DragonScreen.Mech.dll` (4.3 MB), the plugin then compiles against it, and all C# suites + the tool
+  selftest pass unchanged. **No preview PNG: this task changes no page** (C1.3's docs/harness carve-out —
+  nothing it touched can alter a rendered page).
+- ⚠ **WHICH BUILD EXERCISES THE TREE — stated plainly, because it is easy to over-read.** `build.py`'s
+  `__main__` calls `build_plugin()` **unconditionally** before dispatching, so **every** verb — `build`,
+  `test`, `preview`, `install` — now compiles the vendored tree, and a compile error fails all four. But
+  **nothing runs it**: the headless C# suites link `src/pure` + `test` and the preview renderer links
+  `src/pure` + `preview`; **neither references `DragonScreen.Mech.dll`** and no test calls into MechJeb.
+  Green proves it **compiles**, and proves nothing about its behaviour — behaviour needs KSP, i.e. `install`
+  + glass, which are separate owner gates and were not opened.
+- **Files:** `plugin/mech/**` (new, 460 files incl. `VENDOR.md` + `_dragonscreen/`), `plugin/build.py`
+  (the `DragonScreen.Mech` assembly step), `docs/BUILD_PLAN.md` (§B12.1a pin block), `NOTICE` (MechJeb2 +
+  alglib entries), this file.
+
+### T15b [O] Host ONE MechJebCore, headless — **AND SUPPRESS THE GUI** — **TODO**
+- **Depends on T15a** (done). Not blocked on anything else — see the corrected T15 line above.
+- ⚠ **THE REQUIREMENT THAT MUST NOT BE LOST, carried verbatim from §B12.1a:** *"HEADLESS IS MANDATORY EVEN
+  THOUGH THE UI IS PORTED. The full port brings MechJeb's whole GUI with it. It must be vendored but **never
+  registered/shown**: a user who already runs MechJeb would otherwise get **two MechJeb UIs**, one of which
+  they cannot configure and must not touch. The private namespace (§B3) prevents the assembly clash;
+  suppressing the GUI is a separate, equally mandatory job. **Ported ≠ enabled.**"* T15a shipped the port; the
+  GUI in `plugin/mech/` is **live code that has simply never been given a host**. Until this line lands, the
+  vendored assembly must not be given a `MechJebCore` on any part.
+- ⛔ **AND IT IS WORSE THAN "DON'T ATTACH A CORE" — found by T15a while vendoring, `VENDOR.md` §7.**
+  **KSP instantiates `[KSPAddon]` classes by scanning every assembly in `GameData`; nobody has to attach
+  anything.** The vendored tree ships three: `CompatibilityChecker.cs:52` (`Startup.Instantly`, can raise a
+  popup), `InstallChecker.cs:20` (`Startup.MainMenu` — MechJeb's *"you installed it wrong"* popup, which
+  looks for `GameData/MechJeb2` and our layout deliberately has none, so it is likely to FIRE), and
+  `MechjebBundlesManager.cs:14` (`Startup.MainMenu`, loads `Bundles/shaders.bundle` from a path we do not
+  provide). `MechJebCore` itself is a `PartModule` and still needs a part cfg, and none is shipped — but the
+  three addons need nothing. **So T15b's suppression job covers `[KSPAddon]` auto-registration, not just
+  window drawing** — and **`build.py install` must not be run on this build until it does.** Nothing is at
+  risk today: `install`/glass are separate owner gates and T15a opened neither, so this DLL has never been
+  near the game.
+- **Read:** §B12.1 + §B12.1a end-to-end, §B3, §B4 (modules reached via `GetComputerModule<T>()`).
+- **Build:** attach/find **ONE** `MechJebCore` on the Dragon part; reach modules via
+  `MechJebCore.GetComputerModule<T>()`; **enable only the modules the conductor uses**; load the shipped tune
+  `docs/reference/mechjeb_settings_type_Crew-Dragon.cfg` **from the mod, never from the user** (§B12.1); and
+  **suppress the GUI** — no window registration, no toolbar button, nothing drawn.
+- **DONE when:** one core loads on the Dragon part, **no second MechJeb UI appears for a user who already
+  runs MechJeb**, and the cfg is applied. ⛔ **Every one of those criteria is IN-SIM.** Per the Part-B banner
+  at the top of this file, an in-sim done-criterion means this task **stops and asks** for `install` + glass
+  rather than installing — write the C1.13 overseer prompt and stop. Build and reason as far as `build.py
+  test` will take you; do not self-authorize the capsule.
+- ⛔ **Not in this line:** `docs/FLIGHT_SYSTEMS.md` (W26 recovered it 2026-09-04 — nothing to create).
 
 ### T16 [O] Pure conductor core + tests — **re-scoped to the `ConductorAction` gap only, 2026-09-05 (G9 item 2)** — **TODO**
 - **Read:** §B9 / §B12.2-3 + `pure/MissionPhase.cs`.
@@ -10223,3 +10331,30 @@ classifier cell.
 `asc` row-set including every genuinely-ascending row regardless of `mission_phase`/`phase_classified`
 decimation, and the SECO/insertion anchor row is no longer sensitive to which rows happened to land on an
 R2-due tick.
+
+### MJ1 [S] The vendored MechJeb compiles with warnings OFF — a re-pin has no warning baseline — **TODO** — [logged by T15a per C1.1: noticed while wiring `build_mech()`, deliberately not acted on]
+**Finding.** `plugin/build.py`'s `build_mech()` compiles `DragonScreen.Mech.dll` with `-warn:0`, and that is
+correct for daily use: §B12.1 forbids fixing MechJeb's warnings ("rename shell only"), so printing several
+hundred unfixable ones on every build would train the eye to scroll past the region where a real ERROR
+appears. But it also means **nobody has ever seen the list**. At a re-pin, the useful signal is not the
+absolute count — it is the DIFF: a warning that appears at the new commit and did not exist at
+`c5a6d8fe` is a change in upstream's code, and is exactly what a re-pin review should read.
+**Build (not done here):** a `build.py` verb (or a flag on the existing one) that recompiles `plugin/mech`
+at `-warn:4` and writes the warning list to a file that can be committed as the pin's baseline; the re-pin
+task then diffs against it. **Do NOT change the default build's `-warn:0`.**
+**DONE when:** a baseline warning list for commit `c5a6d8fe` exists in the repo and the recipe to regenerate
+it is recorded beside it (`plugin/mech/VENDOR.md` §4.2 is the natural home).
+
+### MJ2 [S] `plugin/mech/` is invisible to the repo's own doc index and audit tools — **TODO** — [logged by T15a per C1.1: out of T15a's declared outputs]
+**Finding.** T15a added 458 files and a substantial reference document (`plugin/mech/VENDOR.md`) that no
+existing index points at. `docs/INDEX.md` catalogues `docs/`, so it does not cover it by design, and
+`README.md`'s repo tour predates the directory entirely. A reader arriving at `plugin/` now sees a 25 MB
+tree with no signpost saying what it is or that `VENDOR.md` is the thing to read first.
+**Build (not done here):** one line in `README.md`'s layout section, and a pointer from `docs/INDEX.md` to
+`plugin/mech/VENDOR.md` as an out-of-`docs/` reference (INDEX already carries that pattern for
+`docs/reference/`).
+**Already checked, so nobody re-checks it:** the audit tools are NOT affected. `plugin/build/
+audit_comments.py:428` builds its file set from `cs_files('src') + cs_files('test')` — a named-directory
+walk, not `plugin/**` — so it never enters `plugin/mech/`, and it is not wired into `build.py` in any case.
+`build.py test` is green with the tree in place. This stray is a signposting gap only, not a broken tool.
+**DONE when:** `plugin/mech/` is discoverable from the repo's top-level docs.

@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net48</TargetFramework>
+        <RootNamespace>MechJebLibBindings</RootNamespace>
+        <AssemblyName>MechJebLibBindings</AssemblyName>
+        <ProjectGuid>{DA770208-1300-4C86-8996-C1790B945999}</ProjectGuid>
+        <LangVersion>8</LangVersion>
+        <Nullable>enable</Nullable>
+        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Reference Include="Assembly-CSharp">
+            <HintPath>$(KspData)/Managed/Assembly-CSharp.dll</HintPath>
+            <SpecificVersion>False</SpecificVersion>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine.CoreModule">
+            <HintPath>$(KspData)/Managed/UnityEngine.CoreModule.dll</HintPath>
+            <SpecificVersion>False</SpecificVersion>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine.UI">
+            <HintPath>$(KspData)/Managed/UnityEngine.UI.dll</HintPath>
+            <SpecificVersion>False</SpecificVersion>
+            <Private>False</Private>
+        </Reference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\MechJebLib\MechJebLib.csproj"/>
+    </ItemGroup>
+
+</Project>

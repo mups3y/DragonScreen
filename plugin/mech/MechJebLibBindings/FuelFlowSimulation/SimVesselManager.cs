@@ -1,0 +1,94 @@
+// VENDORED - MechJeb2, upstream MuMech/MechJeb2, branch dev, commit
+// c5a6d8fed6bf458f85c9aafc49c7e282cd4e2ffa (2026-08-08).  Pinned by DragonScreen T15a; see plugin/mech/VENDOR.md.
+// GPLv3 (plugin/mech/LICENSE.md).  UNMODIFIED except the rename shell: this file's whole
+// body is wrapped in `namespace DragonScreen.Mech` (B3 private namespace) and any
+// `extern alias JetBrainsAnnotations` is folded to a plain `using`.  No other edit.
+
+namespace DragonScreen.Mech
+{
+/*
+ * Copyright Lamont Granquist, Sebastien Gaggini and the MechJeb contributors
+ * SPDX-License-Identifier: LicenseRef-PD-hp OR Unlicense OR CC0-1.0 OR 0BSD OR MIT-0 OR MIT OR LGPL-2.1+
+ */
+
+using System.Collections.Generic;
+using MechJebLib.FuelFlowSimulation;
+using MechJebLib.Primitives;
+using static MechJebLib.Utils.Statics;
+
+namespace MechJebLibBindings.FuelFlowSimulation
+{
+    // FIXME: the SimVesselManager needs to be broken out of MechJebLib eventually to isolate the parts that
+    // need to link against KSP GameObjects (MechJebLibBindings.dll or something like that)
+    public partial class SimVesselManager
+    {
+        public List<FuelStats> Segments => FuelFlowSimulation.Segments;
+
+        private readonly SimVesselBuilder _builder;
+        private readonly SimVesselUpdater _updater;
+        private SimVessel _vessel;
+        private IShipconstruct _kspVessel;
+        public readonly MechJebLib.FuelFlowSimulation.FuelFlowSimulation FuelFlowSimulation = new MechJebLib.FuelFlowSimulation.FuelFlowSimulation();
+        public bool DVLinearThrust = true; // include cos losses
+
+        private readonly Dictionary<Part, SimPart> _partMapping = new Dictionary<Part, SimPart>();
+        private readonly Dictionary<SimPart, Part> _inversePartMapping = new Dictionary<SimPart, Part>();
+        private readonly Dictionary<SimPartModule, PartModule> _inversePartModuleMapping = new Dictionary<SimPartModule, PartModule>();
+
+        public double T => _vessel.T;
+        public V3     R => _vessel.R;
+        public V3     V => _vessel.V;
+        public V3     U => _vessel.U;
+
+        public SimVesselManager()
+        {
+            _builder = new SimVesselBuilder(this);
+            _updater = new SimVesselUpdater(this);
+            _vessel = SimVessel.Borrow();
+            _kspVessel = null!;
+        }
+
+        public void Build(IShipconstruct vessel)
+        {
+            Clear();
+            _builder.BuildVessel(vessel);
+            _builder.BuildParts();
+            Update();
+            _builder.UpdateLinks();
+            _builder.UpdateCrossFeedSet();
+            _builder.UpdateSymmetryParts();
+            DecouplingAnalyzer.Analyze(_vessel);
+            _builder.UpdateEngineSet();
+        }
+
+        public void PrintVessel() => Print($"{_vessel}");
+
+        public void Update() => _updater.Update();
+
+        public void SetConditions(double atmDensity, double atmPressure, double machNumber) =>
+            _vessel.SetConditions(atmDensity, atmPressure, machNumber);
+
+        public void SetInitial(double t, V3 r, V3 v, V3 u) => _vessel.SetInitial(t, r, v, u);
+
+        public bool TryStartFuelFlowSimulationJob()
+        {
+            FuelFlowSimulation.DVLinearThrust = DVLinearThrust;
+            return FuelFlowSimulation.TryStartJob(_vessel);
+        }
+
+        private void Clear()
+        {
+            _partMapping.Clear();
+            _inversePartMapping.Clear();
+            _inversePartModuleMapping.Clear();
+        }
+
+        public void Release()
+        {
+            Clear();
+            _vessel.Dispose();
+        }
+    }
+}
+
+}

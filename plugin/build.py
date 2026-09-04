@@ -104,6 +104,52 @@ EXTRA_REFS = []
 MOD     = 'DragonScreen'
 OUT_DLL = os.path.join(HERE, 'GameData', MOD, MOD + '.dll')
 
+# ---------------------------------------------------------------- the embedded MechJeb (T15a)
+# `plugin/mech/` is a VENDORED copy of MuMech/MechJeb2 at a pinned commit - see
+# `plugin/mech/VENDOR.md` for the pin, the exclusions and the two licence checks. It is
+# deliberately NOT under `src/`, because `sources('src')` sweeps a whole tree and this one has
+# parts that must not be swept: MechJebKos needs kOS.dll (an external mod, and C7 forbids
+# reading the KSP install for it) and MechJebLibTest needs xunit. Both are vendored whole and
+# neither compiles here, so the compile set has to be a NAMED list, not a directory walk.
+#
+# §B3/§B12.1: it builds as its own PRIVATE ASSEMBLY, `DragonScreen.Mech.dll`, with every
+# vendored file wrapped in `namespace DragonScreen.Mech`. Both halves matter - a user running
+# their own MechJeb2.dll must never see a type of ours collide with one of theirs.
+MECH          = os.path.join(HERE, 'mech')
+MECH_DLL      = os.path.join(HERE, 'GameData', MOD, MOD + '.Mech.dll')
+MECH_PROJECTS = ['_dragonscreen', 'alglib', 'MechJebLib', 'MechJebLibBindings', 'MechJeb2']
+
+# MechJeb reaches further into Unity than the screens do. These four are ON TOP of REFS and
+# come straight from `mech/MechJeb2/MechJeb2.csproj` + `MechJebLibBindings.csproj`, which are
+# vendored beside the source precisely so this list can be checked against upstream's own.
+MECH_REFS = REFS + ['Assembly-CSharp-firstpass.dll', 'UnityEngine.AnimationModule.dll',
+                    'UnityEngine.AssetBundleModule.dll', 'UnityEngine.VehiclesModule.dll']
+
+# Upstream's own AssemblyInfo per project (five separate assemblies there, one here - keeping
+# them would mean five AssemblyTitles in one DLL) and its ReSharper suppression files (
+# assembly-level attributes, which cannot sit inside the private namespace and mean nothing
+# without the analyser). Vendored, not compiled; VENDOR.md says so out loud.
+MECH_SKIP = ('properties/assemblyinfo.cs', 'globalsuppressions.cs')
+
+
+def mech_sources():
+    """The .cs that go into DragonScreen.Mech.dll - named projects only, see MECH_PROJECTS."""
+    out = []
+    for proj in MECH_PROJECTS:
+        p = os.path.join(MECH, proj)
+        if not os.path.isdir(p):
+            continue
+        for root, _, files in os.walk(p):
+            for f in files:
+                if not f.endswith('.cs'):
+                    continue
+                full = os.path.join(root, f)
+                rel  = os.path.relpath(full, MECH).replace('\\', '/').lower()
+                if any(rel.endswith(s) for s in MECH_SKIP):
+                    continue
+                out.append(full)
+    return sorted(out)
+
 
 def sources(*dirs):
     out = []
@@ -124,7 +170,7 @@ def preflight():
         for r in CORE_REFS:
             if not os.path.isfile(os.path.join(MAN, r)):
                 print('MISSING core reference: %s' % os.path.join(MAN, r)); bad = True
-    for r in REFS:
+    for r in sorted(set(REFS) | set(MECH_REFS)):
         if not os.path.isfile(os.path.join(MAN, r)):
             print('MISSING reference: %s' % os.path.join(MAN, r)); bad = True
     for r in EXTRA_REFS:
@@ -134,7 +180,7 @@ def preflight():
         sys.exit('preflight failed - nothing built')
 
 
-def compile_cs(out, src, refs=(), exe=False, extra=()):
+def compile_cs(out, src, refs=(), exe=False, extra=(), warn='4', langversion='latest'):
     """
     One invocation, either compiler, via a RESPONSE FILE.
 
@@ -142,12 +188,12 @@ def compile_cs(out, src, refs=(), exe=False, extra=()):
     characters and every KSP path contains spaces. Passing them on the command line is how you get
     `Source file 'C:/Program Files' could not be found`.
     """
-    args = ['-nologo', '-warn:4',
+    args = ['-nologo', '-warn:' + warn,
             '-target:' + ('exe' if exe else 'library'),
             '-out:' + out]
     if MODERN:
         # KSP's core assemblies, never the SDK's. See CORE_REFS.
-        args += ['-langversion:latest', '-deterministic', '-nostdlib']
+        args += ['-langversion:' + langversion, '-deterministic', '-nostdlib']
         args += ['-reference:' + os.path.join(MAN, r) for r in CORE_REFS]
     args += ['-reference:' + r for r in refs]
     args += list(extra)
@@ -183,14 +229,50 @@ def run(args, label):
     return out
 
 
+def build_mech():
+    """
+    The embedded MechJeb (T15a), as its own assembly. Returns [] if the tree is not vendored.
+
+    WHY A SEPARATE ASSEMBLY AND NOT JUST A NAMESPACE. §B12.1 asks for "a private namespace +
+    assembly", and the two do different jobs. The namespace stops a TYPE clashing with a user's
+    own MechJeb2.dll; the separate assembly is what lets this compile at all, because vendored
+    MechJeb needs a different compiler contract from our code: LangVersion 8 (upstream's own
+    setting - so nothing here silently starts depending on a newer C# than upstream compiles
+    with), nullable ANNOTATIONS without the warnings, its own wider Unity reference set, and
+    the UNITY_2017_1 define its csproj sets. Welding all that onto the screens' build would
+    push third-party constraints onto our code for no gain.
+
+    ⛔ WARNINGS ARE OFF (-warn:0) FOR THIS ASSEMBLY, AND THAT IS DELIBERATE, NOT LAZINESS.
+    §B12.1's rule is "source kept intact (not rewritten) - rename shell only": we are not
+    permitted to fix MechJeb's warnings, so printing a few hundred of them on every single
+    build would train the eye to scroll past exactly the region where a REAL error appears.
+    Errors are unaffected - csc still reports them and run() still fails the build on them.
+    """
+    src = mech_sources()
+    if not src:
+        return []
+    os.makedirs(os.path.dirname(MECH_DLL), exist_ok=True)
+    if not MODERN:
+        sys.exit('the embedded MechJeb needs Roslyn (C#8); the C#5 fallback compiler cannot '
+                 'build plugin/mech - install a .NET SDK')
+    run(compile_cs(MECH_DLL, src,
+                   refs=[os.path.join(MAN, r) for r in MECH_REFS],
+                   extra=['-optimize+', '-define:UNITY_2017_1', '-nullable:annotations'],
+                   warn='0', langversion='8'),
+        'embedded MechJeb (%d source files)' % len(src))
+    print('    -> %s  (%.1f KB)' % (MECH_DLL, os.path.getsize(MECH_DLL) / 1024.0))
+    return [MECH_DLL]
+
+
 def build_plugin():
     preflight()
+    mech = build_mech()
     src = sources('src')
     if not src:
         sys.exit('no sources in src/ - nothing to build')
     os.makedirs(os.path.dirname(OUT_DLL), exist_ok=True)
     run(compile_cs(OUT_DLL, src,
-                   refs=[os.path.join(MAN, r) for r in REFS] + list(EXTRA_REFS),
+                   refs=[os.path.join(MAN, r) for r in REFS] + list(EXTRA_REFS) + mech,
                    extra=['-optimize+']),
         'plugin (%d source files)%s' % (len(src), '' if MODERN else '  [C#5 fallback]'))
     print('    -> %s  (%.1f KB)' % (OUT_DLL, os.path.getsize(OUT_DLL) / 1024.0))

@@ -819,6 +819,35 @@ Two directives, both binding on T15:
   MechJeb UIs**, one of which they cannot configure and must not touch. The private namespace (§B3) prevents
   the assembly clash; suppressing the GUI is a separate, equally mandatory job. Ported ≠ enabled.
 
+##### B12.1a — THE PIN AS VENDORED (T15a, 2026-09-05). This is the record §B12.1a asked for.
+The port happened. `plugin/mech/` is the tree; **`plugin/mech/VENDOR.md` is the full record** — exclusions,
+both licence checks, the rename shell, and how to reproduce it. The commit, per this section's own
+"newest-then-pin" resolution:
+
+| | |
+|---|---|
+| repository | **`MuMech/MechJeb2`** (the RESOLVED G5a-Q1 choice above) |
+| branch | **`dev`** — MuMech's DEVELOPMENT branch, which is what "the most up-to-date GitHub source" resolves to for this project |
+| commit | **`c5a6d8fed6bf458f85c9aafc49c7e282cd4e2ffa`** |
+| commit date | **2026-08-08** · vendored **2026-09-05** |
+| source | `C:\Users\User\Desktop\MechJeb2-dev.zip`, **placed by the owner 2026-09-05** after the overseer flagged that C7 bars a build chat from fetching it. The commit is stamped in the zip's archive comment; the overseer verified it from the archive, and T15a re-read it there. |
+
+"Most up to date" governed what was fetched; **"pinned" governs everything after — there is no obligation to
+track upstream, and only a deliberate re-pin task may move this hash.** The pin also ships in the assembly
+(`plugin/mech/_dragonscreen/_Pin.cs`) and as a banner on every compiled vendored file, per this section's
+"…and in the shipped source header".
+
+**What is vendored:** all **339** upstream `.cs`, nothing pruned — directive 1 honoured. **What is compiled**
+into the private assembly `DragonScreen.Mech.dll` is 245 of them (+2 of ours): `MechJebKos/` needs `kOS.dll`
+from the KSP install (C7-barred), `MechJebLibTest/` needs xunit, `MechJeb2-Unity/` is a Unity editor project.
+All three are vendored **whole** and recorded as not-compiled; `VENDOR.md` §3 has the file-by-file arithmetic.
+**Licences: MechJeb2 GPLv3 (obligation accepted — the repo licence is already GPL-3.0 and the source ships);
+`alglib/` is the FREE GPL edition, GPL-2.0-or-later per its own per-file headers, hence GPLv3-compatible.**
+Both checks in `VENDOR.md` §5, summarised in `NOTICE`.
+
+⚠ **The GUI is vendored and NOT yet suppressed.** T15a was the port; suppression is **T15b**, and until it
+lands this assembly must not be given a `MechJebCore` — see the register's T15b line.
+
 ### B12.2 The conductor — two layers (honors the pure/glue split)
 - **Pure core** `plugin/src/pure/Conductor*.cs` (NO Unity/MechJeb refs → headless-testable): the phase state
   machine + the re-plan decision logic. Input = a plain telemetry snapshot (extend `MissionInputs`/read

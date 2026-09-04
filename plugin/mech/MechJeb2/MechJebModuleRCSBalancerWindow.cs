@@ -1,0 +1,136 @@
+// VENDORED - MechJeb2, upstream MuMech/MechJeb2, branch dev, commit
+// c5a6d8fed6bf458f85c9aafc49c7e282cd4e2ffa (2026-08-08).  Pinned by DragonScreen T15a; see plugin/mech/VENDOR.md.
+// GPLv3 (plugin/mech/LICENSE.md).  UNMODIFIED except the rename shell: this file's whole
+// body is wrapped in `namespace DragonScreen.Mech` (B3 private namespace) and any
+// `extern alias JetBrainsAnnotations` is folded to a plain `using`.  No other edit.
+
+namespace DragonScreen.Mech
+{
+using System;
+using KSP.Localization;
+using UnityEngine;
+
+namespace MuMech
+{
+    public class MechJebModuleRCSBalancerWindow : DisplayModule
+    {
+        public MechJebModuleRCSBalancer balancer;
+
+        public override void OnStart(PartModule.StartState state)
+        {
+            balancer = Core.GetComputerModule<MechJebModuleRCSBalancer>();
+
+            if (balancer.smartTranslation)
+            {
+                balancer.Users.Add(this);
+            }
+
+            base.OnStart(state);
+        }
+
+        private void SimpleTextInfo(string left, string right)
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(left, GuiUtils.LayoutExpandWidth);
+            GUILayout.Label(right, GuiUtils.LayoutNoExpandWidth);
+            GUILayout.EndHorizontal();
+        }
+
+        protected override void WindowGUI(int windowID)
+        {
+            GUILayout.BeginVertical();
+
+            bool wasEnabled = balancer.smartTranslation;
+
+            GUILayout.BeginHorizontal();
+            balancer.smartTranslation =
+                GUILayout.Toggle(balancer.smartTranslation, Localizer.Format("#MechJeb_RCSBalancer_checkbox1"),
+                    GuiUtils.LayoutWidth(130)); //"Smart translation"
+            GUILayout.EndHorizontal();
+
+            if (wasEnabled != balancer.smartTranslation)
+            {
+                balancer.ResetThrusterForces();
+
+                if (balancer.smartTranslation)
+                {
+                    balancer.Users.Add(this);
+                }
+                else
+                {
+                    balancer.Users.Remove(this);
+                }
+            }
+
+            if (balancer.smartTranslation)
+            {
+                // Overdrive
+                double oldOverdrive = balancer.overdrive;
+                double oldOverdriveScale = balancer.overdriveScale;
+                double oldFactorTorque = balancer.tuningParamFactorTorque;
+                double oldFactorTranslate = balancer.tuningParamFactorTranslate;
+                double oldFactorWaste = balancer.tuningParamFactorWaste;
+
+                GuiUtils.SimpleTextBox(Localizer.Format("#MechJeb_RCSBalancer_label1"), balancer.overdrive, "%"); //"Overdrive"
+
+                double sliderVal = GUILayout.HorizontalSlider((float)balancer.overdrive, 0.0F, 1.0F);
+                const int sliderPrecision = 3;
+                if (Math.Round(Math.Abs(sliderVal - oldOverdrive), sliderPrecision) > 0)
+                {
+                    double rounded = Math.Round(sliderVal, sliderPrecision);
+                    balancer.overdrive = new EditableDoubleMult(rounded, 0.01);
+                }
+
+                GUILayout.Label(
+                    Localizer.Format("#MechJeb_RCSBalancer_label2")); //"Overdrive increases power when possible, at the cost of RCS fuel efficiency."
+
+                // Advanced options
+                balancer.advancedOptions =
+                    GUILayout.Toggle(balancer.advancedOptions, Localizer.Format("#MechJeb_RCSBalancer_checkbox2")); //"Advanced options"
+                if (balancer.advancedOptions)
+                {
+                    // This doesn't work properly, and it might not even be needed.
+                    //balancer.smartRotation = GUILayout.Toggle(balancer.smartRotation, "Smart rotation");
+
+                    GuiUtils.SimpleTextBox(Localizer.Format("#MechJeb_RCSBalancer_label3"), balancer.overdriveScale); //"Overdrive scale"
+                    GuiUtils.SimpleTextBox(Localizer.Format("#MechJeb_RCSBalancer_label4"), balancer.tuningParamFactorTorque); //"torque factor"
+                    GuiUtils.SimpleTextBox(Localizer.Format("#MechJeb_RCSBalancer_label5"), balancer.tuningParamFactorTranslate); //"Translate factor"
+                    GuiUtils.SimpleTextBox(Localizer.Format("#MechJeb_RCSBalancer_label6"), balancer.tuningParamFactorWaste); //"Waste factor"
+                }
+
+                // Apply tuning parameters.
+                if (oldOverdrive != balancer.overdrive
+                    || oldOverdriveScale != balancer.overdriveScale
+                    || oldFactorTorque != balancer.tuningParamFactorTorque
+                    || oldFactorTranslate != balancer.tuningParamFactorTranslate
+                    || oldFactorWaste != balancer.tuningParamFactorWaste)
+                {
+                    balancer.UpdateTuningParameters();
+                }
+            }
+
+            if (balancer.smartTranslation)
+            {
+                balancer.Users.Add(this);
+            }
+            else
+            {
+                balancer.Users.Remove(this);
+            }
+
+            GUILayout.EndVertical();
+
+            base.WindowGUI(windowID);
+        }
+
+        protected override GUILayoutOption[] WindowOptions() => new[] { GuiUtils.LayoutWidth(240), GUILayout.Height(30) };
+
+        public override string GetName() => Localizer.Format("#MechJeb_RCSBalancer_title"); //"RCS Balancer"
+
+        public override string IconName() => "RCS Balancer";
+
+        public MechJebModuleRCSBalancerWindow(MechJebCore core) : base(core) { }
+    }
+}
+
+}

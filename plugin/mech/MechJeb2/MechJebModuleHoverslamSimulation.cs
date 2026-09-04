@@ -1,0 +1,322 @@
+﻿// VENDORED - MechJeb2, upstream MuMech/MechJeb2, branch dev, commit
+// c5a6d8fed6bf458f85c9aafc49c7e282cd4e2ffa (2026-08-08).  Pinned by DragonScreen T15a; see plugin/mech/VENDOR.md.
+// GPLv3 (plugin/mech/LICENSE.md).  UNMODIFIED except the rename shell: this file's whole
+// body is wrapped in `namespace DragonScreen.Mech` (B3 private namespace) and any
+// `extern alias JetBrainsAnnotations` is folded to a plain `using`.  No other edit.
+
+namespace DragonScreen.Mech
+{
+#nullable enable
+
+using System;
+using System.Collections.Generic;
+using MechJebLib.FuelFlowSimulation;
+using MechJebLib.Functions;
+using MechJebLib.HoverslamSimulation;
+using MechJebLib.Primitives;
+using MechJebLibBindings;
+using UnityEngine;
+using static System.Math;
+using static MechJebLib.Utils.Statics;
+
+namespace MuMech
+{
+    public class MechJebModuleHoverslamSimulation : ComputerModule
+    {
+        // TODO: have the integrator produce this value in the background thread
+        // (this isn't as expensive as an ODE integrator but there is multiple kepler solves every tick)
+        [ValueInfoItem("#MechJeb_HoverslamImpact", InfoItem.Category.Hoverslam, tooltip = "#MechJeb_HoverslamImpact_tooltip")] //Impact
+        public string Impact()
+        {
+            if (Orbit.PeA > 0 || Vessel.Landed) return "N/A";
+
+            double impactTime = VesselState.Time;
+            try
+            {
+                for (int iter = 0; iter < 10; iter++)
+                {
+                    Vector3d impactPosition = Orbit.WorldPositionAtUT(impactTime);
+                    double terrainRadius = MainBody.Radius + MainBody.TerrainAltitude(impactPosition);
+                    impactTime = Orbit.NextTimeOfRadius(VesselState.Time, terrainRadius);
+                }
+            }
+            catch (ArgumentException)
+            {
+                return GuiUtils.TimeToDHMS(0, 1);
+            }
+            catch (ArithmeticException)
+            {
+                return GuiUtils.TimeToDHMS(0, 1);
+            }
+
+            return GuiUtils.TimeToDHMS(impactTime - VesselState.Time, 1);
+        }
+
+        // TODO: this shows numbers like e.g. -1.2s in flight if the cycles/second is 1.0s -- not sure how to fix
+        [ValueInfoItem("#MechJeb_HoverslamIgnition", InfoItem.Category.Hoverslam, tooltip = "#MechJeb_HoverslamIgnition_tooltip")] //Ignition
+        public string Ignition() =>
+            Orbit.PeA > 0 || Vessel.Landed ? "N/A" : GuiUtils.TimeToDHMS(IgnitionCountdown, 1);
+
+        [ValueInfoItem("#MechJeb_HoverslamTouchdown", InfoItem.Category.Hoverslam, tooltip = "#MechJeb_HoverslamTouchdown_tooltip")] //Touchdown
+        public string Touchdown() =>
+            Orbit.PeA > 0 || Vessel.Landed ? "N/A" : GuiUtils.TimeToDHMS(LandingCountdown, 1);
+
+        // TODO: This counts down even if you don't ignite and i'm not entirely certain what to do about it
+        // TODO: this doesn't account for planned vertical descent deltaV
+        [ValueInfoItem("#MechJeb_HoverslamDeltaV", InfoItem.Category.Hoverslam, tooltip = "#MechJeb_HoverslamDeltaV_tooltip")] //Hoverslam Δv
+        public string HoverslamDeltaV() => IsFinite(DeltaV) ? DeltaV.ToSI() + "m/s" : "N/A";
+
+        [ValueInfoItem("#MechJeb_HoverslamCoordinates", InfoItem.Category.Hoverslam, width = 90, tooltip = "#MechJeb_HoverslamCoordinates_tooltip")] //Coordinates
+        public string HoverslamCoordinates() => Coordinates.ToStringDMS(Lat, Lng, true);
+
+        [ValueInfoItem("#MechJeb_HoverslamBiome", InfoItem.Category.Hoverslam, tooltip = "#MechJeb_HoverslamBiome_tooltip")] //Biome
+        public string Biome() => IsFinite(LandingUT) ? MainBody.GetExperimentBiomeSafe(Lat, Lng) : "N/A";
+
+        [ValueInfoItem("#MechJeb_HoverslamSlope", InfoItem.Category.Hoverslam, format = "F2", units = "º", tooltip = "#MechJeb_HoverslamSlope_tooltip")] //Slope
+        public double Slope;
+
+        [ValueInfoItem("#MechJeb_HoverslamTerrainAltitude", InfoItem.Category.Hoverslam, format = "F1", units = "m", tooltip = "#MechJeb_HoverslamTerrainAltitude_tooltip")] //Terrain altitude
+        public double TerrainAltitude;
+
+        [ToggleInfoItem("#MechJeb_HoverslamMapLandingPrediction", InfoItem.Category.Hoverslam, tooltip = "#MechJeb_HoverslamMapLandingPrediction_tooltip"), Persistent(pass = (int)(Pass.GLOBAL | Pass.TYPE))]
+         //Map landing prediction
+        public bool MapLandingPrediction = true;
+
+        [EditableInfoItem("#MechJeb_HoverslamSimRecalcInterval", InfoItem.Category.Hoverslam, width = 50, rightLabel = "s", expandWidth = true, tooltip = "#MechJeb_HoverslamSimRecalcInterval_tooltip"), Persistent(pass = (int)(Pass.GLOBAL | Pass.TYPE))]
+         //Simulation recalc interval
+        public readonly EditableDouble SimRecalcInterval = new EditableDouble(1.0);
+
+        [EditableInfoItem("#MechJeb_HoverslamVerticalAuthority", InfoItem.Category.Hoverslam, width = 50, rightLabel = "%", expandWidth = true, tooltip = "#MechJeb_HoverslamVerticalAuthority_tooltip"), Persistent(pass = (int)(Pass.GLOBAL | Pass.TYPE))]
+         //Vertical phase authority
+        public readonly EditableDoubleMult VerticalAuthority = new EditableDoubleMult(0.5, 0.01);
+
+        [EditableInfoItem("#MechJeb_HoverslamVerticalAltitude", InfoItem.Category.Hoverslam, width = 50, rightLabel = "m", expandWidth = true, tooltip = "#MechJeb_HoverslamVerticalAltitude_tooltip"), Persistent(pass = (int)(Pass.GLOBAL | Pass.TYPE))]
+         //Vertical phase altitude
+        public readonly EditableDouble VerticalAltitude = new EditableDouble(100);
+
+        // TODO: VerticalAuthority needs better integration with the prediction.
+        // TODO: what does VerticalAuthority mean?  for stock it is just halfway between hover and max.  for a unthrottleable
+        //       engine it should just be the same to give 50% duty cycle.  for a throttleable engine, it should probably be
+        //       halfway between min and max throttle, even though we can PWM if we have to.
+        // TODO: should we be able to disable PWM for throttleable engines to avoid consuming ignitions?
+        // TODO: somehow wire up DisengageAutopilot to the ToggleInfoItem
+        // TODO: add aero model for landing on Kerbin/Earth
+        // TODO: going to need to have spoolup for RO/RF--on a long enough timeline someone will ask about nuclear landers
+        // TODO: principia integration and gravitational harmonics
+        // TODO: could we check for the presence of the old suicide burn countdown timer in a user's config and then
+        //       delete that, and add the new hoverslam info item menu automagically?
+
+        private List<FuelStats> _vacStats => Core.StageStats.VacStats;
+
+        // ReSharper disable MemberCanBePrivate.Global
+        public Vector3d LandingPosition;
+        public double IgnitionUT;
+        public double LandingUT;
+        public double FinalThrustAccel;
+        public double Lat;
+        public double Lng;
+        public double IgnitionCountdown => IgnitionUT - VesselState.Time;
+        public double LandingCountdown  => LandingUT - VesselState.Time;
+        public double DeltaV;
+        public double FinalDescentSpeed; // should be positive
+        public Vector3d IgnitionAttitude;
+        // ReSharper restore MemberCanBePrivate.Global
+
+        private double _lastCycleUT;
+
+        private readonly HoverslamSimulation.HoverslamSimulationManager _manager = new HoverslamSimulation.HoverslamSimulationManager();
+        private readonly HoverslamSimulation _hoverslam = new HoverslamSimulation();
+
+        public MechJebModuleHoverslamSimulation(MechJebCore core) : base(core)
+        {
+        }
+
+        public override void OnStart(PartModule.StartState state)
+        {
+            Enabled = HighLogic.LoadedSceneIsFlight;
+            Core.AddToPostDrawQueue(DrawMapViewLanding);
+        }
+
+        private void DrawMapViewLanding()
+        {
+            if (HighLogic.LoadedSceneIsEditor) return;
+            if (!MapView.MapIsEnabled) return;
+            if (!MapLandingPrediction) return;
+            if (!Vessel.isActiveVessel || Vessel.GetMasterMechJeb() != Core) return;
+            if (!IsFinite(LandingUT)) return;
+
+            GLUtils.DrawGroundMarker(MainBody, Lat, Lng, Color.magenta, true);
+        }
+
+        protected override void OnModuleEnabled() => Reset();
+
+        protected override void OnModuleDisabled() => Reset();
+
+        private void Reset()
+        {
+            LandingPosition = new Vector3d(double.NaN, double.NaN, double.NaN);
+            IgnitionUT = double.NaN;
+            LandingUT = double.NaN;
+            DeltaV = double.NaN;
+            IgnitionAttitude = new Vector3d(double.NaN, double.NaN, double.NaN);
+            Lat = 0;
+            Lng = 0;
+            FinalThrustAccel = -1;
+            _hoverslam.Cancel();
+            _lastCycleUT = 0;
+        }
+
+        private double CalculateDeltaV(double burnTime)
+        {
+            Core.StageStats.RequestUpdate();
+
+            int lastNonZeroIndex = -1;
+            double dv = 0;
+
+            for (int mjPhase = _vacStats.Count - 1; mjPhase >= 0 && burnTime > 0; mjPhase--)
+            {
+                FuelStats stage = _vacStats[mjPhase];
+
+                if (stage.DeltaV <= 0)
+                    continue;
+
+                lastNonZeroIndex = mjPhase;
+                double bt = stage.DeltaTime < burnTime ? stage.DeltaTime : burnTime;
+
+                dv += Astro.DeltaVFromMassThrustIspBurntime(stage.StartMass, stage.Thrust, stage.Isp, bt);
+                burnTime -= bt;
+            }
+
+            if (burnTime > 0 && lastNonZeroIndex > -1) // we ain't gonna make it
+            {
+                FuelStats stage = _vacStats[lastNonZeroIndex];
+
+                dv += Astro.DeltaVFromMassThrustIspBurntime(stage.StartMass, stage.Thrust, stage.Isp, burnTime);
+            }
+
+            return dv;
+        }
+
+        // TODO: we don't account for the height of the rocket here
+        private double GetGroundRadius() =>
+            IsFinite(LandingUT) ? MainBody.Radius + TerrainAltitude : MainBody.Radius;
+
+        public override void OnFixedUpdate()
+        {
+            double r = GetGroundRadius();
+
+            if (VesselState.MainBody is null || !Vessel.VesselOffGround() || Orbit.PeA > 0 || Orbit.ApR < r + VerticalAltitude)
+            {
+                Reset();
+                return;
+            }
+
+            if (VesselState.Time < _lastCycleUT + SimRecalcInterval * TimeWarp.CurrentRate)
+                return;
+
+            Core.StageStats.RequestUpdate();
+
+            if (_vacStats.Count <= 0)
+                return;
+
+            if (_hoverslam.IsRunning)
+                return;
+
+            if (_hoverslam.IsCompleted)
+            {
+                LandingPosition = _hoverslam.Rf.V3ToWorldRotated();
+                IgnitionUT = _hoverslam.IgnitionUT;
+                IgnitionAttitude = _hoverslam.IgnitionAttitude.V3ToWorldRotated();
+                LandingUT = _hoverslam.LandingUT;
+                FinalThrustAccel = _hoverslam.FinalThrustAccel;
+                MainBody.GetLatLngAltAtUT(LandingUT, LandingPosition, out Lat, out Lng, out _);
+                TerrainAltitude = MainBody.TerrainAltitude(Lat, Lng, true);
+                Slope = MainBody.GetPQSSlopeDegrees(Lat, Lng);
+                DeltaV = CalculateDeltaV(LandingCountdown - (IgnitionUT < VesselState.Time ? 0 : IgnitionCountdown));
+            }
+
+            if (_hoverslam.IsFaulted && _hoverslam.Exception != null)
+                Print($"[MechJebModuleHoverslamSimulation] {_hoverslam.Exception}");
+
+            if (!_hoverslam.TryMarkReady())
+                return;
+
+            _manager.Reset();
+
+            V3 w = 2 * PI / MainBody.rotationPeriod * V3.northpole;
+
+            bool noBurnableStages = true;
+            // TODO: if VesselState.LowestUllage drops below 1.0, but we're already doing the burn, we should not re-add ullage computations (but this is a pathological edge-case).
+            // TODO: this is relying on the ullage status of the currently active engines, should put ullage status into the fuelsim and check the status of the first dv>0 stage.
+            // TODO: should always do the RCS ullage burn since it is part of the plan (don't want to get ahead or behind).
+            // TODO: in theory we should also sim the RCS continuously burning as the engine is spooling up.
+            bool needsRCSUllage = ReflectionUtils.IsLoadedRealFuels && VesselState.LowestUllage < 1.0;
+            int lastKSPStage = -1;
+
+            for (int mjPhase = _vacStats.Count - 1; mjPhase >= 0; mjPhase--)
+            {
+                FuelStats fuelStats = _vacStats[mjPhase];
+
+                if (fuelStats.DeltaV <= 0)
+                    continue;
+
+                if (needsRCSUllage && IsFinite(fuelStats.RcsUllageTime) && fuelStats.RcsUllageTime > 0)
+                {
+                    double m0 = fuelStats.StartMass * 1000;
+                    double thrust = fuelStats.RcsThrust;
+                    double isp = fuelStats.RcsISP;
+                    double bt = fuelStats.RcsUllageTime;
+                    double mf = Astro.MassFromMassThrustIspBurntime(m0, thrust, isp, bt);
+                    _manager.AddStage(m0, mf, thrust, isp, fuelStats.KSPStage, mjPhase);
+                    needsRCSUllage = false;
+                }
+
+                int deltaStage = lastKSPStage - fuelStats.KSPStage;
+
+                // for every stage, we need to include a coast for the correct staging delays.
+                if (deltaStage > 0)
+                {
+                    double stagingDelay = Core.Staging.AutostagePreDelay;
+
+                    if (deltaStage > 1)
+                    {
+                        // XXX: tiny bug, if the stage doesn't decouple the next stage doesn't get a post-delay,
+                        //      probably not worth the effort to fix.
+                        double nextDelay = Core.Staging.AutostagePreDelay + Core.Staging.AutostagePostDelay;
+                        if (nextDelay < PhysicsGlobals.StagingCooldownTimer)
+                            nextDelay = PhysicsGlobals.StagingCooldownTimer;
+
+                        stagingDelay += nextDelay * (deltaStage - 1);
+                    }
+
+                    _manager.AddCoast(fuelStats.StartMass * 1000, fuelStats.StartMass * 1000,  stagingDelay, fuelStats.KSPStage, mjPhase);
+                }
+
+                _manager.AddStage(fuelStats.StartMass * 1000, fuelStats.EndMass * 1000, fuelStats.Thrust * 1000, fuelStats.Isp,
+                    fuelStats.KSPStage, mjPhase);
+
+                lastKSPStage = fuelStats.KSPStage;
+
+                noBurnableStages = false;
+            }
+
+            if (noBurnableStages)
+                return;
+
+            double g = MainBody.gravParameter / (r * r);
+            double a = g + Clamp01(VerticalAuthority) * (FinalThrustAccel - g);
+            FinalDescentSpeed = FinalThrustAccel < 0 ? 0 : Sqrt(Max(2.0 * (a - g) * VerticalAltitude, 0));
+
+            _manager.Initial(Core.StageStats.VacR, Core.StageStats.VacV, Core.StageStats.VacT, MainBody.gravParameter, w);
+            _manager.TargetConditions(r + VerticalAltitude, FinalDescentSpeed);
+
+            _manager.Reconfigure(_hoverslam);
+            if (!_hoverslam.TryStartJob())
+                throw new Exception("[MechJebModuleHoverslamSimulation] could not start job");
+
+            _lastCycleUT = VesselState.Time;
+        }
+    }
+}
+
+}
