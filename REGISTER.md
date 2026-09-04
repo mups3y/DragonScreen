@@ -5979,7 +5979,19 @@ those are redistributed here"* — false: `dragon_crew.png` is shipped verbatim 
 `NOTICE` for the full attribution, and correct the redistribution claim to carve out the one shipped asset.
 Docs-only; no `.cs` change; `build.py test` as no-regression check.
 
-### S71 [S] Fix `assets/ASSET_PROVENANCE.md` §3's "not an asset source" claim — **TODO** — [TIER 3: doc accuracy]
+### S71 [S] Fix `assets/ASSET_PROVENANCE.md` §3's "not an asset source" claim — **DONE** (2026-09-04) — [TIER 3: doc accuracy] ⚠ batch deviation from C1.1/C1.7 authorised by owner 2026-09-04 via overseer
+**Done:** retitled §3's header from *"LAYOUT REFERENCE ONLY. NOT AN ASSET SOURCE."* to *"MOSTLY LAYOUT
+REFERENCE, AND THE SOURCE OF ONE SHIPPED ASSET."*, and added a line under it noting
+`dragon_crew.png` is shipped verbatim from this repo's own bundled art, with Apache-2.0's attribution met
+via `NOTICE` (S69) — cross-referenced, not restated (C7.1). Left the "nothing to lift as a texture" bullet
+in place but scoped it ("(almost) nothing") since the one exception is now stated explicitly right after
+it. Docs-only; no `.cs` file touched.
+**Verified (C1.3):** docs-only, no `.cs` change — no preview PNG applies (said, not skipped).
+`python plugin/build.py test` run as the no-regression check: **ALL SUITES PASSED**.
+**Outputs (C1.11, nothing else):** `assets/ASSET_PROVENANCE.md` · this line · one local commit. NOT pushed
+(C1.5).
+**Batched owner questions (C1.9):** none.
+
 Found by **S69**, same pass as S70 (2026-09-04). §3's header reads *"LAYOUT REFERENCE ONLY. NOT AN ASSET
 SOURCE"* for `reference/dragon2-ui-vue/` — false, since `dragon_crew.png` (shipped in
 `plugin/GameData/DragonScreen/art/cover/`) is sourced from that same repo's bundled art. **Build:** correct

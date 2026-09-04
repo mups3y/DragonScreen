@@ -87,12 +87,17 @@ font by hand. The release route is MAS's bitmap-font path — a texture plus `Ch
 - This is a DIN-family face, which is the typeface class the real capsule displays use. Most of the
   "it looks right" comes from this, not from the chrome.
 
-## 3. `reference/dragon2-ui-vue/` — LAYOUT REFERENCE ONLY. NOT AN ASSET SOURCE.
+## 3. `reference/dragon2-ui-vue/` — MOSTLY LAYOUT REFERENCE, AND THE SOURCE OF ONE SHIPPED ASSET.
 
 - **Source:** https://github.com/Neel-Dandiwala/SpaceX-Dragon2-UI
 - **Licence:** **Apache-2.0** (GPL-3.0 compatible).
 - **Use it for:** what goes on each page and how the pages are arranged. It is a Vue 3 / WebGL app —
-  its visuals are CSS and shaders, so there is nothing here to lift as a texture.
+  its visuals are CSS and shaders, so there is (almost) nothing here to lift as a texture.
+- ⚠ **The one exception: `plugin/GameData/DragonScreen/art/cover/dragon_crew.png` is shipped verbatim**,
+  taken from this repo's own bundled art (`docs/ASSET_INDEX.md`). Apache-2.0's attribution requirements
+  are met via **`NOTICE`** at the repo root (full attribution, licence text, statement of changes — the
+  single source of truth; not restated here). This section's "reference only" framing above is about the
+  Vue/CSS/shader UI, not this one asset.
 - **Pruned on download** from 134 MB to 2.2 MB: the two 42 MB ISS `.glb` models, the earth/camera
   photography and the built `docs/` output were all deleted. Kept: the 8 page components in
   `src/components/`, and `misc/` which holds screenshots of the real panels.
