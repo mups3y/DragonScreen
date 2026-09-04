@@ -15,6 +15,7 @@ simulation. Update it (as a separate task) if the owner reports a mod added or r
 | Mod | Supplies | Evidence |
 |---|---|---|
 | **MechJeb2** (Sarbian/MuMech release, PVG-capable) | Guidance/autopilot core Part B embeds | `docs/BUILD_PLAN.md:353`, `:804-808` |
+| **ThrottleControlledAvionics (TCA)** | Engine/RCS thrust-limiter balancing (iterative torque-nulling descent), T-SAS thrust-vector attitude control, VSC+altitude+radar landing law — installed and instantiated as `ModuleTCA`/`TCAEngineInfo` on the Dragon pod (`TE.18.DRAGONV2.POD`, `GroupMaster=True`) and the booster interstage (`TE.19.F9.S1.Interstage`, `GroupMaster=False`), one shared TCA group `b90d60bb01ee4e448523168699cacccb`, `TCA_Active=False` on both — added by the owner 2026-08-27 | `docs/reference/craftdump.csv:884-921,3236-3256` (42 `ModuleTCA` rows); `docs/MODS_HARVEST_2.md` §1/§1d (recovered by W26) |
 | **RealismOverhaul** (+ `RO_SuggestedMods`) | The RSS-RO ruleset/config layer everything else sits under | `docs/BUILD_PLAN.md:1422-1424` |
 | **RealFuels** | Procedural/realistic propellant tanks, **propellant-settling (ullage) state** — read by reflection in recovered `Ullage.cs` | `docs/AUTOPILOT_RECOVERY_AUDIT.md:27,617,674`; `REGISTER.md:1831-1834` |
 | **TestFlight** | Part failure/reliability model — sits on `TE.19.F9.S1.Engine` with `TestFlightFailure_IgnitionFail/_ShutdownEngine/_ReducedMaxThrust/_EnginePerformanceLoss/_Explode`, `TestFlightReliability_EngineCycle` | `docs/BUILD_PLAN.md:1291-1297` |
@@ -90,7 +91,49 @@ none is needed — CommNet has no separate uplink/downlink budget, so both reado
 signal. No gap, no simulation, no mod search owed beyond confirming CommNet's presence (it is base game, not a
 mod, so §14.5's mod-first ladder does not even apply here).
 
-## 3. Public research consulted
+### (f) Booster steering law — TCA present, decision open — **NOT RESOLVED, owner call (W24 Q1)**
+- **TCA is installed and instantiated** (§1 above) — evidenced from the craft dump (`docs/reference/craftdump.csv`),
+  not assumed. `docs/reference/INSTALLED_MODS.md` (this file, before this task) omitted it entirely; that gap is
+  what this task closes.
+- Whether any TCA capability — T-SAS thrust-vector attitude control, VSC+altitude+radar landing law,
+  Horizontal-Speed Control — can serve the booster's steering law is assessed in full in
+  `docs/BOOSTER_STEERING_MOD_SEARCH.md`: verdict **NOT REJECTABLE, NOT ADOPTABLE** — TCA sits on the Dragon pod
+  as the shared group's `GroupMaster`, so whatever is decided is decided for both vessels at once, and whether
+  TCA's own module can command an **unfocused** vessel is unknowable from anything in this repo (C7 forbids
+  reading the DLL, the install, or TCA's upstream source to settle it).
+- **This decision is open as W24 Q1.** ⚠ **Adding the §1 row above is not adopting the mod.** It records that
+  TCA is installed and what it supplies; it decides nothing about depending on it. Cross-reference
+  `docs/BOOSTER_STEERING_MOD_SEARCH.md` for the candidate-by-candidate assessment rather than restating its
+  verdicts here.
+
+## 4. Rest of the full install scan (`docs/MODS_HARVEST_2.md` §5) — accounted for
+
+W29's line asks that "every other mod `MODS_HARVEST_2.md` §5 evidences is either listed or explicitly
+accounted for." §5 is a full install scan the owner ran 2026-08-27; entries below either already have a §1
+row or are recorded here as accounted-for-with-no-row, per §5's own verdict — nothing invented beyond what
+§5 already says.
+
+| Mod(s) (`MODS_HARVEST_2.md` line) | Status |
+|---|---|
+| **HotStaging** (`:95`) | Not in §1 — RO hot-stage ring hardware; §5's harvest is a future build note for the safe-sep guard (handle hot-stage lead), not a readout any code reads today. |
+| **CanaveralPads · ModularLaunchPads · KSCSwitcher** (`:96`) | Not in §1 by these names — grouped in §5 with the already-listed TundraSpaceCenter/Kerbal Konstructs (RTLS pad statics); these three supply no readout of their own yet. |
+| **TestFlight** (`:97`) | Already in §1 above. |
+| **SolverEngines** (+ RealHeat) (`:98`) | Not in §1 by name — §5 says it sits under the already-listed RealFuels ("engine numbers read live... already core"); accounted for via the RealFuels row. |
+| **KSPCommunityFixes** (`:99`) | Not in §1 — fixes stock `GetPotentialTorque`; §5 says "already relied on" but it supplies no readout of its own to list. |
+| **KerbalJointReinforcement** (`:100`) | Not in §1 — validates the rigid-body control assumption; supplies no readout. |
+| **RealAntennas** (`:101`) | Not in §1 — §5 marks it P3 (comms/thermal management), not yet built. Revisit when P3 is scoped. |
+| **RCSBuildAid** (`:102`) | Not in §1 — §5 itself: "not a runtime source" (editor-only tool). |
+| **EngineGroupController** (`:103`) | N/A per §5 — "we group by capability in Actuator." |
+| **AJE** (`:104`) | N/A per §5 — jet engines; Falcon/Dragon has none. |
+| **Kopernicus · Sol-Configs/Textures/Visuals · RSS-CanaveralHD** (`:105`) | Not in §1 — body/ground-truth constants (Earth R/μ/rotation, KSC latitude), not a runtime readout mod. |
+| **ROLib/ROTanks/ROEngines/ROCapsules/ROHeatshields/ROSolar · ProceduralParts/Fairings · B9PartSwitch** (`:106`) | N/A per §5 — "parts only; actuate by capability." |
+| **AtmosphereAutopilot** (`:107`) | N/A per §5 — already harvested for AoA moderation (a technique, not this mod as a source) and explicitly kept OFF as a controller. |
+| **KerbalReusabilityExpansion · IQStarshipLegs · StarshipGroundExtensions** (`:108`) | N/A per §5 — "parts; capability-detected." |
+| **Waterfall/RealPlume/SmokeScreen · Scatterer/EVE/Parallax/TUFX/Deferred · ReStock · TextureReplacer** (`:109`) | N/A per §5 — visuals. TextureReplacer's one functional use here (the SpaceXSuits texture combo) is already its own §1 row. |
+| **ContractConfigurator/RP-1/RONoCareer · KerbalChangelog/PatchManager/ClickThroughBlocker/ToolbarControl/Harmony** (`:110`) | N/A per §5 — career/UI/infra. |
+| **ModularFlightIntegrator (MFI)** (`docs/MODS_HARVEST_2.md` §3, `:78-83`) | Not in §1 — infrastructure hook, not a port; the takeaway is "measure FAR's/RealHeat's integrated forces, don't model," already how `Trajectory.MeasureAero` works. Named separately because §5's table itself doesn't carry it (it is §3's own section) but the register line's "and check the rest of the list" covers it too. |
+
+## 5. Public research consulted
 
 - KSP-RO/TestFlight source + wiki (`TestFlightFailure_IgnitionFail.cs`, `TestFlightReliability_EngineCycle.cs`,
   the reliability-redesign proposal) — confirms the FailureRate/MTBF model and the dynamic-pressure-gated

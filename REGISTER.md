@@ -6386,7 +6386,20 @@ skipped. `git status` shows exactly the declared outputs: `plugin/src/pure/Boost
 `plugin/test/BoosterSteerTest.cs` (new), `plugin/src/BoosterHost.cs` (attitude wiring + `Actuate=true`),
 `plugin/test/TestMain.cs` (one registration) and this register entry.
 
-### W29 [S] `docs/reference/INSTALLED_MODS.md` omits ThrottleControlledAvionics — the register that C1.15 makes every task check is incomplete — **TODO** — [TIER 2: the gap already cost one task, and C1.15 points every future task at this file]
+### W29 [S] `docs/reference/INSTALLED_MODS.md` omits ThrottleControlledAvionics — the register that C1.15 makes every task check is incomplete — **DONE** — [TIER 2: the gap already cost one task, and C1.15 points every future task at this file] ⚠ batch deviation from C1.1/C1.7 authorised by owner 2026-09-04 via overseer
+Added TCA to §1 with its craft-dump evidence (42 `ModuleTCA` rows, `docs/reference/craftdump.csv:884-921,3236-3256`,
+group `b90d60bb01ee4e448523168699cacccb`) plus `docs/MODS_HARVEST_2.md` §1/§1d, and a new §2(f) candidate
+assessment ("NOT RESOLVED, owner call W24 Q1") that points at `docs/BOOSTER_STEERING_MOD_SEARCH.md` for the
+verdict rather than restating it — explicit that adding the row is not adopting the mod. Added a new §4
+accounting for every other mod `docs/MODS_HARVEST_2.md` §5 evidences (HotStaging, the launch-pad statics trio,
+SolverEngines/RealHeat, KSPCommunityFixes, KerbalJointReinforcement, RealAntennas, RCSBuildAid,
+EngineGroupController, AJE, Kopernicus/Sol-Configs/RSS-CanaveralHD, the RO parts group, AtmosphereAutopilot,
+the legs/grid-fin parts group, the visuals group, the career/UI/infra group) plus ModularFlightIntegrator from
+§3 — each either cross-referenced to its existing §1 row or recorded as accounted-for-with-no-row per §5's own
+verdict, nothing invented; renumbered "Public research consulted" §3→§5 to make room. Checked `docs/INDEX.md`'s
+entry for `reference/INSTALLED_MODS.md` (`:393-395`) — it describes the file only generically ("the register
+C1.15 makes every simulation search run against"), still accurate, no edit needed. Docs-only → no preview PNG
+applies (C1.3); `python plugin/build.py test` run as the no-regression check, green (`ALL SUITES PASSED`).
 Found by **W24**, 2026-09-04 (C1.1 — logged, not done: M1's file says in its own words that it is updated *"as
 a separate task"*, and W24's declared outputs do not include it, C1.11).
 **The finding.** C1.15 makes `docs/reference/INSTALLED_MODS.md` the file every not-yet-modelled-quantity
