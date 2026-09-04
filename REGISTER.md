@@ -2933,6 +2933,47 @@ burn — flagged here so that future work does not have to rediscover it.
 
 - **Strays LOGGED, not fixed (C1.1):** [[OCT7]], [[OCT8]], [[OCT9]], [[OCT10]] below.
 
+#### Open questions for the owner (C1.14)
+
+**OCT6-Q1 — the shed point is now COMPUTED, exactly as you ruled, and it computes to a point with NO
+MARGIN. Is that flown as-is, given a margin, or held for a flight?**
+*(Paste-ready for the overseer, C1.13.)*
+
+**Situation.** OCT6 is built and green: on your ruling (*"1. (2)"* / *"yes to computing from current hover
+slam solver"*) the landing burn now opens on the three-engine bank and sheds to the centre engine when
+`Hoverslam.EnginesFor` says one engine can still arrest. It latches one way, the phase gate admits the
+ordered pair without widening, and a whole simulated landing burn is asserted legal tick by tick. Nothing
+is installed and nothing has flown.
+
+**What the build measured while proving the latch.** `EnginesFor` sheds at the FIRST tick the single
+engine can *just* arrest — it carries no margin term — and the throttle ramp then takes the newly
+selected centre bank about half a second to reach the thrust that solve assumed. The mutation run dated
+the consequence: 0.8 s after the shed, an un-latched solver re-demands three engines, i.e. the margin has
+already gone negative. **The latch is right to refuse to chatter; it cannot give the margin back.** Real
+Falcon 9 sheds well before the single-engine limit for this reason. Logged as [[OCT9]].
+
+**The decision needed — what the shed criterion should be:**
+1. **Leave it exactly as ruled and fly it.** Simplest, and it is literally what was asked for. Accepts
+   that the first recorded landing burn arrives with no headroom across the swap.
+2. **Add margin DERIVED from the solver, not invented** — shed only when the single engine can arrest
+   with the spool time counted as dead time, which `HoverslamInputs.DeadTimeS`/`SpoolS` already model.
+   No new tuned constant, so §B16.8 ruling 2 is not violated. *(the build chat's recommendation)*
+3. **Hold the shed criterion for a recorded flight** and fly option 1 until then, deciding from BlackBox
+   data rather than from a model.
+4. **Fly `CenterOnly` throughout after all** — i.e. reverse the ruling. Listed only for completeness;
+   this would need an explicit `OVERRIDE` (C1.8/C1.12) and OCT6 would be unwound.
+
+**Recommendation: (2).** It keeps your ruling exactly — the shed point stays COMPUTED from the hoverslam
+solver — and closes the one gap the build could measure, using quantities the solver already models
+rather than a number nobody has flown. (1) is safe to *build* but arrives at the deck with zero headroom;
+(3) is reasonable but the flight it waits for is a landing burn flown with that zero headroom. **Option 4
+needs an `OVERRIDE`; options 1-3 do not.** No gate needs opening for any of them — all are pure-code work
+under the existing preview-only build-go.
+
+⚠ **Separately, and not a question:** [[OCT4]] (does dispatch ACTUATE a mid-burn bank change correctly?)
+has never run, and OCT6 just created the project's first mid-burn bank change. That is a build task, not
+an owner call — flagged here only so it is not lost behind the question above.
+
 ### OCT7 [S] Two file headers still assert `ignitions = 1` as established fact — **TODO** — [logged by OCT6 per C1.1; the brief named this one log-only]
 - **The finding, two places:** `pure/BoosterDescent.cs:52-57` (§4.5 non-port **(b)**) still reads
   *"`docs/reference/craftdump.csv` records `ignitions = 1` on EACH of the three `ModuleEnginesRF`.
