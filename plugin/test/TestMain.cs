@@ -179,6 +179,11 @@ public static class TestMain
         // NOTHING about the glue reading the right KSP field into the right column - that is
         // `src/BlackBoxRecorder.cs`, it needs a Vessel, and it is confirmed on the glass by **BB4**.
         bad += BlackBoxTest.Run();       // BB1: recorder core - schema, validity, rates, manifest, coverage
+        // ⚠ S85's suite is NOT part of the excision above. `pure/CrewControlIds.cs`, `pure/CrewPressLog.cs`
+        // and this line stay when the recorder goes: the press buffer is SCREEN-side, the two choke
+        // points write into it, and it is the reason `ScreenPainter.cs`/`PanelButtons.cs` still compile
+        // with `pure/blackbox/` and `BlackBoxRecorder.cs` deleted. Verified by physical removal (S85).
+        bad += CrewPressTest.Run();      // S85: the CVR press channel - the control_id namespace + buffer
 
         Console.WriteLine(bad == 0 ? "ALL SUITES PASSED" : bad + " SUITE(S) FAILED");
         return bad == 0 ? 0 : 1;

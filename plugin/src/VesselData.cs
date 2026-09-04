@@ -44,6 +44,22 @@ namespace DragonScreen
         internal static PageState State { get { return state; } }
         internal static string Met { get { return met; } }
 
+        /// <summary>
+        /// S85: universal time RIGHT NOW, or NaN when there is no `Planetarium` to ask.
+        ///
+        /// The two crew choke points (`ScreenPainter.TouchDown`, `PanelButton.OnMouseDown`) stamp a
+        /// press with the instant it HAPPENED rather than the instant a recorder collected it — §2.9's
+        /// sub-frame rule, which the deleted Recorder A had and then degraded by folding edges into the
+        /// next sample. It lives here because this is the file that reads the game, and one accessor is
+        /// one place for the null guard rather than two copies of it in two glue files.
+        ///
+        /// NaN rather than 0.0 on no clock: 0.0 is a real UT and would put the press at the epoch.
+        /// </summary>
+        internal static double NowUt()
+        {
+            return (Planetarium.fetch != null) ? Planetarium.GetUniversalTime() : double.NaN;
+        }
+
         internal static void Refresh()
         {
             if (Time.frameCount == lastFrame) return;

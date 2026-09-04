@@ -9147,7 +9147,7 @@ whose `Reset()` call-site pattern is visible in `git show 8b81816^:plugin/src/Fl
 columns are appended to `BlackBoxSchema` as `Live`, and `BlackBoxCoverage` reports no defect for them.
 ⚠ Appending columns keeps `schema_version` (§4.2); it must NOT be bumped for this.
 
-### S85 [S] The BlackBox records WHICH page was shown but not a single crew PRESS — §2.7's `control_id` namespace does not exist — **TODO** — [TIER 1: the CVR channel §0's three misdiagnoses actually needed]
+### S85 [S] The BlackBox records WHICH page was shown but not a single crew PRESS — §2.7's `control_id` namespace does not exist — **DONE 2026-09-05** — [TIER 1: the CVR channel §0's three misdiagnoses actually needed]
 Logged by **BB1**, 2026-09-04 (C1.1 — out of BB1's scope BY ITS OWN DESIGN CONSTRAINT, not by preference).
 **The gap.** §2.7 splits the crew channel in two: a page SELECTION is a state (recorded continuously —
 BB1 does this: `page_l/page_c/page_r` plus a `crew.page_change` event on every edge) and a PRESS is an act
@@ -9185,9 +9185,175 @@ BlackBox would make excision a code edit in a screen file instead of a delete.
 3. Leave the press channel out permanently and accept that a recording never shows what the crew did.
 *No gate; a design call with an excisability consequence.*
 
+**S85-Q1 — CLOSED 2026-09-05 by THE OVERSEER, under the owner's standing directive that the overseer
+settles questions with knowable answers.** ⚠ **Attribution, per C1.12's evidentiary standard: this is the
+OVERSEER's ruling, relayed to this chat in its task brief — it is NOT recorded as the owner's, and the
+owner spoke no words this chat can quote.** The overseer's words, quoted in full:
+
+> THE CONSTRAINT FORBIDS A COMPILE DEPENDENCY. A PUBLISH-SIDE BUFFER IS NOT ONE.
+> The screens own a `static` append-only press buffer and write into it at the choke point. The recorder
+> DRAINS it each tick and emits the events. `ScreenPainter.cs` references nothing but its own static.
+> THE TEST YOU MUST APPLY AND REPORT: delete `pure/blackbox/` + `src/BlackBoxRecorder.cs` in a scratch
+> copy — `ScreenPainter.cs` and `PanelButtons.cs` MUST still compile. If they do not, your design is the
+> wrong one; fix the design, not the test.
+> ⛔ `BlackBox.RecordPress(...)` called from a screen file is REFUSED. That is the hard dependency.
+> ⛔ Do NOT introduce a C# event/delegate: `grep` `static event` and `Action<` across `plugin/src/*.cs` —
+> there is NO such precedent in this tree. Copy `livePage` (`ScreenPainter.cs:199`, a `private static`
+> array published per screen at `:287-290`), which is the existing idiom, in QUEUE form.
+
+That is **option 1 in substance and neither option 1 as written nor option 2**: the seam is a QUEUE the
+screens own, not a `static Action<...>` delegate the recorder subscribes to — the ruling forbids the
+delegate explicitly, and the grep it ordered confirms its premise (`static event`: **0 hits**; `Action<`:
+**0 hits**, across `plugin/src/*.cs`, `plugin/src/pure/*.cs` and `plugin/src/pure/blackbox/*.cs`). Built
+exactly as ruled.
+
 **DONE when:** every press on every surface writes one `crew.*` event carrying `control_id`, the surface
 enum, `acted`, `press_kind`, the lamp, and the `alarm_mask`/`sev_system` at that instant; excisability is
 re-tested by physical removal exactly as BB1 did.
+
+---
+
+#### WHAT WAS BUILT (S85, 2026-09-05)
+
+**1. The `control_id` namespace — `plugin/src/pure/CrewControlIds.cs` (new, pure).** Eight prefixes
+(`nav.` `cover.` `suit.` `subsys.tab.` `chute.` `tree.` `dock.` `panel.`) and seven mappers, total over
+every value of every one of §2.7's seven disjoint types. §2.7's own worked examples all come out
+verbatim: `nav.goto.NavOrbitPlot`, `cover.ActDeorbitBrief`, `dock.TransFwd`, `suit.Troubleshoot`,
+`chute.7`, `subsys.tab.1`, `panel.FirePyro`.
+- **STABILITY, which is the whole point.** Every id is derived from the enum's own NAME, never an
+  ordinal (BB9's `boost_block`/`boost_phase` rule), and never from a second hand-kept table that could
+  drift from the enum. The cost of name-derivation is that a RENAME would silently rename a recorded
+  channel — so every member name is PINNED as a literal string in `test/CrewPressTest.cs`, which asserts
+  the count (an added control fails until pinned), the name (a rename fails, naming the channel), the
+  ordinal (a member inserted mid-enum fails even when every name still exists) and the id itself.
+- **The one prefix split that is deliberate.** `PanelCommand.Power1` is reachable from the console plate
+  AND from the SYSTEMS TREE page; they are `panel.Power1` and `tree.Power1`, two ids, because "which
+  surface did the crew use" is a question a CVR must answer. The shared command travels in the payload
+  (`cmd`), so a cross-surface query still has one field to group on.
+- **`chute.N` is the one id that can only be an int, and the code says why.** The chute procedure's
+  twelve rows carry duplicate labels, duplicate `Act` words and duplicate commands — the pinned table
+  proves it: `EnableBackupPyros` appears four times, `FirePyro` three. Position in the crew's reading
+  order is the only unique discriminator, so an inserted step renumbers every id after it; the pin makes
+  that a build failure naming what moved, and the payload carries the row's `PanelCommand` so an old
+  recording stays readable.
+- **`dock.Settings` is defined and can never fire** — `FigmaUI.HitTest` claims that rect as navigation
+  first, so a real press is `nav.goto.Audio`. Stated in the code and asserted in the test rather than
+  left to be discovered: an unreachable channel is S90's defect, and this line exists partly to end it.
+
+**2. The publish-side buffer — `plugin/src/pure/CrewPressLog.cs` (new, pure).** The `CrewPress` record
+(§2.9's payload as plain values) plus a fixed 64-slot append-only queue, no allocation on the touch path.
+**Nothing in it names the BlackBox.** Absent is `-1`/NaN, never `0` — §4.6's blank-never-a-plausible-value
+rule in a struct, because `PanelPressKind.Inert`, `PanelLight.Dark`, `UiPage.Cover`, nominal `Severity`
+and a clear alarm mask are all a real 0.
+- ⚠ **IT COUNTS WHAT IT DROPS.** On overflow the NEWEST press is refused (what survives is a contiguous
+  prefix, not a window with an invisible hole) and `Dropped` climbs; a destination shorter than
+  `Capacity` counts the remainder rather than leaving it to be re-drained out of order. The count reaches
+  the RECORDING as `crew.press_dropped`, not a log line — S76 is what a recorder losing data quietly
+  costs. It should never fire: presses are human-rate against a `FixedUpdate` drain.
+
+**3. The two choke points, instrumented — ONE append each.**
+- `ScreenPainter.TouchDown`: the live `FigmaMode` body was lifted verbatim into a new private
+  `FigmaTouch(px, py, ref CrewPress)`, so the record is built and appended in exactly one place instead
+  of once per branch. **The LIVE branch, not the dead one** — §2.7's second finding: `FigmaMode` is
+  `private const bool = true`, so the chrome-bar path below is compiled-but-unreachable and carries no
+  instrumentation at all. (⚠ S85's recorded line numbers were stale before this line began and are stale
+  again after it; everything here is named, not numbered.)
+- `PanelButton.OnMouseDown`: appended AFTER `Show(kind)`, so `lamp` is the dash **as it now stands**
+  rather than `PanelPolicy.LampFor(kind)` — an Inert or Nothing press leaves the previous lamp exactly
+  where it was, and the record photographs the console the crew is actually looking at.
+- **`acted`, the field with no observable edge.** Where the press reaches `FlightCommands.Run` it IS the
+  dispatcher's bool return and nothing else is consulted (§2.9). Where it does not, the same question is
+  answered by whether the state that surface owns changed — `ApplyNav` and `ApplyCoverCam` now RETURN
+  that (no second copy of their guards to drift from them), the suit page compares its four state fields
+  across the dispatch, the subsystem tab compares before against after. So a re-selection of the page
+  already shown, a refused TROUBLESHOOT, a §14.4(b) inert plate and a §14.4(a) docking no-op are all
+  `acted:false` — and every one is invisible to `PageEdge`'s poll, which is why this line existed.
+- The alarm context is stamped BEFORE the dispatch on both surfaces: it is the CVR's area-microphone
+  channel, so it must be what was lit when the press was MADE (a SYSTEMS TREE press can move the mask
+  itself, and stamping after would report the consequence as the reason).
+
+**4. The drain — `BlackBoxRecorder.DrainPresses()`, beside `PageEdge`.** Capsule-singleton (the booster
+stream has already returned), once per `FixedUpdate`, deliberately OUTSIDE the `ps.Valid` guard: a press
+HAPPENED whether or not the screen feed was answering that tick. Emits `crew.press` when a control was
+hit and `crew.touch` when the touch hit nothing — §2.9 names both and they are different findings (a
+mis-aimed press and a refused press are identical in every state trace). `screen` is converted to the SAME
+0/1/2 the page channel speaks. A new `EmitAt(kind, payload, atUt)` gives the event **its own instant** —
+the first event in this recorder with a real sub-frame timestamp, which is §2.9's rule and the one
+Recorder A had and degraded. **`crew.dispatch` is deliberately NOT implemented**, and `BlackBoxEvents.cs`
+says why: both choke points dispatch synchronously, so it would duplicate every dispatching press.
+
+**5. §4.10's report reads it — `plugin/tools/assess_flight.py` §9.** The subsection that used to DECLARE
+this gap ("NOT RECORDABLE YET … register line **S85** owns it") now prints the interaction table with the
+acted/did-nothing split, names the controls pressed that never acted, separates a mis-aimed touch from a
+refused press, and ALERTS on a dropped-press report. The `--selftest` fixture gained four interactions
+plus an overflow, so all five of those paths have a true positive.
+
+⚠ **NO SCHEMA CHANGE.** No column added, `schema_version` untouched, `BlackBoxCoverage` unaffected —
+this is entirely an event channel.
+
+#### THE EXCISION TEST — RUN, AND ITS RESULT
+
+Performed in a scratch copy, exactly BB1's documented recipe: deleted `plugin/src/pure/blackbox/`,
+`plugin/src/BlackBoxRecorder.cs`, `plugin/test/BlackBoxTest.cs` and the `TestMain.cs` line.
+
+- ✅ **`ScreenPainter.cs` and `PanelButtons.cs` COMPILE** — the whole plugin does. The only mentions of
+  "BlackBox" left in either file are COMMENTS.
+- ✅ **`python plugin/build.py test` → ALL SUITES PASSED**, `CrewPressTest` included (1211 checks) — the
+  press namespace and the buffer survive the excision because they are screen-side, which is the design.
+- ⚠ **ONE FIFTH ITEM THE RECIPE DOES NOT NAME.** The C# half was green immediately; the run then failed
+  on BB3's python tool selftest, which parses `BlackBoxSchema.cs` and cannot once it is gone. Deleting
+  `plugin/tools/assess_flight.py` as well → fully green. **NOT FIXED HERE (C1.1) — logged as `S95`.**
+  A BB3-era omission in a comment, not anything S85 introduced.
+
+#### MUTATION PROOF (16 mutations, 0 survivors)
+
+Every one killed in a scratch copy, with the failing assertion recorded: `covr.` prefix typo ·
+`nav.goto.<ordinal>` instead of the name · `tree.` collapsed onto `panel.` (93 collisions) · the chute
+upper bound removed · an undefined enum rendering as a bare number (`panel.9999`, shaped exactly like
+`chute.7`) · a third subsystem tab · **overflow dropping SILENTLY** · short-destination truncation
+uncounted · `Blank()` starting `press_kind` at 0 (= a real `Inert` verdict) · a null id keeping its
+surface (it would be written as a press, not a touch) · overflow evicting the oldest instead of refusing
+the newest · a member INSERTED mid-`DockAct` · a step inserted into the chute procedure · the reserved
+`none` id colliding with a real control.
+⭐ **The rename guard was proved the realistic way:** an IDE-style *rename symbol* of
+`SuitCheckPage.SuitAct.Retime` → `Rerun` (4 qualified uses + the declaration; string literals untouched,
+which is exactly what such a refactor does) COMPILES CLEAN and is killed by the pin alone —
+`FAIL: SuitAct[5] name - got Rerun, want Retime` and `FAIL: suit Retime - got suit.Rerun, want
+suit.Retime`. A rename cannot quietly rename a recorded channel.
+
+#### VERIFICATION + THE LIMITS, STATED
+
+- `python plugin/build.py test` → **ALL SUITES PASSED** (`CrewPressTest`: 1211 checks) + `SELFTEST OK`.
+- `python plugin/build.py preview` → green, and **all 118 preview PNGs are BYTE-IDENTICAL to `HEAD`**
+  (md5 of every page, rendered before and after). That is the proof of "do not change ANY screen
+  behaviour", and it is stronger than an eyeball; `ui_Cover.png` was inspected directly as well.
+- No new compiler warnings: 6 `CS0162` before, 6 after — all the pre-existing dead-branch ones.
+- ⛔ **`src/` GLUE IS NOT EXERCISED BY ANY TEST HERE.** `build.py test` compiles `src/pure` + `test` into
+  the suite exe (`build.py:199-213`); `ScreenPainter.cs`, `PanelButtons.cs` and `BlackBoxRecorder.cs` are
+  COMPILED and never RUN. So the id mapping, the buffer and the drop accounting are proved; that a press
+  actually reaches the choke point, that `acted` carries the dispatcher's real answer on the glass, and
+  that the line lands in `events.jsonl` are **not** — that is **BB4**'s job, in the capsule.
+- ⚠ **BB6 IS OPEN**, so a green coverage run is not proof of fill — and this channel adds no column, so
+  `BlackBoxCoverage` cannot speak for it at all (see **S85-Q2**).
+- No `install`, no glass time — both remain separate owner gates (C1.12), and this line needed neither.
+
+#### Open questions for the owner (C1.14) — S85
+
+**S85-Q2 — A recording where the press hook silently failed is INDISTINGUISHABLE from a flight where
+nobody pressed anything. Should the recording declare that the hook is fitted?**
+*Situation.* S76's lesson was that a declared-but-never-written COLUMN is a ghost the coverage check can
+catch. The press channel declares no column, so nothing catches its absence: an empty `crew.press` stream
+means either "no presses" or "the hook is broken / this build predates S85", and §9 of the report now
+says exactly that in words because it cannot tell. Everything else in this line is guarded; this is the
+one hole left, and it is the same shape as the failure BB1 was built against.
+1. **A capability list in the manifest** — e.g. `"channels": ["crew.press", …]`, written at open, so a
+   reader can tell "fitted and silent" from "not fitted". *(Recommended: describing the file's own shape
+   is already the manifest's job (§4.3), it needs no `schema_version` bump, and it generalises to every
+   future event channel instead of special-casing this one.)*
+2. A `rec.open` payload field (`"press_hook": true`) — cheaper, but event-log-only, so a reader holding
+   only the manifest still cannot tell.
+3. Leave it — §9's printed caveat is the disclosure, and BB4 confirms the hook once on the glass.
+*No gate. It touches BB1's manifest, which is why this chat did not decide it (C1.1 / C1.14).*
 
 ### S86 [S] Three screen-state columns the BlackBox cannot reach — `brightness_l/c/r`, `cover_cam`, `cover_phase` — **DONE (PARTIAL) 2026-09-05** — [TIER 4: hygiene — a §2.7 column set with no accessor]
 Logged by **BB1**, 2026-09-04 (C1.1). Batched with **[[BB9]]** (same task, same schema file, both pure
@@ -9504,6 +9670,28 @@ first non-DONE task, verifies it, updates the register, and stops."* That is the
 `description` is not the enforced instruction — the skill body is — but it is user-facing (shown wherever
 skills are listed) and states the old, wrong rule. **Fix:** reword the clause to something the new rule
 doesn't contradict, e.g. "does the next eligible task" — a one-line frontmatter edit.
+
+### S96 [S] BB1's excision recipe names FOUR items and the excision needs FIVE — BB3's `assess_flight.py` is not in it — **TODO** — [TIER 4: hygiene — a comment that would mislead the one person following it]
+Logged by **S85**, 2026-09-05 (C1.1 — found by RUNNING the excision, out of S85's scope to fix).
+⚠ Numbered **S96**: `S95` was already taken by an unrelated `TODO` further down (the `brightness_l/c/r`
+source citation). Same collision S94's line warns about; the next free number is used rather than shadowing.
+**The gap.** `plugin/test/TestMain.cs` carries the recipe: "delete `src/pure/blackbox/`,
+`src/BlackBoxRecorder.cs`, `test/BlackBoxTest.cs`, and this line. Nothing else in the tree names it."
+S85 performed exactly that in a scratch copy. The C# half went green immediately — the plugin compiled,
+every suite passed — and then `build.py test` FAILED on BB3's python tool selftest:
+`SELFTEST FAILED: schema parse produced 0 columns - BlackBoxSchema.cs no longer matches the parser`.
+`plugin/tools/assess_flight.py` parses `BlackBoxSchema.cs` to build its fixture (`build.py`'s `tool_tests()`
+runs it as part of `test`), so it cannot survive the schema's deletion. Removing it too → fully green.
+**Why it is only a comment problem.** Nothing is broken today; the recipe simply predates BB3 (the tool
+did not exist when BB1 wrote it), and the one person who will ever follow it is the person excising the
+recorder for release — who would hit a red build and have to work out why.
+**Read:** `plugin/test/TestMain.cs` (the recipe, in the comment above the `BlackBoxTest.Run()` line) ·
+`plugin/build.py` `tool_tests()` (`:219-241`, and its own "a missing tool is skipped, not failed" rule, which
+is what makes deletion the correct fix rather than a guard) · S85's own excision-test report, above.
+**DONE when:** the recipe in `TestMain.cs` names `plugin/tools/assess_flight.py` as the fifth item, and
+anywhere else the four-item recipe is written down (grep `excisable`) agrees with it. Comment-only, no
+code change — so C1.3's preview/build gate is satisfied by saying so (a `build.py test` run is still
+cheap and worth doing).
 
 ### S94 [S] `cover_cam`/`cover_phase` split into six per-screen columns — closing S86-Q1 (owner → the overseer, 2026-09-05) — **DONE 2026-09-05** — [TIER 4: hygiene — the rest of S86's §2.7 column set]
 Assigned directly by the owner, 2026-09-05, as the resolution of **S86**'s open question (C1.14). ⚠ **A

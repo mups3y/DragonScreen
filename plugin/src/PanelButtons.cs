@@ -221,6 +221,20 @@ namespace DragonScreen
             if (PanelPolicy.Clicks(c)) PanelAudio.Click();
 
             PanelPressKind kind;
+            // ---- S85: the CVR press record for the PLATE (§2.9). Built here, appended once at the
+            // ---- bottom, and read by nobody in this file. `CrewPressLog` is a pure screen-side queue
+            // ---- (the `livePage` idiom in queue form); NOTHING here names the BlackBox, so deleting
+            // ---- `pure/blackbox/` and `BlackBoxRecorder.cs` leaves this file compiling untouched.
+            CrewPress rec = CrewPressLog.Blank();
+            rec.Ut = VesselData.NowUt();
+            rec.Surface = CrewSurface.Panel;
+            rec.EnumValue = (int)c;
+            rec.ControlId = CrewControlIds.Panel(c);
+            rec.Cmd = (c == PanelCommand.None) ? -1 : (int)c;
+            // The area-mic context, stamped BEFORE the dispatch: what was lit when the press was made,
+            // not what the press then made lit (see ScreenPainter.StampAlarms, the same rule).
+            PageState ps = VesselData.State;
+            if (ps.Valid) { rec.AlarmMask = Alarms.Mask(ps); rec.SevSystem = (int)Alarms.SystemSeverity(ps); }
 
             // ---- CANCEL: clear any armed command AND stop any running sequence (user 2026-08-21) ----
             // Two jobs. The interlock clears an armed emergency command; CancelAllSequences stops a
@@ -233,6 +247,11 @@ namespace DragonScreen
                 if (PanelPolicy.ClearsArmedLamps(r)) ClearArmedLamps();
                 bool stopped = FlightCommands.CancelAllSequences();
                 kind = PanelPolicy.ResolveCancel(r, stopped);
+                // CANCEL never reaches `FlightCommands.Run`, so `acted` is that same question asked of
+                // the two things it CAN do: clear an arming, or stop a running sequence. With neither
+                // armed nor running it is a press that did nothing - the careful press, which the dash
+                // deliberately does not answer, and which therefore exists only here.
+                rec.Acted = stopped || r == PressResult.Cancelled;
                 Debug.Log(Tag + "panel: CANCEL -> " + kind
                           + (r == PressResult.Cancelled ? "  (armed cleared)" : "")
                           + (stopped ? "  (sequence stopped)" : ""));
@@ -246,6 +265,11 @@ namespace DragonScreen
                 bool acted = (r == PressResult.Fire) && FlightCommands.Run(PanelButtons.Lock.Fired);
 
                 kind = PanelPolicy.ResolveInterlock(r, acted);
+                // An ARM did something without dispatching anything, so `acted` is not the dispatcher's
+                // bool alone here: it is true for Armed and Cancelled too, and false for Refused and
+                // Ignored. `press_kind` carries which of those it was, so nothing is lost by the
+                // widening - an EXECUTE with nothing armed stays `acted:false, press_kind:Nothing`.
+                rec.Acted = acted || r == PressResult.Armed || r == PressResult.Cancelled;
                 Debug.Log(Tag + "panel: " + entry.Label + " -> " + r + " / " + kind
                           + (PanelButtons.Lock.Armed != PanelCommand.None
                              ? "  (armed: " + PanelButtons.Lock.Armed + ")" : ""));
@@ -257,6 +281,9 @@ namespace DragonScreen
                 // dispatcher is not called AT ALL - not called and ignoring the result would leave
                 // one edit between here and a control acting on a guess.
                 kind = PanelPressKind.Inert;
+                // §14.4(b): the dispatcher is not called AT ALL, so nothing happened and `acted` says
+                // so. This is the press that clicks and leaves no trace anywhere else in the vehicle.
+                rec.Acted = false;
                 Debug.Log(Tag + "panel: " + entry.Label
                           + " -> INERT (function unverified, BUILD_PLAN §14.4(b))");
             }
@@ -265,10 +292,20 @@ namespace DragonScreen
                 // Everything else acts immediately.
                 bool acted = FlightCommands.Run(c);
                 kind = PanelPolicy.ResolveImmediate(c, acted, ModeIsOn(c));
+                rec.Acted = acted;   // §2.9's definition, literally: the dispatcher's own bool return
                 Debug.Log(Tag + "panel: " + entry.Label + " -> " + kind);
             }
 
             Show(kind);
+
+            // ---- S85: AFTER `Show`, so `light` is the dash AS IT NOW STANDS ----
+            // `PanelPolicy.LampFor(kind)` would give the outcome's lamp, which is not the same thing:
+            // an Inert or Nothing press leaves the previous lamp exactly where it was, so reading the
+            // field back is the only way the record photographs the console the crew is looking at
+            // rather than what this one press would have set in isolation.
+            rec.PressKind = (int)kind;
+            rec.Lamp = (int)light;
+            CrewPressLog.Append(rec);
         }
 
         /// <summary>Turn the pure outcome into this button's dash: bright or dark, held or momentary.</summary>

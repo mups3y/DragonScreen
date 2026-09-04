@@ -408,100 +408,27 @@ namespace DragonScreen
             // straight through FigmaUI (pure) to a NavHit, which ApplyNav carries out.
             if (FigmaMode)
             {
-                // Nav (bottom bar / back chevron) wins; anything it does not claim on the Suit Leak
-                // Check page drives its START / HALT / popup-close.
-                NavHit nh = FigmaUI.HitTest((UiPage)selectedPage, px, py, w, h);
-                if (nh.Act != NavAct.None) { ApplyNav(nh); return; }
-                UiPage cur = (UiPage)selectedPage;
-                if (cur == UiPage.SuitCheck)
-                {
-                    // T14 added FINISH (end at step 2.5, raise the result popup) and TRY ADDITIONAL
-                    // TIMER (re-run the countdown), and left TROUBLESHOOT out because nothing modelled
-                    // a suit, so nothing could fail. S31 made a suit able to fail and S32 (owner, via
-                    // the overseer) gave the control its action: it is the fail branch's RECOVERY, so
-                    // it acts only while the model says a suit failed, and what it does is repair that
-                    // suit and re-run the check - the same state change TRY ADDITIONAL TIMER makes, so
-                    // it goes through that same path rather than a second one. The gate is
-                    // SuitCheckPage.Available, which the page also lights the control from: a dimmed
-                    // TROUBLESHOOT cannot act, and a live one cannot look unavailable.
-                    SuitCheckState suits = SuitLeak.From(VesselData.State, suitCountdown, suitPopup, suitSeed);
-                    switch (SuitCheckPage.HitTest(px, py, w, h, suitPopup))
-                    {
-                        // START and TRY ADDITIONAL TIMER each begin a run, so each mints a fresh seed:
-                        // re-running re-rolls, which is what a second timed run of a leak check is.
-                        // HALT abandons the run, so its roll goes with it. FINISH ends the run at step
-                        // 2.5 and reports what THAT run found, so it keeps the seed it already has -
-                        // and parks the countdown at 0, because a finished run is a finished run and
-                        // the table must go on agreeing with the verdict the crew was just shown.
-                        case SuitCheckPage.SuitAct.Start:  StartSuitRun(); break;
-                        case SuitCheckPage.SuitAct.Halt:   suitStart = -1f; suitPopup = false; suitSeed = 0u;
-                                                           suitCountdown = 5; break;
-                        case SuitCheckPage.SuitAct.Close:  suitPopup = false; break;
-                        case SuitCheckPage.SuitAct.Finish: suitStart = -1f; suitPopup = true;
-                                                           suitCountdown = 0; break;
-                        case SuitCheckPage.SuitAct.Retime: StartSuitRun(); break;
-                        // S32: REPAIR + RERUN. The repair is what clears the failure the crew is looking
-                        // at; the rerun is the same fresh-seed run the timer control makes, so the next
-                        // verdict is ROLLED honestly rather than declared clean by the press.
-                        case SuitCheckPage.SuitAct.Troubleshoot:
-                            if (SuitCheckPage.Available(SuitCheckPage.SuitAct.Troubleshoot, suits)) StartSuitRun();
-                            break;
-                    }
-                }
-                else if (IsSubsystemPage(cur))
-                {
-                    // FUNCTIONS | ALERTS. T5 drew the toggle and left it inert; this is the tap. It is
-                    // NOT navigation - the page does not change, its body does - so it lands here rather
-                    // than in FigmaUI, which is why FigmaUI.HitTest above did not claim it.
-                    int t = VehicleSubsystemPage.ToggleHit(px, py, w, h);
-                    if (t >= 0) controls.Alerts = (t == 1);
-                }
-                else if (cur == UiPage.ManualChute)
-                {
-                    // The chute procedure's ACTION buttons. Each one IS a console command (see the page),
-                    // so it goes through the SAME dispatcher the lower panel's own button does and gets
-                    // the SAME answer - there is no second policy here and there must never be one.
-                    int a = ManualChuteDeployPage.HitTest(px, py, w, h);
-                    if (a >= 0) ChuteAction(a);
-                }
-                else if (cur == UiPage.SystemsTree)
-                {
-                    // S56 / audit H32. The tree's eight POWER + STRING boxes are the plate's own
-                    // buttons, so they go through the SAME dispatcher and are read back by the SAME
-                    // policy - there is no second policy here and there must never be one (T14's rule).
-                    // Nothing on this page flies the vehicle: SystemsState is local display state.
-                    SystemsAction(SystemsTreePage.HitTest(px, py, w, h));
-                }
-                else if (cur == UiPage.Docking)
-                {
-                    DockAction(DockingSimPage.HitTest(px, py, w, h));
-                }
-                else if (cur == UiPage.Cover)
-                {
-                    // The rail selects a phase; the ◄/► arrows step through them (wrapping over all 7);
-                    // NEXT VIEW + the map cluster drive the camera (ApplyCoverCam).
-                    // S54: the SELECTED PHASE goes in too. On the Reference Content phase the six
-                    // action/entry rows are not drawn, so they must not be touchable either — this is
-                    // the one caller that can ever dispatch them, so this is where the real phase belongs.
-                    CoverPage.CoverButton cb = CoverPage.HitTest(px, py, w, h, coverCam, coverPhase);
-                    int ph = CoverPage.PhaseOf(cb);
-                    if (ph >= 0) coverPhase = ph;
-                    else if (cb == CoverPage.CoverButton.Back)
-                        coverPhase = (coverPhase + CoverPage.PhaseCount - 1) % CoverPage.PhaseCount;
-                    else if (cb == CoverPage.CoverButton.Forward)
-                        coverPhase = (coverPhase + 1) % CoverPage.PhaseCount;
-                    else if (cb == CoverPage.CoverButton.None
-                             && CoverPage.CapsuleHit(px, py, w, h, coverCam))
-                        // LAST, and only on what no button claimed: the capsule fills most of the
-                        // slot, so testing it any earlier would swallow the NEXT VIEW pill it sits
-                        // under. Nothing turns yet - see Turntable.Press.
-                        turnTouch = Turntable.Press(px);
-                    else ApplyCoverCam(cb);
-                    // S94: coverPhase (three branches above) and coverCam (inside ApplyCoverCam) are
-                    // the only two places either field is ever written - republish unconditionally here
-                    // rather than at each branch, since at most one of them changed this touch anyway.
-                    PublishCover();
-                }
+                // ---- S85: THE ONE APPEND, AT THE ONE PLACE EVERY GLASS PRESS PASSES THROUGH ----
+                // Every control on every page on all three screens comes through here, so the CVR
+                // press channel (§2.9) is one record built here and one `Append` — not a call per
+                // branch that a new page could forget to make. `FigmaTouch` below is the dispatch
+                // exactly as it was; all it gained is a `ref` it fills in with what the press WAS.
+                //
+                // ⛔ THE ARROW POINTS ONE WAY. This names `CrewPressLog` (a pure screen-side queue,
+                // the `livePage` idiom in queue form) and NOTHING in the BlackBox. Delete
+                // `pure/blackbox/` and `BlackBoxRecorder.cs` and this file still compiles — which is
+                // the excisable-by-design constraint (owner, 2026-09-03) the buffer exists to keep.
+                CrewPress rec = CrewPressLog.Blank();
+                rec.Ut = VesselData.NowUt();
+                rec.Screen = index;
+                rec.Page = selectedPage;      // the page the crew was LOOKING at, before the press moved it
+                rec.Px = px; rec.Py = py;
+                // BEFORE the dispatch: this is the CVR's area-microphone context — what was lit when
+                // the press was MADE. A SYSTEMS TREE press can change the mask itself, and stamping
+                // afterwards would report the consequence as if it were the reason.
+                StampAlarms(ref rec);
+                FigmaTouch(px, py, ref rec);
+                CrewPressLog.Append(rec);
                 return;
             }
 
@@ -540,6 +467,193 @@ namespace DragonScreen
         }
 
         /// <summary>
+        /// THE LIVE TOUCH PATH — the dispatch that used to sit inline in `TouchDown`'s `FigmaMode`
+        /// branch, lifted out unchanged by S85 so the press record has exactly one place to be built
+        /// and exactly one place to be appended.
+        ///
+        /// ⛔ THIS is the branch that runs. `FigmaMode` is `private const bool = true`, so
+        /// `TouchDown` always returns here and the chrome-bar path below it is compiled-but-dead
+        /// (§2.7's second finding). Instrumenting that path instead would have produced a CVR channel
+        /// that can never fire, which is the defect this register line exists to end — so the
+        /// instrumentation is HERE and there is none down there.
+        ///
+        /// `rec` is filled in as the dispatch resolves: which surface, which control, and — the field
+        /// no poll can ever see — whether the press ACTED. Nothing here reads `rec`, so its presence
+        /// cannot change what a press does.
+        /// </summary>
+        private void FigmaTouch(float px, float py, ref CrewPress rec)
+        {
+            // Nav (bottom bar / back chevron) wins; anything it does not claim on the Suit Leak
+            // Check page drives its START / HALT / popup-close.
+            NavHit nh = FigmaUI.HitTest((UiPage)selectedPage, px, py, w, h);
+            if (nh.Act != NavAct.None)
+            {
+                rec.Surface = CrewSurface.Nav;
+                rec.EnumValue = (int)nh.Act;
+                rec.ControlId = CrewControlIds.Nav(nh.Act, nh.Target);
+                // ApplyNav's own return, not a second copy of its three guards: a re-selection of the
+                // page already shown, a Back with no history and a Forward at the end of it all move
+                // nothing, and all three are presses that a page-column poll cannot distinguish from
+                // no press at all.
+                rec.Acted = ApplyNav(nh);
+                return;
+            }
+            UiPage cur = (UiPage)selectedPage;
+            if (cur == UiPage.SuitCheck)
+            {
+                // T14 added FINISH (end at step 2.5, raise the result popup) and TRY ADDITIONAL
+                // TIMER (re-run the countdown), and left TROUBLESHOOT out because nothing modelled
+                // a suit, so nothing could fail. S31 made a suit able to fail and S32 (owner, via
+                // the overseer) gave the control its action: it is the fail branch's RECOVERY, so
+                // it acts only while the model says a suit failed, and what it does is repair that
+                // suit and re-run the check - the same state change TRY ADDITIONAL TIMER makes, so
+                // it goes through that same path rather than a second one. The gate is
+                // SuitCheckPage.Available, which the page also lights the control from: a dimmed
+                // TROUBLESHOOT cannot act, and a live one cannot look unavailable.
+                SuitCheckState suits = SuitLeak.From(VesselData.State, suitCountdown, suitPopup, suitSeed);
+                SuitCheckPage.SuitAct sa = SuitCheckPage.HitTest(px, py, w, h, suitPopup);
+                rec.Surface = CrewSurface.Suit;
+                rec.EnumValue = (int)sa;
+                rec.ControlId = CrewControlIds.Suit(sa);
+                // S85: `acted` by OBSERVATION, not by a second copy of the switch's rules. The four
+                // fields below are the whole of this page's state, so comparing them across the
+                // dispatch answers "did the press do anything" exactly, and cannot drift when a case
+                // is added. It is the only honest answer for the refused TROUBLESHOOT — a press the
+                // model declines changes nothing, so nothing anywhere else can see it happened.
+                float s0 = suitStart; bool p0 = suitPopup; int c0 = suitCountdown; uint d0 = suitSeed;
+                switch (sa)
+                {
+                    // START and TRY ADDITIONAL TIMER each begin a run, so each mints a fresh seed:
+                    // re-running re-rolls, which is what a second timed run of a leak check is.
+                    // HALT abandons the run, so its roll goes with it. FINISH ends the run at step
+                    // 2.5 and reports what THAT run found, so it keeps the seed it already has -
+                    // and parks the countdown at 0, because a finished run is a finished run and
+                    // the table must go on agreeing with the verdict the crew was just shown.
+                    case SuitCheckPage.SuitAct.Start:  StartSuitRun(); break;
+                    case SuitCheckPage.SuitAct.Halt:   suitStart = -1f; suitPopup = false; suitSeed = 0u;
+                                                       suitCountdown = 5; break;
+                    case SuitCheckPage.SuitAct.Close:  suitPopup = false; break;
+                    case SuitCheckPage.SuitAct.Finish: suitStart = -1f; suitPopup = true;
+                                                       suitCountdown = 0; break;
+                    case SuitCheckPage.SuitAct.Retime: StartSuitRun(); break;
+                    // S32: REPAIR + RERUN. The repair is what clears the failure the crew is looking
+                    // at; the rerun is the same fresh-seed run the timer control makes, so the next
+                    // verdict is ROLLED honestly rather than declared clean by the press.
+                    case SuitCheckPage.SuitAct.Troubleshoot:
+                        if (SuitCheckPage.Available(SuitCheckPage.SuitAct.Troubleshoot, suits)) StartSuitRun();
+                        break;
+                }
+                rec.Acted = (suitStart != s0 || suitPopup != p0 || suitCountdown != c0 || suitSeed != d0);
+            }
+            else if (IsSubsystemPage(cur))
+            {
+                // FUNCTIONS | ALERTS. T5 drew the toggle and left it inert; this is the tap. It is
+                // NOT navigation - the page does not change, its body does - so it lands here rather
+                // than in FigmaUI, which is why FigmaUI.HitTest above did not claim it.
+                int t = VehicleSubsystemPage.ToggleHit(px, py, w, h);
+                rec.Surface = CrewSurface.SubsysTab;
+                rec.EnumValue = t;
+                rec.ControlId = CrewControlIds.SubsysTab(t);
+                // Re-tapping the tab already showing is the textbook press with no edge: the body
+                // does not change, so nothing a poll can watch moves. `acted` is where it shows up.
+                rec.Acted = (t >= 0 && controls.Alerts != (t == 1));
+                if (t >= 0) controls.Alerts = (t == 1);
+            }
+            else if (cur == UiPage.ManualChute)
+            {
+                // The chute procedure's ACTION buttons. Each one IS a console command (see the page),
+                // so it goes through the SAME dispatcher the lower panel's own button does and gets
+                // the SAME answer - there is no second policy here and there must never be one.
+                int a = ManualChuteDeployPage.HitTest(px, py, w, h);
+                rec.Surface = CrewSurface.Chute;
+                rec.EnumValue = a;
+                rec.ControlId = CrewControlIds.Chute(a);
+                if (a >= 0) ChuteAction(a, ref rec);
+            }
+            else if (cur == UiPage.SystemsTree)
+            {
+                // S56 / audit H32. The tree's eight POWER + STRING boxes are the plate's own
+                // buttons, so they go through the SAME dispatcher and are read back by the SAME
+                // policy - there is no second policy here and there must never be one (T14's rule).
+                // Nothing on this page flies the vehicle: SystemsState is local display state.
+                PanelCommand tc = SystemsTreePage.HitTest(px, py, w, h);
+                rec.Surface = CrewSurface.Tree;
+                rec.EnumValue = (int)tc;
+                rec.ControlId = CrewControlIds.Tree(tc);
+                SystemsAction(tc, ref rec);
+            }
+            else if (cur == UiPage.Docking)
+            {
+                DockingSimPage.DockAct da = DockingSimPage.HitTest(px, py, w, h);
+                rec.Surface = CrewSurface.Dock;
+                rec.EnumValue = (int)da;
+                rec.ControlId = CrewControlIds.Dock(da);
+                DockAction(da, ref rec);
+            }
+            else if (cur == UiPage.Cover)
+            {
+                // The rail selects a phase; the ◄/► arrows step through them (wrapping over all 7);
+                // NEXT VIEW + the map cluster drive the camera (ApplyCoverCam).
+                // S54: the SELECTED PHASE goes in too. On the Reference Content phase the six
+                // action/entry rows are not drawn, so they must not be touchable either — this is
+                // the one caller that can ever dispatch them, so this is where the real phase belongs.
+                CoverPage.CoverButton cb = CoverPage.HitTest(px, py, w, h, coverCam, coverPhase);
+                rec.Surface = CrewSurface.Cover;
+                rec.EnumValue = (int)cb;
+                rec.ControlId = CrewControlIds.Cover(cb);
+                int ph = CoverPage.PhaseOf(cb);
+                if (ph >= 0) { rec.Acted = (ph != coverPhase); coverPhase = ph; }
+                else if (cb == CoverPage.CoverButton.Back)
+                {
+                    coverPhase = (coverPhase + CoverPage.PhaseCount - 1) % CoverPage.PhaseCount;
+                    rec.Acted = true;   // the arrows WRAP, so a step always lands somewhere new
+                }
+                else if (cb == CoverPage.CoverButton.Forward)
+                {
+                    coverPhase = (coverPhase + 1) % CoverPage.PhaseCount;
+                    rec.Acted = true;
+                }
+                else if (cb == CoverPage.CoverButton.None
+                         && CoverPage.CapsuleHit(px, py, w, h, coverCam))
+                {
+                    // LAST, and only on what no button claimed: the capsule fills most of the
+                    // slot, so testing it any earlier would swallow the NEXT VIEW pill it sits
+                    // under. Nothing turns yet - see Turntable.Press.
+                    turnTouch = Turntable.Press(px);
+                    // S85: the turntable is a DRAG target with no `CoverButton` of its own, so it
+                    // gets its own id and the enum slot goes back to "absent" — writing 0 there would
+                    // read as `CoverButton.None`, a real member, and claim a button was pressed.
+                    rec.ControlId = CrewControlIds.CoverCapsule;
+                    rec.EnumValue = -1;
+                    rec.Acted = turnTouch.Dragging;
+                }
+                else rec.Acted = ApplyCoverCam(cb);
+                // S94: coverPhase (three branches above) and coverCam (inside ApplyCoverCam) are
+                // the only two places either field is ever written - republish unconditionally here
+                // rather than at each branch, since at most one of them changed this touch anyway.
+                PublishCover();
+            }
+        }
+
+        /// <summary>
+        /// S85: §2.9's area-microphone context — the alarm channel AS IT STOOD when the press was made.
+        ///
+        /// This is what turns a press record into evidence rather than a keystroke log: "FIRE PYRO,
+        /// while sev_system was Alarm and the mask had the propulsion bit lit" is a different fact from
+        /// the same press on a quiet board, and §0's misdiagnoses are exactly the kind that need it.
+        ///
+        /// Both fields stay at -1 when the screen state is not valid. §4.6's rule, in a struct: a blank
+        /// is honest, and a zero here would read as "no alarms" on a feed that was not answering.
+        /// </summary>
+        private static void StampAlarms(ref CrewPress rec)
+        {
+            PageState ps = VesselData.State;
+            if (!ps.Valid) return;
+            rec.AlarmMask = Alarms.Mask(ps);
+            rec.SevSystem = (int)Alarms.SystemSeverity(ps);
+        }
+
+        /// <summary>
         /// A Manual Chute Deploy action was pressed (T14).
         ///
         /// The whole of the decision is elsewhere and that is the point: the command comes from the
@@ -553,18 +667,23 @@ namespace DragonScreen
         /// There is no lamp to set from here: the page reads its own lit state from PageState each frame
         /// (ManualChuteDeployPage.Lit), so nothing can latch a light the vehicle state does not support.
         /// </summary>
-        private void ChuteAction(int action)
+        /// S85 fills `rec` with the dispatch verdict on the way past - the command, `FlightCommands.Run`'s
+        /// own bool, and the `PanelPolicy` outcome. It reads nothing back, so the press is unaffected.
+        private void ChuteAction(int action, ref CrewPress rec)
         {
             PanelCommand c = ManualChuteDeployPage.Actions[action].Command;
             if (c == PanelCommand.None)
             {
                 // "Monitor altitude" - the crew watching a number, not a command. Nothing to dispatch.
+                // `rec` keeps its blanks: no command, not acted, no press kind. A row that commands
+                // nothing did nothing, and saying so is different from saying it was refused.
                 Debug.Log("[DragonScreen] chute action '" + ManualChuteDeployPage.Actions[action].Act
                           + "' names no command - nothing to do");
                 return;
             }
             bool acted = FlightCommands.Run(c);
             PanelPressKind k = PanelPolicy.ResolveImmediate(c, acted, ModeOn(c));
+            rec.Cmd = (int)c; rec.Acted = acted; rec.PressKind = (int)k;
             Debug.Log("[DragonScreen] chute " + c + " -> " + k);
         }
 
@@ -580,13 +699,17 @@ namespace DragonScreen
         /// That is §14.4(a)'s click-no-light-no-action applied to a display-state command, and it is the
         /// same answer the plate gives for the same press.
         /// </summary>
-        private void SystemsAction(PanelCommand c)
+        /// S85 fills `rec` on the way past, exactly as `ChuteAction` does. A REFUSED isolate is
+        /// `acted:false` here, and that refusal is invisible everywhere else - the node just goes on
+        /// reading TRIP - which is precisely the press a poll of the screen state cannot see.
+        private void SystemsAction(PanelCommand c, ref CrewPress rec)
         {
             if (c == PanelCommand.None) return;
             // Charge01 is NOT set here: VesselData.cs:335 already keeps it current every frame for the
             // plate, and a second writer of the same field is how the two surfaces would start to differ.
             bool acted = FlightCommands.Run(c);
             PanelPressKind k = PanelPolicy.ResolveImmediate(c, acted, false);
+            rec.Cmd = (int)c; rec.Acted = acted; rec.PressKind = (int)k;
             Debug.Log("[DragonScreen] systems tree " + c + " -> " + k);
         }
 
@@ -604,11 +727,15 @@ namespace DragonScreen
         /// nothing happens - no light, no action, no red. `Settings` never arrives here; FigmaUI claims it
         /// as navigation before the page is asked.
         /// </summary>
-        private void DockAction(DockingSimPage.DockAct a)
+        private void DockAction(DockingSimPage.DockAct a, ref CrewPress rec)
         {
             if (a == DockingSimPage.DockAct.None) return;
-            if (a == DockingSimPage.DockAct.RotMagnitude)   { controls.DockRotLarge = !controls.DockRotLarge; return; }
-            if (a == DockingSimPage.DockAct.TransMagnitude) { controls.DockTransLarge = !controls.DockTransLarge; return; }
+            // S85: the two magnitude toggles are the only acts on this page that change anything, and
+            // they change SCREEN state, not the vehicle. Everything else falls through to `acted:false`
+            // - which is §14.4(a)'s honest no-op stated as data rather than only as a log line, and it
+            // is the record that lets a flight prove a direction pad was pressed and flew nothing.
+            if (a == DockingSimPage.DockAct.RotMagnitude)   { controls.DockRotLarge = !controls.DockRotLarge; rec.Acted = true; return; }
+            if (a == DockingSimPage.DockAct.TransMagnitude) { controls.DockTransLarge = !controls.DockTransLarge; rec.Acted = true; return; }
             Debug.Log("[DragonScreen] docking " + a
                       + (DockingSimPage.IsActuation(a) ? " - no flight software installed (screens-only build)"
                                                        : " - nothing behind this control yet"));
@@ -690,27 +817,35 @@ namespace DragonScreen
         /// back/forward history the Cover's arrows drive. Going to a new page truncates any forward
         /// history, the standard browser rule.
         /// </summary>
-        private void ApplyNav(NavHit nh)
+        /// <returns>
+        /// S85: whether the navigation actually MOVED. The three `false` cases - a Goto to the page
+        /// already shown, a Back with no history behind it, a Forward with none ahead - are real
+        /// presses that change no state, so no poll of `PageState.ScreenPages` can ever see them.
+        /// Returned rather than re-derived at the call site, so the answer and the guards that decide
+        /// it can never drift apart.
+        /// </returns>
+        private bool ApplyNav(NavHit nh)
         {
             switch (nh.Act)
             {
                 case NavAct.Goto:
                     int p = (int)nh.Target;
-                    if (p == selectedPage) return;
+                    if (p == selectedPage) return false;
                     if (uiHistIndex >= 0 && uiHistIndex < uiHistory.Count - 1)
                         uiHistory.RemoveRange(uiHistIndex + 1, uiHistory.Count - uiHistIndex - 1);
                     uiHistory.Add(p);
                     uiHistIndex = uiHistory.Count - 1;
                     SelectPage(index, p);
-                    break;
+                    return true;
                 case NavAct.Back:
-                    if (uiHistIndex > 0) { uiHistIndex--; SelectPage(index, uiHistory[uiHistIndex]); }
-                    break;
+                    if (uiHistIndex > 0) { uiHistIndex--; SelectPage(index, uiHistory[uiHistIndex]); return true; }
+                    return false;
                 case NavAct.Forward:
                     if (uiHistIndex >= 0 && uiHistIndex < uiHistory.Count - 1)
-                    { uiHistIndex++; SelectPage(index, uiHistory[uiHistIndex]); }
-                    break;
+                    { uiHistIndex++; SelectPage(index, uiHistory[uiHistIndex]); return true; }
+                    return false;
             }
+            return false;
         }
 
         /// <summary>
@@ -718,7 +853,14 @@ namespace DragonScreen
         /// pan/centre/zoom cluster drives the SAME MapView the globe already uses, through the same pure
         /// MapProjection calls the NAV page's cluster does - one map state, two front ends.
         /// </summary>
-        private void ApplyCoverCam(CoverPage.CoverButton cb)
+        /// <returns>
+        /// S85: whether this button is one this method CARRIES OUT. The Cover's action rows, entry
+        /// plates and MENU/SETTINGS all arrive here too (FigmaUI claims only the last two as
+        /// navigation, and the four `Act*` rows are display-only by design) - they match no case, so
+        /// they are `false`: pressed, and did nothing. That is the §14.4(a)-shaped fact for the glass,
+        /// and it is invisible to anything that watches state instead of presses.
+        /// </returns>
+        private bool ApplyCoverCam(CoverPage.CoverButton cb)
         {
             switch (cb)
             {
@@ -727,21 +869,22 @@ namespace DragonScreen
                     // The mode FOLLOWS the camera rather than being a second copy of which view is up:
                     // Pan/Zoom/Centre branch on it, and the two disagreeing would pan the globe.
                     mapView = MapProjection.WithMode(mapView, CoverPage.CamMapMode(coverCam));
-                    break;
+                    return true;
 
-                case CoverPage.CoverButton.MapPanLeft:  mapView = MapProjection.Pan(mapView, -1.0, 0.0); break;
-                case CoverPage.CoverButton.MapPanRight: mapView = MapProjection.Pan(mapView, 1.0, 0.0); break;
-                case CoverPage.CoverButton.MapPanUp:    mapView = MapProjection.Pan(mapView, 0.0, 1.0); break;
-                case CoverPage.CoverButton.MapPanDown:  mapView = MapProjection.Pan(mapView, 0.0, -1.0); break;
-                case CoverPage.CoverButton.MapZoomIn:   mapView = MapProjection.Zoom(mapView, 1); break;
-                case CoverPage.CoverButton.MapZoomOut:  mapView = MapProjection.Zoom(mapView, -1); break;
+                case CoverPage.CoverButton.MapPanLeft:  mapView = MapProjection.Pan(mapView, -1.0, 0.0); return true;
+                case CoverPage.CoverButton.MapPanRight: mapView = MapProjection.Pan(mapView, 1.0, 0.0); return true;
+                case CoverPage.CoverButton.MapPanUp:    mapView = MapProjection.Pan(mapView, 0.0, 1.0); return true;
+                case CoverPage.CoverButton.MapPanDown:  mapView = MapProjection.Pan(mapView, 0.0, -1.0); return true;
+                case CoverPage.CoverButton.MapZoomIn:   mapView = MapProjection.Zoom(mapView, 1); return true;
+                case CoverPage.CoverButton.MapZoomOut:  mapView = MapProjection.Zoom(mapView, -1); return true;
                 case CoverPage.CoverButton.MapCentre:
                 {
                     PageState st = VesselData.State;
                     mapView = MapProjection.Centre(mapView, st.Latitude, st.Longitude);
-                    break;
+                    return true;
                 }
             }
+            return false;
         }
 
         /// <summary>Begin a Suit Leak Check run: the countdown from the top, no result yet, and a FRESH

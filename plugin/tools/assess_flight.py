@@ -1451,14 +1451,60 @@ def crew_screens(M):
         P("  %-14s %s" % (lbl, " -> ".join("%s@%.0f" % (v, g(r, "met_s") or 0) for r, v in tr[:12])
                           or "unchanged / blank"))
 
-    sub("every interaction with its dispatch verdict")
-    P("  NOT RECORDABLE YET, and this is a declaration, not an omission: §2.7's flat `control_id`")
-    P("  namespace and the `crew.touch` / `crew.press` / `crew.dispatch` events do not exist - the hook")
-    P("  belongs at the two choke points INSIDE the screens, which is a tree edit the excisable-by-design")
-    P("  recorder may not make. Register line **S85** owns it. Until it lands, this report can say WHICH")
-    P("  PAGE the crew was shown and WHEN it changed, and cannot say what they pressed or whether the")
-    P("  press did anything - so 'no press did nothing' must NOT be inferred from silence here.")
-    ALERTS.append("CVR is half-fitted: page selections are recorded, crew PRESSES are not (S85)")
+    sub("every interaction with its dispatch verdict (S85)")
+    presses = [e for e in M.events if e.get("kind") in ("crew.press", "crew.touch")]
+    drops = [e for e in M.events if e.get("kind") == "crew.press_dropped"]
+    if not presses:
+        P("  no `crew.press` / `crew.touch` events in this recording. Two very different reasons, and the")
+        P("  report cannot tell them apart from here: either nobody touched a screen or a console button")
+        P("  for the whole flight, or this file predates S85 and HAS no press channel (check the")
+        P("  manifest's recorder_version). Either way, 'no press did nothing' must NOT be inferred from")
+        P("  silence in this section.")
+        ALERTS.append("CVR press channel silent: no crew.press events (pre-S85 recording, or no presses)")
+    else:
+        did = sum(1 for e in presses if (e.get("p") or {}).get("acted"))
+        P("  %d interaction(s): %d acted, %d did nothing. THE SECOND NUMBER IS THE POINT OF THIS CHANNEL"
+          % (len(presses), did, len(presses) - did))
+        P("  - a press that changes no state (refused, inert, a re-selection of the page already shown, a")
+        P("  §14.4(a) no-op) leaves no trace in any state column, so it is recorded here or nowhere.")
+        P("      met_s  screen  control_id                 acted  kind/lamp         alarm")
+        for e in presses[:40]:
+            q = e.get("p") or {}
+            scr = {0: "LEFT", 1: "CENTRE", 2: "RIGHT"}.get(q.get("screen"),
+                                                           "plate" if q.get("screen") == -1 else "?")
+            kl = "/".join(x for x in (q.get("press_kind"), q.get("lamp")) if x) or "-"
+            am = q.get("alarm_mask")
+            P("  %9.2f  %-6s  %-26s %-5s  %-16s %s" %
+              (e.get("met_s") or 0.0, scr, (q.get("control_id") or "?")[:26],
+               "yes" if q.get("acted") else "NO", kl[:16],
+               ("mask %s / %s" % (am, q.get("sev_system") or "?")) if (am is not None and am >= 0) else "-"))
+        if len(presses) > 40:
+            P("  ... %d more (§10's timeline carries the full ordered narrative)" % (len(presses) - 40))
+
+        # WHICH controls never did anything. On a screens-only build most of these are the honest
+        # §14.4(a) no-op and the EXPECTED answer; once Part B is flying, the same line is a finding.
+        tally = {}
+        for e in presses:
+            q = e.get("p") or {}
+            cid = q.get("control_id") or "?"
+            h, t = tally.get(cid, (0, 0))
+            tally[cid] = (h + (1 if q.get("acted") else 0), t + 1)
+        dead = sorted(c for c, (h, t) in tally.items() if h == 0 and c != "none")
+        if dead:
+            P("  pressed and NEVER acted: " + ", ".join(dead[:14]) + ("" if len(dead) <= 14 else " ..."))
+        misses = sum(1 for e in presses if e.get("kind") == "crew.touch")
+        if misses:
+            P("  %d touch(es) hit no control at all - a mis-aimed press, which is a different finding from"
+              % misses)
+            P("  a press that was refused, and identical to it in every state trace.")
+
+    if drops:
+        worst = max((d.get("p") or {}).get("dropped_total") or 0 for d in drops)
+        P("  ⚠ %d PRESS(ES) DROPPED - the screens' publish buffer overflowed, so this section is short"
+          % worst)
+        P("  by that many interactions. It is in the RECORDING rather than a log line because a recorder")
+        P("  that loses data quietly is the S76 failure this whole channel was built against.")
+        ALERTS.append("CVR press buffer dropped %d interaction(s) - the press log is incomplete" % worst)
 
 
 # =============================================================================================
@@ -1875,6 +1921,27 @@ def _synth(dirpath):
     ev("Crew-2", UT0 + 148.0, 148.0, 148, "stage.engine_ignite",
        {"from": 0, "to": 1, "thrust_n": 900000.0, "stage": 1})
     ev("Crew-2", UT0 + 250.0, 250.0, 250, "crew.page_change", {"screen": 0, "from": 4, "to": 15})
+    # ---- S85: the CVR press channel. Four interactions chosen to exercise every branch of §9's press
+    # ---- pass: an acted plate press, a §14.4(a) no-op that acted:false, a nav press, and a touch that
+    # ---- hit nothing - plus a dropped-press report, so the overflow alert has a true positive.
+    ev("Crew-2", UT0 + 249.6, 249.6, 249, "crew.press",
+       {"control_id": "nav.goto.Docking", "surface": "Nav", "enum_v": 1, "screen": 0, "page": 4,
+        "px": 640.0, "py": 1980.0, "acted": True, "cmd": -1, "cmd_name": None, "press_kind": None,
+        "lamp": None, "alarm_mask": 0, "sev_system": "Nominal"})
+    ev("Crew-2", UT0 + 300.2, 300.2, 300, "crew.press",
+       {"control_id": "dock.TransFwd", "surface": "Dock", "enum_v": 8, "screen": 1, "page": 27,
+        "px": 1710.0, "py": 1180.0, "acted": False, "cmd": -1, "cmd_name": None, "press_kind": None,
+        "lamp": None, "alarm_mask": 0, "sev_system": "Nominal"})
+    ev("Crew-2", UT0 + 301.0, 301.0, 301, "crew.touch",
+       {"control_id": "none", "surface": "None", "enum_v": -1, "screen": 1, "page": 27,
+        "px": 40.0, "py": 40.0, "acted": False, "cmd": -1, "cmd_name": None, "press_kind": None,
+        "lamp": None, "alarm_mask": 0, "sev_system": "Nominal"})
+    ev("Crew-2", UT0 + 505.5, 505.5, 505, "crew.press",
+       {"control_id": "panel.FirePyro", "surface": "Panel", "enum_v": 26, "screen": -1, "page": -1,
+        "px": None, "py": None, "acted": True, "cmd": 26, "cmd_name": "FirePyro",
+        "press_kind": "Momentary", "lamp": "Lit", "alarm_mask": 4, "sev_system": "Caution"})
+    ev("Crew-2", UT0 + 506.0, 506.0, 506, "crew.press_dropped",
+       {"dropped_total": 2, "dropped_since": 2, "capacity": 64})
     ev("Crew-2", UT0 + 512.0, 512.0, 512, "stage.engine_shutdown",
        {"from": 1, "to": 0, "thrust_n": 0.0, "stage": 1})
     ev("Crew-2", UT0 + 540.0, 540.0, 541, "rec.stream_end", {"rows": len(cap)})
@@ -2082,7 +2149,7 @@ def selftest(verbose=False):
             assert len(M.streams) == 2, "expected 2 streams, found %d" % len(M.streams)
             assert M.primary.vessel == "Crew-2", "primary stream is %r" % M.primary.vessel
             assert M.streams[1].tracked and not M.streams[1].ever_focused
-            assert len(M.events) == 12, "expected 12 events, found %d" % len(M.events)
+            assert len(M.events) == 17, "expected 17 events, found %d" % len(M.events)
             # The report goes to the BUFFER the assertions read; printing 400 lines into every
             # `build.py test` would bury the C# suites' own output. `--selftest --verbose` shows it.
             buf = io.StringIO()
@@ -2116,7 +2183,11 @@ def selftest(verbose=False):
             ("PROVISIONAL AIM POINT", "§4 omitted the provisional-coordinates caveat"),
             ("R0 ACCUMULATORS", "§8 did not use the accumulators"),
             ("page timeline", "§9 did not print the page timeline"),
-            ("S85", "§9 did not declare the missing press channel"),
+            ("panel.FirePyro", "§9 did not print the S85 press table"),
+            ("2 acted, 2 did nothing", "§9 mis-counted the acted-vs-not split"),
+            ("pressed and NEVER acted", "§9 did not name the controls that never did anything"),
+            ("hit no control at all", "§9 did not separate a mis-aimed touch from a refused press"),
+            ("2 PRESS(ES) DROPPED", "§9 did not report the injected press-buffer overflow"),
             ("by kind:", "§10 did not summarise the event kinds"),
             ("co2_mmhg", "§11 did not check the CO2 rule"),
             ("HIT", "§11 found no exceedance on a fixture that injects one"),

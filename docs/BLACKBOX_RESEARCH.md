@@ -386,6 +386,20 @@ both of which are single:
 value carried alongside in the event payload. This is additive: it introduces no new dispatch and changes no
 behaviour.
 
+> **BUILT 2026-09-05 (S85).** The namespace this ⚠ asks for now exists: `plugin/src/pure/CrewControlIds.cs`
+> (the eight prefixes and the seven mappers, exhaustively pinned in `plugin/test/CrewPressTest.cs`), with
+> the press record and the publish-side queue in `plugin/src/pure/CrewPressLog.cs`. The choke points write
+> into that queue and the recorder DRAINS it each `FixedUpdate` (`BlackBoxRecorder.DrainPresses`) — a
+> buffer rather than a call, because a direct call would have made BB1's excision a code edit inside a
+> screen file instead of a delete. The design answer is the overseer's, 2026-09-05, under the owner's
+> standing directive. Two additions this section did not specify: `crew.press_dropped` (the buffer counts
+> what it cannot hold, and the count goes in the recording), and `crew.dispatch` deliberately NOT
+> implemented — both choke points dispatch synchronously, so a second event would duplicate every
+> dispatching press (see `BlackBoxEvents.cs`).
+> ⚠ **The line numbers above and below are pre-S85** and were already stale when S85 started (S86/S94 moved
+> them again). `TouchDown` is now the entry point and the live branch is the extracted `FigmaTouch`; find
+> them by name, not by line.
+
 ⚠ **Second finding, load-bearing for the design.** `ScreenPainter.FigmaMode` is `private const bool = true`
 (`ScreenPainter.cs:55`), so `TouchDown` always returns at `:442` and **everything below `:445` is unreachable
 at runtime** — `ChromeBar.HitTest`, `GateCard.HitTest`, `Pages.HitTest`, the whole `PageAct`/`PageHit` path.

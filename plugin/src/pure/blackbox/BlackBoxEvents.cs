@@ -148,6 +148,24 @@ namespace DragonScreen.BlackBox
         public const string PhaseTransition = "phase.transition";
         public const string GncModeChange   = "gnc.mode_change";
         public const string CrewPageChange  = "crew.page_change";
+        /// <summary>⭐ S85. A press that HIT a control — §2.7's `control_id` plus §2.9's verdict.</summary>
+        public const string CrewPress       = "crew.press";
+        /// <summary>⭐ S85. A touch that hit NO control. A different fact from a press that did nothing,
+        /// and both are facts a poll of the screen state can never produce.</summary>
+        public const string CrewTouch       = "crew.touch";
+        /// <summary>⭐ S85. The press buffer overflowed and interactions were lost. Should never appear:
+        /// presses are human-rate against a `FixedUpdate` drain. It is in the RECORDING rather than a log
+        /// line because S76 is what a recorder losing data quietly costs.</summary>
+        public const string CrewPressDropped = "crew.press_dropped";
+        /// <summary>
+        /// ⚠ §2.9 also names `crew.dispatch`. It is deliberately NOT defined, and that is a statement,
+        /// not an omission: both choke points dispatch SYNCHRONOUSLY inside the press, so the dispatch
+        /// and the press are one instant and one record — `crew.press` already carries `cmd`, `acted`
+        /// and `press_kind`. A second event per press would double every dispatching press in the
+        /// timeline, and in an ordered narrative a duplicate reads as two occurrences (the same reason
+        /// BB2 emits capsule singletons from one stream only). If a dispatch is ever deferred past the
+        /// press, that is when this kind earns its existence.
+        /// </summary>
 
         public const string SysBusTrip     = "sys.bus_trip";
         public const string SysStringState = "sys.string_state";

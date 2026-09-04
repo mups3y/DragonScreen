@@ -1369,7 +1369,21 @@ namespace DragonScreen.BlackBox
         /// per-event flush costs nothing and guarantees the narrative survives an unexpected end even
         /// when the last few parameter rows do not.
         /// </summary>
-        public void Emit(string kind, Kv[] payload)
+        public void Emit(string kind, Kv[] payload) { EmitAt(kind, payload, double.NaN); }
+
+        /// <summary>
+        /// ⭐ S85. `Emit` with the event's OWN instant, for an event that happened BETWEEN ticks.
+        ///
+        /// §2.9's sub-frame rule: an event carries the instant it occurred, not the instant a recorder
+        /// collected it — "the deleted Recorder A had exactly this mechanism and degraded it by folding
+        /// the edge into the next sample". A crew press happens in the input path, up to one physics
+        /// tick before the drain that finds it, so it is the first event in this recorder with a real
+        /// timestamp of its own. `atUt` NaN (or a stream with no clock yet) falls back to the tick's UT,
+        /// which is what every polled edge here already uses.
+        ///
+        /// MET moves with UT for one vessel, so the offset is exact rather than an approximation.
+        /// </summary>
+        public void EmitAt(string kind, Kv[] payload, double atUt)
         {
             if (log == null || !log.Open) return;
             try
@@ -1381,7 +1395,9 @@ namespace DragonScreen.BlackBox
                 // (BB2) and each line carries its own `vessel`, so the narrative is already ordered
                 // across both craft and nothing has to be merged on a clock afterwards.
                 double ut = double.IsNaN(lastUt) ? 0.0 : lastUt;
-                if (log.Write(BlackBoxEvents.Line(MissionId, VesselName, ut, lastMet, seq, kind, payload)))
+                double met = lastMet;
+                if (!double.IsNaN(atUt) && !double.IsNaN(lastUt)) { met = lastMet + (atUt - lastUt); ut = atUt; }
+                if (log.Write(BlackBoxEvents.Line(MissionId, VesselName, ut, met, seq, kind, payload)))
                 {
                     eventsWritten++;
                     return;
@@ -1586,6 +1602,11 @@ namespace DragonScreen.BlackBox
                     }
                 }
             }
+
+            // ---- ⭐ S85: THE PRESS HALF OF THE CVR CHANNEL. Outside the `ps.Valid` block above on
+            // ---- purpose: a press HAPPENED whether or not the screen feed was answering that tick,
+            // ---- and withholding it would be the recorder deciding an interaction did not occur.
+            DrainPresses();
         }
 
         void PageEdge(int screen, int page, ref int last)
@@ -1596,6 +1617,87 @@ namespace DragonScreen.BlackBox
                      new[] { Kv.Int("screen", screen), Kv.Int("from", last), Kv.Int("to", page) });
             last = page;
         }
+
+        /// <summary>
+        /// ⭐ S85. Take whatever the screens queued since the last tick and write it out — §2.7's press
+        /// channel, the half BB1 could not build.
+        ///
+        /// ---- WHY A DRAIN AND NOT A POLL ----
+        /// `PageEdge` above polls, and can, because a page SELECTION is a state with an edge. A PRESS is
+        /// not: a refused control, an inert one (§14.4(b)), a re-selection of the page already shown and
+        /// a §14.4(a) no-op all change nothing, so no edge exists to watch — and `acted` IS that
+        /// distinction. Two presses between two ticks would also collapse into one edge, or none. So the
+        /// screens PUBLISH (`CrewPressLog`, the `livePage` idiom in queue form) and this reads.
+        ///
+        /// ---- THE ARROW STILL POINTS ONE WAY ----
+        /// This file names `CrewPressLog`; `CrewPressLog` names nothing here. Excision is still a delete.
+        ///
+        /// Capsule-singleton, like every other crew channel: `DetectEvents` has already returned on an
+        /// unfocused stream, so the queue is drained exactly once per tick and the booster's stream never
+        /// claims the Dragon's presses.
+        /// </summary>
+        void DrainPresses()
+        {
+            // ⚠ NOTHING IS DROPPED SILENTLY. The buffer counts what it could not hold, and the count
+            // goes in the RECORDING. It should never move — human-rate presses against a FixedUpdate
+            // drain — and if it does, the file says so rather than a log line nobody keeps.
+            int drops = CrewPressLog.Dropped;
+            if (drops != lastPressDrops)
+            {
+                Emit(BlackBoxEvents.CrewPressDropped,
+                     new[] { Kv.Int("dropped_total", drops), Kv.Int("dropped_since", drops - lastPressDrops),
+                             Kv.Int("capacity", CrewPressLog.Capacity) });
+                lastPressDrops = drops;
+            }
+
+            int n = CrewPressLog.Drain(pressScratch);
+            for (int i = 0; i < n; i++)
+            {
+                CrewPress p = pressScratch[i];
+                // §2.9's payload. `screen` is converted to the SAME 0/1/2 the page channel speaks
+                // (`PageEdge` above, and the `page_l/c/r` columns): `ScreenPainter` numbers its painters
+                // 1/2/3, and two conventions for LEFT in one log is how a reader gets it wrong.
+                // ⚠ A field that does not apply goes out as JSON `null`, never as 0 — `Kv.Str(k, null)`
+                // renders `null` (BlackBoxEvents.JsonString). §4.6's blank-never-a-plausible-value rule:
+                // `PanelLight.Dark` is 0 and a glass press has no lamp at all, and those must not read
+                // the same. `enum_v`/`cmd`/`alarm_mask` carry -1 for the same reason, in the type JSON
+                // has for an int.
+                Kv[] pay = new[]
+                {
+                    Kv.Str("control_id", p.ControlId),
+                    Kv.Str("surface", p.Surface.ToString()),
+                    Kv.Int("enum_v", p.EnumValue),
+                    Kv.Int("screen", (p.Screen >= 1 && p.Screen <= 3) ? p.Screen - 1 : -1),
+                    Kv.Int("page", p.Page),
+                    Kv.Num("px", p.Px),
+                    Kv.Num("py", p.Py),
+                    Kv.Bit("acted", p.Acted),
+                    Kv.Int("cmd", p.Cmd),
+                    Kv.Str("cmd_name", p.Cmd >= 0 ? ((PanelCommand)p.Cmd).ToString() : null),
+                    Kv.Str("press_kind", p.PressKind >= 0 ? ((PanelPressKind)p.PressKind).ToString() : null),
+                    Kv.Str("lamp", p.Lamp >= 0 ? ((PanelLight)p.Lamp).ToString() : null),
+                    Kv.Int("alarm_mask", p.AlarmMask),
+                    Kv.Str("sev_system", p.SevSystem >= 0 ? ((Severity)p.SevSystem).ToString() : null),
+                };
+                // A touch that found no control is `crew.touch`; one that found something is
+                // `crew.press`. §2.9 names both, and they are different findings: a mis-aimed press and
+                // a press that was refused look identical in any state trace and identical to each
+                // other, which is exactly why the CVR records the act and not only the consequence.
+                EmitAt(p.Surface == CrewSurface.None ? BlackBoxEvents.CrewTouch : BlackBoxEvents.CrewPress,
+                       pay, p.Ut);
+            }
+        }
+
+        /// <summary>
+        /// ⭐ S85 scratch. ONE destination for ONE global queue — `CrewPressLog` is a single static
+        /// buffer, and only the focused stream ever drains it, so a per-stream copy would be two arrays
+        /// where one is used. Sized at `Capacity` so `Drain` can never truncate (which it would COUNT as
+        /// a drop, but a drop this file caused would be a lie about the screens).
+        /// </summary>
+        static readonly CrewPress[] pressScratch = new CrewPress[CrewPressLog.Capacity];
+
+        /// <summary>Last reported cumulative drop count, so the event fires on the EDGE and not every tick.</summary>
+        int lastPressDrops;
 
         // ============================== physics-rate accumulation ==============================
 
