@@ -251,6 +251,26 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
   `RecoveryMode` for 6 missions (Crew-7/8/9/10, Ax-4, Crew-11 — coded `Droneship`, really `RTLS`) — logged
   as a stray, not fixed here (out of LZ1's scope).
 
+### 3.1 Wave E **reference extractions** — read out of `8b81816^`, never restored (§B12.8, G6)
+
+The owner ruled on **2026-09-04** that **MechJeb flies all upper-stage manoeuvres and only the booster is
+scripted**. **G6** therefore re-verdicted five Wave E lines **RECOVER-CODE → RECOVER-REFERENCE**: W16, W17,
+W18, W20, W21. Each is *read* at `8b81816^` and written down as one `EXTRACT_*.md`. ⛔ **No `.cs` file is
+created, restored or edited by any of them**, and no extract is an instruction — `BUILD_PLAN.md` wins on any
+conflict (C7.1).
+
+- **[EXTRACT_RENDEZVOUS_CONTROL.md](EXTRACT_RENDEZVOUS_CONTROL.md)** [REF — extraction] — **W20**
+  (2026-09-04), from the deleted gen-2 `RendezvousControl.cs` + `pure/Rendezvous.cs` / `Phasing.cs` /
+  `RvIntercept.cs` / `NavFilter.cs`. ⭐ **The only real RSS-RO rendezvous experience this project has** —
+  DS-ASC-008 closed **7,328 → 109 km over 15.6 orbits for near-zero propellant** — mapped **op by op onto
+  §B9 Phase 3's planner chain** (`OperationPlane` / `OperationGeneric` / `OperationCourseCorrection` /
+  `OperationKillRelVel` / Node Executor) as tuning input. Also: the **five failure flights** (214827's CW
+  self-deorbit, 103303's 200→772 km over-raise, 165302's 27-orbit circularize, the 50 km hand-off fly-past,
+  194334's tumble), the six defects `RENDEZVOUS_REBUILD_PLAN.md` was reviewed for — cited as **evidence, never
+  as an instruction** — and the **still-open Δv-budget contradiction** (~66 m/s of tank vs a 100–200 m/s
+  profile). ⛔ Its §1.5 marks every `NavFilter` noise constant **REGIME-UNSTATED** (R1 §7.4); ⛔ its §5 draws
+  the boundary — **the far field flew, the terminal legs and the dock never did**.
+
 ## 4. Historical — background only, do NOT build from these
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** [HIST] — the 2026-08-04 F9I-era architecture note (kOS bridge, MAS as

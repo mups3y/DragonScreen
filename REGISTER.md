@@ -5566,7 +5566,7 @@ the way W2 stated Actuator's); bind attitude to T15 or STOP.
 7 regimes and the first-tick LATCH survive intact, no screen file changed, and the abort overlay stays dark
 until W10's host publishes `Aborting`.
 
-### W20 [O] Wave E-8 `src/RendezvousControl.cs` — **RE-VERDICTED RECOVER-REFERENCE (G6)**: the ONLY real RSS-RO rendezvous experience we have, mined to tune MechJeb — **TODO** — [TIER 4: reference extraction — the highest-value read in Wave E]
+### W20 [O] Wave E-8 `src/RendezvousControl.cs` — **RE-VERDICTED RECOVER-REFERENCE (G6)**: the ONLY real RSS-RO rendezvous experience we have, mined to tune MechJeb — **DONE** (2026-09-04) — [TIER 4: reference extraction — the highest-value read in Wave E]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 8 of 9).
 🔁 **RE-VERDICTED RECOVER-CODE → RECOVER-REFERENCE by G6, on the OWNER's decision of 2026-09-04 via
 the overseer** (*"...rendezvous ... ALL MechJeb"*). This **closes W11's open question 1** in the direction the
@@ -5640,6 +5640,30 @@ four pure files is a plausible two-session read.
 their unstated-regime marking, the never-flown terminal boundary is stated, this line records that
 `StationApproach` is **T19's** to flip, and **`git status` shows no `.cs` file touched**. Docs-only → the
 preview/PNG gate does not apply (say so); `build.py test` run as a no-regression check.
+✅ **DONE 2026-09-04 — `docs/EXTRACT_RENDEZVOUS_CONTROL.md`.** Read `src/RendezvousControl.cs` (634 lines) +
+`pure/Rendezvous.cs` + `pure/Phasing.cs` + `pure/RvIntercept.cs` + `pure/NavFilter.cs` at `8b81816^`, plus
+`RENDEZVOUS_REBUILD_PLAN.md` **as evidence only** (its *"never treat as an instruction"* banner honoured —
+cited, not obeyed). Recorded: (a) the flown far-field experience — DS-ASC-008 closed **7,328 → 109 km over
+15.6 orbits** from a **367 × 336 km / 51.6°** insertion for **`mmh_frac` 0.826 → 0.822**, ending at 58%
+propellant — mapped **op by op onto §B9 P3's chain** (`OperationPlane` / `OperationGeneric` /
+`OperationCourseCorrection` / `OperationKillRelVel` / Node Executor), incl. the finding that **the file has no
+plane logic at all**, so this project has **zero prior on RSS-RO plane error**; (b) the **six defects** the
+2026-08-31 review found, each as *"this is what went wrong"*, plus the five failure flights (214827 CW
+self-deorbit pe +178→−143 km; 103303 ap 200→772 km over-raise; 165302's 27-orbit circularize / 246→6,000 km
+drift; the 50 km hand-off fly-past at 79–86 km; 194334's ~54 dps tumble that made `trans_z`=0 all flight);
+(c) **every `NavFilter` constant transcribed WITH its REGIME-UNSTATED marking in the same sentence** (R1 §7.4)
+— `RgpsNoiseM` 5.0 m, `LidarNoiseM` 0.02 m, `ImuAccelNoiseMps2` 0.01, `BiasWalkMps2` 1.0e-4, the 1000/200 m
+handoff band, the 100/25/1 covariance seeds; and (d) the **evidence boundary** — the far field flew, the
+**terminal CW legs, `NavFilter` in the loop, the Lambert intercept, the plane change and the dock NEVER did**.
+Records that **`StationApproach` is T19's to flip** (§B12.5a). ⚠ **Deviation, declared:** the batch instruction
+of 2026-09-04 directed one `EXTRACT_<name>.md` per task, so this went there rather than into
+`MECHJEB_MISSION_TUNING.md` §3 as this line said — that doc was **not** edited (C1.11), and folding §2 into it
+later is **Q1** in the extract's Open Questions. **Q2** carries the still-open Δv-budget contradiction
+(~66 m/s of tank vs a 100–200 m/s profile). ✅ `build.py test` **GREEN, unchanged** (ALL SUITES PASSED);
+docs-only → **the preview/PNG gate does not apply** (no screen code changed), stated rather than skipped
+silently; **`git status` shows no `.cs` file touched**. ⚠ Run under the **OWNER-AUTHORISED batch deviation
+from C1.1/C1.7 of 2026-09-04 (via the overseer)** — five Wave E lines in one session; batch only, does not
+generalise.
 
 ### W21 [O] Wave E-9 `src/DockingControl.cs` — **RE-VERDICTED RECOVER-REFERENCE (G6)**: the never-flown dock, mined for its two VERIFIED-REAL geometry gates — **TODO** — [TIER 4: reference extraction — two §1.4 verified-real sources worth keeping]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 9 of 9 — last by design).
