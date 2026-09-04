@@ -6,7 +6,8 @@ RECIPE INHERITED FROM F9_LOP, which shipped from this exact rig - do not re-deri
 No IDE, no MSBuild, no NuGet: csc.exe straight against KSP's managed assemblies.
 
     python build.py          # build the plugin DLL
-    python build.py test     # build and run the headless tests (no KSP needed)
+    python build.py test     # build and run the headless tests (no KSP needed) - the C# suites,
+                            #   then the python tool selftests (BB3's report generator)
     python build.py preview  # render the pages to build/preview/*.png (no KSP needed)
     python build.py install  # build, then copy GameData/DragonScreen into the KSP install
 
@@ -215,6 +216,28 @@ def build_tests():
     print((p.stdout or '') + (p.stderr or ''))
     if p.returncode != 0:
         sys.exit('TESTS FAILED (exit %d)' % p.returncode)
+    tool_tests()
+
+
+def tool_tests():
+    """
+    The PYTHON-side headless checks (BB3). `plugin/tools/assess_flight.py --selftest` synthesises a
+    BB1/BB2 recording at the CURRENT schema - parsed out of `BlackBoxSchema.cs`, so it cannot rot - and
+    asserts the report generator reads all twelve §4.10 sections back out of it. It needs no KSP, no
+    install and no glass time (both of which are separate owner gates), which is exactly why it belongs
+    in `test` rather than waiting on a flight.
+
+    A missing tool is skipped, not failed: the C# suites are this command's contract and a tool that has
+    not been written yet must not break the build. A tool that IS there and fails, fails the build.
+    """
+    tool = os.path.join(HERE, 'tools', 'assess_flight.py')
+    if not os.path.exists(tool):
+        return
+    print('--- running tool selftests')
+    p = subprocess.run([sys.executable, tool, '--selftest'], capture_output=True, text=True)
+    print((p.stdout or '') + (p.stderr or ''))
+    if p.returncode != 0:
+        sys.exit('TOOL SELFTEST FAILED (exit %d)' % p.returncode)
 
 
 def build_preview():

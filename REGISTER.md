@@ -2389,7 +2389,7 @@ and was not re-opened, §B16.7's focus protocol is a recorded owner decision, an
 OPEN and unchanged above**; BB2 did not touch the cadence, and both streams run the same `RatePolicy`, so
 whichever way Q1 is decided applies to both from the one `[Tunable]` with no further edit.
 
-### BB3 [O] The report generator, §4.10 — the program that reads a recording back — **TODO** — [TIER 1: owner named this explicitly, 2026-09-04]
+### BB3 [O] The report generator, §4.10 — the program that reads a recording back — **DONE 2026-09-04** — [TIER 1: owner named this explicitly, 2026-09-04]
 - **Read:** `docs/BLACKBOX_RESEARCH.md` §4.10 (the twelve-section extension of `assess_flight.py`), §3.2
   (what the surviving analysers already do and why), §3.4's row for `plugin/tools/assess_flight.py` /
   `tuning_db.py` ("COMPOSE — extend, do not replace").
@@ -2412,6 +2412,134 @@ whichever way Q1 is decided applies to both from the one `[Tunable]` with no fur
   from the three raw files alone; `python plugin/build.py test` green (a headless check on the report logic
   where practical); preview N/A (a Python tool, not a screen).
 - Ends per C1.5: register update + local commit; never push.
+
+**DONE 2026-09-04.**
+**Files (the ONLY files this task wrote):** `plugin/tools/assess_flight.py` (EXTENDED, 360 → 2214 lines —
+not replaced: every S76/S77 asset is still in it) · `plugin/build.py` (ONE hook + one docstring line, see
+the scope note below) · this file.
+
+**What it does now.** One tool, TWO schemas. A **BlackBox mission** is discovered by globbing
+`*.manifest.json` and **grouping on the `mission_id` the manifests state** — never on filenames or
+timestamps, which is exactly how the old paired `Crew-2_*.csv` / `Crew-2_Probe_*.csv` streams had to be
+associated. A **legacy** Recorder-B CSV is loaded as a one-stream mission with an empty manifest and no
+events, so **all twelve sections still run against the recovered corpus** and each says plainly what that
+schema cannot supply. Column-name drift between the two lives in ONE dict (`ALIAS`) and nowhere else.
+The twelve sections, against §4.10's table:
+- **§0 PROVENANCE (NEW)** — schema/recorder/asm versions, the DLL sha, KSP + mod versions, crew, body, the
+  time base, the cadence, `mechjeb_cfg_sha` + every `[Tunable]`, the stream table with `stream_role` /
+  `ever_focused` / the `stream_join_on`, then the marking pass: columns grouped by provenance, the
+  **SIMULATED** set called out with what that means (evidence about the MODEL, never the vehicle), the
+  **UNFITTED** set with the register line each one names, and the CONDITIONAL count. A legacy file gets a
+  finding here instead: **no manifest ⇒ nothing below is attributable to a build or a tune step.**
+- **§1 EXTENDED** — `seq` gaps (a gap IS a dropped row), duplicate/backwards seq, the manifest's own
+  `closed` / `write_errors` / `max_rec_build_us` / `rows_written` vs the rows actually on disk, torn rows,
+  whether `rec.stream_end` is present and last, and the ghost-column pass **read from the manifest's own
+  `fit` + `scope`** — so a booster's blank capsule column reads WITHHELD, a Live blank reads GHOST, and a
+  capsule value on a never-focused stream reads LEAK. Plus the recorder's own coverage verdict, NaN/Inf,
+  and the warp-row count.
+- **§2 EXTENDED** — vspeed vs d(alt)/dt and vis-viva kept; **thrust_n/mass_kg vs accel_g** added (restricted
+  to vacuum thrusting rows, where it is decidable); the mass ledger added as what the recorded columns CAN
+  decide — mass must never rise without a staging event, and a mass drop must be accompanied by a
+  propellant-fraction drop. **`body` is READ (manifest, else the `body` column), never detected** — the
+  `detect_body` hack is retired, and a non-Earth body skips the Earth-constant checks rather than reporting
+  nonsense.
+- **§3 EXTENDED** — driven off `events.jsonl` (`flight.liftoff` / `flight.maxq` / `stage.*`, at their
+  sub-frame timestamps, each with the row context at that instant), falling back to `ascent_phase` only for
+  legacy. Every milestone is quoted against **§B11 carrying its [DOC]/[EST] tag** (max-Q, MECO alt/Mach,
+  SECO, insertion ap/pe/inc). The "read the orbit a few rows AFTER thrust dies" correction is kept intact.
+- **§4 EXTENDED** — the five-phase timeline; per-phase steering authority from **W24's observability block**
+  (`boost_steer_*`, the three `boost_db_*` flags plus the value the deadband ran at, `boost_uncommanded`);
+  and the **deck-miss geometry PORTED VERBATIM from `plugin/build/assess_flight.py:398-436`** per §4.10 §4,
+  with `build/` left untouched (owner decision S8 and its own banner). The aim point prints with the owner's
+  2026-09-04 PROVISIONAL ruling quoted beside it, so the miss is never read as a verdict on the guidance.
+- **§5/§6/§7 KEPT**, taught to read either schema (the BlackBox has no `rv_phase`/`entry_phase`: the leg
+  comes from `mission_phase` + the `flight.*` events + `range_m`/`closing_mps`), plus the §B11 approach
+  ladder, the contact-rate gate, the entry-interface gates and the touchdown-rate gate.
+- **§8 EXTENDED** — the basis is now the **R0 accumulators** (`acc_int_s` / `acc_att_s` / `acc_trans_s` /
+  `acc_both_s` / `acc_none_s` / `act_sat_s`), with the per-tick snapshots demoted to a printed cross-check,
+  because §3.2's RETRACTION is the reason those accumulators exist. The accumulator ledger is checked to
+  close, and an absent `act_sat_s` prints `n/a` rather than `0.0` — which is not the same statement.
+- **§9 CREW & SCREENS (NEW)** — the page timeline per screen from `crew.page_change` plus the `page_l/c/r`
+  columns, with **UiPage names parsed from `pure/FigmaUI.cs`** (derived, never a second copy of that table),
+  the camera view, and the crew-gate/ack channels. It then **declares, rather than omits**, that presses are
+  not recordable yet (§2.7's `control_id` namespace — register line **S85**), so "no press did nothing" can
+  never be inferred from silence.
+- **§10 EVENT TIMELINE (NEW)** — the whole shared log in order, every payload, with the parameter context at
+  each instant, a by-kind census, and a finding on any `rec.write_error` / `rec.width_mismatch` /
+  `rec.self_disable` / ghost-column / `exception` line.
+- **§11 EXCEEDANCES (NEW)** — every §B11 target and every `CabinLimits` threshold as a rule, reported as
+  **EPISODES** (met span + the extreme) each carrying **its phase and its neighbouring parameters**, for
+  §4.10's own stated reason: rule-based exceedance ignores correlations between parameters, so the flag
+  alone invites the wrong conclusion. A rule whose column is absent prints `n/a`; a rule that holds prints
+  OK with the worst value it saw — nothing is silently skipped.
+- **§12 VERDICT EXTENDED** — every finding raised anywhere above, collected and re-listed, then the §5/C7
+  reminder that a recording is evidence and never a build source.
+
+**Also added:** `--out <file>` (§4.10's "writable to a file the owner can paste to the overseer"),
+`--selftest [--verbose]`, resolution by mission id / basename / any one of the three files, and `--list` /
+`--all` covering BlackBox missions and legacy captures together.
+
+**THREE READER DEFECTS the selftest caught, and this task fixed** — each would have mis-read a real
+recording: (1) §6 matched `flight.*` events on the WRONG VESSEL, because `or not st.tracked` let the
+capsule's section pick up the booster's touchdown; (2) the entry interface was searched over EVERY row, so
+the ASCENT's climb through 122 km at >5 km/s was reported as an entry; (3) a one-sided exceedance rule
+printed its `-1e9` sentinel as though it were a band.
+
+**VERIFY (C1.3).** `python plugin/build.py test` — **ALL SUITES PASSED** (BlackBoxTest contributing 1662
+checks, 0 failed) **and** the new tool selftest **SELFTEST OK**. `python plugin/build.py preview` run as a
+no-regression check: renders clean; **no preview PNG applies to this line** — BB3 is a Python tool and
+touches no screen, which its own done-criteria state ("preview N/A"). Run against REAL data as well as the
+fixture: **`--all` assesses all 13 recovered legacy recordings, 0 failed**, and on
+`Crew-2_20260901_004929.csv` it finds the real skin-temp exceedance (0.928 at met 112.8 — the max-Q
+Overheat! that column was added for), five FDIR faults, and four §B11 ascent misses. So it reads the corpus,
+not only its own fixture. `git status` shows only the three declared files.
+**The selftest is the "headless check on the report logic" the line asks for:** it synthesises a two-stream
+BB1/BB2 mission — capsule + tracked booster, one shared event log, a manifest per stream — **at the CURRENT
+schema, parsed out of `BlackBoxSchema.cs` itself** so it cannot rot, with a seq gap and a CO2 breach
+deliberately injected, into a TEMPORARY directory (never `docs/flights/`, whose contents are named evidence
+attached to findings), and asserts all twelve sections plus eighteen specific behaviours.
+**No `install`, no glass time** — the BlackBox install authority on record belongs to **BB4**, and this line
+did not use it (C1.12).
+**C1.15 (evidence-gated mod-first):** not engaged — BB3 writes NO simulation and models no quantity. It
+reads recorded columns and quotes them against §B11 and `CabinLimits`, both in-repo sources.
+**⚠ SCOPE NOTE (C1.11), declared rather than hidden:** BB3 also touched `plugin/build.py` — one
+`tool_tests()` call after the C# suites, plus one docstring line — because this line's own done-criteria put
+the headless check inside `python plugin/build.py test`, and a check that never runs in the gate is not a
+check. It is guarded (a missing tool is skipped; a failing one fails the build) and is reversible in one
+edit. Posed as **BB3-Q2** below so the owner can reverse it.
+Ends per C1.5: register update + local commit; commit subject starts "BB3:"; never pushed.
+
+#### Open questions for the owner (C1.14) — BB3
+
+**BB3-Q1 — The `CabinLimits` thresholds are MIRRORED in Python. How should they stay in step?**
+§4.10 §11 requires "every `CabinLimits` threshold as a rule". `CabinLimits` is C# (`pure/Alarms.cs`) and the
+report generator is Python, so BB3 mirrored the six pairs into `CABIN_LIMITS` with the source path quoted
+beside them. That works today and drifts SILENTLY the day someone edits `Alarms.cs` — the same failure class
+as the units-in-the-column-name rename §3.4 files as BREAK.
+1. **Leave it mirrored, with the source cited** (what BB3 built). Cheapest; drift is silent.
+2. **Parse `Alarms.cs` at runtime**, exactly as BB3 already parses `BlackBoxSchema.cs` for the column table
+   and `FigmaUI.cs` for the page names. Consistent with two mechanisms already in the tool, costs ~15 lines,
+   and fails loudly if the parse stops matching. **(RECOMMENDED)**
+3. **Have the recorder write the thresholds into the manifest** at open, so a recording carries the limits
+   it was actually flown against. Strongest — an old recording stays decodable against the limits OF ITS
+   DAY, which is §4.3's whole argument — but it is a BB1/BB2 change (a new manifest field), not a BB3 one.
+Recommendation **(2)** now and **(3)** whenever a line next opens the manifest writer: they are
+complementary, not exclusive.
+
+**BB3-Q2 — Should `python plugin/build.py test` run the python tool selftests?**
+BB3 added a `tool_tests()` call to `build.py` so `--selftest` runs in the gate (see the scope note above).
+1. **Keep it** — the headless check runs on every `test`, which is where this line's done-criteria put it.
+   **(RECOMMENDED)**
+2. **Revert it** and run `assess_flight.py --selftest` by hand when the tool changes. That keeps
+   `build.py test` strictly the C# suites, but the check then only runs when someone remembers.
+3. Keep it behind a flag (`build.py test --tools`), so the gate is opt-in.
+Recommendation **(1)**: it costs about a second, it is guarded (a missing tool is skipped), and the defect
+class it already caught — three reader bugs inside one run — is precisely what a gate is for.
+
+**Not re-asked here:** **BB1-Q1 (fixed vs adaptive row rate) remains OPEN on BB1 and is unaffected by this
+line.** BB3 READS the cadence from the manifest (`row_rate_mode` / `row_rate_dynamic_hz`) and never assumes
+a row period, so whichever way Q1 is decided the report is correct with no further edit. §3.4 files
+"hard-coded row period in the analyser" as BREAK for exactly this reason.
 
 ### BB4 [owner-gated] Install the BlackBox + confirm on the glass — **TODO (blocked: needs BB1–BB3 DONE first)** — [TIER 1: the owner's own "before the first flight" deadline]
 - ⚠ **The owner ALREADY AUTHORISED `install` for the BlackBox specifically** (2026-09-03: *"build and install
