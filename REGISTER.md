@@ -7478,7 +7478,7 @@ sites bound to §B16.1's fresh core (or to nothing, explicitly and honestly, if 
   Its "no caller" state is therefore **correct until this line lands**, not a defect to fix early.
 ⚠ **Ordering:** this line depends on **W10** (the host) and on §B16.1 (the booster core). Do not take it first.
 
-### W10 [O] `src/CrewProcedureOps.cs` + `src/FlightDriver.cs` — the conductor glue, and the only thing that ticks it — **W10 OWNS THE HOST OUTRIGHT** — **TODO** — [TIER 2: real gap — the restored Wave-D pure layer has no driver]
+### W10 [O] `src/CrewProcedureOps.cs` + `src/FlightDriver.cs` — the conductor glue, and the only thing that ticks it — **W10 OWNS THE HOST OUTRIGHT** — **DONE 2026-09-05** — [TIER 2: real gap — the restored Wave-D pure layer has no driver]
 Logged by **W4**, 2026-09-04 (C1.1 — §B12.8's Wave D row names `CrewProcedureOps`; it compiles, but landing
 it alone would make a screen lie).
 **The finding.** `plugin/src/CrewProcedureOps.cs` (20,016 B at `8b81816^`, R1 §5.2 **RECOVER-CODE**) drives
@@ -7527,6 +7527,107 @@ phase/engaged, no commands") described the same seam as this line's §B12.6 step
 **SPLIT**, closed in favour of W10. This line's DONE-when therefore also carries T17's own, explicitly:
 **report phase/engaged, no commands, in-sim phase matches nothing flies** — the host recovers READ-ONLY
 here; EXECUTION (actually commanding a MechJeb module) arrives with **T18 onward**, not with this line.
+
+✅ **DONE 2026-09-05 — NOT SPLIT; both files landed in one session, and the tree is GREEN.**
+`python plugin/build.py test` **green** (`build_plugin()` compiles the glue; all suites pass, plus the tool
+selftest) and `python plugin/build.py preview` **green**, PNG inspected (`page0_flight.png`,
+`page0_flight_gate.png` — the AUTO SEQUENCE button is dark and the phase word comes from the live
+classifier, exactly as before; nothing `preview`-visible changed, because nothing under `src/pure/` changed
+but comments). **No install, no glass time** — neither was needed and both remain separate owner gates
+(§0). The compiler warning set is **byte-identical to the pre-change baseline** (checked with `git stash -u`).
+
+**Delivered.** `src/CrewProcedureOps.cs` restored from `8b81816^`, and `src/FlightDriver.cs` restored as
+§B12.6 step (3)'s **read-only** host: the flight-scene `[KSPAddon]`, `OnFlyByWire` (bound, writes no axis),
+`CrewProcedureOps.Tick(v)` once per physics frame, phase/engaged reported, `engaged`+`ActivePhase` supplied
+to `Mission.AuthoritativePhase` (rule T4 — already wired at `VesselData.cs:103`; it only ever needed a real
+conductor). **T17's DONE-when is carried:** report phase/engaged, **no commands**, in-sim phase matches
+nothing flies. **Nothing commands the vehicle** — no ignition, no throttle, no attitude, no abort.
+
+**The gen-1/gen-2 diff, stated (W1's mechanical rule).** Comment-stripped, gen-1 (`0d6423d`, 15,868 B, 274
+code lines) and gen-2 (`8b81816^`, 20,016 B, 270 code lines) share **77 lines (28%)**, and every shared line
+is trivial — `using UnityEngine;`, `namespace DragonScreen`, braces, `Vessel v = FlightGlobals.ActiveVessel;`.
+They are different implementations: gen 1 walks a `CrewProcedureCore` + `WpPhase` layer that is **not in this
+tree**, with public `Engage()` / `Disengage(string)` / `Tick()`; gen 2 walks `MissionProfile` / `MissionStep[]`
+/ `GateId` — exactly the pure layer **W4** restored — with `Tick(Vessel)`. ⇒ **GEN 2 TAKEN WHOLE; nothing of
+gen 1 was used.** (Third gen-1 file checked under this rule, third that proved to be a different
+implementation.)
+
+⭐ **THE BEHAVIOUR CHANGE, RECORDED HERE AND NOT IN A QUIET EDIT: `AutoAdvanceGates` NOW SHIPS `false`.**
+The recovered file declared `public static bool AutoAdvanceGates = true` and marked it, in the file, *"⛔
+TEMPORARY (user 2026-08-27)"*, with its own comment at `:319` reading *"Restore the interactive gates by
+setting AutoAdvanceGates = false."* `true` synthesises the crew's checklist taps **and** the GO press, which
+makes every interactive gate DECORATIVE — the opposite of the operating concept `pure/ModeManager.cs` states
+in its own header (*"autonomous between gates, authorised by the crew at each real decision point"*).
+Honouring the owner's own TEMPORARY label is not overriding him. `test/ConductorWalkTest.cs` **asserts the
+runaway** rather than describing it: with the flag on, all seven countdown gates clear in seven consecutive
+ticks with zero crew input.
+
+**Three further deviations from `8b81816^`, all §14.4(a), all stated in the files' own headers:**
+1. **`ActivePhase` reports a Fly phase only when the host can actually fly it**, via the new
+   `FlightDriver.HasControllerFor(MissionPhase)` — the host's phase table, **empty this increment**. Without
+   it the plan parks on the Ascent Fly step that nothing completes, and `Mission.AuthoritativePhase` then
+   publishes **ASCENT over a vehicle bolted to the pad**. Gated, it returns `Unknown` and rule T4 falls
+   through to the live classifier — that resolver's own designed fallback (`test/MissionPhaseTest.cs:32`).
+   ⭐ **This is the growth point §B12.8 rider (c) describes:** each later increment adds its own phase here
+   and its own dispatch in the tick, in the same diff, and the conductor names that phase again with **no
+   screen change at all**.
+2. **`PhaseName` says `HOLD - NO CONTROLLER`** at such a step, for the same reason — `pure/Pages.cs:810`
+   renders the AUTO SEQUENCE button as `"AUTO  " + PhaseName`, and *"AUTO  Ascent to orbit"* on the pad is
+   the same lie in a different font.
+3. **`PressAbort()` is an honest no-op.** The gate card's ABORT hands to the abort responder — **W19**
+   (`AbortControl.cs`), not in the tree. Routing the press would latch `GatePhase.Abort`, which
+   `pure/GateCard.cs:195` paints in `DragonPalette.Alarm`: a **red ABORT for an abort that cannot happen**.
+   §14.4(a) is explicit — click, no light, no action, and **no red**. It was a no-op in the stub and it stays
+   one until W19. GO / NO-GO / the item taps ARE live: those are crew PROCEDURE, not flight actuation.
+
+**The stub collision, resolved by W2's precedent (§B12.8(a); owner Q4 NOT inverted).** `_AutopilotStub.cs`
+declared `CrewProcedureOps` (`:53`) and `FlightDriver` (`:71`); both stub classes are **RETIRED IN PLACE**
+with a comment in W2's own style, and the real files stand behind the same names. **No screen file changed**
+— the gen-1 façade names are untouched, nothing was renamed, and no parallel surface was added
+(§B12.5a(iv)). (`AutoPilot` was NOT one of the three collisions: it is a façade class, not a recovered one.)
+
+**The ONE façade property flipped (§B12.5: exactly one per increment): `AutoPilot.Engaged` →
+`CrewProcedureOps.Engaged`**, backed by a real controller that a real host ticks. Its comment was rewritten
+in the same diff (§B12.5a step 4); the other four still report exactly as they did. §B12.5a's table row was
+corrected too — it still named **T17**, which G9 closed into this line.
+
+**What was DELIBERATELY not restored** (§B12.6 step (3) + §B12.8 rider (c) — no speculative members): the
+recovered host is 980 lines and most of them actuate — `StartLaunch`/`Ignite`/`ClampGate`, `TickErectorClear`,
+`TickLaunchHold`+`WarpTo`, `DriveActivePhase`'s dispatch to the five deleted controllers, the throttle /
+translation / attitude / roll authority latches, the RCS pulse shaper, the structural-g abort, the abort FX
+(klaxon + IVA strobe), `UpdateAbort`, FDIR's acting path, `FlightLog`. The **launch GO is consumed and
+logged, and fires nothing**, so it cannot latch and go off at some future increment's first frame.
+
+⚠ **HONEST TEST COVERAGE, stated plainly.** `build.py test` runs `build_plugin()` — which **does** compile
+both new glue files, against the KSP + embedded-MechJeb references — and then `build_tests()`, which compiles
+and runs `src/pure` + `test` **only**. So the suite proves the glue COMPILES and that the pure decisions it
+composes are correct; it **cannot execute** a `[KSPAddon]` MonoBehaviour, which needs the game, and that half
+is glass time (a separate owner gate). New suite **`test/ConductorWalkTest.cs`** (35 checks) walks the exact
+`CrewGates.ById` → `CrewGate.Step` → `ModeManager.Advance` composition the glue performs, against the real
+gate catalog and the real Crew-2 plan, and pins: seven GO presses clear the seven countdown gates; **a GO is
+consumed on the frame it is pressed** (one press = one gate; a complete checklist with no press clears
+nothing; a GO on an unsatisfied checklist is discarded and not remembered; no gate's GO carries into the
+next); NO-GO holds and a fresh GO resumes; the `AutoAdvanceGates` runaway; and rule T4's classifier fallback.
+It is a CONTRACT test and says so in its own header — it does not execute the glue.
+
+**Stale claims corrected in the same diff** (each asserted something this task made false):
+`pure/ModeManager.cs` (*"IT HAS NO CALLER"*), `pure/CrewGate.cs` (*"THE GATE MACHINE HAS NO DRIVER"*),
+`pure/MissionProfile.cs` (*"NO CALLER"*), `test/TestMain.cs`'s Wave-D block, and five
+`pure/blackbox/BlackBoxSchema.cs` column descriptions (`gnc_engaged`, `gate_id`, `gate_phase`, `crew_action`,
+`is_return` — *"(idle seam)"* → LIVE). `mode_index`, `fdir_*` and `aborting` were left as idle seams,
+because they still are.
+
+**Logged, not done (C1.1 — noticed inside W10's own scope, deliberately not built):**
+- **W10-S1 — a hands-off test mode, if it is ever wanted again, returns as an EXPLICIT NAMED OPTION, never a
+  default.** `AutoAdvanceGates` ships false and must not be quietly flipped back (C1.8). A deliberate
+  hands-off mode is a new register line with an owner call, not a default this file carries.
+- **W10-S2 — `CrewProcedureOps.Engage()` carries a comment/code mismatch inherited from `8b81816^`.** Its
+  comment reads *"NO-GO rather than fly a guessed mission — surface it, do not engage"*, but on
+  `!mission.Valid` it logs the warning and **engages anyway** on the Fallback profile. Harmless today
+  (nothing flies either way), and fixing it is a behaviour change outside this line's read-only scope — it
+  belongs with the increment that first makes an engage actuate something.
+- **W10-S3 — `FlightCommands.CancelAllSequences()` still returns `false`** and does not disengage the
+  now-real conductor. Not touched: that is a `FlightCommands` dispatch question (§B12.5), not a host question.
 
 ⚠ **STUB-COLLISION WARNING, recorded here because it will bite whoever runs this line (2026-09-05, G9
 item 1).** `plugin/src/_AutopilotStub.cs` declares BOTH `CrewProcedureOps` (`:53`) and `FlightDriver`
@@ -7734,6 +7835,11 @@ advances only when the host ticks it, and no facade property changed state.
   green, the three `Actuator` calls bind (the compile proves it), the controller **advances only when ticked
   and nothing ticks it**, and no facade property moved — this controller backs none, so §14.4(a)'s honest
   no-op is untouched and no lamp can lie. **W10 adds the one-line dispatch when the host exists.**
+  ⚠ **CORRECTED 2026-09-05 by W10 — that last sentence pointed at the wrong line, and the host now exists.**
+  **W10 is DONE**, and it did NOT add this dispatch: §B12.8 rider (c) is that each Wave E line grows the host
+  by *its own* controller's dispatch, so W10 restoring W14's would have been the speculative member the rider
+  forbids (and C1.1 scope creep in the other direction). W14 is closed, W10 is closed, and `DeployablesControl`
+  is still dormant — so the one line of dispatch has **no owner**. ⇒ it is now **W30**, below.
 
 ### W15 [S] Wave E-3 `src/LandingSiteScan.cs` — the safe-water splashdown scan both return paths need — **DONE 2026-09-04** — [TIER 3: scheduled recovery]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 3 of 9).
@@ -10567,3 +10673,34 @@ audit_comments.py:428` builds its file set from `cs_files('src') + cs_files('tes
 walk, not `plugin/**` — so it never enters `plugin/mech/`, and it is not wired into `build.py` in any case.
 `build.py test` is green with the tree in place. This stray is a signposting gap only, not a broken tool.
 **DONE when:** `plugin/mech/` is discoverable from the repo's top-level docs.
+
+### W30 [S] `DeployablesControl` is in the tree and NOTHING TICKS IT — the one line of dispatch W14 left and W10 could not take — **TODO** — [TIER 3: a restored controller with no caller]
+Logged by **W10**, 2026-09-05 (C1.1 — found on landing the host W14's DONE note was waiting for).
+**The finding.** **W14** restored `plugin/src/DeployablesControl.cs` (Wave E-2) and closed **dormant on
+purpose**: `grep -rn DeployablesControl plugin/src plugin/test` finds only the file itself. Its DONE note
+ends *"W10 adds the one-line dispatch when the host exists."* **The host now exists — and W10 did not add
+it, correctly.** §B12.8 rider (c): *"every later Wave E line GROWS THIS SAME HOST by exactly the dispatch its
+own controller needs"* — W10 adding W14's dispatch would be a speculative member in the host, which the
+rider forbids by name, and doing another line's work, which C1.1 forbids. So both lines behaved correctly and
+the dispatch fell between them. It has no owner; this line is that owner.
+**What it actually is.** One call, from `FlightDriver`'s tick, in the shape the recovered host used:
+`DeployablesControl.Tick(v, CrewProcedureOps.ActivePhase, CrewProcedureOps.IsReturn)` — verified against
+`8b81816^:plugin/src/FlightDriver.cs`, where it was the first statement of `DriveActivePhase`.
+⚠ **It is NOT a one-liner, and that is the whole reason it gets a line.** `DeployablesControl` **ACTUATES**
+(`Actuator.DeploySolarPanels` / `.DeployAntennas` / `.RetractSolarPanels`), so wiring it moves the host from
+§B12.6 step (3)'s *read-only* to its first real command. Three things must be settled in the same diff:
+1. **It is keyed on `ActivePhase`**, and W10 made `ActivePhase` report `Unknown` for any phase
+   `FlightDriver.HasControllerFor` does not claim — so this line must add its phase(s) to that table, and the
+   moment it does, the conductor starts NAMING those phases on the glass. The naming and the actuation have to
+   land together or one of them lies.
+2. **§14.4(a) stops applying to this path** the instant it is wired: a deploy that fires is an action, and the
+   crew must be able to see it. Check what lamp, if any, reports it before wiring, not after.
+3. **§B12.7's binding rule** — the parts are resolved on the LIVE vessel at runtime, never by a dump-local
+   `persistent_id`, and the craft dump is a **work in progress** (§B12.7's re-dump warning): make no claim about
+   which panel/antenna parts exist.
+**Read:** §B12.8 rider (c) · §B12.6 build-order step (3) · §B12.7 · W14's line · W10's line (the host + the
+`HasControllerFor` table).
+**DONE when:** `build.py test` green; `DeployablesControl.Tick` is called from `FlightDriver` and from nowhere
+else; every phase it is keyed on is in `HasControllerFor`; nothing on any screen claims a phase or an action
+that is not happening; and the owner has been asked whether the read-only host may take its first command
+(⛔ **this is a gate question — C1.12/C1.14: a build chat does not decide it**).

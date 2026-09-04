@@ -24,8 +24,11 @@
 // `Items[i].Kind == ItemKind.CrewAck`, `Phase`, `Satisfied`) exists here with the same shape. `Gate` gains an
 // `Id` and `ChecklistItem` gains `Crew()`/`Sys()`; the one RENAME is `ItemKind.AutoCheck` → `Auto`, and
 // nothing in the tree read that member. `GatePhase` stays in `pure/MissionPhase.cs` where the screens have it.
-// ⚠ THE GATE MACHINE HAS NO DRIVER: `src/CrewProcedureOps.cs` (the glue that owns the live bits) is not in
-// the tree — register **W10**. `CrewGate.Step` is a pure decision nothing calls outside its own test.
+// ✅ THE GATE MACHINE HAS ITS DRIVER SINCE **W10**, 2026-09-05: `src/CrewProcedureOps.cs` feeds `Step` the
+// live gate each frame (items satisfied from vessel state, the crew's taps, the crew's GO / NO-GO) and
+// advances the plan on a cleared gate. ⚠ `AbortPressed` is the one input still wired to constant false —
+// the gate card's ABORT hands to the abort responder, register **W19**, and latching `GatePhase.Abort`
+// without one would paint a red ABORT for an abort that cannot happen (§14.4(a): no red).
 // ============================================================================================
 namespace DragonScreen
 {

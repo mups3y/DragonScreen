@@ -363,7 +363,7 @@ namespace DragonScreen.BlackBox
             // that return a REAL constant, and §2.5 is explicit that recording that constant "is itself
             // the proof the seam was idle" — so they are Live, not Unfitted. The rest have no source at
             // all and each names the increment that fills it (§B12.5: one property per increment).
-            Cap("gnc_engaged", "0/1",  Tier.R2, "conductor", "AutoPilot.Engaged (idle seam — constant 0 until T17)"),
+            Cap("gnc_engaged", "0/1",  Tier.R2, "conductor", "AutoPilot.Engaged — LIVE since W10: the crew-gate conductor is engaged (not flying)"),
             Cap("mode_index",  "enum", Tier.R2, "conductor", "FlightDriver.MissionMode (idle seam — constant Idle until T17)"),
             Unfit("gnc_module",   "string", Tier.R2, "the MechJeb module the conductor has engaged", "T17"),
             Unfit("gnc_status",   "string", Tier.R2, "that module's own status/convergence word",    "T17"),
@@ -387,11 +387,11 @@ namespace DragonScreen.BlackBox
             // a (b)-class independent cross-check on our own FSM, and it costs one column.
             Cap("mission_phase",    "enum", Tier.R2, "derived", "Mission.AuthoritativePhase(CrewProcedureOps..., classified)"),
             C("phase_classified", "enum", Tier.R2, "derived", "Mission.Classify(MissionInputs) built from THIS stream's vessel"),
-            Cap("gate_id",       "enum", Tier.R2, "conductor", "CrewProcedureOps.CurrentGate().Id (idle seam)"),
-            Cap("gate_phase",    "enum", Tier.R2, "conductor", "CrewProcedureOps.Proc.Phase (idle seam)"),
-            Cap("crew_action",   "0/1",  Tier.R2, "conductor", "CrewProcedureOps.CrewActionNeeded() (idle seam)"),
+            Cap("gate_id",       "enum", Tier.R2, "conductor", "CrewProcedureOps.CurrentGate().Id — LIVE since W10"),
+            Cap("gate_phase",    "enum", Tier.R2, "conductor", "CrewProcedureOps.Proc.Phase — LIVE since W10"),
+            Cap("crew_action",   "0/1",  Tier.R2, "conductor", "CrewProcedureOps.CrewActionNeeded() — LIVE since W10"),
             Cap("gate_satisfied_mask", "bits", Tier.R2, "conductor", "ProcState.Satisfied[] packed — WHICH items were satisfied at the release"),
-            Cap("is_return",     "0/1",  Tier.R3, "conductor", "CrewProcedureOps.IsReturn (idle seam)"),
+            Cap("is_return",     "0/1",  Tier.R3, "conductor", "CrewProcedureOps.IsReturn — LIVE since W10"),
             CondCap("step_ack_mask", "bits", Tier.R2, "screens", "PageState.Steps.Acknowledged — the crew's own ack channel", WhenScreens),
             Unfit("step_id",    "enum", Tier.R2, "StepList's live step", "S55"),
             Unfit("step_state", "enum", Tier.R2, "StepList's live step state", "S55"),

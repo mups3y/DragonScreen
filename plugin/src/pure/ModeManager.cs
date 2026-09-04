@@ -11,10 +11,12 @@
 // return. ABORT at any gate is absorbing and hands to the abort responder. PURE + headless-tested.
 //
 // ---- RESTORED BY W4 (Wave D, §B12.8), 2026-09-04, from `8b81816^` — 7,647 B, byte-for-byte R1 §5.1's row.
-// ⚠ IT HAS NO CALLER. The glue that walks this plan is `src/CrewProcedureOps.cs`, and that file is NOT in the
-// tree: it only runs when its host `src/FlightDriver.cs` ticks it, and FlightDriver belongs to no recovery
-// wave (register **W10**). So ModeManager is a DECISION LAYER with nothing driving it — every flight command
-// on every screen is still §14.4(a)'s honest no-op. Nothing here flies anything.
+// ✅ IT HAS A CALLER SINCE **W10**, 2026-09-05. `src/CrewProcedureOps.cs` walks this plan and
+// `src/FlightDriver.cs` — the flight-scene host — ticks it each physics frame; both were restored together,
+// because a conductor with no host is worse than no conductor at all. What that host does NOT yet do is FLY:
+// it is read-only (§B12.6 build-order step (3)), so the plan advances through its GATES on the crew's GO and
+// then HOLDS at the first Fly step, which nothing completes. Every flight command on every screen is still
+// §14.4(a)'s honest no-op. Nothing here flies anything.
 // ⚠ The docs this header cites (`docs/TRUE_AUTOPILOT_ARCHITECTURE.md`, `data/crew_missions.json`) were
 // deleted 2026-09-01 (R1 §5.4) and are not in the tree; they are reachable only in git history at `8b81816^`.
 // ============================================================================================

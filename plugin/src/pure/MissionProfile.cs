@@ -26,8 +26,9 @@
 // ℹ The `.craft` descriptions also name WHICH droneship (OCISLY / JRTI / ASOG) where `RecoveryMode` can only
 // say `Droneship`. That per-mission recovery-target detail is register **LZ1**'s deliverable, not this
 // enum's — do not widen `RecoveryMode` here to hold it.
-// ⚠ NO CALLER. `Missions.Resolve(vesselName)` was called from `src/CrewProcedureOps.Engage()`, which is not
-// in the tree (register **W10**). Nothing resolves a mission today.
+// ✅ CALLED AGAIN SINCE **W10**, 2026-09-05: `src/CrewProcedureOps.Engage()` resolves the mission from the
+// live craft name on every AUTO SEQUENCE engage, and a `Valid == false` result logs a NO-GO rather than
+// flying a guessed mission.
 // ============================================================================================
 using System;
 

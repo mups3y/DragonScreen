@@ -33,59 +33,30 @@ namespace DragonScreen
     public struct FdirReport { public FaultKind Fault; public Recovery Response; }
     public enum AbortMode : byte { None, DeorbitReturn }
 
-    // ---- the crew-in-the-loop conductor: never engaged, no gate ever active ----
-    // ⚠ W4 (Wave D) RESTORED THE PURE HALF UNDER THIS STUB, AND DELIBERATELY LEFT THE STUB IN PLACE.
-    // `pure/ModeManager.cs` (the plan), `pure/CrewGate.cs` (the gate machine), `pure/CrewGates.cs` (the G1..G15
-    // catalog) and `pure/MissionProfile.cs` (mission-as-data) are all back and headless-tested. The GLUE that
-    // drives them — `src/CrewProcedureOps.cs`, 20,016 B at `8b81816^` — is NOT restored, and the reason is
-    // §14.4(a), not difficulty: its whole state machine advances inside `Tick(Vessel)`, and the ONLY caller of
-    // `Tick` in the entire pre-deletion tree is `FlightDriver.cs:341` (checked, not assumed). FlightDriver is
-    // R1 §5.2's "the Part-B host", it is in NO §B12.8 wave, and it is not in this tree. Landing the real
-    // CrewProcedureOps without it would make the AUTO SEQUENCE button (`ScreenPainter.cs:739`) ENGAGE a
-    // conductor that can never tick: a gate card would appear, its items would tick, and the crew's GO press
-    // would latch into `goPressed` and be consumed by nobody — a lit button and a dead GO. That is strictly
-    // WORSE than the honest no-op §14.4(a) requires (click, no light, no action), so it waits for its host.
-    // ⇒ Register **W10** lands `src/CrewProcedureOps.cs` together with a `FlightDriver` that ticks it.
-    // ⛔ Do NOT "fix" this by ticking CrewProcedureOps from a screen addon: its `AutoAdvanceGates` default is
-    // `true`, so a tick with no flight software behind it auto-clears the whole countdown and parks the plan on
-    // the Ascent Fly step, which nothing completes — the screens would then report a mission phase that is not
-    // happening. A conductor with no controllers must not be ticked at all.
-    public static class CrewProcedureOps
-    {
-        public static bool Engaged { get { return false; } }
-        public static bool IsReturn { get { return false; } }
-        public static MissionPhase ActivePhase { get { return default(MissionPhase); } }
-        public static string PhaseName { get { return null; } }
-        public static ProcState Proc { get { return default(ProcState); } }
-        public static bool CrewActionNeeded() { return false; }
-        public static Gate CurrentGate() { return default(Gate); }
-        public static void Toggle() { }
-        public static void ToggleItem(int i) { }
-        public static void PressGo() { }
-        public static void PressNoGo() { }
-        public static void PressAbort() { }
-        public static void MarkDockedThisMission() { }
-    }
-
-    // ---- the (deleted) autopilot host: no abort in progress, no fault, idle authority ----
-    public static class FlightDriver
-    {
-        public static bool Aborting { get { return false; } }
-        public static bool AbortFxSuppressed { get { return false; } }
-        public static ControlMode MissionMode { get { return ControlMode.Idle; } }
-        public static FdirReport LastFdirReport { get { return default(FdirReport); } }
-        public static void RequestAbort() { }
-        public static void SuppressAbortFx() { }
-        public static void RequestDeorbit(bool propulsive) { }
-
-        // ---- W2 (Wave B) seam: the throttle-authority entry point the REAL Actuator calls ----
-        // `Actuator.FireAbort` owns the throttle (SuperDracos fire at full), so restoring the actuation layer
-        // needs this member to exist. The real FlightDriver (`8b81816^`) latches a commanded throttle and its
-        // OnFlyByWire hook applies it; that hook is Wave D's, so here it stays an HONEST NO-OP — §14.4(a):
-        // nothing is throttled, and nothing pretends to be. Do NOT make this write to a vessel: the facade
-        // gets its real body when Wave D restores FlightDriver, not by half-wiring it from here (§B12.8(a)).
-        public static void SetThrottle(double t) { }
-    }
+    // ---- ⛔ THE CrewProcedureOps AND FlightDriver STUBS ARE RETIRED (W10 / Wave D, 2026-09-05). ----
+    // They used to be declared here as idle stand-ins: a conductor that was never engaged and a host with no
+    // abort, no fault and idle authority. BOTH REAL FILES ARE BACK — `src/CrewProcedureOps.cs` and
+    // `src/FlightDriver.cs`, restored from `8b81816^` per §B12.8 Wave D — and they carry every member the
+    // screens compile against with identical signatures. This is the SAME swap W2 made for `Actuator` and
+    // it follows the same rule: the class name the screens compile against did not change, only what stands
+    // behind it. Do NOT re-add a stub for either; two declarations of the same type break the build
+    // (§B12.8's two-generation rule).
+    //
+    // ⚠ WHY THEY HAD TO LAND TOGETHER, recorded so it is not undone. `CrewProcedureOps`'s whole state
+    // machine advances inside `Tick(Vessel)`, and the ONLY caller of `Tick` in the entire pre-deletion tree
+    // was `FlightDriver.cs:341`. The real conductor WITHOUT its host would have made the AUTO SEQUENCE
+    // button (`ScreenPainter.cs:967`) engage something that can never tick: the gate card appears, its items
+    // tick, and the crew's GO latches into `goPressed` for nobody to consume — a lit button and a dead GO,
+    // strictly worse than the honest no-op §14.4(a) requires.
+    //
+    // ⚠ WHAT THE RESTORED PAIR DOES AND DOES NOT DO. The host is READ-ONLY (§B12.6 build-order step (3)):
+    // it owns the flight-scene addon and `OnFlyByWire` (which writes no axis), ticks the conductor, and
+    // reports phase/engaged. The conductor's GATES are genuinely live — items satisfy from vessel state,
+    // the crew taps and presses GO, the plan advances — and its `AutoAdvanceGates` hands-off flag now
+    // SHIPS FALSE, so the gates are interactive rather than decorative. NOTHING COMMANDS THE VEHICLE:
+    // no ignition, no throttle, no attitude, no abort. `FlightDriver.HasControllerFor` is the empty phase
+    // table that keeps the conductor from naming a phase nothing is flying, and each later increment grows
+    // it (§B12.8 rider (c)). See both files' headers for the full account.
 
     // ---- FDIR fault-name helper (display text). No autopilot → always nominal. ----
     public static class Fdir
@@ -207,9 +178,11 @@ namespace DragonScreen
     // ---- now, they restore no code, and they will never flip a property. So each name below points at the
     // ---- T-series conductor increment that will ACTUALLY back it (§B12.8 rider (d), §B12.5a).
     //
-    //  AutoPilot        → gen-2 `CrewProcedureOps.Engaged` (the AUTO SEQUENCE master). NO-OP: the glue has no
-    //                     host yet and must not be ticked without one — see the block above. **W10** lands
-    //                     the read-only host; **T17** then binds the pinned MechJeb core to it.
+    //  AutoPilot        → gen-2 `CrewProcedureOps.Engaged` (the AUTO SEQUENCE master), ticked by the real
+    //                     `src/FlightDriver.cs`. LIVE since W10, 2026-09-05. The lamp is lit exactly when the
+    //                     crew-gate conductor is engaged and being ticked — which is the honest meaning of
+    //                     "AUTO SEQUENCE engaged" in a read-only build: the PROCEDURE is running, and nothing
+    //                     is flying. **T18 onward** adds the controllers that make it fly (§B12.6 step (4+)).
     //  StationApproach  → the CONDUCTOR's §B9 Phase-3 approach: MechJeb Maneuver-Planner ops composed and
     //                     re-planned live (§B1/§B12.4), flown by the Node Executor. NO-OP: that phase is not
     //                     built. **T19.** (Not W20 — W20 is a reference READ of the deleted hand-written
@@ -228,10 +201,12 @@ namespace DragonScreen
     //                     (§B16.7). NO-OP: MissionConductor does not compile here, and the `BoosterControl`
     //                     under it STAYS DELETED — §B16.1 writes that core fresh. **W9**, then §B16.
     //
-    // ⛔ NOTHING BELOW IS LIVE, AND NOTHING BELOW LIES. G6 changed the EXPLANATION, never the behaviour:
-    // every one still returns false/null, so every lamp these feed is dark and every flight command is
-    // §14.4(a)'s honest no-op — click, no light, no action, and no red.
-    public static class AutoPilot { public static bool Engaged { get { return false; } } }
+    // ⛔ ONE OF THESE IS NOW LIVE, AND NONE OF THEM LIES. W10 (2026-09-05) flipped `AutoPilot.Engaged` — and
+    // exactly that one (§B12.5: one property per increment). The other four still return false/null, so their
+    // lamps are dark and every flight command is still §14.4(a)'s honest no-op — click, no light, no action,
+    // and no red. `AutoPilot.Engaged` lighting means the CONDUCTOR is engaged, not that anything is flying:
+    // the host behind it is read-only and commands nothing (§B12.6 step (3)).
+    public static class AutoPilot { public static bool Engaged { get { return CrewProcedureOps.Engaged; } } }
     public static class StationApproach { public static bool Engaged { get { return false; } } public static string Note { get { return null; } } }
     public static class DockingOps { public static bool Engaged { get { return false; } } public static string Note { get { return null; } } }
     public static class DeorbitOps { public static bool Engaged { get { return false; } } }
