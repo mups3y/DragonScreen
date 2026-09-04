@@ -17,7 +17,7 @@
 #
 # ⛔ Reads recorded data only — NOT a physics/orbital sim (those are banned). It reports, unasked:
 #   1 recorder health   2 physics self-check   3 ascent   4 booster   5 rendezvous/phasing (the
-#   self-deorbit check)   6 deorbit/entry/chute   7 abort + FDIR   8 control authority   9 verdict.
+#   self-deorbit check)   6 deorbit/entry/chute   7 abort + FDIR   8 control authority.
 # Anything it does NOT flag has been CHECKED, not skipped.
 #
 # NOTE plugin/build/assess_flight.py reads an EARLIER, gen-1 schema (ut / a_phase / x_owner) and

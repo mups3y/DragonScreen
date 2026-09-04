@@ -6113,7 +6113,15 @@ that refuses exactly that; verify against a scratch `<out_dir>`.
 `BOOST/<phase>` appears as its own segment; `docs/tuning/TUNING_DB.*` is **unchanged** on disk;
 `python plugin/build.py test` green. Tooling-only → preview/PNG gate N/A (C1.3).
 
-### S78 [S] `plugin/tools/assess_flight.py`'s header promises a ninth section it does not print — **TODO** — [TIER 4: hygiene, doc accuracy]
+### S78 [S] `plugin/tools/assess_flight.py`'s header promises a ninth section it does not print — **DONE** — [TIER 4: hygiene, doc accuracy] ⚠ batch deviation from C1.1/C1.7 authorised by owner 2026-09-04 via overseer
+**Picked: dropped "9 verdict" from the header** (not added the section) — confirmed `assess()`
+(`plugin/tools/assess_flight.py:319-331`) calls exactly the eight section functions
+(`recorder_health, physics, ascent, booster, rendezvous, return_entry, abort, control`), no ninth; the
+task allows either fix and this is the lower-risk one for a Tier-4 hygiene line — no new code, no new
+"physics" to accidentally violate the file's own simulation ban. Reworded `:19-20`'s list to end at "8
+control authority."; grepped the file for any other "verdict"/nine-section mention — none. Confirmed nothing
+it prints changed. `python plugin/build.py test` green (`ALL SUITES PASSED`); no preview PNG applies
+(tool-header-only, C1.3).
 Found by **S76**, 2026-09-04 (C1.1). The header lists what the tool reports as *"1 recorder health … 8 control
 authority **9 verdict**"*, and `assess()` calls exactly eight section functions — there is no verdict section
 in the file. Nothing it prints is wrong; the header over-promises. **Build:** either drop *"9 verdict"* from
