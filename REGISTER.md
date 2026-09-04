@@ -1981,6 +1981,143 @@ already are).
 
 ---
 
+## Part B0 — the BlackBox flight recorder (`docs/BLACKBOX_RESEARCH.md`, S59; before T15 per its own Q4)
+
+### BB0 [S] Register the BlackBox build — S59 specified it; no line ever scheduled it — **DONE 2026-09-04** — [TIER 1: nothing flies unrecorded, and W24 just made the booster fly]
+Owner-directed register task, 2026-09-04 (not from a prior line; taken as THE task per C1.1).
+**The gap.** `docs/BLACKBOX_RESEARCH.md` (S59, DONE 2026-09-03) fully specifies the flight recorder — §2's
+A–I parameter set with rates, §4's format and architecture — and no register line was ever created to BUILD
+it. Same failure shape C1.16 was written for: specified, catalogued, never scheduled.
+**Why now.** `W24` (`897908d`) flipped `BoosterHost.Actuate` to **TRUE** — the booster commands a real vessel
+on the next flight, and nothing records it. The recorded precedent is flight 194334: a booster lit an engine
+with uncontrolled attitude, was lost in ~10 s, and its burn kicked the upper stage — undiagnosable at the time
+for exactly this reason.
+**Done:** wrote **BB1–BB4** below, prefixed `BB` (not `B`) so as never to collide with the heavily-cited
+`§B1`–`§B16` plan sections. Carried forward S59 §6.1's four settled decisions (Q1 in-repo `docs/flights/`,
+Q3 one-stream-per-vessel, Q4 before T15 + install-before-flight-1, Q5 ships enabled) so BB1 does not re-ask
+them, and left **Q2 (fixed vs adaptive row rate) open** on BB1 as a blocking C1.14 question — that one is not
+this task's to decide. Put S76's four evidence-derived defects (an unwritten `torque_cmd` column, two
+stateless mode columns, a torn last row, unmarked warp pollution) onto BB1 as requirements the old recorder
+failed, and flagged BB1 as the register-named reader for the observability columns `W24`'s
+`pure/BoosterSteer.cs` already exposes read-only for it. Updated `docs/INDEX.md`'s `BLACKBOX_RESEARCH.md`
+entry — it previously said the Part-B placement "is an open owner call (its §6.1 Q4)"; that call is now
+settled and the entry points at BB1–BB4 instead of restating the closed question.
+**No code written** — this task schedules work, it does none (declared outputs: this file, `docs/INDEX.md`,
+one commit).
+**VERIFY (C1.3):** register-only task — no preview PNG applies. `python plugin/build.py test` run as the
+no-regression check (see this task's close, below the BB lines). `git status` shows only the two declared
+files changed.
+Ends per C1.5: register update + local commit only; commit subject starts "BB0:"; never pushed.
+
+### BB1 [O] The BlackBox recorder CORE — schema, streams, manifest, validity, budget — **TODO** — [TIER 1: nothing flies unrecorded, and W24 just made the booster fly]
+- **Read:** `docs/BLACKBOX_RESEARCH.md` §2 in full (the A–I parameter set at §2.0's rate ladder — R0
+  accumulated / R1 10 Hz dynamic / R2 2 Hz state / R3 10 s slow / R4 event-driven), §4.1–§4.2 (the three
+  streams + schema mechanics), §4.3 (the manifest — "not optional"), §4.5 (the UT/MET/wall time base), §4.6
+  (validity — **blank, never a plausible number**), §4.7 (the performance budget — reads what is already
+  computed, drives nothing), §4.8 (what the recorder must never do), §3.4 (compose vs break vs build-fresh,
+  column by column).
+- **Build:** the recorder's own namespace, **one entry point**, nothing else in the tree depending on it.
+  `<MissionId>.params.csv` + `<MissionId>.events.jsonl` + `<MissionId>.manifest.json` into
+  `<KSP>/DragonScreen_capture/` (already git-ignored, §4.4 — no new C7 question). The `Schema[]`-as-
+  single-ordered-source-of-truth pattern, blank-filled `NewRow()`, RFC-4180 `Escape()`, invariant-culture
+  `Num()` with NaN/Inf → blank, and `VerifyWidth()` all COMPOSE verbatim from the recovered Recorder B/A per
+  §3.4's table; do not re-derive them.
+  ⭐ **Two named columns are not optional.** `pure/BoosterSteer.cs:43` already exposes read-only
+  deadband-active / deadband-value properties with a comment naming **this register line** as their reader —
+  the owner's Q2 observability refinement (2026-09-04): a knob enable-able from config that never appears in
+  a recording cannot be diagnosed. BB1 must carry those two columns.
+  ⭐ **Four things the old recorder got wrong, found by S76, must not repeat:** (1) `torque_cmd` was declared
+  in the schema and never written in any file — a column that exists and is always empty fakes coverage; BB1
+  must fail loudly (a `rec.width_mismatch`-class check or equivalent) if a declared column is never populated
+  across a mission. (2) `mode_holding` / `mode_flying` carried no state — the same defect, twice more; every
+  declared column needs a real writer or it does not go in the schema. (3) the probe files ended in a torn
+  row (36 and 77 of 116 fields — the stream cut mid-line on revert) which a reader silently turned into a
+  phantom row; close the stream so a revert cannot leave a partial line, or mark the last row incomplete so
+  no reader can mistake it. (4) warp rows polluted every statistic with no way to exclude them; `warp_rate` /
+  `warp_rails` are on every row (§2.1) specifically so a reader can filter without inferring.
+- ⛔ **EXCISABLE BY DESIGN** (owner, 2026-09-03): own namespace, one entry point, nothing depending on it —
+  completely removable for release (S59 §6.1 Q5). If removing BB1 turns out to be a refactor anywhere else in
+  the tree, BB1 failed its own design constraint.
+- **DONE when:** the three files are written for a test flight with the A–I columns at their specified rates;
+  every declared schema column has a verified writer (no `torque_cmd`-class ghosts); the manifest is written
+  and finalised with per-column provenance; on-rails-warp control columns read blank, not zero; a row that
+  throws stops the recorder rather than writing garbage; `rec_build_us` and the flush/self-disable behaviour
+  are in place; `python plugin/build.py test` green with a headless suite covering the schema/blank/validity
+  rules; preview N/A (no screen changed) unless glue touches a page.
+- Ends per C1.5: register update + local commit; install/glass confirmation is **BB4**, not this line.
+
+#### Open questions for the owner (C1.14) — BB1
+
+**BB1-Q1 — Fixed or adaptive row rate? (S59 §6.1 Q2, carried forward unresolved — do not decide this in
+build.py.)**
+*Situation.* The spec proposes 10 Hz while a dynamic phase is active and 2 Hz otherwise, with an on-rails-warp
+floor of 1 row per wall-second (§2.0, §4.6) — ~110 MB for a nominal 19 h mission. S76 found that the OLD
+corpus's warp rows polluted every statistic badly enough that `is_warp()` filtering had to be retrofitted into
+`assess_flight.py`, and S77 had to add a `boost_phase` segment to `tuning_db.py` because pooled rows were
+silently mislabelling 1,560 booster rows — evidence that rate/regime handling is exactly where the old design
+went wrong.
+1. **Adaptive, as specified** (10 Hz dynamic / 2 Hz quiescent / warp-floored). *(Recommended: matches §B8's
+   AoA/Q tune resolution during the phases that need it, and the warp floor is what keeps a 19 h mission
+   bounded.)*
+2. Fixed 10 Hz throughout — simpler to reason about and to analyse, ~5× the file size.
+3. Fixed 5 Hz throughout, matching the screen tick and the deleted Recorder A — smallest and simplest, but
+   halves the resolution of the §B8 AoA/Q traces the whole tune depends on.
+*No gate; a design preference with a size and analysis-ergonomics consequence.*
+
+### BB2 [O] TWO-VESSEL recording — the booster flies unfocused and unrecorded without this — **TODO** — [TIER 1: §B16.7's accepted risk names the BlackBox as its own answer]
+- **Read:** `docs/BLACKBOX_RESEARCH.md` §4.4 (a second tracked vessel opens
+  `<MissionId>.<Vessel>.params.csv` under the same mission id — the fix for the old paired
+  `Crew-2_*.csv` / `Crew-2_Probe_*.csv` streams that could only be associated by timestamp), §B16.7 in
+  `docs/BUILD_PLAN.md` (the booster flies UNFOCUSED, as a separate `Vessel`), `docs/BLACKBOX_RESEARCH.md`
+  §6.1 Q3 (one stream per vessel — settled below).
+- **Confirmed decision, carried from S59 §6.1 Q3 (overseer recommendation, not re-opened here):** **ONE
+  STREAM PER VESSEL**, joined by the shared `mission_id` and `ut` — not parallel per-vehicle column blocks in
+  one row. The booster is a separate vessel with its own lifetime and phases, and the existing recovered
+  corpus already uses this shape, which the repaired analysers already read (S76).
+- **Build:** on BB1's core, open a second `<MissionId>.<Vessel>.params.csv` stream for a tracked unfocused
+  vessel and keep it alive across focus changes — `W23` already established that an unfocused, unpacked
+  vessel can be commanded (`BoosterHost`); recording one while it is unfocused is the same class of problem
+  and must not silently stop when the camera leaves it.
+- **DONE when:** a test flight with an active booster produces two `params.csv` streams under one
+  `mission_id`, both readable and joinable on `ut`; the booster stream continues while the capsule holds
+  camera focus; `python plugin/build.py test` green; preview N/A unless glue touches a page.
+- Ends per C1.5: register update + local commit; install/glass confirmation is **BB4**.
+
+### BB3 [O] The report generator, §4.10 — the program that reads a recording back — **TODO** — [TIER 1: owner named this explicitly, 2026-09-04]
+- **Read:** `docs/BLACKBOX_RESEARCH.md` §4.10 (the twelve-section extension of `assess_flight.py`), §3.2
+  (what the surviving analysers already do and why), §3.4's row for `plugin/tools/assess_flight.py` /
+  `tuning_db.py` ("COMPOSE — extend, do not replace").
+- **Build:** extend `plugin/tools/assess_flight.py` — do not write a new tool. The lineage **S76** repaired
+  (reunited with the recovered corpus) and **S77** fixed (`is_warp()` filtering, the `act_sat` /
+  `angacc_*_auth` authority metrics, the vis-viva self-checks) is what this line builds on. Add the sections
+  §4.10 marks **NEW**: §0 provenance/manifest summary (incl. which columns are `SIMULATED`), §9 crew &
+  screens (the CVR pass), §10 the full event timeline, §11 exceedances against §B11 targets with per-phase
+  context (not the flag alone — rule-based exceedance ignores correlations between parameters). Owner
+  (2026-09-04): *"include the program that will read that data and return to you the correct and full
+  recorded mission."*
+- **DONE when:** run against a BB1/BB2 test recording, the tool prints all twelve §4.10 sections, regenerable
+  from the three raw files alone; `python plugin/build.py test` green (a headless check on the report logic
+  where practical); preview N/A (a Python tool, not a screen).
+- Ends per C1.5: register update + local commit; never push.
+
+### BB4 [owner-gated] Install the BlackBox + confirm on the glass — **TODO (blocked: needs BB1–BB3 DONE first)** — [TIER 1: the owner's own "before the first flight" deadline]
+- ⚠ **The owner ALREADY AUTHORISED `install` for the BlackBox specifically** (2026-09-03: *"build and install
+  before the first flight as we will need it for troubleshooting and diagnoses"*). **This authority extends
+  to nothing else** — no other pending line may cite it, and this line still needs BB1–BB3 DONE and green
+  before it can act (C1.3/C1.12).
+- **Read:** the S59 §6.1 Q4 decision text above; `docs/BLACKBOX_RESEARCH.md` §4.4/§4.7 (self-disable,
+  performance budget) as the pre-install checklist.
+- **Build:** `python plugin/build.py install` (KSP + CKAN closed, full restart), fly a short test (a pad-sit
+  or a short hop is enough), confirm the three files land in `DragonScreen_capture/`, run BB3's report
+  generator against them, confirm `rec_build_us` shows no frame-cost regression on the glass.
+- **DONE when:** installed, one recorded test flight produces a readable manifest + stream + events, BB3's
+  report runs against it end to end, and this is recorded as done **before** the first Part-B flight per the
+  owner's 2026-09-03 directive.
+- Ends per C1.5: register update + local commit; never push. Glass-time confirmation only — no further owner
+  go needed for BlackBox install specifically, per the authority already on record above.
+
+---
+
 ## Part B — autopilot (§B12.6 order; all [O])
 
 ### T15 [O] Embed MechJeb — **TODO**

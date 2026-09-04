@@ -117,13 +117,15 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
 - **[BLACKBOX_RESEARCH.md](BLACKBOX_RESEARCH.md)** [SPEC — research] — the **BlackBox flight recorder**
   specification (S59, 2026-09-03): real FDR/CVR/spacecraft-telemetry practice, our parameter set with a
   per-parameter sample rate, what to COMPOSE from the surviving corpus tooling vs build fresh, the
-  file format / time base / performance budget / replay path, and the C7 evidence boundary. **Not built** —
-  the recorder that fed `plugin/tools/assess_flight.py` was deleted 2026-09-01; the analysers survive, the
-  writer does not. Where it lands in the Part-B order is an open owner call (its §6.1 Q4).
+  file format / time base / performance budget / replay path, and the C7 evidence boundary. **Not built yet,
+  but now scheduled** — **BB1–BB4** (register, added 2026-09-04) build the core, the two-vessel stream, the
+  §4.10 report generator, and the install-before-flight-1 confirmation, in that order, **before T15** per
+  this doc's own §6.1 Q4 (now settled, not open). The recorder that fed `plugin/tools/assess_flight.py` was
+  deleted 2026-09-01; the analysers survive, the writer does not, which is exactly the gap BB1 closes.
   ⚠ **§B16.8 adds a hard requirement on it** (G5a, 2026-09-03): the RSS-RO flight corpus is gone and is
   rebuilt by recorded re-flights, so the recorder MUST capture what a ballistic-coefficient re-derivation
   needs — **density, Mach, drag acceleration, mass, and an explicit unpowered-phase marking** — plus the
-  booster as its own two-vessel stream (§B16.7).
+  booster as its own two-vessel stream (§B16.7, **BB2**).
 - **[flights/README.md](flights/README.md)** [HIST — recovered] — salvaged **H1** (2026-09-04) from
   `8b81816^`. How to read the archived `FlightRecorder` CSVs (DS-ASC-001…008, DS-DEO-001): what each file
   covers, row counts, and the geometry-dump schema. `BLACKBOX_RESEARCH.md` §3.2 calls it *"already 90% of a
