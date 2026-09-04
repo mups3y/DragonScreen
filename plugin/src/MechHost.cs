@@ -9,7 +9,7 @@
  * would otherwise get TWO MechJeb UIs, one of which they cannot configure and must not touch …
  * Ported != enabled."
  *
- * ══ THE FOUR THINGS THIS FILE DOES, AND WHY EACH IS NOT OPTIONAL ═══════════════════════════
+ * ══ THE FIVE THINGS THIS FILE DOES, AND WHY EACH IS NOT OPTIONAL ═══════════════════════════
  *
  * (1) A DISTINCT PartModule NAME.  §B3's private namespace stops a CLR TYPE clashing with a
  *     user's MechJeb2.dll. It does NOT stop the OTHER collision, which is one level up and was
@@ -58,6 +58,30 @@
  *     ⚠ WHICH PROFILE IT IS: the TUNED Crew-2 profile - §B5's TUNING TARGET - NOT the flight-1
  *     baseline, which §B5 says is RSS-RO's own shipped MechJeb defaults. See MechProfile's note.
  *     T15b builds the loader; T22 decides what flight 1 applies, and `tuneFile` is that seam.
+ *
+ * (5) NO INHERITED ACTION-GROUP ENTRIES.  Task T15b's glass row 7 found that MechJeb's own
+ *     `[KSPAction]` methods - orbit prograde, translatron, land at KSC and the rest - appear in
+ *     the Dragon's VAB action-group assignment list, because KSP builds that list by reflection
+ *     over every PartModule on the part, and DragonMechJebCore inherits all of them from
+ *     MechJebCore. Owner ruling, 2026-09-05, verbatim: "remove vab action group list".
+ *     ⚠ NOT a vendored-file edit. There are exactly 18 `[KSPAction(` declarations in the whole
+ *     vendored tree (grep `\[KSPAction\(`, not `ActionGroups[KSPActionGroup.X]` - the latter
+ *     matches ten files and is a different thing entirely), all 18 in MechJebCore.cs from :112,
+ *     and MechJebCore never reads its own `Actions` field anywhere - it only declares the marked
+ *     methods. So emptying `Actions` on OUR subclass instance changes nothing MechJeb depends on;
+ *     it only removes KSP's UI-side record of which methods a player may bind. Removing the
+ *     attributes themselves would mean editing MechJebCore.cs, which §B12.1's rename-shell rule
+ *     forbids - clearing the inherited list on `DragonMechJebCore` needs no such edit and touches
+ *     no file under `plugin/mech/`.
+ *     Done in `OnStart`, not `OnAwake`: KSP populates a module instance's `Actions` from its
+ *     `[KSPAction]` methods when the instance is attached to the part, which happens before that
+ *     instance's `OnStart` runs - so by `OnStart` the list already exists and is safe to clear.
+ *     `OnStart` runs once per module INSTANCE, and a fresh instance is created for every context
+ *     that matters here - a part dragged into the VAB, a vessel launched to flight, a save
+ *     reloaded - each with its own `Actions` list, so doing it alongside `GoHeadless`/`ApplyTune`
+ *     (already called from every such `OnStart`) covers the VAB editor and flight alike. Unlike
+ *     `GoHeadless`, this needs no per-frame re-assertion in `OnUpdate`: nothing regenerates
+ *     `Actions` after the instance is built, so clearing it once holds for the instance's life.
  *
  * ⛔ WHAT THIS FILE DOES NOT DO. It does not fly anything. §14.4(a) still holds and the screens'
  * flight commands are still an honest no-op - Part B replaces them one controller at a time
@@ -121,6 +145,7 @@ namespace DragonScreen
             base.OnStart(state);
             GoHeadless();
             ApplyTune();
+            RemoveInheritedActions();
         }
 
         /// <summary>
@@ -247,6 +272,27 @@ namespace DragonScreen
             string dll = System.Reflection.Assembly.GetExecutingAssembly().Location;
             string dir = Path.GetDirectoryName(dll);
             return Path.Combine(Path.Combine(dir, "PluginData"), file);
+        }
+
+        // ── (5) no inherited action-group entries ───────────────────────────────────────
+
+        /// <summary>
+        /// Empty the action list KSP built from MechJebCore's own <c>[KSPAction]</c> methods, so
+        /// none of the 18 inherited actions (orbit prograde, translatron, land at KSC…) appear in
+        /// the Dragon's VAB action-group list. Called once from <c>OnStart</c> - see (5) in the
+        /// file header for why that point is the right one and why, unlike <see cref="GoHeadless"/>,
+        /// this does not need re-asserting every frame.
+        /// </summary>
+        private void RemoveInheritedActions()
+        {
+            try
+            {
+                if (Actions != null) Actions.Clear();
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[DragonScreen] MechJeb action-group removal failed: " + e);
+            }
         }
     }
 

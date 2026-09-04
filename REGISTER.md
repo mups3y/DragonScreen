@@ -3894,7 +3894,7 @@ DONE-criteria; 4-8 are what the mechanism above could not prove without the game
 | 4 | **Exactly one core, on the Dragon, and nowhere else.** Right-click the pod (one MechJeb PAW section, not two); confirm no core appeared on any other command pod in the VAB parts list. | Part patching is ModuleManager at load time. | `@PART[…]` in `DragonScreen.cfg` names two parts explicitly; a core elsewhere means something else is patching, not us. |
 | 5 | **`GameData/DragonScreen/PluginData/` still contains ONLY the shipped tune after a flight + a quit** — no `mechjeb_settings_global.cfg`, no `mechjeb_settings_type_*.cfg`, and the shipped file **unmodified** (compare against `docs/reference/`). | The write ban is `OnSave`'s `sfsNode == null` early return; nothing writes during `build.py test`. | A settings file appearing here means the override is not being reached — check `DragonMechJebCore` is the class actually instantiated, not a plain `MechJebCore`. |
 | 6 | **`GameData/MechJeb2/` is NOT created, and — if the user has one — is NOT modified.** Note its `mechjeb_settings_global.cfg` timestamp before and after a flight. Log line `[DragonScreen] embedded MechJeb settings directory -> …`. | The redirect is reflection over a `private static readonly` field. Mono permits it; this build cannot prove it. | The warning `MechJeb cfg redirect did not take` is the tell. **The write ban holds regardless**, so the failure mode is a stray read, not damage. |
-| 7 | **The Dragon's action-group list in the VAB** — MechJeb's inherited `[KSPAction]`s (orbit prograde, translatron, land at KSC…) will be listed. **Decide whether that is acceptable**, because removing them needs a vendored-file edit §B12.1 forbids. | Action groups are a VAB UI. | Owner call, not a build-chat one — it is a plan question (§B12.1's rename-shell rule vs. a cleaner PAW). |
+| 7 | **The Dragon's action-group list in the VAB shows NO MechJeb entries** — none of orbit prograde/retrograde/normal/antinormal/radial in/out, kill rotation, deactivate SmartACS, land somewhere, land at KSC, PANIC, the six translatron actions, or ascent AP toggle (the 18 `[KSPAction]`s MechJebCore declares). **Verification, not a question — owner ruling, 2026-09-05, verbatim: "remove vab action group list" (T15c).** | Action groups are a VAB UI; `Actions.Clear()` runs in `DragonMechJebCore.OnStart` (`src/MechHost.cs`), which only the game executes. | If any of the 18 still appear, `RemoveInheritedActions()` did not run or threw — check the log for `MechJeb action-group removal failed`, then confirm the part in the VAB is actually running `DragonMechJebCore` (not a plain `MechJebCore`, per row 5's same check). |
 | 8 | **KSP.log is clean of MechJeb noise at the MAIN MENU** — no `Failed to load AssetBundle`, no install-checker popup, no compatibility popup. This is the direct test of (A). | `[KSPAddon]`s only run in the game. | Any of the three firing means a file came back into the compile — `build.py test` should have caught it first. |
 
 #### T15b — C1.13 OVERSEER PROMPT (paste-ready). The owner (Chris) pastes this; the build chat acts only on what comes back.
@@ -3934,6 +3934,39 @@ DONE-criteria; 4-8 are what the mechanism above could not prove without the game
 > Hiding them would need an edit to a vendored file, which §B12.1's rename-shell rule forbids — so the
 > options are **leave them** (recommended: harmless, and the pin stays clean) or **raise a plan change** to
 > allow that one edit. **No ruling on record; this line is open.**
+> *(Answered by T15c, below — the owner ruled, and no vendored-file edit was needed after all.)*
+
+### T15c [S] Remove MechJeb's inherited action-group entries from the Dragon — **DONE 2026-09-05**
+- **Owner ruling, quoted verbatim (C1.12):** *"remove vab action group list"* — answering T15b's glass row
+  7's question above. No vendored-file edit was needed to satisfy it, and none was made.
+- **Research (overseer, 2026-09-05, cited in the task instruction):** exactly **18** `[KSPAction(`
+  declarations exist in the whole vendored tree — verified here by `grep -c '\[KSPAction\('
+  plugin/mech/MechJeb2/MechJebCore.cs` = 18, and a repo-wide grep for the same pattern returns the same 18,
+  all in that one file. ⚠ A naive `grep "\[KSPAction"` without the open-paren hits ten more files, which
+  are `ActionGroups[KSPActionGroup.X]` indexer brackets, not attributes — confirmed by grepping
+  `plugin/mech/MechJeb2/MechJebCore.cs` for the bare literal `Actions`: **zero matches**, i.e. `MechJebCore`
+  never reads its own inherited `Actions` field anywhere, so clearing it is inert to MechJeb's own code.
+- **Built:** `DragonMechJebCore.RemoveInheritedActions()` (`src/MechHost.cs`), called once from `OnStart`
+  alongside `GoHeadless()`/`ApplyTune()`, clearing `Actions` (the `KSPActionList` KSP populates from the 18
+  inherited `[KSPAction]` methods). **Timing reasoned, not assumed:** KSP builds a module instance's
+  `Actions` when the instance attaches to the part, before that instance's `OnStart` runs, so the list
+  already exists by the time our override runs; `OnStart` runs once per fresh instance in every context
+  that matters (VAB placement, launch, a reloaded save), which is why `GoHeadless`/`ApplyTune` already live
+  there — and unlike `GoHeadless`, nothing regenerates `Actions` afterward, so no per-`OnUpdate`
+  re-assertion is needed. Full reasoning + the header's new item (5) are in `src/MechHost.cs`.
+- **No file under `plugin/mech/` touched** — confirmed by `git show --stat` on the commit (below): only
+  `src/MechHost.cs` and this file changed.
+- **Scope held:** the same question for the right-click PAW (`[KSPEvent]`/`Fields`) was noticed and NOT
+  acted on — that is T15b's glass row 4 ("one MechJeb PAW section, not two"), a different ruling, not
+  extended here (C1.1).
+- **DONE gate (C1.3):** `python plugin/build.py test` **GREEN** — all suites unchanged, including the 102
+  T15b MechJeb-host checks (blacklist/addon-exclusion/tune), which do not touch `Actions` and were not
+  expected to move. **Stated plainly, per the task's own instruction: the actual emptiness of the VAB
+  action-group list is a glass observation** — `src/` glue is excluded from headless compilation-only
+  checks and the VAB itself only exists in-game, so this cannot be proven headlessly. T15b's glass row 7
+  (above) is rewritten from a taste question into that verification, with a "what to check if it failed"
+  column matching the other seven rows.
+- **Files:** `src/MechHost.cs`, this file.
 
 ### T16 [O] Pure conductor core + tests — **re-scoped to the `ConductorAction` gap only, 2026-09-05 (G9 item 2)** — **TODO**
 - **Read:** §B9 / §B12.2-3 + `pure/MissionPhase.cs`.
