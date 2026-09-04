@@ -374,6 +374,20 @@ public static class PreviewMain
             string path = Path.Combine(outDir, "page2_nav_orbit_suborbital.png");
             Render(dl, W, H, path);
             Console.WriteLine("  " + path + "   " + W + "x" + H + "   " + dl.Count + " commands");
+
+            // ---- AND THE SAME SCENE WITH THE ZOOM S43 WIRED ----
+            // This is the render S43 was logged FROM - the arc, the AP box, the AP label and the
+            // vehicle tick all inside an 8 px band on the limb. At x4 the open arc separates from the
+            // limb the way the closed ring does, the surface cut is still visible as the arc running
+            // into the limb, and the caption still says why the line stops.
+            MapView orbitZ = orbit;
+            for (int k = 0; k < 2; k++) orbitZ = MapProjection.Zoom(orbitZ, 1);
+            dl.Clear();
+            Pages.Build(dl, 2, W, H, sub, orbitZ, 2);
+            ChromeBar.Build(dl, W, H, cs);
+            string pathZ = Path.Combine(outDir, "page2_nav_orbit_suborbital_x4.png");
+            Render(dl, W, H, pathZ);
+            Console.WriteLine("  " + pathZ + "   " + W + "x" + H + "   " + dl.Count + " commands");
         }
 
         // ---- THE SAME OPEN ARC AT KERBIN SCALE, WHERE IT CAN ACTUALLY BE JUDGED (S41) ----
@@ -410,6 +424,96 @@ public static class PreviewMain
                 Console.WriteLine("  WARNING page NAV/ORBIT SUBORBITAL KERBIN OVERFLOWED at " + dl.Capacity);
 
             string path = Path.Combine(outDir, "page2_nav_orbit_suborbital_kerbin.png");
+            Render(dl, W, H, path);
+            Console.WriteLine("  " + path + "   " + W + "x" + H + "   " + dl.Count + " commands");
+        }
+
+        // ---- NAV / ORBIT AT THE 1:1 SCALE, x1 AND x4: WHAT S43 IS ABOUT (S43) ----
+        // S43's headline case, and it is not previewed anywhere else: a CLOSED, near-circular 200 km
+        // LEO over a 6371 km body. The ring is 1.0314 body radii, so on a 236 px globe it sits 7.4 px
+        // off the limb with a 10 px apsis box centred on it - the box straddles the limb on both
+        // sides. That is the truth, and it is unreadable, which is the whole of the line.
+        //
+        // The pair below is the owner's ruling rendered: x1 is what the page opens at, x4 is the same
+        // geometry with the zoom the crew now has. Nothing between them changed but the viewport -
+        // same conic, same apsis order, same surface rule - and the x4 render is what "LEGIBLE WHEN
+        // ZOOMED" means, which is the DONE-when the ruling put in place of the old one.
+        //
+        // They are ALSO the two answers to S43's open question (does the page open at x1 or at a
+        // default zoom?), which is why both are rendered rather than just the zoomed one.
+        {
+            PageState leo = ps;                       // PageState is a struct: this is a copy
+            leo.Body = "EARTH";
+            leo.Regime = FlightRegime.Space;
+            leo.BodyRadiusM = 6371000.0; leo.AtmosphereDepthM = 140000.0;
+            leo.ApogeeM = 202000.0; leo.PerigeeM = 198000.0;
+            leo.AltitudeM = 200000.0; leo.Altitude = "200.0 km";
+            leo.Apoapsis = "202.0 km"; leo.Periapsis = "198.0 km";
+            leo.ApogeeShown = true; leo.PerigeeShown = true;
+            leo.Ascending = true;
+            leo.TimeToApText = "00:21:07"; leo.TimeToPeText = "00:65:41"; leo.PeriodText = "01:28:16";
+            leo.HasTarget = false; leo.HasTargetOrbit = false;
+
+            // x1, x4, and x4 panned left+up - the last one because a zoomed plot overflows its well
+            // and the mask that paints the overflow out has to be seen working, not just asserted.
+            MapView baseView = MapProjection.NextMode(MapProjection.Default());
+            MapView[] views = new MapView[4];
+            string[] names = new string[4];
+
+            views[0] = baseView;                            names[0] = "leo_x1";
+            MapView z4 = baseView;
+            for (int k = 0; k < 2; k++) z4 = MapProjection.Zoom(z4, 1);
+            views[1] = z4;                                  names[1] = "leo_x4";
+            MapView z4p = z4;
+            for (int k = 0; k < 3; k++) z4p = MapProjection.Pan(z4p, -1.0, 0.0);
+            for (int k = 0; k < 2; k++) z4p = MapProjection.Pan(z4p, 0.0, 1.0);
+            views[2] = z4p;                                 names[2] = "leo_x4_pan";
+            // The clamp's own render: press + far more times than the range allows and land on x8,
+            // which is what "zoom must not run away to a degenerate view" has to be looked at.
+            MapView z8 = baseView;
+            for (int k = 0; k < 9; k++) z8 = MapProjection.Zoom(z8, 1);
+            views[3] = z8;                                  names[3] = "leo_x8";
+
+            for (int v = 0; v < views.Length; v++)
+            {
+                dl.Clear();
+                Pages.Build(dl, 2, W, H, leo, views[v], 2);
+                ChromeState cs = new ChromeState();
+                cs.Met = "T+ 01:12:04"; cs.VehicleState = "NOMINAL";
+                cs.LinkName = "COM1/TLM"; cs.LinkTimer = "00:04:12"; cs.LinkUp = true;
+                cs.SelectedPage = 2;
+                ChromeBar.Build(dl, W, H, cs);
+
+                if (dl.Overflowed)
+                    Console.WriteLine("  WARNING page NAV/ORBIT " + names[v]
+                                      + " OVERFLOWED at " + dl.Capacity);
+
+                string p2 = Path.Combine(outDir, "page2_nav_orbit_" + names[v] + ".png");
+                Render(dl, W, H, p2);
+                Console.WriteLine("  " + p2 + "   " + W + "x" + H + "   " + dl.Count + " commands");
+            }
+        }
+
+        // ---- THE SAME ZOOM AT KERBIN SCALE, WHERE NOTHING NEEDED FIXING (S43) ----
+        // The x1 Kerbin render is byte-identical to the pre-S43 one and is above; this is the other
+        // half of "the Kerbin case is unchanged" - that the control the RSS case needed does something
+        // sane here too rather than tearing a picture that was already correct.
+        {
+            MapView z4 = MapProjection.NextMode(MapProjection.Default());
+            for (int k = 0; k < 2; k++) z4 = MapProjection.Zoom(z4, 1);
+
+            dl.Clear();
+            Pages.Build(dl, 2, W, H, ps, z4, 2);
+            ChromeState cs = new ChromeState();
+            cs.Met = "T+ 00:12:34"; cs.VehicleState = "NOMINAL";
+            cs.LinkName = "COM1/TLM"; cs.LinkTimer = "00:04:12"; cs.LinkUp = true;
+            cs.SelectedPage = 2;
+            ChromeBar.Build(dl, W, H, cs);
+
+            if (dl.Overflowed)
+                Console.WriteLine("  WARNING page NAV/ORBIT KERBIN x4 OVERFLOWED at " + dl.Capacity);
+
+            string path = Path.Combine(outDir, "page2_nav_orbit_kerbin_x4.png");
             Render(dl, W, H, path);
             Console.WriteLine("  " + path + "   " + W + "x" + H + "   " + dl.Count + " commands");
         }

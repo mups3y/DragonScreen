@@ -29,6 +29,25 @@ namespace DragonScreen
         /// 0..MaxZoom clamp cannot cap it. NEGATIVE shrinks the globe (whole orbit fits), positive
         /// enlarges it. 0 is the default framing.</summary>
         public int PlanetZoom;
+
+        // ---- ORBIT (side-on plot) mode: a viewport over a fixed conic (S43) ----
+        // The ORBIT plot fits the whole orbit AND the body into the panel, which is correct and, at
+        // the 1:1 scale this install flies at, a hairline: a 200 km orbit over a 6371 km radius is
+        // 3.1% of the globe, so ring and limb are ~7.4 px apart on a 236 px globe. The owner's ruling
+        // (2026-09-04) is ZOOM + PAN, accepting that a zoomed view no longer shows the whole orbit -
+        // the arithmetic in S43 proves no uniform scale can show both, because zoom multiplies the
+        // separation and the ring radius by the SAME factor.
+
+        /// <summary>Zoom step for the side-on ORBIT plot. SEPARATE from ZoomStep and from PlanetZoom
+        /// for the same reason those two are separate: three views, three clamps, and one shared step
+        /// would make NEXT VIEW silently rescale the view you just left. 0 is the whole-orbit fit this
+        /// plot has always drawn, and 0 must render EXACTLY as it did before S43.</summary>
+        public int OrbitZoom;
+
+        /// <summary>Where the ORBIT plot's viewport has been panned to, in PANEL-HALF units - 1.0 is
+        /// half the panel's width (X) or height (Y). Positive X moves the drawn geometry RIGHT, i.e.
+        /// the view left; positive Y moves it DOWN. 0,0 is the un-panned view.</summary>
+        public double OrbitPanX, OrbitPanY;
     }
 
     public struct MapQuad
@@ -53,6 +72,9 @@ namespace DragonScreen
             v.Follow = true;
             v.PlanetRotDeg = 0.0;
             v.PlanetZoom = 0;
+            v.OrbitZoom = 0;
+            v.OrbitPanX = 0.0;
+            v.OrbitPanY = 0.0;
             return v;
         }
 
@@ -62,6 +84,20 @@ namespace DragonScreen
         /// <summary>Globe zoom range. Negative shrinks it (whole orbit fits), positive enlarges it.</summary>
         public const int PlanetZoomMin = -5;
         public const int PlanetZoomMax = 6;
+
+        /// <summary>
+        /// ORBIT plot zoom range: x1 .. x8, in powers of two so the label reads the same way the flat
+        /// map's does. x8 is not an arbitrary stop - S43 measured the case this exists for (a 200 km
+        /// orbit over a 6371 km body, 7.4 px of ring-to-limb separation on a 236 px globe) and x4
+        /// already puts ~30 px of daylight under a 10 px apsis box. x8 gives ~59 px, and there is
+        /// nothing above it worth drawing: the globe would be a 1888 px disc whose texture strips are
+        /// wider than the panel, so more zoom buys magnification of an approximation.
+        /// </summary>
+        public const int OrbitZoomMax = 3;
+
+        /// <summary>Panel-halves the ORBIT viewport moves per arrow press - a quarter of the panel,
+        /// which is a pan, not a jump.</summary>
+        private const double OrbitPanStep = 0.5;
 
         public static float Scale(float rectW, float rectH, int zoomStep)
         {
@@ -190,6 +226,15 @@ namespace DragonScreen
                 v.PlanetZoom = Clamp(v.PlanetZoom + delta, PlanetZoomMin, PlanetZoomMax);
                 return v;
             }
+            // ORBIT: a magnification of a fixed conic. Zooming OUT shrinks the reachable pan range
+            // with it, so the pan is re-clamped here - otherwise a view panned right out at x8 would
+            // stay out there at x1, where the whole orbit is supposed to be on the panel.
+            if (v.Mode == NavMode.Orbit)
+            {
+                v.OrbitZoom = Clamp(v.OrbitZoom + delta, 0, OrbitZoomMax);
+                ClampOrbitPan(ref v);
+                return v;
+            }
             v.ZoomStep = Clamp(v.ZoomStep + delta, 0, MaxZoom);
             return v;
         }
@@ -201,6 +246,16 @@ namespace DragonScreen
             if (v.Mode == NavMode.Planet)
             {
                 v.PlanetRotDeg = Wrap180(v.PlanetRotDeg + dLon * PlanetPanStepDeg);
+                return v;
+            }
+
+            // ORBIT: dLon/dLat say which way the VIEW moves, so the drawn geometry moves the other
+            // way - hence the signs. Screen y grows downward, so "view up" moves the plot DOWN.
+            if (v.Mode == NavMode.Orbit)
+            {
+                v.OrbitPanX -= dLon * OrbitPanStep;
+                v.OrbitPanY += dLat * OrbitPanStep;
+                ClampOrbitPan(ref v);
                 return v;
             }
 
@@ -222,10 +277,59 @@ namespace DragonScreen
                 v.PlanetZoom = 0;
                 return v;
             }
+            // ORBIT: CTR is the way back, and it has to be the way back from ANY state the other six
+            // buttons can reach - so it drops the zoom as well as the pan, and lands on the
+            // whole-orbit fit the plot opens at.
+            if (v.Mode == NavMode.Orbit)
+            {
+                v.OrbitZoom = 0;
+                v.OrbitPanX = 0.0;
+                v.OrbitPanY = 0.0;
+                return v;
+            }
             v.CentreLat = lat;
             v.CentreLon = Wrap180(lon);
             v.Follow = true;
             return v;
+        }
+
+        // ---- the ORBIT viewport, as three questions the plot asks (S43) ----
+
+        /// <summary>How much the ORBIT plot is magnified: x1 at step 0, doubling per step.</summary>
+        public static float OrbitScale(int orbitZoom)
+        {
+            return (float)Pow2(Clamp(orbitZoom, 0, OrbitZoomMax));
+        }
+
+        /// <summary>
+        /// How far the ORBIT viewport may be panned, in panel-halves, at a given zoom.
+        ///
+        /// It is the zoom factor itself, and that is not a coincidence: at zoom Z the plot draws its
+        /// whole extent across 0.84 x Z of the panel, so a half-extent of 0.84 x Z panel-halves is
+        /// always inside a limit of Z. So every part of the drawn geometry is reachable at any zoom,
+        /// and nothing beyond it is - the view cannot be panned into empty space it can never get
+        /// back from, and CTR is the way back regardless.
+        /// </summary>
+        public static double OrbitPanLimit(int orbitZoom)
+        {
+            return OrbitScale(orbitZoom);
+        }
+
+        /// <summary>True when the crew has moved the ORBIT viewport off its default framing. The plot
+        /// uses it to decide whether it must paint out its own overspill, and the header to say the
+        /// view is no longer the whole-orbit one.</summary>
+        public static bool OrbitMoved(MapView v)
+        {
+            return v.OrbitZoom != 0 || v.OrbitPanX != 0.0 || v.OrbitPanY != 0.0;
+        }
+
+        private static void ClampOrbitPan(ref MapView v)
+        {
+            double lim = OrbitPanLimit(v.OrbitZoom);
+            if (v.OrbitPanX > lim) v.OrbitPanX = lim;
+            if (v.OrbitPanX < -lim) v.OrbitPanX = -lim;
+            if (v.OrbitPanY > lim) v.OrbitPanY = lim;
+            if (v.OrbitPanY < -lim) v.OrbitPanY = -lim;
         }
 
         /// <summary>The same view in a different mode. Pan/Zoom/Centre all branch on Mode - the flat

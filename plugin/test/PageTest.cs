@@ -56,6 +56,7 @@ public static class PageTest
         AlarmRouting();
         Conic();
         OpenTrajectory();
+        OrbitViewport();   // S43: the ORBIT plot's zoom + pan
         Chrome();
         Velocity();
         Propellant();
@@ -973,6 +974,262 @@ public static class PageTest
               !dOrbit.Overflowed && !dAsc.Overflowed && !dDeo.Overflowed && !dUp.Overflowed, "");
     }
 
+    /// <summary>
+    /// S43. THE ORBIT PLOT'S ZOOM AND PAN - the viewport moves, the geometry does not.
+    ///
+    /// The owner ruled (2026-09-04) that the answer to a hairline orbit at the 1:1 scale is ZOOM +
+    /// PAN, accepting that a zoomed plot no longer shows the whole orbit. Two things then have to be
+    /// true at once, and neither is visible in a PNG:
+    ///
+    ///   1. THE DEFAULT IS UNTOUCHED. At x1 with no pan this plot must draw exactly what it drew
+    ///      before S43 - the Kerbin-scale case was already correct and must not be paid for.
+    ///   2. THE ZOOM IS A VIEWPORT, NOT A SCALE RULE. Every truth the plot tells - nothing inside the
+    ///      planet, the ring closed, apsis order, the surface cut - survives at every zoom, and the
+    ///      controls cannot reach a state the CTR button cannot get out of.
+    ///
+    /// The fixture is S43's own headline case: a near-circular 200 km LEO over a 6371 km body, where
+    /// the ring sits 3.1% of a radius off the limb.
+    /// </summary>
+    static void OrbitViewport()
+    {
+        const double R = 6371000.0, Atmo = 140000.0;
+        double cx, cy, r, near, far;
+
+        PageState leo = Flying(R, Atmo, 202000.0, 198000.0, 200000.0);
+
+        // ---- 1. THE DEFAULT RENDER IS THE PRE-S43 RENDER ----
+        // The no-view overload is what RendezvousPage and NavOrbitPlotPage still call, so if the
+        // default view drew anything different those two pages would have changed as a side effect.
+        DisplayList dPlain = Plot(leo);
+        DisplayList dDefault = PlotView(leo, MapProjection.Default());
+        Check("a default view draws exactly what the view-less overload draws",
+              SameList(dPlain, dDefault), "");
+        Check("the default plot draws the full 72-step sweep",
+              ArcRadii(dPlain, 0, 0, 1, out near, out far) == 72, "");
+        Check("the default view is not marked MANUAL",
+              !MapProjection.OrbitMoved(MapProjection.Default()), "");
+
+        // ---- 2. ZOOM MAGNIFIES THE SEPARATION, IN PROPORTION ----
+        // S43's arithmetic says the ring-to-limb gap is bodyRadiusPx x h/R and that zoom multiplies
+        // BOTH by the same factor. That is precisely why zoom cannot make the whole orbit legible,
+        // and precisely why it CAN make the band around the vehicle legible. Assert the proportion,
+        // because a zoom that scaled only one of the two would look better and be a lie.
+        GlobeDisc(dPlain, out cx, out cy, out r);
+        ArcRadii(dPlain, cx, cy, r, out near, out far);
+        double gap1 = r * (near - 1.0);
+        Check("at x1 the gap is the hairline S43 measured", gap1 > 3.0 && gap1 < 9.0,
+              "got " + gap1.ToString("F2") + " px");
+
+        DisplayList dZ4 = PlotView(leo, Zoomed(2));
+        double cx4, cy4, r4;
+        GlobeDisc(dZ4, out cx4, out cy4, out r4);
+        ArcRadii(dZ4, cx4, cy4, r4, out near, out far);
+        double gap4 = r4 * (near - 1.0);
+        Eq("x4 quadruples the globe", r4, r * 4.0, 0.5);
+        Eq("x4 quadruples the ring-to-limb gap", gap4, gap1 * 4.0, 0.5);
+        Check("x4 clears a 10 px apsis box with daylight", gap4 > 15.0,
+              "got " + gap4.ToString("F2") + " px");
+
+        // ---- 3. ZOOM IS ANCHORED ON THE VEHICLE ----
+        // Magnifying about the focus would sweep the vehicle off the panel at the first press. The
+        // marker must therefore not move as the zoom changes - that is what makes the control usable
+        // without hunting, and it is what makes x1 identical to the old picture.
+        double vx1, vy1, vx4, vy4, vx8, vy8;
+        Check("the default plot draws a vehicle tick", VehicleTick(dPlain, out vx1, out vy1), "");
+        Check("the x4 plot draws a vehicle tick", VehicleTick(dZ4, out vx4, out vy4), "");
+        DisplayList dZ8 = PlotView(leo, Zoomed(3));
+        Check("the x8 plot draws a vehicle tick", VehicleTick(dZ8, out vx8, out vy8), "");
+        Eq("the vehicle does not move between x1 and x4 (x)", vx4, vx1, 0.5);
+        Eq("the vehicle does not move between x1 and x4 (y)", vy4, vy1, 0.5);
+        Eq("the vehicle does not move between x1 and x8 (x)", vx8, vx1, 0.5);
+        Eq("the vehicle does not move between x1 and x8 (y)", vy8, vy1, 0.5);
+
+        // ---- 4. EVERY TRUTH THE PLOT TELLS SURVIVES THE ZOOM ----
+        // Same invariant S41 built this plot's suite around, re-asserted at every reachable zoom: no
+        // part of the drawn arc is inside the planet, both apsides are still marked on a closed
+        // orbit, and a closed orbit still says nothing about the surface.
+        for (int z = 0; z <= MapProjection.OrbitZoomMax; z++)
+        {
+            DisplayList d = PlotView(leo, Zoomed(z));
+            double gcx, gcy, gr;
+            Check("z" + z + " draws a globe", GlobeDisc(d, out gcx, out gcy, out gr), "");
+            int n = ArcRadii(d, gcx, gcy, gr, out near, out far);
+            Check("z" + z + " still draws an arc", n > 0, "got " + n);
+            Check("z" + z + " draws no part of the orbit inside the planet", near >= 0.999,
+                  "nearest " + near.ToString("F4"));
+            Check("z" + z + " still marks AP", HasText(d, "AP"), "");
+            Check("z" + z + " still marks PE", HasText(d, "PE"), "");
+            Check("z" + z + " says nothing about the surface on a closed orbit",
+                  !HasText(d, "TRAJECTORY INTERSECTS SURFACE"), "");
+            Check("z" + z + " did not overflow", !d.Overflowed, "");
+        }
+
+        // ---- 5. THE OPEN-TRAJECTORY RULE IS THE SAME AT ZOOM ----
+        // The surface cut is solved before the focus is placed now, so it is worth proving that
+        // moving that arithmetic did not change its answer at any zoom.
+        PageState ascent = Flying(R, Atmo, 210000.0, -5900000.0, 148000.0);
+        for (int z = 0; z <= MapProjection.OrbitZoomMax; z++)
+        {
+            DisplayList d = PlotView(ascent, Zoomed(z));
+            double gcx, gcy, gr;
+            GlobeDisc(d, out gcx, out gcy, out gr);
+            ArcRadii(d, gcx, gcy, gr, out near, out far);
+            Check("ascent z" + z + " keeps the arc above the surface", near >= 0.999,
+                  "nearest " + near.ToString("F4"));
+            Check("ascent z" + z + " still drops the PE marker", !HasText(d, "PE"), "");
+            Check("ascent z" + z + " still says why the line stops",
+                  HasText(d, "TRAJECTORY INTERSECTS SURFACE"), "");
+            // The one that pays for ArcDots' first pass. This arc is 11.4 degrees of anomaly wide,
+            // so EVERY sample of it is on the panel - an un-thinned x4 put 288 dots down and took
+            // the NAV page to 459 of its 480 commands. Bounded, the page is nowhere near the edge.
+            int nAsc = ArcRadii(d, gcx, gcy, gr, out near, out far);
+            Check("ascent z" + z + " keeps the dot count bounded", nAsc > 20 && nAsc <= 160,
+                  "got " + nAsc);
+        }
+
+        // And the whole page, at every zoom, on the geometry that found the overflow.
+        {
+            DisplayList full = new DisplayList(Pages.Commands + ChromeBar.Commands + 4);
+            for (int z = 0; z <= MapProjection.OrbitZoomMax; z++)
+            {
+                full.Clear();
+                Pages.Build(full, 2, W, H1, ascent, Zoomed(z), 2);
+                ChromeBar.Build(full, W, H1, new ChromeState());
+                Check("the NAV page fits at ORBIT x" + (1 << z) + " on an open trajectory",
+                      !full.Overflowed, "used " + full.Count + " of " + full.Capacity);
+            }
+        }
+
+        // ---- 6. THE CONTROLS ARE BOUNDED, AND CTR IS ALWAYS THE WAY BACK ----
+        MapView v = OrbitView();
+        for (int i = 0; i < 20; i++) v = MapProjection.Zoom(v, 1);
+        Check("zoom cannot run past the top of its range", v.OrbitZoom == MapProjection.OrbitZoomMax,
+              "got " + v.OrbitZoom);
+        for (int i = 0; i < 40; i++) v = MapProjection.Pan(v, 1.0, 0.0);
+        for (int i = 0; i < 40; i++) v = MapProjection.Pan(v, 0.0, 1.0);
+        double lim = MapProjection.OrbitPanLimit(MapProjection.OrbitZoomMax);
+        Eq("pan right stops at the limit", -v.OrbitPanX, lim, 1e-9);
+        Eq("pan up stops at the limit", v.OrbitPanY, lim, 1e-9);
+        Check("a panned, zoomed view reads as MANUAL", MapProjection.OrbitMoved(v), "");
+
+        MapView back = MapProjection.Centre(v, 12.0, 34.0);
+        Check("CTR clears the zoom", back.OrbitZoom == 0, "got " + back.OrbitZoom);
+        Check("CTR clears the pan", back.OrbitPanX == 0.0 && back.OrbitPanY == 0.0, "");
+        Check("and CTR leaves the view reading as the default", !MapProjection.OrbitMoved(back), "");
+        Check("the recovered view draws the default picture",
+              SameList(PlotView(leo, back), dPlain), "");
+
+        // Zooming back OUT has to take the pan with it, or a view panned right out at x8 would stay
+        // out there at x1, where the whole orbit is supposed to be on the panel.
+        MapView outward = v;
+        for (int i = 0; i < 3; i++) outward = MapProjection.Zoom(outward, -1);
+        Check("zooming out re-clamps the pan to the smaller range",
+              Math.Abs(outward.OrbitPanX) <= MapProjection.OrbitPanLimit(0) + 1e-9
+              && Math.Abs(outward.OrbitPanY) <= MapProjection.OrbitPanLimit(0) + 1e-9,
+              "pan " + outward.OrbitPanX + "," + outward.OrbitPanY);
+
+        // ---- 7. THE THREE VIEWS DO NOT SHARE A ZOOM ----
+        // MapView carries three zooms because NEXT VIEW must not silently rescale the view you just
+        // left. Assert it rather than trusting the branch, because the branch is one `if` away from
+        // being wrong in a way no render would show.
+        MapView cross = OrbitView();
+        for (int i = 0; i < 3; i++) cross = MapProjection.Zoom(cross, 1);
+        cross = MapProjection.Pan(cross, 1.0, 1.0);
+        Check("ORBIT zoom leaves the flat map's zoom alone", cross.ZoomStep == 0, "got " + cross.ZoomStep);
+        Check("ORBIT zoom leaves the globe's zoom alone", cross.PlanetZoom == 0, "got " + cross.PlanetZoom);
+        Check("ORBIT pan leaves the flat map's centre alone",
+              cross.CentreLat == 0.0 && cross.CentreLon == 0.0, "");
+        Check("ORBIT pan does not clear the map's follow flag", cross.Follow, "");
+
+        MapView flat = MapProjection.Default();
+        flat = MapProjection.Zoom(flat, 2);
+        flat = MapProjection.Pan(flat, 1.0, 0.0);
+        Check("flat-map zoom leaves the ORBIT zoom alone", flat.OrbitZoom == 0, "got " + flat.OrbitZoom);
+        Check("flat-map pan leaves the ORBIT pan alone",
+              flat.OrbitPanX == 0.0 && flat.OrbitPanY == 0.0, "");
+
+        // ---- 8. THE CLUSTER IS LIVE ON THE PAGE, AND SAYS WHICH ZOOM IT IS SHOWING ----
+        // The controls were drawn inert for NavMode.Orbit until this line. The hit rects never went
+        // away (ScreenPainter.Apply has always implemented all seven), so the check that matters is
+        // the LABEL, which is the only thing on the page that reports the ORBIT zoom back.
+        DisplayList page = new DisplayList(Pages.Commands + 8);
+        NavPage.Build(page, W, H1, leo, Zoomed(2));
+        Check("the page reports the ORBIT zoom, not the flat map's", HasText(page, "ZOOM x4"), "");
+        Check("and marks the framing as no longer the default",
+              HasText(page, "PLANE VIEW - MANUAL"), "");
+        Check("a zoomed ORBIT page paints its overspill out", HasBackgroundMask(page), "");
+        page.Clear();
+        NavPage.Build(page, W, H1, leo, OrbitView());
+        Check("at the default the page reads x1", HasText(page, "ZOOM x1"), "");
+        Check("and the header is the plain PLANE VIEW", HasText(page, "PLANE VIEW"), "");
+        Check("a default ORBIT page paints out no overspill", !HasBackgroundMask(page), "");
+    }
+
+    /// <summary>An ORBIT-mode view at the default framing.</summary>
+    static MapView OrbitView()
+    {
+        return MapProjection.WithMode(MapProjection.Default(), NavMode.Orbit);
+    }
+
+    /// <summary>An ORBIT-mode view zoomed by pressing + n times, the way the crew reaches it.</summary>
+    static MapView Zoomed(int steps)
+    {
+        MapView v = OrbitView();
+        for (int i = 0; i < steps; i++) v = MapProjection.Zoom(v, 1);
+        return v;
+    }
+
+    static DisplayList PlotView(PageState s, MapView v)
+    {
+        DisplayList dl = new DisplayList(3000);
+        NavPage.Orbit(dl, s, 0f, 0f, 520f, 460f, false, v);
+        return dl;
+    }
+
+    /// <summary>Centre of the vehicle cross - the Go-coloured horizontal bar, 18 px wide.</summary>
+    static bool VehicleTick(DisplayList dl, out double vx, out double vy)
+    {
+        vx = vy = 0.0;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind != DrawKind.Rect || !SameColour(c.Colour, DragonPalette.Go)) continue;
+            if (c.C < 17f) continue;
+            vx = c.A + c.C * 0.5; vy = c.B + c.D * 0.5;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>Did the page emit NavPage's overspill mask - a wider-than-the-page Background rect?</summary>
+    static bool HasBackgroundMask(DisplayList dl)
+    {
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind == DrawKind.Rect && SameColour(c.Colour, DragonPalette.Background)
+                && c.C >= W) return true;
+        }
+        return false;
+    }
+
+    /// <summary>Command-for-command equality. The only way to assert "unchanged" about a picture from
+    /// inside a headless test, and the check S43 needed most.</summary>
+    static bool SameList(DisplayList a, DisplayList b)
+    {
+        if (a.Count != b.Count) return false;
+        for (int i = 0; i < a.Count; i++)
+        {
+            DrawCmd p = a.At(i), q = b.At(i);
+            if (p.Kind != q.Kind || p.Str != q.Str || p.Image != q.Image || p.Align != q.Align) return false;
+            if (Math.Abs(p.A - q.A) > 1e-4f || Math.Abs(p.B - q.B) > 1e-4f) return false;
+            if (Math.Abs(p.C - q.C) > 1e-4f || Math.Abs(p.D - q.D) > 1e-4f) return false;
+            if (Math.Abs(p.StartDeg - q.StartDeg) > 1e-4f || Math.Abs(p.EndDeg - q.EndDeg) > 1e-4f) return false;
+            if (!SameColour(p.Colour, q.Colour)) return false;
+        }
+        return true;
+    }
+
     // ------------------------------------------------------------------ chrome crowding
 
     /// <summary>
@@ -1596,16 +1853,27 @@ public static class PageTest
                 // one can be on screen at a time.
                 foreach (NavMode mode in new NavMode[] { NavMode.Map, NavMode.Orbit, NavMode.Planet })
                 {
-                    MapView v = MapProjection.Default();
-                    v = MapProjection.Zoom(v, 2);
-                    while (v.Mode != mode) v = MapProjection.NextMode(v);
+                    MapView v0 = MapProjection.Default();
+                    v0 = MapProjection.Zoom(v0, 2);
+                    while (v0.Mode != mode) v0 = MapProjection.NextMode(v0);
 
-                    dl.Clear();
-                    Pages.Build(dl, p, W, h, s, v, 2);
-                    ChromeBar.Build(dl, W, h, cs);
-                    Check("page " + ChromeBar.PageNames[p] + " (" + mode + ", h" + h + ") fits",
-                          !dl.Overflowed,
-                          "used " + dl.Count + " of " + dl.Capacity);
+                    // S43: the ORBIT view's own zoom is a SECOND axis of cost, because the arc is
+                    // sampled at the drawn size. Every reachable step is built, not just the default,
+                    // for the same reason all three modes are: the worst case is not the obvious one.
+                    int steps = (mode == NavMode.Orbit) ? MapProjection.OrbitZoomMax + 1 : 1;
+                    for (int oz = 0; oz < steps; oz++)
+                    {
+                        MapView v = v0;
+                        for (int k = 0; k < oz; k++) v = MapProjection.Zoom(v, 1);
+
+                        dl.Clear();
+                        Pages.Build(dl, p, W, h, s, v, 2);
+                        ChromeBar.Build(dl, W, h, cs);
+                        Check("page " + ChromeBar.PageNames[p] + " (" + mode + " x" + (1 << oz)
+                              + ", h" + h + ") fits",
+                              !dl.Overflowed,
+                              "used " + dl.Count + " of " + dl.Capacity);
+                    }
                 }
             }
         }

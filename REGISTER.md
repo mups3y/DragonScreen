@@ -3843,131 +3843,127 @@ rejected by `MinMapPixels = 64`) and the NAV **MAP** view — plus the strip-tex
   non-latching. **G12(1) and G12(2) are answered off the log; only G12(3) (the camera) still rides S10b** —
   and that now waits on **S62**.
 
-### S43 [S] The ORBIT plot is a hairline when the orbit is small against the body (RSS LEO) — **HELD 2026-09-04 (blocked: its own cheap fix is arithmetically impossible; owner must pick the mechanism)** — [TIER 3: scheduled polish]
+### S43 [O] The ORBIT plot at RSS LEO: ZOOM + PAN wired — **DONE 2026-09-04** — [TIER 3: scheduled polish]
 Logged by S41, 2026-09-03, from its own preview. `NavPage.Orbit` fits **the whole orbit AND the body** into
 the panel — deliberately, and for a good reason recorded in the source: leaving the body out of the extent
-once blew a 790 px globe into a 520 px panel on the pad. The cost shows up at RSS scale: a 200 km orbit over
-a **6371 km** radius is 3% of the globe, so the ring (or, sub-orbital, the arc) is a **hairline hugging the
-limb**, with the AP box, its label and the vehicle tick all piled on top of each other. Compare
-`page2_nav_orbit_suborbital.png` (RSS — correct and nearly unreadable) with
+once blew a 790 px globe into a 520 px panel on the pad. The cost shows up at the 1:1 scale: a 200 km orbit
+over a **6371 km** radius is 3% of the globe, so the ring (or, sub-orbital, the arc) is a **hairline hugging
+the limb**, with the AP box, its label and the vehicle tick all piled on top of each other. Compare
+`page2_nav_orbit_suborbital.png` (1:1 — correct and nearly unreadable) with
 `page2_nav_orbit_suborbital_kerbin.png` (same geometry, 600 km radius — perfectly clear).
-**Not a correctness bug** — the plot is telling the truth, and it is the truth that is thin — so it is polish,
-not TIER 2. **Worth noting it is the ZOOM control's natural job:** the NAV page already has `ZOOM ×1` with
-`-` / `+` beside this view, and `MapView` already carries a zoom step the MAP view uses; the ORBIT view
-currently ignores it. Wiring the existing control, rather than inventing a new scale rule, is the cheap
-option and probably the right one.
-**DONE when:** an RSS-scale LEO orbit is legible on this plot — the ring/arc separated from the limb and the
-apsis markers not overlapping it — with the closed Kerbin-scale case unchanged, judged on both preview PNGs.
-- ✅ **CHECKED AND LEFT ALONE 2026-09-03 by S61** (`docs/NAV_MAP_RENDERING_RESEARCH.md` §5). The NAV-map
-  architecture research was asked whether the KSP-native-rendering route made this moot. **It does not — this
-  line is entirely untouched by it.** The hairline is the flat ORBIT schematic, which never involved the
-  globe camera, the scaled-space shader or the 3D projection; its cause is the `max(a(1+e), R)` extent rule
-  at `NavPage.cs:591-597` with **no zoom wired** (`Controls()` marks the cluster inactive for `NavMode.Orbit`,
-  `NavPage.cs:899`). Its own diagnosis — wire the existing ZOOM control rather than invent a scale rule —
-  stands, and picked up supporting evidence: **KSP solves the identical problem the same way**, hiding orbits
-  outside a camera-distance-vs-semi-major-axis band (`OrbitRendererBase.upperCamVsSmaRatio` /
-  `lowerCamVsSmaRatio`). ⚠ One wording note for whoever takes it: "RSS-scale" here means the 1:1 regime, which
-  is real on this install — but the planet pack is **Sol**, not RealSolarSystem (S61 §0.1). The geometry the
-  line describes is unaffected.
+**Not a correctness bug** — the plot is telling the truth, and it is the truth that is thin.
+⚠ One wording note carried from **S61**: "RSS-scale" here means the 1:1 regime, which is real on this
+install — but the planet pack is **Sol**, not RealSolarSystem (S61 §0.1). The geometry is unaffected.
 
-- ⛔ **HELD 2026-09-04 — NOT STARTED, and this is a STOP-AND-ASK (C1.12/C1.14), not a deferral.** Reached in
-  the 2026-09-04 batch session (the owner-authorised deviation from C1.1/C1.7). **No file in `plugin/` was
-  touched by this line.** The line's own recommended fix — *"wire the existing ZOOM control rather than
-  invent a scale rule"*, re-affirmed by **S61** (`NAV_MAP_RENDERING_RESEARCH.md` §5, *"Its own diagnosis …
-  stands"*) — **cannot reach this line's own DONE-when. That is arithmetic, not judgement, and it is set out
-  below so the next chat does not re-derive it or, worse, ship the zoom and find out afterwards.**
-- **MEASURED, off the two PNGs the line names** (`page2_nav_orbit_suborbital.png` and
-  `..._kerbin.png`, both 1280×703, both re-rendered 2026-09-04). Both draw the body at the **same** size:
-  centre x = 488, limb at x = 252 and x = 724 on the centre line y = 336, so **body radius = 236 px**.
-  - **RSS** (R = 6371 km, apogee 210 km): `rA/R` = 1.0330 → ring radius 243.8 px → **7.8 px of separation**.
-    Measured: the arc, the AP box and the vehicle tick all fall inside **x = 244…251** — an 8 px band against
-    a 236 px limb, with the 10 px apsis box straddling the limb.
-  - **Kerbin** (R = 600 km, apogee 200 km): `rA/R` = 1.3333 → ring radius 314.7 px → **78.7 px**. Measured
-    cluster at x = 173…183, i.e. 69–79 px clear. This is what "legible" looks like and is the target.
-  - The line's headline case, a **circular 200 km RSS LEO**: `rA/R` = 1.0314 → **7.4 px**, with a 10 px apsis
-    box centred on the ring, so the box overlaps the limb on both sides.
-- ⛔ **WHY ZOOM CANNOT FIX IT.** For a near-circular orbit the drawn separation is
-  `bodyRadiusPx × h/R` — **exactly**, and `h/R` is 3.1% at RSS LEO. A **uniform** zoom `Z` multiplies the
-  separation and the ring radius **by the same `Z`**, so the ratio never improves. To get an apsis box clear
-  of the limb with visible daylight (≈25 px) needs `Z ≥ 3.2`; at `Z = 3.2` the apogee ring radius is
-  **780 px** against a panel half-height of **272 px** and half-width of **465 px** — AP is off-panel and
-  roughly two thirds of the ring is outside the frame. **Zoom shows the separation or it shows the orbit,
-  never both.** (Removing the body from the extent rule does nothing either, and this was checked: with
-  `rA` only 3% above `R`, `max(a(1+e), R)` is dominated by the ORBIT already — dropping `R` changes the
-  RSS scale by under 1%. The `max` is not the cause; the 3% is.)
-- **What that leaves is a real choice about what this plot IS at LEO scale**, and every option changes the
-  screen — which is why nothing was built. Written up below (C1.14). ⚠ **S61's §5 verdict is not wrong about
-  the ARCHITECTURE** (the hairline has nothing to do with the globe camera, the shader or the projection —
-  confirmed again here); it is wrong only in endorsing zoom as the remedy, and it endorsed it from the
-  register's own wording rather than from the geometry. Do not treat that as a settled decision to override.
-- ⚠ **S57's item 3 says to do S43 and the orphaned NAV pan/zoom/NEXT-VIEW cluster together (audit H36).**
-  That coupling survives whichever option is chosen — options 1, 2 and 4 below all need the cluster live for
-  `NavMode.Orbit`, which today reads inactive (`NavPage.cs:899`, `bool active = Map || Planet`).
-- ⬅ **INHERITED FROM S57, 2026-09-04 — THIS LINE NOW OWNS THE NAV PAN/ZOOM/NEXT-VIEW CLUSTER.** The owner
-  answered audit Q1 / S57-Q1 as **option 4 (split S57 into its six items)** via the overseer, and item 3 —
-  *the NAV pan/zoom/NEXT-VIEW cluster* — was routed **here**, because S43's own ruling is now **zoom-and-pan**
-  and so needs exactly this cluster. It is named explicitly so it cannot fall between the two lines, which is
-  option 4's one risk. **S43-Q2 is thereby ANSWERED as its option 2** ("release the NAV cluster from S57 to
-  S43"); S43 is now self-contained on the control side and **S43-Q1 alone still blocks it**.
-- ⭐ **WHAT YOU ACTUALLY INHERIT IS CHEAPER THAN THE AUDIT SAYS — re-verified by grep 2026-09-04 (S57).** The
-  audit calls the cluster *"wired with no `UiPage` to host it"*; that is only half true.
-  - **The Cover map cluster is already LIVE.** `CoverPage.HitTest` returns `NextView` / `MapPan*` /
-    `MapZoom*` / `MapCentre`; `ScreenPainter.cs:430` calls it and `:643-656` acts on all seven.
-    (`FigmaUI.MapCover` resolving only Menu/Settings/PhaseManual is deliberate, not a gap — the painter is
-    the caller that handles the rest, and `FigmaUI.cs:370-373` says so.)
-  - **The stranded half is the standalone `NavPage` cluster.** `NavPage.HitTest:114-125` emits
-    `PageAct.NavNextView` / `NavZoomIn` / `NavZoomOut` / `NavPan*` / `NavCentre`, and `ScreenPainter.Apply`
-    (`:688-694`) **still implements every one of them**. The only producer is `Pages.cs:661 case 2`, behind
-    `FigmaMode = true`.
-  ⇒ **The actuation end is intact; the missing piece is only a Figma-side surface that emits those hits**
-  (plus making `NavMode.Orbit` count as active at `NavPage.cs:899`). That is much less work than "wire up a
-  dead cluster", and whichever S43-Q1 option is chosen should be costed against this, not against the audit.
+- ✅ **OWNER RULING, 2026-09-04, via the overseer: S43-Q1 = OPTION 2, ZOOM + PAN**, wired for
+  `NavMode.Orbit`, **accepting the loss of the whole-orbit view when zoomed in**. Not option 1 (radial
+  exaggeration), not option 3 (both), not option 4 (collisions only).
+- ✅ **AND THE RULING CHANGED THE DONE-WHEN, WHICH IS WHY THE OLD ONE IS NOT BELOW.** Option 2's own text
+  says the DEFAULT render stays a hairline unless a default zoom is also chosen, so as written it does not
+  meet the old DONE-when ("the ring/arc separated from the limb and the apsis markers not overlapping it…
+  judged on the default preview renders"). **The owner's ruling authorises relaxing it to "LEGIBLE WHEN
+  ZOOMED"**, and the line below is that relaxed criterion. An unsatisfiable DONE-when is not something to
+  work around silently.
+- ✅ **S43-Q2 ANSWERED 2026-09-04 by the OWNER: option 2 — the orphaned NAV pan/zoom/NEXT-VIEW cluster was
+  released from S57 to S43** (delivered as S57's option-4 split). This line owned the control side, and did
+  it; the pairing S57 item 3 and audit H36 both called for is discharged.
+
+**DONE when** (as relaxed by the ruling): the ORBIT plot's zoom and pan are live for `NavMode.Orbit`; an
+RSS-scale LEO orbit is **legible when zoomed** — ring/arc separated from the limb with the apsis markers
+clear of it; the **Kerbin-scale case and the default render at every scale are unchanged**; and the plot
+keeps every truth it already told (body circle, the ring's closedness, apsis order, angular positions, the
+surface-intersection rule) at every reachable zoom. **All met — evidence below.**
+
+#### What was built
+- **`pure/MapProjection.cs`** — `MapView` gains `OrbitZoom` (0..`OrbitZoomMax` = 3, i.e. **×1…×8** in powers
+  of two) and `OrbitPanX/OrbitPanY` (panel-half units). `Zoom`/`Pan`/`Centre` gain a `NavMode.Orbit` branch
+  beside the existing `Planet` one; three views, **three separate zooms**, so NEXT VIEW cannot silently
+  rescale the view you just left. Helpers `OrbitScale`, `OrbitPanLimit`, `OrbitMoved`.
+- **`pure/NavPage.cs`** — `Orbit()` gains a `MapView` overload. Zoom is **one multiplier on `scale`**, pan is
+  **one offset on the focus**; the conic, the surface cut, the apsis order and every angular position are
+  untouched. `Controls()` is **active in all three modes** and the ZOOM label reads the ORBIT zoom.
+  Header reads `PLANE VIEW - MANUAL` once the framing is not the default.
+- **`preview/PreviewMain.cs`** — six new scenes (below). **`test/PageTest.cs`** — new `OrbitViewport()` suite
+  (~70 checks) + the capacity sweep extended over every ORBIT zoom step.
+
+#### Three decisions inside option 2 that the ruling did not name, and why they went the way they did
+1. **ZOOM IS ANCHORED ON THE VEHICLE, not on the planet's centre.** Magnifying about the focus sweeps the
+   band the crew is looking at straight off the panel — at ×4 the ring sits 975 px from a centre with 272 px
+   of panel below it, so the first press loses the vehicle and the arrows become a search. Holding the
+   vehicle's **×1 screen position** fixed is what makes option 2's own description ("a truthful magnified
+   view of the band around the vehicle") actually happen, and it reduces to the focus at the panel centre at
+   ×1 — which is why the default render is unchanged rather than merely similar. Where there is no vehicle
+   marker (on the pad; a trajectory with nothing above the surface) the focus is the anchor, because
+   anchoring on a marker the plot deliberately declines to draw would be anchoring on a guess.
+2. **THE ZOOMED PLOT'S OVERSPILL IS PAINTED OUT, NOT CLIPPED.** Neither renderer has a scissor rect and
+   giving each one its own would be two things to keep in step (`DrawCmd`'s own header says so). At ×8 the
+   globe is a 1888 px disc; unclipped it paints over the readout column. Four Background rects afterwards —
+   the same trick `Globe()` already uses to trim its own fringe. **Emitted only when the view has moved**, so
+   the default page is byte-identical. The bands overhang the page and each other because both renderers
+   antialias a rect's edges: the first ×4 render left a one-pixel stripe of planet down the left of the page.
+3. **THE ARC IS SAMPLED AT THE DRAWN SIZE AND THEN THINNED — and the thinning is load-bearing.** 72 samples
+   is a ring at ×1 and eight scattered dots at ×4. Scaling the sample count with the zoom fixes that for a
+   CLOSED ring (zoom pushes most of it off-panel, so ~72 stay visible) and is a trap for an OPEN trajectory,
+   which is only a few degrees of anomaly wide and therefore **entirely** visible: the flown ascent (AP
+   210 km, PE −5900 km, an 11.4° arc) went to **459 of 480 commands at ×4**, and at ×8 it **overflowed —
+   524 of 524, measured**, a silently truncated page. `ArcDots` counts the visible samples and thins by a
+   whole number to ≤ 144. At ×1 nothing is ever off-panel and nothing is ever thinned, so the default emits
+   the same 72 dots in the same places.
+
+#### Gate (C1.3)
+- **`python plugin/build.py test` GREEN**, all suites, 0 failed.
+- **THE DEFAULT RENDER IS BYTE-IDENTICAL AT BOTH SCALES — measured, not asserted.** The three pre-existing
+  scenes were rendered from `3af3c6d` and again from this working tree and compared pixel-for-pixel: the
+  whole-page diff bounding box on all three is **(1030, 395)–(1257, 568)**, which is the control cluster and
+  nothing else. **The map panel — every pixel of the plot, at 1:1 and at Kerbin scale — is identical.** The
+  only change to those pages is the seven buttons going from inert to live, which is the point of the line.
+- **THE NEW TESTS WERE PROVED TO CATCH THEIR OWN BUGS**, S41-style, rather than merely passing:
+  disabling the vehicle anchor → **12 failures** (at every zoom the orbit leaves the panel and no arc is
+  drawn at all: "z1 still draws an arc — got 0"); removing the arc thinning → **3 failures**, including
+  "the NAV page fits at ORBIT x8 on an open trajectory — used 524 of 524". Both restored to green.
+- **`python plugin/build.py preview` re-rendered and INSPECTED.** Six new PNGs, all under budget, no
+  overflow warnings:
+  | render | what it shows |
+  |---|---|
+  | `page2_nav_orbit_leo_x1.png` | S43's headline case at the default: 200 km circular over 6371 km. The ring is a hairline on the limb, AP and PE boxes straddling it, labels touching it. **The complaint, in one picture.** 242 cmd |
+  | `page2_nav_orbit_leo_x4.png` | **The fix.** Limb a shallow curve across the panel, the trajectory a clean dotted arc ~30 px above it, the vehicle tick on the arc at the same screen position it held at ×1. `ZOOM x4`, `PLANE VIEW - MANUAL`. Nothing spills into the readout column. 223 cmd |
+  | `page2_nav_orbit_leo_x8.png` | The clamp: nine `+` presses land on ×8 and stop. Still coherent — arc well clear of the limb — and the globe's texture strips are visibly banded, which is why ×8 is the stop and not ×16 |
+  | `page2_nav_orbit_leo_x4_pan.png` | Three LEFT and two UP: the neighbourhood slides to the bottom-right, the arc runs off the limb, the mask holds. Also the picture of *why* CTR must always work |
+  | `page2_nav_orbit_suborbital_x4.png` | **The scene this line was logged from**, zoomed: the open arc separates into a distinct lens clear of the limb, the surface cut still visibly runs into it, `TRAJECTORY INTERSECTS SURFACE` still captioned. 267 cmd (459 before the thinning) |
+  | `page2_nav_orbit_kerbin_x4.png` | The same control at Kerbin scale — magnifies about the vehicle, tears nothing. The Kerbin *default* is the byte-identical one above |
+- **PER-PAGE QC:** every string in its box, no clipping, no overlap introduced. ⚠ One observation, **not**
+  introduced here and deliberately not fixed: at ×4 on the sub-orbital scene the `AP` **label** sits over the
+  arc, because the label is always 10 px below its box and the arc at apoapsis is near-vertical. It does the
+  same at ×1 in that scene. Moving apsis labels radially outward with a leader is **option 4 of S43-Q1**,
+  which the owner did **not** choose, so it is not done here — logged as **S83**.
+- ⛔ **No `install`, no glass time** — preview-only, per the standing go (C1.12).
+- **Files:** `plugin/src/pure/MapProjection.cs` · `plugin/src/pure/NavPage.cs` ·
+  `plugin/preview/PreviewMain.cs` · `plugin/test/PageTest.cs`.
 
 #### Open questions for the owner (C1.14) — S43
 
-**S43-Q1. At RSS LEO the true picture is a hairline. What should this plot show instead?**
-*Situation.* The plot is correct and unreadable at the same time: a 200 km orbit over a 6371 km body is 3.1%
-of the globe, so ring and limb are 7.8 px apart on a 236 px globe and the apsis box sits on top of the limb
-(measured above). The DONE-when asks for *"the ring/arc separated from the limb and the apsis markers not
-overlapping it"* **with the closed Kerbin-scale case unchanged**, judged on the default preview renders — so
-a manual-only control does not satisfy it either, because the default render is what is judged. Each option
-below is a different answer to "what is this plot for", and each is defensible.
-1. **Radial (altitude) exaggeration, MARKED on the plot.** Draw radius as `R_draw + k·(r − R)`, with `k`
-   chosen so apogee lands at a fixed fraction of the panel, and a caption saying the altitude scale is
-   exaggerated. Keeps the body circle, the ring's closedness, apsis order, every angular position and the
-   surface-intersection logic; distorts only radial proportion. *(recommended: it is the only option that
-   keeps a whole orbit AND a legible altitude band in one frame, it is what altitude-profile displays do, it
-   degrades to `k = 1` — i.e. exactly today's picture — at Kerbin scale where nothing needs fixing, and the
-   marking keeps it honest. ⚠ It does mean the plot stops being proportionally true, which is a §1.4-flavoured
-   change to what a real-screen element depicts, and that is the owner's call, not a build chat's.)*
-2. **Zoom + pan, wired for `NavMode.Orbit`, and accept losing the whole-orbit view when zoomed in.** The
-   existing cluster becomes live; at `Z ≥ 3.2` the crew gets a truthful magnified view of the band around the
-   vehicle (limb as a shallow curve, trajectory above it) and AP/PE leave the frame. Truthful throughout,
-   nothing invented. ⚠ The DEFAULT render stays a hairline unless a default zoom is also chosen, so as
-   written this does **not** meet the DONE-when — picking it means also relaxing the DONE-when to "legible
-   when zoomed".
-3. **Both: exaggeration as the default, the zoom cluster live on top of it.** Most capable, most work, and
-   two scale mechanisms on one plot is two things to explain on the glass.
-4. **Leave the geometry alone and fix only the collisions** — move the AP/PE box and label radially outward
-   with a short leader so nothing overlaps the limb or the vehicle tick, and thicken the ring. Cheap, honest,
-   strictly better than today. ⚠ It satisfies only half the DONE-when: the markers stop overlapping, the ring
-   is still 7.8 px off the limb. Choosing it means re-scoping the line to that half and saying so.
-
-**S43-Q2 — ✅ ANSWERED 2026-09-04 by the OWNER via the overseer: OPTION 2 (release the NAV cluster from S57 to S43), delivered as S57's option-4 split. Kept below as the record; nothing is outstanding on it.** *(Original wording follows.)*
-
-**S43-Q2. S57 item 3 and audit H36 both say "do S43 and the NAV control cluster together". Confirm the
-pairing, or split it.**
-*Situation.* Options 1–4 above all touch `NavPage.Controls()`, whose pan/zoom/NEXT-VIEW cluster is drawn
-inactive for `NavMode.Orbit` and is itself on **S57's** harvest list — and S57 is HELD on audit Q1. So even
-with Q1 answered, whoever takes S43 either reaches into S57's item or stops again.
-1. **Answer audit Q1 (or S57-Q1) in the same pass, so S43 and the cluster land together.** *(recommended: it
-   is what both the audit and S57 ask for in terms, and it is the only order in which S43 can be finished in
-   one sitting.)*
-2. **Release the NAV cluster from S57 to S43** — S57's own option 4 (split it into its six items and let each
-   ride with the task that touches it) already proposes exactly this. Then S43 is self-contained.
-3. **Take option 4 of S43-Q1** (collisions only), which is the one path that needs no control wiring at all,
-   and leave the pairing for later.
-
+**S43-Q3. Does the ORBIT page OPEN at the whole-orbit view, or at a default zoom?**
+*Situation.* The ruling settled the mechanism and explicitly left this open — option 2's text says "the
+DEFAULT render stays a hairline **unless a default zoom is also chosen**". It is now a one-line change
+(`MapProjection.Default()` sets `OrbitZoom`), and both answers are rendered: `page2_nav_orbit_leo_x1.png` is
+what the page opens at today, `page2_nav_orbit_leo_x4.png` is what it would open at with a default zoom of
+×4. **Built as option 1 for now**, because that is the no-behaviour-change answer and it cannot be wrong at
+Kerbin scale.
+1. **Open at the whole orbit (×1), as built.** The page's first picture is the true, complete one and the
+   crew zooms when they want the band; identical to today at every scale; the Kerbin case — where nothing
+   ever needed fixing — keeps the picture it has always had. ⚠ At 1:1 the page therefore *opens* looking
+   broken, and a crew member who does not know the `+` button is there sees only the hairline.
+   *(recommended: it is the only option that cannot make a currently-correct screen worse, the zoom is one
+   press away and now labelled, and the header says `PLANE VIEW - MANUAL` the moment it is used — so the
+   state is never ambiguous. It is also reversible: option 2 stays a one-line change afterwards.)*
+2. **Open at a fixed default zoom (e.g. ×4).** Legible on open at 1:1 without touching anything. ⚠ It makes
+   the whole orbit no longer the default picture **at every scale including Kerbin**, where the whole-orbit
+   view is correct and legible and would now need a `−` press to reach — i.e. it fixes the scale that is
+   broken by changing the scale that is not.
+3. **Open at a zoom chosen from the geometry** — ×1 when the ring clears the limb by more than ~25 px, a
+   fitted zoom when it does not. Legible on open everywhere and Kerbin keeps its picture. ⚠ This is a second
+   scale rule living beside the first, which is the thing S43 set out to avoid; it also means the page can
+   open at different zooms on two consecutive orbits, and the crew cannot predict what they will get.
 
 ### S44 [S] `Tuning` was never invoked — every `[Tunable]` field was dead — **WIRED + INSTALLED 2026-09-03; in-sim confirm rides S18's visit** — [TIER 2: real defect]
 Found by **S18**, 2026-09-03, while verifying the walk-sheet's own instructions before the owner's capsule
@@ -7606,3 +7602,19 @@ this screen IS — **remain undecided** under that Q1. So this line follows the 
 pre-empt it.
 **DONE when:** EITHER the stranded UI's fate is settled and this screen is retired with a note (nothing to
 fix), OR it is harvested to a reachable surface and the block is then fixed with S38/S39's remedy and pinned.
+
+### S83 [S] The ORBIT plot's apsis LABEL can sit on the arc it marks — **TODO** — [TIER 4: hygiene]
+Noticed by **S43**, 2026-09-04, in `page2_nav_orbit_suborbital_x4.png`, and **deliberately not fixed there**
+(C1.1, and a stronger reason below). The `AP` / `PE` boxes are drawn ON the conic, which is correct — they
+mark a point on the orbit — but their text label is placed a flat **10 px below the box** with no regard for
+which way the arc runs there. Wherever the conic is near-vertical at the apsis, the label lands on top of the
+line. Visible at ×4 on the flown sub-orbital scene; visible at ×1 in the same scene too, so **this predates
+S43 and is not caused by the zoom** — the zoom only made it big enough to see.
+⛔ **WHY S43 DID NOT DO IT, AND THE NEXT CHAT SHOULD NOT EITHER WITHOUT ASKING.** "Move the AP/PE box and
+label radially outward with a short leader" is, in terms, **option 4 of S43-Q1** — one of the four options the
+owner ruled on. The owner chose **option 2**. A build chat quietly implementing a rejected option because it
+noticed the same symptom is exactly what C1.8/C1.12 forbid. The narrow, uncontested part is the LABEL's
+placement (a text offset), not the marker's.
+**DONE when:** either the owner confirms the label may be offset along the local normal (or flipped to the
+inside) so it never lies on the arc, and it is done and previewed at both scales; or the line records that
+the flat offset is accepted and closes.

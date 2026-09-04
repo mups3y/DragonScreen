@@ -140,7 +140,6 @@ namespace DragonScreen
 
             string title = (view.Mode == NavMode.Map) ? "GROUND TRACK"
                          : (view.Mode == NavMode.Orbit) ? "ORBIT" : "3D PLANET";
-            dl.Text(title, Pad, HeaderY, Typography.Body, TextAlign.Left, DragonPalette.Text1);
 
             // The demo labels the current view `CAMERA / Auto - Map IO`; ours says which of the three
             // views is up and, on the map, whether it is following the vehicle, because that is the
@@ -150,24 +149,73 @@ namespace DragonScreen
             // there is no scaled-space camera in the build yet (S10b), so what the crew was looking at
             // was the textured disc. It now says so, and goes back to LIVE CAMERA the moment one is
             // actually rendering - see PlanetGeom.NoSignalLabel for the rest of the marking.
+            // ORBIT gains a MANUAL marking for the same reason the map has one: once the crew has
+            // zoomed or panned, the panel is no longer the whole-orbit picture it opens at, and
+            // nothing else on the screen would say so. It is the ZOOM label's companion, not a
+            // duplicate of it - the label says how much, this says the framing is not the default.
             string sub = (view.Mode == NavMode.Map)
                 ? (view.Follow ? "TRACKING VEHICLE" : "MANUAL PAN")
-                : (view.Mode == NavMode.Orbit) ? "PLANE VIEW"
+                : (view.Mode == NavMode.Orbit)
+                    ? (MapProjection.OrbitMoved(view) ? "PLANE VIEW - MANUAL" : "PLANE VIEW")
                 : (s.PlanetCamLive ? "LIVE CAMERA" : "GLOBE + ORBIT");
-            dl.Text(sub, mx + mw, HeaderY, Typography.Caption, TextAlign.Right, DragonPalette.Text6);
 
             // The well the map sits in. Drawn first and always, so the panel has a shape even before
             // anything resolves inside it.
             dl.Rect(mx, my, mw, mh, DragonPalette.Inset2);
 
             if (view.Mode == NavMode.Map) Map(dl, s, view, mx, my, mw, mh);
-            else if (view.Mode == NavMode.Orbit) Orbit(dl, s, mx, my, mw, mh);
+            else if (view.Mode == NavMode.Orbit)
+            {
+                Orbit(dl, s, mx, my, mw, mh, false, view);
+                // ---- A ZOOMED PLOT OVERFLOWS ITS WELL, AND NOTHING CLIPS IT ----
+                // Neither renderer has a scissor rect and giving each one its own would be two things
+                // to keep in step (DrawCmd's header says so, and MapProjection's whole texture-window
+                // design exists to avoid needing one). At x8 the globe is a 1888 px disc; unclipped it
+                // would paint straight over the readout column. So the overspill is painted OUT in the
+                // background's own colour afterwards - the same trick Globe() already uses to trim its
+                // own fringe, four commands, identical in both renderers.
+                //
+                // Only when the view has actually been moved: at the default framing the plot fits its
+                // well by construction, so the default render is byte-for-byte what it was before S43.
+                if (MapProjection.OrbitMoved(view)) MaskOutside(dl, w, h, mx, my, mw, mh);
+            }
             else Planet(dl, s, view, mx, my, mw, mh, true);   // NAV owns the live 3D view (S10)
 
             dl.Box(mx, my, mw, mh, 2f, DragonPalette.Hairline);
 
+            // The headers are emitted AFTER the panel, not before it, so that a zoomed ORBIT plot's
+            // overspill mask cannot paint over them. They sit above the well in every mode, so this
+            // is the same picture in all three.
+            dl.Text(title, Pad, HeaderY, Typography.Body, TextAlign.Left, DragonPalette.Text1);
+            dl.Text(sub, mx + mw, HeaderY, Typography.Caption, TextAlign.Right, DragonPalette.Text6);
+
             Column(dl, w, h, s, view);
             Controls(dl, w, h, view);
+        }
+
+        /// <summary>
+        /// Paint out everything drawn outside the map well, in the colour that sits behind the page.
+        ///
+        /// The four bands run the FULL page width above and below the well and the well's own height
+        /// to either side, so between them they cover every pixel of the page that is not the well.
+        /// The chrome bar is masked too and does not care - it is built after the page, over the top.
+        /// </summary>
+        private static void MaskOutside(DisplayList dl, int w, int h,
+                                        float mx, float my, float mw, float mh)
+        {
+            // ---- THE BANDS OVERHANG THE PAGE AND EACH OTHER, ON PURPOSE ----
+            // Both renderers antialias a filled rect's edges, so a band whose edge lands exactly on
+            // x = 0 leaves a column of half-covered pixels with the globe still showing through -
+            // seen in the first x4 render, a one-pixel stripe of planet down the left of the page.
+            // Overhanging the page bounds puts those soft edges off the canvas, and overlapping the
+            // corners puts the band-to-band seams inside a band rather than between two.
+            const float Over = 4f;
+            Rgba bg = DragonPalette.Background;
+            float below = my + mh, right = mx + mw;
+            dl.Rect(-Over, -Over, w + Over * 2f, my + Over, bg);
+            dl.Rect(-Over, below, w + Over * 2f, h - below + Over, bg);
+            dl.Rect(-Over, my - Over, mx + Over, mh + Over * 2f, bg);
+            dl.Rect(right, my - Over, w - right + Over, mh + Over * 2f, bg);
         }
 
         // ------------------------------------------------------------------ the map view
@@ -558,12 +606,49 @@ namespace DragonScreen
         /// </summary>
         public static void Orbit(DisplayList dl, PageState s, float mx, float my, float mw, float mh,
                                  bool showApproachChord)
+        { Orbit(dl, s, mx, my, mw, mh, showApproachChord, new MapView()); }
+
+        /// <summary>
+        /// As Orbit, with the crew's ZOOM and PAN applied (S43).
+        ///
+        /// ---- THE VIEWPORT MOVES; THE GEOMETRY DOES NOT ----
+        /// The conic, the surface-intersection rule, the apsis order and every angular position are
+        /// exactly what they were: zoom is one multiplier on `scale` and pan is one offset on the
+        /// focus. There is no second scale rule to disagree with the first, and no state in which the
+        /// plot draws something that is not true - it draws the truth larger, or a part of it. The one
+        /// other thing the zoom touches is how DENSELY the arc is sampled, which is resolution, not
+        /// geometry; see ArcDots.
+        ///
+        /// ---- WHY ZOOM IS ANCHORED ON THE VEHICLE, NOT ON THE PLANET'S CENTRE ----
+        /// The whole point of the zoom, per the owner's 2026-09-04 ruling, is a legible view of the
+        /// band the vehicle is flying through. Magnifying about the FOCUS would sweep that band off
+        /// the panel at the first press - at x4 the ring sits 975 px from a centre with 272 px of
+        /// panel below it - and leave the crew hunting for their own vehicle with the arrows. So the
+        /// vehicle's DRAWN POSITION is held fixed as the zoom changes: the limb, the arc and the
+        /// apsis nearest it grow around a marker that does not move. At x1 that reduces to the focus
+        /// at the panel centre, which is exactly the picture this plot has always drawn - the default
+        /// render is unchanged at every scale, which the Kerbin case requires and S43 insists on.
+        ///
+        /// ---- WHAT ZOOM CANNOT DO, STATED SO IT IS NOT RE-ATTEMPTED ----
+        /// It cannot make the whole orbit legible. For a near-circular orbit the ring-to-limb
+        /// separation is bodyRadiusPx x h/R exactly, so a uniform zoom multiplies the separation AND
+        /// the ring radius by the same factor and the RATIO never improves: at the 1:1 scale, the
+        /// x3.2 needed to clear a 10 px apsis box puts a 780 px apogee ring against a 272 px panel
+        /// half-height. Zoom shows the separation or it shows the orbit, never both. That is the
+        /// trade the owner accepted; it is not a defect to fix later.
+        /// </summary>
+        public static void Orbit(DisplayList dl, PageState s, float mx, float my, float mw, float mh,
+                                 bool showApproachChord, MapView view)
         {
-            float cx = mx + mw * 0.5f, cy = my + mh * 0.5f;
+            // The PANEL centre, which is where captions sit whatever the viewport is doing - a
+            // caption that panned off the panel with the geometry would be a caption you cannot read
+            // in the one state you most need it.
+            float pcx = mx + mw * 0.5f, pcy = my + mh * 0.5f;
+            float cx = pcx, cy = pcy;
 
             if (!s.Valid || s.BodyRadiusM <= 0.0)
             {
-                dl.Text("NO ORBIT", cx, cy - 10f, Typography.Body, TextAlign.Centre,
+                dl.Text("NO ORBIT", pcx, pcy - 10f, Typography.Body, TextAlign.Centre,
                         DragonPalette.Text7);
                 return;
             }
@@ -571,7 +656,7 @@ namespace DragonScreen
             double rA = s.BodyRadiusM + s.ApogeeM;
             double rP = s.BodyRadiusM + s.PerigeeM;
             if (rP < 0.0) rP = 0.0;
-            if (rA <= 0.0) { dl.Text("NO ORBIT", cx, cy, Typography.Body, TextAlign.Centre,
+            if (rA <= 0.0) { dl.Text("NO ORBIT", pcx, pcy, Typography.Body, TextAlign.Centre,
                                      DragonPalette.Text7); return; }
 
             double aAxis = (rA + rP) * 0.5;
@@ -593,10 +678,56 @@ namespace DragonScreen
             double extentY = System.Math.Max(halfMinor, s.BodyRadiusM);
             if (extentX <= 0.0 || extentY <= 0.0) return;
 
-            float scale = (float)System.Math.Min((mw * 0.42f) / extentX, (mh * 0.42f) / extentY);
+            float fit = (float)System.Math.Min((mw * 0.42f) / extentX, (mh * 0.42f) / extentY);
+            if (fit <= 0f) return;
+
+            // ---- THE SURFACE CUT IS SOLVED BEFORE ANYTHING IS PLACED ----
+            // It used to be solved after the globe was drawn, which was fine while the focus was
+            // always the panel centre. The zoom anchor needs to know whether there IS a vehicle
+            // marker to anchor on before it can place the focus, so the rule moves up. It is pure
+            // arithmetic either way and draws nothing; the drawing order below is unchanged.
+            //
+            // r(nu) >= R exactly when cos(nu) <= (p/R - 1)/e, with p = a(1-e^2) the semi-latus
+            // rectum; that threshold is the whole rule:
+            //   >= +1          the periapsis itself clears the surface -> it closes, draw all 360
+            //   in (-1, +1)    an OPEN arc through apoapsis, from +nuSurf round to -nuSurf
+            //   <= -1          no part of the conic clears the surface -> there is no arc to draw
+            double semiLatus = aAxis * (1.0 - ecc * ecc);
+            double cosNuSurf;
+            if (ecc < 1e-9) cosNuSurf = (aAxis >= s.BodyRadiusM) ? 1.0 : -1.0;   // circular: all or none
+            else cosNuSurf = (semiLatus / s.BodyRadiusM - 1.0) / ecc;
+
+            bool closed = cosNuSurf >= 1.0;
+            bool anyArc = cosNuSurf > -1.0;
+
+            // Where the vehicle sits on the conic, in the plot's own coordinates. Needed here for the
+            // zoom anchor; the marker itself is still drawn at the bottom, from these same numbers.
+            double rNow = s.BodyRadiusM + s.AltitudeM;
+            double nuNow = OrbitPlot.TrueAnomaly(rNow, aAxis, ecc, s.Ascending);
+            double vWorldX = rNow * System.Math.Cos(nuNow);
+            double vWorldY = rNow * System.Math.Sin(nuNow);
+
+            // ---- ZOOM AND PAN, WHICH IS THE WHOLE OF S43: one multiplier and one offset ----
+            // The anchor is the vehicle wherever there is one to anchor on. Where there is not - on
+            // the pad, or on a trajectory with nothing above the surface - the marker is deliberately
+            // not drawn (see below), so anchoring on it would anchor on a guess: the focus is the
+            // anchor instead, which is the honest fallback and is what x1 does anyway.
+            float zoom = MapProjection.OrbitScale(view.OrbitZoom);
+            float scale = fit * zoom;
             if (scale <= 0f) return;
 
-            // Focus at the panel centre: the body sits at the focus, periapsis to the RIGHT.
+            bool anchorOnVehicle = s.ApogeeShown && anyArc;
+            if (anchorOnVehicle)
+            {
+                // Hold the vehicle's x1 screen position: focus = panelCentre + V*fit*(1 - zoom).
+                cx = pcx + (float)(vWorldX * fit) * (1f - zoom);
+                cy = pcy - (float)(vWorldY * fit) * (1f - zoom);
+            }
+            cx += (float)view.OrbitPanX * (mw * 0.5f);
+            cy += (float)view.OrbitPanY * (mh * 0.5f);
+
+            // The body sits at the focus, periapsis to the RIGHT - at the panel centre when the view
+            // is the default one, and wherever the zoom anchor and the pan have put it otherwise.
             Globe(dl, cx, cy, (float)(s.BodyRadiusM * scale), s.Longitude);
 
             // ---- ON THE GROUND THERE IS NO ORBIT TO PLOT ----
@@ -605,7 +736,7 @@ namespace DragonScreen
             // planet, say so, and draw no ellipse rather than a confident wrong one.
             if (!s.ApogeeShown)
             {
-                dl.Text("ON SURFACE - NO ORBIT", cx, my + mh - 34f, Typography.Caption,
+                dl.Text("ON SURFACE - NO ORBIT", pcx, my + mh - 34f, Typography.Caption,
                         TextAlign.Centre, DragonPalette.Text6);
                 return;
             }
@@ -621,47 +752,30 @@ namespace DragonScreen
             // A closed ellipse there is not a rounding error; it is a picture of a place the vehicle
             // cannot be. The SAME defect covers a deorbit, where periapsis is deliberately negative.
             //
-            // So the arc drawn is the part of the conic at or above the surface, and nothing else.
-            // r(nu) >= R exactly when cos(nu) <= (p/R - 1)/e, with p = a(1-e^2) the semi-latus
-            // rectum; that threshold is the whole rule:
-            //   >= +1          the periapsis itself clears the surface -> it closes, draw all 360
-            //   in (-1, +1)    an OPEN arc through apoapsis, from +nuSurf round to -nuSurf
-            //   <= -1          no part of the conic clears the surface -> there is no arc to draw
-            // The globe is drawn from the SAME radius at the SAME focus, so the arc's ends meet the
-            // limb exactly rather than approximately, and the picture cannot disagree with itself.
-            double semiLatus = aAxis * (1.0 - ecc * ecc);
-            double cosNuSurf;
-            if (ecc < 1e-9) cosNuSurf = (aAxis >= s.BodyRadiusM) ? 1.0 : -1.0;   // circular: all or none
-            else cosNuSurf = (semiLatus / s.BodyRadiusM - 1.0) / ecc;
-
-            bool closed = cosNuSurf >= 1.0;
-            bool anyArc = cosNuSurf > -1.0;
-
-            const int Steps = 72;
+            // So the arc drawn is the part of the conic at or above the surface, and nothing else -
+            // the rule itself is solved further up, because the zoom anchor needs its answer before
+            // the focus can be placed. The globe is drawn from the SAME radius at the SAME focus, so
+            // the arc's ends meet the limb exactly rather than approximately, and the picture cannot
+            // disagree with itself - at any zoom, because the zoom is one multiplier on both.
+            // ---- SAMPLED AT THE DRAWN SIZE, THINNED TO WHAT THE PANEL CAN SHOW ----
+            // 72 samples is a dotted ring at x1 and eight dots scattered across the panel at x4,
+            // because zoom stretches the same samples over four times the arc. So the sample count
+            // follows the zoom - and then ArcDots does the two things that keep it affordable and
+            // honest: it skips samples off the panel, and it thins what is left to a bounded count.
+            // See ArcDots for why the thinning is not optional.
+            int steps = 72 * (int)zoom;
             if (closed)
             {
-                for (int i = 0; i < Steps; i++)
-                {
-                    double nu = (i * 360.0 / Steps) * System.Math.PI / 180.0;
-                    double r = aAxis * (1.0 - ecc * ecc) / (1.0 + ecc * System.Math.Cos(nu));
-                    float px = cx + (float)(r * System.Math.Cos(nu)) * scale;
-                    float py = cy - (float)(r * System.Math.Sin(nu)) * scale;
-                    dl.Rect(px - 1.5f, py - 1.5f, 3f, 3f, DragonPalette.AccentDim);
-                }
+                ArcDots(dl, aAxis, ecc, 0.0, 2.0 * System.Math.PI, steps, false,
+                        cx, cy, scale, mx, my, mw, mh);
             }
             else if (anyArc)
             {
                 // Both ends included, so the arc visibly TOUCHES the limb it is cut off by.
                 double nuSurf = System.Math.Acos(cosNuSurf);
                 double span = 2.0 * (System.Math.PI - nuSurf);
-                for (int i = 0; i <= Steps; i++)
-                {
-                    double nu = nuSurf + span * i / Steps;
-                    double r = aAxis * (1.0 - ecc * ecc) / (1.0 + ecc * System.Math.Cos(nu));
-                    float px = cx + (float)(r * System.Math.Cos(nu)) * scale;
-                    float py = cy - (float)(r * System.Math.Sin(nu)) * scale;
-                    dl.Rect(px - 1.5f, py - 1.5f, 3f, 3f, DragonPalette.AccentDim);
-                }
+                ArcDots(dl, aAxis, ecc, nuSurf, span, steps, true,
+                        cx, cy, scale, mx, my, mw, mh);
             }
 
             // Apsides. Periapsis is true anomaly 0 by definition, apoapsis 180 - no search needed.
@@ -694,17 +808,17 @@ namespace DragonScreen
             if (!closed)
             {
                 dl.Text(anyArc ? "TRAJECTORY INTERSECTS SURFACE" : "NO TRAJECTORY ABOVE SURFACE",
-                        cx, my + mh - 34f, Typography.Caption, TextAlign.Centre, DragonPalette.Text6);
+                        pcx, my + mh - 34f, Typography.Caption, TextAlign.Centre, DragonPalette.Text6);
             }
 
             // Us, from the current radius. Ascending puts us on the near half, descending the far one.
             // Skipped when there is no arc at all: with nothing above the surface to sit on, the tick
             // would land wherever the clamped acos happened to fall, which is a guess wearing a marker.
+            // Drawn from the SAME vWorld the zoom anchored on, so the marker cannot drift away from
+            // the point the view is magnifying about.
             if (!anyArc) return;
-            double rNow = s.BodyRadiusM + s.AltitudeM;
-            double nuNow = OrbitPlot.TrueAnomaly(rNow, aAxis, ecc, s.Ascending);
-            float vx = cx + (float)(rNow * System.Math.Cos(nuNow)) * scale;
-            float vy = cy - (float)(rNow * System.Math.Sin(nuNow)) * scale;
+            float vx = cx + (float)vWorldX * scale;
+            float vy = cy - (float)vWorldY * scale;
             dl.Rect(vx - 9f, vy - 1f, 18f, 2f, DragonPalette.Go);
             dl.Rect(vx - 1f, vy - 9f, 2f, 18f, DragonPalette.Go);
 
@@ -844,6 +958,71 @@ namespace DragonScreen
             dl.ArcBand(cx, cy, r - 2f, r, 0.0, 360.0, DragonPalette.Hairline);
         }
 
+        /// <summary>Most dots the arc may put on the panel, at any zoom, for any conic.</summary>
+        private const int MaxArcDots = 144;
+
+        /// <summary>
+        /// The conic, dotted, over a span of true anomaly.
+        ///
+        /// ---- WHY IT COUNTS BEFORE IT DRAWS, AND THIS IS NOT AN OPTIMISATION ----
+        /// The sample count follows the zoom so a magnified arc is not eight dots in a row. That is
+        /// safe for a CLOSED ring, where zoom pushes most of the ring off the panel and the visible
+        /// count stays near 72 - and it is not safe for an OPEN trajectory, where the whole arc is
+        /// only a few degrees of anomaly wide and every sample of it is on screen. The flown RSS
+        /// ascent is exactly that shape: apogee 210 km, perigee -5900 km, an arc 11.4 degrees wide.
+        /// At x4 it put 288 dots on the panel and took the NAV page to 459 of its 480 commands, one
+        /// scene away from a silently truncated page. Measured, not predicted - it is what the first
+        /// zoomed render of that scene printed.
+        ///
+        /// So the visible samples are counted first and then thinned by a whole number, which keeps
+        /// the dots evenly spaced along the path (a thinning that dropped dots by position would
+        /// bunch them). At x1 nothing is ever off the panel and nothing is ever thinned, so the
+        /// default plot emits the same 72 dots, in the same places, that it always has.
+        /// </summary>
+        private static void ArcDots(DisplayList dl, double aAxis, double ecc,
+                                    double nu0, double span, int steps, bool includeEnd,
+                                    float cx, float cy, float scale,
+                                    float mx, float my, float mw, float mh)
+        {
+            if (steps < 1) return;
+            int n = includeEnd ? steps + 1 : steps;
+            double semiLatus = aAxis * (1.0 - ecc * ecc);
+
+            int visible = 0;
+            for (int pass = 0; pass < 2; pass++)
+            {
+                int keep = 1;
+                if (pass == 1) keep = 1 + visible / MaxArcDots;
+
+                for (int i = 0; i < n; i++)
+                {
+                    if (pass == 1 && (i % keep) != 0) continue;
+                    double nu = nu0 + span * i / steps;
+                    double r = semiLatus / (1.0 + ecc * System.Math.Cos(nu));
+                    float px = cx + (float)(r * System.Math.Cos(nu)) * scale;
+                    float py = cy - (float)(r * System.Math.Sin(nu)) * scale;
+                    if (!OnPanel(px, py, mx, my, mw, mh)) continue;
+                    if (pass == 0) visible++;
+                    else dl.Rect(px - 1.5f, py - 1.5f, 3f, 3f, DragonPalette.AccentDim);
+                }
+
+                // Nothing on the panel at all: the second pass has nothing to do, and the caption
+                // that explains a missing line is the caller's job either way.
+                if (visible == 0) return;
+            }
+        }
+
+        /// <summary>Is a plotted point inside the map well? Generous by a marker's half-width, so a dot
+        /// straddling the edge is still drawn and the overspill mask trims it, rather than the arc
+        /// stopping short of the frame. Only the ZOOMED plot can put a point outside at all: at x1 the
+        /// whole extent fits the well by construction, which is why the default render is unchanged.</summary>
+        private static bool OnPanel(float px, float py, float mx, float my, float mw, float mh)
+        {
+            const float Slack = 4f;
+            return px >= mx - Slack && px <= mx + mw + Slack
+                && py >= my - Slack && py <= my + mh + Slack;
+        }
+
         /// <summary>Clamp to -1..1 so asin and sqrt cannot be handed a value off the disc.</summary>
         private static double Unit(double v)
         {
@@ -893,10 +1072,17 @@ namespace DragonScreen
         private static void Controls(DisplayList dl, int w, int h, MapView view)
         {
             float x, y, rw, rh;
-            // The pan / zoom / centre cluster drives the flat MAP and the 3D PLANET camera alike (on
-            // PLANET, pan swings and tilts the camera, zoom is distance, CTR resets the view); only the
-            // side-on ORBIT plot has nothing for them to do, so they read inactive there.
-            bool active = (view.Mode == NavMode.Map || view.Mode == NavMode.Planet);
+            // ---- LIVE IN ALL THREE VIEWS (S43) ----
+            // The cluster drives the flat MAP (lat/lon pan, texture-window zoom), the 3D PLANET camera
+            // (pan swings and tilts, zoom is distance) and now the side-on ORBIT plot (pan and zoom
+            // move the VIEWPORT over a fixed conic). CTR resets whichever of the three is up.
+            //
+            // It read inactive on ORBIT until the owner's 2026-09-04 ruling, because the plot had
+            // nothing for it to do. Returning it to life is returning to the REFERENCE, not adding to
+            // it: docs/REFERENCE_PAGES.md "THE LIVE DEMO" finding 1 records four pan arrows, a centre
+            // reset, +/- zoom and NEXT VIEW on the real page's map panel. This is why the cluster is
+            // here at all.
+            bool active = true;
 
             // Arrows as words rather than glyphs: the font is whatever Windows resolved, and a
             // triangle drawn from three rects is not a triangle. LEFT/RIGHT/UP/DOWN cannot be
@@ -920,6 +1106,7 @@ namespace DragonScreen
             // it reads as a step number rather than "x2/x4".
             string zoomLabel = (view.Mode == NavMode.Planet)
                 ? "ZOOM " + (view.PlanetZoom >= 0 ? "+" : "") + view.PlanetZoom
+                : (view.Mode == NavMode.Orbit) ? "ZOOM x" + (1 << view.OrbitZoom)
                 : "ZOOM x" + (1 << view.ZoomStep);
             dl.Text(zoomLabel, ColumnX(w), y + 12f, Typography.Caption, TextAlign.Left,
                     DragonPalette.Text6);
