@@ -416,6 +416,14 @@ namespace DragonScreen
                     int a = ManualChuteDeployPage.HitTest(px, py, w, h);
                     if (a >= 0) ChuteAction(a);
                 }
+                else if (cur == UiPage.SystemsTree)
+                {
+                    // S56 / audit H32. The tree's eight POWER + STRING boxes are the plate's own
+                    // buttons, so they go through the SAME dispatcher and are read back by the SAME
+                    // policy - there is no second policy here and there must never be one (T14's rule).
+                    // Nothing on this page flies the vehicle: SystemsState is local display state.
+                    SystemsAction(SystemsTreePage.HitTest(px, py, w, h));
+                }
                 else if (cur == UiPage.Docking)
                 {
                     DockAction(DockingSimPage.HitTest(px, py, w, h));
@@ -506,6 +514,28 @@ namespace DragonScreen
             bool acted = FlightCommands.Run(c);
             PanelPressKind k = PanelPolicy.ResolveImmediate(c, acted, ModeOn(c));
             Debug.Log("[DragonScreen] chute " + c + " -> " + k);
+        }
+
+        /// <summary>
+        /// S56: a SYSTEMS TREE node press. The node IS a console button - POWER 1/2 or STRING nX - so it
+        /// is dispatched through `FlightCommands.Run` and resolved by `PanelPolicy` exactly as the plate's
+        /// own press is. Pressing POWER 1 on the glass and POWER 1 on the plate therefore cannot come to
+        /// different answers, because neither surface owns the answer; the one `SystemsState` does.
+        ///
+        /// There is no lamp to latch from here either: the tree reads every node's colour and word out of
+        /// `PageState.Systems` on the next frame, so a press that the model REFUSED (an isolate on a
+        /// tripped string - `Systems.ToggleString` returns false) simply leaves the node reading TRIP.
+        /// That is §14.4(a)'s click-no-light-no-action applied to a display-state command, and it is the
+        /// same answer the plate gives for the same press.
+        /// </summary>
+        private void SystemsAction(PanelCommand c)
+        {
+            if (c == PanelCommand.None) return;
+            // Charge01 is NOT set here: VesselData.cs:335 already keeps it current every frame for the
+            // plate, and a second writer of the same field is how the two surfaces would start to differ.
+            bool acted = FlightCommands.Run(c);
+            PanelPressKind k = PanelPolicy.ResolveImmediate(c, acted, false);
+            Debug.Log("[DragonScreen] systems tree " + c + " -> " + k);
         }
 
         /// <summary>A mode command's state AFTER the press, for the outcome above. Only the one this page

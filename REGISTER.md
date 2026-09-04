@@ -4549,7 +4549,7 @@ SpaceX's own placeholder text kept verbatim. Track against the page's stated gat
 **DONE when:** each procedure's steps advance off real state, verdicts are computed not hardcoded (the S31
 guardrail), and previews show pending / current / passed. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` §3 + §6.
 
-### S56 [S] The systems tree and the P&ID are read-only while their toggle model exists and works — **TODO** — [TIER 3: scheduled build]
+### S56 [S] The systems tree and the P&ID are read-only while their toggle model exists and works — **DONE 2026-09-04** — [TIER 3: scheduled build] ⚠ batch deviation from C1.1/C1.7 authorised by owner 2026-09-04 via overseer
 Logged by **S49** (H32, H33). Neither page is in `FigmaUI.IsVehiclePage`, neither has a `HitTest`, and
 `ScreenPainter` has no branch for either — so `POWER 1/2` and the six `STRING nX` nodes are **untouchable**,
 while `Systems.ToggleBus` / `ToggleString` / `ResetBus` exist, work, and are wired **only** to the physical IVA
@@ -4563,6 +4563,128 @@ overboard one is a fixed-colour glyph, `CABIN FAN "RUNNING"` is a literal with a
 tripping with the buses would make word and pipe colour honest off state the crew can already switch.
 **DONE when:** the tree's buses/strings are touchable from the glass through the existing dispatcher, and the
 P&ID's pumps/fans/valves read modelled state. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H32/H33.
+
+- ✅ **DONE 2026-09-04. Both halves built; the existing toggle model was WIRED, not replaced.** The batch
+  brief's constraint held exactly: `Systems.ToggleBus` / `ToggleString` / `ResetBus` and `SystemsState` were
+  already there and already correct, so nothing about the model changed. What was missing was a hit test, a
+  painter branch, and three display reads.
+- **H32 — the tree's eight nodes are touchable.** `SystemsTreePage` gained `BusRect` / `StringRect` (the ONE
+  place either box's rectangle is computed — `Build` and `HitTest` both call them, so a geometry edit cannot
+  move the drawing away from the finger), `BusCommand` / `StringCommand`, and `HitTest`, which returns the
+  **console plate's own `PanelCommand`** for that node. `ScreenPainter` routes `UiPage.SystemsTree` through a
+  new `SystemsAction`, which dispatches on `FlightCommands.Run` and reads the outcome back with
+  `PanelPolicy.ResolveImmediate` — **the same dispatcher and the same policy the plate's button uses**, per
+  T14's rule, so the two surfaces cannot come to different answers. Nothing here flies the vehicle
+  (`SystemsState` is local display state); §14.4(a) is not in play.
+- **H33 — the P&ID's tenants read the model.** `SystemsState` gained `FanOn` / `PumpAOn` / `PumpBOn` as
+  **computed properties, not stored fields** — a pump and a fan are electrical loads, and the model already
+  knew, per bus, whether the crew had powered it and whether any string behind it was online. So there is no
+  second state to drift out of step with the buses and no way to read "running" on a dead bus. `CABIN FAN`'s
+  hardcoded `"RUNNING"` + hardcoded `Severity.Nominal` and `PUMP A/B`'s un-`live`-guarded `"RUNNING"` are gone;
+  `CABIN HX A/B`'s **empty strings are now `—`** (a genuinely-absent quantity — the one thing §14.4(f) still
+  lets a dash stand for — rather than a box that looks like it failed to load). The inline valves and the
+  pipes follow the same signal, and the coolant legs gained the valve glyphs they were missing.
+- **The bus assignment is OURS and is stated (§1.4), not transcribed:** loop A on bus 1, loop B on bus 2 (the
+  redundant pair — losing one bus costs one loop, which is the point of having two), the cabin fan
+  **cross-strapped** on either bus because it is life-critical. Written into `VehicleSystems.cs`'s header where
+  the derivation lives, and posed to the owner as **S56-Q2** below rather than treated as settled.
+- **C1.15 — the documented mod-first search, before any of the above was written.** Searched
+  `docs/reference/INSTALLED_MODS.md` (170 lines, full list §1 + the candidate-by-candidate §2) for a source of
+  *coolant-pump running state*, *cabin-fan running state* and *coolant-loop flow*. **Candidates in that list and
+  why each was rejected:** **TAC-LS** — models cabin O2/CO2/water only, already wired via `LifeSupportBridge`;
+  carries no pump, fan or loop-flow state. **Kerbalism** — §2(a) records it as the one mod that models
+  crew/component environment generally, but it is **NOT INSTALLED** and §2(a) states it would very likely
+  REPLACE TAC-LS; a candidate found but not installed is a proposal to the owner (C1.15), never a build-chat
+  install, and §2's own open question already puts it to them. **TestFlight** — part failure/reliability, sits
+  on the booster engine, no ECLSS machinery. **KER / FAR / RealFuels / CommNet** — no ECLSS surface at all;
+  §2(d) already records that none of the installed set models a per-part thermal or fluid figure.
+  ⭐ **And then the search turned out not to be needed**, which is the honest finding: this is **not a new
+  simulation of a not-yet-modelled quantity**. The buses and strings are ALREADY MODELLED (`VehicleSystems`,
+  Part A's own micro-sim), and a pump on a bus is a derivation from that existing state — §14.4(e) step (0),
+  the same footing as `CabinTempC`. No new modelling surface was opened.
+- **✅ `python plugin/build.py test` GREEN** — `ALL SUITES PASSED`. The touch-wiring suite went 297 → **366
+  checks, 0 failed**.
+- **Pinned by tests, in TouchWiringTest's own style — because a PNG cannot check any of this.**
+  `SystemsTreeNodes()`: every one of the eight nodes hits **itself** at three screen sizes (the panel aspect, a
+  squarer one, and the preview's 2×), the four READOUT boxes beside them (MAIN POWER, SOLAR ARRAY, BATTERIES,
+  the flight-computer foot) resolve to `None` at all three, and the eight commands are distinct, non-inert and
+  audible. It also asserts the **cross-surface join**: `PanelPolicy.StringLamp` is the PLATE's map from a
+  command to the (bus, index) it lights from, and each row-1 node must resolve to that same pair — so a tree
+  that ever named STRING 2C where the plate lights 2B would fail here rather than on the glass. And the
+  refusal path: a TRIPPED string refuses the toggle, still reads TRIP, and its outcome is **dark, not red**.
+  `SystemsPidReadsTheModel()` is **mutation-checked in S54's style** — each leg asserted in both directions
+  (bus up → pump runs, all three strings isolated → pump stops while its twin is unaffected, both buses down →
+  the fan stops, bus back up → it restarts), so a constant-true cannot pass it.
+- **✅ PREVIEW GATE MET — rendered and INSPECTED, both pages, and here is what was seen.** (Read fresh: S75's
+  `5a003ce` fixed `PreviewMain.DrawCoverAsset`, so nothing was compared against an older PNG.)
+  - `ui_systemstree.png` (both buses off): eight nodes dark, POWER 1/2 reading **BUS OFF**, all six strings
+    reading **—**, every branch in the unpowered wire tone. The new caption sits on ONE line, centred, well
+    clear of the ON/ISOLATED/TRIPPED/UNPOWERED legend above it and of the bottom bar below — no overlap, no
+    clipping, and drawn at the legend's own 24-unit size, which is already established as legible here.
+  - `ui_systemstree_live.png`: POWER 1 and 2 both **2/3 ONLINE** in caution amber, STRING 1C **TRIP** in red
+    with its branch dark, STRING 2B **ISOL** in amber, the four online strings green with lit branches. Every
+    state word is inside its box.
+  - `ui_systemspid.png`: **CABIN FAN OFF**, **PUMP A OFF**, **PUMP B OFF** — all three boxed in caution amber
+    and all three consistent with each other (the pump outline was corrected during inspection: the fan was
+    getting a caution box and the pumps were not, which would have read as "only the fan matters").
+    **CABIN HX A/B now show `—`** where they were blank. The atmosphere rail and both coolant circuits draw in
+    the dead tone; the two supply valves stay live because both tanks are full. Verified numerically as well
+    as by eye — sampled pixels: rail pipe `#313D7B` (dead), supply line `#585D7C` (live), loop legs `#313D7B`.
+    Every readout is in its box, nothing overlaps, nothing clips.
+- ⚠ **ONE HONEST RESIDUAL, for a glass check rather than a PNG.** The dead-pipe tone (`Hairline #313D7B`)
+  against the live tone (`Text7 #585D7C`) is a **subtle** difference — clear at preview resolution, unproven at
+  IVA distance and at the console's oblique angle (the S38/S39 problem class). It is deliberately the
+  **secondary** signal: the WORD (`OFF` / `RUNNING`) and the caution outline carry the state, and they are
+  unmissable. So this is not a correctness gap — nothing depends on reading the pipe tone — but if a future
+  glass session finds the tone indistinguishable, the remedy is a wider tone gap, not more colour (colouring a
+  healthy line would break this page's own rule that colour means fault).
+- **Deliberately NOT done, and stated rather than quietly skipped:**
+  - **RESET 1/2 is not touchable from the tree.** The plate carries it (`PanelCommand.Reset1/2` →
+    `Systems.ResetBus`) and it is the only way back from TRIP, but **this page draws no reset control**, and
+    drawing one would be inventing a control on a page whose own header calls it "layout-real /
+    labels-reconstructed" (§1.4 / C1.4). Posed as **S56-Q1** rather than decided here.
+  - **The row-2 STRING lamp asymmetry was left alone (C1.1).** `PanelPolicy.StringLamp` covers String1A/B/C
+    only; the row-2 buttons are deliberately not live-mode lamps. That is **S53's own stated decision**,
+    recorded in `pure/PanelBehaviour.cs` with its reasoning and explicitly called "a bigger decision than this
+    defect". S56 does not reopen it — but the new test now **pins** the asymmetry in both directions, so a
+    later change to either row has to come past it on purpose instead of by accident.
+- **Files changed (declared outputs, C1.11):** `plugin/src/pure/VehicleSystems.cs` (three derived properties),
+  `plugin/src/pure/SystemsTreePage.cs` (shared rects + `HitTest` + the touch caption),
+  `plugin/src/pure/SystemsPidPage.cs` (fan/pump/HX/valve/pipe reads), `plugin/src/ScreenPainter.cs` (the
+  branch + `SystemsAction`), `plugin/test/TouchWiringTest.cs` (the two new suites), `REGISTER.md`.
+
+#### Open questions for the owner (C1.14) — S56
+
+**S56-Q1. A string that TRIPS can only be reset at the plate. Should the tree carry a reset control?**
+*Situation.* The eight POWER/STRING nodes are now touchable, but `ResetBus` is not reachable from the glass,
+because the tree draws no reset control and this task would not invent one on a layout-real page (§1.4 / C1.4).
+A low state of charge trips strings automatically (`Systems.Update`), and the only way back is the physical
+RESET 1/2 button. So the crew can now switch everything from the glass **except** recover a fault — which is
+arguably the one they most want to do from where they are reading it.
+1. **Leave it as it is: reset stays a plate action.** *(recommended. The page is layout-real with
+   reconstructed labels, and every box on it today is a box the reference's grammar supports; a RESET pill
+   would be the first purely-invented control on it. The crew is in the capsule with the plate in reach, and
+   §1.4's ordering — verified-real, then other users', then invent only by owner discussion — puts this
+   squarely in "owner discussion", not in a build chat's gift.)*
+2. **Add a RESET control to each bus node** — e.g. the POWER box takes a second tap target, or a small pill
+   beside it — dispatching `PanelCommand.Reset1/2` through the same dispatcher. Needs an `OVERRIDE` or an
+   explicit owner go, because it invents a control on a real-sourced page.
+3. **Make a LONG PRESS on a tripped string reset its bus.** No new glyph, so no invented control — but an
+   unsignposted gesture is a control the crew cannot see, which is the S75 defect class pointing the other
+   way. Not recommended for that reason.
+
+**S56-Q2. Confirm the loop-to-bus assignment, which is OURS rather than sourced.**
+*Situation.* Making the pumps and fan honest required saying which bus each one is on. The build has no source
+for the real Crew Dragon's coolant-loop-to-bus wiring, so the assignment is a stated, coherent invention
+(§14.4(f)'s marked simulation): **loop A → bus 1, loop B → bus 2, cabin fan cross-strapped on either.** It is
+written into `pure/VehicleSystems.cs`'s header, not buried. Flagging it because §1.4 says invent only by owner
+discussion, and this is an invention even though it is a small and defensible one.
+1. **Confirm it as-is.** *(recommended: it is the arrangement two-loop redundancy exists for — one bus lost
+   costs one loop — and cross-strapping the life-critical fan is standard practice on any two-bus vehicle.)*
+2. **Cross-strap the pumps too** (either bus runs either pump). Safer-looking, but it makes bus 1 and bus 2
+   indistinguishable on this page, so switching a bus off would show nothing — which defeats H33's point.
+3. **Name a different assignment** the owner has a source for; the derivation is three lines and follows
+   whatever is chosen.
 
 ### S57 [S] Orphaned live code with no caller — harvest or retire — **SPLIT 2026-09-04 (owner ruling: audit Q1 = option 4 — four of six items routed to their host lines; the remainder is ONE owner question)** — [TIER 4: hygiene + harvest] ⚠ batch deviation from C1.1/C1.7 authorised by owner 2026-09-04 via overseer
 Logged by **S49** (H36, H39, H43, H44). Working, tested code that nothing calls: **`pure/Orbital.cs`**

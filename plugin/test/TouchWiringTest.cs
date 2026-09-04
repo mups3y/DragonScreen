@@ -46,6 +46,8 @@ public static class TouchWiringTest
         DockingActuationIsHonest();
         SuitControls();
         ConsolePanelUnchanged();
+        SystemsTreeNodes();
+        SystemsPidReadsTheModel();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
     }
@@ -337,5 +339,151 @@ public static class TouchWiringTest
         // Every press is audible, including the ones that do nothing (§14.4(a)) - which is what stops a
         // silent no-op reading as a collider that missed, on the plate and now on the glass alike.
         for (int i = 0; i < act.Length; i++) Check(act[i] + " still clicks", PanelPolicy.Clicks(act[i]), "");
+    }
+
+    // ============================================================================================
+    // S56 - THE SYSTEMS TREE'S EIGHT NODES ARE TOUCHABLE, AND THEY ARE THE PLATE'S OWN BUTTONS.
+    // ============================================================================================
+    // The defect: the tree drew BUS OFF / ISOL / TRIP off a model whose toggles were reachable ONLY
+    // from the physical IVA plate, so a crew member could read the fault on the glass and do nothing
+    // about it. What a PNG cannot check is exactly what matters here - that the rect the finger hits is
+    // the rect that was drawn, that each node names the SAME PanelCommand the plate's button does, and
+    // that the readout boxes beside them stayed inert. All three are asserted at three sizes.
+    static void SystemsTreeNodes()
+    {
+        var seen = new System.Collections.Generic.List<PanelCommand>();
+        for (int si = 0; si < 3; si++)
+        {
+            int w = Sizes[si, 0], h = Sizes[si, 1];
+            float x, y, rw, rh;
+            for (int bus = 1; bus <= 2; bus++)
+            {
+                SystemsTreePage.BusRect(bus, w, h, out x, out y, out rw, out rh);
+                Check("tree bus " + bus + " has a rect @" + w + "x" + h, rw > 0f && rh > 0f, "");
+                PanelCommand got = SystemsTreePage.HitTest(x + rw * 0.5f, y + rh * 0.5f, w, h);
+                Check("tree POWER " + bus + " hits itself @" + w + "x" + h,
+                      got == SystemsTreePage.BusCommand(bus), "got " + got);
+                if (si == 0) seen.Add(got);
+
+                for (int i = 0; i < 3; i++)
+                {
+                    SystemsTreePage.StringRect(bus, i, w, h, out x, out y, out rw, out rh);
+                    Check("tree string " + bus + "/" + i + " has a rect @" + w + "x" + h,
+                          rw > 0f && rh > 0f, "");
+                    PanelCommand sg = SystemsTreePage.HitTest(x + rw * 0.5f, y + rh * 0.5f, w, h);
+                    Check("tree STRING " + bus + "/" + i + " hits itself @" + w + "x" + h,
+                          sg == SystemsTreePage.StringCommand(bus, i), "got " + sg);
+                    if (si == 0) seen.Add(sg);
+                }
+            }
+
+            // The four READOUT boxes are not controls. MAIN POWER, the two source boxes and the flight-
+            // computer foot are things no crew switch commands, and S75's defect class runs both ways:
+            // a box that acts without looking like a control is as wrong as one that looks like a
+            // control and does not act. Sampled at the page's own design coordinates.
+            float sc = h / 2112f, ox = (w - 3427f * sc) * 0.5f; if (ox < 0f) ox = 0f;
+            float[,] inert = { { 1713.5f, 560f }, { 1293f, 300f }, { 2134f, 300f }, { 1713.5f, 1445f } };
+            for (int i = 0; i < 4; i++)
+            {
+                PanelCommand n = SystemsTreePage.HitTest(inert[i, 0] * sc + ox, inert[i, 1] * sc, w, h);
+                Check("tree readout box " + i + " is not a control @" + w + "x" + h,
+                      n == PanelCommand.None, "got " + n);
+            }
+        }
+
+        // Eight distinct commands, and every one of them is a command the CONSOLE PLATE already carries.
+        // If this ever fails it means the glass grew a control the plate does not have - the exact way
+        // the two surfaces would start to disagree.
+        Check("the tree publishes eight distinct commands", Distinct(seen) == 8, "got " + Distinct(seen));
+        for (int i = 0; i < seen.Count; i++)
+        {
+            Check(seen[i] + " is not inert (14.4(b))", !PanelPolicy.IsInert(seen[i]), "");
+            Check(seen[i] + " clicks", PanelPolicy.Clicks(seen[i]), "");
+        }
+
+        // ---- AND THE NODE NAMES THE SAME STRING THE PLATE'S OWN LAMP LOGIC DOES ----
+        // `FlightCommands.Run` itself is KSP-side glue and is not in the headless build, so the join is
+        // asserted where it is decidable: `PanelPolicy.StringLamp` is the PLATE's map from a command to
+        // the (bus, index) it lights from, and the page's node must resolve to that same pair. If the
+        // tree ever named STRING 2C where the plate lights 2B, the two surfaces would disagree about one
+        // string while both looking right - and this is the check that would catch it.
+        // Scoped to ROW 1 on purpose. `StringLamp` covers String1A/B/C only - S53's own decision, stated
+        // in PanelBehaviour.cs: the row-2 buttons are deliberately NOT live-mode lamps (they flash on an
+        // accepted press instead), and making all six agree is called out there as a bigger decision
+        // than that defect. This task does not reopen it (C1.1); it asserts the row-1 join and PINS the
+        // row-2 asymmetry so a later change to either has to come past this test on purpose.
+        for (int i = 0; i < 3; i++)
+        {
+            int lb, li;
+            PanelCommand c1 = SystemsTreePage.StringCommand(1, i);
+            Check(c1 + " is a string lamp on the plate", PanelPolicy.StringLamp(c1, out lb, out li), "");
+            Check(c1 + " names the same string on both surfaces", lb == 1 && li == i,
+                  "plate says " + lb + "/" + li);
+
+            PanelCommand c2 = SystemsTreePage.StringCommand(2, i);
+            Check(c2 + " is not a row-1 lamp (S53's stated asymmetry)",
+                  !PanelPolicy.StringLamp(c2, out lb, out li), "");
+        }
+        Check("POWER 1 is a live-mode lamp", PanelPolicy.IsLiveMode(PanelCommand.Power1), "");
+        Check("POWER 2 is a live-mode lamp", PanelPolicy.IsLiveMode(PanelCommand.Power2), "");
+
+        // ---- A PRESS THE MODEL REFUSES CHANGES NOTHING, AND LIGHTS NOTHING ----
+        // The display-state form of 14.4(a). A tripped string cannot be isolated, so the node has to go
+        // on reading TRIP - and the outcome the policy returns for that refusal must be dark, not red.
+        SystemsState st = SystemsState.Fresh();
+        Systems.ToggleBus(ref st, 1);
+        Check("a POWER 1 press switches bus 1", st.Bus1On, "");
+        Check("a STRING 1A press isolates string 1A",
+              Systems.ToggleString(ref st, 1, 0)
+              && Systems.Get(st, 1, 0) == StringState.Isolated, "");
+        Systems.Set(ref st, 2, 2, StringState.Tripped);
+        Check("a tripped string refuses the toggle", !Systems.ToggleString(ref st, 2, 2), "");
+        Check("...and still reads TRIP", Systems.Get(st, 2, 2) == StringState.Tripped, "");
+        Check("...and the refusal is dark, not red",
+              PanelPolicy.LampFor(PanelPolicy.ResolveImmediate(
+                  SystemsTreePage.StringCommand(2, 2), false, false)) == PanelLight.Dark, "");
+    }
+
+    static int Distinct(System.Collections.Generic.List<PanelCommand> l)
+    {
+        var d = new System.Collections.Generic.List<PanelCommand>();
+        for (int i = 0; i < l.Count; i++) if (!d.Contains(l[i])) d.Add(l[i]);
+        return d.Count;
+    }
+
+    // ============================================================================================
+    // S56 / H33 - THE P&ID'S PUMPS AND FAN ARE DERIVED FROM THE BUSES, NOT PAINTED.
+    // ============================================================================================
+    // These used to be the literal word "RUNNING" (the pumps not even live-guarded). The assertion is
+    // the SIMULATE-NEVER-FAKE one: the tenant's state has to MOVE when the crew moves the bus the tree
+    // lets them switch, and it has to be the same model both pages read. Mutation-checked in S54's
+    // style - each leg is asserted in both directions, so a constant-true would fail.
+    static void SystemsPidReadsTheModel()
+    {
+        SystemsState s = SystemsState.Fresh();
+        Check("a fresh vehicle has both buses off, so nothing circulates",
+              !s.PumpAOn && !s.PumpBOn && !s.FanOn, "");
+
+        Systems.ToggleBus(ref s, 1);
+        Check("powering bus 1 starts PUMP A", s.PumpAOn, "");
+        Check("...and not PUMP B", !s.PumpBOn, "");
+        Check("...and the cross-strapped fan runs on one bus", s.FanOn, "");
+
+        Systems.ToggleBus(ref s, 2);
+        Check("powering bus 2 starts PUMP B", s.PumpBOn, "");
+
+        // Isolating all three of a bus's strings is a powered bus with nothing online - the pump stops,
+        // which is the case a bus-only test would miss.
+        for (int i = 0; i < 3; i++) Systems.ToggleString(ref s, 1, i);
+        Check("isolating every string on bus 1 stops PUMP A", !s.PumpAOn, "");
+        Check("...but PUMP B is unaffected - that is what two loops are for", s.PumpBOn, "");
+        Check("...and the fan still runs, being cross-strapped", s.FanOn, "");
+
+        Systems.ToggleBus(ref s, 2);
+        Check("with both buses down the fan stops too", !s.FanOn, "");
+
+        // And back up again, so none of the above can be passing on a stuck false.
+        Systems.ToggleBus(ref s, 2);
+        Check("re-powering bus 2 restarts PUMP B and the fan", s.PumpBOn && s.FanOn, "");
     }
 }

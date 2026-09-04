@@ -30,6 +30,22 @@
 // CabinTempText) — the draw path formats nothing; quantities with no pre-formatted text are shown as
 // bars instead of inventing one.
 //
+// ---- S56 / audit H33: THE PLUMBING NOW READS THE POWER THE CREW CAN SWITCH ----
+// Three tenants of this diagram used to be painted rather than read: CABIN FAN said "RUNNING" with a
+// hardcoded Nominal severity, PUMP A / PUMP B said "RUNNING" without even a live guard (so a dead feed
+// still claimed a running pump), and CABIN HX A/B were EMPTY strings — which reads as "nothing here"
+// rather than "no source". They are now read from `SystemsState.FanOn` / `.PumpAOn` / `.PumpBOn`, which
+// are DERIVED from the bus/string model this page's sibling (SystemsTreePage) lets the crew switch:
+// loop A on bus 1, loop B on bus 2, the fan cross-strapped on either. So powering a bus off on the tree
+// stops the pump HERE, and the two pages cannot disagree because there is only one model.
+// The empty HX values are now "—": that box genuinely has no quantity to show (§14.4(f)'s one surviving
+// dash — a genuinely-absent state), and it must not look like a box that failed to load.
+// PIPES AND VALVES follow the same signal. A dead segment draws in the tree's own `Wire` tone
+// (Hairline) instead of the live `Pipe` tone, which is exactly how SystemsTreePage darkens an unpowered
+// branch — one idiom across the two deep-views. This does NOT colour a healthy line: the page's rule
+// that "the outline only takes a colour when the component is off nominal" is unchanged, so a fault is
+// still the one thing that stands out. Off is DIM, not red — the crew switched it off.
+//
 // Reachability: the Menu grid, like SystemsTreePage and T7/T8's pages — not a ninth VehicleTabBar tab,
 // whose eight tabs are confirmed-real (C1.4). A real in-page entry point is T14's job.
 // ============================================================================================
@@ -39,7 +55,7 @@ namespace DragonScreen
 {
     public static class SystemsPidPage
     {
-        public const int Commands = 230;
+        public const int Commands = 240;   // +8: S56's two inline valves per coolant loop
         const float RefW = 3427f, RefH = 2112f;
         const float CX = 1713.5f;
 
@@ -50,6 +66,9 @@ namespace DragonScreen
         static readonly Rgba Dim    = DragonPalette.Text6;
         static readonly Rgba Faint  = DragonPalette.Text7;
         static readonly Rgba Accent = DragonPalette.Accent;
+        // A DEAD line. The same tone SystemsTreePage darkens an unpowered branch with, so the two
+        // systems deep-views say "no power through here" the same way (S56).
+        static readonly Rgba Dead   = DragonPalette.Hairline;
 
         // ---- ATMOSPHERE rail: four components on one loop, returning under itself ----
         const float AirTop = 340f, AirH = 140f, AirMid = AirTop + AirH * 0.5f;
@@ -122,12 +141,22 @@ namespace DragonScreen
             Bar(340f, 558f, 340f, valid ? (float)s.Systems.Nitrogen : 0f,
                 valid ? Alarms.Colour(n2Sev) : unk);
 
-            Pipe2(720f, 360f, 860f, 360f, Pipe);
-            Pipe2(720f, 530f, 860f, 530f, Pipe);
-            Valve(790f, 360f, Pipe);
-            Valve(790f, 530f, Pipe);
-            Pipe2(860f, 360f, 860f, 530f, Pipe);
-            Pipe2(860f, AirMid, AirX[0], AirMid, Pipe);
+            // S56 / H33: the two supply valves follow the TANK each one gates — a valve on a line out of
+            // an empty tank is not feeding anything, and drawing it identically to a live one is the
+            // painted-glyph defect this task closes. An empty tank is a fact the bar beside it already
+            // states; the valve now agrees with it.
+            bool o2Feed = valid && s.Systems.Oxygen   > 0.01;
+            bool n2Feed = valid && s.Systems.Nitrogen > 0.01;
+            Rgba o2Line = valid ? (o2Feed ? Pipe : Dead) : Pipe;
+            Rgba n2Line = valid ? (n2Feed ? Pipe : Dead) : Pipe;
+            Rgba feedLine = (o2Feed || n2Feed || !valid) ? Pipe : Dead;
+
+            Pipe2(720f, 360f, 860f, 360f, o2Line);
+            Pipe2(720f, 530f, 860f, 530f, n2Line);
+            Valve(790f, 360f, o2Line);
+            Valve(790f, 530f, n2Line);
+            Pipe2(860f, 360f, 860f, 530f, feedLine);
+            Pipe2(860f, AirMid, AirX[0], AirMid, feedLine);
             Dot(860f, AirMid, valid ? Alarms.Colour(Alarms.Worst(o2Sev, n2Sev)) : unk);
 
             // --- the cabin loop: CABIN -> CO2 SCRUBBER -> CABIN FAN -> SUIT LOOP -> back ---
@@ -137,25 +166,32 @@ namespace DragonScreen
             Rgba cabCol = valid ? Alarms.Colour(ls) : unk;
             Rgba co2Col = valid ? Alarms.Colour(co2Sev) : unk;
 
+            // S56: the fan is an electrical load, and the model knows whether the crew has powered
+            // either bus. A stopped fan is a CAUTION, not an alarm and not nominal: nothing is broken,
+            // the cabin loop simply is not circulating, and it is the crew's own switch that did it.
+            bool fanOn = valid && s.Systems.FanOn;
+            Severity fanSev = fanOn ? Severity.Nominal : Severity.Caution;
+            Rgba airPipe = fanOn ? Pipe : (valid ? Dead : Pipe);
+
             Comp(AirX[0], AirTop, AirW[0], AirH, "CABIN", valid ? s.PressText : "—", ls, valid);
             Comp(AirX[1], AirTop, AirW[1], AirH, "CO2 SCRUBBER", valid ? s.Co2Text : "—", co2Sev, valid);
-            Comp(AirX[2], AirTop, AirW[2], AirH, "CABIN FAN", valid ? "RUNNING" : "—",
-                 Severity.Nominal, valid);
+            Comp(AirX[2], AirTop, AirW[2], AirH, "CABIN FAN",
+                 valid ? (fanOn ? "RUNNING" : "OFF") : "—", fanSev, valid);
             Comp(AirX[3], AirTop, AirW[3], AirH, "SUIT LOOP", valid ? s.Ppo2Text : "—", ls, valid);
 
             for (int i = 0; i < 3; i++)
             {
                 float x0 = AirX[i] + AirW[i], x1 = AirX[i + 1];
-                Pipe2(x0, AirMid, x1, AirMid, Pipe);
-                Valve((x0 + x1) * 0.5f, AirMid, Pipe);
+                Pipe2(x0, AirMid, x1, AirMid, airPipe);
+                Valve((x0 + x1) * 0.5f, AirMid, airPipe);
             }
             // return leg, under the rail and back into the cabin
             float airEnd = AirX[3] + AirW[3];
-            Pipe2(airEnd, AirMid, airEnd + 130f, AirMid, Pipe);
-            Pipe2(airEnd + 130f, AirMid, airEnd + 130f, AirRet, Pipe);
-            Pipe2(airEnd + 130f, AirRet, AirX[0] + AirW[0] * 0.5f, AirRet, Pipe);
-            Pipe2(AirX[0] + AirW[0] * 0.5f, AirRet, AirX[0] + AirW[0] * 0.5f, AirTop + AirH, Pipe);
-            Dot(2400f, AirRet, valid ? Alarms.Colour(ls) : unk);
+            Pipe2(airEnd, AirMid, airEnd + 130f, AirMid, airPipe);
+            Pipe2(airEnd + 130f, AirMid, airEnd + 130f, AirRet, airPipe);
+            Pipe2(airEnd + 130f, AirRet, AirX[0] + AirW[0] * 0.5f, AirRet, airPipe);
+            Pipe2(AirX[0] + AirW[0] * 0.5f, AirRet, AirX[0] + AirW[0] * 0.5f, AirTop + AirH, airPipe);
+            Dot(2400f, AirRet, valid ? (fanOn ? Alarms.Colour(ls) : Dead) : unk);
 
             // --- the overboard / isolation branch: the leak path the crew closes ---
             bool leaking = valid && s.Systems.Leaking;
@@ -174,8 +210,14 @@ namespace DragonScreen
             Severity loopBSev = valid ? Alarms.Band(s.Cabin.LoopBC, CabinLimits.LoopCaution,
                                                     CabinLimits.LoopAlarm) : Severity.Nominal;
             L("COOLANT LOOPS", 300f, 960f, 28, Accent);
-            DrawLoop(dl, sc, ox, true, LoopAY, valid ? s.LoopAText : "—", loopASev, valid);
-            DrawLoop(dl, sc, ox, false, LoopBY, valid ? s.LoopBText : "—", loopBSev, valid);
+            // S56: each loop's pump is its bus's load — A on bus 1, B on bus 2 (the redundant pair, so
+            // losing one bus costs one loop). A pump the crew has switched off stops the loop's word,
+            // its circuit and its valves; the RADIATOR temperature beside it keeps reading, because the
+            // loop still holds fluid at a temperature whether or not it is being pumped round.
+            DrawLoop(dl, sc, ox, true, LoopAY, valid ? s.LoopAText : "—", loopASev, valid,
+                     !valid || s.Systems.PumpAOn);
+            DrawLoop(dl, sc, ox, false, LoopBY, valid ? s.LoopBText : "—", loopBSev, valid,
+                     !valid || s.Systems.PumpBOn);
 
             // ================= right-hand live readouts =================
             float rx = 2150f;
@@ -230,7 +272,7 @@ namespace DragonScreen
 
         /// <summary>One coolant loop as a rectangular circuit: PUMP → CABIN HX → RADIATOR → back.</summary>
         static void DrawLoop(DisplayList dl, float sc, float ox, bool isA, float top, string temp,
-                             Severity sev, bool live)
+                             Severity sev, bool live, bool pumping)
         {
             float X(float x) => x * sc + ox;
             float Y(float y) => y * sc;
@@ -238,6 +280,25 @@ namespace DragonScreen
             float mid = top + LoopH * 0.5f;
             Rgba col = live ? Alarms.Colour(sev) : DragonPalette.Text7;
             Rgba outline = (live && sev != Severity.Nominal) ? col : DragonPalette.Text7;
+            // The CIRCUIT is dead when nothing is pumping round it. A fault still wins the outline —
+            // an over-temperature loop stays coloured whether or not its pump is running.
+            Rgba circuit = (live && !pumping && sev == Severity.Nominal) ? DragonPalette.Hairline : outline;
+
+            // The loop's component box with an EXPLICIT value colour — the pump's word is coloured by
+            // its own power state, not by the loop temperature the other two boxes are banded on.
+            void CompC(float x, float bw, string name, string value, Rgba vcol)
+            {
+                // A STOPPED pump takes the caution outline, exactly as the stopped CABIN FAN does on the
+                // atmosphere rail above. Without this the two off machines on one page would be flagged
+                // differently - fan boxed, pump not - which is the sort of inconsistency a crew reads as
+                // "only the fan matters".
+                Rgba box = (live && !pumping) ? vcol : outline;
+                dl.Rect(X(x), Y(top), bw * sc, LoopH * sc, DragonPalette.Inset1);
+                dl.Box(X(x), Y(top), bw * sc, LoopH * sc, Z(3f), box);
+                dl.ArcBand(X(x + 24f), Y(top + 24f), Z(2f), Z(11f), 0, 360, vcol);
+                dl.Text(name, X(x + bw * 0.5f), Y(top + LoopH * 0.20f), Z(24), TextAlign.Centre, DragonPalette.White);
+                dl.Text(value, X(x + bw * 0.5f), Y(top + LoopH * 0.56f), Z(26), TextAlign.Centre, vcol);
+            }
 
             void Comp(float x, float bw, string name, string value)
             {
@@ -249,21 +310,34 @@ namespace DragonScreen
                     dl.Text(value, X(x + bw * 0.5f), Y(top + LoopH * 0.56f), Z(26), TextAlign.Centre, col);
             }
 
-            Comp(ThX[0], ThW[0], isA ? "PUMP A" : "PUMP B", "RUNNING");
-            Comp(ThX[1], ThW[1], isA ? "CABIN HX A" : "CABIN HX B", "");
+            // The pump's own word is its power state, and it takes the CAUTION colour when it is off:
+            // nothing is broken, the loop simply is not circulating. `live` still wins — a dead feed
+            // reads "—" rather than claiming a stopped pump it cannot actually see.
+            string pumpWord = live ? (pumping ? "RUNNING" : "OFF") : "—";
+            Rgba pumpCol = live ? (pumping ? col : DragonPalette.Caution) : DragonPalette.Text7;
+            CompC(ThX[0], ThW[0], isA ? "PUMP A" : "PUMP B", pumpWord, pumpCol);
+            // The heat exchanger has no quantity on this build at all — that is a genuinely-absent
+            // state, which is the one thing §14.4(f) still lets a dash stand for. It used to be an
+            // EMPTY string, which reads as a box that failed rather than a box with nothing to say.
+            Comp(ThX[1], ThW[1], isA ? "CABIN HX A" : "CABIN HX B", "—");
             Comp(ThX[2], ThW[2], isA ? "RADIATOR A" : "RADIATOR B", temp);
 
             for (int i = 0; i < 2; i++)
             {
                 float x0 = ThX[i] + ThW[i], x1 = ThX[i + 1];
-                dl.Line(X(x0), Y(mid), X(x1), Y(mid), Z(4f), outline);
+                dl.Line(X(x0), Y(mid), X(x1), Y(mid), Z(4f), circuit);
+                // H33: an inline valve on each leg, drawn in the circuit's own tone — the reference's
+                // idiom, and the last of the fixed-colour glyphs this page carried.
+                float vx = (x0 + x1) * 0.5f;
+                dl.Line(X(vx - 26f), Y(mid - 26f), X(vx + 26f), Y(mid + 26f), Z(4f), circuit);
+                dl.Line(X(vx - 26f), Y(mid + 26f), X(vx + 26f), Y(mid - 26f), Z(4f), circuit);
             }
             // return leg beneath the rail
             float endX = ThX[2] + ThW[2], retY = top + LoopH + 60f, pumpCX = ThX[0] + ThW[0] * 0.5f;
-            dl.Line(X(endX), Y(mid), X(endX + 90f), Y(mid), Z(4f), outline);
-            dl.Line(X(endX + 90f), Y(mid), X(endX + 90f), Y(retY), Z(4f), outline);
-            dl.Line(X(endX + 90f), Y(retY), X(pumpCX), Y(retY), Z(4f), outline);
-            dl.Line(X(pumpCX), Y(retY), X(pumpCX), Y(top + LoopH), Z(4f), outline);
+            dl.Line(X(endX), Y(mid), X(endX + 90f), Y(mid), Z(4f), circuit);
+            dl.Line(X(endX + 90f), Y(mid), X(endX + 90f), Y(retY), Z(4f), circuit);
+            dl.Line(X(endX + 90f), Y(retY), X(pumpCX), Y(retY), Z(4f), circuit);
+            dl.Line(X(pumpCX), Y(retY), X(pumpCX), Y(top + LoopH), Z(4f), circuit);
         }
     }
 }

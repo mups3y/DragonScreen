@@ -28,6 +28,22 @@ namespace DragonScreen
         public bool Fire { get { return FireIntensity > 0.02; } }
         public bool Leaking { get { return LeakRate > 0.001; } }
 
+        // ---- THE ECLSS TENANTS THE POWER SYSTEM ALREADY DECIDES (S56 / audit H33) ----
+        // The P&ID drew CABIN FAN and PUMP A/B as the literal word "RUNNING" — a machine that ran
+        // whatever the crew did to its bus. These are NOT a new simulation and needed none: a pump and a
+        // fan are electrical loads, and this model already knows, per bus, whether the crew has powered
+        // it and whether any string behind it is online. So the answer is DERIVED, not stored — there is
+        // no second state to drift out of step with the buses, and no way to be "running" on a dead bus.
+        //
+        // The assignment (stated, per §1.4 — the real vehicle's loop-to-bus wiring is not something this
+        // build has a source for, so it is OURS and it is coherent rather than transcribed): the two
+        // coolant loops are the redundant pair, so loop A rides bus 1 and loop B rides bus 2 — losing one
+        // bus costs one loop, which is the whole point of having two. The cabin fan is life-critical and
+        // therefore CROSS-STRAPPED: it runs on either bus, and only both buses down stop it.
+        public bool PumpAOn { get { return Systems.OnlineCount(this, 1) > 0; } }
+        public bool PumpBOn { get { return Systems.OnlineCount(this, 2) > 0; } }
+        public bool FanOn   { get { return PumpAOn || PumpBOn; } }
+
         public static SystemsState Fresh()
         {
             SystemsState s = new SystemsState();

@@ -50,7 +50,7 @@ namespace DragonScreen
 {
     public static class SystemsTreePage
     {
-        public const int Commands = 190;
+        public const int Commands = 195;   // +1: S56's touch caption
         const float RefW = 3427f, RefH = 2112f;
 
         static readonly Rgba Bg     = DragonPalette.Background;
@@ -84,6 +84,86 @@ namespace DragonScreen
             return centre + (i - 1) * StrPitch;
         }
 
+        // ============================================================================================
+        // TOUCH (S56 / audit H32) — the eight nodes the crew can already SEE state on, made switchable.
+        // ============================================================================================
+        // The defect this closes: the tree rendered BUS OFF, ISOL and TRIP off a model whose toggles
+        // (`Systems.ToggleBus` / `ToggleString`) existed, worked, and were reachable ONLY from the
+        // physical IVA plate. A crew member could read the fault on the glass and do nothing about it.
+        //
+        // ---- ONE WALK, SHARED BY DRAWING AND HITTING ----
+        // `BusRect` / `StringRect` are the ONLY place either box's rectangle is computed. Build calls
+        // them; HitTest calls them; a geometry edit therefore cannot move the drawing away from the
+        // finger, which is the failure mode a PNG can never show (TouchWiringTest's own premise).
+        //
+        // ---- THE SAME DISPATCHER, NOT A SECOND ONE (T14's rule) ----
+        // Each node resolves to the console plate's OWN `PanelCommand` for that bus or string, so the
+        // press goes through `FlightCommands.Run` and is read back by `PanelPolicy` exactly as the
+        // plate's button is. Pressing POWER 1 on the glass and POWER 1 on the plate cannot come to
+        // different answers, because neither surface owns the answer. **Nothing here flies the vehicle**
+        // — `SystemsState` is local display state (§14.4(a) is not in play).
+        //
+        // ---- WHAT IS DELIBERATELY *NOT* TOUCHABLE ----
+        // RESET 1/2. The plate carries it (`PanelCommand.Reset1/2` → `Systems.ResetBus`) and it is the
+        // only way back from TRIP, but this page DRAWS no reset control, and drawing one would be
+        // inventing a control on a page whose own header calls it "layout-real / labels-reconstructed"
+        // (§1.4 / C1.4). So reset stays a plate action until a real source says otherwise, and the
+        // register carries the question rather than this file answering it.
+        // The SOLAR ARRAY / BATTERIES / MAIN POWER / FLIGHT COMPUTER STRINGS boxes are readouts of
+        // things no crew switch commands, so they are correctly inert — and, per S75, they are drawn
+        // exactly as they always were: nothing here paints a control that is not one.
+
+        /// <summary>Panel-pixel rect of a POWER bus node. One calculation for the draw and the hit.</summary>
+        public static void BusRect(int bus, int w, int h, out float x, out float y,
+                                   out float rw, out float rh)
+        {
+            float sc = h / RefH, ox = (w - RefW * sc) * 0.5f; if (ox < 0f) ox = 0f;
+            float cx = bus == 1 ? Bus1CX : Bus2CX;
+            x = (cx - BusW * 0.5f) * sc + ox; y = BusY * sc; rw = BusW * sc; rh = BusH * sc;
+        }
+
+        /// <summary>Panel-pixel rect of one STRING node (bus 1|2, i 0..2). Draw and hit share it.</summary>
+        public static void StringRect(int bus, int i, int w, int h, out float x, out float y,
+                                      out float rw, out float rh)
+        {
+            float sc = h / RefH, ox = (w - RefW * sc) * 0.5f; if (ox < 0f) ox = 0f;
+            float cx = StringCX(bus, i);
+            x = (cx - StrW * 0.5f) * sc + ox; y = StrY * sc; rw = StrW * sc; rh = StrH * sc;
+        }
+
+        /// <summary>The bus node's command — the plate's own POWER 1 / POWER 2 button.</summary>
+        public static PanelCommand BusCommand(int bus)
+        { return bus == 1 ? PanelCommand.Power1 : PanelCommand.Power2; }
+
+        /// <summary>The string node's command — the plate's own STRING nX button.</summary>
+        public static PanelCommand StringCommand(int bus, int i)
+        {
+            if (bus == 1)
+                return i == 0 ? PanelCommand.String1A : i == 1 ? PanelCommand.String1B
+                                                               : PanelCommand.String1C;
+            return i == 0 ? PanelCommand.String2A : i == 1 ? PanelCommand.String2B
+                                                           : PanelCommand.String2C;
+        }
+
+        /// <summary>Which node the touch landed on, as the console command it IS —
+        /// <c>PanelCommand.None</c> for everything else on the page.</summary>
+        public static PanelCommand HitTest(float px, float py, int w, int h)
+        {
+            if (w <= 0 || h <= 0) return PanelCommand.None;
+            float x, y, rw, rh;
+            for (int bus = 1; bus <= 2; bus++)
+            {
+                BusRect(bus, w, h, out x, out y, out rw, out rh);
+                if (Control.Hit(px, py, x, y, rw, rh)) return BusCommand(bus);
+                for (int i = 0; i < 3; i++)
+                {
+                    StringRect(bus, i, w, h, out x, out y, out rw, out rh);
+                    if (Control.Hit(px, py, x, y, rw, rh)) return StringCommand(bus, i);
+                }
+            }
+            return PanelCommand.None;
+        }
+
         public static void Build(DisplayList dl, int w, int h, PageState s)
         {
             if (dl == null || w <= 0 || h <= 0) return;
@@ -104,6 +184,16 @@ namespace DragonScreen
                 dl.Box(X(cx - bw * 0.5f), Y(top), bw * sc, bh * sc, Z(3f), col);
                 C(label, cx, top + bh * 0.26f, 28, White);
                 C(state, cx, top + bh * 0.60f, 24, col);
+            }
+
+            // The same box, addressed in PANEL PIXELS — fed by BusRect / StringRect, which HitTest also
+            // calls. The eight touchable nodes go through this one so the box drawn IS the box hit.
+            void NodeBoxPx(float bx, float by, float bw, float bh, string label, string state, Rgba col)
+            {
+                dl.Rect(bx, by, bw, bh, Node);
+                dl.Box(bx, by, bw, bh, Z(3f), col);
+                dl.Text(label, bx + bw * 0.5f, by + bh * 0.26f, Z(28), TextAlign.Centre, White);
+                dl.Text(state, bx + bw * 0.5f, by + bh * 0.60f, Z(24), TextAlign.Centre, col);
             }
 
             dl.Rect(0, 0, w, h, Bg);
@@ -161,8 +251,10 @@ namespace DragonScreen
                             : online == 0 ? DragonPalette.Alarm : DragonPalette.Caution;
 
                 LN(bcx, MainBusY, bcx, BusY, on ? busCol : Wire);
-                NodeBox(bcx, BusY, BusW, BusH, bus == 1 ? "POWER 1" : "POWER 2",
-                        on ? Online3[online] : "BUS OFF", busCol);
+                float nx, ny, nw, nh;
+                BusRect(bus, w, h, out nx, out ny, out nw, out nh);
+                NodeBoxPx(nx, ny, nw, nh, bus == 1 ? "POWER 1" : "POWER 2",
+                          on ? Online3[online] : "BUS OFF", busCol);
 
                 // bus -> its three strings
                 LN(bcx, BusY + BusH, bcx, StrBusY, on ? busCol : Wire);
@@ -177,9 +269,10 @@ namespace DragonScreen
                              : st == StringState.Isolated ? DragonPalette.Caution : DragonPalette.Alarm;
                     float scx = StringCX(bus, i);
                     LN(scx, StrBusY, scx, StrY, live ? sc2 : Wire);
-                    NodeBox(scx, StrY, StrW, StrH,
-                            bus == 1 ? StringName1[i] : StringName2[i],
-                            on ? Systems.StateWord(st) : "—", sc2);
+                    StringRect(bus, i, w, h, out nx, out ny, out nw, out nh);
+                    NodeBoxPx(nx, ny, nw, nh,
+                              bus == 1 ? StringName1[i] : StringName2[i],
+                              on ? Systems.StateWord(st) : "—", sc2);
                     LN(scx, StrY + StrH, scx, FootBusY, live ? sc2 : Wire);
                 }
             }
@@ -198,6 +291,12 @@ namespace DragonScreen
             C("ISOLATED", 1470f, 1640f, 24, DragonPalette.Caution);
             C("TRIPPED", 1780f, 1640f, 24, DragonPalette.Alarm);
             C("UNPOWERED", 2120f, 1640f, 24, Faint);
+
+            // S56: the eight bus/string boxes are now CONTROLS, and a control the crew cannot tell is a
+            // control is the same defect S75 closed pointing the other way. One caption, no new glyph —
+            // the boxes keep the layout the photo gives them, and the page says what they do.
+            C("TOUCH A POWER OR STRING NODE TO SWITCH IT — THE SAME COMMAND AS THE CONSOLE PLATE",
+              MainCX, 1720f, 24, Dim);
 
             dl.Asset("component_48", 0f, Y(1877), w, Z(235), White);
         }
