@@ -168,6 +168,18 @@ public static class TestMain
         bad += WarpPlanTest.Run();         // conductor: the on-rails rate that can never overshoot the drop-out
         bad += CoastEtaTest.Run();         // conductor: range-closing coast ETA -> the warp target UT
 
+        // ---- PART B0 (BB1, §B0) - the BlackBox flight recorder core ----
+        // ⭐ THE ONE LINE THAT MUST BE REMOVED IF THE RECORDER IS EXCISED FOR RELEASE. BB1 is
+        // excisable by design (owner, 2026-09-03): delete `src/pure/blackbox/`, `src/BlackBoxRecorder.cs`,
+        // `test/BlackBoxTest.cs`, and this line. Nothing else in the tree names it - the dependency
+        // arrow points one way, BlackBox -> tree, and never back.
+        // ⚠ This suite proves the PURE half only: the schema, RFC-4180 + invariant formatting, §4.6's
+        // blank-never-zero validity, §2.0's rate ladder and warp floor, the R0 accumulators, the warp
+        // void, the manifest, and the ghost-column coverage check S76's finding demanded. It proves
+        // NOTHING about the glue reading the right KSP field into the right column - that is
+        // `src/BlackBoxRecorder.cs`, it needs a Vessel, and it is confirmed on the glass by **BB4**.
+        bad += BlackBoxTest.Run();       // BB1: recorder core - schema, validity, rates, manifest, coverage
+
         Console.WriteLine(bad == 0 ? "ALL SUITES PASSED" : bad + " SUITE(S) FAILED");
         return bad == 0 ? 0 : 1;
     }

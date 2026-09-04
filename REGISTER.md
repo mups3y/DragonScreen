@@ -2021,7 +2021,7 @@ no-regression check (see this task's close, below the BB lines). `git status` sh
 files changed.
 Ends per C1.5: register update + local commit only; commit subject starts "BB0:"; never pushed.
 
-### BB1 [O] The BlackBox recorder CORE — schema, streams, manifest, validity, budget — **TODO** — [TIER 1: nothing flies unrecorded, and W24 just made the booster fly]
+### BB1 [O] The BlackBox recorder CORE — schema, streams, manifest, validity, budget — **DONE 2026-09-04** — [TIER 1: nothing flies unrecorded, and W24 just made the booster fly]
 - **Read:** `docs/BLACKBOX_RESEARCH.md` §2 in full (the A–I parameter set at §2.0's rate ladder — R0
   accumulated / R1 10 Hz dynamic / R2 2 Hz state / R3 10 s slow / R4 event-driven), §4.1–§4.2 (the three
   streams + schema mechanics), §4.3 (the manifest — "not optional"), §4.5 (the UT/MET/wall time base), §4.6
@@ -2058,10 +2058,131 @@ Ends per C1.5: register update + local commit only; commit subject starts "BB0:"
   rules; preview N/A (no screen changed) unless glue touches a page.
 - Ends per C1.5: register update + local commit; install/glass confirmation is **BB4**, not this line.
 
+#### DONE 2026-09-04 — what was built
+
+**Files (the ONLY files this task wrote):** `plugin/src/pure/blackbox/` (8 files — `BlackBoxSchema.cs`,
+`BlackBoxCols.cs`, `BlackBoxRate.cs`, `BlackBoxAccum.cs`, `BlackBoxVoid.cs`, `BlackBoxEvents.cs`,
+`BlackBoxCoverage.cs`, `BlackBoxManifest.cs`) · `plugin/src/BlackBoxRecorder.cs` (the KSP glue + the
+`[KSPAddon(Flight)]` host) · `plugin/test/BlackBoxTest.cs` · ONE line added to `plugin/test/TestMain.cs`
+(the suite registry) · this file. Nothing else in the tree was touched — `git status` shows exactly
+those. **186 columns, schema_version 1, recorder_version BB1.0.**
+
+**The three streams (§4.1).** `<MissionId>.params.csv` + `.events.jsonl` + `.manifest.json` into
+`<KSP>/DragonScreen_capture/` (§4.4/§5 — the deploy target, already git-ignored, already where the
+screen PNGs go; no new C7 question). `MissionId = <SanitizedVessel>_<yyyyMMdd_HHmmss>`, which keeps
+`plugin/tools/assess_flight.py`'s `Crew-2*` glob working, is a COLUMN on every row so a moved file still
+self-identifies, and branches `_r2`/`_r3`… on a revert.
+
+**COMPOSED verbatim per §3.4, not re-derived:** the `Schema[]`-as-single-ordered-source-of-truth pattern
+with name-derived `static readonly int` indices (`BlackBoxCols.cs`) · blank-filled `NewRow()` ·
+RFC-4180 `Escape()` · invariant-culture `Num()` with NaN/Inf → blank · `VerifyWidth()` (in the game, once
+per file, for Recorder A's stated reason) · explicit flush every 25 rows · the `warp_rate`/`eng_ignited`/
+`eng_flameout` trio · `mmh_frac`/`nto_frac`/`skin_temp_frac` · the great-circle downrange. **BROKEN per
+§3.4:** the `xx_` block prefixes, the three idle sentinels, one-file-per-engage/per-focus, MET-as-only-clock
+(`ut` is now on every row), the assumed row period, units-in-the-name. **BUILT FRESH:** the event log,
+the manifest, the coverage check.
+
+**One deliberate improvement on §4.2's own instruction.** The schema is a table of RECORDS (`Col[]`), not a
+bare `string[]` with the metadata alongside it: name, units, tier, provenance, source and fitness are ONE
+declaration, and both the CSV header and the manifest's `columns[]` are DERIVED from it. A parallel
+metadata array would re-create exactly the positional drift the name-derived `Index()` pattern exists to
+kill — which is §3.4's stated reason for filing units-in-the-column-name as BREAK ("a rename silently
+changes results by 57×").
+
+⭐ **The two named columns are in and are proven headless.** `boost_db_pitch/yaw/roll` (deadband ACTIVE,
+per axis) + `boost_db_deg` (the VALUE it ran at), read from `BoosterHost`'s read-only properties, which
+`pure/BoosterSteer.cs:43` created naming THIS line as their reader. `DeadbandDeg` defaults to 0.0, so on a
+default flight they record the seam as inert — which is the point: an inert seam that is RECORDED inert is
+provably inert, and one merely believed inert is not.
+
+⭐ **The four S76 defects, each answered by a named mechanism:**
+1. **`torque_cmd` declared and never written.** Every column declares a **fitness** — `Live` (a writer runs
+   every mission; blank across a mission is a DEFECT), `Conditional` (a writer exists but its source can
+   legitimately be absent; the condition is stated and lands in the manifest), `Unfitted` (no source exists
+   yet; the `Note` names the register line that will fill it — T17/T18/T19/S55). `BlackBoxCoverage` walks it
+   at close and writes `rec.column_never_written` + a `Debug.LogError` per defect, and the verdict goes in
+   the manifest's `coverage[]`. It also catches the case nobody checked last time — an `Unfitted` column
+   that DID produce values, meaning the manifest's provenance is now wrong.
+   ⚠ A blanket "warn on any empty column" was deliberately NOT built: it would fire on every §2.5 guidance
+   column on every flight until Part B is finished, and a warning that always fires is not a warning.
+2. **`mode_holding`/`mode_flying` carried no state.** Same mechanism; and no column is declared without
+   either a writer in the glue or an explicit `Unfitted` naming its line. Four groups §2 lists were left OUT
+   of the schema rather than declared as ghosts — logged as **S84–S87** below (C1.1).
+3. **The torn last row.** Four independent guards: only COMPLETE lines enter the pending buffer; explicit
+   flush every 25 rows (2.5 s at R1) and immediately after every event; `OnDestroy` + explicit revert
+   detection close the stream cleanly (the old streams cut mid-line ON A REVERT); and a reader can detect
+   any residual cut EXACTLY, because the manifest carries `rows_written`/`closed` and the event log ends in
+   `rec.stream_end`. A row that THROWS stops the recorder rather than writing garbage (Recorder A's rule).
+4. **Warp rows polluted every statistic.** `warp_rate`/`warp_rails` are Tier.Every, so a reader filters
+   without inferring; `BlackBoxVoid` BLANKS the 43-column control block on rails (§4.6's improvement on
+   Recorder B, which ZEROED it — a zero is a legitimate control value and a blank is not); nav/orbit/mass/
+   resources/systems/engine-state deliberately SURVIVE, because on rails they are true readings of true
+   state and voiding them would delete everything a 17-hour phasing coast produces; and §4.6's wall-clock
+   floor holds the on-rails rate to ~1 row per WALL second, so the file is proportional to time SPENT.
+
+**§4.7's budget.** Reads what is already computed and drives nothing — in particular it never calls
+`KerBridge.RequestUpdate()`, because `VesselData.cs:719` already drives that solve on the screens' tick and
+a second driver would double a whole-part-tree simulation; `PageState.Ker` is read, never requested.
+`rec_build_us` is on every row from `System.Diagnostics.Stopwatch` (NOT `DateTime.UtcNow`, whose ~15 ms
+granularity would quantise a sub-millisecond row build to 0 or 15 625 µs). Self-disable after N consecutive
+write failures, with a `rec.self_disable` event and one `LogError`.
+⭐ **Screens-derived columns are written ONLY for the focused vessel while the screens are live**, and
+BLANK otherwise. `PageState` is the screens' 5 Hz copy; recording it for an unfocused vessel or after the
+IVA has died would write a stale copy of somebody else's state and call it a measurement — the same class
+of error as the frozen-under-warp values that manufactured a phantom RCS thrash. The load-bearing physics
+columns are DIRECT `Vessel` reads for the same reason, so they keep working when the IVA dies — which is
+exactly what happens at the booster hand-off BB2 exists for.
+
+⛔ **EXCISABILITY WAS TESTED, NOT ASSERTED.** The three paths were physically removed and the one
+`TestMain.cs` line deleted; `python plugin/build.py test` ran **GREEN, ALL SUITES PASSED**, then everything
+was restored and re-run green. The dependency arrow points one way — BlackBox reads the tree, the tree
+never reads BlackBox — and BB1 added no accessor, no hook and no call site anywhere else.
+
+**C1.15 (evidence-gated mod-first), searched against `docs/reference/INSTALLED_MODS.md`:** BB1 writes NO
+new simulation for a not-yet-modelled quantity, so the rule's trigger does not fire — every column is a
+direct live read, an already-computed pure struct, or a geometric derivation from live state (`aoa_deg`/
+`aos_deg`/`pitch_deg` are `derived`, not `SIMULATED`; the marked simulations it records — `SystemsState`,
+`CabinReadout` — are pre-existing and are declared `provenance: "SIMULATED"` in the manifest). Searched
+anyway for a recorder to defer to: **MechJeb2** (installed) ships `MechJebModuleFlightRecorder` and §3.3
+already rejected it with reasons — `HistorySize = 3000` × 0.2 s with **no wraparound** caps it at **600
+seconds** from the last `Mark()`, and it is in-memory only, so it is structurally incapable of a 19 h
+mission and writes nothing to disk. **KER** (installed) is a data SOURCE and is read as one (`ker_*`), not
+a recorder. **TestFlight / RealFuels / FAR / TAC-LS** are sources for future columns, not recorders. No
+other candidate in that list records flight data to disk. Conclusion: build ours, read theirs.
+
+⚠ **BB1-Q1 WAS NOT DECIDED HERE, and is left open below (C1.14).** What was built is the SPEC AS WRITTEN
+— §2.0's adaptive ladder, which is also what this line's own done-criteria require ("the A–I columns at
+their **specified rates**"). Building the written spec is not deciding the question; the question is whether
+to CHANGE it, and only the owner does that. The whole cadence is isolated in `pure/BlackBoxRate.cs` behind
+one `RatePolicy`, selected by one `[Tunable] BlackBoxRecorder.FixedRowRateHz` — so option **(b) fixed 10 Hz**
+is `FixedRowRateHz = 10` and option **(c) fixed 5 Hz** is `= 5`, from a `PluginData/tuning.cfg` edit with
+**no rebuild and no other file touched**. Whichever is flown, the manifest records it, so no analyser ever
+assumes a row period. Both options are asserted in the suite.
+
+**VERIFY (C1.3):** `python plugin/build.py test` **GREEN — ALL SUITES PASSED**, `BlackBoxTest` contributing
+**1442 checks, 0 failed** (the suite prints its own check count precisely so a zero-check "ok" cannot pass
+for coverage — the same defect one level up). Its last case drives a synthetic 20-second mission (8 s
+dynamic, 6 s quiescent, 6 s at 100× on-rails warp) through the whole pure pipeline and asserts the
+properties that hold ACROSS rows: every row exactly header-width including the ones carrying an embedded
+comma and the ones the warp void emptied, the ladder actually adapting, and the on-rails segment writing
+~1 row per wall-second rather than per UT period. `python plugin/build.py preview` re-run and green: **no
+page changed and none was expected to** — BB1 touches no screen, which this line's own done-criteria allow
+("preview N/A unless glue touches a page"); the preview binary compiles `src/pure`, so it is a real
+no-regression check on the new pure files. **No `install`, no glass time** — the BlackBox install authority
+on record belongs to **BB4** and this line did not use it (C1.12).
+Ends per C1.5: register update + local commit; commit subject starts "BB1:"; never pushed.
+
 #### Open questions for the owner (C1.14) — BB1
 
 **BB1-Q1 — Fixed or adaptive row rate? (S59 §6.1 Q2, carried forward unresolved — do not decide this in
 build.py.)**
+⚠ **STILL OPEN after BB1 (2026-09-04).** BB1 built the SPEC AS WRITTEN — option (1),
+§2.0's adaptive ladder — because that is what this line's own done-criteria require ("at their
+SPECIFIED rates"). It did NOT decide the question: the question is whether to CHANGE the spec, and
+only the owner does that (C1.14). The cadence is isolated in `pure/BlackBoxRate.cs` behind one
+`RatePolicy` selected by one `[Tunable] BlackBoxRecorder.FixedRowRateHz`, so **(2)** is
+`FixedRowRateHz = 10` and **(3)** is `= 5` — a `PluginData/tuning.cfg` edit, no rebuild, no other
+file touched, and the manifest records whichever was flown. Both are asserted in `BlackBoxTest`.
 *Situation.* The spec proposes 10 Hz while a dynamic phase is active and 2 Hz otherwise, with an on-rails-warp
 floor of 1 row per wall-second (§2.0, §4.6) — ~110 MB for a nominal 19 h mission. S76 found that the OLD
 corpus's warp rows polluted every statistic badly enough that `is_warp()` filtering had to be retrofitted into
@@ -7818,3 +7939,102 @@ from the box centre the old vertical offset used (box half-width 5 + 5 px cleara
   read identically before and after.
 - ⛔ No `install`, no glass time — preview-only, per the standing go (C1.12).
 - **Files:** `plugin/src/pure/NavPage.cs`.
+
+---
+
+### S84 [S] The BlackBox has no delivered-RCS-impulse columns — `pure/RcsAccounting.cs` is still deleted — **TODO** — [TIER 2: a named §2 block with no source, logged rather than faked]
+Logged by **BB1**, 2026-09-04 (C1.1 — noticed while building, deliberately not built).
+**The gap.** `docs/BLACKBOX_RESEARCH.md` §2.4 specifies `acc_att_imp` / `acc_trans_imp` / `acc_both_imp` —
+DELIVERED RCS impulse (N·s) by category, which is the basis for **per-category propellant attribution**
+(per-category propellant = category impulse / total impulse × the mmh/nto delta over the interval). BB1
+records the four category TIMES and the applied command-seconds, which is enough for a duty cycle, but not
+the impulse, so propellant cannot be attributed to attitude vs translation.
+**Why it was not built.** The impulse needs `pure/RcsAccounting.cs`, deleted with the autopilot on
+2026-09-01 and in no §B12.8 wave. BB1's own rule forbids declaring a column it cannot write (that is the
+`torque_cmd` ghost), so the three columns are absent from the schema rather than present and empty.
+**Read:** `docs/BLACKBOX_RESEARCH.md` §2.4 (the three-kinds table and the §3.2 retraction behind it) ·
+`git show 8b81816^:plugin/src/pure/RcsAccounting.cs` (RECOVER-REFERENCE — evidence, not a build source),
+whose `Reset()` call-site pattern is visible in `git show 8b81816^:plugin/src/FlightLog.cs`.
+**DONE when:** the accumulator is restored (or written fresh) with its own headless suite, the three
+columns are appended to `BlackBoxSchema` as `Live`, and `BlackBoxCoverage` reports no defect for them.
+⚠ Appending columns keeps `schema_version` (§4.2); it must NOT be bumped for this.
+
+### S85 [S] The BlackBox records WHICH page was shown but not a single crew PRESS — §2.7's `control_id` namespace does not exist — **TODO** — [TIER 1: the CVR channel §0's three misdiagnoses actually needed]
+Logged by **BB1**, 2026-09-04 (C1.1 — out of BB1's scope BY ITS OWN DESIGN CONSTRAINT, not by preference).
+**The gap.** §2.7 splits the crew channel in two: a page SELECTION is a state (recorded continuously —
+BB1 does this: `page_l/page_c/page_r` plus a `crew.page_change` event on every edge) and a PRESS is an act
+(recorded as an event — **BB1 does NOT do this**). So a recording shows what the crew was LOOKING at and
+not one thing they DID, which is precisely the channel §0's three misdiagnoses needed.
+**Why BB1 could not do it.** It needs a call INSIDE the screens, at the two choke points §2.7 names —
+`ScreenPainter.TouchDown` (`plugin/src/ScreenPainter.cs:356`, sole caller `ScreenTouch.cs:91`) and
+`PanelButton.OnMouseDown` (`plugin/src/PanelButtons.cs:210`) — which would make a screen file depend on the
+BlackBox and break BB1's excisable-by-design constraint (owner, 2026-09-03). That is a deliberate design
+decision to make, not a side-effect of another task.
+**Read:** `docs/BLACKBOX_RESEARCH.md` §2.7 in full — including its ⚠ that there is **no unified command
+identifier**: the dispatch inside `TouchDown` produces SEVEN disjoint types (`NavHit`/`NavAct` + `UiPage`,
+`CoverPage.CoverButton`, `DockingSimPage.DockAct`, `SuitCheckPage.SuitAct`, an `int` into
+`ManualChuteDeployPage.Actions`, an `int` 0/1 tab index, and `PanelCommand`), so a flat stable
+`control_id` string namespace has to be DEFINED (`nav.goto.NavOrbitPlot`, `cover.ActDeorbitBrief`,
+`dock.TransFwd`, `suit.Troubleshoot`, `chute.7`, `subsys.tab.1`, `panel.FirePyro`) — and §2.9's `crew.*`
+payload, whose `acted` field is `FlightCommands.Run`'s own bool return: the honest "did the press do
+anything" verdict, alongside `PanelPolicy.Resolve*` → `PanelPressKind` and `PanelLight`.
+⚠ **§2.7's SECOND finding is load-bearing and must be honoured:** `ScreenPainter.FigmaMode` is a
+`private const bool = true` (`:55`), so `TouchDown` always returns at `:442` and everything below `:445`
+is **unreachable at runtime**. Instrument the LIVE branch (`:361-442`), not the compiled-but-dead one, or
+the recording carries a channel that can never fire. (S49's territory; restated because it decides where
+the hook goes.)
+
+#### Open questions for the owner (C1.14) — S85
+**S85-Q1 — How does a press reach the recorder without giving the screens a dependency on it?**
+*Situation.* BB1 is excisable by design (owner, 2026-09-03): delete three paths plus one `TestMain.cs`
+line and the build stays green — verified by physical removal. A direct call from `ScreenPainter` to the
+BlackBox would make excision a code edit in a screen file instead of a delete.
+1. **A nullable `static Action<...>` seam on the SCREEN side** that the recorder subscribes to at load and
+   that is `null` when the recorder is absent. *(Recommended: a null delegate is a no-op, the screens gain
+   no knowledge of the recorder, excision stays a delete, and the seam is one field in each of two files.)*
+2. A direct call from the two choke points, accepting that excision becomes "delete three paths and revert
+   two screen edits".
+3. Leave the press channel out permanently and accept that a recording never shows what the crew did.
+*No gate; a design call with an excisability consequence.*
+
+**DONE when:** every press on every surface writes one `crew.*` event carrying `control_id`, the surface
+enum, `acted`, `press_kind`, the lamp, and the `alarm_mask`/`sev_system` at that instant; excisability is
+re-tested by physical removal exactly as BB1 did.
+
+### S86 [S] Three screen-state columns the BlackBox cannot reach — `brightness_l/c/r`, `cover_cam`, `cover_phase` — **TODO** — [TIER 4: hygiene — a §2.7 column set with no accessor]
+Logged by **BB1**, 2026-09-04 (C1.1).
+**The gap.** §2.7 lists `brightness_l/c/r` (R3), `cover_cam` and `cover_phase` (R3). All three are state of
+a **`ScreenPainter` INSTANCE** (`brightness` `:249`, `coverCam` `:90`, `coverPhase` `:84`) with no public or
+internal accessor; `ps.Brightness` is written onto a per-screen LOCAL copy of `PageState` (`:915`), not onto
+the shared `VesselData.State`. BB1 left them out of the schema rather than declaring columns it cannot fill.
+`cam_view` IS recorded — `VesselData.CameraView` is internal and reachable.
+**DONE when:** either a read-only accessor exists (a static array the three painters publish into, exactly
+as `livePage` already does at `:199`/`:280-283` — which is the precedent and costs one line each) and the
+columns are appended as `Conditional`, or this line records the decision not to carry them.
+⚠ Adding an accessor does NOT break BB1's excisability: the arrow still points BlackBox → tree.
+
+### S87 [S] Three docking/phasing quantities reach `PageState` only as FORMATTED TEXT — **TODO** — [TIER 3: a real value that survives only as a string]
+Logged by **BB1**, 2026-09-04 (C1.1).
+**The gap.** §2.8 asks for `off_x/y/z_m` (R2, R1 inside 1 km), `phase_angle_rad` and `tgt_radius_m` (R3).
+`VesselData.Docking()` computes the offsets and `:546-549` computes the phasing geometry, but only their
+**pre-formatted strings** land on `PageState` (`OffXText`/`OffYText`/`OffZText`); the raw doubles are not
+published. Parsing a display string back into a number inside a recorder is exactly the kind of fabrication
+§4.8 bans, so BB1 left the columns out. The precedent for the fix is already in the tree and is documented:
+**S26** added `RollDeg`/`PitchDeg`/`YawDeg` beside their `*Text` twins for the same reason, formatted side
+by side in `VesselData` so the pair cannot drift.
+**DONE when:** the raw doubles sit beside their text on `PageState` (S26's pattern), the five columns are
+appended to `BlackBoxSchema` as `Conditional` on a target, and `BlackBoxCoverage` reports no defect.
+
+### S88 [S] `docs/BLACKBOX_RESEARCH.md` §6.2 item 10 is now false — three `[KSPAddon]`s exist — **TODO** — [TIER 4: doc accuracy in the spec BB2/BB3/BB4 read from]
+Logged by **BB1**, 2026-09-04 (C1.1).
+**The claim.** `docs/BLACKBOX_RESEARCH.md` §6.2 item 10 states: *"No `[KSPAddon]` and no `FixedUpdate` exist
+in `plugin/src`. Noted as a structural fact a recorder build must supply, not a defect."* §4.7 repeats it
+("there is none in `plugin/src` today").
+**Why it is false now.** True when S59 wrote it (2026-09-03); **W23** then landed `BoosterHostAddon`
+(`plugin/src/BoosterHost.cs:102-105`, `[KSPAddon(Flight, false)]` with a real `FixedUpdate`), and
+`CraftDumpAddon.cs:16` and `GeometryDump.cs:30` carry one each as well. BB1 supplied its own host
+regardless, so nothing was built wrong — but BB2/BB3/BB4 read this document, and a session starting from
+item 10 would believe the flight scene has no physics-rate host to model on.
+⛔ **C1.16: the document is NOT deleted and NOT rewritten.** Mark item 10 (and §4.7's repetition of it)
+`SUPERSEDED 2026-09-04 — see W23` in place, per C7.1, naming what replaced it.
+**DONE when:** both statements carry the marking, with the three addons named.
