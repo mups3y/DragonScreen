@@ -2541,6 +2541,107 @@ line.** BB3 READS the cadence from the manifest (`row_rate_mode` / `row_rate_dyn
 a row period, so whichever way Q1 is decided the report is correct with no further edit. §3.4 files
 "hard-coded row period in the analyser" as BREAK for exactly this reason.
 
+### OCT1 [O] The octaweb never binds in flight — the glue reads a different part name than the pure layer is tested against — **DONE 2026-09-05** — [TIER 1: this silently disabled ALL booster engine control on the 2026-09-05 flight]
+- **Evidence (owner-supplied, in the task brief):** mission `New_Crew-2_20260905_005707`; `KSP.log` 01:04:18
+  onward — **264 octaweb refusals, ZERO successes**; booster attitude UNCOMMANDED on 222 rows in LandingBurn;
+  touchdown **511 km** off the deck centre. Neither the log nor the recording is in the repo (C7), so nothing
+  below was read from them beyond what the brief states.
+- **THE DEFECT.** Two functions read THE SAME field — `Part.name`, in the same part walk — and disagreed
+  about one vessel. `BoosterHost.Describe` → `VehicleParts.IsBooster` is a `.S1.` **substring** test and
+  PASSED ("booster host: found the booster"); `OctawebEngines.Resolve` → `OctawebBinding.IsTundraOctaweb` is
+  a **whole-name equality** test against `TE.19.F9.S1.Engine` and FAILED ("OCTAWEB NOT FOUND"). A string
+  cannot contain `.S1.` and also not equal `TE.19.F9.S1.Engine` unless it carries EXTRA CHARACTERS. Both
+  dumps (`CraftDump.cs:60`, `GeometryDump.cs:79`) read `p.partInfo != null ? p.partInfo.name : p.name` and
+  report a clean `TE.19.F9.S1.Engine` with all three engineIDs present. **The craft is fine, the constant is
+  fine — only the glue's name source was wrong.** `Describe` worked BY LUCK: a substring survived the extras.
+- **WHY NO TEST CAUGHT IT.** `OctawebBinding` is pure and tested against `docs/reference/craftdump.csv`,
+  which is written from `partInfo.name`. The tests fed the CLEAN name and always passed while the live glue
+  fed `p.name`: the pure layer and its test agreed with each other and both disagreed with the game.
+- **Built (5 files, glue + test + two contract comments; no pure LOGIC changed):**
+  1. **MEASURE FIRST — the failure is now self-describing.** `OctawebEngines.Resolve` gained two gated
+     diagnostics (`LogGate`, S40). (a) On a `NotFound` refusal where any part on the vessel satisfies
+     `VehicleParts.IsBooster` by EITHER name source, it prints every offending name **verbatim** — both
+     `partInfo.name` and `Part.name`, quoted, with every non-printable character escaped and the string
+     LENGTH stated, so an invisible character cannot hide the way it did for a whole descent.
+     (b) A **source-drift** line, which fires whenever the two name sources differ on any part **even when
+     the bind now succeeds** — because the fix below stops the refusal from happening, and the evidence
+     would otherwise be lost with it. This is how the exact string gets MEASURED on the next flight.
+  2. **Aligned the glue with the dumps.** `OctawebEngines.Resolve` (via a new private `PartName(Part)`) and
+     `BoosterHost.Describe` (line 384) both now read `p.partInfo != null ? p.partInfo.name : p.name` — the
+     SAME expression the two dumps use, so the live path feeds exactly what the pure layer is tested against.
+     **Changed together, as the brief required:** they must classify one vessel identically.
+  3. **Corrected the contract lines.** `OctawebBinding.cs`'s "glue: v.parts[i].name" (the defect written
+     down, not a description of it) now names `p.partInfo != null ? p.partInfo.name : p.name` as REQUIRED,
+     and says why. The identical wrong line in `OctawebResolve.Build` was corrected with it (C7.1 — the two
+     state one contract and must not disagree).
+  4. **Made the test able to fail.** A pure test cannot see a glue bug, so `ActuationTest` now pins the
+     CONTRACT: for six decorated forms of the octaweb name — the craft file's own
+     `TE.19.F9.S1.Engine_4293186206` (`docs/reference/Crew-2.craft:5668`), two `(Clone)` forms, a
+     space-separated id, a zero-width space inside the name, and a PREFIX (extras are not assumed to be a
+     suffix) — it asserts `IsTundraOctaweb` REJECTS it, `VehicleParts.IsBooster` still ACCEPTS it (**the
+     disagreement itself, pinned**), and `Bind` returns `NotFound` binding nothing. Plus: the dump's own
+     name binds Ok and both classifiers agree on it, and — proving the brief's "not whitespace" narrowing
+     rather than assuming it — a NON-BREAKING-space-padded name still binds, because `Trim()` reaches
+     Unicode spaces.
+  5. **The 264 unthrottled refusals** (`OctawebEngines.cs:107`, its own small defect per the brief) are now
+     gated: `LogGate.First("octaweb-refused:" + Plan + "/" + Guard)` — once per distinct refusal, S40's rule.
+  - **`IsTundraOctaweb` was NOT relaxed to a substring** (brief step 5): §B16.4 needs it to REFUSE rather
+    than mis-bind a Kartoffelkuchen `KK_SPX` octaweb, and a substring test is how that protection is lost.
+- **Verified (C1.3):** `python plugin/build.py test` **GREEN — ALL SUITES PASSED** (ActuationTest 101 checks,
+  up from 81). `python plugin/build.py preview` green, `page0_flight_gate.png` inspected, unchanged (this
+  touches no drawing path). **MUTATION-PROVED the new guard can fail:** relaxing `IsTundraOctaweb` to
+  `Has(partName, TundraOctawebPart)` turns the suite red with **18 failures**, 15 of them the new OCT1
+  checks; the mutation was reverted and the suite is green again.
+- **No install, no glass** — the flight that proves this is a separate owner gate (C1.12), unopened here.
+- ⚠ **WHAT THIS LINE DOES NOT CLAIM.** **The exact malformed string is NOT MEASURED.** It cannot be here: it
+  only exists on a live vessel, and observing it needs a flight. The brief's proven narrowing — extra
+  characters, and NOT surrounding whitespace, because `Trim()` is applied and did not help — is all that is
+  known, and nothing beyond it was assumed: no `(Clone)`, no suffix, no whitespace. The test pins the
+  DECORATION FAMILY any such string belongs to; the diagnostic in (1b) prints the real one on the next
+  flight, and **Q2 below asks for it to be added verbatim then**.
+
+#### Open questions for the owner (C1.14)
+
+**Q1 — the exact malformed string is still unmeasured. How should that be closed?**
+The brief said MEASURE FIRST and report the string; measuring requires flying, which is an owner gate this
+chat may not open (C1.12). So the measurement instrument shipped and the fix shipped with it, and no string
+is claimed. **No ruling on record.**
+1. **Accept as built** — the fix rests on the proof that the two name sources differ (which IS proven), the
+   diagnostic prints the real string on the next flight for free, and no gate is opened. *(recommended)*
+2. **Open `install` + glass for one session** so a pad-sit can print the drift line, then add the observed
+   string to the test's `decorated[]` array verbatim.
+3. **Hold the fix** until the string is measured. — *Not recommended: the vehicle currently cannot command a
+   single booster engine, and holding a proven-correct name-source alignment to wait for a label buys
+   nothing.*
+**Recommendation (1)**, with **(2)** whenever a session is being gated open for other reasons anyway — the
+string is worth having, but it is a label on a defect already understood, not evidence the fix needs.
+⚠ Option 2 requires an **owner gate-open** (C1.12).
+
+**Q2 — should a measured string be added to the test, or is the family enough?**
+Once the drift line prints the real name it can be pinned exactly.
+1. **Add it verbatim** to `decorated[]` when it is observed, alongside the family. *(recommended)*
+2. **Leave the family only** — the guard already refuses everything in the class.
+**Recommendation (1)**: a real observed string is §1.4 verified-real evidence and costs one array entry —
+the family is the net, the measured string is the specimen.
+
+### OCT2 [S] The OTHER `p.name` readers — the same latent divergence in `Actuator.cs` and `VesselData.cs` — **TODO** — [logged by OCT1 per C1.1, NOT done]
+- **Stray found while fixing OCT1, deliberately left alone** (C1.1: log it, do not do it). OCT1's brief scoped
+  the change to `OctawebEngines.Resolve` + `BoosterHost.Describe` and said *"Change both or neither"*; these
+  are outside that pair and were not touched.
+- **The finding:** `src/Actuator.cs` reads a bare `p.name` in **17 places** (lines 39, 60, 80, 97, 120, 177,
+  207, 234, 274, 329, 366, 383, 404, 425, 695, 760, 773) and `src/VesselData.cs` in **3** (408, 409, 887).
+  Every one feeds a SUBSTRING matcher (`VehicleParts.IsBooster` / `IsDrogues` / `IsMains` / `IsErector`,
+  `Actuation.DecouplerRoleOf`, a `"Grid Fin"` search), so all of them survive the extra characters and work
+  **by the same luck `BoosterHost.Describe` was working by** — until a matcher there is ever tightened, or
+  the extras ever land mid-marker (a zero-width character between `.S1` and `.` breaks `.S1.`).
+- **Build:** switch every one to the same `p.partInfo != null ? p.partInfo.name : p.name` expression, so the
+  whole glue reads ONE name source and the pure layer is fed only what its tests assert. Consider hoisting
+  OCT1's `PartName(Part)` into one shared glue helper rather than repeating the ternary twenty times.
+- **DONE when:** no glue file reads a bare `p.name` for classification, `build.py test` green, and a test or
+  a comment records that the expression is the contract.
+- ⚠ **NOT urgent the way OCT1 was:** nothing here is currently broken — this removes the luck, it does not
+  fix a failure. `[S]`.
+
 ### BB4 [owner-gated] Install the BlackBox + confirm on the glass — **DOING 2026-09-05 (blocker CLEARED: BB1 `aa7bfa2`, BB2 `bedb4a6`, BB3 `6604644` are all DONE; BB2 and BB3 each state "No install, no glass time" — this session is the first to act on the line)** — [TIER 1: the owner's own "before the first flight" deadline]
 - ⚠ **The owner ALREADY AUTHORISED `install` for the BlackBox specifically** (2026-09-03: *"build and install
   before the first flight as we will need it for troubleshooting and diagnoses"*). **This authority extends

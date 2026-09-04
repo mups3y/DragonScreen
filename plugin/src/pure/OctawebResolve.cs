@@ -99,9 +99,13 @@ namespace DragonScreen
     {
         // THE BINDER. Call ONCE at a phase boundary (§B12.7) and hold the result — never per frame.
         //
-        // `vesselPartNames` is every part on the vessel (glue: v.parts[i].name); `engines` is every
-        // engine module on it as a (part name, engineID) pair, IN THE CALLER'S OWN ORDER, so the
-        // returned indices address the caller's array directly.
+        // `vesselPartNames` is every part on the vessel; `engines` is every engine module on it as a
+        // (part name, engineID) pair, IN THE CALLER'S OWN ORDER, so the returned indices address the
+        // caller's array directly.
+        //
+        // ⛔ BOTH name fields MUST come from `p.partInfo != null ? p.partInfo.name : p.name`, never
+        // `p.name` — the same contract `OctawebBinding.Bind` states, for the same reason (OCT1,
+        // 2026-09-05). This line used to say "glue: v.parts[i].name"; that was the defect written down.
         public static OctawebTable Build(string[] vesselPartNames, OctawebEngineRef[] engines)
         {
             OctawebTable t = new OctawebTable();

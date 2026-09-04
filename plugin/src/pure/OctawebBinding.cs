@@ -74,8 +74,17 @@ namespace DragonScreen
                 && string.Equals(partName.Trim(), TundraOctawebPart, StringComparison.OrdinalIgnoreCase);
         }
 
-        // THE ASSERTION. Feed it every part name on the vessel (glue: v.parts[i].name). On Ok, `bound` is
-        // the octaweb's part name; on any failure `bound` is null and the caller must refuse + annunciate.
+        // THE ASSERTION. Feed it every part name on the vessel. On Ok, `bound` is the octaweb's part name;
+        // on any failure `bound` is null and the caller must refuse + annunciate.
+        //
+        // ⛔ THE REQUIRED NAME SOURCE IS `p.partInfo != null ? p.partInfo.name : p.name` — NOT `p.name`.
+        // (OCT1, 2026-09-05. This line used to read "glue: v.parts[i].name" and that WAS the defect, not a
+        // description of one.) `IsTundraOctaweb` is a whole-name equality test, and it can only be fed the
+        // name this layer is TESTED against: `docs/reference/craftdump.csv` is written from `partInfo.name`
+        // (`CraftDump.cs:60`, `GeometryDump.cs:79`), so a glue caller passing `Part.name` hands the pure
+        // layer a string no test has ever seen. It did, on 2026-09-05: the live name carried extra
+        // characters (not surrounding whitespace — `Trim()` is applied below and did not help), the bind
+        // refused 264 times, and every booster engine command was dropped for the whole descent.
         //
         // Order matters and is deliberate: a foreign part anywhere on the vessel loses, EVEN IF our octaweb
         // is also present. §B16.4 says "refuse and annunciate on either failure rather than picking one",

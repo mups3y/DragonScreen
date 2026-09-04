@@ -381,7 +381,14 @@ namespace DragonScreen
             {
                 Part p = v.parts[i];
                 if (p == null) continue;
-                string nm = p.name ?? "";
+                // ⛔ `partInfo.name`, NOT `Part.name` (OCT1, 2026-09-05) — the SAME expression the two dumps
+                // and `OctawebEngines.Resolve` use. This walk and that one must classify one vessel
+                // identically: on 2026-09-05 they did not, because this one asked `IsBooster` for a `.S1.`
+                // SUBSTRING (which survived the extra characters `Part.name` carried) while the octaweb
+                // binder asked for whole-name EQUALITY (which did not). "Found the booster" and "octaweb
+                // not found" about the same part, 264 times. Change this line and `OctawebEngines.PartName`
+                // together or the disagreement comes straight back.
+                string nm = (p.partInfo != null ? p.partInfo.name : p.name) ?? "";
                 if (OctawebBinding.IsForeignBoosterPart(nm)) c.HasForeignBoosterPart = true;
                 if (VehicleParts.IsPod(nm)) c.HasPod = true;
                 else if (VehicleParts.IsBooster(nm)) c.HasBoosterPart = true;

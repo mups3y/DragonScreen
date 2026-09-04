@@ -201,6 +201,66 @@ public static class ActuationTest
         Check("IsBooster rejects the KK octaweb (no '.S1.' in it)",
               !VehicleParts.IsBooster("KK_SPX_F9_Octaweb"), "");
 
+        // ================================================================================================
+        // ---- OCT1 (2026-09-05): THE GLUE'S NAME SOURCE IS PART OF THE CONTRACT ----
+        // ================================================================================================
+        // WHAT HAPPENED. Two functions read the SAME field, `Part.name`, in the same part walk, and
+        // disagreed about one vessel: `BoosterHost.Describe` -> `VehicleParts.IsBooster` (a `.S1.`
+        // SUBSTRING) passed, while `OctawebEngines.Resolve` -> `IsTundraOctaweb` (whole-name EQUALITY)
+        // failed. "Found the booster" + "OCTAWEB NOT FOUND", 264 times, zero successes: booster attitude
+        // uncommanded for 222 rows of LandingBurn and a touchdown 511 km off the deck.
+        //
+        // WHY NO TEST CAUGHT IT. This suite feeds the pure layer names from `docs/reference/craftdump.csv`,
+        // which `CraftDump.cs:60` writes from `partInfo.name` — the CLEAN name. The live glue fed `p.name`.
+        // The pure layer and its test agreed with each other and both disagreed with the game. A pure test
+        // cannot see a glue bug, so what is pinned here is the CONTRACT the glue must satisfy: a decorated
+        // name — the same identity carrying extra characters — is NOT this octaweb, and the two classifiers
+        // MUST NOT be able to disagree about one.
+        //
+        // ⚠ THE EXACT LIVE STRING IS NOT YET MEASURED. `Trim()` was already applied and did not help, so it
+        // is not surrounding whitespace; beyond that nothing is proven, and nothing is assumed here. The
+        // diagnostic that will measure it is in `OctawebEngines.Resolve` (it prints both name sources
+        // escaped, with lengths, once via LogGate) and it needs a flight — a separate owner gate. When the
+        // string lands, ADD IT to the array below verbatim; the family it belongs to is already refused.
+        //
+        // ⛔ THE FIX IS NEVER TO RELAX `IsTundraOctaweb` TO A SUBSTRING. §B16.4 requires REFUSING rather
+        // than mis-binding the Kartoffelkuchen `KK_SPX` octaweb, and a substring test is exactly how that
+        // protection is lost. Exactness is the point; the glue is what had to change.
+        string[] decorated =
+        {
+            OCTAWEB + "_4293186206",     // the craft file's own form (docs/reference/Crew-2.craft:5668)
+            OCTAWEB + " (Clone)",        // a Unity-instantiated object name
+            OCTAWEB + "(Clone)",
+            OCTAWEB + " 4293186206",
+            "TE.19.F9​.S1.Engine", // a ZERO-WIDTH SPACE inside the name - invisible in any log line
+            "0:" + OCTAWEB,              // extras need not be a suffix, and are not assumed to be one
+        };
+        for (int i = 0; i < decorated.Length; i++)
+        {
+            string d = decorated[i];
+            Check("OCT1: a decorated octaweb name is NOT the Tundra octaweb  [" + d + "]",
+                  !OctawebBinding.IsTundraOctaweb(d), "");
+            Check("OCT1: ...yet IsBooster still accepts it  [" + d + "]  <- THE DISAGREEMENT",
+                  VehicleParts.IsBooster(d), "");
+            Check("OCT1: a vessel whose only octaweb is decorated binds NOTHING  [" + d + "]",
+                  OctawebBinding.Bind(new[] { POD, TRUNK, d, MVAC }, out bound) == OctawebBind.NotFound,
+                  "");
+            Check("OCT1: ...and hands back no part  [" + d + "]", bound == null, "bound=" + (bound ?? "null"));
+        }
+
+        // The other half of the contract: the name the dumps actually write binds, and binds cleanly. If
+        // the glue feeds THIS, the two classifiers cannot disagree — which is the whole of OCT1's fix.
+        Check("OCT1: the dump's own name (partInfo.name) binds Ok",
+              OctawebBinding.Bind(new[] { POD, TRUNK, OCTAWEB, MVAC }, out bound) == OctawebBind.Ok, "");
+        Check("OCT1: ...and both classifiers agree on it",
+              VehicleParts.IsBooster(OCTAWEB) && OctawebBinding.IsTundraOctaweb(OCTAWEB), "");
+
+        // WHY "extra characters, but NOT surrounding whitespace" is a PROVEN narrowing and not a guess:
+        // `IsTundraOctaweb` Trim()s, and Trim() reaches Unicode spaces too. A name padded with a
+        // NON-BREAKING space still binds - so whatever the live string carried, padding was not it.
+        Check("OCT1: Trim() already covers whitespace padding (which is why it did not help)",
+              OctawebBinding.IsTundraOctaweb(" " + OCTAWEB + " "), "");
+
         // ---- and now against the REAL dump on disk ----
         string path = DumpPath();
         if (!System.IO.File.Exists(path))
