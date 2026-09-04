@@ -77,6 +77,7 @@ public static class BoosterHostTest
         CommandGateTests();
         EngineRoleTests();
         PhaseGateTests();
+        SwitchSequenceTests();
         ProfileTests();
         AnnunciationTests();
 
@@ -452,6 +453,182 @@ public static class BoosterHostTest
         // still compile and answer exactly as before: Idle + None is always allowed.
         Check("an unnamed phase/role defaults to Idle/None, which is always open",
               BoosterHostPlan.Blocked(true, s, farEnough, longEnough) == BoosterCommandBlock.None, "");
+    }
+
+    // =====================================================================================
+    // 5b. OCT4 — THE MODE-CHANGE SEQUENCE, AND THE GATE AS THE HOST ACTUALLY CALLS IT
+    // =====================================================================================
+    // OCT3 proved the gate's YES/NO. OCT6 created the project's first mid-burn bank change. Neither
+    // proved what `Dispatch` → `SelectEngineSet` ACTUATES, nor that the host hands the gate the right
+    // arguments — and the second of those was wrong the whole time (see `BlockedFor`).
+    //
+    // ⛔ WHAT THIS SECTION CANNOT REACH. `src/BoosterHost.cs` does not compile headlessly (no KSP
+    // assemblies), so `Dispatch`, `SelectEngineSet`, `Shut`, `Light` and `ApplyThrottle` are NOT executed
+    // by any test — here or anywhere. What is proved is the SEQUENCING DECISION they now execute
+    // (`EngineSwitchSteps` is their only sequencing rule) and the GATE CALL they now make
+    // (`BlockedFor` is their only argument assembly). The `ModuleEngines.Activate()`/`Shutdown()` calls
+    // themselves, the throttle write ordering inside a `FixedUpdate`, and everything about spool remain
+    // UNTESTED and can only be settled in the capsule. Stated plainly rather than papered over (S76).
+
+    /// <summary>Render a step list so a failure names the actual sequence, not just "false".</summary>
+    static string Seq(BoosterHostPlan.OctawebStep[] steps)
+    {
+        if (steps.Length == 0) return "<none>";
+        string s = "";
+        for (int i = 0; i < steps.Length; i++) s += (i > 0 ? " → " : "") + steps[i].ToString();
+        return s;
+    }
+
+    static bool IsSeq(BoosterHostPlan.OctawebStep[] got, params string[] want)
+    {
+        if (got.Length != want.Length) return false;
+        for (int i = 0; i < got.Length; i++) if (got[i].ToString() != want[i]) return false;
+        return true;
+    }
+
+    static void SwitchSequenceTests()
+    {
+        EngineRole none = EngineRole.None, all = EngineRole.OctawebAll;
+        EngineRole three = EngineRole.OctawebThree, centre = EngineRole.OctawebCentre;
+
+        // ---- THE TRANSITION TABLE. Every transition OCT3's `AllowedRoleForPhase` permits, as the
+        // sequence an ENGINE experiences (`EffectiveSwitchSteps`: the sweep's shutdowns of banks that
+        // are not lit are skipped at runtime by the `EngineIgnited` guard). ORDER IS ASSERTED.
+        Check("OCT4 (1) None→Three (boostback / entry-burn ignition): light only, nothing to shut",
+              IsSeq(BoosterHostPlan.EffectiveSwitchSteps(none, three), "Activate(OctawebThree)"),
+              Seq(BoosterHostPlan.EffectiveSwitchSteps(none, three)));
+        Check("OCT4 (2) Three→None (burn ends): shut only, nothing lit",
+              IsSeq(BoosterHostPlan.EffectiveSwitchSteps(three, none), "Shutdown(OctawebThree)"),
+              Seq(BoosterHostPlan.EffectiveSwitchSteps(three, none)));
+        Check("OCT4 (3) None→Centre (landing-burn ignition, latch already set): light only",
+              IsSeq(BoosterHostPlan.EffectiveSwitchSteps(none, centre), "Activate(OctawebCentre)"),
+              Seq(BoosterHostPlan.EffectiveSwitchSteps(none, centre)));
+        // ⭐ (4) IS OCT6'S SHED, AND IT IS THE ONE NOTHING HAS FLOWN. Three is shut BEFORE Centre is lit,
+        // and that order is forced by the geometry: the centre nozzle is a member of BOTH banks, so they
+        // can never burn at once. Reversing these two lines must turn this red.
+        Check("OCT4 (4) Three→Centre (OCT6's mid-burn shed): SHUT THREE, THEN LIGHT CENTRE — in that order",
+              IsSeq(BoosterHostPlan.EffectiveSwitchSteps(three, centre),
+                    "Shutdown(OctawebThree)", "Activate(OctawebCentre)"),
+              Seq(BoosterHostPlan.EffectiveSwitchSteps(three, centre)));
+        Check("OCT4 (5a) Three→None on release: the lit bank is shut",
+              IsSeq(BoosterHostPlan.EffectiveSwitchSteps(three, none), "Shutdown(OctawebThree)"),
+              Seq(BoosterHostPlan.EffectiveSwitchSteps(three, none)));
+        Check("OCT4 (5b) Centre→None on release: the lit bank is shut",
+              IsSeq(BoosterHostPlan.EffectiveSwitchSteps(centre, none), "Shutdown(OctawebCentre)"),
+              Seq(BoosterHostPlan.EffectiveSwitchSteps(centre, none)));
+
+        // ---- THE INVARIANTS, over EVERY ordered pair of roles, not just the five above.
+        EngineRole[] roles = { none, all, three, centre };
+        for (int f = 0; f < roles.Length; f++)
+            for (int t = 0; t < roles.Length; t++)
+            {
+                BoosterHostPlan.OctawebStep[] full = BoosterHostPlan.EngineSwitchSteps(roles[f], roles[t]);
+                BoosterHostPlan.OctawebStep[] eff = BoosterHostPlan.EffectiveSwitchSteps(roles[f], roles[t]);
+                string tag = roles[f] + "→" + roles[t];
+
+                if (roles[f] == roles[t])
+                {
+                    // ⛔ THE NO-RE-IGNITION GUARD, at its source: no change, no steps, so a lit set can
+                    // never be commanded a second time even if `Dispatch`'s own `want != currentRole`
+                    // test were removed.
+                    Check("OCT4 " + tag + ": an unchanged role actuates NOTHING (a lit set is never re-lit)",
+                          full.Length == 0 && eff.Length == 0, Seq(full));
+                    continue;
+                }
+
+                // Exactly one activate, and only when a bank is actually wanted.
+                int lights = 0, lastShut = -1, firstLight = -1;
+                for (int i = 0; i < full.Length; i++)
+                {
+                    if (full[i].Kind == BoosterHostPlan.OctawebStepKind.Activate)
+                    { lights++; if (firstLight < 0) firstLight = i; }
+                    else lastShut = i;
+                }
+                Check("OCT4 " + tag + ": exactly one Activate (none when going OFF)",
+                      lights == (roles[t] == none ? 0 : 1), Seq(full));
+
+                // ⛔ THE ORDER INVARIANT — every shutdown precedes the activate. This is the check a
+                // future re-order of shut-and-light must break.
+                Check("OCT4 " + tag + ": EVERY Shutdown precedes the Activate (the banks share nozzles)",
+                      firstLight < 0 || lastShut < firstLight, Seq(full));
+
+                // The activate is never for a bank the same call is shutting, and never for OFF.
+                for (int i = 0; i < full.Length; i++)
+                    if (full[i].Kind == BoosterHostPlan.OctawebStepKind.Activate)
+                        Check("OCT4 " + tag + ": the Activate names the WANTED bank and is never `None`",
+                              full[i].Role == roles[t] && roles[t] != none, Seq(full));
+
+                // The sweep covers every bank that is not wanted — including ones we do not believe lit,
+                // because `currentRole` is a record of what we commanded, not a reading of the vehicle.
+                Check("OCT4 " + tag + ": the sweep shuts all three banks except the wanted one",
+                      full.Length == (roles[t] == none ? 3 : 3), Seq(full));
+
+                // And the effective sequence is a subsequence of the full one, never longer than 2.
+                Check("OCT4 " + tag + ": at most one shut and one light actually reach the vehicle",
+                      eff.Length <= 2, Seq(eff));
+            }
+
+        // ---- ⛔ THE WIRING. This is the defect OCT4 found, and this is the check that would have caught
+        // it. Every assertion in `PhaseGateTests` above passes the latch BY HAND; the host did not, and
+        // no test called the host's argument assembly because it did not have one. `BlockedFor` is that
+        // assembly, and it is now pure, so the omission is checkable.
+        BoosterFlightSnapshot fs = Flying();
+        double far = BoosterHostPlan.HoldOffSeparationM + 1.0;
+        double late = BoosterHostPlan.HoldOffSinceBindS + 1.0;
+
+        BoosterCommand shed = new BoosterCommand();
+        shed.Phase = BoosterPhase.LandingBurn;
+        shed.EnginesLit = true;
+        shed.EngineMode = VehicleParts.ModeCentreOnly;
+        shed.LandingShedLatched = true;                 // the FSM has shed; this is every tick after it
+        Check("OCT4: the POST-SHED command the FSM actually emits passes the gate (the OCT6 defect)",
+              BoosterHostPlan.BlockedFor(true, fs, far, late, shed) == BoosterCommandBlock.None,
+              "BlockedFor returned " + BoosterHostPlan.BlockedFor(true, fs, far, late, shed));
+
+        BoosterCommand opening = shed;
+        opening.EngineMode = VehicleParts.ModeThreeEngine;
+        opening.LandingShedLatched = false;             // the burn's opening half
+        Check("OCT4: the PRE-SHED command the FSM actually emits also passes the gate",
+              BoosterHostPlan.BlockedFor(true, fs, far, late, opening) == BoosterCommandBlock.None,
+              "BlockedFor returned " + BoosterHostPlan.BlockedFor(true, fs, far, late, opening));
+
+        // ⛔ AND IT MUST STILL REFUSE — a gate that lost its latch and a gate that accepts everything look
+        // identical on the two checks above. These are the halves that tell them apart.
+        BoosterCommand lateThree = shed;
+        lateThree.EngineMode = VehicleParts.ModeThreeEngine;
+        lateThree.LandingShedLatched = true;            // three engines re-demanded AFTER the shed
+        Check("OCT4: BlockedFor still REFUSES ThreeLanding after the shed (the latch is one-way)",
+              BoosterHostPlan.BlockedFor(true, fs, far, late, lateThree)
+                  == BoosterCommandBlock.WrongEngineForPhase, "");
+
+        BoosterCommand earlyCentre = shed;
+        earlyCentre.EngineMode = VehicleParts.ModeCentreOnly;
+        earlyCentre.LandingShedLatched = false;         // centre demanded before the solver shed
+        Check("OCT4: BlockedFor still REFUSES CenterOnly before the shed",
+              BoosterHostPlan.BlockedFor(true, fs, far, late, earlyCentre)
+                  == BoosterCommandBlock.WrongEngineForPhase, "");
+
+        BoosterCommand nine = shed;
+        nine.Phase = BoosterPhase.AeroDescent;
+        nine.EngineMode = VehicleParts.ModeAllEngines;
+        Check("OCT4: BlockedFor still REFUSES the ascent bank on a descending booster (OCT3)",
+              BoosterHostPlan.BlockedFor(true, fs, far, late, nine)
+                  == BoosterCommandBlock.WrongEngineForPhase, "");
+
+        // `EnginesLit == false` is OFF whatever the mode says — including the `ModeAllEngines == 0`
+        // ambiguity — so a dark command is legal in every phase and never trips the engine gate.
+        BoosterCommand dark = new BoosterCommand();
+        dark.Phase = BoosterPhase.LandingBurn;
+        dark.EnginesLit = false;
+        dark.EngineMode = VehicleParts.ModeAllEngines;   // 0: the struct default AND the ascent bank
+        Check("OCT4: BlockedFor reads EnginesLit as the authority — a dark command is never a wrong bank",
+              BoosterHostPlan.BlockedFor(true, fs, far, late, dark) == BoosterCommandBlock.None, "");
+
+        // The rest of the gate is untouched by the new entry point: it is the same `Blocked`.
+        Check("OCT4: BlockedFor still honours the arm",
+              BoosterHostPlan.BlockedFor(false, fs, far, late, shed) == BoosterCommandBlock.NotArmed, "");
+        Check("OCT4: BlockedFor still honours the flight-194334 hold-off",
+              BoosterHostPlan.BlockedFor(true, fs, 0.0, late, shed) == BoosterCommandBlock.HoldOff, "");
     }
 
     // =====================================================================================

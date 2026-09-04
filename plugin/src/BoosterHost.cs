@@ -518,7 +518,25 @@ namespace DragonScreen
             phase = c.Phase;
             commandedForward = c.AimForward;
             commandedThrottle = c.Throttle;
-            landingShed = c.LandingShedLatched;       // OCT6 — one way; `Guide()` never clears it
+            // OCT6 — one way; `Guide()` never clears it.
+            // ⭐ OCT4 ASKED WHETHER THIS MAY ADVANCE ON A **BLOCKED** TICK, since it sits ahead of the
+            // gate and so can record "we shed" on a tick where the banks never swapped. **It not only may,
+            // it MUST**, and that is provable rather than a matter of taste:
+            //   1. The latch records a DECISION ("the solver has asked for one engine"), not a physical
+            //      state ("the banks have swapped"). It has to. `AllowedRoleForPhase` uses it to name the
+            //      legal bank for the command being gated, so on the shed tick itself the banks have NOT
+            //      yet moved — a latch meaning "physically shed" would make the gate refuse the very
+            //      command that performs the shed, and the shed could never happen at all.
+            //   2. Dropping it on a blocked tick would UN-LATCH the FSM: `Guide()` re-evaluates
+            //      `Hoverslam.EnginesFor` only when `!s.LandingShedLatched` (`BoosterDescent.cs`), so the
+            //      next tick would re-demand three engines. That is precisely the chatter OCT6's
+            //      mutation run measured at 8 ticks (0.8 s) after the shed, and every flip of it is a real
+            //      shutdown plus a real re-ignition mid-brake.
+            // So the latch follows this file's stated convention — `phase`, `AimForward` and the steering
+            // law all advance regardless of dispatch — and it is load-bearing that it does. The
+            // re-detection is what self-corrects: `currentRole` does NOT advance on a blocked tick, so the
+            // change is simply re-detected and actuated on the next unblocked one.
+            landingShed = c.LandingShedLatched;
             AimForward = c.AimForward;               // reported EVERY tick, dispatched or not.
             Refusal = c.Refusal;
 
@@ -545,10 +563,15 @@ namespace DragonScreen
             // ---- MAY ANYTHING GO OUT? ------------------------------------------------------------
             // OCT3: the phase gate reads the SAME decode `Dispatch` uses (`CommandedRole`), so a command
             // `Blocked` lets through and one `Dispatch` would actuate never disagree on which bank it is.
+            //
+            // ⛔ OCT4 FIX (2026-09-05). This call used to name `c.Phase` and the decoded role BY HAND and
+            // omit `c.LandingShedLatched`, so the gate ran on that parameter's default — `false`, "not yet
+            // shed". OCT6's shed was therefore refused `WrongEngineForPhase` on EVERY tick after the latch
+            // raised, permanently, and the three-engine bank would have burned to the ground at its last
+            // throttle. `BlockedFor` takes the whole command and reads all three fields from it, so the
+            // gate and the FSM cannot be handed a different tick's answer or be missing one.
             double sep = SeparationM(v);
-            EngineRole wantRole = BoosterHostPlan.CommandedRole(c.EnginesLit, c.EngineMode);
-            BoosterCommandBlock block = BoosterHostPlan.Blocked(Actuate, snap, sep, Now() - bindUT,
-                                                                 c.Phase, wantRole);
+            BoosterCommandBlock block = BoosterHostPlan.BlockedFor(Actuate, snap, sep, Now() - bindUT, c);
             BlockNote = BoosterHostPlan.Annunciation(block);
 
             if (block == BoosterCommandBlock.None) Dispatch(v, c, steer);
@@ -557,7 +580,30 @@ namespace DragonScreen
                 // ⛔ RELEASE THE AXES — do not write a zero. And do NOT shut an engine that is already
                 // burning: the realistic mid-flight block is `Packed`, where we have no control path
                 // anyway, and §B16.3 is explicit that commanding zero mid-burn is an instant shutdown
-                // whose relight costs an ignition this vehicle does not have. `Release` shuts what we lit.
+                // whose relight costs a spool this vehicle cannot afford. `Release` shuts what we lit.
+                //
+                // ⚠ OCT4 JUDGED THE FIVE BLOCK REASONS SEPARATELY — they are not one case, and "leave the
+                // lit bank burning" is right for four of them for DIFFERENT reasons:
+                //   • `NotArmed`  — `Actuate` is false, so no dispatch ever ran and nothing of ours is lit.
+                //   • `HoldOff`   — pre-ignition by construction (≤10 s from bind / ≤500 m from the stack).
+                //   • `Packed`    — KSP runs no control path: we could not shut it if we wanted to.
+                //   • `NoOctaweb` — UNREACHABLE HERE. `Tick` runs `StopReason` first and `!OctawebStillValid`
+                //     returns `BindLost`, which `Release`s before `Fly` is ever called; and `Release` skips
+                //     its own shutdown for the same reason. A stale table means the module references may
+                //     belong to another vessel, so shutting is not merely useless, it is FORBIDDEN — that
+                //     is the never-touch-the-Dragon rule. The branch in `Blocked` is defensive redundancy
+                //     for direct callers (the tests), not a live path.
+                //   • `WrongEngineForPhase` (OCT3) — ⚠ THE ONE THAT IS NOT OBVIOUSLY RIGHT. A full control
+                //     path exists and a bank is burning, and we hold it at its last throttle on a LOGIC
+                //     refusal. Brief on a transient disagreement, unbounded if the refusal is standing.
+                //     Whether a standing `WrongEngineForPhase` should hold, shut, or abort is a POLICY the
+                //     owner has not ruled on; OCT4 does not decide it. Logged as a register stray + a
+                //     C1.14 question. (The one standing case that DID exist — the shed refused forever —
+                //     was a wiring defect and is fixed above, not a policy question.)
+                //
+                // ⚠ AND NOTE WHAT IS NOT ROLLED BACK HERE: `phase`, `AimForward`, the steering law AND
+                // OCT6's shed latch all advanced before this branch. For the latch that is not merely
+                // tolerable, it is REQUIRED — see the note at its assignment above.
                 fbwOwned = false; fbwThrottle = 0.0; fbwUllage = false;
                 fbwPitch = 0.0; fbwYaw = 0.0; fbwRoll = 0.0;
             }
@@ -613,11 +659,28 @@ namespace DragonScreen
             EngineRole want = BoosterHostPlan.CommandedRole(c.EnginesLit, c.EngineMode);
             if (want != currentRole)
             {
-                SelectEngineSet(want);
+                SelectEngineSet(currentRole, want);
+                // ⚠ OCT4: `currentRole` records what we COMMANDED, not what is physically ignited, and it
+                // advances even when the activate did not take (an exception, or a RealFuels ullage
+                // refusal — flight Crew-2_20260829_144114, *"eng_ignited=0 whole descent"*). It is right
+                // for its job, which is "do not command the same set twice"; it is NOT a reading of the
+                // vehicle, and nothing may treat it as one. Logged as a stray, not changed here.
                 currentRole = want;
             }
 
             // ---- THROTTLE. Both paths, one number (see the header's "NOT PROVEN IN FLIGHT" note).
+            // ⚠ OCT4 — THE ORDER WITHIN THE SWAP FRAME, TRACED AND FOUND BENIGN. `SelectEngineSet` runs
+            // FIRST, so on a 3→1 shed the centre bank is `Activate()`d BEFORE its `independentThrottle`
+            // is set here, and the shut three-engine bank's stale `independentThrottle = true` is cleared
+            // only afterwards. Neither matters, for one reason: both calls happen inside a single
+            // `Dispatch`, i.e. one `FixedUpdate`, with NO physics integration between them, so no engine
+            // step ever observes the intermediate state. And the intermediate state is benign anyway —
+            // a bank whose `independentThrottle` is still false follows `FlightCtrlState.mainThrottle`,
+            // which `Fbw` has been writing to the previous tick's landing-burn throttle (never zero, never
+            // full), and `independentThrottle` on an engine that has just been `Shutdown()` scales
+            // nothing. Worst case, if Unity happened to run a `ModuleEngines` physics step ahead of
+            // `BoosterHostAddon.FixedUpdate`, the newly-lit bank spends ONE frame on the previous tick's
+            // throttle — bounded, and far smaller than the spool transient OCT6 measured at 8 ticks.
             double thr = want == EngineRole.None ? 0.0 : c.Throttle;
             ApplyThrottle(want, thr);
             fbwThrottle = thr;
@@ -663,22 +726,67 @@ namespace DragonScreen
             if (c.DeployLegs && !legsDown) { Actuator.DeployLegs(v); legsDown = true; }
         }
 
-        /// <summary>⛔ SELECT ABSOLUTELY, WHILE OFF, BY `engineID`. Shut every octaweb set that is not
-        /// wanted, then activate the wanted one if it is not already lit. Never `NextEngineMode`, never
-        /// `ModuleEngineConfigs`, never `selectedIndex` (§B16.3 / §B16.4). Called ONLY on a role change,
-        /// so a lit set is never re-ignited — each set carries `ignitions = 1` in the dump.</summary>
-        static void SelectEngineSet(EngineRole want)
+        /// <summary>
+        /// ⛔ SELECT ABSOLUTELY, WHILE OFF, BY `engineID`. Shut every octaweb set that is not wanted, THEN
+        /// activate the wanted one if it is not already lit. Never `NextEngineMode`, never
+        /// `ModuleEngineConfigs`, never `selectedIndex` (§B16.3 / §B16.4).
+        ///
+        /// ⭐ **SHUT-BEFORE-LIGHT IS FORCED BY THE PART'S GEOMETRY, NOT CHOSEN.** The three banks are
+        /// NESTED SUBSETS of one nine-nozzle octaweb (`BoosterHostPlan`'s §4c block has the dump rows and
+        /// the transform names), so the centre nozzle belongs to BOTH `ThreeLanding` AND `CenterOnly` and
+        /// those two can never burn at once. Light-then-shut was never an available option, and OCT6's
+        /// 3→1 shed therefore NECESSARILY crosses a thrust discontinuity ([[OCT9]]). Nothing in this
+        /// method can remove that; re-ordering it would only make the overlap illegal instead of absent.
+        ///
+        /// ⛔ **THE ORDER IS DECIDED IN `pure/`** — `BoosterHostPlan.EngineSwitchSteps` — so the transition
+        /// table is asserted headlessly (OCT4) and a future re-order turns the suite red. This method is
+        /// its interpreter and holds no sequencing rule of its own.
+        ///
+        /// ⛔ **NEVER RE-LIGHT A LIT SET.** The rule stands on its own merits — a re-light is a real
+        /// shutdown plus a real spool mid-flight — and is enforced twice over: `Dispatch` calls this only
+        /// on a role CHANGE (`EngineSwitchSteps` returns nothing when `from == to`), and the activate is
+        /// additionally guarded on `!EngineIgnited`.
+        /// ⚠ **THE IGNITION COUNT IS UNMEASURED.** This comment used to justify the rule with *"each set
+        /// carries `ignitions = 1` in the dump"*. That count is exactly the premise [[BB8]] exists to
+        /// settle: `Crew2_Patches/F9_Engines_InstantSpool.cfg` sets `%ignitions = -1` (RealFuels:
+        /// unlimited) and the ModuleManager ConfigCache carries −1 nine times; only a PRELAUNCH pad read
+        /// ever returned 1, and nobody has sampled it in flight. Do not build a budget guard on it until
+        /// BB8 has measured it. (Two more sites state the same unverified count as fact —
+        /// `pure/BoosterDescent.cs:52-57` and this file's header at `:89-90`; both are [[OCT7]]'s to fix,
+        /// deliberately untouched here.)
+        /// </summary>
+        static void SelectEngineSet(EngineRole from, EngineRole want)
         {
-            ShutUnless(EngineRole.OctawebAll, want);
-            ShutUnless(EngineRole.OctawebThree, want);
-            ShutUnless(EngineRole.OctawebCentre, want);
+            BoosterHostPlan.OctawebStep[] steps = BoosterHostPlan.EngineSwitchSteps(from, want);
+            if (steps.Length == 0) return;                       // `from == want` — nothing to actuate
 
-            if (want == EngineRole.None) { Debug.Log("[DragonScreen] booster engines → OFF (all sets shut)"); return; }
+            for (int i = 0; i < steps.Length; i++)
+            {
+                if (steps[i].Kind == BoosterHostPlan.OctawebStepKind.Shutdown) Shut(steps[i].Role);
+                else Light(steps[i].Role);
+            }
 
-            ModuleEngines e = octaweb.For(want);
+            if (want == EngineRole.None)
+                Debug.Log("[DragonScreen] booster engines → OFF (all sets shut)");
+        }
+
+        /// <summary>Shut one bank if it is actually burning. A bank that is not ignited is left alone —
+        /// the sweep deliberately names banks we do not believe are lit (see `EngineSwitchSteps`).</summary>
+        static void Shut(EngineRole role)
+        {
+            ModuleEngines e = octaweb.For(role);
+            if (e == null || !e.EngineIgnited) return;
+            try { e.Shutdown(); }
+            catch (Exception ex) { Debug.LogWarning("[DragonScreen] booster engine shutdown failed: " + ex.Message); }
+        }
+
+        /// <summary>Activate one bank by its bound `engineID` module, once, and only while it is off.</summary>
+        static void Light(EngineRole role)
+        {
+            ModuleEngines e = octaweb.For(role);
             if (e == null)
             {
-                Debug.LogWarning("[DragonScreen] booster host: no bound module for " + want + " — not commanding it");
+                Debug.LogWarning("[DragonScreen] booster host: no bound module for " + role + " — not commanding it");
                 return;
             }
             if (!e.EngineIgnited)
@@ -686,17 +794,8 @@ namespace DragonScreen
                 try { e.Activate(); }
                 catch (Exception ex) { Debug.LogWarning("[DragonScreen] booster engine activate failed: " + ex.Message); }
             }
-            Debug.Log("[DragonScreen] booster engine set → " + want + " (\"" + e.engineID
+            Debug.Log("[DragonScreen] booster engine set → " + role + " (\"" + e.engineID
                       + "\", activated by engineID — never NextEngineMode)");
-        }
-
-        static void ShutUnless(EngineRole role, EngineRole want)
-        {
-            if (role == want) return;
-            ModuleEngines e = octaweb.For(role);
-            if (e == null || !e.EngineIgnited) return;
-            try { e.Shutdown(); }
-            catch (Exception ex) { Debug.LogWarning("[DragonScreen] booster engine shutdown failed: " + ex.Message); }
         }
 
         /// <summary>
@@ -795,7 +894,7 @@ namespace DragonScreen
             {
                 if (octaweb != null && octaweb.StillValid(v))
                 {
-                    if (currentRole != EngineRole.None) SelectEngineSet(EngineRole.None);
+                    if (currentRole != EngineRole.None) SelectEngineSet(currentRole, EngineRole.None);
                     ApplyThrottle(EngineRole.None, 0.0);
                 }
             }

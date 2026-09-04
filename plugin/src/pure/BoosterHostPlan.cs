@@ -384,6 +384,124 @@ namespace DragonScreen
             return role == AllowedRoleForPhase(phase, landingShed);
         }
 
+        /// <summary>
+        /// ⛔ OCT4 — THE GATE, CALLED THE WAY THE HOST ACTUALLY CALLS IT: one whole `BoosterCommand` in,
+        /// one verdict out. The phase, the commanded role and the shed latch are read from ONE object in
+        /// ONE place, so they cannot be sourced from three and one of them forgotten.
+        ///
+        /// ⛔ **THIS EXISTS BECAUSE IT WAS FORGOTTEN.** `src/BoosterHost.cs` passed `c.Phase` and the
+        /// decoded role to <see cref="Blocked"/> but NOT `c.LandingShedLatched`, so the gate ran with the
+        /// parameter's default — `false`, "the burn has not shed yet". OCT6's own comment above predicted
+        /// the consequence precisely (*"a caller that names `LandingBurn` and forgets the latch … refuses
+        /// the terminal `CenterOnly` command"*), and OCT6's register line asserts the latch WAS passed. It
+        /// was not. Every post-shed tick was refused `WrongEngineForPhase`, permanently: the FSM latches
+        /// and commands `CenterOnly` for the rest of the burn, and the gate refuses it for the rest of the
+        /// burn — so the 3→1 shed could never reach the vehicle, and the three-engine bank stayed lit at
+        /// its last independent throttle all the way down. The `PhaseAllows` / `Blocked` predicates were
+        /// correct and fully tested throughout; only the WIRING was wrong, and no test could see the
+        /// wiring because no test called it. Routing the host through here makes that omission
+        /// unrepresentable at the call site.
+        /// </summary>
+        public static BoosterCommandBlock BlockedFor(bool armed, BoosterFlightSnapshot s,
+                                                     double separationM, double sinceBindS,
+                                                     BoosterCommand c)
+        {
+            return Blocked(armed, s, separationM, sinceBindS, c.Phase,
+                           CommandedRole(c.EnginesLit, c.EngineMode), c.LandingShedLatched);
+        }
+
+        // =========================================================================================
+        // 4c. THE MODE-CHANGE SEQUENCE — OCT4. What a role change ACTUATES, and in what order.
+        // =========================================================================================
+        // ⭐ THE GEOMETRY, AND WHY THE ORDER IS FORCED RATHER THAN CHOSEN. Nothing in this repo said this
+        // before OCT4, so the next reader would reasonably assume light-then-shut was an option that got
+        // rejected on taste. It was never available.
+        //
+        // ONE part (`TE.19.F9.S1.Engine`) carries THREE `ModuleEnginesRF` — verified in
+        // `docs/reference/craftdump.csv`: one part_idx, three modules, three `thrustVectorTransformName`
+        // values and three `runningEffectName` values.
+        //
+        //     AllEngines    → thrustTransform    running_full    (all nine — the ASCENT bank)
+        //     ThreeLanding  → threeTransform     running_three   (three OF THOSE NINE)
+        //     CenterOnly    → centerTransform    running_one     (one OF THOSE THREE)
+        //
+        // They are **NESTED SUBSETS OF THE SAME NINE NOZZLES**, not three independent engine sets, and
+        // `independentThrottle = False` on all three as dumped — so they share the throttle and the
+        // "mode" is simply WHICH BANK IS LIT. Stepping down is SUBTRACTIVE.
+        //
+        // ⛔ **THE CONSEQUENCE: THE CENTRE NOZZLE BELONGS TO BOTH `ThreeLanding` AND `CenterOnly`.** Those
+        // two banks can therefore NEVER be ignited simultaneously — one physical nozzle cannot be driven
+        // by two running modules. So `SelectEngineSet` shutting before it lights is **FORCED, not a style
+        // choice**, and OCT6's 3→1 shed NECESSARILY passes through a thrust discontinuity. That transient
+        // is real, it is [[OCT9]]'s subject, it is not a defect in this sequencing, and no reordering here
+        // can remove it.
+        //
+        // ⚠ The nozzle MEMBERSHIP above is RELAYED evidence (the overseer, measured on the live vessel,
+        // 2026-09-05) — a config dump lists transform NAMES, not the nozzles beneath them, so the repo's
+        // own `craftdump.csv` corroborates the three-modules-on-one-part structure, the shared throttle
+        // and the 9/3/1 effect names, but cannot by itself prove the nesting. Cited as relayed (C1.12).
+
+        /// <summary>What a `SelectEngineSet` step does to one bank.</summary>
+        public enum OctawebStepKind : byte { Shutdown, Activate }
+
+        /// <summary>One ordered actuation within a role change.</summary>
+        public struct OctawebStep
+        {
+            public OctawebStepKind Kind;
+            public EngineRole Role;
+            public override string ToString() { return Kind + "(" + Role + ")"; }
+        }
+
+        /// <summary>
+        /// The ORDERED steps `src/BoosterHost.SelectEngineSet` issues to move the octaweb from `from` to
+        /// `to`. Pure, so the transition table is ASSERTED rather than trusted — a future change that
+        /// re-orders shut-and-light turns the suite red.
+        ///
+        /// **`from == to` returns NO steps at all.** That is the outer guard against re-igniting a lit
+        /// set: `Dispatch` calls `SelectEngineSet` only on a role CHANGE, and this function encodes it.
+        ///
+        /// The shutdown sweep covers every bank that is not `to` — including banks we do not believe are
+        /// lit — because `currentRole` records what we COMMANDED, not what is physically ignited, and the
+        /// two can diverge (an `Activate()` that throws, or one RealFuels refuses on ullage: flight
+        /// Crew-2_20260829_144114, *"eng_ignited=0 whole descent"*). Those extra calls are no-ops at
+        /// runtime, gated on `EngineIgnited`. Shutting a bank we are unsure about is free; lighting one we
+        /// are wrong about is not.
+        ///
+        /// ⛔ EVERY `Shutdown` PRECEDES THE `Activate`, and the geometry block above is why that is not
+        /// negotiable — `ThreeLanding` and `CenterOnly` share the centre nozzle and can never both burn.
+        /// </summary>
+        public static OctawebStep[] EngineSwitchSteps(EngineRole from, EngineRole to)
+        {
+            if (from == to) return new OctawebStep[0];
+
+            EngineRole[] banks = { EngineRole.OctawebAll, EngineRole.OctawebThree, EngineRole.OctawebCentre };
+            var steps = new System.Collections.Generic.List<OctawebStep>(4);
+            for (int i = 0; i < banks.Length; i++)
+                if (banks[i] != to)
+                    steps.Add(new OctawebStep { Kind = OctawebStepKind.Shutdown, Role = banks[i] });
+            if (to != EngineRole.None)
+                steps.Add(new OctawebStep { Kind = OctawebStepKind.Activate, Role = to });
+            return steps.ToArray();
+        }
+
+        /// <summary>
+        /// The subsequence of <see cref="EngineSwitchSteps"/> that ACTUALLY reaches the vehicle when only
+        /// `from` is lit: the sweep's other shutdowns are skipped at runtime by `ShutUnless`'s
+        /// `EngineIgnited` guard. This is the sequence the OCT4 transition table asserts, because it is
+        /// the one an engine experiences.
+        /// </summary>
+        public static OctawebStep[] EffectiveSwitchSteps(EngineRole from, EngineRole to)
+        {
+            OctawebStep[] all = EngineSwitchSteps(from, to);
+            var eff = new System.Collections.Generic.List<OctawebStep>(2);
+            for (int i = 0; i < all.Length; i++)
+            {
+                if (all[i].Kind == OctawebStepKind.Shutdown && all[i].Role != from) continue;
+                eff.Add(all[i]);
+            }
+            return eff.ToArray();
+        }
+
         // =========================================================================================
         // 5. THE TARGET MODE — resolved from an IN-REPO source, never invented
         // =========================================================================================

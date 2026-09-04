@@ -2720,7 +2720,7 @@ happened yet. If a converged trigger becomes available, (2) is the natural next 
 would need a THIRD case (a `LandingBurn`-substate or a new phase) to let `ThreeLanding` be legal early in the
 burn — flagged here so that future work does not have to rediscover it.
 
-### OCT4 [S] Wire the octaweb mode-CHANGE actuation (Activate/Shutdown on the banks) against OCT3's gate — **TODO** — [logged by OCT3 per C1.1, NOT done]
+### OCT4 [S] Wire the octaweb mode-CHANGE actuation (Activate/Shutdown on the banks) against OCT3's gate — **DONE 2026-09-05** — [TIER 1: the audit found a DEFECT, not a clean bill — OCT6's shed could never have reached the vehicle]
 - ⚠ **RAISED FROM "HARDENING" TO PREREQUISITE BY [[OCT6]] (2026-09-05).** When this line was written no
   phase commanded a mid-burn bank change, so auditing the sequencing was tidy-up. OCT6 built one: on the
   owner's ruling the landing burn now OPENS on `ThreeLanding` and SHEDS to `CenterOnly` mid-brake. **That
@@ -2740,6 +2740,221 @@ burn — flagged here so that future work does not have to rediscover it.
   be extracted) test for the transition sequencing itself, not just the gate's yes/no.
 - **DONE when:** the transition sequencing is traced and tested against the OCT3 table, `build.py test` green.
 - `[S]` — this is an audit/hardening pass on already-working dispatch code, not a new capability.
+
+---
+
+#### ⛔ THE HEADLINE: the sequencing was CORRECT; the GATE CALL was not, and it killed OCT6's shed outright
+
+**`src/BoosterHost.cs:550` called `BoosterHostPlan.Blocked` with SIX arguments and omitted the seventh —
+`c.LandingShedLatched`** — so the gate ran on that parameter's default, `false` ("the burn has not shed
+yet"). Consequence, traced end to end: the instant OCT6's FSM latches and commands `CenterOnly`,
+`AllowedRoleForPhase(LandingBurn, false)` answers `OctawebThree`, `PhaseAllows` refuses, and the tick is
+`WrongEngineForPhase`. The latch never clears, so the FSM commands `CenterOnly` on **every** subsequent
+tick and the gate refuses **every** one. **The 3→1 shed could never have reached the vehicle**, and
+because a blocked tick deliberately leaves a burning bank alone, the three-engine bank would have burned
+to the ground at its last independent throttle. Nothing had flown it, so nothing had seen it.
+
+⚠ **OCT6's own comment predicted this exactly** — *"a caller that names `LandingBurn` and forgets the
+latch therefore gets the EARLY half's answer: it refuses the terminal `CenterOnly` command"* — and
+**OCT6's register line above asserts the latch WAS passed** (*"`BoosterHost` passes the latch from the
+SAME `BoosterCommand` it decodes the role from"*). It was not. That claim is corrected in place below,
+not deleted (C1.16's spirit). The predicates were right and fully tested the whole time; only the WIRING
+was wrong, and **no test could see the wiring because no test called it** — every `PhaseGateTests` and
+`LandingBurnWalkChecks` assertion passes the latch BY HAND, modelling the intended wiring rather than the
+real one. That is S76's lesson landing on the exact seam OCT4 was written to inspect.
+
+**THE FIX — the defect class is now unrepresentable, not merely patched.** New pure
+`BoosterHostPlan.BlockedFor(armed, snap, sep, sinceBind, BoosterCommand)` takes the WHOLE command and
+reads phase + role + latch from that one object; `BoosterHost.cs` calls it and names nothing by hand. The
+argument assembly is now pure, so it is testable — which is the only reason the regression check below
+can exist.
+
+#### THE FIVE TRANSITIONS, TRACED — with what actually reaches the vehicle
+
+Each traced through `Dispatch` (`:613`) → `SelectEngineSet` → `Shut`/`Light` → `ApplyThrottle` →
+`SetIndependent`, against `AllowedRoleForPhase`. "Effective" = what an engine experiences, after
+`ShutUnless`'s `EngineIgnited` guard drops the sweep's shutdowns of dark banks.
+
+| # | transition | effective sequence | shut once? | lit once? | re-ignition possible? | `currentRole` consistent? |
+|---|---|---|---|---|---|---|
+| 1 | None→Three (boostback / entry-burn ignition) | `Activate(Three)` | n/a | ✔ | no | ✔ |
+| 2 | Three→None (burn ends) | `Shutdown(Three)` | ✔ | n/a | no | ✔ |
+| 3 | None→Centre (landing-burn ignition, latch already set) | `Activate(Centre)` | n/a | ✔ | no | ✔ |
+| 4 | **Three→Centre (OCT6's mid-burn shed)** | `Shutdown(Three)` → `Activate(Centre)` | ✔ | ✔ | no | ✔ | 
+| 5 | any→None on release (`:856`) | `Shutdown(lit bank)` | ✔ | n/a | no | ⚠ see below |
+
+- **(4) was UNREACHABLE before this line's fix** — the gate refused it on every tick. The sequencing
+  itself was and is correct; it simply never ran.
+- **Re-ignition is guarded TWICE OVER and neither guard was missing:** `Dispatch` calls `SelectEngineSet`
+  only when `want != currentRole`, and `Light` activates only when `!e.EngineIgnited`. Additionally the
+  new `EngineSwitchSteps` returns an EMPTY step list when `from == to`, so even deleting `Dispatch`'s
+  test could not re-command a lit set. No path double-ignites anything.
+- **(5)'s one asterisk:** `Release` (`:851`) shuts only `if (octaweb != null && octaweb.StillValid(v))`,
+  yet resets `currentRole = None` unconditionally at `:869`. When the table is stale the shutdown is
+  SKIPPED and `currentRole` still says None. That is correct-by-necessity and not a defect — a stale
+  table means the module references may belong to another vessel, and reaching into one we no longer own
+  is the never-touch-the-Dragon rule. There is no honest alternative; recorded so it is not rediscovered.
+
+#### (a)–(d), EACH ANSWERED
+
+**(a) ORDER WITHIN THE SWAP FRAME — CONFIRMED as described, and BENIGN. Evidence, not assertion.**
+`SelectEngineSet` does run before `ApplyThrottle`, so on a shed the centre bank is `Activate()`d before
+its `independentThrottle` is set, and the shut three-engine bank's stale `independentThrottle = true` is
+cleared afterwards. Neither matters, for one decisive reason: **both calls are inside a single `Dispatch`,
+i.e. one `FixedUpdate`, with NO physics integration between them** — no engine step observes the
+intermediate state. The intermediate state is benign regardless: a bank whose `independentThrottle` is
+still `false` (which is what the dump shows on all three, so `SetIndependent` is the only thing that ever
+raises it) follows `FlightCtrlState.mainThrottle`, which `Fbw` has been writing to the previous tick's
+landing-burn throttle — never zero, never full; and `independentThrottle` on an engine that has just been
+`Shutdown()` scales nothing. ⚠ **The one honest caveat:** Unity does not guarantee `MonoBehaviour`
+FixedUpdate order against `ModuleEngines`' own physics step, so in the worst ordering the newly-lit bank
+spends **one** physics frame on the previous tick's throttle. Bounded, and far smaller than the spool
+transient OCT6 measured at 8 ticks (0.8 s). Written into `Dispatch`.
+
+**(b) THE BLOCKED TICK AND THE LATCH — the overseer's verdict is right, and the reason is STRONGER than
+"benign". It is REQUIRED.** I came down on: the latch MUST advance on a blocked tick. Two proofs:
+1. **The latch records a DECISION, not a physical state, and it has to.** `AllowedRoleForPhase` uses it
+   to name the legal bank for *the command being gated*. On the shed tick the banks have not yet moved —
+   so a latch meaning "physically shed" would make the gate refuse **the very command that performs the
+   shed**, and the shed could never happen at all. So the "it records an ACTUATION rather than a physical
+   state" concern inverts: decision-semantics is exactly what makes the gate work.
+2. **Dropping it would UN-LATCH the FSM.** `BoosterDescent.Guide` re-evaluates `Hoverslam.EnginesFor`
+   only when `!s.LandingShedLatched` (`:964`), so a tick that failed to carry the latch would re-demand
+   three engines — precisely the chatter OCT6's mutation run measured at 8 ticks after the shed, and each
+   flip is a real shutdown plus a real re-ignition mid-brake.
+   The re-detection is what self-corrects: **`currentRole` does not advance on a blocked tick**, so the
+   change is simply re-detected and actuated on the next unblocked one. Written into `BoosterHost.cs`
+   at the latch assignment.
+
+**(c) A BURNING BANK ON A BLOCKED TICK — judged per reason; they are NOT one case.** Four of five are
+right, for four different reasons; the fifth is a POLICY the owner has not ruled on.
+- `NotArmed` — `Actuate` false ⇒ no dispatch ever ran ⇒ nothing of ours is lit. Correct.
+- `HoldOff` — pre-ignition by construction (≤10 s from bind / ≤500 m from the stack). Correct.
+- `Packed` — KSP runs no control path; we could not shut it if we wanted to. Correct by necessity.
+- `NoOctaweb` — ⭐ **the question is MOOT: it is UNREACHABLE in the live path.** `Tick` (`:275`) runs
+  `StopReason` BEFORE `Fly`, and `!s.OctawebStillValid` returns `BindLost` → `Release` → return, so
+  `Blocked` never sees a stale table. And `Release` skips its own shutdown for the same reason: shutting
+  through references that may now belong to another vessel is not merely useless, it is **forbidden**.
+  The branch in `Blocked` is defensive redundancy for direct callers (the tests), not a live path.
+- `WrongEngineForPhase` — ⚠ **the one that is NOT obviously right, and I did not decide it.** A full
+  control path exists and a bank is burning, and we hold it at its last throttle on a *logic* refusal.
+  Harmless for a transient disagreement, unbounded if the refusal is standing. **The one standing case
+  that actually existed was the wiring defect above and is now fixed** — so this is no longer a live
+  hazard, but the policy question is real and is put to the owner below (C1.14), not settled here.
+
+**(d) `SelectEngineSet`'S DOC COMMENT — CORRECTED HERE, and OCT7's two sites left alone.** It claimed
+*"a lit set is never re-ignited — each set carries `ignitions = 1` in the dump"*. The RULE is kept (it
+stands on its own merits — a re-light is a real shutdown plus a real spool mid-flight) and is now stated
+as enforced twice over; the COUNT is marked **UNMEASURED** and cites [[BB8]]: `%ignitions = -1` in the
+install patch, −1 nine times in the ConfigCache, `1` only from a PRELAUNCH pad read, never sampled in
+flight. The comment now also points at OCT7's two sites as OCT7's to fix, deliberately untouched here.
+
+#### THE NESTED-SUBSET GEOMETRY, WRITTEN INTO THE CODE (`BoosterHostPlan` §4c)
+Verified in `docs/reference/craftdump.csv`: ONE part (`TE.19.F9.S1.Engine`, part_idx 7), THREE
+`ModuleEnginesRF` — `AllEngines`→`thrustTransform`/`running_full`, `ThreeLanding`→`threeTransform`/
+`running_three`, `CenterOnly`→`centerTransform`/`running_one` — all three `independentThrottle = False`,
+all `thrustPercentage = 100`. So they share the throttle and the mode is simply which bank is lit;
+stepping down is SUBTRACTIVE. **The centre nozzle belongs to BOTH `ThreeLanding` and `CenterOnly`, so
+those two can never be ignited simultaneously — shut-before-light is FORCED, not a style choice, and the
+3→1 swap NECESSARILY crosses a thrust discontinuity ([[OCT9]]'s subject, not a defect here).**
+⚠ **Provenance (C1.12):** the three-modules-on-one-part structure, the shared throttle and the 9/3/1
+effect names are verified IN-REPO; the nozzle MEMBERSHIP is **relayed evidence** (the overseer, measured
+on the live vessel, 2026-09-05) — a config dump lists transform NAMES, not the nozzles beneath them, so
+the repo's own dump corroborates but cannot alone prove the nesting. Cited as relayed in the code.
+
+#### VERIFIED (C1.3) — `python plugin/build.py test` **GREEN, ALL SUITES PASSED**
+Booster HOST **236 checks** (up from 161). `python plugin/build.py preview` green (no drawing path
+touched; run per the gate, no PNG differs). **MUTATION-PROVED THREE WAYS, all results recorded:**
+1. ⭐ **The defect, re-introduced.** Dropped `c.LandingShedLatched` from `BlockedFor` — i.e. restored
+   exactly what was in the tree — → **RED**, headline failure naming it:
+   `FAIL  OCT4: the POST-SHED command the FSM actually emits passes the gate (the OCT6 defect)
+   BlockedFor returned WrongEngineForPhase`, plus 2 consequential. Restored → GREEN. **This is the
+   measurement that the shipped code refused OCT6's shed** — it is not an inference from reading.
+2. **The order.** Moved the `Activate` ahead of the shutdown sweep → **RED, 10 failures**, the transition-4
+   check naming the bad sequence verbatim (`Activate(OctawebCentre) → Shutdown(OctawebThree)`) and the
+   order invariant firing on all nine changing pairs. Restored → GREEN.
+3. **The no-re-ignition guard.** Removed `if (from == to) return no steps` → **RED, 4 failures**, each
+   naming the set it would have re-commanded. Restored → GREEN.
+
+#### ⛔ WHAT IS UNTESTED, STATED PLAINLY (S76: a column written but never checked is worse than absent)
+`src/BoosterHost.cs` does not compile headlessly (no KSP assemblies), so **`Dispatch`, `SelectEngineSet`,
+`Shut`, `Light`, `ApplyThrottle` and `SetIndependent` are executed by NO test — here or anywhere.** What
+is now proved is (i) the SEQUENCING DECISION they execute, because `EngineSwitchSteps` is their only
+sequencing rule, and (ii) the GATE CALL they make, because `BlockedFor` is their only argument assembly.
+Still untested and settleable only in the capsule: the real `ModuleEngines.Activate()`/`Shutdown()`
+behaviour, the intra-`FixedUpdate` write ordering in (a), and everything about spool. This is why the
+extraction was worth doing — it moved the two decidable halves out of the untestable file.
+
+#### Built
+`pure/BoosterHostPlan.cs` (`BlockedFor`; §4c geometry block; `OctawebStepKind` / `OctawebStep` /
+`EngineSwitchSteps` / `EffectiveSwitchSteps`), `src/BoosterHost.cs` (the `BlockedFor` call site;
+`SelectEngineSet` re-expressed as the pure plan's interpreter + `ShutUnless`→`Shut` and a new `Light`;
+the corrected doc comment; the (a) ordering note in `Dispatch`; the (b) latch note; the (c) per-reason
+block note; the `currentRole` caveat), `test/BoosterHostTest.cs` (new `SwitchSequenceTests`).
+
+#### ⛔ SCOPE — what this line did NOT touch
+OCT3's gate, OCT5's fix and OCT6's latch SEMANTICS are untouched — the fix makes the actuation match
+OCT6's stated design, it does not re-decide it. The shed CRITERION ([[OCT9]]) and the hand-over altitude
+([[OCT10]]) are untouched. `ModuleTundraEngineSwitch` remains banned as a switching mechanism (§B16.3).
+No install, no glass. **Stray LOGGED, not fixed (C1.1): [[OCT11]].**
+
+#### Open questions for the owner (C1.14)
+
+**OCT4-Q1 — a STANDING `WrongEngineForPhase` holds a burning bank at its last throttle. Hold, shut, or
+abort?**
+*(Paste-ready for the overseer, C1.13.)*
+
+**Situation.** OCT4 audited what `BoosterHost` actuates on every phase transition OCT3's gate permits. The
+sequencing was correct; the gate CALL was not — it omitted OCT6's shed latch, so every post-shed tick of
+a landing burn was refused and OCT6's 3→1 shed could never have reached the vehicle. That is fixed and
+mutation-proved, and it removed the only standing `WrongEngineForPhase` that actually existed. While
+tracing it, one question surfaced that is a POLICY, not a bug, and a build chat may not decide it.
+
+When a command is blocked, the host releases the axes but deliberately does NOT shut a burning engine.
+For four of the five block reasons that is plainly right (nothing is lit, or there is no control path at
+all). For the fifth — `WrongEngineForPhase`, OCT3's own interlock — a full control path EXISTS and a bank
+IS burning, and we hold it at its last commanded throttle because the FSM asked for something the gate
+refuses. Brief disagreement: harmless. Standing disagreement: the booster burns to the ground on a stale
+throttle. Nothing in the plan says which.
+
+**The decision needed.** What should the host do when `WrongEngineForPhase` persists for more than a
+moment (say, more than N consecutive ticks)?
+1. **Hold, as today** — keep the last throttle, log it, change nothing. Simplest; matches the treatment of
+   every other block; and after OCT4's fix no standing case is known to exist.
+2. **Shut the bank after a bounded number of consecutive refusals.** Fail-safe against a future wiring
+   bug of exactly the kind OCT4 just found, but it spends the bank: shutting mid-hoverslam with no relight
+   is a lost booster, so it converts a possible bug into a certain loss.
+3. **Release the binding entirely** (`Release` shuts what we lit and hands the vessel back) on a standing
+   refusal — the same escape `StopReason` already uses for a lost bind.
+4. **Leave it open pending a recorded flight** and revisit with real telemetry (§B16.8 ruling 2).
+
+**Recommendation: (1), with (4) as the follow-up.** The hazard was real but its only known instance was
+the wiring defect, which is now fixed AND is now unrepresentable at the call site; (2) and (3) both
+convert a hypothetical into a guaranteed loss of the stage, and neither has a converged N. If a recorded
+landing burn ever shows a standing refusal, that is the evidence to revisit on. **No gate-open or
+`OVERRIDE` is needed for any option** — this is new policy, not a change to a settled decision.
+
+### OCT11 [S] `currentRole` is a record of what we COMMANDED, not a reading of what is lit — **TODO** — [logged by OCT4 per C1.1: found while answering OCT4's own "is `currentRole` consistent?" question]
+- **The finding:** `BoosterHost.Dispatch` sets `currentRole = want` unconditionally after calling
+  `SelectEngineSet`, whether or not the activate took. It does not take when `Activate()` throws (caught
+  and logged at `Light`), and — the case with flight evidence — when **RealFuels refuses the ignition on
+  ullage**: flight `Crew-2_20260829_144114`, *"Booster engine never lit (eng_ignited=0 whole descent) →
+  ballistic → LOST @14 km. Root = RealFuels ullage"* (register H1b / W5). `currentRole` then claims a bank
+  is lit that is dark, and `Dispatch` never retries the activation because `want == currentRole`.
+- **Why it is NOT simply a bug to fix:** `currentRole`'s job is "do not command the same set twice", and
+  for that job a record of commands is the correct thing. Re-deriving it from `ModuleEngines.EngineIgnited`
+  each tick would retry an activate every tick while ullage is unsettled — which may be right (an unlit
+  engine SHOULD be retried once settled; the FSM's `Ullaged` gate already governs when we ask) or may be a
+  new chatter source. It is a design call with flight evidence on both sides, not a typo.
+- **Mitigation already in place (OCT4):** the shutdown sweep deliberately names banks we do NOT believe
+  are lit, precisely because this record can be wrong — shutting a bank we are unsure about is free,
+  lighting one we are wrong about is not. So the divergence cannot leave a bank burning; it can only
+  leave one dark that we believe is lit.
+- **Build:** decide whether `currentRole` should be re-derived from the live modules (and if so, how the
+  retry interacts with the ullage gate), or stay a command record with an explicit "commanded but not
+  ignited" annunciation so the screens and the BlackBox can show the divergence rather than hide it.
+- **DONE when:** the divergence is either eliminated or made visible, and whichever is chosen is recorded
+  with its reason.
 
 ### OCT5 [S] Boostback lights a bank then hands Coast a stale, still-live command — **DONE 2026-09-05** — [TIER 1: overseer-found defect, OCT3's own phase gate refuses the FSM's own nominal-RTLS output]
 - **Found by the overseer, 2026-09-05**, in `pure/BoosterDescent.cs`'s `BoosterPhase.Boostback` case
@@ -2854,6 +3069,13 @@ burn — flagged here so that future work does not have to rediscover it.
      caller that forgets the latch refuses the terminal `CenterOnly` command — a refusal, never a wrong
      actuation. `BoosterHost` passes the latch from the SAME `BoosterCommand` it decodes the role from,
      so gate and FSM read one latch on one tick (OCT3's identical-decode rule).
+     ⛔ **CORRECTION, [[OCT4]] 2026-09-05 — THAT LAST SENTENCE WAS NOT TRUE OF THE CODE.** The reasoning
+     above stands and is kept whole (C1.16's spirit); the CLAIM about the glue does not.
+     `src/BoosterHost.cs:550` called `Blocked` with six arguments and never passed the latch, so the gate
+     ran on its `false` default and refused `CenterOnly` on every post-shed tick — **OCT6's shed could
+     never have reached the vehicle.** The mechanism OCT6 chose (option (iii), the latch as a parameter)
+     was right; it was simply not wired. Fixed by OCT4 via a new `BlockedFor` that takes the whole
+     command, and mutation-proved by re-introducing the omission. See OCT4's headline block.
   4. **TESTED WHAT IS NOW LIVE** — see the verification block below.
 
 - ⚠ **I CHANGED PASSING TESTS, AND THE RULING IS WHY (C1.3 / W11's failure mode — stated, not quiet).**
