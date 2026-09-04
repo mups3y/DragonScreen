@@ -349,6 +349,15 @@ Appendix M #55); a press is an act (record it as an event, CVR-style).
 |---|---|---|---|
 | `page_l`, `page_c`, `page_r` | R2 | `ScreenPainter.livePage[1..3]` (`ScreenPainter.cs:199`, published `:280-283`); names via `FigmaUI.Name(UiPage)` (`FigmaUI.cs:147`) | `UiPage` enum (values are persistence-stable — `FigmaUI.cs:19-20`) |
 | `brightness_l/c/r` | R3 | `PageState.Brightness` per screen (`ScreenPainter.cs:881`) | 0..1 |
+
+> **SUPERSEDED 2026-09-05 (S95).** Both halves of the row above are wrong as of **S86** (2026-09-05): the
+> real source is `ScreenPainter.Brightness` (`ScreenPainter.cs:216`), `internal static int Brightness {
+> get { return brightness; } }` — a SINGLE shared static, not `PageState.Brightness` and not "per screen".
+> S86's own header comment gives the reason: "dimming for a night pass and having only the display you
+> touched go dark would be a bug, not a feature" — all three columns legitimately carry the identical
+> value by design. Row kept, not deleted (C1.16); corrected reading: `brightness_l/c/r` | R3 |
+> `ScreenPainter.Brightness` (`ScreenPainter.cs:216`), one shared value read into all three columns | 0..1.
+
 | `cam_view` | R3 | `VesselData.cameraView` `:216` | int |
 | `cover_cam_l/c/r`, `cover_phase_l/c/r` | R2 | `ScreenPainter.CoverCamL/C/R`, `CoverPhaseL/C/R` — one read-only property per screen, each reading THAT screen's own `coverCam`/`coverPhase` instance field | `cover_cam_*`: `CoverPage.CoverCam` enum, by name. `cover_phase_*`: a raw 0..6 index (not a name — see the SUPERSEDED note below) |
 
@@ -725,6 +734,11 @@ Four distinct states, three of them representable in a cell:
 once per screen (three times a frame), and it dies with the IVA, which is exactly what happens at a booster
 hand-off. It must also **not** use `Time.realtimeSinceStartup` as its sampling clock: `OnPostRender` keeps
 firing while KSP is paused, a bug already fixed once in the power-flow clock (`VesselData.cs:147-158`).
+> **SUPERSEDED 2026-09-04 — see W23 (S88).** "There is none in `plugin/src` today" was true when written
+> (2026-09-03); no longer. Three `[KSPAddon]`s now exist — `BoosterHostAddon` (`plugin/src/BoosterHost.cs:108`),
+> `CraftDumpAddon` (`plugin/src/CraftDumpAddon.cs:16`), `GeometryDumpProbe` (`plugin/src/GeometryDump.cs:30`) —
+> none of them usable as the recorder's host (none reads the R0 accumulators or has the recorder's lifecycle),
+> which is why BB1 still built its own, `plugin/src/BlackBoxRecorder.cs:116`, as this section specifies.
 
 ## 4.8 What the recorder must never do
 
@@ -923,6 +937,14 @@ an evidence artefact attached to a finding, still not a build source.
    that caveat until S47 clears it, and the manifest's provenance field should say so.
 10. **No `[KSPAddon]` and no `FixedUpdate` exist in `plugin/src`.** Noted as a structural fact a recorder build
     must supply, not a defect.
+    > **SUPERSEDED 2026-09-04 — see W23 (S88).** True when this line was written (2026-09-03); no longer
+    > true. Three `[KSPAddon]`s now exist in `plugin/src`, each with its own `FixedUpdate`: **W23**'s
+    > `BoosterHostAddon` (`plugin/src/BoosterHost.cs:108`), `CraftDumpAddon` (`plugin/src/CraftDumpAddon.cs:16`)
+    > and `GeometryDumpProbe` (`plugin/src/GeometryDump.cs:30`). (BB1 went on to add a fourth, its own
+    > recorder host, `plugin/src/BlackBoxRecorder.cs:116` — built to fill the exact gap this item described,
+    > so it does not count against the original claim; it is the fourth `[KSPAddon]` in the tree today.)
+    > A session starting from this item alone would wrongly believe the flight scene has no physics-rate host
+    > to model on — three (four, counting the recorder itself) already exist.
 
 ---
 

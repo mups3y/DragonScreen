@@ -171,8 +171,12 @@ public static class TestMain
         // ---- PART B0 (BB1, §B0) - the BlackBox flight recorder core ----
         // ⭐ THE ONE LINE THAT MUST BE REMOVED IF THE RECORDER IS EXCISED FOR RELEASE. BB1 is
         // excisable by design (owner, 2026-09-03): delete `src/pure/blackbox/`, `src/BlackBoxRecorder.cs`,
-        // `test/BlackBoxTest.cs`, and this line. Nothing else in the tree names it - the dependency
-        // arrow points one way, BlackBox -> tree, and never back.
+        // `test/BlackBoxTest.cs`, `plugin/tools/assess_flight.py`, and this line. Nothing else in the tree
+        // names it - the dependency arrow points one way, BlackBox -> tree, and never back.
+        // ⚠ S96 (2026-09-05): `plugin/tools/assess_flight.py` parses `BlackBoxSchema.cs` to build its
+        // fixture (`build.py`'s `tool_tests()` runs it as part of `test`) and cannot survive the schema's
+        // deletion - S85 proved this by running the excision and hitting a red `SELFTEST FAILED` on the
+        // python tool before this line named it.
         // ⚠ This suite proves the PURE half only: the schema, RFC-4180 + invariant formatting, §4.6's
         // blank-never-zero validity, §2.0's rate ladder and warp floor, the R0 accumulators, the warp
         // void, the manifest, and the ghost-column coverage check S76's finding demanded. It proves

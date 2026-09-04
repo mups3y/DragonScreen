@@ -1,6 +1,6 @@
 ---
 name: next
-description: Run the DragonScreen build loop for exactly ONE task. Use when the owner types /next, or asks to start/continue the DragonScreen build, take the next task, or work the register. Reads CLAUDE.md + REGISTER.md, does the single first non-DONE task, verifies it, updates the register, and stops.
+description: Run the DragonScreen build loop for exactly ONE task. Use when the owner types /next, or asks to start/continue the DragonScreen build, take the next task, or work the register. Reads CLAUDE.md + REGISTER.md, does the next eligible task (DOING, else first TODO/NEEDS-WORK, skipping blocked lines), verifies it, updates the register, and stops.
 ---
 
 # /next — the DragonScreen build loop

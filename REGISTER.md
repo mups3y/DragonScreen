@@ -9576,7 +9576,7 @@ by side in `VesselData` so the pair cannot drift.
 **DONE when:** the raw doubles sit beside their text on `PageState` (S26's pattern), the five columns are
 appended to `BlackBoxSchema` as `Conditional` on a target, and `BlackBoxCoverage` reports no defect.
 
-### S88 [S] `docs/BLACKBOX_RESEARCH.md` §6.2 item 10 is now false — three `[KSPAddon]`s exist — **TODO** — [TIER 4: doc accuracy in the spec BB2/BB3/BB4 read from]
+### S88 [S] `docs/BLACKBOX_RESEARCH.md` §6.2 item 10 is now false — three `[KSPAddon]`s exist — **DONE 2026-09-05** (batched, S88+S93+S95+S96+S97) — [TIER 4: doc accuracy in the spec BB2/BB3/BB4 read from]
 Logged by **BB1**, 2026-09-04 (C1.1).
 **The claim.** `docs/BLACKBOX_RESEARCH.md` §6.2 item 10 states: *"No `[KSPAddon]` and no `FixedUpdate` exist
 in `plugin/src`. Noted as a structural fact a recorder build must supply, not a defect."* §4.7 repeats it
@@ -9589,6 +9589,16 @@ item 10 would believe the flight scene has no physics-rate host to model on.
 ⛔ **C1.16: the document is NOT deleted and NOT rewritten.** Mark item 10 (and §4.7's repetition of it)
 `SUPERSEDED 2026-09-04 — see W23` in place, per C7.1, naming what replaced it.
 **DONE when:** both statements carry the marking, with the three addons named.
+
+**DONE 2026-09-05.** Both spots in `docs/BLACKBOX_RESEARCH.md` now carry a `> SUPERSEDED 2026-09-04 — see
+W23 (S88)` block directly beneath the original (unedited) sentence — §6.2 item 10 and §4.7's "Host."
+paragraph. Both name the three addons: `BoosterHostAddon` (`plugin/src/BoosterHost.cs:108`),
+`CraftDumpAddon` (`plugin/src/CraftDumpAddon.cs:16`), `GeometryDumpProbe` (`plugin/src/GeometryDump.cs:30`)
+— verified by reading each file, not by trusting this line's own line numbers (BB1's line cited
+`BoosterHost.cs:102-105`; the class attribute is actually at `:108` as of this revision). Also noted: a
+fourth `[KSPAddon]` now exists, BB1's own `BlackBoxRecorder.cs:116` — it does not count against the
+original claim (it was built to fill the exact gap item 10 described) but a reader counting addons in the
+tree today would find four, not three, so both superseded notes say so explicitly.
 
 ### S89 [O] `LZ1` recorded an owner ruling the owner never gave — unwind it, record the real one — **DONE 2026-09-04** — [TIER 1: a C1.12 governance failure, and the rule it violated is what it cited]
 Owner-directed, 2026-09-04 (not from a prior line; taken as THE task per C1.1).
@@ -9760,8 +9770,10 @@ demand, and is Python-version-specific (`313` — it will be a different file th
 matched by `.gitignore:72`; `git ls-files | grep -i pycache` no longer lists it. **Stray found while
 verifying, NOT fixed (C1.1):** `plugin/build/__pycache__/navball_preview.cpython-313.pyc` is ALSO tracked —
 the same defect on a second file this line didn't name. Now caught by the new `__pycache__/` glob for
-future runs, but the already-tracked copy needs its own `git rm --cached`; logged as **S96**. Harness/repo-
-metadata only, no code behaviour change → C1.3 preview/PNG gate does not apply, skipped.
+future runs, but the already-tracked copy needs its own `git rm --cached`; logged as **S96** — later
+renumbered to **S97** (2026-09-05) when a second, unrelated `TODO` collided on the S96 number; see S97's
+own line for the renumbering note. Harness/repo-metadata only, no code behaviour change → C1.3 preview/PNG
+gate does not apply, skipped.
 
 ### S92 [S] `docs/BUILD_PLAN.md:978` describes `_AutopilotStub.cs`'s `Actuator` in the present tense — stale since W2/Wave B retired it — **DONE 2026-09-05** (batched with S3+S91) — [TIER 3: a research doc contradicting the live stub it describes]
 Logged by **G8**, 2026-09-05 (C1.1 — noticed while reading Part B prose to scope G8's docs/BUILD_PLAN.md
@@ -9782,7 +9794,7 @@ declared a no-op `Actuator`; recovering the real one retired that stub class —
 2-line hunk at :978-979, nothing else in the guarded file touched. Docs-only, no code change → C1.3
 preview/PNG gate does not apply, skipped.
 
-### S93 [S] `.claude/skills/next/SKILL.md:3` (frontmatter `description`) still says "the single first non-DONE task" — the same stale rule G8 fixed at :18-27, one level up — **TODO** — [TIER 4: a description string, not the enforced instruction]
+### S93 [S] `.claude/skills/next/SKILL.md:3` (frontmatter `description`) still says "the single first non-DONE task" — the same stale rule G8 fixed at :18-27, one level up — **DONE 2026-09-05** (batched, S88+S93+S95+S96+S97) — [TIER 4: a description string, not the enforced instruction]
 Logged by **G8**, 2026-09-05 (C1.1 — noticed while re-reading the whole file to place the loop-rule fix at
 step 2; not fixed, because the owner's authorisation named four specific locations and this was not one of
 them).
@@ -9794,7 +9806,11 @@ first non-DONE task, verifies it, updates the register, and stops."* That is the
 skills are listed) and states the old, wrong rule. **Fix:** reword the clause to something the new rule
 doesn't contradict, e.g. "does the next eligible task" — a one-line frontmatter edit.
 
-### S96 [S] BB1's excision recipe names FOUR items and the excision needs FIVE — BB3's `assess_flight.py` is not in it — **TODO** — [TIER 4: hygiene — a comment that would mislead the one person following it]
+**DONE 2026-09-05.** `SKILL.md:3` now reads: *"...does the next eligible task (DOING, else first
+TODO/NEEDS-WORK, skipping blocked lines), verifies it, updates the register, and stops."* — matches the
+rule at `SKILL.md:18-27` (step 2) without restating it verbatim. Nothing else in the file touched.
+
+### S96 [S] BB1's excision recipe names FOUR items and the excision needs FIVE — BB3's `assess_flight.py` is not in it — **DONE 2026-09-05** (batched, S88+S93+S95+S96+S97) — [TIER 4: hygiene — a comment that would mislead the one person following it]
 Logged by **S85**, 2026-09-05 (C1.1 — found by RUNNING the excision, out of S85's scope to fix).
 ⚠ Numbered **S96**: `S95` was already taken by an unrelated `TODO` further down (the `brightness_l/c/r`
 source citation). Same collision S94's line warns about; the next free number is used rather than shadowing.
@@ -9815,6 +9831,18 @@ is what makes deletion the correct fix rather than a guard) · S85's own excisio
 anywhere else the four-item recipe is written down (grep `excisable`) agrees with it. Comment-only, no
 code change — so C1.3's preview/build gate is satisfied by saying so (a `build.py test` run is still
 cheap and worth doing).
+
+**DONE 2026-09-05.** `plugin/test/TestMain.cs`'s recipe comment now reads "delete `src/pure/blackbox/`,
+`src/BlackBoxRecorder.cs`, `test/BlackBoxTest.cs`, `plugin/tools/assess_flight.py`, and this line" — five
+items — with a dated note below it recording why the python tool belongs in the recipe (S85's red build,
+above). `grep -rn excisable` across the tree found five other mentions
+(`BlackBoxRecorder.cs:1595`, `BoosterHost.cs:106`, `CraftDumpAddon.cs:9`, `BlackBoxSchema.cs:393`,
+`ScreenPainter.cs:420`) — none restate the item list, so none contradict the fix; and two `REGISTER.md`
+mentions (S85's own dated Open-questions entry, and one general reference), both historical/quoted records
+of what was known when written, left untouched (same practice as elsewhere in this register: a closed,
+dated record is not silently rewritten). Comment-only, no code behaviour change — C1.3's preview/PNG gate
+does not apply, stated rather than skipped silently; `python plugin/build.py test` run anyway as the
+no-regression check.
 
 ### S94 [S] `cover_cam`/`cover_phase` split into six per-screen columns — closing S86-Q1 (owner → the overseer, 2026-09-05) — **DONE 2026-09-05** — [TIER 4: hygiene — the rest of S86's §2.7 column set]
 Assigned directly by the owner, 2026-09-05, as the resolution of **S86**'s open question (C1.14). ⚠ **A
@@ -9897,7 +9925,7 @@ editing the doc row immediately above the one this task changed, NOT fixed (C1.1
 green, `python plugin/build.py` (full glue compile, no `install`) clean. No `install`, no glass time —
 none of this needed anything past the standing preview-only build-go.
 
-### S95 [S] `docs/BLACKBOX_RESEARCH.md`'s `brightness_l/c/r` row cites the wrong source — **TODO** — [TIER 4: doc accuracy]
+### S95 [S] `docs/BLACKBOX_RESEARCH.md`'s `brightness_l/c/r` row cites the wrong source — **DONE 2026-09-05** (batched, S88+S93+S95+S96+S97) — [TIER 4: doc accuracy]
 Logged by **S94**, 2026-09-05 (C1.1 — noticed while editing the adjacent `cover_cam`/`cover_phase` row for
 S86-Q1's closure; not fixed, because it is a different column and outside S94's declared deliverable).
 
@@ -9910,7 +9938,19 @@ having only the display you touched go dark would be a bug, not a feature", its 
 design, per S86's line). **Fix:** correct the Source cell and drop "per screen" from the description; a
 one-row doc edit, C7.1.
 
-### S96 [S] `plugin/build/__pycache__/navball_preview.cpython-313.pyc` is ALSO committed — the same defect S91 fixed, on a second file — **TODO** — [TIER 4: hygiene]
+**DONE 2026-09-05.** Verified against the code first (`plugin/src/ScreenPainter.cs:216`):
+`internal static int Brightness { get { return brightness; } }` — confirms both the accessor name and
+that it is a single shared static, not per-screen. Added a `> SUPERSEDED 2026-09-05 (S95)` block beneath
+the original row (C1.16 — row kept, not edited in place) giving the corrected Source/description/reasoning.
+
+### S97 [S] `plugin/build/__pycache__/navball_preview.cpython-313.pyc` is ALSO committed — the same defect S91 fixed, on a second file — **DONE 2026-09-05** (batched, S88+S93+S95+S96+S97) — [TIER 4: hygiene]
+⚠ **Renumbered from S96 to S97, 2026-09-05 (the S88+S93+S95+S96+S97 batched hygiene task).** This line and
+`REGISTER.md`'s excision-recipe line (naming BB1's `TestMain.cs` recipe gap) were both numbered **S96** —
+two different TODOs, one number, so `/next` could not disambiguate them (C1.1). The excision-recipe line
+keeps **S96** (it was written first, at what is now line 9811); this line, written later, moves to the next
+free number, **S97**. Every cross-reference to "S96" meaning THIS item (this defect) is updated to S97
+below and at `S91`'s stray note; the recipe line's own "S96" references are untouched, since that number
+still correctly names it.
 Logged by the **S3+S91+S92 batched hygiene task**, 2026-09-05 (C1.1 — noticed while verifying S91's fix with
 `git ls-files | grep -i pycache`; not fixed, because S91's authority named only
 `plugin/__pycache__/build.cpython-313.pyc`).
@@ -9922,3 +9962,12 @@ check-ignore -v plugin/build/__pycache__/navball_preview.cpython-313.pyc` alread
 already-tracked copy survives a `.gitignore` addition (gitignore only stops NEW tracking) and still shows
 up in `git ls-files`. **Fix:** `git rm --cached plugin/build/__pycache__/navball_preview.cpython-313.pyc`;
 no `.gitignore` change needed, S91's glob already covers it.
+
+**DONE 2026-09-05.** `git rm --cached plugin/build/__pycache__/navball_preview.cpython-313.pyc` — note
+this line's own "already matches" claim about `git check-ignore` was not quite right: `check-ignore`
+reports a path as ignored only once it is UNTRACKED (a tracked file cannot be "excluded" by definition,
+so it read as not-ignored while still in the index — verified both ways: the pattern matched instantly on
+a fresh test file dropped in the same directory, and on this file itself immediately after the `rm
+--cached`). Post-fix, verified: `git ls-files | grep -i pycache` returns nothing; `git check-ignore -v
+plugin/build/__pycache__/navball_preview.cpython-313.pyc` → matched by `.gitignore:72`, same rule S91
+added. No `.gitignore` change needed, as this line said.
