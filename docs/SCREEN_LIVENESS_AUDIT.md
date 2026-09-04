@@ -398,6 +398,20 @@ glass to *build* — though several will want S18's eyes eventually.
 > **(b)** harvest only `StepList` + the NAV cluster and formally retire the rest as dead code;
 > **(c)** leave everything stranded and rebuild fresh where needed. Which?
 >
+> ✅ **Q1 ANSWERED 2026-09-04 by the OWNER via the overseer — for S57's six items only: neither (a), (b) nor
+> (c), but "SPLIT IT" — route each stranded asset to the register line that already touches that code.**
+> Executed by S57 the same day: the **NAV pan/zoom/NEXT-VIEW cluster → S43**, `LifeSupport.Margins` → **S79**
+> (S75's successor for the MARGIN column), `RangeExtender.cs` → **W9** (a HOLD, never a retire — §B16 claims
+> it), the three `[Tunable]` knobs stay **record-only**, `pure/Orbital.cs` is **NOT retirable** (four live
+> call sites in `pure/Predict.cs` — this audit's "orphaned" verdict on it is STALE, Wave A landed `Predict.cs`
+> after this document), and `pure/Hohmann.cs` + the `defaultPage` cfg key remain on S57 as **S57-Q2 / S57-Q3**.
+> ⚠ **This ruling covers S57's items only.** `StepList`, the crew-gate card and the 478-line settings page
+> are also stranded behind `FigmaMode`, are **not** S57 items, and are **still undecided** under this Q1.
+> ⭐ **One claim above has moved:** the NAV cluster is only half-stranded. The **Cover** map cluster is live
+> today (`CoverPage.HitTest` → `ScreenPainter.cs:430`, acted on at `:643-656`); the stranded half is the
+> standalone `NavPage` cluster (`NavPage.HitTest:114-125`), whose actuation `ScreenPainter.Apply:688-694`
+> still implements in full — only its producer (`Pages.cs:661 case 2`) is behind `FigmaMode`. See S43.
+>
 > **Q2 — Cover `ENTRY ENABLED` (H6).** The row draws `True` **and** `False` simultaneously, neither lit,
 > and both hit rects resolve to nothing. Its class depends on what the row means, which the build cannot
 > read off the reference: **(a)** *"the crew verified entry is enabled"* → a local latch, Part-A-achievable

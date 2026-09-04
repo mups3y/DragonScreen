@@ -3816,9 +3816,26 @@ apsis markers not overlapping it — with the closed Kerbin-scale case unchanged
   register's own wording rather than from the geometry. Do not treat that as a settled decision to override.
 - ⚠ **S57's item 3 says to do S43 and the orphaned NAV pan/zoom/NEXT-VIEW cluster together (audit H36).**
   That coupling survives whichever option is chosen — options 1, 2 and 4 below all need the cluster live for
-  `NavMode.Orbit`, which today reads inactive (`NavPage.cs:899`, `bool active = Map || Planet`). The cluster
-  itself is **S57's** to harvest and S57 is HELD on audit Q1, so an answer here does not unblock the work on
-  its own: **S43 and S57 need answering together.**
+  `NavMode.Orbit`, which today reads inactive (`NavPage.cs:899`, `bool active = Map || Planet`).
+- ⬅ **INHERITED FROM S57, 2026-09-04 — THIS LINE NOW OWNS THE NAV PAN/ZOOM/NEXT-VIEW CLUSTER.** The owner
+  answered audit Q1 / S57-Q1 as **option 4 (split S57 into its six items)** via the overseer, and item 3 —
+  *the NAV pan/zoom/NEXT-VIEW cluster* — was routed **here**, because S43's own ruling is now **zoom-and-pan**
+  and so needs exactly this cluster. It is named explicitly so it cannot fall between the two lines, which is
+  option 4's one risk. **S43-Q2 is thereby ANSWERED as its option 2** ("release the NAV cluster from S57 to
+  S43"); S43 is now self-contained on the control side and **S43-Q1 alone still blocks it**.
+- ⭐ **WHAT YOU ACTUALLY INHERIT IS CHEAPER THAN THE AUDIT SAYS — re-verified by grep 2026-09-04 (S57).** The
+  audit calls the cluster *"wired with no `UiPage` to host it"*; that is only half true.
+  - **The Cover map cluster is already LIVE.** `CoverPage.HitTest` returns `NextView` / `MapPan*` /
+    `MapZoom*` / `MapCentre`; `ScreenPainter.cs:430` calls it and `:643-656` acts on all seven.
+    (`FigmaUI.MapCover` resolving only Menu/Settings/PhaseManual is deliberate, not a gap — the painter is
+    the caller that handles the rest, and `FigmaUI.cs:370-373` says so.)
+  - **The stranded half is the standalone `NavPage` cluster.** `NavPage.HitTest:114-125` emits
+    `PageAct.NavNextView` / `NavZoomIn` / `NavZoomOut` / `NavPan*` / `NavCentre`, and `ScreenPainter.Apply`
+    (`:688-694`) **still implements every one of them**. The only producer is `Pages.cs:661 case 2`, behind
+    `FigmaMode = true`.
+  ⇒ **The actuation end is intact; the missing piece is only a Figma-side surface that emits those hits**
+  (plus making `NavMode.Orbit` count as active at `NavPage.cs:899`). That is much less work than "wire up a
+  dead cluster", and whichever S43-Q1 option is chosen should be costed against this, not against the audit.
 
 #### Open questions for the owner (C1.14) — S43
 
@@ -3849,6 +3866,8 @@ below is a different answer to "what is this plot for", and each is defensible.
    with a short leader so nothing overlaps the limb or the vehicle tick, and thicken the ring. Cheap, honest,
    strictly better than today. ⚠ It satisfies only half the DONE-when: the markers stop overlapping, the ring
    is still 7.8 px off the limb. Choosing it means re-scoping the line to that half and saying so.
+
+**S43-Q2 — ✅ ANSWERED 2026-09-04 by the OWNER via the overseer: OPTION 2 (release the NAV cluster from S57 to S43), delivered as S57's option-4 split. Kept below as the record; nothing is outstanding on it.** *(Original wording follows.)*
 
 **S43-Q2. S57 item 3 and audit H36 both say "do S43 and the NAV control cluster together". Confirm the
 pairing, or split it.**
@@ -4545,7 +4564,7 @@ tripping with the buses would make word and pipe colour honest off state the cre
 **DONE when:** the tree's buses/strings are touchable from the glass through the existing dispatcher, and the
 P&ID's pumps/fans/valves read modelled state. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H32/H33.
 
-### S57 [S] Orphaned live code with no caller — harvest or retire — **HELD 2026-09-04 (blocked on the OWNER's answer to audit Q1)** — [TIER 4: hygiene + harvest]
+### S57 [S] Orphaned live code with no caller — harvest or retire — **SPLIT 2026-09-04 (owner ruling: audit Q1 = option 4 — four of six items routed to their host lines; the remainder is ONE owner question)** — [TIER 4: hygiene + harvest] ⚠ batch deviation from C1.1/C1.7 authorised by owner 2026-09-04 via overseer
 Logged by **S49** (H36, H39, H43, H44). Working, tested code that nothing calls: **`pure/Orbital.cs`**
 (vis-viva, anomalies, ground range/bearing) and **`pure/Hohmann.cs`** (Δv1/Δv2, phase lead, wait time) — zero
 screen callers, though *displaying* a rendezvous plan needs no flight control and is the natural live
@@ -4601,7 +4620,55 @@ or explicitly retired with a note. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H36/H
      `s.Margins` anywhere**. So the work is not "wire the maths up", it is "show what is already computed" —
      which is exactly S75's MARGIN column, and is cheaper than the audit's wording implies.
 
+- ✅ **THE SPLIT, EXECUTED 2026-09-04 (owner ruling via the overseer: audit Q1 / S57-Q1 = OPTION 4).**
+  The owner answered Q1 as **(4) split it** — not the audit's own (a) — so each item rides with the task that
+  already touches that code, and only the genuinely-orphaned remainder stays here. ⚠ Option 4's one risk is
+  things falling between tasks, so **every host line below has been amended to name the item it inherits**;
+  none of this is left implicit. Done in the owner-authorised 2026-09-04 batch session (deviation from
+  C1.1/C1.7, batch only, does not generalise). **No file in `plugin/` was touched by this line** — the split
+  is a routing decision, so S57 changes NO screen and the preview gate does not apply (stated, not skipped
+  silently, per the batch brief).
+  | # | item | routed to | as |
+  |---|------|-----------|-----|
+  | 1 | the **NAV pan/zoom/NEXT-VIEW cluster** | **S43** | S43's own cheap fix — its ruling is now ZOOM-AND-PAN, so it needs exactly this cluster (the pairing S57 item 3 and audit H36 both called for) |
+  | 2 | **`LifeSupport.Margins`** | **S79** (S75's successor for this column) | the filling for the Vehicle Overview MARGIN column |
+  | 3 | **`RangeExtender.cs`** | **W9** | a **HOLD, never a retire** — §B16 claims it |
+  | 4 | the three **`[Tunable]`** knobs (H43) | — | **record-only**, as they always were; the record exists, nothing to do |
+  | 5 | **`pure/Orbital.cs`** | stays here | ⛔ **NOT retirable** — four live call sites in `pure/Predict.cs` |
+  | 6 | **`pure/Hohmann.cs`** + `defaultPage` | stays here | the genuine remainder → **S57-Q2** below |
+- ⚠ **ROUTING NOTE — item 2 goes to S79, not S75, and that is the owner's intent honoured rather than
+  changed.** The ruling named **S75** as the host "which now owns the MARGIN column". Since the ruling was
+  written, **S75 closed** (`5a003ce`, 2026-09-04) having split the MARGIN column out onto its own line as
+  **S79** *("the column is this line, not S75's, and it does not start before S57 is unblocked")*. S79 is
+  therefore the line that actually owns the column today, and S75 is DONE and cannot host new work. Both
+  lines are annotated so the trail is readable from either end. **S79 is hereby unblocked**: its stated
+  blocker was "S57 is HELD", and S57 is no longer held on this item.
+- ⛔ **THE RETIRE LIST EXCLUDES `pure/Orbital.cs` AND `RangeExtender.cs` — re-verified by grep 2026-09-04,
+  not taken on trust.** `Orbital.cs` has **four live call sites** in `pure/Predict.cs` (`:53`, `:54`, `:55`,
+  `:130` — `TrueToMean` ×2, `Wrap`, `AltitudeToTrueAnomaly`); Wave A landed `Predict.cs` AFTER the audit was
+  written, so the audit's "orphaned" verdict on it is **STALE** and retiring it would break the build.
+  `RangeExtender.cs` is claimed by §B16/W9 (`src/BoosterHost.cs:50-51`, `pure/BoosterHostPlan.cs:245`).
+- ⭐ **A FOURTH AUDIT CLAIM HAS MOVED — found while routing item 1, and S43 needs it.** The audit says the NAV
+  cluster is *"fully implemented and wired with no `UiPage` to host it"*. That is now only **half** true, and
+  the two halves need different work:
+  - the **Cover map cluster IS live today**: `CoverPage.HitTest` returns `NextView` / `MapPan*` / `MapZoom*` /
+    `MapCentre`, `ScreenPainter.cs:430` calls it and `ScreenPainter.cs:643-656` acts on every one of them.
+    (`FigmaUI.MapCover` deliberately resolves only Menu/Settings/PhaseManual and drops the rest to `None` —
+    the painter is the caller that handles them, and `FigmaUI.cs:370-373` says so in terms.)
+  - the **standalone `NavPage` cluster is the stranded half**: `NavPage.HitTest` (`:114-125`) returns
+    `PageAct.NavNextView` / `NavZoomIn` / `NavZoomOut` / `NavPan*` / `NavCentre`, and `ScreenPainter.Apply`
+    (`:688-694`) still implements all seven — but the only producer is `Pages.cs:661 case 2`, which is behind
+    `FigmaMode = true` and therefore unreachable. **So the actuation end is intact and the only missing piece
+    is a Figma-side surface that emits those hits.** That is materially cheaper than "wire up a dead cluster",
+    and it is S43's to use.
+- ℹ **What the ruling does NOT settle.** Audit §8 Q1 is broader than S57: it also covers `StepList` (the
+  15-row live ascent state machine), the crew-gate card and the 478-line settings page with eight working
+  handlers. Those are **not** S57 items and no line here claims them — they remain open under the audit's own
+  Q1. Recorded so a later reader does not take "Q1 answered" as covering them.
+
 #### Open questions for the owner (C1.14) — S57
+
+**S57-Q1 — ✅ ANSWERED 2026-09-04 by the OWNER via the overseer: OPTION 4 (split it). Kept below as the record of what was asked and decided; no action is outstanding on it.** *(Original wording follows.)*
 
 **S57-Q1. This line cannot start until audit Q1 is answered. Re-posing it, narrowed to what S57 needs.**
 *Situation.* `docs/SCREEN_LIVENESS_AUDIT.md` §8 Q1 asked what to do with the UI stranded behind
@@ -4623,6 +4690,45 @@ live caller, `Margins` is computed but never displayed, `Hohmann` alone is fully
    cluster with **S43**, `Margins` with **S75**, `RangeExtender` with **W9** — leaving only `Hohmann.cs` and
    `defaultPage` on this line. *(a defensible alternative to 1: it removes the coupling that made this line
    un-startable, and every one of those host tasks already exists.)*
+
+**S57-Q2. `pure/Hohmann.cs` is the one genuinely orphaned file. Retire it, or hold it as harvest material?**
+*Situation.* Verified by grep 2026-09-04: **zero callers** outside its own 77 lines and
+`plugin/test/RendezvousMathTest.cs:58-68`. (`Orbital.Hohmann` at `pure/Orbital.cs:133` is a **different**,
+separately-tested method in a file that stays regardless — the two are not the same asset.) Under the
+2026-09-04 split, **MechJeb owns rendezvous execution**, so no future *flight* caller is coming. C1.16 keeps
+research forever but explicitly allows code to be deleted, so this is a real choice and not a foregone one.
+**This line did not delete it** — a build chat decides none (C1.14).
+1. **HOLD it as harvest material for a rendezvous-plan READOUT — retire nothing.** *(recommended.* Three
+   reasons. **(i)** MechJeb owning rendezvous *execution* does not hand the SCREENS a Δv1/Δv2/phase-lead/wait-time
+   number to draw — the pages are pure-side and MechJeb is not a display source, so a *displayed* plan still
+   needs exactly this math. **(ii)** §14.4(f) says a real screen's readouts are INCLUDED and FILLED, and this
+   line's own text already names the target: the Hold-Capture card's permanent `NOT ENGAGED`
+   (`pure/RendezvousPage.cs:113`) — a plan readout beside it needs **no flight control** and breaks no
+   §14.4(a) rule. **(iii)** It costs 77 lines with green tests to keep, and re-earning it costs more; the same
+   asymmetry C1.16 is built on. **(iv)** Two of the five assets on this line already turned out to be claimed
+   by live code and by §B16 after being called "orphaned" — that history argues for hold-as-default.)*
+2. **Retire it** — delete `pure/Hohmann.cs` **and** the `Hohmann` block of `RendezvousMathTest.cs:58-68`
+   (which would otherwise fail to compile), with a note here saying what went and why. ⚠ Note this deletes
+   test coverage as well as code, and the Hold-Capture readout in (1) would then have to be rebuilt from
+   `Orbital.Hohmann` plus fresh phase-lead math.
+3. **Retire it only once a rendezvous-plan readout is ruled OUT** — i.e. fold this question into whatever
+   line decides the Hold-Capture card's future, and leave `Hohmann.cs` untouched until then. *(the
+   procedural version of 1; same outcome today, defers the deletion decision to a better-informed line.)*
+
+**S57-Q3. `defaultPage` in `DragonScreen.cfg` — honour it or retire the key?**
+*Situation.* `DragonScreenMonitor.cs:84` reads it, `:306-310` resolves and warns on a bad name, and
+`ScreenPainter.cs:239-240` then throws the result away: `FigmaMode ? 0 : defaultPageIndex`. All three screens
+set it in the shipped cfg (`VEHICLE` / `FLIGHT` / `NAV` at `DragonScreen.cfg:64/80/91`) and none of those are
+Figma page names, so the key is inert **and** misleading — a user editing it gets a validation warning path
+that leads nowhere. This was Q1's fourth item; option 4 leaves it here, and it is not settled by the split.
+1. **Honour it against the Figma page map** — map the cfg name onto a `UiPage` and let it pick the starting
+   page per screen. *(recommended: it is the behaviour the cfg's own comment block at `:35` documents
+   — "a STARTING SELECTION, NOT AN ASSIGNMENT" — and the resolve/warn machinery is already written; what is
+   missing is only the Figma-side name table.)*
+2. **Retire the key** — remove it from the cfg and the three `defaultPage =` lines, drop the field and the
+   warning, and leave every screen starting on the Cover. Honest, smaller, and loses a user-facing setting.
+3. **Leave it exactly as is** and add a one-line comment in the cfg saying it is inert under `FigmaMode`.
+   *(cheapest; keeps a documented dead key, which is what the audit flagged in the first place.)*
 
 ### S58 [S] `docs/INDEX.md` is missing the three newest research docs — **DONE 2026-09-04 (H1)** — [TIER 2: hygiene]
 Logged by **G4** (2026-09-03), noticed while making G4's C7.1 consistency pass over `INDEX.md`. `INDEX.md` is
@@ -5133,6 +5239,17 @@ sites bound to §B16.1's fresh core (or to nothing, explicitly and honestly, if 
 `CmdTransX/Y/Z` supplied by a real `FlightDriver` (**W10**) rather than by the stub.
 **DONE when:** `build.py test` green, `MissionConductor.RecoveryBooster` genuinely backs the
 `BoosterRecovery` facade or the facade still carries a stated reason, and no `BoosterControl` byte is back.
+- ⬅ **INHERITED FROM S57, 2026-09-04 — THIS LINE NOW HOLDS `src/RangeExtender.cs`.** The owner answered audit
+  Q1 / S57-Q1 as **option 4 (split S57 into its six items)** via the overseer, and item 5 —
+  **`src/RangeExtender.cs`**, 76 lines, no caller, left by the 2026-09-01 autopilot deletion — was routed
+  **here**, because §B16 claims it and the tree already names W9 as its owner in two places
+  (`src/BoosterHost.cs:50-51` and `pure/BoosterHostPlan.cs:245`, per §B16.7 step 1). Named explicitly so it
+  cannot fall between lines, which is option 4's one risk.
+  ⛔ **It is a HOLD, never a retire, and never a harvest-in-passing.** Do NOT delete it and do NOT wire it
+  from anywhere else: `RangeExtender.Enable` writes `vesselRanges` on **every** vessel including the Dragon,
+  so only the recovery conductor may call it (S48 §2.6 gotcha 7 — without it the booster is unloaded and
+  deleted a few km downrange; `plugin/test/BoosterHostTest.cs:211` pins that packed-is-not-a-stop rule).
+  Its "no caller" state is therefore **correct until this line lands**, not a defect to fix early.
 ⚠ **Ordering:** this line depends on **W10** (the host) and on §B16.1 (the booster core). Do not take it first.
 
 ### W10 [O] `src/CrewProcedureOps.cs` + `src/FlightDriver.cs` — the conductor glue, and the only thing that ticks it — **W10 OWNS THE HOST OUTRIGHT** — **TODO** — [TIER 2: real gap — the restored Wave-D pure layer has no driver]
@@ -6314,6 +6431,15 @@ hardcoded dash, pinned by a test in the same style as S54's.
   `plugin/src/pure/CoverPage.cs` · `plugin/preview/PreviewMain.cs` · `plugin/test/FigmaUINavTest.cs` ·
   this line + the new **S79** / **S80** lines · one local commit. NOT pushed (C1.5).
 
+- ⬅ **S57's `LifeSupport.Margins` WAS ROUTED TO THIS LINE BY THE OWNER, 2026-09-04 — and it lands in this
+  line's successor, `S79`.** The owner answered audit Q1 / S57-Q1 as **option 4 (split S57)** via the
+  overseer and named **S75** as the host for `LifeSupport.Margins`, "which now owns the MARGIN column". S75
+  had already **closed** (`5a003ce`, same day) having split that column out onto its own line as **S79**, so
+  the item is recorded on **S79**, which is the line that owns the column today. Nothing is outstanding on
+  S75 itself; this note exists so the trail is followable from this end too. **The work S57 hands over is
+  `s.Margins` DISPLAY, not computation** — `src/LifeSupportBridge.cs:54/60/66/86` already computes it and
+  `grep` finds no consumer anywhere.
+
 #### Open questions for the owner (C1.14) — S75
 
 **S75-Q1. The two controls are now honestly inert. Do they ever become real, and on what source?**
@@ -6336,13 +6462,30 @@ an end state. Neither can be filled without a source: `SCREEN_INVENTORY.md`'s Di
    screen's features are included, and removing paint to avoid deciding what it means is the one thing this
    defect class should not teach.
 
-### S79 [S] The Vehicle Overview's MARGIN column is a hardcoded dash on every row — **TODO (sequence AFTER S57)** — [TIER 2: a column that claims a number it never computes]
+### S79 [S] The Vehicle Overview's MARGIN column is a hardcoded dash on every row — **TODO — UNBLOCKED 2026-09-04 (S57 split; this line inherits `LifeSupport.Margins`)** — [TIER 2: a column that claims a number it never computes]
 Split out of **S75**, 2026-09-04, when that line closed its two painted controls (C1.7). S75's DONE-when
 carried a third clause — *"and the MARGIN column reads modelled margins rather than a hardcoded dash, pinned
 by a test in the same style as S54's"* — which S75's OWN body then says must land *"with or after S57"*.
 **S57 is HELD on the owner's unanswered audit Q1**, and its item 2 warns in terms: *"it is also the filling
 for the MARGIN column that S75 now owns — sequence them; do not land the column twice."* So the column is
 this line, not S75's, and it does not start before S57 is unblocked.
+- ⬅ **INHERITED FROM S57, 2026-09-04 — THIS LINE NOW OWNS `LifeSupport.Margins`, AND THE S57 BLOCKER IS
+  LIFTED.** The owner answered audit Q1 / S57-Q1 as **option 4 (split S57 into its six items)** via the
+  overseer; item 2 — `LifeSupport.Margins` — was routed to the line owning the MARGIN column, which is this
+  one (the ruling named **S75**, which had closed hours earlier having split the column out to S79). It is
+  named explicitly so it cannot fall between lines, which is option 4's one risk.
+  **What that changes for this line, concretely:**
+  - **The "sequence AFTER S57" gate is spent.** S57 no longer holds anything this line needs; "do not land
+    the column twice" is satisfied because S57 has handed the item over rather than keeping a claim on it.
+  - **The inherited work is DISPLAY, not computation.** Re-verified by grep 2026-09-04:
+    `src/LifeSupportBridge.cs:54/60/66/86` already compute `s.Margins` off real TAC-LS rates, and there is
+    **no consumer of `s.Margins` anywhere in the tree**. So the food/water/O₂ rows need wiring, not modelling
+    — cheaper than this line's own body assumed.
+  - **The deorbit rows' `pure/Orbital.cs` dependency is NOT blocked either.** `Orbital.cs` stays in the tree
+    permanently (four live call sites in `pure/Predict.cs`); S57 explicitly excluded it from any retire list.
+  - **S79-Q2 ("may the two Power Unit rows land BEFORE S57 unblocks?") is therefore MOOT** — S57 is
+    unblocked, so the column can land **once**, in one pass, which is what its own option 1 wanted. **S79-Q1
+    (the column's units/header) is still open and still blocks the build.**
 **The defect.** `pure/VehicleOverviewPage.cs`'s CONSUMABLES loop draws `R(Dash, 3360, y, 25, Dim)` — the same
 literal on all eight rows, on a live feed and a dead one alike, with nothing computed behind it. The column
 HEADER says MARGIN, so the page is asking a question it never answers. `SCREEN_LIVENESS_AUDIT.md` H18 files
