@@ -1525,8 +1525,34 @@ public static class PreviewMain
         }
         if (img == null) return;
         g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-        g.DrawImage(img, new RectangleF(c.A, c.B, c.C, c.D),
-                    new RectangleF(0f, 0f, img.Width, img.Height), GraphicsUnit.Pixel);
+
+        // ---- S75: THE TINT IS PART OF THE COMMAND, AND THE PREVIEW HAS TO OBEY IT ----
+        // ScreenPainter.DrawImage multiplies every image by c.Colour (GL.Color(Tint(c.Colour)) on the
+        // quad), so on the glass a named asset drawn in anything but opaque white comes out tinted.
+        // This path ignored the colour entirely and drew the PNG raw, which made the preview and the
+        // capsule disagree about a page's appearance — and the preview is the ONLY surface layout and
+        // legibility are judged from (CLAUDE.md: restarts are the scarce resource). S75 found it by
+        // tinting CoverPage's gridicons_refresh to the inert tint and watching the PNG not change.
+        // Opaque white takes the old path exactly, so every other cover asset renders byte-identically.
+        if (c.Colour.R >= 0.999f && c.Colour.G >= 0.999f && c.Colour.B >= 0.999f && c.Colour.A >= 0.999f)
+        {
+            g.DrawImage(img, new RectangleF(c.A, c.B, c.C, c.D),
+                        new RectangleF(0f, 0f, img.Width, img.Height), GraphicsUnit.Pixel);
+            return;
+        }
+
+        ColorMatrix cm = new ColorMatrix(new float[][] {
+            new float[] { c.Colour.R, 0f, 0f, 0f, 0f },
+            new float[] { 0f, c.Colour.G, 0f, 0f, 0f },
+            new float[] { 0f, 0f, c.Colour.B, 0f, 0f },
+            new float[] { 0f, 0f, 0f, c.Colour.A, 0f },
+            new float[] { 0f, 0f, 0f, 0f, 1f } });
+        using (ImageAttributes ia = new ImageAttributes())
+        {
+            ia.SetColorMatrix(cm);
+            g.DrawImage(img, new Rectangle((int)c.A, (int)c.B, (int)c.C, (int)c.D),
+                        0, 0, img.Width, img.Height, GraphicsUnit.Pixel, ia);
+        }
     }
 
     private static void DrawImage(Graphics g, DrawCmd c)

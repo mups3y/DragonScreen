@@ -196,6 +196,29 @@ namespace DragonScreen
         static readonly string[] EarthOnlyKeys = {
             "target_latitude_26deg_15_00deg_n", "target_longitude_26deg_15_00deg_n" };
 
+        // ---- S75: THE GLYPHS THAT ARE NOT BUTTONS, DRAWN SO THEY DO NOT LOOK LIKE ONES ----
+        // Every OTHER white glyph on this page is touchable: eva_menu_fill is CoverButton.Menu, and the
+        // two ic_sharp_arrow_back exports are Back and Forward — all three sit in the Hits table below.
+        // White-glyph-means-button is therefore this page's own idiom, and gridicons_refresh (top-right
+        // of the content panel, inline with RUNNING / 00:22:57) was riding that idiom with NO hit rect
+        // at all. SCREEN_LIVENESS_AUDIT.md H18 files it with `SHOW MARGINS TO` as the same defect class:
+        // a painted control that resolves to nothing, which is worse than a no-op because a no-op at
+        // least names an action. S54 fixed the mirror-image defect (a rect that fires with no label);
+        // this is the label with no rect.
+        // It does NOT get a rect here. What a refresh control refreshes on this page is a §1.4 source
+        // question and there is no source for it — the community Figma baked the glyph and recorded no
+        // behaviour — so inventing "re-read the procedure" or "restart the timer" would be inventing the
+        // action the icon asks for, exactly what C1.4 forbids. It takes S75's other branch instead:
+        // drawn INERT (Text6, this build's "no live source behind this" tint) so it reads as part of the
+        // RUNNING status line it sits in rather than as a fourth white affordance beside three real ones.
+        // If a real source for the action ever appears, it goes back to White AND enters Hits — together.
+        static readonly string[] InertKeys = { "gridicons_refresh" };
+
+        /// <summary>The tint an inert, un-hit-testable glyph is drawn in. Text6 is the same "nothing
+        /// live behind this" tint the dashed readouts use, so the distinction reads at IVA distance
+        /// without moving the asset or changing the layout.</summary>
+        public static readonly Rgba InertTint = DragonPalette.Text6;
+
         // ---- camera geometry, all in the 3427x2112 design frame ----
         // The slot: from the content panel's right edge to the frame edge, between the top strip and the
         // bottom bar (First.vue's wrapper starts at 40.5% = design x 1388; the panel edge, 1442, is the
@@ -336,7 +359,10 @@ namespace DragonScreen
                 if (Array.IndexOf(AttitudeSkipKeys, k) >= 0) continue;
                 if (refPhase && Array.IndexOf(ReferenceSkipKeys, k) >= 0) continue;
                 if (cam != CoverCam.Earth && Array.IndexOf(EarthOnlyKeys, k) >= 0) continue;
-                dl.Asset(k, X(Box[i, 0]), Y(Box[i, 1]), Wd(Box[i, 0], Box[i, 2]), Z(Box[i, 3]), DragonPalette.White);
+                // S75: a glyph in InertKeys is painted but has no hit rect, so it is tinted OUT of this
+                // page's white-glyph-means-button idiom rather than left to imply a touch it cannot take.
+                Rgba tint = (Array.IndexOf(InertKeys, k) >= 0) ? InertTint : DragonPalette.White;
+                dl.Asset(k, X(Box[i, 0]), Y(Box[i, 1]), Wd(Box[i, 0], Box[i, 2]), Z(Box[i, 3]), tint);
             }
 
             // the seven-item deorbit phase rail + the selected phase's highlight (shared verbatim with the

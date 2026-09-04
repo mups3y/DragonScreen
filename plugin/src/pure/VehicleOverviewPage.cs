@@ -164,7 +164,22 @@ namespace DragonScreen
                 R(Dash, 3360, y, 25, Dim);
                 dl.Rect(PX(2760), PY(y + 30), 600 * sx, SZ(2), Faint);
             }
-            L("SHOW MARGINS TO", 2760, 360 + ConsLabel.Length * 145 + 30, 24, Accent);
+            // ---- S75: "SHOW MARGINS TO" IS NOT A CONTROL, SO IT MUST NOT BE PAINTED AS ONE ----
+            // The reference render carries this as a toggle (SCREEN_INVENTORY.md's DillonBaird alt-text
+            // capture, 2026-09-01), and it was drawn here in Accent — the SAME tint this page gives the
+            // two deep-view links that ARE touchable (SYSTEMS TREE / SYSTEMS P&ID, VehicleDeepViewLinks)
+            // — while having no hit rect anywhere. SCREEN_LIVENESS_AUDIT.md H18 calls that worse than a
+            // no-op: a no-op at least resolves to a named action, whereas this resolves to nothing and a
+            // crew would still press it. It cannot be given a rectangle until it is decided what the
+            // rectangle DOES, and that answer is not a build chat's to invent (C1.4/§1.4): the alt-text
+            // capture records the toggle's EXISTENCE and none of its targets, and the MARGIN column it
+            // would switch between is itself still unfilled (S76).
+            // So it takes S75's OTHER branch — drawn as INERT TEXT rather than as a button. Dim is this
+            // page's own "no live source behind this" tint (the dashed CONSUMABLES rows, the dead-feed
+            // checklist), which is exactly what this is until S76 lands. When the MARGIN column reads
+            // modelled margins and a target set is settled, this goes back to Accent AND gains a rect —
+            // the two happen together or not at all. Pinned by FigmaUINavTest.
+            L("SHOW MARGINS TO", 2760, 360 + ConsLabel.Length * 145 + 30, 24, Dim);
 
             // ---- subsystem tab bar (All active) + bottom status bar ----
             // The real Vehicle page carries the eight-subsystem strip (VehicleTabBar); "All" is this

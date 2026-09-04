@@ -48,6 +48,7 @@ public static class FigmaUINavTest
         VehicleLiveValues();
         SubsystemLiveValues();
         ProcedureLiveValues();
+        S75InertPaintedControls();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
     }
@@ -419,6 +420,97 @@ public static class FigmaUINavTest
             if (c.Colour.R == want.R && c.Colour.G == want.G && c.Colour.B == want.B) n++;
         }
         return n;
+    }
+
+    /// <summary>The first draw command for a NAMED asset, or a zeroed command if it was not drawn.
+    /// S75 needs the asset's TINT and its drawn rect: a glyph that is painted but has no hit rect is
+    /// distinguishable from a real button only by its colour, and the rect is what the "no rect" half
+    /// of the claim has to be aimed at.</summary>
+    static DrawCmd AssetCmd(DisplayList dl, string key)
+    {
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind == DrawKind.Image && c.AssetKey == key) return c;
+        }
+        return new DrawCmd();
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // S75 — THE PAINTED CONTROLS THAT ARE NOT CONTROLS.
+    // S54 pinned the mirror-image defect: a hit rect that fires on a phase whose label is not drawn.
+    // These two are the opposite — a label drawn with no hit rect anywhere — which H18 calls worse,
+    // because a no-op at least resolves to a named action. Neither could be given a rectangle without
+    // first deciding what the rectangle DOES (a §1.4 question for `gridicons_refresh`, and the still-
+    // unfilled MARGIN column for `SHOW MARGINS TO` — S76), so both take S75's other branch and are
+    // drawn INERT. The claim under test is therefore two-sided and has to stay two-sided: the glyph is
+    // drawn in the inert tint AND nothing hit-tests where it is drawn. Pinning only the colour would
+    // let a later chat re-brighten it; pinning only the miss would let a later chat leave it white.
+    // ------------------------------------------------------------------------------------------
+    static void S75InertPaintedControls()
+    {
+        const int VW = 2560, VH = 1406;
+
+        // ---- (1) VEHICLE OVERVIEW: "SHOW MARGINS TO" ----
+        // Checked on a LIVE fixture, not the dead-feed one: everything on this page dims with no feed,
+        // so a dead-feed assertion would pass even if the control were still painted as a live link.
+        DisplayList ov = new DisplayList(VehicleOverviewPage.Commands + 60);
+        VehicleOverviewPage.Build(ov, VW, VH, VehicleFixture(0));
+
+        Check("S75 overview still draws SHOW MARGINS TO", Drew(ov, "SHOW MARGINS TO"), "");
+        Check("S75 SHOW MARGINS TO is drawn INERT, not as a live control",
+              SameColour(ColourOf(ov, "SHOW MARGINS TO"), DragonPalette.Text6),
+              "painted in " + ColourOf(ov, "SHOW MARGINS TO").R + "," +
+              ColourOf(ov, "SHOW MARGINS TO").G + "," + ColourOf(ov, "SHOW MARGINS TO").B);
+        Check("S75 SHOW MARGINS TO is not painted in the touchable-link tint",
+              !SameColour(ColourOf(ov, "SHOW MARGINS TO"), DragonPalette.Accent), "");
+        // The contrast is the whole point, and it is only meaningful while the links it is being
+        // distinguished FROM are still drawn in Accent and still touchable. If a later task restyles
+        // VehicleDeepViewLinks, this reddens and the inert treatment has to be rechosen, not silently
+        // lost — which is exactly the failure S75 exists to stop happening again.
+        Check("S75 the two links that ARE touchable stay in the Accent idiom",
+              SameColour(ColourOf(ov, "SYSTEMS TREE"), DragonPalette.Accent) &&
+              SameColour(ColourOf(ov, "SYSTEMS P&ID"), DragonPalette.Accent), "");
+
+        // ---- (2) COVER: the gridicons_refresh glyph ----
+        // Phase 0 (Deport & Burn), Earth camera: a plain, non-Reference build, so none of S54's
+        // ReferenceSkipKeys suppression is in play and the glyph is drawn by the ordinary asset loop.
+        PageState cs = new PageState(); cs.Valid = true;
+        DisplayList cv = new DisplayList(CoverPage.Commands + 80);
+        CoverPage.Build(cv, VW, VH, cs, MapProjection.Default(), 0, CoverPage.CoverCam.Earth);
+
+        DrawCmd refresh = AssetCmd(cv, "gridicons_refresh");
+        Check("S75 cover still draws the refresh glyph", refresh.AssetKey == "gridicons_refresh", "");
+        // Pinned to Text6 by NAME, not to CoverPage.InertTint: comparing the drawn colour against the
+        // page's own constant is self-referential — re-pointing that constant at White would keep such
+        // a check green while putting the glyph straight back into the button idiom. Mutation-verified.
+        Check("S75 the refresh glyph is drawn INERT, not in the white button idiom",
+              SameColour(refresh.Colour, DragonPalette.Text6), "");
+        Check("S75 the cover's inert tint is still the no-source tint",
+              SameColour(CoverPage.InertTint, DragonPalette.Text6), "");
+        Check("S75 the refresh glyph is not painted white",
+              !SameColour(refresh.Colour, DragonPalette.White), "");
+
+        // The three white glyphs on this page that ARE buttons must stay white — same reasoning as the
+        // Accent check above: "inert is dimmer than a button" only says something while buttons are lit.
+        Check("S75 the cover's real glyph buttons stay white",
+              SameColour(AssetCmd(cv, "eva_menu_fill").Colour, DragonPalette.White) &&
+              SameColour(AssetCmd(cv, "ic_sharp_arrow_back").Colour, DragonPalette.White) &&
+              SameColour(AssetCmd(cv, "ic_sharp_arrow_back_1").Colour, DragonPalette.White), "");
+
+        // ---- the other half of the claim: nothing fires where the glyph is drawn ----
+        // Aimed at the CENTRE of the rect the page actually drew, so the check follows the asset if it
+        // is ever repositioned rather than at a coordinate copied out of the Box table.
+        float cx = refresh.A + refresh.C * 0.5f, cy = refresh.B + refresh.D * 0.5f;
+        Check("S75 no button fires at the refresh glyph's centre",
+              CoverPage.HitTest(cx, cy, VW, VH, CoverPage.CoverCam.Earth, 0) == CoverPage.CoverButton.None,
+              "hit " + CoverPage.HitTest(cx, cy, VW, VH, CoverPage.CoverCam.Earth, 0));
+        // ...and the three real ones still do, on the same page build, so a blanket break in HitTest
+        // cannot make the line above pass.
+        DrawCmd menu = AssetCmd(cv, "eva_menu_fill");
+        Check("S75 the Menu glyph still fires",
+              CoverPage.HitTest(menu.A + menu.C * 0.5f, menu.B + menu.D * 0.5f, VW, VH,
+                                CoverPage.CoverCam.Earth, 0) == CoverPage.CoverButton.Menu, "");
     }
 
     /// <summary>A vehicle fixture whose every live readout is a distinct, recognisable string.</summary>

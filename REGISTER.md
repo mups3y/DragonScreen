@@ -6159,7 +6159,7 @@ clause to point at the suite that now guards the table (S63, DONE 2026-09-04), k
 exactly as it stands — the curve is still the best number we have and still not evidence, and **not one digit
 of the table may be touched**. Comment-only; `build.py test` as a no-regression check.
 
-### S75 [S] Two painted controls with NO hit rect at all — `SHOW MARGINS TO` and the Cover's refresh glyph — **TODO** — [TIER 2: the "looks like a control, isn't one" defect class]
+### S75 [S] Two painted controls with NO hit rect at all — `SHOW MARGINS TO` and the Cover's refresh glyph — **DONE 2026-09-04 (the two controls; the MARGIN column split out as S79)** — [TIER 2: the "looks like a control, isn't one" defect class] ⚠ batch deviation from C1.1/C1.7 authorised by owner 2026-09-04 via overseer
 Split out of **S54**, 2026-09-04, when that line was closed (C1.1). S54 fixed the *opposite* defect — a rect
 that fires with no label — and its DONE-when (*"no rect fires on a phase whose label is not drawn"*) does not
 reach these two, which are **labels drawn with no rect**. S49 (H18) calls that *worse than a no-op: a no-op at
@@ -6177,6 +6177,182 @@ a refresh control refreshes on this page is a §1.4 question, not a build-chat g
 **DONE when:** neither glyph is a painted lie — each either gains a real hit rect wired to a named action, or
 is drawn as inert text rather than as a button — and the MARGIN column reads modelled margins rather than a
 hardcoded dash, pinned by a test in the same style as S54's.
+
+- **DONE 2026-09-04 — BOTH painted lies are gone, by this line's OWN second branch** (*"or is drawn as inert
+  text rather than as a button"*). Neither could take the first branch: a rectangle cannot be given until it
+  is decided what the rectangle DOES, and for **both** controls that answer is a §1.4 source question this
+  chat does not get to invent (C1.4/C1.12). So both are now painted OUT of their page's interactive idiom.
+- **(1) `SHOW MARGINS TO`** (`pure/VehicleOverviewPage.cs`) was drawn in **Accent** — the *same* tint this
+  page gives the two deep-view links that really are touchable (`SYSTEMS TREE` / `SYSTEMS P&ID`,
+  `VehicleDeepViewLinks`) — with no hit rect anywhere. Now drawn in **Text6**, the page's own "no live
+  source behind this" tint, the one the dashed CONSUMABLES rows and the dead-feed checklist already use.
+- **(2) the Cover's `gridicons_refresh`** (`pure/CoverPage.cs`) was drawn White by the ordinary asset loop.
+  On this page white-glyph-means-button is the idiom and is load-bearing: `eva_menu_fill` is
+  `CoverButton.Menu` and the two `ic_sharp_arrow_back` exports are Back/Forward — **all three are in the
+  `Hits` table, this one was not**. A named `InertKeys` array + `CoverPage.InertTint` (= Text6) now tints it
+  out of that idiom, so it reads as part of the RUNNING / 00:22:57 status line it sits in. Layout, position
+  and size are untouched; only the tint moved.
+- ⚠ **THE PREVIEW WAS NOT SHOWING ASSET TINTS AT ALL, AND THAT IS WHY THIS FIX ALMOST SHIPPED UNSEEN.**
+  `ScreenPainter.DrawImage` multiplies every image by `c.Colour` (`GL.Color(Tint(c.Colour))` on the quad),
+  but `preview/PreviewMain.cs`'s `DrawCoverAsset` drew the PNG raw and **ignored the colour entirely**. The
+  first re-render after tinting the glyph came back byte-identical — brightest pixel in the glyph's rect
+  still `255,255,255`. Fixed here (a `ColorMatrix`, with an opaque-white fast path so every untinted asset
+  renders exactly as before), because the preview is the ONLY surface layout and legibility are judged from
+  and a task cannot meet C1.3 against a renderer that does not show its own change. **This was a live
+  preview/glass divergence wider than S75** — the Vehicle checklist's `ic_check` icons, `SuitCheckPage` and
+  `VrioTestPage`'s `Ico()` glyphs and `VehicleSubsystemPage`'s checklist are all tinted by state and were
+  ALL rendering white in every preview ever taken. Re-inspection of those pages is logged as **S80**.
+- **Gate (C1.3):** `build.py test` **green, all suites** — the Figma UI nav suite 785→**796 checks, 0
+  failed**. `build.py preview` re-rendered and inspected: on `ui_vehicle.png` `SHOW MARGINS TO` now reads
+  grey-blue, plainly dimmer than the white row labels and unmistakably not the cyan of the `CONSUMABLE /
+  QTY / MARGIN` headers above it or the underlined cyan links below it — legible at IVA distance, inside its
+  box, nothing moved. On `ui_cover.png` the refresh glyph is visibly greyed beside the still-white RUNNING
+  label and the two still-white boxed arrow buttons. Two side-effects of the preview fix were inspected and
+  are both CORRECTIONS: `ui_vehicle.png`'s checklist icons now read green / white / amber matching their own
+  state words, and `ui_vehicle_nofeed.png`'s icons now dim with the dashes instead of staying bright white.
+- **Pinned by a test, and MUTATION-CHECKED, in S54's style** — `FigmaUINavTest.S75InertPaintedControls`.
+  The claim is deliberately **two-sided**: the glyph is drawn in the inert tint AND nothing hit-tests where
+  it is drawn (aimed at the CENTRE of the rect the page actually drew, so it follows the asset if it is ever
+  repositioned). Pinning only the colour would let a later chat re-brighten it; pinning only the miss would
+  let it stay white. Both contrasts are pinned too — the Accent links and the three white glyph buttons must
+  stay lit, because "inert is dimmer than a button" says nothing once the buttons stop being lit — and the
+  Menu glyph is re-checked as still firing on the same build, so a blanket break in `HitTest` cannot make the
+  miss pass. The cover tint is asserted against `DragonPalette.Text6` **by name, not against
+  `CoverPage.InertTint`**: the first draft compared the drawn colour to the page's own constant, and the
+  mutation run proved that self-referential — re-pointing `InertTint` at White kept it green. **Mutation
+  check (both, after the fix):** `InertTint → White` reddens exactly 3 checks; `SHOW MARGINS TO → Accent`
+  reddens exactly 2; nothing else moves in either run; restored and re-verified **ALL SUITES PASSED**.
+- ⛔ **THE MARGIN COLUMN IS NOT CLOSED BY THIS LINE — split to S79 (C1.7), and that is not a convenience.**
+  This line's own body says (1) *"should land **with or after S57**, not before it"*, and **S57 is HELD on
+  the owner's unanswered audit Q1 and was explicitly excluded from this batch's whitelist**. Landing the
+  column here would also have landed it twice, which S57's own item 2 says not to do. Beyond sequencing, the
+  audit's premise does not survive contact with the rows: **H18/H39 say `LifeSupport.Margins` is "the natural
+  filling for H18's MARGIN column", but it computes food / water / oxygen DAYS and the eight CONSUMABLES rows
+  are Power Unit 1/2 Energy, Usable Deorbit Fuel/Oxidizer and four Orbit subtanks — it fills none of them.**
+  What each row's margin MEANS is a §14.4(f) design question with an owner call in it, written up under S79.
+- **Outputs (C1.11, nothing else):** `plugin/src/pure/VehicleOverviewPage.cs` ·
+  `plugin/src/pure/CoverPage.cs` · `plugin/preview/PreviewMain.cs` · `plugin/test/FigmaUINavTest.cs` ·
+  this line + the new **S79** / **S80** lines · one local commit. NOT pushed (C1.5).
+
+#### Open questions for the owner (C1.14) — S75
+
+**S75-Q1. The two controls are now honestly inert. Do they ever become real, and on what source?**
+*Situation.* Both are painted features of a real screen, so §14.4(f) says they should be INCLUDED and FILLED
+rather than dropped — and both are now included but explicitly not filled, which is the honest interim, not
+an end state. Neither can be filled without a source: `SCREEN_INVENTORY.md`'s DillonBaird alt-text capture
+(2026-09-01) records that `SHOW MARGINS TO` **exists** and none of its targets, and the community Figma baked
+`gridicons_refresh` with no recorded behaviour at all. Inventing either is exactly what C1.4 forbids.
+1. **Leave both inert; revisit only if a real source appears.** *(recommended: it is the only option that
+   invents nothing, it costs nothing to keep, and the test pins the state so it cannot silently drift back.
+   `SHOW MARGINS TO` in particular has a natural trigger — it becomes answerable the moment S79 settles what
+   a margin is, and the two should land together, which the code comment already says.)*
+2. **Owner supplies the semantics for one or both** — e.g. names the margin targets (UNDOCK / DEORBIT /
+   SPLASHDOWN, or whatever the real toggle offers) and/or says what the refresh glyph refreshes. Then each
+   gains a rect AND its Accent/White tint back, in one change, and the test flips to asserting the live form.
+3. **Treat `gridicons_refresh` as decoration** — declare it part of the RUNNING status indicator (a "clock
+   is running" mark), not a control at all. Cheaper than 2, and consistent with where it sits; it needs an
+   owner ruling only because calling a reference glyph decoration is a §1.4 judgement about a real screen.
+4. **Drop `gridicons_refresh` from the page** (add it to `SkipKeys`). ⚠ Not recommended: §14.4(f) says a real
+   screen's features are included, and removing paint to avoid deciding what it means is the one thing this
+   defect class should not teach.
+
+### S79 [S] The Vehicle Overview's MARGIN column is a hardcoded dash on every row — **TODO (sequence AFTER S57)** — [TIER 2: a column that claims a number it never computes]
+Split out of **S75**, 2026-09-04, when that line closed its two painted controls (C1.7). S75's DONE-when
+carried a third clause — *"and the MARGIN column reads modelled margins rather than a hardcoded dash, pinned
+by a test in the same style as S54's"* — which S75's OWN body then says must land *"with or after S57"*.
+**S57 is HELD on the owner's unanswered audit Q1**, and its item 2 warns in terms: *"it is also the filling
+for the MARGIN column that S75 now owns — sequence them; do not land the column twice."* So the column is
+this line, not S75's, and it does not start before S57 is unblocked.
+**The defect.** `pure/VehicleOverviewPage.cs`'s CONSUMABLES loop draws `R(Dash, 3360, y, 25, Dim)` — the same
+literal on all eight rows, on a live feed and a dead one alike, with nothing computed behind it. The column
+HEADER says MARGIN, so the page is asking a question it never answers. `SCREEN_LIVENESS_AUDIT.md` H18 files
+it with S75's painted controls; §14.4(f) says a real screen's readouts are INCLUDED and FILLED.
+⛔ **CORRECTION TO THE AUDIT'S PREMISE, verified by S75 against the rows themselves — start from this, not
+from H18/H39's wording.** H18 and H39 both say `LifeSupport.Margins` (`pure/LifeSupport.cs:36-47`) is *"the
+natural filling for H18's MARGIN column"* because *"margin = remaining ÷ rate"*. **That is true of its SHAPE
+and false of its CONTENT.** `LsMargins` carries `FoodDays` / `WaterDays` / `OxygenDays` / `LimitingDays` off
+TAC-LS rates. The eight CONSUMABLES rows are **Power Unit 1 Energy, Power Unit 2 Energy, Usable Deorbit Fuel,
+Usable Deorbit Oxidizer** and **four Orbit n Subtank Fuel/Oxidizer** rows. Food, water and oxygen are not
+among them. `LifeSupport.Margins` fills **none** of the eight, and a task that takes H39 at its word will
+find that out after wiring it. (S57's own ⭐ note is right that the orphanage moved from the computation to
+the display — `LifeSupportBridge.Margins`/`.Sample` compute `LsMargins` and **nothing consumes it** — but the
+display that consumes it is not this column. The Crew tab is the likelier host; that is S57's call, not this
+line's.)
+**What each row can honestly answer, as far as S75 got:**
+- **Power Unit 1/2 Energy** — answerable NOW with no harvest: time-to-depletion = real charge ÷ the modelled
+  net bus draw. Both halves already exist and are already on the page (`s.PowerUnit1Text` from
+  `VesselData.Energy()`; `Cabin.NetPwr1W`/`NetPwr2W` from `s.PowerFlow`), and `VesselData.EcWatts = 120.0`
+  is already the single stated W-per-EC currency both power readouts use, so the two cannot disagree.
+- **Usable Deorbit Fuel / Oxidizer** — a margin here means *remaining minus what the deorbit burn needs*,
+  which needs a Δv-to-entry-interface and the rocket equation. `pure/Orbital.cs`'s vis-viva half is exactly
+  that and is exactly **S57's** harvest item, which is why this line waits on S57 rather than reaching for it.
+- **the four Orbit n Subtank rows** — their QTY is already a reasoned dash (the real vehicle's tank split has
+  no KSP counterpart; `docs/TELEMETRY_REGISTRY.md`). A margin on a quantity that does not exist does not
+  exist either, so these stay dashed under §14.4(e)'s *"a dash ONLY where the quantity truly does not exist"*.
+**Read:** `docs/SCREEN_LIVENESS_AUDIT.md` H18 + H39 (and this line's correction to them), §14.4(e) + §14.4(f),
+S57's `LifeSupport.Margins` row and its ⭐ note, S75's close, and `pure/VehicleOverviewPage.cs`'s own
+"WHAT STAYS DASHED, AND WHY" header block.
+**DONE when:** every CONSUMABLES row whose margin exists reads a computed, live-behaving value, every row
+whose margin genuinely does not exist reads a REASONED dash with the reason in the code, no dash is a literal
+printed regardless of state, and the whole column is pinned by a fixture-A-vs-fixture-B test (the
+`VehicleLiveValues` idiom: a constant cannot pass it). `SHOW MARGINS TO` gains its rect and its Accent tint
+back **in the same change** if and only if S75-Q1 settles what it targets — the two go together (S75).
+
+#### Open questions for the owner (C1.14) — S79
+
+**S79-Q1. What does MARGIN mean on this table, for the rows that can have one?**
+*Situation.* The column is real (DillonBaird's Vehicle render, `SCREEN_INVENTORY.md` 2026-09-01) and the
+capture records the column HEADER and no values, so nothing says whether a margin here is a TIME, a SURPLUS
+QUANTITY, or a percentage. §14.4(f) requires it filled with something that behaves live; which of the three
+it is, is not derivable from any source in the repo.
+1. **Time-to-depletion, one currency for the whole column** — hours or days remaining at the current
+   modelled rate. *(recommended: it is the only reading that spans both answerable row families with one
+   unit, it is what "margin" means beside a consumable in every crewed-vehicle consumables table, and the
+   power rows can be built from it immediately with no dependency on S57 at all.)*
+2. **Surplus quantity** — kg or % left over above what the remaining mission needs. Reads more naturally for
+   the propellant rows, but it requires a mission-requirement model this build does not have, and it makes
+   the power rows awkward (surplus over what?).
+3. **Split the column by row family** — time for power, surplus kg for propellant. ⚠ Not recommended: one
+   header over two units is the kind of thing the oblique-viewing-angle work (S38/S39) shows crews misread.
+4. **Leave MARGIN dashed and say so in the code** — an explicitly reasoned, per-row dash rather than the
+   present literal. Honest, cheap, and strictly better than today, but it declines §14.4(f) for a real
+   readout, so it needs the owner to choose it rather than a build chat.
+
+**S79-Q2. May the two Power Unit rows land BEFORE S57 unblocks?**
+*Situation.* Of the eight rows only those two are computable with nothing borrowed from S57's harvest list;
+the deorbit rows need `pure/Orbital.cs`, which is S57's. Splitting would land the column in two passes, which
+S57 item 2 explicitly warns against (*"do not land the column twice"*).
+1. **No — hold the whole column until S57 unblocks, then land it once.** *(recommended: it is what S57 item 2
+   asks for in terms, and a half-filled column with six dashes under one header is a weaker claim than a
+   column that is uniformly honest today.)*
+2. **Yes — land the two power rows now** under S79-Q1's chosen currency, leave the rest reasoned-dashed, and
+   let S57 finish the propellant rows. Gets two real numbers onto the glass sooner.
+3. **Answer S57-Q1 first** (it is already posed and unanswered) and this question disappears — S79 then runs
+   once, in whatever order S57's answer implies.
+
+### S80 [S] Re-inspect every preview PNG whose page tints an ASSET — the preview ignored tints until S75 — [TIER 2: previews that were inspected and were wrong] — **TODO**
+Logged by **S75**, 2026-09-04 (C1.1 — found while verifying S75's own fix, which the preview refused to show).
+**The finding.** `ScreenPainter.DrawImage` multiplies every image command by `c.Colour`, so on the glass a
+named asset drawn in anything but opaque white is tinted. `preview/PreviewMain.cs`'s `DrawCoverAsset` drew
+the PNG raw and ignored `c.Colour` entirely. **Every asset the pure pages tint by STATE therefore rendered
+white in every preview ever taken**, while the glass rendered it coloured — a systematic preview/glass
+divergence on exactly the surface CLAUDE.md says layout and legibility are judged from.
+S75 fixed the renderer (a `ColorMatrix`, opaque-white fast path, so untinted assets are unchanged) and
+inspected the two pages it touched. **It did not re-inspect the rest, and that is this line.**
+**The affected draw sites** (`grep` for a non-White `Asset(` in `plugin/src/pure/`, 2026-09-04):
+`VehicleOverviewPage.cs:114` and `VehicleSubsystemPage.cs:142` (`ic_check`, tinted Go / Caution / White /
+Text6 by each checklist row's severity, and dimmed wholesale on a dead feed) · `SuitCheckPage.cs:83` and
+`VrioTestPage.cs:45` (the shared `Ico()` helper — every glyph on both procedure pages) · `CoverPage.cs:365`
+(S75's own `InertKeys` path).
+⚠ **This is a re-inspection, not a re-design.** The renderer is already fixed; the risk being retired is
+that an EARLIER task judged one of these pages green off a PNG that was not showing what the glass shows —
+S75 confirmed two such cases on the one page it looked at (the Vehicle checklist icons were white where the
+glass shows green/amber, and stayed bright white on the no-feed variant where everything else dims).
+**DONE when:** every preview PNG for the four pages above has been re-rendered and INSPECTED against its
+page's own tint intent, each divergence is either confirmed correct-as-now or logged as its own line, and the
+finding is recorded wherever a future chat would look for it (`docs/SCREEN_SPEC.md` or `docs/INDEX.md` — the
+chat's call, stated in the close). No code change is expected; if one IS needed, log it rather than doing it.
+
 
 ### W22 [S] `pure/Trajectory.cs`'s 4-band L/D schedule is UNMARKED, and R1 §7.4 files it under the wrong file — **DONE** (2026-09-04) — [TIER 3: a disclosed unmeasured constant carrying no marking] ⚠ batch deviation from C1.1/C1.7 authorised by owner 2026-09-04 via overseer
 **Done:** added a `⛔ UN-CONVERGED FOR RSS-RO (§B16.8 ruling 2, W22 2026-09-04)` block comment directly above
