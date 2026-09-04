@@ -11095,3 +11095,83 @@ HEAD` after committing lists only those three files.
    owner-authorised in its own commit message (`S73`) or a narrow correction of fact rather than a new
    decision (the rest) — but they are named here so the owner/overseer can pull any one of them for a closer
    look, since this ledger's job is visibility, not adjudication.
+
+### G11 [S] Governance — adjudicate `G10`'s three flagged §0a items (`W11`, `T15a`, `W26 batch 1`) separately, each on its own evidence — **DONE 2026-09-05**
+- **OWNER AUTHORISATION, 2026-09-05, verbatim: "write g11"** — answering the overseer's Assess #24, which
+  offered "A single G11 could ratify all three the way G10 did the first two." Recorded as the owner's per
+  C1.12; this chat decided nothing about WHICH three or their content, only transcribed the go and did the
+  adjudication the authorisation calls for. **This authorises the guarded-file edits named in the four items
+  below and NOTHING ELSE** in `docs/BUILD_PLAN.md` / `CLAUDE.md`. Grepped `^### G11\b` in both `REGISTER.md`
+  and `docs/BUILD_PLAN.md` before writing — zero hits, so `G11` was free as a governance-line ID. (The
+  unrelated `G11`/`G11(a)`/`G11(b)`/`G11(c)` tags elsewhere in this file and in `docs/BUILD_PLAN.md` are a
+  pre-existing glass-checklist numbering for the NAV 3D-planet-camera physical checks — a different
+  namespace, established before governance `G`-tasks existed; verified no collision, left untouched.)
+  **This task was explicitly NOT a blanket ratification** — the three items below have three different
+  evidentiary bases and are adjudicated separately, per the task's own instruction, so that ratifying one on
+  another's evidence — the failure this whole thread is about — does not happen here either.
+
+**ITEM 1 — `W11` (`60a869f`, +73/-3 to §B12.8): RATIFIED — authority real, only the form was wrong.**
+`W11`'s plan text cited "the owner's decision of 2026-09-04 via the overseer" — a SUMMARY, which C1.12's
+evidentiary standard (added 2026-09-04, i.e. AFTER this commit) would now refuse as a recorded ruling on its
+own. But the decision is independently corroborated by the overseer's own CONTEMPORANEOUS record: its
+2026-09-04 assess note, headed *"ASSESS W11 + owner answers to its Q1/Q2/Q3"*, records *"Delivered option
+(b) faithfully"* — the overseer had recommended option (b) (per-file register lines), the owner chose it,
+and `W11` built exactly that; the overseer also ran the test suites against this commit at the time. **This
+is a BOOKKEEPING gap, not an authority gap**, and the banner added to §B12.8 (immediately above the
+`⚠ Amended by W11, 2026-09-04` paragraph) says exactly that — it does not record the authority as newly
+granted, and distinguishes "the overseer's contemporaneous record" (the actual evidence) from "a quote of
+the owner's words" (which does not exist for this commit, and the banner says so).
+
+**ITEM 2 — `T15a` (`ce6d182`, +29 to §B12.1a): RATIFIED, and the live rule conflict that produced it is now
+closed.** §B12.1a's own then-current text instructed: *"take the NEWEST source at port time, then PIN it and
+RECORD the commit (hash + date + branch) in this section"* — **the plan told a build chat to write into the
+plan.** `T15a` did exactly and only that. That instruction directly conflicts with C1.12's GUARDED-FILE
+STANDARD (added 2026-09-05, after `T15a`'s instruction was written), which says adding a section — even one
+that only documents what was built — needs a `G`-line. **Fixed, not just noted:** the "RESOLVED" bullet in
+§B12.1a is marked `⛔ SUPERSEDED 2026-09-05 by G11` (wording kept verbatim below it, per C1.16 — nothing
+deleted) and replaced with a corrected route: the pin record goes to the task's own register line and to
+`plugin/mech/VENDOR.md` (which already carries it), and the plan-file copy is carried in later by a
+governance line, same as everywhere else. The `T15a` "THE PIN AS VENDORED" subsection itself carries its own
+ratification banner, distinguishing it from the "novel, unsolicited findings" shape of §B12.1b/§B12.1c
+(ratified by `G10`) — `T15a` was following the plan's own (now-superseded) instruction, which G10's item 1
+did not cover and this task's own recommendation (open question 1) flagged as the materially different case.
+
+**ITEM 3 — `W26 batch 1` (`5497695`, +6 to §C1): RATIFIED, and it is the most important of the three.** This
+commit added invariant rule **C1.16 — "RESEARCH IS NEVER DELETED"** to the plan and mirrored it into
+`CLAUDE.md`. Verified directly (not taken on the task prompt's word): the rule text and the commit both cite
+only the `8b81816` incident as the reason for the rule — **no owner authority is claimed anywhere**, unlike
+`T15a` (following an instruction) or `W11` (real contemporaneous authority in weak form). The banner added
+to C1.16 in BOTH copies says this plainly: there is **no underlying owner decision from 2026-09-04 to point
+at** — this is the owner ratifying, on 2026-09-05, a rule a build chat wrote unilaterally, because he has
+operated under it since and endorses it. No 2026-09-04 authority is manufactured.
+**Proof the two copies stay byte-identical:** extracted the 9-line banner block from both files by line
+number (`CLAUDE.md:183-191`, `docs/BUILD_PLAN.md:2222-2230`) with `sed` and ran `diff` — **empty**. The rule
+text itself (`CLAUDE.md:176-181`) was not touched.
+
+**ITEM 4 — the ledger (§0a) updated.** All three items above got their row's "Authorised?" cell changed from
+`NOT REVIEWED`/flagged to `RATIFIED by G11`, pointing at the specific banner. The four minor edits `G10`
+flagged but did not adjudicate now each carry a one-line disposition instead of a bare flag: **`S73`**
+genuinely fine (explicit owner authority already in its own commit message); **`S3+S91+S92`** genuinely
+fine — the part of that commit touching this guarded file is a 2-line stale-tense correction (S92 only; S3
+and S91's fixes landed elsewhere), a narrow correction of fact, not a new decision, the same category G8's
+own owner authorisation carved out as needing no gate; no separate authorisation quote exists for this
+specific commit and the row says so rather than inventing one. **`W10`** genuinely fine — a 1-line
+facade-table name correction, same category. **`S76`** left as a boundary case, per the task's instruction —
+its own commit message's self-description ("a correction of fact, not of policy") is credible on inspection
+but close enough to the line that it is flagged rather than waved through. No row in §0a now reads only
+"NOT REVIEWED". The table also gained the `G10` row's real commit hash (`f91e7ca`, filled in now that it
+exists — the table wrote "(this commit)" for `G10` at the time `G10` was written, before it had a hash) and
+a new final row for this commit.
+
+**⛔ SCOPE — what this task did NOT touch.** No rule renumbered (`C1.1`–`C1.16` unchanged; verified
+`grep -cE "^[0-9]+\. \*\*" CLAUDE.md` still returns **16**). C1.12's GUARDED-FILE STANDARD paragraph itself:
+untouched (verified present, unchanged, at both its known locations). No vendored tree, no `.cs` file, no
+`/next` skill touched. No install, no glass.
+**VERIFY (C1.3).** Docs and register only, no code change — **no preview PNG applies**, stated rather than
+skipped. `python plugin/build.py test` not run — no `.cs`/`.py` file touched by this task, only `CLAUDE.md`,
+`docs/BUILD_PLAN.md`, `REGISTER.md` (a docs/harness-only task per C1.3's own carve-out, same as `G9`/`G10`).
+`git show --stat HEAD` after committing lists only those three files.
+**Open questions for the owner (C1.14): NONE.** Every claim above was checked against the tree (`grep`,
+`sed`+`diff`, `git log`/`git show`) rather than taken on the task prompt's word; where the prompt's framing
+could not be independently verified in the repo (the overseer's contemporaneous `W11` assess note lives in
+the overseer's own record, not this repo) the banner says so honestly rather than treating it as a quote.

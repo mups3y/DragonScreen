@@ -70,32 +70,41 @@ this file, oldest first:
 | 2026-09-03 | `5d576fd` | G5a | **yes** | yes — adds §B12.1a |
 | 2026-09-04 | `7f68ac6` | G5b | **yes** | yes — **missing from the overseer's list, see below** |
 | 2026-09-04 | `24f822a` | G5c | **yes** | yes — **missing from the overseer's list, see below** |
-| 2026-09-04 | `60a869f` | W11 | no | ⚠ NOT REVIEWED by this ledger's authority — inline owner-attribution ("the owner's decision of 2026-09-04, via the overseer") but no `G`-line; added 73 lines to §B12.8. Flagged, not ratified, not unwound (C1.16) |
+| 2026-09-04 | `60a869f` | W11 | no | **RATIFIED by `G11`** (this task, item 1) — bookkeeping gap, not an authority gap: see the banner at §B12.8 |
 | 2026-09-04 | `c60c7aa` | G6 | **yes** | yes |
-| 2026-09-04 | `5497695` | W26 batch 1 | no | ⚠ NOT REVIEWED — added invariant rule **C1.16 itself** to §C1 (6 lines), mirrored in `CLAUDE.md`, outside the governance-line pattern this same rule now describes. Flagged, not unwound |
-| 2026-09-04 | `7e5d624` | S76 | no | ⚠ NOT REVIEWED — narrowed §B16.8's wording (15 ins/3 del), self-described in its own commit message as "a correction of fact, not of policy (C1.12)". Flagged as a boundary case |
-| 2026-09-04 | `6f33ccd` | S73 | no | yes — commit states "Batch run authorised by owner 2026-09-04 via overseer (deviation from C1.1/C1.7, batch only)"; explicit owner authority present, though not in `G`-line form |
+| 2026-09-04 | `5497695` | W26 batch 1 | no | **RATIFIED by `G11`** (this task, item 3) — added invariant rule **C1.16 itself** with no owner authority claimed anywhere; the owner ratified it 2026-09-05 with no 2026-09-04 authority manufactured. See the banner at C1.16 |
+| 2026-09-04 | `7e5d624` | S76 | no | ⚠ REVIEWED, boundary case, left as-is (this task, item 4) — narrowed §B16.8's wording (15 ins/3 del), self-described in its own commit message as "a correction of fact, not of policy (C1.12)"; that self-description is credible on inspection (wording tightened, no new decision recorded) so no ratification is needed, but it is close enough to the line that a closer read is still worthwhile if anyone doubts it |
+| 2026-09-04 | `6f33ccd` | S73 | no | REVIEWED, genuinely fine (this task, item 4) — commit states "Batch run authorised by owner 2026-09-04 via overseer (deviation from C1.1/C1.7, batch only)"; explicit owner authority present in the commit itself, only not in `G`-line form. No further action |
 | 2026-09-04 | `fdbcaa3` | G8 | **yes** | yes |
 | 2026-09-04 | `e9838af` | G7 | **yes** | yes |
-| 2026-09-05 | `6bf52e6` | S3+S91+S92 | no | ⚠ NOT REVIEWED — 2 lines, a stale-tense/citation correction. Flagged as minor |
-| 2026-09-05 | `ce6d182` | T15a | no | ⚠ NOT REVIEWED — added §B12.1a's "the pin as vendored" record (29 lines). The record was called for by §B12.1a's own text, but written by a build chat with no `G`-line, in the **same shape as §B12.1b/§B12.1c below** — not covered by item 1's ratification. Flagged for the owner/overseer, not ratified here |
+| 2026-09-05 | `6bf52e6` | S3+S91+S92 | no | REVIEWED, genuinely fine (this task, item 4) — the portion of this commit that touches this file is a 2-line stale-tense correction (S92; S3's fix landed in `plugin/src/pure/MissionPhase.cs`, S91's in `.gitignore`, neither in this guarded file); no owner-authorisation quote was found for this commit specifically, but it is a narrow correction of FACT (what a still-existing file says), not a new decision or plan-grade material — the same category G8's own owner authorisation (2026-09-05) explicitly carved out as needing no gate ("B1–B5 are corrections of fact, not new policy"). No further action |
+| 2026-09-05 | `ce6d182` | T15a | no | **RATIFIED by `G11`** (this task, item 2) — see the banner at §B12.1a's "THE PIN AS VENDORED"; §B12.1a's own then-current wording is also amended by this task so the underlying conflict (the plan instructing a build chat to edit the plan) cannot recur |
 | 2026-09-05 | `010b793` | G9 | **yes** | yes |
-| 2026-09-05 | `9d7a8ab` | T15b | no (at the time) | **RATIFIED by `G10`** (this task, item 1) — see the banner at §B12.1b |
-| 2026-09-05 | `4a03617` | W10 | no | ⚠ NOT REVIEWED — 1 line, a facade-table name correction. Flagged as minor |
-| 2026-09-05 | `df1fecc` | T15d | no (at the time) | **RATIFIED by `G10`** (this task, item 1) — see the banner at §B12.1c |
-| 2026-09-05 | *(this commit)* | G10 | **yes** | yes — owner authorisation quoted on the register line |
+| 2026-09-05 | `9d7a8ab` | T15b | no (at the time) | **RATIFIED by `G10`** — see the banner at §B12.1b |
+| 2026-09-05 | `4a03617` | W10 | no | REVIEWED, genuinely fine (this task, item 4) — 1 line, a facade-table name correction with no policy content, same category as S76/S3+S91+S92 above. No further action |
+| 2026-09-05 | `df1fecc` | T15d | no (at the time) | **RATIFIED by `G10`** — see the banner at §B12.1c |
+| 2026-09-05 | `f91e7ca` | G10 | **yes** | yes |
+| 2026-09-05 | *(this commit)* | G11 | **yes** | yes — owner authorisation quoted on the register line |
 
-**Discrepancy against the overseer's Assess #23 reading, as this task was asked to check.** The overseer's
-stated list of authorised lines was `G0, G1, G2, G4, G5a, G7, G8, G9`. This ledger finds the true history
-LARGER than that: **`G3`, `G5b`, `G5c` and `G6` are also governance lines that touched this file and are
-equally authorised** — the overseer's list omitted them; it did not find them absent, and nothing here
-suggests they lack authority. Separately, and explicitly OUTSIDE `G10`'s own authority (item 1 ratifies only
-§B12.1b and §B12.1c, named by task and commit): seven more non-`G` commits touched this file —
-`T15a` (`ce6d182`), `W10` (`4a03617`), `W11` (`60a869f`), `W26 batch 1` (`5497695`), `S73` (`6f33ccd`),
-`S76` (`7e5d624`), `S3+S91+S92` (`6bf52e6`). Of these, `W26 batch 1` added a whole new invariant rule
-outside the governance-line pattern, and `T15a` added a documented subsection in the same shape as the two
-sections this task ratifies — both are real open questions this ledger surfaces rather than resolves; `G10`
-was not authorised to rule on them (the owner's "1 and 3" covered §B12.1b/§B12.1c specifically) and does not.
+**Discrepancy against the overseer's Assess #23 reading, as `G10` was asked to check.** The overseer's stated
+list of authorised lines was `G0, G1, G2, G4, G5a, G7, G8, G9`. This ledger finds the true history LARGER
+than that: **`G3`, `G5b`, `G5c` and `G6` are also governance lines that touched this file and are equally
+authorised** — the overseer's list omitted them; it did not find them absent, and nothing here suggests they
+lack authority.
+
+**What `G10` left open, and how `G11` closed it.** `G10`'s own authority covered only §B12.1b/§B12.1c by
+name (the owner's "1 and 3"); it surfaced seven further non-`G` commits — `T15a` (`ce6d182`),
+`W10` (`4a03617`), `W11` (`60a869f`), `W26 batch 1` (`5497695`), `S73` (`6f33ccd`), `S76` (`7e5d624`),
+`S3+S91+S92` (`6bf52e6`) — without ruling on any of them. The owner's 2026-09-05 authorisation "write g11"
+(answering Assess #24's offer to ratify the remaining three the way `G10` ratified the first two) let this
+task adjudicate `W11`, `T15a` and `W26 batch 1` — **each on its own evidence, not on a shared one** (see the
+three banners above/at §B12.8, §B12.1a and C1.16 respectively): `W11` had real contemporaneous authority in
+a form the evidentiary standard now refuses, so its ratification records a bookkeeping fix; `T15a` was
+following an instruction the plan itself gave, so its ratification also fixes the underlying conflict in
+§B12.1a's wording; `W26 batch 1` had no authority to point to at all, so its ratification is the owner
+endorsing a rule after the fact, not the discovery of a missed authorisation. The remaining four
+(`S73`, `S76`, `S3+S91+S92`, `W10`) were reviewed but not ratified — they are narrow factual corrections or
+already-authorised, not plan-grade material, so ratification does not apply to them; see their rows above.
 
 ## 1. Context & status
 DragonScreen is a screens-only KSP mod recreating the Crew Dragon IVA touchscreens + lower analog console.
@@ -852,10 +861,22 @@ Two directives, both binding on T15:
    to reach; the point of the full port is that nothing on that surface is out of reach.
 
 **Three tensions this scope creates. Two are resolved here; one is an owner call.**
-- **"Most up to date" vs "pinned" — RESOLVED: take the NEWEST source at port time, then PIN it and RECORD the
-  commit** (hash + date + branch) in this section and in the shipped source header. The two words are not in
-  conflict: "most up to date" governs *what you fetch*, "pinned" governs *what happens after*. There is no
-  standing obligation to track upstream; a later re-pin is its own task.
+- ⛔ **SUPERSEDED 2026-09-05 by `G11`** (kept verbatim below, not deleted, per C1.16): "**"Most up to date" vs
+  "pinned" — RESOLVED: take the NEWEST source at port time, then PIN it and RECORD the commit** (hash + date
+  + branch) **in this section** and in the shipped source header. The two words are not in conflict: "most up
+  to date" governs *what you fetch*, "pinned" governs *what happens after*. There is no standing obligation to
+  track upstream; a later re-pin is its own task." **Why superseded:** this instruction told a build chat to
+  write the pin record directly into this guarded file — exactly what C1.12's GUARDED-FILE STANDARD (added
+  2026-09-05, after this sentence was written) now forbids without a `G`-line. `T15a` (2026-09-05) followed
+  this instruction literally and produced the §B12.1a "pin as vendored" subsection the Plan Amendment Ledger
+  (§0a) flagged as unauthorised — a rule conflict this task closes rather than merely notes.
+  **Current route, in force from here:** take the newest source at port time, then pin it and record the
+  commit (hash + date + branch) in the task's OWN register line, in `plugin/mech/VENDOR.md` (which already
+  carries it), and in the shipped source header — the copy in THIS plan file is carried in later by a
+  governance (`G`-) line, same route the GUARDED-FILE STANDARD gives every other build chat. "Most up to
+  date" still governs what is fetched, "pinned" still governs what happens after, there is still no standing
+  obligation to track upstream, and a later re-pin is still its own task — none of that changed; only where
+  the plan-file record gets written did.
 - **WHICH repository — RESOLVED (owner, 2026-09-03, via the overseer; see G5a-Q1 in "Open questions for the
   owner" for the full research finding).** **T15 vendors upstream `MuMech/MechJeb2`, newest commit at port
   time, then pins and records it (§B12.1a's own "newest-then-pin" resolution above).** Researched, not
@@ -872,6 +893,15 @@ Two directives, both binding on T15:
   the assembly clash; suppressing the GUI is a separate, equally mandatory job. Ported ≠ enabled.
 
 ##### B12.1a — THE PIN AS VENDORED (T15a, 2026-09-05). This is the record §B12.1a asked for.
+✅ **RATIFIED 2026-09-05 (owner, verbatim: "write g11" — answering the overseer's Assess #24).** This
+subsection was written by `T15a` (commit `ce6d182`, +29 lines), a BUILD chat with no owner authority to add a
+new subsection to this guarded file (C1.12) — the same shape as §B12.1b/§B12.1c below, but a **materially
+different case**: `T15a` was following §B12.1a's own then-current instruction to record the pin "in this
+section", which the edit immediately above marks SUPERSEDED for exactly this reason (the plan told a build
+chat to write into the plan — a live rule conflict this task closes). **The content stands exactly as written
+below; only its authorisation was missing, and this banner is that authorisation, applied after the fact.**
+Nothing below is edited or deleted (C1.16). See §0a (Plan Amendment Ledger).
+
 The port happened. `plugin/mech/` is the tree; **`plugin/mech/VENDOR.md` is the full record** — exclusions,
 both licence checks, the rename shell, and how to reproduce it. The commit, per this section's own
 "newest-then-pin" resolution:
@@ -1287,6 +1317,21 @@ what makes the dump authoritative again.
 **103 files classified RECOVER-CODE** — pure guidance, glue and tests — plus 77 more to read as evidence
 without making them live. **Part B's first code is therefore a RECOVERY, in DEPENDENCY-ORDERED WAVES**, each
 ending green under the preview-only gate (§0). G5c writes the register lines; this section fixes the shape.
+
+✅ **RATIFIED 2026-09-05 (owner, verbatim: "write g11" — answering the overseer's Assess #24, which offered
+"a single G11 could ratify all three the way G10 did the first two").** The two paragraphs immediately below
+(`W11`, commit `60a869f`, 2026-09-04, +73/-3 to this section) were written by a BUILD chat with no `G`-line —
+but this is a **BOOKKEEPING gap, not an authority gap**. `W11`'s own text cites "the owner's decision of
+2026-09-04 via the overseer", which is a SUMMARY rather than a quote, and C1.12's evidentiary standard (added
+2026-09-04, after this commit landed) would now refuse a bare summary as a recorded ruling on its own. The
+decision itself is independently corroborated by the overseer's own CONTEMPORANEOUS record — its 2026-09-04
+assess note headed *"ASSESS W11 + owner answers to its Q1/Q2/Q3"*, which records *"Delivered option (b)
+faithfully"*: the overseer had recommended option (b) (per-file register lines) to the owner, the owner chose
+it, and `W11` built exactly that; the overseer also ran the test suites against this commit at the time. **So:
+the authority was real at the time — this banner is not granting it retroactively, it is repairing the FORM,
+because a summary is no longer sufficient evidence under the standard this project now holds itself to.**
+Nothing below is edited or deleted (C1.16). See §0a (Plan Amendment Ledger).
+
 ⚠ **Amended by W11, 2026-09-04:** the original shape was *four* waves, *one register task each*. Waves A–D are
 still one task each, but cross-checking R1 §5.2 row by row showed **ten RECOVER-CODE glue files in no wave at
 all** — so `FlightDriver.cs` went to **W10** and the other nine became **Wave E, one register line per file**
@@ -2182,6 +2227,16 @@ a **PREVIEW-ONLY BUILD-GO** (owner, 2026-09-02, via the overseer); `install` + g
     mark it `SUPERSEDED` per C7.1; if it is obsolete, say so in it. Deleting it is not an option a build
     chat has. (Added 2026-09-04 after `8b81816` removed ~60 research documents alongside the autopilot,
     and six later tasks — M1, W8, S60, W23, LZ1, W11 — were built without research that already existed.)
+
+    ✅ **RATIFIED 2026-09-05 (owner, verbatim: "write g11" — answering the overseer's Assess #24).** This
+    rule was added by a BUILD chat (`W26 batch 1`, commit `5497695`, 2026-09-04) with **no owner authority
+    claimed anywhere** — not in the commit message, not in the rule text above, which cites only the
+    `8b81816` incident as its reason and never an owner decision. Unlike §B12.1a/§B12.1b/§B12.1c (ratified
+    by `G10`/`G11`), there is **no underlying owner decision from 2026-09-04 to point at here**: this is the
+    owner ratifying, on 2026-09-05, a rule a build chat wrote on its own initiative, because he has been
+    operating under it since and endorses it — say that plainly, do not read a 2026-09-04 authority into it.
+    The rule ITSELF is unchanged (C1.16 forbids editing it retroactively); only its authority was missing,
+    and this paragraph supplies it. See §0a (Plan Amendment Ledger).
 
 ## C2. The `/next` skill (the loop — identical every task)
 Invoking `/next` runs: (1) read `CLAUDE.md`; (2) open `REGISTER.md` and take THE task —

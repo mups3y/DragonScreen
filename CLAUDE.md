@@ -180,6 +180,16 @@ session and are auto-loaded with this file. Section refs (§n, §Bn, C1–C7.1, 
     chat has. (Added 2026-09-04 after `8b81816` removed ~60 research documents alongside the autopilot,
     and six later tasks — M1, W8, S60, W23, LZ1, W11 — were built without research that already existed.)
 
+    ✅ **RATIFIED 2026-09-05 (owner, verbatim: "write g11" — answering the overseer's Assess #24).** This
+    rule was added by a BUILD chat (`W26 batch 1`, commit `5497695`, 2026-09-04) with **no owner authority
+    claimed anywhere** — not in the commit message, not in the rule text above, which cites only the
+    `8b81816` incident as its reason and never an owner decision. Unlike §B12.1a/§B12.1b/§B12.1c (ratified
+    by `G10`/`G11`), there is **no underlying owner decision from 2026-09-04 to point at here**: this is the
+    owner ratifying, on 2026-09-05, a rule a build chat wrote on its own initiative, because he has been
+    operating under it since and endorses it — say that plainly, do not read a 2026-09-04 authority into it.
+    The rule ITSELF is unchanged (C1.16 forbids editing it retroactively); only its authority was missing,
+    and this paragraph supplies it. See §0a (Plan Amendment Ledger).
+
 ## Off-limits as build sources (C7)
 
 `C:\Users\User\.claude\plans\` (ephemeral — superseded by `docs/BUILD_PLAN.md`) · the auto-memory folder
