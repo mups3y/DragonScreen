@@ -2774,7 +2774,7 @@ burn — flagged here so that future work does not have to rediscover it.
 - ⛔ OCT3-Q1 (open, owner's — the landing-burn engine count) was **not resolved**. OCT4 (the mode-CHANGE
   actuation audit) was **not started**. No install, no glass.
 
-### BB4 [owner-gated] Install the BlackBox + confirm on the glass — **DOING 2026-09-05 (blocker CLEARED: BB1 `aa7bfa2`, BB2 `bedb4a6`, BB3 `6604644` are all DONE; BB2 and BB3 each state "No install, no glass time" — this session is the first to act on the line)** — [TIER 1: the owner's own "before the first flight" deadline]
+### BB4 [owner-gated] Install the BlackBox + confirm on the glass — **DONE 2026-09-05 (closed on overseer-relayed evidence, NOT first-hand-verified by this chat — see provenance note below; blocker CLEARED: BB1 `aa7bfa2`, BB2 `bedb4a6`, BB3 `6604644` are all DONE)** — [TIER 1: the owner's own "before the first flight" deadline]
 - ⚠ **The owner ALREADY AUTHORISED `install` for the BlackBox specifically** (2026-09-03: *"build and install
   before the first flight as we will need it for troubleshooting and diagnoses"*). **This authority extends
   to nothing else** — no other pending line may cite it, and this line still needs BB1–BB3 DONE and green
@@ -2784,11 +2784,93 @@ burn — flagged here so that future work does not have to rediscover it.
 - **Build:** `python plugin/build.py install` (KSP + CKAN closed, full restart), fly a short test (a pad-sit
   or a short hop is enough), confirm the three files land in `DragonScreen_capture/`, run BB3's report
   generator against them, confirm `rec_build_us` shows no frame-cost regression on the glass.
+- **Provenance (CLAUDE.md evidentiary standard):** this register-only chat did not install, fly, or open the
+  KSP install (C7 puts it out of reach) — every figure below was measured by the OWNER/overseer from the
+  confirm flight and relayed into this chat by prompt, 2026-09-05. Relayed evidence: install byte-verified
+  (MD5 match on the DLL and both cfgs, 135/135 art files); the confirm flight, mission
+  `New_Crew-2_20260905_005707`, produced TWO streams under one mission id sharing one `events.jsonl`
+  (45 events), with 0 write errors and 0 coverage defects reported on both streams; BB3's report generator
+  read the recording back to 13 sections / 531 lines.
 - **DONE when:** installed, one recorded test flight produces a readable manifest + stream + events, BB3's
   report runs against it end to end, and this is recorded as done **before** the first Part-B flight per the
-  owner's 2026-09-03 directive.
+  owner's 2026-09-03 directive. **Met, on the relayed evidence above** — the round trip (install → flight →
+  BB3 report) is proven: 0 write errors, 0 coverage defects reported, 531-line report generated from a
+  two-stream, shared-events recording.
+  ⚠ **Closed WITH defects found, not clean.** The same confirm flight that proves this round trip also
+  surfaced four defects — one of them (the "0 coverage defects" figure cited above) turns out to be a defect
+  in the coverage pass itself, not a clean bill of health. Logged as their own lines, not folded into BB4's
+  scope (C1.1): [[BB5]] (`alt_m` intermittently blank, poisoning BB3's §B11 verdicts), [[BB6]] (the coverage
+  pass that reported "0 defects" above cannot see a partially-written column — that is what its own 0 means),
+  [[BB7]] (recorder measured at 23x its §4.7 frame budget), [[BB8]] (per-bank `ignitions` never sampled in
+  flight, only hypothesised at PRELAUNCH). None of the four contradict the round-trip claim this line closes
+  on; they are what the round trip was for.
 - Ends per C1.5: register update + local commit; never push. Glass-time confirmation only — no further owner
   go needed for BlackBox install specifically, per the authority already on record above.
+
+### BB5 [S] `alt_m` is intermittently BLANK, and it poisons the §B11 assessment — **TODO** — [TIER 1: false failures, not real ones, are landing in BB3's mission-safety verdicts]
+- **Provenance:** measured by the overseer from the confirm flight, mission `New_Crew-2_20260905_005707`,
+  2026-09-05, and relayed into this chat by prompt. This chat has not opened the recording (C7) and verified
+  none of the following first-hand.
+- **Finding:** in the confirm flight's CSV, `alt_m` is empty on some rows and populated on others — two empty
+  rows immediately followed by `5053.38` — while `mach` is populated throughout, so this is not a whole-row
+  dropout, it is specific to the altitude column. The gaps cascade into BB3's §B11 section as FALSE FAILURES:
+  `meco_alt_km = 0.00`, `seco_s = 157.54`, `insertion pe -9999.0`. These are not real flight failures; they
+  are the report generator doing arithmetic on blanks.
+  ⚠ **A blank that becomes a confident wrong number is worse than a blank that stays blank.** The §B11
+  verdicts above must be shown to be unreachable-from-missing-data, not merely fixed at the source — otherwise
+  the next gap produces the next false failure.
+- **Build:** find why the altitude accessor returns nothing on some frames while `mach` (same frame) is
+  populated; then, separately, make BB3 refuse to compute a §B11 verdict from an incomplete column rather
+  than emitting a number.
+- **DONE when:** the accessor gap is understood and fixed (or a filed, owner-flagged reason it can't be), and
+  BB3 demonstrably refuses — rather than fabricates — a §B11 verdict on a column with holes in it, verified
+  against a recording that reproduces the gap.
+
+### BB6 [S] The coverage pass cannot see a PARTIALLY written column — **TODO** — [TIER 1: "0 defects" was reported over a column with holes in it]
+- **Provenance:** relayed by the overseer from the same confirm flight, mission
+  `New_Crew-2_20260905_005707`, 2026-09-05 — not independently verified by this chat.
+- **Finding:** BB1's coverage pass reported 0 defects on both streams of the confirm flight while [[BB5]]
+  (`alt_m` gaps) was happening in that same recording. `rec.column_never_written` fires only on a column
+  written NEVER; `alt_m` IS written, sometimes, so the rule is blind to it by construction.
+  `BlackBoxCoverage.cs`'s own words describe exactly this failure, one level up: *"The failure is not that
+  the cells were blank. It is that NOTHING IN THE FILE SAID SO."* — here, the file said "0 defects" over a
+  column with holes in it.
+- **Build:** extend the coverage rule to report a fill RATIO per column against its declared `Col.Fit`, so a
+  column that should be dense and is not raises a defect. Do not weaken `column_never_written` — add to it.
+- **DONE when:** the coverage pass flags a partially-written column (verified against a recording with a
+  known gap, e.g. the one behind [[BB5]]), and still catches a fully-unwritten column as before.
+
+### BB7 [S] `max_rec_build_us = 47544` — the recorder is 23x over its own frame budget — **TODO** — [TIER 2: the instrument is trustworthy, the number it reports is not]
+- **Provenance:** measured by the overseer from mission `New_Crew-2_20260905_005707`, 2026-09-05, and relayed
+  into this chat by prompt — not read by this chat.
+- **Finding:** the confirm flight reported `max_rec_build_us = 47544`, i.e. 47.5 ms building a single row
+  inside one frame, against §4.7's 2 ms budget. BB1 instrumented this correctly (Stopwatch, on every row) —
+  the instrument worked, the number is just bad.
+- **Build:** determine whether this is a sustained cost or a one-off spike (a first-row allocation, a flush,
+  a GC) before optimising anything. `rec_build_us` is recorded on every row, so the distribution already
+  exists — read it, do not guess.
+- **DONE when:** the spike-vs-sustained question is answered from the existing per-row distribution, and
+  either a fix lands or the finding is re-filed as a scoped follow-up with that distribution attached as
+  evidence.
+
+### BB8 [S] Record `ignitions` per octaweb bank IN FLIGHT — **TODO** — [TIER 2: a live guard and an owner ruling both depend on a number nobody has measured in flight]
+- **Provenance:** relayed by the overseer from the confirm flight and the repo's own config/persistence
+  state, 2026-09-05 — this chat has not read the recording or live game state.
+- **Finding:** `Crew2_Patches/F9_Engines_InstantSpool.cfg` sets `%ignitions = -1` (RealFuels: unlimited, never
+  decremented), and the final ModuleManager ConfigCache carries -1 on the octaweb nine times, with no other
+  value. But a live read at PRELAUNCH returned 1. Config and persistence are both ruled out as the source of
+  the 1. The leading hypothesis is that the pad-sit read happens before `ModuleEngineConfigs` pushes the
+  active config onto the module — but that is a HYPOTHESIS, not established.
+- **Why it matters beyond curiosity:** `BoosterDescent.cs:790-793` refuses the entry burn when
+  `IgnitionsThreeLanding == 0`, and OCT3-Q1's option 2 was argued against on the basis of a one-ignition
+  budget. A live guard and an owner ruling both depend on a number nobody has measured in flight.
+- **Build:** add per-bank `ignitions` columns to the BlackBox schema (AllEngines / ThreeLanding / CenterOnly),
+  sampled IN FLIGHT rather than at PRELAUNCH, so the next recording settles it.
+- **Stray, NOT to be fixed here:** `BoosterDescent.cs:53-55` still states "`ignitions = 1` on EACH" as fact.
+  That claim came from a pad dump of our own patched craft and is not established — a future chat should
+  treat it as unverified, not as ground truth.
+- **DONE when:** the schema carries per-bank ignitions sampled in flight, and a recorded flight shows real
+  in-flight values (not just -1, and not just a PRELAUNCH artifact) for at least one bank.
 
 ---
 
