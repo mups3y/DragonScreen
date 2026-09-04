@@ -3651,13 +3651,40 @@ beside `BlockNote`, `SchemaVersion` still 1, headless tests added and mutation-p
   cfg (`docs/reference/mechjeb_settings_type_Crew-Dragon.cfg`). Also create/point `docs/FLIGHT_SYSTEMS.md` (S3).
   **DONE when:** one core loads, no clash, cfg applied.
 
-### T16 [O] Pure conductor core + tests — **TODO**
-- **Read:** §B9 / §B12.2-3 + `MissionPhase.cs`.  **Build:** phase FSM as pure decisions.  **DONE when:**
-  headless tests green.
+### T16 [O] Pure conductor core + tests — **re-scoped to the `ConductorAction` gap only, 2026-09-05 (G9 item 2)** — **TODO**
+- **Read:** §B9 / §B12.2-3 + `pure/MissionPhase.cs`.
+- **Already satisfied by W4 (DONE 2026-09-04) — do NOT rebuild these.** `pure/ModeManager.cs` (its own
+  header: *"the mission conductor / phase sequencer… PURE + headless-tested"*), `pure/MissionProfile.cs`
+  (mission-as-data), `pure/CrewGate.cs` + `pure/CrewGates.cs` (the gate machine + G1..G15 catalog),
+  `pure/CoastEta.cs`, `pure/WarpPlan.cs` — all covered by `test/CrewGateTest.cs` via `TestMain`. Verified
+  2026-09-05: all six files present in the tree, `grep -rn ConductorAction` across `plugin/` and `docs/`
+  returns **zero hits outside `docs/BUILD_PLAN.md` prose** — the type does not exist yet.
+- **THE REMAINING GAP.** §B12.2 specifies the pure core's OUTPUT as a **`ConductorAction`** value: which
+  MechJeb module to engage, which Operation to build with which params, when to advance/hold/re-plan. This
+  is a decision layer ON TOP of the restored sequencer above — it does not replace any of it.
+- **Build:** the `ConductorAction` type + the pure decision logic that derives it from `ModeManager`'s
+  phase/step state plus a telemetry snapshot.
+  **DONE when:** headless tests green over `ConductorAction` output (module / Operation / advance-hold-
+  replan) for representative phase transitions.
+- ⚠ **SEQUENCING.** T16 must come after **T15** (Embed MechJeb — DONE when: one core loads, no clash, cfg
+  applied): `ConductorAction`'s vocabulary is *"which MechJeb module"*, and a module cannot be named in a
+  decision type before the embedded core that hosts those modules exists. *(The task that assigned this
+  re-scope named the prerequisite "T15b" — no such task exists: `grep -n "T15b"` returns zero hits in
+  either `REGISTER.md` or `docs/BUILD_PLAN.md`. The only task that embeds MechJeb is **T15** itself, which
+  is what this ordering actually depends on. Logged as a stray per C1.1, not corrected at its source.)*
 
-### T17 [O] Glue driver, read-only — **TODO**
-- **Read:** §B12.2 + `_AutopilotStub.cs`.  **Build:** report phase/engaged, no commands.  **DONE when:** in-sim
-  phase matches, nothing flies.
+### T17 [O] Glue driver, read-only — **SPLIT into W10, 2026-09-05 (G9 item 1)** — this line is closed, do not take it
+- **Closed in favour of `REGISTER.md`'s W10** (`src/CrewProcedureOps.cs` + `src/FlightDriver.cs` — "W10
+  OWNS THE HOST OUTRIGHT"). `pure/ModeManager.cs`'s own header states the dependency this line was written
+  against, verbatim: *"IT HAS NO CALLER. The glue that walks this plan is `src/CrewProcedureOps.cs`, and
+  that file is NOT in the tree: it only runs when its host `src/FlightDriver.cs` ticks it, and FlightDriver
+  belongs to no recovery wave (register W10)."* T17's own Build/DONE-when — "report phase/engaged, no
+  commands" / "in-sim phase matches, nothing flies" — IS §B12.6 build-order step (3) (*"glue driver
+  implements the stub surfaces read-only… no commands yet"*), and W10 already owns that step outright by
+  name. Same seam, same files, one owner — not two lines writing the same host.
+- **W10's line is amended (below) to carry this DONE-when explicitly**, plus the stub-collision warning
+  that comes with restoring `CrewProcedureOps`/`FlightDriver` for real. No `.cs` file touched by this
+  closure. `/next` can no longer route anyone to T17.
 
 ### T18 [O] Wire Ascent (PVG) — **TODO**
 - **Read:** §B8 / §B11.  **DONE when:** PVG flies to insertion in-sim.
@@ -7178,6 +7205,25 @@ property to go live (§B12.5: exactly one per increment). **May SPLIT** if the h
 is consumed on the frame it is pressed, `AutoPilot.Engaged` is backed by a real controller, and nothing on
 any screen claims a phase the vehicle is not in.
 
+⚠ **T17 ABSORBED HERE, 2026-09-05 (G9 item 1).** `REGISTER.md`'s **T17** ("Glue driver, read-only — report
+phase/engaged, no commands") described the same seam as this line's §B12.6 step (3) scope and is now
+**SPLIT**, closed in favour of W10. This line's DONE-when therefore also carries T17's own, explicitly:
+**report phase/engaged, no commands, in-sim phase matches nothing flies** — the host recovers READ-ONLY
+here; EXECUTION (actually commanding a MechJeb module) arrives with **T18 onward**, not with this line.
+
+⚠ **STUB-COLLISION WARNING, recorded here because it will bite whoever runs this line (2026-09-05, G9
+item 1).** `plugin/src/_AutopilotStub.cs` declares BOTH `CrewProcedureOps` (`:53`) and `FlightDriver`
+(`:71`) as static classes. Restoring the real `src/CrewProcedureOps.cs` + `src/FlightDriver.cs` hits
+§B12.8's two-generation rule (R1 §0.2) — two declarations of the same class name break the build. This is
+the SAME collision **W2** hit with `Actuator`, and W2's resolution is the precedent to follow, not
+reinvent: **retire the stub class in place** once the real file exists (`_AutopilotStub.cs:121`, W2/Wave
+B, 2026-09-04, verbatim: *"⛔ THE `Actuator` STUB IS RETIRED"*) — the real `Actuator.cs` stands behind the
+same class name, and nothing on any screen changed. **Owner Q4** (R1 §5.2, ruled 2026-09-03 per §B12.5's
+*"the stub is a FACADE, not a placeholder"*) is why: the gen-1 stub names are the display-facing façade,
+and a recovered controller registers INTO them rather than the screens being changed to match whatever the
+controller underneath is called (§B12.8(a)). Noted here, not done (C1.1) — this line still has to actually
+perform the retirement-and-register-in step when it lands, in the same diff that restores the real files.
+
 ### W11 [O] TEN R1 §5.2 RECOVER-CODE glue files belong to NO §B12.8 wave — four facade names have no owner — **DONE 2026-09-04** — [TIER 2: real gap in the recovery plan itself]
 Logged by **W4**, 2026-09-04 (C1.1 — found on satisfying W4's own done-criterion, which asks what backs each
 gen-1 facade name).
@@ -9833,6 +9879,77 @@ from the four declared outputs (`CLAUDE.md`, `docs/BUILD_PLAN.md`, `.claude/skil
   only `CLAUDE.md`, `docs/BUILD_PLAN.md`, `REGISTER.md`, `.claude/skills/next/SKILL.md`.
 - **Open questions for the owner (C1.14): NONE.** Every fact was verified; nothing here hit a gate this
   authorisation didn't already cover.
+
+### G9 [S] Governance — collapse the T17/W10 overlap, re-scope T16, correct §B12.2's glue-driver name, and bring C1.14 in line with the owner's answer-don't-relay directive — **DONE 2026-09-05**
+- **OWNER AUTHORISATION, 2026-09-05, verbatim: "yes write that governance prompt"** — given in direct
+  answer to the overseer stating that item 3 (the `docs/BUILD_PLAN.md` §B12.2 edit) "edits
+  `docs/BUILD_PLAN.md`, which is guarded — so it needs your go." Recorded as the owner's per C1.12; this
+  chat decided nothing, only transcribed and acted within it. This authorises the guarded-file edits named
+  in the four items below and NOTHING ELSE in `CLAUDE.md` / `docs/BUILD_PLAN.md` — no other section of
+  either file was touched.
+- **Sourced from a read-only overlap investigation the overseer ran 2026-09-05**, which found three
+  register/plan items describing one piece of software under three names, plus a fourth line ready to
+  correct.
+
+**ITEM 1 — T17 SPLIT into W10.** Verified `pure/ModeManager.cs:12-15`'s header states, verbatim: *"IT HAS
+NO CALLER. The glue that walks this plan is `src/CrewProcedureOps.cs`, and that file is NOT in the tree: it
+only runs when its host `src/FlightDriver.cs` ticks it, and FlightDriver belongs to no recovery wave
+(register W10)."* T17's Build/DONE-when ("report phase/engaged, no commands" / "in-sim phase matches,
+nothing flies") is §B12.6 build-order step (3), and W10's own heading already reads "W10 OWNS THE HOST
+OUTRIGHT". **T17 marked SPLIT**, closed in favour of W10, reasoning recorded on its own line. **W10's line
+amended** to carry T17's read-only DONE-when explicitly, plus a stub-collision warning: `_AutopilotStub.cs`
+declares both `CrewProcedureOps` (`:53`) and `FlightDriver` (`:71`) as static classes (verified by `grep`),
+so restoring the real files hits §B12.8's two-generation rule — the same collision **W2** hit with
+`Actuator`, resolved by retiring the stub in place (`_AutopilotStub.cs:121`, verified verbatim: *"⛔ THE
+`Actuator` STUB IS RETIRED (W2 / Wave B, 2026-09-04)"*). Noted on W10 as a warning, not performed — W10
+still has to do the retirement-and-register-in step itself when it lands (C1.1).
+
+**ITEM 2 — T16 re-scoped.** Verified all six W4 files exist (`pure/ModeManager.cs`, `MissionProfile.cs`,
+`CrewGate.cs`, `CrewGates.cs`, `CoastEta.cs`, `WarpPlan.cs`, `test/CrewGateTest.cs`) and that
+`grep -rn ConductorAction` across `plugin/` and `docs/` returns zero hits outside `docs/BUILD_PLAN.md`
+prose — the type genuinely does not exist. T16's Build/DONE-when re-scoped to only the `ConductorAction`
+decision layer, naming the W4 files that already cover the rest so nobody rebuilds them, and stating the
+ordering: T16 after the core that hosts the modules `ConductorAction` names. **Correction made in the
+writing, not silently:** the task that assigned this re-scope named the prerequisite "T15b"; `grep -n
+"T15b"` returns zero hits in either `REGISTER.md` or `docs/BUILD_PLAN.md` — no such task exists. The actual
+prerequisite is **T15** (Embed MechJeb) itself. T16's line states the ordering against T15 and logs the
+"T15b" mismatch as a stray per C1.1 rather than inventing a task to match the name.
+
+**ITEM 3 — §B12.2's glue-driver name corrected (C7.1, guarded-file edit under the owner's go above).**
+`grep -n ConductorDriver docs/BUILD_PLAN.md` before this edit: **one hit**, at `:827`, inside §B12.2 —
+confirmed my authority in this file covered the whole occurrence, nothing outside §B12.2 to log as a stray.
+The `ConductorDriver.cs` bullet is marked `⛔ SUPERSEDED 2026-09-05` and **kept verbatim, not deleted**
+(C1.16), immediately followed by a corrected entry naming `plugin/src/FlightDriver.cs` (recovered, W10) as
+the glue driver, citing R1 §5.2 and Owner Q4's ruling that a recovered controller registers into the
+existing gen-1 name (§B12.8(a)) rather than the plan being written around a file that will never exist.
+Added the honest caveat by name: W10 recovers `FlightDriver`'s SHAPE READ-ONLY (tick loop, stub-surface
+implementations, phase reporting, `Mission.AuthoritativePhase` per rule T4) — it drove the DELETED
+hand-written controllers, never MechJeb; the MechJeb-FACING half (`ConductorAction` → `MechJebCore`) is NEW
+work arriving with T18 onward, not something W10's recovery already delivers.
+
+**ITEM 4 — C1.14 brought in line with the owner's 2026-09-05 directive, byte-identically in both copies.**
+Rewrote C1.14 in `CLAUDE.md` and `docs/BUILD_PLAN.md` §C1 to record the owner's directive verbatim ("from
+now on you are to answer the questions, you must not guess. You research your answers.") and say the
+overseer now researches and answers any question with a knowable answer instead of relaying every one.
+**Preserved intact:** a build chat still writes its open questions into its own deliverable, and still
+decides none of them and proceeds past none. **Added, so the change cannot be misread as the overseer
+having been handed the gates:** the three things that stay the owner's alone and are never settled as a
+"question" — (1) an owner GATE (`install`/glass/a restart/anything outward-facing, C1.12), (2) an
+`OVERRIDE` of a settled decision (C1.8), (3) the owner's own TASTE where there is no right answer. **Proof,
+not eyeballing:** extracted C1.14 from both files (`CLAUDE.md:147-156`, `docs/BUILD_PLAN.md:1903-1912`)
+with `sed` and ran `diff` — **empty, IDENTICAL**. No rule renumbered; `grep` on both files confirms C1.12,
+C1.13, C1.15, C1.16 are still numbered 12/13/15/16 and their own text is untouched.
+
+**⛔ SCOPE — what this line did NOT touch.** No `.cs` file. `PanelMap.cs`, `docs/REAL_DRAGON_SCREENS.md`,
+the `/next` skill: untouched. W10, T16 and T15b/T15 themselves: not started, per the task's own
+instruction — this line only re-pointed the register and the plan. No install, no glass.
+**VERIFY (C1.3).** Docs and register only, no code change — **no preview PNG applies**, stated rather than
+skipped. `python plugin/build.py test` run as the no-regression check: **ALL SUITES PASSED, 0 failed**.
+`git status` / `git diff --stat` confirmed the change touches only `CLAUDE.md`, `docs/BUILD_PLAN.md` and
+`REGISTER.md` — no other file staged or modified.
+- **Open questions for the owner (C1.14): NONE.** Every claim above was verified against the tree
+  (`grep`/file reads), not taken on the task prompt's word; the one place the prompt's own text was wrong
+  ("T15b") is logged as a stray on T16's line rather than silently followed.
 
 ---
 

@@ -144,11 +144,16 @@ session and are auto-loaded with this file. Section refs (§n, §Bn, C1–C7.1, 
     then acts only on the returned decision. This governs the FORM of asking only — it does NOT let a build
     chat decide a gated item itself (C1.12 still stands), and questions are still batched at the end (C1.9).
     *(Added 2026-09-02 by owner directive.)*
-14. **Every research or build chat MUST write its open questions into its deliverable file**, under
-    `## Open questions for the owner`. Each: the situation, 2-4 numbered options, and the chat's
-    recommendation with reasoning. Chat-only questions do not count as asked. The overseer puts every one to
-    the owner as multiple choice with a recommendation. **The owner decides. Always.** A build chat decides
-    none and proceeds past none.
+14. **The overseer now SETTLES knowable questions; the OWNER decides the rest.** (Owner directive,
+    2026-09-05, verbatim: "from now on you are to answer the questions, you must not guess. You research
+    your answers.") Every research or build chat still writes its open questions into its deliverable
+    file, under `## Open questions for the owner`. Each: the situation, 2-4 numbered options, and the
+    chat's recommendation with reasoning. Chat-only questions do not count as asked. The overseer now
+    researches and answers any question that has a knowable answer, instead of relaying every one to the
+    owner. **Three things are NOT settled this way and stay the owner's alone:** (1) an owner GATE —
+    `install`, glass time, a restart, or anything outward-facing (C1.12); (2) an `OVERRIDE` of a settled
+    decision (C1.8); (3) the owner's own TASTE, where there is no right answer. **A build chat still
+    decides none of the above and proceeds past none.**
 15. **Evidence-gated mod-first (extends §14.4(e)/(f)).** Before writing ANY new simulation for a
     not-yet-modelled real quantity, the task's OWN deliverable must record a documented search against
     `docs/reference/INSTALLED_MODS.md`: what was searched for, what candidates exist in that list, and why

@@ -824,12 +824,33 @@ Two directives, both binding on T15:
   machine + the re-plan decision logic. Input = a plain telemetry snapshot (extend `MissionInputs`/read
   `VesselData`) + current phase; output = a **ConductorAction** value (which module to engage, which
   Operation to build with which params, when to advance/hold/re-plan). All *decisions* live here.
-- **Glue driver** `plugin/src/ConductorDriver.cs` (KSP/MechJeb-facing, thin, like the render path): each tick,
-  read `VesselData` → ask the pure core for the `ConductorAction` → execute it against the embedded
-  `MechJebCore` modules. It also **implements the `_AutopilotStub` surfaces** (`FlightDriver.MissionMode/
+- ⛔ **SUPERSEDED 2026-09-05 (G9 item 3, C7.1 correction) — kept, not deleted, per C1.16.** *Glue driver
+  `plugin/src/ConductorDriver.cs` (KSP/MechJeb-facing, thin, like the render path): each tick, read
+  `VesselData` → ask the pure core for the `ConductorAction` → execute it against the embedded
+  `MechJebCore` modules. It also implements the `_AutopilotStub` surfaces (`FlightDriver.MissionMode/
   RequestDeorbit/RequestAbort`, `DockingOps/DeorbitOps/UndockOps/StationApproach.Engaged+Note`, `AutoPilot.
-  Engaged`) by reporting the core's state, and supplies `engaged`+`ActivePhase` to `Mission.AuthoritativePhase`
-  so screen and autopilot can never disagree (rule T4).
+  Engaged`) by reporting the core's state, and supplies `engaged`+`ActivePhase` to `Mission.
+  AuthoritativePhase` so screen and autopilot can never disagree (rule T4).* `ConductorDriver.cs` was never
+  built and is not going to be — see the corrected entry below.
+- **Glue driver — corrected name: `plugin/src/FlightDriver.cs` (recovered, W10).** `ConductorDriver.cs`
+  above does not exist and will not; **W10** recovers `src/FlightDriver.cs` instead — R1 §5.2's *"the
+  Part-B host"*, the file whose `:341` is `CrewProcedureOps.Tick`'s only pre-deletion caller — on **Owner
+  Q4**'s ruling (R1 §5.2, ruled 2026-09-03 per §B12.5's *"the stub is a FACADE, not a placeholder"*) that a
+  recovered controller registers INTO the existing gen-1 façade name rather than being renamed to match it
+  (§B12.8(a)). Same job the superseded entry described: each tick, read `VesselData` → ask the pure core
+  for the `ConductorAction` → execute it against the embedded `MechJebCore` modules; implement the
+  `_AutopilotStub` surfaces (`FlightDriver.MissionMode/RequestDeorbit/RequestAbort`, `DockingOps/
+  DeorbitOps/UndockOps/StationApproach.Engaged+Note`, `AutoPilot.Engaged`) by reporting the core's state;
+  supply `engaged`+`ActivePhase` to `Mission.AuthoritativePhase` so screen and autopilot can never disagree
+  (rule T4).
+  ⚠ **Not a clean substitution — the honest caveat.** W10 recovers `FlightDriver`'s SHAPE only, and only
+  READ-ONLY (§B12.6 step (3): *"glue driver implements the stub surfaces read-only… no commands yet"*):
+  the tick loop, the `_AutopilotStub` surface implementations, the phase reporting, and supplying
+  `engaged`+`ActivePhase` to `Mission.AuthoritativePhase` per rule T4 above. The recovered file drove the
+  DELETED hand-written controllers (`DockingControl`/`ReturnControl`/`BoosterControl`/`EntrySteering`/
+  `AbortResponder`), never MechJeb. The MechJeb-FACING half described above — reading a `ConductorAction`
+  and executing it against `MechJebCore` modules — is NEW work arriving with **T18 onward**; W10's recovery
+  does not by itself deliver it.
 
 ### B12.3 Phase state machine (drives B9 ops with B7–B11 locked params)
 Over `MissionPhase` (the enum already exists): **Prelaunch** → load profile + target ISS + arm PVG · **Ascent**
@@ -1879,11 +1900,16 @@ a **PREVIEW-ONLY BUILD-GO** (owner, 2026-09-02, via the overseer); `install` + g
     then acts only on the returned decision. This governs the FORM of asking only — it does NOT let a build
     chat decide a gated item itself (C1.12 still stands), and questions are still batched at the end (C1.9).
     (Added 2026-09-02 by owner directive.)
-14. **Every research or build chat MUST write its open questions into its deliverable file**, under
-    `## Open questions for the owner`. Each: the situation, 2-4 numbered options, and the chat's
-    recommendation with reasoning. Chat-only questions do not count as asked. The overseer puts every one to
-    the owner as multiple choice with a recommendation. **The owner decides. Always.** A build chat decides
-    none and proceeds past none.
+14. **The overseer now SETTLES knowable questions; the OWNER decides the rest.** (Owner directive,
+    2026-09-05, verbatim: "from now on you are to answer the questions, you must not guess. You research
+    your answers.") Every research or build chat still writes its open questions into its deliverable
+    file, under `## Open questions for the owner`. Each: the situation, 2-4 numbered options, and the
+    chat's recommendation with reasoning. Chat-only questions do not count as asked. The overseer now
+    researches and answers any question that has a knowable answer, instead of relaying every one to the
+    owner. **Three things are NOT settled this way and stay the owner's alone:** (1) an owner GATE —
+    `install`, glass time, a restart, or anything outward-facing (C1.12); (2) an `OVERRIDE` of a settled
+    decision (C1.8); (3) the owner's own TASTE, where there is no right answer. **A build chat still
+    decides none of the above and proceeds past none.**
 15. **Evidence-gated mod-first (extends §14.4(e)/(f)).** Before writing ANY new simulation for a
     not-yet-modelled real quantity, the task's OWN deliverable must record a documented search against
     `docs/reference/INSTALLED_MODS.md`: what was searched for, what candidates exist in that list, and why
