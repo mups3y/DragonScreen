@@ -46,7 +46,7 @@ Cover's seven phase views, plus the lower analog console panel. **The six Vehicl
 
 | # | UiPage | title | status | date |
 |---|---|---|---|---|
-| **0** | **Cover** | COVER | ✅ **DONE — 11 findings** | 2026-09-05 |
+| **0** | **Cover** | COVER | ✅ **DONE — 13 findings** *(C-12, C-13 added on owner review)* | 2026-09-05 |
 | 1 | Hud | ATTITUDE HUD | NOT STARTED | — |
 | 2 | Audio | AUDIO SETTINGS | NOT STARTED | — |
 | 3 | Procedure | PROCEDURE (Frame 59) | NOT STARTED | — |
@@ -129,6 +129,35 @@ width (`CoverPage.cs` renders at 2× the 1280 preview; the cfg's `screenWidth` i
 else is baked art or C# literals"* and files H1–H9. The renders **confirm H1, H2, H3, H4, H5, H8 and H9**,
 **correct H6** (the row is not "neither lit" — see C-08), and add five defects S49 could not have seen from
 source alone (C-02, C-03, C-04, C-05, C-06) plus one it did not reach (C-07).
+
+---
+
+## OWNER RULINGS ON RECORD (2026-09-05)
+
+Recorded per **C1.12's evidentiary standard** — the owner's actual words, quoted, given directly in the QC
+chat on review of the first pass. These are design decisions on this page's layout and they **supersede the
+measured Frame 67 placement** for the elements they name (§1.4 / C7.1: the owner decides). They authorise
+nothing else: `install` and glass time remain separate gates, and this document remains read-and-plan.
+
+> **R-1 (→ C-12).** *"you missed the white smudge on the bottom left of the bottom bar. This was an attempt
+> to remoove the baked in white bar but you can still see it."*
+
+> **R-2 (→ C-13).** *"The coordinates bellow the map should be evenly spaced either side of the globe so
+> they do not overrun the globe."*
+
+> **R-3 (→ C-13).** *"next button should also be moved to look like it belongs."*
+
+> **R-4 (→ C-13, standing).** *"I like well balanced layouts."*
+
+> **R-5 (→ C-13).** *"That entire section just below the map just looks messy to me"*
+
+⚠ **R-1 is also a correction to this document's first pass.** The smudge was **found by the owner, not by
+QC.** The first pass did examine `component_48.png`, did see bright pixels under the first icon, and filed
+them privately as the reference UI's baked "active tab" indicator — correct on the Cover by coincidence, so
+not a defect. That reading was wrong: `FigmaUI.cs:274-276` states the marker *"has been erased there so it
+can be drawn dynamically"*, and the erase was incomplete. The lesson for later pages: **when an artefact
+looks like it belongs to the design, check whether the code says it was supposed to be gone.** C-12 is the
+finding that should have been in the first pass.
 
 ## What was checked and found CLEAN
 
@@ -655,6 +684,159 @@ code and it took a different rounding rule from the path it was added next to.
 
 ---
 
+## C-12 — The baked tab marker was erased from `component_48.png` but its glow was left behind: a white smudge sits at the bottom-left of every page
+
+**TIER 1** · **NEW — owner-found (R-1); the first QC pass mis-read this as by-design**
+
+**Evidence.** `ui_cabin.png`, bottom-left corner, magnified — chosen deliberately because the Cabin page's
+active tab is **icon 4**, so the dynamic marker is nowhere near this corner and everything visible here is
+leftover. Two artefacts under the first icon:
+
+1. a **soft glow halo** spreading up and outward from the bar's bottom edge, and
+2. a **pale residual bar** along the very bottom, clipped by the asset's own edge.
+
+Measured in the asset (`component_48.png`, bar-local coordinates): elevated luminance across
+**x ≈ 25…145, y ≈ 196…229**, peaking at **112** against a bar background of **42** — 2.7× the surround.
+It falls back to background at y ≥ 231, which is the tell: the *hard* pill below y 231 was erased cleanly
+and the *glow* above it was not.
+
+Measured on the renders, over the residue box (panel x 14…112, y 1378…1400) against plain bar background
+at the same rows:
+
+| render | active tab | residue mean | bar background mean |
+|---|---|---|---|
+| `ui_cover.png` | icon 0 | 83.1 | 51.3 |
+| `ui_ascent.png` | icon 0 | 83.1 | 51.3 |
+| `ui_cabin.png` | **icon 4** | **73.1** | 51.3 |
+| `ui_audiovideo.png` | **icon 4** | **73.1** | 51.3 |
+
+The residue is present at 73.1 even where the marker is not — **it is not the marker.**
+
+**What is wrong.** `FigmaUI.cs:274-276` records the intent: *"The marker was baked under the first icon in
+`component_48.png`; it has been erased there so it can be drawn dynamically."* `BottomBarMarker`
+(`FigmaUI.cs:280-286`) then draws a crisp 108×10 white bar under whichever tab is active. The erase removed
+the pill and left its halo, so:
+
+- on the Cover the crew sees the correct marker **plus** a halo bleeding out of it;
+- on every other page the crew sees the correct marker under one icon **and a permanent ghost marker under
+  icon 0**, which is exactly the state the dynamic marker exists to prevent — the bar says "Cover is active"
+  on every page in the build.
+
+`component_48` is drawn by fifteen pure pages, so this is on **every screen**, not just this one.
+
+**Fix plan.**
+- **Finish the erase in the asset.** Clear `component_48.png` to the bar's own background across the
+  marker's full footprint including the glow — bar-local **x 20…150, y 190…235**, generously beyond the
+  measured 25…145 / 196…229 so no fringe survives resampling. The bar background is a flat fill
+  (luminance 42, sampled well clear of any glyph), so this is a rectangle fill, not a retouch.
+- **Provenance:** `component_48.png` is a community-Figma export and this is the second edit to it (the
+  first being the erase itself). Note the edit in `docs/ASSET_INDEX.md` so the shipped asset's divergence
+  from the export stays recorded (C7.1) — the repo copy is authoritative, but the divergence must be
+  written down.
+- **Then verify the dynamic marker is doing its whole job**, which the residue has been masking: with the
+  corner clean, `ui_cabin.png` and `ui_audiovideo.png` must show **one** marker, under icon 4.
+- **Must not break:** the marker's own geometry. `MarkY = 1877 + 223`, `MarkH = 10`, `MarkW = 108`
+  (`FigmaUI.cs:278`) are measured from the erased block; if the erase is widened, those constants stay as
+  they are — the block being cleared is bigger than the marker being drawn, and that is correct.
+- **Verify:** re-render; the residue probe (panel x 14…112, y 1378…1400) must read within 2 luminance units
+  of the plain bar background on a page whose active tab is not icon 0. Add that as a headless pixel check
+  if the preview harness can assert on rendered output, so an asset re-export cannot silently restore it.
+- ⚠ **Take this with C-04 in one line.** Both are `component_48` defects, both are page-wide, and both are
+  fixed by touching the same asset and its two draw sites.
+
+---
+
+## C-13 — The band below the globe is unbalanced: the coordinate readouts sit on the globe's foot, and NEXT VIEW is 296 px off its mirror position
+
+**TIER 2** · **NEW — owner-directed (R-2, R-3, R-4, R-5)**
+
+**Evidence.** `ui_cover.png`, the strip between the globe and the bottom bar. Measured geometry, all panel
+px at 2560×1406:
+
+- **camera slot:** x **960.0 … 2560**, centre **1760.0**; y 146.5 … 1249.6
+- **globe:** centre (1760.0, 698.0), surface radius **530** (ray-measured, four directions: 528/530/529/531),
+  so the disc spans x 1230 … 2290 and **bottom y = 1228.0**
+- **clear band below the disc: 21.5 px** (1228.0 → 1249.6). Nothing can sit under the globe.
+
+Element boxes in the band, and what each one does to the disc:
+
+| element | x span | overruns the disc? |
+|---|---|---|
+| NEXT VIEW pill | 1277.2 … 1544.1 | clear — but only 61 px from the disc's foot |
+| **TARGET LATITUDE** | 1619.4 … 1786.5 | **yes — 152 of its 167 px (91%) lie over the globe** |
+| **TARGET LONGITUDE** | 1850.4 … 2036.8 | **yes — 35 px (19%)** |
+| SETTINGS pill | 2271.4 … 2538.4 | clear |
+| CAMERA caption | centred 2411.2, y 1145.7 | clear |
+
+*(the disc's foot spans 1634.8 … 1885.2 at the readouts' own top row, y 1213, shrinking to nothing by 1228)*
+
+And the spacing across the band, left to right:
+
+```
+slot edge →NEXT VIEW→ TARGET LAT →TARGET LON→        →SETTINGS→ slot edge
+   317.2        75.3         63.9        234.6          21.6
+```
+
+**317 / 75 / 64 / 235 / 22.** Everything is crowded right of centre, the left third of the band is empty,
+and the two readouts are pushed onto the globe's foot. That is the "messy" (R-5) measured.
+
+**What is wrong.** The band's five elements are each placed at their own baked Frame 67 design-x and then
+put through the page's fill-to-fit reflow (`CoverPage.cs:325-329`), which shifts everything at design
+x ≥ 1500 right by `extra` — 278.6 px at this aspect. `NextX = 1500f` (`CoverPage.cs:233`) sits **exactly on
+the Split**, so the pill takes the full shift and lands 296 px right of where it would balance SETTINGS.
+The readouts take the same shift and land on the globe. Nothing in the band is positioned **relative to the
+slot or to the globe**, so the layout is only correct at the one aspect ratio the design was drawn at.
+
+**Fix plan — a band computed from the slot and the disc, not from baked design-x.**
+
+Anchor every element to the slot rect and the globe's own geometry, both of which `CoverPage` already
+computes (`ViewLeft`, `w`, and the `gcx`/`gs` used by `DrawCameraView`). Then the band is symmetric at any
+panel aspect, which is the durable form of R-4.
+
+1. **Mirror the pills.** SETTINGS' own right margin is **32 design px** (its box ends at 3395 in a 3427-wide
+   frame) — take that as the band inset. Place NEXT VIEW at `slotLeft + inset` and SETTINGS at
+   `slotRight − inset − width`, both keeping their existing 401×111 design size and row.
+   → NEXT VIEW **981.3 … 1248.2** (moves left 295.9 px); SETTINGS **2271.8 … 2538.7** (unchanged — it is
+   already at its mirror position, which is why it looks settled and NEXT VIEW does not). This is R-3.
+2. **Put the readouts either side of the globe, symmetric about its centreline.** Centre each in the clear
+   span between its pill and the disc's foot:
+   - TARGET LATITUDE centred at `(1248.2 + 1634.8) / 2` = **1441.5**
+   - TARGET LONGITUDE centred at `(1885.2 + 2271.8) / 2` = **2078.5**
+   - and `(1441.5 + 2078.5) / 2` = **1760.0** — exactly the slot and globe centre. The pair comes out
+     symmetric by construction, not by tuning. This is R-2.
+
+   Resulting spacing: `21.3 / 109.7 / 109.6 / (globe) / 99.9 / 99.9 / 21.3`.
+3. **The residual 10 px asymmetry** in step 2 is the two baked PNGs' different widths (167.1 vs 186.4 — the
+   longer word). It disappears if the readouts are drawn as **text centred on ±318.5 from the slot centre**
+   rather than as left-anchored PNGs — which is **C-01's method and should be the same build**: these two are
+   baked art of someone else's coordinates (`26° 15.00° N` printed twice, S49 H3) and have to become live
+   text regardless. Doing C-13 with PNGs still standing leaves the band 10 px off true.
+4. **The CAMERA caption is the one element with no mirror**, and it is part of what reads as messy. Three
+   options, and this is a design call — see **Q4**.
+
+**Must not break.**
+- `NextViewRect` (`CoverPage.cs:255-259`) is shared by the draw, the hit test **and** the tests, which is
+  `PageAction`'s standing rule — change it in one place and the touch target follows the pill automatically.
+  `FigmaUINavTest.cs:479-513` exercises the Cover's hit map and must be re-run, not re-pinned to old numbers.
+- **The Map and Capsule views use the same band** with the readouts hidden (`EarthOnlyKeys`,
+  `CoverPage.cs:195-196`). Both must be re-rendered: with NEXT VIEW moved left, the Map view's band becomes
+  two mirrored pills, which is the arrangement it should have had all along.
+- The **map d-pad cluster** is anchored to `MapRect`'s top-right (`PadRect`, `CoverPage.cs:261-279`) and is
+  untouched by this.
+- The globe itself must not move or resize — R-2 asks for the readouts to clear the globe, not for the
+  globe to shrink. Its ±1.5 px overlap of the two bars (the atmosphere ring reaches r = 553, i.e. y 145 and
+  1251, against bars at 146.5 and 1249.6) is cosmetically invisible and out of scope here.
+- **C-03 still applies on top of this.** Moving the pill does not fix the label overrunning it; the label
+  must also come down to its twin's 37 design px. Do both in one pass or the relocated pill still has a
+  border through its "W".
+
+**Verify.** Re-render all five Cover states. Then assert, as headless checks so the balance cannot drift:
+the two pills' insets from their slot edges are equal; the two readout centres are equidistant from the slot
+centre; and no readout box intersects the disc (centre + radius are both computable from the same constants
+the draw uses).
+
+---
+
 ## Open questions for the owner
 
 Per C1.14. Each is a paste-ready overseer prompt (C1.13). **The QC role decides none of these and proceeds
@@ -733,8 +915,36 @@ records *the crew verified entry is enabled*, it is a local latch and Part A can
 reference, not a build chat's, and §1.4 puts a real-source confirmation above a plausible reading. Whichever
 option is chosen, the value must stop being a PNG and must dash when there is no source.
 
+### Q4 — The CAMERA caption is the one element in the rebalanced band with no mirror. Where should it go? (C-13 step 4)
+
+**Situation.** R-2/R-3 make the band symmetric: NEXT VIEW and SETTINGS mirror each other at the slot edges,
+and the two coordinate readouts sit equidistant either side of the globe. `CAMERA` / `Auto - Earth IO` is
+left floating above the SETTINGS pill at the bottom-right (centred x 2411.2, y 1145.7), with nothing above
+NEXT VIEW to answer it — the last thing in the band that is off-balance. It cannot simply be centred under
+the globe: the disc's foot occupies 1475…2045 at that row.
+
+**Options.**
+1. **Move it above NEXT VIEW** (centred x ≈ 1115, same rows). The caption names the camera *state*, and
+   NEXT VIEW is the control that changes that state — label above its own button. It also fills the empty
+   upper-left of the band, which is currently the biggest hole in it. *(Recommended.)*
+2. **Leave it above SETTINGS.** Conservative — it is where the community Figma baked it (`camera_auto_earth_io`
+   at `{3032,1718,346,59}`) — but it labels a state SETTINGS has nothing to do with, and it leaves the band
+   heavy on the right, which is the imbalance R-5 is pointing at.
+3. **Give it its own centred row above the whole band**, at the slot centre, raised clear of the disc
+   (y ≈ 1100 or above). Balanced and unambiguous, but it pushes the caption into the globe's airspace and
+   costs vertical room the band does not have much of.
+
+**Recommendation: 1.** It is the only option that both balances the band and puts the label with the control
+it describes. It is a deviation from the baked Figma placement — but so are R-2 and R-3, and the owner has
+already ruled on those, so this is the same class of decision and belongs in the same answer.
+
 ---
 
-*Page 0 (Cover) inspected 2026-09-05. Next page: **UiPage 1 — Hud (Frame 58)**, which S49 §1.3 records as
-the largest liveness gap in the build (every readout is pixels in a PNG) and which has never been looked at
-on a tint-truthful render.*
+*Page 0 (Cover) inspected 2026-09-05; C-12 and C-13 added the same day on owner review (R-1…R-5).*
+
+*⚠ **C-12 and C-04 are both `component_48` and both page-wide** — the smudge and the 12% stretch are on
+every screen in the build, so whichever line takes them fixes fifteen pages, not one. They should be
+scheduled together and ahead of the per-page sweep.*
+
+*Next page: **UiPage 1 — Hud (Frame 58)**, which S49 §1.3 records as the largest liveness gap in the build
+(every readout is pixels in a PNG) and which has never been looked at on a tint-truthful render.*
