@@ -285,6 +285,21 @@ conflict (C7.1).
   `DeorbitOps` are T21's to flip** (§B12.5a) and that the **`Steering.cs` entry-state-bus decision is RETIRED**
   — the measurement is MechJeb Landing Guidance's, and O8's no-bank baseline means there is no bank to measure.
 
+- **[EXTRACT_DOCKING_CONTROL.md](EXTRACT_DOCKING_CONTROL.md)** [REF — extraction] — **W21** (2026-09-04),
+  from the deleted gen-2 `DockingControl.cs` + `pure/DockApproach.cs` / `DockControl.cs` / `DockCorridor.cs` /
+  `DockCapture.cs`. ⛔⛔ **THE DOCK WAS NEVER FLOWN — not once** (R1 §5.2 UNPROVEN; zero dockings in the
+  corpus), so this is a **design record, not a validated one**, and every constant is UN-CONVERGED. ⭐ Its
+  §1 is the **§1.4 VERIFIED-REAL block, kept separate from every un-converged number**: the **IDSS IDD Rev E
+  Table 3.3.1.1-2** soft-capture envelope with its citation (closing 0.05–0.10 m/s, lateral rate ≤ 0.04 m/s,
+  offset ≤ 0.10 m, angles ≤ 4.0°, rates ≤ 0.20°/s — the acceptance criterion §B9 P4 converges to, which the
+  Docking AP does **not** supply), and the **200 m KOS + approach-corridor cone** with its RETREAT-never-escape
+  rule. Also: the **R-bar → V-bar L-approach ordering** (WP0 400 m below → WP1 220 m ahead → WP2 20 m →
+  contact) whose three holds **are** the §B14 crew gates G10/G11/G12, as direct input to the §B10.3
+  **`speedLimit` ladder** — ⛔ including the finding that the deleted range-taper was **~10× too fast** and
+  breached §B11's *"< 0.2 m/s inside 5 m"*, and that its 0.08 m/s contact speed looks like a **cargo-BERTHING**
+  number §B11 forbids for crew docking. ✅ Records that **`DockingOps` is T20's to flip** (§B12.5a) — and that
+  a live facade means a controller is behind the lamp, **never that docking works**.
+
 ## 4. Historical — background only, do NOT build from these
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** [HIST] — the 2026-08-04 F9I-era architecture note (kOS bridge, MAS as

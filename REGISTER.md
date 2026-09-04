@@ -5692,7 +5692,7 @@ silently; **`git status` shows no `.cs` file touched**. ⚠ Run under the **OWNE
 from C1.1/C1.7 of 2026-09-04 (via the overseer)** — five Wave E lines in one session; batch only, does not
 generalise.
 
-### W21 [O] Wave E-9 `src/DockingControl.cs` — **RE-VERDICTED RECOVER-REFERENCE (G6)**: the never-flown dock, mined for its two VERIFIED-REAL geometry gates — **TODO** — [TIER 4: reference extraction — two §1.4 verified-real sources worth keeping]
+### W21 [O] Wave E-9 `src/DockingControl.cs` — **RE-VERDICTED RECOVER-REFERENCE (G6)**: the never-flown dock, mined for its two VERIFIED-REAL geometry gates — **DONE** (2026-09-04) — [TIER 4: reference extraction — two §1.4 verified-real sources worth keeping]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 9 of 9 — last by design).
 🔁 **RE-VERDICTED RECOVER-CODE → RECOVER-REFERENCE by G6, on the OWNER's decision of 2026-09-04 via
 the overseer** (*"...docking ... ALL MechJeb"*). This **closes W11's open question 1** in the direction **O6**
@@ -5756,6 +5756,31 @@ and cited**, the waypoint/speed ladder is recorded as a tuning input for `speedL
 constant carries its UN-CONVERGED + never-flown marking, this line records that `DockingOps` is **T20's** to
 flip, and **`git status` shows no `.cs` file touched**. Docs-only → the preview/PNG gate does not apply (say
 so); `build.py test` run as a no-regression check.
+✅ **DONE 2026-09-04 — `docs/EXTRACT_DOCKING_CONTROL.md`.** Read `src/DockingControl.cs` +
+`pure/DockApproach.cs` + `pure/DockCapture.cs` + `pure/DockControl.cs` + `pure/DockCorridor.cs` at
+`8b81816^`. Recorded: (a) the **IDSS IDD Rev E Table 3.3.1.1-2** soft-capture envelope **verbatim with its
+citation**, in its own §1 verified-real block kept clear of every un-converged number — closing (axial)
+0.05–0.10 m/s, lateral rate ≤ 0.04 m/s, lateral offset ≤ 0.10 m, pitch/yaw + roll ≤ 4.0°, rates ≤ 0.20°/s
+— plus the transcription note that **the 0.05 m/s LOWER bound is in the standard and was never enforced in
+the code**; (b) the **200 m KOS + corridor** geometry with the real rule (an unplanned off-corridor
+penetration commands **RETREAT, never a launch escape**), the exact cone formula and the floor, the fact
+that the **10° cone is researched-not-public and the 5 m floor underived**, and the design subtlety that the
+breach test is armed **only on the V-bar legs** because the R-bar climb arcs outside by design; (c) the
+**R-bar → V-bar L-approach ordering** — WP0 400 m below → WP1 220 m ahead → WP2 20 m → contact, whose three
+holds **are** §B14's gates G10/G11/G12 — with the speeds resolved against §B10.3's `speedLimit` ladder: ⛔
+**the deleted linear range-taper caps ~20 m/s at WP0 and ~0.33 m/s at 5 m, roughly 10× the ladder and a
+breach of §B11's "< 0.2 m/s inside 5 m" — do NOT port it**, and its 0.08 m/s contact speed is flagged as a
+suspected **cargo-BERTHING** number §B11 forbids for crew docking (**Q2**); and (d) the 6-DOF glideslope
+servo's gains (`KPos` 0.1 / `KVel` 1.0, the −1/−1/−1 RCS sign map) in one paragraph as **history, not a
+proposal** — O6 hands exactly that job to MechJeb. ⛔ **Every non-verified constant carries its UN-CONVERGED
++ NEVER-FLOWN marking**, stated in the banner, in §0 and at each value; two internal disagreements recorded
+as found (WP1 200 vs 220 m; contact range 0.3 vs 0.4 m). §5 points `pure/NavFilter.cs` at **W20's** order and
+repeats its REGIME-UNSTATED marking rather than re-deriving it. ✅ Records that **`DockingOps` is T20's to
+flip** (§B12.5a) and that a live facade **never means "docking works"**. ✅ `build.py test` **GREEN,
+unchanged** (ALL SUITES PASSED); docs-only → **the preview/PNG gate does not apply** (no screen code
+changed), stated rather than skipped silently; **`git status` shows no `.cs` file touched**. ⚠ Run under the
+**OWNER-AUTHORISED batch deviation from C1.1/C1.7 of 2026-09-04 (via the overseer)** — five Wave E lines in
+one session; batch only, does not generalise.
 
 ### S67 — `plugin/src/pure/PropSchematic.cs` has an uncommitted, in-progress redraw already claiming "S65" (informational)
 Found by **LZ1**, 2026-09-04, while checking `git status` before committing (same pattern as **S2**). The
