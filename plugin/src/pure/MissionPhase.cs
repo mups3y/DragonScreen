@@ -51,7 +51,7 @@ namespace DragonScreen
 
     public static class Mission
     {
-        // ---- REAL NUMBERS, from NASA/SpaceX sources. See docs/FLIGHT_SYSTEMS.md. ----
+        // ---- REAL NUMBERS, from NASA/SpaceX sources. See docs/BUILD_PLAN.md §8. ----
         public const double DrogueAltitude = 5486.0;
         public const double MainAltitude = 1830.0;
 

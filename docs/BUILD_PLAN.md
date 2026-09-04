@@ -975,8 +975,8 @@ coverage is effectively complete for this stack: engines (`ActivateEngines`/`Shu
   `DecouplerRole`) — was **deleted with it**, as was `test/ActuationTest.cs`. All three come back together
   (§B12.8 Wave B) or none of them do.
 - **Its surviving dependency:** `pure/VehicleParts.cs` **was not deleted** and is live in today's tree.
-- **Its collision:** today's `_AutopilotStub.cs` declares a no-op `Actuator`; recovering the real one retires
-  that stub class (§B12.8(a)).
+- **Its collision:** `_AutopilotStub.cs` declared a no-op `Actuator`; recovering the real one retired that
+  stub class — done by W2 (Wave B, 2026-09-04) (§B12.8(a)).
 - **The ONE documented exception, and it stays:** the RCS *master* toggle (`KSPActionGroup.RCS`). A thruster
   only answers translation input while the vessel-level RCS flag is set, so `EnableRcs` sets both the
   per-thruster `rcsEnabled` **and** the master — a stock vessel enable, not a VAB-dependent AG binding, which

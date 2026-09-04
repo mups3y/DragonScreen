@@ -3596,7 +3596,7 @@ The tree holds the Figma-UI rebuild (`CoverPage.cs`, `FigmaUI.cs`, `VehicleOverv
 `docs/SCREEN_INVENTORY.md`, `plugin/GameData/DragonScreen/art/cover/`, ~26 files) — pre-existing, not T0's and
 not touched by it. Owner to commit via GitHub Desktop; noted so a later task doesn't mistake it for its own diff.
 
-### S3 [S] `docs/FLIGHT_SYSTEMS.md` is referenced but does not exist — **NEARLY CLOSED by W26** (file recovered 2026-09-04; ONE wrong citation left) — [TIER 3: doc accuracy]
+### S3 [S] `docs/FLIGHT_SYSTEMS.md` is referenced but does not exist — **DONE 2026-09-05** (batched with S91+S92) — [TIER 3: doc accuracy]
 Live references point at a missing file: `plugin/src/pure/MissionPhase.cs`, `plugin/build/audit_comments.py`,
 and `docs/INDEX.md` (lists it as existing). The §8 flight facts it should hold currently live only in
 `BUILD_PLAN.md`. T15 creates it; T1 must at minimum stop `INDEX.md` advertising a missing file.
@@ -3614,6 +3614,18 @@ the Starship citation this file records having got wrong, and the file says exac
 (`5486.0` / `1830.0`). **The file does not contain those numbers** — it is the 2026-08-05 MechJeb+Trajectories
 direction doc, not a flight-facts reference. The chute altitudes live in `BUILD_PLAN.md` §8. W26 did not
 touch that comment (C1.1, out of its scope). **DONE when** that one citation points at `BUILD_PLAN.md` §8.
+
+**DONE 2026-09-05.** Checked both live comments against the files as they exist now (not from the register's
+memory of them): (1) `pure/MissionPhase.cs:54` did carry the stale `docs/FLIGHT_SYSTEMS.md` citation for the
+5486.0/1830.0 chute altitudes, confirmed absent from `docs/FLIGHT_SYSTEMS.md` (`grep` for `5486|1830`: no
+match) and present in `docs/BUILD_PLAN.md` §8's territory (lines 841/1273/1318/1726) — reworded the comment
+to `See docs/BUILD_PLAN.md §8.`. (2) `build/audit_comments.py` — the comment is at **:232-236** in the file
+as it exists now (the register's own citations disagree with each other, `:233` here vs `:232` in the
+prior W26 note; neither pins one line since the comment is a 5-line block starting at 232), and it needed
+**no fix**: it doesn't cite a specific fact or line number in `docs/FLIGHT_SYSTEMS.md`, only describes that
+the file records a corrected Starship citation — confirmed true by `grep` (`docs/FLIGHT_SYSTEMS.md:102`,
+`CORRECTED 2026-08-13 — THIS SECTION QUOTED THE STARSHIP BOOSTER`). Comment-only edit, no code behaviour change → C1.3: preview/PNG gate does not apply, skipped (batched
+hygiene task with S91+S92, none of which touch behaviour).
 
 ### S4 [S] Phase classifier reads PHASING while still sub-orbital — **DONE 2026-09-02**
 From the 2026-08-29 screen audit (U1). **Turned out already fixed** — the SAME-DAY audit-response commit
@@ -9730,7 +9742,7 @@ as R2 columns but a string TRANSITION has no event, while the bus/fire/leak tran
 it" are both defensible and the choice is a one-line register call, not an owner gate.
 BB1's own `BlackBoxCoverage` is the model for the fix if one is wanted: declare, then check at close.
 
-### S91 [S] `plugin/__pycache__/build.cpython-313.pyc` is COMMITTED — a build artefact under version control — **TODO** — [TIER 4: hygiene]
+### S91 [S] `plugin/__pycache__/build.cpython-313.pyc` is COMMITTED — a build artefact under version control — **DONE 2026-09-05** (batched with S3+S92) — [TIER 4: hygiene]
 Logged by **BB2**, 2026-09-04 (C1.1 — noticed because it bit).
 
 `git status` lists `plugin/__pycache__/build.cpython-313.pyc` as a TRACKED, modifiable file. Any task that
@@ -9743,7 +9755,15 @@ demand, and is Python-version-specific (`313` — it will be a different file th
 **Fix:** `git rm --cached` it and add `__pycache__/` to `.gitignore`. **Not done here** (C1.1); one line of
 `.gitignore` and one `git rm --cached`, and it stops silently polluting every future task's `git status`.
 
-### S92 [S] `docs/BUILD_PLAN.md:978` describes `_AutopilotStub.cs`'s `Actuator` in the present tense — stale since W2/Wave B retired it — **TODO** — [TIER 3: a research doc contradicting the live stub it describes]
+**DONE 2026-09-05.** `git rm --cached plugin/__pycache__/build.cpython-313.pyc`; added `__pycache__/` to
+`.gitignore` (LOCAL section). Verified: `git check-ignore -v plugin/__pycache__/build.cpython-313.pyc` →
+matched by `.gitignore:72`; `git ls-files | grep -i pycache` no longer lists it. **Stray found while
+verifying, NOT fixed (C1.1):** `plugin/build/__pycache__/navball_preview.cpython-313.pyc` is ALSO tracked —
+the same defect on a second file this line didn't name. Now caught by the new `__pycache__/` glob for
+future runs, but the already-tracked copy needs its own `git rm --cached`; logged as **S96**. Harness/repo-
+metadata only, no code behaviour change → C1.3 preview/PNG gate does not apply, skipped.
+
+### S92 [S] `docs/BUILD_PLAN.md:978` describes `_AutopilotStub.cs`'s `Actuator` in the present tense — stale since W2/Wave B retired it — **DONE 2026-09-05** (batched with S3+S91) — [TIER 3: a research doc contradicting the live stub it describes]
 Logged by **G8**, 2026-09-05 (C1.1 — noticed while reading Part B prose to scope G8's docs/BUILD_PLAN.md
 edit to C2 item 2 only; not fixed, because this task's authority did not extend past that one item).
 
@@ -9754,6 +9774,13 @@ It is not: `plugin/src/_AutopilotStub.cs:121`'s own header says the `Actuator` s
 since. `CLAUDE.md`'s matching paragraph was corrected for the same fact by G8 (B2); this BUILD_PLAN.md line
 is the same staleness one level up, in the Wave B rationale prose rather than the summary. **Fix:** reword
 :978 to past tense (the collision existed, W2 resolved it) — a small, self-contained edit, not a §B rewrite.
+
+**DONE 2026-09-05.** Reworded :978 only, present → past tense: *"today's `_AutopilotStub.cs` declares a
+no-op `Actuator`; recovering the real one retires that stub class (§B12.8(a))"* → *"`_AutopilotStub.cs`
+declared a no-op `Actuator`; recovering the real one retired that stub class — done by W2 (Wave B,
+2026-09-04) (§B12.8(a))."* Confined to that one bullet — `git diff docs/BUILD_PLAN.md` shows a single
+2-line hunk at :978-979, nothing else in the guarded file touched. Docs-only, no code change → C1.3
+preview/PNG gate does not apply, skipped.
 
 ### S93 [S] `.claude/skills/next/SKILL.md:3` (frontmatter `description`) still says "the single first non-DONE task" — the same stale rule G8 fixed at :18-27, one level up — **TODO** — [TIER 4: a description string, not the enforced instruction]
 Logged by **G8**, 2026-09-05 (C1.1 — noticed while re-reading the whole file to place the loop-rule fix at
@@ -9882,3 +9909,16 @@ having only the display you touched go dark would be a bug, not a feature", its 
 `PageState.Brightness`, and not "per screen" (all three columns legitimately carry the identical value by
 design, per S86's line). **Fix:** correct the Source cell and drop "per screen" from the description; a
 one-row doc edit, C7.1.
+
+### S96 [S] `plugin/build/__pycache__/navball_preview.cpython-313.pyc` is ALSO committed — the same defect S91 fixed, on a second file — **TODO** — [TIER 4: hygiene]
+Logged by the **S3+S91+S92 batched hygiene task**, 2026-09-05 (C1.1 — noticed while verifying S91's fix with
+`git ls-files | grep -i pycache`; not fixed, because S91's authority named only
+`plugin/__pycache__/build.cpython-313.pyc`).
+
+Same pathology as S91: a compiled Python cache, tracked, Python-version-specific (`313`), regenerated
+whenever `plugin/build.py` (or a module it imports, here `navball_preview`) runs under a different
+interpreter. The new `__pycache__/` glob S91 added to `.gitignore` covers it going forward — `git
+check-ignore -v plugin/build/__pycache__/navball_preview.cpython-313.pyc` already matches — but the
+already-tracked copy survives a `.gitignore` addition (gitignore only stops NEW tracking) and still shows
+up in `git ls-files`. **Fix:** `git rm --cached plugin/build/__pycache__/navball_preview.cpython-313.pyc`;
+no `.gitignore` change needed, S91's glob already covers it.
