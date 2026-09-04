@@ -5348,7 +5348,7 @@ stated, and every constant carries its un-converged marking.
   and **W19** (`AbortControl`, still TODO). That is the point of landing it third — *"neither of those lines
   has to invent a splashdown target"*. The suite is currently the only thing exercising it.
 
-### W16 [S] Wave E-4 `src/EntrySteering.cs` — **RE-VERDICTED RECOVER-REFERENCE (G6)**: the lifting-entry L/D prior, mined for MechJeb's entry hold — **TODO** — [TIER 4: reference extraction — read, mined, quoted; no code lands]
+### W16 [S] Wave E-4 `src/EntrySteering.cs` — **RE-VERDICTED RECOVER-REFERENCE (G6)**: the lifting-entry L/D prior, mined for MechJeb's entry hold — **DONE** (2026-09-04) — [TIER 4: reference extraction — read, mined, quoted; no code lands]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 4 of 9).
 🔁 **RE-VERDICTED RECOVER-CODE → RECOVER-REFERENCE by G6, on the OWNER's decision of 2026-09-04 via
 the overseer** (*"we use MechJeb for ALL UPPER STAGE MANOEUVRES as planned"*). **Entry is MechJeb's**:
@@ -5400,6 +5400,35 @@ LIVE]`, and a one-line pointer from this line's DONE note. ⛔ No `.cs` file is 
 §7.2 with their UN-CONVERGED marking and their `8b81816^` provenance, this line states that entry is flown by
 MechJeb per §B9 P8 / O8, and **`git status` shows no `.cs` file touched**. Docs-only → the preview/PNG gate
 does not apply (say so, do not skip it silently); `build.py test` run as a no-regression check.
+✅ **DONE 2026-09-04 — `docs/EXTRACT_ENTRY_STEERING.md`.** Read `src/EntrySteering.cs` (9,687 B) +
+`pure/Entry.cs` at `8b81816^`. Recorded: (a) **the 4-band L/D schedule verbatim, band boundaries and Lerp
+centres included** — `LdAtmosEntry` **0.18** (50–100% depth) / `LdHighAltitude` **0.20** (25–50%) /
+`LdLowAltitude` **0.26** (5–25%) / `LdFinalApproach` **0.24** (<5%), centres 0.75 / 0.375 / 0.15 / 0.025 —
+with R1 §7.4's **UN-CONVERGED** status transcribed **in the same sentence as each value**; ⚠ **and it says
+where each piece actually lives**: the schedule is in the **in-tree** `pure/Trajectory.cs:377-380` (W22's,
+already `[UN-CONVERGED]`-marked by `4715942`), while **`pure/Entry.cs`'s own copy is NOT a 4-band schedule**
+— it is a **single `fullLoverD = 0.20` anchor** plus the 0.18–0.27 envelope and a **~12° trim AoA**, none of
+which ever carried a marking, and `EntrySteering.EntryLoverD` fed the predictor a **flat 0.2 with
+`UseLdBand` never set**, so the deleted stack **never used the bands at all** (**Q2**); and (b) the
+**footprint-prediction and bank-measurement methods in one paragraph each** — the live Bc measurement, the
+lift-aware predictor run at an assumed bank, the rotation-correction into the body-fixed frame, the
+ground-track miss decomposition, and `bank = atan2(refPerp·liftRight, refPerp·liftUp)` against a lift-up
+reference — enough to rebuild without re-reading the glue. Plus the **|σ| / S-turn law** and its seven
+un-converged constants (`RefBankDeg` 60°, `MinBankDeg` 15°, `MaxBankDeg` 105°, `BankGainDegPerKm` 4.0,
+`CrossDeadbandBaseM` 5,000 m, `CrossDeadbandPerMps` 3.0, `CrossSign`/`RollRefSign` +1), ⚠ the **four
+self-declared unvalidated sign conventions** that would steer a footprint the wrong way **silently**
+(**Q3**), and ⛔ the owner's explicit **CoM-shifter rule verbatim** — *a MODE engaged ONCE before the
+interface, never toggled to steer; bank reversals are an RCS roll*. The marking idiom to match is named
+(`pure/CourseCorrect.cs`'s header + in-place `[UN-CONVERGED]`, as `pure/Trajectory.cs` follows) rather than a
+second one invented. ✅ States that **entry is flown by MechJeb per §B9 P8 / O8** — attitude hold, no
+commanded bank at baseline — and that **the `Steering.cs` state-bus worry is moot: this line parks no state**,
+W18 having re-homed all seven members. C1.15 recorded as considered and **not triggered** (no simulation was
+written; values were transcribed and marked). ✅ `build.py test` **GREEN, unchanged** (ALL SUITES PASSED);
+docs-only → **the preview/PNG gate does not apply** (no screen code changed), stated rather than skipped
+silently; **`git status` shows no `.cs` file touched**. ⚠ Run under the **OWNER-AUTHORISED batch deviation
+from C1.1/C1.7 of 2026-09-04 (via the overseer)** — five Wave E lines in one session; batch only, does not
+generalise. ℹ **Q1 (in all five extracts)** proposes ONE [S] line to fold the batch's tuning-relevant
+sections into `MECHJEB_MISSION_TUNING.md`; W16 is the last of the five, so that line can be opened now.
 
 ### W17 [O] Wave E-5 `src/DeorbitBurn.cs` — **RE-VERDICTED RECOVER-REFERENCE (G6)**: the units-bug deorbit, mined as a failure lesson — **DONE** (2026-09-04) — [TIER 4: reference extraction — a real defect, recorded rather than restored]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 5 of 9).

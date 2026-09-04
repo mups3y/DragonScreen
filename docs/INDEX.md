@@ -316,6 +316,23 @@ conflict (C7.1).
   50 km** — neither an entry-corridor periapsis, and **nobody has ever derived one from §B11's −1.4°/−1.6°
   FPA**. ⚠ R1 §4.2 validates ascent and abort only, so **MechJeb inherits an unproven phase, not a solved one**.
 
+- **[EXTRACT_ENTRY_STEERING.md](EXTRACT_ENTRY_STEERING.md)** [REF — extraction] — **W16** (2026-09-04),
+  from the deleted gen-2 `EntrySteering.cs` + `pure/Entry.cs`. ⛔ **Entry is MechJeb's** — §B9 P8 under **O8**
+  is SmartASS `SURFACE_RETROGRADE` attitude hold with **no commanded bank at baseline**, and this file **is**
+  the active steering O8 already declined for flight 1. ⭐ Records **the only lifting-entry L/D estimate the
+  project has**, and says where each piece lives: the **4-band schedule** (0.18 / 0.20 / 0.26 / 0.24 by
+  atmosphere-depth ratio, with its band boundaries and Lerp centres) is in the **in-tree**
+  `pure/Trajectory.cs`, marked by **W22** — while `pure/Entry.cs`'s own copy is a **single 0.20 anchor** plus
+  the 0.18–0.27 envelope and a **~12° trim AoA**, and ⚠ **the deleted stack never enabled the bands at all**
+  (it fed the predictor a flat 0.2). ⛔ **Every value UN-CONVERGED for RSS-RO** (§B16.8 ruling 2) — no
+  lifting entry has ever been flown, and converging one needs glass time, a separate owner gate. Also: the
+  **footprint-prediction and bank-measurement methods** in a paragraph each (measured Bc, the lift-aware
+  rotation-corrected predictor, the ground-track miss decomposition, `atan2` bank against a lift-up
+  reference), the **|σ| / S-turn bank law** and its seven un-converged constants, ⚠ the **four unvalidated
+  sign conventions** that would steer a footprint the wrong way silently, and ⛔ the owner's explicit
+  **CoM-shifter rule** verbatim — *a MODE engaged ONCE, never toggled to steer*. ✅ The `Steering.cs`
+  state-bus worry is **moot**: this line parks no state, and W18 already re-homed every member.
+
 ## 4. Historical — background only, do NOT build from these
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** [HIST] — the 2026-08-04 F9I-era architecture note (kOS bridge, MAS as
