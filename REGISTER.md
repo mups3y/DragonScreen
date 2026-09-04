@@ -8119,3 +8119,25 @@ task's declared outputs (`LZ_RECOVERY_TABLE.md`, `LZ1`'s line, this line).
 **VERIFY (C1.3).** Docs + register only, **no code** — so **no preview PNG applies**, stated rather than
 skipped silently. `python plugin/build.py test` run as the no-regression check: **ALL SUITES PASSED**.
 `git status` clean apart from the two declared outputs.
+
+### G7 [S] Governance — C1.12 gains an evidentiary standard: quote the owner, or there is no ruling — **DONE 2026-09-04**
+- **OWNER RULING, 2026-09-04, via the overseer, answering S89's Q2 — option (2).** Recorded as the owner's
+  per C1.12; this chat decided nothing, only transcribed. **Amended C1.12 in place** (not a new C1.17 — the
+  standard is squarely C1.12's own subject) in `CLAUDE.md` and `docs/BUILD_PLAN.md` §C1, adding: any owner
+  ruling a build chat records must **QUOTE THE OWNER'S ACTUAL WORDS**; no quote, no recorded ruling; if a
+  ruling is believed received but cannot be quoted, write **"no ruling on record"**, leave the line OPEN, and
+  pose the question (C1.14) — a remembered/summarised/inferred ruling is the same failure as an invented one.
+- **Also added to `.claude/skills/next/SKILL.md`**, which restates C1.12's "never record a decision as the
+  owner's" duty at step 4 and in the refusals list — left unamended it would have given a chat reading the
+  skill a weaker rule than one reading `CLAUDE.md`.
+- **Byte-identical check, actually run:** `diff` of the two files' C1.12 blocks (`CLAUDE.md:114-128` vs
+  `docs/BUILD_PLAN.md:1855-1869`) — **IDENTICAL**. Pre-existing drift found and fixed as part of this: the two
+  files' C1.12 closing parenthetical did not match before this task (`CLAUDE.md` had a shorter, italicized
+  note; `BUILD_PLAN.md` had a fuller, plain one) — resolved onto `BUILD_PLAN.md`'s fuller wording per C7.1
+  ("the plan wins" on conflicts), since matching is this task's own proof requirement and the difference was
+  wording/formatting only, not substance. No other line of C1.12 touched.
+- **No other rule touched, renumbered or reworded** (C1.11) — C1.13–C1.16 left exactly as written.
+**VERIFY (C1.3).** Rules/docs only, no code — **no preview PNG applies**, stated rather than skipped.
+`python plugin/build.py test` run as the no-regression check: **ALL SUITES PASSED**. `git status` clean apart
+from the four declared outputs (`CLAUDE.md`, `docs/BUILD_PLAN.md`, `.claude/skills/next/SKILL.md`,
+`REGISTER.md`).

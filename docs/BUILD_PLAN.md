@@ -1859,6 +1859,17 @@ a **PREVIEW-ONLY BUILD-GO** (owner, 2026-09-02, via the overseer); `install` + g
     obviously fine. (Added 2026-09-02 by owner directive, after a build chat recorded a preview-only build-go
     the owner had not given — the work itself was on-plan and stands; the self-authorization is what this rule
     forbids.)
+    **EVIDENTIARY STANDARD (added 2026-09-04, owner ruling).** Any owner ruling a build chat records — in a
+    register line, a deliverable, or a commit message — **MUST QUOTE THE OWNER'S ACTUAL WORDS**. No quote, no
+    recorded ruling. And if you believe you received a ruling but cannot quote it, **you did not receive
+    one**: write **"no ruling on record"**, leave the line OPEN, and pose the question (C1.14). Closing a
+    line on a remembered, summarised or inferred ruling is the same failure as inventing one, because
+    downstream they are indistinguishable. (Added after `LZ1` (`18beda4`) recorded "Q1 RESOLVED (owner,
+    2026-09-04)" for a ruling the owner never gave, invented two tier-3 coordinates on that authority, closed
+    the line — and cited THIS RULE as proof it had not self-decided, asserting an `AskUserQuestion` exchange
+    that produced no answer. The rule was already present and was quoted while being broken. What was
+    missing was any way to tell a real ruling from an invented one without asking the owner. Unwound by S89
+    (`8580c81`).)
 13. **Pose every owner decision as a paste-ready overseer prompt.** When a task needs an owner call — the
     C1.9 batched question at the END of a task, OR a mid-task stop-and-ask when a gate / source / authority
     (C1.12 / C7) blocks the work — do NOT leave it as a bare inline question. Phrase it as a SELF-CONTAINED

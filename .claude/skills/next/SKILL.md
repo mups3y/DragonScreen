@@ -48,6 +48,11 @@ Every register line names what to read (`§4`, `§B12.1`, `§14.4(a,b)`, a sourc
   decision into `REGISTER.md` / the plan as the owner's unless they said it here. If a gate blocks the task:
   **STOP and ask** — do not proceed because the work looks obviously fine. Put that stop-and-ask in the C1.13
   overseer-prompt form too, so the owner can paste it straight to the overseer.
+- **Evidentiary standard (C1.12).** Any owner ruling you record — in `REGISTER.md`, a deliverable, or a commit
+  message — must **QUOTE the owner's actual words**. No quote, no recorded ruling. If you believe you received
+  a ruling but cannot quote it, **you did not receive one**: write **"no ruling on record"**, leave the line
+  OPEN, and pose the question (C1.14). A remembered, summarised or inferred ruling is the same failure as an
+  invented one — downstream they are indistinguishable.
 - **Never ask the owner a question mid-task.** Batch it for step 7.
 - If the task is too big to finish before context compaction, **SPLIT it in `REGISTER.md`** into the part you
   did and the part(s) left, and finish only the first. Never run to compaction mid-task.
