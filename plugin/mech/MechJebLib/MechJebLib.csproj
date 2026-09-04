@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net48</TargetFrameworks>
+        <RootNamespace>MechJebLib</RootNamespace>
+        <AssemblyName>MechJebLib</AssemblyName>
+        <ProjectGuid>{BA86665B-A72E-41FB-858A-C0FF29E05768}</ProjectGuid>
+        <LangVersion>8</LangVersion>
+        <Nullable>enable</Nullable>
+        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+        <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="JetBrains.Annotations" Version="2023.3.0">
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\alglib\alglib.csproj"/>
+    </ItemGroup>
+
+</Project>

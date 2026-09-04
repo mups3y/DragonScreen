@@ -2,11 +2,71 @@ DragonScreen — Third-Party Notices
 ===================================
 
 DragonScreen itself is licensed under the GNU General Public License v3.0 (see LICENSE
-at the repo root). It incorporates a derivative of one separately-licensed work, credited
-below in full per that work's own licence terms. Apache License 2.0 is one-way compatible
-with GPLv3 (a work under it may be included in a GPLv3 work; the reverse is not true), so
-combining them here is permitted — but Apache-2.0 requires this attribution, a copy of the
-licence text, and a statement of what was changed. This file provides all three.
+at the repo root). It incorporates TWO separately-licensed works, each credited below per
+its own licence terms:
+
+  1. SpaceX-Dragon2-UI (Neel Dandiwala) — Apache-2.0 — a derivative: layout, one art asset
+     and some on-screen copy, reimplemented rather than copied.
+  2. MechJeb2 (MuMech) — GPL-3.0 — VENDORED SOURCE, complete, at a pinned commit, in
+     plugin/mech/. Not a derivative: it is compiled into the mod as shipped.
+
+Apache License 2.0 is one-way compatible with GPLv3 (a work under it may be included in a
+GPLv3 work; the reverse is not true), so combining them here is permitted — but Apache-2.0
+requires attribution, a copy of the licence text, and a statement of what was changed. This
+file provides all three. MechJeb2 is GPLv3 itself, so no compatibility question arises; what
+it requires instead is that the source be shipped, which it is.
+
+--------------------------------------------------------------------------------
+MechJeb2 (MuMech) — GNU General Public License v3.0 — VENDORED SOURCE
+--------------------------------------------------------------------------------
+
+Source:    https://github.com/MuMech/MechJeb2
+Copyright: MechJeb2 Copyright (C) 2013, MuMech and the MechJeb contributors
+Licence:   GNU GPL v3 — full text at plugin/mech/LICENSE.md (shipped with the source)
+
+Pinned at: branch `dev`, commit c5a6d8fed6bf458f85c9aafc49c7e282cd4e2ffa (2026-08-08).
+           Vendored 2026-09-05 (register T15a). The pin also ships inside the assembly,
+           as constants in plugin/mech/_dragonscreen/_Pin.cs.
+
+What this project took from it:
+
+- ALL of it. `plugin/mech/` is the complete upstream tree at that commit — all 339 .cs
+  files, nothing pruned — per docs/BUILD_PLAN.md §B12.1a. 245 of them are compiled into a
+  private assembly, `DragonScreen.Mech.dll`, which ships beside DragonScreen.dll.
+- Because distribution is public and MechJeb2 is GPLv3, DragonScreen is a GPLv3 combined
+  work and must ship the embedded source. It does: plugin/mech/ IS that source, in this
+  repository, complete, at the commit named above.
+
+What was changed (and this is the whole list):
+
+- A RENAME SHELL, and nothing else. Every compiled file has its body wrapped verbatim in
+  `namespace DragonScreen.Mech`, and the assembly is named DragonScreen.Mech — so neither a
+  type nor an assembly of ours can collide with a user's own installed MechJeb2.dll. No
+  method was edited, no warning fixed, no module altered or removed.
+- 46 files had `extern alias JetBrainsAnnotations;` dropped and their alias-qualified using
+  folded to a plain `using`, because this build has no NuGet to resolve that package from.
+- Not compiled (but vendored whole, and recorded as such): MechJebKos/ (needs kOS.dll),
+  MechJebLibTest/ (needs xunit), MechJeb2-Unity/ (a Unity editor project), each project's
+  Properties/AssemblyInfo.cs, and GlobalSuppressions.cs.
+- Not vendored: bin/, .github/, .idea/, .gitignore, .gitattributes — upstream's development
+  apparatus, not its source.
+
+Third-party code inside MechJeb2 that ships with it, checked separately for GPLv3
+compatibility (full findings: plugin/mech/VENDOR.md §5):
+
+- alglib 4.08.0 (Sergey Bochkanov). ALGLIB is dual-licensed GPL/commercial upstream; the
+  vendored copy is the FREE GPL EDITION — every one of its 15 source files carries the
+  header "GNU General Public License ... either version 2 of the License, or (at your
+  option) any later version". GPL-2.0-or-later, therefore usable under GPLv3. The
+  `_ALGLIB_COMMERCIAL` code paths are never compiled: this build defines only UNITY_2017_1.
+- MechJebLib (Lamont Granquist, Sebastien Gaggini, MechJeb contributors) — SPDX
+  "LicenseRef-PD-hp OR Unlicense OR CC0-1.0 OR 0BSD OR MIT-0 OR MIT OR LGPL-2.1+".
+- CompatibilityChecker.cs (Majiir, 2014) and ToolbarWrapper.cs (Maik Schreiber, 2013-2016)
+  — BSD 2-clause; their copyright notices are retained in the shipped files.
+- NullableAttributes.cs (Microsoft / .NET Foundation) — MIT; notice retained in the file.
+- MechJeb2/UnityToolbag/ (Dispatcher, Future) carries no licence notice in the vendored
+  copy. This is an upstream gap; it is redistributed exactly as MuMech distributes it,
+  unmodified, under MechJeb2's GPLv3.
 
 --------------------------------------------------------------------------------
 SpaceX-Dragon2-UI (Neel Dandiwala) — Apache License, Version 2.0

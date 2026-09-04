@@ -1,0 +1,112 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net48</TargetFramework>
+        <RootNamespace>MuMech</RootNamespace>
+        <AssemblyName>MechJeb2</AssemblyName>
+        <ProjectGuid>{9FC90AE6-C2E4-47F1-A6D1-DB4731A40BE3}</ProjectGuid>
+        <LangVersion>8</LangVersion>
+        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+        <DefineConstants>$(DefineConstants);UNITY_2017_1</DefineConstants>
+        <Prefer32Bit>false</Prefer32Bit>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+        <DefineConstants>$(DefineConstants);ENABLE_PROFILER</DefineConstants>
+        <DebugType>portable</DebugType>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+        <DebugType>None</DebugType>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Reference Include="Assembly-CSharp">
+            <HintPath>$(KspData)/Managed/Assembly-CSharp.dll</HintPath>
+            <SpecificVersion>False</SpecificVersion>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="Assembly-CSharp-firstpass">
+            <HintPath>$(KspData)/Managed/Assembly-CSharp-firstpass.dll</HintPath>
+            <SpecificVersion>False</SpecificVersion>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine">
+            <HintPath>$(KspData)/Managed/UnityEngine.dll</HintPath>
+            <SpecificVersion>False</SpecificVersion>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine.AnimationModule">
+            <HintPath>$(KspData)/Managed/UnityEngine.AnimationModule.dll</HintPath>
+            <SpecificVersion>False</SpecificVersion>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine.AssetBundleModule">
+            <HintPath>$(KspData)/Managed/UnityEngine.AssetBundleModule.dll</HintPath>
+            <SpecificVersion>False</SpecificVersion>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine.CoreModule">
+            <HintPath>$(KspData)/Managed/UnityEngine.CoreModule.dll</HintPath>
+            <SpecificVersion>False</SpecificVersion>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine.ImageConversionModule">
+            <HintPath>$(KspData)/Managed/UnityEngine.ImageConversionModule.dll</HintPath>
+            <SpecificVersion>False</SpecificVersion>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine.IMGUIModule">
+            <HintPath>$(KspData)/Managed/UnityEngine.IMGUIModule.dll</HintPath>
+            <SpecificVersion>False</SpecificVersion>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine.InputLegacyModule">
+            <HintPath>$(KspData)/Managed/UnityEngine.InputLegacyModule.dll</HintPath>
+            <SpecificVersion>False</SpecificVersion>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine.PhysicsModule">
+            <HintPath>$(KspData)/Managed/UnityEngine.PhysicsModule.dll</HintPath>
+            <SpecificVersion>False</SpecificVersion>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine.TextRenderingModule">
+            <HintPath>$(KspData)/Managed/UnityEngine.TextRenderingModule.dll</HintPath>
+            <SpecificVersion>False</SpecificVersion>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine.UI">
+            <HintPath>$(KspData)/Managed/UnityEngine.UI.dll</HintPath>
+            <SpecificVersion>False</SpecificVersion>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine.VehiclesModule">
+            <HintPath>$(KspData)/Managed/UnityEngine.VehiclesModule.dll</HintPath>
+            <SpecificVersion>False</SpecificVersion>
+            <Private>False</Private>
+        </Reference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Reference Include="JetBrains.Annotations">
+            <HintPath>$(NuGetPackageRoot)jetbrains.annotations/2023.3.0/lib/net20/JetBrains.Annotations.dll</HintPath>
+            <Aliases>JetBrainsAnnotations</Aliases>
+        </Reference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\alglib\alglib.csproj"/>
+        <ProjectReference Include="..\MechJebLibBindings\MechJebLibBindings.csproj"/>
+        <ProjectReference Include="..\MechJebLib\MechJebLib.csproj"/>
+    </ItemGroup>
+
+    <Target Name="MechJebCopyBuild" AfterTargets="Build">
+        <Exec Condition=" '$(OS)' == 'Windows_NT' "
+              Command="call &quot;$(ProjectDir)copy_build.bat&quot; &quot;$(TargetPath)&quot; &quot;$(TargetDir)&quot; &quot;$(TargetName)&quot; &quot;$(ProjectDir)&quot;"/>
+        <Exec Condition=" '$(OS)' != 'Windows_NT' "
+              Command="'$(ProjectDir)/copy_build.sh' '$(TargetPath)' '$(TargetDir)' '$(TargetName)' '$(ProjectDir)' '$(KspDir)'"/>
+    </Target>
+
+</Project>

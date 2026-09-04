@@ -1,0 +1,177 @@
+// VENDORED - MechJeb2, upstream MuMech/MechJeb2, branch dev, commit
+// c5a6d8fed6bf458f85c9aafc49c7e282cd4e2ffa (2026-08-08).  Pinned by DragonScreen T15a; see plugin/mech/VENDOR.md.
+// GPLv3 (plugin/mech/LICENSE.md).  UNMODIFIED except the rename shell: this file's whole
+// body is wrapped in `namespace DragonScreen.Mech` (B3 private namespace) and any
+// `extern alias JetBrainsAnnotations` is folded to a plain `using`.  No other edit.
+
+namespace DragonScreen.Mech
+{
+/*
+ * Copyright Lamont Granquist, Sebastien Gaggini and the MechJeb contributors
+ * SPDX-License-Identifier: LicenseRef-PD-hp OR Unlicense OR CC0-1.0 OR 0BSD OR MIT-0 OR MIT OR LGPL-2.1+
+ */
+
+using System.Collections.Generic;
+using MechJebLib.Functions;
+using MechJebLib.ODE;
+using MechJebLib.Primitives;
+using MechJebLib.Utils;
+using static System.Math;
+
+namespace MechJebLib.PSG
+{
+    public class AscentGuesser
+    {
+        private readonly Problem _problem;
+
+        public AscentGuesser(Problem problem)
+        {
+            _problem = problem;
+            _events = new List<Event> { new Event(OrbitalEnergy) };
+        }
+
+        private class VacuumThrustKernel
+        {
+            public static int N => InterpolantLayout.INTERPOLANT_LAYOUT_LEN;
+
+            // ReSharper disable once NullableWarningSuppressionIsUsed
+            public Phase Phase = null!;
+
+            public void Rhs(Vec yin, double x, Vec dyout)
+            {
+                Check.True(Phase.Normalized);
+
+                var y = InterpolantLayout.CreateFrom(yin);
+                var dy = new InterpolantLayout();
+
+                double thrust = Phase.VacThrust;
+                double at = thrust / y.M;
+
+                double r2 = V3.Dot(y.R, y.R);
+                double r = Sqrt(r2);
+                double r3 = r2 * r;
+
+                dy.R = y.V;
+                dy.V = -y.R / r3 + at * y.U;
+                dy.M = -Phase.Mdot;
+                dy.U = V3.zero;
+
+                dy.CopyTo(dyout);
+            }
+        }
+
+        private double OrbitalEnergy(IList<double> yin, double t, AbstractIVP i)
+        {
+            var y = InterpolantLayout.CreateFrom(yin);
+
+            double r = y.R.magnitude;
+            double v2 = y.V.sqrMagnitude;
+            double e = 0.5 * v2 - 1.0 / r;
+
+            return e - _targetOrbitalEnergy;
+        }
+
+        private double _targetOrbitalEnergy;
+        private readonly VacuumThrustKernel _ode = new VacuumThrustKernel();
+        private readonly DP5 _solver = new DP5();
+        private readonly List<Event> _events;
+
+        private DenseOutput Integrate(Vec y0, Vec yf, Phase phase, double t0, double tf)
+        {
+            _solver.ThrowOnMaxIter = true;
+            _solver.Maxiter = 2000;
+            _solver.Rtol = 1e-6;
+            _solver.Atol = 1e-6;
+            _ode.Phase = phase;
+            var interpolant = DenseOutput.Rent();
+            if (phase.Coast)
+                _solver.Solve(_ode.Rhs, y0, yf, t0, tf, interpolant);
+            else
+                _solver.Solve(_ode.Rhs, y0, yf, t0, tf, interpolant, _events);
+
+            return interpolant;
+        }
+
+        private bool WillIntraPhaseCoast(PhaseCollection phases, int p)
+        {
+            if (p + 2 > phases.Count - 1) // need three phases in a row
+                return false;
+            if (!phases[p + 2].MassContinuity) // next burn should be mass continuity stage
+                return false;
+            if (phases[p].Coast || !phases[p + 1].Coast || phases[p + 2].Coast) // need burn-coast-burn
+                return false;
+            return true;
+        }
+
+        private void Shooting(Solution solution, PhaseCollection phases, V3 u0, double targetOrbitalEnergy)
+        {
+            using var initial = Vec.Rent(InterpolantLayout.INTERPOLANT_LAYOUT_LEN);
+            using var terminal = Vec.Rent(InterpolantLayout.INTERPOLANT_LAYOUT_LEN);
+
+            var y0 = new InterpolantLayout();
+
+            double t0 = 0;
+
+            y0.R = _problem.R0;
+            y0.V = _problem.V0;
+            y0.M = _problem.M0;
+            y0.U = u0.normalized;
+
+            for (int p = 0; p < phases.Count; p++)
+            {
+                Phase phase = phases[p];
+
+                if (!phase.MassContinuity)
+                    y0.M = phase.M0;
+
+                double bt = phase.Coast ? phase.MinT + 0.5 * (phase.MaxT - phase.MinT) : phase.BurnTimeFromMass(y0.M);
+                if (bt < 0)
+                    bt = 0;
+
+                double e0 = 0.5 * y0.V.sqrMagnitude - 1.0 / y0.R.magnitude;
+                if (e0 > targetOrbitalEnergy)
+                    bt = 0;
+
+                y0.CopyTo(initial);
+
+                DenseOutput interpolant = Integrate(initial, terminal, phase, t0, t0 + bt);
+
+                if (WillIntraPhaseCoast(phases, p))
+                {
+                    double btActual = interpolant.MaxT - interpolant.MinT;
+                    interpolant.Dispose();
+                    DenseOutput interpolant2 = Integrate(initial, terminal, phase, t0, t0 + btActual * 0.75);
+                    solution.AddSegment(interpolant2, phase);
+                }
+                else
+                {
+                    solution.AddSegment(interpolant, phase);
+                }
+
+                y0.CopyFrom(terminal);
+
+                t0 = solution.Tmax;
+            }
+        }
+
+        public Solution InitialGuess(PhaseCollection phases, double incT, double targetOrbitalEnergy)
+        {
+            _targetOrbitalEnergy = targetOrbitalEnergy;
+
+            V3 r0 = _problem.R0;
+            // guess the initial launch direction
+            V3 enu = Astro.ENUHeadingForInclination(incT, r0);
+            // add 45 degrees up
+            enu.z = 1.0;
+            V3 u0 = Astro.ENUToECI(r0, enu).normalized;
+
+            var solution = new Solution(_problem);
+
+            Shooting(solution, phases, u0, targetOrbitalEnergy);
+
+            return solution;
+        }
+    }
+}
+
+}

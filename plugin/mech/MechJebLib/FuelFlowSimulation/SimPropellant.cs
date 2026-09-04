@@ -1,0 +1,37 @@
+// VENDORED - MechJeb2, upstream MuMech/MechJeb2, branch dev, commit
+// c5a6d8fed6bf458f85c9aafc49c7e282cd4e2ffa (2026-08-08).  Pinned by DragonScreen T15a; see plugin/mech/VENDOR.md.
+// GPLv3 (plugin/mech/LICENSE.md).  UNMODIFIED except the rename shell: this file's whole
+// body is wrapped in `namespace DragonScreen.Mech` (B3 private namespace) and any
+// `extern alias JetBrainsAnnotations` is folded to a plain `using`.  No other edit.
+
+namespace DragonScreen.Mech
+{
+/*
+ * Copyright Lamont Granquist, Sebastien Gaggini and the MechJeb contributors
+ * SPDX-License-Identifier: LicenseRef-PD-hp OR Unlicense OR CC0-1.0 OR 0BSD OR MIT-0 OR MIT OR LGPL-2.1+
+ */
+
+using MechJebLib.FuelFlowSimulation.PartModules;
+
+namespace MechJebLib.FuelFlowSimulation
+{
+    public readonly struct SimPropellant
+    {
+        public readonly int id;
+        public readonly bool ignoreForIsp;
+        public readonly double ratio;
+        public readonly SimFlowMode FlowMode;
+        public readonly double density;
+
+        public SimPropellant(int id, bool ignoreForIsp, double ratio, SimFlowMode flowMode, double density)
+        {
+            this.id = id;
+            this.ignoreForIsp = ignoreForIsp;
+            this.ratio = ratio;
+            FlowMode = flowMode;
+            this.density = density;
+        }
+    }
+}
+
+}

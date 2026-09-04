@@ -1,0 +1,491 @@
+// VENDORED - MechJeb2, upstream MuMech/MechJeb2, branch dev, commit
+// c5a6d8fed6bf458f85c9aafc49c7e282cd4e2ffa (2026-08-08).  Pinned by DragonScreen T15a; see plugin/mech/VENDOR.md.
+// GPLv3 (plugin/mech/LICENSE.md).  UNMODIFIED except the rename shell: this file's whole
+// body is wrapped in `namespace DragonScreen.Mech` (B3 private namespace) and any
+// `extern alias JetBrainsAnnotations` is folded to a plain `using`.  No other edit.
+
+namespace DragonScreen.Mech
+{
+/*
+ * Copyright Lamont Granquist, Sebastien Gaggini and the MechJeb contributors
+ * SPDX-License-Identifier: LicenseRef-PD-hp OR Unlicense OR CC0-1.0 OR 0BSD OR MIT-0 OR MIT OR LGPL-2.1+
+ */
+
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
+using System.Runtime.CompilerServices;
+using MechJebLib.Utils;
+using static MechJebLib.Utils.Statics;
+using static System.Math;
+
+// ReSharper disable UnusedMember.Global
+// ReSharper disable MemberCanBePrivate.Global
+// ReSharper disable InconsistentNaming
+// ReSharper disable NonReadonlyMemberInGetHashCode
+namespace MechJebLib.Primitives
+{
+    /// <summary>
+    ///     Double Precision, Right-Handed 3-Vector class using Radians
+    /// </summary>
+    public struct V3 : IEquatable<V3>, IFormattable
+    {
+        // MISSING APIS
+        // FIXME: MoveTowards()
+        // FIXME: RotateTowards()
+        // FIXME: Reflect()
+        // FIXME: SmoothDamp()
+        // FIXME: OrthoNormalize(normal, tangent, binormal)
+        public double x;
+        public double y;
+        public double z;
+
+        public double roll
+        {
+            get => x;
+            set => x = value;
+        }
+
+        public double pitch
+        {
+            get => y;
+            set => y = value;
+        }
+
+        public double yaw
+        {
+            get => z;
+            set => z = value;
+        }
+
+        public double this[int index]
+        {
+            get =>
+                index switch
+                {
+                    0 => x,
+                    1 => y,
+                    2 => z,
+                    _ => throw new IndexOutOfRangeException($"Bad V3 index {index} in getter")
+                };
+
+            set
+            {
+                switch (index)
+                {
+                    case 0:
+                        x = value;
+                        break;
+                    case 1:
+                        y = value;
+                        break;
+                    case 2:
+                        z = value;
+                        break;
+                    default:
+                        throw new IndexOutOfRangeException($"Bad V3 index {index} in setter");
+                }
+            }
+        }
+
+        public V3(double x, double y, double z)
+        {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+
+        public V3(double x, double y)
+        {
+            this.x = x;
+            this.y = y;
+            z = 0.0;
+        }
+
+        public void Set(double nx, double ny, double nz)
+        {
+            x = nx;
+            y = ny;
+            z = nz;
+        }
+
+        public static V3 Scale(V3 a, V3 b) => new V3(a.x * b.x, a.y * b.y, a.z * b.z);
+
+        public static V3 Divide(V3 a, V3 b) => new V3(a.x / b.x, a.y / b.y, a.z / b.z);
+
+        public static V3 Abs(V3 a) => new V3(Math.Abs(a.x), Math.Abs(a.y), Math.Abs(a.z));
+
+        public static V3 Sign(V3 a) => new V3(Math.Sign(a.x), Math.Sign(a.y), Math.Sign(a.z));
+
+        public static V3 Sqrt(V3 a) => new V3(Math.Sqrt(a.x), Math.Sqrt(a.y), Math.Sqrt(a.z));
+
+        public static V3 Max(V3 a, V3 b) => new V3(Math.Max(a.x, b.x), Math.Max(a.y, b.y), Math.Max(a.z, b.z));
+
+        public static V3 Min(V3 a, V3 b) => new V3(Math.Min(a.x, b.x), Math.Min(a.y, b.y), Math.Min(a.z, b.z));
+
+        public void Scale(V3 scale)
+        {
+            x *= scale.x;
+            y *= scale.y;
+            z *= scale.z;
+        }
+
+        public static V3 Cross(V3 v1, V3 v2) => new V3(v1.y * v2.z - v1.z * v2.y, v1.z * v2.x - v1.x * v2.z, v1.x * v2.y - v1.y * v2.x);
+
+        public bool Equals(V3 other) => x.Equals(other.x) && y.Equals(other.y) && z.Equals(other.z);
+
+        public override bool Equals(object? obj) => obj is V3 other && Equals(other);
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                int hashCode = x.GetHashCode();
+                hashCode = (hashCode * 397) ^ y.GetHashCode();
+                hashCode = (hashCode * 397) ^ z.GetHashCode();
+                return hashCode;
+            }
+        }
+
+        public static double Dot(V3 v1, V3 v2) => v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+
+        public static M3 Outer(V3 v1, V3 v2) => new M3(v1 * v2.x, v1 * v2.y, v1 * v2.z);
+
+        public static V3 Project(V3 vector, V3 onNormal)
+        {
+            double invC = 1.0 / Math.Max(vector.max_magnitude, onNormal.max_magnitude);
+            if (double.IsPositiveInfinity(invC)) return zero;
+
+            V3 vectorC = vector * invC;
+            V3 onNormalC = onNormal * invC;
+
+            double invSqrMag = 1.0 / Dot(onNormalC, onNormalC);
+            if (double.IsPositiveInfinity(invSqrMag)) return zero;
+
+            double dot = Dot(vectorC, onNormalC);
+            return onNormal * dot * invSqrMag;
+        }
+
+        public static V3 ProjectOnPlane(V3 vector, V3 planeNormal)
+        {
+            if (vector == zero)
+                return zero;
+
+            if (planeNormal == zero)
+                return vector;
+
+            double invC = 1.0 / Math.Max(vector.max_magnitude, planeNormal.max_magnitude);
+            if (double.IsPositiveInfinity(invC)) return zero;
+
+            V3 vectorC = vector * invC;
+            V3 planeNormalC = planeNormal * invC;
+
+            double invSqrMag = 1.0 / Dot(planeNormalC, planeNormalC);
+            double dot = Dot(vectorC, planeNormalC);
+
+            return new V3(vector.x - planeNormal.x * dot * invSqrMag,
+                vector.y - planeNormal.y * dot * invSqrMag,
+                vector.z - planeNormal.z * dot * invSqrMag);
+        }
+
+        public static V3 Lerp(V3 a, V3 b, double t) => a + t * (b - a);
+
+        public static V3 Slerp(V3 a, V3 b, double t)
+        {
+            double magA = a.magnitude;
+            double magB = b.magnitude;
+
+            if (magA == 0 || magB == 0)
+                return Lerp(a, b, t);
+
+            var qa = Q3.FromToRotation(forward, a.normalized);
+            var qb = Q3.FromToRotation(forward, b.normalized);
+            var qSlerp = Q3.Slerp(qa, qb, t);
+
+            V3 direction = qSlerp * forward;
+
+            double magnitude = magA + t * (magB - magA);
+
+            return direction * magnitude;
+        }
+
+        public static double Angle(V3 from, V3 to)
+        {
+            double c = Math.Max(from.max_magnitude, to.max_magnitude);
+            if (c <= 0) return 0;
+
+            V3 from_scaled = from / c;
+            V3 to_scaled = to / c;
+
+            double denominator = from_scaled.magnitude * to_scaled.magnitude;
+            if (denominator <= 0) return 0;
+
+            V3 cross_scaled = Cross(from_scaled, to_scaled);
+
+            double sinAngle = cross_scaled.magnitude / denominator;
+            double cosAngle = Dot(from_scaled, to_scaled) / denominator;
+
+            return Atan2(sinAngle, cosAngle);
+        }
+
+        public static double SignedAngle(V3 from, V3 to, V3 axis)
+        {
+            from.Normalize();
+            to.Normalize();
+            axis.Normalize();
+
+            V3 cross = Cross(from, to);
+            double sign = Dot(cross, axis);
+            double angle = Angle(from, to);
+
+            return sign >= 0 ? angle : -angle;
+        }
+
+        public static double Distance(V3 a, V3 b) => new V3(a.x - b.x, a.y - b.y, a.z - b.z).magnitude;
+
+        public static V3 ClampMagnitude(V3 vector, double maxLength)
+        {
+            double mag = vector.magnitude;
+            if (mag > maxLength)
+                return vector.normalized * maxLength;
+
+            return vector;
+        }
+
+        public double max_magnitude => Math.Max(Math.Max(Math.Abs(x), Math.Abs(y)), Math.Abs(z));
+        public double min_magnitude => Math.Min(Math.Min(Math.Abs(x), Math.Abs(y)), Math.Abs(z));
+
+        public int max_magnitude_index
+        {
+            get
+            {
+                int largest_idx = Math.Abs(y) > Math.Abs(x) ? 1 : 0;
+                return Math.Abs(z) > Math.Abs(this[largest_idx]) ? 2 : largest_idx;
+            }
+        }
+
+        public int min_magnitude_index
+        {
+            get
+            {
+                int lowest_idx = Math.Abs(y) < Math.Abs(x) ? 1 : 0;
+                return Math.Abs(z) < Math.Abs(this[lowest_idx]) ? 2 : lowest_idx;
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static double Magnitude(V3 vector) => vector.magnitude;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static V3 Normalize(V3 v)
+        {
+            double norm = v.magnitude;
+            return norm > 0 ? v / norm : zero;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static V3 SafeNormalize(V3 v)
+        {
+            double c = v.max_magnitude;
+            return c > 0 ? (v / c).normalized : zero;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Normalize()
+        {
+            double norm = Math.Sqrt(x * x + y * y + z * z);
+            this = norm > 0 ? this / norm : zero;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SafeNormalize()
+        {
+            double c = max_magnitude;
+            this = c > 0 ? (this / c).normalized : zero;
+        }
+
+        public V3 orthonormal
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get
+            {
+                V3 vunit = zero;
+                vunit[min_magnitude_index] = 1.0;
+                return Cross(this, vunit).normalized;
+            }
+        }
+
+        public V3 normalized
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => Normalize(this);
+        }
+
+        public V3 safeNormalized
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => SafeNormalize(this);
+        }
+
+        public static void OrthoNormalize(ref V3 normal, ref V3 tangent)
+        {
+            Debug.Assert(normal.magnitude > 0);
+            Debug.Assert(tangent.magnitude > 0);
+            Debug.Assert(Cross(normal, tangent).magnitude > 0);
+
+            normal.Normalize();
+            tangent = Cross(Cross(normal, tangent).normalized, normal).normalized;
+        }
+
+        public double magnitude
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => Math.Sqrt(x * x + y * y + z * z);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static double SqrMagnitude(V3 vector) => vector.sqrMagnitude;
+
+        public double sqrMagnitude
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => x * x + y * y + z * z;
+        }
+
+        public static V3 zero { get; } = new V3(0.0, 0.0, 0.0);
+
+        public static V3 one { get; } = new V3(1.0, 1.0, 1.0);
+
+        public static V3 positiveinfinity { get; } = new V3(double.PositiveInfinity, double.PositiveInfinity, double.PositiveInfinity);
+
+        public static V3 negativeinfinity { get; } = new V3(double.NegativeInfinity, double.NegativeInfinity, double.NegativeInfinity);
+
+        public static V3 maxvalue { get; } = new V3(double.MaxValue, double.MaxValue, double.MaxValue);
+
+        public static V3 minvalue { get; } = new V3(double.MinValue, double.MinValue, double.MinValue);
+
+        public static V3 nan { get; } = new V3(double.NaN, double.NaN, double.NaN);
+
+        // These define North-East-Down co-ordinate system that is valid for vessel body orientations.
+        public static V3 down { get; } = new V3(0.0, 0.0, 1.0);
+
+        public static V3 up { get; } = new V3(0.0, 0.0, -1.0);
+
+        public static V3 left { get; } = new V3(0.0, -1.0, 0.0);
+
+        public static V3 right { get; } = new V3(0.0, 1.0, 0.0);
+
+        public static V3 forward { get; } = new V3(1.0, 0.0, 0.0);
+
+        public static V3 back { get; } = new V3(-1.0, 0.0, 0.0);
+
+        // This defines the North Pole that is valid for body centered inertial coordinate systems
+        public static V3 northpole { get; } = new V3(0, 0, 1);
+
+        // X,Y,Z axis
+        public static V3 xaxis { get; } = new V3(1, 0, 0);
+
+        public static V3 yaxis { get; } = new V3(0, 1, 0);
+
+        public static V3 zaxis { get; } = new V3(0, 0, 1);
+
+        /// <summary>
+        ///     Convert vector stored as spherical radius, theta, phi to cartesian x,y,z
+        /// </summary>
+        /// <returns></returns>
+        public V3 sph2cart => x * new V3(Cos(z) * Sin(y), Sin(z) * Sin(y), Cos(y));
+
+        /// <summary>
+        ///     Convert vector stored as cartesian x,y,z to spherical radius, theta, phi
+        /// </summary>
+        /// <returns></returns>
+        public V3 cart2sph
+        {
+            get
+            {
+                double r = magnitude;
+                if (r == 0)
+                    return zero;
+
+                double rho = new V3(x, y, 0).magnitude;
+                double theta = Atan2(rho, z);
+                double phi = Clamp2Pi(Atan2(y, x));
+
+                return new V3(r, theta, phi);
+            }
+        }
+
+        public V3 xzy => new V3(this[0], this[2], this[1]);
+
+        public static V3 operator +(V3 a, V3 b) => new V3(a.x + b.x, a.y + b.y, a.z + b.z);
+
+        public static V3 operator -(V3 a, V3 b) => new V3(a.x - b.x, a.y - b.y, a.z - b.z);
+
+        public static V3 operator *(V3 a, V3 b) => new V3(a.x * b.x, a.y * b.y, a.z * b.z);
+
+        public static V3 operator /(V3 a, V3 b) => new V3(a.x / b.x, a.y / b.y, a.z / b.z);
+
+        public static V3 operator -(V3 a) => new V3(-a.x, -a.y, -a.z);
+
+        public static V3 operator *(V3 a, double d) => new V3(a.x * d, a.y * d, a.z * d);
+
+        public static V3 operator *(double d, V3 a) => new V3(a.x * d, a.y * d, a.z * d);
+
+        public static V3 operator /(V3 a, double d) => new V3(a.x / d, a.y / d, a.z / d);
+
+        public static V3 operator /(double d, V3 a) => new V3(d / a.x, d / a.y, d / a.z);
+
+        // ReSharper disable CompareOfFloatsByEqualityOperator
+        public static bool operator ==(V3 lhs, V3 rhs) => lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+        // ReSharper restore CompareOfFloatsByEqualityOperator
+
+        public static bool operator !=(V3 lhs, V3 rhs) => !(lhs == rhs);
+
+        public override string ToString() => ToString(null, CultureInfo.InvariantCulture.NumberFormat);
+
+        public string ToString(string? format) => ToString(format, CultureInfo.InvariantCulture.NumberFormat);
+
+        public string ToString(string? format, IFormatProvider formatProvider)
+        {
+            if (string.IsNullOrEmpty(format))
+                format = "G17";
+            return
+                $"[{x.ToString(format, formatProvider)}, {y.ToString(format, formatProvider)}, {z.ToString(format, formatProvider)}]";
+        }
+
+        public bool IsFinite() => Statics.IsFinite(x) && Statics.IsFinite(y) && Statics.IsFinite(z);
+
+        public void CopyFrom(IList<double> other, int index = 0)
+        {
+            this[0] = other[index];
+            this[1] = other[index + 1];
+            this[2] = other[index + 2];
+        }
+
+        public void CopyTo(IList<double> other, int index = 0)
+        {
+            other[index] = this[0];
+            other[index + 1] = this[1];
+            other[index + 2] = this[2];
+        }
+
+        public void CopyTo(double[,] other, int i, int j)
+        {
+            other[i, j] = this[0];
+            other[i + 1, j] = this[1];
+            other[i + 2, j] = this[2];
+        }
+
+        public static V3 CopyFromIndices(IList<double> array, (int, int, int) indices) => new V3(array[indices.Item1], array[indices.Item2], array[indices.Item3]);
+
+        public void CopyToIndices(IList<double> array, (int, int, int) indices)
+        {
+            array[indices.Item1] = this[0];
+            array[indices.Item2] = this[1];
+            array[indices.Item3] = this[2];
+        }
+    }
+}
+
+}
