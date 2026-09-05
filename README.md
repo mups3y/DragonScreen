@@ -35,6 +35,10 @@ page, the same as the real capsule; the selection persists across saves.
     plugin/src/          the thin glue that talks to KSP.
     plugin/test/         the headless display checks, run on every build.
     plugin/preview/      renders every page to PNG without launching the game.
+    plugin/mech/         VENDORED MechJeb2, pinned and privately namespaced — 458 files, ~25 MB,
+                         built as its own assembly (DragonScreen.Mech.dll) and NOT written by us.
+                         ⛔ Read plugin/mech/VENDOR.md FIRST: what was taken, what was excluded,
+                         what was renamed, and the GPLv3 obligation that comes with it.
     docs/                the screen spec, the UI audit, the palette, the reference-page research.
 
 The **pure/glue split** is the load-bearing idea. Anything that can be decided without the game is
@@ -46,6 +50,7 @@ spending one.
 python plugin/build.py test      # compile + run every headless check
 python plugin/build.py preview   # render every page to PNG
 python plugin/build.py install   # test, then copy into KSP
+python plugin/build.py mechwarn  # rewrite the vendored MechJeb's warning baseline (diagnostic only)
 ```
 
 `install` runs the tests first, on purpose: it used to copy whatever had just compiled.

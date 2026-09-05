@@ -11942,7 +11942,7 @@ gate lifted, no plan edit) — nothing here authorises `install`, glass time, or
   install' sequencing in your own words, so a future chat can quote you directly; (2) reject or amend the
   approach; (3) leave it OPEN/BLOCKED as-is until you weigh in unprompted."*
 
-### MJ1 [S] The vendored MechJeb compiles with warnings OFF — a re-pin has no warning baseline — **TODO** — [logged by T15a per C1.1: noticed while wiring `build_mech()`, deliberately not acted on]
+### MJ1 [S] The vendored MechJeb compiles with warnings OFF — a re-pin has no warning baseline — **DONE 2026-09-06** — [⭐ **the baseline is EMPTY, measured twice** — the "several hundred warnings" this line assumed do not exist] — [logged by T15a per C1.1: noticed while wiring `build_mech()`, deliberately not acted on]
 **Finding.** `plugin/build.py`'s `build_mech()` compiles `DragonScreen.Mech.dll` with `-warn:0`, and that is
 correct for daily use: §B12.1 forbids fixing MechJeb's warnings ("rename shell only"), so printing several
 hundred unfixable ones on every build would train the eye to scroll past the region where a real ERROR
@@ -11955,7 +11955,44 @@ task then diffs against it. **Do NOT change the default build's `-warn:0`.**
 **DONE when:** a baseline warning list for commit `c5a6d8fe` exists in the repo and the recipe to regenerate
 it is recorded beside it (`plugin/mech/VENDOR.md` §4.2 is the natural home).
 
-### MJ2 [S] `plugin/mech/` is invisible to the repo's own doc index and audit tools — **TODO** — [logged by T15a per C1.1: out of T15a's declared outputs]
+#### ✅ DONE 2026-09-06 — **and the premise was wrong in the best possible direction**
+
+**Built exactly as specified:** a new verb, `python plugin/build.py mechwarn`, recompiles the same 245
+sources at `-warn:4`, strips absolute paths, sorts and de-duplicates, and writes
+**`plugin/mech/WARNINGS.txt`**. ⛔ **The default build's `-warn:0` is untouched**, as this line requires.
+⛔ **It writes to a THROWAWAY DLL** (`build/mechwarn/…`), never `MECH_DLL` — a diagnostic verb must not
+leave behind something that could ship — and it builds nothing else and runs no tests.
+
+⭐ **THE BASELINE IS EMPTY. MEASURED, NOT ASSUMED.** This line expected *"several hundred"* unfixable
+warnings and reasoned from that. **There are none.** Verified **twice, independently**: through the verb,
+and by invoking Roslyn directly on the same response file — **exit 0, no output at all**. I did not accept
+the first zero, because a silent zero is exactly what a broken filter looks like.
+
+⚠ **AND IT IS CLEAN BECAUSE OF THE COMPILER CONTRACT, NOT BECAUSE MECHJEB IS WARNING-FREE** — a re-pin
+needs to know which, so it was measured by removing one flag at a time from the same response file:
+
+| build | warnings |
+|---|---|
+| as built — `-warn:4`, `-nullable:annotations` | **0**, exit 0 |
+| **without** `-nullable:annotations` | **79**, all `CS8632`, exit 1 |
+| at `-warn:0` (the shipped setting) | 0 |
+
+**`-nullable:annotations` is the flag doing the work**: it lets upstream's `T?` parse without `CS8632`
+(*"annotation … should only be used in code within a '#nullable' annotations context"*). `VENDOR.md`'s own
+table already said that is why the flag is set; **this is the measurement behind the claim.**
+
+⭐ **AN EMPTY BASELINE IS THE STRONGEST KIND, and it is better than this line hoped for.** Any warning at a
+re-pin is **100% signal** — there is no noise floor to read past, which was the whole worry that produced
+`-warn:0` in the first place. ⚠ If a re-pin makes that file non-empty, **that is the finding — do not fix
+it** (§B12.1's rename-shell rule); read it and record what upstream changed. Both the file's own header and
+`VENDOR.md` §4.2 say so.
+
+**Verified (C1.3).** Recipe + measurement recorded in **`plugin/mech/VENDOR.md` §4.2** — this line's own
+"natural home" — and in the generated file's header. `python plugin/build.py test` **green — ALL SUITES
+PASSED**; `python plugin/build.py mechwarn` runs clean. **No shipped code changed and the shipped DLL is
+byte-for-byte the same build it was.** No `install`, no glass, no `git push`.
+
+### MJ2 [S] `plugin/mech/` is invisible to the repo's own doc index and audit tools — **DONE 2026-09-06** — [logged by T15a per C1.1: out of T15a's declared outputs]
 **Finding.** T15a added 458 files and a substantial reference document (`plugin/mech/VENDOR.md`) that no
 existing index points at. `docs/INDEX.md` catalogues `docs/`, so it does not cover it by design, and
 `README.md`'s repo tour predates the directory entirely. A reader arriving at `plugin/` now sees a 25 MB
@@ -11968,6 +12005,27 @@ audit_comments.py:428` builds its file set from `cs_files('src') + cs_files('tes
 walk, not `plugin/**` — so it never enters `plugin/mech/`, and it is not wired into `build.py` in any case.
 `build.py test` is green with the tree in place. This stray is a signposting gap only, not a broken tool.
 **DONE when:** `plugin/mech/` is discoverable from the repo's top-level docs.
+
+#### ✅ DONE 2026-09-06
+
+**Both signposts, exactly as this line specified.**
+1. **`README.md`'s layout block** now lists `plugin/mech/` beside the four `plugin/` entries — *"VENDORED
+   MechJeb2, pinned and privately namespaced — 458 files, ~25 MB, built as its own assembly and **NOT
+   written by us**"* — with ⛔ **read `VENDOR.md` FIRST**, naming what it covers including **the GPLv3
+   obligation**. ⭐ *"Not written by us"* is the sentence that matters: a reader arriving at a 25 MB tree
+   needs to know it is not theirs to edit **before** they open a file in it, not after.
+   The command block gains `mechwarn` beside the three existing verbs.
+2. **`docs/INDEX.md`** carries a pointer to `../plugin/mech/VENDOR.md`, marked **`[REF — OUTSIDE docs/]`**,
+   which is the pattern INDEX already uses for `docs/reference/` — so the index stays honest about
+   cataloguing `docs/` while still pointing at the one out-of-tree document a reader must have.
+
+✅ **This line's own "already checked" note re-confirmed rather than trusted:** `plugin/build/
+audit_comments.py` builds its file set from `cs_files('src') + cs_files('test')` — a named-directory walk —
+so it never enters `plugin/mech/`, and `build.py test` is green with the tree in place. **A signposting gap
+only, and it stayed one.**
+
+**Verified (C1.3).** **Docs only, no code changed** (C1.3's carve-out); `build.py test` run anyway and
+**green**. No `install`, no glass, no `git push`.
 
 ### W30 [S] `DeployablesControl` is in the tree and NOTHING TICKS IT — the one line of dispatch W14 left and W10 could not take — **HELD 2026-09-06 — OWNER GATE, and this line already said so** — [TIER 3: a restored controller with no caller]
 Logged by **W10**, 2026-09-05 (C1.1 — found on landing the host W14's DONE note was waiting for).

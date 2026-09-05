@@ -87,6 +87,13 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
   36 live) swept the same screens independently and neither cites the other, so the same defect was reachable
   from up to three places. This maps every hole and every remaining finding to exactly ONE owner, names the
   **17 duplicate pairs**, and records what is HELD and on what. It fixes no defect and edits neither source.
+- **[../plugin/mech/VENDOR.md](../plugin/mech/VENDOR.md)** [REF — OUTSIDE `docs/`] — MJ2, 2026-09-06.
+  The vendored MechJeb2's provenance: the pinned commit, what was taken and what was deliberately
+  excluded, the namespace/assembly rename shell (§B12.1's "rename shell only"), the compiler contract
+  that tree needs, and the **GPLv3 obligation**. ⛔ **Read it before touching anything under
+  `plugin/mech/` — none of that code is ours to edit.** Its §4.2 also carries the `mechwarn` recipe
+  and the warning baseline (MJ1). Listed here because `plugin/mech/` is 458 files with no other
+  signpost, the same reason `docs/reference/` is listed.
 
 ## 2. Contracts — where a value or a control comes from
 

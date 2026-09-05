@@ -215,6 +215,46 @@ The assembly's identity is its `-out:` name, `DragonScreen.Mech` — distinct fr
 `MechJebLib`, `MechJebLibBindings` and `alglib`, so it cannot collide with an installed MechJeb at
 the assembly level either.
 
+#### ⭐ The warning BASELINE — `plugin/mech/WARNINGS.txt` (register **MJ1**, 2026-09-06)
+
+`-warn:0` is right for the daily build and stays. But it also meant **nobody had ever seen the
+list** — and at a re-pin the useful signal was never the absolute count, it is **the DIFF**: a
+warning that appears at a new upstream commit and not at the pinned one is a change in upstream's
+code, and is exactly what a re-pin review should read.
+
+**Regenerate:**
+
+```
+python plugin/build.py mechwarn
+```
+
+It recompiles the same 245 sources at `-warn:4` **to a throwaway DLL** (`build/mechwarn/…`, never
+`MECH_DLL` — a diagnostic verb must not leave behind something that could ship), strips absolute
+paths, sorts and de-duplicates, and writes `plugin/mech/WARNINGS.txt`. It builds nothing else and
+runs no tests.
+
+⛔ **AT THE CURRENT PIN THE BASELINE IS EMPTY, AND THAT WAS MEASURED, NOT ASSUMED.** MJ1 was logged
+expecting *"several hundred"* unfixable warnings. **There are none.** Verified twice — through the
+verb, and by invoking Roslyn directly on the same response file (exit 0, no output at all).
+
+⚠ **It is clean because of the COMPILER CONTRACT above, not because MechJeb is warning-free**, and a
+re-pin needs to know which. Measured by removing one flag at a time from the same response file:
+
+| build | warnings |
+|---|---|
+| as built — `-warn:4`, `-nullable:annotations` | **0**, exit 0 |
+| **without** `-nullable:annotations` | **79**, all `CS8632`, exit 1 |
+| at `-warn:0` (the shipped setting) | 0 |
+
+So `-nullable:annotations` is the flag doing the work: it lets upstream's `T?` annotations parse
+**without** `CS8632` (*"annotation for nullable reference types should only be used in code within a
+'#nullable' annotations context"*). The row for it in the table above already said that is why it is
+set; this is the measurement behind the claim.
+
+⭐ **An empty baseline is the strongest kind**: any warning at a re-pin is 100% signal, with no noise
+floor to read past. ⚠ If a re-pin makes that file non-empty, **that is the finding — do not fix it**
+(§B12.1's rename-shell rule); read it, and record what upstream changed.
+
 ### 4.3 `JetBrains.Annotations` — a build-dependency substitution (46 files touched)
 
 Upstream pulls `JetBrains.Annotations` 2023.3.0 from NuGet, and 46 files open with

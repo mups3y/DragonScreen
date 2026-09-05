@@ -10,6 +10,9 @@ No IDE, no MSBuild, no NuGet: csc.exe straight against KSP's managed assemblies.
                             #   then the python tool selftests (BB3's report generator)
     python build.py preview  # render the pages to build/preview/*.png (no KSP needed)
     python build.py install  # build, then copy GameData/DragonScreen into the KSP install
+    python build.py mechwarn  # MJ1: rewrite plugin/mech/WARNINGS.txt, the vendored MechJeb's warning
+                              #   baseline, by recompiling it at -warn:4. Diagnostic only: it builds
+                              #   nothing that ships. Diff this file at a re-pin.
 
 THE ONE THING THAT WILL BITE YOU: a DLL change needs a full game restart, and so does a cfg change -
 ModuleManager applies patches at load. There is no in-flight reload worth trusting. KSP must be
@@ -371,6 +374,102 @@ def tool_tests():
         sys.exit('TOOL SELFTEST FAILED (exit %d)' % p.returncode)
 
 
+def mech_warning_baseline():
+    """
+    MJ1: WRITE THE VENDORED MECHJEB'S WARNING LIST, so a re-pin has something to diff against.
+
+    `build_mech()` compiles with `-warn:0`, and that is correct for daily use: §B12.1 forbids fixing
+    MechJeb's warnings ("source kept intact - rename shell only"), so printing several hundred
+    unfixable ones on every build would train the eye to scroll straight past the region where a real
+    ERROR appears. ⛔ THE DEFAULT BUILD'S `-warn:0` IS NOT CHANGED BY THIS, and must not be.
+
+    But it also means nobody has ever SEEN the list. And at a re-pin the useful signal was never the
+    absolute count - it is the DIFF: a warning that appears at the new commit and did not exist at the
+    pinned one is a change in upstream's code, and that is exactly what a re-pin review should read.
+
+    So this is a separate verb (`python plugin/build.py mechwarn`) that recompiles the same sources at
+    `-warn:4` and writes the sorted, de-duplicated list to `plugin/mech/WARNINGS.txt`.
+
+    ⛔ IT WRITES TO A THROWAWAY DLL PATH, not to `MECH_DLL`. A `-warn:4` build is otherwise identical,
+    but shipping whatever a diagnostic verb happened to leave behind is how a build gets subtly
+    different from the one that was tested. The real DLL is only ever written by `build_mech()`.
+
+    ⚠ Paths are made RELATIVE and the list is SORTED, so the file is stable across machines and the
+    diff at a re-pin shows real changes rather than a different checkout directory.
+    """
+    src = mech_sources()
+    if not src:
+        print('--- no plugin/mech tree vendored; nothing to baseline')
+        return
+    if not MODERN:
+        sys.exit('the warning baseline needs Roslyn (C#8) - install a .NET SDK')
+    scratch = os.path.join(HERE, 'build', 'mechwarn', 'DragonScreen.Mech.warn.dll')
+    os.makedirs(os.path.dirname(scratch), exist_ok=True)
+    print('--- recompiling the vendored MechJeb at -warn:4 (%d source files)' % len(src))
+    args = compile_cs(scratch, src,
+                      refs=[os.path.join(MAN, r) for r in MECH_REFS],
+                      extra=['-optimize+', '-define:UNITY_2017_1', '-nullable:annotations'],
+                      warn='4', langversion='8')
+    proc = subprocess.run(args, capture_output=True, text=True)
+    out = (proc.stdout or '') + (proc.stderr or '')
+
+    warns = set()
+    for line in out.splitlines():
+        if ': warning ' not in line:
+            continue
+        line = line.strip().replace('\\', '/')
+        here = HERE.replace('\\', '/')
+        if here in line:
+            line = line.replace(here + '/', '').replace(here, '')
+        warns.add(line)
+
+    dest = os.path.join(HERE, 'mech', 'WARNINGS.txt')
+    body = [
+        '# Vendored MechJeb — compiler warning BASELINE  (register MJ1)',
+        '#',
+        '# ⛔ THIS FILE IS EVIDENCE, NOT A TASK LIST. §B12.1 forbids fixing any of these:',
+        '#    "source kept intact (not rewritten) - rename shell only". Do not touch plugin/mech to',
+        '#    make a line here go away.',
+        '#',
+        '# WHAT IT IS FOR: the DIFF at a re-pin. A warning that appears at a new upstream commit and',
+        '# is not in this list is a CHANGE IN UPSTREAM CODE, and is the thing a re-pin review reads.',
+        '# The absolute count is not the signal and never was.',
+        '#',
+        '# ⭐ AND AT THE CURRENT PIN THE LIST IS EMPTY — MEASURED, NOT ASSUMED. MJ1 was logged',
+        '#   expecting "several hundred" unfixable warnings. There are none. Verified twice: through',
+        '#   this verb, and by running Roslyn directly on the same response file (exit 0, no output).',
+        '#',
+        '#   ⛔ THAT IS A PROPERTY OF THE COMPILER CONTRACT, NOT OF MECHJEB ALONE, and a re-pin must',
+        '#   know it. Measured by removing one flag at a time from the same response file:',
+        '#',
+        '#       as built  (-warn:4, -nullable:annotations)  ->    0 warnings, exit 0',
+        '#       WITHOUT   -nullable:annotations             ->   79 warnings (all CS8632), exit 1',
+        '#       at        -warn:0 (the shipped setting)     ->    0 warnings',
+        '#',
+        '#   So `-nullable:annotations` is what makes this tree clean: it enables the `?` annotations',
+        '#   upstream writes WITHOUT the CS8632 "annotation used outside a #nullable context" warning.',
+        '#   `build_mech()`s docstring already says that is why the flag is there; this measures it.',
+        '#',
+        '#   ⭐ AN EMPTY BASELINE IS THE STRONGEST KIND. Any warning at a re-pin is 100% signal — there',
+        '#   is no noise floor to read past, which is exactly what MJ1 wanted and better than it hoped.',
+        '#   ⚠ If a future re-pin makes this file non-empty, that is the finding. Do not fix it (§B12.1);',
+        '#   read it, and record what upstream changed.',
+        '#',
+        '# REGENERATE:  python plugin/build.py mechwarn',
+        '# Pinned commit: see plugin/mech/VENDOR.md. Sources: %d files.' % len(src),
+        '# Distinct warning lines: %d' % len(warns),
+        '',
+    ]
+    if not warns:
+        body.append('(no warnings at this pin — see the note above)')
+    body.extend(sorted(warns))
+    io.open(dest, 'w', encoding='utf-8', newline='\n').write('\n'.join(body) + '\n')
+    print('    %d distinct warning lines -> %s' % (len(warns), dest))
+    if proc.returncode != 0:
+        sys.exit('the -warn:4 compile FAILED (exit %d) - that is an ERROR, not a warning'
+                 % proc.returncode)
+
+
 def event_vocabulary_check():
     """
     S90: EVERY DECLARED EVENT KIND MUST HAVE AN EMITTER.
@@ -609,6 +708,12 @@ def install():
 
 if __name__ == '__main__':
     cmd = sys.argv[1] if len(sys.argv) > 1 else 'build'
+    # MJ1: a DIAGNOSTIC verb. It does not build the plugin, does not run the tests and does not write
+    # the shipped DLL - it only re-reads the vendored tree and writes the warning baseline.
+    if cmd == 'mechwarn':
+        mech_warning_baseline()
+        print('--- ok')
+        sys.exit(0)
     build_plugin()
     if cmd == 'test':
         build_tests()

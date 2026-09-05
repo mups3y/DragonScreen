@@ -1,0 +1,35 @@
+# Vendored MechJeb — compiler warning BASELINE  (register MJ1)
+#
+# ⛔ THIS FILE IS EVIDENCE, NOT A TASK LIST. §B12.1 forbids fixing any of these:
+#    "source kept intact (not rewritten) - rename shell only". Do not touch plugin/mech to
+#    make a line here go away.
+#
+# WHAT IT IS FOR: the DIFF at a re-pin. A warning that appears at a new upstream commit and
+# is not in this list is a CHANGE IN UPSTREAM CODE, and is the thing a re-pin review reads.
+# The absolute count is not the signal and never was.
+#
+# ⭐ AND AT THE CURRENT PIN THE LIST IS EMPTY — MEASURED, NOT ASSUMED. MJ1 was logged
+#   expecting "several hundred" unfixable warnings. There are none. Verified twice: through
+#   this verb, and by running Roslyn directly on the same response file (exit 0, no output).
+#
+#   ⛔ THAT IS A PROPERTY OF THE COMPILER CONTRACT, NOT OF MECHJEB ALONE, and a re-pin must
+#   know it. Measured by removing one flag at a time from the same response file:
+#
+#       as built  (-warn:4, -nullable:annotations)  ->    0 warnings, exit 0
+#       WITHOUT   -nullable:annotations             ->   79 warnings (all CS8632), exit 1
+#       at        -warn:0 (the shipped setting)     ->    0 warnings
+#
+#   So `-nullable:annotations` is what makes this tree clean: it enables the `?` annotations
+#   upstream writes WITHOUT the CS8632 "annotation used outside a #nullable context" warning.
+#   `build_mech()`s docstring already says that is why the flag is there; this measures it.
+#
+#   ⭐ AN EMPTY BASELINE IS THE STRONGEST KIND. Any warning at a re-pin is 100% signal — there
+#   is no noise floor to read past, which is exactly what MJ1 wanted and better than it hoped.
+#   ⚠ If a future re-pin makes this file non-empty, that is the finding. Do not fix it (§B12.1);
+#   read it, and record what upstream changed.
+#
+# REGENERATE:  python plugin/build.py mechwarn
+# Pinned commit: see plugin/mech/VENDOR.md. Sources: 245 files.
+# Distinct warning lines: 0
+
+(no warnings at this pin — see the note above)
