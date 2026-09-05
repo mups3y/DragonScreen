@@ -92,7 +92,17 @@ namespace DragonScreen
         static readonly string[] SkipKeys = {
             "rectangle_178", "rectangle_183", "rectangle_95", "coast_to_trunk_jettison",
             "deport_burn", "coast_to_trunk", "claw_separati", "procedure", "manual_chute",
-            "union_1", "union_2", "union_3", "union_4", "union_5", "camera_auto_earth_io" };
+            "union_1", "union_2", "union_3", "union_4", "union_5", "camera_auto_earth_io",
+            // ---- S105 / QC C-01: THE TOP TELEMETRY STRIP IS NO LONGER SOMEONE ELSE'S FLIGHT ----
+            // These seven were baked PNGs of one particular descent — ALTITUDE 393.3km, APOGEE 416.2km,
+            // INERTIAL VELOCITY 7.69km/s and so on — on the page the crew opens on. Six of the seven
+            // contradicted the PageState the same frame's globe was drawn from (QC C-01 has the table).
+            // Every one exists live and pre-formatted, and ManualChuteDeployPage — which shares this
+            // page's own rail — has drawn the same seven live since T13c. They are placed as text at the
+            // baked assets' OWN measured boxes now; see DrawTopStrip.
+            // ⚠ `running_00_22_57` is NOT in this list and stays baked, deliberately — see DrawTopStrip.
+            "active_phase_deorbit_coast", "splashdown_time_t_01_24_51", "inertial_velocity_7_69km_s",
+            "altitude_393_3km", "apogee_416_2km", "perigee_379_4km", "inclination_51_62deg" };
 
         // ---- S13's RESIDUAL, CLOSED 2026-09-03 (QC-AUDIT, owner-directed in that chat) ----
         // S13 decided the deorbit interrupt criteria are ATTITUDE, not altitude, and applied it to
@@ -256,8 +266,35 @@ namespace DragonScreen
         public static void NextViewRect(int w, int h, out float x, out float y, out float rw, out float rh)
         {
             float sc = h / RefH, extra = w - RefW * sc; if (extra < 0f) extra = 0f;
-            x = NextX * sc + extra; y = NextY * sc; rw = NextW * sc; rh = NextH * sc;
+            // ---- S105 / QC C-13: NEXT VIEW IS SETTINGS' MIRROR, NOT A LEFTOVER OF THE REFLOW ----
+            // Owner, 2026-09-05, verbatim: *"next button should also be moved to look like it belongs"*
+            // and *"I like well balanced layouts"*. It used to sit at `NextX * sc + extra` — NextX is
+            // 1500, EXACTLY the reflow Split, so the pill took the full horizontal slack and landed 296
+            // design px right of where it balances. SETTINGS' own right margin is 32 design px (its box
+            // ends at 3395 in a 3427 frame), so the mirror is the camera slot's left edge plus the same
+            // 32: `(ViewLeft + 32) * sc`, with no `extra` because it is left of the Split. The two pills
+            // are then the same size, on the same row, at the same inset from their own ends of the slot.
+            x = (ViewLeft + NextInset) * sc; y = NextY * sc; rw = NextW * sc; rh = NextH * sc;
         }
+
+        /// <summary>SETTINGS' own margin from the frame edge (rectangle_174 ends at 3395 of 3427), which
+        /// is what NEXT VIEW mirrors at the other end of the slot.</summary>
+        const float NextInset = 32f;
+
+        /// <summary>
+        /// Half the gap between the two TARGET readouts, in design px, measured about the camera slot's
+        /// own centre — which is also the globe's centre, so the pair is symmetric about the thing it
+        /// sits under (QC C-13; owner: *"The coordinates bellow the map should be evenly spaced either
+        /// side of the globe so they do not overrun the globe"*).
+        ///
+        /// 475 puts each readout in the middle of the clear span between its pill and the globe's foot:
+        /// at the shipped 1280x703 the disc's half-width at the readouts' own row is 62.5 px, so the
+        /// blocks land 54 px clear of the globe on the left and 49 px clear on the right, with 56 and 51
+        /// to the pills. ⚠ The residual few px is the two BAKED PNGs being different widths (251 vs 280
+        /// design px) — it closes only when they become live text, which is a different finding (S49 H3:
+        /// both currently read "26° 15.00° N", and the longitude carries a latitude's N).
+        /// </summary>
+        const float ReadoutHalfGap = 475f;
 
         /// <summary>Panel-pixel rect of one cluster button, in pitches from the centre button: (0,0) is
         /// CTR, the four unit steps are the arrows, and dy=2 with dx=-0.5/+0.5 is the zoom row. Measured
@@ -358,7 +395,9 @@ namespace DragonScreen
                 if (Array.IndexOf(SkipKeys, k) >= 0) continue;
                 if (Array.IndexOf(AttitudeSkipKeys, k) >= 0) continue;
                 if (refPhase && Array.IndexOf(ReferenceSkipKeys, k) >= 0) continue;
-                if (cam != CoverCam.Earth && Array.IndexOf(EarthOnlyKeys, k) >= 0) continue;
+                // S105/C-13: the two TARGET readouts are placed by DrawCameraChrome now, centred on
+                // the slot rather than at their baked x, so the loop never draws them.
+                if (Array.IndexOf(EarthOnlyKeys, k) >= 0) continue;
                 // S75: a glyph in InertKeys is painted but has no hit rect, so it is tinted OUT of this
                 // page's white-glyph-means-button idiom rather than left to imply a touch it cannot take.
                 Rgba tint = (Array.IndexOf(InertKeys, k) >= 0) ? InertTint : DragonPalette.White;
@@ -367,6 +406,9 @@ namespace DragonScreen
 
             // the seven-item deorbit phase rail + the selected phase's highlight (shared verbatim with the
             // Manual Chute Deploy page via DrawRail), then the centre heading (Cover-specific).
+            // the seven top-bar telemetry values, live, over the boxes their baked PNGs used (S105/C-01)
+            DrawTopStrip(dl, X, Y, Z, s);
+
             DrawRail(dl, w, h, sp);
             dl.Text(PhaseName[sp], X(490), Y(286), Z(58), TextAlign.Left, DragonPalette.White);
 
@@ -511,8 +553,40 @@ namespace DragonScreen
             float px, py, pw, ph;
             NextViewRect(w, h, out px, out py, out pw, out ph);
             Pill(dl, px, py, pw, ph, Stroke(sc, 2f));
-            dl.Rect(px + Z(36f), py + Z(53f), Z(44f), Stroke(sc, 6f), DragonPalette.White);
-            dl.Text("NEXT VIEW", px + Z(130f), py + Z(32f), Z(53f), TextAlign.Left, DragonPalette.White);
+            // S105/C-03: the dash moves in with the label (36 -> 30) so the cluster stays balanced
+            // inside the pill rather than the label being pushed up against the right border.
+            dl.Rect(px + Z(30f), py + Z(53f), Z(44f), Stroke(sc, 6f), DragonPalette.White);
+            // ---- S105 / QC C-03: THE LABEL FITS ITS OWN BUTTON NOW ----
+            // It was `Z(130)` in and `Z(53)` tall, and at the shipped 1280x703 that is 96 px of glyph in
+            // 90.2 px of room — the pill's right border struck through the final "W" (verified as a real
+            // overrun, not S101's hairline dropout: the border renders at x 770-772 and the W's two stems
+            // straddle it at 764-765 and 777-778).
+            // ⚠ QC's filed fix was "set it at the SETTINGS twin's own 37" — and that is WRONG at the
+            // shipped width: 37 design px is 12.3 panel px, below `Typography.Min` = 16, so it would
+            // trade an overrun for an unreadable label. The 130 inset is SETTINGS' own, and SETTINGS'
+            // label is 140 design px wide where this one is ~288; the inset is the lever the filed plan
+            // missed. 110 in at 50 tall keeps the label inside the pill AND at 16.6 panel px, above the
+            // floor — the twin geometry gives a little, the legibility does not.
+            dl.Text("NEXT VIEW", px + Z(102f), py + Z(34f), Z(50f), TextAlign.Left, DragonPalette.White);
+
+            // ---- S105 / QC C-13: THE TWO TARGET READOUTS, SYMMETRIC ABOUT THE GLOBE ----
+            // They were placed at their baked design x (2014 and 2361) and then pushed right by the
+            // reflow, so TARGET LATITUDE sat with 88% of its width over the globe's foot and TARGET
+            // LONGITUDE with 17%. They are drawn HERE now, centred on the camera slot's own centre
+            // ± ReadoutHalfGap — the same centre the globe is drawn about — so the pair is symmetric
+            // about the thing it sits under and both clear the disc. Earth view only, as before:
+            // the flat map and the capsule do not plot a ground target (First.vue's `v-if`).
+            if (cam == CoverCam.Earth)
+            {
+                float slotCx = (ViewLeft * sc + w) * 0.5f;
+                float lw = BoxOf(EarthOnlyKeys[0], 2) * sc, lh = BoxOf(EarthOnlyKeys[0], 3) * sc;
+                float gw = BoxOf(EarthOnlyKeys[1], 2) * sc, gh = BoxOf(EarthOnlyKeys[1], 3) * sc;
+                float ry = BoxOf(EarthOnlyKeys[0], 1) * sc;
+                dl.Asset(EarthOnlyKeys[0], slotCx - Z(ReadoutHalfGap) - lw * 0.5f, ry, lw, lh,
+                         DragonPalette.White);
+                dl.Asset(EarthOnlyKeys[1], slotCx + Z(ReadoutHalfGap) - gw * 0.5f, ry, gw, gh,
+                         DragonPalette.White);
+            }
 
             if (cam != CoverCam.Map) return;
 
@@ -604,6 +678,66 @@ namespace DragonScreen
                 gap = (count > 1) ? (avail - size) / (count - 1) : wantGap;
             }
             if (gap < size) gap = size;
+        }
+
+        // ---- S105 / QC C-01: THE TOP STRIP, LIVE, AT THE BAKED ASSETS' OWN METRICS ----
+        // Measured off the seven PNGs this replaces, the same way DrawCameraChrome was measured off
+        // camera_auto_earth_io. Every one of them is LEFT-aligned (ink starts at x 0..2 of its box) and
+        // carries a small caption over a large value:
+        //
+        //      the six 113-tall assets   caption cap rows 7..26   value cap rows 56..97
+        //      active_phase (89 tall)    caption cap rows 7..27   value cap rows 47..77
+        //
+        // A cap is ~0.7em and a text y is the top of the line box, ~0.1em above the cap, so a 20-row cap
+        // is a 29px line whose top sits at y+4, and a 42-row cap is a 60px line topping at y+50. Reading
+        // the geometry out of Keys/Box rather than re-typing it means the strip cannot drift off the bar
+        // if a placement is ever re-measured — the same rule AttX/AttY1 follow.
+        const float CapSize = 29f, CapTop = 4f;          // the caption over every value
+        const float ValSize = 60f, ValTop = 50f;         // the six 113-tall telemetry boxes
+        const float PhaseValSize = 44f, PhaseValTop = 43f;   // active_phase, which is 89 tall
+
+        /// <summary>
+        /// The seven live telemetry readouts across the top bar.
+        ///
+        /// ⚠ NO FEED IS A DASH, NOT A STALE NUMBER — and two of these dash even WITH a feed, because the
+        /// vehicle's own state says the quantity is meaningless: apogee and perigee follow the same
+        /// ApogeeShown/PerigeeShown flags every other page's apsides do (a conic through a landed vessel
+        /// is a real solution and a meaningless number), and SPLASHDOWN TIME follows SplashdownShown,
+        /// the registry's "N/A off-return" for SPLASHDOWN_ETA. That is ManualChuteDeployPage's rule,
+        /// reused rather than re-derived, so the two pages cannot disagree about one value.
+        ///
+        /// ⛔ `RUNNING 00:22:57` IS DELIBERATELY LEFT BAKED (QC H-2). The label sits beside the phase
+        /// heading and reads as TIME IN THE CURRENT PHASE. Nothing in the build keeps a phase-entry
+        /// timestamp, and the one clock that does exist — `VesselData.Met`, which reaches `ChromeState`
+        /// but not `PageState` — is a DIFFERENT quantity. Drawing MET under a "RUNNING" label would
+        /// replace a frozen wrong number with a live wrong one, which is worse: it would look right.
+        /// It needs a phase-entry timestamp owned by the painter beside `coverPhase`, and that is its
+        /// own change with its own decision about what "the phase" means.
+        /// </summary>
+        static void DrawTopStrip(DisplayList dl, Func<float, float> X, Func<float, float> Y,
+                                 Func<float, float> Z, PageState s)
+        {
+            bool ok = s.Valid;
+            string T(string t) => (ok && !string.IsNullOrEmpty(t)) ? t : "—";
+
+            void Cell(string key, string caption, string value, float valSize, float valTop)
+            {
+                float bx = BoxOf(key, 0), by = BoxOf(key, 1);
+                dl.Text(caption, X(bx), Y(by + CapTop), Z(CapSize), TextAlign.Left, DragonPalette.Text3);
+                dl.Text(value, X(bx), Y(by + valTop), Z(valSize), TextAlign.Left,
+                        value == "—" ? DragonPalette.Text6 : DragonPalette.White);
+            }
+
+            Cell("active_phase_deorbit_coast", "ACTIVE PHASE", T(s.Phase), PhaseValSize, PhaseValTop);
+            Cell("splashdown_time_t_01_24_51", "SPLASHDOWN TIME",
+                 ok && s.SplashdownShown ? T(s.SplashdownText) : "—", ValSize, ValTop);
+            Cell("inertial_velocity_7_69km_s", "INERTIAL VELOCITY", T(s.Velocity), ValSize, ValTop);
+            Cell("altitude_393_3km",           "ALTITUDE",          T(s.Altitude), ValSize, ValTop);
+            Cell("apogee_416_2km",             "APOGEE",
+                 ok && s.ApogeeShown ? T(s.Apoapsis) : "—", ValSize, ValTop);
+            Cell("perigee_379_4km",            "PERIGEE",
+                 ok && s.PerigeeShown ? T(s.Periapsis) : "—", ValSize, ValTop);
+            Cell("inclination_51_62deg",       "INCLINATION",       T(s.InclinationDegText), ValSize, ValTop);
         }
 
         /// <summary>The two Crew Interrupt Conditions captions, drawn as primitives because their baked

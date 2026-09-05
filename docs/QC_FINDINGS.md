@@ -269,6 +269,26 @@ pre-formatted, and none needs a model.
 - **Verify:** re-render `ui_cover.png` and check all eight against the fixture; then set `ps.Valid = false`
   in a scratch fixture and confirm eight dashes.
 
+
+### ✅ FIXED 2026-09-05 — S105 (QC batch 3)
+
+**Fixed for seven of the eight.** New `CoverPage.DrawTopStrip` draws `ACTIVE PHASE`, `SPLASHDOWN TIME`,
+`INERTIAL VELOCITY`, `ALTITUDE`, `APOGEE`, `PERIGEE` and `INCLINATION` live, as text at the baked assets'
+own measured boxes (read via `BoxOf`, so the strip cannot drift if a placement is re-measured). The seven
+keys joined `SkipKeys`. Metrics measured off the PNGs replaced: all left-aligned, caption cap rows 7..26,
+value cap rows 56..97 (47..77 for the 89-tall `active_phase`).
+
+The dash rules are `ManualChuteDeployPage`'s, reused so the two pages cannot disagree — and on the current
+fixture `SPLASHDOWN TIME` correctly renders a dimmed **—** rather than a number.
+
+**On the glass:** `ACTIVE PHASE ORBITING · INERTIAL VELOCITY 2280 m/s · ALTITUDE 123.6 km · APOGEE 124.0 km
+· PERIGEE 121.9 km · INCLINATION 51.60°` — every one matching the `PageState` the globe beside it is drawn
+from. The six-of-seven contradiction is gone.
+
+⛔ **`running_00_22_57` stays baked, and that is H-2, not an oversight.** The label reads as *time in the
+current phase*; nothing keeps a phase-entry timestamp, and `VesselData.Met` — the only clock that exists,
+and one that does not reach `PageState` — is a different quantity. Drawing MET there would replace a frozen
+wrong number with a **live** wrong one, which is worse because it would look right.
 ---
 
 ## C-02 — A 16 px black arrow is placed outside the content panel and renders on the live camera slot
@@ -392,6 +412,22 @@ at luminance 221 rather than 255, because `Stroke(sc,2)` = 0.67 px clamps to 1. 
 SETTINGS twin's `Z(37)`. At the shipped width that is **12.3 px** — below `Typography.Min` = 16, so it
 trades an overrun for an unreadable label. The pill must get wider, or the label shorter, or both; see
 **R-01**, which is the general form of this problem.
+
+### ✅ FIXED 2026-09-05 — S105 (QC batch 3)
+
+**Fixed — and the filed fix plan was wrong, which the re-validation had already half-caught.**
+
+The plan said to set the label at the SETTINGS twin's own `Z(37)`. At the shipped width that is **12.3 panel
+px, below `Typography.Min` = 16** — it would have traded an overrun for an unreadable label. The lever it
+missed is the **inset**: 130 is SETTINGS' own margin, and SETTINGS' label is 140 design px wide where this
+one is ~288.
+
+The cluster moved inward instead — dash `Z(36)`→`Z(30)`, label `Z(130)`→`Z(102)`, size `Z(53)`→`Z(50)`.
+Measured on the render: runs at 501–515 (dash), 526–615 (label), 620–623 (the border) — the label ends
+**5 px clear** of the border, and `Z(50)` is **16.6 panel px, above the floor**.
+
+⚠ **First fix in the sweep to bump into R-01.** It was solved without shrinking anything, but the next label
+that does not fit will not have that escape.
 ---
 
 ## C-04 — The bottom status bar is stretched 12.2% horizontally: its circular icons render as ellipses and all its baked type is distorted
@@ -1019,6 +1055,27 @@ figure is exactly half.
 32-design-px margin is 10.7 px; mirroring the pills puts NEXT VIEW at **490.6…624.1**, so it moves **left by
 147.9 px** (filed: 295.9 — exactly half). The proposed readout centres become **721.8** and **2078.5 → 1038.2**,
 whose midpoint is **880.0 — the slot centre, exactly.** The construction was not an artifact of the scale.
+
+### ✅ FIXED 2026-09-05 — S105 (QC batch 3)
+
+**Fixed, to the owner's note (R-2, R-3, R-4).** Both halves are derived now rather than placed:
+
+- `NextViewRect` returns `(ViewLeft + 32) * sc` — SETTINGS' own 32-design-px margin, mirrored about the
+  other end of the camera slot. `NextX = 1500f` was **exactly the reflow `Split`**, which is why the pill
+  took the full slack.
+- The two TARGET readouts are drawn by `DrawCameraChrome`, centred on the camera slot's own centre
+  ± `ReadoutHalfGap` (475 design px) — the same centre the globe is drawn about.
+
+**Measured after, at 1280×703:**
+
+| | before | **after** |
+|---|---|---|
+| pill insets from their slot ends | 158.6 vs 10.7 | **10.7 vs 10.7** |
+| readout centres | — | 721.9 and 1038.1, **midpoint 880.0 = the slot centre exactly** |
+| TARGET LATITUDE over the disc | 88% | **0%** |
+| TARGET LONGITUDE over the disc | 17% | **0%** |
+
+⚠ **Q4 (the CAMERA caption) is untouched** — it is an open owner question and this fix does not pre-empt it.
 ---
 
 ## Open questions for the owner — Cover (Q1–Q4)

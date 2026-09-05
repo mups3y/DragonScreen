@@ -11955,6 +11955,65 @@ agreeing with the P&ID at last; and an **alarm-red pixel sweep across `ui_vehicl
 standard the lower console already met (S103's neighbour finding) and the screens did not. `build.py test`
 green (825 checks), 104 PNGs re-rendered.
 
+### S105 [O] QC batch 3 — the Cover: someone else's flight in the top strip, and the owner's own layout note — **DONE 2026-09-05** — [C-01 + C-13 + C-03]
+
+**🟢 OWNER-DIRECTED**, and two of the three are the owner's own words. On reviewing QC's first Cover pass he
+said, verbatim: *"The coordinates bellow the map should be evenly spaced either side of the globe so they do
+not overrun the globe"*, *"next button should also be moved to look like it belongs"* and *"I like well
+balanced layouts"*. Those are C-13. C-01 is the page's TIER 1.
+
+**C-01 — THE TOP TELEMETRY STRIP WAS EIGHT BAKED PNGs OF ANOTHER DESCENT. FIXED for seven of them.**
+`ALTITUDE 393.3km`, `APOGEE 416.2km`, `INERTIAL VELOCITY 7.69km/s`, `PERIGEE`, `INCLINATION`,
+`SPLASHDOWN TIME` and `ACTIVE PHASE` were pictures, on the page the crew opens on, and **six of the seven
+contradicted the `PageState` the same frame's globe was drawn from**. Every one existed live and
+pre-formatted, and `ManualChuteDeployPage` — which shares this page's own rail — has drawn the same seven
+live since T13c. New `CoverPage.DrawTopStrip` places them as text at **the baked assets' own measured
+boxes**, read out of `Keys`/`Box` via `BoxOf` so the strip cannot drift if a placement is re-measured (the
+rule `AttX`/`AttY1` already follow). Metrics measured off the PNGs being replaced, the same way
+`DrawCameraChrome` was measured off `camera_auto_earth_io`: all seven are LEFT-aligned, caption cap rows
+7..26 and value cap rows 56..97 (47..77 for the 89-tall `active_phase`), a cap being ~0.7em and a text y the
+line-box top ~0.1em above it.
+
+⚠ **The dash rules are `ManualChuteDeployPage`'s, reused rather than re-derived**, so the two pages cannot
+disagree about one value: no feed dashes everything, and apogee/perigee follow `ApogeeShown`/`PerigeeShown`
+(a conic through a landed vessel is a real solution and a meaningless number) while splashdown follows
+`SplashdownShown`. On the current fixture SPLASHDOWN TIME correctly renders a dimmed **—**.
+
+**⛔ `running_00_22_57` STAYS BAKED, DELIBERATELY (QC H-2).** The label sits beside the phase heading and
+reads as TIME IN THE CURRENT PHASE. Nothing in this build keeps a phase-entry timestamp, and the one clock
+that exists — `VesselData.Met`, which reaches `ChromeState` but not `PageState` — is a **different
+quantity**. Drawing MET under a "RUNNING" label would replace a frozen wrong number with a live wrong one,
+which is worse because it would look right. It needs a phase-entry timestamp owned by the painter beside
+`coverPhase`, and that carries its own decision about what "the phase" means.
+
+**C-13 — THE BAND BELOW THE GLOBE. FIXED, to the owner's note.** `NextX` was `1500f` — **exactly the reflow
+`Split`** — so the pill took the full horizontal slack and landed 296 design px right of where it balances,
+while the two TARGET readouts sat at their baked x and were pushed onto the globe's foot: measured **88% of
+TARGET LATITUDE and 17% of TARGET LONGITUDE over the disc**. Both are now derived, not placed:
+`NextViewRect` mirrors SETTINGS' own 32-design-px margin about the other end of the camera slot, and the two
+readouts are drawn by `DrawCameraChrome` centred on the slot's own centre ± `ReadoutHalfGap` — the same
+centre the globe is drawn about, so the pair is symmetric about the thing it sits under.
+
+Measured after, at the shipped 1280×703: the two pills sit at **identical 10.7 px insets** from their own
+ends of the slot; the readout centres are 721.9 and 1038.1, whose **midpoint is 880.0 — the slot centre,
+exactly**; and both readouts now overlap the disc **0%**, from 88% and 17%.
+
+**C-03 — "NEXT VIEW" OVERRAN ITS OWN PILL. FIXED, and QC's filed fix was wrong.** The label was `Z(130)` in
+at `Z(53)`: 96 px of glyph in 90.2 px of room, with the pill's border struck through the final "W". QC's
+plan said "set it at the SETTINGS twin's own 37" — **37 design px is 12.3 panel px at the shipped width,
+below `Typography.Min` = 16**, so that would have traded an overrun for an unreadable label. The lever the
+plan missed is the **inset**: 130 is SETTINGS' own, and SETTINGS' label is 140 design px wide where this one
+is ~288. The cluster moved in instead (dash 36→30, label 130→102) at `Z(50)`. Measured after: the label ends
+**5 px clear** of the border, at **16.6 panel px — above the floor**. The twin geometry gave a little; the
+legibility did not.
+
+⚠ **This is the first fix in the sweep to bump into R-01** (every Figma-page text size is below the measured
+floor at the shipped width). It was solved here without shrinking anything, but the next label that does not
+fit will not have that escape. **R-01 is still the batch that unblocks the rest.**
+
+**Verified:** `build.py test` green, 104 PNGs re-rendered, no overflow warnings; strip values match the
+fixture; band symmetry and 0% overlap measured from the render.
+
 
 ---
 
