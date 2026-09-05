@@ -15417,7 +15417,7 @@ rather than wired, and the crew-GO → autopilot edge the settlement names is no
 - **DONE when:** the Cover shows a computed caution state, bit 2 is set or its absence is commented, and a
   preview shows nominal and cautioned looks.
 
-### S131 [S] A 16 px black arrow renders outside the content panel, on the live camera slot — **HELD** — [QC `C-02`; owner answered Q1 but NOT YET ACTIONABLE]
+### S131 [S] A 16 px black arrow renders outside the content panel, on the live camera slot — **DOING** — [QC `C-02`; the HELD is LIFTED — the overseer assessment happened 2026-09-06]
 - 🟢 **Owner answered Q1: "Drop it"** (option selected, 2026-09-05).
 - ⛔ **HELD on the owner's own condition** — the same *"ask the overseer to assess before acting"* that holds
   [[S129]] and [[S135]]. ⚠ Also one of the three findings waiting on the community Figma export, which
