@@ -16148,7 +16148,7 @@ is **SUPERSEDED IN PLACE**, kept verbatim, because it is the finding that produc
 
 ⛔ No `install`, no glass, no `git push`. §14.4(a) untouched.
 
-### S137c [S] `sev_vehicle` now includes events its component columns cannot explain — **TODO** — [logged by [[S137b]] per C1.1, 2026-09-06; TIER 3: a recording that cannot be read back]
+### S137c [S] `sev_vehicle` now includes events its component columns cannot explain — **DOING** — [logged by [[S137b]] per C1.1, 2026-09-06; TIER 3: a recording that cannot be read back]
 - **The finding.** [[S137b]] folded fire / cabin leak / power-string events into
   `Alarms.VehicleSeverity`, which the black box records as **`sev_vehicle`**. Its two component columns,
   **`sev_ls`** and **`sev_thermal`**, are recorded through `Alarms.LifeSupport(CabinReadout)` and
