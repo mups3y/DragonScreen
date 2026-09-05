@@ -640,6 +640,30 @@ under the Vehicle page's `SHOW MARGINS TO`.
 - **Verify:** re-render and confirm the thumb is dimmer than the panel's white hairlines and the three
   white glyphs, in the same relationship `gridicons_refresh` now has.
 
+
+### ✅ FIXED 2026-09-05 — S106 (QC batch 4: the inert tint)
+
+**Fixed — option (a), exactly as filed.** `"rectangle_182"` joins `CoverPage.InertKeys`, so the loop at
+`:408` gives it `InertTint` instead of `White`.
+
+⚠ **One correction to my own evidence.** I wrote *"drawn in full `DragonPalette.White`"* and then
+*"a light-lavender vertical bar"* two paragraphs apart without noticing they disagree. `White` is the **tint
+argument**, and the asset's own baked pixels are `(93,104,164)` — so it was never white on screen; it was its
+own lavender at **full strength**, which is what every live glyph on the page gets. That does not weaken the
+finding (the idiom is "full tint = live"), but the code comment now states it correctly.
+
+**On the glass**, `ui_cover.png`, the thumb column at panel x 475..480:
+
+| | before | **after** |
+|---|---|---|
+| thumb pixels | (93,104,164) | **(48,56,105)** |
+
+Measured against the finding's own verify line — *"dimmer than the panel's white hairlines and the three
+white glyphs, in the same relationship `gridicons_refresh` now has"*: it is, and it is the same relationship,
+because it is now literally the same tint.
+
+⚠ **Option (b) is untouched and still available.** If C-05 lands the scrolling card, the thumb becomes a
+real indicator and goes back to `White` **and** into `Hits` — together, S75's rule.
 ---
 
 ## C-07 — The ◄/► arrows can park the Cover on phase 6, printing "Manual Chute Deploy" over the Coast body while the real page sits one tap away
@@ -3210,6 +3234,42 @@ identical glyph was tinted inert by S75; these were not.
 - **Verify:** on any SuitCheck render, every White control resolves to an action and every inert one is
   visibly dimmer.
 
+
+### ✅ FIXED 2026-09-05 — S106 (QC batch 4: the inert tint)
+
+**Fixed for the two plates — and confirming before fixing withdrew the second half of this finding.**
+
+**Done.** Both read-only plates and the `ENTER READ-ONLY` caption are `Dim` (= `DragonPalette.Text6`, the
+same value `CoverPage.InertTint` holds). **No hit rect was added** — C1.8 keeps S29 standing until the owner
+types `OVERRIDE`; this fix is S75's territory only, the tint.
+
+**On the glass**, `ui_suitcheck.png`:
+
+| element | pixels above 190 | dominant |
+|---|---|---|
+| plate 1 + `ic_grid` | **0** | (132,137,163) = Text6 |
+| plate 2 + `ic_eye` | **0** | (103,109,141) = antialiased Text6 |
+| `ENTER READ-ONLY` | **0** | (132,137,163) = Text6 |
+| `INITIATE SUIT LEAK CHECK` (**live**) | 304 pure white | unchanged |
+
+⚠ **WITHDRAWN: *"and every un-hit-testable `ic_refresh`"*.** That sub-claim was filed without checking what
+those glyphs are, and all three fail it for two different reasons:
+
+- **`:225`, the TRY ADDITIONAL TIMER glyph, IS hit-tested.** `HitTest` has `In(2910, 1120, 420, 110) →
+  SuitAct.Retime`, and the glyph at `(2950, 1154)` sits inside it. It is a live control; tinting it inert
+  would have been the S75 defect **inverted** — painting a working button as dead.
+- **`:140` and `:164` are a STATE COLUMN, not affordances.** The row icon is `ic_refresh` when the feed is
+  live and **`ic_dash` when it is not**, and its tint already follows the row's severity
+  (`!suits.Valid ? Dim : (bad ? Amber : White)`). It is a status glyph driven by the model — exactly what
+  S31/§14.4(e) asks for. Forcing it to `Text6` would have destroyed a correct, existing, state-driven
+  signal to satisfy a rule about buttons.
+- **`:116` is part of an Accent CAPTION**, not a control: the glyph matches the `SECTION 2: IN PROGRESS`
+  text it is set beside, in the same `Accent`. Dimming it would say "no live source" about a section that
+  is in progress.
+
+**The lesson is the same one this file already recorded once:** an idiom rule ("un-hit-testable → dim")
+cannot be applied by grep. Three glyphs shared one asset key and had three different jobs, and only reading
+each site told them apart.
 ---
 
 ---
@@ -3548,6 +3608,25 @@ shape, and translation reuses it with the glyph slot empty.
 - **Must not break:** the hit rects, which are per-pad and unaffected.
 - **Verify:** all six translation pads read at one weight.
 
+
+### ✅ FIXED 2026-09-05 — S106 (QC batch 4: the inert tint)
+
+**Closed by DK-02's fix, and the mechanism is worth recording because the finding predicted it.**
+
+This finding asked for *"all six translation pads at one weight"* and warned that the choice must be made
+once for both clusters. DK-02's tint does exactly that, from the other direction: **both** label slots are
+now `Text6`, so the `a`/`b` asymmetry has nowhere left to express itself. FWD and BACK no longer read
+brighter than UP/DOWN/LEFT/RIGHT because nothing in either cluster is bright any more.
+
+**Measured:** the ROTATION cluster's palette on `ui_docking.png` contains **0 pixels above 190** and 216 px
+of (132,137,163); the TRANSLATION cluster likewise, across all four docking variants
+(`ui_docking`, `_precise`, `_notarget`, `_corrected`).
+
+⚠ **The structural cause the finding named is NOT fixed — it is only no longer visible.** `Cluster` is still
+written around the rotation cluster's glyph-plus-caption shape, and translation still reuses it with the
+`a` slot empty. If a later change gives either slot a distinguishing tint again, the asymmetry returns. The
+finding's alternative reading — *"if axis captions are secondary, then ROTATION is right and TRANSLATION
+needs arrows"* — is a design call against `iss-sim` and **stays open**; it is not foreclosed by this fix.
 ---
 
 ## DK-02 — Thirteen correctly-inert controls, all painted as live buttons
@@ -3578,6 +3657,34 @@ sixteen controls on this page does anything.
   vehicle (S29 left it open). It then goes back to White **and** stays hit-tested — S75's "together" rule.
 - **Verify:** on `ui_docking.png`, exactly three controls read as live.
 
+
+### ✅ FIXED 2026-09-05 — S106 (QC batch 4: the inert tint)
+
+**Fixed, all thirteen.** The twelve direction pads and both inert bottom labels are `Dim`; the two magnitude
+toggles keep `Accent` and `Settings` keeps `White`.
+
+⚠ **The hit rects are untouched**, as this finding required. S85's `rec.Acted = false` record depends on the
+press being *received and logged*; inert here means drawn as not acting, not un-hit-testable.
+
+**Verified against this finding's own criterion — *"on `ui_docking.png`, exactly three controls read as
+live"*.** A blob sweep of every pixel above the bottom bar with all channels > 200 returns **four bright
+blobs, and only one of them is a control**:
+
+| blob | design box | what it is |
+|---|---|---|
+| n=185 | x 1656..1771, y 844..958 | the **boresight reticle** — a display element (`Text2`), correctly bright |
+| n=127 | x 1377..1527, y 1637..1667 | the **RANGE value** — a live readout |
+| n=60 | x 1674..1753, y 249..276 | the page **title** |
+| n=83 | x 2023..2110, y 1751..1776 | **`Settings`** — the one live control |
+
+Plus the two `Accent` magnitude toggles and the `Accent` RATE readout, which a bright sweep does not catch.
+**Three controls read as live, and they are the three that act.** Both inert labels measure 0 pixels above
+190 against a dominant (132,137,163); the rotation cluster's palette is background, panel, **216 px of
+Text6 (the pad labels)** and **178 px of Accent (the toggle)** — the live thing is the only bright thing
+in the cluster.
+
+⚠ **`Reset Positions` may still become live** if a source settles that it resets the view rather than the
+vehicle (S29 left it open). It then goes back to White **and** stays hit-tested — S75's "together" rule.
 ---
 
 ## DK-03 — There is no camera behind the docking rings
@@ -3648,6 +3755,28 @@ and the four rail icons have no hit rect (S49 H28); the rail is drawn at `Rendez
 - **Verify:** with a target, the card reads a real approach; with none, it dashes — `ui_rendezvous_notarget.png`
   already exists as the second case.
 
+
+### ✅ FIXED 2026-09-05 — S106 (QC batch 4: the inert tint)
+
+**PARTLY fixed — the tint half only, which is the half this finding marked as DK-02's.**
+
+**Done:** both `◄` and `►` are `Text6` instead of `Text3`. The finding's reasoning is followed exactly:
+*"No source says what they step through … §1.4 question — no source, so no rectangle. Meanwhile S75's tint
+applies: draw them inert."* They go back to `Text3` **and** into a hit table together, or not at all.
+
+**On the glass**, `ui_rendezvous.png` and `ui_rendezvous_notarget.png`: each arrow's brightest pixel is
+**exactly (132,137,163) = Text6** (was `Text3` = (193,195,223)), 19 glyph pixels each, and **0 pixels above
+170** in either arrow box — the box border (`Hairline`, (49,61,123)) is now the brightest thing in the
+control, which is what an inert control should look like.
+
+⚠ **STILL OPEN, and it is the larger half of this finding:** *"fill the card with the approach that is
+actually happening"* — range, range-rate, closing/opening, target name, all live in `PageState` today, all
+readouts, all (A) under §14.4(f), and all printed by `ui_docking.png` in the same frame from the same
+fields. `NOT ENGAGED` stays as the **engagement** row; it is true. **The four rail icons stay a §1.4
+question** — nothing in the repo says what they are, and their rings were already `Text6`.
+
+Dimming the arrows makes the card **honest**, not **full**. Those are different jobs and only the first is
+done here.
 ---
 
 ---
@@ -3925,6 +4054,36 @@ whose other ten nodes are green / amber / red from `SystemsState`.
   a clarifying label, not a changed number.
 - **Verify:** the footer node no longer matches any legend colour.
 
+
+### ⚠ CORRECTED 2026-09-05 — S106 (confirming before fixing disproved this)
+
+**The first bullet — *"It reads as unpowered"* — is WITHDRAWN. It is wrong, and measuring it before
+acting on it is what caught it.** I filed it from the shape of the thing (a dim-bordered box on a page whose
+other nodes are coloured) without ever comparing the two colours I claimed were the same one. They are three
+different colours, and none of them is the legend's:
+
+| element | source | value |
+|---|---|---|
+| `FLIGHT COMPUTER STRINGS` caption | `SystemsTreePage.cs:286`, `White` | **(255,255,255)** — measured, pure white |
+| its subtitle line | `Dim` = `Text6` | (132,137,163) |
+| the node's border | `Wire` = `Hairline` | #313D7B = (49,61,123) |
+| the legend's `UNPOWERED` | `:293`, `Faint` = `Text7` | #585D7C = (88,93,124) |
+
+Measured on `ui_systemstree_live.png`: the caption row contains **296 pixels of (255,255,255)**. The node's
+caption is the *brightest* text in that region — the opposite of dim grey. The finding's own verify line,
+*"the footer node no longer matches any legend colour"*, **was already satisfied before the finding was
+written**, which is the clearest possible sign the claim was never checked.
+
+⚠ **No code changed for this, deliberately.** "Tint it out of the legend" was the cheap fix I recommended
+*"regardless of the rest"*, and it would have dimmed a correctly-white caption to solve a problem that does
+not exist — making the page worse on the authority of my own unmeasured claim.
+
+**The SECOND bullet STANDS, unchanged and unactioned:** `18 UNITS · 54 VOTING PROCESSORS` is still a
+confident count with nothing behind it, still reference copy, and still irreconcilable with the Avionics
+tab's `3 / 3` for a reader who has only the two pages. That half needs flight-computer health in the model,
+which is Part-B-adjacent, and it stays parked against the same policy question **S49's Q3** holds. The
+finding's own guardrail also stands: **do not reconcile 18 with 3 by editing either number** without a
+source.
 ---
 
 ---

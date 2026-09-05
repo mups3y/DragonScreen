@@ -188,7 +188,11 @@ namespace DragonScreen
                 float bx, by, bw, bh;
                 BottomRect(i, w, h, out bx, out by, out bw, out bh);
                 dl.Box(bx, by, bw, bh, St(2), Hair);
-                C(BottomLabel[i], BottomCx[i], 1742, 26, White);
+                // S106 / QC DK-02: `Settings` routes (FigmaUI sends it to the settings page) and stays
+                // White; `Instructions` and `Reset Positions` do not, for the two different recorded
+                // reasons in this file's header, so they take the inert tint.
+                C(BottomLabel[i], BottomCx[i], 1742, 26,
+                  BottomLabel[i] == "Settings" ? White : Dim);
             }
 
             BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
@@ -206,7 +210,20 @@ namespace DragonScreen
             {
                 if (a.Length == 0 && b.Length == 0) return;
                 dl.Box(X(ccx + gx * Cell - Btw * 0.5f), Y(ccy + gy * Cell - Btw * 0.5f), Z(Btw), Z(Btw), St(2), DragonPalette.Hairline);
-                if (a.Length > 0) dl.Text(a, X(ccx + gx * Cell), Y(ccy + gy * Cell - (b.Length > 0 ? 34f : 18f)), Z(30), TextAlign.Centre, DragonPalette.White);
+                // ---- S106 / QC DK-02 + DK-01: TWELVE INERT PADS, DRAWN AS ONE THING ----
+                // Every direction pad is a 14.4(a) no-op with a recorded reason (S29 + T14 + S85), and
+                // all twelve were drawn White - indistinguishable from the two magnitude toggles, which
+                // are the only controls on this page that act and are drawn in `Accent`. The page had a
+                // distinguishing tint and was spending it on the wrong half.
+                // ⚠ This also closes DK-01. The `a` slot was White and the `b` slot Text6, so ROTATION
+                // (arrows in `a`, axis words in `b`) read coherently while TRANSLATION - which has no
+                // arrows, so UP/DOWN/LEFT/RIGHT fell into `b` - had four pads faint and their two corner
+                // siblings FWD/BACK bright, for six controls that behave identically. One tint, one
+                // weight, and the inconsistency has nowhere left to live.
+                // ⛔ The hit rects STAY. S85's `rec.Acted = false` record depends on the press being
+                // received and logged - "the record that lets a flight prove a direction pad was pressed
+                // and flew nothing". Inert here means drawn as not acting, not un-hit-testable.
+                if (a.Length > 0) dl.Text(a, X(ccx + gx * Cell), Y(ccy + gy * Cell - (b.Length > 0 ? 34f : 18f)), Z(30), TextAlign.Centre, DragonPalette.Text6);
                 if (b.Length > 0) dl.Text(b, X(ccx + gx * Cell), Y(ccy + gy * Cell + 6f), Z(22), TextAlign.Centre, DragonPalette.Text6);
             }
             dl.Text(title, X(ccx), Y(ccy - Cell - 90f), Z(28), TextAlign.Centre, DragonPalette.Accent);

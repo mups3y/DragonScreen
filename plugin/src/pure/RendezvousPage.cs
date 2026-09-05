@@ -119,9 +119,13 @@ namespace DragonScreen
             const float ArrowW = 160f, ArrowH = 110f;
             float arrowY = CardY + CardH - 150f;
             dl.Box(X(CardX + 40f), Y(arrowY), Z(ArrowW), Z(ArrowH), St(2), DragonPalette.Hairline);
-            dl.Text("◄", X(CardX + 40f + ArrowW * 0.5f), Y(arrowY + 34f), Z(40), TextAlign.Centre, DragonPalette.Text3);
+            // S106 / QC RZ-01: the two arrows have NO hit rect and no source says what they would step
+            // through, so 1.4 gives them no rectangle - and S75 says a control that cannot act must not
+            // be painted as one. They were `Text3` inside a Hairline box, which reads as a button. The
+            // inert tint now; they go back to Text3 AND into a hit table together, or not at all.
+            dl.Text("◄", X(CardX + 40f + ArrowW * 0.5f), Y(arrowY + 34f), Z(40), TextAlign.Centre, DragonPalette.Text6);
             dl.Box(X(CardX + CardW - 40f - ArrowW), Y(arrowY), Z(ArrowW), Z(ArrowH), St(2), DragonPalette.Hairline);
-            dl.Text("►", X(CardX + CardW - 40f - ArrowW * 0.5f), Y(arrowY + 34f), Z(40), TextAlign.Centre, DragonPalette.Text3);
+            dl.Text("►", X(CardX + CardW - 40f - ArrowW * 0.5f), Y(arrowY + 34f), Z(40), TextAlign.Centre, DragonPalette.Text6);
         }
     }
 }

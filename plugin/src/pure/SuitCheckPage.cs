@@ -99,9 +99,17 @@ namespace DragonScreen
             // until verified) applies rather than inventing a real-only-console function for either. Not
             // wired by T14 either (outside §6's four groups). Recorded, not built; see REGISTER.md S29.
             dl.Line(PX(120), PY(1560), PX(700), PY(1560), St(2), Hair);
-            Pl(210, 1600, 130, 130, White); Ico("ic_grid", 245, 1635, 60, White);
-            Pl(430, 1600, 130, 130, White); Ico("ic_eye", 465, 1635, 60, White);
-            C("ENTER READ-ONLY", 408, 1770, 26, White);
+            // ---- S106 / QC SC-02: S29 SETTLED THE BEHAVIOUR, S75 SETTLED THE APPEARANCE ----
+            // S29 (above) ruled both plates INERT. They were still drawn plate + border + full-white
+            // glyph - byte-identical in idiom to INITIATE SUIT LEAK CHECK and TROUBLESHOOT on this same
+            // screen, both of which act. S75 (2026-09-04, two days after S29) decided what a control that
+            // does nothing must LOOK like: `Text6`, the "nothing live behind this" tint. The appearance
+            // half was never applied here, so the page honoured the ruling in behaviour and contradicted
+            // it in paint. It does not get a hit rect - C1.8 keeps S29 standing until the owner says
+            // otherwise; only the tint changes.
+            Pl(210, 1600, 130, 130, Dim); Ico("ic_grid", 245, 1635, 60, Dim);
+            Pl(430, 1600, 130, 130, Dim); Ico("ic_eye", 465, 1635, 60, Dim);
+            C("ENTER READ-ONLY", 408, 1770, 26, Dim);
 
             // ================= MAIN PANEL =================
             dl.Box(PX(820), PY(96), 2000 * sx, 1700 * sy, St(3), Panel);

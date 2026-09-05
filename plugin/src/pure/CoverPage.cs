@@ -222,7 +222,15 @@ namespace DragonScreen
         // drawn INERT (Text6, this build's "no live source behind this" tint) so it reads as part of the
         // RUNNING status line it sits in rather than as a fourth white affordance beside three real ones.
         // If a real source for the action ever appears, it goes back to White AND enters Hits — together.
-        static readonly string[] InertKeys = { "gridicons_refresh" };
+        // S106 / QC C-06: `rectangle_182` joins it. That asset is a 15x920 SCROLLBAR THUMB whose right
+        // edge is 1442 - the content panel's inner edge exactly - fixed length, fixed position, no hit
+        // rect, no scroll model, and a panel whose content never overflows. A thumb's LENGTH says "there
+        // is more below" and its POSITION says "you are here", and here both were lies. It was taking the
+        // White tint, i.e. its baked lavender at full strength (93,104,164), which is the same tint every
+        // live glyph on the page takes; the inert tint renders it (48,56,105), plainly dimmer than the
+        // panel's white hairlines - the relationship `gridicons_refresh` already has.
+        // It takes S75's branch rather than a rect because what it would scroll is not settled (C-05).
+        static readonly string[] InertKeys = { "gridicons_refresh", "rectangle_182" };
 
         /// <summary>The tint an inert, un-hit-testable glyph is drawn in. Text6 is the same "nothing
         /// live behind this" tint the dashed readouts use, so the distinction reads at IVA distance

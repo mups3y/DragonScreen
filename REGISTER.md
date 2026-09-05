@@ -12014,6 +12014,72 @@ fit will not have that escape. **R-01 is still the batch that unblocks the rest.
 **Verified:** `build.py test` green, 104 PNGs re-rendered, no overflow warnings; strip values match the
 fixture; band symmetry and 0% overlap measured from the render.
 
+### S106 [O] QC batch 4 — a control that cannot act must not be painted as one — **DONE 2026-09-05** — [C-06 + SC-02 + DK-02 + DK-01 + RZ-01, and SP-02 CORRECTED not fixed]
+
+**🟢 OWNER-DIRECTED** — *"continue with all the screen fixes one at a time until all pages are complete. You
+must confirm your findings before fixing."* **Confirming changed three of the six**, which is the point of
+the instruction and the most useful thing in this line.
+
+**The rule being applied is S75's**, stated in `CoverPage.cs:212-214` when it fixed the Cover's one glyph:
+*"a painted control that resolves to nothing … is worse than a no-op because a no-op at least names an
+action"*, and *"if a real source for the action ever appears, it goes back to White AND enters Hits —
+together."* S75 settled the **appearance**; four other pages had settled the **behaviour** first and never
+got the paint. This closes that gap everywhere QC found it.
+
+**FIXED — 18 controls across four pages, all to `Text6`.**
+
+| finding | page | what | why it was inert already |
+|---|---|---|---|
+| **C-06** | Cover | `rectangle_182`, a 15×920 scrollbar thumb whose right edge is 1442 — the panel's inner edge exactly | fixed length, fixed position, no hit rect, no scroll model, nothing that overflows |
+| **SC-02** | Suit Check | 2 read-only plates + glyphs + the `ENTER READ-ONLY` caption | **S29** (owner, 2026-09-02) ruled both plates inert |
+| **DK-02** | Docking | 12 direction pads + `Instructions` + `Reset Positions` | §14.4(a) no-ops, four recorded decisions (S29 + T14 + S85) |
+| **DK-01** | Docking | — | closed *by* DK-02: both label slots are one tint now, so the `a`/`b` asymmetry has nowhere to live |
+| **RZ-01** | Rendezvous | the `◄` / `►` step arrows | no hit rect, and no source says what they step through |
+
+⛔ **NO HIT RECT WAS ADDED OR REMOVED.** Not one. C1.8 keeps S29 standing until the owner types `OVERRIDE`,
+and **S85's audit trail depends on the docking presses still being received and logged** (`rec.Acted =
+false` — the record that lets a flight prove a pad was pressed and flew nothing). Inert here means *drawn as
+not acting*, never *not hit-tested*. Every one of these goes back to a live tint **and** into a hit table
+together, or not at all.
+
+**⚠ CONFIRMING DISPROVED SP-02's HEADLINE CLAIM, so no code changed for it.** I had filed that the
+`FLIGHT COMPUTER STRINGS` node *"reads as unpowered"* because it and the legend's `UNPOWERED` were both
+"dim grey". They are **three different colours and none is the legend's**: the caption is `White` and
+measures **(255,255,255)** on `ui_systemstree_live.png` — the *brightest* text in that region — the subtitle
+is `Text6`, the border is `Hairline` #313D7B, and the legend is `Text7` #585D7C. The finding's own verify
+line (*"no longer matches any legend colour"*) **was already satisfied before the finding was written**. The
+"cheap fix I recommended regardless of the rest" would have dimmed a correctly-white caption for a problem
+that does not exist. Corrected in `docs/QC_FINDINGS.md`; **SP-02's second bullet — `18 UNITS · 54 VOTING
+PROCESSORS` is a count with nothing behind it — stands, unactioned, parked against S49's Q3.**
+
+**⚠ AND SC-02's SECOND HALF IS WITHDRAWN, for a better reason than the first.** It asked for *"every
+un-hit-testable `ic_refresh`"* to be dimmed. Three glyphs share that asset key on that page and **all three
+fail the rule, in two different ways**: `:225` (TRY ADDITIONAL TIMER) **is** hit-tested — `In(2910, 1120,
+420, 110) → SuitAct.Retime` — so dimming it would have been S75's defect *inverted*, painting a working
+button as dead; and `:140`/`:164` are a **state column**, `ic_refresh` when live and **`ic_dash` when not**,
+already tinted by row severity, which is exactly the S31/§14.4(e) behaviour we want and which a blanket
+`Text6` would have destroyed. `:116` is part of an `Accent` caption, not a control. **An idiom rule cannot
+be applied by grep** — one key, three jobs, and only reading each site told them apart.
+
+**⚠ RZ-01 is PARTLY closed, and the larger half is still open.** Dimming the arrows makes the card
+**honest**; it does not make it **full**. The finding's main body — fill the Hold-Capture card with the
+approach that is actually happening (range, range-rate, closing, target name; all live in `PageState`, all
+printed by `ui_docking.png` in the same frame) — is untouched (A) work under §14.4(f). `NOT ENGAGED` stays;
+it is a true statement about this build. The four rail icons stay a §1.4 question.
+
+**⚠ DK-01's structural cause is invisible, not gone.** `Cluster` is still written around the rotation
+cluster's glyph-plus-caption shape and translation still reuses it with the `a` slot empty. If either slot
+is ever given a distinguishing tint again, the asymmetry returns.
+
+**Verified on the glass** (measured, not eyeballed): Cover thumb (93,104,164) → **(48,56,105)**; both suit
+plates, both glyphs and the caption **0 pixels above 190** against a dominant (132,137,163) while
+`INITIATE SUIT LEAK CHECK` keeps its 304 pure-white pixels; both docking clusters **0 above 190** across all
+four docking variants, with 216 px of Text6 (pads) and 178 px of Accent (the toggle that acts); a blob sweep
+of everything above the docking bottom bar returns four bright blobs of which **exactly one is a control**
+(`Settings`) — the others are the boresight reticle, the RANGE readout and the page title; both rendezvous
+arrows peak at **exactly (132,137,163)**, was `Text3` (193,195,223). `build.py test` green, 104 PNGs
+re-rendered.
+
 
 ---
 
