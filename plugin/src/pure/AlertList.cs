@@ -19,6 +19,13 @@
 // invents a fault. When Part B fills that channel this list gains rows without changing.
 //
 // ---- WHAT IS DELIBERATELY NOT HERE ----
+// ✅ SUPERSEDED IN PLACE 2026-09-06 BY [[S137b]] — the paragraph below is kept VERBATIM because it is
+// the finding, and the finding is why the fix looks the way it does. `Alarms` now reads all three
+// (`CabinEvents`, `PowerEvents`), so they fold into `VehicleSeverity` — reaching the tab strip, the
+// chrome bar and `Mask` at once — and the scoped lists here gained their rows for free, under a word
+// that moves with them. Read the next paragraph as "why this was not done in S137", not as current
+// state.
+//
 // ⛔ NO FIRE, NO CABIN LEAK, NO TRIPPED-STRING ROW — AND THAT IS A FINDING, NOT AN OMISSION.
 // `VehicleSystems` models all three (`SystemsState.Fire`, `.Leaking`, and six `StringState`s), and
 // `SystemsPidPage` draws them. But `Alarms` NEVER SEES THEM: `VehicleSeverity` is life support +
@@ -96,6 +103,13 @@ namespace DragonScreen
                         Alarms.Band(s.Cabin.Co2MmHg, CabinLimits.Co2Caution, CabinLimits.Co2Alarm));
                     Add(into, ref n, "CABIN PRESSURE", Num(s.Cabin.PressPsia, 2, " psia"),
                         Alarms.Band(s.Cabin.PressPsia, CabinLimits.PressCaution, CabinLimits.PressAlarm));
+                    // ⭐ S137b: and the two discrete cabin emergencies, which `Alarms` can now see.
+                    // They were absent from this list for exactly one build, and the reason is on the
+                    // header above — a fire row under a green word was the wrong way to add them.
+                    if (s.Systems.Fire)
+                        Add(into, ref n, "CABIN FIRE", Pct(s.Systems.FireIntensity), Severity.Alarm);
+                    if (s.Systems.Leaking)
+                        Add(into, ref n, "CABIN LEAK", Pct(s.Systems.LeakRate), Severity.Alarm);
                     break;
 
                 // Alarms.Thermal takes the worst of exactly these three.
@@ -113,9 +127,18 @@ namespace DragonScreen
                 // where the word named only how bad it was.
                 case AlertScope.Power:
                     Add(into, ref n, "BATTERY", Pct(s.Power01), Alarms.Low(s.Power01));
+                    // S137b: the string events, at the severity Alarms derives rather than counts.
+                    Add(into, ref n, "POWER STRINGS", StringWord(s.Systems),
+                        Alarms.PowerEvents(s.Systems));
                     break;
                 case AlertScope.Propellant:
-                    Add(into, ref n, "PROPELLANT", Pct(s.Propellant01), Alarms.PropellantSeverity(s));
+                    // ⛔ `DragonProp01`, NOT `Propellant01` - the SAME one-field-per-row rule as the
+                    // cabin block, and it very nearly slipped through here. `Alarms.PropellantSeverity`
+                    // bands `s.DragonProp01` deliberately (its own comment: the whole-stack fraction is
+                    // meaningless once the booster is gone), so printing `Propellant01` beside it would
+                    // have been a row citing one number to justify a verdict reached on another. Caught
+                    // by a test fixture that set one and not the other.
+                    Add(into, ref n, "PROPELLANT", Pct(s.DragonProp01), Alarms.PropellantSeverity(s));
                     break;
                 case AlertScope.Fdir:
                     Add(into, ref n, "FDIR", s.FaultText, Alarms.FdirSeverity(s));
@@ -132,9 +155,9 @@ namespace DragonScreen
             if (!s.Valid) return Severity.Nominal;
             switch (scope)
             {
-                case AlertScope.LifeSupport: return Alarms.LifeSupport(s.Cabin);
+                case AlertScope.LifeSupport: return Alarms.CrewSeverity(s);
                 case AlertScope.Thermal:     return Alarms.Thermal(s.Cabin);
-                case AlertScope.Power:       return Alarms.Low(s.Power01);
+                case AlertScope.Power:       return Alarms.PowerSeverity(s);
                 case AlertScope.Propellant:  return Alarms.PropellantSeverity(s);
                 case AlertScope.Fdir:        return Alarms.FdirSeverity(s);
             }
@@ -165,6 +188,18 @@ namespace DragonScreen
                 a[j + 1] = k;
             }
             return n;
+        }
+
+        /// <summary>What the POWER STRINGS row reads: how many are down, and whether a powered bus has
+        /// been left with nothing online — the two facts `Alarms.PowerEvents` reaches its verdict on,
+        /// so the row again proves its own severity.</summary>
+        static string StringWord(SystemsState y)
+        {
+            bool dead = (y.Bus1On && Systems.OnlineCount(y, 1) == 0)
+                     || (y.Bus2On && Systems.OnlineCount(y, 2) == 0);
+            int t = Tripped(y);
+            if (dead) return t + " TRIPPED, BUS DEAD";
+            return t + " TRIPPED";
         }
 
         static int Tripped(SystemsState y)

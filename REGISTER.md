@@ -16049,7 +16049,7 @@ caught. Recorded because a mutation table is only worth what its weakest row is.
 
 ⛔ No `install`, no glass, no `git push`. §14.4(a) untouched — a list of what is wrong commands nothing.
 
-### S137b [S] A cabin FIRE raises no severity anywhere in the build — **DOING** — [logged by [[S137]] per C1.1, 2026-09-06; TIER 2: a modelled emergency that no alarm channel can see]
+### S137b [S] A cabin FIRE raises no severity anywhere in the build — **DONE 2026-09-06 — one line in `VehicleSeverity` reached every surface at once** — [logged by [[S137]] per C1.1, 2026-09-06; TIER 2: a modelled emergency that no alarm channel can see]
 - **The finding, measured in source.** `VehicleSystems` models three discrete emergencies —
   `SystemsState.Fire` (`FireIntensity > 0.02`), `.Leaking` (`LeakRate > 0.001`) and six `StringState`s
   that can read `Tripped` — and `SystemsPidPage` draws all of them. ⛔ **`Alarms` reads none of them.**
@@ -16066,6 +16066,102 @@ caught. Recorded because a mutation table is only worth what its weakest row is.
   whether *three* tripped strings is still a caution is a judgement. §14.4(f) territory, not §1.4.
 - **DONE when:** `Alarms` folds the three discrete events into the severity every surface already reads,
   [[S137]]'s list gains its rows for free, and a preview shows a fire turning the tab strip red.
+
+#### ✅ DONE 2026-09-06
+
+⭐ **The fix is one line in `VehicleSeverity`, and that is the whole argument for putting it here rather
+than in the page** — the tab strip, the chrome bar, `Alarms.Mask` and [[S137]]'s alert list all already
+read that function, so none of them needed changing.
+
+```csharp
+v = Worst(v, CabinEvents(s.Systems));
+v = Worst(v, PowerEvents(s.Systems));
+```
+
+#### ⚠ THE POWER RULE IS DERIVED, NOT COUNTED — which is the only judgement in the change
+
+The obvious rule is *"count the tripped strings"*, and it would have been **an invented threshold**: is
+three worse than two? The model answers instead:
+
+| condition | severity | why it is a fact and not a choice |
+|---|---|---|
+| any string `Tripped` | **CAUTION** | the bus behind it is redundant — one trip costs margin, not the bus |
+| a bus the crew has switched **ON** with `OnlineCount == 0` | **ALARM** | that redundancy is actually gone |
+| a bus the crew switched **OFF** | **NOMINAL** | ⛔ a deliberate act is not a fault |
+
+⭐ **That last row matters more than it looks.** A rule that asked "are any strings online" without
+asking *why* would alarm every time the crew powered a bus down — and `SystemsState.Fresh()` starts with
+**both buses off**, so it would have alarmed on the vehicle's own initial state. Mutation **D** is
+exactly that mistake and it fails two unrelated pre-existing checks, which is how a wrong rule here
+would have shown up.
+
+#### ⛔ WHAT WAS DELIBERATELY LEFT ALONE, AND WHY IT IS NOT AN OVERSIGHT
+
+`Alarms.LifeSupport(CabinReadout)` is **UNCHANGED**. The black box records `sev_ls` through that exact
+signature and `BlackBoxSchema.cs:492` names it as the column's source — so widening it in place would
+**silently change what a recorded column means**, which is the S76 ghost-column family. The screens get
+new functions (`CrewSeverity`, `PowerSeverity`) that take `PageState`; the recorder keeps its
+documented one. **Mutation E** proves the seal.
+⚠ **The residual, stated:** `sev_vehicle` now includes the discrete events and `sev_ls` / `sev_thermal`
+still do not, so a recording can show `sev_vehicle=Alarm` beside two nominal component columns with no
+column explaining it. **Logged as [[S137c]]** rather than fixed by widening a schema'd column here.
+
+#### ⭐ AND THE FIXTURE FOUND A DEFECT THIS LINE WAS NOT LOOKING FOR
+
+Writing a quiet baseline state failed immediately: `VehicleSeverity` read **ALARM** on a fixture with
+nothing wrong. Cause — `Alarms.PropellantSeverity` bands **`DragonProp01`**, not `Propellant01`
+(deliberately: its own comment says the whole-stack fraction is meaningless once the booster is gone),
+and the fixture set only the latter. ⛔ **Which means [[S137]]'s propellant row was printing
+`Propellant01` beside a verdict reached on `DragonProp01`** — the same one-field-per-row defect S137
+had just fixed for the cabin rows, still alive in one row. Fixed, and given a check where the two
+fields genuinely differ: **5 % alarm against a healthy-looking 90 %**.
+
+#### Verified (C1.3) — measured, not asserted
+
+`python plugin/build.py test` → **ALL SUITES PASSED**. `python plugin/build.py preview` → the alert
+render now prints:
+
+```
+CREW/life-support alerts 4: PPO2=2.00 psia, CO2=9.0 mmHg, CABIN FIRE=40%, CABIN PRESSURE=12.00 psia
+   (word: ALARM)
+```
+
+⭐ **`CABIN FIRE` appears in a list that could not name it yesterday, under a word that moved with it.**
+And the 200-combination *"the worst row IS the word"* invariant from [[S137]] now sweeps the discrete
+events too, so the events are inside the property rather than beside it.
+
+**MUTATION-PROVEN — 8 mutations, 8 caught, 0 uncaught:**
+
+| | mutation | first check that failed |
+|---|---|---|
+| **A** | the fire is invisible to `VehicleSeverity` again — **the original defect** | *"it raises the VEHICLE severity… got Nominal"*, and *"Alarms.Mask lights the vehicle bit   mask 0"* |
+| **B** | a cabin leak stops counting | *"…2 disagreed"* + *"a cabin LEAK likewise"* |
+| **C** | a dead POWERED bus is only a caution | *"got Caution"* |
+| **D** | the bus-off check is dropped | ⭐ *"healthy raises no alarms   mask 2"* — two PRE-EXISTING checks, from elsewhere in the suite |
+| **E** | `LifeSupport(CabinReadout)` widened in place | the same two, plus the seal check |
+| **F** | the CREW list stops naming the fire | *"the CREW alert list names the fire   rows 0"* |
+| **G** | the propellant row cites `Propellant01` again | ⚠ **escaped once** — the fixture set both fields to the same value, so swapping them changed nothing. Given a case where they differ: *"row reads 90%"* |
+| **H** | the Crew tab reverts to the bare life-support band | *"the CREW page's ALERTS word reads ALARM on a fire"* |
+
+**Comment-loss check (C1.16 / G12): 0 lost** across five files. `AlertList`'s "no fire here" paragraph
+is **SUPERSEDED IN PLACE**, kept verbatim, because it is the finding that produced this line.
+
+⛔ No `install`, no glass, no `git push`. §14.4(a) untouched.
+
+### S137c [S] `sev_vehicle` now includes events its component columns cannot explain — **TODO** — [logged by [[S137b]] per C1.1, 2026-09-06; TIER 3: a recording that cannot be read back]
+- **The finding.** [[S137b]] folded fire / cabin leak / power-string events into
+  `Alarms.VehicleSeverity`, which the black box records as **`sev_vehicle`**. Its two component columns,
+  **`sev_ls`** and **`sev_thermal`**, are recorded through `Alarms.LifeSupport(CabinReadout)` and
+  `Alarms.Thermal(CabinReadout)` — signatures `BlackBoxSchema.cs:492-493` name explicitly, and which
+  S137b deliberately did NOT widen so a recorded column would not silently change meaning.
+- ⚠ **So a flight can record `sev_vehicle = Alarm` beside `sev_ls = Nominal` and `sev_thermal =
+  Nominal`, with nothing in the file saying why.** A reader has no column for the fire.
+- ⭐ **The shape of the fix is a NEW column, not a widened one** — `sev_events`, sourced from
+  `Alarms.CabinEvents` / `Alarms.PowerEvents` — which keeps every existing column's meaning intact and
+  makes `sev_vehicle` reconstructible from its parts. ⚠ Read BB1's own coverage rules first (S76's
+  ghost-column defect): a column that is declared and never written is worse than one that is absent.
+- **DONE when:** `sev_vehicle` can be reconstructed from the columns beside it, and the coverage
+  detector is happy with the new one.
 
 ### S138 [S] 23 of the 36 subsystem state words are still literals — **TODO — un-held 2026-09-06, the R-01 policy exists** —
 ✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set

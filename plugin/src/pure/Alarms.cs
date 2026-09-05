@@ -141,11 +141,76 @@ namespace DragonScreen
             return Severity.Nominal;
         }
 
+        // ==========================================================================================
+        //  S137b — THE DISCRETE EMERGENCIES THE ALARM CHANNEL COULD NOT SEE
+        // ==========================================================================================
+        // ⛔ THE FINDING. `VehicleSystems` models three emergencies — `SystemsState.Fire`, `.Leaking`,
+        // and six power `StringState`s that can read `Tripped` — and `SystemsPidPage` draws all three.
+        // Nothing in this file read any of them. `VehicleSeverity` below was life support + thermal +
+        // propellant + power, and `Mask` added only FDIR and a closing-rate term.
+        //
+        // So a CABIN FIRE raised no severity ANYWHERE: not the VehicleTabBar's red-nav, not the chrome
+        // bar's STATE, not `SystemSeverity`, not the ALERTS list [[S137]] had just built. A crew on any
+        // page but the P&ID would not have been told. Found by S137 while scoping that list, and NOT
+        // patched there — a fire row under a green summary word is the "one panel, two answers" defect
+        // S137 spent its own build removing. The fix belongs here, where one addition reaches every
+        // surface that already reads a severity.
+        //
+        // ⚠ THE TWO BOOLEAN EVENTS ARE STATED AS ALARMS; THE POWER ONE IS DERIVED, NOT COUNTED.
+        // A fire and a cabin leak are alarms by their own naming and need no threshold. For power the
+        // obvious rule — "count the tripped strings" — would have been an invented threshold (is three
+        // worse than two?), so the model answers it instead: a string tripping is a CAUTION because the
+        // bus behind it is redundant, and a bus the crew has POWERED with ZERO online strings is an
+        // ALARM because that redundancy is gone. Both facts come from `Systems.OnlineCount`; neither is
+        // a number chosen here.
+
+        /// <summary>Cabin emergencies: fire and a hull/cabin leak. Both ALARM — they are named as
+        /// emergencies by the model that produces them and carry no band to argue about.</summary>
+        public static Severity CabinEvents(SystemsState y)
+        {
+            return (y.Fire || y.Leaking) ? Severity.Alarm : Severity.Nominal;
+        }
+
+        /// <summary>Power-string events. CAUTION on any trip; ALARM on a bus the crew has switched ON
+        /// that has no online string left, because that is the redundancy actually being gone rather
+        /// than a count of how many trips feels bad.</summary>
+        public static Severity PowerEvents(SystemsState y)
+        {
+            if ((y.Bus1On && Systems.OnlineCount(y, 1) == 0)
+                || (y.Bus2On && Systems.OnlineCount(y, 2) == 0)) return Severity.Alarm;
+            bool tripped = y.A1 == StringState.Tripped || y.B1 == StringState.Tripped
+                        || y.C1 == StringState.Tripped || y.A2 == StringState.Tripped
+                        || y.B2 == StringState.Tripped || y.C2 == StringState.Tripped;
+            return tripped ? Severity.Caution : Severity.Nominal;
+        }
+
+        /// <summary>The CREW / life-support subsystem's severity, events included. ⛔ Deliberately a
+        /// NEW function rather than a change to `LifeSupport(CabinReadout)`: the black box records
+        /// `sev_ls` through that signature and `BlackBoxSchema` names it as the source, so widening it
+        /// in place would silently change what a recorded column means. See REGISTER.md S137b.</summary>
+        public static Severity CrewSeverity(PageState s)
+        {
+            if (!s.Valid) return Severity.Nominal;
+            return Worst(LifeSupport(s.Cabin), CabinEvents(s.Systems));
+        }
+
+        /// <summary>The POWER subsystem's severity, events included. Same reasoning as CrewSeverity.</summary>
+        public static Severity PowerSeverity(PageState s)
+        {
+            if (!s.Valid) return Severity.Nominal;
+            return Worst(Low(s.Power01), PowerEvents(s.Systems));
+        }
+
         public static Severity VehicleSeverity(PageState s)
         {
             Severity v = Worst(LifeSupport(s.Cabin), Thermal(s.Cabin));
             v = Worst(v, PropellantSeverity(s));
             v = Worst(v, Low(s.Power01));
+            // ⭐ S137b: and the three discrete emergencies, which nothing here could see before. This
+            // one line is what reaches the tab strip, the chrome bar and `Mask` - all of them already
+            // read this function, so none of them needed changing.
+            v = Worst(v, CabinEvents(s.Systems));
+            v = Worst(v, PowerEvents(s.Systems));
             return v;
         }
 

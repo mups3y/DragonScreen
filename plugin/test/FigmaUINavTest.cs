@@ -60,6 +60,7 @@ public static class FigmaUINavTest
         AudioPageChannels();
         CoverTargetReadouts();
         AlertsView();
+        DiscreteEmergencies();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
     }
@@ -2407,6 +2408,20 @@ public static class FigmaUINavTest
               && buf[0].Sev == Severity.Alarm,
               n2 >= 1 ? buf[0].Label + " = " + buf[0].Value : "no rows");
 
+        // ⛔ THE SAME TRAP, ON THE ONE ROW WHERE THE TWO FIELDS ARE GENUINELY DIFFERENT QUANTITIES.
+        // `Alarms.PropellantSeverity` bands `DragonProp01` on purpose - its own comment says the
+        // whole-stack `Propellant01` is meaningless once the booster is gone - so a row printing
+        // `Propellant01` would cite a healthy 90% beside an alarm reached on 5%. ⚠ A fixture that
+        // sets both to the same value cannot see this, which is exactly what let it survive one
+        // mutation run.
+        PageState pp = AlertFixture(0);
+        pp.DragonProp01 = 0.05;   // the field the verdict is reached on: hard alarm
+        pp.Propellant01 = 0.90;   // the whole-stack figure: looks fine
+        int n3 = AlertList.Build(pp, AlertScope.Propellant, buf);
+        Check("the propellant row cites the fraction its own verdict was reached on",
+              n3 == 1 && buf[0].Sev == Severity.Alarm && buf[0].Value == "5%",
+              n3 == 1 ? "row reads " + buf[0].Value : "rows " + n3);
+
         // ---- 4. THE PAGE: THE WORD AND THE WORST ROW ARE ONE COLOUR -----------------------------
         PageState alarmed = AlertFixture(0);
         alarmed.Cabin.Ppo2Psia = 1.8; alarmed.Cabin.Co2MmHg = 9.0;
@@ -2477,10 +2492,104 @@ public static class FigmaUINavTest
         s.Cabin.LoopAC      = 30.0 + 1.0 * (k % 30);
         s.Cabin.LoopBC      = 28.0 + 1.1 * ((k * 7) % 30);
         s.Power01           = 1.0 - 0.03 * (k % 33);
+        // ⚠ BOTH propellant fields, and the severity reads DragonProp01 - `Alarms.PropellantSeverity`
+        // bands the Dragon-only fraction on purpose. A fixture that set only `Propellant01` left every
+        // sweep state in propellant ALARM at 0.0, which is how the row's own two-field mismatch was
+        // found: it printed Propellant01 beside a verdict reached on DragonProp01.
         s.Propellant01      = 1.0 - 0.03 * ((k * 5) % 33);
+        s.DragonProp01      = 1.0 - 0.03 * ((k * 5) % 33);
         s.GForce01          = 0.02 * (k % 40);
         s.Fault = FaultKind.None; s.FaultText = "NOMINAL";
+        // ⭐ S137b: the discrete emergencies are IN the sweep, so the "worst row IS the word"
+        // invariant is exercised over them and not only over the bands. Deterministic in k.
+        s.Systems = SystemsState.Fresh();
+        s.Systems.Bus1On = (k % 3) != 1;
+        s.Systems.Bus2On = (k % 5) != 2;
+        if (k % 7 == 3) s.Systems.FireIntensity = 0.35;
+        if (k % 11 == 5) s.Systems.LeakRate = 0.02;
+        if (k % 4 == 1) s.Systems.A1 = StringState.Tripped;
+        if (k % 6 == 2) { s.Systems.A1 = s.Systems.B1 = s.Systems.C1 = StringState.Tripped; }
         return s;
+    }
+
+    // ================= S137b: A CABIN FIRE NOW RAISES A SEVERITY =================
+    // VehicleSystems modelled fire, cabin leak and six power strings, and SystemsPidPage drew them -
+    // but `Alarms` read none of them, so a fire raised no severity anywhere: not the tab strip's
+    // red-nav, not the chrome bar, not Alarms.Mask, not S137's own alert list. Found while scoping
+    // that list and deliberately NOT patched there.
+    static void DiscreteEmergencies()
+    {
+        const int VW = 2560, VH = 1406;
+        PageState clean = AlertFixture(0);
+        clean.Systems = SystemsState.Fresh();
+        Check("the baseline fixture really is quiet",
+              Alarms.VehicleSeverity(clean) == Severity.Nominal
+              && Alarms.CabinEvents(clean.Systems) == Severity.Nominal,
+              "vehicle " + Alarms.VehicleSeverity(clean));
+
+        // ---- 1. THE HEADLINE, AS A BEFORE/AFTER ON ONE FIELD ------------------------------------
+        PageState fire = clean; fire.Systems.FireIntensity = 0.4;
+        Check("a cabin FIRE is an alarm", Alarms.CabinEvents(fire.Systems) == Severity.Alarm, "");
+        Check("...and it raises the VEHICLE severity, which is what every surface reads",
+              Alarms.VehicleSeverity(fire) == Severity.Alarm,
+              "got " + Alarms.VehicleSeverity(fire));
+        Check("...so Alarms.Mask lights the vehicle bit", (Alarms.Mask(fire) & (1 << 1)) != 0,
+              "mask " + Alarms.Mask(fire));
+        Check("...and the CREW subsystem carries it", Alarms.CrewSeverity(fire) == Severity.Alarm, "");
+
+        PageState leak = clean; leak.Systems.LeakRate = 0.05;
+        Check("a cabin LEAK likewise", Alarms.VehicleSeverity(leak) == Severity.Alarm
+              && Alarms.CrewSeverity(leak) == Severity.Alarm, "");
+
+        // ---- 2. THE POWER RULE IS DERIVED, NOT COUNTED -------------------------------------------
+        PageState one = clean; one.Systems.A1 = StringState.Tripped;
+        Check("one tripped string is a CAUTION - the bus behind it is redundant",
+              Alarms.PowerEvents(one.Systems) == Severity.Caution,
+              "got " + Alarms.PowerEvents(one.Systems));
+        PageState busDead = clean;
+        busDead.Systems.Bus1On = true;
+        busDead.Systems.A1 = busDead.Systems.B1 = busDead.Systems.C1 = StringState.Tripped;
+        Check("...but a POWERED bus with nothing online is an ALARM - the redundancy is gone",
+              Alarms.PowerEvents(busDead.Systems) == Severity.Alarm,
+              "got " + Alarms.PowerEvents(busDead.Systems));
+        // ⛔ AND THE CREW SWITCHING A BUS OFF IS NOT A FAULT. That is the difference between "no
+        // strings online" and "no strings online BECAUSE THE CREW SAID SO", and a rule that counted
+        // online strings without asking would have alarmed on a deliberate act.
+        PageState busOff = clean;
+        busOff.Systems.Bus1On = false;
+        busOff.Systems.A1 = busOff.Systems.B1 = busOff.Systems.C1 = StringState.Online;
+        Check("a bus the crew switched OFF is not an alarm",
+              Alarms.PowerEvents(busOff.Systems) == Severity.Nominal,
+              "got " + Alarms.PowerEvents(busOff.Systems));
+
+        // ---- 3. THE LIST GAINS ITS ROWS, UNDER A WORD THAT MOVED WITH THEM -----------------------
+        AlertItem[] buf = new AlertItem[AlertList.Max];
+        int n = AlertList.Build(fire, AlertScope.LifeSupport, buf);
+        bool named = false;
+        for (int i = 0; i < n; i++) if (buf[i].Label == "CABIN FIRE") named = true;
+        Check("the CREW alert list names the fire", named && n >= 1, "rows " + n);
+        Check("...and the word above it is the same alarm",
+              AlertList.SeverityOf(fire, AlertScope.LifeSupport) == Severity.Alarm, "");
+
+        int pn = AlertList.Build(busDead, AlertScope.Power, buf);
+        bool strung = false;
+        for (int i = 0; i < pn; i++)
+            if (buf[i].Label == "POWER STRINGS" && buf[i].Value.Contains("BUS DEAD")) strung = true;
+        Check("the POWER list names the dead bus, and its row proves its own severity", strung,
+              "rows " + pn);
+
+        // ---- 4. THE PAGE: THE CREW TAB READS ALARM ON A FIRE -------------------------------------
+        DisplayList dl = Subsys(VehicleSubsystemPage.Sub.Crew, fire, VW, VH);
+        Check("the CREW page's ALERTS word reads ALARM on a fire", Drew(dl, "ALARM"), "");
+        Check("...and the page names the fire", Drew(dl, "CABIN FIRE"), "");
+
+        // ---- 5. WHAT WAS DELIBERATELY LEFT ALONE ------------------------------------------------
+        // ⛔ `Alarms.LifeSupport(CabinReadout)` is UNCHANGED, and that is not an oversight: the black
+        // box records `sev_ls` through that exact signature and `BlackBoxSchema` names it as the
+        // source, so widening it in place would silently change what a recorded column means.
+        Check("LifeSupport(CabinReadout) still means the three cabin bands ONLY",
+              Alarms.LifeSupport(fire.Cabin) == Severity.Nominal,
+              "a fire has leaked into the recorded sev_ls column");
     }
 
     /// <summary>The x a string was drawn at, first match. -1 if it was not drawn.</summary>

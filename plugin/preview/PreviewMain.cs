@@ -1144,6 +1144,7 @@ public static class PreviewMain
                 al.Cabin.Ppo2Psia = 2.0;        // below the PPO2 caution band
                 al.Cabin.Co2MmHg = 9.0;         // above the CO2 caution band
                 al.Cabin.PressPsia = 12.0;      // cabin pressure into caution
+                al.Systems.FireIntensity = 0.4; // S137b: a discrete emergency Alarms can now see
                 // ⚠ Scoped: the CREW tab's word is Alarms.LifeSupport, so the list is its three bands
                 // and nothing else. Cabin temp / power / fire belong to other scopes (or, for fire, to
                 // no scope at all - see AlertList's header) and must NOT appear under this word.

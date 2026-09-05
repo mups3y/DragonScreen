@@ -116,9 +116,12 @@ namespace DragonScreen
             if (!s.Valid) return Severity.Nominal;
             switch (sub)
             {
-                case Sub.Crew:       return Alarms.LifeSupport(s.Cabin);
+                // ⭐ S137b: CrewSeverity / PowerSeverity, not the bare bands - they fold in the
+                // discrete emergencies (fire, cabin leak, tripped strings) that `Alarms` could not see
+                // until then. This is what makes the tab strip go red on a fire.
+                case Sub.Crew:       return Alarms.CrewSeverity(s);
                 case Sub.Propulsion: return Alarms.PropellantSeverity(s);
-                case Sub.Power:      return Alarms.Low(s.Power01);
+                case Sub.Power:      return Alarms.PowerSeverity(s);
                 case Sub.Avionics:
                 case Sub.Gnc:        return Alarms.FdirSeverity(s);
                 default:             return Alarms.Thermal(s.Cabin); // Thermal
