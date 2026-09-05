@@ -36,6 +36,7 @@ public static class FigmaUINavTest
         CoverPhases();
         CoverPhaseStepping();
         MarginAffordances();
+        RangeRingsOnTop();
         MenuGridFits();
         PlaceholderUnreachable();
         CoverCamera();
@@ -1257,6 +1258,55 @@ public static class FigmaUINavTest
                 if (next == 6 && FigmaUI.PhaseNav(6) < 0) reachable = true;
             }
         Check("no arrow step can display rail slot 6", !reachable, "");
+    }
+
+    // ---- S109 / QC NO-01: a range ring is an OVERLAY, so it goes ON TOP ----
+    // The four rings used to be emitted BEFORE NavPage.Orbit, which draws the body disc over them, so
+    // the page drew four rings and rendered one. Draw ORDER is not visible in any single command, only
+    // in the sequence - which is exactly what a display-list test can see and a PNG diff cannot explain.
+    static void RangeRingsOnTop()
+    {
+        var dl = new DisplayList(FigmaUI.Commands);
+        var s = new PageState();
+        s.Valid = true;
+        s.BodyRadiusM = 600000.0; s.ApogeeM = 124000.0; s.PerigeeM = 121900.0;
+        s.AltitudeM = 123600.0;
+        FigmaUI.Build(dl, UiPage.NavOrbitPlot, W, H, s, MapProjection.Default());
+
+        // The plot well, in panel space - the globe is drawn inside it. ⚠ The obvious probe ("the last
+        // Image command") is WRONG and this test caught it: BottomBar.Draw emits an Asset after
+        // everything else, so "last Image" is the nav bar, 600 px below the plot. Only Images INSIDE
+        // the well can be the body.
+        float psc = (float)H / RefH, pox = (W - RefW * psc) * 0.5f;
+        float wx = 380f * psc + pox, wy = 180f * psc, ww = 2667f * psc, wh = 1670f * psc;
+
+        int lastBody = -1, rings = 0, firstRing = int.MaxValue;
+        for (int c = 0; c < dl.Count; c++)
+        {
+            var cmd = dl.At(c);
+            if (cmd.Kind == DrawKind.Image
+                && cmd.A >= wx - 1f && cmd.B >= wy - 1f
+                && cmd.A + cmd.C <= wx + ww + 1f && cmd.B + cmd.D <= wy + wh + 1f) lastBody = c;
+            // a ring: a full-circle ArcBand in the ring tint
+            if (cmd.Kind == DrawKind.ArcBand && cmd.StartDeg == 0.0 && cmd.EndDeg == 360.0
+                && Same(cmd.Colour, DragonPalette.Text7))
+            {
+                rings++;
+                if (c < firstRing) firstRing = c;
+            }
+        }
+
+        Check("nav plot draws all four range rings", rings == 4, "got " + rings);
+        // The guard against a vacuous pass: if the fixture drew no body there is nothing to be on top of.
+        Check("nav plot drew a body to be on top of", lastBody >= 0, "no Image command");
+        if (lastBody >= 0)
+            Check("the range rings are drawn AFTER the body disc", firstRing > lastBody,
+                  "first ring at " + firstRing + ", last body draw at " + lastBody);
+    }
+
+    static bool Same(Rgba a, Rgba b)
+    {
+        return a.R == b.R && a.G == b.G && a.B == b.B && a.A == b.A;
     }
 
     // ---- S108 / QC H-04 + DK-04 + H-06: the drawn rect and the hit rect are ONE rect ----

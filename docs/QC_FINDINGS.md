@@ -3045,6 +3045,86 @@ recorder and not to the screen.
 - **Verify:** re-render; four rows with margins, four with dashes, and the same numbers as a BlackBox
   recording of the same frame.
 
+
+### ⚠ CORRECTED 2026-09-05 — S109 (the fix plan was wrong; the column is right to dash)
+
+**This finding's premise is true and its conclusion does not follow. Nothing was changed in the page, and
+that is the correct outcome.**
+
+**What stands:** `LifeSupport.Margins` *is* wired now — `LifeSupportBridge.cs:52-60` off real TAC-LS,
+`BlackBoxRecorder.cs:1149-1150`, `BlackBoxSchema.cs:458-459` — so S49 H18's *"has no caller anywhere"* is
+genuinely out of date, and the margins genuinely are computed every frame and written to disk. That
+correction to H18 holds.
+
+**What is wrong: the margins that are computed are for consumables that are not in this column.**
+
+| `LsMargins` supplies | the MARGIN column's rows are |
+|---|---|
+| `FoodDays`, `WaterDays`, `OxygenDays`, `OxygenHoursToLoss`, `LimitingDays` | Power Unit 1/2 **Energy**, Usable Deorbit **Fuel**/**Oxidizer**, four Orbit Subtank rows |
+
+**There is no overlap at all.** Food, water and oxygen are not in the table; power and propellant are not in
+`LsMargins`. My fix plan said *"the bridge already returns days-remaining per consumable, which is the shape
+the column wants"* — it returns days-remaining per **life-support** consumable, and I never checked the two
+lists against each other before writing that.
+
+**And no other source can fill the column either, which is why the dash is correct:**
+- Rows 0–1 (`Power Unit n Energy`) print a **percent state of charge** (`Pages.cs:180-186`). A margin needs
+  a *rate* and a *capacity in energy units*; `Power01` is a fraction and `NetPwr1W` is watts, and no
+  capacity in Wh exists anywhere in the model. A time-margin is not computable from what is there.
+- Rows 2–3 (`Usable Deorbit Fuel / Oxidizer`) print **kg**. A margin would be burn time or Δv, neither of
+  which is in `PageState`.
+- Rows 4–7 are dashed by a settled §1.4 decision (the subtank split has no KSP counterpart).
+
+So all eight dashes are §14.4(e)/(f)-correct: a dash for a quantity that genuinely has no source. Filling
+them would have meant **inventing a margin**, which is the defect this whole sweep exists to remove.
+
+⛔ **`SHOW MARGINS TO` therefore stays inert, and for a firmer reason than the one filed.** S75's condition
+was *"when the MARGIN column reads modelled margins and a target set is settled"*. The column cannot read
+modelled margins at all today, so the first half is not merely pending — it needs a model that does not
+exist. Unchanged, correctly.
+
+⚠ **The real observation inside this finding survives and has moved to its own number.** Life-support
+margins *are* computed, recorded, and shown on **no screen anywhere** — the pattern H-05 also found for the
+alarm mask. That is real and it is filed as **V-04**. It was never about this column.
+---
+
+## V-04 — The life-support margins are computed every frame, recorded to the black box, and shown on no screen
+
+**TIER 2** · **NEW (S109)** · what V-03 was actually looking at · the same pattern as **H-05**
+
+**Evidence.** `LifeSupport.Margins` returns `FoodDays`, `WaterDays`, `OxygenDays`, `OxygenHoursToLoss` and
+`LimitingDays`, from **real TAC-LS resources** — `LifeSupportBridge.cs:52-60`. Those values are computed
+per frame and written to the flight recording (`BlackBoxRecorder.cs:1149-1150`,
+`BlackBoxSchema.cs:458-459` — `ls_present`, `ls_o2_days`, …).
+
+Grepped across every page: **no screen draws any of them.** The Vehicle Overview's CONSUMABLES table is
+power and propellant (see V-03's correction); the Crew sub-tab shows PPO2, CO2, cabin pressure and cabin
+temperature — the *atmosphere*, not the *stores*. `PageState` carries no field for them.
+
+**What is wrong.** The crew's own screens cannot answer "how many days of oxygen are left" for a vehicle
+that models the answer continuously and files it to disk. Under **§14.4(f)** this is a readout with a live
+source, which is the strongest case for inclusion the plan defines — no simulation to mark, no threshold to
+invent, and `LimitingDays` is already the single number a crew would want.
+
+⚠ **This is the second channel to go to the recorder and not to the glass** — **H-05** found the alarm mask
+computed and recorded at `ScreenPainter.cs:652` and discarded from the screen. Two now. Worth treating as
+one habit rather than two incidents.
+
+**Fix plan.**
+- Add the margins to `PageState` and thread them **through `LifeSupportBridge`, not a second computation**,
+  so the glass and the black box can never disagree about one flight.
+- ⚠ **Where they go is a layout decision and is NOT settled by this finding.** The Crew sub-tab is the
+  natural home (it is the life-support page and it has room), but the Vehicle Overview's left column and a
+  dedicated consumables block are both defensible. **This should not be built until the page is chosen** —
+  putting a real number in the wrong place is how the MARGIN column got its wrong fix plan.
+- **Dash rules, and they matter here:** `Present == false` (no TAC-LS on the vessel) must dash, not print
+  zero — "0 days of oxygen" is the worst possible false reading. `LifeSupport.Margins(false, 0, 0, 0, 0)`
+  is the no-vessel case the bridge already returns.
+- ⚠ **Bands are a separate question.** Days-remaining wants a caution/alarm threshold to be a verdict, and
+  no `CabinLimits` entry exists for it. Until one does, it is a **reading** and takes `Accent` — S104's rule.
+- **Verify:** a render with TAC-LS present showing the same numbers a BlackBox recording of that frame
+  carries, and a render without it showing dashes.
+
 ---
 
 ---
@@ -4634,6 +4714,51 @@ which is the whole reason the finding survives. Draw order is the cause and draw
 visible is drawn at `St(2)` = 1 px and now renders as a faint grey hairline rather than a clear circle. Fixing
 NO-01 (moving the rings above the globe) will put four such hairlines over a photographic disc — **the fix
 plan's existing caution about the tint is now the load-bearing part of it**, not an afterthought.
+
+### ✅ FIXED 2026-09-05 — S109 (QC batch 7)
+
+**Fixed by the recommended route — the draw order — and the tint warning turned out to be necessary, not
+hypothetical.**
+
+**Step 1, the one statement moved.** The ring loop now runs *after* `NavPage.Orbit` instead of before it.
+Measured on `ui_navorbitplot.png`, sampling 8 rays per ring: **all four rings are on the glass**, at radii
+63 / 127 / 191–193 / 255 — matching the computed 63.9 / 127.9 / 191.8 / 255.7 exactly. Before, one.
+
+**Step 2, and this finding predicted it.** The fix plan said: *"Then they will cross the globe … but check
+the tint: at `DragonPalette.Hairline` over a photographic disc they may vanish into the texture. If so, the
+honest fix is a slightly brighter or dashed ring over the disc, **not** moving them back under it."*
+Measured with the order fixed and the tint still `Hairline`:
+
+| ring | ground | contrast (luminance vs its own surroundings) |
+|---|---|---|
+| 4 (255.7) | the plot well | +20.5 |
+| 3 (191.8) | at the limb | +19.6 |
+| 1 (63.9) | over the globe | +7.0 |
+| **2 (127.9)** | **over the globe** | **+0.2 — on the screen and still invisible** |
+
+Ring 2 landed on a patch of body whose luminance is `Hairline`'s. So the tint went up one step, to
+**`Text7`** — still a background scale element, not an instrument line. After:
+
+| ring | before | **after** |
+|---|---|---|
+| 1 | +7.0 | **+19.9** |
+| 2 | **+0.2** | **+13.6** |
+| 3 | +19.6 | **+31.9** |
+| 4 | +20.5 | **+34.1** |
+
+⛔ **The §1.4 marking is untouched**, as the finding required: the rings are still unscaled and still ours.
+The alternative the finding offered — sizing `rmax` so all four sit outside the limb — was **not** taken,
+because it changes what the rings measure and that is a design decision, not a fix.
+
+**Verified headlessly too**, because draw ORDER lives in the sequence and no PNG can explain it:
+`FigmaUINavTest.RangeRingsOnTop()` asserts four full-circle `Text7` arcs exist and that the first of them
+comes **after** the body disc in the display list.
+
+⚠ **And that test caught a bug in its own first draft, which is worth recording.** The obvious probe — *the
+last `Image` command is the body* — is wrong: `BottomBar.Draw` emits an asset after everything else, so
+"last Image" was the nav bar 600 px below the plot, and the check failed against a correct page. The probe
+is scoped to Images **inside the plot well** now. A test that can be fooled by the bottom bar would have
+been worse than no test.
 ---
 
 ## NO-02 — S43 built zoom and pan for the orbit plot, and the standalone orbit plot cannot use them

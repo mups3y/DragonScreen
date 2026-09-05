@@ -55,18 +55,33 @@ namespace DragonScreen
             // ---- the plot well ----
             dl.Rect(X(PlotX), Y(PlotY), Z(PlotW), Z(PlotH), DragonPalette.Inset2);
 
+            // ---- the real orbit conic (T6's calculation): body, dotted ellipse, AP/PE, our
+            // vehicle marker, and — with a target set — the approach-chord diamond ----
+            NavPage.Orbit(dl, s, X(PlotX), Y(PlotY), Z(PlotW), Z(PlotH), true);
+
             // ---- concentric range rings (ours — no scale is legible in either source, §1.4) ----
+            // S109 / QC NO-01: these used to be drawn BEFORE NavPage.Orbit, and the body disc painted
+            // three of the four out. Measured at 1280x703: rmax 255.7, rings at 63.9 / 127.9 / 191.8 /
+            // 255.7, globe limb at radius 194.0 - so rings 1 and 2 were entirely inside the disc and
+            // ring 3 missed clearing it by 2.2 px. The page drew four rings and rendered one, and that
+            // one read as a lone decorative circle rather than the outermost of a scale.
+            // A range ring is an OVERLAY, and an overlay belongs on top. One statement moved.
+            // ⚠ AND THE TINT HAD TO CHANGE WITH THE ORDER, WHICH QC PREDICTED. Over the plot well
+            // Hairline reads at +20 luminance; over the lit body it does not. Measured on the render
+            // with the rings moved but still Hairline: ring 4 +20.5, ring 3 +19.6, ring 1 +7.0, and
+            // ring 2 **+0.2** - a ring landing on a patch of globe whose luminance is Hairline's, so
+            // it was on the screen and still invisible. QC named the remedy in advance: "the honest fix
+            // is a slightly brighter or dashed ring over the disc, NOT moving them back under it."
+            // Text7 is one step up from Hairline and clears both grounds - it is still a background
+            // scale element, not an instrument line.
+            // ⛔ The §1.4 marking is unchanged: they are still unscaled and still ours.
             float rcx = X(PlotX + PlotW * 0.5f), rcy = Y(PlotY + PlotH * 0.5f);
             float rmax = Z(Math.Min(PlotW, PlotH)) * 0.46f;
             for (int i = 1; i <= 4; i++)
             {
                 float r = rmax * i / 4f;
-                dl.ArcBand(rcx, rcy, r - St(2), r, 0.0, 360.0, DragonPalette.Hairline);
+                dl.ArcBand(rcx, rcy, r - St(2), r, 0.0, 360.0, DragonPalette.Text7);
             }
-
-            // ---- the real orbit conic (T6's calculation): body, dotted ellipse, AP/PE, our
-            // vehicle marker, and — with a target set — the approach-chord diamond ----
-            NavPage.Orbit(dl, s, X(PlotX), Y(PlotY), Z(PlotW), Z(PlotH), true);
 
             dl.Box(X(PlotX), Y(PlotY), Z(PlotW), Z(PlotH), St(2), DragonPalette.Hairline);
 

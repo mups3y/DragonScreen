@@ -12240,6 +12240,62 @@ every run** rather than asserted, for the reason above.
 **Verified on the glass:** `frame58_hud.png`, `frame58_hud_noseopen.png` and `ui_docking.png` — every label
 strictly inside its box, measured. `build.py test` green, 104 PNGs re-rendered.
 
+### S109 [O] QC batch 7 — three of four range rings were behind the planet; and the MARGIN column is right to dash — **DONE 2026-09-05** — [NO-01 fixed; V-03 CORRECTED, not fixed; V-04 filed new]
+
+**🟢 OWNER-DIRECTED** — *"…You must confirm your findings before fixing."* One of the two was fixed; the
+other was **disproved by confirming it**, and the real observation inside it moved to its own number.
+
+**NO-01 — THE PAGE DREW FOUR RANGE RINGS AND RENDERED ONE. FIXED, IN TWO STEPS.**
+The ring loop ran **before** `NavPage.Orbit`, which paints the body disc over them. Measured at 1280×703:
+rings at 63.9 / 127.9 / 191.8 / 255.7 against a globe limb at 194 — rings 1 and 2 entirely inside the disc,
+ring 3 missing it by 2.2 px. A range ring is an **overlay**; one statement moved.
+
+⭐ **And QC's tint warning was necessary, not hypothetical** — it said *"check the tint: at `Hairline` over a
+photographic disc they may vanish… the honest fix is a slightly brighter ring, NOT moving them back under
+it."* Measured with the order fixed and the tint unchanged: ring 4 **+20.5** luminance contrast, ring 3
+**+19.6**, ring 1 **+7.0**, and ring 2 **+0.2** — a ring that was now on the screen and still invisible,
+having landed on a patch of body whose luminance is `Hairline`'s. Tint raised one step to `Text7`; after:
+**+19.9 / +13.6 / +31.9 / +34.1**. All four read, and they are still a background scale rather than an
+instrument line. ⛔ The §1.4 marking is untouched — unscaled, and still ours. The alternative (size `rmax`
+so all four clear the limb) was **not** taken: it changes what the rings measure, which is a design call.
+
+⚠ **The test for this caught a bug in its own first draft.** Draw ORDER lives in the sequence, so
+`RangeRingsOnTop()` asserts the rings come after the body in the display list. The obvious probe — *the last
+`Image` command is the body* — is **wrong**, because `BottomBar.Draw` emits an asset after everything else:
+"last Image" was the nav bar 600 px below the plot, and the check failed against a correct page. Scoped to
+Images **inside the plot well** now. A test that can be fooled by the bottom bar is worse than no test.
+
+**⚠ V-03 — CORRECTED, NOT FIXED. THE MARGIN COLUMN IS RIGHT TO DASH, ALL EIGHT ROWS.**
+QC filed that the MARGIN column shows dashes while `LifeSupport.Margins` is computed every frame and written
+to the black box, and prescribed *"draw the MARGIN column from `LsMargins`… the bridge already returns
+days-remaining per consumable, which is the shape the column wants."*
+
+**The premise is true and the conclusion does not follow.** `LsMargins` supplies `FoodDays`, `WaterDays`,
+`OxygenDays`, `OxygenHoursToLoss`, `LimitingDays`. The column's rows are **Power Unit 1/2 Energy, Usable
+Deorbit Fuel/Oxidizer and four Orbit Subtank rows.** **There is no overlap whatsoever** — I compared the two
+lists for the first time while confirming, having asserted their shapes matched without ever doing so.
+
+And nothing else can fill it either: rows 0–1 print a **percent state of charge**, and a time-margin needs a
+capacity in energy units that exists nowhere in the model (`Power01` is a fraction, `NetPwr1W` is watts);
+rows 2–3 print **kg**, and a margin would be burn time or Δv, neither in `PageState`; rows 4–7 are dashed by
+a settled §1.4 decision. **All eight dashes are §14.4(e)/(f)-correct**, and filling them would have meant
+inventing a margin — the exact defect this sweep exists to remove. ⛔ `SHOW MARGINS TO` stays inert, and for
+a firmer reason than the one filed: S75's condition was *"when the MARGIN column reads modelled margins"*,
+and the column cannot, because the model does not compute them.
+
+**⚠ V-04 (NEW) — WHAT V-03 WAS ACTUALLY LOOKING AT.** The life-support margins really are computed from
+real TAC-LS every frame and written to the flight recording — and **no screen draws any of them.**
+`PageState` has no field for them; the Crew sub-tab shows the *atmosphere* (PPO2, CO2, pressure,
+temperature), not the *stores*. A crew cannot ask their own screens how many days of oxygen are left for a
+vehicle that files the answer to disk continuously. §14.4(f)'s strongest case — live source, no simulation
+to mark, no threshold to invent. ⚠ **Second channel to reach the recorder and not the glass**, after
+**H-05**'s alarm mask; worth treating as one habit rather than two incidents. **Filed, not built:** where
+they go is a layout decision, and putting a real number in the wrong place is precisely how V-03 got its
+wrong fix plan.
+
+**Verified:** `build.py test` green (953 in the nav suite), 104 PNGs re-rendered; the four rings measured on
+`ui_navorbitplot.png` by 8-ray sampling at each radius.
+
 
 ---
 
