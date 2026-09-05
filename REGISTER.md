@@ -15521,7 +15521,7 @@ right of `Split` (1500), so the fill-to-fit reflow adds `extra = 2560 − 3427 �
   `F-04` first, then the stranded writer, then layout.
 - **DONE when:** each split line lands with a preview at 2560 and a hit-test/draw round-trip test.
 
-### S135 [S] The audio page paints ten controls a dated owner decision says should not exist — **HELD** — [QC `A-02` `A-05` `A-06`; owner answered Q6 but NOT YET ACTIONABLE, and two of the three additionally need an asset that is outside the repo]
+### S135 [S] The audio page paints ten controls a dated owner decision says should not exist — **DOING** — [QC `A-02` `A-05` `A-06`; the HELD is LIFTED — assessed 2026-09-06, and the C7 flag was a misreading]
 - 🟢 **Owner answered Q6, verbatim:** *"make the volume controls control the game sound levels. Music,
   vehicle sound, ambient sound etc etc. What ever logical sound layer options the game has, tie to those
   sliders etc"* — which **reverses** the 2026-08-06 no-cabin-audio decision that made these (C).
