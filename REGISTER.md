@@ -15888,7 +15888,7 @@ line does not pretend to have reproduced it.
 `python plugin/build.py test` green (unchanged tree). ⛔ `docs/QC_FINDINGS.md` **not edited** (QC's file);
 the verdict lives here, where the register can act on it. No `install`, no glass, no `git push`.
 
-### S153 [O] `R-01` — every sampled text element on every Figma-era page is below the measured legibility floor — **HELD — OWNER DECISION** — [QC `R-01`, verified STILL OPEN 2026-09-06; **the largest unowned item in the project**, 18 register mentions and no line until now]
+### S153 [O] `R-01` — every sampled text element on every Figma-era page is below the measured legibility floor — **DOING** — [QC `R-01`; the HELD is LIFTED — the owner set the policy 2026-09-06]
 - **The finding.** At the shipped width, **every** sampled text element across nine Figma-era pages measures
   below `Typography.MinFor(panelW)` — the floor the owner measured himself on glass 2026-08-05.
 - ⭐ **AND RAISING THE RESOLUTION DID NOT HELP, WHICH IS THE WHOLE POINT.** R-02 (landed 2026-09-06) proved
@@ -15904,6 +15904,41 @@ the verdict lives here, where the register can act on it. No `install`, no glass
   ADD text to pages R-01 already fails — so each either inherits the defect or waits. QC's own note: *"R-01
   is still the batch that unblocks the rest."*
 - **DONE when:** the owner has set the type-scale policy, and the resulting per-page work is split out.
+
+#### 🟢 THE HELD IS LIFTED — the owner set the policy, 2026-09-06
+
+**RULING — option selected, 2026-09-06, via the overseer: "SPLIT BY CONTENT TYPE".** The option text, as
+presented to him:
+
+> Raise anything LIVE to the floor — checklist state words, CONSUMABLES rows, SEAT TACH rows, Frame58's
+> MANUAL/DOCKING. Permit STATIC reference tables (the Cover's timeline/contingency cards, pad captions) to
+> sit at `Typography.Dense`, which already exists for exactly this: "a table someone leans in to read… NOT
+> for any live value, any alert."
+
+⛔ **THIS IS RECORDED AS A SELECTION, NOT AS WORDS THE OWNER TYPED, and that distinction is C1.12's
+evidentiary standard doing its job.** He chose from presented options rather than writing free text, so
+there is no verbatim quote to give and **none is manufactured here**. Inventing one is exactly the `LZ1`
+failure this rule was added after. The convention is QC's own, in `docs/QC_FINDINGS.md`: *"free-text
+answers are quoted verbatim; where he chose from presented options the option is named as a selection,
+not as words he wrote."*
+
+⛔ **R-01's OWN OPTION 2 IS DEAD AND MUST NOT BE RE-PROPOSED.** *"Raise `screenWidth`"* already happened
+([[S115]]), and [[R-02]] then proved the floor is a **RATIO**: the panel pixels and the floor doubled
+together, so **not one of the 17 samples moved**. R-01's note that *"even at 2560 five are still under
+16"* was the R-02 error sitting inside R-01's own fix plan. Re-measuring the floor itself needs glass and
+is deferred by the owner's sequence ruling.
+
+#### ⛔ SESSION DEVIATION FROM C1.1 AND C1.7 — recorded here, on the first register line this run writes
+
+**OWNER DIRECTIVE, 2026-09-06, verbatim:** *"write the build prompt, make sure it loops until all tasks
+are complete committing and reading the rules etc in between jobs"*
+
+That directive suspends **C1.1** (*"ONE task at a time"*) and **C1.7**'s *"never run a session to
+compaction mid-task"* **FOR THIS SESSION ONLY**. This chat runs many tasks in one context and re-reads
+`CLAUDE.md` end-to-end between them in place of the fresh chat C1.7 would give each one. **Every other
+rule stands unchanged — especially C1.12**: no gate is opened, no `install`, no glass, no `git push`, and
+no owner ruling is recorded without saying exactly how it was given. ⚠ This is the SECOND such run; the
+first (2026-09-06, 63 commits) recorded the same deviation on its own first line.
 
 ### S154 [O] Frame 58's HUD is one raster and every readout in it is baked — **TODO — SPLIT IT AGAIN BEFORE STARTING** — [H10 + QC `H-02`; split out of [[S50]] 2026-09-06; TIER 2: *"the largest liveness gap in the build"* — the audit's own words]
 
