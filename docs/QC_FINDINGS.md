@@ -44,7 +44,11 @@ therefore optimistic by a factor of two in each axis. H-01 has the measurements 
 **Open questions raised so far** (full text at the end of each page's section):
 **Q1** stray arrow placement (C-02) · **Q2** globe/map handedness, glass-gated (C-09) · **Q3** ENTRY ENABLED
 class (C-08) · **Q4** where the CAMERA caption goes (C-13) · **Q5** which screen resolution is authoritative
-(H-01) — *Q5 is the one that changes other findings' severity; answer it first.*
+(H-01) · **Q6** do the Figma audio faders survive the 2026-08-06 no-volume-sliders decision (A-02)
+— *Q5 is the one that changes other findings' severity; answer it first.*
+
+⚠ **Q1, A-05 and A-06 all wait on the same thing: the community Figma export** (`assets/figma/` is
+gitignored, so it is not in the repo, C7). One retrieval unblocks three findings across two pages.
 
 ---
 
@@ -58,7 +62,7 @@ Cover's seven phase views, plus the lower analog console panel. **The six Vehicl
 |---|---|---|---|---|
 | **0** | **Cover** | COVER | ✅ **DONE — 13 findings** *(C-12, C-13 added on owner review)* | 2026-09-05 |
 | **1** | **Hud** | ATTITUDE HUD (Frame 58) | ✅ **DONE — 9 findings** | 2026-09-05 |
-| 2 | Audio | AUDIO SETTINGS | NOT STARTED | — |
+| **2** | **Audio** | AUDIO SETTINGS | ✅ **DONE — 6 findings** | 2026-09-05 |
 | 3 | Procedure | PROCEDURE (Frame 59) | NOT STARTED | — |
 | 4 | Cabin | CABIN (Frame 66) | NOT STARTED | — |
 | 5 | Menu | MENU | NOT STARTED | — |
@@ -1483,8 +1487,312 @@ font already has this rule written down; resolution never did.
 
 ---
 
+---
+
+# PAGE 2 — AUDIO SETTINGS
+
+**Render inspected:** `settings_audio.png` (2560×1406 — again not the shipped size, H-01), 2026-09-05.
+
+**Source under inspection:** `plugin/src/pure/SettingsAudioPage.cs` (127 lines) · `FigmaUI.cs:197` (the
+build call) · `FigmaUI.cs:310-320` (the tab hit bands) · `plugin/src/pure/SettingsPage.cs:27-29` (the
+owner decision that governs this page).
+
+**S49's entry, and what the glass says about it.** S49 §2 rates this page *"Display-only. `sel` is the
+literal `2`; channel values … are a literal array; the eight ± buttons and two fan buttons are drawn art
+with no HitTest in the file at all"* (H12). **Every clause of that is confirmed at HEAD.** The glass adds
+four defects and turns one of S49's classifications into an owner question — because a **dated owner
+decision on record says these controls should not be drawn at all**, and S49 read that decision as covering
+only the values.
+
+## What was checked and found CLEAN
+
+1. **The three tab hit bands sit on the three drawn tabs.** Drawn at design x 1584 / 1714 / 1843
+   (`SettingsAudioPage.cs:117-119`); hit bands 1520–1650 / 1652–1780 / 1782–1910 (`FigmaUI.cs:314-317`),
+   centres 1585 / 1716 / 1846. Within 3 design px on all three. The tabs are the one wired thing here and
+   they are wired correctly.
+2. **No collision between the tab band and the bottom bar.** `BottomBarHit` runs first and its icons sit at
+   design x 46…638; the tabs are at 1520…1910. The two y-bands overlap by 9 design px and it does not
+   matter, because they share no x.
+3. **The tabs survive being drawn under the bar.** `component_48` is drawn last (`:126`) over the tab rows,
+   but its top ~105 rows are transparent, so the labels and the accent underline read correctly. ⚠ This is
+   luck, not design: the page depends on an asset's alpha for its own navigation to be visible. If the bar
+   is ever re-exported opaque, the tab strip disappears with no code change.
+4. **The accent underline matches its tab cell, not its label.** 120 design px wide against a 130-px hit
+   cell and a ~65-px label — correct for a tab indicator, and it is centred on the label's own centre.
+5. **No asset is upscaled.** The seat PNGs are 1161×1748 drawn at 580×874 design (×0.333 at this panel);
+   the cabin PNG is 1216×1888 drawn at 608×944. All downscales. H-08's problem does not exist here.
+6. **The seat labels are baked into the seat PNGs**, not drawn — so a live `sel` would move the highlight
+   without disturbing the labels. Not a defect, recorded so it is not mistaken for one.
+
+## Cross-page confirmations
+
+**C-04** (the 12.2% horizontal stretch) and **C-12** (the un-erased marker glow) are present again —
+`SettingsAudioPage.cs:126` draws `component_48` at `3427 * sx` for sizes scaled by `sy`, the identical
+straddle-stretch. **Third page, same two defects.** No new finding.
+
+---
+
+## A-01 — The page has five layouts and can render exactly one of them, forever
+
+**TIER 1** · confirms S49 **H12**
+
+**Evidence.** `FigmaUI.cs:197` — `case UiPage.Audio: SettingsAudioPage.Build(dl, w, h, 2); break;`
+
+`Build`'s `sel` parameter selects which of the five audio scopes is shown: `sel == 2` is CABIN, `0/1/3/4`
+are SEAT 1–4. It drives the highlight box (`:78-84`), the panel heading (`:97`) and nothing else — the five
+seat illustrations are always all drawn. The call site passes the literal `2`. There is no `PageState`
+parameter on this page at all, and `sel` is never anything else in the build or in the preview
+(`PreviewMain.cs:585` also passes `2`).
+
+**What is wrong.** `CABIN AUDIO` is the only heading this page can ever show. The four `SEAT n AUDIO`
+layouts are written, correct, and unreachable — the same class as S49 H9's nine dead `UiPage` values, but
+inside a page that ships. And because the highlight is the *only* thing that moves, the page presents five
+selectable-looking seats of which none is selectable.
+
+**Fix plan.**
+- The seat selection is **pure screen state** — it changes a heading and a highlight and commands nothing —
+  so it is (A) and buildable now. It wants (i) a `sel` held per screen in the painter beside `coverPhase`
+  and `coverCam` (`ScreenPainter.cs:84-100`), and (ii) a hit test over the five seat boxes, which
+  `SeatBox` already defines and which the draw already uses.
+- **Do it with one shared rect function**, `SeatRect(i, w, h, …)`, called by the draw and the hit test —
+  `PageAction`'s rule, and the exact thing H-04 shows going wrong when it is not followed.
+- ⚠ **What the four seat layouts should then SHOW is the open question, not the switching.** Today
+  `ChValue` is one literal array shared by all five scopes, so selecting SEAT 2 would change a heading and
+  nothing else — five headings over one set of numbers, which is worse than one honest heading. **A-02 and
+  Q6 govern what the numbers are allowed to be**, so land that first.
+- **Must not break:** the tab strip, which is the page's working navigation.
+- **Verify:** five preview renders, one per `sel`, each with its own highlight and heading.
+
+---
+
+## A-02 — The page paints ten controls that a dated owner decision says should not exist, and none of them can be touched
+
+**TIER 1** · extends S49 **H12** · ⚠ **partly re-classifies it — see Q6**
+
+**Evidence.** Ten controls are drawn (`SettingsAudioPage.cs:104-116`): eight ± buttons (GROUND, AUX,
+INTERCOM, ALERTS × minus/plus) and two signal buttons (GROUND, AUX). Each is a filled square with a
+`St(3)` white border and a centred glyph — this build's button idiom everywhere.
+
+**There is no hit test.** Verified three ways: no `HitTest` in `SettingsAudioPage.cs`; no `SettingsAudioPage.`
+reference anywhere in `plugin/src/` or `plugin/test/` that mentions hit-testing; and `FigmaUI.HitTest`'s
+settings branch (`:310-320`) resolves **only** the three tabs. Ten painted buttons, zero rectangles.
+
+**And the decision is on record.** `plugin/src/pure/SettingsPage.cs:27-29`, quoted in full:
+
+> *"---- NO VOLUME SLIDERS ---- (user's call, 2026-08-06). Audio shows per-seat ROLE and occupancy, and
+> the intercom/alert state. KSP has no cabin audio, so a fader would be a control bound to nothing.
+> **Simulate a reading, never simulate a control.**"*
+
+Two lines above it, the same comment states the principle for the lighting zones: *"Drawing eight buttons
+where seven do nothing is **the dead-control failure this project refuses**."*
+
+**What is wrong.** The Figma rebuild re-introduced, as ten dead buttons, precisely the faders a dated owner
+decision removed — and the decision's stated reason ("a control bound to nothing") is exactly what they are.
+S49 filed the audio faders as **(C) deliberate** on the strength of this same comment, but the comment
+supports only half of that: *the values staying display-state* is deliberate and correct; *drawing the
+controls* is the thing it forbids. The distinction matters because (C) means "recorded, do not re-log", and
+ten dead buttons on a reachable page is not a thing to stop logging.
+
+⚠ **I am not asserting the owner's 2026-08-06 decision still stands unchanged.** It predates the Figma
+rebuild, and the Figma design is itself a source (§1.4). That is exactly why this is **Q6** and not a fix.
+
+**Fix plan.** Held pending Q6. The three shapes it can take:
+- **Remove the ten buttons.** Truest to the 2026-08-06 decision and to the no-dead-controls principle. The
+  channel values stay as readings. Costs fidelity to the Figma frame.
+- **Tint them inert.** `DragonPalette.Text6`, S75's *"nothing live behind this"* tint, so they stop riding
+  the button idiom while the design's layout survives. Cheapest, and it is the branch S75 chose for
+  `gridicons_refresh` when the action had no source.
+- **Make them live as screen state.** A per-channel level held in the painter, adjusted by the ± buttons,
+  with the values drawn from it. It commands nothing and breaks no gate — but it is the *simulated control*
+  the 2026-08-06 decision names, so it needs the owner to reverse that decision explicitly.
+- **Must not break, in every case:** the two signal buttons are not faders and may be a different question —
+  they read as a squelch/signal indicator, and no source in the repo names their action.
+
+---
+
+## A-03 — The dividers define five equal cells; AUX's value and two of the four button clusters do not sit in them
+
+**TIER 2** · **NEW**
+
+**Evidence.** All arithmetic from `SettingsAudioPage.cs:33-38`, confirmed against `settings_audio.png`.
+
+The four dividers (`DivX = {966, 1464, 1962, 2460}`) and the panel edges (468, 2957) cut the panel into
+**five cells of 498 design px** — a perfectly regular grid. Against that grid:
+
+| channel | cell | cell centre | value drawn at | button cluster centred at |
+|---|---|---|---|---|
+| GROUND | 468–966 | 717 | **717** ✓ | **717** ✓ |
+| AUX | 966–1464 | 1215 | **1257** ✗ **+42** | 1219 ✓ *(+4)* |
+| MAIN | 1464–1962 | 1713 | **1713** ✓ | *(none — see A-05)* |
+| INTERCOM | 1962–2460 | 2211 | **2211** ✓ | **2257** ✗ **+46** |
+| ALERTS | 2460–2957 | 2708.5 | **2709** ✓ | **2754** ✗ **+45.5** |
+
+**Three of thirteen positions are off a grid that the other ten land on exactly.** They are two independent
+errors, not one systematic offset:
+
+1. **AUX's label and value** are 42 design px right of their cell — its *buttons* are correct.
+2. **INTERCOM's and ALERTS' button pairs** are ~45 px right of their cells — their *values* are correct.
+
+Visible on the render: AUX's three buttons sit left of the `0dB` above them; INTERCOM's and ALERTS' pairs
+sit right of `+9dB` and `50`. ≈33 panel px at 2560, ≈16 px at the shipped 1280.
+
+⚠ **The dividers themselves are exactly regular**, and they prove it: with AUX's value at its cell centre
+1215, the midpoints between neighbouring values become 966 and 1464 — the divider positions, to the pixel.
+So the grid is the design's intent and these three are outliers against it.
+
+**Fix plan.**
+- Stop writing thirteen absolute positions and **derive them from the grid the dividers already define**: a
+  cell width, a cell index, and offsets within a cell. Then a value and its buttons cannot drift apart,
+  and the next channel added cannot be placed wrong.
+- Concretely: `CellCx(i) = 468 + 498 * (i + 0.5)`; the value and label centre on it; a 3-button row spans
+  `CellCx ± 152` with the middle button on the centre; a 2-button row spans `CellCx ± 76`.
+- ⚠ **§1.4 note, small but real.** These numbers came from *"the exact layer geometry from the Figma MCP"*
+  (`SettingsAudioPage.cs:3-4`), so snapping them to a computed grid edits measured source geometry. Ten of
+  thirteen landing exactly on that grid is strong evidence the outliers are transcription slips rather than
+  design — and the owner has already ruled for balance on the Cover (**R-2/R-4**, *"I like well balanced
+  layouts"*) — but the change should be **recorded as ours** rather than presented as re-measurement.
+- **Must not break:** the dividers, which are already right, and the MAIN cell, which has no buttons.
+- **Verify:** re-render and require each value's ink centre and its button cluster's centre to fall within
+  2 px of the same cell centre, as a headless check.
+
+---
+
+## A-04 — The signal glyph is drawn below its own button and far too small to read as one
+
+**TIER 2** · **NEW**
+
+**Evidence.** `SettingsAudioPage.cs:112-116`. The button box is `Btn(SignalX[i], 1598, 140, …)` — design y
+**1598…1738**, centre **1668**. The glyph inside is
+`dl.ArcBand(SignalX[i] * sx, PY(1690), SZ(6), SZ(20), -55, 55, White)` plus a filled dot of r5.
+
+Two problems, both measurable:
+- **It is centred on design y 1690, not 1668** — **22 design px low** (14.6 panel px at 2560) in its own
+  140-px box. Its neighbours are correct: the − and + are drawn at `PY(1668)`, dead centre.
+- **It is a 40-px-wide mark in a 140-px box.** The − spans 56 design px and the + 56×56; the signal fan's
+  outer radius is 20, so it occupies under a third of the width its siblings use.
+
+On the render it reads as a small solid mushroom blob sitting low in an empty square — not a signal fan, and
+not obviously the same class of control as the two buttons beside it.
+
+**Fix plan.**
+- Centre it on the box: `PY(1668)`, the same constant the − and + already use. Better, derive all three
+  from the `Btn` call's own y and size so a future move cannot desynchronise them — the same one-rectangle
+  discipline as A-01 and H-04.
+- Scale it to its siblings: outer radius ~28 design px (matching the ±'s 56-px span), inner radius scaled
+  with it, so the three glyphs read as one set.
+- ⚠ **It also does not read as a signal fan.** A 14-px-thick band over ±55° is a solid wedge at this size.
+  Three thin concentric arcs over ±55° with a filled dot is the conventional form and is what the shape is
+  reaching for. **This is our geometry either way** — the Figma export was not used for this glyph — so no
+  §1.4 question, but mark it as ours.
+- **Must not break:** A-02/Q6 may delete these buttons entirely. **Do Q6 first**; this fix is wasted if the
+  answer is "remove them".
+- **Verify:** re-render; all three glyphs in a channel's row share a centre line and a comparable extent.
+
+---
+
+## A-05 — MAIN's VOX readout has no box, though the file's own comment says it should
+
+**TIER 3** *(fidelity — needs the Figma export)* · **NEW**
+
+**Evidence.** `settings_audio.png`, the MAIN column: `VOX` and `17` float as bare text in the row where the
+four other channels each carry a bordered button row. Nothing is drawn around them.
+
+`SettingsAudioPage.cs:36` says otherwise, in the code's own words: *"-/+ button centres (design x) per
+side; **MAIN has the VOX box instead**."* The draw (`:118-119`) is two `CTxt` calls and no box.
+
+**What is wrong.** A discrepancy inside our own file: the comment describes a box that the code does not
+draw. Either the comment is loose wording for "MAIN has VOX there instead of buttons", or the box exists in
+the Figma frame and was dropped in transcription. On the glass the row reads as a gap in an otherwise
+regular strip, which is the owner's balance concern again (**R-4**).
+
+**Fix plan.** This needs the source, not a guess (C1.4) — see **Q6**'s note, which carries the same
+dependency.
+- **If the Figma frame has a box:** draw it at the measured bounds, in the same idiom as the ± boxes but
+  visibly not a button (no border-as-affordance, or the inert tint) — VOX is a *reading*, not a control,
+  and this page's whole problem is controls that are not controls.
+- **If it does not:** correct the comment, which is the actual defect in that case.
+- **Must not break:** the VOX value stays a readout under either answer.
+- **Verify:** re-render and compare the MAIN cell against the export.
+
+---
+
+## A-06 — The centre panel — the one the page is actually showing — is an empty box between four illustrated seats
+
+**TIER 2** · **NEW** · §1.4 note
+
+**Evidence.** `settings_cabin_seat.png` is **1216×1888**. Its entire bright content is **one 213×58 region
+at x 502…715, y 90…148** — the word "Cabin". Measured: 5,298 pixels above luminance 120, in a single row
+band, out of 2.3 million. The rest is a flat dark panel: mean luminance **22.3**, and **0.23%** of pixels
+brighter than 120, against **4.7–4.9%** for each of the four seat PNGs.
+
+On the render the effect is a hole: four illustrated seats, and in the middle — inside the cyan selection
+highlight, on the scope the page is actually reporting — a dark rectangle containing two small rings drawn
+by our own code (`SettingsAudioPage.cs:88-93`) and nothing else.
+
+**What is wrong.** The selected panel is the emptiest thing on the page. Whether the community Figma's cabin
+frame was itself an empty plate, or whether the export lost a layer, cannot be told from the repo — the
+Figma exports are gitignored (`assets/figma/`). What *can* be said is that the asset carries one word and a
+fill, which is a strange thing to ship as a 1216×1888 PNG, and that the result is visibly unbalanced in the
+way the owner has already objected to on the Cover.
+
+**Fix plan.**
+- **First establish what the frame contains** — the same export dependency as Q1 and A-05. If a layer was
+  lost, re-export; that is the whole fix and it needs no design decision.
+- **If the frame really is an empty plate**, the panel needs content of its own or it should stop being a
+  panel. The two speaker rings we already draw are the honest seed: a cabin-audio scope could show what the
+  cabin actually has — speaker count, intercom state, alert routing — all of which `CabinEnvironment` and
+  `Alarms` can supply, and none of which commands anything (§14.4(f) READOUTS, (A)).
+- ⚠ **Do not fill it with a picture.** A drawn cabin interior would be a tier-3 invention (§1.4) with no
+  source, on a page that already has one asset of unknown provenance.
+- **Must not break:** the seat highlight geometry, which is computed from `SeatBox[sel]` and is correct.
+- **Verify:** re-render; the selected panel should carry at least as much information as the four
+  unselected ones.
+
+---
+
+## Open questions for the owner — Audio (Q6)
+
+### Q6 — A dated decision says this page should have no volume controls. It has ten. Does the Figma design change that call? (A-02, and it gates A-04/A-05)
+
+**Situation.** `SettingsPage.cs:27-29` records, in the code, dated and attributed: *"---- NO VOLUME SLIDERS
+---- (user's call, 2026-08-06) … KSP has no cabin audio, so a fader would be a control bound to nothing.
+Simulate a reading, never simulate a control."* Two lines above, the same comment calls drawing buttons that
+do nothing *"the dead-control failure this project refuses."* The Figma rebuild — `SettingsAudioPage`, which
+replaced the page that decision was written for — draws **eight ± buttons and two signal buttons**, with no
+hit test anywhere in the build. So the page now shows exactly the controls the decision removed, inert.
+
+The decision predates the Figma rebuild, and the Figma frame is itself a source (§1.4). So this is not
+simply "the code drifted from a ruling" — it is two sources disagreeing, and only the owner can say which
+governs. **A-04 and A-05 are both downstream of the answer** and should not be built before it.
+
+**Options.**
+1. **The 2026-08-06 decision still governs — remove the ten buttons.** The channel values stay as readings,
+   which is what that decision explicitly allows. Truest to the ruling and to the no-dead-controls
+   principle; costs fidelity to the Figma frame. *(Recommended — see below.)*
+2. **Keep the layout, tint the controls inert.** `DragonPalette.Text6`, S75's established "nothing live
+   behind this" tint. The design survives, the affordance stops lying. Cheapest, and it is the branch S75
+   itself took when a glyph's action had no source.
+3. **Reverse the decision — make them live screen state.** A per-channel level in the painter, adjusted by
+   the ± buttons, values drawn from it. Nothing is commanded and no gate is touched, but it is precisely
+   the *simulated control* the ruling forbids, so it needs the owner to say so explicitly (C1.8 — a settled
+   decision stands unless the owner types `OVERRIDE`).
+4. **Leave as-is.** Not recommended: ten dead buttons on a reachable page is the failure the project's own
+   comment names, and it is now on the glass in a preview.
+
+**Recommendation: 1, with 2 as the fallback if the Figma frame is judged worth preserving intact.**
+Reasoning: option 1 is what the ruling on record actually says, and the values-as-readings half of the page
+is untouched by it — the page still shows GROUND / AUX / MAIN / INTERCOM / ALERTS and their levels, which is
+the information the crew needs. Option 3 is defensible but it needs an `OVERRIDE`, and this chat cannot
+infer one from the design's existence.
+
+⚠ **Whichever way it goes, A-01 comes first**: making the seat selection live is independent of this
+question, and until it lands the page can only ever show CABIN.
+
+---
+
 *Page 0 (Cover) inspected 2026-09-05; C-12 and C-13 added the same day on owner review (R-1…R-5).
-Page 1 (Hud / Frame 58) inspected 2026-09-05 at HEAD `97f4c78`.*
+Page 1 (Hud / Frame 58) inspected 2026-09-05 at HEAD `97f4c78`.
+Page 2 (Audio settings) inspected 2026-09-05.*
 
 *⚠ **Three findings are page-wide, not per-page, and should be scheduled ahead of the sweep:***
 - ***H-01** — the preview's resolution. It decides how every later legibility finding is measured, so
@@ -1493,6 +1801,6 @@ Page 1 (Hud / Frame 58) inspected 2026-09-05 at HEAD `97f4c78`.*
   on the HUD as well as the Cover; both are on all fifteen pages that draw the bar; **and H-07 is coupled to
   C-04 through `FigmaUI.BottomBarHit`, so all three touch one hit map and belong in one commit.***
 
-*Next page: **UiPage 2 — Audio (settings)**, which S49 §2 records as display-only with its eight ± buttons
-and two fan buttons **drawn with no HitTest in the file at all** — the same both-directions wiring question
-this page just failed, on a page built entirely of controls.*
+*Next page: **UiPage 3 — Procedure (Frame 59)**, which S49 §2 records as **one PNG** — `FigmaFramePage.Build`,
+`Commands = 8`, no `PageState`, no HitTest branch, *"a dead end escapable only by the bottom bar"* (H13) —
+and whose art shares `frame58.png`'s 0.6× export scale (H-08).*
