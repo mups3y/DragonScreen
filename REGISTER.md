@@ -7108,7 +7108,7 @@ group — which is the point of splitting, since three of the five cautions appl
 TRACKING is a readout and Part-A-achievable now, while a step's ACTION BUTTON is actuation and stays Part
 B's (§14.4(a), unchanged by §14.4(f)); and the §B-side sequencing notes to [[S150]] and [[S151]].
 
-### S156 [S] Manual Chute Deploy: six live altitude gates and nothing says which is next — **TODO** — [H22 + QC `MC-02`; split 1 of 5 from [[S55]], and its cleanest]
+### S156 [S] Manual Chute Deploy: six live altitude gates and nothing says which is next — **DOING** — [H22 + QC `MC-02`; split 1 of 5 from [[S55]], and its cleanest]
 - **The finding.** The gates (`10.6 km`, `5.5 km`, `1.6 km`…) are literals in a `Step[]`, and **the row tint
   is a function of a compile-time `Gate` flag, not of `s.Altitude`. Nothing compares the two.** The strip
   above the steps already draws altitude live, on the same page, in the same frame.
