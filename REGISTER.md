@@ -11774,7 +11774,7 @@ comment lines before scanning, and says why in place.
 check. Recorder glue + one pure file + the build script; **no draw changed, so no preview applies**
 (C1.3's carve-out). **C1.16/G12: 0 comment prose lines lost.** No `install`, no glass, no `git push`.
 
-### S161 [S] BB1's ghost-column DETECTOR is itself a ghost — `BlackBoxCoverage` has no caller, so three event kinds can never fire — **TODO** — [found by [[S90]]'s new build guard, 2026-09-06; TIER 2: a check that silently always passes]
+### S161 [S] BB1's ghost-column DETECTOR is itself a ghost — `BlackBoxCoverage` has no caller, so three event kinds can never fire — **DOING** — [found by [[S90]]'s new build guard, 2026-09-06; TIER 2: a check that silently always passes]
 
 - **The finding, and it is recursive.** `pure/blackbox/BlackBoxCoverage.cs` is BB1/BB6's ghost-column
   detector — the machinery that exists so a column which is declared and never written is *reported*.
