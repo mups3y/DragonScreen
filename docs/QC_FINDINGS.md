@@ -1377,6 +1377,23 @@ buildable and they are not equivalent:
 - **Verify:** whichever way it goes, the Cover and HUD renders must come back at the cfg's own width, and
   C-05's re-measure must be taken from *that* render, not this one.
 
+
+### ✅ FIXED 2026-09-05 — by **S100** (`7957d4d`), NOT by this sweep
+
+**Closed by the owner's own change, and recorded here so the ledger is honest about who fixed it.** S100
+derived the preview's render size from `DragonScreen.cfg` instead of the hardcoded 2560, so every Figma page
+now previews at the **1280×703 the mod actually ships**.
+
+⚠ **This finding is why the re-validation pass exists.** The whole first sweep was conducted on an
+instrument that was lying about scale, so fourteen scale-dependent findings had to be re-measured against
+honest renders: **9 STANDS, 4 CHANGED (all worse), 1 VANISHED** (H-08 — the frame art turned out to be a
+0.557 DOWNSCALE at 1280, with sharpness inverted relative to the filing).
+
+⛔ **Q5 is NOT closed by this.** S100 settled which size the PREVIEW renders; it did not settle whether
+1280 is the right shipped width, which is what **R-01** hangs on — and R-01 has since collected more
+evidence from pages it never sampled (S107's Menu label at 10.7 px, S108's margin labels at 11.5 and 8.1 px,
+both measured). **S100 did not touch the cfg**, and raising `screenWidth` would need an `install` + glass
+go, which is the owner's alone (C1.12).
 ---
 
 ## H-02 — Every readout on the docking HUD is a pixel in a PNG; 8 of the 12 numbers contradict live state in the same frame
