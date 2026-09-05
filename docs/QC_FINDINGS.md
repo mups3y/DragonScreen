@@ -78,8 +78,8 @@ Cover's seven phase views, plus the lower analog console panel. **The six Vehicl
 | **15** | **Vehicle** | VEHICLE OVERVIEW *(tab: All)* | ✅ **DONE — 3 findings** | 2026-09-05 |
 | **16** | **SuitCheck** | SUIT LEAK CHECK | ✅ **DONE — 2 findings** *(the build's best page)* | 2026-09-05 |
 | **17** | **VehicleMech** | MECH PANEL *(tab: Mech)* | ✅ **DONE — 3 findings** | 2026-09-05 |
-| 18 | AudioVideo | VIDEO SETTINGS | NOT STARTED | — |
-| 19 | VrioTest | TEST VRIO HEALTH LEDS | NOT STARTED | — |
+| **18** | **AudioVideo** | VIDEO SETTINGS | ✅ **DONE — 2 findings** *(shared section with 19)* | 2026-09-05 |
+| **19** | **VrioTest** | TEST VRIO HEALTH LEDS | ✅ **DONE — 1 finding** *(+ F-01)* | 2026-09-05 |
 | **20** | **VehicleCrew** | VEHICLE — CREW *(sub-tab)* | ✅ **DONE — 4 findings** *(shared section, 20–25)* | 2026-09-05 |
 | **21** | **VehiclePropulsion** | VEHICLE — PROP *(sub-tab)* | ✅ **DONE — 4 findings** *(shared section, 20–25)* | 2026-09-05 |
 | **22** | **VehiclePower** | VEHICLE — POWER *(sub-tab)* | ✅ **DONE — 4 findings** *(shared section, 20–25)* | 2026-09-05 |
@@ -2755,7 +2755,137 @@ identical glyph was tinted inert by S75; these were not.
 
 ---
 
-*Next: **pages 18 and 19** — Video settings, and the VRIO test that is the other half of F-01's duplicate.*
+---
+
+# PAGES 18 + 19 — VIDEO SETTINGS and TEST VRIO HEALTH LEDS
+
+**Renders inspected:** `ui_audiovideo.png` · `ui_vriotest.png` (also used as F-01's evidence).
+
+**Source:** `plugin/src/pure/SettingsVideoPage.cs` (83 lines) · `plugin/src/pure/VrioTestPage.cs`.
+
+**S49's entries.** §2 rates Video as *"Camera list is **LIVE read-only** off a real
+`MuMechModuleHullCameraZoom` scan; **tapping a camera row does nothing** — its only writer is in the dead
+`Apply`"* (H12), and VrioTest as *"Fully static. `Build(dl,w,h)` — **no `PageState` parameter**; checklist
+state is `bool[] Done = {true,true,true,true,false}`; **no HitTest in the file and no glue branch** —
+START / STOP / NEXT are pixels"* (H21). **Both confirmed verbatim at HEAD.**
+
+## What was checked and found CLEAN
+
+1. **The Video page's empty states are honest and well made.** With no cameras it says `no cameras on
+   vehicle` in the list and `NO SIGNAL` in the viewport — not a fake feed, not a blank panel. It also has a
+   third, distinct state: `FORWARD VIEW IN USE BY DOCKING` when the docking renderer holds the camera
+   (`:66-67`). Three states, three honest messages.
+2. ⭐ **The Video page's tab strip maps correctly, unlike the Cabin page's.** It draws with `PX(x) = x * sx`
+   (`:74-78`), the exact inverse of `FigmaUI.HitTest`'s `px * RefW / w`. **F-04 is a Cabin-only defect** —
+   Audio and Video both agree with the hit bands.
+3. **`VrioTestPage` is the element-level rebuild F-01 recommends routing to.** Its content is complete and
+   correct; what it lacks is state and touch, which is VT-01.
+
+---
+
+## VV-01 — The Video page prints a camera resolution beside its own "no cameras" and "NO SIGNAL"
+
+**TIER 2** · **NEW**
+
+**Evidence.** `ui_audiovideo.png` states three things at once:
+
+- left column: **`no cameras on vehicle`**
+- viewport: **`NO SIGNAL`**
+- below the viewport: **`RESOLUTION   640 x 360`**
+
+The third is `SettingsVideoPage.cs:72` — `R(s.CameraResText ?? "—", …)` — printed **unconditionally**. The
+two honest states are branch-guarded (`:66-70` gate on `cams.Length == 0`); the resolution is not.
+
+**What is wrong.** A resolution is a property of a camera. With no camera there is no resolution, and the
+page's own `?? "—"` fallback shows the author intended a dash for exactly this case — it just never fires,
+because the *field* is populated even when the *camera list* is empty. It is a small defect but a pure one:
+one page, three statements, one of them impossible.
+
+**Fix plan.**
+- Gate the value on the same condition the viewport already uses:
+  `R(cams.Length == 0 ? Dash : (s.CameraResText ?? Dash), …)`. One line, no new state.
+- ⚠ **Check `CameraHeldByDocking` too** — when the forward view is held by docking, *this* page has no feed
+  but the resolution may still be meaningful. Decide deliberately rather than by omission; recommend
+  showing it in that case, since a camera exists.
+- **Must not break:** the three honest empty states, which are this page's strength.
+- **Verify:** three renders — no cameras, cameras present, camera held by docking — with the resolution row
+  correct in each.
+
+---
+
+## VV-02 — The camera list is live and read-only, its writer is stranded, and the preview has never rendered the populated state
+
+**TIER 2** · confirms S49 **H12** · ⚠ same class as **H-09**
+
+**Evidence.** `SettingsVideoPage.cs:44-56` reads `s.CamLabels` and highlights `s.CameraView` — a genuinely
+live list off a real vessel scan. There is **no `HitTest` in the file**, and `FigmaUI.HitTest`'s settings
+branch (`:310-320`) resolves only the three tabs. So a camera row draws a selection the crew cannot change.
+S49 records where the writer went: the only code that sets `CameraView` is in the stranded legacy `Apply`
+path, unreachable under `FigmaMode` (S49 §1.1).
+
+**And the preview cannot show any of it.** `PreviewMain.cs:180` sets `ps.CameraView = 0;
+ps.CameraResText = "640 x 360"; ps.CameraHeldByDocking = false;` — and **never sets `CamLabels`**. So the
+one render of this page is its empty state, and the live list, the selection highlight and the
+`FORWARD VIEW IN USE BY DOCKING` branch have **never been rendered**. That is H-09's defect on a second
+page: the preview gate cannot see the page's live half.
+
+**Fix plan.**
+- **Two independent fixes; do the fixture one first**, because it is free and it makes the other reviewable:
+  1. **Fixture:** give `ps.CamLabels` two or three plausible names in `PreviewMain`, and add renders for
+     the populated and `CameraHeldByDocking` states. Then the page's live half is on the gate.
+  2. **Wiring:** re-home the stranded writer. Selecting a camera is **pure screen state** — it changes
+     which feed this page shows and commands nothing — so it is (A) and buildable now. It needs a
+     `SettingsVideoPage.HitTest` over the same row rects the draw uses, and a painter branch beside the
+     SuitCheck one.
+- ⚠ **S49 H12 groups this with the other stranded settings handlers** (lights, brightness, seat view,
+  page-per-display in `SettingsPage.cs`). They are one job — *"re-home the stranded handlers onto a
+  reachable Figma settings page"* — and should be scheduled together rather than one row at a time.
+- **Must not break:** the three empty states, and `CameraHeldByDocking`'s precedence over a selection.
+- **Verify:** the populated render shows a highlighted row; tapping a different row moves the highlight and
+  the feed.
+
+---
+
+## VT-01 — The VRIO page takes no state, ships a literal checklist, and has no touch anywhere
+
+**TIER 1** *(folded into **F-01**'s fix — see below)* · confirms S49 **H21**
+
+**Evidence, all three structural and verified at HEAD:**
+
+- `VrioTestPage.cs:36` — `public static void Build(DisplayList dl, int w, int h)` — **no `PageState`
+  parameter.** The page cannot read the vehicle even in principle.
+- `:34` — `static readonly bool[] Done = { true, true, true, true, false };` — the five-step DEORBIT
+  checklist state is a compile-time literal. `ui_vriotest.png` shows four green ticks and one grey,
+  permanently.
+- **No `HitTest` in the file, and no `cur == UiPage.VrioTest` branch in `ScreenPainter`.** `START VRIO 1 LED
+  TEST`, `START VRIO 2 LED TEST`, `STOP VRIO 2 LED TEST`, `NEXT` and `ENTER READ-ONLY` are all painted in
+  full button idiom and none is touchable — seven controls, zero rectangles.
+
+**What is wrong.** This is the most complete procedure screen in the build and none of it is connected. It
+is also **the second rendering of the same procedure** — see **F-01** — so the build ships two versions of
+one screen, neither of which tracks a step.
+
+**Fix plan.** **Sequence matters here, and F-01 comes first.**
+1. **F-01** decides which of the two renderings survives. Building state into `VrioTestPage` before that is
+   decided risks doing it twice or doing it to the copy that gets dropped.
+2. **Then the classification, which is not uniform** — and this is the part that must not be rushed:
+   - `NEXT` and `ENTER READ-ONLY` are **navigation / screen state** → **(A)**, buildable now.
+   - The five checklist ticks are **step TRACKING**, a readout of real vehicle state → **(A)** under
+     §14.4(f), and S49's own distinction: *"a procedure's step TRACKING is a readout … and is therefore
+     (A); the same step's ACTION BUTTON fires a pyro and is (B)."*
+   - `START VRIO 1 / 2 LED TEST` and `STOP VRIO 2` **command the vehicle's health LEDs** → **(B)**, and
+     they stay §14.4(a) honest-no-op until Part B. **They must not be given working rectangles in Part A.**
+3. **Meanwhile, S75's tint applies to all seven now** — see **SC-02**. A control that cannot act must not be
+   painted as one, whichever class it lands in.
+- ⚠ **There is no step model to read from.** S49 §1.1 records that the one real step machine in the tree,
+  `pure/StepList.cs`, is stranded behind `FigmaMode`. Tracking these five steps means routing it, which is
+  H34's job and a build of its own — not a line item on this page.
+- **Verify:** after F-01, one render of this procedure; after step tracking, the ticks change with vehicle
+  state; after the tint pass, the two (B) buttons are visibly inert.
+
+---
+
+*Next: **page 26 — Manual Chute Deploy**, then Docking (27) and Rendezvous (28).*
 
 *⚠ **Three findings are page-wide, not per-page, and should be scheduled ahead of the sweep:***
 - ***H-01** — the preview's resolution. It decides how every later legibility finding is measured, so
