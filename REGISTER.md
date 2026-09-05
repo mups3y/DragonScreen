@@ -15183,7 +15183,7 @@ commands anything** — the thirteen inert docking controls are untouched (QC `D
 - **DONE when:** the card reflects a derived approach state, the arrows step, the rail is left with its
   comment, and a test pins that nothing here reaches `FlightCommands`.
 
-### S144 [S] Crew Interrupt Conditions are printed as copy and never evaluated — **TODO** — [H30; TIER 3]
+### S144 [S] Crew Interrupt Conditions are printed as copy and never evaluated — **HELD 2026-09-06 — "sustained" is UNQUANTIFIED, and doing the half that works is worse than doing neither** — [H30; TIER 3]
 - **The finding.** *"30° sustained attitude error"*, *"600°/min attitude rate"*, *"Far-field pointing"* are
   printed as text; no threshold is compared and nothing turns amber.
 - ⛔ **The WORDING is (C) and must NOT be edited** — it is real reference copy and [[S13]] settled the
@@ -15193,6 +15193,55 @@ commands anything** — the thirteen inert docking controls are untouched (QC `D
 - ⚠ **"Sustained" needs a dwell timer** — that is the model to design, and it is the whole of the work.
 - **DONE when:** each criterion lights from live state against its own stated limit, the dwell is modelled
   and tested, the copy is byte-identical, and a preview shows nominal and exceeded.
+
+#### ⛔ HELD 2026-09-06 — picked up to be built, and stopped on the one number nobody has
+
+**THE DATA IS ALL THERE, and that half was checked first.** `s.BodyRollDps` / `BodyPitchDps` / `BodyYawDps`
+are raw body rates in deg/s (`Pages.cs:282`), and **600 °/min is exactly 10 °/s** — so the rate criterion
+is a one-line comparison needing no state at all. The attitude error is `s.Align01 × 90` (VesselData sets
+`Align01 = Clamp01(align / 90)`), so **30°** is `Align01 > 1/3`. ⚠ `DrawAttitudeCriteria` takes no
+`PageState` today, but it is called from inside `Build` where `s` is in scope — the same one-line thread
+[[S157]] did for `EntryPage`.
+
+⛔ **THE BLOCKER IS THE WORD "SUSTAINED", AND IT IS A §1.4 BLOCKER, NOT AN ENGINEERING ONE.**
+*"30° **sustained** attitude error"* is **reference copy** — [[S13]] settled that wording and this line
+protects it as (C), *"must NOT be edited"*. But the copy **does not say for how long**, and nothing else in
+the tree does either: a search for a dwell or hold-time pattern finds none (`maxQPassed` is a boolean latch,
+not a dwell). **Five seconds and thirty seconds are different criteria**, and picking one decides when the
+crew are told to interrupt a deorbit. That is precisely what §1.4 reserves for owner discussion, and this
+line's own text calls it *"the model to design"*.
+
+#### ⭐ AND THE RATE HALF WAS DELIBERATELY NOT BUILT ALONE — this is the substance of the hold
+
+The rate criterion needs no dwell and could ship today. **It must not, and the reason is the crew's
+reading, not tidiness.** These two lines are a LIST. If *600 °/min attitude rate* can light amber and
+*30° sustained attitude error* never can, then a crew seeing the second one white reads it as **"that
+criterion is not exceeded"** — when the truth is *"nothing is checking it"*. ⛔ **That is exactly the
+confident-green-on-a-dead-feed failure [[S22]] was opened for**, manufactured deliberately, on the page
+that tells the crew when to interrupt a deorbit. **A half-lit criteria list is worse than an unlit one.**
+
+⚠ **AND IT IS TWO SURFACES, NOT ONE (C7.1).** The identical copy is on `DeorbitBurnPrepPage.cs:104` as well
+as `CoverPage.cs:911`. Whatever the dwell is, both must evaluate it the same way or the two pages disagree
+about when to interrupt — the defect [[S13]] closed for the *wording* and this would re-open for the
+*verdict*.
+
+**Paste-ready overseer prompt (C1.13):**
+> DragonScreen, S144. The Cover and the Deorbit Burn Prep pages both print the crew interrupt criteria —
+> **"30° sustained attitude error"** and **"600°/min attitude rate"** — as static copy. Nothing compares
+> them to anything; they are the same white whether the vehicle is pointing perfectly or tumbling.
+> **Both quantities are live and the arithmetic is trivial** (600 °/min is 10 °/s; the attitude error is
+> already on `PageState`). ⛔ **One number is missing and it is yours: how long is "sustained"?** The copy
+> is real reference text and says only "sustained". Five seconds and thirty seconds are different
+> criteria, and the answer decides when the crew are told to interrupt a deorbit.
+> ⚠ **I did not build the rate half on its own**, though it needs no dwell — because a list where one
+> criterion can light and the other never can reads as *"the other one is fine"*, which is worse than an
+> unlit list. Both light together or neither does.
+> **Options:** **(a)** give a dwell (e.g. "5 s continuous above 30°") and both criteria go live on both
+> pages; **(b)** rule that the criteria stay display-only copy, and record that as the decision so this
+> line closes rather than lingering; **(c)** light only on the INSTANTANEOUS exceedance and re-word — ⛔
+> ruled out here, because the wording is reference copy §1.4 protects and S13 settled.
+
+**Verified (C1.3).** **Nothing built, nothing changed.** No `install`, no glass, no `git push`.
 
 ### S145 [S] NavOrbitPlot's four range rings carry no scale — **HELD 2026-09-06 — gated on [[S153]] (R-01)** — [H35; TIER 3]
 ⛔ **HELD 2026-09-06 — GATED ON [[S153]] (`R-01`), and this is [[S125]]'s own finding applied to itself.**
