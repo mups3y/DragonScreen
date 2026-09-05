@@ -19,7 +19,7 @@ That is why `preview` exists: restarts are the scarce resource, so anything that
 outside the game - layout, proportion, palette, legibility - is judged from a PNG, and a restart is
 spent only on what needs the capsule.
 """
-import io, os, subprocess, sys, shutil, hashlib, time
+import io, os, re, subprocess, sys, shutil, hashlib, time
 
 NL = chr(10)          # response-file line separator, spelled out so no edit can eat the escape
 
@@ -359,6 +359,8 @@ def tool_tests():
     A missing tool is skipped, not failed: the C# suites are this command's contract and a tool that has
     not been written yet must not break the build. A tool that IS there and fails, fails the build.
     """
+    event_vocabulary_check()
+
     tool = os.path.join(HERE, 'tools', 'assess_flight.py')
     if not os.path.exists(tool):
         return
@@ -367,6 +369,81 @@ def tool_tests():
     print((p.stdout or '') + (p.stderr or ''))
     if p.returncode != 0:
         sys.exit('TOOL SELFTEST FAILED (exit %d)' % p.returncode)
+
+
+def event_vocabulary_check():
+    """
+    S90: EVERY DECLARED EVENT KIND MUST HAVE AN EMITTER.
+
+    `BlackBoxEvents.cs` names each `kind` as a constant so that a typo is a compile error rather than a
+    lost channel - which is true, and is NOT the same property as "every declared kind can actually
+    fire". Three could not: `rec.close`, `rec.scene_change` and `sys.string_state` were declared and
+    never emitted, each name appearing exactly once in the whole tree, at its own declaration.
+
+    That is BB1's ghost-column defect (S76) one level up, in the EVENT namespace. A reader filtering
+    `events.jsonl` for `sys.string_state` found nothing and concluded no string ever changed state -
+    the same wrong inference `torque_cmd` invited by being present and always blank.
+
+    S90 wired one and retired two. This is the standing guard that stops a fourth appearing: it is
+    STATIC on purpose, because a kind with an emitter that simply did not fire on a given flight is
+    legitimate, while a kind with NO emitter anywhere is always a defect and is knowable without
+    flying. BB1's runtime `BlackBoxCoverage` is the same idea for columns, checked at close.
+    """
+    events = os.path.join(HERE, 'src', 'pure', 'blackbox', 'BlackBoxEvents.cs')
+    if not os.path.exists(events):
+        return
+    print('--- event vocabulary (S90: every declared kind has an emitter)')
+    # ⛔ COMMENT LINES ARE SKIPPED, and that is not a detail. A retired kind is kept VERBATIM in a
+    # comment (C1.16/G12 - the reasoning for retiring it is worth more than the line it describes), so
+    # a naive scan of the file re-reports every retirement as a fresh defect. The first version of
+    # this check did exactly that and flagged RecClose and RecSceneChange, which S90 had just removed.
+    decl = re.compile(r'public\s+const\s+string\s+(\w+)\s*=\s*"([^"]+)"\s*;')
+    src = NL.join(l for l in io.open(events, encoding='utf-8').read().splitlines()
+                  if not l.strip().startswith('//'))
+    names = decl.findall(src)
+
+    # Every .cs in the plugin, minus the declaration file itself.
+    bodies = []
+    for root, _dirs, files in os.walk(os.path.join(HERE, 'src')):
+        for f in files:
+            if not f.endswith('.cs'):
+                continue
+            full = os.path.join(root, f)
+            if os.path.abspath(full) == os.path.abspath(events):
+                continue
+            bodies.append(io.open(full, encoding='utf-8', errors='replace').read())
+    blob = NL.join(bodies)
+
+    # ---- KNOWN DEAD, EACH OWNED BY A REGISTER LINE ----------------------------------------------
+    # ⛔ An entry here is a DEFECT ON RECORD, not a pardon. The guard stays live - a kind that is not
+    # on this list and has no emitter still fails the build - and this list is the register's to
+    # SHRINK. Nothing may be added to it without a register line that owns the fix.
+    #
+    # All three below are one finding, logged as S161 by S90 (C1.1: S90's declared scope was the three
+    # kinds it named, and these are not them). They are the S76 ghost-column defect applied to the
+    # ghost-column DETECTOR: `BlackBoxCoverage.Findings()` has no caller anywhere in plugin/src - the
+    # only mention outside its own file is a doc comment in BlackBoxManifest - so the coverage check
+    # never runs, these three events can never fire, and `tools/assess_flight.py` alerts on exactly
+    # these three kinds and will therefore report "no column defects" on every flight forever.
+    KNOWN_DEAD = {
+        'RecColumnNeverWritten': 'S161',
+        'RecColumnUnexpected':   'S161',
+        'Exception':             'S161',
+    }
+
+    dead = [(sym, kind) for sym, kind in names
+            if ('BlackBoxEvents.' + sym) not in blob and sym not in KNOWN_DEAD]
+    for sym, kind in dead:
+        print('    DEAD KIND  %-24s "%s"  - declared, never emitted' % (sym, kind))
+    if dead:
+        sys.exit('EVENT VOCABULARY FAILED: %d declared kind(s) have no emitter (S90). '
+                 'Either emit it, or retire it and say why - a named channel that cannot '
+                 'fire tells a reader the thing never happened.' % len(dead))
+    for sym in sorted(KNOWN_DEAD):
+        if any(s2 == sym for s2, _k in names):
+            print('    known dead  %-23s owned by register %s' % (sym, KNOWN_DEAD[sym]))
+    print('    %d kinds, %d emitted, %d known dead and owned'
+          % (len(names), len(names) - len(KNOWN_DEAD), len(KNOWN_DEAD)))
 
 
 def build_preview():

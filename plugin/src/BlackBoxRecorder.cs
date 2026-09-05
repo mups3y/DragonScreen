@@ -668,6 +668,10 @@ namespace DragonScreen.BlackBox
         int lastAlarmMask = -1;
         bool lastBus1, lastBus2, haveBusState;
         bool lastFire, lastLeak;
+        // S90: the six power strings' last seen state, A1/B1/C1 then A2/B2/C2. Primed on the first
+        // tick (haveStringState) so a fresh stream does not emit six edges for a state nobody changed.
+        readonly StringState[] lastString = new StringState[6];
+        bool haveStringState;
         bool liftoffSeen, maxQSeen, droguesSeen, mainsSeen, downSeen;
         bool lastBoostCni, haveBoostCni;             // [[OCT11]] — commanded-vs-lit divergence edge
         double boostCniSinceUt = double.NaN;
@@ -1622,6 +1626,47 @@ namespace DragonScreen.BlackBox
                 Emit(sys.Leaking ? BlackBoxEvents.SysLeakStart : BlackBoxEvents.SysIsolate,
                      new[] { Kv.Num("leak_rate", sys.LeakRate), Kv.Bit("isolating", sys.Isolating) });
                 lastLeak = sys.Leaking;
+            }
+
+            // ---- S90: THE SIX POWER STRINGS' TRANSITIONS, which were the ONE genuine gap ----
+            // `BlackBoxEvents.SysStringState` was DECLARED and never emitted, while every sibling
+            // beside it — bus trip, fire start/out, leak start/isolate — had an emitter. So the six
+            // `SystemsState.A1…C2` values were recorded as R2 COLUMNS and their TRANSITIONS were not,
+            // and a reader filtering `events.jsonl` for `sys.string_state` would find nothing and
+            // conclude no string ever changed state. That is S76's ghost-column defect one level up:
+            // the channel exists, is named, and can never fire.
+            //
+            // Written exactly like the bus edges above it, for the same stated reason: a trip cascade
+            // is instantaneous, so the EDGE is the event and the column is only context (§2.8).
+            // ⛔ `haveStringState` primes on the first tick rather than emitting six events for a
+            // state nobody changed — the same guard `haveBusState` exists for.
+            {
+                if (!haveStringState)
+                {
+                    for (int b = 0; b < 2; b++)
+                        for (int i = 0; i < 3; i++)
+                            lastString[b * 3 + i] = Systems.Get(sys, b + 1, i);
+                    haveStringState = true;
+                }
+                else
+                {
+                    for (int b = 0; b < 2; b++)
+                        for (int i = 0; i < 3; i++)
+                        {
+                            StringState now = Systems.Get(sys, b + 1, i);
+                            int k = b * 3 + i;
+                            if (now == lastString[k]) continue;
+                            // The name the crew and the P&ID both use: bus 1 -> A1/B1/C1, bus 2 -> A2/B2/C2.
+                            Emit(BlackBoxEvents.SysStringState, new[]
+                            {
+                                Kv.Str("string", ((char)('A' + i)).ToString() + (b + 1)),
+                                Kv.Int("bus", b + 1),
+                                Kv.Str("from", lastString[k].ToString()),
+                                Kv.Str("to", now.ToString()),
+                            });
+                            lastString[k] = now;
+                        }
+                }
             }
 
             // ---- the alarm channel + the page timeline: screens-derived, so guarded the same way the

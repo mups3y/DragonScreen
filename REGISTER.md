@@ -11405,7 +11405,7 @@ skipped. `python plugin/build.py test` run as the no-regression check: **ALL SUI
 
 ---
 
-### S90 [S] Three BlackBox event kinds are DECLARED and never emitted — the ghost-column defect, one level up — **TODO** — [TIER 3: a named channel that can never fire]
+### S90 [S] Three BlackBox event kinds are DECLARED and never emitted — the ghost-column defect, one level up — **DONE 2026-09-06** — [one WIRED, two RETIRED, **and a standing build guard added — which immediately found three more, logged as [[S161]]**] — [TIER 3: a named channel that can never fire]
 Logged by **BB2**, 2026-09-04 (C1.1 — noticed while re-reading the event vocabulary, deliberately not fixed).
 
 `plugin/src/pure/blackbox/BlackBoxEvents.cs` declares `RecClose` (`rec.close`), `RecSceneChange`
@@ -11426,6 +11426,87 @@ as R2 columns but a string TRANSITION has no event, while the bus/fire/leak tran
 **Not fixed here** (C1.1: BB2's scope is the second stream), and not decided either — "wire it" and "delete
 it" are both defensible and the choice is a one-line register call, not an owner gate.
 BB1's own `BlackBoxCoverage` is the model for the fix if one is wanted: declare, then check at close.
+
+#### ✅ DONE 2026-09-06 — **the two halves went opposite ways, on this line's own reasoning**
+
+⭐ **This line said the choice was mine:** *"'wire it' and 'delete it' are both defensible and the choice is
+a one-line register call, not an owner gate."* Both of its readings were **verified in source before acting
+on them**, and both held.
+
+**`sys.string_state` — WIRED.** The asymmetry is exact, and measured: `SysBusTrip` has **2** emitters,
+`SysFireStart` / `SysFireOut` / `SysLeakStart` **1** each, and `SysStringState` **0**. So the six
+`SystemsState.A1…C2` values had R2 **columns** and no **transitions**, while every sibling beside them had
+both. Now emitted from the same systems-edges block, in the same shape as the bus edges (`{string, bus,
+from, to}`), with a `haveStringState` prime so a fresh stream does not fire six edges for a state nobody
+changed — the guard `haveBusState` already exists for.
+
+**`rec.close` + `rec.scene_change` — RETIRED, not wired.** Both are **already said** by `rec.stream_end`,
+which carries a `reason` — and `"scene_change"` is **a reason actually passed**: `BlackBoxRecorder.cs:123`,
+`OnDestroy() { Close("scene_change"); }`, beside `scene_start` / `self_disable` / `revert` / `row_failed` /
+`width_mismatch` / `size_ceiling`. ⛔ Wiring them would have produced **a second event saying what
+`rec.stream_end` already says, on the same edge** — two channels for one fact, which is the defect C7.1 is
+about rather than a fix for it. **C1.16/G12:** both declarations are kept **verbatim** in a comment where
+they stood, with why they were retired and why the third went the other way.
+
+#### ⭐ AND THE STANDING GUARD FOUND THREE MORE — the reason this line is worth more than three strings
+
+`plugin/build.py` gained **`event_vocabulary_check()`**, run by `build.py test`: every `public const string`
+kind in `BlackBoxEvents.cs` must appear somewhere else in `plugin/src` as `BlackBoxEvents.<Sym>`.
+⛔ **STATIC on purpose.** A kind whose emitter simply did not fire on a given flight is legitimate; a kind
+with **no emitter anywhere** is always a defect and is knowable without flying. (BB1's runtime
+`BlackBoxCoverage` is the same idea for columns.)
+
+**It failed immediately, on three kinds nobody had looked for**, now logged as **[[S161]]**:
+`rec.column_never_written` · `rec.column_unexpected_writer` · `exception`.
+⭐ **Those are BB1's own ANTI-GHOST machinery, and they are ghosts.** `BlackBoxCoverage.Findings()` has
+**no caller anywhere in `plugin/src`** — the only mention outside its own file is a doc comment in
+`BlackBoxManifest.cs` — so the coverage check never runs, those three events can never fire, and
+`tools/assess_flight.py:1586` **alerts on exactly those three kinds**, so it will report "no column
+defects" on every flight forever. **Logged, not fixed (C1.1)** — S90's declared scope was the three kinds
+it named, and these are not them.
+
+⚠ **The `KNOWN_DEAD` list in the guard is a DEFECT ON RECORD, not a pardon.** Each entry names the register
+line that owns its fix, the guard stays live for everything else, and **the list is the register's to
+shrink** — nothing may be added without a line that owns it.
+
+⚠ **AND THE GUARD'S FIRST VERSION WAS WRONG, recorded because it would fool the next chat.** Its regex
+matched the *commented-out* declarations too, so it re-reported `RecClose` and `RecSceneChange` — the two
+this very task had just retired **into comments, as C1.16/G12 requires** — as fresh defects. It now strips
+comment lines before scanning, and says why in place.
+
+**MUTATION-PROVEN.** Declaring a fresh `GhostKind = "rec.ghost"` with no emitter fails the build:
+*"DEAD KIND GhostKind "rec.ghost" — declared, never emitted"*. Removed, and the build is green:
+**39 kinds, 36 emitted, 3 known dead and owned.**
+
+**Verified (C1.3).** `python plugin/build.py test` **green — ALL SUITES PASSED** plus the new vocabulary
+check. Recorder glue + one pure file + the build script; **no draw changed, so no preview applies**
+(C1.3's carve-out). **C1.16/G12: 0 comment prose lines lost.** No `install`, no glass, no `git push`.
+
+### S161 [S] BB1's ghost-column DETECTOR is itself a ghost — `BlackBoxCoverage` has no caller, so three event kinds can never fire — **TODO** — [found by [[S90]]'s new build guard, 2026-09-06; TIER 2: a check that silently always passes]
+
+- **The finding, and it is recursive.** `pure/blackbox/BlackBoxCoverage.cs` is BB1/BB6's ghost-column
+  detector — the machinery that exists so a column which is declared and never written is *reported*.
+  **`BlackBoxCoverage.Findings()` has no caller anywhere in `plugin/src`.** The only mention outside its
+  own file is a doc comment in `BlackBoxManifest.cs:71` describing what it *"was given at close"*.
+- **So three declared event kinds can never fire:** `rec.column_never_written`,
+  `rec.column_unexpected_writer`, `exception`.
+- ⛔ **AND THE CONSEQUENCE IS WORSE THAN A DEAD CHANNEL.** `tools/assess_flight.py:1586` scans the event
+  log for exactly those three kinds and raises an `alert()` on each. Since none can ever appear,
+  **the flight report will state "no column defects" on every flight, forever, whatever the truth is.**
+  A check that always passes is worse than no check: it is read as evidence.
+- ⭐ **This is S76's ghost-column defect applied to the ghost-column detector**, which is why it is worth a
+  TIER 2 rather than hygiene — the same class of error, one level up again, in the machinery built to
+  prevent it.
+- **Not fixed by [[S90]] (C1.1):** S90's declared scope was the three kinds it named (`rec.close`,
+  `rec.scene_change`, `sys.string_state`) and these are three different ones. S90's guard is what found
+  them, and its `KNOWN_DEAD` list names this line as their owner.
+- **DONE when:** `BlackBoxCoverage.Findings()` is called at stream close and its findings emitted as the
+  three kinds, **or** the detector and its kinds are retired together with the reason recorded in place
+  (C1.16/G12) **and `assess_flight.py`'s alert list updated to match** — a scan for a kind that cannot
+  exist must not survive either choice. Then remove all three from `build.py`'s `KNOWN_DEAD`.
+- ⚠ **Check `exception` separately**: it is declared beside `fault.raised`/`fault.cleared` and may want a
+  real emitter in the recorder's `catch` blocks rather than retirement — a swallowed exception that
+  writes no event is its own version of this defect.
 
 ### S91 [S] `plugin/__pycache__/build.cpython-313.pyc` is COMMITTED — a build artefact under version control — **DONE 2026-09-05** (batched with S3+S92) — [TIER 4: hygiene]
 Logged by **BB2**, 2026-09-04 (C1.1 — noticed because it bit).

@@ -116,13 +116,35 @@ namespace DragonScreen.BlackBox
         // A misspelled `kind` does not fail: the line is written, the reader's filter misses it, and the
         // event is invisible in exactly the way §0's misdiagnoses were invisible. Naming them costs
         // nothing and removes the failure mode.
+        // ---- ⚠ S90, 2026-09-06: `RecClose` and `RecSceneChange` WERE DECLARED HERE AND RETIRED ----
+        // They read, verbatim:
+        //     public const string RecClose       = "rec.close";
+        //     public const string RecSceneChange = "rec.scene_change";
+        // Nothing ever emitted either — `grep` found each name exactly once, at its own declaration.
+        //
+        // ⛔ THEY WERE REMOVED RATHER THAN WIRED, and this is the reasoning, because the opposite
+        // choice was equally available and someone will wonder. Both are ALREADY SAID by
+        // `RecStreamEnd`, which carries a `reason` — and `"scene_change"` is one of the reasons
+        // actually passed (`BlackBoxRecorder.cs:123`, `OnDestroy` → `Close("scene_change")`), beside
+        // `scene_start`, `self_disable`, `revert`, `row_failed`, `width_mismatch`, `size_ceiling`.
+        // So wiring them would have produced a SECOND event saying what `rec.stream_end` already
+        // says, on the same edge — two channels for one fact, which is the defect C7.1 is about,
+        // not a fix for it.
+        //
+        // ⭐ The third ghost, `SysStringState`, was the OPPOSITE case and was WIRED instead: its
+        // siblings (bus trip, fire start/out, leak start/isolate) all had emitters and it alone did
+        // not, so the six power strings had R2 columns and no transitions. See BlackBoxRecorder's
+        // systems-edges block. **The two halves of S90 went opposite ways on purpose.**
+        //
+        // ⚠ The header above still stands: naming a kind as a constant makes a typo a compile error
+        // rather than a lost channel. What it does NOT do — and what S90 is — is guarantee that every
+        // declared kind has an emitter. A reader filtering for a declared-but-dead kind finds nothing
+        // and concludes the thing never happened, which is S76's ghost-column defect one level up.
         public const string RecOpen        = "rec.open";
-        public const string RecClose       = "rec.close";
         public const string RecRevert      = "rec.revert_detected";
         public const string RecVesselChange = "rec.vessel_change";
         public const string RecFocusChange = "rec.focus_change";
         public const string RecWarpChange  = "rec.warp_change";
-        public const string RecSceneChange = "rec.scene_change";
         public const string RecWriteError  = "rec.write_error";
         public const string RecSelfDisable = "rec.self_disable";
         public const string RecWidthMismatch = "rec.width_mismatch";
