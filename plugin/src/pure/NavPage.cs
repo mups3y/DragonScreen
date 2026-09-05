@@ -32,11 +32,35 @@ namespace DragonScreen
 {
     public static class NavPage
     {
+        // ---- EVERY NUMBER IN THIS FILE IS A SIZE AT Typography.RefPanelW (S117 / QC R-02) --------
+        // NavPage was written in literal panel pixels for the 1280x703 screen it was measured on, and
+        // for two weeks that was the only width there was. On 2026-09-05 the shipped screenWidth went
+        // 1280 -> 2560 (Q5 / S115) and NOTHING here moved: the same 16 px label on a canvas twice as
+        // wide is HALF the physical size to the crew. NAV is a live screen - it is what the right-hand
+        // console shows by default - so that was a plain halving of legibility that nobody asked for,
+        // logged by S115 as S117 and fixed here.
+        //
+        // The fix is CoverPage's own idiom, arrived at from the other end: every literal below is a
+        // size at Typography.RefPanelW, and Sc(w) turns it into panel pixels. At 1280 Sc is exactly 1
+        // and this file renders byte-for-byte what it always did; at 2560 everything - type, boxes,
+        // padding, strokes, marker sizes - doubles together, so the page is the same picture at the
+        // same physical size and only the pixel density changes.
+        //
+        // ⛔ SCALE THE BOXES WITH THE TYPE, ALWAYS. S117's own line warned that "font sizes cannot be
+        // scaled in isolation from the marker/box sizes sitting beside them": doubling the type inside
+        // a 276 px column that stayed 276 px would have pushed the readouts straight out of their own
+        // column. If you add a literal here, it is a RefPanelW size and it gets Sc().
         private const float Pad = 24f;
         private const float ColumnW = 276f;
         /// <summary>26, not 18: at 18 the headers sat hard against the top frame line.</summary>
         private const float HeaderY = 26f;
         private const float MapTop = 58f;
+
+        /// <summary>
+        /// This page's scale: panel pixels per RefPanelW pixel, for a panel `w` device px wide.
+        /// 1.0 at 1280, 2.0 at 2560. The one place the width enters the layout.
+        /// </summary>
+        private static float Sc(int w) { return Typography.ScaleFor(w); }
 
         /// <summary>
         /// Horizontal bands the ORBIT view's globe is built from. See Globe().
@@ -63,34 +87,46 @@ namespace DragonScreen
         /// <summary>The map panel, in page pixels.</summary>
         public static void MapRect(int w, int h, out float x, out float y, out float rw, out float rh)
         {
-            x = Pad;
-            y = MapTop;
-            rw = w - Pad * 2f - ColumnW - Pad;
-            if (rw < 64f) rw = 64f;
-            rh = (h - ChromeBar.Height - Pad) - MapTop;
-            if (rh < 64f) rh = 64f;
+            float sc = Sc(w);
+            x = Pad * sc;
+            y = MapTop * sc;
+            rw = w - Pad * 3f * sc - ColumnW * sc;
+            if (rw < 64f * sc) rw = 64f * sc;
+            rh = ColumnBottom(w, h) - MapTop * sc;
+            if (rh < 64f * sc) rh = 64f * sc;
         }
 
         /// <summary>Left edge of the readout / control column.</summary>
-        private static float ColumnX(int w) { return w - Pad - ColumnW; }
+        private static float ColumnX(int w) { return w - (Pad + ColumnW) * Sc(w); }
 
-        /// <summary>Bottom of the map, which the control cluster is anchored to.</summary>
-        private static float ColumnBottom(int h) { return h - ChromeBar.Height - Pad; }
+        /// <summary>
+        /// Bottom of the map, which the control cluster is anchored to.
+        ///
+        /// ⛔ ChromeBar.Height IS NOT SCALED HERE, AND THAT IS DELIBERATE. This has to clear the bar
+        /// that is ACTUALLY DRAWN, and ChromeBar is still a RefPanelW-literal page of its own (its
+        /// Height, Pitch and Typography.Caption label do not track screenWidth either) - the same
+        /// defect as this file's, on a bar that appears on every legacy page rather than one. Scaling
+        /// it here and not there would open a gap between the page and the bar. Logged, not fixed
+        /// here (C1.1): see the 2026-09-06 batch, job 3.
+        /// </summary>
+        private static float ColumnBottom(int w, int h) { return h - ChromeBar.Height - Pad * Sc(w); }
 
         public static void NextViewRect(int w, int h, out float x, out float y,
                                         out float rw, out float rh)
         {
-            x = ColumnX(w); rw = ColumnW; rh = BtnH;
-            y = ColumnBottom(h) - BtnH;
+            float sc = Sc(w);
+            x = ColumnX(w); rw = ColumnW * sc; rh = BtnH * sc;
+            y = ColumnBottom(w, h) - BtnH * sc;
         }
 
         public static void ZoomRect(int w, int h, bool inward, out float x, out float y,
                                     out float rw, out float rh)
         {
-            rw = BtnW; rh = BtnH;
-            y = ColumnBottom(h) - BtnH * 2f - BtnGap * 2f;
-            float right = ColumnX(w) + ColumnW;
-            x = inward ? (right - BtnW) : (right - BtnW * 2f - BtnGap);
+            float sc = Sc(w);
+            rw = BtnW * sc; rh = BtnH * sc;
+            y = ColumnBottom(w, h) - (BtnH * 2f + BtnGap * 2f) * sc;
+            float right = ColumnX(w) + ColumnW * sc;
+            x = inward ? (right - BtnW * sc) : (right - (BtnW * 2f + BtnGap) * sc);
         }
 
         /// <summary>
@@ -100,11 +136,12 @@ namespace DragonScreen
         public static void PadRect(int w, int h, int dx, int dy, out float x, out float y,
                                    out float rw, out float rh)
         {
-            rw = BtnW; rh = BtnH;
-            float cx = ColumnX(w) + ColumnW * 0.5f - BtnW * 0.5f;
-            float cy = ColumnBottom(h) - BtnH * 3f - BtnGap * 4f - BtnH;
-            x = cx + dx * (BtnW + BtnGap);
-            y = cy + dy * (BtnH + BtnGap);
+            float sc = Sc(w);
+            rw = BtnW * sc; rh = BtnH * sc;
+            float cx = ColumnX(w) + (ColumnW * 0.5f - BtnW * 0.5f) * sc;
+            float cy = ColumnBottom(w, h) - (BtnH * 4f + BtnGap * 4f) * sc;
+            x = cx + dx * (BtnW + BtnGap) * sc;
+            y = cy + dy * (BtnH + BtnGap) * sc;
         }
 
         public static PageHit HitTest(float px, float py, int w, int h)
@@ -135,6 +172,7 @@ namespace DragonScreen
 
         public static void Build(DisplayList dl, int w, int h, PageState s, MapView view)
         {
+            float sc = Sc(w);
             float mx, my, mw, mh;
             MapRect(w, h, out mx, out my, out mw, out mh);
 
@@ -163,10 +201,10 @@ namespace DragonScreen
             // anything resolves inside it.
             dl.Rect(mx, my, mw, mh, DragonPalette.Inset2);
 
-            if (view.Mode == NavMode.Map) Map(dl, s, view, mx, my, mw, mh);
+            if (view.Mode == NavMode.Map) Map(dl, s, view, mx, my, mw, mh, sc);
             else if (view.Mode == NavMode.Orbit)
             {
-                Orbit(dl, s, mx, my, mw, mh, false, view);
+                Orbit(dl, s, mx, my, mw, mh, false, view, sc);
                 // ---- A ZOOMED PLOT OVERFLOWS ITS WELL, AND NOTHING CLIPS IT ----
                 // Neither renderer has a scissor rect and giving each one its own would be two things
                 // to keep in step (DrawCmd's header says so, and MapProjection's whole texture-window
@@ -177,17 +215,17 @@ namespace DragonScreen
                 //
                 // Only when the view has actually been moved: at the default framing the plot fits its
                 // well by construction, so the default render is byte-for-byte what it was before S43.
-                if (MapProjection.OrbitMoved(view)) MaskOutside(dl, w, h, mx, my, mw, mh);
+                if (MapProjection.OrbitMoved(view)) MaskOutside(dl, w, h, mx, my, mw, mh, sc);
             }
-            else Planet(dl, s, view, mx, my, mw, mh, true);   // NAV owns the live 3D view (S10)
+            else Planet(dl, s, view, mx, my, mw, mh, true, sc);   // NAV owns the live 3D view (S10)
 
-            dl.Box(mx, my, mw, mh, 2f, DragonPalette.Hairline);
+            dl.Box(mx, my, mw, mh, 2f * sc, DragonPalette.Hairline);
 
             // The headers are emitted AFTER the panel, not before it, so that a zoomed ORBIT plot's
             // overspill mask cannot paint over them. They sit above the well in every mode, so this
             // is the same picture in all three.
-            dl.Text(title, Pad, HeaderY, Typography.Body, TextAlign.Left, DragonPalette.Text1);
-            dl.Text(sub, mx + mw, HeaderY, Typography.Caption, TextAlign.Right, DragonPalette.Text6);
+            dl.Text(title, Pad * sc, HeaderY * sc, Typography.Body * sc, TextAlign.Left, DragonPalette.Text1);
+            dl.Text(sub, mx + mw, HeaderY * sc, Typography.Caption * sc, TextAlign.Right, DragonPalette.Text6);
 
             Column(dl, w, h, s, view);
             Controls(dl, w, h, view);
@@ -201,7 +239,7 @@ namespace DragonScreen
         /// The chrome bar is masked too and does not care - it is built after the page, over the top.
         /// </summary>
         private static void MaskOutside(DisplayList dl, int w, int h,
-                                        float mx, float my, float mw, float mh)
+                                        float mx, float my, float mw, float mh, float sc)
         {
             // ---- THE BANDS OVERHANG THE PAGE AND EACH OTHER, ON PURPOSE ----
             // Both renderers antialias a filled rect's edges, so a band whose edge lands exactly on
@@ -209,7 +247,7 @@ namespace DragonScreen
             // seen in the first x4 render, a one-pixel stripe of planet down the left of the page.
             // Overhanging the page bounds puts those soft edges off the canvas, and overlapping the
             // corners puts the band-to-band seams inside a band rather than between two.
-            const float Over = 4f;
+            float Over = 4f * sc;
             Rgba bg = DragonPalette.Background;
             float below = my + mh, right = mx + mw;
             dl.Rect(-Over, -Over, w + Over * 2f, my + Over, bg);
@@ -223,8 +261,13 @@ namespace DragonScreen
         // Public for the same reason Planet is: the Figma Cover page's camera has a 2D MAP view
         // (First.vue's `view-01` / NavEarth), and a second flat-map renderer over there would drift
         // from this one the first time either was touched. One map, two pages.
+        /// <param name="sc">This panel's type/marker scale, Typography.ScaleFor(panelW). The rect is
+        /// the caller's, but everything drawn INSIDE it - the track weight, the graticule, the marker
+        /// boxes and their labels - is a RefPanelW size, so the caller has to say what a RefPanelW
+        /// pixel is worth on its panel. S117 / QC R-02; the Cover's own MAP view is why this is a
+        /// parameter and not Sc(w).</param>
         public static void Map(DisplayList dl, PageState s, MapView view,
-                               float mx, float my, float mw, float mh)
+                               float mx, float my, float mw, float mh, float sc)
         {
             // ---- the body itself ----
             MapQuad a, b;
@@ -260,7 +303,7 @@ namespace DragonScreen
                     float px, py;
                     MapProjection.Project(0.0, lon, view, mx, my, mw, mh, out px, out py);
                     if (px < mx || px > mx + mw) continue;
-                    dl.Rect(px, gTop, 1f, gh,
+                    dl.Rect(px, gTop, 1f * sc, gh,
                             (lon == 0) ? DragonPalette.Text5 : DragonPalette.Hairline);
                 }
             for (int lat = -60; lat <= 60; lat += 30)
@@ -268,7 +311,7 @@ namespace DragonScreen
                 float px, py;
                 MapProjection.Project(lat, 0.0, view, mx, my, mw, mh, out px, out py);
                 if (py < my || py > my + mh) continue;
-                dl.Rect(mx, py, mw, 1f, (lat == 0) ? DragonPalette.Text5 : DragonPalette.Hairline);
+                dl.Rect(mx, py, mw, 1f * sc, (lat == 0) ? DragonPalette.Text5 : DragonPalette.Hairline);
             }
 
             if (!s.Valid) return;
@@ -287,7 +330,7 @@ namespace DragonScreen
                 // opposite edges of an equirectangular map, and a straight line between them would
                 // streak clean across the panel. So a segment wider than half the map is dropped - the
                 // track simply breaks at the seam, which is the honest thing an unwrapped map can show.
-                float lineW = 2.5f + view.ZoomStep * 0.4f;
+                float lineW = (2.5f + view.ZoomStep * 0.4f) * sc;
                 float seam = mw * 0.5f;
                 float pax, pay;
                 MapProjection.Project(s.TrackLat[0], s.TrackLon[0], view, mx, my, mw, mh, out pax, out pay);
@@ -319,8 +362,8 @@ namespace DragonScreen
                 MapProjection.Project(s.TargetLat, s.TargetLon, view, mx, my, mw, mh, out px, out py);
                 if (MapProjection.Inside(px, py, mx, my, mw, mh))
                 {
-                    dl.Box(px - 7f, py - 7f, 14f, 14f, 2f, DragonPalette.Caution);
-                    dl.Text("TGT", px, py + 10f, Typography.Dense, TextAlign.Centre,
+                    dl.Box(px - 7f * sc, py - 7f * sc, 14f * sc, 14f * sc, 2f * sc, DragonPalette.Caution);
+                    dl.Text("TGT", px, py + 10f * sc, Typography.Dense * sc, TextAlign.Centre,
                             DragonPalette.Caution);
                 }
             }
@@ -333,9 +376,9 @@ namespace DragonScreen
                 MapProjection.Project(s.Latitude, s.Longitude, view, mx, my, mw, mh, out px, out py);
                 if (MapProjection.Inside(px, py, mx, my, mw, mh))
                 {
-                    dl.Rect(px - 9f, py - 1f, 18f, 2f, DragonPalette.Go);
-                    dl.Rect(px - 1f, py - 9f, 2f, 18f, DragonPalette.Go);
-                    dl.Box(px - 5f, py - 5f, 10f, 10f, 2f, DragonPalette.Go);
+                    dl.Rect(px - 9f * sc, py - 1f * sc, 18f * sc, 2f * sc, DragonPalette.Go);
+                    dl.Rect(px - 1f * sc, py - 9f * sc, 2f * sc, 18f * sc, DragonPalette.Go);
+                    dl.Box(px - 5f * sc, py - 5f * sc, 10f * sc, 10f * sc, 2f * sc, DragonPalette.Go);
                 }
             }
         }
@@ -389,8 +432,8 @@ namespace DragonScreen
         // Public so the Figma-built pages (CoverPage) can reuse the exact same live globe + orbit
         // overlay inside their own layout, instead of a second globe renderer that could drift.
         public static void Planet(DisplayList dl, PageState s, MapView view,
-                                   float mx, float my, float mw, float mh)
-        { Planet(dl, s, view, mx, my, mw, mh, false); }
+                                   float mx, float my, float mw, float mh, float sc)
+        { Planet(dl, s, view, mx, my, mw, mh, false, sc); }
 
         /// <summary>
         /// As Planet, but able to show the LIVE scaled-space render (S10, MAP_MFD_RESEARCH §2).
@@ -406,24 +449,24 @@ namespace DragonScreen
         /// render. See PlanetGeom.NoSignalLabel.
         /// </summary>
         public static void Planet(DisplayList dl, PageState s, MapView view,
-                                   float mx, float my, float mw, float mh, bool live)
+                                   float mx, float my, float mw, float mh, bool live, float sc)
         {
-            PlanetBody(dl, s, view, mx, my, mw, mh, live);
+            PlanetBody(dl, s, view, mx, my, mw, mh, live, sc);
 
             // Drawn LAST and outside PlanetBody so it survives every early return in there - a state
             // with no orbit to plot is exactly the state where an unmarked disc would read as a feed.
-            if (live && !s.PlanetCamLive) NoSignalMark(dl, mx, my);
+            if (live && !s.PlanetCamLive) NoSignalMark(dl, mx, my, sc);
         }
 
         /// <summary>The globe and its overlay. Split from Planet only so the no-signal marking cannot
         /// be skipped by an early return - see Planet.</summary>
         private static void PlanetBody(DisplayList dl, PageState s, MapView view,
-                                       float mx, float my, float mw, float mh, bool live)
+                                       float mx, float my, float mw, float mh, bool live, float sc)
         {
             float cx = mx + mw * 0.5f, cy = my + mh * 0.5f;
             float r = System.Math.Min(mw, mh) * GlobeDiscFrac
                       * (float)System.Math.Pow(PlanetGeom.ZoomBase, view.PlanetZoom);
-            if (r < 24f) r = 24f;
+            if (r < 24f * sc) r = 24f * sc;
 
             // Follow the vehicle's longitude, plus the crew's manual spin.
             double lonCentre = (s.Valid && s.HasFix ? s.Longitude : 0.0) + view.PlanetRotDeg;
@@ -436,13 +479,13 @@ namespace DragonScreen
             if (live && s.PlanetCamLive)
                 dl.Image(ImageId.ScaledPlanetLive, mx, my, mw, mh, DragonPalette.White);
             else
-                Globe(dl, cx, cy, r, lonCentre);   // the real Earth - the same disc the ORBIT view uses
+                Globe(dl, cx, cy, r, lonCentre, sc);   // the real Earth - the same disc the ORBIT view uses
 
             PlanetOverlay ov = s.Planet;
             if (ov == null || !ov.Ready)
             {
                 if (!s.Valid)
-                    dl.Text("NO DATA", cx, my + mh - 26f, Typography.Caption, TextAlign.Centre,
+                    dl.Text("NO DATA", cx, my + mh - 26f * sc, Typography.Caption * sc, TextAlign.Centre,
                             DragonPalette.Text7);
                 return;
             }
@@ -451,42 +494,42 @@ namespace DragonScreen
             if (ov.TgtCount > 1)
                 ProjPolyline(dl, ov.TgtLat, ov.TgtLon, ov.TgtRatio, ov.TgtCount, lonCentre,
                              cx, cy, r, mx, my, mw, mh,
-                             DragonPalette.Caution, DragonPalette.Caution, DragonPalette.Caution, GlobeLineW);
+                             DragonPalette.Caution, DragonPalette.Caution, DragonPalette.Caution, GlobeLineW * sc);
 
             // ---- our orbit, fading along its length so the direction of travel reads (but kept cyan
             // and visible against the darker real Earth - the far tail is AccentDim, not a grey) ----
             if (ov.OrbitCount > 1)
                 ProjPolyline(dl, ov.OrbitLat, ov.OrbitLon, ov.OrbitRatio, ov.OrbitCount, lonCentre,
                              cx, cy, r, mx, my, mw, mh,
-                             DragonPalette.Accent, DragonPalette.AccentDim, DragonPalette.AccentDim, GlobeLineW);
+                             DragonPalette.Accent, DragonPalette.AccentDim, DragonPalette.AccentDim, GlobeLineW * sc);
 
             if (ov.OnSurface)
-                dl.Text("ON SURFACE - NO ORBIT", cx, my + mh - 26f, Typography.Caption,
+                dl.Text("ON SURFACE - NO ORBIT", cx, my + mh - 26f * sc, Typography.Caption * sc,
                         TextAlign.Centre, DragonPalette.Text6);
 
             // ---- markers ----
             float sx, sy;
             if (ProjMarker(ov.Ap, lonCentre, cx, cy, r, mx, my, mw, mh, out sx, out sy))
             {
-                dl.Box(sx - 5f, sy - 5f, 10f, 10f, 2f, DragonPalette.Text3);
-                dl.Text("AP", sx, sy + 10f, Typography.Dense, TextAlign.Centre, DragonPalette.Text5);
+                dl.Box(sx - 5f * sc, sy - 5f * sc, 10f * sc, 10f * sc, 2f * sc, DragonPalette.Text3);
+                dl.Text("AP", sx, sy + 10f * sc, Typography.Dense * sc, TextAlign.Centre, DragonPalette.Text5);
             }
             if (ProjMarker(ov.Pe, lonCentre, cx, cy, r, mx, my, mw, mh, out sx, out sy))
             {
-                dl.Box(sx - 5f, sy - 5f, 10f, 10f, 2f, DragonPalette.Text3);
-                dl.Text("PE", sx, sy + 10f, Typography.Dense, TextAlign.Centre, DragonPalette.Text5);
+                dl.Box(sx - 5f * sc, sy - 5f * sc, 10f * sc, 10f * sc, 2f * sc, DragonPalette.Text3);
+                dl.Text("PE", sx, sy + 10f * sc, Typography.Dense * sc, TextAlign.Centre, DragonPalette.Text5);
             }
             if (ProjMarker(ov.Target, lonCentre, cx, cy, r, mx, my, mw, mh, out sx, out sy))
             {
-                dl.Box(sx - 7f, sy - 7f, 14f, 14f, 2f, DragonPalette.Caution);
-                dl.Text("TGT", sx, sy + 10f, Typography.Dense, TextAlign.Centre, DragonPalette.Caution);
+                dl.Box(sx - 7f * sc, sy - 7f * sc, 14f * sc, 14f * sc, 2f * sc, DragonPalette.Caution);
+                dl.Text("TGT", sx, sy + 10f * sc, Typography.Dense * sc, TextAlign.Centre, DragonPalette.Caution);
             }
             // Us last, so nothing is drawn over the one marker that must always be findable.
             if (ProjMarker(ov.Vessel, lonCentre, cx, cy, r, mx, my, mw, mh, out sx, out sy))
             {
-                dl.Rect(sx - 9f, sy - 1f, 18f, 2f, DragonPalette.Go);
-                dl.Rect(sx - 1f, sy - 9f, 2f, 18f, DragonPalette.Go);
-                dl.Box(sx - 5f, sy - 5f, 10f, 10f, 2f, DragonPalette.Go);
+                dl.Rect(sx - 9f * sc, sy - 1f * sc, 18f * sc, 2f * sc, DragonPalette.Go);
+                dl.Rect(sx - 1f * sc, sy - 9f * sc, 2f * sc, 18f * sc, DragonPalette.Go);
+                dl.Box(sx - 5f * sc, sy - 5f * sc, 10f * sc, 10f * sc, 2f * sc, DragonPalette.Go);
             }
         }
 
@@ -501,11 +544,11 @@ namespace DragonScreen
         /// for something that is not a fault". The wording lives in PlanetGeom so the label naming
         /// S10b cannot drift from the code that would clear it.
         /// </summary>
-        private static void NoSignalMark(DisplayList dl, float mx, float my)
+        private static void NoSignalMark(DisplayList dl, float mx, float my, float sc)
         {
-            dl.Text(PlanetGeom.NoSignalLabel, mx + 12f, my + 10f, Typography.Caption,
+            dl.Text(PlanetGeom.NoSignalLabel, mx + 12f * sc, my + 10f * sc, Typography.Caption * sc,
                     TextAlign.Left, DragonPalette.Caution);
-            dl.Text(PlanetGeom.NoSignalDetail, mx + 12f, my + 30f, Typography.Dense,
+            dl.Text(PlanetGeom.NoSignalDetail, mx + 12f * sc, my + 30f * sc, Typography.Dense * sc,
                     TextAlign.Left, DragonPalette.Text6);
         }
 
@@ -596,8 +639,9 @@ namespace DragonScreen
         /// by the engine: it needs no unit convention to be agreed with KSP, and it cannot disagree
         /// with the apogee and perigee printed beside it.
         /// </summary>
-        public static void Orbit(DisplayList dl, PageState s, float mx, float my, float mw, float mh)
-        { Orbit(dl, s, mx, my, mw, mh, false); }
+        public static void Orbit(DisplayList dl, PageState s, float mx, float my, float mw, float mh,
+                                 float sc)
+        { Orbit(dl, s, mx, my, mw, mh, false, sc); }
 
         /// <summary>
         /// As Orbit, plus an optional approach chord from the vehicle to periapsis (T6's rendezvous
@@ -605,8 +649,8 @@ namespace DragonScreen
         /// by the plain NAV page (chord off) and RendezvousPage (chord on), not two that could drift.
         /// </summary>
         public static void Orbit(DisplayList dl, PageState s, float mx, float my, float mw, float mh,
-                                 bool showApproachChord)
-        { Orbit(dl, s, mx, my, mw, mh, showApproachChord, new MapView()); }
+                                 bool showApproachChord, float sc)
+        { Orbit(dl, s, mx, my, mw, mh, showApproachChord, new MapView(), sc); }
 
         /// <summary>
         /// As Orbit, with the crew's ZOOM and PAN applied (S43).
@@ -638,7 +682,7 @@ namespace DragonScreen
         /// trade the owner accepted; it is not a defect to fix later.
         /// </summary>
         public static void Orbit(DisplayList dl, PageState s, float mx, float my, float mw, float mh,
-                                 bool showApproachChord, MapView view)
+                                 bool showApproachChord, MapView view, float sc)
         {
             // The PANEL centre, which is where captions sit whatever the viewport is doing - a
             // caption that panned off the panel with the geometry would be a caption you cannot read
@@ -648,7 +692,7 @@ namespace DragonScreen
 
             if (!s.Valid || s.BodyRadiusM <= 0.0)
             {
-                dl.Text("NO ORBIT", pcx, pcy - 10f, Typography.Body, TextAlign.Centre,
+                dl.Text("NO ORBIT", pcx, pcy - 10f * sc, Typography.Body * sc, TextAlign.Centre,
                         DragonPalette.Text7);
                 return;
             }
@@ -656,7 +700,7 @@ namespace DragonScreen
             double rA = s.BodyRadiusM + s.ApogeeM;
             double rP = s.BodyRadiusM + s.PerigeeM;
             if (rP < 0.0) rP = 0.0;
-            if (rA <= 0.0) { dl.Text("NO ORBIT", pcx, pcy, Typography.Body, TextAlign.Centre,
+            if (rA <= 0.0) { dl.Text("NO ORBIT", pcx, pcy, Typography.Body * sc, TextAlign.Centre,
                                      DragonPalette.Text7); return; }
 
             double aAxis = (rA + rP) * 0.5;
@@ -728,7 +772,7 @@ namespace DragonScreen
 
             // The body sits at the focus, periapsis to the RIGHT - at the panel centre when the view
             // is the default one, and wherever the zoom anchor and the pan have put it otherwise.
-            Globe(dl, cx, cy, (float)(s.BodyRadiusM * scale), s.Longitude);
+            Globe(dl, cx, cy, (float)(s.BodyRadiusM * scale), s.Longitude, sc);
 
             // ---- ON THE GROUND THERE IS NO ORBIT TO PLOT ----
             // Same rule as the dashed apogee and perigee, and the same reason: the conic through a
@@ -736,7 +780,7 @@ namespace DragonScreen
             // planet, say so, and draw no ellipse rather than a confident wrong one.
             if (!s.ApogeeShown)
             {
-                dl.Text("ON SURFACE - NO ORBIT", pcx, my + mh - 34f, Typography.Caption,
+                dl.Text("ON SURFACE - NO ORBIT", pcx, my + mh - 34f * sc, Typography.Caption * sc,
                         TextAlign.Centre, DragonPalette.Text6);
                 return;
             }
@@ -767,7 +811,7 @@ namespace DragonScreen
             if (closed)
             {
                 ArcDots(dl, aAxis, ecc, 0.0, 2.0 * System.Math.PI, steps, false,
-                        cx, cy, scale, mx, my, mw, mh);
+                        cx, cy, scale, mx, my, mw, mh, sc);
             }
             else if (anyArc)
             {
@@ -775,7 +819,7 @@ namespace DragonScreen
                 double nuSurf = System.Math.Acos(cosNuSurf);
                 double span = 2.0 * (System.Math.PI - nuSurf);
                 ArcDots(dl, aAxis, ecc, nuSurf, span, steps, true,
-                        cx, cy, scale, mx, my, mw, mh);
+                        cx, cy, scale, mx, my, mw, mh, sc);
             }
 
             // Apsides. Periapsis is true anomaly 0 by definition, apoapsis 180 - no search needed.
@@ -796,18 +840,18 @@ namespace DragonScreen
             // therefore sits ON that tangent every time; offset HORIZONTALLY (the local normal)
             // instead, outward from the focus, and it can never land on the arc. Same 10 px gap
             // from the box centre the old vertical offset used, just turned 90 degrees.
-            float labelY = cy - 7f;   // vertical centre of the 12 px Dense line against the 10 px box
+            float labelY = cy - 7f * sc;   // vertical centre of the 12 px Dense line against the 10 px box
             float pxA = cx - (float)(rA * scale);
             if (closed)
             {
                 float pxP = cx + (float)(rP * scale);
-                dl.Box(pxP - 5f, cy - 5f, 10f, 10f, 2f, DragonPalette.Text3);
-                dl.Text("PE", pxP + 10f, labelY, Typography.Dense, TextAlign.Left, DragonPalette.Text5);
+                dl.Box(pxP - 5f * sc, cy - 5f * sc, 10f * sc, 10f * sc, 2f * sc, DragonPalette.Text3);
+                dl.Text("PE", pxP + 10f * sc, labelY, Typography.Dense * sc, TextAlign.Left, DragonPalette.Text5);
             }
             if (anyArc)
             {
-                dl.Box(pxA - 5f, cy - 5f, 10f, 10f, 2f, DragonPalette.Text3);
-                dl.Text("AP", pxA - 10f, labelY, Typography.Dense, TextAlign.Right, DragonPalette.Text5);
+                dl.Box(pxA - 5f * sc, cy - 5f * sc, 10f * sc, 10f * sc, 2f * sc, DragonPalette.Text3);
+                dl.Text("AP", pxA - 10f * sc, labelY, Typography.Dense * sc, TextAlign.Right, DragonPalette.Text5);
             }
 
             // ---- SAY WHY THE LINE STOPS ----
@@ -817,7 +861,7 @@ namespace DragonScreen
             if (!closed)
             {
                 dl.Text(anyArc ? "TRAJECTORY INTERSECTS SURFACE" : "NO TRAJECTORY ABOVE SURFACE",
-                        pcx, my + mh - 34f, Typography.Caption, TextAlign.Centre, DragonPalette.Text6);
+                        pcx, my + mh - 34f * sc, Typography.Caption * sc, TextAlign.Centre, DragonPalette.Text6);
             }
 
             // Us, from the current radius. Ascending puts us on the near half, descending the far one.
@@ -828,8 +872,8 @@ namespace DragonScreen
             if (!anyArc) return;
             float vx = cx + (float)vWorldX * scale;
             float vy = cy - (float)vWorldY * scale;
-            dl.Rect(vx - 9f, vy - 1f, 18f, 2f, DragonPalette.Go);
-            dl.Rect(vx - 1f, vy - 9f, 2f, 18f, DragonPalette.Go);
+            dl.Rect(vx - 9f * sc, vy - 1f * sc, 18f * sc, 2f * sc, DragonPalette.Go);
+            dl.Rect(vx - 1f * sc, vy - 9f * sc, 2f * sc, 18f * sc, DragonPalette.Go);
 
             // ---- approach chord (T6, made target-relative by T13c) ----
             // Only drawn with a target actually set, so the plain NAV view (chord always off) and an
@@ -851,12 +895,12 @@ namespace DragonScreen
                 double nuT = nuNow + s.TargetPhaseRad;
                 float tx = cx + (float)(s.TargetRadiusM * System.Math.Cos(nuT)) * scale;
                 float ty = cy - (float)(s.TargetRadiusM * System.Math.Sin(nuT)) * scale;
-                dl.Line(vx, vy, tx, ty, 2f, DragonPalette.Caution);
-                const float d = 7f;
-                dl.Line(tx, ty - d, tx + d, ty, 2f, DragonPalette.Caution);
-                dl.Line(tx + d, ty, tx, ty + d, 2f, DragonPalette.Caution);
-                dl.Line(tx, ty + d, tx - d, ty, 2f, DragonPalette.Caution);
-                dl.Line(tx - d, ty, tx, ty - d, 2f, DragonPalette.Caution);
+                dl.Line(vx, vy, tx, ty, 2f * sc, DragonPalette.Caution);
+                float d = 7f * sc;
+                dl.Line(tx, ty - d, tx + d, ty, 2f * sc, DragonPalette.Caution);
+                dl.Line(tx + d, ty, tx, ty + d, 2f * sc, DragonPalette.Caution);
+                dl.Line(tx, ty + d, tx - d, ty, 2f * sc, DragonPalette.Caution);
+                dl.Line(tx - d, ty, tx, ty - d, 2f * sc, DragonPalette.Caution);
             }
         }
 
@@ -889,7 +933,7 @@ namespace DragonScreen
         /// The base disc is drawn FIRST and unconditionally, so a body whose texture did not resolve
         /// - and the PNG preview, which has no game to ask - still gets a planet rather than a hole.
         /// </summary>
-        private static void Globe(DisplayList dl, float cx, float cy, float r, double lonCentre)
+        private static void Globe(DisplayList dl, float cx, float cy, float r, double lonCentre, float sc)
         {
             if (r <= 1f) return;
 
@@ -964,7 +1008,7 @@ namespace DragonScreen
             dl.ArcBand(cx, cy, r, r + fringe, 0.0, 360.0, DragonPalette.Inset2);
 
             // The rim last of all, sitting exactly on the trimmed edge.
-            dl.ArcBand(cx, cy, r - 2f, r, 0.0, 360.0, DragonPalette.Hairline);
+            dl.ArcBand(cx, cy, r - 2f * sc, r, 0.0, 360.0, DragonPalette.Hairline);
         }
 
         /// <summary>Most dots the arc may put on the panel, at any zoom, for any conic.</summary>
@@ -991,7 +1035,7 @@ namespace DragonScreen
         private static void ArcDots(DisplayList dl, double aAxis, double ecc,
                                     double nu0, double span, int steps, bool includeEnd,
                                     float cx, float cy, float scale,
-                                    float mx, float my, float mw, float mh)
+                                    float mx, float my, float mw, float mh, float sc)
         {
             if (steps < 1) return;
             int n = includeEnd ? steps + 1 : steps;
@@ -1010,9 +1054,9 @@ namespace DragonScreen
                     double r = semiLatus / (1.0 + ecc * System.Math.Cos(nu));
                     float px = cx + (float)(r * System.Math.Cos(nu)) * scale;
                     float py = cy - (float)(r * System.Math.Sin(nu)) * scale;
-                    if (!OnPanel(px, py, mx, my, mw, mh)) continue;
+                    if (!OnPanel(px, py, mx, my, mw, mh, sc)) continue;
                     if (pass == 0) visible++;
-                    else dl.Rect(px - 1.5f, py - 1.5f, 3f, 3f, DragonPalette.AccentDim);
+                    else dl.Rect(px - 1.5f * sc, py - 1.5f * sc, 3f * sc, 3f * sc, DragonPalette.AccentDim);
                 }
 
                 // Nothing on the panel at all: the second pass has nothing to do, and the caption
@@ -1025,9 +1069,9 @@ namespace DragonScreen
         /// straddling the edge is still drawn and the overspill mask trims it, rather than the arc
         /// stopping short of the frame. Only the ZOOMED plot can put a point outside at all: at x1 the
         /// whole extent fits the well by construction, which is why the default render is unchanged.</summary>
-        private static bool OnPanel(float px, float py, float mx, float my, float mw, float mh)
+        private static bool OnPanel(float px, float py, float mx, float my, float mw, float mh, float sc)
         {
-            const float Slack = 4f;
+            float Slack = 4f * sc;
             return px >= mx - Slack && px <= mx + mw + Slack
                 && py >= my - Slack && py <= my + mh + Slack;
         }
@@ -1042,44 +1086,46 @@ namespace DragonScreen
 
         private static void Column(DisplayList dl, int w, int h, PageState s, MapView view)
         {
+            float sc = Sc(w);
             float x = ColumnX(w);
-            float y = MapTop + 4f;
-            const float Pitch = 42f;
+            float y = (MapTop + 4f) * sc;
+            float Pitch = 42f * sc;
 
             if (view.Mode == NavMode.Map)
             {
-                Row(dl, x, y + Pitch * 0, "LATITUDE", s.Valid ? s.LatText : "-");
-                Row(dl, x, y + Pitch * 1, "LONGITUDE", s.Valid ? s.LonText : "-");
-                Row(dl, x, y + Pitch * 2, "ALTITUDE", s.Valid ? s.Altitude : "-");
-                Row(dl, x, y + Pitch * 3, "INCLINATION", s.Valid ? s.InclinationText : "-");
-                Row(dl, x, y + Pitch * 4, "PERIOD", s.Valid ? s.PeriodText : "-");
+                Row(dl, x, y + Pitch * 0, "LATITUDE", s.Valid ? s.LatText : "-", sc);
+                Row(dl, x, y + Pitch * 1, "LONGITUDE", s.Valid ? s.LonText : "-", sc);
+                Row(dl, x, y + Pitch * 2, "ALTITUDE", s.Valid ? s.Altitude : "-", sc);
+                Row(dl, x, y + Pitch * 3, "INCLINATION", s.Valid ? s.InclinationText : "-", sc);
+                Row(dl, x, y + Pitch * 4, "PERIOD", s.Valid ? s.PeriodText : "-", sc);
                 Row(dl, x, y + Pitch * 5, "TARGET LAT",
-                    (s.Valid && s.HasTargetGround) ? s.TargetLatText : "-");
+                    (s.Valid && s.HasTargetGround) ? s.TargetLatText : "-", sc);
                 Row(dl, x, y + Pitch * 6, "TARGET LON",
-                    (s.Valid && s.HasTargetGround) ? s.TargetLonText : "-");
+                    (s.Valid && s.HasTargetGround) ? s.TargetLonText : "-", sc);
             }
             else
             {
                 Row(dl, x, y + Pitch * 0, "APOGEE",
-                    (s.Valid && s.ApogeeShown) ? s.Apoapsis : "-");
+                    (s.Valid && s.ApogeeShown) ? s.Apoapsis : "-", sc);
                 Row(dl, x, y + Pitch * 1, "PERIGEE",
-                    (s.Valid && s.PerigeeShown) ? s.Periapsis : "-");
-                Row(dl, x, y + Pitch * 2, "ALTITUDE", s.Valid ? s.Altitude : "-");
-                Row(dl, x, y + Pitch * 3, "PERIOD", s.Valid ? s.PeriodText : "-");
-                Row(dl, x, y + Pitch * 4, "TIME TO AP", s.Valid ? s.TimeToApText : "-");
-                Row(dl, x, y + Pitch * 5, "TIME TO PE", s.Valid ? s.TimeToPeText : "-");
-                Row(dl, x, y + Pitch * 6, "INCLINATION", s.Valid ? s.InclinationText : "-");
+                    (s.Valid && s.PerigeeShown) ? s.Periapsis : "-", sc);
+                Row(dl, x, y + Pitch * 2, "ALTITUDE", s.Valid ? s.Altitude : "-", sc);
+                Row(dl, x, y + Pitch * 3, "PERIOD", s.Valid ? s.PeriodText : "-", sc);
+                Row(dl, x, y + Pitch * 4, "TIME TO AP", s.Valid ? s.TimeToApText : "-", sc);
+                Row(dl, x, y + Pitch * 5, "TIME TO PE", s.Valid ? s.TimeToPeText : "-", sc);
+                Row(dl, x, y + Pitch * 6, "INCLINATION", s.Valid ? s.InclinationText : "-", sc);
             }
         }
 
-        private static void Row(DisplayList dl, float x, float y, string caption, string value)
+        private static void Row(DisplayList dl, float x, float y, string caption, string value, float sc)
         {
-            Readouts.Row(dl, x, y, ColumnW, caption, value, null, Typography.Body);
-            dl.Rect(x, y + 28f, ColumnW, 1f, DragonPalette.Inset1);
+            Readouts.Row(dl, x, y, ColumnW * sc, caption, value, null, Typography.Body * sc, sc);
+            dl.Rect(x, y + 28f * sc, ColumnW * sc, 1f * sc, DragonPalette.Inset1);
         }
 
         private static void Controls(DisplayList dl, int w, int h, MapView view)
         {
+            float sc = Sc(w);
             float x, y, rw, rh;
             // ---- LIVE IN ALL THREE VIEWS (S43) ----
             // The cluster drives the flat MAP (lat/lon pan, texture-window zoom), the 3D PLANET camera
@@ -1097,31 +1143,31 @@ namespace DragonScreen
             // triangle drawn from three rects is not a triangle. LEFT/RIGHT/UP/DOWN cannot be
             // mis-rendered, and at 16 px they are as fast to read as an arrow would be.
             PadRect(w, h, 0, -1, out x, out y, out rw, out rh);
-            Control.Button(dl, x, y, rw, rh, "UP", false, active);
+            Control.Button(dl, x, y, rw, rh, "UP", false, active, sc);
             PadRect(w, h, -1, 0, out x, out y, out rw, out rh);
-            Control.Button(dl, x, y, rw, rh, "LEFT", false, active);
+            Control.Button(dl, x, y, rw, rh, "LEFT", false, active, sc);
             PadRect(w, h, 0, 0, out x, out y, out rw, out rh);
-            Control.Button(dl, x, y, rw, rh, "CTR", view.Follow && view.Mode == NavMode.Map, active);
+            Control.Button(dl, x, y, rw, rh, "CTR", view.Follow && view.Mode == NavMode.Map, active, sc);
             PadRect(w, h, 1, 0, out x, out y, out rw, out rh);
-            Control.Button(dl, x, y, rw, rh, "RIGHT", false, active);
+            Control.Button(dl, x, y, rw, rh, "RIGHT", false, active, sc);
             PadRect(w, h, 0, 1, out x, out y, out rw, out rh);
-            Control.Button(dl, x, y, rw, rh, "DOWN", false, active);
+            Control.Button(dl, x, y, rw, rh, "DOWN", false, active, sc);
 
             ZoomRect(w, h, false, out x, out y, out rw, out rh);
-            Control.Button(dl, x, y, rw, rh, "-", false, active);
+            Control.Button(dl, x, y, rw, rh, "-", false, active, sc);
             ZoomRect(w, h, true, out x, out y, out rw, out rh);
-            Control.Button(dl, x, y, rw, rh, "+", false, active);
+            Control.Button(dl, x, y, rw, rh, "+", false, active, sc);
             // The PLANET camera zoom is a signed step (distance), not a power-of-two texture window, so
             // it reads as a step number rather than "x2/x4".
             string zoomLabel = (view.Mode == NavMode.Planet)
                 ? "ZOOM " + (view.PlanetZoom >= 0 ? "+" : "") + view.PlanetZoom
                 : (view.Mode == NavMode.Orbit) ? "ZOOM x" + (1 << view.OrbitZoom)
                 : "ZOOM x" + (1 << view.ZoomStep);
-            dl.Text(zoomLabel, ColumnX(w), y + 12f, Typography.Caption, TextAlign.Left,
+            dl.Text(zoomLabel, ColumnX(w), y + 12f * sc, Typography.Caption * sc, TextAlign.Left,
                     DragonPalette.Text6);
 
             NextViewRect(w, h, out x, out y, out rw, out rh);
-            Control.Button(dl, x, y, rw, rh, "NEXT VIEW", false, true);
+            Control.Button(dl, x, y, rw, rh, "NEXT VIEW", false, true, sc);
         }
     }
 

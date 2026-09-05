@@ -12635,7 +12635,7 @@ the Figma-era pages. **No `install`, no glass** — separate owner gates (C1.12)
 cost note for the glass session (4× RenderTexture fill on three live screens) is left for that session to
 read, not acted on.
 
-### S116 [S] Land C-05's one-line unit fix — compare `Typography.Min` in panel space, not design space — **BLOCKED on [[R-02]] — 2026-09-06** — [logged by S115, 2026-09-05 as "now-safe — UNBLOCKED by Q5"; that premise is FALSE — see the block note at the foot of this line]
+### S116 [S] Land C-05's one-line unit fix — compare the legibility floor in panel space, not design space — **BLOCKED — 2026-09-06: needs C-05's TIER-3 layout call, which is the OWNER's (C1.12)** — [logged by S115, 2026-09-05 as "now-safe — UNBLOCKED by Q5"; that premise is FALSE. Blocked on [[R-02]] by job 1; R-02 LANDED in job 2 and the blocker CONVERTED rather than lifted — see the block note at the foot of this line]
 - **The finding.** `CoverPage.FitRows` (`:673-689`) receives `top`/`slotBottom`/`wantSize`/`wantGap` in
   DESIGN units and returns a design `size`, but clamps it against `Typography.Min` (16, a PANEL-pixel
   constant) directly — `if (size < Typography.Min)` — comparing DESIGN px to PANEL px. At both widths tried
@@ -12682,10 +12682,11 @@ fix exists to prevent, onto a baked card background and out over the page ground
 6, restored.
 
 **What this line is blocked on, in order.**
-1. **[[R-02]]** — the root cause: a device-pixel legibility floor that did not move when the panel doubled.
-   Fixed by making the floor a function of the panel width. Once that lands, the clamp finally computes
-   against 32 panel px at 2560 — the number in row 2 above.
-2. ⛔ **And R-02 does NOT unblock this line — it converts the blocker.** With an honest floor the corrected
+1. ~~**[[R-02]]**~~ — **LANDED 2026-09-06 (job 2 of this batch).** The floor is now
+   `Typography.MinFor(panelW)` and reads **32 panel px at the shipped 2560**, which is the number in row 2
+   above. `FitRows` itself was deliberately left untouched — fixing it IS S116, and S116 is still blocked,
+   by the item below. The blocker did not lift; it CONVERTED, exactly as this line said it would.
+2. ⛔ **THE LIVE BLOCKER, since 2026-09-06.** With the honest floor now in the build, the corrected
    clamp overflows by 131 design px **at every width**, because the overflow is a fraction of the card, not a
    pixel count. So S116 then needs exactly what S112 said it needed at 1280: one of C-05's layout options
    (a) shorten the seven ENTRY TIMELINE strings, (b) swap ENTRY TIMELINE into the roomier card 3, or
@@ -12699,7 +12700,7 @@ fixing C-05 is not in it. `docs/QC_FINDINGS.md` is untouched (QC's file) — C-0
 carries the QC officer's *"NOT CLOSED … C-05 stays blocked behind [R-02]"* verdict, so both halves of the
 record now agree.
 
-### S117 [O] `NavPage`'s text does not scale with `screenWidth` — Q5 halves the live NAV screen's (and the Cover Map view's) legibility — **TODO** — [logged by S115, 2026-09-05; TIER 1/2 — a real regression from Q5, on a live shipped screen, found while verifying it]
+### S117 [O] `NavPage`'s text does not scale with `screenWidth` — Q5 halves the live NAV screen's (and the Cover Map view's) legibility — **DONE 2026-09-06** — [landed with [[R-02]] as job 2 of the 2026-09-06 owner batch; NAV + the four pages that reuse its renderers now track the panel; ChromeBar logged, not fixed]
 - **The finding.** `src/pure/NavPage.cs` (live NAV screen, `DragonScreen.cfg` screen 3; also reused by
   `CoverPage.DrawCameraView`'s Map mode) draws every text label at a literal `Typography.*` panel-pixel size
   with no scale factor — unlike `CoverPage`'s `X()/Y()/Z()` idiom, which multiplies every design value by
@@ -12720,6 +12721,129 @@ record now agree.
 - **DONE when:** `NavPage`'s text (and whatever else turns out to be resolution-literal) tracks
   `screenWidth` the way `CoverPage` does, verified by the same empirical test S115 used here — ink rows at
   1280 vs 2560 must differ by the resolution ratio, not be identical — plus a preview PNG inspected at 2560.
+
+#### ✅ DONE 2026-09-06 — landed together with **[[R-02]]** as **job 2** of the 2026-09-06 owner batch
+
+**🟢 OWNER AUTHORISATION, 2026-09-06, verbatim (C1.12):** *"give me a batched prompt in the order you
+suggest for one chat to fix all whilst reading its rules etc between jobs"* — answering the overseer's
+four-item order. R-02 and S117 are one job because they are one defect seen from two ends: a size written as
+a device-pixel literal under a canvas that doubled.
+
+**(a) THE DELETED REASONING, RECOVERED VERBATIM — and this is half the value of the job.**
+`plugin/src/pure/Typography.cs` carried two section headings — `---- 16 PX IS MEASURED, NOT CHOSEN ----` and
+`---- THE RULE THAT FALLS OUT OF IT ----` — **with no body under either**. The overseer traced why: the file
+went **55 lines → 20 at `158eb2a`** (the ground-up autopilot rebuild, `3 insertions, 38 deletions`,
+confirmed by `git show --stat`), which deleted the bodies and left the headings standing over nothing.
+
+Recovered from `git show 14b8c2a:plugin/src/pure/Typography.cs` and restored **byte-identical** — not
+paraphrased, not rewritten. Proven, not asserted: the recovered header (lines 1-23) and all six member doc
+comments were spliced in programmatically and then re-checked with a substring test against the git blob,
+which reported `VERBATIM` for all seven blocks. What came back includes:
+
+- the OWNER'S OWN MEASUREMENT QUOTE — *"technically every single one is visible from the seat as you can use
+  the mouse wheel to zoom view. 16px is legible without needing to zoom"* — and its premise, **"Established
+  in game 2026-08-05 from the proof page's legibility ramp, at 1280 px across a screen 0.2844 m wide, seen
+  from the seat"**. That premise is the entire reason R-02 exists, and it had been deleted;
+- the rule: **"NEVER SHRINK BELOW 16 PX TO CREATE HIERARCHY. GO DIMMER INSTEAD."** — with its justification
+  (DragonPalette's nine-step ladder carries hierarchy by BRIGHTNESS);
+- `Dense = 12f`'s own doc, which says in as many words that it is *"BELOW the glanceable floor and legal only
+  because zoom exists … NOT for any live value, any alert, or anything on the nav bar"*.
+
+A deleted owner quote is tier-1 evidence destroyed (C1.12's evidentiary standard). The new R-02 section is
+**appended below the recovered text and says so in its first line** — nothing above it was edited.
+
+**(b) THE FLOOR IS NOW A FUNCTION OF THE PANEL.** `Typography` gains `RefPanelW = 1280f` (the width the scale
+was measured at — explicitly NOT the shipped width, which is the cfg's and free to move), `ScaleFor(panelW)`
+and **`MinFor(panelW) = Min * panelW / RefPanelW`**. `Min` stays exactly `16f`, because that is the number
+that was measured; what changes is that it is now named as *the value at RefPanelW* rather than as "the
+floor". ⛔ **NOT retyped as `32f`** — the batch forbids it and so does the restored header: that is right
+for one cfg and wrong for the next, and it throws the measurement away a second time.
+
+Comparison sites moved onto the honest floor:
+
+| site | was | now |
+|---|---|---|
+| `MarginAffordance.FitsLegibly` | `>= Typography.Min` | `>= Typography.MinFor(w)` |
+| `FigmaUINavTest`'s reported floor | `Typography.Min` (printed "16" on a 2560 panel) | `Typography.MinFor(W)` |
+| `LayoutTest` chrome-bar floor | `Typography.Min` | `Typography.MinFor(1280)` — same number today, but the width is now written down |
+| `FigmaUINavTest.MenuGridFits` | *(read, not changed)* | its `cellPanelPx >= labelPanelPx * 2f` is a **RATIO** — both sides scale with `H`, so it is resolution-invariant and was never affected. Verdict: correctly screen-space. |
+| `CoverPage.FitRows` | ⛔ **DELIBERATELY UNTOUCHED** | C-05's unit bug, **[[S116]]**, BLOCKED by job 1. Behaviour unchanged; a long comment now states why touching it lands a blocked fix by the back door, and `LayoutTest`'s QC6 check carries the same marker. |
+
+**(c) S117: NAV NOW TRACKS THE PANEL.** All 18 sites S115 listed (`NavPage.cs:189, 190, 323, 445, 464, 472,
+477, 482, 506, 508, 651, 659, 739, 805, 810, 820, 1077, 1120`) now multiply by `Sc(w) = Typography.ScaleFor(w)`.
+
+⛔ **And so does every box they sit in** — which S117's own line warned was the trap (*"font sizes cannot be
+scaled in isolation from the marker/box sizes sitting beside them"*). `Pad`, `ColumnW`, `HeaderY`, `MapTop`,
+`BtnW/BtnH/BtnGap`, the readout pitch, every marker box, every stroke, the graticule, the track weight, the
+arc dots and the panel slack all scale by the same one factor. Doubling the type inside a 276 px column that
+stayed 276 px would have pushed the readouts straight out of their own column.
+
+Two shared helpers gained **scale-aware overloads** — `Readouts.Row(..., sc)` and `Control.Button(..., sc)` —
+because both hardcode `Typography.Caption` and a 2 px border. **The existing 8-argument overloads delegate
+with `sc = 1`**, so every page that has not had a scale pass renders byte-identically; NAV is fixed and the
+rest are left visibly un-passed rather than silently half-done.
+
+The three sub-renderers NAV shares — `Map`, `Orbit`, `Planet` — take `sc` as an **explicit parameter with no
+default**, so the four Figma-era pages that reuse them had to state their own scale rather than inherit a
+silent 1: `CoverPage` (MAP view + the EARTH globe), `ManualChuteDeployPage`, `NavOrbitPlotPage`,
+`RendezvousPage`. Their AP/PE/TGT/NO-DATA labels were carrying the same defect and now do not.
+
+**VERIFIED (C1.3).**
+- `python plugin/build.py test` — **ALL SUITES PASSED**. New suite `plugin/test/LegibilityFloorTest.cs`,
+  **41 checks, 0 failed**, wired into `TestMain`. Every check in it is a comparison **ACROSS two widths**,
+  which is the shape that can fail: nothing in `plugin/test/` had ever compared the same element at 1280 and
+  2560, and at one width a floor-as-constant and a floor-as-ratio are indistinguishable.
+- **MUTATION-PROVED, 6/6**, each mutation reintroducing exactly the defect its check pins, each reverted:
+
+  | # | mutation | the check that fired |
+  |---|---|---|
+  | 1 | `Min = 16f` → `32f` (the "fix" R-02 forbids) | *Min is still the 16 px that was MEASURED at RefPanelW* — got 32, want 16 |
+  | 2 | `MinFor` collapsed back to `return Min;` | *the floor at the shipped 2560 is 32 px* — got 16, want 32 |
+  | 3 | `FitsLegibly` back on `Typography.Min` | *…and that answer is still FALSE — 2560 did not make this control legible* |
+  | 4 | ONE NAV label back to a literal `Typography.Body` | *EVERY label doubles when the panel doubles* — `'GROUND TRACK'` is 20 px @1280 and 20 px @2560, should be 40 |
+  | 5 | NAV's NEXT VIEW box back to unscaled `ColumnW`/`BtnH` | *the NEXT VIEW button's width doubles* — got 276, want 552 |
+  | 6 | NAV scaling `ChromeBar.Height` it does not draw | *NAV sits exactly one Pad above the chrome bar it clears, at 2560* — gap 112, want 48 |
+
+  ⚠ Case 6 is recorded because it did **not** fire on the first attempt: the check read "clears the bar",
+  which a 64 px HOLE above the bar also satisfies. Tightened to two-sided (the gap must be exactly one
+  scaled `Pad`) and it fires. A one-sided check on a two-sided invariant is not a check.
+- `python plugin/build.py preview` — green, 108 pages, all at 2560×1406 from the cfg. **PNGs inspected:**
+  `page2_nav_planet.png` and `page2_nav.png` (both NAV views, headers/readouts/d-pad/NEXT VIEW all
+  proportional and plainly legible), `ui_cover_cam_map.png` (the Cover's MAP view — TGT label and vessel
+  marker now scaled), `ui_navorbitplot.png` (AP/PE labels now readable).
+- **The empirical test S117's own DONE-when names.** S115 measured `page2_nav_planet.png`'s header inking
+  rows 31–45 = **15 px at BOTH 1280 and 2560** — identical, which is the defect. The same header now inks
+  **rows 60–88 = 29 px at 2560** (stable across ink thresholds 100–180), a ratio of **1.93** against the
+  recorded 15, where before it was **1.00**. The one-row shortfall from a clean 2.00 is glyph-raster
+  rounding, not scaling: the display-list proof is exact — the new suite asserts every Text command's size
+  at 2560 is **exactly 2×** the same command at 1280, in all three NAV modes, and mutation 4 shows it fires.
+- **The reference width is untouched.** `Sc(1280) == 1` exactly, so the whole scale pass is a no-op at the
+  width every historical measurement in `docs/` is quoted against. Asserted (`the reference width scales by
+  exactly 1`, `the map well still starts at Pad`/`at MapTop`), and confirmed by the fact that the entire
+  pre-existing suite — which runs at 1280×703 — passed unchanged.
+
+**Scope respected (C1.1).** `docs/QC_FINDINGS.md` untouched (QC's file). `docs/BUILD_PLAN.md` untouched
+(G10 / C1.12 — job 4 carries the plan-grade material, under the owner authorisation quoted above). No cfg
+change, no `install`, no glass. No flight control wired (§14.4(a)).
+
+**⚠ STRAYS FOUND, LOGGED NOT FIXED (C1.1)** — all three are the same "fixed device-pixel constant under a
+doubled canvas" family and are **job 3 of this batch's** to enumerate and rule on:
+1. **`ChromeBar` is entirely RefPanelW-literal** — `Height = 64f`, `Pitch = 112f`, `Pad = 24f`, `Hairline`,
+   `SelectBar`, and a raw `Typography.Caption` label — and `TopY(h) = h - Height` subtracts a device-pixel
+   constant from a dimension that scales. It is on EVERY legacy page, which is why it is not fixed inside a
+   NAV task. **Visible in `page2_nav_planet.png`**: the bar's FLIGHT/VEHICLE/NAV/DOCKING/SETTINGS row and its
+   STATE/COM1/MET block are now conspicuously smaller than everything above them. `NavPage.ColumnBottom`
+   deliberately does NOT scale `ChromeBar.Height`, so the page clears the bar that is actually drawn; the new
+   suite pins that gap two-sided so the two cannot drift while this is open.
+2. **`MarginAffordance`'s `Inset = 4f`, `BorderPx = 2f`, `Pad = 2f`** — device-px constants subtracted from a
+   letterbox that scales, so the box grows **2.13×** rather than 2.00× (QC measured the same figure). The
+   consequence is measured and printed by the new suite: MANUAL/DOCKING reads **72.2% of the floor @1280 but
+   82.9% @2560**, and RENDEZVOUS **50.5% vs 58.0%** — R-02's own verify line wants those equal. Reported, not
+   asserted, deliberately: asserting it here would make job 2's suite depend on job 3's fix and leave the tree
+   red in between. **Job 3 tightens the print into an assertion**; the numbers above are what it must equalise.
+3. **`Gauge.ValueSize(radius)`** clamps a derived size into `[Typography.Min, Typography.Value]` — two
+   RefPanelW constants used as panel-pixel bounds. On a scaled page the radius doubles and the result is
+   capped at 28 device px regardless, so the gauge's own value text cannot follow the panel.
 
 ### S118 [S] Six comments cite 1280x703 pixel figures that Q5 doubles — aspect reasoning survives, absolute figures are stale — **TODO** — [logged by S115, 2026-09-05; TIER 3, comments only, no behaviour]
 - **The finding.** `pure/BottomBar.cs:82`, `pure/CoverPage.cs:299` and `:568`, `pure/MarginAffordance.cs:49`,

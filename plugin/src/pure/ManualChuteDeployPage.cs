@@ -194,7 +194,7 @@ namespace DragonScreen
             float gs = Z(1809);
             float gcx = (X(1442f) + w) * 0.5f;
             float gcy = (Y(220f) + Y(1877f)) * 0.5f;
-            NavPage.Planet(dl, s, view, gcx - gs * 0.5f, gcy - gs * 0.5f, gs, gs);
+            NavPage.Planet(dl, s, view, gcx - gs * 0.5f, gcy - gs * 0.5f, gs, gs, Typography.ScaleFor(w));
 
             // ---- top-bar telemetry: LIVE (T13c) ----
             // Drawn rather than placed because the Cover's baked bar assets are private to it. The seven

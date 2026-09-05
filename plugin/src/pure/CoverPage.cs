@@ -452,7 +452,10 @@ namespace DragonScreen
                 // it - and so the map degrades to a graticule rather than to a hole if BodyMap does not
                 // resolve. Same order, and the same reason, as NavPage.Build.
                 dl.Rect(mx, my, mw, mh, DragonPalette.Inset2);
-                NavPage.Map(dl, s, view, mx, my, mw, mh);
+                // S117 / QC R-02: the map's own markers, labels and track weight are RefPanelW
+                // sizes, so they need this panel's type scale — not the Cover's design-frame `sc`,
+                // which is px-per-design-px and a different quantity entirely.
+                NavPage.Map(dl, s, view, mx, my, mw, mh, Typography.ScaleFor(w));
                 dl.Box(mx, my, mw, mh, Stroke(sc, 2f), DragonPalette.Hairline);
                 return;
             }
@@ -470,7 +473,7 @@ namespace DragonScreen
             float gs = 1809f * sc;
             float gcx = (ViewLeft * sc + w) * 0.5f;
             float gcy = (ViewTop + ViewBottom) * 0.5f * sc;
-            NavPage.Planet(dl, s, view, gcx - gs * 0.5f, gcy - gs * 0.5f, gs, gs);
+            NavPage.Planet(dl, s, view, gcx - gs * 0.5f, gcy - gs * 0.5f, gs, gs, Typography.ScaleFor(w));
         }
 
         // ---- THE CAPSULE TURNTABLE (T11a, §5) ------------------------------------------------
@@ -669,7 +672,25 @@ namespace DragonScreen
         /// the wanted size/pitch untouched when the block already fits; otherwise scales BOTH by the same
         /// factor, so the block keeps its proportions rather than just crushing the leading. Type never
         /// goes below Typography.Min (the measured legibility floor) and rows never overlap — a slot too
-        /// short for one legible line overflows visibly instead of turning to mush.</summary>
+        /// short for one legible line overflows visibly instead of turning to mush.
+        ///
+        /// ---- ⛔ THE CLAMP BELOW IS A KNOWN, OPEN DEFECT. DO NOT "TIDY" IT. (QC C-05, blocked) ----
+        /// `top`, `slotBottom`, `wantSize`, `wantGap` and `size` are all DESIGN units (the 3427x2112
+        /// frame); the caller multiplies by Z() afterwards. `Typography.Min` is PANEL pixels. So the
+        /// comparison is design-px against panel-px and under-protects by the height scale — at the
+        /// shipped panel it permits type far below the real floor, and the clamp has never once fired.
+        ///
+        /// It is LEFT ALONE ON PURPOSE. The unit fix is one line and its consequence is not: with an
+        /// honest floor (Typography.MinFor(panelW) — 32 px at the shipped 2560, not 16) the ENTRY
+        /// TIMELINE clamps to 48.07 design px and the block ends at design y 891.5 against a card
+        /// bottom of 760 — it OVERFLOWS BY 131 DESIGN PX, at every width. That overflow is what
+        /// FitRows was written to prevent, so the fix cannot land without one of C-05's layout
+        /// options, and two of the three touch the Reference Content page, which §14.2 classes TIER-3
+        /// (invention → joint discussion). That is an owner decision (C1.12) and it is not settled.
+        ///
+        /// Tracked as [[S116]], BLOCKED. S112 and S115 each computed this fix as "safe at 2560" — both
+        /// against the un-doubled 16 px floor, which is R-02 — and job 1 of the 2026-09-06 batch
+        /// unwound that. Nothing here changes until the layout call is made.</summary>
         public static void FitRows(float top, float slotBottom, int count, float wantSize, float wantGap,
                                    out float size, out float gap)
         {

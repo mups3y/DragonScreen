@@ -60,7 +60,7 @@ namespace DragonScreen
             const float PlotX = 1260f, PlotY = 220f, PlotW = 2127f, PlotH = 1580f;
             dl.Text("ORBITAL PLOT", X(PlotX), Y(PlotY - 40f), Z(28), TextAlign.Left, DragonPalette.Text6);
             dl.Rect(X(PlotX), Y(PlotY), Z(PlotW), Z(PlotH), DragonPalette.Inset2);
-            NavPage.Orbit(dl, s, X(PlotX), Y(PlotY), Z(PlotW), Z(PlotH), true);
+            NavPage.Orbit(dl, s, X(PlotX), Y(PlotY), Z(PlotW), Z(PlotH), true, Typography.ScaleFor(w));
             dl.Box(X(PlotX), Y(PlotY), Z(PlotW), Z(PlotH), St(2), DragonPalette.Hairline);
 
             BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame

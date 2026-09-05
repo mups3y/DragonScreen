@@ -334,10 +334,15 @@ public static class LayoutTest
               ChromeBar.PageNames.Length + " pages");
 
         // Nothing on the bar may drop below the measured glanceable floor.
+        // ⛔ MinFor(1280), NOT Min. The bar above is BUILT at 1280, so the two are the same number
+        // today - but writing the width down is the whole of QC R-02: a size compared against a bare
+        // constant instead of against the panel it is drawn on is how a resolution change made every
+        // legibility check in the build twice as permissive without one test going red. If this Build
+        // width ever moves, the floor now follows it instead of silently lagging behind.
         for (int i = 0; i < bar.Count; i++)
             if (bar.At(i).Kind == DrawKind.Text)
-                Check("chrome text >= the 16 px glanceable floor",
-                      bar.At(i).C >= Typography.Min,
+                Check("chrome text >= the glanceable floor at the width it is drawn at",
+                      bar.At(i).C >= Typography.MinFor(1280),
                       "'" + bar.At(i).Str + "' at " + bar.At(i).C + " px");
 
         // ---- page link hit testing ----
@@ -872,6 +877,15 @@ public static class LayoutTest
 
             // A slot far too short must not answer with illegible type: Typography.Min is a MEASURED
             // floor, so the block overflows visibly rather than turning to mush.
+            //
+            // ⛔ THIS ONE STAYS `Typography.Min`, AND STAYS IN DESIGN SPACE, ON PURPOSE. `size` is a
+            // DESIGN-frame number and Min is a PANEL-pixel one - that mismatch IS QC C-05's unit bug.
+            // What this check pins is the OVERFLOW POLICY (FitRows' own summary: "a slot too short for
+            // one legible line overflows visibly instead of turning to mush"), not the floor, and it is
+            // the check that caught S112 inventing a third policy. C-05's fix is [[S116]] and it is
+            // BLOCKED: against an honest floor the clamp overflows its card by 131 design px at EVERY
+            // width, which needs an owner-level TIER-3 layout call (C1.12, not settled). Correcting the
+            // units here before that call would land the blocked fix by the back door. See FitRows.
             CoverPage.FitRows(0f, 60f, 6, CoverPage.RowSize, 40f, out size, out gap);
             Check("QC6 type never goes under Typography.Min", size >= Typography.Min, "size " + size);
         }

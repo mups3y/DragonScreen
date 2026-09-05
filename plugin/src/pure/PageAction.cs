@@ -180,6 +180,22 @@ namespace DragonScreen
         /// </summary>
         public static void Button(DisplayList dl, float x, float y, float w, float h,
                                   string label, bool on, bool enabled)
+        { Button(dl, x, y, w, h, label, on, enabled, 1f); }
+
+        /// <summary>
+        /// As Button, on a panel whose type scale is <paramref name="sc"/> = Typography.ScaleFor(panelW).
+        ///
+        /// ---- WHY THIS OVERLOAD EXISTS (S117 / QC R-02, 2026-09-06) ----
+        /// The label size, the border and the baseline nudge are all numbers AT Typography.RefPanelW
+        /// (1280). A caller that lays its buttons out proportionally - NavPage does, since S117 - grew
+        /// its BOXES with the panel while the label inside stayed 16 device px, so at 2560 the type
+        /// read half the physical size it was measured at inside a box twice the area.
+        ///
+        /// The 8-argument overload above delegates with sc = 1, so every page that has not had a scale
+        /// pass renders byte-identically.
+        /// </summary>
+        public static void Button(DisplayList dl, float x, float y, float w, float h,
+                                  string label, bool on, bool enabled, float sc)
         {
             Rgba face = on ? DragonPalette.Accent : DragonPalette.Panel;
             Rgba edge = enabled ? DragonPalette.Hairline : DragonPalette.Inset2;
@@ -187,11 +203,11 @@ namespace DragonScreen
                       : enabled ? DragonPalette.Text2 : DragonPalette.Text7;
 
             dl.Rect(x, y, w, h, face);
-            dl.Box(x, y, w, h, 2f, edge);
+            dl.Box(x, y, w, h, 2f * sc, edge);
             // Vertically centred by eye on the cap height rather than the line box: Typography.Caption
             // is 16 px and the glyphs occupy roughly the top 12 of it in both renderers.
-            dl.Text(label, x + w * 0.5f, y + (h - Typography.Caption) * 0.5f - 1f,
-                    Typography.Caption, TextAlign.Centre, text);
+            dl.Text(label, x + w * 0.5f, y + (h - Typography.Caption * sc) * 0.5f - 1f * sc,
+                    Typography.Caption * sc, TextAlign.Centre, text);
         }
     }
 }

@@ -1201,7 +1201,7 @@ public static class FigmaUINavTest
               "got " + Lines(rz, DragonPalette.Caution).Count);
         // The plain NAV page never grows one: its overload passes the chord flag false.
         DisplayList nav = new DisplayList(400);
-        NavPage.Orbit(nav, a, 0f, 0f, VW * 0.5f, VH * 0.5f);
+        NavPage.Orbit(nav, a, 0f, 0f, VW * 0.5f, VH * 0.5f, 1f);
         Check("the plain NAV orbit view draws no chord",
               Lines(nav, DragonPalette.Caution).Count == 0,
               "got " + Lines(nav, DragonPalette.Caution).Count);
@@ -1439,11 +1439,13 @@ public static class FigmaUINavTest
             Check("no letterbox -> the HUD draws no margin label", !drewLabel, "");
         }
 
-        // 5. \u26d4 REPORTED, NOT ASSERTED: whether the fitted type clears Typography.Min. At the shipped
-        //    size the HUD's does not, and RENDEZVOUS is far below it - the box is 61.6 px wide and the
-        //    word needs 106 px at 16 px type. That is a DESIGN question about the margin's width (Q8),
-        //    not something a fit can solve, and failing the build on it would block the H-04 fix that
-        //    stands on its own. Printed so it cannot be forgotten.
+        // 5. \u26d4 REPORTED, NOT ASSERTED: whether the fitted type clears the floor. This suite
+        //    runs at W = 1280, where Typography.MinFor(W) IS the measured 16 - but it is written as
+        //    MinFor(W) so the yardstick follows the width if this harness size ever moves (QC R-02).
+        //    At the shipped size the HUD's does not, and RENDEZVOUS is far below it - the box is 61.6
+        //    px wide and the word needs 106 px at 16 px type. That is a DESIGN question about the
+        //    margin's width (Q8), not something a fit can solve, and failing the build on it would
+        //    block the H-04 fix that stands on its own. Printed so it cannot be forgotten.
         {
             float x, y, bw, bh;
             MarginAffordance.Rect(W, H, out x, out y, out bw, out bh);
@@ -1451,7 +1453,7 @@ public static class FigmaUINavTest
                 + MarginAffordance.FitSize(bw, H * 0.020f, "MANUAL", "DOCKING").ToString("0.00")
                 + " px, RENDEZVOUS "
                 + MarginAffordance.FitSize(bw, H * 0.020f, "RENDEZVOUS", null).ToString("0.00")
-                + " px, floor " + Typography.Min + "  (QC H-06 / Q8)");
+                + " px, floor " + Typography.MinFor(W) + "  (QC H-06 / Q8)");
         }
     }
 

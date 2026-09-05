@@ -57,7 +57,7 @@ namespace DragonScreen
 
             // ---- the real orbit conic (T6's calculation): body, dotted ellipse, AP/PE, our
             // vehicle marker, and — with a target set — the approach-chord diamond ----
-            NavPage.Orbit(dl, s, X(PlotX), Y(PlotY), Z(PlotW), Z(PlotH), true);
+            NavPage.Orbit(dl, s, X(PlotX), Y(PlotY), Z(PlotW), Z(PlotH), true, Typography.ScaleFor(w));
 
             // ---- concentric range rings (ours — no scale is legible in either source, §1.4) ----
             // S109 / QC NO-01: these used to be drawn BEFORE NavPage.Orbit, and the body disc painted

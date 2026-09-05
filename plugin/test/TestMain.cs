@@ -40,6 +40,15 @@ public static class TestMain
         // for RESOLUTION.
         bad += ScreenSizeTest.Run();
 
+        // 2026-09-06 batch, job 2 (QC R-02 + S117): THE FLOOR ITSELF. Typography.Min is a MEASURED
+        // number at a MEASURED WIDTH, and when S115 doubled the shipped panel the number did not
+        // move - so every legibility check in the build became twice as permissive, and NavPage,
+        // which draws in literal RefPanelW pixels, halved the physical size of a LIVE screen's text.
+        // Neither could be caught by a suite that only ever ran at 1280, where the two widths are the
+        // same width. Every check in here is a comparison ACROSS widths, which is the only shape that
+        // can fail.
+        bad += LegibilityFloorTest.Run();
+
         // ---- PART B RECOVERY, WAVE A (W1, §B12.8) - the collision-free pure support layer ----
         // Recovered from `8b81816^` with their modules. The fixtures are as they were: ConicTest and
         // LambertTest are RSS (mu = 3.986e14); TrajectoryTest and PredictTest are a STOCK Kerbin fixture

@@ -857,7 +857,7 @@ public static class PageTest
     static DisplayList Plot(PageState s)
     {
         DisplayList dl = new DisplayList(600);
-        NavPage.Orbit(dl, s, 0f, 0f, 520f, 460f);
+        NavPage.Orbit(dl, s, 0f, 0f, 520f, 460f, 1f);   // sc 1 = the RefPanelW measurements below
         return dl;
     }
 
@@ -1182,7 +1182,7 @@ public static class PageTest
     static DisplayList PlotView(PageState s, MapView v)
     {
         DisplayList dl = new DisplayList(3000);
-        NavPage.Orbit(dl, s, 0f, 0f, 520f, 460f, false, v);
+        NavPage.Orbit(dl, s, 0f, 0f, 520f, 460f, false, v, 1f);
         return dl;
     }
 

@@ -97,13 +97,20 @@ namespace DragonScreen
         }
 
         /// <summary>Does the fitted type clear the measured legibility floor? Reported rather than
-        /// silently accepted: a control that has to go below Typography.Min to fit its own box is telling
-        /// you the BOX is wrong, and that is a design question, not something a fit can solve.</summary>
+        /// silently accepted: a control that has to go below the floor to fit its own box is telling
+        /// you the BOX is wrong, and that is a design question, not something a fit can solve.
+        ///
+        /// ---- THE FLOOR IS MinFor(w), NOT Min (QC R-02, 2026-09-06) ----
+        /// This used to read `>= Typography.Min`. Min is 16 px AT Typography.RefPanelW, so on the
+        /// 2560-wide panel shipped since S115 it was half the physical size it was measured as, and
+        /// this predicate was twice as easy to pass as it was written to be. Both sides of the
+        /// comparison now scale with the panel, so it reports the same verdict - and the same
+        /// PERCENTAGE of the floor - at any width, which is the point.</summary>
         public static bool FitsLegibly(int w, int h, string a, string b)
         {
             float x, y, bw, bh;
             if (!Rect(w, h, out x, out y, out bw, out bh)) return false;
-            return FitSize(bw, h * 0.020f, a, b) >= Typography.Min;
+            return FitSize(bw, h * 0.020f, a, b) >= Typography.MinFor(w);
         }
 
         static int Longest(string a, string b)
