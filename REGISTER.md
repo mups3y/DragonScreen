@@ -7480,7 +7480,7 @@ the new material re-added as `<param>` blocks after them, so every change is a p
 > literal, and record that so the line closes rather than lingering. ⚠ Whatever you pick applies to
 > `VrioTestPage`'s identical `SECTION 4: IN PROGRESS` too, or the two procedure pages disagree.
 
-### S159 [S] Ascent: eleven events, none tracked, while a live 15-row step machine runs unread — **DOING** — [H34 + QC `AS-01`; split 4 of 5 from [[S55]]]
+### S159 [S] Ascent: eleven events, none tracked, while a live 15-row step machine runs unread — **DONE 2026-09-06 — all eleven marked from the live machine; three that nothing observes are answered by ORDER, and said so** — [H34 + QC `AS-01`; split 4 of 5 from [[S55]]]
 - **The finding.** The page's eleven ascent events are a static array. Meanwhile **`pure/StepList.cs` is a
   15-row LIVE state machine** — crew aboard, escape armed, prop load, liftoff, latched Max-Q, MECO, stage
   sep, SECO, Dragon sep, nose-cone open, plus an 8-mode `AbortMode()` — which renders **only** through
@@ -7493,6 +7493,128 @@ the new material re-added as `<param>` blocks after them, so every change is a p
   around content that is about to change.
 - **DONE when:** the events track `StepList`, the six it already computes are read rather than re-derived,
   and a preview shows pending / current / passed.
+
+#### ✅ DONE 2026-09-06 — the harvest, and the one honest inference it needed
+
+⭐ **IT NEEDED NO PLUMBING AT ALL, and that is worth stating because the line and QC both budgeted for
+some.** QC `AS-01`: *"`StepList` is stranded, not missing. Routing it is a real piece of work (it means
+reaching a pure file the Figma path does not currently call)."* ⚠ **Checked, and it is already reached.**
+`AscentPage.Build` takes `PageState`, `PageState.Steps` **is** the `StepInputs` that machine reads
+(`Pages.cs:165`), and `VesselData.cs:410-452` fills it every frame regardless of `FigmaMode`. The machine
+was not unreachable — it was **unasked**. Nothing new is computed, no parameter added, no source invented.
+
+#### The eight events that have a source
+
+| # | event | source | |
+|---|---|---|---|
+| 0 | `LIFTOFF` | `StepId.Liftoff` | the clamps letting go, not a clock |
+| 2 | `T+1:00 — MAX-Q` | `StepId.MaxQ` | the latched peak detector |
+| 5 | `T+2:30–2:35 — MECO` | `StepId.Meco` | |
+| 6 | `T+2:35–2:39 — STAGE SEPARATION` | `StepId.StageSep` | |
+| 7 | `T+2:36–2:47 — S2 IGNITION` | **`s.Steps.S2Lit`** | ⭐ the one sourced from a raw input rather than a `StepList` row — QC counts it among the five fixture fields that prove the frame has flown |
+| 8 | `T+4:20–8:43 — SECO-1` | `StepId.Seco` | |
+| 9 | `T+9:00–12:02 — DRAGON SEPARATION` | `StepId.DragonSep` | |
+| 10 | `T+12:48–13:23 — NOSE-CONE OPEN` | `StepId.NoseConeOpen` | |
+
+⚠ `S2Lit` is true only **while** the engine burns, so on its own S2 IGNITION would **un-happen at SECO**.
+The ordering rule below is what keeps it passed, and a test pins exactly that.
+
+#### ⛔ THREE EVENTS HAVE NO OBSERVER, AND ONE OF THEM IS THE TRAP
+
+- `T+0:10 — PITCH KICK` — a steering event; there is no steering state to read.
+- `T+1:09 — MACH 1` — would need a speed of sound. `StepInputs` has none, and `PageState.SurfaceVelocityMps`
+  is **not** a Mach number. Converting one to the other is a NEW SIMULATION, which C1.15 gates behind a
+  documented mod-first search — and this line is a harvest, so it was not written.
+- ⛔ `T+1:14 — STAGE-1B ABORT MODE` — **the one that looks easy and is not.** `StepList.AbortMode()`
+  already returns `MODE 1 / 2 / 3` through first-stage flight, and mapping the real 1B call onto our
+  MODE 2 boundary is tempting and wrong. That function's own header says it: *"the actual boundary
+  conditions are NOT public … where each one starts is **OURS**. **Do not cite these numbers as
+  SpaceX's.**"* Declaring our boundary to BE the real T+1:14 call is precisely that citation. **Not
+  mapped**, and the reason is written into the code beside it so the next reader does not re-tempt.
+
+#### ⭐ WHAT ANSWERS THEM INSTEAD: THE ORDER THE PAGE ALREADY PRINTS
+
+`EventText` is chronological — the file's own comment says so, and every entry carries a tier-1 T+ time.
+So **if a later event has been observed, every earlier one is behind us**: Max-Q observed at T+1:00 puts
+the T+0:10 pitch kick in the past. That is a deduction from the page's own printed timeline, not a
+reading it does not have. ⛔ **It runs BACKWARD ONLY** — a passed event implies its predecessors and
+never its successors — and mutation **B** exists solely to prove the forward direction is not taken.
+
+⭐ **And that removes the need for a fourth state.** The first event that is not passed is the one the
+ascent has **reached**, so it is `Current` — including an unobserved one, for which *"we are at this
+milestone and it is not confirmed done"* is the true statement. Just after liftoff, `PITCH KICK` is
+`Current`: not claimed done, not claimed pending. That window has its own fixture and its own checks.
+
+⚠ **A DEAD FEED IS NOT ELEVEN PENDINGS.** `Marks` returns **0** and the page then draws no marker at all
+and one dim tint — it marks nothing because it knows nothing, rather than asserting that no event has
+occurred. Mutations **D** and **J** are the two halves of that (the model, and the draw).
+
+#### Verified (C1.3) — measured, not asserted
+
+`python plugin/build.py test` → **ALL SUITES PASSED**. `python plugin/build.py preview` → four new
+renders. QC's verify step asked for *"three fixtures — pre-launch, mid-ascent, post-insertion — with the
+marked set growing"*; each render **prints its own counts**, so the growth is a number in the build log:
+
+```
+ui_ascent_pad.png     PRE-LAUNCH  (clamped)                  passed 0  current 1  pending 10
+ui_ascent_mid.png     MID-ASCENT  (Max-Q passed, S2 lit)     passed 8  current 1  pending 2
+ui_ascent_orbit.png   POST-INSERTION (nose cone open)        passed 11 current 0  pending 0
+ui_ascent_nofeed.png  NO FEED     (nothing marked)           passed 0  current 0  pending 0  (unmarked)
+```
+
+**Inspected.** Pad: `LIFTOFF` cyan and current, the ten above dim with dim markers. Mid: eight green
+markers up to `S2 IGNITION`, `SECO-1` cyan, the last two dim. Orbit: eleven green. No feed: eleven dim
+labels and **no markers at all**.
+
+⭐ **QC said six of eleven had demonstrably occurred on that frame; the page marks EIGHT** — and the two
+extra are `MACH 1` and `STAGE-1B ABORT MODE`, both deduced from MECO having been observed after them,
+not from any new reading.
+
+⛔ **THE T+ TIMES ARE UNTOUCHED**, which QC named as the thing not to break: *"step tracking marks which
+have happened; it does not change when they are printed to happen."* A test asserts all eleven strings
+are drawn **verbatim**, in both the marked and the unmarked state; mutation **K** proves it fires on a
+one-character change.
+
+**MUTATION-PROVEN — 11 mutations, 11 caught, 0 uncaught:**
+
+| | mutation | first check that failed |
+|---|---|---|
+| **A** | the backward ordering fill removed | *"mid: eight of eleven have passed   got 5"* |
+| **B** | the fill also runs **forward** | *"early: PITCH KICK is current, NOT passed   got Passed"* |
+| **C** | S2 IGNITION stops reading `S2Lit` | *"S2 IGNITION is passed because S2Lit says the engine is burning   got Current"* |
+| **D** | a dead feed is marked anyway | *"no feed = no marking at all"* |
+| **E** | nothing is ever `Current` | *"pad: LIFTOFF is the current milestone   got Pending"* |
+| **F** | **every** unpassed event is current, not just the first | *"pad: everything above liftoff is pending"* |
+| **G** | `NOSE-CONE OPEN` loses its source | *"orbit: all eleven have passed"* |
+| **H** | `LIFTOFF` loses its source | *"early: LIFTOFF has passed — the clamps let go   got Current"* |
+| **I** | passed and pending share one label tint — *the exact defect AS-01 opened* | *"passed / current / pending are three different colours"* |
+| **J** | markers drawn on a dead feed too | *"a live ascent draws eleven event markers and a dead one draws none"* |
+| **K** | a T+ time string is "corrected" | *"all eleven T+ strings are drawn verbatim, marked or not"* |
+
+⚠ **F's first attempt was NOT a valid mutation** — it broke the `if/else` chain and was caught by the
+**compiler**, which proves nothing about the tests. Re-run as a compiling change; the row above is that
+re-run. Recorded because a mutation table is only worth what its weakest row is.
+
+#### Notes for the lines downstream
+
+- ⭐ **[[S151]] (`AS-02`, the empty right 60 %) is now unblocked.** Its own note said the content that
+  would fill that space is this line's tracking, and QC agreed: *"the empty 60% is not a layout problem
+  looking for filler; it is the space AS-01's fix should occupy."* **That content now exists.**
+- ⚠ **`R-01` ([[S153]]) does NOT gate this line, and that was checked rather than assumed.** The six
+  lines held on R-01 are held because they **ADD TEXT** to a page whose type is under the legibility
+  floor. This line adds **no text at all** — it tints the eleven labels that were already there and adds
+  eleven 16-px squares. Nothing new to be illegible.
+- ⚠ Pending uses `Text6`, not `Pages.StepColumn`'s `Text7`. `Text7` is `#585D7C` on a `#020738` ground,
+  very dark for a 26-px label on a page R-01 already reports as under the floor. `Text6` is the same
+  "not yet" tint [[S158]] used on the Suit Leak Check's ticks the same day — ⭐ **one step-state
+  vocabulary across every page that has one**, which is the [[S149]] failure not repeated.
+- ⚠ **`ScreenPainter` is not touched and needs no change** — `PageState.Steps` was already threaded.
+
+**Comment-loss check (C1.16 / G12): 0 lost** across all three files (HEAD 1228 comment lines → 1336). One
+section heading was extended in place, caught by the check, and restored verbatim with the new heading
+added beneath it.
+
+⛔ No `install`, no glass, no `git push`. §14.4(a) untouched — this reads state, it commands nothing.
 
 ### S160 [S] VrioTest is inert end to end, and it is the only split that needs a NEW model — **TODO** — [H21 + QC `VT-01` (part-closed); split 5 of 5 from [[S55]]; **do it last**]
 - **The finding.** No `PageState` parameter, no HitTest, no glue branch; the five checklist ticks read a
@@ -15607,6 +15729,11 @@ named as such in both files. The colour half of MP-01 was closed by [[S104]]; **
   space is the tracking S55 owns**, so doing this first would lay out a page around content that is about
   to change.
 - ⛔ **Sequence after [[S55]]'s ascent half.**
+- ✅ **UNBLOCKED 2026-09-06 by [[S159]]** (S55's ascent half, split 4 of 5), which marks all eleven events
+  passed / current / pending from the live `StepList`. **The content this line was waiting for now
+  exists**, and there are four renders of it to lay out against — `ui_ascent_pad` / `_mid` / `_orbit` /
+  `_nofeed`. ⚠ Note before laying out: the page's marked state is at its DIMMEST pre-launch (ten pending
+  rows in `Text6`), so judge the layout from `ui_ascent_pad.png` as well as the mid-ascent frame.
 - **DONE when:** the page uses the screen with S55's tracked events in it, at 2560.
 
 ### S152 [S] The preview draws tinted assets at integer rectangles while the game draws them at float — **DONE 2026-09-06 — ALREADY FIXED by [[S100]]; this line supplies the CODE-REVIEW verdict QC said it could not give** — [QC `C-11`]

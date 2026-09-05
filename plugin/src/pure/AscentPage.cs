@@ -35,6 +35,8 @@ namespace DragonScreen
     {
         // background + title + active-phase line + ~30 hull/leg/fin/engine strokes + 4 section labels
         // + 11 event leaders + 11 event labels + bottom bar.
+        // S159 adds 11 event-state markers, one Rect each. MEASURED at 2560x1406 by the preview:
+        // 64 commands with a live feed, 53 with none (a dead feed draws no marker at all). 100 stands.
         public const int Commands = 100;
         const float RefW = 3427f, RefH = 2112f;
 
@@ -78,6 +80,121 @@ namespace DragonScreen
             "T+9:00–12:02 — DRAGON SEPARATION",
             "T+12:48–13:23 — NOSE-CONE OPEN"
         };
+
+        // ==================== S159 / S49 H34 / QC AS-01: THE ELEVEN EVENTS ARE MARKED ====================
+        // All eleven drew in ONE tint, none marked passed, current or pending — while `pure/StepList.cs`,
+        // a 15-row machine that resolves most of them off real vessel state, ran unread because it draws
+        // only through `Pages.Build` and is stranded behind `FigmaMode` (S49 §1.1). QC AS-01: *"the state
+        // to mark them with is in the fixture, ON THIS FRAME … by those five fields alone, six of the
+        // eleven events have demonstrably occurred and the page marks none."*
+        //
+        // ⭐ THIS IS A HARVEST AND IT NEEDED NO PLUMBING AT ALL. `Build` already takes `PageState`, and
+        // `PageState.Steps` IS the `StepInputs` that machine reads (`Pages.cs:165`, filled at
+        // `VesselData.cs:410`). Nothing new is computed here, no new parameter, no new source.
+        //
+        // ⛔ THE T+ TIMES ARE NOT TOUCHED. They are tier-1 reference copy — [[T12]]'s own register line,
+        // "all 11 T+ events transcribed verbatim" — and QC says so again: *"step tracking marks which have happened;
+        // it does not change when they are printed to happen."* Only the TINT of each row changes.
+
+        /// <summary>The event has a step of its own in <see cref="StepList"/>, or -1 if it has not.</summary>
+        const int NoStep = -1;
+
+        /// <summary>Which `StepList` row each of the eleven events is, in the same order as
+        /// <c>EventText</c>. Three of them have no row and no observer anywhere — see EventMark.</summary>
+        static readonly int[] EventStepIdx = {
+            (int)StepId.Liftoff,      // LIFTOFF                    — the clamps letting go
+            NoStep,                   // T+0:10 PITCH KICK          — nothing observes a pitch program
+            (int)StepId.MaxQ,         // T+1:00 MAX-Q               — a latched peak detector
+            NoStep,                   // T+1:09 MACH 1              — no Mach anywhere in StepInputs
+            NoStep,                   // T+1:14 STAGE-1B ABORT MODE — see the note below
+            (int)StepId.Meco,         // T+2:30–2:35 MECO
+            (int)StepId.StageSep,     // T+2:35–2:39 STAGE SEPARATION
+            NoStep,                   // T+2:36–2:47 S2 IGNITION    — not a StepId, but `S2Lit` IS an input
+            (int)StepId.Seco,         // T+4:20–8:43 SECO-1
+            (int)StepId.DragonSep,    // T+9:00–12:02 DRAGON SEPARATION
+            (int)StepId.NoseConeOpen  // T+12:48–13:23 NOSE-CONE OPEN
+        };
+
+        /// <summary>S2 IGNITION's index. It is the one event sourced from a raw `StepInputs` FIELD rather
+        /// than from a `StepList` row — QC counts `ps.Steps.S2Lit` among the five fields that prove six
+        /// events have occurred, and it is already wired (`VesselData.cs:445`). ⚠ `S2Lit` is true only
+        /// WHILE the engine burns, so on its own it would un-happen at SECO; the ordering rule below is
+        /// what keeps it passed afterwards.</summary>
+        const int S2IgnitionEvent = 7;
+
+        /// <summary>Where the ascent has got to, per event. Three states, which is what the page can
+        /// honestly distinguish.</summary>
+        public enum EventMark : byte { Pending, Current, Passed }
+
+        static readonly StepRow[] stepScratch = new StepRow[(int)StepId.Count];
+        static readonly bool[] passedScratch = new bool[11];
+        static readonly EventMark[] markScratch = new EventMark[11];
+
+        /// <summary>
+        /// Mark every event passed / current / pending from the LIVE step machine. Returns the number of
+        /// marks written, and <b>0 when nothing is known</b> — a dead feed does not get eleven confident
+        /// "pending"s, it gets no marking at all, which is what the caller draws.
+        ///
+        /// ---- THREE EVENTS HAVE NO OBSERVER, AND ORDERING IS WHAT ANSWERS THEM HONESTLY ----
+        /// PITCH KICK, MACH 1 and STAGE-1B ABORT MODE are resolved by nothing in this build:
+        /// • a PITCH KICK is a steering event and there is no steering state to read;
+        /// • MACH 1 would need a speed of sound. `StepInputs` has none, and `PageState.SurfaceVelocityMps`
+        ///   is not a Mach number — turning one into the other is a new simulation, which C1.15 gates
+        ///   behind a documented mod-first search, and this line is a harvest;
+        /// • ⛔ STAGE-1B ABORT MODE is the one that looks easy and is not. `StepList.AbortMode()` returns
+        ///   MODE 1 / 2 / 3 during first-stage flight, and its own header says *"the actual boundary
+        ///   conditions are NOT public … where each one starts is OURS. Do not cite these numbers as
+        ///   SpaceX's."* Declaring our MODE 2 boundary to BE the real 1B call at T+1:14 is exactly that
+        ///   citation. So it is not mapped.
+        ///
+        /// ⭐ Instead they are resolved by the ORDER THE PAGE ITSELF PRINTS THEM IN. `EventText` is
+        /// chronological — the file's own comment says so, and the T+ figures beside each one are tier-1
+        /// reference times. So if a LATER event has been observed, every earlier one is behind us: MAX-Q
+        /// observed at T+1:00 puts the T+0:10 pitch kick in the past. That is a deduction from the page's
+        /// printed timeline, not an invented reading, and it is the ONLY inference made here.
+        /// ⛔ It runs BACKWARD ONLY. A passed event implies its predecessors; it never implies a successor.
+        ///
+        /// The remainder falls out with no fourth state: the first event that is not passed is the one the
+        /// ascent has REACHED, so it is CURRENT — including the unobserved ones, for which "we are at this
+        /// milestone and it is not confirmed done" is exactly the true statement.
+        /// </summary>
+        public static int Marks(PageState s, EventMark[] into)
+        {
+            int n = EventStepIdx.Length;
+            if (into == null || into.Length < n) return 0;
+            if (!s.Valid) return 0;
+
+            int rows = StepList.Build(s.Steps, stepScratch);
+            if (rows == 0) return 0;
+
+            bool[] p = passedScratch;
+            for (int i = 0; i < n; i++)
+            {
+                int idx = EventStepIdx[i];
+                p[i] = idx != NoStep && StateOf(stepScratch, rows, (StepId)idx) == StepState.Done;
+            }
+            if (s.Steps.S2Lit) p[S2IgnitionEvent] = true;
+
+            for (int i = n - 2; i >= 0; i--) if (p[i + 1]) p[i] = true;
+
+            bool tookCurrent = false;
+            for (int i = 0; i < n; i++)
+            {
+                if (p[i]) into[i] = EventMark.Passed;
+                else if (!tookCurrent) { into[i] = EventMark.Current; tookCurrent = true; }
+                else into[i] = EventMark.Pending;
+            }
+            return n;
+        }
+
+        /// <summary>A row's state, found by its Id rather than by its index. `StepId`'s own note —
+        /// "order must not be reshuffled" — protects the ACKNOWLEDGEMENT BITMASK, not this array, so
+        /// indexing `stepScratch` by `(int)StepId` would be leaning on a promise nobody made.</summary>
+        static StepState StateOf(StepRow[] rows, int n, StepId id)
+        {
+            for (int i = 0; i < n; i++) if (rows[i].Id == id) return rows[i].State;
+            return StepState.Pending;
+        }
 
         public static void Build(DisplayList dl, int w, int h, PageState s)
         {
@@ -137,11 +254,32 @@ namespace DragonScreen
             SectionLabel("STAGE 1 — 9 MERLIN 1D", 1500f);
 
             // ---- the 11 real §8 events, called out against the stack ----
+            // ---- ...and since S159, EACH ONE MARKED passed / current / pending ----
+            // ⛔ THE COLOURS ARE THE BUILD'S EXISTING STEP LANGUAGE, NOT A NEW ONE. `Pages.StepColumn`
+            // — the stranded surface this page is harvesting from — already says done / active / pending
+            // as Go / Accent / dim, and [[S158]] made "not yet" `Text6` on the Suit Leak Check's ticks
+            // the same day. One vocabulary for step state across every page that has one; a second would
+            // be the C7.1 failure ([[S149]]) built on purpose.
+            // ⚠ Pending uses `Text6`, not `StepColumn`'s `Text7`. Text7 is #585D7C on a #020738 ground,
+            // which is very dark for a 26 px label on a page [[S153]] (R-01) already reports as under the
+            // legibility floor. Text6 is the same "not yet" tint S158 used and is the brighter of the two.
+            // ⚠ A DEAD FEED IS NOT ELEVEN PENDINGS. `Marks` returns 0, and everything then draws in one
+            // dim tint with no marker at all: the page marks nothing because it knows nothing, rather
+            // than asserting that no event has happened yet. Same rule as every dashed readout here.
+            EventMark[] marks = markScratch;
+            int nm = Marks(s, marks);
             for (int i = 0; i < EventY.Length; i++)
             {
                 float ty = EventY[i], hw = HalfWidth(ty);
-                LN(CX + hw, ty, CX + hw + 40f, ty, DragonPalette.Accent);
-                dl.Text(EventText[i], X(CX + hw + 50f), Y(ty), Z(26), TextAlign.Left, DragonPalette.Text2);
+                Rgba mark, lead, label;
+                if (nm == 0)                            { mark = Faint;                lead = Faint;                label = Faint; }
+                else if (marks[i] == EventMark.Passed)  { mark = DragonPalette.Go;     lead = Hull;                 label = DragonPalette.Text2; }
+                else if (marks[i] == EventMark.Current) { mark = DragonPalette.Accent; lead = DragonPalette.Accent; label = DragonPalette.Accent; }
+                else                                    { mark = DragonPalette.Text8;  lead = DragonPalette.Text8;  label = DragonPalette.Text6; }
+
+                LN(CX + hw, ty, CX + hw + 40f, ty, lead);
+                if (nm != 0) dl.Rect(X(CX + hw + 46f), Y(ty - 8f), Z(16f), Z(16f), mark);
+                dl.Text(EventText[i], X(CX + hw + 74f), Y(ty), Z(26), TextAlign.Left, label);
             }
 
             BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame

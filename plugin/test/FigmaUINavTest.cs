@@ -382,6 +382,168 @@ public static class FigmaUINavTest
         NavHit body = FigmaUI.HitTest(UiPage.Ascent, 0.5f * W, 0.4f * H, W, H);
         Check("Ascent body is inert", body.Act == NavAct.None, "got " + body.Act);
         Check("Ascent is a real page, not a placeholder", !FigmaUI.IsPlaceholder(UiPage.Ascent), "");
+
+        AscentMarks();
+    }
+
+    /// <summary>The eleven T+ event callouts against the live step machine (S159 / S49 H34 / QC AS-01).
+    /// All eleven used to draw in one tint while `StepList` — which resolves most of them — ran unread.
+    /// </summary>
+    static void AscentMarks()
+    {
+        var m = new AscentPage.EventMark[11];
+
+        // ---- ON THE PAD: nothing has happened, and LIFTOFF is what is next ----
+        PageState pad = AscentFixture();
+        pad.Steps.OnPad = true; pad.Steps.Clamped = true;
+        pad.Steps.MaxQPassed = false; pad.Steps.BoosterAttached = true; pad.Steps.S2Attached = true;
+        pad.Steps.S2Lit = false; pad.Steps.InSpace = false; pad.Steps.NoseConeOpen = false;
+        pad.Steps.RadarAltitude = 0.0;
+        Check("pad: all eleven events are marked", AscentPage.Marks(pad, m) == 11, "");
+        Check("pad: LIFTOFF is the current milestone",
+              m[0] == AscentPage.EventMark.Current, "got " + m[0]);
+        int padPassed = CountMark(m, 11, AscentPage.EventMark.Passed);
+        Check("pad: nothing has passed", padPassed == 0, "got " + padPassed);
+        Check("pad: everything above liftoff is pending",
+              CountMark(m, 11, AscentPage.EventMark.Pending) == 10, "");
+
+        // ---- JUST AFTER LIFTOFF: the window the ordering rule CANNOT answer, and must not pretend to.
+        // The clamps have let go and nothing else has been observed, so PITCH KICK - which nothing in
+        // this build sees - is the milestone the ascent has REACHED. Not passed: reached. That is the
+        // one honest thing to say about an unobserved event with no later observation behind it.
+        PageState early = AscentFixture();
+        early.Steps.MaxQPassed = false; early.Steps.BoosterAttached = true; early.Steps.BoosterLit = true;
+        early.Steps.S2Attached = true; early.Steps.S2Lit = false; early.Steps.InSpace = false;
+        early.Steps.RadarAltitude = 800.0;
+        AscentPage.Marks(early, m);
+        Check("early: LIFTOFF has passed - the clamps let go",
+              m[0] == AscentPage.EventMark.Passed, "got " + m[0]);
+        Check("early: PITCH KICK is current, NOT passed - nothing has been observed after it",
+              m[1] == AscentPage.EventMark.Current, "got " + m[1]);
+        Check("early: exactly one event has passed",
+              CountMark(m, 11, AscentPage.EventMark.Passed) == 1, "");
+        Check("early: MAX-Q is still pending with no peak latched",
+              m[2] == AscentPage.EventMark.Pending, "got " + m[2]);
+
+        // ---- MID-ASCENT: QC AS-01's own fixture. Max-Q latched, booster gone, S2 burning ----
+        PageState mid = AscentFixture();
+        Check("mid: eleven marks", AscentPage.Marks(mid, m) == 11, "");
+        Check("mid: SECO-1 is current while S2 is still lit",
+              m[8] == AscentPage.EventMark.Current, "got " + m[8]);
+        Check("mid: MECO and STAGE SEPARATION have passed",
+              m[5] == AscentPage.EventMark.Passed && m[6] == AscentPage.EventMark.Passed, "");
+        Check("mid: DRAGON SEPARATION and NOSE-CONE OPEN are still pending",
+              m[9] == AscentPage.EventMark.Pending && m[10] == AscentPage.EventMark.Pending, "");
+        // ⭐ S2 IGNITION is the one event sourced from a raw StepInputs FIELD (`S2Lit`), not a StepList
+        // row - QC counts it among the five fields proving the fixture has flown.
+        Check("mid: S2 IGNITION is passed because S2Lit says the engine is burning",
+              mid.Steps.S2Lit && m[7] == AscentPage.EventMark.Passed, "got " + m[7]);
+        // ⭐ AND THE THREE UNOBSERVED EVENTS ARE ANSWERED BY ORDER, NOT BY A GUESS. Nothing in this
+        // build sees a pitch program, a Mach number, or the real 1B abort call. But MECO has been
+        // observed, and all three are printed BEFORE it on a page whose events are chronological, so
+        // they are behind us. This is the whole of the inference the page makes.
+        Check("mid: PITCH KICK, MACH 1 and STAGE-1B ABORT MODE are passed by ORDERING",
+              m[1] == AscentPage.EventMark.Passed && m[3] == AscentPage.EventMark.Passed &&
+              m[4] == AscentPage.EventMark.Passed, "");
+        int midPassed = CountMark(m, 11, AscentPage.EventMark.Passed);
+        Check("mid: eight of eleven have passed", midPassed == 8, "got " + midPassed);
+
+        // ---- POST-INSERTION: everything is behind, so nothing is current ----
+        PageState orbit = AscentFixture();
+        orbit.Steps.BoosterAttached = false; orbit.Steps.S2Attached = false; orbit.Steps.S2Lit = false;
+        orbit.Steps.InSpace = true; orbit.Steps.NoseConeOpen = true; orbit.Steps.RadarAltitude = 400000.0;
+        AscentPage.Marks(orbit, m);
+        Check("orbit: all eleven have passed",
+              CountMark(m, 11, AscentPage.EventMark.Passed) == 11, "");
+        Check("orbit: nothing is current once the last event is behind",
+              CountMark(m, 11, AscentPage.EventMark.Current) == 0, "");
+        // S2 IGNITION must NOT un-happen when the engine stops. `S2Lit` is false here; only the
+        // backward ordering rule keeps it passed.
+        Check("orbit: S2 IGNITION stays passed after the engine has shut down",
+              !orbit.Steps.S2Lit && m[7] == AscentPage.EventMark.Passed, "");
+
+        // ---- THE MARKING IS MONOTONE. A passed event can never sit above a pending one. ----
+        Check("marks never go backwards up the timeline",
+              MonotoneMarks(mid, m) && MonotoneMarks(pad, m) && MonotoneMarks(orbit, m)
+              && MonotoneMarks(early, m), "");
+
+        // ---- NO FEED: the page marks NOTHING rather than eleven confident pendings ----
+        PageState dead = AscentFixture(); dead.Valid = false; dead.Steps.Valid = false;
+        Check("no feed = no marking at all", AscentPage.Marks(dead, m) == 0, "");
+        // ...and the DRAW follows it: with nothing known there is no marker on the page at all.
+        DisplayList dl = new DisplayList(AscentPage.Commands + 40);
+        AscentPage.Build(dl, W, H, dead);
+        DisplayList live = new DisplayList(AscentPage.Commands + 40);
+        AscentPage.Build(live, W, H, mid);
+        Check("a live ascent draws eleven event markers and a dead one draws none",
+              Rects(live) - Rects(dl) == 11, "live " + Rects(live) + " dead " + Rects(dl));
+
+        // ---- THE T+ TIMES ARE REFERENCE COPY AND THIS LINE DOES NOT TOUCH THEM (QC AS-01) ----
+        // Marking WHICH events have happened must not change WHEN they are printed to happen.
+        string[] times = { "LIFTOFF", "T+0:10 — PITCH KICK", "T+1:00 — MAX-Q", "T+1:09 — MACH 1",
+                           "T+1:14 — STAGE-1B ABORT MODE", "T+2:30–2:35 — MECO",
+                           "T+2:35–2:39 — STAGE SEPARATION", "T+2:36–2:47 — S2 IGNITION",
+                           "T+4:20–8:43 — SECO-1 / ORBIT INSERTION", "T+9:00–12:02 — DRAGON SEPARATION",
+                           "T+12:48–13:23 — NOSE-CONE OPEN" };
+        bool allThere = true;
+        for (int i = 0; i < times.Length; i++)
+            if (!Drew(live, times[i]) || !Drew(dl, times[i])) allThere = false;
+        Check("all eleven T+ strings are drawn verbatim, marked or not", allThere, "");
+
+        // ---- and the three states are VISIBLY different, not three names for one tint ----
+        Check("passed / current / pending are three different colours",
+              !SameColour(ColourOf(live, "T+2:30–2:35 — MECO"),
+                          ColourOf(live, "T+4:20–8:43 — SECO-1 / ORBIT INSERTION")) &&
+              !SameColour(ColourOf(live, "T+4:20–8:43 — SECO-1 / ORBIT INSERTION"),
+                          ColourOf(live, "T+12:48–13:23 — NOSE-CONE OPEN")) &&
+              !SameColour(ColourOf(live, "T+2:30–2:35 — MECO"),
+                          ColourOf(live, "T+12:48–13:23 — NOSE-CONE OPEN")), "");
+    }
+
+    /// <summary>QC AS-01's own frame: mid-ascent, Max-Q latched, booster gone, second stage burning.
+    /// The five fields it names as proof that events have occurred (`PreviewMain`'s shared fixture).
+    /// </summary>
+    static PageState AscentFixture()
+    {
+        PageState s = new PageState();
+        s.Valid = true;
+        s.Phase = "ASCENT";
+        s.Steps.Valid = true;
+        s.Steps.Crew = 4;
+        s.Steps.OnPad = false; s.Steps.Clamped = false; s.Steps.Powered = true;
+        s.Steps.Propellant01 = 0.62; s.Steps.EscapeArmed = true;
+        s.Steps.RadarAltitude = 96000.0; s.Steps.VerticalSpeed = 480.0;
+        s.Steps.MaxQPassed = true;
+        s.Steps.BoosterAttached = false; s.Steps.S2Attached = true; s.Steps.S2Lit = true;
+        return s;
+    }
+
+    static int CountMark(AscentPage.EventMark[] m, int n, AscentPage.EventMark want)
+    { int c = 0; for (int i = 0; i < n; i++) if (m[i] == want) c++; return c; }
+
+    /// <summary>Once an event is not passed, nothing above it may be. The page prints its events in
+    /// chronological order, so a passed one sitting above a pending one would be the timeline
+    /// contradicting itself.</summary>
+    static bool MonotoneMarks(PageState s, AscentPage.EventMark[] m)
+    {
+        int n = AscentPage.Marks(s, m);
+        bool seenUnpassed = false;
+        for (int i = 0; i < n; i++)
+        {
+            if (m[i] != AscentPage.EventMark.Passed) seenUnpassed = true;
+            else if (seenUnpassed) return false;
+        }
+        return true;
+    }
+
+    /// <summary>How many filled rectangles the page drew. The event markers are the only Rects
+    /// AscentPage adds beyond its background, so this counts them without reaching into the page.
+    /// </summary>
+    static int Rects(DisplayList dl)
+    {
+        int n = 0;
+        for (int i = 0; i < dl.Count; i++) if (dl.At(i).Kind == DrawKind.Rect) n++;
+        return n;
     }
 
     static void NavOrbitPlot()

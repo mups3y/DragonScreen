@@ -869,6 +869,57 @@ public static class PreviewMain
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + udl.Count + " commands");
             }
 
+            // ---- S159 / QC AS-01: THE ASCENT PAGE'S ELEVEN EVENTS, AT THREE POINTS IN A FLIGHT ----
+            // `ui_ascent.png` out of the loop above is the shared orbit fixture — one moment. The whole
+            // of this line is that the eleven events MOVE, and a single frame cannot show that, so QC's
+            // own verify step asks for three: *"three fixtures — pre-launch, mid-ascent, post-insertion —
+            // with the marked set growing."* Each render prints its own mark counts, so the growth is a
+            // number in the build log rather than something to be taken on trust from a picture.
+            {
+                PageState pad = ps;
+                pad.Steps.OnPad = true; pad.Steps.Clamped = true;
+                pad.Steps.MaxQPassed = false; pad.Steps.BoosterAttached = true;
+                pad.Steps.S2Attached = true; pad.Steps.S2Lit = false; pad.Steps.BoosterLit = false;
+                pad.Steps.InSpace = false; pad.Steps.NoseConeOpen = false;
+                pad.Steps.RadarAltitude = 0.0; pad.Steps.VerticalSpeed = 0.0;
+                pad.Steps.Propellant01 = 0.97;
+
+                PageState orbit = ps;
+                orbit.Steps.BoosterAttached = false; orbit.Steps.S2Attached = false;
+                orbit.Steps.S2Lit = false; orbit.Steps.InSpace = true;
+                orbit.Steps.NoseConeOpen = true; orbit.Steps.RadarAltitude = 400000.0;
+
+                PageState dead = ps; dead.Valid = false; dead.Steps.Valid = false;
+
+                var frames = new[] {
+                    new { Name = "ui_ascent_pad.png",    S = pad,   What = "PRE-LAUNCH  (clamped)" },
+                    new { Name = "ui_ascent_mid.png",    S = ps,    What = "MID-ASCENT  (Max-Q passed, S2 lit)" },
+                    new { Name = "ui_ascent_orbit.png",  S = orbit, What = "POST-INSERTION (nose cone open)" },
+                    new { Name = "ui_ascent_nofeed.png", S = dead,  What = "NO FEED     (nothing marked)" },
+                };
+                var marks = new AscentPage.EventMark[11];
+                foreach (var f in frames)
+                {
+                    DisplayList adl = new DisplayList(600);
+                    AscentPage.Build(adl, CW, CH, f.S);
+                    if (adl.Overflowed) Console.WriteLine("  WARNING UI ASCENT/" + f.Name + " OVERFLOWED");
+                    string path = Path.Combine(outDir, f.Name);
+                    Render(adl, CW, CH, path);
+                    int n = AscentPage.Marks(f.S, marks);
+                    int passed = 0, current = 0, pending = 0;
+                    for (int i = 0; i < n; i++)
+                    {
+                        if (marks[i] == AscentPage.EventMark.Passed) passed++;
+                        else if (marks[i] == AscentPage.EventMark.Current) current++;
+                        else pending++;
+                    }
+                    Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + adl.Count
+                                      + " commands   " + f.What
+                                      + "   passed " + passed + " current " + current
+                                      + " pending " + pending + (n == 0 ? "  (unmarked)" : ""));
+                }
+            }
+
             // ---- T13c: the prox-ops / procedure pages in the states their new live values have ----
             // The loop above renders each of these once, from the shared orbit fixture. Both pages now
             // have a SECOND look that only appears when the vessel is in a different state, and the same
