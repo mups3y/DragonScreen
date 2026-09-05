@@ -12489,3 +12489,198 @@ degree, when the size is corrected.
 **Gate flags (C1.13):** none of these needs an `install` or glass go — all four are preview-and-register
 work. **Option 2 of QC's own Q5** (raising `screenWidth` to 2560 in the cfg instead) *would* need `install`
 + glass time and is a separate owner decision (C1.12); S100 did not touch the cfg.
+
+---
+
+### S115 [O] QC Q5 applied — the shipped screens raised to 2560, and what that settles, what it doesn't, and one regression it introduces — **DONE 2026-09-05** — [Q5/Q8 applied; C-05 re-measured, still blocked (fix now safe — [[S116]]); S101 re-measured, stays open; S102 checked, does not close as predicted; a live-screen regression found and logged ([[S117]]); stale-figure stray logged ([[S118]])]
+
+**🟢 OWNER RULING APPLIED, verbatim, recorded 2026-09-05 in `docs/QC_FINDINGS.md`'s Q1–Q9 answer block
+(`e9dffe9`, C1.12):** **Q5 — "Raise the cfg to 2560"** (option selected) · **Q8 — "Nothing — 2560 handles
+it"** (option selected). Q8 answers the margin-label dropout question by pointing at Q5, not at widening,
+shortening or moving anything. This task applies Q5 and checks — measures, not assumes — what Q8's
+"nothing" actually bought.
+
+**THE CHANGE.** Three lines in `plugin/GameData/DragonScreen/DragonScreen.cfg` (`:60`, `:76`, `:87`), all
+`screenWidth = 1280` → **`2560`**. Nothing else in the cfg changes — height is still derived from the mesh
+(the cfg's own note), so the aspect (1.82) carries over unchanged; confirmed in `MANIFEST.txt` below.
+
+**THE DEFAULT — decided, with a reason.** `DragonScreenMonitor.cs:52`'s `[KSPField] public int screenWidth
+= 1280;` is what a screen gets if its MODULE block omits the field. Left at 1280 behind a 2560 cfg it
+becomes a fourth opinion waiting for the next screen someone adds without copying every field — the exact
+H-01 shape. Raised to **2560**. Not a style choice: `plugin/test/ScreenSizeTest.cs` (S100) already asserts
+*"the glue's screenWidth default matches the cfg"* and S100's own mutation-proof already showed a lagging
+default fails the build on its own (case 2, `S100`'s entry above) — so this default and the cfg cannot
+disagree without going red. Confirmed: `build.py test` reports `ScreenSizeTest ... 0 failed (cfg screenWidth
+= 2560)`.
+
+**BUILD CONFIRMED.** `build.py test`: all suites green, `ScreenSizeTest` 0 failed, `cfg screenWidth = 2560`.
+`build.py preview`: 108 pages rendered, `MANIFEST.txt` confirms every Figma-era page (`ui_cover.png`,
+`ui_cover_phase5.png`, `page2_nav_planet.png`, …) at **2560×1406** — the preview derives from the cfg (S100)
+so this needed no code change to follow.
+
+**S101 RE-MEASURED — STAYS OPEN.** No committed script measures this (checked — none exists), so the method
+is this chat's own, stated so it is auditable rather than trusted: the four hairlines are `Lines[,]` indices
+0/3/8/9 in `CoverPage.cs` (design y 566/915/1532/1609 — the four of the ten whose x-span crosses panel
+x=430 @1280 / x=860 @2560, confirmed against the table). `St(2)` rounds `2×sc` to a whole device px with a
+floor of 1 — **exactly 1 at both 1280 (`sc`=0.3329) and 2560 (`sc`=0.6657)** — so raising the resolution does
+not request a thicker line; it only moves each line's sub-pixel Y, which is what changes how the renderer's
+antialiasing splits its one pixel of ink across 1 or 2 rows. Per instance: sample the column, take the
+darkest (peak) row's ink as a fraction of full `Text6`, halve it (a "solid 2px rule" = two full-ink rows,
+denominator 2). **Validated first against the filed numbers**, on the pre-change 1280 render this chat still
+had on disk: **25.0% / 37.6% / 50.0% / 37.6%** against S101's filed **24% / 36% / 48% / 36%** — within 1
+point, close enough to trust the same four instances and an equivalent metric (S101 never recorded its own
+method to check against exactly).
+
+| instance (design y) | filed @1280 | this chat, validation @1280 | this chat @2560 |
+|---|---|---|---|
+| 566 | 24% | 25.0% | **50.0%** |
+| 915 | 36% | 37.6% | 37.6% |
+| 1532 | 48% | 50.0% | 50.0% |
+| 1609 | 36% | 37.6% | 37.6% |
+
+**Verdict: the near-vanishing instance is gone (worst case rose 25%→50%), but the weight is still not
+consistent** — two distinct values, 50.0% and 37.6%, for the same nominal 2px design rule. S101's own
+DONE-when is *"a consistent, legible weight"*, not merely "more visible", so **S101 STAYS OPEN with these
+figures.** Q8 is right that nothing collapses to near-invisible any more; it does not make the four instances
+agree with each other. This is not a re-litigation of Q8 (this task's own brief warns against that) — the
+owner answered "does the dropout stop", and it does; this records, separately, that "does the weight become
+consistent" is a narrower question Q8 was never asked and resolution alone does not answer.
+
+**C-05 RE-MEASURED, NOT FIXED — the fix is now safe, and is logged separately ([[S116]]) rather than applied
+here.** `FitRows`' bug (`CoverPage.cs:683`, `if (size < Typography.Min)` compares a DESIGN-space `size` to a
+PANEL-pixel constant) never involves `sc`, so it is exactly as broken at 2560 as at 1280 — resolution does
+not touch the comparison itself. What changes is the cost of leaving it broken: card 1's unclamped design
+size is 23.02 (`k`=0.8853×`wantSize`(26); `top`/`slotBottom`/`wantSize`/`wantGap` are all design constants,
+independent of `screenWidth`), which at 2560's `sc`=0.6657 renders at **15.32 panel px** — confirmed both by
+this arithmetic and by a direct pixel scan of the new `ui_cover_phase5.png`: row 1's ink spans y 373–383,
+row 2 begins at y 392 (19 px pitch, matching `gap`=32×0.8853×0.6657=18.86 px). **15.32 is still under the
+16 px `Typography.Min` floor** (96% of it) — much closer than 1280's 7.66 px (48%), but not fixed, because
+the comparison that is supposed to catch it still is not looking at matching units.
+**What Q5 changes is whether the fix is safe to land.** S112 (`4081f5e`) computed both candidates: at 1280
+the corrected clamp overflows its card by 131 design px and needs a TIER-3 layout call; at 2560 it clamps to
+exactly 24.03 design (=16.0 panel) and the block ends at design y 748 against a card bottom of 760 — **12 px
+of design margin, no layout consequence.** This chat's own numbers (23.02 unclamped, 15.32 rendered) agree
+with S112's exactly. **So the block S112 found is lifted** — but landing the one-line fix changes rendered
+row sizes on a page file, which this task's scope excludes (*"fix no screen layout"*; this task's own
+done-criteria says "C-05 re-measured", not "fixed"). Logged as **[[S116]]**, ready to land in one line with
+every number already in hand.
+
+**⛔ THE TRAP, CHECKED FOR AND NOT WALKED INTO.** Raising `screenWidth` does not move the vehicle's physical
+screen or the crew's eyes — every element that scales through `sc` (`CoverPage.X()/Y()/Z()`, the whole
+Figma-era idiom) renders the SAME fraction of the panel at 2560 as at 1280, just at twice the pixel density.
+So H-06 / DK-04 / R-01 / every "too small to read" finding whose evidence is a Figma-era measurement **still
+stands** — their filed pixel figures just doubled to describe the same physical size (the stray for this is
+[[S118]], since several comments now state absolute-pixel figures the doubling makes stale). S101 and C-05
+above are the two cases where the doubling genuinely changes the OUTCOME, and it is because both compare
+against a floor that is NOT proportional to `sc` — a fixed panel-pixel constant (`Typography.Min`) or a
+fixed device-pixel stroke floor (`St`'s clamp to 1) — so doubling the canvas under a fixed threshold moves
+how close the rendered value comes to it. Everything else that is merely "small", with no such fixed
+comparison in its way, is exactly as small, in the seat, as it was before this task.
+
+**⚠ A REAL REGRESSION Q5 INTRODUCES — FOUND WHILE VERIFYING THIS TASK, NOT ASKED FOR, LOGGED NOT FIXED
+(C1.1) — [[S117]].** `src/pure/NavPage.cs` — the live NAV screen (`DragonScreen.cfg` screen 3,
+`defaultPage = NAV`, routed through `Pages.Build` at `ScreenPainter.cs:1201` with the screen's ACTUAL `w,h`)
+and the `Map`/`Orbit` sub-functions `CoverPage`'s own Map camera view reuses — draws every text label at a
+literal `Typography.*` panel-pixel constant with **no `sc` scaling at all** (checked: `NavPage.cs:189, 190,
+323, 445, 464, 472, 477, 482, 506, 508, 651, 659, 739, 805, 810, 820, 1077, 1120` all pass `Typography.*`
+straight to `dl.Text` — none multiply by a height-derived scale the way `CoverPage` does). Doubling
+`screenWidth` does not touch these constants, so the rendered PIXEL size is identical at 1280 and 2560 —
+**confirmed empirically**: `page2_nav_planet.png`'s header text inks rows 31–45 (15 px tall) at BOTH
+1280×703 (this chat's own pre-change render, saved before editing the cfg) and 2560×1406 (post-change). Same
+absolute pixel height on a canvas twice as wide means **half the physical/angular size on the real screen**
+— the opposite of "2560 handles it", for this page and for the AP/PE/TGT/NO DATA/ON SURFACE labels
+`NavPage.Map` draws inside `CoverPage`'s Map view. Not fixed here: it is a page-code change (giving `NavPage`
+the `sc`-scaling idiom `CoverPage` already has) on a live shipped screen, out of this task's "no screen
+layout" scope, and it deserves its own C1.3 verification. Logged as **[[S117]]**.
+
+**S102 CHECKED — DOES NOT CLOSE AS PREDICTED, UPDATED INSTEAD.** The task brief's hint ("after Q5 that claim
+becomes TRUE") is half right: `Turntable.cs:213`'s *"the in-game RenderTexture (2560)"* clause is now true.
+But its OTHER clause, *"the preview (1280 wide)"*, is now equally false — the preview derives from the same
+cfg (S100), so it is 2560 too — and the *"2x cover render"* clause has been gone since S100. All three of
+the comment's illustrative numbers needed a look, not the one the finding named. **Fixed directly** (TIER 3,
+comments only, zero behaviour change, explicitly invited by this task's brief: "check and close it if so"):
+`Turntable.cs:213` and `:309` now describe the render size as the one number it is, note it used to be three,
+and point at Q5/S102 rather than re-asserting stale figures. Not "closed as predicted" — the finding
+undersold what actually needed correcting; recorded here rather than in `docs/QC_FINDINGS.md`, which this
+task's scope keeps untouched.
+
+**STALE-FIGURE STRAY LOGGED, NOT FIXED (C1.1) — [[S118]].** Six comments cite an absolute pixel measurement
+"at the shipped 1280x703" that Q5 doubles: `pure/BottomBar.cs:82` (aspect 1.82 vs design 1.623),
+`pure/CoverPage.cs:299` (globe half-width 62.5 px, clearances 54/49/56/51 px) and `:568` (HUD label 96 px of
+glyph in 90.2 px of room, border at x 770–772), `pure/MarginAffordance.cs:49` ("MANUAL" at ts=14.06 px, ink
+x 8…63), `pure/NavOrbitPlotPage.cs:64` (range-ring radii 63.9/127.9/191.8/255.7, globe limb 194.0),
+`pure/Pages.cs:878` (chrome bar starts at y 639 on a 703-high screen). **The ASPECT reasoning in every one of
+these survives unchanged** — 2560×1406 is the same 1.82:1 as 1280×703, so e.g. `BottomBar.cs:82`'s whole
+point (the shipped aspect exceeds the design's 1.623, so `x` is always positive) is exactly as true as
+before. Only the ABSOLUTE PIXEL figures are stale (they read as the 1280 numbers; the shipped ones are
+double each). Logged as one stray, not fixed, per this task's brief — **[[S118]]** — with the distinction
+stated so whoever lands it corrects numbers without "fixing" reasoning that was never wrong.
+
+**Scope respected (C1.1).** No screen layout changed — no page repositioned, resized by hand, or given new
+content. Beyond the cfg + the `KSPField` default, the only other file touched is `Turntable.cs`, comment-only
+(S102, explicitly invited). `docs/BUILD_PLAN.md` untouched (G10). `docs/QC_FINDINGS.md` untouched, as this
+task's brief requires — every disposition above lives here instead, the pattern S100 used for the same
+reason. `build.py test` green. `build.py preview` green, 108 pages, `MANIFEST.txt` confirms 2560×1406 across
+the Figma-era pages. **No `install`, no glass** — separate owner gates (C1.12), not opened here. The frame-
+cost note for the glass session (4× RenderTexture fill on three live screens) is left for that session to
+read, not acted on.
+
+### S116 [S] Land C-05's now-safe one-line unit fix — compare `Typography.Min` in panel space, not design space — **TODO** — [logged by S115, 2026-09-05; TIER 1, UNBLOCKED by Q5]
+- **The finding.** `CoverPage.FitRows` (`:673-689`) receives `top`/`slotBottom`/`wantSize`/`wantGap` in
+  DESIGN units and returns a design `size`, but clamps it against `Typography.Min` (16, a PANEL-pixel
+  constant) directly — `if (size < Typography.Min)` — comparing DESIGN px to PANEL px. At both widths tried
+  so far it never fires even though the rendered panel size is under the real floor (7.7 px @1280, 15.3 px
+  @2560 — QC C-05, confirmed again by [[S115]]).
+- **The fix — exactly what S112 (`4081f5e`) specified, and [[S115]]'s own numbers confirm lands cleanly at
+  the now-shipped 2560:** pass `sc` into `FitRows` (the caller already has it) and clamp against
+  `Typography.Min / sc`, raising `size` to `Typography.Min / sc` (not to `Typography.Min` itself) when it
+  fires. At 2560 (`sc`=0.6657) this raises ENTRY TIMELINE from the unclamped 23.02 design (15.3 panel) to
+  exactly 24.03 design (16.0 panel) — block ends at design y 748 against `Card1Bottom` 760, **12 design px
+  to spare, no overflow.** At 1280 the same fix overflows by 131 design px and needs a TIER-3 layout call —
+  moot at the current cfg, but leave a comment saying why the divide-by-`sc` matters if `screenWidth` is ever
+  lowered again.
+- **Must not break:** `FitRows`' contract (untouched when the block already fits) — cards 2 and 3 must render
+  byte-identical (both already clear the corrected floor: 26×0.6657=17.3 panel > 16).
+- **Verify (C1.3):** re-render `ui_cover_phase5.png`; ENTRY TIMELINE's fitted `size` ≥ 16 panel px, block
+  ends inside `Card1Bottom` with margin; extend `LayoutTest`'s QC6 (already pins the overflow-not-mush
+  policy) to assert the floor in PANEL units so a future resolution change cannot silently reopen this.
+- **DONE when:** the fix lands, `ui_cover_phase5.png` inspected, `build.py test` green, and the register says
+  which width was current when it landed (so a future width change re-checks the 1280 branch before anyone
+  relies on it).
+
+### S117 [O] `NavPage`'s text does not scale with `screenWidth` — Q5 halves the live NAV screen's (and the Cover Map view's) legibility — **TODO** — [logged by S115, 2026-09-05; TIER 1/2 — a real regression from Q5, on a live shipped screen, found while verifying it]
+- **The finding.** `src/pure/NavPage.cs` (live NAV screen, `DragonScreen.cfg` screen 3; also reused by
+  `CoverPage.DrawCameraView`'s Map mode) draws every text label at a literal `Typography.*` panel-pixel size
+  with no scale factor — unlike `CoverPage`'s `X()/Y()/Z()` idiom, which multiplies every design value by
+  `sc = h / RefH` so the SAME physical fraction of the panel draws regardless of `screenWidth`. Confirmed at
+  `NavPage.cs:189, 190, 323, 445, 464, 472, 477, 482, 506, 508, 651, 659, 739, 805, 810, 820, 1077, 1120`.
+- **What Q5 does to it, measured (by [[S115]]).** `page2_nav_planet.png`'s header text inks the identical
+  rows (31–45, 15 px) at both 1280×703 and 2560×1406 — same absolute pixel size, on a canvas twice as wide.
+  The same mechanism reaches `NavPage.Map`'s AP/PE/TGT/NO DATA/ON SURFACE labels, drawn over `CoverPage`'s
+  own (correctly `sc`-scaled) globe/map well — not confined to the standalone NAV page.
+- **Why this is not just another stale-figure stray:** everything else this task touched assumes doubling
+  the canvas is at worst neutral for anything that already scales with `sc`. `NavPage` does not scale with
+  `sc` at all, so for it Q5 is not neutral — it is a plain halving of on-screen text size, on a live,
+  currently-shipped screen, that nobody asked for.
+- **Not fixed here (C1.1 / this task's "no screen layout" scope).** The fix is to give `NavPage` the same
+  `sc`-multiplying treatment `CoverPage` already has — non-trivial, because `NavPage` also places non-text
+  geometry (marker boxes, ring radii, the `MapRect` well itself) in literal panel pixels throughout, so font
+  sizes cannot be scaled in isolation from the marker/box sizes sitting beside them without a fresh pass.
+- **DONE when:** `NavPage`'s text (and whatever else turns out to be resolution-literal) tracks
+  `screenWidth` the way `CoverPage` does, verified by the same empirical test S115 used here — ink rows at
+  1280 vs 2560 must differ by the resolution ratio, not be identical — plus a preview PNG inspected at 2560.
+
+### S118 [S] Six comments cite 1280x703 pixel figures that Q5 doubles — aspect reasoning survives, absolute figures are stale — **TODO** — [logged by S115, 2026-09-05; TIER 3, comments only, no behaviour]
+- **The finding.** `pure/BottomBar.cs:82`, `pure/CoverPage.cs:299` and `:568`, `pure/MarginAffordance.cs:49`,
+  `pure/NavOrbitPlotPage.cs:64`, `pure/Pages.cs:878` — each states an absolute pixel figure measured "at the
+  shipped 1280x703", which the shipped 2560 now doubles.
+- **Fix by ADDING the 2560 figure, not by removing the 1280 one** — several of these are pinned by headless
+  tests at explicit 1280×703 test-harness dimensions (`FigmaUINavTest.BottomBarUndistorted`,
+  `MarginAffordanceTest`), which is a legitimate thing to keep testing; the comments need a second, current
+  number alongside the historical one, not a rewrite that hides which resolution produced which figure.
+- **⚠ The ASPECT reasoning in every one of these is UNCHANGED and must not be "corrected".** 2560×1406 is the
+  same 1.82:1 as 1280×703, so e.g. `BottomBar.cs:82`'s point (shipped aspect 1.82 > design 1.623, so `x` is
+  always positive) is exactly as true now as before. Only the absolute pixel figures are stale.
+- **DONE when:** each of the six comments states the figure that matches the CURRENT shipped `screenWidth`
+  (2560) — either replacing the number or stating both with the resolution each belongs to — with the aspect
+  reasoning left exactly as it reads today, and `build.py test` still green.

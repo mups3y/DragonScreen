@@ -210,10 +210,14 @@ namespace DragonScreen
         //
         // ---- WHY THE SLOT WIDTH IS AN ARGUMENT AND NOT A CONSTANT ----
         // A fixed pixels-per-frame would mean the same wrist movement spins the vehicle a different
-        // amount on the preview (1280 wide), on the in-game RenderTexture (2560), and on the 2x
-        // cover render. Expressing the gearing as a FRACTION OF THE SLOT makes the gesture the same
-        // physical sweep across the glass at every resolution, which is the only definition of "the
-        // same drag" that survives all three.
+        // amount depending on the render size. (Historically that meant three different numbers -
+        // the preview at 1280, the in-game RenderTexture at 2560, and a since-removed 2x cover
+        // render - S102. QC Q5, owner ruling 2026-09-05, raised the shipped screens to 2560, so
+        // preview and RenderTexture now AGREE; the illustration is kept because the reasoning does
+        // not depend on the two ever having differed.) Expressing the gearing as a FRACTION OF THE
+        // SLOT makes the gesture the same physical sweep across the glass regardless of what the
+        // render size is or ever becomes, which is the only definition of "the same drag" that
+        // survives a cfg change.
         //
         // ---- THE GEARING WAS CHOSEN, THEN MEASURED ON GLASS (S17, 2026-09-02) ----
         // T11a chose "one full sweep of the slot = one revolution" because there is no reference for
@@ -306,9 +310,10 @@ namespace DragonScreen
         // let it go back. Nothing else on the page moves, and nothing new is drawn.
         //
         // ---- WHAT COUNTS AS A TAP, AND WHY IT IS MEASURED IN FRAMES ----
-        // Not "under N pixels": N would mean a different gesture on the 1280 preview, the 2560
-        // RenderTexture and the 2x cover render, exactly as a fixed pixels-per-frame would (see the
-        // drag header). It is measured in FRAMES OF ROTATION, through the same gearing: a press and
+        // Not "under N pixels": N would mean a different gesture at every render size, exactly as a
+        // fixed pixels-per-frame would (see the drag header - and its note on Q5, since 2026-09-05
+        // that is one size, 2560, not the three this comment used to name). It is measured in FRAMES
+        // OF ROTATION, through the same gearing: a press and
         // release that turned the vehicle less than half a frame never showed the crew a different
         // sprite, so calling it a tap cannot contradict anything they saw. Travel is the total PATH,
         // not the net displacement, so a wiggle that ends where it started is a drag, not a tap.

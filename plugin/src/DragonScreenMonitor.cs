@@ -48,8 +48,16 @@ namespace DragonScreen
         /// </summary>
         [KSPField] public string textureSlot = "_MainTex";
 
-        /// <summary>Render target width in pixels. THE ONLY RESOLUTION NUMBER THAT IS CHOSEN.</summary>
-        [KSPField] public int screenWidth = 1280;
+        /// <summary>
+        /// Render target width in pixels. THE ONLY RESOLUTION NUMBER THAT IS CHOSEN.
+        ///
+        /// 2560, matching `DragonScreen.cfg`'s three MODULE blocks (QC Q5, owner ruling 2026-09-05,
+        /// verbatim: "raise the cfg to 2560"). This default is what a screen gets if its MODULE block
+        /// OMITS the field, so it must track the cfg or it becomes a fourth opinion about the render
+        /// size the moment someone adds a screen without copying every field — `plugin/test/
+        /// ScreenSizeTest.cs` fails the build if it does not.
+        /// </summary>
+        [KSPField] public int screenWidth = 2560;
 
         /// <summary>
         /// Render target height. LEAVE IT AT 0 - it is MEASURED from the screen mesh.
