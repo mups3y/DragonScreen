@@ -6862,7 +6862,7 @@ source, no claim) rather than reporting a cabin leak under a propellant label, a
 3. **Wire it to `s.Systems.Leaking` as this line literally reads.** ⛔ Not recommended: it puts a cabin leak
    under a propellant-manifold label, which is a new false statement rather than the removal of one.
 
-### S52 [O] `SuitLeakSim`'s provenance comment contradicts the code, and cabin pressure ignores the live leak — **TODO** — [TIER 2: real defect + documentation defect]
+### S52 [O] `SuitLeakSim`'s provenance comment contradicts the code, and cabin pressure ignores the live leak — **DOING** — [TIER 2: real defect + documentation defect]
 
 ⚠ **[[S125]] CROSS-REFERENCE, 2026-09-06.** H20 + H37, one root cause. ⭐ Landing it makes **the leak, the
 isolation valve, the alert word, the suit ΔP and the cabin gauge one story** — the audit's own phrasing —
