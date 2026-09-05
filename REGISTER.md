@@ -15208,7 +15208,7 @@ The full mapping — which hole, which finding, which are duplicates of each oth
 `docs/BACKLOG_RECONCILIATION.md`. **No new defect was discovered here and none was fixed.**
 ⚠ Each line names its sources so the next chat reads the audit's own detail rather than this summary.
 
-### S126 [S] The Cover's two TARGET readouts are baked pictures of the same wrong value — **TODO — un-held 2026-09-06, the R-01 policy exists** —
+### S126 [S] The Cover's two TARGET readouts are baked pictures of the same wrong value — **DOING** —
 ✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set
 one (SPLIT BY CONTENT TYPE — see S153). ⛔ **The condition that replaces it is mechanical, not a wait:**
 any text this line ADDS must be drawn at **`Typography.MinDesignFor(w, sc)` or above** if it is LIVE, or
