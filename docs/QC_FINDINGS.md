@@ -4189,3 +4189,181 @@ cause rather than the symptom.
 size and must render byte-identically.
 **Verify:** re-render every Figma page and assert that no drawn text size falls below `Typography.Min` in
 **panel** pixels — a headless check, which is what would have caught this at the start.
+
+
+---
+
+# BATCH 1 — SPECIFICATION: THE BOTTOM BAR
+
+> **Owner-directed, 2026-09-05.** The owner said, verbatim: **"give me batch 1"**. Batch 0 was **S100**
+> (`7957d4d`), an INSTRUMENT task that fixed the gate itself. This is the batch that follows it.
+>
+> ⛔ **This section is a SPECIFICATION, not a build.** The QC role is read-and-plan and writes only this
+> file; nothing here has been implemented. It is written so a build chat can execute it without re-deriving
+> anything. **No owner approval of its contents is claimed** — the owner asked for a batch; this is QC's
+> proposal of which one, with the research done.
+
+## What batch 1 is, and why this one
+
+**Three findings, one asset, one hit map, and every page in the build: C-12 + C-04 + H-07.**
+
+| finding | tier | what it is |
+|---|---|---|
+| **C-12** | 1 | `component_48.png`'s baked tab marker was erased so the marker could be drawn dynamically — **the erase left the glow behind**, so every page carries a permanent ghost marker under icon 0 |
+| **C-04** | 2 | the bar is drawn at full panel width against a height-derived scale, so it is **stretched 12.2% horizontally** — circular icons render as ellipses and all its baked type is distorted |
+| **H-07** | 2 | on the letterboxed pages the bar is drawn `0…w` while the page art is drawn `ox…ox+RefW·sc`, so **the frame's own border becomes a rule crossing the bar** and two rounded corners collide |
+
+**Why this batch and not another.** Four tests, and it is the only candidate that passes all four:
+
+1. **No owner gate and no open question.** Q1–Q6 do not touch it; `install` and glass time are not needed;
+   the whole thing is verifiable from `build.py preview`. *(This rules out **R-01**, whose option 2 is Q5's
+   and needs glass; and **A-02 / F-03**, which wait on Q6.)*
+2. **One fix, many surfaces.** 21 draw sites covering **all 35 pages** — not a page-at-a-time sweep.
+3. **They are coupled and must move together.** The draw, the hit map (`FigmaUI.BottomBarHit`) and the
+   marker (`BottomBarMarker`) all encode the same stretched mapping. Fixing C-04 without the other two
+   slides every nav icon's touch target off its icon. **Doing these separately means touching one hit map
+   three times.**
+4. **It follows batch 0 in kind.** S100 made the gate honest; this is the first defect that gate can now
+   prove, on every page at once.
+
+⚠ **It is also the batch that S100 makes newly verifiable.** C-12's proof — the ghost showing on a page
+whose marker is elsewhere — was measured at 2× and is **re-confirmed at the shipped width below**.
+
+## Research a build chat would otherwise have to redo
+
+### The 21 draw sites, and the three families they fall into
+
+`dl.Asset("component_48", …)` appears in **21 files**. Every one draws it **full panel width × `235·sc`**,
+so the 12.2% stretch is universal. But the *pages* fall into three families by how they map x, and **the
+right fix differs by family** — this is the single most important thing in this spec:
+
+| family | x mapping | sites | files |
+|---|---|---|---|
+| **A — LETTERBOXED** | `x·sc + ox` | **11** | `AscentPage` `DeorbitBurnPrepPage` `DockingSimPage` `EntryPage` `FigmaFramePage` `Frame58Hud` `NavOrbitPlotPage` `PlaceholderPage` `RendezvousPage` `SystemsPidPage` `SystemsTreePage` |
+| **B — FULL-WIDTH STRETCH** | `x·sx` | **8** | `MenuPage` `SettingsAudioPage` `SettingsVideoPage` `SuitCheckPage` `VehicleMechPage` `VehicleOverviewPage` `VehicleSubsystemPage` `VrioTestPage` |
+| **C — FILL-TO-FIT REFLOW** | `x·sc + (x ≥ Split ? extra : 0)` | **2** | `CoverPage` `ManualChuteDeployPage` |
+
+*(11 + 8 + 2 = 21 sites → 35 pages: `FigmaFramePage` serves 2, `PlaceholderPage` 9, `VehicleSubsystemPage` 6,
+the other 18 files one each.)*
+
+⭐ **For family A, drawing the bar at `ox … ox + 3427·sc` fixes C-04 and H-07 in one move** — the bar becomes
+uniform *and* flush with the page's own frame, and the colliding-corner seam disappears because there is only
+one frame edge left. For families B and C there is no letterbox, so a uniform bar leaves 69.6 px of *page
+background* at each end, which reads as a gap rather than a frame.
+
+### Where the bar can be split without showing
+
+Measured on `component_48.png` (3427 × 235), interior rows 118–232, excluding its top border:
+three empty spans wider than 80 design px —
+
+```
+x  632..1097   (466 wide)
+x 1466..1942   (477 wide)
+x 2121..2666   (546 wide, centre 2393)   <- the widest, between "Sun + GEO" and the SPX block
+```
+
+At the shipped width 546 design px is **182 panel px**, and the horizontal slack to absorb is **69.6 px**.
+So a split at design **x ≈ 2393** hides the slack inside a span two and a half times its width.
+
+⚠ **An overlap trick was tested and does not work.** Drawing the asset twice at uniform scale — once anchored
+left, once anchored right — leaves the right copy visible only from design x ≥ 3008.5, which lands **inside**
+the ink group at 3008–3058 and clips a glyph. Rejected; recorded so it is not re-tried.
+
+### The residue, re-measured at the shipped width
+
+Region: bar-local **x 25…145, y 196…229** in the asset, peaking at luminance **112** against a bar background
+of **42**, falling back to background at y ≥ 231 — the hard pill was erased, the glow was not. On the honest
+1280×703 renders:
+
+| render | active tab | residue mean | plain bar | excess |
+|---|---|---|---|---|
+| `ui_cover.png` | icon 0 | 97.4 | 40.9 | +56.5 |
+| `ui_ascent.png` | icon 0 | 97.4 | 40.9 | +56.5 |
+| **`ui_cabin.png`** | **icon 4** | **68.3** | 40.9 | **+27.4** |
+| **`ui_audiovideo.png`** | **icon 4** | **68.3** | 40.9 | **+27.4** |
+
+**The last two are the proof**: their marker is under icon 4, and the residue under icon 0 is still there at
++27.4 above background. It is not the marker. At the shipped width it lands at panel **x 9.3…54.2,
+y 690.0…701.0**.
+
+## The build
+
+### 1 — C-12: finish the erase *(no decision needed)*
+
+Clear `component_48.png` to its own flat background `#111B52` (sampled RGB **17, 27, 82**, alpha 255) across
+**bar-local x 20…150, y 190…235** — deliberately wider than the measured 25…145 / 196…229 so no fringe
+survives resampling. It is a rectangle fill on a flat region, not a retouch.
+
+- ⚠ **Record the edit in `docs/ASSET_INDEX.md`.** This is the second edit to a community-Figma export (the
+  first being the original erase); the repo copy's divergence must stay written down (C7.1).
+- ⚠ **Do not touch `MarkY` / `MarkH` / `MarkW`** (`FigmaUI.cs:278`). They are measured from the erased block,
+  and the block being cleared is deliberately larger than the marker being drawn.
+
+### 2 — C-04 + H-07: one uniform bar *(a decision is needed — see below)*
+
+**Family A (11 sites) is unambiguous.** Draw the bar at `ox … ox + 3427·sc`, uniform. C-04 and H-07 both
+close. This is 11 of the 21 sites and the higher-value half.
+
+**Families B and C (10 sites) need a choice.** Three shapes, and QC does not decide it:
+
+| # | option | cost | result |
+|---|---|---|---|
+| **1** | **Add `DisplayList.AssetUV`** — a sub-rect asset draw mirroring the existing `ImageUV` — and split the bar at design 2393, left half anchored left, right half anchored right | a new primitive in **both renderers** (`ScreenPainter.DrawImage` + `PreviewMain.DrawCoverAsset`) | exact: uniform scale, content flush to both edges, slack invisible |
+| **2** | **Draw uniformly at `ox` on every page**, and fill the two end strips with the bar's own `#111B52` plus a 1 px top-border continuation | no new primitive | uniform everywhere; the bar's content insets from 10.5 px to **78.9 px** from the left edge on families B and C |
+| **3** | **Fix family A only**, leave B and C stretched | least work, least risk | 11 of 21 sites correct, 10 still 12.2% wide — an inconsistency that would need recording |
+
+⚠ **Option 1 is the correct result and the riskiest route.** A new draw primitive implemented twice is
+exactly the class of divergence **S75** found — where `PreviewMain` ignored asset tint for months and the
+preview and the capsule silently disagreed. If it is taken, the two implementations must land in one commit
+with a headless test that pins them together, the way `ScreenSizeTest` now pins the render size.
+
+**QC's recommendation: option 2.** It fixes all 21 sites, needs no new primitive, and therefore cannot
+introduce a two-renderer divergence. Its only cost is a 68 px content inset on families B and C — and on
+family A that inset **is** the frame, which is the point. If the inset is judged wrong once it is on the
+glass, option 1 remains available and the family-A work is not wasted.
+
+### 3 — The hit map moves with the draw *(mandatory, whichever option)*
+
+`FigmaUI.BottomBarHit` (`:121-131`) maps a touch by `BarIconX[i] / RefW * w` and `BottomBarMarker`
+(`:281-286`) places the marker by the same rule — **both assume the current stretch.** They must change in
+the same commit as the draw or every nav icon's touch target slides off its icon, on all 35 pages.
+
+⚠ **The bar is the one control the crew can always rely on** — `FigmaUI.HitTest` tests it first, before any
+page control, for exactly that reason. A silent break here is the worst possible outcome of this batch.
+**Derive all three (draw, hit, marker) from one function**, as `MenuPage.CellRect` already does for the Menu
+grid — *"the one source of truth Build, HitTest and the headless nav test all share."*
+
+## Must not break
+
+- **`ScreenSizeTest`** — S100's fence. Nothing here may re-enlarge the preview.
+- **The tab strip on `UiPage.Cabin`.** `F-04` records that it is baked into `frame66.png` and survives only
+  because `component_48`'s top ~105 rows are transparent. Changing the bar's geometry on a family-A page
+  moves what shows through. **Re-render `ui_cabin.png` and check the three tabs are still legible and still
+  inside their hit bands.**
+- **`FigmaUINavTest`** — it exercises the bar's routing and must be re-run, not re-pinned to old numbers.
+- **The `_nofeed` / `_alarm` / `_alerts` render variants** — the bar is on all of them.
+
+## Verify
+
+1. `component_48`'s crosshair icon renders **square** (bbox ratio 1.00 ± 0.05) on `ui_cover.png`. It is
+   exactly 130 × 130 in the asset; today it renders 23 × 21.
+2. The residue probe — panel **x 9.3…54.2, y 690.0…701.0** — reads within 2 luminance units of the plain bar
+   background on a page whose active tab is **not** icon 0 (`ui_cabin.png`, `ui_audiovideo.png`).
+3. On a family-A page (`frame58_hud.png`), **no vertical rule at x = 70** and **one** rounded bottom-left
+   corner, not two.
+4. A headless check that the bar's drawn width ÷ 3427 equals its drawn height ÷ 235, and that each icon's
+   drawn centre maps back inside its own `BottomBarHit` band — at two panel aspects.
+5. `build.py test` green; all 104 preview PNGs re-rendered and the manifest checked.
+
+## What batch 1 deliberately does NOT include
+
+- **R-01** (page-wide sub-floor type) and **S101** (the hairline dropout) — one job between them, TIER 1, and
+  **the strongest candidate for batch 2** — but its option 2 is **Q5's** and needs `install` + glass, an owner
+  gate (C1.12). ⚠ It also **blocks the filed fixes for C-03 and H-06**, so those cannot precede it either.
+- **V-01 + S-01** (32 hardcoded gauge colours across 7 pages) — unblocked for cabin temp, CO2 and the loops,
+  where `SystemsPidPage.cs:249` already makes the right call; but PPO2's and pressure's bands are a §1.4
+  question and `CabinLimits` is mirrored into Python for the BlackBox report (**BB3-Q1**, still open). **A
+  good batch 3.**
+- **The S75 inert-tint hoist** (SC-02, DK-02, RZ-01, and A-02/F-03 behind Q6) — five pages, one shared tint,
+  no gate on three of them. **A good batch 4**, and small.
+- Everything gated on **Q1** (the Figma export), **Q2** (glass), **Q3**, **Q4**, **Q6**.
