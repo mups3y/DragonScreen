@@ -903,6 +903,43 @@ namespace DragonScreen
                     c.AimForward = SteerAim(s.SurfaceVelocity, up, g.TiltDown, g.TiltCross, aoa);
                     c.DeployFins = s.AltitudeM <= FinDeployAltM;
 
+                    // ============================================================================
+                    // ⭐ [[OCT10]] — THE HAND-OVER ARMS OFF THE **CENTRE** BANK WHILE THE BURN THAT
+                    //    STARTS IS A **THREE-ENGINE** BURN. THAT INCONSISTENCY IS **DELIBERATE**.
+                    // ============================================================================
+                    // OCT10 was logged by [[OCT6]] (C1.1) as a consequence of the 3→1 landing burn, and
+                    // its DONE-when offered two ways to close: make the trigger and the opening bank
+                    // consistent, OR record the inconsistency as deliberate with the reason. **The second
+                    // was taken, 2026-09-05 (W5+W25+OCT10 batch), and nothing here changed.** The reason,
+                    // in full, because a later chat WILL read this line and think it is a bug:
+                    //
+                    //  • `Hoverslam.IgnitionAltitude(s.Land)` solves against `s.Land` — the **CENTRE**
+                    //    (`CenterOnly`) bank. Since OCT6 the burn that then opens is a **THREE**-engine
+                    //    burn, which needs far less altitude to arrest, so the stage lights three engines
+                    //    meaningfully HIGHER than three engines require.
+                    //  • **THE ERROR DIRECTION IS CONSERVATIVE.** Igniting early wastes propellant;
+                    //    igniting late loses the stage. Of the two ways to be wrong this is the survivable
+                    //    one, and there is no recorded flight to price the propellant against.
+                    //  • ⭐ **AND IT IS LOAD-BEARING — this is the part that makes it a decision rather
+                    //    than an oversight.** The hand-over altitude BEING the single-engine ignition
+                    //    altitude is exactly what makes `Hoverslam.EnginesFor` answer **3** on the opening
+                    //    tick: at that altitude one engine is out of margin BY CONSTRUCTION, so the solver
+                    //    asks for three. Arm off the THREE-engine bank instead and the burn opens far
+                    //    lower — where one engine may already suffice — and `EnginesFor` could answer 1 on
+                    //    the very first tick. That would **collapse the 3→1 profile the owner RULED FOR on
+                    //    2026-09-05** (asked which of two options to fly, verbatim: *"1. (2)"* —
+                    //    `ThreeLanding` shedding to `CenterOnly`). Changing this trigger is therefore not
+                    //    a tidy-up of an off-by-one; it changes WHICH BANK the burn opens on, which is a
+                    //    settled owner decision (C1.8).
+                    //  • **WHAT WOULD REOPEN IT:** a RECORDED flight that prices the current early light
+                    //    in propellant, against a hand-over armed off the three-engine solve that still
+                    //    provably opens on three. That needs the BlackBox and glass time — §B16.8 ruling 3,
+                    //    a SEPARATE owner gate, and the owner has DEFERRED flight. Until then this stands
+                    //    as written, on purpose.
+                    // ⛔ Do not "fix" this line without that data and an owner ruling. See [[OCT9]], which
+                    //    is the shed test's OWN margin and is a different question from this gate — OCT9
+                    //    deliberately fed its ramp allowance to the shed test ONLY and left this hand-over
+                    //    untouched, for exactly the reason above.
                     if (s.AltitudeM <= Hoverslam.IgnitionAltitude(s.Land)) c.Phase = BoosterPhase.LandingBurn;
                     break;
                 }

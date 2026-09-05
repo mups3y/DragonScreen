@@ -3389,7 +3389,7 @@ an owner call — flagged here only so it is not lost behind the question above.
 - **DONE when:** the shed criterion either carries a derived (not invented) margin with a test, or the
   deferral is recorded with the owner's words.
 
-### OCT10 [S] The landing burn now opens on three engines but is still ARMED off the centre bank's ignition altitude — **TODO** — [logged by OCT6 per C1.1: a consequence of OCT6, deliberately not folded into it]
+### OCT10 [S] The landing burn now opens on three engines but is still ARMED off the centre bank's ignition altitude — **DONE 2026-09-05 — CLOSED AS DELIBERATE, NO BEHAVIOUR CHANGED (batched with [[W5]] + [[W25]])** — [logged by OCT6 per C1.1: a consequence of OCT6, deliberately not folded into it]
 - **The finding:** `BoosterDescent.cs`'s `AeroDescent` case hands over with
   `if (s.AltitudeM <= Hoverslam.IgnitionAltitude(s.Land))` — `s.Land` being the CENTRE bank. Since OCT6
   the burn that then starts is a THREE-engine burn, which needs far less altitude, so the stage lights
@@ -3404,6 +3404,34 @@ an owner call — flagged here only so it is not lost behind the question above.
   flight to judge the cost, so it is probably downstream of [[OCT9]] and §B16.8 ruling 2.
 - **DONE when:** the hand-over trigger and the opening bank are consistent, or the inconsistency is
   recorded as deliberate with the reason.
+
+✅ **DONE 2026-09-05 — the SECOND of this line's two closing options was taken: the inconsistency is
+RECORDED AS DELIBERATE, with the reason. ⛔ NO BEHAVIOUR CHANGED, and that is provable:** the
+comment-stripped diff of `pure/BoosterDescent.cs` against `HEAD` is **IDENTICAL**. The deliverable is a
+comment block at the `AeroDescent` hand-over plus this closure.
+**The answer was supplied by the overseer with this task's brief — it was not re-engineered here**, and the
+reasoning as recorded in `BoosterDescent.cs`'s `AeroDescent` case is:
+  · `AeroDescent` hands over at `Hoverslam.IgnitionAltitude(s.Land)` — the **CENTRE** bank — while the burn
+    that starts is, since [[OCT6]], a **THREE**-engine burn, so three engines light meaningfully higher than
+    three engines require.
+  · **The error direction is CONSERVATIVE:** an early light wastes propellant, a late light loses the stage.
+    Of the two ways to be wrong, this is the survivable one.
+  · ⭐ **AND IT IS LOAD-BEARING — which is what makes it a decision rather than an oversight.** The
+    hand-over altitude BEING the single-engine ignition altitude is precisely what makes
+    `Hoverslam.EnginesFor` return **3** on the opening tick: at that altitude one engine is out of margin by
+    construction. Arm off the three-engine bank instead and the burn opens much lower, where one engine may
+    already suffice — which would **collapse the 3→1 profile the owner RULED FOR on 2026-09-05** (asked
+    which of two options to fly, verbatim: *"1. (2)"*). Changing this trigger changes WHICH BANK the burn
+    opens on, and that is a settled owner decision (C1.8).
+  · **Judging the propellant cost of the current early light needs recorded flight data, and the owner has
+    DEFERRED flight** (§B16.8 ruling 3 — the BlackBox plus a separate glass gate).
+**⇒ It stays as it is, on purpose, until flight data justifies changing it.** The in-code block states the
+reopening condition explicitly: a recorded flight that prices the early light against a hand-over armed off
+the three-engine solve that still provably opens on three. It also cross-references [[OCT9]], which fed its
+ramp allowance to the **shed test only** and deliberately left this gate untouched — for exactly this reason.
+**Verification (C1.3):** `python plugin/build.py test` **GREEN — ALL SUITES PASSED** (BoosterTest and
+BoosterHostTest unmoved, as they must be for a comment-only change). **No screen changed → no preview PNG
+applies.** ⛔ OCT4's gate, OCT6's latch and OCT9's shed criterion were not touched.
 
 ### BB4 [owner-gated] Install the BlackBox + confirm on the glass — **DONE 2026-09-05 (closed on overseer-relayed evidence, NOT first-hand-verified by this chat — see provenance note below; blocker CLEARED: BB1 `aa7bfa2`, BB2 `bedb4a6`, BB3 `6604644` are all DONE)** — [TIER 1: the owner's own "before the first flight" deadline]
 - ⚠ **The owner ALREADY AUTHORISED `install` for the BlackBox specifically** (2026-09-03: *"build and install
@@ -7539,7 +7567,7 @@ test's header so a future editor sees where the authority for them is (and that 
   register line S63 exists: pin the table in a test"* — now stale in tense, and a `plugin/src` edit outside
   this task's declared outputs → **S74**.
 
-### W5 [O] H1b — the ullage/ignition gate that lost the booster, recovered as an OPEN DEFECT — **TODO** — [TIER 2: real defect + Part-B recovery]
+### W5 [O] H1b — the ullage/ignition gate that lost the booster, recovered as an OPEN DEFECT — **DONE 2026-09-05 (batched with [[W25]] + [[OCT10]] — all three touch the booster lane and collide if run apart)** — [TIER 2: real defect + Part-B recovery]
 Logged by **W3**, 2026-09-04 (C1.1 — the register line R1 §7.1 and §B16.4 both cite by name does not exist).
 **The finding:** `docs/BUILD_PLAN.md` §B16.4 says *"…the reason register line **H1b** exists"* and R1 §7.1
 lists `pure/IgnitionGate.cs` + `src/Ullage.cs` under *"directly implicated — a named, located, UNFIXED
@@ -7561,6 +7589,119 @@ R1 §7.1 and R1 §5.1's two rows END-TO-END first.
 **DONE when:** `build.py test` green, the gate is restored with its defect stated and pinned by a test, and
 either the fix is landed with the owner's agreement or the line is closed with the fix written down and
 assigned. ⚠ Nothing here converges a constant — that needs a recorded flight (§B16.8 ruling 3, owner gate).
+
+✅ **DONE 2026-09-05.** All three files restored from `8b81816^`, **byte counts confirmed against R1
+§5.1/§5.3 before touching them**: `pure/IgnitionGate.cs` **2,502 B** · `src/Ullage.cs` **3,917 B** ·
+`test/IgnitionGateTest.cs` **2,944 B** — the audit's rows checked against the artefact rather than taken on
+trust. **Two-generation rule satisfied trivially:** `git log --all --follow` gives each file exactly two
+commits, `06b9f86` (Step C, gen 2) → `8b81816` (the deletion). There is **no gen-1 copy** of any of the three;
+nothing from gen 1 was read or restored.
+⛔ **RESTORED AS AN OPEN DEFECT, NOT AS A FIX — and the proof is mechanical.** Comment-stripped diff of both
+source files against `8b81816^`: **IDENTICAL** (54 significant lines each side for `Ullage.cs`). **No line of
+logic changed anywhere.** Every edit is a comment.
+
+**THE DEFECT, STATED IN EACH FILE'S OWN HEADER — two of them, both provable from the code alone:**
+1. **`UllageReady`'s BACKSTOP authorises a light into propellant it knows is unsettled.**
+   `return stability >= UllageStable || settledS > maxSettleS;` — past `maxSettleS` the answer stops
+   depending on stability at all. Harmless on stock (`Ullage.Stability` is 1.0 always, so the first term
+   always wins); on RSS-RO it is the mechanism that **throws an ignition away**, because RealFuels refuses
+   the light AND §B16.4 records `TestFlightFailure_IgnitionFail` on this exact part — so an attempt is a
+   consumable spent *and* a die rolled. The file's own words for it are *"a best-effort backstop"*.
+2. **The `stability` parameter cannot say "I do not know", and its only supplier relies on that.**
+   `src/Ullage.cs` returns **1.0 = "fully settled" on all SEVEN of its failure paths** (RealFuels absent ·
+   type lookup failed · a reflected member missing · engine not a `ModuleEnginesRF` · `ullage == false` ·
+   null `ullageSet` · anything thrown). So `1.0` reaches the gate meaning *either* "measured and settled"
+   *or* "nothing was measured", and the signature cannot tell them apart. **It fails OPEN.**
+
+⛔ **THE FLIGHT EVIDENCE — QUOTED, AND ITS LIMIT STATED.** `Crew-2_20260829_144114`: *"Booster engine never
+lit (eng_ignited=0 whole descent) → ballistic → LOST @14 km. Root = RealFuels ullage"*
+(`src/BoosterHost.cs`'s header; same event at `docs/FLIGHT_144114_SCREEN_AUDIT.md:35` and
+`docs/INTEGRATION_SCORECARD.md` rows 3–4, *"eng_ignited=0 — engine NEVER ignites"* → *"ballistic crash
+@119 m/s"*). ⚠ **BUT THE PROXIMATE ROOT OF THAT FLIGHT IS NOT PROVEN, and W5 refuses to inherit the
+headline.** `docs/ISSUE_REGISTER.md`'s own H1b row records the LIKELY root as a **MODE-NUMBER MISMATCH** —
+`BoosterDescent.Guide` emitted `EngineMode` 3/1 while `VehicleParts.EngineIdIsMode` decoded 1=three/2=centre,
+so the entry burn activated *the AllEngines set that had already spent its ignition at liftoff* — in its
+author's own words *"NOT proven to be off-focus RF (I over-concluded)"*, and marked **FIXED — UNFLOWN**.
+Ullage was never measured on that booster at all: the recorder sampled only the ACTIVE vessel, so the
+non-active booster's 16,139-tick descent carries **no `ullage_stab` and no `eng_ignited` stream** (R1's
+recorder finding; [[BB8]] for the ignition count). ⇒ **implicated and independently defective; NOT
+established as that flight's cause.** This corrects the framing this line inherited, rather than assuming it.
+
+**PINNED BY A TEST, AND THE PINS ASSERT THE *WRONG* BEHAVIOUR ON PURPOSE.** `test/IgnitionGateTest.cs` is the
+restored suite (13 checks, unweakened) plus a **`DefectPins()`** group — **26 checks total**, registered in
+`TestMain.cs`. Defect 1 is swept across the stability range (0.0 · 0.10 · 0.50 · 0.80 · 0.95 · one ulp under
+the 0.996 threshold) and pinned at **one tick either side of the backstop at identical stability 0.80 —
+refused at 5.9 s, authorised at 6.1 s**, which is the entire bug in two lines. A green suite here does **not**
+mean the gate is correct; it means the gate still behaves as it did on the flight, which is what an open
+defect must do until someone with the authority changes it. The file says so in place, and says the fix is
+written down and is an owner call, not a test repair.
+**Mutation-proved (2 mutations, each reverted, the file re-verified identical afterwards):** dropping the
+`|| settledS > maxSettleS` backstop → **8 failures**; defeating the `settledS <= minCoastS` guard →
+**3 failures**. ⚠ A third attempt hit the *comment copy* of the expression rather than the code and reported
+green — caught, re-targeted, and recorded here, because a mutation run that silently mutates nothing is worse
+than no mutation run at all.
+**Also pinned deliberately: the guard that is NOT defective.** The minimum separation coast is checked first
+and unconditionally, so the backstop can never authorise a light before the spent stage has cleared — pinned
+so a future fix to defect 1 cannot take it along as collateral damage.
+
+⛔ **THE FIX IS PROPOSED, NOT APPLIED (§B12.8 rider (b)) — written into both headers:**
+(a) the backstop must not authorise a light in an ullage-modelled regime — either drop the disjunction and
+let the caller handle a settle that never converges (the FSM already has the honest answer: keep raising
+`UllageRcs`, do not burn), or make it a distinct THIRD verdict the caller must handle explicitly;
+(b) `Ullage` must answer **KNOWN-SETTLED / KNOWN-UNSETTLED / UNKNOWN** with UNKNOWN gating CLOSED — `Init()`
+already computes exactly that fact (`ok`) and simply never reports it. Both change flight behaviour, and
+C1.12 says a build chat does not.
+
+⛔ **AND THE ONE THING W5 DELIBERATELY DID *NOT* DO: IT DID NOT WIRE THE READER IN.**
+`src/BoosterHost.cs`'s `UllageSettled` seam is **still null**, so the FSM's ullage gate is still held CLOSED
+and no phase commands thrust. Assigning `Ullage.Stable` to it is a ONE-LINE change and was refused on
+purpose: with the fail-open above, that line converts *"no source, so never burn"* into *"any reflection
+failure, so burn now"* — landing a known-defective gate into the flight path inside the very task that
+restored it, which is exactly what rider (b) forbids. The host's bind log now states which of the two states
+it is in, verbatim, instead of the old *"NONE (gate held closed — register W5)"*. **Arming it = the proposed
+fix + an owner go; logged as [[W31]] at the foot of this file.**
+⛔ **C1.15 honoured, and this file is the reason C1.15 exists.** `docs/reference/INSTALLED_MODS.md` row 1
+names **RealFuels installed** and names `Ullage.cs` as its reader; **no other installed mod models ullage**;
+R1 §5.1 grades it *"irreplaceable, no stock analogue"*. So the reflection is kept exactly as it was and
+**no simulation was written** — §14.4(e)/(f) never engage, because the quantity has a real mod source.
+
+#### ⛔ THE RETRY POLICY — [[OCT11]] DECLINED IT AND ASSIGNED IT HERE. **W5's ANSWER IS: NO RETRY.**
+Recorded in full in `pure/IgnitionGate.cs`'s header and pinned by a test (*"the gate is stateless"* — it has
+no attempt parameter, no memory and no notion of a previous failed light, and after W5 it still has none, so
+the shape changing is itself a test failure). The five reasons:
+1. **A retry treats the symptom.** The engine is commanded because THIS GATE said "ready", and defects 1 and
+   2 are the two ways it says "ready" without knowing. Re-issuing `Activate()` re-rolls the same dice on the
+   same information. Fixing the gate removes the reason to retry at all.
+2. **The owner ruled on this exact shape and nothing has changed since.** [[OCT11]], verbatim:
+   *"OPTION (b): `currentRole` STAYS A COMMAND RECORD. MAKE THE DIVERGENCE VISIBLE. BUILD NO RETRY."*
+   W5 owns the POLICY and so may revisit it — it revisited it and finds the reasoning intact. [[BB8]] is
+   still TODO, the ignition count is still unmeasured, and a bounded retry still spends from a budget nobody
+   has read.
+3. **"Bounded" cannot be chosen honestly today.** Any `MaxAttempts` is a number with no measurement behind
+   it — §B16.8 ruling 2 marks it `[UN-CONVERGED]` on sight and ruling 3 says no task converges one under the
+   preview-only gate. A bound that is invented is not a bound.
+4. **The instrument must fly before the actuator.** [[OCT11]] already made the divergence visible
+   (`boost.commanded_not_ignited` / `boost.ignition_resolved`, column `boost_cmd_not_ignited`) and [[BB8]]
+   will record the per-bank count. **Neither has flown.** Building the retry before the instrument that
+   would judge it is the ordering this project has repeatedly found to be wrong.
+5. **The safe loop already exists and it is not a retry.** §B16.3's *"settle propellant with RCS before EVERY
+   relight"* is implemented: while `Ullaged` is false no phase commands thrust and `UllageRcs` is raised.
+   That WAIT is unbounded in ticks and costs **no ignition**. The unsafe loop is the one that re-commands
+   `Activate()`. We keep the safe one.
+If the owner later directs one, the constraints are on record in the file: BOUNDED · GATED on settled
+ullage · refusing outright on an UNSUPPLIED ignition budget (the `0 = not supplied` convention) · attempt
+count reaching the recorder.
+
+**Verification (C1.3).** `python plugin/build.py test` **GREEN — ALL SUITES PASSED**; ignition-gate suite
+**26 checks, 0 failed**. **No screen or page changed → no preview PNG applies** (C1.3's docs-only skip does
+not apply — code changed — but there is nothing visual to render).
+⚠ **WHAT THE SUITE ACTUALLY EXERCISES, said plainly.** `build.py test` runs `build_plugin()` (which compiles
+**all of `src`**, glue included, against the KSP references) and then `build_tests()` (which compiles and
+RUNS `src/pure` + `test` only — `build.py:317` vs `:334`). So **`src/Ullage.cs` is COMPILED but never
+EXECUTED here**: its `ModuleEngines` parameter does not exist in the headless exe. **Defect 1 (pure) is
+pinned executably; defect 2 (`Ullage.Stability`'s seven fail-open returns) is a code-reading finding this
+suite is STRUCTURALLY unable to reach**, and only glass could exercise it. Stated, not implied — and it is
+moot in practice for as long as the seam stays unwired.
 
 ### W6 [S] `pure/CourseCorrect.cs` — the B8 impact divert, §B16-tagged by R1 but named in no wave — **DONE 2026-09-04** — [TIER 3: scheduled recovery]
 Logged by **W3**, 2026-09-04 (C1.1 — found while deriving Wave C's file list from R1 §5.1 row by row).
@@ -9640,7 +9781,7 @@ evidences is either listed or explicitly accounted for; `docs/INDEX.md`'s entry 
 accurately; docs-only → **no preview PNG applies** (say so, C1.3) and `python plugin/build.py test` is a
 no-regression check.
 
-### W25 [S] The booster AIM POINT — LZ1's sourced table is a DOC; the guidance has nothing to steer at — **TODO** — [TIER 2: real gap — a complete guidance with a zeroed target]
+### W25 [S] The booster AIM POINT — LZ1's sourced table is a DOC; the guidance has nothing to steer at — **DONE 2026-09-05 (batched with [[W5]] + [[OCT10]])** — [TIER 2: real gap — a complete guidance with a zeroed target]
 Logged by **W23**, 2026-09-04 (C1.1 — found on wiring the host: every target-derived input had to be
 supplied as zero because no aim point exists in code).
 **The finding.** `BoosterInputs.TargetBearing`, `.DownrangeErrM`, `.InitialDownrangeErrM` and the whole
@@ -9669,6 +9810,132 @@ AIM POINT" block.
 (never an invented coordinate); `DownrangeErrM` is fed from our own integrator; every new constant is
 marked [UN-CONVERGED] (§B16.8); and an RTLS mission's boostback stops annunciating *"no target bearing"* for
 the missions whose target is actually placed.
+
+✅ **DONE 2026-09-05.** New pure module **`plugin/src/pure/LandingTarget.cs`** turns LZ1's document into a
+resolved aim point, and `src/BoosterHost.cs` now feeds the guidance a LIVE impact error. New suite
+**`test/LandingTargetTest.cs` — 143 checks**, registered in `TestMain.cs`. `python plugin/build.py test`
+**GREEN — ALL SUITES PASSED**.
+
+**⭐ THE OWNER SPOKE MID-TASK, AND THIS IS THE QUOTE (C1.12's evidentiary standard).** In this task's own
+chat, 2026-09-05, verbatim: **"you can use the land anywhere option to start with"**. That is recorded here
+and in `pure/LandingTarget.cs`'s header, and it is the reason **LAND-ANYWHERE is now a NAMED, DELIBERATE
+resolution** rather than an accident of zeros — before this line, a missing target was simply everything
+being 0 and the FSM refusing; now it is a decision the flight, the screens and the recorder can all name.
+It is also exactly what the owner's EARLIER recorded ruling asks for (`LZ_RECOVERY_TABLE.md` §2, owner,
+2026-09-04, via the overseer): *"The droneships are placed at ROUGH, EXPLICITLY PROVISIONAL coordinates. The
+first booster is flown to wherever it NATURALLY lands for a clean nominal descent — the trajectory is not
+fought to reach a target — and THEN the droneship is moved to that exact measured position."* Under that
+ruling **the target moves to the booster, not the booster to the target**, so a clean un-fought descent is
+the CORRECT flight for an unplaced site, not a degraded one.
+⚠ **HOW THE SCOPE OF "to start with" WAS READ, and what was NOT assumed.** The instruction says land-anywhere
+MAY be used; it does not say the sourced aim points must go unused, and this line's own done-criteria require
+them (*"an RTLS mission's boostback stops annunciating 'no target bearing' for the missions whose target is
+actually placed"*). **So both are built**, and the ambiguity is handed back rather than decided:
+`LandingTargets.ForceLandAnywhere` is a `[Tunable]` switch that makes it EVERY mission, settable from
+`PluginData/tuning.cfg` with no recompile. **Its code default is `false`** — because defaulting it true would
+make the sourced half of this task dead code on the strength of one chat line read one particular way.
+**Q1 below asks the owner which he meant. ⛔ This chat did not decide it.**
+
+**(1) THE AIM POINT — resolved by CRAFT NAME, and only TWO coordinates exist in the whole tree.**
+`LandingTargets.Resolve(craftName)` → `Missions.Resolve` → a per-mission site table → a `LandingTarget` that
+is either a cited coordinate or a stated land-anywhere. There is **no third outcome and no silent zero**.
+  · **RTLS → `Fossil_LZ1`, `28.48583, -80.54444`** — cited in place to `LZ_RECOVERY_TABLE.md` §3
+    (*"a fixed, surveyed ground pad — a single real coordinate genuinely exists"*; Wikipedia/Wikidata
+    Q22078213). All 8 RTLS missions in §1 used this pad.
+  · **ASDS → OCISLY, `32.7875, -76.6445`** — cited to **§B16.9**, and taken as the **KK GROUP CENTRE**,
+    which that section is explicit about: *"The KK GROUP CENTRE's lat/lon is therefore what guidance targets
+    — not a vessel position, not a static's own offset."* ⚠ Deliberately **NOT** re-sourced from
+    `plugin/build/assess_flight.py`'s `BARGE` constant: LZ1's own §4 item 7 records that that file's value is
+    the **deck centre**, expressly not the group centre, so citing it here would repeat a mis-citation. The
+    numbers agree; the provenance does not, and the provenance is the point.
+  · ⛔ **JRTI and ASOG carry NO coordinate and never will from a build chat.** They are correctly NAMED
+    (knowing *which ship* and not knowing *where it is* are different facts, and only the second is missing)
+    and they resolve to LAND-ANYWHERE with a reason that says so.
+  · ⛔ **C7 honoured:** every number was read from `docs/reference/LZ_RECOVERY_TABLE.md` and
+    `docs/BUILD_PLAN.md` §B16.9. **The KSP install's Kerbal-Konstructs cfgs were not opened**, even though
+    the same values sit in them.
+  · ⛔ **§1.4:** W23 put no latitude or longitude in any code file, and this is the first line to do so. Both
+    coordinates carry an in-code `Citation` string naming the document and section; the suite asserts the
+    citation is present and names the right section, so a future coordinate without one fails the build.
+  · **`src/BoosterHost.cs` still contains NO coordinate.** It asks by craft name and is handed an answer.
+  · **The per-mission table is `LZ_RECOVERY_TABLE.md` §1 row for row**, and the suite re-derives §1's own
+    summary arithmetic from it: OCISLY 2 · JRTI 3 · ASOG 3 · LZ-1 8 = the 16-mission roster, with the 3
+    free-flyers (Inspiration4, Polaris Dawn, Fram2) correctly ABSENT — they are not in §1's roster, so this
+    repo has no sourced target for them and they land anywhere.
+  · **`MissionProfile.cs` was NOT widened**, per its own in-file instruction (*"do not widen `RecoveryMode`
+    here to hold it"*). The finer fact lives in the new module, keyed by the same craft name, and the suite
+    cross-checks every row against `MissionProfile.Recovery` — two tables sourced from one document that
+    disagreed would mean one was transcribed wrong.
+
+**(2) THE IMPACT ERROR — LIVE, over OUR OWN integrator.** `BoosterHost.PredictError` runs
+`BoosterDescent.PredictImpact` (the two-tier solve that has sat in the tree with **no caller** since W8 —
+this line is its first) over `pure/Trajectory.cs` with `pure/BoosterDrag.cs`'s Mach-binned curve, then
+`BoosterDescent.ErrorTo` for the signed long/short miss. That feeds `DownrangeErrM`, the latched
+`InitialDownrangeErrM` (§4.2's normaliser, latched once on the return leg, cleared on bind and release) and
+the full `GridFinInputs` error set.
+  · ⛔ **The ballistic coefficient is MEASURED, not assumed** — `Trajectory.BallisticCoefficientFrom` from
+    live density / surface speed / **drag acceleration** (`v.acceleration - v.graviticAcceleration`), filtered
+    by `SmoothBc`. **Sampled ONLY while coasting**, because thrust masks drag and the back-solve would
+    otherwise return nonsense; the coasting value is carried into the powered phases, and with no sample yet
+    β is 0, which makes tier 1 decline and tier 2 answer — honestly LONG, and saying so in its `Note`.
+  · ⛔ **The lead term's error RATES are a real finite difference** of successive predictions, never a
+    modelled rate (CLAUDE.md: *"simulate, never fake"*). First tick has no previous sample, so the rates are
+    0 and the law is pure proportional for one frame.
+  · ⛔ **No second predictor and no Trajectories dependency** (§B16.5 — and taking Trajectories is an owner
+    call a build chat may not make). When neither tier answers, the last error is **dropped, not held** —
+    holding it would have the fins chasing a prediction that has already been withdrawn — and a throwing
+    prediction is caught, log-gated and reported, with the FSM unaffected.
+  · **[UN-CONVERGED] gains, and where they came from.** `pure/GridFin.cs` declares NO constant — its header
+    says the numbers *"live in the caller and in `test/BoosterTest.cs`'s fixture (20° cap, 4 °/km, τ = 3 s),
+    and NONE of them is attributed"*. W25 is the first real caller, so it supplies **exactly that in-repo
+    fixture triple** rather than inventing a fourth opinion, as three `[Tunable]`s marked `[UN-CONVERGED]`
+    in place (§B16.8 ruling 2). They make the law RUN and are evidence of nothing; `BoosterDescent.AoaCapDeg`
+    re-caps by phase and altitude on top, so this cap is a ceiling on a ceiling.
+
+**(3) WHAT LAND-ANYWHERE ACTUALLY FLIES — and why no new phase or law was needed.** Every target-derived
+input stays ZERO, byte-identical to the pre-W25 behaviour, and the FSM's own stated behaviours are the RIGHT
+ones for a free descent: RTLS boostback refuses and annunciates (*correct — there is nothing to boost back
+TO*); ASDS boostback is inert at magnitude 0; the grid-fin law steers toward zero error, i.e. holds
+retrograde. **The entry burn and the hoverslam are UNAFFECTED** — both are speed/vertical solves over live
+state and need no target — so the stage still flies a real, controlled, engine-lit landing and simply lands
+where the trajectory was already going. **That is the measurement the owner's 2026-09-04 ruling wants.**
+⛔ Land-anywhere is NOT "guidance off", and NOT a licence to invent a target further down the pipeline.
+
+**DONE-when, item by item.** ✅ RTLS and OCISLY resolve real aim points by craft name with in-code citations.
+✅ JRTI/ASOG remain targetless with the refusal firing — now as a *named* land-anywhere rather than an
+accident. ✅ Impact error is live. ✅ Tests. ✅ `build.py test` green. ✅ Every new constant `[UN-CONVERGED]`.
+✅ An RTLS mission's boostback stops annunciating *"no target bearing"* — for the missions whose target is
+actually placed, and with `ForceLandAnywhere` at its code default of `false` (Q1).
+
+**Mutation-proved (4 mutations, each reverted, the file verified restored after each).** ⛔ The tripwire
+mutation first, because it is the one that matters: **re-introducing the STRUCK JRTI coordinate
+(`30.51, -78.18`) → 14 failures** including the enum-wide *"EXACTLY TWO recovery sites carry a coordinate"*
+count (`aimed=3`). The struck values are named in the suite ON PURPOSE, so restoring either one — from the
+table's §2, from git history, or by re-deriving the same great-circle projection — turns it red on the spot.
+Then: one digit wrong on OCISLY's longitude → 1 failure · Crew-6 mis-sourced JRTI→OCISLY → 6 failures ·
+land-anywhere stopping saying WHY → 3 failures.
+⚠ **The tripwire mutation also found a defect in the SUITE and it was fixed:** with the reason string null,
+a `.Contains` threw and aborted the run mid-suite, hiding every later check. Four call sites now go through a
+null-safe `Says()` helper, so a tripwire FAILS instead of crashing. Recorded because a tripwire that throws
+is a tripwire that hides things.
+
+⚠ **A DISCREPANCY BETWEEN THE TASK BRIEF AND THE SOURCE DOCUMENT, REPORTED RATHER THAN SILENTLY RESOLVED.**
+The brief states JRTI and ASOG are *"STRUCK"* by S89 and *"DO NOT RESTORE THEM"*. Reading
+`docs/reference/LZ_RECOVERY_TABLE.md` §2 directly (as the brief instructs — *"do not trust this summary
+alone"*), what S89 struck is the **fabricated Q1 owner ruling**; the two coordinates themselves are re-framed
+under the owner's REAL 2026-09-04 ruling as **"PROVISIONAL PLACEHOLDERS — tier-3, marked COHERENT, superseded
+by measurement"**, not deleted. **The code outcome is identical either way and this line took the strict
+reading**: a tier-3 provisional placeholder is not a §1.4-sourced position, the brief forbids it explicitly,
+and the owner's own ruling says the number is superseded by the first measured landing — so neither enters
+code. Flagged so a later chat is not surprised by the wording gap. **No document was edited (C1.16/C7.1).**
+
+⚠ **WHAT ONLY GLASS CAN CONFIRM.** `build.py test` compiles all of `src` but RUNS only `src/pure` + `test`
+(`build.py:317` vs `:334`), so `src/BoosterHost.cs`'s half of this line is **compiled, not exercised**: that
+`LandingTargets.For` is really called at bind and held; that `body.GetWorldSurfacePosition` puts the aim point
+where the pad/deck actually is; that `TerrainAltitude` clamped at 0 is right for a floating barge; that the
+measured-β coasting gate really excludes powered ticks on a live vessel; that `PredictImpact` converges in a
+physics frame's budget; and whether the fixture gains produce a sane commanded AoA on a real descent. **No
+install and no glass in this task** (preview-only build-go). **No screen changed → no preview PNG applies.**
 
 ---
 
@@ -11175,3 +11442,83 @@ skipped. `python plugin/build.py test` not run — no `.cs`/`.py` file touched b
 `sed`+`diff`, `git log`/`git show`) rather than taken on the task prompt's word; where the prompt's framing
 could not be independently verified in the repo (the overseer's contemporaneous `W11` assess note lives in
 the overseer's own record, not this repo) the banner says so honestly rather than treating it as a quote.
+
+---
+
+## Logged by the W5 + W25 + OCT10 batch, 2026-09-05 (C1.1 — noticed, NOT fixed)
+
+### W31 [S] ARM the ullage source — the reader is back, the seam is still null — **TODO** — [blocked on W5's proposed fix + an owner go]
+- **The finding:** [[W5]] restored `src/Ullage.cs` (the RealFuels reflection reader) and deliberately did
+  **not** assign it to `src/BoosterHost.cs`'s `UllageSettled` seam. So the FSM's ullage gate is still held
+  CLOSED, and **no booster phase can command thrust** — the host says so in its own bind log.
+- **Why it was not done in W5:** today's reader **fails OPEN** (1.0 = "settled" on all seven failure paths),
+  so the one-line assignment converts *"no source, so never burn"* into *"any reflection failure, so burn
+  now"* — landing a known-defective gate into the flight path inside the task that restored it, which
+  §B12.8 rider (b) forbids.
+- **Build:** apply W5's two proposed fixes — `Ullage` answering KNOWN-SETTLED / KNOWN-UNSETTLED / UNKNOWN
+  (`Init()`'s `ok` already computes the fact and never reports it), and `IgnitionGate.UllageReady`'s
+  backstop no longer authorising a light in an ullage-modelled regime — then wire the seam. Both change
+  flight behaviour, so **this needs an owner ruling before it starts** (C1.12), and W5's register line +
+  both file headers carry the proposals in full. **The DEFECT-pin tests will go red by design** — that is
+  the signal the change is deliberate, and they must be rewritten as correctness tests in the same diff.
+- **DONE when:** the gate can express "unknown", UNKNOWN gates closed, the seam is armed, the defect pins
+  are converted to correctness pins with the change stated in-header, and `build.py test` is green.
+
+### W32 [S] The predicted impact ignores the LIFT the grid fins are generating — **TODO** — [logged by W25]
+- **The finding:** `BoosterHost.PredictError` (W25) hands `TrajectoryInputs.LiftToDrag = 0.0`, i.e. a
+  drag-only solve — while the whole point of `AeroDescent` is that the stage flies at a **deliberate,
+  held angle of attack** and steers on the body lift that produces. So the predictor the fins steer on does
+  not model the fins.
+- **What already exists:** `Trajectory.MeasureAero` measures `DragAccel`, `LiftAccel`, `LiftToDrag` and
+  `BankRad` from the vessel's own aero acceleration — the same measured-not-modelled discipline W25 used for
+  the ballistic coefficient — and `TrajectoryInputs` already carries `LiftToDrag`/`BankRad` fields for it.
+  W25 did not wire it rather than half-wire it: the measurement has the same coasting/thrust-masking caveat
+  as β, plus a sign convention against `SteerAim`'s tilt that wants proving before it steers anything.
+- **DONE when:** L/D and bank are measured live and fed to the predictor with the same
+  coasting-only discipline as β, or it is recorded why drag-only is the right prediction for this phase.
+
+### W33 [S] `OffsetToMissM` / `AllNominal` — the aim-beside-the-deck safety bias has no verdict to switch on — **TODO** — [logged by W25]
+- **The finding:** `pure/GridFin.cs`'s header describes *"offset-to-miss (aim beside the deck until all
+  systems nominal) … so a failed steer lands in the water"*, and `BoosterInputs` carries both
+  `OffsetToMissM` and `AllNominal`. W25 left **both inert** (0 / false) because the bias is a SAFETY POLICY
+  that needs an "all systems nominal" verdict `BoosterHost` does not have and W25 would have had to invent —
+  and inventing the magnitude of a deliberate miss is exactly the kind of number §1.4 reserves.
+- **Note:** with OCISLY the only placed droneship this matters most for the ASDS profile; for a land-anywhere
+  descent it is meaningless by construction (there is nothing to miss).
+- **DONE when:** the nominal verdict is defined from real health signals and the offset magnitude is sourced
+  or ruled on, or the mechanism is recorded as deliberately unused with the reason.
+
+---
+
+## Open questions for the owner (C1.14) — from the W5 + W25 + OCT10 batch, 2026-09-05
+
+**Paste-ready for the overseer (C1.13).** One question. W5's retry policy and OCT10 are **not** questions —
+W5 answered NO RETRY with reasons on the authority its own line gives it, and OCT10's answer came with the
+task brief.
+
+### Q1 — "the land anywhere option to start with": for the UNPLACED sites only, or for EVERY mission?
+**Situation.** Mid-task, 2026-09-05, the owner said, verbatim: **"you can use the land anywhere option to
+start with"**. W25 was at that moment building the aim point, whose done-criteria require that *"an RTLS
+mission's boostback stops annunciating 'no target bearing' for the missions whose target is actually
+placed"*. Two readings are both reasonable and they produce different flights, so the chat built BOTH and
+put the choice behind a `[Tunable]` switch (`LandingTargets.ForceLandAnywhere`) rather than pick one on the
+owner's behalf (C1.12). **What is already true either way:** JRTI and ASOG have no coordinate and land
+anywhere; the entry burn and the hoverslam are unaffected by the choice, so the stage flies a real,
+controlled, engine-lit landing in both cases.
+1. **`ForceLandAnywhere = false` — the shipped default, and the chat's recommendation.** Land-anywhere
+   applies to the sites that are NOT placed (JRTI, ASOG, the three free-flyers, any unrecognised craft
+   name); LZ-1 and OCISLY, which are really placed and really sourced, are aimed at. *Reasoning:* this
+   matches the owner's own 2026-09-04 ruling, which is specifically about **the droneships that have no real
+   coordinate** — *"THEN the droneship is moved to that exact measured position"*. LZ-1 is a fixed surveyed
+   pad that does not move, so there is nothing for a measured landing to relocate. It also satisfies W25's
+   done-criteria as written.
+2. **`ForceLandAnywhere = true` — every mission, including LZ-1 and OCISLY.** Nothing is aimed at until the
+   first clean nominal descent has been flown and measured. *Reasoning:* it is the most literal reading of
+   *"to start with"*, and it means the very first Part-B booster flight has one fewer moving part — the
+   guidance is not fighting toward anything, so a bad aim point cannot be confused with a bad descent. Costs
+   nothing but a setting to reverse. **No code change needed — it is one line in `PluginData/tuning.cfg`.**
+3. **Something else** — e.g. land-anywhere for the droneships but aim for RTLS only, which is option 1 with
+   OCISLY moved into the land-anywhere set. Say so and it is a two-line change to the table.
+**Gate flags (C1.13):** none of the three needs an `install`/glass go **to select** — the switch is
+`[Tunable]`. But **flying any of them does**: `install` and glass time remain a separate owner gate, per
+session, and this batch used neither.

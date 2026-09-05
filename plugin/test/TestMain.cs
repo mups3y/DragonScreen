@@ -102,6 +102,8 @@ public static class TestMain
         // (`8225df7`: "fires thr=1.0 0.3 s after MECO at 'sep 0 km' ... LOST in ~10 s - and its 0-km burn
         // kicks the upper stage"). The suite pins that default. The two hold-off constants it exercises
         // are [UN-CONVERGED] (§B16.8): 194334 gives the FAILING point, never a converged safe value.
+        bad += LandingTargetTest.Run();    // W25: the booster aim point - sourced coords, land-anywhere
+        bad += IgnitionGateTest.Run();     // W5: the clamp-release + ullage gates, RESTORED AS AN OPEN DEFECT
         bad += BoosterHostTest.Run();      // §B16 booster host: selection, stop, command gate, engine roles
 
         // ---- PART B RECOVERY, W24 (§B16) - the booster STEERING LAW -------------------------------

@@ -161,19 +161,52 @@ namespace DragonScreen
         public static Func<Vessel, bool> UllageSettled;
 
         // =========================================================================================
-        // ⚠ THERE IS NO AIM POINT IN THE TREE, AND THIS HOST DOES NOT INVENT ONE
+        // ⭐ THE AIM POINT — register W25, 2026-09-05. IT IS RESOLVED, AND IT IS NOT INVENTED HERE.
         // =========================================================================================
-        // `BoosterInputs.TargetBearing`, `.DownrangeErrM`, `.InitialDownrangeErrM` and the grid-fin error
-        // terms all need a landing target. `src/BoosterTargeting.cs` is RECOVER-REFERENCE and §B16.9
-        // hands the per-mission table to **LZ1**, whose deliverable
-        // (`docs/reference/LZ_RECOVERY_TABLE.md`) is a DOC — real, sourced, and not yet code.
-        // So they are supplied as ZERO, honestly, and the consequences are the FSM's own stated ones:
-        //   • RTLS boostback REFUSES and annunciates — *"boostback refused: RTLS has no target bearing"*;
-        //   • ASDS is inert anyway (default magnitude 0 — §B16.2's C1.8 OVERRIDE);
-        //   • the grid-fin law steers toward zero error, i.e. holds retrograde.
-        // Turning LZ1's table into a live aim point (and running `PredictImpact` over `pure/Trajectory.cs`
-        // for the error) is **register W25** — its own line, because it is guidance, not hosting.
-        // ⛔ Do not put a latitude/longitude in this file. §1.4: sourced and marked, or not at all.
+        // ⛔ **THE HISTORY, KEPT (C1.16) BECAUSE IT IS WHY THIS IS SHAPED THE WAY IT IS.** Until W25 this
+        // block read *"THERE IS NO AIM POINT IN THE TREE, AND THIS HOST DOES NOT INVENT ONE"*, and every
+        // target-derived input — `TargetBearing`, `DownrangeErrM`, `InitialDownrangeErrM` and the whole
+        // `GridFinInputs` error set — was supplied as ZERO because LZ1's sourced table was a DOCUMENT and
+        // W23 had deliberately put no latitude or longitude in any code file (§1.4).
+        //
+        // **W25 turns that document into a target, and still puts no coordinate in THIS file.** Both
+        // coordinates live in `pure/LandingTarget.cs`, each citing its own row (LZ-1 →
+        // `LZ_RECOVERY_TABLE.md` §3; OCISLY → §B16.9's PLACED KK GROUP CENTRE), sourced from the repo and
+        // never from the KSP install's KK cfgs (C7). The host asks by CRAFT NAME and is handed either an
+        // aim point or an honest LAND-ANYWHERE — it decides nothing about where to land.
+        //
+        // ⭐ **LAND ANYWHERE — the owner, in this task's chat, 2026-09-05, verbatim: "you can use the land
+        // anywhere option to start with".** JRTI and ASOG have no citable coordinate and never get one
+        // from a build chat (the two that were invented were struck by S89); an unrecognised craft name
+        // has no target either. Those resolve to LAND-ANYWHERE, the target-derived inputs stay ZERO
+        // exactly as they were before W25, and the FSM's own refusals fire honestly — which, under the
+        // owner's 2026-09-04 ruling (*"flown to wherever it NATURALLY lands … THEN the droneship is moved
+        // to that exact measured position"*), is the CORRECT flight for an unplaced site rather than a
+        // degraded one. `LandingTargets.ForceLandAnywhere` makes it every mission if that is what was
+        // meant; its code default is `false` so the two placed sites do aim. See that file's header.
+        // ⛔ Do not put a latitude/longitude in THIS file. §1.4: sourced and marked, or not at all.
+
+        /// <summary>The resolved aim point for the bound booster — read once at bind, never per frame
+        /// (the §B16.4 step-2 discipline this host applies to the octaweb too). Read-only outside.</summary>
+        public static LandingTarget Target { get { return target; } }
+        static LandingTarget target;
+
+        // ---- [UN-CONVERGED] THE GRID-FIN GAINS, and where they come from ------------------------
+        // `pure/GridFin.cs` declares NO constant — its own header says so: *"`AoaMaxDeg`, `GainDegPerKm`
+        // and `LeadTauS` are all INPUTS. The numbers therefore live in the caller and in
+        // `test/BoosterTest.cs`'s fixture (20° cap, 4 °/km, τ = 3 s), and NONE of them is attributed."*
+        // W25 is the first real caller, so it is the first thing that has to supply them, and it supplies
+        // **exactly that in-repo fixture triple** rather than a fourth opinion — the alternative was to
+        // invent numbers, which §1.4 forbids and §B16.8 ruling 2 would mark `[UN-CONVERGED]` anyway.
+        // ⛔ THEY ARE EVIDENCE OF NOTHING. The research they came from was deleted 2026-09-01, R1 §5.1
+        // grades the module *"RSS-RO researched, never DB-seeded / flown ❌ NO"*, and
+        // `BOOSTER_GUIDANCE_METHOD.md` §10 puts the AoA taper third in its re-convergence order. They
+        // make the law RUN; a recorded RSS-RO flight is what will make them right (§B16.8 ruling 3, an
+        // owner gate). `BoosterDescent.AoaCapDeg` re-caps by phase and altitude on top of `FinAoaMaxDeg`,
+        // so this cap is a ceiling on a ceiling, never the only limit.
+        [Tunable] public static double FinAoaMaxDeg = 20.0;      // [UN-CONVERGED] test/BoosterTest.cs fixture
+        [Tunable] public static double FinGainDegPerKm = 4.0;    // [UN-CONVERGED] test/BoosterTest.cs fixture
+        [Tunable] public static double FinLeadTauS = 3.0;        // [UN-CONVERGED] test/BoosterTest.cs fixture
 
         // =========================================================================================
         // [UN-CONVERGED] the ullage settle IMPULSE direction
@@ -233,6 +266,21 @@ namespace DragonScreen
         // column (register BB1) reads these; this host invents no recording mechanism of its own.
         static bool steerPitchDeadbanded, steerYawDeadbanded, steerRollDeadbanded;
         static double steerDeadbandDeg;
+
+        // ---- register W25: the aim point's own carried state ------------------------------------
+        // `initialDownrangeErrM` is §4.2's normaliser, latched ONCE at the start of the return leg; the
+        // `last*ErrM` pair is the previous tick's prediction, so the grid-fin lead term differentiates a
+        // REAL measured change instead of an assumed rate. All three are cleared exactly where `phase` is
+        // (fresh bind, release) — a stale error from a previous booster would steer this one.
+        static double initialDownrangeErrM;
+        static double lastDownrangeErrM, lastCrossrangeErrM;
+        static bool haveLastErr;
+
+        /// <summary>W25: the unsigned great-circle miss of the CURRENT predicted impact from the aim
+        /// point, metres — for a screen or the BlackBox. `ImpactErrorValid` is false on LAND-ANYWHERE and
+        /// whenever neither prediction tier could answer; a display must show that with the number.</summary>
+        public static double ImpactErrorM { get; private set; }
+        public static bool ImpactErrorValid { get; private set; }
 
         static double lastLogUT = -999.0;
         static double lastBindTryUT = -999.0;
@@ -400,14 +448,32 @@ namespace DragonScreen
             MissionProfile mission = Missions.Resolve(v.vesselName);
             profile = BoosterHostPlan.ProfileFor(mission);
 
+            // ---- register W25: THE AIM POINT, resolved ONCE, from the SAME craft name ------------
+            // Same discipline as the octaweb bind (§B16.4 step 2): resolved at the phase boundary into a
+            // held value, never re-searched per frame. `LandingTargets` returns either a cited coordinate
+            // or a stated LAND-ANYWHERE — there is no third outcome and no silent zero.
+            target = LandingTargets.For(mission);
+            initialDownrangeErrM = 0.0;
+            lastDownrangeErrM = 0.0; lastCrossrangeErrM = 0.0; haveLastErr = false;
+            bcFiltered = 0.0;
+            ImpactErrorM = 0.0; ImpactErrorValid = false;
+
             Hook(v);
 
             Debug.Log("[DragonScreen] ⭐ BOOSTER HOST BOUND — \"" + v.vesselName + "\" ("
                       + v.parts.Count + " parts), octaweb " + table.OctawebPart
                       + ", mission " + (mission.Valid ? mission.Name : "UNRESOLVED→inert")
                       + ", mode " + profile.Mode
+                      + ", target " + (target.HasAimPoint
+                            ? target.SiteName + " @ " + target.LatDeg.ToString("0.#####") + ", "
+                              + target.LonDeg.ToString("0.#####") + "  [" + target.Citation + "]"
+                            : target.LandAnywhereReason)
                       + ". Actuate=" + Actuate + ", ullage source="
-                      + (UllageSettled != null ? "live" : "NONE (gate held closed — register W5)")
+                      + (UllageSettled != null
+                            ? "live"
+                            : "NONE (gate held closed — W5 restored pure/IgnitionGate.cs + src/Ullage.cs "
+                              + "as an OPEN DEFECT and deliberately did NOT wire them: today's reader "
+                              + "fails OPEN)")
                       + ". ⛔ ATTITUDE UNCOMMANDED — AimForward is reported, not flown (register W24).");
         }
 
@@ -519,15 +585,96 @@ namespace DragonScreen
                 bi.LandThree = landThree;
             }
 
-            // ⚠ NO AIM POINT EXISTS (see the header block). Everything target-derived stays ZERO, so the
-            // FSM's own refusals fire honestly instead of steering at an invented coordinate.
+            // ---- register W25: THE AIM POINT AND THE LIVE IMPACT ERROR ---------------------------
+            // ⛔ ON LAND-ANYWHERE THIS WHOLE BLOCK IS SKIPPED AND EVERY TARGET-DERIVED INPUT STAYS ZERO —
+            // byte-identical to the pre-W25 behaviour, deliberately. That is not a fallback path that
+            // "failed"; it is the flight the owner asked for where no site is placed, and the FSM's own
+            // refusals are the right output for it (see the header block).
             bi.Fin = new GridFinInputs();
             bi.AllNominal = false;
-            bi.OffsetToMissM = 0.0;
+            bi.OffsetToMissM = 0.0;      // ⚠ the aim-beside-the-deck bias is a SAFETY policy, not a
+                                         // target: it needs an "all systems nominal" verdict this host
+                                         // does not have. Left inert; logged as a stray, not invented.
             bi.TargetBearing = Vec3.Zero;
             bi.DownrangeErrM = 0.0;
             bi.InitialDownrangeErrM = 0.0;
             bi.PayloadMassKg = 0.0;      // §4.3's correction stays inert (BoosterDescent Q2)
+
+            if (target.HasAimPoint && body != null)
+            {
+                // The target's WORLD position. Sea-level for the barge, terrain for the pad — one
+                // expression covers both, and `GetWorldSurfacePosition` is KSP's own body-fixed→world
+                // conversion, so the body's rotation is accounted for without us modelling it.
+                double tgtAlt = body.TerrainAltitude(target.LatDeg, target.LonDeg);
+                if (tgtAlt < 0.0) tgtAlt = 0.0;                    // OCISLY floats; the deck is at sea level
+                Vector3d tgtW = body.GetWorldSurfacePosition(target.LatDeg, target.LonDeg, tgtAlt);
+                Vec3 tgt = new Vec3(tgtW.x, tgtW.y, tgtW.z);
+                Vec3 veh = new Vec3(v.CoM.x, v.CoM.y, v.CoM.z);
+                Vec3 ctr = new Vec3(body.position.x, body.position.y, body.position.z);
+
+                // (1) THE BEARING the RTLS boostback points the thrust axis at (method §4.2) — the unit
+                // HORIZONTAL direction from the vehicle toward the aim point, which is exactly what
+                // `BoosterInputs.TargetBearing` documents itself as wanting.
+                Vec3 toTarget = Vec3.ExcludeUnit(tgt - veh, bi.Up);
+                if (toTarget.IsFinite && toTarget.Magnitude > 1.0)
+                    bi.TargetBearing = toTarget.Normalized;
+
+                // (2) THE PREDICTED-IMPACT ERROR, over OUR OWN INTEGRATOR (§B16.5: no second predictor,
+                // and Trajectories is an owner call a build chat may not make). `PredictImpact` is the
+                // two-tier solve already sitting in `BoosterDescent` with no caller — tier 1 drag-modelled
+                // through `BoosterDrag`'s Mach-binned bc curve, tier 2 the drag-free Keplerian answer that
+                // is always LONG and says so. W25 is its first caller.
+                ImpactError err = PredictError(v, body, bi, massKg, tgt, veh, ctr);
+                if (err.Valid)
+                {
+                    bi.DownrangeErrM = err.DownrangeM;
+
+                    // §4.2's normaliser: the error LATCHED at boostback ignition. 0 = not latched, and
+                    // the throttle law then commands full authority — so latch it the first tick we have
+                    // a real error and are still in the return leg, and clear it on a fresh bind.
+                    if (initialDownrangeErrM == 0.0
+                        && (phase == BoosterPhase.Idle || phase == BoosterPhase.Flip
+                            || phase == BoosterPhase.Boostback))
+                        initialDownrangeErrM = err.DownrangeM;
+                    bi.InitialDownrangeErrM = initialDownrangeErrM;
+
+                    // (3) THE GRID-FIN ERROR SET, with the rates the lead term needs taken as a real
+                    // finite difference of OUR OWN successive predictions — never a modelled or assumed
+                    // rate (CLAUDE.md: "simulate, never fake"). First tick has no previous sample, so the
+                    // rates stay 0 and the law is pure proportional for one frame.
+                    GridFinInputs fin = new GridFinInputs();
+                    fin.DownrangeErrM = err.DownrangeM;
+                    fin.CrossrangeErrM = err.CrossrangeM;
+                    double dt = TimeWarp.fixedDeltaTime;
+                    if (haveLastErr && dt > 1e-4)
+                    {
+                        fin.DownrangeRateMps = (err.DownrangeM - lastDownrangeErrM) / dt;
+                        fin.CrossrangeRateMps = (err.CrossrangeM - lastCrossrangeErrM) / dt;
+                    }
+                    fin.LeadTauS = FinLeadTauS;
+                    fin.AoaMaxDeg = FinAoaMaxDeg;
+                    fin.GainDegPerKm = FinGainDegPerKm;
+                    bi.Fin = fin;
+
+                    lastDownrangeErrM = err.DownrangeM;
+                    lastCrossrangeErrM = err.CrossrangeM;
+                    haveLastErr = true;
+                    ImpactErrorM = err.GreatCircleM;
+                    ImpactErrorValid = true;
+                }
+                else
+                {
+                    // ⛔ NEITHER TIER ANSWERED. Say so and steer at nothing — do NOT hold the last error,
+                    // which would have the fins chasing a prediction that has already been withdrawn.
+                    haveLastErr = false;
+                    ImpactErrorValid = false;
+                }
+            }
+            else
+            {
+                haveLastErr = false;
+                ImpactErrorValid = false;
+            }
 
             // The carried state — the shaper needs continuity across ticks or it is not a shaper.
             bi.CommandedForward = commandedForward;
@@ -968,6 +1115,13 @@ namespace DragonScreen
             AimForward = Vec3.Zero; Refusal = null; BlockNote = null; lastBlock = BoosterCommandBlock.None;
             SteerPitch = 0.0; SteerYaw = 0.0; SteerRoll = 0.0;
             CommandedNotIgnited = false; CommandedNotIgnitedNote = null;   // [[OCT11]] — released, nothing commanded
+            // W25 — the aim point and every error derived from it. A released host holds no target, and a
+            // stale downrange error from THIS booster must never reach the NEXT one.
+            target = new LandingTarget();
+            initialDownrangeErrM = 0.0;
+            lastDownrangeErrM = 0.0; lastCrossrangeErrM = 0.0; haveLastErr = false;
+            bcFiltered = 0.0;
+            ImpactErrorM = 0.0; ImpactErrorValid = false;
             lastBindVerdict = BoosterBind.NoVessel;
         }
 
@@ -1055,6 +1209,110 @@ namespace DragonScreen
                 return n > 0 ? n : 0;
             }
             catch { return 0; }
+        }
+
+        /// <summary>
+        /// Register W25 — run `BoosterDescent.PredictImpact` over `pure/Trajectory.cs` for THIS vessel and
+        /// return the signed miss against the aim point. Glue, because everything it gathers is a KSP
+        /// reading; the integrator, the drag curve and the long/short test are all pure and already in the
+        /// tree (§B16.5's SETTLED prediction engine — **no second predictor is added here**).
+        ///
+        /// ⛔ THE BALLISTIC COEFFICIENT IS **MEASURED, NOT ASSUMED**, and that is the whole reason this
+        /// prediction is worth having. `Trajectory.BallisticCoefficientFrom` back-solves β from the live
+        /// air density, the live surface speed and the live DRAG acceleration, and `SmoothBc` filters it —
+        /// `pure/BoosterDescent.cs`'s own note: *"drag only ever shortens a trajectory, so a vacuum answer
+        /// is always LONG — by tens of km on an entry — and the drag term is MEASURED, not modelled."*
+        /// ⚠ THRUST MASKS DRAG, so the measurement is taken ONLY while coasting: with an engine lit the
+        /// acceleration is dominated by thrust and the back-solve would return nonsense. While lit we keep
+        /// the last coasting value (that is what `SmoothBc`'s carried state is for) and, if we have never
+        /// had one, we hand `Solve` a zero β — which makes tier 1 decline and tier 2 answer, honestly LONG.
+        /// </summary>
+        static ImpactError PredictError(Vessel v, CelestialBody body, BoosterInputs bi, double massKg,
+                                        Vec3 tgt, Vec3 veh, Vec3 ctr)
+        {
+            ImpactError none = new ImpactError();
+            if (v == null || body == null) return none;
+
+            try
+            {
+                double alt = v.altitude;
+                double rho = v.atmDensity;
+
+                // ---- the MEASURED drag acceleration, and only while unpowered -----------------------
+                // `v.acceleration` is the vessel's total sensed acceleration; subtracting gravity leaves
+                // the aero part. `graviticAcceleration` is KSP's own gravity vector for this vessel, so
+                // no gravity model of ours enters here.
+                bool coasting = fbwThrottle <= 1e-6 && currentRole == EngineRole.None;
+                if (coasting && rho > 1e-9)
+                {
+                    Vector3d aero = v.acceleration - v.graviticAcceleration;
+                    Vector3d srf = v.srf_velocity;
+                    double srfSpeed = srf.magnitude;
+                    double dragAccel = srfSpeed > 1.0 ? -Vector3d.Dot(aero, srf / srfSpeed) : 0.0;
+                    double sample = Trajectory.BallisticCoefficientFrom(rho, srfSpeed, dragAccel);
+                    bcFiltered = Trajectory.SmoothBc(bcFiltered, sample, TimeWarp.fixedDeltaTime,
+                                                     Trajectory.BcFilterTauS);
+                }
+
+                TrajectoryInputs t = new TrajectoryInputs();
+                t.Px = v.CoM.x; t.Py = v.CoM.y; t.Pz = v.CoM.z;
+                Vector3d orb = v.obt_velocity;
+                t.Vx = orb.x; t.Vy = orb.y; t.Vz = orb.z;
+                t.Mu = body.gravParameter;
+                t.BodyRadiusM = body.Radius;
+                t.BodyOmega = body.rotates ? (2.0 * Math.PI / body.rotationPeriod) : 0.0;
+                t.AtmosphereDepthM = body.atmosphere ? body.atmosphereDepth : 0.0;
+                t.BallisticCoefficient = bcFiltered;
+                t.ImpactAltitudeM = 0.0;             // the deck / the pad, both at datum for this solve
+                t.LiftToDrag = 0.0;                  // ⚠ the fins ARE lifting; measuring L/D live is
+                                                     // `Trajectory.MeasureAero`'s job and is NOT wired
+                                                     // here — logged as a stray, not half-built.
+                t.SoundSpeed = MachSoundSpeed(body);
+                t.DragFactor = null;                 // `PredictImpact` fills in BoosterDrag's own curve
+
+                TrajectoryResult r = BoosterDescent.PredictImpact(t, AtmosphereDensity(body));
+                if (!r.Ok) return none;
+
+                return BoosterDescent.ErrorTo(new Vec3(r.Ix, r.Iy, r.Iz), tgt, veh, ctr);
+            }
+            catch (Exception e)
+            {
+                // A prediction that throws must not take the descent with it: no error, no steering, and
+                // the FSM keeps flying retrograde on its own laws.
+                if (LogGate.First("booster-host-predict"))
+                    Debug.LogWarning("[DragonScreen] booster host: impact prediction threw — " + e.Message
+                                     + " (steering at nothing this tick; the FSM is unaffected)");
+                return none;
+            }
+        }
+
+        /// <summary>The filtered, MEASURED ballistic coefficient. Persists across ticks on purpose — see
+        /// `PredictError`: it can only be sampled while coasting, so the value carried from the coast is
+        /// what the powered phases predict with. Cleared with the rest of the aim-point state.</summary>
+        static double bcFiltered;
+
+        static DensityAt AtmosphereDensity(CelestialBody body)
+        {
+            return delegate(double altitudeM)
+            {
+                if (body == null || !body.atmosphere || altitudeM > body.atmosphereDepth) return 0.0;
+                double p = body.GetPressure(altitudeM);
+                double tK = body.GetTemperature(altitudeM);
+                if (p <= 0.0 || tK <= 0.0) return 0.0;
+                return body.GetDensity(p, tK);
+            };
+        }
+
+        static SpeedOfSoundAt MachSoundSpeed(CelestialBody body)
+        {
+            return delegate(double altitudeM)
+            {
+                if (body == null || !body.atmosphere || altitudeM > body.atmosphereDepth) return 0.0;
+                double p = body.GetPressure(altitudeM);
+                double tK = body.GetTemperature(altitudeM);
+                if (p <= 0.0 || tK <= 0.0) return 0.0;
+                return body.GetSpeedOfSound(p, body.GetDensity(p, tK));
+            };
         }
 
         static bool SafeUllage(Vessel v)
