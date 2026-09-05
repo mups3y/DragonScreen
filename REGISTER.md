@@ -15010,7 +15010,7 @@ over-corrects: S117 fixed `NavPage`, whose `Build` is equally unreachable — **
 (`.Map`, `.Orbit`, `.Planet`) are reached from `CoverPage`, which IS live.** S117's fix does reach the
 glass; this one does not.
 
-### S121 [O] The legacy page family draws in RefPanelW pixels — eleven files that do not track `screenWidth` — **TODO** — [logged by [[S119]] (job 3 of the 2026-09-06 batch), TIER 2, R-02 family; SPLIT THIS before doing it]
+### S121 [O] The legacy page family draws in RefPanelW pixels — eleven files that do not track `screenWidth` — **DOING** — [logged by [[S119]] (job 3 of the 2026-09-06 batch), TIER 2, R-02 family; SPLIT THIS before doing it]
 - **The finding.** [[S117]] fixed `NavPage`. The same defect is in every other legacy page and shared widget:
   `Pages.cs` (32 raw `Typography.*`, plus `w - SidePad`, `h - ChromeBar.Height - 100f`,
   `((h - ChromeBar.Height) - 24f) * 0.74f`), `SettingsPage.cs` (24), `DockingPage.cs` (11, plus `w - 170f`,
