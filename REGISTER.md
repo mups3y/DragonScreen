@@ -12689,7 +12689,7 @@ the Figma-era pages. **No `install`, no glass** — separate owner gates (C1.12)
 cost note for the glass session (4× RenderTexture fill on three live screens) is left for that session to
 read, not acted on.
 
-### S116 [S] Land C-05's one-line unit fix — compare the legibility floor in panel space, not design space — **TODO — AFTER [[S123]], NEVER BEFORE IT** — [logged by S115, 2026-09-05 as "now-safe — UNBLOCKED by Q5"; that premise was FALSE. Blocked on [[R-02]] by job 1; R-02 LANDED in job 2 and the blocker CONVERTED to C-05's TIER-3 layout call; **that call was made by the owner 2026-09-06 ("option 2") and the block is discharged — see the foot of this line**]
+### S116 [S] Land C-05's one-line unit fix — compare the legibility floor in panel space, not design space — **DOING** — [[S123]] LANDED 2026-09-06, so the order requirement is satisfied — [logged by S115, 2026-09-05 as "now-safe — UNBLOCKED by Q5"; that premise was FALSE. Blocked on [[R-02]] by job 1; R-02 LANDED in job 2 and the blocker CONVERTED to C-05's TIER-3 layout call; **that call was made by the owner 2026-09-06 ("option 2") and the block is discharged — see the foot of this line**]
 - **The finding.** `CoverPage.FitRows` (`:673-689`) receives `top`/`slotBottom`/`wantSize`/`wantGap` in
   DESIGN units and returns a design `size`, but clamps it against `Typography.Min` (16, a PANEL-pixel
   constant) directly — `if (size < Typography.Min)` — comparing DESIGN px to PANEL px. At both widths tried
