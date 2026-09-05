@@ -7178,7 +7178,7 @@ ladder cropped 1:1: `10.6 km` and `5.5 km` in accent as each section's next gate
 dim, and every action row unchanged. **C1.16/G12: 0 comment prose lines lost.** No `install`, no glass, no
 `git push`.
 
-### S157 [S] `EntryPage.Build(dl, w, h)` takes no `PageState` at all — **TODO** — [H31; split 2 of 5 from [[S55]]]
+### S157 [S] `EntryPage.Build(dl, w, h)` takes no `PageState` at all — **DOING** — [H31; split 2 of 5 from [[S55]]]
 - **The finding.** *"Nothing live at all, structurally"* — the page prints parachute-deployment altitudes
   while `s.Altitude`, `s.Steps.DroguesFired` / `MainsFired` and the phase are all live one call away.
 - ⚠ **It is a SIGNATURE change before it is a tracking change**, which is why it follows [[S156]] rather
