@@ -1477,9 +1477,25 @@ public static class PreviewMain
             // needs its own render or none of it has a cheap evidence channel. The 5% roll is seedable
             // exactly so this is possible without waiting for one: seed 0 is a run that found nothing,
             // SeedForLeak(3) is one that found a leak in suit 3.
+            // ---- S158: the procedure MID-RUN, which is the state ui_suitcheck.png cannot show ----
+            // The DONE-when asks for before / during / after. `ui_suitcheck.png` (out of the page loop
+            // above) is BEFORE and the two popup renders are AFTER; this is DURING, and it is the only
+            // one that needs runActive true. Rendered at countdown 3 - mid-run in both senses, so the
+            // counter reads a real number rather than either of its two ambiguous values (5 = also
+            // idle, 0 = also finished; see SuitCheckPage.StepOf).
             {
                 DisplayList udl = new DisplayList(600);
-                SuitCheckPage.Build(udl, CW, CH, 0, true, SuitLeak.From(ps, 0, true, 0u));
+                uint run = SuitLeak.SeedFrom(1234.5, 1);
+                SuitCheckPage.Build(udl, CW, CH, 3, false, SuitLeak.From(ps, 3, false, run), true);
+                if (udl.Overflowed) Console.WriteLine("  WARNING UI SUITCHECK/RUNNING OVERFLOWED");
+                string path = Path.Combine(outDir, "ui_suitcheck_running.png");
+                Render(udl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + udl.Count
+                                  + " commands   step " + SuitCheckPage.StepOf(3, false, true));
+            }
+            {
+                DisplayList udl = new DisplayList(600);
+                SuitCheckPage.Build(udl, CW, CH, 0, true, SuitLeak.From(ps, 0, true, 0u), false);
                 if (udl.Overflowed) Console.WriteLine("  WARNING UI SUITCHECK/POPUP OVERFLOWED");
                 string path = Path.Combine(outDir, "ui_suitcheck_popup.png");
                 Render(udl, CW, CH, path);
@@ -1495,7 +1511,7 @@ public static class PreviewMain
                 uint leak = SuitLeak.SeedForLeak(3);
                 SuitCheckState st = SuitLeak.From(ps, 0, true, leak);
                 DisplayList udl = new DisplayList(600);
-                SuitCheckPage.Build(udl, CW, CH, 0, false, st);
+                SuitCheckPage.Build(udl, CW, CH, 0, false, st, false);
                 if (udl.Overflowed) Console.WriteLine("  WARNING UI SUITCHECK/LEAK OVERFLOWED");
                 string path = Path.Combine(outDir, "ui_suitcheck_leak.png");
                 Render(udl, CW, CH, path);
@@ -1509,7 +1525,7 @@ public static class PreviewMain
             {
                 uint leak = SuitLeak.SeedForLeak(3);
                 DisplayList udl = new DisplayList(600);
-                SuitCheckPage.Build(udl, CW, CH, 0, true, SuitLeak.From(ps, 0, true, leak));
+                SuitCheckPage.Build(udl, CW, CH, 0, true, SuitLeak.From(ps, 0, true, leak), false);
                 if (udl.Overflowed) Console.WriteLine("  WARNING UI SUITCHECK/LEAK-POPUP OVERFLOWED");
                 string path = Path.Combine(outDir, "ui_suitcheck_leak_popup.png");
                 Render(udl, CW, CH, path);

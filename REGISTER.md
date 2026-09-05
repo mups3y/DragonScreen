@@ -7311,7 +7311,7 @@ and leaves the rest empty, which the render makes obvious). **This line owned on
 checks**. `python plugin/build.py preview` re-rendered and inspected, colours sampled numerically.
 **C1.16/G12: 0 comment prose lines lost.** No `install`, no glass, no `git push`.
 
-### S158 [S] Suit Leak Check: the sim is live, the *procedure* is not — **DOING** — [H19 + QC `SC-01`; split 3 of 5 from [[S55]]]
+### S158 [S] Suit Leak Check: the sim is live, the *procedure* is not — **DONE 2026-09-06 — the step flow is built and tracks; the section HEADER is split out to [[S158b]] and HELD on §1.4** — [H19 + QC `SC-01`; split 3 of 5 from [[S55]]]
 - **The finding.** Both left ticks draw **checked at page-open, before the crew touch anything**;
   *"SECTION 2: IN PROGRESS"* never advances; steps 2.3 / 2.4 / 2.5 are literals.
 - ⭐ **The verdict half is already exemplary and must not be disturbed** — S31/S32 built it, and [[S52]]
@@ -7321,6 +7321,164 @@ checks**. `python plugin/build.py preview` re-rendered and inspected, colours sa
   **Research: none** — the transitions are already in `ScreenPainter`'s suit state.
 - **DONE when:** the ticks reflect what the crew has actually done, the section header advances, and a
   preview shows the procedure before, during and after a run.
+
+#### ✅ DONE 2026-09-06 — the ticks track the procedure; the header's other two words have no source
+
+**WHAT WAS WRONG, RE-VERIFIED IN SOURCE RATHER THAN TAKEN FROM QC.** `SuitCheckPage.cs:94-95` at `HEAD`:
+```
+Ico("ic_check", 120, 452, 38, White); L("1. PREPARE SUITS FOR LEAK CHECK", 176, 458, 26, White);
+Ico("ic_check", 120, 560, 38, White); L("2. EXECUTE SUIT LEAK CHECK", 176, 566, 26, White);
+```
+`White` twice, unconditionally — no `countdown`, no `suits`, no state of any kind. A two-step procedure
+drawn COMPLETE before the crew touched anything, on the page whose *measurement* half (S31/S32/[[S52]])
+is the build's exemplar.
+
+#### ⭐ THE ONE THING THIS TASK FOUND THAT QC's FIX PLAN DID NOT — and it is half a second wide
+
+QC `SC-01` says: *"`suitStart`, `suitCountdown`, `suitPopup`, `suitSeed` fully determine not started /
+running / finished, and `Build` is already handed `suitCountdown` and `suitPopup`. **No new model, no new
+source, no §1.4 question** — this is routing state the page is already given."* ⚠ **Nearly. `suitStart`
+is in that list of four and is NOT one of the two the page is handed**, and the gap is real at both ends
+of a run. `ScreenPainter.cs:1156` runs the counter as `5 - (int)(el / 0.9f)` over a run that ends at
+`el = 5f` (`:1155`) — the demo's own timings, copied faithfully (`Fourth.vue`: timeouts at 900…4500 ms,
+`setInterval` at 5000 ms). So:
+
+| window | what `suitCountdown` reads | what it ALSO means |
+|---|---|---|
+| `el < 0.9 s` | **5** | the page's IDLE value |
+| `el ∈ [4.5, 5.0)` | **0**, popup not yet raised | the FINISHED value |
+
+⛔ **The second one is why this was not built from the countdown alone.** `countdown == 0 && !showPopup`
+is two different states, and reading it as "finished" would tick **EXECUTE SUIT LEAK CHECK** half a
+second before a result exists — a smaller copy of the exact defect this line removes. So one bool,
+`suitStart >= 0f`, is threaded through as `runActive`, and `SuitCheckPage.StepOf(countdown, showPopup,
+runActive)` is the whole three-way. Mutation **A** below is that finding as a test.
+
+#### What was built
+
+- **`SuitCheckPage.ProcStep { NotStarted, Running, Complete }` + `StepOf(...)`** — nine lines, no stored
+  step index: the painter's existing run state already determines it. HALT and a page change reset the
+  counter AND clear the popup (`:534`, `:789`), so an abandoned run correctly reads **NotStarted** — the
+  crew stopped it, they did not do it.
+- **The ticks**, tinted `White : Dim` — ⭐ **and `Dim` is this tree's own idiom, not a choice made here:**
+  `VrioTestPage.cs:99` already draws a checklist tick as `Done[i] ? White : Dim`. The two pages in this
+  build that have a step tick now draw one the same way.
+- ⚠ **The LABEL is tinted with its tick**, which VrioTest does not do. A 38-design-px glyph alone is a
+  small target for the eye at seat distance, and this page's own S106 note records the converse failure
+  (a control that did nothing while painted like one that did). Dimming the row says "not yet" once.
+- **`FigmaUI.Build` gains `suitRunActive` on its deepest overload only**, defaulted `false` in the one
+  above it. ⭐ **The parameter is REQUIRED, not optional, on purpose** — the same fail-closed move
+  [[S120]] made with `ChromeBar.TopY`: the compiler then named all 10 `SuitCheckPage.Build` call sites that existed
+  and each had to say which state it draws, instead of silently inheriting a default.
+- **`ui_suitcheck_running.png`** — a new preview, the only one of the four that needs `runActive` true.
+
+#### ⛔ WHAT IS **NOT** BUILT, AND WHY IT IS [[S158b]] RATHER THAN A SHORTFALL
+
+The header. Making `SECTION 2: IN PROGRESS` advance means **printing words no source has**, and both
+tiers were searched before concluding that:
+
+| tier (§1.4) | source | what it gives |
+|---|---|---|
+| 1 · verified-real | the capsule photographs (discovery2/3) | this string, and no other. Its one attested word for a **finished** 4.011 is `PROCEDURE COMPLETE` — in the result **box**, not this header |
+| 2 · other users' | `assets/reference/dragon2-ui-master/src/views/Fourth.vue` | `SECTION 2 IN PROGRESS` as a hardcoded `<p>`, and **both left ticks as hardcoded SVGs**. The demo has no state vocabulary either — ⭐ it is the *source* of this defect, not a fix for it |
+
+So `NOT STARTED` is attested nowhere, and §1.4's third tier — *invent ONLY by owner discussion* — is
+where it lands. **A build chat does not get to name a procedure's states.**
+
+#### ⭐ AND THE TWO HALVES DO NOT IMPLY EACH OTHER — which is why shipping one is honest here and was not on [[S144]]
+
+S144 was held because its two criteria were a **single list**: one lit criterion makes the unlit one
+read as *"that one is not exceeded"*. **This is not that shape.** Section 2 is not the tick — it
+contains steps 2.3, 2.4 **and 2.5** (*"On completion, contact SpaceX to report results"*), and 2.5 is
+FINISH's own step, as this file's own comment at that plate says. **So section 2 is genuinely still in
+progress after the check itself has finished**, and an unadvanced header beside a ticked step 2 states
+nothing false. A crew reading it is not misled; they are told less than they could be.
+
+⚠ **A TRIPWIRE WAS LEFT ON THE HELD HALF.** A test pins that the header is the literal string in all
+four states, so a later chat that invents `COMPLETE` / `NOT STARTED` trips it and has to go and get the
+ruling. Mutation **H** proves it fires. Delete that check when the owner answers — not before.
+
+#### Verified (C1.3) — measured, not asserted
+
+`python plugin/build.py test` → **ALL SUITES PASSED**. `python plugin/build.py preview` → 4 SuitCheck
+renders + the new `ui_suitcheck_running.png` (`step Running` printed by the render itself).
+
+**Inspected**, and the numbers are the brightest pixel inside each tick's own 38-px design rect
+(`ic_check` is drawn six times on this page — two ticks and four STATUS markers — so the probe is by
+POSITION, not by "the n-th one"):
+
+| render | tick 1 | tick 2 | |
+|---|---|---|---|
+| `ui_suitcheck.png` — before a run | `(147,153,182)` | `(147,153,182)` | both **dim** |
+| `ui_suitcheck_running.png` — countdown 3 | `(255,255,255)` | `(150,156,185)` | step 1 only |
+| `ui_suitcheck_leak.png` — run finished, box closed | `(255,255,255)` | `(255,255,255)` | both |
+| `ui_suitcheck_popup.png` — box up | `(48,52,91)` | `(48,52,91)` | both white **under the 82 % scrim** (white ⇒ 48; dim would be 25) |
+
+**MUTATION-PROVEN — 9 mutations, 9 caught, 0 uncaught.** Each applied to the finished tree, `test` run,
+tree restored:
+
+| | mutation | first check that failed |
+|---|---|---|
+| **A** | `StepOf` ignores `runActive` — *the countdown-only page QC's fix plan implied* | *"the first 0.9s of a run is RUNNING even though the counter still reads 5"* |
+| **B** | tick 1 back to unconditional `White` | *"before a run BOTH steps are unticked   t1 1.00 t2 0.52"* |
+| **C** | tick 2 back to unconditional `White` | same, `t1 0.52 t2 1.00` |
+| **D** | tick 2 ticks when a run **starts** | *"the last half-second of a run still has step 2 UNTICKED"* |
+| **E** | tick 2 keyed off the **verdict** (`!AnyFailed`) | *"a completed run that FAILED still ticks step 2 — done is not passed"* |
+| **F** | a finished run forgets itself once its box closes | *"StepOf: a completed run stays complete once its box is closed"* |
+| **G** | the tick dims but its label stays `White` | *"before a run BOTH step labels are unticked too"* |
+| **H** | the header is "fixed" by inventing `SECTION 2: COMPLETE` | *"the section header is still a literal in all four states"* |
+| **I** | HALT read as a completed procedure | *"HALT puts the procedure back to not-started"* |
+
+⚠ **E IS QC's OWN must-not-break**: *"`suits.AnyFailed` must not tick step 2 as a pass. A completed
+check with a failed suit is complete, not nominal: the tick means 'done', the STATUS column means
+'passed'."* The page has never stated a verdict in two places and still does not.
+
+⛔ **THE ONE THING NOT PROVEN, SAID PLAINLY.** `ScreenPainter` passing `suitStart >= 0f` rather than a
+constant is **glue**, and there is no headless test that can reach it — the file needs Unity. The pure
+side is exhaustively pinned; the one-line wiring is read, not tested. It is a single expression at
+`ScreenPainter.cs:1173`, in a file whose other call arguments have the same standing.
+
+⚠ **AN OBSERVATION FOR QC, NOT A CHANGE.** `ic_check` is a FILLED DISC with a tick in it, so a dimmed
+one still reads as *"a tick, in grey"* — arguably "done but inactive" rather than "not done". The
+`White : Dim` pair is `VrioTestPage`'s established idiom and changing the GLYPH would be a new decision,
+so it was not made here. Whether grey-tick-means-not-done survives seat distance is a glass question.
+
+**Comment-loss check (C1.16 / G12): 0 lost across all 5 files** — HEAD 2076 comment lines → 2194 now.
+Two doc comments were re-flowed mid-edit and caught by that check; both were restored **verbatim** and
+the new material re-added as `<param>` blocks after them, so every change is a pure insertion.
+
+⛔ No `install`, no glass, no `git push`. §14.4(a) untouched — nothing here wires a flight control.
+
+### S158b [S] The Suit Leak Check's section header needs two words no source has — **HELD 2026-09-06 — §1.4 TIER 3: owner vocabulary** — [split from [[S158]]; H19's second half + QC `SC-01`'s second half]
+- **The finding.** `SuitCheckPage.cs` prints `SECTION 2: IN PROGRESS` as a literal in every state the
+  page has, including after the procedure has completed. [[S158]] built the step TICKS beside it; this
+  is the header.
+- ⛔ **The blocker is vocabulary, not engineering.** `SuitCheckPage.StepOf` already computes the exact
+  three-way this needs and is public — **the fix is one ternary.** What is missing is the WORDS. Tier 1
+  (the capsule photographs) gives this string and no other; tier 2 (`Fourth.vue`) hardcodes the same
+  string and has no state vocabulary either. `NOT STARTED` is attested nowhere.
+- ⚠ **A tripwire is already in place**: `FigmaUINavTest` pins the literal in all four states, so this
+  cannot be closed by quietly inventing the words. **Delete that check as part of building this.**
+- **DONE when:** the header carries the owner's words for its three states, off `StepOf`, with the
+  tripwire replaced by a check on the new strings.
+
+**Paste-ready overseer prompt (C1.13):**
+> DragonScreen, S158b. The Suit Leak Check page prints **`SECTION 2: IN PROGRESS`** as a fixed string in
+> every state it has — before the check, during it, and after it has completed. I have just made the two
+> step ticks beside it track the procedure honestly (they used to draw *both* ticked the instant the page
+> opened, before the crew touched anything), and the page now computes exactly the three-way the header
+> would need. ⛔ **The header is one ternary away and I did not write it, because it would mean printing
+> words that exist in no source.** The capsule photographs give `SECTION 2: IN PROGRESS` and nothing else;
+> the reference demo hardcodes the same string. There is no attested wording for "not started".
+> ⭐ **Nothing is currently false on the page** — section 2 also contains step 2.5 ("contact SpaceX to
+> report results"), so it genuinely IS still in progress after the check finishes. This is a page telling
+> the crew *less* than it could, not something wrong.
+> **Options:** **(a)** `NOT STARTED / IN PROGRESS / COMPLETE` — QC's own suggestion; `COMPLETE` echoes the
+> reference's `PROCEDURE COMPLETE` in this procedure's own result box, `NOT STARTED` is new vocabulary;
+> **(b)** two states only — leave `IN PROGRESS` and add `COMPLETE`, using only the word the reference
+> already uses for a finished 4.011; **(c)** rule that the header is fixed reference copy and stays a
+> literal, and record that so the line closes rather than lingering. ⚠ Whatever you pick applies to
+> `VrioTestPage`'s identical `SECTION 4: IN PROGRESS` too, or the two procedure pages disagree.
 
 ### S159 [S] Ascent: eleven events, none tracked, while a live 15-row step machine runs unread — **TODO** — [H34 + QC `AS-01`; split 4 of 5 from [[S55]]]
 - **The finding.** The page's eleven ascent events are a static array. Meanwhile **`pure/StepList.cs` is a

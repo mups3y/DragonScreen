@@ -441,6 +441,26 @@ public static class FigmaUINavTest
     static bool SameColour(Rgba a, Rgba b)
     { return a.R == b.R && a.G == b.G && a.B == b.B && a.A == b.A; }
 
+    /// <summary>The tint of an ASSET draw, found by WHERE it is rather than by which one it is
+    /// (S158). `ic_check` is drawn six times on the Suit Leak Check — the two procedure step ticks
+    /// and the four STATUS markers — so "the n-th one" would silently follow any re-ordering of the
+    /// page. yFrac is the design-space Y divided by the design height, which is a property of the
+    /// LAYOUT and changes only if the tick actually moves. Returns transparent black if nothing sits
+    /// there, which no colour check can pass by accident.</summary>
+    static Rgba AssetTintAtFrac(DisplayList dl, string key, float yFrac, int h)
+    {
+        float want = yFrac * h, bestD = 8f;      // 8 px: tighter than the 108-design-px tick pitch
+        Rgba best = new Rgba(0f, 0f, 0f, 0f);
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind != DrawKind.Image || c.AssetKey != key) continue;
+            float d = c.B - want; if (d < 0f) d = -d;
+            if (d < bestD) { bestD = d; best = c.Colour; }
+        }
+        return best;
+    }
+
     /// <summary>How many TIMES the page drew this exact string. A page that draws one datum in two
     /// places (DockingSimPage's ring readouts and its PYR block are the same group) has to draw the SAME
     /// string in both, and this is how that is proved rather than assumed.</summary>
@@ -1134,9 +1154,9 @@ public static class FigmaUINavTest
         DisplayList sa = new DisplayList(SuitCheckPage.Commands + 60);
         DisplayList sb = new DisplayList(SuitCheckPage.Commands + 60);
         DisplayList sd = new DisplayList(SuitCheckPage.Commands + 60);
-        SuitCheckPage.Build(sa, VW, VH, 5, false, sca);
-        SuitCheckPage.Build(sb, VW, VH, 5, false, scb);
-        SuitCheckPage.Build(sd, VW, VH, 5, false, SuitLeak.From(dead, 5, false, 0u));
+        SuitCheckPage.Build(sa, VW, VH, 5, false, sca, false);
+        SuitCheckPage.Build(sb, VW, VH, 5, false, scb, false);
+        SuitCheckPage.Build(sd, VW, VH, 5, false, SuitLeak.From(dead, 5, false, 0u), false);
         for (int i = 0; i < 4; i++)
         {
             string va = SuitLeak.Text(sca.Delta(i));
@@ -1916,7 +1936,7 @@ public static class FigmaUINavTest
         // ---- A CLEAN RUN: four verdicts the model justifies, and the completion box ----
         SuitCheckState ok = SuitLeak.From(s, 0, true, clean);
         DisplayList dok = new DisplayList(SuitCheckPage.Commands + 60);
-        SuitCheckPage.Build(dok, VW, VH, 0, true, ok);
+        SuitCheckPage.Build(dok, VW, VH, 0, true, ok, false);
         Check("a clean run finds no leak", !ok.Leak && ok.LeakSuit == 0, "");
         Check("a clean run holds all four suits",
               !ok.Failed(0) && !ok.Failed(1) && !ok.Failed(2) && !ok.Failed(3), "");
@@ -1928,7 +1948,7 @@ public static class FigmaUINavTest
         // ---- A LEAK RUN: the verdict FOLLOWS the sim, and the repair box replaces the other one ----
         SuitCheckState bad = SuitLeak.From(s, 0, true, leaky);
         DisplayList dbad = new DisplayList(SuitCheckPage.Commands + 60);
-        SuitCheckPage.Build(dbad, VW, VH, 0, true, bad);
+        SuitCheckPage.Build(dbad, VW, VH, 0, true, bad, false);
         Check("the leaking suit fell below the pass threshold",
               bad.Failed(2) && bad.Delta(2) < SuitLeak.PassPsi, "delta " + bad.Delta(2).ToString("F3"));
         Check("the other three still hold",
@@ -1992,7 +2012,7 @@ public static class FigmaUINavTest
         // Available() the glue gates the press on, so these two colours are the visible half of the
         // assertions above rather than a second opinion about them.
         DisplayList dtable = new DisplayList(SuitCheckPage.Commands + 60);
-        SuitCheckPage.Build(dtable, VW, VH, 0, false, bad);          // the box closed: what the crew acts in
+        SuitCheckPage.Build(dtable, VW, VH, 0, false, bad, false);          // the box closed: what the crew acts in
         Check("the failed table draws TROUBLESHOOT lit",
               SameColour(ColourOf(dtable, "TROUBLESHOOT"), DragonPalette.White),
               "got " + ColourOf(dtable, "TROUBLESHOOT").R.ToString("F2"));
@@ -2016,6 +2036,89 @@ public static class FigmaUINavTest
         SuitCheckState again = SuitLeak.From(s, 0, true, SuitLeak.SeedForLeak(1));
         Check("a re-run that finds a leak lights it again",
               again.Failed(0) && SuitCheckPage.Available(SuitCheckPage.SuitAct.Troubleshoot, again), "");
+
+        // ================= S158 / S49 H19 / QC SC-01: THE PROCEDURE'S OWN STEP FLOW =================
+        // Both left ticks used to draw White unconditionally, so the page showed a two-step procedure
+        // COMPLETE before it began. What follows pins the three-way that replaced them, and it is
+        // written around the TWO STATES A COUNTDOWN-ONLY IMPLEMENTATION CANNOT SEE, because those are
+        // the whole reason `runActive` is threaded in:
+        //   • el < 0.9 s   the counter still reads 5, which is ALSO its idle value  -> under-claims
+        //   • el in [4.5,5) the counter already reads 0, which is ALSO its finished value, and the
+        //                   popup has not been raised yet                            -> OVER-claims
+        // The second is the one that matters: it would tick "EXECUTE SUIT LEAK CHECK" half a second
+        // before a result exists — a smaller copy of the defect this task removes.
+        const float TickY1 = 452f / 2112f, TickY2 = 560f / 2112f;   // SuitCheckPage's own design frame
+        Check("StepOf: an unopened procedure has not started",
+              SuitCheckPage.StepOf(5, false, false) == SuitCheckPage.ProcStep.NotStarted, "");
+        Check("StepOf: the first 0.9s of a run is RUNNING even though the counter still reads 5",
+              SuitCheckPage.StepOf(5, false, true) == SuitCheckPage.ProcStep.Running, "");
+        Check("StepOf: the last 0.5s of a run is RUNNING even though the counter already reads 0",
+              SuitCheckPage.StepOf(0, false, true) == SuitCheckPage.ProcStep.Running, "");
+        Check("StepOf: a raised result box is a completed run",
+              SuitCheckPage.StepOf(0, true, false) == SuitCheckPage.ProcStep.Complete, "");
+        Check("StepOf: a completed run stays complete once its box is closed",
+              SuitCheckPage.StepOf(0, false, false) == SuitCheckPage.ProcStep.Complete, "");
+        // HALT sets countdown 5 + popup false + suitStart -1 (ScreenPainter:534), and a page change does
+        // the same (:789). An abandoned run is NOT a done one: the crew stopped it.
+        Check("StepOf: HALT puts the procedure back to not-started",
+              SuitCheckPage.StepOf(5, false, false) == SuitCheckPage.ProcStep.NotStarted, "");
+
+        // ---- and the PAGE draws that three-way, tick and label together ----
+        DisplayList dIdle = new DisplayList(SuitCheckPage.Commands + 60);
+        SuitCheckPage.Build(dIdle, VW, VH, 5, false, SuitLeak.From(s, 5, false, 0u), false);
+        DisplayList dRunA = new DisplayList(SuitCheckPage.Commands + 60);
+        SuitCheckPage.Build(dRunA, VW, VH, 5, false, SuitLeak.From(s, 5, false, clean), true);
+        DisplayList dRunZ = new DisplayList(SuitCheckPage.Commands + 60);
+        SuitCheckPage.Build(dRunZ, VW, VH, 0, false, SuitLeak.From(s, 0, false, clean), true);
+        DisplayList dDone = new DisplayList(SuitCheckPage.Commands + 60);
+        SuitCheckPage.Build(dDone, VW, VH, 0, false, SuitLeak.From(s, 0, false, clean), false);
+
+        Check("before a run BOTH steps are unticked",
+              SameColour(AssetTintAtFrac(dIdle, "ic_check", TickY1, VH), DragonPalette.Text6) &&
+              SameColour(AssetTintAtFrac(dIdle, "ic_check", TickY2, VH), DragonPalette.Text6),
+              "t1 " + AssetTintAtFrac(dIdle, "ic_check", TickY1, VH).R.ToString("F2") +
+              " t2 " + AssetTintAtFrac(dIdle, "ic_check", TickY2, VH).R.ToString("F2"));
+        Check("before a run BOTH step labels are unticked too",
+              SameColour(ColourOf(dIdle, "1. PREPARE SUITS FOR LEAK CHECK"), DragonPalette.Text6) &&
+              SameColour(ColourOf(dIdle, "2. EXECUTE SUIT LEAK CHECK"), DragonPalette.Text6), "");
+        Check("the first second of a run ticks step 1 and NOT step 2",
+              SameColour(AssetTintAtFrac(dRunA, "ic_check", TickY1, VH), DragonPalette.White) &&
+              SameColour(AssetTintAtFrac(dRunA, "ic_check", TickY2, VH), DragonPalette.Text6), "");
+        // THE OVER-CLAIM GUARD. This is the state a countdown-only page gets wrong.
+        Check("the last half-second of a run still has step 2 UNTICKED",
+              SameColour(AssetTintAtFrac(dRunZ, "ic_check", TickY2, VH), DragonPalette.Text6) &&
+              SameColour(ColourOf(dRunZ, "2. EXECUTE SUIT LEAK CHECK"), DragonPalette.Text6), "");
+        Check("a finished run ticks both steps",
+              SameColour(AssetTintAtFrac(dDone, "ic_check", TickY1, VH), DragonPalette.White) &&
+              SameColour(AssetTintAtFrac(dDone, "ic_check", TickY2, VH), DragonPalette.White), "");
+        Check("the result box is up on a finished run and both steps are ticked",
+              SameColour(AssetTintAtFrac(dok, "ic_check", TickY1, VH), DragonPalette.White) &&
+              SameColour(AssetTintAtFrac(dok, "ic_check", TickY2, VH), DragonPalette.White), "");
+
+        // ⛔ QC SC-01's own "must not break": the TICK means DONE, the STATUS column means PASSED, and
+        // they are two different claims. A check that ran and found a leak is COMPLETE — ticking step 2
+        // off `AnyFailed` would make the page state a verdict in two places, which is the one thing this
+        // page has never done. dtable is exactly that run with its box closed.
+        Check("a completed run that FAILED still ticks step 2 — done is not passed",
+              bad.AnyFailed &&
+              SameColour(AssetTintAtFrac(dtable, "ic_check", TickY2, VH), DragonPalette.White), "");
+
+        // The step flow reads the PROCEDURE, not the vessel: a dead feed dashes the table (checked
+        // above) and must not un-run a run the crew actually made.
+        DisplayList dDead = new DisplayList(SuitCheckPage.Commands + 60);
+        SuitCheckPage.Build(dDead, VW, VH, 0, true, SuitLeak.From(nofeed, 0, true, leaky), false);
+        Check("a dead feed does not un-tick a completed procedure",
+              SameColour(AssetTintAtFrac(dDead, "ic_check", TickY2, VH), DragonPalette.White), "");
+
+        // ⚠ THE RESIDUAL, PINNED ON PURPOSE. "SECTION 2: IN PROGRESS" is reference copy and the words
+        // for its other states are attested in NO source — tier 1 (the capsule photographs) or tier 2
+        // (Fourth.vue, which hardcodes this same string). §1.4 sends that to the owner, so the header
+        // stays a literal in every state. This check exists so that a later chat inventing "COMPLETE"
+        // or "NOT STARTED" trips a test and has to go and get the ruling, rather than quietly shipping
+        // vocabulary. Delete it when the owner has answered — not before.
+        Check("the section header is still a literal in all four states (S158's held half)",
+              Drew(dIdle, "SECTION 2: IN PROGRESS") && Drew(dRunA, "SECTION 2: IN PROGRESS") &&
+              Drew(dRunZ, "SECTION 2: IN PROGRESS") && Drew(dDone, "SECTION 2: IN PROGRESS"), "");
     }
 
     static void BottomBarNav()

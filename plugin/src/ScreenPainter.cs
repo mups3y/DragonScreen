@@ -1166,8 +1166,12 @@ namespace DragonScreen
                     ImageStore.ReleaseTurntable(index);
 
                 // The new Figma pages carry their own chrome (each has its bottom bar), so no ChromeBar.
+                // S158: `suitStart >= 0f` is "a run is under way", and it is the ONE bit of this page's
+                // run state that suitCountdown cannot carry - the counter reads 5 for the first 0.9 s of
+                // a run (its idle value) and 0 for the last 0.5 s of one (its finished value). The
+                // procedure's step ticks need the difference; SuitCheckPage.StepOf says why.
                 FigmaUI.Build(page, up, w, h, ps, mapView, suitCountdown, suitPopup, coverPhase, coverCam, turn,
-                              controls, suitSeed);
+                              controls, suitSeed, suitStart >= 0f);
             }
             else
             {

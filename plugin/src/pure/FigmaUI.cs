@@ -179,7 +179,7 @@ namespace DragonScreen
         public static void Build(DisplayList dl, UiPage page, int w, int h, PageState s, MapView view,
                                  int suitCountdown, bool suitPopup, int coverPhase,
                                  CoverPage.CoverCam coverCam, TurntableState turn, PageControls ctl)
-        { Build(dl, page, w, h, s, view, suitCountdown, suitPopup, coverPhase, coverCam, turn, ctl, 0u); }
+        { Build(dl, page, w, h, s, view, suitCountdown, suitPopup, coverPhase, coverCam, turn, ctl, 0u, false); }
 
         /// <summary>As Build, plus the page state the painter owns: the Suit Leak Check's
         /// countdown/popup, the Cover's selected deorbit phase, the Cover's camera view (T4 - which
@@ -188,10 +188,16 @@ namespace DragonScreen
         /// touch flips (T14 - see PageControls), and the Suit Leak Check's RUN SEED (S31 - the painter
         /// mints one per run; 0 means no run has been made, so nothing has been found). Every other
         /// page ignores them.</summary>
+        /// <param name="suitRunActive">S158: a Suit Leak Check run is UNDER WAY - the painter's
+        /// `suitStart >= 0f`. It is the one bit of that page's run state its countdown cannot carry,
+        /// because the counter reads 5 for the first 0.9 s of a run (also its idle value) and 0 for the
+        /// last 0.5 s of one (also its finished value); see SuitCheckPage.StepOf. REQUIRED here and
+        /// defaulted to false in the overload above, deliberately: every shallower caller is a static
+        /// render with no live run, and the one live caller had to be made to say so.</param>
         public static void Build(DisplayList dl, UiPage page, int w, int h, PageState s, MapView view,
                                  int suitCountdown, bool suitPopup, int coverPhase,
                                  CoverPage.CoverCam coverCam, TurntableState turn, PageControls ctl,
-                                 uint suitSeed)
+                                 uint suitSeed, bool suitRunActive)
         {
             if (dl == null || w <= 0 || h <= 0) return;
             switch (page)
@@ -216,7 +222,8 @@ namespace DragonScreen
                 // also "the run produced a result", which is what decides whether a leaking suit has
                 // finished bleeding down - see SuitLeak.Compute.
                 case UiPage.SuitCheck: SuitCheckPage.Build(dl, w, h, suitCountdown, suitPopup,
-                                                           SuitLeak.From(s, suitCountdown, suitPopup, suitSeed)); break;
+                                                           SuitLeak.From(s, suitCountdown, suitPopup, suitSeed),
+                                                           suitRunActive); break;
                 case UiPage.Vehicle:   VehicleOverviewPage.Build(dl, w, h, s); break;
                 case UiPage.VehicleMech: VehicleMechPage.Build(dl, w, h, s); break;
                 case UiPage.AudioVideo:  SettingsVideoPage.Build(dl, w, h, s); break;

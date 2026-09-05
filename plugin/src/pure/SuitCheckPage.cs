@@ -70,8 +70,13 @@ namespace DragonScreen
         /// reads — four differentials and the verdict they support, from pure/SuitLeakSim.cs. S31 threaded
         /// it in because until then this page took no vessel state at all and so had nothing to be honest
         /// about; the countdown is still the painter's own live procedure timer, untouched.</summary>
+        /// <param name="runActive">S158: a run is UNDER WAY right now — the painter's `suitStart >= 0f`.
+        /// It is a REQUIRED parameter rather than an optional one deliberately, so that adding it made
+        /// the compiler name every caller and each one had to say which state it is drawing; the same
+        /// fail-closed move [[S120]] made with ChromeBar.TopY. Why the page cannot derive it from the
+        /// countdown: see StepOf, which is where the three-way lives.</param>
         public static void Build(DisplayList dl, int w, int h, int countdown, bool showPopup,
-                                 SuitCheckState suits)
+                                 SuitCheckState suits, bool runActive)
         {
             float sx = w / RefW, sy = h / RefH;
             float PX(float x) => x * sx;
@@ -91,8 +96,31 @@ namespace DragonScreen
             C("4.011 - Suit Leak Check", 408, 180, 40, White);
             C("ECLSS", 408, 244, 24, Accent);
             L("SUIT", 120, 350, 28, Accent);
-            Ico("ic_check", 120, 452, 38, White); L("1. PREPARE SUITS FOR LEAK CHECK", 176, 458, 26, White);
-            Ico("ic_check", 120, 560, 38, White); L("2. EXECUTE SUIT LEAK CHECK", 176, 566, 26, White);
+            // ---- S158 / S49 H19 / QC SC-01: THE TICKS SAY WHAT THE CREW HAVE ACTUALLY DONE ----
+            // Both of these drew White the instant the page opened, so a two-step procedure was shown
+            // COMPLETE before it began — QC SC-01: "the left column says both steps are done; the header
+            // says section 2 is in progress; the run may not have started. The three statements cannot
+            // all be true and none of them is computed." That is the confident-word-on-no-evidence shape
+            // [[S22]] was opened for, here on a checklist the crew tick off, on the one page whose
+            // MEASUREMENT half (S31/S32/[[S52]]) is the build's exemplar.
+            //
+            // Step 1 is "prepare the suits", which the crew have done by the time they press INITIATE;
+            // step 2 is "execute the check", which is done when the run has produced a result. So the
+            // ticks are the procedure's own three-way, and StepOf below is the whole of it.
+            //
+            // ⛔ THE UNCHECKED TINT IS `Dim`, AND THAT IS THIS TREE'S IDIOM, NOT A CHOICE MADE HERE:
+            // VrioTestPage.cs:99 already draws a checklist tick as `Done[i] ? White : Dim`. Two pages in
+            // this build have a step tick; they now draw one the same way.
+            //
+            // ⚠ THE LABEL IS TINTED WITH ITS TICK, and that is a deliberate departure from VrioTest,
+            // which dims only the glyph. A tick alone at 38 design px is a small target for the eye at
+            // seat distance, and this page's own S106 note records the opposite failure — a control that
+            // did nothing while painted like one that did. Dimming the row says "not yet" once.
+            ProcStep step = StepOf(countdown, showPopup, runActive);
+            Rgba t1 = step != ProcStep.NotStarted ? White : Dim;
+            Rgba t2 = step == ProcStep.Complete   ? White : Dim;
+            Ico("ic_check", 120, 452, 38, t1); L("1. PREPARE SUITS FOR LEAK CHECK", 176, 458, 26, t1);
+            Ico("ic_check", 120, 560, 38, t2); L("2. EXECUTE SUIT LEAK CHECK", 176, 566, 26, t2);
             // read-only controls (bottom) — S29 (owner, via the overseer, 2026-09-02): both plates stay
             // INERT, drawn only, no HitTest entry. One caption, two plates: the reference does not say
             // which of ic_grid/ic_eye arms read-only mode or what the other one does, so §1.4 (inert
@@ -114,6 +142,25 @@ namespace DragonScreen
             // ================= MAIN PANEL =================
             dl.Box(PX(820), PY(96), 2000 * sx, 1700 * sy, St(3), Panel);
             Ico("ic_refresh", 1180, 168, 34, Accent);
+            // ⚠ S158: "SECTION 2: IN PROGRESS" IS STILL A LITERAL, DELIBERATELY — this is the half of
+            // H19 / SC-01 that is NOT built, and the reason is §1.4 rather than difficulty. Making it
+            // advance means PRINTING WORDS NO SOURCE HAS. Both sources were searched, in tier order:
+            //   TIER 1 (verified-real): the capsule photographs give this string and no other. Their
+            //     one attested state word for a FINISHED 4.011 is "PROCEDURE COMPLETE", in the result
+            //     box drawn below — for the popup, not for this header.
+            //   TIER 2 (other users'): assets/reference/dragon2-ui-master/src/views/Fourth.vue holds
+            //     `SECTION 2 IN PROGRESS` as a hardcoded <p> and both left ticks as hardcoded SVGs. The
+            //     demo has no state vocabulary either; it is the source of the DEFECT, not of a fix.
+            // So "NOT STARTED" is attested nowhere, and §1.4's third tier — invent ONLY by owner
+            // discussion — is where it lands. Written up on the register line, not guessed at here.
+            //
+            // ⭐ AND THE HALVES DO NOT IMPLY EACH OTHER, WHICH IS WHY BUILDING ONE IS HONEST HERE WHERE
+            // IT WOULD NOT BE ON [[S144]]. Section 2 is not the tick: it contains steps 2.3, 2.4 AND
+            // 2.5 ("On completion, contact SpaceX to report results"), and 2.5 is FINISH's own step
+            // — see the comment on that plate. So section 2 is genuinely still in progress after the
+            // check itself has completed, and an unadvanced header beside a ticked step 2 states
+            // nothing false. S144 was held precisely because its two halves WERE a single list, where
+            // one lit criterion makes an unlit one read as "not exceeded".
             L("SECTION 2: IN PROGRESS", 1230, 172, 30, Accent);
             C("Execute Suit Leak Check", 1800, 280, 62, White);
 
@@ -304,6 +351,41 @@ namespace DragonScreen
             if (a == SuitAct.None) return false;
             if (a == SuitAct.Troubleshoot) return FailBranchLive && suits.AnyFailed;
             return true;
+        }
+
+        /// <summary>Where procedure 4.011 has got to. Three states, and the page has exactly the three
+        /// it needs — no step index is stored anywhere, because the painter's existing run state already
+        /// determines it.</summary>
+        public enum ProcStep { NotStarted, Running, Complete }
+
+        /// <summary>
+        /// The procedure's three-way, computed rather than remembered (S158).
+        ///
+        /// ⛔ WHY `runActive` HAS TO BE PASSED IN, when QC SC-01's fix plan said the page was already
+        /// handed enough: it very nearly is, and the gap is half a second wide at each end.
+        /// `ScreenPainter` runs the counter as `5 - (int)(el / 0.9f)` over a run that ends at el = 5 s
+        /// — the demo's own timings (Fourth.vue: timeouts at 900…4500 ms, popup at 5000 ms), copied
+        /// faithfully. Two consequences, and the second is the one that matters:
+        ///   • for el &lt; 0.9 s the counter still reads 5, which is also its IDLE value; and
+        ///   • for el in [4.5, 5.0) it already reads 0 while the popup has NOT yet been raised.
+        /// So `countdown == 0 &amp;&amp; !showPopup` is TWO different states — "the last half-second of a
+        /// running check" and "a finished check whose box has been closed". Ticking step 2 off the
+        /// counter alone would mark EXECUTE SUIT LEAK CHECK done half a second before a result exists:
+        /// a smaller version of the exact defect this task is fixing, so it is not built that way.
+        /// `suitStart >= 0f` separates them exactly, and costs one bool.
+        ///
+        /// The rest follows the painter's own documented rules and re-derives none of them:
+        /// • the counter PARKS AT 0 after a run rather than springing back to 5 (S32, ScreenPainter:64),
+        ///   so `countdown &lt; 5` with no run active and no box up is a FINISHED run whose box was closed
+        ///   — which is the state the crew act in, and the one TROUBLESHOOT is reachable from;
+        /// • HALT and any page change put it back to 5 AND clear the popup (ScreenPainter:534, :789), so
+        ///   an abandoned run correctly reads NotStarted — the crew halted it, they did not do it.
+        /// </summary>
+        public static ProcStep StepOf(int countdown, bool showPopup, bool runActive)
+        {
+            if (runActive) return ProcStep.Running;
+            if (showPopup) return ProcStep.Complete;
+            return countdown < 5 ? ProcStep.Complete : ProcStep.NotStarted;
         }
 
         public static SuitAct HitTest(float px, float py, int w, int h, bool popup)
