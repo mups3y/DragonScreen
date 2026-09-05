@@ -59,6 +59,7 @@ public static class FigmaUINavTest
         CoverDroppedArrow();
         AudioPageChannels();
         CoverTargetReadouts();
+        AlertsView();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
     }
@@ -2344,6 +2345,142 @@ public static class FigmaUINavTest
             if (Math.Abs(c.A - x) <= tol && Math.Abs(c.B - y) <= tol) return c.C;
         }
         return 0f;
+    }
+
+    // ================= S137 / S49 H14: THE ALERTS VIEW LISTS WHAT IS WRONG =================
+    // The panel showed ONE WORD at 110 design px and nothing else, beside a FDIR "gauge" whose fill was
+    // 0.15 / 0.6 / 1 chosen by severity - a bar implying a magnitude that does not exist for a
+    // three-valued enum.
+    static void AlertsView()
+    {
+        const int VW = 2560, VH = 1406;
+        AlertItem[] buf = new AlertItem[AlertList.Max];
+
+        // ---- 1. THE INVARIANT THAT MAKES THE PANEL CORRECT --------------------------------------
+        // ⭐ The list is the WORKING of the word above it, so the worst row must BE the word - for
+        // every scope, in every state. A panel that could show one and say the other is the "one
+        // panel, two answers" defect S51 fixed here once already, and the first version of this line
+        // had it: a whole-vehicle list under a per-subsystem word.
+        AlertScope[] scopes = { AlertScope.LifeSupport, AlertScope.Thermal, AlertScope.Power,
+                                AlertScope.Propellant, AlertScope.Fdir };
+        int states = 0, mismatches = 0, withRows = 0;
+        for (int k = 0; k < 40; k++)
+        {
+            PageState s2 = AlertFixture(k);
+            foreach (AlertScope sc in scopes)
+            {
+                states++;
+                int n = AlertList.Build(s2, sc, buf);
+                Severity worst = Severity.Nominal;
+                for (int i = 0; i < n; i++) if (buf[i].Sev > worst) worst = buf[i].Sev;
+                if (worst != AlertList.SeverityOf(s2, sc)) mismatches++;
+                if (n > 0) withRows++;
+                // worst-first ordering, on every one of them
+                for (int i = 1; i < n; i++)
+                    if (buf[i].Sev > buf[i - 1].Sev) mismatches++;
+            }
+        }
+        Check("the worst row IS the word, across " + states + " scope/state combinations",
+              mismatches == 0, mismatches + " disagreed");
+        Check("...and the sweep actually produced alerts to compare", withRows > 20,
+              "only " + withRows + " of " + states + " had rows - the fixture is not exercising it");
+
+        // ---- 2. A NOMINAL BAND IS NOT A ROW, AND A DEAD FEED IS NOT A LIST ----------------------
+        PageState good = AlertFixture(0);
+        Check("a nominal life-support state lists nothing",
+              AlertList.Build(good, AlertScope.LifeSupport, buf) == 0, "");
+        PageState dead = AlertFixture(7); dead.Valid = false;
+        int dn = 0;
+        foreach (AlertScope sc in scopes) dn += AlertList.Build(dead, sc, buf);
+        Check("a dead feed lists nothing at all, in any scope", dn == 0, "got " + dn + " rows");
+
+        // ---- 3. THE ROW CANNOT DISAGREE WITH ITSELF ---------------------------------------------
+        // ⛔ Caught in the preview: the first version banded one field and printed another, so a
+        // fixture that moved only the numeric produced "PPO2 2.86" in ALARM RED. The value is now
+        // formatted from the same number that was banded, so the reading proves the verdict.
+        PageState p2 = AlertFixture(0);
+        p2.Cabin.Ppo2Psia = 1.5;                     // hard alarm
+        p2.Ppo2Text = "9.99 psia";                   // a stale display field, deliberately wrong
+        int n2 = AlertList.Build(p2, AlertScope.LifeSupport, buf);
+        Check("the row prints the number it was banded on, not a stale display field",
+              n2 >= 1 && buf[0].Label == "PPO2" && buf[0].Value.StartsWith("1.5")
+              && buf[0].Sev == Severity.Alarm,
+              n2 >= 1 ? buf[0].Label + " = " + buf[0].Value : "no rows");
+
+        // ---- 4. THE PAGE: THE WORD AND THE WORST ROW ARE ONE COLOUR -----------------------------
+        PageState alarmed = AlertFixture(0);
+        alarmed.Cabin.Ppo2Psia = 1.8; alarmed.Cabin.Co2MmHg = 9.0;
+        DisplayList dl = Subsys(VehicleSubsystemPage.Sub.Crew, alarmed, VW, VH);
+        Check("the alerted page draws the failing quantities by name",
+              Drew(dl, "PPO2") && Drew(dl, "CO2"), "");
+        Check("...at the LIVE floor, because an alert nobody can read is not an alert",
+              SizeOf(dl, "PPO2") >= Typography.MinFor(VW),
+              "got " + SizeOf(dl, "PPO2") + ", floor " + Typography.MinFor(VW));
+        Check("the summary word and the worst row are the same colour",
+              SameColour(ColourOf(dl, Alarms.Word(Alarms.LifeSupport(alarmed.Cabin))),
+                         ColourOf(dl, "PPO2")), "");
+
+        // A nominal page lists nothing - the word alone is the right answer when nothing is wrong.
+        DisplayList ok = Subsys(VehicleSubsystemPage.Sub.Crew, good, VW, VH);
+        Check("a nominal page lists no rows", !Drew(ok, "PPO2") && !Drew(ok, "CO2"), "");
+
+        // ---- 5. THE FDIR BAR IS A POSITION INDICATOR, NOT A FILL --------------------------------
+        // Three equal segments at design y 410; exactly ONE is lit while there is a feed, and NONE
+        // when there is not. The old bar drew two rects - a track and a fraction of it.
+        Check("the FDIR bar is three segments and exactly one is lit",
+              BarSegments(dl, VW, VH, true) == 1 && BarSegments(dl, VW, VH, false) == 2,
+              "lit " + BarSegments(dl, VW, VH, true) + ", unlit " + BarSegments(dl, VW, VH, false));
+        DisplayList nofeed = Subsys(VehicleSubsystemPage.Sub.Crew, dead, VW, VH);
+        Check("...and with no feed none of them is lit",
+              BarSegments(nofeed, VW, VH, true) == 0 && BarSegments(nofeed, VW, VH, false) == 3,
+              "lit " + BarSegments(nofeed, VW, VH, true));
+    }
+
+    /// <summary>Rects sitting on the FDIR bar's own row (design y 410, height 8). `lit` counts the
+    /// ones that are NOT the dim track colour.</summary>
+    static int BarSegments(DisplayList dl, int w, int h, bool lit)
+    {
+        float sy = (float)h / 2112f;
+        float y = 410f * sy, hh = 8f * sy;
+        int n = 0;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind != DrawKind.Rect) continue;
+            if (Math.Abs(c.B - y) > 1f || Math.Abs(c.D - hh) > 1f) continue;
+            bool isLit = !SameColour(c.Colour, DragonPalette.Text7)
+                         && !SameColour(c.Colour, DragonPalette.Text8)
+                         && !SameColour(c.Colour, DragonPalette.Hairline);
+            if (isLit == lit) n++;
+        }
+        return n;
+    }
+
+    static DisplayList Subsys(VehicleSubsystemPage.Sub sub, PageState s, int w, int h)
+    {
+        DisplayList dl = new DisplayList(VehicleSubsystemPage.Commands + 80);
+        VehicleSubsystemPage.Build(dl, w, h, sub, s, true);
+        return dl;
+    }
+
+    /// <summary>A spread of cabin/power/propellant states, deterministic in k, that walks every band
+    /// through nominal, caution and alarm so the invariant above is exercised rather than asserted
+    /// against one happy value.</summary>
+    static PageState AlertFixture(int k)
+    {
+        PageState s = new PageState();
+        s.Valid = true;
+        s.Cabin.Ppo2Psia    = 3.2 - 0.05 * (k % 30);
+        s.Cabin.Co2MmHg     = 1.0 + 0.25 * (k % 32);
+        s.Cabin.PressPsia   = 14.7 - 0.15 * (k % 30);
+        s.Cabin.CabinTempC  = 20.0 + 0.6 * (k % 30);
+        s.Cabin.LoopAC      = 30.0 + 1.0 * (k % 30);
+        s.Cabin.LoopBC      = 28.0 + 1.1 * ((k * 7) % 30);
+        s.Power01           = 1.0 - 0.03 * (k % 33);
+        s.Propellant01      = 1.0 - 0.03 * ((k * 5) % 33);
+        s.GForce01          = 0.02 * (k % 40);
+        s.Fault = FaultKind.None; s.FaultText = "NOMINAL";
+        return s;
     }
 
     /// <summary>The x a string was drawn at, first match. -1 if it was not drawn.</summary>

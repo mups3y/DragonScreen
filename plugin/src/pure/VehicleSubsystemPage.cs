@@ -46,6 +46,10 @@ namespace DragonScreen
         public enum Sub { Crew, Propulsion, Power, Avionics, Gnc, Thermal }
 
         public const int Commands = 300;
+
+        /// <summary>The alert list's row buffer, owned here and reused - the draw path allocates
+        /// nothing, the same rule `Pages.StepColumn` follows for its own step rows.</summary>
+        static readonly AlertItem[] alertScratch = new AlertItem[AlertList.Max];
         const float RefW = 3427f, RefH = 2112f;
 
         static readonly Rgba Bg     = DragonPalette.Background;
@@ -88,6 +92,25 @@ namespace DragonScreen
         /// <summary>This subsystem's real live severity — the same signal that colours its VehicleTabBar
         /// tab (T5). Avionics and GNC share the one real fault channel this build has (Alarms.FdirSeverity);
         /// there is no second, separately-modelled fault source to split them on.</summary>
+        /// <summary>⭐ S137: the scope whose components the ALERTS list shows — and it is the SAME
+        /// switch as LiveSeverity below, deliberately mirrored rather than derived, so the two are
+        /// visibly one mapping. `AlertList.SeverityOf(s, ScopeOf(sub))` and `LiveSeverity(sub, s)`
+        /// must agree for every sub and every state, and a test holds them to it: the list is the
+        /// WORKING of the word above it, and a panel that could show one and say the other is the
+        /// "one panel, two answers" defect S51 fixed here once already.</summary>
+        static AlertScope ScopeOf(Sub sub)
+        {
+            switch (sub)
+            {
+                case Sub.Crew:       return AlertScope.LifeSupport;
+                case Sub.Propulsion: return AlertScope.Propellant;
+                case Sub.Power:      return AlertScope.Power;
+                case Sub.Avionics:
+                case Sub.Gnc:        return AlertScope.Fdir;
+                default:             return AlertScope.Thermal;
+            }
+        }
+
         static Severity LiveSeverity(Sub sub, PageState s)
         {
             if (!s.Valid) return Severity.Nominal;
@@ -208,10 +231,53 @@ namespace DragonScreen
                 L("FDIR", 2760, 340, 28, Dim);
                 Rgba fdirCol = s.Valid ? Alarms.Colour(Alarms.FdirSeverity(s)) : Dim;
                 R(s.Valid ? s.FaultText : "NO DATA", 3360, 340, 34, fdirCol);
-                float fdirFrac = Alarms.FdirSeverity(s) == Severity.Nominal ? 0.15f
-                               : Alarms.FdirSeverity(s) == Severity.Caution ? 0.6f : 1f;
-                dl.Rect(PX(2760), PY(410), 600 * sx, SZ(8), Faint);
-                dl.Rect(PX(2760), PY(410), 600 * sx * fdirFrac, SZ(8), fdirCol);
+
+                // ---- S137 / S49 H14: THE BAR WAS A FAKE GAUGE AND IS NOW A POSITION INDICATOR ----
+                // ⛔ WHAT IT USED TO BE. `fdirFrac` was 0.15 / 0.6 / 1 chosen by severity and then
+                // drawn as a CONTINUOUS FILL - a bar whose length implied a magnitude that does not
+                // exist. FDIR severity is a three-valued enum; there is no 15%-of-a-fault. Reading a
+                // bar 60% full as "somewhat faulted" is the reading the drawing invited, and it was
+                // never a quantity. Same defect class as a confident word on a dead feed: a shape
+                // asserting precision the model has not got.
+                //
+                // ⭐ WHAT IT IS NOW. THREE SEGMENTS, one per value, the current one lit. That is a
+                // faithful drawing of a three-valued quantity - it says WHICH, and it does not say
+                // HOW MUCH. The geometry is unchanged (2760, 410, 600x8) so the layout does not move;
+                // only the claim does.
+                {
+                    Severity fdirSev = Alarms.FdirSeverity(s);
+                    const float segGap = 12f, segW = (600f - segGap * 2f) / 3f;
+                    for (int i = 0; i < 3; i++)
+                    {
+                        bool lit = s.Valid && (int)fdirSev == i;
+                        dl.Rect(PX(2760 + i * (segW + segGap)), PY(410), segW * sx, SZ(8),
+                                lit ? fdirCol : Faint);
+                    }
+                }
+
+                // ---- S137 / S49 H14: THE ENUMERATED LIST, WHERE THERE WAS ONE WORD ----
+                // The word above says HOW BAD. It never said WHAT, and a crew reading `CAUTION`
+                // learned that something was wrong and not one thing about which thing.
+                // ⭐ EVERY ROW IS A BAND `Alarms` ALREADY EVALUATES and then throws away when it takes
+                // `Worst()`. pure/AlertList.cs keeps the components; there is no new threshold in it
+                // and no new source. §1.2's (A)/(B) ceiling is respected - the FDIR row REPORTS the
+                // channel `PageState.Fault` already carries and never waits for a fault to arrive.
+                // ⚠ The list occupies the right column BELOW the FDIR block, which was empty from
+                // design y 450 to the tab strip - so nothing moved to make room for it.
+                // ⚠ LIVE type, so `Typography.MinDesignFor` (S153's policy): an alert the crew cannot
+                // read at a glance is not an alert.
+                {
+                    int an = AlertList.Build(s, ScopeOf(sub), alertScratch);
+                    float rowSz = Typography.MinDesignFor(w, sy);
+                    float pitch = rowSz * 1.45f;
+                    for (int i = 0; i < an; i++)
+                    {
+                        float ry = 470f + i * pitch;
+                        Rgba c = Alarms.Colour(alertScratch[i].Sev);
+                        L(alertScratch[i].Label, 2400, ry, rowSz, c);
+                        R(alertScratch[i].Value, 3360, ry, rowSz, c);
+                    }
+                }
             }
 
             // ---- CENTRE: capsule diagram (the vehicle, on every vehicle page). Prop's schematic view

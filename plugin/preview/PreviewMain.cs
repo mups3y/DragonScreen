@@ -1134,6 +1134,34 @@ public static class PreviewMain
                 Render(adl, CW, CH, path);
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + adl.Count + " commands");
             }
+            // ---- S137: THE ALERT LIST WITH SOMETHING IN IT ----
+            // ⛔ The three renders above are the NOMINAL case, and a list that is empty when nothing is
+            // wrong is the correct list - but it is also the one state that proves nothing about the
+            // list. So this pushes several bands at once and renders the same page again: the point is
+            // that the crew can now read WHICH things are wrong, where before there was one word.
+            {
+                PageState al = ps;
+                al.Cabin.Ppo2Psia = 2.0;        // below the PPO2 caution band
+                al.Cabin.Co2MmHg = 9.0;         // above the CO2 caution band
+                al.Cabin.PressPsia = 12.0;      // cabin pressure into caution
+                // ⚠ Scoped: the CREW tab's word is Alarms.LifeSupport, so the list is its three bands
+                // and nothing else. Cabin temp / power / fire belong to other scopes (or, for fire, to
+                // no scope at all - see AlertList's header) and must NOT appear under this word.
+                al.Fault = FaultKind.None; al.FaultText = "NOMINAL";
+                DisplayList adl = new DisplayList(VehicleSubsystemPage.Commands + 60);
+                VehicleSubsystemPage.Build(adl, CW, CH, VehicleSubsystemPage.Sub.Crew, al, true);
+                if (adl.Overflowed) Console.WriteLine("  WARNING VEHICLE ALERTS LIST OVERFLOWED");
+                string path = Path.Combine(outDir, "ui_vehiclecrew_alerts_list.png");
+                Render(adl, CW, CH, path);
+                AlertItem[] probe = new AlertItem[AlertList.Max];
+                int pn = AlertList.Build(al, AlertScope.LifeSupport, probe);
+                string names = "";
+                for (int i = 0; i < pn; i++) names += (i > 0 ? ", " : "") + probe[i].Label + "=" + probe[i].Value;
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + adl.Count
+                                  + " commands   CREW/life-support alerts " + pn + ": " + names
+                                  + "   (word: " + Alarms.Word(AlertList.SeverityOf(al, AlertScope.LifeSupport)) + ")");
+            }
+
             // ps.Power01 = 0.18 above is deliberately in the CAUTION band so the main Power render already
             // proves amber; push it into ALARM band here to prove the sub-nav genuinely turns red (not just
             // amber) from every vehicle page, per REAL_DRAGON_SCREENS.md's "turns red when that subview

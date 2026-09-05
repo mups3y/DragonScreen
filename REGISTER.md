@@ -15933,7 +15933,7 @@ read. ⛔ No `install`, no glass, no `git push`. §14.4(a) untouched.
 ⚠ **The Procedure half is DONE and this line should not be re-read as owing it.** If the Cabin question
 is answered "(d) leave it", this line closes with no code at all.
 
-### S137 [S] The ALERTS view is a one-word summary, and the FDIR bar beside it is a fake three-position gauge — **DOING** —
+### S137 [S] The ALERTS view is a one-word summary, and the FDIR bar beside it is a fake three-position gauge — **DONE 2026-09-06 — the list is the WORKING of the word above it, and a test holds it to that** —
 ✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set
 one (SPLIT BY CONTENT TYPE — see S153). ⛔ **The condition that replaces it is mechanical, not a wait:**
 any text this line ADDS must be drawn at **`Typography.MinDesignFor(w, sc)` or above** if it is LIVE, or
@@ -15959,6 +15959,113 @@ is answered this is buildable as written. [H16 + QC `S-02`; TIER 2]
 - ⚠ Same family as [[S130]] and [[S133]].
 - **DONE when:** the view lists real discrete events, the dead-feed case cannot read `NOMINAL`, the fake bar
   is gone or driven, and previews show nominal / cautioned / no-feed.
+
+#### ✅ DONE 2026-09-06 — and one DONE-when clause was already met before I started
+
+⭐ **"The dead-feed case cannot read `NOMINAL`" was CLOSED BY [[S51]]** and is quoted in the page:
+`C(s.Valid ? Alarms.Word(sev) : "NO DATA", …)`. Checked at HEAD rather than rebuilt.
+
+#### What was built
+
+- **`pure/AlertList.cs`** — the enumerated list. ⭐ **A HARVEST, NOT A MODEL: there is not one threshold
+  in the file.** `Alarms` already evaluates a band per quantity and then throws the components away
+  when it takes `Worst()`; this keeps the components.
+- **The FDIR bar** — `fdirFrac` was `0.15 / 0.6 / 1` chosen by severity and drawn as a **continuous
+  fill**. ⛔ FDIR severity is a three-valued enum; **there is no 15%-of-a-fault**, and a bar 60 % full
+  invited "somewhat faulted" as a reading. It is now **three segments, one lit** — a faithful drawing
+  of a three-valued quantity that says WHICH and never HOW MUCH. Same geometry, so nothing moved.
+
+#### ⛔ THE DEFECT I BUILT FIRST, AND WHAT THE PREVIEW SHOWED
+
+The list started **whole-vehicle**, under a word that reports **one subsystem**. The very first render
+said it: the Crew tab printed a green `NOMINAL` — life support is fine — over an amber **`POWER 18%`**
+row. ⭐ **One panel, two answers** — the exact defect [[S51]] fixed on this same panel when a dead feed
+printed `NOMINAL` beside `NO DATA`.
+
+**Fixed by construction, not by care.** `AlertList` takes an `AlertScope`, and the five scopes are
+exactly `LiveSeverity`'s five distinct answers. The invariant that follows is testable:
+
+> **`Worst(everything the list returns) == the severity the word prints`** — asserted over **200
+> scope/state combinations** (40 fixture states × 5 scopes) walking every band through nominal,
+> caution and alarm.
+
+#### ⛔ AND A SECOND DEFECT THE PREVIEW CAUGHT — a row that disagreed with itself
+
+The first version banded `s.Cabin.Ppo2Psia` and **printed `s.Ppo2Text`** — two different fields. The
+live glue fills both from one reading so they agree in flight; a fixture that moved one and not the
+other rendered **`PPO2 2.86` in alarm red**. Every row now formats its value **from the same number its
+severity was banded on**, so a row cannot lie about its own reason whoever fills the state. Mutation
+**E** puts a deliberately stale `Ppo2Text` in and proves it.
+
+#### ⛔ FIRE, CABIN LEAK AND TRIPPED STRINGS ARE **NOT** IN THE LIST — and that is a finding, logged as [[S137b]]
+
+`VehicleSystems` models all three and `SystemsPidPage` draws them — but **`Alarms` never sees them**:
+`VehicleSeverity` is life support + thermal + propellant + power, and `Mask` adds only FDIR and a
+closing-rate term. ⭐ **So a CABIN FIRE raises no severity anywhere** — not the tab strip's red-nav, not
+the chrome bar, not the word above this list. Putting them in a scoped list here would have printed an
+ALARM row under a green word, which is the very defect the scoping exists to prevent. **The fix belongs
+in `Alarms`**, and it is logged rather than smuggled in.
+
+⚠ **No timestamps and no acknowledgement**, though the finding names both. A timestamp needs a clock
+and a latch; an acknowledgement is a control with a persistence question behind it (survives a page
+change? a scene change? who clears it?). Neither is in this line's DONE-when, and inventing those rules
+here is what C1.1 exists to stop.
+
+⛔ **§1.2's (A)/(B) ceiling respected**: the FDIR row REPORTS the channel `PageState.Fault` already
+carries and never waits for a fault to arrive. When Part B fills that channel the list gains rows
+without changing.
+
+#### Verified (C1.3) — measured, not asserted
+
+`python plugin/build.py test` → **ALL SUITES PASSED**. `python plugin/build.py preview` → a new
+`ui_vehiclecrew_alerts_list.png`, and the render **prints its own list**:
+
+```
+CREW/life-support alerts 3: PPO2=2.00 psia, CO2=9.0 mmHg, CABIN PRESSURE=12.00 psia   (word: ALARM)
+```
+
+**Inspected**: three rows, worst-first, red over amber, each naming the quantity and its reading —
+against the nominal render beside it, which lists nothing at all, because a list that shows green rows
+teaches a crew to stop reading it.
+
+**MUTATION-PROVEN — 8 mutations, 8 caught, 0 uncaught:**
+
+| | mutation | first check that failed |
+|---|---|---|
+| **A2** | life support also lists the battery — **the scope leaks** | *"the worst row IS the word, across 200 scope/state combinations   1 disagreed"* |
+| **B** | nominal bands become rows | *"a nominal life-support state lists nothing"* |
+| **C** | a dead feed produces a list | *"a dead feed lists nothing at all, in any scope   got 2 rows"* |
+| **D** | the sort stops putting the worst first | *"…9 disagreed"* |
+| **E** | the row prints a stale display field again | *"PPO2 = 9.99 psia"* |
+| **F** | the FDIR bar goes back to a continuous fill | *"three segments and exactly one is lit   lit 1, unlit 1"* |
+| **G** | the rows drop below the legibility floor | *"got 19.97, floor 32"* |
+| **H** | the page picks a different scope from the one its word reports | *"the alerted page draws the failing quantities by name"* |
+
+⚠ **Mutation A as first written was NOT a valid mutation** — it added a dead `case (AlertScope)99:` that
+no state can reach, so of course nothing failed. **A2 is the real form of the same defect** and is
+caught. Recorded because a mutation table is only worth what its weakest row is.
+
+**Comment-loss check (C1.16 / G12): 0 lost** across three files.
+
+⛔ No `install`, no glass, no `git push`. §14.4(a) untouched — a list of what is wrong commands nothing.
+
+### S137b [S] A cabin FIRE raises no severity anywhere in the build — **TODO** — [logged by [[S137]] per C1.1, 2026-09-06; TIER 2: a modelled emergency that no alarm channel can see]
+- **The finding, measured in source.** `VehicleSystems` models three discrete emergencies —
+  `SystemsState.Fire` (`FireIntensity > 0.02`), `.Leaking` (`LeakRate > 0.001`) and six `StringState`s
+  that can read `Tripped` — and `SystemsPidPage` draws all of them. ⛔ **`Alarms` reads none of them.**
+  `Alarms.VehicleSeverity` is life support + thermal + propellant + power; `Alarms.Mask` adds FDIR and a
+  closing-rate term. There is no path from a fire to a severity.
+- ⭐ **So the consequences are wide, not local:** the VehicleTabBar's red-nav, the chrome bar's STATE
+  severity, `Alarms.SystemSeverity`, and [[S137]]'s new ALERTS list are **all blind to a cabin fire**.
+  A crew on any page but the P&ID would not be told.
+- ⚠ **[[S137]] deliberately did NOT paper over it.** Adding a FIRE row to a scoped alert list would have
+  printed an ALARM row under a green summary word — the "one panel, two answers" defect S137 spent its
+  own build fixing. **The fix belongs in `Alarms`**, where one addition reaches every surface at once.
+- ⚠ **It needs a severity decision, which is small but real:** a fire and a cabin leak read as ALARM
+  naturally, but a tripped power string is a CAUTION only because the bus behind it is redundant — and
+  whether *three* tripped strings is still a caution is a judgement. §14.4(f) territory, not §1.4.
+- **DONE when:** `Alarms` folds the three discrete events into the severity every surface already reads,
+  [[S137]]'s list gains its rows for free, and a preview shows a fire turning the tab strip red.
 
 ### S138 [S] 23 of the 36 subsystem state words are still literals — **TODO — un-held 2026-09-06, the R-01 policy exists** —
 ✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set
