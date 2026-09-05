@@ -15334,7 +15334,7 @@ inside the card.
 `build.py test` green — `LegibilityFloorTest` **252 checks** · comment-loss **0** · no `install`, no
 glass, no `git push` · §14.4(a) untouched.
 
-### S121b-iii [S] `Pages.cs` — the legacy DOCKING page and the placeholder — **TODO (UNBLOCKED 2026-09-06 by [[S121b-i]])** — [split of [[S121b]]; ~48 sites]
+### S121b-iii [S] `Pages.cs` — the legacy DOCKING page and the placeholder — **DOING** — [split of [[S121b]]; ~48 sites]
 - `DockingOld` (38) · `Axis` (3) · `AxisR` (3) · `Placeholder` (4).
 - ⛔ **Not the live docking HUD.** That is `Frame58Hud` + [[S154b]]/[[S154c]]. This is the legacy page,
   dormant behind `FigmaMode` like the rest of the family.
