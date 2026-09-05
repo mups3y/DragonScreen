@@ -703,12 +703,20 @@ namespace DragonScreen
         /// </summary>
         private static void Flight(DisplayList dl, int w, int h, PageState s)
         {
-            float pad = 28f;
+            // ⭐ [[S121b-i]], 2026-09-06. EVERY number below was measured on a 1280-wide panel, and at
+            // the shipped 2560 the whole page was drawing at half the physical size it was designed at
+            // — type, margins, row pitches and the sidebar alike. `sc` is the one factor; the FRACTIONS
+            // (w * 0.30f, w * 0.02f, the gauge allowances) already track the panel and must NOT take it.
+            // ⚠ The sidebar's `bodyTop + 110f + 182f` is the same arithmetic as `StepTop`, which is why
+            // both are scaled: `StepRect` measures the hit rows down from `StepTopFor(w)`, and if the
+            // drawing and the rects disagreed the crew would tap the wrong milestone.
+            float sc = Typography.ScaleFor(w);
+            float pad = 28f * sc;
             float y = pad;
 
             // The strip sits on its own panel so it reads as chrome-of-the-page rather than as
             // floating text, which is how the reference separates it from the content below.
-            float stripH = StripHeight;
+            float stripH = StripHeight * sc;
             dl.Rect(0f, 0f, w, stripH, DragonPalette.Inset1);
             dl.Rect(0f, stripH - 2f, w, 2f, DragonPalette.Hairline);
 
@@ -737,9 +745,9 @@ namespace DragonScreen
             for (int i = 0; i < caps.Length; i++)
             {
                 float x = pad + pitch * i;
-                dl.Text(caps[i], x, y, Typography.Caption, TextAlign.Left, DragonPalette.Text6);
-                dl.Text(s.Valid ? (vals[i] ?? Dashes.None) : Dashes.None, x, y + 24f,
-                        Typography.Body, TextAlign.Left,
+                dl.Text(caps[i], x, y, Typography.Caption * sc, TextAlign.Left, DragonPalette.Text6);
+                dl.Text(s.Valid ? (vals[i] ?? Dashes.None) : Dashes.None, x, y + 24f * sc,
+                        Typography.Body * sc, TextAlign.Left,
                         s.Valid ? DragonPalette.Text0 : DragonPalette.Text7);
             }
 
@@ -770,21 +778,25 @@ namespace DragonScreen
 
             // IDENTITY COLOURS, NOT THRESHOLDS. Each dial keeps its own colour whatever it reads;
             // alarm goes to the chrome bar through Alarms.Mask. See DragonPalette's gauge block.
+            // ⭐ [[S121a]] made Gauge.ValueSize able to follow the panel and deliberately left every
+            // caller at sc = 1. THIS is the call that turns that on: the dial's own number was clamped
+            // to 28 px at both widths — 2.1875 % of a 1280 panel and 1.0938 % of a 2560 one — because
+            // Typography.Value was used as a bare panel-pixel ceiling. With a real sc it reads 56.
             Gauge.Labelled(dl, first, cy, radius, thickness,
                            s.Valid ? s.Propellant01 : 0.0,
                            s.Valid ? s.PropellantText : Dashes.None, "%",
                            s.PropellantCaption ?? "PROPELLANT",
-                           DragonPalette.GaugeTrack, DragonPalette.GaugePropellant);
+                           DragonPalette.GaugeTrack, DragonPalette.GaugePropellant, sc);
 
             Gauge.Labelled(dl, first + step, cy, radius, thickness,
                            s.Valid ? s.Power01 : 0.0,
                            s.Valid ? s.PowerText : Dashes.None, "%", "POWER",
-                           DragonPalette.GaugeTrack, DragonPalette.GaugePower);
+                           DragonPalette.GaugeTrack, DragonPalette.GaugePower, sc);
 
             Gauge.Labelled(dl, first + step * 2f, cy, radius, thickness,
                            s.Valid ? s.GForce01 : 0.0,
                            s.Valid ? s.GForceText : Dashes.None, "g", "G-FORCE",
-                           DragonPalette.GaugeTrack, DragonPalette.GaugeGForce);
+                           DragonPalette.GaugeTrack, DragonPalette.GaugeGForce, sc);
 
             // ---- THE PHASE SIDEBAR ----
             // Frame 67, the closest reference to this page, puts the mission steps here with the
@@ -794,19 +806,19 @@ namespace DragonScreen
             float sideX = pad;
             float sw = w * 0.30f - pad * 2f;
 
-            dl.Text("PHASE", sideX, bodyTop + 28f, Typography.Caption, TextAlign.Left,
+            dl.Text("PHASE", sideX, bodyTop + 28f * sc, Typography.Caption * sc, TextAlign.Left,
                     DragonPalette.Text6);
-            dl.Text(s.Valid ? (s.Phase ?? Dashes.None) : Dashes.None, sideX, bodyTop + 54f,
-                    Typography.Value, TextAlign.Left,
+            dl.Text(s.Valid ? (s.Phase ?? Dashes.None) : Dashes.None, sideX, bodyTop + 54f * sc,
+                    Typography.Value * sc, TextAlign.Left,
                     s.Valid ? DragonPalette.Accent : DragonPalette.Text7);
 
             // ABORT MODE sits beside the phase because that is what it is - which escape option the
             // vehicle currently has. Read the caveat in StepList.AbortMode before quoting it
             // anywhere: the eight-mode structure is the real vehicle's, the boundaries are ours.
-            dl.Text("ABORT MODE", sideX + sw * 0.55f, bodyTop + 28f, Typography.Caption,
+            dl.Text("ABORT MODE", sideX + sw * 0.55f, bodyTop + 28f * sc, Typography.Caption * sc,
                     TextAlign.Left, DragonPalette.Text6);
             string am = s.Valid ? StepList.AbortMode(s.Steps) : Dashes.None;
-            dl.Text(am, sideX + sw * 0.55f, bodyTop + 56f, Typography.Caption, TextAlign.Left,
+            dl.Text(am, sideX + sw * 0.55f, bodyTop + 56f * sc, Typography.Caption * sc, TextAlign.Left,
                     (am == "DISARMED") ? DragonPalette.Caution : DragonPalette.Text2);
 
             // ---- BODY, AND THE APSIS CLOCKS ----
@@ -814,15 +826,17 @@ namespace DragonScreen
             // reference's seven, which have no room for it. It is not a field to lose: everything
             // else on the page - which velocity is meaningful, what an altitude means, where the
             // perigee floor sits - is relative to the body being orbited.
-            float sy = bodyTop + 110f;
-            SideRow(dl, sideX, sy, sw, "BODY", s.Valid ? s.Body : Dashes.None);
-            SideRow(dl, sideX, sy + 42f, sw, "TIME TO APOGEE",
-                    (s.Valid && s.ApogeeShown) ? s.TimeToApText : Dashes.None);
-            SideRow(dl, sideX, sy + 84f, sw, "TIME TO PERIGEE",
-                    (s.Valid && s.PerigeeShown) ? s.TimeToPeText : Dashes.None);
-            SideRow(dl, sideX, sy + 126f, sw, "PERIOD", s.Valid ? s.PeriodText : Dashes.None);
+            float sy = bodyTop + 110f * sc;
+            SideRow(dl, sideX, sy, sw, "BODY", s.Valid ? s.Body : Dashes.None, sc);
+            SideRow(dl, sideX, sy + 42f * sc, sw, "TIME TO APOGEE",
+                    (s.Valid && s.ApogeeShown) ? s.TimeToApText : Dashes.None, sc);
+            SideRow(dl, sideX, sy + 84f * sc, sw, "TIME TO PERIGEE",
+                    (s.Valid && s.PerigeeShown) ? s.TimeToPeText : Dashes.None, sc);
+            SideRow(dl, sideX, sy + 126f * sc, sw, "PERIOD", s.Valid ? s.PeriodText : Dashes.None, sc);
 
-            StepColumn(dl, s, sideX, sy + 182f, sw, w, h);
+            // ⭐ `sy + 182f * sc` IS `StepTopFor(w)` — bodyTop is stripH, so this is
+            // (StripHeight + 110 + 182) * sc. StepRect measures the hit rows from the same number.
+            StepColumn(dl, s, sideX, sy + 182f * sc, sw, w, h);
 
             // ---- AUTO SEQUENCE ----
             // The vehicle flies itself and the crew can take it or hand it back - that authority is
@@ -831,14 +845,14 @@ namespace DragonScreen
             AutoRect(w, h, out ax, out ay, out aw, out ah);
             Control.Button(dl, ax, ay, aw, ah,
                            s.AutoEngaged ? ("AUTO  " + (s.AutoPhase ?? "")) : "AUTO SEQUENCE",
-                           s.AutoEngaged, s.Valid);
+                           s.AutoEngaged, s.Valid, sc);
 
             for (int i = 0; i < MissionButtons; i++)
             {
                 float mx, my, mw, mh;
                 MissionRect(i, w, h, out mx, out my, out mw, out mh);
                 Control.Button(dl, mx, my, mw, mh, MissionLabel(s, i),
-                               MissionLit(s, i), s.Valid && MissionUsable(s, i));
+                               MissionLit(s, i), s.Valid && MissionUsable(s, i), sc);
             }
 
             // ---- CREW CHECKLIST CARD ----
@@ -895,7 +909,8 @@ namespace DragonScreen
         public static void MissionRect(int index, int w, int h, out float x, out float y,
                                        out float rw, out float rh)
         {
-            rh = MissionHeight;
+            float sc = Typography.ScaleFor(w);
+            rh = MissionHeight * sc;
 
             // ---- ⛔ MEASURED UP FROM THE TAB BAR, NOT DOWN FROM AUTO SEQUENCE. ----
             // Stacked downward they ran straight under the chrome bar: on a 703-high screen the bar
@@ -910,18 +925,18 @@ namespace DragonScreen
             // glass. ⭐ Which is precisely why this rect is measured UP FROM THE BAR: that is the one
             // formulation that survived both the resolution change and the bar's own rescaling
             // without an edit. Measured now: the row sits at y 1236-1270 at 2560, 597-631 at 1280.
-            y = ChromeBar.TopY(w, h) - MissionGap - rh;
+            y = ChromeBar.TopY(w, h) - MissionGap * sc - rh;
 
             // ---- AND A ROW, NOT A COLUMN, STARTING RIGHT OF THE SIDEBAR. ----
             // A column here would cross the gauges; the strip between AUTO SEQUENCE and the bar is
             // one button tall. The left 30% belongs to the phase sidebar and the step list, so the
             // row starts clear of it rather than centring on the page and overlapping the steps.
-            float left = w * SidebarFrac + MissionGap;
-            float right = w - SidePad;
+            float left = w * SidebarFrac + MissionGap * sc;
+            float right = w - SidePad * sc;
             float total = right - left;
-            if (total > MissionRowMax) total = MissionRowMax;
-            rw = (total - MissionGap * (MissionButtons - 1)) / MissionButtons;
-            x = left + (rw + MissionGap) * index;
+            if (total > MissionRowMax * sc) total = MissionRowMax * sc;
+            rw = (total - MissionGap * sc * (MissionButtons - 1)) / MissionButtons;
+            x = left + (rw + MissionGap * sc) * index;
         }
 
         /// <summary>Gap between the mission buttons, and between the row and the tab bar.</summary>
@@ -947,10 +962,11 @@ namespace DragonScreen
             // bottom of the sidebar, straight on top of DRAGON SEPARATION and NOSE CONE OPEN - the
             // hit test round-trip caught it, which is the second time that check has found a control
             // sitting on another one. The middle of the page is empty and this is what it is for.
-            rw = 280f;
-            rh = 34f;
+            float sc = Typography.ScaleFor(w);
+            rw = 280f * sc;
+            rh = 34f * sc;
             x = w * 0.5f - rw * 0.5f;
-            y = h - ChromeBar.HeightFor(w) - 100f;
+            y = h - ChromeBar.HeightFor(w) - 100f * sc;
         }
 
         /// <summary>
@@ -976,11 +992,12 @@ namespace DragonScreen
             }
 
             int visible = StepVisible(w, h);
+            float hsc = Typography.ScaleFor(w);
             for (int i = 0; i < visible; i++)
             {
                 float x, y, rw, rh;
                 StepRect(i, w, h, out x, out y, out rw, out rh);
-                if (px >= x && px <= x + rw && py >= y - 3f && py <= y + rh - 4f)
+                if (px >= x && px <= x + rw && py >= y - 3f * hsc && py <= y + rh - 4f * hsc)
                     return PageHit.Of(PageAct.AckStep, StepIdAt(i, w, h));
             }
             return PageHit.None;
@@ -1003,7 +1020,17 @@ namespace DragonScreen
         public const float StepPitchMin = 13f;
 
         /// <summary>Top of the step list, matching FlightPage's sidebar exactly.</summary>
+        /// ⚠ SUPERSEDED IN PLACE 2026-09-06 by [[S121b-i]] (C1.16 / G12): still exactly right, and now
+        /// explicitly THE VALUE AT RefPanelW. All three of its terms are 1280-measured pixels, so on a
+        /// wider panel the list starts too high by the same ratio everything else was drawing too
+        /// small. Use `StepTopFor(panelW)`; this property is what that scales.
         public static float StepTop { get { return StripHeight + 110f + 182f; } }
+
+        /// <summary>`StepTop` on THIS panel. ⛔ Every caller that has a width must use this one: the
+        /// pitch, the visible-row count and `StepRect` all measure DOWN from it, and `Flight` draws its
+        /// sidebar from the same three terms — so if one scales and the others do not, the drawn rows
+        /// and the hit rects separate. That is the H-04 failure, one page over.</summary>
+        public static float StepTopFor(int panelW) { return StepTop * Typography.ScaleFor(panelW); }
 
         /// <summary>
         /// The pitch that actually fits on THIS screen.
@@ -1020,11 +1047,12 @@ namespace DragonScreen
         public static float StepPitchFor(int w, int h)
         {
             int rows = (int)StepId.Count;
-            if (rows < 2) return StepPitch;
-            float room = ChromeBar.TopY(w, h) - StepTop;
+            float sc = Typography.ScaleFor(w);
+            if (rows < 2) return StepPitch * sc;
+            float room = ChromeBar.TopY(w, h) - StepTopFor(w);
             float fit = room / rows;
-            if (fit > StepPitch) fit = StepPitch;
-            if (fit < StepPitchMin) fit = StepPitchMin;
+            if (fit > StepPitch * sc) fit = StepPitch * sc;
+            if (fit < StepPitchMin * sc) fit = StepPitchMin * sc;
             return fit;
         }
 
@@ -1046,7 +1074,7 @@ namespace DragonScreen
             int rows = (int)StepId.Count;
             float pitch = StepPitchFor(w, h);
             if (pitch <= 0f) return rows;
-            int fit = (int)((ChromeBar.TopY(w, h) - StepTop) / pitch);
+            int fit = (int)((ChromeBar.TopY(w, h) - StepTopFor(w)) / pitch);
             if (fit > rows) fit = rows;
             if (fit < 1) fit = 1;
             return fit;
@@ -1082,7 +1110,7 @@ namespace DragonScreen
             float pitch = StepPitchFor(w, h);
             // `i` is a WINDOW SLOT, not a StepId - see StepVisible. On our screens they are the same
             // because every row fits.
-            y = StepTop + i * pitch;
+            y = StepTopFor(w) + i * pitch;
             rh = pitch;
         }
 
@@ -1098,7 +1126,11 @@ namespace DragonScreen
         private static void StepColumn(DisplayList dl, PageState s, float x, float y, float w,
                                        int panelW, int h)
         {
-            dl.Text("SEQUENCE", x, y - 26f, Typography.Caption, TextAlign.Left, DragonPalette.Text6);
+            // ⭐ [[S121b-i]]: derived from `panelW`, NEVER from `w` — see this method's own header.
+            // The two parameters are named apart precisely because passing one for the other compiles.
+            float sc = Typography.ScaleFor(panelW);
+
+            dl.Text("SEQUENCE", x, y - 26f * sc, Typography.Caption * sc, TextAlign.Left, DragonPalette.Text6);
 
             // ONE pitch for drawing and hitting - StepRect derives the same number from h.
             float pitch = StepPitchFor(panelW, h);
@@ -1106,7 +1138,7 @@ namespace DragonScreen
             int n = s.Valid ? StepList.Build(s.Steps, stepScratch) : 0;
             if (n == 0)
             {
-                dl.Text(Dashes.None, x, y, Typography.Caption, TextAlign.Left, DragonPalette.Text7);
+                dl.Text(Dashes.None, x, y, Typography.Caption * sc, TextAlign.Left, DragonPalette.Text7);
                 return;
             }
 
@@ -1123,29 +1155,32 @@ namespace DragonScreen
                           : (r.State == StepState.Active) ? DragonPalette.Accent
                           : DragonPalette.Text7;
 
-                float mx = x + 5f, my = ry + 3f;
-                if (r.State == StepState.Done) dl.Rect(mx, my, 8f, 8f, DragonPalette.Go);
-                else if (r.State == StepState.Active) dl.Box(mx, my, 8f, 8f, 2f, DragonPalette.Accent);
-                else dl.Box(mx, my, 8f, 8f, 1f, DragonPalette.Text8);
+                float mx = x + 5f * sc, my = ry + 3f * sc, ms = 8f * sc;
+                if (r.State == StepState.Done) dl.Rect(mx, my, ms, ms, DragonPalette.Go);
+                else if (r.State == StepState.Active) dl.Box(mx, my, ms, ms, 2f * sc, DragonPalette.Accent);
+                else dl.Box(mx, my, ms, ms, 1f * sc, DragonPalette.Text8);
 
-                dl.Text(r.Label, x + 22f, ry, Typography.Dense, TextAlign.Left, tint);
-                dl.Text(r.TimeRef, x + w, ry, Typography.Dense, TextAlign.Right,
+                dl.Text(r.Label, x + 22f * sc, ry, Typography.Dense * sc, TextAlign.Left, tint);
+                dl.Text(r.TimeRef, x + w, ry, Typography.Dense * sc, TextAlign.Right,
                         DragonPalette.Text8);
 
                 // A CREW step that is still running is the only tappable thing here, so it is the
                 // only one that gets an affordance. Marking the others would promise a control that
                 // is not there - the vehicle does those, not the crew.
                 if (r.CrewStep && r.State == StepState.Active)
-                    dl.Box(x, ry - 2f, w, pitch - 2f, 1f, DragonPalette.Accent);
+                    dl.Box(x, ry - 2f * sc, w, pitch - 2f * sc, 1f * sc, DragonPalette.Accent);
             }
         }
 
+        /// ⛔ `w` HERE IS THE ROW WIDTH, NOT THE PANEL'S — the same naming trap `StepColumn`'s header
+        /// records. `Typography.ScaleFor(w)` would read a 300 px row as a 300 px panel, so `sc` is
+        /// PASSED IN by the caller that holds the real width ([[S121b-i]], 2026-09-06).
         private static void SideRow(DisplayList dl, float x, float y, float w,
-                                    string caption, string value)
+                                    string caption, string value, float sc)
         {
-            dl.Text(caption, x, y, Typography.Caption, TextAlign.Left, DragonPalette.Text6);
-            dl.Text(value ?? Dashes.None, x + w, y, Typography.Body, TextAlign.Right, DragonPalette.Text0);
-            dl.Rect(x, y + 28f, w, 1f, DragonPalette.Inset1);
+            dl.Text(caption, x, y, Typography.Caption * sc, TextAlign.Left, DragonPalette.Text6);
+            dl.Text(value ?? Dashes.None, x + w, y, Typography.Body * sc, TextAlign.Right, DragonPalette.Text0);
+            dl.Rect(x, y + 28f * sc, w, 1f * sc, DragonPalette.Inset1);
         }
 
         /// <summary>

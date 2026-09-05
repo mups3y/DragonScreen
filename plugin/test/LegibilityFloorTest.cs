@@ -55,6 +55,7 @@ public static class LegibilityFloorTest
         ChromeBarTracksThePanel();
         TheShippedPanelsAreExactlyTwoToOne();
         SharedWidgetsTrackThePanel();
+        FlightPageTracksThePanel();
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed"
                           + "   (floor " + Typography.MinFor(W1) + " px @" + W1
@@ -368,6 +369,221 @@ public static class LegibilityFloorTest
     //
     // ⛔ WRITTEN ACROSS WIDTHS, like everything else here, and for the same reason: at 1280 alone a
     // scaled bar and an un-scaled one are the same bar. That is why nothing caught this for ten days.
+    // ---- S121b-i: THE FLIGHT PAGE, ACROSS WIDTHS ------------------------------------------------
+    // ⛔ THE CHECK THAT MATTERS HERE IS THE ROUND TRIP, NOT THE TYPE. FLIGHT is the one page in this
+    // family whose controls are hit-tested: the fifteen crew steps, AUTO SEQUENCE and UNDOCK. Scaling
+    // what is DRAWN without what is HIT lands a tap on the wrong milestone, and a wrong milestone
+    // acknowledged is worse than an unreadable one. So the page is rendered and hit at BOTH widths.
+    static void FlightPageTracksThePanel()
+    {
+        // ---- the step list's origin and pitch, which the draw and the rects share ----------------
+        Eq("S121b-i StepTopFor doubles with the panel",
+           Pages.StepTopFor(W2), 2f * Pages.StepTopFor(W1), 1e-3f);
+        Eq("S121b-i StepTopFor at RefPanelW is the unscaled StepTop",
+           Pages.StepTopFor(W1), Pages.StepTop, 1e-3f);
+        Eq("S121b-i the step pitch doubles with the panel",
+           Pages.StepPitchFor(W2, H2), 2f * Pages.StepPitchFor(W1, H1), 1e-3f);
+        Check("S121b-i ...and the same number of milestones is reachable at both widths",
+              Pages.StepVisible(W1, H1) == Pages.StepVisible(W2, H2),
+              Pages.StepVisible(W1, H1) + " vs " + Pages.StepVisible(W2, H2));
+
+        // ---- the two button rects ---------------------------------------------------------------
+        RectDoubles("AutoRect", AutoBox(W1, H1), AutoBox(W2, H2));
+        RectDoubles("MissionRect", MissionBox(W1, H1), MissionBox(W2, H2));
+
+        // ---- ⭐ THE ROUND TRIP, AT BOTH WIDTHS ---------------------------------------------------
+        FlightHitRoundTrip(W1, H1);
+        FlightHitRoundTrip(W2, H2);
+
+        // ---- and the page's TYPE, read off what it actually drew ---------------------------------
+        // ⛔ Not a table of expected sizes: the page is built at both widths and the emitted text
+        // commands are compared. Every size must double and the command count must be identical —
+        // a page that scaled its type but dropped or added a draw would fail the second half.
+        float[] t1 = FlightTextSizes(W1, H1), t2 = FlightTextSizes(W2, H2);
+        Check("S121b-i the FLIGHT page draws the same number of text commands at both widths",
+              t1.Length == t2.Length, t1.Length + " vs " + t2.Length);
+        int bad = 0; float worst = 0f; int worstI = -1;
+        for (int i = 0; i < t1.Length && i < t2.Length; i++)
+        {
+            float d = Math.Abs(t2[i] - 2f * t1[i]);
+            if (d > 1e-3f) { bad++; if (d > worst) { worst = d; worstI = i; } }
+        }
+        Check("S121b-i every text size on the FLIGHT page doubles with the panel",
+              bad == 0, bad + " of " + t1.Length + " did not; worst at index " + worstI
+                        + " (@1280 " + (worstI >= 0 ? t1[worstI] : 0f)
+                        + ", @2560 " + (worstI >= 0 ? t2[worstI] : 0f) + ")");
+        Check("S121b-i ...and there is real type on the page to check",
+              t1.Length > 40, "only " + t1.Length + " text commands");
+
+        // ⚠ the whole point of the exercise: the smallest type on FLIGHT is the same SHARE of the
+        // panel at both widths, whatever that share is. (It does not clear the floor — that is
+        // [[S153b]]'s job — but it must not get worse when the canvas grows.)
+        float min1 = Min(t1), min2 = Min(t2);
+        Check("S121b-i the smallest type on FLIGHT is the same share of the panel at both widths",
+              Math.Abs(min1 / W1 - min2 / W2) < 1e-7f,
+              min1 + "/" + W1 + " vs " + min2 + "/" + W2);
+
+        // ---- ⛔ AND THREE THINGS A CROSS-WIDTH RATIO CANNOT SEE ----------------------------------
+        // Mutation testing found all three, and each survived a suite that looked thorough:
+        //
+        //   1. THE DRAWN ROWS AND THE HIT ROWS CAN SEPARATE. Every check above either compares two
+        //      widths or locates a control with the very function it then tests, so `Flight` drawing
+        //      its step column at the OLD unscaled offset while `StepRect` uses `StepTopFor` changed
+        //      nothing any of them looked at — and that is a tap landing on the wrong milestone.
+        //   2. THE WRONG SCALE CAN STILL DOUBLE. `StepColumn` deriving `sc` from its COLUMN width
+        //      instead of the panel gives 0.256 and 0.513 — absurd, and exactly 2x apart, because the
+        //      column doubles with the panel. Only an ABSOLUTE check at RefPanelW catches it.
+        //   3. A TAP AT THE CENTRE OF A ROW HITS WHATEVER THE BAND IS. The tappable band is inset from
+        //      the row; an unscaled inset is wrong at 2560 and invisible to a centre probe.
+        DrawnStepsMatchTheHitRects(W1, H1);
+        DrawnStepsMatchTheHitRects(W2, H2);
+
+        // ⭐ THE ABSOLUTE ANCHOR: at RefPanelW every size must be its own unscaled constant, because
+        // sc is exactly 1 there. This is the "the 1280 render is byte-identical" half of the
+        // DONE-when, stated as something a test can fail.
+        Check("S121b-i at RefPanelW the step list draws at exactly Typography.Dense",
+              HasSize(t1, Typography.Dense), "no " + Typography.Dense + " px text at 1280");
+        Check("S121b-i at RefPanelW the strip captions draw at exactly Typography.Caption",
+              HasSize(t1, Typography.Caption), "no " + Typography.Caption + " px text at 1280");
+        Check("S121b-i ...and at 2560 those same two are exactly doubled, not merely proportional",
+              HasSize(t2, Typography.Dense * 2f) && HasSize(t2, Typography.Caption * 2f),
+              "missing " + (Typography.Dense * 2f) + " or " + (Typography.Caption * 2f) + " px text at 2560");
+
+        TappableBandIsProportional(W1, H1);
+        TappableBandIsProportional(W2, H2);
+    }
+
+    static bool HasSize(float[] a, float want)
+    { for (int i = 0; i < a.Length; i++) if (Math.Abs(a[i] - want) < 1e-3f) return true; return false; }
+
+    /// <summary>The step labels the page DREW, against the rects the hit test USES. ⛔ The two are
+    /// computed by different code from different starting points, which is the only arrangement in
+    /// which this check can fail — and it did, under mutation W6.</summary>
+    static void DrawnStepsMatchTheHitRects(int w, int h)
+    {
+        PageState ps = new PageState(); ps.Valid = true;
+        DisplayList dl = new DisplayList(4096);
+        Pages.Build(dl, 0, w, h, ps, MapProjection.Default(), 1);
+        float sc = Typography.ScaleFor(w);
+        float dense = Typography.Dense * sc;
+
+        // the step rows are the only Dense-sized text on this page; two per row (label + time ref)
+        float top = float.MaxValue;
+        int n = 0;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind != DrawKind.Text || Math.Abs(c.C - dense) > 1e-3f) continue;
+            n++;
+            if (c.B < top) top = c.B;
+        }
+        Check("S121b-i @" + w + " the FLIGHT page actually drew a step list to check",
+              n >= 2, "found " + n + " dense-sized text commands");
+        if (n < 2) return;
+
+        float rx, ry, rw, rh;
+        Pages.StepRect(0, w, h, out rx, out ry, out rw, out rh);
+        Check("S121b-i @" + w + " the FIRST step is DRAWN where the hit test expects it",
+              Math.Abs(top - ry) < 0.51f, "drawn at " + top + ", StepRect says " + ry);
+    }
+
+    /// <summary>
+    /// The tappable band is inset from the drawn row. Probe just inside its lower edge and just past
+    /// it: a centre-only probe passes whatever the inset is (mutation W10).
+    ///
+    /// ⚠ AND THE PROBE ASKS WHICH STEP, NOT WHETHER A STEP. A first version checked that the far
+    /// probe did NOT return `AckStep` and failed at both widths — correctly, because **the rows
+    /// deliberately abut** (`LayoutSweepTest` says so in terms: "drawn on an 18 px pitch with a taller
+    /// tappable box, so they deliberately abut"). A tap past row 0's lower edge is not in dead space;
+    /// it is in ROW 1. So the question that distinguishes a right inset from a wrong one is which
+    /// milestone answers, and getting that wrong is precisely the defect worth catching — the crew
+    /// acknowledging the step below the one they touched.
+    /// </summary>
+    static void TappableBandIsProportional(int w, int h)
+    {
+        float sc = Typography.ScaleFor(w);
+        float x, y, rw, rh;
+        Pages.StepRect(0, w, h, out x, out y, out rw, out rh);
+        float px = x + rw * 0.5f;
+        int id0 = Pages.StepIdAt(0, w, h), id1 = Pages.StepIdAt(1, w, h);
+
+        PageHit inside = Pages.HitTest(0, px, y + rh - 5f * sc, w, h);
+        PageHit beyond = Pages.HitTest(0, px, y + rh - 3f * sc, w, h);
+        Check("S121b-i @" + w + " a tap just inside row 0's band acknowledges row 0's step",
+              inside.Act == PageAct.AckStep && inside.Arg == id0,
+              "got " + inside.Act + " arg " + inside.Arg + ", want AckStep " + id0);
+        Check("S121b-i @" + w + " ...and a tap past its lower edge belongs to row 1, not row 0",
+              beyond.Act == PageAct.AckStep && beyond.Arg == id1,
+              "got " + beyond.Act + " arg " + beyond.Arg + ", want AckStep " + id1
+              + " — the band's inset is not tracking the panel");
+    }
+
+    static float Min(float[] a)
+    { float m = float.MaxValue; for (int i = 0; i < a.Length; i++) if (a[i] < m) m = a[i]; return m; }
+
+    static float[] AutoBox(int w, int h)
+    { float x, y, rw, rh; Pages.AutoRect(w, h, out x, out y, out rw, out rh); return new float[] { rw, rh }; }
+
+    static float[] MissionBox(int w, int h)
+    { float x, y, rw, rh; Pages.MissionRect(0, w, h, out x, out y, out rw, out rh); return new float[] { rw, rh }; }
+
+    static void RectDoubles(string name, float[] a, float[] b)
+    {
+        for (int i = 0; i < a.Length; i++)
+            Check("S121b-i " + name + " dimension " + i + " doubles with the panel",
+                  Math.Abs(b[i] - 2f * a[i]) < 1e-3f, "@1280 " + a[i] + " @2560 " + b[i]);
+    }
+
+    /// <summary>Build FLIGHT and hand back every text size it emitted, in order.</summary>
+    static float[] FlightTextSizes(int w, int h)
+    {
+        PageState ps = new PageState(); ps.Valid = true;
+        DisplayList dl = new DisplayList(4096);
+        Pages.Build(dl, 0, w, h, ps, MapProjection.Default(), 1);
+        int n = 0;
+        for (int i = 0; i < dl.Count; i++) if (dl.At(i).Kind == DrawKind.Text) n++;
+        float[] outp = new float[n]; int k = 0;
+        for (int i = 0; i < dl.Count; i++)
+            if (dl.At(i).Kind == DrawKind.Text) outp[k++] = dl.At(i).C;
+        return outp;
+    }
+
+    /// <summary>Every FLIGHT control, hit at the centre of where it is DRAWN.</summary>
+    static void FlightHitRoundTrip(int w, int h)
+    {
+        float ax, ay, aw, ah;
+        Pages.AutoRect(w, h, out ax, out ay, out aw, out ah);
+        PageHit a = Pages.HitTest(0, ax + aw * 0.5f, ay + ah * 0.5f, w, h);
+        Check("S121b-i @" + w + " the centre of AUTO SEQUENCE hits ToggleAuto",
+              a.Act == PageAct.ToggleAuto, "got " + a.Act);
+
+        float mx, my, mw, mh;
+        Pages.MissionRect(0, w, h, out mx, out my, out mw, out mh);
+        PageHit m = Pages.HitTest(0, mx + mw * 0.5f, my + mh * 0.5f, w, h);
+        Check("S121b-i @" + w + " the centre of the mission button hits Undock",
+              m.Act == PageAct.Undock, "got " + m.Act);
+
+        int visible = Pages.StepVisible(w, h);
+        int hitOk = 0;
+        for (int i = 0; i < visible; i++)
+        {
+            float x, y, rw, rh;
+            Pages.StepRect(i, w, h, out x, out y, out rw, out rh);
+            PageHit g = Pages.HitTest(0, x + rw * 0.5f, y + rh * 0.5f, w, h);
+            if (g.Act == PageAct.AckStep && g.Arg == Pages.StepIdAt(i, w, h)) hitOk++;
+        }
+        Check("S121b-i @" + w + " every drawn crew step is hit by a tap at its own centre",
+              hitOk == visible, hitOk + " of " + visible);
+
+        // ⚠ and the list must still clear the chrome bar at this width - the defect StepPitchFor exists
+        // for, which scaling the pitch could reintroduce if StepTop had been left behind.
+        float lx, ly, lrw, lrh;
+        Pages.StepRect(visible - 1, w, h, out lx, out ly, out lrw, out lrh);
+        Check("S121b-i @" + w + " the last milestone stays clear of the chrome bar",
+              ly + lrh <= ChromeBar.TopY(w, h) + 0.01f,
+              "last row ends " + (ly + lrh) + ", bar starts " + ChromeBar.TopY(w, h));
+    }
+
     // ---- S121a: THE FIVE SHARED WIDGETS, ACROSS WIDTHS ------------------------------------------
     // These five are what every legacy page draws THROUGH, so a page pass that scales its own literals
     // while calling an unscaled widget just moves the defect one call deep. The checks are the same

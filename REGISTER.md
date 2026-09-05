@@ -15215,7 +15215,7 @@ must receive `sc` from a caller that holds the real panel width.
 
 #### The three splits, one page each — which is what [[S121]] asked for
 
-### S121b-i [O] `Pages.cs` — the FLIGHT page and its hit rects — **DOING** — [split of [[S121b]]; ~59 sites; the only one with hit-test geometry]
+### S121b-i [O] `Pages.cs` — the FLIGHT page and its hit rects — **DONE 2026-09-06 — and three mutations proved the suite could not see a tap landing on the wrong milestone** — [split of [[S121b]]; ~59 sites; the only one with hit-test geometry]
 - `Flight` (23) · `StepColumn` (19) · `SideRow` (4) · `MissionRect` (4) · `AutoRect` (3) ·
   `FlightHitTest` (6) and `HitTest`'s flight branch.
 - ⛔ **The draw and the hit test must move together**, and `LayoutSweepTest` / `PageTest` call
@@ -15226,13 +15226,71 @@ must receive `sc` from a caller that holds the real panel width.
   real `sc` here is what turns the shipped dial's number from 28 px at 2560 into 56.
 - **DONE when:** as [[S121]]'s DONE-when, for these methods, with a hit-test check at BOTH widths.
 
-### S121b-ii [S] `Pages.cs` — the VEHICLE page — **TODO (blocked: [[S121b-i]] — shared helpers)** — [split of [[S121b]]; ~34 sites]
+#### ⭐ DONE 2026-09-06
+
+The FLIGHT page now derives one `sc = Typography.ScaleFor(w)` and multiplies every RefPanelW number by
+it — type, margins, row pitches, the sidebar, both button rects and the tappable band. The **fractions**
+(`w * 0.30f`, `w * 0.02f`, the gauge allowances) are deliberately left alone: they already track the panel
+and scaling them would grow the page twice.
+
+- **`StepTopFor(panelW)` added**; `StepTop` is kept verbatim and marked SUPERSEDED IN PLACE as *the value
+  at RefPanelW* (C1.16 / G12). ⭐ `Flight`'s sidebar draws at `bodyTop + 110f*sc + 182f*sc`, which is the
+  same three terms — so the drawn rows and `StepRect`'s hit rows come from one number by construction.
+- **`StepPitchFor` / `StepVisible` / `StepRect` / `MissionRect` / `AutoRect` / `FlightHitTest`** all scale.
+  Because the draw and the hit test call the SAME rects, they cannot separate — which is the property
+  this line existed to protect.
+- ⚠ **`SideRow` takes `sc` as a parameter**, because its `w` is a ROW width; `StepColumn` derives its own
+  from `panelW`, the second parameter its header says exists for exactly this reason.
+- ⭐ **The three dials finally scale.** [[S121a]] made `Gauge.ValueSize` able to follow the panel and left
+  every caller at `sc = 1`; this is the call that turns it on. The dial's number was **28 px at both
+  widths** — 2.1875 % of a 1280 panel, 1.0938 % of a 2560 one — and now reads 56.
+
+#### ⛔ THREE MUTATIONS SURVIVED THE FIRST SUITE, AND ALL THREE WERE THE SAME BLIND SPOT
+
+10 mutations, 7 killed immediately. The three that lived are worth writing down, because each defeated a
+check that looked sufficient:
+
+1. **`Flight` drawing the step column at the OLD unscaled offset while `StepRect` used `StepTopFor`.**
+   Nothing failed. Every check either compared two widths — and both sides moved — or located a control
+   **with the very function it then tested**. ⭐ *That is a tap landing on a milestone the crew did not
+   touch, and the suite was blind to it.* Fixed by reading the DRAWN step positions out of the display
+   list and comparing them to `StepRect`, which is the only arrangement where the two can disagree.
+2. **`StepColumn` deriving `sc` from its COLUMN width instead of the panel.** Nothing failed — because
+   the column doubles with the panel, so the (absurd) scales 0.256 and 0.513 are still **exactly 2×
+   apart**. ⛔ **A cross-width ratio cannot catch a wrong absolute scale.** Fixed with an anchor at
+   RefPanelW: at 1280 the step list must draw at exactly `Typography.Dense`, because `sc` is exactly 1
+   there — which is the "the 1280 render is byte-identical" half of the DONE-when, made failable.
+3. **The tappable band's inset left unscaled.** Nothing failed, because the probes tapped row CENTRES.
+   ⚠ The fix needed a correction of its own: a first version asserted the far probe returns *no* step
+   and failed at both widths — correctly, because **the rows deliberately abut** (`LayoutSweepTest` says
+   so in terms). Past row 0's edge is not dead space, it is ROW 1. So the probe now asks **which**
+   milestone answers, and the mutation dies with `got AckStep arg 0, want AckStep 1` — the defect stated
+   as what the crew would experience.
+
+**All 10 killed after that.**
+
+#### Verified
+
+⭐ **MEASURED: rendered all 119 preview pages with the change and again with `HEAD`'s `Pages.cs`, compared
+by hash. 3 changed** — `page0_flight`, `page0_flight_gate` and `abort_overlay`, which overlays FLIGHT.
+`page1_vehicle`, the NAV family, DOCKING and the settings pages are all **unchanged**, which is the scope
+line: [[S121b-ii]] and [[S121b-iii]] own those. Inspected: the sequence list, the side rows, the strip and
+the dials' own numbers are legible and proportional, and the list still clears the chrome bar.
+
+`build.py test` green — `LegibilityFloorTest` now **241 checks** · comment-loss **0** · no `install`, no
+glass, no `git push` · nothing wires a flight control (§14.4(a)).
+
+⚠ **Logged, not fixed (C1.1):** `Pages.cs` has two `float pad` locals that are assigned and never used —
+in `Vehicle` and in `Status`. Both pre-date this line (they are at `HEAD` too) and both are in
+[[S121b-ii]]'s methods, so that line should clear them as it passes.
+
+### S121b-ii [S] `Pages.cs` — the VEHICLE page — **TODO (UNBLOCKED 2026-09-06 by [[S121b-i]])** — [split of [[S121b]]; ~34 sites]
 - `Vehicle` (18) · `Status` (8) · `Dot` (8).
 - ⚠ `Dot` takes no width at all and needs `sc` passed in.
 - ⭐ `Vehicle` draws through `Gauge.Bar`, which [[S121a]] made scale-aware; pass the real `sc`.
 - **DONE when:** as [[S121]]'s DONE-when, for these methods.
 
-### S121b-iii [S] `Pages.cs` — the legacy DOCKING page and the placeholder — **TODO (blocked: [[S121b-i]] — shared helpers)** — [split of [[S121b]]; ~48 sites]
+### S121b-iii [S] `Pages.cs` — the legacy DOCKING page and the placeholder — **TODO (UNBLOCKED 2026-09-06 by [[S121b-i]])** — [split of [[S121b]]; ~48 sites]
 - `DockingOld` (38) · `Axis` (3) · `AxisR` (3) · `Placeholder` (4).
 - ⛔ **Not the live docking HUD.** That is `Frame58Hud` + [[S154b]]/[[S154c]]. This is the legacy page,
   dormant behind `FigmaMode` like the rest of the family.
