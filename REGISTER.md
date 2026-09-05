@@ -11969,7 +11969,7 @@ walk, not `plugin/**` — so it never enters `plugin/mech/`, and it is not wired
 `build.py test` is green with the tree in place. This stray is a signposting gap only, not a broken tool.
 **DONE when:** `plugin/mech/` is discoverable from the repo's top-level docs.
 
-### W30 [S] `DeployablesControl` is in the tree and NOTHING TICKS IT — the one line of dispatch W14 left and W10 could not take — **TODO** — [TIER 3: a restored controller with no caller]
+### W30 [S] `DeployablesControl` is in the tree and NOTHING TICKS IT — the one line of dispatch W14 left and W10 could not take — **HELD 2026-09-06 — OWNER GATE, and this line already said so** — [TIER 3: a restored controller with no caller]
 Logged by **W10**, 2026-09-05 (C1.1 — found on landing the host W14's DONE note was waiting for).
 **The finding.** **W14** restored `plugin/src/DeployablesControl.cs` (Wave E-2) and closed **dormant on
 purpose**: `grep -rn DeployablesControl plugin/src plugin/test` finds only the file itself. Its DONE note
@@ -11999,6 +11999,47 @@ the dispatch fell between them. It has no owner; this line is that owner.
 else; every phase it is keyed on is in `HasControllerFor`; nothing on any screen claims a phase or an action
 that is not happening; and the owner has been asked whether the read-only host may take its first command
 (⛔ **this is a gate question — C1.12/C1.14: a build chat does not decide it**).
+
+#### ⛔ HELD 2026-09-06 — reached by the continuous build chat and **deliberately not started**
+
+**Its own DONE-when contains a gate it forbids a build chat from passing**, in as many words: *"the owner
+has been asked whether the read-only host may take its first command (⛔ this is a gate question —
+C1.12/C1.14: a build chat does not decide it)"*. **That is the whole reason this is HELD**, and the
+continuous run did not look for a way round it.
+
+**The finding is not in doubt and nothing about it has changed** — re-checked: `grep -rn DeployablesControl
+plugin/src plugin/test` still finds **only the file itself**. W14 restored it dormant on purpose and left
+the dispatch to W10; W10 correctly declined, because §B12.8 rider (c) forbids a speculative member and C1.1
+forbids doing another line's work. **Both behaved correctly and the dispatch fell between them.** This line
+is its owner and remains so.
+
+⛔ **WHY IT IS A GATE AND NOT A ONE-LINER, restated because the title makes it look like one.**
+`DeployablesControl` **ACTUATES** — `Actuator.DeploySolarPanels` / `.DeployAntennas` /
+`.RetractSolarPanels`. Wiring it moves the host from §B12.6 step (3)'s **read-only** to **its first real
+command**, and **§14.4(a) stops applying to that path the instant it is wired.** §14.4(a) is a settled
+decision; changing what it covers is C1.8's `OVERRIDE`, the owner's alone (C1.14 keeps it there).
+
+⚠ **AND THE SECOND HALF WOULD STILL NEED CARE EVEN AFTER A GO**, which is why it must not be treated as a
+formality: the controller is keyed on `ActivePhase`, and W10 made `ActivePhase` report `Unknown` for any
+phase `FlightDriver.HasControllerFor` does not claim. **The moment this line adds its phases to that table,
+the conductor starts NAMING those phases on the glass.** The naming and the actuation have to land in the
+same diff **or one of them lies** — a screen naming a phase nothing is flying, or an action firing with no
+lamp to report it.
+
+**Paste-ready overseer prompt (C1.13):**
+> DragonScreen, W30. `DeployablesControl` was restored by W14 and **nothing calls it** — one line of
+> dispatch from `FlightDriver`, which W14 left to W10 and W10 correctly declined as another line's work.
+> ⛔ **The question is not the line, it is what the line does.** That controller ACTUATES: it deploys and
+> retracts solar panels and antennas. Wiring it makes the conductor host issue **its first real command to
+> a vessel**, and **§14.4(a) — "the screens' flight commands stay an honest no-op until Part B" — stops
+> applying to that path the moment it is wired.
+> **May the read-only host take its first command, and specifically this one?** Deployables are the mildest
+> possible candidate — a panel that deploys is visible, reversible and cannot lose the vehicle — which is
+> presumably why the recovered `FlightDriver` had it as the first statement of `DriveActivePhase`. But it
+> is still the boundary being crossed, and crossing it needs an **`OVERRIDE`** plus a `BUILD_PLAN` entry.
+> ⚠ If yes, two things must land in the same diff or one of them lies: the actuation, and the phase naming
+> it forces onto the glass via `HasControllerFor`. **A build chat cannot decide this** (C1.12/C1.14), and
+> this line's own DONE-when says so.
 
 ### G10 [S] Governance — ratify §B12.1b/§B12.1c, build the in-repo Plan Amendment Ledger, close the rule gap that let both land unauthorised — **DONE 2026-09-05**
 - **OWNER AUTHORISATION, 2026-09-05, verbatim: "1 and 3, write that governance prompt"** — answering the
