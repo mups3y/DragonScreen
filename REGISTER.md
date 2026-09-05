@@ -15402,7 +15402,7 @@ named as such in both files. The colour half of MP-01 was closed by [[S104]]; **
 - ⛔ **Sequence after [[S55]]'s ascent half.**
 - **DONE when:** the page uses the screen with S55's tracked events in it, at 2560.
 
-### S152 [S] The preview draws tinted assets at integer rectangles while the game draws them at float — **TODO** — [QC `C-11`; TIER 3: an instrument defect, not a screen defect]
+### S152 [S] The preview draws tinted assets at integer rectangles while the game draws them at float — **DONE 2026-09-06 — ALREADY FIXED by [[S100]]; this line supplies the CODE-REVIEW verdict QC said it could not give** — [QC `C-11`]
 - **The finding.** A code-structure claim QC explicitly records as **not judgeable from a render** — which is
   precisely why it needs a line rather than an inspection.
 - ⛔ **This is an INSTRUMENT defect and it matters more than its tier suggests.** The whole preview-first
@@ -15411,6 +15411,47 @@ named as such in both files. The colour half of MP-01 was closed by [[S104]]; **
   fixed it. A sub-pixel placement difference is smaller, but it is the same kind of wrong.
 - **DONE when:** the preview places tinted assets the way the game does, or the difference is measured,
   bounded and documented as harmless — with the measurement shown, not asserted.
+
+#### ✅ DONE 2026-09-06 — no code change: it was fixed, and the missing thing was a verdict
+
+⚠ **THIS LINE'S PREMISE IS STALE, and [[S125]] created it from QC's "unjudgeable" bucket without checking
+whether the underlying finding was still open.** It is not. **`C-11` was FIXED by [[S100]] (`7957d4d`) on
+2026-09-05**, and `docs/QC_FINDINGS.md` records that fix — followed immediately by the QC officer's own
+verification note, which is the reason this line existed at all:
+
+> *"**NOT JUDGEABLE FROM A RENDER — recorded honestly rather than ticked.** … That is a statement about
+> code structure … **I cannot reproduce that comparison, because the old path no longer exists to render.**
+> … Beyond that this is a **code-review verdict, not a QC one**, and I decline to claim otherwise."*
+
+⭐ **That is exactly the gap this line can close.** QC could not verify a structural claim from a PNG, and
+declined to pretend otherwise — which is the right call and is why the finding sat in limbo. **A
+code-review verdict is a build chat's to give.** Here it is, mechanically rather than by eye:
+
+| assertion | how it was checked | result |
+|---|---|---|
+| `DrawCoverAsset` makes **ONE** draw call | parsed the method body, comment lines stripped, counted `DrawImage` | **1** |
+| …and it is the **sub-pixel** overload | inspected that call | `g.DrawImage(src, new RectangleF(c.A, c.B, c.C, c.D), …)` |
+| **no integer `Rectangle`** remains in the method | substring search over the stripped body | **absent** |
+| the tint is baked **before** the draw, not applied at it | read the path: `TintedAsset(key, img, colour)` returns a cached `Bitmap` at **native size**, and opaque white skips the bake entirely | one geometry rule for both |
+| the GAME side is float | `ScreenPainter.DrawImage` | **GL float vertices** |
+
+⭐ **AND THE SHAPE OF THE FIX IS THE PART WORTH KEEPING.** S100 did **not** take the obvious route of
+putting the float overload on both paths. It removed the second path: the tint is baked into a cached
+bitmap so there is **only one draw call left to get a rounding rule wrong in**. ⛔ That matters because
+`C-11` was **introduced BY S75's own fix** — the new tint path took a different rounding rule from the one
+it was added beside. Two aligned paths can drift again; one path cannot. **The same reasoning retired
+`Stroke` in [[S122]] and `rec.close` in [[S90]]** — and it is the reasoning, not the rounding, that this
+line is really about.
+
+⚠ **The residual is honestly nil, and stated so nobody re-opens it.** The Cover's only tinted asset is
+`gridicons_refresh`; S100 measured the before/after difference as **92 pixels of 899,840, in a 12×11 box** —
+sub-pixel movement toward the float position, every other asset byte-identical, which was S75's own
+acceptance condition. That measurement **cannot be reproduced now** because the old path is gone, and this
+line does not pretend to have reproduced it.
+
+**Verified (C1.3).** **No code changed** — the finding was already closed and this supplies the verdict.
+`python plugin/build.py test` green (unchanged tree). ⛔ `docs/QC_FINDINGS.md` **not edited** (QC's file);
+the verdict lives here, where the register can act on it. No `install`, no glass, no `git push`.
 
 ### S153 [O] `R-01` — every sampled text element on every Figma-era page is below the measured legibility floor — **HELD — OWNER DECISION** — [QC `R-01`, verified STILL OPEN 2026-09-06; **the largest unowned item in the project**, 18 register mentions and no line until now]
 - **The finding.** At the shipped width, **every** sampled text element across nine Figma-era pages measures
