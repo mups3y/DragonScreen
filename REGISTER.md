@@ -13028,7 +13028,7 @@ doubled canvas" family and are **job 3 of this batch's** to enumerate and rule o
    RefPanelW constants used as panel-pixel bounds. On a scaled page the radius doubles and the result is
    capped at 28 device px regardless, so the gauge's own value text cannot follow the panel.
 
-### S118 [S] Six comments cite 1280x703 pixel figures that Q5 doubles — aspect reasoning survives, absolute figures are stale — **TODO** — [logged by S115, 2026-09-05; TIER 3, comments only, no behaviour]
+### S118 [S] Six comments cite 1280x703 pixel figures that Q5 doubles — aspect reasoning survives, absolute figures are stale — **DOING** — [logged by S115, 2026-09-05; TIER 3, comments only, no behaviour]
 - **The finding.** `pure/BottomBar.cs:82`, `pure/CoverPage.cs:299` and `:568`, `pure/MarginAffordance.cs:49`,
   `pure/NavOrbitPlotPage.cs:64`, `pure/Pages.cs:878` — each states an absolute pixel figure measured "at the
   shipped 1280x703", which the shipped 2560 now doubles.
