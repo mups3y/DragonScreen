@@ -11632,6 +11632,200 @@ commands `s.pitch/yaw/roll` from the W24 steering law at `:1118`. The log now st
 - **DONE when:** the bind log states the real actuation status (and whether `Actuate` is honoured), or the
   line is removed as superseded, with the W24 cross-reference kept.
 
+### S100 [O] QC batch 0 — make the preview tell the truth: the gate was judging at 2× the shipped width — **DONE 2026-09-05** — [H-01 + C-09 + C-10 + C-11 + F-05 + H-09 + VV-02; the instrument, not the screens]
+
+**🟢 OWNER-DIRECTED.** The owner asked the overseer to order QC's 65 findings for batch fixing and then
+said, verbatim: **"give me batch 0"**. This is that batch. It was scoped as an INSTRUMENT task — fix the
+preview, fix no screen — because these seven findings all say one thing: **the preview is not the game.**
+CLAUDE.md makes the preview the legibility gate (*"judge layout/palette/legibility from `python
+plugin/build.py preview`"*) and C1.3 makes an inspected preview PNG a condition of marking anything DONE.
+Until this landed, no screen fix could be verified and the C1.3 gate was unsound.
+
+**H-01 — the load-bearing one. FIXED.** `PreviewMain.cs` rendered every Figma-era page at `int CW = W * 2,
+CH = H * 2;` — 2560×1406 — at five sites, justified by a comment claiming *"the in-game RenderTexture should
+match — screenWidth 2560 in the cfg"*. `DragonScreen.cfg:60`, `:76` and `:87` all say **1280**, and so does
+the glue's own default (`DragonScreenMonitor.cs:52`). C7.1: the repo copy is authoritative. All five sites
+now render at the cfg's width. The size is no longer *declared* anywhere — it is **DERIVED**: the measured
+mesh table was renamed `MeasuredScreens` and demoted to what it actually is (an **aspect**), `CfgScreenWidth()`
+parses `screenWidth` out of the shipped cfg, and `DeriveScreens()` scales the aspect to it. Height follows the
+mesh, exactly as the cfg's own note says the game derives it; at 1280 this reproduces the measured 703/710/703
+to the pixel. A missing, unparseable, self-disagreeing or sub-16 cfg is **fatal**, not a fallback to 1280 —
+a silent fallback is how the old comment survived for so long.
+
+**⭐ THE DELIVERABLE THAT MATTERS MOST — `plugin/test/ScreenSizeTest.cs`, NEW, and MUTATION-PROVED.**
+Nothing in `plugin/test/` referenced `ScreenSpec` or `screenWidth`. `PreviewMain` states the governing
+principle for the FONT in as many words — *"If this and `PreviewMain.FontFamily` ever disagree, the preview
+is lying about the real page"* — and **nobody wrote that rule for resolution, which is exactly where it
+broke.** It is written now: 1389 checks that the cfg agrees with itself, that the glue's `KSPField` default
+agrees with the cfg, that the preview derives rather than declares, that **no code line scales the screen
+size**, and that the mesh aspect is kept apart from the render size.
+**Mutation-proved, three ways, each confirmed red and then restored:**
+1. one cfg `screenWidth` → 2560 ⇒ `FAIL every screenWidth in the cfg is the same value  3 values: 2560, 1280, 1280`, `build.py test` exit 1;
+2. all three → 2560 ⇒ `FAIL the glue's screenWidth default matches the cfg (2560)`;
+3. `int CW = W * 2, CH = H * 2;` put back ⇒ `FAIL PreviewMain.cs:688 does not scale the screen size`.
+**And the derivation itself was proved,** by moving cfg + glue default to 2560 together: every page — legacy
+AND Figma — followed to **2560×1406**, aspect intact, with no code change. Both files were then restored.
+⚠ **The suite reads SOURCE TEXT, and that is a deliberate, documented choice.** Tests link `src/pure` +
+`test`; the preview is a separate assembly (`src/pure` + `preview`), so `PreviewMain.Screens` is not callable
+from a test. The alternatives were to move the screen table into the shipped DLL as code the game never
+executes, or to read the preview's source off disk. It reads the source, is **fail-closed** (every marker
+must be FOUND — a renamed derivation goes red saying so, it never passes by failing to look), and says all
+of this in its own header. Precedent: `LayoutTest` reads each PNG's IHDR and fails if `Images.Size` drifted
+from the file that ships. This is that, for the screen.
+
+**⛔ THE TRAP, AND IT WAS NOT WALKED INTO. The hairline dropout is REAL, it is now VISIBLE, and it is
+logged, not fixed — see [[S101]].** H-01's own justification recorded a genuine defect and treated it:
+*"the Figma assets carry 2px hairline borders that fall to sub-pixel (~0.7px) at 1280 and drop
+inconsistently."* That is a statement that **at the shipped width the design's hairlines drop out**, and the
+2× render was hiding it. It duly appeared the moment the preview became honest. **Nothing was re-enlarged,
+rounded or fudged.** Measured on `ui_cover.png` at x=430, clear of text — four instances of the *same* 2px
+design rule: **24% / 36% / 48% / 36%** of a solid 2px rule, one of them collapsing to a single row. That is
+"drop inconsistently", quantified. It is a shipped defect in the art and the page code, so it belongs to a
+screen batch, not to the instrument.
+
+**C-11 — FIXED, and the second path is GONE.** The tinted asset path drew at `new Rectangle((int)c.A, …)`
+while opaque white drew at `RectangleF` — and `ScreenPainter.DrawImage` uses float vertices for both. The fix
+is not "use the float overload on both" (that leaves two paths to drift again): the tint is now baked into a
+**cached bitmap** at native size and there is exactly **one** draw call in `DrawCoverAsset`, so there is no
+second rounding rule to get wrong. **Verified as C-11 asks:** rendering the Cover through the old integer
+path and the new one differs in a **12×11 px box, 92 pixels of 899,840** — `gridicons_refresh`, the Cover's
+only tinted asset, moving sub-pixel toward its float position. Every other asset byte-identical, which was
+S75's own acceptance condition.
+
+**C-10 — FIXED, and the fixture can now fail.** The Cover fixture described one vehicle three incompatible
+ways: scalars said inclination 0.13° and an altitude implying ratio 1.206, the overlay said 51.6° at ratio
+1.06, and the vessel marker sat at lat 0 / lon 0 while its own ground track was built around lon −80.6 —
+because the Cover reuses the NAV/PLANET overlay wholesale and inherited `ps.Latitude = 0.0; ps.Longitude =
+0.0;` with it. New `BuildOrbitFixture` derives **everything from one orbit**: Ap/Pe are the inputs, and the
+current altitude, inclination, lat/lon, the overlay path, the AP/PE/vessel markers and the ground track all
+fall out of them. **The 51.6° inclination was KEPT and the SCALARS changed to match it, exactly as C-10
+directs.** ⚠ `ref` is load-bearing — `PageState` is a **struct** (`Pages.cs:53`), and taking it by value
+discarded every write: the track stayed empty and the readouts fell back to dashes while the render still
+looked plausible. That is noted in the signature's own comment. **Verified as C-10 asks:** the vessel marker
+now sits **on** its own ground track on `ui_cover_cam_map.png`, and on `page2_nav_planet.png` APOGEE 124.0 km
+/ PERIGEE 121.9 km / ALTITUDE **123.6 km** / INCLINATION **51.60 deg** are one consistent orbit, with the
+seam-straddle and far-side occlusion those renders exist for both intact.
+
+**C-09 — PREPARED, NOT SETTLED (correctly: it needs glass, an owner gate).** The globe does not swap u, the
+flat map does, and `PageTest.NavTexture` pins both as correct — which can only hold if they read the same way
+on one texture, and on the stand-in they visibly do not. **Neither convention was touched and
+`PageTest.NavTexture` is untouched**, because the preview cannot say which is right: it will always flatter
+the globe and slander the map, since the map's swap exists *because* KSP's `_ColorMap` is mirrored and the
+stand-in is a plain unmirrored Earth. What was built is C-09's own no-gate preparation: a **mirrored
+stand-in** and two new renders, `ui_cover_cam_earth_mirrored.png` and `ui_cover_cam_map_mirrored.png`, so
+each view is on record against **both** handednesses and one look at the glass can settle it. QC's **Q2**
+poses that look; it stays open.
+⚠ **And the honest fixture made the disagreement worse to look at, which is evidence for Q2, not a
+regression:** with the marker and track now correctly plotted in *unmirrored* longitude over a *mirrored*
+texture, the vehicle draws over Asia while its longitude says the Atlantic. Recorded here for whoever takes
+Q2; **not fixed** — fixing it means choosing a convention, and that is the glass call.
+
+**H-09 — FIXED.** `ImageId.DockingCamLive` now gets a stand-in on the same footing and for the same stated
+reason as `BodyMap`: the GAME always has a feed, only the PREVIEW cannot. It is a **drawn, marked bore-sight
+card** — grid, cross, scale ring, and the words `PREVIEW TEST CARD` / `NOT A CAMERA FEED` — never a
+photograph, so "a preview that flatters us is worse than none" is kept intact. **Three renders, all
+distinct, as H-09 requires:** nose closed → open (no feed) differs by **545 px** in a 44×44 box (the
+crosshair, which was the whole of the old evidence); open (no feed) → open (card) differs by **76,609 px**
+over a 312×312 box — the docking disc and its `BowlBlue` corner mask, on a preview render **for the first
+time**. The no-feed path is unchanged and keeps its own render.
+
+**F-05 — FIXED, and staleness is now IMPOSSIBLE rather than merely absent.** `build.py`'s preview path
+**empties `build/preview/` at the start of every run** — the first run cleared **118 files, of which 19 were
+the stale set F-05 names**, including `ui_cover_phase4.png`, a 1.75 MB full Cover render from a deleted
+render block, named exactly like current output and drawn by a renderer that ignored asset tint. A run now
+also writes **`MANIFEST.txt`**, listing every PNG with its rendered `WxH` — because H-01 was a render size
+nobody could see from the output. **Verified as F-05 asks: two consecutive runs produce identical listings.**
+⚠ **C1.16 was checked before deleting anything, not assumed.** `docs/` was grepped for all four non-`ui_`
+families (`navball_*`, `_heading_*`, `_stock_*`, `globe_*`) plus `arrow_zoom`, `seat_thumb`,
+`ui_cover_phase4` and `_verify_hn_he`. **No document cites any of them as evidence** — the only hits are
+`docs/QC_FINDINGS.md` naming them *as the stale files to be got rid of*, plus three unrelated coincidences
+(an asset named `navball_edited.png`, a tool named `navball_preview.py`, a black-box column
+`cmd_heading_deg`). The folder is gitignored (`.gitignore:19`) and documented as output, not input. Research
+is never deleted; build output is not research.
+
+**VV-02 — FIXTURE HALF FIXED, WIRING HALF LEFT OPEN (and it is out of this task's scope).** The fixture
+never set `ps.CamLabels`, so the one render of the Video page was its empty state and the live list, the
+selection highlight and the `FORWARD VIEW IN USE BY DOCKING` branch had **never been rendered**. Two new
+renders — `ui_audiovideo_cameras.png` (four cameras, DOCKING PORT selected) and
+`ui_audiovideo_cameras_heldbydocking.png` — put the page's live half on the gate, and the empty state keeps
+its own render because "no cameras on vehicle" is a real in-game state. ⚠ **The row still draws a selection
+the crew cannot move.** Re-homing the stranded writer is a change to `SettingsVideoPage` + `FigmaUI.HitTest`
+— a SCREEN change this instrument task must not make — and S49 H12 groups it with the other stranded
+settings handlers to be done as one job. **That half stays open.**
+
+---
+
+**⚠ C-05 RE-ASSESSED, AS H-01 REQUIRES — and it is WORSE than filed. NOT FIXED (it heads its own batch).**
+H-01 states it *"changes the severity of other findings in this document, including C-05."* Measured on the
+honest `ui_cover_phase5.png` (1280×703):
+
+| card | C-05's figure (at h 1406) | measured at the shipped h 703 |
+|---|---|---|
+| ENTRY TIMELINE rows | 11–14 px ink | **6–8 px** |
+| PARACHUTES rows | — | **1–9 px** |
+| CONTINGENCY rows | **16 px** — C-05's acceptance target | **1–9 px** |
+
+`Typography.Min = 16f` is documented as *"16 PX IS MEASURED, NOT CHOSEN"*. **Tier is unchanged (it was
+already TIER 1) but the SCOPE widens materially, and one specific thing in C-05 no longer works:** its own
+verification says *"every body row's measured ink height must be ≥ the ink height of the CONTINGENCY rows
+(16 px)"* — and at the shipped size **the CONTINGENCY rows are 9 px, so C-05's reference row fails the floor
+too.** Its acceptance test is therefore **self-defeating as written**, and its recommended remedy (b) —
+moving the dense list into the tall card — **cannot on its own bring anything to 16 px**, because no card on
+the page clears the floor at this scale. Whoever takes C-05 must re-derive the acceptance criterion from the
+floor itself, not from a sibling card. Recorded, not acted on.
+
+**⚠ EVERY EXISTING PREVIEW PNG WAS RENDERED AT THE WRONG SIZE, AND THE EXPOSURE IS STATED HERE FOR THE OWNER
+TO JUDGE.** All 104 pages have been re-rendered at 1280. But every Figma-era preview taken before this
+commit was judged at four times the shipped pixel count, and C1.3 makes an inspected preview PNG a condition
+of marking a task DONE. **So any prior finding or sign-off judged from a preview may need revisiting —
+including this project's own closed screen tasks, and including the parts of `docs/QC_FINDINGS.md` whose
+evidence is a measurement in preview pixels.** C-05 above is a worked example: the numbers did not merely
+halve, the finding's acceptance criterion stopped being reachable. **Nothing has been re-opened** — that is
+the owner's call, not a build chat's, and re-opening closed lines wholesale would be its own kind of damage.
+The exposure is stated so the decision can be made deliberately.
+
+**Scope respected (C1.1).** **No screen file, no page file, no `ScreenPainter` change.** Four files touched:
+`plugin/preview/PreviewMain.cs`, `plugin/build.py` (preview path only), `plugin/test/TestMain.cs` (one
+registration), and the new `plugin/test/ScreenSizeTest.cs`. `docs/BUILD_PLAN.md` untouched (C1.12
+GUARDED-FILE STANDARD / G10). `docs/QC_FINDINGS.md` untouched — it is the QC officer's file, and dispositions
+are recorded here instead. `PageTest.NavTexture`, `CoverPage`, `NavPage`, `SettingsVideoPage` and
+`DragonScreen.cfg` all untouched. `build.py test` + `preview` green. No install, no glass.
+
+**⚠ Strays found, LOGGED NOT FIXED (C1.1):** [[S101]] (the hairline dropout) and [[S102]] (two stale
+"2560" comments in `pure/Turntable.cs`) at the foot of this file.
+
+### S101 [S] The design's 2px hairlines drop out at the shipped 1280, inconsistently — the defect the 2× preview was hiding — **TODO** — [logged by S100, 2026-09-05; TIER 2: a real shipped defect in the art + page code, now visible on the gate]
+- **The finding.** The Figma pages carry 2px hairline borders and rules. At the shipped `screenWidth = 1280`
+  they fall to roughly 0.7 device px and **drop inconsistently**. Measured on `ui_cover.png` at x=430, clear
+  of text, four instances of the *same* 2px design rule render at **24%, 36%, 48% and 36%** of a solid 2px
+  rule, and the one at 48% collapses from two rows to one.
+- **This is not new, and it is not a regression.** It was recorded verbatim in the very comment that
+  justified the 2× render — *"the Figma assets carry 2px hairline borders that fall to sub-pixel (~0.7px) at
+  1280 and drop inconsistently; 2x keeps them crisp"* — i.e. the defect was **seen, understood, and hidden**
+  rather than fixed. S100 removed the hiding. The pixels the crew sees have not changed.
+- **⛔ DO NOT FIX IT BY RE-ENLARGING THE PREVIEW.** That is the exact move that buried it for two weeks, and
+  `ScreenSizeTest` now fails the build if anyone tries. The fix belongs in the art and the page code — a
+  hairline that survives a 0.33 scale — or, if the owner decides the screens should ship at a higher
+  `screenWidth`, in the cfg (QC **Q5** option 2, which needs `install` + glass: an owner gate, C1.12).
+- **Related, and probably one job:** [[S100]]'s C-05 re-assessment shows the same scale problem in the type.
+  Hairlines and type sizes are both "the design assumes a scale the screen does not have".
+- **DONE when:** every 2px design rule on a Figma page renders at a consistent, legible weight at the cfg's
+  own width, verified from a re-rendered preview — or the owner rules the width up and the pages are
+  re-verified at the new one.
+
+### S102 [S] `pure/Turntable.cs` still tells the reader the in-game RenderTexture is 2560 — **TODO** — [logged by S100, 2026-09-05; TIER 3: comments only, no behaviour]
+- **The finding.** `src/pure/Turntable.cs:213` and `:309` both reason about *"the preview (1280), the in-game
+  RenderTexture (2560), and the 2x cover render"*. The cfg says 1280 on all three screens, there is no 2×
+  cover render any more ([[S100]]), and the glue's default is 1280.
+- **The CODE is right and must not change.** Both comments are explaining why the gearing is a **fraction of
+  the slot** and why a tap is measured in **frames of rotation** rather than pixels — which is exactly the
+  design that makes those numbers irrelevant. Only the illustration is stale.
+- **NOT fixed by S100 (C1.1):** S100 is an instrument task and `pure/Turntable.cs` is a page file; its
+  declared outputs are the preview, the preview build path and the tests.
+- **DONE when:** both comments cite the real shipped width, or drop the specific numbers in favour of "at
+  any width", keeping the resolution-independence argument they exist to make.
+
+
 ---
 
 ## Open questions for the owner (C1.14) — from the W5 + W25 + OCT10 batch, 2026-09-05
@@ -11666,3 +11860,44 @@ controlled, engine-lit landing in both cases.
 **Gate flags (C1.13):** none of the three needs an `install`/glass go **to select** — the switch is
 `[Tunable]`. But **flying any of them does**: `install` and glass time remain a separate owner gate, per
 session, and this batch used neither.
+
+---
+
+## Open questions for the owner (C1.14) — from S100 (QC batch 0), 2026-09-05
+
+**Paste-ready for the overseer (C1.13).** One question. The other decisions this batch met were already
+settled and were not re-opened: **Q5** (1280 vs 2560) was answered by the batch brief itself — *"the preview
+renders at the shipped size"* — and **Q2** (which u-convention is right in game) needs glass, so S100 built
+the preparation and left the question where QC filed it.
+
+### Q1 — Every preview PNG before this commit was judged at 2× the shipped width. Do any closed lines get re-opened?
+**Situation.** `PreviewMain` rendered every Figma-era page at 2560×1406 while the shipped cfg said 1280,
+three times over. CLAUDE.md names the preview as the instrument layout, palette and legibility are judged
+from, and **C1.3 makes an inspected preview PNG a condition of marking a task DONE**. So every sign-off
+taken from a Figma-era preview — this project's own closed screen tasks, and the parts of
+`docs/QC_FINDINGS.md` whose evidence is a measurement in preview pixels — was taken at four times the pixel
+count the crew gets. S100 has re-rendered all 104 pages at 1280 and added a test that fails if the two ever
+disagree again, so **nothing further can be signed off at the wrong size**. What is open is the past.
+**This is not hypothetical:** S100 re-measured **C-05** at the honest size and found its numbers did not
+merely halve — its acceptance criterion ("≥ the ink height of the CONTINGENCY rows, 16 px") stopped being
+reachable, because at 1280 those reference rows are 9 px. A finding can change *character*, not just
+degree, when the size is corrected.
+1. **Re-open nothing; let it surface (the chat's recommendation).** Leave every closed line closed. The
+   honest preview is now the standing instrument, so anything genuinely wrong will be caught the next time
+   a page is touched, and the QC sweep that produced these 65 findings was itself only days ago and will be
+   re-run against honest renders anyway. *Reasoning:* the exposure is real but it is concentrated in
+   *legibility and layout* judgements, which is exactly what the remaining QC batches will re-examine at the
+   correct size. Wholesale re-opening would churn a lot of sound work for findings that the existing queue
+   already reaches.
+2. **Re-open only the legibility/type/spacing lines**, by a named sweep task, and leave behaviour and
+   wiring lines alone. *Reasoning:* it targets the actual failure mode — sizes and spacings judged at 2× —
+   without touching lines whose evidence was code-reading rather than pixel-measuring. Costs one task.
+3. **Mark, do not re-open.** Add a one-line "judged at 2× — re-verify if touched" note to the closed
+   Figma-era screen lines, so the next person to open one knows. *Reasoning:* cheapest, and it puts the
+   warning exactly where someone would trip over it, but it leaves the register noisier.
+4. **Re-verify everything now** — a full pass over every closed screen line against the honest renders.
+   *Reasoning:* most thorough and most expensive; probably only worth it if the first honest QC re-read
+   turns up more findings that changed character the way C-05 did.
+**Gate flags (C1.13):** none of these needs an `install` or glass go — all four are preview-and-register
+work. **Option 2 of QC's own Q5** (raising `screenWidth` to 2560 in the cfg instead) *would* need `install`
++ glass time and is a separate owner decision (C1.12); S100 did not touch the cfg.

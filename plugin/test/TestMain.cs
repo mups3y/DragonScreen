@@ -32,6 +32,13 @@ public static class TestMain
         bad += TurntableTest.Run();        // screens: the capsule sprite turntable — naming, picker, drag (T11a, §5)
         bad += TouchWiringTest.Run();      // screens: the touch pass (T14) - chute actions, docking clusters, suit fail branch
         bad += LogGateTest.Run();          // diagnostics: the seen-set that stops a standing warning flooding KSP.log (S40)
+        // S100 (QC H-01): THE INSTRUMENT ITSELF. The preview is what layout, palette and legibility
+        // are judged from (CLAUDE.md) and what C1.3 requires before anything is marked DONE, and it
+        // was rendering every Figma page at twice the shipped width on the strength of a cfg value
+        // the cfg contradicted. This suite reads the cfg and the preview's source and fails if they
+        // ever disagree again - the rule this file already had for the FONT, finally written down
+        // for RESOLUTION.
+        bad += ScreenSizeTest.Run();
 
         // ---- PART B RECOVERY, WAVE A (W1, §B12.8) - the collision-free pure support layer ----
         // Recovered from `8b81816^` with their modules. The fixtures are as they were: ConicTest and

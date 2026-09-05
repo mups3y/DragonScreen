@@ -19,7 +19,7 @@ That is why `preview` exists: restarts are the scarce resource, so anything that
 outside the game - layout, proportion, palette, legibility - is judged from a PNG, and a restart is
 spent only on what needs the capsule.
 """
-import io, os, subprocess, sys, shutil, hashlib
+import io, os, subprocess, sys, shutil, hashlib, time
 
 NL = chr(10)          # response-file line separator, spelled out so no edit can eat the escape
 
@@ -386,6 +386,30 @@ def build_preview():
     exe = os.path.join(HERE, 'build', 'DragonScreenPreview.exe')
     out = os.path.join(HERE, 'build', 'preview')
     os.makedirs(os.path.dirname(exe), exist_ok=True)
+
+    # ---- THE OUTPUT FOLDER IS EMPTIED FIRST (S100, from QC finding F-05) ----
+    # It used to accumulate. 118 PNGs sat here, nineteen of them older than the 2026-09-04 tint fix
+    # and therefore drawn by a renderer that ignored asset tint entirely - and one of those,
+    # `ui_cover_phase4.png`, was a full-size Cover render from a render block that no longer exists,
+    # named exactly like the current `ui_cover_phase5.png`. Nothing about the file said so. A QC pass
+    # came within one step of writing a finding against a two-week-old tint-blind render.
+    #
+    # ⚠ EMPTYING IT EVERY RUN IS THE POINT, and clearing it once by hand is NOT this fix: a stale
+    # render has to be IMPOSSIBLE, not merely absent today. After this, every file in the folder was
+    # produced by the run that is printed above it, and the manifest below says which run that was.
+    #
+    # Nothing is lost: the folder is gitignored (`.gitignore:19`) and documented as "output, not
+    # input". Checked before writing this (C1.16): no file under `docs/` cites any of these PNGs as
+    # evidence - `docs/QC_FINDINGS.md` names them only as the stale files to be got rid of. Research
+    # is never deleted; build output is not research.
+    if os.path.isdir(out):
+        removed = 0
+        for name in sorted(os.listdir(out)):
+            f = os.path.join(out, name)
+            if os.path.isfile(f):
+                os.remove(f); removed += 1
+        print('--- cleared %d stale file(s) from build/preview' % removed)
+    os.makedirs(out, exist_ok=True)
     # System.Drawing is a .NET Framework assembly and is NOT in KSP's Managed folder, so under
     # -nostdlib it has to be named by full path from the framework directory. Nothing here ships.
     drawing = 'System.Drawing.dll'
@@ -398,6 +422,40 @@ def build_preview():
     print((p.stdout or '') + (p.stderr or ''))
     if p.returncode != 0:
         sys.exit('PREVIEW FAILED (exit %d)' % p.returncode)
+
+    # ---- THE MANIFEST (S100 / F-05) ----
+    # The folder is now exactly this run's output, so a listing of it IS the manifest, and writing it
+    # down means a reader of a PNG can tell what produced it without re-running anything. The width
+    # is recorded beside every file because H-01 was a render size nobody could see from the output.
+    listing = sorted(f for f in os.listdir(out) if f.lower().endswith('.png'))
+    manifest = os.path.join(out, 'MANIFEST.txt')
+    lines = [
+        '# build/preview - written by `python build.py preview`, %s'
+        % time.strftime('%Y-%m-%d %H:%M:%S'),
+        '# The folder is emptied at the start of every run (S100 / QC F-05), so every file below',
+        '# was produced by THIS run. A PNG here with no line below it is impossible.',
+        '# Rendered at the width in plugin/GameData/DragonScreen/DragonScreen.cfg - the preview',
+        '# DERIVES its size from the cfg and cannot render at any other (QC H-01).',
+    ]
+    for f in listing:
+        lines.append(f + chr(9) + _png_size(os.path.join(out, f)))
+    with open(manifest, 'w') as mf:
+        mf.write(chr(10).join(lines) + chr(10))
+    print('--- %d page(s) rendered; manifest at %s' % (len(listing), manifest))
+
+
+def _png_size(path):
+    """WxH out of a PNG's IHDR - big-endian 32-bit at offsets 16 and 20."""
+    try:
+        with open(path, 'rb') as fh:
+            h = fh.read(24)
+        if len(h) < 24:
+            return '?'
+        w = (h[16] << 24) | (h[17] << 16) | (h[18] << 8) | h[19]
+        ht = (h[20] << 24) | (h[21] << 16) | (h[22] << 8) | h[23]
+        return '%dx%d' % (w, ht)
+    except OSError:
+        return '?'
 
 
 def _same(a, b):

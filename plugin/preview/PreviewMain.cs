@@ -36,18 +36,237 @@ using DragonScreen;
 
 public static class PreviewMain
 {
+    private struct ScreenSpec { public int Index, W, H; }
+
+    // ---- THE MESH ASPECT, MEASURED ---------------------------------------------------------
     // Measured from the screen meshes in game, 2026-08-05, and logged by DragonScreenMonitor.
     // Hard-coded here because the game is not running; if the model ever changes, the log is the
     // source of truth and these follow it.
-    private struct ScreenSpec { public int Index, W, H; }
-    private static readonly ScreenSpec[] Screens = {
+    //
+    // THESE ARE AN ASPECT, NOT A RESOLUTION. The number of PIXELS the game renders is `screenWidth`
+    // in DragonScreen.cfg, and the cfg's own note says the HEIGHT is derived from the mesh - so the
+    // mesh fixes the shape and the cfg fixes the size. `Screens` below applies the cfg to this
+    // shape. Nothing in this file may name a render size that did not come through there.
+    private static readonly ScreenSpec[] MeasuredScreens = {
         new ScreenSpec { Index = 1, W = 1280, H = 703 },   // left
         new ScreenSpec { Index = 2, W = 1280, H = 710 },   // centre - NOT the same shape
         new ScreenSpec { Index = 3, W = 1280, H = 703 }    // right
     };
 
+    /// <summary>
+    /// The sizes the preview actually renders at: the MEASURED aspect above, scaled to the width the
+    /// shipped cfg asks for. Read from plugin/GameData/DragonScreen/DragonScreen.cfg at startup.
+    ///
+    /// ---- WHY THIS IS DERIVED AND NOT DECLARED (S100 / QC H-01) ----
+    /// This file used to render every Figma-era page at `W * 2` - 2560x1406 - justified by a comment
+    /// that said "the in-game RenderTexture should match - screenWidth 2560 in the cfg". The cfg said
+    /// 1280, on all three screens, and had said so the whole time. So the project's own legibility
+    /// gate - CLAUDE.md: "judge layout/palette/legibility from `python plugin/build.py preview`" -
+    /// was judging at FOUR TIMES the pixel count the mod ships, on the strength of a number that did
+    /// not exist in the file it named.
+    ///
+    /// The rule this file already states for the font is the same rule, and it was never written
+    /// down for resolution: "If this and PreviewMain.FontFamily ever disagree, the preview is lying
+    /// about the real page." A comment cannot enforce it. Derivation can: there is now no expression
+    /// in this file that can produce a render size the cfg did not ask for.
+    ///
+    /// plugin/test/ScreenSizeTest.cs is the second half of the guard - it reads the cfg AND this
+    /// source and fails the build if a doubling is reintroduced or the derivation is bypassed.
+    /// </summary>
+    private static readonly ScreenSpec[] Screens = DeriveScreens();
+
+    /// <summary>The cfg the derivation reads. build/ -> plugin/ -> GameData/DragonScreen.</summary>
+    private static string CfgPath()
+    {
+        return Path.GetFullPath(Path.Combine(
+            Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location),
+            "..", "GameData", "DragonScreen", "DragonScreen.cfg"));
+    }
+
+    /// <summary>
+    /// `screenWidth` out of the shipped cfg, and it is FATAL if it cannot be had.
+    ///
+    /// Not "fall back to 1280": a silent fallback is how the old comment survived - it looked right
+    /// and agreed with nothing. If the cfg is missing, unparseable, or disagrees with itself across
+    /// the three screens, the preview must not render at all, because whatever it rendered would be
+    /// a size no source asked for. C7.1: the repo copy is authoritative.
+    /// </summary>
+    private static int CfgScreenWidth()
+    {
+        string path = CfgPath();
+        if (!File.Exists(path))
+            throw new InvalidOperationException(
+                "PREVIEW CANNOT DERIVE ITS RENDER SIZE: no cfg at " + path);
+
+        var widths = new System.Collections.Generic.List<int>();
+        foreach (string raw in File.ReadAllLines(path))
+        {
+            // `screenWidth = 1280`, with any comment tail (// ...) dropped first.
+            string line = raw;
+            int c = line.IndexOf("//", StringComparison.Ordinal);
+            if (c >= 0) line = line.Substring(0, c);
+            int eq = line.IndexOf('=');
+            if (eq < 0) continue;
+            if (line.Substring(0, eq).Trim() != "screenWidth") continue;
+            int v;
+            if (!int.TryParse(line.Substring(eq + 1).Trim(), out v))
+                throw new InvalidOperationException(
+                    "PREVIEW CANNOT DERIVE ITS RENDER SIZE: unparseable screenWidth in " + path
+                    + ": " + raw.Trim());
+            widths.Add(v);
+        }
+
+        if (widths.Count == 0)
+            throw new InvalidOperationException(
+                "PREVIEW CANNOT DERIVE ITS RENDER SIZE: no screenWidth in " + path);
+        for (int i = 1; i < widths.Count; i++)
+            if (widths[i] != widths[0])
+                throw new InvalidOperationException(
+                    "PREVIEW CANNOT DERIVE ITS RENDER SIZE: the cfg's " + widths.Count
+                    + " screenWidth values disagree in " + path
+                    + ". The preview renders ONE size; the shipped screens must agree on it.");
+        if (widths[0] < 16)
+            throw new InvalidOperationException(
+                "PREVIEW CANNOT DERIVE ITS RENDER SIZE: screenWidth " + widths[0] + " is below the "
+                + "glue's own floor of 16 (DragonScreenMonitor.cs:345) in " + path);
+        return widths[0];
+    }
+
+    private static ScreenSpec[] DeriveScreens()
+    {
+        int w = CfgScreenWidth();
+        ScreenSpec[] outp = new ScreenSpec[MeasuredScreens.Length];
+        for (int i = 0; i < MeasuredScreens.Length; i++)
+        {
+            ScreenSpec m = MeasuredScreens[i];
+            // Height follows the MESH aspect, exactly as the cfg's own note says the game derives it.
+            // At the shipped 1280 this reproduces the measured heights to the pixel.
+            outp[i] = new ScreenSpec {
+                Index = m.Index, W = w,
+                H = (int)Math.Round(w * (double)m.H / m.W)
+            };
+        }
+        return outp;
+    }
+
     /// <summary>Frozen sweep position. A fixed value so two runs can be compared byte for byte.</summary>
     private const double Phase = 0.62;
+
+    /// <summary>
+    /// ONE ORBIT, and every description of the vehicle derived from it (S100, from QC finding C-10).
+    ///
+    /// ---- WHAT WAS WRONG ----
+    /// The Cover fixture described the same vehicle three incompatible ways in one frame: the scalar
+    /// readouts said inclination 0.13 deg and an altitude implying orbit ratio 1.206, the overlay
+    /// said 51.6 deg at ratio 1.06, and the vessel marker sat at lat 0 lon 0 while its own ground
+    /// track was built around lon -80.6. On the flat map the green vessel cross sat at the centre
+    /// while its track passed ten degrees of latitude above it; on the globe the AP/PE markers sat
+    /// just outside the disc rather than at the radius the ALTITUDE readout implies.
+    ///
+    /// Nobody chose that. The Cover reuses the NAV/PLANET overlay wholesale and inherited the lat/lon
+    /// reset that came with it. But CLAUDE.md makes the preview the gate that saves restarts, and a
+    /// fixture whose elements cannot disagree with each other cannot catch a page that draws them
+    /// wrong - the marker could be plotted with a sign error and this render would look the same.
+    ///
+    /// ---- WHAT IS DERIVED HERE ----
+    /// Apogee and perigee are the INPUTS (they are the numbers the page's own readouts quote); the
+    /// orbit is built from them, and the current altitude, inclination, latitude, longitude, the
+    /// overlay path, the AP/PE/vessel markers and the ground track all fall out of it. So the
+    /// verification C-10 asks for is now meaningful: the vessel marker must sit ON its own ground
+    /// track, and the AP/PE markers must sit at the radius the ALTITUDE readout implies.
+    ///
+    /// The 51.6-degree inclination is kept, per C-10 - it is the shape that makes a wrong projection
+    /// and the far-side occlusion obvious, and it is the real Dragon inclination the baked strip
+    /// prints. It was the SCALARS that were changed to match it, not the other way round.
+    /// </summary>
+    /// ⚠ `ref` IS LOAD-BEARING: PageState is a STRUCT (Pages.cs:53), so taking it by value here
+    /// would silently discard every assignment below - the track would stay empty, the readouts would
+    /// fall back to dashes, and the render would look plausible while describing nothing.
+    private static void BuildOrbitFixture(ref PageState ps)
+    {
+        const double D2R = Math.PI / 180.0;
+        const double inc = 51.6;                  // kept: see the header
+        double bodyR = ps.BodyRadiusM;
+
+        // Ap/Pe are the inputs. The orbit's radius is taken to vary sinusoidally between them, with
+        // apogee a quarter-turn on and perigee three-quarters - which is where the markers were
+        // already placed, so the shape the projection is exercised against does not change.
+        double ratioAp = (bodyR + ps.ApogeeM) / bodyR;
+        double ratioPe = (bodyR + ps.PerigeeM) / bodyR;
+        double rMean = 0.5 * (ratioAp + ratioPe), rAmp = 0.5 * (ratioAp - ratioPe);
+
+        // Where the vehicle is on that orbit. A mid-latitude on the ascending leg: clear of both
+        // poles, so a wrong projection shows, and clear of the marker's own AP/PE neighbours.
+        const double thNow = 40.0 * D2R;
+        // Longitude of the ascending node - the pad, near enough, which is what the track was always
+        // built around and what the LATITUDE / LONGITUDE readouts used to quote on their own.
+        const double lonAn = -80.6;
+        // How far the body turns under the vehicle in one revolution. The old track marched west by
+        // this much; it is kept so the track still crosses the seam, which is what it is for.
+        const double drift = 22.0;
+
+        double latAt, lonAt;
+        OrbitPoint(inc, lonAn, thNow, out latAt, out lonAt);
+
+        // ---- the scalars, DERIVED ----
+        double ratioNow = rMean + rAmp * Math.Sin(thNow);
+        ps.InclinationDeg = inc;
+        ps.InclinationText = inc.ToString("F2") + " deg";
+        ps.InclinationDegText = inc.ToString("F2") + "\u00b0";
+        ps.AltitudeM = (ratioNow - 1.0) * bodyR;
+        ps.Altitude = (ps.AltitudeM / 1000.0).ToString("F1") + " km";
+        ps.Latitude = latAt; ps.Longitude = lonAt;
+        ps.LatText = Math.Abs(latAt).ToString("F2") + (latAt >= 0 ? " N" : " S");
+        ps.LonText = Math.Abs(lonAt).ToString("F2") + (lonAt >= 0 ? " E" : " W");
+
+        // ---- the ground track: one revolution of history, ENDING where the vehicle is now ----
+        // The last sample is the vessel's own position, which is what makes "the marker sits on its
+        // own track" a real check rather than a coincidence.
+        int track = 90;
+        ps.TrackLat = new double[track];
+        ps.TrackLon = new double[track];
+        for (int i = 0; i < track; i++)
+        {
+            double frac = i / (double)(track - 1);
+            double th = thNow - (1.0 - frac) * 2.0 * Math.PI;
+            double la, lo;
+            OrbitPoint(inc, lonAn, th, out la, out lo);
+            // Older samples were laid down further east, before the body turned; at frac = 1 the
+            // correction is zero, so the track ends exactly on the vessel.
+            ps.TrackLat[i] = la;
+            ps.TrackLon[i] = MapProjection.Wrap180(lo + (1.0 - frac) * drift);
+        }
+        ps.TrackCount = track;
+
+        // ---- the overlay: the same orbit, drawn whole ----
+        PlanetOverlay ov = new PlanetOverlay();
+        int N = PlanetOverlay.DefaultSamples;
+        double[] olat = new double[N], olon = new double[N], orat = new double[N];
+        for (int i = 0; i < N; i++)
+        {
+            double th = (2.0 * Math.PI * i) / (N - 1);
+            OrbitPoint(inc, lonAn, th, out olat[i], out olon[i]);
+            orat[i] = rMean + rAmp * Math.Sin(th);
+        }
+        ov.Ready = true;
+        ov.OrbitLat = olat; ov.OrbitLon = olon; ov.OrbitRatio = orat; ov.OrbitCount = N;
+        ov.Vessel = new GlobePoint { Lat = latAt, Lon = lonAt, Ratio = ratioNow, Has = true };
+        ov.Ap = new GlobePoint { Lat = olat[N / 4], Lon = olon[N / 4], Ratio = ratioAp, Has = true };
+        ov.Pe = new GlobePoint { Lat = olat[3 * N / 4], Lon = olon[3 * N / 4], Ratio = ratioPe, Has = true };
+        ps.Planet = ov;
+    }
+
+    /// <summary>Sub-satellite point at argument-of-latitude th, for an orbit of this inclination
+    /// whose ascending node is at lonAn. Degrees out, radians in.</summary>
+    private static void OrbitPoint(double incDeg, double lonAnDeg, double th,
+                                   out double latDeg, out double lonDeg)
+    {
+        const double D2R = Math.PI / 180.0, R2D = 180.0 / Math.PI;
+        double inc = incDeg * D2R;
+        latDeg = Math.Asin(Math.Sin(inc) * Math.Sin(th)) * R2D;
+        lonDeg = MapProjection.Wrap180(
+            lonAnDeg + Math.Atan2(Math.Cos(inc) * Math.Sin(th), Math.Cos(th)) * R2D);
+    }
 
     public static int Main(string[] args)
     {
@@ -121,12 +340,12 @@ public static class PreviewMain
         // Kerbin's real numbers, so the bars fill to the fractions they will actually fill to in
         // game rather than to whatever looked good here.
         ps.AltitudeM = 123400.0; ps.ApogeeM = 124000.0; ps.PerigeeM = 121900.0;
-        ps.VelocityMps = 2280.0; ps.InclinationDeg = 0.13;
+        ps.VelocityMps = 2280.0;      // InclinationDeg is set by BuildOrbitFixture (C-10)
         ps.BodyRadiusM = 600000.0; ps.AtmosphereDepthM = 70000.0;
         ps.CircularSpeedMps = 2426.0;      // sqrt(mu/R) for Kerbin
         ps.Ascending = true;
-        ps.InclinationText = "0.13 deg";
-        ps.InclinationDegText = "0.13°";      // T13c: the Manual Chute strip's own rendering
+        // InclinationText / InclinationDegText are set by BuildOrbitFixture (C-10), off the same
+        // inclination the overlay is drawn from. They used to say 0.13 deg beside a 51.6 deg overlay.
         ps.PeriodText = "31.4 min";
         ps.TimeToApText = "00:12:07";
         ps.TimeToPeText = "00:27:49";
@@ -138,23 +357,10 @@ public static class PreviewMain
         ps.HasTargetOrbit = true; ps.TargetRadiusM = 728000.0; ps.TargetPhaseRad = 0.7;
 
         // ---- NAV ----
-        // A synthetic track: a 51.6 degree inclination pass, which is a shape that makes a wrong
-        // projection obvious at a glance in a way a near-equatorial Kerbin orbit would not.
+        // The ground track, the orbit overlay, the vessel marker and the scalar readouts all come
+        // out of BuildOrbitFixture below, off ONE orbit. See its header for why (QC finding C-10).
         ps.HasFix = true;
-        ps.Latitude = 28.6; ps.Longitude = -80.6;      // the real pad, near enough
-        ps.LatText = "28.60 N"; ps.LonText = "80.60 W";
-        int track = 90;
-        ps.TrackLat = new double[track];
-        ps.TrackLon = new double[track];
-        for (int i = 0; i < track; i++)
-        {
-            double frac = i / (double)(track - 1);
-            double arg = frac * 360.0;
-            ps.TrackLat[i] = 51.6 * Math.Sin(arg * Math.PI / 180.0);
-            // Marching west as the body turns under it - the correction VesselData applies for real.
-            ps.TrackLon[i] = MapProjection.Wrap180(-80.6 + arg - frac * 22.0);
-        }
-        ps.TrackCount = track;
+        BuildOrbitFixture(ref ps);
         ps.HasTargetGround = true;
         ps.TargetLat = 51.6; ps.TargetLon = 14.0;
         ps.TargetLatText = "51.60 N"; ps.TargetLonText = "14.00 E";
@@ -525,25 +731,19 @@ public static class PreviewMain
         {
             MapView planet = MapProjection.NextMode(MapProjection.NextMode(MapProjection.Default()));
 
-            // A synthetic inclined orbit so the projection + far-side occlusion are visible offline.
-            PlanetOverlay ov = new PlanetOverlay();
-            int N = PlanetOverlay.DefaultSamples;
-            double[] olat = new double[N], olon = new double[N], orat = new double[N];
-            const double inc = 51.6, D2R = Math.PI / 180.0, R2D = 180.0 / Math.PI;
-            for (int i = 0; i < N; i++)
-            {
-                double th = (360.0 * i / (N - 1)) * D2R;
-                olat[i] = Math.Asin(Math.Sin(inc * D2R) * Math.Sin(th)) * R2D;
-                olon[i] = Math.Atan2(Math.Cos(inc * D2R) * Math.Sin(th), Math.Cos(th)) * R2D;
-                orat[i] = 1.06;
-            }
-            ov.Ready = true;
-            ov.OrbitLat = olat; ov.OrbitLon = olon; ov.OrbitRatio = orat; ov.OrbitCount = N;
-            ov.Vessel = new GlobePoint { Lat = olat[0], Lon = olon[0], Ratio = 1.06, Has = true };
-            ov.Ap = new GlobePoint { Lat = olat[N / 4], Lon = olon[N / 4], Ratio = 1.06, Has = true };
-            ov.Pe = new GlobePoint { Lat = olat[3 * N / 4], Lon = olon[3 * N / 4], Ratio = 1.06, Has = true };
-            ps.Planet = ov;
-            ps.HasFix = true; ps.Latitude = 0.0; ps.Longitude = 0.0;
+            // ---- THE OVERLAY IS THE FIXTURE ORBIT, NOT A SECOND ONE (S100, QC finding C-10) ----
+            // This block used to build its own synthetic 51.6-degree orbit at ratio 1.06 and then
+            // write `ps.HasFix = true; ps.Latitude = 0.0; ps.Longitude = 0.0;` - which silently
+            // overwrote the pad coordinates the ground track had been built around. Each half was a
+            // reasonable local choice; together they meant the page described three different
+            // vehicles at once, and the one question a preview of this page can answer - do the
+            // markers, the track and the readouts agree? - could not be asked. A fixture that cannot
+            // fail is not a gate.
+            //
+            // The orbit is now built ONCE, in BuildOrbitFixture, and this view just draws it. The
+            // 51.6-degree inclination is kept deliberately: it is the shape that makes a wrong
+            // projection and the far-side occlusion obvious, which is what this render is for.
+            PlanetOverlay ov = ps.Planet;
 
             dl.Clear();
             Pages.Build(dl, 2, W, H, ps, planet, 2);
@@ -566,10 +766,23 @@ public static class PreviewMain
         // overlay set up just above, so the cover's globe shows the same live disc + track. ----
         {
             MapView planet = MapProjection.NextMode(MapProjection.NextMode(MapProjection.Default()));
-            // Render at 2x the screen size: the Figma assets carry 2px hairline borders that fall to
-            // sub-pixel (~0.7px) at 1280 and drop inconsistently; 2x keeps them crisp (the in-game
-            // RenderTexture should match — screenWidth 2560 in the cfg).
-            int CW = W * 2, CH = H * 2;
+            // ---- THE SHIPPED SIZE, AND WHY THERE IS NO LONGER A CHOICE HERE (S100 / QC H-01) ----
+            // This line read `int CW = W * 2, CH = H * 2;` and was justified as: "Render at 2x the
+            // screen size: the Figma assets carry 2px hairline borders that fall to sub-pixel
+            // (~0.7px) at 1280 and drop inconsistently; 2x keeps them crisp (the in-game
+            // RenderTexture should match - screenWidth 2560 in the cfg)."
+            //
+            // The cfg says 1280, three times (DragonScreen.cfg:60, :76, :87), and so does the glue's
+            // own default (DragonScreenMonitor.cs:52). So the gate was judging every Figma page at
+            // four times the shipped pixel count.
+            //
+            // THE HAIRLINE SENTENCE IS A REAL DEFECT REPORT, AND IT STANDS. At the shipped width the
+            // design's 2px hairlines DO fall to ~0.7px and drop inconsistently. Rendering large did
+            // not fix that; it hid it. It is now visible in these PNGs because they are finally the
+            // size the crew gets, and it is logged as its own finding (REGISTER S101) for a screen
+            // batch to fix in the art and the page code. Do NOT re-enlarge, round, or fudge this to
+            // make the hairlines come back - that only re-hides the defect.
+            int CW = W, CH = H;
             DisplayList cdl = new DisplayList(CoverPage.Commands + 400);
             CoverPage.Build(cdl, CW, CH, ps, planet);
             if (cdl.Overflowed) Console.WriteLine("  WARNING COVER OVERFLOWED at " + cdl.Capacity);
@@ -580,7 +793,7 @@ public static class PreviewMain
 
         // ---- SETTINGS / AUDIO (Figma rebuild, A-Settings) — Cabin selected, 2x render ----
         {
-            int CW = W * 2, CH = H * 2;
+            int CW = W, CH = H;   // the shipped size - see the COVER block above (S100 / QC H-01)
             DisplayList sdl = new DisplayList(SettingsAudioPage.Commands + 200);
             SettingsAudioPage.Build(sdl, CW, CH, 2);
             if (sdl.Overflowed) Console.WriteLine("  WARNING SETTINGS_AUDIO OVERFLOWED at " + sdl.Capacity);
@@ -592,7 +805,7 @@ public static class PreviewMain
         // ---- Complex frame pages shown from their Figma export (attitude HUD, procedure, cabin) ----
         foreach (string fk in new[] { "frame58", "frame59", "frame66" })
         {
-            int CW = W * 2, CH = H * 2;
+            int CW = W, CH = H;   // the shipped size - see the COVER block above (S100 / QC H-01)
             DisplayList fdl = new DisplayList(FigmaFramePage.Commands + 4);
             FigmaFramePage.Build(fdl, CW, CH, fk);
             if (fdl.Overflowed) Console.WriteLine("  WARNING " + fk + " OVERFLOWED");
@@ -606,8 +819,14 @@ public static class PreviewMain
         // (which has no honest preview still, so the centre is the dark it will have when nothing is in
         // view — the game supplies the real forward camera there).
         {
-            int CW = W * 2, CH = H * 2;
+            int CW = W, CH = H;   // the shipped size - see the COVER block above (S100 / QC H-01)
             bool savedNose = ps.Steps.NoseConeOpen;
+            // ---- THREE STATES, NOT TWO (S100, from QC finding H-09) ----
+            // Nose CLOSED; nose OPEN with the bore-sight card, which is the shape the GAME always
+            // has and only the preview cannot; and nose OPEN with NO feed, which is the real in-game
+            // look when nothing is in view and which the GL painter agrees with today. All three
+            // must stay visibly distinct - the middle one is the page ONE live feature and until now
+            // it had never been rendered at all.
             foreach (bool open in new[] { false, true })
             {
                 ps.Steps.NoseConeOpen = open;
@@ -618,12 +837,25 @@ public static class PreviewMain
                 Render(hdl, CW, CH, path);
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + hdl.Count + " commands");
             }
+            {
+                ps.Steps.NoseConeOpen = true;
+                DockingCamStandIn = true;
+                ForgetRuntimeImages();
+                DisplayList hdl = new DisplayList(Frame58Hud.Commands + 60);
+                Frame58Hud.Build(hdl, CW, CH, ps);
+                if (hdl.Overflowed) Console.WriteLine("  WARNING FRAME58_HUD CAM OVERFLOWED at " + hdl.Capacity);
+                string path = Path.Combine(outDir, "frame58_hud_noseopen_camfeed.png");
+                Render(hdl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + hdl.Count + " commands");
+                DockingCamStandIn = false;
+                ForgetRuntimeImages();
+            }
             ps.Steps.NoseConeOpen = savedNose;
         }
 
         // ---- Figma UI navigation: dispatcher + placeholder + shared back chevron ----
         {
-            int CW = W * 2, CH = H * 2;
+            int CW = W, CH = H;   // the shipped size - see the COVER block above (S100 / QC H-01)
             foreach (UiPage up in new[] { UiPage.Cover, UiPage.Menu, UiPage.PhaseDeport, UiPage.Hud, UiPage.SuitCheck, UiPage.Vehicle, UiPage.VehicleMech, UiPage.Cabin, UiPage.AudioVideo, UiPage.VrioTest,
                                           UiPage.VehicleCrew, UiPage.VehiclePropulsion, UiPage.VehiclePower, UiPage.VehicleAvionics, UiPage.VehicleGnc, UiPage.VehicleThermal,
                                           UiPage.ManualChute, UiPage.Docking, UiPage.Rendezvous, UiPage.DeorbitBurnPrep, UiPage.EntryProcedure,
@@ -645,6 +877,49 @@ public static class PreviewMain
             // a real descent); the Docking readouts are the no-target look, which is the failure mode
             // that matters most here - nothing to be misaligned with must read as dashes, not as a
             // confident 0.0 degrees of error against nothing.
+            // ---- THE VIDEO PAGE POPULATED (S100, from QC finding VV-02) ----
+            // SettingsVideoPage reads s.CamLabels and highlights s.CameraView - a genuinely live list
+            // off a real vessel scan, and the only live thing on the page. The fixture never set
+            // CamLabels, so the ONE render of this page was its empty state and the list, the
+            // selection highlight and the FORWARD VIEW IN USE BY DOCKING branch had never been drawn
+            // at all. That is H-09 defect on a second page: the gate could not see the page live half.
+            //
+            // The empty state keeps its render (the loop above still draws it with CamLabels unset),
+            // because "no cameras on vehicle" is a real in-game state and must stay checkable.
+            //
+            // ⚠ THIS IS THE FIXTURE HALF ONLY. VV-02 second half - re-homing the stranded writer so a
+            // camera row can actually be TAPPED - is a change to SettingsVideoPage and FigmaUI.HitTest,
+            // which this instrument task does not touch. The row still draws a selection the crew
+            // cannot move; that stays open, and S49 H12 groups it with the other stranded settings
+            // handlers to be done as one job.
+            {
+                string[] savedCams = ps.CamLabels;
+                int savedView = ps.CameraView;
+                bool savedHeld = ps.CameraHeldByDocking;
+                // Names in the shape a real vessel scan produces, not invented prettiness.
+                ps.CamLabels = new string[] { "FORWARD", "DOCKING PORT", "TRUNK", "CUPOLA" };
+                ps.CameraView = 1;
+                ps.CameraHeldByDocking = false;
+                DisplayList vdl = new DisplayList(600);
+                FigmaUI.Build(vdl, UiPage.AudioVideo, CW, CH, ps, MapProjection.Default());
+                if (vdl.Overflowed) Console.WriteLine("  WARNING UI AudioVideo populated OVERFLOWED");
+                string path = Path.Combine(outDir, "ui_audiovideo_cameras.png");
+                Render(vdl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + vdl.Count + " commands");
+
+                // ...and the branch where docking owns the forward feed, which must take precedence
+                // over the selection above rather than merely sit beside it.
+                ps.CameraHeldByDocking = true;
+                DisplayList hdl2 = new DisplayList(600);
+                FigmaUI.Build(hdl2, UiPage.AudioVideo, CW, CH, ps, MapProjection.Default());
+                if (hdl2.Overflowed) Console.WriteLine("  WARNING UI AudioVideo held OVERFLOWED");
+                path = Path.Combine(outDir, "ui_audiovideo_cameras_heldbydocking.png");
+                Render(hdl2, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + hdl2.Count + " commands");
+
+                ps.CamLabels = savedCams; ps.CameraView = savedView;
+                ps.CameraHeldByDocking = savedHeld;
+            }
             {
                 bool savedShown = ps.SplashdownShown;
                 string savedSplash = ps.SplashdownText;
@@ -948,6 +1223,33 @@ public static class PreviewMain
                 string path = Path.Combine(outDir, "ui_cover_cam_" + cam.ToString().ToLowerInvariant() + ".png");
                 Render(cdl, CW, CH, path);
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + cdl.Count + " commands");
+            }
+
+            // ---- THE SAME TWO VIEWS AGAINST A MIRRORED TEXTURE (S100, from QC finding C-09) ----
+            // The globe does not swap u and the flat map does, and PageTest.NavTexture pins both as
+            // correct - which can only be true if they read the same way on one texture. On the
+            // unmirrored stand-in they do not. These two extra renders put each view against the
+            // OPPOSITE handedness, so the four PNGs together say what each view does to a texture of
+            // each kind. They do NOT settle which one is right in game - only the glass can, and
+            // that is an owner gate (C1.12; QC Q2). Nothing about either convention is changed here.
+            {
+                mirrorBodyMap = true;
+                ForgetRuntimeImages();
+                foreach (CoverPage.CoverCam cam in new[] { CoverPage.CoverCam.Earth, CoverPage.CoverCam.Map })
+                {
+                    MapView cv = MapProjection.WithMode(MapProjection.Default(), CoverPage.CamMapMode(cam));
+                    cv = MapProjection.Centre(cv, ps.Latitude, ps.Longitude);
+                    DisplayList cdl = new DisplayList(600);
+                    CoverPage.Build(cdl, CW, CH, ps, cv, 1, cam);
+                    if (cdl.Overflowed)
+                        Console.WriteLine("  WARNING COVER MIRROR " + cam + " OVERFLOWED at " + cdl.Capacity);
+                    string path = Path.Combine(outDir,
+                        "ui_cover_cam_" + cam.ToString().ToLowerInvariant() + "_mirrored.png");
+                    Render(cdl, CW, CH, path);
+                    Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + cdl.Count + " commands");
+                }
+                mirrorBodyMap = false;
+                ForgetRuntimeImages();
             }
 
             // The MAP view zoomed in, for MapProjection's wrap/clamp — the same reason the NAV preview
@@ -1556,6 +1858,36 @@ public static class PreviewMain
     /// Absence is not an error: if the reference assets are not checked out, the preview falls back
     /// to the plain base disc exactly as it used to, and says so once rather than pretending.
     /// </summary>
+    /// <summary>
+    /// Draw the body map MIRRORED in u. Preview-harness only (S100, from QC finding C-09).
+    ///
+    /// ---- WHAT THIS IS FOR, AND WHAT IT DELIBERATELY DOES NOT DO ----
+    /// The globe and the flat map use OPPOSITE u-conventions and PageTest.NavTexture pins both as
+    /// correct - "The two NAV textured views use OPPOSITE u-conventions, and BOTH are correct." That
+    /// can only hold if the two read the same way on the same texture, and on the preview stand-in
+    /// they visibly do not: ui_cover.png puts South America left, ui_cover_cam_map.png puts Asia
+    /// left. Look at how each half was proved and the reason is plain - the flat map swap was
+    /// confirmed IN GAME against KSP real _ColorMap, the globe no-swap was confirmed against this
+    /// stand-in, and the two textures cannot have the same handedness, because the map swap exists
+    /// precisely BECAUSE KSP is mirrored and the stand-in is a plain unmirrored Earth.
+    ///
+    /// So the preview will always flatter the globe and slander the map, whatever it shows. It
+    /// CANNOT say which view is right in game, and this switch does not claim to: neither convention
+    /// is changed here, and PageTest.NavTexture is untouched. What it does is give the question a
+    /// second instrument - each view rendered against BOTH handednesses - so that whoever gets glass
+    /// time can compare the four PNGs against one look at the real body instead of reasoning from
+    /// one texture. Settling it needs the capsule, which is an owner gate (C1.12); QC Q2 poses it.
+    /// </summary>
+    private static bool mirrorBodyMap = false;
+
+    /// <summary>Drop the runtime images so the next LoadImage re-resolves them. Called only when the
+    /// mirror switch above flips, which happens between renders and never inside one.</summary>
+    private static void ForgetRuntimeImages()
+    {
+        foreach (ImageId iid in Enum.GetValues(typeof(ImageId)))
+            if (iid != ImageId.None && Images.IsRuntime(iid)) imgCache.Remove(iid);
+    }
+
     private static Image LoadStandIn(ImageId id)
     {
         string dir = Path.GetDirectoryName(
@@ -1569,12 +1901,26 @@ public static class PreviewMain
         //
         // What the preview CANNOT show is the ball's orientation: that is a Unity camera rendering a
         // real mesh, and there is no camera here. Attitude is a question for the game.
-        // ---- THE DOCKING CAMERA GETS NO STAND-IN ----
-        // It is a view of whatever is out there; there is no honest still to put in its place, and
-        // falling through to the body map drew EARTH behind the docking HUD - a picture that looks
-        // deliberate and is pure fiction. The page is designed to work without it, so the preview
-        // shows the dark background it will have when nothing is in view.
-        if (id == ImageId.DockingCamLive) return null;
+        // ---- THE DOCKING CAMERA GETS A MARKED TEST CARD (S100, from QC finding H-09) ----
+        // It used to get nothing, for a reason that was right about the wrong thing: "there is no
+        // honest still to put in its place, and falling through to the body map drew EARTH behind the
+        // docking HUD - a picture that looks deliberate and is pure fiction."
+        //
+        // The PHOTOGRAPH was the problem, not the stand-in. ImageId.DockingCamLive is in exactly the
+        // category the body map is in, and this file already states the exception for it: the GAME
+        // always has a feed (DockingCamRenderer, claimed at ScreenPainter.cs:1131) and only the
+        // PREVIEW cannot ask for one. With nothing here, diffing frame58_hud.png against
+        // frame58_hud_noseopen.png came to 1109 pixels in an 88x88 box - the crosshair, and nothing
+        // else - so the 626px docking disc and its BowlBlue corner mask, the page ONE live feature
+        // and the whole point of the nose-cone gate, had never once appeared on a preview render.
+        //
+        // The card below is DRAWN, not photographed, and is unmistakably a test pattern: nobody can
+        // mistake it for the feed, so the "a preview that flatters us is worse than none" rule is
+        // kept. Its grid and bore sight make the circular clip and the corner mask CHECKABLE, which
+        // is the geometry the disc exists to exercise. DockingCamStandIn below switches it off, so
+        // the no-feed look - which agrees with the GL painter today - still has its own render.
+        if (id == ImageId.DockingCamLive)
+            return DockingCamStandIn ? BoresightCard() : null;
 
         // ---- AND NEITHER DOES THE LIVE 3D PLANET (S10a) ----
         // Exactly the same trap, one step worse: the shared stand-in below IS an equirectangular
@@ -1604,12 +1950,64 @@ public static class PreviewMain
             Console.WriteLine("  (no body-map stand-in at " + path + " - globe previews bare)");
             return null;
         }
-        try { return Image.FromFile(path); }
+        try
+        {
+            Image earth = Image.FromFile(path);
+            if (!mirrorBodyMap) return earth;
+            // A horizontal flip and nothing else - so the ONLY difference between the two runs is
+            // the texture handedness, and a disagreement in the render is the views, not the data.
+            Bitmap flipped = new Bitmap(earth);
+            flipped.RotateFlip(RotateFlipType.RotateNoneFlipX);
+            earth.Dispose();
+            return flipped;
+        }
         catch (Exception e)
         {
             Console.WriteLine("  body-map stand-in: " + e.Message);
             return null;
         }
+    }
+
+    /// <summary>Whether LoadStandIn hands out the bore-sight card for the docking feed (H-09).</summary>
+    private static bool DockingCamStandIn = false;
+
+    /// <summary>
+    /// A MARKED test card for the docking camera. Drawn here rather than read from assets/ on
+    /// purpose: a generated pattern cannot be mistaken for a photograph of anything, and it needs no
+    /// file to be checked out for the preview to exercise the disc.
+    ///
+    /// Square, because the disc clips it to a circle - so the card own edges landing outside the
+    /// circle is itself the check that the clip is doing its job.
+    /// </summary>
+    private static Image BoresightCard()
+    {
+        const int S = 512;
+        Bitmap bmp = new Bitmap(S, S, PixelFormat.Format32bppArgb);
+        using (Graphics g = Graphics.FromImage(bmp))
+        using (Pen grid = new Pen(Color.FromArgb(70, 120, 150, 170), 1f))
+        using (Pen bore = new Pen(Color.FromArgb(200, 90, 200, 210), 2f))
+        using (Font f = new Font(FontFamily, 18f, FontStyle.Regular))
+        using (Brush ink = new SolidBrush(Color.FromArgb(210, 150, 200, 210)))
+        {
+            g.Clear(Color.FromArgb(255, 14, 22, 34));
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            for (int i = 1; i < 8; i++)
+            {
+                int t = S * i / 8;
+                g.DrawLine(grid, t, 0, t, S);
+                g.DrawLine(grid, 0, t, S, t);
+            }
+            // Bore sight, and a scale ring at half radius so a wrong disc size is visible.
+            g.DrawLine(bore, S / 2, S / 2 - 60, S / 2, S / 2 + 60);
+            g.DrawLine(bore, S / 2 - 60, S / 2, S / 2 + 60, S / 2);
+            g.DrawEllipse(bore, S / 4, S / 4, S / 2, S / 2);
+            // Says what it is, in the render, so no reader has to be told.
+            StringFormat sf = new StringFormat();
+            sf.Alignment = StringAlignment.Center;
+            g.DrawString("PREVIEW TEST CARD", f, ink, new RectangleF(0, S * 0.30f, S, 30f), sf);
+            g.DrawString("NOT A CAMERA FEED", f, ink, new RectangleF(0, S * 0.62f, S, 30f), sf);
+        }
+        return bmp;
     }
 
     // Cover-page PNG assets (art/cover/<key>.png), placed at their measured Figma positions.
@@ -1638,25 +2036,66 @@ public static class PreviewMain
         // legibility are judged from (CLAUDE.md: restarts are the scarce resource). S75 found it by
         // tinting CoverPage's gridicons_refresh to the inert tint and watching the PNG not change.
         // Opaque white takes the old path exactly, so every other cover asset renders byte-identically.
-        if (c.Colour.R >= 0.999f && c.Colour.G >= 0.999f && c.Colour.B >= 0.999f && c.Colour.A >= 0.999f)
-        {
-            g.DrawImage(img, new RectangleF(c.A, c.B, c.C, c.D),
-                        new RectangleF(0f, 0f, img.Width, img.Height), GraphicsUnit.Pixel);
-            return;
-        }
+        // ---- ONE GEOMETRY PATH, WHATEVER THE TINT (S100, from QC finding C-11) ----
+        // S75's tint fix put the tinted draw on the `Rectangle` (INTEGER) overload while the opaque
+        // path kept `RectangleF` (SUB-PIXEL). `ScreenPainter.DrawImage` uses float vertices for both
+        // (ScreenPainter.cs:1181), so a tinted asset could sit up to 1px higher and left, and up to
+        // 1px narrower and shorter, in the preview than in the game AND than an untinted asset drawn
+        // beside it. Small, but it is exactly the silent two-renderer divergence S75 existed to end -
+        // and it was introduced BY S75, because the new path took a different rounding rule from the
+        // one it was added next to.
+        //
+        // The fix is not "use the float overload on both": that leaves two paths that can drift
+        // again. The tint is baked into a CACHED BITMAP at native size, and then there is only one
+        // draw call in this method, so there is no second rule to get wrong. Opaque white skips the
+        // bake entirely and renders byte-identically, which was S75's own acceptance condition.
+        Image src = img;
+        if (!(c.Colour.R >= 0.999f && c.Colour.G >= 0.999f
+              && c.Colour.B >= 0.999f && c.Colour.A >= 0.999f))
+            src = TintedAsset(c.AssetKey, img, c.Colour);
+        if (src == null) return;
 
-        ColorMatrix cm = new ColorMatrix(new float[][] {
-            new float[] { c.Colour.R, 0f, 0f, 0f, 0f },
-            new float[] { 0f, c.Colour.G, 0f, 0f, 0f },
-            new float[] { 0f, 0f, c.Colour.B, 0f, 0f },
-            new float[] { 0f, 0f, 0f, c.Colour.A, 0f },
-            new float[] { 0f, 0f, 0f, 0f, 1f } });
-        using (ImageAttributes ia = new ImageAttributes())
+        g.DrawImage(src, new RectangleF(c.A, c.B, c.C, c.D),
+                    new RectangleF(0f, 0f, src.Width, src.Height), GraphicsUnit.Pixel);
+    }
+
+    // The tint baked in, one bitmap per (asset, colour). Both are small and few - the Cover draws a
+    // single tinted asset today - and caching keeps the multiply off the per-frame path.
+    private static readonly System.Collections.Generic.Dictionary<string, Image> tintCache =
+        new System.Collections.Generic.Dictionary<string, Image>();
+
+    private static Image TintedAsset(string key, Image img, Rgba col)
+    {
+        // Quantised to the byte the multiply will actually produce, so two colours that render
+        // identically share one bitmap rather than filling the cache with float noise.
+        string ck = key + "|" + (int)(col.R * 255f) + "," + (int)(col.G * 255f) + ","
+                              + (int)(col.B * 255f) + "," + (int)(col.A * 255f);
+        Image tinted;
+        if (tintCache.TryGetValue(ck, out tinted)) return tinted;
+
+        Bitmap bmp = new Bitmap(img.Width, img.Height, PixelFormat.Format32bppArgb);
+        using (Graphics tg = Graphics.FromImage(bmp))
         {
-            ia.SetColorMatrix(cm);
-            g.DrawImage(img, new Rectangle((int)c.A, (int)c.B, (int)c.C, (int)c.D),
-                        0, 0, img.Width, img.Height, GraphicsUnit.Pixel, ia);
+            tg.Clear(Color.Transparent);
+            // Native size, 1:1 - the bake must not resample, or it would introduce a filtering
+            // difference of its own on top of the one it is removing.
+            tg.InterpolationMode = InterpolationMode.NearestNeighbor;
+            tg.PixelOffsetMode = PixelOffsetMode.Half;
+            ColorMatrix cm = new ColorMatrix(new float[][] {
+                new float[] { col.R, 0f, 0f, 0f, 0f },
+                new float[] { 0f, col.G, 0f, 0f, 0f },
+                new float[] { 0f, 0f, col.B, 0f, 0f },
+                new float[] { 0f, 0f, 0f, col.A, 0f },
+                new float[] { 0f, 0f, 0f, 0f, 1f } });
+            using (ImageAttributes ia = new ImageAttributes())
+            {
+                ia.SetColorMatrix(cm);
+                tg.DrawImage(img, new Rectangle(0, 0, img.Width, img.Height),
+                             0, 0, img.Width, img.Height, GraphicsUnit.Pixel, ia);
+            }
         }
+        tintCache[ck] = bmp;
+        return bmp;
     }
 
     private static void DrawImage(Graphics g, DrawCmd c)
