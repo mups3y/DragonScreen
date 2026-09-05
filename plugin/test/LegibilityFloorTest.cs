@@ -57,6 +57,7 @@ public static class LegibilityFloorTest
         SharedWidgetsTrackThePanel();
         FlightPageTracksThePanel();
         VehiclePageTracksThePanel();
+        DockingPageTracksThePanel();
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed"
                           + "   (floor " + Typography.MinFor(W1) + " px @" + W1
@@ -557,9 +558,14 @@ public static class LegibilityFloorTest
     /// <summary>Build any legacy page and hand back every text size it emitted, in order. ⛔ Reads the
     /// EMITTED commands — the point is to compare what the page drew, never what the test expected it
     /// to draw. Shared by [[S121b-i]] and [[S121b-ii]].</summary>
-    static float[] PageTextSizes(int pageIndex, int w, int h)
+    static float[] PageTextSizes(int pageIndex, int w, int h) { return PageTextSizes(pageIndex, w, h, false); }
+
+    /// <summary>⚠ `target` matters for DOCKING and only for DOCKING: without one it draws two words
+    /// ("NO TARGET SELECTED") instead of the HUD, and a check run against that would pass while
+    /// proving nothing about the page it is supposed to cover.</summary>
+    static float[] PageTextSizes(int pageIndex, int w, int h, bool target)
     {
-        PageState ps = new PageState(); ps.Valid = true;
+        PageState ps = new PageState(); ps.Valid = true; ps.HasTarget = target;
         DisplayList dl = new DisplayList(8192);
         Pages.Build(dl, pageIndex, w, h, ps, MapProjection.Default(), 1);
         int n = 0;
@@ -573,9 +579,11 @@ public static class LegibilityFloorTest
     /// <summary>The shape both page checks want: same command count, every size exactly doubled, and
     /// an ABSOLUTE anchor at RefPanelW — which is the only thing that catches a scale derived from the
     /// wrong width, since a wrong width that doubles still doubles ([[S121b-i]] mutation W7).</summary>
-    static void PageTypeTracksThePanel(string name, int pageIndex)
+    static void PageTypeTracksThePanel(string name, int pageIndex) { PageTypeTracksThePanel(name, pageIndex, false); }
+
+    static void PageTypeTracksThePanel(string name, int pageIndex, bool target)
     {
-        float[] t1 = PageTextSizes(pageIndex, W1, H1), t2 = PageTextSizes(pageIndex, W2, H2);
+        float[] t1 = PageTextSizes(pageIndex, W1, H1, target), t2 = PageTextSizes(pageIndex, W2, H2, target);
         Check("S121b " + name + " draws the same number of text commands at both widths",
               t1.Length == t2.Length, t1.Length + " vs " + t2.Length);
         Check("S121b " + name + " has real type on it to check", t1.Length > 20,
@@ -607,7 +615,7 @@ public static class LegibilityFloorTest
         // The two shipped panels are exactly 2:1 (pinned by TheShippedPanelsAreExactlyTwoToOne), so on
         // a correctly-scaled page EVERY drawn coordinate doubles — a much stronger statement than the
         // sizes doubling, and it costs nothing extra to make.
-        float[] p1 = PageTextPositions(pageIndex, W1, H1), p2 = PageTextPositions(pageIndex, W2, H2);
+        float[] p1 = PageTextPositions(pageIndex, W1, H1, target), p2 = PageTextPositions(pageIndex, W2, H2, target);
         int badp = 0; int worstP = -1; float worstD = 0f;
         for (int i = 0; i < p1.Length && i < p2.Length; i++)
         {
@@ -622,9 +630,11 @@ public static class LegibilityFloorTest
 
     /// <summary>Every text command's x and y, interleaved. See the note in PageTypeTracksThePanel:
     /// the panels are exactly 2:1, so every coordinate on a scaled page doubles.</summary>
-    static float[] PageTextPositions(int pageIndex, int w, int h)
+    static float[] PageTextPositions(int pageIndex, int w, int h) { return PageTextPositions(pageIndex, w, h, false); }
+
+    static float[] PageTextPositions(int pageIndex, int w, int h, bool target)
     {
-        PageState ps = new PageState(); ps.Valid = true;
+        PageState ps = new PageState(); ps.Valid = true; ps.HasTarget = target;
         DisplayList dl = new DisplayList(8192);
         Pages.Build(dl, pageIndex, w, h, ps, MapProjection.Default(), 1);
         int n = 0;
@@ -655,6 +665,64 @@ public static class LegibilityFloorTest
         Check("S121b-ii ...and at RefPanelW it is exactly the 10 px it was measured as",
               Math.Abs(SmallestSquare(1, W1, H1) - 10f) < 1e-3f,
               "got " + SmallestSquare(1, W1, H1));
+    }
+
+    // ---- S121b-iii: THE LEGACY DOCKING PAGE -----------------------------------------------------
+    // ⛔ NOT `Frame58Hud` — that is the live HUD and belongs to [[S154b]]/[[S154c]]. This is the
+    // dormant legacy page, and it carries more RefPanelW literals than any other method in `Pages.cs`.
+    static void DockingPageTracksThePanel()
+    {
+        // ⛔ AND `Pages.Build(…, 3, …)` IS NOT THIS PAGE. It routes to `Pages.Docking`, which is two
+        // lines calling `DockingPage.Build` — a different FILE, and [[S121d]]'s to pass. A check on
+        // page 3 here would be testing someone else's work and would fail until they do it.
+        // ⭐ `DockingOld` — the method this split was written around — HAS NO CALLER AT ALL (see its
+        // own header). It cannot be reached through `Pages.Build`, so it cannot be rendered, so its
+        // type cannot be read off a display list. What CAN be checked is the public HUD geometry it
+        // uses, which is the part with a real defect in it, and the placeholder branch.
+
+        // ⭐ THE ONE PIECE OF THIS PAGE THAT IS NOT TYPE OR A COLUMN: the attitude ball's clearance
+        // inside the ALIGN sweep. `AlignRingRadius` is a FRACTION of the ring and already tracks the
+        // panel; `BallClearance` is 22 RefPanelW pixels subtracted from it, so an unscaled clearance
+        // makes the ball too LARGE relative to the ring it sits in — and this page's own header
+        // records that gap closing to nine pixels once already, in game.
+        float ring1 = Pages.DockingRingHeight(W1, H1), ring2 = Pages.DockingRingHeight(W2, H2);
+        Eq("S121b-iii the docking ring keeps its share of the glass", ring2, 2f * ring1, 1e-3f);
+
+        float gap1 = Pages.AlignRingRadius(ring1) - Pages.BallDiameter(ring1, Typography.ScaleFor(W1)) * 0.5f;
+        float gap2 = Pages.AlignRingRadius(ring2) - Pages.BallDiameter(ring2, Typography.ScaleFor(W2)) * 0.5f;
+        Eq("S121b-iii ...and the ball's clearance inside the ALIGN sweep doubles with it",
+           gap2, 2f * gap1, 1e-3f);
+        Eq("S121b-iii the clearance at RefPanelW is exactly the 22 px it was measured as",
+           gap1, Pages.BallClearance, 1e-3f);
+        Check("S121b-iii the ball still fits inside the sweep at both widths",
+              Pages.BallDiameter(ring1, Typography.ScaleFor(W1)) > 0f
+              && Pages.BallDiameter(ring2, Typography.ScaleFor(W2)) < 2f * Pages.AlignRingRadius(ring2),
+              "d1 " + Pages.BallDiameter(ring1, Typography.ScaleFor(W1))
+              + " d2 " + Pages.BallDiameter(ring2, Typography.ScaleFor(W2)));
+        Check("S121b-iii the 1-argument BallDiameter still delegates at sc = 1",
+              Math.Abs(Pages.BallDiameter(ring1) - Pages.BallDiameter(ring1, 1f)) < 1e-4f,
+              "got " + Pages.BallDiameter(ring1) + " vs " + Pages.BallDiameter(ring1, 1f));
+
+        // ---- the placeholder branch, which a malformed save can still reach --------------------
+        PageTypeCountsOnly("PLACEHOLDER", 9);
+    }
+
+    /// <summary>For a page too small to satisfy PageTypeTracksThePanel's "real type on it" bar — the
+    /// placeholder draws exactly two words — but which must still double.</summary>
+    static void PageTypeCountsOnly(string name, int pageIndex)
+    {
+        float[] t1 = PageTextSizes(pageIndex, W1, H1), t2 = PageTextSizes(pageIndex, W2, H2);
+        float[] q1 = PageTextPositions(pageIndex, W1, H1), q2 = PageTextPositions(pageIndex, W2, H2);
+        Check("S121b-iii " + name + " draws the same commands at both widths",
+              t1.Length == t2.Length && t1.Length > 0, t1.Length + " vs " + t2.Length);
+        int bad = 0;
+        for (int i = 0; i < t1.Length && i < t2.Length; i++)
+            if (Math.Abs(t2[i] - 2f * t1[i]) > 1e-3f) bad++;
+        Check("S121b-iii every " + name + " text size doubles", bad == 0, bad + " of " + t1.Length);
+        int badq = 0;
+        for (int i = 0; i < q1.Length && i < q2.Length; i++)
+            if (Math.Abs(q2[i] - 2f * q1[i]) > 0.02f) badq++;
+        Check("S121b-iii every " + name + " text position doubles", badq == 0, badq + " of " + q1.Length);
     }
 
     /// <summary>The smallest square Rect a page emits — on VEHICLE that is the alarm dot.</summary>

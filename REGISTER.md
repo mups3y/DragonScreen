@@ -15334,13 +15334,81 @@ inside the card.
 `build.py test` green — `LegibilityFloorTest` **252 checks** · comment-loss **0** · no `install`, no
 glass, no `git push` · §14.4(a) untouched.
 
-### S121b-iii [S] `Pages.cs` — the legacy DOCKING page and the placeholder — **DOING** — [split of [[S121b]]; ~48 sites]
+### S121b-iii [S] `Pages.cs` — the legacy DOCKING page and the placeholder — **DONE 2026-09-06 — and the method it was written around has NO CALLER AT ALL** — [split of [[S121b]]; ~48 sites]
 - `DockingOld` (38) · `Axis` (3) · `AxisR` (3) · `Placeholder` (4).
 - ⛔ **Not the live docking HUD.** That is `Frame58Hud` + [[S154b]]/[[S154c]]. This is the legacy page,
   dormant behind `FigmaMode` like the rest of the family.
 - ⚠ `Axis`/`AxisR` take no width and need `sc` passed in; `DockingOld` carries 27 pixel literals, the most
   of any method in the file, largely the ±150f column offsets around the range/rate pair.
 - **DONE when:** as [[S121]]'s DONE-when, for these methods.
+
+#### ⛔ DONE 2026-09-06 — AND THE CENTRAL FINDING IS THAT THIS SPLIT WAS AIMED AT DEAD CODE
+
+`DockingOld` — the 38-site method [[S121b]]'s split called *"the most of any method in the file"* —
+**has no caller anywhere.** `grep -rn "DockingOld" plugin/ docs/` finds exactly ONE hit in source, its
+own declaration, plus three compiled binaries. `Pages.Build`'s `case 3:` calls `Docking`, two lines
+above it, which is two lines calling **`DockingPage.Build` — a different file, and [[S121d]]'s to pass.**
+
+⭐ **So this is not the "dormant behind `FigmaMode`" that the whole [[S121]] family shares. It is
+unreachable even if `FigmaMode` were false**, and so is everything only it uses: `Axis`, `AxisR`,
+`DockingRingHeight`, `AlignRingRadius`, `BallDiameter` and `BallClearance`.
+
+⭐ **CONFIRMED EMPIRICALLY, not just by grep:** rendering all 119 preview pages before and after this
+line's changes and comparing by hash gives **0 changed**. Every other split in this family moved pixels;
+this one provably cannot.
+
+⚠ **The split's premise was mine and it was wrong** — I wrote *"`DockingOld` (38) … the ±150f column
+offsets around the range/rate pair"* into [[S121b]]'s split a few hours earlier, having counted the
+literals without checking whether anything calls the method. **Counting a method is not the same as
+reaching it**, and the count was right while the conclusion drawn from it was not.
+
+#### What was done anyway, and why
+
+- **The scale pass was applied to all of it.** That is the recovery-wave premise — code that does not run
+  should still be correct — and it cost one edit a line with the file already open. ⛔ Nothing was
+  deleted: C1.16 / G12 is explicit that removing code does not license removing the reasoning attached
+  to it, and `DockingOld`'s body carries findings paid for in game (the ball reading as misplaced at nine
+  pixels of clearance; the boresight that must draw over the ball).
+- **`DockingOld` now carries a header stating plainly that it has no caller**, how that was established,
+  and that the decision to remove it is not a build chat's to take in passing. Logged as [[S163]].
+- ⭐ **One real defect was fixed on the way, in code that IS public:** `BallDiameter` subtracts
+  `BallClearance` — 22 RefPanelW pixels — from `AlignRingRadius`, which is a FRACTION of the ring and
+  already tracks the panel. Unscaled, the ball came out too LARGE relative to the sweep at 2560 and the
+  clearance this constant exists to guarantee halved. The method's own header records that gap closing
+  to nine pixels once already, in game. Now `BallDiameter(ringHeight, sc)`, with the 1-argument form
+  delegating at `sc = 1`.
+- **`Placeholder`** scales too. It is reached by `Pages.Build`'s `default:` branch — a bad page index,
+  which its comment notes a malformed save can produce.
+
+#### Verified
+
+`build.py test` green — `LegibilityFloorTest` **260 checks** · **5 mutations, 5 killed** (the unscaled
+clearance, the ring's top margin, the delegating overload, and both placeholder lines) · preview **0
+pages changed**, which is this line's whole finding stated as a measurement · comment-loss **0**.
+
+⚠ **The DOCKING page checks were re-scoped, not written.** A first version asserted on
+`Pages.Build(…, 3, …)` and failed **24 of 24** — because that is `DockingPage.cs`, which has not had its
+pass. It belongs to [[S121d]] and the check was removed rather than left failing or weakened.
+
+### S163 [S] `Pages.cs` carries a dead docking subsystem — seven members, no caller — **TODO (needs an owner call)** — [logged by [[S121b-iii]] per C1.1, 2026-09-06; TIER 3]
+- **The finding.** `DockingOld` and the six members only it uses — `Axis`, `AxisR`, `DockingRingHeight`,
+  `AlignRingRadius`, `BallDiameter`, `BallClearance` — are unreachable from any entry point. Established
+  by grep (one source hit: the declaration) and confirmed by a 119-page preview diff showing 0 changes
+  after every one of them was edited.
+- ⚠ **This is NOT the `FigmaMode` dormancy the rest of [[S121]] has.** Those methods would draw if the
+  flag flipped. These would not.
+- ⛔ **C1.16 / G12 shapes the options, and rules one of them out.** Deleting the code is permitted in
+  principle — *"Code may be deleted, rewritten or superseded at any time"* — but the same rule forbids
+  taking its COMMENTS with it, and those comments are where two in-game findings live (the ALIGN-sweep
+  clearance, the boresight over the ball). So "delete the method" is really "keep the reasoning, drop
+  the body", which is a shape someone has to choose deliberately.
+- **The options, for the owner:** (1) leave it, marked as it now is — costs nothing, and it is a worked
+  reference for whoever rebuilds a manual docking HUD; (2) reduce it to a commented block preserving the
+  findings, deleting the executable body; (3) delete the body AND move the two findings into
+  `docs/SCREEN_SPEC.md` first, so nothing is lost when the file is.
+  *(Recommendation: (1) — it compiles, it is now correct, it is marked, and it is the only worked example
+  of this HUD's geometry in the tree. Re-earning that costs more than carrying it.)*
+- **DONE when:** the owner has chosen, or the line is closed as "leave it" with that recorded.
 
 ### S121c [S] `SettingsPage.cs` — **TODO (UNBLOCKED 2026-09-06 by [[S121a]])** — [split 3 of 5 of [[S121]]; 24 lines / 24 references]
 - ⚠ **Read [[S134]] before starting.** It owns the settings family's real coordinate-system defect and its

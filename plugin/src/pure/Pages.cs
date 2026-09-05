@@ -1394,15 +1394,31 @@ namespace DragonScreen
 
         /// <summary>Diameter the attitude ball gets inside a HUD of this size. Shared with the test.</summary>
         public static float BallDiameter(float ringHeight)
+        { return BallDiameter(ringHeight, 1f); }
+
+        /// <summary>
+        /// As BallDiameter, on a panel whose type scale is <paramref name="sc"/>.
+        ///
+        /// ⛔ THE CLEARANCE IS THE ONLY THING THAT NEEDS IT, and that is the whole subtlety.
+        /// `AlignRingRadius` is a FRACTION of the ring height, and the ring height is derived from the
+        /// panel — so it already tracks. `BallClearance` is 22 RefPanelW pixels subtracted from it, so
+        /// on a 2560 panel the ball was 22 px too LARGE relative to everything around it and the gap
+        /// this constant exists to guarantee shrank to half its measured size. The header above records
+        /// that gap closing to nine pixels once already, in game, and the ball reading as misplaced.
+        /// ⚠ The 1-argument overload delegates at sc = 1 ([[S121b-iii]], 2026-09-06).
+        /// </summary>
+        public static float BallDiameter(float ringHeight, float sc)
         {
-            float d = (AlignRingRadius(ringHeight) - BallClearance) * 2f;
+            float d = (AlignRingRadius(ringHeight) - BallClearance * sc) * 2f;
             return (d > 0f) ? d : 0f;
         }
 
         /// <summary>The HUD ring height for a page of this height. One source, drawing and tests.</summary>
         public static float DockingRingHeight(int w, int h)
         {
-            return ((h - ChromeBar.HeightFor(w)) - 24f) * 0.74f;
+            // ⚠ 24f is a RefPanelW pixel — the page's top margin — subtracted from a height that
+            // scales. Scaled by [[S121b-iii]] so the ring keeps its share of the glass at both widths.
+            return ((h - ChromeBar.HeightFor(w)) - 24f * Typography.ScaleFor(w)) * 0.74f;
         }
 
         /// <summary>
@@ -1424,23 +1440,44 @@ namespace DragonScreen
             DockingPage.Build(dl, w, h, s);
         }
 
+        /// ⛔ THIS METHOD HAS NO CALLER. Established by [[S121b-iii]], 2026-09-06:
+        /// `grep -rn "DockingOld" plugin/ docs/` finds exactly ONE hit in source — this declaration —
+        /// plus three compiled binaries. `Pages.Build`'s `case 3:` goes to `Docking`, two lines above,
+        /// which calls `DockingPage.Build` in a different file. So this is not merely dormant behind
+        /// `FigmaMode` like the rest of the legacy family; **it is unreachable even if `FigmaMode` were
+        /// false**, and the same is true of everything only it uses: `Axis`, `AxisR`,
+        /// `DockingRingHeight`, `AlignRingRadius`, `BallDiameter` and `BallClearance`.
+        ///
+        /// ⚠ IT IS KEPT, NOT DELETED, AND THAT IS NOT INDECISION — C1.16 / G12: removing code does not
+        /// license removing the reasoning attached to it, and this method's body carries findings that
+        /// were paid for in game (the ball reading as misplaced at nine pixels of clearance; the
+        /// boresight that must draw over the ball). Whether the dead subsystem goes is a decision with
+        /// an owner, not a build chat's to take in passing. Logged as its own register line.
+        ///
+        /// ⚠ It was given its scale pass anyway. That is the recovery-wave premise — code that does not
+        /// run should still be correct — and it cost one edit per line while the file was open.
         private static void DockingOld(DisplayList dl, int w, int h, PageState s)
         {
-            float bodyTop = 24f;
+            // ⭐ [[S121b-iii]], 2026-09-06. ⛔ NOT the live docking HUD — that is `Frame58Hud` and
+            // [[S154b]]/[[S154c]]. This is the legacy page, dormant behind `FigmaMode` with the rest of
+            // the family, and it carries more RefPanelW literals than any other method in this file:
+            // the ±150 column offsets, the crosshair, and the offset/attitude row pitches.
+            float sc = Typography.ScaleFor(w);
+            float bodyTop = 24f * sc;
             float bodyBottom = h - ChromeBar.HeightFor(w);
             float cx = w * 0.5f;
             float cy = (bodyTop + bodyBottom) * 0.5f;
 
             if (!s.Valid || !s.HasTarget)
             {
-                dl.Text("DOCKING", cx, cy - 40f, Typography.Hero, TextAlign.Centre,
+                dl.Text("DOCKING", cx, cy - 40f * sc, Typography.Hero * sc, TextAlign.Centre,
                         DragonPalette.Text4);
-                dl.Text("NO TARGET SELECTED", cx, cy + 20f, Typography.Body, TextAlign.Centre,
+                dl.Text("NO TARGET SELECTED", cx, cy + 20f * sc, Typography.Body * sc, TextAlign.Centre,
                         DragonPalette.Text7);
                 return;
             }
 
-            dl.Text(s.TargetName ?? "TARGET", cx, bodyTop, Typography.Body, TextAlign.Centre,
+            dl.Text(s.TargetName ?? "TARGET", cx, bodyTop, Typography.Body * sc, TextAlign.Centre,
                     DragonPalette.Text1);
 
             // ---- THE RINGS ----
@@ -1468,15 +1505,15 @@ namespace DragonScreen
             // ball read as misplaced rather than merely tight. Deriving the diameter from the ring
             // it has to sit inside means the two can never drift into each other again, and the
             // headless test asserts the clearance rather than the number.
-            float ballD = BallDiameter(ringH);
+            float ballD = BallDiameter(ringH, sc);
             dl.Image(ImageId.NavBallLive, cx - ballD * 0.5f, cy - ballD * 0.5f, ballD, ballD,
                      DragonPalette.White);
 
             // Centre crosshair - two short bars, not a filled dot, so the alignment marker that will
             // sit here later is never hidden behind it. Drawn OVER the ball: it is the boresight, and
             // a boresight the attitude ball can hide is not a boresight.
-            dl.Rect(cx - 18f, cy - 1f, 36f, 2f, DragonPalette.Text2);
-            dl.Rect(cx - 1f, cy - 18f, 2f, 36f, DragonPalette.Text2);
+            dl.Rect(cx - 18f * sc, cy - 1f * sc, 36f * sc, 2f * sc, DragonPalette.Text2);
+            dl.Rect(cx - 1f * sc, cy - 18f * sc, 2f * sc, 36f * sc, DragonPalette.Text2);
 
             // ---- ALIGNMENT RING ----
             // ---- AND WHY THIS ONE IS STILL THRESHOLD-COLOURED ----
@@ -1494,44 +1531,47 @@ namespace DragonScreen
             // is actually flown on. RATE goes CAUTION when opening - drifting away during an
             // approach is a condition, not a reading.
             float ry = cy + ringH * 0.40f;
-            dl.Text("RANGE", cx - 150f, ry, Typography.Caption, TextAlign.Centre, DragonPalette.Text6);
-            dl.Text(s.RangeText ?? Dashes.None, cx - 150f, ry + 22f, Typography.Value, TextAlign.Centre,
+            dl.Text("RANGE", cx - 150f * sc, ry, Typography.Caption * sc, TextAlign.Centre, DragonPalette.Text6);
+            dl.Text(s.RangeText ?? Dashes.None, cx - 150f * sc, ry + 22f * sc, Typography.Value * sc, TextAlign.Centre,
                     DragonPalette.Go);
-            dl.Text("RATE", cx + 150f, ry, Typography.Caption, TextAlign.Centre, DragonPalette.Text6);
-            dl.Text(s.RateText ?? Dashes.None, cx + 150f, ry + 22f, Typography.Value, TextAlign.Centre,
+            dl.Text("RATE", cx + 150f * sc, ry, Typography.Caption * sc, TextAlign.Centre, DragonPalette.Text6);
+            dl.Text(s.RateText ?? Dashes.None, cx + 150f * sc, ry + 22f * sc, Typography.Value * sc, TextAlign.Centre,
                     s.ClosingFast ? DragonPalette.Alarm
                                   : s.Closing ? DragonPalette.Go : DragonPalette.Caution);
 
             // ---- X / Y / Z OFFSETS, left of the ring ----
-            float ox = w * 0.10f, oy = cy - 60f;
-            dl.Text("OFFSET", ox, oy - 34f, Typography.Caption, TextAlign.Left, DragonPalette.Text6);
-            Axis(dl, ox, oy,       "X", s.OffXText);
-            Axis(dl, ox, oy + 40f, "Y", s.OffYText);
-            Axis(dl, ox, oy + 80f, "Z", s.OffZText);
+            float ox = w * 0.10f, oy = cy - 60f * sc;
+            dl.Text("OFFSET", ox, oy - 34f * sc, Typography.Caption * sc, TextAlign.Left, DragonPalette.Text6);
+            Axis(dl, ox, oy,            "X", s.OffXText, sc);
+            Axis(dl, ox, oy + 40f * sc, "Y", s.OffYText, sc);
+            Axis(dl, ox, oy + 80f * sc, "Z", s.OffZText, sc);
 
             // ---- ATTITUDE, right of the ring ----
-            float ax = w - w * 0.10f, ay = cy - 60f;
-            dl.Text("ATTITUDE", ax, ay - 34f, Typography.Caption, TextAlign.Right,
+            float ax = w - w * 0.10f, ay = cy - 60f * sc;
+            dl.Text("ATTITUDE", ax, ay - 34f * sc, Typography.Caption * sc, TextAlign.Right,
                     DragonPalette.Text6);
-            AxisR(dl, ax, ay,       "PITCH", s.PitchText);
-            AxisR(dl, ax, ay + 40f, "YAW",   s.YawText);
-            AxisR(dl, ax, ay + 80f, "ROLL",  s.RollText);
+            AxisR(dl, ax, ay,            "PITCH", s.PitchText, sc);
+            AxisR(dl, ax, ay + 40f * sc, "YAW",   s.YawText, sc);
+            AxisR(dl, ax, ay + 80f * sc, "ROLL",  s.RollText, sc);
 
-            dl.Text("ALIGN", ax, ay + 128f, Typography.Caption, TextAlign.Right, DragonPalette.Text6);
-            dl.Text(s.AlignText ?? Dashes.None, ax, ay + 150f, Typography.Body, TextAlign.Right,
+            dl.Text("ALIGN", ax, ay + 128f * sc, Typography.Caption * sc, TextAlign.Right, DragonPalette.Text6);
+            dl.Text(s.AlignText ?? Dashes.None, ax, ay + 150f * sc, Typography.Body * sc, TextAlign.Right,
                     alignColour);
         }
 
-        private static void Axis(DisplayList dl, float x, float y, string name, string value)
+        /// ⛔ `sc` is PASSED IN: these take an x and a y and no width at all. ⚠ The 150 px column is
+        /// the gap between a label and its value — leaving it fixed while the type doubles is how a
+        /// value ends up sitting on its own label ([[S121b-iii]], 2026-09-06).
+        private static void Axis(DisplayList dl, float x, float y, string name, string value, float sc)
         {
-            dl.Text(name, x, y, Typography.Caption, TextAlign.Left, DragonPalette.Text5);
-            dl.Text(value ?? Dashes.None, x + 150f, y, Typography.Body, TextAlign.Right, DragonPalette.Text0);
+            dl.Text(name, x, y, Typography.Caption * sc, TextAlign.Left, DragonPalette.Text5);
+            dl.Text(value ?? Dashes.None, x + 150f * sc, y, Typography.Body * sc, TextAlign.Right, DragonPalette.Text0);
         }
 
-        private static void AxisR(DisplayList dl, float x, float y, string name, string value)
+        private static void AxisR(DisplayList dl, float x, float y, string name, string value, float sc)
         {
-            dl.Text(name, x - 150f, y, Typography.Caption, TextAlign.Left, DragonPalette.Text5);
-            dl.Text(value ?? Dashes.None, x, y, Typography.Body, TextAlign.Right, DragonPalette.Text0);
+            dl.Text(name, x - 150f * sc, y, Typography.Caption * sc, TextAlign.Left, DragonPalette.Text5);
+            dl.Text(value ?? Dashes.None, x, y, Typography.Body * sc, TextAlign.Right, DragonPalette.Text0);
         }
 
         /// <summary>
@@ -1542,11 +1582,12 @@ namespace DragonScreen
         {
             string name = (pageIndex >= 0 && pageIndex < ChromeBar.PageNames.Length)
                           ? ChromeBar.PageNames[pageIndex] : "?";
+            float sc = Typography.ScaleFor(w);
             float cx = w * 0.5f;
             float cy = h * 0.42f;
 
-            dl.Text(name, cx, cy - 30f, Typography.Hero, TextAlign.Centre, DragonPalette.Text4);
-            dl.Text("NO SUCH PAGE", cx, cy + 24f, Typography.Body, TextAlign.Centre,
+            dl.Text(name, cx, cy - 30f * sc, Typography.Hero * sc, TextAlign.Centre, DragonPalette.Text4);
+            dl.Text("NO SUCH PAGE", cx, cy + 24f * sc, Typography.Body * sc, TextAlign.Centre,
                     DragonPalette.Text7);
         }
     }
