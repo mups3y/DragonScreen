@@ -8302,7 +8302,7 @@ pure linear algebra over a caller-supplied error and declares only the three con
 to name them together. W6 did not widen into another wave's file — logged as **W22** (C1.1).
 **No screen changed → no preview PNG applies.**
 
-### W7 [O] `AscentControl.cs` — recover it with the roll-trim block REMOVED, on its own line — **TODO** — [TIER 2: real defect + recovery; touches the ONLY flight-validated subsystem]
+### W7 [O] `AscentControl.cs` — recover it with the roll-trim block REMOVED, on its own line — **HELD 2026-09-06 — ⛔ DO NOT EXECUTE THIS LINE AS WRITTEN: its line range would delete a DIFFERENT flight fix, and the defect it names was already fixed by the owner** — [TIER 2: real defect + recovery; touches the ONLY flight-validated subsystem]
 Logged by **W3**, 2026-09-04 (C1.1 — W3's Build text asked which wave owns this file; the answer is **none**).
 **The finding:** R1 §5.2 gives `plugin/src/AscentControl.cs` (55,054 B) verdict **RECOVER-CODE — HIGH**,
 regime **RSS-RO — DB-VALIDATED**, flown **YES**. But it is the DRAGON's ascent phase controller (§B12.5
@@ -8323,6 +8323,71 @@ the removal (no roll-trim hysteresis path remains) and that nothing else in the 
 comment-stripped diff against `8b81816^` minus that block, the W2/W3 provenance idiom.
 **DONE when:** `build.py test` green, the removal is test-guarded and stated in the file's header, and the
 diff shows the block gone and nothing else in the proven ascent path altered.
+
+#### ⛔ HELD 2026-09-06 — **FOUR findings, and the first one is why this must not be executed as written**
+
+This line was picked up to be built. It was not built, and it must not be until the owner rules, because
+**following its Build instruction literally would delete a flight fix and reintroduce a known failure.**
+Everything below was read out of `git show 8b81816^:plugin/src/AscentControl.cs` and the commits around it.
+
+**1. ⛔ THE LINE RANGE IS STALE, AND `:397-414` IS NOT THE ROLL-TRIM BLOCK.**
+In `8b81816^` — the file this line says to restore from — lines 394-414 are the **ROLL REFERENCE** block:
+the Gram-Schmidt `rollRef = up − aimN·(up·aimN)` and its `Steering.PointHoldRoll` call. Its own comment
+states the two defects it fixes: *"(1) PLANE STABILITY … a non-⊥ ISS-normal ref gave inc 116° instead of
+51.6° (flight 190114)"* and *"(2) CREW ORIENTATION: the crew must ride BACKS-TO-THE-SKY … NOT lying on
+their sides."* **Deleting `:397-414` would remove that fix and restore an inc-116° failure and a 90°-rolled
+crew.** R1 §7.1's line numbers must date from a revision before the shift described in (2).
+
+**2. ⭐ AND THE DEFECT THIS LINE EXISTS TO REMOVE WAS ALREADY REMOVED — BY THE OWNER, BEFORE THE DELETION.**
+Commit **`fc74863`** (*"PID research fix … + RCS-on for S2 + separation hold-lock"*, owner, **2026-09-01**,
+one commit before `8b81816`) took the hysteresis out. Its diff drops
+`if (rateDps > S2RollTrimOnDps && !lastRcsOn)` / `else if (rateDps < S2RollTrimOffDps && lastRcsOn)` and
+replaces them with the record that survives at `:419-422`: *"S2 roll-trim hysteresis REMOVED (owner
+2026-09-01): RCS is now ON continuously through S2 … no on/off toggling."*
+**So §B12.8 rider (b)'s "it comes back with that block REMOVED" is already satisfied by the source.**
+⚠ What genuinely remains is **two orphaned `[Tunable]`s** — `S2RollTrimOnDps` / `S2RollTrimOffDps`
+(`:68-69`) and their doc comment at `:66` — dead knobs for a loop that no longer exists. That is the only
+part of this line's stated defect still outstanding, and it is a fraction of the job the line describes.
+
+**3. ⛔ IT CANNOT COMPILE, AND THE MISSING DEPENDENCY IS ONE THE PLAN FORBIDS RECOVERING.**
+`AscentControl` calls **seven** distinct `Steering.*` members — `AngleOfAttackDeg`, `LimitToProgradeCone`,
+`PitchHeadingDir`, `PointHoldRoll`, `Prograde`, `Release`, `Up`. **`plugin/src/Steering.cs` is not in the
+tree**, and this line's own ⚠ says it is **NEVER recovered** (§B12.8 rider (b): *"its last committed state
+is `UseGimbalLoop = false`, attitude handed to stock SAS, which is precisely what Part B replaces"*).
+`plugin/src/pure/Ascent.cs` is absent too. **So the recovery is blocked on a file the plan rules out**, and
+no amount of care with the removal changes that.
+
+**4. ⭐ AND THE DESIGN QUESTION UNDERNEATH, WHICH [[T16]] MADE CONCRETE TODAY.** §B12.3 assigns the ascent
+phase to **MechJeb's PVG autopilot** — *"Ascent → PVG ascent (§B8)"* — and T16's `ConductorAction` core now
+returns `Engage AscentPvg` for `MissionPhase.Ascent`, naming `MechJebModuleAscentPSGAutopilot`. **A
+recovered `AscentControl` would be a SECOND ascent controller**, hand-written, driving a `Steering` layer
+Part B exists to replace. The two cannot both fly the ascent.
+
+#### The question, and it is the owner's (C1.12 / C1.14)
+
+⛔ **A build chat cannot answer any of these**: (1) is a correction to a plan-derived instruction, (3)
+requires overriding §B12.8 rider (b), and (4) is a Part-B architecture call.
+
+**Paste-ready overseer prompt (C1.13):**
+> DragonScreen, W7. This line says to recover `AscentControl.cs` from `8b81816^` **with lines 397-414
+> removed**, because R1 §7.1 names that block as the S2 roll-trim hysteresis that caused *"the shake"*.
+> ⛔ **Three things are wrong with executing that, all verified in git:**
+> **(a)** In `8b81816^`, lines 397-414 are **not** the roll trim — they are the **roll REFERENCE**
+> Gram-Schmidt block, whose own comment says it fixes flight 190114's *"inc 116° instead of 51.6°"* **and**
+> the crew riding on their sides. Deleting it restores both failures.
+> **(b)** The roll-trim hysteresis **is already gone** — you removed it yourself in `fc74863` on
+> **2026-09-01**, the commit before the deletion (*"RCS-on for S2 roll"*), and the file carries your note
+> saying so. All that remains is two dead `[Tunable]`s, `S2RollTrimOnDps` / `S2RollTrimOffDps`.
+> **(c)** The file **cannot compile**: it calls seven `Steering.*` members and `src/Steering.cs` is one
+> §B12.8 rider (b) says is **never recovered**.
+> **And the real question is whether this file should come back at all.** §B12.3 gives the ascent phase to
+> MechJeb's PVG autopilot, and T16's conductor core now returns *engage AscentPvg* for `MissionPhase.Ascent`.
+> A recovered `AscentControl` would be a second ascent controller driving the very `Steering` layer Part B
+> replaces. **Options:** **(a)** drop the recovery — ascent is MechJeb's, and W7 shrinks to deleting two dead
+> tunables from a file that no longer exists (i.e. nothing to do); **(b)** recover it as reference only,
+> not compiled, for the flight-validated tuning inside it; **(c)** recover it AND `Steering.cs`, which needs
+> an `OVERRIDE` of §B12.8 rider (b) and leaves two ascent controllers to reconcile.
+> ⚠ Whatever is chosen, **R1 §7.1's line numbers must be corrected or struck** — they are the trap here.
 
 ### W8 [O] The recovered booster FSM is FOUR phases; §B16.2 and the owner's boostback decision need FIVE — **DONE** — [TIER 2: real gap — the recovered starting point cannot fly either profile]
 Logged by **W3**, 2026-09-04 (C1.1 — found on restoring `pure/BoosterDescent.cs`; closing it is a rewrite,
