@@ -43,6 +43,7 @@ public static class FigmaUINavTest
         SpeccedPages();
         Menu();
         MenuHidesPlaceholders();
+        OneScreenOneRenderer();
         Rendezvous();
         DeorbitBurnPrep();
         EntryProcedure();
@@ -66,9 +67,12 @@ public static class FigmaUINavTest
         // S14: the grid no longer lists EVERY page but Menu — a page that resolves to the honest
         // PlaceholderPage (FigmaUI.IsPlaceholder, no real Build case) is left off until a real case
         // is added for it. Count independently from the same predicate MenuPage itself reads.
+        // S110 / QC F-01: and an ALIAS is left off too - `Procedure` (3) and `VrioTest` (19) are one
+        // real screen, so the grid must not offer two doors onto it. The value stays reachable.
         int wantEntries = 0;
         for (int i = 0; i < FigmaUI.PageCount; i++)
-            if ((UiPage)i != UiPage.Menu && !FigmaUI.IsPlaceholder((UiPage)i)) wantEntries++;
+            if ((UiPage)i != UiPage.Menu && !FigmaUI.IsPlaceholder((UiPage)i)
+                && !FigmaUI.IsAlias((UiPage)i)) wantEntries++;
         Check("menu lists every real page but itself", MenuPage.Entries.Length == wantEntries,
               "got " + MenuPage.Entries.Length + " want " + wantEntries);
 
@@ -166,10 +170,57 @@ public static class FigmaUINavTest
             for (int j = 0; j < MenuPage.Entries.Length; j++)
                 if (MenuPage.Entries[j] == p) { present = true; break; }
 
-            bool want = p != UiPage.Menu && !FigmaUI.IsPlaceholder(p);
+            bool want = p != UiPage.Menu && !FigmaUI.IsPlaceholder(p) && !FigmaUI.IsAlias(p);
             Check("menu " + (want ? "lists" : "hides") + " " + p, present == want,
                   "got present=" + present + " want=" + want);
         }
+    }
+
+    // ---- S110 / QC F-01: one real screen, one renderer ----
+    // Page 3 (`Procedure`) and page 19 (`VrioTest`) are the same screen - "4.700 Deorbit Preparation /
+    // Test VRIO Health LEDs". The build shipped both: 3 as the baked `frame59` PNG, 19 as the element
+    // rebuild, each with its own Menu card, and the two drawings had drifted apart (different tick
+    // style, an extra glyph, differently placed note cards, a different read-only icon).
+    static void OneScreenOneRenderer()
+    {
+        var a = new DisplayList(FigmaUI.Commands);
+        var b = new DisplayList(FigmaUI.Commands);
+        var st = new PageState();
+        var view = MapProjection.Default();
+        FigmaUI.Build(a, UiPage.Procedure, W, H, st, view);
+        FigmaUI.Build(b, UiPage.VrioTest, W, H, st, view);
+
+        // 1. The alias resolves - identical command streams, not merely "both non-empty".
+        Check("Procedure and VrioTest draw the same command count",
+              a.Count == b.Count, a.Count + " vs " + b.Count);
+        bool same = a.Count == b.Count;
+        for (int c = 0; same && c < a.Count; c++)
+        {
+            var x = a.At(c); var y = b.At(c);
+            if (x.Kind != y.Kind || x.A != y.A || x.B != y.B || x.C != y.C || x.D != y.D
+                || x.Str != y.Str || !Same(x.Colour, y.Colour)) same = false;
+        }
+        Check("Procedure and VrioTest are the SAME screen, command for command", same, "");
+
+        // 2. It is still the VRIO page and not something empty - guards a vacuous pass.
+        bool sawTitle = false;
+        for (int c = 0; c < a.Count; c++)
+            if (a.At(c).Kind == DrawKind.Text && a.At(c).Str == "Test VRIO Health LEDs") sawTitle = true;
+        Check("page 3 now draws the VRIO procedure", sawTitle, "");
+
+        // 3. The enum value is KEPT and still reachable - UiPage's own rule is that the int persists per
+        //    screen, so a save written on page 3 must still open something real.
+        Check("Procedure is not a placeholder", !FigmaUI.IsPlaceholder(UiPage.Procedure), "");
+        Check("Procedure is an alias of VrioTest",
+              FigmaUI.Canonical(UiPage.Procedure) == UiPage.VrioTest, "");
+        Check("VrioTest is its own canonical page",
+              FigmaUI.Canonical(UiPage.VrioTest) == UiPage.VrioTest, "");
+
+        // 4. Exactly one Menu card leads to this screen.
+        int cards = 0;
+        for (int j = 0; j < MenuPage.Entries.Length; j++)
+            if (FigmaUI.Canonical(MenuPage.Entries[j]) == UiPage.VrioTest) cards++;
+        Check("exactly one Menu card opens the VRIO procedure", cards == 1, "got " + cards);
     }
 
     static void Rendezvous()

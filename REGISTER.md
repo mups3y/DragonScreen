@@ -12296,6 +12296,64 @@ wrong fix plan.
 **Verified:** `build.py test` green (953 in the nav suite), 104 PNGs re-rendered; the four rings measured on
 `ui_navorbitplot.png` by 8-ray sampling at each radius.
 
+### S110 [O] QC batch 8 — one real screen was shipped twice, and the surviving copy was built from the wrong source — **DONE 2026-09-05** — [F-01 fixed; VT-01 partly fixed; VT-02 filed new]
+
+**🟢 OWNER-DIRECTED** — *"…You must confirm your findings before fixing."* Confirming this one meant putting
+the two renders side by side and **looking**, which is how the sharper defect surfaced.
+
+**F-01 (TIER 1) — TWO `UiPage` VALUES, TWO MENU CARDS, ONE REAL SCREEN. FIXED.** Page 3 (`Procedure`, the
+baked `frame59`) and page 19 (`VrioTest`, the element rebuild) are both *"4.700 Deorbit Preparation / Test
+VRIO Health LEDs"* — same title, same DEORBIT checklist with the same 4-of-5 state, same steps 4.1–4.5,
+same three command buttons, same NEXT and ENTER READ-ONLY, same two note cards word for word. Page 3 now
+calls `VrioTestPage.Build`. New `FigmaUI.Canonical` / `IsAlias` make the relationship **derived** rather
+than a special case in three files, and `MenuPage.BuildEntries` skips aliases the way S14 taught it to skip
+placeholders. `ui_menu.png` dropped **exactly 6 commands** — one card's rect + box + text.
+⛔ The enum value stays, unrenumbered: a save written on page 3 reopens on the screen it always meant.
+
+**⭐ AND THE SURVIVING PAGE'S HEADER WAS WRONG, WHICH EXPLAINS THE WHOLE THING.** `VrioTestPage.cs:3` said:
+*"A real Crew Dragon procedure screen with **NO Figma/demo reference** — reconstructed from photographs."*
+`frame59.png` is a Figma frame **of that exact screen**, sitting in the repo, being rendered by page 3 the
+whole time. **The rebuild was reconstructed from photographs while a reference frame was already in the
+tree** — C7's own failure mode, building from a weaker source than the one present — and the two drawings
+drifted apart. Header corrected: the frame is this page's reference now, and where they disagree §1.4 makes
+the frame the source and the page the thing corrected.
+
+**VT-01 — PARTLY FIXED: the tint half, on the rendering that survives.** F-01 came first, as VT-01's own
+sequencing demanded, so nothing was built into the copy that got dropped. All seven painted controls take
+S75's tint, because none can act (no `HitTest` in the file, no `ScreenPainter` branch): the three
+`START/STOP VRIO … LED TEST` buttons are **(B)** and must never get a rect in Part A; `NEXT` is **(A)** but
+advances a step model that does not exist; `ENTER READ-ONLY` gets the same call SC-02 made for the identical
+control on the Suit Leak Check, this page's own template.
+
+Two more, for two different reasons: the read-only glyph was **`ic_stop`** — a filled rounded rect — where
+the reference draws an **eye**, and `ic_eye` is already in the asset set and already used by SuitCheck for
+the identical control (a placeholder that outlived its excuse). And the checklist ticks were filled **`Go`
+green off a compile-time literal** — the page asserting a completion verdict with no source, S31/S32's rule
+and MP-01's exact shape. White now. ⛔ **The STATE is reference copy and is untouched**; only the colour was
+ours, and it goes back to `Go` when a real step model drives it.
+
+⛔ **VT-01's larger half is still BLOCKED:** the five ticks are step TRACKING, §14.4(f) **(A)**, and
+`pure/StepList.cs` is stranded behind `FigmaMode` (S49 §1.1). Routing it is **H34**, a build of its own.
+
+**⚠ VT-02 (NEW) — AND THE HONEST COST OF F-01's TRADE, WRITTEN DOWN RATHER THAN GLOSSED.** Side by side,
+`frame59` is the **better-looking and more legible** of the two, and F-01 dropped it — correctly, because a
+flat PNG can never track a step, take a touch, or be tinted. That trade is only honest if the gap is then
+closed. Seven measured deviations from the reference are filed: the title, the section heading and the page
+heading are **left-aligned and large in the frame and centred and smaller in the rebuild**; the rebuild adds
+a refresh glyph the frame does not have; the step rows are lighter and set wider; the note cards sit at a
+different x with a different type treatment; and the content panel stops ~40 px short of the bar. **Filed,
+not fixed** — correcting them means measuring against the frame the way S105 measured `DrawTopStrip` off the
+PNGs it replaced, and one item may not be a deviation at all (the refresh glyph is `SuitCheckPage`'s own
+idiom, so the sibling procedure frame has to be checked before removing it).
+
+**Tests.** New `OneScreenOneRenderer()`: the two pages produce **identical command streams, command for
+command** (kind, geometry, string, colour); page 3 draws the VRIO title so the pass cannot be vacuous;
+`Procedure` is not a placeholder and is still reachable; `Canonical` round-trips; and **exactly one Menu
+card** resolves to this screen. The two existing Menu checks learned about aliases rather than being
+loosened — they still assert an exact membership rule, with one more clause in it.
+
+**Verified:** `build.py test` green, 104 PNGs re-rendered, and both renders read by eye at 1280×703.
+
 
 ---
 

@@ -2522,6 +2522,38 @@ same class as the S13 residual the Cover fixed (`CoverPage.cs:126-141`).
   look even if it stops being drawn), and the enum value is not renumbered.
 - **Verify:** the Menu grid lists this procedure once; `ui_vriotest.png` is the only render of it.
 
+
+### ✅ FIXED 2026-09-05 — S110 (QC batch 8)
+
+**Fixed by the recommended route, and confirming it turned up something the finding did not know.**
+
+`UiPage.Procedure` (3) now calls `VrioTestPage.Build` — one screen, one renderer. `frame59` is off the draw
+path. New `FigmaUI.Canonical(UiPage)` / `IsAlias(UiPage)` make the relationship a **derived fact** rather
+than a special case repeated in three files, and `MenuPage.BuildEntries` skips aliases the same way S14
+taught it to skip placeholders. `ui_menu.png` dropped **exactly 6 commands** — one card's rect + box + text.
+
+⛔ **The enum value stays and is not renumbered.** `UiPage`'s own rule is that the int persists per screen,
+so a save written on page 3 reopens on the same screen it always meant. `frame59.png` stays on disk and is
+still previewed as an asset — it is this page's **reference** now, not its renderer.
+
+⚠ **THE HEADER OF THE SURVIVING PAGE WAS WRONG, AND IT EXPLAINS HOW THE DUPLICATION HAPPENED.**
+`VrioTestPage.cs:3` opened: *"A real Crew Dragon procedure screen with **NO Figma/demo reference** —
+reconstructed from photographs."* `frame59.png` is a Figma frame **of this exact screen** and was in the
+repo the whole time — `UiPage.Procedure` was rendering it. So the rebuild was reconstructed from
+photographs while a reference frame sat in the tree: **C7's own failure mode, building from a weaker source
+than the one already present**, and the two drawings then drifted. The header now says so, and records that
+where the two disagree, §1.4 makes the frame the source and the page the thing corrected.
+
+**Verified headlessly** — `FigmaUINavTest.OneScreenOneRenderer()`: the two pages produce **identical
+command streams, command for command** (kind, geometry, string and colour), page 3 draws the VRIO title
+(so the pass cannot be vacuous), `Procedure` is not a placeholder and is still reachable, and **exactly one
+Menu card** resolves to this screen.
+
+⚠ **The shipped look temporarily regresses, and that is the right trade, stated plainly.** Side by side,
+`frame59` is the better-looking and more legible of the two. But it is a flat PNG: it can never track a
+step, take a touch, or be tinted. The rebuild is the only one with a future, so it is the one that
+survives — and the gap between it and the reference is now a **defect with a source to fix it against**,
+filed as **VT-02**, rather than a second screen nobody was comparing.
 ---
 
 ## F-02 — Both pages are a single PNG with no state and no touch, and the Cabin page's data is already live one file away
@@ -3905,6 +3937,85 @@ one screen, neither of which tracks a step.
   H34's job and a build of its own — not a line item on this page.
 - **Verify:** after F-01, one render of this procedure; after step tracking, the ticks change with vehicle
   state; after the tint pass, the two (B) buttons are visibly inert.
+
+
+### ⚠ PARTLY FIXED 2026-09-05 — S110 (the tint half; step tracking is still blocked)
+
+**F-01 came first, as this finding's own sequencing required**, so the work landed on the rendering that
+survives rather than the one that was dropped.
+
+**Done — S75's tint, on all seven painted controls**, because none of them can act (still no `HitTest` in
+the file and no `ScreenPainter` branch):
+
+| control | class | why it is dim |
+|---|---|---|
+| `START VRIO 1 / 2 LED TEST`, `STOP VRIO 2` | **(B)** | they command the flight computer's health LEDs — §14.4(a) honest no-op until Part B, and they **must not** get working rects in Part A |
+| `NEXT` | **(A)** | buildable in principle, but what it advances is the stranded `StepList` — until it advances something it resolves to nothing |
+| `ENTER READ-ONLY` | inert | same call SC-02 made for the identical control on the Suit Leak Check, this page's own template |
+
+**Also done, and it is two fixes for two different reasons:**
+- **The read-only glyph was `ic_stop`** — a filled rounded rect — where the reference frame draws an **eye**,
+  and `ic_eye` is already in the asset set and already used by `SuitCheckPage` for the identical control. A
+  placeholder that outlived its excuse; reference and sibling page agreed, so there was nothing to decide.
+- **The checklist ticks were filled `Go` green off a compile-time literal** (`Done`, `:34`) — this page
+  asserting a completion verdict with no source, S31/S32's rule and MP-01's exact shape. They are `White`
+  now. ⛔ **The STATE (four done, one open) is reference copy and is reproduced untouched**; only the colour
+  was ours. It goes back to `Go` when a real step model drives it.
+
+⛔ **STILL BLOCKED, and this is the finding's larger half:** the five ticks are step TRACKING — **(A)** under
+§14.4(f) — and there is no step model to read. `pure/StepList.cs` is stranded behind `FigmaMode` (S49 §1.1),
+and routing it is **H34**, a build of its own. Nothing here pretends otherwise: the literal is still a
+literal, it is just no longer painted as a live verdict.
+
+⛔ **No hit rect was added**, deliberately. The three (B) buttons must not get one in Part A at all; the two
+(A) controls go back to White **and** into a hit table together, or not at all.
+---
+
+## VT-02 — The VRIO rebuild deviates from the Figma frame of the same screen in at least seven ways
+
+**TIER 2** · **NEW (S110)** · only became a defect once **F-01** established `frame59` as this page's reference
+
+**Why this is new.** Until S110 these two were treated as different screens, so nobody compared them. F-01
+established that `art/cover/frame59.png` is a Figma frame **of this exact screen**, and `VrioTestPage`'s own
+header wrongly claimed there was no Figma reference. §1.4 now makes the frame the source and the page the
+thing corrected — so every place they differ is a deviation from a real reference, not a style choice.
+
+**Evidence.** `frame59.png` against `ui_vriotest.png`, both 1280×703, side by side:
+
+| # | element | the reference frame | the rebuild |
+|---|---|---|---|
+| 1 | `4.700 - Deorbit Preparation` | **left**-aligned in the panel | **centred** |
+| 2 | `SECTION 4: IN PROGRESS` | left, at the panel's own margin | indented, and preceded by an extra glyph |
+| 3 | a refresh glyph beside that heading | **absent** | **present** (`ic_refresh`, `:75`) |
+| 4 | `Test VRIO Health LEDs` | **left**-aligned, large | **centred** |
+| 5 | step rows 4.1–4.5 | larger type, tighter to the left rule | smaller, lighter, wider gutter |
+| 6 | the two note cards | flush right, one type weight | different x, hanging indent after `Note:`, dimmed bullet lines |
+| 7 | the content panel's foot | the page chrome encloses the whole screen | the panel stops ~40 px short, leaving a bare gap above the bar |
+
+⚠ **Items 1, 2, 4 and 5 are the ones that matter**, because they are what makes the rebuild read as less
+legible than the PNG it replaced — the reference sets this procedure left-aligned and large, and the
+rebuild centres it and shrinks it. Item 3 is an element the reference does not have at all.
+
+**What is wrong.** F-01's fix deliberately kept the renderer that can become live and dropped the one that
+looked better. That trade is only honest if the gap is then closed — otherwise the sweep will have made the
+shipped screen worse and called it a fix.
+
+**Fix plan.**
+- **Measure the seven against `frame59.png` and correct the page to the frame**, the same way
+  `DrawCameraChrome` and `DrawTopStrip` were measured off the assets they replaced (S105/C-01). The frame is
+  a Figma export, so positions are recoverable from it directly rather than eyeballed.
+- ⚠ **Item 3 is the only one that might not be a deviation.** `ic_refresh` beside a section heading is the
+  idiom `SuitCheckPage:116` also uses, so the rebuild may have imported it deliberately from the sibling
+  template rather than invented it. **Check the Suit-Leak frame before removing it** — if both procedure
+  screens' references carry it and only this one's does not, that is a reference inconsistency to record,
+  not a bug to fix.
+- ⚠ **Do NOT re-derive the checklist state or the copy.** Both are reference content and are already
+  correct; this is a layout and type correction only.
+- **Must not break:** the S75 tints S110 applied. Correcting alignment must not repaint an inert control as
+  live.
+- **Verify:** the two renders side by side with each of the seven resolved, and the page's type at or above
+  what `frame59` sets — which will also feed **R-01**, since the frame's own sizes are evidence of what the
+  designer intended at this scale.
 
 ---
 

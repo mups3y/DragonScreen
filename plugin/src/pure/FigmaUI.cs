@@ -190,7 +190,16 @@ namespace DragonScreen
                 case UiPage.Menu:      MenuPage.Build(dl, w, h); break;
                 case UiPage.Hud:       Frame58Hud.Build(dl, w, h, s); break;
                 case UiPage.Audio:     SettingsAudioPage.Build(dl, w, h, 2); break;
-                case UiPage.Procedure: FigmaFramePage.Build(dl, w, h, "frame59"); break;
+                // S110 / QC F-01: page 3 and page 19 are THE SAME REAL SCREEN - "4.700 Deorbit
+                // Preparation / Test VRIO Health LEDs" - and the build shipped both, page 3 as the baked
+                // `frame59` and page 19 as the element rebuild, with the Menu listing each under its own
+                // name. Two cards, one procedure, two drawings that disagreed with each other.
+                // The rebuild wins because it is the only one that can ever become live (VT-01 / S49 H21);
+                // a flat PNG can never track a step, take a touch, or be tinted. `frame59` stays ON DISK
+                // and is still previewed as an asset - it is now this page's REFERENCE, not its renderer.
+                // ⛔ The enum value stays and is NOT renumbered (UiPage's own rule: the int persists per
+                // screen), so a save written on page 3 reopens on the same screen it always meant.
+                case UiPage.Procedure:   VrioTestPage.Build(dl, w, h); break;
                 case UiPage.Cabin:     FigmaFramePage.Build(dl, w, h, "frame66"); break;
                 // S31: the page's suit model is assembled HERE, from the same PageState every other
                 // page reads, so the one thing the painter has to own is the run seed. suitPopup is
@@ -221,6 +230,21 @@ namespace DragonScreen
             }
             BottomBarMarker(dl, w, h, page);
         }
+
+        /// <summary>The page a UiPage value RESOLVES TO when it is not its own screen. S110 / QC F-01:
+        /// `Procedure` (3) and `VrioTest` (19) are one real screen that was shipped twice, so 3 now draws
+        /// 19's page. Derived rather than special-cased in three places: the Menu asks this to avoid
+        /// listing one screen under two names, and anything else that needs "which screen is this really"
+        /// gets one answer.</summary>
+        public static UiPage Canonical(UiPage p)
+        {
+            return p == UiPage.Procedure ? UiPage.VrioTest : p;
+        }
+
+        /// <summary>Is this value an alias for another page's screen (see <see cref="Canonical"/>)?
+        /// An alias is still REACHABLE - a persisted page int must keep working - it just does not get
+        /// its own Menu card, because a grid with two doors onto one room is the F-01 defect.</summary>
+        public static bool IsAlias(UiPage p) { return Canonical(p) != p; }
 
         /// <summary>True if this page has no real case in Build's switch above, so a visit draws the
         /// honest PlaceholderPage card instead of real content. This is the ONE place that decides

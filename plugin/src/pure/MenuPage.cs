@@ -66,7 +66,11 @@ namespace DragonScreen
             for (int i = 0; i < FigmaUI.PageCount; i++)
             {
                 UiPage p = (UiPage)i;
-                if (p == UiPage.Menu || FigmaUI.IsPlaceholder(p)) continue;
+                // S110 / QC F-01: an ALIAS is skipped too. `Procedure` (3) and `VrioTest` (19) are one
+                // screen, and the grid listed both - "PROCEDURE" and the VRIO title - so two cards opened
+                // the same procedure. Same shape as S14's placeholder rule: the enum value is kept and
+                // stays reachable, it just does not get a second card.
+                if (p == UiPage.Menu || FigmaUI.IsPlaceholder(p) || FigmaUI.IsAlias(p)) continue;
                 list.Add(p);
             }
             return list.ToArray();
