@@ -104,7 +104,7 @@ namespace DragonScreen
             L("  disconnected", 2910, 1074, 24, Dim);
 
             // ================= bottom status bar =================
-            dl.Asset("component_48", 0f, PY(1877), w, SZ(235), White);
+            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
         }
     }
 }

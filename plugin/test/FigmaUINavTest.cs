@@ -28,7 +28,7 @@ public static class FigmaUINavTest
     public static int Run()
     {
         Console.WriteLine("DragonScreen Figma UI nav tests");
-        BottomBar();
+        BottomBarNav();
         SuitCheck();
         SuitLeakSimulation();
         VehicleTabs();
@@ -100,8 +100,14 @@ public static class FigmaUINavTest
         // the same global bottom bar as every other page, whose Cover icon returns to the Cover — the
         // one back route every page in this UI has (see BottomBar()).
         {
-            float sc = H / RefH;
-            float bcx = (46f + 40f) / RefW * W, bcy = (2003f + 40f) * sc;
+            // S103: derived from BottomBar, not a third hardcoded copy of the stretched mapping -
+            // this probe silently stopped landing on the bar when the draw was un-stretched, which is
+            // exactly the drift the shared geometry exists to prevent.
+            float bbx, bby, bbw, bbh;
+            BottomBar.Rect(W, H, out bbx, out bby, out bbw, out bbh);
+            float bk = bbw / RefW;
+            float bcx = bbx + (BottomBar.IconX[0] + BottomBar.IconS * 0.5f) * bk;
+            float bcy = bby + (BottomBar.IconY - 1877f + BottomBar.IconS * 0.5f) * bk;
             NavHit back = FigmaUI.HitTest(UiPage.Menu, bcx, bcy, W, H);
             Check("menu bottom-bar -> Cover (back)",
                   back.Act == NavAct.Goto && back.Target == UiPage.Cover, "got " + back.Act + " " + back.Target);
@@ -1608,18 +1614,25 @@ public static class FigmaUINavTest
               again.Failed(0) && SuitCheckPage.Available(SuitCheckPage.SuitAct.Troubleshoot, again), "");
     }
 
-    static void BottomBar()
+    static void BottomBarNav()
     {
-        float sc = H / RefH;
-        float[] x = { 46f, 174f, 302f, 430f, 558f };
-        const float iconY = 2003f, s = 80f;
+        // ---- S103: THE PROBE COMES FROM THE BAR'S OWN GEOMETRY, NOT FROM A COPY OF IT ----
+        // This used to compute the icon centres as `(x[i] + s*0.5f) / RefW * W` - the STRETCHED
+        // mapping, hardcoded here as a second copy of what FigmaUI's hit test happened to do. So it
+        // proved the hit map agreed with itself and nothing about whether it agreed with the DRAW.
+        // Both now read `BottomBar`, which is the one geometry the bar is drawn from (QC C-04/H-07).
+        float bx, by, bw, bh;
+        BottomBar.Rect(W, H, out bx, out by, out bw, out bh);
+        float k = bw / RefW;
+        float[] x = BottomBar.IconX;
+        const float s = BottomBar.IconS;
         // Must match FigmaUI.BarTarget (from the reference demo: icon N -> panel N).
         UiPage[] want = { UiPage.Cover, UiPage.Hud, UiPage.Vehicle, UiPage.SuitCheck, UiPage.Audio };
 
         for (int i = 0; i < x.Length; i++)
         {
-            float cx = (x[i] + s * 0.5f) / RefW * W;
-            float cy = (iconY + s * 0.5f) * sc;
+            float cx = bx + (x[i] + s * 0.5f) * k;
+            float cy = by + (BottomBar.IconY - 1877f + s * 0.5f) * k;
 
             Check("bar icon " + i + " hittable", FigmaUI.BottomBarHit(cx, cy, W, H) == i,
                   "got " + FigmaUI.BottomBarHit(cx, cy, W, H));
@@ -1636,16 +1649,68 @@ public static class FigmaUINavTest
                   "act " + fromCover.Act + " tgt " + fromCover.Target);
         }
 
-        // Neighbours must not share a hit region (icons are ~48px apart at 1280 wide).
+        // Neighbours must not share a hit region (the icon pitch is 128 design px, the icon 80).
         for (int i = 0; i + 1 < x.Length; i++)
         {
-            float edge = ((x[i] + s) + x[i + 1]) * 0.5f / RefW * W;   // midpoint of the gap
-            float cy = (iconY + s * 0.5f) * sc;
+            float edge = bx + ((x[i] + s) + x[i + 1]) * 0.5f * k;     // midpoint of the gap
+            float cy = by + (BottomBar.IconY - 1877f + s * 0.5f) * k;
             Check("gap after icon " + i + " hits nothing", FigmaUI.BottomBarHit(edge, cy, W, H) == -1,
                   "got " + FigmaUI.BottomBarHit(edge, cy, W, H));
         }
 
         // A touch above the bar is not a bar hit.
         Check("above the bar misses", FigmaUI.BottomBarHit(100f, H * 0.5f, W, H) == -1, "");
+
+        BottomBarUndistorted();
+    }
+
+    // ============================================================================================
+    // S103 / QC C-04 + H-07 — THE BAR IS DRAWN UNDISTORTED, AND ITS HIT MAP FOLLOWS IT
+    //
+    // The bar was drawn `0..w` against a height-derived scale at 21 sites, so component_48 was
+    // stretched 12.2% horizontally on every page - its 130x130 crosshair rendered 23x21 - while the
+    // hit map encoded the same stretch independently. This is the fence: the drawn box must be
+    // UNIFORM, and every icon's drawn centre must map back inside its OWN hit band, at more than one
+    // panel aspect. A future "just make the bar reach both edges again" fails here rather than on the
+    // glass.
+    // ============================================================================================
+    static void BottomBarUndistorted()
+    {
+        // The shipped screens plus two deliberately different aspects, including one NARROWER than the
+        // design (where Rect clamps and there is no letterbox to sit in).
+        int[,] sizes = { { 1280, 703 }, { 1280, 710 }, { 2560, 1406 }, { 1000, 800 } };
+        for (int i = 0; i < sizes.GetLength(0); i++)
+        {
+            int w = sizes[i, 0], h = sizes[i, 1];
+            string at = " @" + w + "x" + h;
+
+            float bx, by, bw, bh;
+            BottomBar.Rect(w, h, out bx, out by, out bw, out bh);
+
+            // UNDISTORTED: the bar's own x-scale and y-scale are the same number. This is the whole
+            // finding - `bw / RefW` used to be `w / RefW` while `bh / 235` was `h / RefH`.
+            float kx = bw / RefW, ky = bh / 235f;
+            Check("bar is undistorted" + at, System.Math.Abs(kx - ky) < 1e-4f,
+                  "x-scale " + kx + " vs y-scale " + ky);
+
+            // ...and where the panel is at least as wide as the design aspect - which every shipped
+            // screen is (1280x703 is 1.82 against the design's 1.623) - it sits inside the panel.
+            // On a TALLER panel the bar overflows with the page art rather than being clamped; see
+            // BottomBar.Rect's own note for why clamping is the wrong answer there.
+            if (w >= RefW * (h / RefH) - 0.01f)
+                Check("bar fits the panel" + at, bx >= -0.01f && bx + bw <= w + 0.01f,
+                      "x " + bx + " w " + bw);
+
+            // Every icon's DRAWN centre is a hit on ITS OWN index - the draw and the hit map agreeing,
+            // which is what having one geometry is for.
+            float k = bw / RefW;
+            for (int n = 0; n < BottomBar.IconX.Length; n++)
+            {
+                float cx = bx + (BottomBar.IconX[n] + BottomBar.IconS * 0.5f) * k;
+                float cy = by + (BottomBar.IconY - 1877f + BottomBar.IconS * 0.5f) * k;
+                Check("icon " + n + " drawn centre hits itself" + at,
+                      BottomBar.Hit(cx, cy, w, h) == n, "got " + BottomBar.Hit(cx, cy, w, h));
+            }
+        }
     }
 }

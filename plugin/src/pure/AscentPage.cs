@@ -144,7 +144,7 @@ namespace DragonScreen
                 dl.Text(EventText[i], X(CX + hw + 50f), Y(ty), Z(26), TextAlign.Left, DragonPalette.Text2);
             }
 
-            dl.Asset("component_48", 0f, Y(1877), w, Z(235), DragonPalette.White);
+            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
         }
     }
 }

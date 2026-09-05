@@ -49,7 +49,7 @@ namespace DragonScreen
             }
 
             // full-width bottom status bar over the frame so it reaches both edges.
-            dl.Asset("component_48", 0f, 1877f * sc, w, 235f * sc, DragonPalette.White);
+            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
         }
     }
 }

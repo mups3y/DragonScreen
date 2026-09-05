@@ -121,7 +121,7 @@ namespace DragonScreen
             dl.Rect(PX(1524), PY(1974), 120 * sx, 8 * sy, Accent);
 
             // ---- bottom status bar (reused) ----
-            dl.Asset("component_48", PX(0), PY(1877), 3427 * sx, 235 * sy, White);
+            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
         }
     }
 }

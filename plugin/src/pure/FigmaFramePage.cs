@@ -25,7 +25,7 @@ namespace DragonScreen
             float dw = RefW * sc, ox = (w - dw) * 0.5f;
             dl.Asset(frameKey, ox, 0f, dw, h, DragonPalette.White);
             // full-width bottom status bar over the top so it reaches both edges
-            dl.Asset("component_48", 0f, 1877f * sc, w, 235f * sc, DragonPalette.White);
+            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
         }
     }
 }

@@ -63,7 +63,7 @@ namespace DragonScreen
             NavPage.Orbit(dl, s, X(PlotX), Y(PlotY), Z(PlotW), Z(PlotH), true);
             dl.Box(X(PlotX), Y(PlotY), Z(PlotW), Z(PlotH), St(2), DragonPalette.Hairline);
 
-            dl.Asset("component_48", 0f, Y(1877), w, Z(235), DragonPalette.White);
+            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
         }
 
         // ---- LEFT icon sub-nav rail ----

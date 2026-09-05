@@ -463,6 +463,27 @@ arithmetic (1.122) is unchanged.
 ⚠ **One thing the honest render adds:** the bar's icons are now **21 px tall**, so the 12% distortion is
 harder to *see* — but the icons are correspondingly harder to read at all. The fix is unaffected; the
 coupling to `FigmaUI.BottomBarHit` still holds.
+
+### ✅ FIXED 2026-09-05 — S103 (QC batch 1)
+
+**Fixed by giving the bar one geometry.** New `plugin/src/pure/BottomBar.cs` owns the bar's rectangle, draw,
+hit map and marker; all **21 draw sites** now call `BottomBar.Draw(dl, w, h)`, and `FigmaUI.BottomBarHit` /
+`BottomBarMarker` delegate to the same file. The bar is drawn undistorted in the design frame's own box,
+`ox … ox + RefW·sc`.
+
+| | before | **after** |
+|---|---|---|
+| bar x-scale vs y-scale | 0.3735 vs 0.3329 — **12.2% stretch** | **equal, by construction** |
+| rendered crosshair (asset is 130×130) | 23 × 21, ratio 1.095 | **21 × 21, ratio 1.000** |
+
+⚠ **The hit map moved with the draw, and the tests caught a third copy of the old mapping.**
+`FigmaUINavTest`'s own "menu bottom-bar → Cover (back)" probe computed the icon centre as
+`(46f + 40f) / RefW * W` and silently stopped landing on the bar once the draw was un-stretched. Both it and
+the main bar probe now derive from `BottomBar.Rect`, so they prove the hit map agrees with the **draw**
+rather than with a copy of itself.
+
+**New fence:** `FigmaUINavTest.BottomBarUndistorted` asserts, at four panel sizes, that the bar's x-scale
+equals its y-scale and that every icon's **drawn** centre is a hit on its own index.
 ---
 
 ## C-05 — `FitRows` compares a DESIGN-space size against a PANEL-pixel legibility floor, so the floor never fires
@@ -864,6 +885,28 @@ the pill and left its halo, so:
 - ⚠ **Take this with C-04 in one line.** Both are `component_48` defects, both are page-wide, and both are
   fixed by touching the same asset and its two draw sites.
 
+
+### ✅ FIXED 2026-09-05 — S103 (QC batch 1)
+
+**Fixed in the asset.** `component_48.png` cleared to its own flat background `#111B52` (17, 27, 82) in
+three boxes shaped **around** icon 0 rather than through it — `y 200..232, x 10..160` (fully below the
+icon's last ink row, 198), plus `y 190..199` at `x 10..49` and `x 122..160` either side of it — stopping
+short of the bar's own bottom border at y 233..234.
+
+**Verified against the pre-edit asset:** icon 0 (x 54..117, y 134..198) **byte-identical**; the bottom
+border (y 233..234) **byte-identical**; 4350 pixels changed, **none outside the box**; the glow region's
+peak luminance 113.7 → **42.0, the bar background exactly**.
+
+**On the glass**, the residue probe on the pages whose active tab is *not* icon 0:
+
+| render | active tab | before | **after** |
+|---|---|---|---|
+| `ui_cabin.png` | icon 4 | +27.4 above plain bar | **+0.8** |
+| `ui_audiovideo.png` | icon 4 | +27.4 | **+0.8** |
+| `ui_cover.png` | icon 0 | +56.5 | +35.1 — *the real dynamic marker, correctly there* |
+
+Both edits to this asset are now recorded in `docs/COVER_PAGE_ASSETS.md`, with the instruction that a
+re-export must re-apply both.
 ---
 
 ## C-13 — The band below the globe is unbalanced: the coordinate readouts sit on the globe's foot, and NEXT VIEW is 296 px off its mirror position
@@ -1532,6 +1575,23 @@ Two corners, one seam, unchanged.
 `Stroke(sc, 2)` is 0.67 px and clamps to 1 — so the borders *look* fainter. **That is S101 and it is not this
 finding.** H-07 is about the borders being in two different *places*, and they are: 69.6 px apart, exactly as
 filed. Fixing S101 would make this defect more visible, not less.
+
+### ✅ FIXED 2026-09-05 — S103 (QC batch 1)
+
+**Fixed by the same change as C-04, and this is why the two were one job.** `component_48` carries the design
+frame's **own** bottom border and left/right edges, so drawing it `0…w` while the page art was drawn at `ox`
+put a second page border 69.6 px inside the first. Drawing the bar in the design frame — `ox … ox + RefW·sc`
+— makes the bar's edge and the frame's edge the **same edge**.
+
+**On the glass** (`frame58_hud.png`, bottom-left, 6× crop): the vertical white rule at x = 70 is gone as a
+*separate* line, there is **one** rounded corner instead of two ~50 px apart, and the triangular sliver of
+lighter navy trapped between them has gone with it.
+
+⚠ **The ten pages that spread x across the full width now show the bar inset ~70 px from each edge**, with
+its own rounded corners on page ground. Inspected on `ui_vehicle.png`: it reads as a framed bar and is
+better than the stretched version it replaces. **The strips are deliberately left unfilled** — filling them
+would put the asset's own left/right border in the middle of a filled bar, which is this defect one step to
+the right. Recorded in `BottomBar.cs`'s header.
 ---
 
 ## H-08 — The frame art is exported at 0.6× design scale, so at the preview's resolution it is drawn upscaled and measurably soft

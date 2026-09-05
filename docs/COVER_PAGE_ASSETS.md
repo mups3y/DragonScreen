@@ -7,7 +7,7 @@ top-left in the 3427x2112 reference frame (masked template match against `Frame 
 | # | asset | placement | status |
 |---|---|---|---|
 | 1 | `Rectangle 173` | 0,0 (3427x220) | ✅ PNG placed |
-| 2 | `Component 48` | 0,1877 (3427x235) | ✅ PNG placed (bottom status bar) |
+| 2 | `Component 48` | 0,1877 (3427x235) | ✅ PNG placed (bottom status bar) — ⚠ **EDITED TWICE, see below** |
 | 3 | `Rectangle 178` | 218,216 (1224x1779) | ✅ PNG placed |
 | 4 | `Rectangle 179` | 240,443 (1187x317) | ✅ PNG placed |
 | 5 | `Rectangle 180` | 240,792 (1187x449) | ✅ PNG placed |
@@ -90,3 +90,32 @@ Not yet done: refine any sub-pixel nudges against the side-by-side, then make ea
 > ✅ **CORRECTED 2026-09-02 (T1):** the in-game renderer IS wired — `ImageStore.ResolveAsset` loads
 > `GameData/DragonScreen/art/cover/<key>.png` and `ScreenPainter` draws by `AssetKey`. Only the interactivity
 > is outstanding. No conflict with `docs/BUILD_PLAN.md` otherwise.
+---
+
+## ⚠ `component_48.png` — the one shipped asset we have EDITED, twice
+
+The bottom status bar is a community-Figma export like every other asset here, and it is the **only one
+whose pixels the repo copy no longer matches**. Both edits are to the same small region and both are
+recorded here because C7.1 makes the repo copy authoritative — a reader must be able to tell a divergence
+from a bad export.
+
+| # | when | what | why |
+|---|---|---|---|
+| 1 | before 2026-09-04 | the baked **active-tab marker pill** was erased from under the first icon | so `FigmaUI` could draw the marker under whichever tab is really active (`BottomBar.Marker`), instead of the bar permanently claiming icon 0 |
+| 2 | **2026-09-05 (S103)** | **the marker's GLOW, which edit 1 left behind** | edit 1 removed the pill and not its halo, so every page still carried a ghost marker under icon 0 whatever tab was active — QC **C-12** |
+
+**Edit 2, exactly.** Filled to the bar's own flat background `#111B52` (RGB 17, 27, 82, alpha 255):
+
+```
+y 200..232, x 10..160          fully below icon 0's last ink row (198)
+y 190..199, x 10..49           left of the icon
+y 190..199, x 122..160         right of the icon
+```
+
+Shaped around the icon rather than through it, and stopping short of the bar's own bottom border.
+Verified after the edit: **icon 0 (x 54..117, y 134..198) byte-identical**, **the bottom border
+(y 233..234) byte-identical**, 4350 pixels changed and none outside the box. The glow region went from a
+peak luminance of 113.7 to a flat 42.0 — the bar's background exactly.
+
+⛔ **If this asset is ever re-exported from the community Figma, BOTH edits must be re-applied**, or the
+ghost marker returns and `BottomBar.Marker` starts drawing a second one beside it.

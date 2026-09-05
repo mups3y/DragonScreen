@@ -191,7 +191,7 @@ namespace DragonScreen
                 C(BottomLabel[i], BottomCx[i], 1742, 26, White);
             }
 
-            dl.Asset("component_48", 0f, Y(1877), w, Z(235), White);
+            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
         }
 
         // a rotation/translation control cluster: a plus of direction buttons around a centre magnitude

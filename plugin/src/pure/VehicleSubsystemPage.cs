@@ -219,7 +219,7 @@ namespace DragonScreen
             // ---- subsystem tab bar + global bottom bar ----
             VehicleTabBar.Draw(dl, w, h, d.Tab, VehicleTabBar.Severities(s));
             VehicleDeepViewLinks.Draw(dl, w, h);
-            dl.Asset("component_48", 0f, PY(1877), w, SZ(235), White);
+            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
         }
 
         // ---- THE FUNCTIONS | ALERTS TOGGLE (T5 drew it, T14 wired it) ----

@@ -106,7 +106,7 @@ namespace DragonScreen
             Row("RATE", s.Valid && s.HasTarget ? s.RateText : "-", rowY + 44f);
             Row("RANGE", s.Valid && s.HasTarget ? s.RangeText : "-", rowY + 88f);
 
-            dl.Asset("component_48", 0f, Y(1877), w, Z(235), DragonPalette.White);
+            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
         }
     }
 }

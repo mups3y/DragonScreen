@@ -80,7 +80,7 @@ namespace DragonScreen
                         SZ(32), TextAlign.Centre, DragonPalette.White);
             }
 
-            dl.Asset("component_48", 0f, PY(1877), w, SZ(235), DragonPalette.White);
+            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
         }
 
         /// <summary>Which entry (an index into Entries) a touch hit, or -1.</summary>

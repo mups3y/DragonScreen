@@ -77,7 +77,7 @@ namespace DragonScreen
             C("Video", 1843, 1921, 28, White);
             dl.Rect(PX(1783), PY(1974), 120 * sx, 8 * sy, Accent);
 
-            dl.Asset("component_48", 0f, PY(1877), w, SZ(235), White);
+            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
         }
     }
 }

@@ -11825,6 +11825,71 @@ are recorded here instead. `PageTest.NavTexture`, `CoverPage`, `NavPage`, `Setti
 - **DONE when:** both comments cite the real shipped width, or drop the specific numbers in favour of "at
   any width", keeping the resolution-independence argument they exist to make.
 
+### S103 [O] QC batch 1 — the bottom bar: an un-erased ghost marker, a 12.2% stretch, and two page borders where there is one page — **DONE 2026-09-05** — [C-12 + C-04 + H-07; one asset, one geometry, all 35 pages]
+
+**🟢 OWNER-DIRECTED.** After [[S100]] (batch 0) the owner said, verbatim: **"give me batch 1"**, and then
+**"build it"**. QC specified the batch in `docs/QC_FINDINGS.md` and this is that batch built. Three findings,
+chosen because they are one asset and one geometry across **every page in the build**, and because nothing in
+them needs an owner gate or an open question answered — the whole thing is provable from `build.py preview`.
+
+**C-12 — the ghost marker. FIXED, in the asset.** The bar's baked active-tab pill had been erased so
+`FigmaUI` could draw the marker under whichever tab is really active. **The erase took the pill and left its
+GLOW**, so every page carried a ghost marker under icon 0 whatever tab was up — the thing the dynamic marker
+exists to prevent. Measured in `component_48.png`: elevated luminance at bar-local x 21..149, y 194..232,
+peaking 113.7 against a bar background of 42. The proof it was not the marker: on `ui_cabin.png` and
+`ui_audiovideo.png`, whose active tab is **icon 4**, the region under icon 0 still read **+27.4 above
+background**. Now filled to the bar's own `#111B52` in three boxes shaped **around** icon 0 rather than
+through it (`y 200..232, x 10..160`; `y 190..199, x 10..49` and `x 122..160`), stopping short of the bar's
+own bottom border. Verified: icon 0 (x 54..117, y 134..198) and the bottom border (y 233..234) come out
+**byte-identical**, 4350 px changed, none outside the box. **On the glass now: +0.8**, from +27.4.
+Both edits to this asset are recorded in `docs/COVER_PAGE_ASSETS.md` — it is the only shipped asset whose
+pixels diverge from the community export, and a re-export must re-apply both.
+
+**C-04 + H-07 — the stretch and the doubled border. FIXED, by giving the bar ONE geometry.** The bar was
+drawn `dl.Asset("component_48", 0, Y(1877), w, Z(235))` at **21 sites** — full panel width against a
+height-derived scale. At the shipped 1280x703 that is x-scale 0.3735 against y-scale 0.3329: **stretched
+12.2% horizontally on every page**, so the 130x130 crosshair rendered 23x21 and every word baked into the
+bar was 12% wide. And because the eleven letterboxed pages draw their art at `ox` while the bar was drawn
+`0..w`, the frame's own border became a vertical rule crossing the bar and the design's single rounded corner
+became two, ~50 px apart.
+
+**⭐ THE DELIVERABLE THAT MATTERS MOST — `plugin/src/pure/BottomBar.cs`, NEW.** The bar's rectangle, draw, hit
+map and marker now come from **one function**, `BottomBar.Rect` — `MenuPage.CellRect`'s rule applied to the
+one control the crew can always rely on. The bar is drawn undistorted in the design frame's own box,
+`ox .. ox + RefW*sc`, which is where `component_48` belongs: it carries the design frame's **own** bottom
+border and left/right edges, so drawing it anywhere else put a page border in the middle of a page. On the
+eleven letterboxed pages the bar now ends exactly where the page art does — that is H-07 closed. On the ten
+that spread x across the full width it becomes a framed bar inset from the page ground; the strips are
+deliberately **not** filled, because filling them would put the asset's own left/right border in the middle
+of a filled bar, which is the same defect one step to the right.
+
+**⛔ THE HIT MAP MOVED WITH THE DRAW, AND THAT WAS THE RISK.** `FigmaUI.BottomBarHit` and `BottomBarMarker`
+each encoded the stretched mapping independently; `FigmaUI.HitTest` tests this bar **first**, before any page
+control, because it is the one touch that always works. Both now delegate to `BottomBar`. **The tests found a
+THIRD copy** — `FigmaUINavTest`'s own "menu bottom-bar -> Cover (back)" probe computed the icon centre as
+`(46f + 40f) / RefW * W` and silently stopped landing on the bar. It, and the main bar probe, now derive from
+`BottomBar.Rect`, so they prove the hit map agrees with the **draw** rather than with a copy of itself.
+
+**NEW `FigmaUINavTest.BottomBarUndistorted` — the fence.** At four panel sizes including one narrower than
+the design aspect: the bar's own x-scale equals its y-scale (this is the finding, stated as an assertion),
+it fits the panel wherever a letterbox exists, and **every icon's DRAWN centre is a hit on its own index**.
+A future "just make the bar reach both edges again" fails the build instead of the glass.
+
+⚠ **A clamp was tried in `BottomBar.Rect` and REMOVED, deliberately** — forcing the bar inside a panel
+narrower than the design aspect re-introduced the exact distortion this line removes (measured 0.2918 against
+0.3788 at 1000x800) and would have put the bar in a different frame from the page art. The pages themselves
+overflow at that aspect; the bar overflows with them. The shipped screens are 1280x703/710 — aspect 1.82
+against the design's 1.623 — so the case does not arise in the build. The reasoning is in the file so it is
+not re-tried.
+
+**Verified on the glass:** crosshair **21x21, ratio 1.000** (was 23x21 = 1.095); ghost residue **+0.8** (was
++27.4); one vertical edge and one rounded corner at the frame pages' bottom-left, with the trapped sliver
+gone. `build.py test` green (824 checks), all 104 preview PNGs re-rendered, no overflow warnings.
+
+**NOT done here (C1.1):** everything else in QC's file. The next candidates and why, in
+`docs/QC_FINDINGS.md`'s batch-1 section — **R-01 + S101** are one job and the strongest batch 2, but gated on
+**Q5**.
+
 
 ---
 

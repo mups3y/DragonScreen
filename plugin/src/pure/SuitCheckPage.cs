@@ -220,7 +220,7 @@ namespace DragonScreen
             Ico("ic_grid", 2950, 1642, 36, Red); C("HALT SUIT LEAK CHECK", 3155, 1648, 30, White);
 
             // ================= bottom status bar =================
-            dl.Asset("component_48", 0f, PY(1877), w, SZ(235), White);
+            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
 
             // ================= the run's RESULT popup =================
             // ONE box, two outcomes. The completion box is the photographed one (discovery3) and is

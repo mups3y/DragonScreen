@@ -106,11 +106,14 @@ namespace DragonScreen
         // ---- component_48 BOTTOM-BAR NAVIGATION ----
         // The Figma has only five real page designs; the persistent page-to-page nav is the bottom bar
         // (component_48), present on every page — the new equivalent of the old ChromeBar tab strip.
-        // Its four icons are baked into component_48.png at these design x's (each 80 wide, at design
-        // y 2003 = the bar top 1877 + the icon's local y 126). The bar is drawn full-width (stretched),
-        // so a touch maps design-x across the whole screen width and design-y by the height scale.
-        static readonly float[] BarIconX = { 46f, 174f, 302f, 430f, 558f };
-        const float BarIconY = 2003f, BarIconS = 80f;
+        //
+        // ⚠ S103 (QC batch 1) MOVED THE BAR'S GEOMETRY TO `pure/BottomBar.cs`, and this file keeps only
+        // the ROUTING. The geometry — the rectangle, the icon positions, the draw, the hit map and the
+        // marker — is one source of truth there, because the draw and the hit map used to encode the
+        // same stretched mapping in two places and changing one without the other slides every nav
+        // icon's touch target off its icon on all 35 pages. Read that file's header for why the bar is
+        // now drawn undistorted in the design frame rather than stretched across the panel.
+        //
         // Left-to-right: compass, target, rocket, folder, gear. The mapping is taken from the reference
         // UI's live demo (github: neel-dandiwala/SpaceX-Dragon2-UI), whose bottom bar routes icon N to
         // panel N: Cover, attitude HUD, vehicle overview, suit leak check, settings(audio). Vehicle and
@@ -118,19 +121,11 @@ namespace DragonScreen
         static readonly UiPage[] BarTarget =
             { UiPage.Cover, UiPage.Hud, UiPage.Vehicle, UiPage.SuitCheck, UiPage.Audio };
 
-        /// <summary>Which bottom-bar icon (0..3) a touch hit, or -1. Present on every page.</summary>
+        /// <summary>Which bottom-bar icon (0..4) a touch hit, or -1. Present on every page.
+        /// Delegates to <see cref="BottomBar.Hit"/> — the same geometry the bar is DRAWN from.</summary>
         public static int BottomBarHit(float px, float py, int w, int h)
         {
-            float sc = h / RefH;
-            float y0 = BarIconY * sc, y1 = (BarIconY + BarIconS) * sc;
-            if (py < y0 - 12f || py > y1 + 12f) return -1;
-            for (int i = 0; i < BarIconX.Length; i++)
-            {
-                // Padding kept under half the ~48px icon pitch so neighbours never share a hit region.
-                float x0 = BarIconX[i] / RefW * w, x1 = (BarIconX[i] + BarIconS) / RefW * w;
-                if (px >= x0 - 6f && px < x1 + 6f) return i;
-            }
-            return -1;
+            return BottomBar.Hit(px, py, w, h);
         }
 
         static readonly string[] Titles = {
@@ -272,17 +267,12 @@ namespace DragonScreen
             }
         }
 
-        // The marker was baked under the first icon in component_48.png; it has been erased there so it
-        // can be drawn dynamically. These are the erased block's component_48 coords (bar is 235 tall,
-        // sitting at design y1877): a thin white line just above the bar's bottom edge.
-        const float MarkY = 1877f + 223f, MarkH = 10f, MarkW = 108f;
-
-        /// <summary>Slide the bottom bar's white marker under the active tab (App.vue's `.marker`).</summary>
+        /// <summary>Slide the bottom bar's white marker under the active tab (App.vue's `.marker`).
+        /// The marker's geometry lives with the bar's (S103) so the two cannot drift; this decides only
+        /// WHICH tab is active, which is this file's job.</summary>
         static void BottomBarMarker(DisplayList dl, int w, int h, UiPage page)
         {
-            float sc = h / RefH, mw = MarkW / RefW * w;
-            float cx = (BarIconX[ActiveBarIcon(page)] + BarIconS * 0.5f) / RefW * w;
-            dl.Rect(cx - mw * 0.5f, MarkY * sc, mw, MarkH * sc, DragonPalette.White);
+            BottomBar.Marker(dl, w, h, ActiveBarIcon(page));
         }
 
         public static NavHit HitTest(UiPage page, float px, float py, int w, int h)

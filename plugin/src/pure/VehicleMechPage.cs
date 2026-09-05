@@ -160,7 +160,7 @@ namespace DragonScreen
             // declared scope, so its tab bar was still reading nominal on a genuine subsystem alert.
             VehicleTabBar.Draw(dl, w, h, 3, VehicleTabBar.Severities(s));
             VehicleDeepViewLinks.Draw(dl, w, h);
-            dl.Asset("component_48", 0f, PY(1877), w, SZ(235), White);
+            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
         }
     }
 }

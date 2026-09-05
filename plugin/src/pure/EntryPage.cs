@@ -73,7 +73,7 @@ namespace DragonScreen
                 "Land under ≥ 3 mains",
                 "CUT MAINS after splashdown" }, C1Y, 40f);
 
-            dl.Asset("component_48", 0f, Y(1877), w, Z(235), DragonPalette.White);
+            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
         }
     }
 }

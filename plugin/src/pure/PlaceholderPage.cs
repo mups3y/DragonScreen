@@ -35,7 +35,7 @@ namespace DragonScreen
                     w * 0.5f, Y(1120), Z(30), TextAlign.Centre, DragonPalette.Text6);
 
             // bottom status bar (shared chrome)
-            dl.Asset("component_48", 0f, Y(1877), w, Z(235), DragonPalette.White);
+            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
         }
     }
 }

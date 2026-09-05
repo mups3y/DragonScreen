@@ -188,7 +188,7 @@ namespace DragonScreen
             // here too — the real "reached in one touch from anywhere" behaviour, not just on its own page.
             VehicleTabBar.Draw(dl, w, h, 0, VehicleTabBar.Severities(s));
             VehicleDeepViewLinks.Draw(dl, w, h);
-            dl.Asset("component_48", 0f, PY(1877), w, SZ(235), White);
+            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
         }
 
         /// <summary>A net-power dial's fill. The reading is SIGNED (negative = draining) and a ring
