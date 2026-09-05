@@ -15168,7 +15168,7 @@ commands anything** — the thirteen inert docking controls are untouched (QC `D
 - **DONE when:** the three live values draw from state over erased boxes, the comm block is sourced or
   marked, and previews across several pages show it.
 
-### S148 [S] A dashed value is drawn in the same weight as a live one — **TODO** — [H45; TIER 3: cosmetic but on-theme]
+### S148 [S] A dashed value is drawn in the same weight as a live one — **DOING** — [H45; TIER 3: cosmetic but on-theme]
 - **The finding.** On the vehicle gauges and detail rows a dash draws in `White`, the same as a live value,
   while the CONSUMABLES table correctly dims its dash. **This is the "can't tell dead from live" failure
   [[S22]] was opened for, in a third form.**
