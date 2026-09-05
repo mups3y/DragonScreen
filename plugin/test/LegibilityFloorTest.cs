@@ -59,6 +59,7 @@ public static class LegibilityFloorTest
         VehiclePageTracksThePanel();
         DockingPageTracksThePanel();
         SettingsPageTracksThePanel();
+        DockingTrioTracksThePanel();
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed"
                           + "   (floor " + Typography.MinFor(W1) + " px @" + W1
@@ -599,13 +600,23 @@ public static class LegibilityFloorTest
               bad + " of " + t1.Length + " did not; worst at index " + worstI
               + " (@1280 " + (worstI >= 0 ? t1[worstI] : 0f)
               + ", @2560 " + (worstI >= 0 ? t2[worstI] : 0f) + ")");
+        // ---- ⭐ THE ABSOLUTE ANCHOR, and it has to be a property EVERY page has -------------------
+        // ⛔ A cross-width ratio cannot catch a scale derived from the wrong width, because a wrong
+        // width that doubles still doubles ([[S121b-i]] mutation W7 - 0.256 and 0.513, exactly 2x
+        // apart). Only an absolute statement at RefPanelW catches it, where sc is exactly 1.
+        // ⚠ A first version demanded both Caption AND Dense at 1280 and failed on DOCKING, which
+        // draws neither Dense nor anything smaller than Caption. That was the CHECK being wrong about
+        // the page, not the page being wrong - so the anchor is now the property all four share:
+        // a Caption at its measured size, and nothing on the page below the smallest Typography
+        // constant. A wrong absolute scale drives everything under that floor at once.
         Check("S121b " + name + " draws at exactly Typography.Caption at RefPanelW",
               HasSize(t1, Typography.Caption), "no " + Typography.Caption + " px text at 1280");
-        Check("S121b " + name + " draws at exactly Typography.Dense at RefPanelW",
-              HasSize(t1, Typography.Dense), "no " + Typography.Dense + " px text at 1280");
-        Check("S121b ...and " + name + " doubles both of those exactly at 2560",
-              HasSize(t2, Typography.Caption * 2f) && HasSize(t2, Typography.Dense * 2f),
-              "missing " + (Typography.Caption * 2f) + " or " + (Typography.Dense * 2f) + " px at 2560");
+        Check("S121b ...and " + name + " doubles it exactly at 2560",
+              HasSize(t2, Typography.Caption * 2f),
+              "missing " + (Typography.Caption * 2f) + " px text at 2560");
+        Check("S121b nothing on " + name + " is drawn below Typography.Dense at RefPanelW",
+              Min(t1) >= Typography.Dense - 1e-3f,
+              "smallest is " + Min(t1) + ", Dense is " + Typography.Dense);
         float min1 = Min(t1), min2 = Min(t2);
         Check("S121b the smallest type on " + name + " is the same share of the panel at both widths",
               Math.Abs(min1 / W1 - min2 / W2) < 1e-7f, min1 + "/" + W1 + " vs " + min2 + "/" + W2);
@@ -828,6 +839,88 @@ public static class LegibilityFloorTest
         bool ok = g.Act == want && (arg < 0 || g.Arg == arg);
         Check("S121c @" + w + " the centre of " + what + " hits " + want, ok,
               "got " + g.Act + " arg " + g.Arg);
+    }
+
+    // ---- S121d: THE DOCKING TRIO ----------------------------------------------------------------
+    // ⭐ `DockingPage` is the one page in the S121 family whose GEOMETRY was already right and whose
+    // TYPE was not: its rings are fractions of the body and track the panel, so at 2560 the readouts
+    // sat at half their measured size INSIDE a ring twice the area. Nothing looked broken.
+    static void DockingTrioTracksThePanel()
+    {
+        // page 3 is Pages.Docking -> DockingPage.Build, so the shared page helper covers it directly
+        PageTypeTracksThePanel("DOCKING", 3, true);
+
+        // ---- DockingPageCentral and AttitudeHud are not reachable through Pages.Build, so they are
+        // built here directly. AttitudeHud is drawn BY DockingPageCentral, so covering the outer one
+        // covers both — and the check is the same invariant: sizes and positions double.
+        float[] c1 = CentralSizes(W1, H1), c2 = CentralSizes(W2, H2);
+        Check("S121d DockingPageCentral draws the same commands at both widths",
+              c1.Length == c2.Length && c1.Length > 30, c1.Length + " vs " + c2.Length);
+        int bad = 0, worstI = -1; float worst = 0f;
+        for (int i = 0; i < c1.Length && i < c2.Length; i++)
+        {
+            float d = Math.Abs(c2[i] - 2f * c1[i]);
+            if (d > 0.02f) { bad++; if (d > worst) { worst = d; worstI = i; } }
+        }
+        Check("S121d every size and position on DockingPageCentral doubles with the panel", bad == 0,
+              bad + " of " + c1.Length + " did not; worst at index " + worstI
+              + " (@1280 " + (worstI >= 0 ? c1[worstI] : 0f)
+              + ", @2560 " + (worstI >= 0 ? c2[worstI] : 0f) + ", off by " + worst + ")");
+
+        // ⛔ AND THE UN-PASSED CALLERS MUST STILL BE UNCHANGED. AttitudeHud's older overloads delegate
+        // at sc = 1, and ComponentsTest and the preview both still use them; if that delegation broke,
+        // this suite would go green while two other callers silently re-laid themselves.
+        DisplayList a = new DisplayList(512), b = new DisplayList(512);
+        AttitudeHudState st = new AttitudeHudState(); st.Valid = true;
+        AttitudeHud.Draw(a, 640f, 360f, 120f, st);
+        AttitudeHud.Draw(b, 640f, 360f, 120f, st, 1f);
+        Check("S121d AttitudeHud's 5-argument overload still delegates at sc = 1",
+              SameDraws(a, b), "the un-passed form no longer matches sc = 1");
+    }
+
+    static bool SameDraws(DisplayList a, DisplayList b)
+    {
+        if (a.Count != b.Count) return false;
+        for (int i = 0; i < a.Count; i++)
+        {
+            DrawCmd x = a.At(i), y = b.At(i);
+            if (x.Kind != y.Kind) return false;
+            if (Math.Abs(x.A - y.A) > 1e-4f || Math.Abs(x.B - y.B) > 1e-4f) return false;
+            if (Math.Abs(x.C - y.C) > 1e-4f || Math.Abs(x.D - y.D) > 1e-4f) return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Every TEXT size/x/y and every RECT x/y/w/h DockingPageCentral emits, interleaved.
+    ///
+    /// ⛔ THE RECTS ARE HERE BECAUSE OF A MUTATION THAT SURVIVED WITHOUT THEM. Leaving the FRAME /
+    /// CAMERA selector pills at their RefPanelW 200x46 changed no text size and no text position -
+    /// the captions inside them are placed from the pill's own x and y, so they moved correctly while
+    /// the pill they sit in did not. Reading text alone could not see a box half the size of its own
+    /// contents.
+    /// </summary>
+    static float[] CentralSizes(int w, int h)
+    {
+        PageState ps = new PageState(); ps.Valid = true; ps.HasTarget = true;
+        DisplayList dl = new DisplayList(4096);
+        DockingPageCentral.Build(dl, w, h, ps);
+        int n = 0;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawKind k0 = dl.At(i).Kind;
+            if (k0 == DrawKind.Text) n += 3;
+            else if (k0 == DrawKind.Rect) n += 4;
+        }
+        float[] outp = new float[n]; int k = 0;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind == DrawKind.Text) { outp[k++] = c.C; outp[k++] = c.A; outp[k++] = c.B; }
+            else if (c.Kind == DrawKind.Rect)
+            { outp[k++] = c.A; outp[k++] = c.B; outp[k++] = c.C; outp[k++] = c.D; }
+        }
+        return outp;
     }
 
     /// <summary>The smallest square Rect a page emits — on VEHICLE that is the alarm dot.</summary>

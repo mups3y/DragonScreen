@@ -63,6 +63,11 @@ namespace DragonScreen
         public static void Build(DisplayList dl, int w, int h, PageState s)
         {
             if (dl == null) return;
+            // ⭐ [[S121d]], 2026-09-06: this page's RINGS are fractions of the body and already track the
+            // panel, but every caption, column offset and header inset around them is a RefPanelW pixel.
+            // At 2560 the readouts sat at half their measured size INSIDE a ring twice the area — which
+            // is the worst version of the R-02 defect, because the geometry looked right.
+            float sc = Typography.ScaleFor(w);
             float body = BodyHeight(w, h);
             float cx, cy;
             Centre(w, h, out cx, out cy);
@@ -79,55 +84,55 @@ namespace DragonScreen
 
             // ---- HEADER: phase (left) · target (centre) · GNC AUTO/MANUAL (right, rule C6) ----
             dl.Text(s.Valid ? (string.IsNullOrEmpty(s.Phase) ? "PROX OPS" : s.Phase) : Dashes.None,
-                    24f, 16f, Typography.Body, TextAlign.Left, DragonPalette.Text5);
+                    24f * sc, 16f * sc, Typography.Body * sc, TextAlign.Left, DragonPalette.Text5);
             dl.Text(s.HasTarget ? (s.TargetName ?? "TARGET") : "NO TARGET",
-                    cx, 14f, Typography.Body, TextAlign.Centre,
+                    cx, 14f * sc, Typography.Body * sc, TextAlign.Centre,
                     s.HasTarget ? DragonPalette.Text1 : DragonPalette.Text6);
-            StatusIndicator.Badge(dl, w - 170f, 10f, 132f, 40f,
-                                  AuthorityManager.Name(s.Mode), StatusIndicator.Colour(s.Mode));
+            StatusIndicator.Badge(dl, w - 170f * sc, 10f * sc, 132f * sc, 40f * sc,
+                                  AuthorityManager.Name(s.Mode), StatusIndicator.Colour(s.Mode), sc);
 
             // ---- THE CENTRAL RETICLE: two thin concentric rings + a boresight crosshair ----
             // NOT a navball. The real HUD frames the docking target in thin rings with a centre
             // crosshair the target is brought onto.
-            dl.ArcBand(cx, cy, R - 2f, R, 0.0, 360.0, DragonPalette.Text4);          // outer ring
+            dl.ArcBand(cx, cy, R - 2f * sc, R, 0.0, 360.0, DragonPalette.Text4);    // outer ring
             TargetReticle.Crosshair(dl, cx, cy, R * 0.55f, DragonPalette.Text2);      // inner ring + cross
 
             // The alignment SWEEP around the outer ring — the pointing-error MAGNITUDE, threshold
             // coloured. Honest: it shows how far off we are without inventing a 2-D direction.
             if (s.Valid && s.HasTarget)
-                Gauge.Ring(dl, cx, cy, R + 12f, 4f, s.Align01,
+                Gauge.Ring(dl, cx, cy, R + 12f * sc, 4f * sc, s.Align01,
                            DragonPalette.Inset1, Alarms.Colour(Alarms.High(s.Align01)));
 
             // The green diamond target marker. On the boresight until a bearing vector exists upstream
             // (see the file header); the sweep above carries the misalignment for now.
             if (s.Valid && s.HasTarget)
-                TargetReticle.Marker(dl, cx, cy, 11f, DragonPalette.Go);
+                TargetReticle.Marker(dl, cx, cy, 11f * sc, DragonPalette.Go);
 
             if (!s.Valid || !s.HasTarget)
             {
-                dl.Text("NO TARGET SELECTED", cx, cy + R + 24f, Typography.Body, TextAlign.Centre,
+                dl.Text("NO TARGET SELECTED", cx, cy + R + 24f * sc, Typography.Body * sc, TextAlign.Centre,
                         DragonPalette.Text7);
                 return;   // the reticle is drawn; the target-relative readouts are withheld (nothing to show)
             }
 
             // ---- LEFT: ROTATION corrections, the two-number scheme (GREEN correction / BLUE rate) ----
-            float lx = cx - R - 196f;
-            float ry = cy - 132f;
-            NumericReadout.Paired(dl, lx, ry,         "ROLL",  s.RollText,  s.RollRateText);
-            NumericReadout.Paired(dl, lx, ry + 92f,   "PITCH", s.PitchText, s.PitchRateText);
-            NumericReadout.Paired(dl, lx, ry + 184f,  "YAW",   s.YawText,   s.YawRateText);
+            float lx = cx - R - 196f * sc;
+            float ry = cy - 132f * sc;
+            NumericReadout.Paired(dl, lx, ry,              "ROLL",  s.RollText,  s.RollRateText,  sc);
+            NumericReadout.Paired(dl, lx, ry + 92f * sc,   "PITCH", s.PitchText, s.PitchRateText, sc);
+            NumericReadout.Paired(dl, lx, ry + 184f * sc,  "YAW",   s.YawText,   s.YawRateText,   sc);
 
             // ---- RIGHT: TRANSLATION / ALIGNMENT — lateral offsets + the alignment angle (green) ----
-            float rx = cx + R + 44f;
-            NumericReadout.Value(dl, rx, ry,        "X",     s.OffXText, DragonPalette.Go, Typography.Value);
-            NumericReadout.Value(dl, rx, ry + 74f,  "Y",     s.OffYText, DragonPalette.Go, Typography.Value);
-            NumericReadout.Value(dl, rx, ry + 148f, "Z",     s.OffZText, DragonPalette.Go, Typography.Value);
-            NumericReadout.Value(dl, rx, ry + 222f, "ALIGN", s.AlignText, DragonPalette.Go, Typography.Value);
+            float rx = cx + R + 44f * sc;
+            NumericReadout.Value(dl, rx, ry,             "X",     s.OffXText, DragonPalette.Go, Typography.Value * sc, sc);
+            NumericReadout.Value(dl, rx, ry + 74f * sc,  "Y",     s.OffYText, DragonPalette.Go, Typography.Value * sc, sc);
+            NumericReadout.Value(dl, rx, ry + 148f * sc, "Z",     s.OffZText, DragonPalette.Go, Typography.Value * sc, sc);
+            NumericReadout.Value(dl, rx, ry + 222f * sc, "ALIGN", s.AlignText, DragonPalette.Go, Typography.Value * sc, sc);
 
             // ---- BOTTOM: RANGE (left) and RATE (right), the two numbers a manual approach is flown on ----
-            float by = body - 92f;
-            dl.Text("RANGE", 64f, by, Typography.Caption, TextAlign.Left, DragonPalette.Text6);
-            dl.Text(s.RangeText ?? NumericReadout.Blank, 64f, by + 22f, Typography.Hero,
+            float by = body - 92f * sc;
+            dl.Text("RANGE", 64f * sc, by, Typography.Caption * sc, TextAlign.Left, DragonPalette.Text6);
+            dl.Text(s.RangeText ?? NumericReadout.Blank, 64f * sc, by + 22f * sc, Typography.Hero * sc,
                     TextAlign.Left, DragonPalette.Go);
 
             // RATE keeps the two-colour scheme (a rate → blue) with a safety override: amber if we are
@@ -135,8 +140,8 @@ namespace DragonScreen
             Rgba rateColour = s.ClosingFast ? DragonPalette.Alarm
                             : s.Closing ? DragonPalette.AccentDim
                             : DragonPalette.Caution;
-            dl.Text("RATE", w - 64f, by, Typography.Caption, TextAlign.Right, DragonPalette.Text6);
-            dl.Text(s.RateText ?? NumericReadout.Blank, w - 64f, by + 22f, Typography.Hero,
+            dl.Text("RATE", w - 64f * sc, by, Typography.Caption * sc, TextAlign.Right, DragonPalette.Text6);
+            dl.Text(s.RateText ?? NumericReadout.Blank, w - 64f * sc, by + 22f * sc, Typography.Hero * sc,
                     TextAlign.Right, rateColour);
         }
     }

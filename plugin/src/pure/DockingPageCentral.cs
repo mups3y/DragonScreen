@@ -21,6 +21,7 @@ namespace DragonScreen
         public static void Build(DisplayList dl, int w, int h, PageState s)
         {
             if (dl == null) return;
+            float sc = Typography.ScaleFor(w);   // [[S121d]], 2026-09-06 — see DockingPage's note
             float body = BodyHeight(w, h);
             float cx = w * 0.5f, cy = body * 0.53f;
             float radius = body * 0.30f;
@@ -34,34 +35,34 @@ namespace DragonScreen
 
             // ---- header: phase (left) · target (centre) · GNC AUTO/MANUAL (right, rule C6) ----
             dl.Text(s.Valid ? (string.IsNullOrEmpty(s.Phase) ? "PROX OPS" : s.Phase) : Dashes.None,
-                    24f, 16f, Typography.Body, TextAlign.Left, DragonPalette.Text5);
-            dl.Text(s.TargetName ?? "NO TARGET", cx, 14f, Typography.Body, TextAlign.Centre, DragonPalette.Text1);
-            StatusIndicator.Lamp(dl, w - 150f, 10f, "GNC",
-                                 AuthorityManager.Name(s.Mode), StatusIndicator.Colour(s.Mode));
+                    24f * sc, 16f * sc, Typography.Body * sc, TextAlign.Left, DragonPalette.Text5);
+            dl.Text(s.TargetName ?? "NO TARGET", cx, 14f * sc, Typography.Body * sc, TextAlign.Centre, DragonPalette.Text1);
+            StatusIndicator.Lamp(dl, w - 150f * sc, 10f * sc, "GNC",
+                                 AuthorityManager.Name(s.Mode), StatusIndicator.Colour(s.Mode), sc);
 
             // ---- the central attitude HUD: the LIVE navball + corrections/rates + X/Y/Z + RANGE/RATE ----
-            AttitudeHud.Draw(dl, cx, cy, radius, FromState(s));
+            AttitudeHud.Draw(dl, cx, cy, radius, FromState(s), sc);
 
             // A thin alignment sweep just outside the ball — a DEVIATION, so threshold-coloured.
-            Gauge.Ring(dl, cx, cy, radius + 14f, 4f, s.Valid ? s.Align01 : 0.0,
+            Gauge.Ring(dl, cx, cy, radius + 14f * sc, 4f * sc, s.Valid ? s.Align01 : 0.0,
                        DragonPalette.Inset1, Alarms.Colour(Alarms.High(s.Align01)));
 
             // ---- right column: FLIGHT COMMANDS / FAR FIELD POSITIONING / ALERT ACTIVITY (Frame 58) ----
-            float rx = w - 296f, ry = body * 0.16f;
-            dl.Text("FLIGHT COMMANDS", rx, ry, Typography.Caption, TextAlign.Left, DragonPalette.Text6);
-            Control.Button(dl, rx, ry + 26f, 260f, 42f, "FAR FIELD POSITIONING", false, true);
-            dl.Text("ALERT ACTIVITY", rx, ry + 88f, Typography.Caption, TextAlign.Left, DragonPalette.Text6);
+            float rx = w - 296f * sc, ry = body * 0.16f;
+            dl.Text("FLIGHT COMMANDS", rx, ry, Typography.Caption * sc, TextAlign.Left, DragonPalette.Text6);
+            Control.Button(dl, rx, ry + 26f * sc, 260f * sc, 42f * sc, "FAR FIELD POSITIONING", false, true, sc);
+            dl.Text("ALERT ACTIVITY", rx, ry + 88f * sc, Typography.Caption * sc, TextAlign.Left, DragonPalette.Text6);
             if (s.Valid && !string.IsNullOrEmpty(s.FaultText) && s.FaultText != "NOMINAL")
-                dl.Text(s.FaultText, rx, ry + 112f, Typography.Body, TextAlign.Left,
+                dl.Text(s.FaultText, rx, ry + 112f * sc, Typography.Body * sc, TextAlign.Left,
                         Alarms.Colour(Alarms.FdirSeverity(s)));
             else
-                dl.Text("— none —", rx, ry + 112f, Typography.Caption, TextAlign.Left, DragonPalette.Text7);
+                dl.Text("— none —", rx, ry + 112f * sc, Typography.Caption * sc, TextAlign.Left, DragonPalette.Text7);
 
             // ---- bottom selectors: FRAME · CAMERA (display-only; MANUAL clusters come with commands) ----
-            Selector(dl, cx - 236f, body - 60f, "FRAME", "LVLH");
-            Selector(dl, cx + 36f, body - 60f, "CAMERA", "VIRTUAL");
+            Selector(dl, cx - 236f * sc, body - 60f * sc, "FRAME", "LVLH", sc);
+            Selector(dl, cx + 36f * sc, body - 60f * sc, "CAMERA", "VIRTUAL", sc);
             dl.Text("MANUAL CONTROL CLUSTERS ADDED WITH COMMAND WIRING (PHASE 7 / REVIEW)",
-                    cx, body - 12f, Typography.Dense, TextAlign.Centre, DragonPalette.Text7);
+                    cx, body - 12f * sc, Typography.Dense * sc, TextAlign.Centre, DragonPalette.Text7);
         }
 
         private static AttitudeHudState FromState(PageState s)
@@ -78,12 +79,13 @@ namespace DragonScreen
         }
 
         // A display-only labelled pill (caption over value). Not a Control — nothing to press yet.
-        private static void Selector(DisplayList dl, float x, float y, string caption, string value)
+        /// ⛔ `sc` is PASSED IN — this pill takes an x and a y and no width ([[S121d]], 2026-09-06).
+        private static void Selector(DisplayList dl, float x, float y, string caption, string value, float sc)
         {
-            dl.Rect(x, y, 200f, 46f, DragonPalette.Panel);
-            dl.Box(x, y, 200f, 46f, 2f, DragonPalette.Hairline);
-            dl.Text(caption, x + 14f, y + 7f, Typography.Dense, TextAlign.Left, DragonPalette.Text6);
-            dl.Text(value ?? Dashes.None, x + 14f, y + 22f, Typography.Caption, TextAlign.Left, DragonPalette.Text1);
+            dl.Rect(x, y, 200f * sc, 46f * sc, DragonPalette.Panel);
+            dl.Box(x, y, 200f * sc, 46f * sc, 2f * sc, DragonPalette.Hairline);
+            dl.Text(caption, x + 14f * sc, y + 7f * sc, Typography.Dense * sc, TextAlign.Left, DragonPalette.Text6);
+            dl.Text(value ?? Dashes.None, x + 14f * sc, y + 22f * sc, Typography.Caption * sc, TextAlign.Left, DragonPalette.Text1);
         }
     }
 }

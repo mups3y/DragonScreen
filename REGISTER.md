@@ -15460,7 +15460,7 @@ the whole 15-button page grid are legible and proportional.
 `build.py test` green — `LegibilityFloorTest` **288 checks** · comment-loss **0** · no `install`, no
 glass, no `git push` · §14.4(a) untouched.
 
-### S121d [S] The docking trio: `DockingPage` · `DockingPageCentral` · `AttitudeHud` — **DOING** — [split 4 of 5 of [[S121]]; 25 lines / 25 references]
+### S121d [S] The docking trio: `DockingPage` · `DockingPageCentral` · `AttitudeHud` — **DONE 2026-09-06 — the page whose GEOMETRY was right and whose TYPE was half-size** — [split 4 of 5 of [[S121]]; 25 lines / 25 references]
 - Kept as one line because they are one screen: `DockingPageCentral` draws `AttitudeHud`, and both lean on
   `Gauge`, `NumericReadout` and `StatusIndicator` from [[S121a]].
 - ⚠ Non-type geometry here too: `w - 170f`, `w - 64f` (`DockingPage`), `w - 150f`, `w - 296f`
@@ -15468,6 +15468,51 @@ glass, no `git push` · §14.4(a) untouched.
 - ⛔ **Not to be confused with Frame 58.** The live docking HUD is `Frame58Hud` + [[S154b]]/[[S154c]];
   these three are the legacy docking page and are dormant.
 - **DONE when:** as the parent's DONE-when, for these three files.
+
+#### ⭐ DONE 2026-09-06 — and this was the worst-looking instance of R-02 in the family
+
+⛔ **`DockingPage`'s geometry was ALREADY CORRECT and that is what made it dangerous.** Its rings are
+fractions of the body height (`RingFraction = 0.30f`) and its centre is a fraction of the panel, so at
+2560 the HUD framed itself perfectly — while every caption, column offset and readout around it stayed at
+its RefPanelW size. **The readouts sat at half their measured size inside a ring twice the area, and
+nothing looked broken.** Every other page in this family at least looked wrong.
+
+- **`DockingPage`, `DockingPageCentral`** derive `sc` from their own `w`; **`AttitudeHud` takes it as a
+  parameter** — it is handed a centre and a RADIUS and never a panel width, and the radius already
+  tracks the panel while the captions beside it do not. Its three existing overloads delegate at
+  `sc = 1`, so `ComponentsTest` and the preview's own direct call are untouched.
+- **`DockingPageCentral.Selector`** likewise takes `sc`: an x, a y, and no width.
+- ⭐ Every widget call on these pages now passes the scale — `StatusIndicator.Badge` and `.Lamp`,
+  `NumericReadout.Paired` and `.Value`, `Control.Button`, `Gauge.Ring` — which is [[S121a]]'s work
+  reaching the glass.
+
+#### ⛔ ONE MUTATION SURVIVED, AND IT FOUND A HOLE IN THE WHOLE SUITE
+
+9 mutations, 8 killed at once. **D9** left the FRAME / CAMERA selector pills at their RefPanelW
+`200x46` — and **nothing failed**. The captions inside those pills are placed from the pill's own x and
+y, so they moved correctly while the box they sit in did not. ⭐ **Every check in this suite read TEXT
+commands only. A box half the size of its own contents was invisible to all of them.**
+
+Fixed by reading `Rect` geometry as well as text — x, y, w and h — into the same doubling comparison.
+D9 then dies with `@1280 200, @2560 200`. ⚠ This is the third time a check in this family has needed
+widening after a mutation walked through it (sizes-without-positions in [[S121b-ii]], the round trip that
+locates a control with the function it tests in [[S121b-i]]), and each widening has been kept general
+rather than special-cased to the mutation that found it.
+
+⚠ **And one check was wrong about a page rather than the reverse.** The shared page helper demanded
+both a `Caption` AND a `Dense` at RefPanelW; DOCKING draws neither Dense nor anything smaller than
+Caption, so it failed on a property it never had. The anchor is now what all four pages share: a Caption
+at its measured size, and **nothing on the page below the smallest Typography constant** — which a wrong
+absolute scale drives everything under at once, so it still catches [[S121b-i]]'s W7 class.
+
+#### Verified
+
+**MEASURED: 119 preview pages before and after, compared by hash — 2 changed**, `page3_docking` and
+`page_docking_central`, and nothing else. Inspected: ROLL/PITCH/YAW with their rates, X/Y/Z/ALIGN, and
+RANGE/RATE at Hero size are all legible, inside a ring that had always been the right size.
+
+`build.py test` green — `LegibilityFloorTest` **299 checks** · comment-loss **0** · no `install`, no
+glass, no `git push` · §14.4(a) untouched — this page commands nothing and still commands nothing.
 
 ### S121e [S] `PanelBoardPage.cs` — **TODO (UNBLOCKED 2026-09-06 by [[S121a]])** — [split 5 of 5 of [[S121]]; 10 lines / **13 references**]
 - The smallest page-level split, and the one where the line-vs-reference gap is widest (10 lines carry 13
