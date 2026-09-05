@@ -8302,6 +8302,8 @@ pure linear algebra over a caller-supplied error and declares only the three con
 to name them together. W6 did not widen into another wave's file — logged as **W22** (C1.1).
 **No screen changed → no preview PNG applies.**
 
+⚠ **SEE ALSO [[W19]], which hit the IDENTICAL blocker the same day — `Steering.cs`. That line carries the wave-level sweep and the joint overseer prompt for both.**
+
 ### W7 [O] `AscentControl.cs` — recover it with the roll-trim block REMOVED, on its own line — **HELD 2026-09-06 — ⛔ DO NOT EXECUTE THIS LINE AS WRITTEN: its line range would delete a DIFFERENT flight fix, and the defect it names was already fixed by the owner** — [TIER 2: real defect + recovery; touches the ONLY flight-validated subsystem]
 Logged by **W3**, 2026-09-04 (C1.1 — W3's Build text asked which wave owns this file; the answer is **none**).
 **The finding:** R1 §5.2 gives `plugin/src/AscentControl.cs` (55,054 B) verdict **RECOVER-CODE — HIGH**,
@@ -9139,7 +9141,7 @@ silently; **`git status` shows no `.cs` file touched**. ⚠ Run under the **OWNE
 from C1.1/C1.7 of 2026-09-04 (via the overseer)** — five Wave E lines in one session; batch only, does not
 generalise.
 
-### W19 [O] Wave E-7 `src/AbortControl.cs` — the flight-validated abort executor; retires the `AbortControl`/`AbortMode` stub — **TODO** — [TIER 2: recovery of the ONLY other flight-validated subsystem]
+### W19 [O] Wave E-7 `src/AbortControl.cs` — the flight-validated abort executor; retires the `AbortControl`/`AbortMode` stub — **HELD 2026-09-06 — blocked on `Steering.cs`, which §B12.8 rider (b) forbids recovering** — [TIER 2; ⚠ **the same blocker as [[W7]] — this is a WAVE-LEVEL problem, not two coincidences**]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 7 of 9).
 **The file.** `plugin/src/AbortControl.cs` (23,536 B at `8b81816^`), R1 §5.2 **RECOVER-CODE — HIGH, §B12.7**,
 regime **RSS-RO**, flown **YES — flight-validated**. *"The SELF-AWARE abort executor — 7 regimes, mode LATCHED
@@ -9187,6 +9189,74 @@ the way W2 stated Actuator's); bind attitude to T15 or STOP.
 7 regimes and the first-tick LATCH survive intact, no screen file changed, and the abort overlay stays dark
 until W10's host publishes `Aborting`.
 
+
+#### ⛔ HELD 2026-09-06 — **it cannot compile, and the missing file is one the plan rules out**
+
+Picked up to be built, and stopped at the dependency check. **Verified, not assumed:**
+- `plugin/src/AbortControl.cs` calls **`Steering.Point`, `Steering.PointNoRoll`,
+  `Steering.PointingErrorDeg`, `Steering.Prograde`, `Steering.Up`** — **11 call sites**.
+- **`plugin/src/Steering.cs` is not in the tree**, and §B12.8 rider (b) says it is **NEVER recovered**
+  (*"its last committed state is `UseGimbalLoop = false`, attitude handed to stock SAS, which is precisely
+  what Part B replaces"*). [[W7]]'s line records the same rule.
+- **`plugin/src/pure/AbortResponder.cs` is also absent.** This line names it as the pure half and gives its
+  R1 verdict, but does **not** list it as a deliverable — so even the pure side has no owner yet.
+
+#### ⭐ AND IT IS NOT ONE LINE'S PROBLEM — the whole recovery wave rests on a file that is not coming back
+
+Swept `git ls-tree 8b81816^ -- plugin/src` for every file that calls `Steering.*`:
+
+| file | `Steering.` call sites | in the tree? |
+|---|---|---|
+| `ReturnControl.cs` | 16 | no — *deliberately stays deleted* |
+| `RendezvousControl.cs` | 12 | no |
+| **`AbortControl.cs`** | **11** | **no — THIS LINE** |
+| **`AscentControl.cs`** | **8** | **no — [[W7]]** |
+| `DeorbitBurn.cs` | 4 | no |
+| `BoosterControl.cs` | 4 | no — *deliberately stays deleted* |
+| `DockingControl.cs` | 3 | no — *deliberately stays deleted* |
+| `EntrySteering.cs` | 2 | no — *deliberately stays deleted* |
+| `RvCoast.cs` · `FlightLog.cs` · `BoosterTargeting.cs` | 1 each | no |
+| `FlightDriver.cs` | 1 | **yes** — see below |
+
+⛔ **The two files the plan schedules for recovery *because they are flight-validated* — `AscentControl`
+(W7) and `AbortControl` (this line) — are both blocked on the one file the plan forbids recovering.** Most
+of the rest of that list is *meant* to stay deleted (`CLAUDE.md`'s STALE set), so this is not a general
+complaint: it is precisely the two recoveries that cannot proceed.
+
+⚠ **AND W10's ESCAPE ROUTE DOES NOT EXIST HERE, WHICH IS THE CRUX.** `FlightDriver.cs` had a `Steering`
+call and *is* in the tree: [[W10]] recovered its **SHAPE only, read-only** (§B12.6 step 3) and the call did
+not come with it — `grep "Steering\."` over the current file returns **nothing**. That works for a host
+whose job is to tick and report. ⛔ **It cannot work here.** `AbortControl` is a **pointing controller** —
+*"the SELF-AWARE abort executor — 7 regimes, mode LATCHED at the first tick"* — and `Steering.Point` /
+`PointNoRoll` **are** what it does. Stripping them leaves a mode latch that points nothing, which is not a
+recovery of a flight-validated subsystem; it is a different, unflown file wearing its name.
+
+⚠ **What this line got RIGHT and should be kept:** its stub analysis. `_AutopilotStub.cs` declares both
+`class AbortControl` (`:97`) and a two-member `enum AbortMode` (`:34`) while the real `AbortResponder`
+declares an eight-member one, and **nothing in the tree reads either stub** — the [[W2]] `Actuator`
+precedent exactly. That remains the right plan **once the dependency is resolved**, and no part of it was
+acted on here, because deleting the stub without landing the real file breaks the build.
+
+#### The question, and it is the owner's (C1.12 / C1.14)
+
+**Paste-ready overseer prompt (C1.13):**
+> DragonScreen, W7 + W19 together. The plan schedules the recovery of **the only two flight-validated
+> subsystems** — `AscentControl` (W7) and `AbortControl` (W19). ⛔ **Neither can compile**, and for the same
+> reason: they call `src/Steering.cs` **8 and 11 times**, and §B12.8 rider (b) says `Steering.cs` is **never
+> recovered** because *"attitude handed to stock SAS … is precisely what Part B replaces"*.
+> **W10's route out does not apply.** It recovered `FlightDriver` shape-only and dropped its single
+> `Steering` call, which is fine for a host that ticks and reports. These two are **pointing controllers** —
+> `Steering.Point` / `PointNoRoll` **are** their function — so stripping the calls leaves an unflown file
+> wearing a flight-validated name.
+> **Three ways out, all yours:** **(a)** recover `Steering.cs` after all — an **`OVERRIDE`** of rider (b),
+> and then decide what happens when MechJeb's attitude modules arrive to do the same job; **(b)** re-point
+> both onto the embedded MechJeb attitude modules — that is no longer a *recovery*, it is new Part-B work
+> and belongs with T18-T21, and it forfeits the "flight-validated" claim that justified recovering them;
+> **(c)** recover both as **reference only, not compiled**, to preserve the flight-validated tuning inside
+> them, and let §B12.3's MechJeb assignments fly the vehicle.
+> ⚠ Note that **T16 (landed 2026-09-06) already routes `MissionPhase.Ascent` to MechJeb's PVG autopilot**,
+> so option (b)/(c) is where the plan is already pointing for ascent. Abort is the harder half: §B12.3 does
+> **not** give abort to MechJeb, so if `AbortControl` is not recovered, **nothing owns abort actuation**.
 ### W20 [O] Wave E-8 `src/RendezvousControl.cs` — **RE-VERDICTED RECOVER-REFERENCE (G6)**: the ONLY real RSS-RO rendezvous experience we have, mined to tune MechJeb — **DONE** (2026-09-04) — [TIER 4: reference extraction — the highest-value read in Wave E]
 Logged by **W11**, 2026-09-04 (§B12.8 rider (c), Wave E line 8 of 9).
 🔁 **RE-VERDICTED RECOVER-CODE → RECOVER-REFERENCE by G6, on the OWNER's decision of 2026-09-04 via
