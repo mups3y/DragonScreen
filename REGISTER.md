@@ -16581,7 +16581,7 @@ about when to interrupt — the defect [[S13]] closed for the *wording* and this
 
 **Verified (C1.3).** **Nothing built, nothing changed.** No `install`, no glass, no `git push`.
 
-### S145 [S] NavOrbitPlot's four range rings carry no scale — **TODO — un-held 2026-09-06, the R-01 policy exists** — [H35; TIER 3]
+### S145 [S] NavOrbitPlot's four range rings carry no scale — **DOING** — [H35; TIER 3]
 ✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set
 one (SPLIT BY CONTENT TYPE — see S153). ⛔ **The condition that replaces it is mechanical, not a wait:**
 any text this line ADDS must be drawn at **`Typography.MinDesignFor(w, sc)` or above** if it is LIVE, or
