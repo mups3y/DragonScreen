@@ -17204,6 +17204,87 @@ rule stands unchanged — especially C1.12**: no gate is opened, no `install`, n
 no owner ruling is recorded without saying exactly how it was given. ⚠ This is the SECOND such run; the
 first (2026-09-06, 63 commits) recorded the same deviation on its own first line.
 
+### S162 [S] Q9 / `VT-02` — the element split is RULED, and the evidence it needs is not in this repository — **HELD 2026-09-06 — C7 STOP-AND-FLAG** — [Q9 answered 2026-09-06; VT-02, un-withdrawn by that answer]
+
+#### 🟢 THE RULING, and it is applicable — this line is not blocked on a decision
+
+**Q9 — option selected 2026-09-06 via the overseer: §1.4 CLAUSE (2), SPLIT BY ELEMENT.** As presented:
+
+> Keep the photographic rebuild where the photographs genuinely resolve an element; take `frame59` as a
+> **MARKED tier-2 fill** only where they do not (alignment and type size are likeliest — a photo at an
+> angle resolves *what* far better than *where* and *how big*). This is the tier rule applied, NOT a
+> precedent downgrading tier-1. **It needs the photographs actually looked at** — `REAL_SPACEX_SCREENSHOTS/`,
+> in the repo. That is a research step.
+
+⛔ Recorded as a **SELECTION**, not a verbatim quote (C1.12's evidentiary standard).
+⭐ This **un-withdraws `VT-02`**, which [[S111]] parked with *"VT-02 is not actioned until that is
+answered"*. It is answered. ⚠ [[S160]]'s line still says *"VT-02 is withdrawn, no code owed — do not
+re-open it from this line"*; that instruction was correct when written and is superseded for this line
+only — S160 still should not re-open it, because it belongs here.
+
+#### ⛔ AND THE RESEARCH STEP CANNOT BE PERFORMED. `REAL_SPACEX_SCREENSHOTS/` IS NOT IN THIS REPOSITORY.
+
+Checked four ways, because both QC and the ruling assert it is:
+
+| check | result |
+|---|---|
+| `ls -a` at the repo root | `.claude` `.git` `assets` `docs` `plugin` + files. **No such folder.** |
+| `.gitignore` | no entry for it — so it is not "present but ignored" |
+| `git log --all --diff-filter=A -- "REAL_SPACEX_SCREENSHOTS/*"` | **empty. Never committed, on any branch.** |
+| `find . -iname "discovery*"` | **nothing.** The `discovery*.jpg` files `SCREEN_INVENTORY.md:49` describes are not here |
+
+⚠ **QC's Q9 says the opposite in as many words** — *"they are in `REAL_SPACEX_SCREENSHOTS/`, in the repo,
+so it is a research task rather than an owner question"* (`QC_FINDINGS.md:3064`) — and the ruling repeats
+it. Both are mistaken, and **C7 is explicit about what to do**: *"If a needed input is not in the repo,
+STOP and flag it."* This is that flag.
+
+⭐ **AND IT IS THE MIRROR OF THE `assets/figma` FLAG [[S135]] CORRECTED THE SAME DAY.** That one claimed a
+folder was OUTSIDE the repo and it was inside; this one claims a folder is INSIDE and it is not there at
+all. Both claims were carried for weeks and neither had been looked at. ⚠ The lesson is the same in both
+directions: **a claim about what is on disk is checkable in one command, and was worth more than the
+inference built on it.**
+
+#### What IS here, and why it does not substitute
+
+- ⭐ **`assets/figma/dashboard_ui/Frame 59.svg`** and `art/cover/frame59.png` — the tier-2 side of the
+  comparison, complete. ⚠ **But the SVG has no `<text>` nodes** (`docs/UI_AUDIT.md:370-376`; confirmed for
+  Frame 66 by direct parse in [[S136]]), so even the tier-2 side's type sizes are raster.
+- **`docs/SCREEN_INVENTORY.md` #6 and §106/§130/§178** transcribe the page's CONTENT — the numbered steps,
+  the section numbering, the row labels — and were the rebuild's source. ⛔ **Nothing anywhere transcribes
+  ALIGNMENT or TYPE SIZE**, which is precisely Q9's crux: *"whether the photographs actually resolve
+  alignment and type size for these seven elements, or whether the rebuild's choices were the builder's
+  own inference filling a gap."*
+- So the seven differences can be MEASURED (QC measured them) but not ADJUDICATED. Measuring both drawings
+  again would add nothing: the question is which one is right, and the tier-1 evidence is absent.
+
+#### ⚠ AND THERE IS A SEQUENCING CONSEQUENCE, which is the useful part of this line
+
+[[S153c]] owns `VrioTestPage`'s **37 below-floor text draws** and will raise its type to the floor. ⛔ **Q9
+is a question about that page's alignment and type size** — the two things S153c is about to change. If
+S153c re-lays the page first and Q9 is then answered the other way, the page is laid out twice.
+⭐ **Either resolve this line before S153c reaches that page, or accept that its VrioTest half is
+provisional.** Recorded so the choice is made deliberately rather than discovered.
+
+**Paste-ready overseer prompt (C1.13):**
+> DragonScreen, S162 / Q9 / VT-02. Your split-by-element ruling is clear and I can apply it — but the
+> evidence it depends on is not in the repository. ⛔ **`REAL_SPACEX_SCREENSHOTS/` does not exist here**:
+> not on disk, not gitignored, and never committed on any branch (checked all three). The
+> `discovery*.jpg` files the docs describe are not in the tree either. QC's own note says they are in the
+> repo; that is where the mistake started.
+> ⚠ Nothing else here substitutes: our Figma frame's SVG has no text nodes, so even the tier-2 side's type
+> is raster, and the docs transcribe the page's CONTENT but never its alignment or type size — which is
+> exactly what the ruling asks me to check the photographs for.
+> **What I need is one of:** **(a)** the photograph folder added to the repo (or its relevant crops), and
+> I do the element-by-element pass as ruled; **(b)** a ruling that, absent the photographs, the seven
+> elements default one way — either "keep the rebuild, it is tier 1 until shown otherwise" or "take
+> frame59's alignment and type as the marked tier-2 fill" — which needs no new evidence and unblocks the
+> page; **(c)** leave it, and accept that [[S153c]] will re-lay this page's type without the question
+> settled, and may have to do it twice.
+> ⚠ **(c) is the current default and it is the expensive one.**
+
+- **DONE when:** the photographs are readable from inside the repo and the seven elements are split
+  per the ruling — or the owner has ruled the default in their absence.
+
 ### S153a [S] Cover: raise the type to the two floors — **TODO** — [split of [[S153]]; **24** below-floor draws]
 - **Scope:** `plugin/src/pure/CoverPage.cs` only.
 - **Policy (S153, owner 2026-09-06):** LIVE → `Typography.MinDesignFor(w, sc)` (**48.07** design px at
