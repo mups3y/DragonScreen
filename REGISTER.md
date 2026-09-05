@@ -12354,6 +12354,21 @@ loosened — they still assert an exact membership rule, with one more clause in
 
 **Verified:** `build.py test` green, 104 PNGs re-rendered, and both renders read by eye at 1280×703.
 
+⛔ **CORRECTION, S111, same day — S110 GOT THE SOURCE HIERARCHY BACKWARDS.** The entry above says frame59
+"is this page's reference now, and where they disagree §1.4 makes the frame the source and the page the
+thing corrected", and VT-02 was filed on that basis. **That is wrong.** §1.4 (owner, 2026-09-02, *"governs
+EVERY element"*) ranks VERIFIED-REAL first and names the **community Figma in tier 2 by name**; §14.2 lists
+the captured **VRIO** screen LAYOUT in **tier 1**. So `frame59` is the tier-2 recreation and the
+photographic rebuild is the tier-1 source — correcting the page to the frame would have **downgraded a
+tier-1 element on a build chat's say-so**, which is precisely what §1.4 exists to stop. Caught while
+starting VT-02's measurement pass, before any of it was applied; **no page was changed to the frame.**
+**What still stands:** F-01's fix (the duplication was real; the renderer that can become live is the right
+one to keep) and the header's factual correction (frame59 *does* depict this screen — the old "NO Figma
+reference" claim was false). **What is withdrawn:** VT-02's fix plan. The genuine question underneath —
+`CLAUDE.md`'s *"never a screenshot"* method rule points the other way for LAYOUT, and the tier-2 frame is
+measurably more legible — is now **Q9**, with the chat's recommendation to split it by element per §1.4's
+own clause (2). VT-02 is **not actioned** until that is answered.
+
 
 ---
 

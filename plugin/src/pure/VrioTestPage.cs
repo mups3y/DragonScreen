@@ -4,10 +4,19 @@
 // `art/cover/frame59.png` is a Figma frame OF THIS EXACT SCREEN - same title, same DEORBIT checklist with
 // the same 4-of-5 state, same steps 4.1-4.5, same three command buttons, same NEXT and ENTER READ-ONLY,
 // same two note cards word for word. It was in the repo the whole time, and `UiPage.Procedure` was
-// rendering it. This page was reconstructed from photographs while a reference frame sat in the tree -
-// which is C7's own failure mode, building from a weaker source than the one already present - and the
-// two drawings then drifted apart (see F-01 for the list). frame59 is this page's REFERENCE now; where
-// the two disagree, §1.4 says the frame is the source and this file is what gets corrected.
+// rendering it (S110 pointed page 3 here instead, so there is one screen and one renderer).
+//
+// ⛔ S111 — BUT THE FRAME DOES NOT OUTRANK THIS FILE, AND S110's FIRST VERSION OF THIS COMMENT SAID IT
+// DID. That was backwards. §1.4 (owner, 2026-09-02, and it "governs EVERY element") ranks
+// (1) VERIFIED-REAL first, (2) other users' recreations second - and it names the **community Figma** in
+// tier 2 explicitly. §14.2 then lists the captured **VRIO** screen LAYOUT in TIER-1. So the photographic
+// reconstruction this file is built from is the HIGHER source, and `frame59` is a tier-2 recreation of
+// the same screen. Where they disagree, the default is that THIS FILE is right and the frame is the
+// marked fallback - the opposite of what S110 wrote.
+// ⚠ What is genuinely open is narrower and is QC **Q9**: for the specific elements where the
+// photographs may not resolve alignment and type size, a tier-2 frame is a legitimate fill - and the
+// frame is measurably more legible at the shipped width. Which elements those are is not recorded
+// anywhere, so VT-02 is NOT actioned until the owner answers. Nothing here is corrected to the frame.
 //
 // A real Crew Dragon procedure screen, also corroborated by photographs of the actual capsule displays
 // (REAL_SPACEX_SCREENSHOTS, the shanemielke.com walkthrough). It shares the

@@ -2307,6 +2307,60 @@ four illustrated seats — if anything more so, because the two speaker rings ou
 ~10 px across and contribute even less. Nothing in the fix plan changes.
 ---
 
+## Open questions for the owner — the VRIO procedure screen (Q9)
+
+### Q9 — A tier-1 photographic reconstruction and a tier-2 Figma frame of the same screen disagree, and the tier-2 one is more legible. Which governs its LAYOUT? (VT-02, and it touches R-01)
+
+**Paste-ready for the overseer (C1.13).**
+
+**Situation.** S110 found that `UiPage.Procedure` (3) and `UiPage.VrioTest` (19) are one real screen shipped
+twice — page 3 as the baked community-Figma frame `frame59.png`, page 19 as an element rebuild
+reconstructed from photographs of the actual capsule. Page 3 now renders page 19's rebuild, so there is one
+screen and one renderer, and that part is settled and not in question.
+
+What is in question is what to do about **seven measured differences** between the two drawings (VT-02): the
+frame sets the page title, the section heading and the page heading **left-aligned and large**, the rebuild
+**centres them and sets them smaller**; the rebuild adds a refresh glyph the frame does not have; the step
+rows are lighter and set wider; the note cards sit at a different x with a different type treatment; and the
+content panel stops ~40 px short of the bar.
+
+**Two repo rules point in opposite directions, and I am not able to settle which wins here:**
+- **§1.4 + §14.2** — §1.4 is an owner decision that *"governs EVERY element"*, ranks VERIFIED-REAL first,
+  and names the **community Figma in tier 2** explicitly; §14.2 lists the captured **VRIO** screen LAYOUT in
+  **tier 1**. On this reading the photographic rebuild wins and `frame59` is the marked fallback.
+- **`CLAUDE.md`** — *"Build pages from the reference's own source, never a screenshot. …Screenshot/SVG-derived
+  pages came out wrong every time."* On this reading, for LAYOUT specifically, the Figma frame is exactly the
+  kind of source that rule prefers, and a photograph is exactly what it warns against.
+
+**And the observable fact cuts across both:** put side by side at 1280×703, **`frame59` is the more legible
+of the two.** The rebuild's centring and smaller type are also part of why **R-01** (every Figma-era text
+below the legibility floor) bites on this page.
+
+⚠ **What is NOT recorded anywhere:** whether the photographs actually resolve alignment and type size for
+these seven elements, or whether the rebuild's choices were the builder's own inference filling a gap. That
+is the crux, and nothing in the repo answers it.
+
+1. **Tier-1 wins: keep the rebuild's layout, close VT-02 as "not a defect".** *Reasoning:* §1.4 is an owner
+   decision and it is explicit. ⚠ Costs the legibility, and leaves the page reading worse than the PNG it
+   replaced.
+2. **Split it by element — the chat's recommendation.** Keep the rebuild wherever the photographs genuinely
+   resolve the element, and take `frame59` as a **marked tier-2 fill** for the ones they do not (alignment
+   and type size are the likeliest, since a photograph of a screen at an angle resolves *what* is written far
+   better than *where* and *how big*). *Reasoning:* this is what §1.4 clause (2) is literally for — fall back
+   to a recreation where an element "cannot be COMPLETELY verified" — and it is the only option that uses
+   both sources for what each is actually good at. ⚠ Requires someone to look at the photographs and say
+   which elements they resolve; that is a research step, not a build step.
+3. **Tier-2 wins for layout: correct the page to `frame59` throughout.** *Reasoning:* simplest, most legible
+   result, and matches `CLAUDE.md`'s method rule. ⚠ **Recommend against without an explicit ruling** — it
+   downgrades a tier-1 element to tier-2 across the board, which is exactly what §1.4 exists to prevent.
+
+**Gate flags (C1.12/C1.14):** none needs `install` or glass time. **Option 2 needs the photographs looked
+at** — they are in `REAL_SPACEX_SCREENSHOTS/`, in the repo, so it is a research task rather than an owner
+gate. **Options 1 and 3 are rulings on the source hierarchy and are the owner's alone**, since either would
+set a precedent for every other page where a captured layout and a Figma frame both exist.
+
+---
+
 ## Open questions for the owner — the letterbox margin (Q8)
 
 ### Q8 — The margin page-links are 61.6 px wide at the shipped size and their labels need 74–106 px to be legible. Widen, shorten, or move? (H-06, DK-04)
@@ -4017,6 +4071,46 @@ shipped screen worse and called it a fix.
   what `frame59` sets — which will also feed **R-01**, since the frame's own sizes are evidence of what the
   designer intended at this scale.
 
+
+### ⚠ CORRECTED 2026-09-05 — S111 (I had the source hierarchy backwards)
+
+⛔ **This finding's premise — *"§1.4 now makes the frame the source and the page the thing corrected"* — is
+WRONG, and it was wrong the moment I wrote it, hours after correctly applying §1.4 twice elsewhere in this
+same sweep.**
+
+**§1.4** (`BUILD_PLAN.md` §1.4, an **owner decision of 2026-09-02** that by its own words *"governs EVERY
+element, Part A AND Part B"*):
+
+> *"(1) VERIFIED-REAL Crew-Dragon design/layout/functionality/assets are used FIRST; (2) where an element
+> cannot be COMPLETELY verified, fall back to OTHER USERS' recreations/designs/assets/elements
+> (DillonBaird, iss-sim, Tundra's IVA model, **community Figma**, the JSC imagery — each MARKED as such)"*
+
+**The community Figma is named in tier 2, by name.** And **§14.2**'s source-tier map puts the captured
+**VRIO** screen layout in tier 1:
+
+> *"**TIER-1 (verified-real — used FIRST):** all captured screen LAYOUTS (Cover/HUD/Suit-Check/**VRIO**/
+> Manual-Chute/Manual-Docking …)"*
+
+`frame59.png` is a community-Figma frame — **tier 2**. `VrioTestPage` is reconstructed from photographs of
+the actual capsule (`REAL_SPACEX_SCREENSHOTS`, the shanemielke.com walkthrough) — **tier 1**. So the page
+outranks the frame, and "correct the page to the frame" would have **downgraded a tier-1 element to a
+tier-2 one** on my say-so.
+
+**What survives, unchanged:** the seven differences are real, measured, and worth having written down. And
+F-01's fix stands on its own reasoning — the duplication was real and the renderer that can become live is
+the right one to keep — none of which depended on which source outranks which.
+
+**What is withdrawn:** the fix plan. Do **not** correct this page to `frame59`.
+
+⚠ **And there is a genuine tension underneath, which is why this became Q9 rather than just a withdrawal.**
+`CLAUDE.md` carries its own load-bearing rule — *"Build pages from the reference's own source, never a
+screenshot… Screenshot/SVG-derived pages came out wrong every time."* That is a rule about METHOD, and it
+points the other way for LAYOUT specifically. Meanwhile the observable fact is that the tier-2 frame renders
+**more legibly** than the tier-1 reconstruction. Whether the photographs actually resolve alignment and type
+size for these seven elements — or whether the rebuild's choices were the builder's own inference filling a
+gap the photographs left — **is recorded nowhere**. That is the real question, and it is the owner's.
+
+**Nothing in the page was changed for this finding.** It stays open, behind **Q9**.
 ---
 
 ---
