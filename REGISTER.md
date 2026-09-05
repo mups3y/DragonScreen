@@ -10255,7 +10255,7 @@ an end state. Neither can be filled without a source: `SCREEN_INVENTORY.md`'s Di
    screen's features are included, and removing paint to avoid deciding what it means is the one thing this
    defect class should not teach.
 
-### S79 [S] The Vehicle Overview's MARGIN column is a hardcoded dash on every row — **TODO — UNBLOCKED 2026-09-04 (S57 split; this line inherits `LifeSupport.Margins`)** — [TIER 2: a column that claims a number it never computes]
+### S79 [S] The Vehicle Overview's MARGIN column is a hardcoded dash on every row — **HELD 2026-09-06 — S57's blocker is spent but S79-Q1 is an OWNER call and no code can land without it** — [TIER 2: a column that claims a number it never computes]
 Split out of **S75**, 2026-09-04, when that line closed its two painted controls (C1.7). S75's DONE-when
 carried a third clause — *"and the MARGIN column reads modelled margins rather than a hardcoded dash, pinned
 by a test in the same style as S54's"* — which S75's OWN body then says must land *"with or after S57"*.
@@ -10345,6 +10345,52 @@ S57 item 2 explicitly warns against (*"do not land the column twice"*).
    let S57 finish the propellant rows. Gets two real numbers onto the glass sooner.
 3. **Answer S57-Q1 first** (it is already posed and unanswered) and this question disappears — S79 then runs
    once, in whatever order S57's answer implies.
+
+#### ⛔ HELD 2026-09-06 — reached in the continuous run, and stopped at the right place
+
+This line's own S57 blocker is genuinely spent (the inherited note above is correct and was re-read). What
+stops it is **S79-Q1**, and that question is the owner's rather than the overseer's under C1.14:
+
+- ⛔ **It is not knowable from the repo, and the line says so in its own words:** *"the capture records the
+  column HEADER and no values, so nothing says whether a margin here is a TIME, a SURPLUS QUANTITY, or a
+  percentage… which of the three it is, is not derivable from any source in the repo."* C1.14 lets the
+  overseer settle questions with knowable answers; this one has none to find.
+- ⛔ **And option 4 needs the owner by construction** — *"it declines §14.4(f) for a real readout, so it needs
+  the owner to choose it rather than a build chat."*
+
+⚠ **No half-measure was taken.** Options 1-4 each change WHAT is computed for every answerable row, so there
+is no subset of this column that can land first and stay right under any answer. S79-Q2 is already moot
+(recorded above). ⭐ The work behind the answer is small and ready: `VesselData.Energy()`, `Cabin.NetPwr1W` /
+`NetPwr2W` and `VesselData.EcWatts = 120.0` are all on the page already, so option 1 is a wiring job the
+moment it is chosen.
+
+**Paste-ready overseer prompt (C1.13):**
+> DragonScreen, S79 — the Vehicle Overview's MARGIN column. The column header is real (DillonBaird's Vehicle
+> render), every one of its eight rows currently prints the same hardcoded dash, and §14.4(f) says a real
+> readout is included and FILLED. The blocker that used to hold this line (S57) is gone, and the inputs for
+> the two Power Unit rows are already on the page — so this is ready to build the moment one thing is
+> decided.
+> ⛔ **What MARGIN means on this table is not recoverable from anything in the repo.** The reference capture
+> shows the header and no values, so nothing tells us whether a margin here is a time, a surplus quantity,
+> or a percentage.
+> **The options, as the line records them:**
+> **(1)** *Time-to-depletion, one currency for the whole column* — hours or days at the current modelled
+> rate. **This is the build's recommendation**: it is the only reading that spans both answerable row
+> families in one unit, it is what "margin" means beside a consumable on a crewed vehicle, and the two power
+> rows can be built from it immediately.
+> **(2)** *Surplus quantity* — kg or % above what the remaining mission needs. Reads naturally for the
+> propellant rows but needs a mission-requirement model this build does not have, and makes the power rows
+> awkward.
+> **(3)** *Split the column by row family* — time for power, surplus for propellant. Not recommended: one
+> header over two units is what S38/S39's oblique-angle work shows crews misread.
+> **(4)** *Leave MARGIN dashed, but as a reasoned per-row dash with the reason in the code.* Honest and
+> cheap and strictly better than today — but it declines §14.4(f) for a real readout, so it is the owner's
+> to choose and not a build chat's.
+> ⚠ Four of the eight rows stay dashed under every option: the Orbit n Subtank rows have no KSP counterpart,
+> so a margin on them does not exist either (§14.4(e)).
+
+**HELD until S79-Q1 is answered.** Nothing else in this line is blocked; the moment it is, the column lands
+in one pass with the fixture-A-vs-fixture-B test its DONE-when already specifies.
 
 ### S80 [S] Re-inspect every preview PNG whose page tints an ASSET — the preview ignored tints until S75 — [TIER 2: previews that were inspected and were wrong] — **DONE 2026-09-06 — all five sites measured, all correct, NO code change** — recorded in `docs/SCREEN_SPEC.md` §7.1
 Logged by **S75**, 2026-09-04 (C1.1 — found while verifying S75's own fix, which the preview refused to show).
