@@ -6706,7 +6706,7 @@ with `if (built) return;`) and `Tuning.Poll()` in `ScreenPainter.Update()`
   `PanelPolicy.IsInert` (`PanelBehaviour.cs:78-86`) lists exactly six commands and RESET is not among them;
   `BUILD_PLAN.md:136-137` records the owner's option-B choice keeping RESET as real display-state.
 
-### S50 [O] The Cover top strip and the whole Frame 58 HUD are baked art — `PageState` already carries every value live — **TODO** — [TIER 2: real defect / the biggest immersion win]
+### S50 [O] The Cover top strip and the whole Frame 58 HUD are baked art — `PageState` already carries every value live — **SPLIT 2026-09-06** — [**H1 was already DONE by [[S105]]** — this line's title was stale; H2 deferred with cause → [[S155]]; H10 is real and confirmed → [[S154]]]
 
 ⚠ **[[S125]] CROSS-REFERENCE, 2026-09-06 — this line owns more than its own text says.** It is H1 + H2 + H10
 in `docs/SCREEN_LIVENESS_AUDIT.md`, **and** QC's **`C-01`** (the Cover strip — which QC's verification pass
@@ -6728,6 +6728,48 @@ more pages. **Zero new data, zero new model.** Also in scope: the Cover's frozen
 designed and previewed, and coordinates come from `docs/UI_AUDIT.md` (the reference's own source, never a
 screenshot). ⚠ New rows land on two pages **S39** lists — adopt S38's label→value remedy, do not inherit the
 defect. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H1/H2/H10 + §1.3.
+
+#### ✅ SPLIT 2026-09-06 — **checked before rebuilding, and one third of it was already done**
+
+⭐ **[[S125]]'s cross-reference said to check `C-01` before rebuilding the Cover strip. That check paid for
+itself: H1 IS DONE.** [[S105]] landed it and this line's title has been stale ever since. Verified in source,
+not from QC's scoreboard — `CoverPage.DrawTopStrip` (`:877`) draws **all seven** values live through a
+`T()` helper that dashes on `!Valid`, with `SplashdownShown`/`ApogeeShown`/`PerigeeShown` honoured and the
+dash drawn in `Text6` rather than `White` so a dead value cannot read as a live one. **Rebuilding it would
+have been pure waste**, and this line as written invited exactly that.
+
+⚠ **AND I READ THE HUD WRONG FIRST, WHICH IS WORTH RECORDING.** `frame58_hud.png` shows `ROLL 15.0°`,
+`RANGE 202.6 m`, `RATE -0.031 m/s` in live-green — and **202.6 is exactly √(200² + 12² + 30²)** against the
+X/Y/Z of 200.0 / 12.0 / 30.0 shown beside it. I took that internal consistency as proof the page was live.
+**It is not.** The reference's own fixture was self-consistent, and the art was exported from it.
+
+**PROVEN, not argued** — a temporary probe on the display list, since removed:
+
+```
+Frame58Hud: 10 cmds, 2 Text: [MANUAL][DOCKING]
+```
+
+⛔ **Ten draw commands for that entire page, and the only two strings on it are the margin affordance's.**
+ROLL / PITCH / YAW and their rates, X / Y / Z, RANGE, RATE, ACCELERATION, FRAME, CAMERA, the `0s / RESET /
+START` timer, FLIGHT COMMANDS and ALERT ACTIVITY are **every one of them pixels in `frame58.png`**.
+Corroborated independently in the art itself: 191 saturated-green pixels (`31,227,39`) sit in the raster at
+art y≈276, which is the ROLL readout's row.
+
+**THE SPLIT.**
+| half | verdict |
+|---|---|
+| **H1** — the Cover's seven-value top strip | ✅ **DONE by [[S105]]**, verified above. Nothing owed. |
+| **H2** — the frozen `RUNNING 00:22:57` clock | → **[[S155]]**. Deliberately deferred by S105 **with a documented reason**, not overlooked. |
+| **H10** / QC **`H-02`** — the whole Frame 58 HUD | → **[[S154]]**. Real, confirmed, and **larger than this line's method allows for.** |
+
+⛔ **WHY H10 NEEDED ITS OWN LINE RATHER THAN A DAY'S WORK: THIS LINE'S STATED METHOD DOES NOT APPLY.**
+It says *"add the keys to `SkipKeys` and draw `dl.Text` at the measured boxes, exactly as
+`ManualChuteDeployPage` already does"*. That works on the Cover because **the Cover is many placed assets
+with per-key `Box` metadata**, so a key can be skipped and overdrawn. **Frame 58 is ONE raster** —
+`dl.Asset("frame58", …)`, a single call — so there is no key to skip and no per-element box to draw at.
+`docs/UI_AUDIT.md` says so in as many words: *"Frame 58.svg — No live text nodes — this frame is an
+embedded raster."* **The input this line assumes exists does not exist**, and that is why it is split rather
+than attempted.
 
 ### S51 [S] The six subsystem tabs never got S22's guard, and eight status words contradict live state on their own screen — **DONE 2026-09-04** — [TIER 2: real defect]
 Logged by **S49** (H14, H15). **S22 fixed `VehicleOverviewPage` + `VehicleMechPage` only.** Verified: the
@@ -14001,6 +14043,75 @@ The full mapping — which hole, which finding, which are duplicates of each oth
   ADD text to pages R-01 already fails — so each either inherits the defect or waits. QC's own note: *"R-01
   is still the batch that unblocks the rest."*
 - **DONE when:** the owner has set the type-scale policy, and the resulting per-page work is split out.
+
+### S154 [O] Frame 58's HUD is one raster and every readout in it is baked — **TODO — SPLIT IT AGAIN BEFORE STARTING** — [H10 + QC `H-02`; split out of [[S50]] 2026-09-06; TIER 2: *"the largest liveness gap in the build"* — the audit's own words]
+
+- **The finding, proven not asserted.** `Frame58Hud.Build` emits **10 draw commands** for the whole page and
+  exactly **2 Text** commands, both the margin affordance's (`[MANUAL][DOCKING]`). ROLL/PITCH/YAW and their
+  rates, X/Y/Z, RANGE, RATE, ACCELERATION, FRAME, CAMERA, the `0s / RESET / START` timer, FLIGHT COMMANDS
+  and ALERT ACTIVITY are all pixels in `frame58.png`. QC `H-02` adds that **8 of the 12 numbers contradict
+  live state in the same frame**.
+- ⭐ **Every value exists live and pre-formatted, and a sibling page already draws them correctly:**
+  `RollDegText`, `PitchDegText`, `YawDegText`, `Roll/Pitch/YawRateText`, `OffX/Y/ZText`, `RangeText`,
+  `RateText`, `AccelPosText` — `DockingSimPage` (S26/T13c) draws the same fields. **Zero new data, zero new
+  model.** The gap is entirely in *where to put them* and *how to hide what is already there*.
+
+#### ⛔ THE ACTUAL BLOCKER, AND IT IS NOT THE ONE [[S50]] ASSUMED
+
+`SkipKeys` **cannot be used**: it filters *placed assets*, and Frame 58 is a single `dl.Asset("frame58", …)`.
+There is no per-element geometry anywhere in the repo for it — `docs/UI_AUDIT.md` records the frame as
+*"an embedded raster"* with **no live text nodes**. So the baked numbers cannot be skipped, and there are no
+source-derived boxes to draw the live ones at. **Three routes, and they are not equivalent:**
+
+1. **Rebuild element-by-element from the reference's own source.** ⭐ **This is what the plan mandates**
+   (*"Build pages from the reference's own source, never a screenshot"*) and the geometry **does exist** —
+   `docs/UI_AUDIT.md` carries the Vue app's CSS: `#roll-number` top:12.5% left:50%, `#pitch-number` top:50%
+   left:86%, `#yaw-number` top:85% left:50%, `#xyz-number` left:14%, plus `#hud-ring`, `.hud-darken-ring`,
+   `#lower-left/right`, `#upper-left/right`, `#meter-svg`. ⚠ **The catch:** those percentages are relative to
+   containers sized `min(85vh, 100vw*0.714)`, and the audit lists them **flat, without their parents**. The
+   mapping into our 3427×2112 design frame therefore has to be *derived*, and `Frame58Hud` already holds one
+   anchor for it — `BowlCx 1706, BowlCy 984, BowlR 470`, *"from the frame metadata (Ellipse 6 centre)"*.
+   **Establishing that mapping is a RESEARCH step and must be step one.**
+2. **Erase the numbers from `frame58.png`.** The precedent exists — `FigmaUI.cs:276-277`, the tab marker
+   erased from `component_48.png` so it could be drawn live. ⛔ **And so does the precedent for it going
+   wrong: QC `C-12` is that exact erase leaving the pill's GLOW behind**, putting a ghost marker on every
+   page in the build until [[S103]] fixed it. This edits shippable art (`plugin/GameData/DragonScreen/art/`,
+   C7.1's only shippable art) and should not be chosen by default.
+3. **Overdraw opaque patches, then the live text.** Cheapest and worst: it needs the same measurements as
+   (1) but taken off the raster rather than the source, which is the *"derived from a screenshot"* method
+   `CLAUDE.md` records as having *"come out wrong every time"*.
+
+- ⛔ **SPLIT THIS BEFORE STARTING (C1.7).** Step 1 is the mapping in (1), as its own line, with nothing drawn.
+  Only once the mapping is established and checkable does any drawing start.
+- ⚠ **AND IT IS GATED BY [[S153]] (`R-01`).** This adds ~13 text readouts to a page R-01 already fails at the
+  shipped width. Landing it before the type-scale decision means **building the largest text surface in the
+  build against a floor that is known to be wrong**.
+- ⚠ **The no-target and no-feed looks must be designed too** — the page currently cannot show either, and
+  QC `H-09` (CONFIRMED CLOSED) established that the three nose-cone states must stay visibly distinct.
+- ⚠ `FAR FIELD POSITIONING` on this page is a **GNC mode command → (B)**, §14.4(a). See [[S132]], which owns
+  the FRAME/CAMERA/timer readouts on this same frame. **Two lines touch Frame 58 — read both.**
+- **DONE when:** each split line lands with the mapping shown (not asserted), a 2560 preview of live /
+  no-target / no-feed, and a test pinning that nothing added reaches `FlightCommands`.
+
+### S155 [S] The Cover's `RUNNING 00:22:57` is a frozen clock — **TODO (needs a definition first)** — [H2; split out of [[S50]] 2026-09-06; TIER 3]
+
+- **The finding.** A stopwatch is the one element a viewer assumes is live, and this one has read
+  `00:22:57` since the art was exported.
+- ⭐ **It was NOT overlooked — [[S105]] left it deliberately and said why** (`CoverPage.cs:869`, verbatim):
+  *"`RUNNING 00:22:57` IS DELIBERATELY LEFT BAKED (QC H-2). The label sits beside the phase heading and
+  reads as TIME IN THE CURRENT PHASE. Nothing in the build keeps a phase-entry timestamp, and the one clock
+  that does exist — `VesselData.Met`, which reaches `ChromeState` but not `PageState` — is a DIFFERENT
+  quantity. Drawing MET under a "RUNNING" label would replace a frozen wrong number with a live wrong one,
+  which is worse: it would look right."*
+- ⛔ **That reasoning stands and this line does not overturn it.** The model the audit proposes — a
+  phase-entry timestamp in the painter, formatted on the second per the `Pages.cs:46-47` format-on-change
+  rule — is correct as far as it goes.
+- ⚠ **THE OPEN QUESTION IS WHAT "THE PHASE" MEANS, and it is not rhetorical.** The Cover's rail is a **view
+  selector**: the crew tap it to *look at* a phase. Timing "how long since you tapped" is meaningless.
+  Timing "how long the vehicle has been in this mission phase" is meaningful but is a different quantity
+  from the rail index, and needs `MissionPhase` transitions timestamped by the painter.
+- **DONE when:** the quantity is defined in writing, a phase-entry timestamp exists, the label reads it, and
+  a test pins that it is not MET wearing a RUNNING label.
 
 ### G12 [O] Close the gap C1.16 left open: research is protected wherever it lives, code comments included — **DONE 2026-09-06** — [job 4 of the 2026-09-06 owner batch; GUARDED FILES — `CLAUDE.md` + `docs/BUILD_PLAN.md` Part C, byte-identical and proven, plus §0a's ledger row]
 

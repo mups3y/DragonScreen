@@ -48,7 +48,7 @@ other leaves a false open item.
 
 | QC | liveness hole | the shared defect | owner after this reconciliation |
 |---|---|---|---|
-| `C-01` | **H1** | The Cover's top telemetry strip is baked art from someone else's flight | **[[S50]]** — QC records `C-01` CONFIRMED CLOSED; H1's other half (the HUD, H10) is still S50's |
+| `C-01` | **H1** | The Cover's top telemetry strip is baked art from someone else's flight | ✅ **CLOSED** — [[S105]] did it; verified in source 2026-09-06. H10 went to **[[S154]]** |
 | `C-08` | **H6** | `ENTRY ENABLED` shows a baked verdict; what the row *means* is undecided | **[[S129]]** — HELD, owner answered Q3 but the answer is not yet actionable |
 | `C-14` | **H3** | Both TARGET readouts are baked pictures of the same wrong value | **[[S126]]** |
 | `H-02` | **H10** | Every docking-HUD readout is a pixel; 8 of 12 contradict live state | **[[S50]]** |
@@ -77,8 +77,8 @@ picking up S55 is picking up more than its own text says, and its line now recor
 
 | hole | class | owner | state |
 |---|---|---|---|
-| H1 | A | [[S50]] | TODO (QC `C-01` closed the Cover half) |
-| H2 | A | [[S50]] | TODO |
+| H1 | A | [[S50]] | ✅ **DONE by [[S105]]** — confirmed in source 2026-09-06 when S50 was split; S50's title was stale |
+| H2 | A | **[[S155]]** *(new, from S50's split)* | TODO — deferred by S105 **with cause**; needs "what is the phase?" defined first |
 | H3 | A | **[[S126]]** *(new)* | TODO |
 | H4 | A | **[[S127]]** *(new)* | TODO — slots 3/4 owner-declined (S27), slots 0/1/2 buildable |
 | H5 | A | **[[S128]]** *(new)* | TODO — prerequisite [[S54]] is DONE |
@@ -86,7 +86,7 @@ picking up S55 is picking up more than its own text says, and its line now recor
 | H7 | A | **[[S130]]** *(new)* | TODO |
 | H8 | A | [[S54]] | ✅ DONE |
 | H9 | C | — | recorded, no build owed |
-| H10 | A | [[S50]] | TODO |
+| H10 | A | **[[S154]]** *(new, from S50's split)* | TODO — confirmed: the page emits 10 commands and 2 Text. ⛔ `SkipKeys` cannot be used; Frame 58 is ONE raster |
 | H11 | mixed | **[[S132]]** *(new)* | TODO (A parts); `FAR FIELD POSITIONING` is (B) |
 | H12 | A | **[[S134]]** *(new)* | TODO |
 | H13 | A | **[[S136]]** *(new)* | TODO |
@@ -174,7 +174,7 @@ figure is 36.** QC's file is not edited to say so (it is QC's); this is recorded
 | `C-09` | — | **glass-gated**; owner: *"Check it during the 2560 install"* |
 | `C-11` | **[[S152]]** *(new)* | preview/game tint-rect mismatch — a code-structure claim, unjudgeable from a render |
 | `C-14` | **[[S126]]** *(new)* | ≡ H3 |
-| `H-02` | [[S50]] | ≡ H10 |
+| `H-02` | **[[S154]]** | ≡ H10 — split out of S50 2026-09-06 |
 | `H-05` | **[[S133]]** *(new)* | the docking HUD's 822 px empty ALERT ACTIVITY panel |
 | `A-01` `A-03` `A-04` | **[[S134]]** *(new)* | settings/audio structural + layout |
 | `A-02` | **[[S135]]** *(new)* | **HELD** — owner answered Q6, not yet actionable |
