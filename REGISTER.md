@@ -15417,12 +15417,77 @@ rather than wired, and the crew-GO → autopilot edge the settlement names is no
 - **DONE when:** the Cover shows a computed caution state, bit 2 is set or its absence is commented, and a
   preview shows nominal and cautioned looks.
 
-### S131 [S] A 16 px black arrow renders outside the content panel, on the live camera slot — **DOING** — [QC `C-02`; the HELD is LIFTED — the overseer assessment happened 2026-09-06]
+### S131 [S] A 16 px black arrow renders outside the content panel, on the live camera slot — **DONE 2026-09-06 — dropped; verified by an EXACT before/after diff of all 19 Cover renders** — [QC `C-02`]
 - 🟢 **Owner answered Q1: "Drop it"** (option selected, 2026-09-05).
 - ⛔ **HELD on the owner's own condition** — the same *"ask the overseer to assess before acting"* that holds
   [[S129]] and [[S135]]. ⚠ Also one of the three findings waiting on the community Figma export, which
   `assets/figma/` being gitignored puts **outside the repo (C7)**.
 - **DONE when:** the assessment has happened and the arrow is removed.
+
+#### ✅ DONE 2026-09-06
+
+**Both blockers cleared, and one of them was WRONG — which is the part worth recording.**
+
+1. ✅ **The assessment happened.** The owner selected *"Drop it"* for Q1 on 2026-09-05 and attached the
+   same *"ask the overseer to assess before acting on them"* condition that held [[S129]] and [[S135]].
+   That assessment landed 2026-09-06. ⛔ Recorded as a **SELECTION** with the option named, never as a
+   verbatim quote: he chose from presented options and did not write the words (C1.12's evidentiary
+   standard; QC's own convention in `docs/QC_FINDINGS.md`).
+2. ⛔ **`assets/figma/` WAS NEVER A C7 BLOCKER, and this line said it was.** It is on disk with **16 SVG
+   files**. **C7.1 permits reading `assets/` BY NAME** — *"assets/ … is REFERENCE — look, don't ship."*
+   The `.gitignore` entry exists to stop us REPUBLISHING someone else's design, not to stop us reading
+   it. ⚠ That misreading was holding three lines, this one included, and it is corrected here rather
+   than left to hold them again. **In the event this line needed nothing from that folder at all** —
+   the owner's answer removes the placement question instead of answering it.
+
+#### What was built
+
+`bi_arrow_right_short` joins `SkipKeys`. That is the whole change.
+
+⛔ **THE `Keys`/`Box` ROW STAYS, and a test now pins that it does.** The two arrays are index-paired and
+every later placement is measured against them, so deleting a row would shift twelve boxes for no gain.
+⭐ **Mutation B demonstrates it rather than asserting it**: excising the row broke [[S129]]'s ENTRY
+ENABLED position in the same run (*"...and the dash with it   got 0"*). "Dropped" means never drawn, not
+excised. The asset PNG stays on disk too — `assets/` is reference, and a wrong placement in this file
+says nothing about the art.
+⚠ **Its `ReferenceSkipKeys` entry also stays**, deliberately, though this makes it redundant: QC's own
+must-not-break says *"`ReferenceSkipKeys` must keep suppressing it on phase 5"*, and the two lists are
+checked against each other by eye (S54 / H8).
+
+#### Verified (C1.3) — an EXACT diff, no threshold
+
+QC's verify line asks that *"the 18×16 probe box at (1414, 698) must contain zero non-background pixels"*
+on every Cover render. ⭐ **A threshold was not used, because a threshold is a judgement.** Every Cover
+render was saved before the change and diffed pixel-for-pixel against the render after it:
+
+```
+19 ui_cover*.png renders diffed
+  changed inside the probe box .......... 362 px total
+  changed ANYWHERE ELSE, on ANY page ...... 0 px
+  every changed pixel lies in one 6x6 box at (1417,700)-(1423,706)
+  ui_cover_phase5.png ..................... 0 px changed
+```
+
+⭐ **So the change is provably the arrow and nothing else** — and phase 5 changing by zero is independent
+confirmation that `ReferenceSkipKeys` was already suppressing it there, which was QC's own evidence for
+believing the measurer thought it belonged to the `deorbit_burn_brief` row.
+
+⚠ **And the arithmetic behind QC's coordinate was re-derived rather than trusted.** Design x 1706 is
+right of `Split` (1500), so the fill-to-fit reflow adds `extra = 2560 − 3427 × 0.66572 = 278.6`:
+`1706 × 0.66572 + 278.6 = 1414.3`, and `1048 × 0.66572 = 697.7`. **(1414, 698)**, exactly as filed.
+
+`python plugin/build.py test` → **ALL SUITES PASSED**. `python plugin/build.py preview` → 116 pages.
+
+**MUTATION-PROVEN — 2 mutations, 2 caught:**
+
+| | mutation | first check that failed |
+|---|---|---|
+| **A** | the arrow is drawn again — the original defect | *"drawn on **18 of 21** phase/camera states"* ⭐ 18 not 21, because `ReferenceSkipKeys` still covers phase 5 on all three cameras — the guard's own numbers corroborate the render evidence |
+| **B** | "dropped" quietly becomes "deleted" | *"its measured box row is NOT deleted"*, **plus** S129's row breaking in the same run |
+
+**Comment-loss check (C1.16 / G12): 0 lost.**
+
+⛔ No `install`, no glass, no `git push`. §14.4(a) untouched.
 
 ### S132 [S] Frame 58's `FRAME`/`CAMERA` labels and the `0s / RESET / START` timer are baked with no hit rects — **TODO** — [H11; TIER 3]
 - **The finding, split by class:** `FRAME LVLH` / `CAMERA Virtual` as **readouts** → (A), and

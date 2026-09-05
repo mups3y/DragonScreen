@@ -97,6 +97,35 @@ namespace DragonScreen
         // asset `entry_enabled` is NOT skipped - it is a label and says nothing about state.
         static readonly string[] SkipKeys = {
             "true", "false",
+            // ---- S131 / QC C-02: `bi_arrow_right_short` IS DROPPED, BY OWNER DECISION ----
+            // A 16x16 glyph with TWELVE OPAQUE PIXELS, placed by masked template match against
+            // Frame 67.png - the smallest, lowest-information target in the whole set, and exactly the
+            // case where a template match returns a false peak. It did: design x 1706 is 264 px right
+            // of the content panel's own right edge (`rectangle_178` ends at 1442) and 336 px right of
+            // the `deorbit_burn_brief` row it plainly belongs to. The fill-to-fit reflow then reads
+            // 1706 as right of Split and shifts it further, landing it at panel (1414, 698) - dead
+            // centre of the LIVE camera slot, over the globe, on every Cover render but phase 5.
+            //
+            // It is also PURE BLACK ink (RGB 0,0,0) where every comparable glyph on this page is pure
+            // white, and it is drawn with a White tint - and a white multiply cannot lift black. So at
+            // its CORRECT position it would have been invisible on #020738. It was visible only
+            // because it landed on a photograph.
+            //
+            // 🟢 OWNER DECISION, Q1: option selected "Drop it" (2026-09-05, via the overseer).
+            // ⛔ RECORDED AS A SELECTION, NOT A VERBATIM QUOTE - he chose from presented options and
+            // did not write the words (C1.12's evidentiary standard; QC's own convention).
+            // ⚠ QC's fix plan offered a REPLACEMENT (redraw it as primitives at the row's own metrics)
+            // and left the PLACEMENT to §1.4 because guessing "just after x 1370" invents a layout
+            // bound. The owner's answer removes that question rather than answering it.
+            //
+            // ⛔ THE Keys/Box ROWS STAY. They are index-paired and every other placement is measured
+            // against them, so deleting a row would shift 12 boxes for no gain. The asset PNG stays on
+            // disk too - `assets/` is reference (C7.1) and this file's placement being wrong says
+            // nothing about the art. It is simply never drawn.
+            // ⚠ Its `ReferenceSkipKeys` entry ALSO stays, deliberately, though this line makes it
+            // redundant: QC's own must-not-break says "ReferenceSkipKeys must keep suppressing it on
+            // phase 5", and the two lists are checked against each other by eye (see S54 / H8).
+            "bi_arrow_right_short",
             "rectangle_178", "rectangle_183", "rectangle_95", "coast_to_trunk_jettison",
             "deport_burn", "coast_to_trunk", "claw_separati", "procedure", "manual_chute",
             "union_1", "union_2", "union_3", "union_4", "union_5", "camera_auto_earth_io",
@@ -1125,6 +1154,16 @@ namespace DragonScreen
         public static CoverButton PhaseAt(int i)
         {
             return (i < 0 || i >= PhaseButton.Length) ? CoverButton.None : PhaseButton[i];
+        }
+
+        /// <summary>Is this asset key still in the measured Keys/Box table? ⚠ Exists for S131: a key
+        /// that is DROPPED (never drawn) must keep its row, because Keys and Box are index-paired and
+        /// every placement after a deleted row would shift. A test pins the difference so "dropped"
+        /// cannot quietly become "deleted".</summary>
+        public static bool HasAssetRow(string key)
+        {
+            for (int i = 0; i < Keys.Length; i++) if (Keys[i] == key) return true;
+            return false;
         }
 
         /// <summary>The phase index (0..6) a rail button selects, or -1 if it is not a rail button.</summary>

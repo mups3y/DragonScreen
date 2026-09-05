@@ -56,6 +56,7 @@ public static class FigmaUINavTest
         ProcedureLiveValues();
         S75InertPaintedControls();
         CoverEntryEnabled();
+        CoverDroppedArrow();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
     }
@@ -2489,6 +2490,39 @@ public static class FigmaUINavTest
         float inkTrue = 4f * MarginAffordance.CapAdvance * size;
         Check("True likewise, clear of the False column",
               inkTrue < (1132f - 783f), "ink " + inkTrue + " design px, room 349");
+    }
+
+    // ================= S131 / QC C-02: THE STRAY ARROW IS DROPPED =================
+    // `bi_arrow_right_short` is a 16x16 glyph with TWELVE opaque pixels, placed by masked template
+    // match - the smallest, lowest-information target in the set, and exactly where a template match
+    // returns a false peak. It did: design x 1706 is 264 px right of the content panel's own right
+    // edge, and the fill-to-fit reflow pushed it further, onto panel (1414, 698) - dead centre of the
+    // LIVE camera slot, over the globe, on every Cover render but phase 5. It is also pure BLACK ink
+    // drawn with a White tint, so at its correct position it would have been invisible anyway.
+    // 🟢 Owner Q1: option selected "Drop it" (2026-09-05, via the overseer) - a SELECTION, not words
+    // he typed. This is the standing guard that it does not come back with the next asset sweep.
+    static void CoverDroppedArrow()
+    {
+        const int VW = 2560, VH = 1406;
+        int drawn = 0;
+        foreach (CoverPage.CoverCam cam in new[] { CoverPage.CoverCam.Earth, CoverPage.CoverCam.Map,
+                                                   CoverPage.CoverCam.Capsule })
+            for (int ph = 0; ph < CoverPage.PhaseCount; ph++)
+            {
+                PageState s2 = new PageState(); s2.Valid = true;
+                DisplayList dl = new DisplayList(CoverPage.Commands + 200);
+                CoverPage.Build(dl, VW, VH, s2, MapProjection.Default(), ph, cam, Turntable.Front());
+                if (DrewAsset(dl, "bi_arrow_right_short")) drawn++;
+            }
+        Check("the dropped arrow is drawn on none of the 21 phase/camera states", drawn == 0,
+              "drawn on " + drawn + " of 21");
+
+        // ⚠ AND ITS Keys/Box ROW IS STILL THERE, deliberately. The two arrays are index-paired and
+        // every other placement is measured against them, so deleting a row would shift twelve boxes
+        // for no gain. "Dropped" means never drawn, not excised - and this pins the difference, so a
+        // later reader does not "tidy up" the row and silently renumber the table.
+        Check("...but its measured box row is NOT deleted", CoverPage.HasAssetRow("bi_arrow_right_short"),
+              "the Keys/Box pairing has been edited - check every placement that follows it");
     }
 
     /// <summary>The Cover on a normal phase with one ENTRY ENABLED verdict set. Phase 0, not the
