@@ -87,8 +87,8 @@ Cover's seven phase views, plus the lower analog console panel. **The six Vehicl
 | **24** | **VehicleGnc** | VEHICLE — GNC *(sub-tab)* | ✅ **DONE — 4 findings** *(shared section, 20–25)* | 2026-09-05 |
 | **25** | **VehicleThermal** | VEHICLE — THERMAL *(sub-tab)* | ✅ **DONE — 4 findings** *(shared section, 20–25)* | 2026-09-05 |
 | **26** | **ManualChute** | MANUAL CHUTE DEPLOY | ✅ **DONE — 2 findings** | 2026-09-05 |
-| 27 | Docking | MANUAL DOCKING | NOT STARTED | — |
-| 28 | Rendezvous | RENDEZVOUS | NOT STARTED | — |
+| **27** | **Docking** | MANUAL DOCKING | ✅ **DONE — 3 findings** *(shared section with 28)* | 2026-09-05 |
+| **28** | **Rendezvous** | RENDEZVOUS | ✅ **DONE — 1 finding** | 2026-09-05 |
 | 29 | DeorbitBurnPrep | DEORBIT BURN PREP | NOT STARTED | — |
 | 30 | EntryProcedure | ENTRY | NOT STARTED | — |
 | 31 | SystemsTree | SYSTEMS TREE | NOT STARTED | — |
@@ -3003,7 +3003,187 @@ go live now, its `DEPLOY DROGUES` button cannot."*
 
 ---
 
-*Next: **page 27 — Manual Docking**, then Rendezvous (28).*
+---
+
+# PAGES 27 + 28 — MANUAL DOCKING and RENDEZVOUS
+
+**Inspected together — they are the prox-ops pair**, reached from one another's letterbox margins, and S49
+covers them as one family (H24–H28).
+
+**Renders:** `ui_docking.png` · `ui_docking_corrected.png` · `ui_docking_notarget.png` ·
+`ui_docking_precise.png` · `ui_rendezvous.png` · `ui_rendezvous_notarget.png`.
+
+**Source:** `plugin/src/pure/DockingSimPage.cs` · `plugin/src/pure/RendezvousPage.cs` ·
+`ScreenPainter.DockAction`.
+
+## What was checked and found CLEAN
+
+1. ⭐ **The docking bearings are genuinely live and correctly tinted.** `ui_docking.png`: ROLL 15.0°,
+   PITCH 0.1° and YAW 0.1° in **green** (within `CorrectedToleranceDeg`), PYR 0.0 / 0.1 / 0.0 deg/s,
+   RANGE 202.6 m, RATE −0.25 m/s — all matching the fixture. `RingTint` (`:150`) computes the
+   green-when-corrected state from the value. **S26's work, and the second computed verdict in the sweep
+   after SuitCheck.** On `ui_docking_notarget.png` everything dashes.
+2. ⭐ **S85 turned the no-op into data.** `DockAction` sets `rec.Acted = false` for every direction pad —
+   *"§14.4(a)'s honest no-op stated as data rather than only as a log line, and it is the record that lets
+   a flight prove a direction pad was pressed and flew nothing."* That is better than an honest refusal; it
+   is an auditable one.
+3. **The two magnitude toggles act, and they are the only things on the page that do** — screen state, not
+   the vehicle, correctly classed. `ui_docking_precise.png` shows the toggled state.
+4. ⚠ **The Rendezvous plot's DOTTED orbit is deliberate, not a gap.** `RendezvousPage.cs:37` budgets *"the
+   dotted ellipse (72 steps)"*, and `:63` calls `NavPage.Orbit(…, true)` — the dotted flag being *"the one
+   addition NavPage.Orbit gained for this page"*. **Recording this explicitly because it looks exactly like
+   the broken-orbit-line defect class the charter asks about** (and like `ISSUE_REGISTER` N5's ground-track
+   seam). It is not one.
+5. **S83's AP/PE label offset is visible and working** — on `ui_rendezvous.png` the two labels sit outboard
+   of their markers along the local normal, not straight down.
+6. **The Rendezvous plot is the real conic**, shared with `NavPage.Orbit` rather than re-implemented —
+   *"NOT a second orbit renderer"* (`:13`).
+7. **`Instructions` and `Reset Positions` are inert for two different recorded reasons (S29, quoted in
+   `DockingSimPage.cs:44-53`)** — `Instructions` has no body in any source; `Reset Positions` is actuation
+   whose target (vehicle or view) the reference does not state, so §1.4 keeps it classified conservatively.
+   **Both correct.** How they are *drawn* is DK-02.
+
+---
+
+## DK-01 — Four of the six translation pads are labelled in the secondary tint and two in the primary, though all six do the same thing
+
+**TIER 2** · **NEW**
+
+**Evidence.** `DockingSimPage.Cluster` draws each pad's `a` label in `DragonPalette.White` and its `b` label
+in `DragonPalette.Text6` (`:209-210`). The two clusters pass different slots:
+
+```csharp
+Cluster(…, "ROTATION",    …, "ROLL","ROLL", "PITCH","PITCH","YAW","YAW",  "▲","▼","◄","►");
+Cluster(…, "TRANSLATION", …, "FWD","BACK",  "UP","DOWN","LEFT","RIGHT",   "", "", "", "");
+```
+
+- **ROTATION** puts the arrows in the `a` slot (White) and the axis words in `b` (Dim) — so each pad has a
+  bright glyph and a dim caption. Coherent.
+- **TRANSLATION** has no arrows: `aTop…aRgt` are empty, so `UP`, `DOWN`, `LEFT`, `RIGHT` land in the `b`
+  slot and are drawn **Dim** — while `FWD` and `BACK`, in the corner `a` slots, are drawn **White**.
+
+On `ui_docking.png` the result is plain: FWD and BACK read bright; UP, DOWN, LEFT and RIGHT read faint,
+inside identically-bright borders. **All six are the same control with the same behaviour.**
+
+**What is wrong.** `Text6` is this build's *"no live source behind this"* tint (S75) and this page's caption
+tint (ROLL/YAW/PITCH labels, RANGE/RATE). Using it for four of six sibling pads says something the page does
+not mean. The cause is structural: `Cluster` was written around the rotation cluster's glyph-plus-caption
+shape, and translation reuses it with the glyph slot empty.
+
+**Fix plan.**
+- Give `Cluster` an explicit label tint, or fall the label back to `White` when the `a` slot is empty —
+  a one-line change in `Btn`: if `a` is empty, draw `b` in White at the `a` size and position.
+- ⚠ **Decide it once for both clusters.** If the intended reading is "axis captions are secondary", then
+  ROTATION is right and TRANSLATION needs arrows, not a tint change — that is a design call, and the
+  reference (`iss-sim`, named in the file header) should settle it before either is changed. **Recommend
+  the tint fix as the minimal correct step**, because six identical controls reading in two weights is
+  wrong under either interpretation.
+- **Must not break:** the hit rects, which are per-pad and unaffected.
+- **Verify:** all six translation pads read at one weight.
+
+---
+
+## DK-02 — Thirteen correctly-inert controls, all painted as live buttons
+
+**TIER 2** · S75's appearance rule, **third page** (after **SC-02** and **A-02**)
+
+**Evidence.** Twelve direction pads plus `Reset Positions` are §14.4(a) no-ops, and `Instructions` has no
+content — four separate, recorded, correct decisions (S29 + T14 + S85). Every one is drawn in the live
+idiom: `dl.Box(…, DragonPalette.Hairline)` plus a `DragonPalette.White` label (`:207-209`), and the three
+bottom buttons at `:191` are `White` on a bordered box. Nothing distinguishes them from the two magnitude
+toggles, which are the only controls on the page that act — and those are drawn in **`Accent`**, so the page
+does have a distinguishing tint available and uses it for the wrong half.
+
+**What is wrong.** Identical to **SC-02**: the *behaviour* is settled and right; the *appearance* rule that
+S75 established on 2026-09-04 was never applied here. A crew member cannot tell, by looking, which of the
+sixteen controls on this page does anything.
+
+⚠ **This is now the third page with the same gap** (Cover fixed by S75; SuitCheck, Audio and Docking not).
+**It should be one build line, not three** — see SC-02's recommendation to hoist a shared inert tint.
+
+**Fix plan.**
+- Draw the twelve pads, `Reset Positions` and `Instructions` in `DragonPalette.Text6`; leave the two
+  magnitude toggles and `Settings` in their live tints.
+- ⚠ **Do not remove their hit rects.** S85's `rec.Acted = false` record depends on the press being
+  *received* and logged — that is the audit trail, and it is a feature. Inert here means "drawn as not
+  acting", not "not hit-tested".
+- ⚠ **`Reset Positions` may become live** if a source settles that it resets the view rather than the
+  vehicle (S29 left it open). It then goes back to White **and** stays hit-tested — S75's "together" rule.
+- **Verify:** on `ui_docking.png`, exactly three controls read as live.
+
+---
+
+## DK-03 — There is no camera behind the docking rings
+
+**TIER 2** · confirms S49 **H26**
+
+**Evidence.** `ui_docking.png`: the two alignment rings enclose bare page background. `DockingSimPage` draws
+no `ImageId.DockingCamLive` anywhere — grep confirms the key does not appear in the file.
+
+**What is wrong.** This is the *manual docking* page. The rings and the target diamond are an overlay for a
+view the page does not show, so the crew aligns against an empty circle. S49 records that the build already
+knows how: the stranded pre-Figma `pure/DockingPage.cs:73` draws the **full-bleed docking camera** the live
+HUD does not, and `Frame58Hud` already claims the camera and clips a feed to a circle
+(`Frame58Hud.cs:34-37`) — so both the claim path and the circular-clip draw exist.
+
+**Fix plan.**
+- Draw `ImageId.DockingCamLive` behind the rings, clipped to the outer ring, using `dl.ImageCircle` exactly
+  as `Frame58Hud` does — same call, same mask colour idiom.
+- **The camera must be claimed for this page.** `ScreenPainter.cs:1129-1131` requests the docking view only
+  for `FigmaUI.WantsDockingCam(up, ps)`, which is `p == UiPage.Hud && s.Steps.NoseConeOpen`. This page needs
+  adding to that predicate — and then `CameraHeldByDocking` becomes true, which the **Video settings page
+  already handles** with its `FORWARD VIEW IN USE BY DOCKING` message (VV-01's CLEAN 1). The three pages
+  are already designed to cooperate; only this one is not wired in.
+- ⚠ **Design the no-feed look in the same pass**, and reuse `PlanetGeom.NoSignalLabel`'s marking pattern
+  rather than inventing a second one — the same note H-09 makes.
+- ⚠ **The preview cannot show the result** (H-09): `DockingCamLive` has no stand-in. **Do H-09's stand-in
+  first** or this fix ships unreviewed.
+- **Verify:** three renders — no target, target with feed, target with camera unavailable.
+
+---
+
+## RZ-01 — The Hold-Capture card reads NOT ENGAGED forever, and neither its arrows nor the icon rail can be touched
+
+**TIER 2** · confirms S49 **H27** + **H28**
+
+**Evidence.** `ui_rendezvous.png`: the `HOLD CAPTURE` card shows **`NOT ENGAGED`**, with a `◄` and a `►`
+below it and a ring glyph top-right. To its left, a rail of **four identical empty ring boxes**. The whole
+left third of the page is those five elements and empty space.
+
+`NOT ENGAGED` is stub-pinned: S49 §1.2 records `RendezvousEngaged` / `RendezvousNote` as fed by
+`StationApproach` in `_AutopilotStub.cs:144`, whose value *"can only ever be"* `false` / `null`. The arrows
+and the four rail icons have no hit rect (S49 H28); the rail is drawn at `RendezvousPage.cs:81-85` as four
+`dl.Rect` + ring, with nothing behind them.
+
+**What is wrong — and the split matters.**
+- The **engagement state** is genuinely Part B's. `RendezvousEngaged` is one of the nineteen stub-pinned
+  fields; §14.4(a) says it stays an honest no-op until the conductor exists. **`NOT ENGAGED` is not a
+  defect** — it is a true statement about this build.
+- **What the card does with the rest of its space is (A), and that is the defect.** S49 H27 makes the point
+  precisely: *"a card could read an actual approach off `HasTarget` / `RangeM` / `Closing` instead of a stub
+  that says NOT ENGAGED for the whole mission."* Those three fields are live on this very page's sibling —
+  `ui_docking.png` prints RANGE 202.6 m and RATE −0.25 m/s from them in the same frame.
+- The **four rail icons** are a different problem: they are drawn with no labels, no state and no action —
+  four identical rings. Nothing in the repo says what they are.
+
+**Fix plan.**
+- **Fill the card with the approach that is actually happening**, beside the honest engagement line: range,
+  range-rate, closing/opening, target name — all live in `PageState` today, all readouts, all (A) under
+  §14.4(f). Keep `NOT ENGAGED` as the *engagement* row; it is true.
+- ⚠ **Do not wire the ◄/► arrows on a guess.** No source says what they step through. Either they select
+  something the card can show (then they are (A) screen state and need a rect), or they are Part B's
+  approach-mode selector (then they are (B)). **§1.4 question — no source, so no rectangle.** Meanwhile
+  S75's tint applies: draw them inert (DK-02's fix, same page family).
+- ⚠ **The four rail icons are a §1.4 question of their own** and should not be built or removed on a build
+  chat's judgement. Recommend tinting them inert now and recording the question; the Figma export
+  (**Q1 / A-05 / A-06**'s dependency) may name them.
+- **Must not break:** the plot, which is the page's live half and is correct.
+- **Verify:** with a target, the card reads a real approach; with none, it dashes — `ui_rendezvous_notarget.png`
+  already exists as the second case.
+
+---
+
+*Next: **pages 29 + 30** — Deorbit Burn Prep and Entry Procedure, the two reconstructed-from-photo screens.*
 
 *⚠ **Three findings are page-wide, not per-page, and should be scheduled ahead of the sweep:***
 - ***H-01** — the preview's resolution. It decides how every later legibility finding is measured, so
