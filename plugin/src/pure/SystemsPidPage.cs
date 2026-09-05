@@ -267,7 +267,7 @@ namespace DragonScreen
             L(leaking ? (isolating ? "ISOLATING" : "DETECTED") : (valid ? "NONE" : "—"),
               2150f, 1674f, 28, ventCol);
 
-            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
+            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
         }
 
         /// <summary>One coolant loop as a rectangular circuit: PUMP → CABIN HX → RADIATOR → back.</summary>

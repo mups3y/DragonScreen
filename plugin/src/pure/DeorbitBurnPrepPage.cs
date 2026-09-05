@@ -142,7 +142,7 @@ namespace DragonScreen
                 "1 sec pulses at 30 sec intervals",
                 "State oscillates between Deorbit Burn Prep and Deorbit Burn Settle" }, C3Y, 40f);
 
-            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
+            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
         }
     }
 }

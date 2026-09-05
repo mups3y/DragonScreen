@@ -578,6 +578,12 @@ public static class LegibilityFloorTest
     static readonly FloorBaseline[] Baseline = {
         B(UiPage.Cover,             26, 23),   // S153a  ⚠ 26 not 24: [[S126]] added two STATIC captions
         B(UiPage.Menu,              24, 24),   // S153f
+        // ⭐ S147 PUT THIS PAGE IN THE CENSUS. `UiPage.Cabin` is a flat frame that drew NO text at all,
+        // so it was legitimately absent from this table - until the bottom bar started printing
+        // CURRENT STATE on every page. Its one text draw is at the glanceable floor, so both counts
+        // are 0, and the ratchet caught the omission the moment it appeared rather than letting a
+        // page slip out of the census.
+        B(UiPage.Cabin,              0,  0),   // S153f (the frame itself is [[S136]]'s)
         B(UiPage.Hud,                2,  2),   // S153f - MarginAffordance's MANUAL/DOCKING, also QC H-06
         B(UiPage.Audio,             12, 10),   // S153f
         B(UiPage.AudioVideo,         9,  7),   // S153f

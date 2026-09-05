@@ -180,7 +180,7 @@ namespace DragonScreen
             Row("RATE", s.Valid && s.HasTarget ? s.RateText : Dashes.None, rowY + 44f);
             Row("RANGE", s.Valid && s.HasTarget ? s.RangeText : Dashes.None, rowY + 88f);
 
-            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
+            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
         }
     }
 }

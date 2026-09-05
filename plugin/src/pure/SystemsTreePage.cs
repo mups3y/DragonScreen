@@ -298,7 +298,7 @@ namespace DragonScreen
             C("TOUCH A POWER OR STRING NODE TO SWITCH IT — THE SAME COMMAND AS THE CONSOLE PLATE",
               MainCX, 1720f, 24, Dim);
 
-            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
+            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
         }
     }
 }

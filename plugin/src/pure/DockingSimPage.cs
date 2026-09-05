@@ -239,7 +239,7 @@ namespace DragonScreen
             // Typography.Min. That is NOT solved here and is not pretended to be: see Q8.
             MarginAffordance.Draw(dl, w, h, "RENDEZVOUS", null);
 
-            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
+            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
         }
 
         // a rotation/translation control cluster: a plus of direction buttons around a centre magnitude

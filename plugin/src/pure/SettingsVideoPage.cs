@@ -87,7 +87,7 @@ namespace DragonScreen
             C("Video", 1843, 1921, 28, White);
             dl.Rect(PX(1783), PY(1974), 120 * sx, 8 * sy, Accent);
 
-            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
+            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
         }
     }
 }

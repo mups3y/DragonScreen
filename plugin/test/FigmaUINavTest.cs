@@ -64,6 +64,7 @@ public static class FigmaUINavTest
         DiscreteEmergencies();
         SubsystemStateWords();
         OrbitRingScale();
+        BottomBarCurrentState();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
     }
@@ -797,6 +798,11 @@ public static class FigmaUINavTest
     {
         PageState s = new PageState();
         s.Valid = true;
+        // ⚠ S147: a live vessel always HAS a mission phase - `Mission.Classify` gives one on every
+        // frame - and since S147 the bottom bar prints it as CURRENT STATE on every page. A fixture
+        // without one made that row dash, which broke this suite's "GNC has no unsourced readout"
+        // check for a reason that was about the FIXTURE, not the page.
+        s.Phase = "Orbit";
         string k = variant == 0 ? "1" : "2";
         s.Ppo2Text = "3.0" + k;  s.CabinTempText = "21." + k;
         s.PressText = "14.7" + k; s.Co2Text = "1.0" + k;
@@ -2513,6 +2519,135 @@ public static class FigmaUINavTest
         if (k % 4 == 1) s.Systems.A1 = StringState.Tripped;
         if (k % 6 == 2) { s.Systems.A1 = s.Systems.B1 = s.Systems.C1 = StringState.Tripped; }
         return s;
+    }
+
+    // ================= S147 / S49 H40: CURRENT STATE STOPS BEING A PICTURE =================
+    // `CURRENT STATE`, `POINTING MODE`, the comm block and a counter were all pixels in
+    // component_48.png, so 21 pages carried one frozen sentence - "Far Field Pointing Deorbit" -
+    // whatever the vehicle was doing. The value box is erased and CURRENT STATE drawn live.
+    static void BottomBarCurrentState()
+    {
+        const int VW = 2560, VH = 1406;
+
+        // ---- 1. THE SOURCE ORDER IS THE REGISTRY'S, THEN THE LIVE CLASSIFIER, THEN NOTHING ------
+        // TELEMETRY_REGISTRY names `CrewProcedureOps`'s step label, which reaches the screens as
+        // `AutoPhase` - null unless the conductor is engaged. `Phase` is the live classifier the
+        // Cover's own ACTIVE PHASE row prints, so the two surfaces cannot disagree (C7.1).
+        PageState both = new PageState();
+        both.Valid = true; both.AutoPhase = "DEORBIT BURN"; both.Phase = "Orbit";
+        Check("the conductor's own step label wins when there is one",
+              BottomBar.CurrentState(both) == "DEORBIT BURN",
+              "got " + BottomBar.CurrentState(both));
+        PageState classifier = new PageState();
+        classifier.Valid = true; classifier.Phase = "Orbit";
+        Check("...and the live classifier is the fallback",
+              BottomBar.CurrentState(classifier) == "Orbit",
+              "got " + BottomBar.CurrentState(classifier));
+        PageState blank = new PageState(); blank.Valid = true;
+        Check("neither = a dash, never a plausible sentence",
+              BottomBar.CurrentState(blank) == Dashes.None, "got " + BottomBar.CurrentState(blank));
+        PageState dead = new PageState(); dead.Valid = false; dead.Phase = "Orbit";
+        Check("a dead feed dashes even with a phase still on the state",
+              BottomBar.CurrentState(dead) == Dashes.None, "got " + BottomBar.CurrentState(dead));
+
+        // ---- 2. IT IS DRAWN, AND IT MOVES - WHICH A PICTURE CANNOT DO --------------------------
+        DisplayList a = BarOf(classifier, VW, VH);
+        PageState other = new PageState(); other.Valid = true; other.Phase = "ENTRY INTERFACE";
+        DisplayList b = BarOf(other, VW, VH);
+        Check("the bar prints the phase it was given", BarValue(a, VW, VH) == "Orbit",
+              "bar reads \"" + BarValue(a, VW, VH) + "\"");
+        Check("...and a different phase gives a different bar",
+              BarValue(b, VW, VH) == "ENTRY INTERFACE",
+              "bar reads \"" + BarValue(b, VW, VH) + "\"");
+        // ⛔ The frozen sentence is gone from the ART, so it cannot be drawn at all any more.
+        Check("the baked sentence is not drawn by any state",
+              !Drew(a, "Far Field Pointing Deorbit") && !Drew(b, "Far Field Pointing Deorbit"), "");
+
+        DisplayList none = BarOf(blank, VW, VH);
+        Check("with no phase the bar dashes", BarValue(none, VW, VH) == Dashes.None,
+              "bar reads \"" + BarValue(none, VW, VH) + "\"");
+
+        // ---- 3. GEOMETRY: right-aligned on the erased box, at the glanceable floor --------------
+        float sc = (float)VH / 2112f;
+        float bx, by, bw, bh;
+        BottomBar.Rect(VW, VH, out bx, out by, out bw, out bh);
+        float k = bw / 3427f;
+        Check("the value is right-aligned exactly where the erased box ended",
+              Math.Abs(XOf(a, "Orbit") - (bx + 1461f * k)) < 0.5f,
+              "drawn at " + XOf(a, "Orbit") + ", box right edge " + (bx + 1461f * k));
+        // ⚠ LIVE type, so S153's glanceable floor - the baked value was ~29 design px, 60% of it, and
+        // is one of QC R-01's own samples.
+        Check("...and at the glanceable floor, not the baked size",
+              SizeOf(a, "Orbit") >= Typography.MinFor(VW),
+              "got " + SizeOf(a, "Orbit") + ", floor " + Typography.MinFor(VW));
+
+        // ---- 4. THE FIVE PAGES WITHOUT STATE DASH, AND THAT IS HONEST --------------------------
+        // MenuPage / PlaceholderPage / FigmaFramePage / SuitCheckPage / VrioTestPage genuinely do not
+        // receive a PageState. A dash there says so; a frozen sentence said something false.
+        DisplayList menu = new DisplayList(MenuPage.Commands + 40);
+        MenuPage.Build(menu, VW, VH);
+        Check("a page with no vessel state dashes rather than inventing one",
+              Drew(menu, Dashes.None) && !Drew(menu, "Far Field Pointing Deorbit"), "");
+
+        // ---- 5. THE SWEEP: EVERY PAGE, BECAUSE THE FINDING WAS "ON EVERY PAGE" -----------------
+        // ⛔ A per-page check is what this line needs and it is what the first version of these tests
+        // did NOT have: a mutation that reverted ONE page to the stateless overload passed everything.
+        // The bar is the one thing the crew see from anywhere, so the guard has to be page-wide.
+        // ⚠ FIVE PAGES LEGITIMATELY DASH - they do not receive a PageState at all - and naming them
+        // here is the record of which five, so a sixth cannot join them quietly.
+        UiPage[] stateless = { UiPage.Menu, UiPage.Cabin, UiPage.SuitCheck, UiPage.Procedure,
+                               UiPage.VrioTest };
+        PageState sweepState = new PageState();
+        sweepState.Valid = true; sweepState.Phase = "ENTRY INTERFACE";
+        int live = 0, dashed = 0, wrong = 0;
+        foreach (UiPage up in (UiPage[])Enum.GetValues(typeof(UiPage)))
+        {
+            if (FigmaUI.IsPlaceholder(up)) continue;
+            DisplayList dl = new DisplayList(1200);
+            FigmaUI.Build(dl, up, VW, VH, sweepState, MapProjection.Default());
+            bool has = BarValue(dl, VW, VH) == "ENTRY INTERFACE";
+            bool exempt = Array.IndexOf(stateless, up) >= 0;
+            if (has) live++; else dashed++;
+            if (has == exempt) { wrong++; Console.WriteLine("    S147  " + up + " bar=\""
+                                                            + BarValue(dl, VW, VH) + "\" exempt="
+                                                            + exempt); }
+        }
+        Check("every page that receives vessel state prints it in the bar; the five that do not, do not",
+              wrong == 0, wrong + " page(s) disagreed with the exemption list");
+        Check("...and that is most of them, not a handful", live >= 18,
+              "only " + live + " pages printed it, " + dashed + " dashed");
+    }
+
+    /// <summary>The string the BOTTOM BAR drew as CURRENT STATE, or null if it drew none there.
+    /// ⛔ BY POSITION, and that is not fussiness: the first version of S147's sweep searched the whole
+    /// page for the phase string and every page that prints the phase for its OWN reasons - the Cover's
+    /// ACTIVE PHASE row, for one - passed whatever the bar did. A mutation reverting one page to the
+    /// stateless overload went uncaught because of it.</summary>
+    static string BarValue(DisplayList dl, int w, int h)
+    {
+        float bx, by, bw, bh;
+        BottomBar.Rect(w, h, out bx, out by, out bw, out bh);
+        if (bw <= 0f) return null;
+        float k = bw / 3427f;
+        // ⚠ The band is generous on purpose. The live value is drawn at `185 - 0.553 * size`,
+        // which at the floor size is PNG row 158.4 - a band starting at 160 missed it by 1.6 px
+        // and the whole sweep read empty. Nothing else in the bar is DRAWN text (the captions
+        // are baked), so a wide band costs nothing.
+        float x = bx + 1461f * k, y0 = by + 110f * k, y1 = by + 225f * k;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind == DrawKind.Text && Math.Abs(c.A - x) < 0.5f && c.B >= y0 && c.B <= y1)
+                return c.Str;
+        }
+        return null;
+    }
+
+    static DisplayList BarOf(PageState s, int w, int h)
+    {
+        DisplayList dl = new DisplayList(64);
+        BottomBar.Draw(dl, w, h, s);
+        return dl;
     }
 
     // ================= S145 / S49 H35: THE RANGE RINGS CARRY A SCALE =================

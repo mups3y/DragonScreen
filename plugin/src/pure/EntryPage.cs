@@ -120,7 +120,7 @@ namespace DragonScreen
                     s.MainsReleased },
                 C1Y, 40f);
 
-            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
+            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
         }
     }
 }

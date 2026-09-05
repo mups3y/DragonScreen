@@ -16690,7 +16690,7 @@ picture is identical for a 200 km rendezvous and a lunar transfer.
 - **DONE when:** the power pair reads two real buses, and every remaining duplicate is either justified in
   the entry or handed to the owner as a question.
 
-### S147 [S] The bottom status bar's live text is baked on every page — **DOING** — [H40; TIER 2: 35 pages at once]
+### S147 [S] The bottom status bar's live text is baked on every page — **DONE 2026-09-06 — CURRENT STATE is live on 16 pages and dashes on the five with no state; the other three have NO SOURCE and are written up** — [H40; TIER 2]
 ✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set
 one (SPLIT BY CONTENT TYPE — see S153). ⛔ **The condition that replaces it is mechanical, not a wait:**
 any text this line ADDS must be drawn at **`Typography.MinDesignFor(w, sc)` or above** if it is LIVE, or
@@ -16717,6 +16717,110 @@ is answered this is buildable as written.
   source, so **C1.15's mod-first search applies before any simulation is written.**
 - **DONE when:** the three live values draw from state over erased boxes, the comm block is sourced or
   marked, and previews across several pages show it.
+
+#### ✅ DONE 2026-09-06 — ⚠ and "the three live values" turned out to be ONE
+
+The line assumes three wireable values. Checked, one at a time, against the registry it cites:
+
+| value | the registry's own authority | verdict |
+|---|---|---|
+| **CURRENT STATE** | `TELEMETRY_REGISTRY.md:67` — *"`CrewProcedureOps` step label"* | ⭐ **WIRED.** That label reaches the screens as `PageState.AutoPhase`, with `s.Phase` — the live classifier the Cover's ACTIVE PHASE row already prints — as the fallback |
+| **POINTING MODE** | `:66` — *"attitude controller / **`Steering`** target"* | ⛔ **NO SOURCE.** `src/Steering.cs` is DELETED and §B12.8's rider says never recovered. `ModeText` is the control AUTHORITY (IDLE/AUTO/MANUAL), a different quantity — printing it under this label would be a *wrong* reading rather than a missing one |
+| **the comm block** | `:107` — SIMULATION unless a comms mod supplies it | ⛔ **NOT FILLABLE HONESTLY** — see below |
+| **the counter** (`79/1450122`) | **no registry entry at all** | ⛔ No source names what it counts |
+
+#### ⭐ THE C1.15 MOD-FIRST SEARCH WAS ALREADY ON FILE, AND IT SETTLES THE COMM BLOCK
+
+`docs/reference/INSTALLED_MODS.md:86-91`, section (e): *"Not a not-yet-modelled quantity at all: stock
+KSP's own CommNet already supplies real S-Band signal strength, wired end-to-end in `VesselData.cs:968-987`
+(S24)… No third-party comms mod (RemoteTech, AntennaRange, etc.) appears anywhere in the installed-evidence
+list… No gap, no simulation, no mod search owed."*
+
+⛔ **But the bar draws FOUR named links — SPX / GND / TDRS / ISS — and CommNet supplies ONE signal.**
+One real number cannot honestly fill four station indicators, and inventing three is §1.4 tier-3. So the
+block stays baked and is written up rather than dressed. ⚠ `RealAntennas` IS in the installed list
+(`:101`) but marked *"P3, not yet built"* — a candidate for a later line, not a source today.
+
+#### The method is this PNG's own
+
+The active-tab marker was baked into `component_48.png` and **erased** so it could be drawn dynamically
+(S103; QC `C-12` closed the glow that erase left behind) — `BottomBar.cs` records it. CURRENT STATE's
+value box is erased the same way, **measured rather than eyeballed**:
+
+```
+row profile over x 1000..2200:  caption band y 143..158, value band y 173..201
+value x-extent 1098..1461, RIGHT-ALIGNED at 1461 - where its caption ends too
+the vertical rule beside it: x 1464..1465        the bar ground: (17, 27, 82)
+erased x 1098..1461, y 170..208   ->  2799 bright pixels became 0
+after the erase: the rule still has 196 bright px, the caption still has 823
+```
+
+#### Verified (C1.3) — measured, not asserted
+
+`python plugin/build.py test` → **ALL SUITES PASSED**. `python plugin/build.py preview` → 119 pages.
+**Inspected** across four: `ui_cover`, `ui_vehiclecrew`, `ui_navorbitplot` all read **`ORBITING`**;
+`ui_cabin` — a flat frame with no `PageState` — reads a **dash**.
+
+⭐ **The clearance to the rule was measured, not eyeballed**, because at a crop's zoom it looked tight:
+**4.9 panel px / 7.4 design px**. The baked value had **3 design px**, so the live one has more room than
+the art it replaced.
+
+⚠ **The type is at the glanceable floor, not the baked size.** The exported value was ~29 design px —
+19.3 panel px, 60 % of the floor, and one of QC R-01's own samples. It is LIVE, so [[S153]]'s policy puts
+it at `MinDesignFor`. It fits: 836 design px of clear run against 798 for the longest string the art ever
+showed.
+
+⚠ **Two consequences the guards caught rather than me:**
+- **`UiPage.Cabin` entered the census.** A flat frame that drew NO text now draws one, so S153's ratchet
+  refused it as un-baselined. Added at `0, 0` — its one draw is above the floor.
+- **A test fixture had no phase.** `VehicleFixture` never set one, so the bar dashed and the pre-existing
+  *"gnc has no unsourced readout"* check failed. A live vessel always has a phase; the fixture now does.
+
+**MUTATION-PROVEN — 7 mutations, 7 caught, 0 uncaught:**
+
+| | mutation | first check that failed |
+|---|---|---|
+| **A** | CURRENT STATE stops being drawn — back to the PNG | *"the bar prints the phase it was given"* |
+| **B** | the classifier fallback is dropped | *"…and the live classifier is the fallback   got —"* |
+| **C** | a dead feed may print a phase | *"a dead feed dashes even with a phase still on the state"* |
+| **D** | no phase invents a sentence | *"neither = a dash…   got Far Field Pointing Deorbit"* |
+| **E** | drawn at the baked 29 px | the size check **and** S153's hard ratchet |
+| **F** | the value slides off the erased box | *"right-aligned exactly where the erased box ended"* |
+| **G** | **one page** reverts to the stateless overload | *"1 page(s) disagreed with the exemption list"* |
+
+⚠ **G ESCAPED TWICE, and both escapes were the test's fault:**
+1. There was **no page-wide check at all** — the finding is *"on every page"* and the guard was not. Added
+   a sweep over every non-placeholder page, with the five stateless ones as a NAMED exemption list so a
+   sixth cannot join them quietly.
+2. The sweep then searched the whole page for the phase string — and **the Cover prints the phase in its
+   own ACTIVE PHASE row**, so it passed whatever the bar did. Now probed **by position**, at the erased
+   box's own right edge inside the bar's rows.
+   ⚠ And the first position band missed by **1.6 px** (the value sits at PNG row 158.4; the band began at
+   160), which read as *every page empty* — fixed by widening it, since nothing else in the bar is drawn
+   text at all.
+
+**Comment-loss check (C1.16 / G12): 0 lost** across 18 modified files.
+
+⛔ No `install`, no glass, no `git push`. §14.4(a) untouched.
+
+### S147b [S] The bottom bar's other three values have no source — **HELD 2026-09-06 — two are §1.4, one is Part B** — [split from [[S147]]; H40's remainder]
+- ⛔ **POINTING MODE — Part B.** The registry's authority is *"attitude controller / `Steering` target"*,
+  and `src/Steering.cs` is deleted and never recovered (§B12.8 rider). There is nothing to read until a
+  controller exists. ⚠ **Do NOT substitute `ModeText`**: that is the control AUTHORITY (IDLE / AUTO /
+  MANUAL), a different quantity, and it would be a wrong reading rather than a missing one.
+- ⛔ **The comm block — §1.4.** The C1.15 search is on file and conclusive: stock CommNet gives ONE real
+  signal strength (`S24`, `VesselData.cs:968-987`) and no third-party comms mod is installed. The bar
+  draws **four** named links (SPX / GND / TDRS / ISS). ⚠ **The honest options are the owner's:**
+  (a) drive ONE indicator from CommNet and dash the other three; (b) treat the four as a marked
+  simulation under §14.4(f); (c) leave the block baked. ⚠ `RealAntennas` is installed but marked P3 and
+  not built — a fourth option is to scope it.
+- ⛔ **The counter (`79/1450122`) — §1.4.** No registry entry, no source, and nothing in the tree names
+  what it counts. It cannot be wired without deciding what it means.
+- ⭐ **The mechanism is done and reusable:** [[S147]] erased one value box and drew over it, and the
+  measurement recipe (row profile → x-extent → alignment → ground colour → erase → re-count the
+  neighbours) is written into its entry. Each of these is that same operation once its meaning is settled.
+- **DONE when:** the owner has ruled on the comm block and the counter, Part B has a pointing source, and
+  each is erased and drawn the way CURRENT STATE was.
 
 ### S148 [S] A dashed value is drawn in the same weight as a live one — **DONE 2026-09-06** — [⚠ the glyph half was **25 sites, not two widgets** — and all 25 are in code `FigmaMode` makes unreachable] — [H45; TIER 3]
 - **The finding.** On the vehicle gauges and detail rows a dash draws in `White`, the same as a live value,

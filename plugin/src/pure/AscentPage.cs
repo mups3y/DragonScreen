@@ -282,7 +282,7 @@ namespace DragonScreen
                 dl.Text(EventText[i], X(CX + hw + 74f), Y(ty), Z(26), TextAlign.Left, label);
             }
 
-            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
+            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
         }
     }
 }

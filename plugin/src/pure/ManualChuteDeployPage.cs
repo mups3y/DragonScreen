@@ -230,7 +230,7 @@ namespace DragonScreen
             // chrome: content-panel border, top bar bg, bottom bar (shared with the Cover)
             dl.Asset("rectangle_178", X(218), Y(216), Wd(218, 1224), Z(1779), White);
             dl.Asset("rectangle_173", X(0), Y(0), Wd(0, 3427), Z(220), White);
-            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
+            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
 
             // live globe, right of the content panel (identical placement to the Cover)
             float gs = Z(1809);

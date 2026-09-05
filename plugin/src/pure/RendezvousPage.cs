@@ -63,7 +63,7 @@ namespace DragonScreen
             NavPage.Orbit(dl, s, X(PlotX), Y(PlotY), Z(PlotW), Z(PlotH), true, Typography.ScaleFor(w));
             dl.Box(X(PlotX), Y(PlotY), Z(PlotW), Z(PlotH), St(2), DragonPalette.Hairline);
 
-            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
+            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
         }
 
         // ---- LEFT icon sub-nav rail ----

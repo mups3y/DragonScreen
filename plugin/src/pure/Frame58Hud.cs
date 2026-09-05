@@ -52,7 +52,7 @@ namespace DragonScreen
             MarginAffordance.Draw(dl, w, h, "MANUAL", "DOCKING");
 
             // full-width bottom status bar over the frame so it reaches both edges.
-            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
+            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
         }
     }
 }

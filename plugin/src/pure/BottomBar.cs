@@ -92,13 +92,92 @@ namespace DragonScreen
         }
 
         /// <summary>Draw the bar, undistorted, where the design puts it.</summary>
-        public static void Draw(DisplayList dl, int w, int h)
+        /// <summary>The bar with NO vessel state — CURRENT STATE dashes. ⚠ Five pages call this
+        /// (`MenuPage`, `PlaceholderPage`, `FigmaFramePage`, `SuitCheckPage`, `VrioTestPage`) because
+        /// they genuinely do not receive a `PageState`; a dash there is the honest reading and is
+        /// LOGGED rather than papered over — see REGISTER.md S147.</summary>
+        public static void Draw(DisplayList dl, int w, int h) { Draw(dl, w, h, new PageState()); }
+
+        // =========================================================================================
+        //  S147 / S49 H40 — CURRENT STATE STOPS BEING A PICTURE
+        // =========================================================================================
+        // ⛔ THE FINDING, ON EVERY PAGE IN THE BUILD. `CURRENT STATE`, `POINTING MODE`, the
+        // SPX/GND/TDRS/ISS block and a counter were all PIXELS IN `component_48.png` — so 21 pages
+        // carried one frozen sentence ("Far Field Pointing Deorbit") whatever the vehicle was doing.
+        //
+        // ⭐ THE METHOD IS THIS PNG'S OWN. The active-tab marker was baked under icon 0 and ERASED so
+        // it could be drawn dynamically (S103; QC C-12 closed the glow that erase left behind), and
+        // this file already documents that. CURRENT STATE's value box is erased the same way:
+        // MEASURED at x 1098..1461, y 170..208 — right-aligned at 1461, which is where its caption
+        // ends too — with the vertical rule at x 1464..1465 and the caption band (y 143..158) left
+        // untouched and re-counted afterwards.
+        //
+        // ---- WHAT IS WIRED, AND WHAT IS NOT, AND WHY ----
+        // ⭐ CURRENT STATE has a source and it is the registry's own: `TELEMETRY_REGISTRY.md:67` names
+        //    `CrewProcedureOps`'s step label, which reaches the screens as `PageState.AutoPhase`. That
+        //    is null unless the conductor is engaged, so it falls back to `s.Phase` — the live
+        //    classifier the Cover's own ACTIVE PHASE row already prints, so the two surfaces cannot
+        //    disagree about what the vehicle is doing (C7.1).
+        // ⛔ POINTING MODE IS NOT WIRED, and that is a source problem rather than an effort one. The
+        //    registry names its authority as *"attitude controller / `Steering` target"* — and
+        //    `src/Steering.cs` is DELETED and, per §B12.8's rider, never recovered. There is nothing
+        //    to read. `PageState.ModeText` is the control AUTHORITY (IDLE / AUTO / MANUAL), which is a
+        //    different quantity; printing it under a POINTING MODE label would be a wrong reading
+        //    rather than a missing one. Left baked, and written up.
+        // ⛔ THE COMM BLOCK IS NOT WIRED EITHER, and the C1.15 search is already ON FILE:
+        //    `docs/reference/INSTALLED_MODS.md:86-91` records that stock CommNet supplies ONE real
+        //    signal strength (wired by S24) and that no third-party comms mod is installed. The bar
+        //    draws FOUR named links — SPX / GND / TDRS / ISS. One real signal cannot honestly fill
+        //    four station indicators, and inventing three is §1.4 tier-3. Left baked, and written up.
+        // ⛔ THE COUNTER ("79/1450122") has no entry in the registry at all and no source names what it
+        //    counts. Left baked, and written up.
+
+        /// <summary>
+        /// The bar, with CURRENT STATE drawn live over the erased box.
+        ///
+        /// ⚠ THE TYPE IS AT THE GLANCEABLE FLOOR, NOT AT THE BAKED SIZE. The exported value was ~29
+        /// design px — 19.3 panel px, 60% of the floor, and one of QC R-01's own samples. It is a LIVE
+        /// value, so [[S153]]'s policy puts it at `Typography.MinDesignFor`. ⭐ It fits: right-aligned
+        /// at design x 1461 with the icon strip ending at 625, there are 836 design px of clear run,
+        /// against 798 for the longest string the baked art ever showed.
+        /// </summary>
+        public static void Draw(DisplayList dl, int w, int h, PageState s)
         {
             if (dl == null || w <= 0 || h <= 0) return;
             float x, y, bw, bh;
             Rect(w, h, out x, out y, out bw, out bh);
             dl.Asset("component_48", x, y, bw, bh, DragonPalette.White);
+            if (bw <= 0f) return;
+
+            float k = bw / RefW;                       // the bar's own uniform scale
+            string state = CurrentState(s);
+            // The ink CENTRE of the erased value sat at PNG row 185; a line drawn at `top` puts its
+            // ink centre 0.553 * size below it (measured off a render in S129). So the live text lands
+            // on the same optical line the baked value did, at whatever size it is drawn.
+            float size = Typography.MinDesignFor(w, k);
+            float top = ValueInkMid - InkCentreOfTop * size;
+            dl.Text(state, x + ValueRight * k, y + top * k, size * k, TextAlign.Right,
+                    state == Dashes.None ? DragonPalette.Text6 : DragonPalette.White);
         }
+
+        /// <summary>What CURRENT STATE reads. The registry's own source first, the live classifier
+        /// second, a dash when there is neither — never a plausible sentence.</summary>
+        public static string CurrentState(PageState s)
+        {
+            if (!s.Valid) return Dashes.None;
+            if (!string.IsNullOrEmpty(s.AutoPhase)) return s.AutoPhase;
+            if (!string.IsNullOrEmpty(s.Phase)) return s.Phase;
+            return Dashes.None;
+        }
+
+        /// <summary>The erased value box, in component_48's own pixels: right edge, and the ink centre
+        /// of the row it sat on. MEASURED off the PNG, not chosen — see the block above.</summary>
+        const float ValueRight = 1461f, ValueInkMid = 185f;
+
+        /// <summary>Where a line of this type puts its ink centre below the y it is drawn at, as a
+        /// fraction of the size. Measured on a render in [[S129]] and reused here rather than
+        /// re-derived — one number, one measurement.</summary>
+        const float InkCentreOfTop = 0.553f;
 
         /// <summary>Which bottom-bar icon (0..4) a touch hit, or -1. Present on every page.</summary>
         public static int Hit(float px, float py, int w, int h)

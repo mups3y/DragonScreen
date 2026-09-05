@@ -431,7 +431,7 @@ namespace DragonScreen
             dl.Asset("rectangle_178", X(218), Y(216), Wd(218, 1224), Z(1779), DragonPalette.White);
 
             // bottom status bar (Component 48: bg + CURRENT STATE / POINTING MODE / SPX·TDRS·ISS text) — full width
-            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
+            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
 
             // the camera slot: the LIVE globe, the flat map, or the capsule. Drawn HERE, before the
             // placed assets, so the caption/readouts/bars in the loop below sit over it exactly as the
