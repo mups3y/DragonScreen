@@ -15215,7 +15215,7 @@ must receive `sc` from a caller that holds the real panel width.
 
 #### The three splits, one page each — which is what [[S121]] asked for
 
-### S121b-i [O] `Pages.cs` — the FLIGHT page and its hit rects — **TODO** — [split of [[S121b]]; ~59 sites; the only one with hit-test geometry]
+### S121b-i [O] `Pages.cs` — the FLIGHT page and its hit rects — **DOING** — [split of [[S121b]]; ~59 sites; the only one with hit-test geometry]
 - `Flight` (23) · `StepColumn` (19) · `SideRow` (4) · `MissionRect` (4) · `AutoRect` (3) ·
   `FlightHitTest` (6) and `HitTest`'s flight branch.
 - ⛔ **The draw and the hit test must move together**, and `LayoutSweepTest` / `PageTest` call
