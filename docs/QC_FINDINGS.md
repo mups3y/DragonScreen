@@ -76,7 +76,7 @@ Cover's seven phase views, plus the lower analog console panel. **The six Vehicl
 | 13 | ActAcknowledge | ACKNOWLEDGE | ✅ **DONE** *(placeholder — see M-02)* | 2026-09-05 |
 | 14 | Entry | ENTRY GO / NO-GO | ✅ **DONE** *(placeholder — see M-02)* | 2026-09-05 |
 | **15** | **Vehicle** | VEHICLE OVERVIEW *(tab: All)* | ✅ **DONE — 3 findings** | 2026-09-05 |
-| 16 | SuitCheck | SUIT LEAK CHECK | NOT STARTED | — |
+| **16** | **SuitCheck** | SUIT LEAK CHECK | ✅ **DONE — 2 findings** *(the build's best page)* | 2026-09-05 |
 | **17** | **VehicleMech** | MECH PANEL *(tab: Mech)* | ✅ **DONE — 3 findings** | 2026-09-05 |
 | 18 | AudioVideo | VIDEO SETTINGS | NOT STARTED | — |
 | 19 | VrioTest | TEST VRIO HEALTH LEDS | NOT STARTED | — |
@@ -2636,8 +2636,126 @@ adds:
 
 ---
 
-*Next: **page 16 — SuitCheck**, which S49 calls the exemplar MICRO-SIM (S31/S32) — the one page whose
-verdict is computed rather than declared — and then pages 18 and 19.*
+---
+
+# PAGE 16 — SUIT LEAK CHECK
+
+**Renders inspected:** `ui_suitcheck.png` · `ui_suitcheck_leak.png` · `ui_suitcheck_popup.png` ·
+`ui_suitcheck_leak_popup.png`.
+
+**Source:** `plugin/src/pure/SuitCheckPage.cs` (326 lines) · `SuitLeak` · `ScreenPainter.cs:368-401`.
+
+**S49's entry.** §2: *"The exemplar MICRO-SIM (S31/S32) — four ΔP rows and the STATUS verdict computed from
+`SuitLeakSim`, never hardcoded. But no step is tracked: both left ticks draw checked at page-open, and
+'SECTION 2: IN PROGRESS' never advances"* (H19, H20). **Both halves confirmed exactly.**
+
+## What was checked and found CLEAN — this is the page the rest of the build should be measured against
+
+1. ⭐ **The verdict is computed, and the render proves it.** `ui_suitcheck_leak.png`: `SUIT 3 DELTA
+   PRESSURE 0.01psi` → `SUIT 3 STATUS Failed Low` in amber with an amber marker, while suits 1, 2 and 4
+   read 0.28 / 0.26 / 0.27 psi → `Nominal` in green. **The status word follows the number.** That is
+   S31/S32 satisfied, and so far it is the only page inspected where a safety verdict has a model behind
+   it. Every hardcoded-verdict finding in this document — C-08, V-01, V-02, MP-01, S-01, S-03 — describes a
+   page that does not do what this one does.
+2. **The failure branch is gated on the model, not on the press.** `Available(SuitAct.Troubleshoot, suits)`
+   returns `FailBranchLive && suits.AnyFailed` (`:297`), and the control is tinted from the same predicate
+   (`:213-215`) — *"a dimmed TROUBLESHOOT cannot act, and a live one cannot look unavailable"*
+   (`ScreenPainter.cs:376-378`). Draw state and act state from one source.
+3. **Six controls are hit-tested from the rectangles that draw them** — INITIATE, HALT, FINISH,
+   TROUBLESHOOT, TRY ADDITIONAL TIMER and the popup Close (`:301-318`), dispatched at
+   `ScreenPainter.cs:379-400`.
+4. **The dead-feed path is honest:** `suits.Valid ? "ic_refresh" : "ic_dash"` (`:156`), and the status
+   markers dash rather than holding a stale verdict.
+5. **The run seed is owned by the painter and re-rolled per run**, so a second timed check genuinely
+   re-rolls rather than repeating the first — `StartSuitRun()` on both START and TRY ADDITIONAL TIMER.
+
+---
+
+## SC-01 — The two-step procedure is drawn complete before it starts, and its section header never advances
+
+**TIER 2** · confirms S49 **H20**
+
+**Evidence.** `SuitCheckPage.cs:94-95`:
+
+```csharp
+Ico("ic_check", 120, 452, 38, White); L("1. PREPARE SUITS FOR LEAK CHECK", 176, 458, 26, White);
+Ico("ic_check", 120, 560, 38, White); L("2. EXECUTE SUIT LEAK CHECK", 176, 566, 26, White);
+```
+
+`ic_check` is passed **unconditionally**, in White, for both rows — no state, no `suits`, no countdown. On
+`ui_suitcheck.png`, before any run, both steps already carry a tick. And `:109` prints
+`SECTION 2: IN PROGRESS` as a literal, so the header says IN PROGRESS in every state the page has —
+including after FINISH has raised the result popup.
+
+**What is wrong.** The page tracks the *measurement* beautifully and the *procedure* not at all. The left
+column says both steps are done; the header says section 2 is in progress; the run may not have started.
+The three statements cannot all be true and none of them is computed.
+
+⚠ **This is the page-level instance of S49's central conclusion** — *"no procedure page in the build is
+step-tracked"* — on the one page that already holds the state needed to do it.
+
+**Fix plan.**
+- **The state exists in the painter already:** `suitStart`, `suitCountdown`, `suitPopup`, `suitSeed`
+  (`ScreenPainter.cs:368-400`) fully determine *not started / running / finished*, and `Build` is already
+  handed `suitCountdown` and `suitPopup`. Step 1 ticks once a run has been started; step 2 ticks once one
+  has completed; the header reads `NOT STARTED / IN PROGRESS / COMPLETE` off the same three-way.
+- **No new model, no new source, no §1.4 question** — this is routing state the page is already given.
+- ⚠ **`suits.AnyFailed` must not tick step 2 as a pass.** A completed check with a failed suit is
+  *complete*, not *nominal*: the tick means "done", the STATUS column means "passed". Keep them separate or
+  the page starts declaring a verdict in two places — the defect this page otherwise avoids.
+- **Must not break:** the popup flow and the `!Valid` dash path.
+- **Verify:** four renders — before start, running, finished-clean, finished-with-failure — each with a
+  different tick/header combination.
+
+---
+
+## SC-02 — The two owner-ruled-inert read-only plates are still painted as live buttons
+
+**TIER 2** · **NEW** · S29 settled the behaviour; S75 later settled the appearance and was never applied here
+
+**Evidence.** `SuitCheckPage.cs:96-104`, with the ruling quoted in the code:
+
+> *"read-only controls (bottom) — **S29 (owner, via the overseer, 2026-09-02): both plates stay INERT,
+> drawn only, no HitTest entry.** One caption, two plates: the reference does not say which of
+> `ic_grid`/`ic_eye` arms read-only mode or what the other one does, so §1.4 (inert until verified) applies
+> rather than inventing a real-only-console function for either."*
+
+The decision is right and is not in question. **How they are drawn is:**
+
+```csharp
+Pl(210, 1600, 130, 130, White); Ico("ic_grid", 245, 1635, 60, White);
+Pl(430, 1600, 130, 130, White); Ico("ic_eye",  465, 1635, 60, White);
+```
+
+Full plate, full border, full-white glyph — **identical in idiom to `INITIATE SUIT LEAK CHECK` and
+`TROUBLESHOOT` on the same screen**, both of which act. Visible on every SuitCheck render.
+
+**What is wrong.** S29 (2026-09-02) decided these do nothing. **S75 (2026-09-04) decided what a control that
+does nothing must look like** — `DragonPalette.Text6`, the *"nothing live behind this"* tint — and applied
+it to the Cover's `gridicons_refresh`, stating the rule: *"If a real source for the action ever appears, it
+goes back to White AND enters Hits — together."* S29 predates S75 by two days, so the appearance half was
+never applied here. The page honours the ruling in behaviour and contradicts it in paint.
+
+⚠ **Same class, same page:** the `ic_refresh` glyphs — one beside `SECTION 2` in `Accent` (`:108`) and one
+per table row in White (`:132`, `:156`) — are also drawn in live tints with no hit rect. The Cover's
+identical glyph was tinted inert by S75; these were not.
+
+**Fix plan.**
+- Draw both read-only plates, and every un-hit-testable `ic_refresh`, in `DragonPalette.Text6` — exactly
+  what `CoverPage.InertTint` already is (`CoverPage.cs:215-218`).
+- ⚠ **Do NOT give them hit rects.** S29 is a settled owner decision and C1.8 applies: it stands unless the
+  owner types `OVERRIDE`. This fix changes the tint only, which is S75's territory.
+- **Consider hoisting the idiom.** Three pages now need the same inert tint for the same reason — Cover,
+  SuitCheck, and A-02/F-03's controls if **Q6** resolves that way. A shared `DragonPalette.Inert` or a
+  `Control.DrawInert` helper stops the next page relearning it.
+- **Must not break:** the six live controls stay White/Red. The whole point is that the two groups become
+  distinguishable at a glance.
+- **Verify:** on any SuitCheck render, every White control resolves to an action and every inert one is
+  visibly dimmer.
+
+---
+
+*Next: **pages 18 and 19** — Video settings, and the VRIO test that is the other half of F-01's duplicate.*
 
 *⚠ **Three findings are page-wide, not per-page, and should be scheduled ahead of the sweep:***
 - ***H-01** — the preview's resolution. It decides how every later legibility finding is measured, so
