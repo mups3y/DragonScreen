@@ -794,12 +794,33 @@ public static class PreviewMain
         // ---- SETTINGS / AUDIO (Figma rebuild, A-Settings) — Cabin selected, 2x render ----
         {
             int CW = W, CH = H;   // the shipped size - see the COVER block above (S100 / QC H-01)
+            // ---- S135: THE CHANNELS ARE THE GAME'S OWN LAYERS NOW, SO THE FIXTURE HAS TO SUPPLY
+            // ---- THEM. The five values used to be literals in the page; this is what they read.
+            PageState aps = ps;
+            aps.Audio = new AudioLevels { Valid = true, Master = 0.80f, Ambience = 0.62f,
+                                          Voice = 0.45f, Ship = 0.50f };
             DisplayList sdl = new DisplayList(SettingsAudioPage.Commands + 200);
-            SettingsAudioPage.Build(sdl, CW, CH, 2);
+            SettingsAudioPage.Build(sdl, CW, CH, 2, aps);
             if (sdl.Overflowed) Console.WriteLine("  WARNING SETTINGS_AUDIO OVERFLOWED at " + sdl.Capacity);
             string path = Path.Combine(outDir, "settings_audio.png");
             Render(sdl, CW, CH, path);
-            Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + sdl.Count + " commands");
+            Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + sdl.Count + " commands"
+                              + "   MAIN " + SettingsAudioPage.ChannelText(aps, "MAIN")
+                              + "  AUX " + SettingsAudioPage.ChannelText(aps, "AUX")
+                              + "  VOX " + SettingsAudioPage.ChannelText(aps, "VOX")
+                              + "  ALERTS " + SettingsAudioPage.ChannelText(aps, "ALERTS")
+                              + "  GROUND " + SettingsAudioPage.ChannelText(aps, "GROUND"));
+
+            // ⛔ AND THE UNREADABLE CASE, because it is the one that must not invent a level. With the
+            // settings unreadable every mapped channel dashes and NO button is painted live - the
+            // paint and the touch fail together, which is the property S32 set on the Suit page.
+            PageState dps = ps;   // Audio left at its default: Valid false
+            DisplayList ddl = new DisplayList(SettingsAudioPage.Commands + 200);
+            SettingsAudioPage.Build(ddl, CW, CH, 2, dps);
+            string dpath = Path.Combine(outDir, "settings_audio_nosettings.png");
+            Render(ddl, CW, CH, dpath);
+            Console.WriteLine("  " + dpath + "   " + CW + "x" + CH + "   " + ddl.Count + " commands"
+                              + "   every channel " + SettingsAudioPage.ChannelText(dps, "MAIN"));
         }
 
         // ---- Complex frame pages shown from their Figma export (attitude HUD, procedure, cabin) ----

@@ -545,6 +545,49 @@ namespace DragonScreen
                 }
                 rec.Acted = (suitStart != s0 || suitPopup != p0 || suitCountdown != c0 || suitSeed != d0);
             }
+            else if (cur == UiPage.Audio)
+            {
+                // ---- S135 / QC A-02: THE AUDIO PAGE'S FOUR REAL CONTROLS ----
+                // ⛔ THIS IS THE ONE PLACE IN THE BUILD THAT WRITES A GAME SETTING, and it is worth
+                // saying plainly: these are GLOBAL. A tap here changes the owner's whole-game audio
+                // and persists outside the seat. He was told that and accepted it (Q6, 2026-09-05:
+                // "make the volume controls control the game sound levels"; the mapping chosen from
+                // presented options 2026-09-06). Nothing else about the vehicle is touched, and this
+                // is NOT §14.4(a) - a volume is not a flight control.
+                //
+                // ⭐ THE GATE IS ASKED TWICE AND IT IS THE SAME GATE. `SettingsAudioPage.HitTest`
+                // refuses a button the page painted dim, and `Available` is asked again here before a
+                // single float moves - so a control that looks unavailable cannot act, which is S32's
+                // rule and the reason the page tints from that same predicate.
+                PageState aps = VesselData.State;
+                SettingsAudioPage.AudioAct aa = SettingsAudioPage.HitTest(px, py, w, h, aps);
+                rec.Surface = CrewSurface.Audio;
+                rec.EnumValue = (int)aa;
+                rec.ControlId = CrewControlIds.Audio(aa);
+                if (aa != SettingsAudioPage.AudioAct.None
+                    && SettingsAudioPage.Available(aa, aps.Audio))
+                {
+                    // The NUDGE is pure (AudioChannels.Nudge - step, clamp and rounding all testable
+                    // without the game); this only stores the result and asks KSP to persist it.
+                    AudioLayer lay = AudioChannels.LayerFor(SettingsAudioPage.ChannelOf(aa));
+                    float cur0 = AudioChannels.Level(aps.Audio, lay);
+                    float next = AudioChannels.Nudge(cur0, SettingsAudioPage.DirOf(aa));
+                    switch (lay)
+                    {
+                        case AudioLayer.Master:   GameSettings.MASTER_VOLUME = next; break;
+                        case AudioLayer.Ambience: GameSettings.AMBIENCE_VOLUME = next; break;
+                        case AudioLayer.Voice:    GameSettings.VOICE_VOLUME = next; break;
+                        case AudioLayer.Ship:     GameSettings.SHIP_VOLUME = next; break;
+                    }
+                    // ⚠ Persist, or the change is lost on the next settings load and the crew have a
+                    // control that works until it does not. Defensive: a save failure must not take
+                    // the screen down with it.
+                    try { GameSettings.SaveSettings(); }
+                    catch (Exception e)
+                    { Debug.LogWarning("[DragonScreen] audio settings save failed: " + e.Message); }
+                    rec.Acted = next != cur0;
+                }
+            }
             else if (IsSubsystemPage(cur))
             {
                 // FUNCTIONS | ALERTS. T5 drew the toggle and left it inert; this is the tap. It is

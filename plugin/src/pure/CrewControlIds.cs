@@ -71,7 +71,10 @@ namespace DragonScreen
         Chute = 5,        // ManualChuteDeployPage.Actions index
         Tree = 6,         // SystemsTreePage.HitTest -> PanelCommand
         Dock = 7,         // DockingSimPage.DockAct
-        Panel = 8         // PanelButtons / PanelMap -> PanelCommand  (the console plate, not glass)
+        Panel = 8,        // PanelButtons / PanelMap -> PanelCommand  (the console plate, not glass)
+        /// <summary>S135: the audio page's ± buttons. Appended, never renumbered - a recording holds
+        /// these ints and an older file must keep meaning what it meant.</summary>
+        Audio = 9         // SettingsAudioPage.AudioAct
     }
 
     public static class CrewControlIds
@@ -85,6 +88,7 @@ namespace DragonScreen
         public const string TreePrefix  = "tree.";
         public const string DockPrefix  = "dock.";
         public const string PanelPrefix = "panel.";
+        public const string AudioPrefix = "audio.";
 
         /// <summary>
         /// The `control_id` a touch that hit nothing carries. NOT null — the event is written with a
@@ -138,6 +142,18 @@ namespace DragonScreen
         {
             if (a == SuitCheckPage.SuitAct.None) return null;
             return SuitPrefix + Name((int)a, typeof(SuitCheckPage.SuitAct));
+        }
+
+        /// <summary>
+        /// S135: the audio page's ± buttons. ⚠ Eight names for four working controls, deliberately -
+        /// `SettingsAudioPage.AudioAct` covers the page's GEOMETRY and its `Available` gate covers the
+        /// owner's mapping, so this namespace stays complete if the mapping ever widens. Only an act
+        /// the gate allowed ever reaches here, so in practice a recording sees the four.
+        /// </summary>
+        public static string Audio(SettingsAudioPage.AudioAct a)
+        {
+            if (a == SettingsAudioPage.AudioAct.None) return null;
+            return AudioPrefix + Name((int)a, typeof(SettingsAudioPage.AudioAct));
         }
 
         /// <summary>

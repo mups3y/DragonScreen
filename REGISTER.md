@@ -15521,7 +15521,7 @@ right of `Split` (1500), so the fill-to-fit reflow adds `extra = 2560 − 3427 �
   `F-04` first, then the stranded writer, then layout.
 - **DONE when:** each split line lands with a preview at 2560 and a hit-test/draw round-trip test.
 
-### S135 [S] The audio page paints ten controls a dated owner decision says should not exist — **DOING** — [QC `A-02` `A-05` `A-06`; the HELD is LIFTED — assessed 2026-09-06, and the C7 flag was a misreading]
+### S135 [S] The audio page paints ten controls a dated owner decision says should not exist — **DONE 2026-09-06 — four channels are the GAME's own audio layers and four buttons really move them; A-05 and A-06 answered from the export** — [QC `A-02` `A-05` `A-06`]
 - 🟢 **Owner answered Q6, verbatim:** *"make the volume controls control the game sound levels. Music,
   vehicle sound, ambient sound etc etc. What ever logical sound layer options the game has, tie to those
   sliders etc"* — which **reverses** the 2026-08-06 no-cabin-audio decision that made these (C).
@@ -15533,6 +15533,191 @@ right of `Split` (1500), so the fill-to-fit reflow adds `extra = 2560 − 3427 �
   display-state. Q6's answer changes the premise (game sound layers, not cabin audio) rather than
   contradicting it — but **that reading is the overseer's to confirm, not a build chat's (C1.8).**
 - **DONE when:** assessed, the collision resolved in writing, and the export retrieved for A-05/A-06.
+
+#### ✅ DONE 2026-09-06 — all three clauses, and one of the two blockers was never real
+
+**1. ASSESSED.** The owner's Q6 answer (2026-09-05, verbatim, and this half he DID type):
+
+> *"make the volume controls control the game sound levels. Music, vehicle sound, ambient sound etc
+> etc. What ever logical sound layer options the game has, tie to those sliders etc"*
+
+…carried his standing condition *"I will answer them and then ask the overseer to assess before acting
+on them"*. That assessment landed 2026-09-06 with a mapping — **option selected, "MAP THE FOUR THAT
+FIT"**:
+
+> MAIN → `MASTER_VOLUME`, AUX → `AMBIENCE_VOLUME`, Vox → `VOICE_VOLUME`, ALERTS → `SHIP_VOLUME`.
+> `MUSIC_VOLUME` stays unmapped; INTERCOM stays the crew reading it already is; `dB` stays a unit
+> label. Every wired slider does what its label says.
+
+⛔ **RECORDED AS A SELECTION, NOT A QUOTE.** He chose from presented options; manufacturing his words
+for a chosen option is the `LZ1` failure C1.12's evidentiary standard exists for.
+⚠ **And he was told, and accepted, that these are GLOBAL game settings** — a tap in the capsule changes
+his whole-game audio and persists outside the seat. Written into `AudioChannels.cs`, `VesselData.cs` and
+`ScreenPainter.cs`, because it is the one consequence a later reader would otherwise rediscover.
+
+**2. THE COLLISION, RESOLVED IN WRITING — and it needs no `OVERRIDE`, which is the point.**
+`SettingsPage.cs:27-29` records *"NO VOLUME SLIDERS (user's call, 2026-08-06) … KSP has no cabin audio,
+so a fader would be a control bound to nothing. Simulate a reading, never simulate a control."*
+⭐ **Read its REASON.** It forbids faders **on a stated premise**. Binding these channels to the game's
+own audio layers **falsifies that premise** rather than contradicting the rule: the control is bound to
+something real, so it is not the thing the rule names. Its own closing sentence is honoured exactly —
+**nothing here is simulated**. ⛔ **A real control is not a simulated one.** No `OVERRIDE` was given and
+none is needed; the 2026-08-06 decision still stands, unedited, and is quoted in full in
+`AudioChannels.cs` so nobody reads this file as having overruled it.
+
+**3. THE EXPORT — ⛔ AND THE C7 FLAG THIS LINE RAISED WAS A MISREADING.** `assets/figma/` is **on disk**
+with **16 SVG files**. **C7.1 permits reading `assets/` BY NAME** — *"assets/ … is REFERENCE — look,
+don't ship."* The `.gitignore` entry stops us REPUBLISHING someone else's design, not reading it. The
+flag held this line and two others for nothing. ⚠ The flag's *substantive* half survives — the export
+has no separate Audio or Video tab frame — but `A-Settings-Cabin.svg` **is** the frame this page was
+rebuilt from (`SettingsAudioPage.cs:3`), so both findings were answerable. They are.
+
+#### ⭐ `A-05` — ANSWERED FROM THE SOURCE: THE COMMENT IS THE DEFECT, NOT THE DRAW
+
+`SettingsAudioPage.cs:36` says *"MAIN has the VOX box instead"*; the code draws no box. QC could not tell
+which was wrong. Parsed the frame: **33 `<rect>` elements, of which exactly TEN sit in the button row** —
+all `138×138` at `y 1599`, at x 496 · 648 · 800 · 994 · 1146 · 1298 · 2066 · 2218 · 2563 · 2715.
+**None is at the VOX cell** (x 1643…1783); the only rects overlapping it are the page and panel
+backgrounds. ⛔ **There is no VOX box in the frame.** QC's own branch applies: *"If it does not: correct
+the comment, which is the actual defect in that case."* Done — the comment now says what is there.
+
+⚠ **AND THE FRAME HAS NO `<text>` AT ALL — every label is a rasterised layer** (2 `<image>` elements,
+4 `<pattern>`/`<use>`, 2 base64 blobs). So the export can answer questions about BOXES and never about
+type. Worth knowing before the next line reaches for it.
+
+#### ⭐ `A-06` — ANSWERED TOO, AND THE ANSWER IS "NO LAYER WAS LOST"
+
+QC: *"Whether the community Figma's cabin frame was itself an empty plate, or whether the export lost a
+layer, cannot be told from the repo."* It can now. The Cabin panel region (design x 1387…1995,
+y 215…1159) contains **20 of the frame's 28 circles**, and every one is at just two centres —
+**(1718.3, 583.7)** and **(1718.3, 747.1)** — which are the two SPEAKER RINGS
+`SettingsAudioPage.cs:76-82` already draws. **Nothing else is in that panel.**
+⛔ **So the frame IS an empty plate and the export is faithful.** A-06's first branch is closed; its
+second — *"the panel needs content of its own or it should stop being a panel"* — is a design decision
+with QC's own seed (speaker count, intercom state, alert routing, all §14.4(f) readouts) and is logged as
+[[S135c]] rather than decided here.
+
+#### ⚠ A STRAY FOUND WHILE MEASURING, LOGGED NOT FIXED (C1.1) — see [[S135b]]
+
+Comparing our transcription to the frame, box centre by box centre (`centre = x + 69`):
+
+| element | frame | this file | drift |
+|---|---|---|---|
+| the audio panel rect | `468,1323,2489,434` | identical | **0** |
+| the four dividers | x 967 · 1465 · 1963 · 2461 | 966 · 1464 · 1962 · 2460 | **1 px** |
+| GROUND's signal + ± | 565 · 717 · 869 | identical | **0** |
+| AUX's signal + ± | 1063 · 1215 · 1367 | 1067 · 1219 · 1371 | **+4 px** |
+| **INTERCOM's ±** | 2135 · 2287 | 2181 · 2333 | **+46 px** |
+| **ALERTS' ±** | 2632 · 2784 | 2678 · 2830 | **+46 px** |
+| the two speaker rings | (1718.3, 583.7) / (1718.3, 747.1) | (1696, 564) / (1696, 727) | **+22 x, +20 y** |
+
+⭐ The panel and dividers match to ≤1 px and the LEFT two clusters to ≤4, while the RIGHT two are 46 px
+out together. That asymmetry says one transcription slip, not general drift — which is why it is worth a
+line rather than a shrug. **Not fixed here:** the draw and the hit test agree with each other today, so
+nothing is broken; it is a fidelity gap, and moving ten boxes is its own job.
+
+#### What was built
+
+- **`pure/AudioChannels.cs`** — the mapping, the percent rendering, the ± step and clamp, and
+  `Actionable`. ⛔ **Percent, not dB, and that is a §1.4 point:** KSP's volumes are LINEAR GAINS in
+  0..1, and turning one into decibels needs a reference level no source in this project gives — a dB
+  figure here would be an invented quantity wearing a real unit. The ruling's *"`dB` stays a unit
+  label"* is consistent: in `Audio.vue`'s slot list it is a legend, not a reading.
+- **`PageState.Audio`**, filled in `VesselData` from `GameSettings` **defensively** — any throw leaves
+  it invalid and every mapped channel DASHES. ⛔ Never "0%": that would say the game is muted, which is
+  a different claim from "this could not be read".
+- **The five literals are gone.** `"12dB"`, `"0dB"`, `"100"`, `"+9dB"`, `"50"` and VOX's `"17"` —
+  six hardcoded strings in three unit systems, none measured from anything.
+- **Four of the ten buttons are real controls**, and the other six are painted `Text6` with **no hit
+  rect** — S75's tint and S29's precedent. ⭐ **The lit state and the live state are ONE predicate**
+  (`Available`), asked by the draw, again by `HitTest`, and again by the glue before a float moves: a
+  dimmed button cannot act and a live one cannot look unavailable. That is S32's rule on a second page.
+- **`ScreenPainter` writes the setting** and persists it, with the save wrapped so a failure cannot take
+  the screen down. **This is the only place in the build that writes a game setting**, and it says so.
+- **`CrewSurface.Audio = 9` + `CrewControlIds.Audio`** — appended, never renumbered. The map is TOTAL
+  over all eight buttons though only four can act, for the same reason `DockAct.Settings` stays
+  nameable: a partial map is how a control silently loses its name when the mapping later widens.
+
+#### ⛔ TWO THINGS THE PAGE AS DESIGNED CANNOT DELIVER — collected for the owner, not decided
+
+1. **`GROUND` is not a channel.** `Audio.vue`'s slot list is *"dB, AUX, MAIN, Vox, INTERCOM, ALERTS"*
+   (`SettingsPage.cs:17`); `GROUND` is a crew ROLE from the seat rows (`PASSENGER / PILOT / GROUND`,
+   `:311`). The Figma rebuild put a role where the reference has a unit legend. ⛔ **Not renamed** — the
+   label is reference-sourced (this file was rebuilt from the frame's own layer geometry), so changing
+   it is §1.4's call, not a tidy-up. It resolves to a dash, which is the honest reading of a channel
+   with nothing behind it.
+2. ⚠ **The ± buttons are on the wrong channels for the owner's own mapping.** Of the four mapped
+   channels, only **AUX** and **ALERTS** have ± buttons; **MAIN** and **VOX** are mapped and have none
+   (the frame gives that column the VOX readout instead). Of the four channels that DO have buttons,
+   two — GROUND and INTERCOM — have nothing to move. So *"make the volume controls control the game
+   sound levels"* is **half-deliverable on the page as drawn**, and adding ± to MAIN/VOX would be
+   inventing controls the frame does not have (§1.4 tier 3). Both halves of that are the owner's.
+
+#### Verified (C1.3) — measured, not asserted
+
+`python plugin/build.py test` → **ALL SUITES PASSED**; `CrewPressTest` **1241 checks** (was 1211).
+`python plugin/build.py preview` → `settings_audio.png` printing its own readings, plus a new
+`settings_audio_nosettings.png`.
+
+⭐ **The field names are verified by the compiler, not by memory:** `GameSettings.MASTER_VOLUME`,
+`AMBIENCE_VOLUME`, `VOICE_VOLUME` and `SHIP_VOLUME` all compile against KSP's own assembly.
+
+**Inspected**, both states side by side:
+
+| | live settings | unreadable settings |
+|---|---|---|
+| GROUND | `—`, ± and signal plate **dim** | `—`, dim |
+| AUX | **`62%`**, ± **bright** | `—`, ± dim |
+| MAIN / VOX | **`80%`** / **`45%`** | `—` / `—` |
+| INTERCOM | **`3 / 4`** (the crew reading), ± dim | ⭐ still `3 / 4` — a different source, correctly unaffected |
+| ALERTS | **`50%`**, ± **bright** | `—`, ± dim |
+
+**MUTATION-PROVEN — 8 mutations, 8 caught, 0 uncaught:**
+
+| | mutation | first check that failed |
+|---|---|---|
+| **A** | GROUND becomes a real channel — a crew ROLE wired to the master volume | *"GROUND maps to nothing"* |
+| **B** | an unreadable setting prints `0%` instead of a dash | *"unreadable settings dash rather than reading 0%   got '0%'"* |
+| **C** | the nudge stops clamping | *"it clamps at full scale   got 1.05"* |
+| **D** | `Actionable` ignores whether the settings could be read | *"with the settings unreadable NOTHING is painted live   got 6"* |
+| **E** | every button painted live again — **the original defect** | *"white button lines 12 (expected 6)"* |
+| **F** | the signal plates go back to looking like buttons | *"no white arc anywhere on the page   got 2"* |
+| **G** | `HitTest` stops asking the gate — a dim button becomes touchable | *"GROUND's pair takes no touch"* |
+| **H** | INTERCOM stops being the crew reading | *"INTERCOM is the crew reading"* |
+
+**Comment-loss check (C1.16 / G12): 0 lost** across nine files. ⚠ Three short section headers were
+edited in place, caught, and restored verbatim with the new material added beneath.
+
+⛔ §14.4(a) UNTOUCHED — a volume is not a flight control, and nothing about the vehicle is written. No
+`install`, no glass, no `git push`.
+
+### S135b [S] Ten button boxes and two speaker rings are transcribed off the Figma frame's own positions — **TODO** — [logged by [[S135]] per C1.1, 2026-09-06; TIER 3: fidelity]
+- **The finding, measured against `assets/figma/dashboard_ui/A-Settings-Cabin.svg`** (33 `<rect>`, ten of
+  them the `138×138` button boxes at `y 1599`): the audio panel and its four dividers match this build to
+  **≤1 px**, GROUND's three boxes match **exactly**, AUX's three are **+4 px**, and **INTERCOM's and
+  ALERTS' four are +46 px** — all four together. The two Cabin speaker rings are **+22 x, +20 y**.
+- ⭐ **The asymmetry is the evidence**: one cluster 46 px out as a block is a transcription slip, not
+  drift. Whoever fixes it should look for a single wrong constant, not re-measure ten boxes.
+- ⚠ **NOTHING IS BROKEN TODAY.** The draw and the hit test read the same arrays, so the controls work;
+  this is fidelity to the reference frame, which is §1.4's tier-1 source for this page.
+- ⚠ Sequence with [[S153f]], which re-lays this page's type — moving boxes and raising type in one pass
+  is one preview inspection instead of two.
+- **DONE when:** the ten boxes and two rings sit at the frame's own coordinates, with the before/after
+  measured the way this line's table was.
+
+### S135c [S] The Cabin panel is an empty plate — and the export proves it was always one — **TODO (needs an owner/design call)** — [QC `A-06`'s second branch; logged by [[S135]] 2026-09-06; TIER 2]
+- ⭐ **A-06's first branch is CLOSED by [[S135]]**: parsed against the export, the Cabin panel region
+  holds **20 of the frame's 28 circles and nothing else**, all at the two speaker-ring centres this
+  build already draws. **No layer was lost; the frame is an empty plate.**
+- ⛔ **What is left is QC's second branch, and it is a design decision:** *"If the frame really is an
+  empty plate, the panel needs content of its own or it should stop being a panel."* On the render the
+  selected panel — the one the page is actually reporting — is the emptiest thing on screen, which is
+  the balance objection the owner has already raised on the Cover.
+- **QC's own seed, and it needs no new source:** speaker count, intercom state, alert routing — all
+  available from `CabinEnvironment` and `Alarms`, all §14.4(f) READOUTS, none of them commanding
+  anything. ⚠ **Do NOT fill it with a picture**: a drawn cabin interior is a §1.4 tier-3 invention.
+- **DONE when:** the selected panel carries at least as much information as the four unselected ones,
+  from real sources, or the owner rules that it stays a plate.
 
 ### S136 [S] `UiPage.Procedure` and `UiPage.Cabin` are flat images — 8 draw calls for a whole screen — **TODO — un-held 2026-09-06; its Procedure half is still TIER-3** —
 ✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set

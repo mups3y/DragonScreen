@@ -205,7 +205,7 @@ namespace DragonScreen
                 case UiPage.Cover:     CoverPage.Build(dl, w, h, s, view, coverPhase, coverCam, turn); break;
                 case UiPage.Menu:      MenuPage.Build(dl, w, h); break;
                 case UiPage.Hud:       Frame58Hud.Build(dl, w, h, s); break;
-                case UiPage.Audio:     SettingsAudioPage.Build(dl, w, h, 2); break;
+                case UiPage.Audio:     SettingsAudioPage.Build(dl, w, h, 2, s); break;
                 // S110 / QC F-01: page 3 and page 19 are THE SAME REAL SCREEN - "4.700 Deorbit
                 // Preparation / Test VRIO Health LEDs" - and the build shipped both, page 3 as the baked
                 // `frame59` and page 19 as the element rebuild, with the Menu listing each under its own

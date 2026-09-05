@@ -9,6 +9,8 @@
  *    follows; an id that collides merges two controls; a buffer that overflows quietly loses crew
  *    interactions the way S76's ghost columns quietly lost data. All three are asserted below,
  *    exhaustively over every value of every one of the seven dispatch types.
+ *    ⚠ EIGHT SINCE S135 (2026-09-06), which added the audio page's ± buttons. The sentence above
+ *    is kept as written because it is the rule, not a running total; this line carries the count.
  *
  *  ⛔ IT PROVES NOTHING ABOUT THE WIRING. That the choke points are reached, that `acted` carries the
  *    dispatcher's real answer, that the record reaches `events.jsonl` — that is `ScreenPainter.cs`,
@@ -57,12 +59,13 @@ public static class CrewPressTest
     {
         bad = 0; checks = 0;
         Console.WriteLine("CrewPressTest (S85 CVR press channel: the control_id namespace, exhaustively "
-                          + "pinned over all seven dispatch types, + the publish-side press buffer)");
+                          + "pinned over all EIGHT dispatch types, + the publish-side press buffer)");
 
         NavIds();
         CoverIds();
         SuitIds();
         DockIds();
+        AudioIds();
         PanelIds();
         TreeIds();
         SubsysTabIds();
@@ -106,6 +109,13 @@ public static class CrewPressTest
         "MapPanUp", "MapPanDown", "MapPanLeft", "MapPanRight", "MapCentre", "MapZoomIn", "MapZoomOut" };
 
     static readonly string[] PinSuitAct = { "None", "Start", "Halt", "Close", "Finish", "Retime", "Troubleshoot" };
+
+    static readonly string[] PinAudioAct = {
+        "None",
+        "GroundMinus", "GroundPlus",
+        "AuxMinus", "AuxPlus",
+        "IntercomMinus", "IntercomPlus",
+        "AlertsMinus", "AlertsPlus" };
 
     static readonly string[] PinDockAct = {
         "None",
@@ -160,6 +170,7 @@ public static class CrewPressTest
 
     // =============================================================================================
     //  1-7. the seven dispatch types, exhaustively
+    //  8.   — and audio since S135, which is why the banner above now says EIGHT.
     // =============================================================================================
 
     static void NavIds()
@@ -227,6 +238,35 @@ public static class CrewPressTest
         Check(CrewControlIds.Suit(SuitCheckPage.SuitAct.None) == null, "SuitAct.None must map to null (a miss)");
         Eq(CrewControlIds.Suit(SuitCheckPage.SuitAct.Troubleshoot), "suit.Troubleshoot",
            "§2.7's own worked example");
+    }
+
+    static void AudioIds()
+    {
+        PinEnum(typeof(SettingsAudioPage.AudioAct), PinAudioAct, "AudioAct");
+        for (int i = 1; i < PinAudioAct.Length; i++)
+            Eq(CrewControlIds.Audio((SettingsAudioPage.AudioAct)i), "audio." + PinAudioAct[i],
+               "audio " + PinAudioAct[i]);
+        Check(CrewControlIds.Audio(SettingsAudioPage.AudioAct.None) == null,
+              "AudioAct.None must map to null (a miss)");
+
+        // ⚠ THE MAP IS TOTAL OVER EIGHT BUTTONS THOUGH ONLY FOUR CAN ACT, and that is deliberate -
+        // the same reason DockAct.Settings stays nameable above. The enum is the page's GEOMETRY and
+        // `Available` is the owner's MAPPING; a partial map is how a control silently loses its name
+        // when the mapping later widens. GROUND being a channel at all is a §1.4 question (see
+        // SettingsAudioPage's header), so its two ids exist and simply never fire today.
+        int names = 0;
+        foreach (SettingsAudioPage.AudioAct a in Enum.GetValues(typeof(SettingsAudioPage.AudioAct)))
+            if (a != SettingsAudioPage.AudioAct.None && CrewControlIds.Audio(a) != null) names++;
+        Check(names == 8, "all eight audio buttons must be nameable, got " + names);
+
+        // And the four that CAN act are exactly the owner's mapping, asked through the same predicate
+        // the page tints from and the glue gates on.
+        AudioLevels lv = new AudioLevels();
+        lv.Valid = true; lv.Master = 0.5f; lv.Ambience = 0.5f; lv.Voice = 0.5f; lv.Ship = 0.5f;
+        int live = 0;
+        foreach (SettingsAudioPage.AudioAct a in Enum.GetValues(typeof(SettingsAudioPage.AudioAct)))
+            if (SettingsAudioPage.Available(a, lv)) live++;
+        Check(live == 4, "exactly four audio buttons are live under the owner's mapping, got " + live);
     }
 
     static void DockIds()

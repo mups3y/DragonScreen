@@ -57,6 +57,7 @@ public static class FigmaUINavTest
         S75InertPaintedControls();
         CoverEntryEnabled();
         CoverDroppedArrow();
+        AudioPageChannels();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
     }
@@ -2491,6 +2492,148 @@ public static class FigmaUINavTest
         Check("True likewise, clear of the False column",
               inkTrue < (1132f - 783f), "ink " + inkTrue + " design px, room 349");
     }
+
+    // ================= S135 / QC A-02 / A-05: THE AUDIO PAGE'S CHANNELS ARE REAL =================
+    // Five channel values were hardcoded strings in three unit systems — "12dB", "0dB", "100", "+9dB",
+    // "50" — plus a "17" for VOX, and TEN painted buttons with no hit test anywhere in the tree.
+    // `SettingsPage.cs:20-23` names that exact shape: "drawing eight buttons where seven do nothing is
+    // the dead-control failure this project refuses."
+    //
+    // 🟢 Owner Q6 (2026-09-05, verbatim): "make the volume controls control the game sound levels."
+    // The mapping was chosen from presented options on 2026-09-06 - "MAP THE FOUR THAT FIT" - which is
+    // a SELECTION and is never quoted as words he typed.
+    //
+    // ⭐ AND IT IS NOT AN OVERRIDE OF THE 2026-08-06 "NO VOLUME SLIDERS" DECISION. That decision forbids
+    // a fader on a stated PREMISE - "KSP has no cabin audio, so a fader would be a control bound to
+    // nothing". Binding these to the game's own layers falsifies the premise; it does not overrule the
+    // rule. A real control is not a simulated one.
+    static void AudioPageChannels()
+    {
+        const int VW = 2560, VH = 1406;
+
+        // ---- 1. THE MAPPING IS THE OWNER'S FOUR, AND NOTHING ELSE -------------------------------
+        Check("MAIN is the master volume",
+              AudioChannels.LayerFor("MAIN") == AudioLayer.Master, "");
+        Check("AUX is ambience", AudioChannels.LayerFor("AUX") == AudioLayer.Ambience, "");
+        Check("VOX is voice", AudioChannels.LayerFor("VOX") == AudioLayer.Voice, "");
+        Check("ALERTS is the ship layer", AudioChannels.LayerFor("ALERTS") == AudioLayer.Ship, "");
+        // ⛔ GROUND is a crew ROLE the Figma page put in a channel slot (Audio.vue's slot list is
+        // "dB, AUX, MAIN, Vox, INTERCOM, ALERTS"); INTERCOM the ruling keeps as a reading. Neither is
+        // a layer, and an unknown label must not silently become one either.
+        Check("GROUND maps to nothing", AudioChannels.LayerFor("GROUND") == AudioLayer.None, "");
+        Check("INTERCOM maps to nothing", AudioChannels.LayerFor("INTERCOM") == AudioLayer.None, "");
+        Check("an unknown label maps to nothing",
+              AudioChannels.LayerFor("MUSIC") == AudioLayer.None && AudioChannels.LayerFor(null) == AudioLayer.None, "");
+
+        // ---- 2. VALUES: A PERCENT WHEN THERE IS ONE, A DASH WHEN THERE IS NOT --------------------
+        AudioLevels lv = new AudioLevels();
+        lv.Valid = true; lv.Master = 0.8f; lv.Ambience = 0.62f; lv.Voice = 0.45f; lv.Ship = 0.5f;
+        Eq2("MAIN prints the master gain as a percent", AudioChannels.Text(lv, AudioLayer.Master), "80%");
+        Eq2("AUX likewise", AudioChannels.Text(lv, AudioLayer.Ambience), "62%");
+        Eq2("VOX likewise", AudioChannels.Text(lv, AudioLayer.Voice), "45%");
+        Eq2("ALERTS likewise", AudioChannels.Text(lv, AudioLayer.Ship), "50%");
+        Eq2("an unmapped channel dashes", AudioChannels.Text(lv, AudioLayer.None), Dashes.None);
+        // ⛔ THE ONE THAT MATTERS: unreadable settings must NOT print 0%. "0%" says the game is muted,
+        // which is a different claim from "this could not be read".
+        AudioLevels bad = new AudioLevels();   // Valid false, every gain 0
+        Eq2("unreadable settings dash rather than reading 0%",
+            AudioChannels.Text(bad, AudioLayer.Master), Dashes.None);
+
+        // ---- 3. THE NUDGE: step, clamp, both ends ------------------------------------------------
+        Check("one press moves one step",
+              Math.Abs(AudioChannels.Nudge(0.5f, 1) - (0.5f + AudioChannels.Step)) < 1e-6f, "");
+        Check("...and down the same",
+              Math.Abs(AudioChannels.Nudge(0.5f, -1) - (0.5f - AudioChannels.Step)) < 1e-6f, "");
+        Check("it clamps at full scale", AudioChannels.Nudge(1f, 1) == 1f, "got " + AudioChannels.Nudge(1f, 1));
+        Check("...and at silence", AudioChannels.Nudge(0f, -1) == 0f, "got " + AudioChannels.Nudge(0f, -1));
+        Check("a zero direction moves nothing", AudioChannels.Nudge(0.37f, 0) == 0.37f, "");
+
+        // ---- 4. THE PAGE ------------------------------------------------------------------------
+        PageState live = new PageState(); live.Valid = true; live.Audio = lv; live.CrewText = "4";
+        PageState dead = new PageState(); live.Valid = true;
+        DisplayList on = Audio(live, VW, VH);
+        DisplayList off = Audio(dead, VW, VH);
+
+        // ⛔ THE LITERALS ARE GONE. This is the finding.
+        Check("none of the five hardcoded channel values is drawn any more",
+              !Drew(on, "12dB") && !Drew(on, "0dB") && !Drew(on, "100") && !Drew(on, "+9dB")
+              && !Drew(on, "50") && !Drew(on, "17"), "");
+        Check("the mapped channels print their live gains",
+              Drew(on, "80%") && Drew(on, "62%") && Drew(on, "45%") && Drew(on, "50%"), "");
+        // INTERCOM is the crew reading the ruling keeps it as - the same field the legacy page shows.
+        Check("INTERCOM is the crew reading", Drew(on, "4"), "");
+        // GROUND has nothing behind it, so it dashes rather than showing a plausible level.
+        Check("GROUND dashes", Drew(on, Dashes.None), "");
+        Check("a dead feed dashes every channel and prints no percent",
+              Drew(off, Dashes.None) && !Drew(off, "80%") && !Drew(off, "62%"), "");
+
+        // ---- 5. THE TEN BUTTONS: FOUR REAL, SIX PAINTED INERT ------------------------------------
+        // The ± glyphs are Line commands, so counting them by colour is how "which buttons look live"
+        // is measured without reaching into the page. AUX and ALERTS give 3 lines each (minus, plus-,
+        // plus|); GROUND and INTERCOM give 3 each in the dim tint, and the two signal plates add two
+        // ArcBands rather than lines.
+        int white = Lines(on, DragonPalette.White).Count;
+        int dim = Lines(on, DragonPalette.Text6).Count;
+        Check("exactly two channels' worth of button glyphs are painted live", white == 6,
+              "white button lines " + white + " (expected 6: AUX and ALERTS, 3 each)");
+        Check("...and two channels' worth are painted inert", dim >= 6,
+              "dim button lines " + dim + " (expected at least 6: GROUND and INTERCOM)");
+        Check("with the settings unreadable NOTHING is painted live", Lines(off, DragonPalette.White).Count == 0,
+              "got " + Lines(off, DragonPalette.White).Count);
+
+        // ⛔ THE TWO SIGNAL PLATES ARE ARCS, NOT LINES, so the line count above cannot see them. No
+        // source says what a signal button on an audio channel DOES - the same §1.4 wall S29 hit on
+        // the Suit Leak Check's read-only plates - so they are drawn dim and take no touch. Counting
+        // WHITE arcs is how that is measured: after this line there are none on the page at all.
+        int whiteArcs = 0;
+        for (int i = 0; i < on.Count; i++)
+        {
+            DrawCmd c = on.At(i);
+            if (c.Kind == DrawKind.ArcBand && SameColour(c.Colour, DragonPalette.White)) whiteArcs++;
+        }
+        Check("the two signal plates are painted inert (no white arc anywhere on the page)",
+              whiteArcs == 0, "got " + whiteArcs + " white arcs");
+
+        // ---- 6. THE HIT TEST AGREES WITH THE PAINT ------------------------------------------------
+        // ⭐ S32's rule on a second page: a dimmed button cannot act, a live one cannot look
+        // unavailable. Probed at each button's own centre, computed the way Build places them.
+        float sx = VW / 3427f, sy = VH / 2112f;
+        float by = 1598f * sy + 70f * sy;
+        Check("AUX minus is live", SettingsAudioPage.HitTest(1219f * sx, by, VW, VH, live)
+              == SettingsAudioPage.AudioAct.AuxMinus, "");
+        Check("AUX plus is live", SettingsAudioPage.HitTest(1371f * sx, by, VW, VH, live)
+              == SettingsAudioPage.AudioAct.AuxPlus, "");
+        Check("ALERTS minus is live", SettingsAudioPage.HitTest(2678f * sx, by, VW, VH, live)
+              == SettingsAudioPage.AudioAct.AlertsMinus, "");
+        Check("ALERTS plus is live", SettingsAudioPage.HitTest(2830f * sx, by, VW, VH, live)
+              == SettingsAudioPage.AudioAct.AlertsPlus, "");
+        Check("GROUND's pair takes no touch",
+              SettingsAudioPage.HitTest(717f * sx, by, VW, VH, live) == SettingsAudioPage.AudioAct.None
+              && SettingsAudioPage.HitTest(869f * sx, by, VW, VH, live) == SettingsAudioPage.AudioAct.None, "");
+        Check("INTERCOM's pair takes no touch",
+              SettingsAudioPage.HitTest(2181f * sx, by, VW, VH, live) == SettingsAudioPage.AudioAct.None
+              && SettingsAudioPage.HitTest(2333f * sx, by, VW, VH, live) == SettingsAudioPage.AudioAct.None, "");
+        Check("the two signal plates take no touch either",
+              SettingsAudioPage.HitTest(565f * sx, by, VW, VH, live) == SettingsAudioPage.AudioAct.None
+              && SettingsAudioPage.HitTest(1067f * sx, by, VW, VH, live) == SettingsAudioPage.AudioAct.None, "");
+        Check("a touch above the button row misses",
+              SettingsAudioPage.HitTest(1219f * sx, 1500f * sy, VW, VH, live)
+              == SettingsAudioPage.AudioAct.None, "");
+        // ⛔ AND WITH THE SETTINGS UNREADABLE, NOTHING IS LIVE - the paint and the touch fail together.
+        Check("unreadable settings make every button inert",
+              SettingsAudioPage.HitTest(1219f * sx, by, VW, VH, dead) == SettingsAudioPage.AudioAct.None
+              && SettingsAudioPage.HitTest(2678f * sx, by, VW, VH, dead) == SettingsAudioPage.AudioAct.None, "");
+    }
+
+    static DisplayList Audio(PageState s, int w, int h)
+    {
+        DisplayList dl = new DisplayList(SettingsAudioPage.Commands + 200);
+        SettingsAudioPage.Build(dl, w, h, 2, s);
+        return dl;
+    }
+
+    static void Eq2(string what, string got, string want)
+    { Check(what, got == want, "got '" + got + "', want '" + want + "'"); }
 
     // ================= S131 / QC C-02: THE STRAY ARROW IS DROPPED =================
     // `bi_arrow_right_short` is a 16x16 glyph with TWELVE opaque pixels, placed by masked template

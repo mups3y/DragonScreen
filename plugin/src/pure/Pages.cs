@@ -326,6 +326,14 @@ namespace DragonScreen
         /// </summary>
         public EntryVerdict EntryEnabled;
 
+        /// <summary>
+        /// S135 / QC A-02: the GAME's own audio layers, 0..1, read straight from GameSettings. The
+        /// audio page's channels are these, not a simulation - which is what makes its controls real
+        /// controls rather than the faders the 2026-08-06 decision forbade. See pure/AudioChannels.cs
+        /// for the mapping and for why that decision is not overruled by this.
+        /// </summary>
+        public AudioLevels Audio;
+
         /// <summary>Crew procedure gate the user must act on now - the checklist card. See GateCard.</summary>
         public bool GateActive;
         public string GateTitle;

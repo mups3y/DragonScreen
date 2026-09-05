@@ -417,6 +417,29 @@ namespace DragonScreen
             }
             state.EntryEnabled = EntryReadiness.Of(er);
 
+            // ---- S135 / QC A-02: THE AUDIO PAGE'S CHANNELS ARE THE GAME'S OWN LAYERS ----
+            // 🟢 Owner Q6 (2026-09-05, verbatim): "make the volume controls control the game sound
+            // levels. Music, vehicle sound, ambient sound etc etc. What ever logical sound layer
+            // options the game has, tie to those sliders etc" - with the mapping chosen from presented
+            // options 2026-09-06 ("MAP THE FOUR THAT FIT"; a SELECTION, not words he typed).
+            // ⛔ THESE ARE GLOBAL GAME SETTINGS, and the owner was told and accepted that: a tap in the
+            // capsule changes his whole-game audio and persists outside the seat. Reading them is
+            // free; the WRITE is in ScreenPainter, gated on the same predicate the page tints from.
+            // ⚠ `GameSettings` is a KSP static and can be read before the settings are loaded, so this
+            // is defensive: any throw leaves Valid false and every mapped channel DASHES rather than
+            // showing a plausible 0, which would say the game is muted.
+            AudioLevels au = new AudioLevels();
+            try
+            {
+                au.Master = GameSettings.MASTER_VOLUME;
+                au.Ambience = GameSettings.AMBIENCE_VOLUME;
+                au.Voice = GameSettings.VOICE_VOLUME;
+                au.Ship = GameSettings.SHIP_VOLUME;
+                au.Valid = true;
+            }
+            catch (Exception) { au = new AudioLevels(); }
+            state.Audio = au;
+
             state.RendezvousEngaged = StationApproach.Engaged;
             state.RendezvousNote = StationApproach.Note;
             state.DockEngaged = DockingOps.Engaged;
