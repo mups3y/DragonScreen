@@ -828,6 +828,112 @@ public static class BoosterTest
         BoosterCommand rc = BoosterDescent.Guide(ramped, BoosterPhase.Boostback);
         Check("the FSM's first boostback tick is a spool, not a step",
               rc.EnginesLit && rc.Throttle > 0.0 && rc.Throttle < 1.0, rc.Throttle.ToString("F4"));
+
+        W34WiringPins();
+    }
+
+    // =====================================================================================
+    // ⭐ W34 (2026-09-05) — THE PINS THE PURE LAYER CAN ACTUALLY CARRY FOR THE ULLAGE WIRING.
+    // =====================================================================================
+    // ⚠ **SAID PLAINLY: THE WIRING ITSELF CANNOT BE EXERCISED HERE.** `src/BoosterHost.cs` and
+    // `src/Ullage.cs` are GLUE — `build.py test` COMPILES them into the plugin DLL (`build.py:317`) but
+    // the headless exe it then runs is `src/pure` + `test` only (`build.py:334`). So `ReadUllage`,
+    // `Ullage.Stable` and the bind/release lifetime are compile-checked and NOT executed by any suite.
+    // Only glass can exercise them. What IS pinnable is the pure CONTRACT the wiring depends on, plus the
+    // two mechanical facts the owner's 2026-09-05 closure rests on. That is what follows.
+    static void W34WiringPins()
+    {
+        // ---- 1. THE ADAPTER'S ENGINE-SELECTION RULE IS DEFINED EXACTLY WHERE IT MATTERS. -----------
+        // `BoosterHost.ReadUllage` asks `AllowedRoleForPhase(phase, landingShed)` which bank to read the
+        // ullage off. That is only sound if every phase whose `Guide` consults `Ullaged` names a real
+        // bank. Pin both halves.
+        Check("W34 — boostback names a bank to read ullage off",
+              BoosterHostPlan.AllowedRoleForPhase(BoosterPhase.Boostback) == EngineRole.OctawebThree, "");
+        Check("W34 — the entry burn names a bank to read ullage off",
+              BoosterHostPlan.AllowedRoleForPhase(BoosterPhase.EntryBurn) == EngineRole.OctawebThree, "");
+        Check("W34 — the landing burn names a bank BEFORE the shed",
+              BoosterHostPlan.AllowedRoleForPhase(BoosterPhase.LandingBurn, false) == EngineRole.OctawebThree, "");
+        Check("W34 — and after it",
+              BoosterHostPlan.AllowedRoleForPhase(BoosterPhase.LandingBurn, true) == EngineRole.OctawebCentre, "");
+
+        // The other half: in every phase that names NO bank, `Guide` must not consult `Ullaged` at all —
+        // otherwise the adapter's `AllEngines` fallback would be load-bearing and would need its own
+        // justification. Proven behaviourally: flip `Ullaged` and the whole command must be unchanged.
+        BoosterPhase[] unpowered = { BoosterPhase.Idle, BoosterPhase.Flip, BoosterPhase.Coast,
+                                     BoosterPhase.AeroDescent, BoosterPhase.Landed };
+        for (int i = 0; i < unpowered.Length; i++)
+        {
+            Check("W34 — " + unpowered[i] + " names no bank (so the fallback is never load-bearing)",
+                  BoosterHostPlan.AllowedRoleForPhase(unpowered[i], false) == EngineRole.None
+                  && BoosterHostPlan.AllowedRoleForPhase(unpowered[i], true) == EngineRole.None, "");
+
+            BoosterInputs settled = Booster(TargetMode.Asds); settled.Ullaged = true;
+            BoosterInputs unsettled = Booster(TargetMode.Asds); unsettled.Ullaged = false;
+            BoosterCommand a = BoosterDescent.Guide(settled, unpowered[i]);
+            BoosterCommand b = BoosterDescent.Guide(unsettled, unpowered[i]);
+            Check("W34 — " + unpowered[i] + " ignores `Ullaged` entirely (same command either way)",
+                  a.Phase == b.Phase && a.EnginesLit == b.EnginesLit && a.Throttle == b.Throttle
+                  && a.EngineMode == b.EngineMode && a.UllageRcs == b.UllageRcs, "");
+        }
+
+        // ---- 2. THE ALWAYS-FALSE PATH IS WHAT WAS BLOCKING A LIGHT — pin the OTHER side of the gate. -
+        // `UllageAndSpoolChecks` above already pins that an UNSETTLED stage refuses to thrust in all three
+        // powered phases. Until W34 nothing ever assigned `BoosterHost.UllageSettled`, so `bi.Ullaged` was
+        // a constant false and that refusal was the ONLY reachable branch — the booster lit nothing at all
+        // and simply fell. These pin the branch the wiring unlocks.
+        BoosterInputs sbb = Booster(TargetMode.Rtls);
+        sbb.AltitudeM = 150000.0; sbb.Land.AltitudeM = 150000.0;
+        sbb.DownrangeErrM = 400000.0; sbb.InitialDownrangeErrM = 400000.0; sbb.Ullaged = true;
+        BoosterCommand sbc = BoosterDescent.Guide(sbb, BoosterPhase.Boostback);
+        Check("W34 — a SETTLED boostback commands a light (the branch the wiring unlocks)",
+              sbc.EnginesLit && sbc.Throttle > 0.0 && !sbc.UllageRcs, "");
+
+        BoosterInputs seb = Booster(TargetMode.Asds);
+        seb.AltitudeM = 60000.0; seb.Land.AltitudeM = 60000.0; seb.SpeedMps = 2000.0; seb.Ullaged = true;
+        BoosterCommand sec = BoosterDescent.Guide(seb, BoosterPhase.EntryBurn);
+        Check("W34 — a SETTLED entry burn commands a light",
+              sec.EnginesLit && sec.Throttle > 0.0 && !sec.UllageRcs, "");
+
+        // ---- 3. THE CLOSURE'S LOAD-BEARING FACT: THE SHED IS DOWNSTREAM OF THE ULLAGE GATE. ---------
+        // The owner's ruling rests on the hoverslam engine never being COLD-STARTED: the centre nozzle is
+        // already burning as one of `ThreeLanding` when OCT6's shed happens. That holds only because the
+        // shed decision sits INSIDE the settled branch — an unsettled landing burn never sheds and never
+        // latches. Pin it, so a future re-order of that branch cannot quietly make the shed a cold light.
+        BoosterInputs unshed = Booster(TargetMode.Asds);
+        unshed.AltitudeM = 400.0; unshed.DescentSpeedMps = 50.0; unshed.Ullaged = false;
+        unshed.Land = Flight(); unshed.Land.AltitudeM = 400.0; unshed.Land.DescentSpeedMps = 50.0;
+        BoosterCommand uc = BoosterDescent.Guide(unshed, BoosterPhase.LandingBurn);
+        Check("W34 — an UNSETTLED landing burn never sheds (the latch stays clear)",
+              !uc.LandingShedLatched && !uc.EnginesLit, "");
+
+        // And the gate still governs AFTER the shed: a latched burn that loses its settled reading stops
+        // commanding thrust rather than riding through on the latch.
+        BoosterInputs shed = Booster(TargetMode.Asds);
+        shed.AltitudeM = 400.0; shed.DescentSpeedMps = 50.0; shed.Ullaged = false;
+        shed.LandingShedLatched = true;
+        shed.Land = Flight(); shed.Land.AltitudeM = 400.0; shed.Land.DescentSpeedMps = 50.0;
+        BoosterCommand sc = BoosterDescent.Guide(shed, BoosterPhase.LandingBurn);
+        Check("W34 — the ullage gate still governs a POST-SHED landing burn",
+              !sc.EnginesLit && sc.Throttle == 0.0 && sc.UllageRcs, "");
+
+        // ---- 4. THE CENTRE BANK IS NEVER THE FIRST BANK OF A PHASE — "never cold-started", in pure. --
+        // `OctawebCentre` is legal in exactly one situation: a LandingBurn that has ALREADY latched the
+        // shed, and whose pre-shed legal bank is `ThreeLanding`. So reaching the centre engine always
+        // passes through a burning three-bank. (The shut-then-light ORDER of that handover is forced by
+        // the nested-bank geometry and is pinned separately in `BoosterHostTest`'s transition table — it
+        // is a single frame, and it is NOT an ullage event.)
+        BoosterPhase[] every = { BoosterPhase.Idle, BoosterPhase.Boostback, BoosterPhase.Flip,
+                                 BoosterPhase.Coast, BoosterPhase.EntryBurn, BoosterPhase.AeroDescent,
+                                 BoosterPhase.LandingBurn, BoosterPhase.Landed };
+        for (int i = 0; i < every.Length; i++)
+        {
+            bool centreLegal = BoosterHostPlan.AllowedRoleForPhase(every[i], false) == EngineRole.OctawebCentre
+                            || BoosterHostPlan.AllowedRoleForPhase(every[i], true) == EngineRole.OctawebCentre;
+            bool onlyViaShedLandingBurn = every[i] == BoosterPhase.LandingBurn
+                                       && BoosterHostPlan.AllowedRoleForPhase(every[i], false) == EngineRole.OctawebThree;
+            Check("W34 — " + every[i] + ": the centre bank is reachable only through a shed landing burn",
+                  !centreLegal || onlyViaShedLandingBurn, "");
+        }
     }
 
     // =====================================================================================

@@ -42,7 +42,9 @@
 //  • ⚠ **THE ONE THING THAT DID NOT WORK WAS NOT A FOCUS PROBLEM.** Same flight: *"Booster engine never
 //    lit (eng_ignited=0 whole descent) → ballistic → LOST @14 km. Root = RealFuels ullage."* The
 //    activation command REACHED the engine; RealFuels' ullage gate refused the ignition. That is register
-//    **H1b / W5**, and it is why this host holds the ullage gate CLOSED (see `Ullaged` below).
+//    **H1b / W5**, and it is why this host held the ullage gate CLOSED until **W34** (2026-09-05) armed
+//    the seam on the owner's ruling — see `UllageSettled` / `ReadUllage` below for the ruling verbatim,
+//    the wiring's lifetime, and [[BB8]] as the condition that would reopen it.
 //
 // ⇒ **§B16.7's protocol stands. No STOP, no owner decision needed on feasibility.** What remains is a
 // PHYSICS risk, not a permissions one, and §B16.7 already states and accepts it: KSP re-centres its
@@ -144,20 +146,56 @@ namespace DragonScreen
         [Tunable] public static bool Actuate = true;
 
         // =========================================================================================
-        // THE SEAM W5 FILLS — and until it does, the ullage gate is CLOSED
+        // ⭐ THE SEAM — **WIRED BY W34, 2026-09-05, ON THE OWNER'S RULING.** IT WAS NEVER ASSIGNED.
         // =========================================================================================
-        // `BoosterInputs.Ullaged` is *"propellant SETTLED (method §6, §B16.3)"*, and it is **the failure
-        // that lost the booster**: `docs/FLIGHT_144114_SCREEN_AUDIT.md` — *"booster ballistic, eng never
-        // lit → LOST"*. The real source is RealFuels' propellant-settling state, read by reflection in
-        // `src/Ullage.cs` — RECOVER-CODE, HIGH priority, and owned by **register W5**, which is TODO.
-        // C1.1/§B12.8 rider (b) forbid restoring it inside this diff.
+        // ⛔ **WHAT WAS ACTUALLY WRONG, MEASURED AND NOT ASSUMED (W34's first act was to verify it).**
+        // A tree-wide search for an assignment to this field returned **NOTHING**. It was declared here
+        // by W23, described by W5, referenced by three files — and **assigned by nobody**. So
+        // `bi.Ullaged = UllageSettled != null && SafeUllage(v)` was a constant **false**, every tick of
+        // every descent, and `pure/BoosterDescent.cs` refuses to light whenever `!s.Ullaged` (`:821`
+        // boostback, `:860` entry burn, `:996` landing burn). ⇒ **As it stood the booster lit nothing at
+        // all and simply fell.** Not a degraded landing — no landing, by construction.
         //
-        // C1.15 (evidence-gated mod-first): searched `docs/reference/INSTALLED_MODS.md` for a source of
-        // propellant-settling state. **RealFuels is installed and IS the source** (row 1 of that file
-        // names it, and names `Ullage.cs` as the reader). No other installed mod models ullage. **So no
-        // simulation is written here** — the quantity has a real mod source, it simply has no reader in
-        // the tree yet. A null hook reports NOT SETTLED, so every phase that wants thrust raises
-        // `UllageRcs` and refuses to burn. That is the safe direction and it is the FSM's own design.
+        // 🟢 **THE OWNER'S RULING, 2026-09-05, VERBATIM.** Asked about W5's two defects (stated in full in
+        // `pure/IgnitionGate.cs`), the owner said *"if you use the three engine mods correctly it will not
+        // be an issue"*, corrected a step-up-through-the-banks misreading with *"no 3-1"*, and — choosing
+        // between (1) leave the gate alone, the profile handles it, close W5's defects as theoretical, and
+        // (2) fix the gate, don't touch the profile — answered **"1"**.
+        // ⛔ **The overseer recommended (2) and was OVERRULED.** Recorded rather than hidden: a closure
+        // that conceals the disagreement is worth less than one that shows it. A DECISION, not a discovery.
+        //
+        // **THE LIFETIME, STATED.** This host OWNS the field across a binding:
+        //   • **BIND** — `TryBind` assigns `ReadUllage` in the same block that sets `bound` + `octaweb`,
+        //     BEFORE the bind log, so the log's "ullage source" line reports what is actually in force.
+        //   • **RELEASE** — `Release` sets it back to null, beside every other piece of carried state. An
+        //     unbound host has no vessel to read and no octaweb to read it off, so "no source" is the
+        //     honest answer — and a null seam still reads as NOT SETTLED, which is the safe direction.
+        // ⚠ The field stays public (it is still the injection point a future sim/test host would use), but
+        // an external assignment made while unbound is OVERWRITTEN at the next bind. Said plainly here
+        // rather than discovered later.
+        //
+        // **WHICH ENGINE IS ASKED — and why the choice is forced rather than tasteful.** `Ullage.Stable`
+        // takes the `ModuleEngines` *about to be lit*; this seam takes a `Vessel`. `ReadUllage` bridges the
+        // two with the FSM's OWN rule, `BoosterHostPlan.AllowedRoleForPhase(phase, landingShed)` — no
+        // second policy is invented here. The three banks are **nested subsets of the same nine nozzles**
+        // on ONE part (the geometry block in `pure/BoosterHostPlan.cs` §4c), fed by the same tanks, so
+        // ullage is a property of the STAGE's propellant and any bound bank answers for the octaweb;
+        // asking the bank the phase would light is simply the one that matches the reader's own stated
+        // contract. A phase that names no bank falls back to `AllEngines` — and that fallback is never
+        // load-bearing, because those are exactly the phases in which `Guide` never consults `Ullaged`
+        // (pinned in `test/BoosterTest.cs`, the W34 group).
+        //
+        // C1.15 (evidence-gated mod-first) — unchanged and still satisfied: searched
+        // `docs/reference/INSTALLED_MODS.md` for a source of propellant-settling state. **RealFuels is
+        // installed and IS the source** (row 1 names it, and names `Ullage.cs` as the reader). No other
+        // installed mod models ullage. **No simulation is written here**; §14.4(e)/(f) never engage.
+        //
+        // ⚠ **WHAT WOULD REOPEN THIS — [[BB8]].** The ruling rests on the exposure being CHEAP: the reader
+        // still fails OPEN on all seven of its paths (`src/Ullage.cs`), so a reflection failure reads as
+        // "settled" and can spend an ignition on a light RealFuels would refuse. That is affordable only
+        // while the ignition budget is effectively unlimited. **BB8 measures `ignitions` per bank IN
+        // FLIGHT and is still TODO.** If BB8 comes back **FINITE**, the cost of a wrong "settled" becomes
+        // a live one, and this wiring — with W5's two closed defects — deserves a fresh owner look.
         public static Func<Vessel, bool> UllageSettled;
 
         // =========================================================================================
@@ -427,6 +465,11 @@ namespace DragonScreen
 
             bound = v;
             octaweb = table;
+            // ⭐ W34 — ARM THE ULLAGE SOURCE, here, in the same block that establishes the binding it
+            // reads through. Before this line the seam was never assigned by anything in the tree, so
+            // `bi.Ullaged` was a constant false and no phase could ever command a light. See the seam's
+            // own block above for the owner's ruling, the lifetime and BB8's reopening condition.
+            UllageSettled = ReadUllage;
             bindUT = Now();
             phase = BoosterPhase.Idle;
             commandedForward = Vec3.Zero;
@@ -470,10 +513,11 @@ namespace DragonScreen
                             : target.LandAnywhereReason)
                       + ". Actuate=" + Actuate + ", ullage source="
                       + (UllageSettled != null
-                            ? "live"
-                            : "NONE (gate held closed — W5 restored pure/IgnitionGate.cs + src/Ullage.cs "
-                              + "as an OPEN DEFECT and deliberately did NOT wire them: today's reader "
-                              + "fails OPEN)")
+                            ? "LIVE (src/Ullage.cs → RealFuels, armed at bind by W34; still FAILS OPEN on "
+                              + "all seven of its paths — the owner's 2026-09-05 ruling accepts that "
+                              + "exposure while the ignition budget is unmeasured, see register BB8)"
+                            : "NONE (gate held closed — nothing armed the seam; every phase that wants "
+                              + "thrust will raise UllageRcs and refuse to burn)")
                       + ". ⛔ ATTITUDE UNCOMMANDED — AimForward is reported, not flown (register W24).");
         }
 
@@ -689,7 +733,10 @@ namespace DragonScreen
             Transform rt = v.ReferenceTransform;
             if (rt != null) { Vector3 f = rt.up; bi.Facing = new Vec3(f.x, f.y, f.z); }
 
-            // ⛔ THE ULLAGE GATE, HELD CLOSED unless a real source says otherwise (register W5).
+            // ⭐ THE ULLAGE GATE — **LIVE SINCE W34** (2026-09-05, owner ruling "1"). The `!= null` test
+            // stays as a defensive read of an unbound host; it is no longer the always-false path it was
+            // for as long as nothing assigned the seam. `SafeUllage` still swallows a throwing source and
+            // answers NOT SETTLED, which is the safe direction and the FSM's own design.
             bi.Ullaged = UllageSettled != null && SafeUllage(v);
 
             // §B16.3's ignition budget, read LIVE off the bound modules. 0 = not supplied → inert guard.
@@ -1102,6 +1149,10 @@ namespace DragonScreen
                       + " (phase " + phase + ", \"" + (v != null ? v.vesselName : "?") + "\")");
 
             bound = null; octaweb = null; hooked = false;
+            // W34 — the ullage source dies with the binding it read through: no vessel, no octaweb, no
+            // reading. A null seam reads as NOT SETTLED, so a released host cannot leave a stale
+            // "settled" behind for the NEXT booster, exactly as W25 does with the aim point below.
+            UllageSettled = null;
             phase = BoosterPhase.Idle;
             commandedForward = Vec3.Zero; commandedThrottle = 0.0;
             landingShed = false;                 // OCT6
@@ -1313,6 +1364,53 @@ namespace DragonScreen
                 if (p <= 0.0 || tK <= 0.0) return 0.0;
                 return body.GetSpeedOfSound(p, body.GetDensity(p, tK));
             };
+        }
+
+        /// <summary>
+        /// ⭐ **W34 — THE ULLAGE READING ITSELF.** The default `UllageSettled`, armed at bind and cleared
+        /// at release. It is the ONE-LINE wiring W5 identified and declined to make; the owner's ruling of
+        /// 2026-09-05 ("1" — leave the gate alone, the profile handles it) is what makes making it correct.
+        ///
+        /// ⛔ **THE READER IS USED AS-IS AND WAS NOT "IMPROVED" ON THE WAY PAST.** `src/Ullage.cs` still
+        /// returns 1.0 — "settled" — on all seven of its failure paths, and `Ullage.Stable` still compares
+        /// against `IgnitionGate.UllageStable` (0.996). That fail-open is W5's DEFECT 2 and it is now
+        /// CLOSED-AS-THEORETICAL, not fixed: closing it was the owner's decision, and re-opening it here
+        /// under the cover of "wiring" would be exactly the quiet change C1.12 forbids.
+        ///
+        /// **WHY THIS IS SAFE ENOUGH TO FLY, in the owner's words and this codebase's mechanics.** The
+        /// 3→1 landing profile (OCT6) means **the hoverslam engine is never cold-started**: the centre
+        /// nozzle is already burning as one of `ThreeLanding` when the shed happens, so the engine that
+        /// must work at 100 m is never asked to ignite there. The remaining cold lights — boostback,
+        /// entry burn, landing-burn start — are all HIGH, with altitude in hand and RCS time available.
+        /// ⚠ The shed is *technically* a shut-then-light (`BoosterHostPlan.EngineSwitchSteps` is FORCED to
+        /// shut `ThreeLanding` before activating `CenterOnly`, because the banks are NESTED subsets of the
+        /// same nine nozzles and the centre nozzle belongs to both) — but it is a SINGLE FRAME, and
+        /// settled propellant does not migrate in ~20 ms. **It is not an ullage event.** Stated so nobody
+        /// later mistakes it for one and "fixes" it.
+        ///
+        /// **WHICH BANK IS ASKED.** The FSM's own rule, `AllowedRoleForPhase(phase, landingShed)` — no
+        /// second policy invented here. `phase`/`landingShed` are this tick's carried state, read before
+        /// `Guide()` runs, which is the same state the gate downstream will be evaluated against. A phase
+        /// that names no bank falls back to `AllEngines`; that fallback is never load-bearing, because
+        /// those are exactly the phases in which `Guide` never consults `Ullaged` (pinned in
+        /// `test/BoosterTest.cs`). The three banks share one part and one propellant feed, so the choice
+        /// is about matching `Ullage.Stability`'s stated contract ("the engine about to be lit"), not
+        /// about getting a different number.
+        ///
+        /// **A vessel that is not the bound one reads NOT SETTLED.** This host knows one vessel; it will
+        /// not answer for another, and refusing is the safe direction.
+        /// </summary>
+        static bool ReadUllage(Vessel v)
+        {
+            if (v == null || !ReferenceEquals(v, bound)) return false;
+            if (octaweb == null || !octaweb.Ok) return false;
+
+            EngineRole ask = BoosterHostPlan.AllowedRoleForPhase(phase, landingShed);
+            ModuleEngines e = octaweb.For(ask != EngineRole.None ? ask : EngineRole.OctawebAll);
+            if (e == null) e = octaweb.For(EngineRole.OctawebAll);
+            if (e == null) return false;
+
+            return Ullage.Stable(e);
         }
 
         static bool SafeUllage(Vessel v)

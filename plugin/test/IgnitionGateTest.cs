@@ -8,6 +8,13 @@
  * ============================================================================================
  * ⛔ W5 (2026-09-05) — RESTORED FROM `8b81816^` (2,944 B, R1 §5.3's row) AND EXTENDED WITH A **DEFECT**
  *    GROUP THAT ASSERTS THE **WRONG** BEHAVIOUR ON PURPOSE.
+ * ✅ **W34 (2026-09-05) — BOTH DEFECTS CLOSED AS THEORETICAL ON THE OWNER'S RULING; THE PINS STAY.**
+ *    The owner chose *"1"* — leave the gate alone, the profile handles it — over fixing it (the overseer
+ *    recommended fixing it and was OVERRULED). **Not one assertion below changed**, because ruling (1)
+ *    is precisely "do not change this behaviour": the group's meaning flips from *pinning a defect
+ *    awaiting a fix* to *pinning REVIEWED, ACCEPTED behaviour against an accidental change*. The full
+ *    ruling, its reasoning and the reopening condition live in `pure/IgnitionGate.cs`'s banner.
+ *    ⚠ **Reopens on [[BB8]]**: a FINITE in-flight ignition count makes DEFECT 1's backstop cost real.
  * ============================================================================================
  * The suite above the DEFECT group is byte-for-byte the restored one; nothing in it was weakened, and
  * the gate itself is unchanged (`pure/IgnitionGate.cs`, comment-stripped diff against `8b81816^`:
@@ -85,6 +92,11 @@ public static class IgnitionGateTest
     // somebody with the authority to change it does so. **If one of these turns red, that is the signal
     // to read `pure/IgnitionGate.cs`'s banner and W5's register line before "fixing" the test** — the
     // proposed fix is written down there and it is an owner call (C1.12), not a test repair.
+    // ✅ **W34, 2026-09-05 — STILL TRUE, AND NOW FOR A DIFFERENT REASON.** The person with the authority
+    // did rule, and ruled **"1": leave the gate alone.** So these checks no longer pin "a defect nobody
+    // has fixed yet" — they pin **behaviour that was reviewed and deliberately kept**, and a red result
+    // now means someone changed a flight decision the owner made. The instruction is unchanged: read the
+    // banner first, do not repair the test. ⚠ **[[BB8]] is the one thing that would reopen it.**
     static void DefectPins()
     {
         // ---- DEFECT 1: the `maxSettleS` backstop authorises a light into UNSETTLED propellant. ------

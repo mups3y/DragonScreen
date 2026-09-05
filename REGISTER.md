@@ -7660,6 +7660,12 @@ failure, so burn now"* — landing a known-defective gate into the flight path i
 restored it, which is exactly what rider (b) forbids. The host's bind log now states which of the two states
 it is in, verbatim, instead of the old *"NONE (gate held closed — register W5)"*. **Arming it = the proposed
 fix + an owner go; logged as [[W31]] at the foot of this file.**
+✅ **SUPERSEDED 2026-09-05 BY [[W34]] — THE SEAM IS NO LONGER NULL.** The owner ruled **"1"**: *leave the
+gate alone, the profile handles it, close W5's two defects as theoretical* — over the overseer's
+recommendation to fix it, **which was OVERRULED**. So the reader was wired in **AS-IS**, fail-open and all,
+and both defect analyses above are **CLOSED-NOT-DELETED** (struck verbatim in both file headers, C1.16).
+W5's own finding stands unrefuted — it was WEIGHED and accepted, because the 3→1 profile never cold-starts
+the hoverslam engine. ⚠ **[[BB8]] is the named reopening condition.** Full record: W34's line.
 ⛔ **C1.15 honoured, and this file is the reason C1.15 exists.** `docs/reference/INSTALLED_MODS.md` row 1
 names **RealFuels installed** and names `Ullage.cs` as its reader; **no other installed mod models ullage**;
 R1 §5.1 grades it *"irreplaceable, no stock analogue"*. So the reflection is kept exactly as it was and
@@ -11447,7 +11453,7 @@ the overseer's own record, not this repo) the banner says so honestly rather tha
 
 ## Logged by the W5 + W25 + OCT10 batch, 2026-09-05 (C1.1 — noticed, NOT fixed)
 
-### W31 [S] ARM the ullage source — the reader is back, the seam is still null — **TODO** — [blocked on W5's proposed fix + an owner go]
+### W31 [S] ARM the ullage source — the reader is back, the seam is still null — **DONE 2026-09-05 by [[W34]] — the SEAM half done, the FIX half OVERRULED by the owner** — [was: blocked on W5's proposed fix + an owner go]
 - **The finding:** [[W5]] restored `src/Ullage.cs` (the RealFuels reflection reader) and deliberately did
   **not** assign it to `src/BoosterHost.cs`'s `UllageSettled` seam. So the FSM's ullage gate is still held
   CLOSED, and **no booster phase can command thrust** — the host says so in its own bind log.
@@ -11463,6 +11469,21 @@ the overseer's own record, not this repo) the banner says so honestly rather tha
   the signal the change is deliberate, and they must be rewritten as correctness tests in the same diff.
 - **DONE when:** the gate can express "unknown", UNKNOWN gates closed, the seam is armed, the defect pins
   are converted to correctness pins with the change stated in-header, and `build.py test` is green.
+
+✅ **CLOSED 2026-09-05 BY [[W34]] — AND HALF OF THIS LINE'S BUILD WAS OVERRULED, SO SAY SO.** The owner's
+ruling of 2026-09-05 (verbatim in W34's line, and in `pure/IgnitionGate.cs`'s banner) chose option **"1"** —
+*leave the gate alone; the profile handles it; close W5's defects as theoretical* — over fixing the gate.
+⛔ **The overseer recommended the fix and was OVERRULED.** So of this line's two halves:
+  • **the FIX half — NOT DONE, and deliberately not done.** `Ullage` does **not** gain
+    KNOWN-SETTLED/KNOWN-UNSETTLED/UNKNOWN, `UllageReady`'s backstop is **unchanged**, and the DEFECT pins
+    were **not** rewritten as correctness pins — not one assertion in `test/IgnitionGateTest.cs` changed,
+    because ruling (1) *is* "do not change this behaviour". Both proposals are **kept, struck not deleted**
+    (C1.16), as the fix that would be applied if [[BB8]] ever makes the exposure expensive.
+  • **the SEAM half — DONE.** `BoosterHost.UllageSettled` is armed at bind and cleared at release, reading
+    the restored `Ullage.Stable` **AS-IS**, fail-open included. `build.py test` green.
+⚠ **This line's own premise — that the fail-open made the one-line assignment unsafe — was not refuted; it
+was WEIGHED and accepted.** W34 records why (the 3→1 profile never cold-starts the hoverslam engine) and
+names **[[BB8]]** as what would reopen it. Do not re-open this line to "finish" the fix half without one.
 
 ### W32 [S] The predicted impact ignores the LIFT the grid fins are generating — **TODO** — [logged by W25]
 - **The finding:** `BoosterHost.PredictError` (W25) hands `TrajectoryInputs.LiftToDrag = 0.0`, i.e. a
@@ -11487,6 +11508,129 @@ the overseer's own record, not this repo) the banner says so honestly rather tha
   descent it is meaningless by construction (there is nothing to miss).
 - **DONE when:** the nominal verdict is defined from real health signals and the offset magnitude is sourced
   or ruled on, or the mechanism is recorded as deliberately unused with the reason.
+
+### W34 [O] Wire the ullage reader; close W5's two defects on the owner's ruling — **DONE 2026-09-05** — [TIER 1: the booster lit nothing at all, and the seam that would let it was assigned by nobody]
+Owner-directed via the overseer, 2026-09-05. Supersedes **[[W31]]** (which proposed the opposite fix).
+
+⛔ **WHAT WAS ACTUALLY BROKEN — VERIFIED FIRST, NOT INHERITED FROM THE BRIEF.** A tree-wide search for an
+assignment to `BoosterHost.UllageSettled` (`src/BoosterHost.cs:161`, pre-edit) returned **NOTHING**: declared
+by W23, described by W5, referenced by three files, **assigned by nobody**. So
+`bi.Ullaged = UllageSettled != null && SafeUllage(v)` was a **constant false** every tick, and
+`pure/BoosterDescent.cs` refuses to light whenever `!s.Ullaged` (`:821` boostback, `:860` entry burn, `:996`
+landing burn). ⇒ **As it stood the booster lit nothing at all and simply fell.** Not a degraded landing — no
+landing, by construction. W5 left it unwired *because* the reader fails open; the owner's ruling is what makes
+wiring it correct.
+
+🟢 **THE OWNER'S RULING, 2026-09-05, VERBATIM — with the question it answered, because "1" alone is
+meaningless.** Of W5's two defects the owner said: **"if you use the three engine mods correctly it will not
+be an issue"**. Correcting the overseer's step-up-through-the-banks misreading, he added: **"no 3-1"**. Then,
+asked to choose between —
+  **(1)** leave the gate alone — the profile handles it, W5's defects are theoretical, close them as such
+  **(2)** fix the gate, don't touch the profile
+— he answered **"1"**.
+⛔ **THE OVERSEER RECOMMENDED (2) AND WAS OVERRULED.** Recorded here on purpose: **a closure that hides the
+disagreement is worth less than one that shows it.** This is a **DECISION, not a discovery** — nothing in W5's
+analysis was found to be factually wrong; the ruling is that the exposure is not worth paying to remove.
+
+⭐ **WHY IT IS DEFENSIBLE — the substance of the closure.**
+1. **The hoverslam engine is NEVER COLD-STARTED.** The 3→1 landing profile ([[OCT6]], owner-ruled) has the
+   centre nozzle already burning as one of `ThreeLanding` when the shed happens, so the engine that must work
+   at 100 m is never asked to *ignite* there. Every remaining cold light — boostback, entry burn, landing-burn
+   start — is HIGH, with altitude in hand and RCS settling time available. An ullage misjudgement at those
+   altitudes costs a wait, not the vehicle.
+2. ⚠ **THE SHED IS NOT AN ULLAGE EVENT — stated so nobody "fixes" it later.** Because the three banks are
+   **NESTED SUBSETS OF THE SAME NINE NOZZLES** (`pure/BoosterHostPlan.cs` §4c: the centre nozzle belongs to
+   BOTH `ThreeLanding` and `CenterOnly`, so the two can never burn together), `SelectEngineSet` is **FORCED**
+   to shut `ThreeLanding` before activating `CenterOnly`. The shed is therefore *technically* a
+   shut-then-light — but it is a **SINGLE FRAME**, and settled propellant does not migrate in ~20 ms.
+   (Verified by the overseer, 2026-09-05; the ordering itself is already pinned by `BoosterHostTest`'s
+   transition table.)
+3. **DEFECT 1 is not merely improbable — TODAY IT IS UNREACHABLE.** W34 verified it: `IgnitionGate.UllageReady`
+   has **NO CALLER** anywhere in `plugin/src` outside its own file. The FSM gates on the plain bool
+   `BoosterInputs.Ullaged`; nothing supplies a `maxSettleS`, so the backstop disjunction cannot fire on any
+   code path that exists. Stronger than "theoretical", weaker than "fixed" — exactly true, and it stops being
+   true the moment somebody routes the FSM through `UllageReady`.
+
+**A. THE WIRING (the DONE-criterion: `UllageSettled` assigned, the always-false path gone).**
+`src/BoosterHost.ReadUllage` is the new default source, and the seam's **lifetime is stated in the file**:
+**bind** — `TryBind` assigns it in the same block that sets `bound` + `octaweb`, *before* the bind log, so the
+log's "ullage source" line reports what is actually in force; **release** — `Release` nulls it beside every
+other piece of carried state, so a released host cannot leave a stale "settled" behind for the next booster.
+The field stays public (still the injection point a future sim/test host would use) but an external assignment
+made while unbound is **overwritten at the next bind** — said in the header rather than discovered later.
+**WHICH BANK IS ASKED:** the FSM's own rule, `BoosterHostPlan.AllowedRoleForPhase(phase, landingShed)` — **no
+second policy is invented**. The three banks share one part and one propellant feed, so this is about matching
+`Ullage.Stability`'s stated contract ("the engine about to be lit"), not about getting a different number. A
+phase naming no bank falls back to `AllEngines`, and that fallback is **never load-bearing** — pinned below.
+⛔ **THE READER WAS NOT "IMPROVED" ON THE WAY PAST.** `src/Ullage.cs`'s seven fail-open `return 1.0` paths are
+**exactly as they were** — that is what ruling (1) decided. **Comment-stripped diff of `src/Ullage.cs` and
+`pure/IgnitionGate.cs` against `HEAD`: IDENTICAL both sides. Not one line of logic changed in either file.**
+
+**B. BOTH DEFECTS CLOSED — STRUCK, NOT DELETED (C1.16).** `pure/IgnitionGate.cs`'s header no longer says
+*"OPEN DEFECT / IT IS NOT A WORKING PART"* and no longer warns a reader off wiring the seam (wiring it is now
+correct). It says **reviewed and closed on the owner's ruling of 2026-09-05**, with the profile reasoning
+above as the why. **Both analyses survive VERBATIM**, bracketed by explicit `BEGIN STRUCK TEXT` /
+`END OF STRUCK TEXT` rules — a plain-text medium has no strikethrough, so the convention is stated in place —
+with a one-line CLOSED annotation added above each `DEFECT` heading and above each `PROPOSED FIX` (additions,
+not edits). The retry-policy section is **outside** the struck region: NO RETRY is a live standing answer, not
+a closed defect. `src/Ullage.cs` gets the same treatment for its own half. Kept because **if a flight ever
+contradicts this ruling, that analysis is the fastest way back to the answer.**
+
+⚠ **C. WHAT WOULD REOPEN IT — [[BB8]], NAMED IN BOTH FILE HEADERS AND HERE.** The closure rests on the
+exposure being **CHEAP**: a wrong "settled" spends an ignition on a light RealFuels will refuse, and §B16.4
+puts `TestFlightFailure_IgnitionFail` on this very part. That is affordable only while the ignition budget is
+effectively unlimited — **which nobody has measured. BB8 records `ignitions` per octaweb bank IN FLIGHT and is
+still TODO.** ⇒ **If BB8 comes back FINITE, DEFECT 1's timeout backstop spending an ignition is a live cost
+again and this ruling deserves a fresh owner look** — together with DEFECT 2's fail-open reader, which W34 put
+into the flight path on the strength of the same "it is cheap" argument. **A closure without its reopening
+condition is how a settled decision quietly becomes a wrong one.**
+
+**Verification (C1.3).** `python plugin/build.py test` **GREEN — ALL SUITES PASSED**; booster suite
+**1023 checks, 0 failed** (997 → 1023: the 26 new W34 pins), ignition-gate suite **26 checks, 0 failed**
+(unchanged — see below). **No screen or page changed → no preview PNG applies.**
+⚠ **SAID PLAINLY: THE WIRING ITSELF IS NOT EXERCISED BY ANY SUITE.** `src/BoosterHost.cs` and `src/Ullage.cs`
+are GLUE — `build.py test` COMPILES them into the plugin DLL (`build.py:317`) but the headless exe it then
+runs is `src/pure` + `test` only (`build.py:334`). **`ReadUllage`, `Ullage.Stable` and the bind/release
+lifetime are compile-checked and never executed here.** Only glass can exercise them.
+**What the pure layer CAN pin, and does (`test/BoosterTest.cs`, `W34WiringPins`, 26 checks):**
+(1) the adapter's selection rule is **defined exactly where it matters** — every phase whose `Guide` consults
+`Ullaged` names a real bank, and every phase that names none **ignores `Ullaged` entirely** (proven
+behaviourally: flip the flag, the whole command is unchanged), so the `AllEngines` fallback is never
+load-bearing; (2) the branch the wiring **unlocks** — a SETTLED boostback and entry burn now command a light,
+the mirror of the pre-existing "unsettled refuses" checks that were the only reachable branch before W34;
+(3) the closure's load-bearing fact — **the shed is downstream of the ullage gate**: an unsettled landing burn
+never sheds and never latches, and the gate still governs a POST-SHED burn, so a future re-order cannot quietly
+make the shed a cold light; (4) **the centre bank is never the first bank of a phase** — it is legal only in a
+LandingBurn that has already latched, whose pre-shed bank is `ThreeLanding`.
+**Mutation-proved (2 mutations, each reverted, the tree re-verified clean and green afterwards):** defeating
+`AllowedRoleForPhase`'s shed branch → **3 failures** (incl. the new `W34 — and after it`); defeating the
+landing-burn ullage gate → **3 failures** (incl. both new shed pins). The new group bites.
+**The DEFECT pins in `test/IgnitionGateTest.cs` are UNCHANGED — not one assertion edited**, because ruling (1)
+*is* "do not change this behaviour". Only their meaning is re-framed in comments: from *pinning a defect
+awaiting a fix* to *pinning REVIEWED, ACCEPTED behaviour against an accidental change*. A red result there now
+means someone changed a flight decision the owner made.
+
+**Scope respected.** The 3→1 profile, OCT6's latch, OCT9's shed criterion, OCT4's gate and `SelectEngineSet`
+are untouched. `docs/BUILD_PLAN.md` untouched (C1.12 GUARDED-FILE STANDARD / G10) — **the plan-grade material
+is the §B16.3 paragraph this line's closure would justify updating, and it stays here for a later `G`-line.**
+W25's `LandingTarget.cs`, `MechHost.cs`, `FlightDriver.cs` and `plugin/mech/` untouched. No install, no glass.
+
+**⚠ Stray found, LOGGED NOT FIXED (C1.1) — see [[S99]] at the foot of this file.** `BoosterHost.cs`'s bind log
+still ends *"⛔ ATTITUDE UNCOMMANDED — AimForward is reported, not flown (register W24)"* while the same file
+commands `s.pitch/yaw/roll` from the W24 steering law at `:1118`. The log now states the opposite of the truth.
+
+### S99 [S] `BoosterHost`'s bind log still announces "ATTITUDE UNCOMMANDED" — W24 landed the steering law and the line was never updated — **TODO** — [logged by W34, 2026-09-05; TIER 3: a log line that states the opposite of what the code does]
+- **The finding:** `src/BoosterHost.cs`'s BOOSTER HOST BOUND log ends *"⛔ ATTITUDE UNCOMMANDED — AimForward is
+  reported, not flown (register W24)"*. But [[W24]] IS done: the same file writes `s.pitch`/`s.yaw`/`s.roll`
+  from the steering law's output at `:1118` (`fbwPitch/fbwYaw/fbwRoll`, set at `:935`), and the tick comment
+  beside `bi.Facing` says so in as many words — *"Register W24 landed the steering law, so the vehicle now
+  actually tracks this"*. **The first line a reader sees in KSP.log about a fresh binding is now false.**
+- **Why it matters beyond tidiness:** this is the line someone reads when diagnosing a descent. It would tell
+  them the axes are not being flown, which is exactly the wrong place to start looking.
+- **NOT fixed by W34 (C1.1):** W34's declared outputs are the ullage wiring and W5's closure; rewriting an
+  attitude annunciation is a different subject in the same file.
+- **DONE when:** the bind log states the real actuation status (and whether `Actuate` is honoured), or the
+  line is removed as superseded, with the W24 cross-reference kept.
 
 ---
 

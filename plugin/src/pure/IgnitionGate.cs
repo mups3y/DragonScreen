@@ -1,7 +1,64 @@
 // DragonScreen — IgnitionGate  (PURE: the clamp-release + ullage-settle decisions)
 // ============================================================================================
-// ⛔⛔ THIS FILE IS RESTORED AS AN **OPEN DEFECT**. IT IS NOT A WORKING PART. ⛔⛔
+// ✅✅ **REVIEWED AND CLOSED ON THE OWNER'S RULING OF 2026-09-05 (register W34).** ✅✅
+// **Both of W5's defects are CLOSED AS THEORETICAL. This file is no longer an open defect, and nothing
+// here warns a reader off wiring the ullage source in — because wiring it is now CORRECT (W34 did it).**
 // ============================================================================================
+// 🟢 **THE RULING, VERBATIM, AND THE QUESTION IT ANSWERED — because "1" alone is meaningless.**
+// Asked about W5's two defects below, the owner said: **"if you use the three engine mods correctly it
+// will not be an issue"**. Correcting a step-up-through-the-banks misreading, he added: **"no 3-1"**.
+// Then, asked to choose between —
+//   **(1)** leave the gate alone — the profile handles it, W5's defects are theoretical, close them as such
+//   **(2)** fix the gate, don't touch the profile
+// — he answered **"1"**.
+// ⛔ **THE OVERSEER RECOMMENDED (2) AND WAS OVERRULED.** Recorded here on purpose: a closure that hides
+// the disagreement is worth less than one that shows it. **This is a DECISION, not a discovery.** Nothing
+// below was found to be factually wrong; the ruling is that the exposure is not worth paying to remove.
+//
+// ============================================================================================
+// ⭐ WHY IT IS DEFENSIBLE — the substance of the closure, not a rubber stamp
+// ============================================================================================
+//  1. **The hoverslam engine is NEVER COLD-STARTED.** The 3→1 landing profile (OCT6, owner-ruled) has the
+//     centre nozzle already burning as one of `ThreeLanding` when the shed happens, so the engine that
+//     must work at 100 m is never asked to IGNITE there. Every remaining cold light — boostback, entry
+//     burn, landing-burn start — is HIGH, with altitude in hand and RCS settling time available. An
+//     ullage misjudgement at those altitudes costs a wait, not the vehicle.
+//  2. ⚠ **THE ONE MECHANICAL POINT THAT MUST NOT BE MISREAD — the shed is NOT an ullage event.** Because
+//     the three banks are **NESTED SUBSETS OF THE SAME NINE NOZZLES** (the geometry block in
+//     `pure/BoosterHostPlan.cs` §4c: the centre nozzle belongs to BOTH `ThreeLanding` and `CenterOnly`,
+//     so the two can never burn together), `SelectEngineSet` is **FORCED** to shut `ThreeLanding` before
+//     activating `CenterOnly`. The shed is therefore technically a shut-then-light — but it is a **SINGLE
+//     FRAME**, and settled propellant does not migrate in ~20 ms. **State it; do not treat it as an
+//     ullage event, and do not "fix" it later on the belief that it is one.** (Verified by the overseer,
+//     2026-09-05; the ordering itself is pinned in `test/BoosterHostTest.cs`'s transition table.)
+//  3. **DEFECT 1 is not merely improbable — TODAY IT IS UNREACHABLE.** W34 verified it: `UllageReady` has
+//     **NO CALLER** anywhere in `plugin/src` outside this file. The FSM consumes the plain bool
+//     `BoosterInputs.Ullaged` (`pure/BoosterDescent.cs:821`, `:860`, `:996`); nothing supplies a
+//     `maxSettleS`, so the backstop disjunction cannot fire on any code path that exists. That is a
+//     stronger statement than "theoretical" and a weaker one than "fixed" — it is exactly true, and it
+//     stops being true the moment somebody routes the FSM through `UllageReady`.
+//
+// ============================================================================================
+// ⚠⚠ WHAT WOULD REOPEN THIS — **[[BB8]]**. Name it, because a closure without its reopening condition
+// is how a settled decision quietly becomes a wrong one.
+// ============================================================================================
+// The ruling rests on the exposure being **CHEAP**: a wrong "settled" spends an ignition on a light
+// RealFuels will refuse, and §B16.4 puts `TestFlightFailure_IgnitionFail` on this very part. That is
+// affordable only while the ignition budget is effectively unlimited — which nobody has measured.
+// **[[BB8]] measures `ignitions` per octaweb bank IN FLIGHT and is still TODO** (the install's own cfg
+// sets `%ignitions = -1`, unlimited; only a PRELAUNCH pad read ever returned 1).
+// ⇒ **If BB8 comes back FINITE, DEFECT 1's timeout backstop spending an ignition is a LIVE COST again,
+// and this ruling deserves a fresh owner look** — together with DEFECT 2's fail-open reader, which W34
+// put into the flight path on the strength of the same "it is cheap" argument.
+//
+// ============================================================================================
+// ⛔ C1.16 — **STRUCK, NOT DELETED.** Everything from here to the `END OF STRUCK TEXT` rule below is W5's
+// ORIGINAL ANALYSIS, kept **VERBATIM** and struck rather than removed: if a flight ever contradicts the
+// ruling above, this analysis is the fastest way back to the answer, and re-earning it costs more than
+// keeping it. Read every line between the two rules as **struck through** — it is a record of a closed
+// question, not a live warning. Only the two banner lines that called it OPEN were changed.
+// ============================================================================================
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~ BEGIN STRUCK TEXT (W5, 2026-09-05) ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Register **W5**, 2026-09-05. Restored from `8b81816^` — 2,502 B, byte-for-byte R1 §5.1's row — with
 // **no line of logic changed**. Every edit below this banner is a COMMENT. R1 §7.1 lists this file, with
 // `src/Ullage.cs`, under *"directly implicated — a named, located, **UNFIXED** defect"*, and §B12.8
@@ -12,6 +69,8 @@
 // ⚠ **NOTHING CALLS THIS FILE.** `src/BoosterHost.cs`'s `UllageSettled` hook is still null, so the FSM's
 // ullage gate is still held CLOSED and no phase commands thrust. W5 deliberately did NOT wire the
 // restored reader in: wiring it IS the fix, and the fix is an owner call (see DEFECT 2).
+//     ⤷ ✅ **SUPERSEDED BY W34, 2026-09-05.** The seam is armed; `bi.Ullaged` can now be true and the FSM
+//       can command a light. `UllageReady` itself still has no caller — see point 3 above.
 //
 // ---- THE FLIGHT ----------------------------------------------------------------------------
 // `Crew-2_20260829_144114` — *"Booster engine never lit (eng_ignited=0 whole descent) → ballistic →
@@ -33,6 +92,8 @@
 // ⇒ **This file is implicated, and it is independently defective on its own terms — the two defects
 // below are provable from the code alone. It is NOT established as that flight's proximate cause.**
 //
+// ✅ **DEFECT 1 — CLOSED AS THEORETICAL, owner ruling 2026-09-05 (W34). The heading and the whole
+// analysis below it are STRUCK, kept verbatim. Reopens on [[BB8]] — see the banner at the top.**
 // ============================================================================================
 // ⛔ DEFECT 1 — `UllageReady`'s BACKSTOP AUTHORISES A LIGHT INTO PROPELLANT IT KNOWS IS UNSETTLED
 // ============================================================================================
@@ -52,6 +113,9 @@
 // the backstop a distinct THIRD verdict the caller must handle explicitly, never a plain `true`.
 // ⛔ Not applied here: it changes flight behaviour and reverses a stated design intent (C1.12).
 //
+// ✅ **DEFECT 2 — CLOSED AS THEORETICAL, owner ruling 2026-09-05 (W34). The heading and the whole
+// analysis below it are STRUCK, kept verbatim. The reader was wired in AS-IS, fail-open included;
+// that was the ruling, not an oversight. Reopens on [[BB8]] — see the banner at the top.**
 // ============================================================================================
 // ⛔ DEFECT 2 — THE `stability` PARAMETER CANNOT SAY "I DO NOT KNOW", AND ITS SUPPLIER RELIES ON THAT
 // ============================================================================================
@@ -66,6 +130,12 @@
 // UNKNOWN must gate CLOSED in an ullage-modelled regime. This is why W5 left `BoosterHost.UllageSettled`
 // unwired: wiring today's reader would put a fail-open gate into the flight path, which is exactly the
 // quiet restore of a known-defective file that §B12.8 rider (b) forbids.
+//     ⤶ ✅ **OVERRULED BY THE OWNER, 2026-09-05 (W34):** option (1), leave the gate alone. `Ullage`
+//       does NOT gain a three-state answer, and `BoosterHost.UllageSettled` WAS wired — to this same
+//       fail-open reader, deliberately and unmodified. The proposal is kept because it is the fix
+//       that would be applied if [[BB8]] ever makes the exposure expensive.
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ END OF STRUCK TEXT (W5, 2026-09-05) ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Everything BELOW this rule is LIVE and unstruck.
 //
 // ============================================================================================
 // ⛔ THE RETRY POLICY — [[OCT11]] DECLINED IT AND ASSIGNED IT HERE. W5's ANSWER IS **NO RETRY**.
@@ -133,6 +203,13 @@ namespace DragonScreen
         // Ready to light: past the minimum separation coast AND (propellant settled OR the settle backstop hit).
         // ⛔ W5 DEFECT 1 lives on the next line — the `||` authorises a light at ANY stability once
         //    `settledS > maxSettleS`. Left in place on purpose; see the banner at the top of this file.
+        // ✅ **W34, 2026-09-05: CLOSED AS THEORETICAL on the owner's ruling ("1" — leave the gate alone).**
+        //    Left in place, now deliberately rather than provisionally. Two facts make it cheap and both
+        //    are verifiable from the tree: (a) **this method has NO CALLER** outside its own tests — the
+        //    FSM gates on the plain bool `BoosterInputs.Ullaged`, and nothing supplies a `maxSettleS`;
+        //    (b) the 3→1 profile never cold-starts the hoverslam engine, so no cold light happens low.
+        //    ⚠ **Reopens on [[BB8]]:** if the in-flight per-bank `ignitions` count comes back FINITE, the
+        //    backstop spending one is a live cost again. Do not "fix" this line without that ruling.
         public static bool UllageReady(double stability, double settledS, double minCoastS, double maxSettleS)
         {
             if (settledS <= minCoastS) return false;

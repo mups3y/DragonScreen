@@ -1,13 +1,23 @@
 // DragonScreen — Ullage  (KSP glue: read RealFuels propellant-settling state via reflection)
 // ============================================================================================
-// ⛔⛔ RESTORED AS AN **OPEN DEFECT**, AND **DELIBERATELY NOT WIRED IN**. ⛔⛔
+// ✅✅ **REVIEWED, CLOSED ON THE OWNER'S RULING OF 2026-09-05, AND WIRED IN (register W34).** ✅✅
+// **This file is no longer an open defect and is no longer unwired.** `src/BoosterHost.cs` arms
+// `UllageSettled` at bind and clears it at release, reading through `Ullage.Stable` — **AS-IS**.
 // ============================================================================================
-// Register **W5**, 2026-09-05. Restored from `8b81816^` — 3,917 B, byte-for-byte R1 §5.1's row — with
-// **no line of logic changed**; every edit below this banner is a COMMENT. R1 §7.1 lists this file, with
-// `pure/IgnitionGate.cs`, under *"directly implicated — a named, located, **UNFIXED** defect"*. The full
-// statement of the defect, the flight evidence, the honest "the proximate root is NOT proven" caveat and
-// the retry-policy answer are in **`pure/IgnitionGate.cs`'s header** — read it, it is the primary record
-// and is not duplicated here. This header states only what is specific to THIS file.
+// 🟢 **THE RULING, VERBATIM.** Of W5's two defects the owner said *"if you use the three engine mods
+// correctly it will not be an issue"*, then *"no 3-1"*, then — choosing between **(1)** leave the gate
+// alone (the profile handles it; close W5's defects as theoretical) and **(2)** fix the gate, don't touch
+// the profile — answered **"1"**. ⛔ **The overseer recommended (2) and was OVERRULED.** Recorded, not
+// hidden. The reasoning, the mechanics and the reopening condition are in **`pure/IgnitionGate.cs`'s
+// header** — that is the primary record and is not duplicated here.
+//
+// ⛔ **THE SEVEN FAIL-OPEN `return 1.0` PATHS STAY EXACTLY AS THEY ARE.** That is what ruling (1)
+// decided. W34 did NOT "improve" this reader on the way past: no three-state answer, no source-live flag,
+// no changed threshold. **Not one line of logic in this file changed** — W34's edits are comments.
+//
+// ⚠ **WHAT WOULD REOPEN IT — [[BB8]].** The fail-open is affordable only while a wasted ignition is
+// cheap, and nobody has measured the budget in flight. **If BB8 comes back FINITE, a reflection failure
+// reading as "settled" is a live cost and this ruling deserves a fresh owner look.**
 //
 // ⭐ **WHY IT IS RESTORED AT ALL, AND WHY THE REFLECTION STAYS.** C1.15 (evidence-gated mod-first) names
 // this file BY NAME as the already-installed source a screens pass had been ignoring: **RealFuels IS
@@ -16,6 +26,13 @@
 // stock analogue"*. So the quantity has a real mod source and needs no simulation, and §14.4(e)/(f) do
 // not apply. ⛔ The reflection is kept exactly as it was. Nothing here was replaced by a model.
 //
+// ============================================================================================
+// ⛔ C1.16 — **STRUCK, NOT DELETED.** Everything to the `END OF STRUCK TEXT` rule below is W5's original
+// analysis, kept **VERBATIM**: it is the fastest way back to the answer if a flight ever contradicts the
+// ruling, and re-earning it costs more than keeping it. Read it as a record of a CLOSED question, not a
+// live warning — in particular, the seam it says is null is now armed.
+// ============================================================================================
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~ BEGIN STRUCK TEXT (W5, 2026-09-05) ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // ============================================================================================
 // ⛔ THE DEFECT IN THIS FILE — IT FAILS **OPEN**, AND IT CANNOT REPORT THAT IT FAILED
 // ============================================================================================
@@ -35,6 +52,8 @@
 // (KNOWN-SETTLED / KNOWN-UNSETTLED / UNKNOWN) plus a "source live" flag, and let UNKNOWN gate CLOSED
 // wherever the regime models ullage. `Init()` already computes exactly the fact needed — `ok` is true
 // only when all three reflection handles resolved — it is simply not reported to anyone.
+//     ⤷ ✅ **OVERRULED, 2026-09-05 (W34):** option (1). The fix is NOT applied and the reader was wired
+//       in unchanged. Kept because it is the fix that would be applied if [[BB8]] makes this expensive.
 //
 // ============================================================================================
 // ⛔ AND THAT IS WHY THIS FILE IS NOT WIRED TO ANYTHING (W5's deliberate non-action)
@@ -46,6 +65,10 @@
 // putting a known-defective gate into the flight path inside the very task that restored it, which is
 // what §B12.8 rider (b) forbids. **The seam stays null. The gate stays closed. Nothing burns.**
 // Arming it is the PROPOSED FIX above plus an owner go — see W5's register line.
+//     ⤷ ✅ **SUPERSEDED BY W34, 2026-09-05.** The owner go arrived and the fix did not: `BoosterHost`
+//       arms the seam at bind with `ReadUllage`, which calls `Ullage.Stable` on the bank the current
+//       phase would light. Read that method's own summary for which bank is asked and why.
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ END OF STRUCK TEXT (W5, 2026-09-05) ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
 // ---- THE ORIGINAL HEADER, VERBATIM (C1.16 — reasoning is kept, never replaced) ---------------
 // RealFuels models ullage: after a coast in free-fall the propellant floats off the engine intake and an
@@ -110,6 +133,10 @@ namespace DragonScreen
         // Propellant stability [0..1] for the engine about to be lit. 1.0 = fully settled / not modelled.
         // ⛔ W5 DEFECT: every `return 1.0` below is a FAIL-OPEN — see the banner at the top of this file.
         //    Left exactly as it was; the fix is proposed there, not applied here.
+        // ✅ W34, 2026-09-05: **CLOSED AS THEORETICAL** on the owner's ruling ("1"), and this reader is now
+        //    WIRED (`BoosterHost.ReadUllage`). Still left exactly as it was — the fix stays proposed and
+        //    unapplied, deliberately. ⚠ Reopens on [[BB8]]: a FINITE in-flight ignition count makes a
+        //    wrong "settled" cost a real ignition. Do not change these returns without that ruling.
         public static double Stability(ModuleEngines e)
         {
             Init();
