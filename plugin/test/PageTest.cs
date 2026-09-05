@@ -55,6 +55,7 @@ public static class PageTest
         Scales();
         AlarmRouting();
         CabinLeakReachesTheCabin();   // S52 / H37: the leak reaches the cabin gauge
+        ChutePageTracksItsGates();    // S156 / MC-02: which chute gate is next
         Conic();
         OpenTrajectory();
         OrbitViewport();   // S43: the ORBIT plot's zoom + pan
@@ -734,6 +735,137 @@ public static class PageTest
         // rather than faking is that a model can fail convincingly and a constant cannot.
         Check("unpowered raises a condition", Worst2(Unpowered()) >= Severity.Caution,
               "got " + Worst2(Unpowered()));
+    }
+
+    // ---- S156 / QC MC-02: THE CHUTE PAGE SAYS WHICH GATE IS NEXT ------------------------------
+    // Six altitudes were printed and none of them said where the vehicle was among them, on the one
+    // screen a crew reads while descending through them. Read off the DISPLAY LIST rather than off
+    // the private helper, because what matters is what is drawn.
+    //
+    // ⛔ AND THE FIRST CHECK IS THE ONE THAT MATTERS MOST: it PARSES each gate label and asserts the
+    // parsed kilometres equal the GateM the page compares against. That is what makes S49's §1.4
+    // caution enforceable - "do NOT fix the page's (TBC) altitudes to match MissionPhase's FSM
+    // constants (5486/1830); they are intentionally two different things". If someone edits a label
+    // to "reconcile" it, or edits GateM to match the FSM, this fails.
+    static void ChutePageTracksItsGates()
+    {
+        // 1. Every gate the page DRAWS is a gate it can COMPARE. Parse the drawn strings.
+        //    A gate label looks like "10.6 km (TBC)   ·   6 nm   ·   drogues".
+        double[] want = { 10600, 10000, 2500, 2200, 5500, 1600 };
+        System.Collections.Generic.List<double> found = new System.Collections.Generic.List<double>();
+        foreach (DrawCmd t in ChuteText(50000.0))          // far above every gate: all Pending
+        {
+            string str = t.Str;
+            if (str == null || str.IndexOf(" km (TBC)") < 0) continue;
+            int sp = str.IndexOf(" km (TBC)");
+            double km;
+            if (double.TryParse(str.Substring(0, sp), System.Globalization.NumberStyles.Float,
+                                System.Globalization.CultureInfo.InvariantCulture, out km))
+                found.Add(km * 1000.0);
+        }
+        Check("S156 the page draws six gate rows", found.Count == 6, "found " + found.Count);
+        bool same = found.Count == want.Length;
+        for (int i = 0; same && i < want.Length; i++) if (Math.Abs(found[i] - want[i]) > 0.5) same = false;
+        Check("S156 every gate LABEL parses to the metres the page compares against", same,
+              "labels gave " + string.Join(",", found.ConvertAll(d => d.ToString("0")).ToArray()));
+
+        // ⛔ THE §1.4 TRIPWIRE. It has to be BEHAVIOURAL, and the first version of it was not:
+        // it compared the parsed labels against a hardcoded array, which cannot see an edit to the
+        // GateM the page actually compares against. Mutation R ("reconcile" the mains gate to
+        // MissionPhase's 1830 while the label still reads 1.6 km) PASSED it. This is the fixed form.
+        //
+        // 1700 m sits BETWEEN the page's own 1600 and the FSM's 1830, so the two answers differ:
+        // against 1600 the mains gate has NOT been passed; against 1830 it has. Nothing else can
+        // distinguish them from outside, and that is exactly the confusion S49 warns about.
+        Check("S156 the page's mains gate is still the PAGE's 1600 m, not MissionPhase's 1830",
+              !Same(GateColourAt(1700.0, "1.6"), DragonPalette.Text7),
+              "at 1700 m the 1.6 km gate is drawn as PASSED, so it is being compared against 1830 - "
+                  + "the page's (TBC) altitudes and the FSM constants are deliberately different (S49)");
+        Check("S156 ...and it IS passed once genuinely below it",
+              Same(GateColourAt(1500.0, "1.6"), DragonPalette.Text7), "");
+
+        // The same shape for the label side: the printed number must still be the page's own.
+        Check("S156 the mains gate LABEL still prints the page's 1.6 km",
+              found.Count == 6 && Math.Abs(found[5] - 1600.0) < 0.5,
+              "labels gave " + string.Join(",", found.ConvertAll(d => d.ToString("0")).ToArray()));
+
+        // 2. Three distinguishable states, and the right one moves as the vehicle descends.
+        //    High section gates: 10600, 10000, 2500, 2200.
+        Check("S156 far above every gate, the next gate is the highest one",
+              CurrentGateKm(50000.0) == "10.6", "got " + CurrentGateKm(50000.0));
+        Check("S156 below 10.6 km, the next gate is 10.0",
+              CurrentGateKm(10200.0) == "10.0", "got " + CurrentGateKm(10200.0));
+        Check("S156 below 10.0 km, the next gate is 2.5",
+              CurrentGateKm(5000.0) == "2.5", "got " + CurrentGateKm(5000.0));
+        Check("S156 below 2.5 km, the next gate is 2.2",
+              CurrentGateKm(2300.0) == "2.2", "got " + CurrentGateKm(2300.0));
+        Check("S156 below every gate, none is current - they are all behind",
+              CurrentGateKm(500.0) == "", "got " + CurrentGateKm(500.0));
+
+        // 3. Passed gates are drawn recessive, and are DISTINCT from pending ones - the whole point.
+        Check("S156 a passed gate and a pending gate do not draw the same",
+              !Same(GateColourAt(2300.0, "10.6"), GateColourAt(50000.0, "10.6")),
+              "passed and pending are the same colour, so the page still says nothing");
+        Check("S156 the current gate is drawn in Accent",
+              Same(GateColourAt(50000.0, "10.6"), DragonPalette.Accent), "");
+        Check("S156 a pending gate is not",
+              !Same(GateColourAt(50000.0, "2.5"), DragonPalette.Accent), "");
+
+        // 4. ⛔ NO VALID STATE -> NOTHING IS CLAIMED PASSED. S22's rule on this page.
+        int accents = 0;
+        foreach (DrawCmd t in ChuteTextRaw(500.0, false))
+            if (t.Str != null && t.Str.IndexOf(" km (TBC)") >= 0 && Same(t.Colour, DragonPalette.Accent))
+                accents++;
+        Check("S156 on a dead feed no gate is current", accents == 0, "found " + accents);
+        // ⚠ Stated directly rather than by comparing against a live render: at 50 km the 10.6 gate is
+        // CURRENT, so "the dead feed looks like the far-above case" is false for the wrong reason.
+        // What must hold is that a dead feed shows NEITHER verdict - not current, not passed.
+        Rgba dead = GateColourAt2(500.0, false, "10.6");
+        Check("S156 ...and none is drawn as passed either - a dead feed shows no verdict at all",
+              !Same(dead, DragonPalette.Accent) && !Same(dead, DragonPalette.Text7),
+              "a dead feed is showing a verdict it cannot know");
+        Check("S156 ...it draws exactly what an untracked gate always drew",
+              Same(dead, DragonPalette.Text6), "");
+    }
+
+    static System.Collections.Generic.List<DrawCmd> ChuteText(double radarM)
+    { return ChuteTextRaw(radarM, true); }
+
+    static System.Collections.Generic.List<DrawCmd> ChuteTextRaw(double radarM, bool valid)
+    {
+        PageState cs = new PageState();
+        cs.Valid = valid;
+        cs.Steps.RadarAltitude = radarM;
+        DisplayList d = new DisplayList(ManualChuteDeployPage.Commands + 64);
+        ManualChuteDeployPage.Build(d, 2560, 1406, cs, MapProjection.Default());
+        System.Collections.Generic.List<DrawCmd> outp = new System.Collections.Generic.List<DrawCmd>();
+        for (int i = 0; i < d.Count; i++) if (d.At(i).Kind == DrawKind.Text) outp.Add(d.At(i));
+        return outp;
+    }
+
+    /// <summary>The "10.6"-style prefix of whichever gate is drawn in Accent, or "" if none is.</summary>
+    static string CurrentGateKm(double radarM)
+    {
+        foreach (DrawCmd t in ChuteText(radarM))
+        {
+            if (t.Str == null || t.Str.IndexOf(" km (TBC)") < 0) continue;
+            if (!Same(t.Colour, DragonPalette.Accent)) continue;
+            return t.Str.Substring(0, t.Str.IndexOf(" km (TBC)"));
+        }
+        return "";
+    }
+
+    /// <summary>Colour equality, component-wise. Rgba is four floats and has no operator ==.</summary>
+    static bool Same(Rgba a, Rgba b)
+    { return Math.Abs(a.R-b.R)<1e-6f && Math.Abs(a.G-b.G)<1e-6f && Math.Abs(a.B-b.B)<1e-6f && Math.Abs(a.A-b.A)<1e-6f; }
+
+    static Rgba GateColourAt(double radarM, string kmPrefix) { return GateColourAt2(radarM, true, kmPrefix); }
+
+    static Rgba GateColourAt2(double radarM, bool valid, string kmPrefix)
+    {
+        foreach (DrawCmd t in ChuteTextRaw(radarM, valid))
+            if (t.Str != null && t.Str.StartsWith(kmPrefix + " km (TBC)")) return t.Colour;
+        return new Rgba(0f,0f,0f,0f);
     }
 
     // ---- S52 / S49 H37: THE CABIN LEAK REACHES THE CABIN --------------------------------------

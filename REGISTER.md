@@ -7108,7 +7108,7 @@ group — which is the point of splitting, since three of the five cautions appl
 TRACKING is a readout and Part-A-achievable now, while a step's ACTION BUTTON is actuation and stays Part
 B's (§14.4(a), unchanged by §14.4(f)); and the §B-side sequencing notes to [[S150]] and [[S151]].
 
-### S156 [S] Manual Chute Deploy: six live altitude gates and nothing says which is next — **DOING** — [H22 + QC `MC-02`; split 1 of 5 from [[S55]], and its cleanest]
+### S156 [S] Manual Chute Deploy: six live altitude gates and nothing says which is next — **DONE 2026-09-06** — [and the §1.4 tripwire is now **behavioural**, because mutation testing caught that my first version of it could not fail] — [H22 + QC `MC-02`; split 1 of 5 from [[S55]], and its cleanest]
 - **The finding.** The gates (`10.6 km`, `5.5 km`, `1.6 km`…) are literals in a `Step[]`, and **the row tint
   is a function of a compile-time `Gate` flag, not of `s.Altitude`. Nothing compares the two.** The strip
   above the steps already draws altitude live, on the same page, in the same frame.
@@ -7121,6 +7121,62 @@ B's (§14.4(a), unchanged by §14.4(f)); and the §B-side sequencing notes to [[
   the same string) is a **reporting** matter for the entry, not a licence to edit.
 - **DONE when:** each row reads passed / current / pending from `s.AltitudeM` against its own gate, the
   no-data case is honest, a preview shows all three states, and a test pins that no gate constant moved.
+
+#### ✅ DONE 2026-09-06
+
+**What landed.** `Step` gains `GateM` — the altitude the row's label already states, as a number the page
+can compare. `GateStateOf` returns Pending / Current / Passed from `s.Steps.RadarAltitude`, and the row
+draws **Accent** (current) · **Faint** (passed) · **Dim** (pending, exactly what every gate looked like
+before). Files: `plugin/src/pure/ManualChuteDeployPage.cs`, `plugin/test/PageTest.cs`.
+
+⭐ **THE SOURCE WAS NAMED IN THE CODE ALREADY, so nothing was chosen.** `ManualChuteDeployPage.cs:249`,
+left by [[S105]]: *"If a section marker is ever meant to carry STATE (has this gate been passed?), the
+source for that is `s.Steps.RadarAltitude` against the section's own gate altitudes — which is QC MC-02, a
+different finding. It must be COMPUTED then, not re-hardcoded."* That is this finding, that is the source
+used, and it is computed. ⚠ **`RadarAltitude`, not `AltitudeM`** — height above the surface is the quantity
+a parachute gate is stated in; `AltitudeM` is orbital. It is live from `v.radarAltitude`
+(`VesselData.cs:415`).
+
+⛔ **THE LABELS ARE NOT TOUCHED, AND `GateM` TRANSCRIBES THE PAGE'S NUMBER, NEVER THE FSM'S.**
+`SCREEN_INVENTORY.md` records that the page's "(TBC)" altitudes and `MissionPhase`'s constants
+(`5486`/`1830`) are **intentionally two different things** — SpaceX's own placeholder text kept verbatim.
+The page still prints `1.6 km` for mains where `MainAltitude` is 1830 m; that is **reported, not
+reconciled**.
+
+**⭐ MUTATION TESTING CAUGHT A CHECK OF MINE THAT COULD NOT FAIL — the second time this run, and this one
+was the important check.** I wrote the §1.4 tripwire as *"parse each gate label and assert it equals the
+`GateM` the page compares against"*. **What I actually built compared the parsed labels against a hardcoded
+array**, which cannot see an edit to `GateM` at all. **Mutation R — "reconcile" the mains gate to the FSM's
+1830 while leaving the label reading 1.6 km, i.e. precisely the mistake S49 warns about — PASSED it.**
+
+The fixed tripwire is **behavioural**: at **1700 m**, which sits between the page's 1600 and the FSM's
+1830, the two answers differ — against 1600 the gate has not been passed, against 1830 it has. Nothing else
+can tell them apart from outside, and mutation R now fails with the reason spelled out.
+
+| mutation | result |
+|---|---|
+| **R** — `GateM` "reconciled" to `MissionPhase`'s 1830, label untouched | ⛔ **PASSED at first** (the defect above); after the fix, **FAILS**: *"at 1700 m the 1.6 km gate is drawn as PASSED, so it is being compared against 1830"* |
+| **S** — revert to the old single-colour gate drawing (the original defect) | **7 FAIL**, including *"a passed gate and a pending gate do not draw the same — passed and pending are the same colour, so the page still says nothing"* |
+
+⚠ **ONE ROW CHANGED CLASS, AND IT IS WORTH NAMING.** The `5.5 km` row was `Gate = false`, so it drew as an
+ACTION row (White, size 28) — **the only gate on the page that did**. It has a button because the real page
+draws one ("Monitor altitude", which names no command and therefore commands nothing, per §1.4), but the row
+is a 5.5 km gate like the others. It is now a gate and tracks like one; its button is untouched.
+
+⚠ **BOTH SECTIONS SHOW THEIR OWN NEXT GATE, DELIBERATELY.** High Altitude and Standard Altitude Chute Deploy
+are **alternative profiles**, not one sequence, so each is its own ladder with its own position. The preview
+shows `10.6 km` and `5.5 km` both in accent, which is each section's first un-passed gate. Collapsing them
+to one "current gate" would assert a profile choice the page does not make and the build cannot know.
+
+⛔ **NO VERDICT ON A DEAD FEED.** `!s.Valid` → every gate Pending, drawn exactly as an untracked gate always
+was. Pinned by two checks (not current, and not passed) — S22's rule and S31's guardrail on this page.
+⛔ **Nothing here commands anything** (§14.4(a)): the DEPLOY / FIRE PYRO buttons are untouched.
+
+**Verified (C1.3).** `python plugin/build.py test` **green — ALL SUITES PASSED**, page suite **1005 → 1021
+checks**. `python plugin/build.py preview` re-rendered; **`ui_manualchute_descent.png` inspected**, step
+ladder cropped 1:1: `10.6 km` and `5.5 km` in accent as each section's next gate, `10.0 / 2.5 / 2.2 / 1.6`
+dim, and every action row unchanged. **C1.16/G12: 0 comment prose lines lost.** No `install`, no glass, no
+`git push`.
 
 ### S157 [S] `EntryPage.Build(dl, w, h)` takes no `PageState` at all — **TODO** — [H31; split 2 of 5 from [[S55]]]
 - **The finding.** *"Nothing live at all, structurally"* — the page prints parachute-deployment altitudes

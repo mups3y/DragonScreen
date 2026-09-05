@@ -51,9 +51,47 @@ namespace DragonScreen
 
         // one procedure step: label · action (empty = an altitude-gate context row, drawn dim, no button)
         // · Cmd = the console command this step IS, or None for a step that names no command (T14).
-        struct Step { public string Label, Act; public bool Gate; public PanelCommand Cmd;
-            public Step(string l, string a, bool g){ Label=l; Act=a; Gate=g; Cmd=PanelCommand.None; }
-            public Step(string l, string a, PanelCommand c){ Label=l; Act=a; Gate=false; Cmd=c; } }
+        // ---- S156 / QC MC-02: A GATE ROW CARRIES ITS OWN ALTITUDE, IN METRES ----
+        // `GateM` is the altitude the row's LABEL already states, as a number the page can compare
+        // against. It is 0 on a non-gate row.
+        //
+        // ⛔ WHY IT IS A SECOND FIELD AND NOT PARSED OUT OF THE LABEL. Parsing is fragile - the label
+        // is real reference copy carrying "(TBC)", a bullet, a range in nautical miles and a chute
+        // name - and a parser that silently mis-reads one gives a wrong verdict on the page a crew
+        // reads while descending. Two fields can disagree, so `ManualChuteGatesTest` PARSES THE LABEL
+        // AND ASSERTS IT EQUALS `GateM` for every row. That check is the reason this is safe, and it
+        // is also what makes the §1.4 caution below enforceable rather than merely written down.
+        //
+        // ⛔ AND THE LABELS ARE NOT TOUCHED. `SCREEN_INVENTORY.md` records that the page's "(TBC)"
+        // altitudes and MissionPhase's FSM constants (5486 / 1830) are INTENTIONALLY two different
+        // things - SpaceX's own placeholder text, kept verbatim. `GateM` therefore transcribes THE
+        // PAGE's number, never the FSM's. The page prints 1.6 km for mains where MainAltitude is
+        // 1830 m; that discrepancy is REPORTED, not reconciled, and fixing it is not this line's.
+        struct Step { public string Label, Act; public bool Gate; public PanelCommand Cmd; public double GateM;
+            public Step(string l, string a, bool g){ Label=l; Act=a; Gate=g; Cmd=PanelCommand.None; GateM=0.0; }
+            public Step(string l, string a, double gateM){ Label=l; Act=a; Gate=true; Cmd=PanelCommand.None; GateM=gateM; }
+            public Step(string l, string a, PanelCommand c){ Label=l; Act=a; Gate=false; Cmd=c; GateM=0.0; } }
+
+        /// <summary>Where the vehicle is against one section's ladder of gates.</summary>
+        enum GateState { Pending, Current, Passed }
+
+        /// <summary>The state of gate row `i` in `steps`, given the live radar altitude.
+        ///
+        /// Descending, so a gate is PASSED once the vehicle is at or below it, and the CURRENT gate is
+        /// the first one in the section that has not been passed - the arrays are already in
+        /// descending order, which is the order the crew fly them.
+        ///
+        /// ⛔ `live` false -> everything Pending. A page that cannot read the altitude must not claim
+        /// a gate has been passed; that is S22's rule and S31's guardrail, and it is why the verdict
+        /// is computed here rather than stored.</summary>
+        static GateState GateStateOf(Step[] steps, int i, double radarM, bool live)
+        {
+            if (!live || !steps[i].Gate) return GateState.Pending;
+            if (radarM <= steps[i].GateM) return GateState.Passed;
+            for (int k = 0; k < i; k++)
+                if (steps[k].Gate && radarM > steps[k].GateM) return GateState.Pending;
+            return GateState.Current;
+        }
 
         // The step→command map. Read off the step's OWN LABEL against §4's modelled console inventory —
         // no interpretation: "ENABLE BACKUP PYROS" is the plate's ENABLE BACKUP PYROS, "DEPLOY DROGUES" is
@@ -66,25 +104,29 @@ namespace DragonScreen
         const PanelCommand Pyro    = PanelCommand.FirePyro;
 
         static readonly Step[] High = {
-            new Step("10.6 km (TBC)   ·   6 nm   ·   drogues", "", true),
+            new Step("10.6 km (TBC)   ·   6 nm   ·   drogues", "", 10600.0),
             new Step("ENABLE BACKUP PYROS", "Arm and verify", Pyros),
             new Step("DEPLOY DROGUES", "Execute", Drogues),
-            new Step("10.0 km (TBC)   ·   6 nm   ·   drogues", "", true),
+            new Step("10.0 km (TBC)   ·   6 nm   ·   drogues", "", 10000.0),
             new Step("FIRE PYRO", "Execute", Pyro),
-            new Step("2.5 km (TBC)   ·   6 nm   ·   mains", "", true),
+            new Step("2.5 km (TBC)   ·   6 nm   ·   mains", "", 2500.0),
             new Step("ENABLE BACKUP PYROS", "Arm and verify", Pyros),
             new Step("DEPLOY MAINS", "Execute", Mains),
-            new Step("2.2 km (TBC)   ·   6 nm   ·   mains", "", true),
+            new Step("2.2 km (TBC)   ·   6 nm   ·   mains", "", 2200.0),
             new Step("FIRE PYRO", "Execute", Pyro) };
 
         static readonly Step[] Standard = {
             // "Monitor altitude" is the one action here that names no command — the crew watching
             // the ALTITUDE the live strip above already draws. It has a button because the real page
             // draws one; it commands nothing because the words on it do not.
-            new Step("5.5 km (TBC)   ·   6 nm   ·   drogues", "Monitor altitude", false),
+            // ⚠ S156: this row was `Gate=false`, so it drew as an ACTION row rather than a gate -
+            // the only gate on the page that did. It has a button because the real page draws one
+            // ("Monitor altitude", which names no command and therefore commands nothing), but the
+            // row is a 5.5 km gate like the others and now tracks like one.
+            new Step("5.5 km (TBC)   ·   6 nm   ·   drogues", "Monitor altitude", 5500.0),
             new Step("ENABLE BACKUP PYROS", "Arm and verify", Pyros),
             new Step("DEPLOY DROGUES", "Latch", Drogues),
-            new Step("1.6 km (TBC)   ·   6 nm   ·   mains", "", true),
+            new Step("1.6 km (TBC)   ·   6 nm   ·   mains", "", 1600.0),
             new Step("FIRE PYRO", "Execute", Pyro),
             new Step("ENABLE BACKUP PYROS", "Arm and verify", Pyros),
             new Step("DEPLOY MAINS", "Execute", Mains) };
@@ -236,6 +278,11 @@ namespace DragonScreen
             // see the geometry block above. `act` counts off the Actions array in the same order it was
             // built, which is how a drawn button knows which entry it is and therefore whether it is lit.
             int act = 0;
+            // S156: read once, used by every gate row in both sections. RadarAltitude is height above
+            // the surface, which is the quantity a parachute gate is stated in - not `AltitudeM`,
+            // which is orbital. `Steps` is the same StepInputs the ascent machine reads.
+            double radarM = s.Steps.RadarAltitude;
+            bool gatesLive = s.Valid;
             void Section(string title, Step[] steps, float[] rowY, float titleY)
             {
                 // ---- S105 / QC MC-01: A SECTION BULLET, NOT AN ALARM ----
@@ -254,7 +301,30 @@ namespace DragonScreen
                 {
                     Step st = steps[i];
                     float y = rowY[i];
-                    L(st.Label, 320, y, st.Gate ? 26 : 28, st.Gate ? Dim : White);
+                    // ---- S156 / QC MC-02: WHICH GATE IS NEXT, COMPUTED FROM THE LIVE ALTITUDE ----
+                    // Every gate used to draw identically `Dim`, so the page named six altitudes and
+                    // said nothing about where the vehicle was among them - on the one screen a crew
+                    // reads while actually descending through them. The altitude is `radarM`, live
+                    // from `v.radarAltitude`, and the same strip at the top of this page already
+                    // draws it.
+                    //
+                    // Three states, from the palette this page already uses - no new colour, and no
+                    // red, since none of this is a fault (§14.4(a)):
+                    //     PASSED   Faint  - behind us, still legible, deliberately recessive
+                    //     CURRENT  Accent - the gate being flown, the one thing worth finding fast
+                    //     PENDING  Dim    - exactly what every gate looked like before this
+                    // ⛔ With no valid state every gate is PENDING, so the page cannot claim a gate
+                    // was passed on a dead feed. That is the whole of S22's rule applied here.
+                    Rgba rowCol;
+                    if (st.Gate)
+                    {
+                        GateState g = GateStateOf(steps, i, radarM, gatesLive);
+                        rowCol = (g == GateState.Current) ? Accent
+                               : (g == GateState.Passed)  ? Faint
+                                                          : Dim;
+                    }
+                    else rowCol = White;
+                    L(st.Label, 320, y, st.Gate ? 26 : 28, rowCol);
                     if (st.Act.Length > 0)
                     {
                         // §14.4(a): lit = BRIGHT (accent plate, label knocked out), unlit = the plain
