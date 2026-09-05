@@ -15208,7 +15208,13 @@ The full mapping — which hole, which finding, which are duplicates of each oth
 `docs/BACKLOG_RECONCILIATION.md`. **No new defect was discovered here and none was fixed.**
 ⚠ Each line names its sources so the next chat reads the audit's own detail rather than this summary.
 
-### S126 [S] The Cover's two TARGET readouts are baked pictures of the same wrong value — **HELD 2026-09-06 — gated on [[S153]] (R-01)** —
+### S126 [S] The Cover's two TARGET readouts are baked pictures of the same wrong value — **TODO — un-held 2026-09-06, the R-01 policy exists** —
+✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set
+one (SPLIT BY CONTENT TYPE — see S153). ⛔ **The condition that replaces it is mechanical, not a wait:**
+any text this line ADDS must be drawn at **`Typography.MinDesignFor(w, sc)` or above** if it is LIVE, or
+`DenseDesignFor` if it is static reference. `LegibilityFloorTest`'s per-page ratchet fails the build on a
+new sub-floor element, so this cannot be got wrong quietly. This line does NOT wait for its page to be
+re-laid by the S153a–f splits.
 ⛔ **HELD 2026-09-06 — GATED ON [[S153]] (`R-01`), and this is [[S125]]'s own finding applied to itself.**
 This line **ADDS TEXT** to a Figma-era page, and `R-01` — verified STILL OPEN by QC on 2026-09-06 — is that
 **every sampled text element on every Figma-era page is below the measured legibility floor at the shipped
@@ -15332,7 +15338,13 @@ is answered this is buildable as written. [H3 + QC `C-14`; TIER 2: real defect]
   contradicting it — but **that reading is the overseer's to confirm, not a build chat's (C1.8).**
 - **DONE when:** assessed, the collision resolved in writing, and the export retrieved for A-05/A-06.
 
-### S136 [S] `UiPage.Procedure` and `UiPage.Cabin` are flat images — 8 draw calls for a whole screen — **HELD 2026-09-06 — gated on [[S153]] (R-01); its Procedure half is additionally TIER-3** —
+### S136 [S] `UiPage.Procedure` and `UiPage.Cabin` are flat images — 8 draw calls for a whole screen — **TODO — un-held 2026-09-06; its Procedure half is still TIER-3** —
+✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set
+one (SPLIT BY CONTENT TYPE — see S153). ⛔ **The condition that replaces it is mechanical, not a wait:**
+any text this line ADDS must be drawn at **`Typography.MinDesignFor(w, sc)` or above** if it is LIVE, or
+`DenseDesignFor` if it is static reference. `LegibilityFloorTest`'s per-page ratchet fails the build on a
+new sub-floor element, so this cannot be got wrong quietly. This line does NOT wait for its page to be
+re-laid by the S153a–f splits.
 ⛔ **HELD 2026-09-06 — GATED ON [[S153]] (`R-01`), and this is [[S125]]'s own finding applied to itself.**
 This line **ADDS TEXT** to a Figma-era page, and `R-01` — verified STILL OPEN by QC on 2026-09-06 — is that
 **every sampled text element on every Figma-era page is below the measured legibility floor at the shipped
@@ -15355,7 +15367,13 @@ is answered this is buildable as written. [H13 + QC `F-02`; TIER 2]
 - **DONE when:** Cabin is element-by-element off live state with a 2560 preview, and Procedure carries a
   written owner question rather than an invented body.
 
-### S137 [S] The ALERTS view is a one-word summary, and the FDIR bar beside it is a fake three-position gauge — **HELD 2026-09-06 — gated on [[S153]] (R-01)** —
+### S137 [S] The ALERTS view is a one-word summary, and the FDIR bar beside it is a fake three-position gauge — **TODO — un-held 2026-09-06, the R-01 policy exists** —
+✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set
+one (SPLIT BY CONTENT TYPE — see S153). ⛔ **The condition that replaces it is mechanical, not a wait:**
+any text this line ADDS must be drawn at **`Typography.MinDesignFor(w, sc)` or above** if it is LIVE, or
+`DenseDesignFor` if it is static reference. `LegibilityFloorTest`'s per-page ratchet fails the build on a
+new sub-floor element, so this cannot be got wrong quietly. This line does NOT wait for its page to be
+re-laid by the S153a–f splits.
 ⛔ **HELD 2026-09-06 — GATED ON [[S153]] (`R-01`), and this is [[S125]]'s own finding applied to itself.**
 This line **ADDS TEXT** to a Figma-era page, and `R-01` — verified STILL OPEN by QC on 2026-09-06 — is that
 **every sampled text element on every Figma-era page is below the measured legibility floor at the shipped
@@ -15376,7 +15394,13 @@ is answered this is buildable as written. [H16 + QC `S-02`; TIER 2]
 - **DONE when:** the view lists real discrete events, the dead-feed case cannot read `NOMINAL`, the fake bar
   is gone or driven, and previews show nominal / cautioned / no-feed.
 
-### S138 [S] 23 of the 36 subsystem state words are still literals — **HELD 2026-09-06 — gated on [[S153]] (R-01)** —
+### S138 [S] 23 of the 36 subsystem state words are still literals — **TODO — un-held 2026-09-06, the R-01 policy exists** —
+✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set
+one (SPLIT BY CONTENT TYPE — see S153). ⛔ **The condition that replaces it is mechanical, not a wait:**
+any text this line ADDS must be drawn at **`Typography.MinDesignFor(w, sc)` or above** if it is LIVE, or
+`DenseDesignFor` if it is static reference. `LegibilityFloorTest`'s per-page ratchet fails the build on a
+new sub-floor element, so this cannot be got wrong quietly. This line does NOT wait for its page to be
+re-laid by the S153a–f splits.
 ⛔ **HELD 2026-09-06 — GATED ON [[S153]] (`R-01`), and this is [[S125]]'s own finding applied to itself.**
 This line **ADDS TEXT** to a Figma-era page, and `R-01` — verified STILL OPEN by QC on 2026-09-06 — is that
 **every sampled text element on every Figma-era page is below the measured legibility floor at the shipped
@@ -15624,7 +15648,13 @@ about when to interrupt — the defect [[S13]] closed for the *wording* and this
 
 **Verified (C1.3).** **Nothing built, nothing changed.** No `install`, no glass, no `git push`.
 
-### S145 [S] NavOrbitPlot's four range rings carry no scale — **HELD 2026-09-06 — gated on [[S153]] (R-01)** — [H35; TIER 3]
+### S145 [S] NavOrbitPlot's four range rings carry no scale — **TODO — un-held 2026-09-06, the R-01 policy exists** — [H35; TIER 3]
+✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set
+one (SPLIT BY CONTENT TYPE — see S153). ⛔ **The condition that replaces it is mechanical, not a wait:**
+any text this line ADDS must be drawn at **`Typography.MinDesignFor(w, sc)` or above** if it is LIVE, or
+`DenseDesignFor` if it is static reference. `LegibilityFloorTest`'s per-page ratchet fails the build on a
+new sub-floor element, so this cannot be got wrong quietly. This line does NOT wait for its page to be
+re-laid by the S153a–f splits.
 ⛔ **HELD 2026-09-06 — GATED ON [[S153]] (`R-01`), and this is [[S125]]'s own finding applied to itself.**
 This line **ADDS TEXT** to a Figma-era page, and `R-01` — verified STILL OPEN by QC on 2026-09-06 — is that
 **every sampled text element on every Figma-era page is below the measured legibility floor at the shipped
@@ -15669,7 +15699,13 @@ deciding deliberately rather than discovering on the glass.
 - **DONE when:** the power pair reads two real buses, and every remaining duplicate is either justified in
   the entry or handed to the owner as a question.
 
-### S147 [S] The bottom status bar's live text is baked on every page — **HELD 2026-09-06 — gated on [[S153]] (R-01)** — [H40; TIER 2: 35 pages at once]
+### S147 [S] The bottom status bar's live text is baked on every page — **TODO — un-held 2026-09-06, the R-01 policy exists** — [H40; TIER 2: 35 pages at once]
+✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set
+one (SPLIT BY CONTENT TYPE — see S153). ⛔ **The condition that replaces it is mechanical, not a wait:**
+any text this line ADDS must be drawn at **`Typography.MinDesignFor(w, sc)` or above** if it is LIVE, or
+`DenseDesignFor` if it is static reference. `LegibilityFloorTest`'s per-page ratchet fails the build on a
+new sub-floor element, so this cannot be got wrong quietly. This line does NOT wait for its page to be
+re-laid by the S153a–f splits.
 ⛔ **HELD 2026-09-06 — GATED ON [[S153]] (`R-01`), and this is [[S125]]'s own finding applied to itself.**
 This line **ADDS TEXT** to a Figma-era page, and `R-01` — verified STILL OPEN by QC on 2026-09-06 — is that
 **every sampled text element on every Figma-era page is below the measured legibility floor at the shipped
@@ -15888,7 +15924,7 @@ line does not pretend to have reproduced it.
 `python plugin/build.py test` green (unchanged tree). ⛔ `docs/QC_FINDINGS.md` **not edited** (QC's file);
 the verdict lives here, where the register can act on it. No `install`, no glass, no `git push`.
 
-### S153 [O] `R-01` — every sampled text element on every Figma-era page is below the measured legibility floor — **DOING** — [QC `R-01`; the HELD is LIFTED — the owner set the policy 2026-09-06]
+### S153 [O] `R-01` — every sampled text element on every Figma-era page is below the measured legibility floor — **DONE 2026-09-06 — policy set, population COUNTED (868, not 17), expressed as code, ratcheted, and split into [[S153a]]–[[S153f]]** — [QC `R-01`]
 - **The finding.** At the shipped width, **every** sampled text element across nine Figma-era pages measures
   below `Typography.MinFor(panelW)` — the floor the owner measured himself on glass 2026-08-05.
 - ⭐ **AND RAISING THE RESOLUTION DID NOT HELP, WHICH IS THE WHOLE POINT.** R-02 (landed 2026-09-06) proved
@@ -15922,6 +15958,131 @@ failure this rule was added after. The convention is QC's own, in `docs/QC_FINDI
 answers are quoted verbatim; where he chose from presented options the option is named as a selection,
 not as words he wrote."*
 
+#### ⭐ THE FIRST THING THIS FOUND: QC's SEVENTEEN WERE A SAMPLE, AND THE POPULATION IS **868**
+
+R-01 sampled **17 elements across nine pages** and labelled it a sample. Walked exhaustively over every
+non-placeholder page at the shipped 2560×1406, on the same `Leo()` fixture the rest of the floor suite
+uses:
+
+| | count | |
+|---|---|---|
+| text draws on Figma-era pages | **914** | 25 page-views, 20 page FILES |
+| clear the glanceable floor (32 px) | **46** | **5.0 %** |
+| in the `Dense`..floor band (24–32 px) | **43** | compliant **only if classified STATIC** |
+| below even `Dense` | **825** | 90.3 % |
+| **below the floor** | **868** | the real R-01 |
+
+**Not one page is clean.** The worst single page-view is `VehiclePropulsion` at **114** below-floor draws.
+
+⭐ **AND THE FIRST CROSS-CHECK WAS AGAINST QC's OWN NUMBERS, because a census that disagreed with them
+would be the census that was wrong.** Cover rail labels **21.3 px**, `CAMERA` **14.0**, audio channel
+labels **20.0**, HUD `MANUAL`/`DOCKING` **23.1** — every one matches R-01's independently verified
+2560 table exactly.
+
+#### ⛔ THE MEASUREMENT THAT CHANGES WHAT THE POLICY BUYS — and it is not what it looks like
+
+"Permit STATIC reference tables to sit at `Typography.Dense`" reads like a pardon. **It is a raise.** The
+owner's own named static examples are *below* `Dense` today:
+
+| named as STATIC in the ruling | drawn | `Dense` floor @2560 | |
+|---|---|---|---|
+| the Cover's reference / timeline rows | `Z(26)` = **17.3 px** | 24 px | **72 % of the static floor** |
+| the docking pad captions | `Z(22)` = **14.6 px** | 24 px | **61 %** |
+
+⚠ **So the static allowance changes the verdict for 43 elements out of 868 — 5 %.** The other 825 have to
+move whichever way they are classified. **This is reported, not re-litigated (C1.8): the ruling stands and
+this line is built to it.** It is recorded because the size of the authorised job is materially different
+from what "split by content type" suggests, and the owner should know that from a count rather than from
+a surprise six lines later. Carried into the final summary as an INFORMATIONAL question, not a blocker.
+
+#### The shape of the raise, measured
+
+Every below-floor draw, bucketed by the design size behind it (`sc = 1406/2112 = 0.66572`; the 895 here
+includes the 27 draws on the nine unreachable placeholder cards, which have no owner):
+
+| design px | panel px | count | % of floor | × to reach LIVE 48.07 | × to reach STATIC 36.05 |
+|---|---|---|---|---|---|
+| 20 | 13.3 | 5 | 42 % | 2.40 | 1.80 |
+| 22 | 14.6 | 74 | 46 % | 2.19 | 1.64 |
+| **24** | 16.0 | **160** | 50 % | 2.00 | 1.50 |
+| **26** | 17.3 | **191** | 54 % | 1.85 | 1.39 |
+| **28** | 18.6 | **189** | 58 % | 1.72 | 1.29 |
+| 30 | 20.0 | 69 | 62 % | 1.60 | 1.20 |
+| 32 | 21.3 | 68 | 67 % | 1.50 | 1.13 |
+| 34 | 22.6 | 51 | 71 % | 1.41 | 1.06 |
+| 40 | 26.6 | 17 | 83 % | 1.20 | **already clears** |
+| 44 | 44.0→29.3 | 20 | 92 % | 1.09 | **already clears** |
+| 46 | 30.6 | 11 | 96 % | 1.04 | **already clears** |
+
+⭐ **540 of them — 62 % — sit in three buckets: 24, 26 and 28 design px.** The job is not 868 individual
+decisions; it is a handful of shared row constants per page family. That is what makes the splits below
+tractable, and it is why they are grouped by FILE FAMILY rather than by page.
+
+#### What was built
+
+- **`Typography.DenseFor(panelW)`** — `Dense`'s ratio form, exactly as `MinFor` is `Min`'s. 12 @1280,
+  **24 @2560**. ⛔ Not a second glanceable floor, and its docstring says so in `Dense`'s own words.
+- **`Typography.MinDesignFor(panelW, frameScale)`** and **`DenseDesignFor(...)`** — the floors in
+  DESIGN space, **48.07** and **36.05** at the shipped size. ⭐ **They exist so that no page ever writes
+  `48`.** That would be R-02 repeating itself one layer up: right for one cfg, wrong for the next, and
+  uncheckable against the measurement it came from. A test pins the property that makes them worth
+  having — **the required design size is the SAME number at 1280 and at 2560**, because the design frame
+  and the floor scale together.
+- **The census, as a standing check** in `LegibilityFloorTest`, printing the three bands every run.
+- ⭐ **A per-page RATCHET under it.** The 868 come down page by page; what must not happen meanwhile is a
+  page quietly gaining a NEW sub-floor element — which is exactly what the six R-01-gated content lines
+  would do. The baseline **may fall, never rise**; a page that improves is *reported*, not failed, and
+  told to lower its number in the owning split line. An entry there is a **defect on record, not a
+  pardon**, the same standing as `build.py`'s `KNOWN_DEAD`.
+- ⚠ The counts are **fixture-relative** and the check says so: a change that makes a page draw more rows
+  of legitimately-sized text trips it, and the honest response is to re-baseline in the owning line, not
+  to widen a tolerance.
+
+#### Verified (C1.3) — measured, not asserted
+
+`python plugin/build.py test` → **ALL SUITES PASSED**; `LegibilityFloorTest` **145 checks, 0 failed**,
+printing `914 text draws: 46 clear the floor, 43 in the Dense..floor band, 825 below even Dense` /
+`868 below the floor, 0 page(s) regressed, 0 improved`. No page render changed — this line adds
+measurement and policy, not pixels — so `preview` is unaffected and was not used as evidence.
+
+**MUTATION-PROVEN — 6 mutations, 6 caught, plus the ratchet's direction proven:**
+
+| | mutation | first check that failed |
+|---|---|---|
+| **A** | `DenseFor` returns the glanceable floor — the two floors collapse into one | *"DenseFor(RefPanelW) is exactly Dense   got 16, want 12"* |
+| **B** | `MinDesignFor` ignores the frame scale | *"the LIVE design floor is 48.07…   got 32"* |
+| **C** | `DenseDesignFor` computed off the glanceable floor | *"the STATIC design floor is 36.05…   got 48.07"* |
+| **D** | the degenerate-frame-scale guard dropped | *"a zero frame scale falls back to the panel floor"* |
+| **E** | a page gains a new sub-floor text draw | *"Ascent gained sub-floor text   baseline 17, now 18"* |
+| **F** | a page that draws text is missing from the baseline table | *"Ascent is in the floor baseline table"* |
+| **G** | a page's type RAISED above the floor | **reported, not failed** — `IMPROVED  Ascent  baseline 17 -> 6` |
+
+⚠ **AND ONE PIECE OF EVIDENCE WAS CHASED RATHER THAN ACCEPTED.** Mutation D printed *"got 8, want 32"*,
+which is not what a divide-by-zero should say. Probed directly: `float.IsInfinity(...)` is **true** — the
+value is infinity and the console is rendering .NET's `∞` as a bare `8`. The check and the contract are
+both correct; the *printout* was lying. Recorded because a number nobody chased is how a false finding
+gets written down.
+
+**Comment-loss check (C1.16 / G12): 0 lost.** `Typography.cs` 99 → 154 comment lines, all added below the
+existing header; `LegibilityFloorTest.cs` 168 → 200.
+
+#### The splits — six lines, grouped by FILE FAMILY, 868 accounted for exactly
+
+| line | files | below-floor | why grouped |
+|---|---|---|---|
+| [[S153a]] | `CoverPage` | **24** | one file, and already entangled with C-05 / [[S116]] / [[S123]] / [[S124]] |
+| [[S153b]] | `VehicleOverviewPage` · `VehicleMechPage` · `VehicleSubsystemPage` | **441** | one row grammar across eight page-views; the ruling names two of its rows by name |
+| [[S153c]] | `SuitCheckPage` · `VrioTestPage` · `ManualChuteDeployPage` · `DeorbitBurnPrepPage` · `EntryPage` | **208** | the procedure pages: one checklist grammar, and the LIVE/STATIC line runs *through* a row rather than around it |
+| [[S153d]] | `SystemsTreePage` · `SystemsPidPage` | **73** | the two systems deep-views, one schematic grammar |
+| [[S153e]] | `DockingSimPage` · `RendezvousPage` · `AscentPage` · `NavOrbitPlotPage` | **75** | plot pages: type over a drawing, where reflow is the hard part |
+| [[S153f]] | `MenuPage` · `SettingsAudioPage` · `SettingsVideoPage` · `MarginAffordance` | **47** | shared chrome and settings; `MANUAL`/`DOCKING` is named in the ruling and is also QC `H-06` |
+| | | **868** | |
+
+⛔ **THE SIX R-01-GATED CONTENT LINES ARE UN-HELD BY THIS** — [[S126]] [[S136]] [[S137]] [[S138]] [[S145]]
+[[S147]]. They were held for a policy; the policy exists. ⚠ Each still ADDS text, so each must add it at
+**`Typography.MinDesignFor(w, sc)` or above** — the ratchet enforces exactly that and will fail the build
+otherwise. They no longer wait on a page being re-laid first; they wait on nothing.
+
 ⛔ **R-01's OWN OPTION 2 IS DEAD AND MUST NOT BE RE-PROPOSED.** *"Raise `screenWidth`"* already happened
 ([[S115]]), and [[R-02]] then proved the floor is a **RATIO**: the panel pixels and the floor doubled
 together, so **not one of the 17 samples moved**. R-01's note that *"even at 2560 five are still under
@@ -15939,6 +16100,84 @@ compaction mid-task"* **FOR THIS SESSION ONLY**. This chat runs many tasks in on
 rule stands unchanged — especially C1.12**: no gate is opened, no `install`, no glass, no `git push`, and
 no owner ruling is recorded without saying exactly how it was given. ⚠ This is the SECOND such run; the
 first (2026-09-06, 63 commits) recorded the same deviation on its own first line.
+
+### S153a [S] Cover: raise the type to the two floors — **TODO** — [split of [[S153]]; **24** below-floor draws]
+- **Scope:** `plugin/src/pure/CoverPage.cs` only.
+- **Policy (S153, owner 2026-09-06):** LIVE → `Typography.MinDesignFor(w, sc)` (**48.07** design px at
+  2560); STATIC REFERENCE → `DenseDesignFor` (**36.05**). ⛔ Never write the numbers; call the functions.
+- **Classification, from the ruling's own examples:**
+  - **LIVE** — `ACTIVE PHASE` and the six orbit readouts (`SPLASHDOWN TIME` / `INERTIAL VELOCITY` /
+    `ALTITUDE` / `APOGEE` / `PERIGEE` / `INCLINATION`), the seven rail labels (they are how the crew find
+    a phase), the `CAMERA` caption + its view name (`Z(21)` = **14.0 px, 44 %** — the worst element on the
+    page), and the two attitude-interrupt criteria, which [[S144]] intends to make live.
+  - **STATIC REFERENCE** — the ENTRY TIMELINE / CONTINGENCY card titles and rows. ⭐ Named by the owner —
+    and still a **1.39× raise**, from `Z(26)` = 17.3 px to the 24 px static floor. Not a pardon.
+- ⚠ **This collides with [[S116]] / [[S123]] / [[S124]] by design.** `FitRows` already fits rows to a slot
+  and [[S124]] records that its proportional branch is unreachable because the wanted size is *already*
+  below the floor. Raising the floor-side of that comparison is this line's job; read S124 first.
+- **DONE when:** every Cover element clears its own floor, the ratchet baseline for `Cover` is lowered to
+  what remains, and a preview shows the reference cards still fit their boxes.
+
+### S153b [S] The Vehicle family: raise the type to the two floors — **TODO** — [split of [[S153]]; **441** below-floor draws, the largest group]
+- **Scope:** `VehicleOverviewPage.cs` · `VehicleMechPage.cs` · `VehicleSubsystemPage.cs` — eight page-views
+  (`Vehicle` 80, `VehicleMech` 32, `VehicleCrew`/`Power`/`Avionics`/`Gnc`/`Thermal` 43 each,
+  **`VehiclePropulsion` 114 — the worst page-view in the build**).
+- ⭐ **The ruling names two of these rows explicitly as LIVE**: *"CONSUMABLES rows, SEAT TACH rows"*. So is
+  every subsystem value and every checklist state word. **Essentially nothing here is static reference** —
+  this family is a straight raise to `MinDesignFor`.
+- ⚠ **One row grammar, eight pages.** The saving is that these draw from shared row helpers; find the
+  constants rather than the call sites. Current sizes cluster at `SZ(23)`/`SZ(26)` (**48 % / 54 %**).
+- **DONE when:** all eight page-views clear the glanceable floor, their baselines are lowered, and a
+  preview shows the eight-tab strip and the row tables still fit.
+
+### S153c [S] The procedure pages: raise the type, and settle where the LIVE/STATIC line runs — **TODO** — [split of [[S153]]; **208** below-floor draws]
+- **Scope:** `SuitCheckPage.cs` (47) · `VrioTestPage.cs` (37, drawn by BOTH `Procedure` and `VrioTest` —
+  one file, two page-views, see [[S110]]) · `ManualChuteDeployPage.cs` (58) · `DeorbitBurnPrepPage.cs` (21)
+  · `EntryPage.cs` (8).
+- ⚠ **THIS IS THE GROUP WHERE THE CLASSIFICATION IS GENUINELY AMBIGUOUS, and it is flagged rather than
+  decided.** A checklist row is *both*: the step TEXT is a printed procedure the crew read (static
+  reference), while its TICK and its state word are live — the ruling names *"checklist state words"* as
+  LIVE explicitly. The coherent reading is **step text at `DenseDesignFor`, state words and ticks at
+  `MinDesignFor`**, which keeps a row readable while letting the printed half stay compact.
+  ⛔ **A build chat should not settle that on its own** — it decides how a procedure page looks — so it is
+  written up for the owner and this line builds the straight-raise interpretation only if he declines to
+  pick. **Ask before laying out.**
+- **DONE when:** every state word and tick clears the glanceable floor, the step text clears whichever
+  floor the owner names, and the baselines are lowered.
+
+### S153d [S] The systems deep-views: raise the type to the floor — **TODO** — [split of [[S153]]; **73** below-floor draws]
+- **Scope:** `SystemsTreePage.cs` (31) · `SystemsPidPage.cs` (42).
+- **Classification:** node labels and their values are LIVE readouts — a straight raise to `MinDesignFor`.
+  The schematic's own annotation captions are the only static-reference candidates.
+- ⚠ **Reflow is the whole difficulty.** These are SCHEMATICS: the type sits inside a drawn graph, so a
+  1.5–2× raise moves nodes, not just glyphs. Budget for geometry, not for a size sweep.
+- **DONE when:** both pages clear their floors, baselines lowered, and a preview shows the schematic
+  still readable as a schematic.
+
+### S153e [S] The plot pages: raise the type over the drawings — **TODO** — [split of [[S153]]; **75** below-floor draws]
+- **Scope:** `DockingSimPage.cs` (39) · `RendezvousPage.cs` (8) · `AscentPage.cs` (17) ·
+  `NavOrbitPlotPage.cs` (11).
+- **Classification:** ⭐ `DockingSimPage`'s **pad captions are named STATIC in the ruling** — and at
+  `Z(22)` = **14.6 px** they are at **61 % of the static floor**, so they rise to 24 px, not to 32. Every
+  ring readout, range figure and [[S159]] event mark is LIVE.
+- ⚠ `Rendezvous` is the closest family to compliant in the build — **7 of its 8 below-floor draws are
+  already in the `Dense`..floor band**, so if they classify STATIC it is nearly done.
+- ⚠ [[S145]] adds range-ring labels to `NavOrbitPlot`; it is un-held and must add them at `MinDesignFor`.
+- **DONE when:** all four pages clear their own floors, baselines lowered, previews inspected.
+
+### S153f [S] Shared chrome and settings: raise the type to the floor — **TODO** — [split of [[S153]]; **47** below-floor draws]
+- **Scope:** `MenuPage.cs` (24) · `SettingsAudioPage.cs` (12) · `SettingsVideoPage.cs` (9) ·
+  `MarginAffordance` (the HUD's 2).
+- **Classification: all LIVE.** A Menu card label is how the crew find a page; a settings label names a
+  control they are about to touch; `MANUAL`/`DOCKING` is **named in the ruling**.
+- ⛔ **`MarginAffordance` is NOT a size sweep — it is a FIT.** `FitsLegibly` already returns FALSE at both
+  widths and `LegibilityFloorTest` pins that it still does. Raising it means widening the margin, which is
+  **QC `H-06` / `Q8`, an open owner design question**. ⚠ Do the other three; take `MANUAL`/`DOCKING` only
+  as far as H-06 allows and say so.
+- ⚠ [[S147]] rewrites the bottom status bar across 35 pages and is un-held; sequence it WITH this line or
+  the bar gets laid out twice.
+- **DONE when:** Menu and both settings pages clear the floor, baselines lowered, and the HUD's residual
+  is recorded against H-06 rather than silently left.
 
 ### S154 [O] Frame 58's HUD is one raster and every readout in it is baked — **TODO — SPLIT IT AGAIN BEFORE STARTING** — [H10 + QC `H-02`; split out of [[S50]] 2026-09-06; TIER 2: *"the largest liveness gap in the build"* — the audit's own words]
 

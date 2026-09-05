@@ -46,6 +46,8 @@ public static class LegibilityFloorTest
         checks = 0; failures = 0;
 
         TheFloorCarriesItsPremise();
+        R01Census();
+        TheTwoFloorsAreBothRatios();
         TheSameElementReportsTheSamePercentageAtBothWidths();
         NavPageTracksThePanel();
         NavPageIsUnchangedAtTheReferenceWidth();
@@ -533,6 +535,173 @@ public static class LegibilityFloorTest
         DisplayList dl = new DisplayList(ChromeBar.Commands);
         ChromeBar.Build(dl, w, h, cs);
         return dl;
+    }
+
+    // ---- 8. R-01: THE CENSUS, AND THE RATCHET UNDER IT (S153) -----------------------------------
+    // QC R-01 sampled SEVENTEEN elements across nine pages and found all seventeen under the floor.
+    // ⚠ IT UNDERSTATED THE SCOPE BY A FACTOR OF FIFTY. Walked exhaustively over every non-placeholder
+    // page at the shipped size, the real figure is 868 of 914 text draws - and only 46 elements in the
+    // whole Figma-era build clear the floor. QC's seventeen were a sample, correctly labelled as one;
+    // this is the population.
+    //
+    // ⭐ WHAT THIS CHECK IS FOR IS THE OTHER DIRECTION. The 868 are owned by the split lines S153a-f
+    // and will come down page by page. What must not happen in the meantime is a page quietly gaining
+    // a NEW sub-floor element while those lines are outstanding - which is exactly what the six
+    // R-01-gated content lines (S126/S136/S137/S138/S145/S147) would do, since each ADDS text to a
+    // page in this table. So the baseline below is a RATCHET: it may fall, never rise.
+    //
+    // ⛔ AN ENTRY HERE IS A DEFECT ON RECORD, NOT A PARDON - the same standing as build.py's KNOWN_DEAD
+    // list. The number is what the page measured on 2026-09-06; a split line that raises type LOWERS
+    // its number, and the check says so out loud when it does.
+    //
+    // ⚠ THE COUNTS ARE FIXTURE-RELATIVE, and that is stated rather than hidden: they are taken against
+    // Leo(), the same orbit fixture the rest of this suite uses. A change that makes a page draw MORE
+    // ROWS of legitimately-sized text will trip this, and the honest response is to re-baseline in the
+    // owning register line - not to widen the tolerance.
+    struct FloorBaseline { public UiPage Page; public int Below; }
+
+    static readonly FloorBaseline[] Baseline = {
+        B(UiPage.Cover,             24),   // S153a
+        B(UiPage.Menu,              24),   // S153f
+        B(UiPage.Hud,                2),   // S153f - MarginAffordance's MANUAL/DOCKING, also QC H-06
+        B(UiPage.Audio,             12),   // S153f
+        B(UiPage.AudioVideo,         9),   // S153f
+        B(UiPage.Procedure,         37),   // S153c - the same page file as VrioTest (S110)
+        B(UiPage.VrioTest,          37),   // S153c
+        B(UiPage.SuitCheck,         47),   // S153c
+        B(UiPage.ManualChute,       58),   // S153c
+        B(UiPage.DeorbitBurnPrep,   21),   // S153c
+        B(UiPage.EntryProcedure,     8),   // S153c
+        B(UiPage.Vehicle,           80),   // S153b
+        B(UiPage.VehicleMech,       32),   // S153b
+        B(UiPage.VehicleCrew,       43),   // S153b
+        B(UiPage.VehiclePropulsion,114),   // S153b - the worst single page in the build
+        B(UiPage.VehiclePower,      43),   // S153b
+        B(UiPage.VehicleAvionics,   43),   // S153b
+        B(UiPage.VehicleGnc,        43),   // S153b
+        B(UiPage.VehicleThermal,    43),   // S153b
+        B(UiPage.SystemsTree,       31),   // S153d
+        B(UiPage.SystemsPid,        42),   // S153d
+        B(UiPage.Docking,           39),   // S153e
+        B(UiPage.Rendezvous,         8),   // S153e
+        B(UiPage.Ascent,            17),   // S153e
+        B(UiPage.NavOrbitPlot,      11),   // S153e
+    };
+
+    static FloorBaseline B(UiPage p, int below)
+    { FloorBaseline f = new FloorBaseline(); f.Page = p; f.Below = below; return f; }
+
+    static void R01Census()
+    {
+        float floor = Typography.MinFor(W2), dense = Typography.DenseFor(W2);
+        int tT = 0, tOk = 0, tStatic = 0, tBelowDense = 0, tBelow = 0, regressed = 0, improved = 0;
+        int covered = 0;
+
+        Console.WriteLine("  ---- R-01 census @" + W2 + "x" + H2 + ": floor " + floor
+                          + " px, static-reference floor " + dense + " px ----");
+        foreach (UiPage up in (UiPage[])Enum.GetValues(typeof(UiPage)))
+        {
+            if (FigmaUI.IsPlaceholder(up)) continue;
+            DisplayList dl = new DisplayList(1200);
+            FigmaUI.Build(dl, up, W2, H2, Leo(), MapProjection.Default());
+            int n = 0, ok = 0, st = 0, bd = 0;
+            for (int i = 0; i < dl.Count; i++)
+            {
+                DrawCmd c = dl.At(i);
+                if (c.Kind != DrawKind.Text) continue;
+                n++;
+                if (c.C >= floor) ok++; else if (c.C >= dense) st++; else bd++;
+            }
+            if (n == 0) continue;
+            tT += n; tOk += ok; tStatic += st; tBelowDense += bd; tBelow += (n - ok);
+
+            int want = -1;
+            for (int i = 0; i < Baseline.Length; i++)
+                if (Baseline[i].Page == up) { want = Baseline[i].Below; covered++; }
+
+            Check("R-01: " + up + " is in the floor baseline table", want >= 0,
+                  "a page that draws text and is not listed cannot be ratcheted - add it, owned by a "
+                  + "split line");
+            if (want < 0) continue;
+
+            if (n - ok > want)
+            {
+                regressed++;
+                Check("R-01: " + up + " gained sub-floor text", false,
+                      "baseline " + want + ", now " + (n - ok) + " - a new element below "
+                      + floor + " px. Raise it, or re-baseline in the owning register line.");
+                for (int i = 0; i < dl.Count; i++)
+                {
+                    DrawCmd c = dl.At(i);
+                    if (c.Kind == DrawKind.Text && c.C < floor)
+                        Console.WriteLine(string.Format("        {0,6:0.0}px {1,4:0}%  {2}",
+                            c.C, 100f * c.C / floor, c.Str));
+                }
+            }
+            else if (n - ok < want)
+            {
+                improved++;
+                Console.WriteLine(string.Format(
+                    "    IMPROVED  {0,-18} baseline {1,3} -> {2,3}   lower it in the owning split line",
+                    up, want, n - ok));
+            }
+        }
+
+        Check("R-01: every baselined page was actually walked", covered == Baseline.Length,
+              "table has " + Baseline.Length + ", walked " + covered);
+        Console.WriteLine(string.Format(
+            "    {0} text draws: {1} clear the floor, {2} in the Dense..floor band (static-reference "
+            + "only), {3} below even Dense", tT, tOk, tStatic, tBelowDense));
+        Console.WriteLine("    " + tBelow + " below the floor, " + regressed + " page(s) regressed, "
+                          + improved + " improved");
+    }
+
+    // ---- 9. THE OWNER'S TWO-FLOOR POLICY, AS ARITHMETIC (S153) ----------------------------------
+    static void TheTwoFloorsAreBothRatios()
+    {
+        // Dense's ratio form, exactly as MinFor is Min's.
+        Eq("DenseFor(RefPanelW) is exactly Dense", Typography.DenseFor(Typography.RefPanelW),
+           Typography.Dense, 1e-4f);
+        Eq("the static-reference floor at the shipped 2560 is 24 px", Typography.DenseFor(W2), 24f, 1e-4f);
+        Check("the static floor is BELOW the glanceable floor, at every width",
+              Typography.DenseFor(W1) < Typography.MinFor(W1)
+              && Typography.DenseFor(W2) < Typography.MinFor(W2), "");
+        Check("...and it is the same fraction of it at both widths",
+              Math.Abs(Typography.DenseFor(W1) / Typography.MinFor(W1)
+                       - Typography.DenseFor(W2) / Typography.MinFor(W2)) < 1e-6f,
+              "@1280 " + (Typography.DenseFor(W1) / Typography.MinFor(W1))
+              + ", @2560 " + (Typography.DenseFor(W2) / Typography.MinFor(W2)));
+
+        // ⭐ THE PROPERTY THE SPLIT LINES ACTUALLY NEED, and the one R-02 says a bare 48 could never
+        // have: the required DESIGN size is the same number at BOTH widths, because the design frame
+        // and the floor scale together. A page that writes MinDesignFor(w, sc) is correct at any cfg;
+        // a page that writes 48 is correct at exactly one.
+        float sc1 = (float)H1 / 2112f, sc2 = (float)H2 / 2112f;
+        Eq("the LIVE design floor is 48.07 at the shipped size",
+           Typography.MinDesignFor(W2, sc2), 48.068f, 0.01f);
+        Eq("the STATIC design floor is 36.05 at the shipped size",
+           Typography.DenseDesignFor(W2, sc2), 36.051f, 0.01f);
+        Check("the LIVE design floor is the SAME number at 1280 and 2560",
+              Math.Abs(Typography.MinDesignFor(W1, sc1) - Typography.MinDesignFor(W2, sc2)) < 0.01f,
+              "@1280 " + Typography.MinDesignFor(W1, sc1) + ", @2560 " + Typography.MinDesignFor(W2, sc2));
+        Check("...and so is the STATIC one",
+              Math.Abs(Typography.DenseDesignFor(W1, sc1) - Typography.DenseDesignFor(W2, sc2)) < 0.01f,
+              "@1280 " + Typography.DenseDesignFor(W1, sc1) + ", @2560 " + Typography.DenseDesignFor(W2, sc2));
+
+        // A degenerate frame scale falls back to the panel floor rather than dividing by zero - the
+        // same contract MinFor(0) has.
+        Eq("a zero frame scale falls back to the panel floor",
+           Typography.MinDesignFor(W2, 0f), Typography.MinFor(W2), 1e-4f);
+        Eq("...and the static one likewise",
+           Typography.DenseDesignFor(W2, 0f), Typography.DenseFor(W2), 1e-4f);
+
+        // ⚠ THE MEASUREMENT THAT STOPS THE POLICY BEING MISREAD. "Permit static tables to sit at
+        // Dense" is a RAISE for the owner's own named examples, not a pardon: the Cover's reference
+        // rows draw Z(26) and the docking pad captions Z(22), both BELOW the 24 px static floor.
+        Check("the Cover's reference rows are below even the STATIC floor",
+              26f * sc2 < Typography.DenseFor(W2), "Z(26) = " + (26f * sc2) + " px");
+        Check("the docking pad captions likewise",
+              22f * sc2 < Typography.DenseFor(W2), "Z(22) = " + (22f * sc2) + " px");
     }
 
     static DisplayList BuildNav(int w, int h, MapView view)

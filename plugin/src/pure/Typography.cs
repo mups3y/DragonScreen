@@ -54,6 +54,40 @@
  * pixels per glyph - and nothing else. Anything drawn as a FRACTION of the panel subtends the same
  * angle in the seat at any width, so every "too small to read" finding survives a width change
  * unchanged; only its pixel figures move (QC R-01, verified at both widths).
+ *
+ * ---- TWO FLOORS, NOT ONE: THE OWNER'S R-01 POLICY (S153, 2026-09-06) ----
+ * ⛔ ADDED. Nothing above this line is edited.
+ *
+ * QC R-01 found that essentially every text element on the Figma-era pages sits under the floor
+ * above. Fixing it is a design decision, not an arithmetic one, and the owner made it on 2026-09-06
+ * by selecting "SPLIT BY CONTENT TYPE" from presented options (a SELECTION, not free text - there is
+ * no verbatim quote and none is invented here; see REGISTER.md S153). The option, as presented:
+ *
+ *     Raise anything LIVE to the floor - checklist state words, CONSUMABLES rows, SEAT TACH rows,
+ *     Frame58's MANUAL/DOCKING. Permit STATIC reference tables (the Cover's timeline/contingency
+ *     cards, pad captions) to sit at Typography.Dense, which already exists for exactly this: "a
+ *     table someone leans in to read... NOT for any live value, any alert."
+ *
+ * So there are now TWO floors, and which one applies is a question about the CONTENT:
+ *     LIVE               -> MinFor(panelW)     anything that changes, or that matters in a hurry
+ *     STATIC REFERENCE   -> DenseFor(panelW)   a printed table the crew lean in to read
+ * Dense's own docstring already drew that line; this makes it the project's stated policy rather
+ * than one size's private note.
+ *
+ * ⚠ AND "PERMIT THEM TO SIT AT DENSE" IS A RAISE, NOT A PARDON - measured, because reading it the
+ * other way is the obvious mistake. The owner's own named static examples are BELOW Dense today:
+ * the Cover's reference rows draw 17.3 panel px and the docking pad captions 14.6, against a Dense
+ * floor of 24 at the shipped 2560. Of 868 below-floor text draws counted across the 20 Figma-era
+ * page files, only 43 sit in the Dense..floor band where the static allowance changes the verdict.
+ * The policy makes the job smaller for those 43; it does not excuse anything from moving.
+ *
+ * ---- AND THE PAGES MUST NOT HARDCODE THE ANSWER ----
+ * A Figma-era page draws in a 3427x2112 DESIGN frame and multiplies by its own frame scale, so the
+ * design size that clears a floor is `floor / frameScale`. At the shipped 2560x1406 that is 48.07
+ * design px for LIVE and 36.05 for static reference. ⛔ DO NOT WRITE 48 INTO A PAGE. That is R-02
+ * repeating itself one layer up: a bare number is right for one cfg, wrong for the next, and cannot
+ * be checked against a premise it does not carry. MinDesignFor / DenseDesignFor below resolve it at
+ * the point of comparison, from the panel the page is actually drawing on.
  */
 namespace DragonScreen
 {
@@ -92,6 +126,42 @@ namespace DragonScreen
         public static float MinFor(float panelW)
         {
             return Min * ScaleFor(panelW);
+        }
+
+        /// <summary>
+        /// The STATIC-REFERENCE floor in panel pixels, on a panel panelW device px wide - Dense's
+        /// ratio form, exactly as MinFor is Min's. 12 at 1280, 24 at 2560.
+        ///
+        /// ⛔ This is NOT a second glanceable floor and must never be used as one. It is the level the
+        /// owner's 2026-09-06 policy permits for a printed reference table the crew lean in to read,
+        /// and Dense's own docstring states the boundary: "NOT for any live value, any alert, or
+        /// anything on the nav bar. If it would be a problem to miss it, it is not this size."
+        /// </summary>
+        public static float DenseFor(float panelW)
+        {
+            return Dense * ScaleFor(panelW);
+        }
+
+        /// <summary>
+        /// The smallest DESIGN-space size that clears the glanceable floor, for a page whose design
+        /// frame maps to the panel by <paramref name="frameScale"/> (a Figma-era page's own `sc`).
+        /// 48.07 at the shipped 2560x1406.
+        ///
+        /// ⛔ EXISTS SO NO PAGE WRITES 48. That number is only correct for one cfg and one design
+        /// frame, and a page carrying it could not be checked against the measurement it came from -
+        /// which is R-02, one layer up. A degenerate scale falls back to the panel floor rather than
+        /// dividing by zero, the same way MinFor handles a zero width.
+        /// </summary>
+        public static float MinDesignFor(float panelW, float frameScale)
+        {
+            return frameScale > 0f ? MinFor(panelW) / frameScale : MinFor(panelW);
+        }
+
+        /// <summary>The same, for STATIC REFERENCE content: the smallest design size that clears
+        /// DenseFor. 36.05 at the shipped 2560x1406. Same rule about not hardcoding it.</summary>
+        public static float DenseDesignFor(float panelW, float frameScale)
+        {
+            return frameScale > 0f ? DenseFor(panelW) / frameScale : DenseFor(panelW);
         }
 
         /// <summary>
