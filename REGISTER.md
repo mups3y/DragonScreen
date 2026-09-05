@@ -15039,7 +15039,7 @@ budget that does not exist is arguably genuinely absent, and deciding which read
 **Verified (C1.3).** **Nothing was built and nothing changed** — this is a HELD write-up. `build.py test`
 green (unchanged tree). No `install`, no glass, no `git push`.
 
-### S141 [S] There is no camera behind the docking rings — **TODO** — [H25 + QC `DK-03`; TIER 2: pure display]
+### S141 [S] There is no camera behind the docking rings — **DOING** — [H25 + QC `DK-03`; TIER 2: pure display]
 - **The finding.** `DockingPage.Build` fills the screen with `Background`; `WantsDockingCam` grants the live
   feed **only** to `UiPage.Hud`. The reference (and iss-sim) shows the docking-adapter view behind the rings.
 - ⭐ **`DockingCamRenderer` exists and is genuinely live**, and the stranded `DockingPage.cs:73` already
