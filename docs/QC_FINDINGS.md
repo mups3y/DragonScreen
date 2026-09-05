@@ -89,8 +89,8 @@ Cover's seven phase views, plus the lower analog console panel. **The six Vehicl
 | **26** | **ManualChute** | MANUAL CHUTE DEPLOY | ✅ **DONE — 2 findings** | 2026-09-05 |
 | **27** | **Docking** | MANUAL DOCKING | ✅ **DONE — 3 findings** *(shared section with 28)* | 2026-09-05 |
 | **28** | **Rendezvous** | RENDEZVOUS | ✅ **DONE — 1 finding** | 2026-09-05 |
-| 29 | DeorbitBurnPrep | DEORBIT BURN PREP | NOT STARTED | — |
-| 30 | EntryProcedure | ENTRY | NOT STARTED | — |
+| **29** | **DeorbitBurnPrep** | DEORBIT BURN PREP | ✅ **DONE — 3 findings** *(shared section with 30)* | 2026-09-05 |
+| **30** | **EntryProcedure** | ENTRY | ✅ **DONE** *(same section)* | 2026-09-05 |
 | 31 | SystemsTree | SYSTEMS TREE | NOT STARTED | — |
 | 32 | SystemsPid | SYSTEMS P&ID | NOT STARTED | — |
 | 33 | Ascent | ASCENT / LAUNCH | NOT STARTED | — |
@@ -3183,7 +3183,144 @@ and the four rail icons have no hit rect (S49 H28); the rail is drawn at `Rendez
 
 ---
 
-*Next: **pages 29 + 30** — Deorbit Burn Prep and Entry Procedure, the two reconstructed-from-photo screens.*
+---
+
+# PAGES 29 + 30 — DEORBIT BURN PREP and ENTRY
+
+**Inspected together — the two reconstructed-from-photo screens**, both Menu-only, both built on thin
+tier-1 evidence (a blurry frame for 29, a *partial* frame for 30 with only one section title legible).
+
+**Renders:** `ui_deorbitburnprep.png` · `ui_entryprocedure.png`.
+
+**Source:** `plugin/src/pure/DeorbitBurnPrepPage.cs` · `plugin/src/pure/EntryPage.cs`.
+
+**S49's entries.** §2: 29 is *"Crew Interrupt Conditions are static text; the four SLEW rows are literal
+dashes; FC SLEW is correctly wired to a pinned stub. No touch at all"* (H29, H30); 30 is *"Nothing live.
+`Build(dl,w,h)` takes no `PageState` — structurally provable"* (H31). **Both confirmed at HEAD** —
+`EntryPage.cs:39` is `Build(DisplayList dl, int w, int h)`, no state parameter.
+
+## What was checked and found CLEAN
+
+1. ⭐ **Page 29's interrupt criteria are the SHARED source the Cover reads — C7.1 done right.** The Cover
+   skips its own two baked captions and redraws them *"from DeorbitBurnPrepPage's own S13-corrected
+   strings, so the two surfaces that state this criterion now read identically"* (`CoverPage.cs:126-141`).
+   On the glass both pages say `30° sustained attitude error` and `600°/min attitude rate`, identically.
+   **This is the exact pattern MP-01 needs and does not have** — one fact, one source, two surfaces.
+2. **The four SLEW dashes are correct §14.4 dashes with a recorded reason.** `DeorbitBurnPrepPage.cs:46-47`:
+   *"ROLL / PITCH / YAW under 'SLEW FOR DEORBIT BURN' are the attitude the vehicle is being TOLD to hold
+   … and `docs/TELEMETRY_REGISTRY.md` carries no row for any of them — no SLEW_* datum, no authority."*
+   A commanded attitude with no commander is genuinely absent. Dash is right.
+3. **`FC SLEW` is honestly stub-wired.** `slewing ? "ENGAGED" : "NOT ENGAGED"` with `Go` / `Text6`
+   (`:134`) — reads a pinned Part-B field and says `NOT ENGAGED`, which is true of this build. Compare
+   RZ-01: the same construction, correctly used.
+4. **Page 30's `(TBC)` markers survive** into its prose lines — `5.5 km (TBC)`, `1.6 km (TBC)`.
+
+---
+
+## DB-01 — Both pages use a corner of the screen and leave the rest empty
+
+**TIER 2** · **NEW** · the owner's standing layout concern (**R-4**)
+
+**Evidence.** Measured from the renders, both 2560×1406:
+
+| page | content bounding box | share of the page |
+|---|---|---|
+| DEORBIT BURN PREP | x ≈ 360…870, y ≈ 180…680 | **≈ 7%** of the area; the content column is 20% of the width |
+| ENTRY | x ≈ 360…810, y ≈ 175…365 | **≈ 2%** of the area |
+
+Everything on both pages is stacked in a single left column starting at the same x, and the remaining
+75–95% is empty background. `ui_entryprocedure.png` is a title, one section heading and six short lines on
+an otherwise blank screen — reachable from the Menu grid as a full page called `ENTRY`.
+
+**What is wrong.** Both pages are *honest* — they carry what their sources support and no more, and S49 is
+right that the alternative would be invention. But a page that fills 2% of the glass is not a finished
+screen, and the emptiness is not neutral: at IVA distance a near-blank screen reads as a fault or a page
+that failed to load.
+
+**Fix plan — and the honest options are limited, which is the point.**
+1. **Lay the existing content out for the screen it is on** — two or three columns instead of one, at a
+   larger type size, using the width. Costs nothing, invents nothing, and makes what little there is
+   legible at distance. *(Recommended as the immediate step for both.)*
+2. **Fill page 29 from what is live.** Its own subject — the deorbit burn — has real quantities the build
+   already computes: burn ΔV, time-to-burn, propellant, attitude error against the slew target. These are
+   readouts and (A) under §14.4(f). ⚠ **But `TELEMETRY_REGISTRY` has no SLEW row** (CLEAN 2), so the
+   *target* attitude stays dashed; only the *current* attitude and the burn parameters can fill.
+3. **Merge page 30 into the Manual Chute page** — see DB-02, which argues its content is already there.
+4. **Leave them.** Defensible under §1.4 and the least work, but it ships two near-blank screens on the
+   Menu grid.
+
+**Recommend 1 for both, plus 3 for page 30 if the owner accepts DB-02's reading.** Option 2 is real work
+and should be its own line.
+
+---
+
+## DB-02 — Page 30's entire content is a third copy of material already on two other pages
+
+**TIER 2** · **NEW** · content duplication, the sibling of **F-01**
+
+**Evidence.** `ui_entryprocedure.png` carries exactly six lines. Every one already exists elsewhere:
+
+| ENTRY (page 30) | already on |
+|---|---|
+| `5.5 km (TBC): monitor altitude, arm and verify backup pyros` | **Manual Chute**, Standard Altitude — `5.5 km (TBC) · 6 nm · drogues` + `Monitor altitude` + `ENABLE BACKUP PYROS / Arm and verify` |
+| `Deploy drogues – latch` | **Manual Chute** — `DEPLOY DROGUES / Latch` |
+| `1.6 km (TBC): fire pyro, arm and verify backup pyros` | **Manual Chute** — `1.6 km (TBC) · 6 nm · mains` + `FIRE PYRO / Execute` |
+| `Deploy mains – execute` | **Manual Chute** — `DEPLOY MAINS / Execute` |
+| `Land under ≥ 3 mains` | **Cover**, Reference Content → PARACHUTES (MARK 3) |
+| `CUT MAINS after splashdown` | **Cover**, Reference Content → PARACHUTES (MARK 3) |
+
+**Three surfaces, one set of facts, three formats** — a live action list with buttons (Manual Chute), a
+reference card (Cover), and prose (Entry). And unlike page 29's shared strings (CLEAN 1), **these are three
+independent copies**: change a gate altitude and three files need editing.
+
+**What is wrong.** Same class as F-01 but at content level rather than page level, and with the same risk —
+`CoverPage`'s own header records what happened last time two surfaces stated one criterion independently
+(the S13 residual: *"the two surfaces that state the same criterion disagreed on glass (C7.1)"*).
+
+**Fix plan.**
+- **Make one of them the source.** The Manual Chute page holds the richest version (gates + actions +
+  `(TBC)`), so its strings should be the source and the other two should read them — exactly the move
+  `CoverPage` already makes for the interrupt criteria (CLEAN 1). That fix pattern is in the codebase and
+  needs no new mechanism.
+- **Then ask whether page 30 still has a reason to exist.** If its content is the Manual Chute page's, it
+  is a second view of one procedure. ⚠ **That is the owner's call, not a build chat's** — the page is
+  reconstructed from a real partial photo frame (a §1.4 tier-1 source), so *deleting* it discards a real
+  screen. **Recommend: keep the page, make it read the shared strings, and give it the layout DB-01 asks
+  for** — then it is a legitimate reference view rather than a third transcription.
+- **Must not break:** the `(TBC)` markers, on every surface.
+- **Verify:** grep for each gate altitude; each should appear in exactly one source file.
+
+---
+
+## DB-03 — Neither page has any touch, and page 30 cannot read the vehicle at all
+
+**TIER 3** *(recorded — the §1.4 evidence is genuinely thin)* · confirms S49 **H29/H30/H31**
+
+**Evidence.** Neither file contains a `HitTest`, and neither has a `ScreenPainter` branch. `EntryPage.Build`
+takes **no `PageState`**, so the page cannot read vehicle state even in principle. Page 29 does take state
+but reads exactly one field (`slewing`, for FC SLEW).
+
+**What is wrong — carefully.** Nothing on either page is drawn *as* a control, so this is **not** the
+S75 defect the other pages have: there is no false affordance here. What there is, is two screens that
+cannot participate in the mission they describe.
+
+⚠ **The constraint is real and is recorded.** Page 30's source is a partial photo frame with only
+*"Parachute Deployment Altitude"* legible (`FigmaUI.cs:57-61`); page 29's is *"a blurry photo frame"*. There
+is no tier-1 evidence for controls on either. **Inventing them would be a §1.4 tier-3 invention.**
+
+**Fix plan.**
+- **Page 29 has one clear (A) opportunity that needs no new source**: it names attitude criteria
+  (`30° sustained attitude error`, `600°/min attitude rate`) and the vehicle's *current* attitude and rate
+  are live (`RollDegText` … `YawRateText`, drawn on Docking in the same frame). Showing current-against-
+  criterion turns a static list into a live interrupt monitor — a readout, (A), no invention.
+- **Page 30 stays as it is** until DB-02 is decided.
+- ⚠ **Do not add navigation affordances to either.** T14 owns entry points, and S27 already records the
+  owner declining to assign these pages a Cover rail slot — *"no source names what belongs there"*.
+- **Verify:** page 29 with a live attitude, showing each criterion's current margin.
+
+---
+
+*Next: **pages 31 + 32** — the two Systems deep-views, and then Ascent (33) and Nav/Orbit Plot (34).*
 
 *⚠ **Three findings are page-wide, not per-page, and should be scheduled ahead of the sweep:***
 - ***H-01** — the preview's resolution. It decides how every later legibility finding is measured, so
