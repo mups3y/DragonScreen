@@ -104,14 +104,14 @@ public static class LayoutSweepTest
 
             // Only the rows the page actually draws - see Pages.StepVisible. A row outside the
             // window is not clipped, it is not there.
-            int visible = Pages.StepVisible(h);
+            int visible = Pages.StepVisible(w, h);
             for (int i = 0; i < visible; i++)
             {
                 Pages.StepRect(i, w, h, out x, out y, out rw, out rh);
                 // ⚠ The step rows are drawn on an 18 px pitch with a taller tappable box, so they
                 // deliberately abut. Overlap is checked; the round trip is what matters here.
                 Ctl c = C("STEP[" + i + "]", x, y, rw, rh, PageAct.AckStep,
-                          Pages.StepIdAt(i, h));
+                          Pages.StepIdAt(i, w, h));
                 c.InsetY = 5f;                 // see Ctl.InsetY - the tappable band is inset
                 // A step row may shrink to the pitch floor on a short screen; a BUTTON may not.
                 c.MinH = Pages.StepPitchMin;
@@ -204,7 +204,7 @@ public static class LayoutSweepTest
         {
             int w = ws[si], h = hs[si];
             string at = " @" + w + "x" + h;
-            float barTop = ChromeBar.TopY(h);
+            float barTop = ChromeBar.TopY(w, h);
 
             // The chrome bar's own links, on every page.
             for (int i = 0; i < ChromeBar.PageNames.Length; i++)

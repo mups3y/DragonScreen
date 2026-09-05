@@ -16,12 +16,12 @@ namespace DragonScreen
 {
     public static class DockingPageCentral
     {
-        public static float BodyHeight(int h) { return h - ChromeBar.Height; }
+        public static float BodyHeight(int w, int h) { return h - ChromeBar.HeightFor(w); }
 
         public static void Build(DisplayList dl, int w, int h, PageState s)
         {
             if (dl == null) return;
-            float body = BodyHeight(h);
+            float body = BodyHeight(w, h);
             float cx = w * 0.5f, cy = body * 0.53f;
             float radius = body * 0.30f;
 

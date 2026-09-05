@@ -323,10 +323,24 @@ public static class LayoutTest
 
         // The bar sits ON the bottom edge, whatever the screen height - and the three real screens
         // are NOT the same height.
-        Eq("chrome bottom lands on the screen edge, 703",
-           ChromeBar.TopY(703) + ChromeBar.Height, 703f, 1e-4f);
-        Eq("chrome bottom lands on the screen edge, 710",
-           ChromeBar.TopY(710) + ChromeBar.Height, 710f, 1e-4f);
+        Eq("chrome bottom lands on the screen edge, 1280x703",
+           ChromeBar.TopY(1280, 703) + ChromeBar.HeightFor(1280), 703f, 1e-4f);
+        Eq("chrome bottom lands on the screen edge, 1280x710",
+           ChromeBar.TopY(1280, 710) + ChromeBar.HeightFor(1280), 710f, 1e-4f);
+        // ⛔ AND AT THE SHIPPED WIDTH TOO ([[S120]]). The two checks above passed for ten days while
+        // the bar was physically half the size it was designed as, because both ran at 1280 - the
+        // one width where HeightFor(w) and the bare Height constant agree. A bar bolted to the
+        // bottom edge is not the same claim as a bar of the right SIZE, and only a second width
+        // can tell them apart. This is R-02's lesson applied to the bar's own geometry.
+        Eq("chrome bottom lands on the screen edge, 2560x1406",
+           ChromeBar.TopY(2560, 1406) + ChromeBar.HeightFor(2560), 1406f, 1e-4f);
+        Eq("the bar is the measured 64 px at the width it was measured at",
+           ChromeBar.HeightFor(1280), ChromeBar.Height, 1e-4f);
+        Eq("...and twice that on a panel twice as wide - the same fraction of the glass",
+           ChromeBar.HeightFor(2560), 128f, 1e-4f);
+        Check("the bar is the same fraction of the panel height at both shipped sizes",
+              Math.Abs(ChromeBar.HeightFor(1280) / 703f - ChromeBar.HeightFor(2560) / 1406f) < 1e-6f,
+              ChromeBar.HeightFor(1280) / 703f + " vs " + ChromeBar.HeightFor(2560) / 1406f);
 
         // AlertMask is an int, so the page set must stay inside its bits with room to spare.
         Check("page count fits the alert bitmask",
@@ -368,13 +382,13 @@ public static class LayoutTest
 
         // Above the bar is page content, not chrome - a touch there must not select a page.
         Check("a touch above the bar hits nothing",
-              ChromeBar.HitTest(100f, ChromeBar.TopY(H) - 1f, W, H) == -1, "");
+              ChromeBar.HitTest(100f, ChromeBar.TopY(W, H) - 1f, W, H) == -1, "");
         // Left of the first link is padding.
         Check("the left pad hits nothing",
-              ChromeBar.HitTest(1f, ChromeBar.TopY(H) + 10f, W, H) == -1, "");
+              ChromeBar.HitTest(1f, ChromeBar.TopY(W, H) + 10f, W, H) == -1, "");
         // The right-hand readouts are not links.
         Check("the readout area hits nothing",
-              ChromeBar.HitTest(W - 60f, ChromeBar.TopY(H) + 10f, W, H) == -1, "");
+              ChromeBar.HitTest(W - 60f, ChromeBar.TopY(W, H) + 10f, W, H) == -1, "");
         // Off-screen and negative coordinates must not crash or wrap.
         Check("negative coordinates hit nothing", ChromeBar.HitTest(-50f, -50f, W, H) == -1, "");
         Check("far off-screen hits nothing", ChromeBar.HitTest(99999f, 99999f, W, H) == -1, "");

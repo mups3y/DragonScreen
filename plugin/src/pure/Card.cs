@@ -25,7 +25,7 @@ namespace DragonScreen
 
         public static void Rect(int w, int h, out float x, out float y, out float cw, out float ch)
         {
-            float body = h - ChromeBar.Height;
+            float body = h - ChromeBar.HeightFor(w);
             cw = w * WidthFrac;
             ch = body * HeightFrac;
             x = (w - cw) * 0.5f;
@@ -76,7 +76,7 @@ namespace DragonScreen
             float cx, cy, cw, ch;
             Rect(w, h, out cx, out cy, out cw, out ch);
 
-            dl.Rect(0f, 0f, w, h - ChromeBar.Height, DragonPalette.Background);
+            dl.Rect(0f, 0f, w, h - ChromeBar.HeightFor(w), DragonPalette.Background);
 
             // ---- THE CARD, WITH ROUNDED CORNERS ----
             dl.Rect(cx + Radius, cy, cw - Radius * 2f, ch, DragonPalette.Panel);

@@ -40,31 +40,33 @@ namespace DragonScreen
 {
     public static class DockingPage
     {
-        /// <summary>Body height — everything above the chrome bar. Reused by drawing and the tests.</summary>
-        public static float BodyHeight(int h) { return h - ChromeBar.Height; }
+        /// <summary>Body height — everything above the chrome bar. Reused by drawing and the tests.
+        /// ⛔ TAKES THE WIDTH because the bar's height does ([[S120]]): the bar is a fixed fraction of
+        /// the glass, not a fixed pixel count, so the body left above it depends on the panel width.</summary>
+        public static float BodyHeight(int w, int h) { return h - ChromeBar.HeightFor(w); }
 
         /// <summary>Outer-ring radius as a fraction of the body height. Exposed so the layout test
         /// asserts placement against the ring rather than a magic number.</summary>
         public const float RingFraction = 0.30f;
 
         /// <summary>Radius of the central HUD ring the target is flown into.</summary>
-        public static float OuterRadius(int h) { return BodyHeight(h) * RingFraction; }
+        public static float OuterRadius(int w, int h) { return BodyHeight(w, h) * RingFraction; }
 
         /// <summary>Centre of the HUD reticle: horizontally centred, biased up so RANGE/RATE clear the
         /// bottom. ONE function for drawing and for the tests, so the two cannot drift apart.</summary>
         public static void Centre(int w, int h, out float cx, out float cy)
         {
             cx = w * 0.5f;
-            cy = BodyHeight(h) * 0.46f;
+            cy = BodyHeight(w, h) * 0.46f;
         }
 
         public static void Build(DisplayList dl, int w, int h, PageState s)
         {
             if (dl == null) return;
-            float body = BodyHeight(h);
+            float body = BodyHeight(w, h);
             float cx, cy;
             Centre(w, h, out cx, out cy);
-            float R = OuterRadius(h);
+            float R = OuterRadius(w, h);
 
             // ---- THE LIVE DOCKING VIEW IS THE BACKGROUND ----
             // Full bleed, behind everything. With no camera the page simply has a dark background and

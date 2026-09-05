@@ -727,7 +727,7 @@ namespace DragonScreen
             // Body area runs from the strip to the chrome bar. Centred in it, so the row stays put
             // when the screen height differs by a few pixels between displays.
             float bodyTop = stripH;
-            float bodyBottom = h - ChromeBar.Height;
+            float bodyBottom = h - ChromeBar.HeightFor(w);
             float cy = (bodyTop + bodyBottom) * 0.5f;
 
             // ---- SIZE THE GAUGES FROM THE TIGHTER AXIS, NOT THE ROOMIER ONE ----
@@ -799,7 +799,7 @@ namespace DragonScreen
                     (s.Valid && s.PerigeeShown) ? s.TimeToPeText : "-");
             SideRow(dl, sideX, sy + 126f, sw, "PERIOD", s.Valid ? s.PeriodText : "-");
 
-            StepColumn(dl, s, sideX, sy + 182f, sw, h);
+            StepColumn(dl, s, sideX, sy + 182f, sw, w, h);
 
             // ---- AUTO SEQUENCE ----
             // The vehicle flies itself and the crew can take it or hand it back - that authority is
@@ -880,7 +880,7 @@ namespace DragonScreen
             // covered and UNDOCK & LAND was invisible. The test that should have caught it asserted
             // against the PAGE bottom instead of the bar. `NavPage.MapRect` had the right pattern
             // three files away.
-            y = ChromeBar.TopY(h) - MissionGap - rh;
+            y = ChromeBar.TopY(w, h) - MissionGap - rh;
 
             // ---- AND A ROW, NOT A COLUMN, STARTING RIGHT OF THE SIDEBAR. ----
             // A column here would cross the gauges; the strip between AUTO SEQUENCE and the bar is
@@ -920,7 +920,7 @@ namespace DragonScreen
             rw = 280f;
             rh = 34f;
             x = w * 0.5f - rw * 0.5f;
-            y = h - ChromeBar.Height - 100f;
+            y = h - ChromeBar.HeightFor(w) - 100f;
         }
 
         /// <summary>
@@ -945,13 +945,13 @@ namespace DragonScreen
                 return PageHit.Of(PageAct.Undock, 0);   // the one mission button = UNDOCK
             }
 
-            int visible = StepVisible(h);
+            int visible = StepVisible(w, h);
             for (int i = 0; i < visible; i++)
             {
                 float x, y, rw, rh;
                 StepRect(i, w, h, out x, out y, out rw, out rh);
                 if (px >= x && px <= x + rw && py >= y - 3f && py <= y + rh - 4f)
-                    return PageHit.Of(PageAct.AckStep, StepIdAt(i, h));
+                    return PageHit.Of(PageAct.AckStep, StepIdAt(i, w, h));
             }
             return PageHit.None;
         }
@@ -987,11 +987,11 @@ namespace DragonScreen
         /// Deriving it from the space left means the list can never overflow at any resolution, and
         /// on the screens we actually ship it is still exactly 18 because the cap binds first.
         /// </summary>
-        public static float StepPitchFor(int h)
+        public static float StepPitchFor(int w, int h)
         {
             int rows = (int)StepId.Count;
             if (rows < 2) return StepPitch;
-            float room = ChromeBar.TopY(h) - StepTop;
+            float room = ChromeBar.TopY(w, h) - StepTop;
             float fit = room / rows;
             if (fit > StepPitch) fit = StepPitch;
             if (fit < StepPitchMin) fit = StepPitchMin;
@@ -1011,22 +1011,26 @@ namespace DragonScreen
         /// On both screens the Dragon actually has (703 and 710 high) this returns all fifteen and
         /// the pitch is the full 18, so nothing changes on the vehicle we fly.
         /// </summary>
-        public static int StepVisible(int h)
+        public static int StepVisible(int w, int h)
         {
             int rows = (int)StepId.Count;
-            float pitch = StepPitchFor(h);
+            float pitch = StepPitchFor(w, h);
             if (pitch <= 0f) return rows;
-            int fit = (int)((ChromeBar.TopY(h) - StepTop) / pitch);
+            int fit = (int)((ChromeBar.TopY(w, h) - StepTop) / pitch);
             if (fit > rows) fit = rows;
             if (fit < 1) fit = 1;
             return fit;
         }
 
-        /// <summary>The StepId drawn in window slot <paramref name="slot"/>. See StepVisible.</summary>
-        public static int StepIdAt(int slot, int h)
+        /// <summary>The StepId drawn in window slot <paramref name="slot"/>. See StepVisible.
+        /// ⛔ TAKES THE PANEL WIDTH ([[S120]]) because the window size depends on the pitch, the pitch
+        /// depends on the room above the chrome bar, and the bar's height is a fraction of the glass
+        /// rather than a pixel count. Hitting and drawing must derive it the same way or a touch
+        /// lands on the wrong step.</summary>
+        public static int StepIdAt(int slot, int w, int h)
         {
             int rows = (int)StepId.Count;
-            return slot + (rows - StepVisible(h));
+            return slot + (rows - StepVisible(w, h));
         }
 
         /// <summary>Reused every frame - the draw path allocates nothing. See the DisplayList rule.</summary>
@@ -1045,7 +1049,7 @@ namespace DragonScreen
             rw = w * 0.30f - pad * 2f;
             // Must track FlightPage's sidebar exactly: bodyTop + 110 for the apsis rows, + 182 for
             // the step column below them. Both live here so the two cannot drift apart.
-            float pitch = StepPitchFor(h);
+            float pitch = StepPitchFor(w, h);
             // `i` is a WINDOW SLOT, not a StepId - see StepVisible. On our screens they are the same
             // because every row fits.
             y = StepTop + i * pitch;
@@ -1058,12 +1062,16 @@ namespace DragonScreen
         /// THERE IS NO LAUNCH STEP. The Launch Director commands the countdown and the ground calls
         /// the abort-mode switches - the crew do checks and monitor. See StepList's header.
         /// </summary>
-        private static void StepColumn(DisplayList dl, PageState s, float x, float y, float w, int h)
+        /// ⛔ `w` HERE IS THE COLUMN WIDTH, NOT THE PANEL'S - it always was. `panelW` was added by
+        /// [[S120]] for the pitch, which depends on the chrome bar, which is a fraction of the panel.
+        /// The two are deliberately named apart: passing one for the other compiles and is wrong.
+        private static void StepColumn(DisplayList dl, PageState s, float x, float y, float w,
+                                       int panelW, int h)
         {
             dl.Text("SEQUENCE", x, y - 26f, Typography.Caption, TextAlign.Left, DragonPalette.Text6);
 
             // ONE pitch for drawing and hitting - StepRect derives the same number from h.
-            float pitch = StepPitchFor(h);
+            float pitch = StepPitchFor(panelW, h);
 
             int n = s.Valid ? StepList.Build(s.Steps, stepScratch) : 0;
             if (n == 0)
@@ -1072,7 +1080,7 @@ namespace DragonScreen
                 return;
             }
 
-            int first = n - StepVisible(h);
+            int first = n - StepVisible(panelW, h);
             if (first < 0) first = 0;
             for (int i = first; i < n; i++)
             {
@@ -1315,9 +1323,9 @@ namespace DragonScreen
         }
 
         /// <summary>The HUD ring height for a page of this height. One source, drawing and tests.</summary>
-        public static float DockingRingHeight(int h)
+        public static float DockingRingHeight(int w, int h)
         {
-            return ((h - ChromeBar.Height) - 24f) * 0.74f;
+            return ((h - ChromeBar.HeightFor(w)) - 24f) * 0.74f;
         }
 
         /// <summary>
@@ -1342,7 +1350,7 @@ namespace DragonScreen
         private static void DockingOld(DisplayList dl, int w, int h, PageState s)
         {
             float bodyTop = 24f;
-            float bodyBottom = h - ChromeBar.Height;
+            float bodyBottom = h - ChromeBar.HeightFor(w);
             float cx = w * 0.5f;
             float cy = (bodyTop + bodyBottom) * 0.5f;
 
@@ -1359,7 +1367,7 @@ namespace DragonScreen
                     DragonPalette.Text1);
 
             // ---- THE RINGS ----
-            float ringH = DockingRingHeight(h);
+            float ringH = DockingRingHeight(w, h);
             float ix, iy, iw, ih;
             if (Images.FitHeight(ImageId.HudRing, cx, cy, ringH, out ix, out iy, out iw, out ih))
                 dl.Image(ImageId.HudRing, ix, iy, iw, ih, DragonPalette.Text3);

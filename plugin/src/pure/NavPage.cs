@@ -102,14 +102,24 @@ namespace DragonScreen
         /// <summary>
         /// Bottom of the map, which the control cluster is anchored to.
         ///
-        /// ⛔ ChromeBar.Height IS NOT SCALED HERE, AND THAT IS DELIBERATE. This has to clear the bar
-        /// that is ACTUALLY DRAWN, and ChromeBar is still a RefPanelW-literal page of its own (its
-        /// Height, Pitch and Typography.Caption label do not track screenWidth either) - the same
-        /// defect as this file's, on a bar that appears on every legacy page rather than one. Scaling
-        /// it here and not there would open a gap between the page and the bar. Logged, not fixed
-        /// here (C1.1): see the 2026-09-06 batch, job 3.
+        /// ⚠ SUPERSEDED IN PLACE 2026-09-06 by [[S120]], per C1.16/G12 — the note below was the
+        /// reason this line looked wrong for a day, so it is kept rather than deleted.
+        ///
+        /// WHAT IT SAID:
+        ///   "⛔ ChromeBar.Height IS NOT SCALED HERE, AND THAT IS DELIBERATE. This has to clear the bar
+        ///   that is ACTUALLY DRAWN, and ChromeBar is still a RefPanelW-literal page of its own (its
+        ///   Height, Pitch and Typography.Caption label do not track screenWidth either) - the same
+        ///   defect as this file's, on a bar that appears on every legacy page rather than one. Scaling
+        ///   it here and not there would open a gap between the page and the bar. Logged, not fixed
+        ///   here (C1.1): see the 2026-09-06 batch, job 3."
+        ///
+        /// WHAT REPLACED IT: S120 scaled the bar. ⭐ THE REASONING IS UNCHANGED AND STILL BINDING —
+        /// this must clear the bar that is ACTUALLY DRAWN — it is the FACT underneath it that moved.
+        /// The bar now scales, so clearing it now MEANS HeightFor(w), and using the bare constant here
+        /// would open exactly the gap the old note warned about, in the opposite direction. The
+        /// two-sided check in LegibilityFloorTest is what holds the two together, at both widths.
         /// </summary>
-        private static float ColumnBottom(int w, int h) { return h - ChromeBar.Height - Pad * Sc(w); }
+        private static float ColumnBottom(int w, int h) { return h - ChromeBar.HeightFor(w) - Pad * Sc(w); }
 
         public static void NextViewRect(int w, int h, out float x, out float y,
                                         out float rw, out float rh)

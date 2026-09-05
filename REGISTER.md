@@ -13101,7 +13101,7 @@ True"* for two panels of identical shape). `build.py preview` green, 108 pages; 
 `page2_nav.png`, `page2_nav_planet.png`, `ui_navorbitplot.png`, `ui_cover_cam_map.png` inspected.
 `docs/QC_FINDINGS.md` untouched (QC's file). No `install`, no glass. No flight control wired (§14.4(a)).
 
-### S120 [O] `ChromeBar` is RefPanelW-literal on every legacy page — the bar halved physically when the panel did — **DOING** — [logged by [[S119]] (job 3 of the 2026-09-06 batch), TIER 2, R-02 family]
+### S120 [O] `ChromeBar` is RefPanelW-literal on every legacy page — the bar halved physically when the panel did — **DONE 2026-09-06** — [bar measured at **128 px = 9.1038% of the panel** in the rendered PNG, against the designed 9.1038% and the pre-fix 4.5519%] — [logged by [[S119]] (job 3 of the 2026-09-06 batch), TIER 2, R-02 family]
 - **The finding.** `plugin/src/pure/ChromeBar.cs` is written entirely in panel pixels measured at 1280:
   `Height = 64f`, `Pitch = 112f`, `Pad = 24f`, `Hairline = 2f`, `SelectBar = 3f`, `linkY = top + 22f`, and
   its page labels draw at a raw `Typography.Caption`. `TopY(h) = h - Height` subtracts a device-pixel
@@ -13121,6 +13121,93 @@ True"* for two panels of identical shape). `build.py preview` green, 108 pages; 
 - **DONE when:** `ChromeBar` takes the panel width and scales like `NavPage` does, every `h -
   ChromeBar.Height` caller follows it in the same commit, `LegibilityFloorTest`'s two-sided gap check still
   passes, and a preview PNG at 2560 shows the bar in the same proportion to the page it had at 1280.
+
+#### ✅ DONE 2026-09-06 — all four done-criteria met, and the bar's proportion was MEASURED off the PNG
+
+**What landed, in one commit as this line required.** `ChromeBar` keeps every constant as the number
+MEASURED at `RefPanelW` — the same contract `Typography.Min` has with `MinFor` — and routes every USE
+through `Typography.ScaleFor(w)`. New `HeightFor(panelW)`; `Height` stays as the measured 64.
+
+⭐ **`TopY(int h)` WAS REMOVED, NOT KEPT AS AN OVERLOAD, AND THAT IS THE LOAD-BEARING DESIGN CHOICE.**
+An overload would have let every existing caller keep the un-scaled behaviour and still compile — which is
+precisely how R-02 survived ten days. Deleting the one-argument form made the change **fail-closed**: the
+compiler then found **3 production call sites and 16 test call sites**, and I did not have to trust a grep.
+⚠ **It only works where the name changes.** `ChromeBar.Height` is still a valid `const`, so the eight
+`h - ChromeBar.Height` layout sites compiled silently and had to be found by hand — and the audit below is
+how that half was closed rather than assumed.
+
+**Files (10).** `ChromeBar.cs` · `Card.cs` · `DockingPage.cs` · `DockingPageCentral.cs` · `NavPage.cs` ·
+`Pages.cs` · and the four suites `LayoutTest` · `LayoutSweepTest` · `LegibilityFloorTest` · `PageTest` ·
+`PanelTest`. Signatures that gained the width because what they compute depends on the bar:
+`DockingPage.BodyHeight/OuterRadius`, `DockingPageCentral.BodyHeight`, `Pages.StepPitchFor`,
+`Pages.StepVisible`, `Pages.StepIdAt`, `Pages.DockingRingHeight`, `Pages.StepColumn`.
+⚠ **`StepColumn`'s existing `w` is the COLUMN width, not the panel's**, so the new parameter is named
+`panelW` — passing one for the other compiles and is wrong, which is worth a name.
+
+**⭐ MEASURED OFF THE RENDER, NOT ASSERTED.** `page2_nav_planet.png` (the PNG this line names as the
+visible symptom) was re-rendered and the bar located by its own hairline rule — the LAST run of
+`DragonPalette.Hairline` down the column, because that colour also appears in the readout separators at
+y 117/1108/1227 and taking the first run gives 91.7%, a wrong answer that looks like an answer.
+
+| | |
+|---|---|
+| bar top edge, from the PNG | y **1278** |
+| **measured height** | **128 px** — exactly `HeightFor(2560)` = 64 × 2 |
+| **measured proportion** | **9.1038%** of the 1406-high panel |
+| designed proportion (64 of 703, the width it was measured at) | **9.1038%** — match |
+| what it was before this line | **4.5519%** — half |
+
+**Visually inspected too:** the FLIGHT/VEHICLE/NAV/DOCKING/SETTINGS row and the STATE / COM1·TLM / MET
+block now read at the same weight as the content above them, which is the symptom this line opens with.
+The right-hand columns' 260/520 offsets scale with the type, so they did not collide — a trap noted in the
+code, since scaling the type alone would have run STATE into LINK at 2560 (S117's own warning).
+
+**Cross-width checks added where they belong** — `LegibilityFloorTest`, whose entire premise is that a
+width-dependent property cannot be tested at one width. New `ChromeBarTracksThePanel()`: the height ratio,
+flush-to-bottom at both widths, every `LinkRect` doubling, **`HitTest` still selecting each link at 2560**
+(the `LinkRect` rule — one source for drawing and hitting, or every tab becomes unpressable), every label
+doubling, and every label staying INSIDE the bar. Suite **69 → 99 checks**. `LayoutTest` **314 → 328**.
+
+⚠ **THE TWO-SIDED NAV GAP CHECK PASSED UNTOUCHED, AND THAT IS THE POINT.** This line warned not to break
+it. It survived the fix with no edit at all **because it asserts the GAP rather than either side's
+absolute value** — the best argument in the tree for writing checks that way, and it is now recorded in
+the check itself.
+
+**MUTATION-PROVEN.**
+| mutation | result |
+|---|---|
+| **G** — `HeightFor` returns the bare `Height` (un-scaled bar) | **10 checks across 2 suites, 9 suites failing** — including *"every label sits inside the bar at 2560x1406: 8 outside, first 'FLIGHT' at y 1386"*, i.e. labels off the bottom of the glass |
+| **H** — geometry scales, label type does not | **1 FAIL**: *"'FLIGHT' is 16 px @1280 and 16 px @2560 — it should be 32"* |
+| **I** — `LinkRect` x/width stop scaling | **10 FAIL** across all five links |
+
+**THREE STALE CLAIMS FOUND AND CORRECTED — two of them said the OPPOSITE of the new truth.**
+1. `NavPage.cs:105` — *"⛔ ChromeBar.Height IS NOT SCALED HERE, AND THAT IS DELIBERATE"*. **Superseded in
+   place** (C1.16/G12). ⭐ Its REASONING is unchanged and still binding — *this has to clear the bar that is
+   ACTUALLY DRAWN* — only the FACT under it moved. Clearing the bar now MEANS `HeightFor(w)`, and keeping
+   the bare constant would open the very gap the old note warned about, in the opposite direction.
+2. `LegibilityFloorTest.cs:222` — the same claim, same treatment; the check below it is untouched.
+3. `PanelTest.cs:605` — **a real un-scaled comparison still in the tree**, `ly + lh < H - ChromeBar.Height`.
+   It passed either way because it only ever ran at `W` = 1280, the one width where the two agree. **That
+   is R-02's blind spot exactly**, found by the audit rather than by the compiler, and now measured against
+   the bar that is actually drawn.
+
+**AUDITED, NOT ASSUMED:** `grep -rn "ChromeBar\.Height"` over `plugin/src` + `plugin/test` — every
+surviving hit is either `HeightFor(w)`, a SUPERSEDED-IN-PLACE quotation of the old note, or
+`LayoutTest`'s deliberate assertion that `HeightFor(1280) == Height`. **No layout expression anywhere in
+the tree still uses the bare constant.**
+
+**C1.16 / G12: 0 comment prose lines lost**, across all ten files, by normalised diff against `HEAD`
+(marker stripped, whitespace collapsed, quoting tolerated). Two apparent losses were single-line
+`<summary>` tags that became multi-line summaries; both confirmed present by substring.
+
+**Verified (C1.3).** `python plugin/build.py test` **green — ALL SUITES PASSED**. `python plugin/build.py
+preview` re-rendered and inspected. No `install`, no glass, no `git push`. No flight control wired
+(§14.4(a)). `docs/QC_FINDINGS.md` and `docs/BUILD_PLAN.md` untouched.
+
+⛔ **THIS DOES NOT DO [[S121]].** Only the bar and the call sites that lay out against it moved. The eleven
+legacy page files still draw in `RefPanelW` pixels, and **S121's prerequisite is now met** — its own text
+says `ChromeBar` goes first *"because every body is laid out against it"*. ⚠ It still needs its SPLIT
+before anyone starts it, exactly as its line says.
 
 ### S121 [O] The legacy page family draws in RefPanelW pixels — eleven files that do not track `screenWidth` — **TODO** — [logged by [[S119]] (job 3 of the 2026-09-06 batch), TIER 2, R-02 family; SPLIT THIS before doing it]
 - **The finding.** [[S117]] fixed `NavPage`. The same defect is in every other legacy page and shared widget:

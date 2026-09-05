@@ -600,10 +600,14 @@ public static class PanelTest
         }
 
         // And the list must fit above the chrome bar, or the last steps are unreachable.
+        // ⛔ HeightFor(W), not the bare Height constant ([[S120]]). This read `H - ChromeBar.Height`
+        // and passed either way, because it only ever ran at W = 1280 where the two are the same
+        // number - the exact blind spot R-02 is about. It is now measured against the bar that is
+        // actually drawn, so a width change moves the assertion with it.
         float lx, ly, lw, lh;
         Pages.StepRect((int)StepId.Count - 1, W, H, out lx, out ly, out lw, out lh);
-        Check("the whole list fits on the page", ly + lh < H - ChromeBar.Height,
-              "last step ends at " + (ly + lh) + ", chrome starts at " + (H - ChromeBar.Height));
+        Check("the whole list fits on the page", ly + lh < H - ChromeBar.HeightFor(W),
+              "last step ends at " + (ly + lh) + ", chrome starts at " + (H - ChromeBar.HeightFor(W)));
     }
 
     // ------------------------------------------------------------------ the simulated systems

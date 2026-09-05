@@ -50,6 +50,7 @@ public static class LegibilityFloorTest
         NavPageTracksThePanel();
         NavPageIsUnchangedAtTheReferenceWidth();
         StrokesKeepTheirPhysicalWeight();
+        ChromeBarTracksThePanel();
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed"
                           + "   (floor " + Typography.MinFor(W1) + " px @" + W1
@@ -223,6 +224,13 @@ public static class LegibilityFloorTest
         // track screenWidth - the same defect on a bar that appears on every legacy page). Scaling the
         // clearance here and not the bar there would open a gap. Logged for the 2026-09-06 batch's
         // job 3; pinned here so the two cannot drift apart in the meantime.
+        //
+        // ⚠ SUPERSEDED IN PLACE 2026-09-06 by [[S120]] (C1.16/G12): the bar is no longer
+        // RefPanelW-literal - it scales, and NavPage.ColumnBottom now clears HeightFor(w). The
+        // paragraph above is kept because it is why this check was written two-sided in the first
+        // place, and THE CHECK BELOW IS UNCHANGED: it was already correct for a scaled bar, because
+        // it asserts the GAP rather than either side's absolute value. That is the whole reason it
+        // survived the fix untouched, and it is the argument for writing checks this way.
         {
             float x1, y1, w1, h1, x2, y2, w2, h2;
             NavPage.NextViewRect(W1, H1, out x1, out y1, out w1, out h1);
@@ -230,12 +238,15 @@ public static class LegibilityFloorTest
             // Two-sided on purpose. "Clears the bar" alone would pass if the page left a 64 px hole
             // above it, which is what scaling ChromeBar.Height here (while the bar itself is not
             // scaled) would do. The gap must be the page's own padding, exactly - no overlap, no hole.
+            // ⚠ Post-S120 that hazard runs the other way too: leaving the page on the bare constant
+            // while the bar scales would put the bar OVER the controls at 2560. Two-sided catches
+            // both, which is why it is stated as an exact equality and not a clearance.
             Check("NAV sits exactly one Pad above the chrome bar it clears, at 1280",
-                  Math.Abs((ChromeBar.TopY(H1) - (y1 + h1)) - 24f * Typography.ScaleFor(W1)) < 0.01f,
-                  "gap " + (ChromeBar.TopY(H1) - (y1 + h1)) + ", want " + (24f * Typography.ScaleFor(W1)));
+                  Math.Abs((ChromeBar.TopY(W1, H1) - (y1 + h1)) - 24f * Typography.ScaleFor(W1)) < 0.01f,
+                  "gap " + (ChromeBar.TopY(W1, H1) - (y1 + h1)) + ", want " + (24f * Typography.ScaleFor(W1)));
             Check("NAV sits exactly one Pad above the chrome bar it clears, at 2560",
-                  Math.Abs((ChromeBar.TopY(H2) - (y2 + h2)) - 24f * Typography.ScaleFor(W2)) < 0.01f,
-                  "gap " + (ChromeBar.TopY(H2) - (y2 + h2)) + ", want " + (24f * Typography.ScaleFor(W2)));
+                  Math.Abs((ChromeBar.TopY(W2, H2) - (y2 + h2)) - 24f * Typography.ScaleFor(W2)) < 0.01f,
+                  "gap " + (ChromeBar.TopY(W2, H2) - (y2 + h2)) + ", want " + (24f * Typography.ScaleFor(W2)));
         }
     }
 
@@ -320,6 +331,95 @@ public static class LegibilityFloorTest
         Check("St(1) is at the one-pixel floor at both widths, which is the stated limit",
               Strokes.Px(1f, sc1) == 1 && Strokes.Px(1f, sc2) == 1,
               "@1280 " + Strokes.Px(1f, sc1) + ", @2560 " + Strokes.Px(1f, sc2));
+    }
+
+    // ---- 6. S120: THE CHROME BAR TRACKS THE PANEL -----------------------------------------------
+    // The bar is on EVERY legacy page, so it is the single component where this defect was most
+    // visible and least noticed: at the shipped 2560 it was 64 px on a 1406-high panel - 4.55% of the
+    // height where it was designed as 9.1% - with 16 device px labels on glass twice as wide.
+    //
+    // ⛔ WRITTEN ACROSS WIDTHS, like everything else here, and for the same reason: at 1280 alone a
+    // scaled bar and an un-scaled one are the same bar. That is why nothing caught this for ten days.
+    static void ChromeBarTracksThePanel()
+    {
+        // The geometry. The bar is a FRACTION of the glass, not a pixel count.
+        Eq("the bar is the measured 64 px at the width it was measured at",
+           ChromeBar.HeightFor(W1), ChromeBar.Height, 1e-4f);
+        Eq("...and doubles with the panel", ChromeBar.HeightFor(W2), 2f * ChromeBar.Height, 1e-4f);
+        Check("...so it is the same fraction of the panel height at both",
+              Math.Abs(ChromeBar.HeightFor(W1) / H1 - ChromeBar.HeightFor(W2) / H2) < 1e-6f,
+              ChromeBar.HeightFor(W1) / H1 + " vs " + ChromeBar.HeightFor(W2) / H2);
+        Eq("the bar still sits flush on the bottom edge at 1280",
+           ChromeBar.TopY(W1, H1) + ChromeBar.HeightFor(W1), (float)H1, 1e-4f);
+        Eq("...and at 2560", ChromeBar.TopY(W2, H2) + ChromeBar.HeightFor(W2), (float)H2, 1e-4f);
+
+        // The page links: same rectangles, same fraction of the panel, and hit-testing follows them.
+        for (int i = 0; i < ChromeBar.PageNames.Length; i++)
+        {
+            float ax, ay, aw, ah, bx, by, bw, bh;
+            ChromeBar.LinkRect(i, W1, H1, out ax, out ay, out aw, out ah);
+            ChromeBar.LinkRect(i, W2, H2, out bx, out by, out bw, out bh);
+            Eq("link " + i + "'s x doubles with the panel", bx, ax * 2f, 0.01f);
+            Eq("link " + i + "'s width doubles with the panel", bw, aw * 2f, 0.01f);
+            Eq("link " + i + "'s height doubles with the panel", bh, ah * 2f, 0.01f);
+            // ⛔ The ChromeBar.LinkRect rule: one source for drawing AND hitting. If the rects scale
+            // and HitTest does not, every tab becomes unpressable at the shipped width.
+            Check("...and a touch at link " + i + "'s centre still selects it at 2560",
+                  ChromeBar.HitTest(bx + bw * 0.5f, by + bh * 0.5f, W2, H2) == i,
+                  "got " + ChromeBar.HitTest(bx + bw * 0.5f, by + bh * 0.5f, W2, H2));
+        }
+
+        // The type. Every label the bar draws must double when the panel does - this is the half that
+        // makes the bar legible, as opposed to merely correctly placed.
+        DisplayList a = BuildBar(W1, H1);
+        DisplayList b = BuildBar(W2, H2);
+        Check("the bar draws the same page at both widths, command for command",
+              a.Count == b.Count && a.Count > 0, "1280 " + a.Count + " cmds, 2560 " + b.Count + " cmds");
+        if (a.Count == b.Count)
+        {
+            int texts = 0, worst = -1; float worstA = 0f, worstB = 0f;
+            for (int i = 0; i < a.Count; i++)
+            {
+                if (a.At(i).Kind != DrawKind.Text) continue;
+                texts++;
+                float ta = a.At(i).C, tb = b.At(i).C;
+                if (Math.Abs(tb - ta * 2f) > 0.01f && worst < 0)
+                { worst = i; worstA = ta; worstB = tb; }
+            }
+            Check("the bar draws text at all", texts > 0, "found " + texts);
+            Check("EVERY chrome-bar label doubles when the panel doubles", worst < 0,
+                  worst < 0 ? "" : "'" + a.At(worst).Str + "' is " + worstA + " px @1280 and "
+                      + worstB + " px @2560 - it should be " + (worstA * 2f));
+        }
+
+        // ...and every label stays INSIDE the bar it is drawn in. Scaling the type without scaling
+        // the box is S117's own trap, and on this component it would push MET and STATE off the
+        // bottom edge of the panel entirely.
+        foreach (int[] wh in new[] { new[] { W1, H1 }, new[] { W2, H2 } })
+        {
+            DisplayList d = BuildBar(wh[0], wh[1]);
+            float top = ChromeBar.TopY(wh[0], wh[1]);
+            int outside = 0; string first = null;
+            for (int i = 0; i < d.Count; i++)
+            {
+                DrawCmd t = d.At(i);
+                if (t.Kind != DrawKind.Text) continue;
+                if (t.B >= top && t.B + t.C <= wh[1]) continue;
+                outside++; if (first == null) first = "'" + t.Str + "' at y " + t.B + " size " + t.C;
+            }
+            Check("every label sits inside the bar at " + wh[0] + "x" + wh[1], outside == 0,
+                  outside + " outside, first " + first);
+        }
+    }
+
+    static DisplayList BuildBar(int w, int h)
+    {
+        ChromeState cs = new ChromeState();
+        cs.Met = "01:23:45"; cs.VehicleState = "ORBIT"; cs.LinkName = "COM1";
+        cs.LinkTimer = "00:42"; cs.LinkUp = true; cs.SelectedPage = 2;
+        DisplayList dl = new DisplayList(ChromeBar.Commands);
+        ChromeBar.Build(dl, w, h, cs);
+        return dl;
     }
 
     static DisplayList BuildNav(int w, int h, MapView view)

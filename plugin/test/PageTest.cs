@@ -399,7 +399,7 @@ public static class PageTest
             // ---- NOTHING MAY SIT UNDER THE CHROME BAR ----
             // The bar is drawn over every page and tested before every page, so a control beneath it
             // is a control that can never be pressed. Cheap to assert, invisible in a screenshot.
-            float barTop = ChromeBar.TopY(h);
+            float barTop = ChromeBar.TopY(W, h);
             foreach (NavCtl c in AllNav())
             {
                 float[] r = NavRect(c, h);
@@ -462,7 +462,7 @@ public static class PageTest
         foreach (int h in new int[] { H1, H2 })
         {
             float x, y, w2, hh;
-            float barTop = ChromeBar.TopY(h);
+            float barTop = ChromeBar.TopY(W, h);
             PageHit got;
 
             // ---- TABS ----
@@ -1437,7 +1437,7 @@ public static class PageTest
 
         float cx, cy;
         DockingPage.Centre(W, H1, out cx, out cy);
-        float R = DockingPage.OuterRadius(H1);
+        float R = DockingPage.OuterRadius(W, H1);
 
         // ---- THE HUD IS NOT A NAVBALL. This is the whole reason for the 2026-08-31 rebuild. ----
         bool navball = false;
@@ -1465,7 +1465,7 @@ public static class PageTest
             DrawCmd c = dl.At(camAt);
             Eq("the view is full bleed (x)", c.A, 0f, 0.01);
             Eq("the view is full bleed (w)", c.C, W, 0.01);
-            Eq("the view covers the body", c.D, DockingPage.BodyHeight(H1), 0.01);
+            Eq("the view covers the body", c.D, DockingPage.BodyHeight(W, H1), 0.01);
         }
 
         // ---- THE MONITORING READOUTS ARE PRESENT: RANGE, RATE, and the rotation corrections ----
