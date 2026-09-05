@@ -16690,7 +16690,7 @@ picture is identical for a 200 km rendezvous and a lunar transfer.
 - **DONE when:** the power pair reads two real buses, and every remaining duplicate is either justified in
   the entry or handed to the owner as a question.
 
-### S147 [S] The bottom status bar's live text is baked on every page — **TODO — un-held 2026-09-06, the R-01 policy exists** — [H40; TIER 2: 35 pages at once]
+### S147 [S] The bottom status bar's live text is baked on every page — **DOING** — [H40; TIER 2: 35 pages at once]
 ✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set
 one (SPLIT BY CONTENT TYPE — see S153). ⛔ **The condition that replaces it is mechanical, not a wait:**
 any text this line ADDS must be drawn at **`Typography.MinDesignFor(w, sc)` or above** if it is LIVE, or
