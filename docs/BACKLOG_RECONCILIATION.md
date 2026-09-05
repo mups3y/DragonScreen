@@ -68,8 +68,9 @@ other leaves a false open item.
 | `AS-01` | **H34** | Eleven ascent events, none tracked, the step machine runs unread | **[[S55]]** |
 | `VT-01` | **H21** | The VRIO page takes no state and has no touch (tints done, tracking not) | **[[S55]]** |
 
-⚠ **`S55` alone absorbs four QC findings** (`SC-01`, `MC-02`, `AS-01`, `VT-01`) plus five holes. Anyone
-picking up S55 is picking up more than its own text says, and its line now records that.
+⚠ **`S55` alone absorbed four QC findings** (`SC-01`, `MC-02`, `AS-01`, `VT-01`) plus five holes — which is
+exactly why it was **SPLIT into [[S156]]–[[S160]] on 2026-09-06**, one page per line, in S49 §6's own order.
+Each split line now carries its page's hole, its QC finding, and only the cautions that apply to it.
 
 ---
 
@@ -97,10 +98,10 @@ picking up S55 is picking up more than its own text says, and its line now recor
 | H16 | A | **[[S137]]** *(new)* | TODO |
 | H17 | A | **[[S139]]** *(new)* | **HELD** — policy question |
 | H18 | A | **[[S140]]** *(new)* | TODO |
-| H19 | A | [[S55]] | TODO |
+| H19 | A | **[[S158]]** *(S55 split)* | TODO |
 | H20 | A | [[S52]] | TODO |
-| H21 | A | [[S55]] | TODO |
-| H22 | A | [[S55]] | TODO |
+| H21 | A | **[[S160]]** *(S55 split)* | TODO |
+| H22 | A | **[[S156]]** *(S55 split)* | TODO |
 | H23 | B | — | §14.4(a); Part B wires it (§B12.5) |
 | H24 | B | — | **decided-(a)**, S28, owner 2026-09-02 |
 | H25 | A | **[[S141]]** *(new)* | TODO |
@@ -109,10 +110,10 @@ picking up S55 is picking up more than its own text says, and its line now recor
 | H28 | A | **[[S143]]** *(new)* | TODO |
 | H29 | B | — | §14.4(e)(3); audit's Q4 flags the (f) tension and does not decide it |
 | H30 | A | **[[S144]]** *(new)* | TODO — evaluation is (A), the wording is (C) and must not be edited |
-| H31 | A | [[S55]] | TODO |
+| H31 | A | **[[S157]]** *(S55 split)* | TODO |
 | H32 | A | [[S56]] | ✅ DONE |
 | H33 | A | [[S56]] | ✅ DONE |
-| H34 | A | [[S55]] | TODO |
+| H34 | A | **[[S159]]** *(S55 split)* | TODO |
 | H35 | A | **[[S145]]** *(new)* | TODO |
 | H36 | A | [[S57]] (SPLIT) + [[S62]] | see §2; QC `NO-02` is the same work |
 | H37 | A | [[S52]] | TODO |
@@ -201,15 +202,15 @@ figure is 36.** QC's file is not edited to say so (it is QC's); this is recorded
 | `MP-01` | **[[S149]]** *(new)* | part-closed: colour agrees, the words still differ |
 | `MP-02` | **[[S149]]** *(new)* | one value, three names, three colours |
 | `MP-03` | **[[S139]]** *(new)* | the dash surface again |
-| `SC-01` | [[S55]] | ≡ H19 |
+| `SC-01` | **[[S158]]** | ≡ H19 — S55 split 2026-09-06 |
 | `VV-02` | **[[S134]]** *(new)* | part-closed: fixture renders, the writer is still stranded |
-| `VT-01` | [[S55]] | part-closed: ≡ H21 |
-| `MC-02` | [[S55]] | ≡ H22 |
+| `VT-01` | **[[S160]]** | part-closed: ≡ H21 — S55 split |
+| `MC-02` | **[[S156]]** | ≡ H22 — S55 split |
 | `DK-03` | **[[S141]]** *(new)* | ≡ H25 |
 | `RZ-01` | **[[S143]]** *(new)* | part-closed: ≡ H27 + H28 |
 | `DB-01` `DB-02` `DB-03` | **[[S150]]** *(new)* | corner layout · triplicate content · no touch |
 | `NO-02` | [[S57]] + [[S62]] | ≡ H36 |
-| `AS-01` | [[S55]] | ≡ H34 |
+| `AS-01` | **[[S159]]** | ≡ H34 — S55 split |
 | `AS-02` | **[[S151]]** *(new)* | the Ascent page uses the left 40% |
 | `R-01` | **[[S153]]** *(new)* | ⭐ **HELD — the largest unowned item in the project.** One owner decision |
 | `R-02` | job 2, 2026-09-06 | ✅ **CLOSED** |

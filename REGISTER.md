@@ -7054,7 +7054,7 @@ drawn, pinned by a test. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H8/H18.
   whose label is not drawn"*), and giving either one a rect means first deciding what it DOES. Logged as their
   own line so closing S54 does not bury them → **S75**.
 
-### S55 [O] No procedure page is step-tracked — and the one real step state machine is stranded — **TODO** — [TIER 3: scheduled build — the §14.4(f) headline]
+### S55 [O] No procedure page is step-tracked — and the one real step state machine is stranded — **SPLIT 2026-09-06 into [[S156]]–[[S160]], in this line's own suggested order** — [TIER 3: scheduled build — the §14.4(f) headline]
 
 ⚠ **[[S125]] CROSS-REFERENCE, 2026-09-06 — THIS IS THE BIGGEST LINE IN THE BACKLOG AND ITS TEXT UNDERSTATES
 IT.** It owns holes H19, H21, H22, H31 **and** H34, **and it absorbs FOUR QC findings that were filed
@@ -7084,6 +7084,100 @@ that the FSM numbers (5486/1830) and the page's "(TBC)" figures are **intentiona
 SpaceX's own placeholder text kept verbatim. Track against the page's stated gates.
 **DONE when:** each procedure's steps advance off real state, verdicts are computed not hardcoded (the S31
 guardrail), and previews show pending / current / passed. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` §3 + §6.
+
+#### ✅ SPLIT 2026-09-06 — five lines, in **this line's own suggested order**, nothing re-scoped
+
+⛔ **This line told two chats to split it before starting** — its own text (*"five pages and four findings
+will not finish in one session"*) and [[S125]]'s cross-reference. The continuous run reached it and did
+that rather than starting the biggest line in the backlog whole.
+
+⭐ **The order is not mine.** It is S49 §6 step 6, restated on this line: *"Manual Chute first (cleanest…),
+then Entry, then Suit Leak's step flow, then Ascent (harvest `StepList`), then VrioTest last"*. Each split
+line carries the page's own hole, its QC finding, and the cautions that apply **to it** rather than to the
+group — which is the point of splitting, since three of the five cautions apply to exactly one page.
+
+| line | page | hole | QC | why it sits here in the order |
+|---|---|---|---|---|
+| **[[S156]]** | Manual Chute Deploy | H22 | `MC-02` | **Cleanest.** Compare `s.AltitudeM` to gates the page already prints. No new model, no new source. |
+| **[[S157]]** | Entry | H31 | — | Same model as S156, but `EntryPage.Build(dl,w,h)` **takes no `PageState` at all**, so it is a signature change first. |
+| **[[S158]]** | Suit Leak Check | H19 | `SC-01` | The verdict half is already exemplary (S31/S32). Only the step FLOW is missing, and its transitions already exist in `ScreenPainter`'s suit state. |
+| **[[S159]]** | Ascent | H34 | `AS-01` | A harvest, not a build: `pure/StepList.cs` is a live 15-row machine that renders only through `Pages.Build` and is stranded by `FigmaMode`. |
+| **[[S160]]** | VrioTest | H21 | `VT-01` | **Last, and it is the only one that needs a NEW model.** What a VRIO health lamp reports is not public, so it is a marked reconstruction — C1.15 applies. |
+
+⚠ **Everything this line established stays true and is carried onto the split lines, not lost here:** step
+TRACKING is a readout and Part-A-achievable now, while a step's ACTION BUTTON is actuation and stays Part
+B's (§14.4(a), unchanged by §14.4(f)); and the §B-side sequencing notes to [[S150]] and [[S151]].
+
+### S156 [S] Manual Chute Deploy: six live altitude gates and nothing says which is next — **TODO** — [H22 + QC `MC-02`; split 1 of 5 from [[S55]], and its cleanest]
+- **The finding.** The gates (`10.6 km`, `5.5 km`, `1.6 km`…) are literals in a `Step[]`, and **the row tint
+  is a function of a compile-time `Gate` flag, not of `s.Altitude`. Nothing compares the two.** The strip
+  above the steps already draws altitude live, on the same page, in the same frame.
+- ⭐ **The audit calls this "the clearest (A) in the audit"**, and the clearest split from (B): tracking is a
+  readout of `s.AltitudeM`; the DEPLOY buttons stay §14.4(a) no-ops. **No new model, no new source.**
+- ⛔ **DO NOT "FIX" THE ALTITUDES TO MATCH `MissionPhase`.** `SCREEN_INVENTORY.md` records that the FSM
+  constants (`5486` / `1830`) and the page's "(TBC)" figures are **intentionally two different things** —
+  SpaceX's own placeholder text, kept verbatim (§1.4). **Track against the PAGE's stated gates.** The
+  discrepancy (the page prints `1.6 km` for mains against `MainAltitude = 1830 m`, and `EntryPage` copies
+  the same string) is a **reporting** matter for the entry, not a licence to edit.
+- **DONE when:** each row reads passed / current / pending from `s.AltitudeM` against its own gate, the
+  no-data case is honest, a preview shows all three states, and a test pins that no gate constant moved.
+
+### S157 [S] `EntryPage.Build(dl, w, h)` takes no `PageState` at all — **TODO** — [H31; split 2 of 5 from [[S55]]]
+- **The finding.** *"Nothing live at all, structurally"* — the page prints parachute-deployment altitudes
+  while `s.Altitude`, `s.Steps.DroguesFired` / `MainsFired` and the phase are all live one call away.
+- ⚠ **It is a SIGNATURE change before it is a tracking change**, which is why it follows [[S156]] rather
+  than leading: the model is S156's, already proven by then, but this page cannot receive any state until
+  `Build` takes it. Every caller must move in the same commit.
+- ⚠ [[S150]] owns this page's **structure** (QC `DB-01`/`DB-02`/`DB-03` — corner layout, triplicate
+  content, no touch). **This line owns only its step tracking. Do not fix H31 twice.**
+- **DONE when:** `Build` takes `PageState`, the gates track it as in S156, and a preview shows it live.
+
+### S158 [S] Suit Leak Check: the sim is live, the *procedure* is not — **TODO** — [H19 + QC `SC-01`; split 3 of 5 from [[S55]]]
+- **The finding.** Both left ticks draw **checked at page-open, before the crew touch anything**;
+  *"SECTION 2: IN PROGRESS"* never advances; steps 2.3 / 2.4 / 2.5 are literals.
+- ⭐ **The verdict half is already exemplary and must not be disturbed** — S31/S32 built it, and [[S52]]
+  (2026-09-06) connected the cabin leak so its differentials now move with a real event. **This line is the
+  step-FLOW half only.**
+- **Model:** a step index advanced by the INITIATE / timer / FINISH events the page already owns.
+  **Research: none** — the transitions are already in `ScreenPainter`'s suit state.
+- **DONE when:** the ticks reflect what the crew has actually done, the section header advances, and a
+  preview shows the procedure before, during and after a run.
+
+### S159 [S] Ascent: eleven events, none tracked, while a live 15-row step machine runs unread — **TODO** — [H34 + QC `AS-01`; split 4 of 5 from [[S55]]]
+- **The finding.** The page's eleven ascent events are a static array. Meanwhile **`pure/StepList.cs` is a
+  15-row LIVE state machine** — crew aboard, escape armed, prop load, liftoff, latched Max-Q, MECO, stage
+  sep, SECO, Dragon sep, nose-cone open, plus an 8-mode `AbortMode()` — which renders **only** through
+  `Pages.Build` and is therefore stranded by `FigmaMode` (S49 §1.1). QC: *"the step machine that computes
+  six of them runs unread."*
+- ⭐ **This is a HARVEST, not a build.** The machine exists, is live, and is tested. The work is reaching it
+  from the Figma-era page.
+- ⚠ **[[S151]] (`AS-02`, the page's empty right 60%) is sequenced AFTER this line** — the content that
+  would fill that space is the tracking this line adds, so laying the page out first would lay it out
+  around content that is about to change.
+- **DONE when:** the events track `StepList`, the six it already computes are read rather than re-derived,
+  and a preview shows pending / current / passed.
+
+### S160 [S] VrioTest is inert end to end, and it is the only split that needs a NEW model — **TODO** — [H21 + QC `VT-01` (part-closed); split 5 of 5 from [[S55]]; **do it last**]
+- **The finding.** No `PageState` parameter, no HitTest, no glue branch; the five checklist ticks read a
+  literal `bool[]`; **there are no health LEDs on the page at all** — the "VRIO 1/2 LED" items are dim note
+  text. The file admits it (`:12`): the touch pass never landed here. QC `VT-01` is **part-closed** — its
+  tints are done, and its step tracking was *explicitly blocked on H34*, which is [[S159]]'s.
+- ⛔ **LAST FOR A REASON: this is the only one of the five that invents anything.** Under §14.4(f) the LED
+  *test* is a readout of a modelled avionics health state — **and what a VRIO health lamp actually reports
+  is not public**, so the model is a marked reconstruction (the S31 pattern: a verdict computed from the
+  model, never hardcoded).
+- ⛔ **C1.15 applies in full:** before writing that micro-sim, this line's own deliverable must record a
+  documented search against `docs/reference/INSTALLED_MODS.md` — what was searched for, what candidates
+  exist, and why each was accepted or rejected. **TestFlight is installed and models failure/reliability**,
+  which is the nearest real source and must be assessed before anything is invented.
+- ⚠ `SCREEN_INVENTORY.md` #6 already carries the real procedure structure — use it (§1.4) rather than
+  inventing the steps as well.
+- ⚠ QC `VT-02` is **withdrawn, no code owed** (the rebuild's deviations from the Figma frame were
+  adjudicated) — do not re-open it from this line.
+- **DONE when:** the page takes state, the checklist reflects a run, the LEDs read a marked micro-sim whose
+  verdict is computed, the C1.15 search is on the line, and previews show pass and fail.
+
+
 
 ### S56 [S] The systems tree and the P&ID are read-only while their toggle model exists and works — **DONE 2026-09-04** — [TIER 3: scheduled build] ⚠ batch deviation from C1.1/C1.7 authorised by owner 2026-09-04 via overseer
 Logged by **S49** (H32, H33). Neither page is in `FigmaUI.IsVehiclePage`, neither has a `HitTest`, and
