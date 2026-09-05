@@ -425,7 +425,10 @@ namespace DragonScreen
             if (!refPhase) DrawAttitudeCriteria(dl, X, Y, Z);
 
             if (refPhase)
-                DrawReferenceContent(dl, X, Y, Z);
+                // w and sc go through so FitRows can compare the legibility floor in the SAME units as
+                // the size it is clamping (S116). Z alone is not enough: it converts design -> panel,
+                // and the floor needs the conversion the other way, plus the panel width MinFor needs.
+                DrawReferenceContent(dl, X, Y, Z, w, sc);
             else
                 // the hairlines, as crisp primitives at their measured positions — all ten are dividers
                 // within the baked (non-Reference) panel body, so they are skipped on Reference Content.
@@ -684,25 +687,57 @@ namespace DragonScreen
         /// goes below Typography.Min (the measured legibility floor) and rows never overlap — a slot too
         /// short for one legible line overflows visibly instead of turning to mush.
         ///
-        /// ---- ⛔ THE CLAMP BELOW IS A KNOWN, OPEN DEFECT. DO NOT "TIDY" IT. (QC C-05, blocked) ----
-        /// `top`, `slotBottom`, `wantSize`, `wantGap` and `size` are all DESIGN units (the 3427x2112
-        /// frame); the caller multiplies by Z() afterwards. `Typography.Min` is PANEL pixels. So the
-        /// comparison is design-px against panel-px and under-protects by the height scale — at the
-        /// shipped panel it permits type far below the real floor, and the clamp has never once fired.
+        /// ---- ⛔ THE CLAMP BELOW WAS A KNOWN, OPEN DEFECT. FIXED 2026-09-06 BY [[S116]]. ----
+        /// ⚠ SUPERSEDED IN PLACE, per C1.16/G12 — the diagnosis below is kept VERBATIM because it is
+        /// the reasoning that earned the fix, and because a reader who finds the new panelW/sc
+        /// parameters needs to know what they are for. What it said, and what is now different.
         ///
-        /// It is LEFT ALONE ON PURPOSE. The unit fix is one line and its consequence is not: with an
-        /// honest floor (Typography.MinFor(panelW) — 32 px at the shipped 2560, not 16) the ENTRY
-        /// TIMELINE clamps to 48.07 design px and the block ends at design y 891.5 against a card
-        /// bottom of 760 — it OVERFLOWS BY 131 DESIGN PX, at every width. That overflow is what
-        /// FitRows was written to prevent, so the fix cannot land without one of C-05's layout
-        /// options, and two of the three touch the Reference Content page, which §14.2 classes TIER-3
-        /// (invention → joint discussion). That is an owner decision (C1.12) and it is not settled.
+        /// ITS OWN HEADING, VERBATIM, because a reader who greps for it must find it here rather than
+        /// conclude it was quietly dropped:
+        ///   "---- ⛔ THE CLAMP BELOW IS A KNOWN, OPEN DEFECT. DO NOT "TIDY" IT. (QC C-05, blocked) ----"
         ///
-        /// Tracked as [[S116]], BLOCKED. S112 and S115 each computed this fix as "safe at 2560" — both
-        /// against the un-doubled 16 px floor, which is R-02 — and job 1 of the 2026-09-06 batch
-        /// unwound that. Nothing here changes until the layout call is made.</summary>
+        /// WHAT IT CLAIMED (still an accurate description of the ORIGINAL code):
+        ///   `top`, `slotBottom`, `wantSize`, `wantGap` and `size` are all DESIGN units (the 3427x2112
+        ///   frame); the caller multiplies by Z() afterwards. `Typography.Min` is PANEL pixels. So the
+        ///   comparison is design-px against panel-px and under-protects by the height scale — at the
+        ///   shipped panel it permits type far below the real floor, and the clamp has never once fired.
+        ///
+        ///   It is LEFT ALONE ON PURPOSE. The unit fix is one line and its consequence is not: with an
+        ///   honest floor (Typography.MinFor(panelW) — 32 px at the shipped 2560, not 16) the ENTRY
+        ///   TIMELINE clamps to 48.07 design px and the block ends at design y 891.5 against a card
+        ///   bottom of 760 — it OVERFLOWS BY 131 DESIGN PX, at every width. That overflow is what
+        ///   FitRows was written to prevent, so the fix cannot land without one of C-05's layout
+        ///   options, and two of the three touch the Reference Content page, which §14.2 classes TIER-3
+        ///   (invention → joint discussion). That is an owner decision (C1.12) and it is not settled.
+        ///
+        ///   Tracked as [[S116]], BLOCKED. S112 and S115 each computed this fix as "safe at 2560" — both
+        ///   against the un-doubled 16 px floor, which is R-02 — and job 1 of the 2026-09-06 batch
+        ///   unwound that. Nothing here changes until the layout call is made.
+        ///
+        /// ⭐ THAT LAST PARAGRAPH IS NOW LOAD-BEARING EVIDENCE, not just history. The two false-safe
+        /// computations it names both produced "block ends at design y 748, 12 px of margin". The
+        /// LayoutTest checks this fix added REPRODUCE that exact 748 when the fix is mutated back out
+        /// — so the suite now fails on the specific error S112 and S115 made, rather than merely
+        /// describing it.
+        ///
+        /// WHAT REPLACED IT: the owner settled that decision on 2026-09-06 — verbatim, "option 2",
+        /// C-05's option (b) — and [[S123]] swapped ENTRY TIMELINE into card 3 and CONTINGENCY into
+        /// card 1. That supplies the room the diagnosis says was missing, so the unit fix could land,
+        /// and it did: the clamp now compares LIKE WITH LIKE via FloorDesign(panelW, sc).
+        ///
+        /// ⭐ AND BECAUSE THE SWAP CAME FIRST, THIS FIX IS A NO-OP ON THE SHIPPED RENDER. Both cards
+        /// now satisfy `need &lt;= avail` and take the early return, so the floor's value never reaches
+        /// the render at all. That is deliberate and it is what made the fix safe to land: a correction
+        /// to a comparison that is never reached cannot move a pixel. It is live insurance for the
+        /// next time a row is added or a slot is re-cut — which is the case FitRows exists for.
+        ///
+        /// ⛔ THIS DOES NOT MAKE THE CARDS LEGIBLE, and a reader must not take it that way. The rows
+        /// draw at RowSize 26 design = 17.31 panel px against a 32 px floor at the shipped 2560. That
+        /// is QC [[R-01]], it is open, and only the early return is keeping this clamp from firing on
+        /// it. If R-01 is ever fixed by letting the clamp raise these rows instead, the overflow
+        /// arithmetic above becomes live again and must be re-derived first.</summary>
         public static void FitRows(float top, float slotBottom, int count, float wantSize, float wantGap,
-                                   out float size, out float gap)
+                                   float panelW, float sc, out float size, out float gap)
         {
             size = wantSize; gap = wantGap;
             if (count < 1) return;
@@ -711,12 +746,39 @@ namespace DragonScreen
             if (avail <= 0f || need <= avail) return;
             float k = avail / need;
             size = wantSize * k; gap = wantGap * k;
-            if (size < Typography.Min)
+            // ⛔ FloorDesign, NOT Typography.Min. `size` is a DESIGN-frame number; the floor is a
+            // PANEL-pixel one. Comparing them directly is C-05, and it is the whole of that defect.
+            float floor = FloorDesign(panelW, sc);
+            if (size < floor)
             {
-                size = Typography.Min;
+                size = floor;
                 gap = (count > 1) ? (avail - size) / (count - 1) : wantGap;
             }
             if (gap < size) gap = size;
+        }
+
+        /// <summary>The glanceable legibility floor expressed in DESIGN-FRAME units, for a page that
+        /// draws design values through a scale `sc` (Z(v) = v * sc). This is the ONE place the
+        /// design-px/panel-px conversion happens, so there is exactly one line to get right.
+        ///
+        /// A row drawn at design size `d` reaches the panel at `d * sc` px, and must clear
+        /// Typography.MinFor(panelW). So the floor in design units is MinFor(panelW) / sc.
+        ///
+        /// ---- WHY THE ANSWER IS 48.068 AT BOTH SHIPPED WIDTHS, AND WHAT THAT DOES AND DOES NOT MEAN ----
+        /// MinFor(w) = 16 * w / 1280 and sc = h / 2112, so this reduces to 26.4 * (w / h): the design
+        /// floor depends ONLY ON THE PANEL'S ASPECT RATIO, not on its size. 1280x703 and 2560x1406 are
+        /// the same aspect, so both give 48.068 — which is why C-05's swap is correct at either width
+        /// and why the "not enough room" figure struck on 2026-09-06 was wrong at BOTH, rather than
+        /// merely stale at one.
+        ///
+        /// ⛔ BUT "SCALE-FREE" IS NOT "CONSTANT", and writing 48.068 here as a literal would repeat
+        /// R-02 in a new place. It is invariant under a change of SIZE at fixed aspect; a change of
+        /// ASPECT moves it, because the design frame is letterboxed (sc comes from the height alone
+        /// while the floor comes from the width). A 4:3 panel would give a different number.</summary>
+        public static float FloorDesign(float panelW, float sc)
+        {
+            float floor = Typography.MinFor(panelW);
+            return (sc > 0f) ? floor / sc : floor;
         }
 
         // ---- S105 / QC C-01: THE TOP STRIP, LIVE, AT THE BAKED ASSETS' OWN METRICS ----
@@ -797,12 +859,14 @@ namespace DragonScreen
         /// real §8/§4 flight facts, laid out in the three real card slots (rectangle_179/180/181) the baked
         /// export used for the Coast-phase body. Drawn only when the Reference Content rail item (index 5)
         /// is selected.</summary>
-        static void DrawReferenceContent(DisplayList dl, Func<float, float> X, Func<float, float> Y, Func<float, float> Z)
+        static void DrawReferenceContent(DisplayList dl, Func<float, float> X, Func<float, float> Y,
+                                         Func<float, float> Z, float panelW, float sc)
         {
             void Card(float titleY, float slotBottom, string title, string[] lines, float spacing)
             {
                 float size, gap;
-                FitRows(titleY + RowTop, slotBottom, lines.Length, RowSize, spacing, out size, out gap);
+                FitRows(titleY + RowTop, slotBottom, lines.Length, RowSize, spacing, panelW, sc,
+                        out size, out gap);
                 dl.ArcBand(X(333), Y(titleY + 28), Z(4), Z(9), 0, 360, DragonPalette.Accent);
                 dl.Text(title, X(362), Y(titleY), Z(34), TextAlign.Left, DragonPalette.White);
                 float ry = titleY + RowTop;

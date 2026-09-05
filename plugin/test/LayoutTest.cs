@@ -859,6 +859,10 @@ public static class LayoutTest
         // fix is what gets pinned - not the one string that happened to overflow.
         {
             float size, gap;
+            // S116: FitRows now takes the panel it is fitting for, because the legibility floor is a
+            // PANEL-pixel quantity and `size` is a DESIGN-frame one. The shipped panel and its design
+            // scale, once, for every call below. sc = h / RefH (2112) is CoverPage's own Z() scale.
+            const float PW = 2560f, PSc = 1406f / 2112f;
 
             // ENTRY TIMELINE: 7 rows from y=555 in a slot ending at 760. The design pitch does not fit.
             //
@@ -870,33 +874,126 @@ public static class LayoutTest
             // that is exactly why they are worth keeping — FitRows' scaling path is no longer exercised
             // by any shipped content (see the early-return checks below), so without a synthetic caller
             // the whole clamp would go untested and a later regression in it would land silently.
-            CoverPage.FitRows(555f, 760f, 7, CoverPage.RowSize, 32f, out size, out gap);
-            Check("QC6 a card too dense for its slot shrinks", size < CoverPage.RowSize, "size " + size);
+            // ⚠ SUPERSEDED IN PLACE 2026-09-06 by [[S116]], per C1.16/G12 — and this is the ONE place
+            // in this task where a check's ASSERTIONS changed, so it says exactly why.
+            //
+            // WHAT THESE FOUR CHECKS CLAIMED, with these same arguments:
+            //   "QC6 a card too dense for its slot shrinks"       size < RowSize
+            //   "QC6 ...to exactly the slot, less the bottom pad" block ends at slotBottom - RowPad
+            //   "QC6 ...and its rows still do not overlap"        gap >= size
+            //   "QC6 ...and the block keeps its proportions"      gap/size == wantGap/wantSize
+            //
+            // WHAT REPLACED IT, AND WHY IT IS NOT A TEST BENT TO FIT A FIX: those four pin FitRows'
+            // PROPORTIONAL-SCALING branch, and with an honest floor these arguments no longer REACH
+            // that branch. 7 rows of RowSize 26 in a 193-px slot scale to 23.018 design = 15.3 panel
+            // px, which is under the floor, so the function does what its own summary always said it
+            // would - "a slot too short for one legible line overflows visibly instead of turning to
+            // mush" - and clamps instead. The POLICY is unchanged; the arguments changed branch.
+            //
+            // ⛔ SO BOTH BRANCHES ARE STILL PINNED, not one. These arguments now pin the CLAMP branch
+            // (below), and a second call with a wantSize ABOVE the floor pins the scaling branch that
+            // they used to. Deleting either would have been the back-door landing the old note warned
+            // about, in the opposite direction.
+            //
+            // ⭐ AND THE NUMBER THIS NOW PINS IS THE ONE THE WHOLE C-05 SAGA WAS ABOUT. S112 measured
+            // the overflow at 131 design px in 2026-09; job 1 of the 2026-09-06 batch re-derived it as
+            // 131.5 and blocked S116 on it. With the fix in, the function produces 131.478 - so this
+            // check is also the standing proof that the honest floor behaves exactly as predicted, and
+            // that ENTRY TIMELINE could not have stayed in card 1.
+            CoverPage.FitRows(555f, 760f, 7, CoverPage.RowSize, 32f, PW, PSc, out size, out gap);
+            Eq("QC6/S116 a slot too short for legible type clamps to the floor, it does not shrink",
+               size, CoverPage.FloorDesign(PW, PSc), 0.001f);
+            Check("QC6/S116 ...and its rows still do not overlap", gap >= size,
+                  "gap " + gap + " size " + size);
+            Eq("QC6/S116 ...and it OVERFLOWS VISIBLY by the 131 design px C-05 predicted",
+               555f + gap * 6f + size - 760f, 131.478f, 0.01f);
+            Check("QC6/S116 ...which is why ENTRY TIMELINE could not stay in card 1",
+                  555f + gap * 6f + size > 760f, "block ends at " + (555f + gap * 6f + size));
+
+            // ---- THE SCALING BRANCH, still pinned - with a wantSize that can actually reach it -----
+            // ⛔ wantSize 100 is NOT arbitrary and must not be "tidied" back to RowSize. The scaling
+            // branch is reachable only when wantSize * k >= floor for some k < 1, i.e. only when
+            // wantSize > floor (48.07 design at the shipped aspect). RowSize is 26, so NO RowSize
+            // block can ever take this branch any more - the wanted size is already below the floor.
+            // That is a real consequence of S116 and it is logged as its own register line, not fixed
+            // here (C1.1). Until then this synthetic caller is the only cover the branch has.
+            CoverPage.FitRows(0f, 500f, 4, 100f, 160f, PW, PSc, out size, out gap);
+            Check("QC6 a block that CAN scale legibly shrinks rather than clamping",
+                  size < 100f && size > CoverPage.FloorDesign(PW, PSc), "size " + size);
             Eq("QC6 ...to exactly the slot, less the bottom pad",
-               555f + gap * 6f + size, 760f - CoverPage.RowPad, 0.02f);
+               0f + gap * 3f + size, 500f - CoverPage.RowPad, 0.02f);
             Check("QC6 ...and its rows still do not overlap", gap >= size,
                   "gap " + gap + " size " + size);
             Check("QC6 ...and the block keeps its proportions",
-                  Math.Abs(gap / size - 32f / CoverPage.RowSize) < 0.001f, "ratio " + (gap / size));
+                  Math.Abs(gap / size - 160f / 100f) < 0.001f, "ratio " + (gap / size));
 
             // PARACHUTES: 4 rows from 904 in a slot ending at 1241. Already fits, so nothing may move.
-            CoverPage.FitRows(904f, 1241f, 4, CoverPage.RowSize, 40f, out size, out gap);
+            CoverPage.FitRows(904f, 1241f, 4, CoverPage.RowSize, 40f, PW, PSc, out size, out gap);
             Check("QC6 a card that already fits is left alone",
                   size == CoverPage.RowSize && gap == 40f, "size " + size + " gap " + gap);
 
             // A slot far too short must not answer with illegible type: Typography.Min is a MEASURED
             // floor, so the block overflows visibly rather than turning to mush.
             //
-            // ⛔ THIS ONE STAYS `Typography.Min`, AND STAYS IN DESIGN SPACE, ON PURPOSE. `size` is a
-            // DESIGN-frame number and Min is a PANEL-pixel one - that mismatch IS QC C-05's unit bug.
-            // What this check pins is the OVERFLOW POLICY (FitRows' own summary: "a slot too short for
-            // one legible line overflows visibly instead of turning to mush"), not the floor, and it is
-            // the check that caught S112 inventing a third policy. C-05's fix is [[S116]] and it is
-            // BLOCKED: against an honest floor the clamp overflows its card by 131 design px at EVERY
-            // width, which needs an owner-level TIER-3 layout call (C1.12, not settled). Correcting the
-            // units here before that call would land the blocked fix by the back door. See FitRows.
-            CoverPage.FitRows(0f, 60f, 6, CoverPage.RowSize, 40f, out size, out gap);
-            Check("QC6 type never goes under Typography.Min", size >= Typography.Min, "size " + size);
+            // ⚠ SUPERSEDED IN PLACE 2026-09-06 by [[S116]], per C1.16/G12. WHAT THIS NOTE SAID:
+            //   "⛔ THIS ONE STAYS `Typography.Min`, AND STAYS IN DESIGN SPACE, ON PURPOSE. `size` is a
+            //   DESIGN-frame number and Min is a PANEL-pixel one - that mismatch IS QC C-05's unit bug.
+            //   What this check pins is the OVERFLOW POLICY (FitRows' own summary: "a slot too short for
+            //   one legible line overflows visibly instead of turning to mush"), not the floor, and it is
+            //   the check that caught S112 inventing a third policy. C-05's fix is [[S116]] and it is
+            //   BLOCKED: against an honest floor the clamp overflows its card by 131 design px at EVERY
+            //   width, which needs an owner-level TIER-3 layout call (C1.12, not settled). Correcting the
+            //   units here before that call would land the blocked fix by the back door. See FitRows."
+            //
+            // WHAT REPLACED IT: the owner made that TIER-3 call on 2026-09-06 ("option 2"), [[S123]]
+            // landed the swap, and S116 then landed the unit fix. So the deliberate mismatch is gone
+            // and this check is written in PANEL units, which is what S116's own verify line asks for
+            // ("assert the floor in PANEL units so a future resolution change cannot silently reopen
+            // this"). ⛔ THE OVERFLOW POLICY IT WAS GUARDING IS UNCHANGED and is still what is pinned
+            // below: a slot too short for one legible line overflows VISIBLY. The check that caught
+            // S112 inventing a third policy still catches it.
+            CoverPage.FitRows(0f, 60f, 6, CoverPage.RowSize, 40f, PW, PSc, out size, out gap);
+            Check("QC6 type never goes under the floor, MEASURED IN PANEL PIXELS",
+                  size * PSc >= Typography.MinFor(PW) - 1e-3f,
+                  "size " + size + " design = " + (size * PSc) + " panel px, floor "
+                      + Typography.MinFor(PW));
+
+            // ---- S116: THE UNIT FIX ITSELF, PINNED AT TWO WIDTHS SO IT CANNOT SILENTLY REOPEN -------
+            // R-02's lesson in one check: a floor whose premise is a width cannot be tested at one
+            // width. The SAME slot fitted for two panels of the same ASPECT must clamp to the same
+            // PHYSICAL size - which under the old design-px-vs-panel-px comparison it did not.
+            {
+                const float PW1 = 1280f, PSc1 = 703f / 2112f;
+                float s1, g1, s2, g2;
+                CoverPage.FitRows(0f, 60f, 6, CoverPage.RowSize, 40f, PW1, PSc1, out s1, out g1);
+                CoverPage.FitRows(0f, 60f, 6, CoverPage.RowSize, 40f, PW, PSc, out s2, out g2);
+                Check("S116 the clamped size is the same FRACTION of the panel at 1280 and 2560",
+                      Math.Abs(s1 * PSc1 / PW1 - s2 * PSc / PW) < 1e-6f,
+                      s1 * PSc1 + " px of " + PW1 + " vs " + s2 * PSc + " px of " + PW);
+                Check("S116 ...and clears the floor at BOTH, not just the one it was written at",
+                      s1 * PSc1 >= Typography.MinFor(PW1) - 1e-3f
+                          && s2 * PSc >= Typography.MinFor(PW) - 1e-3f,
+                      "@1280 " + (s1 * PSc1) + " vs " + Typography.MinFor(PW1)
+                          + ", @2560 " + (s2 * PSc) + " vs " + Typography.MinFor(PW));
+
+                // The conversion itself, stated once. ⛔ Asserted as a RATIO, never as the literal
+                // 48.068: writing that number here would be R-02 again in a new place. It is
+                // invariant under a change of SIZE at fixed aspect, and it MOVES with the aspect,
+                // because sc comes from the height alone and the floor comes from the width.
+                Check("S116 FloorDesign is MinFor(panelW) / sc, by construction",
+                      Math.Abs(CoverPage.FloorDesign(PW, PSc) - Typography.MinFor(PW) / PSc) < 1e-4f,
+                      "got " + CoverPage.FloorDesign(PW, PSc));
+                Check("S116 ...so it is the same design number at both shipped widths (same aspect)",
+                      Math.Abs(CoverPage.FloorDesign(PW1, PSc1) - CoverPage.FloorDesign(PW, PSc)) < 1e-3f,
+                      "@1280 " + CoverPage.FloorDesign(PW1, PSc1) + ", @2560 " + CoverPage.FloorDesign(PW, PSc));
+                Check("S116 ...and it MOVES when the ASPECT moves, which is why it is not a constant",
+                      CoverPage.FloorDesign(2560f, 1920f / 2112f) < CoverPage.FloorDesign(PW, PSc) - 1f,
+                      "4:3-ish " + CoverPage.FloorDesign(2560f, 1920f / 2112f)
+                          + " vs shipped " + CoverPage.FloorDesign(PW, PSc));
+                Check("S116 a degenerate scale falls back to the panel floor rather than dividing by zero",
+                      CoverPage.FloorDesign(PW, 0f) == Typography.MinFor(PW),
+                      "got " + CoverPage.FloorDesign(PW, 0f));
+            }
 
             // ---- S123: AFTER THE SWAP, NEITHER CARD CLAMPS — AND [[S116]] DEPENDS ON THAT ----------
             // The owner's C-05 ruling ("option 2", 2026-09-06) put CONTINGENCY's 4 rows in card 1 and
@@ -908,10 +1005,10 @@ public static class LayoutTest
             //
             // ⛔ Stated as `== RowSize` exactly, NOT ">= Typography.Min". An early return is the only
             // path that hands back the wanted size untouched; the clamp path cannot produce it.
-            CoverPage.FitRows(555f, 760f, 4, CoverPage.RowSize, 40f, out size, out gap);
+            CoverPage.FitRows(555f, 760f, 4, CoverPage.RowSize, 40f, PW, PSc, out size, out gap);
             Check("S123 card 1 (CONTINGENCY, 4 rows) fits unscaled — FitRows returns early",
                   size == CoverPage.RowSize && gap == 40f, "size " + size + " gap " + gap);
-            CoverPage.FitRows(1385f, 1823f, 7, CoverPage.RowSize, 32f, out size, out gap);
+            CoverPage.FitRows(1385f, 1823f, 7, CoverPage.RowSize, 32f, PW, PSc, out size, out gap);
             Check("S123 card 3 (ENTRY TIMELINE, 7 rows) fits unscaled — FitRows returns early",
                   size == CoverPage.RowSize && gap == 32f, "size " + size + " gap " + gap);
         }

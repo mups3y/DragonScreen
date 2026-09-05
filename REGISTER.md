@@ -12689,7 +12689,7 @@ the Figma-era pages. **No `install`, no glass** — separate owner gates (C1.12)
 cost note for the glass session (4× RenderTexture fill on three live screens) is left for that session to
 read, not acted on.
 
-### S116 [S] Land C-05's one-line unit fix — compare the legibility floor in panel space, not design space — **DOING** — [[S123]] LANDED 2026-09-06, so the order requirement is satisfied — [logged by S115, 2026-09-05 as "now-safe — UNBLOCKED by Q5"; that premise was FALSE. Blocked on [[R-02]] by job 1; R-02 LANDED in job 2 and the blocker CONVERTED to C-05's TIER-3 layout call; **that call was made by the owner 2026-09-06 ("option 2") and the block is discharged — see the foot of this line**]
+### S116 [S] Land C-05's one-line unit fix — compare the legibility floor in panel space, not design space — **DONE 2026-09-06** — [landed AFTER [[S123]], as its own line required; **pixel-identical render, proven by diff** — the fix is live insurance, not a visible change] — [logged by S115, 2026-09-05 as "now-safe — UNBLOCKED by Q5"; that premise was FALSE. Blocked on [[R-02]] by job 1; R-02 LANDED in job 2 and the blocker CONVERTED to C-05's TIER-3 layout call; **that call was made by the owner 2026-09-06 ("option 2") and the block is discharged — see the foot of this line**]
 - **The finding.** `CoverPage.FitRows` (`:673-689`) receives `top`/`slotBottom`/`wantSize`/`wantGap` in
   DESIGN units and returns a design `size`, but clamps it against `Typography.Min` (16, a PANEL-pixel
   constant) directly — `if (size < Typography.Min)` — comparing DESIGN px to PANEL px. At both widths tried
@@ -12784,6 +12784,104 @@ text quotes 131; QC's C-05 entry quotes both.
 ⛔ **This does NOT close R-01.** After the swap both cards still render rows at `RowSize` 26 design =
 **17.31 panel px against a 32 px floor**. S123 removes the overflow that blocked this fix; it does not make
 the rows legible. Do not let this line's `DONE` be read as legibility.
+
+#### ✅ DONE 2026-09-06 — landed after [[S123]], and it is a **PIXEL-IDENTICAL NO-OP**, exactly as predicted
+
+**What landed.** `FitRows` gained `panelW` and `sc` parameters and now clamps against a new
+`CoverPage.FloorDesign(panelW, sc)` = `Typography.MinFor(panelW) / sc` — the legibility floor converted
+into the DESIGN frame, which is the frame `size` is measured in. The design-px-vs-panel-px comparison that
+*is* QC C-05 is gone. `DrawReferenceContent` takes `w`/`sc` from `Build`, which already had both.
+Files: `plugin/src/pure/CoverPage.cs`, `plugin/test/LayoutTest.cs`. Nothing else.
+
+**⭐ THE WIDTH THAT WAS CURRENT WHEN IT LANDED — the register was asked to state this, so: `screenWidth`
+= 2560** (`DragonScreen.cfg`, since S115), height 1406, `sc` = 1406/2112 = 0.66572, floor
+`MinFor(2560)` = **32 panel px** = **48.068 design px**.
+
+**⭐ AND THE THING THE OLD LINE ASKED FOR IS NOW UNNECESSARY, WHICH IS BETTER THAN DOING IT.** The original
+text said to *"leave a comment saying why the divide-by-`sc` matters if `screenWidth` is ever lowered
+again"*. It does not need one: `FloorDesign` reduces to **26.4 × (w / h)**, so it depends on the panel's
+**ASPECT RATIO ALONE**, not its size. 1280×703 and 2560×1406 are the same aspect, so **both give 48.068**
+and a width change alone cannot move it. What *would* move it is an ASPECT change — `sc` comes from the
+height while the floor comes from the width — and that is what the code comment now warns about instead,
+because it is the real hazard. ⛔ The number is deliberately **not** written as a literal anywhere: doing
+that would be R-02 all over again in a new place, and the tests assert it as a **ratio**.
+
+**MEASURED, NOT ASSERTED — and the fix reproduces C-05's long-predicted number to three decimals.** With
+the honest floor in, the old ENTRY-TIMELINE-in-card-1 arguments clamp to 48.068 design and end at design
+y **891.478** against a card bottom of 760 — an overflow of **131.478**. S112 measured 131 in 2026-09 and
+job 1 of the 2026-09-06 batch re-derived 131.5. The build now produces it. That is the strongest evidence
+available that the corrected clamp is right, and it is pinned as a check rather than written in prose.
+
+**⭐ PIXEL-IDENTICAL, PROVEN BY DIFF — NOT ASSUMED.** `ui_cover_phase5.png` was rendered at `HEAD`
+(S123 only), then again with S116 applied, and compared with `PIL.ImageChops.difference`:
+**`getbbox()` returned `None`** — not one pixel differs, at 2560×1406. This is the property S123's line
+predicted (*"S116 becomes a no-op on the render"*) and it is what made the fix safe to land: both cards
+satisfy `need <= avail`, take the early return, and never reach the clamp. **`ui_cover_phase5.png` was
+also inspected directly** (and its card column cropped 1:1) — unchanged from S123's inspection, as the
+diff requires. `FitRows`' only production caller is `Card()` inside `DrawReferenceContent`, which is gated
+behind `refPhase`, so no other page can reach a line this task touched.
+
+**MUTATION-PROVEN — every new check shown to fail, and two mutations reproduce HISTORICAL errors.**
+| mutation | result |
+|---|---|
+| **D** — clamp against `Typography.Min` again (the original C-05 defect) | **5 FAIL**, and it reproduces *"block ends at 748"* — **the exact false-safe figure S112 and S115 both recorded** |
+| **E** — `FloorDesign` uses `Typography.Min` not `MinFor` (the R-02 form) | **8 FAIL**, reproducing *"24.03 design = 16 panel px"* — **the other historical false-safe, now caught automatically** |
+| **F** — `FloorDesign` returns the literal `48.0683f` | **2 FAIL**: the aspect-moves check and the degenerate-`sc` check — so the constant cannot be smuggled back in as a literal |
+
+⚠ **ONE SET OF EXISTING ASSERTIONS CHANGED, AND IT IS NOT A TEST BENT TO FIT A FIX.** Four QC6 checks
+(*"a card too dense for its slot shrinks"*, *"…to exactly the slot"*, *"…keeps its proportions"*, and the
+overlap check) pinned `FitRows`' **proportional-scaling** branch using 7 rows at `RowSize` in a 193-px
+slot. With an honest floor those arguments **no longer reach that branch** — they scale to 23.018 design
+= 15.3 panel px, under the floor, so the function does what its own summary has always promised (*"a slot
+too short for one legible line overflows visibly instead of turning to mush"*) and clamps. **The policy is
+unchanged; the arguments changed branch.** So **both branches are still pinned, not one**: those
+arguments now pin the CLAMP branch (including the 131.478 overflow), and a **new** synthetic call with
+`wantSize` 100 pins the scaling branch they used to. Deleting either would have been the back-door landing
+the superseded note warned about, in the opposite direction.
+
+**C1.16 / G12 COMPLIANCE — AND THE CHECK CAUGHT ME.** A normalised comment-prose diff against `HEAD`
+(marker stripped, whitespace collapsed, so re-indenting a quoted block is not a false positive) initially
+reported **5 genuinely lost lines**: the `⛔ THE CLAMP BELOW IS A KNOWN, OPEN DEFECT` heading, the
+three-line *"Tracked as [[S116]], BLOCKED. S112 and S115 each computed this fix as 'safe at 2560'…"*
+paragraph, and LayoutTest's *"See FitRows."* pointer. **All five were restored verbatim** inside the
+SUPERSEDED-IN-PLACE blocks and each was then confirmed present by exact substring match. Final state:
+`CoverPage.cs` **414 → 460** comment prose lines, `LayoutTest.cs` **272 → 320**, **0 lost**. Two comments
+are marked SUPERSEDED IN PLACE rather than retyped away (FitRows' diagnosis; LayoutTest's *"STAYS IN
+DESIGN SPACE ON PURPOSE"* note, whose premise — that the TIER-3 call was unsettled — is what expired).
+
+**Verified (C1.3).** `python plugin/build.py test` **green — layout suite 324 checks, all passed**; ALL
+SUITES PASSED. `python plugin/build.py preview` re-rendered, phase 5 inspected and pixel-diffed. No
+`install`, no glass, no `git push`. No flight control wired (§14.4(a)). `docs/QC_FINDINGS.md` not edited
+(QC's file); `docs/BUILD_PLAN.md` not edited (C1.12 guarded file).
+
+⛔ **STILL DOES NOT CLOSE [[R-01]]**, and the paragraph above this one already said so — repeated because a
+`DONE` here is the most likely thing to be misread as legibility. The rows draw at 26 design = **17.31
+panel px against a 32 px floor**. Nothing in S116 raises them; the early return is precisely what stops
+the clamp from raising them. **R-01 is open.**
+
+⚠ **STRAY LOGGED (C1.1), needs its own line — see [[S124]] below**, written rather than acted on: the
+proportional-scaling branch is now **unreachable for any `RowSize` block**.
+
+### S124 [S] `FitRows`' proportional-scaling branch is unreachable at `RowSize` — the wanted size is already below the floor — **TODO** — [logged by [[S116]] per C1.1, 2026-09-06; TIER 3: a live consequence of the honest floor, not a defect S116 introduced]
+
+- **The finding, and it is arithmetic rather than opinion.** `FitRows` takes its scaling branch only when
+  `need > avail`, which forces `k = avail/need < 1`, and the result survives the clamp only when
+  `wantSize * k >= FloorDesign`. Together those require **`wantSize > FloorDesign`**. At the shipped
+  aspect `FloorDesign` is **48.068 design px** and `CoverPage.RowSize` is **26**. So **no block drawn at
+  `RowSize` can ever take the scaling branch** — the wanted size is already below the floor, and every
+  such block that does not fit outright clamps and overflows visibly.
+- **What that means, stated carefully.** It is NOT a regression: before S116 the clamp never fired at all,
+  so the scaling branch was reachable only because the floor was being compared in the wrong units. It IS
+  a narrowing of what `FitRows` can do for the content it is actually used on, and it is a second face of
+  **[[R-01]]** — `RowSize` 26 is below the legibility floor at the shipped panel, which is the whole of
+  R-01. If R-01 is resolved by raising `RowSize` above 48.068 design, this line closes itself.
+- **Not acted on here (C1.1).** S116's declared output was the unit fix. The synthetic `wantSize` 100
+  caller added to `LayoutTest` is the branch's only remaining coverage and is commented as such, so the
+  branch cannot rot silently in the meantime.
+- **DONE when:** either R-01's resolution raises `RowSize` above the floor (and this line records that it
+  did), or a deliberate decision is recorded that the scaling branch is dead code for the Cover's content
+  and it is documented as such in `FitRows`. ⚠ The second option is a judgement about the page's type
+  size and therefore **rides R-01**, so do not take it independently.
 
 ### S117 [O] `NavPage`'s text does not scale with `screenWidth` — Q5 halves the live NAV screen's (and the Cover Map view's) legibility — **DONE 2026-09-06** — [landed with [[R-02]] as job 2 of the 2026-09-06 owner batch; NAV + the four pages that reuse its renderers now track the panel; ChromeBar logged, not fixed]
 - **The finding.** `src/pure/NavPage.cs` (live NAV screen, `DragonScreen.cfg` screen 3; also reused by
