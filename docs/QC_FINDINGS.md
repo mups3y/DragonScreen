@@ -652,6 +652,113 @@ is below the floor at the shipped width. C-05's fix (compare in panel space) is 
 necessary, but on its own it now exposes an overflow the layout cannot absorb — its option (b), moving
 ENTRY TIMELINE into the taller card, does not create enough room. **Sequence C-05 behind R-01.**
 
+### ⛔ STRUCK 2026-09-06 — THE SENTENCE ABOVE IS WRONG. Option (b) creates room to spare.
+
+**The two words that are struck are *"does not create enough room"*, and the recommendation that rests on
+them, *"Sequence C-05 behind R-01."* The text stays visible above (C1.16): a reader has to be able to see
+that a measurement in this file was wrong, and what replaced it.**
+
+**Who measured what.** The 2026-09-06 build chat measured the slots and found the opposite; the overseer
+verified the derivation from source rather than relaying it; and **I re-derived it myself, from
+`CoverPage.cs`, before striking anything** — because taking a handed-down number on trust is exactly the
+failure being corrected here. My figures and theirs agree to three decimal places.
+
+**The derivation, from source.** `Box` rows for the three card backgrounds (parsed with comment lines
+stripped — the Keys array carries quoted strings inside comments, and not stripping them shifts every index):
+
+| card | background | box `{x,y,w,h}` | bottom | `titleY` | `top` = titleY+56 | **`avail`** = bottom−12−top |
+|---|---|---|---|---|---|---|
+| 1 | `rectangle_179` | {240, 443, 1187, **317**} | 760 | 499 | 555 | **193** |
+| 2 | `rectangle_180` | {240, 792, 1187, 449} | 1241 | 848 | 904 | 325 |
+| 3 | `rectangle_181` | {240, 1273, 1187, **550**} | 1823 | 1329 | 1385 | **426** |
+
+`RowTop` 56 · `RowSize` 26 · `RowPad` 12 (`:666`); `avail = slotBottom - RowPad - top` (`:699`);
+`FitRows(titleY + RowTop, slotBottom, …)` (`:795`).
+
+**The floor, and a fact worth having:** `32` panel px ÷ `sc` 0.66572 = **48.068 design px**. ⚠ And
+`16` panel px ÷ `sc` 0.33286 = **48.068 design px** — *the identical number*. The design-space floor is
+**scale-free**, because both the floor and `sc` doubled together. **So the struck sentence was not a stale
+1280-era figure that the resolution change invalidated. It was wrong when it was written, and it would have
+been wrong at either width.**
+
+**Seven rows at the floor** (gap clamps to size, so the block is 7 × 48.068) = **336.48 design px**:
+
+| | |
+|---|---|
+| card 3 `avail` 426 | **FITS, with 89.5 design px to spare** |
+| card 1 `avail` 193 | overflows by 143.5 — which is why the swap is needed at all |
+| card 1 at the floor holds | exactly **4** rows (192.27 of 193) — and CONTINGENCY has exactly 4 |
+
+**🟢 OWNER RULING, 2026-09-06, verbatim: "option 2"** — ENTRY TIMELINE swaps into card 3, CONTINGENCY into
+card 1, the baked backgrounds unmoved. **C-05 is no longer sequenced behind R-01.**
+
+### ⚠ One thing my own re-derivation adds: the swap makes the fix SAFE, not SUFFICIENT
+
+After the swap, `FitRows` **never clamps on either card**, because each block already fits at its wanted
+size and the function returns early (`if (need <= avail) return;`):
+
+| | rows | `need` | `avail` | outcome |
+|---|---|---|---|---|
+| ENTRY TIMELINE in card 3 | 7 | 218 | 426 | fits unscaled — clamp never fires |
+| CONTINGENCY in card 1 | 4 | 146 | 193 | fits unscaled — clamp never fires |
+
+**That is exactly why the unit fix lands as a no-op on today's render**, as the ruling says — confirmed here
+rather than assumed. ⛔ **But both cards then render their rows at `RowSize` 26 design px = 17.31 panel px,
+still barely half the 32 px floor.** The swap removes the *overflow* that blocked the fix; it does not make
+the rows legible. **Legibility remains R-01's**, and no part of this correction should be read as closing it.
+
+### 🔎 How the wrong figure got written — named, because that is the valuable part
+
+**The sentence carries no number at all.** That is the first thing wrong with it: a conclusion stated
+without its arithmetic, in a file whose entire worth is that its claims carry measurements. It is the same
+shape as the defect this role found in the preview — an instrument reporting confidently without being
+checked — except this time the instrument is my own file.
+
+**The mechanism, most probably: the option was restated in half.** C-05's own fix plan says option (b) is
+
+> *"move ENTRY TIMELINE into card 3 (550 px, currently ~45% empty) **and CONTINGENCY into card 1**"*
+
+— a **swap**. The struck sentence renders it as *"moving ENTRY TIMELINE into the taller card"* and **drops
+the second clause entirely.** Read that way, card 3 has to hold both lists, and the arithmetic genuinely
+fails:
+
+| reading | card 3 must hold | vs `avail` 426 |
+|---|---|---|
+| as a one-way move, both at the floor | 336.48 + 192.27 = **528.75** | short by 102.8 → *"not enough room"* |
+| as a one-way move, CONTINGENCY unscaled | 336.48 + 146 = **482.48** | short by 56.5 → *"not enough room"* |
+| **as written — a swap** | **336.48** | **89.5 to spare** |
+
+So the number was never computed against the option as actually written. **It is an error of paraphrase that
+produced a false measurement, not an error of measurement** — which is worse, because paraphrase leaves no
+arithmetic behind for a reader to check.
+
+⚠ **The alternative I considered and rejected:** that card 2's `avail` (325) was measured instead of card
+3's (426) — 325 < 336.48 would also read as "not enough room", by a near-miss of 11.5. **I do not think that
+is what happened**, because the sentence says *"the taller card"* and card 3 **is** the taller card (550 vs
+449), so the card was identified correctly even as its contents were not. I cannot prove which occurred; the
+dropped clause is visible in the text, and the card-2 hypothesis has nothing supporting it but arithmetic
+that also happens to fail.
+
+**The lesson for this file, stated so it outlives this entry:** every claim of the form *"X does not fit Y"*
+must carry the two numbers and where they came from. Three of the four figures needed here
+(`avail`, the floor, the block height) were already derivable from constants named elsewhere in this same
+document; none was written down at the point of the claim, and so nothing caught it for two tasks.
+
+### ✅ The horizontal claim — checked, and it is NOT in this file
+
+The 2026-09-06 build chat warned that after R-01 two CONTINGENCY rows would overrun **card 1** horizontally.
+Searched this document for it under every phrasing I could think of (`overrun`, `too wide`, `wider than`,
+`horizontally`, `overflow.*card 1`, `clip`): **all 14 `overrun` hits belong to C-03's NEXT VIEW pill, the
+owner's globe note, or the tier table. No version of the horizontal claim appears here.** Nothing to
+re-attribute.
+
+**Recording why it could never have been the swap's fault**, so it is not mis-filed later: all three card
+backgrounds are **`x = 240, w = 1187` — identical widths** (table above), and `Card()` (`:792`) takes no
+per-card x. It draws every card's bullet at `X(333)`, every title at `X(362)` and **every row at `X(340)`**.
+A row that overruns one card horizontally therefore overruns all three by the same amount, in whichever card
+it sits. **Any such overrun is R-01's** — it would be caused by raising the type to the floor, not by moving
+a list between two boxes of the same width.
+
 ### ⛔ CONFIRMED, AND PROVED TO BE Q5-GATED — 2026-09-05, S112 (no code changed)
 
 **The unit bug is real, exactly as filed.** `FitRows`' arguments and return are all in the 3427×2112 design
