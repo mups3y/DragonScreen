@@ -77,7 +77,7 @@ Cover's seven phase views, plus the lower analog console panel. **The six Vehicl
 | 14 | Entry | ENTRY GO / NO-GO | ✅ **DONE** *(placeholder — see M-02)* | 2026-09-05 |
 | **15** | **Vehicle** | VEHICLE OVERVIEW *(tab: All)* | ✅ **DONE — 3 findings** | 2026-09-05 |
 | 16 | SuitCheck | SUIT LEAK CHECK | NOT STARTED | — |
-| 17 | VehicleMech | MECH PANEL *(tab: Mech)* | NOT STARTED | — |
+| **17** | **VehicleMech** | MECH PANEL *(tab: Mech)* | ✅ **DONE — 3 findings** | 2026-09-05 |
 | 18 | AudioVideo | VIDEO SETTINGS | NOT STARTED | — |
 | 19 | VrioTest | TEST VRIO HEALTH LEDS | NOT STARTED | — |
 | **20** | **VehicleCrew** | VEHICLE — CREW *(sub-tab)* | ✅ **DONE — 4 findings** *(shared section, 20–25)* | 2026-09-05 |
@@ -2508,7 +2508,136 @@ adds nothing to the question.
 
 ---
 
-*Next: **page 17 — VehicleMech**, the last of the Vehicle family.*
+---
+
+# PAGE 17 — MECH PANEL
+
+**Renders inspected:** `ui_vehiclemech.png` · `ui_vehiclemech_alarm.png` · `ui_vehiclemech_nofeed.png`.
+
+**Source:** `plugin/src/pure/VehicleMechPage.cs` (166 lines).
+
+**S49's entry.** §2: *"Three of five donut nodes live off real acceleration; SEAT n TACH ×4 dashed;
+`Awaiting` static"* (H14, H15). Confirmed exactly. The render adds one thing S49 could not see from a single
+file: what `Awaiting` looks like **beside the other page that names the same check**.
+
+## What was checked and found CLEAN
+
+1. **Three donuts are genuinely live** off real acceleration — `ACCELERATION 1.42 g`, `CENTRIPETAL 0.881 g`,
+   `RESISTANCE 0.00 g` — and `PRESSURE 14.72 psia` is live too (four of five).
+2. **The dead-feed guard is present** — `s.Valid ? … : Dash` on the status word (`:135`), and the dashed
+   rows dash rather than zeroing.
+3. **The donut colour here is `Accent`, which is the honest choice** — a reading, not a verdict. ⚠ It is
+   also the reason MP-02 is a contradiction rather than a second instance of V-01.
+4. **No HitTest, and none owed** — every touchable thing on the page (the eight tabs, the two deep-view
+   links) belongs to `VehicleTabBar` / `VehicleDeepViewLinks`, which have their own, and are routed at
+   `FigmaUI.cs:299-307`.
+
+---
+
+## MP-01 — `ALL SYSTEMS CHECK` reads "Normal" on the Vehicle Overview and "Awaiting" in caution amber on the Mech Panel, in the same frame
+
+**TIER 1** · **NEW** · S49 **H15**'s class, across two pages
+
+**Evidence.** The same named check, on two pages the crew reaches with one tap of the same tab strip:
+
+| page | source | word | colour |
+|---|---|---|---|
+| Vehicle Overview | `VehicleOverviewPage.cs:61` — `ChkState[0] = "Normal"`, `ChkKey[0] = 0` | **Normal** | White |
+| Mech Panel | `VehicleMechPage.cs:135` — `C(s.Valid ? "Awaiting" : Dash, …, Amber)` | **Awaiting** | **Amber (caution)** |
+
+Both are hardcoded. Neither is computed from anything. On `ui_vehicle.png` and `ui_vehiclemech.png` — the
+same fixture, the same frame — the crew is told the all-systems check is complete and normal, and that it is
+still awaiting, one tab apart.
+
+**What is wrong.** S49 H15 catalogues status words that contradict *live state on the same screen*. This is
+the harder version: two hardcoded words contradicting **each other** across screens, with no model behind
+either, so there is no fact of the matter to appeal to. And the Mech Panel's version is amber — a standing
+caution the crew can never clear, on a check that the neighbouring page says passed.
+
+⚠ **Note the asymmetry that makes this worse than V-02:** the Overview's `ALL SYSTEMS CHECK` is drawn in
+*White* (`ChkKey = 0`, neutral), so it does not even claim to be a verdict. The Mech Panel's is amber, which
+does. The two disagree on the *word*, the *colour* and the *claim*.
+
+**Fix plan.**
+- **One check, one source.** Whatever `ALL SYSTEMS CHECK` means, both pages must read it from the same
+  place — the rule T14 established for the systems tree and the console plate, and the rule V-01 needs for
+  the cabin bands.
+- **The obvious source already exists:** `Alarms.SystemSeverity(ps)` is the build's authoritative
+  vehicle-wide verdict — it folds the FDIR spine, propellant, power and crew environment, and
+  `Alarms.Word()` already turns it into a word. `ScreenPainter.cs:1123` computes it every frame. An
+  `ALL SYSTEMS CHECK` driven by it would be live on both pages, and would say the same thing on both.
+- ⚠ **"Awaiting" is not a severity**, so it cannot come from `Alarms.Word` — it is a *procedural* state
+  (a check not yet run). If the row is meant to be procedural rather than a health verdict, it needs a
+  step model, and there is none on either page. **That is the decision to make: is `ALL SYSTEMS CHECK` a
+  health verdict (A, buildable now off `SystemSeverity`) or a procedure step (needs a model, and the only
+  real step machine in the tree — `StepList` — is stranded per S49 §1.1)?** Recommend the health-verdict
+  reading: it is what the Overview's neutral White already implies, and it is buildable today.
+- **Must not break:** the `!valid` dash on both pages.
+- **Verify:** render both pages from one fixture and require the same word and the same colour; then trip a
+  subsystem and require both to change together.
+
+---
+
+## MP-02 — The same 14.72 psia is called PRESSURE here and CABIN PRESSURE / CABIN PRESS elsewhere, and drawn in three different colours
+
+**TIER 2** · **NEW** · the third surface of **V-01 / S-01**
+
+**Evidence.** One quantity, three pages, in the same frame:
+
+| page | label | value | ring colour |
+|---|---|---|---|
+| Vehicle Overview | `CABIN PRESSURE` | 14.72 psia | **Yellow** (constant) |
+| Vehicle — Crew | `CABIN PRESS` | 14.72 psia | **Yellow** (constant) |
+| Mech Panel | `PRESSURE` | 14.72 psia | **Accent** (constant) |
+
+**Three names and two colours for one reading.** The Mech Panel's `Accent` is the *honest* one — a reading,
+not a verdict — which is exactly why the disagreement matters: the two Vehicle pages are asserting a caution
+that this page does not, about the same number, at the same instant.
+
+**Fix plan.**
+- **Colour** is V-01/S-01's fix and needs nothing extra here: once the two Vehicle pages compute their band,
+  all three agree, and the Mech Panel's `Accent` either stays (no threshold defined) or joins them.
+- **Naming is a separate, cheap consistency fix.** `CABIN PRESSURE` / `CABIN PRESS` / `PRESSURE` for one
+  quantity across three sibling pages is the kind of drift `docs/REFERENCE_PAGES.md` exists to prevent.
+  ⚠ **Check the reference before renaming** (§1.4): if the real screens label them differently on different
+  pages, that is a real deviation to preserve, not a bug to fix. If they do not, pick one and record it.
+- **Must not break:** the Mech Panel's `PRESSURE` label may be the reference's own word for a *structural*
+  pressure rather than cabin pressure — in which case the defect is not the label but the fact that it is
+  wired to `Press01`. **Confirm which quantity the reference means before changing either.**
+- **Verify:** one label per quantity across the Vehicle family, and one colour rule.
+
+---
+
+## MP-03 — Five of the page's nine readouts are dashes, and the empty centre circle is the visible consequence
+
+**TIER 3** *(S49 H17 / Q3's surface — recorded, not re-litigated)*
+
+**Evidence.** `ui_vehiclemech.png`: the four `SEAT n TACH` rows are `—`, and the `WATER UPRIGHTING` donut
+shows a dash with an empty ring. Four live readouts (ACCELERATION, CENTRIPETAL, RESISTANCE, PRESSURE), five
+dead.
+
+**The layout consequence is visible and is the owner's standing concern (R-4).** The page's dominant
+element is a ~440-px-diameter circle whose entire content is a heading, four dashes and a hardcoded status
+word — roughly a third of the screen's area carrying one live fact between them (and MP-01 says that fact is
+wrong). The circle is not badly laid out; **it is correctly laid out around content that is not there.**
+
+**Fix plan.** No new question — this is S49 H17's surface and **Q3 governs it**, unanswered. What this pass
+adds:
+- **`WATER UPRIGHTING` is the one worth separating from the rest.** It is a real Dragon system (the
+  uprighting bags) with a real binary state, not a continuous quantity — so it is likelier to have an
+  honest live or micro-sim source than the four tachs, and it is drawn as a *donut*, which is the wrong
+  instrument for a binary. Worth its own look when Q3 is answered.
+- ⚠ **`SEAT n TACH` should not be simulated on a guess.** No source in the repo says what a seat tachometer
+  measures on this vehicle; inventing one would be a §1.4 tier-3 invention. **If Q3 resolves toward
+  filling, these four need a source first** — and C1.15 requires the `INSTALLED_MODS` search to be
+  documented before any simulation is written.
+- **Do not restyle the circle to hide the dashes.** The emptiness is honest; it is the readouts that are
+  missing, and shrinking the circle would remove the evidence.
+
+---
+
+*Next: **page 16 — SuitCheck**, which S49 calls the exemplar MICRO-SIM (S31/S32) — the one page whose
+verdict is computed rather than declared — and then pages 18 and 19.*
 
 *⚠ **Three findings are page-wide, not per-page, and should be scheduled ahead of the sweep:***
 - ***H-01** — the preview's resolution. It decides how every later legibility finding is measured, so
