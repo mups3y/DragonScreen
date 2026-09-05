@@ -1703,10 +1703,14 @@ def exceedances(M, st):
             _exceed(st, col, alarmv, 1e9, "[ALARM]", label, label + " ALARM")
 
     sub("the recorder's own severity + alarm channel")
-    sevcols = [c for c in ("sev_system", "sev_vehicle", "sev_ls", "sev_thermal", "alarm_mask")
+    # S137c: `sev_events` joins the list. Without it a reader saw `sev_vehicle = Alarm` beside two
+    # nominal component columns and had nothing in the file to explain it - the discrete emergencies
+    # (fire, cabin leak, power-string trips) that S137b folded into the vehicle severity.
+    sevcols = [c for c in ("sev_system", "sev_vehicle", "sev_ls", "sev_thermal", "sev_events",
+                           "alarm_mask")
                if has_col(st, c)]
     if not sevcols:
-        P("  none of sev_system / sev_vehicle / sev_ls / sev_thermal / alarm_mask is in this schema -")
+        P("  none of sev_system / sev_vehicle / sev_ls / sev_thermal / sev_events / alarm_mask is in this schema -")
         P("  the alarm channel does not exist in this file, so no alarm can be ruled out from it.")
     for col in sevcols:
         vals = [v for v in (sval(r, col) for r in st.rows) if v not in BLANKS]
@@ -1939,6 +1943,10 @@ def _synth(dirpath):
         put(r, "sev_vehicle", "Nominal")
         put(r, "sev_ls", "Caution" if 300 <= met <= 340 else "Nominal")
         put(r, "sev_thermal", "Nominal")
+        # S137c: the selftest writes it too, or the new column would be blank throughout the synthetic
+        # recording and the section would report it as never-written - which is the ghost column this
+        # line exists to avoid, manufactured by the check meant to prove it is not one.
+        put(r, "sev_events", "Nominal")
         put(r, "alarm_mask", "4" if 300 <= met <= 340 else "0")
         put(r, "ls_present", "0")
         put(r, "comm_linked", "1")

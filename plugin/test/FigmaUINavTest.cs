@@ -12,6 +12,7 @@
  */
 using System;
 using DragonScreen;
+using DragonScreen.BlackBox;   // S137c: the schema's own append rule is asserted here
 
 public static class FigmaUINavTest
 {
@@ -2517,6 +2518,13 @@ public static class FigmaUINavTest
     // but `Alarms` read none of them, so a fire raised no severity anywhere: not the tab strip's
     // red-nav, not the chrome bar, not Alarms.Mask, not S137's own alert list. Found while scoping
     // that list and deliberately NOT patched there.
+    /// <summary>The black-box column table as it stood when S137c appended `sev_events`: how many
+    /// columns preceded it, and an FNV-1a hash of their names in order. A pure APPEND leaves both
+    /// alone; an insert, a removal or a reorder changes the hash, which is precisely what
+    /// `BlackBoxSchema.SchemaVersion` is meant to be bumped for.</summary>
+    const int PrefixCount = 205;
+    const uint PrefixHash = 164112981u;
+
     static void DiscreteEmergencies()
     {
         const int VW = 2560, VH = 1406;
@@ -2582,6 +2590,61 @@ public static class FigmaUINavTest
         DisplayList dl = Subsys(VehicleSubsystemPage.Sub.Crew, fire, VW, VH);
         Check("the CREW page's ALERTS word reads ALARM on a fire", Drew(dl, "ALARM"), "");
         Check("...and the page names the fire", Drew(dl, "CABIN FIRE"), "");
+
+        // ---- 5b. S137c: THE RECORDING CAN BE READ BACK -------------------------------------------
+        // ⛔ Folding the events into `VehicleSeverity` made `sev_vehicle` unreconstructible from the
+        // columns beside it: a flight could record Alarm next to two Nominal component columns with
+        // nothing saying why. `sev_events` is that missing column.
+        Check("sev_events is in the schema", BlackBoxSchema.Index("sev_events") >= 0, "");
+        Check("...and it is a PURE APPEND, at the very end of the table",
+              BlackBoxSchema.Index("sev_events") == BlackBoxSchema.Columns.Length - 1,
+              "index " + BlackBoxSchema.Index("sev_events") + " of "
+              + BlackBoxSchema.Columns.Length);
+        // ⭐ Which is why the version does NOT move. This file's own rule: "bumped when a column is
+        // REORDERED or REMOVED; a pure append keeps the version (§4.2)". A recording made before this
+        // line still chains with one made after it.
+        Check("...so SchemaVersion is unchanged and old recordings still chain",
+              BlackBoxSchema.SchemaVersion == 1, "got " + BlackBoxSchema.SchemaVersion);
+
+        // ⛔ AND THE PREFIX IS PINNED, which is the assertion that actually enforces the append rule.
+        // "sev_events is last" does NOT: inserting a column in the middle leaves it last and shifts
+        // everything between - the exact reorder SchemaVersion exists to forbid. A hash over the names
+        // BEFORE it is exact and, unlike a whole-table hash, a legal pure APPEND still passes.
+        // ⚠ Re-pin BOTH numbers only when a reorder is deliberate, and bump SchemaVersion with them.
+        int pn2 = BlackBoxSchema.Columns.Length - 1;
+        uint h = 2166136261u;
+        for (int i = 0; i < pn2; i++)
+        {
+            string nm = BlackBoxSchema.Columns[i].Name;
+            for (int j = 0; j < nm.Length; j++) { h ^= nm[j]; h *= 16777619u; }
+            h ^= (uint)','; h *= 16777619u;
+        }
+        Console.WriteLine("  note  black-box column prefix: " + pn2 + " names, FNV-1a " + h);
+        Check("the column ORDER before the append is unchanged", pn2 == PrefixCount && h == PrefixHash,
+              "count " + pn2 + " (want " + PrefixCount + "), hash " + h + " (want " + PrefixHash + ")");
+
+        // ⭐ THE PROPERTY THAT MAKES THE COLUMN WORTH HAVING: nothing the vehicle severity says is
+        // hidden from the columns recorded beside it. Swept over the same 40 states.
+        int hidden = 0;
+        for (int k = 0; k < 40; k++)
+        {
+            PageState v = AlertFixture(k);
+            Severity parts = Alarms.Worst(Alarms.LifeSupport(v.Cabin), Alarms.Thermal(v.Cabin));
+            parts = Alarms.Worst(parts, Alarms.PropellantSeverity(v));
+            parts = Alarms.Worst(parts, Alarms.Low(v.Power01));
+            parts = Alarms.Worst(parts, Alarms.Worst(Alarms.CabinEvents(v.Systems),
+                                                     Alarms.PowerEvents(v.Systems)));
+            if (parts != Alarms.VehicleSeverity(v)) hidden++;
+        }
+        Check("sev_vehicle is exactly the worst of the columns recorded beside it, over 40 states",
+              hidden == 0, hidden + " states had a severity no column explains");
+
+        // And the fire case specifically: the events column is the ONLY one that can carry it.
+        Check("on a fire, sev_events is the only non-nominal component",
+              Alarms.Worst(Alarms.CabinEvents(fire.Systems), Alarms.PowerEvents(fire.Systems))
+                  == Severity.Alarm
+              && Alarms.LifeSupport(fire.Cabin) == Severity.Nominal
+              && Alarms.Thermal(fire.Cabin) == Severity.Nominal, "");
 
         // ---- 5. WHAT WAS DELIBERATELY LEFT ALONE ------------------------------------------------
         // ⛔ `Alarms.LifeSupport(CabinReadout)` is UNCHANGED, and that is not an oversight: the black

@@ -364,6 +364,7 @@ def tool_tests():
     """
     event_vocabulary_check()
     part_name_source_check()
+    column_writer_check()
 
     tool = os.path.join(HERE, 'tools', 'assess_flight.py')
     if not os.path.exists(tool):
@@ -543,6 +544,81 @@ def event_vocabulary_check():
             print('    known dead  %-23s owned by register %s' % (sym, KNOWN_DEAD[sym]))
     print('    %d kinds, %d emitted, %d known dead and owned'
           % (len(names), len(names) - len(KNOWN_DEAD), len(KNOWN_DEAD)))
+
+
+def column_writer_check():
+    """
+    S137c: EVERY DECLARED BLACK-BOX COLUMN MUST HAVE A WRITER.
+
+    This is S90's event-vocabulary guard applied one namespace over, and for the same reason. S76 found
+    `torque_cmd` DECLARED and never populated across a whole mission, so a reader filtering for it saw
+    nothing and concluded no torque was ever commanded - a GHOST COLUMN, and the same wrong inference
+    a dead event kind invites.
+
+    `BlackBoxCoverage` already catches the runtime half at close. ⛔ IT CANNOT CATCH THE HALF THIS
+    GUARD IS FOR, and that is why this exists rather than leaning on it: a CONDITIONAL column left
+    blank is reported as a NOTE and deliberately NOT a defect - "no target was ever selected" is a fact
+    about the flight, not a bug - so a conditional column with NO WRITER AT ALL is indistinguishable at
+    runtime from one whose condition never came true. S137c added `sev_events`, a Conditional column;
+    deleting its writer breaks nothing that any test could see. This closes that.
+
+    STATIC on purpose, exactly as the event check is: a column whose writer never fired on a given
+    flight is legitimate, while a column with NO writer anywhere is always a defect and is knowable
+    without flying.
+    """
+    cols = os.path.join(HERE, 'src', 'pure', 'blackbox', 'BlackBoxCols.cs')
+    schema = os.path.join(HERE, 'src', 'pure', 'blackbox', 'BlackBoxSchema.cs')
+    if not os.path.exists(cols) or not os.path.exists(schema):
+        return
+    print('--- black-box columns (S137c: every FITTED column has a writer)')
+
+    # ---- UNFITTED COLUMNS ARE EXEMPT, AND THAT IS THE SCHEMA'S OWN DESIGN, NOT A LOOPHOLE --------
+    # `Unfit(...)` declares a column for a system this build DOES NOT HAVE - the Part B conductor's
+    # dv/PVG/node/step block. The schema's own header calls that "the honest state, and also how a
+    # real recorder reports an unfitted system", and `BlackBoxCoverage` treats WRITING one as the
+    # defect, which is the exact opposite of this check. So the guard would have reported 23 of them
+    # on its first run, all correct, and all noise. Measured, then exempted - not assumed.
+    sch = io.open(schema, encoding='utf-8', errors='replace').read()
+    unfitted = set(re.findall(r'(?<![\w])Unfit\(\s*"([a-z0-9_]+)"', sch))
+    decl = re.compile(r'public\s+static\s+readonly\s+int\s+(\w+)\s*=\s*BlackBoxSchema\.Index')
+    src = NL.join(l for l in io.open(cols, encoding='utf-8').read().splitlines()
+                  if not l.strip().startswith('//'))
+    names = decl.findall(src)
+
+    bodies = []
+    for root, _dirs, files in os.walk(os.path.join(HERE, 'src')):
+        for f in files:
+            if not f.endswith('.cs'):
+                continue
+            full = os.path.join(root, f)
+            if os.path.abspath(full) == os.path.abspath(cols):
+                continue
+            bodies.append(io.open(full, encoding='utf-8', errors='replace').read())
+    blob = NL.join(bodies)
+
+    # ---- KNOWN WRITERLESS, EACH OWNED BY A REGISTER LINE -----------------------------------------
+    # ⛔ An entry here is a DEFECT ON RECORD, not a pardon - the same standing as KNOWN_DEAD above.
+    # The guard stays live and this list is the register's to SHRINK.
+    KNOWN_WRITERLESS = {}
+
+    # Cols declares `Name = BlackBoxSchema.Index("name")`; pair the two so an Unfitted column can be
+    # recognised by the NAME it indexes rather than by guessing from the C# identifier.
+    pairs = dict(re.findall(
+        r'public\s+static\s+readonly\s+int\s+(\w+)\s*=\s*BlackBoxSchema\.Index\("([a-z0-9_]+)"\)', src))
+    dead = [n for n in names
+            if ('BlackBoxCols.' + n) not in blob
+            and pairs.get(n, '') not in unfitted
+            and n not in KNOWN_WRITERLESS]
+    for n in dead:
+        print('    NO WRITER  %s' % n)
+    if dead:
+        sys.exit('BLACK-BOX COLUMN FAILED: %d declared column(s) have no writer (S76/S137c). '
+                 'A column nothing ever writes tells a reader the thing never happened. Either '
+                 'write it, or remove the column and its Index.' % len(dead))
+    print('    %d indexed columns, %d unfitted (declared for a system this build has not got), '
+          '%d known writerless and owned'
+          % (len(names), sum(1 for n in names if pairs.get(n, '') in unfitted),
+             len(KNOWN_WRITERLESS)))
 
 
 def part_name_source_check():

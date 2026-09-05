@@ -519,6 +519,28 @@ namespace DragonScreen.BlackBox
             CondCap("off_z_m",      "m",   Tier.R2, "screens",    "PageState.OffZM — body up",                    WhenTarget + "; " + WhenScreens),
             CondCap("phase_angle_rad","rad",Tier.R3,"screens",    "PageState.TargetPhaseRad — signed in-plane angle to the target, + is AHEAD", WhenTargetOrbit + "; " + WhenScreens),
             CondCap("tgt_radius_m", "m",   Tier.R3, "screens",    "PageState.TargetRadiusM — target radius from the focused body centre", WhenTargetOrbit + "; " + WhenScreens),
+
+            // ---- S137c: THE COLUMN THAT MAKES `sev_vehicle` READABLE AGAIN ----
+            // [[S137b]] folded three DISCRETE emergencies — cabin fire, cabin leak, and power-string
+            // trips — into `Alarms.VehicleSeverity`, because nothing in the alarm channel could see
+            // them and a fire therefore raised no severity anywhere in the build. That fix is right and
+            // it reached every screen at once. ⛔ BUT IT MADE A RECORDING UNREADABLE: `sev_vehicle` is
+            // recorded here, and its two component columns `sev_ls` / `sev_thermal` are recorded
+            // through `Alarms.LifeSupport(CabinReadout)` / `Alarms.Thermal(CabinReadout)` — signatures
+            // this table names, and which S137b deliberately did NOT widen so a recorded column would
+            // not silently change meaning. So a flight could record `sev_vehicle = Alarm` beside two
+            // Nominal component columns, with nothing in the file saying why.
+            //
+            // ⭐ A NEW COLUMN, NOT A WIDENED ONE. Every existing column keeps its meaning, and
+            // `sev_vehicle` becomes reconstructible from the columns beside it.
+            // ⛔ APPENDED AT THE END, deliberately: this file's own rule is that `SchemaVersion` is
+            // "bumped when a column is REORDERED or REMOVED; a pure append keeps the version (§4.2)".
+            // Inserting it next to the other severities would have re-ordered five columns and broken
+            // chaining with every recording already made, to put it in a tidier place.
+            // ⚠ AND IT IS WRITTEN UNCONDITIONALLY beside the other severities, in the same block, on
+            // the same tier — a column declared and never written is the S76 ghost-column defect, which
+            // is worse than no column at all.
+            CondCap("sev_events",  "enum", Tier.R2, "derived", "Worst(Alarms.CabinEvents, Alarms.PowerEvents) — the discrete emergencies (fire, cabin leak, power-string trips) that sev_ls and sev_thermal cannot carry; see S137b/S137c", WhenScreens),
         };
 
         /// <summary>The ordered column NAMES — derived, so it can never disagree with the table.</summary>

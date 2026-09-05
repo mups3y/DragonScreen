@@ -16148,7 +16148,7 @@ is **SUPERSEDED IN PLACE**, kept verbatim, because it is the finding that produc
 
 ⛔ No `install`, no glass, no `git push`. §14.4(a) untouched.
 
-### S137c [S] `sev_vehicle` now includes events its component columns cannot explain — **DOING** — [logged by [[S137b]] per C1.1, 2026-09-06; TIER 3: a recording that cannot be read back]
+### S137c [S] `sev_vehicle` now includes events its component columns cannot explain — **DONE 2026-09-06 — one appended column, plus the STATIC guard that the coverage detector structurally cannot be** — [logged by [[S137b]] per C1.1, 2026-09-06; TIER 3: a recording that cannot be read back]
 - **The finding.** [[S137b]] folded fire / cabin leak / power-string events into
   `Alarms.VehicleSeverity`, which the black box records as **`sev_vehicle`**. Its two component columns,
   **`sev_ls`** and **`sev_thermal`**, are recorded through `Alarms.LifeSupport(CabinReadout)` and
@@ -16162,6 +16162,82 @@ is **SUPERSEDED IN PLACE**, kept verbatim, because it is the finding that produc
   ghost-column defect): a column that is declared and never written is worse than one that is absent.
 - **DONE when:** `sev_vehicle` can be reconstructed from the columns beside it, and the coverage
   detector is happy with the new one.
+
+#### ✅ DONE 2026-09-06
+
+**`sev_events`** — `Worst(Alarms.CabinEvents, Alarms.PowerEvents)` — written in the SAME block, on the
+same tier, as `sev_system` / `sev_vehicle` / `sev_ls` / `sev_thermal`. `sev_vehicle` is now exactly the
+worst of the columns beside it, **asserted over 40 states**.
+
+⛔ **APPENDED AT THE VERY END, and that is this file's own rule, not a preference.**
+`BlackBoxSchema.cs:150`: *"Bumped when a column is REORDERED or REMOVED; **a pure append keeps the
+version** (§4.2)."* Putting it in the tidier place beside its siblings would have re-ordered five
+columns and broken chaining with **every recording already made**. `SchemaVersion` stays **1**.
+
+#### ⭐ AND "THE COVERAGE DETECTOR IS HAPPY WITH IT" TURNED OUT TO BE THE WRONG TEST
+
+The DONE-when asked for it and it is satisfied — but chasing a mutation showed **the coverage detector
+structurally cannot catch the defect this column is at risk of.** `sev_events` is `CondCap`, i.e.
+`Fit.Conditional`, and `BlackBoxCoverage` reports a blank Conditional column as a **NOTE, deliberately
+not a defect** — *"no target was ever selected is not a bug"*. ⛔ **So a Conditional column with NO
+WRITER AT ALL is indistinguishable at runtime from one whose condition never came true.** Deleting this
+column's writer breaks nothing any existing test can see. Measured: mutation **B** passed the whole
+suite.
+
+**So the guard is static, and it is S90's event-vocabulary check one namespace over:**
+
+**`build.py column_writer_check()`** — every `BlackBoxCols` index must have a
+`BlackBoxSchema.Set(…, BlackBoxCols.X, …)` somewhere in the glue.
+
+⚠ **AND IT REPORTED 23 COLUMNS ON ITS FIRST RUN — all correct, and all noise.** They are the Part B
+conductor's `dv_*` / PVG / node / step block, declared through `Unfit(...)`, which the schema's own
+header calls *"the honest state, and also how a real recorder reports an unfitted system"* — and which
+`BlackBoxCoverage` treats **writing** as the defect, the exact opposite of this check. ⭐ Exempted by
+reading `Unfit(...)` out of the schema and pairing it to the `Cols` name, **measured then exempted, not
+assumed**. Result: **206 indexed columns, 30 unfitted, 0 writerless.**
+
+#### ⛔ AND "sev_events IS LAST" DOES NOT ENFORCE THE APPEND RULE — the second mutation showed that too
+
+Inserting a column in the MIDDLE leaves `sev_events` last and shifts everything between: mutation **A**
+passed. The assertion that actually enforces §4.2 is a **pinned prefix** — the count and an FNV-1a hash
+of the column names *before* the append (**205 names, `164112981`**). A legal pure append leaves both
+alone; an insert, removal or reorder changes the hash, which is exactly what `SchemaVersion` is meant to
+be bumped for. ⚠ A whole-table hash would have been wrong: it would fail a legal append.
+
+#### ⚠ AND THE TRANSPORT ATE A BACKSLASH AGAIN — the same bug as [[OCT2]], caught the same way
+
+The new guard's regex went in as `\bUnfit\(…` and arrived on disk with a **literal backspace (0x08)**
+where `\b` should be — so it matched nothing and the guard reported 23 false positives. ⛔ **Identical
+to OCT2's part-name regex**, and found the same way: by looking at the output instead of trusting it.
+Rewritten as `(?<![\w])`, which needs no `\b` at all, and written from a FILE rather than a heredoc.
+**This is now twice; the lesson is the transport, not the regex.**
+
+#### Verified (C1.3)
+
+`python plugin/build.py test` → **ALL SUITES PASSED**, with two new standing lines:
+
+```
+--- black-box columns (S137c: every FITTED column has a writer)
+    206 indexed columns, 30 unfitted (declared for a system this build has not got), 0 known writerless
+SELFTEST OK - 13 sections, 416 report lines   (was 414: sev_events is reported)
+```
+
+`assess_flight.py` reports the new column alongside the other severities, and its selftest fills it —
+⚠ **which by itself would MASK a ghost column**, because the selftest synthesises rows and never calls
+the recorder. That is precisely why the static guard exists rather than the tool being trusted.
+
+**MUTATION-PROVEN — 3 mutations, 3 caught.** ⚠ **Two of them escaped the first run, and both escapes
+were the point:**
+
+| | mutation | outcome |
+|---|---|---|
+| **A** | a column inserted mid-table instead of appended | ⚠ **escaped** — "sev_events is last" is still true after an insert. Caught once the prefix was pinned: *"count 206 (want 205), hash 193032307 (want 164112981)"* |
+| **B** | `sev_events` declared and never written — **the S76 ghost column** | ⚠ **escaped** — the coverage detector cannot see it for a Conditional column. Caught by the new static guard: *"NO WRITER  SevEvents"* |
+| **C** | the events stop reaching `VehicleSeverity` | caught: *"4 states had a severity no column explains"* |
+
+**Comment-loss check (C1.16 / G12): 0 lost** across six files.
+
+⛔ No `install`, no glass, no `git push`.
 
 ### S138 [S] 23 of the 36 subsystem state words are still literals — **TODO — un-held 2026-09-06, the R-01 policy exists** —
 ✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set

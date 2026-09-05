@@ -1202,6 +1202,12 @@ namespace DragonScreen.BlackBox
                 BlackBoxSchema.Set(c, BlackBoxCols.SevVehicle, Alarms.VehicleSeverity(ps).ToString());
                 BlackBoxSchema.Set(c, BlackBoxCols.SevLs, Alarms.LifeSupport(ps.Cabin).ToString());
                 BlackBoxSchema.Set(c, BlackBoxCols.SevThermal, Alarms.Thermal(ps.Cabin).ToString());
+                // S137c: the discrete emergencies, written in the SAME block and on the same tier as
+                // the three above - so `sev_vehicle` can be reconstructed from its parts, and so the
+                // column can never be declared-but-unwritten (S76's ghost-column defect).
+                BlackBoxSchema.Set(c, BlackBoxCols.SevEvents,
+                    Alarms.Worst(Alarms.CabinEvents(ps.Systems),
+                                 Alarms.PowerEvents(ps.Systems)).ToString());
                 BlackBoxSchema.Set(c, BlackBoxCols.AlarmMask, Alarms.Mask(ps));
                 if (ps.ScreenPages != null && ps.ScreenPages.Length >= 4)
                 {

@@ -209,6 +209,11 @@ namespace DragonScreen.BlackBox
         public static readonly int SevVehicle = BlackBoxSchema.Index("sev_vehicle");
         public static readonly int SevLs = BlackBoxSchema.Index("sev_ls");
         public static readonly int SevThermal = BlackBoxSchema.Index("sev_thermal");
+        /// <summary>S137c: the discrete emergencies. ⚠ Its POSITION in the file is the end of the
+        /// table (a pure append, §4.2) even though it belongs with these three by meaning; `Index`
+        /// resolves by NAME, so where the declaration sits here is a readability choice and not a
+        /// column order.</summary>
+        public static readonly int SevEvents = BlackBoxSchema.Index("sev_events");
         public static readonly int AlarmMask = BlackBoxSchema.Index("alarm_mask");
         public static readonly int FdirFault = BlackBoxSchema.Index("fdir_fault");
         public static readonly int FdirRecovery = BlackBoxSchema.Index("fdir_recovery");
