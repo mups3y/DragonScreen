@@ -41,7 +41,7 @@ page at **2560×1406** while the shipped `DragonScreen.cfg` sets `screenWidth = 
 Every "is this legible?" judgement taken from a preview PNG — including the ones in this document — is
 therefore optimistic by a factor of two in each axis. H-01 has the measurements and the open question.
 
-**Open questions raised so far** (full text at the end of each page's section):
+**Open questions raised** (full text at the end of each page's section):
 **Q1** stray arrow placement (C-02) · **Q2** globe/map handedness, glass-gated (C-09) · **Q3** ENTRY ENABLED
 class (C-08) · **Q4** where the CAMERA caption goes (C-13) · **Q5** which screen resolution is authoritative
 (H-01) · **Q6** do the Figma audio faders survive the 2026-08-06 no-volume-sliders decision (A-02)
@@ -125,7 +125,7 @@ slot is the cheapest way to close them — see **C-07**'s fix plan, which adds e
 
 | surface | status | render | date |
 |---|---|---|---|
-| Console plate — rest / armed / fired / inert-swap | NOT STARTED | `panel_rest.png`, `panel_armed.png`, `panel_fired.png`, `panel_inert_swap.png` | — |
+| Console plate — rest / armed / fired / inert-swap | ✅ **DONE — 0 findings** | `panel_rest.png`, `panel_armed.png`, `panel_fired.png`, `panel_inert_swap.png` | 2026-09-05 |
 
 ---
 
@@ -3603,7 +3603,112 @@ ascent telemetry (`ps.Steps.RadarAltitude`, `VerticalSpeed`, `Propellant01`) —
 
 ---
 
-*Next: **the lower analog console panel** — the last surface in the inventory.*
+---
+
+# THE LOWER ANALOG CONSOLE PANEL — 0 findings
+
+**Renders:** `panel_rest.png` · `panel_armed.png` · `panel_fired.png` · `panel_inert_swap.png`
+(3600×540 each).
+
+**Source:** `plugin/src/pure/PanelMap.cs` · `PanelBehaviour.cs` · `PanelBoardPage.cs` ·
+`PreviewMain.cs:1302-1355` · `docs/REAL_DRAGON_SCREENS.md:44-48, 155-175`.
+
+**⚠ Scope, and it changes what QC can legitimately check here.** This is **not a screen we draw.** The
+preview says so in its own header: *"NOT a screen … The console's buttons are meshes on Tundra's IVA prop
+and its indicators are Tundra's dashes; this draws them only so the LIGHTING can be judged with the game
+closed, which is otherwise the one part of the panel that costs a restart to look at."* The render is a
+**diagnostic**, and it labels itself one on the glass: *"PREVIEW-ONLY DIAGNOSTIC, NOT A SCREEN … Neither
+mark exists on the real console."*
+
+So layout, labels and plate geometry are **Tundra's model, not ours**, and C1.4 forbids editing `PanelMap`
+or the label docs without a real-source confirmation. What QC can check is the **lighting model**, the
+**§14.4(a)/(b) behaviour**, and whether the diagnostic's own claims are true. All three check out.
+
+## Verified
+
+1. ⭐ **The no-red invariant holds, measured.** The preview states the rule the four scenes exist to test —
+   *"What must be true in all four is that no dash is any colour but bright or as-modelled"* — and §14.4(a)
+   requires no red for a non-fault. Pixel-scanned across **all four renders, 1,944,000 px each**:
+
+   | render | red px | amber px | green px |
+   |---|---|---|---|
+   | `panel_rest` | **0** | **0** | **0** |
+   | `panel_armed` | **0** | **0** | **0** |
+   | `panel_fired` | **0** | **0** | **0** |
+   | `panel_inert_swap` | **0** | **0** | **0** |
+
+   ⚠ **This is the sharpest result in the whole sweep, and it cuts the other way from the screens.** The
+   surface that actually arms and fires — pyros, abort, deorbit — obeys §14.4(a) exactly. Meanwhile three
+   *screens* draw permanent non-fault red or amber: **V-02** (`CABIN MICS: RECORDING` red), **MP-01**
+   (`Awaiting` in caution amber), **MC-01** (two alarm-red chute markers). **The console is the standard
+   the screens are failing.**
+2. **The four scenes are the right four**, and each states what it proves: at rest, armed-and-holding,
+   fired-from-the-other-seat (with a real display command lit alongside), and an inert control pressed.
+   `panel_fired` deliberately combines two cases so the armed lamp going out can be seen against a lamp
+   that holds.
+3. ⭐ **The inert scene self-checks, and passes.** Its caption is generated as
+   `"Clicked" + (inert.LastClicked ? " (audible)" : " (SILENT - WRONG)")` — the diagnostic **reports its own
+   defect** if the click is silent. The render reads **`INERT - SWAP 2 PRESSED (Inert)` / "Clicked
+   (audible), did nothing, lit nothing (§14.4b)"**. Press received, audible, acts on nothing, lights
+   nothing — §14.4(b) exactly. **A self-reporting diagnostic is a pattern worth copying.**
+
+## Two things that look like defects and are not — recorded so they are not re-logged
+
+1. **`SURPRESS FIRE` is not a typo of ours.** It appears on both emergency plates, and
+   `docs/REAL_DRAGON_SCREENS.md:46-48` rules on it: *"`SURPRESS FIRE` is spelled that way **in the model** —
+   the real capsule reads SUPPRESS. **Do not "correct" it in our own labels** if we ever redraw that
+   texture; matching the installed art matters more, and it is Tundra's to fix."* `PanelMap.cs:19-20`
+   carries the same note. A deliberate, sourced transcription. ⚠ **C1.4 forbids changing it anyway.**
+2. **The two empty bays are real blank plates, not unmapped controls.** `PanelMap` names six plates —
+   `TE_CD2_PROP_BUTTON_1/2/3/4/6/8` — and the diagnostic renders eight positions, so `_5` and `_7` come out
+   empty. `docs/REAL_DRAGON_SCREENS.md:171,174` records both from a real transform dump as **"blank
+   filler … no children"**, count **0**, and `PanelMap.cs:9-11` confirms the mapping *"matched every count,
+   including the two blank filler plates and FIRE PYRD sitting apart from its row."* The gaps are the
+   model's. (`FIRE PYRD`, likewise, is the model's own label and placement.)
+
+**Conclusion: no findings.** Recorded deliberately rather than padded — this surface is correct, and its
+correctness is the argument for fixing V-02, MP-01, MC-01 and the S75 tint gap (**SC-02 / DK-02 / A-02**) on
+the screens.
+
+---
+
+# THE SWEEP IS COMPLETE — all 35 `UiPage` values, the 7 Cover phases, the 3 camera views and the console
+
+**65 findings in 16 sections**, covering all 35 `UiPage` values, the seven Cover phases, the three Cover
+camera views and the lower console. Every page in the inventory is marked DONE. What follows is not new
+analysis; it is the cross-cutting shape of what the sweep found, for scheduling.
+
+⚠ **Four Cover phase slots (0, 2, 3, 4) remain ⏳ PART** — they have no preview render of their own and
+their bodies were read from source rather than seen. **C-07**'s fix plan adds the four renders; until then
+those four are the one part of this inventory that is inferred rather than inspected.
+
+## The five things that are one fix, not many
+
+| # | theme | findings | why one line |
+|---|---|---|---|
+| 1 | **`component_48`** — the un-erased marker glow and the 12.2% horizontal stretch | **C-12**, **C-04**, and **H-07**'s seam | One asset, one draw idiom, **fifteen pages**. H-07 is coupled to C-04 through `FigmaUI.BottomBarHit`, so all three move one hit map. |
+| 2 | **Hardcoded gauge colour** | **V-01**, **S-01** | **32 gauges across 7 pages**, one `Gauge()` colour argument each. The correct call already exists at `SystemsPidPage.cs:249`, and **SP-01's section shows the two verdicts side by side.** |
+| 3 | **S75's inert tint, never applied outside the Cover** | **SC-02**, **DK-02**, **A-02**, **F-03**, **RZ-01** | Five pages, one shared tint. SC-02 recommends hoisting `DragonPalette.Inert` rather than relearning it a sixth time. |
+| 4 | **Step tracking** | **SC-01**, **MC-02**, **VT-01**, **AS-01** | Four pages want the same routing of the stranded `pure/StepList.cs` (S49 §1.1 / H34). One line, scheduled once. |
+| 5 | **The preview cannot see a page's live half** | **H-09**, **VV-02**, **SP-01**, and **C-10**'s fixture | Three pages plus one fixture. **A harness policy** — non-nominal states belong in the preview set — not four separate fixes. |
+
+## What must be decided before building
+
+**H-01 / Q5 first.** The preview renders Figma pages at 2560 while the cfg ships 1280, so **every legibility
+finding in this document is provisional** until that is settled — C-05 above all, which at the shipped width
+is 7.7 px against a 16 px floor.
+
+Then **Q6** (the audio faders — it gates A-04 and A-05), **Q1** (the Figma export — it also unblocks A-05 and
+A-06), **Q2** (glass time for the globe/map handedness), **Q3** (ENTRY ENABLED), **Q4** (the CAMERA caption).
+
+## What the sweep found working, and should be copied
+
+- **`SuitCheckPage`** — the only page where a safety verdict is computed from a model (S31/S32 satisfied).
+- **`MenuPage.CellRect`** — the shared-rectangle discipline stated and followed; the answer to **H-04**.
+- **`SystemsTreePage`** — live colour, a legend, a shared dispatcher, and an affordance caption that is true.
+- **`ManualChuteDeployPage`'s top strip** — **C-01's fix, already built**, on a page that shares the Cover's rail.
+- **`DeorbitBurnPrepPage` ↔ `CoverPage`** — one fact, one source, two surfaces; the answer to **MP-01**.
+- **The lower console** — §14.4(a)/(b) obeyed exactly, verified at 0 red pixels across four scenes.
 
 *⚠ **Three findings are page-wide, not per-page, and should be scheduled ahead of the sweep:***
 - ***H-01** — the preview's resolution. It decides how every later legibility finding is measured, so
