@@ -14827,7 +14827,16 @@ The full mapping — which hole, which finding, which are duplicates of each oth
 `docs/BACKLOG_RECONCILIATION.md`. **No new defect was discovered here and none was fixed.**
 ⚠ Each line names its sources so the next chat reads the audit's own detail rather than this summary.
 
-### S126 [S] The Cover's two TARGET readouts are baked pictures of the same wrong value — **TODO** — [H3 + QC `C-14`; TIER 2: real defect]
+### S126 [S] The Cover's two TARGET readouts are baked pictures of the same wrong value — **HELD 2026-09-06 — gated on [[S153]] (R-01)** —
+⛔ **HELD 2026-09-06 — GATED ON [[S153]] (`R-01`), and this is [[S125]]'s own finding applied to itself.**
+This line **ADDS TEXT** to a Figma-era page, and `R-01` — verified STILL OPEN by QC on 2026-09-06 — is that
+**every sampled text element on every Figma-era page is below the measured legibility floor at the shipped
+width.** ⭐ Building it now does not produce a working readout; it produces **one more illegible one**, and
+then has to be revisited when the type-scale policy lands. QC's own note: *"R-01 is still the batch that
+unblocks the rest."*
+⚠ **This is a SEQUENCING hold, not a doubt about the work.** The finding is real, the sources named on this
+line are real, and nothing here needs an owner's taste **except the one thing S153 owns**. The moment S153
+is answered this is buildable as written. [H3 + QC `C-14`; TIER 2: real defect]
 - **The finding.** Both readouts under the globe are baked PNGs reading `26° 15.00° N`, so **the longitude
   prints a latitude's value and carries a latitude's hemisphere letter.**
 - **Two routes, and choosing is the research (H3):** (i) wire `s.TargetLat`/`s.TargetLon`/`s.HasTargetGround`
@@ -14942,7 +14951,16 @@ The full mapping — which hole, which finding, which are duplicates of each oth
   contradicting it — but **that reading is the overseer's to confirm, not a build chat's (C1.8).**
 - **DONE when:** assessed, the collision resolved in writing, and the export retrieved for A-05/A-06.
 
-### S136 [S] `UiPage.Procedure` and `UiPage.Cabin` are flat images — 8 draw calls for a whole screen — **TODO** — [H13 + QC `F-02`; TIER 2]
+### S136 [S] `UiPage.Procedure` and `UiPage.Cabin` are flat images — 8 draw calls for a whole screen — **HELD 2026-09-06 — gated on [[S153]] (R-01); its Procedure half is additionally TIER-3** —
+⛔ **HELD 2026-09-06 — GATED ON [[S153]] (`R-01`), and this is [[S125]]'s own finding applied to itself.**
+This line **ADDS TEXT** to a Figma-era page, and `R-01` — verified STILL OPEN by QC on 2026-09-06 — is that
+**every sampled text element on every Figma-era page is below the measured legibility floor at the shipped
+width.** ⭐ Building it now does not produce a working readout; it produces **one more illegible one**, and
+then has to be revisited when the type-scale policy lands. QC's own note: *"R-01 is still the batch that
+unblocks the rest."*
+⚠ **This is a SEQUENCING hold, not a doubt about the work.** The finding is real, the sources named on this
+line are real, and nothing here needs an owner's taste **except the one thing S153 owns**. The moment S153
+is answered this is buildable as written. [H13 + QC `F-02`; TIER 2]
 - **The finding.** Both pages are a single PNG with no `PageState` and no touch. This is the
   element-by-element rebuild `FigmaFramePage.cs:9-11` says is the plan.
 - ⭐ **Cabin is the easy half and the data is all sitting there:** `s.Cabin`, `Ppo2Text`, `Co2Text`,
@@ -14956,7 +14974,16 @@ The full mapping — which hole, which finding, which are duplicates of each oth
 - **DONE when:** Cabin is element-by-element off live state with a 2560 preview, and Procedure carries a
   written owner question rather than an invented body.
 
-### S137 [S] The ALERTS view is a one-word summary, and the FDIR bar beside it is a fake three-position gauge — **TODO** — [H16 + QC `S-02`; TIER 2]
+### S137 [S] The ALERTS view is a one-word summary, and the FDIR bar beside it is a fake three-position gauge — **HELD 2026-09-06 — gated on [[S153]] (R-01)** —
+⛔ **HELD 2026-09-06 — GATED ON [[S153]] (`R-01`), and this is [[S125]]'s own finding applied to itself.**
+This line **ADDS TEXT** to a Figma-era page, and `R-01` — verified STILL OPEN by QC on 2026-09-06 — is that
+**every sampled text element on every Figma-era page is below the measured legibility floor at the shipped
+width.** ⭐ Building it now does not produce a working readout; it produces **one more illegible one**, and
+then has to be revisited when the type-scale policy lands. QC's own note: *"R-01 is still the batch that
+unblocks the rest."*
+⚠ **This is a SEQUENCING hold, not a doubt about the work.** The finding is real, the sources named on this
+line are real, and nothing here needs an owner's taste **except the one thing S153 owns**. The moment S153
+is answered this is buildable as written. [H16 + QC `S-02`; TIER 2]
 - **The finding.** No enumerated list, no timestamps, no acknowledgement — and it prints a green `NOMINAL`
   **on a dead feed**, beside its own honest `NO DATA`. The FDIR bar's `0.15/0.6/1` fill is a fake gauge
   under a real word.
@@ -14968,7 +14995,16 @@ The full mapping — which hole, which finding, which are duplicates of each oth
 - **DONE when:** the view lists real discrete events, the dead-feed case cannot read `NOMINAL`, the fake bar
   is gone or driven, and previews show nominal / cautioned / no-feed.
 
-### S138 [S] 23 of the 36 subsystem state words are still literals — **TODO** — [QC `S-03`; the remainder of H14 after [[S51]]; TIER 2]
+### S138 [S] 23 of the 36 subsystem state words are still literals — **HELD 2026-09-06 — gated on [[S153]] (R-01)** —
+⛔ **HELD 2026-09-06 — GATED ON [[S153]] (`R-01`), and this is [[S125]]'s own finding applied to itself.**
+This line **ADDS TEXT** to a Figma-era page, and `R-01` — verified STILL OPEN by QC on 2026-09-06 — is that
+**every sampled text element on every Figma-era page is below the measured legibility floor at the shipped
+width.** ⭐ Building it now does not produce a working readout; it produces **one more illegible one**, and
+then has to be revisited when the type-scale policy lands. QC's own note: *"R-01 is still the batch that
+unblocks the rest."*
+⚠ **This is a SEQUENCING hold, not a doubt about the work.** The finding is real, the sources named on this
+line are real, and nothing here needs an owner's taste **except the one thing S153 owns**. The moment S153
+is answered this is buildable as written. [QC `S-03`; the remainder of H14 after [[S51]]; TIER 2]
 - **The finding.** [[S51]] landed H14's `!Valid` guard and H15's eight self-contradicting words. **It did
   not land the rest:** 23 of 36 state words across the six subsystem tabs are still literals.
 - ⭐ **This is the tier S22 could not reach and S51 did not claim:** under §14.4(f) these words should be
@@ -15158,7 +15194,16 @@ commands anything** — the thirteen inert docking controls are untouched (QC `D
 - **DONE when:** each criterion lights from live state against its own stated limit, the dwell is modelled
   and tested, the copy is byte-identical, and a preview shows nominal and exceeded.
 
-### S145 [S] NavOrbitPlot's four range rings carry no scale — **TODO** — [H35; TIER 3]
+### S145 [S] NavOrbitPlot's four range rings carry no scale — **HELD 2026-09-06 — gated on [[S153]] (R-01)** — [H35; TIER 3]
+⛔ **HELD 2026-09-06 — GATED ON [[S153]] (`R-01`), and this is [[S125]]'s own finding applied to itself.**
+This line **ADDS TEXT** to a Figma-era page, and `R-01` — verified STILL OPEN by QC on 2026-09-06 — is that
+**every sampled text element on every Figma-era page is below the measured legibility floor at the shipped
+width.** ⭐ Building it now does not produce a working readout; it produces **one more illegible one**, and
+then has to be revisited when the type-scale policy lands. QC's own note: *"R-01 is still the batch that
+unblocks the rest."*
+⚠ **This is a SEQUENCING hold, not a doubt about the work.** The finding is real, the sources named on this
+line are real, and nothing here needs an owner's taste **except the one thing S153 owns**. The moment S153
+is answered this is buildable as written.
 - **The finding.** Rings at `rmax·i/4` with no units printed. The file records why — no scale is legible in
   the JSC source — but **an unlabelled ring is a readout that says nothing.**
 - ⭐ **The scale is already computed:** `NavPage.cs:596`, plus `s.RangeM` and `BarScale.Range`. Labelling the
@@ -15167,6 +15212,19 @@ commands anything** — the thirteen inert docking controls are untouched (QC `D
   is what remains once they are visible.
 - **DONE when:** the rings carry marked units off the computed scale, and a preview shows them legible at
   2560 against [[S153]]'s floor.
+
+⚠ **AND THE ROUTE WAS SCOUTED 2026-09-06 BEFORE THE HOLD, so the next chat does not re-derive it.** The
+rings are drawn at `rmax * i/4` with `rmax = Z(min(PlotW, PlotH)) * 0.46f` — **a pure fraction of the box,
+with no range behind it at all.** The metres-per-pixel that WOULD label them is `fit` inside
+`NavPage.Orbit` (`NavPage.cs:735`): `min((mw*0.42)/extentX, (mh*0.42)/extentY)`, with zoom applied as *"one
+multiplier on `scale`"*. So ring *i* is `(rmax * i/4) / fit` metres.
+⛔ **`fit` is a local and is NOT exposed.** Duplicating it in `NavOrbitPlotPage` would be a second copy of
+a scale rule — the exact defect `MarginAffordance`'s header records (*"every copy disagreed with at least
+one other"*). **The honest build is to expose it once from `NavPage` and have both read it**, which is a
+real refactor on a path `CoverPage` also uses, not a label change.
+⚠ **And note what the labels would say:** the plot AUTO-FITS to the orbit, so the ring values move as the
+orbit does. That is honest — it is what an auto-scaling plot means — but it is a moving scale, and worth
+deciding deliberately rather than discovering on the glass.
 
 ### S146 [S] Duplicated signals are presented as two independent instruments — **TODO** — [H38; TIER 3: a §14.4(f) judgement]
 - **The finding.** `PowerUnit1Text == PowerUnit2Text` (one string written to both) · NET PWR1/PWR2 (one real
@@ -15181,7 +15239,16 @@ commands anything** — the thirteen inert docking controls are untouched (QC `D
 - **DONE when:** the power pair reads two real buses, and every remaining duplicate is either justified in
   the entry or handed to the owner as a question.
 
-### S147 [S] The bottom status bar's live text is baked on every page — **TODO** — [H40; TIER 2: 35 pages at once]
+### S147 [S] The bottom status bar's live text is baked on every page — **HELD 2026-09-06 — gated on [[S153]] (R-01)** — [H40; TIER 2: 35 pages at once]
+⛔ **HELD 2026-09-06 — GATED ON [[S153]] (`R-01`), and this is [[S125]]'s own finding applied to itself.**
+This line **ADDS TEXT** to a Figma-era page, and `R-01` — verified STILL OPEN by QC on 2026-09-06 — is that
+**every sampled text element on every Figma-era page is below the measured legibility floor at the shipped
+width.** ⭐ Building it now does not produce a working readout; it produces **one more illegible one**, and
+then has to be revisited when the type-scale policy lands. QC's own note: *"R-01 is still the batch that
+unblocks the rest."*
+⚠ **This is a SEQUENCING hold, not a doubt about the work.** The finding is real, the sources named on this
+line are real, and nothing here needs an owner's taste **except the one thing S153 owns**. The moment S153
+is answered this is buildable as written.
 - **The finding.** CURRENT STATE, POINTING MODE, the SPX/GND/TDRS/ISS block and a counter are all pixels in
   `component_48.png`, on **every page in the build**.
 - ⭐ **`TELEMETRY_REGISTRY` already registers `CURRENT_STATE` (→ `s.Phase`, live) and `POINTING_MODE` with
