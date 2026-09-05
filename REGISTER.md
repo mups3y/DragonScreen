@@ -17363,7 +17363,7 @@ provisional.** Recorded so the choice is made deliberately rather than discovere
 - **DONE when:** Menu and both settings pages clear the floor, baselines lowered, and the HUD's residual
   is recorded against H-06 rather than silently left.
 
-### S154 [O] Frame 58's HUD is one raster and every readout in it is baked — **TODO — SPLIT IT AGAIN BEFORE STARTING** — [H10 + QC `H-02`; split out of [[S50]] 2026-09-06; TIER 2: *"the largest liveness gap in the build"* — the audit's own words]
+### S154 [O] Frame 58's HUD is one raster and every readout in it is baked — **SPLIT 2026-09-06 into [[S154a]]–[[S154d]]; the mapping is step one and is scouted below** — [H10 + QC `H-02`; split out of [[S50]] 2026-09-06; TIER 2: *"the largest liveness gap in the build"* — the audit's own words]
 
 - **The finding, proven not asserted.** `Frame58Hud.Build` emits **10 draw commands** for the whole page and
   exactly **2 Text** commands, both the margin affordance's (`[MANUAL][DOCKING]`). ROLL/PITCH/YAW and their
@@ -17411,6 +17411,87 @@ source-derived boxes to draw the live ones at. **Three routes, and they are not 
   the FRAME/CAMERA/timer readouts on this same frame. **Two lines touch Frame 58 — read both.**
 - **DONE when:** each split line lands with the mapping shown (not asserted), a 2560 preview of live /
   no-target / no-feed, and a test pinning that nothing added reaches `FlightCommands`.
+
+#### ✅ SPLIT 2026-09-06, as this line's own instruction requires — and step one is sharper than it was
+
+⭐ **THE MAPPING WAS SCOUTED BEFORE SPLITTING, so [[S154a]] starts from a measured position rather than
+from "derive it".** What follows is not the mapping; it is what is now KNOWN about it, and what is not.
+
+**1 · The CSS is PAGE-relative, not container-relative.** The three attitude numbers sit beside
+`#lower-left` (`left:14.59% bottom:8%`) and `#upper-left` (`top:3% left:14.59%`) in one flat list of
+absolutely-positioned siblings, so their percentages are the page's:
+
+| selector | CSS | naive page mapping into 3427×2112 |
+|---|---|---|
+| `#roll-number` | `top:12.5% left:50%` | (1713.5, 264) |
+| `#pitch-number` | `top:50% left:86%` | (2947, 1056) |
+| `#yaw-number` | `top:85% left:50%` | (1713.5, 1795) |
+| `#xyz-number` | `left:14%` (no top) | x 479.8 |
+
+**2 · ⭐ AND THE HORIZONTAL ANCHOR CHECKS OUT INDEPENDENTLY.** `#hud-darken` is `top:50% left:50%` with
+`translate(-50%,-50%)`, so the HUD is centred on the page — page centre (1713.5, 1056). `Frame58Hud`'s
+own measured bowl centre, taken from the frame metadata (Ellipse 6), is **(1706, 984)**.
+**x agrees to 7.5 px — 0.2 % of the width.**
+
+**3 · ⛔ THE VERTICAL DOES NOT, AND THAT IS THE FINDING.** y is out by **72 px (3.4 %)**. Nor does the
+obvious correction help: `#back-box` is `height:95vh; bottom:30px`, so page percentages are really taken
+against a 2006 px box sitting 76 px down — which moves the centre to y 1079 and makes the disagreement
+**95 px, worse**. ⭐ **So the Figma frame is not a pixel-exact render of the Vue app, and no arithmetic on
+the CSS alone will reconcile them.** The relative structure is the CSS's; the absolute placement has to
+come from our own frame.
+
+**4 · What step one therefore is.** We have exactly ONE measured anchor (the bowl). ⭐ **A second is
+obtainable the way [[S147]] got component_48's**: `frame58.png` is on disk at 2048×1263 and can be
+profiled for the ring and for one baked number's ink box. Two anchors fix a scale and an offset, and the
+CSS supplies everything between them. **That, and a test that holds the mapping to both anchors, is
+S154a — and nothing is drawn until it exists.**
+
+⚠ **AND TWO OF THIS LINE'S ELEMENTS ARE ALREADY OWNED ELSEWHERE.** [[S132]] owns Frame 58's
+`FRAME`/`CAMERA` labels and its `0s / RESET / START` timer; [[S133]] owns the `ALERT ACTIVITY` panel. The
+splits below EXCLUDE both, so the same pixels are not claimed twice — check those two lines before
+touching either.
+
+⚠ **The R-01 gate is now a FLOOR, not a wait.** [[S153]] set the policy, so the ~13 readouts this page
+gains are drawn at `Typography.MinDesignFor` and the ratchet enforces it. This line no longer waits on
+anything but its own step one.
+
+### S154a [O] Frame 58: establish the CSS→design-frame mapping, and draw nothing — **TODO** — [step one of [[S154]]; research only]
+- **The deliverable is a MAPPING and a test, not a pixel.** Named constants that turn the Vue app's
+  page percentages into our 3427×2112 design frame, anchored on measurements from our own art.
+- ⭐ **Two anchors are needed and one exists.** `Frame58Hud`'s `BowlCx 1706, BowlCy 984, BowlR 470` is the
+  first, from the frame metadata. The second comes from profiling `art/cover/frame58.png` (2048×1263) for
+  the HUD ring and one baked number's ink box — the same row/column-profile method [[S147]] used on
+  `component_48.png`, which is written up there step by step.
+- ⛔ **DO NOT assume the CSS maps by arithmetic.** [[S154]]'s scouting shows x agrees to 0.2 % and y is out
+  by 72 px, and that `#back-box`'s `95vh` correction makes y *worse*. The frame is its own drawing.
+- ⚠ **The route question comes with it.** S154's three routes — element rebuild, erase the raster, or
+  overdraw patches — are decided BY this mapping: if the mapping is good enough to place every element,
+  route 1 is available and the raster becomes a reference exactly as `frame59` did under [[S110]]. ⭐ That
+  precedent is the model: one screen, one renderer, the PNG kept on disk as the source it was.
+- **DONE when:** the mapping exists as named constants, a test holds it to BOTH anchors, and the entry
+  states which of the three routes it makes possible — with nothing drawn.
+
+### S154b [S] Frame 58: the attitude block — ROLL / PITCH / YAW and their rates — **TODO (blocked: [[S154a]])** — [H10 + QC `H-02`]
+- Six readouts, all live and pre-formatted already: `RollDegText`, `PitchDegText`, `YawDegText`,
+  `RollRateText`, `PitchRateText`, `YawRateText`. **Zero new data, zero new model** — `DockingSimPage`
+  draws the same fields today.
+- ⚠ QC `H-02`: **8 of the 12 baked numbers contradict live state in the same frame.** These are the worst
+  of them, because an attitude readout is what the HUD is for.
+- **DONE when:** the six read live at the mapped boxes, at `MinDesignFor`, with a dead-feed preview.
+
+### S154c [S] Frame 58: the translation block — X / Y / Z, RANGE, RATE, ACCELERATION — **TODO (blocked: [[S154a]])** — [H10 + QC `H-02`]
+- `OffXText`, `OffYText`, `OffZText`, `RangeText`, `RateText`, `AccelPosText` — again all live and drawn
+  correctly on `DockingSimPage` already.
+- ⚠ `#xyz-number` gives `left:14%` and **no top**, so this block needs one more anchor than the attitude
+  one does. Establish it in [[S154a]] rather than here.
+- **DONE when:** the six read live at the mapped boxes, at `MinDesignFor`, with a dead-feed preview.
+
+### S154d [S] Frame 58: the FLIGHT COMMANDS block — **TODO (blocked: [[S154a]]; part §14.4(a))** — [H10]
+- ⛔ **This is the one split with a §14.4(a) edge in it.** FLIGHT COMMANDS names controls that would fly
+  the vehicle. Until Part B they stay an honest no-op — *click, no light, no action, no red* — so this
+  line draws the block's STATE honestly and wires nothing.
+- ⚠ Read with `src/_AutopilotStub.cs`'s `FlightCommands` seam, which already reports "not engaged".
+- **DONE when:** the block reads its real state, commands nothing, and the entry says so explicitly.
 
 ### S155 [S] The Cover's `RUNNING 00:22:57` is a frozen clock — **TODO (needs a definition first)** — [H2; split out of [[S50]] 2026-09-06; TIER 3]
 
