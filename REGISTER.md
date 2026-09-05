@@ -9769,7 +9769,7 @@ S57 item 2 explicitly warns against (*"do not land the column twice"*).
 3. **Answer S57-Q1 first** (it is already posed and unanswered) and this question disappears — S79 then runs
    once, in whatever order S57's answer implies.
 
-### S80 [S] Re-inspect every preview PNG whose page tints an ASSET — the preview ignored tints until S75 — [TIER 2: previews that were inspected and were wrong] — **TODO**
+### S80 [S] Re-inspect every preview PNG whose page tints an ASSET — the preview ignored tints until S75 — [TIER 2: previews that were inspected and were wrong] — **DOING**
 Logged by **S75**, 2026-09-04 (C1.1 — found while verifying S75's own fix, which the preview refused to show).
 **The finding.** `ScreenPainter.DrawImage` multiplies every image command by `c.Colour`, so on the glass a
 named asset drawn in anything but opaque white is tinted. `preview/PreviewMain.cs`'s `DrawCoverAsset` drew
