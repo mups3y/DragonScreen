@@ -11168,7 +11168,7 @@ settles questions with knowable answers... S86 recorded three options for `cover
 answer is OPTION 1, SPLIT THEM."* Built by S94: `cover_cam_l/c/r` + `cover_phase_l/c/r`, six columns,
 `BlackBoxSchema.cs` §G. See S94's own line for what was built and its stated limits.
 
-### S87 [S] Three docking/phasing quantities reach `PageState` only as FORMATTED TEXT — **DOING** — [TIER 3: a real value that survives only as a string]
+### S87 [S] Three docking/phasing quantities reach `PageState` only as FORMATTED TEXT — **DONE 2026-09-06** — [⚠ **only THREE of the five were actually text-only** — the other two were already raw doubles and the finding was wrong about them] — [TIER 3: a real value that survives only as a string]
 Logged by **BB1**, 2026-09-04 (C1.1).
 **The gap.** §2.8 asks for `off_x/y/z_m` (R2, R1 inside 1 km), `phase_angle_rad` and `tgt_radius_m` (R3).
 `VesselData.Docking()` computes the offsets and `:546-549` computes the phasing geometry, but only their
@@ -11179,6 +11179,47 @@ published. Parsing a display string back into a number inside a recorder is exac
 by side in `VesselData` so the pair cannot drift.
 **DONE when:** the raw doubles sit beside their text on `PageState` (S26's pattern), the five columns are
 appended to `BlackBoxSchema` as `Conditional` on a target, and `BlackBoxCoverage` reports no defect.
+
+#### ✅ DONE 2026-09-06
+
+⚠ **THE FINDING WAS RIGHT ABOUT THREE AND WRONG ABOUT TWO, and checking is what showed which.** It says
+all five *"reach `PageState` only as FORMATTED text"*. **`TargetPhaseRad` and `TargetRadiusM` have been raw
+doubles on `PageState` all along** (`Pages.cs:354`, filled at `VesselData.cs:570-572`). So those two were
+**missing columns, not missing data** — and `BlackBoxSchema.cs:69` repeated the same wrong claim, which is
+corrected in place (C1.16/G12: the note is kept, with which half was false and why).
+
+**What landed.**
+1. **`PageState.OffXM/OffYM/OffZM`** — the three body-axis offsets as raw metres, beside their text.
+   **S26's pattern**, and `VesselData` writes each pair from ONE expression (`st.OffXM = …;
+   st.OffXText = Metres(st.OffXM);`) so the two cannot drift.
+2. **Five columns declared** — `off_x_m` / `off_y_m` / `off_z_m` (R2, the docking cadence) and
+   `phase_angle_rad` / `tgt_radius_m` (R3, slow context), all `CondCap`.
+3. **Five writers, in the same commit.** ⛔ **Declaring without writing would have MADE a ghost column
+   rather than fixed one** — S76's `torque_cmd` defect exactly, and BB1's rule is that a column it cannot
+   write is not declared. That rule is why these were absent, and §4.8 (*never parse a number back out of
+   a display string*) is why they could not be written before.
+
+⭐ **A NEW GUARD CONSTANT, BECAUSE THE OBVIOUS ONE IS WRONG.** The offsets ride `HasTarget`; the phasing
+pair ride a **new `WhenTargetOrbit`**, because they need the target to have an **orbit**, not merely to
+exist — `HasTargetOrbit` is set only when `TargetPhaseRad` came back a number (`VesselData.cs:573`). **A
+landed target is a target and has no phase angle**, and writing a `NaN` there would be worse than a blank:
+§4.8's *"blank, never a reasonable default"* applies hardest to a value that genuinely is not defined.
+
+**MUTATION-PROVEN, on the check that matters.** `BlackBoxCols.X` is `Index("name")`, which returns **-1**
+for a name not in the table — and `BlackBoxSchema.Set` with -1 **silently writes nothing**. So a
+one-character typo yields a column that exists, is never written, and looks exactly like the defect this
+line fixes. **Mutation X** (`"off_x_m"` → `"off_X_m"`) fails: *"S87 BlackBoxCols.OffXM resolves"*.
+
+⚠ **THE DONE-WHEN'S LAST CLAUSE CANNOT BE MET, AND IT IS NOT THIS LINE'S FAULT.** It asks that
+*"`BlackBoxCoverage` reports no defect"*. **`BlackBoxCoverage.Findings()` has no caller anywhere** — it
+never runs, on any column — which [[S90]]'s new build guard surfaced the same day and which is logged as
+**[[S161]]**. So that clause is unsatisfiable until S161 lands. **In its place**, the five columns are
+pinned by `BlackBoxTest.S87Columns` (schema membership, `Conditional`, a stated blank-condition, a
+resolving index, and the tier), and the python selftest re-parses the schema and round-trips the report.
+
+**Verified (C1.3).** `python plugin/build.py test` **green — ALL SUITES PASSED**; BlackBox suite
+**1826 → 1848 checks**; `SELFTEST OK` with the widened schema. **No draw changed, so no preview applies**
+(C1.3's carve-out). **C1.16/G12: 0 comment prose lines lost.** No `install`, no glass, no `git push`.
 
 ### S88 [S] `docs/BLACKBOX_RESEARCH.md` §6.2 item 10 is now false — three `[KSPAddon]`s exist — **DONE 2026-09-05** (batched, S88+S93+S95+S96+S97) — [TIER 4: doc accuracy in the spec BB2/BB3/BB4 read from]
 Logged by **BB1**, 2026-09-04 (C1.1).

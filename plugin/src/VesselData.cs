@@ -499,9 +499,16 @@ namespace DragonScreen
             Transform ct = v.ReferenceTransform;
             if (ct != null)
             {
-                st.OffXText = Metres(Vector3d.Dot(rel, ct.right));
-                st.OffYText = Metres(Vector3d.Dot(rel, ct.forward));
-                st.OffZText = Metres(Vector3d.Dot(rel, ct.up));
+                // S87: the raw metre and its formatted twin, FORMATTED SIDE BY SIDE from one
+                // expression each, so the pair cannot drift - S26 did this for Roll/Pitch/YawDeg for
+                // the same reason. The BlackBox needs the number; parsing it back out of the string
+                // would be the fabrication §4.8 bans.
+                st.OffXM = Vector3d.Dot(rel, ct.right);
+                st.OffYM = Vector3d.Dot(rel, ct.forward);
+                st.OffZM = Vector3d.Dot(rel, ct.up);
+                st.OffXText = Metres(st.OffXM);
+                st.OffYText = Metres(st.OffYM);
+                st.OffZText = Metres(st.OffZM);
 
                 double align = Vector3d.Angle(ct.up, rel);
                 st.Align01 = Clamp01(align / 90.0);

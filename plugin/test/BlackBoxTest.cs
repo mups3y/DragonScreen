@@ -44,6 +44,7 @@ public static class BlackBoxTest
                           + "manifest, coverage, naming, scope, the two-stream join)");
 
         Schema();
+        S87Columns();   // S87: the five §2.8 columns
         Formatting();
         Validity();
         RateLadder();
@@ -64,6 +65,42 @@ public static class BlackBoxTest
     }
 
     // ---------------------------------------------------------------- schema integrity
+    // ---- S87 / §2.8: the five columns that were absent because their data was text-only ----
+    // BB1's rule is that a column it cannot WRITE is not DECLARED (S76's torque_cmd ghost), and these
+    // five obeyed it: §4.8 bans parsing a number back out of a display string, so until PageState
+    // carried the raw doubles there was nothing honest to write. S87 published them and declared the
+    // columns in the same commit - declaring without writing would have MADE a ghost, not fixed one.
+    //
+    // ⛔ THE INDEX CHECK IS THE LOAD-BEARING ONE. BlackBoxCols.X is `Index("name")`, which returns
+    // -1 for a name that is not in the table - and BlackBoxSchema.Set with -1 silently writes
+    // NOTHING. So a typo in either place gives a column that exists, is never written, and looks
+    // exactly like the defect it was meant to fix.
+    static void S87Columns()
+    {
+        string[] added = { "off_x_m", "off_y_m", "off_z_m", "phase_angle_rad", "tgt_radius_m" };
+        foreach (string n in added)
+        {
+            int i = BlackBoxSchema.Index(n);
+            Check(i >= 0, "S87 '" + n + "' is in the schema");
+            if (i < 0) continue;
+            Col c = BlackBoxSchema.Columns[i];
+            Check(c.Fit == Fit.Conditional, "S87 '" + n + "' is Conditional, not Live - it needs a target");
+            Check(!string.IsNullOrEmpty(c.Note), "S87 '" + n + "' says WHEN it is blank");
+        }
+        // ⛔ Every index BlackBoxCols exposes for them must resolve. -1 writes nothing, silently.
+        Check(BlackBoxCols.OffXM >= 0, "S87 BlackBoxCols.OffXM resolves");
+        Check(BlackBoxCols.OffYM >= 0, "S87 BlackBoxCols.OffYM resolves");
+        Check(BlackBoxCols.OffZM >= 0, "S87 BlackBoxCols.OffZM resolves");
+        Check(BlackBoxCols.PhaseAngleRad >= 0, "S87 BlackBoxCols.PhaseAngleRad resolves");
+        Check(BlackBoxCols.TgtRadiusM >= 0, "S87 BlackBoxCols.TgtRadiusM resolves");
+        // The offsets ride the docking cadence, the phasing pair are slow context - stated so a later
+        // rate change has to be deliberate rather than a slip.
+        Check(BlackBoxSchema.Columns[BlackBoxCols.OffXM].Tier == Tier.R2,
+              "S87 the offsets ride the docking cadence (R2)");
+        Check(BlackBoxSchema.Columns[BlackBoxCols.PhaseAngleRad].Tier == Tier.R3,
+              "S87 the phasing pair are slow context (R3)");
+    }
+
     static void Schema()
     {
         Col[] cols = BlackBoxSchema.Columns;

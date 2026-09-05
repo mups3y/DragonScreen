@@ -66,7 +66,13 @@
 //     see §2.7 below for all nine.)
 //   • `crew.touch` / `crew.press` / `crew.dispatch` events and the flat `control_id` namespace (§2.7's
 //     ⚠) — that is a hook at two choke points inside the screens, i.e. a tree edit, and a separate line.
-//   • `off_x/y/z_m`, `phase_angle_rad`, `tgt_radius_m` — only their FORMATTED text reaches `PageState`.
+//   • ⚠ `off_x/y/z_m`, `phase_angle_rad`, `tgt_radius_m` — CLOSED by S87, 2026-09-06, and the note is
+//     kept because half of it was WRONG and a reader should see which half. It said all five reach
+//     `PageState` "only as FORMATTED text". True of the three OFFSETS, which is why they were absent.
+//     FALSE of `phase_angle_rad` and `tgt_radius_m`: `TargetPhaseRad` and `TargetRadiusM` have been raw
+//     doubles on `PageState` (`Pages.cs:354`) all along, so those two were missing columns and not
+//     missing data. S87 added `OffXM/OffYM/OffZM` beside their text (S26's pattern) and declared all
+//     five columns; see the §2.8 block at the foot of the table.
 // ============================================================================================
 using System;
 using System.Globalization;
@@ -190,6 +196,11 @@ namespace DragonScreen.BlackBox
                                  + "measurement that is not a measurement)";
         const string WhenKer     = "blank unless ker_avail = 1 (Kerbal Engineer installed, driven and reporting)";
         const string WhenTarget  = "blank unless a target is selected";
+        /// <summary>S87: the phasing pair need more than a target - they need the target to have an
+        /// ORBIT this vessel's plane can be projected against, which `PageState.HasTargetOrbit`
+        /// decides (`VesselData.cs:573`, guarded on `TargetPhaseRad` being a number). A landed or
+        /// suborbital target is a target and has no phase angle.</summary>
+        const string WhenTargetOrbit = "blank unless the target has an orbit (PageState.HasTargetOrbit)";
         const string WhenBooster = "blank unless this stream's vessel is the vessel BoosterHost has bound";
         const string WhenLs      = "blank unless a life-support mod supplies it (TAC-LS)";
 
@@ -479,6 +490,21 @@ namespace DragonScreen.BlackBox
             CondCap("roll_err_deg", "deg", Tier.R2, "screens",    "PageState.RollDeg",                            WhenTarget + "; " + WhenScreens),
             CondCap("pitch_err_deg","deg", Tier.R2, "screens",    "PageState.PitchDeg",                           WhenTarget + "; " + WhenScreens),
             CondCap("yaw_err_deg",  "deg", Tier.R2, "screens",    "PageState.YawDeg",                             WhenTarget + "; " + WhenScreens),
+            // ---- S87 / §2.8: the five that used to reach PageState only as formatted text ----
+            // ⛔ THEY WERE ABSENT RATHER THAN EMPTY, which was right: BB1's rule is that a column it
+            // cannot write is not declared (the `torque_cmd` ghost, S76). The blocker was §4.8 — the
+            // recorder may not parse a number back out of a display string — and S87 removed it by
+            // publishing the raw doubles beside their text, not by relaxing the rule.
+            //
+            // ⚠ AND ONLY THREE OF THE FIVE WERE ACTUALLY BLOCKED. `TargetPhaseRad` and
+            // `TargetRadiusM` were ALREADY raw doubles on PageState (`Pages.cs:354`) — the note at the
+            // head of this file said all five were text-only and was wrong about those two. Corrected
+            // there. So S87 added three fields and five columns.
+            CondCap("off_x_m",      "m",   Tier.R2, "screens",    "PageState.OffXM — body right, off the docking reference transform", WhenTarget + "; " + WhenScreens),
+            CondCap("off_y_m",      "m",   Tier.R2, "screens",    "PageState.OffYM — body forward",               WhenTarget + "; " + WhenScreens),
+            CondCap("off_z_m",      "m",   Tier.R2, "screens",    "PageState.OffZM — body up",                    WhenTarget + "; " + WhenScreens),
+            CondCap("phase_angle_rad","rad",Tier.R3,"screens",    "PageState.TargetPhaseRad — signed in-plane angle to the target, + is AHEAD", WhenTargetOrbit + "; " + WhenScreens),
+            CondCap("tgt_radius_m", "m",   Tier.R3, "screens",    "PageState.TargetRadiusM — target radius from the focused body centre", WhenTargetOrbit + "; " + WhenScreens),
         };
 
         /// <summary>The ordered column NAMES — derived, so it can never disagree with the table.</summary>

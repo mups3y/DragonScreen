@@ -113,6 +113,13 @@ namespace DragonScreen
         public string TargetName;
         public string RangeText, RateText;
         public string OffXText, OffYText, OffZText;
+        /// <summary>S87: the same three offsets as RAW METRES, beside their text. ⛔ THIS IS S26's
+        /// PATTERN AND IT EXISTS FOR THE SAME REASON: a recorder that needs the number must not parse
+        /// it back out of a display string. §4.8 bans that outright — a formatter rounds, adds a unit
+        /// and can localise, so re-reading it is fabrication dressed as a measurement. `VesselData`
+        /// writes the pair side by side so the two cannot drift.
+        /// Body axes off the docking reference transform: X right, Y forward, Z up.</summary>
+        public double OffXM, OffYM, OffZM;
         public string PitchText, YawText, RollText;
         /// <summary>
         /// Per-axis attitude RATE (°/s) for the central attitude HUD — the BLUE rate beneath the GREEN

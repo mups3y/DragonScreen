@@ -216,6 +216,12 @@ namespace DragonScreen.BlackBox
         public static readonly int ClosingMps = BlackBoxSchema.Index("closing_mps");
         public static readonly int AlignDeg = BlackBoxSchema.Index("align_deg");
         public static readonly int RollErrDeg = BlackBoxSchema.Index("roll_err_deg");
+        // ---- S87 / §2.8 ----
+        public static readonly int OffXM = BlackBoxSchema.Index("off_x_m");
+        public static readonly int OffYM = BlackBoxSchema.Index("off_y_m");
+        public static readonly int OffZM = BlackBoxSchema.Index("off_z_m");
+        public static readonly int PhaseAngleRad = BlackBoxSchema.Index("phase_angle_rad");
+        public static readonly int TgtRadiusM = BlackBoxSchema.Index("tgt_radius_m");
         public static readonly int PitchErrDeg = BlackBoxSchema.Index("pitch_err_deg");
         public static readonly int YawErrDeg = BlackBoxSchema.Index("yaw_err_deg");
     }

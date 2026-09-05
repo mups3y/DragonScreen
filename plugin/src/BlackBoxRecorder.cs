@@ -1217,6 +1217,24 @@ namespace DragonScreen.BlackBox
                     BlackBoxSchema.Set(c, BlackBoxCols.RollErrDeg, ps.RollDeg);
                     BlackBoxSchema.Set(c, BlackBoxCols.PitchErrDeg, ps.PitchDeg);
                     BlackBoxSchema.Set(c, BlackBoxCols.YawErrDeg, ps.YawDeg);
+                    // ---- S87: the three body-axis offsets, as RAW METRES ----
+                    // These are the numbers `OffXText/OffYText/OffZText` were formatting. §4.8 bans
+                    // parsing a display string back into a number, which is why the columns did not
+                    // exist until `PageState` carried the raw pair (S26's idiom, VesselData writes
+                    // both from one expression each).
+                    BlackBoxSchema.Set(c, BlackBoxCols.OffXM, ps.OffXM);
+                    BlackBoxSchema.Set(c, BlackBoxCols.OffYM, ps.OffYM);
+                    BlackBoxSchema.Set(c, BlackBoxCols.OffZM, ps.OffZM);
+                }
+                // ⛔ A DIFFERENT GUARD, NOT THE SAME ONE. The phasing pair needs the target to have an
+                // ORBIT, not merely to exist: `HasTargetOrbit` is set only when `TargetPhaseRad` came
+                // back a number (`VesselData.cs:573`). A landed target is a target and has no phase
+                // angle, and writing a NaN there would be worse than a blank - §4.8's "blank, never a
+                // reasonable default" applies to a value that genuinely is not defined.
+                if (ps.HasTargetOrbit)
+                {
+                    BlackBoxSchema.Set(c, BlackBoxCols.PhaseAngleRad, ps.TargetPhaseRad);
+                    BlackBoxSchema.Set(c, BlackBoxCols.TgtRadiusM, ps.TargetRadiusM);
                 }
             }
             else
