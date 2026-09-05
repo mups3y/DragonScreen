@@ -518,7 +518,30 @@ namespace DragonScreen
                               + "exposure while the ignition budget is unmeasured, see register BB8)"
                             : "NONE (gate held closed — nothing armed the seam; every phase that wants "
                               + "thrust will raise UllageRcs and refuse to burn)")
-                      + ". ⛔ ATTITUDE UNCOMMANDED — AimForward is reported, not flown (register W24).");
+                      // ---- S99, 2026-09-06: THIS CLAUSE SAID THE OPPOSITE OF WHAT THE CODE DOES ----
+                      // It read, verbatim:
+                      //     ". ⛔ ATTITUDE UNCOMMANDED — AimForward is reported, not flown (register W24)."
+                      // and it was true when it was written. [[W24]] then landed the steering law and
+                      // nobody came back to the annunciation: `FlyByWire` writes `s.pitch`/`s.yaw`/
+                      // `s.roll` from `fbwPitch/fbwYaw/fbwRoll` (:1118, set at :935), the tick comment
+                      // beside `bi.Facing` already says *"Register W24 landed the steering law, so the
+                      // vehicle now actually tracks this"*, and `Actuate` defaults TRUE on the owner's
+                      // own ruling on W23's Q1.
+                      //
+                      // ⛔ WHY THAT MATTERED MORE THAN TIDINESS: this is the FIRST line a reader sees in
+                      // KSP.log about a fresh binding, and it is what someone reads while diagnosing a
+                      // descent. It told them the axes were not being flown — the single most misleading
+                      // place to start looking, because it rules out the subsystem that is actually live.
+                      //
+                      // ⭐ AND THE REPLACEMENT IS NOT "ALL GOOD". The honest status is that attitude IS
+                      // commanded AND that two things about it are still unproven — the gains are
+                      // [UN-CONVERGED] (§B16.8 ruling 2) and the per-axis SIGN is UNVERIFIED, because no
+                      // recorded flight exists to derive it from. A diagnostician needs both halves.
+                      + ". ATTITUDE COMMANDED — W24's steering law writes pitch/yaw/roll every dispatch"
+                      + (Actuate ? " and Actuate is TRUE, so the axes reach the vessel"
+                                 : " but Actuate is FALSE, so nothing reaches the vessel")
+                      + ". ⚠ Gains are [UN-CONVERGED] and the per-axis SIGN is UNVERIFIED — no recorded "
+                      + "flight to derive it from (register W24 / §B16.8 ruling 2).");
         }
 
         /// <summary>Reduce a live `Vessel` to the facts `BoosterHostPlan.Select` turns on. Read-only: this

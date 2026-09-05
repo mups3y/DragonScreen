@@ -12139,7 +12139,7 @@ W25's `LandingTarget.cs`, `MechHost.cs`, `FlightDriver.cs` and `plugin/mech/` un
 still ends *"⛔ ATTITUDE UNCOMMANDED — AimForward is reported, not flown (register W24)"* while the same file
 commands `s.pitch/yaw/roll` from the W24 steering law at `:1118`. The log now states the opposite of the truth.
 
-### S99 [S] `BoosterHost`'s bind log still announces "ATTITUDE UNCOMMANDED" — W24 landed the steering law and the line was never updated — **DOING** — [logged by W34, 2026-09-05; TIER 3: a log line that states the opposite of what the code does]
+### S99 [S] `BoosterHost`'s bind log still announces "ATTITUDE UNCOMMANDED" — W24 landed the steering law and the line was never updated — **DONE 2026-09-06** — [and the replacement is not "all good": it states what is still UNPROVEN] — [logged by W34, 2026-09-05; TIER 3: a log line that states the opposite of what the code does]
 - **The finding:** `src/BoosterHost.cs`'s BOOSTER HOST BOUND log ends *"⛔ ATTITUDE UNCOMMANDED — AimForward is
   reported, not flown (register W24)"*. But [[W24]] IS done: the same file writes `s.pitch`/`s.yaw`/`s.roll`
   from the steering law's output at `:1118` (`fbwPitch/fbwYaw/fbwRoll`, set at `:935`), and the tick comment
@@ -12151,6 +12151,40 @@ commands `s.pitch/yaw/roll` from the W24 steering law at `:1118`. The log now st
   attitude annunciation is a different subject in the same file.
 - **DONE when:** the bind log states the real actuation status (and whether `Actuate` is honoured), or the
   line is removed as superseded, with the W24 cross-reference kept.
+
+#### ✅ DONE 2026-09-06
+
+**The claim was verified in source before anything was written, because a log line is not evidence of its
+own subject:** `FlyByWire` writes `s.pitch` / `s.yaw` / `s.roll` from `fbwPitch/fbwYaw/fbwRoll`
+(`BoosterHost.cs:1118`, set at `:935` from `steer.Pitch/Yaw/Roll`), and **`[Tunable] Actuate = true`**
+(`:146`) on the owner's own recorded ruling on W23's Q1 — verbatim: *"Leave `Actuate = false`; W24 (the
+steering law) flips it as part of its own gate."* **The axes are flown. The line said they were not.**
+
+**What it now prints**, with `Actuate` read live rather than assumed:
+> `ATTITUDE COMMANDED — W24's steering law writes pitch/yaw/roll every dispatch and Actuate is TRUE, so
+> the axes reach the vessel. ⚠ Gains are [UN-CONVERGED] and the per-axis SIGN is UNVERIFIED — no recorded
+> flight to derive it from (register W24 / §B16.8 ruling 2).`
+
+⭐ **THE REPLACEMENT IS DELIBERATELY NOT "ALL GOOD", and that is the substance of this line rather than the
+string swap.** The honest status has two halves: attitude **is** commanded, **and** two things about it are
+still unproven — the gains are `[UN-CONVERGED]` (§B16.8 ruling 2) and the **per-axis SIGN is UNVERIFIED**,
+because no recorded flight exists to derive it from (`BoosterHost.cs:135-140` says exactly this). A line
+that only said "attitude commanded" would be true and would mislead in the opposite direction on the first
+flight this host ever commands. ⚠ It also branches on `Actuate`, so a tuning override held at `false`
+prints *"but Actuate is FALSE, so nothing reaches the vessel"* rather than a stale claim either way.
+
+⛔ **Why this mattered more than tidiness, restated because it is the reason the line exists:** this is the
+**first line a reader sees in `KSP.log` about a fresh binding**, and the one someone reads while diagnosing
+a descent. It told them the axes were not being flown — **the single most misleading place to start
+looking**, because it rules out the subsystem that is actually live.
+
+**C1.16 / G12:** the old text is **kept verbatim** in a comment where it stood, with what it claimed, why it
+was true when written, what replaced it, and why the change was not cosmetic. **0 comment prose lines lost.**
+
+**Verified (C1.3).** `python plugin/build.py test` **green — ALL SUITES PASSED**. **Glue-only, and the
+change is a log string**, so no preview applies (C1.3's carve-out — no draw changed). ⛔ **Nothing was
+actuated and no gate was opened:** `Actuate`'s value is unchanged, this only reports it. No `install`, no
+glass, no `git push`.
 
 ### S100 [O] QC batch 0 — make the preview tell the truth: the gate was judging at 2× the shipped width — **DONE 2026-09-05** — [H-01 + C-09 + C-10 + C-11 + F-05 + H-09 + VV-02; the instrument, not the screens]
 
