@@ -15185,7 +15185,7 @@ hits item 2`, which is the H-04 failure in one line).
 
 ⚠ **This does not do [[S121b]]–[[S121e]].** They are unblocked: the leaves they call are ready.
 
-### S121b [O] `Pages.cs`: the legacy bodies — **DOING** — [split 2 of 5 of [[S121]]; 32 lines / 32 references; the largest]
+### S121b [O] `Pages.cs`: the legacy bodies — **SPLIT 2026-09-06 into [[S121b-i]]–[[S121b-iii]] — the true edit count is 146, not 32** — [split 2 of 5 of [[S121]]; the largest]
 - ⚠ **This is one FILE but several PAGES** (1506 lines: the legacy FLIGHT, NAV and VEHICLE bodies plus the
   modal crew card at `:850`). It may need a further split; decide that after [[S121a]] lands and the true
   edit count is visible, and split rather than run to compaction (C1.7).
@@ -15193,6 +15193,52 @@ hits item 2`, which is the H-04 failure in one line).
   `h - ChromeBar.Height - 100f`, `((h - ChromeBar.Height) - 24f) * 0.74f`. ⛔ **`ChromeBar.Height` is the
   RefPanelW constant** — [[S120]] left `HeightFor(w)` for exactly this, and boxes are [[S117]]'s trap.
 - **DONE when:** as the parent's DONE-when, for this file.
+
+#### ✅ SPLIT AGAIN 2026-09-06, exactly as this line said it might — because the count was measured
+
+⭐ **THIS LINE ASKED FOR THE TRUE EDIT COUNT ONCE [[S121a]] LANDED. It is 146, not 32.** The 32 is the
+`Typography.*` references [[S121]] counted; the parent's DONE-when also requires **"boxes as well as
+type"**, and this file carries **114 further bare pixel literals ≥ 1.0** — `pad = 28f`, `StripHeight`,
+and offsets like `+24f`, `±150f`, `+128f`, `-34f` that position the very text being scaled. Scaling the
+type and leaving those behind would pull each page apart rather than fix it.
+
+⛔ **AND SEVERAL OF THEM ARE HIT-TEST GEOMETRY, WHICH RAISES THE STAKES.** `MissionRect`, `AutoRect` and
+`FlightHitTest` are the FLIGHT page's rects, shared by the drawing and by `Pages.HitTest`; they are also
+exercised directly by `LayoutSweepTest` and `PageTest`. This is the same lockstep requirement [[S121a]]
+handled in `GateCard` and `Card`, and it is the reason this file cannot be done in a hurry: a half-scaled
+page is QC `H-04` again — a control painted where the touch test does not look.
+
+⚠ **One trap, named so the next chat does not walk into it.** `StepColumn(dl, s, x, y, w, …)` and
+`SideRow(dl, x, y, w, …)` take a parameter called `w` that is a **COLUMN WIDTH, not the panel**.
+`Typography.ScaleFor(w)` there is silently wrong — it would read a 300 px column as a 300 px panel. Both
+must receive `sc` from a caller that holds the real panel width.
+
+#### The three splits, one page each — which is what [[S121]] asked for
+
+### S121b-i [O] `Pages.cs` — the FLIGHT page and its hit rects — **TODO** — [split of [[S121b]]; ~59 sites; the only one with hit-test geometry]
+- `Flight` (23) · `StepColumn` (19) · `SideRow` (4) · `MissionRect` (4) · `AutoRect` (3) ·
+  `FlightHitTest` (6) and `HitTest`'s flight branch.
+- ⛔ **The draw and the hit test must move together**, and `LayoutSweepTest` / `PageTest` call
+  `MissionRect` and `AutoRect` directly — so those two suites are the check that they did.
+- ⚠ `StepColumn` and `SideRow` need `sc` PASSED IN (see the trap above), not derived from their own `w`.
+- ⭐ **This is also where `Gauge` finally gets a real scale.** `Flight` draws the three dials, and
+  [[S121a]] made `Gauge.ValueSize` able to follow the panel but left every caller at `sc = 1`. Passing the
+  real `sc` here is what turns the shipped dial's number from 28 px at 2560 into 56.
+- **DONE when:** as [[S121]]'s DONE-when, for these methods, with a hit-test check at BOTH widths.
+
+### S121b-ii [S] `Pages.cs` — the VEHICLE page — **TODO (blocked: [[S121b-i]] — shared helpers)** — [split of [[S121b]]; ~34 sites]
+- `Vehicle` (18) · `Status` (8) · `Dot` (8).
+- ⚠ `Dot` takes no width at all and needs `sc` passed in.
+- ⭐ `Vehicle` draws through `Gauge.Bar`, which [[S121a]] made scale-aware; pass the real `sc`.
+- **DONE when:** as [[S121]]'s DONE-when, for these methods.
+
+### S121b-iii [S] `Pages.cs` — the legacy DOCKING page and the placeholder — **TODO (blocked: [[S121b-i]] — shared helpers)** — [split of [[S121b]]; ~48 sites]
+- `DockingOld` (38) · `Axis` (3) · `AxisR` (3) · `Placeholder` (4).
+- ⛔ **Not the live docking HUD.** That is `Frame58Hud` + [[S154b]]/[[S154c]]. This is the legacy page,
+  dormant behind `FigmaMode` like the rest of the family.
+- ⚠ `Axis`/`AxisR` take no width and need `sc` passed in; `DockingOld` carries 27 pixel literals, the most
+  of any method in the file, largely the ±150f column offsets around the range/rate pair.
+- **DONE when:** as [[S121]]'s DONE-when, for these methods.
 
 ### S121c [S] `SettingsPage.cs` — **TODO (UNBLOCKED 2026-09-06 by [[S121a]])** — [split 3 of 5 of [[S121]]; 24 lines / 24 references]
 - ⚠ **Read [[S134]] before starting.** It owns the settings family's real coordinate-system defect and its
