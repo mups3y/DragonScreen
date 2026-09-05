@@ -1,10 +1,26 @@
 // DragonScreen — PlaceholderPage  (PURE: an honest "not built yet" screen)
 // ============================================================================================
-// The new Figma navigation wires EVERY button to a destination now, but many of those destinations
-// are pages we have not built yet. Rather than a dead button or a silent no-op, the button leads
-// here: a card that names where it was going and says plainly it is not built. That keeps the whole
-// UI navigable and testable in game while the remaining pages are filled in one at a time — the same
-// one-page-at-a-time cadence the built pages followed. The back chevron (drawn by FigmaUI) returns.
+// A card that names a destination and says plainly it is not built — the graceful landing for a page
+// int that does not resolve, so the UI stays navigable and testable in game while the remaining pages
+// are filled in one at a time. The back chevron (drawn by FigmaUI) returns.
+//
+// ⚠ S107 / QC M-02 — THE PREMISE THIS FILE WAS WRITTEN ON IS NO LONGER TRUE, AND THE CARD SAID SO
+// OUT LOUD. This comment used to open "The new Figma navigation wires EVERY button to a destination
+// now", and the card printed "this button is wired; the destination is coming". Both were true when
+// written. S14 then removed these values from the Menu grid — correctly, per the owner's decision, so
+// a dead card would not read as a real page — and left the sentence behind.
+//
+// Nothing in this build opens a placeholder page. Verified, not assumed: `MenuPage.BuildEntries`
+// skips every `FigmaUI.IsPlaceholder` value; `BarTarget` is the five real hubs; and every
+// `NavHit.Go` in `plugin/src/` targets one of eight real pages (Audio, AudioVideo, Cabin, Cover,
+// Docking, ManualChute, Menu, Rendezvous). The ONLY way here is a persisted page int from an older
+// build — which is exactly what this page is for, and is worth telling the crew, because it says
+// what to do next.
+//
+// ⛔ The page and the enum values STAY. UiPage's own rule is that the int persists per screen and
+// values are never renumbered; deleting either would turn a stale save into a page that renders
+// nothing. S49 H9 classes this (C) — record, don't build — and that stands: the PAGE was correct,
+// one SENTENCE was not.
 // ============================================================================================
 using System;
 
@@ -31,8 +47,10 @@ namespace DragonScreen
 
             dl.Text(title ?? "?", w * 0.5f, Y(880), Z(96), TextAlign.Centre, DragonPalette.White);
             dl.Text("PAGE NOT YET BUILT", w * 0.5f, Y(1040), Z(44), TextAlign.Centre, DragonPalette.Accent);
-            dl.Text("this button is wired; the destination is coming",
-                    w * 0.5f, Y(1120), Z(30), TextAlign.Centre, DragonPalette.Text6);
+            dl.Text("no button in this build opens this page",
+                    w * 0.5f, Y(1114), Z(30), TextAlign.Centre, DragonPalette.Text6);
+            dl.Text("remembered from an older save — the bar below goes anywhere",
+                    w * 0.5f, Y(1178), Z(30), TextAlign.Centre, DragonPalette.Text6);
 
             // bottom status bar (shared chrome)
             BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame

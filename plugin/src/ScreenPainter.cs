@@ -603,16 +603,8 @@ namespace DragonScreen
                 rec.ControlId = CrewControlIds.Cover(cb);
                 int ph = CoverPage.PhaseOf(cb);
                 if (ph >= 0) { rec.Acted = (ph != coverPhase); coverPhase = ph; }
-                else if (cb == CoverPage.CoverButton.Back)
-                {
-                    coverPhase = (coverPhase + CoverPage.PhaseCount - 1) % CoverPage.PhaseCount;
-                    rec.Acted = true;   // the arrows WRAP, so a step always lands somewhere new
-                }
-                else if (cb == CoverPage.CoverButton.Forward)
-                {
-                    coverPhase = (coverPhase + 1) % CoverPage.PhaseCount;
-                    rec.Acted = true;
-                }
+                else if (cb == CoverPage.CoverButton.Back)    rec.Acted = StepCoverPhase(-1);
+                else if (cb == CoverPage.CoverButton.Forward) rec.Acted = StepCoverPhase(+1);
                 else if (cb == CoverPage.CoverButton.None
                          && CoverPage.CapsuleHit(px, py, w, h, coverCam))
                 {
@@ -824,6 +816,26 @@ namespace DragonScreen
         /// Returned rather than re-derived at the call site, so the answer and the guards that decide
         /// it can never drift apart.
         /// </returns>
+        /// <summary>Step the Cover's phase rail one slot, wrapping over all seven - and if the slot it
+        /// lands on is a PAGE rather than an in-page phase, OPEN it, exactly as tapping that rail row
+        /// does. S107 / QC C-07.
+        ///
+        /// The bug this closes: the arrows wrapped modulo PhaseCount with no idea what a slot meant, so
+        /// ► from slot 5 (and ◄ from slot 0) parked the Cover on slot 6 - heading "Manual Chute Deploy",
+        /// body still Coast to Trunk Jettison, and the real page one tap away on the same rail. Tapping
+        /// slot 6 navigated; arrowing onto it did not. One rail item, two navigation models.
+        ///
+        /// ⚠ coverPhase is deliberately LEFT WHERE IT WAS when we navigate, so coming back to the Cover
+        /// returns to the phase the crew stepped off, not to a slot the Cover cannot render.</summary>
+        private bool StepCoverPhase(int dir)
+        {
+            int next = CoverPage.StepPhase(coverPhase, dir);
+            int nav = FigmaUI.PhaseNav(next);
+            if (nav >= 0) return ApplyNav(NavHit.Go((UiPage)nav));
+            coverPhase = next;
+            return true;   // the arrows WRAP, so an in-page step always lands somewhere new
+        }
+
         private bool ApplyNav(NavHit nh)
         {
             switch (nh.Act)

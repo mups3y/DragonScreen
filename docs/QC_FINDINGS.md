@@ -717,6 +717,52 @@ live telemetry strip and globe) while the body underneath belongs to a different
   bodies are on the gate instead of one. That also closes the four ⏳ PART rows in the inventory above,
   and it is four lines in `PreviewMain.cs` beside the two that already exist (`:918-934`).
 
+
+### ✅ FIXED 2026-09-05 — S107 (QC batch 5: copy that states something untrue)
+
+**Fixed, by the recommended route — the arrows navigate — and the mechanism is derived rather than
+special-cased on "slot 6".**
+
+The painter's arrow branches were inline arithmetic that knew nothing about what a slot *meant*:
+
+```csharp
+coverPhase = (coverPhase + CoverPage.PhaseCount - 1) % CoverPage.PhaseCount;   // was
+```
+
+They are now three lines over two **pure** functions, so the whole rule is headless-testable:
+
+```csharp
+int next = CoverPage.StepPhase(coverPhase, dir);
+int nav  = FigmaUI.PhaseNav(next);
+if (nav >= 0) return ApplyNav(NavHit.Go((UiPage)nav));   // the slot is a PAGE — open it
+coverPhase = next;                                        // the slot is an in-page phase
+```
+
+`FigmaUI.PhaseNav` asks **`MapCover`** — the same map the rail tap already goes through — so this fixes
+fault 2 at the root rather than papering over it. **If another rail item ever becomes a page, the arrows
+follow it with no second edit and no second model.** That was the whole complaint: *"the same control
+reached two ways produces two different outcomes."*
+
+⚠ **`coverPhase` is deliberately left where it was when we navigate**, so coming back to the Cover returns
+to the phase the crew stepped off — not to a slot the Cover cannot honestly render.
+
+**Verified headlessly, in `FigmaUINavTest.CoverPhaseStepping()` — 60 new checks**, because this fix lives
+partly in glue and a PNG cannot show it:
+
+- `PhaseNav(6) == UiPage.ManualChute`; `PhaseNav(0..5) < 0`; out of range is −1.
+- **A TAP on each of the seven rail rows and `PhaseNav` return the same verdict** — the check that pins
+  "one rail item, one navigation model". Change either side alone and it fails here, not on the glass.
+- `StepPhase` wraps both ways from every slot, and clamps out-of-range input.
+- **The invariant:** for every start slot × both directions, the slot the Cover is *left displaying* is
+  never one that `PhaseNav` routes. This is the finding, stated as an assertion.
+
+⚠ **`ui_cover_phase6.png` still exists, and that is correct.** The preview asks `CoverPage.Build` for the
+slot **directly**, below the layer that decides reachability — it is a fixture, not a state. The test above
+is what proves the state is gone.
+
+⚠ **Fault 1 survives for slots 0–4, as filed.** The heading is still the only thing that changes with the
+rail, and the body is still gated on slot 5 alone. That is **S49 H4** and it is unchanged. Slot 6 was the
+TIER 1 half of it precisely because its heading named a real page; that half is closed.
 ---
 
 ## C-08 — ENTRY ENABLED is a baked verdict, permanently False — and S49's reading of it is wrong
@@ -2146,6 +2192,54 @@ four illustrated seats — if anything more so, because the two speaker rings ou
 ~10 px across and contribute even less. Nothing in the fix plan changes.
 ---
 
+## Open questions for the owner — Mech Panel (Q7)
+
+### Q7 — The Mech Panel's `PRESSURE` node sits in a set of MECHANICAL quantities and is wired to CABIN pressure. Which does the reference mean? (MP-02)
+
+**Paste-ready for the overseer (C1.13).**
+
+**Situation.** `VehicleMechPage` draws five reference node names around the seat tachometers:
+
+```csharp
+NodeLabel = { "ACCELERATION", "CENTRIPETAL", "PRESSURE", "RESISTANCE", "WATER UPRIGHTING" };
+```
+
+Four of the five are unambiguously structural/mechanical. The third is wired to the **cabin atmosphere** —
+`VehicleMechPage.cs:81`, `case 2: return (float)s.Cabin.Press01;` — and the file's own table at `:17`
+records it as *"PRESSURE — cabin, psia — SIMULATED from real state (CabinEnvironment)"*.
+
+QC filed this (MP-02) as a naming inconsistency across three pages. **Confirming it found the opposite:**
+the label is not drift — it is reference copy from a coherent five-word mechanical set — so renaming it
+would repeat MP-01's mistake. What is left is the harder half, which MP-02's own last bullet predicted:
+**the node may be displaying the wrong quantity.**
+
+**What is already true either way.** The *colour* half is closed — S104 made the two Vehicle pages compute
+their band, so all three surfaces now agree about the number's severity. Nothing here is a safety verdict.
+Whichever way this goes, no reference copy is edited without this decision.
+
+1. **It really is cabin pressure — do nothing.** *Reasoning:* the reference set may simply mix a cabin
+   quantity in among mechanical ones, and §1.4 reproduces the reference faithfully. Cheapest, and the
+   status quo. Costs nothing if right; leaves a mechanical node reading an atmospheric number if wrong.
+2. **It is a structural pressure — the node is MIS-WIRED, and needs a different source.** *Reasoning:*
+   the company it keeps (acceleration, centripetal, resistance, water uprighting) is a set about loads on
+   the vehicle. This would make the current wiring a §14.4(e) invention rather than a reading. ⚠ Requires
+   finding a real source for it first (C1.15's evidence-gated mod-first search) — and if none exists, the
+   honest result is a **dash**, not a substitute number.
+3. **Undecidable from what is in the repo — mark it and move on.** *Reasoning:* record the ambiguity in
+   `docs/REFERENCE_PAGES.md` next to the node, leave the wiring, and revisit if a better reference source
+   for this panel turns up. Honest about the uncertainty without spending a search on it now.
+
+**Recommendation: (3), then (2) if a source appears.** The wiring is not *asserting* anything unsafe — it
+is a reading, drawn in `Accent`, with the correct value for cabin pressure. So the cost of being wrong is
+a confusing label rather than a false verdict, and that does not justify inventing a structural-pressure
+simulation to replace it. But the ambiguity is real and should be written down where the next reader of
+that panel will see it, rather than living only in this file.
+
+**Gate flags (C1.12):** none of the three needs `install` or glass time. Option (2) would need a C1.15
+mod-first search recorded in its own deliverable before any new simulation is written.
+
+---
+
 ## Open questions for the owner — Audio (Q6)
 
 ### Q6 — A dated decision says this page should have no volume controls. It has ten. Does the Figma design change that call? (A-02, and it gates A-04/A-05)
@@ -2507,6 +2601,41 @@ has grown by nine values since the Figma rebuild began.
 - **Verify:** re-render `ui_menu.png` — 25 entries should fill 9 rows with two spare cells, not 8 rows with
   five; and the headless bound check must pass with a synthetic 31-entry list.
 
+
+### ✅ FIXED 2026-09-05 — S107 (QC batch 5: copy that states something untrue)
+
+**Fixed — `Rows` is derived, and the latent failure now has a test in front of it.**
+
+```csharp
+const int Cols = 3, Rows = 10;                                   // was — hand-maintained
+static readonly int Rows = (Entries.Length + Cols - 1) / Cols;   // now — derived from the data
+```
+
+Declared **after** `Entries`, since C# runs static initialisers in declaration order.
+
+**The visible effect, measured on `ui_menu.png`:** 25 entries now make **9 rows, not 10**, so the grid fills
+its band instead of ending early. The card band measures **design y 216..1830** — the band's own bottom,
+exactly — where before it stopped at 1665.6 and left a 164-design-px empty strip under the last row. The
+five dead cells are gone because they are no longer created.
+
+**The latent half, which was the point:** at `Rows = 10` the 31st entry would have landed at design y
+1854..1994 — **drawn**, mostly under the bottom bar (1877), and **rejected by `HitTest`'s `dy0 > Bottom`
+guard at 1830**. A visible card that cannot be tapped, five appends away. Derived, that cannot arise.
+
+**New `FigmaUINavTest.MenuGridFits()`** asserts the last card ends inside the band *and* clears the bottom
+bar, and that **every** card is tappable at its own centre — the exact failure mode described.
+
+⚠ **The finding's warning is honoured, not dodged.** Deriving the count fixes the overflow, not the
+*squeeze*: the pitch is fixed by `(Bottom - Top)`, so each appended page shortens every cell. The test
+asserts the **ratio** (a cell must stay at least twice its label height), which fails the build on the
+append that crosses the line — turning a future silent breakage into a build failure, which is what the fix
+plan asked for. Pagination is still the real answer and is still C-05's work.
+
+⛔ **What the test deliberately does NOT assert: `Typography.Min`.** The Menu's label is `SZ(32)` = **10.7
+panel px against a floor of 16** — it fails. But that is **R-01**, which samples *this very element* at 67%
+of the floor alongside 16 others across 9 pages, and R-01 is **one owner decision (Q5) for all of them**.
+Asserting it here would turn one page's grid fix into a red build for a page-wide question the owner has
+not answered, and would have to be undone whichever way Q5 goes.
 ---
 
 ## M-02 — The placeholder page tells the crew "this button is wired", and no button is wired to it
@@ -2549,6 +2678,39 @@ screen whose entire purpose is to be honest about not being built.
 - **Must not break:** the back route. The bottom bar is drawn on this page and is the way out.
 - **Verify:** re-render any placeholder; the caption must not assert a wiring that does not exist.
 
+
+### ✅ FIXED 2026-09-05 — S107 (QC batch 5: copy that states something untrue)
+
+**Fixed — the sentence, and the stale premise in the file header that produced it.**
+
+```
+this button is wired; the destination is coming        ← was, and false
+no button in this build opens this page                ← now
+remembered from an older save — the bar below goes anywhere
+```
+
+The finding's better option was taken: the second line says **how the crew got here**, which is the
+actionable part. The card is four lines now; measured on `ui_phasedeport.png` the new lines sit at design y
+1124..1145 and 1187..1208, inside a card that ends at 1340, and the wider of the two is **847 design px in
+a 1547-px card**.
+
+**The header comment was corrected too**, because it carried the same dead premise (*"The new Figma
+navigation wires EVERY button to a destination now"*) — a file that contradicts its own card is how the
+sentence survived S14 in the first place.
+
+⚠ **The new sentence is a claim about the build, so it now has a test holding it up.** That is the real
+fix here: the line it replaced was *true when written* and rotted silently. New
+`FigmaUINavTest.PlaceholderUnreachable()` asserts no Menu entry is a placeholder, and **sweeps every page ×
+a 64×36 grid of touch points**, asserting that no `NavAct.Goto` anywhere resolves to an `IsPlaceholder`
+page — with a guard that the sweep found routes at all, so it cannot pass vacuously. Wire one, and the
+build fails until the caption is changed with it.
+
+⛔ **The page and the enum values stay**, per the finding and `UiPage`'s own rule. S49 H9's **(C) — record,
+don't build** stands: the *page* was correct, one *sentence* was not.
+
+**Still open, and still the owner's:** the optional clamp of a stale persisted page int back to
+`UiPage.Cover` on load. That is a behaviour change, it would make the placeholder genuinely unreachable,
+and this fix does not pre-empt it either way.
 ---
 
 *Page 0 (Cover) inspected 2026-09-05; C-12 and C-13 added the same day on owner review (R-1…R-5).
@@ -3063,6 +3225,40 @@ that this page does not, about the same number, at the same instant.
   wired to `Press01`. **Confirm which quantity the reference means before changing either.**
 - **Verify:** one label per quantity across the Vehicle family, and one colour rule.
 
+
+### ⚠ UPDATED 2026-09-05 — S107 (confirmed, and the question got sharper)
+
+**Confirmed against the source, and the naming half turns out NOT to be drift — which makes the remaining
+question worse, not better.**
+
+`VehicleMechPage.cs:47`:
+
+```csharp
+static readonly string[] NodeLabel = { "ACCELERATION", "CENTRIPETAL", "PRESSURE", "RESISTANCE", "WATER UPRIGHTING" };
+```
+
+**`PRESSURE` is one of five reference MECHANICAL node names**, not a short form of `CABIN PRESSURE`. Four of
+its siblings are unambiguously structural. Renaming it to match the Vehicle pages would break a coherent
+reference set and edit reference copy — the same trap **MP-01** fell into, and this finding's own
+*"⚠ Check the reference before renaming (§1.4)"* is what caught it. **The naming half is withdrawn.**
+
+⚠ **But this finding's LAST bullet anticipated the real problem, and it is now confirmed.** It said: *"the
+Mech Panel's `PRESSURE` label may be the reference's own word for a structural pressure rather than cabin
+pressure — in which case the defect is not the label but the fact that it is wired to `Press01`."*
+
+It is wired to `Press01`. `VehicleMechPage.cs:81` — `case 2: return (float)s.Cabin.Press01;` — and the
+file's own table at `:17` says so plainly: *"PRESSURE — cabin, psia — SIMULATED from real state
+(CabinEnvironment)"*. **A node sitting in a set of mechanical quantities is displaying a cabin
+atmospheric one.**
+
+⛔ **Not fixed, and not a build-chat call.** Which quantity the reference's `PRESSURE` node means is a §1.4
+source question, and the two answers lead opposite ways: if it is structural, the node is **mis-wired** and
+needs a different source (or a dash under §14.4(f) if none exists); if it really is cabin pressure, the
+wiring is right and there is nothing to fix but the reader's confusion. **This is now an owner question**
+and is listed with the others below.
+
+**The colour half is closed** — S104 computed the two Vehicle pages' bands, so all three surfaces now agree
+about the number's severity. Only the identity of the quantity is open.
 ---
 
 ## MP-03 — Five of the page's nine readouts are dashes, and the empty centre circle is the visible consequence
@@ -3328,6 +3524,37 @@ one page, three statements, one of them impossible.
 - **Verify:** three renders — no cameras, cameras present, camera held by docking — with the resolution row
   correct in each.
 
+
+### ✅ FIXED 2026-09-05 — S107 (QC batch 5: copy that states something untrue)
+
+**Fixed, exactly as filed, including the `CameraHeldByDocking` branch the finding said to decide
+deliberately.**
+
+```csharp
+bool feedExists = cams.Length > 0 || s.CameraHeldByDocking;
+R(feedExists ? (s.CameraResText ?? "—") : "—", …, feedExists ? White : Dim);
+```
+
+Held-by-docking **keeps the number**, on the finding's own reasoning: docking having the forward view means
+a camera *exists* and its feed really is that size — this page just cannot see it.
+
+⚠ **The root cause is worth recording:** `CameraResText` is `DockingCamRenderer.Resolution`, which is
+`Width + " x " + Height` — the **RenderTexture's own size, set once at construction**. It is not read off a
+camera at all, which is precisely why the `?? "—"` fallback the author wrote could never fire.
+
+**Verified on all three renders the finding asked for:**
+
+| render | resolution row |
+|---|---|
+| `ui_audiovideo.png` (no cameras) | **0 white px**, 6 px of Text6 — the dimmed dash |
+| `ui_audiovideo_cameras.png` | **126 white px** — the value |
+| `ui_audiovideo_cameras_heldbydocking.png` | **126 white px** — the value, deliberately |
+
+The three honest empty states are intact.
+
+⚠ **This finding named one surface and there were two.** See **VV-03** — filed separately rather than
+folded in — and fixed in the same commit, because fixing one and not the other is the C7.1 disagreement
+S104 spent a whole batch removing.
 ---
 
 ## VV-02 — The camera list is live and read-only, its writer is stranded, and the preview has never rendered the populated state
@@ -3360,6 +3587,42 @@ page: the preview gate cannot see the page's live half.
 - **Must not break:** the three empty states, and `CameraHeldByDocking`'s precedence over a selection.
 - **Verify:** the populated render shows a highlighted row; tapping a different row moves the highlight and
   the feed.
+
+---
+
+## VV-03 — The lower console's settings card prints the same impossible resolution VV-01 found on the Figma page
+
+**TIER 2** · **NEW (S107)** · the second surface of **VV-01**
+
+**Evidence.** `SettingsPage.cs:369-372`, the lower console's own CAMERA tab:
+
+```csharp
+dl.Text("RESOLUTION", vx, vy + vh + 10f, …, DragonPalette.Text6);
+dl.Text(s.CameraResText ?? "-", vx + vw, vy + vh + 10f, …, DragonPalette.Text0);
+```
+
+Printed unconditionally, from the same `PageState.CameraResText`, with the same `?? "-"` fallback that can
+never fire — and on a card that, immediately below, has its own `CameraHeldByDocking` branch. This page is
+live: `Pages.cs:622-623` builds it for `pageIndex == 4`.
+
+**What is wrong.** Identical to VV-01: a resolution is a property of a camera, and the field is populated
+whether or not one exists, because `DockingCamRenderer.Resolution` is the RenderTexture's own size.
+
+**Why it is filed separately rather than folded into VV-01.** VV-01 names one page and its evidence,
+verify steps and fix are all about that page. Rewriting it to cover a second file would edit a finding's
+recorded analysis, which C1.16 forbids in spirit. **It is fixed in the same commit as VV-01**, because
+fixing one surface and not the other creates exactly the two-pages-disagree defect S104 spent a batch
+removing — but it gets its own number so the second site stays traceable.
+
+**Fix plan.** The same gate, the same reasoning: `feedExists = cams.Length > 0 || s.CameraHeldByDocking`,
+value and tint both following it.
+
+**Verify:** the lower console's camera tab shows a dash with no cameras and the value with any feed.
+
+### ✅ FIXED 2026-09-05 — S107 (filed and fixed together)
+
+Fixed with VV-01, one rule across both files, so the two surfaces cannot disagree about whether a
+resolution exists.
 
 ---
 

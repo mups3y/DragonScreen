@@ -12080,6 +12080,92 @@ of everything above the docking bottom bar returns four bright blobs of which **
 arrows peak at **exactly (132,137,163)**, was `Text3` (193,195,223). `build.py test` green, 104 PNGs
 re-rendered.
 
+### S107 [O] QC batch 5 — copy that states something untrue, and two constants that would have lied later — **DONE 2026-09-05** — [C-07 + M-01 + M-02 + VV-01 + VV-03 new; MP-02 confirmed and re-posed as Q7]
+
+**🟢 OWNER-DIRECTED** — *"continue with all the screen fixes one at a time until all pages are complete. You
+must confirm your findings before fixing."* All five confirmed in source before any edit; **confirming
+changed two of them and turned up a sixth site QC had missed.**
+
+**C-07 (TIER 1) — THE ◄/► ARROWS COULD PARK THE COVER ON A HEADING THAT NAMED ANOTHER PAGE. FIXED.**
+The rail's seven slots are reachable two ways and behaved differently. A **tap** on slot 6 navigated —
+`FigmaUI.HitTest` runs before the painter's Cover branch, and `MapCover` sends `PhaseManual` to
+`UiPage.ManualChute`. An **arrow** onto slot 6 (► from 5, or ◄ wrapping from 0) just set `coverPhase = 6`,
+leaving the Cover reading **"Manual Chute Deploy" over the Coast to Trunk Jettison body** — a heading naming
+a real page whose real content was one tap away on the same rail.
+
+The painter's inline modulo is now three lines over two **pure** functions — `CoverPage.StepPhase` and
+`FigmaUI.PhaseNav` — and `PhaseNav` asks **`MapCover`**, the same map the tap already goes through. ⭐ That
+is the point: **the fix is derived, not a test for "slot 6"**, so if another rail item ever becomes a page
+the arrows follow it with no second edit and no second model. Fault 2 in QC's filing was *"two navigation
+models for one rail item"*; there is now one.
+
+⚠ **Slots 0–4 still have S49 H4's heading-without-a-body**, unchanged and out of scope. Slot 6 was the
+TIER 1 half precisely because its heading named a real page.
+
+**M-01 — A HAND-MAINTAINED ROW COUNT, FIVE APPENDS FROM AN UNTAPPABLE CARD. FIXED.** `const int Rows = 10`
+carried its own confession in the comment above it (*"Rows bumped 9->10 (T6, Rendezvous appended) … the
+count keeps growing every time a page is appended"*). At 10 rows the 31st entry lands at design y
+1854..1994: **drawn**, mostly under the bottom bar (1877), and **rejected outright** by `HitTest`'s
+`dy0 > Bottom` guard at 1830. `Rows` is now `(Entries.Length + Cols - 1) / Cols`, declared after `Entries`.
+Visible effect: 25 entries make **9 rows not 10**, and the card band measures **design y 216..1830** — the
+band's own bottom — where it used to stop at 1665.6 and leave an empty strip.
+
+**M-02 — A PAGE WHOSE WHOLE JOB IS HONESTY WAS LYING IN ONE LINE. FIXED.** The placeholder card printed
+*"this button is wired; the destination is coming"*. **Nothing in this build opens a placeholder page** —
+verified, not assumed: `MenuPage.BuildEntries` skips every `IsPlaceholder` value, `BarTarget` is the five
+real hubs, and every `NavHit.Go` in `plugin/src/` targets one of eight real pages. The copy was true when
+written; **S14 removed those values from the Menu grid and left the sentence behind.** It now reads *"no
+button in this build opens this page"* and *"remembered from an older save — the bar below goes anywhere"*,
+which tells the crew the actionable thing. The file's header comment carried the same dead premise and was
+corrected with it — a file that contradicts its own card is how the sentence survived.
+
+**VV-01 — "no cameras on vehicle", "NO SIGNAL", and "RESOLUTION 640 x 360", all on one page. FIXED.**
+`CameraResText` is `DockingCamRenderer.Resolution` = the **RenderTexture's own size**, set once at
+construction — never read off a camera — which is exactly why the author's `?? "—"` fallback could never
+fire. Gated on `cams.Length > 0 || CameraHeldByDocking`; **held-by-docking keeps the number deliberately**,
+because a camera then exists and its feed really is that size.
+
+**⚠ VV-03 — QC NAMED ONE SURFACE AND THERE WERE TWO. FILED NEW, FIXED IN THE SAME COMMIT.** The lower
+console's own settings card (`SettingsPage.cs:369-372`, live via `Pages.cs:622`) prints the same field the
+same unconditional way with the same never-firing `?? "-"`. It gets **its own finding number rather than
+being folded into VV-01** — rewriting a finding's recorded analysis is what C1.16 forbids in spirit — but it
+is fixed in the same commit, because fixing one surface and not the other is the two-pages-disagree defect
+S104 spent a whole batch removing.
+
+**⚠ MP-02 — CONFIRMING INVERTED IT. NOT FIXED; RE-POSED AS Q7.** QC filed the Mech Panel's `PRESSURE` label
+as naming drift against the Vehicle pages' `CABIN PRESSURE`. `VehicleMechPage.cs:47` shows it is **one of
+five reference MECHANICAL node names** — ACCELERATION / CENTRIPETAL / PRESSURE / RESISTANCE / WATER
+UPRIGHTING — so renaming it would break a coherent reference set and repeat MP-01's mistake. **The naming
+half is withdrawn.** But MP-02's own last bullet predicted the real problem and it is now confirmed: the
+node is wired to `s.Cabin.Press01` (`:81`), so **a node in a set of mechanical quantities is displaying a
+cabin atmospheric one.** Which quantity the reference means is a §1.4 source question with opposite
+answers, so it is the owner's (C1.14) — **Q7**, with the chat's recommendation and a C1.15 flag on the
+option that would need a mod-first search.
+
+**Tests — the two fixes that a PNG cannot show got 60+ new checks.** `CoverPhaseStepping()` pins
+`PhaseNav` per slot, asserts **a tap and `PhaseNav` return the same verdict for all seven rows** (the check
+that keeps one rail item to one model), exercises `StepPhase`'s wrap and clamping, and asserts **the
+invariant**: over every start slot × both directions, the slot the Cover is *left displaying* is never one
+that routes. `MenuGridFits()` asserts the last card ends inside the band, clears the bottom bar, and that
+every card is tappable at its own centre. `PlaceholderUnreachable()` sweeps **every page × a 64×36 touch
+grid** asserting no `Goto` resolves to a placeholder — with a guard that the sweep found routes at all, so
+it cannot pass vacuously. **M-02's new sentence is a claim about the build, so it now has a test holding it
+up** — which is the actual fix, since the line it replaced rotted silently.
+
+⛔ **One check was written, failed honestly, and was REMOVED on purpose:** that the Menu label clears
+`Typography.Min`. It does not — `SZ(32)` is **10.7 panel px against a floor of 16**. But that is **R-01**,
+which samples *this very element* at 67% of the floor with 16 others across 9 pages, and R-01 is **one owner
+decision (Q5) for all of them**. Failing the build here would turn one page's grid fix into a red build for
+an owner-gated question, and would have to be undone whichever way Q5 goes. The **ratio** check (a cell must
+stay at least twice its label height) is M-01's own and stays — it is the pagination guard the fix plan
+asked for.
+
+**Verified on the glass:** `ui_menu.png` card band **design 216..1830** (was ending 1665.6); the placeholder
+card's two new lines at design y 1124..1145 and 1187..1208, widest **847 px in a 1547-px card**; and the
+resolution row across all three video renders — **0 white px + a dimmed dash** with no cameras, **126 white
+px** with cameras, **126** held-by-docking. `build.py test` green (925 in the nav suite), 104 PNGs
+re-rendered.
+
 
 ---
 

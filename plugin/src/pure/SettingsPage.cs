@@ -366,10 +366,16 @@ namespace DragonScreen
             dl.Image(ImageId.DockingCamLive, vx, vy, vw, vh, DragonPalette.White);
             dl.Box(vx, vy, vw, vh, 2f, DragonPalette.Hairline);
 
+            // S107 / QC VV-03: the SAME defect QC filed as VV-01 against the Figma Video page lives here
+            // too, on the lower console's own settings card, from the same field and with the same
+            // never-firing `?? "-"`. Fixing one surface and not the other is the C7.1 failure S104 spent a
+            // batch removing, so both take one rule: no feed, no resolution.
+            bool feedExists = cams.Length > 0 || s.CameraHeldByDocking;
             dl.Text("RESOLUTION", vx, vy + vh + 10f, Typography.Caption, TextAlign.Left,
                     DragonPalette.Text6);
-            dl.Text(s.CameraResText ?? "-", vx + vw, vy + vh + 10f, Typography.Caption,
-                    TextAlign.Right, DragonPalette.Text0);
+            dl.Text(feedExists ? (s.CameraResText ?? "-") : "-", vx + vw, vy + vh + 10f,
+                    Typography.Caption, TextAlign.Right,
+                    feedExists ? DragonPalette.Text0 : DragonPalette.Text6);
 
             // ONE CAMERA, AND DOCKING OUTRANKS THIS PAGE. Rendering a second full scene camera to let
             // two pages look different ways at once is real cost for a rare case; saying so is

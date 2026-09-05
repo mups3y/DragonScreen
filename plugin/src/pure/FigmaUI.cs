@@ -373,6 +373,21 @@ namespace DragonScreen
             }
         }
 
+        /// <summary>The page rail slot <paramref name="phase"/> OPENS, or -1 if that slot selects a phase
+        /// in-page. S107 / QC C-07: the rail and the ◄/► arrows reach the same seven slots, so they must
+        /// agree about what a slot DOES - and before this they did not. A TAP on slot 6 navigated, because
+        /// FigmaUI.HitTest runs before the painter's Cover branch and MapCover sends PhaseManual to
+        /// UiPage.ManualChute; an ARROW onto slot 6 (► from 5, or ◄ wrapping from 0) just set
+        /// coverPhase = 6, leaving the Cover with the heading "Manual Chute Deploy" over the Coast body -
+        /// a heading naming a REAL page whose real content was one tap away.
+        /// Deriving the answer from MapCover rather than testing for slot 6 is the point: if another rail
+        /// item ever becomes a page, the arrows follow it with no second edit and no second model.</summary>
+        public static int PhaseNav(int phase)
+        {
+            NavHit nh = MapCover(CoverPage.PhaseAt(phase));
+            return nh.Act == NavAct.Goto ? (int)nh.Target : -1;
+        }
+
         // Tab index (VehicleTabBar order) → the sibling vehicle page it opens. Must stay in lockstep
         // with VehicleTabBar.Tabs: All · Crew · Prop · Mech · Power · Avionics · GNC · Thermal.
         static readonly UiPage[] VehicleTab = {

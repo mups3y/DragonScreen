@@ -25,14 +25,40 @@ namespace DragonScreen
         public const int Commands = 180;   // background + heading + 28 cards (rect+box+text) + bottom bar
         const float RefW = 3427f, RefH = 2112f;
 
-        // Rows bumped 9->10 (T6, Rendezvous appended): grid cells must cover FigmaUI.PageCount-1
-        // entries, and the count keeps growing every time a page is appended - see BuildEntries.
-        const int Cols = 3, Rows = 10;
+        const int Cols = 3;
         const float Margin = 90f, Top = 210f, Bottom = 1830f, Gap = 24f;
 
         /// <summary>Every REAL page but Menu itself (S14: placeholder-only pages excluded), in enum
         /// order (the same order FigmaUI.Name reads).</summary>
         public static readonly UiPage[] Entries = BuildEntries();
+
+        /// <summary>Rows enough to hold every entry - DERIVED, never typed. S107 / QC M-01.
+        ///
+        /// This was `const int Rows = 10`, carrying its own confession: *"Rows bumped 9->10 (T6,
+        /// Rendezvous appended): grid cells must cover FigmaUI.PageCount-1 entries, and the count keeps
+        /// growing every time a page is appended."* A constant that must be re-typed every time the data
+        /// changes is a defect waiting for the one append nobody remembers, and the failure it was heading
+        /// for was silent: with 10 rows, entry 30 (the 31st) lands at design y 1854..1994 - DRAWN, mostly
+        /// under the bottom bar (which starts at 1877), and rejected outright by HitTest's
+        /// `dy0 &gt; Bottom` guard at 1830. A visible card that cannot be tapped, five appends away.
+        ///
+        /// ⚠ Deriving the count does NOT make the grid safe forever, and the test beside it says so.
+        /// The row PITCH is fixed by (Bottom - Top), so more rows means shorter cells, and eventually a
+        /// cell too short for its own 32-design-px label. At that point the grid must PAGINATE, not
+        /// shrink - the same guard C-05 needs for FitRows, and real work rather than a line here.
+        /// FigmaUINavTest.MenuGridFits() fails the build before that day arrives.</summary>
+        static readonly int Rows = (Entries.Length + Cols - 1) / Cols;
+
+        /// <summary>The design-space cell height the grid currently gets. Exposed so the headless check
+        /// can assert the legibility floor rather than re-deriving the arithmetic.</summary>
+        public static float CellHeight
+        {
+            get { return ((Bottom - Top) - Gap * (Rows - 1)) / Rows; }
+        }
+
+        /// <summary>The label size Build draws in a cell, in design px - the number the cell has to be
+        /// tall enough for.</summary>
+        public const float LabelSize = 32f;
 
         static UiPage[] BuildEntries()
         {

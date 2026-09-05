@@ -854,6 +854,26 @@ namespace DragonScreen
             CoverButton.PhaseDeport, CoverButton.PhaseCoast, CoverButton.PhaseClaw, CoverButton.PhaseProcedure,
             CoverButton.PhaseProcedure2, CoverButton.PhaseReference, CoverButton.PhaseManual };
 
+        /// <summary>The rail slot a ◄/► step lands on from <paramref name="phase"/>, wrapping over all
+        /// seven. PURE, deliberately: this is the RULE, and keeping it here means the painter's arrow
+        /// branch is three lines that cannot get it wrong and a headless test can pin the whole thing.
+        /// S107 / QC C-07 - it used to be inline arithmetic in ScreenPainter, where nothing could reach
+        /// it. Out-of-range clamps rather than throws, the same way Build clamps selectedPhase.</summary>
+        public static int StepPhase(int phase, int dir)
+        {
+            int p = phase < 0 ? 0 : (phase >= PhaseCount ? PhaseCount - 1 : phase);
+            return (p + PhaseCount + (dir < 0 ? -1 : 1)) % PhaseCount;
+        }
+
+        /// <summary>Rail slot <paramref name="i"/>'s button - the inverse of <see cref="PhaseOf"/>, and
+        /// out of range it is <c>None</c> rather than a throw. S107/QC C-07 added it so the ROUTING layer
+        /// can ask "what does this slot do?" without a second copy of the slot order: the array stays
+        /// private, and FigmaUI.PhaseNav is the one caller.</summary>
+        public static CoverButton PhaseAt(int i)
+        {
+            return (i < 0 || i >= PhaseButton.Length) ? CoverButton.None : PhaseButton[i];
+        }
+
         /// <summary>The phase index (0..6) a rail button selects, or -1 if it is not a rail button.</summary>
         public static int PhaseOf(CoverButton b)
         {

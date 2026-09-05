@@ -68,8 +68,18 @@ namespace DragonScreen
             else if (cams.Length == 0)
                 C("NO SIGNAL", vx + vw * 0.5f, vy + vh * 0.5f - 18f, 40, Dim);
 
+            // ---- S107 / QC VV-01: a resolution is a property of a CAMERA ----
+            // This row printed unconditionally, so the page could state three things at once: "no cameras
+            // on vehicle" in the left column, "NO SIGNAL" in the viewport, and "RESOLUTION 640 x 360"
+            // underneath it. The `?? "—"` fallback shows a dash was always intended for this case; it
+            // never fired, because the FIELD is populated even when the camera LIST is empty -
+            // `DockingCamRenderer.Resolution` is the RenderTexture's own size, set once at construction.
+            // ⚠ HELD-BY-DOCKING still shows the number, deliberately: docking having the forward view
+            // means a camera EXISTS and its feed really is that size - this page just cannot see it.
+            bool feedExists = cams.Length > 0 || s.CameraHeldByDocking;
             L("RESOLUTION", vx, vy + vh + 24, 28, Dim);
-            R(s.CameraResText ?? "—", vx + vw, vy + vh + 24, 32, White);
+            R(feedExists ? (s.CameraResText ?? "—") : "—",
+              vx + vw, vy + vh + 24, 32, feedExists ? White : Dim);
 
             // ---- Audio / Cabin / Video tab strip (Video active) ----
             C("Audio", 1584, 1921, 28, Dim);

@@ -34,6 +34,9 @@ public static class FigmaUINavTest
         VehicleTabs();
         VehicleDeepViewLinksTest();
         CoverPhases();
+        CoverPhaseStepping();
+        MenuGridFits();
+        PlaceholderUnreachable();
         CoverCamera();
         SpeccedPages();
         Menu();
@@ -1180,6 +1183,153 @@ public static class FigmaUINavTest
         float bcx = (46f + 40f) / RefW * W, bcy = (2003f + 40f) * sc;
         Check("ManualChute bottom-bar -> Cover", FigmaUI.HitTest(UiPage.ManualChute, bcx, bcy, W, H).Target == UiPage.Cover, "");
         Check("Docking bottom-bar -> Cover", FigmaUI.HitTest(UiPage.Docking, bcx, bcy, W, H).Target == UiPage.Cover, "");
+    }
+
+    // ---- S107 / QC C-07: THE RAIL AND THE ARROWS MUST AGREE ABOUT WHAT A SLOT DOES ----
+    // The Cover's seven rail slots are reachable two ways, and before this they behaved differently.
+    // A TAP on slot 6 navigated (FigmaUI.HitTest runs before the painter's Cover branch, and MapCover
+    // sends PhaseManual to UiPage.ManualChute). An ARROW onto slot 6 - ► from 5, or ◄ wrapping from
+    // 0 - just set coverPhase = 6, leaving the Cover with the heading "Manual Chute Deploy" over the
+    // Coast to Trunk Jettison body, naming a REAL page whose real content was one tap away.
+    //
+    // The painter's rule is now three lines over two pure functions, so all of it is testable here:
+    //     next = CoverPage.StepPhase(coverPhase, dir)
+    //     nav  = FigmaUI.PhaseNav(next);  nav >= 0 ? open it (coverPhase unchanged) : coverPhase = next
+    static void CoverPhaseStepping()
+    {
+        float sc = (float)H / RefH;
+        float[] slotY = { 253f, 421f, 589f, 757f, 925f, 1093f, 1261f };
+
+        // 1. Which slots are pages, and which select in-page? Derived from MapCover, not typed twice.
+        Check("rail slot 6 opens Manual Chute",
+              FigmaUI.PhaseNav(6) == (int)UiPage.ManualChute, "got " + FigmaUI.PhaseNav(6));
+        for (int i = 0; i < 6; i++)
+            Check("rail slot " + i + " selects a phase in-page", FigmaUI.PhaseNav(i) < 0,
+                  "got " + FigmaUI.PhaseNav(i));
+        Check("PhaseNav is -1 out of range",
+              FigmaUI.PhaseNav(-1) < 0 && FigmaUI.PhaseNav(CoverPage.PhaseCount) < 0, "");
+
+        // 2. A TAP on each rail row must reach the SAME verdict PhaseNav gives.  This is the check
+        //    that pins "one rail item, one navigation model" - if either side is ever changed alone,
+        //    it fails here rather than on the glass.
+        for (int i = 0; i < CoverPage.PhaseCount; i++)
+        {
+            NavHit nh = FigmaUI.HitTest(UiPage.Cover, 110f * sc, (slotY[i] + 80f) * sc, W, H);
+            int tapped = nh.Act == NavAct.Goto ? (int)nh.Target : -1;
+            Check("rail row " + i + ": a TAP and PhaseNav agree", tapped == FigmaUI.PhaseNav(i),
+                  "tap=" + tapped + " PhaseNav=" + FigmaUI.PhaseNav(i));
+        }
+
+        // 3. StepPhase wraps over all seven, from anywhere, including out of range.
+        for (int p = 0; p < CoverPage.PhaseCount; p++)
+        {
+            Check("step + from " + p, CoverPage.StepPhase(p, +1) == (p + 1) % 7,
+                  "got " + CoverPage.StepPhase(p, +1));
+            Check("step - from " + p, CoverPage.StepPhase(p, -1) == (p + 6) % 7,
+                  "got " + CoverPage.StepPhase(p, -1));
+        }
+        Check("step clamps a negative phase", CoverPage.StepPhase(-5, +1) == 1,
+              "got " + CoverPage.StepPhase(-5, +1));
+        Check("step clamps an over-range phase", CoverPage.StepPhase(99, +1) == 0,
+              "got " + CoverPage.StepPhase(99, +1));
+
+        // 4. THE INVARIANT, and the whole point of the finding: whatever the crew does with the
+        //    arrows, the Cover is never LEFT DISPLAYING a slot whose heading names another page.
+        for (int p = 0; p < CoverPage.PhaseCount; p++)
+            for (int d = -1; d <= 1; d += 2)
+            {
+                int next = CoverPage.StepPhase(p, d);
+                int nav = FigmaUI.PhaseNav(next);
+                int shown = nav >= 0 ? p : next;   // navigating leaves coverPhase where it was
+                Check("arrow " + (d > 0 ? "+" : "-") + " from " + p + " never parks the Cover on a page",
+                      FigmaUI.PhaseNav(shown) < 0, "would show slot " + shown);
+            }
+
+        // 5. And slot 6 is genuinely no longer reachable as a DISPLAYED phase - the fault the render
+        //    ui_cover_phase6.png showed. (That PNG still exists: the preview asks CoverPage.Build for
+        //    the slot directly, below the layer that decides reachability. It is a fixture, not a state.)
+        bool reachable = false;
+        for (int p = 0; p < CoverPage.PhaseCount; p++)
+            for (int d = -1; d <= 1; d += 2)
+            {
+                int next = CoverPage.StepPhase(p, d);
+                if (next == 6 && FigmaUI.PhaseNav(6) < 0) reachable = true;
+            }
+        Check("no arrow step can display rail slot 6", !reachable, "");
+    }
+
+    // ---- S107 / QC M-01: the grid is derived from the data, and stays legible ----
+    static void MenuGridFits()
+    {
+        int n = MenuPage.Entries.Length;
+        float x, y, cw, ch;
+
+        // Every card is inside the grid band AND clear of the bottom bar. `Rows` used to be a typed
+        // constant that had already been bumped by hand once; at Rows = 10 the 31st entry would have
+        // landed at design y 1854..1994 - drawn, mostly under the bar (which starts at 1877), and
+        // rejected outright by HitTest's `dy0 > Bottom` guard at 1830. Derived, that cannot happen.
+        MenuPage.CellRect(n - 1, out x, out y, out cw, out ch);
+        Check("menu: the last card ends inside the grid band", y + ch <= 1830f + 0.01f,
+              "ends at " + (y + ch));
+        Check("menu: the last card clears the bottom bar", y + ch <= 1877f, "ends at " + (y + ch));
+
+        // And every card is TAPPABLE - the failure mode was a visible card the hit test refused.
+        for (int i = 0; i < n; i++)
+        {
+            MenuPage.CellRect(i, out x, out y, out cw, out ch);
+            float px = (x + cw * 0.5f) * W / RefW, py = (y + ch * 0.5f) * H / RefH;
+            Check("menu card " + i + " (" + MenuPage.Entries[i] + ") is tappable",
+                  MenuPage.HitTest(px, py, W, H) == i, "got " + MenuPage.HitTest(px, py, W, H));
+        }
+
+        // ⚠ THE ONE THAT WILL ACTUALLY FIRE ONE DAY. Deriving the row count fixes the overflow but
+        // not the squeeze: the pitch is fixed by (Bottom - Top), so each appended page makes every
+        // cell shorter. When a cell can no longer hold its own label the grid must PAGINATE, not
+        // shrink - that is C-05's guard and real work. This fails the build on the append that
+        // crosses the line, instead of shipping an illegible menu.
+        float cellPanelPx = MenuPage.CellHeight * H / RefH;
+        float labelPanelPx = MenuPage.LabelSize * H / RefH;
+        Check("menu: a cell still fits its own label with room around it",
+              cellPanelPx >= labelPanelPx * 2f,
+              "cell " + cellPanelPx.ToString("0.0") + "px, label " + labelPanelPx.ToString("0.0") + "px");
+
+        // ⛔ NOT ASSERTED HERE, DELIBERATELY: whether the label clears Typography.Min. It does not -
+        // SZ(32) is 10.7 panel px against a floor of 16 - but that is QC R-01, which samples this very
+        // element at 67% of the floor along with 16 others across 9 pages, and R-01 is one owner
+        // decision (Q5) for all of them. Failing the build here would turn one page's grid fix into a
+        // red build for a page-wide question the owner has not answered, and would have to be undone
+        // whichever way Q5 goes. The RATIO check above is this finding's own: it is about the grid
+        // squeezing its cells, and it holds whatever the absolute size turns out to be.
+    }
+
+    // ---- S107 / QC M-02: the placeholder card's copy is only true while this is ----
+    // The card now says "no button in this build opens this page". That is a claim ABOUT THE BUILD,
+    // so it needs a check that fails when it stops being true - otherwise it rots exactly the way the
+    // sentence it replaced did ("this button is wired; the destination is coming", true when written,
+    // false the moment S14 took these values off the Menu grid, and left standing for months).
+    static void PlaceholderUnreachable()
+    {
+        // Nothing on the Menu grid.
+        for (int j = 0; j < MenuPage.Entries.Length; j++)
+            Check("menu entry " + j + " is a real page",
+                  !FigmaUI.IsPlaceholder(MenuPage.Entries[j]), "got " + MenuPage.Entries[j]);
+
+        // And nothing ROUTES to one, from any page, anywhere on the glass. A coarse sweep is enough:
+        // every nav rect on every page is far bigger than this grid's step.
+        int hits = 0;
+        for (int i = 0; i < FigmaUI.PageCount; i++)
+            for (int gx = 0; gx < 64; gx++)
+                for (int gy = 0; gy < 36; gy++)
+                {
+                    NavHit nh = FigmaUI.HitTest((UiPage)i, (gx + 0.5f) * W / 64f, (gy + 0.5f) * H / 36f, W, H);
+                    if (nh.Act != NavAct.Goto) continue;
+                    hits++;
+                    if (FigmaUI.IsPlaceholder(nh.Target))
+                        Check("page " + (UiPage)i + " routes to placeholder " + nh.Target, false,
+                              "at " + gx + "," + gy);
+                }
+        Check("the nav sweep actually found routes (guards against a vacuous pass)", hits > 0,
+              "got " + hits);
     }
 
     static void CoverCamera()
