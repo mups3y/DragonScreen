@@ -35,6 +35,7 @@ public static class FigmaUINavTest
         VehicleDeepViewLinksTest();
         CoverPhases();
         CoverPhaseStepping();
+        MarginAffordances();
         MenuGridFits();
         PlaceholderUnreachable();
         CoverCamera();
@@ -1256,6 +1257,109 @@ public static class FigmaUINavTest
                 if (next == 6 && FigmaUI.PhaseNav(6) < 0) reachable = true;
             }
         Check("no arrow step can display rail slot 6", !reachable, "");
+    }
+
+    // ---- S108 / QC H-04 + DK-04 + H-06: the drawn rect and the hit rect are ONE rect ----
+    // H-04's own verify line: "a headless check that the drawn rect and the hit rect are the same rect,
+    // for both the HUD and Docking margin affordances. That check is what would have caught this."
+    static void MarginAffordances()
+    {
+        UiPage[] pages = { UiPage.Hud, UiPage.Docking };
+        UiPage[] dest  = { UiPage.Docking, UiPage.Rendezvous };
+        string[] la    = { "MANUAL", "RENDEZVOUS" };
+        string[] lb    = { "DOCKING", null };
+
+        for (int p = 0; p < pages.Length; p++)
+        {
+            float x, y, bw, bh;
+            Check(pages[p] + ": the margin box exists at the shipped size",
+                  MarginAffordance.Rect(W, H, out x, out y, out bw, out bh), "");
+
+            // 1. THE CONTROL IS ACTUALLY PAINTED. This is the whole of DK-04: the Docking page's
+            //    rectangle fired for years with nothing drawn in it.
+            var dl = new DisplayList(FigmaUI.Commands);
+            var st = new PageState();
+            FigmaUI.Build(dl, pages[p], W, H, st, MapProjection.Default());
+            bool drewBox = false, drewLabel = false;
+            for (int c = 0; c < dl.Count; c++)
+            {
+                var cmd = dl.At(c);
+                // DisplayList.Box is four Rects, so the thing to look for is the FILLED plate the
+                // helper lays down first - at exactly the rect the hit test uses.
+                if (cmd.Kind == DrawKind.Rect && Near(cmd.A, x) && Near(cmd.B, y)
+                    && Near(cmd.C, bw) && Near(cmd.D, bh)) drewBox = true;
+                if (cmd.Kind == DrawKind.Text && cmd.Str == la[p]) drewLabel = true;
+            }
+            Check(pages[p] + ": the margin affordance is DRAWN at the shared rect", drewBox, "");
+            Check(pages[p] + ": its label \"" + la[p] + "\" is drawn", drewLabel, "");
+
+            // 2. THE HIT RECT IS THE SAME RECT. Inside every edge hits; just outside every edge misses.
+            //    Before S108 the band was 0.40..0.60 h behind a 0.44..0.56 h box, so the two "outside
+            //    vertically" probes below would both have navigated from blank letterbox.
+            Check(pages[p] + ": centre of the box routes to " + dest[p],
+                  Route(pages[p], x + bw * 0.5f, y + bh * 0.5f) == dest[p], "");
+            Check(pages[p] + ": 4 px ABOVE the box is inert",
+                  Route(pages[p], x + bw * 0.5f, y - 4f) != dest[p], "");
+            Check(pages[p] + ": 4 px BELOW the box is inert",
+                  Route(pages[p], x + bw * 0.5f, y + bh + 4f) != dest[p], "");
+            Check(pages[p] + ": 4 px LEFT of the box is inert",
+                  Route(pages[p], x - 4f, y + bh * 0.5f) != dest[p], "");
+            Check(pages[p] + ": 4 px RIGHT of the box is inert",
+                  Route(pages[p], x + bw + 4f, y + bh * 0.5f) != dest[p], "");
+            Check(pages[p] + ": just inside the top edge hits",
+                  Route(pages[p], x + bw * 0.5f, y + 1f) == dest[p], "");
+            Check(pages[p] + ": just inside the bottom edge hits",
+                  Route(pages[p], x + bw * 0.5f, y + bh - 1f) == dest[p], "");
+
+            // 3. H-06: THE INK STAYS INSIDE THE BOX. "MANUAL" used to render 56 px of ink in a 45.6 px
+            //    box - 4.0 px over the left border and 5.4 px over the right.
+            float ts = MarginAffordance.FitSize(bw, H * 0.020f, la[p], lb[p]);
+            float ink = MarginAffordance.InkWidth(ts, la[p], lb[p]);
+            Check(pages[p] + ": the widest label's ink clears both borders",
+                  ink <= bw - 8f + 0.01f,
+                  "ink " + ink.ToString("0.0") + " in box " + bw.ToString("0.0"));
+        }
+
+        // 4. THE MinMargin GUARD HOLDS ON BOTH SIDES TOGETHER - which is what sharing one function buys.
+        //    A panel with no letterbox must draw nothing AND hit nothing; the old code could only get
+        //    that right by two separate `ox > 40f` tests staying in step.
+        {
+            int nw = 1140, nh = 703;   // 1.62:1, essentially the design aspect -> no margin
+            float x, y, bw, bh;
+            bool has = MarginAffordance.Rect(nw, nh, out x, out y, out bw, out bh);
+            Check("no letterbox -> no margin box", !has, "");
+            Check("no letterbox -> the HUD margin cannot be hit",
+                  !MarginAffordance.Hit(6f, nh * 0.5f, nw, nh), "");
+            var dl = new DisplayList(FigmaUI.Commands);
+            FigmaUI.Build(dl, UiPage.Hud, nw, nh, new PageState(), MapProjection.Default());
+            bool drewLabel = false;
+            for (int c = 0; c < dl.Count; c++)
+                if (dl.At(c).Kind == DrawKind.Text && dl.At(c).Str == "MANUAL") drewLabel = true;
+            Check("no letterbox -> the HUD draws no margin label", !drewLabel, "");
+        }
+
+        // 5. \u26d4 REPORTED, NOT ASSERTED: whether the fitted type clears Typography.Min. At the shipped
+        //    size the HUD's does not, and RENDEZVOUS is far below it - the box is 61.6 px wide and the
+        //    word needs 106 px at 16 px type. That is a DESIGN question about the margin's width (Q8),
+        //    not something a fit can solve, and failing the build on it would block the H-04 fix that
+        //    stands on its own. Printed so it cannot be forgotten.
+        {
+            float x, y, bw, bh;
+            MarginAffordance.Rect(W, H, out x, out y, out bw, out bh);
+            Console.WriteLine("  note  margin affordance type at " + W + "x" + H + ": MANUAL/DOCKING "
+                + MarginAffordance.FitSize(bw, H * 0.020f, "MANUAL", "DOCKING").ToString("0.00")
+                + " px, RENDEZVOUS "
+                + MarginAffordance.FitSize(bw, H * 0.020f, "RENDEZVOUS", null).ToString("0.00")
+                + " px, floor " + Typography.Min + "  (QC H-06 / Q8)");
+        }
+    }
+
+    static bool Near(float a, float b) { float d = a - b; return d < 0.01f && d > -0.01f; }
+
+    static UiPage Route(UiPage from, float px, float py)
+    {
+        NavHit nh = FigmaUI.HitTest(from, px, py, W, H);
+        return nh.Act == NavAct.Goto ? nh.Target : from;
     }
 
     // ---- S107 / QC M-01: the grid is derived from the data, and stays legible ----

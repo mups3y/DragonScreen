@@ -38,15 +38,18 @@ namespace DragonScreen
             }
 
             // "MANUAL DOCKING" entry in the letterbox margin (screen-space, so it never overlaps the
-            // fit-to-height frame art). Opens the manual docking screen; hit-tested in FigmaUI.HitTest.
-            if (ox > 40f)
-            {
-                float bx = 12f, bw = ox - 24f, by = h * 0.44f, bh = h * 0.12f, ts = h * 0.020f;
-                dl.Rect(bx, by, bw, bh, DragonPalette.Panel);
-                dl.Box(bx, by, bw, bh, 2, DragonPalette.Accent);
-                dl.Text("MANUAL", bx + bw * 0.5f, by + bh * 0.26f, ts, TextAlign.Centre, DragonPalette.White);
-                dl.Text("DOCKING", bx + bw * 0.5f, by + bh * 0.54f, ts, TextAlign.Centre, DragonPalette.Accent);
-            }
+            // fit-to-height frame art). Opens the manual docking screen.
+            //
+            // S108 / QC H-04: the box used to be written here AND, with DIFFERENT constants, in
+            // FigmaUI.HitTest - drawn 0.44..0.56 h, hit 0.40..0.60 h - so a tap on empty letterbox up to
+            // 28 px above or below the visible button silently navigated. One rect now, in
+            // MarginAffordance, shared by the draw and the hit test the way PageAction has always
+            // required and the way the Cover already does it.
+            // S108 / QC H-06: and the type is sized from the BOX now, not from the panel height. It was
+            // h * 0.020 against a box derived from the letterbox WIDTH - two unrelated quantities - so
+            // "MANUAL" rendered 56 px of ink in a 45.6 px box, overhanging its own border by 4.0 px left
+            // and 5.4 px right at the shipped size.
+            MarginAffordance.Draw(dl, w, h, "MANUAL", "DOCKING");
 
             // full-width bottom status bar over the frame so it reaches both edges.
             BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame

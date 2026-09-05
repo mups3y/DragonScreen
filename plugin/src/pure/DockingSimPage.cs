@@ -195,6 +195,18 @@ namespace DragonScreen
                   BottomLabel[i] == "Settings" ? White : Dim);
             }
 
+            // S108 / QC DK-04: the RENDEZVOUS page link, in the letterbox margin. FigmaUI has hit-tested
+            // this rectangle since the page was built and NOTHING WAS EVER DRAWN IN IT - so the only way
+            // to discover the control was to trip over it. Its intent was recorded all along, in
+            // FigmaUI's own comment: "a RENDEZVOUS affordance in the matching letterbox margin opens the
+            // rendezvous ellipse plot - the two are the HUD/plot pairing the BBC photo actually shows
+            // together during a real approach, same construction as the HUD's own Docking affordance."
+            // Drawing it is completing that recorded design, not inventing one (S1.4), and the shared
+            // helper is what "same construction" means in code.
+            // ⚠ One word, so one line - and at the shipped width it fits the box only by going below
+            // Typography.Min. That is NOT solved here and is not pretended to be: see Q8.
+            MarginAffordance.Draw(dl, w, h, "RENDEZVOUS", null);
+
             BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
         }
 

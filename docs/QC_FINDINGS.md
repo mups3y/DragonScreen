@@ -1480,6 +1480,32 @@ a no-op at least resolves to a named action — and it is the same call S75 made
 - **Verify:** after the overdraw pass, every painted control on the page is either in a hit table or drawn
   in the inert tint — and the check runs both ways, as the charter requires.
 
+
+### ⛔ CONFIRMED AND BLOCKED 2026-09-05 — S108
+
+**Confirmed in source, and it is BLOCKED — recorded rather than half-done.**
+
+`Frame58Hud.Build` draws the entire page as **one flat asset**:
+
+```csharp
+dl.Asset("frame58", ox, 0f, RefW * sc, h, DragonPalette.White);
+```
+
+So there is no `FAR FIELD POSITIONING`, no `RESET`, no `START` and no `Local Pitch Mode` in the display
+list — they are **pixels inside `frame58.png`**. There is nothing to tint, nothing to give a hit rect to,
+and nothing to move. This finding's own fix plan says so (*"That is the real blocker and it is
+structural"*), and re-reading the source confirms it exactly.
+
+⛔ **It is gated on H-02**, which is the pass that stops the page being one baked PNG. Doing anything here
+first would mean drawing a tinted rectangle *over* a picture of a button to hide it — which is worse than
+the defect, because the page would then contain two representations of one control.
+
+**Nothing was changed for this finding.** The three controls S49 H11 named and the fourth this finding
+added all still ride the button idiom, and will until H-02.
+
+⚠ **What H-04's fix did NOT do, deliberately:** the margin affordance is the *only* live control on this
+page and is now correct. That does not make the four painted ones any better, and the improvement must not
+be read as covering them.
 ---
 
 ## H-04 — The Manual Docking affordance is drawn from one rectangle and hit-tested from another, in two different files, and they do not match
@@ -1526,6 +1552,39 @@ the Docking page at all**. At the shipped 1280×703 the letterbox is 69.6 px, so
 only 29 px of margin, and the guard is a hard cliff, not a taper. The Menu grid remains a second route, so
 this is a robustness note, not a defect.
 
+
+### ✅ FIXED 2026-09-05 — S108 (QC batch 6: one rect, drawn and hit)
+
+**Fixed by the recommended route, and for all three copies at once — which is what the finding asked for.**
+
+New **`plugin/src/pure/MarginAffordance.cs`** holds one geometry. `Frame58Hud.Build`, `DockingSimPage.Build`
+and **both** `FigmaUI.HitTest` branches now call it. The three hand-written copies are gone:
+
+```
+Frame58Hud.cs:44   DRAWN   by = h*0.44f, bh = h*0.12f     →  0.44 h … 0.56 h
+FigmaUI.cs:317     HIT     py >= h*0.40f && py < h*0.60f  →  0.40 h … 0.60 h   (HUD)
+FigmaUI.cs:343     HIT     py >= h*0.40f && py < h*0.60f  →  0.40 h … 0.60 h   (Docking)
+```
+
+⛔ **The drawn box won, exactly as the fix plan directed** — *"the crew can only aim at what they can see,
+and a control that fires outside its border is the defect"*. The 20% band is gone; the halo of 28.1 px above
+and below at the shipped size is gone with it.
+
+⚠ **The finding's third bullet turned out to be the more serious one.** It said to check the two other uses
+in the same pass. Checking found that `DockingSimPage` **draws no margin affordance at all** — so
+`FigmaUI.cs:343`'s rectangle was firing over blank letterbox with nothing on the glass to explain it. That
+is filed separately as **DK-04** and fixed in the same commit.
+
+**Verified headlessly — `FigmaUINavTest.MarginAffordances()`, the exact check the fix plan named**
+(*"a headless check that the drawn rect and the hit rect are the same rect, for both"*). Per page: the plate
+is drawn **at the shared rect**; the centre routes; **4 px above, below, left and right are all inert**; and
+just inside the top and bottom edges hit. The two vertical probes are the ones that would have failed before.
+
+**The `ox > 40f` guard survives on both sides together**, and is now impossible to break independently
+because it is one `return false` inside `Rect`. Pinned at a 1140×703 panel: no box, no hit, no label.
+
+⚠ **The finding's own related note stands unchanged:** a panel whose letterbox is 40 px or less still has no
+margin route to either destination. The Menu grid remains the second route to both.
 ---
 
 ## H-05 — The docking HUD has a titled ALERT ACTIVITY panel, 822 px tall and permanently empty, while the alarm channel is computed every frame and written to the black box
@@ -1641,6 +1700,45 @@ together, while the string's rendered width did not (56 px where a linear halvin
 overflowing. The filed fix (size the type from the box) is still correct but must now also clear the floor,
 which a 45.6 px box cannot do for the word "DOCKING" — **the box has to grow, or the label has to change.**
 See **R-01**.
+
+### ✅ FIXED 2026-09-05 — S108 (QC batch 6: one rect, drawn and hit)
+
+**Fixed — the ink is inside the box now, on every render. The legibility half is NOT fixed, and is not
+pretended to be.**
+
+Two changes, both from the fix plan:
+- **The type is sized from the BOX**, not the panel height: `MarginAffordance.FitSize` fits the wider label
+  to the box, less the 2-px border and a 2-px gap on each side, and never grows beyond `h * 0.020`.
+- **The box was widened** as far as the margin allows — the insets were 12 px a side, costing 24 px of a
+  margin only 69.6 px wide. They are 4 px now, so `bw` goes **45.6 → 61.6**.
+
+**Measured on the render, at the shipped 1280×703:**
+
+| | before | **after** |
+|---|---|---|
+| box | x 12.0 … 57.6 (w 45.6) | **x 4.0 … 65.6 (w 61.6)** |
+| `MANUAL` ink | x 8 … 63 — **4.0 px over the left border, 5.4 px over the right** | **x 12 … 59 — 8.0 px and 6.6 px CLEAR** |
+| `RENDEZVOUS` (new, DK-04) | — | **x 8 … 61 — 4.0 px and 4.6 px clear** |
+| type | 14.06 px | **11.54 px** (RENDEZVOUS 8.08) |
+
+Both labels sit strictly inside on `frame58_hud.png`, `frame58_hud_noseopen.png` and `ui_docking.png`.
+
+⛔ **AND THE TYPE GOT SMALLER, WHICH THIS FINDING PREDICTED AND WHICH I AM NOT GOING TO CALL A WIN.**
+11.54 px is **below `Typography.Min` = 16**, and it was below before at 14.06. The fix plan named the
+remedy: *"If the resulting type is below the floor, the box is too small and must be widened or
+re-oriented."* It has been widened as far as the letterbox permits. **The remaining gap is the margin's own
+width, which is set by the frame's fit-to-height — a design question, not something a fit can solve.** It is
+**Q8**, with the arithmetic: at 16 px, `DOCKING` needs 74 px and `RENDEZVOUS` needs 106 px, in 61.6 px of box.
+
+⚠ **This is aspect-specific, and that matters for Q5.** At 2560×1406 the margin is 139.3 px and the fitted
+type is **26.5 px — comfortably above the floor**. The control is only illegible at the shipped width. More
+evidence for **R-01 / Q5**, from a page R-01 did not sample.
+
+⚠ **The C-03 trap was live here and is flagged in the code.** Shrinking to fit is exactly what C-03's filed
+plan got wrong (*"traded an overrun for an unreadable label"*). It is defensible on the HUD because the
+shrink is 18% and the overflow was real clipping; `MarginAffordance.FitsLegibly` exists so no future caller
+can shrink silently, and the test **prints** the fitted sizes every run rather than asserting them — because
+failing the build on Q5's question would block the H-04 fix that stands on its own.
 ---
 
 ## H-07 — Two different fit strategies on one page: the frame art is letterboxed, the bar is stretched full width, so the frame's own border becomes a rule in the middle of the bar
@@ -2190,6 +2288,54 @@ Its entire bright content is still one 213 × 58 region — the word "Cabin". It
 panel px** (filed 405 × 629), and on the honest render the centre panel reads as the same dark hole between
 four illustrated seats — if anything more so, because the two speaker rings our code draws over it are now
 ~10 px across and contribute even less. Nothing in the fix plan changes.
+---
+
+## Open questions for the owner — the letterbox margin (Q8)
+
+### Q8 — The margin page-links are 61.6 px wide at the shipped size and their labels need 74–106 px to be legible. Widen, shorten, or move? (H-06, DK-04)
+
+**Paste-ready for the overseer (C1.13).**
+
+**Situation.** Two pages put a page link in the letterbox margin beside the fit-to-height frame art: the
+attitude HUD's `MANUAL / DOCKING` (→ Manual Docking) and, as of S108, the Manual Docking page's
+`RENDEZVOUS` (→ the rendezvous plot). S108 gave them one shared rect, so the drawn box and the hit rect
+agree, and sized the type from the box so **no ink crosses a border any more**. What it could not fix is
+that the box is too small for the words.
+
+**The arithmetic, at the shipped 1280×703** (D-DIN caps measure 0.664 em per character, measured off the
+render):
+
+| | needs, at `Typography.Min` = 16 px | has |
+|---|---|---|
+| `DOCKING` (7 chars) | 74 px | **61.6 px** |
+| `RENDEZVOUS` (10 chars) | 106 px | **61.6 px** |
+
+Fitted, they come out at **11.54 px** and **8.08 px**. The letterbox is 69.6 px wide and the box already
+uses all of it but 4 px a side.
+
+⚠ **This is specific to the shipped width.** At 2560×1406 the margin is 139.3 px and the fitted type is
+**26.5 px — comfortably legible**. So this question is entangled with **Q5** (R-01: which width is
+authoritative), and if Q5 raises the shipped width this problem may dissolve on its own.
+
+1. **Do nothing until Q5 is answered — the chat's recommendation.** *Reasoning:* the controls are now
+   correct in every way a build chat can make them correct: one rect, drawn where it fires, ink inside its
+   own box. The remaining defect is a size, and the size is a function of the shipped width, which is
+   already an open owner question. Answering Q5 first may make this moot; answering it after may waste the
+   work. Costs nothing and forecloses nothing.
+2. **Move the links off the margin and onto the page proper.** *Reasoning:* the real fix if the margin
+   stays narrow — there is room on both pages. ⚠ But the HUD is one flat baked PNG (H-03), so it has
+   nowhere to put a control until **H-02** re-draws the page; this is gated behind that work, and it
+   changes a layout the Figma design specifies.
+3. **Shorten the labels to fit.** `DOCK` and `RNDZ` would both clear the floor. *Reasoning:* cheapest that
+   actually solves it. ⚠ It is a copy change on a navigation control, and abbreviations the crew has to
+   learn are their own defect — this is taste, so it is the owner's (C1.14), not the overseer's.
+4. **Widen the margin by shrinking the frame art below fit-to-height.** *Reasoning:* mechanically simple.
+   ⚠ **Recommend against:** it shrinks the attitude bowl — the instrument the page exists for — to make
+   room for a label, which is the wrong thing to trade.
+
+**Gate flags (C1.12):** none needs `install` or glass time. Option 2 is blocked behind H-02. Option 3 is
+owner taste. **Option 1 is a decision to wait, and needs no action at all.**
+
 ---
 
 ## Open questions for the owner — Mech Panel (Q7)
@@ -3976,6 +4122,57 @@ HUD does not, and `Frame58Hud` already claims the camera and clips a feed to a c
 - ⚠ **The preview cannot show the result** (H-09): `DockingCamLive` has no stand-in. **Do H-09's stand-in
   first** or this fix ships unreviewed.
 - **Verify:** three renders — no target, target with feed, target with camera unavailable.
+
+---
+
+## DK-04 — The Manual Docking page hit-tests a RENDEZVOUS affordance it has never drawn
+
+**TIER 1** · **NEW (S108)** · found by H-04's *"check the other two uses in the same pass"* · S54's defect class, unmitigated
+
+**Evidence.** `FigmaUI.cs:343` routes a touch in the left letterbox margin to `UiPage.Rendezvous`:
+
+```csharp
+if (ox > 40f && px >= 12f && px < ox - 12f && py >= h * 0.40f && py < h * 0.60f)
+    return NavHit.Go(UiPage.Rendezvous);
+```
+
+`DockingSimPage.Build` draws **nothing there**. Grepped: the page has no margin box, no label, and no
+mention of Rendezvous outside a header comment. On `ui_docking.png` that region is empty background.
+
+**What is wrong.** This is **worse than H-04**, which at least painted a box in the right place and gave it
+the wrong halo. Here a 20%-tall by 45-px-wide rectangle of blank letterbox **navigates to another page**,
+with nothing on the glass to predict it, explain it afterwards, or avoid. It is exactly the class S54 was
+raised for — *"a rectangle that fires where nothing is painted"* — and unlike S54's six Cover rects, this
+one is not harmless-because-the-target-is-a-no-op: the target is a real page and the jump really happens.
+
+**Why the fix is to DRAW it, not to delete the rect.** §1.4 forbids inventing a control, and this one is
+not invented — its design is recorded, in `FigmaUI`'s own comment beside the rect:
+
+> *"a `RENDEZVOUS` affordance in the matching letterbox margin opens the rendezvous ellipse plot — the two
+> are the HUD/plot pairing the BBC photo actually shows together during a real approach, **same
+> construction as the HUD's own Docking affordance**."*
+
+The intent, the destination, the position and the label word were all already written down. Only the paint
+was missing. (Deleting the rect was the alternative — the Menu grid keeps Rendezvous reachable — but it
+would discard a recorded design to fix a missing three lines.)
+
+**Fix plan.** Draw it through the same shared geometry H-04 introduces, so "same construction" becomes
+literally true.
+
+**Verify:** the affordance is visible on `ui_docking.png`, and a headless check that its drawn rect and its
+hit rect are one rect.
+
+### ✅ FIXED 2026-09-05 — S108 (filed and fixed together)
+
+`DockingSimPage.Build` calls `MarginAffordance.Draw(dl, w, h, "RENDEZVOUS", null)`; `FigmaUI.cs:343` calls
+`MarginAffordance.Hit`. Measured on `ui_docking.png`: the plate is drawn at x 4.0…65.6, y 309.3…393.7, and
+the label's ink spans **x 8…61 — 4.0 px and 4.6 px clear of its borders**. The headless check confirms the
+centre routes to `UiPage.Rendezvous` while 4 px outside every edge is inert.
+
+⚠ **Its label is 8.08 px — the worst case of H-06's legibility problem**, because `RENDEZVOUS` is one
+ten-character word in a 61.6 px box and cannot be stacked the way `MANUAL / DOCKING` is. It needs **106 px
+at the 16 px floor**. Drawn small is still strictly better than invisible — the crew can now see that a
+control is there, which is the defect this finding names — but the size is **Q8**, not a solved problem.
 
 ---
 

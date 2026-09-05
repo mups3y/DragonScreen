@@ -313,9 +313,9 @@ namespace DragonScreen
             // it can never overlap the fit-to-height frame art) and opens the manual docking screen.
             if (page == UiPage.Hud)
             {
-                float sc = h / RefH, ox = (w - RefW * sc) * 0.5f;
-                if (ox > 40f && px >= 12f && px < ox - 12f && py >= h * 0.40f && py < h * 0.60f)
-                    return NavHit.Go(UiPage.Docking);
+                // S108 / QC H-04: the SAME rect Frame58Hud draws. This branch used to re-derive it with
+                // its own constants and get a 20%-tall band behind a 12%-tall button.
+                if (MarginAffordance.Hit(px, py, w, h)) return NavHit.Go(UiPage.Docking);
             }
 
             // Menu is a grid of every other page; a hit on a card jumps straight there. A tap in the
@@ -339,9 +339,13 @@ namespace DragonScreen
             // together during a real approach, same construction as the HUD's own Docking affordance.
             if (page == UiPage.Docking)
             {
-                float sc = h / RefH, ox = (w - RefW * sc) * 0.5f;
-                if (ox > 40f && px >= 12f && px < ox - 12f && py >= h * 0.40f && py < h * 0.60f)
-                    return NavHit.Go(UiPage.Rendezvous);
+                // S108 / QC DK-04: this rectangle fired for a control DockingSimPage never drew - S54's
+                // defect in its purest form, a tap on blank letterbox teleporting the crew to another
+                // page with nothing on the glass to explain it. The page draws the affordance now
+                // (DockingSimPage.Build), through the same MarginAffordance the HUD uses, so the paint
+                // and the rect are one thing and this comment's own claim of "same construction as the
+                // HUD's own Docking affordance" is finally true.
+                if (MarginAffordance.Hit(px, py, w, h)) return NavHit.Go(UiPage.Rendezvous);
                 // T14: the page's own "Settings" control is navigation, so it resolves HERE rather than
                 // in the painter's page switch — and it goes where the Cover's Settings button already
                 // goes, because there is one settings destination in this UI and inventing a second

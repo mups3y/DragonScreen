@@ -12166,6 +12166,80 @@ resolution row across all three video renders — **0 white px + a dimmed dash**
 px** with cameras, **126** held-by-docking. `build.py test` green (925 in the nav suite), 104 PNGs
 re-rendered.
 
+### S108 [O] QC batch 6 — the letterbox page-links: one rect, drawn where it fires — **DONE 2026-09-05** — [H-04 + H-06 + DK-04 new; H-03 confirmed BLOCKED]
+
+**🟢 OWNER-DIRECTED** — *"continue with all the screen fixes one at a time until all pages are complete. You
+must confirm your findings before fixing."* Confirming found a **fourth site worse than the three filed**,
+and confirmed that one of the four findings cannot be built at all yet.
+
+**H-04 (TIER 1) — ONE RECTANGLE, WRITTEN OUT THREE TIMES, IN TWO FILES, WITH DIFFERENT CONSTANTS. FIXED.**
+
+```
+Frame58Hud.cs:44   DRAWN   by = h*0.44f, bh = h*0.12f     ->  0.44 h .. 0.56 h
+FigmaUI.cs:317     HIT     py >= h*0.40f && py < h*0.60f  ->  0.40 h .. 0.60 h   (HUD)
+FigmaUI.cs:343     HIT     py >= h*0.40f && py < h*0.60f  ->  0.40 h .. 0.60 h   (Docking)
+```
+
+A **20%-tall hit band behind a 12%-tall painted button** — an invisible halo of **28.1 px above and below**
+at the shipped size, in which a tap on empty letterbox silently navigated. New pure
+**`MarginAffordance.cs`** holds the geometry; `Frame58Hud.Build`, `DockingSimPage.Build` and both
+`FigmaUI.HitTest` branches call it. ⛔ **The drawn box won, not the hit band**, exactly as QC directed —
+*"the crew can only aim at what they can see."* This is `PageAction`'s standing rule, which the Cover
+already obeys with `NextViewRect` / `PadRect` / `CapsuleRect`, applied to the one page that did not.
+
+**⚠ DK-04 (TIER 1, NEW) — AND CHECKING THE OTHER TWO USES, AS H-04 TOLD ME TO, FOUND A WORSE ONE.**
+`FigmaUI.cs:343` has been routing a margin touch to `UiPage.Rendezvous` since the page was built, and
+**`DockingSimPage` never drew anything there.** A 20%-tall by 45-px-wide rectangle of blank letterbox that
+navigates to another page, with nothing on the glass to predict it, explain it, or avoid — **S54's defect
+in its purest form**, and unlike S54's six Cover rects not harmless-because-the-target-is-a-no-op: the
+target is a real page and the jump really happens.
+
+⭐ **The fix is to DRAW it, and that is not inventing a control (§1.4).** Its design was recorded all along,
+in `FigmaUI`'s own comment beside the rect: *"a `RENDEZVOUS` affordance in the matching letterbox margin
+opens the rendezvous ellipse plot … **same construction as the HUD's own Docking affordance**."* Intent,
+destination, position and label word were all written down; only the paint was missing. Deleting the rect
+was the alternative — the Menu grid keeps Rendezvous reachable — but it would discard a recorded design to
+avoid writing three lines.
+
+**H-06 — THE LABEL OVERRAN ITS OWN BOX ON BOTH SIDES. THE OVERFLOW IS FIXED; THE LEGIBILITY IS NOT, AND I
+AM NOT CALLING THAT A WIN.** The type was `h * 0.020` while the box came from the letterbox WIDTH — two
+unrelated quantities — so `MANUAL` put **56 px of ink in a 45.6 px box**. Now the type is fitted to the box
+(less the 2-px border and a 2-px gap each side) and the insets went 12 → 4, taking `bw` **45.6 → 61.6**.
+
+| | before | **after** |
+|---|---|---|
+| `MANUAL` ink | **4.0 px over the left border, 5.4 over the right** | **8.0 px and 6.6 px CLEAR** |
+| `RENDEZVOUS` | not drawn at all | **4.0 px and 4.6 px clear** |
+| type | 14.06 px | **11.54 px** (RENDEZVOUS 8.08) |
+
+⛔ **The type got SMALLER, and that is the honest half.** 11.54 is below `Typography.Min` = 16, as 14.06
+was. QC's plan named the remedy — *"if the resulting type is below the floor, the box is too small and must
+be widened or re-oriented"* — and it has been widened as far as the letterbox permits. At 16 px `DOCKING`
+needs 74 px and `RENDEZVOUS` needs **106 px**, in 61.6 px of box. **That is a design question about the
+margin's width, not something a fit can solve → Q8.** ⚠ **The C-03 trap was live here** (that fix plan would
+have traded an overrun for an unreadable label); it is defensible on the HUD because the overflow was real
+clipping and the shrink is 18%, and `MarginAffordance.FitsLegibly` exists so no future caller can shrink
+silently. ⚠ **At 2560×1406 the fitted type is 26.5 px — comfortably legible.** The control is illegible only
+at the shipped width, which is fresh evidence for **R-01 / Q5** from a page R-01 never sampled.
+
+**⛔ H-03 (TIER 1) — CONFIRMED AND BLOCKED. NOTHING CHANGED, DELIBERATELY.** `Frame58Hud.Build` draws the
+whole page as **one flat asset** — `dl.Asset("frame58", …)` — so `FAR FIELD POSITIONING`, `RESET`, `START`
+and `Local Pitch Mode` are **pixels inside a PNG**. There is nothing to tint and nothing to give a rect to.
+It is gated on **H-02** (the pass that stops the page being one baked PNG); acting first would mean drawing
+a tinted rectangle *over a picture of a button*, leaving the page with two representations of one control —
+worse than the defect. ⚠ **The margin affordance being fixed must not be read as covering these four.**
+
+**Tests — `FigmaUINavTest.MarginAffordances()`, which is QC's own prescribed check** (*"a headless check
+that the drawn rect and the hit rect are the same rect, for both"*). Per page: the plate is drawn **at the
+shared rect**; the label is drawn; the centre routes; **4 px above, below, left and right are all inert**;
+just inside the top and bottom edges hit. The two vertical probes are the ones that would have failed
+before. The `MinMargin` guard is pinned at a 1140×703 panel — no box, no hit, no label — and it can no
+longer be broken on one side only, because it is a single `return false`. The fitted sizes are **printed
+every run** rather than asserted, for the reason above.
+
+**Verified on the glass:** `frame58_hud.png`, `frame58_hud_noseopen.png` and `ui_docking.png` — every label
+strictly inside its box, measured. `build.py test` green, 104 PNGs re-rendered.
+
 
 ---
 
