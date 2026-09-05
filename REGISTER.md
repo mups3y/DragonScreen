@@ -14499,6 +14499,32 @@ legacy page files still draw in `RefPanelW` pixels, and **S121's prerequisite is
 says `ChromeBar` goes first *"because every body is laid out against it"*. ⚠ It still needs its SPLIT
 before anyone starts it, exactly as its line says.
 
+⚠ **CORRECTION 2026-09-06, from what [[S148]] established later the same day — THIS ENTRY OVERSTATED THE
+REACH AND THE URGENCY, and the correction is owed even though the fix itself is right.**
+
+**The chrome bar does not draw on the glass today.** `ScreenPainter.cs:1201-1206` calls `Pages.Build` and
+`ChromeBar.Build` **in the `else` branch only**, and `FigmaMode` is a `private const bool = true`. So the
+bar — like the whole legacy page family — is unreachable in the shipped build (S49 §1.1: *"`FigmaMode =
+true` makes an entire second UI unreachable"*, and [[S62]] proved the same chain for `NavPage.Build`).
+
+**What that does and does not change:**
+- ⛔ **The measurement stands and the fix is right.** 128 px = 9.1038% was measured off a real render, and
+  the bar's geometry was genuinely wrong. Code that does not run should still be correct — that is the
+  whole premise of the recovery waves.
+- ⚠ **But the framing was wrong.** This entry says the bar *"HALVED physically, on every page, on the day
+  the cfg changed"* and cites `page2_nav_planet.png` as the visible symptom. **That PNG is the PREVIEW**,
+  which calls `ChromeBar.Build` directly (`PreviewMain.cs:506`, `:531`) — no crew has seen this defect,
+  because no crew can reach the page it is on.
+- ⭐ **The honest reading:** S120 fixed a real defect in code that is dormant, and it is a **prerequisite**
+  for [[S121]] and [[S134]] rather than a fix a crew notices. That is still worth having — S121's own text
+  says the bar goes first *"because every body is laid out against it"* — but it is not the immersion win
+  the entry implies.
+
+⚠ **The same caveat does NOT apply to [[S117]]**, and the difference is worth stating so nobody
+over-corrects: S117 fixed `NavPage`, whose `Build` is equally unreachable — **but its RENDERERS
+(`.Map`, `.Orbit`, `.Planet`) are reached from `CoverPage`, which IS live.** S117's fix does reach the
+glass; this one does not.
+
 ### S121 [O] The legacy page family draws in RefPanelW pixels — eleven files that do not track `screenWidth` — **TODO** — [logged by [[S119]] (job 3 of the 2026-09-06 batch), TIER 2, R-02 family; SPLIT THIS before doing it]
 - **The finding.** [[S117]] fixed `NavPage`. The same defect is in every other legacy page and shared widget:
   `Pages.cs` (32 raw `Typography.*`, plus `w - SidePad`, `h - ChromeBar.Height - 100f`,
