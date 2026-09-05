@@ -7673,7 +7673,7 @@ this is a standalone recovery task run ahead of that governance pass, per explic
 
 ---
 
-### S64 [O] `MissionOps.Undock()` still refuses while `Actuator.Undock` is now real — **TODO** — [TIER 3: §B12.5 facade fill — needs glass, owner-gated]
+### S64 [O] `MissionOps.Undock()` still refuses while `Actuator.Undock` is now real — **HELD 2026-09-06 — OWNER GATE (§14.4(a) scope) + GLASS** — [TIER 3: §B12.5 facade fill; the line already said this and the 2026-09-06 continuous run confirmed it rather than proceeding]
 Logged by **W2**, 2026-09-04 (C1.1 — found while retiring the `Actuator` stub, deliberately not fixed there).
 **The finding:** W2 restored the real `Actuator`, so `Actuator.Undock(Vessel)` now genuinely releases the
 docking hooks (`ModuleDockingNode.Undock()`, idempotent, a non-docked node skipped). But the UNDOCK button's
@@ -7691,6 +7691,44 @@ failure; (3) correct the stub's log line, which will no longer be true; (4) deci
 UNDOCK acting for real is wanted **now** or should wait for the conductor to own it (§B13 / Wave D), since
 this is the FIRST screen button that would actually move the vehicle. **Pose (4) as an overseer prompt
 (C1.13) before building** — it is an actuation-scope call, not a build-chat call.
+
+#### ⛔ HELD 2026-09-06 — reached by the continuous build chat and **deliberately not started**
+
+**Why this line is not being done.** It carries **two separate owner gates**, either of which alone stops a
+build chat, and the line's own text names both. Confirmed rather than assumed:
+
+1. ⛔ **IT IS A §14.4(a) SCOPE DECISION, AND THE FIRST OF ITS KIND.** This line's own item (4): *"decide
+   with the owner whether UNDOCK acting for real is wanted **now** or should wait for the conductor to own
+   it (§B13 / Wave D), since this is the FIRST screen button that would actually move the vehicle."*
+   §14.4(a) is a **settled decision** that flight commands from the screens are an honest no-op until Part
+   B, and `CLAUDE.md`'s own summary says the screens' flight commands *"stay an honest no-op (§14.4(a))"*.
+   **Changing that for one button is C1.8's `OVERRIDE`, typed by the owner, plus a plan edit — not a build
+   chat's call (C1.12), and not the overseer's either (C1.14 keeps `OVERRIDE` with the owner).**
+2. ⛔ **THE VERIFICATION CANNOT HAPPEN HERE.** *"the preview gate cannot verify a hook release — no PNG
+   shows whether the hooks let go."* Confirming it needs **glass time, a separate per-session owner gate**
+   (C1.12), which this session does not have and cannot grant itself.
+
+⚠ **The finding itself is real and is NOT in doubt** — `ScreenPainter.cs:744` routes `PageAct.Undock` to
+`MissionOps.Undock()`, still the `_AutopilotStub.cs` no-op logging *"no flight/actuation software installed
+(screens-only build)"*, while `Actuator.Undock(Vessel)` has been genuinely real since [[W2]]. **The log
+line is half false today** and stays so until this is unblocked.
+
+⚠ **AND NOTE WHAT IS *NOT* GATED, so it is not lost:** items (1)–(3) are only useful once (4) is answered,
+but **(3) alone — correcting the stub's now-half-false log line — is a pure documentation fix** that could
+land independently without wiring anything. It is deliberately left with this line rather than split out,
+because a log line that says "no actuation software installed" is *more* honest while the button is still
+inert than a reworded one would be. ⛔ **Do not "tidy" that message before item (4) is decided** — it would
+describe a state the build is not in.
+
+**Paste-ready overseer prompt (C1.13) — the question, unchanged, restated as this session found it:**
+> DragonScreen, S64. `Actuator.Undock(Vessel)` is real and works (W2 restored it). The UNDOCK button on the
+> screens still routes to a no-op stub, so the button is an honest no-op per §14.4(a). Pointing one at the
+> other is three lines. **The question is scope, not code:** should UNDOCK become the FIRST screen button
+> that actually moves the vehicle, now — or wait for the conductor to own it (§B13 / Wave D) so that every
+> flight command crosses from inert to live at once, under one policy? Option (a) needs an `OVERRIDE` of
+> §14.4(a) plus a `BUILD_PLAN` entry, and a glass session to confirm the hooks release, since no preview can
+> show it. Option (b) is no work and no risk, and the button stays honest. **A build chat cannot choose
+> either.**
 
 ### S63 [S] `pure/BoosterDrag.cs` is the one irreplaceable RSS-RO dataset in the tree and NOTHING tests it — **DONE 2026-09-04** — [TIER 2: real gap — cheap guard on an un-re-derivable asset]
 Logged by **W1**, 2026-09-04 (C1.1 — found while pairing Wave A's modules to their tests, not fixed there).
