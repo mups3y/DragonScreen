@@ -15514,7 +15514,7 @@ RANGE/RATE at Hero size are all legible, inside a ring that had always been the 
 `build.py test` green — `LegibilityFloorTest` **299 checks** · comment-loss **0** · no `install`, no
 glass, no `git push` · §14.4(a) untouched — this page commands nothing and still commands nothing.
 
-### S121e [S] `PanelBoardPage.cs` — **TODO (UNBLOCKED 2026-09-06 by [[S121a]])** — [split 5 of 5 of [[S121]]; 10 lines / **13 references**]
+### S121e [S] `PanelBoardPage.cs` — **DOING** — [split 5 of 5 of [[S121]]; 10 lines / **13 references**]
 - The smallest page-level split, and the one where the line-vs-reference gap is widest (10 lines carry 13
   references) — size it off 13.
 - **DONE when:** as the parent's DONE-when, for this file.
