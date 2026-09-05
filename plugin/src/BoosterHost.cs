@@ -566,7 +566,10 @@ namespace DragonScreen
                 // binder asked for whole-name EQUALITY (which did not). "Found the booster" and "octaweb
                 // not found" about the same part, 264 times. Change this line and `OctawebEngines.PartName`
                 // together or the disagreement comes straight back.
-                string nm = (p.partInfo != null ? p.partInfo.name : p.name) ?? "";
+                // ⭐ OCT2 (2026-09-06): they are now ONE, not two kept in step — the expression lives in
+                // `PartNames.Of` and both sides call it, so the instruction above can no longer be
+                // forgotten. Kept verbatim because it is why the rule exists.
+                string nm = PartNames.Of(p);
                 if (OctawebBinding.IsForeignBoosterPart(nm)) c.HasForeignBoosterPart = true;
                 if (VehicleParts.IsPod(nm)) c.HasPod = true;
                 else if (VehicleParts.IsBooster(nm)) c.HasBoosterPart = true;

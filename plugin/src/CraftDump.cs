@@ -57,7 +57,12 @@ namespace DragonScreen
 
         private static void DumpPart(StringBuilder sb, int idx, Part p)
         {
-            string pname = p.partInfo != null ? p.partInfo.name : p.name;
+            // OCT2: the one expression, from `PartNames.Of`. ⛔ THIS DUMP IS THE CONTRACT — the
+            // pure layer's tests are written against the CSV this writes, so the live glue and
+            // this file classifying by different strings is exactly the OCT1 outage. They can no
+            // longer differ. `Of` also never returns null, where this line could; every non-null
+            // name is byte-identical to what it produced before.
+            string pname = PartNames.Of(p);
             string ptitle = p.partInfo != null ? p.partInfo.title : "-";
             string pid = p.persistentId.ToString();
             string stage = p.inverseStage.ToString();

@@ -100,7 +100,7 @@ namespace DragonScreen
                 Part p = v.parts[i];
                 if (p == null) continue;
                 string nm = PartName(p);
-                string raw = p.name ?? "";
+                string raw = p.name ?? "";   // OCT2-ALLOW-RAW-NAME: the drift detector's whole job
                 if (driftFed == null && !string.Equals(raw, nm, StringComparison.Ordinal))
                 { driftFed = nm; driftRaw = raw; }
                 partNames.Add(nm);
@@ -166,9 +166,16 @@ namespace DragonScreen
         // Exactly the expression `CraftDump.DumpPart` and `GeometryDump` use, because the pure layer is
         // tested against what those two write. `Part.name` is a live Unity object name and is NOT the
         // contract; `partInfo.name` is the part's identity from the part database.
+        //
+        // ⭐ OCT2 (2026-09-06) MADE THAT LITERALLY TRUE INSTEAD OF BY AGREEMENT. The expression above
+        // used to be written out here and again in `BoosterHost.Describe`, under comments in both files
+        // telling the next reader to change them together. It now lives once, in `PartNames.Of`, and
+        // this method forwards to it — so "the same expression" is a fact the compiler enforces rather
+        // than an instruction someone has to follow. The header note above and the one in BoosterHost
+        // are kept exactly as they were: they are the reasoning, and only the duplication was the bug.
         static string PartName(Part p)
         {
-            return (p.partInfo != null ? p.partInfo.name : p.name) ?? "";
+            return PartNames.Of(p);
         }
 
         // Render a name so an INVISIBLE difference is visible in KSP.log: quoted, every character outside
@@ -201,7 +208,7 @@ namespace DragonScreen
                 Part p = v.parts[i];
                 if (p == null) continue;
                 string nm = PartName(p);
-                string raw = p.name ?? "";
+                string raw = p.name ?? "";   // OCT2-ALLOW-RAW-NAME: this line REPORTS both, by design
                 if (!VehicleParts.IsBooster(nm) && !VehicleParts.IsBooster(raw)) continue;
                 if (sb == null) sb = new System.Text.StringBuilder();
                 else sb.Append("; ");

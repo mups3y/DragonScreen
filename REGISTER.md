@@ -2631,7 +2631,7 @@ Once the drift line prints the real name it can be pinned exactly.
 **Recommendation (1)**: a real observed string is §1.4 verified-real evidence and costs one array entry —
 the family is the net, the measured string is the specimen.
 
-### OCT2 [S] The OTHER `p.name` readers — the same latent divergence in `Actuator.cs` and `VesselData.cs` — **DOING** — [logged by OCT1 per C1.1, NOT done]
+### OCT2 [S] The OTHER `p.name` readers — the same latent divergence in `Actuator.cs` and `VesselData.cs` — **DONE 2026-09-06 — 23 bare reads routed through ONE helper, the four surviving copies of the expression collapsed into it, and a BUILD GUARD so a new one cannot appear quietly** — [logged by OCT1 per C1.1, NOT done]
 - **Stray found while fixing OCT1, deliberately left alone** (C1.1: log it, do not do it). OCT1's brief scoped
   the change to `OctawebEngines.Resolve` + `BoosterHost.Describe` and said *"Change both or neither"*; these
   are outside that pair and were not touched.
@@ -2646,6 +2646,107 @@ the family is the net, the measured string is the specimen.
   OCT1's `PartName(Part)` into one shared glue helper rather than repeating the ternary twenty times.
 - **DONE when:** no glue file reads a bare `p.name` for classification, `build.py test` green, and a test or
   a comment records that the expression is the contract.
+
+#### ✅ DONE 2026-09-06
+
+**THE FINDING HOLDS, and it was re-counted rather than taken from this line.** ⚠ **Two of its three
+numbers were stale**, which is why:
+
+| this line said | what is actually there | |
+|---|---|---|
+| `Actuator.cs`, **17** lines | **19** — the list above omits the two `chute cut` / `chute deploy` log lines (`803`, `868`) while including the `decoupler fire` one (`366`) | the same three kinds of line, listed inconsistently |
+| `VesselData.cs` lines **408, 409, 887** | **432, 433, 918** — the file has grown ~25 lines since | ⭐ the same three SITES, verified by reading them, not by trusting the numbers |
+| — | **`HullCams.cs:150`**, a 21st bare read this line never listed | found by sweeping, not by working the list |
+
+⭐ **AND THE REAL SCOPE WAS LARGER THAN "TWENTY BARE READS", which is the part worth keeping.** The
+CORRECT expression also existed in **four separate copies** — and two of them carry a comment telling
+the next reader to edit the other:
+
+> `OctawebEngines.PartName`: *"change it here and in `BoosterHost.Describe` together"*
+> `BoosterHost.Describe`: *"change this line and `OctawebEngines.PartName` together **or the
+> disagreement comes straight back**"*
+
+…plus `CraftDump.DumpPart` and `GeometryDump`, which are **the dumps the pure layer's tests are written
+against**. ⛔ **A rule that says "remember to change the other one" is not a contract, it is a hope — and
+this project has the receipt.** The OCT1 outage *was* two classifiers disagreeing about one vessel:
+`IsBooster`'s `.S1.` SUBSTRING survived the extra characters `Part.name` carried while the octaweb
+binder's whole-name EQUALITY did not, so the host found the booster, the octaweb refused **264 times**,
+and every booster engine command was silently dropped for a whole descent.
+
+#### What was built
+
+- **`plugin/src/PartNames.cs`** — `PartNames.Of(Part)`, one expression, never null. The header carries
+  the OCT1 outage and the reason `partInfo.name` is the identity while `Part.name` is a live Unity
+  object name.
+- **27 call sites** now read it: `Actuator.cs` ×19, `VesselData.cs` ×3, `HullCams.cs`, and the four
+  ex-copies (`OctawebEngines.PartName` forwards to it, `BoosterHost.Describe`, `CraftDump.DumpPart`,
+  `GeometryDump`). ⭐ *"The same expression"* is now something the compiler enforces instead of an
+  instruction someone has to remember.
+- ⛔ **Every one of those comments was KEPT WHERE IT WAS** (C1.16 / G12) and a line added saying the
+  duplication is gone. The reasoning is the asset; only the duplication was the defect.
+- **`build.py part_name_source_check()`** — the standing guard, in `test`, beside S90's event-vocabulary
+  check and built to the same shape.
+
+#### ⭐ WHY A BUILD GUARD AND NOT A COMMENT — the DONE-when offered either
+
+*"a test or a **comment** records that the expression is the contract."* ⚠ **A comment is exactly what
+OCT1 already had** — two of them, in two files, each telling the reader to remember the other — and that
+is the thing that failed. The guard cannot be forgotten. Two reads are legitimate and carry
+`OCT2-ALLOW-RAW-NAME` **on their own line**: the drift detector in `OctawebEngines`, whose entire job is
+to compare the two strings and print both.
+
+⭐ **The guard's first run caught `PartNames.Of` ITSELF**, which is correct — the one place the fallback
+may be written is the one place that defines it. Its marker sits **on the line**, not in a comment near
+it, because an exemption you cannot see at the offending line is how a guard quietly stops guarding.
+
+#### ⚠ THE GUARD WAS WRITTEN WRONG THE FIRST TIME, AND ONLY THE MUTATION TEST FOUND IT
+
+The regex went in as `…\.name\b`, and one level of backslash was eaten in transport, so the file
+actually held a **literal backspace character** (`0x08`) after `name`:
+
+```
+bad = re.compile(r'(?<!partInfo)(?<![\w.])(?:p|part)\.name\x08')
+```
+
+It printed **`0 bare reads`** on a tree that had them, and looked entirely healthy. ⛔ **A guard that
+cannot be shown to fail is not a guard**, and this one would have shipped as decoration if it had not
+been mutated. Rewritten as `(?![\w])`, which needs no `\b`, and written from a file rather than a
+heredoc. Recorded because the near-miss is more instructive than the fix.
+
+#### Verified (C1.3) — measured, not asserted
+
+`python plugin/build.py test` → **ALL SUITES PASSED**, and the new step prints
+`0 bare reads; PartNames.Of is the one source`. `python plugin/build.py preview` → 114 pages, green —
+⚠ though it proves nothing here: `preview` links `src/pure` ONLY and this task touches no pure file.
+Run anyway, as OCT3 did, rather than skipped on an argument.
+
+**MUTATION-PROVEN — 6 mutations, 6 caught, plus the exemption itself proven to work:**
+
+| | mutation | what the guard printed |
+|---|---|---|
+| **A** | a classification read goes back to the bare name | `BARE Part.name  src\Actuator.cs:39` |
+| **B** | a matcher called with the bare name inline | `src\Actuator.cs:404 … IsErector(p.name)` |
+| **C** | `VesselData`'s booster classification goes back | `src\VesselData.cs:432` |
+| **D** | the dump the pure tests are written against drifts again | `src\CraftDump.cs:65` |
+| **E** | `BoosterHost.Describe` restates the expression — **the exact OCT1 shape** | `src\BoosterHost.cs:572` |
+| **F** | a log line names the part by the raw string | `src\HullCams.cs:153` |
+| **G** | a line carrying `OCT2-ALLOW-RAW-NAME` | **exempt**, as documented |
+
+**Comment-loss check (C1.16 / G12): 0 lost** across all 8 modified files (`PartNames.cs` is new).
+
+⚠ **STILL NOT URGENT, and this line said so first:** *"nothing here is currently broken — this removes
+the luck, it does not fix a failure."* That is unchanged and was re-confirmed: every converted read fed
+a SUBSTRING matcher, and a substring test survives the extra characters. **It stops mattering the first
+time any of those matchers is tightened** — or the extras ever land mid-marker, where a zero-width
+character between `.S1` and `.` breaks `.S1.`.
+
+⚠ **NOT PROVEN, said plainly:** every file here is **glue** and needs Unity, so the evidence is that it
+COMPILES against KSP's assemblies and that the guard is exhaustive over the source — not that it was
+watched on a vessel. The behaviour is a string-source swap with no branch change, and the two dumps'
+output is byte-identical for every non-null name (`Of` also never returns null, where `CraftDump`'s line
+could).
+
+⛔ No `install`, no glass, no `git push`. §14.4(a) untouched.
 - ⚠ **NOT urgent the way OCT1 was:** nothing here is currently broken — this removes the luck, it does not
   fix a failure. `[S]`.
 

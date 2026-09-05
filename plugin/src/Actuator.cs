@@ -36,7 +36,7 @@ namespace DragonScreen
             for (int i = 0; i < v.parts.Count; i++)
             {
                 Part p = v.parts[i];
-                string nm = p.name ?? "";
+                string nm = PartNames.Of(p);
                 for (int m = 0; m < p.Modules.Count; m++)
                 {
                     ModuleEngines e = p.Modules[m] as ModuleEngines;
@@ -57,7 +57,7 @@ namespace DragonScreen
             for (int i = 0; i < v.parts.Count; i++)
             {
                 Part p = v.parts[i];
-                string nm = p.name ?? "";
+                string nm = PartNames.Of(p);
                 for (int m = 0; m < p.Modules.Count; m++)
                 {
                     ModuleEngines e = p.Modules[m] as ModuleEngines;
@@ -77,7 +77,7 @@ namespace DragonScreen
             for (int i = 0; i < v.parts.Count; i++)
             {
                 Part p = v.parts[i];
-                string nm = p.name ?? "";
+                string nm = PartNames.Of(p);
                 for (int m = 0; m < p.Modules.Count; m++)
                 {
                     ModuleEngines e = p.Modules[m] as ModuleEngines;
@@ -94,7 +94,7 @@ namespace DragonScreen
             for (int i = 0; i < v.parts.Count; i++)
             {
                 Part p = v.parts[i];
-                string nm = p.name ?? "";
+                string nm = PartNames.Of(p);
                 for (int m = 0; m < p.Modules.Count; m++)
                 {
                     ModuleEngines e = p.Modules[m] as ModuleEngines;
@@ -117,7 +117,7 @@ namespace DragonScreen
             for (int i = 0; i < v.parts.Count; i++)
             {
                 Part p = v.parts[i];
-                string nm = p.name ?? "";
+                string nm = PartNames.Of(p);
                 for (int m = 0; m < p.Modules.Count; m++)
                 {
                     ModuleEngines e = p.Modules[m] as ModuleEngines;
@@ -174,7 +174,7 @@ namespace DragonScreen
             Vec3 net = Vec3.Zero; int n = 0;
             for (int i = 0; i < v.parts.Count; i++)
             {
-                Part p = v.parts[i]; string nm = p.name ?? "";
+                Part p = v.parts[i]; string nm = PartNames.Of(p);
                 for (int m = 0; m < p.Modules.Count; m++)
                 {
                     ModuleEngines e = p.Modules[m] as ModuleEngines;
@@ -204,7 +204,7 @@ namespace DragonScreen
             var torque = new System.Collections.Generic.List<Vec3>();
             for (int i = 0; i < v.parts.Count; i++)
             {
-                Part p = v.parts[i]; string nm = p.name ?? "";
+                Part p = v.parts[i]; string nm = PartNames.Of(p);
                 for (int m = 0; m < p.Modules.Count; m++)
                 {
                     ModuleEngines e = p.Modules[m] as ModuleEngines;
@@ -231,7 +231,7 @@ namespace DragonScreen
         {
             for (int i = 0; i < v.parts.Count; i++)
             {
-                Part p = v.parts[i]; string nm = p.name ?? "";
+                Part p = v.parts[i]; string nm = PartNames.Of(p);
                 for (int m = 0; m < p.Modules.Count; m++)
                 {
                     ModuleEngines e = p.Modules[m] as ModuleEngines;
@@ -271,7 +271,7 @@ namespace DragonScreen
             for (int i = 0; i < v.parts.Count; i++)
             {
                 Part p = v.parts[i];
-                if (!VehicleParts.IsBooster(p.name)) continue;
+                if (!VehicleParts.IsBooster(PartNames.Of(p))) continue;
                 for (int m = 0; m < p.Modules.Count; m++)
                 {
                     ModuleEngines e = p.Modules[m] as ModuleEngines;
@@ -326,7 +326,7 @@ namespace DragonScreen
             for (int i = 0; i < v.parts.Count; i++)
             {
                 Part p = v.parts[i];
-                if (Actuation.DecouplerRoleOf(p.name) != role) continue;
+                if (Actuation.DecouplerRoleOf(PartNames.Of(p)) != role) continue;
                 if (FirePartDecoupler(p)) return true;
             }
             return false;
@@ -363,7 +363,7 @@ namespace DragonScreen
                     }
                 }
             }
-            catch (Exception e) { Debug.LogWarning("[DragonScreen] decoupler fire failed on " + p.name + ": " + e.Message); }
+            catch (Exception e) { Debug.LogWarning("[DragonScreen] decoupler fire failed on " + PartNames.Of(p) + ": " + e.Message); }
             return false;
         }
 
@@ -380,7 +380,7 @@ namespace DragonScreen
                 LaunchClamp lc = p.Modules.GetModule<LaunchClamp>();
                 if (lc != null) { try { lc.Release(); clamps++; } catch { } }
 
-                string nm = p.name ?? "";
+                string nm = PartNames.Of(p);
                 bool erectorOrClamp = Actuation.DecouplerRoleOf(nm) == DecouplerRole.Erector
                     || nm.IndexOf("Clamp", StringComparison.OrdinalIgnoreCase) >= 0
                     || nm.IndexOf("Strongback", StringComparison.OrdinalIgnoreCase) >= 0;
@@ -401,7 +401,7 @@ namespace DragonScreen
                 for (int i = 0; i < v.parts.Count; i++)
                 {
                     Part p = v.parts[i];
-                    if (!VehicleParts.IsErector(p.name)) continue;
+                    if (!VehicleParts.IsErector(PartNames.Of(p))) continue;
                     List<ModuleAnimateGeneric> an = p.Modules.GetModules<ModuleAnimateGeneric>();
                     bool moved = false;
                     for (int m = 0; m < an.Count; m++)
@@ -422,7 +422,7 @@ namespace DragonScreen
                 for (int i = 0; i < v.parts.Count; i++)
                 {
                     Part p = v.parts[i];
-                    if (!VehicleParts.IsErector(p.name)) continue;
+                    if (!VehicleParts.IsErector(PartNames.Of(p))) continue;
                     List<ModuleAnimateGeneric> an = p.Modules.GetModules<ModuleAnimateGeneric>();
                     for (int m = 0; m < an.Count; m++) if (an[m].Progress < 0.98f) return false;   // still swinging
                     return true;
@@ -692,7 +692,7 @@ namespace DragonScreen
                 for (int i = 0; i < v.parts.Count; i++)
                 {
                     Part p = v.parts[i];
-                    if (p.name == null || p.name.IndexOf("Grid Fin", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    if (PartNames.Of(p).IndexOf("Grid Fin", StringComparison.OrdinalIgnoreCase) < 0) continue;
                     List<ModuleAnimateGeneric> an = p.Modules.GetModules<ModuleAnimateGeneric>();
                     for (int m = 0; m < an.Count; m++) if (an[m].Progress < 0.5f) an[m].Toggle();
                 }
@@ -757,7 +757,8 @@ namespace DragonScreen
             for (int i = 0; i < v.parts.Count; i++)
             {
                 Part p = v.parts[i];
-                bool isD = VehicleParts.IsDrogues(p.name), isM = VehicleParts.IsMains(p.name);
+                string cn = PartNames.Of(p);
+                bool isD = VehicleParts.IsDrogues(cn), isM = VehicleParts.IsMains(cn);
                 if (drogue ? !isD : !isM) continue;
                 DeployChutePart(p);
             }
@@ -770,7 +771,8 @@ namespace DragonScreen
             for (int i = 0; i < v.parts.Count; i++)
             {
                 Part p = v.parts[i];
-                bool isD = VehicleParts.IsDrogues(p.name), isM = VehicleParts.IsMains(p.name);
+                string cn = PartNames.Of(p);
+                bool isD = VehicleParts.IsDrogues(cn), isM = VehicleParts.IsMains(cn);
                 if (drogue ? !isD : !isM) continue;
                 CutChutePart(p);
             }
@@ -800,7 +802,7 @@ namespace DragonScreen
                     }
                 }
             }
-            catch (Exception e) { Debug.LogWarning("[DragonScreen] chute cut failed on " + p.name + ": " + e.Message); }
+            catch (Exception e) { Debug.LogWarning("[DragonScreen] chute cut failed on " + PartNames.Of(p) + ": " + e.Message); }
         }
 
         // ⛔ RealChute: ARM the canopy (one-shot, idempotent) — do NOT re-invoke "Deploy Chute" every tick.
@@ -865,7 +867,7 @@ namespace DragonScreen
                     }
                 }
             }
-            catch (Exception e) { Debug.LogWarning("[DragonScreen] chute deploy failed on " + p.name + ": " + e.Message); }
+            catch (Exception e) { Debug.LogWarning("[DragonScreen] chute deploy failed on " + PartNames.Of(p) + ": " + e.Message); }
         }
     }
 }

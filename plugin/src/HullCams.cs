@@ -147,7 +147,10 @@ namespace DragonScreen
             }
             catch (Exception e)
             {
-                Debug.LogWarning(Tag + "could not read a hull camera on '" + p.name + "': " + e.Message);
+                // OCT2: `PartNames.Of`, like every other part name in the glue. Not a classification
+                // — this is a diagnostic — but a log that names a part by a different string from the
+                // one the code reasons about is what made the OCT1 outage take a day to see.
+                Debug.LogWarning(Tag + "could not read a hull camera on '" + PartNames.Of(p) + "': " + e.Message);
                 return false;
             }
         }

@@ -363,6 +363,7 @@ def tool_tests():
     not been written yet must not break the build. A tool that IS there and fails, fails the build.
     """
     event_vocabulary_check()
+    part_name_source_check()
 
     tool = os.path.join(HERE, 'tools', 'assess_flight.py')
     if not os.path.exists(tool):
@@ -542,6 +543,66 @@ def event_vocabulary_check():
             print('    known dead  %-23s owned by register %s' % (sym, KNOWN_DEAD[sym]))
     print('    %d kinds, %d emitted, %d known dead and owned'
           % (len(names), len(names) - len(KNOWN_DEAD), len(KNOWN_DEAD)))
+
+
+def part_name_source_check():
+    """
+    OCT2: THE GLUE READS ONE PART-NAME SOURCE, AND THIS IS WHAT KEEPS IT THAT WAY.
+
+    `Part.name` and `partInfo.name` are DIFFERENT STRINGS on a live vessel. OCT1 (2026-09-05) found
+    that out the expensive way: `BoosterHost.Describe` asked `IsBooster` for a `.S1.` SUBSTRING, which
+    survived the extra characters `Part.name` carried, while the octaweb binder asked for whole-name
+    EQUALITY, which did not. "Found the booster" and "octaweb not found" about the same part, 264
+    times, and every booster engine command silently dropped for a whole descent.
+
+    OCT1 fixed the two classifiers it was scoped to and left twenty more bare reads standing, each one
+    working by the same luck. OCT2 routed all of them - and the four remaining copies of the expression
+    - through `PartNames.Of`. This guard is the part that survives the task: a NEW bare read added
+    later would restore the divergence silently, and nothing about it looks wrong on the page.
+
+    ⛔ WHY STATIC AND WHY A BUILD STEP rather than a comment: the DONE-when asked for "a test or a
+    comment", and a comment is what OCT1 already had - two of them, in two files, each telling the
+    reader to remember the other. That is the thing that failed. This cannot be forgotten.
+
+    ⚠ TWO READS ARE LEGITIMATE and carry `OCT2-ALLOW-RAW-NAME` on their own line: the drift detector
+    in `OctawebEngines` exists precisely to compare the two strings and print both. An allow marker is
+    a claim that the line MEANS to read the raw name, not a way to silence the guard.
+    """
+    glue = os.path.join(HERE, 'src')
+    if not os.path.isdir(glue):
+        return
+    print('--- part-name source (OCT2: the glue classifies on PartNames.Of)')
+    # `p.name` / `part.name` as whole words, but never `partInfo.name` - which is the CORRECT read
+    # substring of nothing else here. Comment lines are skipped for the same reason the event check
+    # skips them: this file's own reasoning quotes the bad expression by name (C1.16 / G12).
+    bad = re.compile(r'(?<!partInfo)(?<![\w.])(?:p|part)\.name(?![\w])')
+    hits = []
+    for root, _dirs, files in os.walk(glue):
+        if os.path.basename(root) in ('pure', 'blackbox', 'mech'):
+            _dirs[:] = []
+            continue
+        for f in sorted(files):
+            if not f.endswith('.cs'):
+                continue
+            full = os.path.join(root, f)
+            for n, line in enumerate(io.open(full, encoding='utf-8', errors='replace')
+                                     .read().splitlines(), 1):
+                t = line.strip()
+                if t.startswith('//') or t.startswith('///') or t.startswith('*'):
+                    continue
+                if 'OCT2-ALLOW-RAW-NAME' in line:
+                    continue
+                if bad.search(line):
+                    hits.append((os.path.relpath(full, HERE), n, t[:100]))
+    for rel, n, t in hits:
+        print('    BARE Part.name  %s:%d  %s' % (rel, n, t))
+    if hits:
+        sys.exit('PART-NAME SOURCE FAILED: %d glue line(s) read a bare Part.name (OCT1/OCT2). '
+                 'Use PartNames.Of(p) - partInfo.name is the identity the pure layer is tested '
+                 'against, Part.name is a live Unity object name and is NOT the contract. If the '
+                 'line genuinely means to read the raw name, mark it OCT2-ALLOW-RAW-NAME and say '
+                 'why.' % len(hits))
+    print('    0 bare reads; PartNames.Of is the one source')
 
 
 def build_preview():

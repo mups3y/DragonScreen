@@ -76,7 +76,7 @@ namespace DragonScreen
                 {
                     Part p = v.parts[i];
                     if (p == null || p.transform == null) continue;
-                    string pn = p.partInfo != null ? p.partInfo.name : p.name;
+                    string pn = PartNames.Of(p);   // OCT2: the one expression, from PartNames.Of
                     double massT = p.mass + p.GetResourceMass();
                     Vector3 pp = p.transform.position;
                     Row(sb, "PART", i, pn, p.inverseStage, massT, pp.x, pp.y, pp.z, 0,0,0, 0,0,0,0,0);

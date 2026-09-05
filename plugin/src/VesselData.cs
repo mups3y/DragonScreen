@@ -429,8 +429,8 @@ namespace DragonScreen
             for (int i = 0; i < v.parts.Count; i++)
             {
                 Part p = v.parts[i];
-                bool booster = VehicleParts.IsBooster(p.name);
-                bool second = VehicleParts.IsSecondStage(p.name);
+                bool booster = VehicleParts.IsBooster(PartNames.Of(p));
+                bool second = VehicleParts.IsSecondStage(PartNames.Of(p));
 
                 if (booster) si.BoosterAttached = true;
                 if (second) si.S2Attached = true;
@@ -915,7 +915,8 @@ namespace DragonScreen
                 Part p = v.parts[i];
                 // The DRAGON's own tanks, not the stack's: the Dracos those tanks feed are what flies
                 // the deorbit burn, which is what the row is asking about.
-                bool dragon = !VehicleParts.IsBooster(p.name) && !VehicleParts.IsSecondStage(p.name);
+                string cn = PartNames.Of(p);
+                bool dragon = !VehicleParts.IsBooster(cn) && !VehicleParts.IsSecondStage(cn);
                 bool cell = false;
 
                 for (int k = 0; k < p.Resources.Count; k++)
