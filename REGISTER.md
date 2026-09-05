@@ -11867,7 +11867,7 @@ nominal 2 design px is **1.33 px through `Stroke` and 2 px through `St`**, on on
 mutation-proved (reverting `Ceiling` to `Round` reports *"St(2) … 1 px of 1280 (0.078%) vs 1 px of 2560
 (0.039%)"*). `build.py preview` green, 108 pages; `ui_cover.png` inspected and measured as above.
 
-### S102 [S] `pure/Turntable.cs` still tells the reader the in-game RenderTexture is 2560 — **TODO** — [logged by S100, 2026-09-05; TIER 3: comments only, no behaviour]
+### S102 [S] `pure/Turntable.cs` still tells the reader the in-game RenderTexture is 2560 — **DONE — ALREADY CLOSED BY [[S115]] (`31b964d`), 2026-09-05; verified and the line closed 2026-09-06** — [NO CODE CHANGE NEEDED: the work was done the same day this was logged, and the register line was never updated] — [logged by S100, 2026-09-05; TIER 3: comments only, no behaviour]
 - **The finding.** `src/pure/Turntable.cs:213` and `:309` both reason about *"the preview (1280), the in-game
   RenderTexture (2560), and the 2x cover render"*. The cfg says 1280 on all three screens, there is no 2×
   cover render any more ([[S100]]), and the glue's default is 1280.
@@ -11878,6 +11878,50 @@ mutation-proved (reverting `Ceiling` to `Round` reports *"St(2) … 1 px of 1280
   declared outputs are the preview, the preview build path and the tests.
 - **DONE when:** both comments cite the real shipped width, or drop the specific numbers in favour of "at
   any width", keeping the resolution-independence argument they exist to make.
+
+#### ✅ DONE 2026-09-06 — **no code change: this was already fixed, and the line's own premise had gone stale**
+
+⭐ **THE WORK WAS DONE BY [[S115]] (`31b964d`, 2026-09-05) THE SAME DAY THIS LINE WAS LOGGED.** Found with
+`git log -S "QC Q5, owner ruling 2026-09-05, raised the shipped screens to 2560" -- plugin/src/pure/Turntable.cs`,
+which returns exactly that one commit. S100 logged this line on 2026-09-05; S115 landed Q5 later the same
+day and closed it in passing while applying the resolution change, without updating the register. ⚠ **The
+only thing wrong here was the register**, and re-doing the edit would have been a second, conflicting pass
+over comments that are already correct.
+
+⛔ **AND THE FINDING'S OWN PREMISE IS NOW FALSE — checked rather than assumed.** This line reads *"The cfg
+says 1280 on all three screens"*. It does not: `plugin/GameData/DragonScreen/DragonScreen.cfg` lines 60, 76
+and 87 each read **`screenWidth = 2560`**. Q5 raised all three the same day. So the comments' *"the in-game
+RenderTexture (2560)"* — the very phrase this line was opened about — **became correct again** before
+anyone acted on it.
+
+**BOTH DONE-CRITERIA MET, read from the current file:**
+1. `Turntable.cs:213` — *"(Historically that meant three different numbers … ) QC Q5, owner ruling
+   2026-09-05, raised the shipped screens to 2560, so preview and RenderTexture now AGREE; the illustration
+   is kept because the reasoning does not depend on the two ever having differed."* ⭐ That is the better
+   of the two options this line offered: it keeps the historical illustration, labels it as history, and
+   states the current fact — and it makes explicit that the argument never rested on the numbers.
+2. `Turntable.cs:309` — *"(see the drag header — and its note on Q5, since 2026-09-05 that is one size,
+   2560, not the three this comment used to name)"*, with the frames-of-rotation argument untouched.
+
+**THE FILE SWEPT FOR ANYTHING THE LINE MISSED, AND ONE LOAD-BEARING NUMBER RE-MEASURED.**
+`grep -n "1280\|2560\|RenderTexture\|2x cover"` returns five hits; three are the two comments above. The
+fourth is `:233`, *"the sprite … is only ~474 px across on a 2560 px panel"* — a figure the gearing argument
+actually rests on, so it was measured rather than trusted (temporary probe, since removed):
+
+| | `CapsuleRect` w × h | as a fraction of the panel |
+|---|---|---|
+| 1280×703 | 237.2 × 474.3 | 18.53% |
+| **2560×1406** | **474.3** × 948.7 | 18.53% |
+
+**474.3 px at 2560 — the comment is right**, and the sprite is the same fraction of the panel at both
+widths, so the "three quarters of the rect is the real gesture" reasoning holds at either. ⚠ Worth noting
+because **474 is also the rect's HEIGHT at 1280**, so a reader skimming could easily mistake which
+dimension and which panel it belongs to; it says "across", and across is correct.
+
+**Verified (C1.3).** **Docs/register only — no code changed, so the build/preview gate does not apply**
+(C1.3's own carve-out). `python plugin/build.py test` was run anyway and is **green — ALL SUITES PASSED**.
+No `install`, no glass, no `git push`. §14.4(a) untouched. `docs/QC_FINDINGS.md` / `docs/BUILD_PLAN.md`
+not edited.
 
 ### S103 [O] QC batch 1 — the bottom bar: an un-erased ghost marker, a 12.2% stretch, and two page borders where there is one page — **DONE 2026-09-05** — [C-12 + C-04 + H-07; one asset, one geometry, all 35 pages]
 
