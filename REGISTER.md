@@ -14971,7 +14971,7 @@ The full mapping — which hole, which finding, which are duplicates of each oth
   already installed and already carry real state.
 - **DONE when:** the owner has set the policy, and the resulting build lines are split out from it.
 
-### S140 [S] `LifeSupport.Margins` is computed every frame, written to the black box, and shown on no screen — **TODO** — [H18 + QC `V-04` + H39's margin half; TIER 2: the cheapest real win left]
+### S140 [S] `LifeSupport.Margins` is computed every frame, written to the black box, and shown on no screen — **HELD 2026-09-06 — ⚠ NOT "the cheapest real win left": both halves are §1.4-blocked, and the page's own code already says so** — [H18 + QC `V-04` + H39's margin half]
 - **The finding.** `SHOW MARGINS TO` is a **painted button with no hit rect** — worse than a no-op, since a
   no-op at least resolves to a named action — and the whole MARGIN column is a hardcoded dash. Meanwhile
   `LifeSupport.Margins` (`LifeSupport.cs:36-47`) computes exactly this shape of answer off **real TAC-LS
@@ -14981,6 +14981,63 @@ The full mapping — which hole, which finding, which are duplicates of each oth
 - ⚠ Same class, named so it is not lost: the Cover's `gridicons_refresh` glyph is drawn with no hit rect.
 - **DONE when:** the MARGIN column shows real days-remaining, the button has a hit rect or is unpainted, and
   a preview shows it populated.
+
+#### ⛔ HELD 2026-09-06 — picked up to be built, and stopped by three things this line did not know
+
+⚠ **FIRST, TWO CORRECTIONS TO THIS LINE'S OWN TEXT, both checked in source.**
+1. *"`LifeSupport.Margins` … **has no caller anywhere**"* — **false.** It is called by
+   `LifeSupportBridge.Margins(Vessel)` (`:54`, `:60`, `:66`) and by `BlackBoxRecorder.cs:1164`.
+2. *"computed every frame, written to the black box, and shown on no screen"* — **the last clause is the
+   true one, and it is the whole finding.** The BlackBox already records **all four** figures:
+   `ls_o2_days`, `ls_water_days`, `ls_food_days`, `ls_limiting_days` (`BlackBoxSchema.cs:484-487`,
+   Conditional on TAC-LS). ✅ **So the data is real, live, and already recorded. Only the display is
+   missing.**
+
+#### ⛔ AND THE DISPLAY IS BLOCKED THREE WAYS — none of them a build chat's to resolve
+
+**(a) The MARGIN column is not a home for these numbers.** The CONSUMABLES table's rows are **Power Unit
+1/2 Energy, Usable Deorbit Fuel/Oxidizer, Orbit 1/2 Subtank Fuel/Oxidizer** — propellant and power.
+`LifeSupport.Margins` returns **food / water / oxygen days**. Putting life-support days in a MARGIN column
+beside propellant quantities would file one quantity under another's label, which is the exact defect
+[[S149]] exists for. **A margin on "Usable Deorbit Fuel" is a Δv margin against a deorbit budget** — and no
+such budget is established (that is §B11 / [[T22]]).
+
+**(b) The page already states, in code, that this is not a build chat's call.** `VehicleOverviewPage.cs`'s
+header: *"MARGIN itself isn't in the captured alt-text, so it draws as '—' … rather than inventing a
+number."* And S75's note at `:198-213`, verbatim: *"It cannot be given a rectangle until it is decided what
+the rectangle DOES, and that answer is **not a build chat's to invent (C1.4/§1.4)**: the alt-text capture
+records the toggle's EXISTENCE and none of its targets."* ⭐ **That reasoning is not superseded by this
+line — it is the reason this line cannot be built**, and S75 already chose the honest half (the toggle is
+drawn as inert Dim text, not as a button) so the "worse than a no-op" half of H18 is **already fixed**.
+
+**(c) No screen anywhere asks for days.** Searched every `pure/*.cs` for a label containing "day":
+**zero hits.** So showing the margins means **adding a readout the reference does not have** — §14.2
+TIER-3, *"NO evidence AND no asset → invention, JOINT discussion required"*.
+
+⚠ **§14.4(f) DOES pull the other way, and that is exactly why it needs the owner rather than a build chat.**
+(f) says every real-screen feature is INCLUDED and FILLED, with a dash only for *"a genuinely-absent
+state"*. MARGIN **is** a real-screen feature — it is a captured column header. But a margin against a
+budget that does not exist is arguably genuinely absent, and deciding which reading applies is the call.
+
+**Paste-ready overseer prompt (C1.13):**
+> DragonScreen, S140 / QC V-04. **Life-support margins are computed every frame off real TAC-LS rates and
+> already recorded to the black box** — days of food, water and oxygen remaining, plus the limiting one.
+> **No screen shows any of them**, and no screen has a label that asks for them.
+> ⛔ **The obvious home does not fit.** The Vehicle Overview's MARGIN column sits beside **propellant and
+> power** rows, so a margin there means Δv against a deorbit budget — which does not exist yet (§B11/T22)
+> — not days of oxygen. And the page's own code already records that MARGIN's content *"isn't in the
+> captured alt-text"* and that the `SHOW MARGINS TO` toggle's targets were never captured, so neither can
+> be filled without inventing what the label asks for.
+> **Three options:** **(a)** put the four day-figures somewhere they belong — the Crew tab shows O2 Tank /
+> N2 Tank / Potable Water already, so "days remaining" beside them is coherent, but it **adds a row the
+> reference does not have** (TIER-3, your call); **(b)** leave them recorder-only — they are already in
+> the black box and the flight report reads them, which may be the right home for a planning number the
+> crew do not act on in the moment; **(c)** fill MARGIN with a Δv margin instead, once §B11/T22 establish
+> a deorbit budget, and leave life-support days out of it entirely.
+> ⚠ Note (b) is not "do nothing" — it is a decision that this is telemetry, not instrumentation.
+
+**Verified (C1.3).** **Nothing was built and nothing changed** — this is a HELD write-up. `build.py test`
+green (unchanged tree). No `install`, no glass, no `git push`.
 
 ### S141 [S] There is no camera behind the docking rings — **TODO** — [H25 + QC `DK-03`; TIER 2: pure display]
 - **The finding.** `DockingPage.Build` fills the screen with `Background`; `WantsDockingCam` grants the live
