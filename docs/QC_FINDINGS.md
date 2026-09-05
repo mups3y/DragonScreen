@@ -86,7 +86,7 @@ Cover's seven phase views, plus the lower analog console panel. **The six Vehicl
 | **23** | **VehicleAvionics** | VEHICLE — AVIONICS *(sub-tab)* | ✅ **DONE — 4 findings** *(shared section, 20–25)* | 2026-09-05 |
 | **24** | **VehicleGnc** | VEHICLE — GNC *(sub-tab)* | ✅ **DONE — 4 findings** *(shared section, 20–25)* | 2026-09-05 |
 | **25** | **VehicleThermal** | VEHICLE — THERMAL *(sub-tab)* | ✅ **DONE — 4 findings** *(shared section, 20–25)* | 2026-09-05 |
-| 26 | ManualChute | MANUAL CHUTE DEPLOY | NOT STARTED | — |
+| **26** | **ManualChute** | MANUAL CHUTE DEPLOY | ✅ **DONE — 2 findings** | 2026-09-05 |
 | 27 | Docking | MANUAL DOCKING | NOT STARTED | — |
 | 28 | Rendezvous | RENDEZVOUS | NOT STARTED | — |
 | 29 | DeorbitBurnPrep | DEORBIT BURN PREP | NOT STARTED | — |
@@ -2885,7 +2885,125 @@ one screen, neither of which tracks a step.
 
 ---
 
-*Next: **page 26 — Manual Chute Deploy**, then Docking (27) and Rendezvous (28).*
+---
+
+# PAGE 26 — MANUAL CHUTE DEPLOY
+
+**Renders inspected:** `ui_manualchute.png` · `ui_manualchute_armed.png` · `ui_manualchute_descent.png` ·
+`ui_manualchute_nofeed.png`.
+
+**Source:** `plugin/src/pure/ManualChuteDeployPage.cs` (268 lines) · `ScreenPainter.ChuteAction`.
+
+**S49's entry.** §2: *"Telemetry strip fully live (T13c) plus the live globe. Step rows are static strings;
+8 of 12 action buttons are no-ops; the rail index is the literal 6"* (H22, H23). The live half is confirmed
+and is **more important than S49 could show**; the "no-ops" phrasing needs correcting (CLEAN 2).
+
+## What was checked and found CLEAN
+
+1. ⭐⭐ **This page is C-01's fix, already built and working.** Its top strip is drawn, not baked, and every
+   value matches the fixture exactly in the same frame:
+
+   | readout | on the glass | fixture |
+   |---|---|---|
+   | ACTIVE PHASE | `ORBITING` | `ps.Phase = "ORBITING"` |
+   | INERTIAL VELOCITY | `2280 m/s` | `ps.Velocity = "2280 m/s"` |
+   | ALTITUDE | `123.4 km` | `ps.Altitude = "123.4 km"` |
+   | APOGEE | `124.0 km` | `ps.Apoapsis = "124.0 km"` |
+   | PERIGEE | `121.9 km` | `ps.Periapsis = "121.9 km"` |
+   | INCLINATION | `0.13°` | `ps.InclinationDegText = "0.13°"` |
+
+   **The Cover's C-01 is the same seven values on a page that shares this page's own rail** — baked there,
+   live here. S49 H1 predicted this method would work; the render proves it does. **Cite this page when
+   C-01 is built.** ⚠ It is also visibly *more legible* than the Cover's baked strip: drawn text on the
+   page ground, no boxes, no PNG resampling.
+2. ⭐ **S49 H23's "8 of 12 action buttons are no-ops" understates what is there.** `ChuteAction`
+   (`ScreenPainter.cs`) routes every button through `FlightCommands.Run` + `PanelPolicy.ResolveImmediate` —
+   **the same dispatcher and the same policy the physical console plate uses** — and logs the resolved
+   outcome. A refusal is an *honest refusal through the shared policy*, which is §14.4(a) exactly, and
+   T14's rule that two surfaces cannot come to different answers. `Monitor altitude` is handled separately
+   and says so: *"a row that commands nothing did nothing, and saying so is different from saying it was
+   refused."* **This is correct behaviour, not a hole.**
+3. **All 12 buttons have hit rects, from the rectangle that draws them** — `HitTest` iterates `Actions` and
+   calls `ActionRect` (`:162-171`), the same function `Build` uses. `PageAction`'s rule followed.
+4. **The rail is the Cover's own `DrawRail`**, so the two rails are pixel-identical, and tapping any other
+   rail row returns to the Cover (`FigmaUI.cs:339-345`). The literal `6` S49 flags is *correct* here — this
+   page **is** phase 6.
+5. **The altitude gates carry `(TBC)` markers** — `10.6 km (TBC)`, `2.5 km (TBC)` … — an honest marking that
+   the numbers are provisional.
+
+---
+
+## MC-01 — Both section markers are hardcoded alarm red, permanently
+
+**TIER 2** · **NEW** · §14.4(a)'s "no red" rule, third instance
+
+**Evidence.** `ManualChuteDeployPage.cs:241`:
+
+```csharp
+dl.ArcBand(X(300), Y(titleY + 14), Z(5), Z(15), 0, 360, Alarm);   // red section marker
+```
+
+`Alarm` is `DragonPalette.Alarm` (`:47`), and `Section(…)` is called twice (`:264`), so **both**
+`High Altitude Chute Deploy` and `Standard Altitude Chute Deploy` carry a filled alarm-red dot in every
+state, on every render, with nothing faulted.
+
+**What is wrong.** Red is this UI's fault colour and §14.4(a) is explicit: no red for something that is not
+a fault. Two permanent red markers on the chute page are worse than decorative — this is the screen a crew
+reads while descending under parachutes, and a red marker there means something. It also destroys the
+signal: if a chute section ever *should* go red, nothing changes.
+
+⚠ **Third instance of this class in the sweep** — V-02 (`CABIN MICS: RECORDING` in red), MP-01 (`Awaiting`
+in caution amber), and now this. All three are hardcoded severities on non-fault states.
+
+**Fix plan.**
+- **Decide what the marker means, then compute it.** Two honest readings: (a) it is a *section bullet* —
+  then it should be `Accent`, matching the Cover's reference-content bullets, and carry no severity; (b) it
+  is a *section state* — then it must be computed, and the obvious source is whether that section's gate
+  altitude has been passed (`s.Steps.RadarAltitude` is live and is what MC-02 needs anyway).
+- **(a) is recommended as the immediate fix** — it is a one-constant change, removes a false alarm today,
+  and does not pre-empt MC-02's design. (b) becomes available once MC-02 lands.
+- **Must not break:** the marker's geometry, which is measured.
+- **Verify:** re-render all four states; no red anywhere on a page with no fault.
+
+---
+
+## MC-02 — Six live altitude gates, and nothing says which one is next
+
+**TIER 2** · confirms S49 **H22**
+
+**Evidence.** `ui_manualchute_descent.png` lists six gates across two sections —
+`10.6 km (TBC)`, `10.0 km`, `2.5 km`, `2.2 km` (High Altitude) and `5.5 km`, `1.6 km` (Standard) — each
+with its own action rows. **Nothing indicates which gate is next, which have been passed, or where the
+vehicle is against them.** The rows are static strings (S49 H22), and the page's own name is *descent*.
+
+Meanwhile `s.Steps.RadarAltitude` is live and is already in the fixture (`PreviewMain.cs:110` sets
+`96000.0` for the ascent case). The one number that would order these six gates is present and unread.
+
+**What is wrong.** This is S49's central procedure finding on the page where it costs most: under
+parachutes, "which gate am I at" is the question the screen exists to answer, and the crew has to answer it
+by reading the altitude off the top strip and comparing it to six numbers by eye.
+
+⚠ **Step TRACKING is (A), the buttons are (B), and the distinction is the whole point** — S49 states it:
+*"a procedure's step TRACKING is a readout of real vehicle state and is therefore (A); the same step's
+ACTION BUTTON fires a pyro and is (B). The Manual Chute page is the clearest case — its altitude gates can
+go live now, its `DEPLOY DROGUES` button cannot."*
+
+**Fix plan.**
+- **Compare `s.Steps.RadarAltitude` against each gate** and mark each row passed / current / pending. No
+  new model, no new source, no §1.4 question — one live number against six printed ones.
+- **The tint language already exists on this page**: `Dim` for pending, `White` for current, and the
+  existing `(TBC)` treatment stays. A current-row marker can reuse `Accent`, which MC-01 frees up.
+- ⚠ **Do not let the tracking imply the action happened.** A passed *altitude* is not a deployed *chute* —
+  the gate is a readout, the deployment is Part B's. Mark the gate, not the outcome.
+- ⚠ **`(TBC)` must survive.** The gate altitudes are provisional and marked as such; step tracking against a
+  provisional number must keep the marking, or the page starts asserting precision it does not have.
+- **Must not break:** the `!Valid` path (`ui_manualchute_nofeed.png`) — with no radar altitude, no row is
+  current and all six stay pending, rather than defaulting to the first.
+- **Verify:** three renders at descending altitudes with the current row moving down the list.
+
+---
+
+*Next: **page 27 — Manual Docking**, then Rendezvous (28).*
 
 *⚠ **Three findings are page-wide, not per-page, and should be scheduled ahead of the sweep:***
 - ***H-01** — the preview's resolution. It decides how every later legibility finding is measured, so
