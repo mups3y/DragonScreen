@@ -62,6 +62,7 @@ public static class FigmaUINavTest
         CoverTargetReadouts();
         AlertsView();
         DiscreteEmergencies();
+        SubsystemStateWords();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
     }
@@ -2510,6 +2511,99 @@ public static class FigmaUINavTest
         if (k % 11 == 5) s.Systems.LeakRate = 0.02;
         if (k % 4 == 1) s.Systems.A1 = StringState.Tripped;
         if (k % 6 == 2) { s.Systems.A1 = s.Systems.B1 = s.Systems.C1 = StringState.Tripped; }
+        return s;
+    }
+
+    // ================= S138: THE SUBSYSTEM STATE WORDS THAT HAD A SOURCE =================
+    // 23 of the 36 checklist words were literals. SIX of them had a model already - and three of those
+    // were not merely frozen but CONTRADICTED the Systems P&ID, which draws the same components from
+    // the same numbers in the same frame.
+    //
+    // ⭐ EVERY CHECK BELOW DRIVES A REAL MODEL INPUT AND ASSERTS THE WORD MOVES. That is the only test
+    // a re-hardcoded constant cannot pass: a literal renders identically in every preview ever taken,
+    // so "the word is present" proves nothing and "the word CHANGED when the vessel changed" proves
+    // everything.
+    static void SubsystemStateWords()
+    {
+        const int VW = 2560, VH = 1406;
+
+        // ---- CREW: three rows, three of the P&ID's own verdicts ----------------------------------
+        PageState ok = SubsysFixture();
+        PageState bad = SubsysFixture();
+        bad.Cabin.Ppo2Psia = 1.8;          // life support -> ALARM (the P&ID's CABIN component)
+        bad.Systems.Oxygen = 0.05;         // O2 TANK -> ALARM  (Alarms.Low)
+        bad.Cabin.Co2MmHg = 9.0;           // CO2 SCRUBBER -> ALARM (the CO2 band)
+        DisplayList a = Subsys(VehicleSubsystemPage.Sub.Crew, ok, VW, VH);
+        DisplayList b = Subsys(VehicleSubsystemPage.Sub.Crew, bad, VW, VH);
+        Check("CREW reads Nominal three times when the cabin is healthy",
+              Times(a, "Nominal") >= 3, "got " + Times(a, "Nominal"));
+        Check("...and three of those words move to Alarm when the model does",
+              Times(b, "Alarm") >= 3, "got " + Times(b, "Alarm"));
+        // ⛔ The literal that is GONE for good: "Active" was CO2 SCRUBBER's hardcoded word and no
+        // computed path can produce it. This is the `gone` idiom - a constant wired once must never be
+        // quietly re-hardcoded.
+        Check("CO2 SCRUBBER's old literal cannot come back",
+              !Drew(a, "Active") && !Drew(b, "Active"), "");
+
+        // ---- PROPULSION: the SuperDracos ARE the launch escape system --------------------------
+        PageState armed = SubsysFixture(); armed.Steps.EscapeArmed = true;
+        PageState safed = SubsysFixture(); safed.Steps.EscapeArmed = false;
+        DisplayList da = Subsys(VehicleSubsystemPage.Sub.Propulsion, armed, VW, VH);
+        DisplayList ds = Subsys(VehicleSubsystemPage.Sub.Propulsion, safed, VW, VH);
+        Check("SUPERDRACO reads Armed with the escape system armed", Drew(da, "Armed"), "");
+        Check("...and Disarmed when it is not", Drew(ds, "Disarmed") && !Drew(ds, "Armed"), "");
+        // ⭐ ONE SWITCH, ONE VOCABULARY: `StepList.AbortMode` returns "DISARMED" for this same
+        // condition, so the word is the tree's own rather than one coined here.
+        StepInputs si = new StepInputs();
+        si.Valid = true; si.EscapeArmed = false;
+        Check("...and that word is StepList's own, not a new one",
+              StepList.AbortMode(si) == "DISARMED", "got " + StepList.AbortMode(si));
+
+        // ---- POWER: PWR DISTRIB is the two buses, through S137b's derived rule -------------------
+        PageState pOk = SubsysFixture();
+        PageState pTrip = SubsysFixture(); pTrip.Systems.A1 = StringState.Tripped;
+        PageState pDead = SubsysFixture();
+        pDead.Systems.A1 = pDead.Systems.B1 = pDead.Systems.C1 = StringState.Tripped;
+        DisplayList d1 = Subsys(VehicleSubsystemPage.Sub.Power, pOk, VW, VH);
+        DisplayList d2 = Subsys(VehicleSubsystemPage.Sub.Power, pTrip, VW, VH);
+        DisplayList d3 = Subsys(VehicleSubsystemPage.Sub.Power, pDead, VW, VH);
+        Check("PWR DISTRIB is Nominal with both buses whole", Drew(d1, "Nominal"), "");
+        Check("...Caution on a tripped string", Drew(d2, "Caution"), "");
+        Check("...and Alarm on a powered bus with nothing online", Drew(d3, "Alarm"), "");
+
+        // ---- THERMAL: HX FLOW is the cabin fan, in the P&ID's own two words ---------------------
+        PageState hot = SubsysFixture();
+        PageState cold = SubsysFixture();
+        cold.Systems.Bus1On = false; cold.Systems.Bus2On = false;   // no bus, no fan
+        DisplayList h1 = Subsys(VehicleSubsystemPage.Sub.Thermal, hot, VW, VH);
+        DisplayList h2 = Subsys(VehicleSubsystemPage.Sub.Thermal, cold, VW, VH);
+        Check("HX FLOW reads RUNNING while a bus is up", Drew(h1, "RUNNING"), "");
+        Check("...and OFF when both buses are down", Drew(h2, "OFF") && !Drew(h2, "RUNNING"), "");
+        // ⭐ Same source as the P&ID's CABIN FAN, so the two pages cannot disagree about one fan.
+        Check("...which is exactly the P&ID's own source", hot.Systems.FanOn && !cold.Systems.FanOn, "");
+
+        // ---- AND THE ROWS DELIBERATELY LEFT ALONE ARE STILL LITERAL ------------------------------
+        // ⛔ S138 wired SIX of the 23 and handed SEVENTEEN to [[S139]] - including GPS, which was wired
+        // to `HasFix` and then UNWIRED: that field is `body != null` (`VesselData.cs:147`), true in
+        // flight essentially always, so a row reading "Lock" from it would LOOK computed and BEHAVE
+        // like the constant it replaced. This pins that it was left honest rather than dressed up.
+        DisplayList av = Subsys(VehicleSubsystemPage.Sub.Avionics, ok, VW, VH);
+        PageState noFix = SubsysFixture(); noFix.HasFix = false;
+        DisplayList av2 = Subsys(VehicleSubsystemPage.Sub.Avionics, noFix, VW, VH);
+        Check("GPS is still a literal, and is NOT wired to HasFix",
+              Drew(av, "Lock") && Drew(av2, "Lock"),
+              "if this fails, GPS was wired to a field that is body != null");
+    }
+
+    /// <summary>A healthy vessel with both buses up: the state every S138 row moves AWAY from.</summary>
+    static PageState SubsysFixture()
+    {
+        PageState s = AlertFixture(0);
+        s.Systems = SystemsState.Fresh();
+        s.Systems.Bus1On = true; s.Systems.Bus2On = true;
+        s.Systems.Oxygen = 1.0; s.Systems.Nitrogen = 1.0;
+        s.HasFix = true;
+        s.Steps.Valid = true; s.Steps.EscapeArmed = true;
         return s;
     }
 

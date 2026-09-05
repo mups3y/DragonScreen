@@ -16239,7 +16239,7 @@ were the point:**
 
 ⛔ No `install`, no glass, no `git push`.
 
-### S138 [S] 23 of the 36 subsystem state words are still literals — **DOING** —
+### S138 [S] 23 of the 36 subsystem state words are still literals — **DONE 2026-09-06 — SIX wired from sources that already existed, SEVENTEEN listed and handed to [[S139]], and one un-wired on purpose** —
 ✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set
 one (SPLIT BY CONTENT TYPE — see S153). ⛔ **The condition that replaces it is mechanical, not a wait:**
 any text this line ADDS must be drawn at **`Typography.MinDesignFor(w, sc)` or above** if it is LIVE, or
@@ -16264,6 +16264,94 @@ is answered this is buildable as written. [QC `S-03`; the remainder of H14 after
   this line's; a word with no source stays honest rather than becoming a guess.
 - **DONE when:** every word with an available model reads it, every word without one is listed in the entry
   and handed to S139, and a dead-feed preview shows no confident green.
+
+#### ✅ DONE 2026-09-06 — and one DONE-when clause was already satisfied
+
+⭐ **"A dead-feed preview shows no confident green" was CLOSED BY [[S51]]** and is in the page:
+`CT(live) => (ckValid && …) ? live : Dash`, with the icon `!ckValid ? Dim`. Checked at HEAD, not rebuilt.
+This line is about the LIVE feed, where a literal is invisible.
+
+#### THE COUNT, ROW BY ROW — 23 literals, and it is exactly 23
+
+| tab | literal words |
+|---|---|
+| Crew | `Nominal` · `Nominal` · `Active` · `Standby` · `Nominal` (5) |
+| Propulsion | `16 / 16` · `Armed` · `Open` · `Nominal` (4) |
+| Power | `Nominal` · `Off` (2) |
+| Avionics | `3 / 3` · `Nominal` · `Nominal` · `Lock` · `Armed` (5) |
+| GNC | `Nominal` · `2 / 2` · `Lock` · `Valid` (4) |
+| Thermal | `Deployed` · `Auto` · `Nominal` (3) |
+
+#### ⭐ SIX HAD A MODEL — AND THREE OF THOSE WERE CONTRADICTING ANOTHER PAGE
+
+Not merely frozen. The **Systems P&ID draws the same components from the same numbers in the same
+frame**, so a green literal here sat beside an amber verdict there — C7.1's one-quantity-two-truths:
+
+| row | the verdict that already existed | where |
+|---|---|---|
+| **CABIN ATMOSPHERE** | `Alarms.LifeSupport(s.Cabin)` | `SystemsPidPage:176`, the `CABIN` component |
+| **O2 SUPPLY** | `Alarms.Low(s.Systems.Oxygen)` | `:135`, the `O2 TANK` component |
+| **CO2 SCRUBBER** | `Alarms.Band(Co2MmHg, …)` | `:177`, the `CO2 SCRUBBER` component |
+| **SUPERDRACO x8** | `s.Steps.EscapeArmed` — ⭐ **the SuperDracos ARE the launch escape system** | `StepList`'s `ESCAPE SYSTEM ARMED` row and `AbortMode` |
+| **PWR DISTRIB** | `Alarms.PowerEvents` ([[S137b]]) — derived from the buses, not counted | the same rule the tab strip and chrome bar now read |
+| **HX FLOW** | `s.Systems.FanOn` | `SystemsPidPage:178`, the `CABIN FAN` component |
+
+⛔ **NO NEW THRESHOLD AND NO NEW WORD ANYWHERE.** Each row calls the expression the other page already
+calls and renders it through this file's existing `SevWord` / `SevKey`. `Disarmed` is not coined here —
+`StepList.AbortMode` returns `"DISARMED"` for exactly this condition, so one switch now has one
+vocabulary across two surfaces. `RUNNING` / `OFF` are the P&ID's own `CABIN FAN` words.
+
+#### ⛔ AND ONE ROW WAS WIRED AND THEN **UN**-WIRED, WHICH IS THE PART WORTH READING
+
+**GPS** (Avionics) and **GPS NAV** (GNC) were wired to `PageState.HasFix`. It looks like a GPS source
+and is not one: `VesselData.cs:147` sets it as **`body != null`**, so in flight it is true essentially
+always. ⭐ **A row reading "Lock" from that would LOOK computed and BEHAVE like the constant it
+replaced — which is worse than the literal, because it hides the gap instead of leaving it visible.**
+Reverted, with the reasoning kept in the file, and a test that FAILS if anyone re-wires it. Nothing in
+this build models a GPS receiver.
+
+⚠ **Found by a test, not by inspection**: the change broke a pre-existing assertion — *"gnc has no
+unsourced readout with a target"* — which is what sent me to look at what `HasFix` actually is.
+
+#### The SEVENTEEN handed to [[S139]], each with why
+
+| tab | row | why there is no source |
+|---|---|---|
+| Crew | `SUIT LOOP` | ⚠ the only verdict on record is the P&ID's, which colours it with the SAME `ls` as CABIN ATMOSPHERE — wiring it produces two identical words and says nothing new. Choosing a *different* band for it is a §14.4(f) call |
+| Crew | `WATER SYSTEM` | nothing models water |
+| Prop | `DRACO x16` | ⚠ nothing counts live Dracos. The 16 is a craft-dump FACT about the vehicle, not a health reading |
+| Prop | `PROP ISOLATION`, `HE PRESSURANT` | no isolation valve, no helium pressurant in the model |
+| Power | `LOAD SHED` | nothing sheds load |
+| Avionics | `FLIGHT COMP x3`, `VRIO 1 / 2`, `DATA BUS`, `GPS`, `SW WATCHDOG` | ⭐ this tab's OWN note already says the build models none of it |
+| GNC | `IMU 1 / 2`, `STAR TRACKERS`, `GPS NAV`, `NAV STATE` | as above; `GPS NAV` for the `HasFix` reason |
+| Thermal | `RADIATORS`, `HEATERS` | the coolant model carries the loops but no radiator deploy state and no heater |
+
+**6 + 17 = 23.** ⚠ Under §14.4(f) these should eventually be a **coherent MARKED simulation**, not left
+as literals — and choosing between that and a dash is precisely what S139 is HELD on. This line does not
+pre-empt it.
+
+#### Verified (C1.3) — measured, not asserted
+
+`python plugin/build.py test` → **ALL SUITES PASSED**. `python plugin/build.py preview` → 119 pages.
+
+⭐ **EVERY CHECK DRIVES A MODEL INPUT AND ASSERTS THE WORD MOVES**, which is the only test a
+re-hardcoded constant cannot pass: a literal renders identically in every preview ever taken, so *"the
+word is present"* proves nothing and *"the word CHANGED when the vessel changed"* proves everything.
+
+**MUTATION-PROVEN — 6 mutations, 6 caught, 0 uncaught:**
+
+| | mutation | first check that failed |
+|---|---|---|
+| **A** | CABIN ATMOSPHERE back to a literal green | *"three of those words move to Alarm when the model does   got 2"* |
+| **B** | O2 SUPPLY and CO2 SCRUBBER back | *"got 1"*, plus *"CO2 SCRUBBER's old literal cannot come back"* |
+| **C** | SUPERDRACO ignores the escape-system switch | *"…and Disarmed when it is not"* |
+| **D** | PWR DISTRIB back to a literal | *"Caution on a tripped string"* |
+| **E** | HX FLOW stops reading the fan | *"HX FLOW reads RUNNING while a bus is up"* |
+| **F** | GPS "helpfully" wired to `HasFix` after all | *"GPS is still a literal, and is NOT wired to HasFix"* — ⭐ a mutation that guards against a WELL-MEANT change, not a careless one |
+
+**Comment-loss check (C1.16 / G12): 0 lost.**
+
+⛔ No `install`, no glass, no `git push`. §14.4(a) untouched — every one of these is a readout.
 
 ### S139 [S] The ~27 honest dashes — the §14.4(f) policy surface — **HELD** — [H17 + QC `S-04` `MP-03`; policy question, not a page defect]
 - **The finding.** ~27 dashes across the subsystem tabs — Humidity, Chamber Press, SuperDraco Temp, HELIUM,

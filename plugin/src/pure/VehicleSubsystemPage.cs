@@ -415,9 +415,30 @@ namespace DragonScreen
                     // draws as FIRE DETECTED / NONE — instead of a hardcoded "Clear" that stayed green
                     // through a cabin fire. Same source, same two states, this column's wording.
                     bool smoke = valid && st.Systems.Fire;
-                    s.CkState = new[] { "Nominal", "Nominal", "Active", "Standby", "Nominal",
+                    // ---- S138: THREE OF THESE FIVE HAD A VERDICT ALREADY - ON ANOTHER PAGE ----
+                    // ⛔ The three literals below were not merely frozen; they CONTRADICTED the Systems
+                    // P&ID, which draws the SAME components from the SAME model in the same frame:
+                    //   CABIN ATMOSPHERE  `SystemsPidPage:176` draws CABIN with `Alarms.LifeSupport`
+                    //   O2 SUPPLY         `:135` draws O2 TANK with `Alarms.Low(Systems.Oxygen)`
+                    //   CO2 SCRUBBER      `:177` draws CO2 SCRUBBER with the CO2 band
+                    // A green "Nominal" here beside an amber CABIN there is C7.1's one-quantity-two-
+                    // truths, and it is the same shape S51 fixed for eight other rows.
+                    // ⭐ NO NEW THRESHOLD AND NO NEW WORD: each row calls the P&ID's own expression and
+                    // renders it through this file's existing `SevWord` / `SevKey`.
+                    Severity lsSev = valid ? Alarms.LifeSupport(st.Cabin) : Severity.Nominal;
+                    Severity o2Sev = valid ? Alarms.Low(st.Systems.Oxygen) : Severity.Nominal;
+                    Severity co2Sev = valid ? Alarms.Band(st.Cabin.Co2MmHg,
+                                              CabinLimits.Co2Caution, CabinLimits.Co2Alarm)
+                                            : Severity.Nominal;
+                    // ⚠ SUIT LOOP AND WATER SYSTEM ARE LEFT ALONE, deliberately. The only verdict on
+                    // record for SUIT LOOP is the P&ID's, which colours it with `ls` - the SAME value
+                    // CABIN ATMOSPHERE would then show, so wiring it produces two identical words and
+                    // says nothing new; choosing a different band for it instead is a §14.4(f) call.
+                    // Nothing models a water system at all. Both handed to [[S139]].
+                    s.CkState = new[] { SevWord(lsSev), SevWord(o2Sev), SevWord(co2Sev), "Standby", "Nominal",
                                         smoke ? "Detected" : "Clear" };
-                    s.CkKey   = new[] { 1, 1, 1, 0, 1, smoke ? 3 : 1 };
+                    s.CkKey   = new[] { SevKey(lsSev), SevKey(o2Sev), SevKey(co2Sev), 0, 1,
+                                        smoke ? 3 : 1 };
                     // The four cabin gauges are the overview's four, read off the same CabinReadout.
                     s.GLabel  = new[] { "PPO2", "CABIN TEMP", "CABIN PRESS", "CO2" };
                     s.GVal    = new[] { T(st.Ppo2Text), T(st.CabinTempText), T(st.PressText), T(st.Co2Text) };
@@ -452,9 +473,21 @@ namespace DragonScreen
                     // word for a worse one. Nothing models a propellant manifold leak, so §14.4(e)'s dash
                     // is the honest answer: no source, no claim. See S51's open question in REGISTER.md.
                     bool rcsUp = valid && st.RcsOn;
-                    s.CkState = new[] { "16 / 16", "Armed", "Open", "Nominal",
+                    // ---- S138: SUPERDRACO x8 IS THE LAUNCH ESCAPE SYSTEM, AND IT HAS A SWITCH ----
+                    // ⭐ The SuperDracos ARE the escape system, and this build already carries its arm
+                    // state: `PageState.Steps.EscapeArmed`, off `FlightCommands.EscapeArmed`, which
+                    // `StepList`'s "ESCAPE SYSTEM ARMED" row and `AbortMode` both read. A literal
+                    // "Armed" beside a disarmed escape system is the S51/H15 contradiction exactly.
+                    // ⛔ THE OFF-WORD IS NOT INVENTED: `StepList.AbortMode` returns "DISARMED" for this
+                    // very condition, so both surfaces now use one vocabulary for one switch.
+                    // ⚠ DRACO x16 / PROP ISOLATION / HE PRESSURANT stay literal and go to [[S139]]:
+                    // nothing counts live Dracos (the 16 is a craft-dump FACT about the vehicle, not a
+                    // health reading), and nothing models an isolation valve or a helium pressurant.
+                    bool lesArmed = valid && st.Steps.EscapeArmed;
+                    s.CkState = new[] { "16 / 16", valid ? (lesArmed ? "Armed" : "Disarmed") : Dash,
+                                        "Open", "Nominal",
                                         rcsUp ? "Ready" : "Off", Dash };
-                    s.CkKey   = new[] { 1, 2, 1, 1, rcsUp ? 1 : 0, 0 };
+                    s.CkKey   = new[] { 1, valid ? (lesArmed ? 1 : 2) : 0, 1, 1, rcsUp ? 1 : 0, 0 };
                     s.GLabel  = new[] { "OX (NTO)", "FUEL (MMH)", "HELIUM", "PROP TEMP" };
                     // HELIUM pressurant and propellant temperature: no KSP resource and no model answers
                     // either, and a bar pressure would be a number invented to fill the dial.
@@ -506,8 +539,16 @@ namespace DragonScreen
                     // rows now read SystemsState, in exactly the tree's own logic: off is off, a fully
                     // online bus is Nominal, a partly online one is a caution, and a powered bus with no
                     // string left is an alarm.
+                    // ---- S138: PWR DISTRIB IS THE TWO BUSES, WHICH THIS TAB ALREADY DRAWS ----
+                    // ⭐ `Alarms.PowerEvents` ([[S137b]]) is exactly "what has happened to the power
+                    // strings", derived from the model rather than counted - so the distribution row
+                    // reports the same rule the tab strip and the chrome bar now read. A literal
+                    // "Nominal" sat two rows under a MAIN BUS A that could read 0 / 3.
+                    // ⚠ LOAD SHED stays literal and goes to [[S139]]: nothing in this build sheds load.
+                    Severity distSev = valid ? Alarms.PowerEvents(st.Systems) : Severity.Nominal;
                     s.CkState = new[] { BusWord(st, valid, 1), BusWord(st, valid, 2),
-                                        T(st.BatteryText), T(st.SolarArrayText), "Nominal", "Off" };
+                                        T(st.BatteryText), T(st.SolarArrayText),
+                                        valid ? SevWord(distSev) : Dash, "Off" };
                     s.CkKey   = new[] { BusKey(st, valid, 1), BusKey(st, valid, 2),
                                         cellsUp ? 1 : 0, !valid ? 0 : (arrayUp ? 1 : 2), 1, 0 };
                     s.GLabel  = new[] { "BATTERY SOC", "BUS A", "BUS B", "ARRAY" };
@@ -541,8 +582,19 @@ namespace DragonScreen
                     // itself being off dashes it exactly like every other unsourced row, rather than
                     // reading a stale "Linked". The other five rows are untouched (S25 territory, not
                     // this task) and GPS stays exactly as it was — CommNet is a comm link, not a GPS fix.
-                    s.CkState = new[] { "3 / 3", "Nominal", "Nominal", "Lock", T(st.SBandText), "Armed" };
-                    s.CkKey   = new[] { 1, 1, 1, 1, (valid && st.SBandText != null) ? (st.SBandLinked ? 1 : 2) : 0, 0 };
+                    // ---- S138: GPS WAS WIRED TO `HasFix` AND THEN UNWIRED, DELIBERATELY ----
+                    // ⛔ THIS IS THE ROW THAT ALMOST GOT DRESSED UP AS LIVE. `PageState.HasFix` looks
+                    // like a GPS source and is not one: `VesselData.cs:147` sets it as
+                    // `body != null`, so in flight it is true essentially always. Wiring "Lock" to it
+                    // would have produced a row that LOOKS computed and BEHAVES like the constant it
+                    // replaced - which is worse than the literal, because it hides the gap instead of
+                    // leaving it visible. Nothing in this build models a GPS receiver.
+                    // ⚠ FLIGHT COMP x3 / VRIO 1 / 2 / DATA BUS / GPS / SW WATCHDOG all stay literal and
+                    // go to [[S139]] - this tab's own note already says the build models none of them.
+                    s.CkState = new[] { "3 / 3", "Nominal", "Nominal", "Lock",
+                                        T(st.SBandText), "Armed" };
+                    s.CkKey   = new[] { 1, 1, 1, 1,
+                                        (valid && st.SBandText != null) ? (st.SBandLinked ? 1 : 2) : 0, 0 };
                     // ---- MOST OF THIS TAB STILL DASHES, AND THAT IS THE ANSWER ----
                     // The real vehicle's avionics — triple-redundant flight computers, the data bus, GPS,
                     // storage, a link budget — are almost entirely a subsystem this build models NOTHING
@@ -583,9 +635,13 @@ namespace DragonScreen
                     // the checklist said "Auto" while the readout said IDLE. With no flight software the
                     // honest answer is IDLE (§14.4(a)) and both now say it.
                     bool rcsAuth = valid && st.RcsOn;
+                    // ⚠ S138: IMU 1 / 2, STAR TRACKERS, GPS NAV and NAV STATE all stay literal and go
+                    // to [[S139]]. GPS NAV was wired to `HasFix` and then unwired for the reason the
+                    // Avionics tab's GPS row records: that field is `body != null`, not a receiver.
                     s.CkState = new[] { "Nominal", "2 / 2", "Lock", rcsAuth ? "Enabled" : "Disabled",
                                         "Valid", T(st.ModeText) };
-                    s.CkKey   = new[] { 1, 1, 1, rcsAuth ? 1 : 0, 1, valid ? ModeKey(st.Mode) : 0 };
+                    s.CkKey   = new[] { 1, 1, 1, rcsAuth ? 1 : 0, 1,
+                                        valid ? ModeKey(st.Mode) : 0 };
                     s.GLabel  = new[] { "ROLL RATE", "PITCH RATE", "YAW RATE", "RCS FUEL" };
                     // The Dracos ARE the RCS, so "RCS FUEL" is the propulsion tab's own tank fraction —
                     // one datum, one source, two pages.
@@ -633,9 +689,18 @@ namespace DragonScreen
                     Severity loopB = valid ? Alarms.Band(st.Cabin.LoopBC, CabinLimits.LoopCaution,
                                                          CabinLimits.LoopAlarm) : Severity.Nominal;
                     Severity shield = valid ? Alarms.High(st.HullTemp01) : Severity.Nominal;
+                    // ---- S138: HX FLOW IS THE CABIN FAN, AND THE P&ID ALREADY NAMES ITS STATES ----
+                    // ⭐ `SystemsPidPage:178-179` draws CABIN FAN as "RUNNING" / "OFF" off
+                    // `Systems.FanOn` - which is DERIVED from the buses, so a heat exchanger cannot be
+                    // "Nominal" here while the P&ID shows its fan stopped on a dead bus. Same source,
+                    // same two words.
+                    // ⚠ RADIATORS and HEATERS stay literal and go to [[S139]]: the coolant model carries
+                    // the loops but no radiator deploy state and no heater.
+                    bool hxOn = valid && st.Systems.FanOn;
                     s.CkState = new[] { SevWord(loopA), SevWord(loopB), "Deployed", SevWord(shield),
-                                        "Auto", "Nominal" };
-                    s.CkKey   = new[] { SevKey(loopA), SevKey(loopB), 1, SevKey(shield), 0, 1 };
+                                        "Auto", valid ? (hxOn ? "RUNNING" : "OFF") : Dash };
+                    s.CkKey   = new[] { SevKey(loopA), SevKey(loopB), 1, SevKey(shield), 0,
+                                        valid ? (hxOn ? 1 : 2) : 0 };
                     s.GLabel  = new[] { "LOOP A", "LOOP B", "RADIATOR", "SHIELD" };
                     // RADIATOR: the coolant model (pure/CabinEnvironment.cs) carries the two loops but no
                     // separate radiator outlet, and the trunk radiators are not modelled at all.
