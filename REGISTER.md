@@ -13061,7 +13061,17 @@ True"* for two panels of identical shape). `build.py preview` green, 108 pages; 
   2560 preview first — they are curves and a box, not long rules, and a whole-pixel snap may read heavier
   than intended; if `Stroke` wins, say why a float is right here and `St` is right for the ten rules.
 
-### S123 [S] C-05's layout call: swap ENTRY TIMELINE into card 3 and CONTINGENCY into card 1 — **TODO** — [🟢 OWNER RULING 2026-09-06 "option 2"; TIER-3 layout, so it needed that ruling and now has it; unblocks [[S116]], which must not land before it]
+### S123 [S] C-05's layout call: swap ENTRY TIMELINE into card 3 and CONTINGENCY into card 1 — **DOING** — [🟢 OWNER RULING 2026-09-06 "option 2"; TIER-3 layout, so it needed that ruling and now has it; unblocks [[S116]], which must not land before it]
+
+⚙ **SESSION DEVIATION RECORDED HERE (C1.1 + C1.7 suspended for this session only).** This line is the
+first written by the CONTINUOUS BUILD CHAT opened 2026-09-06. **🟢 OWNER DIRECTIVE, 2026-09-06, verbatim:**
+*"lets create a chat capable of completing all the remaining tasks one after another reading its rules etc
+between jobs. It must survive compaction and continue un prompted until all tasks are completed. Then we
+will QC then assess the work"* — that quote is the whole of the authority. It suspends **C1.1** (one task
+per session) and **C1.7**'s *"never run a session to compaction mid-task"* **for this session only**; the
+chat re-reads `CLAUDE.md` end-to-end between jobs in their place. **Every other rule stands unchanged —
+especially C1.12** (no gate is opened or widened here: no `install`, no glass, no `git push`), C1.16/G12,
+and §14.4(a). Owner questions found en route are written up per C1.14, marked `HELD`, and the run continues.
 
 **🟢 OWNER RULING, 2026-09-06, verbatim (C1.12): "option 2"** — C-05's option (b). Recorded in
 `docs/QC_FINDINGS.md` under C-05. **That quote is the whole of the authority; nothing further is inferred.**
