@@ -15410,7 +15410,7 @@ pass. It belongs to [[S121d]] and the check was removed rather than left failing
   of this HUD's geometry in the tree. Re-earning that costs more than carrying it.)*
 - **DONE when:** the owner has chosen, or the line is closed as "leave it" with that recorded.
 
-### S121c [S] `SettingsPage.cs` — **TODO (UNBLOCKED 2026-09-06 by [[S121a]])** — [split 3 of 5 of [[S121]]; 24 lines / 24 references]
+### S121c [S] `SettingsPage.cs` — **DOING** — [split 3 of 5 of [[S121]]; 24 lines / 24 references]
 - ⚠ **Read [[S134]] before starting.** It owns the settings family's real coordinate-system defect and its
   five-layouts-that-render-one problem; this line is only the RefPanelW pass. Do not do S134's work here,
   and check whether S134 has landed first — if it has, the file will have moved.
