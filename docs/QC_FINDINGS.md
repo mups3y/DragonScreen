@@ -41,6 +41,27 @@ page at **2560×1406** while the shipped `DragonScreen.cfg` sets `screenWidth = 
 Every "is this legible?" judgement taken from a preview PNG — including the ones in this document — is
 therefore optimistic by a factor of two in each axis. H-01 has the measurements and the open question.
 
+> ## ⟳ H-01 IS FIXED, AND THE ORIGINAL SWEEP WAS CONDUCTED ON THE BROKEN INSTRUMENT
+>
+> **S100 (`7957d4d`, 2026-09-05)** made the preview derive its size from `DragonScreen.cfg` and rendered it
+> incapable of any other. Every PNG is now **1280×703**, and `build/preview/MANIFEST.txt` records each one
+> with its size, written fresh each run into an emptied folder.
+>
+> **Everything in this file above this line was measured at 2560×1406 — twice the shipped width in each
+> axis.** That does not touch the correctness findings: a readout that contradicts live state does so at any
+> size, as do dead hit rects, duplicate pages, hardcoded colours and coordinate-system mismatches. It does
+> touch every absolute pixel figure and every legibility judgement.
+>
+> **Fourteen scale-dependent findings were re-validated on the honest preview on 2026-09-05** — C-03, C-04,
+> C-05, C-13, H-06, H-07, H-08, A-03, A-04, A-06, AS-02, DB-01, NO-01, MP-03. Each now carries a dated
+> **⟳ RE-VALIDATED** block giving the old figure beside the new one and a verdict of STANDS / CHANGED /
+> VANISHED. **The original text of every finding is preserved unedited** — a reader must be able to see what
+> was measured on the broken instrument and what changed when it was fixed. The batch summary is at the end
+> of this file, and the pass added one new finding, **R-01**.
+>
+> ⚠ **Read a pre-2026-09-05 pixel figure in this file as "twice the shipped value" unless a ⟳ block says
+> otherwise.** Ratios and proportions were unaffected and are stated as such.
+
 **Open questions raised** (full text at the end of each page's section):
 **Q1** stray arrow placement (C-02) · **Q2** globe/map handedness, glass-gated (C-09) · **Q3** ENTRY ENABLED
 class (C-08) · **Q4** where the CAMERA caption goes (C-13) · **Q5** which screen resolution is authoritative
@@ -337,6 +358,40 @@ geometry, not by hoping the game's metrics are narrower.
   x = 1544. Add a headless check that the drawn label's advance width fits the pill, so the next label
   change fails the build instead of the glass.
 
+
+### ⟳ RE-VALIDATED 2026-09-05, on the honest 1280×703 preview (S100 / `7957d4d`)
+
+**Rendered:** `ui_cover.png`, 1280×703 (`MANIFEST.txt`).  **Verdict: CHANGED — worse in the way that
+matters.**
+
+| | filed (2560×1406) | now (1280×703) |
+|---|---|---|
+| pill | x 1277.2…1544.1, w 266.9 | **x 638.6…772.1, w 133.5** |
+| label ink | 1367…1551 = 184 px | **683…779 = 96 px** |
+| room (label start → border) | 180.4 px | **90.2 px** |
+| overrun | **7.0 px = 3.9% of the label** | **6.9 px = 7.2% of the label** |
+
+The room halved exactly; **the label did not** — GDI+ at half the size returns a proportionally wider
+string (96 px where a linear halving gives 92). So the absolute overrun is unchanged at ~7 px while
+everything around it halved: **in relative terms the defect roughly doubled.**
+
+⚠ **The border is present and correctly placed — this is NOT S101's hairline dropout.** Luminance profile
+across the pill's right cap at y=620 (page ground 21, pill fill 42):
+
+```
+x   760-763  764-765  766-769  770-772  773-776  777-778  779+
+lum   42       255      42       255      21       255      21
+```
+
+The white at **770-772 is the border**. The white at **764-765 and 777-778 are the two stems of the final
+"W"** — one inside the pill, one outside it on the page ground. The glyph straddles a border that is where
+it should be. *(The pill's left cap does show S101's symptom separately: a single pixel at x=639 rendering
+at luminance 221 rather than 255, because `Stroke(sc,2)` = 0.67 px clamps to 1. That is S101's, not C-03's.)*
+
+⚠ **The filed fix no longer works and must not be built as written.** It proposed setting the label at the
+SETTINGS twin's `Z(37)`. At the shipped width that is **12.3 px** — below `Typography.Min` = 16, so it
+trades an overrun for an unreadable label. The pill must get wider, or the label shorter, or both; see
+**R-01**, which is the general form of this problem.
 ---
 
 ## C-04 — The bottom status bar is stretched 12.2% horizontally: its circular icons render as ellipses and all its baked type is distorted
@@ -387,6 +442,27 @@ seen here, and the fix belongs with whichever line takes the bar.
 - **Verify:** re-render; the crosshair's bounding box must come back square (ratio 1.00 ± 0.03). Add a
   headless check that the bar's drawn width ÷ 3427 equals its drawn height ÷ 235.
 
+
+### ⟳ RE-VALIDATED 2026-09-05, on the honest 1280×703 preview (S100 / `7957d4d`)
+
+**Rendered:** `ui_cover.png`, `frame58_hud.png`, `ui_menu.png`, 1280×703.  **Verdict: STANDS, exactly.**
+
+The stretch is a ratio of two scales that both halved, so it is unchanged to four decimal places:
+
+| | filed | now |
+|---|---|---|
+| x-scale (`w / RefW`) | 0.7470 | **0.3735** |
+| y-scale (`h / RefH`) | 0.6657 | **0.3329** |
+| **horizontal stretch** | **12.2%** | **12.2%** |
+| rendered crosshair | 48 × 42 px, ratio 1.143 | **23 × 21 px, ratio 1.095** |
+
+The asset's crosshair is still exactly square (130 × 130). The measured render ratio moved from 1.143 to
+1.095 only because the icon is now 21 px tall and a ±1 px quantisation is worth 5% at that size; the
+arithmetic (1.122) is unchanged.
+
+⚠ **One thing the honest render adds:** the bar's icons are now **21 px tall**, so the 12% distortion is
+harder to *see* — but the icons are correspondingly harder to read at all. The fix is unaffected; the
+coupling to `FigmaUI.BottomBarHit` still holds.
 ---
 
 ## C-05 — `FitRows` compares a DESIGN-space size against a PANEL-pixel legibility floor, so the floor never fires
@@ -443,6 +519,36 @@ but the remedy it chose trades overflow for illegibility instead of rebalancing.
   height of the CONTINGENCY rows (16 px). Add a headless check that `FitRows` never returns a panel-space
   size below `Typography.Min`.
 
+
+### ⟳ RE-VALIDATED 2026-09-05, on the honest 1280×703 preview (S100 / `7957d4d`)
+
+**Rendered:** `ui_cover_phase5.png`, 1280×703.  **Verdict: CHANGED — much worse, and it is no longer one
+card's problem.** S100's re-assessment said "worse than filed"; here is the measurement.
+
+`FitRows`' arithmetic is design-space and unchanged (card 1: avail 193, need 218, k 0.8853 → design 23.02).
+What changed is what that design size becomes on the shipped panel:
+
+| card | design size | filed (panel px @2560) | **now (panel px @1280)** | vs the 16 px floor |
+|---|---|---|---|---|
+| 1 — ENTRY TIMELINE | 23.02 | 15.32 | **7.66** | **48%** |
+| 2 — PARACHUTES | 26.00 | 17.31 | **8.65** | **54%** |
+| 3 — CONTINGENCY | 26.00 | 17.31 | **8.65** | **54%** |
+
+**Measured ink heights on the render:** card 1 rows **5–7 px** with a 9.4 px line pitch; card 3 rows **9 px**.
+At 4× magnification the card-1 rows are visibly mush — strokes merge and "Deorbit burn" reads as "bum".
+
+**The finding's character changes.** As filed it was *"card 1 is marginally under the floor while cards 2 and
+3 clear it"* — cards 2 and 3 measured 17.3 px, **above** 16. At the shipped width **all three cards are at
+roughly half the floor**, and the difference between them is no longer the point.
+
+⚠ **The unit bug is correspondingly worse.** `if (size < Typography.Min)` compares a design size to a
+panel-pixel constant, so the clamp would permit a design size of 16 — which at the shipped width renders at
+**5.33 px, one third of the real floor.** Filed, that latent floor was 10.65 px.
+
+⚠ **And it is not confined to this page.** See **R-01**: every sampled text element on every Figma-era page
+is below the floor at the shipped width. C-05's fix (compare in panel space) is still right and still
+necessary, but on its own it now exposes an overflow the layout cannot absorb — its option (b), moving
+ENTRY TIMELINE into the taller card, does not create enough room. **Sequence C-05 behind R-01.**
 ---
 
 ## C-06 — The panel's scrollbar thumb is painted in full white with no hit rect, no scroll model, and nothing to scroll
@@ -849,6 +955,27 @@ the two pills' insets from their slot edges are equal; the two readout centres a
 centre; and no readout box intersects the disc (centre + radius are both computable from the same constants
 the draw uses).
 
+
+### ⟳ RE-VALIDATED 2026-09-05, on the honest 1280×703 preview (S100 / `7957d4d`)
+
+**Rendered:** `ui_cover.png`, 1280×703.  **Verdict: STANDS.** Every proportion is identical; every absolute
+figure is exactly half.
+
+| | filed (2560×1406) | now (1280×703) |
+|---|---|---|
+| camera slot | x 960…2560, centre 1760 | **x 480…1280, centre 880.0** |
+| globe centre / radius | (1760, 698) r 530 | **(880.0, 349.0) r 264.5** |
+| clear band below the disc | 21.5 px | **11.3 px** |
+| TARGET LATITUDE over the disc | 91% | **88%** |
+| TARGET LONGITUDE over the disc | 19% | **17%** |
+| band spacing, left→right | 317 / 75 / 64 / 235 / 22 | **158.6 / 37.6 / 32.0 / 117.5 / 10.7** |
+
+*(The 91%→88% and 19%→17% differences are precision on the ray-measured disc radius, not a real change.)*
+
+**The fix geometry re-derives cleanly and its key property survives.** At the shipped width the design's own
+32-design-px margin is 10.7 px; mirroring the pills puts NEXT VIEW at **490.6…624.1**, so it moves **left by
+147.9 px** (filed: 295.9 — exactly half). The proposed readout centres become **721.8** and **2078.5 → 1038.2**,
+whose midpoint is **880.0 — the slot centre, exactly.** The construction was not an artifact of the scale.
 ---
 
 ## Open questions for the owner — Cover (Q1–Q4)
@@ -1320,6 +1447,30 @@ it gets worse on a narrower panel until `ox` drops to 40 and the button vanishes
 - **Verify:** re-render at **both** 1280 and 2560 (H-01) and require both labels' ink to sit strictly inside
   the box on each.
 
+
+### ⟳ RE-VALIDATED 2026-09-05, on the honest 1280×703 preview (S100 / `7957d4d`)
+
+**Rendered:** `frame58_hud.png`, 1280×703.  **Verdict: CHANGED — worse, and it is now two defects rather
+than one.**
+
+| | filed (2560×1406) | now (1280×703) |
+|---|---|---|
+| letterbox `ox` | 139.29 | **69.64** *(still > 40, so the affordance is drawn)* |
+| box | x 12…127.3, w 115.3 | **x 12…57.6, w 45.6** |
+| type `h * 0.020` | 28.1 px | **14.06 px** |
+| `MANUAL` ink | 14…140 = 126 px = **109%** of the box | **8…63 = 56 px = 123% of the box** |
+| `DOCKING` ink (cyan, incl. borders at 12 / 58) | 7…132 | **5…65** |
+
+`MANUAL` now starts **4 px left of the left border** and ends **5.4 px right of the right one**; `DOCKING`
+clears both borders on both sides. The overrun grew from 109% to **123% of the box width**, because the box
+is derived from the letterbox width and the type from the panel height — two quantities that halved
+together, while the string's rendered width did not (56 px where a linear halving gives 52).
+
+⚠ **NEW, and independent of the overflow: the label is now below the legibility floor.** 14.06 px against
+`Typography.Min` = 16 — **88% of the floor.** So the page's only interactive control is both illegible and
+overflowing. The filed fix (size the type from the box) is still correct but must now also clear the floor,
+which a 45.6 px box cannot do for the word "DOCKING" — **the box has to grow, or the label has to change.**
+See **R-01**.
 ---
 
 ## H-07 — Two different fit strategies on one page: the frame art is letterboxed, the bar is stretched full width, so the frame's own border becomes a rule in the middle of the bar
@@ -1360,6 +1511,27 @@ collision is visible at all.
 - **Verify:** re-render; the frame's bottom-left corner and the bar's must be the same corner, with no
   vertical rule at `ox` and no trapped sliver.
 
+
+### ⟳ RE-VALIDATED 2026-09-05, on the honest 1280×703 preview (S100 / `7957d4d`)
+
+**Rendered:** `frame58_hud.png`, 1280×703.  **Verdict: STANDS** — structurally identical, at half the scale.
+
+| | filed | now |
+|---|---|---|
+| frame art (letterboxed) | x 139.3…2420.7 | **x 69.64…1210.36** |
+| `component_48` (full width) | 0…2560 | **0…1280** |
+| the frame's left edge as a rule inside the bar's span | 139.3 px | **69.6 px** |
+| the two rounded corners' separation | ~100 px | **~50 px** |
+
+Verified on the render: the vertical white rule at **x = 70** runs from **y = 631** to the page bottom; the
+frame's own rounded bottom-left corner starts just right of it; `component_48`'s corner sits at the true page
+edge; and the triangular sliver of lighter navy is still trapped between the frame's curve and the bar's top.
+Two corners, one seam, unchanged.
+
+⚠ **Distinguished from S101, as the brief asks.** The hairlines involved are now visibly greyer and thinner —
+`Stroke(sc, 2)` is 0.67 px and clamps to 1 — so the borders *look* fainter. **That is S101 and it is not this
+finding.** H-07 is about the borders being in two different *places*, and they are: 69.6 px apart, exactly as
+filed. Fixing S101 would make this defect more visible, not less.
 ---
 
 ## H-08 — The frame art is exported at 0.6× design scale, so at the preview's resolution it is drawn upscaled and measurably soft
@@ -1398,6 +1570,35 @@ hide. `frame59.png` (2048×1262) and `frame66.png` (2048×1263) are the same exp
 - **Verify:** re-measure normalised edge sharpness against the bar art on the same render; the two should
   land within ~5%.
 
+
+### ⟳ RE-VALIDATED 2026-09-05, on the honest 1280×703 preview (S100 / `7957d4d`)
+
+**Rendered:** `frame58_hud.png`, 1280×703.  **Verdict: ⛔ VANISHED — struck. This was an artifact of the 2×
+render and was never true of the shipped build.**
+
+| | filed (2560×1406) | now (1280×703) |
+|---|---|---|
+| `frame58.png` native | 2048 × 1263 | 2048 × 1263 |
+| drawn at | 2281.4 × 1406 | **1140.7 × 703** |
+| scale factor | **1.1140 — an UPSCALE** | **0.5570 — a DOWNSCALE** |
+
+**And the sharpness measurement inverts.** Normalised mean edge gradient (higher = sharper), same method:
+
+| region | source asset | filed | **now** |
+|---|---|---|---|
+| `FLIGHT COMMANDS` | frame58.png | 0.314 | **0.411** |
+| `FAR FIELD POSITIONING` | frame58.png | 0.315 | **0.395** |
+| `CURRENT STATE` | component_48.png | 0.365 | **0.311** |
+| `Far Field Pointing Deorbit` | component_48.png | 0.357 | **0.357** |
+
+Filed, the frame art measured ~14% **softer** than the bar art. At the shipped width it is the **sharper** of
+the two. The premise — *"exported at 0.6× design scale, so at the preview's resolution it is drawn upscaled
+and measurably soft"* — is false, and *"the preview's resolution"* is precisely what was wrong.
+
+⚠ **The finding predicted its own death and should be given credit for it**: it was filed conditional on Q5
+(*"H-08 is only a defect if Q5 resolves to 2560 … at the shipped 1280×703 the frame is drawn at 1140.7 px, a
+downscale of 0.557, and this defect does not exist"*). S100 resolved the instrument to 1280 and the
+prediction is confirmed to three decimal places. **Nothing to fix. Do not re-export `frame58/59/66.png`.**
 ---
 
 ## H-09 — The preview cannot render the page's only live feature
@@ -1655,6 +1856,24 @@ So the grid is the design's intent and these three are outliers against it.
 - **Verify:** re-render and require each value's ink centre and its button cluster's centre to fall within
   2 px of the same cell centre, as a headless check.
 
+
+### ⟳ RE-VALIDATED 2026-09-05, on the honest 1280×703 preview (S100 / `7957d4d`)
+
+**Rendered:** `settings_audio.png`, 1280×703.  **Verdict: STANDS.**
+
+The grid is stated in design space and is untouched by the render size: five cells of **498 design px**,
+dividers exact, ten of thirteen positions on the grid and three off it. Only the panel-pixel expression of
+the three outliers changes, and it halves:
+
+| outlier | design offset | filed (panel px) | **now (panel px)** | as a share of the 186 px cell |
+|---|---|---|---|---|
+| AUX label + value | +42 | +31.4 | **+15.7** | **8.4%** |
+| INTERCOM button pair | +46 | +34.4 | **+17.2** | **9.2%** |
+| ALERTS button pair | +45.5 | +34.0 | **+17.0** | **9.1%** |
+
+*(cell width 498 design = **186.0 panel px**, filed 372.0.)* Confirmed visually on the honest render: AUX's
+three buttons sit left of the `0dB` above them; INTERCOM's and ALERTS' pairs sit right of `+9dB` and `50`.
+The share of the cell is unchanged, so the misalignment reads exactly as it did.
 ---
 
 ## A-04 — The signal glyph is drawn below its own button and far too small to read as one
@@ -1688,6 +1907,26 @@ not obviously the same class of control as the two buttons beside it.
   answer is "remove them".
 - **Verify:** re-render; all three glyphs in a channel's row share a centre line and a comparable extent.
 
+
+### ⟳ RE-VALIDATED 2026-09-05, on the honest 1280×703 preview (S100 / `7957d4d`)
+
+**Rendered:** `settings_audio.png`, 1280×703.  **Verdict: CHANGED — the geometry halves as expected, but the
+legibility half of the finding is worse than described.**
+
+| | filed | now |
+|---|---|---|
+| glyph centre below its box centre | 22 design px = 14.6 panel px | 22 design px = **7.3 panel px** |
+| button box | 140 design = 93.2 px | 140 design = **46.6 px** |
+| glyph outer radius | 20 design = 13.3 px | 20 design = **6.7 px** |
+
+The mis-centring is unchanged as a fraction of the box (15.7%), so that half **stands**. What changed is what
+the glyph reads as: filed, I described *"a small solid mushroom blob"* — a 27-px-diameter mark. At the shipped
+width it is a **~13 px mark inside a 47 px box**, and on the render it reads as a **speck**, not as a signal
+fan and barely as a mark at all.
+
+⚠ So the filed fix (centre it, and scale it to its ± siblings) is still right but is no longer cosmetic —
+at this size the glyph must grow substantially or it conveys nothing. ⚠ **Q6 still gates this**: if the ten
+controls are removed, the fix is moot.
 ---
 
 ## A-05 — MAIN's VOX readout has no box, though the file's own comment says it should
@@ -1748,6 +1987,22 @@ way the owner has already objected to on the Cover.
 - **Verify:** re-render; the selected panel should carry at least as much information as the four
   unselected ones.
 
+
+### ⟳ RE-VALIDATED 2026-09-05, on the honest 1280×703 preview (S100 / `7957d4d`)
+
+**Rendered:** `settings_audio.png`, 1280×703.  **Verdict: STANDS, unchanged.**
+
+The finding is a property of the asset, not of the render, and the asset has not changed:
+
+| asset | bright (> lum 120) |
+|---|---|
+| `settings_cabin_seat.png` (1216 × 1888) | **0.23%** |
+| `settings_seat1..4.png` | 4.74% / 4.86% / 4.86% / 4.85% |
+
+Its entire bright content is still one 213 × 58 region — the word "Cabin". It is now drawn at **202 × 314
+panel px** (filed 405 × 629), and on the honest render the centre panel reads as the same dark hole between
+four illustrated seats — if anything more so, because the two speaker rings our code draws over it are now
+~10 px across and contribute even less. Nothing in the fix plan changes.
 ---
 
 ## Open questions for the owner — Audio (Q6)
@@ -2634,6 +2889,30 @@ adds:
 - **Do not restyle the circle to hide the dashes.** The emptiness is honest; it is the readouts that are
   missing, and shrinking the circle would remove the evidence.
 
+
+### ⟳ RE-VALIDATED 2026-09-05, on the honest 1280×703 preview (S100 / `7957d4d`)
+
+**Rendered:** `ui_vehiclemech.png`, 1280×703.  **Verdict: STANDS on its substance — but the figure in the
+filed text was wrong at BOTH scales and is corrected here.**
+
+The counts are render-independent and unchanged: **five of nine readouts are dashes** (four `SEAT n TACH`
+plus `WATER UPRIGHTING`), four live (ACCELERATION, CENTRIPETAL, RESISTANCE, PRESSURE).
+
+The hub circle, measured from the source constants (`ccx 1713, ccy 1040, ring 440`) and confirmed on the
+render:
+
+| | filed prose | **measured (identical at both scales)** |
+|---|---|---|
+| radius | *"~440 px diameter"* | `SZ(440)` = **146.5 px**, diameter **293 px** |
+| share of the body | *"roughly a third of the screen's area"* | **8.4% of the area** · **47% of the height** |
+
+⚠ **That was a description error, not a scale artifact** — 8.4% / 47% is what it measures at 2560 as well. I
+was describing the circle's *height* share and called it *area*. Corrected.
+
+The substance is untouched: a 293-px circle taking nearly half the body's height, containing a heading, four
+dashes and one hardcoded word (**MP-01**). ⚠ **New at the shipped width:** those `SEAT n TACH` rows are drawn
+at 26 design px = **8.7 panel px, 54% of the legibility floor** — so even when they are filled they will not
+read. See **R-01**.
 ---
 
 ---
@@ -3252,6 +3531,25 @@ that failed to load.
 **Recommend 1 for both, plus 3 for page 30 if the owner accepts DB-02's reading.** Option 2 is real work
 and should be its own line.
 
+
+### ⟳ RE-VALIDATED 2026-09-05, on the honest 1280×703 preview (S100 / `7957d4d`)
+
+**Rendered:** `ui_deorbitburnprep.png`, `ui_entryprocedure.png`, 1280×703.  **Verdict: STANDS.** Proportions
+confirmed by measurement rather than by eye.
+
+Content bounding box below the centred page title, above the bottom bar:
+
+| page | filed | **now (measured)** |
+|---|---|---|
+| DEORBIT BURN PREP | *"≈7% of the area; column 20% of the width"* | **20% of the width, 9.4% of the body area** |
+| ENTRY | *"≈2% of the area"* | **18% of the width, 3.1% of the body area** |
+
+⚠ The filed area figures were estimated from a 2× render with the centred title folded into the box; measured
+cleanly they are slightly larger but the same order. **Both pages still use under a tenth of their body area,
+in a single left column under a fifth of the width, and 80% of the screen is empty background.**
+
+The fix plan is unaffected — and option 1 (lay the existing content out for the screen it is on) is now
+**more** urgent, because at the shipped width that content is also below the legibility floor (**R-01**).
 ---
 
 ## DB-02 — Page 30's entire content is a third copy of material already on two other pages
@@ -3507,6 +3805,28 @@ NO-01 is "three of the rings are not on the screen at all", which is a rendering
   ours.
 - **Verify:** count the visible rings on the render — four, not one.
 
+
+### ⟳ RE-VALIDATED 2026-09-05, on the honest 1280×703 preview (S100 / `7957d4d`)
+
+**Rendered:** `ui_navorbitplot.png`, 1280×703.  **Verdict: STANDS, exactly — this is a pure ratio and it
+survived untouched.**
+
+| | filed (2560×1406) | now (1280×703) |
+|---|---|---|
+| plot centre | (1280, 676) | **(640.0, 337.9)** |
+| `rmax` | 511.4 | **255.7** |
+| rings | 127.9 / 255.7 / 383.6 / 511.4 | **63.9 / 127.9 / 191.8 / 255.7** |
+| globe limb (ray-measured) | 388.0 | **194.0** |
+| **rings hidden by the globe** | **3 of 4** | **3 of 4** |
+| ring 3's margin | hidden by 4.4 px | **hidden by 2.2 px** |
+
+Ring radii as a fraction of the globe radius: **0.330 / 0.659 / 0.989 / 1.318** — identical at both scales,
+which is the whole reason the finding survives. Draw order is the cause and draw order does not scale.
+
+⚠ **One new consequence at the shipped width, which belongs to S101 and not here:** the one ring that *is*
+visible is drawn at `St(2)` = 1 px and now renders as a faint grey hairline rather than a clear circle. Fixing
+NO-01 (moving the rings above the globe) will put four such hairlines over a photographic disc — **the fix
+plan's existing caution about the tint is now the load-bearing part of it**, not an afterthought.
 ---
 
 ## NO-02 — S43 built zoom and pan for the orbit plot, and the standalone orbit plot cannot use them
@@ -3601,6 +3921,26 @@ ascent telemetry (`ps.Steps.RadarAltitude`, `VerticalSpeed`, `Propellant01`) —
   reads at distance — the same interim step DB-01 recommends.
 - **Verify:** the page's content bounding box covers a substantial majority of the plot area.
 
+
+### ⟳ RE-VALIDATED 2026-09-05, on the honest 1280×703 preview (S100 / `7957d4d`)
+
+**Rendered:** `ui_ascent.png`, 1280×703.  **Verdict: STANDS as a proportion — but the figure in the filed
+text was an eyeball, not a measurement, and is corrected here.**
+
+Measured bounding box of the rocket and its eleven callouts, below the `ACTIVE PHASE` line and excluding the
+centred page title:
+
+| | filed | **now (measured)** |
+|---|---|---|
+| content column | *"the left 40%"* | **x 114…501 = 30% of the width** |
+| body area used | *"roughly 60% of the width is empty"* | **28.6%** used → **~70% of the width empty** |
+
+⚠ **The filed figure was never measured at either scale.** My own 2× numbers in the finding's evidence
+(*"x ≈ 420…1010 of 2560"*) work out to 23% of the width, while the prose beside them said 40%. The measured
+30% now supersedes both. **The direction is unchanged and the defect is slightly worse than stated.**
+
+The fix plan is unaffected — and its argument gets stronger: AS-01's step state plus live ascent telemetry
+has **70%** of the width to occupy, not 60%.
 ---
 
 ---
@@ -3719,3 +4059,133 @@ A-06), **Q2** (glass time for the globe/map handedness), **Q3** (ENTRY ENABLED),
 
 *Next: **pages 3 + 4 — Procedure (Frame 59) and Cabin (Frame 66)**, inspected together below because
 `FigmaUI` routes both to the same 26-line `FigmaFramePage.Build`.*
+
+
+---
+
+# ⟳ RE-VALIDATION PASS — 2026-09-05, on the honest 1280×703 preview
+
+**Why.** QC's own **H-01** was right and has been fixed by **S100** (`7957d4d`): the preview was rendering
+every Figma-era page at 2560×1406 — twice the shipped width in each axis — so **the entire original sweep
+was conducted on a lying instrument.** The preview now derives its size from `DragonScreen.cfg`, cannot
+render at any other, and writes `MANIFEST.txt` recording every PNG with its size into a folder emptied each
+run. This pass re-measured the fourteen scale-dependent findings against that.
+
+**Scope.** Only the fourteen. The correctness findings are untouched and stand as filed — a readout that
+contradicts live state does so at any size, as do dead hit rects, duplicate pages, hardcoded colours,
+coordinate-system mismatches and un-erased art. **No original text was edited**; each of the fourteen carries
+a dated **⟳ RE-VALIDATED** block with the old figure beside the new one.
+
+**Rendered for this pass:** all 104 PNGs, `python plugin/build.py preview`, 2026-09-05 20:13:40, every one
+**1280×703** per `build/preview/MANIFEST.txt`. `build.py test` green.
+
+## Verdicts
+
+| finding | verdict | the number that changed |
+|---|---|---|
+| **C-03** NEXT VIEW overruns its pill | **CHANGED — worse** | overrun 7.0 px = **3.9%** of the label → 6.9 px = **7.2%**. Absolute unchanged, everything around it halved. |
+| **C-04** bottom bar stretched horizontally | **STANDS, exactly** | **12.2% → 12.2%.** A ratio of two scales that both halved. |
+| **C-05** `FitRows` floor compared in the wrong space | **CHANGED — much worse** | card 1 15.32 px → **7.66 px (48% of the floor)**; cards 2 and 3 were **above** the floor at 17.31 and are now **8.65 px (54%)**. All three now fail. |
+| **C-13** the band below the globe | **STANDS** | every proportion identical; absolutes exactly halved (clear band 21.5 → **11.3 px**). |
+| **H-06** MANUAL / DOCKING overruns its box | **CHANGED — worse, now two defects** | 109% → **123% of the box**, and the type is now **14.06 px, below the 16 px floor**. |
+| **H-07** two fit strategies, two rounded corners | **STANDS** | the frame's edge is a rule **69.6 px** inside the bar's span (was 139.3); corners ~50 px apart (was ~100). |
+| **H-08** frame art upscaled and soft | **⛔ VANISHED — struck** | scale **1.1140 (up) → 0.5570 (down)**; sharpness inverts, frame art **0.411** vs bar art **0.311**. Never true of the shipped build. |
+| **A-03** three positions off the 498-px cell grid | **STANDS** | design-space grid untouched; offsets +31.4/+34.4/+34.0 → **+15.7/+17.2/+17.0 panel px**, unchanged as a share of the cell. |
+| **A-04** signal glyph low and undersized | **CHANGED — worse** | geometry halves as expected (7.3 px low in a 46.6 px box); **the glyph is now a ~13 px speck**, not the "blob" filed. |
+| **A-06** the cabin asset is an empty box | **STANDS, unchanged** | an asset property: **0.23% bright** against 4.74–4.86% for the four seats. Render-independent. |
+| **AS-02** Ascent uses a fraction of the width | **STANDS — figure corrected** | filed *"left 40%"* was never measured; **measured 30% of the width, 28.6% of the body area** → ~70% empty. |
+| **DB-01** two pages use a corner | **STANDS** | DEORBIT BURN PREP **20% width / 9.4% area**; ENTRY **18% width / 3.1% area**. |
+| **NO-01** three of four rings hidden by the globe | **STANDS, exactly** | ring radii as a fraction of the globe radius **0.330 / 0.659 / 0.989 / 1.318** at both scales. **3 of 4** hidden either way. |
+| **MP-03** five of nine readouts dashed | **STANDS — figure corrected** | *"roughly a third of the screen's area"* was wrong at **both** scales; measured **8.4% of the area, 47% of the height**. |
+
+## The count, and whether the batch is bigger or smaller than it looked
+
+**STANDS 9** *(C-04, C-13, H-07, A-03, A-06, AS-02, DB-01, NO-01, MP-03)* — three of them with a **corrected
+figure** (AS-02 and MP-03 were mis-stated; DB-01's area was estimated).
+**CHANGED 4** *(C-03, C-05, H-06, A-04)* — **every one of them worse, none better.**
+**VANISHED 1** *(H-08)*.
+
+**The batch is BIGGER than it looked, not smaller.** Thirteen of fourteen survive; the one that died had
+already predicted its own death in writing and cost nothing. Four grew, and two of those four — **C-05** and
+**H-06** — grew from "a marginal case" into "below the legibility floor", which is a different class of
+defect. And the pass exposed **R-01**, which is larger than any of the fourteen.
+
+⚠ **What this says about the original sweep, plainly.** Every *ratio* and *proportion* I recorded survived
+intact — several to three decimal places — and every *absolute pixel* figure was exactly double. The
+instrument distorted magnitudes, not relationships. The two figures that were actually wrong (**AS-02**'s
+"40%" and **MP-03**'s "a third of the area") were wrong at *both* scales: they were eyeball estimates I wrote
+as if they were measurements. That is a lesson about my prose, not about the preview.
+
+---
+
+## R-01 — At the shipped width, every sampled text element on every Figma-era page is below the measured legibility floor
+
+**TIER 1** · **NEW — exposed by this re-validation pass, 2026-09-05** · page-wide
+
+**Evidence.** `Typography.Min = 16f` is documented as a **measured** floor — `Typography.cs:2`, *"16 PX IS
+MEASURED, NOT CHOSEN"* — and every legacy page uses `Typography.*` directly as a panel-pixel size at the real
+1280×703. The Figma-era pages instead write design-space sizes and multiply by `sc = h / 2112` = **0.3329**.
+Seventeen elements sampled across nine pages, all from the source constants:
+
+| page | element | source | panel px | vs the 16 px floor |
+|---|---|---|---|---|
+| CoverPage | rail labels | `Z(32)` | 10.7 | 67% |
+| CoverPage | reference card titles | `Z(34)` | 11.3 | 71% |
+| CoverPage | reference rows, cards 2/3 | `Z(26)` | 8.7 | 54% |
+| CoverPage | reference rows, card 1 | `Z(23.02)` | **7.7** | **48%** |
+| CoverPage | attitude-criteria captions | `Z(32)` | 10.7 | 67% |
+| CoverPage | map d-pad button labels | `PadLabel 26` | 8.7 | 54% |
+| CoverPage | CAMERA caption | `Z(21)` | **7.0** | **44%** |
+| SettingsAudioPage | channel labels | `SZ(30)` | 10.0 | 62% |
+| SettingsAudioPage | VOX | `SZ(30)` | 10.0 | 62% |
+| SettingsAudioPage | **tab strip** Audio/Cabin/Video | `SZ(28)` | 9.3 | 58% |
+| VehicleOverviewPage | checklist state words | `SZ(26)` | 8.7 | 54% |
+| VehicleOverviewPage | CONSUMABLES rows | `SZ(23)` | 7.7 | 48% |
+| VehicleMechPage | SEAT n TACH rows | `SZ(26)` | 8.7 | 54% |
+| MenuPage | card labels | `SZ(32)` | 10.7 | 67% |
+| DockingSimPage | pad captions | `Z(22)` | **7.3** | **46%** |
+| SuitCheckPage | checklist rows | `26` | 8.7 | 54% |
+| Frame58Hud | MANUAL / DOCKING | `h * 0.020` | 14.1 | 88% |
+
+**Seventeen samples, seventeen failures, 44% to 88% of the floor.** Confirmed on the render: at 4×
+magnification the Cover's ENTRY TIMELINE rows are mush — strokes merge and *"Deorbit burn"* reads as *"bum"*.
+
+**What is wrong.** This is not a per-page layout problem. **The Figma pages were designed at a scale the
+shipped screen does not have**, and the 2× preview hid it for two weeks — the same mechanism, and the same
+two weeks, as S101's hairline dropout. `Typography.Min` is the project's own measured answer to "can the crew
+read this", and the Figma-era pages never consult it.
+
+⚠ **This subsumes several findings and re-sequences others:**
+- **C-05** is the same disease in one function. Its fix (compare in panel space) is necessary and still
+  right, but on its own it now exposes an overflow the layout cannot absorb — **schedule C-05 behind R-01.**
+- **C-03**'s and **H-06**'s filed fixes both propose *shrinking* a label to fit its box. At the shipped width
+  both results are below the floor. **Neither fix is safe until R-01 is answered.**
+- **MP-03**, **DB-01** and **AS-02** all end in "and the content is too small to read at distance" — that is
+  this finding.
+- **S101** (the 2px hairline dropout, `REGISTER.md`) is the same statement about strokes rather than type,
+  and its own line already says *"Hairlines and type sizes are both 'the design assumes a scale the screen
+  does not have'"*. **R-01 and S101 are one job.**
+
+**Fix plan — and this is a design decision, not a mechanical one.**
+1. **Raise the type across the Figma pages to clear the floor**, in design space: a design size of **≥ 48**
+   is needed for 16 panel px at the shipped scale, against the 21–34 in use. That is a **1.4×–2.3× increase**
+   and it will not fit the existing layouts — several pages would need re-laying, and **DB-01 / AS-02 /
+   MP-03's empty space is where that room comes from.** Most work, and it is work against the screen the
+   crew has. *(Recommended.)*
+2. **Raise `screenWidth` in the cfg** so the existing design scale clears the floor. `screenWidth = 2560`
+   would restore exactly the sizes the sweep was measured at — but note that **even at 2560 five of the
+   seventeen samples are still under 16 px**, so this does not fully solve it either. ⚠ It is also **Q5
+   option 2**, which needs `install` + glass time — **an owner gate, C1.12**, which this chat cannot open.
+3. **A hybrid**: a modest cfg increase plus a type pass. Picks a number no source names.
+4. **Re-measure the floor.** `Typography.Min = 16` was measured for the legacy pages; if it is wrong for
+   these, the honest move is to re-derive it — **in the capsule, at IVA distance**, which is glass time again.
+
+**Recommendation: 1, and do not start it until Q5 is formally answered.** S100 fixed the instrument, which
+settles what the *preview* does; it does not settle what the *cfg* should say, and option 2 remains open on
+the owner's authority. But option 1 needs no gate, can start today, and is the only option that treats the
+cause rather than the symptom.
+
+**Must not break:** the legacy `Pages.Build` screens, which already use `Typography.*` correctly at the real
+size and must render byte-identically.
+**Verify:** re-render every Figma page and assert that no drawn text size falls below `Typography.Min` in
+**panel** pixels — a headless check, which is what would have caught this at the start.
