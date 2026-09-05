@@ -15390,7 +15390,7 @@ pages changed**, which is this line's whole finding stated as a measurement · c
 `Pages.Build(…, 3, …)` and failed **24 of 24** — because that is `DockingPage.cs`, which has not had its
 pass. It belongs to [[S121d]] and the check was removed rather than left failing or weakened.
 
-### S163 [S] `Pages.cs` carries a dead docking subsystem — seven members, no caller — **TODO (needs an owner call)** — [logged by [[S121b-iii]] per C1.1, 2026-09-06; TIER 3]
+### S163 [S] `Pages.cs` carries a dead docking subsystem — seven members, no caller — **HELD 2026-09-06 (needs an owner call; written up with three options and a recommendation)** — [logged by [[S121b-iii]] per C1.1, 2026-09-06; TIER 3]
 - **The finding.** `DockingOld` and the six members only it uses — `Axis`, `AxisR`, `DockingRingHeight`,
   `AlignRingRadius`, `BallDiameter`, `BallClearance` — are unreachable from any entry point. Established
   by grep (one source hit: the declaration) and confirmed by a 119-page preview diff showing 0 changes
@@ -15972,7 +15972,7 @@ the first run and two of those were REAL TEST DEFECTS**, which is the whole reas
 
 ⛔ No `install`, no glass, no `git push`. §14.4(a) untouched — a target readout commands nothing.
 
-### S127 [S] Five of the Cover's seven rail phases draw identical content — **TODO (part owner-gated)** — [H4; TIER 3]
+### S127 [S] Five of the Cover's seven rail phases draw identical content — **DOING** — [H4; TIER 3]
 - **The finding.** Only slots 5 (Reference Content) and 6 (Manual Chute) have their own bodies. Slots 0–4
   draw the same baked Coast-phase panel.
 - ⛔ **Slots 3/4 are OWNER-DECLINED and stay that way.** [[S27]] put the two generic "Procedure" slots to the
