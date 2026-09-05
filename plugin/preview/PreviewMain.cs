@@ -1137,6 +1137,65 @@ public static class PreviewMain
                 ps.Systems = savedSys;
             }
 
+            // ---- S113 / QC SP-01: THE P&ID'S NON-NOMINAL STATES, WHICH HAD NEVER BEEN DRAWN ----
+            // The loop above renders `ui_systemspid.png` once, from the all-nominal fixture. Everything
+            // S56 built into this page is COLOUR that only appears when something is wrong - the vent
+            // path, the CABIN LEAK and FIRE words, the OVERBOARD/ISOLATION state, the fan/pump tints and
+            // the per-loop severity bands - so on that one render they all resolve to the same nominal
+            // colour and the gate could not see any of it.
+            //
+            // ⚠ THIS IS THE THIRD PAGE WITH THE SAME GAP, and the sweep should stop finding it: H-09 was
+            // the HUD's docking-cam disc, VV-02 the Video page's camera list, this the P&ID. The rule
+            // T4/T5 set - "anything reachable needs a render" - applies to a STATE as much as to a
+            // control, and a page whose entire value is live colouring needs at least one render where
+            // the colour is doing something, or the gate proves nothing about it.
+            //
+            // ⛔ Fixture edits only. No page source is touched here, and the nominal render above is
+            // untouched, because it is the baseline every one of these is a comparison against.
+            {
+                SystemsState savedSys = ps.Systems;
+                double savedA = ps.Cabin.LoopAC, savedB = ps.Cabin.LoopBC;
+
+                // key | what it exercises on the page
+                string[] key = { "leak", "fire", "pumpson", "hotloop" };
+                for (int i = 0; i < key.Length; i++)
+                {
+                    ps.Systems = savedSys;
+                    ps.Cabin.LoopAC = savedA; ps.Cabin.LoopBC = savedB;
+                    // ⚠ Leaking / Fire / FanOn / PumpAOn / PumpBOn are COMPUTED PROPERTIES, not fields -
+                    // `Fire` is `FireIntensity > 0.02`, `Leaking` is `LeakRate > 0.001`, and the pumps are
+                    // `OnlineCount(bus) > 0`. So the fixture drives the MODEL and lets the page's own
+                    // predicates fire, rather than forcing a display flag: "simulate, never fake" applies
+                    // to a preview fixture as much as to a screen.
+                    switch (i)
+                    {
+                        // Leaking: the vent path takes `ventCol` instead of `Pipe`, and CABIN LEAK lights.
+                        case 0: ps.Systems.LeakRate = 0.05; break;
+                        // Fire: the FIRE word, the one state on this page a crew would act on first.
+                        case 1: ps.Systems.FireIntensity = 0.4; break;
+                        // ⚠ PUMPS AND FAN **ON**, AND THE DIRECTION MATTERS - SP-01 ASSUMED THE WRONG ONE.
+                        // The finding asked for "a pump/fan off vs on" render on the reading that the
+                        // baseline is all-nominal. It is not: the shared fixture is
+                        // `SystemsState.Fresh()` (`:316`), which ships BOTH BUSES OFF, so `OnlineCount`
+                        // returns 0 and the one existing render has ALWAYS shown the fan and both pumps
+                        // OFF. Rendering them off again produced a **0-pixel** difference, which is how
+                        // this was caught. The state that had never been drawn is the powered one.
+                        case 2: ps.Systems.Bus1On = true; ps.Systems.Bus2On = true; break;
+                        // Loop A over CabinLimits.LoopAlarm: the per-loop severity band at :208-210,
+                        // computed by Alarms.Band, which the nominal render can only ever show green.
+                        case 3: ps.Cabin.LoopAC = CabinLimits.LoopAlarm + 5.0; break;
+                    }
+                    DisplayList sdl = new DisplayList(600);
+                    FigmaUI.Build(sdl, UiPage.SystemsPid, CW, CH, ps, MapProjection.Default());
+                    if (sdl.Overflowed) Console.WriteLine("  WARNING P&ID " + key[i] + " OVERFLOWED");
+                    string path = Path.Combine(outDir, "ui_systemspid_" + key[i] + ".png");
+                    Render(sdl, CW, CH, path);
+                    Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + sdl.Count + " commands");
+                }
+                ps.Systems = savedSys;
+                ps.Cabin.LoopAC = savedA; ps.Cabin.LoopBC = savedB;
+            }
+
             // ---- T13a: the VEHICLE family with NO FEED ----
             // Every number on these three pages is live now, so the failure mode has a look of its own and
             // it is the one that matters most: a screen confidently reading 0.0 is indistinguishable from a

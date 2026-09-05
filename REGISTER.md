@@ -12296,6 +12296,50 @@ wrong fix plan.
 **Verified:** `build.py test` green (953 in the nav suite), 104 PNGs re-rendered; the four rings measured on
 `ui_navorbitplot.png` by 8-ray sampling at each radius.
 
+### S113 [O] QC batch 10 — the P&ID's live half had never been rendered, and its baseline was an unpowered vehicle — **DONE 2026-09-05** — [SP-01]
+
+**🟢 OWNER-DIRECTED** — *"…You must confirm your findings before fixing."* Confirming this one **disproved
+its premise while confirming its conclusion**, and the corrected version is worse than the filed one.
+
+**SP-01 — FIXED with four fixture-only renders.** `ui_systemspid_leak / _fire / _pumpson / _hotloop` join
+the nominal render. Everything S56 built into this page is COLOUR that only appears when something is
+happening — the vent path, `CABIN LEAK`, `FIRE`, the fan/pump tints, the per-loop severity bands — and with
+one render the gate could not see any of it. ⛔ **No page source touched**, and the baseline is untouched
+because it is the comparison every one of these needs.
+
+⭐ **The fixture drives the MODEL, not display flags — and the compiler enforced it.** `Leaking`, `Fire`,
+`FanOn`, `PumpAOn`, `PumpBOn` are **computed properties**: `FireIntensity > 0.02`, `LeakRate > 0.001`,
+`OnlineCount(bus) > 0`. The first attempt assigned to them and failed to compile, which was the right
+answer — the renders set `LeakRate`, `FireIntensity` and bus power and let the page's own predicates fire.
+*"Simulate, never fake"* applies to a fixture as much as to a screen.
+
+**⚠ AND THE BASELINE WAS NEVER "ALL-NOMINAL" — IT IS AN UNPOWERED VEHICLE.** QC asked for *"a pump/fan off
+vs on"* render on the assumption that the existing one is all-nominal. The shared fixture is
+`SystemsState.Fresh()` (`PreviewMain.cs:316`), which **ships both buses OFF**, so `OnlineCount` returns 0
+and the one render has always shown the fan and both pumps **off**. I rendered "pumps off" first and it came
+back **0 pixels different from the baseline** — which is how this was caught, and is exactly why the finding
+asked for the render in the first place.
+
+**So the state never drawn was the POWERED one**, and the size of the gap is the point:
+
+| render | differs from baseline |
+|---|---|
+| `_leak` | 599 px |
+| `_fire` | 145 px |
+| **`_pumpson`** | **7,259 px — nearly the whole schematic** |
+| `_hotloop` | 3,296 px |
+
+**Over seven thousand pixels of this page's powered appearance had never been on the gate.** It also
+explains H33's *"fixed-colour glyph"* misreading better than the finding did: those glyphs were not fixed
+and not nominal — they were **off**, and nothing had ever rendered them on.
+
+⚠ **Fourth page with this class**, after H-09, VV-02 and this page's colouring: **a baseline fixture whose
+state nobody had stated.** Knowing which state the baseline is in belongs in the harness policy alongside
+"a page's non-nominal states belong in the preview set".
+
+**Verified:** 108 PNGs rendered (up from 104), `build.py test` green, and each new render diffed against the
+baseline to prove it exercises what it claims.
+
 ### S110 [O] QC batch 8 — one real screen was shipped twice, and the surviving copy was built from the wrong source — **DONE 2026-09-05** — [F-01 fixed; VT-01 partly fixed; VT-02 filed new]
 
 **🟢 OWNER-DIRECTED** — *"…You must confirm your findings before fixing."* Confirming this one meant putting

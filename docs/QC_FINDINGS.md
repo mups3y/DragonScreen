@@ -4910,6 +4910,46 @@ proves nothing about it.
 - **Must not break:** the existing nominal render, which is the baseline any comparison needs.
 - **Verify:** each new render differs from the nominal one in the elements it is meant to exercise.
 
+
+### ✅ FIXED 2026-09-05 — S113 (QC batch 10)
+
+**Fixed with four fixture-only renders — and confirming one of them found that this finding's premise was
+wrong in a way that matters.**
+
+`ui_systemspid_leak.png`, `_fire.png`, `_pumpson.png` and `_hotloop.png` join the nominal render. **No page
+source is touched**, and the baseline render is untouched because it is what every one of these is compared
+against.
+
+⭐ **The fixture drives the MODEL, not the display flags.** `Leaking`, `Fire`, `FanOn`, `PumpAOn` and
+`PumpBOn` turn out to be **computed properties, not fields** — `Fire` is `FireIntensity > 0.02`, `Leaking`
+is `LeakRate > 0.001`, and the pumps are `OnlineCount(bus) > 0`. So the renders set `LeakRate`,
+`FireIntensity` and the bus power and let the page's own predicates fire. *"Simulate, never fake"* applies
+to a preview fixture as much as to a screen, and the compiler enforced it here.
+
+⚠ **AND THE BASELINE WAS NEVER "ALL-NOMINAL" — IT IS AN UNPOWERED VEHICLE.** This finding asked for *"a
+pump/fan off vs on"* render, on the reading that the existing one shows everything nominal. It does not.
+The shared fixture is `SystemsState.Fresh()` (`PreviewMain.cs:316`), which **ships both buses OFF**, so
+`OnlineCount` returns 0 and the one render has always shown the fan and both pumps **off**. I rendered
+"pumps off" first and it came back **0 pixels different from the baseline**, which is how this was caught.
+
+**So the state that had never been drawn was the POWERED one** — and it is not a detail:
+
+| render | differs from the baseline by |
+|---|---|
+| `_leak` | **599 px**, bbox (356,136)–(833,567) — the vent path and `CABIN LEAK` |
+| `_fire` | **145 px**, bbox (637,560)–(684,567) — the `FIRE` word |
+| **`_pumpson`** | **7,259 px**, bbox (170,113)–(1156,507) — **nearly the whole schematic** |
+| `_hotloop` | **3,296 px**, bbox (226,353)–(878,418) — the loop severity band |
+
+**Over seven thousand pixels of this page's powered appearance had never been on the gate.** That is a
+larger blind spot than the finding described, and it explains H33's *"fixed-colour glyph"* misreading better
+than "nominal renders nominally" did: the glyphs were not fixed and were not nominal — they were **off**,
+and nothing had ever rendered them on.
+
+⚠ **The general observation stands and is now four pages, not three:** H-09 (the HUD's docking-cam disc),
+VV-02 (the Video page's camera list), this page's live colouring, and — the new one — a *baseline fixture
+whose state nobody had stated*. **A page's non-nominal states belong in the preview set**, and so does
+knowing which state the baseline is in. That remains a harness policy rather than four separate fixes.
 ---
 
 ## SP-02 — The FLIGHT COMPUTER STRINGS node is the one node on the tree with no state, and its caption asserts a count nothing models
