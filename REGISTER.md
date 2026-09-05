@@ -11100,6 +11100,8 @@ same clause [[S87]] hit the same day. **`BlackBoxCoverage.Findings()` has no cal
 (**[[S161]]**, found by [[S90]]'s new guard), so it reports nothing about any column. In its place the
 three are pinned by exact arithmetic in `BlackBoxTest`: 4×0.02×100, 2×0.02×200 and 1×0.02×400 all give
 **8 N·s**, chosen so a reader can verify them by eye.
+⚠ **CORRECTED 2026-09-06 by [[S161]] — THE SENTENCE ABOVE IS WRONG and is kept per C1.16/G12.** `BlackBoxCoverage` **does** run: `Note()` every row (`BlackBoxRecorder.cs:918`), `Findings()` at close (`:808`), into the manifest, shouted as `Debug.LogError("COVERAGE DEFECT …")` (`:818`), and read back by `tools/assess_flight.py:781`. The wrong claim came from grepping the STATIC form `BlackBoxCoverage.` while the recorder holds an INSTANCE field (`readonly BlackBoxCoverage coverage`, `:649`). **The real gap was narrower** — the findings never reached the EVENT log — and S161 closed it. **So this clause's practical conclusion still holds for its own line** (the coverage pass reports nothing about a column *S87/S84 added* until a flight runs), but "it never runs" is false.
+
 
 ✅ **`schema_version` NOT bumped** — `BlackBoxSchema.SchemaVersion` is still `1`, verified by diff, exactly
 as this line requires (§4.2: appending inside a version is allowed).
@@ -11467,6 +11469,8 @@ never runs, on any column — which [[S90]]'s new build guard surfaced the same 
 **[[S161]]**. So that clause is unsatisfiable until S161 lands. **In its place**, the five columns are
 pinned by `BlackBoxTest.S87Columns` (schema membership, `Conditional`, a stated blank-condition, a
 resolving index, and the tier), and the python selftest re-parses the schema and round-trips the report.
+⚠ **CORRECTED 2026-09-06 by [[S161]] — THE SENTENCE ABOVE IS WRONG and is kept per C1.16/G12.** `BlackBoxCoverage` **does** run: `Note()` every row (`BlackBoxRecorder.cs:918`), `Findings()` at close (`:808`), into the manifest, shouted as `Debug.LogError("COVERAGE DEFECT …")` (`:818`), and read back by `tools/assess_flight.py:781`. The wrong claim came from grepping the STATIC form `BlackBoxCoverage.` while the recorder holds an INSTANCE field (`readonly BlackBoxCoverage coverage`, `:649`). **The real gap was narrower** — the findings never reached the EVENT log — and S161 closed it. **So this clause's practical conclusion still holds for its own line** (the coverage pass reports nothing about a column *S87/S84 added* until a flight runs), but "it never runs" is false.
+
 
 **Verified (C1.3).** `python plugin/build.py test` **green — ALL SUITES PASSED**; BlackBox suite
 **1826 → 1848 checks**; `SELFTEST OK` with the widened schema. **No draw changed, so no preview applies**
@@ -11750,12 +11754,18 @@ with **no emitter anywhere** is always a defect and is knowable without flying. 
 
 **It failed immediately, on three kinds nobody had looked for**, now logged as **[[S161]]**:
 `rec.column_never_written` · `rec.column_unexpected_writer` · `exception`.
-⭐ **Those are BB1's own ANTI-GHOST machinery, and they are ghosts.** `BlackBoxCoverage.Findings()` has
-**no caller anywhere in `plugin/src`** — the only mention outside its own file is a doc comment in
-`BlackBoxManifest.cs` — so the coverage check never runs, those three events can never fire, and
-`tools/assess_flight.py:1586` **alerts on exactly those three kinds**, so it will report "no column
-defects" on every flight forever. **Logged, not fixed (C1.1)** — S90's declared scope was the three kinds
-it named, and these are not them.
+⭐ **Those are BB1's own ANTI-GHOST machinery.** **Logged, not fixed (C1.1)** — S90's declared scope was
+the three kinds it named, and these are not them.
+
+⚠ **AND S90's DIAGNOSIS OF THEM WAS WRONG, corrected by [[S161]] the same day; the original is kept per
+C1.16/G12.** It read: *"`BlackBoxCoverage.Findings()` has no caller anywhere in `plugin/src` … so the
+coverage check never runs, those three events can never fire, and `tools/assess_flight.py:1586` alerts on
+exactly those three kinds, so it will report 'no column defects' on every flight forever."*
+⛔ **The coverage check DOES run** — S90 grepped the STATIC form `BlackBoxCoverage.` and the recorder uses
+an INSTANCE field, so every call site was invisible to it. The findings reach the manifest, `KSP.log` as a
+`LogError`, and `assess_flight.py:781`. **The real gap was that they never reached the EVENT log**, which
+S161 fixed by emitting them. ⭐ **The guard was still right to flag the kinds** — they genuinely had no
+emitter — and finding them is what led to the fix. Only the explanation of *why* was wrong.
 
 ⚠ **The `KNOWN_DEAD` list in the guard is a DEFECT ON RECORD, not a pardon.** Each entry names the register
 line that owns its fix, the guard stays live for everything else, and **the list is the register's to
@@ -11774,31 +11784,76 @@ comment lines before scanning, and says why in place.
 check. Recorder glue + one pure file + the build script; **no draw changed, so no preview applies**
 (C1.3's carve-out). **C1.16/G12: 0 comment prose lines lost.** No `install`, no glass, no `git push`.
 
-### S161 [S] BB1's ghost-column DETECTOR is itself a ghost — `BlackBoxCoverage` has no caller, so three event kinds can never fire — **DOING** — [found by [[S90]]'s new build guard, 2026-09-06; TIER 2: a check that silently always passes]
+### S161 [S] ~~BB1's ghost-column DETECTOR is itself a ghost~~ → **the coverage findings never reach the EVENT LOG** — **DONE 2026-09-06** — [⚠ **this line's own premise was WRONG and is corrected in place**; found by [[S90]]'s build guard, then re-checked before acting]
 
-- **The finding, and it is recursive.** `pure/blackbox/BlackBoxCoverage.cs` is BB1/BB6's ghost-column
-  detector — the machinery that exists so a column which is declared and never written is *reported*.
-  **`BlackBoxCoverage.Findings()` has no caller anywhere in `plugin/src`.** The only mention outside its
-  own file is a doc comment in `BlackBoxManifest.cs:71` describing what it *"was given at close"*.
-- **So three declared event kinds can never fire:** `rec.column_never_written`,
-  `rec.column_unexpected_writer`, `exception`.
-- ⛔ **AND THE CONSEQUENCE IS WORSE THAN A DEAD CHANNEL.** `tools/assess_flight.py:1586` scans the event
-  log for exactly those three kinds and raises an `alert()` on each. Since none can ever appear,
-  **the flight report will state "no column defects" on every flight, forever, whatever the truth is.**
-  A check that always passes is worse than no check: it is read as evidence.
-- ⭐ **This is S76's ghost-column defect applied to the ghost-column detector**, which is why it is worth a
-  TIER 2 rather than hygiene — the same class of error, one level up again, in the machinery built to
-  prevent it.
-- **Not fixed by [[S90]] (C1.1):** S90's declared scope was the three kinds it named (`rec.close`,
-  `rec.scene_change`, `sys.string_state`) and these are three different ones. S90's guard is what found
-  them, and its `KNOWN_DEAD` list names this line as their owner.
-- **DONE when:** `BlackBoxCoverage.Findings()` is called at stream close and its findings emitted as the
-  three kinds, **or** the detector and its kinds are retired together with the reason recorded in place
-  (C1.16/G12) **and `assess_flight.py`'s alert list updated to match** — a scan for a kind that cannot
-  exist must not survive either choice. Then remove all three from `build.py`'s `KNOWN_DEAD`.
-- ⚠ **Check `exception` separately**: it is declared beside `fault.raised`/`fault.cleared` and may want a
-  real emitter in the recorder's `catch` blocks rather than retirement — a swallowed exception that
-  writes no event is its own version of this defect.
+#### ⛔ THE ORIGINAL TEXT OF THIS LINE WAS WRONG. It is kept verbatim below (C1.16/G12) and corrected under it.
+
+> - **The finding, and it is recursive.** `pure/blackbox/BlackBoxCoverage.cs` is BB1/BB6's ghost-column
+>   detector — the machinery that exists so a column which is declared and never written is *reported*.
+>   **`BlackBoxCoverage.Findings()` has no caller anywhere in `plugin/src`.** The only mention outside its
+>   own file is a doc comment in `BlackBoxManifest.cs:71` describing what it *"was given at close"*.
+> - **So three declared event kinds can never fire:** `rec.column_never_written`,
+>   `rec.column_unexpected_writer`, `exception`.
+> - ⛔ **AND THE CONSEQUENCE IS WORSE THAN A DEAD CHANNEL.** `tools/assess_flight.py:1586` scans the event
+>   log for exactly those three kinds and raises an `alert()` on each. Since none can ever appear,
+>   **the flight report will state "no column defects" on every flight, forever, whatever the truth is.**
+>   A check that always passes is worse than no check: it is read as evidence.
+> - ⭐ **This is S76's ghost-column defect applied to the ghost-column detector**, which is why it is worth a
+>   TIER 2 rather than hygiene — the same class of error, one level up again, in the machinery built to
+>   prevent it.
+
+⛔ **WHAT WAS WRONG, AND HOW IT HAPPENED.** [[S90]] logged this line from a grep for **`BlackBoxCoverage.`**
+— the *static* form. The recorder uses an **instance field**, `readonly BlackBoxCoverage coverage`
+(`BlackBoxRecorder.cs:649`), so every real call site was invisible to that search. **The detector runs.**
+
+**The pipeline, verified end to end before anything was changed:**
+
+| step | where | verdict |
+|---|---|---|
+| per-row eligibility | `coverage.Note(row, plan.FillR2, plan.FillR3, rails)` — `BlackBoxRecorder.cs:918` | ✅ runs every row |
+| close-out pass | `manifest.Coverage = coverage.Findings(everFocused)` — `:808` | ✅ runs |
+| written to the manifest | `WriteManifest()` — `:809` | ✅ |
+| shouted into `KSP.log` | `Debug.LogError(Tag + "COVERAGE DEFECT (…)")` — `:818` | ✅ **LogError, not Warning** |
+| read by the report tool | `assess_flight.py:781-786`, `st.manifest.get("coverage")` → `alert()` per defect | ✅ |
+
+⭐ **So "the flight report will state 'no column defects' on every flight, forever" is FALSE.** The report
+reads the coverage verdict from the manifest and alerts on every defect in it. The primary path works.
+
+#### ✅ THE REAL DEFECT, WHICH IS NARROWER AND STILL WORTH FIXING
+
+**The findings never reach the EVENT LOG.** `BlackBoxEvents.RecColumnNeverWritten` and
+`RecColumnUnexpected` are declared, and nothing emits them — so `assess_flight.py:1586`'s **second** scan,
+which looks for those kinds in `events.jsonl`, can never fire. It is redundant rather than load-bearing
+(the manifest scan above already reports them), which is why this is a TIER-3 tidy and not the TIER-2
+alarm the original text made it.
+
+⭐ **AND EMITTING THEM IS A REAL GAIN, not just silencing a dead constant.** The manifest is **per-stream**;
+the event log is **the MISSION's and outlives the stream** (`BlackBoxRecorder.cs:779` — *"a booster stream
+closing at touchdown must not take the capsule's narrative down with it"*). A reader working from
+`events.jsonl` alone — which is the mission-level view — could not see a coverage defect at all. Now they
+can, at the moment of close, in the same timeline as everything else that went wrong.
+**WHAT LANDED.** The close-out loop that already shouts each defect into `KSP.log` now also **emits it**,
+as `rec.column_never_written` or `rec.column_unexpected_writer`, carrying the column, the kind and the
+declared condition. Two of the three kinds go live; `exception` is dealt with below.
+
+⚠ **`exception` — RETIRED, not wired, and the reasoning is the opposite of the other two.** It sits beside
+`fault.raised` / `fault.cleared`, i.e. in the FAULT namespace, not the recorder's. The recorder's own
+failure modes already have named kinds that ARE emitted — `rec.write_error`, `rec.width_mismatch`,
+`rec.self_disable` — and its `catch` blocks route to those. A generic `exception` kind would be **a second
+way to say what those three already say**, which is exactly the argument [[S90]] retired `rec.close` on.
+It is removed, with the reasoning kept in place.
+
+**⛔ `assess_flight.py`'s LIST WAS UPDATED TO MATCH, because this line required it** — *"a scan for a kind
+that cannot exist must not survive either choice"*. `exception` is gone from its `bad` tuple; the two
+coverage kinds stay and can now actually fire.
+
+✅ **All three removed from `build.py`'s `KNOWN_DEAD`**, so the vocabulary guard is back to enforcing the
+whole list with no exceptions at all.
+
+**Verified (C1.3).** `python plugin/build.py test` **green — ALL SUITES PASSED**, including the S90
+vocabulary guard now reporting **every declared kind emitted, none known-dead**, and the python selftest.
+**No draw changed, so no preview applies.** **C1.16/G12: this line's own wrong text is kept verbatim above
+and corrected beneath it**, and `exception`'s declaration is kept as a comment where it stood.
 
 ### S91 [S] `plugin/__pycache__/build.cpython-313.pyc` is COMMITTED — a build artefact under version control — **DONE 2026-09-05** (batched with S3+S92) — [TIER 4: hygiene]
 Logged by **BB2**, 2026-09-04 (C1.1 — noticed because it bit).

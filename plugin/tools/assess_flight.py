@@ -1583,8 +1583,11 @@ def event_timeline(M):
         kinds[e.get("kind")] = kinds.get(e.get("kind"), 0) + 1
     P("")
     P("  by kind: " + ", ".join("%s x%d" % (k, n) for k, n in sorted(kinds.items())))
+    # S161: "exception" was removed - it was a declared kind with no emitter, retired rather than
+    # wired because rec.write_error / rec.width_mismatch / rec.self_disable already say what it would.
+    # The two coverage kinds STAY and now actually fire: the recorder emits them at close (S161).
     for bad in ("rec.write_error", "rec.width_mismatch", "rec.self_disable", "rec.column_never_written",
-                "rec.column_unexpected_writer", "exception"):
+                "rec.column_unexpected_writer"):
         if kinds.get(bad):
             alert("%d x %s in the event log" % (kinds[bad], bad))
 

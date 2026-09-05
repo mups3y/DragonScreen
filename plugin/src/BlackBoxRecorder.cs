@@ -818,6 +818,16 @@ namespace DragonScreen.BlackBox
                     // an audit of the whole corpus to find last time. It goes in the log LOUDLY.
                     Debug.LogError(Tag + "COVERAGE DEFECT (" + f.Kind + "): column '" + f.Column
                                    + "' — " + f.Declared);
+                    // ---- S161: AND INTO THE EVENT LOG, which is the MISSION's and outlives this stream ----
+                    // The finding already reached the manifest (above) and KSP.log (here). Neither is the
+                    // mission-level narrative: the manifest is PER-STREAM, and a reader working from
+                    // `events.jsonl` — the view that survives a stream closing at touchdown — could not
+                    // see a coverage defect at all. `BlackBoxEvents.RecColumnNeverWritten` and
+                    // `RecColumnUnexpected` were declared for exactly this and had no emitter until now.
+                    Emit(f.Kind == "unexpected_writer" ? BlackBoxEvents.RecColumnUnexpected
+                                                       : BlackBoxEvents.RecColumnNeverWritten,
+                         new[] { Kv.Str("column", f.Column), Kv.Str("kind", f.Kind),
+                                 Kv.Str("declared", f.Declared) });
                 }
                 Debug.Log(Tag + "closed " + Stem + " (" + reason + "): " + seq + " rows, "
                           + eventsWritten + " events, " + writeErrors + " write error(s), "

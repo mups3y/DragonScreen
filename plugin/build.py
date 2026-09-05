@@ -524,11 +524,10 @@ def event_vocabulary_check():
     # only mention outside its own file is a doc comment in BlackBoxManifest - so the coverage check
     # never runs, these three events can never fire, and `tools/assess_flight.py` alerts on exactly
     # these three kinds and will therefore report "no column defects" on every flight forever.
-    KNOWN_DEAD = {
-        'RecColumnNeverWritten': 'S161',
-        'RecColumnUnexpected':   'S161',
-        'Exception':             'S161',
-    }
+    # ✅ EMPTY SINCE S161 (2026-09-06). All three entries were cleared by that line: the two coverage
+    # kinds gained an emitter, and `Exception` was retired. The guard is back to enforcing the whole
+    # vocabulary with no exceptions, which is where it should stay.
+    KNOWN_DEAD = {}
 
     dead = [(sym, kind) for sym, kind in names
             if ('BlackBoxEvents.' + sym) not in blob and sym not in KNOWN_DEAD]

@@ -198,7 +198,15 @@ namespace DragonScreen.BlackBox
 
         public const string FaultRaised    = "fault.raised";
         public const string FaultCleared   = "fault.cleared";
-        public const string Exception      = "exception";
+        // ---- ⚠ S161, 2026-09-06: `Exception` WAS DECLARED HERE AND RETIRED ----
+        //     public const string Exception      = "exception";
+        // Nothing ever emitted it. ⛔ RETIRED RATHER THAN WIRED, and for the opposite reason to the two
+        // coverage kinds S161 DID wire: the recorder's own failure modes already have named kinds that
+        // ARE emitted — `rec.write_error`, `rec.width_mismatch`, `rec.self_disable` — and its catch
+        // blocks route to those. A generic "exception" would be a SECOND way to say what those three
+        // already say, on the same edge, which is the argument S90 retired `rec.close` on.
+        // ⚠ `tools/assess_flight.py`'s alert list was updated in the same commit: a scan for a kind
+        // that cannot exist must not outlive the kind.
 
         /// <summary>⭐ [[OCT11]]. The host has COMMANDED a bank (`BoosterHost.CommandedRole`) and that
         /// bank's own ignition state says it is not lit — the exact shape that lost the booster on flight
