@@ -46,7 +46,7 @@ namespace DragonScreen
             float PX(float x) => x * sx;
             float PY(float y) => y * sy;
             float SZ(float v) => v * sy;
-            int St(float rs) { int p = (int)Math.Round(rs * sy); return p < 1 ? 1 : p; }
+            int St(float rs) => Strokes.Px(rs, sy);   // ONE rule, in Strokes.cs - rounds UP (R-02 family)
             // discrete image, undistorted, centred on its design centre-x
             void Img(string key, float x, float y, float wd, float hd) =>
                 dl.Asset(key, (x + wd * 0.5f) * sx - wd * sy * 0.5f, PY(y), wd * sy, hd * sy, White);

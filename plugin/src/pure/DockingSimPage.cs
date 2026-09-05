@@ -106,7 +106,7 @@ namespace DragonScreen
             float X(float x) => x * sc + ox;
             float Y(float y) => y * sc;
             float Z(float v) => v * sc;
-            int St(float rs) { int p = (int)Math.Round(rs * sc); return p < 1 ? 1 : p; }
+            int St(float rs) => Strokes.Px(rs, sc);   // ONE rule, in Strokes.cs - rounds UP (R-02 family)
             void L(string t, float x, float y, float z, Rgba c) => dl.Text(t, X(x), Y(y), Z(z), TextAlign.Left, c);
             void C(string t, float cx, float y, float z, Rgba c) => dl.Text(t, X(cx), Y(y), Z(z), TextAlign.Centre, c);
 

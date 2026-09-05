@@ -11794,7 +11794,7 @@ are recorded here instead. `PageTest.NavTexture`, `CoverPage`, `NavPage`, `Setti
 **⚠ Strays found, LOGGED NOT FIXED (C1.1):** [[S101]] (the hairline dropout) and [[S102]] (two stale
 "2560" comments in `pure/Turntable.cs`) at the foot of this file.
 
-### S101 [S] The design's 2px hairlines drop out at the shipped 1280, inconsistently — the defect the 2× preview was hiding — **TODO** — [logged by S100, 2026-09-05; TIER 2: a real shipped defect in the art + page code, now visible on the gate]
+### S101 [S] The design's 2px hairlines drop out at the shipped 1280, inconsistently — the defect the 2× preview was hiding — **DONE 2026-09-06** — [closed by job 3 of the 2026-09-06 owner batch: the root cause was `St()`'s round-to-nearest, the same R-02 family; all ten Cover rules now measure a solid 2 px]
 - **The finding.** The Figma pages carry 2px hairline borders and rules. At the shipped `screenWidth = 1280`
   they fall to roughly 0.7 device px and **drop inconsistently**. Measured on `ui_cover.png` at x=430, clear
   of text, four instances of the *same* 2px design rule render at **24%, 36%, 48% and 36%** of a solid 2px
@@ -11812,6 +11812,60 @@ are recorded here instead. `PageTest.NavTexture`, `CoverPage`, `NavPage`, `Setti
 - **DONE when:** every 2px design rule on a Figma page renders at a consistent, legible weight at the cfg's
   own width, verified from a re-rendered preview — or the owner rules the width up and the pages are
   re-verified at the new one.
+
+#### ✅ DONE 2026-09-06 — closed by **job 3** of the 2026-09-06 owner batch (the R-02 family sweep)
+
+**🟢 OWNER AUTHORISATION, 2026-09-06, verbatim (C1.12):** *"give me a batched prompt in the order you suggest for one chat to fix all whilst reading its rules etc between jobs"* — answering the overseer's four-item order.
+
+**THE ROOT CAUSE, WHICH WAS NOT WHERE THIS LINE LOOKED.** S101 filed this as "the art and the page code",
+with the fix framed as *"a hairline that survives a 0.33 scale"*. It was neither: it was **one lambda,
+copied into twelve files**, rounding to the nearest whole device pixel —
+
+```csharp
+int St(float rs) { int p = (int)Math.Round(rs * sc); return p < 1 ? 1 : p; }
+```
+
+`2 * sc` is 0.666 at 1280 and 1.331 at 2560, and `Round` gives **1 device px at both**. So a 2 px design
+rule was 1/1280 of the panel at the old width and 1/2560 at the new one — *physically half as thick to the
+crew* — which is QC **R-02**'s exact shape in strokes instead of type. Replaced by one shared rule,
+`plugin/src/pure/Strokes.cs`, which rounds **UP**: the thickness becomes a constant fraction of the panel,
+it errs thick rather than thin (the safe direction for something that was dropping out), and at 1280 it
+returns the same integer `Round` did for every argument the build uses — `St(1)`, `St(2)`, `St(3)`, `St(5)`
+— so nothing moves at the reference width.
+
+**MEASURED ON THE RE-RENDERED PREVIEW, WITH [[S115]]'s OWN METHOD** (peak row's ink as a fraction of full
+`Text6`, halved), `ui_cover.png` @2560 — and extended from the four instances S115 sampled to **all ten**
+rules in `CoverPage.Lines`:
+
+| | S101 filed @1280 | S115 re-measured @2560 | **now @2560** |
+|---|---|---|---|
+| design y 566 | 24% | 50.0% | **50.0%** — 2.00 full rows of ink |
+| design y 915 | 36% | 37.6% | **50.0%** — 2.00 full rows |
+| design y 1532 | 48% | 50.0% | **50.0%** — 2.00 full rows |
+| design y 1609 | 36% | 37.6% | **50.0%** — 2.00 full rows |
+| the other six (621, 687, 970, 1036, 1102, 1168) | not sampled | not sampled | **50.0% each — 2.00 full rows each** |
+
+⚠ **Read the metric before reading the numbers.** S115's measure looks only at the PEAK row, so it tops out
+at 50.0% however solid the rule is — 50.0% means "the darkest row is fully inked", and 37.6% meant "the ink
+is split between two partial rows". All ten now report the ceiling **and** carry exactly **2.00 full rows**
+of total ink, i.e. a genuinely solid two-device-pixel rule. That is this line's DONE-when — *"a consistent,
+legible weight at the cfg's own width, verified from a re-rendered preview"* — met, and met for ten
+instances rather than the four the finding measured.
+
+**The "art" half was checked and is NOT a defect.** `rectangle_178.png` is baked 1224×1779 and drawn at
+814.8 px wide (scale 0.666), so its own 2 px border resamples to ~1.33 px — measured on the render as one
+full-ink row `(250,250,251)` plus one partial `(104,107,136)`. That is **proportional by construction** (an
+image resample, not a fixed constant), it has a bright core rather than the smear it would have at 1280's
+0.67 px, and it is consistent across every baked asset. No fixed pixel constant is involved, so it is not a
+member of this family and needs no change.
+
+**⚠ ONE INCONSISTENCY THIS EXPOSED, LOGGED NOT FIXED (C1.1) — [[S122]].** `CoverPage` has a SECOND stroke
+rule, `Stroke(sc, refPx)`, a float with a 1 px floor, used on four of its own draws. At 2560 the same
+nominal 2 design px is **1.33 px through `Stroke` and 2 px through `St`**, on one page.
+
+**Verified:** `build.py test` green; the stroke invariant is pinned by `LegibilityFloorTest` and
+mutation-proved (reverting `Ceiling` to `Round` reports *"St(2) … 1 px of 1280 (0.078%) vs 1 px of 2560
+(0.039%)"*). `build.py preview` green, 108 pages; `ui_cover.png` inspected and measured as above.
 
 ### S102 [S] `pure/Turntable.cs` still tells the reader the in-game RenderTexture is 2560 — **TODO** — [logged by S100, 2026-09-05; TIER 3: comments only, no behaviour]
 - **The finding.** `src/pure/Turntable.cs:213` and `:309` both reason about *"the preview (1280), the in-game
@@ -12859,3 +12913,119 @@ doubled canvas" family and are **job 3 of this batch's** to enumerate and rule o
 - **DONE when:** each of the six comments states the figure that matches the CURRENT shipped `screenWidth`
   (2560) — either replacing the number or stating both with the resolution each belongs to — with the aspect
   reasoning left exactly as it reads today, and `build.py test` still green.
+
+### S119 [O] The R-02 family swept: every device-pixel constant that meets something scaling with `screenWidth` — **DONE 2026-09-06** — [job 3 of the 2026-09-06 owner batch; 3 instances FIXED, 4 LOGGED ([[S120]] [[S121]] [[S122]] + [[S116]] blocked), 8 ruled correctly screen-space]
+
+**🟢 OWNER AUTHORISATION, 2026-09-06, verbatim (C1.12):** *"give me a batched prompt in the order you suggest for one chat to fix all whilst reading its rules etc between jobs"* — answering the overseer's four-item order. This is job 3 of that batch. **R-02 is one instance of a class**; this line is the class, enumerated,
+with a verdict on every member. ⛔ Nothing below is left described as "probably fine".
+
+**THE SEARCH.** Every `.cs` under `plugin/src/pure/` and `plugin/src/`, for: a numeric or named constant in
+device/panel pixels that is (a) compared against, (b) added to or subtracted from, or (c) clamping something
+that scales with `screenWidth`. Four passes — `Typography.*` used raw; the twelve `St()` copies; literals and
+named constants combined with `w`/`h`; and every `<`/`>` threshold against a scaling quantity. The glue
+(`plugin/src/*.cs`) was searched too and is clean: its only numeric guard is `screenWidth < 16`, a sanity
+floor, not a layout constant.
+
+#### ✅ FIXED — three instances, all self-contained
+
+| # | instance | what was wrong | fix |
+|---|---|---|---|
+| 1 | **`St()` × 12 files, 39 call sites** — `CoverPage` `DockingSimPage` `ManualChuteDeployPage` `MenuPage` `NavOrbitPlotPage` `PlaceholderPage` `RendezvousPage` `SettingsAudioPage` `SettingsVideoPage` `SuitCheckPage` `VehicleMechPage` `VrioTestPage` | rounded `rs*sc` to NEAREST, so `St(2)` = **1 device px at BOTH widths** → a 2 px design rule is physically half as thick at 2560 | one shared rule, **`plugin/src/pure/Strokes.cs`**, rounding UP. `St(2)`/`St(3)`/`St(5)` are now an exactly constant fraction of the panel; byte-identical at 1280 for every argument in use. Closes **[[S101]]**. |
+| 2 | **`MarginAffordance` `Inset = 4f`, `BorderPx = 2f`, `Pad = 2f`** | RefPanelW pixels subtracted from a letterbox that scales, so the box grew **2.13×** rather than 2.00× (QC measured the same figure) | scaled by `Typography.ScaleFor(w)`. `FitSize` now **REQUIRES** the scale — the defaulting overload was deleted, not kept, because a caller that could omit it would silently measure a 2560 box against a 1280 border |
+| 3 | **`MarginAffordance.MinMargin = 40f`** | a device-pixel threshold on `ox`, which scales. "Is there physical room for a control" answered differently on two screens of the SAME SHAPE | scaled likewise |
+
+⭐ **What fix 2 bought, measured:** R-02's own verify line asks that *"at 1280 and 2560 the same element
+reports the same PERCENTAGE of the floor"*. It now does, exactly — MANUAL/DOCKING **72.2% @1280 vs 72.2%
+@2560** and RENDEZVOUS **50.5% vs 50.5%**, where before job 3 they read 72.2/82.9 and 50.5/58.0. Job 2 left
+that as a printed note precisely so this job could turn it into an assertion, and it has.
+
+#### 📋 LOGGED, NOT FIXED (C1.1) — each needs its page's own scale pass first
+
+| # | instance | why not here |
+|---|---|---|
+| 4 | **`ChromeBar` is entirely RefPanelW-literal** → **[[S120]]** | it is on EVERY legacy page, and every one of them lays its body out against `h - ChromeBar.Height`. Scaling the bar without scaling the bodies gives a full-size bar over half-size content |
+| 5 | **the legacy page family** — `Pages` `SettingsPage` `DockingPage` `DockingPageCentral` `PanelBoardPage` `AttitudeHud` `Card` `NumericReadout` `GateCard` `StatusIndicator` `Gauge` → **[[S121]]** | a page-by-page scale pass, the size of S117 eleven times over. **A sweep that turns into a refactor is how this batch stops being finishable** |
+| 6 | **`CoverPage.Stroke(sc, refPx)`** — a SECOND stroke rule, float, in the same file as `St` → **[[S122]]** | not a fixed constant (it is proportional above 1 px), so not this family — but at 2560 the same 2 design px is 1.33 px one way and 2 px the other, on one page |
+| 7 | **`CoverPage.FitRows`'s `Typography.Min`** → **[[S116]]**, ⛔ **BLOCKED** | the last live member of the family, and the only one that is NOT a build-chat call: correcting its units overflows the card by 131 design px at every width and needs C-05's TIER-3 layout decision, which is the owner's (C1.12). Job 1 of this batch blocked it; job 2 left it deliberately untouched |
+
+#### ✅ RULED CORRECTLY SCREEN-SPACE — inspected, and not the defect
+
+| instance | why it is fine |
+|---|---|
+| the letterbox idiom `ox = (w - RefW*sc) * 0.5f`, **12 files** | purely proportional; no constant in it |
+| `X()`/`Y()`/`Z()`/`Wd()` on every Figma-era page, **including `Z(4f)` line widths** | proportional by construction. `dl.Line`/`dl.Box` take a FLOAT stroke, so these never had `St`'s integer-rounding problem |
+| `AbortOverlay` | every dimension a fraction of `h` (`h*0.024f`, `h*0.21f`, `h*0.105f`) |
+| `MechPage` | `h * 0.03f` — proportional |
+| `MarginAffordance.TopFrac` / `HeightFrac` | fractions of `h`, always were |
+| `MarginAffordance.CapAdvance` | an em ratio — dimensionless, scales with whatever size it multiplies |
+| `MenuPage.CellRect`'s `Margin + col * (w + Gap)` | `w`/`h` there are the CELL's DESIGN dimensions, not the panel's — a name collision, not an instance |
+| `FigmaUINavTest.MenuGridFits`' `cellPanelPx >= labelPanelPx * 2f` | a RATIO; both sides scale with `H`, so it is resolution-invariant and was never affected. (R-02 listed it as needing a re-read; this is the re-read) |
+| `NavPage` | fixed in **job 2** of this batch, with all 18 sites and every box around them |
+| the `h - ChromeBar.Height` subtractions (`Card` `DockingPage` `DockingPageCentral` `Pages` `NavPage`) | CORRECT as written — they clear the bar that is actually drawn. The defect is the bar (#4), not the subtraction, and fixing the subtraction first would open a gap |
+| the KSP glue, `plugin/src/*.cs` | searched; no layout constant meets `screenWidth` there at all |
+
+**VERIFIED (C1.3).** `build.py test` green — `LegibilityFloorTest` now **69 checks, 0 failed**, with the
+percentage equality asserted and a new stroke section. **MUTATION-PROVED 4/4**, each reverting one fix:
+`Ceiling`→`Round` (*"St(2) … 1 px of 1280 (0.078%) vs 1 px of 2560 (0.039%)"*); `Inset` unscaled and the
+border/gap unscaled (both → *"@1280 72.16%, @2560 77.54%"*); `MinMargin` unscaled (*"@1280 False, @2560
+True"* for two panels of identical shape). `build.py preview` green, 108 pages; `ui_cover.png`,
+`page2_nav.png`, `page2_nav_planet.png`, `ui_navorbitplot.png`, `ui_cover_cam_map.png` inspected.
+`docs/QC_FINDINGS.md` untouched (QC's file). No `install`, no glass. No flight control wired (§14.4(a)).
+
+### S120 [O] `ChromeBar` is RefPanelW-literal on every legacy page — the bar halved physically when the panel did — **TODO** — [logged by [[S119]] (job 3 of the 2026-09-06 batch), TIER 2, R-02 family]
+- **The finding.** `plugin/src/pure/ChromeBar.cs` is written entirely in panel pixels measured at 1280:
+  `Height = 64f`, `Pitch = 112f`, `Pad = 24f`, `Hairline = 2f`, `SelectBar = 3f`, `linkY = top + 22f`, and
+  its page labels draw at a raw `Typography.Caption`. `TopY(h) = h - Height` subtracts a device-pixel
+  constant from a dimension that scales. So at the shipped 2560 the bar is 64 px on a 1406-high panel —
+  **4.55% of the height where it was 9.1%** — and its labels are 16 device px where they were measured as
+  16 on a panel half as wide. Exactly [[S117]]'s defect, on the one component that is on EVERY legacy page.
+- **Visible on the gate.** `page2_nav_planet.png` after job 2: the bar's FLIGHT / VEHICLE / NAV / DOCKING /
+  SETTINGS row and its STATE / COM1·TLM / MET block are conspicuously smaller than everything above them,
+  because NAV was scaled and the bar was not.
+- **Why job 3 did not fix it.** Every legacy page lays its body out against `h - ChromeBar.Height`
+  (`Card.cs:28`, `:79`; `DockingPage.cs:44`; `DockingPageCentral.cs:19`; `Pages.cs:730`, `:923`, `:1320`,
+  `:1345`; `NavPage.cs:112`). Scaling the bar without scaling those bodies puts a full-size bar under
+  half-size content. It moves with **[[S121]]** or immediately before it.
+- **⚠ Do not "fix" it by scaling `ChromeBar.Height` at one of those call sites.** `NavPage.ColumnBottom`
+  deliberately does NOT scale it, so the page clears the bar that is actually drawn, and
+  `LegibilityFloorTest` pins that gap two-sided at both widths. Change the bar, then the call sites.
+- **DONE when:** `ChromeBar` takes the panel width and scales like `NavPage` does, every `h -
+  ChromeBar.Height` caller follows it in the same commit, `LegibilityFloorTest`'s two-sided gap check still
+  passes, and a preview PNG at 2560 shows the bar in the same proportion to the page it had at 1280.
+
+### S121 [O] The legacy page family draws in RefPanelW pixels — eleven files that do not track `screenWidth` — **TODO** — [logged by [[S119]] (job 3 of the 2026-09-06 batch), TIER 2, R-02 family; SPLIT THIS before doing it]
+- **The finding.** [[S117]] fixed `NavPage`. The same defect is in every other legacy page and shared widget:
+  `Pages.cs` (32 raw `Typography.*`, plus `w - SidePad`, `h - ChromeBar.Height - 100f`,
+  `((h - ChromeBar.Height) - 24f) * 0.74f`), `SettingsPage.cs` (24), `DockingPage.cs` (11, plus `w - 170f`,
+  `w - 64f`), `DockingPageCentral.cs` (9, plus `w - 150f`, `w - 296f`), `PanelBoardPage.cs` (10),
+  `AttitudeHud.cs` (5), `NumericReadout.cs` (6), `Card.cs` (1), `GateCard.cs` (5), `StatusIndicator.cs` (4),
+  `Gauge.cs` (10). At 2560 every one of them draws at half the physical size it was measured at.
+- **⭐ THE ONE LIVE INSTANCE INSIDE THIS, NAMED SO IT IS NOT LOST:** `Gauge.ValueSize(radius)` clamps
+  `radius * 0.46f` into `[Typography.Min, Typography.Value]` — two RefPanelW constants used as panel-pixel
+  bounds. The FLIGHT page's gauge radius is derived from `w` (`Pages.cs:738-741`), so at 2560 the radius
+  doubles, the derived size doubles, and the result is **capped at 28 device px at both widths**. The gauge's
+  own number therefore cannot follow the panel at all — unlike the rest of this family, which is merely
+  un-scaled, this one is actively pinned by a clamp.
+- **Two of the shared widgets are LATENT, not live:** `GateCard.cs:172` and `StatusIndicator.cs:27` centre
+  their label with `y + (h - Typography.Caption) * 0.5f - 1f` — the identical shape job 2 fixed in
+  `Readouts.Row` and `Control.Button` by adding a scale-aware overload. They are correct **today** only
+  because every one of their callers is unscaled; they fire the moment their page gets its pass. Give them
+  the same overload treatment, with the 8-argument form still delegating at `sc = 1`.
+- **⛔ SPLIT THIS BEFORE STARTING (C1.7).** Eleven files is [[S117]] eleven times over and will not finish in
+  one session. One page per line, `ChromeBar` ([[S120]]) first because every body is laid out against it.
+- **DONE when:** each split line's page multiplies its RefPanelW sizes by `Typography.ScaleFor(w)` — boxes as
+  well as type, [[S117]]'s trap — with a cross-width check in `LegibilityFloorTest` for that page and a
+  preview PNG at 2560, and `Sc(1280) == 1` keeping the reference render byte-identical.
+
+### S122 [S] `CoverPage` has two different stroke rules and they disagree at 2560 — **TODO** — [logged by [[S119]] (job 3 of the 2026-09-06 batch), TIER 3, one page]
+- **The finding.** `CoverPage` draws hairlines two ways. `St(2)` now goes through `Strokes.Px` and returns a
+  whole **2 device px** at 2560. `Stroke(sc, 2f)` (`CoverPage.cs:654`) is a float with a 1 px floor and
+  returns **1.33 px** — antialiased across two rows, so a visibly lighter line for the same nominal width.
+  Four draws use `Stroke`: the MAP well's box (`:459`), the NEXT VIEW pill (`:566`), that pill's bar
+  (`:569`, at `6f`), and the d-pad button box (`:647`).
+- **Neither is wrong on its own** — `Stroke` is proportional, which is why job 3 ruled it correctly
+  screen-space rather than an instance of R-02's family. The defect is that ONE page answers "how thick is a
+  2 px design rule" two ways, which is how `MarginAffordance`'s three-copies-of-a-rectangle started.
+- **DONE when:** `CoverPage` has one stroke rule. If `Strokes.Px` wins, check the pill and the d-pad box on a
+  2560 preview first — they are curves and a box, not long rules, and a whole-pixel snap may read heavier
+  than intended; if `Stroke` wins, say why a float is right here and `St` is right for the ten rules.

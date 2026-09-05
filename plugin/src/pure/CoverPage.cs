@@ -371,7 +371,7 @@ namespace DragonScreen
             float Y(float y) => y * sc;
             float Z(float v) => v * sc;
             float Wd(float x, float wref) => wref * sc + (x < Split && x + wref > Split ? extra : 0f); // stretch straddlers (bars)
-            int St(float rs) { int p = (int)Math.Round(rs * sc); return p < 1 ? 1 : p; }
+            int St(float rs) => Strokes.Px(rs, sc);   // ONE rule, in Strokes.cs - rounds UP (R-02 family)
 
             dl.Rect(0, 0, w, h, DragonPalette.Background);
 

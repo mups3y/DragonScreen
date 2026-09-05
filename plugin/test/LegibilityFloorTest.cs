@@ -49,6 +49,7 @@ public static class LegibilityFloorTest
         TheSameElementReportsTheSamePercentageAtBothWidths();
         NavPageTracksThePanel();
         NavPageIsUnchangedAtTheReferenceWidth();
+        StrokesKeepTheirPhysicalWeight();
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed"
                           + "   (floor " + Typography.MinFor(W1) + " px @" + W1
@@ -98,23 +99,22 @@ public static class LegibilityFloorTest
         float rz1 = FitPercentOfFloor(W1, H1, "RENDEZVOUS", null);
         float rz2 = FitPercentOfFloor(W2, H2, "RENDEZVOUS", null);
 
-        // ⛔ REPORTED, NOT ASSERTED - AND THE GAP IS A SECOND DEFECT, NOT A TOLERANCE.
-        // R-02's verify line wants these two percentages EQUAL. They are not yet, and the residual is
-        // not noise: MarginAffordance's box is built from Inset = 4f, BorderPx = 2f and Pad = 2f, all
-        // DEVICE-pixel constants subtracted from a letterbox that scales with the panel. So the usable
-        // width grows 2.13x while the panel grows 2.00x, and the fitted type comes out slightly LESS
-        // bad at 2560 for a reason that has nothing to do with legibility. QC measured that same 2.13x
-        // independently.
-        //
-        // That is the SAME FAMILY as R-02 and a DIFFERENT INSTANCE of it, and it is enumerated by job
-        // 3 of the 2026-09-06 batch, which owns MarginAffordance.cs's Inset. Asserting equality here
-        // would make job 2's suite depend on job 3's fix and leave the tree red in between. Printed
-        // instead, the way FigmaUINavTest prints this same control's floor, and TIGHTENED TO AN
-        // ASSERTION BY JOB 3 - the numbers below are what it has to make equal.
+        // ⛔ ASSERTED SINCE JOB 3 (2026-09-06). This was a PRINT when job 2 landed, because the two
+        // percentages were 72.2% @1280 and 82.9% @2560 and the residual was a SECOND instance of the
+        // same family, not a tolerance: MarginAffordance's box is built from Inset = 4f, BorderPx = 2f
+        // and Pad = 2f - RefPanelW constants subtracted from a letterbox that scales - so the usable
+        // width grew 2.13x while the panel grew 2.00x, and the fitted type came out slightly LESS bad
+        // at 2560 for a reason with nothing to do with legibility. QC measured that same 2.13x
+        // independently. Job 3 scaled those three constants; this is now an equality, which is what
+        // R-02's own verify line asks for.
         Console.WriteLine("  note  fitted type vs the floor: MANUAL/DOCKING "
             + (pct1 * 100f).ToString("0.0") + "% @1280 vs " + (pct2 * 100f).ToString("0.0") + "% @2560"
-            + ", RENDEZVOUS " + (rz1 * 100f).ToString("0.0") + "% vs " + (rz2 * 100f).ToString("0.0")
-            + "%   (residual = MarginAffordance's device-px Inset/Border/Pad - batch job 3)");
+            + ", RENDEZVOUS " + (rz1 * 100f).ToString("0.0") + "% vs " + (rz2 * 100f).ToString("0.0") + "%");
+        Check("MANUAL/DOCKING is the SAME fraction of the floor at 1280 and 2560",
+              Math.Abs(pct1 - pct2) < 0.005f,
+              "@1280 " + (pct1 * 100f).ToString("0.00") + "%, @2560 " + (pct2 * 100f).ToString("0.00") + "%");
+        Check("RENDEZVOUS likewise", Math.Abs(rz1 - rz2) < 0.005f,
+              "@1280 " + (rz1 * 100f).ToString("0.00") + "%, @2560 " + (rz2 * 100f).ToString("0.00") + "%");
 
         // What job 2 DOES own is the floor side of that comparison, and it is now exact: the same
         // element measured against a floor that scales cannot look better merely for being rendered
@@ -135,6 +135,26 @@ public static class LegibilityFloorTest
               "@1280 " + MarginAffordance.FitsLegibly(W1, H1, "MANUAL", "DOCKING")
                   + ", @2560 " + MarginAffordance.FitsLegibly(W2, H2, "MANUAL", "DOCKING"));
 
+        // The MinMargin guard is a question about PHYSICAL room ("is there space for a control here"),
+        // so the same ASPECT must answer the same way at any width. 1219x703 and 2438x1406 are the same
+        // shape; both leave a letterbox just too narrow. With MinMargin left as a device-pixel 40 the
+        // wide one would answer YES and the narrow one NO, for a screen of identical proportions.
+        // Two aspects, each rendered at both widths. The narrow pair leaves a letterbox 2% of the
+        // panel (under the 40/1280 = 3.125% threshold); the roomier pair leaves 4% (over it). With
+        // MinMargin left as a device-pixel 40, the 2560 narrow panel measures 51.2 px of letterbox
+        // against a 40 px bar and says YES while its identical-shape 1280 twin says NO.
+        {
+            float x, y, bw, bh;
+            bool tightNarrow = MarginAffordance.Rect(1280, 757, out x, out y, out bw, out bh);
+            bool wideNarrow  = MarginAffordance.Rect(2560, 1515, out x, out y, out bw, out bh);
+            bool tightRoomy  = MarginAffordance.Rect(1280, 726, out x, out y, out bw, out bh);
+            bool wideRoomy   = MarginAffordance.Rect(2560, 1451, out x, out y, out bw, out bh);
+            Check("the MinMargin guard refuses a 2%-letterbox aspect at BOTH widths",
+                  !tightNarrow && !wideNarrow, "@1280 " + tightNarrow + ", @2560 " + wideNarrow);
+            Check("...and admits a 4%-letterbox aspect at BOTH widths",
+                  tightRoomy && wideRoomy, "@1280 " + tightRoomy + ", @2560 " + wideRoomy);
+        }
+
         // ⛔ AND IT IS STILL FALSE, DELIBERATELY. H-06 / Q8 is an open DESIGN question about the
         // margin's width; this suite pins that R-02 did not silently close it by doubling the canvas.
         Check("...and that answer is still FALSE - 2560 did not make this control legible",
@@ -146,7 +166,7 @@ public static class LegibilityFloorTest
     {
         float x, y, bw, bh;
         if (!MarginAffordance.Rect(w, h, out x, out y, out bw, out bh)) return 0f;
-        return MarginAffordance.FitSize(bw, h * 0.020f, a, b) / Typography.MinFor(w);
+        return MarginAffordance.FitSize(bw, h * 0.020f, a, b, Typography.ScaleFor(w)) / Typography.MinFor(w);
     }
 
     // ---- 3. S117: NAV'S TEXT AND GEOMETRY TRACK THE PANEL ---------------------------------------
@@ -250,6 +270,56 @@ public static class LegibilityFloorTest
         NavPage.MapRect(W1, H1, out mx, out my, out mw, out mh);
         Eq("the map well still starts at Pad", mx, 24f, 0.01f);
         Eq("...and at MapTop", my, 58f, 0.01f);
+    }
+
+    // ---- 5. THE SAME DEFECT IN STROKES (batch job 3) --------------------------------------------
+    // St(2) rounded 2*sc to the NEAREST whole device pixel with a floor of 1, which is 1 px at BOTH
+    // 1280 and 2560 - so the design's 2 px rules became physically HALF AS THICK to the crew the day
+    // the panel doubled. QC measured this while answering S101. Strokes.Px rounds UP instead, which
+    // makes the thickness a constant fraction of the panel and errs thick rather than thin.
+    static void StrokesKeepTheirPhysicalWeight()
+    {
+        // The design frame is 3427 x 2112, so a page's stroke scale is panelH / 2112.
+        float sc1 = 703f / 2112f, sc2 = 1406f / 2112f;
+
+        // The invariant: a design stroke is the same FRACTION of the panel at both widths.
+        foreach (float rs in new[] { 2f, 3f, 5f })
+        {
+            float f1 = Strokes.Px(rs, sc1) / (float)W1;
+            float f2 = Strokes.Px(rs, sc2) / (float)W2;
+            Check("St(" + rs + ") is the same fraction of the panel at 1280 and 2560",
+                  Math.Abs(f1 - f2) < 1e-6f,
+                  Strokes.Px(rs, sc1) + " px of " + W1 + " (" + (f1 * 100f).ToString("0.000")
+                      + "%) vs " + Strokes.Px(rs, sc2) + " px of " + W2 + " ("
+                      + (f2 * 100f).ToString("0.000") + "%)");
+        }
+
+        // ...and never thinner than the design asks for in proportion, nor thinner than one pixel.
+        foreach (float rs in new[] { 1f, 2f, 3f, 5f })
+            foreach (float sc in new[] { sc1, sc2 })
+            {
+                Check("St(" + rs + ") at sc " + sc.ToString("0.000") + " is never below the design ratio",
+                      Strokes.Px(rs, sc) >= rs * sc - 1e-4f, "got " + Strokes.Px(rs, sc));
+                Check("St(" + rs + ") at sc " + sc.ToString("0.000") + " is never below one pixel",
+                      Strokes.Px(rs, sc) >= 1, "got " + Strokes.Px(rs, sc));
+            }
+
+        // ⛔ AND THE REFERENCE WIDTH IS UNTOUCHED, for every argument the build actually uses. Ceiling
+        // and round-to-nearest agree at 1280 on all four, which is why this fix moves nothing at the
+        // width every historical figure in docs/ was measured at.
+        foreach (float rs in new[] { 1f, 2f, 3f, 5f })
+        {
+            int roundWas = (int)Math.Round(rs * sc1); if (roundWas < 1) roundWas = 1;
+            Check("St(" + rs + ") at 1280 is what it always was", Strokes.Px(rs, sc1) == roundWas,
+                  "now " + Strokes.Px(rs, sc1) + ", was " + roundWas);
+        }
+
+        // The one that CANNOT be proportional, stated so nobody "fixes" it into a sub-pixel smear: a
+        // 1 px design rule is 0.33 device px at 1280 and 0.67 at 2560, both under the 1 px a renderer
+        // can draw, so both clamp to 1 and it does halve physically between them.
+        Check("St(1) is at the one-pixel floor at both widths, which is the stated limit",
+              Strokes.Px(1f, sc1) == 1 && Strokes.Px(1f, sc2) == 1,
+              "@1280 " + Strokes.Px(1f, sc1) + ", @2560 " + Strokes.Px(1f, sc2));
     }
 
     static DisplayList BuildNav(int w, int h, MapView view)

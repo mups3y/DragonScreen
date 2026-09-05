@@ -1414,7 +1414,7 @@ public static class FigmaUINavTest
 
             // 3. H-06: THE INK STAYS INSIDE THE BOX. "MANUAL" used to render 56 px of ink in a 45.6 px
             //    box - 4.0 px over the left border and 5.4 px over the right.
-            float ts = MarginAffordance.FitSize(bw, H * 0.020f, la[p], lb[p]);
+            float ts = MarginAffordance.FitSize(bw, H * 0.020f, la[p], lb[p], Typography.ScaleFor(W));
             float ink = MarginAffordance.InkWidth(ts, la[p], lb[p]);
             Check(pages[p] + ": the widest label's ink clears both borders",
                   ink <= bw - 8f + 0.01f,
@@ -1450,9 +1450,9 @@ public static class FigmaUINavTest
             float x, y, bw, bh;
             MarginAffordance.Rect(W, H, out x, out y, out bw, out bh);
             Console.WriteLine("  note  margin affordance type at " + W + "x" + H + ": MANUAL/DOCKING "
-                + MarginAffordance.FitSize(bw, H * 0.020f, "MANUAL", "DOCKING").ToString("0.00")
+                + MarginAffordance.FitSize(bw, H * 0.020f, "MANUAL", "DOCKING", Typography.ScaleFor(W)).ToString("0.00")
                 + " px, RENDEZVOUS "
-                + MarginAffordance.FitSize(bw, H * 0.020f, "RENDEZVOUS", null).ToString("0.00")
+                + MarginAffordance.FitSize(bw, H * 0.020f, "RENDEZVOUS", null, Typography.ScaleFor(W)).ToString("0.00")
                 + " px, floor " + Typography.MinFor(W) + "  (QC H-06 / Q8)");
         }
     }

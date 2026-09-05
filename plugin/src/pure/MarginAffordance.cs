@@ -36,14 +36,34 @@ namespace DragonScreen
         /// <summary>Below this much letterbox there is no room for the control, so it is neither drawn
         /// nor hit — the CLEAN 1 guard, and it must stay on both sides together, which is exactly what
         /// sharing one function guarantees. ⚠ A panel whose aspect leaves 40 px or less therefore has no
-        /// margin route at all; the Menu grid is the second route to both destinations.</summary>
+        /// margin route at all; the Menu grid is the second route to both destinations.
+        ///
+        /// ⛔ 40 PX AT Typography.RefPanelW, resolved through ScaleFor at the point of use — see the
+        /// SCALE block below. "Is there room for a control" is a question about PHYSICAL room, so the
+        /// threshold has to follow the panel or it means something different on every screen.</summary>
         public const float MinMargin = 40f;
 
         /// <summary>Gap between the panel edge / frame art and the box. Was 12 on both sides, which cost
-        /// 24 px of a margin only 69.6 px wide at the shipped size — see FitSize.</summary>
+        /// 24 px of a margin only 69.6 px wide at the shipped size — see FitSize. At RefPanelW.</summary>
         const float Inset = 4f;
 
         const float TopFrac = 0.44f, HeightFrac = 0.12f;
+
+        // ---- EVERY PIXEL CONSTANT IN THIS FILE IS A SIZE AT Typography.RefPanelW (QC R-02 family) ----
+        // MinMargin, Inset, BorderPx and Pad are PANEL pixels, measured at 1280. The letterbox they are
+        // subtracted from - ox = (w - RefW*sc) / 2 - scales with the panel. So when S115 doubled the
+        // shipped screenWidth on 2026-09-05, ox doubled and these four did not, and the usable box grew
+        // 2.13x instead of 2.00x. QC measured that 2.13x independently.
+        //
+        // The visible consequence was a control that looked LESS illegible for a reason that has nothing
+        // to do with legibility: the fitted MANUAL/DOCKING type reported 72.2% of the floor at 1280 and
+        // 82.9% at 2560, for a box that had not changed size in the seat by one arc-minute. R-02's own
+        // verify line wants those two numbers EQUAL, and with the scale applied they are - pinned by
+        // LegibilityFloorTest, which prints both and asserts they agree.
+        //
+        // TopFrac / HeightFrac above are FRACTIONS of h and were always right; CapAdvance is an em ratio
+        // and is dimensionless. Only the four pixel counts needed this.
+        static float S(int w) { return Typography.ScaleFor(w); }
 
         /// <summary>D-DIN capital ink width per character, in ems. MEASURED, not chosen: at the shipped
         /// 1280×703 the HUD renders "MANUAL" at ts = 14.06 px with its white ink spanning x 8…63, i.e.
@@ -60,9 +80,10 @@ namespace DragonScreen
             x = y = bw = bh = 0f;
             if (w <= 0 || h <= 0) return false;
             float sc = h / RefH, ox = (w - RefW * sc) * 0.5f;
-            if (ox <= MinMargin) return false;
-            x = Inset;
-            bw = ox - Inset * 2f;
+            float ps = S(w);
+            if (ox <= MinMargin * ps) return false;
+            x = Inset * ps;
+            bw = ox - Inset * 2f * ps;
             y = h * TopFrac;
             bh = h * HeightFrac;
             return true;
@@ -75,18 +96,24 @@ namespace DragonScreen
         /// would have traded an overrun for an unreadable label, and the same trap is here. It is safe on
         /// the HUD because the shrink is small (see H-06's numbers) and unsafe for a long word, which is
         /// why <see cref="FitsLegibly"/> exists and why the callers do not silently rely on this.</summary>
-        public static float FitSize(float bw, float wantSize, string a, string b)
+        /// <param name="ps">the panel's scale, Typography.ScaleFor(w) — REQUIRED, with no default
+        /// overload on purpose. The border and the breathing gap are RefPanelW pixels and have to follow
+        /// the panel along with the box they are subtracted from (see the SCALE block above); a caller
+        /// that could omit the scale would silently measure a 2560 box against a 1280 border, which is
+        /// the whole shape of QC R-02. Every caller already has `w`, so every caller can say.</param>
+        public static float FitSize(float bw, float wantSize, string a, string b, float ps)
         {
             int n = Longest(a, b);
             if (n < 1 || bw <= 0f) return wantSize;
             // The ink has to clear the 2-px border on BOTH sides, plus a 2-px breathing gap, or it
             // "fits" by touching its own frame - which is what the overflow looked like from the inside.
-            float avail = bw - (BorderPx + Pad) * 2f;
+            float avail = bw - (BorderPx + Pad) * 2f * ps;
             if (avail <= 0f) return wantSize;
             float fit = avail / (n * CapAdvance);
             return fit < wantSize ? fit : wantSize;
         }
 
+        /// <summary>Both at Typography.RefPanelW; scaled at the point of use — see the SCALE block.</summary>
         const float BorderPx = 2f, Pad = 2f;
 
         /// <summary>The widest label's ink width at the fitted size - what a test asserts against the
@@ -110,7 +137,7 @@ namespace DragonScreen
         {
             float x, y, bw, bh;
             if (!Rect(w, h, out x, out y, out bw, out bh)) return false;
-            return FitSize(bw, h * 0.020f, a, b) >= Typography.MinFor(w);
+            return FitSize(bw, h * 0.020f, a, b, S(w)) >= Typography.MinFor(w);
         }
 
         static int Longest(string a, string b)
@@ -127,10 +154,11 @@ namespace DragonScreen
             float x, y, bw, bh;
             if (!Rect(w, h, out x, out y, out bw, out bh)) return;
 
+            float ps = S(w);
             dl.Rect(x, y, bw, bh, DragonPalette.Panel);
-            dl.Box(x, y, bw, bh, 2, DragonPalette.Accent);
+            dl.Box(x, y, bw, bh, BorderPx * ps, DragonPalette.Accent);
 
-            float ts = FitSize(bw, h * 0.020f, a, b);
+            float ts = FitSize(bw, h * 0.020f, a, b, ps);
             float cx = x + bw * 0.5f;
             if (b == null)
             {

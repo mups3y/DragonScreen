@@ -94,7 +94,7 @@ namespace DragonScreen
             float PX(float x) => x * sx;
             float PY(float y) => y * sy;
             float SZ(float v) => v * sy;
-            int St(float rs) { int p = (int)Math.Round(rs * sy); return p < 1 ? 1 : p; }
+            int St(float rs) => Strokes.Px(rs, sy);   // ONE rule, in Strokes.cs - rounds UP (R-02 family)
 
             dl.Rect(0, 0, w, h, DragonPalette.Background);
             dl.Text("MENU", w * 0.5f, PY(60), SZ(56), TextAlign.Centre, DragonPalette.White);
