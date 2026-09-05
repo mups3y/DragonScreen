@@ -663,6 +663,16 @@ namespace DragonScreen
         // the SHORTEST one. At the design row pitch its last row overhung the card by 13 design units and
         // rendered half on the panel, half on the page ground (QC-AUDIT 2026-09-03, finding 6). FitRows
         // scales a block to its own slot instead, so no card can overflow when a row is added later.
+        //
+        // ⚠ SUPERSEDED IN PLACE 2026-09-06 (S123), one clause only — kept, not deleted, per C1.16/G12,
+        // because it is the premise FitRows was written from and the reason the function exists at all.
+        // WHAT IT CLAIMED: "the densest list, the seven-step ENTRY TIMELINE, sits in the SHORTEST one".
+        // WHAT REPLACED IT: the owner's C-05 ruling ("option 2", 2026-09-06) swapped ENTRY TIMELINE into
+        // card 3 (the TALLEST, avail 426) and CONTINGENCY into card 1 (avail 193). The unequal heights,
+        // the 2026-09-03 overhang and FitRows' reason for existing are all still exactly as stated above
+        // — only which list sits in which slot changed. See DrawReferenceContent for the ruling and the
+        // arithmetic. FitRows now returns early on all three cards, so its clamp is unexercised by the
+        // shipped content; it stays because a row added later would exercise it again.
         public const float RowTop = 56f, RowSize = 26f, RowPad = 12f;
         static readonly float Card1Bottom = BoxOf("rectangle_179", 1) + BoxOf("rectangle_179", 3);
         static readonly float Card2Bottom = BoxOf("rectangle_180", 1) + BoxOf("rectangle_180", 3);
@@ -803,16 +813,34 @@ namespace DragonScreen
                 }
             }
 
-            // Return/deorbit sequence — §8 "Return/deorbit". Times are the ones §8 actually gives; no
-            // invented numbers (§1.4).
-            Card(499f, Card1Bottom, "ENTRY TIMELINE", new[] {
-                "Undock → trunk jettison",
-                "Deorbit burn — ~15 min",
-                "Claw separation — ~1 h 20 m before splashdown",
-                "Nose cone close & lock",
-                "Entry interface",
-                "Drogues, then mains at ~2 km",
-                "Splashdown — T+50 min from burn start" }, 32f);
+            // ---- S123 / QC C-05: THE TWO LISTS ARE SWAPPED, AND THE CARDS ARE NOT ----
+            // 🟢 OWNER RULING, 2026-09-06, verbatim: "option 2" — C-05's option (b). The Reference
+            // Content page is §14.2 TIER-3 (no evidence, no asset → invention needs joint discussion), so
+            // this was an owner call and not a build chat's; that quote is the whole of the authority.
+            //
+            // WHAT MOVED: the title, the lines and the spacing only. The three card BACKGROUNDS
+            // (rectangle_179/180/181) are real baked Figma layout and do NOT move, so `titleY` and
+            // `slotBottom` stay welded to their card — they ARE the card. Card 2 is untouched.
+            //
+            // WHY: the seven-row ENTRY TIMELINE was in card 1, the SHORTEST slot (avail 193 design px),
+            // and could not clear the legibility floor there at any width — seven rows at the floor
+            // (48.068 design px, and that number is SCALE-FREE: 32 ÷ sc 0.66572 at 2560 and 16 ÷ sc
+            // 0.33286 at 1280 are the same figure) need 336.48. Card 3's avail is 426, so the timeline
+            // clears it with 89.5 design px to spare, and CONTINGENCY's four rows need 192.27 of card
+            // 1's 193. That is the whole of the swap: the densest list now sits in the tallest slot.
+            //
+            // ⚠ THIS MAKES [[S116]]'s UNIT FIX SAFE, NOT SUFFICIENT. Both blocks now fit at their WANTED
+            // size, so FitRows returns early on both and the clamp never fires either way. The rows still
+            // draw at RowSize 26 design = 17.31 panel px against a 32 px floor — that is [[R-01]]'s
+            // legibility finding and nothing here closes it.
+
+            // Contingency / abort notes — the CONFIRMED-real panel functions (§4) + the §8 deorbit
+            // go/no-go timing.
+            Card(499f, Card1Bottom, "CONTINGENCY", new[] {
+                "EJECT — SuperDraco abort (8 modes)",
+                "WATER DEORBIT / DEORBIT NOW — contingency immediate deorbit",
+                "Water landing is the norm — 7 designated splashdown sites",
+                "Deorbit go/no-go — ~30 min before claw-sep prep" }, 40f);
 
             // §8 "Parachutes (Mark 3)".
             Card(848f, Card2Bottom, "PARACHUTES (MARK 3)", new[] {
@@ -821,13 +849,16 @@ namespace DragonScreen
                 "Land under ≥ 3 mains",
                 "CUT MAINS after splashdown" }, 40f);
 
-            // Contingency / abort notes — the CONFIRMED-real panel functions (§4) + the §8 deorbit
-            // go/no-go timing.
-            Card(1329f, Card3Bottom, "CONTINGENCY", new[] {
-                "EJECT — SuperDraco abort (8 modes)",
-                "WATER DEORBIT / DEORBIT NOW — contingency immediate deorbit",
-                "Water landing is the norm — 7 designated splashdown sites",
-                "Deorbit go/no-go — ~30 min before claw-sep prep" }, 40f);
+            // Return/deorbit sequence — §8 "Return/deorbit". Times are the ones §8 actually gives; no
+            // invented numbers (§1.4).
+            Card(1329f, Card3Bottom, "ENTRY TIMELINE", new[] {
+                "Undock → trunk jettison",
+                "Deorbit burn — ~15 min",
+                "Claw separation — ~1 h 20 m before splashdown",
+                "Nose cone close & lock",
+                "Entry interface",
+                "Drogues, then mains at ~2 km",
+                "Splashdown — T+50 min from burn start" }, 32f);
         }
 
         /// <summary>Draw the seven-item deorbit phase rail (ring marker + two-line label per row) plus the

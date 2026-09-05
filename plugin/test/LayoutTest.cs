@@ -861,6 +861,15 @@ public static class LayoutTest
             float size, gap;
 
             // ENTRY TIMELINE: 7 rows from y=555 in a slot ending at 760. The design pitch does not fit.
+            //
+            // ⚠ SUPERSEDED IN PLACE 2026-09-06 (S123) — the CHECK is unchanged and still correct; only
+            // its LABEL is stale, and it is kept per C1.16/G12 rather than retyped away. WHAT IT
+            // CLAIMED: that this is where ENTRY TIMELINE draws. WHAT REPLACED IT: the owner's C-05
+            // ruling ("option 2", 2026-09-06) moved ENTRY TIMELINE to card 3, so NO shipped card is a
+            // 7-row block at y=555 any more. These arguments are now a SYNTHETIC too-dense block, and
+            // that is exactly why they are worth keeping — FitRows' scaling path is no longer exercised
+            // by any shipped content (see the early-return checks below), so without a synthetic caller
+            // the whole clamp would go untested and a later regression in it would land silently.
             CoverPage.FitRows(555f, 760f, 7, CoverPage.RowSize, 32f, out size, out gap);
             Check("QC6 a card too dense for its slot shrinks", size < CoverPage.RowSize, "size " + size);
             Eq("QC6 ...to exactly the slot, less the bottom pad",
@@ -888,6 +897,66 @@ public static class LayoutTest
             // units here before that call would land the blocked fix by the back door. See FitRows.
             CoverPage.FitRows(0f, 60f, 6, CoverPage.RowSize, 40f, out size, out gap);
             Check("QC6 type never goes under Typography.Min", size >= Typography.Min, "size " + size);
+
+            // ---- S123: AFTER THE SWAP, NEITHER CARD CLAMPS — AND [[S116]] DEPENDS ON THAT ----------
+            // The owner's C-05 ruling ("option 2", 2026-09-06) put CONTINGENCY's 4 rows in card 1 and
+            // ENTRY TIMELINE's 7 in card 3. Both blocks now fit at their WANTED size, so FitRows takes
+            // its `need <= avail` early return on both and the clamp never fires. That is the property
+            // S116 rests on: correcting the design-px/panel-px unit bug cannot move a render in which
+            // the clamp is never reached. If either of these ever fails, S116 is live again and must be
+            // re-derived before it lands.
+            //
+            // ⛔ Stated as `== RowSize` exactly, NOT ">= Typography.Min". An early return is the only
+            // path that hands back the wanted size untouched; the clamp path cannot produce it.
+            CoverPage.FitRows(555f, 760f, 4, CoverPage.RowSize, 40f, out size, out gap);
+            Check("S123 card 1 (CONTINGENCY, 4 rows) fits unscaled — FitRows returns early",
+                  size == CoverPage.RowSize && gap == 40f, "size " + size + " gap " + gap);
+            CoverPage.FitRows(1385f, 1823f, 7, CoverPage.RowSize, 32f, out size, out gap);
+            Check("S123 card 3 (ENTRY TIMELINE, 7 rows) fits unscaled — FitRows returns early",
+                  size == CoverPage.RowSize && gap == 32f, "size " + size + " gap " + gap);
+        }
+
+        // ---- S123: THE SWAP ITSELF, READ OFF THE RENDER RATHER THAN OFF THE SOURCE ------------------
+        // The two checks above pin the arithmetic; this pins that the shipped page actually draws it
+        // that way, which is the half a re-typed literal cannot prove. Card 1's band must contain the
+        // CONTINGENCY title and card 3's the ENTRY TIMELINE title — and every row in the card column
+        // must draw at the WANTED size, which is the render-side statement of "no clamp fired".
+        {
+            const float CoverRefH = 2112f;
+            int cw = 2560, ch = 1406;
+            float csc = ch / CoverRefH;
+            PageState ss = new PageState(); ss.Valid = true;
+            DisplayList sd = new DisplayList(CoverPage.Commands);
+            CoverPage.Build(sd, cw, ch, ss, MapProjection.Default(), 5);   // Reference Content phase
+
+            string card1Title = null, card3Title = null;
+            int rows = 0, offSize = 0; float worstSize = 0f;
+            for (int i = 0; i < sd.Count; i++)
+            {
+                DrawCmd t = sd.At(i);
+                if (t.Kind != DrawKind.Text || t.A < 240f * csc || t.A > 1427f * csc) continue;
+                // Titles draw at 34 design px; rows at RowSize. Band by the baked card backgrounds.
+                bool inCard1 = t.B >= 443f * csc && t.B < 760f * csc;
+                bool inCard3 = t.B >= 1273f * csc && t.B < 1823f * csc;
+                if (Math.Abs(t.C - 34f * csc) < 0.01f)
+                {
+                    if (inCard1) card1Title = t.Str;
+                    if (inCard3) card3Title = t.Str;
+                }
+                else if (inCard1 || inCard3)
+                {
+                    rows++;
+                    if (Math.Abs(t.C - CoverPage.RowSize * csc) > 0.01f)
+                    { offSize++; if (Math.Abs(t.C - CoverPage.RowSize * csc) > worstSize) worstSize = Math.Abs(t.C - CoverPage.RowSize * csc); }
+                }
+            }
+            Check("S123 card 1 now carries CONTINGENCY", card1Title == "CONTINGENCY",
+                  "card 1 title is " + (card1Title ?? "<none>"));
+            Check("S123 card 3 now carries ENTRY TIMELINE", card3Title == "ENTRY TIMELINE",
+                  "card 3 title is " + (card3Title ?? "<none>"));
+            Check("S123 cards 1 and 3 draw 11 rows between them (4 + 7)", rows == 11, "found " + rows);
+            Check("S123 every one of them draws at the WANTED size — no clamp fired anywhere",
+                  offSize == 0, offSize + " rows off by up to " + worstSize + " px");
         }
 
         // ...and the end-to-end guard: NO text drawn inside one of the three card slots may cross that

@@ -13061,7 +13061,7 @@ True"* for two panels of identical shape). `build.py preview` green, 108 pages; 
   2560 preview first — they are curves and a box, not long rules, and a whole-pixel snap may read heavier
   than intended; if `Stroke` wins, say why a float is right here and `St` is right for the ten rules.
 
-### S123 [S] C-05's layout call: swap ENTRY TIMELINE into card 3 and CONTINGENCY into card 1 — **DOING** — [🟢 OWNER RULING 2026-09-06 "option 2"; TIER-3 layout, so it needed that ruling and now has it; unblocks [[S116]], which must not land before it]
+### S123 [S] C-05's layout call: swap ENTRY TIMELINE into card 3 and CONTINGENCY into card 1 — **DONE 2026-09-06** — [🟢 OWNER RULING 2026-09-06 "option 2"; TIER-3 layout, so it needed that ruling and now has it; unblocks [[S116]], which must not land before it]
 
 ⚙ **SESSION DEVIATION RECORDED HERE (C1.1 + C1.7 suspended for this session only).** This line is the
 first written by the CONTINUOUS BUILD CHAT opened 2026-09-06. **🟢 OWNER DIRECTIVE, 2026-09-06, verbatim:**
@@ -13120,6 +13120,67 @@ required"*), which is exactly why a build chat could not pick this and why the r
   phase) at 2560 — ENTRY TIMELINE's seven rows in card 3 and CONTINGENCY's four in card 1, **every row
   inside its own card background**, and the other Cover phases plus card 2 unchanged. State in the entry
   that `FitRows` returned early on both cards (no clamp), which is the property [[S116]] depends on.
+
+**DONE 2026-09-06.** The two `Card(...)` calls exchanged their **contents only** — title, `lines[]` and
+`spacing`. `titleY` and `slotBottom` stayed welded to their card, so `rectangle_179/180/181` did not move,
+and **card 2 is byte-identical** (it appears in the diff only because the hunk around it moved; proven by
+`git diff | grep -E '(PARACHUTES|drogues|mains|CUT MAINS|Card2Bottom)'` returning the same four strings on
+both sides). Files: `plugin/src/pure/CoverPage.cs`, `plugin/test/LayoutTest.cs`. Nothing else.
+
+**⭐ `FitRows` RETURNS EARLY ON BOTH CARDS — NO CLAMP FIRES. This is the property [[S116]] depends on, and
+it is now asserted four ways, not stated.** Two direct checks (`size == RowSize && gap == wanted`, spelled
+as an equality *because only the early-return path hands the wanted size back untouched* — the clamp path
+cannot produce it), plus a render-side check that reads the **actual display list** from
+`CoverPage.Build(..., 5)` and requires all 11 rows across cards 1 and 3 to draw at `RowSize * sc`.
+
+**MEASURED, NOT ASSERTED — and the `avail` figures came out of RUNNING CODE, not out of C-05's table.**
+Mutation C (delete `need <= avail` from the early return) forces the scaling path and makes `FitRows`
+report its own `k`: card 1 returned `size 34.36986` → k = 34.36986/26 = **1.321918 = 193/146**; card 3
+returned `size 50.80734` → k = **1.954128 = 426/218**. So `avail` **193** and **426** and `need` **146**
+and **218** are all confirmed by the build itself, independently of the parsed `Box` table. Re-derived
+arithmetic agrees: floor `32 ÷ sc 0.66572` = **48.068** design px = `16 ÷ sc 0.33286` (**scale-free**,
+so the swap is right at 1280 and 2560 alike); 7 rows at the floor = 336.48, card 3 spare **89.52**; 4 rows
+= 192.27 of card 1's 193.
+
+**MUTATION-PROVEN (every new check shown to fail).**
+| mutation | result |
+|---|---|
+| **A** — swap the two title strings back | 2 FAIL: card 1/card 3 title checks |
+| **B** — full revert to the pre-S123 arrangement | 3 FAIL: both titles **+ "no clamp fired anywhere" (7 rows off by up to 1.98 px)** — which is the positive proof that the OLD layout clamped and the new one does not |
+| **C** — remove `need <= avail` from `FitRows`' early return | 4 FAIL: both S123 early-return checks, the render-side size check, and the pre-existing `QC6 a card that already fits is left alone` |
+
+**Verified (C1.3).** `python plugin/build.py test` **green — layout suite 314 checks, all passed**; ALL
+SUITES PASSED. `python plugin/build.py preview` re-rendered; **`ui_cover_phase5.png` inspected at 2560**,
+and the card column cropped at 1:1 to judge containment rather than judging it from a downscaled view:
+CONTINGENCY's 4 rows in card 1, PARACHUTES untouched in card 2, **ENTRY TIMELINE's 7 rows in card 3 with
+visible room below the last row**, every row inside its own background, and no horizontal overrun (the
+longest line, *"WATER DEORBIT / DEORBIT NOW…"*, ends well inside the card's right edge — as predicted,
+since all three backgrounds are `x = 240, w = 1187` and `Card()` takes no per-card x).
+**Other Cover phases: unchanged BY CONSTRUCTION, which is stronger than diffing PNGs** — `:427`
+`if (refPhase) DrawReferenceContent(...)` gates the whole function behind rail index 5, so no other phase
+can reach a line this task touched.
+
+**C1.16 / G12 COMPLIANCE, PROVEN MECHANICALLY RATHER THAN BY EYE.** No reasoning was deleted to make room:
+every comment line in both files at `HEAD` still appears in the new file — `CoverPage.cs` **401 → 431
+comment lines, 0 lost**; `LayoutTest.cs` **253 → 278, 0 lost**. Two comments were **marked SUPERSEDED IN
+PLACE** rather than retyped away, per G12's honest route:
+1. `CoverPage.cs` `:660`'s slot header claimed *"the densest list, the seven-step ENTRY TIMELINE, sits in
+   the SHORTEST one"*. That clause is now false; the rest of it (the unequal 317/449/550 heights, the
+   2026-09-03 overhang, FitRows' reason for existing) is still exactly true, so the claim is kept and a
+   dated note says what replaced it.
+2. `LayoutTest.cs`'s *"ENTRY TIMELINE: 7 rows from y=555"* label. **The check itself is unchanged and
+   still passes** — but no shipped card is a 7-row block at y=555 any more, so its arguments are now a
+   SYNTHETIC too-dense block. It is kept deliberately, and the note says why: with the clamp no longer
+   exercised by any shipped content, that synthetic caller is the **only** remaining coverage of
+   `FitRows`' scaling path, and deleting it would let a later regression in the clamp land silently.
+
+⚠ **SAFE, NOT SUFFICIENT — and this line closes nothing else.** Both blocks now fit at their *wanted*
+size, so [[S116]]'s unit fix becomes a **no-op on the render** (correct units cannot move a render whose
+clamp is never reached) — that is exactly why S116 is safe to land now, and S116's own line already says
+it must not land before this one. The rows still draw at `RowSize` 26 design = **17.31 panel px against a
+32 px floor**: that is **[[R-01]]**'s legibility finding, it is untouched, and nothing here closes it.
+No `install`, no glass, no `git push`. No flight control wired (§14.4(a)). `docs/QC_FINDINGS.md` not
+edited (QC's file); `docs/BUILD_PLAN.md` not edited (C1.12 guarded file).
 
 ### G12 [O] Close the gap C1.16 left open: research is protected wherever it lives, code comments included — **DONE 2026-09-06** — [job 4 of the 2026-09-06 owner batch; GUARDED FILES — `CLAUDE.md` + `docs/BUILD_PLAN.md` Part C, byte-identical and proven, plus §0a's ledger row]
 
