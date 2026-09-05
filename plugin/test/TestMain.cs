@@ -187,6 +187,7 @@ public static class TestMain
         bad += MissionProfileTest.Run();   // L-S0b mission-as-data: the 19-mission catalog + craft-name resolve
         bad += CrewGateTest.Run();         // L4 crew gate machine + the real gate catalog + the phase sequencer
         bad += ConductorWalkTest.Run();    // W10: the gate WALK the restored glue composes, and the AutoAdvanceGates runaway
+        bad += ConductorTest.Run();        // T16: the pure ConductorAction core — §B12.3's phase table, §B12.4's re-plan rule
         bad += WarpPlanTest.Run();         // conductor: the on-rails rate that can never overshoot the drop-out
         bad += CoastEtaTest.Run();         // conductor: range-closing coast ETA -> the warp target UT
 

@@ -4232,7 +4232,7 @@ install is a deploy target, never ours to touch):**
 > a build chat reading your `GameData`, and **the fix does not depend on the answer** — it closes the route,
 > not the source. It only matters if rows R1–R3 fail again.
 
-### T16 [O] Pure conductor core + tests — **re-scoped to the `ConductorAction` gap only, 2026-09-05 (G9 item 2)** — **DOING**
+### T16 [O] Pure conductor core + tests — **re-scoped to the `ConductorAction` gap only, 2026-09-05 (G9 item 2)** — **DONE 2026-09-06** — [⛔ **it commands nothing** — `Decide` is a pure function returning a value; executing it is T18's]
 - **Read:** §B9 / §B12.2-3 + `pure/MissionPhase.cs`.
 - **Already satisfied by W4 (DONE 2026-09-04) — do NOT rebuild these.** `pure/ModeManager.cs` (its own
   header: *"the mission conductor / phase sequencer… PURE + headless-tested"*), `pure/MissionProfile.cs`
@@ -4253,6 +4253,67 @@ install is a deploy target, never ours to touch):**
   re-scope named the prerequisite "T15b" — no such task exists: `grep -n "T15b"` returns zero hits in
   either `REGISTER.md` or `docs/BUILD_PLAN.md`. The only task that embeds MechJeb is **T15** itself, which
   is what this ordering actually depends on. Logged as a stray per C1.1, not corrected at its source.)*
+
+#### ✅ DONE 2026-09-06 — the `ConductorAction` gap closed, pure and headless
+
+**Files: two new pure, one new suite.** `plugin/src/pure/ConductorAction.cs` (the output type),
+`plugin/src/pure/Conductor.cs` (the decision logic), `plugin/test/ConductorTest.cs` (**83 checks**),
+registered in `TestMain`. Nothing else was touched.
+
+⛔ **IT COMMANDS NOTHING, AND THAT IS CHECKED, NOT CLAIMED.** `Conductor.Decide` is a pure function that
+returns a **value**. Neither file references Unity, KSP, `Vessel` or MechJeb — verified by grep. Executing
+a `ConductorAction` against the embedded `MechJebCore` is the glue's job and is **NEW work arriving with
+T18 onward**, exactly as §B12.2's corrected entry says.
+
+**THE SEQUENCING QUESTION THIS LINE RAISES, ANSWERED.** It requires T15 (embed MechJeb) first, because
+*"a module cannot be named in a decision type before the embedded core that hosts those modules exists"*.
+✅ **That dependency is met.** `plugin/src/MechHost.cs` exists and compiles, the vendored tree builds
+(245 files → `DragonScreen.Mech.dll`), and `MechHostTest` is green. ⚠ [[T15b]] is `NEEDS-WORK`, but **only
+on its IN-SIM criteria** — nothing about this line is in-sim, and T16's own DONE-when is entirely headless.
+
+⭐ **NO NAME IN THE VOCABULARY WAS INVENTED (§1.4), and both halves were checked rather than assumed.**
+Every module and operation is either §B12.3's own words or a class in the vendored tree:
+`MechJebModuleAscentPSGAutopilot` · `MechJebModuleManeuverPlanner` · `MechJebModuleNodeExecutor` ·
+`MechJebModuleDockingAutopilot` · `MechJebModuleSmartASS`, and
+`Operation{Circularize,Periapsis,Apoapsis,Plane,Transfer,CourseCorrection,KillRelVel}` — all confirmed by
+`find` under `plugin/mech/`.
+⛔ **`MechJebModuleRendezvousAutopilot` exists in the tree and is DELIBERATELY ABSENT from the enum**, with
+the reason in the file: §B1/§B12.4 say MechJeb's rendezvous *autopilot* is unreliable in RSS/RO, which is
+**why** the conductor composes planner ops itself. Naming it would invite a later chat to engage it.
+
+⭐ **AND NOT ONE THRESHOLD LIVES IN THE CORE (§1.4 / C1.15).** §B12.4 gives the rule —
+`closestApproachErr > εd OR residual > tol OR drift → rebuild Operation k` — and the **rule** is
+implemented while the **numbers** arrive on `ConductorInputs` from the caller, because they are §B7–B11
+locked params and [[T22]]'s empirical tune. `Conductor.cs` contains **no magic number at all**, and four
+checks enforce it: the same 300 m error re-plans under a tight caller tolerance and does not under a loose
+one, and an **unset** tolerance disables that disjunct rather than failing everything.
+
+**THE SAFETY ORDER IS THE DESIGN, and it is stated in the code and pinned by tests.** Abort ⟩ Complete ⟩
+Hold ⟩ Advance ⟩ the phase table. ⛔ **Abort outranks the gate hold** — an abort raised while the crew are
+being asked for a GO must not be swallowed by it. **Complete outranks the phase table** — a finished plan
+cannot re-engage a module. **Advance is decided before the table** — a finished step cannot engage its own
+module for one more tick.
+
+**MUTATION-PROVEN, on the three things most likely to be "tidied" wrong.**
+| mutation | result |
+|---|---|
+| **AB** — move the gate hold above the abort | FAILS: *"abort outranks hold, complete and phase-complete together (got Hold)"* |
+| **AC** — test the keep-out sphere *after* the operation chain | **3 FAIL** — it plans a **transfer burn next to the station** (*"got Engage ManeuverPlanner/MatchPlane"*) |
+| **AD** — hard-code `εd = 250 m` instead of taking the caller's | **2 FAIL**, including *"an UNSET tolerance disables the check rather than failing everything"* |
+
+⚠ **ONE THING §B12.3 DESCRIBES IS DELIBERATELY NOT IMPLEMENTED HERE**, and the file says so: its Approach
+entry ends *"the crew's manual docking button overrides … and shuts the Docking AP down"*. That override is
+a **crew command through the screens** — §B12.5's front-end, an honest no-op under §14.4(a) today — so it
+appears only as an **input** (`ManualDockingRequested`), never as something this core initiates.
+
+⚠ **STRAY CONFIRMED, NOT INHERITED.** This line notes the re-scope named a non-existent "T15b" as the
+prerequisite. **That is now stale in the other direction:** `T15b` **does** exist (`REGISTER.md:3801`,
+NEEDS-WORK), created after this note was written. The ordering argument is unaffected — T15a vendored the
+tree and T15b built the host, and both are present in code.
+
+**Verified (C1.3).** `python plugin/build.py test` **green — ALL SUITES PASSED**, `ConductorTest` **83
+checks, 0 failed**. **Pure code only — no draw changed, so no preview applies** (C1.3's carve-out). No
+`install`, no glass, no `git push`. §14.4(a) untouched: nothing here can reach a vessel.
 
 ### T17 [O] Glue driver, read-only — **SPLIT into W10, 2026-09-05 (G9 item 1)** — this line is closed, do not take it
 - **Closed in favour of `REGISTER.md`'s W10** (`src/CrewProcedureOps.cs` + `src/FlightDriver.cs` — "W10
