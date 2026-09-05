@@ -15284,7 +15284,7 @@ glass, no `git push` · nothing wires a flight control (§14.4(a)).
 in `Vehicle` and in `Status`. Both pre-date this line (they are at `HEAD` too) and both are in
 [[S121b-ii]]'s methods, so that line should clear them as it passes.
 
-### S121b-ii [S] `Pages.cs` — the VEHICLE page — **TODO (UNBLOCKED 2026-09-06 by [[S121b-i]])** — [split of [[S121b]]; ~34 sites]
+### S121b-ii [S] `Pages.cs` — the VEHICLE page — **DOING** — [split of [[S121b]]; ~34 sites]
 - `Vehicle` (18) · `Status` (8) · `Dot` (8).
 - ⚠ `Dot` takes no width at all and needs `sc` passed in.
 - ⭐ `Vehicle` draws through `Gauge.Bar`, which [[S121a]] made scale-aware; pass the real `sc`.
