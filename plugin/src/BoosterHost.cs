@@ -663,6 +663,37 @@ namespace DragonScreen
             bi.OffsetToMissM = 0.0;      // ⚠ the aim-beside-the-deck bias is a SAFETY policy, not a
                                          // target: it needs an "all systems nominal" verdict this host
                                          // does not have. Left inert; logged as a stray, not invented.
+            // ---- W33, 2026-09-06: RECORDED AS DELIBERATELY UNUSED. Read this before "finishing" it ----
+            // The note above is correct and is kept. It is also INCOMPLETE, and the missing half is the
+            // reason this is not a small job:
+            //
+            // ⛔ NOTHING CONSUMES EITHER FIELD. `AllNominal` and `OffsetToMissM` are declared on
+            // `BoosterInputs` (`pure/BoosterDescent.cs:208-209`) and a tree-wide grep finds no reader
+            // anywhere — only those declarations, this assignment, and one test that sets them. So this
+            // is not a wired mechanism sitting at zero; it is a DESIGN INTENT captured as two struct
+            // fields. Giving them values today would change nothing at all.
+            //
+            // WHERE THE INTENT LIVES: `pure/GridFin.cs`'s header, verbatim — "Offset-to-miss (aim beside
+            // the deck until all systems nominal) is applied BY THE CALLER as a target bias, so a failed
+            // steer lands in the water." GridFin deliberately does not apply it. This host is the
+            // caller, and it does not either.
+            //
+            // ⛔ AND THE MAGNITUDE IS THE PART A BUILD CHAT MAY NOT SUPPLY (§1.4). "How far beside the
+            // deck" is a deliberate, quantified miss — the distance at which a failed steer is safely
+            // in the water and a good steer can still divert back. There is no published SpaceX figure
+            // for it. Inventing one is exactly what §1.4 reserves for owner discussion, and getting it
+            // wrong is not a cosmetic error: too small and a failed steer still hits the deck; too
+            // large and a nominal descent cannot recover the divert.
+            //
+            // ⚠ SCOPE, so nobody over-reads it: on a LAND-ANYWHERE descent this is meaningless by
+            // construction — there is nothing to miss. It matters for the ASDS profile, and with OCISLY
+            // the only placed droneship that is one mission shape today.
+            //
+            // The `AllNominal` half is the tractable one and could be defined from real signals this
+            // host already has (engine roles resolved, the ullage gate, fin authority, the FSM's own
+            // refusals). It is NOT defined here, because a verdict with no consumer is another declared
+            // channel that can never fire — the defect S90 and S161 are about — and because it is only
+            // half of a mechanism whose other half is an owner's number.
             bi.TargetBearing = Vec3.Zero;
             bi.DownrangeErrM = 0.0;
             bi.InitialDownrangeErrM = 0.0;

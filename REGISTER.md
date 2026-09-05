@@ -12287,7 +12287,7 @@ because quoting a `//` line inside a `//` block double-marks it; all three confi
 autopilot already actuates, so §14.4(a) does not gate it, and `Actuate` is unchanged. No `install`, no
 glass, no `git push`.
 
-### W33 [S] `OffsetToMissM` / `AllNominal` — the aim-beside-the-deck safety bias has no verdict to switch on — **DOING** — [logged by W25]
+### W33 [S] `OffsetToMissM` / `AllNominal` — the aim-beside-the-deck safety bias has no verdict to switch on — **DONE 2026-09-06 — RECORDED AS DELIBERATELY UNUSED (the line's second branch)** — [⚠ and the finding was worse than logged: **nothing CONSUMES either field**] — [logged by W25]
 - **The finding:** `pure/GridFin.cs`'s header describes *"offset-to-miss (aim beside the deck until all
   systems nominal) … so a failed steer lands in the water"*, and `BoosterInputs` carries both
   `OffsetToMissM` and `AllNominal`. W25 left **both inert** (0 / false) because the bias is a SAFETY POLICY
@@ -12297,6 +12297,59 @@ glass, no `git push`.
   descent it is meaningless by construction (there is nothing to miss).
 - **DONE when:** the nominal verdict is defined from real health signals and the offset magnitude is sourced
   or ruled on, or the mechanism is recorded as deliberately unused with the reason.
+
+#### ✅ DONE 2026-09-06 — the SECOND branch, and the reason is bigger than the line knew
+
+⚠ **THE FINDING IS WORSE THAN IT WAS LOGGED AS, and that is the substance of this close.** W25 described
+the two fields as *"left inert (0 / false)"*, which reads as a wired mechanism sitting at zero.
+⛔ **Nothing consumes either field.** A tree-wide grep for `OffsetToMissM` / `AllNominal` finds **only**
+their declarations (`pure/BoosterDescent.cs:208-209`), `BoosterHost`'s assignment of `false` / `0.0`, and
+one test that sets them. **No code applies the bias.** So giving them values today would change nothing at
+all — this is a **design intent captured as two struct fields**, not a half-built feature.
+
+**Where the intent lives, verified** — `pure/GridFin.cs:9-10`, verbatim: *"Offset-to-miss (aim beside the
+deck until all systems nominal) is applied **BY THE CALLER** as a target bias, so a failed steer lands in
+the water."* GridFin deliberately does not apply it. **`BoosterHost` is the caller, and it does not
+either.** W33's quotation of that header was accurate; I checked it rather than repeating it.
+
+⛔ **WHY THE MAGNITUDE IS NOT A BUILD CHAT'S TO SUPPLY, stated concretely rather than as a rule citation.**
+"How far beside the deck" is a **quantified deliberate miss**: the distance at which a failed steer is
+safely in the water *and* a good steer can still divert back. **There is no published SpaceX figure.**
+Getting it wrong is not cosmetic — **too small and a failed steer still hits the deck; too large and a
+nominal descent cannot recover the divert.** That is precisely what §1.4 reserves for owner discussion.
+
+⚠ **AND THE TRACTABLE HALF WAS DELIBERATELY NOT DONE EITHER.** `AllNominal` *could* be defined today from
+signals this host already has — engine roles resolved, the ullage gate, fin authority, the FSM's own
+refusals. It is not, for two reasons: **a verdict with no consumer is another declared channel that can
+never fire** — the exact defect [[S90]] fixed and [[S161]] records — and it is half of a mechanism whose
+other half is an owner's number. Half-building it would leave the tree worse, not better.
+
+**WHAT LANDED: the reason, in both places a reader could start from.** `BoosterHost`'s inert assignment
+keeps W25's note **verbatim** and completes it with the missing half; `BoosterDescent`'s **declaration
+site** gains the same warning, because someone reading `BoosterInputs` would otherwise see two plausible
+fields and assume they work. **No behaviour changed and none was intended.**
+
+**Verified (C1.3).** `python plugin/build.py test` **green — ALL SUITES PASSED**. **Comments only — no
+code changed**, so no preview applies (C1.3's carve-out). **C1.16/G12: W25's note kept verbatim, 0 comment
+prose lines lost.** No `install`, no glass, no `git push`.
+
+#### ⛔ THE OPEN QUESTION THIS LEAVES (C1.13/C1.14) — the owner's, and it is a safety number
+
+**Paste-ready overseer prompt:**
+> DragonScreen, W33. The booster's grid-fin descent has a designed safety bias — **aim beside the
+> droneship until all systems are nominal, so that a failed steer lands in the water rather than on the
+> deck.** `GridFin`'s header describes it and two fields exist for it. ⛔ **Nothing implements it:** no code
+> reads either field, so the booster currently aims at the deck from the start of aero descent.
+> **Two things are needed and only one is a build chat's.** The *verdict* ("all systems nominal") can be
+> defined from signals the host already has. **The MAGNITUDE cannot** — how far beside the deck to aim is
+> a quantified deliberate miss with no published figure, and §1.4 reserves that for you. Too small and a
+> failed steer still hits the deck; too large and a nominal descent cannot divert back in time.
+> **Three options:** **(a)** give a figure (or a rule, e.g. "one deck-width", "500 m crossrange until the
+> landing burn commits") and it gets built; **(b)** leave it unimplemented and **delete the two fields**,
+> keeping the reasoning in place per C1.16, so the tree stops advertising a feature it does not have;
+> **(c)** leave both as they are, now that the code says plainly that they are an intent and not a
+> mechanism. ⚠ Note the scope: this matters only for the ASDS profile — on a land-anywhere descent there
+> is nothing to miss.
 
 ### W34 [O] Wire the ullage reader; close W5's two defects on the owner's ruling — **DONE 2026-09-05** — [TIER 1: the booster lit nothing at all, and the seam that would let it was assigned by nobody]
 Owner-directed via the overseer, 2026-09-05. Supersedes **[[W31]]** (which proposed the opposite fix).

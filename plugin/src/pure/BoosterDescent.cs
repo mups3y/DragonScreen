@@ -205,6 +205,13 @@ namespace DragonScreen
 
         // grid-fin steering (predicted-impact error on the deck; aim-to-miss until AllNominal)
         public GridFinInputs Fin;
+        // ⚠ W33, 2026-09-06: THESE TWO ARE DECLARED AND UNCONSUMED — a design intent, not a feature.
+        // Nothing in the tree reads either field: `BoosterHost` assigns them (false / 0) and no code
+        // applies the bias. `pure/GridFin.cs`'s header says it is "applied BY THE CALLER as a target
+        // bias, so a failed steer lands in the water" — GridFin deliberately does not, and the caller
+        // does not either. ⛔ Do not "finish" this by inventing the offset: how far beside the deck to
+        // aim is a quantified safety margin with no published figure, which §1.4 reserves for owner
+        // discussion. See BoosterHost's W33 block for the full account and the open question.
         public bool AllNominal;
         public double OffsetToMissM;    // cross-deck bias applied until nominal
 
