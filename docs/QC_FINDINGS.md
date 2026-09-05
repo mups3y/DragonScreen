@@ -91,8 +91,8 @@ Cover's seven phase views, plus the lower analog console panel. **The six Vehicl
 | **28** | **Rendezvous** | RENDEZVOUS | ✅ **DONE — 1 finding** | 2026-09-05 |
 | **29** | **DeorbitBurnPrep** | DEORBIT BURN PREP | ✅ **DONE — 3 findings** *(shared section with 30)* | 2026-09-05 |
 | **30** | **EntryProcedure** | ENTRY | ✅ **DONE** *(same section)* | 2026-09-05 |
-| 31 | SystemsTree | SYSTEMS TREE | NOT STARTED | — |
-| 32 | SystemsPid | SYSTEMS P&ID | NOT STARTED | — |
+| **31** | **SystemsTree** | SYSTEMS TREE | ✅ **DONE — 2 findings** *(shared section with 32)* | 2026-09-05 |
+| **32** | **SystemsPid** | SYSTEMS P&ID | ✅ **DONE** *(same section)* | 2026-09-05 |
 | 33 | Ascent | ASCENT / LAUNCH | NOT STARTED | — |
 | 34 | NavOrbitPlot | NAV / ORBIT PLOT | NOT STARTED | — |
 
@@ -3320,7 +3320,128 @@ is no tier-1 evidence for controls on either. **Inventing them would be a §1.4 
 
 ---
 
-*Next: **pages 31 + 32** — the two Systems deep-views, and then Ascent (33) and Nav/Orbit Plot (34).*
+---
+
+# PAGES 31 + 32 — SYSTEMS TREE and SYSTEMS P&ID
+
+**Inspected together — the two Vehicle deep-views**, reachable from every Vehicle-family page via
+`VehicleDeepViewLinks` (S27).
+
+**Renders:** `ui_systemstree.png` · `ui_systemstree_live.png` · `ui_systemspid.png`.
+
+**S49's entries.** §2: 31 is *"Genuinely live-coloured … **Read-only — no HitTest anywhere**"* (H32); 32 is
+*"every valve but one is a fixed-colour glyph; PUMP A/B `RUNNING` is a literal not even `Valid`-guarded;
+CABIN HX A/B are **empty boxes**"* (H33). ⚠ **S56 has closed nearly all of this** — see CLEAN 1–3. Do not
+re-log H32, and re-log H33 only for what remains.
+
+## What was checked and found CLEAN — S56 closed two of S49's largest holes
+
+1. ⭐ **H32 is CLOSED.** `SystemsTreePage.HitTest` exists (`:150`), returns a `PanelCommand`, and is
+   dispatched through the **same `FlightCommands.Run` / `PanelPolicy` the physical console plate uses**
+   (`ScreenPainter.SystemsAction`) — *"there is no second policy here and there must never be one."*
+   `ui_systemstree_live.png` shows the result: STRING 1C **TRIP** in red, STRING 2B **ISOL** in amber,
+   the rest ON in green, MAIN POWER **CAUTION** with a live bar, POWER 1/2 at **2 / 3 ONLINE**, and the
+   **connector lines coloured from node state**.
+2. ⭐ **The tree's affordance caption is TRUE**: *"TOUCH A POWER OR STRING NODE TO SWITCH IT — THE SAME
+   COMMAND AS THE CONSOLE PLATE."* ⚠ **Contrast F-03**: the Cabin page says `Tap to disable display` and
+   nothing on it is tappable. Same instruction pattern, opposite truth, two pages apart.
+3. ⭐ **H33 is substantially CLOSED.** `SystemsPidPage.cs:34-37` records the fix in its own words —
+   CABIN FAN, PUMP A and PUMP B now read `SystemsState.FanOn` / `.PumpAOn` / `.PumpBOn` with a live guard,
+   and CABIN HX A/B carry `—` instead of `""`. On `ui_systemspid.png` all three read **OFF** in amber with
+   amber node markers, and the HX boxes carry a dash. **And the valves are state-coloured too** —
+   `Valve(…, o2Line)`, `Valve(…, n2Line)`, `Valve(…, airPipe)`, `Valve(…, leaking ? ventCol : Pipe)`
+   (`:156-203`) — so H33's *"every inline valve but one is a fixed-colour glyph"* is also out of date.
+4. **The tree has a legend** — ON / ISOLATED / TRIPPED / UNPOWERED, each in its own colour. The only page
+   in the sweep that explains its own colour language.
+
+## ⭐ And here is V-01's contradiction, rendered
+
+`ui_systemspid.png` prints **`CABIN TEMP 21.8 °C` in GREEN** in its READOUTS column, computed by
+`Alarms.Colour(Alarms.Band(s.Cabin.CabinTempC, CabinLimits.CabinTempCaution, CabinLimits.CabinTempAlarm))`
+(`SystemsPidPage.cs:249`).
+
+`ui_vehicle.png` and `ui_vehiclecrew.png` print **the same 21.8 °C inside a RED ring**, from a hardcoded
+constant.
+
+**Same value, same fixture, same frame, opposite verdicts.** This is the single clearest piece of evidence
+for **V-01 / S-01**, and it also shows the fix already working one page over: the P&ID needs no change, the
+Vehicle pages need the P&ID's call.
+
+---
+
+## SP-01 — The P&ID has exactly one render, in an all-nominal state, so none of the live colouring S56 built is on the gate
+
+**TIER 2** · **NEW** · third instance of the preview-blindness class (**H-09**, **VV-02**)
+
+**Evidence.** The preview writes **one** P&ID render, `ui_systemspid.png`, from the default fixture — in
+which nothing is faulted. Its sibling gets two: `ui_systemstree.png` **and** `ui_systemstree_live.png`, the
+second showing a tripped string, an isolated string and a caution bus.
+
+So everything S56 built into the P&ID's colouring is invisible on the gate: the valve tints
+(`o2Line`, `n2Line`, `airPipe`, `leaking ? ventCol : Pipe`), the pipe states, the fire and leak words, the
+`OVERBOARD / ISOLATION` state, and the per-loop severity bands at `:208-210`. On the one render they all
+resolve to the same nominal colour, which is exactly why H33's *"fixed-colour glyph"* reading looked right
+from a screenshot **and was wrong** — the QC pass nearly re-logged a closed hole because the render could
+not distinguish "fixed" from "nominal".
+
+**What is wrong.** The preview is the gate, and for this page it can only ever return "nominal renders
+nominally". A page whose entire value is live colouring needs at least one non-nominal render, or the gate
+proves nothing about it.
+
+**Fix plan.**
+- Add P&ID renders for the states the page distinguishes: **a leak** (`Systems.Leaking` → vent path and
+  `CABIN LEAK`), **a fire** (`Systems.Fire` → `FIRE`), **a pump/fan off vs on**, and **a loop over
+  `CabinLimits.LoopCaution`**. Four renders, all from fixture edits, no source change.
+- ⚠ **The same gap exists in the general case and is worth stating once:** the sweep has now found three
+  pages whose live half has never been rendered — the HUD's docking-cam disc (**H-09**), the Video page's
+  camera list (**VV-02**), and this. **A page's non-nominal states belong in the preview set**, and that is
+  a harness policy rather than three separate fixes.
+- **Must not break:** the existing nominal render, which is the baseline any comparison needs.
+- **Verify:** each new render differs from the nominal one in the elements it is meant to exercise.
+
+---
+
+## SP-02 — The FLIGHT COMPUTER STRINGS node is the one node on the tree with no state, and its caption asserts a count nothing models
+
+**TIER 3** · **NEW**
+
+**Evidence.** `ui_systemstree_live.png`: every node on the page carries a live state and a state colour —
+except the footer node, which reads
+
+```
+FLIGHT COMPUTER STRINGS
+TRIPLE-REDUNDANT · 18 UNITS · 54 VOTING PROCESSORS
+```
+
+drawn as two static strings in White and Dim (`SystemsTreePage.cs:286-287`), with a dim border, on a page
+whose other ten nodes are green / amber / red from `SystemsState`.
+
+**What is wrong.** Two things, of different weight:
+- **It reads as unpowered.** The tree's own legend gives `UNPOWERED` a dim grey, and this node is dim grey.
+  A crew member applying the page's legend to the page's own footer concludes the flight computers are
+  unpowered.
+- **`18 UNITS · 54 VOTING PROCESSORS` is a confident count with nothing behind it.** ⚠ It is reference copy
+  (the file classes these boxes as *"readouts of …"*, `:112`), and the Avionics sub-tab separately prints
+  `3 / 3` for flight computers — the two are probably describing different things (strings vs computers),
+  **but nothing on either page says so**, and a reader comparing them has no way to reconcile 18 with 3.
+
+**Fix plan.**
+- **Tint it out of the legend.** Whatever else happens, a node that carries no state must not be drawn in
+  the colour the legend assigns to `UNPOWERED`. Use the page's caption tint, or give the node no border.
+  **Cheapest and correct regardless of the rest.**
+- **Then decide whether it can be live.** `SystemsState` models power strings, not flight computers, so
+  `18 UNITS` has no source in the model today. Under §14.4(f) this is a readout that should be filled — but
+  filling it means modelling flight-computer health, which is Part-B-adjacent (the FDIR spine) and is not a
+  screens-pass job. **Recommend: tint now, and record the liveness question against the same policy
+  question S49's Q3 already holds.**
+- ⚠ **Do not reconcile `18` with the Avionics tab's `3 / 3` by editing either** without a source — both are
+  reference-derived, and §1.4 governs. If the reference does distinguish strings from computers, the fix is
+  a clarifying label, not a changed number.
+- **Verify:** the footer node no longer matches any legend colour.
+
+---
+
+*Next: **pages 33 + 34** — Ascent / Launch and the Nav / Orbit Plot, the last two `UiPage` values.*
 
 *⚠ **Three findings are page-wide, not per-page, and should be scheduled ahead of the sweep:***
 - ***H-01** — the preview's resolution. It decides how every later legibility finding is measured, so
