@@ -289,6 +289,23 @@ from. The six-of-seven contradiction is gone.
 current phase*; nothing keeps a phase-entry timestamp, and `VesselData.Met` — the only clock that exists,
 and one that does not reach `PageState` — is a different quantity. Drawing MET there would replace a frozen
 wrong number with a **live** wrong one, which is worse because it would look right.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** `ui_cover.png` @2560, top strip read directly off the render:
+
+```
+ACTIVE PHASE  ORBITING   SPLASHDOWN TIME  —
+INERTIAL VELOCITY 2280 m/s   ALTITUDE 123.6 km
+APOGEE 124.0 km   PERIGEE 121.9 km   INCLINATION 51.60°
+```
+
+**Not one baked value survives** — the PNGs said 7.69 km/s, 393.3 km, 416.2 km, 379.4 km, 51.62°, and none
+of those is on the screen. All seven now agree with the `PageState` the globe beside them is drawn from.
+And `SPLASHDOWN TIME` correctly renders a **dash**, which is the dash rule working rather than a number
+being invented for a phase that has none.
+
+⚠ The eighth item, `running_00_22_57`, is still baked — deliberately, as H-2, and the finding says so.
 ---
 
 ## C-02 — A 16 px black arrow is placed outside the content panel and renders on the live camera slot
@@ -428,6 +445,28 @@ Measured on the render: runs at 501–515 (dash), 526–615 (label), 620–623 (
 
 ⚠ **First fix in the sweep to bump into R-01.** It was solved without shrinking anything, but the next label
 that does not fit will not have that escape.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** `ui_cover.png` @2560. The defect was ink straddling the pill's border — filed as
+*"the border renders at x 770-772 and the W's two stems straddle it at 764-765 and 777-778."*
+
+Pill x 981.3…1248.2, label band y 1228…1262:
+
+| | px |
+|---|---|
+| ink **inside** the pill | 1136, spanning x 983…1245 |
+| ink **outside the right border** | **0** |
+| ink **outside the left border** | **0** |
+| right-most ink, inside the border | **3.2 px clear** |
+
+**Nothing crosses the border on either side.**
+
+⚠ **A caveat I am recording rather than glossing.** My S105 note justified the size choice as *"16.6 panel
+px, above `Typography.Min` = 16."* At 2560 that reads 33.3 px against the same 16 — but the floor is a
+**1280-panel constant** and did not scale, so that comparison is now twice as flattering as when it was
+measured. It happens not to change this verdict (33.3 clears even a correctly-doubled floor of 32), but the
+general problem is real and is filed as **R-02**.
 ---
 
 ## C-04 — The bottom status bar is stretched 12.2% horizontally: its circular icons render as ellipses and all its baked type is distorted
@@ -520,6 +559,12 @@ rather than with a copy of itself.
 
 **New fence:** `FigmaUINavTest.BottomBarUndistorted` asserts, at four panel sizes, that the bar's x-scale
 equals its y-scale and that every icon's **drawn** centre is a hit on its own index.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** `ui_cover.png` @2560×1406. `BottomBar.Rect` resolves to x 139.3, w 2281.4, y 1249.6,
+h 156.4 — **x-scale 0.665720, y-scale 0.665720, ratio 1.000000.** The 12.2% stretch is gone and cannot
+return: both scales are the one `sc`, so there is no second number to drift.
 ---
 
 ## C-05 — `FitRows` compares a DESIGN-space size against a PANEL-pixel legibility floor, so the floor never fires
@@ -654,6 +699,44 @@ documented one already exists is C1.8's failure mode, whatever its merits. Rever
 
 **Nothing in the code changed for this finding.** What changed is that C-05 now has a number attached to
 each side of Q5, so the decision can be made with the consequence visible rather than guessed at.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**NOT CLOSED — and S115's re-measurement, though arithmetically right, reports a number that flatters it.**
+Nobody claimed this fixed; the register logs it as re-measured with the fix "now safe to land" as
+**[[S116]]**. **That premise does not survive inspection.**
+
+`FitRows` still compares a DESIGN-space `size` against `Typography.Min`, a **PANEL-pixel** constant. Both my
+arithmetic and S115's agree on the render: card 1's unclamped size is **23.018 design px**, rendering at
+**15.32 panel px** at 2560 (7.66 at 1280). S115 reports that as *"96% of the 16 px floor… much closer than
+1280's 7.66 px (48%)"*.
+
+⛔ **But `Typography.Min = 16` is a 1280-panel floor** — this file says so, in R-01: *"measured against the
+legacy pages, which render at the real 1280×703… So the floor is a 1280-panel floor."* The panel is the
+same physical screen at the same distance, so the equivalent floor at 2560 is **32 panel px**:
+
+| | @1280 | @2560 |
+|---|---|---|
+| renders at | 7.66 px | 15.32 px |
+| vs `Typography.Min` as written (16) | 47.9% | **95.8%** |
+| vs the same **physical** floor (16→32) | **47.9%** | **47.9%** |
+
+**Identical. The text is exactly as unreadable to the crew as it was.** The improvement is an artefact of a
+doubled measurement compared against an un-doubled constant — the very trap S115 names in prose two
+paragraphs earlier.
+
+⛔ **And this breaks S116's premise.** S112 and S115 both compute that the corrected clamp fits at 2560 —
+clamping to 24.03 design px, block ending at design y 748 against a card bottom of 760, "12 px of margin, no
+layout consequence". That is right **for a 16 px floor**. At the true physical floor:
+
+| clamp against | size | block ends | card bottom 760 |
+|---|---|---|---|
+| `Typography.Min` = 16 | 24.03 design | y 748.0 | fits, 12 spare |
+| the physical floor = 32 | **48.07 design** | **y 891.5** | **OVERFLOWS by 131** |
+
+**131 design px — exactly the overflow S112 measured at 1280.** The block S112 found is **not** lifted, and
+landing S116's "one line, every number in hand" would ship the overflow it was written to avoid. The root
+cause is filed as **R-02**; C-05 stays blocked behind it.
 ---
 
 ## C-06 — The panel's scrollbar thumb is painted in full white with no hit rect, no scroll model, and nothing to scroll
@@ -712,6 +795,14 @@ because it is now literally the same tint.
 
 ⚠ **Option (b) is untouched and still available.** If C-05 lands the scrolling card, the thumb becomes a
 real indicator and goes back to `White` **and** into `Hits` — together, S75's rule.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** `ui_cover.png` @2560, the thumb column (design x 1427–1442, y 450–1340) renders
+**`(48,56,105)` — 3558 px of it**, with the antialiased neighbours at (38,46,95) and (50,59,110). That is
+the asset's baked lavender `(93,104,164)` multiplied by `InertTint`, exactly as at 1280. It is plainly
+dimmer than the panel's white hairlines and the page's white glyphs — the relationship
+`gridicons_refresh` has, which is the finding's own verify line.
 ---
 
 ## C-07 — The ◄/► arrows can park the Cover on phase 6, printing "Manual Chute Deploy" over the Coast body while the real page sits one tap away
@@ -811,6 +902,23 @@ is what proves the state is gone.
 ⚠ **Fault 1 survives for slots 0–4, as filed.** The heading is still the only thing that changes with the
 rail, and the body is still gated on slot 5 alone. That is **S49 H4** and it is unchanged. Slot 6 was the
 TIER 1 half of it precisely because its heading named a real page; that half is closed.
+
+### 🔎 VERIFIED 2026-09-06 — QC officer: NOT JUDGEABLE FROM A RENDER
+
+**The fix is a NAVIGATION rule, and no PNG can show it.** S107 made the ◄/► arrows resolve through the same
+`MapCover` the rail tap uses, so an arrow onto slot 6 opens Manual Chute instead of parking the Cover on a
+heading that names it. That is a property of `ScreenPainter`'s touch dispatch — glue — and the preview
+renders pages, not touches.
+
+⚠ **`ui_cover_phase6.png` still exists at 2560 and still shows the lying heading**, because the preview asks
+`CoverPage.Build` for slot 6 **directly**, below the layer that decides reachability. S107 said this at the
+time. **It is a fixture, not a reachable state** — but anyone verifying by eye will find that render and
+should not read it as the defect surviving.
+
+**The instrument here is `FigmaUINavTest.CoverPhaseStepping()`**, which asserts the invariant directly (over
+every start slot × both directions, the slot the Cover is left displaying is never one that routes) and is
+green in this pass's `build.py test`. I am recording that as the evidence rather than claiming a render I
+did not make.
 ---
 
 ## C-08 — ENTRY ENABLED is a baked verdict, permanently False — and S49's reading of it is wrong
@@ -911,6 +1019,14 @@ map's swap exists BECAUSE KSP's `_ColorMap` is mirrored"* — and the stand-in t
 
 ⛔ **So this stays OPEN and is not actionable by a preview-only chat.** It needs glass time, which is a
 separate owner gate (C1.12). It is listed here as open for that reason, not because it was overlooked.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**STILL OPEN, correctly — and 2560 changes nothing about it.** S100 prepared this and did not settle it,
+which was right: the preview cannot answer a handedness question, because its stand-in texture is not
+mirrored the way KSP's `_ColorMap` is. Raising the resolution does not make a mirrored texture less
+mirrored. **I could not judge this and neither can any render** — it needs glass, which the owner has since
+routed into the 2560 install (Q2). Listed as *never judgeable from here*, not as unchecked.
 ---
 
 ## C-10 — The Cover's preview fixture is internally inconsistent, so the preview cannot judge marker-versus-track agreement on this page
@@ -964,6 +1080,15 @@ makes the preview the gate that saves restarts; a fixture that cannot fail is no
 0.13° against an overlay saying 51.6°, and a vessel marker at lat 0 / lon 0 whose own ground track was built
 around lon −80.6. **The fixture can now fail**, which is the property that matters: an internally
 inconsistent fixture cannot judge marker-versus-track, which is what this finding was raised for.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED, structurally — and I am stating the limit of that.** The claim is that the Cover fixture
+can no longer describe one vehicle three incompatible ways. What a render CAN show me: the top strip now
+reads `INCLINATION 51.60°` (C-01 above) and the fixture's own target latitude is `51.60 N` — the scalar and
+the overlay agree where they previously did not (0.13° against 51.6°). **What a render cannot show me** is
+that every other field agrees; that is a property of the fixture, and S100's own test is the instrument for
+it, not a PNG. Confirmed as far as a render reaches, and I say so rather than implying more.
 ---
 
 ## C-11 — The preview draws tinted assets at integer rectangles while the game draws them at float
@@ -1005,6 +1130,16 @@ baked into a **cached bitmap at native size**, so `DrawCoverAsset` makes exactly
 is no second rounding rule left to get wrong. **Verified:** old path vs new differs in a **12×11 px box, 92
 pixels of 899,840** — `gridicons_refresh`, the Cover's only tinted asset, moving sub-pixel toward its float
 position, with every other asset byte-identical. That was S75's own acceptance condition.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**NOT JUDGEABLE FROM A RENDER — recorded honestly rather than ticked.** The claim is that the tinted-asset
+path and the opaque path are now **one** draw call rather than two rounding rules. That is a statement about
+code structure; its visible consequence was a 92-pixel sub-pixel shift in a 12×11 box, which S100 measured
+at the time by rendering both paths. **I cannot reproduce that comparison, because the old path no longer
+exists to render.** I can confirm the only tinted asset on the Cover (`gridicons_refresh`) draws cleanly at
+2560 with no doubled edge or seam. Beyond that this is a code-review verdict, not a QC one, and I decline to
+claim otherwise.
 ---
 
 ## C-12 — The baked tab marker was erased from `component_48.png` but its glow was left behind: a white smudge sits at the bottom-left of every page
@@ -1089,6 +1224,30 @@ peak luminance 113.7 → **42.0, the bar background exactly**.
 
 Both edits to this asset are now recorded in `docs/COVER_PAGE_ASSETS.md`, with the instruction that a
 re-export must re-apply both.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED**, and by the test the finding actually needs rather than a look at one page. The ghost
+was a marker baked into `component_48` that could not be turned off, so it appeared under icon 0 on every
+page. Two independent checks:
+
+**The asset.** `art/cover/component_48.png`, the shipped file: the edited box (y200–232, x10–160) is
+**4950 px of a single colour, `(17,27,82,255)`** — no residue at all. Icon 0 (y134–198, x54–117) still
+carries **1773 bright px**, so the erase did not eat the glyph, and the bottom border (y233–234) is still
+**300 px of pure white**, so it did not eat the rule either.
+
+**The render, across five pages** — marker ink at each of the five icon slots:
+
+| page | slot 0 | 1 | 2 | 3 | 4 | lit |
+|---|---|---|---|---|---|---|
+| `ui_cover.png` | **355** | 0 | 0 | 0 | 0 | 0 ✓ |
+| `ui_hud.png` | 0 | **355** | 0 | 0 | 0 | 1 ✓ |
+| `ui_vehicle.png` | 0 | 0 | **350** | 0 | 0 | 2 ✓ |
+| `ui_suitcheck.png` | 0 | 0 | 0 | **355** | 0 | 3 ✓ |
+| `ui_audiovideo.png` | 0 | 0 | 0 | 0 | **355** | 4 ✓ |
+
+**Exactly one marker per page, on its own icon, and zero ink at the other four.** A surviving ghost would
+show as ink at slot 0 on the last four rows; there is none.
 ---
 
 ## C-13 — The band below the globe is unbalanced: the coordinate readouts sit on the globe's foot, and NEXT VIEW is 296 px off its mirror position
@@ -1222,6 +1381,24 @@ whose midpoint is **880.0 — the slot centre, exactly.** The construction was n
 | TARGET LONGITUDE over the disc | 17% | **0%** |
 
 ⚠ **Q4 (the CAMERA caption) is untouched** — it is an open owner question and this fix does not pre-empt it.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** `ui_cover.png` @2560, measured against the finding's own three assertions:
+
+| | measured @2560 |
+|---|---|
+| slot centre | 1760.0 |
+| the two readouts | 1443.8 and 2076.2 → **midpoint 1760.0, the slot centre exactly** |
+| NEXT VIEW inset from the slot's left end | **21.3** |
+| SETTINGS inset from the frame's right end | **21.3** |
+
+Both pills sit at **identical insets** and the readout pair is **exactly symmetric** about the centre the
+globe is drawn on. These are the same figures as at 1280, doubled — which is what a proportional layout
+should do, and confirms the balance is derived rather than tuned to one width.
+
+⚠ **Not re-litigated:** the CAMERA caption's placement is Q4, which the owner has since answered
+("that is well balanced now"), plus two button changes that are not built yet. Out of scope here.
 ---
 
 ## C-14 — Both TARGET readouts under the globe are baked pictures of the same wrong value, and the longitude carries a latitude's hemisphere letter
@@ -1275,6 +1452,97 @@ other values on this page.
 S105's move is what brought them together — but the marker's position follows the **orbit**, so the overlap
 is occasional rather than standing. **Owner's call, 2026-09-05, verbatim: "the pe will be in location rarely
 dont worry about it."** Recorded here so a later pass does not re-file it as new.
+
+---
+
+# 🔎 VERIFICATION PASS — 2026-09-06 — the twelve build tasks, checked against rendered screens
+
+**Brief:** *"They marked their own homework."* Every finding S100 and S103–S115 claim to close or part-close,
+re-inspected independently on the **2560×1406** renders this pass produced. Verdicts sit under each finding;
+this is the scoreboard.
+
+**The instrument.** `build.py test` green; `build.py preview` → **108 pages**, `MANIFEST.txt` confirming
+**103 at 2560×1406**, size derived from the cfg and unable to be anything else (H-01), folder emptied at the
+start of the run so a stale render is structurally impossible (F-05). **Both of those are fixes I was
+verifying, and this pass depended on them** — which is the strongest thing I can say about either.
+
+## The count the owner asked for
+
+| | |
+|---|---|
+| findings on file | **72** |
+| — of which filed *after* the original sweep | 6 (`VV-03` `DK-04` `V-04` `VT-02` `C-14`, and `R-02` below) |
+| **CONFIRMED CLOSED** — rendered, defect gone | **28** |
+| **PART-CLOSED** — the claimed half holds, a named half remains | **4** |
+| **NOT CLOSED** — the claim does not survive inspection | **1** (`C-05`) |
+| verified STILL OPEN | 2 (`C-09`, `R-01`) |
+| **never judgeable from a render** | 2 (`C-09` needs glass, `C-11` is a code-structure claim) |
+| claimed fixed, not judgeable here | 1 (`C-07` — a navigation rule; its headless check is green) |
+| blocked / struck | 2 (`H-03` behind H-02; `H-08` struck at this width) |
+| corrected or withdrawn, no code owed | 3 (`V-03`, `VT-02`, `SP-02`) |
+| **open, never actioned** | **30** |
+
+### ⛔ **Of the original set, 38 remain to be dealt with** — 30 never actioned, 4 part-closed, 1 not closed, 2 verified still open, 1 unjudgeable here.
+
+**CONFIRMED CLOSED (28):** `C-01` `C-03` `C-04` `C-06` `C-10` `C-12` `C-13` `H-01` `H-04` `H-06` `H-07`
+`H-09` `F-01` `F-05` `M-01` `M-02` `V-01` `V-02` `S-01` `SC-02` `VV-01` `VV-03` `MC-01` `DK-01` `DK-02`
+`DK-04` `SP-01` `NO-01`
+
+**PART-CLOSED (4)** — each half named in its own block, none overstated by the task that did it:
+`MP-01` (colour agrees, words still differ) · `VT-01` (tints done, step tracking blocked on H34) ·
+`VV-02` (fixture renders, writer still stranded) · `RZ-01` (arrows inert, card still not filled)
+
+## ⛔ The one that does not survive: **C-05**, and it takes **[[S116]]** with it
+
+S115 reports C-05's text as *"96% of the 16 px floor… much closer than 1280's 7.66 px (48%)"*. The
+arithmetic is right and the conclusion is not, because **`Typography.Min = 16` is a 1280-panel constant that
+S115 did not raise.** Against a floor that means the same physical thing at both widths, the figure is
+**47.9% at 1280 and 47.9% at 2560 — identical.** Nothing improved.
+
+**And S116's premise fails with it:** the corrected clamp fits at 2560 *only* against the un-scaled 16; at
+the true floor it clamps to 48.07 design px and **overflows the card by 131 design px — the same overflow
+S112 measured at 1280.** Landing S116 as written would ship the overflow the fix exists to prevent. Root
+cause filed as **R-02**.
+
+⚠ **S115 is not being scolded** — it named this trap in prose, correctly and at length. Its slip is narrow:
+it treated the two cases involving a **fixed** constant as the ones where doubling changes the outcome. They
+are the opposite. A fixed yardstick is exactly where doubling changes only the *appearance*.
+
+## No regressions found
+
+Nothing I inspected was broken by a fix. The one candidate — `MarginAffordance`'s box growing 2.13× rather
+than 2.0× because its 4 px inset is a screen-space constant — makes the box *more* generous and is recorded
+under H-04 rather than filed, but it is the same un-scaled-constant family as R-02 and should be read with it.
+
+## ⚠ S101 — the hairlines, as an eye judgement rather than a measurement
+
+This is what S115's numbers could not answer. `ui_cover.png` @2560, the two instances that measure furthest
+apart — design y1532 (50.0%) and y1609 (37.6%) — sit 51 panel px apart, cropped together and magnified 3×
+horizontally, 6× vertically with NEAREST so no resampling could flatter them. Mean row luminance **144.0**
+against **118.7**, both spanning all 600 columns sampled with no gaps.
+
+**My answer: the inconsistency is NOT visible as a defect. It is visible only to a pixel measurement.**
+
+Both rules read as continuous, deliberate rules. Magnified six times and told which is which, I can see the
+upper is slightly the brighter. At 1× — the size a crew sees — a 25-point luminance difference between two
+rules 51 px apart on a `#111B52` ground is not something the eye resolves as wrong; it reads as one
+consistent rule weight. **On the question the owner actually asked, S101 is not worth a task**, and Q8's
+*"nothing, 2560 handles it"* is vindicated for the dropout it was asked about.
+
+⛔ **But there is a second fact in the same place, and it points the other way.** `St(2)` = `round(2 × sc)`
+with a floor of 1, which is **exactly 1 device pixel at both 1280 and 2560**. So the rule is the same
+*number of pixels* on a canvas of twice the density — **physically half as thick to the crew as it was at
+1280**, and 25% thinner than the 2-design-px rule the design asks for (1.33 device px, floored to 1). The
+hairlines did not get better in the seat; they got thinner and crisper. That is the **R-02** pattern again —
+a fixed device-pixel floor under a doubled canvas — and it is the reason I would keep S101 open as a *line
+of enquiry* even while judging its filed symptom not worth fixing.
+
+## What I did not do
+
+**I did not re-sweep any page.** This was verification, not a second pass — no finding was re-derived, and
+the only new item is `R-02`, filed because it surfaced *while checking C-05* and changes what a scheduled
+task ([[S116]]) would do. Layout findings were not re-measured as though the geometry changed: 2560×1406 is
+the same 1.82 aspect, and every proportional figure I quote tracks its 1280 counterpart at exactly 2×.
 
 ---
 
@@ -1616,6 +1884,13 @@ honest renders: **9 STANDS, 4 CHANGED (all worse), 1 VANISHED** (H-08 — the fr
 evidence from pages it never sampled (S107's Menu label at 10.7 px, S108's margin labels at 11.5 and 8.1 px,
 both measured). **S100 did not touch the cfg**, and raising `screenWidth` would need an `install` + glass
 go, which is the owner's alone (C1.12).
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** `MANIFEST.txt` records the mechanism as well as the result: *"Rendered at the width
+in `plugin/GameData/DragonScreen/DragonScreen.cfg` — the preview **DERIVES** its size from the cfg and
+cannot render at any other."* This run: **103 pages at 2560×1406**, matching the cfg S115 set. The preview
+and the shipped build cannot disagree about size again, which is the finding's actual subject.
 ---
 
 ## H-02 — Every readout on the docking HUD is a pixel in a PNG; 8 of the 12 numbers contradict live state in the same frame
@@ -1824,6 +2099,20 @@ because it is one `return false` inside `Rect`. Pinned at a 1140×703 panel: no 
 
 ⚠ **The finding's own related note stands unchanged:** a panel whose letterbox is 40 px or less still has no
 margin route to either destination. The Menu grid remains the second route to both.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** `frame58_hud.png` and `ui_docking.png` @2560. The three hand-written copies of this
+rectangle are gone; both pages draw and hit-test through the one `MarginAffordance.Rect`.
+
+Verified on the render rather than only in the test: on `ui_docking.png` the margin plate is **drawn at the
+shared rect** (x 4.0…135.3, matching `Rect`'s output exactly) — the same rect `FigmaUI.HitTest` now calls.
+The 20%-tall band behind a 12%-tall button is gone, so the 28-px invisible halo above and below the visible
+control cannot be tapped any more.
+
+⚠ Note the box is **131.3 px wide at 2560 against 61.6 at 1280 — a 2.13× change, not 2.0×**, because the
+4 px inset is a screen-space constant that did not double. Harmless here (it makes the box slightly more
+generous), but it is the same class of un-scaled constant as **R-02**.
 ---
 
 ## H-05 — The docking HUD has a titled ALERT ACTIVITY panel, 822 px tall and permanently empty, while the alarm channel is computed every frame and written to the black box
@@ -1978,6 +2267,29 @@ plan got wrong (*"traded an overrun for an unreadable label"*). It is defensible
 shrink is 18% and the overflow was real clipping; `MarginAffordance.FitsLegibly` exists so no future caller
 can shrink silently, and the test **prints** the fitted sizes every run rather than asserting them — because
 failing the build on Q5's question would block the H-04 fix that stands on its own.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** `frame58_hud.png` @2560, against the verify — *"require both labels' ink to sit
+strictly inside the box."*
+
+```
+margin box   x   4.0 .. 135.3
+MANUAL ink   x  17   .. 124      clear:  13.0 left, 11.3 right
+accent (border + DOCKING)  x 5 .. 135   — the border itself, at the box edges
+```
+
+**Both labels strictly inside, on both sides.** The filed defect — `MANUAL` overhanging by 4.0 px left and
+5.4 px right — is gone.
+
+⚠ **My first scan of this said it overran by 4.7 px and that reading was wrong** — it ran past the box into
+the frame art, which begins at x = ox = 139.3. Recorded because a later pass scanning the same way would
+reach the same false conclusion.
+
+⛔ **The legibility half is NOT closed and must not be read as closed.** The fitted type is ~26.5 px at 2560
+against ~11.5 at 1280 — the **same physical size** on the same screen at the same distance. Q8's answer
+("nothing, 2560 handles it") settles the overflow, which is fixed; it does not make the label bigger to a
+Kerbal. See **R-02**.
 ---
 
 ## H-07 — Two different fit strategies on one page: the frame art is letterboxed, the bar is stretched full width, so the frame's own border becomes a rule in the middle of the bar
@@ -2056,6 +2368,21 @@ its own rounded corners on page ground. Inspected on `ui_vehicle.png`: it reads 
 better than the stretched version it replaces. **The strips are deliberately left unfilled** — filling them
 would put the asset's own left/right border in the middle of a filled bar, which is this defect one step to
 the right. Recorded in `BottomBar.cs`'s header.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** `ui_cover.png` @2560. Mean column luminance inside the bar's y-range, stepping across
+the letterbox edge at x = ox = 139:
+
+```
+x:   135    136    137    138    139     140    141    142    143
+lum: 21.7   21.7   21.7   21.7   240.7   93.0   36.8   45.9   ...
+```
+
+**One edge, at x = ox exactly** — the bar's own left edge, where the frame art also begins. No second spike
+inboard of it, so there is no vertical rule at `ox` and no trapped sliver between the two. The finding's
+verify line — *"the frame's bottom-left corner and the bar's must be the same corner"* — is met: they are
+the same x, because both now derive from the one `ox`.
 ---
 
 ## H-08 — The frame art is exported at 0.6× design scale, so at the preview's resolution it is drawn upscaled and measurably soft
@@ -2188,6 +2515,12 @@ reason: **the game always has a feed; only the preview cannot.**
 ⭐ **And it is a drawn, MARKED bore-sight card** — grid, cross, scale ring, and the words `PREVIEW TEST CARD`
 / `NOT A CAMERA FEED` — never a photograph. That keeps this file's own standard intact: *a preview that
 flatters us is worse than none.* **Three distinct renders**, as this finding required.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** `frame58_hud.png` vs `frame58_hud_noseopen.png` @2560 differ in a bounded region at
+(1231, 612)–(1320, 700) — the bowl, where the marked stand-in card is drawn. The preview can render the
+page's only live feature, which is what the finding asked for.
 ---
 
 ## Open questions for the owner — HUD (Q5)
@@ -2874,6 +3207,17 @@ Menu card** resolves to this screen.
 step, take a touch, or be tinted. The rebuild is the only one with a future, so it is the one that
 survives — and the gap between it and the reference is now a **defect with a source to fix it against**,
 filed as **VT-02**, rather than a second screen nobody was comparing.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED**, against both halves of the verify — *"the Menu grid lists this procedure once;
+`ui_vriotest.png` is the only render of it."*
+
+- **Zero** files matching `ui_procedure*` in the preview folder — and the folder is emptied every run
+  (F-05), so that is proof of absence, not a stale listing.
+- `ui_menu.png` draws **24 cards**, and `UiPage.Procedure` is not among them (M-01's count above).
+
+One screen, one renderer, one card.
 ---
 
 ## F-02 — Both pages are a single PNG with no state and no touch, and the Cabin page's data is already live one file away
@@ -3049,6 +3393,18 @@ non-`ui_` families plus the four one-offs, and no document cited any of them as 
 **Re-verified here, 2026-09-05:** the folder holds **exactly 104 PNGs, the number the run reports**, all
 stamped with that run's time; every one of the 19 stale files is gone; and `build.py:405-411` does the
 clearing. Nothing in this batch needed building.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED, and it is now self-proving.** `MANIFEST.txt` opens:
+
+> *"The folder is emptied at the start of every run (S100 / QC F-05), so every file below was produced by
+> THIS run. **A PNG here with no line below it is impossible.**"*
+
+This run: **108 pages rendered, 108 listed**, every Figma-era page at 2560×1406. The whole of this
+verification pass depends on that guarantee — I could trust every render I measured because staleness is
+structurally impossible, not merely absent. That is the difference between this fix and "cleared the folder
+once".
 ---
 
 ---
@@ -3170,6 +3526,25 @@ panel px against a floor of 16** — it fails. But that is **R-01**, which sampl
 of the floor alongside 16 others across 9 pages, and R-01 is **one owner decision (Q5) for all of them**.
 Asserting it here would turn one page's grid fix into a red build for a page-wide question the owner has
 not answered, and would have to be undone whichever way Q5 goes.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** `ui_menu.png` @2560, cards detected from the render itself rather than predicted:
+
+```
+8 row-bands, 3 cards each, 24 cards total
+last row: panel y 1100..1217  =  design y 1652..1828
+```
+
+**24 cards in 8 rows, exactly full, no dead cells.** The last card ends at **design y 1828** — inside the
+grid band (`Bottom` = 1830) and well clear of the bottom bar (1877), which is the latent failure the finding
+was actually about.
+
+⚠ **This finding's verify line is now STALE, and that is not a defect.** It says *"25 entries should fill 9
+rows with two spare cells."* S110 later removed `UiPage.Procedure` from the grid as an alias of `VrioTest`
+(F-01), so there are **24** entries, and a derived `Rows` gives **8** — a tighter grid than the verify line
+predicted. The derivation is what was being tested and it is working; the expected numbers moved because a
+later fix removed a duplicate.
 ---
 
 ## M-02 — The placeholder page tells the crew "this button is wired", and no button is wired to it
@@ -3245,6 +3620,20 @@ don't build** stands: the *page* was correct, one *sentence* was not.
 **Still open, and still the owner's:** the optional clamp of a stale persisted page int back to
 `UiPage.Cover` on load. That is a behaviour change, it would make the placeholder genuinely unreachable,
 and this fix does not pre-empt it either way.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** `ui_phasedeport.png` @2560. Text bands inside the card, in design coordinates:
+
+```
+897..969    the destination title
+1048..1080  PAGE NOT YET BUILT
+1121..1151  "no button in this build opens this page"
+1185..1215  "remembered from an older save - the bar below goes anywhere"
+```
+
+**Four bands** — the single false line has become two true ones, both inside a card that ends at design
+y 1340. The verify — *"the caption must not assert a wiring that does not exist"* — is met.
 ---
 
 *Page 0 (Cover) inspected 2026-09-05; C-12 and C-13 added the same day on owner review (R-1…R-5).
@@ -3365,6 +3754,30 @@ the low side. There was no gate.
 
 **On the glass:** CABIN TEMP at 21.8 °C renders **green** on `ui_vehicle.png`, agreeing with the P&ID.
 An alarm-red pixel sweep of the page returns **0**.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** `ui_vehicle.png` @2560. The finding's own headline case: **CABIN TEMP at 21.8 °C
+renders `Go` green** — sampling the ring's arc returns `(31,227,39)` on 77 of the samples, against zero
+alarm-red. And an **alarm-red sweep of the whole page returns 0 px**.
+
+Swept the family, every page with no fault, at 2560:
+
+| page | alarm-red px |
+|---|---|
+| `ui_vehicle.png` | **0** |
+| `ui_vehiclecrew.png` | **0** |
+| `ui_vehiclemech.png` | **0** |
+| `ui_vehiclethermal.png` | **0** |
+| `ui_systemspid.png` | **0** |
+| `ui_cover.png` | **0** |
+
+⚠ **The caution-amber on this page is NOT a residual hardcode — I checked before crediting it.**
+`ui_vehicle.png` carries 1193 amber px, and `VehicleOverviewPage.cs:113` does still paint one checklist row
+`Amber` from a literal `ChkKey`. But `docs/REFERENCE_PAGES.md:171-173` records the reference's own scheme:
+*"blue tick = Normal, **green** tick = `THERMAL SHIELD / Applied`, **orange** = `POWER COMPLETION /
+Awaiting`."* **The orange is reference-documented**, so reproducing it is §1.4-faithful and S104 was right
+to leave it. Recorded here so a later pass does not re-file it as a missed hardcode.
 ---
 
 ## V-02 — `CABIN MICS: RECORDING` is drawn in alarm red for a state that is not a fault
@@ -3398,6 +3811,12 @@ in the live branch's colour choice.
 **Fixed.** `RECORDING` is drawn `Go`, not `Red`. It matches the four `Connected` rows immediately above it
 in the same block — the same kind of thing, a state that is currently true — and a *failed* recorder, which
 nothing models, would be the red case. The `!valid` dash path is unchanged.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** `ui_vehicle.png` @2560 returns **0 alarm-red px** across the entire page, so the
+`RECORDING` row is no longer red on a working recorder. The finding's verify line — *"no red on a page with
+no fault"* — is met literally.
 ---
 
 ## V-03 — The MARGIN column is eight dashes while the margins are computed every frame and written to the black box
@@ -3603,6 +4022,14 @@ quantity and `Accent` where it does not:
 gauge with no reading** — S31/S32 inverted — and is now neutral. And SHIELD stayed `Accent` rather than
 gaining a band, because what `HullTemp01` is normalised against is not established here; a band invented to
 justify a colour is the defect.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** `ui_vehiclethermal.png` @2560, sampled across the whole page: **997 px of `Go`**
+(computed nominal) and **870 px of `Accent`** (a reading with no band), and **0 alarm-red**. That is
+precisely the rule S104 states — computed where the model bands the quantity, neutral where it does not —
+visible as two distinct populations rather than one constant hue. A page still painting constants would
+show one colour, not this split.
 ---
 
 ## S-02 — "ALERT ACTIVITY" resolves to one word, and the FDIR bar beside it is a fake three-position gauge
@@ -3809,6 +4236,21 @@ returns **0 alarm-red pixels** and carries no false caution.
 states. Options unchanged from the fix plan above — health verdict (buildable off `SystemSeverity`) or
 procedure step (needs the stranded `StepList`) — but **whichever is chosen, it overrides reference copy on
 at least one page, so it is §1.4's and the owner's, not a build chat's.**
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**PARTLY CLOSED — exactly as S104 claimed, no more and no less.** Verified against the finding's own verify
+line, *"render both pages from one fixture and require the same word and the same colour."*
+
+| | Vehicle Overview | Vehicle Mech |
+|---|---|---|
+| word for `ALL SYSTEMS CHECK` | `Normal` | `Awaiting` |
+| colour | **White** | **White** (`VehicleMechPage.cs:146`) |
+
+**The colour half is CLOSED** — both White, both pages 0 alarm-red, and the caution amber this build painted
+on a reproduced word is gone. **The word half is NOT**, and S104 said so at the time: both words are
+reference copy from different mockups, so choosing between them overrides a reference on one page and is the
+owner's call. **No claim was overstated.**
 ---
 
 ## MP-02 — The same 14.72 psia is called PRESSURE here and CABIN PRESSURE / CABIN PRESS elsewhere, and drawn in three different colours
@@ -4080,6 +4522,19 @@ those glyphs are, and all three fail it for two different reasons:
 **The lesson is the same one this file already recorded once:** an idiom rule ("un-hit-testable → dim")
 cannot be applied by grep. Three glyphs shared one asset key and had three different jobs, and only reading
 each site told them apart.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** `ui_suitcheck.png` @2560, against the finding's verify — *"every White control
+resolves to an action and every inert one is visibly dimmer."*
+
+| control | white px | Text6 px |
+|---|---|---|
+| read-only plate 1 (`ic_grid`, S29-inert) | **0** | 1092 |
+| `INITIATE SUIT LEAK CHECK` (**acts**) | **2339** | — |
+
+Zero white on the inert plate, 2339 on the live one. The two are now distinguishable at a glance, which is
+the whole of S75's rule.
 ---
 
 ---
@@ -4169,6 +4624,19 @@ The three honest empty states are intact.
 ⚠ **This finding named one surface and there were two.** See **VV-03** — filed separately rather than
 folded in — and fixed in the same commit, because fixing one and not the other is the C7.1 disagreement
 S104 spent a whole batch removing.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED**, on all three renders the finding asked for, @2560:
+
+| render | resolution value |
+|---|---|
+| `ui_audiovideo.png` (no cameras) | **0 white px**, 24 px of Text6 — the dimmed dash |
+| `ui_audiovideo_cameras.png` | **317 white px** — the value |
+| `ui_audiovideo_cameras_heldbydocking.png` | **317 white px** — the value, deliberately |
+
+Three states, three correct answers. The page can no longer say "no cameras on vehicle", "NO SIGNAL" and a
+resolution at the same time.
 ---
 
 ## VV-02 — The camera list is live and read-only, its writer is stranded, and the preview has never rendered the populated state
@@ -4211,6 +4679,15 @@ what **VV-01/VV-03's** fix was verified against in S107.
 
 ⛔ **The wiring half — the stranded writer — is untouched and stays open.** S100 scoped itself to the
 instrument, not the screens, and said so.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**FIXTURE HALF CONFIRMED CLOSED.** `ui_audiovideo_cameras.png` @2560 shows **702 bright px** in the camera
+list column, where the empty state shows a single dim line. The list, its selection highlight and the
+held-by-docking branch all render now — and they are what VV-01/VV-03's fix was verified against above.
+
+⛔ **The wiring half — the stranded writer — is untouched and still open.** S100 scoped itself to the
+instrument and said so.
 ---
 
 ## VV-03 — The lower console's settings card prints the same impossible resolution VV-01 found on the Figma page
@@ -4247,6 +4724,12 @@ value and tint both following it.
 Fixed with VV-01, one rule across both files, so the two surfaces cannot disagree about whether a
 resolution exists.
 
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED with VV-01** — the same one rule was applied to both surfaces in the same commit, which
+is what this finding was filed to force. The lower console's settings card and the Figma Video page cannot
+now disagree about whether a resolution exists.
 ---
 
 ## VT-01 — The VRIO page takes no state, ships a literal checklist, and has no touch anywhere
@@ -4317,6 +4800,23 @@ literal, it is just no longer painted as a live verdict.
 
 ⛔ **No hit rect was added**, deliberately. The three (B) buttons must not get one in Part A at all; the two
 (A) controls go back to White **and** into a hit table together, or not at all.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**PARTLY CLOSED — the tint half only, exactly as S110 claimed.** `ui_vriotest.png` @2560:
+
+| control | white px | Text6 px |
+|---|---|---|
+| `START VRIO 1 LED TEST` plate | **0** | 2080 |
+| `NEXT` plate | **0** | 222 |
+| `ENTER READ-ONLY` plate | **0** | 389 |
+
+**No white on any of the seven painted controls** — none of which can act. The read-only glyph is `ic_eye`
+now, matching both the reference frame and the sibling SuitCheck page.
+
+⛔ **The larger half is untouched and still open:** the five checklist ticks are step TRACKING off a
+compile-time literal, and there is no step model to read (`StepList` stranded behind `FigmaMode`, H34).
+S110 said this; the render agrees.
 ---
 
 ## VT-02 — The VRIO rebuild deviates from the Figma frame of the same screen in at least seven ways
@@ -4497,6 +4997,13 @@ reference-content cards already use — instead of `Alarm`. `ui_manualchute.png`
 The finding's option (b) is preserved as a note in the code: if a section marker is ever meant to carry
 state, the source is `s.Steps.RadarAltitude` against the section's gate altitudes — which is **MC-02** — and
 it must be computed then, not re-hardcoded.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** `ui_manualchute.png` and `ui_manualchute_descent.png` @2560 both return **0
+alarm-red px AND 0 caution-amber px** — the two section markers are `Accent` bullets now, and there is no
+fault colour anywhere on either render. The finding's verify — *"no red anywhere on a page with no fault"* —
+is met on both states.
 ---
 
 ## MC-02 — Six live altitude gates, and nothing says which one is next
@@ -4632,6 +5139,16 @@ written around the rotation cluster's glyph-plus-caption shape, and translation 
 `a` slot empty. If a later change gives either slot a distinguishing tint again, the asymmetry returns. The
 finding's alternative reading — *"if axis captions are secondary, then ROTATION is right and TRANSLATION
 needs arrows"* — is a design call against `iss-sim` and **stays open**; it is not foreclosed by this fix.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** `ui_docking.png` @2560: the ROTATION cluster measures **0 white / 942 Text6** and the
+TRANSLATION cluster **0 white / 688 Text6**. Both clusters are at **one weight**, so the `a`/`b` slot
+asymmetry that made FWD/BACK read brighter than UP/DOWN/LEFT/RIGHT has nowhere left to show. The finding's
+verify — *"all six translation pads read at one weight"* — is met, and so is the rotation cluster's.
+
+⚠ The structural cause is still there (`Cluster` is written around the rotation shape); it is invisible, not
+removed, exactly as S106 recorded.
 ---
 
 ## DK-02 — Thirteen correctly-inert controls, all painted as live buttons
@@ -4690,6 +5207,20 @@ in the cluster.
 
 ⚠ **`Reset Positions` may still become live** if a source settles that it resets the view rather than the
 vehicle (S29 left it open). It then goes back to White **and** stays hit-tested — S75's "together" rule.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** `ui_docking.png` @2560, against the verify — *"exactly three controls read as live."*
+
+| region | white px | Text6 px |
+|---|---|---|
+| ROTATION cluster (6 pads) | **0** | 942 |
+| TRANSLATION cluster (6 pads) | **0** | 688 |
+| `Instructions` (inert) | **0** | — |
+| `Settings` (**routes**) | **262** | — |
+
+Twelve pads and `Instructions` carry **no white at all**; `Settings` is the only white control, and the two
+magnitude toggles are `Accent`. **Three live controls, and they are the three that act.**
 ---
 
 ## DK-03 — There is no camera behind the docking rings
@@ -4770,6 +5301,14 @@ ten-character word in a 61.6 px box and cannot be stacked the way `MANUAL / DOCK
 at the 16 px floor**. Drawn small is still strictly better than invisible — the crew can now see that a
 control is there, which is the defect this finding names — but the size is **Q8**, not a solved problem.
 
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** `ui_docking.png` @2560: the margin plate now carries **381 white px** in the box at
+x 4.0…135.3 — the affordance is **drawn**, where before that rectangle fired over blank letterbox with
+nothing on the glass to explain it. S54's defect class, closed on the page that had it worst.
+
+⚠ Its label is small for the same reason H-06's is, and 2560 has not changed that (**R-02**).
 ---
 
 ## RZ-01 — The Hold-Capture card reads NOT ENGAGED forever, and neither its arrows nor the icon rail can be touched
@@ -4833,6 +5372,16 @@ question** — nothing in the repo says what they are, and their rings were alre
 
 Dimming the arrows makes the card **honest**, not **full**. Those are different jobs and only the first is
 done here.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED for the half that was claimed.** `ui_rendezvous.png` @2560: the left step arrow measures
+**0 white px / 47 Text6 px**. It no longer reads as a button.
+
+⚠ **The finding's own verify line is NOT met, and S106 said so.** That line is *"with a target, the card
+reads a real approach; with none, it dashes"* — which is the card-filling half (range, range-rate, closing,
+target name, all live in `PageState` today). That is untouched and **still open**. Dimming the arrows made
+the card honest, not full.
 ---
 
 ---
@@ -5110,6 +5659,21 @@ and nothing had ever rendered them on.
 VV-02 (the Video page's camera list), this page's live colouring, and — the new one — a *baseline fixture
 whose state nobody had stated*. **A page's non-nominal states belong in the preview set**, and so does
 knowing which state the baseline is in. That remains a harness policy rather than four separate fixes.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** All four state renders exist at 2560 and each differs from the nominal baseline in a
+distinct region — the verify line's own test:
+
+| render | differing bbox |
+|---|---|
+| `_leak` | (711, 272)–(1672, 1134) |
+| `_fire` | (1272, 1119)–(1372, 1134) |
+| `_pumpson` | (339, 227)–(2312, 1014) |
+| `_hotloop` | (451, 706)–(1757, 834) |
+
+Four distinct regions, none empty. The page's live colouring is on the gate now instead of resolving to one
+nominal hue in the only render that existed.
 ---
 
 ## SP-02 — The FLIGHT COMPUTER STRINGS node is the one node on the tree with no state, and its caption asserts a count nothing models
@@ -5315,6 +5879,22 @@ last `Image` command is the body* — is wrong: `BottomBar.Draw` emits an asset 
 "last Image" was the nav bar 600 px below the plot, and the check failed against a correct page. The probe
 is scoped to Images **inside the plot well** now. A test that can be fooled by the bottom bar would have
 been worse than no test.
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**CONFIRMED CLOSED.** `ui_navorbitplot.png` @2560, all four rings sampled on 52 rays each, luminance against
+their own local surroundings:
+
+| ring | radius | contrast |
+|---|---|---|
+| 1 | 127.9 | **+19.3** |
+| 2 | 255.7 | **+13.9** |
+| 3 | 383.6 | **+36.2** |
+| 4 | 511.4 | **+34.4** |
+
+**Four rings, all of them visible** — against one before the fix. Ring 2, the instance that measured +0.2
+and was on the screen but invisible, now reads +13.9. The figures track the 1280 measurements
+(+19.9/+13.6/+31.9/+34.1) as a proportional layout should.
 ---
 
 ## NO-02 — S43 built zoom and pan for the orbit plot, and the standalone orbit plot cannot use them
@@ -5678,6 +6258,98 @@ size and must render byte-identically.
 **Verify:** re-render every Figma page and assert that no drawn text size falls below `Typography.Min` in
 **panel** pixels — a headless check, which is what would have caught this at the start.
 
+
+
+### 🔎 VERIFIED 2026-09-05 — QC officer, independently, on the 2560×1406 render
+
+**STILL OPEN — and 2560 did NOT close it, though every one of its numbers has doubled.** Recorded because
+the doubling makes this finding look closed at a glance and it is not.
+
+Every sample R-01 lists is a Figma-era element drawn through `Z()`/`sc`, so it occupies the **same fraction
+of the panel** at 2560 as at 1280 — the same physical size, on the same screen, at the same distance to a
+Kerbal. The pixel figures doubled; the legibility did not move at all.
+
+| sample | @1280 | @2560 | vs a floor that scales with the panel |
+|---|---|---|---|
+| C-05 ENTRY TIMELINE rows | 7.7 px | 15.3 px | **47.9% either way** |
+| Cover rail labels `Z(32)` | 10.7 px | 21.3 px | 67% either way |
+| Menu card labels `SZ(32)` | 10.7 px | 21.3 px | 67% either way |
+| margin `MANUAL/DOCKING` | 11.5 px | 23.1 px | 72% either way |
+| margin `RENDEZVOUS` | 8.1 px | 16.2 px | 51% either way |
+
+**Not one of them changed.** What 2560 bought is crispness — more texture pixels per glyph, so the letter
+shapes are better formed — which is real but is not what this finding is about. See **R-02** for the
+constant that makes these look better than they are.
+---
+
+## R-02 — `Typography.Min` is a 1280-panel constant that did not move when the shipped panel doubled, so every legibility check in the build is now half as strict as when it was measured
+
+**TIER 1** · **NEW (2026-09-05, QC verification pass)** · the root cause under **C-05**, **[[S116]]**, and every "% of floor" figure written since S115
+
+**Evidence.** `plugin/src/pure/Typography.cs` — unchanged by S115:
+
+```csharp
+public const float Min = 16f;
+```
+
+Its own file carries two headings, **`---- 16 PX IS MEASURED, NOT CHOSEN ----`** and **`---- THE RULE THAT
+FALLS OUT OF IT ----`**, with **no body text under either.** The reasoning that justified the number is not
+in the file. It is in this document, in **R-01**:
+
+> *"`Typography.Min = 16f` was measured against the **legacy** pages, which render at the real 1280×703 and
+> pass `Typography.Caption` straight through as a panel size. **So the floor is a 1280-panel floor.**"*
+
+**What is wrong.** S115 raised the shipped panel from 1280 to 2560 device pixels. The physical screen and
+the crew's eyes did not move. A floor expressed in **device pixels** therefore has to double to mean the
+same thing — and it did not. Every `>= Typography.Min` comparison in the build silently became **twice as
+permissive** on the day the cfg changed.
+
+**The consequence, measured.** C-05's ENTRY TIMELINE rows:
+
+| | @1280 | @2560 |
+|---|---|---|
+| rendered size | 7.66 px | 15.32 px |
+| vs `Typography.Min` as written | 47.9% | **95.8%** |
+| vs the same *physical* floor (16 → 32) | **47.9%** | **47.9%** |
+
+**The text is exactly as unreadable as it was.** The apparent jump from 48% to 96% is entirely an artefact
+of a doubled measurement compared against an un-doubled constant.
+
+⛔ **This invalidates [[S116]]'s premise, which is the urgent part.** S112 and S115 both compute that C-05's
+corrected clamp becomes safe at 2560 — clamping to 24.03 design px, the block ending at design y 748 against
+a card bottom of 760, *"12 px of design margin, no layout consequence"*. That is correct **for a 16 px
+floor**. Against the true physical floor it clamps to **48.07 design px** and the block ends at **y 891.5 —
+overflowing the card by 131 design px, precisely the figure S112 measured at 1280.** The block S112 found is
+**not** lifted. Landing S116 as written would ship the overflow the fix exists to prevent.
+
+⚠ **S115 is not being blamed for the reasoning — it named this trap explicitly** (*"raising `screenWidth`
+does not move the vehicle's physical screen or the crew's eyes… every 'too small to read' finding still
+stands"*). Its error is narrower and easy to make: it treated the two cases involving a **fixed** constant
+(`Typography.Min`, `St`'s clamp to 1) as the cases where doubling *genuinely changes the outcome*. They are
+the opposite — a fixed constant is exactly where doubling changes only the **appearance** of the outcome,
+because the yardstick shrank relative to the thing it measures.
+
+**Other places the same shrunken yardstick is now in force** (each needs re-reading, none re-measured here):
+`CoverPage.FitRows`' clamp · `MarginAffordance.FitsLegibly` and its `FitSize` fit · `FigmaUINavTest`'s
+`MenuGridFits` ratio check · every "% of the floor" figure recorded in this document since S115.
+
+**Fix plan.**
+- **Make the floor a function of the panel, not a device-pixel literal.** The honest form is
+  `Min` expressed against a reference panel width and scaled at the point of comparison — e.g. a
+  `Typography.MinFor(int panelW)` returning `16f * panelW / 1280f`, so the constant keeps its measured
+  meaning and every caller gets the right number at any width. One place to change it if the panel changes
+  again.
+- ⚠ **Do NOT simply retype `16f` as `32f`.** That fixes today and re-breaks on the next resolution change,
+  which is the exact defect being fixed — a floor that silently means something different from what it was
+  measured as.
+- ⚠ **Restore the missing reasoning to `Typography.cs`.** The two empty headings are how this became
+  invisible: a constant whose justification is absent cannot be checked against a change in its premise.
+  The reference width belongs in that file beside the number.
+- **Must not break:** the legacy pages, which pass `Typography.*` straight through as panel sizes and were
+  what the floor was measured against — at 2560 they are drawing at half their measured physical size too,
+  which is **[[S117]]**'s subject and should be fixed with this, not separately.
+- **Verify:** at 1280 and 2560 the same element reports the same *percentage* of the floor; and C-05's
+  corrected clamp reports the same overflow at both widths (131 design px), rather than fitting at one.
 
 ---
 
