@@ -80,12 +80,12 @@ Cover's seven phase views, plus the lower analog console panel. **The six Vehicl
 | 17 | VehicleMech | MECH PANEL *(tab: Mech)* | NOT STARTED | — |
 | 18 | AudioVideo | VIDEO SETTINGS | NOT STARTED | — |
 | 19 | VrioTest | TEST VRIO HEALTH LEDS | NOT STARTED | — |
-| 20 | VehicleCrew | VEHICLE — CREW *(sub-tab)* | NOT STARTED | — |
-| 21 | VehiclePropulsion | VEHICLE — PROP *(sub-tab)* | NOT STARTED | — |
-| 22 | VehiclePower | VEHICLE — POWER *(sub-tab)* | NOT STARTED | — |
-| 23 | VehicleAvionics | VEHICLE — AVIONICS *(sub-tab)* | NOT STARTED | — |
-| 24 | VehicleGnc | VEHICLE — GNC *(sub-tab)* | NOT STARTED | — |
-| 25 | VehicleThermal | VEHICLE — THERMAL *(sub-tab)* | NOT STARTED | — |
+| **20** | **VehicleCrew** | VEHICLE — CREW *(sub-tab)* | ✅ **DONE — 4 findings** *(shared section, 20–25)* | 2026-09-05 |
+| **21** | **VehiclePropulsion** | VEHICLE — PROP *(sub-tab)* | ✅ **DONE — 4 findings** *(shared section, 20–25)* | 2026-09-05 |
+| **22** | **VehiclePower** | VEHICLE — POWER *(sub-tab)* | ✅ **DONE — 4 findings** *(shared section, 20–25)* | 2026-09-05 |
+| **23** | **VehicleAvionics** | VEHICLE — AVIONICS *(sub-tab)* | ✅ **DONE — 4 findings** *(shared section, 20–25)* | 2026-09-05 |
+| **24** | **VehicleGnc** | VEHICLE — GNC *(sub-tab)* | ✅ **DONE — 4 findings** *(shared section, 20–25)* | 2026-09-05 |
+| **25** | **VehicleThermal** | VEHICLE — THERMAL *(sub-tab)* | ✅ **DONE — 4 findings** *(shared section, 20–25)* | 2026-09-05 |
 | 26 | ManualChute | MANUAL CHUTE DEPLOY | NOT STARTED | — |
 | 27 | Docking | MANUAL DOCKING | NOT STARTED | — |
 | 28 | Rendezvous | RENDEZVOUS | NOT STARTED | — |
@@ -2322,8 +2322,193 @@ recorder and not to the screen.
 
 ---
 
-*Next: **page 17 — VehicleMech**, then the six subsystem sub-tabs (20–25), which share one file and which
-S49 H14 says are **not** `!Valid`-guarded — the guard this page has just been confirmed to have.*
+---
+
+# PAGES 20–25 — THE SIX VEHICLE SUBSYSTEM SUB-TABS
+
+**One source file, one section.** `FigmaUI.cs:210-215` routes all six to
+`VehicleSubsystemPage.Build(…, Sub.Crew | Propulsion | Power | Avionics | Gnc | Thermal, …)` — 580 lines
+with a per-subsystem descriptor. Six pages, one layout, one set of defects.
+
+**Renders inspected:** `ui_vehiclecrew.png` · `ui_vehiclecrew_alerts.png` · `ui_vehiclecrew_nofeed.png` ·
+`ui_vehiclepropulsion.png` (+ `_alerts`, `_firing`, `_kerabsent`) · `ui_vehiclepower.png` (+ `_alarm`,
+`_alerts`) · `ui_vehicleavionics.png` (+ `_commoff`) · `ui_vehiclegnc.png` · `ui_vehiclethermal.png`.
+
+**S49's entry.** §2: *"Gauges and detail rows substantially live; **31 status words are literals and, unlike
+the Overview, are not even `!Valid`-guarded**"* (H14, H16, H17). ⚠ **The guard half is now WRONG — S51 fixed
+it** (see CLEAN 1). The literal half is right but has improved and is now measurable: **S-03**.
+
+## What was checked and found CLEAN — S51 has closed two of S49's holes here
+
+1. ⭐ **S49 H14's headline claim is out of date.** `VehicleSubsystemPage.cs:123-144` now carries the guard,
+   with the file's own note: *"S51 / audit H14: THIS COLUMN NEVER GOT S22'S GUARD … The guard is now the
+   overview's, verbatim."* `ckValid` / `CT()` dim the whole row on a dead feed. Confirmed on
+   `ui_vehiclecrew_nofeed.png`. **Do not re-log H14 tier (i) against these pages.**
+2. ⭐ **S49 H15's contradictions are fixed, including the one it led with.** `SMOKE DETECT` now reads the
+   live fire model — `smoke ? "Detected" : "Clear"` off `st.Systems.Fire` (`:335-337`), the same source the
+   P&ID prints — **word and colour together**, which was the trap worth checking. Loops A/B, the heat
+   shield, S-band, RCS authority, the buses and the batteries are all computed too.
+3. **The FUNCTIONS | ALERTS toggle obeys the shared-rectangle rule.** *"The two words are hit-tested from
+   the SAME TabX/TabW below that place them"* (`:213-215`) — the discipline H-04 breaks and `MenuPage`
+   models.
+4. **The Prop tab's sixth row is an honest `Dash`**, not a literal — a genuinely-absent state, correctly
+   dashed.
+5. **The ALERTS view dashes on a dead feed.** S49 H16's *"prints a green NOMINAL on a dead feed beside its
+   own honest NO DATA"* is fixed — `:190-192` now dims the word and prints `NO DATA`. Confirmed.
+
+---
+
+## S-01 — V-01's real scope: all 24 sub-tab gauge colours are constants too, so CABIN TEMP is permanently red on two different pages
+
+**TIER 1** · **NEW** · the same defect and the same fix as **V-01**
+
+**Evidence.** Six `GCol` arrays, all literal (`VehicleSubsystemPage.cs`):
+
+```
+:345 Crew      { Gold, Red, Yellow, Blue }      <- byte-identical to the Overview's
+:376 Prop      { Gold, Gold, Blue, Red }
+:424 Power     { Accent, Accent, Accent, Yellow }
+:459 Avionics  { Accent, Accent, Go, Blue }
+:490 GNC       { Accent, Accent, Accent, Gold }
+:533 Thermal   { Blue, Blue, Accent, Red }
+```
+
+On `ui_vehiclecrew.png`, **CABIN TEMP reads 21.8 °C in a red ring** — the same nominal value, the same false
+alarm, on a second page. Prop and Thermal each carry a permanently-red gauge of their own.
+
+**So V-01 is not a one-page defect: it is 32 gauges across 7 pages** — 8 on the Overview, 24 here — every one
+of them a fixed colour over a live length.
+
+**Fix plan.** **One fix, seven pages.** `Gauge()` has the same signature in both files; changing the colour
+argument to `Alarms.Colour(Alarms.Band(raw, caution, alarm))` at the descriptor sites resolves all 32.
+V-01's plan applies unchanged, including its two cautions:
+- thresholds come from `CabinLimits`, and anything not already there is a **§1.4 question**, not a
+  build-chat number;
+- **`Accent` on a gauge with no defined threshold should stay `Accent`** — 12 of the 24 are `Accent`
+  already, which is the honest "this is a reading, not a verdict" colour. Do not invent a band to justify
+  colouring them.
+- ⚠ **`Go` at `:459` (Avionics gauge 3) is the opposite failure**: a permanently *green* ring is a
+  hardcoded all-clear, which is S31/S32's guardrail read the other way. It is the one that most needs a
+  model behind it or a demotion to `Accent`.
+
+---
+
+## S-02 — "ALERT ACTIVITY" resolves to one word, and the FDIR bar beside it is a fake three-position gauge
+
+**TIER 2** · confirms S49 **H16** · ⚠ links to **H-05**
+
+**Evidence.** `ui_vehiclepower_alerts.png`. The ALERTS view fills a whole screen with:
+
+- the heading `ALERT ACTIVITY`, a rule, and **one word — `CAUTION`** — in 110-design-px amber;
+- an `FDIR` label, the word `NOMINAL`, and a bar filled about 15%.
+
+The bar's fill is `VehicleSubsystemPage.cs:199-201`:
+
+```csharp
+float fdirFrac = Alarms.FdirSeverity(s) == Severity.Nominal ? 0.15f
+               : Alarms.FdirSeverity(s) == Severity.Caution ? 0.6f : 1f;
+```
+
+**A bar whose fill is a lookup from a three-valued enum is not a gauge.** It is drawn in the same idiom as
+the four real detail bars on the FUNCTIONS view — same width, same track, same `Accent`-family fill — so it
+reads as a continuous measurement of something. It measures nothing.
+
+**And the word is the whole alert surface.** No enumerated list, no timestamps, no which-subsystem, no
+acknowledgement. The crew learns *that* something is in caution and nothing about *what* — on the page whose
+title is ALERT ACTIVITY. Everything else on the screen is the capsule illustration and empty space.
+
+⚠ **This is the same heading as the HUD's, and the HUD's is empty (H-05).** Two surfaces titled ALERT
+ACTIVITY: one shows a single computed word, the other shows nothing at all, and neither enumerates an alert.
+**They should be built once and shared**, not twice.
+
+**Fix plan.**
+- Build the enumerated list H-05's plan describes — one row per set bit of `Alarms.Mask(ps)` plus
+  `SystemsState`'s discrete conditions (fire, leak, tripped strings, bus 0/3) — and **use it on both
+  surfaces**. The severity word stays as the summary above the list.
+- **Retire the FDIR bar or make it real.** Two honest options: (a) drop the bar and keep the word, which
+  loses nothing — the word already carries the state; (b) if a bar is wanted, it must measure something
+  continuous, and nothing in `Fdir` currently is. **(a) is recommended**; a decorative bar in the same
+  idiom as four real ones is the defect.
+- ⚠ **Scope, per §14.4(f):** the list built from `Alarms` + `Systems` is **(A)** and buildable now. The FDIR
+  *channel* is Part B's — the stub pins `Fault`/`FaultResponse`/`FaultText` (S49 §1.2) — so the FDIR row
+  stays an honest no-op until then.
+- **Must not break:** `LiveSeverity` drives both the ALERTS content and the tab colour, *"so the toggle
+  content and the red-nav can never say different things"* (`:183-185`). Any list must read the same source.
+
+---
+
+## S-03 — 23 of the 36 subsystem state words are still literals
+
+**TIER 2** · S49 **H14** tier (ii), now counted
+
+**Evidence.** Six tabs × six rows = 36 words. Counted from the six `CkState` arrays:
+
+| tab | line | literal | computed | dash |
+|---|---|---|---|---|
+| Crew | `:336` | 5 | 1 *(smoke)* | — |
+| Prop | `:367` | 4 | 1 *(rcsUp)* | 1 |
+| Power | `:413` | 2 | 4 *(2 × `BusWord`, battery, solar)* | — |
+| Avionics | `:442` | 5 | 1 *(S-band)* | — |
+| GNC | `:479` | 4 | 2 *(RCS authority, mode)* | — |
+| Thermal | `:524` | 3 | 3 *(loop A, loop B, shield)* | — |
+| **total** | | **23** | **12** | **1** |
+
+S49 said 31 literals and no guard; S51 brought it to **23 literals with the guard in place**. The remaining
+23 include `"16 / 16"`, `"3 / 3"`, `"2 / 2"`, `"Lock"` ×2, `"Armed"` ×2, `"Open"`, `"Deployed"`, `"Auto"`,
+`"Valid"`, `"Active"`, `"Standby"` and nine `"Nominal"`.
+
+**What is wrong.** Under §14.4(f) a status word is a READOUT and must be filled from a live source or a
+marked model — a nominal word with nothing behind it is a defect, not a placeholder. These are dimmed on a
+dead feed (S51), which removes the *contradiction*, but a live feed still prints twelve confident verdicts
+that nothing computed.
+
+**Fix plan.**
+- **Sort them before building any.** Three groups, and only the first is straightforward:
+  1. **Countable** — `"16 / 16"`, `"3 / 3"`, `"2 / 2"`: these are *n of m* counts of real things (Draco
+     thrusters, flight computers, batteries). Where the vessel has the parts, count them; `BusWord`'s
+     pattern applies directly.
+  2. **State words with a live source that is simply not read yet** — `"Open"`, `"Armed"`, `"Deployed"`,
+     `"Lock"`. Each needs one field identified; some may already exist in `SystemsState`.
+  3. **The nine `"Nominal"`s and `"Auto"`/`"Valid"`/`"Active"`/`"Standby"`** — these are *verdicts*, and a
+     verdict needs a model. Under S31/S32 they must be computed from something or become dashes. ⚠ **This
+     is a policy call, not a build: it is S49's own Q3** (*"a large surface and a policy question, not one
+     build"*), and it is still open. **Do not invent bands for them.**
+- **Recommended sequencing:** group 1, then group 2 one field at a time, and hold group 3 behind Q3.
+- **Must not break:** the `CT()` guard and the `CkKey` colour must move together with each word — S51's
+  lesson, and the reason `SMOKE DETECT` is now correct in both.
+- **Verify:** per tab, a live render and a `_nofeed` render; every computed word must change between them.
+
+---
+
+## S-04 — The dash surface is S49 H17's, unchanged, and it is a standing policy question rather than a per-page defect
+
+**TIER 3** *(owner policy — S49 §8's Q3, still open)* · recorded, not re-litigated
+
+**Evidence.** `ui_vehiclecrew.png` right column: **`Humidity` is a dash with an empty bar**, beside three
+live rows (O2 Tank 86%, N2 Tank 93%, Potable Water 108 L) and a live `Crew Aboard 3 / 4`. S49 H17 lists
+~27 such rows across these six tabs — Humidity, Chamber Press, SuperDraco Temp, HELIUM, PROP TEMP, bus
+voltages, Bus Load, Battery Temp, FC LOAD, BUS TRAFFIC, LINK MARGIN, STORAGE, FC1-3, GPS Sats, Data Rate,
+RADIATOR, loop flows, Heat Reject, Cabin HX, the TPS rows.
+
+**What is wrong — and why this is not a new finding.** Before §14.4(f) these dashes were correct. After it,
+a dash survives only for a *genuinely-absent* state, and every one of these is a physically-real Dragon
+quantity. But S49 already put this to the owner as **Q3** — *"a large surface and a policy question, not one
+build"* — and **there is no ruling on record.** This QC pass confirms the surface is unchanged at HEAD and
+adds nothing to the question.
+
+**Fix plan.** None proposed; the question is open and is the owner's. What this pass can add:
+- The Avionics tab's own comment (`:444`) already states the honest position — *"MOST OF THIS TAB STILL
+  DASHES, AND THAT IS THE ANSWER"* — which is the right posture until Q3 is answered.
+- ⚠ **C1.15 applies to whatever is built.** Before any of these is simulated, the task's deliverable must
+  record a documented search against `docs/reference/INSTALLED_MODS.md` — what was searched for, what
+  candidates exist, why each was accepted or rejected. Several of these quantities plausibly have real
+  sources already installed (TAC-LS for humidity-adjacent state, RealFuels for propellant temperature,
+  TestFlight for component reliability), and C1.15 exists precisely because a screens pass began inventing
+  simulations for adjacent quantities without checking.
+
+---
+
+*Next: **page 17 — VehicleMech**, the last of the Vehicle family.*
 
 *⚠ **Three findings are page-wide, not per-page, and should be scheduled ahead of the sweep:***
 - ***H-01** — the preview's resolution. It decides how every later legibility finding is measured, so
