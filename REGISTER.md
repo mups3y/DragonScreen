@@ -5703,7 +5703,7 @@ touched only `plugin/src/pure/CoverPage.cs`, `plugin/src/pure/VehicleSubsystemPa
 `plugin/test/LayoutTest.cs` — **no overlap** with S10b's six files — and the commit names those three
 paths explicitly, so S10b's tree is left exactly as it was found.
 
-### S35 [owner call] Gauge identity colours make a NOMINAL reading look like an alarm — **TODO** — [TIER 3: owner decision]
+### S35 [owner call] Gauge identity colours make a NOMINAL reading look like an alarm — **DONE 2026-09-06 — SUBSUMED BY QC `S-01` AND FIXED BY [[S104]]; verified in source by [[S125]]** — [TIER 3; the defect is gone, ONE aesthetic residual is named below and stays the owner's]
 Logged by S34 (C1.1), not done — it needs an owner call, so S34 stopped and asked rather than repainting
 reference-sourced elements on its own authority (C1.4 / C1.12).
 
@@ -5731,7 +5731,34 @@ colours, and the reference's own choices collide with our state palette:**
   `SHIELD` is red and GNC's `RCS FUEL` is gold at 100 % (`s.GCol` is a literal array on every tab —
   lines ~253 / 272 / 306 / 341 / 363 / 391 — never a severity).
 
-**Paste-ready overseer prompt (C1.13):**
+#### ✅ CLOSED 2026-09-06 by [[S125]]'s reconciliation — **the defect is verifiably gone; do not re-open it as written**
+
+⛔ **THIS LINE WAS NEVER ANSWERED AS ASKED. THE DEFECT WAS FIXED UNDER A DIFFERENT LINE, AND THAT IS WHY
+IT SAT OPEN.** QC filed the identical defect independently as **`V-01` + `S-01`**, measured its real scope
+at **32 gauges across 7 pages** (S35 had found it on the tabs; `S-01` found the Overview's eight too), and
+[[S104]] fixed all 32 on 2026-09-05. Nothing pointed the two at each other until now.
+
+**VERIFIED IN THE CURRENT SOURCE, not taken from QC's scoreboard:**
+- `VehicleOverviewPage.cs:129-154` — all eight rings now `GC(Alarms.Band(…, CabinLimits.…))`.
+- `VehicleSubsystemPage.cs:347 / 387 / 442 / 484 / 519 / 569` — all six `GCol` descriptors now
+  `Alarms.GaugeColour(Alarms.Band(…) | Alarms.Low(…), valid)`. The literal arrays this line quotes
+  (`{ Gold, Red, Yellow, Blue }` etc.) **are gone.**
+- So `CABIN TEMP` at ~22 °C — the exact reading photographed on glass in `20260903120439_1.jpg` — now bands
+  green against `CabinTempCaution 30 / Alarm 35`, and cannot draw `DragonPalette.Alarm` at a nominal value.
+
+**AND THE FIX HAD AUTHORITY (C1.12).** [[S104]] is 🟢 OWNER-DIRECTED, verbatim: *"continue with all the
+screen fixes one at a time until all pages are complete. You must confirm your findings before fixing."*
+
+⚠ **ONE RESIDUAL IS GENUINELY OPEN AND IS NOT BEING CLOSED BY SLEIGHT OF HAND.** This line asked the owner
+to choose between the reference's identity colours and severity-driven ones. S104 implemented
+**severity-drives-colour** under a *general* directive — it was never put to the owner in those words. For
+the **twelve gauges with no threshold in the model**, S104 chose `Accent`, the honest "this is a reading,
+not a verdict" colour: neither the reference's identity colour nor an invented band.
+⛔ **If the owner wants the reference's identity palette back on those twelve, that is an `OVERRIDE` (C1.8)
+and a fresh line. No build chat may decide it, and [[S125]] did not.** The original prompt below is kept
+verbatim so the question can still be asked exactly as it was written.
+
+**The original paste-ready overseer prompt (C1.13), kept for that purpose:**
 > DragonScreen, S35. A glass pass found that healthy cabin readings look like alarms: CABIN TEMP ~22 °C
 > draws a RED arc on Crew and Vehicle Overview, PPO2 and CABIN PRESS draw amber, THERMAL's SHIELD draws
 > red and GNC's RCS FUEL draws gold at 100 %. The build chat audited it and found the alarm thresholds
@@ -6680,6 +6707,14 @@ with `if (built) return;`) and `Tuning.Poll()` in `ScreenPainter.Update()`
   `BUILD_PLAN.md:136-137` records the owner's option-B choice keeping RESET as real display-state.
 
 ### S50 [O] The Cover top strip and the whole Frame 58 HUD are baked art — `PageState` already carries every value live — **TODO** — [TIER 2: real defect / the biggest immersion win]
+
+⚠ **[[S125]] CROSS-REFERENCE, 2026-09-06 — this line owns more than its own text says.** It is H1 + H2 + H10
+in `docs/SCREEN_LIVENESS_AUDIT.md`, **and** QC's **`C-01`** (the Cover strip — which QC's verification pass
+lists **CONFIRMED CLOSED**, so the Cover half may already be done: *check before rebuilding it*) **and**
+QC's **`H-02`** (the docking HUD — *"8 of the 12 numbers contradict live state in the same frame"*, still
+open). ⛔ **Check `C-01`'s current state first**: this line's title still claims the top strip is baked, and
+[[S105]] may have made that false. ⚠ Any text this line ADDS lands on pages [[S153]] (`R-01`) already fails,
+so it inherits that defect unless R-01 is settled first.
 Logged by **S49** (H1, H2, H10), not fixed there (C1.1). The Cover's SPLASHDOWN TIME / INERTIAL VELOCITY /
 ALTITUDE / APOGEE / PERIGEE / INCLINATION / ACTIVE PHASE and the HUD's ROLL/PITCH/YAW (correction and rate),
 X/Y/Z, RANGE, RATE, ACCELERATION are **pixels in PNGs**, and both files are verified never to read the
@@ -6786,6 +6821,12 @@ source, no claim) rather than reporting a cabin leak under a propellant label, a
    under a propellant-manifold label, which is a new false statement rather than the removal of one.
 
 ### S52 [O] `SuitLeakSim`'s provenance comment contradicts the code, and cabin pressure ignores the live leak — **TODO** — [TIER 2: real defect + documentation defect]
+
+⚠ **[[S125]] CROSS-REFERENCE, 2026-09-06.** H20 + H37, one root cause. ⭐ Landing it makes **the leak, the
+isolation valve, the alert word, the suit ΔP and the cabin gauge one story** — the audit's own phrasing —
+and the gauge is drawn in **four** places, so the reach is larger than the line's title suggests.
+⛔ **C1.16/G12 applies with unusual force here:** half of this line is that a comment's *provenance claim*
+is false. Fix the claim in place — say what it asserted and what is actually true — rather than deleting it.
 Logged by **S49** (H20, H37). `SuitLeakSim`'s header states the suit ΔP is measured against cabin pressure
 *"driven by real TAC Life Support state via LifeSupportBridge"*. It is not: `CabinEnvironment.cs:145` is
 `r.PressPsia = PressNominal + slower * 0.06` where `slower = sin(MissionTime/113.0)` — verified — and TAC
@@ -6899,6 +6940,18 @@ drawn, pinned by a test. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H8/H18.
   own line so closing S54 does not bury them → **S75**.
 
 ### S55 [O] No procedure page is step-tracked — and the one real step state machine is stranded — **TODO** — [TIER 3: scheduled build — the §14.4(f) headline]
+
+⚠ **[[S125]] CROSS-REFERENCE, 2026-09-06 — THIS IS THE BIGGEST LINE IN THE BACKLOG AND ITS TEXT UNDERSTATES
+IT.** It owns holes H19, H21, H22, H31 **and** H34, **and it absorbs FOUR QC findings that were filed
+independently and never linked to it:** **`SC-01`** (the suit procedure is drawn complete before it starts,
+its header never advances) · **`MC-02`** (six live altitude gates, nothing says which is next) ·
+**`AS-01`** (eleven ascent events, none tracked, while the step machine that computes six of them runs
+unread) · **`VT-01`** (part-closed — VRIO's tints are done, its step tracking is *explicitly blocked on
+H34*, which is this line's).
+⛔ **SPLIT IT BEFORE STARTING (C1.7)** — five pages and four findings will not finish in one session.
+⚠ [[S151]] (`AS-02`, the Ascent page's empty right 60%) is **sequenced AFTER** this line's ascent half: the
+content that would fill that space is the tracking this line owns.
+⚠ [[S150]] owns the Entry page's *structure*; this line owns its *step tracking* (H31). Do not fix H31 twice.
 Logged by **S49** (H19, H21, H22, H31, H34). **Not one of the five procedure screens has a step index, a
 cursor or an advance.** Suit Leak draws both left ticks CHECKED at page-open and never leaves "SECTION 2: IN
 PROGRESS"; **VrioTest has no `PageState` parameter, no HitTest and no glue branch** (checklist = a literal
@@ -7054,7 +7107,7 @@ discussion, and this is an invention even though it is a small and defensible on
 3. **Name a different assignment** the owner has a source for; the derivation is three lines and follows
    whatever is chosen.
 
-### S57 [S] Orphaned live code with no caller — harvest or retire — **SPLIT 2026-09-04 (owner ruling: audit Q1 = option 4 — four of six items routed to their host lines; the remainder is ONE owner question)** — [TIER 4: hygiene + harvest] ⚠ batch deviation from C1.1/C1.7 authorised by owner 2026-09-04 via overseer
+### S57 [S] Orphaned live code with no caller — harvest or retire — ⚠ **[[S125]] 2026-09-06: its `LifeSupport.Margins` item is now owned by [[S140]] (with QC `V-04` + H18); its `Orbital`/`Hohmann` and NAV-cluster items remain here / with [[S62]]** — **SPLIT 2026-09-04 (owner ruling: audit Q1 = option 4 — four of six items routed to their host lines; the remainder is ONE owner question)** — [TIER 4: hygiene + harvest] ⚠ batch deviation from C1.1/C1.7 authorised by owner 2026-09-04 via overseer
 Logged by **S49** (H36, H39, H43, H44). Working, tested code that nothing calls: **`pure/Orbital.cs`**
 (vis-viva, anomalies, ground range/bearing) and **`pure/Hohmann.cs`** (Δv1/Δv2, phase lead, wait time) — zero
 screen callers, though *displaying* a rendezvous plan needs no flight control and is the natural live
@@ -7433,6 +7486,12 @@ per the INDEX convention), covering (1) the globe, (2) the orbit line + markers,
   does S61 (the page route) precede any further glass spend on G11.
 
 ### S62 [O] There is no `UiPage` that reaches the NAV page — so the scaled-space camera is unreachable and G11 cannot be answered — **TODO** — [TIER 2: real defect — the prerequisite for S10b/G11]
+
+⚠ **[[S125]] CROSS-REFERENCE, 2026-09-06.** Related to hole **H36** and QC **`NO-02`** (*"S43 built zoom and
+pan for the orbit plot, and the standalone orbit plot cannot use them"*), both of which are the **complete
+NAV pan/zoom/NEXT-VIEW cluster being orphaned**. [[S57]] (SPLIT) carries the orphaned-code half and
+**[[S43]] already identifies wiring the existing zoom control as the right fix**. ⛔ **Three lines touch one
+cluster — read all three before starting any of them.**
 Logged by **S61**, 2026-09-03 (C1.1 — found, not fixed). S49 §1.1 already recorded that `FigmaMode` strands a
 second UI and that **there is no `UiPage.Nav`**; this line records the consequence S49 did not draw, which is
 that an owner-gated glass check is currently **unanswerable**, not merely unscheduled.
@@ -13534,7 +13593,7 @@ it must not land before this one. The rows still draw at `RowSize` 26 design = *
 No `install`, no glass, no `git push`. No flight control wired (§14.4(a)). `docs/QC_FINDINGS.md` not
 edited (QC's file); `docs/BUILD_PLAN.md` not edited (C1.12 guarded file).
 
-### S125 [O] Reconcile `SCREEN_LIVENESS_AUDIT.md`'s holes with QC's remaining findings into ONE de-duplicated backlog — **DOING** — [opened 2026-09-06 by the continuous build chat, under the same owner directive quoted on [[S123]]; TIER 1: it does not fix a defect, it stops the same defect being fixed three times]
+### S125 [O] Reconcile `SCREEN_LIVENESS_AUDIT.md`'s holes with QC's remaining findings into ONE de-duplicated backlog — **DONE 2026-09-06** — [**17 duplicate pairs found, 9 of them previously unknown; 28 new owner lines S126–S153; [[S35]] CLOSED by evidence; `R-01` given a line for the first time**] — [opened 2026-09-06 by the continuous build chat, under the same owner directive quoted on [[S123]]; TIER 1: it does not fix a defect, it stops the same defect being fixed three times]
 
 **Why this comes before any of the fix lines.** Two independent audits are on file and neither knows about
 the other. `docs/SCREEN_LIVENESS_AUDIT.md` ([[S49]], 2026-09-03) walked every screen and logged **45 holes
@@ -13552,6 +13611,396 @@ is currently reachable from up to three places: a hole, a QC finding, and a regi
 - **DONE when:** every one of the 45 holes and every remaining QC finding has exactly ONE named owner —
   an existing register line, a new one, or an explicit HELD/owner-gated verdict — the duplicate pairs are
   named, and no item is left reachable from two lines without the relationship being written down.
+
+#### ✅ DONE 2026-09-06 — **`docs/BACKLOG_RECONCILIATION.md` is the deliverable; every hole and every live finding now has exactly one owner**
+
+**THE COUNT.**
+| | |
+|---|---|
+| liveness holes reconciled | **45** — 8 DONE · 20 newly owned · 9 already owned · 5 (B)/decided · 3 (C), nothing owed |
+| QC findings on file | 72 |
+| QC's own "remaining" figure | 38 |
+| ⭐ **live remaining after this session** | **36** — `C-05` closed by [[S123]]+[[S116]], `R-02` by job 2 of the 2026-09-06 batch, both AFTER QC's count was written |
+| **duplicate pairs found** | **17** — the brief that opened this line named 3; **14 more were not known** |
+| new owner lines created | **28** ([[S126]]–[[S153]]) |
+| lines CLOSED by evidence | **1** — [[S35]] |
+
+**⭐ THE FINDING THAT MATTERS MOST: [[S35]] SHOULD NOT HAVE BEEN OPEN.** QC filed the identical defect as
+`V-01`/`S-01`, measured its true scope at **32 gauges on 7 pages** (S35 had only found the tabs), and
+[[S104]] fixed all 32 on 2026-09-05 under a verbatim owner directive. **Verified in source, not taken from
+QC's scoreboard** — `VehicleOverviewPage.cs:129-154` and `VehicleSubsystemPage.cs:347/387/442/484/519/569`
+all now band through `Alarms`; the literal `GCol` arrays S35 quotes are gone; `CABIN TEMP` at 22 °C can no
+longer draw `DragonPalette.Alarm`. ⚠ **One residual is left OPEN rather than swept up:** S35 asked the owner
+to choose between the reference's identity colours and severity-driven ones, and S104 chose the latter under
+a *general* directive. For the twelve gauges with no threshold, `Accent` was kept. **Restoring the
+reference's palette there would be an `OVERRIDE` (C1.8)** — recorded on S35, not decided.
+
+**⭐ AND THE SECOND: `R-01` HAD NO REGISTER LINE AT ALL.** 18 mentions across the register, cited as *"the
+batch that unblocks the rest"*, and nothing owned it. It is now **[[S153]]**, **HELD** as C1.14's (3) — the
+owner's own taste. ⚠ It gates six of the new lines, because each of them ADDS text to pages R-01 already
+fails. **Measured on a live example this session:** S123's rows draw at **17.31 panel px against a 32 px
+floor**, and [[S116]] could not fix it.
+
+**⚠ FOUR LINES ARE BLOCKED BY ONE MISSING ACTION, AND IT IS NOT THE OWNER'S.** [[S129]] `C-08` · [[S131]]
+`C-02` · [[S135]] `A-02` are each **answered by the owner in writing** and still unactionable, because he set
+his own condition (verbatim, `docs/QC_FINDINGS.md`): *"I will answer them and then ask the overseer to assess
+before acting on them."* **The assessment has not happened.** One action unblocks three lines; [[S139]] is a
+genuine open policy question and is separate.
+
+**⚠ TWO ITEMS CANNOT BE BUILT HERE AT ALL AND THIS IS THE C7 FLAG.** QC `A-05` and `A-06` both wait on the
+community Figma export; `assets/figma/` is gitignored, so **the input is not in the repo**. C7: *"If a build
+input isn't in the repo, STOP and flag it."* Flagged on [[S135]].
+
+**CROSS-REFERENCES WRITTEN ONTO THE EXISTING OWNERS**, because the duplicates are worthless unless the line
+someone actually picks up carries them: [[S50]] (owns `C-01` + `H-02`; ⛔ and its own title may now be stale
+— `C-01` is CONFIRMED CLOSED, so *check before rebuilding*) · [[S55]] (**absorbs four QC findings** —
+`SC-01` `MC-02` `AS-01` `VT-01` — and is the biggest line in the backlog; needs a C1.7 split) · [[S52]] ·
+[[S57]] (its `Margins` item moved to [[S140]]) · [[S62]] (three lines touch one NAV cluster).
+
+**Verified (C1.3).** **Docs + register only, no code changed**, so the build/preview gate does not apply
+(C1.3's carve-out); `build.py test` run anyway and **green — ALL SUITES PASSED**. Outputs are exactly the
+four declared: `docs/BACKLOG_RECONCILIATION.md`, this line, [[S126]]–[[S153]] + [[S35]]'s closure + five
+cross-references, and `docs/INDEX.md`'s row. ⛔ **`docs/QC_FINDINGS.md` NOT edited** (QC's file — the two
+newly-closed findings are recorded here and in the new document instead); **`docs/BUILD_PLAN.md` NOT
+edited** (C1.12 guarded file). No `install`, no glass, no `git push`. §14.4(a) untouched.
+⛔ **No defect was fixed and nothing owner-gated was decided.**
+
+---
+
+# THE RECONCILED BACKLOG — lines S126–S153, opened by [[S125]] 2026-09-06
+
+⛔ **These lines were CREATED, not invented.** Every one of them owns a defect that was already on file in
+`docs/SCREEN_LIVENESS_AUDIT.md` (a hole) or `docs/QC_FINDINGS.md` (a finding) or both, and had **no owner**.
+The full mapping — which hole, which finding, which are duplicates of each other — is
+`docs/BACKLOG_RECONCILIATION.md`. **No new defect was discovered here and none was fixed.**
+⚠ Each line names its sources so the next chat reads the audit's own detail rather than this summary.
+
+### S126 [S] The Cover's two TARGET readouts are baked pictures of the same wrong value — **TODO** — [H3 + QC `C-14`; TIER 2: real defect]
+- **The finding.** Both readouts under the globe are baked PNGs reading `26° 15.00° N`, so **the longitude
+  prints a latitude's value and carries a latitude's hemisphere letter.**
+- **Two routes, and choosing is the research (H3):** (i) wire `s.TargetLat`/`s.TargetLon`/`s.HasTargetGround`
+  — live and already used by `NavPage.cs:268-271`, but that is the *nav target*, not a splashdown site;
+  (ii) a splashdown predictor — `s.SplashdownText`/`SplashdownShown` prove a descent model exists.
+  ⚠ §B11 **O7**: the seven real splashdown sites have **no published coordinates**, so (ii) can only be
+  modelled, never sourced (§1.4).
+- ⚠ **This is also the residual under [[S123]]'s card work** — `CoverPage.cs:299` records that the few px of
+  asymmetry there closes only when these two become live text.
+- **DONE when:** both readouts are live text at the measured boxes, the longitude carries E/W, and a preview
+  at 2560 shows them balanced about the globe (the C-13 geometry [[S105]] already landed).
+
+### S127 [S] Five of the Cover's seven rail phases draw identical content — **TODO (part owner-gated)** — [H4; TIER 3]
+- **The finding.** Only slots 5 (Reference Content) and 6 (Manual Chute) have their own bodies. Slots 0–4
+  draw the same baked Coast-phase panel.
+- ⛔ **Slots 3/4 are OWNER-DECLINED and stay that way.** [[S27]] put the two generic "Procedure" slots to the
+  owner and **the owner declined to assign them** — no source names their content. Do not invent one.
+- **Slots 0/1/2 are NOT gated:** Deport & Burn / Coast to Trunk / Claw Sep Prep are documented in §8 exactly
+  as slot 5's content was, which is the precedent [[S123]] built on.
+- **DONE when:** slots 0/1/2 draw their own §8-sourced bodies, slots 3/4 are left as they are with a comment
+  saying why, and the preview shows five distinct phases.
+
+### S128 [S] The Cover's four `Act*` buttons are silent no-ops — **TODO** — [H5; TIER 2; prerequisite [[S54]] is DONE]
+- **The finding.** `ActReview`, `ActAcknowledge`, `ActDeorbitBrief`, `ActOnSpaceX` have named hit rects, no
+  dispatcher case, and **not even the honest-refuse log the chute page emits**.
+- ⭐ **None of the four commands the vehicle**, so all four are (A) and §14.4(a) does not block them:
+  `ActReview` selects rail index 5 (**its own label says so, the destination exists — one line**);
+  `ActAcknowledge` is a crew-ack latch; `ActDeorbitBrief` is routing to `DeorbitBurnPrep`; `ActOnSpaceX` is
+  a *ground-authorisation* latch, not a vehicle command.
+- ✅ **The prerequisite is met.** H8's phantom hit rects were the reason this had to wait; [[S54]] fixed them
+  (DONE 2026-09-04), so wiring these can no longer fire a deorbit action from the ENTRY TIMELINE text.
+- **DONE when:** all four do their local thing or log an honest refusal, and a headless test pins that none
+  of them reaches `FlightCommands`.
+
+### S129 [S] `ENTRY ENABLED` is a baked verdict, permanently False, and what the row MEANS is undecided — **HELD** — [H6 + QC `C-08`; owner answered Q3 but the answer is NOT YET ACTIONABLE]
+- **The finding.** The row shows `True` **and** `False` at once, neither lit; `EntryTrue`/`EntryFalse`
+  resolve to nothing. **The class depends on the meaning:** crew-verification → a local latch, (A);
+  vehicle-arming → §14.4(a), (B). QC's `C-08` adds that **S49's own reading of it is wrong.**
+- 🟢 **The owner HAS answered (Q3, 2026-09-05, verbatim):** *"that list should be the autopilot checking
+  everything is ready for re-entry, so if it cannot hold real values we simulate the vehicle performing the
+  checklist. After confirming everything is green/ticked there should be a crew gate question to continue
+  with re-entry go no go decision. If yes autopilot proceeds with re-entry if no there must be a way for
+  the user to retriger the sequence when ready to re-enter"*
+- ⛔ **AND IT IS STILL HELD, on the owner's OWN condition** (`docs/QC_FINDINGS.md`, verbatim): *"I will
+  answer them and then ask the overseer to assess before acting on them."* **No build may start from it.**
+- ⭐ **Most of it already exists**, which is why this is worth un-blocking: `pure/CrewGate.cs` is precisely
+  the machine described — AUTO items confirmed from vessel state, CREW items tapped, GO/NO-GO/ABORT, and
+  **NO-GO holds rather than cancels** (`:109-110`), which IS the "way to retrigger" the owner asked for.
+  `CrewGates.Return()` already defines `G15 "GO FOR DEORBIT BURN"`. [[W10]] gave it a live driver.
+- **DONE when:** the overseer assessment has happened, the answer is actionable, and the row is built to it.
+
+### S130 [S] The Cover has no alarm surface at all — **TODO** — [H7; TIER 2]
+- **The finding.** `Alarms.Mask` folds G-force, propellant, power and the whole FDIR spine every frame
+  (`ScreenPainter.cs:893`) and **is discarded**. The crew's home page cannot show a caution.
+  `Alarms.cs:2-3`'s own header: *"THE ALERT ROUTING IS THE POINT, NOT THE DECORATION."*
+- **Model:** one status field tinted by `Alarms.SystemSeverity(ps)`. `StatusIndicator` and `VehicleTabBar`
+  already render severity, so nothing new is needed.
+- ⚠ **`Alarms.Mask` bit 2 (NAV) is never set** — bits 0/1/3 are. Harmless today, a silent gap the moment the
+  channel is connected. Fix or document it in the same pass.
+- **DONE when:** the Cover shows a computed caution state, bit 2 is set or its absence is commented, and a
+  preview shows nominal and cautioned looks.
+
+### S131 [S] A 16 px black arrow renders outside the content panel, on the live camera slot — **HELD** — [QC `C-02`; owner answered Q1 but NOT YET ACTIONABLE]
+- 🟢 **Owner answered Q1: "Drop it"** (option selected, 2026-09-05).
+- ⛔ **HELD on the owner's own condition** — the same *"ask the overseer to assess before acting"* that holds
+  [[S129]] and [[S135]]. ⚠ Also one of the three findings waiting on the community Figma export, which
+  `assets/figma/` being gitignored puts **outside the repo (C7)**.
+- **DONE when:** the assessment has happened and the arrow is removed.
+
+### S132 [S] Frame 58's `FRAME`/`CAMERA` labels and the `0s / RESET / START` timer are baked with no hit rects — **TODO** — [H11; TIER 3]
+- **The finding, split by class:** `FRAME LVLH` / `CAMERA Virtual` as **readouts** → (A), and
+  `HullCams.Labels()` already supplies real camera names. The timer → (A), purely local.
+  ⛔ `FAR FIELD POSITIONING` is a **GNC mode command** → **(B)**, §14.4(a), Part B's.
+- **DONE when:** the two labels read live, the timer runs and resets locally, `FAR FIELD POSITIONING` is
+  left inert with a comment naming it (B), and a test pins that it reaches no `FlightCommands`.
+
+### S133 [S] The docking HUD's ALERT ACTIVITY panel is 822 px tall and permanently empty — **TODO** — [QC `H-05`; TIER 2]
+- **The finding.** A titled panel occupying 822 px of the busiest page in the build, showing nothing, while
+  the alarm channel is computed every frame **and written to the black box**.
+- ⚠ **Same family as [[S130]] and [[S137]]** — three surfaces that each discard a live `Alarms` channel.
+  Whoever takes one should read the other two; the model is shared even though the pages are not.
+- **DONE when:** the panel lists real events from `Alarms`/`SystemsState` or is honestly collapsed, and a
+  preview shows the empty and populated states.
+
+### S134 [S] The settings family: five layouts that can render one, a stranded writer, and a tab strip in two incompatible forms — **TODO** — [H12 + QC `A-01` `A-03` `A-04` `F-03` `F-04` `VV-02`; TIER 2: contains a real coordinate-system defect]
+- **The findings, and they are one cluster:** the page has five layouts and can render exactly one forever
+  (`A-01`); the audio ± and fan buttons have **no HitTest in the file** and the video page's camera rows
+  draw a live selection **whose only writer is stranded** by `FigmaMode` (H12, `VV-02` part-closed — the
+  fixture renders, the writer is still stranded); Frame 66's LIGHTING panel is broken in the baked art and
+  draws fifteen controls where a recorded finding says exactly **one** is bindable (`F-03`); the dividers'
+  five equal cells do not contain AUX's value or two of the four button clusters (`A-03`); the signal glyph
+  is drawn below its own button and too small to read as one (`A-04`).
+- ⛔ **`F-04` IS THE REAL DEFECT IN HERE AND SHOULD BE DONE FIRST:** the settings tab strip exists in **two
+  incompatible forms**, and the **shared hit bands are computed in a coordinate system only one of them
+  draws in**. That is [[H-04]]'s failure mode — one rectangle drawn, another hit-tested — and it is the
+  class of bug the `ChromeBar.LinkRect` rule exists to prevent.
+- **All of it is screen-state or vessel-display**, so none of it is §14.4(a)-blocked.
+- ⛔ **SPLIT THIS BEFORE STARTING (C1.7)** — six findings across four files will not finish in one session.
+  `F-04` first, then the stranded writer, then layout.
+- **DONE when:** each split line lands with a preview at 2560 and a hit-test/draw round-trip test.
+
+### S135 [S] The audio page paints ten controls a dated owner decision says should not exist — **HELD** — [QC `A-02` `A-05` `A-06`; owner answered Q6 but NOT YET ACTIONABLE, and two of the three additionally need an asset that is outside the repo]
+- 🟢 **Owner answered Q6, verbatim:** *"make the volume controls control the game sound levels. Music,
+  vehicle sound, ambient sound etc etc. What ever logical sound layer options the game has, tie to those
+  sliders etc"* — which **reverses** the 2026-08-06 no-cabin-audio decision that made these (C).
+- ⛔ **HELD, twice over.** (1) The owner's own *"ask the overseer to assess before acting"* condition.
+  (2) ⚠ **`A-05` and `A-06` cannot be built here at all**: both wait on the community Figma export, and
+  `assets/figma/` is gitignored, so **it is not in the repo — C7 says STOP and flag it.** This is that flag.
+- ⚠ **And there is a settled-decision collision to resolve before any build:** `SettingsPage.cs:27-29`
+  records the deliberate 2026-08-06 finding that stock KSP has no cabin audio, which is why the faders are
+  display-state. Q6's answer changes the premise (game sound layers, not cabin audio) rather than
+  contradicting it — but **that reading is the overseer's to confirm, not a build chat's (C1.8).**
+- **DONE when:** assessed, the collision resolved in writing, and the export retrieved for A-05/A-06.
+
+### S136 [S] `UiPage.Procedure` and `UiPage.Cabin` are flat images — 8 draw calls for a whole screen — **TODO** — [H13 + QC `F-02`; TIER 2]
+- **The finding.** Both pages are a single PNG with no `PageState` and no touch. This is the
+  element-by-element rebuild `FigmaFramePage.cs:9-11` says is the plan.
+- ⭐ **Cabin is the easy half and the data is all sitting there:** `s.Cabin`, `Ppo2Text`, `Co2Text`,
+  `PressText`, `CabinTempText`, `LoopAText`/`LoopBText`, `CrewText`, `Crew01` — and `Alarms.LifeSupport` /
+  `Alarms.Thermal` already band them. Nothing to model.
+- ⚠ **Procedure (Frame 59) is a GENERIC TEMPLATE** — §3 calls it a placeholder template, so rebuilding it
+  needs a decision about **what procedure it holds**. ⛔ That is §14.2 TIER-3 (invention → joint discussion)
+  and is **not** a build chat's call. Do Cabin; stop and ask on Procedure (C1.13/C1.14).
+- ⚠ Read with QC `F-01`: `UiPage.Procedure` and `UiPage.VrioTest` were the same screen shipped twice
+  (`F-01` CONFIRMED CLOSED), so check what Procedure is now before rebuilding it.
+- **DONE when:** Cabin is element-by-element off live state with a 2560 preview, and Procedure carries a
+  written owner question rather than an invented body.
+
+### S137 [S] The ALERTS view is a one-word summary, and the FDIR bar beside it is a fake three-position gauge — **TODO** — [H16 + QC `S-02`; TIER 2]
+- **The finding.** No enumerated list, no timestamps, no acknowledgement — and it prints a green `NOMINAL`
+  **on a dead feed**, beside its own honest `NO DATA`. The FDIR bar's `0.15/0.6/1` fill is a fake gauge
+  under a real word.
+- **`Alarms.Mask` + `SystemsState`** (fire, leak, tripped strings, bus 0/3) already produce discrete events
+  to list, so the list itself is (A).
+- ⛔ **The ceiling is (B):** per §1.2 the **FDIR channel itself** is Part B's. An alert list built from
+  `Alarms`/`Systems` is (A); one that expects real faults is (B). Build the former only.
+- ⚠ Same family as [[S130]] and [[S133]].
+- **DONE when:** the view lists real discrete events, the dead-feed case cannot read `NOMINAL`, the fake bar
+  is gone or driven, and previews show nominal / cautioned / no-feed.
+
+### S138 [S] 23 of the 36 subsystem state words are still literals — **TODO** — [QC `S-03`; the remainder of H14 after [[S51]]; TIER 2]
+- **The finding.** [[S51]] landed H14's `!Valid` guard and H15's eight self-contradicting words. **It did
+  not land the rest:** 23 of 36 state words across the six subsystem tabs are still literals.
+- ⭐ **This is the tier S22 could not reach and S51 did not claim:** under §14.4(f) these words should be
+  **computed**, not merely dimmed on a dead feed. The template exists — QC-AUDIT finding 3 did exactly this
+  for MAIN BUS A/B, and S51 did it for the eight.
+- ⚠ **Where a word has no model, it does NOT get an invented one.** That is [[S139]]'s policy question, not
+  this line's; a word with no source stays honest rather than becoming a guess.
+- **DONE when:** every word with an available model reads it, every word without one is listed in the entry
+  and handed to S139, and a dead-feed preview shows no confident green.
+
+### S139 [S] The ~27 honest dashes — the §14.4(f) policy surface — **HELD** — [H17 + QC `S-04` `MP-03`; policy question, not a page defect]
+- **The finding.** ~27 dashes across the subsystem tabs — Humidity, Chamber Press, SuperDraco Temp, HELIUM,
+  PROP TEMP, BUS A/B voltage, Bus Load, Battery Temp, FC LOAD, BUS TRAFFIC, LINK MARGIN, STORAGE, FC1-3,
+  GPS Sats, Data Rate, RADIATOR, Loop A/B Flow, Heat Reject, Cabin HX, TPS rows. `MP-03` adds five more on
+  the Mech Panel, where the empty centre circle is the visible consequence.
+- ⚠ **Before (f) these were CORRECT.** After §14.4(f) a dash survives only for a *genuinely-absent* state,
+  and every one of these is a physically-real Dragon quantity. Each wants a coherent marked micro-sim keyed
+  on something real — humidity off crew + power, helium/chamber pressure off Draco duty, bus voltage off SOC
+  droop, loop flow off the existing loop temperatures, radiator outlet off hull temp.
+- ⛔ **HELD: this is a POLICY question and a large surface, not one build.** It is the audit's own **Q3**
+  and QC's `S-04` says the same — *"a standing policy question rather than a per-page defect"*. **How far
+  §14.4(f)'s "coherent marked simulation" should be taken across 27+ quantities is the owner's call
+  (C1.14).** A build chat may not start it and may not take it a few dashes at a time either.
+- ⛔ **C1.15 applies in full when it IS started:** each quantity needs a documented search against
+  `docs/reference/INSTALLED_MODS.md` **before** any simulation is written. RealFuels and TestFlight are
+  already installed and already carry real state.
+- **DONE when:** the owner has set the policy, and the resulting build lines are split out from it.
+
+### S140 [S] `LifeSupport.Margins` is computed every frame, written to the black box, and shown on no screen — **TODO** — [H18 + QC `V-04` + H39's margin half; TIER 2: the cheapest real win left]
+- **The finding.** `SHOW MARGINS TO` is a **painted button with no hit rect** — worse than a no-op, since a
+  no-op at least resolves to a named action — and the whole MARGIN column is a hardcoded dash. Meanwhile
+  `LifeSupport.Margins` (`LifeSupport.cs:36-47`) computes exactly this shape of answer off **real TAC-LS
+  rates** and **has no caller anywhere**.
+- ⭐ **Nothing needs modelling and nothing needs sourcing.** The numbers exist, are real, and are already
+  recorded to the black box. This is a display gap, not a data gap.
+- ⚠ Same class, named so it is not lost: the Cover's `gridicons_refresh` glyph is drawn with no hit rect.
+- **DONE when:** the MARGIN column shows real days-remaining, the button has a hit rect or is unpainted, and
+  a preview shows it populated.
+
+### S141 [S] There is no camera behind the docking rings — **TODO** — [H25 + QC `DK-03`; TIER 2: pure display]
+- **The finding.** `DockingPage.Build` fills the screen with `Background`; `WantsDockingCam` grants the live
+  feed **only** to `UiPage.Hud`. The reference (and iss-sim) shows the docking-adapter view behind the rings.
+- ⭐ **`DockingCamRenderer` exists and is genuinely live**, and the stranded `DockingPage.cs:73` already
+  proves the pattern with a full-bleed `dl.Image(ImageId.DockingCamLive, …)`. **One image call plus a
+  `WantsDockingCam` clause.**
+- **DONE when:** the feed draws behind the rings, the no-feed look is designed rather than blank, and a
+  preview shows both.
+
+### S142 [S] `Reset Positions` is classed as actuation only because nobody knows what it resets — **TODO** — [H26; TIER 3: the disambiguation IS the research]
+- **The finding.** [[S29]] settled `Instructions` as (C) — no content in this build — and classed
+  `Reset Positions` conservatively as **actuation**, because the reference does not say whether it resets
+  **the vehicle** or **the view**.
+- ⭐ **If it resets the VIEW it is (A) and costs three lines.** If it resets the vehicle it is §14.4(a) and
+  Part B's. The whole line is that one question.
+- ⛔ **§1.4 governs the answer:** verified-real → other users' → owner discussion. A build chat may not pick
+  the convenient reading.
+- **DONE when:** the reading is sourced or put to the owner, and the control is built or left inert with the
+  answer recorded.
+
+### S143 [S] The Hold-Capture card reads `NOT ENGAGED` for the whole mission, and the rendezvous arrows have no hit rect — **TODO** — [H27 + H28 + QC `RZ-01` (part-closed); TIER 3]
+- **The finding.** The card's only variable is a §1.2 stub, so it is honest and useless for the entire
+  flight. The ◄/► arrows have **no hit rect at all**.
+- ⭐ **Follow the `AuthoritativePhase` pattern (§1.2)** — derive an approach state from what is already live
+  (`s.HasTarget && s.RangeM < X && s.Closing`) so the card reflects a real approach **without commanding
+  anything**. The audit calls this its clearest example of a stub that could degrade gracefully and does not.
+  The *conductor-engaged* reading stays (B).
+- The arrows are a procedure stepper — (A), and `StepList` exists (see [[S55]], which owns the stranding).
+- ⛔ **The four-slot icon rail is (C) and stays inert:** `RendezvousPage.cs:17-20` records that the icons are
+  not label-legible in the source photo, so naming destinations would be a §1.4 invention.
+- **DONE when:** the card reflects a derived approach state, the arrows step, the rail is left with its
+  comment, and a test pins that nothing here reaches `FlightCommands`.
+
+### S144 [S] Crew Interrupt Conditions are printed as copy and never evaluated — **TODO** — [H30; TIER 3]
+- **The finding.** *"30° sustained attitude error"*, *"600°/min attitude rate"*, *"Far-field pointing"* are
+  printed as text; no threshold is compared and nothing turns amber.
+- ⛔ **The WORDING is (C) and must NOT be edited** — it is real reference copy and [[S13]] settled the
+  attitude/altitude phrasing. **Only the evaluation is (A).**
+- **Both quantities are live:** `s.AlignText`, `BodyRateText`, `Body*Dps`. A criterion that lights amber when
+  the live value exceeds its stated limit needs no conductor.
+- ⚠ **"Sustained" needs a dwell timer** — that is the model to design, and it is the whole of the work.
+- **DONE when:** each criterion lights from live state against its own stated limit, the dwell is modelled
+  and tested, the copy is byte-identical, and a preview shows nominal and exceeded.
+
+### S145 [S] NavOrbitPlot's four range rings carry no scale — **TODO** — [H35; TIER 3]
+- **The finding.** Rings at `rmax·i/4` with no units printed. The file records why — no scale is legible in
+  the JSC source — but **an unlabelled ring is a readout that says nothing.**
+- ⭐ **The scale is already computed:** `NavPage.cs:596`, plus `s.RangeM` and `BarScale.Range`. Labelling the
+  rings off **our own computed scale** is ours-and-marked, the same footing as `RingFullScaleDeg`.
+- ⚠ Read with QC `NO-01` (CONFIRMED CLOSED — the rings are no longer painted over by the globe); this line
+  is what remains once they are visible.
+- **DONE when:** the rings carry marked units off the computed scale, and a preview shows them legible at
+  2560 against [[S153]]'s floor.
+
+### S146 [S] Duplicated signals are presented as two independent instruments — **TODO** — [H38; TIER 3: a §14.4(f) judgement]
+- **The finding.** `PowerUnit1Text == PowerUnit2Text` (one string written to both) · NET PWR1/PWR2 (one real
+  flow split 0.55/0.45 by a hardcoded constant) · `Downlink = Uplink` **literally** · Charge Rate = Net
+  Power · TPS Max = the SHIELD gauge.
+- ⚠ **Each is documented in-code as deliberate and honest given one KSP source** — so this is NOT a
+  correctness defect. The screen still asserts two instruments where one signal exists.
+- ⭐ **The power pair is the tractable half:** `SystemsState` **already models two independent buses**, so
+  splitting it is local work with a real model behind it.
+- ⛔ **The rest may be correct to leave.** Whether a duplicated readout counts as "filled" under §14.4(f) is
+  a judgement — record it, do not quietly pick one.
+- **DONE when:** the power pair reads two real buses, and every remaining duplicate is either justified in
+  the entry or handed to the owner as a question.
+
+### S147 [S] The bottom status bar's live text is baked on every page — **TODO** — [H40; TIER 2: 35 pages at once]
+- **The finding.** CURRENT STATE, POINTING MODE, the SPX/GND/TDRS/ISS block and a counter are all pixels in
+  `component_48.png`, on **every page in the build**.
+- ⭐ **`TELEMETRY_REGISTRY` already registers `CURRENT_STATE` (→ `s.Phase`, live) and `POINTING_MODE` with
+  sources**, and MET is trivial. **The precedent is in this very PNG:** `FigmaUI.cs:276-277` — the tab
+  marker was erased from it so it could be drawn live, which is exactly the method (and QC `C-12` closed
+  the glow the erase left behind).
+- ⚠ The comm block is marked SIMULATION in the registry absent a comms mod. Under §14.4(f) that is a *fill*,
+  not an omission — and `s.SBandText` / `CommSignal01` from stock CommNet ([[S24]]) are a real partial
+  source, so **C1.15's mod-first search applies before any simulation is written.**
+- **DONE when:** the three live values draw from state over erased boxes, the comm block is sourced or
+  marked, and previews across several pages show it.
+
+### S148 [S] A dashed value is drawn in the same weight as a live one — **TODO** — [H45; TIER 3: cosmetic but on-theme]
+- **The finding.** On the vehicle gauges and detail rows a dash draws in `White`, the same as a live value,
+  while the CONSUMABLES table correctly dims its dash. **This is the "can't tell dead from live" failure
+  [[S22]] was opened for, in a third form.**
+- ⚠ **Also latent, and worth fixing in the same pass:** the codebase has **two dash glyphs** — `—` in the
+  vehicle family and ASCII `-` in the unused `Gauge`/`StatusIndicator` widgets.
+- **DONE when:** a dash is dimmed everywhere a value can be dashed, one glyph is used, and a preview shows a
+  mixed live/dashed row.
+
+### S149 [S] One cabin pressure, three names and three colours — **TODO** — [QC `MP-02` + `MP-01`'s open half; TIER 3: C7.1's own failure mode]
+- **The finding.** The same `14.72 psia` is called **PRESSURE** here and **CABIN PRESSURE** / **CABIN PRESS**
+  elsewhere, drawn in three different colours (`MP-02`). And `MP-01` is **part-closed**: [[S104]] made the
+  colour agree, but `ALL SYSTEMS CHECK` still reads *"Normal"* on the Vehicle Overview and *"Awaiting"* in
+  caution amber on the Mech Panel **in the same frame**.
+- ⛔ **This is exactly C7.1's rule applied to the glass:** one quantity, one name, one verdict. Two surfaces
+  disagreeing about the same number is the defect [[S104]] was opened for and this is its residue.
+- **DONE when:** one name and one verdict per quantity across all surfaces, chosen from the reference where
+  it names one (§1.4), with a test pinning that the two pages cannot disagree.
+
+### S150 [S] The two deorbit/entry pages use a corner of the screen, and one is a third copy of material already on two others — **TODO** — [QC `DB-01` `DB-02` `DB-03`; TIER 3]
+- **The findings.** Both pages use a corner and leave the rest empty (`DB-01`); page 30's **entire content**
+  is a third copy of material already on two other pages (`DB-02`); neither has any touch and page 30
+  **cannot read the vehicle at all** (`DB-03`).
+- ⚠ **`DB-02` is a duplicate-page question first and a layout question second** — QC `F-01` found the same
+  shape (Procedure and VrioTest were one screen shipped twice) and it was closed by **removing** a
+  duplicate, not by redesigning both. Establish whether page 30 should exist **before** laying it out.
+- ⚠ `DB-03` overlaps [[S55]] on the Entry page (H31) — S55 owns the step-tracking half; this line owns the
+  page structure. Do not fix H31 twice.
+- **DONE when:** the duplicate question is answered, the surviving pages take `PageState`, and previews at
+  2560 show them using the screen.
+
+### S151 [S] The Ascent page uses the left 40% of the screen — **TODO** — [QC `AS-02`; TIER 4: layout]
+- **The finding.** Right 60% empty. ⚠ Read with `AS-01` (**owned by [[S55]]** — eleven ascent events, none
+  tracked, while the step machine that computes six of them runs unread): **the content that would fill the
+  space is the tracking S55 owns**, so doing this first would lay out a page around content that is about
+  to change.
+- ⛔ **Sequence after [[S55]]'s ascent half.**
+- **DONE when:** the page uses the screen with S55's tracked events in it, at 2560.
+
+### S152 [S] The preview draws tinted assets at integer rectangles while the game draws them at float — **TODO** — [QC `C-11`; TIER 3: an instrument defect, not a screen defect]
+- **The finding.** A code-structure claim QC explicitly records as **not judgeable from a render** — which is
+  precisely why it needs a line rather than an inspection.
+- ⛔ **This is an INSTRUMENT defect and it matters more than its tier suggests.** The whole preview-first
+  rule (C1.6, "restarts are the scarce resource") rests on the PNG being what the game draws. `H-01` was the
+  same class — the preview lying about its own size — and it invalidated **fourteen findings** until S100
+  fixed it. A sub-pixel placement difference is smaller, but it is the same kind of wrong.
+- **DONE when:** the preview places tinted assets the way the game does, or the difference is measured,
+  bounded and documented as harmless — with the measurement shown, not asserted.
+
+### S153 [O] `R-01` — every sampled text element on every Figma-era page is below the measured legibility floor — **HELD — OWNER DECISION** — [QC `R-01`, verified STILL OPEN 2026-09-06; **the largest unowned item in the project**, 18 register mentions and no line until now]
+- **The finding.** At the shipped width, **every** sampled text element across nine Figma-era pages measures
+  below `Typography.MinFor(panelW)` — the floor the owner measured himself on glass 2026-08-05.
+- ⭐ **AND RAISING THE RESOLUTION DID NOT HELP, WHICH IS THE WHOLE POINT.** R-02 (landed 2026-09-06) proved
+  the floor is a RATIO: anything drawn as a fraction of the panel subtends the same angle in the seat at any
+  width. `Typography.cs`'s own header now says so — *"raising the resolution does not make text more
+  legible… only its pixel figures move"*. **Q5's 2560 did not close a single R-01 sample.**
+- **Measured this session, on a live example:** [[S123]]'s Reference Content rows draw at `RowSize` 26 design
+  = **17.31 panel px against a 32 px floor** — 54% of it. [[S116]] could not fix that and says so.
+- ⛔ **HELD — and it is C1.14's (3), the owner's own taste, not a knowable answer.** Fixing it is a **global
+  type-scale decision** across every Figma-era page: raise the scale and the reference layouts stop fitting;
+  keep it and the text stays under the floor the owner set. Neither a build chat nor the overseer may pick.
+- ⚠ **It gates a large fraction of the backlog.** [[S126]] [[S136]] [[S137]] [[S138]] [[S145]] [[S147]] all
+  ADD text to pages R-01 already fails — so each either inherits the defect or waits. QC's own note: *"R-01
+  is still the batch that unblocks the rest."*
+- **DONE when:** the owner has set the type-scale policy, and the resulting per-page work is split out.
 
 ### G12 [O] Close the gap C1.16 left open: research is protected wherever it lives, code comments included — **DONE 2026-09-06** — [job 4 of the 2026-09-06 owner batch; GUARDED FILES — `CLAUDE.md` + `docs/BUILD_PLAN.md` Part C, byte-identical and proven, plus §0a's ledger row]
 

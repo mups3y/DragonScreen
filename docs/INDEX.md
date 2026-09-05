@@ -82,6 +82,11 @@ auto-memory folder, the KSP install `GameData\`, the user's installed MechJeb2 a
   systematic per-page walk of every screen classifying each element LIVE / STATIC / NO-OP / MICRO-SIM, with
   every claim carrying a `file:line`. **The source cited by register lines S50–S57** (the screen-gap sweep).
   No code changed, no plan edited.
+- **[BACKLOG_RECONCILIATION.md](BACKLOG_RECONCILIATION.md)** [REF] — S125, 2026-09-06. **Read this BEFORE
+  picking up any screen-fix line.** `SCREEN_LIVENESS_AUDIT.md` (45 holes) and `QC_FINDINGS.md` (72 findings,
+  36 live) swept the same screens independently and neither cites the other, so the same defect was reachable
+  from up to three places. This maps every hole and every remaining finding to exactly ONE owner, names the
+  **17 duplicate pairs**, and records what is HELD and on what. It fixes no defect and edits neither source.
 
 ## 2. Contracts — where a value or a control comes from
 
