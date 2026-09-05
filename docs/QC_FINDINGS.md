@@ -854,6 +854,15 @@ establish that it is not, and that the preview visibly contradicts the test's ow
 - **Must not break:** whichever way it resolves, `PageTest.NavTexture` must be updated in the same commit —
   it currently pins the disagreement as correct, so a correct fix would fail the build.
 
+
+### ⚠ PREPARED, NOT SETTLED — by **S100**, and correctly so
+
+**S100 touched neither convention**, and `PageTest.NavTexture` is untouched, **because the preview cannot
+answer this one.** Its own words: the preview *"will always flatter the globe and slander the map, since the
+map's swap exists BECAUSE KSP's `_ColorMap` is mirrored"* — and the stand-in texture is not mirrored.
+
+⛔ **So this stays OPEN and is not actionable by a preview-only chat.** It needs glass time, which is a
+separate owner gate (C1.12). It is listed here as open for that reason, not because it was overlooked.
 ---
 
 ## C-10 — The Cover's preview fixture is internally inconsistent, so the preview cannot judge marker-versus-track agreement on this page
@@ -900,6 +909,13 @@ makes the preview the gate that saves restarts; a fixture that cannot fail is no
 - **Verify:** re-render; the vessel marker must sit **on** its own ground track on the map, and the AP/PE
   markers must sit at the radius the ALTITUDE readout implies.
 
+
+### ✅ FIXED 2026-09-05 — by **S100** (`7957d4d`), NOT by this sweep
+
+**Fixed.** The Cover fixture described one vehicle three incompatible ways — scalars saying inclination
+0.13° against an overlay saying 51.6°, and a vessel marker at lat 0 / lon 0 whose own ground track was built
+around lon −80.6. **The fixture can now fail**, which is the property that matters: an internally
+inconsistent fixture cannot judge marker-versus-track, which is what this finding was raised for.
 ---
 
 ## C-11 — The preview draws tinted assets at integer rectangles while the game draws them at float
@@ -929,6 +945,18 @@ code and it took a different rounding rule from the path it was added next to.
 - **Verify:** render the Cover before and after; every asset except `gridicons_refresh` must be
   byte-identical, and `gridicons_refresh` must move by ≤1 px toward its float position.
 
+
+### ✅ FIXED 2026-09-05 — by **S100** (`7957d4d`), NOT by this sweep
+
+**Fixed, and the second path is gone rather than merely aligned.** The tinted-asset path drew at
+`new Rectangle((int)c.A, …)` while opaque white drew at `RectangleF`, and `ScreenPainter.DrawImage` uses
+float vertices for both.
+
+⭐ **The fix was not "use the float overload on both"** — that leaves two paths to drift again. The tint is
+baked into a **cached bitmap at native size**, so `DrawCoverAsset` makes exactly **one** draw call and there
+is no second rounding rule left to get wrong. **Verified:** old path vs new differs in a **12×11 px box, 92
+pixels of 899,840** — `gridicons_refresh`, the Cover's only tinted asset, moving sub-pixel toward its float
+position, with every other asset byte-identical. That was S75's own acceptance condition.
 ---
 
 ## C-12 — The baked tab marker was erased from `component_48.png` but its glow was left behind: a white smudge sits at the bottom-left of every page
@@ -1943,6 +1971,15 @@ preview is CLAUDE.md's stated instrument for judging the glass without spending 
 - **Verify:** three renders — nose closed, nose open with the stand-in, nose open with no feed — all three
   visibly distinct.
 
+
+### ✅ FIXED 2026-09-05 — by **S100** (`7957d4d`), NOT by this sweep
+
+**Fixed.** `ImageId.DockingCamLive` gets a stand-in on the same footing as `BodyMap`, for the same stated
+reason: **the game always has a feed; only the preview cannot.**
+
+⭐ **And it is a drawn, MARKED bore-sight card** — grid, cross, scale ring, and the words `PREVIEW TEST CARD`
+/ `NOT A CAMERA FEED` — never a photograph. That keeps this file's own standard intact: *a preview that
+flatters us is worse than none.* **Three distinct renders**, as this finding required.
 ---
 
 ## Open questions for the owner — HUD (Q5)
@@ -2764,6 +2801,25 @@ tempting `ui_cover_phase4.png` was not usable, and C-07's fix plan proposes rend
   becomes the manifest of what should exist.
 - **Verify:** two consecutive `preview` runs produce byte-identical directory listings.
 
+
+### ✅ FIXED 2026-09-05 — by **S100** (`7957d4d`), NOT by this sweep
+
+**Fixed exactly as filed, including the C1.16 check this finding demanded.** `build.py`'s preview path
+**empties `build/preview/` at the start of every run**. The first run cleared **118 files, of which 19 were
+the stale set named above** — `ui_cover_phase4.png` among them, the 1.75 MB full Cover render from a deleted
+render block that this role came one step from citing as evidence.
+
+⭐ **And it took the harder reading of the fix plan.** The comment in `build.py` says so: *"⚠ EMPTYING IT
+EVERY RUN IS THE POINT, and clearing it once by hand is NOT this fix: a stale render has to be IMPOSSIBLE,
+not merely absent today."* A run now also writes **`MANIFEST.txt`** with every PNG's rendered `W×H` —
+because H-01 was a render size nobody could see from the output.
+
+⚠ **C1.16 was checked before anything was deleted, not assumed** — `docs/` was grepped for all four
+non-`ui_` families plus the four one-offs, and no document cited any of them as evidence.
+
+**Re-verified here, 2026-09-05:** the folder holds **exactly 104 PNGs, the number the run reports**, all
+stamped with that run's time; every one of the 19 stale files is gone; and `build.py:405-411` does the
+clearing. Nothing in this batch needed building.
 ---
 
 ---
@@ -3917,6 +3973,15 @@ page: the preview gate cannot see the page's live half.
 - **Verify:** the populated render shows a highlighted row; tapping a different row moves the highlight and
   the feed.
 
+
+### ⚠ FIXTURE HALF FIXED — by **S100**; the wiring half is still open
+
+S100 built the fixture so the camera list actually renders — `ui_audiovideo.png`,
+`ui_audiovideo_cameras.png` and `ui_audiovideo_cameras_heldbydocking.png` are the three states, and they are
+what **VV-01/VV-03's** fix was verified against in S107.
+
+⛔ **The wiring half — the stranded writer — is untouched and stays open.** S100 scoped itself to the
+instrument, not the screens, and said so.
 ---
 
 ## VV-03 — The lower console's settings card prints the same impossible resolution VV-01 found on the Figma page
