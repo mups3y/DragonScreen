@@ -15460,7 +15460,7 @@ the whole 15-button page grid are legible and proportional.
 `build.py test` green — `LegibilityFloorTest` **288 checks** · comment-loss **0** · no `install`, no
 glass, no `git push` · §14.4(a) untouched.
 
-### S121d [S] The docking trio: `DockingPage` · `DockingPageCentral` · `AttitudeHud` — **TODO (UNBLOCKED 2026-09-06 by [[S121a]])** — [split 4 of 5 of [[S121]]; 25 lines / 25 references]
+### S121d [S] The docking trio: `DockingPage` · `DockingPageCentral` · `AttitudeHud` — **DOING** — [split 4 of 5 of [[S121]]; 25 lines / 25 references]
 - Kept as one line because they are one screen: `DockingPageCentral` draws `AttitudeHud`, and both lean on
   `Gauge`, `NumericReadout` and `StatusIndicator` from [[S121a]].
 - ⚠ Non-type geometry here too: `w - 170f`, `w - 64f` (`DockingPage`), `w - 150f`, `w - 296f`
