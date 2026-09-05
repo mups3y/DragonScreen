@@ -15251,7 +15251,7 @@ lines entirely. **Final: 0 comment prose lines lost.**
 **1042 → 1046 checks**. `preview` re-rendered (**109 pages**) and the dead-feed gauge row inspected at 1:1.
 **C1.16/G12: 0 comment prose lines lost.** No `install`, no glass, no `git push`.
 
-### S149 [S] One cabin pressure, three names and three colours — **TODO** — [QC `MP-02` + `MP-01`'s open half; TIER 3: C7.1's own failure mode]
+### S149 [S] One cabin pressure, three names and three colours — **HELD 2026-09-06 — ⭐ the two surfaces disagree because the two REFERENCE CAPTURES disagree; the copy is not ours to edit (§1.4)** — [QC `MP-02` + `MP-01`'s open half]
 - **The finding.** The same `14.72 psia` is called **PRESSURE** here and **CABIN PRESSURE** / **CABIN PRESS**
   elsewhere, drawn in three different colours (`MP-02`). And `MP-01` is **part-closed**: [[S104]] made the
   colour agree, but `ALL SYSTEMS CHECK` still reads *"Normal"* on the Vehicle Overview and *"Awaiting"* in
@@ -15260,6 +15260,60 @@ lines entirely. **Final: 0 comment prose lines lost.**
   disagreeing about the same number is the defect [[S104]] was opened for and this is its residue.
 - **DONE when:** one name and one verdict per quantity across all surfaces, chosen from the reference where
   it names one (§1.4), with a test pinning that the two pages cannot disagree.
+
+#### ⛔ HELD 2026-09-06 — the finding is confirmed; the fix would mean editing reference copy
+
+**MP-02 IS TRUE, AND VERIFIED IN SOURCE, NOT ASSUMED.** `VehicleMechPage.NodeValue` **case 2 returns
+`s.PressText`** — the same cabin pressure — under the node label `"PRESSURE"`. So one quantity carries
+three labels on three live surfaces:
+
+| surface | label | file |
+|---|---|---|
+| Mech Panel node | **PRESSURE** | `VehicleMechPage.cs:47` (`NodeValue` case 2 → `s.PressText`) |
+| Vehicle Overview gauge · Settings | **CABIN PRESSURE** | `VehicleOverviewPage.cs:149`, `SettingsPage.cs:294` |
+| Systems P&ID · Crew sub-tab gauge | **CABIN PRESS** | `SystemsPidPage.cs:250`, `VehicleSubsystemPage.cs:353` |
+
+#### ⛔ AND EVERY ONE OF THOSE LABELS IS REFERENCE COPY, WHICH IS WHY THIS IS NOT A TIDY-UP
+
+- `VehicleMechPage.cs:26-27`, verbatim: *"§6 scopes this task to the VALUES, so the reference COPY — **the
+  node names**, 'SEAT n TACH', and the 'ALL SYSTEMS CHECK / Awaiting' line under the seats — is reproduced
+  untouched."* **`PRESSURE` is a node name.**
+- `VehicleOverviewPage.cs:105-107` (S22): its seven checklist rows *"are reference COPY, not live data"*.
+
+⭐ **So the surfaces do not disagree because we were careless. They disagree because the two reference
+captures disagree, and each page is faithfully reproducing its own.** Unifying them means **editing
+reference-sourced copy with no source saying which name is right** — exactly what §1.4 reserves
+(*verified-real → other users' → invent ONLY by owner discussion*). C7.1's "one quantity, one truth" and
+§1.4's "do not edit the copy" point in opposite directions here, and **a build chat does not get to pick.**
+
+⭐ **AND THE OWNER HAS ALREADY ANSWERED THE HARDEST PART — in a way that resolves it BETTER than renaming
+would.** QC **Q7**: *"Simulate a structural pressure"* (option selected, 2026-09-05). That says the Mech
+Panel's `PRESSURE` node should show **a structural pressure, not the cabin's** — so the label was never
+wrong; **the VALUE behind it was.** Renaming it to "CABIN PRESSURE" would have entrenched the actual
+defect. ⛔ **But that answer sits in the section marked *"PENDING OVERSEER ASSESSMENT, NOT YET
+ACTIONABLE"***, under the owner's own condition (*"I will answer them and then ask the overseer to assess
+before acting on them"*). **So it cannot be built either.**
+
+⚠ **`MP-01`'s RESIDUE IS THE SAME SHAPE.** `ALL SYSTEMS CHECK` reads `Normal` on the Overview
+(`ChkState[0]`) and `Awaiting` on the Mech Panel — and **both are reference copy from their own captures**,
+named as such in both files. The colour half of MP-01 was closed by [[S104]]; **the words half is this same
+§1.4 wall**, not an oversight.
+
+**Paste-ready overseer prompt (C1.13):**
+> DragonScreen, S149 / QC MP-02 + MP-01. **One cabin-pressure reading is printed under three different
+> labels** — `PRESSURE` on the Mech Panel, `CABIN PRESSURE` on the Overview and Settings, `CABIN PRESS` on
+> the P&ID and the Crew tab — and `ALL SYSTEMS CHECK` reads *Normal* on one page and *Awaiting* on another
+> in the same frame. ⛔ **Every one of those strings is reference copy**, reproduced untouched from its own
+> capture, so the pages disagree because the captures do. Fixing it means editing copy with no source
+> saying which is right, which §1.4 reserves for you.
+> ⭐ **Your Q7 answer already fixes the worst of it, and better than renaming would:** *"simulate a
+> structural pressure"* means the Mech Panel node should stop showing the CABIN's pressure — the label was
+> right and the value was wrong. That answer is still parked behind the overseer assessment you asked for.
+> **What is left for you after that:** (a) whether `CABIN PRESS` and `CABIN PRESSURE` should be unified —
+> cosmetic, and it edits copy; (b) whether `ALL SYSTEMS CHECK` should read one word on both pages, or
+> whether two captures showing two states is itself the truthful thing to reproduce.
+
+**Verified (C1.3).** **Nothing built, nothing changed.** No `install`, no glass, no `git push`.
 
 ### S150 [S] The two deorbit/entry pages use a corner of the screen, and one is a third copy of material already on two others — **TODO** — [QC `DB-01` `DB-02` `DB-03`; TIER 3]
 - **The findings.** Both pages use a corner and leave the rest empty (`DB-01`); page 30's **entire content**
