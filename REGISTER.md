@@ -12689,7 +12689,7 @@ the Figma-era pages. **No `install`, no glass** — separate owner gates (C1.12)
 cost note for the glass session (4× RenderTexture fill on three live screens) is left for that session to
 read, not acted on.
 
-### S116 [S] Land C-05's one-line unit fix — compare the legibility floor in panel space, not design space — **BLOCKED — 2026-09-06: needs C-05's TIER-3 layout call, which is the OWNER's (C1.12)** — [logged by S115, 2026-09-05 as "now-safe — UNBLOCKED by Q5"; that premise is FALSE. Blocked on [[R-02]] by job 1; R-02 LANDED in job 2 and the blocker CONVERTED rather than lifted — see the block note at the foot of this line]
+### S116 [S] Land C-05's one-line unit fix — compare the legibility floor in panel space, not design space — **TODO — AFTER [[S123]], NEVER BEFORE IT** — [logged by S115, 2026-09-05 as "now-safe — UNBLOCKED by Q5"; that premise was FALSE. Blocked on [[R-02]] by job 1; R-02 LANDED in job 2 and the blocker CONVERTED to C-05's TIER-3 layout call; **that call was made by the owner 2026-09-06 ("option 2") and the block is discharged — see the foot of this line**]
 - **The finding.** `CoverPage.FitRows` (`:673-689`) receives `top`/`slotBottom`/`wantSize`/`wantGap` in
   DESIGN units and returns a design `size`, but clamps it against `Typography.Min` (16, a PANEL-pixel
   constant) directly — `if (size < Typography.Min)` — comparing DESIGN px to PANEL px. At both widths tried
@@ -12753,6 +12753,37 @@ fix exists to prevent, onto a baked card background and out over the page ground
 fixing C-05 is not in it. `docs/QC_FINDINGS.md` is untouched (QC's file) — C-05's own entry there already
 carries the QC officer's *"NOT CLOSED … C-05 stays blocked behind [R-02]"* verdict, so both halves of the
 record now agree.
+
+#### ✅ UNBLOCKED — 2026-09-06. The TIER-3 layout call was made. **Land [[S123]] first.**
+
+**🟢 OWNER RULING, 2026-09-06, verbatim (C1.12): "option 2"** — option (b) above, the swap: ENTRY TIMELINE
+into card 3, CONTINGENCY into card 1, the baked backgrounds unmoved. Recorded in `docs/QC_FINDINGS.md` under
+C-05 (the `⛔ STRUCK 2026-09-06` block), which is where the derivation and the strike of the false
+*"does not create enough room"* figure also live. **That quote is the whole of the authority claimed here;
+nothing else is inferred from it.**
+
+⛔ **THE BLOCK IS DISCHARGED, BUT THE ORDER IS NOT OPTIONAL.** This line is `TODO` only in the sense that
+its owner-decision blocker is gone. **Landing it before [[S123]] re-creates the exact overflow this line was
+blocked to prevent**, because the swap — not the ruling — is what supplies the room:
+
+| tree state when S116 lands | what `FitRows` does to card 1 | result |
+|---|---|---|
+| S116 alone, `Typography.Min` still un-scaled | clamps to 24.03 design, gap 28.16 | fits **by luck** — the flattering-yardstick case R-02 removed |
+| S116 alone, **post-R-02 floor (`MinFor(2560)` = 32)** | clamps to 48.068, block 336.48 vs `avail` 193 | **OVERFLOWS — 131.5 design px past the card bottom** |
+| **S116 after [[S123]]** | **never clamps** — `need` 146 ≤ `avail` 193 | **no-op** |
+
+⭐ **After the swap the clamp never fires on EITHER card** (ENTRY TIMELINE in card 3: `need` 218 ≤ `avail`
+426; CONTINGENCY in card 1: `need` 146 ≤ `avail` 193), so `FitRows` returns early and **the floor's value
+stops mattering to the render.** That is what makes this line a genuine no-op and makes it robust to
+anything further in the R-02 family landing before or after it.
+
+⚠ **Two overflow figures are in circulation and both are right**, measuring different things: **143.5** is
+(block − `avail`); **131.5** is (block end − card bottom). They differ by `RowPad` = 12. This line's original
+text quotes 131; QC's C-05 entry quotes both.
+
+⛔ **This does NOT close R-01.** After the swap both cards still render rows at `RowSize` 26 design =
+**17.31 panel px against a 32 px floor**. S123 removes the overflow that blocked this fix; it does not make
+the rows legible. Do not let this line's `DONE` be read as legibility.
 
 ### S117 [O] `NavPage`'s text does not scale with `screenWidth` — Q5 halves the live NAV screen's (and the Cover Map view's) legibility — **DONE 2026-09-06** — [landed with [[R-02]] as job 2 of the 2026-09-06 owner batch; NAV + the four pages that reuse its renderers now track the panel; ChromeBar logged, not fixed]
 - **The finding.** `src/pure/NavPage.cs` (live NAV screen, `DragonScreen.cfg` screen 3; also reused by
@@ -13029,6 +13060,56 @@ True"* for two panels of identical shape). `build.py preview` green, 108 pages; 
 - **DONE when:** `CoverPage` has one stroke rule. If `Strokes.Px` wins, check the pill and the d-pad box on a
   2560 preview first — they are curves and a box, not long rules, and a whole-pixel snap may read heavier
   than intended; if `Stroke` wins, say why a float is right here and `St` is right for the ten rules.
+
+### S123 [S] C-05's layout call: swap ENTRY TIMELINE into card 3 and CONTINGENCY into card 1 — **TODO** — [🟢 OWNER RULING 2026-09-06 "option 2"; TIER-3 layout, so it needed that ruling and now has it; unblocks [[S116]], which must not land before it]
+
+**🟢 OWNER RULING, 2026-09-06, verbatim (C1.12): "option 2"** — C-05's option (b). Recorded in
+`docs/QC_FINDINGS.md` under C-05. **That quote is the whole of the authority; nothing further is inferred.**
+The Reference Content page is §14.2 **TIER-3** (*"NO evidence AND no asset → invention, JOINT discussion
+required"*), which is exactly why a build chat could not pick this and why the ruling was needed.
+
+- **The change.** `CoverPage.DrawReferenceContent` (`:808` and `:826`) — the two `Card(...)` calls exchange
+  their **contents**, not their boxes. `titleY` and `slotBottom` stay with the card (they *are* the card);
+  the `title`, the `lines[]` and the `spacing` move:
+
+  ```
+  Card(499f,  Card1Bottom, "CONTINGENCY",    <the 4 contingency lines>, 40f)
+  Card(1329f, Card3Bottom, "ENTRY TIMELINE", <the 7 timeline lines>,    32f)
+  ```
+  ⛔ **The baked card backgrounds do not move** — `rectangle_179/180/181` are real Figma layout. Only the
+  text that sits in them changes. Card 2 (PARACHUTES) is untouched.
+
+- **Why it works — figures independently derived by the QC officer from source, matching the build chat's
+  and the overseer's to three decimals** (`Box` rows parsed with comment lines stripped; the `Keys` array
+  carries quoted strings inside comments and an unstripped parse silently returns another card's geometry):
+
+  | card | background | box `{x,y,w,h}` | bottom | `titleY` | `top` (+`RowTop` 56) | **`avail`** |
+  |---|---|---|---|---|---|---|
+  | 1 | `rectangle_179` | {240, 443, 1187, **317**} | 760 | 499 | 555 | **193** |
+  | 3 | `rectangle_181` | {240, 1273, 1187, **550**} | 1823 | 1329 | 1385 | **426** |
+
+  `avail = slotBottom − RowPad − top` (`:699`). Floor `MinFor(2560)` 32 ÷ `sc` 0.66572 = **48.068 design**.
+  Seven rows at the floor = **336.48** → **card 3 fits them with 89.5 design px to spare.** Card 1 at the
+  floor holds exactly **4** rows (192.27 of 193), and CONTINGENCY has exactly 4.
+
+  ⭐ **The design-space floor is scale-free** — 32 ÷ 0.66572 and 16 ÷ 0.33286 are both **48.068** — so this
+  swap is correct at 1280 and 2560 alike, and the figure it replaces (*"does not create enough room"*,
+  struck 2026-09-06) was wrong at both widths, not merely stale.
+
+- ⚠ **This makes C-05's fix SAFE, not SUFFICIENT.** After the swap both cards fit unscaled (`need` 218 ≤ 426
+  and 146 ≤ 193), so `FitRows` returns early, the clamp never fires, and **[[S116]] becomes a no-op on the
+  render**. But the rows then draw at `RowSize` 26 design = **17.31 panel px against a 32 px floor**.
+  **Legibility remains [[R-01]]'s** and nothing in this line closes it.
+
+- ⚠ **Any horizontal overrun that appears belongs to R-01, not to this swap.** All three card backgrounds are
+  **`x = 240, w = 1187` — identical widths** — and `Card()` (`:792`) takes no per-card x: bullet `X(333)`,
+  title `X(362)`, every row `X(340)`. A row that overruns one card overruns all three by the same amount, in
+  whichever card it sits. Moving a list between two boxes of the same width cannot cause one.
+
+- **DONE when:** `build.py test` green; re-render and inspect `ui_cover_phase5.png` (the Reference Content
+  phase) at 2560 — ENTRY TIMELINE's seven rows in card 3 and CONTINGENCY's four in card 1, **every row
+  inside its own card background**, and the other Cover phases plus card 2 unchanged. State in the entry
+  that `FitRows` returned early on both cards (no clamp), which is the property [[S116]] depends on.
 
 ### G12 [O] Close the gap C1.16 left open: research is protected wherever it lives, code comments included — **DONE 2026-09-06** — [job 4 of the 2026-09-06 owner batch; GUARDED FILES — `CLAUDE.md` + `docs/BUILD_PLAN.md` Part C, byte-identical and proven, plus §0a's ledger row]
 
