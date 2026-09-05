@@ -1977,6 +1977,20 @@ and measurably soft"* — is false, and *"the preview's resolution"* is precisel
 (*"H-08 is only a defect if Q5 resolves to 2560 … at the shipped 1280×703 the frame is drawn at 1140.7 px, a
 downscale of 0.557, and this defect does not exist"*). S100 resolved the instrument to 1280 and the
 prediction is confirmed to three decimal places. **Nothing to fix. Do not re-export `frame58/59/66.png`.**
+
+### ⛔ STRUCK 2026-09-05 — not a defect at the shipped width (recorded by S114 for the ledger)
+
+**No action, and none is possible: the premise is false.** The re-validation above measured it — at
+1280×703 `frame58.png` is drawn at a **0.557 DOWNSCALE**, not the upscale the finding assumed, and the
+sharpness comparison **inverts** (frame art 0.411 vs bar art 0.311; filed, it was 0.314 vs 0.365).
+
+⚠ **Marked here only because it was still sitting in the OPEN list**, which overstated the remaining work
+by one TIER 2 and would have sent a later pass to re-measure something already measured twice.
+
+⭐ **The finding predicted its own death and gets the credit**: it was filed explicitly conditional on Q5,
+saying it *"is only a defect if Q5 resolves to 2560"*. Q5 has not been answered — so if the shipped width
+ever rises, **this comes back exactly as written** and should not be treated as disproved. It is struck at
+1280, not struck in general.
 ---
 
 ## H-09 — The preview cannot render the page's only live feature
