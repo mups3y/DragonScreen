@@ -60,6 +60,7 @@ public static class LegibilityFloorTest
         DockingPageTracksThePanel();
         SettingsPageTracksThePanel();
         DockingTrioTracksThePanel();
+        PanelBoardTracksThePanel();
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed"
                           + "   (floor " + Typography.MinFor(W1) + " px @" + W1
@@ -905,6 +906,119 @@ public static class LegibilityFloorTest
         PageState ps = new PageState(); ps.Valid = true; ps.HasTarget = true;
         DisplayList dl = new DisplayList(4096);
         DockingPageCentral.Build(dl, w, h, ps);
+        int n = 0;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawKind k0 = dl.At(i).Kind;
+            if (k0 == DrawKind.Text) n += 3;
+            else if (k0 == DrawKind.Rect) n += 4;
+        }
+        float[] outp = new float[n]; int k = 0;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind == DrawKind.Text) { outp[k++] = c.C; outp[k++] = c.A; outp[k++] = c.B; }
+            else if (c.Kind == DrawKind.Rect)
+            { outp[k++] = c.A; outp[k++] = c.B; outp[k++] = c.C; outp[k++] = c.D; }
+        }
+        return outp;
+    }
+
+    // ---- S121e: THE PANEL BOARD -----------------------------------------------------------------
+    // ⚠ A PREVIEW-ONLY DIAGNOSTIC, not a screen — it says so on itself. It is checked anyway, and by
+    // the same rule as the rest: an instrument that misreports at one width is worse than none.
+    // ⭐ Sizes AND positions AND rect geometry in one list, which is where the family ended up after
+    // three mutations walked through narrower versions of this check.
+    static void PanelBoardTracksThePanel()
+    {
+        float[] b1 = BoardGeometry(W1, H1), b2 = BoardGeometry(W2, H2);
+        Check("S121e the panel board draws the same commands at both widths",
+              b1.Length == b2.Length && b1.Length > 100, b1.Length + " vs " + b2.Length);
+        int bad = 0, worstI = -1; float worst = 0f;
+        for (int i = 0; i < b1.Length && i < b2.Length; i++)
+        {
+            float d = Math.Abs(b2[i] - 2f * b1[i]);
+            if (d > 0.02f) { bad++; if (d > worst) { worst = d; worstI = i; } }
+        }
+        Check("S121e every size, position and rect on the panel board doubles with the panel", bad == 0,
+              bad + " of " + b1.Length + " did not; worst at index " + worstI
+              + " (@1280 " + (worstI >= 0 ? b1[worstI] : 0f)
+              + ", @2560 " + (worstI >= 0 ? b2[worstI] : 0f) + ", off by " + worst + ")");
+
+        // ---- ⛔ AND AT THE SIZE IT IS ACTUALLY RENDERED, WHICH IS NOT 2:1 ------------------------
+        // ⚠ THIS CHECK EXISTS BECAUSE THE SUITE MISSED A REAL BREAKAGE. [[S121e]]'s first version
+        // scaled this page by `Typography.ScaleFor(w)`; the preview draws it at **3600x540**, where
+        // that ratio is 2.8125, so the header and legend bands grew to 270 and 219 px of a 540 px
+        // page, the board was squeezed to 51, and every label landed on every other. Every check above
+        // passed, because they all run at 1280x703 and 2560x1406 — where the width ratio and the
+        // height ratio are the same number and the defect cannot exist.
+        // ⭐ The preview caught it, which is what CLAUDE.md says the preview is for. This is that
+        // finding turned into something that fails on its own.
+        const int SW = 3600, SH = 540;    // PreviewMain's own PW/PH for the console scenes
+        Eq("S121e on a reference-aspect panel the page scale IS Typography.ScaleFor",
+           PanelBoardPage.PanelScale(W2, H2), Typography.ScaleFor(W2), 1e-4f);
+        Check("S121e on the 3600x540 diagnostic strip the HEIGHT governs the scale",
+              PanelBoardPage.PanelScale(SW, SH) < Typography.ScaleFor(SW) - 1f,
+              "scale " + PanelBoardPage.PanelScale(SW, SH) + " vs ScaleFor(w) " + Typography.ScaleFor(SW));
+
+        // and the consequence that matters: the board still has room to draw in
+        float[] strip = BoardGeometry(SW, SH);
+        Check("S121e the strip still emits a full board", strip.Length > 100, "only " + strip.Length);
+        // ⚠ the BOTTOM edge specifically - a first version took the maximum over BoardGeometry's
+        // flat list, which interleaves x with y and reported the page's own 3600 px WIDTH as a depth.
+        Check("S121e nothing on the strip is drawn past its own bottom edge",
+              LowestEdge(SW, SH) <= SH + 0.5f, "furthest down is " + LowestEdge(SW, SH) + ", page is " + SH);
+        // ⛔ READ OFF THE RENDER, NOT RE-DERIVED FROM PanelScale. A first version computed the band
+        // heights here as `96 * PanelScale + 78 * PanelScale` and compared that to the page - which is
+        // a statement about the test's own arithmetic, and it let the ACTUAL regression through: with
+        // `Build` reverted to `ScaleFor(w)`, this check still passed because it never asked `Build`
+        // anything. The plate backgrounds are what the bands squeeze, so the plates are what is
+        // measured: the tallest Rect that is not the full-page ground.
+        float plate = TallestPlate(SW, SH);
+        Check("S121e the header and legend bands leave the board most of the page",
+              plate > SH * 0.45f, "the plates are " + plate + " tall on a " + SH + " page");
+    }
+
+    /// <summary>The tallest Rect the board emits that is not the full-page background — the plate
+    /// backgrounds, whose height is exactly what the header and legend bands leave over.</summary>
+    static float TallestPlate(int w, int h)
+    {
+        PanelBoard board = new PanelBoard();
+        DisplayList dl = new DisplayList(8192);
+        PanelBoardPage.Build(dl, w, h, board, "TITLE", "note", 0);
+        float best = 0f;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind != DrawKind.Rect) continue;
+            if (c.D >= h - 0.5f) continue;               // the full-page ground
+            if (c.D > best) best = c.D;
+        }
+        return best;
+    }
+
+    /// <summary>The furthest-down pixel the panel board draws: a Rect's y+h, or a Text's baseline.</summary>
+    static float LowestEdge(int w, int h)
+    {
+        PanelBoard board = new PanelBoard();
+        DisplayList dl = new DisplayList(8192);
+        PanelBoardPage.Build(dl, w, h, board, "TITLE", "note", 0);
+        float lowest = 0f;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            float bottom = (c.Kind == DrawKind.Rect) ? (c.B + c.D)
+                         : (c.Kind == DrawKind.Text) ? (c.B + c.C) : 0f;
+            if (bottom > lowest) lowest = bottom;
+        }
+        return lowest;
+    }
+
+    static float[] BoardGeometry(int w, int h)
+    {
+        PanelBoard board = new PanelBoard();
+        DisplayList dl = new DisplayList(8192);
+        PanelBoardPage.Build(dl, w, h, board, "TITLE", "note", 0);
         int n = 0;
         for (int i = 0; i < dl.Count; i++)
         {

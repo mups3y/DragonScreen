@@ -15514,10 +15514,60 @@ RANGE/RATE at Hero size are all legible, inside a ring that had always been the 
 `build.py test` green — `LegibilityFloorTest` **299 checks** · comment-loss **0** · no `install`, no
 glass, no `git push` · §14.4(a) untouched — this page commands nothing and still commands nothing.
 
-### S121e [S] `PanelBoardPage.cs` — **DOING** — [split 5 of 5 of [[S121]]; 10 lines / **13 references**]
+### S121e [S] `PanelBoardPage.cs` — **DONE 2026-09-06 — my first version BROKE the preview and the preview is what caught it** — [split 5 of 5 of [[S121]]; 10 lines / **13 references**]
 - The smallest page-level split, and the one where the line-vs-reference gap is widest (10 lines carry 13
   references) — size it off 13.
 - **DONE when:** as the parent's DONE-when, for this file.
+
+#### ⛔ DONE 2026-09-06 — AND THE FIRST VERSION WAS WRONG IN A WAY THE WHOLE FAMILY'S TESTS COULD NOT SEE
+
+Most of this page was already proportional — `margin`, the plate spans, the cell padding, the dash width
+and the row heights are fractions of `w` or of the board — so the pass touched only the genuinely fixed
+numbers: the header and legend bands, the type, and the insets that place type inside a cell.
+
+⛔ **AND SCALING THOSE BY `Typography.ScaleFor(w)` DESTROYED THE PAGE.** The preview renders this board
+at **3600×540** — a 6.7:1 diagnostic strip, not a console. `ScaleFor(3600)` is **2.8125**, so the header
+and legend bands grew to **270 and 219 px of a 540 px page**, the board itself was squeezed to **51 px**,
+and every label was drawn on top of every other.
+
+⭐ **EVERY CHECK IN THE SUITE PASSED.** They all run at 1280×703 and 2560×1406, and those two panels are
+exactly 2:1 to each other — so the width ratio and the height ratio are the same number and this defect
+*cannot exist* at either. **The PREVIEW caught it**, which is exactly what `CLAUDE.md` says the preview is
+for: *"judge layout/palette/legibility from `python plugin/build.py preview`"*. A green suite is not a
+rendered page.
+
+#### The fix, and it is the rule the Figma pages already follow
+
+`PanelBoardPage.PanelScale(w, h)` = **`min(w / RefPanelW, h / RefPanelH)`**.
+- ⭐ On any reference-aspect panel the two ratios are equal and this **IS** `Typography.ScaleFor(w)` —
+  every real screen is bit-for-bit unaffected, and a check pins that.
+- On a strip wider than it is tall, the HEIGHT governs and nothing can grow off the page. ⭐ This is not a
+  new idea: `Frame58Hud` and `CoverPage` have always derived their scale from HEIGHT for the same reason.
+- `RefPanelH = 703f` is named and sourced — 1280×703 is the measured console (`docs/SCREEN_SPEC.md`, and
+  the preview's own `MeasuredScreens` table), and 2560×1406 is exactly twice it.
+
+#### And the gap in the suite was closed, not just the defect
+
+A check now runs at **3600×540**, the size this page is actually rendered at: the height must govern the
+scale there, nothing may be drawn past the bottom edge, and **the plate backgrounds must still have most
+of the page**. ⚠ Two versions of that last check were wrong before it worked:
+1. it took the maximum over a flat list that interleaves x with y, and reported the page's own 3600 px
+   **width** as a depth;
+2. worse, it computed the band heights **in the test** as `96 * PanelScale + 78 * PanelScale` — a
+   statement about the test's own arithmetic, which **let the real regression through**: reverting
+   `Build` to `ScaleFor(w)` still passed it. It now reads the tallest plate rect off the render.
+
+**9 mutations, 9 killed** — including **E8, the regression itself** (`Build` back on `ScaleFor(w)`), which
+now dies with *"the plates are 50.625 tall on a 540 page"*, and E9 (`PanelScale` taking the larger ratio).
+
+#### Verified
+
+`build.py test` green — `LegibilityFloorTest` **306 checks** · preview: **4 changed**, the four console
+scenes, inspected and correct · comment-loss **0** · no `install`, no glass, no `git push`.
+
+⭐ **[[S121]] IS NOW COMPLETE** — a, b-i, b-ii, b-iii, c, d, e all closed. ⚠ [[S121-Q1]] (whether the
+family was worth doing at all, given it is dormant) remains open and is collected for the owner; it did
+not block any of the work and the technical answer was the same under every option.
 
 #### Open questions for the owner (C1.14) — S121
 
