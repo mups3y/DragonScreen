@@ -17513,7 +17513,27 @@ touching either.
 gains are drawn at `Typography.MinDesignFor` and the ratchet enforces it. This line no longer waits on
 anything but its own step one.
 
-### S154a [O] Frame 58: establish the CSS→design-frame mapping, and draw nothing — **DOING** — [step one of [[S154]]; research only]
+#### ⛔ SUPERSEDED IN PLACE 2026-09-06 BY [[S154a]] — THE SCOUTING ABOVE IS KEPT VERBATIM AND IS WRONG IN ITS PREMISE
+
+C1.16 / G12: nothing above is edited or deleted, because it is the reasoning that led here. But two of
+its claims did not survive being checked, and I wrote both, so they are corrected here rather than left
+to mislead the split lines.
+
+1. ⛔ **"one flat list of absolutely-positioned siblings, so their percentages are the page's" — NO.**
+   `#roll-number` and the rest are inside `.hud-measures` (`Second.vue:173-176`), which has **no CSS rule
+   at all** — so it is `position: static`, it is not a containing block, and the nearest positioned
+   ancestor is `#hud-ring` (`Second.vue:32`, CSS at `:1596`). The percentages are the RING SQUARE's.
+   ⭐ The naive table in section 1 above therefore maps nothing, and its four coordinates are void.
+2. ⚠ **Section 3's finding was right and its reason was not.** The frame is indeed not a pixel render of
+   the Vue app — but the 72 px page-centre-vs-bowl-centre gap was comparing the wrong two things.
+   Read correctly, the CSS still fails: solving for the containing block from the ROLL and YAW numbers'
+   measured centres gives a box of height 1360.03 at y 303.88, which then puts PITCH's `top:50%` 17.4 px
+   out and its `left:86%` 42 px out. **No single box satisfies all three numbers.**
+3. ⭐ **And section 4's plan — "profile the PNG for a second anchor and fit a scale and an offset" — was
+   solving a problem that does not exist.** `assets/figma/dashboard_ui/Frame 58.svg` is
+   `viewBox="0 0 3427 2112"`: the frame's own source is already in our design frame. See S154a.
+
+### S154a [O] Frame 58: establish the CSS→design-frame mapping, and draw nothing — **DONE 2026-09-06 — there was no mapping to derive: the frame's own SVG IS our design frame** — [step one of [[S154]]; research only]
 - **The deliverable is a MAPPING and a test, not a pixel.** Named constants that turn the Vue app's
   page percentages into our 3427×2112 design frame, anchored on measurements from our own art.
 - ⭐ **Two anchors are needed and one exists.** `Frame58Hud`'s `BowlCx 1706, BowlCy 984, BowlR 470` is the
@@ -17529,7 +17549,80 @@ anything but its own step one.
 - **DONE when:** the mapping exists as named constants, a test holds it to BOTH anchors, and the entry
   states which of the three routes it makes possible — with nothing drawn.
 
-### S154b [S] Frame 58: the attitude block — ROLL / PITCH / YAW and their rates — **TODO (blocked: [[S154a]])** — [H10 + QC `H-02`]
+#### ⭐ DONE 2026-09-06 — AND THE ANSWER IS THAT THE QUESTION WAS THE WRONG ONE
+
+**`assets/figma/dashboard_ui/Frame 58.svg` is `viewBox="0 0 3427 2112"`.** That is the SAME design frame
+`Frame58Hud` already fits the raster to. ⭐ **So the CSS→design-frame mapping this line was created to
+derive does not need deriving: the transform from the frame's own source to our coordinates is the
+IDENTITY**, and every element's position can be read straight off the drawing instead of fitted.
+
+⛔ **And the CSS route is a dead end, which matters because I am the one who scouted it.** Corrected in
+place under [[S154]] above; in short, the numbers are children of `#hud-ring`, not page-level siblings,
+and even read correctly no single containing block reproduces all three attitude positions (PITCH lands
+17.4 px out vertically and 42 px out horizontally). **The CSS keeps exactly one job: it says WHICH readout
+is which.** That is how the names in the map were assigned, and it is worth having — but it supplies no
+geometry.
+
+#### The two anchors the line demanded — both measured, both holding
+
+| anchor | independent sources | agreement |
+|---|---|---|
+| **1 · the bowl** | SVG `<circle cx="1706.86" cy="984.697">` vs `Frame58Hud.BowlCx/BowlCy` = 1706/984, taken from the frame metadata weeks ago | **0.86 px x, 0.70 px y** |
+| **2 · the ring** | circle fit over `frame58.png`'s 8285 bright px (5105 inliers) → centre (1704.93, 986.22), outer r 585.33/584.94 · vs the SVG ring path's radial profile → 549.83 inner, **585.48** outer about (1706.30, 986.28) | **0.15 px radius, 1.37 px centre** |
+
+⭐ **Anchor 2 is the load-bearing one, and not for the reason the line expected.** It is not a second point
+for a fit — there is no fit. It is the proof that **the PNG we ship and the SVG being measured are the
+same drawing**. Without it every box in the map would be geometry from a file we never render.
+
+#### And then all 18 boxes were checked against the raster, not just the anchors
+
+Each element's box was re-measured by thresholding ink in `frame58.png` inside its own window.
+**17 of 18 agree within 1.7 design px.** ⚠ The 18th, `PitchLabel`, came out **8.09 px** wide of its `x0`
+— **not a mapping error**: the outer arc segment overlaps its search window and a colour threshold cannot
+separate label from arc. Narrowing the pad 7 px → 3 px removes the arc and the disagreement falls to
+**0.94 px**. Recorded because the alternative was to quietly drop the one row that looked bad.
+
+⭐ **The twelve baked numbers were enumerated independently and came to twelve** — ROLL/PITCH/YAW value and
+rate (6), X/Y/Z (3), RANGE, RATE, ACCELERATION (3). **QC `H-02`'s count is confirmed from the artwork.**
+
+#### ⭐ WHICH ROUTE THIS MAKES POSSIBLE — the DONE-when's third clause
+
+**All three are open, which is a stronger result than the line hoped for.**
+
+- **Route 1, element rebuild — AVAILABLE.** The SVG is complete vector geometry (493 paths, 26 circles)
+  already in our frame, exactly the `frame59` / [[S110]] precedent: one screen, one renderer, the PNG kept
+  on disk as the source it was. It is also the largest job by far.
+- **Routes 2 and 3, erase-the-raster or overdraw-a-patch — BOTH VIABLE, and now precisely targetable.**
+  ⭐ Measured, not assumed: the background immediately around **all twelve** number boxes is locally FLAT
+  — max channel spread **4** across each box's corners (`AccelValue` 0). So a patch will not show a seam
+  on a gradient, which was the obvious way those routes could have failed.
+  ⚠ But the ground is not ONE colour: `(5-7, 11-14, 61-65)` around the bowl readouts against `(2, 7, 56)`
+  at ACCELERATION. A single hardcoded patch colour is wrong; each patch takes its own local value, or the
+  erase route bakes it in.
+- **Recommendation, not a decision:** route 2/3 per element for [[S154b]] / [[S154c]] — twelve small,
+  independently verifiable changes against one 493-path rebuild — with route 1 genuinely available if a
+  later pass wants the whole frame live. ⛔ No route is chosen here; this line draws nothing.
+
+#### What landed
+
+- **`plugin/src/pure/Frame58Map.cs`** — the two anchors, the raster's size, a `Box` struct, and **18
+  measured element boxes** (12 readouts + 6 labels). ⚠ Its header states plainly that these are INK boxes,
+  not text boxes and not baselines, and that `H` is **not** a font size — the one misreading that would
+  quietly put [[S153]]'s floor on the wrong quantity.
+- **`plugin/test/Frame58MapTest.cs`** — **70 checks**, registered in `TestMain`. ⛔ Deliberately NOT a
+  table of re-typed literals: the checks are RELATIONS the drawing must satisfy (the anchors agreeing with
+  constants of separate provenance, each rate under its value, ROLL above / YAW below the ring centre,
+  X/Y/Z sharing a LEFT EDGE and explicitly *not* a centre).
+- ⚠ **X/Y/Z share a left edge to 0.1 px and do NOT share a centre.** Pinned both ways, because reading
+  them as centred would make three live values of differing width each drift by half their difference.
+
+**Verified:** 7 mutations run, **7 killed** — including `RingOuterR` set to the SVG *bbox* half-width
+(579.66, the near-miss the notches create), the bowl centre set to the page centre the dead CSS route
+gives, and Z read as centred. · `build.py test` green · `build.py preview` 119 pages, unchanged — **the
+module references no `DisplayList` and draws nothing**, which was the line's hard constraint ·
+comment-loss check **0**.
+
+### S154b [S] Frame 58: the attitude block — ROLL / PITCH / YAW and their rates — **TODO (UNBLOCKED 2026-09-06 by [[S154a]]; boxes are in `Frame58Map`)** — [H10 + QC `H-02`]
 - Six readouts, all live and pre-formatted already: `RollDegText`, `PitchDegText`, `YawDegText`,
   `RollRateText`, `PitchRateText`, `YawRateText`. **Zero new data, zero new model** — `DockingSimPage`
   draws the same fields today.
@@ -17537,14 +17630,14 @@ anything but its own step one.
   of them, because an attitude readout is what the HUD is for.
 - **DONE when:** the six read live at the mapped boxes, at `MinDesignFor`, with a dead-feed preview.
 
-### S154c [S] Frame 58: the translation block — X / Y / Z, RANGE, RATE, ACCELERATION — **TODO (blocked: [[S154a]])** — [H10 + QC `H-02`]
+### S154c [S] Frame 58: the translation block — X / Y / Z, RANGE, RATE, ACCELERATION — **TODO (UNBLOCKED 2026-09-06 by [[S154a]]; boxes are in `Frame58Map`)** — [H10 + QC `H-02`]
 - `OffXText`, `OffYText`, `OffZText`, `RangeText`, `RateText`, `AccelPosText` — again all live and drawn
   correctly on `DockingSimPage` already.
 - ⚠ `#xyz-number` gives `left:14%` and **no top**, so this block needs one more anchor than the attitude
   one does. Establish it in [[S154a]] rather than here.
 - **DONE when:** the six read live at the mapped boxes, at `MinDesignFor`, with a dead-feed preview.
 
-### S154d [S] Frame 58: the FLIGHT COMMANDS block — **TODO (blocked: [[S154a]]; part §14.4(a))** — [H10]
+### S154d [S] Frame 58: the FLIGHT COMMANDS block — **TODO (UNBLOCKED 2026-09-06 by [[S154a]]; part §14.4(a))** — [H10]
 - ⛔ **This is the one split with a §14.4(a) edge in it.** FLIGHT COMMANDS names controls that would fly
   the vehicle. Until Part B they stay an honest no-op — *click, no light, no action, no red* — so this
   line draws the block's STATE honestly and wires nothing.
