@@ -75,7 +75,7 @@ Cover's seven phase views, plus the lower analog console panel. **The six Vehicl
 | 12 | ActReview | REVIEW REFERENCE | ✅ **DONE** *(placeholder — see M-02)* | 2026-09-05 |
 | 13 | ActAcknowledge | ACKNOWLEDGE | ✅ **DONE** *(placeholder — see M-02)* | 2026-09-05 |
 | 14 | Entry | ENTRY GO / NO-GO | ✅ **DONE** *(placeholder — see M-02)* | 2026-09-05 |
-| 15 | Vehicle | VEHICLE OVERVIEW *(tab: All)* | NOT STARTED | — |
+| **15** | **Vehicle** | VEHICLE OVERVIEW *(tab: All)* | ✅ **DONE — 3 findings** | 2026-09-05 |
 | 16 | SuitCheck | SUIT LEAK CHECK | NOT STARTED | — |
 | 17 | VehicleMech | MECH PANEL *(tab: Mech)* | NOT STARTED | — |
 | 18 | AudioVideo | VIDEO SETTINGS | NOT STARTED | — |
@@ -2159,7 +2159,171 @@ screen whose entire purpose is to be honest about not being built.
 Page 1 (Hud / Frame 58) inspected 2026-09-05 at HEAD `97f4c78`.
 Page 2 (Audio settings) inspected 2026-09-05.
 Pages 3 + 4 (Procedure / Cabin) inspected 2026-09-05.
-Page 5 (Menu) + pages 6–14 (the nine placeholders) inspected 2026-09-05.*
+Page 5 (Menu) + pages 6–14 (the nine placeholders) inspected 2026-09-05.
+Page 15 (Vehicle Overview) inspected 2026-09-05.*
+
+---
+
+# PAGE 15 — VEHICLE OVERVIEW (tab: All)
+
+**Renders inspected:** `ui_vehicle.png` · `ui_vehicle_alarm.png` · `ui_vehicle_nofeed.png`. 2026-09-05.
+
+**Source:** `plugin/src/pure/VehicleOverviewPage.cs` (220 lines) · `Alarms.cs:106` (`Band`) ·
+`Alarms.cs:148-153` (`CabinLimits`) · `VehicleTabBar.cs` · `VehicleDeepViewLinks.cs`.
+
+**S49's entry.** §2 rates this *"Mixed — the best-wired family. Four cabin gauges live/micro-sim;
+CONSUMABLES 4 of 8 live; tab severities live"*, with H14, H16, H17, H18. **That is right about the numbers
+and wrong about the colours**, which is V-01. Two of S49's holes have since been closed and one of its
+supporting claims has gone out of date — recorded below so they are not re-logged.
+
+## What was checked and found CLEAN — including two S49 holes now closed
+
+1. ⭐ **S22's `!valid` guard has landed on this page.** `VehicleOverviewPage.cs:104-118, 141-152` route the
+   seven checklist states, the four `Connected` rows and `RECORDING` through `T()`, which dashes and dims
+   them on a dead feed. Confirmed on `ui_vehicle_nofeed.png`. **S49 H14 tier (i) is DONE for the Overview**
+   — its remaining half (computing those words rather than dimming them) is unchanged.
+2. ⭐ **S75's `SHOW MARGINS TO` fix has landed and is visible.** It is drawn in `Dim`, not `Accent`, so it
+   no longer rides the idiom of the two links beside it that *are* touchable. S49 H18's "painted button"
+   half is closed; its MARGIN-column half is V-03.
+3. **Both touchable clusters have hit tests**: `VehicleTabBar.HitTest` and `VehicleDeepViewLinks.HitTest`,
+   both routed at `FigmaUI.cs:299-307`. The eight tabs and the two deep-view links are genuinely wired.
+4. **The tab severities are live.** `VehicleTabBar.Severities(s)` colours `Power` amber on this render while
+   `All` carries the selection underline — a real subsystem severity reaching a tab, exactly as designed.
+5. **The gauge value and the ring LENGTH come from one readout**, as the file claims — `F(s.Cabin.*01)` and
+   `T(s.*Text)` are the same model. ⚠ The claim covers length only; the colour is V-01.
+6. **The four dashed CONSUMABLES rows are a correct §14.4 dash, with the reason recorded**: the Orbit 1/2
+   subtanks *"have no KSP counterpart, and guessing which litres belong to which subtank would be inventing
+   the number"* (`VehicleOverviewPage.cs:212-214`). Genuinely-absent state → dash. Not a defect.
+
+---
+
+## V-01 — Every gauge ring on this page is a fixed colour, so CABIN TEMP is permanently RED — and the P&ID computes the opposite verdict for the same value in the same frame
+
+**TIER 1** · **NEW** · S31/S32's guardrail, and C7.1's two-surfaces failure
+
+**Evidence.** `VehicleOverviewPage.cs:120-136` — the colour argument to every `Gauge` call is a **constant**:
+
+```csharp
+Gauge(1170, 430, 175, F(s.Cabin.Ppo201),      Gold,   "PPO2",           …);
+Gauge(1620, 430, 175, F(s.Cabin.CabinTemp01), Red,    "CABIN TEMP",     …);
+Gauge(2070, 430, 175, F(s.Cabin.Press01),     Yellow, "CABIN PRESSURE", …);
+Gauge(2520, 430, 175, F(s.Cabin.Co201),       Blue,   "CO2",            …);
+…
+Gauge(1230,  900, 120, F(s.Cabin.LoopA01),  Blue,   "LOOP A",   …);
+Gauge(1230, 1200, 120, F(s.Cabin.LoopB01),  Blue,   "LOOP B",   …);
+Gauge(2410,  900, 120, F(NetPwr01(…)),      Accent, "NET PWR1", …);
+Gauge(2410, 1200, 120, F(NetPwr01(…)),      Accent, "NET PWR2", …);
+```
+
+The arc's **length** is live. Its **colour** is decoration — all eight of them, at every value.
+
+On `ui_vehicle.png` the consequence is stark: **CABIN TEMP reads 21.8 °C and its ring is drawn red.**
+The thresholds are in this repo: `Alarms.cs:153` — `CabinTempCaution = 30.0, CabinTempAlarm = 35.0`. So
+`Alarms.Band(21.8, 30, 35)` is **Nominal**. Three of the four top gauges show a non-nominal colour on a
+nominal reading (PPO2 gold at 2.86 psia, PRESSURE yellow at 14.72 psia, TEMP red at 21.8 °C).
+
+**And the build already computes this correctly, twice, elsewhere:**
+
+| page | line | what it does with the same quantity |
+|---|---|---|
+| `SystemsPidPage` | `:249` | `Alarms.Colour(Alarms.Band(s.Cabin.CabinTempC, CabinLimits.CabinTempCaution, CabinLimits.CabinTempAlarm))` |
+| `SystemsPidPage` | `:208-210` | the same for Loop A and Loop B |
+| `VehicleSubsystemPage` | `:519-521` | the same for Loop A and Loop B |
+
+So in one frame, on one vessel, the Vehicle Overview says CABIN TEMP is in alarm and the Systems P&ID says
+it is nominal. That is C7.1's failure mode on the glass, and S49 H15's class — *"status words contradict
+live state already on the same screen"* — one level up, because a red ring outranks a word.
+
+⚠ **Red is the strongest signal this UI has**, and §14.4(a) is explicit: **no red for something that is not
+a fault.** A permanently-red cabin-temperature ring also destroys the signal — when the cabin really does
+pass 30 °C, nothing on this page changes.
+
+**Fix plan.**
+- Replace each constant with the computed severity colour: `Alarms.Colour(Alarms.Band(value, caution,
+  alarm))`, taking the raw quantity (`s.Cabin.CabinTempC`, `Co2MmHg`, `LoopAC`, `LoopBC`, …) and the
+  `CabinLimits` constants — **exactly the call `SystemsPidPage.cs:249` already makes.** Do not write a
+  second banding rule; route through the existing one so the two surfaces cannot disagree again (T14's rule,
+  and the reason `SystemsTreePage` and the console plate share a dispatcher).
+- **PPO2 and CABIN PRESSURE need their thresholds checked, not assumed.** `Alarms.LifeSupport(s.Cabin)`
+  already folds PPO2 and pressure into a severity (`Alarms.cs:140` area); if a per-gauge band is wanted,
+  the constants must come from `CabinLimits`, and any that does not exist there is a **§1.4 question, not a
+  build-chat number**. ⚠ `CabinLimits` is also mirrored into Python for the BlackBox report generator
+  (`REGISTER.md` BB3-Q1, still open) — a new constant has to land in both or the report drifts.
+- **NET PWR1/2 are signed and are a different case.** Their ring already carries magnitude against a stated
+  full scale and the sign lives in the number (`NetPwr01`, `:190-196`). A severity colour there means
+  "discharging faster than X", which needs a threshold nothing currently defines — leave `Accent` and say
+  so, rather than inventing one.
+- **Must not break:** the `!valid` path. On a dead feed the ring is already empty and the value dashed;
+  the colour must not become a confident nominal green on no data.
+- **Verify:** `ui_vehicle.png` with the current fixture must show four nominal rings; add a fixture at
+  32 °C and check the ring goes caution on **both** this page and the P&ID, from the same call.
+
+---
+
+## V-02 — `CABIN MICS: RECORDING` is drawn in alarm red for a state that is not a fault
+
+**TIER 2** · **NEW**
+
+**Evidence.** `VehicleOverviewPage.cs:152` —
+`dl.Text(T("RECORDING"), …, valid ? Red : Dim);` — and on `ui_vehicle.png` the word reads red beside four
+green `Connected` rows.
+
+**What is wrong.** Recording is a normal operating state, not a failure. §14.4(a)'s rule is quoted in
+CLAUDE.md itself: *"no red"* for something that is not a fault. The colour is also a literal: the word is
+reference copy (the file says so at `:141-143`), so this is a hardcoded verdict *and* a hardcoded severity
+on top of it — the same defect class as V-01, in text.
+
+⚠ **It is `!valid`-guarded** (S22's fix reaches it), so on a dead feed it dims correctly. The defect is only
+in the live branch's colour choice.
+
+**Fix plan.**
+- Draw it in `White` or `Go` — a recording indicator is a state, and if it is to carry a colour at all,
+  green/on is the honest one. Red should be reserved for a *failed* recorder, which nothing models today.
+- **If the reference render shows it red**, that is a §1.4 deviation to record rather than silently change —
+  but note the reference is a static mockup and §14.4(a) is a standing decision about *this* build's colour
+  language. Recommend following §14.4(a) and recording the deviation.
+- **Must not break:** the `T()` dash-on-dead-feed behaviour.
+- **Verify:** re-render; no red on a page with no fault.
+
+---
+
+## V-03 — The MARGIN column is eight dashes while the margins are computed every frame and written to the black box
+
+**TIER 2** · updates S49 **H18**, whose supporting claim is now out of date
+
+**Evidence.** `ui_vehicle.png`, right column: `MARGIN` is a header over **eight `—`**
+(`VehicleOverviewPage.cs:161` draws `R(Dash, 3360, y, 25, Dim)` unconditionally, for every row).
+
+**S49 H18 says `LifeSupport.Margins` "has no caller anywhere."** That was true when S49 was written and is
+not true now — BB1/BB2 wired it:
+
+- `plugin/src/LifeSupportBridge.cs:52-60` — `Margins(Vessel v)` off real TAC-LS food/water/oxygen
+- `plugin/src/BlackBoxRecorder.cs:1149-1150` — `ls = LifeSupportBridge.Margins(v)`
+- `plugin/src/pure/blackbox/BlackBoxSchema.cs:458-459` — `ls_present`, `ls_o2_days` … recorded per flight
+
+So the margins are **computed every frame and written to disk, and the crew's own MARGIN column shows a
+dash.** ⚠ **This is the second instance of that exact pattern** — H-05 found the alarm mask computed,
+recorded to the BlackBox at `ScreenPainter.cs:652`, and discarded from the glass. Two channels now go to the
+recorder and not to the screen.
+
+**Fix plan.**
+- Draw the MARGIN column from `LsMargins`. The bridge already returns days-remaining per consumable, which
+  is the shape the column wants; the rows that have no margin (the subtanks) keep their dash, correctly.
+- **Route it the same way the recorder does** — through `LifeSupportBridge`, not a second computation —
+  so the glass and the black box can never report different margins for the same flight.
+- ⚠ **`SHOW MARGINS TO` stays inert until this lands.** S75's comment states the condition precisely:
+  *"When the MARGIN column reads modelled margins and a target set is settled, this goes back to Accent AND
+  gains a rect — the two happen together or not at all."* Filling the column is half of that; the target set
+  is still a §1.4 question (S76), so the control does **not** become touchable in the same pass.
+- **Must not break:** rows 4–7 must keep dashing. A margin for a quantity with no quantity is worse than
+  no margin.
+- **Verify:** re-render; four rows with margins, four with dashes, and the same numbers as a BlackBox
+  recording of the same frame.
+
+---
+
+*Next: **page 17 — VehicleMech**, then the six subsystem sub-tabs (20–25), which share one file and which
+S49 H14 says are **not** `!Valid`-guarded — the guard this page has just been confirmed to have.*
 
 *⚠ **Three findings are page-wide, not per-page, and should be scheduled ahead of the sweep:***
 - ***H-01** — the preview's resolution. It decides how every later legibility finding is measured, so
