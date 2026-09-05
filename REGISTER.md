@@ -12223,7 +12223,7 @@ ruling of 2026-09-05 (verbatim in W34's line, and in `pure/IgnitionGate.cs`'s ba
 was WEIGHED and accepted.** W34 records why (the 3→1 profile never cold-starts the hoverslam engine) and
 names **[[BB8]]** as what would reopen it. Do not re-open this line to "finish" the fix half without one.
 
-### W32 [S] The predicted impact ignores the LIFT the grid fins are generating — **DOING** — [logged by W25]
+### W32 [S] The predicted impact ignores the LIFT the grid fins are generating — **DONE 2026-09-06** — [⭐ **the sign convention W25 wanted proved needed no flight at all** — measure and apply are exact inverses by construction] — [logged by W25]
 - **The finding:** `BoosterHost.PredictError` (W25) hands `TrajectoryInputs.LiftToDrag = 0.0`, i.e. a
   drag-only solve — while the whole point of `AeroDescent` is that the stage flies at a **deliberate,
   held angle of attack** and steers on the body lift that produces. So the predictor the fins steer on does
@@ -12235,6 +12235,57 @@ names **[[BB8]]** as what would reopen it. Do not re-open this line to "finish" 
   as β, plus a sign convention against `SteerAim`'s tilt that wants proving before it steers anything.
 - **DONE when:** L/D and bank are measured live and fed to the predictor with the same
   coasting-only discipline as β, or it is recorded why drag-only is the right prediction for this phase.
+
+#### ✅ DONE 2026-09-06 — the FIRST branch, not the "record why not" one
+
+⭐ **THE BLOCKER DISSOLVED ON INSPECTION, AND IT IS WORTH SAYING EXACTLY WHY.** W25 declined to wire this
+because of *"a sign convention against `SteerAim`'s tilt that wants proving before it steers anything"* —
+and there is no recorded flight to prove it against ([[S99]] confirmed that the same day: the per-axis sign
+is UNVERIFIED because no flight exists). **But this particular convention needs no flight.**
+`Trajectory.MeasureAero` and `Trajectory`'s own integrator build **the same basis from the same two
+vectors**, written out identically in both places:
+
+```
+liftUp    = (radial up) − (its along-velocity component), normalised
+liftRight = v̂ × liftUp
+```
+
+Measure takes `atan2(cr, cu)` on that basis; apply takes `cos(bank)·liftUp + sin(bank)·liftRight`.
+**They are exact inverses BY CONSTRUCTION**, so the convention is provable on constructed vectors.
+
+**What landed.** L/D and bank are measured from **the same `aero` vector β already uses**, in **the same
+`coasting` window**, carried between coasts by the same filter, and fed to `PredictImpact`.
+
+⛔ **THE COASTING GATE MATTERS MORE HERE THAN IT DOES FOR β, and the code says so.** With an engine lit
+`aero` is dominated by thrust: β would come back merely *wrong*, but **L/D would come back as the
+THRUST-to-drag ratio pointing along the thrust axis** — a large lift in a direction the stage is not
+lifting, fed to the predictor the fins steer on.
+
+⚠ **BANK IS NOT SMOOTHED THE WAY β IS, deliberately.** `SmoothBc` refuses a non-positive sample (its own
+guard, for a β that must be > 0) and **an angle is legitimately negative or zero**; worse, a naive lerp
+**across the ±π wrap would swing the lift vector the long way round through "lift down"**. The latest valid
+bank is taken as-is — already a filtered quantity in effect, because it is only sampled while coasting.
+
+⛔ **DRAG-ONLY UNTIL THE FIRST COASTING SAMPLE.** `haveAero` stays false until `MeasureAero` returns a valid
+profile, and the predictor gets `LiftToDrag = 0` until then — the same discipline β states for itself
+(*"if we have never had one, we hand `Solve` a zero β"*). **A never-measured lift is honestly zero, not a
+guess.**
+
+**MUTATION-PROVEN.** **Mutation AA** flips the cross product in `MeasureAero` **and not** in the integrator
+— exactly the hazard W25 named — and the suite fails on the bank sign at every non-zero angle and on the
+round-trip vector. ⚠ **Honestly: a pre-existing check (`"lift-right: bank ~ +90 deg"`) already caught part
+of this.** What W32 adds is the full round trip across **seven bank angles including negatives**, plus the
+pure-drag and below-speed-floor cases — so a flip can no longer be caught only at +90°.
+
+**C1.16/G12:** the `t.LiftToDrag = 0.0` line and its three-line note are **kept verbatim** where they stood,
+with why W25 was right to log it rather than half-build it. (The comment audit flags them as "lost" only
+because quoting a `//` line inside a `//` block double-marks it; all three confirmed present by substring.)
+
+**Verified (C1.3).** `python plugin/build.py test` **green — ALL SUITES PASSED**; booster suite
+**1023 → 1075 checks**. Glue + one pure file + tests; **no draw changed, so no preview applies**.
+⛔ **This changes what the booster predicts, and therefore what the fins do** — the §B16 separate-vessel
+autopilot already actuates, so §14.4(a) does not gate it, and `Actuate` is unchanged. No `install`, no
+glass, no `git push`.
 
 ### W33 [S] `OffsetToMissM` / `AllNominal` — the aim-beside-the-deck safety bias has no verdict to switch on — **TODO** — [logged by W25]
 - **The finding:** `pure/GridFin.cs`'s header describes *"offset-to-miss (aim beside the deck until all

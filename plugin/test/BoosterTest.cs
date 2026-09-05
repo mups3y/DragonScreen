@@ -41,6 +41,10 @@ using DragonScreen;
 public static class BoosterTest
 {
     static int checks = 0, failures = 0;
+    /// <summary>W32: a tolerance compare, expressed through this file's own Check(what, ok, detail).</summary>
+    static void Eq(string what, double got, double want, double tol)
+    { Check(what, Math.Abs(got - want) <= tol, "got " + got + ", want " + want); }
+
     static void Check(string what, bool ok, string detail)
     { checks++; if (!ok) { failures++; Console.WriteLine("  FAIL  " + what + "   " + detail); } }
 
@@ -56,8 +60,87 @@ public static class BoosterTest
             GravityMps2 = 9.8, TerminalSpeedMps = 244.0, DeadTimeS = 6.0, SpoolS = 0.0 };
     }
 
-    public static int Run()
+    
+    // ---- W32: THE LIFT SIGN CONVENTION, PROVED BY CONSTRUCTION RATHER THAN BY A FLIGHT ------------
+    // W25 handed the impact predictor `LiftToDrag = 0` - a drag-only solve - while AeroDescent's whole
+    // premise is that the stage flies a held angle of attack and STEERS on the body lift that makes.
+    // So the predictor the fins steer on did not model the fins. W25 declined to half-wire it, and the
+    // specific thing it wanted first was *"a sign convention against SteerAim's tilt that wants proving
+    // before it steers anything"*.
+    //
+    // ⭐ THAT PROOF NEEDS NO FLIGHT DATA, WHICH IS THE POINT OF THIS SUITE. `Trajectory.MeasureAero`
+    // and `Trajectory`'s own integrator construct the SAME basis from the same two vectors:
+    //      liftUp    = (radial up) minus its along-velocity component, normalised
+    //      liftRight = vhat x liftUp
+    // written out identically in both. Measure takes atan2(cr, cu) on that basis; apply takes
+    // cos(bank)*liftUp + sin(bank)*liftRight. They are exact inverses, so the round trip below
+    // reconstructs the lift vector that was measured - and if anyone ever flips a cross product in
+    // one place and not the other, these fail.
+    //
+    // ⛔ WHY GETTING IT WRONG WOULD MATTER MORE THAN A BIAS: a drag-only predictor is BIASED (it
+    // ignores lift, so it predicts consistently) but never INVERTED. A predictor with the bank sign
+    // backwards moves the aim point the WRONG WAY, the fins steer to correct an inverted error, and
+    // the error grows - which is the shape of flight 194334 that BoosterHost's own header records.
+    static void W32LiftSignRoundTrip()
     {
+        // A descent frame: falling and moving downrange, with "up" along +Y.
+        double vx = 300.0, vy = -400.0, vz = 0.0;          // surface-relative velocity
+        double ux = 0.0,   uy = 1.0,    uz = 0.0;          // local radial up
+        double sv = Math.Sqrt(vx * vx + vy * vy + vz * vz);
+        double hx = vx / sv, hy = vy / sv, hz = vz / sv;
+
+        // The same basis both sides build.
+        double dot = ux * hx + uy * hy + uz * hz;
+        double lux = ux - dot * hx, luy = uy - dot * hy, luz = uz - dot * hz;
+        double ll = Math.Sqrt(lux * lux + luy * luy + luz * luz);
+        lux /= ll; luy /= ll; luz /= ll;
+        double lrx = hy * luz - hz * luy, lry = hz * lux - hx * luz, lrz = hx * luy - hy * lux;
+
+        const double drag = 20.0;      // m/s^2 along -v
+        foreach (double bank in new[] { 0.0, 0.5, 1.5, 3.0, -0.5, -1.5, -3.0 })
+        {
+            double ld = 0.35;
+            double aL = ld * drag;
+            // Build an aero acceleration with the lift EXACTLY where `bank` says it should be.
+            double lxv = aL * (Math.Cos(bank) * lux + Math.Sin(bank) * lrx);
+            double lyv = aL * (Math.Cos(bank) * luy + Math.Sin(bank) * lry);
+            double lzv = aL * (Math.Cos(bank) * luz + Math.Sin(bank) * lrz);
+            double ax = -drag * hx + lxv, ay = -drag * hy + lyv, az = -drag * hz + lzv;
+
+            Trajectory.AeroProfile p = Trajectory.MeasureAero(ax, ay, az, vx, vy, vz, ux, uy, uz);
+            Check("W32 MeasureAero returns a profile at bank " + bank, p.Valid, "");
+            Eq("W32 ...and recovers the drag magnitude", p.DragAccel, drag, 1e-9);
+            Eq("W32 ...and recovers L/D at bank " + bank, p.LiftToDrag, ld, 1e-9);
+            // ⛔ THE ONE THAT MATTERS: the bank comes back with the SAME SIGN it went in with.
+            Eq("W32 ...and recovers the BANK, sign included, at " + bank, p.BankRad, bank, 1e-9);
+
+            // And the full round trip: rebuild the lift vector from what was measured.
+            double cb = Math.Cos(p.BankRad), sb = Math.Sin(p.BankRad);
+            double rl = p.LiftToDrag * p.DragAccel;
+            Eq("W32 round-trip lift x at bank " + bank, rl * (cb * lux + sb * lrx), lxv, 1e-8);
+            Eq("W32 round-trip lift y at bank " + bank, rl * (cb * luy + sb * lry), lyv, 1e-8);
+            Eq("W32 round-trip lift z at bank " + bank, rl * (cb * luz + sb * lrz), lzv, 1e-8);
+        }
+
+        // Pure drag: no lift, no bank claim, and L/D exactly zero - the drag-only case the predictor
+        // falls back to before the first coasting sample.
+        {
+            Trajectory.AeroProfile p = Trajectory.MeasureAero(-drag * hx, -drag * hy, -drag * hz,
+                                                             vx, vy, vz, ux, uy, uz);
+            Check("W32 a pure-drag acceleration reports a profile", p.Valid, "");
+            Eq("W32 ...with L/D exactly zero", p.LiftToDrag, 0.0, 1e-12);
+        }
+
+        // Too slow to define a direction: no profile at all, rather than a confident wrong one.
+        {
+            Trajectory.AeroProfile p = Trajectory.MeasureAero(1, 1, 1, 1, 0, 0, 0, 1, 0);
+            Check("W32 below the speed floor MeasureAero declines rather than guessing", !p.Valid, "");
+        }
+    }
+
+public static int Run()
+    {
+        W32LiftSignRoundTrip();   // W32: the lift sign convention, proved by construction
         Console.WriteLine("DragonScreen booster recovery tests (§B16: hoverslam + grid fins + the 5-phase FSM)");
 
         HoverslamChecks();

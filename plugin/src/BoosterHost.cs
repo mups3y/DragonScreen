@@ -499,6 +499,7 @@ namespace DragonScreen
             initialDownrangeErrM = 0.0;
             lastDownrangeErrM = 0.0; lastCrossrangeErrM = 0.0; haveLastErr = false;
             bcFiltered = 0.0;
+            ldFiltered = 0.0; bankFiltered = 0.0; haveAero = false;   // W32
             ImpactErrorM = 0.0; ImpactErrorValid = false;
 
             Hook(v);
@@ -1195,6 +1196,7 @@ namespace DragonScreen
             initialDownrangeErrM = 0.0;
             lastDownrangeErrM = 0.0; lastCrossrangeErrM = 0.0; haveLastErr = false;
             bcFiltered = 0.0;
+            ldFiltered = 0.0; bankFiltered = 0.0; haveAero = false;   // W32
             ImpactErrorM = 0.0; ImpactErrorValid = false;
             lastBindVerdict = BoosterBind.NoVessel;
         }
@@ -1326,6 +1328,44 @@ namespace DragonScreen
                     double sample = Trajectory.BallisticCoefficientFrom(rho, srfSpeed, dragAccel);
                     bcFiltered = Trajectory.SmoothBc(bcFiltered, sample, TimeWarp.fixedDeltaTime,
                                                      Trajectory.BcFilterTauS);
+
+                    // ---- W32: the LIFT the grid fins are generating, from the SAME aero vector ----
+                    // The predictor used to be handed `LiftToDrag = 0` - a drag-only solve - while the
+                    // whole point of AeroDescent is that the stage flies a HELD ANGLE OF ATTACK and
+                    // steers on the body lift that produces. So the predictor the fins steer on did
+                    // not model the fins.
+                    //
+                    // ⭐ WHY THE SIGN CONVENTION IS SAFE, WHICH IS THE THING W25 WANTED PROVED AND
+                    // COULD NOT SPEND THE TIME ON. It needs no flight data: `Trajectory.MeasureAero`
+                    // and `Trajectory`'s own integrator build the SAME basis from the same two
+                    // vectors - lift-up = (radial up) minus its along-velocity part, normalised, and
+                    // lift-right = vhat x liftUp, written out identically in both places. Measure
+                    // takes `atan2(cr, cu)` on that basis; apply takes `cos(bank)*lu + sin(bank)*lr`.
+                    // They are exact inverses BY CONSTRUCTION, and `BoosterTest` proves the
+                    // round-trip on constructed vectors rather than asserting it.
+                    //
+                    // ⛔ SAME COASTING GATE, AND IT MATTERS MORE HERE THAN FOR β. With an engine lit,
+                    // `aero` is dominated by thrust: β would come back merely wrong, but L/D would
+                    // come back as the THRUST-to-drag ratio pointing along the thrust axis - a large
+                    // lift in a direction the stage is not lifting. Measured only while coasting, and
+                    // carried between coasts by the same filter, for the same reason.
+                    Trajectory.AeroProfile ap = Trajectory.MeasureAero(
+                        aero.x, aero.y, aero.z,
+                        srf.x, srf.y, srf.z,
+                        v.upAxis.x, v.upAxis.y, v.upAxis.z);
+                    if (ap.Valid)
+                    {
+                        ldFiltered = Trajectory.SmoothBc(ldFiltered, ap.LiftToDrag,
+                                                         TimeWarp.fixedDeltaTime, Trajectory.BcFilterTauS);
+                        // ⚠ BANK IS AN ANGLE AND IS NOT SMOOTHED THE SAME WAY. SmoothBc refuses a
+                        // non-positive sample (its own guard, for a β that must be > 0) and an angle
+                        // is legitimately negative or zero; worse, a naive lerp across the ±π wrap
+                        // would swing the lift vector the long way round through "lift down". So the
+                        // latest valid bank is taken as-is. It is already a filtered quantity in
+                        // effect, because it is only sampled while coasting.
+                        bankFiltered = ap.BankRad;
+                        haveAero = true;
+                    }
                 }
 
                 TrajectoryInputs t = new TrajectoryInputs();
@@ -1338,9 +1378,20 @@ namespace DragonScreen
                 t.AtmosphereDepthM = body.atmosphere ? body.atmosphereDepth : 0.0;
                 t.BallisticCoefficient = bcFiltered;
                 t.ImpactAltitudeM = 0.0;             // the deck / the pad, both at datum for this solve
-                t.LiftToDrag = 0.0;                  // ⚠ the fins ARE lifting; measuring L/D live is
-                                                     // `Trajectory.MeasureAero`'s job and is NOT wired
-                                                     // here — logged as a stray, not half-built.
+                // ⚠ SUPERSEDED IN PLACE 2026-09-06 by W32 (C1.16/G12). This read, verbatim:
+                //     t.LiftToDrag = 0.0;   // ⚠ the fins ARE lifting; measuring L/D live is
+                //                           // `Trajectory.MeasureAero`'s job and is NOT wired
+                //                           // here — logged as a stray, not half-built.
+                // W25 was right to log it rather than half-build it, and right about what was
+                // missing. W32 wired it: measured in the coasting block above, on the same gate and
+                // the same filter as β, with the sign convention proved by construction rather than
+                // by a flight nobody has recorded.
+                // ⛔ ZERO UNTIL THE FIRST COASTING SAMPLE, and that is deliberate: `haveAero` stays
+                // false until MeasureAero has returned a valid profile, and a drag-only solve is the
+                // honest answer while we have never measured the lift. Same discipline as β, whose
+                // own note says a never-measured β is handed to `Solve` as zero so tier 1 declines.
+                t.LiftToDrag = haveAero ? ldFiltered : 0.0;
+                t.BankRad = haveAero ? bankFiltered : 0.0;
                 t.SoundSpeed = MachSoundSpeed(body);
                 t.DragFactor = null;                 // `PredictImpact` fills in BoosterDrag's own curve
 
@@ -1364,6 +1415,12 @@ namespace DragonScreen
         /// `PredictError`: it can only be sampled while coasting, so the value carried from the coast is
         /// what the powered phases predict with. Cleared with the rest of the aim-point state.</summary>
         static double bcFiltered;
+        /// <summary>W32: the measured lift-to-drag ratio and the bank angle of the lift vector, carried
+        /// between coasting windows exactly as `bcFiltered` is. `haveAero` gates them: until a coasting
+        /// sample has landed the predictor gets a drag-only solve, because a never-measured lift is
+        /// honestly zero rather than a guess.</summary>
+        static double ldFiltered, bankFiltered;
+        static bool haveAero;
 
         static DensityAt AtmosphereDensity(CelestialBody body)
         {
