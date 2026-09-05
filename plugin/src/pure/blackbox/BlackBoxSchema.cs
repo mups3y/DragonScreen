@@ -66,9 +66,10 @@
 //     see §2.7 below for all nine.)
 //   • `crew.touch` / `crew.press` / `crew.dispatch` events and the flat `control_id` namespace (§2.7's
 //     ⚠) — that is a hook at two choke points inside the screens, i.e. a tree edit, and a separate line.
-//   • ⚠ `off_x/y/z_m`, `phase_angle_rad`, `tgt_radius_m` — CLOSED by S87, 2026-09-06, and the note is
-//     kept because half of it was WRONG and a reader should see which half. It said all five reach
-//     `PageState` "only as FORMATTED text". True of the three OFFSETS, which is why they were absent.
+//   • `off_x/y/z_m`, `phase_angle_rad`, `tgt_radius_m` — only their FORMATTED text reaches `PageState`.
+//     ⚠ CLOSED by S87, 2026-09-06 — and the line above is kept VERBATIM (C1.16/G12) because half of it
+//     was WRONG and a reader should be able to see which half. True of the three OFFSETS, which is
+//     why they were absent.
 //     FALSE of `phase_angle_rad` and `tgt_radius_m`: `TargetPhaseRad` and `TargetRadiusM` have been raw
 //     doubles on `PageState` (`Pages.cs:354`) all along, so those two were missing columns and not
 //     missing data. S87 added `OffXM/OffYM/OffZM` beside their text (S26's pattern) and declared all
