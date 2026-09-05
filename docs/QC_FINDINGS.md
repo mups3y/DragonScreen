@@ -606,6 +606,54 @@ panel-pixel constant, so the clamp would permit a design size of 16 — which at
 is below the floor at the shipped width. C-05's fix (compare in panel space) is still right and still
 necessary, but on its own it now exposes an overflow the layout cannot absorb — its option (b), moving
 ENTRY TIMELINE into the taller card, does not create enough room. **Sequence C-05 behind R-01.**
+
+### ⛔ CONFIRMED, AND PROVED TO BE Q5-GATED — 2026-09-05, S112 (no code changed)
+
+**The unit bug is real, exactly as filed.** `FitRows`' arguments and return are all in the 3427×2112 design
+frame — the caller multiplies by `Z()` afterwards — while `Typography.Min` is **16 PANEL pixels**. At the
+shipped `sc` = 0.3329 the clamp permitted type down to **5.3 panel px** before firing. Confirmed at
+`CoverPage.cs`.
+
+**But I started to fix it and stopped, because fixing it is not a build-chat decision. Here is the
+arithmetic, which is the useful part:**
+
+The clamp's policy is **settled and documented** — the function's own summary says *"a slot too short for
+one legible line **overflows visibly** instead of turning to mush"*, and `LayoutTest.cs:875-876` pins it
+(`QC6 type never goes under Typography.Min`). So "what happens when the floor fires" is already decided. I
+applied that decision faithfully with the units corrected, at both candidate widths:
+
+| | shipped **1280×703** | the **2560×1406** the design assumes |
+|---|---|---|
+| `sc` | 0.3329 | 0.6657 |
+| the floor, in design px | 48.1 | 24.0 |
+| ENTRY TIMELINE clamps to | 48.1 design = **16.0 panel** | 24.0 design = **16.0 panel** |
+| row pitch | 48.1 | 28.2 |
+| block ends at design y | **891** | **748** |
+| card bottom is 760 | **OVERFLOWS by 131 design px (43.8 panel)** | **FITS, with 12 px to spare** |
+
+⭐ **So the fix is correct and lands cleanly at 2560, and is destructive at 1280.** At the design's own
+width the clamp does exactly what it was written to do: lifts the type to precisely the measured floor and
+the block still fits its card. At the shipped width the same correct code spills seven rows 131 design px
+past a baked card background and onto the page ground — **which is the defect QC-AUDIT 2026-09-03 finding 6
+raised `FitRows` to fix in the first place.**
+
+⛔ **Therefore C-05 is BLOCKED on Q5, and this is the second TIER 1 that is.** It is not independently
+fixable, and the three layout options in the fix plan above are only needed **if 1280 stays**:
+
+- If Q5 raises the shipped width to 2560, C-05 is a **one-line unit fix** with no layout consequences at
+  all, and options (a)/(b)/(c) are moot.
+- If 1280 stays, the unit fix must land **together with** one of those options, and **(b) — moving ENTRY
+  TIMELINE into the roomier card — touches the Reference Content page, which §14.2 classes TIER-3**
+  (*"NO evidence AND no asset → invention, JOINT discussion required"*). That is an owner decision, not a
+  build-chat one.
+
+⚠ **What I nearly shipped, and why I did not.** My first attempt made the clamp contain the block and
+report the violation instead of overflowing. It was caught by `LayoutTest`'s `QC6` check — which exists
+precisely to pin the overflow policy — and it was **wrong**: a build chat inventing a third policy where a
+documented one already exists is C1.8's failure mode, whatever its merits. Reverted; `git checkout` clean.
+
+**Nothing in the code changed for this finding.** What changed is that C-05 now has a number attached to
+each side of Q5, so the decision can be made with the consequence visible rather than guessed at.
 ---
 
 ## C-06 — The panel's scrollbar thumb is painted in full white with no hit rect, no scroll model, and nothing to scroll
@@ -1985,6 +2033,27 @@ flatters us is worse than none.* **Three distinct renders**, as this finding req
 ## Open questions for the owner — HUD (Q5)
 
 ### Q5 — The preview renders the Figma pages at 2560 wide; the shipped cfg says 1280. Which is authoritative? (H-01)
+
+> **⚠ UPDATED 2026-09-05 (S112) — this question now has four TIER 1/2 findings waiting on it, and one of
+> them comes with a clean pass/fail at each width.**
+>
+> - **C-05** is **blocked on this question, provably.** Its unit fix, applied with the documented overflow
+>   policy: at **2560** the ENTRY TIMELINE clamps to exactly the 16 px floor and **fits its card with 12 px
+>   to spare**; at **1280** the identical correct code **overflows the card by 131 design px (43.8 panel)**,
+>   spilling onto the page ground. So at 2560 C-05 is a one-line fix with no layout consequences; at 1280 it
+>   cannot land without a **TIER-3** layout change to the Reference Content page (§14.2 — joint owner
+>   discussion). *One question, two completely different amounts of work.*
+> - **R-01** has collected three more measured samples since it was filed, from pages it never sampled:
+>   the **Menu** card label at **10.7 px** (S107), and the letterbox margin's **MANUAL/DOCKING at 11.54 px**
+>   and **RENDEZVOUS at 8.08 px** (S108) — all against the 16 px floor.
+> - **H-06 / DK-04** are legible at 2560 (fitted type **26.5 px**) and illegible at 1280. Q8 exists only
+>   because of the shipped width; **answering Q5 may dissolve Q8 entirely.**
+> - **VT-02 / Q9** is entangled too: the tier-2 Figma frame is more legible than the tier-1 rebuild partly
+>   because the rebuild's type is smaller, which is the same axis.
+>
+> ⛔ **Option 2 of this question (raise `screenWidth` to 2560 in the cfg) needs an `install` + glass go and
+> is the owner's alone (C1.12).** S100 fixed which size the PREVIEW renders and deliberately did not touch
+> the cfg.
 
 **Situation.** `DragonScreen.cfg` sets `screenWidth = 1280` on all three IVA screens (`:60`, `:76`, `:87`).
 `PreviewMain`'s own `ScreenSpec` table agrees (1280×703 / 1280×710 / 1280×703). But every Figma-era page is
