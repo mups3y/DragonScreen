@@ -416,6 +416,32 @@ public static class FigmaUINavTest
 
     /// <summary>How many arc bands the page drew in this colour — the gauge FILLS, as distinct from the
     /// faint rings they sit in. A ring that never moves is decoration, and this is how that shows up.</summary>
+    /// <summary>
+    /// How many gauge rings are FILLED, whatever colour they are (S104 / QC V-01 + S-01).
+    ///
+    /// The three checks below used to count rings by their hue - `Arcs(dl, Hex("D12C30"))` and friends -
+    /// which only worked while every ring was a hardcoded constant. The ring colour is now the model's
+    /// computed severity, so a nominal cabin draws green and an alarming one red, and counting by hue
+    /// counts the FIXTURE rather than the page. What the checks are actually for is stated in their own
+    /// comment - "a fill per gauge is the count to hold" - so they count fills.
+    ///
+    /// A gauge's FILL is the second ArcBand at that centre: `Gauge` draws the dim 300-degree track first
+    /// and the coloured fill over it, so a fill is any ArcBand that is not drawn in the track's colour.
+    /// </summary>
+    static int RingFills(DisplayList dl)
+    {
+        int n = 0;
+        Rgba track = DragonPalette.Text7;      // `Faint`, the dim track every gauge draws first
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind != DrawKind.ArcBand) continue;
+            if (c.Colour.R == track.R && c.Colour.G == track.G && c.Colour.B == track.B) continue;
+            n++;
+        }
+        return n;
+    }
+
     static int Arcs(DisplayList dl, Rgba want)
     {
         int n = 0;
@@ -545,6 +571,16 @@ public static class FigmaUINavTest
         // The rings come from the raw numbers, never from the text, so they are set independently.
         s.Cabin.Ppo201 = 0.6; s.Cabin.CabinTemp01 = 0.55; s.Cabin.Press01 = 0.73; s.Cabin.Co201 = 0.2;
         s.Cabin.LoopA01 = 0.33; s.Cabin.LoopB01 = 0.25;
+        // ---- S104 / QC V-01: THE ENGINEERING VALUES, WHICH THIS FIXTURE NEVER SET ----
+        // The ring's COLOUR is now the model's verdict, and `Alarms.Band` reads the raw quantity, not the
+        // 0..1 fraction. These fields defaulted to 0.0 here because nothing had ever read them - and 0.0
+        // psia of oxygen at 0.0 psia of cabin pressure is a genuine ALARM, so the first honest run of the
+        // new code lit two red rings on a fixture whose own text says "3.0 / 14.7". The fixture was
+        // incomplete, not the page. Set to agree with the text and the fractions above: one nominal cabin,
+        // described the same way three times.
+        s.Cabin.Ppo2Psia = 3.0; s.Cabin.CabinTempC = 21.0;
+        s.Cabin.PressPsia = 14.7; s.Cabin.Co2MmHg = 1.0;
+        s.Cabin.LoopAC = 27.0; s.Cabin.LoopBC = 20.0;
         s.Cabin.NetPwr1W = -51.0; s.Cabin.NetPwr2W = -41.0;
         s.AccelPos01 = 0.28; s.AccelNeg01 = 0.06; s.AccelCent01 = 0.44;
         s.SeatCount = 4;
@@ -808,18 +844,29 @@ public static class FigmaUINavTest
         DisplayList crDead = new DisplayList(VehicleSubsystemPage.Commands + 60);
         VehicleSubsystemPage.Build(cr, VW, VH, VehicleSubsystemPage.Sub.Crew, a);
         VehicleSubsystemPage.Build(crDead, VW, VH, VehicleSubsystemPage.Sub.Crew, dead);
-        int crewFills = Arcs(cr, Rgba.Hex("D7B733")) + Arcs(cr, Rgba.Hex("D12C30"))
-                      + Arcs(cr, Rgba.Hex("FCD533")) + Arcs(cr, Rgba.Hex("2983ED"));
+        int crewFills = RingFills(cr);
         Check("crew fills one ring per sourced gauge", crewFills == 4, "got " + crewFills);
-        int crewDeadFills = Arcs(crDead, Rgba.Hex("D7B733")) + Arcs(crDead, Rgba.Hex("D12C30"))
-                          + Arcs(crDead, Rgba.Hex("FCD533")) + Arcs(crDead, Rgba.Hex("2983ED"));
+        int crewDeadFills = RingFills(crDead);
         Check("crew fills no ring with no feed", crewDeadFills == 0, "got " + crewDeadFills);
         // THERMAL has three sourced gauges of four: the RADIATOR has no model and must stay empty.
         DisplayList th = new DisplayList(VehicleSubsystemPage.Commands + 60);
         VehicleSubsystemPage.Build(th, VW, VH, VehicleSubsystemPage.Sub.Thermal, a);
-        int thermFills = Arcs(th, Rgba.Hex("2983ED")) + Arcs(th, Rgba.Hex("D12C30"))
-                       + Arcs(th, DragonPalette.Accent);
+        int thermFills = RingFills(th);
         Check("thermal leaves the unsourced radiator ring empty", thermFills == 3, "got " + thermFills);
+
+        // ---- S104 / QC V-01: THE RING'S COLOUR IS THE VERDICT, SO IT MUST MOVE WITH THE VALUE ----
+        // The whole finding was that CABIN TEMP drew alarm-red at a nominal 21.8 C because the colour was
+        // a constant. A count of fills cannot catch that coming back, so this does: the SAME gauge, two
+        // fixtures either side of `CabinLimits.CabinTempAlarm`, must not come out the same colour - and
+        // the nominal one must not be the alarm colour.
+        PageState hot = VehicleFixture(0);
+        hot.Cabin.CabinTempC = CabinLimits.CabinTempAlarm + 5.0;
+        DisplayList crHot = new DisplayList(VehicleSubsystemPage.Commands + 60);
+        VehicleSubsystemPage.Build(crHot, VW, VH, VehicleSubsystemPage.Sub.Crew, hot);
+        int alarmNominal = Arcs(cr,    DragonPalette.Alarm);
+        int alarmHot     = Arcs(crHot, DragonPalette.Alarm);
+        Check("a nominal cabin draws no alarm-red ring", alarmNominal == 0, "got " + alarmNominal);
+        Check("an over-limit cabin does draw one",       alarmHot   >  0,   "got " + alarmHot);
 
         // ---- the PROP data band carries the same numbers, because it is passed the same source ----
         // PropSchematic re-draws this tab's gauge + detail values; wiring the source had to fix both.

@@ -342,7 +342,13 @@ namespace DragonScreen
                     s.GUnit   = new[] { "psia", "°C", "psia", "mmHg" };
                     s.GFrac   = new[] { F(st.Cabin.Ppo201), F(st.Cabin.CabinTemp01),
                                         F(st.Cabin.Press01), F(st.Cabin.Co201) };
-                    s.GCol    = new[] { Gold, Red, Yellow, Blue };
+                    // S104 / QC S-01: the ring's colour is the model's verdict where the model HAS one,
+                    // and the neutral reading colour where it does not. These were constants.
+                    s.GCol    = new[] {
+                        Alarms.GaugeColour(Alarms.Band(st.Cabin.Ppo2Psia,  CabinLimits.Ppo2Caution,      CabinLimits.Ppo2Alarm),      valid),
+                        Alarms.GaugeColour(Alarms.Band(st.Cabin.CabinTempC, CabinLimits.CabinTempCaution, CabinLimits.CabinTempAlarm), valid),
+                        Alarms.GaugeColour(Alarms.Band(st.Cabin.PressPsia, CabinLimits.PressCaution,     CabinLimits.PressAlarm),     valid),
+                        Alarms.GaugeColour(Alarms.Band(st.Cabin.Co2MmHg,   CabinLimits.Co2Caution,       CabinLimits.Co2Alarm),       valid) };
                     s.RLabel  = new[] { "Humidity", "O2 Tank", "N2 Tank", "Potable Water", "Crew Aboard" };
                     // Humidity: nothing in this build models cabin humidity, so it dashes.
                     s.RVal    = new[] { Dash, T(st.O2TankText), T(st.N2TankText), T(st.WaterText), T(st.CrewText) };
@@ -373,7 +379,15 @@ namespace DragonScreen
                     s.GVal    = new[] { T(st.DragonOxText), T(st.DragonFuelText), Dash, Dash };
                     s.GUnit   = new[] { "%", "%", "bar", "°C" };
                     s.GFrac   = new[] { F(st.DragonOx01), F(st.DragonFuel01), 0f, 0f };
-                    s.GCol    = new[] { Gold, Gold, Blue, Red };
+                    // S104 / QC S-01: the ring's colour is the model's verdict where the model HAS one,
+                    // and the neutral reading colour where it does not. These were constants.
+                    // OX and FUEL are Dragon propellant fractions, so they take `Alarms.Low` - the same
+                    // 0..1 low-side band `PropellantSeverity` already applies to DragonProp01, not a new
+                    // one. HELIUM and PROP TEMP are DASHES with no reading: a dash gets no verdict.
+                    s.GCol    = new[] {
+                        Alarms.GaugeColour(Alarms.Low(st.DragonOx01),   valid),
+                        Alarms.GaugeColour(Alarms.Low(st.DragonFuel01), valid),
+                        Accent, Accent };
                     s.RLabel  = new[] { "Chamber Press", "Prop Remaining", "Draco Duty", "SuperDraco Temp", "Thrust Avail" };
                     // Chamber pressure and SuperDraco temperature have no source: KSP models no per-engine
                     // chamber pressure and no pod temperature. THRUST AVAIL now does (S46) - Kerbal Engineer's
@@ -421,7 +435,13 @@ namespace DragonScreen
                     s.GVal    = new[] { T(st.PowerText), Dash, Dash, T(st.ArrayKwText) };
                     s.GUnit   = new[] { "%", "V", "V", "kW" };
                     s.GFrac   = new[] { F(st.Power01), 0f, 0f, F(st.Array01) };
-                    s.GCol    = new[] { Accent, Accent, Accent, Yellow };
+                    // S104 / QC S-01: the ring's colour is the model's verdict where the model HAS one,
+                    // and the neutral reading colour where it does not. These were constants.
+                    // Power01 takes `Alarms.Low`, the same read `VehicleSeverity` makes of it. BUS A/B
+                    // are dashes, and ARRAY kW has no threshold in the model - Accent, not an invented one.
+                    s.GCol    = new[] {
+                        Alarms.GaugeColour(Alarms.Low(st.Power01), valid),
+                        Accent, Accent, Accent };
                     s.RLabel  = new[] { "Array Output", "Net Power", "Bus Load", "Battery Temp", "Charge Rate" };
                     // "Array Output" is the ARRAY gauge's own datum in the row's format, and "Charge Rate"
                     // is "Net Power" in kW — the template shows each of those quantities twice, so both
@@ -456,7 +476,12 @@ namespace DragonScreen
                     s.GVal    = new[] { Dash, Dash, Dash, Dash };
                     s.GUnit   = new[] { "%", "%", "dB", "%" };
                     s.GFrac   = new[] { 0f, 0f, 0f, 0f };
-                    s.GCol    = new[] { Accent, Accent, Go, Blue };
+                    // S104 / QC S-01: the ring's colour is the model's verdict where the model HAS one,
+                    // and the neutral reading colour where it does not. These were constants.
+                    // ALL FOUR ARE DASHES. The third was `Go` - a hardcoded GREEN all-clear on a gauge
+                    // with no reading behind it, which is S31/S32 read backwards and worse than a false
+                    // caution: it asserts health. A dash gets the neutral colour.
+                    s.GCol    = new[] { Accent, Accent, Accent, Accent };
                     s.RLabel  = new[] { "FC1 / 2 / 3", "GPS Sats", "Uplink", "Downlink", "Data Rate" };
                     // Uplink and Downlink report the SAME real CommNet signal strength — the link has no
                     // separate up/down budget in stock KSP — as a percentage bar/text, never a fabricated
@@ -487,7 +512,12 @@ namespace DragonScreen
                     s.GUnit   = new[] { "°/s", "°/s", "°/s", "%" };
                     s.GFrac   = new[] { F(Rate01(st.BodyRollDps)), F(Rate01(st.BodyPitchDps)),
                                         F(Rate01(st.BodyYawDps)), F(st.DragonProp01) };
-                    s.GCol    = new[] { Accent, Accent, Accent, Gold };
+                    // S104 / QC S-01: the ring's colour is the model's verdict where the model HAS one,
+                    // and the neutral reading colour where it does not. These were constants.
+                    // The three body rates have no threshold in the model. The fourth is DragonProp01,
+                    // which is exactly what `Alarms.PropellantSeverity` reads.
+                    s.GCol    = new[] { Accent, Accent, Accent,
+                        Alarms.GaugeColour(Alarms.Low(st.DragonProp01), valid) };
                     s.RLabel  = new[] { "Attitude Err", "Body Rate", "Altitude", "Velocity", "Pointing" };
                     // Attitude error is an error AGAINST SOMETHING: with no target there is nothing to be
                     // misaligned with, so it dashes rather than reporting a confident zero — the same
@@ -530,7 +560,16 @@ namespace DragonScreen
                     s.GVal    = new[] { T(st.LoopAText), T(st.LoopBText), Dash, T(st.HullTempText) };
                     s.GUnit   = new[] { "°C", "°C", "°C", "°C" };
                     s.GFrac   = new[] { F(st.Cabin.LoopA01), F(st.Cabin.LoopB01), 0f, F(st.HullTemp01) };
-                    s.GCol    = new[] { Blue, Blue, Accent, Red };
+                    // S104 / QC S-01: the ring's colour is the model's verdict where the model HAS one,
+                    // and the neutral reading colour where it does not. These were constants.
+                    // The two loops take CabinLimits' own band. RADIATOR is a dash. SHIELD was `Red` at
+                    // any hull temperature; it stays Accent rather than gaining a band, because what
+                    // HullTemp01 is normalised AGAINST is not established here and a band invented to
+                    // justify a colour is the defect, not the fix (QC S-01).
+                    s.GCol    = new[] {
+                        Alarms.GaugeColour(Alarms.Band(st.Cabin.LoopAC, CabinLimits.LoopCaution, CabinLimits.LoopAlarm), valid),
+                        Alarms.GaugeColour(Alarms.Band(st.Cabin.LoopBC, CabinLimits.LoopCaution, CabinLimits.LoopAlarm), valid),
+                        Accent, Accent };
                     s.RLabel  = new[] { "Loop A Flow", "Loop B Flow", "Heat Reject", "Cabin HX", "TPS Max" };
                     // The loops are modelled as TEMPERATURES, not as a flow rate, a rejected-heat figure or
                     // a heat-exchanger outlet; three litres-per-second that nothing computes would be three

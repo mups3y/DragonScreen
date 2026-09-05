@@ -116,10 +116,27 @@ namespace DragonScreen
                 L(T(ChkState[i]), 150, y + 48, 26, sc);
             }
 
-            Gauge(1170, 430, 175, F(s.Cabin.Ppo201),      Gold,   "PPO2",           T(s.Ppo2Text),      "psia");
-            Gauge(1620, 430, 175, F(s.Cabin.CabinTemp01), Red,    "CABIN TEMP",     T(s.CabinTempText), "°C");
-            Gauge(2070, 430, 175, F(s.Cabin.Press01),     Yellow, "CABIN PRESSURE", T(s.PressText),     "psia");
-            Gauge(2520, 430, 175, F(s.Cabin.Co201),       Blue,   "CO2",            T(s.Co2Text),       "mmHg");
+            // ---- S104 / QC V-01: THE RING'S COLOUR IS THE MODEL'S VERDICT, NOT A CONSTANT ----
+            // These four used to be `Gold, Red, Yellow, Blue` — fixed at any value. The arc's LENGTH was
+            // live and its COLOUR was decoration, so CABIN TEMP was alarm-red at 21.8 °C (caution is 30,
+            // alarm 35) while SystemsPidPage, banding the SAME value through the SAME function in the
+            // SAME frame, printed it green. Two surfaces, one quantity, opposite verdicts — C7.1's own
+            // failure — and a permanently-red ring also destroys the signal for when the cabin really
+            // does pass 30. `Alarms.Band` handles both directions, so the low-side pair (PPO2, PRESSURE:
+            // caution 2.5/13.0, alarm 2.0/11.0) and the high-side pair (TEMP, CO2) take the one call.
+            Rgba GC(Severity sev) => Alarms.GaugeColour(sev, valid);
+            Gauge(1170, 430, 175, F(s.Cabin.Ppo201),
+                  GC(Alarms.Band(s.Cabin.Ppo2Psia, CabinLimits.Ppo2Caution, CabinLimits.Ppo2Alarm)),
+                  "PPO2", T(s.Ppo2Text), "psia");
+            Gauge(1620, 430, 175, F(s.Cabin.CabinTemp01),
+                  GC(Alarms.Band(s.Cabin.CabinTempC, CabinLimits.CabinTempCaution, CabinLimits.CabinTempAlarm)),
+                  "CABIN TEMP", T(s.CabinTempText), "°C");
+            Gauge(2070, 430, 175, F(s.Cabin.Press01),
+                  GC(Alarms.Band(s.Cabin.PressPsia, CabinLimits.PressCaution, CabinLimits.PressAlarm)),
+                  "CABIN PRESSURE", T(s.PressText), "psia");
+            Gauge(2520, 430, 175, F(s.Cabin.Co201),
+                  GC(Alarms.Band(s.Cabin.Co2MmHg, CabinLimits.Co2Caution, CabinLimits.Co2Alarm)),
+                  "CO2", T(s.Co2Text), "mmHg");
 
             // ---- CENTRE: capsule + loop/power gauges ----
             // ⚠ DIVERGENCE from the tier-2 source, 2026-09-02 (S20, owner decision via the overseer):
@@ -130,10 +147,18 @@ namespace DragonScreen
             // different temperatures under one label. docs/REFERENCE_PAGES.md already documents this pair
             // as LOOP A / LOOP B. Owner's call (C1.4): label the second gauge "LOOP B".
             dl.Asset("dragon_crew", PX(1560), PY(760), 520 * sx, 760 * sy, White);
-            Gauge(1230, 900,  120, F(s.Cabin.LoopA01), Blue, "LOOP A", T(s.LoopAText), "°C");
-            Gauge(1230, 1200, 120, F(s.Cabin.LoopB01), Blue, "LOOP B", T(s.LoopBText), "°C");
+            Gauge(1230, 900,  120, F(s.Cabin.LoopA01),
+                  GC(Alarms.Band(s.Cabin.LoopAC, CabinLimits.LoopCaution, CabinLimits.LoopAlarm)),
+                  "LOOP A", T(s.LoopAText), "°C");
+            Gauge(1230, 1200, 120, F(s.Cabin.LoopB01),
+                  GC(Alarms.Band(s.Cabin.LoopBC, CabinLimits.LoopCaution, CabinLimits.LoopAlarm)),
+                  "LOOP B", T(s.LoopBText), "°C");
             // Net power is SIGNED — the sign lives in the printed number, the ring shows how hard the
             // bus is working either way, against the same full scale the model states.
+            // ⛔ THESE TWO STAY `Accent`, DELIBERATELY (S104 / QC V-01). Nothing in the model bands net
+            // power — a severity here would mean "discharging faster than X" and no X exists. Accent is
+            // this build's "a reading, not a verdict" colour, and inventing a threshold to justify a
+            // colour is the defect V-01 removes, not a smaller version of the fix.
             Gauge(2410, 900,  120, F(NetPwr01(s.Cabin.NetPwr1W)), Accent, "NET PWR1", T(s.NetPwr1Text), "W");
             Gauge(2410, 1200, 120, F(NetPwr01(s.Cabin.NetPwr2W)), Accent, "NET PWR2", T(s.NetPwr2Text), "W");
 
@@ -149,7 +174,13 @@ namespace DragonScreen
                 L(T("Connected"), 1400, 1500 + i * 56, 24, valid ? Go : Dim);
             }
             L("CABIN MICS:", 1130, 1748, 26, White);
-            dl.Text(T("RECORDING"), PX(1290), PY(1748), SZ(26), TextAlign.Left, valid ? Red : Dim);
+            // ---- S105 / QC V-02: RECORDING IS A STATE, NOT A FAULT ----
+            // This was drawn in `Red` - the alarm colour - for a recorder that is working. §14.4(a): no
+            // red for something that is not a fault, and CLAUDE.md quotes that rule for exactly this
+            // reason. It reads `Go` now, matching the four `Connected` rows immediately above it: they
+            // are the same kind of thing, a state that is currently true, and the block should read as
+            // one. A FAILED recorder would be the red case, and nothing models one.
+            dl.Text(T("RECORDING"), PX(1290), PY(1748), SZ(26), TextAlign.Left, valid ? Go : Dim);
 
             // ---- RIGHT: CONSUMABLES table (T5) ----
             L("CONSUMABLE", 2760, 300, 24, Accent);

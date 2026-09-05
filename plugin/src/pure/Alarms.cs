@@ -56,6 +56,28 @@ namespace DragonScreen
             return DragonPalette.Go;
         }
 
+        /// <summary>
+        /// A GAUGE RING's colour (S104 / QC V-01 + S-01).
+        ///
+        /// The Vehicle pages used to pass a CONSTANT as every gauge's colour — CABIN TEMP was `Red` at
+        /// any temperature, so it read alarm-red at a nominal 21.8 °C while the Systems P&ID, computing
+        /// the same value through <see cref="Band"/> in the same frame, drew it green. A ring colour is
+        /// a safety verdict and S31/S32 say a verdict is computed or it is not shown.
+        ///
+        /// ⚠ An INVALID feed is not a nominal one — the same rule the FLIGHT page's status dots follow.
+        /// Grey says "no reading"; green says "fine", and asserting green on no data is the confident
+        /// zero this project refuses.
+        ///
+        /// ⛔ Use this ONLY where the model actually bands the quantity. A gauge whose quantity has no
+        /// threshold (net power, body rates, array output, hull temperature) must be drawn in
+        /// `DragonPalette.Accent` — the neutral "this is a reading, not a verdict" colour — NOT given an
+        /// invented band to justify a colour.
+        /// </summary>
+        public static Rgba GaugeColour(Severity sev, bool valid)
+        {
+            return valid ? Colour(sev) : DragonPalette.Text6;
+        }
+
         public static string Word(Severity s)
         {
             if (s == Severity.Alarm) return "ALARM";

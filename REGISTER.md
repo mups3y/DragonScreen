@@ -11890,6 +11890,71 @@ gone. `build.py test` green (824 checks), all 104 preview PNGs re-rendered, no o
 `docs/QC_FINDINGS.md`'s batch-1 section — **R-01 + S101** are one job and the strongest batch 2, but gated on
 **Q5**.
 
+### S104 [O] QC batch 2 — every colour that asserts a verdict is computed now, or it is neutral — **DONE 2026-09-05** — [V-01 + S-01 + V-02 + MC-01 + MP-01; 32 gauges on 7 pages, plus three false reds]
+
+**🟢 OWNER-DIRECTED** — *"continue with all the screen fixes one at a time until all pages are complete. You
+must confirm your findings before fixing."* Every finding here was re-confirmed against the current source
+and the honest 1280×703 renders before anything was changed, and **confirming changed two of them** (see the
+last two paragraphs).
+
+**V-01 + S-01 — 32 GAUGE RINGS WHOSE COLOUR WAS A CONSTANT. FIXED.** `Gauge(...)` took a literal colour at
+every call: `VehicleOverviewPage` 8, `VehicleSubsystemPage` 24 across six descriptors. The arc's LENGTH was
+live and its COLOUR was decoration — so `CABIN TEMP` drew **alarm-red at 21.8 °C** (caution 30, alarm 35)
+while `SystemsPidPage`, banding the same value through the same `Alarms.Band` in the same frame, drew it
+green. One quantity, two surfaces, opposite verdicts — C7.1's own failure mode, and S31/S32's rule is that a
+safety verdict is computed or it is not shown.
+
+**⭐ The gate that was not there: `CabinLimits` already had thresholds for all five cabin quantities** —
+PPO2, CO2, pressure, cabin temp and the loops — and `Alarms.Band` already handles **both directions**
+(`if (alarm > caution)` high-side, `else` low-side), which is how PPO2 and pressure band on the LOW side.
+QC's own fix plan had flagged those two as a possible §1.4 question; **they are not, and re-reading the model
+before building is what found that.** New `Alarms.GaugeColour(sev, valid)` — computed severity when the feed
+is live, grey when it is not, because an invalid feed is not a nominal one (the FLIGHT dials' own rule).
+
+**⛔ WHAT WAS DELIBERATELY *NOT* COLOURED, AND WHY THAT IS THE FIX AND NOT A SHORTFALL.** A ring whose
+quantity the model does not band keeps `Accent`, this build's "a reading, not a verdict" colour: NET PWR 1/2
+(nothing bands net power), ARRAY kW, the three GNC body rates, SHIELD (what `HullTemp01` is normalised
+against is not established here), and every gauge that is a **dash** — Prop's HELIUM and PROP TEMP, Power's
+BUS A/B, all four Avionics gauges. Inventing a band to justify a colour is the defect V-01 removes, not a
+smaller version of the fix. ⚠ Avionics' third gauge was `Go` — a hardcoded **green** all-clear on a gauge
+with no reading at all, which is S31/S32 read backwards and worse than a false caution because it asserts
+health.
+
+**V-02 + MC-01 — TWO FALSE REDS. FIXED.** `CABIN MICS: RECORDING` was drawn in `Red` for a recorder that is
+working; it is `Go` now, matching the four `Connected` rows immediately above it in the same block. Manual
+Chute's two section markers were `Alarm` red on **both** sections in every state, on the screen a crew reads
+while descending under parachutes; they are `Accent` section bullets now, the same treatment the Cover's
+reference-content cards use.
+
+**⚠ MP-01 — CONFIRMING CHANGED THE FIX, AND MOST OF IT IS NOT OURS TO MAKE.** QC filed this as "two pages
+state contradictory verdicts for one named check, both hardcoded" and proposed driving both from
+`Alarms.SystemSeverity`. Re-reading the source first found `VehicleMechPage.cs:26-27`: *"§6 scopes this task
+to the VALUES, so the reference COPY — the node names, 'SEAT n TACH', and the 'ALL SYSTEMS CHECK / Awaiting'
+line under the seats — is reproduced untouched."* **"Awaiting" is reference copy, and so is the Overview's
+"Normal" — the contradiction is between two reference mockups, not between two of our choices.** §1.4
+reproduces each faithfully; changing either word is an owner question, not a build-chat edit. What WAS ours
+is the **caution amber** this build painted on top of a reproduced word: that is gone, the row reads White,
+and it asserts nothing. ⚠ It is deliberately **not** green either — a hardcoded all-clear is the same defect
+inverted. The word-level question stays open in `docs/QC_FINDINGS.md`.
+
+**Tests.** `FigmaUINavTest`'s three ring checks counted arcs **by hue** — `Arcs(dl, Hex("D12C30"))` — which
+only worked while every ring was a constant, and would have counted the fixture rather than the page from
+here on. New `RingFills(dl)` counts fills whatever colour they are, which is what those checks say they are
+for. **NEW: two checks that a count cannot make** — the same gauge, two fixtures either side of
+`CabinTempAlarm`, must not come out the same colour, and a nominal cabin must draw **no** alarm-red ring.
+
+⚠ **And the first honest run lit two red rings, which was the FIXTURE and not the page.** `VehicleFixture`
+set `Cabin.*01` and the text but never the raw engineering values, because nothing had ever read them — so
+`Band` saw 0.0 psia of oxygen at 0.0 psia of cabin pressure and correctly alarmed. The fixture now sets
+`Ppo2Psia`, `CabinTempC`, `PressPsia`, `Co2MmHg`, `LoopAC`, `LoopBC` to agree with the text and the fractions
+it already had: one nominal cabin, described the same way three times.
+
+**Verified on the glass:** CABIN TEMP at 21.8 °C renders **green** on the Vehicle Overview and the Crew tab,
+agreeing with the P&ID at last; and an **alarm-red pixel sweep across `ui_vehicle`, `ui_vehiclemech`,
+`ui_manualchute`, `ui_manualchute_descent`, `ui_cover` and `ui_vehiclecrew` returns 0 on every one** — the
+standard the lower console already met (S103's neighbour finding) and the screens did not. `build.py test`
+green (825 checks), 104 PNGs re-rendered.
+
 
 ---
 

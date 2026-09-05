@@ -131,8 +131,19 @@ namespace DragonScreen
             // S22: "Awaiting" is reference COPY, not a live reading — dash-and-dim it on a dead feed,
             // same rule as VehicleOverviewPage's checklist, so the two pages can't disagree. The
             // "ALL SYSTEMS CHECK" label itself is untouched.
+            // ---- S105 / QC MP-01: THE WORD IS THE REFERENCE'S, THE CAUTION COLOUR WAS OURS ----
+            // "Awaiting" is reference copy and stays (see the header: §6 scopes this page to the VALUES).
+            // Drawing it in CAUTION AMBER was not the reference's - it was a severity this build added on
+            // top of a reproduced word, and §14.4(a) is explicit that a colour that means "fault" is not
+            // spent on something that is not one. A permanent amber the crew can never clear also spends
+            // the signal: when something really does need attention here, nothing changes.
+            // ⚠ It reads WHITE now, not green: a hardcoded green would be the same defect inverted, an
+            // all-clear with no model behind it (S31/S32). White asserts nothing, which is the truth.
+            // ⚠ The Vehicle Overview prints "Normal" for a row of the SAME NAME. That contradiction is
+            // between two REFERENCE mockups, not between two of our choices, so §1.4 keeps both as they
+            // are - it is an owner question, recorded in docs/QC_FINDINGS.md (MP-01), not a build fix.
             C("ALL SYSTEMS CHECK", ccx, ccy + 250, 24, Dim);
-            C(s.Valid ? "Awaiting" : Dash, ccx, ccy + 290, 26, s.Valid ? Amber : Dim);
+            C(s.Valid ? "Awaiting" : Dash, ccx, ccy + 290, 26, s.Valid ? White : Dim);
 
             // outer donut nodes
             for (int i = 0; i < NodeLabel.Length; i++)

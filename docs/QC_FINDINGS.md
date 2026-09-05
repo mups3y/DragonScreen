@@ -2573,6 +2573,21 @@ pass 30 °C, nothing on this page changes.
 - **Verify:** `ui_vehicle.png` with the current fixture must show four nominal rings; add a fixture at
   32 °C and check the ring goes caution on **both** this page and the P&ID, from the same call.
 
+
+### ✅ FIXED 2026-09-05 — S104 (QC batch 2)
+
+**Fixed.** All eight rings now take `Alarms.GaugeColour(Alarms.Band(raw, caution, alarm), valid)` —
+PPO2, CABIN TEMP, CABIN PRESSURE, CO2, LOOP A and LOOP B — the same call `SystemsPidPage.cs:249` already
+made. **NET PWR 1/2 deliberately keep `Accent`**: nothing in the model bands net power, and inventing a
+threshold to justify a colour is this finding, not its fix.
+
+⚠ **The filed fix plan's §1.4 caution was wrong and is withdrawn.** It said PPO2's and pressure's bands
+"must come from `CabinLimits`, and any that does not exist there is a §1.4 question". **They both exist**
+(`Ppo2Caution 2.5 / Ppo2Alarm 2.0`, `PressCaution 13.0 / PressAlarm 11.0`) and `Alarms.Band` already handles
+the low side. There was no gate.
+
+**On the glass:** CABIN TEMP at 21.8 °C renders **green** on `ui_vehicle.png`, agreeing with the P&ID.
+An alarm-red pixel sweep of the page returns **0**.
 ---
 
 ## V-02 — `CABIN MICS: RECORDING` is drawn in alarm red for a state that is not a fault
@@ -2600,6 +2615,12 @@ in the live branch's colour choice.
 - **Must not break:** the `T()` dash-on-dead-feed behaviour.
 - **Verify:** re-render; no red on a page with no fault.
 
+
+### ✅ FIXED 2026-09-05 — S104 (QC batch 2)
+
+**Fixed.** `RECORDING` is drawn `Go`, not `Red`. It matches the four `Connected` rows immediately above it
+in the same block — the same kind of thing, a state that is currently true — and a *failed* recorder, which
+nothing models, would be the red case. The `!valid` dash path is unchanged.
 ---
 
 ## V-03 — The MARGIN column is eight dashes while the margins are computed every frame and written to the black box
@@ -2706,6 +2727,25 @@ V-01's plan applies unchanged, including its two cautions:
   hardcoded all-clear, which is S31/S32's guardrail read the other way. It is the one that most needs a
   model behind it or a demotion to `Accent`.
 
+
+### ✅ FIXED 2026-09-05 — S104 (QC batch 2)
+
+**Fixed with V-01, one rule across both files.** All 24 sub-tab rings are computed where the model bands the
+quantity and `Accent` where it does not:
+
+| tab | computed | left `Accent`, and why |
+|---|---|---|
+| Crew | all four `CabinLimits` quantities | — |
+| Prop | OX, FUEL via `Alarms.Low` — the same 0..1 band `PropellantSeverity` applies | HELIUM, PROP TEMP — **dashes** |
+| Power | `Alarms.Low(Power01)`, as `VehicleSeverity` reads it | BUS A/B (dashes), ARRAY kW (no band) |
+| Avionics | — | **all four are dashes** |
+| GNC | `Alarms.Low(DragonProp01)` | three body rates (no band) |
+| Thermal | LOOP A, LOOP B | RADIATOR (dash), SHIELD (see below) |
+
+⚠ **This finding's own warning was heeded twice.** Avionics' `Go` was a hardcoded **green all-clear on a
+gauge with no reading** — S31/S32 inverted — and is now neutral. And SHIELD stayed `Accent` rather than
+gaining a band, because what `HullTemp01` is normalised against is not established here; a band invented to
+justify a colour is the defect.
 ---
 
 ## S-02 — "ALERT ACTIVITY" resolves to one word, and the FDIR bar beside it is a fake three-position gauge
@@ -2891,6 +2931,27 @@ does. The two disagree on the *word*, the *colour* and the *claim*.
 - **Verify:** render both pages from one fixture and require the same word and the same colour; then trip a
   subsystem and require both to change together.
 
+
+### ✅ FIXED 2026-09-05 — S104 (QC batch 2)
+
+**PARTLY fixed — and confirming before fixing changed what "fixed" means here.**
+
+⚠ **The words are reference copy and are not ours to change.** `VehicleMechPage.cs:26-27` states it: *"§6
+scopes this task to the VALUES, so the reference COPY — the node names, 'SEAT n TACH', and the 'ALL SYSTEMS
+CHECK / Awaiting' line under the seats — is reproduced untouched."* The Overview's "Normal" for the same
+named row is reference copy too, from a different mockup. **So the contradiction is between two reference
+sources, not between two of our choices**, and §1.4 reproduces each faithfully. The filed fix — drive both
+from `Alarms.SystemSeverity` — would have overwritten reference copy on both pages.
+
+**What WAS ours, and is fixed:** the **caution amber**. That severity was painted on top of a reproduced
+word by this build, and §14.4(a) forbids spending a fault colour on a non-fault. The row now reads **White**
+— deliberately not green, because a hardcoded all-clear is the same defect inverted. `ui_vehiclemech.png`
+returns **0 alarm-red pixels** and carries no false caution.
+
+**STILL OPEN, and it is an owner question:** two reference mockups give one named check two different
+states. Options unchanged from the fix plan above — health verdict (buildable off `SystemSeverity`) or
+procedure step (needs the stranded `StepList`) — but **whichever is chosen, it overrides reference copy on
+at least one page, so it is §1.4's and the owner's, not a build chat's.**
 ---
 
 ## MP-02 — The same 14.72 psia is called PRESSURE here and CABIN PRESSURE / CABIN PRESS elsewhere, and drawn in three different colours
@@ -3304,6 +3365,16 @@ in caution amber), and now this. All three are hardcoded severities on non-fault
 - **Must not break:** the marker's geometry, which is measured.
 - **Verify:** re-render all four states; no red anywhere on a page with no fault.
 
+
+### ✅ FIXED 2026-09-05 — S104 (QC batch 2)
+
+**Fixed.** Both section markers are `DragonPalette.Accent` — the accent section bullet the Cover's
+reference-content cards already use — instead of `Alarm`. `ui_manualchute.png` and
+`ui_manualchute_descent.png` now return **0 alarm-red pixels**.
+
+The finding's option (b) is preserved as a note in the code: if a section marker is ever meant to carry
+state, the source is `s.Steps.RadarAltitude` against the section's gate altitudes — which is **MC-02** — and
+it must be computed then, not re-hardcoded.
 ---
 
 ## MC-02 — Six live altitude gates, and nothing says which one is next

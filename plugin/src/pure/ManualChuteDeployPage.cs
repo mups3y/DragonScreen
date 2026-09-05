@@ -238,7 +238,17 @@ namespace DragonScreen
             int act = 0;
             void Section(string title, Step[] steps, float[] rowY, float titleY)
             {
-                dl.ArcBand(X(300), Y(titleY + 14), Z(5), Z(15), 0, 360, Alarm);   // red section marker
+                // ---- S105 / QC MC-01: A SECTION BULLET, NOT AN ALARM ----
+                // This was `Alarm` - the fault red - and `Section` is called twice, so BOTH "High
+                // Altitude Chute Deploy" and "Standard Altitude Chute Deploy" carried a filled red dot
+                // in every state, with nothing faulted. This is the screen a crew reads while descending
+                // under parachutes; a red marker there means something. §14.4(a): no red for a non-fault.
+                // It is `Accent` now - the same accent bullet the Cover's reference-content cards use for
+                // a section heading, which is what this is.
+                // ⚠ If a section marker is ever meant to carry STATE (has this gate been passed?), the
+                // source for that is `s.Steps.RadarAltitude` against the section's own gate altitudes -
+                // which is QC MC-02, a different finding. It must be COMPUTED then, not re-hardcoded.
+                dl.ArcBand(X(300), Y(titleY + 14), Z(5), Z(15), 0, 360, DragonPalette.Accent);
                 L(title, 340, titleY, 34, White);
                 for (int i = 0; i < steps.Length; i++)
                 {
