@@ -36,6 +36,16 @@ i.e. after S75's tint fix. Anything rendered before 2026-09-04 has the tint bug 
 used as evidence. `python plugin/build.py test` was green at the same commit (**ALL SUITES PASSED**), so
 nothing below is a broken build.
 
+⚠ **READ H-01 BEFORE ACTING ON ANY LEGIBILITY FINDING IN THIS FILE.** The preview renders every Figma-era
+page at **2560×1406** while the shipped `DragonScreen.cfg` sets `screenWidth = 1280` on all three screens.
+Every "is this legible?" judgement taken from a preview PNG — including the ones in this document — is
+therefore optimistic by a factor of two in each axis. H-01 has the measurements and the open question.
+
+**Open questions raised so far** (full text at the end of each page's section):
+**Q1** stray arrow placement (C-02) · **Q2** globe/map handedness, glass-gated (C-09) · **Q3** ENTRY ENABLED
+class (C-08) · **Q4** where the CAMERA caption goes (C-13) · **Q5** which screen resolution is authoritative
+(H-01) — *Q5 is the one that changes other findings' severity; answer it first.*
+
 ---
 
 ## PAGE INVENTORY — the worklist
@@ -47,7 +57,7 @@ Cover's seven phase views, plus the lower analog console panel. **The six Vehicl
 | # | UiPage | title | status | date |
 |---|---|---|---|---|
 | **0** | **Cover** | COVER | ✅ **DONE — 13 findings** *(C-12, C-13 added on owner review)* | 2026-09-05 |
-| 1 | Hud | ATTITUDE HUD | NOT STARTED | — |
+| **1** | **Hud** | ATTITUDE HUD (Frame 58) | ✅ **DONE — 9 findings** | 2026-09-05 |
 | 2 | Audio | AUDIO SETTINGS | NOT STARTED | — |
 | 3 | Procedure | PROCEDURE (Frame 59) | NOT STARTED | — |
 | 4 | Cabin | CABIN (Frame 66) | NOT STARTED | — |
@@ -837,7 +847,7 @@ the draw uses).
 
 ---
 
-## Open questions for the owner
+## Open questions for the owner — Cover (Q1–Q4)
 
 Per C1.14. Each is a paste-ready overseer prompt (C1.13). **The QC role decides none of these and proceeds
 past none.**
@@ -946,5 +956,543 @@ already ruled on those, so this is the same class of decision and belongs in the
 every screen in the build, so whichever line takes them fixes fifteen pages, not one. They should be
 scheduled together and ahead of the per-page sweep.*
 
-*Next page: **UiPage 1 — Hud (Frame 58)**, which S49 §1.3 records as the largest liveness gap in the build
-(every readout is pixels in a PNG) and which has never been looked at on a tint-truthful render.*
+---
+
+# PAGE 1 — HUD (FRAME 58)
+
+**Renders inspected (2026-09-05, re-rendered at HEAD `97f4c78` after W10/T15d/G10/BB7/G11/W5/W34 landed):**
+`frame58_hud.png` · `frame58_hud_noseopen.png` · `frame58.png`. All 2560×1406 — **which is not the shipped
+size; see H-01.**
+
+**Source under inspection:** `plugin/src/pure/Frame58Hud.cs` (**55 lines, the whole page**) ·
+`plugin/src/pure/FigmaUI.cs:324-329` (the only touch route) · `plugin/src/ScreenPainter.cs:1121-1157,
+1309, 1347-1354` · `plugin/GameData/DragonScreen/DragonScreen.cfg:60,76,87`.
+
+**S49's entry, and what the glass says about it.** S49 §2 rates the HUD *"Two live things — the nose-cone
+flag and the docking-cam disc it gates. Every readout is baked (§1.3)"*, and §1.3 proves from source that
+`s.Steps.NoseConeOpen` is the file's only `PageState` read. **All of that is confirmed at HEAD.** The glass
+adds seven defects source alone could not show, and one — H-01 — that is not about this page at all but was
+found by asking why this page's renders are 2560 px wide.
+
+## What was checked and found CLEAN
+
+1. **The `ox > 40f` guard agrees between the draw and the hit test.** `Frame58Hud.cs:44` and
+   `FigmaUI.cs:327` both gate the Manual Docking affordance on the same letterbox width, so the control
+   cannot be hit when it is not drawn. *(Their **rectangles** do not agree — that is H-04. The guard does.)*
+2. **The two renderers agree on the missing-texture case.** With the nose open and no docking-cam texture,
+   `ScreenPainter.Execute` skips the whole command — `if (img == null || imageMat == null) continue;`
+   (`ScreenPainter.cs:1309`), which takes the circle mask with it — and `PreviewMain.DrawImage` returns
+   early on the same condition, *"Skipped, not substituted — same rule as the GL painter."* Both draw
+   nothing. This is genuine agreement, not luck: **H-09 is preview blindness, not renderer divergence.**
+3. **`Frame58Hud.Commands = 20` is a correct budget.** Worst case is 11 commands: background, frame asset,
+   `ImageCircle` + `TargetReticle.Crosshair` (3, per `TargetReticle.cs:14`), the four margin-button draws,
+   and `component_48`. No overflow warning in the preview log.
+4. **The bowl geometry is sound.** `BowlCx/Cy/R = 1706/984/470` places the disc at panel (1275.0, 655.1)
+   r 312.9 — concentric with the frame's own baked bowl, verified by the nose-open diff landing exactly on
+   its centre.
+5. **The bottom-left attitude sphere is the design's clean synthetic instrument**, not the mirrored
+   photographic navball the file header was written to get away from. The header's complaint is satisfied.
+   *(It is also completely static — that is part of H-02, not a separate defect.)*
+
+## Cross-page confirmations
+
+Both of the Cover's page-wide `component_48` defects are **present and clearly visible on this page**, which
+is the second of the fifteen pages that draw that bar:
+
+- **C-12** (the un-erased marker glow): the smudge sits in the HUD's **left letterbox**, outside the frame
+  art entirely — `frame58_hud.png` bottom-left.
+- **C-04** (the 12.2% horizontal stretch): the bottom bar's crosshair icon renders as a visible ellipse.
+
+No new finding is logged for either; they are the same two defects and should be fixed once.
+
+---
+
+## H-01 — The preview renders every Figma page at 2× the width the mod actually ships, and says so on the strength of a cfg value the cfg contradicts
+
+**TIER 1** · **NEW** · ⚠ **this finding changes the severity of other findings in this document, including C-05**
+
+**Evidence.** Three files in this repo, at HEAD:
+
+| source | says |
+|---|---|
+| `plugin/GameData/DragonScreen/DragonScreen.cfg:60`, `:76`, `:87` | `screenWidth = 1280` — on **all three** screens |
+| `plugin/preview/PreviewMain.cs:43-46` | `ScreenSpec` = 1280×703 / 1280×710 / 1280×703 — agrees with the cfg |
+| `plugin/preview/PreviewMain.cs:572` (and `:583`, `:595`, `:609`, `:626`) | `int CW = W * 2, CH = H * 2;` — every Figma page rendered at **2560×1406** |
+| `plugin/preview/PreviewMain.cs:569-571`, the justification | *"Render at 2x the screen size: the Figma assets carry 2px hairline borders that fall to sub-pixel (~0.7px) at 1280 and drop inconsistently; 2x keeps them crisp (the in-game RenderTexture should match — **screenWidth 2560 in the cfg**)."* |
+
+**The cfg says 1280, three times.** The preview therefore renders the Figma pages at **four times the pixel
+count** the mod ships, on the stated basis of a cfg value that does not exist in the cfg.
+
+**What is wrong.** Two things, and the second is the serious one.
+
+1. **The claim is stale or was never true.** Whichever, the comment asserts a fact about a file sitting in
+   the same repo, and that file disagrees. Under C7.1 the repo copy is authoritative.
+2. **The preview is the project's legibility gate, and it is judging at double resolution.** CLAUDE.md
+   makes this explicit — *"judge layout/palette/legibility from `python plugin/build.py preview`"* — and
+   `PreviewMain` states the governing principle for the font in as many words: *"If this and
+   `PreviewMain.FontFamily` ever disagree, the preview is lying about the real page"* (`:1470-1471`,
+   paraphrasing the cfg's own note at `DragonScreen.cfg:48`). **Nobody wrote the same rule for resolution,
+   and resolution is where it broke.**
+
+   Worse, the justification records the symptom and treats it: *"2px hairline borders … fall to sub-pixel
+   (~0.7px) at 1280 and drop inconsistently."* That is a statement that **at the shipped width the design's
+   hairlines drop out**. The response was to render the preview larger, not to fix the page or raise the
+   cfg — so the preview was made to look right at a resolution the game does not use.
+
+**What this does to findings already in this document.** Every text size in `CoverPage` is a design-space
+number multiplied by `sc = h / 2112`. At the preview's h = 1406, `sc = 0.6657`. At the shipped h ≈ 703,
+`sc = 0.3329` — **exactly half**. So:
+
+| element | preview (h 1406) | shipped (h 703) | `Typography.Min` = 16 |
+|---|---|---|---|
+| **C-05** ENTRY TIMELINE rows | 15.3 px *(already under the floor)* | **7.7 px** | ❌ less than half |
+| Reference-content card titles `Z(34)` | 22.6 px | **11.3 px** | ❌ |
+| Cover rail labels `Z(32)` | 21.3 px | **10.7 px** | ❌ |
+| CONTINGENCY / PARACHUTES rows `Z(26)` | 17.3 px | **8.7 px** | ❌ |
+| **C-03** NEXT VIEW label `Z(53)` | 35.3 px | 17.6 px | ✅ (but still overruns its pill) |
+
+`Typography.Min = 16f` was measured against the **legacy** pages, which render at the real 1280×703 and pass
+`Typography.Caption` straight through as a panel size. So the floor is a 1280-panel floor, and at 1280
+**almost nothing `CoverPage` draws as text clears it.**
+
+**Fix plan.** The engineering is easy; **which way to fix it is the owner's — see Q5.** Both directions are
+buildable and they are not equivalent:
+
+- **If 1280 is right:** the preview must render the Figma pages at 1280×703 like everything else (delete the
+  `* 2`), and the pages must then be made legible and hairline-safe at that size. That is real work —
+  C-05's rebalance, a type-scale pass, and hairlines that survive a 0.33 scale — but it is work against the
+  screen the crew actually has.
+- **If 2560 is right:** the cfg's three `screenWidth` lines go to 2560 and the preview is already correct.
+  That is a one-line change per screen, but it is an in-game rendering change: three RenderTextures at 4×
+  the pixels, and the cfg's own note explains the height is *derived from the mesh*, so the aspect follows
+  automatically and only the cost changes. **Confirming the cost needs glass time — an owner gate (C1.12).**
+
+- **Either way, and regardless of which is chosen:** correct the comment at `PreviewMain.cs:569-571` so it
+  states the cfg value that is actually there, and **write down the resolution rule the font already has** —
+  the preview's render size must be derived from the cfg, not asserted in a comment beside it. Deriving
+  `CW`/`CH` from `ScreenSpec` (which already matches the cfg) makes the two unable to drift again.
+- **Must not break:** the legacy `Pages.Build` renders (`page0_flight.png` … `page4_settings.png`) are
+  already at the real 1280×703 and must stay there; only the Figma-era renders are doubled.
+- **Verify:** whichever way it goes, the Cover and HUD renders must come back at the cfg's own width, and
+  C-05's re-measure must be taken from *that* render, not this one.
+
+---
+
+## H-02 — Every readout on the docking HUD is a pixel in a PNG; 8 of the 12 numbers contradict live state in the same frame
+
+**TIER 1** · confirms S49 **H10** with rendered proof
+
+**Evidence.** `frame58_hud.png`. `Frame58Hud.Build` is six draw calls and reads exactly one `PageState`
+field, `s.Steps.NoseConeOpen` (`Frame58Hud.cs:32`) — verified at HEAD. Everything below is baked into
+`frame58.png`:
+
+| readout | on the glass | live in `PageState` that same frame | agrees? |
+|---|---|---|---|
+| ROLL | `15.0°` | `RollDegText "15.0°"` (`PreviewMain.cs:87`) | ✓ *(art and fixture were matched to each other)* |
+| ROLL rate | `0.0 °/s` | `RollRateText "0.0 deg/s"` (`:84`) | ✓ |
+| PITCH | `-20.0°` | `PitchDegText "0.1°"` | ✗ |
+| PITCH rate | `0.0 °/s` | `PitchRateText "0.0 deg/s"` | ✓ |
+| YAW | `-10.0°` | `YawDegText "0.1°"` | ✗ |
+| YAW rate | `0.0 °/s` | `YawRateText "0.1 deg/s"` | ✗ |
+| X | `200.0 m` | `OffXText "22.7 m"` (`:82`) | ✗ |
+| Y | `12.0 m` | `OffYText "0.1 m"` | ✗ |
+| Z | `30.0 m` | `OffZText "0.0 m"` | ✗ |
+| RANGE | `202.6 m` | `RangeText "202.6 m"` (`:81`) | ✓ |
+| RATE | `-0.031 m/s` | `RateText "-0.25 m/s"` | ✗ |
+| ACCELERATION | `0.00g` | `AccelPosText "1.42"` (`:174`) | ✗ |
+| FRAME | `LVLH` | *(no field)* | — |
+| CAMERA | `Virtual` | `CameraResText` / `HullCams.Labels()` | ✗ |
+| timer | `0s` | *(no field)* | — |
+
+**Eight of twelve numeric readouts disagree**, and the three that agree do so only because the fixture was
+authored to match the art (`PreviewMain.cs:83`: *"the same three errors in the glyph form the MANUAL docking
+page prints"*). On a real approach none would track. The bottom-left attitude sphere is baked too, so the
+page's attitude instrument never moves.
+
+**What is wrong.** This is S49's *"largest liveness gap in the build"*, and it is worse in kind than the
+Cover's: the Cover's baked strip is context, whereas these are the numbers a crew member flies a manual
+approach on. A docking HUD reading a frozen `RANGE 202.6 m` and `RATE -0.031 m/s` while the vehicle closes
+is not a placeholder, it is a wrong instrument.
+
+**Fix plan.** Identical in method to C-01, and the two should share a build line.
+- Overdraw at the frame's measured coordinates. Every value exists live and pre-formatted:
+  `RollDegText`/`PitchDegText`/`YawDegText`, `Roll/Pitch/YawRateText`, `OffX/Y/ZText`, `RangeText`,
+  `RateText`, `AccelPosText`; `HullCams.Labels()` supplies a real camera name for CAMERA.
+- **Research the coordinates from `docs/UI_AUDIT.md`, never from a screenshot** — CLAUDE.md's standing rule,
+  and the reason screenshot-derived pages *"came out wrong every time."* `DockingSimPage` already draws the
+  same fields correctly and is the working template.
+- **Design the no-target and no-feed looks in the same pass.** `RangeText`/`RateText`/`OffX*` all dash with
+  no target, and the page currently has no way to show that — a frozen number is exactly what the dash
+  exists to prevent.
+- **FRAME `LVLH`** has no source and must not be invented (C1.4). Leave it baked, or dash it, until a source
+  names the frame — record which, do not guess.
+- **Must not break:** the nose-cone gate and the bowl geometry (see CLEAN 4).
+- **Verify:** re-render with the fixture's real values and check every readout against the table above.
+
+---
+
+## H-03 — Four painted controls in the page's own button idiom have no hit rect anywhere
+
+**TIER 1** · S75's defect class · extends S49 **H11** (which named three of the four)
+
+**Evidence.** `frame58_hud.png`, and `FigmaUI.HitTest` (`FigmaUI.cs:324-329`), whose entire `UiPage.Hud`
+branch is the letterbox margin. There is no other Hud touch route: `ScreenPainter`'s Figma branch has **no
+`cur == UiPage.Hud` case at all**. So on this page exactly one rectangle is touchable, and these are painted:
+
+| control | where | idiom |
+|---|---|---|
+| **`Local Pitch Mode`** | top centre | filled pill with a centred label — *not named by S49* |
+| **`FAR FIELD POSITIONING`** | right column, under FLIGHT COMMANDS | bordered box **with a leading icon** — unmistakably a button |
+| **`RESET`** | bottom right, in the timer box | bordered box, centred label |
+| **`START`** | bottom right, in the timer box | bordered box, centred label |
+
+Measured: the FAR FIELD POSITIONING box occupies y 144…213 in the right column; RESET/START sit inside the
+timer box at y 1092…1260.
+
+**What is wrong.** The page paints four things that look exactly like the buttons on every other screen in
+this build and none of them can be touched. That is the half of S75's defect that is *worse than a no-op* —
+a no-op at least resolves to a named action — and it is the same call S75 made for `gridicons_refresh`.
+
+**But these four do not all belong in one bucket, and that is the whole fix plan:**
+
+- **`FAR FIELD POSITIONING` is a GNC MODE COMMAND.** It commands the vehicle's pointing. Under §14.4(a) it
+  stays an honest no-op until Part B wires it — **(B)**, and S49 H11 classes it the same way. It must not
+  get a working hit rect in Part A.
+- **`RESET` / `START` are a stopwatch.** Their whole effect is screen state — **(A)**, buildable now, and
+  the same shape as the Cover's `RUNNING` clock (C-01's H2 half). The two should share one timer model.
+- **`Local Pitch Mode` is a READOUT, not a control.** It names the current pointing frame, and the bottom
+  bar prints `POINTING MODE / Sun + GEO` twelve inches below it. Under §14.4(f) it is a readout that must be
+  filled — **(A)** — and it needs no hit rect at all.
+
+**Fix plan.**
+- **Now, and cheaply:** tint the two that will never be touchable in Part A — `FAR FIELD POSITIONING` (a
+  Part-B command) — with `DragonPalette.Text6`, the *"nothing live behind this"* tint S75 established
+  (`CoverPage.cs:215-218`), so it stops riding the button idiom. `Frame58Hud` cannot do this today because
+  it draws the whole page as **one** asset: `frame58.png` is a single flat PNG, so there is no per-element
+  tint to apply. **That is the real blocker and it is structural** — see the note below.
+- **The structural fix, which H-02 already requires:** the page must stop being one baked PNG. Once the
+  readouts are overdrawn (H-02), the same pass can overdraw the four controls, and then each gets its own
+  tint and, where it is (A), its own hit rect drawn from one shared rectangle (`PageAction`'s rule — and
+  see H-04 for what happens when that rule is not followed here).
+- **Must not break:** `FAR FIELD POSITIONING` must **not** become touchable. §14.4(a) is explicit that flight
+  actuation stays an honest no-op, and §14.4(f)'s scope line excludes it.
+- **Verify:** after the overdraw pass, every painted control on the page is either in a hit table or drawn
+  in the inert tint — and the check runs both ways, as the charter requires.
+
+---
+
+## H-04 — The Manual Docking affordance is drawn from one rectangle and hit-tested from another, in two different files, and they do not match
+
+**TIER 1** · **NEW** · `PageAction`'s standing rule, broken across a file boundary
+
+**Evidence.** The same control, specified twice:
+
+| | source | vertical extent |
+|---|---|---|
+| **drawn** | `Frame58Hud.cs:44` — `by = h * 0.44f, bh = h * 0.12f` | **0.44 h … 0.56 h** |
+| **hit** | `FigmaUI.cs:327` — `py >= h * 0.40f && py < h * 0.60f` | **0.40 h … 0.60 h** |
+
+Horizontally they agree (`12 … ox − 12` in both). Vertically the hit region is **20% of panel height against
+a 12% painted box** — an invisible halo of **0.04 h above and 0.04 h below**, which at the preview's 1406 px
+is **56.2 px each way**, and at the shipped 703 px is 28.1 px each way.
+
+**What is wrong.** A tap in the empty letterbox up to 56 px above or below the visible button silently
+navigates to Manual Docking. It is the S54 defect class — a rectangle that fires where nothing is painted —
+and here the cause is plainer than S54's: **the rectangle is written out twice, in two files, in two
+different modules, with different constants.** `PageAction`'s rule exists for exactly this — the Cover obeys
+it with `NextViewRect`, `PadRect` and `CapsuleRect`, each shared by the draw, the hit test and the tests
+(`CoverPage.cs:255-259`, `:261-279`, `:363-374`). The HUD's one control is the page that does not.
+
+**Fix plan.**
+- Give the affordance a single public rect function on `Frame58Hud` — `MarginRect(w, h, out x, out y, out
+  rw, out rh)`, returning `false` when `ox <= 40f` — and have **both** `Frame58Hud.Build` and
+  `FigmaUI.HitTest` call it. That is the Cover's own pattern, lifted directly.
+- **Pick the drawn box, not the hit band**, as the shared truth: the crew can only aim at what they can see,
+  and a control that fires outside its border is the defect. If the button is too small to hit comfortably
+  at 1280 (H-01), the answer is to **draw it bigger**, not to keep a secret halo.
+- ⚠ **The same construction is used twice more** and should be checked in the same pass: `UiPage.Docking`'s
+  RENDEZVOUS affordance (`FigmaUI.cs:352-355`) uses the identical `py >= h*0.40f && py < h*0.60f` band, and
+  `DockingSimPage` draws its own margin button. Those are pages 27 and 28 and will be inspected in turn, but
+  if this is fixed generically it should be fixed for all three at once.
+- **Must not break:** the `ox > 40f` guard must survive on both sides (CLEAN 1), and the Menu grid must
+  remain a second route to Docking — see the note in H-04's sibling below.
+- **Verify:** a headless check that the drawn rect and the hit rect are the same rect, for both the HUD and
+  Docking margin affordances. That check is what would have caught this.
+
+⚠ **Related, and worth recording rather than logging separately:** because both the draw and the hit are
+gated on `ox > 40f`, a panel whose aspect leaves a letterbox of 40 px or less has **no route from the HUD to
+the Docking page at all**. At the shipped 1280×703 the letterbox is 69.6 px, so it holds today — but with
+only 29 px of margin, and the guard is a hard cliff, not a taper. The Menu grid remains a second route, so
+this is a robustness note, not a defect.
+
+---
+
+## H-05 — The docking HUD has a titled ALERT ACTIVITY panel, 822 px tall and permanently empty, while the alarm channel is computed every frame and written to the black box
+
+**TIER 1** · **NEW** · the constructive answer to S49 **H7**
+
+**Evidence.** `frame58_hud.png`, right column (x 2105…2415). Bright-ink row bands, measured:
+
+```
+   y   84.. 98   FLIGHT COMMANDS   (heading)
+   y  111        rule
+   y  144..213   FAR FIELD POSITIONING  (the one command)
+   y  241..256   ALERT ACTIVITY    (heading)
+   y  269        rule
+   ---- 822 px of nothing ----
+   y 1092..1260  the 0s / RESET / START timer box
+```
+
+**822 px of empty column on a 1406 px page** — 58% of the page height — under a heading that promises alerts.
+
+Meanwhile, at HEAD:
+
+- `ScreenPainter.cs:1121` — `chrome.AlertMask = Alarms.Mask(ps);`
+- `ScreenPainter.cs:1123` — `chrome.VehicleState = ps.Valid ? Alarms.Word(Alarms.SystemSeverity(ps)) : "NO DATA";`
+- both computed **immediately before** `if (FigmaMode)` at `:1127`, and `ChromeBar.Build` — the only consumer
+  that would put them on the glass — is at `:1194`, inside the `else`. **So they are still discarded from
+  every screen**, exactly as S49 §1.1 found.
+- **What has changed since S49:** `ScreenPainter.cs:652-653` now feeds `rec.AlarmMask = Alarms.Mask(ps)` and
+  `rec.SevSystem` into the BlackBox recorder (BB1). So the alarm state is **computed, and recorded to disk,
+  and never shown to the crew.**
+
+**What is wrong.** S49 H7 says the Cover has no alarm surface and proposes building one there. This page
+**already has one, designed, titled and sized** — and the fix has a home that needs no new layout invented
+and no §1.4 source question, because the panel and its heading are in the reference design. `Alarms.cs`'s
+own header is quoted in S49: *"THE ALERT ROUTING IS THE POINT, NOT THE DECORATION."*
+
+**Fix plan.**
+- Draw an alert **list** into the ALERT ACTIVITY panel from `Alarms.Mask(ps)` + `SystemsState`: one row per
+  set bit, tinted by `Alarms.SystemSeverity`, with the severity word from `Alarms.Word`. `StatusIndicator`
+  and `VehicleTabBar` already render severity, so the colour language exists.
+- **Route the existing value rather than inventing a channel.** `chrome.AlertMask` is computed on the line
+  before the Figma branch; it needs to reach `FigmaUI.Build`, not a second `Alarms` call — one state, one
+  source, which is T14's rule and the reason the systems tree and the console plate share a dispatcher.
+- **Scope, per §14.4(f):** an alert list built from `Alarms` + `Systems` (G-force, propellant, power, fire,
+  leak, tripped strings, bus 0/3) is **(A)** and buildable now. An alert list that expects *real FDIR faults*
+  is **(B)** — the stub pins `Fault`/`FaultResponse`/`FaultText` (S49 §1.2). Build the (A) half; leave a
+  socket for the (B) half.
+- ⚠ **`Alarms.Mask` bit 2 (NAV) is never set** — S49 H7 records this; bits 0/1/3 are. Harmless while the
+  channel is discarded; the moment it reaches this panel, one of four categories is silently dead. **Fix
+  that in the same pass or the new panel ships with a known hole.**
+- **Empty state:** with no alarms the panel must say so — a `NOMINAL` row computed from
+  `Alarms.SystemSeverity`, or an explicit "no active alerts". **Not a blank panel, and not a hardcoded green
+  word** (S31/S32): the verdict is computed or it is not drawn.
+- **Must not break:** nothing on this page is actuation, so §14.4(a) is not engaged. The BlackBox recorder's
+  reads at `:652-653` must keep working unchanged.
+- **Verify:** re-render with a fixture that trips one alarm of each category and check one row per bit,
+  correctly tinted; then with a clean fixture and check the computed empty state.
+
+---
+
+## H-06 — The MANUAL DOCKING label overflows its own box on both sides
+
+**TIER 2** · **NEW**
+
+**Evidence.** `frame58_hud.png`, left letterbox, magnified. Measured at 2560×1406:
+
+- box: **x 12.0 … 127.3** (`bx = 12f`, `bw = ox − 24f`, `ox = 139.29`)
+- `MANUAL` (white): ink spans **x 14 … 140** — **overflows the right border by 12.7 px**
+- `DOCKING` (accent): ink spans **x 7 … 132** — **overflows on BOTH sides**, 5 px each way
+
+Both labels are set at `ts = h * 0.020f` = 28.1 px (`Frame58Hud.cs:45-48`) and centred on `bx + bw * 0.5`.
+
+**What is wrong.** The label size is derived from the panel **height** while the box width is derived from
+the **letterbox width** — two unrelated quantities — so the text has no relationship to the box it sits in.
+`DOCKING` needs ~125 px and gets 115.3. This is the owner's standing per-page QC line (*every string inside
+its box, no clipping*) failing on the page's **only** interactive control, and the aspect-dependence means
+it gets worse on a narrower panel until `ox` drops to 40 and the button vanishes entirely (H-04's note).
+
+**Fix plan.**
+- Size the type from the **box**, not from the panel: pick `ts` such that the wider of the two labels fits
+  `bw` with a margin — measure `DOCKING` against `bw` and scale down when it does not fit, the same shape as
+  `CoverPage.FitRows` but for one axis. ⚠ **And apply the `Typography.Min` floor in PANEL space** — C-05 is
+  the same bug in the other direction and both should learn from one helper.
+- If the resulting type is below the floor, the box is too small and must be **widened or re-oriented** —
+  stacking the two words is already the design; a third option is rotating the label to run up the margin,
+  which is what the margin's shape actually suits.
+- **Must not break:** H-04 makes the drawn rect the shared truth, so widening the box widens the hit target
+  too — which is the point. Do H-04 first, then this, or the two will fight.
+- **Verify:** re-render at **both** 1280 and 2560 (H-01) and require both labels' ink to sit strictly inside
+  the box on each.
+
+---
+
+## H-07 — Two different fit strategies on one page: the frame art is letterboxed, the bar is stretched full width, so the frame's own border becomes a rule in the middle of the bar
+
+**TIER 2** · **NEW** · borders over borders
+
+**Evidence.** `frame58_hud.png`, bottom-left corner, magnified. Three border treatments collide:
+
+1. a **hard vertical white line the full height of the page at x = 139.3** — the frame art's own left edge
+   (`ox`), drawn as a visible stroke;
+2. the frame's **rounded bottom-left corner**, starting at (141.6, 1265.6) and meeting a horizontal border
+   at y ≈ 1317.8 — i.e. *inboard* of the page edge, with a triangular sliver of lighter navy trapped
+   between it and the bar;
+3. `component_48`'s own **rounded corner at the true page edge**, x 40…77, y 1312…1320.
+
+Two rounded corners, ~100 px apart horizontally, in the same band.
+
+**What is wrong.** `Frame58Hud.Build` uses **two incompatible fits in six lines**: the frame art is
+fit-to-height and centred with a letterbox (`ox`, `Frame58Hud.cs:27,30`), and `component_48` is drawn at
+`0f … w` — full panel width, ignoring `ox` (`Frame58Hud.cs:53`). In the design the bar sits flush under the
+frame's own rounded panel; here it runs 139 px past it on each side, so the frame's left border stops being
+an edge and becomes a rule crossing the bar's span, and the design's single corner becomes two.
+
+`component_48.png`'s top 105 rows are transparent (measured: only 130 of its 235 rows are fully opaque), so
+the frame's border shows *through* the bar's upper band rather than being covered by it — which is why the
+collision is visible at all.
+
+**Fix plan.** The Cover solved exactly this and its solution is the model, with one correction:
+- **Draw the bar in the frame's own coordinate system**, at `ox … ox + RefW*sc`, so it is flush with the
+  frame's rounded panel as designed, and fill the two letterbox strips with the page background. The frame's
+  corner and the bar's corner then coincide, as one corner.
+- ⚠ **Do NOT copy the Cover's `Wd` straddle-stretch** — that is C-04, and it is the reason the bar's icons
+  are 12% wide. This page should take the *uniform* fix C-04 proposes, not the Cover's current behaviour.
+- **Must not break:** `FigmaUI.BottomBarHit` (`FigmaUI.cs:117-131`) maps touches by
+  `BarIconX[i] / RefW * w` — full panel width — so it currently matches this page's stretched draw. Moving
+  the bar to `ox`-relative coordinates **moves every nav icon's touch target**, and the hit map must change
+  in the same commit. This is the same coupling C-04 flags; **the two are one fix, not two.**
+- **Verify:** re-render; the frame's bottom-left corner and the bar's must be the same corner, with no
+  vertical rule at `ox` and no trapped sliver.
+
+---
+
+## H-08 — The frame art is exported at 0.6× design scale, so at the preview's resolution it is drawn upscaled and measurably soft
+
+**TIER 2** · **NEW** · ⚠ **conditional on H-01 / Q5**
+
+**Evidence.** `frame58.png` is **2048×1263** for a **3427×2112** design — a scale factor of **0.5976**. Every
+Cover asset, by contrast, is exported at 1.0× design scale. Drawn at the preview's 2560×1406 the frame is
+placed at 2281.4×1406, i.e. **upscaled 1.114×**.
+
+Measured edge sharpness on the same render (mean gradient at edge pixels, normalised by local contrast —
+higher is sharper):
+
+| region | source asset | drawn scale | normalised sharpness |
+|---|---|---|---|
+| `FLIGHT COMMANDS` | frame58.png | **×1.114 (up)** | **0.314** |
+| `FAR FIELD POSITIONING` | frame58.png | ×1.114 (up) | **0.315** |
+| `CURRENT STATE` | component_48.png | ×0.747 (down) | 0.365 |
+| `Far Field Pointing Deorbit` | component_48.png | ×0.747 (down) | 0.357 |
+
+The frame art's edges are **≈14% softer** than the bar art on the same page, consistent with an 11% upscale.
+
+**What is wrong — stated honestly.** At the **shipped** 1280×703 (H-01), the frame is drawn at 1140.7 px, a
+*downscale* of 0.557, and this defect does not exist. **So H-08 is only a defect if Q5 resolves to 2560** —
+and if it does, it is a defect on the one page that is *entirely* baked art, where softness has nowhere to
+hide. `frame59.png` (2048×1262) and `frame66.png` (2048×1263) are the same export scale and the same pages
+(`FigmaFramePage`), so this is a three-page finding, not one.
+
+**Fix plan.** Do nothing until Q5 is answered. Then:
+- **If 1280:** close this as not-a-defect and record why, so it is not re-logged.
+- **If 2560:** re-export `frame58/59/66.png` at 1.0× design scale (3427×2112) from the community Figma. That
+  needs the export — the same dependency as Q1 — and it costs disk: three PNGs at ~2.8× the pixels. Note the
+  re-export in `docs/ASSET_INDEX.md`.
+- **The durable fix underneath either answer** is H-02: a page assembled from elements rather than one flat
+  PNG does not have a single global resolution to get wrong.
+- **Verify:** re-measure normalised edge sharpness against the bar art on the same render; the two should
+  land within ~5%.
+
+---
+
+## H-09 — The preview cannot render the page's only live feature
+
+**TIER 2** · **NEW** · preview blindness, *not* renderer divergence (see CLEAN 2)
+
+**Evidence.** Diffing `frame58_hud.png` against `frame58_hud_noseopen.png`:
+
+```
+differing pixels: 1109 of 3,599,360  (0.0308%)
+bbox  x 1231..1319  y 612..699        (88 x 88 px — the crosshair, and nothing else)
+```
+
+The docking-cam disc is at **x 962…1588, y 342…968** — 626 px across. It is **entirely absent**, and so is
+the `BowlBlue` corner mask that `Frame58Hud.cs:36` passes with it. So the page's one live behaviour renders
+as *"a crosshair appeared."*
+
+**Why.** `ImageId.DockingCamLive` is a runtime image and the preview gives a stand-in to only two —
+`BodyMap` and the navball — for stated reasons (`PreviewMain.cs:1510-1530`). Everything else is skipped
+because *"a preview that flatters us is worse than none."* That principle is right, and the same file
+already records the exception that proves it: the body map gets a stand-in *"because the GAME always has
+one … and only the PREVIEW cannot."*
+
+**What is wrong.** The docking camera is in exactly that category — the game has a real feed
+(`DockingCamRenderer`, claimed at `ScreenPainter.cs:1131`), only the preview cannot. So the page's single
+live feature, the whole point of the nose-cone gate, **has never appeared on a preview render**, and the
+preview is CLAUDE.md's stated instrument for judging the glass without spending a restart.
+
+**Fix plan.**
+- Give `ImageId.DockingCamLive` a stand-in, on the same footing and for the same stated reason as `BodyMap`:
+  read from `assets/`, never shipped, and **visibly a stand-in** — a marked test pattern rather than a
+  photograph, so no reader mistakes it for the real feed. A grid or bore-sight card also makes the circular
+  clip and the `BowlBlue` corner mask checkable, which is the geometry the disc exists to exercise.
+- **Must not break:** the missing-texture path must still render as it does now — that is the *in-game*
+  no-feed look and it agrees with the GL painter today (CLEAN 2). Keep a render of both states.
+- ⚠ **The no-feed look is itself undesigned.** With the nose open and no camera, the crew gets the baked
+  bowl plus a crosshair and no indication the feed is missing — the same gap S49 H10 flags for the no-target
+  case. `NavPage` already has the pattern: `PlanetGeom.NoSignalLabel` marks a disc that is not a live render
+  (`NavPage.cs:498-503`). **Reuse it here rather than inventing a second marking.**
+- **Verify:** three renders — nose closed, nose open with the stand-in, nose open with no feed — all three
+  visibly distinct.
+
+---
+
+## Open questions for the owner — HUD (Q5)
+
+### Q5 — The preview renders the Figma pages at 2560 wide; the shipped cfg says 1280. Which is authoritative? (H-01)
+
+**Situation.** `DragonScreen.cfg` sets `screenWidth = 1280` on all three IVA screens (`:60`, `:76`, `:87`).
+`PreviewMain`'s own `ScreenSpec` table agrees (1280×703 / 1280×710 / 1280×703). But every Figma-era page is
+rendered at `W*2, H*2` = 2560×1406, justified in a comment that says *"the in-game RenderTexture should
+match — screenWidth 2560 in the cfg."* It is 1280. So the preview — which CLAUDE.md names as the instrument
+for judging layout and legibility without spending a restart — has been judging at four times the shipped
+pixel count. The comment also records *why* the doubling was introduced: the design's 2 px hairlines *"fall
+to sub-pixel (~0.7px) at 1280 and drop inconsistently"* — i.e. **at the shipped width the design's hairlines
+drop out.** At 1280, `CoverPage`'s body text lands at 7.7–11.3 px against a measured 16 px legibility floor.
+
+**This changes the severity of findings already filed** (C-05 above all), so it should be answered before
+any legibility work is scheduled.
+
+**Options.**
+1. **1280 is authoritative — fix the preview and then fix the pages.** Delete the `* 2`, then do the real
+   work the doubling was hiding: a type-scale pass on the Figma pages, C-05's rebalance, and hairlines that
+   survive a 0.33 scale. Most work, but it is work against the screen the crew actually has, and it makes
+   the preview honest immediately. *(Recommended — see below.)*
+2. **2560 is authoritative — raise the cfg.** Three one-line changes; the preview is then already correct
+   and the hairline problem disappears. But it is an in-game rendering change: three RenderTextures at 4× the
+   pixels, in an IVA that already runs RSS-RO. The cfg derives height from the mesh, so aspect follows
+   automatically and only cost changes. **Confirming the cost needs `install` + glass time — an owner gate
+   (C1.12), which this chat cannot open.**
+3. **Split the difference** — e.g. 1920 — trading some cost for some legibility. Cheap to try, but it picks
+   a number no source names and leaves the same class of question open at the new value.
+4. **Leave both as they are and annotate.** Not recommended: it keeps a gate that reports pass at a
+   resolution the product does not ship, which is the failure `PreviewMain`'s own font rule was written to
+   prevent.
+
+**Recommendation: 1, with 2 as the fallback if glass time shows 1280 is genuinely unreadable in the seat.**
+Reasoning: option 1 needs no gate and can start today, and it surfaces the real defect — pages designed at a
+scale the screen does not have — rather than moving the screen to fit the pages. Option 2 is a legitimate
+answer, but it cannot be *validated* without glass time, and buying legibility with a 4× RenderTexture cost
+in an RSS-RO install is a trade only the owner can make.
+
+**Either way, one part is not optional and needs no decision:** correct the stale comment at
+`PreviewMain.cs:569-571`, and **derive** the preview's render size from `ScreenSpec` (which already tracks
+the cfg) instead of asserting it in prose — so the preview and the cfg cannot silently disagree again. The
+font already has this rule written down; resolution never did.
+
+---
+
+*Page 0 (Cover) inspected 2026-09-05; C-12 and C-13 added the same day on owner review (R-1…R-5).
+Page 1 (Hud / Frame 58) inspected 2026-09-05 at HEAD `97f4c78`.*
+
+*⚠ **Three findings are page-wide, not per-page, and should be scheduled ahead of the sweep:***
+- ***H-01** — the preview's resolution. It decides how every later legibility finding is measured, so
+  everything after this page is provisional until Q5 is answered.*
+- ***C-12 + C-04** — `component_48`'s un-erased marker glow and its 12.2% horizontal stretch. Both confirmed
+  on the HUD as well as the Cover; both are on all fifteen pages that draw the bar; **and H-07 is coupled to
+  C-04 through `FigmaUI.BottomBarHit`, so all three touch one hit map and belong in one commit.***
+
+*Next page: **UiPage 2 — Audio (settings)**, which S49 §2 records as display-only with its eight ± buttons
+and two fan buttons **drawn with no HitTest in the file at all** — the same both-directions wiring question
+this page just failed, on a page built entirely of controls.*
