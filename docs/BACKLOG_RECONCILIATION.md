@@ -26,16 +26,18 @@ the owner's taste (C1.14), it is marked and left.
 
 ## 1. THE HEADLINE: WHAT THE RECONCILIATION ACTUALLY FOUND
 
-1. **Twelve duplicate pairs.** Twelve QC findings and twelve liveness holes are the *same defect described
-   twice*. Named in §2. Three were already known (the brief that opened this task named them: `C-01`≡`H1`,
-   `S-01`⊃`S35`, `F-02`≡`H13`); **nine were not.**
+1. **Seventeen duplicate pairs.** Seventeen QC findings and seventeen liveness holes are the *same defect
+   described twice*. Named in §2, and **counted from that table rather than asserted**. Three were already
+   known — the brief that opened this task named `C-01`≡`H1`, `S-01`⊃`S35`, `F-02`≡`H13`; **fourteen were
+   not.**
 2. **`S35` is CLOSED by a fix that landed under a different line.** QC's `S-01` is the same defect, `S104`
    fixed it on 2026-09-05 under an owner directive, and the code was verified. **See §4 — this is the one
    item this document takes off the board rather than merely assigning.**
 3. **Two QC findings closed by THIS session** and not yet reflected in QC's own count: `C-05` (by `S123` +
    `S116`) and `R-02` (by job 2 of the 2026-09-06 batch). **The live remaining count is 36, not 38.**
-4. **Twenty-five liveness holes had no owner at all** — the audit only ever proposed S50–S57, which covers
-   17 holes. The rest have sat unowned since 2026-09-03.
+4. **Twenty-two liveness holes had no owner at all** — counted from §3's table, not asserted. The audit
+   only ever proposed S50–S57; the rest have sat unowned since 2026-09-03. (20 were given new lines here;
+   H2 and H10 make 22 once [[S50]] was split.)
 5. **`R-01` is the largest unowned item in the project** and had **no register line** despite 18 mentions.
    It is one owner decision that gates a large fraction of everything else. Now `S153`, and **HELD**.
 
@@ -51,7 +53,7 @@ other leaves a false open item.
 | `C-01` | **H1** | The Cover's top telemetry strip is baked art from someone else's flight | ✅ **CLOSED** — [[S105]] did it; verified in source 2026-09-06. H10 went to **[[S154]]** |
 | `C-08` | **H6** | `ENTRY ENABLED` shows a baked verdict; what the row *means* is undecided | **[[S129]]** — HELD, owner answered Q3 but the answer is not yet actionable |
 | `C-14` | **H3** | Both TARGET readouts are baked pictures of the same wrong value | **[[S126]]** |
-| `H-02` | **H10** | Every docking-HUD readout is a pixel; 8 of 12 contradict live state | **[[S50]]** |
+| `H-02` | **H10** | Every docking-HUD readout is a pixel; 8 of 12 contradict live state | **[[S154]]** — split out of S50 2026-09-06 |
 | `F-02` | **H13** | `UiPage.Procedure` and `UiPage.Cabin` are flat PNGs with no state | **[[S136]]** |
 | `S-01` | **H14/H15 → and `S35`** | Gauge ring colours were constants asserting a verdict | ✅ **CLOSED** by `S104` — see §4 |
 | `S-02` | **H16** | The ALERTS view is one word, and the FDIR bar is a fake three-position gauge | **[[S137]]** |
@@ -123,8 +125,19 @@ picking up S55 is picking up more than its own text says, and its line now recor
 | H44 | C | [[S57]] (SPLIT) | hygiene |
 | H45 | A | **[[S148]]** *(new)* | TODO |
 
-**Counts.** 45 holes: **8 DONE** · **20 newly owned here** · **9 already owned and still TODO** ·
-**5 (B)/decided** · **3 (C) with nothing owed** (H9, H43, and H44's hygiene half).
+**Counts, enumerated from this table row by row — and they sum to exactly 45, which is the only way to
+know none was dropped.** A first pass summed to 46 because **H14 and H39 each straddle two categories**;
+they are counted once, in their own row below.
+
+| category | n | holes |
+|---|---|---|
+| ✅ **DONE, nothing owed** | **7** | H1 H8 H15 H32 H33 H41 H42 |
+| ⭐ **newly owned here** | **22** | H2 H3 H4 H5 H6 H7 H10 H11 H12 H13 H16 H17 H18 H25 H26 H27 H28 H30 H35 H38 H40 H45 |
+| **already owned, still TODO** | **8** | H19 H20 H21 H22 H31 H34 H36 H37 |
+| **part done / part newly owned** | **2** | H14 (S51 did the guard, [[S138]] owns 23 literals) · H39 (`Margins` → [[S140]], the rest → [[S57]]) |
+| **(B)** — Part B's, no Part-A build | **3** | H23 H24 H29 |
+| **(C)** — recorded, nothing owed | **3** | H9 H43 H44 |
+| | **45** | |
 
 ---
 
