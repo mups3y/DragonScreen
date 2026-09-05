@@ -15258,7 +15258,7 @@ is answered this is buildable as written. [H3 + QC `C-14`; TIER 2: real defect]
 - **DONE when:** all four do their local thing or log an honest refusal, and a headless test pins that none
   of them reaches `FlightCommands`.
 
-### S129 [S] `ENTRY ENABLED` is a baked verdict, permanently False, and what the row MEANS is undecided — **HELD** — [H6 + QC `C-08`; owner answered Q3 but the answer is NOT YET ACTIONABLE]
+### S129 [S] `ENTRY ENABLED` is a baked verdict, permanently False, and what the row MEANS is undecided — **DOING** — [H6 + QC `C-08`; the HELD is LIFTED — the overseer assessment happened 2026-09-06]
 - **The finding.** The row shows `True` **and** `False` at once, neither lit; `EntryTrue`/`EntryFalse`
   resolve to nothing. **The class depends on the meaning:** crew-verification → a local latch, (A);
   vehicle-arming → §14.4(a), (B). QC's `C-08` adds that **S49's own reading of it is wrong.**
