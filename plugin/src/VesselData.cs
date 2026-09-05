@@ -193,6 +193,14 @@ namespace DragonScreen
                 ci.PowerFlow = powerFlow;
                 ci.Powered = (state.Power01 > 0.01);
 
+                // S52 / S49 H37: the cabin leak reaches the cabin. `Steps()` published state.Systems
+                // above (line ~105), so this is the CURRENT leak, not last frame's. Before this the
+                // P&ID could print CABIN LEAK: DETECTED beside a rock-steady 14.70 psia, and the
+                // pressure alarm could never fire at all - the swing was +/-0.06 psi against a 13.0
+                // caution. Isolating decays LeakRate to zero over ~60 s, so the recovery is real
+                // time and needs no state here.
+                ci.LeakRate = state.Systems.LeakRate;
+
                 LsState ls = LifeSupportBridge.Read(v);
                 ci.HasLifeSupport = ls.Present;
                 ci.OxygenFrac = ls.Oxygen01;

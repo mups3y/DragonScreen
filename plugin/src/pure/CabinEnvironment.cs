@@ -56,6 +56,19 @@ namespace DragonScreen
         public double OxygenFrac;
         /// <summary>Captured-CO2 ACCUMULATOR fill, 0..1. REAL - TAC fills it. Drives CO2 when HasLifeSupport.</summary>
         public double Co2Frac;
+
+        // ---- THE CABIN LEAK (S52 / S49 H37) ----
+        /// <summary>VehicleSystems' own leak magnitude - `(GForce - LeakG) / LeakG` at the worst
+        /// over-G the vehicle has taken, decaying to zero over ~60 s once the crew isolate it
+        /// (VehicleSystems.cs:109-120). Dimensionless, 0 = sealed.
+        ///
+        /// ⛔ IT IS AN INPUT RATHER THAN SOMETHING THIS FILE INTEGRATES, ON PURPOSE. `Compute` is a
+        /// PURE function of its inputs with no state between frames, and it must stay that way -
+        /// every test and the whole preview depend on it. `LeakRate` is ALREADY an integrated
+        /// quantity: it latches the worst overload and bleeds down while `Isolating`. So the sag
+        /// below is a function of the current leak, and the RECOVERY is real time because the leak
+        /// itself decays. Nothing here needs to remember anything.</summary>
+        public double LeakRate;
     }
 
     /// <summary>Values and their gauge fractions. Fractions are what the dials need; values print.</summary>
@@ -142,7 +155,49 @@ namespace DragonScreen
 
             // Cabin pressure holds; a leak is not modelled, so this is the steadiest reading on the
             // page and should be - a pressure gauge that wanders is alarming for the wrong reason.
-            r.PressPsia = PressNominal + slower * 0.06;
+            //
+            // ⚠ SUPERSEDED IN PLACE 2026-09-06 by S52 (C1.16/G12). WHAT IT CLAIMED: "a leak is not
+            // modelled". WHAT REPLACED IT: a leak IS modelled, and always was - VehicleSystems has
+            // carried `LeakRate` since it was written, integrating over-G damage and bleeding it down
+            // while the crew isolate. It simply was not connected to this line. ⭐ The rest of the
+            // note above still stands and is the reason the sine is kept: absent a leak this is still
+            // the steadiest reading on the page, which is what a healthy cabin should look like.
+            //
+            // ---- THE DEFECT THIS FIXES (S49 H37 / H20) ----
+            // `PressNominal + slower * 0.06` is a swing of +/-0.06 psi about 14.7, against a caution
+            // band at 13.0 and an alarm at 11.0. So THE CABIN PRESSURE ALARM COULD NEVER FIRE - not
+            // rarely, never - and the P&ID could print `CABIN LEAK: DETECTED` beside a rock-steady
+            // `14.70 psia` in the same frame, which is C7.1's failure mode on one number.
+            //
+            // ---- WHY THE SCALE IS PressNominal AND NOT A CHOSEN CONSTANT ----
+            // ⛔ The obvious implementation picks a psi-per-unit-leak figure, and that would be an
+            // invented number in a file whose whole discipline is not having any. The honest anchor
+            // is already here: a FULL-MAGNITUDE leak is a FULL depressurisation. So the sag is
+            // simply the fraction of the cabin that is gone, and the constant is PressNominal.
+            //
+            // What that yields against thresholds nobody chose for this purpose (CabinLimits, which
+            // predate it) and VehicleSystems' own `LeakG = 9.0`:
+            //
+            //     leak01   psia    verdict     the over-G that produces it
+            //     0.000    14.70   nominal     <= 9.0 g
+            //     0.116    13.00   CAUTION       10.0 g
+            //     0.252    11.00   ALARM         11.3 g
+            //     1.000     0.00   depressurised 18.0 g
+            //
+            // Both bands are reachable from a survivable abort, which is the point, and neither
+            // threshold was moved to make it so.
+            //
+            // ---- C1.15 / §14.4(e): MOD-FIRST, AND THE SEARCH IS ON FILE ----
+            // `docs/reference/INSTALLED_MODS.md` records the sweep. TAC-LS is installed and wired,
+            // but `LsState` (LifeSupportBridge.cs:9-19) carries Oxygen01, Co201 and Water ONLY -
+            // TAC models no cabin pressure. Kerbalism DOES model environment pressure and is NOT
+            // installed (and typically replaces TAC rather than layering with it). No installed mod
+            // supplies this quantity, so a coherent MARKED simulation is the correct route, and this
+            // is it: driven entirely by real vessel state (the vehicle's own over-G history) with no
+            // free parameter.
+            double leak01 = Clamp01(s.LeakRate);
+            r.PressPsia = PressNominal * (1.0 - leak01) + slower * 0.06;
+            if (r.PressPsia < 0.0) r.PressPsia = 0.0;
 
             // ---- CABIN TEMPERATURE FOLLOWS THE HULL, WHICH IS REAL ----
             // KSP heats parts during entry, so this rises when the vehicle actually gets hot. The

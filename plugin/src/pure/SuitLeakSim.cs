@@ -13,6 +13,24 @@
 //                is itself driven by real TAC Life Support state via LifeSupportBridge. Every
 //                differential below is measured against it, so all four rows MOVE when the cabin
 //                moves — the §14.4(e) test, and the reason this is not a constant with a unit on it.
+//
+//     ⚠ SUPERSEDED IN PLACE 2026-09-06 by S52 (C1.16/G12) — THE "REAL" LABEL ABOVE WAS WRONG, AND IT
+//       MATTERED, because S31 is the pattern every other micro-sim in the build is told to copy.
+//
+//       WHAT IT CLAIMED: that cabin pressure is "driven by real TAC Life Support state via
+//       LifeSupportBridge".
+//       WHAT IS ACTUALLY TRUE: LifeSupportBridge carries FOUR things — Oxygen01, Co201, WaterLitres
+//       and their capacities (LsState, LifeSupportBridge.cs:9-19). There is no pressure resource in
+//       it, and TAC does not model one. CabinEnvironment drove ppO2 and CO2 from TAC and computed
+//       pressure as `PressNominal + slower * 0.06` — a clock, not a life-support reading.
+//       SO THE DIFFERENTIALS BELOW DID MOVE, and §14.4(e)'s "never a constant" test did pass — but
+//       they moved with a SINE, not with the cabin, and nothing the crew did could change them.
+//
+//       WHAT REPLACED IT: S52 connected the live leak. Cabin pressure is now
+//       `PressNominal + slower*0.06 − LeakSag(LeakRate)`, where LeakRate is VehicleSystems' own
+//       integrated over-G leak, so the suit ΔP rows now respond to a real event on the vehicle and
+//       to the crew isolating it. ⛔ THE QUANTITY IS STILL SIMULATED, not TAC-sourced — read the
+//       "REAL" above as "real vessel state", never as "a life-support mod reports this".
 //     SIMULATED  The SUIT side: one regulated suit-loop pressure (SuitLoopPsia), a small stated
 //                per-suit fit offset so four suits are four readings rather than one repeated four
 //                times (the same idiom as CabinEnvironment's 55/45 bus split), and the bleed-down of

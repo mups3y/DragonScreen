@@ -6862,7 +6862,7 @@ source, no claim) rather than reporting a cabin leak under a propellant label, a
 3. **Wire it to `s.Systems.Leaking` as this line literally reads.** ⛔ Not recommended: it puts a cabin leak
    under a propellant-manifold label, which is a new false statement rather than the removal of one.
 
-### S52 [O] `SuitLeakSim`'s provenance comment contradicts the code, and cabin pressure ignores the live leak — **DOING** — [TIER 2: real defect + documentation defect]
+### S52 [O] `SuitLeakSim`'s provenance comment contradicts the code, and cabin pressure ignores the live leak — **DONE 2026-09-06** — [the leak now reaches the cabin **with no invented constant** — the scale is `PressNominal` itself] — [TIER 2: real defect + documentation defect]
 
 ⚠ **[[S125]] CROSS-REFERENCE, 2026-09-06.** H20 + H37, one root cause. ⭐ Landing it makes **the leak, the
 isolation valve, the alert word, the suit ΔP and the cabin gauge one story** — the audit's own phrasing —
@@ -6881,6 +6881,79 @@ headline gauge in four places and drives `Alarms.LifeSupport`, which colours the
 outline. **DONE when:** the comment matches the code, `s.Systems.LeakRate` feeds `CabinInputs`, pressure falls
 on a real leak and recovers on `DepressResponse`/`Isolating`, and leak + valve + alert word + suit ΔP + gauge
 tell one story. Detail: `docs/SCREEN_LIVENESS_AUDIT.md` H20/H37.
+
+#### ✅ DONE 2026-09-06 — both halves; **the cabin pressure alarm can now fire, and it never could before**
+
+**THE DOCUMENTATION HALF.** `SuitLeakSim`'s header labelled cabin pressure **REAL**, *"driven by real TAC
+Life Support state via LifeSupportBridge"*. **Verified false at the source:** `LsState`
+(`LifeSupportBridge.cs:9-19`) carries `Oxygen01`, `Co201`, `WaterLitres` and their capacities — **there is
+no pressure field in it, and TAC models none.** The claim is **marked SUPERSEDED IN PLACE** (C1.16/G12):
+what it asserted, what is actually true, and what replaced it. ⚠ It also now says plainly that the rows
+*did* move — §14.4(e)'s "never a constant" always passed — **but they moved with a SINE, not with the
+cabin**, which is the distinction that made a true-looking label wrong. That matters because S31 is the
+pattern every other micro-sim is told to copy.
+
+**THE MODEL HALF.** `CabinInputs` gains `LeakRate`; `VesselData` fills it from `state.Systems.LeakRate`
+(`Steps()` publishes that at `:105`, so it is the **current** leak, not last frame's); `CabinEnvironment`
+computes `PressPsia = PressNominal × (1 − leak01) + slower × 0.06`, floored at zero.
+
+⭐ **THE SCALE IS `PressNominal` ITSELF, SO THERE IS NO INVENTED CONSTANT.** The obvious implementation
+picks a psi-per-unit-leak figure, and that would be a free parameter in a file whose whole discipline is not
+having any. The honest anchor was already present: **a full-magnitude leak is a full depressurisation.**
+The sag is then just the fraction of the cabin that is gone.
+
+**AND THE BANDS FALL OUT WHERE THEY SHOULD, AGAINST THRESHOLDS NOBODY CHOSE FOR THIS PURPOSE** —
+`CabinLimits` and `VehicleSystems.LeakG = 9.0` both predate it. **Computed, then verified against the
+running model:**
+
+| `leak01` | psia | verdict | the over-G that produces it |
+|---|---|---|---|
+| 0.000 | 14.70 | nominal | ≤ 9.0 g |
+| 0.116 | **13.00** | **CAUTION** | 10.0 g |
+| 0.252 | **11.00** | **ALARM** | 11.3 g |
+| 1.000 | 0.00 | depressurised | 18.0 g |
+
+**Both bands are reachable from a survivable abort, and neither threshold was moved to make it so.**
+
+**C1.15 / §14.4(e) — MOD-FIRST, SEARCHED AND RECORDED.** `docs/reference/INSTALLED_MODS.md`:
+**TAC-LS** is installed and wired, and models cabin O2/CO2/water — **not pressure** (confirmed by reading
+`LsState`, not by trusting the doc). **Kerbalism** *does* model environment pressure and is **NOT
+installed**, and typically replaces TAC rather than layering with it. No other candidate in the list
+(RealFuels, TestFlight, FAR, KER, RPM, FreeIva, MechJeb2, RealismOverhaul, SpaceXSuits…) supplies it.
+**Conclusion: no installed source, so a coherent MARKED simulation is the correct route** — and this one is
+driven entirely by real vessel state with no free parameter, which is the strongest form of it.
+
+⭐ **`Compute` STAYS PURE, AND THAT WAS THE DESIGN PROBLEM.** A falling pressure looks like it needs
+integration, and `Compute` is a stateless function of its inputs that every test and the whole preview
+depend on. **It does not need it:** `LeakRate` is *already* an integrated quantity — `VehicleSystems`
+latches the worst overload and bleeds it down over ~60 s while `Isolating` — so the sag is a function of
+the current leak and **the recovery is real time for free.** Nothing here remembers anything.
+
+**TESTED END TO END, THROUGH THE REAL MODEL** (`PageTest.CabinLeakReachesTheCabin`, suite **992 → 1005**):
+an over-G event at 12 g opens a leak in the actual `Systems.Update`, the gauge falls with it,
+`DepressResponse` accepts it, 120 s of ticks clear it, and the cabin returns to nominal. Plus: monotone in
+the leak, never negative, a full leak is a full depress, and a sealed cabin still reads 14.7.
+⛔ **Every threshold figure in the test is DERIVED from `PressNominal` and `CabinLimits` at runtime, never
+typed** — so the suite cannot drift from the model, and moving a threshold shows up as a failure.
+
+**MUTATION-PROVEN, and both mutations reproduce a real failure mode.**
+| mutation | result |
+|---|---|
+| **P** — `leak01 = 0` (the original defect restored) | **4 FAIL**, all reading *"psia 14.6503901081827"* — the rock-steady gauge the finding describes, next to a detected leak |
+| **Q** — sag 20% even when sealed | **6 FAIL**, tripping the **pre-existing** healthy-cabin guards (*"healthy raises no alarms"*, *"sitting on the pad is nominal"*, *"orbital cruise is nominal"*) — so the fix cannot degrade a nominal cabin without the suite noticing |
+
+**Verified (C1.3).** `python plugin/build.py test` **green — ALL SUITES PASSED**. `python plugin/build.py
+preview` re-rendered; **`ui_vehiclecrew.png` pixel-diffed against the pre-fix render: `getbbox()` = `None`,
+byte-identical** — correct, because the preview fixture has no leak, so the healthy case is provably
+unregressed. **C1.16/G12: 0 comment prose lines lost** across all four files. No `install`, no glass, no
+`git push`. §14.4(a) untouched — nothing here commands anything.
+
+⭐ **THE STORY IS ONE STORY NOW**, which is what H37 asked for: an over-G opens a leak → `Systems.Leaking`
+turns the P&ID's `CABIN LEAK` to DETECTED **and** the cabin gauge falls **and** `Alarms.LifeSupport`
+cautions, colouring the Crew tab and the P&ID cabin outline → the crew hit `DEPRESS RESPONSE` → `Isolating`
+bleeds `LeakRate` down → pressure recovers. The gauge is drawn in **four** places and they now agree.
+⚠ **The suit ΔP rows follow it too** ([[S52]]'s H20 half), since `SuitLeakSim` measures every differential
+against this same cabin pressure — so they now respond to a real event and to the crew's response to it.
 
 ### S53 [S] Two console lamps that lie: STRING 1A/1B/1C can never light, and `DepressResponse` discards its refusal — **DONE 2026-09-04** — [TIER 2: real defect]
 Logged by **S49** (H41, H42). **(a)** Pressing STRING 1A/1B/1C genuinely changes the simulated string state

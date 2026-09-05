@@ -54,6 +54,7 @@ public static class PageTest
         SettingsControls();
         Scales();
         AlarmRouting();
+        CabinLeakReachesTheCabin();   // S52 / H37: the leak reaches the cabin gauge
         Conic();
         OpenTrajectory();
         OrbitViewport();   // S43: the ORBIT plot's zoom + pan
@@ -733,6 +734,91 @@ public static class PageTest
         // rather than faking is that a model can fail convincingly and a constant cannot.
         Check("unpowered raises a condition", Worst2(Unpowered()) >= Severity.Caution,
               "got " + Worst2(Unpowered()));
+    }
+
+    // ---- S52 / S49 H37: THE CABIN LEAK REACHES THE CABIN --------------------------------------
+    // Before this, cabin pressure was `14.7 + sin(t/113)*0.06` - a swing of +/-0.06 psi against a
+    // caution band at 13.0 and an alarm at 11.0 - so the pressure alarm COULD NEVER FIRE, and the
+    // P&ID could print CABIN LEAK: DETECTED beside a rock-steady 14.70 psia in the same frame.
+    //
+    // ⛔ THE THRESHOLD FIGURES BELOW ARE DERIVED, NOT TYPED. Every one is computed here from
+    // PressNominal and the CabinLimits thresholds, so this suite cannot drift from the model by
+    // someone editing a literal, and a threshold change shows up as a failure rather than silently.
+    static void CabinLeakReachesTheCabin()
+    {
+        // Sealed: the nominal reading is unchanged, which is the half that must NOT regress.
+        CabinReadout sealed0 = LeakAt(0.0);
+        Check("S52 a sealed cabin still reads nominal",
+              Math.Abs(sealed0.PressPsia - 14.7) <= 0.061,
+              "got " + sealed0.PressPsia);
+        Check("S52 ...and raises no life-support alarm on pressure",
+              Alarms.Band(sealed0.PressPsia, CabinLimits.PressCaution, CabinLimits.PressAlarm)
+                  == Severity.Nominal, "");
+
+        // The two bands are REACHABLE - the whole point of the finding.
+        const double Nom = 14.7;
+        double leakCaution = 1.0 - CabinLimits.PressCaution / Nom;   // 0.1156
+        double leakAlarm   = 1.0 - CabinLimits.PressAlarm   / Nom;   // 0.2517
+
+        // A shade past each boundary, so the sine (+/-0.06) cannot decide the verdict either way.
+        double eps = 0.02;
+        Check("S52 a leak past the caution fraction cautions",
+              Alarms.Band(LeakAt(leakCaution + eps).PressPsia,
+                          CabinLimits.PressCaution, CabinLimits.PressAlarm) != Severity.Nominal,
+              "psia " + LeakAt(leakCaution + eps).PressPsia);
+        Check("S52 a leak past the alarm fraction ALARMS - it could never fire before",
+              Alarms.Band(LeakAt(leakAlarm + eps).PressPsia,
+                          CabinLimits.PressCaution, CabinLimits.PressAlarm) == Severity.Alarm,
+              "psia " + LeakAt(leakAlarm + eps).PressPsia);
+        Check("S52 ...and just short of it does not",
+              Alarms.Band(LeakAt(leakAlarm - eps).PressPsia,
+                          CabinLimits.PressCaution, CabinLimits.PressAlarm) != Severity.Alarm,
+              "psia " + LeakAt(leakAlarm - eps).PressPsia);
+
+        // Monotone and bounded: more leak is never more pressure, and it never goes negative.
+        double prev = double.MaxValue;
+        bool monotone = true, nonneg = true;
+        for (int i = 0; i <= 20; i++)
+        {
+            double psia = LeakAt(i / 20.0).PressPsia;
+            if (psia > prev + 1e-9) monotone = false;
+            if (psia < 0.0) nonneg = false;
+            prev = psia;
+        }
+        Check("S52 pressure falls monotonically with the leak", monotone, "");
+        Check("S52 ...and never goes negative", nonneg, "");
+        Check("S52 a full-magnitude leak is a full depressurisation",
+              LeakAt(1.0).PressPsia <= 0.061, "got " + LeakAt(1.0).PressPsia);
+
+        // ⭐ THE STORY, END TO END: an over-G event opens a leak, the cabin falls, the crew isolate,
+        // the cabin comes back. This is the "leak + valve + alert word + gauge tell ONE story" the
+        // finding asks for, driven through the REAL VehicleSystems model rather than a stub.
+        SystemsState st = SystemsState.Fresh();
+        SystemsInputs si = new SystemsInputs();
+        si.Valid = true; si.Dt = 1.0; si.Crew = 4; si.Charge01 = 0.8; si.GForce = 12.0;
+        Systems.Update(ref st, si);          // over LeakG (9.0) -> a leak opens
+        Check("S52 an over-G event opens a leak in the REAL systems model", st.Leaking,
+              "LeakRate " + st.LeakRate);
+        double hurt = LeakAt(st.LeakRate).PressPsia;
+        Check("S52 ...and the cabin gauge falls with it", hurt < 14.6, "psia " + hurt);
+
+        Check("S52 DepressResponse accepts a real leak", Systems.DepressResponse(ref st), "");
+        si.GForce = 1.0;
+        for (int i = 0; i < 120; i++) { si.Dt = 1.0; Systems.Update(ref st, si); }
+        Check("S52 ...isolation clears the leak", !st.Leaking, "LeakRate " + st.LeakRate);
+        Check("S52 ...and the cabin recovers to nominal",
+              Math.Abs(LeakAt(st.LeakRate).PressPsia - 14.7) <= 0.061,
+              "psia " + LeakAt(st.LeakRate).PressPsia);
+    }
+
+    /// <summary>The cabin readout at a given leak magnitude, everything else healthy.</summary>
+    static CabinReadout LeakAt(double leak)
+    {
+        CabinInputs ci = new CabinInputs();
+        ci.Crew = 4; ci.CrewCapacity = 4; ci.HullTempC = 25.0;
+        ci.MissionTime = 600.0; ci.Power01 = 0.8; ci.PowerFlow = 0.0; ci.Powered = true;
+        ci.LeakRate = leak;
+        return Cabin.Compute(ci);
     }
 
     /// <summary>Worst cabin severity for a given hull temperature.</summary>
