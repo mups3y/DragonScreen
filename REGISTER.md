@@ -16239,7 +16239,7 @@ were the point:**
 
 ⛔ No `install`, no glass, no `git push`.
 
-### S138 [S] 23 of the 36 subsystem state words are still literals — **TODO — un-held 2026-09-06, the R-01 policy exists** —
+### S138 [S] 23 of the 36 subsystem state words are still literals — **DOING** —
 ✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set
 one (SPLIT BY CONTENT TYPE — see S153). ⛔ **The condition that replaces it is mechanical, not a wait:**
 any text this line ADDS must be drawn at **`Typography.MinDesignFor(w, sc)` or above** if it is LIVE, or
