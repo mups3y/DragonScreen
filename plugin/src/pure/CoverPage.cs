@@ -89,7 +89,14 @@ namespace DragonScreen
         // rail labels and their union dots (the rail is redrawn as seven primitive rows instead).
         // `camera_auto_earth_io` joins them (T4): the baked caption names ONE of the three camera
         // views, so it is redrawn as live text at the asset's own measured metrics — see DrawCameraChrome.
+        // ⭐ S129 / QC C-08 ADDS `true` AND `false` TO THIS LIST. They were the ENTRY ENABLED row's two
+        // value glyphs, and the exported art carries the SELECTION as well as the words - `false` is set
+        // heavier and its box is bigger for that reason alone. So the page answered a safety question
+        // from a picture, permanently, on every phase. They are redrawn as text from a computed verdict
+        // (DrawEntryVerdict), at the assets' own measured boxes, which is C-01's method. The CAPTION
+        // asset `entry_enabled` is NOT skipped - it is a label and says nothing about state.
         static readonly string[] SkipKeys = {
+            "true", "false",
             "rectangle_178", "rectangle_183", "rectangle_95", "coast_to_trunk_jettison",
             "deport_burn", "coast_to_trunk", "claw_separati", "procedure", "manual_chute",
             "union_1", "union_2", "union_3", "union_4", "union_5", "camera_auto_earth_io",
@@ -438,6 +445,10 @@ namespace DragonScreen
             // the two skipped interrupt-condition captions, redrawn as ATTITUDE (see AttitudeSkipKeys).
             // Not on the Reference Content phase: there the whole baked body is swapped out anyway.
             if (!refPhase) DrawAttitudeCriteria(dl, X, Y, Z);
+
+            // S129: the ENTRY ENABLED verdict, over the boxes its two baked PNGs used. Not on the
+            // Reference Content phase - the whole baked body including this row is swapped out there.
+            if (!refPhase) DrawEntryVerdict(dl, X, Y, Z, w, sc, s);
 
             if (refPhase)
                 // w and sc go through so FitRows can compare the legibility floor in the SAME units as
@@ -900,6 +911,73 @@ namespace DragonScreen
             Cell("inclination_51_62deg",       "INCLINATION",       T(s.InclinationDegText), ValSize, ValTop);
         }
 
+        /// <summary>
+        /// S129 / S49 H6 / QC C-08: ENTRY ENABLED, computed and drawn, instead of two PNGs with the
+        /// answer baked into which one was exported bolder.
+        ///
+        /// ⛔ THE SIZE IS NOT THE BAKED ONE, AND THAT IS THE POINT. The `true` asset's box is 51x34
+        /// design px - about 22 panel px at the shipped size, two thirds of the measured legibility
+        /// floor. This is a LIVE safety verdict, which the owner's 2026-09-06 R-01 policy puts at
+        /// `Typography.MinDesignFor` and not at `DenseDesignFor`; drawing it at the PNG's size would be
+        /// adding a new sub-floor element on the day that policy landed, and `LegibilityFloorTest`'s
+        /// per-page ratchet would fail the build for it. So the words are drawn at the floor and the
+        /// row's own geometry gives way, not the legibility.
+        ///
+        /// ⭐ THERE IS ROOM, MEASURED RATHER THAN ASSUMED. The `true` box starts at design x 783 and the
+        /// `false` box at 1132, so `True` has 349 design px of clear run and `False` has 295 before the
+        /// panel body's right edge at 1427. At the floor size (48.07) `MarginAffordance.CapAdvance`
+        /// puts "False" at 5 * 0.6638 * 48.07 = 160 px. Both fit with room over, and a test asserts it
+        /// against the same advance rather than against a look.
+        ///
+        /// ⛔ AND THE UNSOURCED CASE IS A DASH, NOT A DIMMED "False" - QC's own must-not-break: *"the
+        /// row must dash, not read `False`, when there is no source."* Both words are replaced by one
+        /// dash, because leaving a greyed `True`/`False` pair on screen still shows the crew a radio
+        /// with a position, and there is no position to show.
+        /// </summary>
+        /// <summary>Where a line of this page's type puts its INK CENTRE, as a fraction of the size,
+        /// below the y the text is drawn at. Measured off the rendered PNG rather than taken from a
+        /// font table: 26.6 design px below the top at a 48.07 px size, identical on both verdict
+        /// words. Used to sit the ENTRY ENABLED verdict on the same optical line as its caption.</summary>
+        const float InkCentreOfTop = 0.553f;
+
+        static void DrawEntryVerdict(DisplayList dl, Func<float, float> X, Func<float, float> Y,
+                                     Func<float, float> Z, int w, float sc, PageState s)
+        {
+            EntryVerdict v = s.Valid ? s.EntryEnabled : EntryVerdict.Unknown;
+            float size = Typography.MinDesignFor(w, sc);
+            // The assets' own measured boxes (Keys/Box rows `true` and `false`), so the row stays where
+            // the reference put it. The baked glyphs sat on the box top; the larger type is centred on
+            // the same optical line by keeping the top and letting it grow downward into the 111 design
+            // px of clear space before the next caption row at y 1666.
+            float tx = BoxOf("true", 0);
+            float fx = BoxOf("false", 0);
+            // ⚠ ONE BASELINE FOR BOTH WORDS, and it is NOT either asset's own box top. The exported
+            // boxes disagree - `true` starts at y 1555 and `false` at 1549 - which was invisible while
+            // both were 34-px PNGs and is a visible 6-design-px step once they are drawn at the floor
+            // size. They are one control and must sit on one line.
+            //
+            // So both are centred on the CAPTION's box (`entry_enabled`, {351,1555,195,34}), which is
+            // the thing a reader lines them up against. `InkCentreOfTop` is MEASURED, not guessed: at
+            // 48.07 design px the rendered ink centre of "True" came out 26.6 design px below the top
+            // the text was drawn at, on both words independently (ui_cover_entry_*.png, ink rows
+            // between the row's own two hairlines). 26.6 / 48.07 = 0.553.
+            float capMid = BoxOf("entry_enabled", 1) + BoxOf("entry_enabled", 3) * 0.5f;
+            float ty = capMid - InkCentreOfTop * size, fy = ty;
+
+            if (v == EntryVerdict.Unknown)
+            {
+                // ONE dash, at the first value position. Nothing at the second: a dash in both slots
+                // would read as two unknowns rather than one absent answer.
+                dl.Text(EntryReadiness.Text(v), X(tx), Y(ty), Z(size), TextAlign.Left, DragonPalette.Text6);
+                return;
+            }
+            bool enabled = v == EntryVerdict.Enabled;
+            dl.Text("True",  X(tx), Y(ty), Z(size), TextAlign.Left,
+                    enabled ? DragonPalette.White : DragonPalette.Text6);
+            dl.Text("False", X(fx), Y(fy), Z(size), TextAlign.Left,
+                    enabled ? DragonPalette.Text6 : DragonPalette.White);
+        }
+
         /// <summary>The two Crew Interrupt Conditions captions, drawn as primitives because their baked
         /// PNGs read "altitude" and S13 settled the quantity as ATTITUDE. The strings are
         /// DeorbitBurnPrepPage's own S13-corrected ones, so the two surfaces that state this criterion
@@ -1066,9 +1144,18 @@ namespace DragonScreen
             {(int)CoverButton.ActOnSpaceX,  779, 930, 591,  60},
             {(int)CoverButton.ActDeorbitBrief,1093,996,277,  60},
             {(int)CoverButton.ActReview,    964,1062, 406,  60},
-            {(int)CoverButton.ActAcknowledge,1158,1128,212, 60},
-            {(int)CoverButton.EntryTrue,    770,1548, 90,  50},
-            {(int)CoverButton.EntryFalse,  1125,1544, 100, 55}
+            {(int)CoverButton.ActAcknowledge,1158,1128,212, 60}
+            // ⛔ S129 / QC C-08 REMOVED TWO ROWS HERE, and they are named rather than silently dropped:
+            //     {(int)CoverButton.EntryTrue,    770,1548, 90,  50},
+            //     {(int)CoverButton.EntryFalse,  1125,1544, 100, 55}
+            // ENTRY ENABLED is a READOUT of the autopilot's own readiness check - the class the
+            // overseer settled on 2026-09-06 - so it is neither a crew latch nor an arming flag. Both
+            // rectangles had a hit test and NO dispatcher case anywhere in the tree, which is the
+            // shape S75 and audit H18 call worse than an honestly-dim control: a rectangle that looks
+            // touchable, over a verdict the crew are not allowed to set. The `CoverButton` members
+            // STAY - `CrewPressTest` pins the control-id namespace by name and the ints persist - they
+            // are simply no longer reachable. If Part B ever gives the crew an entry-arm control it
+            // gets its own rows back, deliberately, with a dispatcher.
         };
 
         // ---- S54 / audit H8: THE SIX ROWS THAT ARE NOT DRAWN ON THE REFERENCE CONTENT PHASE ----

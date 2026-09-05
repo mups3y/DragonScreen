@@ -55,6 +55,7 @@ public static class FigmaUINavTest
         SubsystemLiveValues();
         ProcedureLiveValues();
         S75InertPaintedControls();
+        CoverEntryEnabled();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
     }
@@ -1871,18 +1872,21 @@ public static class FigmaUINavTest
             const int RefPhase = 5;   // CoverPage.ReferencePhase — private, so mirrored (and pinned below)
             float ox = W - RefW * sc; // right-block reflow offset, as the Hits table's own x's are frame-local
             // button | frame x,y of a point INSIDE its rect (from CoverPage.Hits) | is it right-of-Split
+            // ⚠ S129 TOOK THE TWO ENTRY ROWS OUT OF THIS LIST, and the paragraph above is kept verbatim
+            // because it is still the reason the FOUR that remain are tested this way. The Entry rows
+            // are no longer hit-testable AT ALL - QC C-08 / the 2026-09-06 overseer settlement made
+            // ENTRY ENABLED a READOUT of the autopilot's readiness check rather than a crew control -
+            // so "hits on a normal phase, misses on slot 5" is no longer the property to assert about
+            // them. ⭐ The stronger assertion that replaces it is below, and it covers every phase.
             float[][] hidden = new float[][] {
                 new float[] { 800f, 950f },    // ActOnSpaceX      779,930  591x60
                 new float[] { 1150f, 1010f },  // ActDeorbitBrief 1093,996  277x60
                 new float[] { 1000f, 1080f },  // ActReview        964,1062 406x60
                 new float[] { 1200f, 1140f },  // ActAcknowledge  1158,1128 212x60
-                new float[] { 800f, 1560f },   // EntryTrue        770,1548  90x50
-                new float[] { 1150f, 1560f },  // EntryFalse      1125,1544 100x55
             };
             CoverPage.CoverButton[] hidWant = {
                 CoverPage.CoverButton.ActOnSpaceX, CoverPage.CoverButton.ActDeorbitBrief,
-                CoverPage.CoverButton.ActReview, CoverPage.CoverButton.ActAcknowledge,
-                CoverPage.CoverButton.EntryTrue, CoverPage.CoverButton.EntryFalse };
+                CoverPage.CoverButton.ActReview, CoverPage.CoverButton.ActAcknowledge };
 
             for (int i = 0; i < hidden.Length; i++)
             {
@@ -1903,6 +1907,20 @@ public static class FigmaUINavTest
                           CoverPage.HitTest(px, py, W, H, CoverPage.CoverCam.Earth, ph) == hidWant[i], "");
                 }
             }
+
+            // ---- S129 / QC C-08: THE ENTRY ROWS ARE A READOUT AND TAKE NO TOUCH, ON ANY PHASE ----
+            // They had a hit rect and no dispatcher case anywhere in the tree, which promised the crew
+            // a touch that could never do anything - and over a SAFETY VERDICT they are not allowed to
+            // set. Both rectangles are gone. Asserted at the exact pixels the old rows used, across
+            // every phase, so restoring either one has to be a deliberate act with a test to change.
+            foreach (float[] pt in new float[][] { new float[] { 800f, 1560f },      // was EntryTrue
+                                                   new float[] { 1150f, 1560f } })   // was EntryFalse
+                for (int ph = 0; ph < CoverPage.PhaseCount; ph++)
+                    Check("cover ENTRY ENABLED takes no touch (phase " + ph + ", x " + pt[0] + ")",
+                          CoverPage.HitTest(pt[0] * sc, pt[1] * sc, W, H,
+                                            CoverPage.CoverCam.Earth, ph) == CoverPage.CoverButton.None,
+                          "got " + CoverPage.HitTest(pt[0] * sc, pt[1] * sc, W, H,
+                                                     CoverPage.CoverCam.Earth, ph));
 
             // WHAT IS STILL DRAWN ON SLOT 5 IS STILL TOUCHABLE. The gate must not cost the crew the rail,
             // the chrome or the camera on the one phase that most needs a way out of itself.
@@ -2281,6 +2299,208 @@ public static class FigmaUINavTest
         Check("the section header is still a literal in all four states (S158's held half)",
               Drew(dIdle, "SECTION 2: IN PROGRESS") && Drew(dRunA, "SECTION 2: IN PROGRESS") &&
               Drew(dRunZ, "SECTION 2: IN PROGRESS") && Drew(dDone, "SECTION 2: IN PROGRESS"), "");
+    }
+
+    /// <summary>Did the page draw this ASSET at all? The ENTRY ENABLED row's whole defect was that its
+    /// answer was a PNG, so "the PNG is gone" is half of the fix and has to be asserted, not eyeballed.
+    /// </summary>
+    static bool DrewAsset(DisplayList dl, string key)
+    {
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind == DrawKind.Image && c.AssetKey == key) return true;
+        }
+        return false;
+    }
+
+    /// <summary>The pixel size the page drew this exact string at. The R-01 policy is a statement about
+    /// SIZE, so a check on it needs the size and not the colour.</summary>
+    static float SizeOf(DisplayList dl, string text)
+    {
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind == DrawKind.Text && c.Str == text) return c.C;
+        }
+        return 0f;
+    }
+
+    /// <summary>The size of a string drawn NEAR a given panel point. ⚠ Needed because SizeOf takes the
+    /// FIRST match and the Cover draws the project dash in eight places - the seven top-strip readouts
+    /// resolve to one whenever their field is empty, and they are drawn before the ENTRY ENABLED row.
+    /// The first version of the S129 size check found a top-strip dash at 29.3 px and reported the
+    /// wrong element as failing; the row itself was correct all along. Matching by POSITION is what
+    /// makes the check about the element it names.</summary>
+    static float SizeOfNear(DisplayList dl, string text, float x, float y, float tol)
+    {
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind != DrawKind.Text || c.Str != text) continue;
+            if (Math.Abs(c.A - x) <= tol && Math.Abs(c.B - y) <= tol) return c.C;
+        }
+        return 0f;
+    }
+
+    /// <summary>The y a string was drawn at (the TOP of the line), first match.</summary>
+    static float TopOf(DisplayList dl, string text)
+    {
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind == DrawKind.Text && c.Str == text) return c.B;
+        }
+        return -1f;
+    }
+
+    // ================= S129 / S49 H6 / QC C-08: ENTRY ENABLED IS COMPUTED =================
+    // Two baked PNGs with the answer exported into which one was set bolder - and the exported answer
+    // is FALSE, permanently, on every phase, on the page whose whole body is the deorbit procedure.
+    // The class of the row was the thing that blocked it for two days: crew latch, or vehicle arming
+    // flag? The overseer settled it 2026-09-06 - the checklist and its gate command nothing that flies,
+    // so the row is a §14.4(f) READOUT of the autopilot's own readiness check, and the crew-GO ->
+    // autopilot edge is the part that stays an honest no-op.
+    static void CoverEntryEnabled()
+    {
+        // The SHIPPED panel, not the suite's 1280 default: R-01 is a statement about the size the crew
+        // actually get, and checking the floor at 1280 is the one width where the check cannot fail.
+        const int VW = 2560, VH = 1406;
+        // ---- 1. THE MODEL ----------------------------------------------------------------------
+        // ⛔ THE ORDERING TEST FIRST, because it is the one that stops a false verdict. An unengaged
+        // conductor leaves every other field at its struct default, and a rule that asked "at the
+        // gate?" before "running at all?" would read that default `Holding` as a real "not enabled".
+        // ⚠ TWO CASES, because the first version of this check had ONE and it did not test what its
+        // own comment claimed. It set AtEntryGate = true, so reordering the guards still produced
+        // Unknown and a mutation that moved the not-running check to LAST went uncaught. The case the
+        // comment was really about is the UNFILLED struct - every field at its default - which is what
+        // an unengaged conductor actually hands over.
+        EntryReadinessInputs blank = new EntryReadinessInputs();
+        Check("a struct nobody filled in is UNKNOWN, not a verdict",
+              EntryReadiness.Of(blank) == EntryVerdict.Unknown, "got " + EntryReadiness.Of(blank));
+
+        EntryReadinessInputs off = new EntryReadinessInputs();
+        off.ConductorEngaged = false;
+        off.AtEntryGate = true; off.ChecklistComplete = true; off.EntryGatePhase = GatePhase.Go;
+        Check("nothing running = no verdict, even when every other field says GO",
+              EntryReadiness.Of(off) == EntryVerdict.Unknown, "got " + EntryReadiness.Of(off));
+
+        EntryReadinessInputs e = new EntryReadinessInputs();
+        e.ConductorEngaged = true;
+
+        e.AtEntryGate = false; e.EntryGatePhase = GatePhase.Holding; e.ChecklistComplete = false;
+        Check("running but not at the deorbit gate = NOT enabled (a verdict, not an absence)",
+              EntryReadiness.Of(e) == EntryVerdict.NotEnabled, "got " + EntryReadiness.Of(e));
+
+        e.AtEntryGate = true;
+        Check("at the gate with the checklist still working = NOT enabled",
+              EntryReadiness.Of(e) == EntryVerdict.NotEnabled, "got " + EntryReadiness.Of(e));
+
+        e.ChecklistComplete = true; e.EntryGatePhase = GatePhase.GoReady;
+        Check("checklist complete = ENABLED",
+              EntryReadiness.Of(e) == EntryVerdict.Enabled, "got " + EntryReadiness.Of(e));
+
+        e.EntryGatePhase = GatePhase.Go;
+        Check("the gate cleared = ENABLED",
+              EntryReadiness.Of(e) == EntryVerdict.Enabled, "got " + EntryReadiness.Of(e));
+
+        // NO-GO holds rather than cancels (CrewGate:109-110) - the "way to retrigger" the owner asked
+        // for. While the hold stands, entry is not enabled however complete the list is.
+        e.EntryGatePhase = GatePhase.NoGo;
+        Check("a crew NO-GO holds, and entry is NOT enabled while it does",
+              EntryReadiness.Of(e) == EntryVerdict.NotEnabled, "got " + EntryReadiness.Of(e));
+
+        e.EntryGatePhase = GatePhase.Abort;
+        Check("ABORT is absorbing here too",
+              EntryReadiness.Of(e) == EntryVerdict.NotEnabled, "got " + EntryReadiness.Of(e));
+
+        // ⛔ The words are REFERENCE COPY - docs/UI_AUDIT.md's Cover label list carries `ENTRY ENABLED`,
+        // `True` and `False` verbatim. Not ours to reword (§1.4).
+        Check("the verdict words are the reference's own",
+              EntryReadiness.Text(EntryVerdict.Enabled) == "True"
+              && EntryReadiness.Text(EntryVerdict.NotEnabled) == "False", "");
+        Check("and no verdict is the project's dash, not a third word",
+              EntryReadiness.Text(EntryVerdict.Unknown) == Dashes.None, "");
+
+        // ---- 2. THE PAGE ------------------------------------------------------------------------
+        PageState live = new PageState(); live.Valid = true;
+        DisplayList unk = CoverAt(live, EntryVerdict.Unknown);
+        DisplayList yes = CoverAt(live, EntryVerdict.Enabled);
+        DisplayList no  = CoverAt(live, EntryVerdict.NotEnabled);
+
+        // THE PNGs ARE GONE. Half the finding was that the answer was a picture.
+        Check("the baked `true` glyph is no longer drawn on any of the three states",
+              !DrewAsset(unk, "true") && !DrewAsset(yes, "true") && !DrewAsset(no, "true"), "");
+        Check("...nor the baked `false` one",
+              !DrewAsset(unk, "false") && !DrewAsset(yes, "false") && !DrewAsset(no, "false"), "");
+        // ...but the CAPTION is a label, not a verdict, and stays exactly as exported.
+        Check("the ENTRY ENABLED caption asset is untouched",
+              DrewAsset(unk, "entry_enabled") && DrewAsset(yes, "entry_enabled"), "");
+
+        // ⛔ QC's own must-not-break: "the row must dash, not read False, when there is no source."
+        Check("no source draws a DASH and neither word",
+              Drew(unk, Dashes.None) && !Drew(unk, "True") && !Drew(unk, "False"), "");
+        Check("enabled lights True and dims False",
+              SameColour(ColourOf(yes, "True"), DragonPalette.White)
+              && SameColour(ColourOf(yes, "False"), DragonPalette.Text6), "");
+        Check("not-enabled lights False and dims True",
+              SameColour(ColourOf(no, "False"), DragonPalette.White)
+              && SameColour(ColourOf(no, "True"), DragonPalette.Text6), "");
+
+        // A dead feed cannot produce a verdict either, whatever the field happens to hold.
+        PageState dead = new PageState(); dead.Valid = false; dead.EntryEnabled = EntryVerdict.Enabled;
+        DisplayList dl0 = CoverAt(dead, EntryVerdict.Enabled);
+        Check("a dead feed dashes even with the field set to Enabled",
+              Drew(dl0, Dashes.None) && !Drew(dl0, "True"), "");
+
+        // ---- 3. THE R-01 POLICY, ON THE FIRST ROW BUILT AFTER IT ---------------------------------
+        // This is a LIVE safety verdict, so S153's policy puts it at the glanceable floor, NOT at the
+        // baked PNG's 34-design-px box (~22 panel px, two thirds of the floor). The per-page ratchet
+        // would fail the build for a new sub-floor element; this asserts the intent rather than
+        // relying on the ratchet to notice.
+        float floor = Typography.MinFor(VW);
+        Check("the verdict is drawn at or above the glanceable floor",
+              SizeOf(yes, "True") >= floor && SizeOf(no, "False") >= floor,
+              "True " + SizeOf(yes, "True") + ", False " + SizeOf(no, "False") + ", floor " + floor);
+        // ⚠ BY POSITION, not by string: the Cover draws the dash in up to eight places and the seven
+        // top-strip readouts get theirs first. See SizeOfNear.
+        float scq = (float)VH / 2112f;
+        // x is the `true` asset's own box left, tight; y is the row's band rather than an exact
+        // baseline, because S129 centres the verdict on the CAPTION box instead of on either asset's
+        // top (the two exported tops disagree by 6 design px). Pinning the exact y here would just
+        // mirror the page's own arithmetic back at it.
+        float dashSize = SizeOfNear(unk, Dashes.None, 783f * scq, 1570f * scq, 40f);
+        Check("...and the dash with it", dashSize >= floor, "got " + dashSize + ", floor " + floor);
+
+        // ⛔ ONE BASELINE. The two exported boxes disagree by 6 design px (`true` at y 1555, `false` at
+        // 1549) - invisible while both were 34-px PNGs, a visible step once they are drawn at the floor
+        // size. They are ONE control and the page centres both on the caption box instead.
+        Check("both verdict words sit on exactly one baseline",
+              TopOf(yes, "True") == TopOf(yes, "False"),
+              "True y " + TopOf(yes, "True") + ", False y " + TopOf(yes, "False"));
+
+        // ⭐ AND IT STILL FITS, measured against MarginAffordance's own em advance rather than by eye.
+        // `false` sits at design x 1132 and the panel body ends at 1427, so "False" has 295 design px.
+        float sc = (float)VH / 2112f;
+        float size = Typography.MinDesignFor(VW, sc);
+        float inkFalse = 5f * MarginAffordance.CapAdvance * size;
+        Check("False at the floor size still fits the run to the panel body's edge",
+              inkFalse < (1427f - 1132f), "ink " + inkFalse + " design px, room 295");
+        float inkTrue = 4f * MarginAffordance.CapAdvance * size;
+        Check("True likewise, clear of the False column",
+              inkTrue < (1132f - 783f), "ink " + inkTrue + " design px, room 349");
+    }
+
+    /// <summary>The Cover on a normal phase with one ENTRY ENABLED verdict set. Phase 0, not the
+    /// Reference Content phase - slot 5 swaps this whole row out with the rest of the baked body.</summary>
+    static DisplayList CoverAt(PageState s, EntryVerdict v)
+    {
+        const int VW = 2560, VH = 1406;
+        PageState c = s; c.EntryEnabled = v;
+        DisplayList dl = new DisplayList(CoverPage.Commands + 200);
+        CoverPage.Build(dl, VW, VH, c, MapProjection.Default(), 0,
+                        CoverPage.CoverCam.Earth, Turntable.Front());
+        return dl;
     }
 
     static void BottomBarNav()

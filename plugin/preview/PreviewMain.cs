@@ -1320,6 +1320,24 @@ public static class PreviewMain
                 ps.UplinkText = savedUp; ps.DownlinkText = savedDown; ps.CommSignal01 = savedSig;
             }
 
+            // ---- S129 / QC C-08: THE ENTRY ENABLED ROW, IN ALL THREE OF ITS STATES ----
+            // The row used to be two PNGs with the answer exported into which one was set bolder, and
+            // the exported answer was FALSE - permanently, on every phase. It is a computed verdict
+            // now, so all three states need a render or two thirds of the fix has no evidence channel.
+            // ⭐ `ui_cover.png` above is already the UNKNOWN state: the shared fixture has no conductor
+            // running, so the row dashes - which is the case QC's must-not-break is about.
+            foreach (EntryVerdict ev in new[] { EntryVerdict.Enabled, EntryVerdict.NotEnabled })
+            {
+                PageState eps = ps; eps.EntryEnabled = ev;
+                DisplayList edl = new DisplayList(600);
+                CoverPage.Build(edl, CW, CH, eps, MapProjection.Default(), 0);
+                string path = Path.Combine(outDir,
+                    "ui_cover_entry_" + ev.ToString().ToLowerInvariant() + ".png");
+                Render(edl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + edl.Count
+                                  + " commands   ENTRY ENABLED = " + EntryReadiness.Text(ev));
+            }
+
             // Cover with the LAST phase selected (Manual Chute Deploy, rail slot 6) to prove the expanded
             // seven-item rail + the in-page highlight/heading move to the bottom row.
             {

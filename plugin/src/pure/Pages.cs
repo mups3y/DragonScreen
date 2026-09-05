@@ -318,6 +318,14 @@ namespace DragonScreen
         public Recovery FaultResponse;
         public string FaultText;
 
+        /// <summary>
+        /// S129 / QC C-08: the Cover's ENTRY ENABLED row, as a VERDICT rather than a picture. Computed
+        /// by pure/EntryReadiness.cs from the crew-gate machine's own state - not a latch the crew set
+        /// and not an arming flag, which is the distinction the overseer settled on 2026-09-06.
+        /// `Unknown` when the conductor is not running, because then nothing is checking.
+        /// </summary>
+        public EntryVerdict EntryEnabled;
+
         /// <summary>Crew procedure gate the user must act on now - the checklist card. See GateCard.</summary>
         public bool GateActive;
         public string GateTitle;

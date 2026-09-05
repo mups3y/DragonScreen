@@ -398,6 +398,25 @@ namespace DragonScreen
             }
             else { state.GateTitle = null; state.GateItems = null; }
 
+            // ---- S129 / QC C-08: the Cover's ENTRY ENABLED row, from the gate machine that already
+            // ---- answers the question. NOT a new model: pure/EntryReadiness.cs makes the call, this
+            // ---- only hands it what CrewProcedureOps already publishes.
+            // ⛔ `Engaged` FIRST, and it is the whole honesty of the row. The conductor only runs when
+            // the crew engage it, so with it disengaged there is no autopilot checking anything and the
+            // row DASHES. A `False` there would be exactly the baked verdict this line removes.
+            EntryReadinessInputs er = new EntryReadinessInputs();
+            er.ConductorEngaged = CrewProcedureOps.Engaged;
+            if (er.ConductorEngaged)
+            {
+                er.AtEntryGate = CrewProcedureOps.CurrentGateId == GateId.DeorbitGoG15;
+                ProcState ep = CrewProcedureOps.Proc;
+                er.EntryGatePhase = ep.Phase;
+                // AllSatisfied, not a second count of the same items - one source for "is this
+                // checklist done", shared with the gate card the crew are looking at.
+                er.ChecklistComplete = CrewGate.AllSatisfied(CrewProcedureOps.CurrentGate(), ep.Satisfied);
+            }
+            state.EntryEnabled = EntryReadiness.Of(er);
+
             state.RendezvousEngaged = StationApproach.Engaged;
             state.RendezvousNote = StationApproach.Note;
             state.DockEngaged = DockingOps.Engaged;

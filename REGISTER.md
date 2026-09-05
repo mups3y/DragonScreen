@@ -15258,7 +15258,7 @@ is answered this is buildable as written. [H3 + QC `C-14`; TIER 2: real defect]
 - **DONE when:** all four do their local thing or log an honest refusal, and a headless test pins that none
   of them reaches `FlightCommands`.
 
-### S129 [S] `ENTRY ENABLED` is a baked verdict, permanently False, and what the row MEANS is undecided — **DOING** — [H6 + QC `C-08`; the HELD is LIFTED — the overseer assessment happened 2026-09-06]
+### S129 [S] `ENTRY ENABLED` is a baked verdict, permanently False, and what the row MEANS is undecided — **DONE 2026-09-06 — computed from the gate machine that already answered the question; the two hit rects are gone because it is a READOUT** — [H6 + QC `C-08`]
 - **The finding.** The row shows `True` **and** `False` at once, neither lit; `EntryTrue`/`EntryFalse`
   resolve to nothing. **The class depends on the meaning:** crew-verification → a local latch, (A);
   vehicle-arming → §14.4(a), (B). QC's `C-08` adds that **S49's own reading of it is wrong.**
@@ -15274,6 +15274,137 @@ is answered this is buildable as written. [H3 + QC `C-14`; TIER 2: real defect]
   **NO-GO holds rather than cancels** (`:109-110`), which IS the "way to retrigger" the owner asked for.
   `CrewGates.Return()` already defines `G15 "GO FOR DEORBIT BURN"`. [[W10]] gave it a live driver.
 - **DONE when:** the overseer assessment has happened, the answer is actionable, and the row is built to it.
+
+#### ✅ DONE 2026-09-06 — all three DONE-when clauses, in order
+
+**1. THE ASSESSMENT HAPPENED**, on the owner's own condition (*"I will answer them and then ask the
+overseer to assess before acting on them"*), and it settled the CLASS this line was blocked on:
+
+> ⭐ **The checklist and its GO/NO-GO gate command nothing that flies** → **§14.4(f)**: include the
+> feature, FILL it, else a coherent MARKED simulation that BEHAVES live.
+> ⛔ **The crew-GO → autopilot edge DOES fly the vehicle** and stays an honest no-op until Part B.
+
+So the row is neither of the two things S49 and QC could not choose between. It is **not** a crew latch
+(A) and **not** an arming flag (B). It is a **READOUT of the autopilot's own readiness check** — which
+is what the owner's Q3 answer describes in his own words: *"that list should be the autopilot checking
+everything is ready for re-entry."*
+
+**2. AND THE MODEL ALREADY EXISTED — nothing here is simulated.** That is the part worth keeping.
+*"The autopilot checking everything is ready for re-entry"* is `pure/CrewGate.cs` + `pure/CrewGates.cs`
+(restored by [[W4]], given a live driver by [[W10]]), and `CrewGates.Return()` already defines the exact
+gate this row is about, written months before the owner's sentence:
+
+```
+G(GateId.DeorbitGoG15, "GO FOR DEORBIT BURN",
+    A("Departure burns complete — stable orbit below the station"),
+    A("Consumables margin for return + reserve"),
+    C("Mission control GO for deorbit"))
+```
+
+Two AUTO items the machine confirms from vessel state and one CREW item the crew tap. **`EntryReadiness`
+adds no threshold, no simulation and no new source** — it answers one question: given where that machine
+has got to, what may the row say?
+
+**3. THE ROW IS BUILT TO IT.**
+- `pure/EntryReadiness.cs` — `EntryVerdict { Unknown, NotEnabled, Enabled }` and `Of(inputs)`.
+- `PageState.EntryEnabled`, filled in `VesselData` from `CrewProcedureOps` — `Engaged`,
+  `CurrentGateId == DeorbitGoG15`, `Proc.Phase`, and `CrewGate.AllSatisfied` (⭐ **the same predicate the
+  gate card the crew are looking at uses** — one source for "is this checklist done", not a second count).
+- `CoverPage`: `"true"` and `"false"` join `SkipKeys`, and `DrawEntryVerdict` draws the words as text.
+
+#### ⛔ THE DASH IS THE POINT, and it is QC's own must-not-break
+
+*"The row must dash, not read `False`, when there is no source."* The conductor only runs when the crew
+engage it, so with it disengaged **nothing is checking anything** and a `False` there would be exactly
+the defect being removed. Once it IS engaged, `NotEnabled` is a real verdict rather than a default.
+⭐ **`Unknown` is checked FIRST, and that ordering is load-bearing**: an unengaged conductor hands over a
+struct whose other fields are at their C# defaults, and a rule that asked *"at the gate?"* before
+*"running at all?"* would read that default `Holding` as a real "not enabled". Mutation **A** is that.
+
+#### ⛔ AND THE TWO HIT RECTS ARE GONE — the classification's real consequence
+
+`EntryTrue` and `EntryFalse` had rectangles in `Hits` and **no dispatcher case anywhere in the tree**
+(re-checked at HEAD, not taken from QC). That is the shape [[S75]] and audit **H18** call worse than an
+honestly-dim control: a rectangle that looks touchable, over a safety verdict the crew are not allowed to
+set. The `CoverButton` MEMBERS stay — `CrewPressTest` pins the control-id namespace by name and the ints
+persist — they are simply unreachable, and the removed rows are quoted in place rather than deleted.
+
+⚠ **This rewrote part of [[S54]]'s test, and the S54 reasoning is kept verbatim.** Its check was *"hits
+on a normal phase, misses on slot 5"* for six rows; two of those rows no longer exist. The four `Act*`
+rows still carry S54's property; the two Entry positions now get a **stronger** assertion — *no touch, at
+those exact pixels, on every one of the seven phases*.
+
+#### ⭐ THIS IS THE FIRST ROW BUILT UNDER [[S153]]'s TYPE POLICY, AND IT SHOWS
+
+The baked `true` asset's box is **51×34 design px** — about **22 panel px**, two thirds of the floor. A
+LIVE safety verdict goes to `Typography.MinDesignFor(w, sc)` = **48.07**, not to `DenseDesignFor`. Drawing
+it at the PNG's size would have added a new sub-floor element on the day the policy landed, and S153's
+per-page ratchet would have failed the build for it — mutation **G** shows exactly that, reporting
+`22.6 px against a floor of 32`. **The row's geometry gave way; the legibility did not.**
+
+⭐ **And there is room, measured rather than assumed.** `true` sits at design x 783 with 349 px of clear
+run to the `false` column; `false` at 1132 with 295 px to the panel body's edge at 1427. At the floor
+size `MarginAffordance.CapAdvance` puts *"False"* at 5 × 0.6638 × 48.07 = **160 design px**. Both fit with
+room over, and a test asserts it against that same advance rather than against a look.
+
+#### ⚠ ONE DEFECT THIS TASK INTRODUCED AND THEN CAUGHT BY MEASURING
+
+The two words inherited **different exported box tops** — `true` at y 1555, `false` at 1549. Invisible
+while both were 34-px PNGs; a **6-design-px step** once they are drawn at 48. They are ONE control and
+must sit on one line. Both are now centred on the CAPTION's box, using an ink-centre ratio **measured off
+the render** (26.6 design px below the drawn top at 48.07 px, identical on both words) rather than taken
+from a font table. Measured after the fix: **True and False 0.0 px apart**, 1.5 panel px from the
+caption's ink centre — inside the caption's own 12 px ink height. Mutation **J** pins it.
+
+#### Verified (C1.3) — measured, not asserted
+
+`python plugin/build.py test` → **ALL SUITES PASSED**. `python plugin/build.py preview` → two new renders
+plus `ui_cover.png`, which is already the **Unknown** state because the shared fixture has no conductor
+running — the case QC's must-not-break is about.
+
+**Inspected**, and then measured on the pixels between the row's own two hairlines (design y 1532/1609):
+
+| render | row reads | |
+|---|---|---|
+| `ui_cover.png` | `ENTRY ENABLED  —` | dim dash, **neither word drawn** |
+| `ui_cover_entry_enabled.png` | `True` white · `False` dim | |
+| `ui_cover_entry_notenabled.png` | `True` dim · `False` white | |
+
+⭐ **The R-01 ratchet behaved exactly as designed on the first line after it landed**: `Cover` went from
+32 text draws to 33, `>=floor` from 8 to 9, and the below-floor count stayed at its baseline 24 —
+`868 below the floor, 0 page(s) regressed, 0 improved`.
+
+**MUTATION-PROVEN — 10 mutations, 10 caught, 0 uncaught:**
+
+| | mutation | first check that failed |
+|---|---|---|
+| **A** | the not-running check is no longer FIRST | *"a struct nobody filled in is UNKNOWN, not a verdict   got NotEnabled"* |
+| **B** | an incomplete checklist reads ENABLED | *"at the gate with the checklist still working = NOT enabled"* |
+| **C** | a crew NO-GO no longer holds the verdict | *"a crew NO-GO holds, and entry is NOT enabled while it does"* |
+| **D** | ABORT stops being absorbing | *"ABORT is absorbing here too"* |
+| **E** | no verdict prints a word instead of the dash | *"no source draws a DASH and neither word"* |
+| **F** | the baked PNGs are drawn again — **the original defect** | *"the baked `true` glyph is no longer drawn"* |
+| **G** | drawn at the PNG's size instead of the floor | *"True 22.6, False 22.6, floor 32"* |
+| **H** | the `EntryTrue` hit rect comes back | *"cover ENTRY ENABLED takes no touch (phase 0)   got EntryTrue"* |
+| **I** | a dead feed may state a verdict | *"a dead feed dashes even with the field set to Enabled"* |
+| **J** | the two words go back to their own box tops | *"both verdict words sit on exactly one baseline   True y 1035.2, False y 1031.2"* |
+
+⚠ **MUTATION A ESCAPED ON THE FIRST RUN, and the reason is worth recording because it is a repeat of a
+known failure mode.** The check set `AtEntryGate = true` while the comment beside it described an
+*unfilled* struct — so reordering the guards still produced `Unknown` and the test proved nothing about
+ordering. **The test did not test what its own comment claimed.** Fixed by adding the case the comment
+was about — a wholly default `EntryReadinessInputs` — which catches it. Same class as last session's S156
+mutation R; only mutation testing finds it.
+
+⚠ **NOT PROVEN, said plainly:** `VesselData` reading `CrewProcedureOps` is **glue** and needs Unity, so
+the evidence is that it compiles and that the pure verdict is exhaustively pinned — not that it was
+watched turning `True` on a vessel. That needs the conductor engaged on a return leg, which is glass.
+
+**Comment-loss check (C1.16 / G12): 0 lost** across all five modified files.
+
+⛔ §14.4(a) UNTOUCHED. Nothing here commands anything: the row is a readout, its two rectangles are gone
+rather than wired, and the crew-GO → autopilot edge the settlement names is not part of this line. No
+`install`, no glass, no `git push`.
 
 ### S130 [S] The Cover has no alarm surface at all — **TODO** — [H7; TIER 2]
 - **The finding.** `Alarms.Mask` folds G-force, propellant, power and the whole FDIR spine every frame
