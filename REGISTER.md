@@ -15010,7 +15010,7 @@ over-corrects: S117 fixed `NavPage`, whose `Build` is equally unreachable — **
 (`.Map`, `.Orbit`, `.Planet`) are reached from `CoverPage`, which IS live.** S117's fix does reach the
 glass; this one does not.
 
-### S121 [O] The legacy page family draws in RefPanelW pixels — eleven files that do not track `screenWidth` — **DOING** — [logged by [[S119]] (job 3 of the 2026-09-06 batch), TIER 2, R-02 family; SPLIT THIS before doing it]
+### S121 [O] The legacy page family draws in RefPanelW pixels — eleven files that do not track `screenWidth` — **SPLIT 2026-09-06 into [[S121a]]–[[S121e]]; every count re-measured, one claim corrected, one confirmed** — [logged by [[S119]] (job 3 of the 2026-09-06 batch), TIER 2, R-02 family; SPLIT THIS before doing it]
 - **The finding.** [[S117]] fixed `NavPage`. The same defect is in every other legacy page and shared widget:
   `Pages.cs` (32 raw `Typography.*`, plus `w - SidePad`, `h - ChromeBar.Height - 100f`,
   `((h - ChromeBar.Height) - 24f) * 0.74f`), `SettingsPage.cs` (24), `DockingPage.cs` (11, plus `w - 170f`,
@@ -15033,6 +15033,131 @@ glass; this one does not.
 - **DONE when:** each split line's page multiplies its RefPanelW sizes by `Typography.ScaleFor(w)` — boxes as
   well as type, [[S117]]'s trap — with a cross-width check in `LegibilityFloorTest` for that page and a
   preview PNG at 2560, and `Sc(1280) == 1` keeping the reference render byte-identical.
+
+#### ✅ SPLIT 2026-09-06, as this line's own instruction requires — with the numbers re-measured first
+
+⭐ **THE COUNTS ARE RIGHT, AND THE METHOD IS WORTH STATING BECAUSE IT CHANGES THE SIZE OF THE JOB.**
+Re-measured file by file: **all eleven match this line exactly** — but they are counts of **LINES that
+carry a raw `Typography.*`**, not of references. The same code carries **125 references on 117 lines**.
+Eight lines do two apiece (`PanelBoardPage` 10→13, `Gauge` 10→12, `NumericReadout` 6→7, `GateCard` 5→6,
+`StatusIndicator` 4→5). Nothing here is wrong; a chat sizing the work off "117" will find 125 edits.
+
+| file | lines (this line's number) | references | goes to |
+|---|---|---|---|
+| `Pages.cs` | 32 | 32 | [[S121b]] |
+| `SettingsPage.cs` | 24 | 24 | [[S121c]] |
+| `DockingPage.cs` | 11 | 11 | [[S121d]] |
+| `DockingPageCentral.cs` | 9 | 9 | [[S121d]] |
+| `AttitudeHud.cs` | 5 | 5 | [[S121d]] |
+| `PanelBoardPage.cs` | 10 | **13** | [[S121e]] |
+| `Gauge.cs` | 10 | **12** | [[S121a]] |
+| `NumericReadout.cs` | 6 | **7** | [[S121a]] |
+| `GateCard.cs` | 5 | **6** | [[S121a]] |
+| `StatusIndicator.cs` | 4 | **5** | [[S121a]] |
+| `Card.cs` | 1 | 1 | [[S121a]] |
+| **total** | **117** | **125** | |
+
+#### ⭐ THE `Gauge` CLAIM IS CONFIRMED — arithmetic, not agreement
+
+This line says `Gauge.ValueSize` is "capped at 28 device px at both widths". Recomputed from the real
+expressions (`Pages.cs:760-767`, `Gauge.cs:12-19`, `ChromeBar.Height = 64f`):
+
+| panelW | gauge `step` | `radius` | `radius * 0.46` | `ValueSize` | share of the panel |
+|---|---|---|---|---|---|
+| 1280 | 289.33 | 115.73 | 53.24 | **28.00** | 2.1875 % |
+| 2560 | 588.00 | 235.20 | 108.19 | **28.00** | **1.0938 %** |
+
+⛔ **Exactly halved, and the vertical cap is not what does it** — `radius` is set by the horizontal pitch
+at both widths (the `vertical` allowance is 192 and 383 against radii of 116 and 235, and it still does not
+bind at any `StripHeight` from 0 to 140). It is `Typography.Value = 28f` used as a panel-pixel ceiling.
+⭐ So this really is the qualitatively different member of the family: the others render at the wrong
+size, this one **cannot follow the panel at all**.
+
+#### ⚠ AND ONE CORRECTION, BECAUSE "LIVE" WILL BE MISREAD
+
+This line calls `Gauge.ValueSize` **"THE ONE LIVE INSTANCE INSIDE THIS"**. In context that means *actively
+clamped* rather than *merely un-scaled*, and read that way it is correct and is confirmed above.
+⛔ **It does not mean reachable, and nothing in this family is.** Traced 2026-09-06: `Gauge` is called only
+from `Pages.cs`, `DockingPage.cs` and `DockingPageCentral.cs`; `GateCard.Draw` only from `Pages.cs:850`;
+and `Pages.Build` only from `ScreenPainter.cs:1248` — which sits inside the `else` of the
+`if (FigmaMode)` at `:1182` (block closes at `:1218`, `else` at `:1219`, verified by brace walk).
+`FigmaMode` is `private const bool = true`. **Every one of these eleven files is dormant on the glass**,
+exactly as [[S148]] established for [[S120]]'s chrome bar and [[S62]] for `NavPage.Build`.
+
+⭐ **That does not cancel the work** — code that does not run should still be correct, which is the premise
+of the recovery waves, and [[S134]] is queued to make part of this family reachable. **It does change how
+a split line reports itself:** none of these is an immersion fix and no preview of them shows a crew-visible
+defect. Each line below says so in its own text so the next chat is not misled the way S120's entry was.
+
+#### The five splits, ordered by dependency
+
+### S121a [S] The five shared widgets: give them a scale-aware form — **TODO** — [split 1 of 5 of [[S121]]; 26 lines / **31 references**; do this FIRST]
+- `Gauge.cs` · `NumericReadout.cs` · `GateCard.cs` · `StatusIndicator.cs` · `Card.cs`.
+- ⛔ **FIRST, because every page below calls into these** — the same reason [[S120]]'s `ChromeBar` came
+  before the bodies. Fixing a page against an unscaled widget just moves the defect one call deep.
+- **The pattern is already in the tree:** job 2 of the 2026-09-06 batch gave `Readouts.Row` and
+  `Control.Button` a scale-aware overload with the **old arity delegating at `sc = 1`**. Do the same, so
+  no existing caller changes behaviour and `Sc(1280) == 1` keeps the reference render byte-identical.
+- ⭐ **`Gauge.ValueSize` is the one real behaviour change in this split** — the clamp above. Its bounds
+  `Typography.Min` / `Typography.Value` must become `MinFor(w)` / `Value * ScaleFor(w)`, which is what
+  makes the dial's number able to follow the panel at all.
+- ⚠ **`GateCard:172` and `StatusIndicator:27` are the LATENT pair** this line's parent names: they centre
+  a label with `y + (h - Typography.Caption) * 0.5f - 1f`, correct today only because every caller is
+  unscaled. They fire the moment their page gets its pass — so fix them HERE, not later.
+- **DONE when:** each widget has a scale-aware form, the old arity delegates at `sc = 1`, a cross-width
+  check in `LegibilityFloorTest` covers `Gauge.ValueSize` at 1280 and 2560, and the 1280 render is
+  byte-identical.
+
+### S121b [O] `Pages.cs`: the legacy bodies — **TODO (blocked: [[S121a]])** — [split 2 of 5 of [[S121]]; 32 lines / 32 references; the largest]
+- ⚠ **This is one FILE but several PAGES** (1506 lines: the legacy FLIGHT, NAV and VEHICLE bodies plus the
+  modal crew card at `:850`). It may need a further split; decide that after [[S121a]] lands and the true
+  edit count is visible, and split rather than run to compaction (C1.7).
+- ⚠ It also carries the non-type geometry the parent names: `w - SidePad`,
+  `h - ChromeBar.Height - 100f`, `((h - ChromeBar.Height) - 24f) * 0.74f`. ⛔ **`ChromeBar.Height` is the
+  RefPanelW constant** — [[S120]] left `HeightFor(w)` for exactly this, and boxes are [[S117]]'s trap.
+- **DONE when:** as the parent's DONE-when, for this file.
+
+### S121c [S] `SettingsPage.cs` — **TODO (blocked: [[S121a]])** — [split 3 of 5 of [[S121]]; 24 lines / 24 references]
+- ⚠ **Read [[S134]] before starting.** It owns the settings family's real coordinate-system defect and its
+  five-layouts-that-render-one problem; this line is only the RefPanelW pass. Do not do S134's work here,
+  and check whether S134 has landed first — if it has, the file will have moved.
+- **DONE when:** as the parent's DONE-when, for this file.
+
+### S121d [S] The docking trio: `DockingPage` · `DockingPageCentral` · `AttitudeHud` — **TODO (blocked: [[S121a]])** — [split 4 of 5 of [[S121]]; 25 lines / 25 references]
+- Kept as one line because they are one screen: `DockingPageCentral` draws `AttitudeHud`, and both lean on
+  `Gauge`, `NumericReadout` and `StatusIndicator` from [[S121a]].
+- ⚠ Non-type geometry here too: `w - 170f`, `w - 64f` (`DockingPage`), `w - 150f`, `w - 296f`
+  (`DockingPageCentral`).
+- ⛔ **Not to be confused with Frame 58.** The live docking HUD is `Frame58Hud` + [[S154b]]/[[S154c]];
+  these three are the legacy docking page and are dormant.
+- **DONE when:** as the parent's DONE-when, for these three files.
+
+### S121e [S] `PanelBoardPage.cs` — **TODO (blocked: [[S121a]])** — [split 5 of 5 of [[S121]]; 10 lines / **13 references**]
+- The smallest page-level split, and the one where the line-vs-reference gap is widest (10 lines carry 13
+  references) — size it off 13.
+- **DONE when:** as the parent's DONE-when, for this file.
+
+#### Open questions for the owner (C1.14) — S121
+
+**S121-Q1. Is the RefPanelW pass worth 125 edits across eleven files that no crew can reach?**
+*Situation.* Every file in this line is behind `FigmaMode = true` and unreachable on the glass (traced
+above). The work is real and the defect is real — at 2560 this family renders at half its measured
+physical size, and `Gauge`'s number cannot follow the panel at all — but nobody sees any of it today.
+[[S134]] is queued to make part of the settings family reachable, and if it lands, [[S121c]]'s file stops
+being dormant; nothing else here has such a plan.
+1. **Do all five splits anyway, in the order above.** *(recommended: it is the premise of the recovery
+   waves that dormant code should still be correct, the pattern is already established by [[S120]] and job
+   2, and each split is small once [[S121a]] lands. It also means [[S134]] does not inherit the defect.)*
+2. **Do [[S121a]] and [[S121c]] only** — the shared widgets, because they are the leaves everything else
+   would inherit, and the settings page because S134 may make it live. Park the other three until
+   something makes them reachable.
+3. **Park the whole line** behind whatever first makes the legacy family reachable, and record it as
+   deliberately deferred rather than outstanding.
+⚠ This is a PRIORITY call, not a technical one — the technical answer is the same under all three. It is
+recorded here because a build chat should not spend a session on unreachable code without the owner having
+seen the trade, not because anything is ambiguous about how to do the work.
+
+**The split itself is COMPLETE and none of it waits on this question** — [[S121a]] is startable now.
 
 ### S122 [S] `CoverPage` has two different stroke rules and they disagree at 2560 — **DONE 2026-09-06** — [`Strokes.Px` won, **on a measurement, not on taste** — and the measurement CORRECTS this line's own premise: the float rule was NOT proportional at 2 px] — [logged by [[S119]] (job 3 of the 2026-09-06 batch), TIER 3, one page]
 - **The finding.** `CoverPage` draws hairlines two ways. `St(2)` now goes through `Strokes.Px` and returns a
