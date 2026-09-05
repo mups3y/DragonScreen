@@ -12565,6 +12565,16 @@ row sizes on a page file, which this task's scope excludes (*"fix no screen layo
 done-criteria says "C-05 re-measured", not "fixed"). Logged as **[[S116]]**, ready to land in one line with
 every number already in hand.
 
+> ⛔ **SUPERSEDED 2026-09-06, by job 1 of the 2026-09-06 owner batch (C7.1 — marked, not deleted).** *"So the
+> block S112 found is lifted"* is **FALSE**, and so is *"ready to land in one line"*. Both rest on comparing a
+> 2560 render against `Typography.Min = 16`, which is a **1280** floor this task did not double when it
+> doubled the panel — the exact trap this same task named two paragraphs below and then applied the wrong way
+> round. Against the true physical floor (32 panel px at 2560) the corrected clamp is 48.07 design px and the
+> block ends at design y 891.5, **overflowing `Card1Bottom` 760 by 131 design px — the identical figure S112
+> measured at 1280.** The root cause is filed as **[[R-02]]**; **[[S116]]** is BLOCKED on it. Everything else
+> in this task stands: the cfg change, the `KSPField` default, the S101 re-measure, [[S117]] and [[S118]] are
+> unaffected.
+
 **⛔ THE TRAP, CHECKED FOR AND NOT WALKED INTO.** Raising `screenWidth` does not move the vehicle's physical
 screen or the crew's eyes — every element that scales through `sc` (`CoverPage.X()/Y()/Z()`, the whole
 Figma-era idiom) renders the SAME fraction of the panel at 2560 as at 1280, just at twice the pixel density.
@@ -12625,7 +12635,7 @@ the Figma-era pages. **No `install`, no glass** — separate owner gates (C1.12)
 cost note for the glass session (4× RenderTexture fill on three live screens) is left for that session to
 read, not acted on.
 
-### S116 [S] Land C-05's now-safe one-line unit fix — compare `Typography.Min` in panel space, not design space — **TODO** — [logged by S115, 2026-09-05; TIER 1, UNBLOCKED by Q5]
+### S116 [S] Land C-05's one-line unit fix — compare `Typography.Min` in panel space, not design space — **BLOCKED on [[R-02]] — 2026-09-06** — [logged by S115, 2026-09-05 as "now-safe — UNBLOCKED by Q5"; that premise is FALSE — see the block note at the foot of this line]
 - **The finding.** `CoverPage.FitRows` (`:673-689`) receives `top`/`slotBottom`/`wantSize`/`wantGap` in
   DESIGN units and returns a design `size`, but clamps it against `Typography.Min` (16, a PANEL-pixel
   constant) directly — `if (size < Typography.Min)` — comparing DESIGN px to PANEL px. At both widths tried
@@ -12647,6 +12657,47 @@ read, not acted on.
 - **DONE when:** the fix lands, `ui_cover_phase5.png` inspected, `build.py test` green, and the register says
   which width was current when it landed (so a future width change re-checks the 1280 branch before anyone
   relies on it).
+
+#### ⛔ BLOCKED on [[R-02]] — 2026-09-06. **"Now-safe" is FALSE.** Do not land this line.
+
+**🟢 Authority for this batch — OWNER, 2026-09-06, verbatim (C1.12):** *"give me a batched prompt in
+the order you suggest for one chat to fix all whilst reading its rules etc between jobs"* — answering the
+overseer's four-item order. This is job 1 of that batch.
+
+**The premise, and why it fails.** S112 (`4081f5e`) and S115 both computed C-05's corrected clamp as safe at
+2560: 24.03 design px, block ending at design y 748 against a card bottom of 760, *"12 px of design margin,
+no layout consequence"*. **That arithmetic is right — but only for a 16 px floor.** `Typography.Min = 16f`
+was measured **at 1280** (`Typography.cs`; R-01: *"the floor is a 1280-panel floor"*), and S115 doubled the
+shipped panel to 2560 without doubling it. So the floor the clamp is being computed against is half the
+physical size it was measured as, and the fix computed against it is half the size it needs to be:
+
+| clamp against | fitted size | block ends at design y | vs `Card1Bottom` = 760 |
+|---|---|---|---|
+| `Typography.Min` = 16 (as written, a 1280 floor used at 2560) | 24.03 design = 16.0 panel | **748.0** | fits, 12 px spare |
+| the true physical floor at 2560 = **32** | **48.07 design** = 32.0 panel | **891.5** | ⛔ **OVERFLOWS by 131 design px** |
+
+**131 design px is precisely the overflow S112 measured at 1280.** The block S112 found was never lifted —
+Q5 only changed the units the measurement is reported in. Landing S116 as written would ship the overflow the
+fix exists to prevent, onto a baked card background and out over the page ground: QC-AUDIT 2026-09-03 finding
+6, restored.
+
+**What this line is blocked on, in order.**
+1. **[[R-02]]** — the root cause: a device-pixel legibility floor that did not move when the panel doubled.
+   Fixed by making the floor a function of the panel width. Once that lands, the clamp finally computes
+   against 32 panel px at 2560 — the number in row 2 above.
+2. ⛔ **And R-02 does NOT unblock this line — it converts the blocker.** With an honest floor the corrected
+   clamp overflows by 131 design px **at every width**, because the overflow is a fraction of the card, not a
+   pixel count. So S116 then needs exactly what S112 said it needed at 1280: one of C-05's layout options
+   (a) shorten the seven ENTRY TIMELINE strings, (b) swap ENTRY TIMELINE into the roomier card 3, or
+   (c) make card 1 scroll — and (b)/(c) touch the Reference Content page, which §14.2 classes **TIER-3**
+   (*"NO evidence AND no asset → invention, JOINT discussion required"*). **That is an owner decision, not a
+   build-chat one (C1.12), and it is not settled.** Whoever picks this line up next must re-open it as an
+   owner question (C1.13/C1.14), not as a one-liner.
+
+**Not fixed here, deliberately.** This job's whole purpose is that nobody lands C-05 on a false premise;
+fixing C-05 is not in it. `docs/QC_FINDINGS.md` is untouched (QC's file) — C-05's own entry there already
+carries the QC officer's *"NOT CLOSED … C-05 stays blocked behind [R-02]"* verdict, so both halves of the
+record now agree.
 
 ### S117 [O] `NavPage`'s text does not scale with `screenWidth` — Q5 halves the live NAV screen's (and the Cover Map view's) legibility — **TODO** — [logged by S115, 2026-09-05; TIER 1/2 — a real regression from Q5, on a live shipped screen, found while verifying it]
 - **The finding.** `src/pure/NavPage.cs` (live NAV screen, `DragonScreen.cfg` screen 3; also reused by
