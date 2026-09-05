@@ -13028,7 +13028,7 @@ doubled canvas" family and are **job 3 of this batch's** to enumerate and rule o
    RefPanelW constants used as panel-pixel bounds. On a scaled page the radius doubles and the result is
    capped at 28 device px regardless, so the gauge's own value text cannot follow the panel.
 
-### S118 [S] Six comments cite 1280x703 pixel figures that Q5 doubles — aspect reasoning survives, absolute figures are stale — **DOING** — [logged by S115, 2026-09-05; TIER 3, comments only, no behaviour]
+### S118 [S] Six comments cite 1280x703 pixel figures that Q5 doubles — aspect reasoning survives, absolute figures are stale — **DONE 2026-09-06** — [all six restated as PURE INSERTIONS; the doubling is **proven over 189 draw commands**, not done by hand] — [logged by S115, 2026-09-05; TIER 3, comments only, no behaviour]
 - **The finding.** `pure/BottomBar.cs:82`, `pure/CoverPage.cs:299` and `:568`, `pure/MarginAffordance.cs:49`,
   `pure/NavOrbitPlotPage.cs:64`, `pure/Pages.cs:878` — each states an absolute pixel figure measured "at the
   shipped 1280x703", which the shipped 2560 now doubles.
@@ -13042,6 +13042,67 @@ doubled canvas" family and are **job 3 of this batch's** to enumerate and rule o
 - **DONE when:** each of the six comments states the figure that matches the CURRENT shipped `screenWidth`
   (2560) — either replacing the number or stating both with the resolution each belongs to — with the aspect
   reasoning left exactly as it reads today, and `build.py test` still green.
+
+#### ✅ DONE 2026-09-06 — six comments, six pure insertions, and the doubling PROVEN rather than performed
+
+**All six restated:** `BottomBar.cs:82` · `CoverPage.cs:299` · `CoverPage.cs:568` ·
+`MarginAffordance.cs:49` · `NavOrbitPlotPage.cs:64` · `Pages.cs:878`.
+
+⭐ **EVERY EDIT IS A PURE INSERTION — not one original character moved.** That is this line's own rule
+(*"Fix by ADDING the 2560 figure, not by removing the 1280 one"*, and *"the ASPECT reasoning … must not be
+corrected"*), and it is verified mechanically: normalised comment-prose diff against `HEAD` reports
+**0 lines lost across all six files**.
+
+⚠ **AND I GOT THIS WRONG ON THE FIRST PASS, WHICH IS WORTH RECORDING.** My first attempt rewrote the
+paragraphs in place — replacing *"the shipped 1280x703"* with the 2560 figure, re-flowing the readout
+clearances into a table, and rewording *"below `Typography.Min` = 16"*. The comment-loss check flagged
+**13 lines**, I read them, and they were exactly what this line forbids. **The four files were reverted to
+`HEAD` and redone as append-only.** The check is what caught it; without it the rewrite would have looked
+like a tidy-up and shipped.
+
+**⭐ THE DOUBLING IS PROVEN, NOT PERFORMED — one property covers all six comments.** Rather than doubling
+six sets of numbers by hand and hoping, a new check asserts the property that MAKES them double:
+`LegibilityFloorTest.TheShippedPanelsAreExactlyTwoToOne`. The two shipped panels are **exactly** 2:1
+(2560 = 2×1280 **and** 1406 = 2×703), and for a page laid out by the `sc = h/RefH` idiom both `sc` **and**
+the horizontal slack `extra = w − RefW·sc` double — so every coordinate and size the page emits doubles.
+Measured: **CoverPage 166 draw commands, NavOrbitPlotPage 23, and 0 of 189 fail to double exactly.**
+
+⛔ **That check is not a tautology and it is not guaranteed** — it fails the instant a page mixes an
+un-scaled device-pixel constant into that arithmetic, which is precisely the R-02 family. So it doubles as
+a **standing sweep for NEW R-02 instances** on the two pages carrying the most Figma-derived geometry.
+**Mutation N** (a bare `+ 5f` added to one Cover coordinate) fails it with the diagnosis spelled out:
+*"1 of 166 did not. Image field 0: 77.56 → 150.13 (want 155.13) rectangle_178 — an un-scaled device-pixel
+constant, i.e. a new R-02."*
+
+**MEASURED FIGURES, from the code at both widths, not doubled by eye** (a temporary probe, since removed):
+
+| | @1280×703 | @2560×1406 |
+|---|---|---|
+| letterbox slack `extra` | 139.3 | 278.6 |
+| NEXT VIEW pill width | 133.5 | 267.0 |
+| …room after the 110 inset | 96.9 | 193.7 |
+| …the label at `Z(50)` | **16.6 panel px** (floor 16) | **33.3 panel px** (floor 32) |
+| …QC's rejected `37` | 12.3 (floor 16) | 24.6 (floor 32) |
+| MarginAffordance letterbox / box | 69.6 / 61.6 | 139.3 / 123.3 |
+| chrome bar top | 639 | **1278** |
+| the mission row | y 597–631 | y 1236–1270 |
+
+⭐ **EVERY VERDICT IN THOSE COMMENTS SURVIVES, AND THAT IS THE HEADLINE.** The NEXT VIEW label clears the
+floor by the same ~4% at both widths and QC's rejected `37` falls short by the same margin at both —
+because R-02 made the floor `MinFor(panelW)`. The comments needed **new numbers, not new arguments**,
+which is exactly what this line predicted.
+
+⚠ **ONE FIGURE IS NOT A DOUBLING, AND IT IS CALLED OUT IN THE COMMENT.** `Pages.cs:878`'s chrome bar goes
+639 → **1278**, which is *not* 639 doubled: it is 1406 − 128, because [[S120]] made the bar's height a
+fraction of the glass rather than a fixed 64. ⭐ That is also the best possible advertisement for what that
+comment already says — the mission rect is measured **UP FROM THE BAR**, and that is the one formulation
+which survived both the resolution change and the bar's own rescaling with no edit at all.
+
+**Verified (C1.3).** Comments plus one added check; no behaviour changed. `python plugin/build.py test`
+**green — ALL SUITES PASSED**; `LegibilityFloorTest` **103 → 107 checks**. No preview needed (no draw
+changed) and none of the six figures came from a PNG. **C1.16/G12: 0 comment prose lines lost.** No
+`install`, no glass, no `git push`. §14.4(a) untouched. `docs/QC_FINDINGS.md` / `docs/BUILD_PLAN.md` not
+edited.
 
 ### S119 [O] The R-02 family swept: every device-pixel constant that meets something scaling with `screenWidth` — **DONE 2026-09-06** — [job 3 of the 2026-09-06 owner batch; 3 instances FIXED, 4 LOGGED ([[S120]] [[S121]] [[S122]] + [[S116]] blocked), 8 ruled correctly screen-space]
 

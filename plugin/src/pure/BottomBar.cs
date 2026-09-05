@@ -81,6 +81,14 @@ namespace DragonScreen
             // fit-to-height and lets its own art overflow at that aspect; the bar overflows WITH it.
             // The shipped screens are 1280x703/710 - aspect 1.82 against the design's 1.623 - so `x`
             // is always positive in the build. See FigmaUINavTest.BottomBarUndistorted.
+            // ⚠ S118, 2026-09-06 — ADDED, nothing above changed. "The shipped screens" meant
+            // 1280x703/710 when this was written; screenWidth went 1280 -> 2560 on 2026-09-05 (Q5 /
+            // S115), so the shipped panel is now 2560x1406.
+            // ⭐ THE ARGUMENT ABOVE IS UNAFFECTED AND WAS NEVER RESOLUTION-DEPENDENT: 2560x1406 is
+            // the SAME 1.82:1 aspect as 1280x703, so `x` is positive at either size. Only the figure
+            // is stale, which is why it is restated here rather than corrected in place.
+            // FigmaUINavTest still runs at 1280x703 on purpose - it is a SHAPE check, and a second
+            // size would not make it a better one.
         }
 
         /// <summary>Draw the bar, undistorted, where the design puts it.</summary>

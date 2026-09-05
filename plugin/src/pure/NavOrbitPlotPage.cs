@@ -66,6 +66,14 @@ namespace DragonScreen
             // ring 3 missed clearing it by 2.2 px. The page drew four rings and rendered one, and that
             // one read as a lone decorative circle rather than the outermost of a scale.
             // A range ring is an OVERLAY, and an overlay belongs on top. One statement moved.
+            // ⚠ S118, 2026-09-06 — ADDED, nothing above changed. Those radii were measured at 1280x703
+            // and the shipped panel is 2560x1406 (Q5 / S115). Every one of them is exactly doubled:
+            // rmax 511.4, rings at 127.9 / 255.7 / 383.6 / 511.4, globe limb at 388.0, and ring 3
+            // short by 4.4 px. ⭐ Exactly, not approximately — the two shipped panels are 2:1 and this
+            // page is uniformly scaled; asserted over all 23 of its draw commands by
+            // LegibilityFloorTest.TheShippedPanelsAreExactlyTwoToOne. The defect itself is a statement
+            // about RATIOS (which rings fall inside the disc), so it was never resolution-dependent
+            // and neither is the fix.
             // ⚠ AND THE TINT HAD TO CHANGE WITH THE ORDER, WHICH QC PREDICTED. Over the plot well
             // Hairline reads at +20 luminance; over the lit body it does not. Measured on the render
             // with the rings moved but still Hairline: ring 4 +20.5, ring 3 +19.6, ring 1 +7.0, and

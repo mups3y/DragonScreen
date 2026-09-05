@@ -51,6 +51,7 @@ public static class LegibilityFloorTest
         NavPageIsUnchangedAtTheReferenceWidth();
         StrokesKeepTheirPhysicalWeight();
         ChromeBarTracksThePanel();
+        TheShippedPanelsAreExactlyTwoToOne();
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed"
                           + "   (floor " + Typography.MinFor(W1) + " px @" + W1
@@ -433,6 +434,64 @@ public static class LegibilityFloorTest
             }
             Check("every label sits inside the bar at " + wh[0] + "x" + wh[1], outside == 0,
                   outside + " outside, first " + first);
+        }
+    }
+
+    // ---- 7. S118: THE TWO SHIPPED PANELS ARE EXACTLY 2:1, SO EVERY FIGURE DOUBLES ---------------
+    // S118 had to restate six comments' pixel figures at the current shipped width. Rather than
+    // double six sets of numbers by hand and hope, this pins the PROPERTY that makes the doubling
+    // exact - and it covers every figure in every one of those comments at once.
+    //
+    // 2560 = 2 x 1280 and 1406 = 2 x 703, so for a page laid out by CoverPage's idiom - sc = h/RefH,
+    // with the horizontal slack `extra = w - RefW*sc` put into one gap - BOTH sc and extra double,
+    // and therefore so does every coordinate and every size the page emits.
+    //
+    // ⛔ THIS IS NOT A TAUTOLOGY AND IT IS NOT GUARANTEED. It fails the moment any page mixes a
+    // device-pixel constant into that arithmetic, which is exactly the R-02 family: an un-scaled
+    // literal shows up here as a command that did NOT double. So this doubles as a standing sweep
+    // for new instances of R-02 on the two pages that carry the most Figma-derived geometry.
+    static void TheShippedPanelsAreExactlyTwoToOne()
+    {
+        Eq("the shipped width is exactly twice the reference width", (float)W2, W1 * 2f, 0f);
+        Eq("...and the height with it, so the aspect is identical", (float)H2, H1 * 2f, 0f);
+
+        PageState ps = new PageState(); ps.Valid = true;
+        for (int which = 0; which < 2; which++)
+        {
+            string what = which == 0 ? "CoverPage" : "NavOrbitPlotPage";
+            DisplayList a = new DisplayList(4096), b = new DisplayList(4096);
+            if (which == 0)
+            {
+                CoverPage.Build(a, W1, H1, ps, MapProjection.Default(), 1, CoverPage.CoverCam.Map);
+                CoverPage.Build(b, W2, H2, ps, MapProjection.Default(), 1, CoverPage.CoverCam.Map);
+            }
+            else
+            {
+                NavOrbitPlotPage.Build(a, W1, H1, ps);
+                NavOrbitPlotPage.Build(b, W2, H2, ps);
+            }
+            Check(what + ": the same page is drawn at both widths", a.Count == b.Count && a.Count > 0,
+                  a.Count + " vs " + b.Count);
+            if (a.Count != b.Count) continue;
+
+            int bad = 0; string first = null;
+            for (int i2 = 0; i2 < a.Count; i2++)
+            {
+                DrawCmd x = a.At(i2), y = b.At(i2);
+                float[] xs = { x.A, x.B, x.C, x.D }, ys = { y.A, y.B, y.C, y.D };
+                for (int k = 0; k < 4; k++)
+                    if (Math.Abs(ys[k] - xs[k] * 2f) > 0.02f)
+                    {
+                        bad++;
+                        if (first == null)
+                            first = x.Kind + " field " + k + ": " + xs[k] + " -> " + ys[k]
+                                  + " (want " + (xs[k] * 2f) + ") " + x.Str + x.AssetKey;
+                        break;
+                    }
+            }
+            Check(what + ": EVERY command doubles exactly when the panel doubles", bad == 0,
+                  bad + " of " + a.Count + " did not. First: " + first
+                      + "  - an un-scaled device-pixel constant, i.e. a new R-02.");
         }
     }
 

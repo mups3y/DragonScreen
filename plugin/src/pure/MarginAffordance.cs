@@ -45,6 +45,12 @@ namespace DragonScreen
 
         /// <summary>Gap between the panel edge / frame art and the box. Was 12 on both sides, which cost
         /// 24 px of a margin only 69.6 px wide at the shipped size — see FitSize. At RefPanelW.</summary>
+        /// <remarks>⚠ S118, 2026-09-06 — ADDED, the summary above is unchanged. "At the shipped size"
+        /// meant 1280x703 when it was written; the shipped panel is 2560x1406 since S115. Measured at
+        /// both: the letterbox is 69.6 px at 1280 and 139.3 px at 2560, and the resulting box 61.6 px
+        /// and 123.3 px. ⭐ Both pairs are the SAME FRACTION of the panel — which is true only because
+        /// job 3 of the 2026-09-06 batch scaled these four constants. Before that they were not, and
+        /// the block below is the record of why.</remarks>
         const float Inset = 4f;
 
         const float TopFrac = 0.44f, HeightFrac = 0.12f;

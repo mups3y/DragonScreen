@@ -302,6 +302,21 @@ namespace DragonScreen
         /// design px) — it closes only when they become live text, which is a different finding (S49 H3:
         /// both currently read "26° 15.00° N", and the longitude carries a latitude's N).
         /// </summary>
+        /// ⚠ S118, 2026-09-06 — ADDED, nothing above changed. Every figure in the paragraph above was
+        /// measured at 1280x703; the shipped panel has been 2560x1406 since S115 (2026-09-05). The
+        /// same five quantities there:
+        ///
+        ///     disc half-width at the readouts' row   62.5 px  ->  125.0 px
+        ///     clear of the globe, left / right       54 / 49  ->   108 / 98
+        ///     clear to the pills, left / right       56 / 51  ->   112 / 102
+        ///
+        /// ⭐ EXACTLY doubled, not doubled by eye. The two shipped panels are exactly 2:1 (2560 =
+        /// 2x1280, 1406 = 2x703) and this page is uniformly height-scaled with its horizontal slack
+        /// `extra = w - RefW*sc` doubling too, so every coordinate and size it emits doubles. That is
+        /// asserted over all 166 of this page's draw commands by
+        /// LegibilityFloorTest.TheShippedPanelsAreExactlyTwoToOne, not by re-deriving these five.
+        /// The RESIDUAL the note above describes is a ratio between two baked PNGs, so it is
+        /// unchanged as an argument and merely twice as many pixels.
         const float ReadoutHalfGap = 475f;
 
         /// <summary>Panel-pixel rect of one cluster button, in pitches from the centre button: (0,0) is
@@ -581,6 +596,21 @@ namespace DragonScreen
             // label is 140 design px wide where this one is ~288; the inset is the lever the filed plan
             // missed. 110 in at 50 tall keeps the label inside the pill AND at 16.6 panel px, above the
             // floor — the twin geometry gives a little, the legibility does not.
+            // ⚠ S118 + R-02, 2026-09-06 — ADDED, nothing above changed. Those figures were measured at
+            // 1280x703 and the shipped panel is 2560x1406 (Q5 / S115). Measured at both:
+            //
+            //     quantity                    @1280x703       @2560x1406     the floor there
+            //     the pill's width             133.5 px         267.0 px          —
+            //     room after the 110 inset      96.9 px         193.7 px          —
+            //     the label, Z(50)              16.6 panel px    33.3 panel px   16 / 32
+            //     QC's rejected 37              12.3 panel px    24.6 panel px   16 / 32
+            //
+            // ⭐ AND EVERY VERDICT ABOVE SURVIVES, WHICH IS THE POINT. The label clears the floor by
+            // the same ~4% at both widths and QC's 37 falls short by the same margin at both, because
+            // the floor is `Typography.MinFor(panelW)` and scales with them (R-02, landed 2026-09-06).
+            // "Below Typography.Min = 16" above should now be read as "below the floor, which is 16
+            // AT 1280" - the number moved, the verdict did not. Raising the resolution buys crispness,
+            // never legibility; Typography's header says so in as many words.
             dl.Text("NEXT VIEW", px + Z(102f), py + Z(34f), Z(50f), TextAlign.Left, DragonPalette.White);
 
             // ---- S105 / QC C-13: THE TWO TARGET READOUTS, SYMMETRIC ABOUT THE GLOBE ----

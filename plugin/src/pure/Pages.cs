@@ -880,6 +880,13 @@ namespace DragonScreen
             // covered and UNDOCK & LAND was invisible. The test that should have caught it asserted
             // against the PAGE bottom instead of the bar. `NavPage.MapRect` had the right pattern
             // three files away.
+            // ⚠ S118, 2026-09-06 - the figures above describe the OLD downward-stacked layout on the
+            // 1280x703 panel of the time, and are kept as the record of the defect. At the shipped
+            // 2560x1406 the bar starts at 1278, not 639 - and note that is NOT 639 doubled from a
+            // fixed 64 px bar but 1406 - 128, because [[S120]] made the bar's height a fraction of the
+            // glass. ⭐ Which is precisely why this rect is measured UP FROM THE BAR: that is the one
+            // formulation that survived both the resolution change and the bar's own rescaling
+            // without an edit. Measured now: the row sits at y 1236-1270 at 2560, 597-631 at 1280.
             y = ChromeBar.TopY(w, h) - MissionGap - rh;
 
             // ---- AND A ROW, NOT A COLUMN, STARTING RIGHT OF THE SIDEBAR. ----
