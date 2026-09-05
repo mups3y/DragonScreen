@@ -13534,6 +13534,25 @@ it must not land before this one. The rows still draw at `RowSize` 26 design = *
 No `install`, no glass, no `git push`. No flight control wired (§14.4(a)). `docs/QC_FINDINGS.md` not
 edited (QC's file); `docs/BUILD_PLAN.md` not edited (C1.12 guarded file).
 
+### S125 [O] Reconcile `SCREEN_LIVENESS_AUDIT.md`'s holes with QC's remaining findings into ONE de-duplicated backlog — **DOING** — [opened 2026-09-06 by the continuous build chat, under the same owner directive quoted on [[S123]]; TIER 1: it does not fix a defect, it stops the same defect being fixed three times]
+
+**Why this comes before any of the fix lines.** Two independent audits are on file and neither knows about
+the other. `docs/SCREEN_LIVENESS_AUDIT.md` ([[S49]], 2026-09-03) walked every screen and logged **45 holes
+(H1–H45)**, proposing register lines only for a subset ([[S50]]–[[S57]]). `docs/QC_FINDINGS.md` swept the
+same screens independently and has **72 findings**, of which its own 2026-09-06 verification pass says
+**38 remain**. ⛔ **They overlap heavily and nobody has ever mapped one onto the other**, so the same defect
+is currently reachable from up to three places: a hole, a QC finding, and a register line.
+
+- **Declared outputs (C1.11):** `docs/BACKLOG_RECONCILIATION.md` (new), this register line, the new register
+  lines it creates, and `docs/INDEX.md`'s row for the new document. **Nothing else.**
+- ⛔ **`docs/QC_FINDINGS.md` IS NOT EDITED** — it is QC's file. The mapping lives in the new document and in
+  the register, and cites QC read-only.
+- ⛔ **No defect is fixed here.** This line only establishes ownership. Every fix stays with whichever line
+  ends up owning it.
+- **DONE when:** every one of the 45 holes and every remaining QC finding has exactly ONE named owner —
+  an existing register line, a new one, or an explicit HELD/owner-gated verdict — the duplicate pairs are
+  named, and no item is left reachable from two lines without the relationship being written down.
+
 ### G12 [O] Close the gap C1.16 left open: research is protected wherever it lives, code comments included — **DONE 2026-09-06** — [job 4 of the 2026-09-06 owner batch; GUARDED FILES — `CLAUDE.md` + `docs/BUILD_PLAN.md` Part C, byte-identical and proven, plus §0a's ledger row]
 
 **🟢 OWNER AUTHORISATION, 2026-09-06, verbatim (C1.12):** *"give me a batched prompt in the order you
