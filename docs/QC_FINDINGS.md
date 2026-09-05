@@ -93,8 +93,8 @@ Cover's seven phase views, plus the lower analog console panel. **The six Vehicl
 | **30** | **EntryProcedure** | ENTRY | ✅ **DONE** *(same section)* | 2026-09-05 |
 | **31** | **SystemsTree** | SYSTEMS TREE | ✅ **DONE — 2 findings** *(shared section with 32)* | 2026-09-05 |
 | **32** | **SystemsPid** | SYSTEMS P&ID | ✅ **DONE** *(same section)* | 2026-09-05 |
-| 33 | Ascent | ASCENT / LAUNCH | NOT STARTED | — |
-| 34 | NavOrbitPlot | NAV / ORBIT PLOT | NOT STARTED | — |
+| **33** | **Ascent** | ASCENT / LAUNCH | ✅ **DONE — 2 findings** *(shared section with 34)* | 2026-09-05 |
+| **34** | **NavOrbitPlot** | NAV / ORBIT PLOT | ✅ **DONE — 2 findings** | 2026-09-05 |
 
 ### The Cover's seven phase views (`CoverPage.PhaseName`, `CoverPage.cs:87-89`)
 
@@ -3441,7 +3441,169 @@ whose other ten nodes are green / amber / red from `SystemsState`.
 
 ---
 
-*Next: **pages 33 + 34** — Ascent / Launch and the Nav / Orbit Plot, the last two `UiPage` values.*
+---
+
+# PAGES 33 + 34 — ASCENT / LAUNCH and NAV / ORBIT PLOT
+
+**The last two `UiPage` values.** Both Menu-only.
+
+**Renders:** `ui_ascent.png` · `ui_navorbitplot.png` · `ui_navorbitplot_notarget.png`.
+
+**S49's entries.** §2: 33 is *"One live element — ACTIVE PHASE. All 11 ascent events are a static string
+array, while `StepList` computes live equivalents of six of them and is never read"* (H34); 34 is *"Plot
+LIVE … G-FORCE / RATE / RANGE live; **the range rings carry no scale**; no touch controls"* (H35, H36).
+**Confirmed, with one correction: H36's missing scale is a recorded §1.4 decision** (CLEAN 2).
+
+## What was checked and found CLEAN
+
+1. **Page 34's plot is live and correct** — the real conic via `NavPage.Orbit` (*"NOT a second orbit
+   renderer"*), a legend (`VEHICLE` cyan / `SPACE X STATION` amber), live `G-FORCE 0.2 g`,
+   `RATE −0.25 m/s`, `RANGE 202.6 m`, the approach chord, and S83's AP/PE label offset.
+2. ⚠ **H36's "no scale" is answered, not open.** `NavOrbitPlotPage.cs:22` states it: *"the concentric range
+   rings (ring count and spacing — **no scale is legible in either source, §1.4**)"*. The rings are marked
+   as ours and unscaled deliberately, because inventing a scale would be a tier-3 invention. **Do not
+   re-log this.** ⭐ What *is* wrong with them is NO-01, which is a different thing entirely.
+3. **Page 33's `ACTIVE PHASE — ORBITING` is live** and is the page's one live element, as S49 says.
+
+---
+
+## NO-01 — Three of the four range rings are drawn and then painted over by the globe
+
+**TIER 2** · **NEW** · measured
+
+**Evidence.** `NavOrbitPlotPage.cs:58-66` draws four concentric rings **before** calling `NavPage.Orbit`
+(`:69`), which draws the body disc over them. Measured on `ui_navorbitplot.png`:
+
+```
+plot centre  (1280.0, 676.0)
+rmax = Z(min(PlotW,PlotH)) x 0.46 = 511.4 panel px
+rings at      127.9   255.7   383.6   511.4
+globe limb, scanned from the centre leftwards:  radius 388.0
+```
+
+**Rings 1, 2 and 3 all fall inside the globe's 388-px radius and are covered.** Only the outer ring is
+visible — which is exactly what the render shows: one faint circle outside the globe and nothing inside it.
+Ring 3 misses by 4.4 px.
+
+**What is wrong.** The page draws four rings, states in its own header that the ring count and spacing are a
+deliberate design choice of ours, and then renders one. Three quarters of a deliberately-designed element is
+invisible, and the one that survives reads as a lone decorative circle rather than as the outermost of a
+scale. It also costs draw calls the page's `Commands` budget is paying for.
+
+⚠ **This is not the same as H36.** H36 is "the rings carry no scale", which is a settled §1.4 decision.
+NO-01 is "three of the rings are not on the screen at all", which is a rendering defect.
+
+**Fix plan.**
+- **Draw the rings AFTER the globe**, not before. They are a range overlay; an overlay belongs on top.
+  One statement moved.
+- ⚠ **Then they will cross the globe**, which is the point of a range ring — but check the tint: at
+  `DragonPalette.Hairline` over a photographic disc they may vanish into the texture. If so, the honest fix
+  is a slightly brighter or dashed ring over the disc, **not** moving them back under it.
+- **Alternative, if rings over the body are judged wrong:** size `rmax` so all four sit *outside* the
+  globe — i.e. from the limb outward rather than from the centre. That keeps them clear of the texture and
+  makes all four visible, but it changes what they measure, so it is a design decision rather than a fix.
+  **Recommend moving the draw order first** and looking at the result before choosing.
+- **Must not break:** the §1.4 marking. However they are drawn, the rings stay unscaled and stay marked as
+  ours.
+- **Verify:** count the visible rings on the render — four, not one.
+
+---
+
+## NO-02 — S43 built zoom and pan for the orbit plot, and the standalone orbit plot cannot use them
+
+**TIER 2** · **NEW** · extends S49 **H36**
+
+**Evidence.** `NavOrbitPlotPage.Build(DisplayList dl, int w, int h, PageState s)` — **no `MapView`
+parameter** — and `FigmaUI.cs:224` calls it without one. `NavPage.Orbit` has three overloads (`:599`,
+`:607`, `:640`); this page calls the one that takes no viewport.
+
+Meanwhile `REGISTER.md` records **S43: *"the ORBIT plot gets ZOOM + PAN, owner-ruled, default render
+untouched"*** (`01aef68`), and the preview carries six renders proving it works —
+`page2_nav_orbit_leo_x1/x4/x8`, `_x4_pan`, `_kerbin_x4`, `_suborbital_x4`.
+
+**So the page whose entire subject is the orbit plot is the one place the orbit plot's zoom cannot be
+reached.** The zoom exists, is owner-ruled, is tested and rendered — on the NAV page, which S49 §1.1 records
+as *stranded* behind `FigmaMode` and unreachable in the shipped build.
+
+⚠ **Stated precisely: S43's zoom is currently reachable from nowhere in the shipped UI.** It lives on
+`NavPage.Build`'s cluster, and there is no `UiPage.Nav`.
+
+**Fix plan.**
+- Give `NavOrbitPlotPage` a `MapView` and pass it to the viewport overload of `NavPage.Orbit`, then draw
+  the zoom cluster. **The cluster already exists twice over** — `NavPage`'s own (stranded) and
+  `CoverPage.PadRect`/`PadButton`, which is reachable, tested, and drawn from shared rectangles.
+  **Reuse the Cover's**, don't re-implement.
+- **The painter already holds the state.** `mapView` is a field on `ScreenPainter` and is already passed to
+  Cover and ManualChute; this page needs adding to that list. ⚠ **Decide whether it shares the Cover's
+  `mapView` or gets its own** — sharing means zooming here also zooms the Cover's globe, which may or may
+  not be wanted. Recommend a separate view: the two plots show different things at different scales.
+- ⚠ **S43 is owner-ruled and its ruling included "default render untouched".** Any change here must keep
+  the zero-zoom render byte-identical, which is what that ruling protects.
+- **Must not break:** `ui_navorbitplot_notarget.png`, and the dotted-ellipse rendering.
+- **Verify:** the six existing NAV zoom renders have equivalents on this page.
+
+---
+
+## AS-01 — Eleven ascent events, none of them tracked, while the step machine that computes six of them runs unread
+
+**TIER 2** · confirms S49 **H34**
+
+**Evidence.** `ui_ascent.png` lists eleven T+ events down a Falcon 9 / Dragon line drawing — `LIFTOFF`,
+`T+0:10 PITCH KICK`, `T+1:00 MAX-Q`, `T+1:09 MACH 1`, `T+1:14 STAGE-1B ABORT MODE`, `T+2:30-2:35 MECO`,
+`T+2:35-2:39 STAGE SEPARATION`, `T+2:36-2:47 S2 IGNITION`, `T+4:20-8:43 SECO-1 / ORBIT INSERTION`,
+`T+9:00-12:02 DRAGON SEPARATION`, `T+12:48-13:23 NOSE-CONE OPEN` — **all in one tint, none marked passed,
+current or pending.**
+
+And the state to mark them with is in the fixture, on this frame: `ps.Steps.MaxQPassed = true`,
+`ps.Steps.BoosterAttached = false`, `ps.Steps.S2Attached = true`, `ps.Steps.S2Lit = true`,
+`ps.Steps.Phase = MissionPhase.Ascent` (`PreviewMain.cs:105-113`). By those five fields alone, **six of the
+eleven events have demonstrably occurred** and the page marks none.
+
+S49 §1.1 records why: `pure/StepList.cs` is *"a 15-row live ascent/prelaunch state machine … every row
+resolved off real KSP state"*, stranded behind `FigmaMode`. **The events on this page and the rows in that
+file are the same events.** S49's own words: *"H34's fix is largely 'route what already exists'."*
+
+**Fix plan.**
+- **Route `StepList`, do not rewrite it.** It already resolves liftoff, Max-Q (a latched peak detector),
+  MECO, stage sep, SECO, Dragon sep and nose-cone open off `VesselData`. This page needs the six or seven
+  it covers, tinted passed / current / pending.
+- ⚠ **The eleven T+ *times* are reference copy and must not be recomputed.** `REGISTER.md:941` records them
+  as *"Real, from §8's mission-timeline pass (tier-1): all 11 T+ events transcribed verbatim."* Step
+  tracking marks which have happened; it does not change when they are printed to happen.
+- ⚠ **`StepList` is stranded, not missing.** Routing it is a real piece of work (it means reaching a pure
+  file the Figma path does not currently call) and it serves this page, the SuitCheck steps (**SC-01**),
+  the Manual Chute gates (**MC-02**) and the VRIO checklist (**VT-01**). **Four pages want the same
+  routing.** It should be one line, scheduled once — which is what S49 H34 says.
+- **Verify:** three fixtures — pre-launch, mid-ascent, post-insertion — with the marked set growing.
+
+---
+
+## AS-02 — The Ascent page uses the left 40% of the screen
+
+**TIER 2** · **NEW** · same class as **DB-01**
+
+**Evidence.** On `ui_ascent.png` the vehicle drawing and its eleven callouts occupy x ≈ 420…1010 of 2560;
+the only thing right of that is `ACTIVE PHASE — ORBITING` in the top corner. **Roughly 60% of the width is
+empty background.**
+
+**What is wrong.** The layout is a vertical stack on a wide screen — the callout labels all run rightwards
+from the rocket and stop less than halfway across. It is the same shape as DB-01 (pages 29 and 30) and the
+same owner concern (**R-4**): a screen that reads as unfinished at IVA distance.
+
+⚠ **Unlike DB-01, this page has content to put there.** AS-01's step state, a mission clock, the live
+ascent telemetry (`ps.Steps.RadarAltitude`, `VerticalSpeed`, `Propellant01`) — all live, all readouts, all
+(A). The empty 60% is not a layout problem looking for filler; it is the space AS-01's fix should occupy.
+
+**Fix plan.**
+- **Do AS-01 first, then lay out for the result.** Marking the eleven events is the content; a second
+  column of live ascent telemetry beside the vehicle is the natural use of the space.
+- **If AS-01 is deferred**, widen the callout column and increase the type so the existing content at least
+  reads at distance — the same interim step DB-01 recommends.
+- **Verify:** the page's content bounding box covers a substantial majority of the plot area.
+
+---
+
+*Next: **the lower analog console panel** — the last surface in the inventory.*
 
 *⚠ **Three findings are page-wide, not per-page, and should be scheduled ahead of the sweep:***
 - ***H-01** — the preview's resolution. It decides how every later legibility finding is measured, so
