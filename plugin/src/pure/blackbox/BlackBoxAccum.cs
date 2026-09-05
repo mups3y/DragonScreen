@@ -22,6 +22,22 @@
 // precisely the `torque_cmd` ghost BB1 exists to stop, so they are not declared. Logged as its own
 // register line (C1.1), not smuggled in as a zero.
 //
+// ⚠ SUPERSEDED IN PLACE 2026-09-06 by S84 (C1.16/G12). The paragraph above was correct when written
+// and its RULE still governs — a column that cannot be filled is not declared. What changed is the
+// FACT under it: the blocker was never `RcsAccounting.cs` itself, it was the DELIVERED FORCE that
+// file read, and **`Actuator.RcsThrustN(Vessel)` came back with W2** (2026-09-04). The recorder has
+// been writing `rcs_thrust_n` from it ever since. So the impulse is now computable and the three
+// columns are declared and filled.
+//
+// ⭐ AND THE ACCUMULATOR WAS NOT RESURRECTED — the impulse was folded into THIS struct instead.
+// `RcsAccounting` was a SECOND physics-rate accumulator with its own interval, its own reset and its
+// own caller, computing the same four categories from the same commands. Two accumulators that must
+// be reset in lockstep is a defect waiting to happen: one missed reset double-counts an interval and
+// the duty cycle silently disagrees with the impulse. One struct, one tick, one reset — and the
+// four-category identity below (they sum to IntervalS) now covers the impulse for free.
+// `git show 8b81816^:plugin/src/pure/RcsAccounting.cs` is the RECOVER-REFERENCE evidence; its
+// VALIDATED LIMITATIONS are restated on the Add() below, because they are still every bit as true.
+//
 // ---- COST (§4.7's < 0.05 ms per FixedUpdate) ----
 // Pure arithmetic on pre-allocated doubles in one struct. No allocation, no reflection, no LINQ, no
 // branch on anything but a comparison. It is called once per physics tick and does ~30 flops.
@@ -48,6 +64,17 @@ namespace DragonScreen.BlackBox
         // ---- command-seconds: the integral of the applied command magnitude ----
         public double AppAttCmdS, AppTransCmdS;
 
+        // ---- §2.4's DELIVERED RCS IMPULSE (N·s), in the SAME three categories (S84) ----
+        // ⭐ Why this is the number worth having: it is an UN-ALIASED propellant proxy. All Dracos
+        // share one Isp and the single MMH/NTO pair, so delivered impulse is proportional to
+        // propellant mass, and per-category propellant = category_imp / total_imp × (MMH+NTO
+        // consumed). That is the attribution §2.4 was specified for and the reason the withdrawn
+        // "68-82 % duty cycle" figure could not answer the terminal-fuel question.
+        // ⛔ There is no `NoneImpNs`, deliberately: with no command applied there is no category to
+        // attribute delivered force to, and a fourth bucket would invite dividing by a total that
+        // includes it. The three sum to the commanded impulse, which is what the ratio needs.
+        public double AttImpNs, TransImpNs, BothImpNs;
+
         // ---- saturation: time at or beyond the authority limit ----
         public double SatS;
 
@@ -66,16 +93,36 @@ namespace DragonScreen.BlackBox
         /// warp), NOT a wall clock and NOT the row period — under physics warp a tick covers more UT,
         /// and the accumulator must reflect that or every duty cycle is wrong by the warp factor.
         /// </summary>
-        public void Add(double dt, double attCmd, double transCmd, double accelG, double qPa, double rateDps)
+        /// <remarks>
+        /// ⛔ S84 — THE DELIVERED-IMPULSE LIMITATIONS, RESTATED FROM THE DELETED `RcsAccounting.cs`
+        /// BECAUSE THEY ARE STILL TRUE AND OVERCLAIMING THIS NUMBER IS EASY:
+        ///  • NAMING. REQUESTED command ≠ APPLIED `FlightCtrlState` command ≠ DELIVERED thruster
+        ///    force. This bucket is the AGGREGATE delivered force, categorised by the APPLIED
+        ///    command. KSP's own RCS solver decides which thrusters fire from the combined command
+        ///    and does not expose that split, so the `Both` bucket is the honest home for any
+        ///    overlap — do NOT manufacture a finer per-thruster attribution.
+        ///  • TICK LAG. `rcsForceN` is read before KSP applies this tick's `ctrlState`, so the force
+        ///    reflects the PREVIOUS physics tick while the category is this tick's command — a ≤1-tick
+        ///    (~0.02 s) smear at each category transition. Negligible over the seconds-long windows
+        ///    the terminal phase uses; do NOT trust it for sub-0.1 s flipping.
+        ///  • PROPELLANT. The impulse→propellant proportionality holds because all Dracos share one
+        ///    Isp and one MMH/NTO pair. It would NOT hold for mixed-Isp thrusters firing in different
+        ///    categories — not this vehicle.
+        /// </remarks>
+        public void Add(double dt, double attCmd, double transCmd, double accelG, double qPa, double rateDps,
+                        double rcsForceN)
         {
             if (dt <= 0.0 || double.IsNaN(dt) || double.IsInfinity(dt)) return;
             IntervalS += dt;
 
             bool att = Math.Abs(attCmd) > CommandEpsilon;
             bool trans = Math.Abs(transCmd) > CommandEpsilon;
-            if (att && trans) BothS += dt;
-            else if (att) AttS += dt;
-            else if (trans) TransS += dt;
+            // A negative or NaN force contributes nothing rather than poisoning the bucket - the same
+            // discipline the peaks below use, and the same one the deleted accumulator used.
+            double imp = (rcsForceN > 0.0) ? rcsForceN * dt : 0.0;
+            if (att && trans) { BothS += dt; BothImpNs += imp; }
+            else if (att) { AttS += dt; AttImpNs += imp; }
+            else if (trans) { TransS += dt; TransImpNs += imp; }
             else NoneS += dt;
 
             if (att) AppAttCmdS += Math.Abs(attCmd) * dt;
@@ -104,6 +151,10 @@ namespace DragonScreen.BlackBox
             BlackBoxSchema.Set(c, BlackBoxCols.AccNoneS, NoneS);
             BlackBoxSchema.Set(c, BlackBoxCols.AccAppAtt, AppAttCmdS);
             BlackBoxSchema.Set(c, BlackBoxCols.AccAppTrans, AppTransCmdS);
+            // S84 / §2.4: delivered impulse in the same three categories as the times above them.
+            BlackBoxSchema.Set(c, BlackBoxCols.AccAttImp, AttImpNs);
+            BlackBoxSchema.Set(c, BlackBoxCols.AccTransImp, TransImpNs);
+            BlackBoxSchema.Set(c, BlackBoxCols.AccBothImp, BothImpNs);
             BlackBoxSchema.Set(c, BlackBoxCols.ActSatS, SatS);
             BlackBoxSchema.Set(c, BlackBoxCols.AccelGPeak, PeakAccelG);
             BlackBoxSchema.Set(c, BlackBoxCols.QPaPeak, PeakQPa);

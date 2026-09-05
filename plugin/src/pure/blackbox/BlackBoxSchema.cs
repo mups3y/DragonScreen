@@ -61,6 +61,11 @@
 // will fill it. They are LOGGED as register lines instead (C1.1) and are absent from the schema:
 //   • `acc_att_imp` / `acc_trans_imp` / `acc_both_imp` (delivered RCS impulse) — needs the deleted
 //     `pure/RcsAccounting.cs`.
+//     ⚠ CLOSED by S84, 2026-09-06. The two lines above are kept VERBATIM (C1.16/G12): the RULE they
+//     serve is unchanged — a column that cannot be filled is not declared — and only the FACT moved.
+//     The blocker was never that file, it was the DELIVERED FORCE it read, and `Actuator.RcsThrustN`
+//     came back with W2. The impulse is folded into `BlackBoxAccum` rather than restoring a second
+//     physics-rate accumulator; see that file's header for why one struct beats two.
 //   • (S86, then S94/S86-Q1 filled the rest: `brightness_l/c/r`, `cover_cam_l/c/r`, `cover_phase_l/c/r`
 //     WERE listed here as "private to a `ScreenPainter` INSTANCE, no accessor" — that gap is closed;
 //     see §2.7 below for all nine.)
@@ -326,6 +331,14 @@ namespace DragonScreen.BlackBox
             C("acc_att_s",   "s", Tier.R0, "derived", "time with an attitude command and no translation command"),
             C("acc_trans_s", "s", Tier.R0, "derived", "time with a translation command and no attitude command"),
             C("acc_both_s",  "s", Tier.R0, "derived", "time with both commanded"),
+            // ---- S84 / §2.4: DELIVERED RCS IMPULSE by category, the propellant-attribution basis ----
+            // Live, not Conditional: the accumulator ticks whenever the recorder does, and a delivered
+            // force of zero is a real measurement (nothing was firing), not an absent one. The row is
+            // blank only when the whole interval is - `Put` returns early on `!Any`, which is §4.6's
+            // "nothing accumulated is NO VALUE" and applies to all eleven R0 columns together.
+            C("acc_att_imp",   "N.s", Tier.R0, "derived", "delivered RCS impulse while attitude-only was commanded"),
+            C("acc_trans_imp", "N.s", Tier.R0, "derived", "delivered RCS impulse while translation-only was commanded"),
+            C("acc_both_imp",  "N.s", Tier.R0, "derived", "delivered RCS impulse while BOTH were commanded"),
             C("acc_none_s",  "s", Tier.R0, "derived", "time with neither commanded"),
             C("acc_app_att",   "cmd.s", Tier.R0, "derived", "integral of max|app_pitch,app_yaw,app_roll| dt"),
             C("acc_app_trans", "cmd.s", Tier.R0, "derived", "integral of max|app_tx,app_ty,app_tz| dt"),

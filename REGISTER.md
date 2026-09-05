@@ -10842,7 +10842,7 @@ from the box centre the old vertical offset used (box half-width 5 + 5 px cleara
 
 ---
 
-### S84 [S] The BlackBox has no delivered-RCS-impulse columns — `pure/RcsAccounting.cs` is still deleted — **DOING** — [TIER 2: a named §2 block with no source, logged rather than faked]
+### S84 [S] The BlackBox has no delivered-RCS-impulse columns — `pure/RcsAccounting.cs` is still deleted — **DONE 2026-09-06** — [⭐ **the blocker was never that file** — it was the delivered FORCE it read, and [[W2]] brought that back] — [TIER 2: a named §2 block with no source, logged rather than faked]
 Logged by **BB1**, 2026-09-04 (C1.1 — noticed while building, deliberately not built).
 **The gap.** `docs/BLACKBOX_RESEARCH.md` §2.4 specifies `acc_att_imp` / `acc_trans_imp` / `acc_both_imp` —
 DELIVERED RCS impulse (N·s) by category, which is the basis for **per-category propellant attribution**
@@ -10858,6 +10858,61 @@ whose `Reset()` call-site pattern is visible in `git show 8b81816^:plugin/src/Fl
 **DONE when:** the accumulator is restored (or written fresh) with its own headless suite, the three
 columns are appended to `BlackBoxSchema` as `Live`, and `BlackBoxCoverage` reports no defect for them.
 ⚠ Appending columns keeps `schema_version` (§4.2); it must NOT be bumped for this.
+
+#### ✅ DONE 2026-09-06 — **and it turned out not to need the deleted file at all**
+
+⭐ **THE BLOCKER THIS LINE NAMES WAS ALREADY GONE, AND CHECKING IS WHAT FOUND THAT.** It says the impulse
+*"needs `pure/RcsAccounting.cs`, deleted with the autopilot … and in no §B12.8 wave"*. **What the impulse
+actually needs is the DELIVERED FORCE that file read** — `Actuator.RcsThrustN(Vessel)` — and **[[W2]]
+restored `Actuator` on 2026-09-04.** The recorder has been writing `rcs_thrust_n` from that very function
+ever since (`BlackBoxRecorder.cs:1063`). The file was the vehicle; the force was the cargo.
+
+⭐ **THE ACCUMULATOR WAS WRITTEN FRESH INTO `BlackBoxAccum`, NOT RESURRECTED — this line allowed either
+(*"restored (or written fresh)"*) and one is clearly better.** `RcsAccounting` was a **SECOND physics-rate
+accumulator** with its own interval, its own reset and its own caller, computing **the same four
+categories from the same commands**. ⛔ **Two accumulators that must be reset in lockstep is a defect
+waiting to happen:** one missed reset double-counts an interval and the duty cycle silently disagrees with
+the impulse it is supposed to explain. One struct, one tick, one reset — and `BlackBoxAccum`'s existing
+four-category identity (they sum to `IntervalS`, checked by BB3) now covers the impulse for free.
+
+**What landed.** `BlackBoxAccum` gains `AttImpNs` / `TransImpNs` / `BothImpNs`, bucketed in the **same
+branch** that already buckets the times, so a category and its impulse cannot disagree by construction.
+`Add()` gains `rcsForceN`; `Put()` writes three new **`Live`** R0 columns; `BlackBoxRecorder` supplies
+`Actuator.RcsThrustN(v)` **at physics rate** — for the same reason the categories are accumulated rather
+than sampled, which is §3.2's retracted *"68-82 % duty cycle"*.
+
+⛔ **THERE IS NO `NoneImpNs`, DELIBERATELY, AND A TEST ENFORCES IT.** With no command applied there is no
+category to attribute delivered force to, and a fourth bucket would invite dividing by a total that
+includes it. **The ten-tick fixture carries 999 N through its three IDLE ticks and expects exactly zero of
+it in any bucket** — without that, a bug dumping idle force anywhere would pass unseen, and idle is
+precisely where a leaky thruster or a residual reading would show up.
+
+**THE VALIDATED LIMITATIONS ARE RESTATED, not lost with the file.** `git show 8b81816^` was read as
+**RECOVER-REFERENCE evidence**, not copied as a build source, and its three cautions are on the new
+`Add()`: REQUESTED ≠ APPLIED ≠ DELIVERED (so `Both` is the honest home for overlap — do not manufacture a
+per-thruster split KSP does not expose); the ≤1-tick force/category smear; and that impulse→propellant
+holds only because all Dracos share one Isp and one MMH/NTO pair.
+
+**MUTATION-PROVEN.**
+| mutation | result |
+|---|---|
+| **Y** — attribute idle delivered force to the attitude bucket | **2 FAIL**, including *"the three impulses total the COMMANDED impulse only — idle force is not attributed"* |
+| **Z** — drop the negative-force guard | FAILS: *"a NEGATIVE delivered force contributes zero impulse"* |
+
+⚠ **The DONE-WHEN's `BlackBoxCoverage` clause is unsatisfiable and it is not this line's fault** — the
+same clause [[S87]] hit the same day. **`BlackBoxCoverage.Findings()` has no caller anywhere**
+(**[[S161]]**, found by [[S90]]'s new guard), so it reports nothing about any column. In its place the
+three are pinned by exact arithmetic in `BlackBoxTest`: 4×0.02×100, 2×0.02×200 and 1×0.02×400 all give
+**8 N·s**, chosen so a reader can verify them by eye.
+
+✅ **`schema_version` NOT bumped** — `BlackBoxSchema.SchemaVersion` is still `1`, verified by diff, exactly
+as this line requires (§4.2: appending inside a version is allowed).
+
+**Verified (C1.3).** `python plugin/build.py test` **green — ALL SUITES PASSED**; BlackBox suite
+**1848 → 1875 checks**; `SELFTEST OK` with the widened schema. ⚠ **Every existing `Add()` caller was found
+by the COMPILER**, not by grep — adding a required parameter is fail-closed, the same property [[S120]]
+relied on. **No draw changed, so no preview applies. C1.16/G12: 0 comment prose lines lost.** No
+`install`, no glass, no `git push`.
 
 ### S85 [S] The BlackBox records WHICH page was shown but not a single crew PRESS — §2.7's `control_id` namespace does not exist — **DONE 2026-09-05** — [TIER 1: the CVR channel §0's three misdiagnoses actually needed]
 Logged by **BB1**, 2026-09-04 (C1.1 — out of BB1's scope BY ITS OWN DESIGN CONSTRAINT, not by preference).

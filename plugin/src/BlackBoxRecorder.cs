@@ -1837,8 +1837,14 @@ namespace DragonScreen.BlackBox
                 att = Max3(Math.Abs(cs.pitch), Math.Abs(cs.yaw), Math.Abs(cs.roll));
                 trans = Max3(Math.Abs(cs.X), Math.Abs(cs.Y), Math.Abs(cs.Z));
             }
+            // S84: the DELIVERED RCS force this tick, for the per-category impulse. Read here at
+            // PHYSICS rate for the same reason the categories are - a ~0.06 s pulse dwell sampled at
+            // the row rate is an alias, which is the retraction §3.2 records. `Actuator.RcsThrustN`
+            // is the same source the `rcs_thrust_n` SNAPSHOT column already uses, so the snapshot and
+            // the accumulated impulse cannot disagree about what "delivered" means.
             accum.Add(dt, att, trans, v.geeForce, v.dynamicPressurekPa * 1000.0,
-                      (v.angularVelocity * Mathf.Rad2Deg).magnitude);
+                      (v.angularVelocity * Mathf.Rad2Deg).magnitude,
+                      Actuator.RcsThrustN(v));
         }
 
         static double Max3(double a, double b, double c)

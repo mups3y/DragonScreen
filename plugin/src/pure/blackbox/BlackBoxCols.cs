@@ -110,6 +110,10 @@ namespace DragonScreen.BlackBox
         public static readonly int AccAttS = BlackBoxSchema.Index("acc_att_s");
         public static readonly int AccTransS = BlackBoxSchema.Index("acc_trans_s");
         public static readonly int AccBothS = BlackBoxSchema.Index("acc_both_s");
+        // ---- S84 / §2.4 ----
+        public static readonly int AccAttImp = BlackBoxSchema.Index("acc_att_imp");
+        public static readonly int AccTransImp = BlackBoxSchema.Index("acc_trans_imp");
+        public static readonly int AccBothImp = BlackBoxSchema.Index("acc_both_imp");
         public static readonly int AccNoneS = BlackBoxSchema.Index("acc_none_s");
         public static readonly int AccAppAtt = BlackBoxSchema.Index("acc_app_att");
         public static readonly int AccAppTrans = BlackBoxSchema.Index("acc_app_trans");

@@ -482,10 +482,10 @@ public static class BlackBoxTest
               "an EMPTY interval writes blank, not a zero duty cycle — a zero would be a claim");
 
         // 10 physics ticks at 0.02 s: attitude only for 4, translation only for 2, both for 1, none 3.
-        for (int i = 0; i < 4; i++) a.Add(0.02, 0.5, 0.0, 1.0, 100.0, 2.0);
-        for (int i = 0; i < 2; i++) a.Add(0.02, 0.0, 0.4, 1.0, 100.0, 2.0);
-        a.Add(0.02, 0.6, 0.3, 3.9, 30500.0, 11.0);
-        for (int i = 0; i < 3; i++) a.Add(0.02, 0.0, 0.0, 1.0, 100.0, 2.0);
+        for (int i = 0; i < 4; i++) a.Add(0.02, 0.5, 0.0, 1.0, 100.0, 2.0, 100.0);
+        for (int i = 0; i < 2; i++) a.Add(0.02, 0.0, 0.4, 1.0, 100.0, 2.0, 200.0);
+        a.Add(0.02, 0.6, 0.3, 3.9, 30500.0, 11.0, 400.0);
+        for (int i = 0; i < 3; i++) a.Add(0.02, 0.0, 0.0, 1.0, 100.0, 2.0, 999.0);
 
         Check(Math.Abs(a.IntervalS - 0.2) < 1e-9, "the interval sums to 0.2 s");
         // ⛔ THE IDENTITY THAT MAKES A DUTY CYCLE COMPUTABLE: the four categories are mutually exclusive
@@ -498,6 +498,29 @@ public static class BlackBoxTest
         Check(Math.Abs(a.BothS - 0.02) < 1e-9, "both-commanded time is 1 tick");
         Check(Math.Abs(a.NoneS - 0.06) < 1e-9, "idle time is 3 ticks");
 
+        // ---- S84 / §2.4: DELIVERED IMPULSE, in the same three categories -------------------------
+        // The forces above are 100 N for the four attitude-only ticks, 200 N for the two
+        // translation-only, 400 N on the one both-tick, and 999 N while IDLE. Each tick is 0.02 s, so
+        // the impulses are exactly 4x0.02x100 = 8, 2x0.02x200 = 8, and 1x0.02x400 = 8 N.s.
+        Check(Math.Abs(a.AttImpNs - 8.0) < 1e-9, "S84 attitude-only impulse is 4 ticks x 0.02 s x 100 N");
+        Check(Math.Abs(a.TransImpNs - 8.0) < 1e-9, "S84 translation-only impulse is 2 x 0.02 x 200");
+        Check(Math.Abs(a.BothImpNs - 8.0) < 1e-9, "S84 both-commanded impulse is 1 x 0.02 x 400");
+
+        // ⛔ THE IDLE TICKS CARRIED 999 N AND CONTRIBUTED NOTHING, WHICH IS THE POINT. There is no
+        // `NoneImpNs` bucket: with no command applied there is no category to attribute delivered
+        // force to, and a fourth bucket would invite dividing by a total that includes it. Without
+        // this check a bug that dumped idle force into any of the three would pass unseen - and idle
+        // is where a leaky RCS or a residual reading would show up.
+        Check(Math.Abs((a.AttImpNs + a.TransImpNs + a.BothImpNs) - 24.0) < 1e-9,
+              "S84 the three impulses total the COMMANDED impulse only - idle force is not attributed");
+
+        // ⛔ And a negative or absurd force contributes nothing rather than poisoning the bucket,
+        // the same discipline the peaks use.
+        BlackBoxAccum neg = BlackBoxAccum.Fresh();
+        neg.Add(0.02, 0.5, 0.0, 1, 0, 0, -500.0);
+        Check(Math.Abs(neg.AttImpNs) < 1e-12, "S84 a NEGATIVE delivered force contributes zero impulse");
+        Check(Math.Abs(neg.AttS - 0.02) < 1e-9, "S84 ...but the TIME still accumulates - it was commanded");
+
         // ⛔ THE PEAK IS THE POINT. §B11's ~4 g and §B8's 30-35 kPa are PEAKS, and a peak passing
         // between two snapshots of a rising curve never appears at all. Here the 3.9 g / 30.5 kPa tick
         // is one of ten and it is the one that must survive.
@@ -507,15 +530,15 @@ public static class BlackBoxTest
 
         // Saturation is TIME at the limit, not a snapshot of being at it.
         BlackBoxAccum s = BlackBoxAccum.Fresh();
-        s.Add(0.02, 1.0, 0.0, 1, 0, 0);
-        s.Add(0.02, 0.5, 0.0, 1, 0, 0);
+        s.Add(0.02, 1.0, 0.0, 1, 0, 0, 0.0);
+        s.Add(0.02, 0.5, 0.0, 1, 0, 0, 0.0);
         Check(Math.Abs(s.SatS - 0.02) < 1e-9, "act_sat_s accumulates TIME at |command| >= 0.99");
 
         // A bad dt must not poison an interval — the recorder never fabricates (§4.8).
         BlackBoxAccum g = BlackBoxAccum.Fresh();
-        g.Add(double.NaN, 1, 1, 1, 1, 1);
-        g.Add(-0.5, 1, 1, 1, 1, 1);
-        g.Add(0.0, 1, 1, 1, 1, 1);
+        g.Add(double.NaN, 1, 1, 1, 1, 1, 0.0);
+        g.Add(-0.5, 1, 1, 1, 1, 1, 0.0);
+        g.Add(0.0, 1, 1, 1, 1, 1, 0.0);
         Check(!g.Any, "NaN / negative / zero dt is ignored, not accumulated");
 
         a.Put(row);
@@ -845,7 +868,7 @@ public static class BlackBoxTest
             accum.Add(utStep, dynamic ? 0.4 : 0.0, 0.0,
                       dynamic ? 1.0 + phase * 0.3 : 0.0,
                       dynamic ? 1000.0 * phase : 0.0,
-                      dynamic ? 2.0 : 0.0);
+                      dynamic ? 2.0 : 0.0, 0.0);
 
             RateInputs now = In(ut, wall, dynamic, rails);
             RowPlan plan = BlackBoxRate.Plan(policy, st, now);
