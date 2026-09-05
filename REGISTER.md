@@ -12223,7 +12223,7 @@ ruling of 2026-09-05 (verbatim in W34's line, and in `pure/IgnitionGate.cs`'s ba
 was WEIGHED and accepted.** W34 records why (the 3→1 profile never cold-starts the hoverslam engine) and
 names **[[BB8]]** as what would reopen it. Do not re-open this line to "finish" the fix half without one.
 
-### W32 [S] The predicted impact ignores the LIFT the grid fins are generating — **TODO** — [logged by W25]
+### W32 [S] The predicted impact ignores the LIFT the grid fins are generating — **DOING** — [logged by W25]
 - **The finding:** `BoosterHost.PredictError` (W25) hands `TrajectoryInputs.LiftToDrag = 0.0`, i.e. a
   drag-only solve — while the whole point of `AeroDescent` is that the stage flies at a **deliberate,
   held angle of attack** and steers on the body lift that produces. So the predictor the fins steer on does
