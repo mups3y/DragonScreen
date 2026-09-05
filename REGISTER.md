@@ -4232,7 +4232,7 @@ install is a deploy target, never ours to touch):**
 > a build chat reading your `GameData`, and **the fix does not depend on the answer** — it closes the route,
 > not the source. It only matters if rows R1–R3 fail again.
 
-### T16 [O] Pure conductor core + tests — **re-scoped to the `ConductorAction` gap only, 2026-09-05 (G9 item 2)** — **TODO**
+### T16 [O] Pure conductor core + tests — **re-scoped to the `ConductorAction` gap only, 2026-09-05 (G9 item 2)** — **DOING**
 - **Read:** §B9 / §B12.2-3 + `pure/MissionPhase.cs`.
 - **Already satisfied by W4 (DONE 2026-09-04) — do NOT rebuild these.** `pure/ModeManager.cs` (its own
   header: *"the mission conductor / phase sequencer… PURE + headless-tested"*), `pure/MissionProfile.cs`
