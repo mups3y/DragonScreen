@@ -56,6 +56,7 @@ public static class PageTest
         AlarmRouting();
         CabinLeakReachesTheCabin();   // S52 / H37: the leak reaches the cabin gauge
         ChutePageTracksItsGates();    // S156 / MC-02: which chute gate is next
+        EntryPageTracksTheDescent();  // S157 / H31: the Entry page reads the vehicle
         Conic();
         OpenTrajectory();
         OrbitViewport();   // S43: the ORBIT plot's zoom + pan
@@ -735,6 +736,85 @@ public static class PageTest
         // rather than faking is that a model can fail convincingly and a constant cannot.
         Check("unpowered raises a condition", Worst2(Unpowered()) >= Severity.Caution,
               "got " + Worst2(Unpowered()));
+    }
+
+    // ---- S157 / S49 H31: THE ENTRY PAGE READS THE VEHICLE AT ALL ------------------------------
+    // `EntryPage.Build(dl, w, h)` took no PageState, so a page printing real deploy altitudes and
+    // real deploy actions could not see RadarAltitude, DroguesFired, MainsFired or MainsReleased -
+    // all four live one call away. "Nothing live at all, structurally" was the audit's phrasing.
+    static void EntryPageTracksTheDescent()
+    {
+        // ⛔ THE §1.4 TRIPWIRE, behavioural, exactly as [[S156]]'s had to be rebuilt to be. 5493 m
+        // sits between the page's own 5500 and MissionPhase's 5486; 1700 m between 1600 and 1830.
+        // If either gate is ever "reconciled" to the FSM constant, these two flip and say so.
+        Check("S157 the 5.5 km gate is the PAGE's 5500, not MissionPhase's 5486",
+              EntryColour(5493.0, "5.5 km") == "passed",
+              "at 5493 m the page's own 5500 gate is passed; got " + EntryColour(5493.0, "5.5 km"));
+        Check("S157 the 1.6 km gate is the PAGE's 1600, not MissionPhase's 1830",
+              EntryColour(1700.0, "1.6 km") != "passed",
+              "at 1700 m the 1.6 km gate reads passed, so it is being compared against 1830 - "
+                  + "the page's (TBC) altitudes and the FSM constants are deliberately different (S49)");
+
+        // The cursor walks as the vehicle descends.
+        Check("S157 high up, the 5.5 km gate is the current step",
+              EntryColour(20000.0, "5.5 km") == "current", "got " + EntryColour(20000.0, "5.5 km"));
+        Check("S157 ...and the 1.6 km gate is not yet",
+              EntryColour(20000.0, "1.6 km") == "pending", "got " + EntryColour(20000.0, "1.6 km"));
+        Check("S157 below 5.5 km the first gate is behind us",
+              EntryColour(3000.0, "5.5 km") == "passed", "got " + EntryColour(3000.0, "5.5 km"));
+        Check("S157 below 1.6 km both gates are behind us",
+              EntryColour(1000.0, "1.6 km") == "passed", "got " + EntryColour(1000.0, "1.6 km"));
+
+        // The deploy actions read the REAL chute state, not the altitude.
+        Check("S157 'Deploy drogues' is not done until the drogues actually fire",
+              EntryColourFull(1000.0, true, false, false, false, "Deploy drogues") != "passed", "");
+        Check("S157 ...and is once they have",
+              EntryColourFull(1000.0, true, true, false, false, "Deploy drogues") == "passed", "");
+        Check("S157 'CUT MAINS' follows MainsReleased, not MainsFired",
+              EntryColourFull(500.0, true, true, true, false, "CUT MAINS") != "passed", "");
+        Check("S157 ...and is done once they are released",
+              EntryColourFull(200.0, true, true, true, true, "CUT MAINS") == "passed", "");
+
+        // ⛔ NO SOURCE -> NO VERDICT. Nothing in the build counts deployed canopies, so this line
+        // must stay neutral in EVERY state - including one where every other line is done. Folding
+        // it into MainsFired would be a different claim wearing this line's words.
+        bool neutralAlways = true;
+        foreach (double alt in new[] { 20000.0, 3000.0, 1000.0, 100.0 })
+            foreach (bool fired in new[] { false, true })
+                if (EntryColourFull(alt, true, fired, fired, fired, "Land under") != "pending")
+                    neutralAlways = false;
+        Check("S157 'Land under >= 3 mains' never claims a verdict - nothing counts canopies",
+              neutralAlways, "it is being given a verdict it has no source for");
+
+        // ⛔ AND A DEAD FEED CLAIMS NOTHING AT ALL.
+        bool allPending = true;
+        foreach (string frag in new[] { "5.5 km", "Deploy drogues", "1.6 km", "Deploy mains", "CUT MAINS" })
+            if (EntryColourFull(200.0, false, true, true, true, frag) != "pending") allPending = false;
+        Check("S157 on a dead feed no step is claimed done, whatever the flags say", allPending, "");
+    }
+
+    static string EntryColour(double radarM, string frag)
+    { return EntryColourFull(radarM, true, false, false, false, frag); }
+
+    /// <summary>The state word for the Entry line containing `frag`: passed / current / pending.</summary>
+    static string EntryColourFull(double radarM, bool valid, bool drogues, bool mains, bool cut, string frag)
+    {
+        PageState es = new PageState();
+        es.Valid = valid;
+        es.Steps.RadarAltitude = radarM;
+        es.DroguesFired = drogues; es.MainsFired = mains; es.MainsReleased = cut;
+        DisplayList d = new DisplayList(EntryPage.Commands + 32);
+        EntryPage.Build(d, 2560, 1406, es);
+        for (int i = 0; i < d.Count; i++)
+        {
+            DrawCmd t = d.At(i);
+            if (t.Kind != DrawKind.Text || t.Str == null || t.Str.IndexOf(frag) < 0) continue;
+            if (Same(t.Colour, DragonPalette.Text7))  return "passed";
+            if (Same(t.Colour, DragonPalette.Accent)) return "current";
+            if (Same(t.Colour, DragonPalette.Text2))  return "pending";
+            return "other";
+        }
+        return "missing";
     }
 
     // ---- S156 / QC MC-02: THE CHUTE PAGE SAYS WHICH GATE IS NEXT ------------------------------

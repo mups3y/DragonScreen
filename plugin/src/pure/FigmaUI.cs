@@ -221,7 +221,7 @@ namespace DragonScreen
                 case UiPage.Docking:           DockingSimPage.Build(dl, w, h, s, ctl); break;
                 case UiPage.Rendezvous:        RendezvousPage.Build(dl, w, h, s); break;
                 case UiPage.DeorbitBurnPrep:   DeorbitBurnPrepPage.Build(dl, w, h, s); break;
-                case UiPage.EntryProcedure:    EntryPage.Build(dl, w, h); break;
+                case UiPage.EntryProcedure:    EntryPage.Build(dl, w, h, s); break;
                 case UiPage.SystemsTree:       SystemsTreePage.Build(dl, w, h, s); break;
                 case UiPage.SystemsPid:        SystemsPidPage.Build(dl, w, h, s); break;
                 case UiPage.Ascent:            AscentPage.Build(dl, w, h, s); break;

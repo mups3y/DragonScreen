@@ -7178,7 +7178,7 @@ ladder cropped 1:1: `10.6 km` and `5.5 km` in accent as each section's next gate
 dim, and every action row unchanged. **C1.16/G12: 0 comment prose lines lost.** No `install`, no glass, no
 `git push`.
 
-### S157 [S] `EntryPage.Build(dl, w, h)` takes no `PageState` at all — **DOING** — [H31; split 2 of 5 from [[S55]]]
+### S157 [S] `EntryPage.Build(dl, w, h)` takes no `PageState` at all — **DONE 2026-09-06** — [four of six lines track real state; the fifth is left neutral **because nothing counts canopies**, and a mutation proves it stays that way] — [H31; split 2 of 5 from [[S55]]]
 - **The finding.** *"Nothing live at all, structurally"* — the page prints parachute-deployment altitudes
   while `s.Altitude`, `s.Steps.DroguesFired` / `MainsFired` and the phase are all live one call away.
 - ⚠ **It is a SIGNATURE change before it is a tracking change**, which is why it follows [[S156]] rather
@@ -7187,6 +7187,68 @@ dim, and every action row unchanged. **C1.16/G12: 0 comment prose lines lost.** 
 - ⚠ [[S150]] owns this page's **structure** (QC `DB-01`/`DB-02`/`DB-03` — corner layout, triplicate
   content, no touch). **This line owns only its step tracking. Do not fix H31 twice.**
 - **DONE when:** `Build` takes `PageState`, the gates track it as in S156, and a preview shows it live.
+
+#### ✅ DONE 2026-09-06
+
+**What landed.** `EntryPage.Build` takes `PageState` (its one caller, `FigmaUI.cs:224`, moved with it), and
+the six-line card tracks on **[[S156]]'s model exactly**, so the two pages describing the same physical
+event now describe it the same way (C7.1):
+
+| line | source | real? |
+|---|---|---|
+| `5.5 km (TBC): monitor altitude…` | `s.Steps.RadarAltitude` ≤ **5500** | live |
+| `Deploy drogues — latch` | `s.DroguesFired` | live, from real chute modules |
+| `1.6 km (TBC): fire pyro…` | `s.Steps.RadarAltitude` ≤ **1600** | live |
+| `Deploy mains — execute` | `s.MainsFired` | live |
+| `Land under ≥ 3 mains` | ⛔ **none** — stays neutral | — |
+| `CUT MAINS after splashdown` | `s.MainsReleased` | live |
+
+⭐ **`Done` IS A TRI-STATE (`bool?`), NOT A BOOL, AND THAT IS THE WHOLE DESIGN.** *"Land under ≥ 3 mains"*
+needs a **count of deployed canopies**, and nothing in the build models one. Folding it into `MainsFired`
+would be **a different claim wearing this line's words** — "the mains fired" is not "three of them are
+holding". So it carries `null` and never receives a verdict, in any state. **Mutation T** gives it
+`MainsFired` and the suite fails with *"it is being given a verdict it has no source for"*.
+
+⛔ **THE §1.4 TRIPWIRE, BEHAVIOURAL FROM THE START** — [[S156]] learned that lesson the hard way and this
+line inherited it. **5493 m** sits between the page's own 5500 and `MissionPhase`'s **5486**; **1700 m**
+between 1600 and **1830**. If either gate is ever "reconciled" to the FSM constant, the two checks flip and
+say so by name. **Mutation U** does exactly that and fails with the reason printed.
+
+**MUTATION-PROVEN.**
+| mutation | result |
+|---|---|
+| **T** — give the canopy-count line `MainsFired`'s verdict | FAILS: *"never claims a verdict — nothing counts canopies"* |
+| **U** — reconcile the 1.6 km gate to the FSM's 1830 | FAILS: *"at 1700 m the 1.6 km gate reads passed, so it is being compared against 1830"* |
+| **V** — `live = true` (a dead feed still shows verdicts) | FAILS: *"on a dead feed no step is claimed done, whatever the flags say"* |
+
+**MEASURED OFF THE RENDER, NOT JUDGED BY EYE.** `ui_entryprocedure.png` re-rendered and the six rows'
+colours sampled from the PNG:
+
+| row | measured | = |
+|---|---|---|
+| `5.5 km` | `(32, 251, 253)` | `20FBFD` **Accent — current** |
+| `Deploy drogues` | `(88, 93, 124)` | `585D7C` **Text7 — passed** |
+| the other four | `(218, 231, 250)` | `DAE7FA` **Text2 — pending** |
+
+⚠ **AND THE ONE THING THAT LOOKS WRONG IN THAT RENDER IS NOT WRONG.** The drogues read *passed* while the
+5.5 km gate is still *current* — which looks like an inconsistent fixture (QC `C-10`'s category) and is
+not. The Entry card carries the **Standard** schedule; the **High Altitude** profile deploys drogues at
+**10.6 km**. A vehicle that took the high profile and is now above 5.5 km has genuinely fired its drogues
+and genuinely not reached the 5.5 km gate. **I checked this before filing it as a fixture defect.**
+
+⚠ **`current` IS THE FIRST NOT-DONE LINE, EVEN WHEN A LATER ONE IS DONE**, and that is deliberate: on a
+descent checklist the earliest outstanding item is the one worth surfacing, and the alternative ("the first
+not-done *after* the last done") would silently skip an incomplete step. The render above is exactly that
+case, so the property is visible as well as tested.
+
+⛔ **No verdict on a dead feed** (`!s.Valid` → every line pending, whatever the flags say — S22 / S31).
+⛔ **Nothing here commands anything** (§14.4(a)); the page has no controls at all.
+⚠ **[[S150]] still owns this page's STRUCTURE** (QC `DB-01`/`DB-02`/`DB-03` — it uses a corner of the screen
+and leaves the rest empty, which the render makes obvious). **This line owned only H31, the tracking.**
+
+**Verified (C1.3).** `python plugin/build.py test` **green — ALL SUITES PASSED**, page suite **1021 → 1033
+checks**. `python plugin/build.py preview` re-rendered and inspected, colours sampled numerically.
+**C1.16/G12: 0 comment prose lines lost.** No `install`, no glass, no `git push`.
 
 ### S158 [S] Suit Leak Check: the sim is live, the *procedure* is not — **TODO** — [H19 + QC `SC-01`; split 3 of 5 from [[S55]]]
 - **The finding.** Both left ticks draw **checked at page-open, before the crew touch anything**;

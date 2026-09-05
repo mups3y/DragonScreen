@@ -36,7 +36,12 @@ namespace DragonScreen
         const float RefW = 3427f, RefH = 2112f;
         const float CardX = 300f, CardW = 2827f;
 
-        public static void Build(DisplayList dl, int w, int h)
+        /// <summary>⛔ TAKES `PageState` SINCE S157 (2026-09-06). It did not, and that was the whole of
+        /// S49's H31: *"Entry page: nothing live at all, structurally — `Build(dl,w,h)` takes no
+        /// `PageState`"*. The page printed real parachute-deployment altitudes and real deploy actions
+        /// while `RadarAltitude`, `DroguesFired`, `MainsFired` and `MainsReleased` were all live one
+        /// call away, and it could not see any of them because they were not passed in.</summary>
+        public static void Build(DisplayList dl, int w, int h, PageState s)
         {
             if (dl == null || w <= 0 || h <= 0) return;
             float sc = h / RefH, ox = (w - RefW * sc) * 0.5f; if (ox < 0f) ox = 0f;
@@ -50,12 +55,40 @@ namespace DragonScreen
             void Dot(float titleY) => dl.ArcBand(X(CardX + 33f), Y(titleY + 28), Z(4), Z(9), 0, 360, DragonPalette.Accent);
             void Title(string t, float titleY) =>
                 dl.Text(t, X(CardX + 62f), Y(titleY), Z(34), TextAlign.Left, DragonPalette.White);
-            void Lines(string[] lines, float titleY, float spacing)
+            // ---- S157 / S49 H31: THE STEPS TRACK, ON EXACTLY THE MODEL [[S156]] LANDED ----
+            // Three states from the palette the sibling chute page uses, so the two screens describing
+            // the same physical event describe it the same way (C7.1):
+            //     PASSED   Faint  - behind us
+            //     CURRENT  Accent - the step being flown
+            //     PENDING  Text2  - exactly what every line looked like before this
+            //
+            // ⛔ `Done` IS A tri-state, NOT A bool, and that is the point. `null` means THIS LINE HAS
+            // NO SOURCE and must never be given a verdict - "Land under >= 3 mains" needs a count of
+            // deployed canopies that nothing in the build models, so it stays neutral rather than
+            // being folded into MainsFired, which would be a different claim wearing this one's words.
+            // ⛔ And with no valid state EVERY line is pending: a page that cannot read the vehicle
+            // must not claim a step was completed (S22 / S31's guardrail).
+            bool live = s.Valid;
+            double radarM = s.Steps.RadarAltitude;
+
+            void Lines(string[] lines, bool?[] done, float titleY, float spacing)
             {
+                // The first line whose step is not yet done is the CURRENT one. A line with no source
+                // is skipped for that purpose rather than blocking the cursor behind it.
+                int current = -1;
+                if (live)
+                    for (int i = 0; i < lines.Length; i++)
+                        if (done[i].HasValue && !done[i].Value) { current = i; break; }
+
                 float ry = titleY + 56f;
                 for (int i = 0; i < lines.Length; i++)
                 {
-                    dl.Text(lines[i], X(CardX + 40f), Y(ry), Z(26), TextAlign.Left, DragonPalette.Text2);
+                    Rgba col = DragonPalette.Text2;
+                    if (live && done[i].HasValue)
+                        col = done[i].Value ? DragonPalette.Text7
+                            : (i == current) ? DragonPalette.Accent
+                                             : DragonPalette.Text2;
+                    dl.Text(lines[i], X(CardX + 40f), Y(ry), Z(26), TextAlign.Left, col);
                     ry += spacing;
                 }
             }
@@ -65,13 +98,27 @@ namespace DragonScreen
             // numbers for the same physical event (see header comment) ----
             const float C1Y = 260f;
             Dot(C1Y); Title("PARACHUTE DEPLOYMENT ALTITUDE", C1Y);
+            // ⛔ THE GATE ALTITUDES ARE THE PAGE'S OWN, TRANSCRIBED FROM ITS OWN LABELS — 5500 and
+            // 1600 — and NOT MissionPhase's FSM constants (5486 / 1830). `SCREEN_INVENTORY.md`
+            // records that those are intentionally two different things: SpaceX's own "(TBC)"
+            // placeholder text, kept verbatim (§1.4). [[S156]] landed the identical rule on
+            // ManualChuteDeployPage, whose Standard schedule these six lines already reuse — so the
+            // two pages now agree about one physical event in BOTH the numbers and the tracking.
             Lines(new[] {
                 "5.5 km (TBC): monitor altitude, arm and verify backup pyros",
                 "Deploy drogues — latch",
                 "1.6 km (TBC): fire pyro, arm and verify backup pyros",
                 "Deploy mains — execute",
                 "Land under ≥ 3 mains",
-                "CUT MAINS after splashdown" }, C1Y, 40f);
+                "CUT MAINS after splashdown" },
+                new bool?[] {
+                    radarM <= 5500.0,      // the page's own 5.5 km, never the FSM's 5486
+                    s.DroguesFired,
+                    radarM <= 1600.0,      // the page's own 1.6 km, never the FSM's 1830
+                    s.MainsFired,
+                    null,                  // no source: nothing models a CANOPY COUNT. Stays neutral.
+                    s.MainsReleased },
+                C1Y, 40f);
 
             BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
         }
