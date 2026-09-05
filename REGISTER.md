@@ -14472,7 +14472,7 @@ the clamp from raising them. **R-01 is open.**
 ⚠ **STRAY LOGGED (C1.1), needs its own line — see [[S124]] below**, written rather than acted on: the
 proportional-scaling branch is now **unreachable for any `RowSize` block**.
 
-### S124 [S] `FitRows`' proportional-scaling branch is unreachable at `RowSize` — the wanted size is already below the floor — **TODO** — [logged by [[S116]] per C1.1, 2026-09-06; TIER 3: a live consequence of the honest floor, not a defect S116 introduced]
+### S124 [S] `FitRows`' proportional-scaling branch is unreachable at `RowSize` — the wanted size is already below the floor — **DOING** — [logged by [[S116]] per C1.1, 2026-09-06; TIER 3: a live consequence of the honest floor, not a defect S116 introduced]
 
 - **The finding, and it is arithmetic rather than opinion.** `FitRows` takes its scaling branch only when
   `need > avail`, which forces `k = avail/need < 1`, and the result survives the clamp only when
