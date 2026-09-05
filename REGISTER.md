@@ -15185,7 +15185,7 @@ hits item 2`, which is the H-04 failure in one line).
 
 ⚠ **This does not do [[S121b]]–[[S121e]].** They are unblocked: the leaves they call are ready.
 
-### S121b [O] `Pages.cs`: the legacy bodies — **TODO (UNBLOCKED 2026-09-06 by [[S121a]])** — [split 2 of 5 of [[S121]]; 32 lines / 32 references; the largest]
+### S121b [O] `Pages.cs`: the legacy bodies — **DOING** — [split 2 of 5 of [[S121]]; 32 lines / 32 references; the largest]
 - ⚠ **This is one FILE but several PAGES** (1506 lines: the legacy FLIGHT, NAV and VEHICLE bodies plus the
   modal crew card at `:850`). It may need a further split; decide that after [[S121a]] lands and the true
   edit count is visible, and split rather than run to compaction (C1.7).
