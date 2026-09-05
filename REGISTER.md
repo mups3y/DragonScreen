@@ -11168,7 +11168,7 @@ settles questions with knowable answers... S86 recorded three options for `cover
 answer is OPTION 1, SPLIT THEM."* Built by S94: `cover_cam_l/c/r` + `cover_phase_l/c/r`, six columns,
 `BlackBoxSchema.cs` §G. See S94's own line for what was built and its stated limits.
 
-### S87 [S] Three docking/phasing quantities reach `PageState` only as FORMATTED TEXT — **TODO** — [TIER 3: a real value that survives only as a string]
+### S87 [S] Three docking/phasing quantities reach `PageState` only as FORMATTED TEXT — **DOING** — [TIER 3: a real value that survives only as a string]
 Logged by **BB1**, 2026-09-04 (C1.1).
 **The gap.** §2.8 asks for `off_x/y/z_m` (R2, R1 inside 1 km), `phase_angle_rad` and `tgt_radius_m` (R3).
 `VesselData.Docking()` computes the offsets and `:546-549` computes the phasing geometry, but only their
