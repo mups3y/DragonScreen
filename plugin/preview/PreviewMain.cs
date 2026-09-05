@@ -1019,6 +1019,28 @@ public static class PreviewMain
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + pdl.Count + " commands");
             }
 
+            // ---- S141 / S49 H25 / QC DK-03: THE DOCKING FEED, WITH AND WITHOUT ----
+            // S141 put the docking-adapter view behind the rings, where the reference (the live iss-sim
+            // DOM) has it. ⛔ BOTH STATES NEED A RENDER, because the interesting half of the change is
+            // the one that draws NOTHING: with no camera the page must still be a working instrument,
+            // not a hole (rule S10). `ui_docking.png` above IS that no-feed state — the preview has no
+            // live feed, so it renders exactly what a closed nose cone gives the crew.
+            // This one is the other half, using the SAME stand-in the HUD's `_camfeed` render uses
+            // (S100, from QC H-09: the middle state "the GAME always has and only the preview cannot").
+            {
+                DockingCamStandIn = true;
+                ForgetRuntimeImages();
+                DisplayList cdl = new DisplayList(600);
+                FigmaUI.Build(cdl, UiPage.Docking, CW, CH, ps, MapProjection.Default(),
+                              5, false, 1, CoverPage.CoverCam.Earth, Turntable.Front(), PageControls.Default);
+                if (cdl.Overflowed) Console.WriteLine("  WARNING UI Docking camfeed OVERFLOWED");
+                string cpath = Path.Combine(outDir, "ui_docking_camfeed.png");
+                Render(cdl, CW, CH, cpath);
+                Console.WriteLine("  " + cpath + "   " + CW + "x" + CH + "   " + cdl.Count + " commands");
+                DockingCamStandIn = false;
+                ForgetRuntimeImages();
+            }
+
             // ---- VEHICLE ALERTS + red sub-nav (T5) ----
             // Anything reachable by a control needs a render (the T4 lesson, above). The FUNCTIONS/ALERTS
             // toggle and VehicleTabBar's per-tab severity aren't wired to touch yet (T14), so their other

@@ -110,7 +110,39 @@ namespace DragonScreen
             void L(string t, float x, float y, float z, Rgba c) => dl.Text(t, X(x), Y(y), Z(z), TextAlign.Left, c);
             void C(string t, float cx, float y, float z, Rgba c) => dl.Text(t, X(cx), Y(y), Z(z), TextAlign.Centre, c);
 
+            // ---- S141 / S49 H25 / QC DK-03: THE DOCKING-ADAPTER VIEW IS THE BACKGROUND ----
+            // This page had no camera at all: it filled the screen with Background and drew rings over
+            // nothing. The reference has a view behind them — this file's own header, specced from the
+            // live iss-sim DOM, says "two concentric HUD rings + centre reticle OVER THE DOCKING-ADAPTER
+            // VIEW". So the feed is evidence (§1.4), not a decision.
+            //
+            // ⭐ THE PATTERN IS ALREADY PROVEN THREE TIMES: the stranded legacy `DockingPage.cs:74-75`
+            // does exactly this pair — Background first, then a full-bleed `ImageId.DockingCamLive` —
+            // and Frame58Hud does it clipped to the bowl. Nothing new is invented here.
+            //
+            // ⛔ BACKGROUND FIRST, ALWAYS, AND THAT ORDER IS THE NO-FEED DESIGN. With no camera the
+            // image draws nothing and the page is simply dark with every instrument still working —
+            // rule S10's graceful degradation, and the legacy page's own comment says so in as many
+            // words. There is no "no signal" placard because there is nothing to placard: the rings,
+            // the diamond and every readout are unaffected.
             dl.Rect(0, 0, w, h, DragonPalette.Background);
+            dl.Image(ImageId.DockingCamLive, 0f, 0f, w, h, DragonPalette.White);
+            // ---- AND THE DARKEN BEHIND THE RINGS, WHICH THE FEED MAKES NECESSARY ----
+            // ⛔ NOT DECORATION, AND NOT SCOPE CREEP: adding the feed is what creates the problem this
+            // solves. Every readout on this page is white or green, and it now sits over a live view of
+            // a target that is frequently SUNLIT. The stranded legacy `DockingPage.cs:76-78` hit exactly
+            // this and states the fix in its own words — "a darken square behind the rings so
+            // white/green numerals read over a sunlit target" — using this same `ImageId.HudDarken` at
+            // 0.94 of its body height. Shipping the feed without it would trade an empty background for
+            // an unreadable one, which is not the finding being closed.
+            // Sized and centred on the ring cluster (HCX/HCY, outer radius R1) rather than on the page,
+            // because that is what the readouts ring: ROLL above, YAW below, PITCH right, and the PYR
+            // block left all sit within ~R1 + 100 of the centre.
+            {
+                float vig = Z((R1 + 100f) * 2f);
+                dl.Image(ImageId.HudDarken, X(HCX) - vig * 0.5f, Y(HCY) - vig * 0.5f, vig, vig,
+                         DragonPalette.White);
+            }
             C("MANUAL DOCKING", HCX, 60, 26, Accent);
 
             // ---- HUD: two concentric rings + graticule ticks + centre reticle ----

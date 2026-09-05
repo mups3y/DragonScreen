@@ -147,7 +147,17 @@ namespace DragonScreen
 
         /// <summary>Does the page's centre swap to the docking camera? (The HUD, when the nose is open.)
         /// The painter uses this to claim the camera before drawing, as the old DOCKING page did.</summary>
-        public static bool WantsDockingCam(UiPage p, PageState s) { return p == UiPage.Hud && s.Steps.NoseConeOpen; }
+        /// <summary>Which pages want the forward docking-port camera claimed for them.
+        ///
+        /// ⛔ THE NOSE-CONE GATE IS PHYSICS, NOT POLICY, WHICH IS WHY BOTH PAGES SHARE IT. The camera
+        /// looks out through the docking port, and on Dragon the nose cone covers it. Closed cone, no
+        /// view — for the HUD and for the manual docking screen alike. S141 added `Docking` and did NOT
+        /// touch the gate, because the same hardware is in the way for both.
+        ///
+        /// S141 / S49 H25 / QC DK-03: `UiPage.Docking` (DockingSimPage) drew its rings over a flat
+        /// Background. Its own spec — the live iss-sim DOM — puts them over the docking-adapter view.</summary>
+        public static bool WantsDockingCam(UiPage p, PageState s)
+        { return (p == UiPage.Hud || p == UiPage.Docking) && s.Steps.NoseConeOpen; }
 
         public static void Build(DisplayList dl, UiPage page, int w, int h, PageState s, MapView view)
         { Build(dl, page, w, h, s, view, 5, false, 1, CoverPage.CoverCam.Earth); }

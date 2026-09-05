@@ -57,6 +57,7 @@ public static class PageTest
         CabinLeakReachesTheCabin();   // S52 / H37: the leak reaches the cabin gauge
         ChutePageTracksItsGates();    // S156 / MC-02: which chute gate is next
         EntryPageTracksTheDescent();  // S157 / H31: the Entry page reads the vehicle
+        DockingPageHasACamera();      // S141 / H25 / DK-03: a camera behind the docking rings
         Conic();
         OpenTrajectory();
         OrbitViewport();   // S43: the ORBIT plot's zoom + pan
@@ -736,6 +737,46 @@ public static class PageTest
         // rather than faking is that a model can fail convincingly and a constant cannot.
         Check("unpowered raises a condition", Worst2(Unpowered()) >= Severity.Caution,
               "got " + Worst2(Unpowered()));
+    }
+
+    // ---- S141 / S49 H25 / QC DK-03: A CAMERA BEHIND THE DOCKING RINGS --------------------------
+    // DockingSimPage drew its rings over a flat Background. Its own spec - the live iss-sim DOM - puts
+    // them "over the docking-adapter view". The feed existed and was granted only to the HUD.
+    static void DockingPageHasACamera()
+    {
+        PageState s = new PageState(); s.Valid = true;
+        DisplayList d = new DisplayList(DockingSimPage.Commands + 64);
+        DockingSimPage.Build(d, 2560, 1406, s);
+
+        int cam = -1, bg = -1;
+        for (int i = 0; i < d.Count; i++)
+        {
+            DrawCmd t = d.At(i);
+            if (t.Kind == DrawKind.Image && t.Image == ImageId.DockingCamLive && cam < 0) cam = i;
+            if (t.Kind == DrawKind.Rect && bg < 0 && t.C >= 2559f && t.D >= 1405f) bg = i;
+        }
+        Check("S141 the manual docking page draws the live docking feed", cam >= 0, "");
+        Check("S141 ...and still paints a full-page background", bg >= 0, "");
+        // ⛔ THE ORDER IS THE NO-FEED DESIGN, not a detail: Background FIRST, so that with no camera the
+        // page is simply dark and every instrument still works (rule S10). Reversed, a missing feed
+        // would paint over the rings.
+        Check("S141 ...with the background BEHIND it, so no feed degrades gracefully", bg >= 0 && cam > bg, "");
+        // And the feed is full-bleed, as the reference and the stranded legacy page both have it.
+        if (cam >= 0)
+        {
+            DrawCmd t = d.At(cam);
+            Check("S141 ...anchored at the page origin", Math.Abs(t.A) < 0.01f && Math.Abs(t.B) < 0.01f, "");
+            Check("S141 ...and full-bleed", t.C >= 2559f && t.D >= 1405f, "");
+        }
+
+        // ⛔ THE CAMERA IS ONLY CLAIMED WITH THE NOSE CONE OPEN - physics, not policy: the camera looks
+        // out through the docking port and the cone covers it. Same gate as the HUD's, deliberately.
+        PageState open = new PageState(); open.Valid = true; open.Steps.NoseConeOpen = true;
+        PageState shut = new PageState(); shut.Valid = true; shut.Steps.NoseConeOpen = false;
+        Check("S141 the docking page claims the camera with the nose cone OPEN", FigmaUI.WantsDockingCam(UiPage.Docking, open), "");
+        Check("S141 ...and not with it shut - the cone is over the lens", !FigmaUI.WantsDockingCam(UiPage.Docking, shut), "");
+        Check("S141 ...and the HUD still claims it, unchanged", FigmaUI.WantsDockingCam(UiPage.Hud, open), "");
+        Check("S141 ...while a page with no camera slot still does not", !FigmaUI.WantsDockingCam(UiPage.Vehicle, open), "");
     }
 
     // ---- S157 / S49 H31: THE ENTRY PAGE READS THE VEHICLE AT ALL ------------------------------

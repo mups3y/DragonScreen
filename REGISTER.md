@@ -15039,7 +15039,7 @@ budget that does not exist is arguably genuinely absent, and deciding which read
 **Verified (C1.3).** **Nothing was built and nothing changed** — this is a HELD write-up. `build.py test`
 green (unchanged tree). No `install`, no glass, no `git push`.
 
-### S141 [S] There is no camera behind the docking rings — **DOING** — [H25 + QC `DK-03`; TIER 2: pure display]
+### S141 [S] There is no camera behind the docking rings — **DONE 2026-09-06** — [and it needed **one more thing than the line said** — the feed is what makes the darken necessary] — [H25 + QC `DK-03`; TIER 2: pure display]
 - **The finding.** `DockingPage.Build` fills the screen with `Background`; `WantsDockingCam` grants the live
   feed **only** to `UiPage.Hud`. The reference (and iss-sim) shows the docking-adapter view behind the rings.
 - ⭐ **`DockingCamRenderer` exists and is genuinely live**, and the stranded `DockingPage.cs:73` already
@@ -15047,6 +15047,55 @@ green (unchanged tree). No `install`, no glass, no `git push`.
   `WantsDockingCam` clause.**
 - **DONE when:** the feed draws behind the rings, the no-feed look is designed rather than blank, and a
   preview shows both.
+
+#### ✅ DONE 2026-09-06 — all three criteria, and one addition the change itself made necessary
+
+**⚠ FIRST, ONE CORRECTION TO THE LINE.** It says *"`DockingPage.Build` fills the screen with
+`Background`"*. `plugin/src/pure/DockingPage.cs` is the **stranded legacy** page and it **already draws the
+feed** (`:74-75`) — that is the *"stranded proof"* the line itself cites two sentences later. The page with
+no camera is **`DockingSimPage`**, which `FigmaUI.cs:221` maps `UiPage.Docking` to. Same finding, different
+file; fixed in the right one.
+
+⭐ **THE FEED IS EVIDENCE, NOT A DESIGN CHOICE (§1.4).** `DockingSimPage`'s own header, specced from the
+live iss-sim DOM, reads: *"two concentric HUD rings + centre reticle **over the docking-adapter view**"*.
+Nothing was invented — `ImageId.DockingCamLive` and `DockingCamRenderer` already exist and are live, and
+the draw pair is copied from the stranded legacy page.
+
+**What landed.** `DockingSimPage` draws `Background` then a full-bleed `DockingCamLive`;
+`FigmaUI.WantsDockingCam` now returns true for `UiPage.Docking` as well as `UiPage.Hud`.
+
+⛔ **THE NOSE-CONE GATE IS PHYSICS, NOT POLICY, AND WAS NOT TOUCHED.** The camera looks out through the
+docking port and Dragon's nose cone covers it — closed cone, no view, for either page. Adding `Docking`
+beside `Hud` in the same condition is therefore not a widening of a policy; it is the same hardware being
+in the way. Four checks pin it, including that a page with no camera slot still gets nothing.
+
+#### ⭐ ONE THING THE LINE DID NOT ASK FOR, AND WHY IT BELONGS TO THIS LINE ANYWAY
+
+**The feed is what creates the problem the darken solves.** Every readout on this page is white or green,
+and it now sits over a live view of a target that is frequently **sunlit**. The stranded legacy page hit
+exactly this and states the fix in its own words (`DockingPage.cs:76-78`): *"A darken square behind the
+rings so white/green numerals read over a sunlit target."* ⛔ **Shipping the feed without it would trade an
+empty background for an unreadable one**, which is not the finding being closed — so it is this line's
+responsibility rather than a stray. Same `ImageId.HudDarken`, same idiom, sized to the ring cluster
+(`HCX`/`HCY`, `R1 + 100`) because that is the radius the readouts ring.
+
+**MUTATION-PROVEN, on the property that IS the no-feed design.**
+| mutation | result |
+|---|---|
+| **AE** — draw the feed *before* the background | FAILS: *"with the background BEHIND it, so no feed degrades gracefully"* — reversed, a missing feed paints over the rings |
+| **AF** — drop the nose-cone gate | FAILS: *"and not with it shut — the cone is over the lens"* |
+
+**BOTH STATES RENDERED AND INSPECTED, which is what the DONE-when asks.**
+- **`ui_docking.png` — no feed.** The preview has no live camera, so this *is* the closed-nose-cone look:
+  every instrument reads, and the darken gives the rings a deliberate well rather than a flat field.
+- **`ui_docking_camfeed.png` — with feed.** New, using the **same stand-in** the HUD's `_camfeed` render
+  uses (S100, from QC `H-09`: the state *"the GAME always has and only the preview cannot"*). The test card
+  fills the page behind the rings and every readout stays legible over it.
+
+**Verified (C1.3).** `python plugin/build.py test` **green — ALL SUITES PASSED**, page suite
+**1033 → 1042 checks**. `preview` re-rendered; both docking states inspected at 2560.
+**C1.16/G12: 0 comment prose lines lost.** No `install`, no glass, no `git push`. ⛔ **Nothing here
+commands anything** — the thirteen inert docking controls are untouched (QC `DK-02`, correctly inert).
 
 ### S142 [S] `Reset Positions` is classed as actuation only because nobody knows what it resets — **TODO** — [H26; TIER 3: the disambiguation IS the research]
 - **The finding.** [[S29]] settled `Instructions` as (C) — no content in this build — and classed
