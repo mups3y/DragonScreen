@@ -15933,7 +15933,7 @@ read. ⛔ No `install`, no glass, no `git push`. §14.4(a) untouched.
 ⚠ **The Procedure half is DONE and this line should not be re-read as owing it.** If the Cabin question
 is answered "(d) leave it", this line closes with no code at all.
 
-### S137 [S] The ALERTS view is a one-word summary, and the FDIR bar beside it is a fake three-position gauge — **TODO — un-held 2026-09-06, the R-01 policy exists** —
+### S137 [S] The ALERTS view is a one-word summary, and the FDIR bar beside it is a fake three-position gauge — **DOING** —
 ✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set
 one (SPLIT BY CONTENT TYPE — see S153). ⛔ **The condition that replaces it is mechanical, not a wait:**
 any text this line ADDS must be drawn at **`Typography.MinDesignFor(w, sc)` or above** if it is LIVE, or
