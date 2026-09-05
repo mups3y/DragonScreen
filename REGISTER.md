@@ -9769,7 +9769,7 @@ S57 item 2 explicitly warns against (*"do not land the column twice"*).
 3. **Answer S57-Q1 first** (it is already posed and unanswered) and this question disappears — S79 then runs
    once, in whatever order S57's answer implies.
 
-### S80 [S] Re-inspect every preview PNG whose page tints an ASSET — the preview ignored tints until S75 — [TIER 2: previews that were inspected and were wrong] — **DOING**
+### S80 [S] Re-inspect every preview PNG whose page tints an ASSET — the preview ignored tints until S75 — [TIER 2: previews that were inspected and were wrong] — **DONE 2026-09-06 — all five sites measured, all correct, NO code change** — recorded in `docs/SCREEN_SPEC.md` §7.1
 Logged by **S75**, 2026-09-04 (C1.1 — found while verifying S75's own fix, which the preview refused to show).
 **The finding.** `ScreenPainter.DrawImage` multiplies every image command by `c.Colour`, so on the glass a
 named asset drawn in anything but opaque white is tinted. `preview/PreviewMain.cs`'s `DrawCoverAsset` drew
@@ -9791,6 +9791,44 @@ glass shows green/amber, and stayed bright white on the no-feed variant where ev
 page's own tint intent, each divergence is either confirmed correct-as-now or logged as its own line, and the
 finding is recorded wherever a future chat would look for it (`docs/SCREEN_SPEC.md` or `docs/INDEX.md` — the
 chat's call, stated in the close). No code change is expected; if one IS needed, log it rather than doing it.
+
+#### ✅ DONE 2026-09-06 — **five sites, all MEASURED, all correct as they stand, and no code change**
+
+**Every tinting site re-derived from source rather than taken from this line** (line numbers had moved:
+`VrioTestPage` is `:63` now, not `:45`). `grep -rn "\.Asset(" plugin/src/pure/ | grep -v White` gives the
+five: `VehicleOverviewPage.cs:114` · `VehicleSubsystemPage.cs:142` · `SuitCheckPage.cs:83` ·
+`VrioTestPage.cs:63` · `CoverPage.cs:427`.
+
+**MEASURED, NOT INSPECTED BY EYE** — the colours were sampled out of the PNGs:
+
+| site | measured |
+|---|---|
+| `ic_check` on `ui_vehicle` | icon boxes read **White · White · White · Go · White · Caution · White** — ⭐ **exactly `ChkKey = { 0,0,0,1,0,2,0 }`, row for row** |
+| `ic_check` on `ui_vehicle_nofeed` | **Text6 on all seven.** ⭐ This is precisely the case S75 reported broken |
+| `Ico()` on `ui_suitcheck` / `ui_vriotest` | `ic_refresh` → **Accent** (34 px each), `ic_eye` → **Text6** (183 / 184 px) |
+| `CoverPage` `InertKeys` | `gridicons_refresh` → **Text6** 112 px, 7 px white antialiasing |
+
+⭐ **AND THE FIRST METHOD I USED WAS WRONG — recorded because it would fool the next chat too.** A
+whole-page pixel count found Go and Caution on the vehicle pages and I nearly closed on that. **It proves
+nothing:** the state word beside each icon is drawn in the *same colour as the icon*, so a page-wide sweep
+scores green TEXT as a green ICON — which is the exact confusion this line exists to retire. The finding
+only became evidence when re-measured **inside the asset's own rect** (design `x 85..132`, the label starts
+at `x 150`). That method note is written into `docs/SCREEN_SPEC.md` §7.1 so it is not re-learned.
+
+⚠ **ONE PAGE SHOWS NO SEVERITY COLOUR AT ALL, AND IT IS CORRECT.** `ui_vriotest` has no Go / Caution /
+Alarm anywhere. **Not a divergence:** `VrioTestPage` only ever passes `White` / `Dim` / `Accent` to `Ico()`
+— it has **no modelled health state to tint by**, which is S49's **H21** and belongs to **[[S160]]**
+(split out of [[S55]] the same day). Checked at the call sites before concluding it, not assumed.
+
+**RECORDED WHERE A FUTURE CHAT WILL LOOK: `docs/SCREEN_SPEC.md` §7.1** — chosen over `INDEX.md` because §7
+is the **"screen complete" gate**, and its *"visual review vs reference ✓"* tick is the specific thing this
+finding invalidates. The new §7.1 states that **a visual review taken before 2026-09-04 did not see asset
+tints**, so that tick is not transferable across that date for any page in the table.
+
+**Verified (C1.3).** **A re-inspection, and no code changed** — exactly as this line predicted (*"No code
+change is expected; if one IS needed, log it rather than doing it"*), and none was needed. `python
+plugin/build.py preview` re-rendered; `python plugin/build.py test` green. Outputs: this line and
+`docs/SCREEN_SPEC.md` §7.1. No `install`, no glass, no `git push`.
 
 
 ### W22 [S] `pure/Trajectory.cs`'s 4-band L/D schedule is UNMARKED, and R1 §7.4 files it under the wrong file — **DONE** (2026-09-04) — [TIER 3: a disclosed unmeasured constant carrying no marking] ⚠ batch deviation from C1.1/C1.7 authorised by owner 2026-09-04 via overseer

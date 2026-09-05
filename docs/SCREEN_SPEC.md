@@ -60,3 +60,39 @@ Navigation · **Docking (reference)** · Mission · Vehicle/Overview · Systems 
 
 ## 7. "Screen complete" gate (per page)
 IA ✓ · evidence class + confidence recorded ✓ · source-of-truth contract ✓ · visual review vs reference ✓ · typography ✓ · components ✓ · glove touch targets ✓ · real telemetry ✓ · real commands ✓ · phase-aware ✓ · alert-integrated ✓ · failure/disabled states ✓ · IVA-tested ✓ · performance ✓ · **flight-tested where applicable ✓** · docs updated ✓.
+
+### ⚠ 7.1 A "visual review" taken before 2026-09-04 did not see asset tints (S75 → S80)
+
+**The instrument was wrong, and this is the note that stops an old verdict being trusted.**
+`ScreenPainter.DrawImage` multiplies every image command by `c.Colour`, so on the glass a named asset
+drawn in anything but opaque white is **tinted**. `preview/PreviewMain.cs`'s `DrawCoverAsset` drew the PNG
+raw and ignored `c.Colour` entirely — so **every asset a page tints BY STATE rendered white in every
+preview taken before S75 fixed it** (2026-09-04), while the glass rendered it coloured. That is a
+systematic preview/glass divergence on precisely the surface `CLAUDE.md` says layout and legibility are
+judged from.
+
+⛔ **So the "visual review vs reference ✓" tick above is not transferable across that date for any page
+that tints an asset.** If a page's tick predates 2026-09-04 and the page appears in the list below,
+the review was taken on an instrument that could not show the thing being reviewed.
+
+**S80 re-verified all five tinting sites on 2026-09-06 — MEASURED off the PNGs, not eyeballed, and every
+one is correct as it now stands. No code change was needed.**
+
+| site | what it tints | measured in the preview |
+|---|---|---|
+| `VehicleOverviewPage.cs:114` · `VehicleSubsystemPage.cs:142` | `ic_check`, per row severity | `ui_vehicle` icon boxes read **White · White · White · Go · White · Caution · White** — exactly `ChkKey = { 0,0,0,1,0,2,0 }`, row for row |
+| …the same, on a dead feed | whole row dims | `ui_vehicle_nofeed` reads **Text6 on all seven**. ⭐ This is the exact case S75 found broken (the icons *"stayed bright white on the no-feed variant where everything else dims"*) |
+| `SuitCheckPage.cs:83` (`Ico()`) | every glyph on the page | `ic_refresh` → **Accent**, `ic_eye` → **Text6** |
+| `VrioTestPage.cs:63` (`Ico()`) | every glyph on the page | same, and identical counts |
+| `CoverPage.cs:427` (`InertKeys`) | inert glyphs dimmed | `gridicons_refresh` → **Text6** (112 px, 7 px white antialiasing) |
+
+⚠ **`ui_vriotest` shows NO severity colours at all, and that is CORRECT, not a divergence.**
+`VrioTestPage` only ever passes `White` / `Dim` / `Accent` to `Ico()` — it has **no modelled health state
+to tint by**, which is S49's **H21** and is owned by register line **S160**, not by the renderer.
+
+⛔ **HOW TO CHECK THIS PROPERLY, because the obvious method does not work.** A whole-page pixel count
+**cannot** distinguish a tinted ASSET from tinted TEXT — on these pages the state word beside each icon is
+drawn in the *same* colour as the icon, so a page-wide sweep scores green text as a green icon. S80's first
+sweep did exactly that and proved nothing. **Sample the asset's own rect** (for `ic_check`: design
+`x 85..132`, `y = 300 + i*200`, size 38 — the label starts at `x = 150`, so that column is icon and nothing
+else).
