@@ -1224,6 +1224,152 @@ whose midpoint is **880.0 — the slot centre, exactly.** The construction was n
 ⚠ **Q4 (the CAMERA caption) is untouched** — it is an open owner question and this fix does not pre-empt it.
 ---
 
+## C-14 — Both TARGET readouts under the globe are baked pictures of the same wrong value, and the longitude carries a latitude's hemisphere letter
+
+**TIER 1** · **NEW (2026-09-05)** · found by the owner asking to *see* the band during Q4 · same class as **C-01**
+
+**Evidence.** The two readouts either side of the globe are drawn as **assets**, not text
+(`CoverPage.cs:593-595`), and their keys state their contents:
+
+```
+target_latitude_26deg_15_00deg_n
+target_longitude_26deg_15_00deg_n
+```
+
+Both baked as **26° 15.00" N**. On the render they print identically, side by side, under a live globe.
+
+**Three separate faults in one pair of glyphs:**
+
+1. **Latitude and longitude show the same number.** Two different quantities, one picture's worth of value.
+2. **The longitude reads `N`.** North is not a longitude. The correct letters are E/W, and the build already
+   knows this — `VesselData.cs:468-469` is explicitly `LatLon(TargetLat, "N", "S")` and
+   `LatLon(TargetLon, "E", "W")`.
+3. **Both contradict the live state in the same frame.** `PageState` carries `TargetLatText` and
+   `TargetLonText`, correctly computed and correctly lettered; the preview fixture holds `51.60 N` and
+   `14.00 E`. The page draws neither.
+
+**What is wrong.** This is **C-01 exactly** — baked telemetry contradicting the live state it sits beside —
+on the same page, in the band directly under the globe those coordinates claim to describe.
+
+⚠ **AND I MOVED THEM WITHOUT NOTICING, WHICH IS THE PART WORTH RECORDING.** S105 fixed C-01 for the seven
+top-strip values by replacing the baked assets with live text at their own measured boxes. In the same
+batch, S105 took these two and **only repositioned them** — centring them symmetrically about the slot — and
+I reported the result as *"midpoint 880.0 = the slot centre exactly"* and *"0% globe overlap"*. Both true,
+and both about two readouts that are pictures of the wrong numbers. **I measured the geometry of a lie and
+called the geometry fixed.** The lesson is C-01's own and I had it in hand: when a value sits in a band you
+are rearranging, check whether it is a value or a picture *before* you measure how well it is placed.
+
+**Fix plan.** The mechanism already exists and is proven — `DrawTopStrip` (S105) does exactly this for seven
+other values on this page.
+- Add the two keys to `SkipKeys` and draw `s.TargetLatText` / `s.TargetLonText` as text at the positions
+  `DrawCameraChrome` already computes (`slotCx ± Z(ReadoutHalfGap)`), so the S105 balance is preserved.
+- **Reuse the dash rule the top strip uses** — `NavPage.cs:1057-1059` already gates these two on
+  `s.Valid && s.HasTargetGround`, so a page with no target ground point dashes rather than inventing a
+  coordinate. Route through the same predicate so the two surfaces cannot disagree.
+- ⚠ **The captions `TARGET LATITUDE` / `TARGET LONGITUDE` are reference copy and stay**; only the values
+  change, exactly as in S105.
+- **Verify:** the two readouts print different, correctly-lettered values matching `PageState` in the same
+  frame, and dash together when there is no target ground point.
+
+⛔ **NOT filed: the `PE` marker overlapping the latitude caption.** It is visible on the current render, and
+S105's move is what brought them together — but the marker's position follows the **orbit**, so the overlap
+is occasional rather than standing. **Owner's call, 2026-09-05, verbatim: "the pe will be in location rarely
+dont worry about it."** Recorded here so a later pass does not re-file it as new.
+
+---
+
+# ⚠ OWNER'S ANSWERS TO Q1–Q9 — 2026-09-05 — **PENDING OVERSEER ASSESSMENT, NOT YET ACTIONABLE**
+
+⛔ **NOTHING IN THIS SECTION HAS BEEN ACTED ON, AND NOTHING MAY BE UNTIL THE OVERSEER HAS ASSESSED IT.** The
+owner set that condition himself when he asked for the questions: *"I will answer them and then ask the
+overseer to assess before acting on them."* These are therefore his **stated preferences**, recorded per
+C1.12 — free-text answers are quoted verbatim; where he chose from presented options the option is named as
+a selection, not as words he wrote. **No build has been started from any of them.**
+
+| Q | answer | form |
+|---|---|---|
+| **Q5** width | **Raise the cfg to 2560** | option selected |
+| **Q3** ENTRY ENABLED | autopilot-run checklist + crew GO/NO-GO gate | free text, below |
+| **Q6** audio | tie the sliders to KSP's own sound layers | free text, below |
+| **Q2** mirrored Earth | **Check it during the 2560 install** | option selected |
+| **Q4** camera band | balance accepted; two button changes | free text, below |
+| **Q9** VRIO page | look like the original, simulate it, with sound | free text, below |
+| **Q1** stray arrow | **Drop it** | option selected |
+| **Q7** PRESSURE node | **Simulate a structural pressure** | option selected |
+| **Q8** margin labels | **Nothing — 2560 handles it** | option selected |
+
+## The free-text answers, verbatim
+
+**Q3 —** *"that list should be the autopilot checking everything is ready for re-entry, so if it cannot hold
+real values we simulate the vehicle performing the checklist. After confirming everything is green/ticked
+there should be a crew gate question to continue with re-entry go no go decision. If yes autopilot proceeds
+with re-entry if no there must be a way for the user to retriger the sequence when ready to re-enter"*
+
+**Q6 —** *"make the volume controls control the game sound levels. Music, vehicle sound, ambient sound etc
+etc. What ever logical sound layer options the game has, tie to those sliders etc"*
+
+**Q4 —** *"that is well balanced now, the only things I would like to change is the white dash before "next
+view" and "settings" text in buttons needs to be removed and both font sizes for each button should match"*
+
+**Q9 —** *"that page needs to look like the original but all those features do not look like we can get true
+values for so yet a again simulate it. Make it look like it is actively doing it's job in a realistic way
+including sound effects"*
+
+## What the chat established while these were being answered — facts, not decisions
+
+- **Q3's architecture already exists.** `pure/CrewGate.cs` is the described machine: a gate is a titled
+  checklist of AUTO items (confirmed from vessel state) and CREW items (tapped), plus GO/NO-GO/ABORT; the
+  autopilot **holds** at the gate and only a crew GO on a satisfied checklist clears it. **NO-GO holds
+  rather than cancels** (`:109-110`) — which is the "way to retrigger when ready" the owner asked for,
+  already built. W10 gave it a live driver on 2026-09-05. `CrewGates.Return()` defines
+  `G15 "GO FOR DEORBIT BURN"` with two AUTO items and one CREW item.
+  ⚠ **Three gaps:** there is **no entry/re-entry gate** (`Return()` stops at the deorbit burn); the Cover's
+  rows are **not wired** to any of it; and those rows are **reference copy**, so mapping them onto gate items
+  is a §1.4 call.
+- **Q6 has a clean 5-to-5 fit.** The page's channels are GROUND / AUX / MAIN / INTERCOM / ALERTS; KSP's
+  `Assembly-CSharp` exposes `MASTER_VOLUME`, `MUSIC_VOLUME`, `AMBIENCE_VOLUME`, `SHIP_VOLUME`,
+  `VOICE_VOLUME`. ⚠ **Which maps to which is arbitrary in places**, and if the mapping is arbitrary the
+  **labels** become a question. ⚠ These are **global game settings** — an IVA slider would change the
+  player's whole-game audio, not just the mod's.
+- **Q9's sound requirement is already solved for licensing.** `PanelAudio.cs` plays a console click through
+  `GameDatabase.Instance.GetAudioClip`, and **the sample is synthesised in-repo** by `build/make_click.py` —
+  *"art-free, licence-free, deterministic PCM. Nothing was downloaded (C7 puts external URLs off-limits)."*
+  VRIO test tones can be made the same way. It already rides `GameSettings.SHIP_VOLUME`, so Q6's sliders
+  would govern them automatically.
+- **Q4's two changes, with the mechanics.** `NEXT VIEW` is **live text at 50 design px**; `SETTINGS` is a
+  **baked PNG at ~37**. Matching them means drawing SETTINGS as live text — shrinking NEXT VIEW to 37 would
+  put it at 12.3 panel px, under the floor (this is C-03's own finding). The two dashes are different
+  things: NEXT VIEW's is drawn in code, SETTINGS' is the baked `ic_sharp_subtract` asset. At 50, SETTINGS'
+  label is ~189 design px in a pill that already holds NEXT VIEW's ~288, so it fits.
+
+## ⚠ Three things the overseer must resolve before any of this is built
+
+1. **Q9: "look like the original" is ambiguous.** The community Figma frame, or the real capsule screen?
+   Both readings reject the current centred/smaller rebuild, but they rank the SOURCES oppositely — and that
+   ranking is the whole of Q9. §1.4 puts the community Figma in tier 2 **by name** and §14.2 puts the
+   captured VRIO layout in tier 1, so reading it as "the Figma frame" **downgrades a tier-1 element**, which
+   is exactly what I flagged as needing an explicit ruling.
+2. **Q9 + Q3 versus §14.4(a).** `START / STOP VRIO n LED TEST` command the vehicle's health LEDs, and
+   §14.4(f) is explicit that *"flight ACTUATION stays §14.4(a) honest-no-op until Part B"*. Is an LED
+   self-test actuation, or a readout-producing self-test that §14.4(f) requires be included and filled?
+   The owner has asked for it to be simulated and to *behave*; whether that is permitted, or needs the
+   Part-B gate, is the crux of both answers.
+3. **Q7 needs a C1.15 search first.** "Simulate a structural pressure" may not be reachable: C1.15 requires a
+   documented mod-first search against `docs/reference/INSTALLED_MODS.md` **before any new simulation is
+   written**, and if a real source exists it wins over the simulation. If none exists and none can be
+   modelled coherently, §14.4(e)'s honest answer is a **dash**, not a substitute number.
+
+## Gate flags (C1.12)
+
+- **Q5 option 2 and Q2 both need `install` + glass time.** Neither has been opened. The owner has stated the
+  preference; **the gate itself is still shut** and only he opens it.
+- **Q6 option 3 would have needed an `OVERRIDE`** of the 2026-08-06 no-volume-sliders ruling. The owner's
+  actual answer routes around it — real controls are not "simulated controls" — so **no OVERRIDE is
+  required**, but the overseer should confirm that reading rather than assume it.
+- Nothing else here touches a gate.
+
+---
+
 ## Open questions for the owner — Cover (Q1–Q4)
 
 Per C1.14. Each is a paste-ready overseer prompt (C1.13). **The QC role decides none of these and proceeds
