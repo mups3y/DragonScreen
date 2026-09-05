@@ -65,16 +65,16 @@ Cover's seven phase views, plus the lower analog console panel. **The six Vehicl
 | **2** | **Audio** | AUDIO SETTINGS | ✅ **DONE — 6 findings** | 2026-09-05 |
 | **3** | **Procedure** | PROCEDURE (Frame 59) | ✅ **DONE — 5 findings** *(shared section with page 4)* | 2026-09-05 |
 | **4** | **Cabin** | CABIN (Frame 66) | ✅ **DONE** *(same section — one source file)* | 2026-09-05 |
-| 5 | Menu | MENU | NOT STARTED | — |
-| 6 | PhaseDeport | DEORBIT BURN | NOT STARTED — *unreachable enum value (S49 H9)* | — |
-| 7 | PhaseCoast | COAST TO TRUNK JETTISON | NOT STARTED — *unreachable (S49 H9)* | — |
-| 8 | PhaseClaw | CLAW SEPARATION | NOT STARTED — *unreachable (S49 H9)* | — |
-| 9 | PhaseManual | MANUAL CHUTE | NOT STARTED — *unreachable (S49 H9)* | — |
-| 10 | ActOnSpaceX | ON SPACEX — GO | NOT STARTED — *unreachable (S49 H9)* | — |
-| 11 | ActDeorbitBrief | DEORBIT BURN BRIEF | NOT STARTED — *unreachable (S49 H9)* | — |
-| 12 | ActReview | REVIEW REFERENCE | NOT STARTED — *unreachable (S49 H9)* | — |
-| 13 | ActAcknowledge | ACKNOWLEDGE | NOT STARTED — *unreachable (S49 H9)* | — |
-| 14 | Entry | ENTRY GO / NO-GO | NOT STARTED — *unreachable (S49 H9)* | — |
+| **5** | **Menu** | MENU | ✅ **DONE — 2 findings** | 2026-09-05 |
+| 6 | PhaseDeport | DEORBIT BURN | ✅ **DONE** *(placeholder — see M-02)* | 2026-09-05 |
+| 7 | PhaseCoast | COAST TO TRUNK JETTISON | ✅ **DONE** *(placeholder — see M-02)* | 2026-09-05 |
+| 8 | PhaseClaw | CLAW SEPARATION | ✅ **DONE** *(placeholder — see M-02)* | 2026-09-05 |
+| 9 | PhaseManual | MANUAL CHUTE | ✅ **DONE** *(placeholder — see M-02)* | 2026-09-05 |
+| 10 | ActOnSpaceX | ON SPACEX — GO | ✅ **DONE** *(placeholder — see M-02)* | 2026-09-05 |
+| 11 | ActDeorbitBrief | DEORBIT BURN BRIEF | ✅ **DONE** *(placeholder — see M-02)* | 2026-09-05 |
+| 12 | ActReview | REVIEW REFERENCE | ✅ **DONE** *(placeholder — see M-02)* | 2026-09-05 |
+| 13 | ActAcknowledge | ACKNOWLEDGE | ✅ **DONE** *(placeholder — see M-02)* | 2026-09-05 |
+| 14 | Entry | ENTRY GO / NO-GO | ✅ **DONE** *(placeholder — see M-02)* | 2026-09-05 |
 | 15 | Vehicle | VEHICLE OVERVIEW *(tab: All)* | NOT STARTED | — |
 | 16 | SuitCheck | SUIT LEAK CHECK | NOT STARTED | — |
 | 17 | VehicleMech | MECH PANEL *(tab: Mech)* | NOT STARTED | — |
@@ -2027,10 +2027,139 @@ tempting `ui_cover_phase4.png` was not usable, and C-07's fix plan proposes rend
 
 ---
 
+---
+
+# PAGE 5 — MENU, and the nine placeholder pages (6–14)
+
+**Renders inspected:** `ui_menu.png` · `ui_phasedeport.png` (representative of all nine placeholders — they
+differ only in the title string). 2026-09-05.
+
+**Source:** `plugin/src/pure/MenuPage.cs` (108 lines) · `plugin/src/pure/PlaceholderPage.cs` (41 lines) ·
+`FigmaUI.IsPlaceholder`.
+
+**S49's entry.** §2 rates Menu as *"Nav index; grid membership is compile-time. `Build` takes no
+`PageState`"* — correct, and correctly classed **(C)**, not a defect. H9 records the nine dead enum values
+as **(C) — record, don't build**. Both hold. The two findings below are things S49 could not see without a
+render and a grep.
+
+## What was checked and found CLEAN — and this page is the model the others should copy
+
+1. ⭐ **`MenuPage.CellRect` is the shared-rectangle discipline done right.** Its own docstring: *"The one
+   source of truth Build, HitTest and the headless nav test all share, so the drawn grid and the hit grid
+   can never drift apart."* `Build` (`:76`) and `HitTest` (`:97`) both call it. **This is the exact pattern
+   H-04 shows failing on the HUD and A-01 needs on the Audio page** — it already exists, in this file, and
+   should be cited as the precedent when those are fixed.
+2. **The hit mapping matches the draw mapping.** `HitTest` uses `px * RefW / w`; `Build` uses `PX(x) = x * sx`
+   with `sx = w / RefW`. Exact inverses — unlike F-04's letterbox mismatch.
+3. **Grid membership is correct per S14.** 25 cards for 35 enum values: `Menu` itself and the nine
+   `IsPlaceholder` values are excluded, so no look-alike dead card reaches the grid.
+4. **The heading and the card rects agree on centre.** `dl.Text("MENU", w * 0.5f, …)` uses the panel centre
+   while the cards use `PX()`; at design 3427 the two coincide exactly (1713.5 → 1280 at this panel).
+5. **The placeholder card is honestly built** — it names its destination, says plainly it is not built, and
+   the bottom bar is a real way out. ⚠ Except for one line of its copy — M-02.
+
+## Cross-page confirmations
+
+**C-04** and **C-12** recur on both (`MenuPage.cs:85`, `PlaceholderPage.cs:37` — `component_48` at full
+panel width again). Pages six and seven.
+
+⭐ **F-01's evidence is visible here:** the grid carries **`PROCEDURE`** and **`TEST VRIO HEALTH LEDS`** as
+two separate cards, and they open the same screen.
+
+---
+
+## M-01 — The Menu's row count is a hand-maintained constant, and the 31st page added will be drawn under the bottom bar and be untappable
+
+**TIER 2** · **NEW** · latent
+
+**Evidence.** `MenuPage.cs:29` — `const int Cols = 3, Rows = 10;` — with the file's own comment recording
+that it has already been bumped by hand once:
+
+> *"Rows bumped 9->10 (T6, Rendezvous appended): grid cells must cover `FigmaUI.PageCount-1` entries, and
+> the count keeps growing every time a page is appended — see BuildEntries."*
+
+`Rows` is **not derived from `Entries.Length`.** Today: 25 entries in 30 cells → **five dead cells** and a
+visibly empty band across the bottom of the grid (`ui_menu.png`, rows 9 and 10).
+
+**The latent half is the one that matters.** With `Top = 210`, `Bottom = 1830`, `Gap = 24`, `Rows = 10`, a
+cell is 140.4 design px tall and the row pitch is 164.4. So entry **30** (the 31st) lands at:
+
+```
+CellRect(30) -> row 10, y = 210 + 10 x 164.4 = 1854 ... 1994.4
+bottom status bar begins at design y 1877
+HitTest guard: `if (dy0 < Top || dy0 > Bottom) return -1`   (Bottom = 1830)
+```
+
+So the 31st card would be **drawn**, mostly underneath the bottom bar, and **rejected by the hit test
+entirely** — a visible card that cannot be tapped. The build is five appends away from that, and the enum
+has grown by nine values since the Figma rebuild began.
+
+**Fix plan.**
+- **Derive the grid from the data:** `Rows = ceil(Entries.Length / (float)Cols)`, computed in the static
+  initialiser beside `Entries`. Then the grid can never under- or over-provision, and the hand-maintenance
+  the comment describes stops being needed.
+- ⚠ **Deriving `Rows` alone is not enough** — with the row *pitch* fixed by `(Bottom - Top)`, more rows
+  means shorter cells, and eventually cells too short for a 32-px label. Add the same guard `FitRows`
+  needs (**C-05**): below a legible cell height the grid must **paginate**, not shrink. That is real work
+  and should be scheduled, not bolted on.
+- **Recommended now, as the cheap safe step:** derive `Rows`, and add a headless check that
+  `CellRect(Entries.Length - 1)` ends above `Bottom` **and** above the bottom bar's design y (1877). That
+  check turns a future silent breakage into a build failure — which is the same move C-07 and H-04's fix
+  plans both propose.
+- **Must not break:** `CellRect` is shared by `Build`, `HitTest` and `FigmaUINavTest`. Changing `Rows`
+  changes all three together, which is exactly why the shared function is right.
+- **Verify:** re-render `ui_menu.png` — 25 entries should fill 9 rows with two spare cells, not 8 rows with
+  five; and the headless bound check must pass with a synthetic 31-entry list.
+
+---
+
+## M-02 — The placeholder page tells the crew "this button is wired", and no button is wired to it
+
+**TIER 2** · **NEW** · extends S49 **H9**
+
+**Evidence.** `ui_phasedeport.png` renders three lines:
+
+```
+DEORBIT BURN
+PAGE NOT YET BUILT
+this button is wired; the destination is coming
+```
+
+The third is a literal at `PlaceholderPage.cs:35-36`. **It is false.** Verified by grep across
+`plugin/src/`: no `NavHit` anywhere targets `UiPage` 6–14 — the only matches for those enum values are
+two comments explaining that `UiPage.Entry` (14) was *not* reused for `EntryPage`. And `MenuPage.BuildEntries`
+excludes every `IsPlaceholder` value from the grid. So the nine placeholder pages are reachable only from a
+**stale persisted page int** — a save written by an older build.
+
+**What is wrong.** The copy was true when it was written: the Figma nav *did* wire every button to a
+destination, which is what `PlaceholderPage.cs:3-5` describes. **S14 then removed those values from the
+Menu grid** — correctly, per the owner's decision, so a dead card would not read as a real page — and left
+the caption behind. The page now makes a claim about the build that the build contradicts, on the one
+screen whose entire purpose is to be honest about not being built.
+
+**Fix plan.**
+- **Correct the line to what is now true.** Something with no claim in it — *"no page is built for this
+  destination yet"* — or, better, say how the crew got here, because that is genuinely useful: this page
+  can now only appear from a stale saved selection, and *"this screen was remembered from an older save"*
+  tells them something actionable (the bottom bar takes them anywhere).
+- ⚠ **Do not delete the page or the enum values.** `UiPage`'s own rule is that the int persists per screen
+  and values are never renumbered; the placeholder is precisely the graceful landing for an int that no
+  longer resolves. S49 H9 classes this **(C) — record, don't build**, and that stands: the *page* is
+  correct, one *sentence* is not.
+- **Optional, and worth considering with it:** `ScreenPainter` could clamp a persisted page int that
+  resolves to `IsPlaceholder` back to `UiPage.Cover` on load, so a stale save opens on the hub instead of
+  on a "not built" card. That is a behaviour change, so it is the owner's call — but it would make the
+  placeholder genuinely unreachable, at which point the caption question disappears.
+- **Must not break:** the back route. The bottom bar is drawn on this page and is the way out.
+- **Verify:** re-render any placeholder; the caption must not assert a wiring that does not exist.
+
+---
+
 *Page 0 (Cover) inspected 2026-09-05; C-12 and C-13 added the same day on owner review (R-1…R-5).
 Page 1 (Hud / Frame 58) inspected 2026-09-05 at HEAD `97f4c78`.
 Page 2 (Audio settings) inspected 2026-09-05.
-Pages 3 + 4 (Procedure / Cabin) inspected 2026-09-05.*
+Pages 3 + 4 (Procedure / Cabin) inspected 2026-09-05.
+Page 5 (Menu) + pages 6–14 (the nine placeholders) inspected 2026-09-05.*
 
 *⚠ **Three findings are page-wide, not per-page, and should be scheduled ahead of the sweep:***
 - ***H-01** — the preview's resolution. It decides how every later legibility finding is measured, so
