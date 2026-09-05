@@ -15091,7 +15091,7 @@ defect. Each line below says so in its own text so the next chat is not misled t
 
 #### The five splits, ordered by dependency
 
-### S121a [S] The five shared widgets: give them a scale-aware form — **DOING** — [split 1 of 5 of [[S121]]; 26 lines / **31 references**; do this FIRST]
+### S121a [S] The five shared widgets: give them a scale-aware form — **DONE 2026-09-06 — and two of the five turned out to need SELF-scaling, not an overload** — [split 1 of 5 of [[S121]]; 26 lines / **31 references**; do this FIRST]
 - `Gauge.cs` · `NumericReadout.cs` · `GateCard.cs` · `StatusIndicator.cs` · `Card.cs`.
 - ⛔ **FIRST, because every page below calls into these** — the same reason [[S120]]'s `ChromeBar` came
   before the bodies. Fixing a page against an unscaled widget just moves the defect one call deep.
@@ -15108,7 +15108,84 @@ defect. Each line below says so in its own text so the next chat is not misled t
   check in `LegibilityFloorTest` covers `Gauge.ValueSize` at 1280 and 2560, and the 1280 render is
   byte-identical.
 
-### S121b [O] `Pages.cs`: the legacy bodies — **TODO (blocked: [[S121a]])** — [split 2 of 5 of [[S121]]; 32 lines / 32 references; the largest]
+#### ⭐ DONE 2026-09-06 — and the five split into TWO KINDS, which the line did not anticipate
+
+The plan was one pattern for all five: an `sc` overload with the old arity delegating at 1. That is right
+for three of them and **wrong for two**, and the difference is not stylistic.
+
+| widget | shape | why |
+|---|---|---|
+| `Gauge` · `NumericReadout` · `StatusIndicator` | **`sc` overload**, old arity delegates at `1f` | they never receive the panel width — only `x`, `y`, `radius`, or the caller's own box |
+| `GateCard` · `Card` | ⭐ **SELF-scaling from their own `w`** | they already take `(w, h)`, and their DRAW and their HIT TEST share the same geometry helpers |
+
+⛔ **THE SECOND ROW IS A SAFETY ARGUMENT, NOT A CONVENIENCE ONE.** `GateCard.Draw` and
+`GateCard.HitTest` both lay out through `CardRect`/`ItemRect`/`ButtonRect`; `Card.Build` draws the tabs
+that `Card.HitTest` tests. Handing `sc` in as a parameter makes it possible for a caller to scale one and
+not the other — **a control painted where the touch test does not look, which is QC `H-04` exactly**
+([[S108]]: a tap on empty letterbox navigating, because one box was written twice with different
+constants). Deriving the scale from the `w` both entry points already receive makes that divergence
+impossible rather than merely unlikely. ⚠ Where a helper has no `w` to derive from (`ItemRect`,
+`ButtonRect`) it takes `sc` as a **REQUIRED** parameter — fail-closed, as [[S120]] did with
+`ChromeBar.TopY`, [[S158]] with `runActive` and [[S124]] with `floorDesign`.
+
+#### What each widget got
+
+- **`Gauge.ValueSize` — the one real behaviour change, and it is the clamp.** Both bounds now scale, so
+  `Typography.Min * sc` is `MinFor(panelW)` by definition and the ceiling stops pinning the dial.
+  Measured: at 1280 the dial's number is 28 px (2.1875 % of the panel); at 2560 it was **still 28**
+  (1.0938 %) and is now 56. ⭐ `Gauge.Bar` also scales its **boxes** — the `56f` unit inset, the `28f`
+  drop to the track and the track's own `6f` thickness — which is [[S117]]'s trap, not type.
+- **`StatusIndicator.Badge` and `GateCard`'s `DrawItem`/`Plate` — the LATENT pair this line names.**
+  `(h - Typography.Caption) * 0.5f` compares a panel-pixel height against a RefPanelW type size: correct
+  only while nothing scales. Both fixed here rather than left for the page that trips them.
+- **`GateCard.CardRect`'s `MaxW`** was the surprise: `cw = w * 0.60f` clamped to a bare 640 gave a card
+  **640 px wide on a 2560 panel — a quarter of the width**, holding a 400 px minimum meant for half of
+  1280. Scaled, the clamp does what it was measured to do.
+- **`Card`** scales `Radius`, the tab strip's `12f`/`6f` and its type. ⚠ `WidthFrac` / `HeightFrac` /
+  `NotchPerTab` / `NotchDepth` are **fractions of the panel** and are deliberately NOT scaled — doubling
+  those would grow the card twice.
+
+#### Verified — and the preview says which pages this actually reached
+
+⭐ **MEASURED, NOT ASSERTED: rendered all 119 preview pages with the change and again with `HEAD`'s five
+files swapped back in, and compared every PNG by hash.** **8 changed**, and they are exactly the right 8:
+`page0_flight_gate` (GateCard) and `page1_vehicle`, `page1_vehicle_mech`, `page4_settings{,_audio,_cabin,
+_display,_video}` (Card's tabs).
+⚠ **`page0_flight` and `page3_docking` are UNCHANGED, and that is correct, not a miss** — they use
+`Gauge` / `NumericReadout` / `StatusIndicator` through the OLD arity, which delegates at `sc = 1`. Those
+three widgets do nothing until a page passes a real scale, which is [[S121b]] and [[S121d]]. **The
+capability landed here; the pages are still visibly un-passed rather than silently half-done.**
+Inspected: the gate card now fills half the panel with legible type and full-size GO/NO-GO/ABORT plates;
+the settings tab strip is legible while its page body is still small — [[S121c]]'s file, untouched.
+
+**`LegibilityFloorTest` gained `SharedWidgetsTrackThePanel`** — cross-width checks on all five, including
+`Gauge.ValueSize` at both widths as the DONE-when requires, plus draw/hit agreement for `GateCard` and
+`Card` at 1280 AND 2560.
+
+⛔ **AND THREE OF THOSE CHECKS WERE TAUTOLOGIES ON THE FIRST PASS.** `GaugeBarSizes`/`PairedSizes`/
+`BadgeSizes` originally computed `Typography.Caption * sc` **in the test** and asserted the 2560 list was
+twice the 1280 list — which is `Caption * 2 == 2 * (Caption * 1)`, arithmetic about the test's own
+expression, and would have passed with every `* sc` deleted from the source. ⭐ Rewritten to RENDER each
+widget into a `DisplayList` and read the sizes and baselines back out of the emitted commands. Caught by
+asking what the check would fail on, which is the same discipline that caught [[S126]] E.
+
+**Mutation-proved: 11 mutations, 11 killed** — but only after two survived and the tests were strengthened.
+⚠ **V10** (GateCard's row pitch unscaled) and **V11** (Card's tab height unscaled) both survived the first
+round, and for one reason worth recording: the hit-test checks locate a control **with the same function
+they then test**, so a mutation that moves both stays self-consistent and passes. ⭐ **Consistency is not
+correctness.** Added checks that compare those two quantities against something they do NOT share — the
+card that must contain the rows, the buttons they must not reach, and the pitch across widths. Both then
+die. The other nine: the clamp's upper bound, its lower bound (a second floor, which R-02 forbids), the
+bar's track and gap, the paired rate line, the latent centring, the badge frame, `MaxW`, and **the
+draw/hit divergence itself** (`HitTest` at `sc = 1` while `Draw` scales — reports `the centre of item 0
+hits item 2`, which is the H-04 failure in one line).
+
+`build.py test` green · comment-loss check **0** across all six files · no `install`, no glass, no
+`git push` · nothing wires a flight control (§14.4(a)).
+
+⚠ **This does not do [[S121b]]–[[S121e]].** They are unblocked: the leaves they call are ready.
+
+### S121b [O] `Pages.cs`: the legacy bodies — **TODO (UNBLOCKED 2026-09-06 by [[S121a]])** — [split 2 of 5 of [[S121]]; 32 lines / 32 references; the largest]
 - ⚠ **This is one FILE but several PAGES** (1506 lines: the legacy FLIGHT, NAV and VEHICLE bodies plus the
   modal crew card at `:850`). It may need a further split; decide that after [[S121a]] lands and the true
   edit count is visible, and split rather than run to compaction (C1.7).
@@ -15117,13 +15194,13 @@ defect. Each line below says so in its own text so the next chat is not misled t
   RefPanelW constant** — [[S120]] left `HeightFor(w)` for exactly this, and boxes are [[S117]]'s trap.
 - **DONE when:** as the parent's DONE-when, for this file.
 
-### S121c [S] `SettingsPage.cs` — **TODO (blocked: [[S121a]])** — [split 3 of 5 of [[S121]]; 24 lines / 24 references]
+### S121c [S] `SettingsPage.cs` — **TODO (UNBLOCKED 2026-09-06 by [[S121a]])** — [split 3 of 5 of [[S121]]; 24 lines / 24 references]
 - ⚠ **Read [[S134]] before starting.** It owns the settings family's real coordinate-system defect and its
   five-layouts-that-render-one problem; this line is only the RefPanelW pass. Do not do S134's work here,
   and check whether S134 has landed first — if it has, the file will have moved.
 - **DONE when:** as the parent's DONE-when, for this file.
 
-### S121d [S] The docking trio: `DockingPage` · `DockingPageCentral` · `AttitudeHud` — **TODO (blocked: [[S121a]])** — [split 4 of 5 of [[S121]]; 25 lines / 25 references]
+### S121d [S] The docking trio: `DockingPage` · `DockingPageCentral` · `AttitudeHud` — **TODO (UNBLOCKED 2026-09-06 by [[S121a]])** — [split 4 of 5 of [[S121]]; 25 lines / 25 references]
 - Kept as one line because they are one screen: `DockingPageCentral` draws `AttitudeHud`, and both lean on
   `Gauge`, `NumericReadout` and `StatusIndicator` from [[S121a]].
 - ⚠ Non-type geometry here too: `w - 170f`, `w - 64f` (`DockingPage`), `w - 150f`, `w - 296f`
@@ -15132,7 +15209,7 @@ defect. Each line below says so in its own text so the next chat is not misled t
   these three are the legacy docking page and are dormant.
 - **DONE when:** as the parent's DONE-when, for these three files.
 
-### S121e [S] `PanelBoardPage.cs` — **TODO (blocked: [[S121a]])** — [split 5 of 5 of [[S121]]; 10 lines / **13 references**]
+### S121e [S] `PanelBoardPage.cs` — **TODO (UNBLOCKED 2026-09-06 by [[S121a]])** — [split 5 of 5 of [[S121]]; 10 lines / **13 references**]
 - The smallest page-level split, and the one where the line-vs-reference gap is widest (10 lines carry 13
   references) — size it off 13.
 - **DONE when:** as the parent's DONE-when, for this file.

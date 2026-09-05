@@ -54,6 +54,7 @@ public static class LegibilityFloorTest
         StrokesKeepTheirPhysicalWeight();
         ChromeBarTracksThePanel();
         TheShippedPanelsAreExactlyTwoToOne();
+        SharedWidgetsTrackThePanel();
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed"
                           + "   (floor " + Typography.MinFor(W1) + " px @" + W1
@@ -367,6 +368,245 @@ public static class LegibilityFloorTest
     //
     // ⛔ WRITTEN ACROSS WIDTHS, like everything else here, and for the same reason: at 1280 alone a
     // scaled bar and an un-scaled one are the same bar. That is why nothing caught this for ten days.
+    // ---- S121a: THE FIVE SHARED WIDGETS, ACROSS WIDTHS ------------------------------------------
+    // These five are what every legacy page draws THROUGH, so a page pass that scales its own literals
+    // while calling an unscaled widget just moves the defect one call deep. The checks are the same
+    // shape as the rest of this suite: a comparison ACROSS widths, plus the un-passed caller rendering
+    // exactly as before, which is the property that makes landing this safe.
+    static void SharedWidgetsTrackThePanel()
+    {
+        float sc1 = Typography.ScaleFor(W1), sc2 = Typography.ScaleFor(W2);
+
+        // ---- Gauge.ValueSize: THE ONE THAT WAS CLAMPED, NOT MERELY UN-SCALED --------------------
+        // ⛔ The defect in one line: a dial whose radius DOUBLES produced the same 28 px number, so its
+        // share of the panel halved. The old 1-arg form is kept and must still do exactly that, because
+        // that is what "un-passed callers are unchanged" means.
+        Eq("S121a Gauge.ValueSize at RefPanelW is unchanged by the overload",
+           Gauge.ValueSize(115.73f, sc1), Gauge.ValueSize(115.73f), 1e-4f);
+        Check("S121a the OLD Gauge.ValueSize still clamps a doubled radius to the 1280 ceiling — the defect, pinned",
+              Math.Abs(Gauge.ValueSize(235.20f) - Typography.Value) < 1e-4f,
+              "got " + Gauge.ValueSize(235.20f) + ", Typography.Value " + Typography.Value);
+        Check("S121a ...and the SCALED form lets it follow the panel instead",
+              Gauge.ValueSize(235.20f, sc2) > Typography.Value + 1f,
+              "got " + Gauge.ValueSize(235.20f, sc2));
+        // the real dial: radius 115.73 at 1280, 235.20 at 2560 (measured off Pages.cs' own expressions)
+        Eq("S121a the shipped dial's number is exactly twice the size on a twice-as-wide panel",
+           Gauge.ValueSize(235.20f, sc2), 2f * Gauge.ValueSize(115.73f, sc1), 1e-3f);
+        Check("S121a ...which is the same share of the panel at both widths",
+              Math.Abs(Gauge.ValueSize(115.73f, sc1) / W1 - Gauge.ValueSize(235.20f, sc2) / W2) < 1e-7f,
+              Gauge.ValueSize(115.73f, sc1) / W1 + " vs " + Gauge.ValueSize(235.20f, sc2) / W2);
+        // the floor half of the clamp is a ratio too - R-02's whole point
+        Eq("S121a the scaled lower bound IS Typography.MinFor, not a second floor",
+           Gauge.ValueSize(0f, sc2), Typography.MinFor(W2), 1e-4f);
+
+        // ---- the four text widgets: every size doubles, nothing at RefPanelW moves --------------
+        WidgetRow("Gauge.Bar", GaugeBarSizes(sc1), GaugeBarSizes(sc2));
+        WidgetRow("NumericReadout.Paired", PairedSizes(sc1), PairedSizes(sc2));
+        WidgetRow("StatusIndicator.Badge", BadgeSizes(sc1), BadgeSizes(sc2));
+        WidgetRow("GateCard", GateSizes(W1), GateSizes(W2));
+
+        // ---- GateCard: THE DRAW AND THE HIT TEST MUST AGREE AT BOTH WIDTHS ----------------------
+        // ⛔ This is the check that matters most in this split. Scaling a card's drawing without its
+        // hit test is QC H-04 again ([[S108]]): a control painted where the touch test does not look.
+        // Both entry points derive sc from the same w, so this is true by construction — and pinned
+        // here so a later refactor cannot quietly separate them.
+        GateCardHitFollowsTheDraw(W1, H1);
+        GateCardHitFollowsTheDraw(W2, H2);
+
+        // ---- Card: the tab strip is drawn by Build and hit by HitTest, same story ---------------
+        CardTabsAgree(W1, H1);
+        CardTabsAgree(W2, H2);
+
+        // the two quantities each owned by ONE function, compared across widths directly (see the
+        // note in GateCardHitFollowsTheDraw: a hit test cannot catch a defect it moves with)
+        Eq("S121a GateCard's checklist row pitch doubles with the panel",
+           GateRowPitch(W2, H2), 2f * GateRowPitch(W1, H1), 1e-3f);
+        Eq("S121a Card's tab height doubles with the panel",
+           CardTabHeight(W2, H2), 2f * CardTabHeight(W1, H1), 0.5f);
+        Check("S121a Card's notch fractions are NOT scaled — they already track the panel",
+              CardBodyWidthFrac(W1, H1) > 0.90f && Math.Abs(CardBodyWidthFrac(W1, H1) - CardBodyWidthFrac(W2, H2)) < 0.006f,
+              "body/panel " + CardBodyWidthFrac(W1, H1) + " vs " + CardBodyWidthFrac(W2, H2));
+    }
+
+    // ---- ⛔ THESE READ THE WIDGET, THEY DO NOT RESTATE IT ----------------------------------------
+    // A first version of these three helpers returned `Typography.Caption * sc` and friends computed
+    // HERE, then asserted the 2560 list was twice the 1280 list. That passes whatever the widgets do:
+    // it is `Caption * 2 == 2 * (Caption * 1)`, arithmetic about the test's own expression, and it
+    // would have gone on passing with every `* sc` deleted from the source. ⭐ So each helper now
+    // RENDERS the widget into a DisplayList and reads the sizes and positions back out of the emitted
+    // commands. What is compared is what the widget actually drew.
+    static float[] TextSizes(DisplayList dl)
+    {
+        int n = 0;
+        for (int i = 0; i < dl.Count; i++) if (dl.At(i).Kind == DrawKind.Text) n++;
+        float[] outp = new float[n * 2];
+        int k = 0;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind != DrawKind.Text) continue;
+            outp[k++] = c.C;    // pixelSize
+            outp[k++] = c.B;    // the baseline it was placed at - the half a size alone cannot catch
+        }
+        return outp;
+    }
+
+    static float[] GaugeBarSizes(float sc)
+    {
+        DisplayList dl = new DisplayList(64);
+        // ⚠ `width` is the CALLER's and is passed already scaled, exactly as a passed page would.
+        Gauge.Bar(dl, 0f, 0f, 400f * sc, "CAPTION", "12.3", "m/s", 0.5, DragonPalette.Go, sc);
+        float[] t = TextSizes(dl);
+        // plus the track rect the bar draws under the type: its y and its thickness
+        float by = 0f, bh = 0f;
+        for (int i = 0; i < dl.Count; i++)
+            if (dl.At(i).Kind == DrawKind.Rect) { by = dl.At(i).B; bh = dl.At(i).D; break; }
+        float[] outp = new float[t.Length + 2];
+        for (int i = 0; i < t.Length; i++) outp[i] = t[i];
+        outp[t.Length] = by; outp[t.Length + 1] = bh;
+        return outp;
+    }
+
+    static float[] PairedSizes(float sc)
+    {
+        DisplayList dl = new DisplayList(32);
+        NumericReadout.Paired(dl, 0f, 0f, "CAPTION", "1.0", "2.0", sc);
+        return TextSizes(dl);
+    }
+
+    static float[] BadgeSizes(float sc)
+    {
+        DisplayList dl = new DisplayList(32);
+        // ⭐ The box is the caller's and IS scaled, which is the case the latent centring bug needs:
+        // an unscaled `Typography.Caption` inside a scaled `h` is what pushes the word off centre.
+        StatusIndicator.Badge(dl, 0f, 0f, 200f * sc, 60f * sc, "AUTO", DragonPalette.Go, sc);
+        float[] t = TextSizes(dl);
+        // ⚠ There is no DrawKind.Box: DisplayList.Box expands into FOUR Rects (top, bottom, left,
+        // right), so the frame's thickness is the HEIGHT of the top edge — command 1, straight after
+        // the plate's own background fill. Read off the emitted commands, not from the source.
+        float stroke = (dl.Count > 1 && dl.At(1).Kind == DrawKind.Rect) ? dl.At(1).D : 0f;
+        float[] outp = new float[t.Length + 1];
+        for (int i = 0; i < t.Length; i++) outp[i] = t[i];
+        outp[t.Length] = stroke;
+        return outp;
+    }
+    // ⚠ The card's RAW size, deliberately NOT divided by sc. A first version returned `cw / sc` and
+    // reported 640 at both widths — which is true and proves nothing, because dividing by the scale
+    // normalises away the exact quantity under test. The claim is that the card itself doubles.
+    static float[] GateSizes(int w)
+    {
+        float x, y, cw, ch;
+        GateCard.CardRect(w, w * 703 / 1280, 4, out x, out y, out cw, out ch);
+        return new float[] { cw, ch };
+    }
+
+    static void WidgetRow(string name, float[] at1280, float[] at2560)
+    {
+        Check("S121a " + name + " reports the same number of sizes at both widths",
+              at1280.Length == at2560.Length, at1280.Length + " vs " + at2560.Length);
+        for (int i = 0; i < at1280.Length && i < at2560.Length; i++)
+            Check("S121a " + name + " size " + i + " doubles with the panel",
+                  Math.Abs(at2560[i] - 2f * at1280[i]) < 1e-3f,
+                  "@1280 " + at1280[i] + " @2560 " + at2560[i]);
+    }
+
+    static void GateCardHitFollowsTheDraw(int w, int h)
+    {
+        const int items = 4;
+        float x, y, cw, ch;
+        GateCard.CardRect(w, h, items, out x, out y, out cw, out ch);
+        float sc = Typography.ScaleFor(w);
+
+        // the centre of every drawn control must hit that control, and nothing else
+        for (int i = 0; i < items; i++)
+        {
+            float rx, ry, rw, rh;
+            GateCard.ItemRect(i, x, y, cw, sc, out rx, out ry, out rw, out rh);
+            GateHit g = GateCard.HitTest(rx + rw * 0.5f, ry + rh * 0.5f, w, h, items);
+            Check("S121a @" + w + " the centre of item " + i + " hits item " + i,
+                  g.Kind == GateHitKind.Item && g.Item == i, "got " + g.Kind + " " + g.Item);
+        }
+        GateHitKind[] want = { GateHitKind.Go, GateHitKind.NoGo, GateHitKind.Abort };
+        for (int b = 0; b < 3; b++)
+        {
+            float bx, by, bw, bh;
+            GateCard.ButtonRect(b, x, y, cw, ch, sc, out bx, out by, out bw, out bh);
+            GateHit g = GateCard.HitTest(bx + bw * 0.5f, by + bh * 0.5f, w, h, items);
+            Check("S121a @" + w + " the centre of button " + b + " hits " + want[b],
+                  g.Kind == want[b], "got " + g.Kind);
+            Check("S121a @" + w + " button " + b + " is inside its own card",
+                  bx >= x && bx + bw <= x + cw + 0.01f && by >= y && by + bh <= y + ch + 0.01f,
+                  "btn " + bx + "," + by + " " + bw + "x" + bh + " card " + x + "," + y + " " + cw + "x" + ch);
+        }
+        // ⚠ and the card must not be a quarter of the panel at 2560 — that was MaxW's unscaled clamp
+        Check("S121a @" + w + " the card keeps its share of the panel",
+              cw / w > 0.45f, "card " + cw + " on panel " + w + " = " + (cw / w));
+
+        // ---- ⛔ CONSISTENCY IS NOT CORRECTNESS, AND THAT GAP LET TWO MUTATIONS THROUGH -------------
+        // The checks above find the control's centre with ItemRect and then hit-test it — so a
+        // mutation that moves BOTH (dropping the scale inside ItemRect, say) stays self-consistent and
+        // passes, while the rows march off the bottom of the card. Mutation V10 did exactly that and
+        // survived. So the rows are also checked against something they do NOT share: the card that
+        // has to contain them, and the buttons they must not reach.
+        float lastBottom = 0f;
+        {
+            float rx, ry, rw, rh;
+            GateCard.ItemRect(items - 1, x, y, cw, sc, out rx, out ry, out rw, out rh);
+            lastBottom = ry + rh;
+        }
+        float btnTop;
+        {
+            float bx, by, bw, bh;
+            GateCard.ButtonRect(0, x, y, cw, ch, sc, out bx, out by, out bw, out bh);
+            btnTop = by;
+        }
+        Check("S121a @" + w + " the last checklist row stays clear of the buttons",
+              lastBottom <= btnTop + 0.01f, "last row ends " + lastBottom + ", buttons start " + btnTop);
+        Check("S121a @" + w + " every checklist row is inside the card",
+              lastBottom <= y + ch + 0.01f, "last row ends " + lastBottom + ", card ends " + (y + ch));
+    }
+
+    /// <summary>The row pitch is the thing ItemRect owns alone, so it is compared across widths
+    /// directly rather than through a hit test that would move with it.</summary>
+    static float GateRowPitch(int w, int h)
+    {
+        float x, y, cw, ch;
+        GateCard.CardRect(w, h, 4, out x, out y, out cw, out ch);
+        float sc = Typography.ScaleFor(w);
+        float x0, y0, w0, h0, x1, y1, w1, h1;
+        GateCard.ItemRect(0, x, y, cw, sc, out x0, out y0, out w0, out h0);
+        GateCard.ItemRect(1, x, y, cw, sc, out x1, out y1, out w1, out h1);
+        return y1 - y0;
+    }
+
+    /// <summary>Card's tab height, which TabRect owns alone — the same argument as GateRowPitch.</summary>
+    static float CardTabHeight(int w, int h)
+    {
+        float tx, ty, tw, th;
+        Card.TabRect(0, 3, w, h, out tx, out ty, out tw, out th);
+        return th;
+    }
+
+    static void CardTabsAgree(int w, int h)
+    {
+        string[] tabs = { "A", "B", "C" };
+        for (int i = 0; i < tabs.Length; i++)
+        {
+            float tx, ty, tw, th;
+            Card.TabRect(i, tabs.Length, w, h, out tx, out ty, out tw, out th);
+            int hit = Card.HitTest(tx + tw * 0.5f, ty + th * 0.5f, tabs.Length, w, h);
+            Check("S121a @" + w + " the centre of Card tab " + i + " hits tab " + i,
+                  hit == i, "got " + hit);
+        }
+    }
+
+    static float CardBodyWidthFrac(int w, int h)
+    {
+        float x, y, bw, bh;
+        Card.Body(w, h, out x, out y, out bw, out bh);
+        return bw / w;
+    }
+
     static void ChromeBarTracksThePanel()
     {
         // The geometry. The bar is a FRACTION of the glass, not a pixel count.
