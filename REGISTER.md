@@ -17513,7 +17513,7 @@ touching either.
 gains are drawn at `Typography.MinDesignFor` and the ratchet enforces it. This line no longer waits on
 anything but its own step one.
 
-### S154a [O] Frame 58: establish the CSS→design-frame mapping, and draw nothing — **TODO** — [step one of [[S154]]; research only]
+### S154a [O] Frame 58: establish the CSS→design-frame mapping, and draw nothing — **DOING** — [step one of [[S154]]; research only]
 - **The deliverable is a MAPPING and a test, not a pixel.** Named constants that turn the Vue app's
   page percentages into our 3427×2112 design frame, anchored on measurements from our own art.
 - ⭐ **Two anchors are needed and one exists.** `Frame58Hud`'s `BowlCx 1706, BowlCy 984, BowlR 470` is the
