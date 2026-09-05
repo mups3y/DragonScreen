@@ -58,6 +58,7 @@ public static class LegibilityFloorTest
         FlightPageTracksThePanel();
         VehiclePageTracksThePanel();
         DockingPageTracksThePanel();
+        SettingsPageTracksThePanel();
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed"
                           + "   (floor " + Typography.MinFor(W1) + " px @" + W1
@@ -723,6 +724,110 @@ public static class LegibilityFloorTest
         for (int i = 0; i < q1.Length && i < q2.Length; i++)
             if (Math.Abs(q2[i] - 2f * q1[i]) > 0.02f) badq++;
         Check("S121b-iii every " + name + " text position doubles", badq == 0, badq + " of " + q1.Length);
+    }
+
+    // ---- S121c: THE SETTINGS FAMILY -------------------------------------------------------------
+    // ⚠ NOT [[S134]]'s work — that line owns this family's coordinate-system defect (`F-04`) and five
+    // findings besides. These checks cover only the RefPanelW pass, at both widths.
+    static void SettingsPageTracksThePanel()
+    {
+        // all four tabs, by their own subview index
+        for (int tab = 0; tab < SettingsPage.Tabs.Length; tab++)
+            SettingsTabTracksThePanel(SettingsPage.Tabs[tab], tab);
+
+        // ---- ⛔ AND THE ROUND TRIP, which is the half a render check cannot make -----------------
+        // Every rect in SettingsPage is used BOTH to draw a control and to hit it. The file derives
+        // its scale inside each rect from the `w` it already has, so the two cannot disagree — and
+        // that is pinned here at both widths rather than trusted.
+        SettingsHitRoundTrip(W1, H1);
+        SettingsHitRoundTrip(W2, H2);
+    }
+
+    static void SettingsTabTracksThePanel(string name, int tab)
+    {
+        float[] t1 = SettingsSizes(tab, W1, H1), t2 = SettingsSizes(tab, W2, H2);
+        Check("S121c the " + name + " tab draws the same commands at both widths",
+              t1.Length == t2.Length && t1.Length > 4, t1.Length + " vs " + t2.Length);
+        int bad = 0, worstI = -1; float worst = 0f;
+        for (int i = 0; i < t1.Length && i < t2.Length; i++)
+        {
+            float d = Math.Abs(t2[i] - 2f * t1[i]);
+            if (d > 0.02f) { bad++; if (d > worst) { worst = d; worstI = i; } }
+        }
+        // ⭐ sizes AND positions in one list — a settings column left behind moves the page without
+        // changing a type size, which is the gap [[S121b-ii]]'s mutation X6 found the hard way.
+        Check("S121c every size and position on the " + name + " tab doubles with the panel",
+              bad == 0, bad + " of " + t1.Length + " did not; worst at index " + worstI
+              + " (@1280 " + (worstI >= 0 ? t1[worstI] : 0f)
+              + ", @2560 " + (worstI >= 0 ? t2[worstI] : 0f) + ", off by " + worst + ")");
+    }
+
+    /// <summary>Every text command's size, x and y on one settings tab, interleaved.</summary>
+    static float[] SettingsSizes(int tab, int w, int h)
+    {
+        PageState ps = new PageState(); ps.Valid = true;
+        DisplayList dl = new DisplayList(8192);
+        Pages.Build(dl, 4, w, h, ps, MapProjection.Default(), 1, tab);
+        int n = 0;
+        for (int i = 0; i < dl.Count; i++) if (dl.At(i).Kind == DrawKind.Text) n++;
+        float[] outp = new float[n * 3]; int k = 0;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind != DrawKind.Text) continue;
+            outp[k++] = c.C; outp[k++] = c.A; outp[k++] = c.B;
+        }
+        return outp;
+    }
+
+    static void SettingsHitRoundTrip(int w, int h)
+    {
+        float x, y, rw, rh;
+
+        SettingsPage.LightsRect(w, h, out x, out y, out rw, out rh);
+        HitIs("LIGHTS", w, h, x, y, rw, rh, SettingsPage.Cabin, PageAct.ToggleLights, -1);
+
+        for (int i = 0; i < 4; i++)
+        {
+            SettingsPage.SeatRect(i, w, h, out x, out y, out rw, out rh);
+            HitIs("SEAT " + i, w, h, x, y, rw, rh, SettingsPage.Cabin, PageAct.ViewFromSeat, i);
+        }
+
+        SettingsPage.BrightRect(false, w, h, out x, out y, out rw, out rh);
+        HitIs("BRIGHT DOWN", w, h, x, y, rw, rh, SettingsPage.Display, PageAct.BrightDown, -1);
+        SettingsPage.BrightRect(true, w, h, out x, out y, out rw, out rh);
+        HitIs("BRIGHT UP", w, h, x, y, rw, rh, SettingsPage.Display, PageAct.BrightUp, -1);
+        SettingsPage.CaptureRect(w, h, out x, out y, out rw, out rh);
+        HitIs("CAPTURE", w, h, x, y, rw, rh, SettingsPage.Display, PageAct.Capture, -1);
+        SettingsPage.BoosterRect(w, h, out x, out y, out rw, out rh);
+        HitIs("BOOSTER", w, h, x, y, rw, rh, SettingsPage.Display, PageAct.ToggleBoosterRecovery, -1);
+
+        // ⚠ the 15 page buttons are the densest grid on any settings tab: three screens x five pages,
+        // 100 px wide on a 6 px gap at RefPanelW. If any of those three numbers failed to scale, one
+        // button's centre lands in its neighbour — so every one is checked, not a sample.
+        int ok = 0, total = 0;
+        for (int screen = 1; screen <= 3; screen++)
+            for (int page = 0; page < ChromeBar.PageNames.Length; page++)
+            {
+                SettingsPage.PageRect(screen, page, w, h, out x, out y, out rw, out rh);
+                PageHit g = SettingsPage.HitTest(x + rw * 0.5f, y + rh * 0.5f, w, h, SettingsPage.Display);
+                total++;
+                if (g.Act == PageAct.SetScreenPage && g.Arg == PageHit.PackScreenPage(screen, page)) ok++;
+            }
+        Check("S121c @" + w + " every one of the " + total + " page buttons is hit at its own centre",
+              ok == total, ok + " of " + total);
+    }
+
+    // ⚠ `h` IS NOT OPTIONAL. A first version passed 0 for it and every probe returned None,
+    // because SettingsPage's rects come from Card.Body, which needs the real height to place the card
+    // at all. The failure looked like a scaling bug and was a test bug.
+    static void HitIs(string what, int w, int h, float x, float y, float rw, float rh,
+                      int tab, PageAct want, int arg)
+    {
+        PageHit g = SettingsPage.HitTest(x + rw * 0.5f, y + rh * 0.5f, w, h, tab);
+        bool ok = g.Act == want && (arg < 0 || g.Arg == arg);
+        Check("S121c @" + w + " the centre of " + what + " hits " + want, ok,
+              "got " + g.Act + " arg " + g.Arg);
     }
 
     /// <summary>The smallest square Rect a page emits — on VEHICLE that is the alarm dot.</summary>

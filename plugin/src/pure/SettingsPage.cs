@@ -51,6 +51,23 @@ namespace DragonScreen
         /// <summary>Height of AUDIO's extra per-seat ROLE line, which CABIN does not draw.</summary>
         private const float RoleLine = 22f;
 
+        // ---- S121c, 2026-09-06: EVERY CONSTANT ABOVE IS A RefPanelW PIXEL --------------------------
+        // ⛔ They stay as they are, exactly as `Typography.Min` does: each is a MEASURED number at the
+        // width it was measured at, and retyping one is how a measurement gets thrown away. What
+        // changes is that the use sites multiply by the panel's scale.
+        //
+        // ⭐ THIS FILE SCALES ITSELF, and that is not a style choice. Every `*Rect` here takes `(w, h)`
+        // and every one of them is used BOTH by `Build` to draw and by `HitTest` to hit. Deriving the
+        // scale inside each from the `w` it already has makes a draw/hit divergence impossible; handing
+        // it in as a parameter would make it merely unlikely. Same argument as [[S121a]]'s `Card` and
+        // `GateCard`, and the failure it avoids is QC `H-04`.
+        //
+        // ⚠ NOT [[S134]]'s WORK. That line owns this family's real coordinate-system defect (`F-04`:
+        // the tab strip in two incompatible forms with shared hit bands in one form's coordinates) and
+        // five findings besides. This line is only the RefPanelW pass, and it touches no tab strip —
+        // the tabs are `Card`'s, already passed. Read S134 before changing anything else here.
+        private static float Sc(int w) { return Typography.ScaleFor(w); }
+
         // ---------------------------------------------------------------- geometry
 
         private static void Body(int w, int h, out float x, out float y, out float bw, out float bh)
@@ -63,7 +80,8 @@ namespace DragonScreen
         {
             float bx, by, bw, bh;
             Body(w, h, out bx, out by, out bw, out bh);
-            x = bx; y = by + 42f; rw = 170f; rh = BtnH;
+            float sc = Sc(w);
+            x = bx; y = by + 42f * sc; rw = 170f * sc; rh = BtnH * sc;
         }
 
         public static void SeatRect(int i, int w, int h, out float x, out float y,
@@ -71,9 +89,10 @@ namespace DragonScreen
         {
             float bx, by, bw, bh;
             Body(w, h, out bx, out by, out bw, out bh);
-            rw = SeatW; rh = SeatH + 20f;
-            x = bx + i * (SeatW + SeatGap);
-            y = by + 42f + BtnH + 26f;
+            float sc = Sc(w);
+            rw = SeatW * sc; rh = (SeatH + 20f) * sc;
+            x = bx + i * (SeatW + SeatGap) * sc;
+            y = by + (42f + BtnH + 26f) * sc;
         }
 
         public static void BrightRect(bool up, int w, int h, out float x, out float y,
@@ -81,9 +100,10 @@ namespace DragonScreen
         {
             float bx, by, bw, bh;
             Body(w, h, out bx, out by, out bw, out bh);
-            rw = 56f; rh = BtnH;
-            y = by + 42f;
-            x = up ? (bx + 240f) : bx;
+            float sc = Sc(w);
+            rw = 56f * sc; rh = BtnH * sc;
+            y = by + 42f * sc;
+            x = up ? (bx + 240f * sc) : bx;
         }
 
         public static void CaptureRect(int w, int h, out float x, out float y,
@@ -91,7 +111,8 @@ namespace DragonScreen
         {
             float bx, by, bw, bh;
             Body(w, h, out bx, out by, out bw, out bh);
-            x = bx; y = by + 42f + BtnH + 26f; rw = 296f; rh = BtnH;
+            float sc = Sc(w);
+            x = bx; y = by + (42f + BtnH + 26f) * sc; rw = 296f * sc; rh = BtnH * sc;
         }
 
         /// <summary>AUTO BOOSTER RECOVERY toggle — left column, below capture + the this-display/resolution lines.</summary>
@@ -100,7 +121,8 @@ namespace DragonScreen
         {
             float cx, cy, crw, crh;
             CaptureRect(w, h, out cx, out cy, out crw, out crh);
-            x = cx; y = cy + BtnH + 120f; rw = 296f; rh = BtnH;
+            float sc = Sc(w);
+            x = cx; y = cy + (BtnH + 120f) * sc; rw = 296f * sc; rh = BtnH * sc;
         }
 
         public static void PageRect(int screen, int page, int w, int h,
@@ -108,13 +130,14 @@ namespace DragonScreen
         {
             float bx, by, bw, bh;
             Body(w, h, out bx, out by, out bw, out bh);
-            rw = PageBtnW; rh = BtnH;
-            x = bx + bw - (ChromeBar.PageNames.Length * (PageBtnW + PageBtnGap))
-                + page * (PageBtnW + PageBtnGap);
+            float sc = Sc(w);
+            rw = PageBtnW * sc; rh = BtnH * sc;
+            x = bx + bw - (ChromeBar.PageNames.Length * (PageBtnW + PageBtnGap) * sc)
+                + page * (PageBtnW + PageBtnGap) * sc;
             // 76, not 42. Each row draws its name at (y - 22); at 42 that landed on by+20, in the
             // same band as this column's own header at by+26 AND the page title at by+4. Three
             // strings in one 22 px band, all illegible. Reported from a screenshot, 2026-08-06.
-            y = by + 76f + (screen - 1) * RowPitch;
+            y = by + (76f + (screen - 1) * RowPitch) * sc;
         }
 
         /// <summary>Camera direction button on the VIDEO tab. 0 Front, 1 Rear, 2 Left, 3 Right.</summary>
@@ -123,9 +146,10 @@ namespace DragonScreen
         {
             float bx, by, bw, bh;
             Body(w, h, out bx, out by, out bw, out bh);
-            rw = bw * 0.15f; rh = BtnH;          // .column left 0%, width 15%
+            float sc = Sc(w);
+            rw = bw * 0.15f; rh = BtnH * sc;      // .column left 0%, width 15%
             x = bx;
-            y = by + bh * 0.1225f + i * (BtnH + 8f);
+            y = by + bh * 0.1225f + i * (BtnH + 8f) * sc;
         }
 
         /// <summary>
@@ -259,7 +283,7 @@ namespace DragonScreen
             string title = (tab == Cabin) ? "CABIN SETTINGS"
                          : (tab == Audio) ? "AUDIO SETTINGS"
                          : (tab == Video) ? "VIDEO SETTINGS" : "DISPLAY SETTINGS";
-            dl.Text(title, bx + bw * 0.5f, by + 4f, Typography.Body, TextAlign.Centre,
+            dl.Text(title, bx + bw * 0.5f, by + 4f * Sc(w), Typography.Body * Sc(w), TextAlign.Centre,
                     DragonPalette.Text1);
 
             if (tab == Cabin) CabinTab(dl, w, h, s, bx, by, bw, bh);
@@ -271,13 +295,14 @@ namespace DragonScreen
         private static void CabinTab(DisplayList dl, int w, int h, PageState s,
                                      float bx, float by, float bw, float bh)
         {
-            dl.Text("LIGHTING", bx, by + 26f, Typography.Caption, TextAlign.Left,
+            float sc = Sc(w);
+            dl.Text("LIGHTING", bx, by + 26f * sc, Typography.Caption * sc, TextAlign.Left,
                     DragonPalette.Text5);
 
             float x, y, rw, rh;
             LightsRect(w, h, out x, out y, out rw, out rh);
             Control.Button(dl, x, y, rw, rh, s.LightsOn ? "LIGHTS ON" : "LIGHTS OFF",
-                           s.LightsOn, s.Valid);
+                           s.LightsOn, s.Valid, sc);
 
             // ---- WHY THERE IS ONE BUTTON AND NOT EIGHT ----
             // Cabin.vue names eight zones. TE_CD2_POD.cfg carries one ModuleColorChanger on the Light
@@ -285,17 +310,17 @@ namespace DragonScreen
             // lights actually found is printed instead - it is the honest version of the same
             // information, and it grows by itself if the vehicle ever gains more.
             dl.Text(s.LightCount > 1 ? (s.LightCount + " LIGHT GROUPS") : "SINGLE CABIN LIGHT GROUP",
-                    bx + rw + 16f, y + 10f, Typography.Dense, TextAlign.Left, DragonPalette.Text7);
+                    bx + rw + 16f * sc, y + 10f * sc, Typography.Dense * sc, TextAlign.Left, DragonPalette.Text7);
 
             Seats4(dl, w, h, s, "CREW - TOUCH A SEAT TO LOOK FROM IT", bx, by);
 
-            float ry = by + 42f + BtnH + 26f + SeatH + 54f;
-            Row(dl, bx, ry, 360f, "CABIN TEMP", s.Valid ? s.CabinTempText : Dashes.None, "deg C");
-            Row(dl, bx, ry + 34f, 360f, "CABIN PRESSURE", s.Valid ? s.PressText : Dashes.None, "psia");
-            Row(dl, bx, ry + 68f, 360f, "PPO2", s.Valid ? s.Ppo2Text : Dashes.None, "psia");
-            Row(dl, bx, ry + 102f, 360f, "CO2", s.Valid ? s.Co2Text : Dashes.None, "mmHg");
-            Row(dl, bx, ry + 136f, 360f, "LOOP A", s.Valid ? s.LoopAText : Dashes.None, "deg C");
-            Row(dl, bx, ry + 170f, 360f, "LOOP B", s.Valid ? s.LoopBText : Dashes.None, "deg C");
+            float ry = by + (42f + BtnH + 26f + SeatH + 54f) * sc;
+            Row(dl, bx, ry, 360f * sc, "CABIN TEMP", s.Valid ? s.CabinTempText : Dashes.None, "deg C", sc);
+            Row(dl, bx, ry + 34f * sc, 360f * sc, "CABIN PRESSURE", s.Valid ? s.PressText : Dashes.None, "psia", sc);
+            Row(dl, bx, ry + 68f * sc, 360f * sc, "PPO2", s.Valid ? s.Ppo2Text : Dashes.None, "psia", sc);
+            Row(dl, bx, ry + 102f * sc, 360f * sc, "CO2", s.Valid ? s.Co2Text : Dashes.None, "mmHg", sc);
+            Row(dl, bx, ry + 136f * sc, 360f * sc, "LOOP A", s.Valid ? s.LoopAText : Dashes.None, "deg C", sc);
+            Row(dl, bx, ry + 170f * sc, 360f * sc, "LOOP B", s.Valid ? s.LoopBText : Dashes.None, "deg C", sc);
         }
 
         /// <summary>
@@ -305,6 +330,7 @@ namespace DragonScreen
         private static void AudioTab(DisplayList dl, int w, int h, PageState s,
                                      float bx, float by, float bw, float bh)
         {
+            float sc = Sc(w);
             Seats4(dl, w, h, s, "STATIONS", bx, by);
 
             // The roles Audio.vue assigns, in its own order.
@@ -313,7 +339,7 @@ namespace DragonScreen
             {
                 float x, y, rw, rh;
                 SeatRect(i, w, h, out x, out y, out rw, out rh);
-                dl.Text(roles[i], x + rw * 0.5f, y + SeatH + 18f, Typography.Dense,
+                dl.Text(roles[i], x + rw * 0.5f, y + (SeatH + 18f) * sc, Typography.Dense * sc,
                         TextAlign.Centre, DragonPalette.Text6);
             }
 
@@ -323,21 +349,21 @@ namespace DragonScreen
             // caption 26 above that clears everything. AUDIO reused the same figure and the caption
             // landed at SeatH + 28, straight through the role line - visible in the first flight.
             // The extra line has to be paid for; the panel below is empty, so it costs nothing.
-            float ry = by + 42f + BtnH + 26f + SeatH + 54f + RoleLine;
-            dl.Text("CHANNELS", bx, ry - 26f, Typography.Caption, TextAlign.Left,
+            float ry = by + (42f + BtnH + 26f + SeatH + 54f + RoleLine) * sc;
+            dl.Text("CHANNELS", bx, ry - 26f * sc, Typography.Caption * sc, TextAlign.Left,
                     DragonPalette.Text5);
             // INTERCOM is crew aboard; ALERTS mirrors the one alarm channel the whole UI uses, so it
             // cannot disagree with the chrome bar. Both are real. dB, AUX, MAIN and Vox are not, and
             // are not drawn.
             Severity sev = s.Valid ? Alarms.VehicleSeverity(s) : Severity.Nominal;
-            Row(dl, bx, ry, 360f, "INTERCOM", s.Valid ? s.CrewText : Dashes.None, "crew");
-            dl.Text("ALERTS", bx, ry + 34f, Typography.Caption, TextAlign.Left, DragonPalette.Text6);
-            dl.Text(s.Valid ? Alarms.Word(sev) : Dashes.None, bx + 360f, ry + 34f, Typography.Body,
+            Row(dl, bx, ry, 360f * sc, "INTERCOM", s.Valid ? s.CrewText : Dashes.None, "crew", sc);
+            dl.Text("ALERTS", bx, ry + 34f * sc, Typography.Caption * sc, TextAlign.Left, DragonPalette.Text6);
+            dl.Text(s.Valid ? Alarms.Word(sev) : Dashes.None, bx + 360f * sc, ry + 34f * sc, Typography.Body * sc,
                     TextAlign.Right, s.Valid ? Alarms.Colour(sev) : DragonPalette.Text7);
-            dl.Rect(bx, ry + 62f, 360f, 1f, DragonPalette.Inset2);
+            dl.Rect(bx, ry + 62f * sc, 360f * sc, 1f * sc, DragonPalette.Inset2);
 
             dl.Text("no cabin audio in stock KSP - state only, no faders",
-                    bx, ry + 76f, Typography.Dense, TextAlign.Left, DragonPalette.Text8);
+                    bx, ry + 76f * sc, Typography.Dense * sc, TextAlign.Left, DragonPalette.Text8);
         }
 
         /// <summary>
@@ -347,14 +373,15 @@ namespace DragonScreen
         private static void VideoTab(DisplayList dl, int w, int h, PageState s,
                                      float bx, float by, float bw, float bh)
         {
+            float sc = Sc(w);
             float x, y, rw, rh;
             string[] cams = CamList(s, w, h);
             for (int i = 0; i < cams.Length; i++)
             {
                 CamRect(i, w, h, out x, out y, out rw, out rh);
-                Control.Button(dl, x, y, rw, rh, cams[i], s.CameraView == i, true);
+                Control.Button(dl, x, y, rw, rh, cams[i], s.CameraView == i, true, sc);
             }
-            dl.Text("CAMERA", bx, by + bh * 0.1225f - 22f, Typography.Caption, TextAlign.Left,
+            dl.Text("CAMERA", bx, by + bh * 0.1225f - 22f * sc, Typography.Caption * sc, TextAlign.Left,
                     DragonPalette.Text5);
 
             // The view itself, in the box. 979 x 487.5 in the source - a 2:1 letterbox.
@@ -364,17 +391,17 @@ namespace DragonScreen
             float vy = by + (bh - vh) * 0.45f;
             dl.Rect(vx, vy, vw, vh, DragonPalette.Inset2);
             dl.Image(ImageId.DockingCamLive, vx, vy, vw, vh, DragonPalette.White);
-            dl.Box(vx, vy, vw, vh, 2f, DragonPalette.Hairline);
+            dl.Box(vx, vy, vw, vh, 2f * sc, DragonPalette.Hairline);
 
             // S107 / QC VV-03: the SAME defect QC filed as VV-01 against the Figma Video page lives here
             // too, on the lower console's own settings card, from the same field and with the same
             // never-firing `?? "-"`. Fixing one surface and not the other is the C7.1 failure S104 spent a
             // batch removing, so both take one rule: no feed, no resolution.
             bool feedExists = cams.Length > 0 || s.CameraHeldByDocking;
-            dl.Text("RESOLUTION", vx, vy + vh + 10f, Typography.Caption, TextAlign.Left,
+            dl.Text("RESOLUTION", vx, vy + vh + 10f * sc, Typography.Caption * sc, TextAlign.Left,
                     DragonPalette.Text6);
-            dl.Text(feedExists ? (s.CameraResText ?? Dashes.None) : Dashes.None, vx + vw, vy + vh + 10f,
-                    Typography.Caption, TextAlign.Right,
+            dl.Text(feedExists ? (s.CameraResText ?? Dashes.None) : Dashes.None, vx + vw, vy + vh + 10f * sc,
+                    Typography.Caption * sc, TextAlign.Right,
                     feedExists ? DragonPalette.Text0 : DragonPalette.Text6);
 
             // ONE CAMERA, AND DOCKING OUTRANKS THIS PAGE. Rendering a second full scene camera to let
@@ -382,32 +409,33 @@ namespace DragonScreen
             // better than quietly showing the wrong direction.
             if (s.CameraHeldByDocking)
                 dl.Text("FORWARD VIEW IN USE BY DOCKING", vx + vw * 0.5f, vy + vh * 0.5f,
-                        Typography.Caption, TextAlign.Centre, DragonPalette.Caution);
+                        Typography.Caption * sc, TextAlign.Centre, DragonPalette.Caution);
         }
 
         private static void DisplayTab(DisplayList dl, int w, int h, PageState s, int thisScreen,
                                        float bx, float by, float bw, float bh)
         {
+            float sc = Sc(w);
             float x, y, rw, rh;
             BrightRect(false, w, h, out x, out y, out rw, out rh);
-            Control.Button(dl, x, y, rw, rh, "-", false, true);
+            Control.Button(dl, x, y, rw, rh, "-", false, true, sc);
             BrightRect(true, w, h, out x, out y, out rw, out rh);
-            Control.Button(dl, x, y, rw, rh, "+", false, true);
-            dl.Text("BRIGHTNESS", bx, by + 26f, Typography.Caption, TextAlign.Left,
+            Control.Button(dl, x, y, rw, rh, "+", false, true, sc);
+            dl.Text("BRIGHTNESS", bx, by + 26f * sc, Typography.Caption * sc, TextAlign.Left,
                     DragonPalette.Text5);
-            dl.Text(s.Brightness * 10 + "%", bx + 148f, y + 10f, Typography.Body,
+            dl.Text(s.Brightness * 10 + "%", bx + 148f * sc, y + 10f * sc, Typography.Body * sc,
                     TextAlign.Centre, DragonPalette.Text0);
 
             CaptureRect(w, h, out x, out y, out rw, out rh);
-            Control.Button(dl, x, y, rw, rh, "CAPTURE SCREEN", false, true);
+            Control.Button(dl, x, y, rw, rh, "CAPTURE SCREEN", false, true, sc);
 
-            dl.Text("THIS DISPLAY", bx, y + BtnH + 22f, Typography.Caption, TextAlign.Left,
+            dl.Text("THIS DISPLAY", bx, y + (BtnH + 22f) * sc, Typography.Caption * sc, TextAlign.Left,
                     DragonPalette.Text6);
-            dl.Text("SCREEN " + thisScreen, bx + 296f, y + BtnH + 22f, Typography.Body,
+            dl.Text("SCREEN " + thisScreen, bx + 296f * sc, y + (BtnH + 22f) * sc, Typography.Body * sc,
                     TextAlign.Right, DragonPalette.Accent);
-            dl.Text("RESOLUTION", bx, y + BtnH + 54f, Typography.Caption, TextAlign.Left,
+            dl.Text("RESOLUTION", bx, y + (BtnH + 54f) * sc, Typography.Caption * sc, TextAlign.Left,
                     DragonPalette.Text6);
-            dl.Text(w + " x " + h, bx + 296f, y + BtnH + 54f, Typography.Body, TextAlign.Right,
+            dl.Text(w + " x " + h, bx + 296f * sc, y + (BtnH + 54f) * sc, Typography.Body * sc, TextAlign.Right,
                     DragonPalette.Text0);
 
             // AUTO BOOSTER RECOVERY toggle — LAST in the left column (it reassigns x,y, so it must come after the
@@ -415,13 +443,13 @@ namespace DragonScreen
             // conductor focuses the separated booster and lands it (a booster-recovery test that sacrifices the
             // Dragon's orbit that run — stock KSP flies one active vessel).
             BoosterRect(w, h, out x, out y, out rw, out rh);
-            dl.Text("AUTO BOOSTER RECOVERY  (sacrifices the Dragon orbit that flight)", x, y - 22f,
-                    Typography.Caption, TextAlign.Left, DragonPalette.Text5);
+            dl.Text("AUTO BOOSTER RECOVERY  (sacrifices the Dragon orbit that flight)", x, y - 22f * sc,
+                    Typography.Caption * sc, TextAlign.Left, DragonPalette.Text5);
             Control.Button(dl, x, y, rw, rh,
                            s.BoosterRecoveryOn ? "BOOSTER RECOVERY  ARMED" : "BOOSTER RECOVERY  OFF",
-                           s.BoosterRecoveryOn, true);
+                           s.BoosterRecoveryOn, true, sc);
 
-            dl.Text("PAGE ON EACH DISPLAY", bx + bw - 530f, by + 34f, Typography.Caption,
+            dl.Text("PAGE ON EACH DISPLAY", bx + bw - 530f * sc, by + 34f * sc, Typography.Caption * sc,
                     TextAlign.Left, DragonPalette.Text5);
             for (int screen = 1; screen <= 3; screen++)
             {
@@ -429,7 +457,7 @@ namespace DragonScreen
                 PageRect(screen, 0, w, h, out lx, out ly, out lw, out lh);
                 string name = (screen == 1) ? "SCREEN 1  LEFT"
                             : (screen == 2) ? "SCREEN 2  CENTRE" : "SCREEN 3  RIGHT";
-                dl.Text(name, lx, ly - 22f, Typography.Caption, TextAlign.Left,
+                dl.Text(name, lx, ly - 22f * sc, Typography.Caption * sc, TextAlign.Left,
                         (screen == thisScreen) ? DragonPalette.Accent : DragonPalette.Text6);
 
                 int current = -1;
@@ -440,7 +468,7 @@ namespace DragonScreen
                 {
                     PageRect(screen, page, w, h, out x, out y, out rw, out rh);
                     Control.Button(dl, x, y, rw, rh, ChromeBar.PageNames[page],
-                                   page == current, true);
+                                   page == current, true, sc);
                 }
             }
         }
@@ -448,7 +476,8 @@ namespace DragonScreen
         private static void Seats4(DisplayList dl, int w, int h, PageState s, string caption,
                                    float bx, float by)
         {
-            dl.Text(caption, bx, by + 42f + BtnH + 8f, Typography.Caption, TextAlign.Left,
+            float sc = Sc(w);
+            dl.Text(caption, bx, by + (42f + BtnH + 8f) * sc, Typography.Caption * sc, TextAlign.Left,
                     DragonPalette.Text6);
             for (int i = 0; i < Seats; i++)
             {
@@ -460,7 +489,7 @@ namespace DragonScreen
                 bool exists = (i < s.SeatCount);
 
                 float ix, iy, iw, ih;
-                if (Images.FitHeight(ImageId.Seat, sx + sw * 0.5f, sy + SeatH * 0.5f, SeatH,
+                if (Images.FitHeight(ImageId.Seat, sx + sw * 0.5f, sy + SeatH * 0.5f * sc, SeatH * sc,
                                      out ix, out iy, out iw, out ih))
                 {
                     Rgba tint = !exists ? DragonPalette.Text8
@@ -469,16 +498,21 @@ namespace DragonScreen
                 }
 
                 string label = !exists ? Dashes.None : occupied ? s.SeatNames[i] : "EMPTY";
-                dl.Text(label, sx + sw * 0.5f, sy + SeatH + 2f, Typography.Dense, TextAlign.Centre,
+                dl.Text(label, sx + sw * 0.5f, sy + (SeatH + 2f) * sc, Typography.Dense * sc, TextAlign.Centre,
                         occupied ? DragonPalette.Text1 : DragonPalette.Text7);
             }
         }
 
+        /// ⛔ `w` HERE IS THE ROW WIDTH, NOT THE PANEL'S, so `sc` is PASSED IN — the same naming trap
+        /// `Pages.StepColumn` and `Pages.SideRow` carry. ⭐ `Readouts.Row` has taken a scale since job 2
+        /// of the 2026-09-06 batch and every caller in this file was still at its 8-argument form,
+        /// which is exactly the "leaves the rest visibly un-passed" state that overload was built for.
+        /// This is the pass ([[S121c]], 2026-09-06).
         private static void Row(DisplayList dl, float x, float y, float w,
-                                string caption, string value, string unit)
+                                string caption, string value, string unit, float sc)
         {
-            Readouts.Row(dl, x, y, w, caption, value, unit, Typography.Body);
-            dl.Rect(x, y + 26f, w, 1f, DragonPalette.Inset2);
+            Readouts.Row(dl, x, y, w, caption, value, unit, Typography.Body * sc, sc);
+            dl.Rect(x, y + 26f * sc, w, 1f * sc, DragonPalette.Inset2);
         }
     }
 }

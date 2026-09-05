@@ -15410,11 +15410,55 @@ pass. It belongs to [[S121d]] and the check was removed rather than left failing
   of this HUD's geometry in the tree. Re-earning that costs more than carrying it.)*
 - **DONE when:** the owner has chosen, or the line is closed as "leave it" with that recorded.
 
-### S121c [S] `SettingsPage.cs` — **DOING** — [split 3 of 5 of [[S121]]; 24 lines / 24 references]
+### S121c [S] `SettingsPage.cs` — **DONE 2026-09-06 — the checks caught a real missed scaling before the preview did** — [split 3 of 5 of [[S121]]; 24 lines / 24 references]
 - ⚠ **Read [[S134]] before starting.** It owns the settings family's real coordinate-system defect and its
   five-layouts-that-render-one problem; this line is only the RefPanelW pass. Do not do S134's work here,
   and check whether S134 has landed first — if it has, the file will have moved.
 - **DONE when:** as the parent's DONE-when, for this file.
+
+#### ⭐ DONE 2026-09-06
+
+**This file scales itself**, and for the reason [[S121a]] established with `Card` and `GateCard`: every
+`*Rect` here takes `(w, h)`, and every one of them is used BOTH by `Build` to draw and by `HitTest` to
+hit. Deriving the scale inside each from the `w` it already has makes a draw/hit divergence impossible;
+handing it in would make it merely unlikely. The constants stay as their measured RefPanelW values —
+`BtnH 36`, `SeatW 78`, `PageBtnW 100`, `RowPitch 74` and the rest — and the use sites multiply.
+
+- ⚠ **`Row` takes `sc` as a parameter**, because its `w` is a ROW width — the same naming trap
+  `Pages.StepColumn` and `Pages.SideRow` carry.
+- ⭐ **Every `Readouts.Row` caller in this file was still on the 8-argument form.** That overload has
+  taken a scale since job 2 of the 2026-09-06 batch, and its own header says the un-passed form exists
+  so pages are "visibly un-passed rather than silently half-done". This is that pass.
+- ⚠ **NOT [[S134]]'s work.** That line owns this family's coordinate-system defect (`F-04`: the tab strip
+  in two incompatible forms with shared hit bands in one form's coordinates) and five findings besides.
+  Nothing here touches a tab strip — the tabs are `Card`'s, passed by [[S121a]] — and S134 is unaffected.
+
+#### ⭐ THE CHECKS FOUND A REAL MISS, WHICH IS THE POINT OF WRITING THEM FIRST
+
+The CABIN tab failed on its first run: **2 of 93 values did not double**, at exactly 16 px both times.
+The cause was a `Control.Button` call I had simply not reached — the LIGHTS toggle, still on the
+8-argument form, drawing its label at RefPanelW while everything around it scaled. ⭐ **Found by the
+check, before any preview was rendered and before mutation testing began.**
+
+⚠ **And one of the failures was the test's own.** Every settings hit probe returned `None` at both
+widths, which looked like a scaling defect and was not: my helper passed `h = 0`, and these rects come
+from `Card.Body`, which needs the real height to place the card at all. Recorded in the helper.
+
+#### Verified
+
+**8 mutations, 8 killed** — the 15-button page grid's width and gap, its row pitch, the seat pitch, the
+brightness buttons, the readout row width, `Readouts.Row` reverted to 8 arguments, the LIGHTS label, and
+the camera buttons' height (which the layout sweep catches independently, as overlapping controls).
+⭐ **Mutation Z1 is worth a note:** the page-grid mutation did NOT fail the hit round trip, because draw
+and hit share the rect and moved together. It died on the POSITION invariant [[S121b-ii]] added. That is
+twice now that check has caught what a round trip structurally cannot.
+
+**MEASURED: 119 preview pages rendered before and after, compared by hash — 5 changed, all five settings
+tabs**, and nothing else. Inspected: the DISPLAY tab's brightness controls, CAPTURE, BOOSTER RECOVERY and
+the whole 15-button page grid are legible and proportional.
+
+`build.py test` green — `LegibilityFloorTest` **288 checks** · comment-loss **0** · no `install`, no
+glass, no `git push` · §14.4(a) untouched.
 
 ### S121d [S] The docking trio: `DockingPage` · `DockingPageCentral` · `AttitudeHud` — **TODO (UNBLOCKED 2026-09-06 by [[S121a]])** — [split 4 of 5 of [[S121]]; 25 lines / 25 references]
 - Kept as one line because they are one screen: `DockingPageCentral` draws `AttitudeHud`, and both lean on
