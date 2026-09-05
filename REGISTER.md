@@ -12139,7 +12139,7 @@ W25's `LandingTarget.cs`, `MechHost.cs`, `FlightDriver.cs` and `plugin/mech/` un
 still ends *"⛔ ATTITUDE UNCOMMANDED — AimForward is reported, not flown (register W24)"* while the same file
 commands `s.pitch/yaw/roll` from the W24 steering law at `:1118`. The log now states the opposite of the truth.
 
-### S99 [S] `BoosterHost`'s bind log still announces "ATTITUDE UNCOMMANDED" — W24 landed the steering law and the line was never updated — **TODO** — [logged by W34, 2026-09-05; TIER 3: a log line that states the opposite of what the code does]
+### S99 [S] `BoosterHost`'s bind log still announces "ATTITUDE UNCOMMANDED" — W24 landed the steering law and the line was never updated — **DOING** — [logged by W34, 2026-09-05; TIER 3: a log line that states the opposite of what the code does]
 - **The finding:** `src/BoosterHost.cs`'s BOOSTER HOST BOUND log ends *"⛔ ATTITUDE UNCOMMANDED — AimForward is
   reported, not flown (register W24)"*. But [[W24]] IS done: the same file writes `s.pitch`/`s.yaw`/`s.roll`
   from the steering law's output at `:1118` (`fbwPitch/fbwYaw/fbwRoll`, set at `:935`), and the tick comment
