@@ -7311,7 +7311,7 @@ and leaves the rest empty, which the render makes obvious). **This line owned on
 checks**. `python plugin/build.py preview` re-rendered and inspected, colours sampled numerically.
 **C1.16/G12: 0 comment prose lines lost.** No `install`, no glass, no `git push`.
 
-### S158 [S] Suit Leak Check: the sim is live, the *procedure* is not — **TODO** — [H19 + QC `SC-01`; split 3 of 5 from [[S55]]]
+### S158 [S] Suit Leak Check: the sim is live, the *procedure* is not — **DOING** — [H19 + QC `SC-01`; split 3 of 5 from [[S55]]]
 - **The finding.** Both left ticks draw **checked at page-open, before the crew touch anything**;
   *"SECTION 2: IN PROGRESS"* never advances; steps 2.3 / 2.4 / 2.5 are literals.
 - ⭐ **The verdict half is already exemplary and must not be disturbed** — S31/S32 built it, and [[S52]]
