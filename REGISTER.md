@@ -16581,7 +16581,7 @@ about when to interrupt — the defect [[S13]] closed for the *wording* and this
 
 **Verified (C1.3).** **Nothing built, nothing changed.** No `install`, no glass, no `git push`.
 
-### S145 [S] NavOrbitPlot's four range rings carry no scale — **DOING** — [H35; TIER 3]
+### S145 [S] NavOrbitPlot's four range rings carry no scale — **DONE 2026-09-06 — the scale existed as a LOCAL; it is exposed once and the draw and the labels read one number** — [H35; TIER 3]
 ✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set
 one (SPLIT BY CONTENT TYPE — see S153). ⛔ **The condition that replaces it is mechanical, not a wait:**
 any text this line ADDS must be drawn at **`Typography.MinDesignFor(w, sc)` or above** if it is LIVE, or
@@ -16618,6 +16618,64 @@ real refactor on a path `CoverPage` also uses, not a label change.
 ⚠ **And note what the labels would say:** the plot AUTO-FITS to the orbit, so the ring values move as the
 orbit does. That is honest — it is what an auto-scaling plot means — but it is a moving scale, and worth
 deciding deliberately rather than discovering on the glass.
+
+#### ✅ DONE 2026-09-06 — the scouted route taken, including its hard half
+
+⭐ **The refactor was done rather than dodged.** `fit` was a LOCAL inside `NavPage.Orbit`; re-deriving it
+in `NavOrbitPlotPage` would have been a second scale rule, and `MarginAffordance`'s header records what
+that costs — when one geometry was copied, *"every copy disagreed with at least one other"*. So the
+expression moved out into **`NavPage.OrbitFit`** / **`NavPage.OrbitPixelsPerMetre`**, and **`Orbit`
+calls it too**. One place decides how big this plot is; the drawing and the labels both read it.
+
+⚠ **Behaviour-preserving, and that is checked rather than claimed:** every NAV test passed unchanged
+across the extraction, including the ones that compare the same element at 1280 and 2560.
+
+#### The labels
+
+Four ranges up the plot's **vertical** axis — ⚠ a fit decision, not a taste one: the rings are `rmax/4`
+apart, and four right-aligned labels on the +x axis would overlap each other at any size that clears the
+legibility floor. Stacked vertically they are one ring-gap apart and cannot collide. **LIVE type**, so
+`Typography.MinDesignFor` ([[S153]]'s policy): a range that cannot be read at a glance is not a range.
+
+⛔ **NO ORBIT, NO LABEL.** With nothing to fit, `OrbitPixelsPerMetre` returns 0 and the rings draw bare —
+the same rings the page has always had, saying nothing, which is the truth then.
+
+#### Verified (C1.3) — the numbers derived independently, then checked against the render
+
+`python plugin/build.py test` → **ALL SUITES PASSED**. `python plugin/build.py preview` → the page reads
+**198 / 396 / 594 / 792 km**.
+
+⭐ **I did not take that from the picture.** Reproduced from the fixture's own figures — Kerbin
+`R = 600 km`, `ap 124 km`, `pe 121.9 km`, a well of `1775.4 × 1111.7 px`, the fit rule's 0.42 margin and
+the 0.46 ring fraction — giving `6.4588e-4 px/m` and an outer ring of **791.8 km**. ⭐ **And the same
+arithmetic puts the globe's limb at 387.5 px, between ring 3 (383.6) and ring 4 (511.4) — which is
+exactly where the render shows it.** The 792 km is pinned as a golden value against that derivation.
+⚠ My first estimate was ~7 200 km, from assuming Earth; the preview fixture is **Kerbin**. Going and
+looking is what settled it.
+
+**MUTATION-PROVEN — 6 mutations, 6 caught, 0 uncaught.** ⚠ **Three escaped the first run, and all three
+were fixture weaknesses that are worth more than the fix:**
+
+| | mutation | outcome |
+|---|---|---|
+| **A** | the labels are drawn with no scale at all | ⚠ **escaped.** `RingLabel(r/0)` returns the project dash, so the page drew FOUR DASHES where four ranges belong and a string search could not see it. Now counted by POSITION: *"a dead feed labels no ring at all — not even with a dash"* |
+| **B** | the labels use a scale of their own | caught: *"the page draws the outer ring's range"* |
+| **C** | the fit forgets the BODY | ⚠ **escaped.** The orbital fixture's half-minor axis (723 km) already exceeds the body, so `Max(…, BodyRadiusM)` never binds. Added the **PAD** case the rule exists for — apoapsis at the surface, periapsis at the planet's centre — and it is caught: *"globe would draw at radius **751 px** in a well 1112 px tall"*. ⭐ `NavPage`'s own note records **790 px in a 520 px panel, seen in game 2026-08-06** — the mutation reproduces the historical defect |
+| **D** | zoom stops reaching the scale | caught: *"zooming in makes each ring measure LESS range"* |
+| **E** | a dead feed gets a scale anyway | ⚠ **escaped.** `new PageState()` has `BodyRadiusM == 0`, so a second guard caught it and `!s.Valid` was never exercised. The fixture now keeps its body — which is what a dropped feed in flight actually looks like — and it is caught |
+| **F** | the labels drop below the floor | caught **twice**: the size check and **S153's hard ratchet** (*"a new element below 24 px, which no content type is allowed to be"*) |
+
+**Comment-loss check (C1.16 / G12): 0 lost.** ⚠ The header's *"so none is printed"* clause is
+**SUPERSEDED IN PLACE** — the paragraph is kept verbatim and the amendment sits after it. My first
+attempt inserted the block MID-SENTENCE, splitting one paragraph and duplicating its tail; caught by the
+check and redone.
+
+⚠ **The moving scale the scouting note warned about is real and is now visible rather than hidden:** the
+rings are a fixed fraction of the box, so their values change as the orbit does. That is what an
+auto-fitting plot means — and it is precisely why the labels had to exist, because without them the
+picture is identical for a 200 km rendezvous and a lunar transfer.
+
+⛔ No `install`, no glass, no `git push`. §14.4(a) untouched.
 
 ### S146 [S] Duplicated signals are presented as two independent instruments — **TODO** — [H38; TIER 3: a §14.4(f) judgement]
 - **The finding.** `PowerUnit1Text == PowerUnit2Text` (one string written to both) · NET PWR1/PWR2 (one real

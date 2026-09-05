@@ -24,6 +24,14 @@
 // call T6 made for its mission-patch roundel) and the small colour-key chips ("VEHICLE" cyan /
 // target-name yellow) — the JSC frame shows two coloured markers but not their exact glyphs, so
 // the key names the colour convention instead of inventing an unreadable icon shape.
+//
+// ✅ SUPERSEDED IN PLACE 2026-09-06 BY S145 (C1.16 / G12). The paragraph above is kept VERBATIM,
+// and it is still entirely true about the SOURCE. What is no longer true about the PAGE is the
+// clause "so none is printed": the rings now carry a range, read off THIS BUILD'S OWN computed
+// plot scale (`NavPage.OrbitPixelsPerMetre`) — ours-and-marked exactly as the ring spacing is.
+// ⛔ The §1.4 position is unchanged: no scale was transcribed from the JSC or BBC frames, because
+// none is legible in either. The numbers beside the rings are OURS, and they are REAL, because the
+// plot they measure is real.
 // ============================================================================================
 using System;
 
@@ -39,6 +47,19 @@ namespace DragonScreen
 
         const float RefW = 3427f, RefH = 2112f;
         const float PlotX = 380f, PlotY = 180f, PlotW = 2667f, PlotH = 1670f;
+
+        /// <summary>A ring's range, in the unit that keeps it readable. ⚠ km throughout the orbital
+        /// range this plot covers, with one decimal only where the number would otherwise round to
+        /// nothing; metres below a kilometre, because "0 km" is not a range. No unit is invented — km
+        /// and m are the units every other distance in this build already prints.</summary>
+        static string RingLabel(float metres)
+        {
+            if (float.IsNaN(metres) || float.IsInfinity(metres) || metres <= 0f) return Dashes.None;
+            if (metres < 1000f) return ((int)(metres + 0.5f)) + " m";
+            float km = metres / 1000f;
+            if (km < 10f) return km.ToString("F1") + " km";
+            return ((int)(km + 0.5f)) + " km";
+        }
 
         public static void Build(DisplayList dl, int w, int h, PageState s)
         {
@@ -83,12 +104,42 @@ namespace DragonScreen
             // Text7 is one step up from Hairline and clears both grounds - it is still a background
             // scale element, not an instrument line.
             // ⛔ The §1.4 marking is unchanged: they are still unscaled and still ours.
+            // ---- S145 / S49 H35: AND NOW THEY CARRY A SCALE ----
+            // ⛔ AN UNLABELLED RING IS A READOUT THAT SAYS NOTHING. Four circles at `rmax * i/4` are a
+            // pure fraction of the BOX - no range behind them at all - so a crew could not tell a 200 km
+            // rendezvous from a lunar transfer. The rings were honest about being unsourced and useless
+            // as an instrument.
+            //
+            // ⭐ THE SCALE WAS ALREADY COMPUTED, AND IT IS NOT COPIED HERE. `NavPage.Orbit` fits the
+            // conic to the well, and S145 lifted that expression into `NavPage.OrbitPixelsPerMetre` so
+            // the DRAW and the LABELS read one number. ⛔ Re-deriving it in this file would have been a
+            // second scale rule, and `MarginAffordance`'s header records what that costs: when one
+            // geometry was copied, "every copy disagreed with at least one other".
+            //
+            // ⚠ THE SCALE MOVES, AND THAT IS WHAT AN AUTO-FITTING PLOT MEANS. The rings are a fixed
+            // fraction of the box, so their VALUES change as the orbit does - a 200 km ring on one
+            // orbit and a 2 000 km ring on another. That is honest rather than convenient, and it is
+            // why the labels exist: without them the picture is identical in both cases.
+            // ⛔ NO ORBIT, NO LABEL. With nothing to fit, `OrbitPixelsPerMetre` returns 0 and the rings
+            // draw bare - the same rings the page has always had, saying nothing, which is the truth
+            // then. A ring labelled from a scale that does not exist would be worse than an unlabelled
+            // one.
             float rcx = X(PlotX + PlotW * 0.5f), rcy = Y(PlotY + PlotH * 0.5f);
             float rmax = Z(Math.Min(PlotW, PlotH)) * 0.46f;
+            float ppm = NavPage.OrbitPixelsPerMetre(s, Z(PlotW), Z(PlotH), new MapView());
+            // ⚠ LIVE type: a range that cannot be read at a glance is not a range ([[S153]]'s policy).
+            float lblSz = Typography.MinDesignFor(w, sc);
             for (int i = 1; i <= 4; i++)
             {
                 float r = rmax * i / 4f;
                 dl.ArcBand(rcx, rcy, r - St(2), r, 0.0, 360.0, DragonPalette.Text7);
+                if (ppm <= 0f) continue;
+                // ⚠ ON THE VERTICAL AXIS, not the horizontal, and that is a fit decision rather than a
+                // taste one: the rings are `rmax/4` apart, and four right-aligned labels on the +x axis
+                // would overlap each other at any size that clears the legibility floor. Stacked up the
+                // +y axis they are one ring-gap apart and cannot collide.
+                dl.Text(RingLabel(r / ppm), rcx, rcy - r - Z(lblSz) - Z(6f), Z(lblSz),
+                        TextAlign.Centre, DragonPalette.Text3);
             }
 
             dl.Box(X(PlotX), Y(PlotY), Z(PlotW), Z(PlotH), St(2), DragonPalette.Hairline);

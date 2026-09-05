@@ -63,6 +63,7 @@ public static class FigmaUINavTest
         AlertsView();
         DiscreteEmergencies();
         SubsystemStateWords();
+        OrbitRingScale();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
     }
@@ -2514,6 +2515,130 @@ public static class FigmaUINavTest
         return s;
     }
 
+    // ================= S145 / S49 H35: THE RANGE RINGS CARRY A SCALE =================
+    // Four circles at `rmax * i/4` are a pure fraction of the BOX - no range behind them at all - so a
+    // crew could not tell a 200 km rendezvous from a lunar transfer. The scale existed; it was a LOCAL
+    // inside `NavPage.Orbit`, and S145 lifted it out so the draw and the labels read ONE number.
+    static void OrbitRingScale()
+    {
+        const int VW = 2560, VH = 1406;
+        // The plot well, exactly as NavOrbitPlotPage passes it.
+        float sc = (float)VH / 2112f;
+        float mw = 2667f * sc, mh = 1670f * sc;
+        float rmax = sc * Math.Min(2667f, 1670f) * 0.46f;
+
+        PageState kerbin = new PageState();
+        kerbin.Valid = true; kerbin.Regime = FlightRegime.Space;
+        kerbin.BodyRadiusM = 600000.0; kerbin.AtmosphereDepthM = 70000.0;
+        kerbin.ApogeeM = 124000.0; kerbin.PerigeeM = 121900.0; kerbin.AltitudeM = 123400.0;
+        kerbin.ApogeeShown = true; kerbin.PerigeeShown = true; kerbin.Ascending = true;
+
+        float ppm = NavPage.OrbitPixelsPerMetre(kerbin, mw, mh, MapProjection.Default());
+        Check("the plot has a scale at all", ppm > 0f, "got " + ppm);
+
+        // ⭐ THE GOLDEN NUMBER, DERIVED INDEPENDENTLY. Worked out by hand from the fixture's own
+        // figures - Kerbin R = 600 km, ap 124 km, pe 121.9 km, a well of 1775.4 x 1111.7 px, the fit
+        // rule's 0.42 margin and the 0.46 ring fraction - giving 6.4588e-4 px/m and an outer ring of
+        // 791.8 km. This asserts the page against that derivation, not against itself.
+        float outerKm = (rmax / ppm) / 1000f;
+        Check("the outer ring is 792 km on the Kerbin fixture",
+              Math.Abs(outerKm - 791.8f) < 1f, "got " + outerKm + " km");
+
+        // The rings are evenly spaced, so their VALUES must be too - a scale that is not linear in the
+        // radius is not a scale.
+        for (int i = 1; i <= 4; i++)
+        {
+            float km = ((rmax * i / 4f) / ppm) / 1000f;
+            Check("ring " + i + " is " + i + "/4 of the outer one",
+                  Math.Abs(km - outerKm * i / 4f) < 0.01f, "got " + km);
+        }
+
+        // ⭐ AN INDEPENDENT PROPERTY: zoom is one multiplier on the scale, so at 2x the SAME ring must
+        // read HALF the range. Nothing about the ring geometry changes; only what it measures.
+        MapView z2 = MapProjection.Default();
+        float zoomStepScale = MapProjection.OrbitScale(z2.OrbitZoom);
+        Check("the default view is unzoomed", Math.Abs(zoomStepScale - 1f) < 1e-6f,
+              "got " + zoomStepScale);
+        // ⚠ The zoom field is public on MapView, so this sets it directly - the projection's own
+        // stepper (`MapProjection.Zoom`) takes a control act and is a different surface. What matters
+        // is that the SCALE is read through `OrbitScale`, which it is.
+        MapView zin = MapProjection.Default(); zin.OrbitZoom = 1;
+        float ppm2 = NavPage.OrbitPixelsPerMetre(kerbin, mw, mh, zin);
+        Check("zooming in makes each ring measure LESS range",
+              ppm2 > ppm && Math.Abs((rmax / ppm2) - (rmax / ppm) / (ppm2 / ppm)) < 1f,
+              "ppm " + ppm + " -> " + ppm2);
+
+        // A bigger body means a bigger picture, so the same rings measure more.
+        PageState earth = kerbin;
+        earth.BodyRadiusM = 6371000.0; earth.ApogeeM = 202000.0; earth.PerigeeM = 198000.0;
+        float ppmE = NavPage.OrbitPixelsPerMetre(earth, mw, mh, MapProjection.Default());
+        Check("a body ten times larger makes the rings measure much more range",
+              (rmax / ppmE) > (rmax / ppm) * 5f,
+              "kerbin " + (rmax / ppm / 1000f) + " km, earth " + (rmax / ppmE / 1000f) + " km");
+
+        // ---- ⭐ THE PAD, WHICH IS WHY THE BODY IS IN THE EXTENT AT ALL -------------------------
+        // `NavPage`'s own note: on the pad the "orbit" is a degenerate ellipse - apoapsis at the
+        // surface, periapsis at the centre of the planet, periapsis reading -598.4 km - and scaling to
+        // its minor axis "blew the globe up to 790 px inside a 520 px panel, seen in game 2026-08-06".
+        // ⚠ THE ORBITAL FIXTURE ABOVE CANNOT TEST THAT: its half-minor axis (723 km) is already larger
+        // than the body, so the `Max(..., BodyRadiusM)` never binds and a mutation removing it passed.
+        // This is the state where it does bind.
+        PageState pad = new PageState();
+        pad.Valid = true; pad.Regime = FlightRegime.Space;
+        pad.BodyRadiusM = 600000.0; pad.ApogeeM = 0.0; pad.PerigeeM = -598400.0;
+        pad.ApogeeShown = true; pad.Ascending = true;
+        float ppmPad = NavPage.OrbitPixelsPerMetre(pad, mw, mh, MapProjection.Default());
+        Check("the pad's degenerate ellipse still has a scale", ppmPad > 0f, "got " + ppmPad);
+        Check("...and the BODY still fits the well, which is what that rule is for",
+              (float)pad.BodyRadiusM * ppmPad <= mh * 0.5f,
+              "globe would draw at radius " + ((float)pad.BodyRadiusM * ppmPad)
+              + " px in a well " + mh + " px tall");
+
+        // ---- AND NO ORBIT MEANS NO LABEL, WHICH IS THE HONEST STATE --------------------------
+        // ⚠ THE DEAD FIXTURE KEEPS ITS BODY, and that is the point. A `new PageState()` has
+        // `BodyRadiusM == 0`, so a second guard inside OrbitFit catches it and the `!Valid` check
+        // itself is never exercised - a mutation removing `!s.Valid` passed. A dropped feed in flight
+        // still has the last body it knew about, which is exactly this state.
+        PageState dead = kerbin; dead.Valid = false;
+        Check("a dead feed has no plot scale, even with a body still on the state",
+              NavPage.OrbitPixelsPerMetre(dead, mw, mh, MapProjection.Default()) == 0f,
+              "got " + NavPage.OrbitPixelsPerMetre(dead, mw, mh, MapProjection.Default()));
+        PageState noBody = new PageState(); noBody.Valid = true; noBody.BodyRadiusM = 0.0;
+        Check("...and neither does a state with no body",
+              NavPage.OrbitPixelsPerMetre(noBody, mw, mh, MapProjection.Default()) == 0f, "");
+
+        DisplayList live = new DisplayList(NavOrbitPlotPage.Commands + 40);
+        NavOrbitPlotPage.Build(live, VW, VH, kerbin);
+        DisplayList off = new DisplayList(NavOrbitPlotPage.Commands + 40);
+        NavOrbitPlotPage.Build(off, VW, VH, dead);
+        Check("the page draws the outer ring's range", Drew(live, "792 km"),
+              "expected 792 km among the labels");
+        Check("...and all four rings are labelled",
+              Drew(live, "198 km") && Drew(live, "396 km") && Drew(live, "594 km"), "");
+        // ⛔ A ring labelled from a scale that does not exist would be worse than an unlabelled one -
+        // and "no label" has to mean NO TEXT, not a dash where a range should be. ⚠ Checking for the
+        // absence of "792 km" was not enough: with the guard removed, `RingLabel(r/0)` returns the
+        // project dash and the page draws FOUR of them, which that check cannot see. Counted by
+        // POSITION instead - the ring labels are the only text centred on the plot's vertical axis.
+        // ⚠ A Y BAND AS WELL AS AN X. The plot is centred on the panel, so `rcx` is also `w * 0.5` -
+        // the page title and NavPage's own "NO ORBIT" both land on that column. The ring labels are
+        // the only text in the band ABOVE the plot centre and BELOW its top edge; the innermost sits
+        // a full ring-gap up, so the bound is generous rather than fitted.
+        float rcx = (380f + 2667f * 0.5f) * sc + (VW - 3427f * sc) * 0.5f;
+        float rcy = (180f + 1670f * 0.5f) * sc;
+        float yTop = 180f * sc, yBot = rcy - 100f * sc;
+        Check("the live page carries four ring labels on the plot's axis",
+              TextsAtX(live, rcx, yTop, yBot) == 4, "got " + TextsAtX(live, rcx, yTop, yBot));
+        Check("a dead feed labels no ring at all - not even with a dash",
+              TextsAtX(off, rcx, yTop, yBot) == 0 && !Drew(off, "792 km"),
+              "got " + TextsAtX(off, rcx, yTop, yBot) + " labels on the axis");
+
+        // ⚠ LIVE type: a range that cannot be read at a glance is not a range (S153's policy).
+        Check("the ring labels clear the glanceable floor",
+              SizeOf(live, "792 km") >= Typography.MinFor(VW),
+              "got " + SizeOf(live, "792 km") + ", floor " + Typography.MinFor(VW));
+    }
+
     // ================= S138: THE SUBSYSTEM STATE WORDS THAT HAD A SOURCE =================
     // 23 of the 36 checklist words were literals. SIX of them had a model already - and three of those
     // were not merely frozen but CONTRADICTED the Systems P&ID, which draws the same components from
@@ -2747,6 +2872,21 @@ public static class FigmaUINavTest
         Check("LifeSupport(CabinReadout) still means the three cabin bands ONLY",
               Alarms.LifeSupport(fire.Cabin) == Severity.Nominal,
               "a fire has leaked into the recorded sev_ls column");
+    }
+
+    /// <summary>How many text commands sit at this x. ⚠ Needed because "the label is absent" and
+    /// "the label is a dash" look the same to a string search, and S145's mutation A exploited
+    /// exactly that: with its guard removed the page drew four dashes where four ranges belong.
+    /// </summary>
+    static int TextsAtX(DisplayList dl, float x, float yMin, float yMax)
+    {
+        int n = 0;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind == DrawKind.Text && Math.Abs(c.A - x) < 0.5f && c.B >= yMin && c.B <= yMax) n++;
+        }
+        return n;
     }
 
     /// <summary>The x a string was drawn at, first match. -1 if it was not drawn.</summary>

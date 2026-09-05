@@ -653,6 +653,55 @@ namespace DragonScreen
                                  float sc)
         { Orbit(dl, s, mx, my, mw, mh, false, sc); }
 
+        // =========================================================================================
+        //  S145 — THE PLOT'S SCALE, EXPOSED ONCE
+        // =========================================================================================
+        // ⛔ THIS EXISTS SO THERE IS NOT A SECOND COPY OF IT. `NavOrbitPlotPage` draws four concentric
+        // range rings and, until S145, printed no scale beside them — an unlabelled ring is a readout
+        // that says nothing. Labelling them needs the plot's metres-per-pixel, which lived as a LOCAL
+        // inside `Orbit`. Re-deriving it over there would have been a second scale rule, and this
+        // project has the receipt for what that costs: `MarginAffordance`'s header records that when
+        // one geometry was copied, *"every copy disagreed with at least one other"*.
+        //
+        // So the expression moved out and `Orbit` calls it too. There is exactly one place that
+        // decides how big this plot is, and both the drawing and the labels read it.
+
+        /// <summary>
+        /// The plot's base fit, in PIXELS PER METRE, before the crew's zoom — 0 when there is no
+        /// orbit to draw. Unchanged arithmetic, moved: fit the whole conic in the well with a margin,
+        /// and take the BODY into the extent so the pad's degenerate ellipse (apoapsis at the surface,
+        /// periapsis at the planet's centre) cannot blow the globe past the panel, which it did in game
+        /// on 2026-08-06.
+        /// </summary>
+        public static float OrbitFit(PageState s, float mw, float mh)
+        {
+            if (!s.Valid || s.BodyRadiusM <= 0.0 || mw <= 0f || mh <= 0f) return 0f;
+            double rA = s.BodyRadiusM + s.ApogeeM;
+            double rP = s.BodyRadiusM + s.PerigeeM;
+            if (rP < 0.0) rP = 0.0;
+            if (rA <= 0.0) return 0f;
+            double aAxis = (rA + rP) * 0.5;
+            double ecc = (aAxis > 0.0) ? (rA - rP) / (rA + rP) : 0.0;
+            if (ecc < 0.0) ecc = 0.0;
+            if (ecc > 0.98) ecc = 0.98;
+            double halfMinor = aAxis * System.Math.Sqrt(1.0 - ecc * ecc);
+            double extentX = System.Math.Max(aAxis * (1.0 + ecc), s.BodyRadiusM);
+            double extentY = System.Math.Max(halfMinor, s.BodyRadiusM);
+            if (extentX <= 0.0 || extentY <= 0.0) return 0f;
+            float f = (float)System.Math.Min((mw * 0.42f) / extentX, (mh * 0.42f) / extentY);
+            return f > 0f ? f : 0f;
+        }
+
+        /// <summary>The plot's ACTUAL pixels-per-metre, zoom included — `OrbitFit * OrbitScale(zoom)`,
+        /// which is the same `scale` the draw uses. 0 when there is nothing to draw.</summary>
+        public static float OrbitPixelsPerMetre(PageState s, float mw, float mh, MapView view)
+        {
+            float f = OrbitFit(s, mw, mh);
+            if (f <= 0f) return 0f;
+            float z = MapProjection.OrbitScale(view.OrbitZoom);
+            return z > 0f ? f * z : 0f;
+        }
+
         /// <summary>
         /// As Orbit, plus an optional approach chord from the vehicle to periapsis (T6's rendezvous
         /// ellipse plot). Public for the same reason Planet/Map are: one conic calculation, reused
@@ -732,7 +781,7 @@ namespace DragonScreen
             double extentY = System.Math.Max(halfMinor, s.BodyRadiusM);
             if (extentX <= 0.0 || extentY <= 0.0) return;
 
-            float fit = (float)System.Math.Min((mw * 0.42f) / extentX, (mh * 0.42f) / extentY);
+            float fit = OrbitFit(s, mw, mh);
             if (fit <= 0f) return;
 
             // ---- THE SURFACE CUT IS SOLVED BEFORE ANYTHING IS PLACED ----
