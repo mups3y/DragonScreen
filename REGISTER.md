@@ -15091,7 +15091,7 @@ defect. Each line below says so in its own text so the next chat is not misled t
 
 #### The five splits, ordered by dependency
 
-### S121a [S] The five shared widgets: give them a scale-aware form — **TODO** — [split 1 of 5 of [[S121]]; 26 lines / **31 references**; do this FIRST]
+### S121a [S] The five shared widgets: give them a scale-aware form — **DOING** — [split 1 of 5 of [[S121]]; 26 lines / **31 references**; do this FIRST]
 - `Gauge.cs` · `NumericReadout.cs` · `GateCard.cs` · `StatusIndicator.cs` · `Card.cs`.
 - ⛔ **FIRST, because every page below calls into these** — the same reason [[S120]]'s `ChromeBar` came
   before the bodies. Fixing a page against an unscaled widget just moves the defect one call deep.
