@@ -15208,7 +15208,7 @@ The full mapping — which hole, which finding, which are duplicates of each oth
 `docs/BACKLOG_RECONCILIATION.md`. **No new defect was discovered here and none was fixed.**
 ⚠ Each line names its sources so the next chat reads the audit's own detail rather than this summary.
 
-### S126 [S] The Cover's two TARGET readouts are baked pictures of the same wrong value — **DOING** —
+### S126 [S] The Cover's two TARGET readouts are baked pictures of the same wrong value — **DONE 2026-09-06 — live text, route (i), and it AMENDED [[S153]]'s ratchet on the way through** —
 ✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set
 one (SPLIT BY CONTENT TYPE — see S153). ⛔ **The condition that replaces it is mechanical, not a wait:**
 any text this line ADDS must be drawn at **`Typography.MinDesignFor(w, sc)` or above** if it is LIVE, or
@@ -15235,6 +15235,81 @@ is answered this is buildable as written. [H3 + QC `C-14`; TIER 2: real defect]
   asymmetry there closes only when these two become live text.
 - **DONE when:** both readouts are live text at the measured boxes, the longitude carries E/W, and a preview
   at 2560 shows them balanced about the globe (the C-13 geometry [[S105]] already landed).
+
+#### ✅ DONE 2026-09-06 — and the defect was worse than "baked"
+
+⭐ **The two asset KEYS carry the finding**: `target_latitude_26deg_15_00deg_n` and
+`target_longitude_26deg_15_00deg_n`. **Both** printed the same string, so the LONGITUDE showed a
+latitude's value **with a latitude's hemisphere letter**. A longitude cannot be `N`. That is a *wrong*
+reading, not a frozen one.
+
+#### The research (H3 named two routes; choosing was the work)
+
+| route | verdict |
+|---|---|
+| **(i) the live nav target** — `HasTargetGround` / `TargetLatText` / `TargetLonText`, filled at `VesselData.cs:504-520` from the vessel's own target and **already formatted with N/S and E/W** | ⭐ **TAKEN.** `NavPage` reads the same fields, so the two surfaces cannot disagree about where the target is (C7.1) |
+| **(ii) a splashdown predictor** | ⛔ **REJECTED ON A SOURCE, NOT ON EFFORT.** §B11 **O7**: the seven real splashdown sites have **no published coordinates**, so that readout could only ever be modelled, never sourced (§1.4). And these labels say **TARGET**, not SPLASHDOWN — a splashdown site here would be a different readout with a different label and a §1.4 conversation of its own |
+
+#### ⭐ FIRST LINE TO USE [[S153]]'s TWO-FLOOR POLICY PROPERLY — and it broke the guard
+
+The **value** is live → `MinDesignFor` (48.07 design px). The **caption** is a static label — and the
+ruling names *"pad captions"* as exactly that — → `DenseDesignFor` (36.05). Together **84.1 design px
+against the baked box's 90**: it fits, measured, and the pair is centred on that box.
+
+⛔ **THEN THE RATCHET FAILED THE BUILD FOR DOING THE RIGHT THING.** `Cover`'s below-floor count went
+24 → 26, because a caption at the STATIC floor *is* below the GLANCEABLE floor — by design. **A
+one-floor ratchet cannot police a two-floor policy**, and S153's guard was one-floor.
+
+**Amended, here, by the very next line to use it.** There are now two numbers per page:
+
+| | rule | on a rise |
+|---|---|---|
+| `BelowDense` | **HARD** — nothing may EVER sit below the static-reference floor | **fails the build** |
+| `Below` | **SOFT** — may rise only when `BelowDense` did not, i.e. the new text landed in the `Dense`..floor band | **reported** (`STATIC+`), with the page named |
+
+⚠ **What it still cannot catch, said plainly:** a LIVE element placed at the static floor. Telling those
+apart needs a per-element classification, which S153 left to the S153a–f split lines. The guard covers
+the half that is knowable without one and its own comment says so rather than implying more.
+
+#### Verified (C1.3) — measured, not asserted
+
+`python plugin/build.py test` → **ALL SUITES PASSED**; census `870 below the floor, 0 regressed,
+0 improved` (868 + this line's two static captions, and the hard count unmoved at 23 for the Cover).
+`python plugin/build.py preview` → a new `ui_cover_target.png`.
+
+**Inspected**, and ⚠ **one claim I had written into the preview comment was FALSE and is corrected.**
+I wrote that `ui_cover.png` is the no-target state; the render showed `51.60 N / 14.00 E`, and
+`PreviewMain.cs:364-366` sets `HasTargetGround = true` on the shared fixture. ⭐ **The pair of renders is
+better evidence than I claimed** — two fixtures, FOUR different strings, from a page that used to print
+one picture twice:
+
+| render | latitude | longitude |
+|---|---|---|
+| `ui_cover.png` (shared fixture) | `51.60 N` | `14.00 E` |
+| `ui_cover_target.png` | `28.50 N` | `80.60 W` |
+
+The no-target case (both dashing) is pinned headlessly instead, because it needs a fixture WITHOUT a
+target and the shared one has one.
+
+**MUTATION-PROVEN — 6 mutations + a two-part control, all caught, 0 uncaught.** ⚠ **Three escaped on
+the first run and two of those were REAL TEST DEFECTS**, which is the whole reason for doing this:
+
+| | mutation | outcome |
+|---|---|---|
+| **A** | both readouts show the latitude again — **the original defect exactly** | caught: *"the two readouts show DIFFERENT values"* |
+| **B** | a missing ground target prints a stale value | ⚠ **escaped.** The no-target fixture left the text fields **null**, so there was nothing to leak and the check was vacuous. Fixed by giving it the same strings with the flag off — then caught |
+| **C** | the values drop to the static floor | caught: *"the VALUES are LIVE… lat 24, lon 24, floor 32"* |
+| **D** | the captions drop below even the static floor | caught **twice** — the size check and **the new hard ratchet**: *"a new element below 24 px, which no content type is allowed to be"* |
+| **E** | the C-13 symmetry is broken | ⚠ **escaped, and the check was a TAUTOLOGY**: it took the midpoint OF THE TWO READOUTS and asserted they were equidistant from it, which is true of any two numbers. Rewritten against the page's own slot geometry — then caught |
+| **F** | the readouts appear on the flat map | caught: *"the readouts are Earth-view only"* |
+| **G1/G2** | the ratchet amendment, as a two-part control | with `Cover` rolled back to 24 the **amended** guard passes and reports `STATIC+`; the **pre-amendment** form fails on the same tree. ⭐ So the amendment is what keeps the build green, not a loosened number |
+
+**Comment-loss check (C1.16 / G12): 0 lost** across four files.
+
+⚠ **[[S123]]'s residual is closed too** — `CoverPage.cs:299` recorded that its few px of card asymmetry
+*"closes only when these two become live text"*. They are.
+
+⛔ No `install`, no glass, no `git push`. §14.4(a) untouched — a target readout commands nothing.
 
 ### S127 [S] Five of the Cover's seven rail phases draw identical content — **TODO (part owner-gated)** — [H4; TIER 3]
 - **The finding.** Only slots 5 (Reference Content) and 6 (Manual Chute) have their own bodies. Slots 0–4
@@ -16418,6 +16493,14 @@ tractable, and it is why they are grouped by FILE FAMILY rather than by page.
 - ⚠ The counts are **fixture-relative** and the check says so: a change that makes a page draw more rows
   of legitimately-sized text trips it, and the honest response is to re-baseline in the owning line, not
   to widen a tolerance.
+- ⚠ **AMENDED 2026-09-06 BY [[S126]], the very next line to use it, and the amendment is worth reading.**
+  The ratchet as first written counted only elements below the GLANCEABLE floor and failed on any rise —
+  so when S126 added two captions at `DenseDesignFor`, which is exactly where this policy puts a static
+  label, **the guard failed the build for doing the right thing.** ⛔ A ONE-FLOOR RATCHET CANNOT POLICE A
+  TWO-FLOOR POLICY. It now carries two numbers per page: `BelowDense` is HARD (nothing may ever sit below
+  the static floor), `Below` is SOFT (it may rise only when `BelowDense` did not, and that is reported as
+  `STATIC+` rather than failed). ⚠ It still cannot catch a LIVE element placed at the static floor — that
+  needs the per-element classification the S153a–f splits own, and the guard says so.
 
 #### Verified (C1.3) — measured, not asserted
 

@@ -58,6 +58,7 @@ public static class FigmaUINavTest
         CoverEntryEnabled();
         CoverDroppedArrow();
         AudioPageChannels();
+        CoverTargetReadouts();
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
     }
@@ -2343,6 +2344,101 @@ public static class FigmaUINavTest
             if (Math.Abs(c.A - x) <= tol && Math.Abs(c.B - y) <= tol) return c.C;
         }
         return 0f;
+    }
+
+    /// <summary>The x a string was drawn at, first match. -1 if it was not drawn.</summary>
+    static float XOf(DisplayList dl, string text)
+    {
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind == DrawKind.Text && c.Str == text) return c.A;
+        }
+        return -1f;
+    }
+
+    // ================= S126 / S49 H3 / QC C-14: THE TWO TARGET READOUTS =================
+    // ⛔ THE DEFECT WAS WORSE THAN "BAKED". The two assets are `target_latitude_26deg_15_00deg_n` and
+    // `target_longitude_26deg_15_00deg_n` - the key names carry it - so BOTH printed the same string
+    // and the LONGITUDE showed a latitude's value with a LATITUDE'S HEMISPHERE LETTER. A longitude
+    // cannot be "N". That is a wrong reading, not a frozen one, and it is what these checks are for.
+    static void CoverTargetReadouts()
+    {
+        const int VW = 2560, VH = 1406;
+        PageState with = new PageState();
+        with.Valid = true; with.HasTargetGround = true;
+        with.TargetLatText = "28.50 N"; with.TargetLonText = "80.60 W";
+        // ⚠ THE SAME STRINGS, WITH THE FLAG OFF. The first version of this fixture left the text
+        // fields null, so "no target dashes" passed even when the code ignored `HasTargetGround`
+        // entirely - there was nothing to leak. A stale value can only be caught by having one.
+        PageState without = new PageState();
+        without.Valid = true; without.HasTargetGround = false;
+        without.TargetLatText = "28.50 N"; without.TargetLonText = "80.60 W";
+
+        DisplayList a = CoverCam(with, CoverPage.CoverCam.Earth, VW, VH);
+        DisplayList b = CoverCam(without, CoverPage.CoverCam.Earth, VW, VH);
+        DisplayList map = CoverCam(with, CoverPage.CoverCam.Map, VW, VH);
+
+        // The pictures are gone.
+        Check("neither baked TARGET asset is drawn any more",
+              !DrewAsset(a, "target_latitude_26deg_15_00deg_n")
+              && !DrewAsset(a, "target_longitude_26deg_15_00deg_n"), "");
+        // The captions are the reference's own strings (docs/UI_AUDIT.md's Cover label list).
+        Check("both captions are drawn as text",
+              Drew(a, "TARGET LATITUDE") && Drew(a, "TARGET LONGITUDE"), "");
+
+        // ⛔ THE FINDING, AS A CHECK: two DIFFERENT values, and the longitude carries E/W.
+        Check("the two readouts show DIFFERENT values",
+              Drew(a, "28.50 N") && Drew(a, "80.60 W"), "");
+        Check("the longitude is right of the latitude, as the C-13 geometry puts them",
+              XOf(a, "80.60 W") > XOf(a, "28.50 N"),
+              "lat x " + XOf(a, "28.50 N") + ", lon x " + XOf(a, "80.60 W"));
+        // ⭐ And the pair is still SYMMETRIC ABOUT THE CAMERA SLOT - S105/C-13's whole point, which this
+        // line must not undo.
+        // ⛔ THE CENTRE IS COMPUTED INDEPENDENTLY, and the first version of this check was a TAUTOLOGY
+        // that mutation testing caught: it took the midpoint OF THE TWO READOUTS and then asserted
+        // they were equidistant from it, which is true of any two numbers. The slot centre comes from
+        // the page's own geometry instead - `(ViewLeft * sc + w) / 2`, with ViewLeft = 1442 mirrored
+        // here because it is private (the same move, and the same note, as the S54 phase-index test).
+        float scq2 = (float)VH / 2112f;
+        float slotCx = (1442f * scq2 + VW) * 0.5f;
+        float dLat = slotCx - XOf(a, "TARGET LATITUDE"), dLon = XOf(a, "TARGET LONGITUDE") - slotCx;
+        Check("the two readouts stay symmetric about the CAMERA SLOT's centre",
+              Math.Abs(dLat - dLon) < 0.01f && dLat > 0f,
+              "lat is " + dLat + " left of centre, lon is " + dLon + " right");
+
+        // No target = no reading. Not a stale one, and not a plausible one.
+        Check("with no ground target both values dash",
+              Drew(b, Dashes.None) && !Drew(b, "28.50 N") && !Drew(b, "80.60 W"), "");
+        Check("...and the captions still name the row", Drew(b, "TARGET LATITUDE"), "");
+
+        // Earth view only - the flat map and the capsule plot no ground target (First.vue's own v-if).
+        Check("the readouts are Earth-view only",
+              !Drew(map, "TARGET LATITUDE") && !Drew(map, "28.50 N"), "");
+
+        // ---- S153's two-floor policy, applied per content type ----
+        float floor = Typography.MinFor(VW), dense = Typography.DenseFor(VW);
+        Check("the VALUES are LIVE, so they clear the glanceable floor",
+              SizeOf(a, "28.50 N") >= floor && SizeOf(a, "80.60 W") >= floor,
+              "lat " + SizeOf(a, "28.50 N") + ", lon " + SizeOf(a, "80.60 W") + ", floor " + floor);
+        // ⚠ The CAPTIONS are static labels - the ruling names "pad captions" as exactly that - so they
+        // sit at the static-reference floor, which is BELOW the glanceable one by design. Both bounds
+        // are asserted: at Dense or above, and deliberately under the live floor.
+        Check("the CAPTIONS sit at the static-reference floor",
+              SizeOf(a, "TARGET LATITUDE") >= dense && SizeOf(a, "TARGET LATITUDE") < floor,
+              "caption " + SizeOf(a, "TARGET LATITUDE") + ", Dense " + dense + ", floor " + floor);
+        // And the pair fits the baked box it replaces: 90 design px tall.
+        Check("caption + value fit the baked box's 90 design px",
+              (SizeOf(a, "TARGET LATITUDE") + SizeOf(a, "28.50 N")) <= 90f * ((float)VH / 2112f),
+              "stack " + (SizeOf(a, "TARGET LATITUDE") + SizeOf(a, "28.50 N")) + " panel px, box "
+              + (90f * ((float)VH / 2112f)));
+    }
+
+    static DisplayList CoverCam(PageState s, CoverPage.CoverCam cam, int w, int h)
+    {
+        DisplayList dl = new DisplayList(CoverPage.Commands + 200);
+        CoverPage.Build(dl, w, h, s, MapProjection.Default(), 0, cam, Turntable.Front());
+        return dl;
     }
 
     /// <summary>The y a string was drawn at (the TOP of the line), first match.</summary>

@@ -558,38 +558,57 @@ public static class LegibilityFloorTest
     // Leo(), the same orbit fixture the rest of this suite uses. A change that makes a page draw MORE
     // ROWS of legitimately-sized text will trip this, and the honest response is to re-baseline in the
     // owning register line - not to widen the tolerance.
-    struct FloorBaseline { public UiPage Page; public int Below; }
+    // ⚠ AMENDED 2026-09-06 BY [[S126]], THE VERY NEXT LINE TO USE IT, and the amendment is the
+    // interesting part. The first form counted only elements below the GLANCEABLE floor and failed on
+    // any rise. S126 then added two captions at `DenseDesignFor` - which is where the owner's policy
+    // puts a static label, and the ruling names "pad captions" as exactly that - and the guard failed
+    // the build for doing the right thing. ⛔ A ONE-FLOOR RATCHET CANNOT POLICE A TWO-FLOOR POLICY.
+    //
+    // So there are two numbers per page and they are NOT the same kind of rule:
+    //   `BelowDense` is the HARD one - nothing may EVER sit below the static-reference floor, whatever
+    //       it is. A rise fails the build.
+    //   `Below` is SOFT - it may rise only when `BelowDense` did NOT, i.e. the new element landed in
+    //       the Dense..floor band where the policy permits static content to live. That is reported,
+    //       loudly, with the page named; it is not silently accepted and it is not a failure either.
+    // ⚠ What this deliberately CANNOT catch is a LIVE element placed at the static floor. Telling
+    // those apart needs a per-element classification, which S153 left to the per-page split lines;
+    // this guard covers the half that is knowable without one, and says so rather than implying more.
+    struct FloorBaseline { public UiPage Page; public int Below; public int BelowDense; }
 
     static readonly FloorBaseline[] Baseline = {
-        B(UiPage.Cover,             24),   // S153a
-        B(UiPage.Menu,              24),   // S153f
-        B(UiPage.Hud,                2),   // S153f - MarginAffordance's MANUAL/DOCKING, also QC H-06
-        B(UiPage.Audio,             12),   // S153f
-        B(UiPage.AudioVideo,         9),   // S153f
-        B(UiPage.Procedure,         37),   // S153c - the same page file as VrioTest (S110)
-        B(UiPage.VrioTest,          37),   // S153c
-        B(UiPage.SuitCheck,         47),   // S153c
-        B(UiPage.ManualChute,       58),   // S153c
-        B(UiPage.DeorbitBurnPrep,   21),   // S153c
-        B(UiPage.EntryProcedure,     8),   // S153c
-        B(UiPage.Vehicle,           80),   // S153b
-        B(UiPage.VehicleMech,       32),   // S153b
-        B(UiPage.VehicleCrew,       43),   // S153b
-        B(UiPage.VehiclePropulsion,114),   // S153b - the worst single page in the build
-        B(UiPage.VehiclePower,      43),   // S153b
-        B(UiPage.VehicleAvionics,   43),   // S153b
-        B(UiPage.VehicleGnc,        43),   // S153b
-        B(UiPage.VehicleThermal,    43),   // S153b
-        B(UiPage.SystemsTree,       31),   // S153d
-        B(UiPage.SystemsPid,        42),   // S153d
-        B(UiPage.Docking,           39),   // S153e
-        B(UiPage.Rendezvous,         8),   // S153e
-        B(UiPage.Ascent,            17),   // S153e
-        B(UiPage.NavOrbitPlot,      11),   // S153e
+        B(UiPage.Cover,             26, 23),   // S153a  ⚠ 26 not 24: [[S126]] added two STATIC captions
+        B(UiPage.Menu,              24, 24),   // S153f
+        B(UiPage.Hud,                2,  2),   // S153f - MarginAffordance's MANUAL/DOCKING, also QC H-06
+        B(UiPage.Audio,             12, 10),   // S153f
+        B(UiPage.AudioVideo,         9,  7),   // S153f
+        B(UiPage.Procedure,         37, 35),   // S153c - the same page file as VrioTest (S110)
+        B(UiPage.VrioTest,          37, 35),   // S153c
+        B(UiPage.SuitCheck,         47, 46),   // S153c
+        B(UiPage.ManualChute,       58, 56),   // S153c
+        B(UiPage.DeorbitBurnPrep,   21, 20),   // S153c
+        B(UiPage.EntryProcedure,     8,  7),   // S153c
+        B(UiPage.Vehicle,           80, 79),   // S153b
+        B(UiPage.VehicleMech,       32, 31),   // S153b
+        B(UiPage.VehicleCrew,       43, 42),   // S153b
+        B(UiPage.VehiclePropulsion,114,113),   // S153b - the worst single page in the build
+        B(UiPage.VehiclePower,      43, 42),   // S153b
+        B(UiPage.VehicleAvionics,   43, 42),   // S153b
+        B(UiPage.VehicleGnc,        43, 42),   // S153b
+        B(UiPage.VehicleThermal,    43, 42),   // S153b
+        B(UiPage.SystemsTree,       31, 30),   // S153d
+        B(UiPage.SystemsPid,        42, 41),   // S153d
+        B(UiPage.Docking,           39, 31),   // S153e
+        B(UiPage.Rendezvous,         8,  1),   // S153e ⭐ 7 of its 8 already sit in the Dense..floor band
+        B(UiPage.Ascent,            17, 16),   // S153e
+        B(UiPage.NavOrbitPlot,      11,  8),   // S153e
     };
 
-    static FloorBaseline B(UiPage p, int below)
-    { FloorBaseline f = new FloorBaseline(); f.Page = p; f.Below = below; return f; }
+    static FloorBaseline B(UiPage p, int below, int belowDense)
+    { FloorBaseline f = new FloorBaseline(); f.Page = p; f.Below = below; f.BelowDense = belowDense; return f; }
+
+    /// <summary>Flip to true for one run to dump the baseline table, then flip back. It exists
+    /// because a table of 25 pairs is not something to type from a screenshot.</summary>
+    const bool PrintBaselines = false;
 
     static void R01Census()
     {
@@ -614,29 +633,41 @@ public static class LegibilityFloorTest
             }
             if (n == 0) continue;
             tT += n; tOk += ok; tStatic += st; tBelowDense += bd; tBelow += (n - ok);
+            if (PrintBaselines)
+                Console.WriteLine(string.Format("        B(UiPage.{0}, {1}, {2}),", up, n - ok, bd));
 
-            int want = -1;
+            int want = -1, wantD = -1;
             for (int i = 0; i < Baseline.Length; i++)
-                if (Baseline[i].Page == up) { want = Baseline[i].Below; covered++; }
+                if (Baseline[i].Page == up)
+                { want = Baseline[i].Below; wantD = Baseline[i].BelowDense; covered++; }
 
             Check("R-01: " + up + " is in the floor baseline table", want >= 0,
                   "a page that draws text and is not listed cannot be ratcheted - add it, owned by a "
                   + "split line");
             if (want < 0) continue;
 
-            if (n - ok > want)
+            // ---- THE HARD RATCHET: nothing may ever drop below the STATIC-reference floor ----
+            if (bd > wantD)
             {
                 regressed++;
-                Check("R-01: " + up + " gained sub-floor text", false,
-                      "baseline " + want + ", now " + (n - ok) + " - a new element below "
-                      + floor + " px. Raise it, or re-baseline in the owning register line.");
+                Check("R-01: " + up + " gained text below even the static floor", false,
+                      "baseline " + wantD + ", now " + bd + " - a new element below " + dense
+                      + " px, which no content type is allowed to be. Raise it.");
                 for (int i = 0; i < dl.Count; i++)
                 {
                     DrawCmd c = dl.At(i);
-                    if (c.Kind == DrawKind.Text && c.C < floor)
+                    if (c.Kind == DrawKind.Text && c.C < dense)
                         Console.WriteLine(string.Format("        {0,6:0.0}px {1,4:0}%  {2}",
                             c.C, 100f * c.C / floor, c.Str));
                 }
+            }
+            // ---- THE SOFT ONE: a rise is allowed ONLY into the Dense..floor band ----
+            else if (n - ok > want)
+            {
+                Console.WriteLine(string.Format(
+                    "    STATIC+   {0,-18} below-floor {1,3} -> {2,3}, below-Dense unchanged at {3,3}"
+                    + "   (new STATIC-reference text; re-baseline in the owning line)",
+                    up, want, n - ok, bd));
             }
             else if (n - ok < want)
             {

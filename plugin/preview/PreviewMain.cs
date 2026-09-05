@@ -1341,6 +1341,28 @@ public static class PreviewMain
                 ps.UplinkText = savedUp; ps.DownlinkText = savedDown; ps.CommSignal01 = savedSig;
             }
 
+            // ---- S126 / QC C-14: THE TWO TARGET READOUTS, AGAINST A SECOND TARGET ----
+            // The defect was that BOTH readouts were the same baked picture - "26deg 15.00deg N" on
+            // the LONGITUDE as well - so the pair being DIFFERENT, and the longitude carrying E/W, is
+            // the thing to look at.
+            // ⚠ `ui_cover.png` above is NOT the no-target state: the shared fixture sets
+            // `HasTargetGround = true` with 51.60 N / 14.00 E (`:364-366`). ⭐ That makes this pair of
+            // renders a stronger piece of evidence than a with/without pair would be - TWO fixtures,
+            // FOUR different strings, from a page that used to print one picture twice. The
+            // no-target case (both dashing) is pinned headlessly in FigmaUINavTest instead, because it
+            // needs the fixture NOT to have a target and the shared one does.
+            {
+                PageState tps = ps;
+                tps.HasTargetGround = true;
+                tps.TargetLatText = "28.50 N"; tps.TargetLonText = "80.60 W";
+                DisplayList tdl = new DisplayList(600);
+                CoverPage.Build(tdl, CW, CH, tps, MapProjection.Default(), 0);
+                string path = Path.Combine(outDir, "ui_cover_target.png");
+                Render(tdl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + tdl.Count
+                                  + " commands   TARGET " + tps.TargetLatText + " / " + tps.TargetLonText);
+            }
+
             // ---- S129 / QC C-08: THE ENTRY ENABLED ROW, IN ALL THREE OF ITS STATES ----
             // The row used to be two PNGs with the answer exported into which one was set bolder, and
             // the exported answer was FALSE - permanently, on every phase. It is a computed verdict

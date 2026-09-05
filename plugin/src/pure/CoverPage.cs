@@ -491,7 +491,7 @@ namespace DragonScreen
                     dl.Line(X(Lines[i, 0]), Y(Lines[i, 2]), X(Lines[i, 1]), Y(Lines[i, 2]), St(2), DragonPalette.Text6);
 
             // the camera caption, the NEXT VIEW pill and (on the MAP view) its d-pad, over everything.
-            DrawCameraChrome(dl, w, h, view, cam);
+            DrawCameraChrome(dl, w, h, view, cam, s);
         }
 
         // ---- the three camera views ----------------------------------------------------------------
@@ -605,7 +605,8 @@ namespace DragonScreen
 
         /// <summary>The CAMERA caption + heading, the NEXT VIEW pill, and - on the MAP view only - the
         /// NavEarth pan/centre/zoom cluster. Drawn after the placed assets so nothing covers them.</summary>
-        static void DrawCameraChrome(DisplayList dl, int w, int h, MapView view, CoverCam cam)
+        static void DrawCameraChrome(DisplayList dl, int w, int h, MapView view, CoverCam cam,
+                                     PageState s)
         {
             float sc = h / RefH; float extra = w - RefW * sc; if (extra < 0f) extra = 0f;
             float X(float v) => v * sc + extra;      // every camera control lives right of the Split
@@ -662,14 +663,49 @@ namespace DragonScreen
             // the flat map and the capsule do not plot a ground target (First.vue's `v-if`).
             if (cam == CoverCam.Earth)
             {
+                // ---- S126 / S49 H3 / QC C-14: THEY ARE LIVE TEXT NOW, NOT TWO PICTURES ----
+                // ⛔ WHAT WAS WRONG IS WORSE THAN "BAKED". The two assets are
+                // `target_latitude_26deg_15_00deg_n` and `target_longitude_26deg_15_00deg_n` - the
+                // key names carry it - so BOTH readouts printed the SAME string, and the LONGITUDE
+                // one therefore showed a latitude's value with a LATITUDE'S HEMISPHERE LETTER. A
+                // longitude cannot be "N". It was a wrong reading, not just a frozen one.
+                //
+                // ⭐ ROUTE (i), AND CHOOSING WAS THE RESEARCH (H3 named two). The live nav target is
+                // already on PageState - `HasTargetGround`, `TargetLatText`, `TargetLonText`, filled
+                // at `VesselData.cs:504-520` from the vessel's own target and ALREADY formatted with
+                // N/S and E/W - and `NavPage` reads the same fields, so the two surfaces cannot
+                // disagree about where the target is (C7.1).
+                // ⛔ ROUTE (ii) WAS REJECTED ON A SOURCE, NOT ON EFFORT: a SPLASHDOWN predictor would
+                // need the seven real splashdown sites, and §B11 O7 records that they have NO
+                // PUBLISHED COORDINATES. That readout could only ever be modelled, never sourced
+                // (§1.4), and these labels say TARGET - not SPLASHDOWN - so the target is what they
+                // get. If the owner later wants a splashdown site here, it is a different readout
+                // with a different label and a §1.4 conversation of its own.
+                //
+                // ⚠ TWO SIZES, BY [[S153]]'s POLICY, AND THE SPLIT IS THE RULING'S OWN EXAMPLE.
+                // The VALUE is live -> `MinDesignFor`. The CAPTION is a static label -> the ruling
+                // names "pad captions" as static reference, so `DenseDesignFor`. Together they are
+                // 36.05 + 48.07 = 84.1 design px against the baked box's 90 - it fits, measured, and
+                // the pair is centred on that box so the row sits where the reference put it.
+                //
+                // The C-13 geometry ([[S105]]) is untouched: still `slotCx ± ReadoutHalfGap`, still
+                // Earth-view only (the flat map and the capsule plot no ground target - First.vue's
+                // own `v-if`). Only the ink changed.
                 float slotCx = (ViewLeft * sc + w) * 0.5f;
-                float lw = BoxOf(EarthOnlyKeys[0], 2) * sc, lh = BoxOf(EarthOnlyKeys[0], 3) * sc;
-                float gw = BoxOf(EarthOnlyKeys[1], 2) * sc, gh = BoxOf(EarthOnlyKeys[1], 3) * sc;
-                float ry = BoxOf(EarthOnlyKeys[0], 1) * sc;
-                dl.Asset(EarthOnlyKeys[0], slotCx - Z(ReadoutHalfGap) - lw * 0.5f, ry, lw, lh,
-                         DragonPalette.White);
-                dl.Asset(EarthOnlyKeys[1], slotCx + Z(ReadoutHalfGap) - gw * 0.5f, ry, gw, gh,
-                         DragonPalette.White);
+                float capSz = Typography.DenseDesignFor(w, sc), valSz = Typography.MinDesignFor(w, sc);
+                float boxTop = BoxOf(EarthOnlyKeys[0], 1), boxH = BoxOf(EarthOnlyKeys[0], 3);
+                float top = boxTop + (boxH - (capSz + valSz)) * 0.5f;
+                bool have = s.Valid && s.HasTargetGround;
+                string[] cap = { "TARGET LATITUDE", "TARGET LONGITUDE" };
+                string[] val = { have ? s.TargetLatText : Dashes.None,
+                                 have ? s.TargetLonText : Dashes.None };
+                for (int i = 0; i < 2; i++)
+                {
+                    float cx = slotCx + (i == 0 ? -Z(ReadoutHalfGap) : Z(ReadoutHalfGap));
+                    dl.Text(cap[i], cx, Y(top), Z(capSz), TextAlign.Centre, DragonPalette.Text3);
+                    dl.Text(val[i], cx, Y(top + capSz), Z(valSz), TextAlign.Centre,
+                            have ? DragonPalette.White : DragonPalette.Text6);
+                }
             }
 
             if (cam != CoverCam.Map) return;
