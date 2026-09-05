@@ -63,8 +63,8 @@ Cover's seven phase views, plus the lower analog console panel. **The six Vehicl
 | **0** | **Cover** | COVER | ✅ **DONE — 13 findings** *(C-12, C-13 added on owner review)* | 2026-09-05 |
 | **1** | **Hud** | ATTITUDE HUD (Frame 58) | ✅ **DONE — 9 findings** | 2026-09-05 |
 | **2** | **Audio** | AUDIO SETTINGS | ✅ **DONE — 6 findings** | 2026-09-05 |
-| 3 | Procedure | PROCEDURE (Frame 59) | NOT STARTED | — |
-| 4 | Cabin | CABIN (Frame 66) | NOT STARTED | — |
+| **3** | **Procedure** | PROCEDURE (Frame 59) | ✅ **DONE — 5 findings** *(shared section with page 4)* | 2026-09-05 |
+| **4** | **Cabin** | CABIN (Frame 66) | ✅ **DONE** *(same section — one source file)* | 2026-09-05 |
 | 5 | Menu | MENU | NOT STARTED | — |
 | 6 | PhaseDeport | DEORBIT BURN | NOT STARTED — *unreachable enum value (S49 H9)* | — |
 | 7 | PhaseCoast | COAST TO TRUNK JETTISON | NOT STARTED — *unreachable (S49 H9)* | — |
@@ -1790,9 +1790,247 @@ question, and until it lands the page can only ever show CABIN.
 
 ---
 
+---
+
+# PAGES 3 + 4 — PROCEDURE (FRAME 59) and CABIN (FRAME 66)
+
+**Inspected together because they are one source file.** `FigmaUI.cs:198-199` routes both to
+`FigmaFramePage.Build(dl, w, h, "frame59" | "frame66")` — the same 26-line function, differing only in
+which PNG it places. One section, one commit; the inventory marks both DONE.
+
+**Renders inspected:** `frame59.png` (Procedure) · `ui_cabin.png` = `frame66.png` (Cabin, the same render
+under two names) · cross-checked against `ui_vriotest.png`. All 2026-09-05, 2560×1406 (H-01).
+
+**S49's entry.** §2 rates both as *"One PNG. `FigmaFramePage.Build`, `Commands = 8`, no `PageState`, no
+HitTest branch — a dead end escapable only by the bottom bar"* (H13), and calls Procedure *"a generic
+placeholder template"*. **The first half is exactly right. The second half is wrong** — Frame 59 is a
+fully-specified real procedure screen, and the build already contains a second, element-level rendering of
+it (F-01).
+
+## What was checked and found CLEAN
+
+1. **`Commands = 8` is a correct budget** — the function makes three draw calls.
+2. **The frame art is drawn undistorted.** Fit-to-height, centred, so the illustration keeps its aspect.
+   That much of the file's stated intent holds.
+3. **No asset is upscaled at the shipped width.** `frame59.png`/`frame66.png` are the same 2048-wide export
+   as `frame58.png`; H-08's upscale exists only at the preview's 2560 and is the same finding, not a new one.
+
+## Cross-page confirmations
+
+**C-04** (12.2% bar stretch), **C-12** (the un-erased marker glow) and **H-07** (frame letterboxed at `ox`
+while the bar is drawn `0…w`, so the frame's left border becomes a rule crossing the bar and two rounded
+corners collide) all recur here — `FigmaFramePage.cs:23-26` is the same construction as `Frame58Hud`, line
+for line. **Pages four and five for C-04/C-12; second and third for H-07.** No new findings.
+
+---
+
+## F-01 — `UiPage.Procedure` and `UiPage.VrioTest` are the same real screen, shipped twice, both reachable from the Menu
+
+**TIER 1** · **NEW** · corrects S49 **H13**'s "generic placeholder template"
+
+**Evidence.** Put `frame59.png` and `ui_vriotest.png` side by side. They are the same screen:
+
+| element | Frame 59 (page 3) | VrioTest (page 19) |
+|---|---|---|
+| title | `4.700 - Deorbit Preparation` | `4.700 - Deorbit Preparation` |
+| section | `DEORBIT` | `DEORBIT` |
+| checklist | 5 items, 4 ticked, `5. COMPLETE FLUID LOADING` open | identical, same 4/1 state |
+| heading | `SECTION 4: IN PROGRESS` · `Test VRIO Health LEDs` | identical |
+| steps | 4.1 … 4.5, same wording | identical |
+| commands | START VRIO 1 / START VRIO 2 / STOP VRIO 2 | identical |
+| footer | `NEXT` · `ENTER READ-ONLY` | identical |
+| notes | the same two note cards, same wording | identical |
+
+So the build carries **two `UiPage` values for one screen** — page 3 as a flat baked PNG, page 19 as an
+element-level rebuild — and `MenuPage` lists both, as `PROCEDURE` and `TEST VRIO HEALTH LEDS`. A crew member
+opening the Menu sees two cards that lead to the same procedure, drawn differently.
+
+**And the two renderings disagree with each other**, which is the sharper half of the defect:
+- the frame's checklist ticks are **white outline** circles; the rebuild's are **filled green**;
+- the rebuild adds a refresh glyph beside `SECTION 4: IN PROGRESS` that the frame does not have;
+- the note cards sit at different x and use different type treatments (the rebuild has a hanging indent
+  after `Note:` and dims its bullet lines);
+- the rebuild's `ENTER READ-ONLY` glyph is a filled rounded rect; the frame's is an eye.
+
+Two surfaces stating the same procedure, disagreeing on its appearance — C7.1's own failure mode, and the
+same class as the S13 residual the Cover fixed (`CoverPage.cs:126-141`).
+
+**Fix plan.**
+- **This is a routing decision, not a drawing one.** `UiPage.VrioTest` is the real rebuild and the one S49
+  H21 already schedules work against; `UiPage.Procedure` is its baked predecessor. The clean resolution is
+  to **point `UiPage.Procedure` at `VrioTestPage`** — one screen, one renderer — and drop `frame59` from the
+  draw path. The enum value stays (UiPage's own rule: never renumber), so no save breaks.
+- ⚠ **`MenuPage` must then stop listing both**, or the grid shows one screen twice under two names. `S14`
+  already established the pattern for pruning the Menu (`FigmaUI.IsPlaceholder` decides grid membership).
+- **Alternative, if the owner wants Frame 59 kept as the reference look:** keep it, but rename its Menu card
+  so the duplication is legible rather than confusing, and record in `SCREEN_INVENTORY.md` that the two are
+  one screen. **Not recommended** — it keeps two renderings that already disagree.
+- **Must not break:** `frame59.png` stays on disk (C1.16's spirit — the asset is evidence of the reference
+  look even if it stops being drawn), and the enum value is not renumbered.
+- **Verify:** the Menu grid lists this procedure once; `ui_vriotest.png` is the only render of it.
+
+---
+
+## F-02 — Both pages are a single PNG with no state and no touch, and the Cabin page's data is already live one file away
+
+**TIER 1** · confirms S49 **H13**
+
+**Evidence.** `FigmaFramePage.Build(DisplayList dl, int w, int h, string frameKey)` — **no `PageState`
+parameter**, structurally provable. Three draw calls. No `HitTest` in the file, and `FigmaUI.HitTest` has no
+branch for either page beyond the settings tab strip (which only `Cabin` shares).
+
+Painted controls with no rectangle behind them:
+- **Frame 59:** `START VRIO 1 LED TEST`, `START VRIO 2 LED TEST`, `STOP VRIO 2 LED TEST`, `NEXT`,
+  `ENTER READ-ONLY`, five tappable-looking checklist rows, and a baked scrollbar thumb — **11**.
+- **Frame 66:** fifteen `- DISPLAY n` lighting rows, three tab icons, and a caption that says
+  **`Tap to disable display`** — **19**, one of which instructs the crew to tap.
+
+**And the Cabin page's data is all present and already drawn live elsewhere.** `PageState` carries
+`Ppo2Text`, `Co2Text`, `PressText`, `CabinTempText`, `LoopAText`, `LoopBText`, `CrewText`
+(`Pages.cs:104-106`), and `Pages.cs:1185-1197` already draws them as banded dials, as does
+`SettingsPage.cs:293`. `Alarms.LifeSupport` / `Thermal` already band them. So the page shows a photograph
+of a cabin while the real cabin's numbers are computed every frame two files away.
+
+**Fix plan.**
+- This is the element-by-element rebuild `FigmaFramePage.cs:9-11` says is the plan, and for **Cabin it needs
+  no research at all**: the values, the formatters and the bands all exist. Overdraw at the frame's measured
+  positions, exactly as C-01/H-02 propose for the Cover strip and the HUD.
+- **For Procedure, F-01 dissolves the work** — the rebuild already exists as `VrioTestPage`.
+- ⚠ **The lighting rows are not a drawing problem, they are F-03's.** Do not wire them.
+- **Must not break:** the illustration. Frame 66's cabin render is the page's whole visual identity and
+  should stay as the background it is.
+- **Verify:** a `!Valid` render must dash every overdrawn value rather than showing the baked one.
+
+---
+
+## F-03 — Frame 66's LIGHTING panel is broken in the baked art, and it draws fifteen controls where a recorded finding says exactly one is bindable
+
+**TIER 1** · **NEW**
+
+**Evidence.** `ui_cabin.png`, the LIGHTING panel, magnified. Four faults, all in the PNG:
+
+1. **Three of the four column headings are identical** — `CABIN` · `CABIN DISPLAYS` · `CABIN DISPLAYS` ·
+   `CABIN DISPLAYS`.
+2. **`- DISPLAY 3` appears twice** in each of columns 1, 2 and 3, and there is **no `DISPLAY 4`**. The rows
+   read 1, 2, 3, 3.
+3. **Column 4 has only three rows** and its box ends higher than the other three, so the four columns do not
+   align along the bottom.
+4. **Its caption ends mid-clause:** `Tap to disable display` / `or` — and stops.
+
+**And the controls should not be there at all.** `SettingsPage.cs:20-25` records the finding, in the code:
+
+> *"Checked in `TundraExploration/Parts/RodanV2/TE_CD2_POD.cfg`: the pod carries exactly ONE
+> ModuleColorChanger, on the Light action group. There is no Back light, no Tip light, no per-zone anything
+> to bind to. **Drawing eight buttons where seven do nothing is the dead-control failure this project
+> refuses**, so the panel shows the master toggle plus whatever light modules are ACTUALLY found on the
+> vessel, by name."*
+
+That finding is about **eight** buttons. This page draws **fifteen** lighting rows, plus an instruction to
+tap them, on a page with no hit test — the same failure the same file refuses, at nearly twice the scale.
+This is A-02's shape a second time: the Figma rebuild re-introduced controls a recorded decision had removed.
+
+**Fix plan.**
+- **The art faults (1–4) cannot be fixed in code** — they are pixels in `frame66.png`, a community export.
+  Either the frame is re-exported (needs the Figma, the same dependency as **Q1 / A-05 / A-06**), or the
+  panel is **rebuilt as elements** and the baked one skipped, which is F-02's fix and the only route that
+  does not depend on an export.
+- **The controls question is A-02's, one page over, and should be answered once for both** — see **Q6**,
+  whose options (remove / tint inert / make live under an `OVERRIDE`) apply here unchanged. ⚠ **The
+  difference is that here the answer is already partly determined by evidence**, not just by preference:
+  `TE_CD2_POD.cfg` has one `ModuleColorChanger`, so fifteen per-zone rows cannot be made live even if the
+  owner wanted them. The honest rebuild shows **the master toggle plus whatever light modules the vessel
+  actually has**, which is precisely what `SettingsPage` already does.
+- **`Tap to disable display` must go or become true.** An instruction to tap, on a page where nothing is
+  tappable, is the strongest form of the dead-control defect: it does not merely look interactive, it
+  *says* it is.
+- **Must not break:** if the panel is rebuilt, the cabin illustration behind it stays.
+- **Verify:** re-render; no duplicate row label, four columns of equal height, no truncated caption, and no
+  instruction the page cannot honour.
+
+---
+
+## F-04 — The settings tab strip exists in two incompatible forms, and the shared hit bands are computed in a coordinate system only one of them draws in
+
+**TIER 2** · **NEW**
+
+**Evidence.** Three pages share one tab strip — `Audio`, `Cabin`, `AudioVideo` — hit-tested by one block,
+`FigmaUI.cs:310-320`, which maps a touch with `dx = px * RefW / w` (a **full-width stretch**).
+
+But the three pages draw that strip in two different ways:
+- **Audio** draws it as live text with `PX(x) = x * sx`, `sx = w / RefW` — the **same** full-width mapping
+  the hit test uses. Exact agreement.
+- **Cabin** does not draw it at all: the strip is **baked into `frame66.png`** with icons, and
+  `FigmaFramePage` places that PNG **letterboxed** — `ox + x * sc`, a different mapping.
+
+So on the Cabin page a tab painted at design x *d* is hit-tested as if it were at
+`(ox + d·sc) · RefW / w`. At this panel that puts the three tabs at effective design x **1598 / 1714 / 1829**
+against bands centred on **1585 / 1716 / 1846** — inside all three, with ~50 px of margin, but off by up to
+17 px, and the error grows with `ox`, i.e. with panel width.
+
+**And the two strips do not look alike:** Audio's is plain text with an accent underline; Cabin's is baked
+icons above labels. Two sibling settings pages, two different navigation chromes.
+
+**Fix plan.**
+- **Draw the tab strip once, in code, for all three settings pages**, and skip the baked one on Cabin —
+  the same "swap the baked element for a drawn one" move `CoverPage` already makes with `SkipKeys`.
+  `FigmaFramePage` would need a skip mechanism, which is a reason to prefer F-02's element rebuild.
+- **Then derive the hit bands from the same function that draws them** — the standing rule that H-04 and
+  A-01 both invoke. One tab geometry, three pages.
+- **Must not break:** the bands currently work at the shipped aspect; any change must keep all three tabs
+  hittable on Audio, Cabin and AudioVideo, which is three renders to check, not one.
+- **Verify:** a headless check that each drawn tab's centre maps back inside its own hit band, on each of
+  the three pages, at two panel aspects.
+
+---
+
+## F-05 — The preview folder keeps stale renders, and one of them is a full Cover page from before the tint fix, named exactly like current output
+
+**TIER 2** · **NEW** · QC-instrument finding
+
+**Evidence.** `plugin/build/preview/` holds **118 PNGs**. Nineteen are older than S75's tint fix
+(2026-09-04) and are therefore drawn by the renderer that **ignored asset tint entirely**:
+
+```
+2026-08-05  screen1/2/3.png
+2026-08-21  navball_*.png, _stock_*.png, _heading_*.png, _verify_hn_he.png   (11 files)
+2026-08-29  globe_left.png, globe_right.png
+2026-09-01  arrow_zoom.png, seat_thumb.png
+2026-09-01  ui_cover_phase4.png        ← 1.75 MB, a full Cover render
+```
+
+`ui_cover_phase4.png` is the dangerous one. It is named exactly like the current `ui_cover_phase5.png` and
+`ui_cover_phase6.png`, it is a full-size Cover render, and **`PreviewMain` no longer produces it** — grep
+finds no reference. It is an orphan from a deleted render block, and nothing about the file says so.
+
+**What is wrong.** The preview directory is never cleaned, so it accumulates output from render blocks that
+have since been removed, and those orphans are indistinguishable by name from current output. This role
+nearly used that file as evidence for the Cover's phase-4 body — which would have been a finding written
+against a tint-blind render of a two-week-old build. The directory is gitignored *and* documented as
+*"output, not input — they are how the pages are checked, and they change every build"* (`.gitignore`), but
+they do not all change every build, and that is the gap.
+
+⚠ **The Cover section's inventory marks slots 0, 2, 3 and 4 as ⏳ PART for exactly this reason** — the
+tempting `ui_cover_phase4.png` was not usable, and C-07's fix plan proposes rendering all seven slots.
+
+**Fix plan.**
+- **Clear the output directory at the start of each `build.py preview` run**, so the folder contains exactly
+  what this build produced and nothing else. It is gitignored build output, so nothing is lost, and it makes
+  a stale render impossible rather than merely detectable.
+- ⚠ **Check the four non-`ui_` families before deleting them wholesale**: `navball_*`, `_heading_*`,
+  `_stock_*` and `globe_*` look like one-off investigation renders from named campaigns (2026-08-21 and
+  the Campaign 4 globe work). If any is still cited as evidence in `docs/`, it belongs in `docs/reference/`
+  as a tracked input, not in gitignored build output — **that is C1.16's territory and must be checked, not
+  assumed.** A grep of `docs/` for those filenames answers it.
+- **Must not break:** the preview's own console output already lists every file it writes; that listing
+  becomes the manifest of what should exist.
+- **Verify:** two consecutive `preview` runs produce byte-identical directory listings.
+
+---
+
 *Page 0 (Cover) inspected 2026-09-05; C-12 and C-13 added the same day on owner review (R-1…R-5).
 Page 1 (Hud / Frame 58) inspected 2026-09-05 at HEAD `97f4c78`.
-Page 2 (Audio settings) inspected 2026-09-05.*
+Page 2 (Audio settings) inspected 2026-09-05.
+Pages 3 + 4 (Procedure / Cabin) inspected 2026-09-05.*
 
 *⚠ **Three findings are page-wide, not per-page, and should be scheduled ahead of the sweep:***
 - ***H-01** — the preview's resolution. It decides how every later legibility finding is measured, so
@@ -1801,6 +2039,5 @@ Page 2 (Audio settings) inspected 2026-09-05.*
   on the HUD as well as the Cover; both are on all fifteen pages that draw the bar; **and H-07 is coupled to
   C-04 through `FigmaUI.BottomBarHit`, so all three touch one hit map and belong in one commit.***
 
-*Next page: **UiPage 3 — Procedure (Frame 59)**, which S49 §2 records as **one PNG** — `FigmaFramePage.Build`,
-`Commands = 8`, no `PageState`, no HitTest branch, *"a dead end escapable only by the bottom bar"* (H13) —
-and whose art shares `frame58.png`'s 0.6× export scale (H-08).*
+*Next: **pages 3 + 4 — Procedure (Frame 59) and Cabin (Frame 66)**, inspected together below because
+`FigmaUI` routes both to the same 26-line `FigmaFramePage.Build`.*
