@@ -13233,7 +13233,7 @@ before anyone starts it, exactly as its line says.
   well as type, [[S117]]'s trap — with a cross-width check in `LegibilityFloorTest` for that page and a
   preview PNG at 2560, and `Sc(1280) == 1` keeping the reference render byte-identical.
 
-### S122 [S] `CoverPage` has two different stroke rules and they disagree at 2560 — **TODO** — [logged by [[S119]] (job 3 of the 2026-09-06 batch), TIER 3, one page]
+### S122 [S] `CoverPage` has two different stroke rules and they disagree at 2560 — **DOING** — [logged by [[S119]] (job 3 of the 2026-09-06 batch), TIER 3, one page]
 - **The finding.** `CoverPage` draws hairlines two ways. `St(2)` now goes through `Strokes.Px` and returns a
   whole **2 device px** at 2560. `Stroke(sc, 2f)` (`CoverPage.cs:654`) is a float with a 1 px floor and
   returns **1.33 px** — antialiased across two rows, so a visibly lighter line for the same nominal width.
