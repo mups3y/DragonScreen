@@ -15794,7 +15794,7 @@ edited in place, caught, and restored verbatim with the new material added benea
 - **DONE when:** the selected panel carries at least as much information as the four unselected ones,
   from real sources, or the owner rules that it stays a plate.
 
-### S136 [S] `UiPage.Procedure` and `UiPage.Cabin` are flat images — 8 draw calls for a whole screen — **TODO — un-held 2026-09-06; its Procedure half is still TIER-3** —
+### S136 [S] `UiPage.Procedure` and `UiPage.Cabin` are flat images — 8 draw calls for a whole screen — **HELD 2026-09-06 — ⭐ the Procedure half is ALREADY CLOSED by [[S110]], and the Cabin half is not the page this line thought it was** —
 ✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set
 one (SPLIT BY CONTENT TYPE — see S153). ⛔ **The condition that replaces it is mechanical, not a wait:**
 any text this line ADDS must be drawn at **`Typography.MinDesignFor(w, sc)` or above** if it is LIVE, or
@@ -15822,6 +15822,116 @@ is answered this is buildable as written. [H13 + QC `F-02`; TIER 2]
   (`F-01` CONFIRMED CLOSED), so check what Procedure is now before rebuilding it.
 - **DONE when:** Cabin is element-by-element off live state with a 2560 preview, and Procedure carries a
   written owner question rather than an invented body.
+
+#### ⛔ HELD 2026-09-06 — picked up to be built, and TWO of this line's premises turned out to be wrong
+
+**Neither correction is a quibble; together they mean the line as written cannot be executed.**
+
+#### ⭐ CORRECTION 1 — `UiPage.Procedure` IS NOT A FLAT IMAGE. [[S110]] ALREADY REBUILT IT.
+
+The line opens *"Both pages are a single PNG with no `PageState` and no touch."* Checked at HEAD:
+
+```
+FigmaUI.cs:  case UiPage.Procedure:   VrioTestPage.Build(dl, w, h); break;
+             case UiPage.Cabin:       FigmaFramePage.Build(dl, w, h, "frame66"); break;
+```
+
+`UiPage.Procedure` routes to **`VrioTestPage`**, the element rebuild — because S110 found that page 3
+and page 19 *were the same real screen shipped twice* and made both render the rebuild. Measured on the
+census this session: **`Procedure` draws 38 text elements**, not 8 draw calls. ⭐ **The half this line
+called TIER-3-and-unbuildable is DONE**, and its own note said to check (*"Read with QC `F-01` … check
+what Procedure is now before rebuilding it"*). Checked. Only `UiPage.Cabin` is still a flat frame.
+
+#### ⛔ CORRECTION 2 — AND THE CABIN HALF IS NOT AN ENVIRONMENT PAGE. IT IS **CABIN SETTINGS / LIGHTING.**
+
+The line calls Cabin *"the easy half"* and lists the data as *"`s.Cabin`, `Ppo2Text`, `Co2Text`,
+`PressText`, `CabinTempText`, `LoopAText`/`LoopBText`, `CrewText`, `Crew01`"* — **cabin ENVIRONMENT**.
+⚠ **Looked at the frame.** `art/cover/frame66.png` (2048×1263) is:
+
+- title **`CABIN SETTINGS`**
+- a large photographic cabin-interior illustration
+- a panel headed **`LIGHTING`**, with four columns — `CABIN`, `CABIN DISPLAYS`, `CABIN DISPLAYS`,
+  `CABIN DISPLAYS` — carrying **thirteen `DISPLAY 1/2/3` buttons**, and the note *"Tap to disable
+  display"*
+- the Audio / Cabin / Video tab strip and the bottom bar
+
+**There is no PPO2, no CO2, no cabin pressure, no loop temperature anywhere on it.** Not one of the
+eight fields the line names belongs on this page. ⭐ **The plan was written for a page that does not
+exist**, and building it would have put environment readouts on a lighting panel.
+
+#### ⛔ AND THE PAGE IT *IS* RUNS STRAIGHT INTO A DECISION THIS PROJECT ALREADY MADE ONCE
+
+`SettingsPage.cs:20-25`, on this exact screen, verbatim:
+
+> *"---- THE EIGHT LIGHTING ZONES ARE NOT BUILDABLE, AND THAT IS A FACT ABOUT THE VEHICLE ---- Checked
+> in `TundraExploration/Parts/RodanV2/TE_CD2_POD.cfg`: the pod carries exactly ONE ModuleColorChanger,
+> on the Light action group. There is no Back light, no Tip light, no per-zone anything to bind to.
+> **Drawing eight buttons where seven do nothing is the dead-control failure this project refuses.**"*
+
+⭐ **RE-VERIFIED, and from a source C7 allows.** That note cites the KSP install, which C7 forbids
+reading — so it was re-checked against `docs/reference/craftdump.csv`, the repo's own dump (7,135 lines):
+
+| part | `ModuleColorChanger` |
+|---|---|
+| `TE.18.DRAGONV2.POD` | **1** — `Toggle Lights` / `Lights On` / `Lights Off` |
+| `TE.18.DRAGONV2.TRUNK` | **1** ⭐ a second one the 2026-08-06 note does not mention |
+| `TE.19.F9.S2.Engine` | 2 (engine glow, not cabin lighting) |
+| **modules with "Light" in the name, whole craft** | **0** |
+
+**So the vehicle offers TWO toggles and the frame draws THIRTEEN buttons.** The 2026-08-06 finding
+holds, is now sourced from inside the repo, and is *worse* on Frame 66 than on the `Cabin.vue` it was
+written about.
+
+#### ⚠ AND THE TWO SOURCES DISAGREE ABOUT WHAT THIS PAGE'S BODY IS — which is the §1.4 knot
+
+| source | this page's body |
+|---|---|
+| the reference demo, `Cabin.vue` (`docs/UI_AUDIT.md:211`) | `CABIN SETTINGS`, `LIGHTING`, and eight ZONE names: `Back`, `Left`, `Right`, `Up`, `Down`, `Front`, `Tip`, `Outside` |
+| our Figma export, `Frame 66` | `CABIN SETTINGS`, `LIGHTING`, and thirteen `DISPLAY n` buttons in four columns, plus *"Tap to disable display"* |
+
+⛔ **Two tier-1-ish sources, two different bodies, and no way to choose without the owner.** ⚠ And
+`docs/UI_AUDIT.md:370` records that **`Frame 66.svg` has NO live text nodes — it is an embedded
+raster** — so the Figma side cannot even be transcribed from its own vector source the way every other
+Figma-era page was. Its labels are only readable as pixels, which is the one thing `CLAUDE.md` says
+produced wrong pages every time.
+
+⭐ **One genuinely interesting possibility, offered rather than taken:** *"Tap to disable display"* over
+`CABIN DISPLAYS` columns may be about the SCREENS, not the lights — and this mod really does have three
+(VEHICLE / FLIGHT / NAV), with `SettingsPage`'s own DISPLAY tab already owning *"the grid that moves a
+page onto another display"*. **But the frame draws 13 buttons for 3 screens**, and inventing that
+mapping is §14.2 TIER-3.
+
+**Paste-ready overseer prompt (C1.13):**
+> DragonScreen, S136. The `Cabin` page is still a flat PNG, and I stopped rather than rebuild it,
+> because the register line describes a different page from the one that is there. ⭐ **The other half
+> of the line is already done** — `UiPage.Procedure` was rebuilt by S110 and draws 38 live elements.
+> **The Cabin frame is CABIN SETTINGS / LIGHTING**: a cabin illustration over a panel of **thirteen
+> `DISPLAY 1/2/3` buttons** in four columns, captioned *"Tap to disable display"*. The line planned to
+> fill it with PPO2 / CO2 / cabin pressure / loop temperatures — **none of which is on that page.**
+> ⛔ **And the vehicle has two lighting toggles, not thirteen.** Measured from the repo's own craft dump:
+> the pod carries one `ModuleColorChanger` and the trunk one more; there are no per-zone light modules
+> at all. Your own 2026-08-06 decision on this exact screen says *"drawing eight buttons where seven do
+> nothing is the dead-control failure this project refuses"* — and this frame draws thirteen.
+> ⚠ **The two sources also disagree about the page's body**: the reference demo's Cabin.vue has eight
+> LIGHTING ZONE names (Back/Left/Right/Up/Down/Front/Tip/Outside); our Figma frame has the DISPLAY
+> columns. The Figma frame is an embedded raster with no text nodes, so its labels can only be read as
+> pixels.
+> **Options:** **(a)** build the panel to the VEHICLE — the two real toggles (pod, trunk) by name, and
+> nothing else, extending your 2026-08-06 ruling to this frame; **(b)** read *"CABIN DISPLAYS"* as this
+> mod's three SCREENS and build a real display-enable grid, which needs you to say how 13 buttons map
+> to 3 screens; **(c)** rebuild the frame faithfully with all thirteen painted INERT (S75's tint), which
+> is honest but ships a panel that does nothing; **(d)** leave it as the flat frame until there is a
+> reason to touch it. ⚠ (b) is the only one that makes the page useful, and it is the one that needs a
+> mapping no source gives.
+
+#### Verified (C1.3)
+
+**Nothing built, nothing changed.** `FigmaUI.cs`'s switch read at HEAD; `frame66.png` opened and
+inspected; `docs/reference/craftdump.csv` counted by part and module; `docs/UI_AUDIT.md:211` and `:370`
+read. ⛔ No `install`, no glass, no `git push`. §14.4(a) untouched.
+
+⚠ **The Procedure half is DONE and this line should not be re-read as owing it.** If the Cabin question
+is answered "(d) leave it", this line closes with no code at all.
 
 ### S137 [S] The ALERTS view is a one-word summary, and the FDIR bar beside it is a fake three-position gauge — **TODO — un-held 2026-09-06, the R-01 policy exists** —
 ✅ **UN-HELD 2026-09-06 by [[S153]].** The gate was *"waiting for a type-scale policy"*, and the owner set
