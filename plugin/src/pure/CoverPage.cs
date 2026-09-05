@@ -871,8 +871,28 @@ namespace DragonScreen
         /// is QC [[R-01]], it is open, and only the early return is keeping this clamp from firing on
         /// it. If R-01 is ever fixed by letting the clamp raise these rows instead, the overflow
         /// arithmetic above becomes live again and must be re-derived first.</summary>
+        /// <summary>
+        /// ⭐ S124: THE FLOOR IS NOW THE CALLER'S TO NAME, AND THAT IS THE FIX.
+        ///
+        /// This method used to clamp against `FloorDesign` — the GLANCEABLE floor — for every caller.
+        /// [[S116]] made that comparison honest (C-05: design px against panel px) and it was right in
+        /// UNITS; what it could not know was that the owner would later split the floor BY CONTENT TYPE.
+        /// He did, on 2026-09-06 ([[S153]]), and he named this page's rows on the STATIC side of it:
+        /// *"permit STATIC reference tables (the Cover's timeline/contingency cards, pad captions) to sit
+        /// at `Typography.Dense`"*.
+        ///
+        /// ⛔ SO THE SINGLE FLOOR WAS OVER-STRICT FOR THE ONE THING THIS METHOD IS USED ON. It held the
+        /// Cover's reference rows to **48.068** design px — the floor for a LIVE readout — when the
+        /// ruling puts them at **36.051**. And that is not academic: S124 recorded that the proportional
+        /// branch is UNREACHABLE, because it needs `wantSize > floor` and no plausible row size exceeds
+        /// 48.068. Against the static floor it is reachable, and the difference is the policy.
+        ///
+        /// ⚠ THE PARAMETER IS REQUIRED, NOT DEFAULTED — the same fail-closed move [[S120]] made with
+        /// `ChromeBar.TopY` and [[S158]] with `runActive`. A default would let a LIVE block silently
+        /// inherit the static floor, which is the one mistake this split makes possible.
+        /// </summary>
         public static void FitRows(float top, float slotBottom, int count, float wantSize, float wantGap,
-                                   float panelW, float sc, out float size, out float gap)
+                                   float floorDesign, out float size, out float gap)
         {
             size = wantSize; gap = wantGap;
             if (count < 1) return;
@@ -883,7 +903,14 @@ namespace DragonScreen
             size = wantSize * k; gap = wantGap * k;
             // ⛔ FloorDesign, NOT Typography.Min. `size` is a DESIGN-frame number; the floor is a
             // PANEL-pixel one. Comparing them directly is C-05, and it is the whole of that defect.
-            float floor = FloorDesign(panelW, sc);
+            //
+            // ⚠ SUPERSEDED IN PLACE 2026-09-06 by [[S124]] (C1.16 / G12) - ONE CLAUSE, the method name.
+            // The floor is no longer chosen HERE; the caller passes it, as either `FloorDesign` (live) or
+            // `StaticFloorDesign` (static reference), because the owner's R-01 ruling split the floor by
+            // content type. ⭐ THE UNIT STATEMENT ABOVE IS UNCHANGED AND IS STILL THE WHOLE OF C-05:
+            // `size` is design px, and BOTH of those methods hand back design px. What this line must
+            // never become is a comparison against a panel-pixel number, whoever supplies it.
+            float floor = floorDesign;
             if (size < floor)
             {
                 size = floor;
@@ -913,6 +940,19 @@ namespace DragonScreen
         public static float FloorDesign(float panelW, float sc)
         {
             float floor = Typography.MinFor(panelW);
+            return (sc > 0f) ? floor / sc : floor;
+        }
+
+        /// <summary>The STATIC-REFERENCE floor in the same design-frame units — `Typography.DenseFor`
+        /// where the method above uses `MinFor`. **36.051 at both shipped widths**, by the identical
+        /// aspect-only argument, and every caveat in the block above applies unchanged.
+        ///
+        /// ⛔ NOT a second glanceable floor. It is the level the owner's 2026-09-06 ruling permits for a
+        /// printed reference table the crew lean in to read, and `Typography.Dense`'s own docstring
+        /// draws the line: *"NOT for any live value, any alert, or anything on the nav bar."*</summary>
+        public static float StaticFloorDesign(float panelW, float sc)
+        {
+            float floor = Typography.DenseFor(panelW);
             return (sc > 0f) ? floor / sc : floor;
         }
 
@@ -1067,7 +1107,12 @@ namespace DragonScreen
             void Card(float titleY, float slotBottom, string title, string[] lines, float spacing)
             {
                 float size, gap;
-                FitRows(titleY + RowTop, slotBottom, lines.Length, RowSize, spacing, panelW, sc,
+                // ⭐ S124: THE STATIC floor. These are the Cover's reference cards - the ENTRY TIMELINE,
+                // PARACHUTES and CONTINGENCY tables - which the owner's R-01 ruling names by description
+                // as static reference content. Passing the LIVE floor here held a printed table to a
+                // readout's standard and made FitRows' own scaling branch unreachable ([[S124]]).
+                FitRows(titleY + RowTop, slotBottom, lines.Length, RowSize, spacing,
+                        StaticFloorDesign(panelW, sc),
                         out size, out gap);
                 dl.ArcBand(X(333), Y(titleY + 28), Z(4), Z(9), 0, 360, DragonPalette.Accent);
                 dl.Text(title, X(362), Y(titleY), Z(34), TextAlign.Left, DragonPalette.White);

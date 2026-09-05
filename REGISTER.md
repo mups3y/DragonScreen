@@ -14472,7 +14472,7 @@ the clamp from raising them. **R-01 is open.**
 ⚠ **STRAY LOGGED (C1.1), needs its own line — see [[S124]] below**, written rather than acted on: the
 proportional-scaling branch is now **unreachable for any `RowSize` block**.
 
-### S124 [S] `FitRows`' proportional-scaling branch is unreachable at `RowSize` — the wanted size is already below the floor — **DOING** — [logged by [[S116]] per C1.1, 2026-09-06; TIER 3: a live consequence of the honest floor, not a defect S116 introduced]
+### S124 [S] `FitRows`' proportional-scaling branch is unreachable at `RowSize` — the wanted size is already below the floor — **DONE 2026-09-06 — the branch was measuring against the WRONG FLOOR; `FitRows` now takes its floor from the caller** — [logged by [[S116]] per C1.1, 2026-09-06; TIER 3: a live consequence of the honest floor, not a defect S116 introduced]
 
 - **The finding, and it is arithmetic rather than opinion.** `FitRows` takes its scaling branch only when
   `need > avail`, which forces `k = avail/need < 1`, and the result survives the clamp only when
@@ -14492,6 +14492,64 @@ proportional-scaling branch is now **unreachable for any `RowSize` block**.
   did), or a deliberate decision is recorded that the scaling branch is dead code for the Cover's content
   and it is documented as such in `FitRows`. ⚠ The second option is a judgement about the page's type
   size and therefore **rides R-01**, so do not take it independently.
+
+#### ⭐ DONE 2026-09-06 — AND BY NEITHER OF THE TWO ROUTES THE LINE OFFERED
+
+**R-01 WAS resolved, and it did NOT raise `RowSize`** — so route one did not fire. But route two was
+wrong to reach for either, and re-reading the ruling is what showed why. **R-01, option selected
+2026-09-06 via the overseer: "SPLIT BY CONTENT TYPE".** As presented, it permits
+
+> STATIC reference tables (the Cover's timeline/contingency cards, pad captions) to sit at
+> `Typography.Dense` — "a table someone leans in to read… NOT for any live value, any alert."
+
+⛔ Recorded as an **option selected**, not a verbatim quote (C1.12's evidentiary standard).
+
+⭐ **THE COVER'S REFERENCE CARDS ARE NAMED IN THAT RULING BY DESCRIPTION.** They are the timeline and
+contingency cards. So the floor they must clear is **`DenseDesignFor` = 36.051 design px**, not
+`MinDesignFor`'s 48.068 — and this line's whole premise, *"`wantSize > FloorDesign`… 48.068"*, was
+measuring a printed table against a live readout's standard. **The branch was not dead. It was being
+held to the wrong number.** That is a third answer the line did not anticipate, and it is the correct one.
+
+#### What changed
+
+- **`CoverPage.FitRows` now takes `float floorDesign` as a REQUIRED parameter** instead of `panelW, sc`.
+  ⚠ Required, not defaulted — the same fail-closed move [[S120]] made with `ChromeBar.TopY` and [[S158]]
+  with `runActive`. A default is the one mistake this split makes possible: a LIVE block silently
+  inheriting the static floor.
+- **`CoverPage.StaticFloorDesign(panelW, sc)`** added beside `FloorDesign`, `DenseFor` where that uses
+  `MinFor`. **36.051 at both shipped widths**, by [[R-02]]'s identical aspect-only argument.
+- The **Reference Content** caller passes the static floor. All 8 existing `LayoutTest` calls pass
+  `FloorDesign(PW, PSc)`, so **every pre-existing verdict is unchanged** rather than re-baselined.
+- ⛔ The old *"branch unreachable"* comment is **kept verbatim and SUPERSEDED IN PLACE**, as is the
+  `FloorDesign, NOT Typography.Min` unit note inside `FitRows` (C1.16 / G12). The comment-loss check
+  caught the second one after I had rewritten it, and it was restored: **0 prose lines lost, measured.**
+
+#### ⛔ AND ONE MUTATION COULD NOT BE KILLED — SAID PLAINLY BECAUSE IT MATTERS
+
+Six mutations, five killed. **The sixth was the PRODUCTION call site itself** — reverted to
+`FloorDesign(panelW, sc)`, the exact pre-S124 behaviour — and the **entire suite still passed**.
+
+⭐ The reason is [[S123]]'s swap, and it is already on the record at that call site: all three cards take
+`FitRows`' `need <= avail` early return, so **the floor argument is never read by the shipped content**.
+Confirmed at the pixel level rather than inferred — rendered `ui_cover_phase5.png` under both floors and
+compared: **sha `17be0bea…` both times, byte-identical.** So no test can distinguish the two floors
+through `Draw`, and calling the call site "covered" would be false.
+
+⚠ **What was done instead of claiming coverage:** three checks now fit each real card under BOTH floors
+and require the results identical and at the wanted size, plus a guard that the two floors are actually
+different numbers so the comparison is not vacuous. Mutation-proved by shortening cards 1 and 3 until they
+scale — both then fail, reporting `static 36.05121 live 48.06828`. **That is the tripwire**: the day a row
+is added, a card is shortened, or [[S153a]] raises `RowSize`, the branch goes live and the floor the caller
+passes starts deciding what the crew see.
+
+#### ⚠ What this line does NOT close
+
+`RowSize` is **26**, below BOTH floors — pinned by its own check so it fails the moment that changes.
+**[[S153a]] owns the number**; S124 owned only the mechanism, and the mechanism is now right.
+
+**Verified:** `build.py test` green (≈15 800 checks, 0 failed) · `build.py preview` — all three cards
+render inside their slots · 6 mutations run, 5 killed, the 6th shown unkillable-by-construction with
+evidence · comment-loss check 0.
 
 ### S117 [O] `NavPage`'s text does not scale with `screenWidth` — Q5 halves the live NAV screen's (and the Cover Map view's) legibility — **DONE 2026-09-06** — [landed with [[R-02]] as job 2 of the 2026-09-06 owner batch; NAV + the four pages that reuse its renderers now track the panel; ChromeBar logged, not fixed]
 - **The finding.** `src/pure/NavPage.cs` (live NAV screen, `DragonScreen.cfg` screen 3; also reused by

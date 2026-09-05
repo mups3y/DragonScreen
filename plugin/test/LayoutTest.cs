@@ -914,7 +914,7 @@ public static class LayoutTest
             // 131.5 and blocked S116 on it. With the fix in, the function produces 131.478 - so this
             // check is also the standing proof that the honest floor behaves exactly as predicted, and
             // that ENTRY TIMELINE could not have stayed in card 1.
-            CoverPage.FitRows(555f, 760f, 7, CoverPage.RowSize, 32f, PW, PSc, out size, out gap);
+            CoverPage.FitRows(555f, 760f, 7, CoverPage.RowSize, 32f, CoverPage.FloorDesign(PW, PSc), out size, out gap);
             Eq("QC6/S116 a slot too short for legible type clamps to the floor, it does not shrink",
                size, CoverPage.FloorDesign(PW, PSc), 0.001f);
             Check("QC6/S116 ...and its rows still do not overlap", gap >= size,
@@ -931,7 +931,15 @@ public static class LayoutTest
             // block can ever take this branch any more - the wanted size is already below the floor.
             // That is a real consequence of S116 and it is logged as its own register line, not fixed
             // here (C1.1). Until then this synthetic caller is the only cover the branch has.
-            CoverPage.FitRows(0f, 500f, 4, 100f, 160f, PW, PSc, out size, out gap);
+            //
+            // ✅ SUPERSEDED IN PLACE 2026-09-06 BY [[S124]] (C1.16 / G12 - the paragraph above is kept
+            // verbatim because it is the finding). It is still exactly right ABOUT THE LIVE FLOOR. What
+            // changed is that the live floor is no longer the one this content is held to: the owner's
+            // R-01 ruling ([[S153]]) puts the Cover's reference tables at the STATIC floor, 36.051
+            // design px, and `FitRows` now takes its floor from the caller instead of assuming one.
+            // ⭐ So the branch IS reachable for real content - at any row size above 36.051 - and the
+            // block below pins that, beside the synthetic caller rather than instead of it.
+            CoverPage.FitRows(0f, 500f, 4, 100f, 160f, CoverPage.FloorDesign(PW, PSc), out size, out gap);
             Check("QC6 a block that CAN scale legibly shrinks rather than clamping",
                   size < 100f && size > CoverPage.FloorDesign(PW, PSc), "size " + size);
             Eq("QC6 ...to exactly the slot, less the bottom pad",
@@ -941,8 +949,53 @@ public static class LayoutTest
             Check("QC6 ...and the block keeps its proportions",
                   Math.Abs(gap / size - 160f / 100f) < 0.001f, "ratio " + (gap / size));
 
+            // ---- ⭐ S124: THE SAME BLOCK, AGAINST THE FLOOR ITS CONTENT IS ACTUALLY HELD TO --------
+            // The two floors differ by exactly Dense/Min = 12/16 = 0.75, so the static one is 36.051
+            // design px where the live one is 48.068. Everything below is the SAME call with the SAME
+            // arguments as the clamp check above, and only the floor changed.
+            {
+                float liveFloor = CoverPage.FloorDesign(PW, PSc);
+                float statFloor = CoverPage.StaticFloorDesign(PW, PSc);
+                Eq("S124 the static floor is 36.051 design px at the shipped aspect", statFloor, 36.051f, 0.01f);
+                Eq("S124 ...which is exactly Dense/Min of the live one", statFloor / liveFloor, 0.75f, 1e-4f);
+
+                // ⛔ THE FINDING, AS ARITHMETIC: the branch needs the SCALED size to clear the floor,
+                // not just the wanted one - `wantSize * k >= floor`. So the arguments below are chosen
+                // to put the scaled size BETWEEN the two floors, which is the only place the policies
+                // can differ: 4 rows of 60 with a 60 gap in 168 px of room gives k = 0.7 and a scaled
+                // size of 42 - above 36.051, below 48.068.
+                //
+                // ⚠ AND `wantGap` IS 60, NOT SMALLER, FOR A REASON THAT IS NOT ARITHMETIC. FitRows ends
+                // with `if (gap < size) gap = size;`, so whenever the gap would come out under the row
+                // size the block occupies `count * size` regardless of what the scale computed. A first
+                // attempt here used a 40 gap under a 46 size; the scale produced 38.8 and 33.7, the
+                // trailing clamp pushed the gap back to 38.8, and the block ended at 155.2 rather than
+                // the 140 the scale had fitted it to - overflowing under BOTH floors and distinguishing
+                // nothing. ⭐ Recorded because it is a real property of this method: the proportional
+                // branch only actually fits the slot when `wantGap >= wantSize`.
+                float s1b, g1b, s2b, g2b;
+                float slotTop = 0f, slotBot = 168f + CoverPage.RowPad;
+                CoverPage.FitRows(slotTop, slotBot, 4, 60f, 60f, statFloor, out s1b, out g1b);
+                CoverPage.FitRows(slotTop, slotBot, 4, 60f, 60f, liveFloor, out s2b, out g2b);
+                Check("S124 a reference block SCALES against the static floor", s1b < 60f && s1b > statFloor,
+                      "size " + s1b + ", static floor " + statFloor);
+                Eq("S124 ...and CLAMPS against the live one, which is what made the branch unreachable",
+                   s2b, liveFloor, 0.001f);
+                Check("S124 ...so the same content overflows under one policy and fits under the other",
+                      (slotTop + g2b * 3f + s2b > slotBot) && (slotTop + g1b * 3f + s1b <= slotBot + 0.02f),
+                      "static ends " + (slotTop + g1b * 3f + s1b) + ", live ends "
+                          + (slotTop + g2b * 3f + s2b) + ", slot ends " + slotBot);
+
+                // ⚠ AND THE CURRENT RowSize STILL CANNOT REACH IT. 26 is below BOTH floors, so this
+                // line fixes the MECHANISM and [[S153a]] owns the NUMBER. Pinned so that when S153a
+                // raises RowSize this check fails and has to be re-read rather than silently passing.
+                Check("S124 RowSize 26 is below even the static floor - S153a owns raising it",
+                      CoverPage.RowSize < statFloor,
+                      "RowSize " + CoverPage.RowSize + " vs static floor " + statFloor);
+            }
+
             // PARACHUTES: 4 rows from 904 in a slot ending at 1241. Already fits, so nothing may move.
-            CoverPage.FitRows(904f, 1241f, 4, CoverPage.RowSize, 40f, PW, PSc, out size, out gap);
+            CoverPage.FitRows(904f, 1241f, 4, CoverPage.RowSize, 40f, CoverPage.FloorDesign(PW, PSc), out size, out gap);
             Check("QC6 a card that already fits is left alone",
                   size == CoverPage.RowSize && gap == 40f, "size " + size + " gap " + gap);
 
@@ -966,7 +1019,7 @@ public static class LayoutTest
             // this"). ⛔ THE OVERFLOW POLICY IT WAS GUARDING IS UNCHANGED and is still what is pinned
             // below: a slot too short for one legible line overflows VISIBLY. The check that caught
             // S112 inventing a third policy still catches it.
-            CoverPage.FitRows(0f, 60f, 6, CoverPage.RowSize, 40f, PW, PSc, out size, out gap);
+            CoverPage.FitRows(0f, 60f, 6, CoverPage.RowSize, 40f, CoverPage.FloorDesign(PW, PSc), out size, out gap);
             Check("QC6 type never goes under the floor, MEASURED IN PANEL PIXELS",
                   size * PSc >= Typography.MinFor(PW) - 1e-3f,
                   "size " + size + " design = " + (size * PSc) + " panel px, floor "
@@ -979,8 +1032,8 @@ public static class LayoutTest
             {
                 const float PW1 = 1280f, PSc1 = 703f / 2112f;
                 float s1, g1, s2, g2;
-                CoverPage.FitRows(0f, 60f, 6, CoverPage.RowSize, 40f, PW1, PSc1, out s1, out g1);
-                CoverPage.FitRows(0f, 60f, 6, CoverPage.RowSize, 40f, PW, PSc, out s2, out g2);
+                CoverPage.FitRows(0f, 60f, 6, CoverPage.RowSize, 40f, CoverPage.FloorDesign(PW1, PSc1), out s1, out g1);
+                CoverPage.FitRows(0f, 60f, 6, CoverPage.RowSize, 40f, CoverPage.FloorDesign(PW, PSc), out s2, out g2);
                 Check("S116 the clamped size is the same FRACTION of the panel at 1280 and 2560",
                       Math.Abs(s1 * PSc1 / PW1 - s2 * PSc / PW) < 1e-6f,
                       s1 * PSc1 + " px of " + PW1 + " vs " + s2 * PSc + " px of " + PW);
@@ -1019,12 +1072,52 @@ public static class LayoutTest
             //
             // ⛔ Stated as `== RowSize` exactly, NOT ">= Typography.Min". An early return is the only
             // path that hands back the wanted size untouched; the clamp path cannot produce it.
-            CoverPage.FitRows(555f, 760f, 4, CoverPage.RowSize, 40f, PW, PSc, out size, out gap);
+            CoverPage.FitRows(555f, 760f, 4, CoverPage.RowSize, 40f, CoverPage.FloorDesign(PW, PSc), out size, out gap);
             Check("S123 card 1 (CONTINGENCY, 4 rows) fits unscaled — FitRows returns early",
                   size == CoverPage.RowSize && gap == 40f, "size " + size + " gap " + gap);
-            CoverPage.FitRows(1385f, 1823f, 7, CoverPage.RowSize, 32f, PW, PSc, out size, out gap);
+            CoverPage.FitRows(1385f, 1823f, 7, CoverPage.RowSize, 32f, CoverPage.FloorDesign(PW, PSc), out size, out gap);
             Check("S123 card 3 (ENTRY TIMELINE, 7 rows) fits unscaled — FitRows returns early",
                   size == CoverPage.RowSize && gap == 32f, "size " + size + " gap " + gap);
+
+            // ---- ⭐ S124: AND THEREFORE THE FLOOR SWAP THIS LINE MADE IS INERT FOR TODAY'S CONTENT ----
+            // ⛔ THIS IS A MUTATION RESULT, NOT A COMFORT. S124 mutated the PRODUCTION call site to pass
+            // the LIVE floor — exactly the pre-S124 behaviour — and ran the whole suite: **nothing failed**.
+            // Five other mutations of the same change were killed; that one cannot be, and the three
+            // checks above are the reason. All three cards take `need <= avail` and return before the
+            // floor is ever read, so no test can distinguish the two floors THROUGH `Draw`. Saying the
+            // call site is "covered" would be false.
+            //
+            // ⭐ What IS checkable is the equivalence itself, so it is checked here rather than assumed:
+            // the same card, fitted under both floors, must come back byte-identical AND at the wanted
+            // size. That is the machine-readable form of "the swap changes no pixel today".
+            // ⚠ It is also the tripwire. The moment a row is added, `RowSize` is raised ([[S153a]] owns
+            // that), or a card is shortened, `need <= avail` stops holding, these checks diverge, and the
+            // floor the production caller passes starts deciding what the crew see — which is when S124's
+            // change earns its keep and has to be re-read rather than trusted.
+            {
+                float sA, gA, sB, gB;
+                float stat = CoverPage.StaticFloorDesign(PW, PSc), live = CoverPage.FloorDesign(PW, PSc);
+                Check("S124 the two floors are genuinely different numbers (else the check below is vacuous)",
+                      stat < live - 10f, "static " + stat + " live " + live);
+
+                CoverPage.FitRows(555f, 760f, 4, CoverPage.RowSize, 40f, stat, out sA, out gA);
+                CoverPage.FitRows(555f, 760f, 4, CoverPage.RowSize, 40f, live, out sB, out gB);
+                Check("S124 card 1 draws identically under BOTH floors — the swap is inert here",
+                      sA == sB && gA == gB && sA == CoverPage.RowSize,
+                      "static " + sA + "/" + gA + " live " + sB + "/" + gB);
+
+                CoverPage.FitRows(904f, 1241f, 4, CoverPage.RowSize, 40f, stat, out sA, out gA);
+                CoverPage.FitRows(904f, 1241f, 4, CoverPage.RowSize, 40f, live, out sB, out gB);
+                Check("S124 card 2 draws identically under BOTH floors — the swap is inert here",
+                      sA == sB && gA == gB && sA == CoverPage.RowSize,
+                      "static " + sA + "/" + gA + " live " + sB + "/" + gB);
+
+                CoverPage.FitRows(1385f, 1823f, 7, CoverPage.RowSize, 32f, stat, out sA, out gA);
+                CoverPage.FitRows(1385f, 1823f, 7, CoverPage.RowSize, 32f, live, out sB, out gB);
+                Check("S124 card 3 draws identically under BOTH floors — the swap is inert here",
+                      sA == sB && gA == gB && sA == CoverPage.RowSize,
+                      "static " + sA + "/" + gA + " live " + sB + "/" + gB);
+            }
         }
 
         // ---- S123: THE SWAP ITSELF, READ OFF THE RENDER RATHER THAN OFF THE SOURCE ------------------
