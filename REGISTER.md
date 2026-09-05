@@ -13233,7 +13233,7 @@ before anyone starts it, exactly as its line says.
   well as type, [[S117]]'s trap — with a cross-width check in `LegibilityFloorTest` for that page and a
   preview PNG at 2560, and `Sc(1280) == 1` keeping the reference render byte-identical.
 
-### S122 [S] `CoverPage` has two different stroke rules and they disagree at 2560 — **DOING** — [logged by [[S119]] (job 3 of the 2026-09-06 batch), TIER 3, one page]
+### S122 [S] `CoverPage` has two different stroke rules and they disagree at 2560 — **DONE 2026-09-06** — [`Strokes.Px` won, **on a measurement, not on taste** — and the measurement CORRECTS this line's own premise: the float rule was NOT proportional at 2 px] — [logged by [[S119]] (job 3 of the 2026-09-06 batch), TIER 3, one page]
 - **The finding.** `CoverPage` draws hairlines two ways. `St(2)` now goes through `Strokes.Px` and returns a
   whole **2 device px** at 2560. `Stroke(sc, 2f)` (`CoverPage.cs:654`) is a float with a 1 px floor and
   returns **1.33 px** — antialiased across two rows, so a visibly lighter line for the same nominal width.
@@ -13245,6 +13245,68 @@ before anyone starts it, exactly as its line says.
 - **DONE when:** `CoverPage` has one stroke rule. If `Strokes.Px` wins, check the pill and the d-pad box on a
   2560 preview first — they are curves and a box, not long rules, and a whole-pixel snap may read heavier
   than intended; if `Stroke` wins, say why a float is right here and `St` is right for the ten rules.
+
+#### ✅ DONE 2026-09-06 — `Strokes.Px` wins, and it was not a matter of taste
+
+⛔ **THIS LINE'S OWN PREMISE WAS WRONG, AND MEASURING IT IS WHAT FOUND THAT.** The text above says
+*"Neither is wrong on its own — `Stroke` is proportional, which is why job 3 ruled it correctly
+screen-space rather than an instance of R-02's family."* **`Stroke` is proportional only ABOVE ITS OWN
+FLOOR**, and three of its four call sites asked for **2 px**, which is exactly where the floor fires at one
+shipped width and not the other:
+
+| design | panel | `Stroke` (float, floor 1) | `Strokes.Px` (ceil) |
+|---|---|---|---|
+| 2 px | 1280×703 | 1.000 px = **0.0781%** | 1 px = 0.0781% |
+| 2 px | 2560×1406 | 1.331 px = **0.0520%** | 2 px = 0.0781% |
+| 6 px | 1280×703 | 1.997 px = 0.1560% | 2 px = 0.1562% |
+| 6 px | 2560×1406 | 3.994 px = 0.1560% | 4 px = 0.1562% |
+
+**So the Cover's 2 px rules were a THIRD THINNER PHYSICALLY at the shipped 2560 than at 1280** — R-02's
+defect exactly, arriving through the FLOOR rather than through the formula. Job 3's ruling was right about
+`refPx * sc` in the abstract and wrong about the floored function as actually called. At 6 px the two agree
+to 0.15% and the choice there genuinely is free; at 2 px it never was.
+
+**The change.** The four `Stroke(sc, …)` draws now call `Strokes.Px` — the MAP well's box (`:462`), the
+NEXT VIEW pill (`:569`), that pill's bar (`:572`, at `6f`), and the d-pad button box (`:650`). The local
+`Stroke` helper is **retired**. ⚠ Its body and doc comment are **kept verbatim in a note where it stood**
+(C1.16/G12: removing the code does not license removing the reasoning), together with the table above —
+because the reasoning here is a measurement that corrects a previous ruling, and that is the part which
+cannot be rebuilt from the code.
+
+**THE PREVIEW CHECK THIS LINE ASKED FOR, DONE BEFORE COMMITTING, AND THE ANSWER IS THE OTHER WAY ROUND.**
+Before/after crops at **2× and 4× nearest-neighbour** (so the pixels are visible rather than inferred):
+- **NEXT VIEW pill** — before, a faint grey 1.33 px antialiased halo; after, a crisp white 2 px outline.
+- **D-pad buttons** — before, indistinct edges against the busy map; after, a definite border.
+- **Map well box** — subtler (Hairline on a dark ground), marginally crisper.
+**Nothing reads heavy.** The concern was that a whole-pixel snap might over-weight a curve; what the render
+shows is that the *old* state was UNDER-weight — a smear, which is the exact failure `Strokes.cs`'s header
+predicts for 1.33 px. The pill's curve is still smoothly antialiased; only the THICKNESS snapped.
+
+**⭐ MUTATION TESTING CAUGHT A TEST OF MINE THAT COULD NOT FAIL — worth recording, because it nearly
+shipped.** The check builds the Cover, collects every thin `Rect` (a `Box` decomposes into four `Rect`s
+whose stroke becomes a side) and requires the **SET** of thicknesses at 2560 to be the set at 1280
+**doubled** — integrality and proportionality in one statement. My first version rendered only the DEFAULT
+camera, and **mutation J passed**: three of the four draws are reachable only under `CoverCam.Map`, so the
+check never rendered the page containing the defect it exists for. Fixed to sweep **all three camera
+views**; the reason is written into the helper so it is not re-broken.
+
+| mutation (float rule restored at one site) | result |
+|---|---|
+| **J** — map well box | ⛔ **PASSED at first** — the check's own defect; after the fix, FAILS with `1.3314, 2, 4` |
+| **K** — d-pad button box | FAILS `1.3314, 2, 4` |
+| **L** — NEXT VIEW pill | FAILS `1.3314, 2, 4` |
+| **M** — the pill's 6 px bar | FAILS at **both** widths: `1, 1.9972` @1280 and `2, 3.9943` @2560 |
+
+**Measured, not asserted:** the Cover's thin-rect thicknesses are **`{1, 2}` at 1280 and `{2, 4}` at
+2560** — every rule a whole device pixel, every one exactly doubled. Before the fix the 2560 set contained
+`1.3314` and `3.9943`.
+
+**Verified (C1.3).** `python plugin/build.py test` **green — ALL SUITES PASSED**; `LegibilityFloorTest`
+**99 → 103 checks**. `python plugin/build.py preview` re-rendered and the three regions inspected zoomed.
+**C1.16/G12: 0 comment prose lines lost** (the one flagged line is the retired helper's own summary,
+quoted inside the note and therefore double-marked; confirmed present by substring, along with its whole
+body). No `install`, no glass, no `git push`. §14.4(a) untouched. `docs/QC_FINDINGS.md` and
+`docs/BUILD_PLAN.md` not edited.
 
 ### S123 [S] C-05's layout call: swap ENTRY TIMELINE into card 3 and CONTINGENCY into card 1 — **DONE 2026-09-06** — [🟢 OWNER RULING 2026-09-06 "option 2"; TIER-3 layout, so it needed that ruling and now has it; unblocks [[S116]], which must not land before it]
 

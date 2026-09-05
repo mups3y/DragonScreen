@@ -459,7 +459,7 @@ namespace DragonScreen
                 // sizes, so they need this panel's type scale — not the Cover's design-frame `sc`,
                 // which is px-per-design-px and a different quantity entirely.
                 NavPage.Map(dl, s, view, mx, my, mw, mh, Typography.ScaleFor(w));
-                dl.Box(mx, my, mw, mh, Stroke(sc, 2f), DragonPalette.Hairline);
+                dl.Box(mx, my, mw, mh, Strokes.Px(2f, sc), DragonPalette.Hairline);
                 return;
             }
 
@@ -566,10 +566,10 @@ namespace DragonScreen
             // rectangle_174 + 30,28 in a 56 box) then the label (the `settings` asset at +130,37).
             float px, py, pw, ph;
             NextViewRect(w, h, out px, out py, out pw, out ph);
-            Pill(dl, px, py, pw, ph, Stroke(sc, 2f));
+            Pill(dl, px, py, pw, ph, Strokes.Px(2f, sc));
             // S105/C-03: the dash moves in with the label (36 -> 30) so the cluster stays balanced
             // inside the pill rather than the label being pushed up against the right border.
-            dl.Rect(px + Z(30f), py + Z(53f), Z(44f), Stroke(sc, 6f), DragonPalette.White);
+            dl.Rect(px + Z(30f), py + Z(53f), Z(44f), Strokes.Px(6f, sc), DragonPalette.White);
             // ---- S105 / QC C-03: THE LABEL FITS ITS OWN BUTTON NOW ----
             // It was `Z(130)` in and `Z(53)` tall, and at the shipped 1280x703 that is 96 px of glyph in
             // 90.2 px of room — the pill's right border struck through the final "W" (verified as a real
@@ -647,18 +647,47 @@ namespace DragonScreen
             float x, y, bw, bh;
             PadRect(w, h, dx, dy, out x, out y, out bw, out bh);
             dl.Rect(x, y, bw, bh, on ? DragonPalette.Accent : PadFace);
-            dl.Box(x, y, bw, bh, Stroke(sc, 2f), DragonPalette.White);
+            dl.Box(x, y, bw, bh, Strokes.Px(2f, sc), DragonPalette.White);
             float ts = PadLabel * sc;
             dl.Text(label, x + bw * 0.5f, y + bh * 0.5f - ts * 0.45f, ts, TextAlign.Centre,
                     on ? DragonPalette.Background : DragonPalette.White);
         }
 
-        /// <summary>A design-frame stroke width in panel pixels, never thinner than one.</summary>
-        static float Stroke(float sc, float refPx)
-        {
-            float t = refPx * sc;
-            return (t < 1f) ? 1f : t;
-        }
+        // ---- ⚠ `Stroke(sc, refPx)` LIVED HERE AND WAS RETIRED 2026-09-06 BY [[S122]] ----
+        // Kept as a note rather than deleted, per C1.16/G12: removing the code does not license
+        // removing the reasoning, and the reasoning here is a MEASUREMENT that corrects a previous
+        // ruling. What it was, verbatim:
+        //
+        //     /// <summary>A design-frame stroke width in panel pixels, never thinner than one.</summary>
+        //     static float Stroke(float sc, float refPx)
+        //     {
+        //         float t = refPx * sc;
+        //         return (t < 1f) ? 1f : t;
+        //     }
+        //
+        // WHY IT EXISTED: it is the obvious rule - scale the design width, never go under one pixel -
+        // and it is proportional, which is why job 3 of the 2026-09-06 batch ruled it "correctly
+        // screen-space rather than an instance of R-02's family" and left it alone.
+        //
+        // ⛔ THAT RULING WAS WRONG FOR THE CASE THAT ACTUALLY MATTERED, AND HERE IS THE ARITHMETIC.
+        // It is proportional only ABOVE its own floor. Three of its four call sites asked for a 2 px
+        // design rule, and 2 px is exactly where the floor fires at one width and not the other:
+        //
+        //     design   panel        Stroke               Strokes.Px
+        //     2 px     1280 x 703   1.000 px = 0.0781%   1 px = 0.0781%   <- Stroke's floor clamps
+        //     2 px     2560 x 1406  1.331 px = 0.0520%   2 px = 0.0781%   <- floor does not fire
+        //     6 px     1280 x 703   1.997 px = 0.1560%   2 px = 0.1562%
+        //     6 px     2560 x 1406  3.994 px = 0.1560%   4 px = 0.1562%
+        //
+        // So the page's 2 px rules were 33% PHYSICALLY THINNER at the shipped 2560 than at 1280 - the
+        // same defect as R-02, arriving through the floor rather than through the formula. Strokes.Px
+        // is exactly proportional at both. At 6 px the two agree to 0.15% and the choice is free; at
+        // 2 px it is not a matter of taste at all.
+        //
+        // AND THE SECOND REASON, WHICH WAS ALWAYS THE STATED ONE (see Strokes.cs's header): a whole
+        // device pixel is not a rounding convenience, it is the difference between a line and a grey
+        // smear. 1.331 px antialiases across two rows. The four draws now go through Strokes.Px, so
+        // this page answers "how thick is a 2 px design rule" exactly once.
 
         // ---- THE THREE REFERENCE-CONTENT CARD SLOTS, AND THE TYPE THAT HAS TO FIT IN THEM ----
         // The slots are the baked card BACKGROUNDS (rectangle_179/180/181) and their measured heights are

@@ -331,6 +331,30 @@ public static class LegibilityFloorTest
         Check("St(1) is at the one-pixel floor at both widths, which is the stated limit",
               Strokes.Px(1f, sc1) == 1 && Strokes.Px(1f, sc2) == 1,
               "@1280 " + Strokes.Px(1f, sc1) + ", @2560 " + Strokes.Px(1f, sc2));
+
+        // ---- S122: AND THE COVER ANSWERS "HOW THICK IS A RULE" EXACTLY ONCE ------------------------
+        // CoverPage had TWO stroke rules. St(rs) went through Strokes.Px and returned whole pixels;
+        // a local `Stroke(sc, refPx)` returned a float with a 1 px floor, and four draws used it - the
+        // map well's box, the NEXT VIEW pill, that pill's bar, and the d-pad button box.
+        //
+        // ⛔ AND THE FLOAT ONE WAS NOT MERELY INCONSISTENT, IT WAS THE R-02 DEFECT AGAIN. It is
+        // proportional only ABOVE its own floor, and three of its four call sites asked for 2 px,
+        // which is exactly where the floor fires at 1280 and not at 2560: 1.000 px of 1280 (0.0781%)
+        // against 1.331 px of 2560 (0.0520%). The page's 2 px rules were a THIRD THINNER physically
+        // at the shipped width. Job 3 of the 2026-09-06 batch ruled `Stroke` "correctly screen-space
+        // rather than an instance of R-02's family" - true of the formula, false of the floored
+        // function as actually called, and measuring it is what caught that.
+        //
+        // THE CHECK: collect every thin Rect the Cover draws - Box decomposes into four Rects whose
+        // stroke becomes a side - and require the SET of thicknesses at 2560 to be the SET at 1280,
+        // doubled. That is integrality and proportionality in one statement, and it is what having a
+        // single rule buys. With the float rule the 2560 set contained 1.3314 and 3.9943.
+        {
+            string thin1 = ThinRectThicknesses(W1, H1);
+            string thin2 = ThinRectThicknesses(W2, H2);
+            Check("the Cover's rules are whole device pixels at 1280", thin1 == "1, 2", "got " + thin1);
+            Check("...and exactly twice that at 2560 - one rule, scaled", thin2 == "2, 4", "got " + thin2);
+        }
     }
 
     // ---- 6. S120: THE CHROME BAR TRACKS THE PANEL -----------------------------------------------
@@ -410,6 +434,36 @@ public static class LegibilityFloorTest
             Check("every label sits inside the bar at " + wh[0] + "x" + wh[1], outside == 0,
                   outside + " outside, first " + first);
         }
+    }
+
+    /// <summary>Every distinct thickness among the Cover's thin Rects, sorted, as a string. A Box is
+    /// four Rects whose stroke is one side, so a stroke rule shows up here as a thin Rect. 12 px is a
+    /// generous ceiling for "this is a rule, not a panel" and is well clear of the next thing up.</summary>
+    static string ThinRectThicknesses(int w, int h)
+    {
+        PageState ps = new PageState(); ps.Valid = true;
+        System.Collections.Generic.SortedSet<float> set = new System.Collections.Generic.SortedSet<float>();
+        // ⛔ ALL THREE CAMERA VIEWS, not just the default. Three of the four draws this check exists
+        // for - the map well's box, the NEXT VIEW pill and the d-pad button box - are only reached
+        // under CoverCam.Map, so a sweep of the default Earth view passes while the defect is live.
+        // Mutation J proved exactly that: the first version of this check did not fail when the float
+        // rule was put back, because it never rendered the page that draws it.
+        foreach (CoverPage.CoverCam cam in new[] { CoverPage.CoverCam.Earth, CoverPage.CoverCam.Map, CoverPage.CoverCam.Capsule })
+        {
+            DisplayList d = new DisplayList(CoverPage.Commands);
+            CoverPage.Build(d, w, h, ps, MapProjection.Default(), 1, cam);
+            for (int i = 0; i < d.Count; i++)
+            {
+                DrawCmd t = d.At(i);
+                if (t.Kind != DrawKind.Rect) continue;
+                float mn = Math.Min(t.C, t.D);
+                if (mn <= 12f) set.Add((float)Math.Round(mn, 4));
+            }
+        }
+        string[] parts = new string[set.Count];
+        int k = 0;
+        foreach (float v in set) parts[k++] = v.ToString("0.####");
+        return string.Join(", ", parts);
     }
 
     static DisplayList BuildBar(int w, int h)
