@@ -190,6 +190,40 @@ session and are auto-loaded with this file. Section refs (§n, §Bn, C1–C7.1, 
     The rule ITSELF is unchanged (C1.16 forbids editing it retroactively); only its authority was missing,
     and this paragraph supplies it. See §0a (Plan Amendment Ledger).
 
+    ➕ **EXTENDED 2026-09-06 — THE RULE COVERS REASONING WHEREVER IT LIVES, CODE COMMENTS INCLUDED.**
+    Owner authority, verbatim: **"give me a batched prompt in the order you suggest for one chat to fix all
+    whilst reading its rules etc between jobs"** — answering the overseer's four-item order, of which this
+    rule change is item 4 and was named in the batch as the item that edits guarded files. The rule above is
+    **UNCHANGED**; this paragraph adds to it and does not edit it, because C1.16 forbids that too.
+
+    **THE GAP.** The rule as written protects DOCUMENTS — *"No task may delete a file under `docs/`"*. Much
+    of this project's reasoning is not in `docs/`. It is in the headers of the pure files, and it is the same
+    asset by the same argument: it was earned once, it cannot be rebuilt from the code that follows it, and
+    re-earning it costs more than keeping it. **A code comment is not a lesser form of research**, and the
+    deletion that produced this extension was a code comment, so the rule never reached it.
+
+    **AND THIS IS NOT HYPOTHETICAL — IT IS THE DEFECT THAT PRODUCED THE EXTENSION.**
+    `plugin/src/pure/Typography.cs` went from **55 lines to 20 at `158eb2a`** (the ground-up autopilot
+    rebuild; `git show --stat`: 3 insertions, 38 deletions). The deletion took the bodies of both its section
+    headings and left `---- 16 PX IS MEASURED, NOT CHOSEN ----` and `---- THE RULE THAT FALLS OUT OF IT ----`
+    standing over nothing. What went with them was the PREMISE of the project's legibility floor —
+    *"Established in game 2026-08-05 from the proof page's legibility ramp, at 1280 px across a screen
+    0.2844 m wide, seen from the seat"* — **and the owner's own verbatim measurement quote**, which is
+    tier-1 evidence under C1.12's evidentiary standard. The constant `Min = 16f` survived; the reason it was
+    16 did not, so it could no longer be checked against its own premise. Ten days later a resolution change
+    silently invalidated that premise (`screenWidth` 1280 → 2560, `S115`, 2026-09-05) and **two tasks
+    computed a fix for QC C-05 against the wrong floor and recorded it as safe** (`S112`, `S115`; the block
+    was never lifted, and `S116` would have shipped the overflow it exists to prevent). Recovered verbatim
+    from git and restored by job 2 of this batch — which is only possible because git had it; nothing
+    guaranteed that.
+
+    **THE HONEST ROUTE, WHICH IS THE ONE THE RULE ALREADY GIVES FOR DOCUMENTS.** Reasoning that is genuinely
+    obsolete is **marked SUPERSEDED IN PLACE** — say what it claimed, what replaced it, and when — and left
+    where it is. Deleting it is not an option a build chat has, in `docs/` or in a `.cs` file. **Removing the
+    CODE a comment describes does not license removing the comment**: code can be rebuilt from reasoning,
+    which is the whole premise of the rule above, and a heading left over an empty body is worse than either
+    — it advertises that something was there and gives no way to find out what.
+
 ## Off-limits as build sources (C7)
 
 `C:\Users\User\.claude\plans\` (ephemeral — superseded by `docs/BUILD_PLAN.md`) · the auto-memory folder

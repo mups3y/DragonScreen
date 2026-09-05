@@ -13029,3 +13029,66 @@ True"* for two panels of identical shape). `build.py preview` green, 108 pages; 
 - **DONE when:** `CoverPage` has one stroke rule. If `Strokes.Px` wins, check the pill and the d-pad box on a
   2560 preview first — they are curves and a box, not long rules, and a whole-pixel snap may read heavier
   than intended; if `Stroke` wins, say why a float is right here and `St` is right for the ten rules.
+
+### G12 [O] Close the gap C1.16 left open: research is protected wherever it lives, code comments included — **DONE 2026-09-06** — [job 4 of the 2026-09-06 owner batch; GUARDED FILES — `CLAUDE.md` + `docs/BUILD_PLAN.md` Part C, byte-identical and proven, plus §0a's ledger row]
+
+**🟢 OWNER AUTHORISATION, 2026-09-06, verbatim (C1.12):** *"give me a batched prompt in the order you
+suggest for one chat to fix all whilst reading its rules etc between jobs"* — answering the overseer's
+four-item order. **"fix all" covers item 4, which the batch named as the item that edits guarded files.**
+This is that item. No other authority is claimed, and none is inferred: the quote above is the whole of it.
+
+**THE GAP.** C1.16 reads *"No task may delete a file under `docs/`"* — it protects **documents**. The
+deletion that caused QC **R-02** was a **code comment**, so the rule never reached it. Much of this
+project's reasoning is not in `docs/` at all; it is in the headers of the pure files, and it is the same
+asset by the rule's own argument — earned once, not rebuildable from the code beneath it, more expensive to
+re-earn than to keep.
+
+**AND IT IS NOT HYPOTHETICAL — it is what jobs 1 and 2 of this batch spent themselves on.**
+`plugin/src/pure/Typography.cs` went **55 lines → 20 at `158eb2a`** (`git show --stat`: 3 insertions, 38
+deletions), which took the bodies of both its section headings and left the headings standing over nothing.
+What went with them was the PREMISE of the legibility floor — *"at 1280 px across a screen 0.2844 m wide,
+seen from the seat"* — **and the owner's own verbatim measurement quote**, tier-1 evidence under C1.12's
+evidentiary standard. `Min = 16f` survived; the reason it was 16 did not, so nobody could check the constant
+against its own premise. When `screenWidth` went 1280 → 2560 (Q5 / [[S115]], 2026-09-05) that premise was
+silently invalidated, and **two tasks computed C-05's fix against the wrong floor and recorded it as safe**
+([[S112]] via `4081f5e`, [[S115]]) — [[S116]] would have shipped the 131-design-px overflow it exists to
+prevent. Job 1 blocked it; job 2 recovered the deleted text verbatim from git and restored it. That recovery
+was only possible because git happened to have it; nothing in the rules guaranteed that, and this closes it.
+
+**WHAT WAS WRITTEN.** One added paragraph under C1.16 — *"➕ EXTENDED 2026-09-06 — THE RULE COVERS REASONING
+WHEREVER IT LIVES, CODE COMMENTS INCLUDED"* — carrying the owner quote, the gap, the `Typography.cs` /
+`158eb2a` / 55→20 incident, and the honest route: **reasoning that is genuinely obsolete is marked
+SUPERSEDED IN PLACE and left where it is**, in `docs/` or in a `.cs` file alike; and **removing the CODE a
+comment describes does not license removing the comment**, because code is what gets rebuilt from reasoning.
+
+⛔ **The existing rule text is UNCHANGED and no rule is renumbered.** C1.16's own G11 ratification says the
+rule *"ITSELF is unchanged (C1.16 forbids editing it retroactively)"*, so this is an ADDITION beneath it,
+dated and attributed, exactly as `G11`'s ratification paragraph was — not an edit of the 2026-09-04 text.
+
+**BYTE-IDENTICAL IN BOTH GUARDED FILES, AND HERE IS HOW IT WAS PROVEN** (the G7/G8/G9/G10 precedent):
+1. In each file, locate the single line beginning `16. **RESEARCH IS NEVER DELETED.**` — asserted to occur
+   **exactly once** per file, so a duplicated rule cannot pass.
+2. Take a **FIXED count of 50 lines** from that anchor, the same 50 from both. ⚠ A fixed count, *not* "up to
+   the next heading": an extraction that stops at a boundary would pass silently if one copy were TRUNCATED
+   at that boundary and the other were not.
+3. Write both slices out and diff them. Result: **`CLAUDE.md` line 176 and `docs/BUILD_PLAN.md` line 2224,
+   50 lines and 4634 bytes each, empty diff**, confirmed independently by `cmp` on the two extracted files.
+4. Assert the slice actually contains all three parts — the 2026-09-04 rule, `G11`'s ratification, and the
+   whole `G12` extension including its last line — so a fixed count cannot pass on a shared prefix alone.
+   Checked for: *"No task may delete a file under `docs/`"*, *"RATIFIED 2026-09-05"*, *"EXTENDED
+   2026-09-06"*, *"55 lines to 20 at"*, `158eb2a`, `Typography.cs`, *"marked SUPERSEDED IN PLACE"*, *"code
+   can be rebuilt from reasoning"*.
+5. Assert nothing was renumbered: inside each file's **C1 block** (bounded, so the plan's other numbered
+   lists are not counted) items **1..16 appear once each, in order**. Both files pass.
+
+**§0a — THE PLAN AMENDMENT LEDGER carries this edit's row**, because G10 built it under the rule *"an entry
+in this table, or the edit was not authorised"* and G12's own edit needs one. Added: `2026-09-06 | (this
+commit) | G12 | yes | yes` with the owner quote and the byte-identity proof in the row.
+⚠ **One correction of fact in the same table:** `G11`'s row read `*(this commit)*` — the placeholder a chat
+writes when it cannot know its own hash. Resolved to **`ac5117e`** from `git log --oneline --follow --
+docs/BUILD_PLAN.md`, verified with `git show --stat ac5117e` (*"G11: adjudicate G10's three flagged §0a
+items separately"*). Nothing else in that row changed, and no second G11 row was left behind.
+
+**Verified (C1.3).** Governance/docs only — no code changed, so the build/preview gate does not apply
+(C1.3's own carve-out); `build.py test` was run anyway and is **green**. `docs/QC_FINDINGS.md` untouched
+(QC's file). No `install`, no glass. No flight control wired (§14.4(a)).
