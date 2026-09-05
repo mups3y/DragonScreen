@@ -7812,7 +7812,7 @@ per the INDEX convention), covering (1) the globe, (2) the orbit line + markers,
   get re-verdicted and closed on this evidence; (b) does the MAP view's warning get the "not-yet" fix; (c)
   does S61 (the page route) precede any further glass spend on G11.
 
-### S62 [O] There is no `UiPage` that reaches the NAV page — so the scaled-space camera is unreachable and G11 cannot be answered — **TODO** — [TIER 2: real defect — the prerequisite for S10b/G11]
+### S62 [O] There is no `UiPage` that reaches the NAV page — so the scaled-space camera is unreachable and G11 cannot be answered — **HELD 2026-09-06 — the FINDING is re-verified and certain; the FIX is an owner design call** — [TIER 2: real defect — the prerequisite for S10b/G11]
 
 ⚠ **[[S125]] CROSS-REFERENCE, 2026-09-06.** Related to hole **H36** and QC **`NO-02`** (*"S43 built zoom and
 pan for the orbit plot, and the standalone orbit plot cannot use them"*), both of which are the **complete
@@ -7843,6 +7843,64 @@ explicitly declined to propose flipping `FigmaMode`. **DONE when:** some reachab
 `ScaledPlanetRenderer` and draws `NavPage.Planet(..., live: true)`, `build.py test` is green and the preview
 shows the honest `LIVE 3D — NO SIGNAL` state on that page — at which point G11/G12(3) become answerable on one
 glass visit.
+
+#### ⛔ HELD 2026-09-06 — **the finding is CONFIRMED from source; the fix is the owner's to choose**
+
+**RE-VERIFIED, not taken on trust** — this line's chain was checked end to end because it is the
+prerequisite for a glass visit and a wrong link would waste one:
+- `ScreenPainter.cs:56` — `private const bool FigmaMode = true`. ✅
+- `ScreenPainter.cs:1198` — **`ScaledPlanetRenderer.Request(...)` is inside the `else` branch**, beside
+  `Pages.Build` and the legacy `ChromeBar.Build`. `grep -rn "ScaledPlanetRenderer.Request" plugin/src/`
+  returns **exactly one call site**, and it is that one. So it never runs. ✅
+- `grep -rn "NavPage.Build"` over `plugin/src` returns **one production caller: `Pages.cs:588`,
+  `case 2:`** — inside the same dead path. `FigmaUI.cs` never calls it (`grep -n "NavPage\." plugin/src/pure/FigmaUI.cs`
+  returns nothing at all). ✅ **The full NAV page is unreachable in the shipped build.**
+
+⚠ **AND ONE APPARENT CONTRADICTION RESOLVED, because two lines disagree in writing.** [[S117]] says *"NAV is
+what the right-hand console shows by default"*, which reads as though NAV renders. It does **not** — S117's
+own text names the real route in the next clause: *"also reused by `CoverPage.DrawCameraView`'s Map mode"*.
+What ships is `NavPage`'s **renderers** (`.Map`, `.Orbit`, `.Planet`) drawn into the **Cover's** slots, not
+`NavPage.Build`. S117's fix was correct and correctly scoped; only that phrase is loose. **Nothing here
+re-opens S117.**
+
+#### ⛔ WHY THIS IS NOT A BUILD-CHAT FIX — all three routes are gated, and the line already said so
+
+This line's own text: *"how it is reached … is a design call with a real §1.4/§14.4 dimension … and S49
+explicitly declined to propose flipping `FigmaMode`."* Each option, and what it costs:
+
+| route | what it needs |
+|---|---|
+| **(a)** a new `UiPage.Nav` routing to `NavPage.Build` | **Adds a page the reference does not have.** §14.2 TIER-3 — *"NO evidence AND no asset → invention, JOINT discussion required"*. |
+| **(b)** a 3D-PLANET view added to an existing Figma page | Same class: which page, and where on it, is invention on a reference-matched layout. |
+| **(c)** promote the Cover's globe to `live: true` | ⛔ **Overturns a SETTLED decision.** [[S10a]] decided the Cover/Chute globes are small decorative body slots and pass `live: false` *deliberately*, and this line records that as **still right**. Changing it is C1.8's `OVERRIDE`, typed by the owner. |
+| **(d)** flip `FigmaMode` | **[[S49]] explicitly declined to propose this**, and it would swap the entire shipped UI for the legacy one. Not a side-effect anybody should take. |
+
+⛔ **C1.14 keeps all four with the OWNER**, not the overseer: (a)/(b) are TIER-3 invention on the look of a
+reference-matched screen — the owner's taste; (c) is an `OVERRIDE`; (d) is a whole-UI change. **A build
+chat decides none of them and proceeds past none.**
+
+⚠ **THE ORDERING CONSEQUENCE IS THE REASON THIS MATTERS, AND IT IS UNCHANGED:** **[[G11]] and G12(3) are
+batched onto an owner `install` + glass go, and spending that go before this is fixed cannot answer any of
+[[S10b]]'s three criteria** — the camera will not be claimed no matter what the crew touches. So this is an
+**ordering prerequisite for a scarce resource**, not a parallel task. ⭐ **Answering the question below is
+worth more than any single fix line in the backlog**, because it is what stops a glass visit being wasted.
+
+**Paste-ready overseer prompt (C1.13):**
+> DragonScreen, S62. **The scaled-space planet camera has never once run.** Verified from source: its only
+> `Request(...)` call sits in the `FigmaMode == false` branch, `FigmaMode` is a `const true`, and
+> `NavPage.Build`'s only production caller is in that same dead branch — so `PageState.PlanetCamLive` can
+> never become true. A full flight session's `KSP.log` has zero `scaled-planet` hits, while the sibling
+> `docking cam ready` line is present, which is independent proof.
+> **Why it needs answering before the next glass visit:** G11 and G12(3) are batched onto an `install` +
+> glass go, and that go **cannot answer S10b's criteria** while the camera is unreachable — the visit would
+> be spent proving only that nothing happens.
+> **The question is which page hosts a live 3D globe**, and every route is yours rather than a build
+> chat's: **(a)** a new NAV page — invention, §14.2 TIER-3; **(b)** a 3D-PLANET view on an existing Figma
+> page — same; **(c)** promote the Cover's existing globe to `live: true` — needs an **`OVERRIDE`** of
+> S10a, which deliberately made it decorative; **(d)** flip `FigmaMode` — S49 declined to propose it and it
+> swaps the whole shipped UI. **(c) is the cheapest by far** (one argument) and the only one that invents
+> nothing new — but it changes what a reference-matched slot is, which is exactly the kind of call S10a
+> reserved. **A build chat cannot pick any of these.**
 
 ### W0 [O] Recover CraftDump.cs and take a fresh craft dump — **DONE 2026-09-03**
 Owner directive via the overseer ("do W0 first"), 2026-09-03: every Part-B actuation decision binds to named
