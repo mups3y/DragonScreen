@@ -56,6 +56,7 @@ public static class LegibilityFloorTest
         TheShippedPanelsAreExactlyTwoToOne();
         SharedWidgetsTrackThePanel();
         FlightPageTracksThePanel();
+        VehiclePageTracksThePanel();
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed"
                           + "   (floor " + Typography.MinFor(W1) + " px @" + W1
@@ -435,6 +436,22 @@ public static class LegibilityFloorTest
         //      column doubles with the panel. Only an ABSOLUTE check at RefPanelW catches it.
         //   3. A TAP AT THE CENTRE OF A ROW HITS WHATEVER THE BAND IS. The tappable band is inset from
         //      the row; an unscaled inset is wrong at 2560 and invisible to a centre probe.
+        // ⭐ the same position invariant [[S121b-ii]] added, applied to FLIGHT: on exactly-2:1 panels
+        // every drawn coordinate doubles, which catches a column or a width left behind even when no
+        // type size moved. Stated here rather than only for VEHICLE, because FLIGHT is the page with
+        // the hit rects and a moved control is the expensive kind of wrong.
+        float[] fp1 = PageTextPositions(0, W1, H1), fp2 = PageTextPositions(0, W2, H2);
+        int badp = 0; int worstP = -1; float worstD = 0f;
+        for (int i = 0; i < fp1.Length && i < fp2.Length; i++)
+        {
+            float d = Math.Abs(fp2[i] - 2f * fp1[i]);
+            if (d > 0.02f) { badp++; if (d > worstD) { worstD = d; worstP = i; } }
+        }
+        Check("S121b-i every text POSITION on FLIGHT doubles with the panel", badp == 0,
+              badp + " of " + fp1.Length + " did not; worst at index " + worstP
+              + " (@1280 " + (worstP >= 0 ? fp1[worstP] : 0f)
+              + ", @2560 " + (worstP >= 0 ? fp2[worstP] : 0f) + ", off by " + worstD + ")");
+
         DrawnStepsMatchTheHitRects(W1, H1);
         DrawnStepsMatchTheHitRects(W2, H2);
 
@@ -535,17 +552,127 @@ public static class LegibilityFloorTest
     }
 
     /// <summary>Build FLIGHT and hand back every text size it emitted, in order.</summary>
-    static float[] FlightTextSizes(int w, int h)
+    static float[] FlightTextSizes(int w, int h) { return PageTextSizes(0, w, h); }
+
+    /// <summary>Build any legacy page and hand back every text size it emitted, in order. ⛔ Reads the
+    /// EMITTED commands — the point is to compare what the page drew, never what the test expected it
+    /// to draw. Shared by [[S121b-i]] and [[S121b-ii]].</summary>
+    static float[] PageTextSizes(int pageIndex, int w, int h)
     {
         PageState ps = new PageState(); ps.Valid = true;
-        DisplayList dl = new DisplayList(4096);
-        Pages.Build(dl, 0, w, h, ps, MapProjection.Default(), 1);
+        DisplayList dl = new DisplayList(8192);
+        Pages.Build(dl, pageIndex, w, h, ps, MapProjection.Default(), 1);
         int n = 0;
         for (int i = 0; i < dl.Count; i++) if (dl.At(i).Kind == DrawKind.Text) n++;
         float[] outp = new float[n]; int k = 0;
         for (int i = 0; i < dl.Count; i++)
             if (dl.At(i).Kind == DrawKind.Text) outp[k++] = dl.At(i).C;
         return outp;
+    }
+
+    /// <summary>The shape both page checks want: same command count, every size exactly doubled, and
+    /// an ABSOLUTE anchor at RefPanelW — which is the only thing that catches a scale derived from the
+    /// wrong width, since a wrong width that doubles still doubles ([[S121b-i]] mutation W7).</summary>
+    static void PageTypeTracksThePanel(string name, int pageIndex)
+    {
+        float[] t1 = PageTextSizes(pageIndex, W1, H1), t2 = PageTextSizes(pageIndex, W2, H2);
+        Check("S121b " + name + " draws the same number of text commands at both widths",
+              t1.Length == t2.Length, t1.Length + " vs " + t2.Length);
+        Check("S121b " + name + " has real type on it to check", t1.Length > 20,
+              "only " + t1.Length + " text commands");
+        int bad = 0; int worstI = -1; float worst = 0f;
+        for (int i = 0; i < t1.Length && i < t2.Length; i++)
+        {
+            float d = Math.Abs(t2[i] - 2f * t1[i]);
+            if (d > 1e-3f) { bad++; if (d > worst) { worst = d; worstI = i; } }
+        }
+        Check("S121b every text size on " + name + " doubles with the panel", bad == 0,
+              bad + " of " + t1.Length + " did not; worst at index " + worstI
+              + " (@1280 " + (worstI >= 0 ? t1[worstI] : 0f)
+              + ", @2560 " + (worstI >= 0 ? t2[worstI] : 0f) + ")");
+        Check("S121b " + name + " draws at exactly Typography.Caption at RefPanelW",
+              HasSize(t1, Typography.Caption), "no " + Typography.Caption + " px text at 1280");
+        Check("S121b " + name + " draws at exactly Typography.Dense at RefPanelW",
+              HasSize(t1, Typography.Dense), "no " + Typography.Dense + " px text at 1280");
+        Check("S121b ...and " + name + " doubles both of those exactly at 2560",
+              HasSize(t2, Typography.Caption * 2f) && HasSize(t2, Typography.Dense * 2f),
+              "missing " + (Typography.Caption * 2f) + " or " + (Typography.Dense * 2f) + " px at 2560");
+        float min1 = Min(t1), min2 = Min(t2);
+        Check("S121b the smallest type on " + name + " is the same share of the panel at both widths",
+              Math.Abs(min1 / W1 - min2 / W2) < 1e-7f, min1 + "/" + W1 + " vs " + min2 + "/" + W2);
+
+        // ---- ⭐ AND WHERE IT IS DRAWN, NOT ONLY HOW BIG -----------------------------------------
+        // ⛔ THE SIZE CHECKS ABOVE MISS HALF THE DEFECT, and mutation found it: leaving a COLUMN
+        // position or a bar WIDTH unscaled moves the page around without changing a single type size.
+        // The two shipped panels are exactly 2:1 (pinned by TheShippedPanelsAreExactlyTwoToOne), so on
+        // a correctly-scaled page EVERY drawn coordinate doubles — a much stronger statement than the
+        // sizes doubling, and it costs nothing extra to make.
+        float[] p1 = PageTextPositions(pageIndex, W1, H1), p2 = PageTextPositions(pageIndex, W2, H2);
+        int badp = 0; int worstP = -1; float worstD = 0f;
+        for (int i = 0; i < p1.Length && i < p2.Length; i++)
+        {
+            float d = Math.Abs(p2[i] - 2f * p1[i]);
+            if (d > 0.02f) { badp++; if (d > worstD) { worstD = d; worstP = i; } }
+        }
+        Check("S121b every text POSITION on " + name + " doubles with the panel", badp == 0,
+              badp + " of " + p1.Length + " did not; worst at index " + worstP
+              + " (@1280 " + (worstP >= 0 ? p1[worstP] : 0f)
+              + ", @2560 " + (worstP >= 0 ? p2[worstP] : 0f) + ", off by " + worstD + ")");
+    }
+
+    /// <summary>Every text command's x and y, interleaved. See the note in PageTypeTracksThePanel:
+    /// the panels are exactly 2:1, so every coordinate on a scaled page doubles.</summary>
+    static float[] PageTextPositions(int pageIndex, int w, int h)
+    {
+        PageState ps = new PageState(); ps.Valid = true;
+        DisplayList dl = new DisplayList(8192);
+        Pages.Build(dl, pageIndex, w, h, ps, MapProjection.Default(), 1);
+        int n = 0;
+        for (int i = 0; i < dl.Count; i++) if (dl.At(i).Kind == DrawKind.Text) n++;
+        float[] outp = new float[n * 2]; int k = 0;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind != DrawKind.Text) continue;
+            outp[k++] = c.A; outp[k++] = c.B;
+        }
+        return outp;
+    }
+
+    // ---- S121b-ii: THE VEHICLE PAGE -------------------------------------------------------------
+    // ⚠ No hit rects of its own — its only controls are the Card tabs, which [[S121a]] already pins at
+    // both widths. So this is the type-and-geometry half, read off the render.
+    static void VehiclePageTracksThePanel()
+    {
+        PageTypeTracksThePanel("VEHICLE", 1);
+
+        // ⭐ The alarm dots are a SQUARE beside a word. A fixed square next to type twice the size
+        // reads as a different symbol, so the square has to scale with it. Read off the render: the
+        // smallest square on the page (the dot) must double.
+        Check("S121b-ii the status dot doubles with the panel",
+              Math.Abs(SmallestSquare(1, W2, H2) - 2f * SmallestSquare(1, W1, H1)) < 1e-3f,
+              "@1280 " + SmallestSquare(1, W1, H1) + " @2560 " + SmallestSquare(1, W2, H2));
+        Check("S121b-ii ...and at RefPanelW it is exactly the 10 px it was measured as",
+              Math.Abs(SmallestSquare(1, W1, H1) - 10f) < 1e-3f,
+              "got " + SmallestSquare(1, W1, H1));
+    }
+
+    /// <summary>The smallest square Rect a page emits — on VEHICLE that is the alarm dot.</summary>
+    static float SmallestSquare(int pageIndex, int w, int h)
+    {
+        PageState ps = new PageState(); ps.Valid = true;
+        DisplayList dl = new DisplayList(8192);
+        Pages.Build(dl, pageIndex, w, h, ps, MapProjection.Default(), 1);
+        float best = float.MaxValue;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind != DrawKind.Rect) continue;
+            if (c.C <= 0f || c.D <= 0f) continue;
+            if (Math.Abs(c.C - c.D) > 0.01f) continue;      // square only
+            if (c.C < best) best = c.C;
+        }
+        return best;
     }
 
     /// <summary>Every FLIGHT control, hit at the centre of where it is DRAWN.</summary>

@@ -1211,17 +1211,23 @@ namespace DragonScreen
             float bx, by, bw, bh;
             Card.Body(w, h, out bx, out by, out bw, out bh);
 
-            float pad = 28f;
+            // ⭐ [[S121b-ii]], 2026-09-06: one scale for every RefPanelW number on this page. The card
+            // itself already tracks the panel ([[S121a]] made `Card` self-scaling), so `bx`/`bw` arrive
+            // correct and are NOT scaled again — only the numbers measured inside it are.
+            // ⚠ `float pad = 28f;` stood here, assigned and never used, and was a live compiler warning
+            // (CS0219). [[S121b-i]] logged it rather than reaching outside its own methods; this is the
+            // line that owns this one, so it goes.
+            float sc = Typography.ScaleFor(w);
             float bodyTop = by;
             float bodyBottom = by + bh;
             // 56, not 40: the row is two lines - a name and its state word - and at 40 the second
             // line sat exactly on the boundary below it.
-            float statusH = 56f;
+            float statusH = 56f * sc;
             float contentBottom = bodyBottom - statusH;
             float cy = (bodyTop + contentBottom) * 0.5f;
             float cxPage = bx + bw * 0.5f;
 
-            dl.Text("VEHICLE OVERVIEW", cxPage, bodyTop, Typography.Body, TextAlign.Centre,
+            dl.Text("VEHICLE OVERVIEW", cxPage, bodyTop, Typography.Body * sc, TextAlign.Centre,
                     DragonPalette.Text1);
 
             // ---- THE CAPSULE, CENTRED ----
@@ -1229,7 +1235,7 @@ namespace DragonScreen
             // because a squashed Dragon is the most obvious possible sign that nobody looked.
             float artH = (contentBottom - bodyTop) * 0.80f;
             float ix, iy, iw, ih;
-            if (Images.FitHeight(ImageId.Dragon, cxPage, cy + 8f, artH,
+            if (Images.FitHeight(ImageId.Dragon, cxPage, cy + 8f * sc, artH,
                                  out ix, out iy, out iw, out ih))
                 dl.Image(ImageId.Dragon, ix, iy, iw, ih, DragonPalette.White);
 
@@ -1237,10 +1243,10 @@ namespace DragonScreen
             // Laid out on an explicit grid rather than by nudging offsets off the radius: the
             // previous three-row version derived its rows from the radius and a fourth row would have
             // run off the bottom. Rows are a pitch; the radius fits INSIDE the pitch.
-            float gridTop = bodyTop + 34f;
+            float gridTop = bodyTop + 34f * sc;
             float gridH = contentBottom - gridTop;
             float rowPitch = gridH / 4f;
-            float col1 = bx + 118f, col2 = bx + 354f;
+            float col1 = bx + 118f * sc, col2 = bx + 354f * sc;
             float gr = rowPitch * 0.34f;
             float gth = gr * 0.20f;
 
@@ -1256,36 +1262,36 @@ namespace DragonScreen
 
             float r0 = gridTop + rowPitch * 0.5f;
             Dial(dl, col1, r0, gr, gth, s, cb.Ppo201, s.Ppo2Text, "psia", "PPO2",
-                 DragonPalette.GaugePpo2);
+                 DragonPalette.GaugePpo2, sc);
             Dial(dl, col2, r0, gr, gth, s, cb.CabinTemp01, s.CabinTempText, "deg C", "CABIN TEMP",
-                 DragonPalette.GaugeCabinTemp);
+                 DragonPalette.GaugeCabinTemp, sc);
 
             float r1 = gridTop + rowPitch * 1.5f;
             Dial(dl, col1, r1, gr, gth, s, cb.Press01, s.PressText, "psia", "CABIN PRESSURE",
-                 DragonPalette.GaugePress);
+                 DragonPalette.GaugePress, sc);
             Dial(dl, col2, r1, gr, gth, s, cb.Co201, s.Co2Text, "mmHg", "CO2",
-                 DragonPalette.GaugeCo2);
+                 DragonPalette.GaugeCo2, sc);
 
             float r2 = gridTop + rowPitch * 2.5f;
             Dial(dl, col1, r2, gr, gth, s, cb.LoopA01, s.LoopAText, "deg C", "LOOP A",
-                 DragonPalette.GaugeLoop);
+                 DragonPalette.GaugeLoop, sc);
             Dial(dl, col2, r2, gr, gth, s, cb.LoopB01, s.LoopBText, "deg C", "LOOP B",
-                 DragonPalette.GaugeLoop);
+                 DragonPalette.GaugeLoop, sc);
 
             float r3 = gridTop + rowPitch * 3.5f;
             Dial(dl, col1, r3, gr, gth, s, np1, s.NetPwr1Text, "W", "NET PWR 1",
-                 DragonPalette.GaugePower);
+                 DragonPalette.GaugePower, sc);
             Dial(dl, col2, r3, gr, gth, s, np2, s.NetPwr2Text, "W", "NET PWR 2",
-                 DragonPalette.GaugePower);
+                 DragonPalette.GaugePower, sc);
 
             // ---- BAR READOUTS, RIGHT ----
             // The reference's right-hand column, and its exact list: Inertial Velocity, Altitude,
             // Apogee, Perigee, Inclination, Range to ISS. Every one filled to a fraction of a stated
             // range - see BarScale for where the ranges come from and why they are body-derived.
-            float barW = 300f;
+            float barW = 300f * sc;
             float rx = bx + bw - barW;
             float pitch = (contentBottom - gridTop) / 6f;
-            float ry = gridTop + 8f;
+            float ry = gridTop + 8f * sc;
 
             // Velocity goes through the SHARED rule, caption and all - see OrbitReadout.Velocity for
             // why this bar is not allowed to just read s.Velocity like it used to.
@@ -1294,25 +1300,25 @@ namespace DragonScreen
             OrbitReadout.Velocity(s, out velCap, out velVal, out velMps);
             Gauge.Bar(dl, rx, ry, barW, velCap, s.Valid ? velVal : Dashes.None, null,
                       s.Valid ? BarScale.Velocity(velMps, s.CircularSpeedMps) : -1.0,
-                      DragonPalette.BarFill);
+                      DragonPalette.BarFill, sc);
             Gauge.Bar(dl, rx, ry + pitch, barW, "ALTITUDE", s.Valid ? s.Altitude : Dashes.None, null,
                       s.Valid ? BarScale.Altitude(s.AltitudeM, s.AtmosphereDepthM, s.BodyRadiusM)
                               : -1.0,
-                      DragonPalette.BarFill);
+                      DragonPalette.BarFill, sc);
             Gauge.Bar(dl, rx, ry + pitch * 2f, barW, "APOGEE",
                       (s.Valid && s.ApogeeShown) ? s.Apoapsis : Dashes.None, null,
                       (s.Valid && s.ApogeeShown)
                           ? BarScale.Altitude(s.ApogeeM, s.AtmosphereDepthM, s.BodyRadiusM) : -1.0,
-                      DragonPalette.BarFill);
+                      DragonPalette.BarFill, sc);
             Gauge.Bar(dl, rx, ry + pitch * 3f, barW, "PERIGEE",
                       (s.Valid && s.PerigeeShown) ? s.Periapsis : Dashes.None, null,
                       (s.Valid && s.PerigeeShown)
                           ? BarScale.Altitude(s.PerigeeM, s.AtmosphereDepthM, s.BodyRadiusM) : -1.0,
-                      DragonPalette.BarFill);
+                      DragonPalette.BarFill, sc);
             Gauge.Bar(dl, rx, ry + pitch * 4f, barW, "INCLINATION",
                       s.Valid ? s.InclinationText : Dashes.None, null,
                       s.Valid ? BarScale.Inclination(s.InclinationDeg) : -1.0,
-                      DragonPalette.BarFill);
+                      DragonPalette.BarFill, sc);
             // "RANGE TO ISS" in the reference. Ours names the actual target, because under stock the
             // target is the Space X Station and under RSS it may really be the ISS - hard-coding the
             // caption would be accurate to the mock and wrong on the glass.
@@ -1320,19 +1326,21 @@ namespace DragonScreen
                       s.HasTarget ? "RANGE TO TARGET" : "RANGE",
                       (s.Valid && s.HasTarget) ? s.RangeText : Dashes.None, null,
                       (s.Valid && s.HasTarget) ? BarScale.Range(s.RangeM) : -1.0,
-                      DragonPalette.BarFill);
+                      DragonPalette.BarFill, sc);
 
             // ---- STATUS ROW: the alarm channel ----
-            Status(dl, bx, bw, contentBottom, s);
+            Status(dl, bx, bw, contentBottom, s, sc);
         }
 
         /// <summary>One ring gauge, dashed out when the feed is invalid. Saves eight repetitions.</summary>
+        /// ⛔ `sc` is PASSED IN: this helper is handed a radius and a centre, never a panel width, so
+        /// there is nothing here to derive it from ([[S121b-ii]], 2026-09-06).
         private static void Dial(DisplayList dl, float cx, float cy, float r, float th,
                                  PageState s, double value01, string text, string unit,
-                                 string caption, Rgba fill)
+                                 string caption, Rgba fill, float sc)
         {
             Gauge.Labelled(dl, cx, cy, r, th, s.Valid ? value01 : 0.0, s.Valid ? text : Dashes.None,
-                           unit, caption, DragonPalette.GaugeTrack, fill);
+                           unit, caption, DragonPalette.GaugeTrack, fill, sc);
         }
 
         /// <summary>
@@ -1342,9 +1350,10 @@ namespace DragonScreen
         /// the dials no longer change colour, so this row and the chrome bar are the whole alarm
         /// channel. Both read from Alarms, so a dot and a lit page link can never disagree.
         /// </summary>
-        private static void Status(DisplayList dl, float bx, float bw, float top, PageState s)
+        /// ⚠ `float pad = 0f;` stood here, assigned and never used (CS0219) — removed by
+        /// [[S121b-ii]], which owns this method, rather than by the line that noticed it.
+        private static void Status(DisplayList dl, float bx, float bw, float top, PageState s, float sc)
         {
-            float pad = 0f;
             float pitch = bw / 4f;
 
             // Both dots come from Alarms, so a dot here and a lit page link on the bar can never
@@ -1352,22 +1361,25 @@ namespace DragonScreen
             Severity life = Alarms.LifeSupport(s.Cabin);
             Severity thermal = Alarms.Thermal(s.Cabin);
 
-            Dot(dl, bx + pitch * 0f, top + 10f, "LIFE SUPPORT", life, s.Valid);
-            Dot(dl, bx + pitch * 1f, top + 10f, "POWER", Alarms.Low(s.Power01), s.Valid);
-            Dot(dl, bx + pitch * 2f, top + 10f, "PROPELLANT", Alarms.PropellantSeverity(s),
-                s.Valid);
-            Dot(dl, bx + pitch * 3f, top + 10f, "THERMAL", thermal, s.Valid);
+            Dot(dl, bx + pitch * 0f, top + 10f * sc, "LIFE SUPPORT", life, s.Valid, sc);
+            Dot(dl, bx + pitch * 1f, top + 10f * sc, "POWER", Alarms.Low(s.Power01), s.Valid, sc);
+            Dot(dl, bx + pitch * 2f, top + 10f * sc, "PROPELLANT", Alarms.PropellantSeverity(s),
+                s.Valid, sc);
+            Dot(dl, bx + pitch * 3f, top + 10f * sc, "THERMAL", thermal, s.Valid, sc);
         }
 
+        /// ⛔ `sc` is PASSED IN — this helper takes an x and a y and no width at all
+        /// ([[S121b-ii]], 2026-09-06). ⚠ The dot's own 10 px square scales with the words beside it:
+        /// a fixed square next to type twice the size reads as a different symbol, not the same one.
         private static void Dot(DisplayList dl, float x, float y, string name, Severity sev,
-                                bool valid)
+                                bool valid, float sc)
         {
             // An INVALID feed is not a nominal one. Grey says "no reading", green says "fine", and
             // the difference is the whole reason this project refuses to draw plausible zeroes.
             Rgba c = valid ? Alarms.Colour(sev) : DragonPalette.Text7;
-            dl.Rect(x, y + 2f, 10f, 10f, c);
-            dl.Text(name, x + 20f, y, Typography.Caption, TextAlign.Left, DragonPalette.Text4);
-            dl.Text(valid ? Alarms.Word(sev) : "NO DATA", x + 20f, y + 18f, Typography.Dense,
+            dl.Rect(x, y + 2f * sc, 10f * sc, 10f * sc, c);
+            dl.Text(name, x + 20f * sc, y, Typography.Caption * sc, TextAlign.Left, DragonPalette.Text4);
+            dl.Text(valid ? Alarms.Word(sev) : "NO DATA", x + 20f * sc, y + 18f * sc, Typography.Dense * sc,
                     TextAlign.Left, DragonPalette.Text6);
         }
 

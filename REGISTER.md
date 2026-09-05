@@ -15284,11 +15284,55 @@ glass, no `git push` · nothing wires a flight control (§14.4(a)).
 in `Vehicle` and in `Status`. Both pre-date this line (they are at `HEAD` too) and both are in
 [[S121b-ii]]'s methods, so that line should clear them as it passes.
 
-### S121b-ii [S] `Pages.cs` — the VEHICLE page — **DOING** — [split of [[S121b]]; ~34 sites]
+### S121b-ii [S] `Pages.cs` — the VEHICLE page — **DONE 2026-09-06 — and it found the half of the defect the SIZE checks could not see** — [split of [[S121b]]; ~34 sites]
 - `Vehicle` (18) · `Status` (8) · `Dot` (8).
 - ⚠ `Dot` takes no width at all and needs `sc` passed in.
 - ⭐ `Vehicle` draws through `Gauge.Bar`, which [[S121a]] made scale-aware; pass the real `sc`.
 - **DONE when:** as [[S121]]'s DONE-when, for these methods.
+
+#### ⭐ DONE 2026-09-06
+
+`Vehicle`, `Status`, `Dot` and the shared `Dial` helper all take the panel's scale. ⚠ `bx`/`bw` arrive
+from `Card.Body`, which [[S121a]] already made self-scaling, so the card's own geometry is **not** scaled
+a second time — only the numbers measured inside it: the status row's height, the dial grid's columns and
+top, the bar column's width, the readout insets and every type size.
+
+- ⛔ **`Dial` and `Dot` take `sc` as a parameter** — both are handed a centre and a radius, or an x and a
+  y, and neither ever sees a panel width. There is nothing there to derive it from, which is the same
+  reason [[S121b-i]]'s `SideRow` takes one.
+- ⭐ **The alarm dot's 10 px square scales with the words beside it.** A fixed square next to type twice
+  the size does not read as the same symbol; it reads as a different one.
+- ⭐ **The eight dials and six bar readouts now pass a real `sc`**, which is what finally turns on
+  [[S121a]]'s `Gauge` work on this page as [[S121b-i]] did on FLIGHT.
+- ⚠ **Both unused `float pad` locals are gone** — `Vehicle`'s and `Status`'s, live CS0219 warnings that
+  [[S121b-i]] logged rather than reached across for. This is the line that owns those methods.
+
+#### ⛔ THE SIZE CHECKS PASSED A PAGE THAT HAD MOVED — and mutation is what said so
+
+7 mutations, 5 killed at once. **X6** (the bar column's width left unscaled) and **X7** (the dial grid's
+columns left unscaled) both survived, and the reason is worth stating plainly: **they change WHERE things
+are drawn without changing HOW BIG any of them is.** Every check to that point read type sizes, so a page
+whose right-hand column had collapsed to 300 px on a 2560 panel passed cleanly.
+
+⭐ **The fix is a stronger invariant, not another special case.** The two shipped panels are exactly 2:1
+(already pinned by `TheShippedPanelsAreExactlyTwoToOne`), so on a correctly-scaled page **every drawn
+coordinate doubles**, not merely every size. `PageTextPositions` reads the emitted commands and asserts
+exactly that. X6 then dies with `off by 300`, X7 with `off by 354` — the two constants themselves.
+
+⭐ **And it was applied back to FLIGHT.** [[S121b-i]] had no position check either; VEHICLE's new one
+passes on FLIGHT unchanged, so that page's guarantee is now proven rather than assumed — the cheapest
+possible confirmation that the earlier line was complete.
+
+#### Verified
+
+**MEASURED: 119 preview pages rendered with the change and again with `HEAD`'s `Pages.cs`, compared by
+hash. 1 changed — `page1_vehicle`.** FLIGHT, NAV, DOCKING, the settings family and `page1_vehicle_mech`
+(a different subview) are all untouched, which is the scope line. Inspected: eight dials with legible
+values and captions, six bar readouts at a proportional width, and the four status dots readable — all
+inside the card.
+
+`build.py test` green — `LegibilityFloorTest` **252 checks** · comment-loss **0** · no `install`, no
+glass, no `git push` · §14.4(a) untouched.
 
 ### S121b-iii [S] `Pages.cs` — the legacy DOCKING page and the placeholder — **TODO (UNBLOCKED 2026-09-06 by [[S121b-i]])** — [split of [[S121b]]; ~48 sites]
 - `DockingOld` (38) · `Axis` (3) · `AxisR` (3) · `Placeholder` (4).
