@@ -7480,7 +7480,7 @@ the new material re-added as `<param>` blocks after them, so every change is a p
 > literal, and record that so the line closes rather than lingering. ⚠ Whatever you pick applies to
 > `VrioTestPage`'s identical `SECTION 4: IN PROGRESS` too, or the two procedure pages disagree.
 
-### S159 [S] Ascent: eleven events, none tracked, while a live 15-row step machine runs unread — **TODO** — [H34 + QC `AS-01`; split 4 of 5 from [[S55]]]
+### S159 [S] Ascent: eleven events, none tracked, while a live 15-row step machine runs unread — **DOING** — [H34 + QC `AS-01`; split 4 of 5 from [[S55]]]
 - **The finding.** The page's eleven ascent events are a static array. Meanwhile **`pure/StepList.cs` is a
   15-row LIVE state machine** — crew aboard, escape armed, prop load, liftoff, latched Max-Q, MECO, stage
   sep, SECO, Dragon sep, nose-cone open, plus an 8-mode `AbortMode()` — which renders **only** through
