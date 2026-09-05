@@ -10842,7 +10842,7 @@ from the box centre the old vertical offset used (box half-width 5 + 5 px cleara
 
 ---
 
-### S84 [S] The BlackBox has no delivered-RCS-impulse columns — `pure/RcsAccounting.cs` is still deleted — **TODO** — [TIER 2: a named §2 block with no source, logged rather than faked]
+### S84 [S] The BlackBox has no delivered-RCS-impulse columns — `pure/RcsAccounting.cs` is still deleted — **DOING** — [TIER 2: a named §2 block with no source, logged rather than faked]
 Logged by **BB1**, 2026-09-04 (C1.1 — noticed while building, deliberately not built).
 **The gap.** `docs/BLACKBOX_RESEARCH.md` §2.4 specifies `acc_att_imp` / `acc_trans_imp` / `acc_both_imp` —
 DELIVERED RCS impulse (N·s) by category, which is the basis for **per-category propellant attribution**
