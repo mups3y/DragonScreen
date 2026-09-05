@@ -16049,7 +16049,7 @@ caught. Recorded because a mutation table is only worth what its weakest row is.
 
 ⛔ No `install`, no glass, no `git push`. §14.4(a) untouched — a list of what is wrong commands nothing.
 
-### S137b [S] A cabin FIRE raises no severity anywhere in the build — **TODO** — [logged by [[S137]] per C1.1, 2026-09-06; TIER 2: a modelled emergency that no alarm channel can see]
+### S137b [S] A cabin FIRE raises no severity anywhere in the build — **DOING** — [logged by [[S137]] per C1.1, 2026-09-06; TIER 2: a modelled emergency that no alarm channel can see]
 - **The finding, measured in source.** `VehicleSystems` models three discrete emergencies —
   `SystemsState.Fire` (`FireIntensity > 0.02`), `.Leaking` (`LeakRate > 0.001`) and six `StringState`s
   that can read `Tripped` — and `SystemsPidPage` draws all of them. ⛔ **`Alarms` reads none of them.**
