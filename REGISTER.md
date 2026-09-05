@@ -13101,7 +13101,7 @@ True"* for two panels of identical shape). `build.py preview` green, 108 pages; 
 `page2_nav.png`, `page2_nav_planet.png`, `ui_navorbitplot.png`, `ui_cover_cam_map.png` inspected.
 `docs/QC_FINDINGS.md` untouched (QC's file). No `install`, no glass. No flight control wired (§14.4(a)).
 
-### S120 [O] `ChromeBar` is RefPanelW-literal on every legacy page — the bar halved physically when the panel did — **TODO** — [logged by [[S119]] (job 3 of the 2026-09-06 batch), TIER 2, R-02 family]
+### S120 [O] `ChromeBar` is RefPanelW-literal on every legacy page — the bar halved physically when the panel did — **DOING** — [logged by [[S119]] (job 3 of the 2026-09-06 batch), TIER 2, R-02 family]
 - **The finding.** `plugin/src/pure/ChromeBar.cs` is written entirely in panel pixels measured at 1280:
   `Height = 64f`, `Pitch = 112f`, `Pad = 24f`, `Hairline = 2f`, `SelectBar = 3f`, `linkY = top + 22f`, and
   its page labels draw at a raw `Typography.Caption`. `TopY(h) = h - Height` subtracts a device-pixel
