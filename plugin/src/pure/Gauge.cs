@@ -41,7 +41,7 @@ namespace DragonScreen
             bool hasUnit = !string.IsNullOrEmpty(unit);
 
             float vy = hasUnit ? (cy - vs * 0.95f) : (cy - vs * 0.55f);
-            dl.Text(valueText ?? "-", cx, vy, vs, TextAlign.Centre, DragonPalette.Text0);
+            dl.Text(valueText ?? Dashes.None, cx, vy, vs, TextAlign.Centre, DragonPalette.Text0);
             if (hasUnit)
                 dl.Text(unit, cx, vy + vs * 1.05f, Typography.Caption, TextAlign.Centre,
                         DragonPalette.Text5);
@@ -67,7 +67,7 @@ namespace DragonScreen
                                string caption, string value, string unit, double value01, Rgba fill)
         {
             dl.Text(caption, x, y, Typography.Caption, TextAlign.Left, DragonPalette.Text6);
-            dl.Text(value ?? "-", x + width, y, Typography.Body, TextAlign.Right,
+            dl.Text(value ?? Dashes.None, x + width, y, Typography.Body, TextAlign.Right,
                     DragonPalette.Text0);
             if (!string.IsNullOrEmpty(unit))
                 dl.Text(unit, x + width - 56f, y + 2f, Typography.Caption, TextAlign.Right,

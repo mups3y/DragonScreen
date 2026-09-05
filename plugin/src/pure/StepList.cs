@@ -227,7 +227,7 @@ namespace DragonScreen
         /// </summary>
         public static string AbortMode(StepInputs s)
         {
-            if (!s.Valid) return "-";
+            if (!s.Valid) return Dashes.None;
             if (!s.EscapeArmed) return "DISARMED";
 
             if (s.OnPad || s.Clamped) return "PAD ABORT";

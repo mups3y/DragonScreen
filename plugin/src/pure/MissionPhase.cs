@@ -101,7 +101,7 @@ namespace DragonScreen
                 case MissionPhase.Mains:      return "MAINS";
                 case MissionPhase.Splashdown: return "SPLASHDOWN";
                 case MissionPhase.Landed:     return "LANDED";
-                default:                      return "-";
+                default:                      return Dashes.None;
             }
         }
 

@@ -24,7 +24,7 @@ namespace DragonScreen
             dl.Rect(x, y, w, h, DragonPalette.Panel);
             dl.Box(x, y, w, h, 2f, colour);
             // Centred on cap height, matching Control.Button.
-            dl.Text(word ?? "-", x + w * 0.5f, y + (h - Typography.Caption) * 0.5f - 1f,
+            dl.Text(word ?? Dashes.None, x + w * 0.5f, y + (h - Typography.Caption) * 0.5f - 1f,
                     Typography.Caption, TextAlign.Centre, colour);
         }
 
@@ -33,7 +33,7 @@ namespace DragonScreen
         {
             if (dl == null) return;
             dl.Text(caption, x, y, Typography.Caption, TextAlign.Left, DragonPalette.Text6);
-            dl.Text(word ?? "-", x, y + Typography.Caption + 4f, Typography.Value, TextAlign.Left, colour);
+            dl.Text(word ?? Dashes.None, x, y + Typography.Caption + 4f, Typography.Value, TextAlign.Left, colour);
         }
 
         /// <summary>

@@ -125,9 +125,9 @@ namespace DragonScreen
                 dl.Text(label, X(rowLabelX), Y(ry), Z(26), TextAlign.Left, DragonPalette.Text6);
                 dl.Text(value, X(rowX0), Y(ry), Z(26), TextAlign.Right, DragonPalette.Text2);
             }
-            Row("G-FORCE", s.Valid && s.GForceText != null ? s.GForceText + " g" : "-", rowY);
-            Row("RATE", s.Valid && s.HasTarget ? s.RateText : "-", rowY + 44f);
-            Row("RANGE", s.Valid && s.HasTarget ? s.RangeText : "-", rowY + 88f);
+            Row("G-FORCE", s.Valid && s.GForceText != null ? s.GForceText + " g" : Dashes.None, rowY);
+            Row("RATE", s.Valid && s.HasTarget ? s.RateText : Dashes.None, rowY + 44f);
+            Row("RANGE", s.Valid && s.HasTarget ? s.RangeText : Dashes.None, rowY + 88f);
 
             BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
         }

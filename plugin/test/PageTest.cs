@@ -58,6 +58,7 @@ public static class PageTest
         ChutePageTracksItsGates();    // S156 / MC-02: which chute gate is next
         EntryPageTracksTheDescent();  // S157 / H31: the Entry page reads the vehicle
         DockingPageHasACamera();      // S141 / H25 / DK-03: a camera behind the docking rings
+        DashesAreDimAndSingular();    // S148 / H45: a dash is dim, and there is one glyph
         Conic();
         OpenTrajectory();
         OrbitViewport();   // S43: the ORBIT plot's zoom + pan
@@ -737,6 +738,49 @@ public static class PageTest
         // rather than faking is that a model can fail convincingly and a constant cannot.
         Check("unpowered raises a condition", Worst2(Unpowered()) >= Severity.Caution,
               "got " + Worst2(Unpowered()));
+    }
+
+    // ---- S148 / S49 H45: A DASH IS DIMMED, AND THERE IS ONE GLYPH -----------------------------
+    // Two halves. (1) A dash drawn in White reads with the weight of a live reading, so a page of
+    // dashes looks like a page of data - the third form of the "can't tell dead from live" failure S22
+    // was opened for. (2) The tree had two dash glyphs, and the split was not the two stray widgets
+    // H45 guessed: 48 em-dash sites in the shipped Figma family against 25 ASCII ones in the legacy
+    // family that FigmaMode makes unreachable.
+    static void DashesAreDimAndSingular()
+    {
+        // ⛔ ONE GLYPH, and it is the SHIPPED one. Asserted against the constant rather than a literal,
+        // so a future edit to Dashes.None moves this check with it instead of leaving it stale.
+        Check("S148 the no-value glyph is the em dash", Dashes.None == "—", "got '" + Dashes.None + "'");
+
+        // A dead feed dashes every gauge value AND dims it. Before S148 the value drew White whatever
+        // it said, so a fully-dashed page looked exactly as authoritative as a live one.
+        PageState dead = new PageState(); dead.Valid = false;
+        DisplayList d = new DisplayList(VehicleOverviewPage.Commands + 64);
+        VehicleOverviewPage.Build(d, 2560, 1406, dead);
+        int dashes = 0, bright = 0;
+        for (int i = 0; i < d.Count; i++)
+        {
+            DrawCmd t = d.At(i);
+            if (t.Kind != DrawKind.Text || t.Str != Dashes.None) continue;
+            dashes++;
+            if (Same(t.Colour, DragonPalette.White)) bright++;
+        }
+        Check("S148 a dead feed dashes the Overview's values", dashes > 0, "found " + dashes);
+        Check("S148 ...and NOT ONE of them is drawn at live weight", bright == 0,
+              bright + " of " + dashes + " dashes still draw in White");
+
+        // ...while a live feed still draws its values bright - the fix must not dim real readings.
+        PageState live = new PageState(); live.Valid = true;
+        live.Ppo2Text = "3.00"; live.CabinTempText = "21.8"; live.PressText = "14.70"; live.Co2Text = "1.00";
+        DisplayList l = new DisplayList(VehicleOverviewPage.Commands + 64);
+        VehicleOverviewPage.Build(l, 2560, 1406, live);
+        int brightLive = 0;
+        for (int i = 0; i < l.Count; i++)
+        {
+            DrawCmd t = l.At(i);
+            if (t.Kind == DrawKind.Text && t.Str == "14.70" && Same(t.Colour, DragonPalette.White)) brightLive++;
+        }
+        Check("S148 a LIVE value is still drawn at full weight", brightLive > 0, "found " + brightLive);
     }
 
     // ---- S141 / S49 H25 / QC DK-03: A CAMERA BEHIND THE DOCKING RINGS --------------------------

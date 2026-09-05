@@ -126,17 +126,17 @@ namespace DragonScreen
 
             float metX = w - Pad * sc;
             dl.Text("MET", metX, capY, Typography.Caption * sc, TextAlign.Right, DragonPalette.Text6);
-            dl.Text(s.Met ?? "-", metX, valY, Typography.Body * sc, TextAlign.Right, DragonPalette.Text0);
+            dl.Text(s.Met ?? Dashes.None, metX, valY, Typography.Body * sc, TextAlign.Right, DragonPalette.Text0);
 
             float linkX = w - (Pad + 260f) * sc;
             Rgba linkColour = s.LinkUp ? DragonPalette.Text0 : DragonPalette.Alarm;
             dl.Text(s.LinkName ?? "LINK", linkX, capY, Typography.Caption * sc, TextAlign.Right,
                     s.LinkUp ? DragonPalette.Text6 : DragonPalette.Alarm);
-            dl.Text(s.LinkTimer ?? "-", linkX, valY, Typography.Body * sc, TextAlign.Right, linkColour);
+            dl.Text(s.LinkTimer ?? Dashes.None, linkX, valY, Typography.Body * sc, TextAlign.Right, linkColour);
 
             float stateX = w - (Pad + 520f) * sc;
             dl.Text("STATE", stateX, capY, Typography.Caption * sc, TextAlign.Right, DragonPalette.Text6);
-            dl.Text(s.VehicleState ?? "-", stateX, valY, Typography.Body * sc, TextAlign.Right,
+            dl.Text(s.VehicleState ?? Dashes.None, stateX, valY, Typography.Body * sc, TextAlign.Right,
                     DragonPalette.Text0);
         }
     }

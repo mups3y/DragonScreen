@@ -33,7 +33,7 @@ namespace DragonScreen
             dl.Image(ImageId.HudDarken, cx - vig * 0.5f, cy - vig * 0.5f, vig, vig, DragonPalette.White);
 
             // ---- header: phase (left) · target (centre) · GNC AUTO/MANUAL (right, rule C6) ----
-            dl.Text(s.Valid ? (string.IsNullOrEmpty(s.Phase) ? "PROX OPS" : s.Phase) : "-",
+            dl.Text(s.Valid ? (string.IsNullOrEmpty(s.Phase) ? "PROX OPS" : s.Phase) : Dashes.None,
                     24f, 16f, Typography.Body, TextAlign.Left, DragonPalette.Text5);
             dl.Text(s.TargetName ?? "NO TARGET", cx, 14f, Typography.Body, TextAlign.Centre, DragonPalette.Text1);
             StatusIndicator.Lamp(dl, w - 150f, 10f, "GNC",
@@ -83,7 +83,7 @@ namespace DragonScreen
             dl.Rect(x, y, 200f, 46f, DragonPalette.Panel);
             dl.Box(x, y, 200f, 46f, 2f, DragonPalette.Hairline);
             dl.Text(caption, x + 14f, y + 7f, Typography.Dense, TextAlign.Left, DragonPalette.Text6);
-            dl.Text(value ?? "-", x + 14f, y + 22f, Typography.Caption, TextAlign.Left, DragonPalette.Text1);
+            dl.Text(value ?? Dashes.None, x + 14f, y + 22f, Typography.Caption, TextAlign.Left, DragonPalette.Text1);
         }
     }
 }

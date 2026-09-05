@@ -290,12 +290,12 @@ namespace DragonScreen
             Seats4(dl, w, h, s, "CREW - TOUCH A SEAT TO LOOK FROM IT", bx, by);
 
             float ry = by + 42f + BtnH + 26f + SeatH + 54f;
-            Row(dl, bx, ry, 360f, "CABIN TEMP", s.Valid ? s.CabinTempText : "-", "deg C");
-            Row(dl, bx, ry + 34f, 360f, "CABIN PRESSURE", s.Valid ? s.PressText : "-", "psia");
-            Row(dl, bx, ry + 68f, 360f, "PPO2", s.Valid ? s.Ppo2Text : "-", "psia");
-            Row(dl, bx, ry + 102f, 360f, "CO2", s.Valid ? s.Co2Text : "-", "mmHg");
-            Row(dl, bx, ry + 136f, 360f, "LOOP A", s.Valid ? s.LoopAText : "-", "deg C");
-            Row(dl, bx, ry + 170f, 360f, "LOOP B", s.Valid ? s.LoopBText : "-", "deg C");
+            Row(dl, bx, ry, 360f, "CABIN TEMP", s.Valid ? s.CabinTempText : Dashes.None, "deg C");
+            Row(dl, bx, ry + 34f, 360f, "CABIN PRESSURE", s.Valid ? s.PressText : Dashes.None, "psia");
+            Row(dl, bx, ry + 68f, 360f, "PPO2", s.Valid ? s.Ppo2Text : Dashes.None, "psia");
+            Row(dl, bx, ry + 102f, 360f, "CO2", s.Valid ? s.Co2Text : Dashes.None, "mmHg");
+            Row(dl, bx, ry + 136f, 360f, "LOOP A", s.Valid ? s.LoopAText : Dashes.None, "deg C");
+            Row(dl, bx, ry + 170f, 360f, "LOOP B", s.Valid ? s.LoopBText : Dashes.None, "deg C");
         }
 
         /// <summary>
@@ -330,9 +330,9 @@ namespace DragonScreen
             // cannot disagree with the chrome bar. Both are real. dB, AUX, MAIN and Vox are not, and
             // are not drawn.
             Severity sev = s.Valid ? Alarms.VehicleSeverity(s) : Severity.Nominal;
-            Row(dl, bx, ry, 360f, "INTERCOM", s.Valid ? s.CrewText : "-", "crew");
+            Row(dl, bx, ry, 360f, "INTERCOM", s.Valid ? s.CrewText : Dashes.None, "crew");
             dl.Text("ALERTS", bx, ry + 34f, Typography.Caption, TextAlign.Left, DragonPalette.Text6);
-            dl.Text(s.Valid ? Alarms.Word(sev) : "-", bx + 360f, ry + 34f, Typography.Body,
+            dl.Text(s.Valid ? Alarms.Word(sev) : Dashes.None, bx + 360f, ry + 34f, Typography.Body,
                     TextAlign.Right, s.Valid ? Alarms.Colour(sev) : DragonPalette.Text7);
             dl.Rect(bx, ry + 62f, 360f, 1f, DragonPalette.Inset2);
 
@@ -373,7 +373,7 @@ namespace DragonScreen
             bool feedExists = cams.Length > 0 || s.CameraHeldByDocking;
             dl.Text("RESOLUTION", vx, vy + vh + 10f, Typography.Caption, TextAlign.Left,
                     DragonPalette.Text6);
-            dl.Text(feedExists ? (s.CameraResText ?? "-") : "-", vx + vw, vy + vh + 10f,
+            dl.Text(feedExists ? (s.CameraResText ?? Dashes.None) : Dashes.None, vx + vw, vy + vh + 10f,
                     Typography.Caption, TextAlign.Right,
                     feedExists ? DragonPalette.Text0 : DragonPalette.Text6);
 
@@ -468,7 +468,7 @@ namespace DragonScreen
                     dl.Image(ImageId.Seat, ix, iy, iw, ih, tint);
                 }
 
-                string label = !exists ? "-" : occupied ? s.SeatNames[i] : "EMPTY";
+                string label = !exists ? Dashes.None : occupied ? s.SeatNames[i] : "EMPTY";
                 dl.Text(label, sx + sw * 0.5f, sy + SeatH + 2f, Typography.Dense, TextAlign.Centre,
                         occupied ? DragonPalette.Text1 : DragonPalette.Text7);
             }

@@ -1103,27 +1103,27 @@ namespace DragonScreen
 
             if (view.Mode == NavMode.Map)
             {
-                Row(dl, x, y + Pitch * 0, "LATITUDE", s.Valid ? s.LatText : "-", sc);
-                Row(dl, x, y + Pitch * 1, "LONGITUDE", s.Valid ? s.LonText : "-", sc);
-                Row(dl, x, y + Pitch * 2, "ALTITUDE", s.Valid ? s.Altitude : "-", sc);
-                Row(dl, x, y + Pitch * 3, "INCLINATION", s.Valid ? s.InclinationText : "-", sc);
-                Row(dl, x, y + Pitch * 4, "PERIOD", s.Valid ? s.PeriodText : "-", sc);
+                Row(dl, x, y + Pitch * 0, "LATITUDE", s.Valid ? s.LatText : Dashes.None, sc);
+                Row(dl, x, y + Pitch * 1, "LONGITUDE", s.Valid ? s.LonText : Dashes.None, sc);
+                Row(dl, x, y + Pitch * 2, "ALTITUDE", s.Valid ? s.Altitude : Dashes.None, sc);
+                Row(dl, x, y + Pitch * 3, "INCLINATION", s.Valid ? s.InclinationText : Dashes.None, sc);
+                Row(dl, x, y + Pitch * 4, "PERIOD", s.Valid ? s.PeriodText : Dashes.None, sc);
                 Row(dl, x, y + Pitch * 5, "TARGET LAT",
-                    (s.Valid && s.HasTargetGround) ? s.TargetLatText : "-", sc);
+                    (s.Valid && s.HasTargetGround) ? s.TargetLatText : Dashes.None, sc);
                 Row(dl, x, y + Pitch * 6, "TARGET LON",
-                    (s.Valid && s.HasTargetGround) ? s.TargetLonText : "-", sc);
+                    (s.Valid && s.HasTargetGround) ? s.TargetLonText : Dashes.None, sc);
             }
             else
             {
                 Row(dl, x, y + Pitch * 0, "APOGEE",
-                    (s.Valid && s.ApogeeShown) ? s.Apoapsis : "-", sc);
+                    (s.Valid && s.ApogeeShown) ? s.Apoapsis : Dashes.None, sc);
                 Row(dl, x, y + Pitch * 1, "PERIGEE",
-                    (s.Valid && s.PerigeeShown) ? s.Periapsis : "-", sc);
-                Row(dl, x, y + Pitch * 2, "ALTITUDE", s.Valid ? s.Altitude : "-", sc);
-                Row(dl, x, y + Pitch * 3, "PERIOD", s.Valid ? s.PeriodText : "-", sc);
-                Row(dl, x, y + Pitch * 4, "TIME TO AP", s.Valid ? s.TimeToApText : "-", sc);
-                Row(dl, x, y + Pitch * 5, "TIME TO PE", s.Valid ? s.TimeToPeText : "-", sc);
-                Row(dl, x, y + Pitch * 6, "INCLINATION", s.Valid ? s.InclinationText : "-", sc);
+                    (s.Valid && s.PerigeeShown) ? s.Periapsis : Dashes.None, sc);
+                Row(dl, x, y + Pitch * 2, "ALTITUDE", s.Valid ? s.Altitude : Dashes.None, sc);
+                Row(dl, x, y + Pitch * 3, "PERIOD", s.Valid ? s.PeriodText : Dashes.None, sc);
+                Row(dl, x, y + Pitch * 4, "TIME TO AP", s.Valid ? s.TimeToApText : Dashes.None, sc);
+                Row(dl, x, y + Pitch * 5, "TIME TO PE", s.Valid ? s.TimeToPeText : Dashes.None, sc);
+                Row(dl, x, y + Pitch * 6, "INCLINATION", s.Valid ? s.InclinationText : Dashes.None, sc);
             }
         }
 

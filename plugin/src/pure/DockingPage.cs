@@ -78,7 +78,7 @@ namespace DragonScreen
             dl.Image(ImageId.HudDarken, cx - vig * 0.5f, cy - vig * 0.5f, vig, vig, DragonPalette.White);
 
             // ---- HEADER: phase (left) · target (centre) · GNC AUTO/MANUAL (right, rule C6) ----
-            dl.Text(s.Valid ? (string.IsNullOrEmpty(s.Phase) ? "PROX OPS" : s.Phase) : "-",
+            dl.Text(s.Valid ? (string.IsNullOrEmpty(s.Phase) ? "PROX OPS" : s.Phase) : Dashes.None,
                     24f, 16f, Typography.Body, TextAlign.Left, DragonPalette.Text5);
             dl.Text(s.HasTarget ? (s.TargetName ?? "TARGET") : "NO TARGET",
                     cx, 14f, Typography.Body, TextAlign.Centre,

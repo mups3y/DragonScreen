@@ -15168,7 +15168,7 @@ commands anything** — the thirteen inert docking controls are untouched (QC `D
 - **DONE when:** the three live values draw from state over erased boxes, the comm block is sourced or
   marked, and previews across several pages show it.
 
-### S148 [S] A dashed value is drawn in the same weight as a live one — **DOING** — [H45; TIER 3: cosmetic but on-theme]
+### S148 [S] A dashed value is drawn in the same weight as a live one — **DONE 2026-09-06** — [⚠ the glyph half was **25 sites, not two widgets** — and all 25 are in code `FigmaMode` makes unreachable] — [H45; TIER 3]
 - **The finding.** On the vehicle gauges and detail rows a dash draws in `White`, the same as a live value,
   while the CONSUMABLES table correctly dims its dash. **This is the "can't tell dead from live" failure
   [[S22]] was opened for, in a third form.**
@@ -15176,6 +15176,54 @@ commands anything** — the thirteen inert docking controls are untouched (QC `D
   vehicle family and ASCII `-` in the unused `Gauge`/`StatusIndicator` widgets.
 - **DONE when:** a dash is dimmed everywhere a value can be dashed, one glyph is used, and a preview shows a
   mixed live/dashed row.
+
+#### ✅ DONE 2026-09-06 — both halves, and the second was five times bigger than H45 thought
+
+**HALF ONE — THE WEIGHT.** A new `ValueTint(v)` on both vehicle pages returns `Dim` for a dash and
+`White` for a reading, and is used at the gauge value (`Gauge`'s `C(val, …)`) and the subsystem detail
+rows (`R(d.RVal[i], …)`) — the three places H45 names.
+⭐ **It is not a new convention:** the CONSUMABLES table on the same page already did exactly this
+(`string.IsNullOrEmpty(qty) ? Dim : White`), so this is that page's own idiom applied to the gauges beside
+it. **Measured on the render:** `ui_vehicle_nofeed.png`'s gauges now show the em dash at the same weight as
+their label and unit instead of at full white — you can tell dead from live at a glance, which is the whole
+of the finding.
+
+**HALF TWO — THE GLYPH, AND H45'S DESCRIPTION OF IT WAS WRONG.** It says *"two dash glyphs — `—` in the
+vehicle family, ASCII `-` in the **unused `Gauge`/`StatusIndicator` widgets**"*. **Counted: 48 em-dash sites
+against 25 ASCII ones**, and the split is not two stray widgets — it is **the whole LEGACY page family**
+(`Pages` 17, `NavPage` 14, `SettingsPage` 7, `ChromeBar` 3, `NavOrbitPlotPage` 3, plus
+`Gauge`/`StatusIndicator`/`DockingPageCentral`/`Readouts`/`AscentPage`/`DockingPage`/`MissionPhase`/
+`StepList`) against the whole Figma-era family. All 25 now go through a new `pure/Dashes.cs` — a named
+constant, because the finding is precisely that two literals drifted apart.
+
+⚠ **AND THE SWEEP IS COSMETICALLY INERT, WHICH IS WORTH SAYING PLAINLY RATHER THAN LETTING IT LOOK LIKE A
+FIX.** `ScreenPainter.cs:1201-1206` draws `Pages` and `ChromeBar` **in the `else` branch only**, and
+`FigmaMode` is a `const true` — so **every one of the 25 sites is in code that never runs on the glass.**
+No shipped page's PNG changed. This is hygiene against the day that branch is revived ([[S121]], [[S134]]),
+not a visible fix.
+
+⛔ **EIGHT ASCII DASHES WERE LEFT, DELIBERATELY, AND EACH WAS CLASSIFIED BEFORE BEING LEFT.**
+Three are **minus-button LABELS** (`CoverPage:647`, `NavPage:1167`, `SettingsPage:393` — a control's
+caption, not a missing value); one is `PageSelection.Unset`, a **comparison sentinel** that is never drawn;
+one is `Pages.Short`'s **guard** `note == "-"`, a defensive read of external text with no writer in the
+tree. **Changing any of those would be a different, worse edit.** The remaining three *were* display
+dashes (`MissionPhase`'s phase-name default, `StepList.AbortMode`, `Pages`' empty step list) and were
+swept, each checked first for a comparison partner.
+
+⚠ **AND ONE THING I GOT WRONG MID-TASK, CAUGHT BY MY OWN CHECK.** The first sweep was a blind
+search-and-replace and it rewrote `?? "-"` **inside a comment in `SettingsPage.cs` that QUOTES the old
+code** — the comment-loss check flagged it, and it was restored verbatim. The second pass skips comment
+lines entirely. **Final: 0 comment prose lines lost.**
+
+**MUTATION-PROVEN.**
+| mutation | result |
+|---|---|
+| **AG** — `ValueTint` always returns `White` | FAILS: *"NOT ONE of them is drawn at live weight — 8 of 36 dashes still draw in White"* |
+| **AH** — `Dashes.None` back to the ASCII glyph | **2 FAIL**, including the dead-feed dash count dropping to **0** — so the test is reading the real glyph, not a copy of it |
+
+**Verified (C1.3).** `python plugin/build.py test` **green — ALL SUITES PASSED**, page suite
+**1042 → 1046 checks**. `preview` re-rendered (**109 pages**) and the dead-feed gauge row inspected at 1:1.
+**C1.16/G12: 0 comment prose lines lost.** No `install`, no glass, no `git push`.
 
 ### S149 [S] One cabin pressure, three names and three colours — **TODO** — [QC `MP-02` + `MP-01`'s open half; TIER 3: C7.1's own failure mode]
 - **The finding.** The same `14.72 psia` is called **PRESSURE** here and **CABIN PRESSURE** / **CABIN PRESS**

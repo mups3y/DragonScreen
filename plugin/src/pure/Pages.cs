@@ -706,9 +706,9 @@ namespace DragonScreen
 
             // Apogee and perigee are NOT governed by the same test - see OrbitReadout. Both pages
             // call it; neither decides for itself.
-            string apo = s.ApogeeShown ? s.Apoapsis : "-";
-            string per = s.PerigeeShown ? s.Periapsis : "-";
-            string spl = s.SplashdownShown ? s.SplashdownText : "-";
+            string apo = s.ApogeeShown ? s.Apoapsis : Dashes.None;
+            string per = s.PerigeeShown ? s.Periapsis : Dashes.None;
+            string spl = s.SplashdownShown ? s.SplashdownText : Dashes.None;
 
             string[] caps = { "ACTIVE PHASE", "SPLASHDOWN TIME", velCap, "ALTITUDE",
                               "APOGEE", "PERIGEE", "INCLINATION" };
@@ -722,7 +722,7 @@ namespace DragonScreen
             {
                 float x = pad + pitch * i;
                 dl.Text(caps[i], x, y, Typography.Caption, TextAlign.Left, DragonPalette.Text6);
-                dl.Text(s.Valid ? (vals[i] ?? "-") : "-", x, y + 24f,
+                dl.Text(s.Valid ? (vals[i] ?? Dashes.None) : Dashes.None, x, y + 24f,
                         Typography.Body, TextAlign.Left,
                         s.Valid ? DragonPalette.Text0 : DragonPalette.Text7);
             }
@@ -756,18 +756,18 @@ namespace DragonScreen
             // alarm goes to the chrome bar through Alarms.Mask. See DragonPalette's gauge block.
             Gauge.Labelled(dl, first, cy, radius, thickness,
                            s.Valid ? s.Propellant01 : 0.0,
-                           s.Valid ? s.PropellantText : "-", "%",
+                           s.Valid ? s.PropellantText : Dashes.None, "%",
                            s.PropellantCaption ?? "PROPELLANT",
                            DragonPalette.GaugeTrack, DragonPalette.GaugePropellant);
 
             Gauge.Labelled(dl, first + step, cy, radius, thickness,
                            s.Valid ? s.Power01 : 0.0,
-                           s.Valid ? s.PowerText : "-", "%", "POWER",
+                           s.Valid ? s.PowerText : Dashes.None, "%", "POWER",
                            DragonPalette.GaugeTrack, DragonPalette.GaugePower);
 
             Gauge.Labelled(dl, first + step * 2f, cy, radius, thickness,
                            s.Valid ? s.GForce01 : 0.0,
-                           s.Valid ? s.GForceText : "-", "g", "G-FORCE",
+                           s.Valid ? s.GForceText : Dashes.None, "g", "G-FORCE",
                            DragonPalette.GaugeTrack, DragonPalette.GaugeGForce);
 
             // ---- THE PHASE SIDEBAR ----
@@ -780,7 +780,7 @@ namespace DragonScreen
 
             dl.Text("PHASE", sideX, bodyTop + 28f, Typography.Caption, TextAlign.Left,
                     DragonPalette.Text6);
-            dl.Text(s.Valid ? (s.Phase ?? "-") : "-", sideX, bodyTop + 54f,
+            dl.Text(s.Valid ? (s.Phase ?? Dashes.None) : Dashes.None, sideX, bodyTop + 54f,
                     Typography.Value, TextAlign.Left,
                     s.Valid ? DragonPalette.Accent : DragonPalette.Text7);
 
@@ -789,7 +789,7 @@ namespace DragonScreen
             // anywhere: the eight-mode structure is the real vehicle's, the boundaries are ours.
             dl.Text("ABORT MODE", sideX + sw * 0.55f, bodyTop + 28f, Typography.Caption,
                     TextAlign.Left, DragonPalette.Text6);
-            string am = s.Valid ? StepList.AbortMode(s.Steps) : "-";
+            string am = s.Valid ? StepList.AbortMode(s.Steps) : Dashes.None;
             dl.Text(am, sideX + sw * 0.55f, bodyTop + 56f, Typography.Caption, TextAlign.Left,
                     (am == "DISARMED") ? DragonPalette.Caution : DragonPalette.Text2);
 
@@ -799,12 +799,12 @@ namespace DragonScreen
             // else on the page - which velocity is meaningful, what an altitude means, where the
             // perigee floor sits - is relative to the body being orbited.
             float sy = bodyTop + 110f;
-            SideRow(dl, sideX, sy, sw, "BODY", s.Valid ? s.Body : "-");
+            SideRow(dl, sideX, sy, sw, "BODY", s.Valid ? s.Body : Dashes.None);
             SideRow(dl, sideX, sy + 42f, sw, "TIME TO APOGEE",
-                    (s.Valid && s.ApogeeShown) ? s.TimeToApText : "-");
+                    (s.Valid && s.ApogeeShown) ? s.TimeToApText : Dashes.None);
             SideRow(dl, sideX, sy + 84f, sw, "TIME TO PERIGEE",
-                    (s.Valid && s.PerigeeShown) ? s.TimeToPeText : "-");
-            SideRow(dl, sideX, sy + 126f, sw, "PERIOD", s.Valid ? s.PeriodText : "-");
+                    (s.Valid && s.PerigeeShown) ? s.TimeToPeText : Dashes.None);
+            SideRow(dl, sideX, sy + 126f, sw, "PERIOD", s.Valid ? s.PeriodText : Dashes.None);
 
             StepColumn(dl, s, sideX, sy + 182f, sw, w, h);
 
@@ -1090,7 +1090,7 @@ namespace DragonScreen
             int n = s.Valid ? StepList.Build(s.Steps, stepScratch) : 0;
             if (n == 0)
             {
-                dl.Text("-", x, y, Typography.Caption, TextAlign.Left, DragonPalette.Text7);
+                dl.Text(Dashes.None, x, y, Typography.Caption, TextAlign.Left, DragonPalette.Text7);
                 return;
             }
 
@@ -1128,7 +1128,7 @@ namespace DragonScreen
                                     string caption, string value)
         {
             dl.Text(caption, x, y, Typography.Caption, TextAlign.Left, DragonPalette.Text6);
-            dl.Text(value ?? "-", x + w, y, Typography.Body, TextAlign.Right, DragonPalette.Text0);
+            dl.Text(value ?? Dashes.None, x + w, y, Typography.Body, TextAlign.Right, DragonPalette.Text0);
             dl.Rect(x, y + 28f, w, 1f, DragonPalette.Inset1);
         }
 
@@ -1241,25 +1241,25 @@ namespace DragonScreen
             string velCap, velVal;
             double velMps;
             OrbitReadout.Velocity(s, out velCap, out velVal, out velMps);
-            Gauge.Bar(dl, rx, ry, barW, velCap, s.Valid ? velVal : "-", null,
+            Gauge.Bar(dl, rx, ry, barW, velCap, s.Valid ? velVal : Dashes.None, null,
                       s.Valid ? BarScale.Velocity(velMps, s.CircularSpeedMps) : -1.0,
                       DragonPalette.BarFill);
-            Gauge.Bar(dl, rx, ry + pitch, barW, "ALTITUDE", s.Valid ? s.Altitude : "-", null,
+            Gauge.Bar(dl, rx, ry + pitch, barW, "ALTITUDE", s.Valid ? s.Altitude : Dashes.None, null,
                       s.Valid ? BarScale.Altitude(s.AltitudeM, s.AtmosphereDepthM, s.BodyRadiusM)
                               : -1.0,
                       DragonPalette.BarFill);
             Gauge.Bar(dl, rx, ry + pitch * 2f, barW, "APOGEE",
-                      (s.Valid && s.ApogeeShown) ? s.Apoapsis : "-", null,
+                      (s.Valid && s.ApogeeShown) ? s.Apoapsis : Dashes.None, null,
                       (s.Valid && s.ApogeeShown)
                           ? BarScale.Altitude(s.ApogeeM, s.AtmosphereDepthM, s.BodyRadiusM) : -1.0,
                       DragonPalette.BarFill);
             Gauge.Bar(dl, rx, ry + pitch * 3f, barW, "PERIGEE",
-                      (s.Valid && s.PerigeeShown) ? s.Periapsis : "-", null,
+                      (s.Valid && s.PerigeeShown) ? s.Periapsis : Dashes.None, null,
                       (s.Valid && s.PerigeeShown)
                           ? BarScale.Altitude(s.PerigeeM, s.AtmosphereDepthM, s.BodyRadiusM) : -1.0,
                       DragonPalette.BarFill);
             Gauge.Bar(dl, rx, ry + pitch * 4f, barW, "INCLINATION",
-                      s.Valid ? s.InclinationText : "-", null,
+                      s.Valid ? s.InclinationText : Dashes.None, null,
                       s.Valid ? BarScale.Inclination(s.InclinationDeg) : -1.0,
                       DragonPalette.BarFill);
             // "RANGE TO ISS" in the reference. Ours names the actual target, because under stock the
@@ -1267,7 +1267,7 @@ namespace DragonScreen
             // caption would be accurate to the mock and wrong on the glass.
             Gauge.Bar(dl, rx, ry + pitch * 5f, barW,
                       s.HasTarget ? "RANGE TO TARGET" : "RANGE",
-                      (s.Valid && s.HasTarget) ? s.RangeText : "-", null,
+                      (s.Valid && s.HasTarget) ? s.RangeText : Dashes.None, null,
                       (s.Valid && s.HasTarget) ? BarScale.Range(s.RangeM) : -1.0,
                       DragonPalette.BarFill);
 
@@ -1280,7 +1280,7 @@ namespace DragonScreen
                                  PageState s, double value01, string text, string unit,
                                  string caption, Rgba fill)
         {
-            Gauge.Labelled(dl, cx, cy, r, th, s.Valid ? value01 : 0.0, s.Valid ? text : "-",
+            Gauge.Labelled(dl, cx, cy, r, th, s.Valid ? value01 : 0.0, s.Valid ? text : Dashes.None,
                            unit, caption, DragonPalette.GaugeTrack, fill);
         }
 
@@ -1432,10 +1432,10 @@ namespace DragonScreen
             // approach is a condition, not a reading.
             float ry = cy + ringH * 0.40f;
             dl.Text("RANGE", cx - 150f, ry, Typography.Caption, TextAlign.Centre, DragonPalette.Text6);
-            dl.Text(s.RangeText ?? "-", cx - 150f, ry + 22f, Typography.Value, TextAlign.Centre,
+            dl.Text(s.RangeText ?? Dashes.None, cx - 150f, ry + 22f, Typography.Value, TextAlign.Centre,
                     DragonPalette.Go);
             dl.Text("RATE", cx + 150f, ry, Typography.Caption, TextAlign.Centre, DragonPalette.Text6);
-            dl.Text(s.RateText ?? "-", cx + 150f, ry + 22f, Typography.Value, TextAlign.Centre,
+            dl.Text(s.RateText ?? Dashes.None, cx + 150f, ry + 22f, Typography.Value, TextAlign.Centre,
                     s.ClosingFast ? DragonPalette.Alarm
                                   : s.Closing ? DragonPalette.Go : DragonPalette.Caution);
 
@@ -1455,20 +1455,20 @@ namespace DragonScreen
             AxisR(dl, ax, ay + 80f, "ROLL",  s.RollText);
 
             dl.Text("ALIGN", ax, ay + 128f, Typography.Caption, TextAlign.Right, DragonPalette.Text6);
-            dl.Text(s.AlignText ?? "-", ax, ay + 150f, Typography.Body, TextAlign.Right,
+            dl.Text(s.AlignText ?? Dashes.None, ax, ay + 150f, Typography.Body, TextAlign.Right,
                     alignColour);
         }
 
         private static void Axis(DisplayList dl, float x, float y, string name, string value)
         {
             dl.Text(name, x, y, Typography.Caption, TextAlign.Left, DragonPalette.Text5);
-            dl.Text(value ?? "-", x + 150f, y, Typography.Body, TextAlign.Right, DragonPalette.Text0);
+            dl.Text(value ?? Dashes.None, x + 150f, y, Typography.Body, TextAlign.Right, DragonPalette.Text0);
         }
 
         private static void AxisR(DisplayList dl, float x, float y, string name, string value)
         {
             dl.Text(name, x - 150f, y, Typography.Caption, TextAlign.Left, DragonPalette.Text5);
-            dl.Text(value ?? "-", x, y, Typography.Body, TextAlign.Right, DragonPalette.Text0);
+            dl.Text(value ?? Dashes.None, x, y, Typography.Body, TextAlign.Right, DragonPalette.Text0);
         }
 
         /// <summary>

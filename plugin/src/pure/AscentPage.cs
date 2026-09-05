@@ -96,7 +96,7 @@ namespace DragonScreen
             dl.Text("ASCENT / LAUNCH", w * 0.5f, Y(60), Z(44), TextAlign.Centre, DragonPalette.Accent);
 
             // ---- live, reused: the same PageState.Phase DockingPage already reads (§1.4) ----
-            string phase = s.Valid ? (string.IsNullOrEmpty(s.Phase) ? "-" : s.Phase) : "-";
+            string phase = s.Valid ? (string.IsNullOrEmpty(s.Phase) ? Dashes.None : s.Phase) : Dashes.None;
             dl.Text("ACTIVE PHASE — " + phase, X(3127f), Y(130), Z(28), TextAlign.Right, DragonPalette.Text2);
 
             // ---- THE STACK OUTLINE, nose (Dragon) at the top, engines (stage 1) at the base ----

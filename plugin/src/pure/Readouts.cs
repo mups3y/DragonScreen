@@ -34,7 +34,7 @@ namespace DragonScreen
 
             bool hasUnit = !string.IsNullOrEmpty(unit);
             float valueRight = x + w - (hasUnit ? UnitColumn * sc : 0f);
-            dl.Text(value ?? "-", valueRight, y, valueSize, TextAlign.Right, DragonPalette.Text0);
+            dl.Text(value ?? Dashes.None, valueRight, y, valueSize, TextAlign.Right, DragonPalette.Text0);
 
             if (hasUnit)
                 dl.Text(unit, x + w, y + 2f * sc, Typography.Dense * sc, TextAlign.Right, DragonPalette.Text7);

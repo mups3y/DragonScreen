@@ -70,6 +70,19 @@ namespace DragonScreen
         /// <summary>No-source dash — the one idiom the whole mod uses for a value nothing can supply.</summary>
         const string Dash = "—";
 
+        /// <summary>S148 / S49 H45: the colour a VALUE should draw in — dimmed when it is a dash.
+        ///
+        /// ⛔ THE POINT IS NOT TIDINESS. A dash drawn in `White` reads with exactly the weight of a live
+        /// reading, so at a glance a page of dashes looks like a page of data. That is the third form of
+        /// the "can't tell dead from live" failure [[S22]] was opened for — the first was a confident
+        /// green word on a dead feed, the second was a fixed gauge colour asserting a verdict (QC S-01).
+        ///
+        /// ⭐ The CONSUMABLES table on the Overview already did this right — `string.IsNullOrEmpty(qty)
+        /// ? Dim : White` — so this is that page's own idiom applied to the gauges and detail rows
+        /// beside it, not a new convention.</summary>
+        static Rgba ValueTint(string v)
+        { return (string.IsNullOrEmpty(v) || v == Dash) ? Dim : White; }
+
         public static void Build(DisplayList dl, int w, int h, PageState s)
         {
             float sx = w / RefW, sy = h / RefH;
@@ -88,7 +101,7 @@ namespace DragonScreen
                 dl.ArcBand(cx, cy, r - rw, r, -150, 150, Faint);
                 if (frac > 0f) dl.ArcBand(cx, cy, r - rw, r, -150, -150 + 300f * (frac > 1f ? 1f : frac), col);
                 C(label, cxd, cyd - rd - 44f, 24, Dim);
-                C(val, cxd, cyd - rd * 0.34f, rd * 0.42f, White);
+                C(val, cxd, cyd - rd * 0.34f, rd * 0.42f, ValueTint(val));
                 C(unit, cxd, cyd + rd * 0.30f, 24, Dim);
             }
 
