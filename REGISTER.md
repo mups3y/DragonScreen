@@ -12287,7 +12287,7 @@ because quoting a `//` line inside a `//` block double-marks it; all three confi
 autopilot already actuates, so §14.4(a) does not gate it, and `Actuate` is unchanged. No `install`, no
 glass, no `git push`.
 
-### W33 [S] `OffsetToMissM` / `AllNominal` — the aim-beside-the-deck safety bias has no verdict to switch on — **TODO** — [logged by W25]
+### W33 [S] `OffsetToMissM` / `AllNominal` — the aim-beside-the-deck safety bias has no verdict to switch on — **DOING** — [logged by W25]
 - **The finding:** `pure/GridFin.cs`'s header describes *"offset-to-miss (aim beside the deck until all
   systems nominal) … so a failed steer lands in the water"*, and `BoosterInputs` carries both
   `OffsetToMissM` and `AllNominal`. W25 left **both inert** (0 / false) because the bias is a SAFETY POLICY
