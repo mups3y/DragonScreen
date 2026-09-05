@@ -2631,7 +2631,7 @@ Once the drift line prints the real name it can be pinned exactly.
 **Recommendation (1)**: a real observed string is §1.4 verified-real evidence and costs one array entry —
 the family is the net, the measured string is the specimen.
 
-### OCT2 [S] The OTHER `p.name` readers — the same latent divergence in `Actuator.cs` and `VesselData.cs` — **TODO** — [logged by OCT1 per C1.1, NOT done]
+### OCT2 [S] The OTHER `p.name` readers — the same latent divergence in `Actuator.cs` and `VesselData.cs` — **DOING** — [logged by OCT1 per C1.1, NOT done]
 - **Stray found while fixing OCT1, deliberately left alone** (C1.1: log it, do not do it). OCT1's brief scoped
   the change to `OctawebEngines.Resolve` + `BoosterHost.Describe` and said *"Change both or neither"*; these
   are outside that pair and were not touched.
