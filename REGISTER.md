@@ -19940,12 +19940,67 @@ the boxes someone remembered.** It counts all six now.
   attitude, six translation — and **no baked number survives anywhere on the frame**.
 - No `install`, no glass, no `git push`. §14.4(a) untouched — this block reads and commands nothing.
 
-### S154d [S] Frame 58: the FLIGHT COMMANDS block — **DOING (UNBLOCKED 2026-09-06 by [[S154a]]; part §14.4(a))** — [H10]
+### S154d [S] Frame 58: the FLIGHT COMMANDS block — **HELD 2026-09-06 — HALF of its DONE-when was ALREADY MET by [[S132]]; the other half needs space the frame has not got (S153a-Q1)** — [H10]
 - ⛔ **This is the one split with a §14.4(a) edge in it.** FLIGHT COMMANDS names controls that would fly
   the vehicle. Until Part B they stay an honest no-op — *click, no light, no action, no red* — so this
   line draws the block's STATE honestly and wires nothing.
 - ⚠ Read with `src/_AutopilotStub.cs`'s `FlightCommands` seam, which already reports "not engaged".
 - **DONE when:** the block reads its real state, commands nothing, and the entry says so explicitly.
+
+#### ⭐ HELD 2026-09-06 — and the first thing to record is that ONE CLAUSE IS ALREADY TRUE
+
+⛔ **"COMMANDS NOTHING" IS ALREADY PINNED, BY A TEST, AND I CHECKED RATHER THAN ASSUMED.**
+[[S132]] proved it the way [[S128]] proved the Cover's — **by the SHAPE of what a press can produce**.
+`Frame58Controls.HitTest` is the only hit test this page has and its return type is `TimerAct`, whose
+three values are a stopwatch's. `Frame58ControlsTest` pins that a probe at the FAR FIELD button's own
+region answers `TimerAct.None`, and that the enum has exactly those three values — so **no value this
+page's touch handling can produce names a flight command.** ⚠ Nothing needed adding, and adding a second
+weaker pin beside a stronger one would only give a later reader two answers.
+
+**And the entry says so explicitly, which is the third clause:** ⛔ **this block wires nothing, commands
+nothing, and cannot. `FLIGHT COMMANDS` / `FAR FIELD POSITIONING` names controls that would fly the
+vehicle; until Part B they stay §14.4(a)'s honest no-op — click, no light, no action, NO RED.**
+
+#### ⛔ THE REMAINING CLAUSE — "reads its real state" — NEEDS SPACE THE FRAME HAS NOT GOT
+
+Measured off `art/cover/frame58.png`, by row and column profile of the right-hand column
+(design x 2900–3427), against the **48.07 design px** glanceable floor:
+
+| element | measured | |
+|---|---|---|
+| `FLIGHT COMMANDS` heading | design y **125–150** | |
+| rule | y **168–170** | the frame's own artwork |
+| ⭐ flat gap | y **172–214** — **42 design px** | ⛔ 6 px short of one line at the floor |
+| rule | y **216–218** | |
+| the `FAR FIELD POSITIONING` plate | y ~**250–292**, **~42 px tall**, x **2965–3410** | ⛔ also 6 px short |
+| the plate's label ink | x **2995–3357** — the icon at 2995–3014, glyphs to 3357 | no room to its right |
+| rule | y **320–322** | |
+| flat gap | y **324–360** — **36 design px** | ⛔ 12 px short |
+| `ALERT ACTIVITY` title | y **362–386** | [[S133]]'s |
+
+⭐ **Every candidate site is 36–42 design px and the floor is 48.07.** A state line at the floor crosses
+one of the frame's own rules wherever it is put, and the plate cannot hold one inside itself. ⚠ The
+ground was checked too, because that is what would have made a patch cheap: **y 282–315 is NOT flat**
+(34 of 34 rows carry the plate's border), while y 190–200 and y 300 ARE flat `DragonPalette.Background`.
+
+⛔ **So this is [[S153a]]'s Q1 again**, on the same page family and for the same reason: **the export was
+drawn for type roughly half the seat-measured floor, and re-cutting the frame's own rules is a design
+decision about §1.4 tier-1 geometry**, not an arithmetic consequence. **No new question is posed here.**
+
+⚠ **AND THE OBVIOUS SHORTCUT IS REFUSED ON PURPOSE.** A status line at `DenseDesignFor` (36.05) fits
+every gap above. ⛔ It would be **wrong**: the state is LIVE — it is exactly the thing that changes when
+Part B engages a mode — and the owner's R-01 ruling puts a live value on the glanceable floor.
+`Typography.Dense`'s own docstring draws the line: *"NOT for any live value… If it would be a problem to
+miss it, it is not this size."* Taking the static floor because it fits is the inversion the whole R-01
+policy exists to prevent, and it would be invisible afterwards.
+
+#### Verified
+
+- **No code landed from this line**, and none is owed: the clause that needed code was already met.
+- `python plugin/build.py test` → **ALL SUITES PASSED** with the tree at HEAD; `Frame58ControlsTest`'s
+  §14.4(a) pins re-read and confirmed present.
+- Every measurement above is a row/column profile of the shipped raster, not an estimate.
+- No `install`, no glass, no `git push`. §14.4(a) untouched — and untouchable from this page.
 
 ### S155 [S] The Cover's `RUNNING 00:22:57` is a frozen clock — **TODO (needs a definition first)** — [H2; split out of [[S50]] 2026-09-06; TIER 3]
 
