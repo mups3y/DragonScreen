@@ -12,6 +12,16 @@
  *    ⚠ EIGHT SINCE S135 (2026-09-06), which added the audio page's ± buttons. The sentence above
  *    is kept as written because it is the rule, not a running total; this line carries the count.
  *
+ *    ⛔ SUPERSEDED IN PLACE 2026-09-06 by S164 (C1.16 / G12) — BOTH LINES ABOVE ARE KEPT BECAUSE
+ *    THEY ARE THE DEFECT. "Seven", then "eight", each written into prose by the task that added a
+ *    surface; by the time S164 opened there were ELEVEN, and the two most recent — the Video page's
+ *    camera rows (S134b) and the audio page's five scope illustrations (S134c) — had no pin in this
+ *    file AT ALL. Nothing failed, because the suite's coverage was a hand-written list of calls in
+ *    `Run` and a hand-written list of eight prefixes in `NamespaceIsFlatAndUnique`; a namer nobody
+ *    listed was simply not tested. ⭐ The coverage is now ENUMERATED FROM `CrewSurface` — see
+ *    `SurfacesAreAllNamed` and `IdsOf` — so a surface with no namer is a build failure and the count
+ *    is computed rather than claimed. There is no running total left to keep current.
+ *
  *  ⛔ IT PROVES NOTHING ABOUT THE WIRING. That the choke points are reached, that `acted` carries the
  *    dispatcher's real answer, that the record reaches `events.jsonl` — that is `ScreenPainter.cs`,
  *    `PanelButtons.cs` and `BlackBoxRecorder.cs`, all three of them `src/` GLUE, which
@@ -58,19 +68,24 @@ public static class CrewPressTest
     public static int Run()
     {
         bad = 0; checks = 0;
+        // ⭐ S164: COUNTED, NOT CLAIMED. Three tasks in a row wrote this number into prose and the
+        // fourth did not, so it read EIGHT over eleven surfaces. `CrewSurface` is the list.
         Console.WriteLine("CrewPressTest (S85 CVR press channel: the control_id namespace, exhaustively "
-                          + "pinned over all EIGHT dispatch types, + the publish-side press buffer)");
+                          + "pinned over all " + (Enum.GetValues(typeof(CrewSurface)).Length - 1)
+                          + " dispatch surfaces, + the publish-side press buffer)");
 
         NavIds();
         CoverIds();
         SuitIds();
         DockIds();
         AudioIds();
+        VideoIds();
         HudTimerIds();
         PanelIds();
         TreeIds();
         SubsysTabIds();
         ChuteIds();
+        SurfacesAreAllNamed();
         NamespaceIsFlatAndUnique();
         Buffer();
 
@@ -150,6 +165,15 @@ public static class CrewPressTest
     static readonly string[] PinChuteCommand = {
         "EnableBackupPyros", "DroguesAndMains", "FirePyro", "EnableBackupPyros", "MainsOnly", "FirePyro",
         "None", "EnableBackupPyros", "DroguesAndMains", "FirePyro", "EnableBackupPyros", "MainsOnly" };
+
+    /// <summary>
+    /// S164: the SURFACES themselves, pinned like every enum here — because until now they were the
+    /// one list nothing checked. ⚠ Append-only: these ordinals go into recordings.
+    /// </summary>
+    static readonly string[] PinSurface = {
+        "None",
+        "Nav", "Cover", "Suit", "SubsysTab", "Chute", "Tree", "Dock", "Panel",
+        "Audio", "Hud", "Video" };
 
     /// <summary>
     /// Assert an enum is exactly the pinned member list: same count, same names, contiguous ordinals
@@ -291,6 +315,32 @@ public static class CrewPressTest
         foreach (SettingsAudioPage.AudioAct a in Enum.GetValues(typeof(SettingsAudioPage.AudioAct)))
             if (SettingsAudioPage.Available(a, lv)) live++;
         Check(live == 4, "exactly four audio buttons are live under the owner's mapping, got " + live);
+
+        // ---- ⛔ S164: THE FIVE SCOPE ILLUSTRATIONS, WHICH HAD NO PIN IN THIS FILE AT ALL --------
+        // `CrewControlIds.AudioScope` was added by S134c and this suite never called it. Same surface
+        // as the ± buttons on purpose (one page, one channel), so the ids have to be distinguishable
+        // from them by their own text and not by a prefix — which is what `scope` in the id is for.
+        for (int i = 0; i < SettingsAudioPage.Scopes; i++)
+            Eq(CrewControlIds.AudioScope(i), "audio.scope" + i, "audio scope " + i);
+        Check(CrewControlIds.AudioScope(-1) == null, "a negative scope must map to null (a miss)");
+        // ⚠ THE INDEX, NOT A SEAT NUMBER — `audio.scope2` is the CABIN, and the file's own comment
+        // says so. A pin that read "seat2" would be wrong for exactly one of the five.
+        Eq(CrewControlIds.AudioScope(SettingsAudioPage.CabinScope), "audio.scope2",
+           "the cabin scope is scope2, not a seat");
+    }
+
+    // =============================================================================================
+    //  ⛔ S164: the Video page's camera rows — added by S134b, pinned by NOBODY until now
+    // =============================================================================================
+    static void VideoIds()
+    {
+        // ⚠ The row INDEX, not the camera's name: the name comes from a vessel scan and changes with
+        // the craft, so `video.cam2` stays readable against a recording made on another vehicle.
+        for (int i = 0; i < SettingsVideoPage.MaxRows; i++)
+            Eq(CrewControlIds.VideoCam(i), "video.cam" + i, "video cam " + i);
+        Check(CrewControlIds.VideoCam(-1) == null, "a negative row must map to null (a miss)");
+        // The page draws at most `MaxRows`; the namespace must reach every row it can draw.
+        Check(SettingsVideoPage.MaxRows > 0, "the video page draws no rows at all");
     }
 
     static void DockIds()
@@ -415,31 +465,171 @@ public static class CrewPressTest
     /// two controls into one channel, and — unlike a rename, which the pins catch — a collision is
     /// invisible in the recording itself, because both controls would produce well-formed lines.
     /// </summary>
+    // =============================================================================================
+    //  ⭐ S164 — EVERY SURFACE HAS A NAMER, AND THE LIST IS `CrewSurface` ITSELF
+    // =============================================================================================
+    /// <summary>
+    /// Every `control_id` surface <paramref name="s"/> can produce, appended to
+    /// <paramref name="into"/>. Returns FALSE when this file knows no producer for the surface —
+    /// which is the whole of S164: a surface added with no namer, or with a namer nobody wired into
+    /// this suite, used to leave the build green.
+    ///
+    /// ⛔ TYPED OUT, LIKE THE PINS, AND FOR THE SAME REASON. A producer found by reflection would
+    /// pass for any surface whose namer merely EXISTS; naming each one here means the person adding
+    /// a surface has to say which function names it and what its full id set is, and the compiler
+    /// plus the `default` below make that unavoidable. The file's own rule: *"a pin computed from
+    /// the enum would assert nothing"*.
+    /// </summary>
+    static bool IdsOf(CrewSurface s, List<string> into)
+    {
+        switch (s)
+        {
+            case CrewSurface.Nav:
+                for (int i = 0; i < PinUiPage.Length; i++) Add(into, CrewControlIds.Nav(NavAct.Goto, (UiPage)i));
+                Add(into, CrewControlIds.Nav(NavAct.Back, UiPage.Cover));
+                Add(into, CrewControlIds.Nav(NavAct.Forward, UiPage.Cover));
+                return true;
+            case CrewSurface.Cover:
+                for (int i = 0; i < PinCoverButton.Length; i++) Add(into, CrewControlIds.Cover((CoverPage.CoverButton)i));
+                Add(into, CrewControlIds.CoverCapsule);
+                return true;
+            case CrewSurface.Suit:
+                for (int i = 0; i < PinSuitAct.Length; i++) Add(into, CrewControlIds.Suit((SuitCheckPage.SuitAct)i));
+                return true;
+            case CrewSurface.SubsysTab:
+                Add(into, CrewControlIds.SubsysTab(0)); Add(into, CrewControlIds.SubsysTab(1));
+                return true;
+            case CrewSurface.Chute:
+                for (int i = 0; i < ManualChuteDeployPage.Actions.Length; i++) Add(into, CrewControlIds.Chute(i));
+                return true;
+            case CrewSurface.Tree:
+                for (int i = 0; i < PinPanelCommand.Length; i++) Add(into, CrewControlIds.Tree((PanelCommand)i));
+                return true;
+            case CrewSurface.Dock:
+                for (int i = 0; i < PinDockAct.Length; i++) Add(into, CrewControlIds.Dock((DockingSimPage.DockAct)i));
+                return true;
+            case CrewSurface.Panel:
+                for (int i = 0; i < PinPanelCommand.Length; i++) Add(into, CrewControlIds.Panel((PanelCommand)i));
+                return true;
+            case CrewSurface.Audio:
+                // ⚠ TWO NAMERS, ONE SURFACE — the ± buttons and the five scope illustrations. A
+                // surface is not one function, which is why this returns a SET rather than a name.
+                for (int i = 0; i < PinAudioAct.Length; i++) Add(into, CrewControlIds.Audio((SettingsAudioPage.AudioAct)i));
+                for (int i = 0; i < SettingsAudioPage.Scopes; i++) Add(into, CrewControlIds.AudioScope(i));
+                return true;
+            case CrewSurface.Hud:
+                for (int i = 0; i < PinHudTimer.Length; i++) Add(into, CrewControlIds.HudTimer((TimerAct)i));
+                return true;
+            case CrewSurface.Video:
+                for (int i = 0; i < SettingsVideoPage.MaxRows; i++) Add(into, CrewControlIds.VideoCam(i));
+                return true;
+        }
+        return false;   // ⛔ including CrewSurface.None, which must have no namer at all
+    }
+
+    static void Add(List<string> into, string id) { if (id != null) into.Add(id); }
+
+    /// <summary>The prefix a surface's ids all carry. ⛔ Typed out for the same reason as `IdsOf`,
+    /// and checked against what the namers ACTUALLY produce rather than trusted.</summary>
+    static string PrefixOf(CrewSurface s)
+    {
+        switch (s)
+        {
+            case CrewSurface.Nav:       return CrewControlIds.NavPrefix;
+            case CrewSurface.Cover:     return CrewControlIds.CoverPrefix;
+            case CrewSurface.Suit:      return CrewControlIds.SuitPrefix;
+            case CrewSurface.SubsysTab: return CrewControlIds.TabPrefix;
+            case CrewSurface.Chute:     return CrewControlIds.ChutePrefix;
+            case CrewSurface.Tree:      return CrewControlIds.TreePrefix;
+            case CrewSurface.Dock:      return CrewControlIds.DockPrefix;
+            case CrewSurface.Panel:     return CrewControlIds.PanelPrefix;
+            case CrewSurface.Audio:     return CrewControlIds.AudioPrefix;
+            case CrewSurface.Hud:       return CrewControlIds.HudPrefix;
+            case CrewSurface.Video:     return CrewControlIds.VideoPrefix;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// ⭐ THE S164 CHECK. Walk `CrewSurface` — not a list in this file — and require of every value
+    /// except `None` that it has a producer, that the producer yields at least one id, and that every
+    /// id it yields carries the prefix the surface declares. `None` must have neither.
+    /// </summary>
+    static void SurfacesAreAllNamed()
+    {
+        PinEnum(typeof(CrewSurface), PinSurface, "CrewSurface");
+
+        Array vals = Enum.GetValues(typeof(CrewSurface));
+        string unnamed = "", unprefixed = "", empty = "";
+        int named = 0;
+        foreach (CrewSurface sf in vals)
+        {
+            List<string> ids = new List<string>();
+            bool has = IdsOf(sf, ids);
+            if (sf == CrewSurface.None)
+            {
+                Check(!has, "CrewSurface.None must have NO namer — it is the `none` id and nothing else");
+                Check(PrefixOf(sf) == null, "CrewSurface.None must have no prefix");
+                continue;
+            }
+            if (!has) { unnamed += (unnamed.Length > 0 ? ", " : "") + sf; continue; }
+            named++;
+            if (ids.Count == 0) empty += (empty.Length > 0 ? ", " : "") + sf;
+            string pre = PrefixOf(sf);
+            if (string.IsNullOrEmpty(pre)) { unprefixed += (unprefixed.Length > 0 ? ", " : "") + sf; continue; }
+            for (int i = 0; i < ids.Count; i++)
+                Check(ids[i].StartsWith(pre, StringComparison.Ordinal),
+                      "control_id '" + ids[i] + "' comes from surface " + sf + " but does not carry its "
+                      + "prefix '" + pre + "' — a reader grouping by prefix would file it elsewhere");
+        }
+        Check(unnamed.Length == 0,
+              "CrewSurface value(s) with NO namer: " + unnamed + " — a press on that surface would be "
+              + "recorded with no control_id, which is exactly what S164 exists to stop");
+        Check(empty.Length == 0, "CrewSurface value(s) whose namer produces no ids: " + empty);
+        Check(unprefixed.Length == 0, "CrewSurface value(s) with no declared prefix: " + unprefixed);
+        Check(named == vals.Length - 1,
+              "every surface but None must be named: " + named + " of " + (vals.Length - 1));
+
+        // ⚠ AND NO TWO SURFACES MAY SHARE A PREFIX, OR BE A PREFIX OF EACH OTHER. Sharing merges two
+        // surfaces in every recording that groups by prefix, and the ids themselves need not collide
+        // for that to happen — so the id-collision check below cannot see it.
+        foreach (CrewSurface a in vals)
+        {
+            if (a == CrewSurface.None) continue;
+            foreach (CrewSurface b in vals)
+            {
+                if (b == CrewSurface.None || b == a) continue;
+                string pa = PrefixOf(a), pb = PrefixOf(b);
+                if (pa == null || pb == null) continue;
+                Check(!pa.StartsWith(pb, StringComparison.Ordinal),
+                      "surface prefixes '" + pa + "' (" + a + ") and '" + pb + "' (" + b
+                      + ") are not distinguishable from each other");
+            }
+        }
+    }
+
     static void NamespaceIsFlatAndUnique()
     {
         List<string> all = new List<string>();
         List<string> from = new List<string>();
 
-        Action<string, string> add = delegate(string id, string src)
+        // ⭐ S164: GATHERED BY SURFACE, so a surface added later joins the collision and prefix checks
+        // WITHOUT anyone remembering to add a line here. That is what went wrong: `audio.`, `hud.`,
+        // `video.` and the five `audio.scopeN` ids were absent from this function entirely, so a
+        // collision involving any of them was invisible.
+        foreach (CrewSurface sf in Enum.GetValues(typeof(CrewSurface)))
         {
-            if (id == null) return;
-            all.Add(id); from.Add(src);
-        };
-
-        for (int i = 0; i < PinUiPage.Length; i++) add(CrewControlIds.Nav(NavAct.Goto, (UiPage)i), "nav.goto");
-        add(CrewControlIds.Nav(NavAct.Back, UiPage.Cover), "nav");
-        add(CrewControlIds.Nav(NavAct.Forward, UiPage.Cover), "nav");
-        for (int i = 0; i < PinCoverButton.Length; i++) add(CrewControlIds.Cover((CoverPage.CoverButton)i), "cover");
-        add(CrewControlIds.CoverCapsule, "cover");
-        for (int i = 0; i < PinSuitAct.Length; i++) add(CrewControlIds.Suit((SuitCheckPage.SuitAct)i), "suit");
-        for (int i = 0; i < PinDockAct.Length; i++) add(CrewControlIds.Dock((DockingSimPage.DockAct)i), "dock");
-        for (int i = 0; i < PinPanelCommand.Length; i++) add(CrewControlIds.Panel((PanelCommand)i), "panel");
-        for (int i = 0; i < PinPanelCommand.Length; i++) add(CrewControlIds.Tree((PanelCommand)i), "tree");
-        add(CrewControlIds.SubsysTab(0), "subsys"); add(CrewControlIds.SubsysTab(1), "subsys");
-        for (int i = 0; i < ManualChuteDeployPage.Actions.Length; i++) add(CrewControlIds.Chute(i), "chute");
+            if (sf == CrewSurface.None) continue;
+            List<string> ids = new List<string>();
+            if (!IdsOf(sf, ids)) continue;              // reported by SurfacesAreAllNamed
+            for (int i = 0; i < ids.Count; i++) { all.Add(ids[i]); from.Add(sf.ToString()); }
+        }
 
         // 35 goto + 2 history + 25 cover + capsule + 6 suit + 17 dock + 31 panel + 31 tree + 2 tab + 12 chute
-        Check(all.Count == 162, "the namespace should hold 162 ids, it holds " + all.Count);
+        //   — that is 162, and it was the whole count until S164.
+        // ⭐ S164 adds the four sets nothing here was gathering: 8 audio ± + 5 audio scopes + 2 hud
+        //   + 8 video = 23 more, so 185.
+        Check(all.Count == 185, "the namespace should hold 185 ids, it holds " + all.Count);
 
         Dictionary<string, string> seen = new Dictionary<string, string>();
         for (int i = 0; i < all.Count; i++)
@@ -459,13 +649,21 @@ public static class CrewPressTest
 
         // Every id must be attributable to exactly one surface by its prefix alone, so a reader can
         // group a recording without a lookup table it does not have.
-        string[] prefixes = { CrewControlIds.NavPrefix, CrewControlIds.CoverPrefix, CrewControlIds.SuitPrefix,
-                              CrewControlIds.TabPrefix, CrewControlIds.ChutePrefix, CrewControlIds.TreePrefix,
-                              CrewControlIds.DockPrefix, CrewControlIds.PanelPrefix };
+        // ⛔ S164: THIS LIST WAS EIGHT LONG WHILE `CrewSurface` HELD ELEVEN, so `audio.`, `hud.` and
+        // `video.` ids each matched ZERO prefixes — and the check below asks for exactly one, which
+        // means it would have caught them the moment they were gathered. They never were. Derived
+        // from the surfaces now, so the two lists cannot drift apart again.
+        List<string> prefixes = new List<string>();
+        foreach (CrewSurface sf in Enum.GetValues(typeof(CrewSurface)))
+        {
+            if (sf == CrewSurface.None) continue;
+            string pre = PrefixOf(sf);
+            if (!string.IsNullOrEmpty(pre)) prefixes.Add(pre);
+        }
         for (int i = 0; i < all.Count; i++)
         {
             int hits = 0;
-            for (int k = 0; k < prefixes.Length; k++) if (all[i].StartsWith(prefixes[k])) hits++;
+            for (int k = 0; k < prefixes.Count; k++) if (all[i].StartsWith(prefixes[k], StringComparison.Ordinal)) hits++;
             Check(hits == 1, "control_id '" + all[i] + "' matches " + hits + " surface prefixes, not 1");
         }
     }

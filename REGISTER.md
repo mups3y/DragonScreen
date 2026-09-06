@@ -16515,7 +16515,7 @@ widens the hit test to swallow it and dies on exactly that.
   changed" here because its before-render failed to compile and it read the stale PNGs as unchanged.
 - `build.py test` green · comment-loss **0** across eight files · no `install`, no glass, no `git push`.
 
-### S164 [S] `CrewPressTest` cannot tell when a control channel is added without a name — **DOING** — [logged by [[S132]] per C1.1, 2026-09-06; TIER 3]
+### S164 [S] `CrewPressTest` cannot tell when a control channel is added without a name — **DONE 2026-09-06 — the coverage is enumerated from `CrewSurface` now, and it found two surfaces with no pin at all** — [logged by [[S132]] per C1.1, 2026-09-06; TIER 3]
 - **The finding.** The suite's header says it pins the `control_id` namespace *"exhaustively over every
   value of every one of the seven dispatch types"*. The values are exhaustive; **the seven is not**. It is
   a hardcoded list of calls in `Run`, so a new `CrewSurface` with no namer at all leaves the suite green.
@@ -16525,6 +16525,65 @@ widens the hit test to swallow it and dies on exactly that.
   that name no control — the recording keeps the event and loses what was pressed.
 - **DONE when:** the suite enumerates `CrewSurface` and fails if any value has no namer, and the count of
   dispatch types is derived rather than written in prose.
+
+#### ⛔ DONE 2026-09-06 — and the finding was WORSE than filed
+
+The line predicted that *"a new `CrewSurface` with no namer at all leaves the suite green"*. ⚠ **Two
+surfaces were already in that state**, and neither was hypothetical:
+
+| namer | added by | pinned in `CrewPressTest` |
+|---|---|---|
+| `CrewControlIds.VideoCam` (`video.camN`) | [[S134b]] | ⛔ **never called by this suite** |
+| `CrewControlIds.AudioScope` (`audio.scopeN`) | [[S134c]] | ⛔ **never called by this suite** |
+
+⭐ **And the prose had drifted twice over.** The banner said *"exhaustively pinned over all EIGHT
+dispatch types"* while `CrewSurface` held **eleven**; `NamespaceIsFlatAndUnique`'s prefix list held
+**eight** while `CrewControlIds` declared **eleven**. ⚠ That second one is the sharp end: the
+collision-and-attribution check requires every id to match exactly ONE surface prefix, so an `audio.`,
+`hud.` or `video.` id would have matched **zero** and failed it — **if the function had ever gathered
+one.** It did not. Thirteen ids sat outside every check in the file.
+
+#### What replaced the hand-written coverage
+
+- **`IdsOf(CrewSurface, List<string>)`** — every id a surface can produce, and **`false` when this file
+  knows no producer**. That boolean is the whole line: `SurfacesAreAllNamed` walks `Enum.GetValues`,
+  not a list, so a surface added without a namer fails the build naming itself.
+- ⛔ **TYPED OUT, NOT REFLECTED**, which is this file's own standing rule — *"a pin computed from the
+  enum would assert nothing"*. A producer discovered by reflection would pass for any surface whose
+  namer merely EXISTS; naming each one by hand forces whoever adds a surface to say which function
+  names it and what its full id set is.
+- **`PrefixOf(CrewSurface)`**, checked against what the namers actually produce rather than trusted, and
+  a check that no two surfaces' prefixes are nested or equal — because two surfaces sharing a prefix
+  merges them for any reader grouping by prefix **without the ids themselves colliding**, so the
+  existing collision check cannot see it.
+- ⭐ **`NamespaceIsFlatAndUnique` now gathers BY SURFACE**, so a new surface joins the collision, the
+  charset and the prefix-attribution checks with nobody remembering to add a line. The prefix list is
+  derived from the surfaces for the same reason.
+- **The count is computed.** The banner prints `Enum.GetValues(typeof(CrewSurface)).Length - 1` — it
+  reads **11** — and the two prose sentences that carried a hand-kept total are marked **SUPERSEDED IN
+  PLACE** (C1.16 / G12) rather than corrected, because they are the evidence for the defect.
+- **`VideoIds()` added and `AudioIds()` extended**: `video.cam0..7` and `audio.scope0..4` pinned
+  character for character, plus their misses. ⚠ `audio.scope2` is pinned as the **CABIN**, against
+  `SettingsAudioPage.CabinScope`, because a pin reading `seat2` would be wrong for one of the five.
+
+#### Verified
+
+- **`CrewPressTest` 1251 → 1686 checks** (+435) · `build.py test` green.
+- **11 mutations, 11 killed, none survived.** Z1 a new `CrewSurface` with no namer (the filed defect),
+  Z2 a producer removed, Z3 a prefix renamed, Z4 a namer filing under another surface's prefix, Z5 two
+  prefixes made equal at the source, Z6 a surface dropped from the pin, Z7 a miss given a real id, Z8
+  one id dropped from a set, Z9 a surface with a namer and no prefix, Z10 a producer that answers yes
+  and yields nothing, Z11 two surfaces declaring the same prefix with their namers left correct.
+- ⚠ **Z8's FIRST FORM WAS A FALSE KILL AND IS RECORDED AS ONE.** Making `AudioScope(0)` return null in
+  the pure file killed the run — but by `NullReferenceException` **inside `AudioScopeTest`, which runs
+  first**, so `CrewPressTest` never executed and the `185` pin proved nothing. Re-cut on the test side,
+  where nothing else is looking. ⭐ Logged as [[S167]]: a suite that throws instead of failing a check
+  hides every suite after it.
+- ⭐ **Z11 was checked separately** rather than assumed: the prefix-distinguishability check fires on
+  its own (2 failures, naming both surfaces), so it is not a check that can never fail.
+- **Preview: 0 pages changed, 0 new** — measured, not assumed: this touches `test/` only, and
+  `CrewControlIds.cs` is byte-identical to `HEAD`.
+- comment-loss **0** · no `install`, no glass, no `git push`.
 
 ### S133 [S] The docking HUD's ALERT ACTIVITY panel is 822 px tall and permanently empty — **DONE 2026-09-06 — it lists the vehicle, worst first, out of [[S137]]'s own machinery** — [QC `H-05`; TIER 2]
 - **The finding.** A titled panel occupying 822 px of the busiest page in the build, showing nothing, while
@@ -16839,6 +16898,27 @@ the caveat only draws on the four seats. It failed only when a mutation moved th
   no comparable majority here, only three isolated numbers, so the same argument does NOT carry over.
 - **DONE when:** each of the three is either shown to match the export (and left alone, with the finding
   recorded) or corrected against a stated centre, with a 2560 preview and a render-read check.
+
+### S167 [S] A suite that THROWS instead of failing a check hides every suite after it — **TODO** — [logged by [[S164]] per C1.1, 2026-09-06; TIER 3: harness]
+- **The finding, found by mutation.** [[S164]]'s mutation Z8 made `CrewControlIds.AudioScope(0)` return
+  null. `AudioScopeTest` — which runs BEFORE `CrewPressTest` — dereferenced it and threw
+  `NullReferenceException`. `TestMain` does not catch it, so the process died at exit `3221225477` and
+  **every suite after that one never ran**.
+- ⚠ **Why this matters beyond one mutation.** The harness's failure report is a per-suite count, and a
+  crash produces no count at all for the suites it skipped. A reader sees "TESTS FAILED" and one stack
+  trace, and cannot tell whether the twelve suites below it are green — so a real regression can be
+  masked by an unrelated crash above it, and the run still looks like it told you everything.
+- ⭐ It also makes a mutation look killed by the wrong check, which is how this was found: Z8's kill came
+  from a suite that was not the one under test. A mutation harness that only reads the exit code cannot
+  tell that apart from a genuine kill.
+- ⚠ **NOT the same as a check failing.** `Check(false, ...)` is the designed path and reports fine. This
+  is about an EXCEPTION escaping a suite.
+- Candidate shape: `TestMain` wraps each `Run()` in a try/catch, counts the throw as a failure of that
+  suite, prints the exception, and CONTINUES — so the report stays complete and the exit code still
+  fails. ⚠ Needs a decision on whether a throw should be distinguishable in the output from a failed
+  check (it should — they mean different things).
+- **DONE when:** a deliberately-throwing suite produces a named failure, every later suite still runs and
+  reports, and the exit code is non-zero.
 
 ### S134d [S] Frame 66's LIGHTING panel draws fifteen controls where one is bindable — **DONE 2026-09-06 — rebuilt over the baked one, which takes all four art faults with it** — [split 4 of 5 of [[S134]]; QC `F-03`]
 - ⛔ **A recorded finding says exactly ONE light group is bindable** — `TE_CD2_POD.cfg` carries a single
