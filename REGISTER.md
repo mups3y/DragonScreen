@@ -4847,7 +4847,7 @@ figure; T20 takes the slower end under a stated principle. **Options:** (1) 0.3 
 time, fast costs the vehicle, and flight 1 is not in a hurry)*; (2) 0.5, on the reading that a 200 m
 corridor at 0.3 m/s is eleven minutes; (3) leave it to T22 with no preference. **No gate needed.**
 
-### T21 [O] Deorbit/entry/chutes + abort wiring — **TODO**
+### T21 [O] Deorbit/entry/chutes + abort wiring — **DOING**
 - **Read:** §B13 / §B10.4 / §B9.  **DONE when:** return + splash in-sim, EJECT abort works.
 
 ### T22 [O] Empirical tune (one param at a time vs §B11) — **TODO**
