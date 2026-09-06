@@ -21545,6 +21545,147 @@ through the same map. ⛔ `docs/QC_FINDINGS.md` is QC's file and was **not** edi
 governance line. **S176-Q1 (the bar's typed text vs the nav-bar floor) is UNCHANGED and still open.**
 ---
 
+
+### S179 [O] The bottom bar's centre cell is an EVENT DIALOG, and it is why 475 design px of the bar are empty — **TODO (needs one owner ruling: what fires it and what it says)** — [logged by [[S176]] per C1.1, 2026-09-06; owner-supplied source; TIER 2: a whole missing element]
+
+**🟢 OWNER, 2026-09-06, verbatim, with a reference image of the bar's centre section:** *"this is an
+example of the centre section of the bottom bar. You will notice the pop up box "trunk jettison and
+de-orbit enabled" This dialog box appears during events throughout the flight"*, and then, unprompted and
+before anything was built: *"the example I showed you is from someone elses build it was just an example
+of what ours should do"*. The image shows, left to right: `CURRENT STATE / Far Field Pointing Deorbit` ·
+a vertical rule · **a rounded slate-filled box with two centred lines, "Trunk Jettison and Deorbit / Burn
+Enabled"** · a vertical rule · `POINTING MODE / Sun + GEO`.
+
+⭐ **THE SECOND QUOTE SETS THE SOURCE TIER, AND IT IS THE WHOLE DIFFERENCE.** §1.4's ladder is
+*verified-real → other users' → invent ONLY by owner discussion*. This image is **another user's build** —
+**tier 2, the same tier as the community Figma export this entire UI is reconstructed from**, and NOT a
+tier-1 capture of a real Crew Dragon. So:
+- ✅ It is **good evidence that the ELEMENT exists and what it is for** — a transient event announcement in
+  the bar's centre cell. That is what the owner said it was for: *"just an example of what ours should
+  do"*.
+- ⛔ It is **NOT a source for the COPY.** *"Trunk Jettison and Deorbit Burn Enabled"* is another builder's
+  wording. Reproducing it would be copying a tier-2 sentence and presenting it as ours, when our own
+  sourced labels exist. **Nothing in this line proposes to print it.**
+
+#### ⭐ IT EXPLAINS A MEASUREMENT [[S176]] MADE AND COULD NOT ACCOUNT FOR
+
+While cutting the bar into its elements, `component_48.png` was profiled column by column. Between the
+bar's two vertical rules — **measured at x 1464–1465 and 1943–1944, rows 121–218** — there is **NOTHING**:
+a **475-design-px** span, **13.9 % of the whole bar**, carrying no ink at all. It was landed as ground and
+noted as unexplained. **This is what belongs there.** The export baked it empty because no event was
+active in the frame that was exported.
+
+The cell, in panel px at the shipped 2560×1406, under each of [[S176]]'s three fits:
+
+| fit | pages | the empty cell |
+|---|---|---|
+| `Split` | Cover, ManualChute | panel x **976 … 1571** (595 px) |
+| `Stretch` | Menu, settings, the Vehicle family, SuitCheck, VRIO | panel x **1095 … 1450** (355 px) |
+| `Frame` | the 19 letterboxed pages | panel x **1115 … 1431** (316 px) |
+
+The bar's body is **87 panel px** tall, and the owner's image shows a **two-line** box inside it.
+
+⛔ **AND THE GEOMETRY WILL NOT BE TRACED FROM THAT IMAGE.** `CLAUDE.md` is explicit — *"Build pages from
+the reference's own source, never a screenshot … Screenshot/SVG-derived pages came out wrong every
+time."* It does not need to be: the cell is bounded by two rules **measured off the export**, so the box
+is derived from the bar's own structure and the image is used as EVIDENCE THAT THE ELEMENT EXISTS and of
+what it contains — which is what a photograph is good for. ⚠ Its proportions were checked against the
+measured cell as a **consistency check** and agree; that is not the same as measuring from it.
+
+#### ⭐ A LIVE SOURCE ALREADY EXISTS IN THE TREE — the C1.15 search, done before proposing any simulation
+
+Searched: `CrewGates.cs` · `CrewGate.cs` · `MissionPhase.cs` · `EntryReadiness.cs` · `StepList` ·
+`Alarms`/`Fdir` · `docs/CREW_MISSION_TELEMETRY.md` · `docs/TELEMETRY_REGISTRY.md`.
+
+**Found, and it is genuinely live, not a seam:**
+- **`CrewGates`** — the real catalog **G1…G15**, spanning ingress → launch → approach → docking → undock →
+  **GO FOR DEORBIT BURN**. Its own header: *"Every gate TITLE and every checklist ITEM below is a
+  transcribed NASA/SpaceX crew-timeline callout."*
+- **`CrewGate`** — the pure gate state machine.
+- **`src/CrewProcedureOps.cs`** — the real conductor, restored by [[W10]] together with its host
+  `FlightDriver`, whose `FixedUpdate` ticks it every physics frame.
+- **`VesselData.cs:386-400`** already publishes `GateActive`, `GateTitle`, `GateStage`, `GateItems` into
+  `PageState` each frame, and `:372` publishes `AutoPhase` — which the bar's own CURRENT STATE already
+  reads ([[S147]]).
+- **`docs/CREW_MISSION_TELEMETRY.md` §5** holds the *"callout / mission-control announcement stream"*
+  research — the real per-mission event timeline, transcribed from NASA timeline PDFs and live blogs.
+
+⭐ **So this element does NOT need a §14.4(f) simulation.** There is a real, ticking, mission-long event
+source in the build, and the announcements the owner describes are the same family as the research in §5.
+
+#### ⛔ THE ONE GAP, AND IT IS A §1.4 GAP RATHER THAN AN EFFORT ONE
+
+The owner's example is an **ENABLEMENT STATEMENT**: *"Trunk Jettison and Deorbit Burn Enabled"*.
+Every title in `CrewGates` is a **DECISION QUESTION**: `GO FOR DEORBIT BURN`, `GO/NO-GO FOR LAUNCH`,
+`GO FOR PROPELLANT LOAD`. Those are different registers, and **turning one into the other is rewording a
+transcribed callout**, which `CrewGates.cs` forbids by name: *"Do not reword one to make a test pass or a
+card fit."* ⛔ **So a build chat cannot manufacture the copy, and this line does not.**
+
+⚠ **AND THE BOX IS NOT THE GATE CARD.** `GateCard` renders a checklist with a GO/NO-GO decision; this is a
+transient announcement with no buttons. Driving one from the other without deciding which it is would
+merge a decision surface into a notification surface — and `S146` / H38 is already the register's standing
+finding about presenting one signal as two instruments.
+
+#### ⛔ AND THE CELL IS TOO NARROW FOR MOST OF THE GATE TITLES — MEASURED, NOT ASSUMED
+
+This is the finding that decides how the line is built, and it was computed before proposing anything.
+The cell is **475 design px**; at a plausible 24-px inner margin that is **427 usable**. The glanceable
+floor is `Typography.MinDesignFor` = **48.07 design px** at the shipped 2560×1406, and D-DIN's measured
+cap advance is **0.6638 em** (`MarginAffordance.CapAdvance`). So the box holds **≈13 characters per line,
+≈27 over two lines.**
+
+Against the 14 real gate titles: **8 fit, 6 overflow.**
+
+| overflow | chars |
+|---|---:|
+| `HOLD — WP0 (400 m below) — GO TO ENTER KOS` | 42 |
+| `HOLD — WP1 (~220 m on the V-bar) — GO` | 37 |
+| `GO FOR APPROACH INITIATION (7.5 km)` | 35 |
+| `HOLD — WP2 (20 m) — GO FOR DOCKING` | 34 |
+| `HATCH CLOSE & CABIN LEAK CHECK` | 30 |
+| `DOCKING COMPLETE — VESTIBULE` | 28 |
+
+⛔ **SO "JUST WIRE IT TO THE GATE TITLES" IS NOT AVAILABLE**, and shipping it anyway would be QC `C-05`'s
+family for the third time — a fit computed against a floor and found not to hold. The copy has to be
+DESIGNED FOR THE CELL, which is what makes this an owner ruling rather than a build.
+⚠ The owner's own example is **39 characters over two lines** — 45 % more than the cell holds at the
+floor — which is consistent with the other build drawing it **below** our legibility floor. Ours cannot,
+and that is [[S153]]'s policy, not a preference.
+
+#### Open question for the owner — S179-Q1: what fires the box, and what does it say?
+
+**Paste-ready for the overseer (C1.13).**
+
+**Situation.** The cell is measured and empty, a live mission-long event source exists (`CrewProcedureOps`
+→ `PageState.GateActive/GateTitle`, and `MissionPhase`'s live classifier), and the ONE thing missing is the
+mapping from event → sentence. The owner has one real example. **No gate title may be reworded (§1.4).**
+
+1. **The owner supplies a SHORT message per event — the chat's recommendation.** A dozen lines of "at THIS
+   event, the box reads THIS", **each ≤ ~27 characters** so it clears the floor in the cell. *Reasoning:*
+   it makes every sentence his by construction — the same footing `CoverPage.PhaseName`'s seven rail
+   labels have — it is the only option with no invention in it, the triggers then wire to signals that
+   already tick, and the length constraint is now a measured number rather than a surprise found later.
+2. **Build the container now against the live gate feed, and SHORTEN the six long titles for display.**
+   *Reasoning:* fastest to something on the glass. ⛔ **Recommend against, and this is the one to say no
+   to:** `CrewGates.cs`'s header forbids it in as many words — *"Every gate TITLE … is a transcribed
+   NASA/SpaceX crew-timeline callout. Do not reword one to make a test pass or a card fit."* Shortening
+   for display is rewording to make a card fit, which is the sentence it was written against.
+3. **Announce `MissionPhase` transitions instead** — a live classifier, already sourced, and its names are
+   short (`Entry`, `Drogues`, `Mains`, `Splashdown`). *Reasoning:* fits the cell, no new copy at all.
+   ⚠ But the bar's own CURRENT STATE **already prints the phase**, so the box would restate its
+   neighbour — which is `S146` / H38's standing finding about one signal shown as two instruments.
+4. **Enlarge the cell** by moving the two rules apart. ⛔ **Recommend against:** the rules are measured
+   export geometry and the first one is what continues the Cover's column divider ([[S172]]'s second
+   defect) — moving it un-does work the owner has already approved.
+
+**Gate flags (C1.12):** none needs `install` or glass. **Option 1 is the owner's own words. Option 2 needs
+an explicit release from `CrewGates`' §1.4 rule, which is his to give and not a build chat's to assume.**
+
+**DONE when:** the box is drawn in the measured cell under all three `BarFit` maps, appears and clears on
+a REAL signal (never a timer or a constant), its copy has a named source per line, the bar's hit map is
+unaffected (it takes no touch), and `previewdiff` shows it on the pages that can raise an event and on no
+others.
+
 ### S178 [S] Four ways to centre a label vertically, and only one of them was measured — **TODO** — [logged by [[S176]] per C1.1, 2026-09-06; TIER 3: consistency]
 - **The finding.** "How far below a text `y` the cap centre falls, as a fraction of the size" now has a
   home — `Typography.CapCentreOfTop` = **0.553**, measured on a render in [[S129]] — and [[S176]] moved
