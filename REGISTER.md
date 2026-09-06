@@ -3899,7 +3899,7 @@ beside `BlockNote`, `SchemaVersion` still 1, headless tests added and mutation-p
   (the `DragonScreen.Mech` assembly step), `docs/BUILD_PLAN.md` (§B12.1a pin block), `NOTICE` (MechJeb2 +
   alglib entries), this file.
 
-### T15b [O] Host ONE MechJebCore, headless — **AND SUPPRESS THE GUI** — **NEEDS-WORK — WALKED ON THE GLASS 2026-09-05 AND THREE ROWS FAILED; T15d (below) rebuilt the suppression and REWROTE this line's checklist for a re-run. Still NEEDS-WORK: every DONE-criterion is IN-SIM and needs a fresh `install` + glass gate (C1.12).**
+### T15b [O] Host ONE MechJebCore, headless — **AND SUPPRESS THE GUI** — **DONE 2026-09-07 — RE-WALKED ON THE GLASS BY THE OWNER AND R2 PASSED; closed by [[S194]] against `KSP.log`, and Part B's host is proven** — [was NEEDS-WORK 2026-09-05 to 2026-09-07: three rows failed on the first walk, T15d rebuilt the suppression, T15b's own DONE-criteria are all in-sim]
 - **Depends on T15a** (done). Not blocked on anything else — see the corrected T15 line above.
 - ⚠ **THE REQUIREMENT THAT MUST NOT BE LOST, carried verbatim from §B12.1a:** *"HEADLESS IS MANDATORY EVEN
   THOUGH THE UI IS PORTED. The full port brings MechJeb's whole GUI with it. It must be vendored but **never
@@ -6231,6 +6231,28 @@ ascent looks like until circularisation, and the ORBIT view had never been previ
   `plugin/preview/PreviewMain.cs` (two scenes).
 
 ### S42 [owner-gated] The RSS scaled-space globe: `Custom/HapkeScaled` defeats the body-map lookup — **HELD** (`/next` SKIPS it; build-then-verify-on-glass) — [TIER 5: held / owner-action / Part-B-bound]
+
+⭐ **THE MISSING INPUT, HARVESTED VERBATIM FROM `KSP.log` BY [[S194]], 2026-09-07 — the owner's 05:06
+flight, line ~103248. `G12` (via [[S18]]) has waited for this and it exists nowhere else; the log is
+overwritten on the next run, so it is copied here in full rather than cited.**
+
+```
+[WRN 05:12:00.850] [DragonScreen] no usable scaled-space map for Earth on shader 'Custom/HapkeScaled' - NAV draws the grid and track only. Said once per body+shader. Texture slots: _MainTex=4x4, _BumpMap=null, _OcclusionMap=null, _ResourceMap=null, _MainTexLow=null, _BumpMapLow=null, _InfluenceMap=null, _MainTexMid=null, _BumpMapMid=null, _MainTexHigh=null, _BumpMapHigh=null, _MainTexSteep=null, _BumpMapSteep=null, _DisplacementMap=null, _ColorMap=null, _HeightMap=null, _EmissiveMap=null, _AtmosphereRimMap=null, _Skybox=4096x4096, _ScatteringTex=null, _SurgeTex=null
+```
+
+**WHAT THE SLOT LIST SAYS, read but NOT acted on (this line stays `HELD`; [[S194]] only harvested it).**
+**21 slots. Nineteen are `null`. Exactly two carry a texture and NEITHER is a body map:**
+`_MainTex = 4x4` — a placeholder, not a planet — and `_Skybox = 4096x4096`, which is the star field
+`Custom/HapkeScaled` samples for its own lighting, not Earth's surface. ⇒ **the surface map is not merely
+in a differently-named slot; it is not on the material at all**, so every remaining "read it from another
+slot" hypothesis is closed by this line and the search has to move to where Kopernicus/RSS actually keeps
+the scaled-space texture. ⛔ **Not investigated here** — C1.1, and this line is owner-gated.
+
+⚠ **AND SOMETHING ON THE SAME GLASS CONTRADICTS THE WARNING'S OWN CONCLUSION.** The warning says
+*"NAV draws the grid and track only"* — but the 05:12 captures show **a fully textured Earth** with
+Africa, Arabia, India, Europe and South America. ⇒ either a second path finds a map after this warning
+fires, or the warning outlives the condition it reports. Whoever takes S42 must start by reconciling
+those two facts; see [[S197]], which measures the globe that IS being drawn.
 Logged by the same pass (finding **C**), and **deliberately NOT claimed as fixed** — the brief said escalate,
 and the escalation is right. Evidence is S40's log line: under RSS the planet wears
 **`Custom/HapkeScaled`**, whose texture slots are not the stock ones, so `ImageStore.BodyMap`'s
@@ -18717,7 +18739,18 @@ showed.
 
 ⛔ No `install`, no glass, no `git push`. §14.4(a) untouched.
 
-### S147b [S] The bottom bar's other three values have no source — **HELD 2026-09-06 — two are §1.4, one is Part B** — [split from [[S147]]; H40's remainder]
+### S147b [S] The bottom bar's other three values have no source — **HELD 2026-09-06 — two are §1.4, one is Part B** — ⚠ **AND ALL THREE WERE ON SCREEN, FROZEN, IN THE OWNER'S 2026-09-07 FLIGHT** — [split from [[S147]]; H40's remainder]
+
+🟢 **CONFIRMED IN THE CAPSULE, 2026-09-07 — the owner's words, verbatim (C1.12):** *"no mechjeb of ours
+displayed. No readings on the screen read live. Text is fine"*. Recorded by [[S194]].
+- **All three of this line's unsourced values were visible and frozen** in the 05:12 captures:
+  `POINTING MODE / Sun + GEO`, the comm block `SPX 22:33 0.00 GND TDRS · ISS`, and the counter
+  `79/1450122`. Beside them, `CURRENT STATE / PRELAUNCH` — the one value [[S147]] made live — read
+  correctly. **The bar therefore shows one live value and three baked ones on the same row**, which is
+  precisely why the row reads dead.
+- ⛔ **THE HOLD STANDS AND THIS DOES NOT LIFT IT (C1.12).** Two of the three are §1.4 owner calls and one
+  waits on Part B; the owner reporting the SYMPTOM is not a ruling on the comm block or the counter, and
+  no build chat may read one into it. What this adds is evidence for the question when it is put.
 - ⛔ **POINTING MODE — Part B.** The registry's authority is *"attitude controller / `Steering` target"*,
   and `src/Steering.cs` is deleted and never recovered (§B12.8 rider). There is nothing to read until a
   controller exists. ⚠ **Do NOT substitute `ModeText`**: that is the control AUTHORITY (IDLE / AUTO /
@@ -19257,7 +19290,7 @@ answered"*; it is answered, it was un-withdrawn by the answer, and its action is
 ⚠ [[S160]]'s *"VT-02 is withdrawn, no code owed — do not re-open it from this line"* was correct when
 written and stays correct **for S160**: the work belongs to S153c, not there.
 
-### S153a [S] Cover: raise the type to the two floors — **HELD 2026-09-06 — BUILT, MEASURED, AND REVERTED: this page's baked geometry cannot hold the ruling's type, and re-cutting it is an owner call** — [split of [[S153]]; ~~**24**~~ → **48** below-floor draws ([[S165]] 2026-09-06)]
+### S153a [S] Cover: raise the type to the two floors — **TODO — UNHELD 2026-09-07 by [[S194]]: `S153a-Q1` is ANSWERED (owner, on the glass at 2560: *"Text is fine"*), so the geometry does NOT have to give. Re-read S153a-Q1's answer in [[S194]] before touching a size** — [was HELD 2026-09-06: built, measured and reverted; this page's baked geometry could not hold the raise] — [split of [[S153]]; ~~**24**~~ → **48** below-floor draws ([[S165]] 2026-09-06)]
 - **Scope:** `plugin/src/pure/CoverPage.cs` only.
 - ⭐ **COUNT DOUBLED BY [[S165]], 2026-09-06 — 24 → 48, and the 24 new ones are ONE CAMERA VIEW.** The
   census rendered only `CoverCam.Earth`; the **MAP** view draws a whole pan/zoom cluster —
@@ -19369,6 +19402,37 @@ seat"*. Once those disagree, one of them has to move, and the one with a MEASURE
 floor. ⚠ **But it is the owner's page**, it is tier-1 geometry, and (2) is a legitimate answer if
 fidelity to the export matters more than glanceability on this particular screen.
 
+🟢 **S153a-Q1 — ANSWERED 2026-09-07 BY THE OWNER, ON THE GLASS, AT 2560. Verbatim (C1.12), free text
+from his report on the 05:06 install:** *"no mechjeb of ours displayed. No readings on the screen read
+live. Text is fine"*. Recorded by [[S194]].
+
+⭐ **WHAT "TEXT IS FINE" ANSWERS, AND WHY THE OWNER'S EYE IS THE ONLY INSTRUMENT THAT COULD.** Q1 above is
+a dilemma — *geometry or floor* — and it only IS a dilemma because both were believed binding. The floor
+side was not: `Typography.Min = 16f` was measured **at `screenWidth = 1280`, in game, 2026-08-05, from the
+seat**, and [[S115]] doubled the shipped width to **2560** on 2026-09-05 without re-deriving it (that is
+the premise `G12` recovered from git after `158eb2a` deleted the comment carrying it). So every one of the
+four overflow groups measured above was a collision with a floor whose own measurement no longer applied
+to the screen it was being enforced on. **The owner has now judged the SHIPPED type in the capsule, at
+2560, and it reads.** No render, no census and no build chat could have produced that judgement.
+
+⛔ **WHAT THIS DOES *NOT* SAY — stated flatly, because the tempting misreading is the destructive one.**
+It is **NOT** "delete the floor", it is **NOT** an `OVERRIDE` of R-01, and it does not touch the LIVE /
+STATIC split or `MinDesignFor` / `DenseDesignFor`. It answers exactly one empirical question — ***is the
+type this build ships too small to read from the seat?*** — and the answer is **no**. The **census stays**
+and keeps counting. What changes is its STANDING: a below-floor draw is **no longer presumed a defect**,
+it is an observation against a floor whose premise is known to be stale at 2560. ⇒ **Of Q1's four options
+the geometry no longer has to give**, so (1) and (3) are off the table for the reason that made them
+painful; the page proceeds nearest to **(2)** — raise where a box allows, record the residual — with the
+residual now benign rather than a debt.
+
+⚠ **AND THE FLOOR ITSELF IS STILL UN-RE-DERIVED.** *"Text is fine"* says the current type passes; it does
+**not** supply a new measured `Min` for 2560, and nobody may infer one from it (C1.12: no quote, no
+ruling). Re-deriving the floor at the shipped width is its own line and its own glass pass.
+
+**⛔ UNBLOCKS, and only these:** [[S153a]] · [[S153b]] · [[S153d]] · [[S153e]] · [[S154d]] → `TODO`.
+**[[S153c]] STAYS HELD** — it was never blocked on this question; it is held on its **own** `S153c-Q1`
+(where the LIVE/STATIC line runs on a checklist row), which is still unanswered.
+
 **Q2 — does the STATIC half land on its own, or wait for Q1?**
 *Situation.* The three reference cards are a self-contained change that removes **16 draws** from the
 band no content type is allowed to be in (below-Dense 47 → 31). It fits vertically. It overruns the
@@ -19383,7 +19447,7 @@ column divider by ~14 design px on ONE row of one card.
 ⛔ **Neither Q1 nor Q2 is decided here, and nothing is half-landed while they are open** — the code is
 reverted to HEAD and only the two instrument fixes remain.
 
-### S153b [S] The Vehicle family: raise the type to the two floors — **HELD 2026-09-06 — the SAME wall as [[S153a]], measured on this family too; blocked on S153a-Q1, which governs all six** — [split of [[S153]]; **441** below-floor draws, the largest group]
+### S153b [S] The Vehicle family: raise the type to the two floors — **TODO — UNHELD 2026-09-07 by [[S194]]: `S153a-Q1` is ANSWERED and no longer blocks this line** — [was HELD 2026-09-06 on the same wall as [[S153a]], measured on this family too] — [split of [[S153]]; **441** below-floor draws, the largest group]
 - **Scope:** `VehicleOverviewPage.cs` · `VehicleMechPage.cs` · `VehicleSubsystemPage.cs` — eight page-views
   (`Vehicle` 80, `VehicleMech` 32, `VehicleCrew`/`Power`/`Avionics`/`Gnc`/`Thermal` 43 each,
   **`VehiclePropulsion` 114 — the worst page-view in the build**).
@@ -19429,7 +19493,7 @@ inheriting this verdict — the mechanism is general, but whether a given page h
 - `python plugin/build.py test` → **ALL SUITES PASSED** with the tree back at HEAD.
 - **No code landed from this line.** No `install`, no glass, no `git push`. §14.4(a) untouched.
 
-### S153c [S] The procedure pages: raise the type, and settle where the LIVE/STATIC line runs — **HELD 2026-09-06 — on its OWN question, which the line itself says a build chat must not settle; now posed properly under C1.14** — [split of [[S153]]; ~~**208**~~ → **215** below-floor draws ([[S165]] 2026-09-06)]
+### S153c [S] The procedure pages: raise the type, and settle where the LIVE/STATIC line runs — **STILL HELD 2026-09-07 — `S153a-Q1` is answered and no longer blocks it, but THIS LINE WAS NEVER BLOCKED ON THAT ONE. It is held on its OWN `S153c-Q1` (where the LIVE/STATIC line runs on a checklist row), which is unanswered and which the line itself says a build chat must not settle** — [split of [[S153]]; ~~**208**~~ → **215** below-floor draws ([[S165]] 2026-09-06)]
 - **Scope:** `SuitCheckPage.cs` (~~47~~ **54**) · `VrioTestPage.cs` (37, drawn by BOTH `Procedure` and
   `VrioTest` — one file, two page-views, see [[S110]]) · `ManualChuteDeployPage.cs` (58) ·
   `DeorbitBurnPrepPage.cs` (21) · `EntryPage.cs` (8).
@@ -19534,7 +19598,7 @@ warns that answering them at different times means laying the page out twice.
    twice.
 
 
-### S153d [S] The systems deep-views: raise the type to the floor — **HELD 2026-09-06 — probed and rendered: the schematic's label/value stacking and the READOUTS column both collide; blocked on S153a-Q1** — [split of [[S153]]; **73** below-floor draws]
+### S153d [S] The systems deep-views: raise the type to the floor — **TODO — UNHELD 2026-09-07 by [[S194]]: `S153a-Q1` is ANSWERED and no longer blocks this line** — [was HELD 2026-09-06: probed and rendered, the schematic's label/value stacking and the READOUTS column both collide] — [split of [[S153]]; **73** below-floor draws]
 - **Scope:** `SystemsTreePage.cs` (31) · `SystemsPidPage.cs` (42).
 - **Classification:** node labels and their values are LIVE readouts — a straight raise to `MinDesignFor`.
   The schematic's own annotation captions are the only static-reference candidates.
@@ -19568,7 +19632,7 @@ split warned about.
   green with the tree at HEAD. **No code landed.** No `install`, no glass, no `git push`.
 
 
-### S153e [S] The plot pages: raise the type over the drawings — **HELD 2026-09-06 — probed and rendered: the docking clusters' labels overflow their own buttons; blocked on S153a-Q1** — [split of [[S153]]; **75** below-floor draws]
+### S153e [S] The plot pages: raise the type over the drawings — **TODO — UNHELD 2026-09-07 by [[S194]]: `S153a-Q1` is ANSWERED and no longer blocks this line** — [was HELD 2026-09-06: probed and rendered, the docking clusters' labels overflow their own buttons] — [split of [[S153]]; **75** below-floor draws]
 - **Scope:** `DockingSimPage.cs` (39) · `RendezvousPage.cs` (8) · `AscentPage.cs` (17) ·
   `NavOrbitPlotPage.cs` (11).
 - **Classification:** ⭐ `DockingSimPage`'s **pad captions are named STATIC in the ruling** — and at
@@ -20005,7 +20069,7 @@ the boxes someone remembered.** It counts all six now.
   attitude, six translation — and **no baked number survives anywhere on the frame**.
 - No `install`, no glass, no `git push`. §14.4(a) untouched — this block reads and commands nothing.
 
-### S154d [S] Frame 58: the FLIGHT COMMANDS block — **HELD 2026-09-06 — HALF of its DONE-when was ALREADY MET by [[S132]]; the other half needs space the frame has not got (S153a-Q1)** — [H10]
+### S154d [S] Frame 58: the FLIGHT COMMANDS block — **TODO — UNHELD 2026-09-07 by [[S194]]: `S153a-Q1` is ANSWERED, so the space the frame has not got no longer has to be found. HALF of its DONE-when was already met by [[S132]]** — [H10]
 - ⛔ **This is the one split with a §14.4(a) edge in it.** FLIGHT COMMANDS names controls that would fly
   the vehicle. Until Part B they stay an honest no-op — *click, no light, no action, no red* — so this
   line draws the block's STATE honestly and wires nothing.
@@ -20067,7 +20131,23 @@ policy exists to prevent, and it would be invisible afterwards.
 - Every measurement above is a row/column profile of the shipped raster, not an estimate.
 - No `install`, no glass, no `git push`. §14.4(a) untouched — and untouchable from this page.
 
-### S155 [S] The Cover's `RUNNING 00:22:57` is a frozen clock — **TODO (needs a definition first)** — [H2; split out of [[S50]] 2026-09-06; TIER 3]
+### S155 [S] The Cover's `RUNNING 00:22:57` is a frozen clock — **TODO (needs a definition first)** — ⚠ **AND IT IS NOW THE OWNER'S OWN COMPLAINT** — [H2; split out of [[S50]] 2026-09-06; TIER 3]
+
+🟢 **THE OWNER SAW THIS IN THE CAPSULE, 2026-09-07, and it is half of what he reported. Verbatim
+(C1.12):** *"no mechjeb of ours displayed. No readings on the screen read live. Text is fine"*. Recorded
+by [[S194]], which diagnosed the middle clause against the in-game captures.
+- ⭐ **THE CLOCK IS THE LOUDEST THING ON THE PAGE THAT DOES NOT MOVE, AND THAT IS WHY HE SAID IT.** The
+  Cover's genuinely live readouts were all correct at the moment of capture — `ACTIVE PHASE PRELAUNCH`,
+  `INERTIAL VELOCITY 408 m/s`, `ALTITUDE 111 m`, `INCLINATION 28.62°`, `CURRENT STATE PRELAUNCH`,
+  `ON SURFACE - NO ORBIT` — and the four dashed ones are honestly dashed because they do not exist on the
+  pad (§14.4(e)). **What dominates the page is the frozen half**, and a stopwatch reading `00:22:57` on a
+  vehicle that has not launched is the single most convincing piece of evidence that nothing is live.
+- ⛔ **This raises the line's PRIORITY; it does not answer its question.** [[S105]]'s reasoning still
+  stands verbatim, and *"the owner noticed"* is not a definition of what the clock times. **The C1.14
+  question this line needs is unchanged and still unasked** — and now has a reason to be asked.
+- ⚠ **It is not even text: it is a picture.** `KSP.log` 05:12:01.251 — `[DragonScreen] loaded asset
+  running_00_22_57 152x83`. The frozen value is a HARVESTED PNG, so nothing can make it move without
+  replacing the asset with drawn type. Note that in the build when this lands.
 
 - **The finding.** A stopwatch is the one element a viewer assumes is live, and this one has read
   `00:22:57` since the art was exported.
@@ -20600,7 +20680,7 @@ the host) · [[S135c]] and [[S155]] (each needs a definition or an owner call) �
 
 | id | line | what it decides |
 |---|---|---|
-| **S153a-Q1** | [[S153a]] | the geometry wall — **governs six lines** |
+| ~~**S153a-Q1**~~ | [[S153a]] | the geometry wall — ✅ **ANSWERED 2026-09-07 by the owner on the glass** (*"Text is fine"*); recorded by [[S194]]. Unblocked S153a/b/d/e + S154d; S153c stays held on its own Q1 |
 | **S153a-Q2** | [[S153a]] | does the Cover's STATIC half land alone, or wait for Q1 |
 | **S153c-Q1** | [[S153c]] | where the LIVE/STATIC line runs **through** a checklist row |
 | **S153c-Q2** | [[S153c]] | is `VrioTestPage` laid out once, or twice |
@@ -23498,27 +23578,288 @@ or NAVIGATION, and all of those are now live and pinned.
 
 ---
 
-### S194 [O] Record the owner's 2026-09-07 flight results, and close what they unblock — **DOING** — [owner report on the 05:06 install, 2026-09-07; a RECORDING task]
+### S194 [O] Record the owner's 2026-09-07 flight results, and close what they unblock — **DONE 2026-09-07 — one line CLOSED on the glass, five UNHELD by a question the owner answered in eleven words, and the symptom he reported is not the defect it looks like** — [owner report on the 05:06 install, 2026-09-07; a RECORDING task]
 
-🟢 **OWNER, 2026-09-07, verbatim, after flying the 05:06 install:**
+🟢 **OWNER, 2026-09-07, verbatim (C1.12), free text, after flying the 05:06 install:**
 
 > *"no mechjeb of ours displayed. No readings on the screen read live. Text is fine"*
 
-**Three findings, and they are NOT equal — that is the whole content of this line.**
+⛔ **THIS TASK RECORDS AND UNBLOCKS. No page changed, no type was raised, no code was touched** — `git
+show --stat` is `REGISTER.md` alone. Docs/register-only ⇒ C1.3's build/preview gate is N/A and is skipped
+by that carve-out, not by omission. No `install`, no glass, no `git push`. `docs/BUILD_PLAN.md` and
+`docs/QC_FINDINGS.md` untouched (both guarded — C1.12's G10 standard).
 
-1. **`T15b` → the R2 row that failed on 2026-09-05 has now PASSED on the glass.** *"no mechjeb of ours
-   displayed"* is R2 verbatim. ⚠ Before closing anything, establish whether `KSP.log`'s
-   `ADDON BINDER: Cannot resolve assembly: DragonScreen.Mech` (05:08:54, twice) means the embed did not
-   load — an R2 that passes because nothing loaded proves nothing.
-2. **`S153a-Q1` → ANSWERED by *"Text is fine"*.** The floor was measured at `screenWidth = 1280` on
-   2026-08-05 and never re-derived after [[S115]] doubled it to 2560; the owner has now judged the shipped
-   type **in the seat at 2560**, which is the only instrument that can answer it. Unblocks [[S153a]]
-   [[S153b]] [[S153c]] [[S153d]] [[S153e]] [[S154d]]. ⛔ **It does NOT delete the floor** — it answers
-   *"is the shipped type too small"*, no.
-3. **"No readings on the screen read live" — DIAGNOSED, and it is NOT a data defect.** Record it against
-   [[S155]] and [[S147b]] as the owner-visible symptom of those lines. **No data-path defect is opened.**
+⚠ **PROVENANCE, said first (C1.12).** This chat had **no glass time and ran no `install`.** Its own
+evidence is three sets of files the 05:06–05:19 session left on disk and which it READ, never wrote:
+`KSP.log` (47.1 MB), `DragonScreen_capture/screen1..3.png` (05:12) and
+`DragonScreen_capture/New_Crew-2_20260907_051159.{params.csv,events.jsonl,manifest.json}`. **C7 bars the
+KSP install as a build SOURCE; these are its run OUTPUT, read as evidence at this task's own direction,
+and nothing under the install was modified.** The eleven words above are the owner's; every deduction
+below is this chat's and is labelled as one.
 
-⭐ **AND HARVEST THE LOG BEFORE IT IS OVERWRITTEN** — [[S42]]'s missing shader/texture-slot line; the
-two-profile confusion the tune log reveals; and the BlackBox run's 18 coverage defects, each as its own line.
+---
 
-⛔ **This task RECORDS and UNBLOCKS. It changes no page and raises no type.**
+#### 1. `T15b` → **DONE.** The row that failed is the row he answered — and the log says the embed really was there to fail
+
+**⛔ THE FIRST JOB WAS TO EARN THE RIGHT TO BELIEVE R2, AND IT NEARLY DID NOT SURVIVE.** *"no mechjeb of
+ours displayed"* is glass row **R2** almost word for word. But `KSP.log` at **05:08:54.205** carries, twice:
+
+```
+[ERR 05:08:54.205] ADDON BINDER: Cannot resolve assembly: DragonScreen.Mech, Culture=neutral, PublicKeyToken=null
+```
+
+**An R2 that passes because the embed never loaded proves nothing at all** — it is the difference between
+a suppression that works and a mod that is not running. ⭐ **BENIGN, and by evidence rather than by
+reassurance, on two independent grounds.**
+
+1. **It is not ours and not about us.** The same eight lines, in the same 108 ms, name **five other
+   assemblies**: `0_00_AT_Utils_UI`, `System.Runtime`, `UnityGUIFramework`, `EVEManager`, `Utils` — all of
+   them from mods that visibly work in this same session. It is KSP's `AssemblyLoader` resolve handler
+   logging a simple-name probe it does not itself satisfy; the CLR then resolves it normally. **We are one
+   entry in a list, not a special case.**
+2. **The embed demonstrably loaded and ran** — four independent log facts, each doing something only a
+   loaded assembly can do:
+
+| line | evidence |
+|---|---|
+| `207-210` | `AssemblyLoader: Loading assembly at …GameData\DragonScreen\DragonScreen.Mech.dll` |
+| `34903` | in the loaded-assembly manifest with a SHA — `DragonScreen.Mech  7bac86bd…95d3` |
+| `891-892` | `[AddonLoader]: Instantiating addon 'MechCfgRedirect'` **and** `'MechCoreNameGuard'` |
+| `102271`, `102915` | `MechJeb tune applied from the mod … 51 module(s) matched a node (expected 51), of which 11 carried values (expected 11)` |
+
+**The tune line is conclusive on its own**: applying a tune to 51 constructed `ComputerModule`s is not
+something a mod that failed to bind can do. ⇒ **R2 passed with the embed live.**
+
+**WHAT THE LOG THEN LETS THIS CHAT CLOSE — and, as importantly, what it does not.**
+
+| row | verdict | the evidence |
+|---|---|---|
+| **R1** — no `ArgumentOutOfRangeException` from our `VesselState` | ✅ **PASS — but the row's own wording is wrong and is corrected here** | `DragonScreen.Mech.MuMech` appears in **0** stack frames in 47 MB of log. The row said *"there should now be none at all"*; there are **19,246**, and **every one is `MuMech.VesselState.AnalyzeParts ← MuMech.VesselState.Update ← MuMech.MechJebCore.{OnFlyByWire→Drive ×14,897 / FixedUpdate ×4,349}`** — the **un-renamed** namespace, i.e. **the owner's own `MechJeb2`**, on his own vessel, hitting stock KSP's `ModuleGimbal.GetPotentialTorque` index bug. ⭐ **The renamed namespace is what makes this decidable at all** (§B3): ours would read `DragonScreen.Mech.MuMech.VesselState`, and it never does. Last run ours threw **6,935**; this run **0** |
+| **R2** — no MechJeb window or toolbar button of ours | ✅ **PASS — the owner's own words, above** | and, per the four rows above, with the embed loaded |
+| **R3** — only the shipped tune in `GameData/DragonScreen/PluginData/` | ✅ **PASS, and by a better witness than the row asked for** | The owner did **not** do housekeeping step 1, so `mechjeb_settings_global.cfg` and `mechjeb_settings_type_New Crew-2.cfg` are still there — **both still stamped 2026-09-05 08:11**. ⭐ **Leaving them made them a written-or-not detector:** a new write would have moved the mtime and neither moved during a 2026-09-07 session. `mechjeb_settings_type_Crew-Dragon.cfg` **byte-identical** to `docs/reference/` (`cmp` clean, run here) |
+| **R4** — `GameData/MechJeb2/` untouched | ✅ **PASS — with the row's test replaced, because the row's test cannot work** | The redirect logged clean at 05:09:08: `embedded MechJeb settings directory -> …DragonScreen\PluginData (was …MechJeb2)`. ⚠ **But his `mechjeb_settings_global.cfg` IS stamped 05:18**, so the row as written ("timestamp unchanged") reads as a fail. **It is his own MechJeb2 saving its own settings at the end of his own flight** — its `MuUtils._cfgPath` is a static in *its* assembly and our reflection never reaches it. ⭐ **The sound test is the other end:** a write of ours lands in `DragonScreen/PluginData` (which is exactly what 2026-09-05 proved), and **nothing landed there on 2026-09-07**. See stray 1 |
+| **R5** — the three new log lines | ✅ **PASS, all three** | (a) `MechJeb core name guard: our 'MechJebCore' is out of KSP's PartModule name table (2 entries); only DragonMechJebCore can be named` — **the good wording**, not the "was not under KSP's PartModule key" fallback · (b) `BARE MechJebCore` — **0 occurrences** · (c) `drive authority` — **0 occurrences**, so nothing has called `AuthorizeDrive` and §14.4(a) holds |
+| **R6** — the tune line reads two numbers and both match | ✅ **PASS** | `51 module(s) matched a node (expected 51), of which 11 carried values (expected 11)`, twice (load + flight) |
+| **C2** — no MechJeb action-group entries | ✅ **PASS, on the negative check only** | `MechJeb action-group removal failed` — **0 occurrences**, so `RemoveInheritedActions()` neither failed nor threw. ⚠ The VAB list itself was not seen by anyone |
+| **C3** — `KSP.log` clean of MechJeb noise at the main menu | ✅ **PASS** | `Failed to load AssetBundle` **0**; the 47 `InstallChecker`/`CompatibilityChecker` hits are **Harmony's, Firefly's and RealismOverhaul's own**, none MechJeb's — T15b(A)'s three excluded `[KSPAddon]`s are demonstrably absent |
+| **C1** — one core, on the Dragon, PAW toggle hidden | ⚠ **NOT CHECKED — a right-click in the VAB, and nobody did it** | The half that IS on record: `DragonScreen.cfg`'s `@PART[TE_18_DRAGONV2_POD\|TE_18_DRAGONV2_POD_I4]` patch applied to **exactly those two parts** (log 85179-85182) and to nothing else |
+| **C4** — the screens work and still fly nothing | ⚠ **HALF** | They work — the owner walked them and the captures prove it. *"press a flight command"* was not reported, though R5(c) shows nothing reached `AuthorizeDrive` |
+
+⭐ **SO: EVERY ROW THAT PROTECTS A USER'S OWN MECHJEB FROM US — R1, R2, R3, R4, R5 — PASSED, and three of
+those are the ones that FAILED on 2026-09-05.** T15b's three DONE-criteria are *a core loads* (R6, twice),
+*no second MechJeb UI appears* (R2, the owner's words) and *the cfg is applied* (R6 again, plus R3's
+byte-check). **All three are met on the glass, under a gate the owner opened and this chat did not touch.**
+⇒ **T15b is DONE and Part B has a proven host.** The two unwalked rows are **C1 and C4's second half**,
+both cosmetic verification rather than safety, and both are named here rather than quietly counted as
+passes — see stray 2.
+
+⚠ **A DISCREPANCY THIS CHAT WILL NOT PAPER OVER.** `T15d` records that on 2026-09-05 the owner's own
+MechJeb threw `GetPotentialTorque` **zero** times. On 2026-09-07 it threw **19,246**. That inversion is
+real and is not explained by anything in this task. ⛔ **What it is NOT:** ours (0 frames in our
+namespace), and not something our fix could have caused — `GetMasterMechJeb` is
+`vessel.GetModule<MechJebCore>(p => p.running)` and, after §B3, *his* `MechJebCore` and *ours* are
+different CLR types in differently-named assemblies, so **his master election has never been able to see
+our core, before or after.** The likely reading is simply that the 09-05 walk (08:06-08:13) was not a
+gimballed flight and the 09-07 one was a 20-part, 1571.9 t stack. **Likely is not measured**, the 09-05
+log is overwritten, and so this is recorded as an open observation rather than a conclusion.
+
+---
+
+#### 2. `S153a-Q1` → **ANSWERED**, and it is the largest thing in this report
+
+*"Text is fine."* **Three words that close a question which has held six register lines and 856 counted
+draws since 2026-09-06.** The full answer — what it settles, what it explicitly does not, and the
+`1280 → 2560` premise failure that made the dilemma false in the first place — is written **where the
+question was posed**, under [[S153a]]'s `## Open questions for the owner (C1.14)`, so that nobody meets
+Q1 again without meeting its answer. It is not restated in full here; recording a ruling in two places is
+how it gets read two ways.
+
+**In one line:** the floor's `Min = 16f` was measured **in game, from the seat, at `screenWidth = 1280`**
+on 2026-08-05; [[S115]] doubled the shipped width to **2560** without re-deriving it; the owner has now
+judged the shipped type **in the seat, at 2560**, and it reads. ⛔ **It answers *"is this type too
+small"* — no. It does NOT delete the floor, and it is not an `OVERRIDE` of R-01.** The **census stays and
+keeps counting**; what changes is that a below-floor draw is **no longer presumed a defect**.
+
+| line | before | after |
+|---|---|---|
+| [[S153a]] Cover — 48 draws | HELD | ✅ **TODO** |
+| [[S153b]] Vehicle family — 441 draws | HELD | ✅ **TODO** |
+| [[S153c]] procedure pages — 215 draws | HELD | ⛔ **STILL HELD** — never blocked on this question; held on its **own** `S153c-Q1` (where the LIVE/STATIC line runs on a checklist row), unanswered |
+| [[S153d]] systems deep-views — 73 draws | HELD | ✅ **TODO** |
+| [[S153e]] plot pages — 75 draws | HELD | ✅ **TODO** |
+| [[S154d]] Frame 58 FLIGHT COMMANDS | HELD | ✅ **TODO** |
+
+⭐ **FIVE, NOT SIX — AND SAYING "SIX" WOULD HAVE BEEN THE EASY ERROR.** This task was handed a list of six
+lines to unblock. **[[S153c]] is not on `S153a-Q1`'s hook and never was**: its header has said since
+2026-09-06 that it is held *"on its OWN question, which the line itself says a build chat must not
+settle"*. Unblocking it on the strength of an answer to a **different** question would hand a build chat
+the LIVE/STATIC ruling by accident — precisely the C1.14 failure that line was written to prevent. **It
+stays held, and its Q1 is still owed an answer.**
+
+⚠ **AND THE FLOOR IS STILL UN-RE-DERIVED AT 2560.** *"Text is fine"* says the current type passes; it
+supplies no new measured `Min`, and **no one may infer one from it** (C1.12: no quote, no ruling). That
+is [[S198]].
+
+---
+
+#### 3. "No readings on the screen read live" — **DIAGNOSED, and it is NOT a data defect**
+
+⛔ **NO DATA-PATH DEFECT IS OPENED, and that is a finding, not a dismissal.** All three 05:12 captures are
+the **Cover**, and it was read here directly rather than taken on report. **Everything on it that can be
+live, is live and is correct for a vehicle on the pad:**
+
+| element | drawn | check |
+|---|---|---|
+| `ACTIVE PHASE` | `PRELAUNCH` | ✅ |
+| `CURRENT STATE` | `PRELAUNCH` | ✅ the one bottom-bar value [[S147]] made live |
+| `INERTIAL VELOCITY` | `408 m/s` | ✅ Earth's rotation at 28.6° N — **the pad is not stationary in an inertial frame**, and a naïve build would have shown `0` |
+| `ALTITUDE` | `111 m` | ✅ pad height |
+| `INCLINATION` | `28.62°` | ✅ and **cross-checked against the black box**: `lat_deg = 28.620268` on row 1. On the pad, inclination *is* the latitude |
+| the globe | Earth, with a position marker | ✅ drawn and live — ⚠ **but see [[S197]]**: the marker's longitude does not survive measurement |
+| `SPLASHDOWN TIME` · `APOGEE` · `PERIGEE` · `TARGET LAT`/`LON` · `ENTRY ENABLED` | **—** | ✅ **honestly dashed**: none of these quantities exists on the pad (§14.4(e)). `ON SURFACE - NO ORBIT` says so in words |
+
+⭐ **SO WHAT DID HE SEE? THE FROZEN HALF — AND IT IS THE HALF THAT OCCUPIES THE PAGE.** The live readouts
+are a thin strip along the top and one word in the bottom bar. **The centre-left two-thirds of the screen
+is `Coast to Trunk Jettison`, two procedure cards, and `RUNNING 00:22:57`** — a stopwatch, on a vehicle
+that has not launched, and the one element a viewer assumes above all others is live. That is [[S155]],
+and it is not even text: `KSP.log` 05:12:01.251 shows `loaded asset running_00_22_57 152x83`, **a
+harvested PNG of the frozen value**. Beside it in the same bar sit `POINTING MODE / Sun + GEO`, the comm
+block and `79/1450122` — [[S147b]]'s three unsourced values, all baked, sharing a row with the one live
+one. Recorded against **[[S155]]** and **[[S147b]]**; both lines now carry his words.
+⛔ **The procedure cards themselves are NOT a defect** — they are reference COPY, settled under [[S22]],
+and making them "live" would invent content §1.4 reserves to the owner. **Two frozen things on one page,
+one a bug and one a decision**, and the page gives a viewer no way to tell them apart. That is the honest
+statement of what he reported.
+
+---
+
+#### Harvested from `KSP.log` before it is overwritten
+
+- ⭐ **[[S42]]'s missing input — the `Custom/HapkeScaled` texture-slot line — is copied VERBATIM AND IN
+  FULL into the [[S42]] line.** It exists nowhere else and the next run destroys it; `G12` (via [[S18]])
+  has waited for it. **21 slots, 19 `null`, and the two that are not are `_MainTex = 4x4` (a placeholder)
+  and `_Skybox = 4096x4096` (the star field)** ⇒ the surface map is **not on the material at all**, which
+  closes every "read it from another slot" hypothesis. ⛔ Harvested and read; **not acted on** — S42 is
+  owner-gated and stays `HELD`.
+- **Three new lines opened (C1.1 — LOG it, do not do it):** [[S195]] the two-profile confusion the tune
+  line reveals · [[S196]] the black box's 18 coverage defects · [[S197]] the NAV globe's marker, found by
+  this chat while checking finding 3. Plus **[[S198]]** — re-derive the floor at 2560 — which finding 2
+  makes necessary.
+
+#### Strays LOGGED, not done (C1.1)
+
+1. **Glass row R4's test cannot distinguish our write from the user's own.** It says *"note the timestamp
+   on your own `mechjeb_settings_global.cfg` before launching"* — but a user flying with MechJeb2 will
+   ALWAYS see that stamp move, because his own mod saves normally at the end of his own flight. The row
+   reads as a fail every time. **The sound test is the other end** (nothing new in
+   `GameData/DragonScreen/PluginData/`), which is what was used here. Too small for its own line; noted so
+   a future re-walk does not report a false failure.
+2. **T15b closes with C1 and half of C4 unwalked** — one right-click in the VAB (one PAW section, no
+   `MechJeb: Enabled/Disabled` toggle) and one flight-command press (§14.4(a): click, no light, no action,
+   no red). Both are cosmetic verification, not safety, and every safety row passed. Named here rather
+   than counted as a pass. If a later session is in the capsule anyway, they cost thirty seconds.
+3. ⚠ **`[KSPCF:ModuleIndexingMismatch] Found additional PartModule named 'MechJebAR202' in assembly
+   'MechJeb2'.  Original was in 'DragonScreen.Mech'`** (log 85673). ⭐ **This is the SAME class of hole
+   `T15d` closed for `MechJebCore`, on a different class, and `MechCoreNameGuard` only ever removed the
+   one name** — our assembly sorts first, so **our** `MechJebAR202` won KSP's name table and the owner's
+   real one lost it. `MechJebAR202` is a cosmetic AR202 case part and nothing here ships a node naming it,
+   so the observed effect is a KSPCF warning — but the mechanism is general, and **whether any other
+   vendored `PartModule` name collides has never been enumerated.** Not fixed here (C1.1); it belongs to
+   whoever next opens `MechHost.cs`.
+
+---
+
+### S195 [S] The shipped tune is the TUNED Crew-2 profile, and §B5 says flight 1 flies RSS-RO DEFAULTS — **TODO** — [logged by [[S194]] per C1.1, 2026-09-07; TIER 2: a plan/behaviour divergence, not a bug]
+
+- **The evidence, verbatim from `KSP.log` (05:11:50.774 and 05:11:59.701, both loads):**
+  > `[DragonScreen] MechJeb tune applied from the mod: mechjeb_settings_type_Crew-Dragon.cfg - 51 module(s) matched a node (expected 51), of which 11 carried values (expected 11). This is the TUNED Crew-2 profile (§B5 TUNING TARGET), not the RSS-RO default baseline.`
+- ⭐ **NOTHING IS BROKEN AND NOTHING LIED — the log line says exactly what it is, deliberately.** [[T15b]]
+  wrote that sentence into `ApplyTune` precisely so this could not be inherited as a confusion, and its
+  own entry says *"T15b built the loader §B12.1 asks for; it did not decide what flight 1 applies"*.
+- **The divergence.** The Part-B gate and §B5's two-profile split say flight 1 is flown at **RSS-RO
+  DEFAULT settings as the baseline to tune from**, with the tuned Crew-2 profile demoted to a TUNING
+  TARGET and the one-parameter-at-a-time fine tune deferred until after the first recorded flight (T22).
+  **What is installed and loading today is the tuning target.** So the *first recorded flight* would be
+  flown against the wrong baseline, and T22 would have nothing to tune from.
+- ⚠ **NOTHING FLIES YET, WHICH IS WHY THIS IS TIER 2 AND NOT TIER 1.** §14.4(a) holds; `AuthorizeDrive`
+  is called by nothing ([[S194]] confirmed `drive authority` appears **0** times in the flight log). The
+  loaded tune is inert. **The moment T18 lands it is not.**
+- ⛔ **NOT FIXED BY [[S194]] (C1.1), and it may not be a build chat's to fix at all.** The seam exists and
+  is named — `DragonMechJebCore.tuneFile`, blank = load nothing — but **which profile flight 1 flies is a
+  plan question owned by §B5 and T22**, and `docs/BUILD_PLAN.md` is a guarded file (C1.12 / G10).
+- **DONE when:** it is settled in writing which profile is loaded before the first recorded flight, and
+  either the loader matches it or the line records the owner's decision to keep the target profile.
+
+### S196 [S] The black box logged 18 coverage defects, and all 18 are the same one row — **TODO** — [logged by [[S194]] per C1.1, 2026-09-07; TIER 3: instrumentation]
+
+- **The run.** `New_Crew-2_20260907_051159` — **1268 rows, 133 events, 0 write errors, 18 coverage
+  defects**, `rec_build` p50/p90/p99/max **181/215/470/9207 µs**, closed on `scene_change` at 05:18:36.
+  ⭐ **0 write errors and 133 events over a 7-minute flight: the recorder itself worked.**
+- **The 18 columns**, every one `(partially_written) … declared Live`:
+  `period_s` · `t_ap_s` · `skin_temp_frac` · `hull_temp_c` (**719/720**) and `accel_g_peak` ·
+  `q_pa_peak` · `rate_peak_dps` · `acc_int_s` · `acc_att_s` · `acc_trans_s` · `acc_both_s` ·
+  `acc_att_imp` · `acc_trans_imp` · `acc_both_imp` · `acc_none_s` · `acc_app_att` · `acc_app_trans` ·
+  `act_sat_s` (**1267/1268**).
+- ⭐ **THE DIAGNOSIS, MEASURED FROM THE CSV RATHER THAN INFERRED FROM THE COUNTS.** Every ratio is
+  **eligible − 1**, and the missing row is the same one in all 18 cases: **row 0**, the first sample.
+  Verified by parsing `New_Crew-2_20260907_051159.params.csv` here — for `accel_g_peak` and `acc_int_s`
+  the blank set is exactly `{0}`; for `period_s` / `t_ap_s` / `skin_temp_frac` / `hull_temp_c` it is
+  `{0}` plus 548 rows that are **not eligible** and are not counted against them.
+- ⇒ **It is a first-row bootstrap, not a data-path failure**: an interval accumulator has no interval on
+  the first row it is asked for, and the 720-eligible columns evaluate their gate one row late. **Every
+  one of these columns then filled correctly for the whole rest of the flight.**
+- ⚠ **It is still a defect and is not being talked away** — a `Live` column blank where a reader expects a
+  number is exactly what the coverage check exists to catch, and *"only the first row"* is a reason it is
+  cheap to fix, not a reason to leave it.
+- **DONE when:** row 0 either carries a value or is declared ineligible for these columns, and a run
+  closes with **0** coverage defects.
+
+### S197 [S] On the pad the NAV globe put the vessel marker ~90° from where the vessel was — **TODO** — [logged by [[S194]] per C1.1, 2026-09-07; TIER 2: a live readout that may be WRONG rather than absent]
+
+- **How it was found.** [[S194]] was verifying that the Cover's live elements really were live
+  (finding 3). Every other element checked out. **This one did not** — and a readout that is wrong is
+  worse than one that is dashed, which is §14.4(f)'s whole premise.
+- **The ground truth**, from the run's own black box, row 1:
+  `lat_deg = 28.620268`, `lon_deg = -80.604992` — **Cape Canaveral**; and the page's own `INCLINATION
+  28.62°` agrees with the latitude.
+- **What the capture shows** (`DragonScreen_capture/screen1.png`, 05:12, measured off the image):
+  the disc spans x 952..1815 (centre **1384**, radius **428**) and y 128..985 (centre **556**). The green
+  marker sits at **(1372, 346)** — **12 px off the vertical centreline of an 863-px-wide disc, i.e. on the
+  view's centre meridian** — and 210 px north of centre ⇒ **≈ 29.4° N**. ⭐ **Latitude agrees with 28.62°
+  to within the measurement. Longitude agrees with nothing.** The globe unmistakably shows Africa,
+  Arabia, India, the Mediterranean and South America ⇒ its disc centre is near **10° E**, and −80.6° W is
+  **~91° away, at or beyond the limb** — not near the middle.
+- **TWO READINGS, and this line does not choose between them** — both are ~90°, and both are testable:
+  1. **The marker ignores longitude** and is drawn on whatever meridian faces the camera.
+  2. **The marker is right and the MAP is rotated** — the camera is centred on the vessel's longitude as
+     intended, and the scaled-space texture's UV origin is ~90° out, so Florida is painted as Africa.
+- ⚠ **READING 2 WOULD MAKE THIS [[S42]]'s** — and [[S42]] now carries a matching contradiction: its
+  harvested warning says *"NAV draws the grid and track only"* on a frame where a fully textured Earth is
+  visibly drawn. **Whoever takes either line should take both.**
+- ⛔ **Measured off a PNG by a build chat, not confirmed in the capsule.** Stated as a measurement with
+  its numbers so it can be refuted, not asserted as a defect. **Not fixed here (C1.1).**
+- **DONE when:** the marker's longitude is proved against a known lat/lon by a test, and either it is
+  correct and the map is at fault (→ [[S42]]) or it is fixed.
+
+### S198 [S] The legibility floor has never been re-derived at the shipped 2560 — **TODO (needs a glass pass; owner-gated)** — [logged by [[S194]] per C1.1, 2026-09-07; TIER 2: a standing rule enforced on a stale premise]
+
+- **The gap — and it is why `S153a-Q1` was ever a dilemma.** `Typography.Min = 16f` was established
+  *"in game 2026-08-05 from the proof page's legibility ramp, at 1280 px across a screen 0.2844 m wide,
+  seen from the seat"* — the premise `G12` recovered from git after `158eb2a` deleted the comment carrying
+  it. **[[S115]] doubled `screenWidth` to 2560 on 2026-09-05 and nobody re-ran the ramp.** ⇒ the floor the
+  census enforces, and that [[S153a]]–[[S153e]] were measured against, is a **1280 measurement applied to
+  a 2560 screen**. The mesh is unchanged at **0.2844 m** (log 05:12:00.002), so the physical size of a
+  design pixel has halved.
+- **What is already settled and must NOT be re-litigated here (C1.8):** the owner ruled on the glass,
+  2026-09-07, *"Text is fine"* — **the type this build ships reads from the seat at 2560.** That closed
+  `S153a-Q1` and unheld five lines ([[S194]]).
+- ⛔ **THAT IS NOT A NEW FLOOR, AND INFERRING ONE FROM IT IS THE FAILURE C1.12 NAMES.** *"Text is fine"*
+  says the current sizes pass. It gives **no measured `Min` for 2560**, and no quote supports one, so none
+  may be written. ⇒ **the floor still governs 856 counted draws on a premise known to be stale**, and
+  until it is re-measured neither the census's verdicts nor `MinDesignFor` / `DenseDesignFor` rest on
+  anything current.
+- ⚠ **This is an `install` + glass task and this line grants nothing (C1.12).** It needs the proof page's
+  legibility ramp re-run in the capsule at 2560, from the seat, by the owner.
+- **DONE when:** the ramp has been re-walked at 2560, a measured `Min` is recorded **with the owner's own
+  words**, `Typography.cs`'s header states the new premise **beside** the old one marked `SUPERSEDED IN
+  PLACE` (C1.16 / G12 — the 1280 measurement is not deleted), and the census is re-run against it.
