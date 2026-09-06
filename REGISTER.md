@@ -6230,7 +6230,7 @@ ascent looks like until circularisation, and the ORBIT view had never been previ
 - **Files:** `plugin/src/pure/NavPage.cs` · `plugin/test/PageTest.cs` (`OpenTrajectory`, +23 checks) ·
   `plugin/preview/PreviewMain.cs` (two scenes).
 
-### S42 [owner-gated] The RSS scaled-space globe: `Custom/HapkeScaled` defeats the body-map lookup — **DOING** (unheld by the overseer ruling of 2026-09-07: the quarter-turn origin is a constant, not a glass measurement) — [TIER 5: held / owner-action / Part-B-bound]
+### S42 [owner-gated] The RSS scaled-space globe: `Custom/HapkeScaled` defeats the body-map lookup — **NEEDS-WORK — step 1 answered NO: the repo CANNOT establish KSP's scaled-space UV convention, so no origin was changed (the ruling's own stop condition). One cheap, already-existing observation would settle it — see S199** — [TIER 5: held / owner-action / Part-B-bound]
 
 ⭐ **THE MISSING INPUT, HARVESTED VERBATIM FROM `KSP.log` BY [[S194]], 2026-09-07 — the owner's 05:06
 flight, line ~103248. `G12` (via [[S18]]) has waited for this and it exists nowhere else; the log is
@@ -6283,6 +6283,74 @@ two options this line named: the warning OUTLIVES the condition it reports.** Tr
   change `NavPage.Globe` and that constant together and it is green (36/0).** ⛔ Still owner-gated and
   still needing the glass — the repo cannot see KSP's texture, and the preview's stand-in satisfies the
   wrong assumption by construction.
+
+⭐ **STEP 1 RUN, 2026-09-07 — AND THE ANSWER IS "NO". THE REPO CANNOT ESTABLISH KSP's SCALED-SPACE UV
+CONVENTION, SO THE ORIGIN WAS NOT CHANGED.** That is the ruling's own stop condition, taken deliberately
+and not as a failure. ⛔ **No production behaviour changed. Two comments were marked `SUPERSEDED IN PLACE`
+(C1.16/G12) and nothing was deleted.**
+
+- **THE SEARCH, documented (C1.15).** `docs/` (all), `docs/reference/INSTALLED_MODS.md`, the vendored
+  **MechJeb2 source** now in `plugin/mech/` (its only map lookup is `BiomeMap.GetAtt(lat,lon)` — stock
+  `MapSO` does the UV conversion **inside KSP**, so it reveals nothing), `assets/`, and the three prior
+  verdicts. **Not consulted, correctly:** the KSP install (C7 — the `Earth_Color.dds` that would answer
+  this outright lives in `Sol-Textures/`, a deploy target).
+- ⚠ **AND THE REPO DOES NOT MERELY LACK AN ANSWER — IT CARRIES THREE THAT CONTRADICT EACH OTHER:**
+  | source | verdict on the globe | proved against |
+  |---|---|---|
+  | `SCREENS_CONSOLE_PLAN.md:37` (2026-08-28) | **IS mirrored** — swap u like `Quad` | a diagnosis, no render cited |
+  | `ISSUE_REGISTER.md` N5 (2026-08-29) | **NOT mirrored** — "false alarm" | **the PNG preview** |
+  | `QC_FINDINGS.md` C-09 | at most one of the two views is right in game | the preview is the wrong instrument |
+  `docs/NAV_MAP_RENDERING_RESEARCH.md` (2026-09-03) is the most authoritative doc here — written from the
+  actual binaries, configs and log — and it says **nothing** about orientation. Searched for
+  mirror/orient/east/west/flip/uv: **zero hits.**
+- ⛔ **THE OVERSEER'S ARITHMETIC IS RIGHT BUT DOES NOT UNIQUELY IDENTIFY THE FIX, AND THIS IS THE REASON
+  TO STOP.** Two hypotheses BOTH fit [[S197]]'s capture, and **they differ by a MIRROR, not a constant:**
+  - **(i)** current handedness, origin **−90** ⇒ disc centre **9.4° E**
+  - **(ii)** **mirrored** handedness, u=0 ↔ **+90** ⇒ disc centre **9.4° W**
+  Both put Africa and the Mediterranean centre, South America toward one limb and India toward the other
+  — i.e. **both match every continent S197 listed.** Only the **left-right ORDER** separates them, and
+  **S197's record does not state it.** ⇒ a one-line origin change would be a 50/50 guess, which is what
+  step 1's stop condition exists to prevent. (Hypothesis (ii) also fits the owner's 2026-08-27 *"read as a
+  MIRROR image"* report, which (i) does not — so it is not the less likely of the two.)
+- ❌ **CORRECTION TO [[S197]], AND IT IS MINE.** S197's own note claims *"the capture agrees: South
+  America (west) on the left, India (east) on the right."* **The capture's record says no such thing** —
+  it lists which continents were visible, never their order. That sentence was an inference presented as
+  an observation, and it is exactly what C1.12's evidentiary standard forbids. **Struck; see the
+  correction in S197's line.** Everything S197 proved BY TEST is unaffected and still stands.
+- ⭐ **WHAT WAS ESTABLISHED, and it is worth more than the constant would have been: `NavPage.Quad`'s
+  SWAP IS INCOHERENT — measured, not argued.** A per-quad u swap cannot express a texture property at
+  all; it mirrors the picture about **the view's own centre**, so what it samples depends on where the
+  crew is looking. Probed against the shipped code (Greenwich, one texture, an 800×400 well at zoom 2):
+  | view | centre −45° | centre +45° |
+  |---|---|---|
+  | flat map **as drawn** (swapped) | u = **0.2500** | u = **0.7500** |
+  | flat map if NOT swapped | u = 0.5000 | u = 0.5000 |
+  | the globe | u = 0.5000 | u = 0.5000 |
+  ⇒ **the same point on the ground is drawn from texels half the texture apart purely because the view
+  moved.** No texture convention makes that right at more than one centre longitude. So the owner's
+  2026-08-27 confirmation can only have been correct **at the centre it was made at**, and the globe's
+  centre-INDEPENDENT mapping is the only well-formed one of the two. ⛔ **Not changed here** — un-swapping
+  on this argument alone would trade a wrong picture for a differently wrong one while the convention is
+  still unknown. Recorded at `NavPage.Quad` in place.
+- ✅ **THE S42 CONTRADICTION IS FULLY CLOSED, and by a source stronger than [[S197]]'s deduction.**
+  `docs/NAV_MAP_RENDERING_RESEARCH.md` §0.2 (2026-09-03) already had it, verbatim from a real log, 1.74 s
+  apart: the same shader that warned `_ColorMap=null` at 14:57:35.508 logged
+  `body map Earth 16384x8192 from _ColorMap on 'Custom/HapkeScaled'` at 14:57:37.251. **The failure is a
+  load-timing RACE, not an absence** — Kopernicus `ScaledSpaceOnDemand` unloading/reloading Earth's scaled
+  textures, plus ParallaxContinued's `loadTexturesImmediately = False`, both cycling in that log. ⇒ the
+  warning outlives its condition (as S197 deduced from the drawn Earth alone), **and S42's original
+  premise — "no slot carries a colour map" — is simply wrong.** The remaining work on that half is a
+  warning-phrasing fix, not an architecture branch.
+- **VERIFY:** `python plugin/build.py test` → **ALL SUITES PASSED** (64 suite report lines; S197's own
+  suite still **36 checks, 0 failed**). `previewdiff` → **1 changed render input (`NavPage.cs`), 127 pages
+  compared, 127 unchanged, 0 changed / 0 new / 0 removed** — which is the point: the two markings are
+  comments and are provably inert. ⚠ previewdiff also warns `assets/kenney_ui_scifi is now EMPTY`;
+  checked — **not this run's doing** (mtime 2026-09-06 12:49, gitignored, never tracked) and harmless:
+  `.gitignore:77` records it as unused third-party art *"nothing in plugin/ references"*.
+- **DONE when:** the left-right order on a real KSP globe is known (one binary observation — see
+  [[S199]]), the origin **and handedness** are fixed at ONE named constant shared by
+  `MapProjection.cs:187` and `NavPage.cs:1004`, `NavPage.Quad`'s centre-dependent swap is retired with
+  it, and a test pinned to Cape Canaveral fails on the old convention and passes on the new one.
 Logged by the same pass (finding **C**), and **deliberately NOT claimed as fixed** — the brief said escalate,
 and the escalation is right. Evidence is S40's log line: under RSS the planet wears
 **`Custom/HapkeScaled`**, whose texture slots are not the stock ones, so `ImageStore.BodyMap`'s
@@ -24124,6 +24192,15 @@ map is rotated. Nothing was fixed here — the defect is [[S42]]'s (C1.1).** New
   west-left to east-right (`left edge = lonCentre-90`, `right edge = lonCentre+90`, asserted), and the
   capture agrees: **South America (west) on the left, India (east) on the right.** A mirrored texture
   would have reversed them. ⇒ the handedness is right and only the ORIGIN is wrong.
+  ❌ **STRUCK 2026-09-07 by [[S42]] — C1.16: marked in place, not deleted, because the error is the
+  instructive part.** The FIRST half stands and is proved by test: the disc's strips do run west-left to
+  east-right, and that mapping is centre-independent. **The second half does not.** *"the capture agrees:
+  South America on the left, India on the right"* — **the capture's record states no such thing.** It
+  lists which continents were visible and never their order. That was an INFERENCE written as an
+  OBSERVATION, and it is what C1.12's evidentiary standard exists to catch. It matters: without the
+  left-right order, a −90 origin (rotation) and a mirrored texture with u=0 ↔ +90 fit the evidence
+  **equally well**, so the conclusion *"only the ORIGIN is wrong"* was not earned. ⇒ S42 stopped rather
+  than change a constant on it.
 - **THE ARITHMETIC, pinned so it cannot drift while S42 carries it.** The code paints texel
   `u = (lonCentre+180)/360` at the disc centre, i.e. it assumes **u=0 holds longitude -180**. If KSP's
   scaled-space texture actually starts at **-90** (u shifted 0.25 — a quarter turn), that same texel
@@ -24182,3 +24259,26 @@ map is rotated. Nothing was fixed here — the defect is [[S42]]'s (C1.1).** New
 - **DONE when:** the ramp has been re-walked at 2560, a measured `Min` is recorded **with the owner's own
   words**, `Typography.cs`'s header states the new premise **beside** the old one marked `SUPERSEDED IN
   PLACE` (C1.16 / G12 — the 1280 measurement is not deleted), and the census is re-run against it.
+
+### S199 [S] Flight captures live only in the KSP install, which C7 makes off-limits — land them in `assets/reference/` with a hashed manifest — **TODO** — [logged by [[S42]] per C1.1 at the overseer's direction, 2026-09-07; TIER 2: a build INPUT that is out of reach]
+
+- **The exposure.** The 05:12 screen captures (`DragonScreen_capture/screen1..3.png`) and the 05:06
+  `KSP.log` are in the **KSP install**, which C7 defines as a DEPLOY target and forbids as a build input
+  — and **`KSP.log` is overwritten on the next run.** So the only first-hand evidence of what the screens
+  actually did is unreadable by the chats that need it, and half of it is one launch from being gone.
+- **Nothing is lost today**, and that is luck rather than design: [[S194]] harvested the log's key line
+  into `REGISTER.md:6240` verbatim, and `docs/NAV_MAP_RENDERING_RESEARCH.md` §0.2 independently captured
+  the pair of lines that closed S42's contradiction. Both were copied out **by hand, once**.
+- ⭐ **AND IT IS ALREADY COSTING SOMETHING CONCRETE.** [[S42]] stopped this session for want of **one
+  binary fact that those captures already contain**: on the pad globe, is South America LEFT or RIGHT of
+  Africa? That single observation separates a −90° origin from a mirrored texture and would let S42 fix
+  the map without any new glass time. **The evidence exists; it is merely out of bounds.**
+- **What is proposed** (the owner's call — a build chat moves no files): land future captures under
+  `assets/reference/captures/<date>/` with a **hashed manifest**, exactly as [[S184]] landed the NASA art
+  — `sha256` per file, provenance and date recorded, REFERENCE / look-don't-ship (C7.1). Starting with
+  the three 05:12 PNGs, which are worth landing on their own for S42.
+- ⛔ **Not done here (C1.1), and not doable here anyway:** C7 forbids this chat reading the install, so it
+  cannot copy the files even to propose them concretely. This line is the proposal; the move is the
+  owner's.
+- **DONE when:** the owner has landed the captures (or declined), and if landed, a manifest with hashes
+  sits beside them and `docs/INDEX.md` knows what they are.

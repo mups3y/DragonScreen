@@ -401,6 +401,22 @@ namespace DragonScreen
             // the continents mirrored while the grid/track (MapProjection, east-on-the-right) stayed correct.
             // Swapping uMin/uMax reverses the texture horizontally per quad → the land un-mirrors and lines up
             // with the projection. (V/latitude is unchanged, so it does NOT re-mirror.)
+            // ---- ⚠ THE SWAP'S RATIONALE IS SUPERSEDED IN PLACE, 2026-09-07 (S42; C1.16/G12) ----
+            // The USER OBSERVATION above stands and is not touched: on 2026-08-27 the unswapped flat map
+            // read as a mirror image in game. What is superseded is the inference that swapping u per quad
+            // FIXES a texture handedness, because a per-quad swap cannot express a texture property at all:
+            // it mirrors the picture about THE VIEW'S OWN CENTRE, so what it samples depends on where the
+            // crew happens to be looking. Measured against this code on 2026-09-07 - Greenwich, one texture,
+            // two view centres, ppd from a 800x400 well at zoom 2:
+            //     centre -45 deg : lon 0 samples u = 0.2500      centre +45 deg : lon 0 samples u = 0.7500
+            //     the same view UNSWAPPED, and the globe : u = 0.5000 at BOTH centres
+            // => the same point on the ground is drawn from texels HALF THE TEXTURE APART purely because the
+            // view moved. No texture convention makes that right at more than one centre longitude, so the
+            // 2026-08-27 confirmation can only have been correct AT THE CENTRE IT WAS MADE AT.
+            // NOT CHANGED HERE: the real convention is still unestablished (S42), and un-swapping this on
+            // that argument alone would trade a wrong picture for a differently wrong one. What this note
+            // does is stop the swap being cited as settled - it is a known-incoherent fix awaiting the
+            // convention. See NavPage.Globe's matching note.
             // ⛔ BRIGHTENED (user: the map looked dark). The scaled-space _ColorMap is the DAY albedo (not the
             // EVE night map), but a realistic albedo reads dark; the >1 tint multiplies it brighter (GL.Color
             // multiplies the texture, so dark texels lift while already-bright ones just clamp at white).
@@ -1038,6 +1054,26 @@ namespace DragonScreen
                 // way. An earlier pass mirrored this to match Quad on the false assumption the two share a
                 // u->screen convention; the preview showed that put India/east on the LEFT and S.America/west
                 // on the RIGHT. Left as-is: west-left, east-right, matching the east-on-right GlobeProjection.
+                //
+                // ---- ⚠ SUPERSEDED IN PLACE, 2026-09-07 (S42; C1.16/G12 - marked, NOT deleted) ----
+                // WHAT IS SUPERSEDED: the sentence above that settles this on "the preview showed". IT IS
+                // NOT EVIDENCE FOR THIS QUESTION. ImageId.BodyMap has no file behind it; the preview feeds it
+                // a STAND-IN equirectangular Earth from assets/ (PreviewMain.LoadStandIn), which satisfies
+                // this code's u=0 <-> -180 assumption BY CONSTRUCTION. So the preview renders correctly
+                // whatever KSP's real texture does, and it confirmed the stand-in, not the platform. The
+                // convention was settled on an instrument that cannot see the thing under test - QC C-09 says
+                // the same, and it is H-01's failure class.
+                //
+                // WHAT REPLACED IT: nothing yet, and that is the honest state. S42 searched the repo for
+                // KSP's actual scaled-space UV convention and could not establish it (see the register).
+                // Two hypotheses BOTH fit the 2026-09-07 pad capture and differ by a MIRROR:
+                //   (i)  this handedness, origin -90  -> disc centre 9.4 E
+                //   (ii) mirrored handedness, u=0 <-> +90 -> disc centre 9.4 W
+                // The capture's recorded evidence lists which continents were visible but NOT their
+                // left-right order, which is the one thing that separates them. So the draw below is LEFT
+                // EXACTLY AS IT IS - changing it would be a guess - and what is now known for certain is
+                // only this: THIS mapping is centre-INDEPENDENT (u = (lon+180)/360 for every lonCentre,
+                // measured), whereas NavPage.Quad's swapped one is not. See Quad's own note.
                 if (!split)
                 {
                     dl.ImageUV(ImageId.BodyMap, cx - halfW, y0, halfW * 2f, y1 - y0,
