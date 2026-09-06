@@ -20476,6 +20476,21 @@ build chat does not change it. This is a proposal.
   (≤ ~15 px at 2560), the eleven letterboxed pages are UNCHANGED, no glyph is stretched, and the hit map
   still lands on the icons — with `FigmaUINavTest`'s shape check extended to cover the spread case.
 
+  ➕ **SCOPE CORRECTED 2026-09-06, SAME SESSION — MEASURED, NOT REASONED. Nothing above is edited
+  (C1.16); this paragraph replaces one claim in it.** The owner's reply to the analysis was
+  verbatim: **"all pages have the bottom bar problem"**. He is right, and the bullet above understated
+  it. A sweep of every shipped-size preview (`barsweep`, the bar's own left/right border columns):
+  **94 of 94 pages that draw the bar have it at 139..2421. NOT ONE is edge-to-edge.** (The other 26
+  are overlays/popups that cover the bar.) So "the eleven letterboxed pages are UNCHANGED" is the
+  wrong done-criterion — there is no page in the build where the bar currently reaches the glass.
+  ⚠ **AND ON THE FRAME PAGES IT IS NOT THE BAR, IT IS THE PAGE.** `ui_hud` measures art ink at
+  `x 8..2420` with the frame's own border at 140 and 2419 — the WHOLE page is letterboxed and the bar
+  merely agrees with it. Those pages need a different question answered (should the art letterbox at
+  all?), so they are [[S173]]'s, not this line's.
+  ⛔ **A COUPLING THIS LINE MUST NOT BREAK:** `MarginAffordance.cs` exists to PUT A CONTROL IN THAT
+  STRIP — the HUD's `MANUAL DOCKING` → `UiPage.Docking`, and `RENDEZVOUS`. Take the letterbox away and
+  those links have nowhere to live. Whatever this line does to the bar, it answers that first.
+
 **Not defects — checked and cleared this pass, recorded so they are not re-opened:**
 - **Seven rail rows vs the reference's five** — deliberate: the community Figma baked five, the real
   capsule has seven (`CoverPage.PhaseName`, sourced to `REAL_SPACEX_SCREENSHOTS` / `SCREEN_INVENTORY`).
@@ -20489,6 +20504,39 @@ build chat does not change it. This is a proposal.
 - ⚠ **Type larger than the reference throughout** — that is the R-01 floor, and it is **[[S153a]]-Q1**,
   which is the OWNER's to settle. NOT decided here and NOT re-posed.
 
+
+### S173 [O] Attitude HUD / Frame 58 — the page letterboxes, and three readouts break their own boxes — **TODO** — [logged by the 2026-09-06 glass pass per C1.1; TIER 2]
+- **How it was reviewed.** Second page of the owner's page-by-page pass (*"preview the next page and
+  show me the issues you see"*), taken in the bottom bar's OWN tab order — `FigmaUI.BarTarget` =
+  `{Cover, Hud, Vehicle, SuitCheck, Audio}`, so icon 1 follows [[S172]]'s Cover. Measured against
+  `refart/dashboard_ui_frame_58.png`, never the screenshot.
+- ⛔ **(1) THE WHOLE PAGE LETTERBOXES, NOT JUST THE BAR.** Art ink runs `x 8..2420` of 2560 with the
+  rounded frame's own border at **140** and **2419** — so there is a **140 px dead strip at each end**,
+  and the bar agreeing with it is the ONLY reason it looks deliberate. In the reference the frame is
+  inset but its right-hand column runs to **0.991** of the width; ours stops at **0.945**.
+- ⚠ **(2) AND THE STRIP IS LOAD-BEARING, WHICH IS WHY (1) IS NOT A ONE-LINE FIX.**
+  `MarginAffordance.Draw(dl, w, h, "MANUAL", "DOCKING")` deliberately puts the link to `UiPage.Docking`
+  in that margin (measured at `x 8..131`). It is ALSO already a filed defect: the preview's own note
+  reads `margin affordance type at 1280x703: MANUAL/DOCKING 11.54 px, RENDEZVOUS 8.08 px, floor 16`
+  — QC `H-06` / Q8. **Both facts point the same way: the strip cannot just be deleted, and what is in
+  it cannot stay at 11.5 px.**
+- ⛔ **(3) THE PITCH RATE COLLIDES TWICE.** `0.0 deg/s` runs THROUGH the white bracket and into the
+  vertical `PITCH` label beside it. The reference's `-20.0° / 0.0 %` clears both. Verified at 2×.
+- ⛔ **(4) `Virtual` OVERFLOWS THE CAMERA PILL** — the value sits on and below the pill's bottom border.
+  Its twin `FRAME / LVLH` fits, so the pill geometry is fine and the value is what outgrew it.
+- ⚠ **(5) THE NAVBALL IS OUT OF PALETTE.** Mean luminance **89.4**, p95 **183.3**, against the page's
+  own **40.3** — it is the brightest object on the screen. The reference's is **45.4** (p95 **84**),
+  i.e. it sits IN the palette as a flat dark instrument; ours reads as a lit 3-D ball.
+- ⚠ **(6) The XYZ / RANGE / RATE values are much larger relative to their brackets than the reference.**
+  That is the R-01 raise and therefore **[[S153a]]-Q1**, the OWNER's to settle — recorded here, NOT
+  decided, NOT re-posed. (3) and (4) are listed separately because they are collisions inside a fixed
+  box, which is the half of the wall S153a already found on six other pages.
+- **Not defects — checked:** `deg/s` where the export baked `%` (a rate is not a percentage — the
+  `attitude`/`altitude` correction's twin); green live values against the export's white; `ALERT
+  ACTIVITY` showing a live `BATTERY 18%` where the export shows an empty heading.
+- **DONE when:** (3) and (4) no longer overlap anything at 2560×1406, (5) is inside the page's own
+  palette, and (1)+(2) are resolved TOGETHER with [[S172]] — the strip and what lives in it are one
+  decision, not two.
 
 ---
 
