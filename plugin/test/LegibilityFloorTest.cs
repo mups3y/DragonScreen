@@ -46,6 +46,7 @@ public static class LegibilityFloorTest
         checks = 0; failures = 0;
 
         TheFloorCarriesItsPremise();
+        CensusStatesAreReal();   // S165: the census's state sweep is real and not collapsed
         R01Census();
         TheTwoFloorsAreBothRatios();
         TheSameElementReportsTheSamePercentageAtBothWidths();
@@ -1507,6 +1508,14 @@ public static class LegibilityFloorTest
     // whole Figma-era build clear the floor. QC's seventeen were a sample, correctly labelled as one;
     // this is the population.
     //
+    // ⚠ SUPERSEDED IN PLACE BY [[S165]], 2026-09-06 - the paragraph above is kept because its
+    // REASONING is still right and its NUMBER is not. "Exhaustively over every page" was true of the
+    // pages and false of their STATES: each was rendered once, in its default state, so text that only
+    // draws in another state was not counted. Swept over the state variants below, the figure is
+    //         903 below the floor, of 990 text draws, 854 of them below even the static floor
+    // and 87 clear the glanceable floor. ⭐ The 868 was a LOWER BOUND, exactly as S165 predicted, and
+    // the 35 it missed were real: 24 of them are the Cover's MAP-view pan/zoom cluster alone.
+    //
     // ⭐ WHAT THIS CHECK IS FOR IS THE OTHER DIRECTION. The 868 are owned by the split lines S153a-f
     // and will come down page by page. What must not happen in the meantime is a page quietly gaining
     // a NEW sub-floor element while those lines are outstanding - which is exactly what the six
@@ -1536,23 +1545,421 @@ public static class LegibilityFloorTest
     // ⚠ What this deliberately CANNOT catch is a LIVE element placed at the static floor. Telling
     // those apart needs a per-element classification, which S153 left to the per-page split lines;
     // this guard covers the half that is knowable without one, and says so rather than implying more.
+    // ---- S165: THE CENSUS RENDERED EACH PAGE ONCE, IN ITS DEFAULT STATE -------------------------
+    // ⛔ SO TEXT THAT ONLY DRAWS IN A NON-DEFAULT STATE WAS INVISIBLE TO IT, and the 868 was a LOWER
+    // BOUND presented as a population. Found for real: [[S134c]] added a caveat line at 15.98 panel px
+    // - below the 24 px static floor - that draws ONLY on the audio page's four SEAT scopes. The census
+    // rendered scope 2 (CABIN) and passed it. It failed only when a mutation moved the line onto the
+    // default scope, which means the census was reporting the mutation and not the defect.
+    //
+    // ⚠ AND THE RATCHET UNDER IT INHERITED THE BLINDNESS, which is the worse half. A baseline taken in
+    // the default state BLESSES every sub-floor element the default state cannot see - so once S153a-f
+    // start lowering these numbers, the ratchet would defend the gap rather than close it.
+    //
+    // ---- WHAT THIS COVERS NOW, AND HOW IT IS KEPT FROM GOING STALE -------------------------------
+    // Every argument `FigmaUI.Build` takes that changes what a page DRAWS is swept, and each sweep is
+    // DERIVED from the constant or enum that defines it rather than written out here:
+    //
+    //   Audio            ctl.AudioSeat 0..SettingsAudioPage.Scopes-1      (the S134c defect itself)
+    //   Vehicle* (6)     ctl.Alerts false/true                            (ALERTS vs FUNCTIONS)
+    //   Docking          ctl.DockRotLarge x ctl.DockTransLarge            (4 combinations)
+    //   Cover            coverPhase 0..CoverPage.PhaseCount-1
+    //                      x coverCam over CoverPage.CoverCam's values    (7 x 3)
+    //   SuitCheck        every SuitCheckPage.ProcStep value, x a clean
+    //                      seed and a LEAKING one (SuitLeak.SeedForLeak)
+    //
+    // A page's count is then the WORST any of its states produces. ⚠ Stated precisely because it is
+    // not the same as a union: a state that swaps one sub-floor element for another leaves the max
+    // unchanged and is still invisible. The max is what a crew can be looking at in one glance, which
+    // is the quantity the floor is about, and it is strictly more than the default alone saw.
+    //
+    // ⛔ WHAT IT STILL DOES NOT SEE, recorded so the count is not read as complete (the other half of
+    // this line's DONE-when):
+    //   · `PageState` is held at Leo() - ONE orbit fixture. Alert severities, dead feeds, a latched
+    //     act, NoseConeOpen, a failed subsystem and every other vessel-derived state draw whatever
+    //     that fixture implies. This is by far the largest uncovered surface and it is NOT enumerable:
+    //     PageState is a wide struct of live vessel readings, not a set of modes.
+    //   · `MapView` is MapProjection.Default() - one projection, one zoom, no pan.
+    //   · `TurntableState` is Turntable.Front() - one of 36 frames, though it carries no text.
+    //   · `suitSeed` sweeps two values, not the space; SuitLeak's per-suit branch is exercised by
+    //     `SuitLeakSim`'s own suite, not here.
+    // A later line that needs one of these covered should widen `StatesFor`, not re-baseline around it.
+    struct CensusState
+    {
+        public string What;                     // NAMED, so a regression says WHICH state produced it
+        public int SuitCountdown; public bool SuitPopup; public bool SuitRunActive; public uint SuitSeed;
+        public int CoverPhase; public CoverPage.CoverCam Cam;
+        public PageControls Ctl;
+
+        /// <summary>Exactly the single state the census rendered before S165 - the arguments
+        /// `FigmaUI.Build`'s shallowest overload fills in. Every variant below starts from it and
+        /// changes ONE thing, so a difference is attributable.</summary>
+        public static CensusState Default
+        {
+            get
+            {
+                CensusState c;
+                c.What = "default";
+                c.SuitCountdown = 5; c.SuitPopup = false; c.SuitRunActive = false; c.SuitSeed = 0u;
+                c.CoverPhase = 1; c.Cam = CoverPage.CoverCam.Earth;
+                c.Ctl = PageControls.Default;
+                return c;
+            }
+        }
+    }
+
+    static CensusState[] StatesFor(UiPage p)
+    {
+        CensusState d = CensusState.Default;
+        switch (p)
+        {
+            // ⭐ THE S134c DEFECT, MADE PERMANENT. Swept over the page's OWN scope count, so adding a
+            // sixth scope puts it in the census on the day it lands.
+            case UiPage.Audio:
+            {
+                CensusState[] v = new CensusState[SettingsAudioPage.Scopes];
+                v[0] = d;                                    // the default scope, kept at index 0
+                int k = 1;
+                for (int i = 0; i < SettingsAudioPage.Scopes; i++)
+                {
+                    if (i == SettingsAudioPage.CabinScope) continue;
+                    v[k] = d; v[k].Ctl.AudioSeat = i; v[k].What = "scope " + i + " (SEAT)"; k++;
+                }
+                return v;
+            }
+
+            // The ALERTS/FUNCTIONS toggle draws a different table on all six subsystem pages.
+            case UiPage.VehicleCrew: case UiPage.VehiclePropulsion: case UiPage.VehiclePower:
+            case UiPage.VehicleAvionics: case UiPage.VehicleGnc: case UiPage.VehicleThermal:
+            {
+                CensusState b = d;                           // d is FUNCTIONS - PageControls.Default
+                b.What = "ALERTS"; b.Ctl.Alerts = true;
+                return new CensusState[] { d, b };
+            }
+
+            // Two independent magnitude toggles - all four corners, because the interesting case is
+            // usually the mixed one and nobody would think to write it down.
+            case UiPage.Docking:
+            {
+                CensusState[] v = new CensusState[4];
+                v[0] = d;                                    // both LARGE - PageControls.Default
+                int k = 1;
+                for (int i = 0; i < 4; i++)
+                {
+                    bool rot = (i & 1) != 0, trans = (i & 2) != 0;
+                    if (rot == d.Ctl.DockRotLarge && trans == d.Ctl.DockTransLarge) continue;
+                    v[k] = d; v[k].Ctl.DockRotLarge = rot; v[k].Ctl.DockTransLarge = trans;
+                    v[k].What = "rot " + (rot ? "LARGE" : "PRECISE")
+                              + " / trans " + (trans ? "LARGE" : "PRECISE");
+                    k++;
+                }
+                return v;
+            }
+
+            // Seven deorbit phases x three camera views. Both counts are read off the page's own
+            // constants, so a phase or a view added later is swept without an edit here.
+            case UiPage.Cover:
+            {
+                Array cams = Enum.GetValues(typeof(CoverPage.CoverCam));
+                CensusState[] v = new CensusState[CoverPage.PhaseCount * cams.Length];
+                v[0] = d;                                    // phase 1 / cam Earth
+                int k = 1;
+                for (int ph = 0; ph < CoverPage.PhaseCount; ph++)
+                    foreach (CoverPage.CoverCam cam in cams)
+                    {
+                        if (ph == d.CoverPhase && cam == d.Cam) continue;
+                        v[k] = d; v[k].CoverPhase = ph; v[k].Cam = cam;
+                        v[k].What = "phase " + ph + " / cam " + cam;
+                        k++;
+                    }
+                return v;
+            }
+
+            // The procedure's three-way, swept over the ENUM rather than over the three argument
+            // triples that produce it - and each triple is asserted to actually produce the step it
+            // claims (see StepIs below), so a change to StepOf breaks this loudly instead of quietly
+            // collapsing three states into one.
+            case UiPage.SuitCheck:
+            {
+                // ⛔ NO LEAK ARM, AND THE REASON IS MEASURED, NOT ASSUMED. A `SuitLeak.SeedForLeak(3)`
+                // variant was written first and rendered IDENTICALLY to its clean twin in all three
+                // steps. `SuitLeak.Compute` opens with `r.Valid = i.Valid && i.CabinPressPsia > 1.0`
+                // and returns early otherwise - and `Leo()` never sets a cabin pressure, so it is 0.
+                // ⭐ THE LEAK BRANCH IS UNREACHABLE FROM THIS FIXTURE, whatever the seed. A sweep arm
+                // that cannot reach what it names is worse than no arm: it is coverage on paper.
+                // `SuitCheckFixtureCannotLeak` below FAILS if the fixture ever gains a pressure, and
+                // says to put the arm back - so this is a guarded gap, not a silent one.
+                Array steps = Enum.GetValues(typeof(SuitCheckPage.ProcStep));
+                CensusState[] v = new CensusState[steps.Length];
+                v[0] = d;                                    // NotStarted
+                int k = 1;
+                foreach (SuitCheckPage.ProcStep st in steps)
+                {
+                    if (st == SuitCheckPage.ProcStep.NotStarted) continue;
+                    CensusState c = d;
+                    c.SuitRunActive = st == SuitCheckPage.ProcStep.Running;
+                    c.SuitPopup     = st == SuitCheckPage.ProcStep.Complete;
+                    c.SuitCountdown = 5;
+                    c.What = st.ToString();
+                    v[k++] = c;
+                }
+                return v;
+            }
+
+            default: return new CensusState[] { d };
+        }
+    }
+
+    /// <summary>
+    /// S165: the sweep's own checks. ⛔ WITHOUT THESE THE SWEEP CAN SILENTLY COLLAPSE - three suit
+    /// states that all resolve to one step, or a scope loop that stops enumerating - and a collapsed
+    /// sweep looks exactly like a page that has no non-default states. That is the defect this line
+    /// exists to remove, one level up.
+    /// </summary>
+    static void CensusStatesAreReal()
+    {
+        // ---- the sweeps are the size the page's own constants say ----
+        Check("S165 the audio sweep covers every scope the page has",
+              StatesFor(UiPage.Audio).Length == SettingsAudioPage.Scopes,
+              "got " + StatesFor(UiPage.Audio).Length + " for " + SettingsAudioPage.Scopes + " scopes");
+        Check("S165 the Cover sweep covers every phase x every camera",
+              StatesFor(UiPage.Cover).Length
+                  == CoverPage.PhaseCount * Enum.GetValues(typeof(CoverPage.CoverCam)).Length,
+              "got " + StatesFor(UiPage.Cover).Length);
+        Check("S165 the SuitCheck sweep covers every ProcStep",
+              StatesFor(UiPage.SuitCheck).Length
+                  == Enum.GetValues(typeof(SuitCheckPage.ProcStep)).Length,
+              "got " + StatesFor(UiPage.SuitCheck).Length);
+
+        // ⭐ THE SELF-INVALIDATING GUARD. This asserts a LIMITATION, which is unusual and deliberate:
+        // the census fixture cannot reach the suit-leak branch, so sweeping a leaking seed would be
+        // coverage on paper. The day `Leo()` gains a cabin pressure this FAILS, and its message says
+        // what to do - which is the only way a recorded blind spot stops being forgotten.
+        Check("S165 the census fixture still cannot reach the suit-leak branch",
+              !SuitLeak.From(Leo(), 5, true, SuitLeak.SeedForLeak(3)).Valid,
+              "Leo() now has a cabin pressure > 1.0 psia, so SuitLeak.Compute no longer returns early "
+              + "and a leaking run DOES draw differently. Put the leak arm back in StatesFor(SuitCheck) "
+              + "and re-baseline SuitCheck.");
+        Check("S165 the subsystem sweep is both sides of the ALERTS toggle",
+              StatesFor(UiPage.VehiclePropulsion).Length == 2, "");
+        Check("S165 the docking sweep is all four toggle corners",
+              StatesFor(UiPage.Docking).Length == 4, "");
+        Check("S165 a page with no modes is still swept once",
+              StatesFor(UiPage.Menu).Length == 1, "");
+
+        // ---- the DEFAULT is always variant 0, which is what makes a reported "worst state" mean
+        //      "genuinely worse than the default" rather than "happened to be first" ----
+        foreach (UiPage up in (UiPage[])Enum.GetValues(typeof(UiPage)))
+        {
+            if (FigmaUI.IsPlaceholder(up)) continue;
+            CensusState[] v = StatesFor(up);
+            Check("S165 " + up + "'s variant 0 IS the default state", v[0].What == "default", v[0].What);
+        }
+
+        // ---- ⛔ AND THE SUIT TRIPLES ACTUALLY PRODUCE THE STEPS THEY CLAIM ----
+        // The sweep names its states after ProcStep values but reaches them through
+        // (countdown, popup, runActive). If StepOf's three-way changes, these must break loudly
+        // rather than quietly render one step three times.
+        bool sawRunning = false, sawComplete = false, sawNotStarted = false;
+        foreach (CensusState c in StatesFor(UiPage.SuitCheck))
+        {
+            SuitCheckPage.ProcStep got =
+                SuitCheckPage.StepOf(c.SuitCountdown, c.SuitPopup, c.SuitRunActive);
+            if (got == SuitCheckPage.ProcStep.Running) sawRunning = true;
+            if (got == SuitCheckPage.ProcStep.Complete) sawComplete = true;
+            if (got == SuitCheckPage.ProcStep.NotStarted) sawNotStarted = true;
+        }
+        Check("S165 the suit sweep really reaches NotStarted", sawNotStarted, "");
+        Check("S165 the suit sweep really reaches Running", sawRunning, "");
+        Check("S165 the suit sweep really reaches Complete", sawComplete, "");
+
+        // ---- ⛔ AND EVERY SWEPT STATE MUST ACTUALLY REACH THE PAINTER -----------------------------
+        // ⭐ THIS IS THE CHECK THAT MATTERS MOST ON THIS LINE, and the reason is a property of the
+        // ratchet rather than of any page: THE RATCHET IS ONE-DIRECTIONAL. A count that RISES fails
+        // the build; a count that FALLS prints `IMPROVED` and passes. So removing coverage - deleting
+        // a sweep, or quietly dropping a state on the way to `FigmaUI.Build` - makes every number go
+        // DOWN and reads as progress. That is exactly how a verification instrument dies quietly, and
+        // it is the same shape as `S130`'s harness reporting "0 pages changed" because its render had
+        // failed. The sizes are checked above; this checks the states are PLUMBED THROUGH.
+        //
+        // ⚠ It compares the whole DISPLAY LIST, not the text - a magnitude toggle changes a highlight
+        // and no words, and would pass a text-only comparison while drawing the same thing twice.
+        // ⚠ And it says nothing about SIZE, deliberately, so `S153a-f` raising type cannot break it.
+        // ⛔ PAIRWISE DISTINCT, not merely "one of them differs". The weaker form was written first
+        // and THREE MUTATIONS SURVIVED IT: dropping the Cover CAMERA, dropping the SuitCheck popup,
+        // and having the census take the first state instead of the worst. Each left some other field
+        // still varying, so "at least one differs" stayed true while real coverage had gone - and
+        // because the ratchet only fails on a RISE, every count merely fell and read as progress.
+        // ⭐ Pairwise distinctness is the property that actually says "each of these states is a
+        // state": if a swept field stops reaching the painter, the states it distinguished collapse
+        // onto each other and this names the pair.
+        // ⚠ MEASURED BEFORE BEING REQUIRED, not asserted and hoped for: all 21 Cover states, all 5
+        // audio scopes, all 4 docking corners and both sides of every ALERTS toggle already render
+        // distinctly. The one pair that did NOT is recorded above - the suit leak arm, dropped.
+        foreach (UiPage up in (UiPage[])Enum.GetValues(typeof(UiPage)))
+        {
+            if (FigmaUI.IsPlaceholder(up)) continue;
+            CensusState[] v = StatesFor(up);
+            if (v.Length < 2) continue;
+            string[] sig = new string[v.Length];
+            for (int i = 0; i < v.Length; i++) sig[i] = Signature(up, v[i]);
+            for (int i = 0; i < v.Length; i++)
+                for (int j = i + 1; j < v.Length; j++)
+                    Check("S165 ⭐ " + up + ": state \"" + v[i].What + "\" and \"" + v[j].What
+                          + "\" render differently", sig[i] != sig[j],
+                          "they render IDENTICALLY, so one of the swept fields is not reaching the "
+                          + "painter and this page is being censused twice under two names");
+        }
+
+        // ---- ⛔ THE BASELINE TABLE MUST COVER THE WORST STATE, NOT THE ONE THE LOOP PICKED --------
+        // Computed here INDEPENDENTLY of R01Census's own aggregation, and compared against the TABLE -
+        // which is the artefact that persists and the thing a re-baseline writes. If the census's
+        // worst-of ever breaks and someone re-baselines to the lower number it then reports, the table
+        // stops covering a state that really draws, and THIS fails with the page and the state named.
+        // ⚠ RESIDUAL, STATED RATHER THAN IMPLIED: a broken aggregation whose table is NOT re-baselined
+        // prints `IMPROVED` and passes. That is the one-directional ratchet's own property - a falling
+        // count is never a failure - and it is why the plumbing check above exists as well as this one.
+        foreach (UiPage up in (UiPage[])Enum.GetValues(typeof(UiPage)))
+        {
+            if (FigmaUI.IsPlaceholder(up)) continue;
+            int want = -1, wantD = -1;
+            for (int i = 0; i < Baseline.Length; i++)
+                if (Baseline[i].Page == up) { want = Baseline[i].Below; wantD = Baseline[i].BelowDense; }
+            if (want < 0) continue;
+            float floor = Typography.MinFor(W2), dense = Typography.DenseFor(W2);
+            foreach (CensusState c in StatesFor(up))
+            {
+                DisplayList dl = new DisplayList(1200);
+                CensusBuild(dl, up, c);
+                int below = 0, belowDense = 0, text = 0;
+                for (int i = 0; i < dl.Count; i++)
+                {
+                    DrawCmd d = dl.At(i);
+                    if (d.Kind != DrawKind.Text) continue;
+                    text++;
+                    if (d.C < floor) below++;
+                    if (d.C < dense) belowDense++;
+                }
+                if (text == 0) continue;
+                Check("S165 " + up + "'s baseline covers state \"" + c.What + "\"",
+                      belowDense <= wantD && below <= want,
+                      "that state draws " + below + " below-floor / " + belowDense + " below-Dense, "
+                      + "but the table says " + want + " / " + wantD);
+            }
+        }
+
+        // ---- ⛔ AND THE PICKER REALLY PICKS THE WORST -------------------------------------------
+        // Computed here with a plain independent maximum and compared to what `WorstStateOf` returns.
+        // ⭐ THIS IS THE CHECK THAT KILLS "take the first state": that mutation makes every count fall,
+        // and a fall is `IMPROVED`, so nothing else in the suite notices. Comparing the picker against
+        // a second, dumber implementation is the only thing that does.
+        {
+            float floor = Typography.MinFor(W2), dense = Typography.DenseFor(W2);
+            foreach (UiPage up in (UiPage[])Enum.GetValues(typeof(UiPage)))
+            {
+                if (FigmaUI.IsPlaceholder(up)) continue;
+                int maxBelow = -1, maxDense = -1, drawn = 0;
+                foreach (CensusState c in StatesFor(up))
+                {
+                    DisplayList dl = new DisplayList(1200);
+                    CensusBuild(dl, up, c);
+                    int text = 0, below = 0, belowDense = 0;
+                    for (int i = 0; i < dl.Count; i++)
+                    {
+                        DrawCmd dd = dl.At(i);
+                        if (dd.Kind != DrawKind.Text) continue;
+                        text++;
+                        if (dd.C < floor) below++;
+                        if (dd.C < dense) belowDense++;
+                    }
+                    if (text == 0) continue;
+                    drawn++;
+                    if (below > maxBelow) maxBelow = below;
+                    if (belowDense > maxDense) maxDense = belowDense;
+                }
+                if (drawn == 0) continue;
+                CensusPick p = WorstStateOf(up, floor, dense);
+                Check("S165 ⭐ the census reports " + up + "'s WORST state, not its first",
+                      p.BelowDense == maxDense && (p.Text - p.Ok) == maxBelow,
+                      "picker says " + (p.Text - p.Ok) + " / " + p.BelowDense + " (state \"" + p.Worst
+                      + "\"), an independent maximum over its " + drawn + " states says "
+                      + maxBelow + " / " + maxDense);
+                Check("S165 " + up + " draws in all " + drawn + " of its states",
+                      p.StatesDrawn == drawn, "picker saw " + p.StatesDrawn);
+            }
+        }
+
+        // ---- AND THE S134c CASE BY NAME, because it is the finding that opened this line ----------
+        // Kept as its own check rather than folded into the loop above: this is the concrete defect,
+        // and a failure here should say "the audio page" rather than "some page".
+        Check("S165 ⭐ a SEAT scope draws different text from CABIN (S134c's caveat is now visible)",
+              Signature(UiPage.Audio, StatesFor(UiPage.Audio)[1])
+                  != Signature(UiPage.Audio, StatesFor(UiPage.Audio)[0]),
+              "the census renders CABIN by default; if a SEAT scope renders identically, the caveat "
+              + "line S134c added is still invisible to it");
+    }
+
+    /// <summary>
+    /// S165: a page's whole render in one state, flattened to a comparable string. EVERY draw kind,
+    /// not just text - see the check that uses it for why. Rounded to 0.1 px so a float that lands
+    /// one ULP apart between two builds cannot read as a different state.
+    /// </summary>
+    static string Signature(UiPage p, CensusState c)
+    {
+        DisplayList dl = new DisplayList(1200);
+        CensusBuild(dl, p, c);
+        System.Text.StringBuilder sb = new System.Text.StringBuilder(4096);
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd d = dl.At(i);
+            sb.Append((int)d.Kind).Append(' ')
+              .Append(Math.Round(d.A, 1)).Append(' ').Append(Math.Round(d.B, 1)).Append(' ')
+              .Append(Math.Round(d.C, 1)).Append(' ').Append(Math.Round(d.D, 1)).Append(' ')
+              .Append(Math.Round(d.StartDeg, 1)).Append(' ').Append(Math.Round(d.EndDeg, 1)).Append(' ')
+              .Append(d.Colour.R).Append(',').Append(d.Colour.G).Append(',')
+              .Append(d.Colour.B).Append(',').Append(d.Colour.A).Append(' ')
+              .Append((int)d.Align).Append(' ').Append((int)d.Image).Append(' ')
+              .Append(d.AssetKey ?? "-").Append(' ').Append(d.Str ?? "-").Append('\n');
+        }
+        return sb.ToString();
+    }
+
+    static void CensusBuild(DisplayList dl, UiPage p, CensusState c)
+    {
+        FigmaUI.Build(dl, p, W2, H2, Leo(), MapProjection.Default(),
+                      c.SuitCountdown, c.SuitPopup, c.CoverPhase, c.Cam, Turntable.Front(),
+                      c.Ctl, c.SuitSeed, c.SuitRunActive);
+    }
+
     struct FloorBaseline { public UiPage Page; public int Below; public int BelowDense; }
 
     static readonly FloorBaseline[] Baseline = {
-        B(UiPage.Cover,             26, 23),   // S153a  ⚠ 26 not 24: [[S126]] added two STATIC captions
+        B(UiPage.Cover,             48, 47),   // S153a  ⚠ 26 not 24: [[S126]] added two STATIC captions
+                                               // ⭐ S165 26,23 -> 48,47: the CAMERA slot's MAP view draws a
+                                               // whole pan/zoom cluster (UP/LEFT/CTR/RIGHT/DOWN/+/-/ZOOM) at
+                                               // 17-20 px that the default Earth view never showed.
         B(UiPage.Menu,              24, 24),   // S153f
         // ⭐ S147 PUT THIS PAGE IN THE CENSUS. `UiPage.Cabin` is a flat frame that drew NO text at all,
         // so it was legitimately absent from this table - until the bottom bar started printing
         // CURRENT STATE on every page. Its one text draw is at the glanceable floor, so both counts
         // are 0, and the ratchet caught the omission the moment it appeared rather than letting a
         // page slip out of the census.
-        B(UiPage.Cabin,              0,  0),   // S153f (the frame itself is [[S136]]'s)
+        B(UiPage.Cabin,              3,  0),   // S153f (the frame itself is [[S136]]'s)
+                                               // ⚠ S165 0 -> 3, and NOT a state effect: this page has one
+                                               // state. [[S134d]]'s rebuilt LIGHTING panel added three
+                                               // Dense-band draws and the SOFT ratchet only PRINTED it, so
+                                               // the stale baseline sat here green. Re-baselined by S165.
         B(UiPage.Hud,                2,  2),   // S153f - MarginAffordance's MANUAL/DOCKING, also QC H-06
-        B(UiPage.Audio,             12, 10),   // S153f
+        B(UiPage.Audio,             13, 10),   // S153f
+                                               // ⭐ S165 12 -> 13: THE DEFECT THAT OPENED THAT LINE.
+                                               // [[S134c]]'s caveat draws only on a SEAT scope; the census
+                                               // rendered CABIN. Worst state: scope 0 (SEAT).
         B(UiPage.AudioVideo,         9,  7),   // S153f
         B(UiPage.Procedure,         37, 35),   // S153c - the same page file as VrioTest (S110)
         B(UiPage.VrioTest,          37, 35),   // S153c
-        B(UiPage.SuitCheck,         47, 46),   // S153c
+        B(UiPage.SuitCheck,         54, 51),   // S153c
+                                               // ⭐ S165 47,46 -> 54,51: the Complete step draws the run's
+                                               // RESULT block, which the NotStarted default never shows.
         B(UiPage.ManualChute,       58, 56),   // S153c
         B(UiPage.DeorbitBurnPrep,   21, 20),   // S153c
         B(UiPage.EntryProcedure,     8,  7),   // S153c
@@ -1579,6 +1986,56 @@ public static class LegibilityFloorTest
     /// because a table of 25 pairs is not something to type from a screenshot.</summary>
     const bool PrintBaselines = false;
 
+    /// <summary>S165: one page's census result - the WORST state's render and its counts.</summary>
+    struct CensusPick
+    {
+        public DisplayList Dl;
+        public int Text, Ok, Static, BelowDense, StatesDrawn;
+        public string Worst;
+    }
+
+    /// <summary>
+    /// S165: build every state of a page and keep the WORST. ⛔ EXTRACTED FROM R01Census ON PURPOSE,
+    /// so it can be checked against an independently computed maximum (`CensusStatesAreReal`).
+    ///
+    /// It was inline first, and a mutation that made it take the FIRST state instead of the worst
+    /// SURVIVED THE WHOLE SUITE: every count simply fell, and a falling count is what the ratchet
+    /// calls `IMPROVED`. A one-directional guard cannot notice its own measurement shrinking, so the
+    /// measurement has to be testable from outside it.
+    ///
+    /// WORST = most below the hard (static-reference) floor first, then most below the glanceable one.
+    /// The hard ratchet is the one that fails a build, so it decides which state is reported - and the
+    /// returned DisplayList is that state's, so the regression dump prints the elements that actually
+    /// tripped it rather than the default state's.
+    /// </summary>
+    static CensusPick WorstStateOf(UiPage up, float floor, float dense)
+    {
+        CensusPick p = new CensusPick();
+        p.Dl = null; p.Worst = "-"; p.StatesDrawn = 0;
+        foreach (CensusState state in StatesFor(up))
+        {
+            DisplayList d2 = new DisplayList(1200);
+            CensusBuild(d2, up, state);
+            int n2 = 0, ok2 = 0, st2 = 0, bd2 = 0;
+            for (int i = 0; i < d2.Count; i++)
+            {
+                DrawCmd c = d2.At(i);
+                if (c.Kind != DrawKind.Text) continue;
+                n2++;
+                if (c.C >= floor) ok2++; else if (c.C >= dense) st2++; else bd2++;
+            }
+            if (n2 == 0) continue;
+            p.StatesDrawn++;
+            if (p.Dl == null || bd2 > p.BelowDense
+                || (bd2 == p.BelowDense && (n2 - ok2) > (p.Text - p.Ok)))
+            {
+                p.Dl = d2; p.Text = n2; p.Ok = ok2; p.Static = st2; p.BelowDense = bd2;
+                p.Worst = state.What;
+            }
+        }
+        return p;
+    }
+
     static void R01Census()
     {
         float floor = Typography.MinFor(W2), dense = Typography.DenseFor(W2);
@@ -1590,20 +2047,22 @@ public static class LegibilityFloorTest
         foreach (UiPage up in (UiPage[])Enum.GetValues(typeof(UiPage)))
         {
             if (FigmaUI.IsPlaceholder(up)) continue;
-            DisplayList dl = new DisplayList(1200);
-            FigmaUI.Build(dl, up, W2, H2, Leo(), MapProjection.Default());
-            int n = 0, ok = 0, st = 0, bd = 0;
-            for (int i = 0; i < dl.Count; i++)
-            {
-                DrawCmd c = dl.At(i);
-                if (c.Kind != DrawKind.Text) continue;
-                n++;
-                if (c.C >= floor) ok++; else if (c.C >= dense) st++; else bd++;
-            }
-            if (n == 0) continue;
+
+            // ---- S165: EVERY STATE, AND THE PAGE'S SCORE IS THE WORST OF THEM ----
+            CensusPick p = WorstStateOf(up, floor, dense);
+            DisplayList dl = p.Dl;
+            int n = p.Text, ok = p.Ok, st = p.Static, bd = p.BelowDense;
+            string worst = p.Worst;
+            int seenStates = p.StatesDrawn;
+            if (dl == null || n == 0) continue;
+            if (seenStates > 1 && worst != "default")
+                Console.WriteLine(string.Format(
+                    "    STATE      {0,-18} worst of {1,2} states is \"{2}\"   below-floor {3,3}, below-Dense {4,3}",
+                    up, seenStates, worst, n - ok, bd));
             tT += n; tOk += ok; tStatic += st; tBelowDense += bd; tBelow += (n - ok);
             if (PrintBaselines)
-                Console.WriteLine(string.Format("        B(UiPage.{0}, {1}, {2}),", up, n - ok, bd));
+                Console.WriteLine(string.Format("        B(UiPage.{0,-18} {1,3}, {2,3}),   // worst: {3}",
+                                                up + ",", n - ok, bd, worst));
 
             int want = -1, wantD = -1;
             for (int i = 0; i < Baseline.Length; i++)
@@ -1621,7 +2080,8 @@ public static class LegibilityFloorTest
                 regressed++;
                 Check("R-01: " + up + " gained text below even the static floor", false,
                       "baseline " + wantD + ", now " + bd + " - a new element below " + dense
-                      + " px, which no content type is allowed to be. Raise it.");
+                      + " px, which no content type is allowed to be. Raise it."
+                      + "   [S165: worst state = " + worst + "]");
                 for (int i = 0; i < dl.Count; i++)
                 {
                     DrawCmd c = dl.At(i);

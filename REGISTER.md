@@ -16958,7 +16958,7 @@ the caveat only draws on the four seats. It failed only when a mutation moved th
   layout in the project's history. The four were written, correct and unrendered.
 - comment-loss **0** · `build.py test` green · no `install`, no glass, no `git push`.
 
-### S165 [S] The R-01 census only renders each page's DEFAULT state — **DOING** — [logged by [[S134c]] per C1.1, 2026-09-06; TIER 3]
+### S165 [S] The R-01 census only renders each page's DEFAULT state — **DONE 2026-09-06 — swept; the lower bound was 868 and the population is 903, and 24 of the 35 it missed are one camera view** — [logged by [[S134c]] per C1.1, 2026-09-06; TIER 3]
 - **The finding.** `LegibilityFloorTest`'s R-01 census builds each page once, in whatever state its
   fixture gives. Text drawn only in a NON-default state is invisible to it.
 - ⭐ Found for real: [[S134c]] added a caveat line at **15.98 panel px** — below the 24 px static floor —
@@ -16969,6 +16969,97 @@ the caveat only draws on the four seats. It failed only when a mutation moved th
   BOUND, and its baselines are baselines of the default states only.
 - **DONE when:** the census covers each page's meaningful states, or its header records precisely which
   states it does and does not see so the count is not read as complete.
+
+#### ⭐ DONE 2026-09-06 — BOTH halves of the DONE-when, because neither is sufficient alone
+
+**The census now sweeps every argument `FigmaUI.Build` takes that changes what a page draws**, and each
+sweep is **DERIVED from the constant or enum that defines it** rather than written out, so a scope, a
+phase, a camera or a procedure step added later is censused on the day it lands:
+
+| page(s) | swept over | derived from |
+|---|---|---|
+| `Audio` | 5 scopes | `SettingsAudioPage.Scopes` |
+| the six `Vehicle*` subsystems | ALERTS / FUNCTIONS | `PageControls.Alerts` |
+| `Docking` | 4 toggle corners | `DockRotLarge` × `DockTransLarge` |
+| `Cover` | 21 = 7 phases × 3 cameras | `CoverPage.PhaseCount`, `Enum.GetValues(CoverCam)` |
+| `SuitCheck` | 3 procedure steps | `Enum.GetValues(SuitCheckPage.ProcStep)` |
+
+A page's score is the **WORST** any of its states produces. ⚠ Stated precisely because it is not a
+union: a state that swaps one sub-floor element for another leaves the max unchanged. The max is what a
+crew can be looking at in one glance, which is the quantity the floor is about.
+
+#### THE NUMBERS MOVED, AND THE BIGGEST MOVE WAS NOT THE ONE THAT OPENED THE LINE
+
+| page | was | now | what the default state could not see |
+|---|---|---|---|
+| `Cover` | 26 / 23 | ⭐ **48 / 47** | the CAMERA slot's **MAP view** draws a whole pan/zoom cluster — `UP LEFT CTR RIGHT DOWN + − ZOOM x1` — at 17–20 px |
+| `SuitCheck` | 47 / 46 | **54 / 51** | the `Complete` step draws the run's RESULT block |
+| `Audio` | 12 / 10 | **13 / 10** | ⭐ [[S134c]]'s SEAT-only caveat — **the finding this line was opened for** |
+| `Cabin` | 0 / 0 | ⚠ **3 / 0** | ⛔ **not a state effect at all** — see below |
+
+**Population: 903 below the floor, of 990 text draws, 854 below even the static floor.** The old figure
+was **868 of 914**. ⭐ **The lower bound was understated by 35, and 24 of those are the Cover's map
+cluster alone** — one camera view nobody had rendered.
+
+⚠ **`Cabin` is the sharpest of the four and it is not about states.** That page has ONE state. Its
+baseline said `0, 0`; it draws **3**. [[S134d]]'s rebuilt LIGHTING panel added them, the **SOFT** ratchet
+only PRINTS a rise into the Dense..floor band, and the stale baseline therefore sat green in the table
+for a day. ⛔ **Nobody had read the census's own output.** Re-baselined here.
+
+#### ⛔ WHAT IT STILL DOES NOT SEE — the other half of the DONE-when, written into the file's header
+
+- **`PageState` is held at `Leo()`** — one orbit fixture. Alert severities, dead feeds, latched acts,
+  `NoseConeOpen`, a failed subsystem: all draw whatever that fixture implies. ⛔ **By far the largest
+  uncovered surface, and NOT enumerable** — `PageState` is a wide struct of live vessel readings, not a
+  set of modes.
+- `MapView` is one projection · `TurntableState` is one frame (it carries no text).
+- ⭐ **And one blind spot is now GUARDED rather than merely recorded.** A leaking-suit sweep arm was
+  written first and **rendered identically to its clean twin in all three steps**. Cause, measured:
+  `SuitLeak.Compute` opens `r.Valid = i.Valid && i.CabinPressPsia > 1.0` and returns early, and `Leo()`
+  never sets a cabin pressure. **The leak branch is unreachable from this fixture, whatever the seed.**
+  A sweep arm that cannot reach what it names is *coverage on paper*, so it was dropped — and replaced
+  by a check that **FAILS the day `Leo()` gains a cabin pressure**, telling the reader to put the arm
+  back. ⚠ A recorded blind spot is forgotten; a **self-invalidating** one announces itself.
+
+#### ⭐ THE THREE MUTATIONS THAT SURVIVED THE FIRST VERSION, AND WHY THEY ALL SURVIVED FOR ONE REASON
+
+The first version passed six of nine mutations. **Z3** (drop the Cover camera), **Z4** (drop the SuitCheck
+popup) and **Z5** (take the first state instead of the worst) all lived — and the single cause is a
+property of the ratchet, not of any page:
+
+⛔ **THE RATCHET IS ONE-DIRECTIONAL. A rising count fails the build; a falling count prints `IMPROVED`
+and passes.** So *removing* coverage makes every number go down and reads as progress. That is the same
+shape as [[S130]]'s harness reporting *"0 pages changed"* because its render had failed, and as
+[[S168]]'s first run reporting 35 where the answer was 3 — **an instrument cannot be trusted to notice
+its own measurement shrinking.**
+
+Two checks close it, and neither could have been reasoned to without running the mutations:
+1. **Every pair of a page's states must render DIFFERENTLY** — pairwise, not "at least one differs",
+   which was the weak form all three survived. If a swept field stops reaching the painter, the states
+   it distinguished collapse onto each other and the check names the pair. ⚠ It compares the whole
+   DISPLAY LIST, not the text: a magnitude toggle changes a highlight and no words.
+2. **`WorstStateOf` was EXTRACTED from the census loop** so it can be compared against a second, dumber
+   maximum computed independently. A picker verified only by the loop that uses it is not verified.
+
+#### Verified
+
+- **9 mutations, 9 killed, every kill attributed to `LegibilityFloorTest`** — the suite under test, not
+  a crash above it. ⭐ Readable at all because [[S167]] landed first: `Z1` both failed its named check
+  AND crashed the suite, and the report named `LegibilityFloorTest` and still ran every suite below it.
+- `python plugin/build.py test` → **ALL SUITES PASSED**; `LegibilityFloorTest` **691 checks, 0 failed**
+  (was 342); census `903 below the floor, 0 page(s) regressed, 0 improved`.
+- **Preview: `python plugin/build.py previewdiff` REFUSED** — *"no render input differs between HEAD and
+  the working tree"*. ⭐ Correct and measured: this line touches `plugin/test/` only. **That refusal is
+  the evidence**, and it is exactly what [[S168]] built the gate for — a `0 pages changed` typed by hand
+  here would have been arithmetic dressed as a measurement.
+- Comment-loss **0**: the header's *"868 of 914"* paragraph is **SUPERSEDED IN PLACE** (C1.16 / G12) —
+  its reasoning is still right and only its number was wrong, and both are on the record.
+- No `install`, no glass, no `git push`. No flight control wired (§14.4(a)). `docs/BUILD_PLAN.md` and
+  `docs/QC_FINDINGS.md` untouched.
+
+⚠ **Pre-existing and NOT touched (C1.1):** the build emits 7 × `warning CS0162: Unreachable code
+detected`, from the `const bool` debug-flag pattern. Confirmed pre-existing by stashing this change and
+recounting: 7 before, 7 after. Not this line's, and not worth a register line of its own.
 
 ### S166 [S] The audio page's three PANEL-WIDE positions are each a few px off the centre they look centred on — **TODO** — [noticed by [[S134e]]; TIER 4: layout]
 - ⚠ **LOGGED, NOT DONE (C1.1).** QC `A-03` enumerates exactly thirteen positions — five labels, five
@@ -18721,6 +18812,22 @@ uses:
 | below even `Dense` | **825** | 90.3 % |
 | **below the floor** | **868** | the real R-01 |
 
+⚠ **SUPERSEDED IN PLACE BY [[S165]], 2026-09-06 (C1.16 / G12) — the table above is kept because its
+REASONING is right and only its NUMBERS were short.** *"Exhaustively over every page"* was true of the
+pages and false of their STATES: each was rendered once, in its default state. Swept over the state
+variants, the population is:
+
+| | count | |
+|---|---|---|
+| text draws on Figma-era pages | **990** | was 914 |
+| clear the glanceable floor (32 px) | **87** | **8.8 %** |
+| in the `Dense`..floor band (24–32 px) | **49** | compliant **only if classified STATIC** |
+| below even `Dense` | **854** | 86.3 % |
+| **below the floor** | ⭐ **903** | the 868 was a LOWER BOUND, by 35 |
+
+⭐ **24 of the 35 are the Cover's MAP camera view alone** — a pan/zoom cluster on a view the census had
+never rendered. The per-page moves are on [[S165]]; [[S153a]], [[S153c]] and [[S153f]] carry theirs.
+
 **Not one page is clean.** The worst single page-view is `VehiclePropulsion` at **114** below-floor draws.
 
 ⭐ **AND THE FIRST CROSS-CHECK WAS AGAINST QC's OWN NUMBERS, because a census that disagreed with them
@@ -18981,8 +19088,14 @@ answered"*; it is answered, it was un-withdrawn by the answer, and its action is
 ⚠ [[S160]]'s *"VT-02 is withdrawn, no code owed — do not re-open it from this line"* was correct when
 written and stays correct **for S160**: the work belongs to S153c, not there.
 
-### S153a [S] Cover: raise the type to the two floors — **TODO** — [split of [[S153]]; **24** below-floor draws]
+### S153a [S] Cover: raise the type to the two floors — **TODO** — [split of [[S153]]; ~~**24**~~ → **48** below-floor draws ([[S165]] 2026-09-06)]
 - **Scope:** `plugin/src/pure/CoverPage.cs` only.
+- ⭐ **COUNT DOUBLED BY [[S165]], 2026-09-06 — 24 → 48, and the 24 new ones are ONE CAMERA VIEW.** The
+  census rendered only `CoverCam.Earth`; the **MAP** view draws a whole pan/zoom cluster —
+  `UP LEFT CTR RIGHT DOWN + −` at 17.3 px and `ZOOM x1` at 20.0 px. ⛔ **They are not in the
+  classification below because nobody had seen them.** Classify them before raising: they are map
+  CONTROLS, so LIVE by the ruling's own logic (a label on a thing the crew touch), which makes them
+  `MinDesignFor` — but say so deliberately rather than sweeping them in with the rail labels.
 - **Policy (S153, owner 2026-09-06):** LIVE → `Typography.MinDesignFor(w, sc)` (**48.07** design px at
   2560); STATIC REFERENCE → `DenseDesignFor` (**36.05**). ⛔ Never write the numbers; call the functions.
 - **Classification, from the ruling's own examples:**
@@ -19010,10 +19123,12 @@ written and stays correct **for S160**: the work belongs to S153c, not there.
 - **DONE when:** all eight page-views clear the glanceable floor, their baselines are lowered, and a
   preview shows the eight-tab strip and the row tables still fit.
 
-### S153c [S] The procedure pages: raise the type, and settle where the LIVE/STATIC line runs — **TODO** — [split of [[S153]]; **208** below-floor draws]
-- **Scope:** `SuitCheckPage.cs` (47) · `VrioTestPage.cs` (37, drawn by BOTH `Procedure` and `VrioTest` —
-  one file, two page-views, see [[S110]]) · `ManualChuteDeployPage.cs` (58) · `DeorbitBurnPrepPage.cs` (21)
-  · `EntryPage.cs` (8).
+### S153c [S] The procedure pages: raise the type, and settle where the LIVE/STATIC line runs — **TODO** — [split of [[S153]]; ~~**208**~~ → **215** below-floor draws ([[S165]] 2026-09-06)]
+- **Scope:** `SuitCheckPage.cs` (~~47~~ **54**) · `VrioTestPage.cs` (37, drawn by BOTH `Procedure` and
+  `VrioTest` — one file, two page-views, see [[S110]]) · `ManualChuteDeployPage.cs` (58) ·
+  `DeorbitBurnPrepPage.cs` (21) · `EntryPage.cs` (8).
+- ⚠ **`SuitCheckPage` re-counted 47 → 54 by [[S165]]:** the census rendered `NotStarted` only, and the
+  **`Complete`** step draws the run's RESULT block. Those seven are a **result readout**, so LIVE.
 - ⚠ **THIS IS THE GROUP WHERE THE CLASSIFICATION IS GENUINELY AMBIGUOUS, and it is flagged rather than
   decided.** A checklist row is *both*: the step TEXT is a printed procedure the crew read (static
   reference), while its TICK and its state word are live — the ruling names *"checklist state words"* as
@@ -19053,9 +19168,14 @@ written and stays correct **for S160**: the work belongs to S153c, not there.
 - ⚠ [[S145]] adds range-ring labels to `NavOrbitPlot`; it is un-held and must add them at `MinDesignFor`.
 - **DONE when:** all four pages clear their own floors, baselines lowered, previews inspected.
 
-### S153f [S] Shared chrome and settings: raise the type to the floor — **TODO** — [split of [[S153]]; **47** below-floor draws]
-- **Scope:** `MenuPage.cs` (24) · `SettingsAudioPage.cs` (12) · `SettingsVideoPage.cs` (9) ·
-  `MarginAffordance` (the HUD's 2).
+### S153f [S] Shared chrome and settings: raise the type to the floor — **TODO** — [split of [[S153]]; ~~**47**~~ → **51** below-floor draws ([[S165]] 2026-09-06)]
+- **Scope:** `MenuPage.cs` (24) · `SettingsAudioPage.cs` (~~12~~ **13**) · `SettingsVideoPage.cs` (9) ·
+  `MarginAffordance` (the HUD's 2) · ⭐ **`CabinLightingPanel.cs` (3)**.
+- ⚠ **Re-counted 47 → 51 by [[S165]], and the two additions are different in kind:**
+  `SettingsAudioPage` 12 → 13 is [[S134c]]'s SEAT-only caveat, which the census could not see because it
+  rendered CABIN. **`CabinLightingPanel`'s 3 were never a state problem at all** — [[S134d]] added them,
+  the SOFT ratchet only printed the rise, and `B(UiPage.Cabin, 0, 0)` sat stale in the table. This line
+  owns them: the census assigns `UiPage.Cabin` to S153f, and until now that page drew no text.
 - **Classification: all LIVE.** A Menu card label is how the crew find a page; a settings label names a
   control they are about to touch; `MANUAL`/`DOCKING` is **named in the ruling**.
 - ⛔ **`MarginAffordance` is NOT a size sweep — it is a FIT.** `FitsLegibly` already returns FALSE at both
