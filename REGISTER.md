@@ -19279,7 +19279,7 @@ inheriting this verdict — the mechanism is general, but whether a given page h
 - `python plugin/build.py test` → **ALL SUITES PASSED** with the tree back at HEAD.
 - **No code landed from this line.** No `install`, no glass, no `git push`. §14.4(a) untouched.
 
-### S153c [S] The procedure pages: raise the type, and settle where the LIVE/STATIC line runs — **DOING** — [split of [[S153]]; ~~**208**~~ → **215** below-floor draws ([[S165]] 2026-09-06)]
+### S153c [S] The procedure pages: raise the type, and settle where the LIVE/STATIC line runs — **HELD 2026-09-06 — on its OWN question, which the line itself says a build chat must not settle; now posed properly under C1.14** — [split of [[S153]]; ~~**208**~~ → **215** below-floor draws ([[S165]] 2026-09-06)]
 - **Scope:** `SuitCheckPage.cs` (~~47~~ **54**) · `VrioTestPage.cs` (37, drawn by BOTH `Procedure` and
   `VrioTest` — one file, two page-views, see [[S110]]) · `ManualChuteDeployPage.cs` (58) ·
   `DeorbitBurnPrepPage.cs` (21) · `EntryPage.cs` (8).
@@ -19303,6 +19303,86 @@ inheriting this verdict — the mechanism is general, but whether a given page h
 - **DONE when:** every state word and tick clears the glanceable floor, the step text clears whichever
   floor the owner names, the seven `VT-02` elements take frame59's alignment and layout **each marked
   tier-2 in the code**, and the baselines are lowered.
+
+#### ⛔ HELD 2026-09-06 — and the blocker is this line's OWN question, not [[S153a]]'s wall
+
+**The line already said so and the instruction was not being followed.** Its own body reads *"⛔ A build
+chat should not settle that on its own — it decides how a procedure page looks… **Ask before laying
+out**"*, and it says the question *"is written up for the owner"*. ⛔ **It was not.** It appeared only as
+prose inside this line and never under an `Open questions for the owner` heading, which C1.14 is explicit
+about: *"Chat-only questions do not count as asked."* That is fixed below.
+
+#### ⭐ AND THE GEOMETRY PROBE CAME BACK DIFFERENT HERE, WHICH IS WORTH HAVING
+
+[[S153b]]'s probe was repeated on `ManualChuteDeployPage` — the biggest page in this group at 58 draws —
+and the result is **not** the Cover's or the Vehicle family's:
+
+- ✅ **The checklist body takes the raise.** Every step row, its state word and its action plate stay
+  inside the content panel and read cleanly at the floor. This group has vertical room the row tables do
+  not, because a checklist is one column of short strings rather than a table of columns.
+- ⚠ `Arm and verify` on the first row reaches the panel's right edge — marginal, not overlapping.
+- ⛔ **The shared TOP STRIP collides, exactly as on the Cover**: `ACTIVE PHASE` overruns `SPLASHDOWN
+  TIME`. That is the same six-cell strip [[S153a]] measured, drawn again here, and it is S153a-Q1's.
+
+⭐ **SO THE WALL IS NOT UNIFORM, AND ASSUMING IT WAS WOULD HAVE BEEN WRONG.** `S153b`'s note asked each
+line to run its own probe rather than inherit a verdict; this is the line that shows why. The body of
+this group is buildable the day the classification is answered — only the strip it shares with the
+Cover waits on S153a-Q1.
+
+#### What applying [[S162]]'s ruling will need, recorded now so the next chat is not re-deriving it
+
+The ruling (option selected 2026-09-06 via the overseer: **"TAKE FRAME59'S ALIGNMENT AND LAYOUT, MARKED
+TIER-2"**) settles the SOURCE for the seven `VT-02` elements. Applying it needs three things this line
+should have in hand before it starts:
+
+1. **The seven, as [[S110]] filed them** — the title, the section heading and the page heading (frame:
+   left-aligned and large; rebuild: centred and smaller); the refresh glyph the rebuild adds; the step
+   rows (frame: lighter, set wider); the note cards (different x, different type treatment); and the
+   content panel stopping ~40 px short of the bar.
+2. ⚠ **Item 4 may not be a deviation at all.** S110's own caveat: *"the refresh glyph is
+   `SuitCheckPage`'s own idiom, so the sibling procedure frame has to be checked before removing it."*
+   Check the sibling frame first; do not remove a glyph because a list has seven items in it.
+3. ⛔ **THE MEASUREMENTS COME OFF A RASTER, AND THAT NEEDS SAYING OUT LOUD.**
+   `assets/figma/dashboard_ui/Frame 59.svg` **has no `<text>` nodes** ([[S162]], `docs/UI_AUDIT.md`
+   :370-376), so the frame's own alignment and type must be measured from `art/cover/frame59.png`.
+   ⚠ `CLAUDE.md` says *"Build pages from the reference's own source, never a screenshot"* — and this is
+   the one case where the ruling directs otherwise, because the vector source does not carry the
+   information. **Mark each of the seven as a tier-2 fill IN THE CODE**, per S162's guardrail: unmarked,
+   the ruling silently becomes the §1.4 inversion [[S111]] caught in [[S110]].
+
+#### Verified
+
+- Probe applied to `ManualChuteDeployPage`, 124 pages rendered, `ui_manualchute.png` inspected,
+  probe **reverted**. `python plugin/build.py test` green with the tree at HEAD.
+- **No code landed from this line.** No `install`, no glass, no `git push`. §14.4(a) untouched.
+
+## Open questions for the owner (C1.14) — S153c
+
+**Q1 — on a checklist row, where does the LIVE/STATIC line run?**
+*Situation.* The owner's R-01 ruling splits the floor by content type and names *"checklist state words"*
+as LIVE. ⛔ **But a checklist ROW is both things at once**: the step TEXT is a printed procedure the crew
+read (static reference), while its TICK and its STATE WORD are live. The ruling does not say which floor
+the step text takes, and the answer changes how five procedure pages look. ⚠ This line is explicit that a
+build chat must not settle it, which is why it is here rather than decided.
+
+1. **Step text at `DenseDesignFor`, state words and ticks at `MinDesignFor`.** *(recommended: it is the
+   ruling applied literally to each half of the row, it keeps a row readable while letting the printed
+   half stay compact, and it is the reading this line already reasoned its way to. It also costs the
+   least room, which matters — the probe above shows this group fits, but not with margin to spare.)*
+2. **Everything on the row at `MinDesignFor`.** Simplest, and defensible: a crew reading a procedure
+   under load is not leaning in. ⚠ Costs the most room and makes the step text as loud as the state.
+3. **Everything at `DenseDesignFor`.** ⛔ Not recommended: the ruling names state words as LIVE in terms,
+   so this contradicts it and would need an `OVERRIDE` (C1.8) rather than an answer.
+
+**Q2 — is `VrioTestPage` laid out once or twice?**
+*Situation.* [[S162]]'s ruling and this Q1 both change the same page, and this line's own sequencing note
+warns that answering them at different times means laying the page out twice.
+
+1. **Answer Q1, then apply both in one pass.** *(recommended, and it is only a recommendation about
+   ORDER — it costs nothing and saves a re-lay.)*
+2. **Apply S162's alignment now, raise the type later.** Gets the ruled layout in sooner; the page moves
+   twice.
+
 
 ### S153d [S] The systems deep-views: raise the type to the floor — **TODO** — [split of [[S153]]; **73** below-floor draws]
 - **Scope:** `SystemsTreePage.cs` (31) · `SystemsPidPage.cs` (42).
