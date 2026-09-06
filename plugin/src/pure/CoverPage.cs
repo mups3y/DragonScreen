@@ -327,6 +327,17 @@ namespace DragonScreen
         // built as SETTINGS' twin (same size, same dash-then-label interior) so the two read as a pair.
         const float NextX = 1500f, NextY = 1810f, NextW = 401f, NextH = 111f;
 
+        /// <summary>The gap between the two pills, now that they are STACKED — SETTINGS' own margin
+        /// from the frame edge (see <see cref="NextInset"/>), reused rather than chosen, so the column
+        /// is spaced by a number the page already uses. 1810 - 111 - 32 = 1667, NEXT VIEW's new top.
+        /// The CAMERA caption clears the pill by the same 33 design px it used to clear SETTINGS by,
+        /// which is why <see cref="CamShift"/> is exactly the pill's height plus this gap.</summary>
+        const float PillGap = NextInset;
+
+        /// <summary>How far the CAMERA caption + heading move UP to make room for the stacked pill:
+        /// the pill's own height plus the gap, so the caption keeps its old clearance exactly.</summary>
+        const float CamShift = NextH + PillGap;
+
         // The MAP view's pan/centre/zoom cluster, NavEarth.vue's arrangement exactly: a centre button
         // with the four arrows ONE pitch away (centre right:7em top:7em; arrows at 2/12em, so the pitch
         // is 5em), and the zoom pair a row below (top:17em) HALF a pitch either side of the centre line
@@ -343,8 +354,13 @@ namespace DragonScreen
         // 3032,1718): "CAMERA" occupies cap rows 5..19, the heading rows 35..56, both centred on x+173.
         // Cap height is ~0.7em and a text y is the top of the line box, ~0.1em above the cap.
         const float CamCx = 3205f;
-        const float CamCapY = 1721f, CamCapSize = 21f;
-        const float CamHeadY = 1750f, CamHeadSize = 31f;
+        // ⭐ S176 edit 2 (OWNER, 2026-09-06): the two rows move UP by CamShift so the NEXT VIEW pill can
+        // sit directly above SETTINGS. The measured metrics below are UNCHANGED and still the baked
+        // asset's own — 1721 and 1750 are where `camera_auto_earth_io` put them, and the shift is
+        // applied to them rather than replacing them, so the caption's internal spacing (29 design px
+        // between cap and heading) survives and the provenance is still readable.
+        const float CamCapY = 1721f - CamShift, CamCapSize = 21f;
+        const float CamHeadY = 1750f - CamShift, CamHeadSize = 31f;
 
         /// <summary>Panel-pixel rect of the NEXT VIEW pill. One calculation for the draw and the hit -
         /// PageAction's rule: a control drawn from one and hit from another drifts on first touch.</summary>
@@ -359,7 +375,28 @@ namespace DragonScreen
             // ends at 3395 in a 3427 frame), so the mirror is the camera slot's left edge plus the same
             // 32: `(ViewLeft + 32) * sc`, with no `extra` because it is left of the Split. The two pills
             // are then the same size, on the same row, at the same inset from their own ends of the slot.
-            x = (ViewLeft + NextInset) * sc; y = NextY * sc; rw = NextW * sc; rh = NextH * sc;
+            //
+            // ⭐ SUPERSEDED IN PLACE 2026-09-06 (S176 edit 2) — THE MIRROR IS GONE AND THE OWNER ASKED
+            // FOR THAT, HAVING BEEN SHOWN THE PARAGRAPH ABOVE. It is kept verbatim because it is the
+            // record of a REAL defect (the pill riding the full reflow slack) and of the 32-px margin
+            // that is still the number this file spaces the column by. Owner, 2026-09-06, verbatim:
+            // *"move next view button to above the setting button"*, then, after the 2026-09-05
+            // decision above was quoted back to him with two rendered placements: *"I like the writing
+            // inside the pills also the location you moved them too make both edits"*.
+            // ⚠ HE DID NOT TYPE THE WORD `OVERRIDE`, AND THIS SAYS SO RATHER THAN CLAIMING HE DID
+            // (C1.12's evidentiary standard). What is on record is that the conflicting decision was
+            // put to him first and he instructed the change anyway, twice. See REGISTER.md S176 edit 2.
+            //
+            // ---- WHERE IT GOES, AND WHY EVERY NUMBER IS BORROWED RATHER THAN CHOSEN ----
+            // Directly above SETTINGS: the SAME box, `PillGap` above it. The x, the width and the height
+            // are read from `rectangle_174`'s own Box row through SplitReflow — the SAME map the asset
+            // loop draws that pill with — so the two are exactly aligned at any panel size and cannot
+            // drift apart if the placement is ever re-measured. That is what made the mirror correct and
+            // it is what keeps the stack correct.
+            x = SplitReflow.X(SetX, w, h);
+            y = (SetY - NextH - PillGap) * sc;
+            rw = SplitReflow.Wd(SetX, SetW, w, h);
+            rh = SetH * sc;
         }
 
         /// <summary>SETTINGS' own margin from the frame edge (rectangle_174 ends at 3395 of 3427), which

@@ -21042,7 +21042,7 @@ and belongs to it.
 
 ---
 
-### S176 [O] PER-PAGE REBUILD, UNIT 1 — THE BOTTOM BAR: rebuilt from the export, and it reaches the glass on every page that spreads — **DOING — the build is done and verified; the unit stays OPEN for the owner's edits (edit 1 landed 2026-09-06; S176-Q2 awaits an `OVERRIDE`)** — [unit 1 of the owner's per-page rebuild programme; closes [[S172]]; closes [[S175]]'s "noticed, not touched"]
+### S176 [O] PER-PAGE REBUILD, UNIT 1 — THE BOTTOM BAR: rebuilt from the export, and it reaches the glass on every page that spreads — **DOING — the build is done and verified; the unit stays OPEN for the owner's edits (edits 1 and 2 landed 2026-09-06; S176-Q1 still open)** — [unit 1 of the owner's per-page rebuild programme; closes [[S172]]; closes [[S175]]'s "noticed, not touched"]
 
 **🟢 OWNER DIRECTIVE, 2026-09-06, verbatim (C1.12's evidentiary standard):** *"I want a prompt to
 completely rebuild each page correctly one at a time. Build it then show me preview I will either approve
@@ -21439,6 +21439,110 @@ is committed.** ⚠ Either way the left end of the camera slot goes empty, which
 
 **S176-Q1 (the bar's typed text vs the nav-bar floor) is UNCHANGED and still open** — see above.
 
+
+#### ⭐ EDIT 2 (OWNER, 2026-09-06) — NEXT VIEW MOVES ABOVE SETTINGS; THE TWO PILLS ARE A STACK
+
+**🟢 OWNER INSTRUCTION, verbatim (C1.12's evidentiary standard), in the order it was given:**
+1. *"move next view button to above the setting button"*
+2. — the chat did **not** build it, and put the conflict below to him with two rendered placements —
+3. *"I like the writing inside the pills also the location you moved them too make both edits"*
+
+⛔ **HE DID NOT TYPE THE WORD `OVERRIDE`, AND THIS RECORDS THAT PLAINLY RATHER THAN CLAIMING HE DID.**
+C1.8 asks for the word before a settled decision is reversed. What IS on record, and all that is claimed
+here: the conflicting decision was **quoted back to him first**, the requirement was **named**, two
+placements were **rendered and shown**, and he then instructed the change — twice, the second time after
+seeing all of it. ⚠ **A later governance line may want to settle whether that sequence counts as an
+`OVERRIDE` or whether the literal word is required**; this line does not decide it, and a chat reading
+this later should not read an `OVERRIDE` into it. (The [[G11]] pattern — the owner ratifying wording after
+the fact — is the precedent for how that would be closed.)
+
+**WHAT IT REVERSES, stated so it is not lost.** `NextViewRect`'s header carries the owner's 2026-09-05
+words — *"next button should also be moved to look like it belongs"* / *"I like well balanced layouts"* —
+and that decision put NEXT VIEW at the **opposite end of the camera slot**, SETTINGS' mirror, on the same
+row, at the same 32-px inset from its own end. It closed QC `C-13`. That paragraph is **kept verbatim** in
+the file and marked `SUPERSEDED IN PLACE` (C1.16 / G12), because the defect it describes — the pill riding
+the full reflow slack — is real, and its 32-px margin is still the number this column is spaced by.
+
+**⚠ WHICH OF THE TWO PLACEMENTS, AND WHY.** *"the location you moved them **too**"* does not name A or B.
+**A was built**, for a reason that is in his own first instruction rather than in a preference of mine:
+**A is literally "above the setting button"; B is above the CAMERA *caption*.** ⭐ And *"them"* is plural,
+which fits A — where two elements move — and not B, where only the pill does. **If that reading is wrong,
+B is one constant away and the line is still open.**
+
+**WHAT MOVED, and every number is BORROWED rather than chosen:**
+
+| | before | after |
+|---|---|---|
+| NEXT VIEW pill | design (1474, 1810, 401, 111) — slot's left end | **(2994, 1667, 401, 111)** — SETTINGS' own box, 32 px above it |
+| its x / w / h | computed from `ViewLeft + NextInset` | **read from `rectangle_174`'s own Box row, through `SplitReflow`** — the SAME map the asset loop draws that pill with |
+| the gap | — | **`PillGap = NextInset` = 32** — SETTINGS' own frame margin, reused, not picked |
+| CAMERA caption + heading | design y 1721 / 1750 | **1578 / 1607** — shifted by `CamShift = NextH + PillGap` = 143 |
+
+⭐ **THE CAPTION'S OWN MEASURED METRICS ARE UNCHANGED AND STILL VISIBLE IN THE SOURCE.** `CamCapY` reads
+`1721f - CamShift`, not `1578f`: 1721 and 1750 are where the baked `camera_auto_earth_io` asset put them,
+the 29-px cap-to-heading spacing survives by construction, and the provenance is still readable. ⛔ Typing
+1578 would have thrown away the measurement, which is R-02's own lesson one layer along.
+
+⭐ **AND THE CAPTION KEEPS ITS CLEARANCE EXACTLY.** It cleared SETTINGS' top by 33 design px (asset bottom
+1777 against 1810); it now clears the pill's top by the same 33 (1634 against 1667). That is not a
+coincidence — it is why `CamShift` is the pill's height plus the gap rather than a number.
+
+**MEASURED IN THE RENDER** (`ui_cover.png` @2560×1406, white-band scan down the pills' centre column):
+
+| edge | design y |
+|---|---:|
+| CAMERA heading ink | 1588 |
+| NEXT VIEW pill, top / bottom border | **1669 / 1777** |
+| SETTINGS pill, top / bottom border | **1810 / 1920** |
+| the gap between them | **33** |
+
+Both pills at an identical panel x **2271.7 … 2538.7**.
+
+**⛔ THEY ARE ADJACENT NOW, SO THEY CAN COLLIDE — AND THAT IS FENCED, NOT ASSUMED.** The two hit rects used
+to be at opposite ends of the slot and could not be confused; they are now 32 design px apart in y, and
+`CoverPage.HitTest` tests **NEXT VIEW first**. `CoverActsTest` now asserts, at both shipped widths: the two
+share an x and a width; NEXT VIEW ends above SETTINGS begins; the gap is the page's own 32; a touch in each
+pill hits **its own** button; a touch in the gap hits **neither**; and the CAMERA caption is clear above the
+pill. ⚠ That last one matters because `NextViewRect` is the single source for the draw *and* the touch — a
+pill that grew, or a gap that shrank, would let the upper one eat the lower one's touches silently, which
+is `MarginAffordance`'s defect exactly.
+
+#### Verified (edit 2)
+
+- **`python plugin/build.py test` → ALL SUITES PASSED.** `CoverActsTest` 90 → **108 checks**.
+- **The R-01 census is UNMOVED: `856 below the floor, 0 regressed, 0 improved`** — nothing resized.
+- **`previewdiff`: 23 changed, 0 new, 0 removed, of 125** — every one a Cover variant, the only page with
+  these pills.
+- ⭐ **ALL 23 SHARE ONE BOUNDING BOX: `(981, 1055, 2540, 1280)`** — from NEXT VIEW's *old* left edge to the
+  new stack's right edge, and from the moved caption's new top to SETTINGS' bottom. **Nothing outside the
+  camera slot's lower right and the strip the pill vacated changed by a pixel.**
+- **6 MUTATIONS, 5 KILLED, 1 EQUIVALENT** — 0 compile errors and 0 crash lines on every one ([[S167]]):
+
+  | | mutation | killed by |
+  |---|---|---|
+  | Q1 | the pill goes back to the slot's far left | `the two pills share an x and a width` |
+  | Q2 | the pill lands ON the SETTINGS pill | `cover Settings still hits` — the upper rect ate the lower one's touches, exactly as predicted |
+  | Q3 | the gap is "tidied" to a round 40 | `by the page's own 32 design px, not a chosen number` |
+  | Q4 | the CAMERA caption is left behind under the pill | `it is clear ABOVE the NEXT VIEW pill` |
+  | Q5 | the two pills stop sharing a width | `the two pills share an x and a width` |
+  | Q6 | `CamShift` is typed as `143f` instead of `NextH + PillGap` | ⚠ **SURVIVED — and it is an EQUIVALENT MUTANT, not a gap** |
+
+  ⚠ **Q6 IS REPORTED AS EQUIVALENT RATHER THAN PAPERED OVER.** `NextH + PillGap` is 111 + 32 = **143**, so
+  the mutant renders byte-identically and **no test can distinguish it**. The derived form's value is that
+  it TRACKS if either constant ever moves — a maintainability property, not an observable one — and
+  inventing a check that merely restates the source would be theatre. ⭐ Q4 kills the gross case (a caption
+  left under the pill), which is the version of this that a reader would actually see.
+- `install` and glass **SPENT**; no `git push`; `docs/BUILD_PLAN.md` and `docs/QC_FINDINGS.md` untouched;
+  §14.4(a) untouched — neither pill commands anything, and `CoverActs` still resolves every `CoverButton`
+  to one of three harmless kinds.
+
+⚠ **QC `C-13`'s "NEXT VIEW is 296 px off its mirror position" is NOT re-opened — it is SUPERSEDED by owner
+instruction.** The mirror is gone because he asked for a stack; the defect C-13 actually named (the pill
+taking the full reflow slack) cannot recur, because the pill's x is now read from SETTINGS' own Box row
+through the same map. ⛔ `docs/QC_FINDINGS.md` is QC's file and was **not** edited to say so.
+
+**S176-Q2 IS THEREFORE CLOSED-BY-INSTRUCTION**, with the `OVERRIDE`-wording caveat above left open for a
+governance line. **S176-Q1 (the bar's typed text vs the nav-bar floor) is UNCHANGED and still open.**
 ---
 
 ### S178 [S] Four ways to centre a label vertically, and only one of them was measured — **TODO** — [logged by [[S176]] per C1.1, 2026-09-06; TIER 3: consistency]

@@ -224,6 +224,51 @@ public static class CoverActsTest
             Check("the NEXT VIEW pill's interior is empty of primitives" + at, inside == 0,
                   inside + " white rect(s) inside the pill");
 
+            // ============================================================================
+            // 4. S176 EDIT 2 - THEY ARE STACKED NOW, SO THEY ARE ADJACENT, SO THEY CAN COLLIDE.
+            //
+            // Owner, 2026-09-06: "move next view button to above the setting button". The two hit
+            // rects used to be at opposite ends of the camera slot and could not be confused; they are
+            // now PillGap = 32 design px apart in y, and CoverPage.HitTest tests NEXT VIEW FIRST. A
+            // pill that grew, or a gap that shrank, would let the upper one eat the lower one's
+            // touches silently - the MarginAffordance failure, which is why this is asserted rather
+            // than assumed.
+            // ============================================================================
+            Check("the two pills share an x and a width" + at,
+                  Math.Abs(nx - sx) < 0.01f && Math.Abs(nw - sw) < 0.01f,
+                  "NEXT VIEW x " + nx + " w " + nw + ", SETTINGS x " + sx + " w " + sw);
+            Check("NEXT VIEW sits ABOVE SETTINGS, clear of it" + at,
+                  ny + nh < sy - 0.01f, "NEXT VIEW ends " + (ny + nh) + ", SETTINGS starts " + sy);
+            Check("...by the page's own 32 design px, not a chosen number" + at,
+                  Math.Abs((sy - (ny + nh)) / sc - 32f) < 0.01f,
+                  "gap " + ((sy - (ny + nh)) / sc) + " design px");
+
+            Check("a touch in the NEXT VIEW pill hits NEXT VIEW" + at,
+                  CoverPage.HitTest(nx + nw * 0.5f, ny + nh * 0.5f, w, h, 0)
+                      == CoverPage.CoverButton.NextView,
+                  "got " + CoverPage.HitTest(nx + nw * 0.5f, ny + nh * 0.5f, w, h, 0));
+            Check("a touch in the SETTINGS pill still hits SETTINGS, not the pill above it" + at,
+                  CoverPage.HitTest(sx + sw * 0.5f, sy + sh * 0.5f, w, h, 0)
+                      == CoverPage.CoverButton.Settings,
+                  "got " + CoverPage.HitTest(sx + sw * 0.5f, sy + sh * 0.5f, w, h, 0));
+            Check("a touch in the gap between them hits neither" + at,
+                  CoverPage.HitTest(sx + sw * 0.5f, (ny + nh + sy) * 0.5f, w, h, 0)
+                      != CoverPage.CoverButton.NextView
+                  && CoverPage.HitTest(sx + sw * 0.5f, (ny + nh + sy) * 0.5f, w, h, 0)
+                      != CoverPage.CoverButton.Settings,
+                  "got " + CoverPage.HitTest(sx + sw * 0.5f, (ny + nh + sy) * 0.5f, w, h, 0));
+
+            // ⭐ AND THE CAMERA CAPTION MOVED WITH IT, rather than being left under the new pill.
+            float capTop = -1f;
+            for (int c = 0; c < dl.Count; c++)
+            {
+                DrawCmd d = dl.At(c);
+                if (d.Kind == DrawKind.Text && d.Str == "CAMERA") capTop = d.B;
+            }
+            Check("the CAMERA caption is drawn" + at, capTop >= 0f, "not found");
+            Check("...and it is clear ABOVE the NEXT VIEW pill" + at, capTop >= 0f && capTop < ny,
+                  "caption top " + capTop + ", pill top " + ny);
+
             // ⭐ AND THE PILL IS STILL THE EXPORT'S OWN ART. Removing the interior must not remove
             // rectangle_174 - §14.2a clause (1) keeps the element that IS in the export.
             bool pillArt = false;
