@@ -176,7 +176,10 @@ namespace DragonScreen
         // phase's content — so those particular keys are swapped out here and replaced by real §8 data,
         // never invented (§1.4). The card BACKGROUNDS (rectangle_179/180/181) are real Figma layout and
         // stay; only their baked captions/rows are swapped for the reference text.
-        const int ReferencePhase = 5;
+        /// <summary>The rail slot whose panel body is swapped for the deorbit quick-reference.
+        /// ⭐ PUBLIC since [[S128]]: `CoverActs` targets it by name so the REVIEW REFERENCE CONTENT row
+        /// and the body swap cannot drift onto different slots.</summary>
+        public const int ReferencePhase = 5;
         /// <summary>The rail slot the community export actually baked - "Coast to Trunk Jettison".
         /// ⭐ Named so [[S127]]'s finding is checkable rather than only asserted in a comment: the baked
         /// panel body belongs to THIS slot, so slot 1 is not one of the phases missing its content.
@@ -510,6 +513,11 @@ namespace DragonScreen
             // S129: the ENTRY ENABLED verdict, over the boxes its two baked PNGs used. Not on the
             // Reference Content phase - the whole baked body including this row is swapped out there.
             if (!refPhase) DrawEntryVerdict(dl, X, Y, Z, w, sc, s);
+
+            // S128: the two action rows that LATCH show whether they have been pressed. Same phase
+            // rule as the verdict above - both rows live in the baked body, so on the Reference
+            // Content phase they are not drawn and (per S54 / H8) not touchable either.
+            if (!refPhase) DrawActLatches(dl, X, Y, Z, sc, s);
 
             if (refPhase)
                 // w and sc go through so FitRows can compare the legibility floor in the SAME units as
@@ -1113,6 +1121,51 @@ namespace DragonScreen
                     enabled ? DragonPalette.White : DragonPalette.Text6);
             dl.Text("False", X(fx), Y(fy), Z(size), TextAlign.Left,
                     enabled ? DragonPalette.Text6 : DragonPalette.White);
+        }
+
+        /// <summary>
+        /// S128: mark the two Cover action rows that LATCH, when they have been.
+        ///
+        /// ⛔ A LATCH NOBODY CAN SEE IS STILL A SILENT NO-OP, which is the defect this line exists to
+        /// remove. Both rows are baked PNG labels, so the state is drawn as a rule under the label —
+        /// the same language the rail's own selection uses — rather than by replacing the artwork.
+        ///
+        /// ⚠ ACCENT, NEVER GO OR ALARM. Both latches record that a HUMAN act happened; neither is a
+        /// vehicle state and neither is a safety verdict, so they must not borrow the palette that
+        /// means one. §14.4(a)'s "no red" applies with room to spare: nothing here is even a command.
+        ///
+        /// The boxes are the `Hits` rows' own measured rectangles, read back by `BoxOfButton`, so the
+        /// mark cannot drift off the label it belongs to — the `ChromeBar.LinkRect` rule again.
+        /// </summary>
+        static void DrawActLatches(DisplayList dl, Func<float, float> X, Func<float, float> Y,
+                                   Func<float, float> Z, float sc, PageState s)
+        {
+            if (s.CoverAckLatched) LatchRule(dl, X, Y, CoverButton.ActAcknowledge, sc);
+            if (s.CoverGroundGo)   LatchRule(dl, X, Y, CoverButton.ActOnSpaceX, sc);
+        }
+
+        static void LatchRule(DisplayList dl, Func<float, float> X, Func<float, float> Y,
+                              CoverButton b, float sc)
+        {
+            float bx, by, bw, bh;
+            if (!BoxOfButton(b, out bx, out by, out bw, out bh)) return;
+            // a 4-design-px rule along the bottom of the row's own rectangle
+            dl.Rect(X(bx), Y(by + bh - 4f), X(bx + bw) - X(bx), Strokes.Px(sc, 4f), DragonPalette.Accent);
+        }
+
+        /// <summary>The measured rectangle behind a `CoverButton`, from the same `Hits` table the touch
+        /// test uses. ⭐ False when the button has no row — which is the honest answer for the two
+        /// [[S129]] removed, and stops a caller inventing a box for one.</summary>
+        static bool BoxOfButton(CoverButton b, out float x, out float y, out float w, out float h)
+        {
+            x = y = w = h = 0f;
+            for (int i = 0; i < Hits.GetLength(0); i++)
+            {
+                if (Hits[i, 0] != (int)b) continue;
+                x = Hits[i, 1]; y = Hits[i, 2]; w = Hits[i, 3]; h = Hits[i, 4];
+                return true;
+            }
+            return false;
         }
 
         /// <summary>The two Crew Interrupt Conditions captions, drawn as primitives because their baked

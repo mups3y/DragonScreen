@@ -646,6 +646,11 @@ namespace DragonScreen
                 rec.ControlId = CrewControlIds.Cover(cb);
                 int ph = CoverPage.PhaseOf(cb);
                 if (ph >= 0) { rec.Acted = (ph != coverPhase); coverPhase = ph; }
+                // ---- S128: THE FOUR ACTION ROWS, WHICH USED TO FALL THROUGH TO SILENCE -----------
+                // ⛔ The DECISION is not here. `CoverActs.Of` is pure and headless-tested, and its
+                // type cannot express a vehicle command — so §14.4(a) is satisfied by construction
+                // rather than by this branch being careful. All this does is APPLY what it returns.
+                else if (CoverActs.IsAction(cb)) rec.Acted = ApplyCoverAct(cb);
                 else if (cb == CoverPage.CoverButton.Back)    rec.Acted = StepCoverPhase(-1);
                 else if (cb == CoverPage.CoverButton.Forward) rec.Acted = StepCoverPhase(+1);
                 else if (cb == CoverPage.CoverButton.None
@@ -669,6 +674,50 @@ namespace DragonScreen
                 PublishCover();
             }
         }
+
+        /// <summary>
+        /// S128: apply one resolved Cover action. Returns whether anything actually changed, which is
+        /// what `CrewPress.Acted` means — a second ACKNOWLEDGE on an already-latched screen did
+        /// nothing, and saying so is the difference between a press log and evidence.
+        ///
+        /// ⛔ Every branch is a VIEW change or a LATCH. Nothing here touches `FlightCommands`,
+        /// `Actuator` or any seam in `_AutopilotStub` — and it could not, because `CoverAct` has no
+        /// field that names a command (see `CoverActs`).
+        /// </summary>
+        private bool ApplyCoverAct(CoverPage.CoverButton cb)
+        {
+            CoverAct a = CoverActs.Of(cb);
+            switch (a.Kind)
+            {
+                case CoverActKind.SelectPhase:
+                {
+                    bool moved = (a.Phase != coverPhase);
+                    coverPhase = a.Phase;
+                    return moved;
+                }
+                case CoverActKind.GoPage:
+                    SelectPage(index, (int)a.Page);
+                    return true;
+                case CoverActKind.Latch:
+                    if (a.Latch == CoverLatch.CrewAcknowledge)
+                    {
+                        if (coverAckLatched) return false;
+                        coverAckLatched = true; return true;
+                    }
+                    if (a.Latch == CoverLatch.GroundAuthorised)
+                    {
+                        if (coverGroundGo) return false;
+                        coverGroundGo = true; return true;
+                    }
+                    return false;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>The Cover's two action latches. Per-screen display state, like `brightness` —
+        /// see `PageState.CoverAckLatched` for why they are not vessel state (S128).</summary>
+        private bool coverAckLatched, coverGroundGo;
 
         /// <summary>
         /// S85: §2.9's area-microphone context — the alarm channel AS IT STOOD when the press was made.
@@ -1165,6 +1214,8 @@ namespace DragonScreen
             ps.Brightness = brightness;
             ps.BoosterRecoveryOn = MissionConductor.AutoRecoverBooster;
             ps.ScreenPages = livePage;
+            ps.CoverAckLatched = coverAckLatched;      // S128 — see PageState's note on both of these
+            ps.CoverGroundGo = coverGroundGo;
 
             // The map follows the vehicle until the crew pans it by hand - see MapProjection.Pan.
             mapView = MapProjection.Track(mapView, ps.HasFix, ps.Latitude, ps.Longitude);

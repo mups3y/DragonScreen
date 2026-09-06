@@ -52,6 +52,17 @@ namespace DragonScreen
     /// </summary>
     public struct PageState
     {
+        // ---- S128, 2026-09-06: THE COVER'S TWO ACTION LATCHES ----------------------------------
+        // ⛔ NOT vessel state, and they must never be read as it. Both record a HUMAN act — the crew
+        // pressing ACKNOWLEDGE, and the ground's "On SpaceX, on, begin procedure 4.700" being marked
+        // as received — so they live with `Brightness` and `ScreenPages` as per-screen display state,
+        // stamped onto a copy by the painter rather than pushed into `VesselData`, which exists to
+        // read KSP and has nothing to say about either.
+        // ⚠ A latch that changed nothing visible would still be a silent no-op, which is the whole
+        // defect S128 exists to remove — so `CoverPage` lights the row that set it.
+        public bool CoverAckLatched;
+        public bool CoverGroundGo;
+
         public string Phase;
         public string Altitude;
         public string Velocity;

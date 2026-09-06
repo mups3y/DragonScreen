@@ -16066,7 +16066,7 @@ lesson: the danger is the tool's failure mode, not the content.
 - **DONE when:** slots 0 and 2 either draw content from a real source, or draw an owner-chosen marked
   minimal body — and slot 1 is left alone.
 
-### S128 [S] The Cover's four `Act*` buttons are silent no-ops — **DOING** — [H5; TIER 2; prerequisite [[S54]] is DONE]
+### S128 [S] The Cover's four `Act*` buttons are silent no-ops — **DONE 2026-09-06 — all four act, and the TYPE makes a flight command unrepresentable** — [H5; TIER 2; prerequisite [[S54]] is DONE]
 - **The finding.** `ActReview`, `ActAcknowledge`, `ActDeorbitBrief`, `ActOnSpaceX` have named hit rects, no
   dispatcher case, and **not even the honest-refuse log the chute page emits**.
 - ⭐ **None of the four commands the vehicle**, so all four are (A) and §14.4(a) does not block them:
@@ -16077,6 +16077,57 @@ lesson: the danger is the tool's failure mode, not the content.
   (DONE 2026-09-04), so wiring these can no longer fire a deorbit action from the ENTRY TIMELINE text.
 - **DONE when:** all four do their local thing or log an honest refusal, and a headless test pins that none
   of them reaches `FlightCommands`.
+
+#### ⭐ DONE 2026-09-06
+
+All four now act, each by its own baked label:
+
+| row | baked key | what it does |
+|---|---|---|
+| REVIEW REFERENCE CONTENT | `review_reference_content` | selects rail slot `CoverPage.ReferencePhase` |
+| DEORBIT BURN BRIEF | `deorbit_burn_brief` | opens `UiPage.DeorbitBurnPrep` |
+| ACKNOWLEDGE | `acknowledge` | sets the CREW latch |
+| ON SPACEX… 4.700 | `on_spacex_on_begin_procedure_4_700` | sets the GROUND latch |
+
+⭐ **THE DECISION IS PURE, THE GLUE IS FOUR LINES.** `plugin/src/pure/CoverActs.cs` resolves a press to a
+`CoverAct`; `ScreenPainter.ApplyCoverAct` applies it. That split is what makes the DONE-when's headless
+test possible at all — what a press MEANS is testable, and the glue that applies it has no judgement in it.
+
+#### ⛔ HOW "NONE OF THEM REACHES `FlightCommands`" IS ANSWERED
+
+Not by hunting for a call site. **`CoverAct` has no field that could name one.** It carries a kind, a
+phase index, a `UiPage` and a latch — so no value of the type can express a vehicle command, and
+§14.4(a) is satisfied by the shape rather than by a branch being careful.
+
+The suite pins it three ways: every `CoverButton` is enumerated (26 of them, not a sample) and must
+resolve to a view change, a latch or nothing; **exactly four** may be actions; and reflection asserts the
+struct's four fields and their types. ⭐ Mutation **M7** — adding a `CommandId` field — **fails to
+compile**, because `CoverAct.None` assigns every field explicitly; **M7b**, which adds it *and* assigns
+it so it does compile, is caught by the field check. Both routes are closed.
+
+#### ⚠ A LATCH NOBODY CAN SEE IS STILL A SILENT NO-OP
+
+That is the defect this line exists to remove, so the two latching rows are marked on the glass:
+`CoverPage.DrawActLatches` draws a rule under the row's **own measured `Hits` rectangle** (via
+`BoxOfButton`), so the mark cannot drift off the label — `ChromeBar.LinkRect`'s rule again.
+⛔ **Accent, never Go or Alarm.** Both latches record a HUMAN act — one by the crew, one relayed from the
+ground — and neither is a vehicle state or a safety verdict, so neither borrows the palette that means one.
+⚠ Same phase rule as [[S129]]'s verdict: both rows live in the baked body, so on the Reference Content
+phase they are neither drawn nor touchable ([[S54]] / H8).
+
+**The latches are per-screen display state**, stamped onto a `PageState` copy beside `Brightness` and
+`ScreenPages` — not pushed into `VesselData`, which reads KSP and has nothing to say about either.
+
+#### Verified
+
+- `build.py test` green · new suite **`CoverActsTest` — 66 checks** · **8 mutations, 8 killed** (two of
+  them by the compiler and the field check respectively).
+- ⭐ **Preview: 0 existing pages changed**, measured by hash across all of them — the latch rules appear
+  only when latched, and nothing else moved. **A new render, `ui_cover_acts_latched.png`**, shows both
+  lit; without it the one state a crew would see after pressing either row appeared in no PNG at all.
+- ⚠ `CoverPage.ReferencePhase` became `public` so `CoverActs` targets it **by name**: the REVIEW row and
+  the body swap cannot drift onto different slots. Mutation M1 (a literal `4`) dies on exactly that.
+- Comment-loss **0** across five files · no `install`, no glass, no `git push`.
 
 ### S129 [S] `ENTRY ENABLED` is a baked verdict, permanently False, and what the row MEANS is undecided — **DONE 2026-09-06 — computed from the gate machine that already answered the question; the two hit rects are gone because it is a READOUT** — [H6 + QC `C-08`]
 - **The finding.** The row shows `True` **and** `False` at once, neither lit; `EntryTrue`/`EntryFalse`

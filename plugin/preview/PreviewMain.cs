@@ -1410,6 +1410,21 @@ public static class PreviewMain
                                   + " commands   ENTRY ENABLED = " + EntryReadiness.Text(ev));
             }
 
+            // ---- S128: THE TWO ACTION LATCHES, LIT ----
+            // ⛔ WITHOUT THIS RENDER THE CHANGE HAS NO EVIDENCE CHANNEL. Both latches are false in the
+            // shared fixture - which is right, and is what every other cover render shows - so the one
+            // state the crew would see after pressing ACKNOWLEDGE or relaying SpaceX's go appears in no
+            // PNG at all. A latch nobody can see is the defect S128 exists to remove, so it gets a page.
+            {
+                PageState lps = ps; lps.CoverAckLatched = true; lps.CoverGroundGo = true;
+                DisplayList ldl = new DisplayList(600);
+                CoverPage.Build(ldl, CW, CH, lps, MapProjection.Default(), 0);
+                string path = Path.Combine(outDir, "ui_cover_acts_latched.png");
+                Render(ldl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + ldl.Count
+                                  + " commands   ACKNOWLEDGE + ON SPACEX both latched");
+            }
+
             // Cover with the LAST phase selected (Manual Chute Deploy, rail slot 6) to prove the expanded
             // seven-item rail + the in-page highlight/heading move to the bottom row.
             {

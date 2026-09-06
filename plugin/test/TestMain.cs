@@ -48,7 +48,8 @@ public static class TestMain
         // same width. Every check in here is a comparison ACROSS widths, which is the only shape that
         // can fail.
         bad += LegibilityFloorTest.Run();
-        bad += Frame58MapTest.Run();       // S154a: Frame 58's element geometry (research only - draws nothing)
+        bad += Frame58MapTest.Run();
+        bad += CoverActsTest.Run();       // S128: what the Cover's four action rows do, and cannot do       // S154a: Frame 58's element geometry (research only - draws nothing)
 
         // ---- PART B RECOVERY, WAVE A (W1, §B12.8) - the collision-free pure support layer ----
         // Recovered from `8b81816^` with their modules. The fixtures are as they were: ConicTest and
