@@ -344,6 +344,13 @@ public static class TestMain
         // commands a fixture VEHICLE, and the vehicle answers back. ⭐ A chain of individually correct
         // decisions can still fail to TERMINATE, and a flight is an expensive place to find that out.
         // ⚠ A CONTRACT test over the pure layer, not an execution of the glue - see its header.
+        // T19: §B11's approach geometry, §B10.2's op parameters and §B12.4's numbers - plus the half
+        // that can only be proved against the PINNED MECHJEB TREE: that each `ConductorOp` names a class
+        // that EXISTS, and that each operation's DEFAULT `TimeReference` is the one §B9/§B10.2 asks for.
+        // ⛔ The conductor cannot SET a TimeSelector (private static readonly in every Operation), so it
+        // relies on those defaults; a re-pin that reorders one would silently move a rendezvous burn.
+        bad += Suite(RendezvousOpsTest.Run);
+
         bad += Suite(MissionWalkTest.Run);
         bad += Suite(WarpPlanTest.Run);         // conductor: the on-rails rate that can never overshoot the drop-out
         bad += Suite(CoastEtaTest.Run);         // conductor: range-closing coast ETA -> the warp target UT

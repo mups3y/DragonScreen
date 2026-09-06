@@ -4577,8 +4577,155 @@ target unless `tuneFile` is blanked. **Options:** (1) fly the target profile and
 says, and it is one cfg field)*; (3) amend §B5. ⛔ **(2) and (3) both touch `docs/BUILD_PLAN.md` or the
 shipped profile and need the owner (C1.12 / G10).**
 
-### T19 [O] On-orbit ops + re-plan loop — **DOING**
+### T19 [O] On-orbit ops + re-plan loop — **NEEDS-WORK — built, awaiting the in-sim criterion**
 - **Read:** §B10.2 / §B12.4 / §B9.  **DONE when:** rendezvous to the KOS in-sim.  **May SPLIT if large.**
+
+#### ⚠ NEEDS-WORK 2026-09-07 — BUILT AND PROVEN HEADLESS; **`DONE` NEEDS THE SIM AND THIS CHAT HAS NO GATE**
+
+T19's DONE-when is *"rendezvous to the KOS in-sim"*. Built, closed-loop-proven headless, **NOT SPLIT** —
+the work came in under one line because `pure/Conductor.cs` (T16) already owned the §B12.3 chain and the
+§B12.4 rule, so T19 only had to supply the caller's half and the executor.
+
+**Files: one pure, one suite, four glue.**
+`plugin/src/pure/RendezvousOps.cs` (new — §B11 geometry, the §B10.2 op parameters, §B12.4's numbers, and
+`MechOps`) · `plugin/test/RendezvousOpsTest.cs` (new, **122 checks**) · `plugin/src/MechConductor.cs`
+(+the on-orbit executor) · `plugin/src/FlightDriver.cs` (phase table += Phasing/Coast/Approach) ·
+`plugin/src/_AutopilotStub.cs` (**the facade flip**) · `plugin/test/MissionWalkTest.cs` (the walk now runs
+insertion → KOS, **40 checks**).
+
+⛔ **§14.4(a) — EXACTLY WHAT BECOMES LIVE, AND WHAT DOES NOT.**
+**LIVE after T19, and only in `Phasing` / `Coast` / `Approach` with AUTO SEQUENCE engaged:** MechJeb drive
+authority on-orbit; the Maneuver-Planner **operations composed by us** (`MakeNodes` → `PlaceManeuverNode`);
+the **Node Executor** flying them one node at a time (`ExecuteOneNode`, never `ExecuteAllNodes` — §B10.1);
+and §B12.4's **live re-plan** (abort the executor, clear the node, rebuild the operation).
+**STILL AN HONEST NO-OP:** every flight button on every screen (`FlightCommands.Run` untouched);
+`DockingOps` (T20); `UndockOps` / `DeorbitOps` (T21); and **ABORT** — still W19, still HELD, and all the
+conductor does with an abort decision is stop flying and hand the vehicle back.
+⭐ **FACADE FLIP: `StationApproach.Engaged` + `.Note`** — §B12.5a's table names T19 as its owner, and this
+is the increment's ONE property (§B12.5). It reads `MechConductor.ApproachEngaged`, which is
+`Flying && leg != None` — so it is **dark** when the conductor is idle, holding at a crew gate, standing
+down, or inside the Keep-Out Sphere, and it can never light ahead of the vehicle because `Flying` IS the
+core's own drive authority.
+
+⛔ **MECHJEB'S RENDEZVOUS AUTOPILOT IS NOT USED, AND THAT IS CHECKED, NOT CLAIMED.** §B1: it is unreliable
+in RSS/RO, which is *why* the conductor composes planner operations itself. `MechJebModuleRendezvousAutopilot`
+exists in the pinned tree, is deliberately absent from `ConductorOp` (T16's decision, kept), and a suite
+check asserts no op maps to it.
+
+⭐⭐ **A FINDING ABOUT THE PLAN'S OWN VOCABULARY — §B10.2's `OperationTransfer` DOES NOT EXIST.**
+§B10.2 and `pure/ConductorAction.cs` both name `OperationTransfer`, and ConductorAction's header records
+that all seven op names were *"confirmed by `find` under `plugin/mech/`"*. That `find` was a **FILE**-name
+check and it is right for six of seven: the file `OperationTransfer.cs` declares a class called
+**`OperationGeneric`**, and no class named `OperationTransfer` exists in the pinned tree
+(`grep "public class Operation.*: Operation"`). §B10.2's own ⚠ predicted exactly this — *"Verify exact C#
+class names vs the pinned MechJeb source when embedding."*
+⛔ **SUPERSEDED IN PLACE, NOT DELETED (C1.16):** ConductorAction's claim is corrected in `MechOps`'s header
+rather than edited out of it, and a suite check asserts the class does NOT exist so the correction cannot
+silently rot back.
+
+⭐ **AND THE `TimeSelector` CANNOT BE SET, SO ITS DEFAULTS ARE PINNED AGAINST THE VENDORED SOURCE.**
+Every `Operation` holds its selector in a **`private static readonly`** field; reaching it would mean
+reflecting into a vendored type. It does not need reaching: `TimeSelector._currentTimeRef` is declared with
+no initialiser, so the default is `_timeReferences[0]`, and for **all seven** operations that first entry
+is already the reference §B9/§B10.2 names — `MatchPlane` REL_HIGHEST_AD, `Transfer` COMPUTED,
+`CourseCorrection` COMPUTED, `KillRelVel` CLOSEST_APPROACH, and the apsis ops at the opposite apsis. So the
+conductor sets nothing, and `RendezvousOpsTest` re-derives all seven **from the pinned source text on every
+build** — a re-pin that reorders one array would otherwise silently move a rendezvous burn to a different
+node and nothing in the tree would notice.
+
+⛔ **NO NUMBER WAS INVENTED (§1.4 / C1.15).** Every constant is a §B11 [DOC] figure or a §B10.1 value:
+Approach Ellipsoid **4 km**, Go/No-Go hold **1 km**, Keep-Out Sphere **200 m**, WP0 **400 m**, WP1
+**220 m**, WP2 **20 m**, node residual **0.1** coarse / **0.05** fine. All seven waypoint/ladder numbers
+are pinned as literals in the suite AND cross-checked against a **second in-repo source** — `CrewGates`'s
+own gate titles, which name 400 / 220 / 20 m independently.
+⚠ **ONE BORROWED FIGURE, MARKED AS BORROWED:** `NulledRelativeSpeedMps = 0.2` is §B11's *"rate must stay
+< 0.2 m/s inside 5 m"*, which is a DOCKING-CORRIDOR limit, not a definition of station-keeping. It is the
+only published number of the right kind, it is conservative at 400 m, and T22 converges it.
+⭐ **AND εd IS DERIVED, NOT CHOSEN:** §B12.4 states it only as a symbol, so
+`ClosestApproachToleranceM(leg)` = **the leg's own target range**. That scales by construction — 400 m of
+slack at WP0, 20 m at WP2 — and introduces no constant.
+
+⭐⭐ **TWO REAL DEFECTS THE CLOSED-LOOP WALK FOUND, BOTH OF WHICH WOULD HAVE STRANDED THE FLIGHT SILENTLY.**
+Neither is a fixture artefact; both are design faults in code that read correctly.
+1. **`NodeExists` HAD TO BECOME A LATCH.** `Conductor.PlanThenBurn` is *plan when `!NodeExists`, burn when
+   `!NodeBurned`, else Advance* — so it can only reach Advance while `NodeExists` is still TRUE. But the
+   Node Executor **deletes the node** the instant the burn ends (`ShouldTerminateStock` → `RemoveSelf()`),
+   so a live `maneuverNodes.Count` reads false one tick later and the core plans the same operation
+   **forever**. The glue now latches "a node was built for this step", clears it at the three places a step
+   genuinely ends, and keeps one live read purely as a correction (a node the crew deleted by hand).
+2. **THE INTERCEPT LADDER STALLED AT ITS OWN RUNG BOUNDARY, AND SO DID ARRIVAL.** A range-driven ladder
+   aiming at the 4 km rung that lands at 4.3 km picks 4 km again, lands at 4.3 km again, forever — while
+   every burn and every error reads nominal. §B10.2's own words are *"walk down **on later passes**"*, so
+   the rung is now chosen by the **pass count**, with two one-way guards (never aim further out than the
+   vehicle is; never aim inside the leg's own waypoint). The same shape then reappeared at **429 m** on the
+   400 m hold: 29 m is far inside εd so §B12.4 does not re-plan it, but 429 > 400 so the leg never arrives.
+   ⭐ **The fix is a coupling, not a fudge:** the arrival band IS εd — *a miss too small to be worth
+   re-planning is an arrival* — so the two can no longer disagree, and the loop converges by construction.
+   ⚠ It is loose (800 m at the 400 m hold) and loose **on purpose** for a first flight at RO defaults: the
+   next leg tightens it by an order of magnitude and the KOS hand-off is a hard 200 m test no tolerance
+   widens.
+
+⭐ **THE `Advance` VERB MEANS TWO THINGS, AND THE GLUE NOW TELLS THEM APART WITH CERTAINTY.**
+`Conductor.Decide` returns `Advance` both from its top-level `PhaseComplete` check (*the mission plan may
+move on*) and from inside the phase table (*this step of the op chain is finished*). They are separable
+without guessing, because the top-level check runs FIRST: if the glue did not feed `PhaseComplete = true`,
+the Advance came from the chain. ⛔ Conflating them would advance the mission plan on every completed burn
+— a WP0 hold raised from four kilometres out.
+
+**VERIFIED (C1.3).** `python plugin/build.py test` — **ALL SUITES PASSED**; `RendezvousOpsTest` **122
+checks, 0 failed**, `MissionWalkTest` **40 checks, 0 failed**. `previewdiff` — **0 of 127 pages changed**.
+**MUTATION-PROVEN, 15 mutations, ALL 15 KILLED, every kill from a suite under test (S167):**
+
+| mutation | killed by |
+|---|---|
+| **R1** the ladder is range-driven again (the stall) | `RendezvousOpsTest` + `MissionWalkTest` |
+| **R2** the ladder may aim further out than the vehicle is | `RendezvousOpsTest` |
+| **R3** the ladder may aim inside the leg's own waypoint | `RendezvousOpsTest` |
+| **R4** arrival needs only the range, not a matched velocity | `RendezvousOpsTest` — *"a collision in 90 s"* |
+| **R5** arrival is exact again, decoupled from εd (the 429 m stall) | `RendezvousOpsTest` + `MissionWalkTest` |
+| **R6** a zero range counts as inside the Keep-Out Sphere | `RendezvousOpsTest` |
+| **R7** the phasing leg loops instead of raising G9 | `RendezvousOpsTest` + `MissionWalkTest` |
+| **R8** an approach leg ends on its first chain pass | `RendezvousOpsTest` + `MissionWalkTest` |
+| **R9** drift ignores the rate and fires on any opening | `RendezvousOpsTest` |
+| **R10** the fine corrections use the coarse 0.1 m/s tolerance | `RendezvousOpsTest` |
+| **R11** the transfer is named `OperationTransfer`, as the plan says | `RendezvousOpsTest` (vendored-source check) |
+| **R12** the plane change is scheduled COMPUTED, not at a relative node | `RendezvousOpsTest` (vendored-source check) |
+| **R13** KillRelVel is scheduled at apoapsis, not closest approach | `RendezvousOpsTest` (vendored-source check) |
+| **R14** the docking gate G13 acquires an approach leg | `RendezvousOpsTest` |
+| **R15** the Keep-Out Sphere is 20 m instead of 200 m | `RendezvousOpsTest` + `MissionWalkTest` |
+
+⭐ **THE WALK IS THE ARTEFACT WORTH KEEPING.** `MissionWalkTest` now flies one Crew-2 mission from the pad
+to the Keep-Out Sphere against a fixture that **misses** — every planned intercept overshoots by 60% until
+the conductor re-plans it — and asserts that it TERMINATES, that §B12.4 actually fired, that a re-plan
+never advanced the chain past the step whose burn missed, that the ladder never rose, and that **no
+transfer burn was ever planned inside the Keep-Out Sphere.** The KOS hand-off itself is asserted DIRECTLY
+rather than left to chance: a nominal approach ARRIVES at WP2 and raises the docking gate (§B14.2's real
+operating concept), so the Docking-AP hand-off is the SAFETY path for being inside the sphere with the leg
+unfinished, and a walk that never gets there proves nothing about it.
+
+**DONE when (unchanged):** rendezvous to the KOS in-sim.
+
+#### Open questions for the owner (C1.14) — **HELD**
+
+**Q1 — `OperationGeneric`'s four flags.  Category: SOURCE.** §B10.2 names the transfer's parameters in
+kRPC's vocabulary (`intercept_only`, `simple_transfer`, `period_offset`); the vendored class has
+`Capture` / `PlanCapture` / `MatchOrbit` / `Coplanar` / `LagTime`, and **this repo carries no source
+mapping one onto the other.** T19 therefore sets NONE of them and takes MechJeb's own defaults
+(`Capture = true`, `PlanCapture = true`, `MatchOrbit = false`, `Coplanar = false`), which is a two-burn
+Hohmann rendezvous — what a MechJeb user gets by pressing the button, and what §B5's "begin from defaults"
+asks for. **Options:** (1) leave the defaults and read the flown transfer *(recommended — it is §B5's own
+discipline and the flight measures it)*; (2) map the kRPC names from an out-of-repo source and pin them;
+(3) set `Capture = false` for a single-burn intercept, on the reading that §B9 calls it *"the big catch-up
+burn to an intercept trajectory"*. **No gate needed.**
+
+**Q2 — the G9 gate's stated range.  Category: TASTE / fidelity.** `CrewGates` titles G9 *"GO FOR APPROACH
+INITIATION (7.5 km)"* and §B14.2 puts that poll at 7.5 km, but §B12.3's phase table gives the whole
+rendezvous chain to `Approach`, so `Phasing` ends when the insertion trim is flown and G9 comes up at
+whatever range that is — typically hundreds of kilometres. Nothing malfunctions; the gate's own words just
+do not describe where it appears. **Options:** (1) leave it — the plan wins on conflict (C7.1) and the
+crew still poll before the transfer *(recommended for flight 1)*; (2) hold the phasing leg until the range
+is inside 7.5 km, which means the chain runs in `Phasing` and contradicts §B12.3; (3) re-word the gate.
+⛔ **(2) changes the plan and needs the owner (C1.12 / G10).**
 
 ### T20 [O] Docking hand-off + speedLimit ladder — **TODO**
 - **Read:** §B10.3 / §B14.  **DONE when:** dock in-sim.

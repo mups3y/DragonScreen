@@ -261,7 +261,232 @@ public static class MissionWalkTest
               && plan[index].Phase == MissionPhase.Phasing,
               "the plan is now at PHASING — the outbound rendezvous leg (T19's)");
 
-        // ⚠ AND THAT IS AS FAR AS THIS BATCH'S FIRST PHASE GOES. T19/T20/T21 continue the walk from
-        // here; until each lands, the phase after Ascent has no controller and the conductor idles.
+        // ---- 5. ON INTO THE RENDEZVOUS (T19) ----------------------------------------------------
+        WalkTheRendezvous(plan, ref index);
     }
+    // ============================================================================================
+    //  THE CHASE — a station to close on, and a planner that does not always hit what it aims at
+    // ============================================================================================
+    // ⭐ THE MISS IS THE POINT. A fixture whose burns always land exactly where they were aimed can
+    // never exercise §B12.4, which is the ONE genuinely new piece of logic in the whole rendezvous
+    // (§B12.4: "the main NEW logic"). So `Miss` starts at 1.6 — every planned intercept overshoots by
+    // 60% — and tightens only when the conductor re-plans, which is how a real solver behaves and is
+    // exactly the loop that has to be proved to converge rather than to oscillate.
+    class Chase
+    {
+        public double RangeM = 250000.0;      // behind and below, straight out of insertion
+        public double RelSpeedMps = 120.0;
+        public bool NodeExists, NodeBurned;
+        public double AimedAtM;               // the intercept this node was planned for
+        public double Miss = 1.6;             // how badly the planner is missing, this pass
+        public int Planned, Burned, Replans;
+
+        public void Plan(double interceptM)
+        { NodeExists = true; NodeBurned = false; AimedAtM = interceptM; Planned++; }
+
+        /// <summary>What §B12.4 measures: the predicted closest approach against what was aimed at.</summary>
+        public double ClosestApproachErrM
+        { get { return NodeExists ? AimedAtM * (Miss - 1.0) : 0.0; } }
+
+        // ⛔ `NodeExists` STAYS TRUE. It is a LATCH on "a node was built for this step", which is the
+        // only reading under which `Conductor.PlanThenBurn` can ever reach Advance — the Node Executor
+        // deletes the node the moment the burn ends, so a live count would send the core back to
+        // planning the same operation forever. `src/MechConductor.cs` latches it the same way, and says
+        // so at the point it does. This walk is what found it.
+        public void Burn(ConductorOp op)
+        {
+            NodeBurned = true; Burned++;
+            switch (op)
+            {
+                case ConductorOp.MatchPlane:                       break;   // plane only, no range change
+                case ConductorOp.Transfer:
+                case ConductorOp.CourseCorrection:
+                    double got = AimedAtM * Miss;
+                    if (got < RangeM) RangeM = got;                          // never further away
+                    break;
+                case ConductorOp.KillRelVel:  RelSpeedMps = 0.05;  break;   // velocities matched
+                case ConductorOp.Circularize:                      break;   // shapes the orbit, not the range
+            }
+        }
+
+        /// <summary>A re-plan is a better solution, not the same one again — otherwise the loop could
+        /// only ever oscillate, and a test that cannot converge proves nothing about one that does.</summary>
+        public void Replan()
+        {
+            NodeExists = false; NodeBurned = false; Replans++;
+            Miss = 1.0 + (Miss - 1.0) * 0.35;
+        }
+    }
+
+    // ---- 5. THE RENDEZVOUS, CLOSED-LOOP, FROM INSERTION TO THE KEEP-OUT SPHERE ------------------
+    // T19's DONE-when is "rendezvous to the KOS in-sim". This is everything about that which is
+    // decidable without the game: that the phasing leg raises G9, that each approach leg terminates
+    // and raises its own gate, that the intercept ladder actually walks down, that §B12.4 re-plans a
+    // missed burn WITHOUT advancing the chain past it, and that the whole thing ENDS at the Keep-Out
+    // Sphere by asking for the Docking Autopilot — which is T20's, not T19's.
+    static void WalkTheRendezvous(MissionStep[] plan, ref int index)
+    {
+        Chase c = new Chase();
+        int stepsDone = 0, passes = 0, gatesCleared = 0, dockingHandoffs = 0;
+        double lastIntercept = double.MaxValue;
+        int ladderRises = 0, replanAdvancedChain = 0, plannedInsideKos = 0;
+        RendezvousLeg reachedKosOn = RendezvousLeg.None, lastLeg = RendezvousLeg.None;
+        MissionPhase endedOn = MissionPhase.Unknown;
+        bool ended = false;
+
+        for (int tick = 0; tick < 4000; tick++)
+        {
+            if (index >= plan.Length) break;
+
+            // ---- a GATE: the crew work the checklist and press GO, as in the countdown -----------
+            if (plan[index].Kind == StepKind.Gate)
+            {
+                Gate g = CrewGates.ById(Missions.Resolve("Crew-2"), plan[index].Gate);
+                bool[] sat = new bool[g.Items == null ? 0 : g.Items.Length];
+                for (int i = 0; i < sat.Length; i++) sat[i] = true;
+                CrewGateInputs gi;
+                gi.Gate = g; gi.Satisfied = sat;
+                gi.GoPressed = true; gi.NoGoPressed = false; gi.AbortPressed = false;
+                if (!CrewGate.Step(gi, GatePhase.Holding).Cleared) { Check(false, "gate " + g.Id + " would not clear"); break; }
+                index = ModeManager.Advance(plan, index, new ModeInputs { GateGo = true }).Index;
+                gatesCleared++;
+                stepsDone = 0; passes = 0; lastIntercept = double.MaxValue;
+                continue;
+            }
+
+            // ---- a FLY step. Which leg? The gate it walks toward, exactly as the glue does. ------
+            MissionPhase phase = plan[index].Phase;
+            if (phase != MissionPhase.Phasing && phase != MissionPhase.Approach)
+            { endedOn = phase; ended = true; break; }
+
+            GateId next = GateId.None;
+            for (int i = index; i < plan.Length; i++)
+                if (plan[i].Kind == StepKind.Gate) { next = plan[i].Gate; break; }
+            RendezvousLeg leg = RendezvousOps.LegFor(next);
+            if (leg != RendezvousLeg.None) lastLeg = leg;
+
+            ConductorInputs s = new ConductorInputs();
+            s.Phase = phase;
+            s.NodeExists = c.NodeExists;
+            s.NodeBurned = c.NodeBurned;
+            s.ApproachStepsDone = stepsDone;
+            s.InKeepOutSphere = RendezvousOps.InsideKeepOutSphere(c.RangeM);
+            s.ClosestApproachTolM = RendezvousOps.ClosestApproachToleranceM(leg);
+            s.ClosestApproachErrM = c.ClosestApproachErrM;
+            s.NodeResidualTolMps = RendezvousOps.NodeResidualToleranceFor(leg);
+            s.PhaseComplete = RendezvousOps.LegComplete(leg, c.RangeM, c.RelSpeedMps,
+                                                        RendezvousOps.NulledRelativeSpeedMps);
+            ConductorAction a = Conductor.Decide(s);
+
+            if (a.Verb == ConductorVerb.Advance)
+            {
+                if (s.PhaseComplete)
+                {
+                    index = ModeManager.Advance(plan, index, new ModeInputs { PhaseComplete = true }).Index;
+                    stepsDone = 0; passes = 0; lastIntercept = double.MaxValue;
+                    c.NodeExists = false; c.NodeBurned = false;
+                    continue;
+                }
+                // a CHAIN-level advance
+                c.NodeExists = false; c.NodeBurned = false;
+                if (leg != RendezvousLeg.Phasing && stepsDone < Conductor.ApproachChain.Length)
+                { stepsDone++; continue; }
+                if (RendezvousOps.OnChainComplete(leg) == RendezvousOps.ChainEnd.CompleteLeg)
+                {
+                    index = ModeManager.Advance(plan, index, new ModeInputs { PhaseComplete = true }).Index;
+                    stepsDone = 0; passes = 0; lastIntercept = double.MaxValue;
+                    continue;
+                }
+                stepsDone = 0; passes++; lastIntercept = double.MaxValue;
+                continue;
+            }
+
+            if (a.Verb == ConductorVerb.Replan)
+            {
+                int before = stepsDone;
+                c.Replan();
+                // ⛔ §B12.4 / `Conductor`: "a step whose burn missed is not a step that is done".
+                if (stepsDone != before) replanAdvancedChain++;
+                continue;
+            }
+
+            if (a.Verb == ConductorVerb.Engage && a.Module == ConductorModule.DockingAutopilot)
+            {
+                dockingHandoffs++;
+                if (reachedKosOn == RendezvousLeg.None) reachedKosOn = leg;
+                ended = true; break;                     // ⭐ T19's terminal: the KOS. T20 takes it on.
+            }
+
+            if (a.Verb == ConductorVerb.Engage && a.Module == ConductorModule.ManeuverPlanner)
+            {
+                if (s.InKeepOutSphere) plannedInsideKos++;
+                double d = a.Op == ConductorOp.CourseCorrection || a.Op == ConductorOp.Transfer
+                         ? RendezvousOps.InterceptDistanceM(leg, c.RangeM, passes)
+                         : c.RangeM;
+                if (a.Op == ConductorOp.CourseCorrection)
+                {
+                    if (d > lastIntercept) ladderRises++;
+                    lastIntercept = d;
+                }
+                c.Plan(d);
+                continue;
+            }
+
+            if (a.Verb == ConductorVerb.Engage && a.Module == ConductorModule.NodeExecutor)
+            { c.Burn(a.Op); continue; }
+
+            Check(false, "the rendezvous reached an unexpected decision: " + a);
+            break;
+        }
+
+        Check(ended, "the rendezvous TERMINATES (it did not run out of ticks)");
+        Check(endedOn == MissionPhase.Docked,
+              "⭐ it ends by handing the plan to the DOCKED step — the leg after G12 'HOLD — WP2 (20 m) "
+              + "— GO FOR DOCKING', which is T20's (got " + endedOn + ")");
+        Check(lastLeg == RendezvousLeg.ToWaypoint2,
+              "...having walked all the way in to the WP2 leg (got " + lastLeg + ")");
+        Check(c.RangeM <= RendezvousOps.KeepOutSphereM,
+              "⭐ T19's OWN DONE-WHEN: the range is inside the 200 m Keep-Out Sphere when the conductor "
+              + "hands over (got " + c.RangeM.ToString("F0") + " m)");
+        Check(gatesCleared >= 4,
+              "G9, G10, G11 and G12 were all worked on the way in (got " + gatesCleared + ")");
+        Check(c.Replans > 0,
+              "⭐ §B12.4 ACTUALLY FIRED — the planner missed and the conductor re-planned "
+              + c.Replans + " time(s) rather than flying a burn it knew was wrong");
+        Check(replanAdvancedChain == 0,
+              "⛔ and a re-plan NEVER advanced the chain past the step whose burn missed");
+        Check(ladderRises == 0,
+              "⛔ the intercept ladder never aimed further out than the pass before it within a leg");
+        Check(plannedInsideKos == 0,
+              "⛔ NO transfer burn was ever planned inside the Keep-Out Sphere — `Conductor` tests the "
+              + "hand-off BEFORE the operation chain, and this is what that ordering is for");
+        Check(dockingHandoffs == 0,
+              "⛔ and the Docking Autopilot was never engaged on the way in: the approach ARRIVES at "
+              + "WP2 and raises the docking gate, which is the real operating concept (§B14.2). The "
+              + "hand-off is the SAFETY path for being inside the KOS with the leg unfinished — proved "
+              + "directly below, not by hoping this walk stumbles into it");
+
+        // ⭐ THE HAND-OFF, PROVED DIRECTLY. It is a SAFETY property, not a nominal one: if the vehicle
+        // is inside the Keep-Out Sphere on an unfinished approach leg, the planner chain must stop dead
+        // and the Docking Autopilot must take it (O6 / §B10.3 / §B12.3). A nominal walk arrives at WP2
+        // and never exercises it, so it is asserted here rather than left to chance.
+        {
+            ConductorInputs kos = new ConductorInputs();
+            kos.Phase = MissionPhase.Approach;
+            kos.ApproachStepsDone = 1;                       // mid-chain, deliberately
+            kos.InKeepOutSphere = RendezvousOps.InsideKeepOutSphere(120.0);
+            kos.ClosestApproachErrM = 5000.0;                // and badly off, deliberately
+            kos.ClosestApproachTolM = RendezvousOps.ClosestApproachToleranceM(RendezvousLeg.ToWaypoint1);
+            ConductorAction ka = Conductor.Decide(kos);
+            Check(ka.Verb == ConductorVerb.Engage && ka.Module == ConductorModule.DockingAutopilot,
+                  "⭐ inside the KOS mid-chain: the DOCKING AUTOPILOT, not another transfer burn (got "
+                  + ka + ")");
+            Check(RendezvousOps.InsideKeepOutSphere(120.0) && !RendezvousOps.InsideKeepOutSphere(220.0),
+                  "...and 120 m is inside the sphere while 220 m (WP1) is outside it");
+        }
+
+        Check(c.Burned > 0 && c.Planned > 0,
+              "the chain planned " + c.Planned + " node(s) and flew " + c.Burned);
+    }
+
 }

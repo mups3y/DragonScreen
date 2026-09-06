@@ -179,9 +179,11 @@ namespace DragonScreen
     //                     "AUTO SEQUENCE engaged" in a read-only build: the PROCEDURE is running, and nothing
     //                     is flying. **T18 onward** adds the controllers that make it fly (§B12.6 step (4+)).
     //  StationApproach  → the CONDUCTOR's §B9 Phase-3 approach: MechJeb Maneuver-Planner ops composed and
-    //                     re-planned live (§B1/§B12.4), flown by the Node Executor. NO-OP: that phase is not
-    //                     built. **T19.** (Not W20 — W20 is a reference READ of the deleted hand-written
-    //                     `RendezvousControl.cs`, mined to TUNE this phase; it lands no code.)
+    //                     re-planned live (§B1/§B12.4), flown by the Node Executor. **LIVE since T19,
+    //                     2026-09-07** — `MechConductor.ApproachEngaged`, true only while the core holds
+    //                     drive authority on a far-field leg, dark inside the Keep-Out Sphere. (Not W20 —
+    //                     W20 is a reference READ of the deleted hand-written `RendezvousControl.cs`,
+    //                     mined to TUNE this phase; it lands no code.)
     //  DockingOps       → the MechJeb **Docking Autopilot**, the DEFAULT from the Keep-Out Sphere inward
     //                     (O6, owner 2026-09-03; §B10.3/§B12.3), with the manual button overriding to the
     //                     Manual ISS Docking screen. NO-OP: not built. **T20.** (Not W21 — that is a
@@ -197,16 +199,28 @@ namespace DragonScreen
     //                     flying, gated on the conductor's recovery stage. No `BoosterControl` byte is
     //                     back and no focus moves — it is the hull-camera follow, not a command.
     //
-    // ⛔ TWO OF THESE ARE NOW LIVE, AND NONE OF THEM LIES. W10 (2026-09-05) flipped `AutoPilot.Engaged`;
-    // W9 (2026-09-07) flipped `BoosterRecovery.Tracked` — one property per increment, both times
-    // (§B12.5). The other three still return false/null, so their lamps are dark and every flight command
+    // ⛔ THREE OF THESE ARE NOW LIVE, AND NONE OF THEM LIES. W10 (2026-09-05) flipped `AutoPilot.Engaged`;
+    // W9 (2026-09-07) flipped `BoosterRecovery.Tracked`; T19 (2026-09-07) flipped
+    // `StationApproach.Engaged`/`.Note` — one property per increment, every time (§B12.5). The other two
+    // still return false/null, so their lamps are dark and every flight command
     // on every screen is still §14.4(a)'s honest no-op — click, no light, no action, and no red.
     // `AutoPilot.Engaged` lighting means the CONDUCTOR is engaged, not that anything is flying: the host
     // behind it is read-only and commands nothing (§B12.6 step (3)). `BoosterRecovery.Tracked` going
     // non-null means a hull camera has something to look at on a SEPARATE vessel; the Dragon's own flight
     // is untouched by it.
     public static class AutoPilot { public static bool Engaged { get { return CrewProcedureOps.Engaged; } } }
-    public static class StationApproach { public static bool Engaged { get { return false; } } public static string Note { get { return null; } } }
+    // ---- ⭐ LIVE SINCE T19 (2026-09-07) — THIS INCREMENT'S ONE FACADE FLIP (§B12.5: exactly one). ----
+    // `MechConductor.ApproachEngaged` is true exactly while the conductor holds the vehicle on a
+    // far-field rendezvous leg — MechJeb's Maneuver-Planner operations composed by us and flown by the
+    // Node Executor, re-planned live (§B1 / §B12.4). ⛔ IT IS NEVER LIT AHEAD OF THE VEHICLE: it reads
+    // `Flying`, which is the core's own drive authority, so a conductor that is idle, holding at a crew
+    // gate, or standing down because it has no controller leaves the lamp DARK. Inside the Keep-Out
+    // Sphere the far-field job is over and this goes dark too — that is `DockingOps`, T20's flip.
+    public static class StationApproach
+    {
+        public static bool Engaged { get { return MechConductor.ApproachEngaged; } }
+        public static string Note { get { return MechConductor.ApproachNote; } }
+    }
     public static class DockingOps { public static bool Engaged { get { return false; } } public static string Note { get { return null; } } }
     public static class DeorbitOps { public static bool Engaged { get { return false; } } }
     public static class UndockOps { public static bool Engaged { get { return false; } } public static string Note { get { return null; } } }
