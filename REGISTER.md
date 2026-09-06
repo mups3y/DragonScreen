@@ -22820,3 +22820,70 @@ supplied them together and his phrase is the provenance on record.
 **Recommendation: (1)** — the split costs a move and a stale-path risk, and buys only a tidier name; the
 manifest already prevents anyone mistaking a render for a cutaway. ⚠ **This is taste and it is his**
 (C1.14 category 3).
+
+---
+
+### S185 [O] UNIT 3 — the VEHICLE OVERVIEW page, measured against the owner's own rendered mock — **DOING** — [the overseer's per-page rebuild programme, unit 3; §14.2a (G13) clause (2) governs the WHOLE page]
+
+🟢 **OWNER, 2026-09-07, verbatim:** *"assess then vehicle overview page next"*, and on the art
+*"Vehicle overview page gets the 3d render"*, with the line-art sheets explicitly excluded — *"they are
+for the other page with line art like those already on it, so we can show the rcs port locations clearer
+etc"*.
+
+- ⭐ **THIS IS NOT A FIGMA-CONFORMANCE UNIT AND CANNOT BE ONE.** There is no Vehicle element set in
+  `assets/figma/` and there never was — `VehicleOverviewPage.cs:3` says so, and a search of all 337
+  restored export files for `vehicle|consumab|subsystem|prop|thermal|avionic` returns one hit, a Cover
+  string. **§14.2a clause (2) therefore governs every element on this page**: *"an element ABSENT from
+  the export STAYS EXACTLY AS IT IS — absence bounds what may be ADDED, never what must be REMOVED."*
+- **Sources, all in-repo (C7):** `assets/reference/dragon2-ui-assets/src/components/Overview.vue` ·
+  `docs/UI_AUDIT.md` §Overview.vue (the CSS placements) · `docs/SCREEN_INVENTORY.md` (DillonBaird's
+  Vehicle render, which is where the CONSUMABLES column comes from) · and — **new to this unit** —
+  `assets/reference/nasa/interface_1950x1260.png` and `interface_1630x941.png`, landed and hashed by
+  [[S184]], which are **rendered pictures of THIS EXACT PAGE**. The page was built from CSS; this is the
+  first time there has been a picture of what that CSS produces.
+- **Scope: CONFORMANCE + THE 3D RENDER.** Measure the built page against `Overview.vue`/`UI_AUDIT.md` and
+  the mock, **every divergence reported as a delta in fractions of width**, and resolve the capsule
+  render's resolution question.
+- ⛔ **TYPE IS OUT OF SCOPE.** [[S153b]] is **HELD** on S153a-Q1 and owns this family's **441**
+  below-floor draws — the largest single group in the build. No text size moves, up or down; the R-01
+  census must read **0 regressed**.
+- ⛔ **THE BOTTOM BAR IS DONE AND IS NOT REBUILT.** `Typography.BarDesign = 29` binds the bar alone.
+- ⛔ **THE LINE-ART SHEETS ARE NOT FOR THIS PAGE** (owner, verbatim above). They belong to
+  `PropSchematic`, whose header already calls for capsule + trunk line-art. Logged there, not used here.
+
+#### STEP A — the per-page backlog list (the first deliverable, assembled from all four sources)
+
+⚠ **The backlog is indexed by finding ID, not by page**, so this list is built rather than looked up.
+Sources: `REGISTER.md` · `docs/BACKLOG_RECONCILIATION.md` §3 + §5 · `docs/SCREEN_LIVENESS_AUDIT.md`
+(H1–H45) · `docs/QC_FINDINGS.md` (read-only, QC's file).
+
+| # | item | source | what it is | status coming in | outcome in this unit |
+|---|---|---|---|---|---|
+| 1 | QC `V-01` ≡ **H14/H15** ≡ [[S35]] | QC + audit + REGISTER | eight gauge rings were fixed colours asserting a verdict | ✅ closed by [[S104]], verified by [[S125]] | (to be filled) |
+| 2 | QC `V-02` | QC_FINDINGS | `RECORDING` drawn in alarm red for a non-fault | ✅ closed by [[S104]] | (to be filled) |
+| 3 | QC `V-03` | QC_FINDINGS | MARGIN column was eight unconditional dashes | ✅ corrected by `S109`, then FILLED by [[S79]] | (to be filled) |
+| 4 | QC `V-04` ≡ **H18** ≡ **H39**'s margin half | QC + audit | LS margins computed, recorded, shown nowhere | ⛔ **[[S140]] HELD** — both halves §1.4-blocked | (to be filled) |
+| 5 | **H17** ≡ QC `S-04` ≡ `MP-03` | audit + QC | the ~27 honest dashes — a §14.4(f) POLICY surface | ⛔ **[[S139]] HELD** — policy question | (to be filled) |
+| 6 | QC `MP-01` + `MP-02` | QC_FINDINGS | `ALL SYSTEMS CHECK` and CABIN PRESSURE disagree across pages | ⛔ **[[S149]] HELD** — the two REFERENCE CAPTURES disagree | (to be filled) |
+| 7 | QC `R-01` | QC_FINDINGS | this family's 441 below-floor text draws | ⛔ **[[S153b]] HELD** on S153a-Q1 | (to be filled) |
+| 8 | [[S79]] | REGISTER | the MARGIN column | ✅ **DONE 2026-09-06** — verify and extend, do not redo | (to be filled) |
+| 9 | [[S81]] **Q2** | REGISTER | the CONSUMABLES table's LAYOUT (29.3× label→value span) | ⛔ **TODO, blocked: owner design call** | (to be filled) |
+| 10 | [[S170]] | REGISTER | `120.0` W-per-EC written in three files | TODO — logged by [[S79]]; not a page defect | (to be filled) |
+| 11 | [[S177]] | REGISTER | the design frame's white border | TODO — **S177 scopes it to the Cover/Menu units** | (to be filled) |
+| 12 | **H45** ≡ QC (dash weight) | audit | a dashed value drawn at the weight of a live one | ✅ closed by [[S148]] | (to be filled) |
+| 13 | **H16** | audit | the ALERTS view / FDIR bar | ✅ closed by [[S137]] (not this page) | (to be filled) |
+
+⚠ **§2's duplicate pairs, checked so no defect is fixed twice and closed once.** This page's are
+`V-01` ≡ `S-01` ≡ H14/H15 ≡ [[S35]] (four names, one defect, all closed) · `V-04` ≡ H18 ≡ H39's margin
+half → [[S140]] · `S-04` ≡ H17 ≡ `MP-03` → [[S139]]. **Counted once each.**
+
+⭐ **AND THE HEADLINE OF STEP A IS THAT THE INDEXED BACKLOG FOR THIS PAGE IS EMPTY.** Every item above is
+either **DONE** or **HELD on an owner question**. Nothing indexed is both open and actionable. That is
+why this unit's real work is the material the index does not carry: the **conformance walk** against the
+page's own sources, and the **mock** — which did not exist when any of those findings were written.
+
+- **DONE when:** the Step A list above is walked with an outcome per row; every divergence from
+  `Overview.vue` / `UI_AUDIT.md` / the mock is measured as a fraction of width and either fixed or
+  written up under clause (2); the capsule-render question is resolved or explicitly left with its
+  reason; `test` is green and mutation-proved; `previewdiff` shows this page's views alone; the R-01
+  census reads 0 regressed; and the owner has been shown the PNG.
