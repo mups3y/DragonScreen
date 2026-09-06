@@ -73,6 +73,10 @@ namespace DragonScreen
         static void ResetAll()
         {
             CrewProcedureOps.ForceReset();
+            // W9, 2026-09-07: the conductor holds static warp + physics-range state that survives a scene
+            // change, and a stale wide range on a fresh vehicle is exactly the kind of thing nobody would
+            // think to look for. It resets with everything else.
+            MissionConductor.Reset();
         }
 
         public void OnDestroy()
@@ -112,6 +116,18 @@ namespace DragonScreen
 
             try
             {
+                // ⭐ THE CONDUCTOR TICKS BEFORE THE AUTO-SEQUENCE GATE, AND DELIBERATELY SO (W9, 2026-09-07).
+                // §B12.8 rider (c): every later increment GROWS THIS HOST by exactly the dispatch its own
+                // controller needs — this is W9's, and it is one line. It sits ABOVE the `Engaged` early
+                // return because what it drives is not part of the crew's AUTO SEQUENCE: the §B16.7 physics
+                // ranges are armed by the DISPLAY-tab toggle (`MissionConductor.AutoRecoverBooster`) and
+                // serve a SEPARATE vessel, whose own host (`BoosterHostAddon`) ticks unconditionally for
+                // the same reason. Gating the ranges on AUTO SEQUENCE would mean the booster silently
+                // packs out whenever the crew flew the Dragon by hand — the owner's direction is *"as soon
+                // as the booster gets dropped it runs its script"*, with no mention of a mode.
+                // ⛔ It commands no flight control: a time-warp rate and a physics range, nothing else.
+                MissionConductor.Tick(v);
+
                 if (!CrewProcedureOps.Engaged) { Unbind(); return; }
 
                 Bind(v);

@@ -8841,7 +8841,7 @@ flip, 5° offset and 2700 m aim are `[NOT SEEDED]` (start at 0/geometry); every 
 `pure/BoosterDescent.cs` — Q1 is the sharp one: **on the craft as dumped, an RTLS boostback has no
 ignition left** (`ThreeLanding` has one, owed to the entry burn), so the §B16.3 guard refuses it.
 
-### W9 [O] `src/MissionConductor.cs` — the warp + focus glue — **DOING 2026-09-07** — [TIER 3: scheduled recovery]
+### W9 [O] `src/MissionConductor.cs` — the warp + focus glue — **DONE 2026-09-07 — the booster's physics-range blocker is gone; warp restored dormant; one facade flipped; §B16.7 step 4 NOT built and stated** — [TIER 3: scheduled recovery]
 ⭐ **BLOCKER SPENT, 2026-09-07 — owner brief.** This line's own header read *"blocked on the booster core
 and the host"*. Both are gone: **W10 landed the host** (`src/FlightDriver.cs`, read-only, DONE 2026-09-05)
 and the **§B16 booster core is built and actuates**. The owner's goal for this run, verbatim: *"no I want
@@ -8880,6 +8880,225 @@ sites bound to §B16.1's fresh core (or to nothing, explicitly and honestly, if 
   deleted a few km downrange; `plugin/test/BoosterHostTest.cs:211` pins that packed-is-not-a-stop rule).
   Its "no caller" state is therefore **correct until this line lands**, not a defect to fix early.
 ⚠ **Ordering:** this line depends on **W10** (the host) and on §B16.1 (the booster core). Do not take it first.
+
+✅ **DONE 2026-09-07 — `python plugin/build.py test` GREEN.** 65 suites, **23,203 checks, 0 failed**, plus
+the python tool selftests (`SELFTEST OK — 13 sections, 416 report lines`) and S167's process-level harness
+check. The new suite reports **`RecoveryPlanTest` — 40 checks, 0 failed**. The compiler warning set is
+**byte-identical to the pre-change baseline** (checked with `git stash -u`): the only diff lines are the
+source-file counts (171→173 plugin, 201→203 test) and one line number shifting by 4 in `ScreenPainter.cs`
+where a comment was added. **No install, no glass time** — the 2026-09-07 gate was spent on that flight,
+and a fresh flight needs a fresh owner go (§0).
+
+**`previewdiff` — ONE page changed, deliberately, and it is not a glue leak.** `page4_settings_display.png`;
+126 unchanged, 0 new, 0 removed of 127. **The brief predicted an EMPTY list because glue draws nothing, and
+the glue drew nothing** — the change is a CAPTION CORRECTION the tree itself assigned to this line, and it
+is stated here rather than buried because it contradicts a stated expectation. `src/BoosterHost.cs`'s own
+open question Q3 (W23, 2026-09-04) refused to wire the AUTO BOOSTER RECOVERY toggle for exactly this reason
+and recommended option (1): *"**W9** owns the arm together with the §B16.7 PRE/focus protocol it is really
+the switch for, **and corrects the screen text in the same diff**"* — because the caption read
+*"(sacrifices the Dragon orbit that flight)"*, which describes the FOCUS-SWITCHING design §B16.7 superseded
+on 2026-09-03. Wiring the toggle live while leaving that text would have made a screen state something
+false (§14.4(a)). It now reads **"(booster lands unfocused; orbit kept)"** — 3 characters SHORTER than the
+string it replaces, so no layout risk; PNG inspected, no overflow, no collision with the right-hand column.
+The same correction was made to the two non-drawing copies of the claim, `ScreenPainter.cs`'s log line and
+`pure/PageAction.cs`'s doc comment.
+
+**Delivered (3 new files, 6 modified).**
+- **`plugin/src/MissionConductor.cs`** (NEW) — the glue, restored from `8b81816^` and **NOT byte-for-byte**;
+  the three differences are enumerated in the file's own header, W2/W3's provenance idiom.
+- **`plugin/src/pure/RecoveryPlan.cs`** (NEW) — the §B16.7 range lifecycle as a pure decision
+  (`RecoveryStage` × `RecoveryInputs` → `RecoveryDecision`). §B12.8's Wave rule 1: a line carries its own
+  pure half and its own test.
+- **`plugin/test/RecoveryPlanTest.cs`** (NEW) — 40 checks, including a 128-combination sweep of the one
+  invariant that matters.
+- Modified: `src/FlightDriver.cs` (+2 call sites), `src/_AutopilotStub.cs` (stub retired, one facade
+  flipped), `src/pure/SettingsPage.cs` + `src/ScreenPainter.cs` + `src/pure/PageAction.cs` (the superseded
+  caption, in all three places it was written), `test/TestMain.cs` (suite registered).
+
+**THE THREE DIFFERENCES FROM THE RECOVERED FILE, each a settled decision honoured rather than a liberty.**
+1. ⛔ **`ForceSetActiveVessel` APPEARS NOWHERE.** The recovered `FocusOn(Vessel, string)` handed focus to
+   the booster so `BoosterControl` could fly it. **§B16.7 settled the opposite** (owner O-B1 REVISED,
+   2026-09-03): *"⛔ FOCUS NEVER LEAVES THE UPPER STAGE."* Restoring the verb would re-import a replaced
+   design **and stop the booster dead** — `BoosterHostPlan.RequireNonActive` releases the host the instant
+   the booster becomes active (`BoosterHostStop.BecameActive`, *"focus moved ONTO the booster — releasing
+   (§B16.7)"*). `pure/RecoveryPlan.cs` has no focus verb in its vocabulary at all — the type system making
+   a superseded design unreachable, rather than a comment asking nobody to write it.
+2. ⛔ **NO `BoosterControl` BYTE IS BACK** — this line's own DONE-when, met literally. The recovered FSM
+   called `.Reset()` / `.IsRecoverableBooster()` / `.DriveNonActive()` and hooked the booster's
+   `OnFlyByWire` itself. §B16.1's fresh core exists (`src/BoosterHost.cs`, W23/W24) and does the flying;
+   this file **reads `BoosterHost.Engaged`** and manages the ranges around it. It does not search for a
+   booster, does not hook a callback and does not write an axis. **One searcher, one driver** — a second
+   opinion about which vessel is the booster is the class of bug two independent searches produce.
+3. ⚠ **THE BURN GUARD NOW ONLY DROPS WARP THE CONDUCTOR ITSELF COMMANDED**, tracked by `conductorOwnsWarp`.
+   The recovered guard was unconditional and also read `FlightDriver.CmdTransX/Y/Z` — RCS-translation
+   readbacks the read-only host (W10) does not have and, per **§B12.8(a)**, must not gain ahead of the
+   controller that writes them. Both halves fall out of one fact: **nothing in this tree publishes a warp
+   target**, so an unconditional drop could only ever cancel a warp THE CREW started over a throttle THE
+   CREW opened — an unrequested command from a build whose whole claim is that it flies nothing
+   (§14.4(a)). The guard's real job (*a warp of ours must never carry through a burn*) is kept in full; the
+   pending target is still zeroed unconditionally, which costs the crew nothing. The increment that lands a
+   translation controller adds its readback and widens `BurnCommanded` in the same diff (§B12.8 rider (c))
+   — said at `BurnCommanded`'s own definition, not only here.
+
+⭐ **WHAT THIS ACTUALLY UNBLOCKS, AND IT IS THE BOOSTER, NOT THE WARP.** `src/BoosterHost.cs`'s header
+states the blocker in its own words: *"Until W9 lands, a real flight will packs-out the booster within a few
+km and this host will say so and let go."* KSP accepts control input only for an UNPACKED vessel and stock
+unpack range is a couple of km, so without wide ranges the host binds, flies for a second and releases with
+`BoosterHostStop.Unloaded` — annunciated *"booster unloaded (out of physics range — PRE is register W9's)"*.
+`RangeExtender.Enable` fixes that and **may only be called from here**, because it writes `vesselRanges` on
+EVERY loaded vessel including the Dragon; `BoosterHost.cs:100` forbids itself the call **by name**: *"NEVER
+WIDEN PHYSICS RANGES (that is global, and therefore the Dragon's too — register W9)."* That is now wired,
+and `src/RangeExtender.cs` — held on this line since **S57** as *"a HOLD, never a retire"*, with its
+callerless state recorded as **correct until this line lands** — has its one legitimate caller. It is
+called from nowhere else.
+
+**THE WARP HALF IS LIVE CODE WITH NO CALLER, AND SAYING SO IS THE POINT.** `WarpToEvent` / `Realtime` /
+`ApplyRailWarp` are restored and compile against `pure/WarpPlan.cs`, which W4 landed with no consumer.
+**Nothing calls `WarpToEvent`, so nothing warps.** Its callers were `RendezvousControl` / `ReturnControl` /
+`DeorbitBurn`, and the owner's 2026-09-04 upper-stage decision re-verdicted all three **RECOVER-REFERENCE**
+(§B12.8 rider (d)) — they land no code, ever. The coast warp acquires a caller with the increments that
+schedule burns (**T18** onward). It was restored **now**, with the recovery half, because they are one file
+and splitting a file to defer half of it is the *"quiet deletion inside another task's diff"* §B12.8 rider
+(b) bans and this line's own text bans again. `pure/WarpPlan.cs` + `pure/CoastEta.cs` now have a compiled
+consumer; they still have **no flight**, and WarpPlan's four margins stay **[UN-CONVERGED]** (§B16.8 r2).
+
+**THE FACADE FLIP — EXACTLY ONE (§B12.5).** `BoosterRecovery.Tracked` now returns
+`MissionConductor.RecoveryBooster`, which is **`BoosterHost.Booster` gated on the conductor's own recovery
+stage** — non-null exactly while a recovery is running, null otherwise, and never lit off a host that bound
+something while the crew had the arm off. This line's DONE-when asked for precisely that
+(*"`MissionConductor.RecoveryBooster` genuinely backs the `BoosterRecovery` facade"*). **It is a camera
+follow, not a command**: `HullCams.cs:75` already guards null / not-active / not-loaded, so no screen
+behaviour changes until a booster is really being flown, and no focus moves. `_AutopilotStub.cs`'s
+`MissionConductor` stub is **retired** the way W2 retired the `Actuator` stub — same class name, real class
+behind it, no screen file touched; its status block now reads **two** live facade properties, not one.
+
+**⛔ §14.4(a) IS UNTOUCHED, AND W9 IS NOT THE LINE THAT LIFTS IT.** This file sets a time-warp rate and a
+physics range. **No throttle, no attitude, no translation, no staging, no ignition, no abort** — verified by
+grep over the delivered file: it names no `Actuator` member and no `FlightCtrlState` field. **T18 (ascent)
+is still the first line that commands the vehicle.** The `MissionConductor.Tick(v)` call was added to
+`FlightDriver` **above** the `CrewProcedureOps.Engaged` early-return on purpose: the §B16.7 ranges are armed
+by the DISPLAY-tab toggle and serve a SEPARATE vessel whose own host ticks unconditionally, so gating them
+on AUTO SEQUENCE would silently pack the booster out whenever the crew flew the Dragon by hand — against the
+owner's *"as soon as the booster gets dropped it runs its script"*, which names no mode. That is §B12.8
+rider (c)'s growth shape: one line of dispatch, for this line's own controller, no speculative members.
+
+**MUTATION-PROVED — 10 mutations, 10 KILLED, and every kill came from the suite under test ([[S167]]).**
+Each run recorded `suites-with-failures = 1`, and the failing suite was `RecoveryPlanTest` every time, with
+its own named check quoted — so no kill came from a crash above it hiding the rest of the report, which is
+the failure mode S167 exists to make visible. The source was restored **byte-for-byte** after the last run
+(asserted by the harness, not eyeballed).
+
+| # | Mutation | Killed by |
+|---|---|---|
+| M1 | step 1 no longer widens the ranges before separation | *"...and the ranges go WIDE, before anything separates"* |
+| M2 | the disarm loses its power to restore the ranges | *"disarming from ANY stage restores the ranges"* (2 checks) |
+| M3 | no re-extend when the booster vessel appears | *"...and RE-extends, because the booster did not exist at arming time"* |
+| M4 | the host releasing no longer ends the lifecycle | *"Recovering + the host released -> Done"* (3 checks) |
+| M5 | the backstop fires AT the timeout instead of past it | *"Recovering exactly AT the timeout keeps recovering"* |
+| M6 | a zero timeout trips the backstop instantly | *"a zero timeout disables the backstop, it does not trip it"* |
+| M7 | `InProgress` lights on `Armed` too | *"InProgress: NOT Armed"* |
+| M8 | `Idle` stops self-healing stranded wide ranges | the 128-combination invariant sweep |
+| M9 | `Done` stops restoring ranges it finds wide | *"Done RESTORES if it ever finds the ranges wide again"* (2 checks) |
+| M10 | `Armed` survives the stack coming back down | *"Armed + the stack is down again -> Idle"* (2 checks) |
+
+⭐ **THE TEST FOUND A REAL DEFECT IN THE FIRST DRAFT, AND IT IS WORTH RECORDING BECAUSE IT WAS INVISIBLE IN
+A CODE READ.** The 128-combination sweep asserts the one thing that must never be reachable: **physics
+ranges left WIDE with nobody recovering** (that is §B16.7's accepted risk — phantom forces past 100 km —
+held for no reason). It failed on the first run. `RecoveryStage.Idle` returned `RangeAct.None`
+unconditionally, so any path landing back on Idle with the ranges still extended stranded them there
+forever — reachable if `RangeExtender.Disable`'s own `try/catch` swallowed a failure, or a scene resumed
+Idle with wide ranges set. Fixed by making `Idle` self-heal (restore whenever it finds them wide); **M8 is
+the mutation that proves the fix is load-bearing.** This is why the pure half exists: the same machine
+written inline in the glue would have been unreachable by any test in this repo.
+
+⛔ **§B16.7 STEP 4 (AUTO-RECOVER THE BOOSTER) IS NOT BUILT — STATED, NOT SKIPPED.** The protocol's five
+steps and their owners: **1** (ranges wide before separation) THIS LINE · **2** (lands unfocused)
+`BoosterHost` · **3** (+10 s settle) `BoosterHostPlan.LandedSettleS = 10.0`, already built · **4**
+(auto-recover) **NOT BUILT** · **5** (ranges restored) THIS LINE. Step 4 in the stock sense — remove the
+landed vessel and credit its recovery — has **no verified-real source anywhere in this repo**: no document
+records which KSP call recovers a NON-ACTIVE vessel from the flight scene, and the pre-deletion
+`MissionConductor` never called one either (its FSM went straight to `Done` after touchdown, so the name
+`AutoRecoverBooster` always meant "fly it down", never "credit it"). **C1.15 / §1.4 forbid inventing the
+binding**, and guessing wrong has two outcomes, both bad: a silent no-op, or a vessel destroyed mid-flight.
+So the protocol runs **1-2-3-5**, the booster is left standing where it landed (benign — it unloads with the
+ranges and sits in the tracking station like any landed craft), and `RecoveryStage.Done` is named for the
+RANGE lifecycle finishing, never for a recovery having been credited. Question **Q1** below.
+
+**Kept, and flagged rather than changed quietly (the `AutoAdvanceGates` precedent from W10).**
+`AutoRecoverBooster` still **ships `true`** — the recovered default, owner 2026-08-29, verbatim in the file:
+*"don't make me re-arm it every session"*. But **what default-ON arms is now a different, far cheaper
+thing**: it used to mean *hand focus to the booster and give up this flight's orbit*; under §B16.7 it means
+*keep the physics ranges wide so the booster host can fly the booster while the Dragon flies its own
+mission*. Nothing is sacrificed, so there is nothing to re-arm defensively — which is why the default was
+kept rather than flipped. Its one real cost is that a default flight now runs with 600 km ranges from
+"airborne" to "the host let go"; that is step 1, it is not optional, and §B16.7 already states and accepts
+the risk it carries. `PreRangeKm = 600` stays **[UN-CONVERGED]** (the owner's *"say 500 km → set 600"*, and
+no recorded flight measured the real separation — which is exactly why `LogSeparation` is restored: the
+flight recorder follows the active vessel only, so this two-vessel number exists in no single recording).
+
+**Logged, NOT done (C1.1 — one task at a time).**
+- ⚠ **`src/DockingCamRenderer.cs:439`** still carries a comment describing the superseded design:
+  *"`BoosterRecovery:256` calls `ForceSetActiveVessel(booster)` so the crew can watch the..."*. It names a
+  file deleted 2026-09-01 and a protocol §B16.7 replaced. **C1.16's 2026-09-06 extension applies**: it is
+  marked SUPERSEDED IN PLACE by a later line, never deleted. Not touched here — outside this task's
+  declared outputs (C1.11).
+- ⚠ **Four `docs/` files still describe the focus-switching recovery as current**:
+  `INSTALLED_MODS_RESEARCH.md` (*"a focus-managed booster recovery"*), `MOD_INTEGRATION_RESEARCH.md` §2,
+  `VEHICLE_AUDIT.md` §"Booster recovery (opt-in `AutoRecoverBooster`, focus-managed)", and
+  `BOOSTER_RECOVERY_ARCHITECTURE.md` §7.3 items **2** (*"the toggle is a live control with a dead effect"*)
+  and **3** (*"`RangeExtender.Enable`/`Disable` have zero callers"*) — both of which **this line has now
+  closed**, and neither of which may be edited from here. They want `SUPERSEDED` marks per C7.1, on their
+  own line. **No `docs/` file was deleted or edited by this task** (C1.16).
+- ℹ `previewdiff` still warns `assets/kenney_ui_scifi` is **EMPTY**. Pre-existing, gitignored, and already
+  logged by three earlier sessions; untouched and unchanged by this task.
+
+**Blocked lines skipped by the loop, listed so blockers cannot accumulate unseen:** [[W7]] (`AscentControl`
+— **HELD 2026-09-06**, *"DO NOT EXECUTE THIS LINE AS WRITTEN"*) and [[W19]] (`AbortControl` — **HELD
+2026-09-06**, blocked on `Steering.cs`, which §B12.8 rider (b) forbids recovering — the same wave-level
+blocker as W7). Neither owns any file this task touched — checked, not assumed.
+
+## Open questions for the owner
+
+**Q1 — §B16.7 step 4, "auto-recover the booster": how should it be recovered, or should it be?**
+*Situation.* Steps 1, 2, 3 and 5 are built and green; step 4 is not, for the reason above — no source in
+this repo records how a NON-ACTIVE landed vessel is recovered from the flight scene, and C1.15/§1.4 forbid
+inventing the binding. Today the booster lands, the ranges are restored, and it is left standing where it
+came down. Nothing is broken by that; the funds/parts are simply not credited automatically.
+*Options.*
+1. **Leave it as it is** and treat "recovered" as the crew's own tracking-station action after the flight.
+   Costs nothing, hides nothing, and the landing — the part that was actually blocked — works.
+2. **Open a small [S] line to research the binding first** (which stock call, which scene, and what it does
+   to a vessel whose physics ranges are about to un-widen), then implement against a documented answer, the
+   way C1.15 requires before writing a simulation.
+3. **Implement it now on `GameEvents.onVesselRecoveryRequested`** — the event the stock Recover button
+   raises. ⚠ The compiler would confirm the member exists; **nothing available here confirms it does the
+   right thing for a non-active vessel in the flight scene**, and the wrong answer destroys a vessel
+   mid-flight rather than erroring.
+*Recommendation:* **(2)**, with (1) standing in the meantime. The blocked thing was the landing and it is
+unblocked; step 4 is a convenience, and it is the one step where a wrong guess is destructive rather
+than inert.
+
+**Q2 — the caption change is the one thing in this diff a screen shows. Confirm the wording.**
+*Situation.* The DISPLAY tab now reads **"AUTO BOOSTER RECOVERY  (booster lands unfocused; orbit kept)"**,
+replacing *"(sacrifices the Dragon orbit that flight)"*, which stated the design §B16.7 superseded. The
+change was required — wiring the toggle live while leaving the old text would have made a screen lie
+(§14.4(a)) — and `BoosterHost`'s Q3 routed both halves to this line. **This is the owner's TASTE, which
+C1.14 reserves to him**; the substance is settled, only the words are open.
+*Options.* **(1)** keep it · **(2)** the owner supplies the wording · **(3)** drop the parenthetical and let
+the button alone speak.
+*Recommendation:* **(1)**, pending his eye on the PNG — it is accurate, it is 3 characters shorter than what
+it replaces, and the parenthetical is the half that was actually wrong before.
+
+**Q3 — does a fresh flight go? (An owner GATE — C1.12; a build chat opens none.)**
+*Situation.* This is the first build in which a separated booster can stay loaded and controllable all the
+way to the ground. Nothing here can be proven on the glass without a flight, and the 2026-09-07 gate was
+spent on the flight that proved `T15b` R2. `install` + glass time remain separate owner gates, per session.
+*Options.* **(1)** fly it now and record it — the two-vessel separation number §B16.8 wants has never been
+measured, and `LogSeparation` is restored specifically to capture it · **(2)** hold until more of Part B
+lands and spend one flight on more · **(3)** fly it with `AutoRecoverBooster` forced OFF from
+`PluginData/tuning.cfg` first, as a null test that the wide ranges change nothing about the Dragon's own
+ascent.
+*Recommendation:* **(1)**. ⛔ **Only the owner opens this gate.**
 
 ### W10 [O] `src/CrewProcedureOps.cs` + `src/FlightDriver.cs` — the conductor glue, and the only thing that ticks it — **W10 OWNS THE HOST OUTRIGHT** — **DONE 2026-09-05** — [TIER 2: real gap — the restored Wave-D pure layer has no driver]
 Logged by **W4**, 2026-09-04 (C1.1 — §B12.8's Wave D row names `CrewProcedureOps`; it compiles, but landing

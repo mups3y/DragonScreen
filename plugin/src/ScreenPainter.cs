@@ -1163,9 +1163,13 @@ namespace DragonScreen
 
                 case PageAct.ToggleBoosterRecovery:
                     MissionConductor.AutoRecoverBooster = !MissionConductor.AutoRecoverBooster;
+                    // W9, 2026-09-07: this line described the focus-switching design §B16.7 superseded.
+                    // What the arm does now is hold the physics ranges wide so the separated booster stays
+                    // loaded and controllable while `src/BoosterHost.cs` lands it UNFOCUSED — the Dragon
+                    // keeps focus and keeps its orbit. See `pure/SettingsPage.cs` for the matching caption.
                     Debug.Log("[DragonScreen] AUTO BOOSTER RECOVERY "
-                              + (MissionConductor.AutoRecoverBooster ? "ARMED — after MECO the booster is focused + landed (Dragon orbit sacrificed this flight)"
-                                                                     : "OFF — full Dragon mission to orbit"));
+                              + (MissionConductor.AutoRecoverBooster ? "ARMED — physics ranges go wide before separation; the booster lands UNFOCUSED (§B16.7)"
+                                                                     : "OFF — stock ranges; a separated booster packs out and is not recovered"));
                     break;
 
                 // Tick a crew step. Held in VesselData rather than per screen: the countdown is the

@@ -44,10 +44,13 @@ namespace DragonScreen
         /// <summary>Write the render target to a PNG. Developer tooling, deliberately reachable.</summary>
         Capture,
         /// <summary>
-        /// Toggle AUTO BOOSTER RECOVERY (MissionConductor.AutoRecoverBooster). OFF = the full crew mission flies
-        /// the Dragon to orbit (the booster is not recovered). ON = after MECO the conductor hands focus to the
-        /// separated booster and lands it — a focused booster-recovery test that sacrifices the Dragon's orbit
-        /// that run (stock KSP flies one active vessel). Lets us collect booster-phase data on demand.
+        /// Toggle AUTO BOOSTER RECOVERY (MissionConductor.AutoRecoverBooster). ON = the conductor holds the
+        /// physics ranges wide from ascent through touchdown, so the separated booster stays LOADED and
+        /// controllable and `src/BoosterHost.cs` can fly it down on its own vessel. OFF = stock ranges, and a
+        /// separated booster packs out within a few km and is not recovered.
+        /// ⛔ Corrected by W9, 2026-09-07: this used to say ON hands FOCUS to the booster and sacrifices the
+        /// Dragon's orbit. §B16.7 (owner, 2026-09-03) settled that away — focus never leaves the upper stage,
+        /// the booster lands unfocused, and both vehicles fly their own mission in the same flight.
         /// </summary>
         ToggleBoosterRecovery,
 

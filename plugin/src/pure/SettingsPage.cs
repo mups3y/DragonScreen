@@ -439,11 +439,18 @@ namespace DragonScreen
                     DragonPalette.Text0);
 
             // AUTO BOOSTER RECOVERY toggle — LAST in the left column (it reassigns x,y, so it must come after the
-            // display/resolution lines above, which key off the capture rect's y). ARMED = after MECO the
-            // conductor focuses the separated booster and lands it (a booster-recovery test that sacrifices the
-            // Dragon's orbit that run — stock KSP flies one active vessel).
+            // display/resolution lines above, which key off the capture rect's y).
+            // ⛔ CAPTION CORRECTED BY W9, 2026-09-07, AND THE OLD ONE WAS A LIE BY THEN. It read
+            // "(sacrifices the Dragon orbit that flight)", which described the FOCUS-SWITCHING recovery
+            // §B16.7 superseded on 2026-09-03: focus now NEVER leaves the upper stage, the booster lands
+            // UNFOCUSED on its own core, and the Dragon flies its own mission to orbit in the same flight.
+            // ARMED now means what the machine behind it actually does — hold the physics ranges wide so
+            // the separated booster stays loaded and controllable (§B16.7 steps 1 and 5). Wiring the toggle
+            // to a live effect while leaving this text would have made a screen state something false,
+            // which is exactly why `src/BoosterHost.cs`'s own open question refused to wire it and routed
+            // both halves here (§14.4(a)).
             BoosterRect(w, h, out x, out y, out rw, out rh);
-            dl.Text("AUTO BOOSTER RECOVERY  (sacrifices the Dragon orbit that flight)", x, y - 22f * sc,
+            dl.Text("AUTO BOOSTER RECOVERY  (booster lands unfocused; orbit kept)", x, y - 22f * sc,
                     Typography.Caption * sc, TextAlign.Left, DragonPalette.Text5);
             Control.Button(dl, x, y, rw, rh,
                            s.BoosterRecoveryOn ? "BOOSTER RECOVERY  ARMED" : "BOOSTER RECOVERY  OFF",

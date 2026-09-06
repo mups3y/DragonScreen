@@ -70,24 +70,19 @@ namespace DragonScreen
         public static AbortMode Mode { get { return AbortMode.None; } }
     }
 
-    // ---- mission orchestration: a display-only booster-recovery arm flag, no recovery booster ----
-    // ⚠ W4 (Wave D) RESTORED THIS ONE'S PURE HALF TOO, AND COULD NOT RESTORE THE GLUE. `pure/WarpPlan.cs`
-    // (the never-overshoot warp rule) and `pure/CoastEta.cs` (a coast's ETA → the warp target UT) are back and
-    // headless-tested. `src/MissionConductor.cs` (24,299 B at `8b81816^`) is NOT, because it does not COMPILE
-    // in this tree, on two counts that are both settled decisions rather than missing effort:
-    //   1. its booster-recovery FSM calls `BoosterControl.Reset()` / `.IsRecoverableBooster()` /
-    //      `.DriveNonActive()` — and CLAUDE.md is explicit that *"the deleted `BoosterControl` implementation
-    //      still stays deleted"* (R1 §5.2 files it RECOVER-REFERENCE; §B16.1 writes the booster core FRESH,
-    //      on its own vessel). Restoring MissionConductor as-is would drag it back in through the side door.
-    //   2. its burn-guard reads `FlightDriver.CmdTransX/Y/Z`, which the stub FlightDriver below does not have
-    //      and must not gain — half-wiring a facade from here is what §B12.8(a) forbids.
-    // Cutting the recovery half out to make it build is exactly the "quiet deletion inside another task's
-    // diff" §B12.8 rider (b) bans, so it was not done. ⇒ Register **W9**.
-    public static class MissionConductor
-    {
-        public static bool AutoRecoverBooster;         // a screen toggle only — nothing acts on it now
-        public static Vessel RecoveryBooster { get { return null; } }
-    }
+    // ---- ⛔ THE MissionConductor STUB IS RETIRED (W9, 2026-09-07). ----
+    // It used to declare a no-op `MissionConductor` holding a display-only `AutoRecoverBooster` flag that
+    // nothing read and a `RecoveryBooster` that was always null. The REAL one is back —
+    // `src/MissionConductor.cs`, restored per §B12.8 Wave D — and it carries both members with identical
+    // signatures, so this is the same facade swap W2 made for `Actuator`: the class name the screens
+    // compile against did not change, only what stands behind it. Do NOT re-add a stub MissionConductor
+    // here; two declarations of the same type break the build (§B12.8's two-generation rule).
+    // The two blockers this stub recorded are both spent, and neither was resolved by relaxing a rule:
+    //   1. `BoosterControl` STAYS DELETED — the restored file calls no member of it. §B16.1's fresh
+    //      booster core exists (`src/BoosterHost.cs`, W23/W24) and does the flying; the conductor manages
+    //      the physics ranges around it and never searches for, hooks or drives a booster itself.
+    //   2. `FlightDriver.CmdTransX/Y/Z` is still NOT added — §B12.8(a) forbids half-wiring that facade,
+    //      so the restored burn-guard reads the main throttle only and says so at its own definition.
 
     // ---- ⛔ THE Actuator STUB IS RETIRED (W2 / Wave B, 2026-09-04). ----
     // It used to declare a no-op `Actuator` with three refusing methods (ToggleNoseShroud / DeployChutes /
@@ -197,21 +192,29 @@ namespace DragonScreen
     //  DeorbitOps       → the conductor's §B9 Phase 7: `OperationPeriapsis` → Node Executor, then P8 entry
     //                     attitude hold (O8) and P9 chutes. NO-OP: not built. **T21, increment 2.**
     //  BoosterRecovery  → the SCRIPTED booster autopilot on its OWN vessel (§B16) — ours, not MechJeb's —
-    //                     surfaced through gen-2 `MissionConductor.RecoveryBooster`'s focus/PRE machine
-    //                     (§B16.7). NO-OP: MissionConductor does not compile here, and the `BoosterControl`
-    //                     under it STAYS DELETED — §B16.1 writes that core fresh. **W9**, then §B16.
+    //                     surfaced through gen-2 `MissionConductor.RecoveryBooster`'s §B16.7 range machine.
+    //                     **LIVE since W9, 2026-09-07.** `Tracked` is the booster `src/BoosterHost.cs` is
+    //                     flying, gated on the conductor's recovery stage. No `BoosterControl` byte is
+    //                     back and no focus moves — it is the hull-camera follow, not a command.
     //
-    // ⛔ ONE OF THESE IS NOW LIVE, AND NONE OF THEM LIES. W10 (2026-09-05) flipped `AutoPilot.Engaged` — and
-    // exactly that one (§B12.5: one property per increment). The other four still return false/null, so their
-    // lamps are dark and every flight command is still §14.4(a)'s honest no-op — click, no light, no action,
-    // and no red. `AutoPilot.Engaged` lighting means the CONDUCTOR is engaged, not that anything is flying:
-    // the host behind it is read-only and commands nothing (§B12.6 step (3)).
+    // ⛔ TWO OF THESE ARE NOW LIVE, AND NONE OF THEM LIES. W10 (2026-09-05) flipped `AutoPilot.Engaged`;
+    // W9 (2026-09-07) flipped `BoosterRecovery.Tracked` — one property per increment, both times
+    // (§B12.5). The other three still return false/null, so their lamps are dark and every flight command
+    // on every screen is still §14.4(a)'s honest no-op — click, no light, no action, and no red.
+    // `AutoPilot.Engaged` lighting means the CONDUCTOR is engaged, not that anything is flying: the host
+    // behind it is read-only and commands nothing (§B12.6 step (3)). `BoosterRecovery.Tracked` going
+    // non-null means a hull camera has something to look at on a SEPARATE vessel; the Dragon's own flight
+    // is untouched by it.
     public static class AutoPilot { public static bool Engaged { get { return CrewProcedureOps.Engaged; } } }
     public static class StationApproach { public static bool Engaged { get { return false; } } public static string Note { get { return null; } } }
     public static class DockingOps { public static bool Engaged { get { return false; } } public static string Note { get { return null; } } }
     public static class DeorbitOps { public static bool Engaged { get { return false; } } }
     public static class UndockOps { public static bool Engaged { get { return false; } } public static string Note { get { return null; } } }
 
-    // ---- HullCams had followed the recovery booster; there is no recovery booster now ----
-    public static class BoosterRecovery { public static Vessel Tracked { get { return null; } } }
+    // ---- ⭐ LIVE SINCE W9 (2026-09-07) — THIS INCREMENT'S ONE FACADE FLIP (§B12.5: exactly one). ----
+    // `src/HullCams.cs:75` follows this vessel with the hull cameras. It is now the booster the §B16 host
+    // is actually flying, gated on the conductor's own recovery stage — so it is non-null exactly while a
+    // recovery is running and null otherwise. ⚠ IT IS A CAMERA FOLLOW, NOT A COMMAND: nothing about this
+    // property flies anything, and no focus changes (§B16.7 — focus never leaves the upper stage).
+    public static class BoosterRecovery { public static Vessel Tracked { get { return MissionConductor.RecoveryBooster; } } }
 }

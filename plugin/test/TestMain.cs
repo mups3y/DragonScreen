@@ -318,9 +318,12 @@ public static class TestMain
         // layer finally HAS a caller: the conductor's gates are live, the crew's GO advances the plan, and
         // the host reports phase/engaged. The host is READ-ONLY (§B12.6 step (3)) - it commands nothing, and
         // it holds at the first Fly step because no controller exists to complete a phase. `src/
-        // MissionConductor.cs` is still absent (it needs a booster core - register W9). So these suites
-        // prove DECISIONS, not a flown mission; every flight command on every screen is still §14.4(a)'s
-        // honest no-op. CrewGates' gate TITLES and CHECKLIST ITEMS are §1.4 source-of-truth material
+        // ⭐ W9 (2026-09-07) landed `src/MissionConductor.cs` too, so WarpPlan and CoastEta finally have a
+        // compiled consumer and `RecoveryPlan` (new, below) has its live one. That changes what these
+        // suites cover and NOT what the vehicle does: the conductor sets a time-warp rate and a physics
+        // range, and nothing else - no throttle, no attitude, no staging, no ignition. So these suites
+        // still prove DECISIONS, not a flown mission; every flight command on every screen is still
+        // §14.4(a)'s honest no-op. CrewGates' gate TITLES and CHECKLIST ITEMS are §1.4 source-of-truth material
         // (transcribed NASA/SpaceX callouts) - do not edit one to make a test pass.
         bad += Suite(MissionProfileTest.Run);   // L-S0b mission-as-data: the 19-mission catalog + craft-name resolve
         bad += Suite(CrewGateTest.Run);         // L4 crew gate machine + the real gate catalog + the phase sequencer
@@ -328,6 +331,7 @@ public static class TestMain
         bad += Suite(ConductorTest.Run);        // T16: the pure ConductorAction core — §B12.3's phase table, §B12.4's re-plan rule
         bad += Suite(WarpPlanTest.Run);         // conductor: the on-rails rate that can never overshoot the drop-out
         bad += Suite(CoastEtaTest.Run);         // conductor: range-closing coast ETA -> the warp target UT
+        bad += Suite(RecoveryPlanTest.Run);     // W9: §B16.7's physics-range lifecycle - wide before sep, always restored
 
         // ---- PART B0 (BB1, §B0) - the BlackBox flight recorder core ----
         // ⭐ THE ONE LINE THAT MUST BE REMOVED IF THE RECORDER IS EXCISED FOR RELEASE. BB1 is
