@@ -21546,7 +21546,7 @@ governance line. **S176-Q1 (the bar's typed text vs the nav-bar floor) is UNCHAN
 ---
 
 
-### S179 [O] The bottom bar's centre cell is an EVENT DIALOG, and it is why 475 design px of the bar are empty — **TODO (needs one owner ruling: what fires it and what it says)** — [logged by [[S176]] per C1.1, 2026-09-06; owner-supplied source; TIER 2: a whole missing element]
+### S179 [O] The bottom bar's centre cell is an EVENT DIALOG, and it is why 475 design px of the bar are empty — **TODO — the COPY is now sourced and sized (40 callouts, 0 overflow); what remains is which of them the bar raises, and the ascent/booster detectors that do not exist yet** — [logged by [[S176]] per C1.1, 2026-09-06; owner-supplied source; TIER 2: a whole missing element]
 
 **🟢 OWNER, 2026-09-06, verbatim, with a reference image of the bar's centre section:** *"this is an
 example of the centre section of the bottom bar. You will notice the pop up box "trunk jettison and
@@ -21685,6 +21685,100 @@ an explicit release from `CrewGates`' §1.4 rule, which is his to give and not a
 a REAL signal (never a timer or a constant), its copy has a named source per line, the bar's hit map is
 unaffected (it takes no touch), and `previewdiff` shows it on the pages that can raise an event and on no
 others.
+
+---
+
+#### ⭐ S179-Q1 IS ANSWERED BY THE OWNER'S OWN NEXT INSTRUCTION — AND THE BLOCKER ABOVE DISSOLVES
+
+**🟢 OWNER, 2026-09-06, verbatim:** *"look up what space x use during their streams. Like MECO etc"*.
+
+⭐ **THAT IS OPTION 3 SELECTED, AND IT WAS HIS TO SELECT.** The block above flagged sourcing the copy
+from the callout stream as *"a §1.4 tier jump this chat should not make on its own"*. He has made it. The
+copy therefore comes from the **transcribed SpaceX/NASA stream callouts already captured in this repo** —
+not from the other build's screenshot, and not from a build chat's imagination.
+
+⛔ **AND IT WAS LOOKED UP IN THE REPO, NOT ON THE WEB (C7).** External URLs are off-limits as a build
+source precisely because *"research complete, captured in `docs/`"* — and it is:
+`docs/CREW_MISSION_TELEMETRY.md` §5 (the countdown gates + the ascent callout MET table), §6a (the real
+named-burn rendezvous schedule), §6b (the return sequence), and `docs/PHASE_6_DEORBIT_ENTRY_SPLASHDOWN_
+RESEARCH.md` §2/§4 (entry interface, drogues, mains, splashdown). A term census across `docs/` returns
+**MECO 141 · SECO 92 · Max-Q 22 · Boostback 13 · trunk jettison 21 · entry burn 11 · landing burn 11** —
+the vocabulary was already here.
+
+#### ⭐ THE 40-CALLOUT CANDIDATE SET, AND IT ALL FITS — WHICH REVERSES THIS LINE'S OWN FINDING
+
+The section above concluded *"the cell is too narrow"* on the strength of the **gate titles**, which are
+sentences. **Stream callouts are not sentences — they are terse by design, which is the whole reason the
+owner pointed at them.** Re-measured against the same cell:
+
+| | |
+|---|---|
+| callouts assembled from in-repo sources | **40** |
+| fit on **ONE** line at the glanceable floor | **20** |
+| need **TWO** lines | **20** |
+| **overflow** | **0** |
+
+⭐ **AND IT IS PROVEN TWICE, THE SECOND TIME AGAINST THE REAL FONT.** The char-budget estimate uses
+`MarginAffordance.CapAdvance` (0.6638 em, an all-caps average). That average can hide a single wide word,
+and a wrap can never break a word — so every callout was re-measured with **D-DIN's own advance widths,
+read from `assets/d-din/D-DIN.ttf`**, at the floor size of 48.07 design px against 427 usable:
+
+- widest whole string: `DRAGON ON INT POWER` at **486.8 px** — wraps to two lines, as expected
+- **widest single WORD in the entire set: `SPLASHDOWN` at 292.9 px against 427 usable**
+- ⭐ **so NOT ONE WORD in the 40 is too wide for a line, and a plain word-wrap always succeeds**
+
+The candidate set, each line with the in-repo source it is transcribed from:
+
+| phase | callout | chars | source |
+|---|---|---:|---|
+| Countdown | `GO FOR PROP LOAD` | 16 | `CREW_MISSION_TELEMETRY` §5, G4 |
+| Countdown | `LES ARMED` | 9 | §5, G5 |
+| Countdown | `DRAGON ON INT POWER` | 19 | §5, G6 |
+| Countdown | `GO FOR LAUNCH` | 13 | §5, G7 |
+| Ascent | `LIFTOFF` | 7 | §5, MET 0:00:00 |
+| Ascent | `MAX-Q` | 5 | §5, MET 0:00:58 |
+| Ascent | `MECO` | 4 | §5, MET 0:02:37 |
+| Ascent | `STAGE SEPARATION` | 16 | §5, MET 0:02:40 |
+| Ascent | `SES-1` | 5 | §5, MET 0:02:48 |
+| Ascent | `SECO-1` | 6 | §5, MET 0:08:50 |
+| Ascent | `DRAGON SEPARATION` | 17 | §5, MET 0:12:03 |
+| Ascent | `NOSECONE OPEN` | 13 | §5, MET 0:12:48 |
+| Booster | `BOOSTBACK BURN` | 14 | booster docs |
+| Booster | `ENTRY BURN` | 10 | §5, MET 0:07:29 |
+| Booster | `LANDING BURN` | 12 | §5, MET 0:08:59 |
+| Rendezvous | `PHASE BURN` · `BOOST BURN` · `CLOSE BURN` · `TRANSFER BURN` · `COELLIPTIC BURN` | 10–15 | §6a, the real named-burn schedule |
+| Rendezvous | `GO FOR AI BURN` · `AI BURN` · `MIDCOURSE BURN` | 7–14 | §6a, G9 |
+| Prox-ops | `WAYPOINT 0 - 400 M` · `WAYPOINT 1 - 220 M` · `WAYPOINT 2 - 20 M` | 17–18 | §6a, G10–G12 |
+| Prox-ops | `GO FOR DOCKING` | 14 | §6a, G12 |
+| Docking | `SOFT CAPTURE` · `DOCKING COMPLETE` | 12–16 | §6a, contact / hard capture |
+| Return | `GO FOR UNDOCK` · `DEPARTURE BURN 0` · `PHASING BURN` | 12–16 | §6b, G14 |
+| Return | `TRUNK JETTISON` · `GO FOR DEORBIT BURN` · `DEORBIT BURN` | 12–19 | §6b, G15 |
+| Return | `NOSECONE CLOSED` | 15 | `EXTRACT_RETURN_CONTROL` §8 |
+| Entry | `ENTRY INTERFACE` | 15 | `PHASE_6` §2, ~120 km |
+| Entry | `DROGUES DEPLOYED` · `MAINS DEPLOYED` | 14–16 | `PHASE_6` §4, ~5.5 km / ~1.8 km |
+| Entry | `SPLASHDOWN` | 10 | `PHASE_6` §4 |
+
+⚠ **THE SET IS A CANDIDATE, NOT A DECISION.** It is assembled from sourced material and sized; **which
+of the 40 the bar should raise, and in what wording, is still the owner's** — this line does not adopt it
+unilaterally.
+
+#### ⛔ WHAT IS STILL MISSING, AND IT IS TRIGGERS, NOT WORDS
+
+The copy problem is solved; the **detection** problem is not, and it splits three ways. Stated so nobody
+builds a fake:
+
+| the callout needs… | status |
+|---|---|
+| a **crew gate** (`GO FOR …`, the waypoints) — **G1–G15** | ✅ **LIVE TODAY** — `CrewProcedureOps` ticks every physics frame; `PageState.GateActive/GateTitle` already published |
+| a **flight-phase transition** (`ENTRY INTERFACE`, `DROGUES`, `MAINS`, `SPLASHDOWN`) | ✅ **LIVE TODAY** — `MissionPhase`'s classifier. ⚠ But CURRENT STATE already prints the phase, so raising the same thing twice is `S146`/H38 |
+| an **ascent/booster event** (`MECO`, `SECO-1`, `MAX-Q`, `STAGE SEPARATION`, the burns) | ⛔ **NO DETECTOR EXISTS.** These are Falcon-9 events; nothing in `plugin/src/pure/` classifies them today |
+| a **conductor event** (the named rendezvous burns) | ⛔ **PART B** — §B12.5; the conductor does not fly yet |
+
+⭐ **THE HONEST BUILD THAT FOLLOWS FROM THIS:** draw the box, wire the callouts whose signal is ALREADY
+LIVE, and let the rest simply **not fire** until their detector exists — never a timer, never a constant,
+never a plausible sentence. That is §14.4(f) read exactly: include the feature, fill it from a live
+source, and where there is no source there is no event. ⚠ A `MECO` that fires off a stopwatch would be
+the single worst thing this bar could do, and it is precisely what this note exists to prevent.
 
 ### S178 [S] Four ways to centre a label vertically, and only one of them was measured — **TODO** — [logged by [[S176]] per C1.1, 2026-09-06; TIER 3: consistency]
 - **The finding.** "How far below a text `y` the cap centre falls, as a fraction of the size" now has a
