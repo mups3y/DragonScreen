@@ -19232,7 +19232,7 @@ items separately"*). Nothing else in that row changed, and no second G11 row was
 (QC's file). No `install`, no glass. No flight control wired (§14.4(a)).
 
 
-### S168 [S] There is no before/after preview harness in this repo — the one that lied was fixed in PROSE — **DOING** — [opened 2026-09-06 by the continuous build chat, run 3, on the owner's instruction quoted below; TIER 3: harness]
+### S168 [S] There is no before/after preview harness in this repo — the one that lied was fixed in PROSE — **DONE 2026-09-06 — `build.py previewdiff` — and it found 32 false positives in its own first run, then caused a 298 MB deletion that is written up in full below** — [opened 2026-09-06 by the continuous build chat, run 3, on the owner's instruction quoted below; TIER 3: harness]
 
 🟢 **AUTHORITY.** Opened on the owner-authorised run-3 prompt, whose instruction is reproduced verbatim
 so a later reader can check it against this line rather than take it on trust:
@@ -19259,3 +19259,164 @@ so a later reader can check it against this line rather than take it on trust:
   per-page difference by hash, and **cannot report "nothing changed" when a render did not happen** — with
   that last property proved by a check that runs on every `build.py test`, not by a note asking the next
   chat to be careful.
+
+#### DONE 2026-09-06 — `python plugin/build.py previewdiff [<ref>]`
+
+**What it does.** Checks `<ref>` (default `HEAD`) out into its own **git worktree**, renders it, renders
+the working tree, and compares the two page sets **by sha256**. Prints the CHANGED / NEW / REMOVED names
+and the one-line form a register entry quotes.
+
+⭐ **THE WORKTREE IS THE FIX, and it is stronger than the instruction that asked for it.** The
+instruction was to *"move ADDED files aside as well as reverting modified ones"*. A worktree needs
+neither move nor revert: the baseline is a **commit**, so it is internally consistent by construction,
+there is no put-it-back step to get wrong, a fresh checkout **cannot be carrying an added file**, and the
+two renders write to two different folders so neither can be read as the other. The class of bug is
+removed rather than the instance patched.
+
+Then three gates, because a structural argument is still only an argument:
+
+1. **EITHER RENDER FAILING IS FATAL.** Non-zero exit, no output folder, or **zero PNGs** — each checked
+   separately, because in S130 only one of the three was true. ⚠ `None` (no folder) and `{}` (a folder
+   with no PNGs) are deliberately distinguished from an empty comparison that trivially matches: **that
+   conflation IS S130.**
+2. **A VACUOUS COMPARISON IS REFUSED, NOT REPORTED.** If no render input differs between the baseline and
+   the working tree, `0 pages changed` is arithmetic, not evidence — and it is the exact sentence a
+   register line would quote as proof. ⭐ Demonstrated: run against `HEAD` with only `build.py` modified
+   and it exits 1 with *"no render input differs ... Nothing was rendered."*
+3. **THE CLASSIFIER IS SELF-TESTED ON EVERY `build.py test`** — `preview_diff_selftest`, wired into
+   `tool_tests()`, **19 checks**, no render, so it is cheap enough that nobody is tempted to skip it. The
+   count is **counted, not written down**: a hardcoded total would be the same defect this task exists to
+   remove. Its sharpest check is the S130 shape itself — *"a render that produced ZERO PNGs is a failure,
+   not 'nothing moved'"*.
+
+#### ⭐ ITS FIRST REAL RUN REPORTED 35 PAGES CHANGED. THE TRUE FIGURE WAS 3, AND FINDING THAT OUT IS THE MOST USEFUL THING IN THIS LINE
+
+Measured against `072467b` (the commit before [[S134e]]), whose only render-input change is
+`plugin/src/pure/SettingsAudioPage.cs`. The first run said **35 changed**. [[S134e]] had recorded **3**.
+
+⛔ **The 35 was wrong, and the harness was wrong, not the register.** Isolated by rendering the SAME
+commit in a worktree and in the live tree: **32 pages differed with identical source.** The cause:
+`git worktree` checks out **tracked files only**, `assets/reference/` is **gitignored** (`.gitignore:12`),
+and the preview's Earth stand-in lives in it (`PreviewMain.cs:2264`) — so the baseline drew a **bare
+globe** on every page carrying one.
+
+⭐ **AND THE RENDER HAD SAID SO ALL ALONG.** The baseline log carried
+`(no body-map stand-in at ... - globe previews bare)` **five times** and the comparison was not reading
+it. **That is S130's shape exactly** — the tool printed the warning and the instrument ignored it — and
+it happened inside the task written to stop it happening.
+
+Two fixes, and the second is the general one:
+- ignored **directories** are junctioned into the baseline worktree. ⚠ **IGNORED, not untracked**: an
+  untracked-but-not-ignored file is a NEW SOURCE FILE, part of the change under test, and must never
+  reach the baseline — which is precisely what S130's habit got wrong.
+- `render_warnings()` compares the two renders' own missing-input vocabulary (`stand-in`, `MISSING art`,
+  `MISSING cover asset`). **If one render saw an input the other did not, the run FAILS** rather than
+  reporting a difference that is the environment. This would have caught the bug above with no knowledge
+  of `assets/` at all.
+
+After both: **3 changed — `settings_audio.png`, `settings_audio_nosettings.png`, `settings_audio_seat2.png`
+— exactly what S134e recorded.** ⭐ An independently built instrument reproducing a previously recorded
+figure to the page is the strongest evidence either of them is right.
+
+#### ⛔⛔ AND THEN THIS TASK DELETED 298 MB OF THE OWNER'S GITIGNORED REFERENCE MATERIAL
+
+**Recorded in full because it is the most important thing on this line.** The junctions above are doors
+into the real directories. The teardown was `git worktree remove --force` followed by
+`shutil.rmtree`. **Both follow a junction.** `assets/` went from **299 MB to 972 KB**:
+`assets/figma/`, `assets/kenney_ui_scifi/` and `assets/reference/` were emptied **through the links, in
+the real repository**, and none of it was in git — that is what gitignored means. A recursive delete does
+not know it is standing in a doorway.
+
+⚠ **Nothing that ships was lost.** `plugin/GameData/DragonScreen/art/` (135 files) is TRACKED and intact,
+and so is every `docs/` file (C1.16 material was never at risk). The loss is `assets/` — C7.1 REFERENCE.
+
+**RESTORED, from archives already on the owner's own Desktop — no network, nothing downloaded:**
+
+| path | from | state |
+|---|---|---|
+| `assets/reference/dragon2-ui-assets/` (`docs/img`, `src`, `misc`, README, LICENSE) | `Desktop\SpaceX-Dragon2-UI-master.zip` | ✅ 77 files |
+| `assets/figma/dashboard_ui/` (all 9 SVGs, **Frame 58 and Frame 59 included**) | `Desktop\SpaceX Crew Dragon - Dashboard UI (Community).zip` | ✅ 9 files |
+
+⭐ **PROOF THE BUILD IS WHOLE AGAIN, not an assurance:** the preview was rendered before the deletion and
+again after the restore — **124 pages, ZERO differing, and zero `stand-in` warnings.** Byte-identical.
+
+⛔ **STILL MISSING — the owner's call, written up as a question below:** `assets/kenney_ui_scifi/`
+(CC0, re-downloadable), `assets/figma/flight_control_ui/` + `assets/figma/dragon_interface_docking/`
+(need the owner's own Figma session — `ASSET_PROVENANCE.md`: *"Not fetchable unattended"*), and
+`assets/reference/AvionicsSystems-master/` (re-clonable). ⚠ **No build input is among them** — the only
+two `assets/` paths any build step reads are `PreviewMain.cs:2264` and `rasterise.py:29`, and both are
+restored.
+
+**THE FIX, in `_unmirror_ignored_inputs()`, with the incident written above it in the file (C1.16):**
+every junction is removed with **`os.rmdir`** — which unlinks the reparse point and does **not** touch
+what is on the other side — and **verified removed, before any recursive delete goes near the tree**. If
+one cannot be removed, the worktree is **LEFT ON DISK** and the run says so: a stale temp directory costs
+disk space; the alternative cost 298 MB. It also warns if a mirrored source is left empty.
+⭐ **Proved on a throwaway target before being run again on the repo**: a junction to a directory holding
+one file, torn down by this function, then `shutil.rmtree` over the tree that held it — **the file
+survived**. Then proved on the real thing: `assets/` measured **69M before and 69M after** a full
+`previewdiff`, with the globe stand-in still present.
+
+⚠ **THE LESSON, and it is not "be careful".** The first version was written, reviewed and reasoned about
+by the same chat that then ran it, and the danger was invisible at every step because a junction *looks
+like a directory to every tool that lists it*. What would have caught it is what caught everything else on
+this line: **run the destructive step against a throwaway target first.** That is now what the code does
+and what its comment says.
+
+#### Verified
+
+- `python plugin/build.py test` → `ALL SUITES PASSED`, `previewdiff selftest ... ok: 19 checks`.
+- **Gate 1 demonstrated**: a deliberate syntax error in `pure/Typography.cs` gives exit 1 and
+  *"the WORKING TREE render exited 1 - it did not complete, so its PNGs mean nothing ... This is exactly
+  the S130 shape - do not read the PNGs."* — never a page count. ⚠ Restored from **text held in memory**,
+  never `git checkout` — see [[S167]] for why that distinction is on the record.
+- **Gate 2 demonstrated**: `previewdiff` with no render-input change refuses and exits 1.
+- **Gate 3**: 19 checks on every `test`.
+- **The real measurement**: `previewdiff 072467b` → **3 existing pages changed, 0 new, 0 removed, of 124**.
+- ⚠ **The render is deterministic** — checked, not assumed, because the whole harness rests on it: two
+  renders of the same tree, 124 pages, **0 differing**.
+- No `install`, no glass, no `git push`. No flight control wired (§14.4(a)). `docs/BUILD_PLAN.md` and
+  `docs/QC_FINDINGS.md` untouched.
+
+## Open questions for the owner (C1.14) — from S168
+
+**Q1 — three `assets/` folders were destroyed by this task's own code and could not be restored from
+anything on this machine. How should they be replaced?** Nothing that ships and no build input is
+affected (proved above); this is reference material. `docs/ASSET_PROVENANCE.md` records the source of
+each, and it survives.
+
+1. **Owner re-exports / re-downloads the three, at his own pace.** `kenney_ui_scifi` (CC0,
+   https://kenney.nl/assets/ui-pack-sci-fi) and `AvionicsSystems-master` (GitHub) are unattended
+   downloads; the two Figma folders are **not** — `ASSET_PROVENANCE.md` says a logged-in Figma session is
+   required to duplicate and export a Community file, so only the owner can do those two.
+2. **Replace only what a task actually asks for, when it asks.** Nothing in the register currently needs
+   them: `docs/UI_AUDIT.md` — the generated layout source CLAUDE.md points every page at — is committed
+   and intact, and `assets/figma/dashboard_ui/` (Frame 58 + Frame 59) is restored, which is what
+   [[S153c]] and the `S154` family read.
+3. **Un-gitignore `assets/` so this can never be a one-copy asset again.** ⚠ ~299 MB of binaries into git
+   history, permanently, most of it explicitly *"look, don't ship"* (C7.1) — and it does not address the
+   deletion, only the recovery.
+
+⭐ **RECOMMENDATION: (2), then (1) for `kenney_ui_scifi` and `AvionicsSystems-master` whenever
+convenient.** Reasoning: no build step reads any of the three, no open register line needs them, and the
+two irreplaceable-without-the-owner folders (`flight_control_ui`, `dragon_interface_docking`) are the
+docking-page and flight-control references that no current line touches. ⚠ **But this is the owner's
+material and the recommendation is being made by the chat that destroyed it**, so it is a recommendation
+and nothing more.
+
+**Q2 — should `previewdiff` become part of the C1.3 DONE gate, rather than a verb a chat remembers to
+run?** C1.3 requires *"preview PNG inspected"* before DONE, and this run's own instruction is that *"a
+habit does not survive compaction; a subcommand does"* — which applies to running it as much as to having
+it.
+
+1. **Leave it a verb.** A task runs it when it changed a render input. ⚠ Exactly the habit that failed.
+2. **`build.py test` refuses to pass a dirty render-input tree until `previewdiff` has been run** against
+   the current HEAD, with the result cached.
+3. **Make it advisory:** `test` PRINTS *"N render input(s) changed — run `build.py previewdiff`"* when it
+   sees one, and says nothing otherwise.
+
+⭐ **RECOMMENDATION: (3).** It puts the prompt where the chat is already looking, on every build, and
+costs one `git diff --name-only`; (2) is the honest form of the rule but caches a result that a later
+edit invalidates, and a stale cache in a verification instrument is this file's recurring defect.
+⛔ **NOT DONE HERE**: C1.3 is a build-protocol rule in `CLAUDE.md`, a guarded file (C1.12 / G10), so a
+build chat does not change it. This is a proposal.

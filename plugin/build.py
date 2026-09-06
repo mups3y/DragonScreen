@@ -13,6 +13,11 @@ No IDE, no MSBuild, no NuGet: csc.exe straight against KSP's managed assemblies.
     python build.py mechwarn  # MJ1: rewrite plugin/mech/WARNINGS.txt, the vendored MechJeb's warning
                               #   baseline, by recompiling it at -warn:4. Diagnostic only: it builds
                               #   nothing that ships. Diff this file at a re-pin.
+    python build.py harnesscheck        # S167: prove a THROWING suite still leaves a complete report
+    python build.py previewdiff [ref]   # S168: render `ref` (default HEAD) and the working tree, and
+                              #   report which pages changed, by hash. THE instrument behind every
+                              #   "N pages changed" a register line claims - see S168 for why it is
+                              #   code and not a habit.
 
 THE ONE THING THAT WILL BITE YOU: a DLL change needs a full game restart, and so does a cfg change -
 ModuleManager applies patches at load. There is no in-flight reload worth trusting. KSP must be
@@ -22,11 +27,13 @@ That is why `preview` exists: restarts are the scarce resource, so anything that
 outside the game - layout, proportion, palette, legibility - is judged from a PNG, and a restart is
 spent only on what needs the capsule.
 """
-import io, os, re, subprocess, sys, shutil, hashlib, time
+import io, os, re, subprocess, sys, shutil, hashlib, tempfile, time
 
 NL = chr(10)          # response-file line separator, spelled out so no edit can eat the escape
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# The REPO root, one above plugin/. S168's previewdiff runs git here, never in plugin/.
+ROOT = os.path.dirname(HERE)
 KSP  = r'C:\Program Files (x86)\Steam\steamapps\common\Kerbal Space Program'
 MAN  = os.path.join(KSP, 'KSP_x64_Data', 'Managed')
 # ---------------------------------------------------------------- the compiler
@@ -433,6 +440,7 @@ def tool_tests():
     event_vocabulary_check()
     part_name_source_check()
     column_writer_check()
+    preview_diff_selftest()   # S168: the before/after harness's own classifier + render gate
 
     tool = os.path.join(HERE, 'tools', 'assess_flight.py')
     if not os.path.exists(tool):
@@ -442,6 +450,402 @@ def tool_tests():
     print((p.stdout or '') + (p.stderr or ''))
     if p.returncode != 0:
         sys.exit('TOOL SELFTEST FAILED (exit %d)' % p.returncode)
+
+
+# ======================================================================================================
+# S168: THE BEFORE/AFTER PREVIEW HARNESS, IN CODE
+#
+# Every register line in this project reports "N pages changed" from a preview render, and C1.3 makes
+# that report part of the DONE gate. Until this, the report came from a habit: revert the changed files
+# by hand, re-render, compare, put them back. `S130` reported "0 existing pages changed"; the true
+# figure was 74 (`8d6880f`). The revert had put the MODIFIED files back but left the NEW file on disk,
+# the before-render therefore failed to COMPILE, the old PNGs were still sitting in the output folder,
+# and the harness read them as "nothing moved".
+#
+# A SILENT FALSE GREEN PRODUCED BY THE TOOL MEANT TO PREVENT ONE. It was caught only because `S132` ran
+# the same habit over a change that visibly redrew two elements and got 0 again.
+#
+# `8d6880f` diagnosed it exactly and fixed it in PROSE - `git show --stat 8d6880f` touches REGISTER.md
+# and nothing else. That is the third verification instrument in this project to fail (S75's tints,
+# H-01's 2x width, this) and the first two were fixed in code, where they cannot rot. This is the third.
+#
+# ---- WHAT MAKES THE FALSE GREEN STRUCTURALLY IMPOSSIBLE HERE ----------------------------------------
+# The instruction was to move ADDED files aside as well as reverting modified ones. This does something
+# strictly stronger and for the same reason: the baseline is rendered in a SEPARATE GIT WORKTREE, a
+# clean checkout of the baseline commit. There is no "put it back" step to get wrong, because the live
+# tree is never touched; there is nothing to move aside, because a fresh checkout has no added files in
+# it at all; and the two renders write to two different output folders, so neither can be read as the
+# other. The class of bug is removed rather than the instance patched.
+#
+# Then, because a structural argument is still only an argument, three explicit gates:
+#   (1) EITHER RENDER FAILING IS FATAL. Non-zero exit, no output folder, or zero PNGs - any of the three
+#       ends the run with a non-zero exit and a named reason. S130's render failed and was read as a
+#       result; here a render that did not happen can never be read as "nothing moved".
+#   (2) A VACUOUS COMPARISON IS REFUSED, not reported. If no render input differs between the baseline
+#       and the working tree, "0 pages changed" is arithmetic, not evidence - and it is the exact
+#       sentence a register line would quote as proof. It is refused, loudly, with the reason.
+#   (3) THE CLASSIFIER IS SELF-TESTED on every `build.py test` (`previewdiff --selftest`, wired into
+#       tool_tests), including a case where the before-render produced nothing - the S130 shape.
+# ======================================================================================================
+
+# The preview renders from these, and only these: the pure display layer, the renderer itself, the
+# shipped cfg it derives its size from (QC H-01 / S100), and the art it draws.
+PREVIEW_INPUTS = ('plugin/src/pure/', 'plugin/preview/', 'plugin/GameData/DragonScreen/')
+
+
+def _sha256(path):
+    h = hashlib.sha256()
+    with open(path, 'rb') as fh:
+        for chunk in iter(lambda: fh.read(1 << 16), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _pngs(folder):
+    """{filename: sha256} for every PNG in a render folder. Missing folder -> None, NOT {}."""
+    if not os.path.isdir(folder):
+        return None
+    out = {}
+    for n in sorted(os.listdir(folder)):
+        if n.lower().endswith('.png'):
+            f = os.path.join(folder, n)
+            if os.path.isfile(f):
+                out[n] = _sha256(f)
+    return out
+
+
+def render_problems(label, returncode, folder):
+    """
+    S168 gate (1). What must be true before a render's output may be COMPARED to anything.
+
+    ⛔ THE DISTINCTION THIS FUNCTION EXISTS FOR: `None` (no folder) and `{}` (a folder with no PNGs) are
+    both "the render did not produce pages", and neither may be silently treated as an empty set of
+    pages that simply happened to match. That conflation IS S130.
+    """
+    bad = []
+    if returncode != 0:
+        bad.append('the %s render exited %d - it did not complete, so its PNGs mean nothing'
+                   % (label, returncode))
+    pngs = _pngs(folder)
+    if pngs is None:
+        bad.append('the %s render produced no output folder at %s' % (label, folder))
+    elif not pngs:
+        bad.append('the %s render produced ZERO pages - a folder with no PNGs is a render that did '
+                   'not happen, not a render in which nothing moved' % label)
+    return bad
+
+
+def diff_renders(before, after):
+    """
+    S168: classify two {name: sha256} maps. Pure, so `--selftest` can prove it without rendering.
+
+    Returns (changed, added, removed, same) - four sorted lists of filenames.
+    """
+    b, a = set(before), set(after)
+    changed = sorted(n for n in (b & a) if before[n] != after[n])
+    same = sorted(n for n in (b & a) if before[n] == after[n])
+    return changed, sorted(a - b), sorted(b - a), same
+
+
+# ⛔ IGNORED DIRECTORIES THE RENDER READS, AND WHY THIS IS NOT A DETAIL --------------------------
+# A `git worktree` checkout contains TRACKED files only. `assets/reference/` is gitignored
+# (`.gitignore:12`) and the preview's Earth stand-in lives in it - so the first working version of
+# previewdiff rendered the baseline with a BARE GLOBE and reported 35 pages changed for a change that
+# touched 3. THIRTY-TWO FALSE POSITIVES, from an instrument built to stop a false negative.
+#
+# ⭐ AND THE RENDER HAD SAID SO. The baseline log carried `(no body-map stand-in at ... - globe
+# previews bare)` five times and the comparison did not read it - the same shape as S130, where the
+# render failed and its output was compared anyway.
+#
+# So: ignored DIRECTORIES are junctioned into the worktree, and the two renders' own missing-input
+# warnings are compared. Ignored files are not versioned, so they are identical for both sides by
+# construction; junctioning them makes the tracked source the ONLY difference between the renders.
+#
+# ⚠ IGNORED, NOT UNTRACKED. An untracked-but-not-ignored file is a NEW SOURCE FILE - part of the
+# change under test - and must NOT reach the baseline. That distinction is the whole reason S130's
+# habit broke: it left a new file in a reverted tree.
+MIRROR_SKIP = ('plugin/build/', 'plugin/__pycache__/', 'plugin/build')
+
+
+def _mirror_ignored_inputs(tree, made):
+    """
+    Junction every ignored directory (bar build output) into the baseline worktree.
+
+    ⛔ `made` IS AN OUT-PARAMETER AND IT IS A SAFETY DEVICE, NOT BOOKKEEPING. Read
+    `_unmirror_ignored_inputs` before touching anything here: a junction is a door into the REAL
+    directory, and a recursive delete of a tree containing one deletes what is on the other side.
+    That happened - see S168 - and it cost ~298 MB of gitignored reference material.
+    """
+    r = subprocess.run(['git', 'ls-files', '--others', '--ignored', '--exclude-standard',
+                        '--directory'], capture_output=True, text=True, cwd=ROOT)
+    failed = []
+    for rel in sorted(set((r.stdout or '').splitlines())):
+        rel = rel.strip()
+        if not rel.endswith('/') or rel.startswith(MIRROR_SKIP):
+            continue                      # files are not mirrored; build output never is
+        src = os.path.join(ROOT, rel.rstrip('/').replace('/', os.sep))
+        dst = os.path.join(tree, rel.rstrip('/').replace('/', os.sep))
+        if not os.path.isdir(src) or os.path.exists(dst):
+            continue
+        parent = os.path.dirname(dst)
+        if not os.path.isdir(parent):
+            os.makedirs(parent)
+        j = subprocess.run(['cmd', '/c', 'mklink', '/J', dst, src], capture_output=True, text=True)
+        if j.returncode == 0:
+            made.append((dst, src))       # recorded BEFORE anything else can fail
+        else:
+            failed.append(rel)
+    if made:
+        print('    mirrored %d ignored input dir(s) into the baseline: %s'
+              % (len(made), ', '.join(os.path.basename(d) for d, _ in made)))
+    if failed:
+        # LOUD. A baseline that cannot see an input the working tree can see will report a difference
+        # that is the environment, not the change - which is worse than no measurement at all.
+        sys.exit('PREVIEWDIFF FAILED: could not mirror ignored input(s) into the baseline worktree: '
+                 '%s. The baseline would render without them and every page that draws them would '
+                 'read as changed.' % ', '.join(failed))
+
+
+
+def _unmirror_ignored_inputs(made):
+    """
+    ⛔⛔ THE MOST DANGEROUS TEN LINES IN THIS FILE. READ THE INCIDENT BEFORE EDITING THEM.
+
+    WHAT HAPPENED (S168, 2026-09-06). The first working previewdiff junctioned the ignored input
+    directories into the baseline worktree and then tore the worktree down with
+    `git worktree remove --force` + `shutil.rmtree`. BOTH FOLLOW A JUNCTION. `assets/` went from
+    299 MB to 972 KB: `assets/figma/`, `assets/kenney_ui_scifi/` and `assets/reference/` were emptied
+    THROUGH THE LINKS, in the real repository, and none of it was in git - that is what "gitignored"
+    means. A recursive delete does not know it is standing in a doorway.
+
+    THE RULE THAT FALLS OUT OF IT. A junction is removed with `os.rmdir`, which unlinks the reparse
+    point and does NOT touch what is on the other side. Every junction is removed, and VERIFIED
+    removed, BEFORE any recursive delete goes anywhere near the tree that held them. If even one
+    cannot be removed, the worktree is LEFT ON DISK and the run says so - a stale temp directory
+    costs disk space, and the alternative cost 298 MB of material that had to be re-downloaded.
+
+    ⚠ AND THE VERIFICATION IS NOT OPTIONAL. `os.rmdir` succeeding is not the same as the link being
+    gone, and the source surviving is the thing actually being protected - so both are checked, and
+    a source directory that has lost its contents is reported as loudly as this file can report it.
+    """
+    survivors = []
+    for dst, src in made:
+        try:
+            if os.path.isdir(dst):
+                os.rmdir(dst)             # UNLINK ONLY. Never rmtree, never `del /s`, never git.
+        except OSError as e:
+            print('    !! could not unlink the junction at %s: %s' % (dst, e))
+        if os.path.exists(dst):
+            survivors.append(dst)
+        # the thing the whole guard is for: is the REAL directory still populated?
+        try:
+            if os.path.isdir(src) and not os.listdir(src):
+                print('    !! WARNING: %s is now EMPTY - check it against your backups' % src)
+        except OSError:
+            pass
+    return survivors
+
+def render_warnings(text):
+    """
+    The renderer's own vocabulary for "an input I wanted was not there". S168 compares these across
+    the two runs: if one render saw an input the other did not, the pages that draw it differ for a
+    reason that has nothing to do with the change, and no count from that run means anything.
+    """
+    keys = ('stand-in', 'MISSING art', 'MISSING cover asset')
+    return sorted(l.strip() for l in text.splitlines() if any(k in l for k in keys))
+
+
+def _changed_inputs(baseref):
+    """Render inputs that differ between `baseref` and the WORKING TREE, untracked files included."""
+    def git(*args):
+        r = subprocess.run(['git'] + list(args), capture_output=True, text=True, cwd=ROOT)
+        return (r.stdout or '').splitlines() if r.returncode == 0 else []
+    names = set(git('diff', '--name-only', baseref, '--'))
+    names |= set(git('ls-files', '--others', '--exclude-standard'))
+    return sorted(n for n in names if n and n.startswith(PREVIEW_INPUTS))
+
+
+def preview_diff(baseref='HEAD'):
+    """
+    S168: render `baseref` and the working tree, and report the per-page difference by hash.
+
+    Usage:  python plugin/build.py previewdiff [<baseline-ref>]
+
+    The baseline defaults to HEAD - "what my uncommitted work changed". Pass HEAD~1 (or any ref) to
+    measure a change that is already committed, which is how most register lines phrase it.
+    """
+    work = tempfile.mkdtemp(prefix='dsprevdiff-')
+    tree = os.path.join(work, 'baseline')
+    mirrored = []            # (junction, real target) - see _unmirror_ignored_inputs before editing
+    print('--- previewdiff: baseline %s  vs  the working tree' % baseref)
+
+    moved = _changed_inputs(baseref)
+    if not moved:
+        # ---- GATE (2): REFUSE, DO NOT REPORT ----
+        # "0 pages changed" here would be arithmetic dressed as evidence, and it is the exact sentence
+        # a register line would quote as proof that a change drew nothing.
+        shutil.rmtree(work, ignore_errors=True)
+        sys.exit('PREVIEWDIFF REFUSED: no render input differs between %s and the working tree, so '
+                 '"0 pages changed" would be arithmetic, not a measurement. Nothing was rendered. '
+                 'Pass the ref you actually mean, e.g. `previewdiff HEAD~1`.' % baseref)
+    print('    %d changed render input(s): %s'
+          % (len(moved), ', '.join(moved[:6]) + (' ...' if len(moved) > 6 else '')))
+
+    try:
+        # ---- THE BASELINE, IN ITS OWN WORKTREE ----
+        # A detached checkout of `baseref`. The live tree is never touched, so there is no restore step
+        # to get wrong, and a fresh checkout cannot be carrying an added file that does not belong to
+        # the baseline - which is precisely what broke S130's measurement.
+        r = subprocess.run(['git', 'worktree', 'add', '--detach', tree, baseref],
+                           capture_output=True, text=True, cwd=ROOT)
+        if r.returncode != 0:
+            sys.exit('PREVIEWDIFF FAILED: could not check out %s\n%s'
+                     % (baseref, (r.stdout or '') + (r.stderr or '')))
+        _mirror_ignored_inputs(tree, mirrored)
+
+        before_dir = os.path.join(tree, 'plugin', 'build', 'preview')
+        after_dir = os.path.join(HERE, 'build', 'preview')
+
+        print('--- previewdiff: rendering the BASELINE (%s)' % baseref)
+        rb = subprocess.run([sys.executable, os.path.join(tree, 'plugin', 'build.py'), 'preview'],
+                            capture_output=True, text=True, cwd=tree)
+        print('--- previewdiff: rendering the WORKING TREE')
+        ra = subprocess.run([sys.executable, os.path.join(HERE, 'build.py'), 'preview'],
+                            capture_output=True, text=True, cwd=ROOT)
+
+        # ---- GATE (1): a render that did not happen is never a render in which nothing moved ----
+        bad = render_problems('BASELINE', rb.returncode, before_dir)
+        bad += render_problems('WORKING TREE', ra.returncode, after_dir)
+        if bad:
+            for x in bad:
+                print('    FAIL  ' + x)
+            tail = ((rb.stdout or '') + (rb.stderr or '')) if bad and rb.returncode != 0 \
+                else ((ra.stdout or '') + (ra.stderr or ''))
+            print(chr(10).join(tail.splitlines()[-25:]))
+            sys.exit('PREVIEWDIFF FAILED: a render did not report ok, so NO comparison from this run '
+                     'is trustworthy. This is exactly the S130 shape - do not read the PNGs.')
+
+        # ---- GATE (1b): the two renders must have seen the SAME INPUTS ----
+        # Caught in the act while this was being written: without the junctions above, the baseline
+        # rendered a bare globe and 32 pages read as changed. The renders said so in their own logs
+        # and nothing was reading them. Now something is.
+        wb = render_warnings((rb.stdout or '') + (rb.stderr or ''))
+        wa = render_warnings((ra.stdout or '') + (ra.stderr or ''))
+        if wb != wa:
+            print('    FAIL  the two renders did not see the same inputs:')
+            for l in [x for x in wb if x not in wa]:
+                print('        BASELINE only:      ' + l)
+            for l in [x for x in wa if x not in wb]:
+                print('        WORKING TREE only:  ' + l)
+            sys.exit('PREVIEWDIFF FAILED: one render was missing an input the other had, so any page '
+                     'that draws it would read as changed for a reason that is not the change.')
+
+        before, after = _pngs(before_dir), _pngs(after_dir)
+        changed, added, removed, same = diff_renders(before, after)
+
+        print('--- previewdiff RESULT   baseline %s (%d pages)  ->  working tree (%d pages)'
+              % (baseref, len(before), len(after)))
+        for label, names in (('CHANGED', changed), ('NEW', added), ('REMOVED', removed)):
+            if names:
+                print('    %d %s:' % (len(names), label))
+                for n in names:
+                    print('        ' + n)
+        print('    %d unchanged' % len(same))
+        # The one-line form a register entry quotes.
+        print('--- previewdiff: %d existing page(s) changed, %d new, %d removed  (of %d compared)'
+              % (len(changed), len(added), len(removed), len(before)))
+    finally:
+        # ⛔ ORDER IS LOAD-BEARING: unlink every junction FIRST, and refuse to recurse if one is left.
+        left = _unmirror_ignored_inputs(mirrored)
+        if left:
+            print('    !! LEAVING the baseline worktree at %s - %d junction(s) could not be removed, '
+                  'and deleting a tree that still contains one deletes what is on the other side.'
+                  % (tree, len(left)))
+            subprocess.run(['git', 'worktree', 'prune'], capture_output=True, text=True, cwd=ROOT)
+        else:
+            subprocess.run(['git', 'worktree', 'remove', '--force', tree],
+                           capture_output=True, text=True, cwd=ROOT)
+            shutil.rmtree(work, ignore_errors=True)
+
+
+def preview_diff_selftest():
+    """
+    S168 gate (3): the classifier and the render gate, proved on every `build.py test`.
+
+    ⚠ NO RENDER RUNS HERE - it is deliberately cheap enough to sit in `test`, because a check that is
+    too slow to run is a check nobody runs. The end-to-end path is `previewdiff` itself.
+    """
+    bad = []
+    ran = [0]
+
+    def check(what, ok):
+        # ⚠ COUNTED, not written down. A hardcoded total in the "ok" line below would be the same
+        # class of defect this whole function exists to prevent: a number that stops matching what
+        # was actually done, and no way to tell from the output.
+        ran[0] += 1
+        if not ok:
+            bad.append(what)
+
+    A = {'p.png': 'aa', 'q.png': 'bb'}
+    check('identical renders report no change', diff_renders(A, dict(A))[0] == [])
+    check('identical renders report every page as same', diff_renders(A, dict(A))[3] == ['p.png', 'q.png'])
+
+    B = {'p.png': 'aa', 'q.png': 'ZZ'}
+    ch, ad, rm, sm = diff_renders(A, B)
+    check('one differing page is reported as changed, by name', ch == ['q.png'])
+    check('...and the identical one is not', sm == ['p.png'])
+    check('a change is not miscounted as new or removed', ad == [] and rm == [])
+
+    ch, ad, rm, sm = diff_renders(A, {'p.png': 'aa', 'q.png': 'bb', 'r.png': 'cc'})
+    check('a page only in the AFTER render is NEW', ad == ['r.png'] and ch == [])
+    ch, ad, rm, sm = diff_renders(A, {'p.png': 'aa'})
+    check('a page only in the BEFORE render is REMOVED', rm == ['q.png'] and ad == [])
+
+    # ---- THE S130 SHAPE, WHICH IS THE WHOLE REASON THIS FILE HAS A previewdiff --------------------
+    # A render that failed, or produced nothing, must be a FAILURE - never an empty set of pages that
+    # trivially matches. Each of the three is checked alone, because in S130 only one of them was true.
+    tmp = tempfile.mkdtemp(prefix='dsprevself-')
+    try:
+        empty = os.path.join(tmp, 'empty')
+        os.makedirs(empty)
+        check('a render that exited non-zero is a FAILURE even with pages on disk',
+              render_problems('x', 1, tmp) != [])
+        check('a render with NO OUTPUT FOLDER is a failure, not an empty comparison',
+              render_problems('x', 0, os.path.join(tmp, 'nope')) != [])
+        check('⭐ a render that produced ZERO PNGs is a failure, not "nothing moved"',
+              render_problems('x', 0, empty) != [])
+        with open(os.path.join(empty, 'p.png'), 'wb') as fh:
+            fh.write(b'x')
+        check('a render that exited 0 with pages is accepted', render_problems('x', 0, empty) == [])
+        # and the hash really reads the bytes, or every comparison above is vacuous
+        with open(os.path.join(empty, 'q.png'), 'wb') as fh:
+            fh.write(b'y')
+        m = _pngs(empty)
+        check('two different files hash differently', m['p.png'] != m['q.png'])
+        check('a missing folder is None, distinguishable from an empty one',
+              _pngs(os.path.join(tmp, 'nope')) is None and _pngs(empty) is not None)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    # ---- THE MISSING-INPUT GUARD, which is what a bare-globe baseline looked like -------------
+    bare = '  (no body-map stand-in at C:/x/earth.jpg - globe previews bare)'
+    check('a missing stand-in is picked up as a render warning', render_warnings(bare) != [])
+    check('MISSING art is picked up too', render_warnings('  MISSING art C:/x/y.png') != [])
+    check('MISSING cover asset is picked up too',
+          render_warnings('  MISSING cover asset nose_04') != [])
+    check('an ordinary render line is NOT a warning',
+          render_warnings('  C:/out/cover.png   2560x1406   201 commands') == [])
+    check('⭐ the two runs disagreeing about inputs is detectable',
+          render_warnings(bare) != render_warnings(''))
+    check('...and two identical logs agree', render_warnings(bare) == render_warnings(bare))
+
+    if bad:
+        for x in bad:
+            print('    FAIL  ' + x)
+        sys.exit('PREVIEWDIFF SELFTEST FAILED (S168): %d of %d check(s). The before/after harness is '
+                 'the instrument every "N pages changed" claim comes from.' % (len(bad), ran[0]))
+    print('--- previewdiff selftest (S168: a render that did not happen is never "nothing moved")')
+    print('    ok: %d checks' % ran[0])
 
 
 def mech_warning_baseline():
@@ -923,6 +1327,13 @@ if __name__ == '__main__':
     # what is in doubt is the instrument rather than the code.
     if cmd == 'harnesscheck':
         harness_fault_check()
+        print('--- ok')
+        sys.exit(0)
+    # S168: the before/after preview harness. Renders a baseline in its own git worktree and the
+    # working tree here, and reports the per-page difference by hash. It builds both trees itself, so
+    # it does NOT fall through to build_plugin() below.
+    if cmd == 'previewdiff':
+        preview_diff(sys.argv[2] if len(sys.argv) > 2 else 'HEAD')
         print('--- ok')
         sys.exit(0)
     build_plugin()
