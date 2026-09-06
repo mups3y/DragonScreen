@@ -16277,7 +16277,7 @@ watched turning `True` on a vessel. That needs the conductor engaged on a return
 rather than wired, and the crew-GO → autopilot edge the settlement names is not part of this line. No
 `install`, no glass, no `git push`.
 
-### S130 [S] The Cover has no alarm surface at all — **DOING** — [H7; TIER 2]
+### S130 [S] The Cover has no alarm surface at all — **DONE 2026-09-06 — the channel has a consumer, and NAV's empty bit is now a decision** — [H7; TIER 2]
 - **The finding.** `Alarms.Mask` folds G-force, propellant, power and the whole FDIR spine every frame
   (`ScreenPainter.cs:893`) and **is discarded**. The crew's home page cannot show a caution.
   `Alarms.cs:2-3`'s own header: *"THE ALERT ROUTING IS THE POINT, NOT THE DECORATION."*
@@ -16287,6 +16287,55 @@ rather than wired, and the crew-GO → autopilot edge the settlement names is no
   channel is connected. Fix or document it in the same pass.
 - **DONE when:** the Cover shows a computed caution state, bit 2 is set or its absence is commented, and a
   preview shows nominal and cautioned looks.
+
+#### ⭐ DONE 2026-09-06
+
+**`BottomBar.StateInk` tints CURRENT STATE by `Alarms.SystemSeverity`.** That is the whole routing fix,
+and it reaches **every Figma page**, not only the Cover — the bar is shared, and H7 names the Cover only
+because it is the home page.
+
+#### ⛔ WHY A COLOUR AND NOT A NEW FIELD
+
+The Figma pages have no alert element and **`First.vue` has none either**, so adding one would be
+invention (§1.4). Tinting an element that is already there is not — it is the grammar this project
+already uses, where the legacy `ChromeBar` leaves a page link **saying** "VEHICLE" and lets the colour say
+there is a problem behind it. ⚠ **The text is not overloaded**: CURRENT STATE still reads the phase,
+which is what it means; only the ink carries the severity, and a check pins that the two fixtures print
+the same word.
+
+- ⚠ **Nominal stays WHITE**, not `Alarms.Colour`'s green. A bar that is green whenever nothing is wrong
+  trains the eye past it, and it would have re-tinted every existing render for no reading gain.
+- ⭐ The two states that DO speak come from **`Alarms.Colour`** — the one severity-to-colour function
+  (rule P5). Mutation N3 writes a second mapping and dies.
+- ⚠ **A dash is not nominal.** No feed keeps `Text6`; mutation N2 makes it white and trips **S148's**
+  existing dash-weight check as well as this line's.
+
+#### ⛔ BIT 2 (NAV) IS EMPTY BY DECISION, AND THAT IS NOW WRITTEN DOWN
+
+The audit flags it as *"a silent gap the moment the channel is reconnected"*. The channel is reconnected
+**now**, and the bit is still empty — because **nothing this build models is a NAV alarm**. NAV draws the
+orbit, the ground track and the map; a bad orbit is a FLIGHT condition and already lights bit 0, and there
+is no navigation-system fault modelled that belongs to the page itself. ⭐ **Inventing one to fill the bit
+would be a fake alarm**, which is the worst possible member of the class `Alarms` exists to keep honest.
+A check pins the bit CLEAR, so setting it later forces someone to say what it means — and the comment
+names the conditions that would earn it (a lost fix, a stale ephemeris, a map with no body).
+
+#### Verified
+
+- **5 mutations, 5 killed** — the severity ignored, the dead feed reading white, a second colour mapping,
+  nominal turning green, and bit 2 set from a condition that does not mean NAV.
+- **New suite `CoverAlarmTest`, 12 checks**, and they **read the render**: `BottomBar.Draw` is built into a
+  DisplayList and the CURRENT STATE command's own colour is read back, so what is asserted is the ink a
+  crew would see rather than a helper re-deriving the source's expression.
+- ⚠ **The "nominal" fixture was wrong twice, and both were worth the time.** A default `CabinReadout` is
+  all zeros, so zero PPO2 at zero pressure read as **Alarm** — the nominal check was passing a red bar.
+  Then `Alarms.PropellantSeverity` turned out to band **`DragonProp01`**, not the `Propellant01` the
+  FLIGHT dial uses, so a "fully fuelled" fixture was still alarming. ⭐ Found by PROBING each component of
+  `SystemSeverity` rather than guessing which one, and the fixture now asserts it IS nominal before
+  asserting what nominal looks like.
+- **Preview: 0 existing pages changed** (measured by hash) — nominal is unchanged everywhere, which is the
+  point. **`ui_cover_alarm.png`** is the new render: CURRENT STATE reads `ORBITING` in red.
+- `build.py test` green · comment-loss **0** · no `install`, no glass, no `git push`.
 
 ### S131 [S] A 16 px black arrow renders outside the content panel, on the live camera slot — **DONE 2026-09-06 — dropped; verified by an EXACT before/after diff of all 19 Cover renders** — [QC `C-02`]
 - 🟢 **Owner answered Q1: "Drop it"** (option selected, 2026-09-05).

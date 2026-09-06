@@ -122,6 +122,19 @@ namespace DragonScreen
 
             if (s.HasTarget && s.ClosingFast) mask |= 1 << 3;
 
+            // ---- ⚠ BIT 2 (NAV) IS NEVER SET, AND THAT IS DELIBERATE ([[S130]], 2026-09-06) --------
+            // Bits 0 (FLIGHT), 1 (VEHICLE) and 3 (DOCKING) are set above. Bit 2 is the NAV page, and it
+            // stays clear because **nothing this build models is a NAV alarm**. NAV draws the orbit, the
+            // ground track and the map: a bad orbit is a FLIGHT condition and already lights bit 0, and
+            // there is no navigation-system fault modelled that belongs to the page itself.
+            // ⛔ Inventing one to fill the gap would be a FAKE ALARM — the worst possible member of the
+            // class this file exists to keep honest, because an alarm channel is only worth anything if
+            // every light in it means something. The audit (H7) flags the empty bit as "a silent gap the
+            // moment the channel is reconnected"; the answer is that it is reconnected NOW, by
+            // `BottomBar.StateInk`, and bit 2 is empty because the condition does not exist yet.
+            // ⭐ When one does — a lost fix, a stale ephemeris, a map with no body — set it here and the
+            // whole channel picks it up with no other change.
+
             return mask;
         }
 

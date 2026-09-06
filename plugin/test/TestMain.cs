@@ -49,7 +49,8 @@ public static class TestMain
         // can fail.
         bad += LegibilityFloorTest.Run();
         bad += Frame58MapTest.Run();
-        bad += CoverActsTest.Run();       // S128: what the Cover's four action rows do, and cannot do       // S154a: Frame 58's element geometry (research only - draws nothing)
+        bad += CoverActsTest.Run();
+        bad += CoverAlarmTest.Run();      // S130 / H7: the Figma UI's alarm channel finally has a consumer       // S128: what the Cover's four action rows do, and cannot do       // S154a: Frame 58's element geometry (research only - draws nothing)
 
         // ---- PART B RECOVERY, WAVE A (W1, §B12.8) - the collision-free pure support layer ----
         // Recovered from `8b81816^` with their modules. The fixtures are as they were: ConicTest and

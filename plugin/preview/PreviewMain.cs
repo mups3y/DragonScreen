@@ -1410,6 +1410,21 @@ public static class PreviewMain
                                   + " commands   ENTRY ENABLED = " + EntryReadiness.Text(ev));
             }
 
+            // ---- S130 / H7: THE ALARM CHANNEL, WHICH USED TO HAVE NO CONSUMER ----
+            // ⛔ Every other cover render is a NOMINAL feed, so the one state this line adds appears in
+            // none of them. `Alarms.Mask` folded the whole FDIR spine every frame and was discarded; the
+            // bar's CURRENT STATE now carries `SystemSeverity`, and this is where that is visible.
+            // ⚠ The TEXT is unchanged - it still reads the phase. Only the ink moved.
+            {
+                PageState aps = ps; aps.DragonProp01 = 0.04;   // a real low-propellant alarm
+                DisplayList adl = new DisplayList(600);
+                CoverPage.Build(adl, CW, CH, aps, MapProjection.Default(), 0);
+                string path = Path.Combine(outDir, "ui_cover_alarm.png");
+                Render(adl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + adl.Count
+                                  + " commands   SystemSeverity = " + Alarms.SystemSeverity(aps));
+            }
+
             // ---- S128: THE TWO ACTION LATCHES, LIT ----
             // ⛔ WITHOUT THIS RENDER THE CHANGE HAS NO EVIDENCE CHANNEL. Both latches are false in the
             // shared fixture - which is right, and is what every other cover render shows - so the one

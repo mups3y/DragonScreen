@@ -157,7 +157,37 @@ namespace DragonScreen
             float size = Typography.MinDesignFor(w, k);
             float top = ValueInkMid - InkCentreOfTop * size;
             dl.Text(state, x + ValueRight * k, y + top * k, size * k, TextAlign.Right,
-                    state == Dashes.None ? DragonPalette.Text6 : DragonPalette.White);
+                    StateInk(s, state));
+        }
+
+        /// <summary>
+        /// The ink CURRENT STATE is drawn in — and the Figma UI's whole alarm channel ([[S130]], H7).
+        ///
+        /// ---- ⛔ THE DEFECT THIS CLOSES ----
+        /// `Alarms.Mask` folds G-force, propellant, power and the entire FDIR spine every frame and was
+        /// then DISCARDED on every Figma page. `Alarms.cs`' own header says it in terms: *"THE ALERT
+        /// ROUTING IS THE POINT, NOT THE DECORATION."* The crew's home page could not show a caution.
+        ///
+        /// ---- ⭐ WHY THE COLOUR AND NOT A NEW FIELD ----
+        /// The Figma pages have no alert element — `First.vue` has none either — so ADDING one would be
+        /// invention (§1.4). Tinting an element that is already there is not: it is the grammar this
+        /// project already uses, where the legacy `ChromeBar` leaves a page link SAYING "VEHICLE" and
+        /// lets the colour say there is a problem behind it. ⚠ The TEXT is not overloaded — it still
+        /// reads the phase, which is what it means — only the ink carries the severity.
+        ///
+        /// ⚠ NOMINAL STAYS WHITE, deliberately, rather than becoming `Alarms.Colour`'s green. A bar that
+        /// is green whenever nothing is wrong trains the eye to ignore it, and it would have re-tinted
+        /// every existing render for no reading gain. Colour appears when there is something to say.
+        /// ⭐ And the two states that DO speak come from `Alarms.Colour` — the one severity-to-colour
+        /// function (rule P5), never a second copy of the mapping.
+        ///
+        /// ⚠ A DASH IS NOT NOMINAL. No feed keeps `Text6`: a dead channel must not read as a quiet one.
+        /// </summary>
+        public static Rgba StateInk(PageState s, string state)
+        {
+            if (state == Dashes.None) return DragonPalette.Text6;
+            Severity sev = Alarms.SystemSeverity(s);
+            return (sev >= Severity.Caution) ? Alarms.Colour(sev) : DragonPalette.White;
         }
 
         /// <summary>What CURRENT STATE reads. The registry's own source first, the live classifier
