@@ -16899,7 +16899,19 @@ the caveat only draws on the four seats. It failed only when a mutation moved th
 - **DONE when:** each of the three is either shown to match the export (and left alone, with the finding
   recorded) or corrected against a stated centre, with a 2560 preview and a render-read check.
 
-### S167 [S] A suite that THROWS instead of failing a check hides every suite after it — **TODO** — [logged by [[S164]] per C1.1, 2026-09-06; TIER 3: harness]
+### S167 [S] A suite that THROWS instead of failing a check hides every suite after it — **DOING** — [logged by [[S164]] per C1.1, 2026-09-06; TIER 3: harness]
+
+#### ⛔ SESSION DEVIATION FROM C1.1 + C1.7 — RECORDED HERE BECAUSE THIS IS THE FIRST LINE THIS RUN WRITES
+
+This task is being done by the **continuous build chat, run 3**, which works MANY register lines in ONE
+session instead of one-task-one-chat. That is an owner directive, **2026-09-06, verbatim: "write run 3's
+prompt"**, continuing the standing instruction **"make sure it loops until all tasks are complete
+committing and reading the rules etc in between jobs"**. It **overrides C1.1 ("ONE task at a time") and
+C1.7 ("never run a session to compaction mid-task") FOR THIS SESSION ONLY**. ⚠ **Every other rule stands
+unchanged — C1.12 above all**: this run opens no gate, decides no owner question, never runs `install`,
+never touches glass, never `git push`es, and edits neither `docs/BUILD_PLAN.md` nor `docs/QC_FINDINGS.md`.
+Each job still marks its line `DOING` and commits that marker before any code, and still commits on its
+own at the end — the loop keeps C1.5's per-task commit, it only drops the fresh chat between tasks.
 - **The finding, found by mutation.** [[S164]]'s mutation Z8 made `CrewControlIds.AudioScope(0)` return
   null. `AudioScopeTest` — which runs BEFORE `CrewPressTest` — dereferenced it and threw
   `NullReferenceException`. `TestMain` does not catch it, so the process died at exit `3221225477` and
