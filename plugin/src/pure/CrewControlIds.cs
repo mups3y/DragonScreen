@@ -141,6 +141,16 @@ namespace DragonScreen
             return CoverPrefix + Name((int)b, typeof(CoverPage.CoverButton));
         }
 
+        /// <summary>The audio page's five SCOPE illustrations — four seats and the cabin (S134c).
+        /// ⚠ Same `audio.` surface as the ± buttons: one page, one channel, and the id says which kind
+        /// of control it was. `audio.scope2` is the CABIN, which is why the id carries the INDEX rather
+        /// than a seat number that would be wrong for one of the five.</summary>
+        public static string AudioScope(int scope)
+        {
+            if (scope < 0) return null;
+            return AudioPrefix + "scope" + scope;
+        }
+
         /// <summary>The Video settings page's camera rows (S134b). ⚠ The id carries the ROW INDEX, not
         /// the camera's name: the name comes from a vessel scan and changes with the craft, so an event
         /// naming "video.cam2" stays readable against a recording made on a different vehicle, and the

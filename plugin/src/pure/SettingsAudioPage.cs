@@ -113,7 +113,27 @@ namespace DragonScreen
 
             // ---- audio panel ----
             dl.Rect(PX(468), PY(1323), 2489 * sx, 434 * sy, Panel);
-            CTxt(sel == 2 ? "CABIN AUDIO" : "SEAT " + (sel + 1) + " AUDIO", 1721, 1264, 34, White);
+            CTxt(sel == CabinScope ? "CABIN AUDIO" : "SEAT " + (sel + 1) + " AUDIO", 1721, 1264, 34, White);
+            // ---- ⛔ S134c / QC A-01: AND THE PAGE SAYS WHAT THE SELECTION DOES NOT CHANGE --------
+            // QC's own warning about making the seats selectable: *"today `ChValue` is one literal array
+            // shared by all five scopes, so selecting SEAT 2 would change a heading and nothing else —
+            // five headings over one set of numbers, which is worse than one honest heading."*
+            // ⭐ THAT IS STILL TRUE, and it is not a gap this line can close. [[S135]] settled what the
+            // channels read — the owner's Q6 ruling bound four of them to the GAME's own audio layers,
+            // and he was told and accepted that those are **global settings**. KSP has no per-seat
+            // audio, so there is nothing per-seat for a seat to select.
+            // ⚠ So the selection is real (the reference's own control, and (A)), and the page MARKS what
+            // it does not do rather than implying it. §14.4(f): included, filled, and marked — never a
+            // heading that quietly claims a scope the numbers do not have.
+            // ⚠ AT THE STATIC FLOOR, and the size is DERIVED rather than picked. A first version used
+            // `Typography.Dense * 2f` — 24 design px, which on this page is 24 * (h/RefH) = 16 PANEL px,
+            // two thirds of the 24 px floor [[S153]]'s R-01 ruling permits even for a static label.
+            // ⛔ AND THE RATCHET COULD NOT SEE IT: the R-01 census renders this page at its DEFAULT
+            // scope, and the caveat only draws on the four seats. It failed only when a mutation moved
+            // the line onto CABIN. Logged as [[S165]] — the census is blind to non-default page states.
+            if (sel != CabinScope)
+                CTxt("LEVELS BELOW ARE THE VEHICLE'S — KSP HAS NO PER-SEAT AUDIO",
+                     1721, 1310, Typography.DenseDesignFor(w, h / RefH), DragonPalette.Text6);
 
             for (int i = 0; i < 5; i++)
             {
@@ -255,6 +275,53 @@ namespace DragonScreen
         /// ⛔ No branch here can print a plausible number for an unreadable source. "0%" on a channel
         /// whose settings could not be read would say the game is MUTED, which is a different claim.
         /// </summary>
+        // =========================================================================================
+        //  S134c / QC A-01 — THE FIVE SEATS BECOME SELECTABLE
+        // =========================================================================================
+        // ⛔ THE DEFECT: `Build`'s `sel` picks which of five scopes is shown, and every caller passed
+        // the literal `2`. `CABIN AUDIO` was the only heading this page could ever show; the four
+        // `SEAT n AUDIO` layouts were written, correct and unreachable — S49 H9's dead-enum class,
+        // inside a page that ships. And the page drew five selectable-LOOKING seats, none selectable.
+        //
+        // ⭐ ONE RECT FUNCTION FOR THE DRAW AND THE TOUCH, which is `PageAction`'s rule and the exact
+        // thing QC `H-04` shows going wrong when it is not followed. `SeatBox` was already the draw's
+        // geometry; this only gives it a name and an inverse.
+
+        /// <summary>The scope index that means CABIN rather than a seat. ⚠ 2, not 0 — the cabin sits in
+        /// the MIDDLE of the five illustrations, and the reference numbers them left to right.</summary>
+        public const int CabinScope = 2;
+
+        /// <summary>How many scopes the page draws.</summary>
+        public const int Scopes = 5;
+
+        /// <summary>Seat <paramref name="i"/>'s illustration box, in design coordinates — the same
+        /// `SeatBox` row the draw places the artwork from.</summary>
+        public static void SeatRect(int i, out float x, out float y, out float w, out float h)
+        {
+            if (i < 0 || i >= Scopes) { x = y = w = h = 0f; return; }
+            x = SeatBox[i, 0]; y = SeatBox[i, 1]; w = SeatBox[i, 2]; h = SeatBox[i, 3];
+        }
+
+        /// <summary>
+        /// Which scope a touch fell on, or −1.
+        ///
+        /// ⚠ THE PAGE IS STRETCHED — `PX(x) = x * w / RefW` — so the inverse is the same stretch.
+        /// [[S134a]] is the line about a sibling page getting that wrong; this one draws in code and
+        /// has only one projection.
+        /// </summary>
+        public static int SeatHitTest(float px, float py, int w, int h)
+        {
+            if (w <= 0 || h <= 0) return -1;
+            float dx = px * RefW / w, dy = py * RefH / h;
+            for (int i = 0; i < Scopes; i++)
+            {
+                float rx, ry, rw, rh;
+                SeatRect(i, out rx, out ry, out rw, out rh);
+                if (dx >= rx && dx < rx + rw && dy >= ry && dy < ry + rh) return i;
+            }
+            return -1;
+        }
+
         public static string ChannelText(PageState s, string label)
         {
             if (label == "INTERCOM")

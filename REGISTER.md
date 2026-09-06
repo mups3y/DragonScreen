@@ -16756,11 +16756,68 @@ a screen shows commands nothing.
 page-per-display). Those are `SettingsPage`'s and remain [[S134c]]'s territory; only the camera rows are
 re-homed here.
 
-### S134c [S] The settings page has five layouts and can render exactly one, forever — **DOING** — [split 3 of 5 of [[S134]]; QC `A-01`]
+### S134c [S] The settings page has five layouts and can render exactly one, forever — **DONE 2026-09-06 — all five reachable, and the four seats now say what selecting them does NOT change** — [split 3 of 5 of [[S134]]; QC `A-01`]
 - Five layouts, one reachable. ⚠ Read [[S121c]] first: that line gave this file its RefPanelW pass, so
   the geometry has moved since QC measured it.
 - **DONE when:** every layout is reachable or the unreachable ones are removed with their reasoning kept
   in place (C1.16), and a preview shows each.
+
+#### ⭐ DONE 2026-09-06
+
+`sel` now comes from the SCREEN, not from a literal. `PageControls.AudioSeat` carries it beside the
+Cover's phase and camera; `SettingsAudioPage.SeatRect` names the geometry the draw already used and
+`SeatHitTest` reads the same function — `PageAction`'s rule, and the thing QC `H-04` shows going wrong
+when it is not followed. A screen still OPENS on CABIN, so nothing moved under anyone.
+
+#### ⛔ AND THE HARD PART WAS NOT THE SWITCHING — QC SAID SO AND WAS RIGHT
+
+QC's warning, in terms: *"today `ChValue` is one literal array shared by all five scopes, so selecting
+SEAT 2 would change a heading and nothing else — five headings over one set of numbers, which is worse
+than one honest heading. A-02 and Q6 govern what the numbers are allowed to be, so land that first."*
+
+⭐ **A-02 and Q6 DID land ([[S135]]), and they settle it the other way.** The owner's Q6 ruling bound four
+channels to the GAME's own audio layers, and he was told and accepted that those are **global settings**.
+KSP has no per-seat audio. So there is nothing per-seat for a seat to select, and there never will be
+without a model that does not exist.
+
+⭐ **So the page MARKS it.** Selecting a seat moves the heading and the highlight and draws one line:
+*"LEVELS BELOW ARE THE VEHICLE'S — KSP HAS NO PER-SEAT AUDIO"*. §14.4(f): included, filled, and marked.
+The alternative readings were both worse — leaving four correct layouts permanently dead, or switching
+five headings over one set of numbers with nothing saying so.
+
+#### ⚠ AND THE CAVEAT LINE WAS BELOW THE FLOOR, WHICH THE RATCHET COULD NOT SEE
+
+The first version drew it at `Typography.Dense * 2f` — 24 design px, which on this page is
+**24 × (h/RefH) = 15.98 PANEL px**, two thirds of the 24 px floor R-01 permits even for a static label.
+⛔ **The R-01 ratchet did not catch it**, because the census renders this page at its DEFAULT scope and
+the caveat only draws on the four seats. It failed only when a mutation moved the line onto CABIN.
+⭐ Now derived rather than picked — `Typography.DenseDesignFor(w, h / RefH)` — which measures **exactly
+24.00 panel px**. The census gap is logged as [[S165]].
+
+#### Verified
+
+- **6 mutations, 6 killed** — the caveat dropped, the caveat drawn on CABIN too, the scope walk
+  shortened, CABIN taken as scope 0, the letterboxed inverse on a stretched page, and a screen opening
+  on a seat.
+- **New suite `AudioScopeTest`, 32 checks**, including the round trip **at two aspects** — [[S134a]] and
+  [[S134b]] both had a projection bug survive a single-aspect suite, so this one starts with two.
+- ⚠ The heading check **reads the render**: five scopes, five headings, found in the emitted text rather
+  than recomputed. Before this line every render on this page said `CABIN AUDIO`.
+- **Preview: 0 existing pages changed, 1 new** — `settings_audio_seat2.png`, the first render of a SEAT
+  layout in the project's history. The four were written, correct and unrendered.
+- comment-loss **0** · `build.py test` green · no `install`, no glass, no `git push`.
+
+### S165 [S] The R-01 census only renders each page's DEFAULT state — **TODO** — [logged by [[S134c]] per C1.1, 2026-09-06; TIER 3]
+- **The finding.** `LegibilityFloorTest`'s R-01 census builds each page once, in whatever state its
+  fixture gives. Text drawn only in a NON-default state is invisible to it.
+- ⭐ Found for real: [[S134c]] added a caveat line at **15.98 panel px** — below the 24 px static floor —
+  that draws only on the audio page's four SEAT scopes. The census renders scope 2 (CABIN), so it passed.
+  It failed only when a mutation moved the line onto the default scope.
+- ⚠ **The same blindness covers every conditional draw in the build** — alert rows, dead-feed variants,
+  latched states, selected tabs. The census's own count (868 below-floor draws) is therefore a LOWER
+  BOUND, and its baselines are baselines of the default states only.
+- **DONE when:** the census covers each page's meaningful states, or its header records precisely which
+  states it does and does not see so the count is not read as complete.
 
 ### S134d [S] Frame 66's LIGHTING panel draws fifteen controls where one is bindable — **TODO (UNBLOCKED 2026-09-06 by [[S134a]])** — [split 4 of 5 of [[S134]]; QC `F-03`]
 - ⛔ **A recorded finding says exactly ONE light group is bindable** — `TE_CD2_POD.cfg` carries a single

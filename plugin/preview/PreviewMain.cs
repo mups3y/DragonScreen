@@ -821,6 +821,18 @@ public static class PreviewMain
             Render(ddl, CW, CH, dpath);
             Console.WriteLine("  " + dpath + "   " + CW + "x" + CH + "   " + ddl.Count + " commands"
                               + "   every channel " + SettingsAudioPage.ChannelText(dps, "MAIN"));
+
+            // ---- S134c / QC A-01: A SEAT SCOPE, WHICH NO RENDER HAS EVER SHOWN ----
+            // ⛔ Every caller passed the literal 2, so "CABIN AUDIO" is the only heading this page has
+            // ever drawn - in the build AND in the preview. The four SEAT layouts were written, correct
+            // and unrendered. ⭐ This is one of them, and it also carries the caveat line the seat
+            // scopes draw: the levels are the vehicle's, because KSP has no per-seat audio (S135 / Q6).
+            DisplayList q1 = new DisplayList(SettingsAudioPage.Commands + 200);
+            SettingsAudioPage.Build(q1, CW, CH, 1, aps);
+            string q1path = Path.Combine(outDir, "settings_audio_seat2.png");
+            Render(q1, CW, CH, q1path);
+            Console.WriteLine("  " + q1path + "   " + CW + "x" + CH + "   " + q1.Count
+                              + " commands   scope 1 = SEAT 2 AUDIO");
         }
 
         // ---- Complex frame pages shown from their Figma export (attitude HUD, procedure, cabin) ----

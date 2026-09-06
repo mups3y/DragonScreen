@@ -121,6 +121,16 @@ namespace DragonScreen
         /// <summary>DockingSimPage: the TRANSLATION cluster's magnitude toggle.</summary>
         public bool DockTransLarge;
 
+        /// <summary>
+        /// S134c / QC `A-01`: which of the audio page's five scopes is selected — 0-3 SEAT 1-4,
+        /// **2 = CABIN**. ⛔ The page has always drawn five selectable-looking seats and had no way to
+        /// select one: `FigmaUI` passed the literal `2` and `sel` was never anything else in the build
+        /// or the preview. This is the state that was missing.
+        /// ⚠ Per-screen display state, like the Cover's phase and camera — it changes a heading and a
+        /// highlight and commands nothing, which is why it is (A).
+        /// </summary>
+        public int AudioSeat;
+
         /// <summary>What a screen opens on: FUNCTIONS, and both clusters on LARGE - the states every
         /// page already drew before the toggles could be tapped, so nothing moved under anyone.</summary>
         public static PageControls Default
@@ -131,6 +141,7 @@ namespace DragonScreen
                 c.Alerts = false;
                 c.DockRotLarge = true;
                 c.DockTransLarge = true;
+                c.AudioSeat = SettingsAudioPage.CabinScope;   // S134c: the scope the page always drew
                 return c;
             }
         }

@@ -560,6 +560,24 @@ namespace DragonScreen
                 // single float moves - so a control that looks unavailable cannot act, which is S32's
                 // rule and the reason the page tints from that same predicate.
                 PageState aps = VesselData.State;
+
+                // ---- S134c / QC A-01: THE FIVE SCOPE ILLUSTRATIONS, WHICH WERE NEVER SELECTABLE ----
+                // ⛔ Tested BEFORE the ± buttons and returning early, because the seat boxes are large
+                // and the buttons sit beside them, not inside them — but a control that overlaps must
+                // not be shadowed by the bigger one silently. If these two ever do overlap, the seat
+                // wins and that is written down rather than discovered.
+                // ⚠ (A): it moves a heading and a highlight and commands nothing.
+                int scope = SettingsAudioPage.SeatHitTest(px, py, w, h);
+                if (scope >= 0)
+                {
+                    rec.Surface = CrewSurface.Audio;
+                    rec.EnumValue = scope;
+                    rec.ControlId = CrewControlIds.AudioScope(scope);
+                    rec.Acted = (scope != audioSeat);
+                    audioSeat = scope;
+                    return;
+                }
+
                 SettingsAudioPage.AudioAct aa = SettingsAudioPage.HitTest(px, py, w, h, aps);
                 rec.Surface = CrewSurface.Audio;
                 rec.EnumValue = (int)aa;
@@ -753,6 +771,10 @@ namespace DragonScreen
         /// <summary>The Cover's two action latches. Per-screen display state, like `brightness` —
         /// see `PageState.CoverAckLatched` for why they are not vessel state (S128).</summary>
         private bool coverAckLatched, coverGroundGo;
+
+        /// <summary>S134c: which audio scope this screen is showing — 2 (CABIN) is what the page always
+        /// drew, so a screen opens exactly where it used to.</summary>
+        private int audioSeat = SettingsAudioPage.CabinScope;
 
         /// <summary>
         /// S132: Frame 58's stopwatch. `hudTimerRunning` says whether it is counting; `hudTimerBase` is
@@ -1351,8 +1373,13 @@ namespace DragonScreen
                 // run state that suitCountdown cannot carry - the counter reads 5 for the first 0.9 s of
                 // a run (its idle value) and 0 for the last 0.5 s of one (its finished value). The
                 // procedure's step ticks need the difference; SuitCheckPage.StepOf says why.
+                // S134c: the audio scope is per-SCREEN, like coverPhase and coverCam, so it rides in
+                // `controls` rather than living on the page. A screen opens on CABIN, which is exactly
+                // what the page drew before it could be selected.
+                PageControls ctl = controls;
+                ctl.AudioSeat = audioSeat;
                 FigmaUI.Build(page, up, w, h, ps, mapView, suitCountdown, suitPopup, coverPhase, coverCam, turn,
-                              controls, suitSeed, suitStart >= 0f);
+                              ctl, suitSeed, suitStart >= 0f);
             }
             else
             {
