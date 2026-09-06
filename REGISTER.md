@@ -16958,7 +16958,7 @@ the caveat only draws on the four seats. It failed only when a mutation moved th
   layout in the project's history. The four were written, correct and unrendered.
 - comment-loss **0** · `build.py test` green · no `install`, no glass, no `git push`.
 
-### S165 [S] The R-01 census only renders each page's DEFAULT state — **TODO** — [logged by [[S134c]] per C1.1, 2026-09-06; TIER 3]
+### S165 [S] The R-01 census only renders each page's DEFAULT state — **DOING** — [logged by [[S134c]] per C1.1, 2026-09-06; TIER 3]
 - **The finding.** `LegibilityFloorTest`'s R-01 census builds each page once, in whatever state its
   fixture gives. Text drawn only in a NON-default state is invisible to it.
 - ⭐ Found for real: [[S134c]] added a caveat line at **15.98 panel px** — below the 24 px static floor —
