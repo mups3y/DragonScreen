@@ -23495,3 +23495,30 @@ and **flight ACTUATION stays an honest no-op until Part B (§14.4(a))**. Every i
 or NAVIGATION, and all of those are now live and pinned.
 
 ⚠ **[[S192]]'s Q1–Q3 remain open** — *"that will do for now"* released the LOOK, not the questions.
+
+---
+
+### S194 [O] Record the owner's 2026-09-07 flight results, and close what they unblock — **DOING** — [owner report on the 05:06 install, 2026-09-07; a RECORDING task]
+
+🟢 **OWNER, 2026-09-07, verbatim, after flying the 05:06 install:**
+
+> *"no mechjeb of ours displayed. No readings on the screen read live. Text is fine"*
+
+**Three findings, and they are NOT equal — that is the whole content of this line.**
+
+1. **`T15b` → the R2 row that failed on 2026-09-05 has now PASSED on the glass.** *"no mechjeb of ours
+   displayed"* is R2 verbatim. ⚠ Before closing anything, establish whether `KSP.log`'s
+   `ADDON BINDER: Cannot resolve assembly: DragonScreen.Mech` (05:08:54, twice) means the embed did not
+   load — an R2 that passes because nothing loaded proves nothing.
+2. **`S153a-Q1` → ANSWERED by *"Text is fine"*.** The floor was measured at `screenWidth = 1280` on
+   2026-08-05 and never re-derived after [[S115]] doubled it to 2560; the owner has now judged the shipped
+   type **in the seat at 2560**, which is the only instrument that can answer it. Unblocks [[S153a]]
+   [[S153b]] [[S153c]] [[S153d]] [[S153e]] [[S154d]]. ⛔ **It does NOT delete the floor** — it answers
+   *"is the shipped type too small"*, no.
+3. **"No readings on the screen read live" — DIAGNOSED, and it is NOT a data defect.** Record it against
+   [[S155]] and [[S147b]] as the owner-visible symptom of those lines. **No data-path defect is opened.**
+
+⭐ **AND HARVEST THE LOG BEFORE IT IS OVERWRITTEN** — [[S42]]'s missing shader/texture-slot line; the
+two-profile confusion the tune log reveals; and the BlackBox run's 18 coverage defects, each as its own line.
+
+⛔ **This task RECORDS and UNBLOCKS. It changes no page and raises no type.**
