@@ -4577,7 +4577,7 @@ target unless `tuneFile` is blanked. **Options:** (1) fly the target profile and
 says, and it is one cfg field)*; (3) amend §B5. ⛔ **(2) and (3) both touch `docs/BUILD_PLAN.md` or the
 shipped profile and need the owner (C1.12 / G10).**
 
-### T19 [O] On-orbit ops + re-plan loop — **TODO**
+### T19 [O] On-orbit ops + re-plan loop — **DOING**
 - **Read:** §B10.2 / §B12.4 / §B9.  **DONE when:** rendezvous to the KOS in-sim.  **May SPLIT if large.**
 
 ### T20 [O] Docking hand-off + speedLimit ladder — **TODO**
