@@ -16899,7 +16899,7 @@ the caveat only draws on the four seats. It failed only when a mutation moved th
 - **DONE when:** each of the three is either shown to match the export (and left alone, with the finding
   recorded) or corrected against a stated centre, with a 2560 preview and a render-read check.
 
-### S167 [S] A suite that THROWS instead of failing a check hides every suite after it — **DOING** — [logged by [[S164]] per C1.1, 2026-09-06; TIER 3: harness]
+### S167 [S] A suite that THROWS instead of failing a check hides every suite after it — **DONE 2026-09-06 — measured at 29 suites hidden; the guard, the self-test and a process-level check that cannot go stale** — [logged by [[S164]] per C1.1, 2026-09-06; TIER 3: harness]
 
 #### ⛔ SESSION DEVIATION FROM C1.1 + C1.7 — RECORDED HERE BECAUSE THIS IS THE FIRST LINE THIS RUN WRITES
 
@@ -16931,6 +16931,98 @@ own at the end — the loop keeps C1.5's per-task commit, it only drops the fres
   check (it should — they mean different things).
 - **DONE when:** a deliberately-throwing suite produces a named failure, every later suite still runs and
   reports, and the exit code is non-zero.
+
+#### DONE 2026-09-06 — and the "29 suites hidden" is measured, not estimated
+
+**THE BEFORE, RUN RATHER THAN ARGUED.** A `NullReferenceException` was injected at the top of
+`AudioScopeTest.Run` — **suite 25 of 55** — and `python plugin/build.py test` run against it:
+
+```
+DragonScreen audio page scopes (S134c / QC A-01)
+
+Unhandled Exception: System.NullReferenceException: S167 BEFORE-MEASUREMENT: deliberate throw
+   at AudioScopeTest.Run()
+   at TestMain.Main()
+
+TESTS FAILED (exit 3762504530)
+```
+
+Counted off that output: **25 suites reported a count, 1 printed its banner and no count, and 29 never
+ran.** ⚠ The exit code was **3762504530** (`0xE0434352`, the CLR's unhandled-exception code), not
+[[S164]]'s `3221225477` (`0xC0000005`, an access violation) — **the code depends on what the suite threw,
+which is another reason a harness must not be read through it.** The fault was reverted and the clean
+run counted at the same time: **55 suites, `ALL SUITES PASSED`, exit 0.**
+
+#### The fix is in TWO halves because neither one can prove the other
+
+⛔ **AND THAT IS THE INTERESTING PART OF THIS LINE.** The done-criteria has an in-process clause ("a
+named failure") and a **whole-process** clause ("every later suite still runs and reports"). The second
+cannot be checked from inside the process: a check that ran would only prove that *it* had survived,
+which is exactly the reasoning that lets a crash look like a complete report.
+
+| half | where | proves |
+|---|---|---|
+| in-process | `plugin/test/HarnessTest.cs` (18 checks) | a throw becomes a NAMED failure of that suite and control returns |
+| whole-process | `python plugin/build.py harnesscheck` | every suite BELOW the crash still ran and still reported |
+
+- `TestMain.Guard(name, run, log)` catches, returns **1** (one failure of that suite), and prints
+  `!! SUITE CRASHED <name> threw <Type>: <message>` with the stack indented under it. Everything inside
+  the catch is itself wrapped — **a guard that dies while reporting a death is the same defect one frame
+  further out**, so a null `Message` and a null `StackTrace` are both exercised.
+- ⭐ **The log sink is a PARAMETER.** That is what lets `HarnessTest` exercise the crash path without a
+  `!! SUITE CRASHED` banner appearing in a green build. A self-test that cries wolf every run trains
+  the reader to skip the line it exists to draw attention to.
+- ⭐ **The suite's name is read off the delegate's own method** (`run.Method.DeclaringType.Name`), never
+  a hand-typed string. 55 call sites × a duplicated literal is 55 chances for a rename to leave a lie
+  behind — and it is precisely what makes "a named failure" trustworthy: the name is the throwing
+  suite's own type, so a crash cannot be attributed to a suite that did not throw.
+- ⚠ **THE OPEN QUESTION IN THIS LINE IS ANSWERED YES, as the line itself recommended.** A throw and a
+  failed check are printed differently: `FAIL` versus `!! SUITE CRASHED`, and the closing line reads
+  `N SUITE(S) FAILED, M OF THEM BY THROWING`. They are different diagnoses — one is a suite doing its
+  job, the other is a suite unable to — and a reader who cannot tell them apart debugs the wrong one.
+
+#### ⭐ Why `harnesscheck` cannot rot, which is the point of doing it in code
+
+`build.py harnesscheck` re-runs the built exe with `DRAGONSCREEN_HARNESS_FAULT=1` (a seam injected
+FIRST, so "every later suite" means all of them) and **compares the faulted report to the clean one LINE
+FOR LINE**, excluding only the closing summary, which differs by design.
+
+⛔ **It does NOT hold a list of suite names.** A hand-listed set is the failure mode this project keeps
+hitting: it is correct on the day it is written and silently incomplete on the day a suite is added. The
+line-for-line comparison covers a suite added, renamed or reordered in `TestMain.cs` **on the day it
+lands, with no edit here.** It runs on **every `build.py test`**, not only when the verb is typed.
+
+#### Mutation-proved — six mutations, six kills, and every kill ATTRIBUTED
+
+⚠ This is the first line that can honestly claim the last part, because attributing a kill is what
+S167 fixed. Each mutation was applied to `TestMain.cs`, `build.py test` was run, and the killer was read
+off the **named instrument** rather than off the exit code.
+
+| # | mutation | killed by |
+|---|---|---|
+| M1 | `Guard` returns 0 on catch | `HarnessTest` — *"a throw counts as ONE failure of that suite   got 0"* |
+| M2 | `NameOf` returns a constant | `HarnessTest` — *"a suite's name is read off its own method   suite"* |
+| M3 | the fault seam never arms | `harnesscheck` — *"the faulted run exited 0"* |
+| M4 | `Suite` stops counting crashes | `harnesscheck` — *"the summary does not distinguish a throw from a failed check"* |
+| M5 | `Guard` logs an empty string | `HarnessTest` — *"the report NAMES the suite that threw"* |
+| M6 | **`Suite` rethrows — the original defect** | `harnesscheck` — *"120 line(s) the clean run printed are MISSING after the crash — suites below it were hidden"* |
+
+⭐ **M6 is the regression test for the defect itself**, and the number it prints is the measurement: put
+the crash back and 120 report lines vanish.
+
+⚠ **A note on method, because the first attempt at this destroyed work.** The mutation script restored
+each file by rewriting the ORIGINAL TEXT it had held in memory. Its first version used
+`git checkout -- <file>`, which reverted the whole of `TestMain.cs` — **the S167 change was uncommitted
+at the time and was lost, and had to be rebuilt.** ⛔ **Never revert a mutation with `git checkout` on a
+tree that has uncommitted work; commit first, or restore from the text you saved.**
+
+#### Verification
+
+- `python plugin/build.py test` → `ALL SUITES PASSED`, then
+  `harness fault check ... ok: fault named, exit 1, all 120 clean report lines still present`.
+- The faulted run's own report: the crash block first, `HarnessTest` and all 55 suites reporting under
+  it, and `1 SUITE(S) FAILED, 1 OF THEM BY THROWING (see SUITE CRASHED above)`.
+- ⚠ **No preview PNG:** this task changes the harness only and draws nothing (C1.3's docs/harness carve-out).
 
 ### S134d [S] Frame 66's LIGHTING panel draws fifteen controls where one is bindable — **DONE 2026-09-06 — rebuilt over the baked one, which takes all four art faults with it** — [split 4 of 5 of [[S134]]; QC `F-03`]
 - ⛔ **A recorded finding says exactly ONE light group is bindable** — `TE_CD2_POD.cfg` carries a single
