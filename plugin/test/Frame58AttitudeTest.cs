@@ -1,4 +1,5 @@
-// Tests for [[S154b]] / QC `H-02` / H10 — Frame 58's attitude block, drawn live over its baked ink.
+// Tests for [[S154b]] + [[S154c]] / QC `H-02` / H10 — Frame 58's TWELVE baked numbers, drawn live
+// over their own ink. S154b is the six attitude readouts; S154c the six translation ones.
 //
 // ⛔ WHAT WAS WRONG. QC `H-02` counted TWELVE baked numbers on this frame, EIGHT of which contradict
 // live state in the same frame. Six of them are the attitude block — ROLL / PITCH / YAW and their
@@ -32,7 +33,7 @@ public static class Frame58AttitudeTest
 
     public static int Run()
     {
-        Console.WriteLine("Frame58AttitudeTest (S154b / QC H-02: six baked attitude numbers, now live)");
+        Console.WriteLine("Frame58AttitudeTest (S154b + S154c / QC H-02: all twelve baked numbers, now live)");
         checks = 0; failures = 0;
 
         PageState a = Fixture("15.0°", "0.1°", "0.2°", "0.0 deg/s", "0.3 deg/s", "0.4 deg/s");
@@ -120,9 +121,132 @@ public static class Frame58AttitudeTest
               && Same(DragonPalette.Accent, Rgba.Hex("20FBFD")),
               "Go " + DragonPalette.Go.R + "," + DragonPalette.Go.G + "," + DragonPalette.Go.B);
 
+        TranslationBlock();
+
         Console.WriteLine("  " + checks + " checks, " + failures + " failed"
                           + "   (the patch is counted on both a live and a dead feed)");
         return failures > 0 ? 1 : 0;
+    }
+
+    // =============================================================================================
+    // [[S154c]] — the other six of QC `H-02`'s twelve: X / Y / Z, RANGE, RATE, ACCELERATION.
+    // Same technique, same two failure modes, plus two of its own.
+    // =============================================================================================
+    static void TranslationBlock()
+    {
+        PageState a = Trans("22.7 m", "0.1 m", "0.0 m", "202.6 m", "-0.25 m/s", "1.42");
+        PageState b = Trans("-8.4 m", "9.9 m", "4.2 m", "88.8 m",  "0.75 m/s",  "0.31");
+        PageState dead = a; dead.Valid = false;
+        DisplayList da = Build(a), db = Build(b), dd = Build(dead);
+
+        string[] v = { a.OffXText, a.OffYText, a.OffZText, a.RangeText, a.RateText };
+        for (int i = 0; i < v.Length; i++)
+        {
+            Check("S154c the HUD draws " + v[i], Drew(da, v[i]), "");
+            Check("S154c ⭐ " + v[i] + " is not a constant", !Drew(db, v[i]), "");
+            Check("S154c " + v[i] + " is gone with no feed", !Drew(dd, v[i]), "");
+        }
+
+        // ---- ⛔ ACCELERATION CARRIES ITS UNIT, AND THAT IS ITS OWN CHECK ------------------------
+        // `AccelValue`'s box is the ink of the WHOLE baked string `0.00g` — digits and the `g` — so
+        // patching it erases the unit, and `AccelPosText` is a bare number. The first render of this
+        // block read `1.42` under a label saying ACCELERATION. ⚠ A quantity with no unit on a flight
+        // display is a defect of the same family as a frozen one: it looks like data and is not usable.
+        Check("S154c ⭐ ACCELERATION prints its unit, which the patch erased", Drew(da, "1.42g"),
+              "drew the bare number instead");
+        Check("S154c ...and the bare number is NOT drawn on its own", !Drew(da, "1.42"), "");
+        Check("S154c ⭐ the unit does not make it a constant", !Drew(db, "1.42g"), "");
+        Check("S154c ACCELERATION dashes with no feed", !Drew(dd, "1.42g"), "");
+
+        // ---- ⛔ THE X/Y/Z STACK DOES NOT OVERLAP ITSELF ------------------------------------------
+        // ⭐ THE REASON THIS BLOCK IS NOT SIX `Readout` CALLS. The export pitches those three rows 35
+        // design px apart around 17-px ink; at the glanceable floor the type is 48.07, so keeping the
+        // export's pitch would overlap every row by 13 px. The stack is re-pitched about its own
+        // centre, and this is what says it worked — measured off the draw commands, not eyeballed.
+        float sc = H / Frame58Map.RefH, ox = (W - Frame58Map.RefW * sc) * 0.5f;
+        float size = Typography.MinDesignFor(W, sc) * sc;
+        float[] tops = { YOf(da, a.OffXText), YOf(da, a.OffYText), YOf(da, a.OffZText) };
+        Check("S154c all three offsets are drawn", tops[0] >= 0f && tops[1] >= 0f && tops[2] >= 0f, "");
+        if (tops[0] >= 0f && tops[1] >= 0f && tops[2] >= 0f)
+        {
+            Check("S154c ⭐ X and Y do not overlap", tops[1] - tops[0] >= size,
+                  "pitch " + (tops[1] - tops[0]) + " px for " + size + " px type");
+            Check("S154c ⭐ Y and Z do not overlap", tops[2] - tops[1] >= size,
+                  "pitch " + (tops[2] - tops[1]) + " px for " + size + " px type");
+            Check("S154c ...and the pitch is even", Math.Abs((tops[1] - tops[0]) - (tops[2] - tops[1])) < 0.5f,
+                  "");
+            // ⛔ AND THE GROUP HAS NOT WALKED. Re-pitching about the TOP row would push the block down
+            // the frame by half the growth; about the centre it stays where the export put it.
+            float drawnCentre = (tops[0] + tops[2]) * 0.5f + size * 0.5f;
+            float exportCentre = (Frame58Map.XValue.Cy + Frame58Map.ZValue.Cy) * 0.5f * sc;
+            Check("S154c ⭐ the stack is still centred where the export put it",
+                  Math.Abs(drawnCentre - exportCentre) < 1.0f,
+                  "drawn " + drawnCentre + " vs export " + exportCentre);
+        }
+
+        // ---- the frame's own two inks here too -------------------------------------------------
+        // ⚠ RANGE and the three offsets are VALUES (green); RATE is a rate (cyan). Same split as the
+        // attitude block, and getting it backwards would silently re-code what the frame means.
+        Check("S154c the offsets and RANGE draw green",
+              Same(InkOf(da, a.OffXText), DragonPalette.Go)
+              && Same(InkOf(da, a.OffZText), DragonPalette.Go)
+              && Same(InkOf(da, a.RangeText), DragonPalette.Go), "");
+        Check("S154c RATE draws cyan", Same(InkOf(da, a.RateText), DragonPalette.Accent), "");
+        Check("S154c ACCELERATION draws green", Same(InkOf(da, "1.42g"), DragonPalette.Go), "");
+
+        // ---- the patch, on both feeds, for ALL SIX boxes ----------------------------------------
+        // ⚠ ALL SIX, not just the three single ones. Mutation Y6 dropped the patch from the X/Y/Z
+        // stack alone and SURVIVED a version that counted only RANGE / RATE / ACCELERATION - the three
+        // baked offsets would have stayed on the frame under the live ones, and every other check here
+        // passed. A patch count that does not cover every patched box is a patch count for the boxes
+        // someone remembered.
+        Check("S154c all six translation boxes are patched on a live feed", TransPatches(da) == 6,
+              "got " + TransPatches(da));
+        Check("S154c ⭐ ...and on a dead one", TransPatches(dd) == 6, "got " + TransPatches(dd));
+    }
+
+    static PageState Trans(string x, string y, string z, string range, string rate, string accel)
+    {
+        PageState s = new PageState();
+        s.Valid = true;
+        s.OffXText = x; s.OffYText = y; s.OffZText = z;
+        s.RangeText = range; s.RateText = rate; s.AccelPosText = accel;
+        return s;
+    }
+
+    /// <summary>The y a string was drawn at, or −1.</summary>
+    static float YOf(DisplayList dl, string t)
+    {
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind == DrawKind.Text && c.Str == t) return c.B;
+        }
+        return -1f;
+    }
+
+    static int TransPatches(DisplayList dl)
+    {
+        Frame58Map.Box[] boxes = { Frame58Map.RangeValue, Frame58Map.RateValue, Frame58Map.AccelValue,
+                                   Frame58Map.XValue, Frame58Map.YValue, Frame58Map.ZValue };
+        float sc = H / Frame58Map.RefH, ox = (W - Frame58Map.RefW * sc) * 0.5f;
+        int found = 0;
+        for (int b = 0; b < boxes.Length; b++)
+        {
+            float x = ox + boxes[b].X0 * sc, y = boxes[b].Y0 * sc;
+            for (int i = 0; i < dl.Count; i++)
+            {
+                DrawCmd c = dl.At(i);
+                if (c.Kind != DrawKind.Rect || !Same(c.Colour, DragonPalette.Background)) continue;
+                if (!(c.A <= x + 0.01f && c.B <= y + 0.01f
+                      && c.A + c.C >= ox + boxes[b].X1 * sc - 0.01f
+                      && c.B + c.D >= boxes[b].Y1 * sc - 0.01f)) continue;
+                const float Slop = 12f;
+                if (c.C > (boxes[b].W + Slop) * sc || c.D > (boxes[b].H + Slop) * sc) continue;
+                found++; break;
+            }
+        }
+        return found;
     }
 
     static PageState Fixture(string roll, string pitch, string yaw,

@@ -52,6 +52,7 @@ namespace DragonScreen
             // is correct, and redrawing a correct constant would only add a way to get it wrong.
             DrawBottomRow(dl, w, ox, sc, s);
             DrawAttitudeBlock(dl, w, ox, sc, s);
+            DrawTranslationBlock(dl, w, ox, sc, s);
             DrawAlertActivity(dl, w, ox, sc, s);
 
             // "MANUAL DOCKING" entry in the letterbox margin (screen-space, so it never overlaps the
@@ -166,6 +167,66 @@ namespace DragonScreen
             Readout(dl, ox, sc, live, Frame58Map.RollRate,   s.Valid ? s.RollRateText  : null, DragonPalette.Accent);
             Readout(dl, ox, sc, live, Frame58Map.PitchRate,  s.Valid ? s.PitchRateText : null, DragonPalette.Accent);
             Readout(dl, ox, sc, live, Frame58Map.YawRate,    s.Valid ? s.YawRateText   : null, DragonPalette.Accent);
+        }
+
+        /// <summary>
+        /// ⭐ [[S154c]] / QC `H-02` / H10: THE TRANSLATION BLOCK — X / Y / Z, RANGE, RATE, ACCELERATION.
+        ///
+        /// The other six of QC `H-02`'s twelve baked numbers, and the same technique as the attitude
+        /// block above: patch the ink box [[S154a]] measured, redraw the live value at the floor. All
+        /// six fields are already published and `DockingSimPage` already draws them, so this is a
+        /// DRAWING change and the two surfaces read the same state (C7.1).
+        ///
+        /// ⚠ THE X/Y/Z STACK IS THE TIGHT ONE, and it is why this block is not simply six more calls
+        /// to `Readout`. The export pitches those three rows **35 design px apart** (tops 942.07 /
+        /// 977.15 / 1011.14) around 17-px-tall ink. At the glanceable floor the type is 48.07, so three
+        /// rows at the export's pitch would OVERLAP BY 13 px EACH. Keeping the pitch is not an option
+        /// and neither is shrinking the type, so the stack is RE-PITCHED about its own centre: the
+        /// group stays where the export put it and the rows spread to clear each other.
+        /// ⛔ The group CENTRE is preserved rather than the top row, so the block does not walk up or
+        /// down the frame — the same reasoning `Readout` uses for a single box, one level up.
+        /// </summary>
+        static void DrawTranslationBlock(DisplayList dl, int w, float ox, float sc, PageState s)
+        {
+            float live = Typography.MinDesignFor(w, sc);
+
+            // ---- the three offsets, re-pitched about their own centre ----
+            Frame58Map.Box[] xyz = { Frame58Map.XValue, Frame58Map.YValue, Frame58Map.ZValue };
+            string[] val = { s.Valid ? s.OffXText : null, s.Valid ? s.OffYText : null,
+                             s.Valid ? s.OffZText : null };
+            // ⚠ PITCH FROM THE SIZE, not from the export's 35. `live * 1.15` is the type's own height
+            // plus 15 % leading — the same proportion the export used (17 px ink on a 35 px pitch is
+            // roughly two line-heights, and a value stack reads as a list, not as a paragraph).
+            float pitch = live * 1.15f;
+            float centre = (xyz[0].Cy + xyz[2].Cy) * 0.5f;
+            float top = centre - pitch;                     // three rows, centre row on `centre`
+            for (int i = 0; i < 3; i++)
+            {
+                Patch(dl, ox, sc, xyz[i]);
+                float cy = top + pitch * i;
+                bool have = !string.IsNullOrEmpty(val[i]);
+                // ⚠ LEFT-aligned at the box's own X0, because these three are a COLUMN: the export
+                // left-aligns them under one another and centring them would make the column ragged.
+                dl.Text(have ? val[i] : Dashes.None, ox + xyz[i].X0 * sc, (cy - live * 0.5f) * sc,
+                        live * sc, TextAlign.Left, have ? DragonPalette.Go : DragonPalette.Text6);
+            }
+
+            // ---- RANGE, RATE and ACCELERATION each sit alone, so each is just a Readout ----
+            // ⚠ RANGE and ACCELERATION are green (a value), RATE cyan — the frame's own split, the same
+            // one the attitude block follows.
+            Readout(dl, ox, sc, live, Frame58Map.RangeValue, s.Valid ? s.RangeText : null, DragonPalette.Go);
+            Readout(dl, ox, sc, live, Frame58Map.RateValue,  s.Valid ? s.RateText  : null, DragonPalette.Accent);
+            // ⛔ THE UNIT IS RESTORED BY HAND, AND THAT IS NOT A DETAIL. `AccelValue`'s box is the ink
+            // of the whole baked string `0.00g` — digits AND the `g` — so patching it erases the unit,
+            // and `AccelPosText` is a BARE number (`VesselData.Acceleration` formats `along` with
+            // "F2" and nothing else; the Mech panel prints its own unit label beside it). The first
+            // render of this block read `1.42` under a label saying ACCELERATION, which is a quantity
+            // with no unit on a flight display.
+            // ⚠ `g` with no space, because that is the export's own form — this is restoring what the
+            // patch removed, not choosing a format. And `along` IS in g: `Dot(acc, rt.up) / 9.80665`.
+            Readout(dl, ox, sc, live, Frame58Map.AccelValue,
+                    s.Valid && !string.IsNullOrEmpty(s.AccelPosText) ? s.AccelPosText + "g" : null,
+                    DragonPalette.Go);
         }
 
         /// <summary>

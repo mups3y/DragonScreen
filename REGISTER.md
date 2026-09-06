@@ -19889,12 +19889,56 @@ the correct render is not a check, and only running the mutation shows which one
   clear**, with zero cyan pixels at or past the label.
 - No `install`, no glass, no `git push`. §14.4(a) untouched — this block reads and commands nothing.
 
-### S154c [S] Frame 58: the translation block — X / Y / Z, RANGE, RATE, ACCELERATION — **DOING (UNBLOCKED 2026-09-06 by [[S154a]]; boxes are in `Frame58Map`)** — [H10 + QC `H-02`]
+### S154c [S] Frame 58: the translation block — X / Y / Z, RANGE, RATE, ACCELERATION — **DONE 2026-09-06 — QC H-02's other six; the X/Y/Z stack needed re-pitching and ACCELERATION needed its unit back** — [H10 + QC `H-02`]
 - `OffXText`, `OffYText`, `OffZText`, `RangeText`, `RateText`, `AccelPosText` — again all live and drawn
   correctly on `DockingSimPage` already.
 - ⚠ `#xyz-number` gives `left:14%` and **no top**, so this block needs one more anchor than the attitude
   one does. Establish it in [[S154a]] rather than here.
 - **DONE when:** the six read live at the mapped boxes, at `MinDesignFor`, with a dead-feed preview.
+
+#### ⭐ DONE 2026-09-06 — **all twelve of QC `H-02`'s baked numbers are now live**, with [[S154b]]
+
+⚠ **The line's own anchor worry was already settled.** It warned that `#xyz-number` gives `left:14%` and
+no top, so the block *"needs one more anchor than the attitude one does"* — but [[S154a]] measured all
+six boxes with explicit y coordinates, so there was nothing left to establish. Checked before assuming.
+
+#### ⛔ TWO THINGS THIS BLOCK NEEDED THAT THE ATTITUDE BLOCK DID NOT
+
+**1 — THE X/Y/Z STACK CANNOT KEEP ITS PITCH.** The export puts those three rows **35 design px apart**
+(tops 942.07 / 977.15 / 1011.14) around 17-px-tall ink. At the glanceable floor the type is **48.07**, so
+three rows at the export's pitch would **overlap by 13 px each**. Neither keeping the pitch nor shrinking
+the type is available, so the stack is **re-pitched about its own centre** — the group stays where the
+export put it and the rows spread to clear each other.
+⭐ **Both halves of that are pinned**: the rows must not overlap (`pitch >= size`, measured off the draw
+commands) AND the group's centre must still match the export's. Mutation `Y2` re-pitches about the TOP
+row instead — which walks the whole block down the frame — and dies on the second check alone.
+
+**2 — ACCELERATION LOST ITS UNIT, AND THE FIRST RENDER SHOWED IT.** `AccelValue`'s box is the ink of the
+whole baked string **`0.00g`** — digits *and* the `g` — so patching it erases the unit, while
+`AccelPosText` is a bare number (`VesselData.Acceleration` formats with `"F2"` and nothing else; the Mech
+panel prints its own unit label beside it). The first render read **`1.42`** under a label saying
+ACCELERATION.
+⚠ **A quantity with no unit on a flight display is the same family of defect as a frozen one** — it looks
+like data and is not usable. The `g` is restored in the export's own form (no space), and `along` really
+is in g: `Dot(acc, rt.up) / 9.80665`. ⭐ **Found by looking at the render**, which is what C1.3's preview
+gate is for — no test would have missed a unit it was never told to expect.
+
+#### ⚠ AND ONE MORE MUTATION SURVIVED FIRST — the same lesson as [[S154b]]'s two
+
+`Y6` dropped the patch from the X/Y/Z stack alone and **survived**, because the patch counter covered only
+RANGE / RATE / ACCELERATION. The three baked offsets would have sat on the frame under the live ones and
+every other check passed. ⛔ **A patch count that does not cover every patched box is a patch count for
+the boxes someone remembered.** It counts all six now.
+
+#### Verified
+
+- `python plugin/build.py test` → **ALL SUITES PASSED**. `Frame58AttitudeTest` now **74 checks**, both
+  splits.
+- **6 mutations, 6 killed**, all attributed to `Frame58AttitudeTest`.
+- **`previewdiff`: 7 existing pages changed, 0 new, 0 removed, of 125.**
+- **PNGs inspected.** ⭐ `frame58_hud_nofeed.png` now shows **all twelve positions dashed** — six
+  attitude, six translation — and **no baked number survives anywhere on the frame**.
+- No `install`, no glass, no `git push`. §14.4(a) untouched — this block reads and commands nothing.
 
 ### S154d [S] Frame 58: the FLIGHT COMMANDS block — **TODO (UNBLOCKED 2026-09-06 by [[S154a]]; part §14.4(a))** — [H10]
 - ⛔ **This is the one split with a §14.4(a) edge in it.** FLIGHT COMMANDS names controls that would fly
