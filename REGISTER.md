@@ -24923,6 +24923,25 @@ with Waves C/D."* **T18 and T21 are those callers**: `OpenNoseShroud` at the end
 
 ---
 
+## 🟢 GATE OPENED — the OWNER, 2026-09-07, IN THIS CHAT, verbatim: **"install and let's fly it"**
+
+⭐ **`install` + glass time are GRANTED for this flight, by the owner's own words quoted above** — the
+C1.12 evidentiary standard satisfied by a quote and not a summary. The gate request immediately below is
+what he was answering. **The gate is scoped to THIS SESSION and THIS FLIGHT** (C1.12: a one-session
+gate-open is not a standing one); the standing state returns to preview-only afterwards.
+
+**What the build chat then did, and only this:**
+- verified **KSP and CKAN are both closed** before touching the deploy target (`build.py install`'s own
+  recorded failure mode: *"it is not always KSP — CKAN keeps the GameData tree open too"*);
+- ran **`python plugin/build.py install`**, which runs the full test suite first and refuses to copy
+  anything if it is red;
+- reported the result and handed over the numbered checklist.
+⛔ **It did not fly.** Glass time is the owner's; the build chat has no way to press a button in the
+capsule and does not claim to have. **None of T18–T21 was marked `DONE`** — each closes on the owner's
+report of the checklist, and a build chat does not record a flight result it did not witness (C1.12).
+
+---
+
 ## 🟠 GATE REQUEST — `install` + glass, ONE flight, the WHOLE mission profile (T18–T21 batch, 2026-09-07)
 
 ⛔ **A BUILD CHAT DOES NOT OPEN THIS GATE AND HAS NOT (C1.12).** This is the paste-ready overseer prompt
