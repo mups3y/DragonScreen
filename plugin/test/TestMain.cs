@@ -6,39 +6,151 @@
  * dependency-ordered waves, and each wave RE-REGISTERS the suites that prove it, below. Wave A (W1)
  * is the collision-free pure support layer; Waves B-D follow. A suite is registered here only once
  * the module it proves is actually in the tree - never ahead of it.
+ *
+ * ---- S167: A SUITE THAT THROWS MUST NOT TAKE THE REST OF THE RUN WITH IT --------------------
+ * Every call below goes through `Suite`, which catches. It did not used to, and the consequence is
+ * the reason this file changed: `Run()` returning a failure count is the DESIGNED failure path and
+ * reports fine, but an EXCEPTION escaping a suite reached `Main` uncaught, killed the process, and
+ * took every suite below it with it.
+ *
+ * MEASURED, on this tree, 2026-09-06 (S167). A deliberate `NullReferenceException` thrown at the top
+ * of `AudioScopeTest.Run` - suite 25 of 55 - produced: 25 suites with counts, ONE suite that printed
+ * its banner and no count, and TWENTY-NINE that never ran at all. The output ended in a stack trace
+ * and `TESTS FAILED (exit 3762504530)`. Nothing in that report distinguishes "the 29 below are green"
+ * from "the 29 below are red", so a real regression could sit under an unrelated crash and the run
+ * still looked like it had told you everything.
+ *
+ * AND IT MISATTRIBUTES A MUTATION KILL, which is how S164 found it. A mutation harness that reads
+ * only the exit code cannot tell "the suite under test caught this" from "some suite above it fell
+ * over on the way past". S164's mutation Z8 was killed by a suite that was not the one under test.
+ *
+ * A THROW AND A FAILED CHECK ARE PRINTED DIFFERENTLY ON PURPOSE. They mean different things: a
+ * failed `Check` is the suite doing its job, a throw is the suite unable to. The first shows as that
+ * suite's own `N failed`; the second shows as a `!! SUITE CRASHED` block naming the suite, and the
+ * closing line counts them separately. Both are failures and both make the exit code non-zero.
+ *
+ * The two halves of the proof, because neither is sufficient alone:
+ *   test/HarnessTest.cs     the in-process half - a throw becomes a NAMED failure, control returns
+ *   build.py harnesscheck   the process half   - every suite BELOW the crash still runs and reports
  */
 using System;
 
 public static class TestMain
 {
+    // ---- S167 ------------------------------------------------------------------------------------
+    // How many suites THREW rather than reporting. Separate from `bad` because a crash and a failed
+    // check are different diagnoses, and the closing line says which happened.
+    static int crashed;
+
+    /// <summary>
+    /// S167: run one suite so that a throw becomes a NAMED failure of that suite instead of the end
+    /// of the run. Returns the suite's own failure count, or 1 if it threw.
+    ///
+    /// The log sink is injected so `HarnessTest` can prove this catches WITHOUT printing a crash
+    /// banner into a green build - the alternative was a self-test that cried wolf on every run.
+    /// </summary>
+    public static int Guard(string name, Func<int> run, Action<string> log)
+    {
+        try
+        {
+            return run();
+        }
+        catch (Exception ex)
+        {
+            // EVERYTHING IN HERE MUST BE THROW-PROOF. A guard that dies while reporting a death
+            // reproduces the exact defect it exists to fix, one frame further out.
+            string kind, msg, stack;
+            try { kind = ex.GetType().Name; } catch { kind = "Exception"; }
+            try { msg = ex.Message; } catch { msg = "(message unavailable)"; }
+            try { stack = ex.StackTrace; } catch { stack = null; }
+            if (string.IsNullOrEmpty(stack)) stack = "(no stack trace)";
+            log("!! SUITE CRASHED  " + name + "  threw " + kind + ": " + msg
+                + Environment.NewLine + Indent(stack));
+            return 1;
+        }
+    }
+
+    // S167: the stack trace goes under the CRASH line indented, so a reader scanning a long report
+    // can see where one suite's wreckage ends and the next suite's banner begins.
+    const char LF = (char)10;
+
+    static string Indent(string text)
+    {
+        string[] lines = (text ?? "").Split(LF);
+        for (int i = 0; i < lines.Length; i++) lines[i] = "     " + lines[i].TrimEnd();
+        return string.Join(Environment.NewLine, lines).TrimEnd();
+    }
+
+    /// <summary>
+    /// S167: the name comes off the delegate's own method, never a hand-typed string - a string here
+    /// would be a second copy of the suite name at all 55 call sites, and every copy is a chance for
+    /// a rename to leave a lie behind. It is also what makes the NAME in a crash report trustworthy:
+    /// it is the throwing suite's own type, so it cannot name a different one.
+    /// </summary>
+    public static string NameOf(Func<int> run)
+    {
+        try
+        {
+            if (run != null && run.Method != null && run.Method.DeclaringType != null)
+                return run.Method.DeclaringType.Name;
+        }
+        catch { }
+        return "(unnamed suite)";
+    }
+
+    static int Suite(Func<int> run) { return Suite(NameOf(run), run); }
+
+    static int Suite(string name, Func<int> run)
+    {
+        return Guard(name, run, delegate(string m) { crashed++; Console.WriteLine(m); });
+    }
+
     public static int Main()
     {
+        crashed = 0;
         // The SCREEN + shared-display-math suites. The autopilot suites removed on 2026-09-01 return
         // wave by wave underneath them (§B12.8); the ones still missing are the ones whose modules are.
         int bad = 0;
-        bad += LayoutTest.Run();
-        bad += LayoutSweepTest.Run();
-        bad += PageTest.Run();
-        bad += ComponentsTest.Run();       // Phase 6: pure display widgets (NumericReadout/StatusIndicator/TargetReticle)
-        bad += PanelTest.Run();
-        bad += GlobeProjectionTest.Run();  // screens: orthographic globe projection + occlusion (NAV 3D)
-        bad += PlanetGeomTest.Run();       // screens: scaled-space camera framing/projection/occlusion (S10a)
-        bad += OrbitalTest.Run();          // shared display math: orbit readouts
-        bad += VehiclePartsTest.Run();     // screens: part classification for the systems display
-        bad += MissionPhaseTest.Run();     // shared: the phase enum the screens label
-        bad += StageStatsTest.Run();       // display: per-stage dV/TWR/burn-time readout (KER-mirrored)
-        bad += KerDataTest.Run();          // KER soft-integration: per-stage selection over the mirrored KER sim data
-        bad += FigmaUINavTest.Run();       // new Figma UI: bottom-bar nav + back chevron hit routing
-        bad += TurntableTest.Run();        // screens: the capsule sprite turntable — naming, picker, drag (T11a, §5)
-        bad += TouchWiringTest.Run();      // screens: the touch pass (T14) - chute actions, docking clusters, suit fail branch
-        bad += LogGateTest.Run();          // diagnostics: the seen-set that stops a standing warning flooding KSP.log (S40)
+
+        // ---- S167's fault-injection seam -------------------------------------------------------
+        // `build.py harnesscheck` sets this and asserts the run still reports every suite BELOW the
+        // crash - the half of S167's done-criteria that no in-process check can reach, because it is
+        // a claim about a whole process and so it takes a whole process to prove. Injected FIRST, so
+        // that "every later suite" means all of them. Unset in every normal run, and the ONE call
+        // site that passes an explicit name: this delegate has no suite class to be named after.
+        if (Environment.GetEnvironmentVariable("DRAGONSCREEN_HARNESS_FAULT") == "1")
+            bad += Suite("DeliberateFaultInjection",
+                         delegate { throw new InvalidOperationException(
+                             "S167 fault injection - the run must survive this and report every suite below it"); });
+
+        // S167: HarnessTest FIRST, deliberately. It proves the guard that every other line on this
+        // list now depends on, so it runs before any of them - and if the guard itself were broken the
+        // wreckage would land here, rather than 30 suites downstream where it reads as someone else's bug.
+        bad += Suite(HarnessTest.Run);
+
+        bad += Suite(LayoutTest.Run);
+        bad += Suite(LayoutSweepTest.Run);
+        bad += Suite(PageTest.Run);
+        bad += Suite(ComponentsTest.Run);       // Phase 6: pure display widgets (NumericReadout/StatusIndicator/TargetReticle)
+        bad += Suite(PanelTest.Run);
+        bad += Suite(GlobeProjectionTest.Run);  // screens: orthographic globe projection + occlusion (NAV 3D)
+        bad += Suite(PlanetGeomTest.Run);       // screens: scaled-space camera framing/projection/occlusion (S10a)
+        bad += Suite(OrbitalTest.Run);          // shared display math: orbit readouts
+        bad += Suite(VehiclePartsTest.Run);     // screens: part classification for the systems display
+        bad += Suite(MissionPhaseTest.Run);     // shared: the phase enum the screens label
+        bad += Suite(StageStatsTest.Run);       // display: per-stage dV/TWR/burn-time readout (KER-mirrored)
+        bad += Suite(KerDataTest.Run);          // KER soft-integration: per-stage selection over the mirrored KER sim data
+        bad += Suite(FigmaUINavTest.Run);       // new Figma UI: bottom-bar nav + back chevron hit routing
+        bad += Suite(TurntableTest.Run);        // screens: the capsule sprite turntable — naming, picker, drag (T11a, §5)
+        bad += Suite(TouchWiringTest.Run);      // screens: the touch pass (T14) - chute actions, docking clusters, suit fail branch
+        bad += Suite(LogGateTest.Run);          // diagnostics: the seen-set that stops a standing warning flooding KSP.log (S40)
         // S100 (QC H-01): THE INSTRUMENT ITSELF. The preview is what layout, palette and legibility
         // are judged from (CLAUDE.md) and what C1.3 requires before anything is marked DONE, and it
         // was rendering every Figma page at twice the shipped width on the strength of a cfg value
         // the cfg contradicted. This suite reads the cfg and the preview's source and fails if they
         // ever disagree again - the rule this file already had for the FONT, finally written down
         // for RESOLUTION.
-        bad += ScreenSizeTest.Run();
+        bad += Suite(ScreenSizeTest.Run);
 
         // 2026-09-06 batch, job 2 (QC R-02 + S117): THE FLOOR ITSELF. Typography.Min is a MEASURED
         // number at a MEASURED WIDTH, and when S115 doubled the shipped panel the number did not
@@ -47,30 +159,30 @@ public static class TestMain
         // Neither could be caught by a suite that only ever ran at 1280, where the two widths are the
         // same width. Every check in here is a comparison ACROSS widths, which is the only shape that
         // can fail.
-        bad += LegibilityFloorTest.Run();
-        bad += Frame58MapTest.Run();
-        bad += CoverActsTest.Run();
-        bad += CoverAlarmTest.Run();
-        bad += Frame58ControlsTest.Run();
-        bad += AlertActivityTest.Run();
-        bad += SettingsTabStripTest.Run();
-        bad += VideoCamRowsTest.Run();
-        bad += AudioScopeTest.Run();
-        bad += CabinLightingTest.Run();   // S134d / QC F-03: Frame 66's LIGHTING panel, rebuilt
-        bad += AudioGridTest.Run();       // S134e / QC A-03 + A-04: the audio panel's grid + its signal glyph      // S134c / QC A-01: the audio page's five scopes    // S134b / QC VV-02: the Video page's camera rows are touchable // S134a / QC F-04: one strip geometry, two projections   // S133 / QC H-05: Frame 58's ALERT ACTIVITY panel // S132 / H11: Frame 58's FRAME, CAMERA and stopwatch      // S130 / H7: the Figma UI's alarm channel finally has a consumer       // S128: what the Cover's four action rows do, and cannot do       // S154a: Frame 58's element geometry (research only - draws nothing)
+        bad += Suite(LegibilityFloorTest.Run);
+        bad += Suite(Frame58MapTest.Run);
+        bad += Suite(CoverActsTest.Run);
+        bad += Suite(CoverAlarmTest.Run);
+        bad += Suite(Frame58ControlsTest.Run);
+        bad += Suite(AlertActivityTest.Run);
+        bad += Suite(SettingsTabStripTest.Run);
+        bad += Suite(VideoCamRowsTest.Run);
+        bad += Suite(AudioScopeTest.Run);
+        bad += Suite(CabinLightingTest.Run);   // S134d / QC F-03: Frame 66's LIGHTING panel, rebuilt
+        bad += Suite(AudioGridTest.Run);       // S134e / QC A-03 + A-04: the audio panel's grid + its signal glyph      // S134c / QC A-01: the audio page's five scopes    // S134b / QC VV-02: the Video page's camera rows are touchable // S134a / QC F-04: one strip geometry, two projections   // S133 / QC H-05: Frame 58's ALERT ACTIVITY panel // S132 / H11: Frame 58's FRAME, CAMERA and stopwatch      // S130 / H7: the Figma UI's alarm channel finally has a consumer       // S128: what the Cover's four action rows do, and cannot do       // S154a: Frame 58's element geometry (research only - draws nothing)
 
         // ---- PART B RECOVERY, WAVE A (W1, §B12.8) - the collision-free pure support layer ----
         // Recovered from `8b81816^` with their modules. The fixtures are as they were: ConicTest and
         // LambertTest are RSS (mu = 3.986e14); TrajectoryTest and PredictTest are a STOCK Kerbin fixture
         // DELIBERATELY - they prove the integrator's ARITHMETIC against closed forms, and prove nothing
         // about RSS-RO tuning (R1 §3.5). Do not "fix" a fixture into RSS thinking it validates more.
-        bad += AeroTest.Run();             // L1 derived aero: q, speed of sound, Mach, isothermal density
-        bad += AuthorityTest.Run();        // L1 the vehicle's own control authority (torque / MOI)
-        bad += ConicTest.Run();            // L3 support: Vec3 + universal-variable conic propagation
-        bad += TrajectoryTest.Run();       // §B16 prediction engine: RK4 through-atmosphere, drag MEASURED
-        bad += PredictTest.Run();          // where we will be / hit / pass closest - damped fixed point
-        bad += LambertTest.Run();          // B7 Lambert two-point BVP, self-inverted against our propagator
-        bad += RendezvousMathTest.Run();   // L3 rendezvous: the LVLH frame + Clohessy-Wiltshire targeting
+        bad += Suite(AeroTest.Run);             // L1 derived aero: q, speed of sound, Mach, isothermal density
+        bad += Suite(AuthorityTest.Run);        // L1 the vehicle's own control authority (torque / MOI)
+        bad += Suite(ConicTest.Run);            // L3 support: Vec3 + universal-variable conic propagation
+        bad += Suite(TrajectoryTest.Run);       // §B16 prediction engine: RK4 through-atmosphere, drag MEASURED
+        bad += Suite(PredictTest.Run);          // where we will be / hit / pass closest - damped fixed point
+        bad += Suite(LambertTest.Run);          // B7 Lambert two-point BVP, self-inverted against our propagator
+        bad += Suite(RendezvousMathTest.Run);   // L3 rendezvous: the LVLH frame + Clohessy-Wiltshire targeting
         // S63's guard on the one irreplaceable RSS-RO dataset in the tree. `pure/BoosterDrag.cs` had no
         // suite and NEVER did (a grep of the whole pre-deletion tree at `8b81816^` finds its name in two
         // places: the file, and a prose sentence in `Aero.cs`). Its ten Mach-binned bc values came from
@@ -83,7 +195,7 @@ public static class TestMain
         // quotation of the same lost corpus, not an independent measurement - and R1 §3.5 records that the
         // data came from flights that mostly did NOT land, with no after-case for the miss it fixed. Only a
         // recorded RE-FLIGHT converges this (owner decision on R1 Q2), which needs glass time: an owner gate.
-        bad += BoosterDragTest.Run();      // S63: the corpus bc-vs-Mach curve, pinned against R1 §3.5
+        bad += Suite(BoosterDragTest.Run);      // S63: the corpus bc-vs-Mach curve, pinned against R1 §3.5
 
         // ---- PART B RECOVERY, WAVE B (W2, §B12.8) - the actuation layer (§B12.7 direct part control) ----
         // ActuationTest proves the pure capability->role classifier the restored glue `src/Actuator.cs` acts
@@ -96,8 +208,8 @@ public static class TestMain
         // ⚠ Their CONSTANTS are UN-CONVERGED and UNATTRIBUTED (R1 §7.4) and engine-out was NEVER FLOWN
         // (R1 §5.1) - the suites prove the solver's ARITHMETIC, never that any of it is tuned. Each file
         // carries that marking in its own header; do not read a green suite as a validated number.
-        bad += ActuationTest.Run();        // §B12.7 capability->role map + §B16.4's octaweb binding assertion
-        bad += ThrustBalanceTest.Run();    // B3 TCA torque-nulling solver + its engine-out / RCS wrappers
+        bad += Suite(ActuationTest.Run);        // §B12.7 capability->role map + §B16.4's octaweb binding assertion
+        bad += Suite(ThrustBalanceTest.Run);    // B3 TCA torque-nulling solver + its engine-out / RCS wrappers
 
         // ---- PART B RECOVERY, WAVE C (W3, §B12.8) - the booster set (§B16) ----
         // BoosterTest proves the three restored booster modules: the hoverslam ignition solver
@@ -113,8 +225,8 @@ public static class TestMain
         // FSM contract. Green here means the ARITHMETIC is right. It means NOTHING about tuning, and the
         // FSM under test is four phases where §B16.2 specifies five (no boostback state). Each file says
         // so in its own header; read one before trusting a number that came through it.
-        bad += BoosterTest.Run();          // §B16 booster: hoverslam solver + grid-fin steering + the recovery FSM
-        bad += OctawebResolveTest.Run();   // §B16.4 step 2: the octaweb binder, guard-first, against the real dump
+        bad += Suite(BoosterTest.Run);          // §B16 booster: hoverslam solver + grid-fin steering + the recovery FSM
+        bad += Suite(OctawebResolveTest.Run);   // §B16.4 step 2: the octaweb binder, guard-first, against the real dump
 
         // ---- PART B RECOVERY, W23 (§B16) - the booster HOST: the thing that RUNS the script ----
         // W8 built the five-phase script and recorded that NOTHING CALLED IT. W23 built the caller:
@@ -128,9 +240,9 @@ public static class TestMain
         // (`8225df7`: "fires thr=1.0 0.3 s after MECO at 'sep 0 km' ... LOST in ~10 s - and its 0-km burn
         // kicks the upper stage"). The suite pins that default. The two hold-off constants it exercises
         // are [UN-CONVERGED] (§B16.8): 194334 gives the FAILING point, never a converged safe value.
-        bad += LandingTargetTest.Run();    // W25: the booster aim point - sourced coords, land-anywhere
-        bad += IgnitionGateTest.Run();     // W5: the clamp-release + ullage gates, RESTORED AS AN OPEN DEFECT
-        bad += BoosterHostTest.Run();      // §B16 booster host: selection, stop, command gate, engine roles
+        bad += Suite(LandingTargetTest.Run);    // W25: the booster aim point - sourced coords, land-anywhere
+        bad += Suite(IgnitionGateTest.Run);     // W5: the clamp-release + ullage gates, RESTORED AS AN OPEN DEFECT
+        bad += Suite(BoosterHostTest.Run);      // §B16 booster host: selection, stop, command gate, engine roles
 
         // ---- PART B RECOVERY, W24 (§B16) - the booster STEERING LAW -------------------------------
         // `docs/BOOSTER_STEERING_MOD_SEARCH.md` (C1.15) could neither rule TCA in nor out; the owner ruled
@@ -145,7 +257,7 @@ public static class TestMain
         // FOR. Every gain is [UN-CONVERGED] (§B16.8 ruling 2) and the per-axis SIGN is UNVERIFIED — this
         // law has no recorded flight of its own. `BoosterHost.Actuate` flips to TRUE with this task, per
         // the owner's ruling on W23's Q1: the next flight is the first time this commands a real vessel.
-        bad += BoosterSteerTest.Run();     // W24: the steering law - rate ceiling, deadband seam, bounds
+        bad += Suite(BoosterSteerTest.Run);     // W24: the steering law - rate ceiling, deadband seam, bounds
 
         // ---- PART B RECOVERY, W6 (§B16, R1-tagged but in NO §B12.8 wave) - the B8 impact divert ----
         // pure/CourseCorrect.cs is the layer between the two above: it turns a predicted-impact ERROR
@@ -159,7 +271,7 @@ public static class TestMain
         // linear algebra recovers that answer, the damping leaves exactly its residual, and the solve
         // REFUSES rather than diverting on noise when the Jacobian is unobservable or rank-deficient. It
         // proves nothing about a tuned number. The file's header says so.
-        bad += CourseCorrectTest.Run();    // B8 impact-point divert: the 2x2 Jacobian solve + the 1x1 Newton step
+        bad += Suite(CourseCorrectTest.Run);    // B8 impact-point divert: the 2x2 Jacobian solve + the 1x1 Newton step
 
         // ---- PART B RECOVERY, WAVE E-3 (W15, §B12.8 rider (c)) - the safe-water splashdown selector ----
         // pure/SafeLandingSite.cs picks WHICH point on the sampled ground track a returning capsule aims at:
@@ -177,7 +289,7 @@ public static class TestMain
         // `test/FdirTest.cs:152-164` (the rest of that suite stays deleted - it is `AbortResponder`/`Fdir`
         // coverage and neither type is in the tree). The fixtures are ANALYTIC. Green proves the selector
         // picks the right sample; it proves nothing about the window being the right window.
-        bad += SafeLandingSiteTest.Run();  // W15: nearest safe water inside the reachable glide window
+        bad += Suite(SafeLandingSiteTest.Run);  // W15: nearest safe water inside the reachable glide window
 
         // ---- PART B RECOVERY, WAVE D (W4, §B12.8) - the PURE conductor set ----
         // The mission-conductor decision layer: ModeManager (the mission plan + the phase sequencer),
@@ -194,12 +306,12 @@ public static class TestMain
         // prove DECISIONS, not a flown mission; every flight command on every screen is still §14.4(a)'s
         // honest no-op. CrewGates' gate TITLES and CHECKLIST ITEMS are §1.4 source-of-truth material
         // (transcribed NASA/SpaceX callouts) - do not edit one to make a test pass.
-        bad += MissionProfileTest.Run();   // L-S0b mission-as-data: the 19-mission catalog + craft-name resolve
-        bad += CrewGateTest.Run();         // L4 crew gate machine + the real gate catalog + the phase sequencer
-        bad += ConductorWalkTest.Run();    // W10: the gate WALK the restored glue composes, and the AutoAdvanceGates runaway
-        bad += ConductorTest.Run();        // T16: the pure ConductorAction core — §B12.3's phase table, §B12.4's re-plan rule
-        bad += WarpPlanTest.Run();         // conductor: the on-rails rate that can never overshoot the drop-out
-        bad += CoastEtaTest.Run();         // conductor: range-closing coast ETA -> the warp target UT
+        bad += Suite(MissionProfileTest.Run);   // L-S0b mission-as-data: the 19-mission catalog + craft-name resolve
+        bad += Suite(CrewGateTest.Run);         // L4 crew gate machine + the real gate catalog + the phase sequencer
+        bad += Suite(ConductorWalkTest.Run);    // W10: the gate WALK the restored glue composes, and the AutoAdvanceGates runaway
+        bad += Suite(ConductorTest.Run);        // T16: the pure ConductorAction core — §B12.3's phase table, §B12.4's re-plan rule
+        bad += Suite(WarpPlanTest.Run);         // conductor: the on-rails rate that can never overshoot the drop-out
+        bad += Suite(CoastEtaTest.Run);         // conductor: range-closing coast ETA -> the warp target UT
 
         // ---- PART B0 (BB1, §B0) - the BlackBox flight recorder core ----
         // ⭐ THE ONE LINE THAT MUST BE REMOVED IF THE RECORDER IS EXCISED FOR RELEASE. BB1 is
@@ -215,19 +327,23 @@ public static class TestMain
         // void, the manifest, and the ghost-column coverage check S76's finding demanded. It proves
         // NOTHING about the glue reading the right KSP field into the right column - that is
         // `src/BlackBoxRecorder.cs`, it needs a Vessel, and it is confirmed on the glass by **BB4**.
-        bad += BlackBoxTest.Run();       // BB1: recorder core - schema, validity, rates, manifest, coverage
+        bad += Suite(BlackBoxTest.Run);       // BB1: recorder core - schema, validity, rates, manifest, coverage
         // ⚠ S85's suite is NOT part of the excision above. `pure/CrewControlIds.cs`, `pure/CrewPressLog.cs`
         // and this line stay when the recorder goes: the press buffer is SCREEN-side, the two choke
         // points write into it, and it is the reason `ScreenPainter.cs`/`PanelButtons.cs` still compile
         // with `pure/blackbox/` and `BlackBoxRecorder.cs` deleted. Verified by physical removal (S85).
-        bad += CrewPressTest.Run();      // S85: the CVR press channel - the control_id namespace + buffer
+        bad += Suite(CrewPressTest.Run);      // S85: the CVR press channel - the control_id namespace + buffer
 
         // T15b: the embedded MechJeb's HOST rules, checked against the pinned tree itself - the
         // blacklist's substring behaviour (and its collateral), the three [KSPAddon]s staying out
         // of the compile, and the shipped tune. Nothing here loads a core; that needs the game.
-        bad += MechHostTest.Run();
+        bad += Suite(MechHostTest.Run);
 
-        Console.WriteLine(bad == 0 ? "ALL SUITES PASSED" : bad + " SUITE(S) FAILED");
+        // S167: a crash is counted and NAMED separately from a failed check. A reader who sees only
+        // "N SUITE(S) FAILED" cannot tell an unhealthy harness from an unhealthy build.
+        Console.WriteLine(bad == 0 ? "ALL SUITES PASSED"
+                          : crashed == 0 ? bad + " SUITE(S) FAILED"
+                          : bad + " SUITE(S) FAILED, " + crashed + " OF THEM BY THROWING (see SUITE CRASHED above)");
         return bad == 0 ? 0 : 1;
     }
 }

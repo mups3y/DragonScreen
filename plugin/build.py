@@ -345,10 +345,78 @@ def build_tests():
     run(compile_cs(exe, src, exe=True), 'tests (%d source files)' % len(src))
     print('--- running tests')
     p = subprocess.run([exe], capture_output=True, text=True)
-    print((p.stdout or '') + (p.stderr or ''))
+    out = (p.stdout or '') + (p.stderr or '')
+    print(out)
     if p.returncode != 0:
         sys.exit('TESTS FAILED (exit %d)' % p.returncode)
+    harness_fault_check(exe, out)
     tool_tests()
+
+
+def harness_fault_check(exe=None, clean_out=None):
+    """
+    S167: PROVE THE TEST HARNESS STILL REPORTS EVERYTHING WHEN ONE SUITE THROWS.
+
+    A suite returning a failure count is the designed path. A suite THROWING was not caught anywhere,
+    so it reached the CLR, killed the process, and every suite registered below it never ran - and the
+    report gave no counts for them at all, so a reader could not tell "green" from "never asked". S164
+    found this by mutation: its kill came from a suite that was not the one under test.
+
+    MEASURED before the fix (2026-09-06): a NullReferenceException at the top of AudioScopeTest - suite
+    25 of 55 - left 25 suites with counts, one with a banner and no count, and 29 that never ran.
+
+    ⚠ WHY THIS IS A PROCESS-LEVEL CHECK AND NOT A C# ONE. `test/HarnessTest.cs` proves the in-process
+    half (a throw becomes a named failure of that suite and control returns). It cannot prove the other
+    half, because "every suite BELOW the crash still ran" is a claim about a whole process: a check
+    running inside that process could only ever show that IT had survived. So this re-runs the built
+    exe with the fault seam armed and compares the two reports LINE FOR LINE.
+
+    ⭐ THE COMPARISON IS THE POINT, and it is why this cannot rot: it does not look for a hand-listed
+    set of suite names that would go stale the next time one is registered. It asserts that the faulted
+    run's output CONTAINS EVERY LINE the clean run produced - so a suite added, renamed or reordered in
+    TestMain.cs is covered on the day it lands, with no edit here.
+    """
+    exe = exe or os.path.join(HERE, 'build', 'DragonScreenTest.exe')
+    if not os.path.exists(exe):
+        sys.exit('HARNESS CHECK: no test exe at %s - run `build.py test` first' % exe)
+    if clean_out is None:
+        c = subprocess.run([exe], capture_output=True, text=True)
+        clean_out = (c.stdout or '') + (c.stderr or '')
+        if c.returncode != 0:
+            sys.exit('HARNESS CHECK: the CLEAN run is already failing - fix that first')
+    print('--- harness fault check (S167: a throwing suite must not hide the ones below it)')
+
+    env = dict(os.environ)
+    env['DRAGONSCREEN_HARNESS_FAULT'] = '1'
+    f = subprocess.run([exe], capture_output=True, text=True, env=env)
+    faulted = (f.stdout or '') + (f.stderr or '')
+
+    # The closing summary DIFFERS by design (one says ALL SUITES PASSED, the other counts the crash),
+    # so it is the one line excluded from the "every clean line survives" comparison.
+    def body(text):
+        return [l for l in text.splitlines()
+                if l.strip() and 'SUITES PASSED' not in l and 'SUITE(S) FAILED' not in l]
+
+    clean_lines, faulted_set = body(clean_out), set(body(faulted))
+    missing = [l for l in clean_lines if l not in faulted_set]
+
+    problems = []
+    if f.returncode == 0:
+        problems.append('the faulted run exited 0 - a crashing suite MUST fail the build')
+    if 'SUITE CRASHED' not in faulted or 'DeliberateFaultInjection' not in faulted:
+        problems.append('the crash was not reported as a NAMED suite failure')
+    if 'BY THROWING' not in faulted:
+        problems.append('the summary does not distinguish a throw from a failed check')
+    if missing:
+        problems.append('%d line(s) the clean run printed are MISSING after the crash - '
+                        'suites below it were hidden. First: %r' % (len(missing), missing[0]))
+    if problems:
+        for x in problems:
+            print('    FAIL  ' + x)
+        sys.exit('HARNESS CHECK FAILED (S167): the test report is not trustworthy, so no result '
+                 'from this run is either.')
+    print('    ok: fault named, exit %d, all %d clean report lines still present'
+          % (f.returncode, len(clean_lines)))
 
 
 def tool_tests():
@@ -848,6 +916,13 @@ if __name__ == '__main__':
     # the shipped DLL - it only re-reads the vendored tree and writes the warning baseline.
     if cmd == 'mechwarn':
         mech_warning_baseline()
+        print('--- ok')
+        sys.exit(0)
+    # S167: a DIAGNOSTIC verb over the ALREADY-BUILT test exe. `test` runs this check itself on every
+    # run - this verb exists so the harness can be interrogated on its own, without a rebuild, when
+    # what is in doubt is the instrument rather than the code.
+    if cmd == 'harnesscheck':
+        harness_fault_check()
         print('--- ok')
         sys.exit(0)
     build_plugin()
