@@ -16629,7 +16629,7 @@ under them first means the rest are not built on a mapping that is about to chan
 
 #### The five splits
 
-### S134a [S] The settings tab strip: draw it once, hit it from the same function — **TODO** — [split 1 of 5 of [[S134]]; QC `F-04`; do this FIRST]
+### S134a [S] The settings tab strip: draw it once, hit it from the same function — **DOING** — [split 1 of 5 of [[S134]]; QC `F-04`; do this FIRST]
 - **The defect, measured:** see the table above. Two mappings for one strip; 14.4 px of disagreement at
   the shipped panel, first actual miss at a 3.14:1 aspect.
 - ⭐ **The fix is the standing rule**: one geometry function, used by the draw and by the hit test.
