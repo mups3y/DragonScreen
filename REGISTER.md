@@ -17165,7 +17165,7 @@ not have fired earlier: until S153a moved the cards, one state maximised both me
 detected`, from the `const bool` debug-flag pattern. Confirmed pre-existing by stashing this change and
 recounting: 7 before, 7 after. Not this line's, and not worth a register line of its own.
 
-### S166 [S] The audio page's three PANEL-WIDE positions are each a few px off the centre they look centred on — **TODO** — [noticed by [[S134e]]; TIER 4: layout]
+### S166 [S] The audio page's three PANEL-WIDE positions are each a few px off the centre they look centred on — **DOING** — [noticed by [[S134e]]; TIER 4: layout]
 - ⚠ **LOGGED, NOT DONE (C1.1).** QC `A-03` enumerates exactly thirteen positions — five labels, five
   values, and the button clusters — and [[S134e]] moved those onto the dividers' grid. These three are
   **not** among them, so touching them would have been scope creep on a line that was already editing
