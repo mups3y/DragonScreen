@@ -20626,3 +20626,42 @@ the whole R-01 policy exists to prevent.
 3. ⚠ **TWO MEASUREMENTS WERE DISCARDED BEFORE USE** — a naive SVG path scan that mis-parses `H`/`V`/`A`,
    and a preview fixture that printed `18 %` beside `0.0 h`. Both were caught by looking at the output
    rather than by trusting the method that produced it.
+
+### S174 [O] Re-distribute the fill-to-fit slack on the two SPLIT pages — **DOING 2026-09-06** — [🟢 OWNER RULING via the overseer, 2026-09-06, **option SELECTED, not free text** — step ONE of `S153a-Q1`, which stays OPEN]
+
+**🟢 AUTHORITY — RECORDED AS A SELECTION (C1.12).** The owner was given options and **chose one**; he did
+not write prose. ⛔ **No verbatim quote is manufactured here, and none should be read into this line** —
+that is the `LZ1` failure mode this rule exists for. The option as it was put to him, reproduced:
+
+> **"Re-distribute the reflow slack first."** Widen the content panel into the 419 design px of slack the
+> reflow currently parks in the gap, then apply the raise and re-measure what still overflows. The Split
+> rule is OURS, not the reference's, so this changes no tier-1 proportion — it changes how our design maps
+> onto a differently-shaped screen. Accepted costs: the globe/camera slot shrinks; it does not help
+> vertical overflow; some pages may still need a further decision afterwards.
+
+⛔ **THIS DOES NOT CLOSE `S153a-Q1`.** It is step one of it. `S153a`, `S153b`, `S153c`, `S153d`, `S153e` and
+`S154d` **stay HELD** and must not be recorded as unblocked by this line. The residual this task measures is
+the input to the reopened question.
+
+**SCOPE — exactly two files, and they are the only two pages in the build with a Split reflow** (verified
+independently here: `grep` for `Split = 1500` / `>= Split` across `plugin/src/pure/` returns these two and
+nothing else):
+- `plugin/src/pure/CoverPage.cs` — three sites: `:429` (Build), `:1267` (rail), `:1434` (hit threshold)
+- `plugin/src/pure/ManualChuteDeployPage.cs` — `:218-222`
+
+⛔ **THE LETTERBOX PAGES ARE NOT IN SCOPE.** `SystemsPidPage`, `AscentPage`, `DockingSimPage`, `Frame58Hud`,
+`SystemsTreePage`, `EntryPage`, `DeorbitBurnPrepPage`, `NavOrbitPlotPage`, `RendezvousPage`,
+`CabinLightingPanel`, `SettingsTabStrip` and `PlaceholderPage` all use `ox = (w - RefW*sc) * 0.5f`. Their
+slack is the owner's pending letterbox decision, a different question.
+
+**THE STARTING POINT (to be re-verified, not re-derived).** `sc = 1406/2112 = 0.66572`;
+`extra = 2560 − 2281.4 = 278.6` real px = **418.5 design px**; `Split = 1500`;
+`X(x) = x*sc + (x >= Split ? extra : 0)`. The content panel is `rectangle_178` at design **218..1442** —
+entirely left of the Split, so it receives **none** of the slack, and every overflow run 4 reported is
+inside it.
+
+**DONE when:** a coherent reflow rule gives the content panel a share of `extra` **and carries its interior
+with it** (widening the box alone leaves the same overflows in a wider empty panel); `previewdiff` shows the
+only changed pages are the Cover family and Manual Chute; `test` green; the new rule mutation-proved with
+each kill confirmed to come from the suite under test (`S167`); and the report states **the residual overflow
+with the raise applied** and **the new camera/globe slot width against the old**.
