@@ -163,10 +163,9 @@ namespace DragonScreen
             }
 
             // ---- bottom tabs (Audio / Cabin / Video) with the Audio tab underlined ----
-            CTxt("Audio", 1584, 1921, 28, White);
-            CTxt("Cabin", 1714, 1921, 28, Dim);
-            CTxt("Video", 1843, 1921, 28, Dim);
-            dl.Rect(PX(1524), PY(1974), 120 * sx, 8 * sy, Accent);
+            // ⭐ S134a: the strip's geometry lives in `SettingsTabStrip` now, and the hit test asks the
+            // same numbers — so a tab cannot be drawn in one place and tested in another (QC F-04).
+            SettingsTabStrip.Draw(dl, w, h, 0);
 
             // ---- bottom status bar (reused) ----
             BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live

@@ -339,15 +339,15 @@ namespace DragonScreen
             }
 
             // Settings Audio/Cabin/Video sub-tabs switch between the three sibling pages.
-            if (page == UiPage.Audio || page == UiPage.Cabin || page == UiPage.AudioVideo)
+            // ⛔ S134a / QC F-04: this used to inline the bands with ONE mapping — `px * RefW / w`, the
+            // full-width stretch — for all three pages. Cabin's strip is BAKED and placed letterboxed,
+            // so on that page a tab drawn at design x 1846 was hit-tested as 1831.6. It still landed in
+            // its own 130 px band, and would have gone on doing so until a 3.14:1 panel. One geometry,
+            // two projections, asked from one place.
+            if (SettingsTabStrip.IndexOf(page) >= 0)
             {
-                float dx = px * RefW / w, dy = py * RefH / h;
-                if (dy >= 1890f && dy < 2000f)
-                {
-                    if (dx >= 1520f && dx < 1650f) return NavHit.Go(UiPage.Audio);
-                    if (dx >= 1652f && dx < 1780f) return NavHit.Go(UiPage.Cabin);
-                    if (dx >= 1782f && dx < 1910f) return NavHit.Go(UiPage.AudioVideo);
-                }
+                int tab = SettingsTabStrip.HitTest(px, py, w, h, SettingsTabStrip.IsLetterboxed(page));
+                if (tab >= 0) return NavHit.Go(SettingsTabStrip.Targets[tab]);
             }
 
             // Attitude HUD: a "MANUAL DOCKING" affordance sits in the letterbox margin (screen-space, so

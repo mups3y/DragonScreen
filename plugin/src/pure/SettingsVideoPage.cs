@@ -82,10 +82,8 @@ namespace DragonScreen
               vx + vw, vy + vh + 24, 32, feedExists ? White : Dim);
 
             // ---- Audio / Cabin / Video tab strip (Video active) ----
-            C("Audio", 1584, 1921, 28, Dim);
-            C("Cabin", 1714, 1921, 28, Dim);
-            C("Video", 1843, 1921, 28, White);
-            dl.Rect(PX(1783), PY(1974), 120 * sx, 8 * sy, Accent);
+            // ⭐ S134a: shared geometry, see SettingsTabStrip (QC F-04).
+            SettingsTabStrip.Draw(dl, w, h, 2);
 
             BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
         }

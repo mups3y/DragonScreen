@@ -16629,7 +16629,7 @@ under them first means the rest are not built on a mapping that is about to chan
 
 #### The five splits
 
-### S134a [S] The settings tab strip: draw it once, hit it from the same function — **DOING** — [split 1 of 5 of [[S134]]; QC `F-04`; do this FIRST]
+### S134a [S] The settings tab strip: draw it once, hit it from the same function — **DONE 2026-09-06 — one geometry, two projections; QC's own fix plan was tried and the raster refused it** — [split 1 of 5 of [[S134]]; QC `F-04`; do this FIRST]
 - **The defect, measured:** see the table above. Two mappings for one strip; 14.4 px of disagreement at
   the shipped panel, first actual miss at a 3.14:1 aspect.
 - ⭐ **The fix is the standing rule**: one geometry function, used by the draw and by the hit test.
@@ -16643,6 +16643,58 @@ under them first means the rest are not built on a mapping that is about to chan
   three pages, so all three need a render.
 - **DONE when:** one function supplies both geometries, each drawn tab's centre hit-tests back to its own
   page on **all three pages at two aspects**, and the previews show the three strips identical.
+
+#### ⛔ DONE 2026-09-06 — AND NOT BY QC's FIX PLAN, WHICH WAS TRIED FIRST
+
+QC's plan: *"draw the tab strip once, in code, for all three settings pages, and skip the baked one on
+Cabin."* ⚠ **The raster refuses it.** An ink profile of `frame66.png` across the strip band shows it
+**embedded in a panel**: solid artwork above (y 1840-1858) and below (1980-2008), and more of it in the
+columns either side of the labels. A patch large enough to hide the baked strip would erase the frame's
+own drawing, and `FigmaFramePage` has no skip mechanism because the frame is **one PNG**. QC anticipated
+the difficulty in the same paragraph — *"which is a reason to prefer F-02's element rebuild"* — and F-02
+is not this line.
+
+⭐ **SO THE RULE IS HONOURED THE OTHER WAY ROUND, AND IT IS THE BETTER FIX.** The tab boxes live in
+`SettingsTabStrip`, once, **in design coordinates**; each page applies the projection it actually draws
+in — to the drawing AND to the hit test. Nothing is patched, no pixel moves, and the two cannot disagree
+because neither owns the geometry any more.
+
+⭐ **The two forms were always the same design geometry.** `SettingsAudioPage` and `SettingsVideoPage`
+drew at 1584 / 1714 / 1843, and the ink profile puts `frame66`'s baked clusters at 1584 / 1716 / 1844.
+**Only the projection differed** — which is exactly why the bug was invisible and why this is the right
+seam to cut at.
+
+⛔ **`letterboxed` is a REQUIRED parameter, not a default.** Getting it wrong is silent at the shipped
+aspect, so the compiler is made to ask — the same fail-closed move [[S120]], [[S124]] and [[S121a]] each
+made for the same reason.
+
+#### Verified
+
+- **The round trip, on all three pages at two aspects**, as the DONE-when asks: each tab's own drawn
+  centre hit-tests back to itself, and `FigmaUI.HitTest` routes it to the right page. **51 checks.**
+- ⭐ **The second aspect is 4416×1406 and it is not arbitrary** — it is the width at which the OLD single
+  mapping first put a tab outside its own band. The suite prints a note at 2560 recording that the old
+  mapping still landed correctly there, *"which is why F-04 had never bitten"*. A suite that only ran at
+  the shipped aspect would have passed through the whole of this defect's life.
+- **6 mutations, 5 killed at once.** ⚠ **V4 — two tab targets swapped — survived**, because the round
+  trip asserts `HitTest(centre of tab t)` routes to `Targets[t]`, and both sides read the same array. A
+  strip whose tabs are internally consistent and go to the wrong screens passed it. Fixed by naming the
+  three destinations independently, plus a check that `IsLetterboxed` and `Targets` agree about which
+  tab is Cabin. V4 then dies. ⭐ That is the third tautology this run has found by mutation rather than
+  by reading, and the shape is always the same: comparing a thing to itself.
+- **Preview: 0 pages changed** — and that is the RIGHT answer, measured rather than assumed. The strip
+  is drawn with the geometry it always had and Cabin's baked one is untouched; only the SPACE the hit
+  bands are measured in changed, which no render can show.
+- `build.py test` green · comment-loss **0** · no `install`, no glass, no `git push`.
+
+#### ⚠ What this does NOT fix, said plainly
+
+`F-04`'s second complaint is that the two strips do not **LOOK** alike — Audio's is text with an accent
+underline, Cabin's is baked icons above labels. **That is untouched.** It is a look rather than a
+correctness defect, unifying it needs the element rebuild `F-02` asks for, and this line's DONE-when
+asked for the previews to show three identical strips — which they do not, and cannot without that
+rebuild. ⭐ Recorded here rather than quietly dropped: the correctness half is done and the appearance
+half belongs with `F-02`.
 
 ### S134b [S] The video page's camera rows draw a selection whose only writer is stranded — **TODO (blocked: [[S134a]])** — [split 2 of 5 of [[S134]]; H12 + QC `VV-02` (part-closed)]
 - **The finding.** The camera rows draw a live selection and the only thing that WRITES it is unreachable
