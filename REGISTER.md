@@ -6230,7 +6230,7 @@ ascent looks like until circularisation, and the ORBIT view had never been previ
 - **Files:** `plugin/src/pure/NavPage.cs` · `plugin/test/PageTest.cs` (`OpenTrajectory`, +23 checks) ·
   `plugin/preview/PreviewMain.cs` (two scenes).
 
-### S42 [owner-gated] The RSS scaled-space globe: `Custom/HapkeScaled` defeats the body-map lookup — **HELD** (`/next` SKIPS it; build-then-verify-on-glass) — [TIER 5: held / owner-action / Part-B-bound]
+### S42 [owner-gated] The RSS scaled-space globe: `Custom/HapkeScaled` defeats the body-map lookup — **DOING** (unheld by the overseer ruling of 2026-09-07: the quarter-turn origin is a constant, not a glass measurement) — [TIER 5: held / owner-action / Part-B-bound]
 
 ⭐ **THE MISSING INPUT, HARVESTED VERBATIM FROM `KSP.log` BY [[S194]], 2026-09-07 — the owner's 05:06
 flight, line ~103248. `G12` (via [[S18]]) has waited for this and it exists nowhere else; the log is
