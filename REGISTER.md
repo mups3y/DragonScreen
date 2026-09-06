@@ -16066,7 +16066,7 @@ lesson: the danger is the tool's failure mode, not the content.
 - **DONE when:** slots 0 and 2 either draw content from a real source, or draw an owner-chosen marked
   minimal body — and slot 1 is left alone.
 
-### S128 [S] The Cover's four `Act*` buttons are silent no-ops — **TODO** — [H5; TIER 2; prerequisite [[S54]] is DONE]
+### S128 [S] The Cover's four `Act*` buttons are silent no-ops — **DOING** — [H5; TIER 2; prerequisite [[S54]] is DONE]
 - **The finding.** `ActReview`, `ActAcknowledge`, `ActDeorbitBrief`, `ActOnSpaceX` have named hit rects, no
   dispatcher case, and **not even the honest-refuse log the chute page emits**.
 - ⭐ **None of the four commands the vehicle**, so all four are (A) and §14.4(a) does not block them:
