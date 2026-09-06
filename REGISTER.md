@@ -16277,7 +16277,7 @@ watched turning `True` on a vessel. That needs the conductor engaged on a return
 rather than wired, and the crew-GO → autopilot edge the settlement names is not part of this line. No
 `install`, no glass, no `git push`.
 
-### S130 [S] The Cover has no alarm surface at all — **TODO** — [H7; TIER 2]
+### S130 [S] The Cover has no alarm surface at all — **DOING** — [H7; TIER 2]
 - **The finding.** `Alarms.Mask` folds G-force, propellant, power and the whole FDIR spine every frame
   (`ScreenPainter.cs:893`) and **is discarded**. The crew's home page cannot show a caution.
   `Alarms.cs:2-3`'s own header: *"THE ALERT ROUTING IS THE POINT, NOT THE DECORATION."*
